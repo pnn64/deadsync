@@ -1,7 +1,12 @@
 use deadsync_theme_simply_love::views::SimplyLoveApplyReplayGainEvent;
 use log::info;
+use smallvec::SmallVec;
 use std::path::Path;
-use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::mpsc::{self, Receiver};
+
+use crate::content_reload::{
+    PROGRESS_EVENTS_PER_FRAME, PROGRESS_QUEUE_CAPACITY, ProgressGate, receive_ready, send_progress,
+};
 
 /// Shell-owned worker that runs a one-shot bulk ReplayGain (EBU R128) analysis
 /// over the whole song library, driven by the Sound options "Apply ReplayGain"
@@ -20,7 +25,7 @@ impl Service {
         if self.rx.is_some() {
             return;
         }
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = mpsc::sync_channel(PROGRESS_QUEUE_CAPACITY);
         self.rx = Some(rx);
 
         std::thread::spawn(move || {
@@ -39,15 +44,24 @@ impl Service {
             let mut last_done = 0usize;
             {
                 let tx = &tx;
+                let mut gate = ProgressGate::default();
                 let mut on_song = |done: usize, total: usize, path: &Path| {
                     last_done = done;
+                    if !gate.should_emit(done, total) {
+                        return;
+                    }
                     let (line2, line3) = crate::content_reload::cache_progress_lines(Some(path));
-                    let _ = tx.send(SimplyLoveApplyReplayGainEvent::Progress {
+                    send_progress(
+                        tx,
                         done,
                         total,
-                        line2,
-                        line3,
-                    });
+                        SimplyLoveApplyReplayGainEvent::Progress {
+                            done,
+                            total,
+                            line2,
+                            line3,
+                        },
+                    );
                 };
                 deadsync_audio_replaygain::analyze_paths_blocking(paths, &mut on_song);
             }
@@ -67,35 +81,64 @@ impl Service {
         });
     }
 
-    pub(crate) fn poll(&mut self) -> Vec<SimplyLoveApplyReplayGainEvent> {
+    pub(crate) fn poll(
+        &mut self,
+    ) -> SmallVec<[SimplyLoveApplyReplayGainEvent; PROGRESS_EVENTS_PER_FRAME]> {
         let Some(rx) = self.rx.as_ref() else {
-            return Vec::new();
+            return SmallVec::new();
         };
-        let mut events = Vec::new();
-        let mut finished = false;
-        loop {
-            match rx.try_recv() {
-                Ok(event) => {
-                    finished |= matches!(event, SimplyLoveApplyReplayGainEvent::Finished { .. });
-                    events.push(event);
-                }
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => {
-                    if !finished {
-                        events.push(SimplyLoveApplyReplayGainEvent::Finished {
-                            done: 0,
-                            total: 0,
-                            cancelled: true,
-                        });
-                    }
-                    finished = true;
-                    break;
-                }
+        let batch = receive_ready(rx);
+        let mut events = batch.events;
+        let mut finished = events
+            .iter()
+            .any(|event| matches!(event, SimplyLoveApplyReplayGainEvent::Finished { .. }));
+        if batch.disconnected {
+            if !finished {
+                events.push(SimplyLoveApplyReplayGainEvent::Finished {
+                    done: 0,
+                    total: 0,
+                    cancelled: true,
+                });
             }
+            finished = true;
         }
         if finished {
             self.rx = None;
         }
         events
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replaygain_progress_poll_is_bounded_before_terminal_event() {
+        let (tx, rx) = mpsc::channel();
+        for done in 1..=10 {
+            tx.send(SimplyLoveApplyReplayGainEvent::Progress {
+                done,
+                total: 10,
+                line2: "Pack".to_owned(),
+                line3: format!("Song {done}"),
+            })
+            .unwrap();
+        }
+        let mut service = Service { rx: Some(rx) };
+        assert_eq!(service.poll().len(), PROGRESS_EVENTS_PER_FRAME);
+        assert_eq!(service.poll().len(), 10 - PROGRESS_EVENTS_PER_FRAME);
+
+        tx.send(SimplyLoveApplyReplayGainEvent::Finished {
+            done: 10,
+            total: 10,
+            cancelled: false,
+        })
+        .unwrap();
+        assert!(matches!(
+            service.poll().as_slice(),
+            [SimplyLoveApplyReplayGainEvent::Finished { done: 10, .. }]
+        ));
+        assert!(service.rx.is_none());
     }
 }

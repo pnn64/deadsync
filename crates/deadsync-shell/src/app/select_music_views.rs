@@ -9,6 +9,7 @@ use deadsync_theme_simply_love::views::{
     SelectMusicPadProfileView, SelectMusicProfileView, SelectMusicRuntimeView,
     SelectMusicSessionView,
 };
+use std::sync::Arc;
 
 fn pad_in_play(session: SelectMusicSessionView, pad: usize) -> bool {
     match session.play_style {
@@ -245,12 +246,21 @@ impl App {
             display_names: profile_view
                 .sides
                 .each_ref()
-                .map(|side| side.display_name.clone()),
-            avatar_texture_keys: profile_snapshot.avatar_texture_keys,
-            local_profile_ids: profile_snapshot.local_profile_ids,
-            pad_profile_ids: profile_snapshot.pad_profile_ids,
+                .map(|side| Arc::clone(&side.display_name)),
+            avatar_texture_keys: profile_snapshot
+                .avatar_texture_keys
+                .each_ref()
+                .map(|key| key.as_ref().map(Arc::clone)),
+            local_profile_ids: profile_snapshot
+                .local_profile_ids
+                .each_ref()
+                .map(|id| id.as_ref().map(Arc::clone)),
+            pad_profile_ids: profile_snapshot
+                .pad_profile_ids
+                .each_ref()
+                .map(|id| id.as_ref().map(Arc::clone)),
         };
-        let [p1_profile, p2_profile] = profile_snapshot.scorebox.sides;
+        let [p1_profile, p2_profile] = &profile_snapshot.scorebox.sides;
         let [p1_hash, p2_hash] = scorebox_hashes;
         let [p1_leaderboards, p2_leaderboards] = scorebox_leaderboards;
         let pane_filter = super::scorebox_pane_filter(config);

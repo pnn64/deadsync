@@ -62,7 +62,7 @@ pub(super) fn start_reload_song_dirs(state: &mut State, pack_dirs: Vec<PathBuf>)
 
 pub fn sync_reload_events(
     state: &mut State,
-    events: Vec<crate::views::SimplyLoveContentReloadEvent>,
+    events: impl IntoIterator<Item = crate::views::SimplyLoveContentReloadEvent>,
 ) {
     let Some(reload) = state.reload_ui.as_mut() else {
         return;

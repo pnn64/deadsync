@@ -417,7 +417,7 @@ fn evaluation_context_view(
                 joined: player.joined,
                 guest: player.guest,
                 avatar_texture_key: avatar_texture_keys[player_idx].take(),
-                display_name: player.display_name.clone(),
+                display_name: player.display_name.to_string(),
                 groovestats_linked: !player.leaderboard.api_key().trim().is_empty(),
                 arrowcloud_linked: !player.leaderboard.arrowcloud_api_key().trim().is_empty(),
             }
@@ -1620,7 +1620,7 @@ impl App {
                     .take()
                     .expect("one Evaluation scorebox per player side");
                 Self::scorebox_side_view(
-                    player,
+                    &player,
                     Some(score_info.chart.short_hash.clone()),
                     leaderboards[player_idx].clone(),
                     pane_filter,
@@ -1682,7 +1682,7 @@ impl App {
     }
 
     fn scorebox_side_view(
-        player: profile_data::ScoreboxProfileView,
+        player: &profile_data::ScoreboxProfileView,
         chart_hash: Option<String>,
         leaderboards: Option<deadsync_score::CachedPlayerLeaderboardData>,
         pane_filter: deadsync_score::SelectMusicScoreboxFilter,
@@ -1739,9 +1739,9 @@ impl App {
             show_ex_score: player.leaderboard.show_ex_score,
             pane_filter,
             srpg10,
-            display_name: player.display_name,
-            groovestats_username: player.groovestats_username,
-            player_initials: player.player_initials,
+            display_name: Arc::clone(&player.display_name),
+            groovestats_username: Arc::clone(&player.groovestats_username),
+            player_initials: Arc::clone(&player.player_initials),
             local_itg,
             local_ex,
             local_hard_ex,
@@ -1988,7 +1988,7 @@ impl App {
         SelectCourseScoreView {
             mode_show_ex_score: profiles.sides[0].leaderboard.show_ex_score,
             pane_show_ex_score: pane_profile.leaderboard.show_ex_score,
-            player_initials: pane_profile.player_initials.clone(),
+            player_initials: pane_profile.player_initials.to_string(),
             player_score_percent,
             machine_initials,
             machine_score_percent,

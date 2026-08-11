@@ -208,9 +208,9 @@ fn local_self_machine_tag(view: &ScoreboxSideView) -> Option<String> {
 
 fn local_self_scorebox_name(view: &ScoreboxSideView) -> String {
     let fallback = [
-        view.display_name.as_str(),
-        view.groovestats_username.as_str(),
-        view.player_initials.as_str(),
+        view.display_name.as_ref(),
+        view.groovestats_username.as_ref(),
+        view.player_initials.as_ref(),
     ]
     .into_iter()
     .map(str::trim)
@@ -229,9 +229,9 @@ fn leaderboard_entry_matches_local_self(
         return false;
     }
     [
-        view.groovestats_username.as_str(),
-        view.display_name.as_str(),
-        view.player_initials.as_str(),
+        view.groovestats_username.as_ref(),
+        view.display_name.as_ref(),
+        view.player_initials.as_ref(),
     ]
     .into_iter()
     .map(str::trim)
@@ -309,7 +309,7 @@ pub fn select_music_scorebox_view(
         .filter(|score| !score.failed || score.score_10000 > 0.0)
         .map(|score| {
             (
-                runtime.player_initials.clone(),
+                runtime.player_initials.to_string(),
                 score_text_with_percent(score.score_10000),
             )
         })
@@ -1343,8 +1343,8 @@ mod tests {
     #[test]
     fn entries_with_local_self_state_marks_matching_online_name_as_self() {
         let runtime = ScoreboxSideView {
-            display_name: "Self Player".to_string(),
-            player_initials: "SELF".to_string(),
+            display_name: "Self Player".into(),
+            player_initials: "SELF".into(),
             ..Default::default()
         };
         let pane = pane("GrooveStats", vec![entry(7, "Self Player", false, false)]);
@@ -1377,7 +1377,7 @@ mod tests {
     fn select_music_view_uses_prepared_local_records() {
         let runtime = ScoreboxSideView {
             chart_hash: Some("chart".to_string()),
-            player_initials: "P1".to_string(),
+            player_initials: "P1".into(),
             local_itg: Some(crate::views::ScoreboxLocalView {
                 score_10000: 9876.0,
                 failed: false,

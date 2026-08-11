@@ -10,6 +10,7 @@ use deadsync_theme_simply_love::views::{
 use log::warn;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[inline(always)]
 fn path_key(path: &Path) -> String {
@@ -185,17 +186,19 @@ pub(crate) fn session_view() -> SelectMusicSessionView {
 pub(crate) fn profile_view() -> SelectMusicProfileView {
     let players = deadsync_profile::runtime_session_players_view();
     SelectMusicProfileView {
-        display_names: players.display_names,
+        display_names: players.display_names.map(Arc::<str>::from),
         avatar_texture_keys: std::array::from_fn(|idx| {
             profile::get_for_side(deadsync_profile::player_side_for_index(idx))
                 .avatar_texture_key
-                .clone()
+                .as_deref()
+                .map(Arc::<str>::from)
         }),
         local_profile_ids: std::array::from_fn(|idx| {
             profile::active_local_profile_id_for_side(deadsync_profile::player_side_for_index(idx))
+                .map(Arc::<str>::from)
         }),
         pad_profile_ids: std::array::from_fn(|idx| {
-            profile::active_local_profile_id_for_pad(idx == 1)
+            profile::active_local_profile_id_for_pad(idx == 1).map(Arc::<str>::from)
         }),
     }
 }

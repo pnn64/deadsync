@@ -7,6 +7,10 @@ license = "GPL-3.0"
 [[bench]]
 name = "select_music_profile_snapshot"
 harness = false
+required-features = ["bench-support"]
+
+[features]
+bench-support = []
 
 [dependencies]
 bincode = "2.0.1"

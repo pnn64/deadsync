@@ -12,6 +12,11 @@ name = "dynamic_media_completion_budget"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "content_worker_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }

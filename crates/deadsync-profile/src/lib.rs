@@ -4,6 +4,7 @@ use chrono::{Datelike, Local};
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_score::ScoreImportEndpoint;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
 use std::fs;
@@ -2086,9 +2087,9 @@ pub struct ScoreboxProfileView {
     pub leaderboard: deadsync_score::GameplayScoreboxProfileSnapshot,
     pub joined: bool,
     pub guest: bool,
-    pub display_name: String,
-    pub groovestats_username: String,
-    pub player_initials: String,
+    pub display_name: Arc<str>,
+    pub groovestats_username: Arc<str>,
+    pub player_initials: Arc<str>,
 }
 
 #[derive(Debug, Clone)]
@@ -2106,9 +2107,113 @@ pub struct ScoreboxRuntimeView {
 pub struct MusicProfileSnapshot {
     pub scorebox: ScoreboxRuntimeView,
     pub music_rate: f32,
-    pub avatar_texture_keys: [Option<String>; PLAYER_SLOTS],
-    pub local_profile_ids: [Option<String>; PLAYER_SLOTS],
-    pub pad_profile_ids: [Option<String>; PLAYER_SLOTS],
+    pub avatar_texture_keys: [Option<Arc<str>>; PLAYER_SLOTS],
+    pub local_profile_ids: [Option<Arc<str>>; PLAYER_SLOTS],
+    pub pad_profile_ids: [Option<Arc<str>>; PLAYER_SLOTS],
+}
+
+/// Reuses an immutable Select Music profile snapshot while every source field
+/// and service policy remains unchanged.
+///
+/// The owner is one game-thread caller. It is single-thread-only, lives for the
+/// caller's thread, has one entry, and is warmed by the first Select Music
+/// frame. A miss rebuilds the small snapshot without I/O; replacement drops the
+/// previous shared strings on the game thread. There is no eviction scan or
+/// capacity growth. Benchmarks cover hits/misses and allocation counters; a hit
+/// is bounded by two source-field comparisons plus `Arc` refcount increments.
+#[derive(Default)]
+pub struct MusicProfileSnapshotCache {
+    snapshot: Option<Arc<MusicProfileSnapshot>>,
+}
+
+impl MusicProfileSnapshotCache {
+    fn session_matches(
+        &self,
+        active_profiles: &[ActiveProfile; PLAYER_SLOTS],
+        joined_mask: u8,
+        play_style: PlayStyle,
+        player_side: PlayerSide,
+        music_rate: f32,
+    ) -> bool {
+        self.snapshot.as_deref().is_some_and(|snapshot| {
+            music_profile_session_matches(
+                snapshot,
+                active_profiles,
+                joined_mask,
+                play_style,
+                player_side,
+                music_rate,
+            )
+        })
+    }
+
+    fn profile_hit(
+        &self,
+        profiles: &[Profile; PLAYER_SLOTS],
+        enable_groovestats: bool,
+        enable_arrowcloud: bool,
+        auto_populate_gs_scores: bool,
+    ) -> Option<Arc<MusicProfileSnapshot>> {
+        self.snapshot.as_ref().and_then(|snapshot| {
+            music_profile_fields_match(
+                snapshot,
+                profiles,
+                enable_groovestats,
+                enable_arrowcloud,
+                auto_populate_gs_scores,
+            )
+            .then(|| Arc::clone(snapshot))
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn get(
+        &mut self,
+        profiles: &[Profile; PLAYER_SLOTS],
+        active_profiles: &[ActiveProfile; PLAYER_SLOTS],
+        joined_mask: u8,
+        play_style: PlayStyle,
+        player_side: PlayerSide,
+        music_rate: f32,
+        enable_groovestats: bool,
+        enable_arrowcloud: bool,
+        auto_populate_gs_scores: bool,
+    ) -> Arc<MusicProfileSnapshot> {
+        if let Some(snapshot) = self.snapshot.as_ref()
+            && music_profile_snapshot_matches(
+                snapshot,
+                profiles,
+                active_profiles,
+                joined_mask,
+                play_style,
+                player_side,
+                music_rate,
+                enable_groovestats,
+                enable_arrowcloud,
+                auto_populate_gs_scores,
+            )
+        {
+            return Arc::clone(snapshot);
+        }
+        let snapshot = Arc::new(music_profile_snapshot_from_parts(
+            profiles,
+            active_profiles,
+            joined_mask,
+            play_style,
+            player_side,
+            music_rate,
+            enable_groovestats,
+            enable_arrowcloud,
+            auto_populate_gs_scores,
+        ));
+        self.snapshot = Some(Arc::clone(&snapshot));
+        snapshot
+    }
+}
+
+thread_local! {
+    static MUSIC_PROFILE_CACHE: RefCell<MusicProfileSnapshotCache> =
+        RefCell::new(MusicProfileSnapshotCache::default());
 }
 
 pub fn scorebox_runtime_view(
@@ -2139,9 +2244,9 @@ pub fn scorebox_runtime_view(
                 ),
                 joined,
                 guest: active_profile_is_guest(&active_profiles[side_idx]),
-                display_name: profile.display_name.clone(),
-                groovestats_username: profile.groovestats_username.clone(),
-                player_initials: profile.player_initials.clone(),
+                display_name: Arc::from(profile.display_name.as_str()),
+                groovestats_username: Arc::from(profile.groovestats_username.as_str()),
+                player_initials: Arc::from(profile.player_initials.as_str()),
             }
         }),
     }
@@ -2173,6 +2278,7 @@ pub fn runtime_scorebox_view(
     )
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 pub fn music_profile_snapshot(
     profiles: &[Profile; PLAYER_SLOTS],
     session: &SessionState,
@@ -2206,7 +2312,7 @@ fn music_profile_snapshot_from_parts(
     auto_populate_gs_scores: bool,
 ) -> MusicProfileSnapshot {
     let local_profile_ids = std::array::from_fn(|side_idx| {
-        active_profile_local_id(&active_profiles[side_idx]).map(str::to_owned)
+        active_profile_local_id(&active_profiles[side_idx]).map(Arc::<str>::from)
     });
     let pad_profile_ids = std::array::from_fn(|pad| {
         let side = side_for_physical_pad(play_style, player_side, pad == 1);
@@ -2225,18 +2331,145 @@ fn music_profile_snapshot_from_parts(
         ),
         music_rate,
         avatar_texture_keys: std::array::from_fn(|side_idx| {
-            profiles[side_idx].avatar_texture_key.clone()
+            profiles[side_idx]
+                .avatar_texture_key
+                .as_deref()
+                .map(Arc::<str>::from)
         }),
         local_profile_ids,
         pad_profile_ids,
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn music_profile_snapshot_matches(
+    snapshot: &MusicProfileSnapshot,
+    profiles: &[Profile; PLAYER_SLOTS],
+    active_profiles: &[ActiveProfile; PLAYER_SLOTS],
+    joined_mask: u8,
+    play_style: PlayStyle,
+    player_side: PlayerSide,
+    music_rate: f32,
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    auto_populate_gs_scores: bool,
+) -> bool {
+    music_profile_session_matches(
+        snapshot,
+        active_profiles,
+        joined_mask,
+        play_style,
+        player_side,
+        music_rate,
+    ) && music_profile_fields_match(
+        snapshot,
+        profiles,
+        enable_groovestats,
+        enable_arrowcloud,
+        auto_populate_gs_scores,
+    )
+}
+
+fn music_profile_session_matches(
+    snapshot: &MusicProfileSnapshot,
+    active_profiles: &[ActiveProfile; PLAYER_SLOTS],
+    joined_mask: u8,
+    play_style: PlayStyle,
+    player_side: PlayerSide,
+    music_rate: f32,
+) -> bool {
+    snapshot.scorebox.play_style == play_style
+        && snapshot.scorebox.player_side == player_side
+        && snapshot.music_rate == music_rate
+        && (0..PLAYER_SLOTS).all(|side_idx| {
+            let side = player_side_for_index(side_idx);
+            let active = &active_profiles[side_idx];
+            let joined = player_side_is_joined(joined_mask, side);
+            let persistent_profile_id = active_profile_local_id(active);
+            let view = &snapshot.scorebox.sides[side_idx];
+            view.joined == joined
+                && view.guest == active_profile_is_guest(active)
+                && snapshot.local_profile_ids[side_idx].as_deref() == persistent_profile_id
+        })
+        && (0..PLAYER_SLOTS).all(|pad| {
+            let side = side_for_physical_pad(play_style, player_side, pad == 1);
+            snapshot.pad_profile_ids[pad].as_deref()
+                == active_profile_local_id(&active_profiles[player_side_index(side)])
+        })
+}
+
+fn music_profile_fields_match(
+    snapshot: &MusicProfileSnapshot,
+    profiles: &[Profile; PLAYER_SLOTS],
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    auto_populate_gs_scores: bool,
+) -> bool {
+    (0..PLAYER_SLOTS).all(|side_idx| {
+        let profile = &profiles[side_idx];
+        let view = &snapshot.scorebox.sides[side_idx];
+        let leaderboard = &view.leaderboard;
+        let api_key = profile.groovestats_api_key.trim();
+        let arrowcloud_api_key = profile.arrowcloud_api_key.trim();
+        let username = profile.groovestats_username.trim();
+        let persistent_profile_id = snapshot.local_profile_ids[side_idx].as_deref();
+        view.display_name.as_ref() == profile.display_name
+            && view.groovestats_username.as_ref() == profile.groovestats_username
+            && view.player_initials.as_ref() == profile.player_initials
+            && leaderboard.display_scorebox == profile.display_scorebox
+            && leaderboard.gs_active == (enable_groovestats && view.joined && !api_key.is_empty())
+            && leaderboard.show_ex_score == profile.show_ex_score
+            && leaderboard.api_key() == api_key
+            && leaderboard.arrowcloud_api_key() == arrowcloud_api_key
+            && leaderboard.include_arrowcloud()
+                == (enable_arrowcloud && !arrowcloud_api_key.is_empty())
+            && leaderboard.gs_username() == username
+            && leaderboard.persistent_profile_id() == persistent_profile_id
+            && leaderboard.auto_profile_id()
+                == auto_populate_gs_scores
+                    .then_some(persistent_profile_id)
+                    .flatten()
+            && leaderboard.should_auto_populate()
+                == (auto_populate_gs_scores
+                    && persistent_profile_id.is_some()
+                    && !username.is_empty())
+            && snapshot.avatar_texture_keys[side_idx].as_deref()
+                == profile.avatar_texture_key.as_deref()
+    })
+}
+
 pub fn runtime_music_profile_snapshot(
     enable_groovestats: bool,
     enable_arrowcloud: bool,
     auto_populate_gs_scores: bool,
-) -> MusicProfileSnapshot {
+) -> Arc<MusicProfileSnapshot> {
+    let session_matches = {
+        let session = runtime_lock_session();
+        MUSIC_PROFILE_CACHE.with_borrow(|cache| {
+            cache.session_matches(
+                &session.active_profiles,
+                session.joined_mask,
+                session.play_style,
+                session.player_side,
+                session.music_rate(),
+            )
+        })
+    };
+    let profiles = runtime_lock_profiles();
+    if session_matches
+        && let Some(snapshot) = MUSIC_PROFILE_CACHE.with_borrow(|cache| {
+            cache.profile_hit(
+                &profiles,
+                enable_groovestats,
+                enable_arrowcloud,
+                auto_populate_gs_scores,
+            )
+        })
+    {
+        return snapshot;
+    }
+    drop(profiles);
+
     let (active_profiles, joined_mask, play_style, player_side, music_rate) = {
         let session = runtime_lock_session();
         (
@@ -2248,17 +2481,19 @@ pub fn runtime_music_profile_snapshot(
         )
     };
     let profiles = runtime_lock_profiles();
-    music_profile_snapshot_from_parts(
-        &profiles,
-        &active_profiles,
-        joined_mask,
-        play_style,
-        player_side,
-        music_rate,
-        enable_groovestats,
-        enable_arrowcloud,
-        auto_populate_gs_scores,
-    )
+    MUSIC_PROFILE_CACHE.with_borrow_mut(|cache| {
+        cache.get(
+            &profiles,
+            &active_profiles,
+            joined_mask,
+            play_style,
+            player_side,
+            music_rate,
+            enable_groovestats,
+            enable_arrowcloud,
+            auto_populate_gs_scores,
+        )
+    })
 }
 
 /// Capture all profile-owned Evaluation frame data under one session lock and
@@ -10199,17 +10434,72 @@ mod tests {
         }
         assert_eq!(snapshot.music_rate, 1.25);
         assert_eq!(
-            snapshot.avatar_texture_keys,
-            [Some("avatar:p1".to_string()), Some("avatar:p2".to_string())]
+            snapshot
+                .avatar_texture_keys
+                .each_ref()
+                .map(Option::as_deref),
+            [Some("avatar:p1"), Some("avatar:p2")]
         );
         assert_eq!(
-            snapshot.local_profile_ids,
-            [
-                Some("profile-p1".to_string()),
-                Some("profile-p2".to_string())
-            ]
+            snapshot.local_profile_ids.each_ref().map(Option::as_deref),
+            [Some("profile-p1"), Some("profile-p2")]
         );
         assert_eq!(snapshot.pad_profile_ids, snapshot.local_profile_ids);
+    }
+
+    #[test]
+    fn music_profile_snapshot_cache_reuses_hits_and_refreshes_changed_fields() {
+        let mut profiles = [Profile::default(), Profile::default()];
+        profiles[0].display_name = "Alice".to_string();
+        profiles[0].avatar_texture_key = Some("avatar:p1".to_string());
+        let session = SessionState {
+            active_profiles: [
+                ActiveProfile::Local {
+                    id: "profile-p1".to_string(),
+                },
+                ActiveProfile::Guest,
+            ],
+            ..SessionState::default()
+        };
+        let mut cache = MusicProfileSnapshotCache::default();
+        let first = cache.get(
+            &profiles,
+            &session.active_profiles,
+            session.joined_mask,
+            session.play_style,
+            session.player_side,
+            session.music_rate(),
+            true,
+            true,
+            true,
+        );
+        let hit = cache.get(
+            &profiles,
+            &session.active_profiles,
+            session.joined_mask,
+            session.play_style,
+            session.player_side,
+            session.music_rate(),
+            true,
+            true,
+            true,
+        );
+        assert!(Arc::ptr_eq(&first, &hit));
+
+        profiles[0].display_name = "Bob".to_string();
+        let changed = cache.get(
+            &profiles,
+            &session.active_profiles,
+            session.joined_mask,
+            session.play_style,
+            session.player_side,
+            session.music_rate(),
+            true,
+            true,
+            true,
+        );
+        assert!(!Arc::ptr_eq(&first, &changed));
+        assert_eq!(changed.scorebox.sides[0].display_name.as_ref(), "Bob");
     }
 
     #[test]
@@ -10302,8 +10592,8 @@ mod tests {
         assert!(!view.sides[0].joined);
         assert!(!view.sides[0].guest);
         assert!(!view.sides[0].leaderboard.gs_active);
-        assert_eq!(view.sides[0].display_name, "Player One");
-        assert_eq!(view.sides[0].player_initials, "P1");
+        assert_eq!(view.sides[0].display_name.as_ref(), "Player One");
+        assert_eq!(view.sides[0].player_initials.as_ref(), "P1");
         assert!(view.sides[1].joined);
         assert!(!view.sides[1].guest);
         assert!(view.sides[1].leaderboard.gs_active);

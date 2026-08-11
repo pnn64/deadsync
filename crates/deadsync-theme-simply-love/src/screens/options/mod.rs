@@ -261,7 +261,7 @@ pub fn apply_score_import_events(
 
 pub fn apply_apply_replaygain_events(
     state: &mut State,
-    events: Vec<crate::views::SimplyLoveApplyReplayGainEvent>,
+    events: impl IntoIterator<Item = crate::views::SimplyLoveApplyReplayGainEvent>,
 ) {
     for event in events {
         apply_apply_replaygain_event(state, event);

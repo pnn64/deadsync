@@ -3,8 +3,77 @@ use deadsync_theme_simply_love::views::{
     SimplyLoveContentReloadEvent, SimplyLoveContentReloadPhase,
 };
 use log::info;
+use smallvec::SmallVec;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{self, Receiver, SyncSender, TryRecvError};
+use std::time::{Duration, Instant};
+
+/// Worker-to-game progress policy. Workers own production; the game thread owns
+/// reception. The bounded channel lives for one reload, is warmed at job start,
+/// and never grows. Progress updates are sampled and may be skipped when full;
+/// phase and terminal events block until admitted and are never dropped. There
+/// is no eviction or gameplay miss path. At most eight events are integrated in
+/// one frame, and the focused worker-progress benchmark reports queue/frame
+/// cost, allocation churn, and eventual drain behavior.
+pub(crate) const PROGRESS_QUEUE_CAPACITY: usize = 32;
+pub(crate) const PROGRESS_EVENTS_PER_FRAME: usize = 8;
+const PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(16);
+
+#[derive(Default)]
+pub(crate) struct ProgressGate {
+    last_emit: Option<Instant>,
+}
+
+pub(crate) struct ReadyBatch<T> {
+    pub events: SmallVec<[T; PROGRESS_EVENTS_PER_FRAME]>,
+    pub disconnected: bool,
+}
+
+pub(crate) fn receive_ready<T>(rx: &Receiver<T>) -> ReadyBatch<T> {
+    let mut events = SmallVec::new();
+    let mut disconnected = false;
+    for _ in 0..PROGRESS_EVENTS_PER_FRAME {
+        match rx.try_recv() {
+            Ok(event) => events.push(event),
+            Err(TryRecvError::Empty) => break,
+            Err(TryRecvError::Disconnected) => {
+                disconnected = true;
+                break;
+            }
+        }
+    }
+    ReadyBatch {
+        events,
+        disconnected,
+    }
+}
+
+pub(crate) fn send_progress<T>(tx: &SyncSender<T>, done: usize, total: usize, event: T) {
+    if done == total {
+        let _ = tx.send(event);
+    } else {
+        let _ = tx.try_send(event);
+    }
+}
+
+impl ProgressGate {
+    pub(crate) fn should_emit(&mut self, done: usize, total: usize) -> bool {
+        self.should_emit_at(done, total, Instant::now())
+    }
+
+    fn should_emit_at(&mut self, done: usize, total: usize, now: Instant) -> bool {
+        let due = self.last_emit.is_none_or(|last| {
+            now.checked_duration_since(last)
+                .is_some_and(|elapsed| elapsed >= PROGRESS_MIN_INTERVAL)
+        });
+        if done == total || due {
+            self.last_emit = Some(now);
+            true
+        } else {
+            false
+        }
+    }
+}
 
 #[derive(Default)]
 pub(crate) struct Service {
@@ -35,13 +104,22 @@ impl Service {
             let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
                 SimplyLoveContentReloadPhase::Songs,
             ));
+            let mut gate = ProgressGate::default();
             let mut on_song = |done: usize, total: usize, pack: &str, song: &str| {
-                let _ = tx.send(SimplyLoveContentReloadEvent::Song {
+                if !gate.should_emit(done, total) {
+                    return;
+                }
+                send_progress(
+                    &tx,
                     done,
                     total,
-                    pack: pack.to_owned(),
-                    song: song.to_owned(),
-                });
+                    SimplyLoveContentReloadEvent::Song {
+                        done,
+                        total,
+                        pack: pack.to_owned(),
+                        song: song.to_owned(),
+                    },
+                );
             };
             deadsync_simfile::app_runtime::reload_song_dirs_with_progress_counts(
                 &songs_root,
@@ -53,36 +131,34 @@ impl Service {
         });
     }
 
-    fn start(&mut self, job: impl FnOnce(Sender<SimplyLoveContentReloadEvent>) + Send + 'static) {
+    fn start(
+        &mut self,
+        job: impl FnOnce(SyncSender<SimplyLoveContentReloadEvent>) + Send + 'static,
+    ) {
         if self.rx.is_some() {
             return;
         }
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = mpsc::sync_channel(PROGRESS_QUEUE_CAPACITY);
         self.rx = Some(rx);
         std::thread::spawn(move || job(tx));
     }
 
-    pub(crate) fn poll(&mut self) -> Vec<SimplyLoveContentReloadEvent> {
+    pub(crate) fn poll(
+        &mut self,
+    ) -> SmallVec<[SimplyLoveContentReloadEvent; PROGRESS_EVENTS_PER_FRAME]> {
         let Some(rx) = self.rx.as_ref() else {
-            return Vec::new();
+            return SmallVec::new();
         };
-        let mut events = Vec::new();
-        let mut finished = false;
-        loop {
-            match rx.try_recv() {
-                Ok(event) => {
-                    finished |= matches!(event, SimplyLoveContentReloadEvent::Finished { .. });
-                    events.push(event);
-                }
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => {
-                    if !finished {
-                        events.push(finished_event());
-                    }
-                    finished = true;
-                    break;
-                }
+        let batch = receive_ready(rx);
+        let mut events = batch.events;
+        let mut finished = events
+            .iter()
+            .any(|event| matches!(event, SimplyLoveContentReloadEvent::Finished { .. }));
+        if batch.disconnected {
+            if !finished {
+                events.push(finished_event());
             }
+            finished = true;
         }
         if finished {
             self.rx = None;
@@ -91,17 +167,30 @@ impl Service {
     }
 }
 
-fn scan_library(tx: &Sender<SimplyLoveContentReloadEvent>, songs_root: &Path, courses_root: &Path) {
+fn scan_library(
+    tx: &SyncSender<SimplyLoveContentReloadEvent>,
+    songs_root: &Path,
+    courses_root: &Path,
+) {
     let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
         SimplyLoveContentReloadPhase::Songs,
     ));
+    let mut song_gate = ProgressGate::default();
     let mut on_song = |done: usize, total: usize, pack: &str, song: &str| {
-        let _ = tx.send(SimplyLoveContentReloadEvent::Song {
+        if !song_gate.should_emit(done, total) {
+            return;
+        }
+        send_progress(
+            tx,
             done,
             total,
-            pack: pack.to_owned(),
-            song: song.to_owned(),
-        });
+            SimplyLoveContentReloadEvent::Song {
+                done,
+                total,
+                pack: pack.to_owned(),
+                song: song.to_owned(),
+            },
+        );
     };
     deadsync_simfile::app_runtime::scan_and_load_songs_with_progress_counts(
         songs_root,
@@ -111,13 +200,22 @@ fn scan_library(tx: &Sender<SimplyLoveContentReloadEvent>, songs_root: &Path, co
     let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
         SimplyLoveContentReloadPhase::Courses,
     ));
+    let mut course_gate = ProgressGate::default();
     let mut on_course = |done: usize, total: usize, group: &str, course: &str| {
-        let _ = tx.send(SimplyLoveContentReloadEvent::Course {
+        if !course_gate.should_emit(done, total) {
+            return;
+        }
+        send_progress(
+            tx,
             done,
             total,
-            group: group.to_owned(),
-            course: course.to_owned(),
-        });
+            SimplyLoveContentReloadEvent::Course {
+                done,
+                total,
+                group: group.to_owned(),
+                course: course.to_owned(),
+            },
+        );
     };
     deadsync_simfile::app_runtime::scan_and_load_courses_with_progress_counts(
         courses_root,
@@ -126,7 +224,7 @@ fn scan_library(tx: &Sender<SimplyLoveContentReloadEvent>, songs_root: &Path, co
     );
 }
 
-fn prewarm_artwork(tx: &Sender<SimplyLoveContentReloadEvent>) {
+fn prewarm_artwork(tx: &SyncSender<SimplyLoveContentReloadEvent>) {
     let (banner_paths, cdtitle_paths) = artwork_cache_paths();
     let total = deadsync_assets::media_cache::artwork_cache_jobs(&banner_paths, &cdtitle_paths);
     let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
@@ -138,14 +236,23 @@ fn prewarm_artwork(tx: &Sender<SimplyLoveContentReloadEvent>) {
         cdtitle_paths.len(),
         total
     );
+    let mut gate = ProgressGate::default();
     let mut on_artwork = |done: usize, _total: usize, path: Option<&Path>| {
+        if !gate.should_emit(done, total) {
+            return;
+        }
         let (line2, line3) = cache_progress_lines(path);
-        let _ = tx.send(SimplyLoveContentReloadEvent::Artwork {
+        send_progress(
+            tx,
             done,
             total,
-            line2,
-            line3,
-        });
+            SimplyLoveContentReloadEvent::Artwork {
+                done,
+                total,
+                line2,
+                line3,
+            },
+        );
     };
     deadsync_assets::media_cache::prewarm_artwork_cache_with_progress(
         &banner_paths,
@@ -155,18 +262,27 @@ fn prewarm_artwork(tx: &Sender<SimplyLoveContentReloadEvent>) {
     info!("Init loading: artwork cache prewarm complete.");
 }
 
-fn compile_noteskins(tx: &Sender<SimplyLoveContentReloadEvent>) {
+fn compile_noteskins(tx: &SyncSender<SimplyLoveContentReloadEvent>) {
     let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
         SimplyLoveContentReloadPhase::Noteskins,
     ));
     info!("Init loading: compiling noteskin cache before UI...");
+    let mut gate = ProgressGate::default();
     let mut on_noteskin = |done: usize, total: usize, skin: &str, status: &str| {
-        let _ = tx.send(SimplyLoveContentReloadEvent::Noteskins {
+        if !gate.should_emit(done, total) {
+            return;
+        }
+        send_progress(
+            tx,
             done,
             total,
-            skin: skin.to_owned(),
-            status: status.to_owned(),
-        });
+            SimplyLoveContentReloadEvent::Noteskins {
+                done,
+                total,
+                skin: skin.to_owned(),
+                status: status.to_owned(),
+            },
+        );
     };
     let summary = deadsync_assets::noteskin::compile_all_itg_caches_with_progress(&mut on_noteskin);
     info!(
@@ -184,7 +300,10 @@ fn compile_noteskins(tx: &Sender<SimplyLoveContentReloadEvent>) {
 /// When `restrict_to` is `Some`, only songs under those pack directories are
 /// considered (used by targeted song-dir reloads); `None` covers the whole
 /// library (boot and full reload).
-fn analyze_replaygain(tx: &Sender<SimplyLoveContentReloadEvent>, restrict_to: Option<&[PathBuf]>) {
+fn analyze_replaygain(
+    tx: &SyncSender<SimplyLoveContentReloadEvent>,
+    restrict_to: Option<&[PathBuf]>,
+) {
     if !config::get().enable_replaygain || !deadsync_audio_stream::is_initialized() {
         return;
     }
@@ -199,14 +318,23 @@ fn analyze_replaygain(tx: &Sender<SimplyLoveContentReloadEvent>, restrict_to: Op
         "Init loading: analyzing ReplayGain loudness for {} song(s)...",
         paths.len()
     );
+    let mut gate = ProgressGate::default();
     let mut on_song = |done: usize, total: usize, path: &Path| {
+        if !gate.should_emit(done, total) {
+            return;
+        }
         let (line2, line3) = cache_progress_lines(Some(path));
-        let _ = tx.send(SimplyLoveContentReloadEvent::ReplayGain {
+        send_progress(
+            tx,
             done,
             total,
-            line2,
-            line3,
-        });
+            SimplyLoveContentReloadEvent::ReplayGain {
+                done,
+                total,
+                line2,
+                line3,
+            },
+        );
     };
     deadsync_audio_replaygain::analyze_paths_blocking(paths, &mut on_song);
     info!("Init loading: ReplayGain analysis complete.");
@@ -231,6 +359,27 @@ pub(crate) fn replaygain_music_paths(restrict_to: Option<&[PathBuf]>) -> Vec<Pat
         }
     }
     paths.into_iter().collect()
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_sample_progress<T>(
+    samples: &[(usize, usize, Duration)],
+    mut make_event: impl FnMut(usize, usize) -> T,
+) -> Vec<T> {
+    let start = Instant::now();
+    let mut gate = ProgressGate::default();
+    samples
+        .iter()
+        .filter_map(|&(done, total, elapsed)| {
+            gate.should_emit_at(done, total, start + elapsed)
+                .then(|| make_event(done, total))
+        })
+        .collect()
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_receive_ready<T>(rx: &Receiver<T>) -> SmallVec<[T; PROGRESS_EVENTS_PER_FRAME]> {
+    receive_ready(rx).events
 }
 
 fn artwork_cache_paths() -> (Vec<PathBuf>, Vec<PathBuf>) {
@@ -314,7 +463,7 @@ pub(crate) fn cache_progress_lines(path: Option<&Path>) -> (String, String) {
     (parent, file_stem)
 }
 
-fn send_finished(tx: &mpsc::Sender<SimplyLoveContentReloadEvent>) {
+fn send_finished(tx: &mpsc::SyncSender<SimplyLoveContentReloadEvent>) {
     let _ = tx.send(finished_event());
 }
 
@@ -428,6 +577,62 @@ mod tests {
             [SimplyLoveContentReloadEvent::Finished { .. }]
         ));
         assert!(service.rx.is_none());
+    }
+
+    #[test]
+    fn progress_poll_is_bounded_and_preserves_terminal_order() {
+        let (tx, rx) = mpsc::channel();
+        for done in 1..=10 {
+            tx.send(SimplyLoveContentReloadEvent::Song {
+                done,
+                total: 10,
+                pack: "Pack".to_owned(),
+                song: format!("Song {done}"),
+            })
+            .unwrap();
+        }
+        let mut service = Service { rx: Some(rx) };
+        assert_eq!(service.poll().len(), PROGRESS_EVENTS_PER_FRAME);
+        let second = service.poll();
+        assert_eq!(second.len(), 10 - PROGRESS_EVENTS_PER_FRAME);
+        assert!(matches!(
+            second.last(),
+            Some(SimplyLoveContentReloadEvent::Song { done: 10, .. })
+        ));
+
+        tx.send(SimplyLoveContentReloadEvent::Finished {
+            song_packs: Vec::new(),
+        })
+        .unwrap();
+        assert!(matches!(
+            service.poll().as_slice(),
+            [SimplyLoveContentReloadEvent::Finished { .. }]
+        ));
+        assert!(service.rx.is_none());
+    }
+
+    #[test]
+    fn progress_gate_keeps_first_periodic_and_terminal_updates() {
+        let start = Instant::now();
+        let mut gate = ProgressGate::default();
+        assert!(gate.should_emit_at(1, 100, start));
+        assert!(!gate.should_emit_at(2, 100, start + Duration::from_millis(15)));
+        assert!(gate.should_emit_at(3, 100, start + Duration::from_millis(16)));
+        assert!(gate.should_emit_at(100, 100, start + Duration::from_millis(16)));
+    }
+
+    #[test]
+    fn terminal_progress_waits_for_queue_capacity() {
+        let (tx, rx) = mpsc::sync_channel(1);
+        send_progress(&tx, 1, 3, 1);
+        send_progress(&tx, 2, 3, 2);
+        let terminal = std::thread::spawn(move || send_progress(&tx, 3, 3, 3));
+
+        assert_eq!(rx.recv_timeout(Duration::from_secs(1)), Ok(1));
+        assert_eq!(rx.recv_timeout(Duration::from_secs(1)), Ok(3));
+        terminal
+            .join()
+            .expect("terminal progress sender should exit");
     }
 
     #[test]

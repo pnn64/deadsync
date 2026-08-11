@@ -1,7 +1,6 @@
 use deadsync_profile::{
-    ActiveProfile, PlayStyle, PlayerSide, Profile, SessionState, music_profile_snapshot,
-    player_side_for_index, player_side_index, scorebox_runtime_view, session_players_view,
-    side_for_physical_pad,
+    ActiveProfile, MusicProfileSnapshotCache, PlayStyle, PlayerSide, Profile, SessionState,
+    music_profile_snapshot, player_side_for_index, player_side_index,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -134,56 +133,56 @@ fn fixture() -> ([Profile; 2], SessionState) {
 }
 
 fn legacy(profiles: &[Profile; 2], session: &SessionState) -> u64 {
-    let scorebox = scorebox_runtime_view(
-        profiles,
-        &session.active_profiles,
-        session.joined_mask,
-        session.play_style,
-        session.player_side,
-        true,
-        true,
-        true,
-    );
-    let players = session_players_view(profiles, session.joined_mask, session.player_side);
-    let avatars: [Option<String>; 2] = std::array::from_fn(|side| {
-        let full_profile = profiles[side].clone();
-        full_profile.avatar_texture_key.clone()
-    });
-    let local_ids: [Option<String>; 2] = std::array::from_fn(|side| {
-        session
-            .active_local_profile_id(player_side_for_index(side))
-            .map(str::to_owned)
-    });
-    let pad_ids: [Option<String>; 2] = std::array::from_fn(|pad| {
-        let side = side_for_physical_pad(session.play_style, session.player_side, pad == 1);
-        session.active_local_profile_id(side).map(str::to_owned)
-    });
-    checksum(
-        scorebox
-            .sides
-            .each_ref()
-            .map(|side| side.display_name.as_str()),
-        players.display_names.each_ref().map(String::as_str),
-        avatars.each_ref().map(Option::as_deref),
-        local_ids.each_ref().map(Option::as_deref),
-        pad_ids.each_ref().map(Option::as_deref),
-    )
-}
-
-fn current(profiles: &[Profile; 2], session: &SessionState) -> u64 {
     let snapshot = music_profile_snapshot(profiles, session, true, true, true);
     let display_names = snapshot
         .scorebox
         .sides
         .each_ref()
-        .map(|side| side.display_name.clone());
+        .map(|side| side.display_name.to_string());
     checksum(
         snapshot
             .scorebox
             .sides
             .each_ref()
-            .map(|side| side.display_name.as_str()),
+            .map(|side| side.display_name.as_ref()),
         display_names.each_ref().map(String::as_str),
+        snapshot
+            .avatar_texture_keys
+            .each_ref()
+            .map(Option::as_deref),
+        snapshot.local_profile_ids.each_ref().map(Option::as_deref),
+        snapshot.pad_profile_ids.each_ref().map(Option::as_deref),
+    )
+}
+
+fn current(
+    profiles: &[Profile; 2],
+    session: &SessionState,
+    cache: &mut MusicProfileSnapshotCache,
+) -> u64 {
+    let snapshot = cache.get(
+        profiles,
+        &session.active_profiles,
+        session.joined_mask,
+        session.play_style,
+        session.player_side,
+        session.music_rate(),
+        true,
+        true,
+        true,
+    );
+    let display_names = snapshot
+        .scorebox
+        .sides
+        .each_ref()
+        .map(|side| side.display_name.as_ref());
+    checksum(
+        snapshot
+            .scorebox
+            .sides
+            .each_ref()
+            .map(|side| side.display_name.as_ref()),
+        display_names,
         snapshot
             .avatar_texture_keys
             .each_ref()
@@ -246,12 +245,46 @@ fn measure(mut op: impl FnMut() -> u64) -> ResultRow {
 
 fn main() {
     let (profiles, session) = fixture();
+    let mut cache = MusicProfileSnapshotCache::default();
     let old = measure(|| legacy(black_box(&profiles), black_box(&session)));
-    let new = measure(|| current(black_box(&profiles), black_box(&session)));
+    let new = measure(|| current(black_box(&profiles), black_box(&session), &mut cache));
     assert_eq!(old.checksum, new.checksum);
-    println!("Select Music profile capture (2 profiles, 750 set entries/profile)");
-    print("old", &old);
-    print("new", &new);
+    comparison(
+        "Select Music stable profile capture (2 profiles, 750 set entries/profile)",
+        &old,
+        &new,
+    );
+
+    let mut changed_profiles = profiles.clone();
+    changed_profiles[0].display_name = "Changed Player".to_owned();
+    let variants = [&profiles, &changed_profiles];
+    let mut old_variant = 0usize;
+    let mut new_variant = 0usize;
+    let mut miss_cache = MusicProfileSnapshotCache::default();
+    let old_miss = measure(|| {
+        old_variant ^= 1;
+        legacy(black_box(variants[old_variant]), black_box(&session))
+    });
+    let new_miss = measure(|| {
+        new_variant ^= 1;
+        current(
+            black_box(variants[new_variant]),
+            black_box(&session),
+            &mut miss_cache,
+        )
+    });
+    assert_eq!(old_miss.checksum, new_miss.checksum);
+    comparison(
+        "Select Music forced profile-cache miss (alternating identity)",
+        &old_miss,
+        &new_miss,
+    );
+}
+
+fn comparison(title: &str, old: &ResultRow, new: &ResultRow) {
+    println!("{title}");
+    print("old", old);
+    print("new", new);
     println!(
         "  change: {:+.2}% latency  {:+.2}% cycles  {:+.2}% churn",
         change(old.ns, new.ns),

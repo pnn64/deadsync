@@ -737,7 +737,7 @@ pub fn srpg_shop_overlay_visible(state: &State) -> bool {
 }
 
 #[inline(always)]
-pub fn local_profile_ids(state: &State) -> &[Option<String>; 2] {
+pub fn local_profile_ids(state: &State) -> &[Option<Arc<str>>; 2] {
     &state.profiles.local_profile_ids
 }
 
@@ -1737,10 +1737,11 @@ fn sync_new_pack_names(
     match mode {
         NewPackMode::Disabled => {
             for (idx, profile_id) in profiles.local_profile_ids.iter().enumerate() {
-                if profile_id
-                    .as_ref()
-                    .is_some_and(|id| profile_ids.contains(id))
-                {
+                if profile_id.as_ref().is_some_and(|id| {
+                    profile_ids
+                        .iter()
+                        .any(|profile_id| profile_id == id.as_ref())
+                }) {
                     known_packs.names[idx].extend(scanned_pack_names.iter().cloned());
                 }
             }
@@ -4729,7 +4730,9 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         if !in_play {
             continue;
         }
-        let pid = state.profiles.pad_profile_ids[slot].clone();
+        let pid = state.profiles.pad_profile_ids[slot]
+            .as_deref()
+            .map(str::to_owned);
         pads.push((is_p2, pid, slot));
     }
     if pads.is_empty() {
@@ -5048,7 +5051,7 @@ fn start_song_search_prompt(state: &mut State) {
 
 fn active_profile_choices(state: &State) -> [profile_data::ActiveProfile; 2] {
     std::array::from_fn(|idx| match &state.profiles.local_profile_ids[idx] {
-        Some(id) => profile_data::ActiveProfile::Local { id: id.clone() },
+        Some(id) => profile_data::ActiveProfile::Local { id: id.to_string() },
         None => profile_data::ActiveProfile::Guest,
     })
 }
@@ -5280,7 +5283,10 @@ fn start_reload_song_dirs(state: &mut State, pack_dirs: Vec<PathBuf>) -> ThemeEf
     ))
 }
 
-pub fn sync_reload_events(state: &mut State, events: Vec<SimplyLoveContentReloadEvent>) {
+pub fn sync_reload_events(
+    state: &mut State,
+    events: impl IntoIterator<Item = SimplyLoveContentReloadEvent>,
+) {
     let Some(reload) = state.reload_ui.as_mut() else {
         return;
     };
@@ -10438,10 +10444,11 @@ fn handle_confirm_impl(state: &mut State) -> ThemeEffect {
             {
                 let profile_ids = joined_local_profile_ids(state.session, &state.profiles);
                 for (idx, profile_id) in state.profiles.local_profile_ids.iter().enumerate() {
-                    if profile_id
-                        .as_ref()
-                        .is_some_and(|id| profile_ids.contains(id))
-                    {
+                    if profile_id.as_ref().is_some_and(|id| {
+                        profile_ids
+                            .iter()
+                            .any(|profile_id| profile_id == id.as_ref())
+                    }) {
                         state.known_packs.names[idx].insert(target.to_string());
                     }
                 }
@@ -15717,7 +15724,7 @@ mod tests {
     #[test]
     fn pack_favorite_updates_local_view_before_shell_persistence() {
         let mut state = init_placeholder();
-        state.profiles.local_profile_ids[0] = Some("alice".to_string());
+        state.profiles.local_profile_ids[0] = Some("alice".into());
         state.entries = vec![super::MusicWheelEntry::PackHeader {
             name: Arc::from("Pack A"),
             original_index: 0,
@@ -15753,7 +15760,7 @@ mod tests {
     #[test]
     fn series_favorite_updates_local_view_before_shell_persistence() {
         let mut state = init_placeholder();
-        state.profiles.local_profile_ids[0] = Some("alice".to_string());
+        state.profiles.local_profile_ids[0] = Some("alice".into());
         state.entries = vec![super::MusicWheelEntry::PackHeader {
             name: Arc::from("ITG Series"),
             original_index: 0,
@@ -15801,7 +15808,7 @@ mod tests {
         let p2_hash = song.charts[3].short_hash.clone();
         let mut state = init_placeholder();
         state.session.play_style = profile_data::PlayStyle::Versus;
-        state.profiles.local_profile_ids[1] = Some("bob".to_string());
+        state.profiles.local_profile_ids[1] = Some("bob".into());
         state.entries = vec![super::MusicWheelEntry::Song(song)];
         state.selected_steps_index = 1;
         state.p2_selected_steps_index = 3;
@@ -15827,7 +15834,7 @@ mod tests {
     #[test]
     fn open_pack_mode_seeds_empty_history_through_shell_request() {
         let profiles = crate::views::SelectMusicProfileView {
-            local_profile_ids: [Some("alice".to_string()), None],
+            local_profile_ids: [Some("alice".into()), None],
             ..Default::default()
         };
         let mut known = profile_data::KnownPackSnapshot::default();
@@ -15891,10 +15898,10 @@ mod tests {
                     music_rate: 1.25,
                 },
                 profiles: crate::views::SelectMusicProfileView {
-                    display_names: ["Alice".to_string(), "Bob".to_string()],
-                    avatar_texture_keys: [Some("alice-avatar".to_string()), None],
-                    local_profile_ids: [Some("alice".to_string()), None],
-                    pad_profile_ids: [Some("alice".to_string()), Some("alice".to_string())],
+                    display_names: ["Alice".into(), "Bob".into()],
+                    avatar_texture_keys: [Some("alice-avatar".into()), None],
+                    local_profile_ids: [Some("alice".into()), None],
+                    pad_profile_ids: [Some("alice".into()), Some("alice".into())],
                 },
                 favorites: None,
                 pad_profiles: Some([
@@ -15977,7 +15984,14 @@ mod tests {
         assert_eq!(state.session.joined, [true, true]);
         assert_eq!(state.session.guest, [false, true]);
         assert_eq!(state.session.music_rate, 1.25);
-        assert_eq!(state.profiles.display_names, ["Alice", "Bob"]);
+        assert_eq!(
+            state
+                .profiles
+                .display_names
+                .each_ref()
+                .map(|name| name.as_ref()),
+            ["Alice", "Bob"]
+        );
         assert_eq!(
             state
                 .profiles

@@ -290,7 +290,7 @@ fn start_loading(state: &mut State) -> ThemeEffect {
 
 pub fn sync_loading_events(
     state: &mut State,
-    events: Vec<crate::views::SimplyLoveContentReloadEvent>,
+    events: impl IntoIterator<Item = crate::views::SimplyLoveContentReloadEvent>,
 ) {
     let Some(loading) = state.loading.as_mut() else {
         return;

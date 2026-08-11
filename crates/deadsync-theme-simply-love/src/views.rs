@@ -466,9 +466,9 @@ pub struct ScoreboxSideView {
     pub show_ex_score: bool,
     pub pane_filter: deadsync_score::SelectMusicScoreboxFilter,
     pub srpg10: bool,
-    pub display_name: String,
-    pub groovestats_username: String,
-    pub player_initials: String,
+    pub display_name: Arc<str>,
+    pub groovestats_username: Arc<str>,
+    pub player_initials: Arc<str>,
     pub local_itg: Option<ScoreboxLocalView>,
     pub local_ex: Option<ScoreboxLocalView>,
     pub local_hard_ex: Option<ScoreboxLocalView>,
@@ -787,10 +787,10 @@ impl Default for SelectMusicSessionView {
 /// Shell-prepared profile identity and pad routing used by Select Music.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SelectMusicProfileView {
-    pub display_names: [String; 2],
-    pub avatar_texture_keys: [Option<String>; 2],
-    pub local_profile_ids: [Option<String>; 2],
-    pub pad_profile_ids: [Option<String>; 2],
+    pub display_names: [Arc<str>; 2],
+    pub avatar_texture_keys: [Option<Arc<str>>; 2],
+    pub local_profile_ids: [Option<Arc<str>>; 2],
+    pub pad_profile_ids: [Option<Arc<str>>; 2],
 }
 
 /// One shell-prepared saved pad config shown in Select Music's quick menu.
