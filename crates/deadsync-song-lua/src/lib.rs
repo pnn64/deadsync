@@ -6256,6 +6256,42 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_refines_active_player_transform_sampling() {
+        let song_dir = test_dir("set-update-function-player-transform-tail");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        self:SetUpdateFunction(function()
+            local beat = GAMESTATE:GetSongBeat()
+            if beat >= 2 and beat < 4 then
+                local amount = (beat - 2) / 2
+                player:skewx((1 - amount) * (1 - amount))
+            end
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Update Transform Tail");
+        context.song_display_bpms = [120.0, 120.0];
+        context.music_length_seconds = 75.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let tail = compiled
+            .eases
+            .iter()
+            .rev()
+            .find(|ease| matches!(ease.target, SongLuaEaseTarget::PlayerSkewX))
+            .expect("update function should compile player skew samples");
+        assert!(tail.to.abs() < 0.001, "unexpected skew tail: {}", tail.to);
+    }
+
+    #[test]
     fn compile_song_lua_clears_update_function_with_nil() {
         let song_dir = test_dir("set-update-function-clear");
         let entry = song_dir.join("default.lua");

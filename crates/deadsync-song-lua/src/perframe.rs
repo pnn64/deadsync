@@ -15,6 +15,20 @@ use crate::{
 };
 
 pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 4096;
+const SONG_LUA_PLAYER_TRANSFORM_SAMPLE_DIVISOR: f32 = 4.0;
+const PLAYER_TRANSFORM_CAPTURE_KEYS: [&str; 11] = [
+    "x",
+    "y",
+    "z",
+    "rot_x_deg",
+    "rot_z_deg",
+    "rot_y_deg",
+    "zoom_x",
+    "zoom_y",
+    "zoom_z",
+    "skew_x",
+    "skew_y",
+];
 
 pub struct SongLuaPerframeEntry {
     pub start: f32,
@@ -144,6 +158,48 @@ pub fn current_perframe_player_states(
         out[player] = actor_perframe_player_state(actor)?;
     }
     Ok(out)
+}
+
+fn capture_block_has_player_transform(block: &Table) -> Result<bool, String> {
+    for key in PLAYER_TRANSFORM_CAPTURE_KEYS {
+        if !matches!(
+            block.raw_get::<Value>(key).map_err(|err| err.to_string())?,
+            Value::Nil
+        ) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn actor_touched_player_transform(actor: &Table) -> Result<bool, String> {
+    if let Some(block) = actor
+        .get::<Option<Table>>("__songlua_capture_block")
+        .map_err(|err| err.to_string())?
+        && capture_block_has_player_transform(&block)?
+    {
+        return Ok(true);
+    }
+    if let Some(blocks) = actor
+        .get::<Option<Table>>("__songlua_capture_blocks")
+        .map_err(|err| err.to_string())?
+    {
+        for block in blocks.sequence_values::<Table>() {
+            if capture_block_has_player_transform(&block.map_err(|err| err.to_string())?)? {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+fn player_transform_touched(player_tables: &[Option<Table>; LUA_PLAYERS]) -> Result<bool, String> {
+    for actor in player_tables.iter().flatten() {
+        if actor_touched_player_transform(actor)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 pub fn tracked_player_tables(
@@ -765,21 +821,29 @@ pub fn compile_update_functions<Kind>(
     let mut mod_samples = vec![baseline_mods.clone()];
     let mut overlay_samples = vec![baseline_overlays.clone()];
 
-    for sample in update_function_samples(start, end) {
-        let delta_seconds = perframe_delta_seconds(context, sample.delta_beats);
+    let coarse_step = update_function_sample_step(end - start);
+    let fine_step = coarse_step / SONG_LUA_PLAYER_TRANSFORM_SAMPLE_DIVISOR;
+    let mut beat = start;
+    let mut transforms_active = player_transform_touched(&player_tables)?;
+    while beat < end - f32::EPSILON {
+        let next_beat = (beat
+            + if transforms_active {
+                fine_step
+            } else {
+                coarse_step
+            })
+        .min(end);
+        let delta_beats = next_beat - beat;
+        let delta_seconds = perframe_delta_seconds(context, delta_beats);
         reset_overlay_compile_actor_capture_tables(lua, overlays)?;
         reset_tracked_capture_tables(lua, tracked_actors)?;
-        call_update_functions_at(
-            lua,
-            root,
-            sample.eval_beat,
-            sample.delta_beats,
-            delta_seconds,
-        )?;
-        sample_beats.push(sample.beat);
+        call_update_functions_at(lua, root, next_beat, delta_beats, delta_seconds)?;
+        transforms_active = player_transform_touched(&player_tables)?;
+        sample_beats.push(next_beat);
         player_samples.push(current_perframe_player_states(&player_tables)?);
         mod_samples.push(current_update_mod_states(&option_tables)?);
         overlay_samples.push(current_overlay_compile_actor_states(overlays)?);
+        beat = next_beat;
     }
 
     let mut eases = Vec::new();
