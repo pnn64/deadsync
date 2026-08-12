@@ -598,6 +598,27 @@ mod tests {
     }
 
     #[test]
+    fn detects_song_root_default_lua_from_dot_fgchange() {
+        let root = test_dir("dot-fgchange");
+        let song_dir = root.join("PLAY (Initiate Remix)");
+        fs::create_dir_all(&song_dir).unwrap();
+        let default_lua = song_dir.join("default.lua");
+        fs::write(&default_lua, b"return Def.ActorFrame{}").unwrap();
+        let simfile = b"#TITLE:PLAY;\
+            #SUBTITLE:(Initiate Remix);\
+            #FGCHANGES:-10.000=./=1.000=0=0=1;";
+
+        let changes = extract_foreground_change_sets(&song_dir, simfile);
+
+        assert!(changes.uses_lua);
+        assert!(changes.media.is_empty());
+        assert_eq!(changes.lua.len(), 1);
+        assert_eq!(changes.lua[0].start_beat, -10.0);
+        assert_eq!(PathBuf::from(&changes.lua[0].path), default_lua);
+        assert!(simfile_uses_lua(&song_dir, simfile, ""));
+    }
+
+    #[test]
     fn extracts_foreground_media_and_lua_changes() {
         let root = test_dir("fgchanges");
         let song_dir = root.join("Song");

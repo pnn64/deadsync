@@ -111,7 +111,10 @@ pub fn resolve_song_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<Pa
 
     let collapsed = collapse_song_asset_path_like_itg(asset_tag);
     if collapsed.is_empty() {
-        return None;
+        let is_current_dir = asset_tag
+            .split(['/', '\\'])
+            .all(|part| part.is_empty() || part == ".");
+        return (is_current_dir && song_dir.is_dir()).then(|| song_dir.to_path_buf());
     }
     if collapsed.starts_with('/') {
         let path = PathBuf::from(&collapsed);
