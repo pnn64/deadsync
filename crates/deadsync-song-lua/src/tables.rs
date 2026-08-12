@@ -1958,6 +1958,24 @@ pub fn create_timing_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
         "GetBPMs",
         lua.create_function(move |_, _args: MultiValue| Ok(timing_bpms.clone()))?,
     )?;
+    let timed_bpms = create_timed_bpms_table(lua, bpms, true)?;
+    let timed_bpm_strings = create_timed_bpms_table(lua, bpms, false)?;
+    table.set(
+        "GetBPMsAndTimes",
+        lua.create_function(move |_, args: MultiValue| {
+            Ok(
+                if method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_boolish)
+                    .unwrap_or(false)
+                {
+                    timed_bpms.clone()
+                } else {
+                    timed_bpm_strings.clone()
+                },
+            )
+        })?,
+    )?;
     let has_bpm_changes = (bpms[0] - bpms[1]).abs() > f32::EPSILON;
     table.set(
         "HasBPMChanges",
@@ -2624,6 +2642,29 @@ fn create_timing_bpms_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
     Ok(table)
 }
 
+fn create_timed_bpms_table(lua: &Lua, bpms: [f32; 2], numeric: bool) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let count = if (bpms[0] - bpms[1]).abs() > f32::EPSILON {
+        2
+    } else {
+        1
+    };
+    for (index, bpm) in bpms.into_iter().take(count).enumerate() {
+        if numeric {
+            let segment = lua.create_table()?;
+            segment.raw_set(1, index as f32)?;
+            segment.raw_set(2, bpm.max(0.0))?;
+            table.raw_set(index + 1, segment)?;
+        } else {
+            table.raw_set(
+                index + 1,
+                format!("{:.6}={:.6}", index as f32, bpm.max(0.0)),
+            )?;
+        }
+    }
+    Ok(table)
+}
+
 fn call_string_method(table: &Table, name: &str) -> mlua::Result<Option<String>> {
     let Some(function) = table.get::<Option<Function>>(name)? else {
         return Ok(None);
@@ -2879,11 +2920,23 @@ mod tests {
         let lua = Lua::new();
         let timing = create_timing_table(&lua, [120.0, 180.0]).unwrap();
         let get_bpms = timing.get::<mlua::Function>("GetBPMs").unwrap();
+        let get_timed_bpms = timing.get::<mlua::Function>("GetBPMsAndTimes").unwrap();
         let has_bpm_changes = timing.get::<mlua::Function>("HasBPMChanges").unwrap();
         let bpms = get_bpms.call::<Table>(MultiValue::new()).unwrap();
+        let timed_bpms = get_timed_bpms
+            .call::<Table>((timing.clone(), true))
+            .unwrap();
+        let timed_bpm_strings = get_timed_bpms.call::<Table>((timing, false)).unwrap();
 
         assert_eq!(bpms.raw_get::<f32>(1).unwrap(), 120.0);
         assert_eq!(bpms.raw_get::<f32>(2).unwrap(), 180.0);
+        let second = timed_bpms.raw_get::<Table>(2).unwrap();
+        assert_eq!(second.raw_get::<f32>(1).unwrap(), 1.0);
+        assert_eq!(second.raw_get::<f32>(2).unwrap(), 180.0);
+        assert_eq!(
+            timed_bpm_strings.raw_get::<String>(1).unwrap(),
+            "0.000000=120.000000"
+        );
         assert!(has_bpm_changes.call::<bool>(MultiValue::new()).unwrap());
     }
 

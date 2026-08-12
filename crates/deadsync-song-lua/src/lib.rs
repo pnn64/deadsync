@@ -15261,6 +15261,50 @@ return Def.ActorFrame {}
     }
 
     #[test]
+    fn compile_song_lua_loadfile_inherits_lua51_env_table() {
+        let root = test_dir("loadfile-lua51-env");
+        let entry = root.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local _ENV = {
+    _G = _G,
+    Def = Def,
+}
+
+function _ENV.loadfile(path)
+    local chunk, err = _G.loadfile(path)
+    if err then error(err, 2) end
+    if setfenv then setfenv(chunk, _ENV) end
+    return chunk()
+end
+
+function _ENV.module(name)
+    return name
+end
+
+return Def.ActorFrame{
+    InitCommand = function()
+        _ENV.loadfile("child.lua")
+    end,
+}
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("child.lua"),
+            r#"assert(module("helpers") == "helpers")"#,
+        )
+        .unwrap();
+
+        test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&root, "Lua 5.1 Environment"),
+        )
+        .expect("loadfile should preserve a Lua 5.1-style environment table");
+    }
+
+    #[test]
     fn compile_song_lua_supports_generated_runtime_modchart() {
         let root = test_dir("generated-runtime-modchart");
         let entry = root.join("default.lua");

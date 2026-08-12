@@ -109,9 +109,22 @@ pub fn read_song_lua_sound_paths(lua: &Lua) -> Result<Vec<PathBuf>, String> {
 }
 
 pub fn load_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result<Function> {
+    load_script_file_with_env(lua, path, song_dir, None)
+}
+
+fn load_script_file_with_env(
+    lua: &Lua,
+    path: &Path,
+    song_dir: &Path,
+    environment: Option<Table>,
+) -> mlua::Result<Function> {
     let source = fs::read_to_string(path).map_err(mlua::Error::external)?;
     let source = preprocess_lua_cmd_syntax(&source).map_err(mlua::Error::external)?;
-    let chunk_env = create_chunk_env_proxy(lua, initial_chunk_environment(lua, path)?)?;
+    let environment = match environment {
+        Some(environment) => environment,
+        None => initial_chunk_environment(lua, path)?,
+    };
+    let chunk_env = create_chunk_env_proxy(lua, environment)?;
     let chunk = lua
         .load(&source)
         .set_name(path.to_string_lossy().as_ref())
@@ -139,6 +152,15 @@ pub fn execute_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Res
 }
 
 pub fn create_loader_function(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<Function> {
+    create_loader_function_with_env(lua, song_dir, path, None)
+}
+
+fn create_loader_function_with_env(
+    lua: &Lua,
+    song_dir: &Path,
+    path: &str,
+    environment: Option<Table>,
+) -> mlua::Result<Function> {
     let path = path.trim();
     let basename = Path::new(path)
         .file_name()
@@ -149,7 +171,12 @@ pub fn create_loader_function(lua: &Lua, song_dir: &Path, path: &str) -> mlua::R
         return lua.create_function(move |_, _args: MultiValue| Ok(Value::Table(ease.clone())));
     }
     let resolved = resolve_script_path(lua, song_dir, path)?;
-    load_script_file(lua, &resolved, song_dir)
+    load_script_file_with_env(lua, &resolved, song_dir, environment)
+}
+
+fn caller_chunk_environment(lua: &Lua) -> Option<Table> {
+    lua.inspect_stack(1, |debug| debug.function().environment())
+        .flatten()
 }
 
 pub fn install_file_loader_globals(
@@ -163,7 +190,12 @@ pub fn install_file_loader_globals(
         "loadfile",
         lua.create_function(move |lua, path: String| {
             let mut out = MultiValue::new();
-            match create_loader_function(lua, &song_dir_for_loadfile, &path) {
+            match create_loader_function_with_env(
+                lua,
+                &song_dir_for_loadfile,
+                &path,
+                caller_chunk_environment(lua),
+            ) {
                 Ok(loader) => {
                     out.push_back(Value::Function(loader));
                     out.push_back(Value::Nil);
