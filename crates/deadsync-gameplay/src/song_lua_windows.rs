@@ -309,6 +309,47 @@ pub fn build_song_lua_constant_windows_for_player<Window: SongLuaModWindowLike>(
                 global_offset_seconds,
             )
         {
+            if out.is_empty() {
+                out.reserve(time_mods.len().saturating_add(beat_mods.len()));
+            }
+            out.push(window);
+        }
+    }
+    for window in beat_mods {
+        if song_lua_target_matches_player(window.player(), player)
+            && let Some(window) = build_song_lua_constant_window_from_mod(
+                window,
+                timing_player,
+                global_offset_seconds,
+            )
+        {
+            if out.is_empty() {
+                out.reserve(time_mods.len().saturating_add(beat_mods.len()));
+            }
+            out.push(window);
+        }
+    }
+    out
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn build_song_lua_constant_windows_for_player_reference<Window: SongLuaModWindowLike>(
+    time_mods: &[Window],
+    beat_mods: &[Window],
+    timing_player: &TimingData,
+    player: usize,
+    global_offset_seconds: f32,
+) -> Vec<AttackMaskWindow> {
+    let mut out = Vec::new();
+    for window in time_mods {
+        if song_lua_target_matches_player(window.player(), player)
+            && let Some(window) = build_song_lua_constant_window_from_mod(
+                window,
+                timing_player,
+                global_offset_seconds,
+            )
+        {
             out.push(window);
         }
     }
@@ -420,6 +461,60 @@ impl SongLuaColumnOffsetWindowLike for SongLuaRuntimeColumnOffsetWindow {
 }
 
 pub fn build_song_lua_column_offset_windows_for_player<Window: SongLuaColumnOffsetWindowLike>(
+    windows: &[Window],
+    timing_player: &TimingData,
+    player: usize,
+    global_offset_seconds: f32,
+) -> Vec<SongLuaColumnOffsetWindowRuntime> {
+    let mut out = Vec::new();
+    for window in windows {
+        if window.player() != player {
+            continue;
+        }
+        let Some((start_second, end_second)) = song_lua_window_seconds(
+            window.unit(),
+            window.start(),
+            window.limit(),
+            window.span_mode(),
+            timing_player,
+            global_offset_seconds,
+        ) else {
+            continue;
+        };
+        let sustain_end_second = song_lua_sustain_end_second(
+            window.unit(),
+            window.start(),
+            window.limit(),
+            window.span_mode(),
+            window.sustain(),
+            timing_player,
+            global_offset_seconds,
+            end_second,
+        );
+        if out.is_empty() {
+            out.reserve(windows.len());
+        }
+        out.push(build_song_lua_column_offset_window_runtime(
+            window.column(),
+            start_second,
+            end_second,
+            sustain_end_second,
+            window.from_y(),
+            window.to_y(),
+            window.easing(),
+            window.opt1(),
+            window.opt2(),
+        ));
+    }
+    song_lua_extend_column_offset_tails(&mut out);
+    out
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn build_song_lua_column_offset_windows_for_player_reference<
+    Window: SongLuaColumnOffsetWindowLike,
+>(
     windows: &[Window],
     timing_player: &TimingData,
     player: usize,

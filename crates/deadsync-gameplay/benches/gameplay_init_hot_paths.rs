@@ -1,16 +1,22 @@
 use deadsync_chart::GameplayChartData;
 use deadsync_core::{input::MAX_COLS, note::NoteType};
 use deadsync_gameplay::{
-    CrossoverRow, PumpHoldEventKind, SongLuaEaseMaskWindow, SongLuaNoteHideWindows,
-    append_song_lua_ease_targets, append_song_lua_ease_targets_reference,
-    build_assist_clap_rows_preallocated_for_bench, build_assist_clap_rows_reference_for_bench,
-    build_column_cues_for_player, build_column_cues_for_player_reference,
-    build_crossover_cues_for_bench, build_crossover_cues_reference_for_bench, build_crossover_rows,
-    build_crossover_rows_reference, build_note_count_stats,
-    build_note_count_stats_for_players_for_bench, build_note_count_stats_reference,
-    build_pump_hold_events, build_pump_hold_events_reference,
-    build_song_lua_message_command_indices, build_song_lua_message_command_indices_reference,
-    build_song_lua_note_hide_windows_for_players,
+    AttackMaskWindow, CrossoverRow, PumpHoldEventKind, SongLuaColumnOffsetWindowRuntime,
+    SongLuaEaseMaskWindow, SongLuaNoteHideWindows, SongLuaRuntimeColumnOffsetWindow,
+    SongLuaRuntimeEaseTargetOwned, SongLuaRuntimeEaseWindow, SongLuaRuntimeModWindow,
+    SongLuaRuntimeSpanMode, SongLuaRuntimeTimeUnit, append_song_lua_ease_targets,
+    append_song_lua_ease_targets_reference, build_assist_clap_rows_preallocated_for_bench,
+    build_assist_clap_rows_reference_for_bench, build_column_cues_for_player,
+    build_column_cues_for_player_reference, build_crossover_cues_for_bench,
+    build_crossover_cues_reference_for_bench, build_crossover_rows, build_crossover_rows_reference,
+    build_note_count_stats, build_note_count_stats_for_players_for_bench,
+    build_note_count_stats_reference, build_pump_hold_events, build_pump_hold_events_reference,
+    build_song_lua_column_offset_windows_for_player,
+    build_song_lua_column_offset_windows_for_player_reference,
+    build_song_lua_constant_windows_for_player,
+    build_song_lua_constant_windows_for_player_reference, build_song_lua_ease_windows_for_player,
+    build_song_lua_ease_windows_for_player_reference, build_song_lua_message_command_indices,
+    build_song_lua_message_command_indices_reference, build_song_lua_note_hide_windows_for_players,
     build_song_lua_note_hide_windows_for_players_reference, parse_attack_mods,
     parse_attack_mods_reference, parse_chart_attack_windows, parse_chart_attack_windows_reference,
     parse_song_lua_runtime_mods, parse_song_lua_runtime_mods_reference, pump_tap_rows_for_bench,
@@ -39,6 +45,7 @@ const METADATA_ITERS: usize = 128;
 const PUMP_EVENT_ITERS: usize = 32;
 const ATTACK_PARSE_ITERS: usize = 64;
 const SONG_LUA_HIDE_ITERS: usize = 32;
+const SONG_LUA_BUILD_ITERS: usize = 64;
 
 struct CountingAlloc {
     enabled: AtomicBool,
@@ -515,6 +522,35 @@ fn note_hide_checksum(players: [SongLuaNoteHideWindows; 2]) -> u64 {
                 sum.rotate_left(1) ^ u64::from(song_lua_note_hidden(windows, column, beat))
             })
         })
+}
+
+fn constant_window_checksum(windows: Vec<AttackMaskWindow>) -> u64 {
+    windows.into_iter().fold(0u64, |sum, window| {
+        sum.rotate_left(5)
+            ^ u64::from(window.start_second.to_bits())
+            ^ u64::from(window.end_second.to_bits()).rotate_left(7)
+            ^ u64::from(window.clear_all).rotate_left(13)
+            ^ window
+                .visual
+                .drunk
+                .map_or(0, |value| u64::from(value.to_bits()).rotate_left(19))
+            ^ window
+                .appearance
+                .hidden
+                .map_or(0, |value| u64::from(value.to_bits()).rotate_left(29))
+    })
+}
+
+fn column_offset_checksum(windows: Vec<SongLuaColumnOffsetWindowRuntime>) -> u64 {
+    windows.into_iter().fold(0u64, |sum, window| {
+        sum.rotate_left(5)
+            ^ window.column as u64
+            ^ u64::from(window.start_second.to_bits()).rotate_left(7)
+            ^ u64::from(window.end_second.to_bits()).rotate_left(13)
+            ^ u64::from(window.sustain_end_second.to_bits()).rotate_left(19)
+            ^ u64::from(window.from_y.to_bits()).rotate_left(23)
+            ^ u64::from(window.to_y.to_bits()).rotate_left(31)
+    })
 }
 
 fn usize_checksum(values: Vec<usize>) -> u64 {
@@ -1009,6 +1045,164 @@ fn main() {
     );
     print_pair(
         "15. single-pass Song-Lua note-hide index",
+        old,
+        new,
+        old_alloc,
+        new_alloc,
+    );
+
+    let song_lua_time_mods = (0..128)
+        .map(|index| SongLuaRuntimeModWindow {
+            player: (index % 3 != 0).then_some(1),
+            unit: SongLuaRuntimeTimeUnit::Second,
+            start: index as f32 * 0.25,
+            limit: index as f32 * 0.25 + 1.0,
+            span_mode: SongLuaRuntimeSpanMode::End,
+            mods: "50% hidden,25% reverse,15% drunk".to_owned(),
+        })
+        .collect::<Vec<_>>();
+    let song_lua_beat_mods = (0..128)
+        .map(|index| SongLuaRuntimeModWindow {
+            player: (index % 3 != 0).then_some(1),
+            unit: SongLuaRuntimeTimeUnit::Beat,
+            start: index as f32 * 0.25,
+            limit: 2.0,
+            span_mode: SongLuaRuntimeSpanMode::Len,
+            mods: "*2 20% bumpy,10% mini,25% incoming".to_owned(),
+        })
+        .collect::<Vec<_>>();
+    let song_lua_timing = pump.timing_players[0].as_ref();
+    let mod_window_count = song_lua_time_mods.len() + song_lua_beat_mods.len();
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        mod_window_count,
+        SONG_LUA_BUILD_ITERS,
+        || {
+            constant_window_checksum(build_song_lua_constant_windows_for_player_reference(
+                black_box(&song_lua_time_mods),
+                black_box(&song_lua_beat_mods),
+                black_box(song_lua_timing),
+                0,
+                -0.012,
+            ))
+        },
+        || {
+            constant_window_checksum(build_song_lua_constant_windows_for_player(
+                black_box(&song_lua_time_mods),
+                black_box(&song_lua_beat_mods),
+                black_box(song_lua_timing),
+                0,
+                -0.012,
+            ))
+        },
+    );
+    print_pair(
+        "16. pre-sized Song-Lua constant windows",
+        old,
+        new,
+        old_alloc,
+        new_alloc,
+    );
+
+    let column_offset_windows = (0..256)
+        .map(|index| SongLuaRuntimeColumnOffsetWindow {
+            player: 0,
+            unit: SongLuaRuntimeTimeUnit::Second,
+            start: index as f32 * 0.25,
+            limit: index as f32 * 0.25 + 0.125,
+            span_mode: SongLuaRuntimeSpanMode::End,
+            column: index % MAX_COLS,
+            from_y: (index as f32).sin() * 32.0,
+            to_y: (index as f32).cos() * 32.0,
+            easing: Some("outQuad".to_owned()),
+            sustain: (index % 5 == 0).then_some(0.5),
+            opt1: Some(0.5),
+            opt2: None,
+        })
+        .collect::<Vec<_>>();
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        column_offset_windows.len(),
+        SONG_LUA_BUILD_ITERS,
+        || {
+            column_offset_checksum(build_song_lua_column_offset_windows_for_player_reference(
+                black_box(&column_offset_windows),
+                black_box(song_lua_timing),
+                0,
+                -0.012,
+            ))
+        },
+        || {
+            column_offset_checksum(build_song_lua_column_offset_windows_for_player(
+                black_box(&column_offset_windows),
+                black_box(song_lua_timing),
+                0,
+                -0.012,
+            ))
+        },
+    );
+    print_pair(
+        "17. pre-sized Song-Lua column offsets",
+        old,
+        new,
+        old_alloc,
+        new_alloc,
+    );
+
+    const EASE_WINDOW_TARGETS: [&str; 8] = [
+        "incoming",
+        "space",
+        "bumpy3",
+        "hidden",
+        "reverse",
+        "tiny2",
+        "pulseouter",
+        "mini",
+    ];
+    let ease_windows = (0..256)
+        .map(|index| SongLuaRuntimeEaseWindow {
+            player: (index % 3 != 0).then_some(1),
+            unit: SongLuaRuntimeTimeUnit::Second,
+            start: index as f32 * 0.25,
+            limit: index as f32 * 0.25 + 0.125,
+            span_mode: SongLuaRuntimeSpanMode::End,
+            target: SongLuaRuntimeEaseTargetOwned::Mod(
+                EASE_WINDOW_TARGETS[index % EASE_WINDOW_TARGETS.len()].to_owned(),
+            ),
+            from: -25.0,
+            to: 75.0,
+            easing: Some("outQuad".to_owned()),
+            sustain: (index % 5 == 0).then_some(0.5),
+            opt1: Some(0.5),
+            opt2: None,
+        })
+        .collect::<Vec<_>>();
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        ease_windows.len(),
+        SONG_LUA_BUILD_ITERS,
+        || {
+            let (windows, unsupported) = build_song_lua_ease_windows_for_player_reference(
+                black_box(&ease_windows),
+                black_box(song_lua_timing),
+                0,
+                -0.012,
+                &[],
+                |_| {},
+            );
+            ease_window_checksum(windows, unsupported)
+        },
+        || {
+            let (windows, unsupported) = build_song_lua_ease_windows_for_player(
+                black_box(&ease_windows),
+                black_box(song_lua_timing),
+                0,
+                -0.012,
+                &[],
+                |_| {},
+            );
+            ease_window_checksum(windows, unsupported)
+        },
+    );
+    print_pair(
+        "18. pre-sized Song-Lua ease windows",
         old,
         new,
         old_alloc,

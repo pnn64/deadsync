@@ -461,7 +461,7 @@ pub fn begin_outro_attack_visual_clear(
     outro_attack_visual[..player_count].copy_from_slice(&active_attack_visual[..player_count]);
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AttackMaskWindow {
     pub start_second: f32,
     pub end_second: f32,
@@ -641,7 +641,7 @@ pub enum SongLuaRuntimeEaseAppend {
     Ignored,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SongLuaColumnOffsetWindowRuntime {
     pub column: usize,
     pub start_second: f32,
@@ -1974,6 +1974,36 @@ where
 }
 
 pub fn build_song_lua_ease_windows_for_player<Window>(
+    windows: &[Window],
+    timing_player: &TimingData,
+    player: usize,
+    global_offset_seconds: f32,
+    constant_windows: &[AttackMaskWindow],
+    mut unsupported_window: impl FnMut(&Window),
+) -> (Vec<SongLuaEaseMaskWindow>, usize)
+where
+    Window: SongLuaEaseWindowLike,
+{
+    let mut out = Vec::with_capacity(windows.len().saturating_mul(2));
+    let mut unsupported_targets = 0usize;
+    for window in windows {
+        if !song_lua_target_matches_player(window.player(), player) {
+            continue;
+        }
+        if append_song_lua_ease_window_for(&mut out, window, timing_player, global_offset_seconds)
+            == SongLuaRuntimeEaseAppend::Unsupported
+        {
+            unsupported_targets += 1;
+            unsupported_window(window);
+        }
+    }
+    song_lua_extend_ease_tails(&mut out, constant_windows);
+    (out, unsupported_targets)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn build_song_lua_ease_windows_for_player_reference<Window>(
     windows: &[Window],
     timing_player: &TimingData,
     player: usize,

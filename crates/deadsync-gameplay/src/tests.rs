@@ -6702,6 +6702,217 @@ mod tests {
     }
 
     #[test]
+    fn preallocated_song_lua_constant_windows_match_geometric_growth() {
+        let timing = test_timing(ROWS_PER_BEAT as usize * 16);
+        let time_mods = [
+            SongLuaRuntimeModWindow {
+                player: Some(1),
+                unit: SongLuaRuntimeTimeUnit::Second,
+                start: 1.0,
+                limit: 3.0,
+                span_mode: SongLuaRuntimeSpanMode::End,
+                mods: "50% hidden,25% reverse".to_owned(),
+            },
+            SongLuaRuntimeModWindow {
+                player: Some(2),
+                unit: SongLuaRuntimeTimeUnit::Second,
+                start: 2.0,
+                limit: 5.0,
+                span_mode: SongLuaRuntimeSpanMode::End,
+                mods: "drunk".to_owned(),
+            },
+            SongLuaRuntimeModWindow {
+                player: None,
+                unit: SongLuaRuntimeTimeUnit::Second,
+                start: 6.0,
+                limit: 4.0,
+                span_mode: SongLuaRuntimeSpanMode::End,
+                mods: "mini".to_owned(),
+            },
+        ];
+        let beat_mods = [
+            SongLuaRuntimeModWindow {
+                player: None,
+                unit: SongLuaRuntimeTimeUnit::Beat,
+                start: 4.0,
+                limit: 2.0,
+                span_mode: SongLuaRuntimeSpanMode::Len,
+                mods: "*2 75% bumpy".to_owned(),
+            },
+            SongLuaRuntimeModWindow {
+                player: Some(1),
+                unit: SongLuaRuntimeTimeUnit::Beat,
+                start: 7.0,
+                limit: 8.0,
+                span_mode: SongLuaRuntimeSpanMode::End,
+                mods: "noholds".to_owned(),
+            },
+        ];
+
+        let expected = build_song_lua_constant_windows_for_player_reference(
+            &time_mods, &beat_mods, &timing, 0, 0.125,
+        );
+        let actual = build_song_lua_constant_windows_for_player(
+            &time_mods, &beat_mods, &timing, 0, 0.125,
+        );
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn preallocated_song_lua_column_offsets_match_geometric_growth() {
+        let timing = test_timing(ROWS_PER_BEAT as usize * 16);
+        let windows = [
+            SongLuaRuntimeColumnOffsetWindow {
+                player: 0,
+                unit: SongLuaRuntimeTimeUnit::Beat,
+                start: 1.0,
+                limit: 2.0,
+                span_mode: SongLuaRuntimeSpanMode::Len,
+                column: 1,
+                from_y: -32.0,
+                to_y: 16.0,
+                easing: Some("outQuad".to_owned()),
+                sustain: Some(1.0),
+                opt1: Some(0.5),
+                opt2: None,
+            },
+            SongLuaRuntimeColumnOffsetWindow {
+                player: 1,
+                unit: SongLuaRuntimeTimeUnit::Second,
+                start: 2.0,
+                limit: 4.0,
+                span_mode: SongLuaRuntimeSpanMode::End,
+                column: 2,
+                from_y: 4.0,
+                to_y: 8.0,
+                easing: None,
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            },
+            SongLuaRuntimeColumnOffsetWindow {
+                player: 0,
+                unit: SongLuaRuntimeTimeUnit::Second,
+                start: 5.0,
+                limit: 4.0,
+                span_mode: SongLuaRuntimeSpanMode::End,
+                column: 3,
+                from_y: 1.0,
+                to_y: 2.0,
+                easing: Some("linear".to_owned()),
+                sustain: None,
+                opt1: None,
+                opt2: Some(2.0),
+            },
+            SongLuaRuntimeColumnOffsetWindow {
+                player: 0,
+                unit: SongLuaRuntimeTimeUnit::Second,
+                start: 7.0,
+                limit: 9.0,
+                span_mode: SongLuaRuntimeSpanMode::End,
+                column: 1,
+                from_y: 16.0,
+                to_y: 0.0,
+                easing: Some("inOutSine".to_owned()),
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            },
+        ];
+
+        let expected = build_song_lua_column_offset_windows_for_player_reference(
+            &windows, &timing, 0, 0.25,
+        );
+        let actual =
+            build_song_lua_column_offset_windows_for_player(&windows, &timing, 0, 0.25);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn preallocated_song_lua_ease_windows_match_geometric_growth() {
+        let timing = test_timing(ROWS_PER_BEAT as usize * 16);
+        let windows = [
+            SongLuaRuntimeEaseWindow {
+                player: Some(1),
+                unit: SongLuaRuntimeTimeUnit::Beat,
+                start: 1.0,
+                limit: 2.0,
+                span_mode: SongLuaRuntimeSpanMode::Len,
+                target: SongLuaRuntimeEaseTargetOwned::Mod("incoming".to_owned()),
+                from: -25.0,
+                to: 75.0,
+                easing: Some("outQuad".to_owned()),
+                sustain: Some(1.0),
+                opt1: Some(0.5),
+                opt2: None,
+            },
+            SongLuaRuntimeEaseWindow {
+                player: None,
+                unit: SongLuaRuntimeTimeUnit::Second,
+                start: 4.0,
+                limit: 7.0,
+                span_mode: SongLuaRuntimeSpanMode::End,
+                target: SongLuaRuntimeEaseTargetOwned::Mod("bumpy3".to_owned()),
+                from: 0.0,
+                to: 50.0,
+                easing: None,
+                sustain: None,
+                opt1: None,
+                opt2: Some(2.0),
+            },
+            SongLuaRuntimeEaseWindow {
+                player: Some(2),
+                unit: SongLuaRuntimeTimeUnit::Second,
+                start: 2.0,
+                limit: 5.0,
+                span_mode: SongLuaRuntimeSpanMode::End,
+                target: SongLuaRuntimeEaseTargetOwned::Mod("hidden".to_owned()),
+                from: 0.0,
+                to: 100.0,
+                easing: Some("linear".to_owned()),
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            },
+            SongLuaRuntimeEaseWindow {
+                player: Some(1),
+                unit: SongLuaRuntimeTimeUnit::Second,
+                start: 9.0,
+                limit: 8.0,
+                span_mode: SongLuaRuntimeSpanMode::End,
+                target: SongLuaRuntimeEaseTargetOwned::Function,
+                from: 0.0,
+                to: 1.0,
+                easing: None,
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            },
+        ];
+
+        let expected = build_song_lua_ease_windows_for_player_reference(
+            &windows,
+            &timing,
+            0,
+            0.125,
+            &[],
+            |_| {},
+        );
+        let actual = build_song_lua_ease_windows_for_player(
+            &windows,
+            &timing,
+            0,
+            0.125,
+            &[],
+            |_| {},
+        );
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn scroll_overrides_approach_targets_by_speed() {
         let mut current = ScrollOverrides {
             reverse: Some(0.0),
