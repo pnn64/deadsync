@@ -201,6 +201,12 @@ pub fn screen_change_plan(previous: Screen, target: Screen) -> ScreenChangePlan 
     }
 }
 
+#[inline(always)]
+pub const fn course_plan_required(previous: Screen, target: Screen) -> bool {
+    matches!(previous, Screen::SelectCourse)
+        && matches!(target, Screen::Gameplay | Screen::PlayerOptions)
+}
+
 /// Build audio commands for a completed actor-only screen transition.
 pub fn actor_transition_music_commands(
     previous: Screen,
@@ -762,6 +768,17 @@ mod tests {
                 clear_text_layout_cache: true,
             }
         );
+    }
+
+    #[test]
+    fn selected_course_routes_require_a_playable_course_plan() {
+        assert!(course_plan_required(Screen::SelectCourse, Screen::Gameplay));
+        assert!(course_plan_required(
+            Screen::SelectCourse,
+            Screen::PlayerOptions
+        ));
+        assert!(!course_plan_required(Screen::SelectCourse, Screen::Menu));
+        assert!(!course_plan_required(Screen::SelectMusic, Screen::Gameplay));
     }
 
     #[test]

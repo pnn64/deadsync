@@ -11,8 +11,8 @@ use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
 pub use rssp::course::{
-    CourseEntry, CourseFile, CourseSong, Difficulty, SongSort, StepsSpec, difficulty_label,
-    resolve_course_banner_path,
+    CourseEntry, CourseFile, CourseSong, Difficulty, SongSelect, SongSort, StepsSpec,
+    difficulty_label, resolve_course_banner_path,
 };
 
 pub type LoadedCourse = (PathBuf, CourseFile);
@@ -35,6 +35,14 @@ pub struct CourseTotals {
     pub hands: u32,
     pub rolls: u32,
 }
+
+#[derive(Clone, Debug)]
+pub struct ResolvedCourseStage {
+    pub song: Arc<SongData>,
+    pub chart_index: usize,
+}
+
+pub type CourseGradeCounts = [u32; 19];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CourseRefError {
@@ -324,57 +332,7 @@ pub fn course_difficulty_from_meters(course: &CourseFile) -> Option<(&'static st
     None
 }
 
-pub fn resolve_course_chart<'a>(
-    song: &'a SongData,
-    entry: &CourseEntry,
-    chart_type: &str,
-    course_difficulty: Difficulty,
-) -> Option<&'a ChartData> {
-    let mut first_chart = None;
-    let mut first_playable = None;
-    let mut meter_match = None;
-    let target_diff = match &entry.steps {
-        StepsSpec::Difficulty(diff) => {
-            let selected = if course_difficulty != Difficulty::Medium && !entry.no_difficult {
-                shifted_course_difficulty(*diff, course_difficulty)
-            } else {
-                *diff
-            };
-            Some(difficulty_label(selected))
-        }
-        _ => None,
-    };
-
-    for chart in &song.charts {
-        if !chart.chart_type.eq_ignore_ascii_case(chart_type) {
-            continue;
-        }
-        if first_chart.is_none() {
-            first_chart = Some(chart);
-        }
-        if !chart.has_note_data {
-            continue;
-        }
-        if first_playable.is_none() {
-            first_playable = Some(chart);
-        }
-        if let Some(target) = target_diff
-            && chart.difficulty.eq_ignore_ascii_case(target)
-        {
-            return Some(chart);
-        }
-        if let StepsSpec::MeterRange { low, high } = &entry.steps {
-            let meter = chart.meter as i32;
-            if meter >= *low && meter <= *high && meter_match.is_none() {
-                meter_match = Some(chart);
-            }
-        }
-    }
-
-    meter_match.or(first_playable).or(first_chart)
-}
-
-pub fn resolve_entry_song(
+pub fn resolve_course_stage(
     course_path: &Path,
     entry_index: usize,
     random_seed: u64,
@@ -384,45 +342,291 @@ pub fn resolve_entry_song(
     all_songs: &[Arc<SongData>],
     songs_by_group: &HashMap<String, Vec<Arc<SongData>>>,
     song_play_counts: &HashMap<String, u32>,
-    used_song_keys: &HashSet<String>,
+    song_grade_counts: &HashMap<String, CourseGradeCounts>,
+    previous_song_key: Option<&str>,
     chart_type: &str,
     course_difficulty: Difficulty,
-) -> Option<Arc<SongData>> {
-    match &entry.song {
+) -> Option<ResolvedCourseStage> {
+    let mut candidates = match &entry.song {
         CourseSong::Fixed { group, song } => {
             let song_key = song.trim().to_ascii_lowercase();
-            if let Some(group) = group.as_deref().map(str::trim) {
+            let resolved = if let Some(group) = group.as_deref().map(str::trim) {
                 let group_key = group.to_ascii_lowercase();
                 by_group_song.get(&(group_key, song_key)).cloned()
             } else {
                 by_song.get(&song_key).cloned()
-            }
+            }?;
+            course_candidates(std::slice::from_ref(&resolved), entry, chart_type)
         }
-        CourseSong::SortPick { sort, index } => resolve_sort_pick_song(
-            all_songs,
-            song_play_counts,
-            entry,
-            chart_type,
-            course_difficulty,
-            *sort,
-            *index,
-        ),
-        CourseSong::RandomAny | CourseSong::RandomWithinGroup { .. } => {
-            let seeded = random_seed ^ ((course_difficulty as u64) << 32);
-            resolve_random_song(
-                course_path,
-                entry_index,
-                seeded,
-                all_songs,
-                songs_by_group,
-                used_song_keys,
-                entry,
-                chart_type,
-                course_difficulty,
-            )
+        CourseSong::SortPick { .. } | CourseSong::RandomAny => {
+            course_candidates(all_songs, entry, chart_type)
         }
-        CourseSong::Unknown { .. } => None,
+        CourseSong::RandomWithinGroup { group } => songs_by_group
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(group.trim()))
+            .map(|(_, songs)| course_candidates(songs, entry, chart_type))
+            .unwrap_or_default(),
+        CourseSong::Select(select) => {
+            let pool = select_song_pool(select, all_songs, songs_by_group);
+            course_candidates(&pool, entry, chart_type)
+                .into_iter()
+                .filter(|candidate| song_select_matches(&candidate.song, select))
+                .collect()
+        }
+        CourseSong::Unknown { .. } => return None,
+    };
+
+    if candidates.len() > 1
+        && let Some(previous) = previous_song_key
+    {
+        candidates.retain(|candidate| song_unique_key(&candidate.song) != previous);
     }
+    let (sort, pick) = match &entry.song {
+        CourseSong::SortPick { sort, index } => (Some(*sort), (*index).max(0) as usize),
+        CourseSong::Select(select) => (select.sort, select.index.max(0) as usize),
+        _ => (None, 0),
+    };
+    let candidate = pick_course_candidate(
+        &mut candidates,
+        sort,
+        pick,
+        song_play_counts,
+        song_grade_counts,
+        random_seed ^ ((course_difficulty as u64) << 32),
+        course_path,
+        entry_index,
+    )?;
+    let chart_pick = random_pick_index(
+        random_seed ^ song_key_hash(&candidate.song),
+        course_path,
+        entry_index ^ usize::MAX,
+        candidate.chart_indices.len(),
+    );
+    let base_chart = *candidate.chart_indices.get(chart_pick)?;
+    let chart_index = shifted_chart_index(
+        &candidate.song,
+        base_chart,
+        entry,
+        chart_type,
+        course_difficulty,
+    );
+    Some(ResolvedCourseStage {
+        song: candidate.song,
+        chart_index,
+    })
+}
+
+#[derive(Clone)]
+struct CourseCandidate {
+    song: Arc<SongData>,
+    chart_indices: Vec<usize>,
+    source_index: usize,
+}
+
+fn course_candidates(
+    songs: &[Arc<SongData>],
+    entry: &CourseEntry,
+    chart_type: &str,
+) -> Vec<CourseCandidate> {
+    songs
+        .iter()
+        .enumerate()
+        .filter_map(|(source_index, song)| {
+            let chart_indices = matching_chart_indices(song, entry, chart_type);
+            (!chart_indices.is_empty()).then(|| CourseCandidate {
+                song: song.clone(),
+                chart_indices,
+                source_index,
+            })
+        })
+        .collect()
+}
+
+fn matching_chart_indices(song: &SongData, entry: &CourseEntry, chart_type: &str) -> Vec<usize> {
+    song.charts
+        .iter()
+        .enumerate()
+        .filter(|(_, chart)| {
+            chart.has_note_data
+                && chart.chart_type.eq_ignore_ascii_case(chart_type)
+                && chart_matches_entry(chart, entry)
+        })
+        .map(|(index, _)| index)
+        .collect()
+}
+
+fn chart_matches_entry(chart: &ChartData, entry: &CourseEntry) -> bool {
+    if let CourseSong::Select(select) = &entry.song {
+        let difficulty_matches = select.difficulties.is_empty()
+            || select.difficulties.iter().any(|diff| {
+                chart
+                    .difficulty
+                    .eq_ignore_ascii_case(difficulty_label(*diff))
+            });
+        let meter_matches = select.meter_range.is_none_or(|(low, high)| {
+            let meter = chart.meter as i32;
+            meter >= low && meter <= high
+        });
+        return difficulty_matches && meter_matches;
+    }
+    match &entry.steps {
+        StepsSpec::Difficulty(diff) => chart
+            .difficulty
+            .eq_ignore_ascii_case(difficulty_label(*diff)),
+        StepsSpec::MeterRange { low, high } => {
+            let meter = chart.meter as i32;
+            meter >= *low && meter <= *high
+        }
+        StepsSpec::Unknown { .. } => false,
+    }
+}
+
+fn shifted_chart_index(
+    song: &SongData,
+    base_index: usize,
+    entry: &CourseEntry,
+    chart_type: &str,
+    course_difficulty: Difficulty,
+) -> usize {
+    if course_difficulty == Difficulty::Medium || entry.no_difficult {
+        return base_index;
+    }
+    let Some(base) = song.charts.get(base_index) else {
+        return base_index;
+    };
+    let Some(base_diff) = chart_difficulty(base) else {
+        return base_index;
+    };
+    let shifted = shifted_course_difficulty(base_diff, course_difficulty);
+    song.charts
+        .iter()
+        .position(|chart| {
+            chart.has_note_data
+                && chart.chart_type.eq_ignore_ascii_case(chart_type)
+                && chart
+                    .difficulty
+                    .eq_ignore_ascii_case(difficulty_label(shifted))
+        })
+        .unwrap_or(base_index)
+}
+
+fn chart_difficulty(chart: &ChartData) -> Option<Difficulty> {
+    COURSE_RATING_ORDER.into_iter().find(|diff| {
+        chart
+            .difficulty
+            .eq_ignore_ascii_case(difficulty_label(*diff))
+    })
+}
+
+fn select_song_pool(
+    select: &SongSelect,
+    all_songs: &[Arc<SongData>],
+    songs_by_group: &HashMap<String, Vec<Arc<SongData>>>,
+) -> Vec<Arc<SongData>> {
+    if select.groups.is_empty() {
+        return all_songs.to_vec();
+    }
+    let mut songs = Vec::new();
+    for group in &select.groups {
+        if let Some(group_songs) = songs_by_group.get(group) {
+            songs.extend(group_songs.iter().cloned());
+        }
+    }
+    songs
+}
+
+fn song_select_matches(song: &SongData, select: &SongSelect) -> bool {
+    let song_dir = song
+        .simfile_path
+        .parent()
+        .and_then(Path::file_name)
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    if !select.titles.is_empty()
+        && !select
+            .titles
+            .iter()
+            .any(|title| title == song_dir || title == &song.title || title == &song.translit_title)
+    {
+        return false;
+    }
+    if !select.artists.is_empty() && !select.artists.iter().any(|artist| artist == &song.artist) {
+        return false;
+    }
+    if !select.genres.is_empty() && !select.genres.iter().any(|genre| genre == &song.genre) {
+        return false;
+    }
+    if let Some((low, high)) = select.bpm_range {
+        let Some((song_low, song_high)) = song.display_bpm_range() else {
+            return false;
+        };
+        if song_low < low || song_high > high {
+            return false;
+        }
+    }
+    if let Some((low, high)) = select.duration_range {
+        if song.music_length_seconds < low || song.music_length_seconds > high {
+            return false;
+        }
+    }
+    true
+}
+
+fn pick_course_candidate(
+    candidates: &mut [CourseCandidate],
+    sort: Option<SongSort>,
+    pick: usize,
+    song_play_counts: &HashMap<String, u32>,
+    song_grade_counts: &HashMap<String, CourseGradeCounts>,
+    random_seed: u64,
+    course_path: &Path,
+    entry_index: usize,
+) -> Option<CourseCandidate> {
+    if candidates.is_empty() {
+        return None;
+    }
+    if let Some(sort) = sort {
+        candidates.sort_by(|left, right| {
+            let left_key = song_unique_key(&left.song);
+            let right_key = song_unique_key(&right.song);
+            let order = match sort {
+                SongSort::MostPlays => song_play_counts
+                    .get(&right_key)
+                    .copied()
+                    .unwrap_or(0)
+                    .cmp(&song_play_counts.get(&left_key).copied().unwrap_or(0)),
+                SongSort::FewestPlays => song_play_counts
+                    .get(&left_key)
+                    .copied()
+                    .unwrap_or(0)
+                    .cmp(&song_play_counts.get(&right_key).copied().unwrap_or(0)),
+                SongSort::TopGrades => song_grade_counts
+                    .get(&right_key)
+                    .copied()
+                    .unwrap_or_default()
+                    .cmp(
+                        &song_grade_counts
+                            .get(&left_key)
+                            .copied()
+                            .unwrap_or_default(),
+                    ),
+                SongSort::LowestGrades => song_grade_counts
+                    .get(&left_key)
+                    .copied()
+                    .unwrap_or_default()
+                    .cmp(
+                        &song_grade_counts
+                            .get(&right_key)
+                            .copied()
+                            .unwrap_or_default(),
+                    ),
+            };
+            order.then(left.source_index.cmp(&right.source_index))
+        });
+        return candidates.get(pick).cloned();
+    }
+    let index = random_pick_index(random_seed, course_path, entry_index, candidates.len());
+    candidates.get(index).cloned()
 }
 
 pub fn push_song_bpm_range(min_bpm: &mut Option<f64>, max_bpm: &mut Option<f64>, song: &SongData) {
@@ -450,58 +654,6 @@ pub fn add_chart_totals(totals: &mut CourseTotals, chart: &ChartData) {
     totals.rolls = totals.rolls.saturating_add(chart.stats.rolls);
 }
 
-fn resolve_sort_pick_song(
-    all_songs: &[Arc<SongData>],
-    song_play_counts: &HashMap<String, u32>,
-    entry: &CourseEntry,
-    chart_type: &str,
-    course_difficulty: Difficulty,
-    sort: SongSort,
-    index: i32,
-) -> Option<Arc<SongData>> {
-    if matches!(sort, SongSort::TopGrades | SongSort::LowestGrades) {
-        return None;
-    }
-
-    let mut ranked = Vec::new();
-    for (song_index, song) in all_songs.iter().enumerate() {
-        if resolve_course_chart(song, entry, chart_type, course_difficulty).is_none() {
-            continue;
-        }
-        let plays = song_play_counts
-            .get(song_unique_key(song).as_str())
-            .copied()
-            .unwrap_or(0);
-        ranked.push((plays, song_index));
-    }
-
-    let pick = index.max(0) as usize;
-    select_song_by_play_rank(all_songs, ranked, sort, pick)
-}
-
-fn select_song_by_play_rank(
-    all_songs: &[Arc<SongData>],
-    mut ranked: Vec<(u32, usize)>,
-    sort: SongSort,
-    pick: usize,
-) -> Option<Arc<SongData>> {
-    if pick >= ranked.len() {
-        return None;
-    }
-    match sort {
-        SongSort::MostPlays => {
-            ranked.select_nth_unstable_by(pick, |a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-        }
-        SongSort::FewestPlays => {
-            ranked.select_nth_unstable_by(pick, |a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
-        }
-        SongSort::TopGrades | SongSort::LowestGrades => {
-            return None;
-        }
-    }
-    all_songs.get(ranked[pick].1).cloned()
-}
-
 fn random_pick_index(seed: u64, course_path: &Path, entry_index: usize, len: usize) -> usize {
     if len == 0 {
         return 0;
@@ -512,51 +664,10 @@ fn random_pick_index(seed: u64, course_path: &Path, entry_index: usize, len: usi
     (hasher.finish() as usize) % len
 }
 
-fn resolve_random_song(
-    course_path: &Path,
-    entry_index: usize,
-    random_seed: u64,
-    all_songs: &[Arc<SongData>],
-    songs_by_group: &HashMap<String, Vec<Arc<SongData>>>,
-    used_song_keys: &HashSet<String>,
-    entry: &CourseEntry,
-    chart_type: &str,
-    course_difficulty: Difficulty,
-) -> Option<Arc<SongData>> {
-    let pool: &[Arc<SongData>] = match &entry.song {
-        CourseSong::RandomAny => all_songs,
-        CourseSong::RandomWithinGroup { group } => songs_by_group
-            .get(group.trim().to_ascii_lowercase().as_str())
-            .map_or(&[], Vec::as_slice),
-        _ => return None,
-    };
-    if pool.is_empty() {
-        return None;
-    }
-
-    let mut all_candidates = Vec::new();
-    let mut unused_candidates = Vec::new();
-    for song in pool {
-        if resolve_course_chart(song, entry, chart_type, course_difficulty).is_none() {
-            continue;
-        }
-        all_candidates.push(song.clone());
-        if !used_song_keys.contains(song_unique_key(song).as_str()) {
-            unused_candidates.push(song.clone());
-        }
-    }
-
-    let picked_pool = if unused_candidates.is_empty() {
-        &all_candidates
-    } else {
-        &unused_candidates
-    };
-    if picked_pool.is_empty() {
-        return None;
-    }
-
-    let idx = random_pick_index(random_seed, course_path, entry_index, picked_pool.len());
-    picked_pool.get(idx).cloned()
+fn song_key_hash(song: &SongData) -> u64 {
+    let mut hasher = XxHash64::with_seed(0x53_4f_4e_47_53_45_4c);
+    hasher.write(song_unique_key(song).as_bytes());
+    hasher.finish()
 }
 
 pub fn load_course_scan_with_progress<F>(
@@ -670,6 +781,7 @@ pub fn autogen_nonstop_group_courses(
                 modifiers: String::new(),
                 secret: true,
                 no_difficult: false,
+                gain_seconds: 0.0,
                 gain_lives: -1,
             })
             .collect();
@@ -757,6 +869,7 @@ pub fn validate_course_refs(
                     )));
                 }
             }
+            rssp::course::CourseSong::Select(_) => {}
             _ => {
                 return Err(course_ref_error(format!(
                     "Course '{}' has unsupported song selector in entry {entry_num}.",
@@ -1014,6 +1127,7 @@ mod tests {
                 modifiers: String::new(),
                 secret: false,
                 no_difficult: false,
+                gain_seconds: 0.0,
                 gain_lives: -1,
             }],
         }
@@ -1107,17 +1221,6 @@ mod tests {
         song.max_bpm = 180.0;
         song.charts = charts;
         Arc::new(song)
-    }
-
-    fn entry_with_steps(steps: StepsSpec) -> CourseEntry {
-        CourseEntry {
-            song: CourseSong::RandomAny,
-            steps,
-            modifiers: String::new(),
-            secret: false,
-            no_difficult: false,
-            gain_lives: -1,
-        }
     }
 
     fn song_pack(group_name: &str, name: &str, songs: usize) -> SongPack {
@@ -1440,32 +1543,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_course_chart_prefers_shifted_difficulty_then_playable_fallback() {
-        let song = song_with_charts(
-            "Pack/Song/song.ssc",
-            vec![
-                test_chart("Easy", 3, false, "easy"),
-                test_chart("Hard", 9, true, "hard"),
-                test_chart("Challenge", 12, true, "challenge"),
-            ],
-        );
-        let entry = entry_with_steps(StepsSpec::Difficulty(Difficulty::Hard));
-
-        let shifted = resolve_course_chart(&song, &entry, "dance-single", Difficulty::Challenge)
-            .expect("shifted chart");
-        assert_eq!(shifted.short_hash, "challenge");
-
-        let fallback = resolve_course_chart(&song, &entry, "dance-double", Difficulty::Medium);
-        assert!(fallback.is_none());
-
-        let missing = entry_with_steps(StepsSpec::Difficulty(Difficulty::Medium));
-        let fallback = resolve_course_chart(&song, &missing, "dance-single", Difficulty::Medium)
-            .expect("playable fallback");
-        assert_eq!(fallback.short_hash, "hard");
-    }
-
-    #[test]
-    fn resolve_entry_song_uses_sort_picks_and_random_unused_candidates() {
+    fn resolve_course_stage_uses_sort_picks_and_avoids_an_immediate_repeat() {
         let course_path = PathBuf::from("Courses/course.crs");
         let slow = song_with_charts("Pack/Slow/song.ssc", vec![test_chart("Hard", 7, true, "s")]);
         let fast = song_with_charts("Pack/Fast/song.ssc", vec![test_chart("Hard", 9, true, "f")]);
@@ -1473,7 +1551,7 @@ mod tests {
         let by_group_song = HashMap::new();
         let by_song = HashMap::new();
         let mut songs_by_group = HashMap::new();
-        songs_by_group.insert("pack".to_string(), all_songs.clone());
+        songs_by_group.insert("Pack".to_string(), all_songs.clone());
         let song_play_counts =
             HashMap::from([(song_unique_key(&slow), 4), (song_unique_key(&fast), 12)]);
 
@@ -1486,9 +1564,10 @@ mod tests {
             modifiers: String::new(),
             secret: false,
             no_difficult: false,
+            gain_seconds: 0.0,
             gain_lives: -1,
         };
-        let picked = resolve_entry_song(
+        let picked = resolve_course_stage(
             &course_path,
             0,
             0,
@@ -1498,12 +1577,14 @@ mod tests {
             &all_songs,
             &songs_by_group,
             &song_play_counts,
-            &HashSet::new(),
+            &HashMap::new(),
+            None,
             "dance-single",
             Difficulty::Medium,
         )
         .expect("sort pick");
-        assert_eq!(picked.simfile_path, fast.simfile_path);
+        assert_eq!(picked.song.simfile_path, fast.simfile_path);
+        assert_eq!(picked.song.charts[picked.chart_index].short_hash, "f");
 
         let random_entry = CourseEntry {
             song: CourseSong::RandomWithinGroup {
@@ -1513,10 +1594,11 @@ mod tests {
             modifiers: String::new(),
             secret: false,
             no_difficult: false,
+            gain_seconds: 0.0,
             gain_lives: -1,
         };
-        let used = HashSet::from([song_unique_key(&fast)]);
-        let random = resolve_entry_song(
+        let previous = song_unique_key(&fast);
+        let random = resolve_course_stage(
             &course_path,
             0,
             0,
@@ -1526,30 +1608,77 @@ mod tests {
             &all_songs,
             &songs_by_group,
             &song_play_counts,
-            &used,
+            &HashMap::new(),
+            Some(&previous),
             "dance-single",
             Difficulty::Medium,
         )
         .expect("random pick");
-        assert_eq!(random.simfile_path, slow.simfile_path);
+        assert_eq!(random.song.simfile_path, slow.simfile_path);
     }
 
     #[test]
-    fn play_rank_selection_preserves_stable_ties_and_pick_direction() {
-        let first = song_with_charts("Pack/First/song.ssc", Vec::new());
-        let second = song_with_charts("Pack/Second/song.ssc", Vec::new());
-        let third = song_with_charts("Pack/Third/song.ssc", Vec::new());
-        let songs = vec![first, second.clone(), third.clone()];
-        let ranked = vec![(9, 0), (9, 1), (3, 2)];
+    fn songselect_filters_song_and_steps_before_shifting_course_difficulty() {
+        let course_path = PathBuf::from("Courses/course.crs");
+        let mut matching = (*song_with_charts(
+            "Pack/Match/song.ssc",
+            vec![
+                test_chart("Easy", 4, true, "easy"),
+                test_chart("Hard", 9, true, "hard"),
+                test_chart("Challenge", 12, true, "challenge"),
+            ],
+        ))
+        .clone();
+        matching.title = "Match".to_string();
+        matching.artist = "Artist".to_string();
+        matching.genre = "Genre".to_string();
+        matching.display_bpm = "120:180".to_string();
+        matching.music_length_seconds = 90.0;
+        let matching = Arc::new(matching);
 
-        let tied = select_song_by_play_rank(&songs, ranked.clone(), SongSort::MostPlays, 1)
-            .expect("second stable tie");
-        let fewest = select_song_by_play_rank(&songs, ranked, SongSort::FewestPlays, 0)
-            .expect("fewest plays");
+        let mut wrong_artist = (*matching).clone();
+        wrong_artist.simfile_path = PathBuf::from("Pack/Wrong/song.ssc");
+        wrong_artist.artist = "Other".to_string();
+        let all_songs = vec![matching.clone(), Arc::new(wrong_artist)];
+        let songs_by_group = HashMap::from([("Pack".to_string(), all_songs.clone())]);
+        let entry = CourseEntry {
+            song: CourseSong::Select(SongSelect {
+                groups: vec!["Pack".to_string()],
+                artists: vec!["Artist".to_string()],
+                genres: vec!["Genre".to_string()],
+                difficulties: vec![Difficulty::Hard],
+                meter_range: Some((8, 10)),
+                bpm_range: Some((100.0, 200.0)),
+                duration_range: Some((80.0, 100.0)),
+                ..SongSelect::default()
+            }),
+            steps: StepsSpec::Unknown { raw: String::new() },
+            modifiers: String::new(),
+            secret: false,
+            no_difficult: false,
+            gain_seconds: 0.0,
+            gain_lives: -1,
+        };
 
-        assert!(Arc::ptr_eq(&tied, &second));
-        assert!(Arc::ptr_eq(&fewest, &third));
-        assert!(select_song_by_play_rank(&songs, vec![(9, 0)], SongSort::MostPlays, 1).is_none());
+        let stage = resolve_course_stage(
+            &course_path,
+            0,
+            0,
+            &entry,
+            &HashMap::new(),
+            &HashMap::new(),
+            &all_songs,
+            &songs_by_group,
+            &HashMap::new(),
+            &HashMap::new(),
+            None,
+            "dance-single",
+            Difficulty::Challenge,
+        )
+        .expect("matching SONGSELECT stage");
+
+        assert!(Arc::ptr_eq(&stage.song, &matching));
+        assert_eq!(stage.song.charts[stage.chart_index].short_hash, "challenge");
     }
 
     #[test]

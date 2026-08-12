@@ -29,14 +29,13 @@ use deadsync_chart::{ChartData, SongData, SongPack};
 use deadsync_input::{InputEvent, PadDir, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_simfile::course::{
-    self, COURSE_RATING_ORDER, CourseEntry, CourseFile, CourseSong, CourseTotals, Difficulty,
-    SongSort, StepsSpec, add_chart_totals, course_difficulty_from_meters, course_meter,
-    nearest_filled_slot, push_song_bpm_range, resolve_course_chart, resolve_entry_song,
-    song_unique_key,
+    self, COURSE_RATING_ORDER, CourseFile, CourseSong, CourseTotals, Difficulty, SongSort,
+    add_chart_totals, course_difficulty_from_meters, course_meter, nearest_filled_slot,
+    push_song_bpm_range, resolve_course_stage, song_unique_key,
 };
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::Hasher;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -278,8 +277,9 @@ fn build_song_lookup(
         if pack.songs.is_empty() {
             continue;
         }
-        let group_key = pack.group_name.trim().to_ascii_lowercase();
-        let group_songs = songs_by_group.entry(group_key.clone()).or_default();
+        let group_name = pack.group_name.trim().to_string();
+        let group_key = group_name.to_ascii_lowercase();
+        let group_songs = songs_by_group.entry(group_name).or_default();
         group_songs.reserve(pack.songs.len());
         for song in &pack.songs {
             all_songs.push(song.clone());
@@ -379,43 +379,6 @@ pub fn course_score_hash(course_path: &Path) -> String {
 }
 
 #[inline(always)]
-fn course_steps_label(steps: &StepsSpec) -> String {
-    match steps {
-        StepsSpec::Difficulty(diff) => course::difficulty_label(*diff)
-            .to_ascii_lowercase()
-            .to_string(),
-        StepsSpec::MeterRange { low, high } => format!("{low}-{high}"),
-        StepsSpec::Unknown { raw } => {
-            if raw.trim().is_empty() {
-                "?".to_string()
-            } else {
-                raw.trim().to_string()
-            }
-        }
-    }
-}
-
-#[inline(always)]
-fn course_entry_song_label(entry: &CourseEntry) -> String {
-    match &entry.song {
-        CourseSong::Fixed { song, .. } => song.clone(),
-        CourseSong::RandomAny => tr("SelectCourse", "RandomLabel").to_string(),
-        CourseSong::RandomWithinGroup { group } => format!("{group}/*"),
-        CourseSong::SortPick { sort, index } => {
-            let rank = index.saturating_add(1).max(1);
-            let prefix = match sort {
-                SongSort::MostPlays => tr("SelectCourse", "BestPrefix"),
-                SongSort::FewestPlays => tr("SelectCourse", "WorstPrefix"),
-                SongSort::TopGrades => tr("SelectCourse", "TopGradesPrefix"),
-                SongSort::LowestGrades => tr("SelectCourse", "LowestGradesPrefix"),
-            };
-            format!("{prefix}{rank}")
-        }
-        CourseSong::Unknown { raw } => raw.clone(),
-    }
-}
-
-#[inline(always)]
 fn course_stepchart_label(difficulty_name: &str, meter: Option<u32>) -> String {
     let idx = standard_difficulty_index(difficulty_name).unwrap_or(2);
     let display = color::DISPLAY_DIFFICULTY_NAMES[idx];
@@ -480,6 +443,7 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
     let target_chart_type = init_view.context.play_style.chart_type();
     let (by_group_song, by_song, songs_by_group, all_songs, song_play_counts) =
         build_song_lookup(&init_view.song_packs, &init_view.played_chart_counts);
+    let song_grade_counts = HashMap::new();
 
     let mut grouped: HashMap<String, Vec<Arc<CourseMeta>>> = HashMap::new();
     let mut course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>> = HashMap::new();
@@ -488,7 +452,7 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
         let mut total_seconds = 0i32;
         let mut min_bpm = None;
         let mut max_bpm = None;
-        let mut used_song_keys = HashSet::new();
+        let mut previous_song_key = None;
         let mut has_random_entries = false;
         let mut has_most_played_entries = false;
         let random_seed = std::time::SystemTime::now()
@@ -498,7 +462,9 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
         for (entry_idx, entry) in course.entries.iter().enumerate() {
             if matches!(
                 &entry.song,
-                CourseSong::RandomAny | CourseSong::RandomWithinGroup { .. }
+                CourseSong::RandomAny
+                    | CourseSong::RandomWithinGroup { .. }
+                    | CourseSong::Select(_)
             ) {
                 has_random_entries = true;
             }
@@ -508,11 +474,14 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
                     sort: SongSort::MostPlays,
                     ..
                 }
+            ) || matches!(
+                &entry.song,
+                CourseSong::Select(select) if select.sort == Some(SongSort::MostPlays)
             ) {
                 has_most_played_entries = true;
             }
 
-            let resolved = resolve_entry_song(
+            let resolved = resolve_course_stage(
                 path,
                 entry_idx,
                 random_seed,
@@ -522,13 +491,15 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
                 &all_songs,
                 &songs_by_group,
                 &song_play_counts,
-                &used_song_keys,
+                &song_grade_counts,
+                previous_song_key.as_deref(),
                 target_chart_type,
                 Difficulty::Medium,
             );
 
-            if let Some(song_data) = resolved.as_ref() {
-                used_song_keys.insert(song_unique_key(song_data));
+            if let Some(stage) = resolved.as_ref() {
+                let song_data = &stage.song;
+                previous_song_key = Some(song_unique_key(song_data));
                 let len = if song_data.music_length_seconds > 0.0 {
                     song_data.music_length_seconds.round() as i32
                 } else {
@@ -567,21 +538,13 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
             let mut rated_entry_count = 0usize;
             let mut meter_sum = 0u32;
             let mut meter_count = 0usize;
-            let mut rating_used_song_keys = HashSet::new();
+            let mut previous_rating_song_key = None;
             let mut rating_total_seconds = 0i32;
             let mut rating_min_bpm = None;
             let mut rating_max_bpm = None;
 
             for (entry_idx, entry) in course.entries.iter().enumerate() {
-                let mut title = course_entry_song_label(entry);
-                let mut difficulty = course_steps_label(&entry.steps);
-                let mut meter = None;
-                let mut step_artist = if course.scripter.trim().is_empty() {
-                    tr("SelectCourse", "UnknownStepArtist").to_string()
-                } else {
-                    course.scripter.clone()
-                };
-                let resolved = resolve_entry_song(
+                let Some(stage) = resolve_course_stage(
                     path,
                     entry_idx,
                     random_seed,
@@ -591,41 +554,38 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
                     &all_songs,
                     &songs_by_group,
                     &song_play_counts,
-                    &rating_used_song_keys,
+                    &song_grade_counts,
+                    previous_rating_song_key.as_deref(),
                     target_chart_type,
                     course_diff,
-                );
-                if let Some(song_data) = resolved.as_ref() {
-                    rating_used_song_keys.insert(song_unique_key(song_data));
-                    title = song_data.display_full_title(translated_titles);
-                    let len = if song_data.music_length_seconds > 0.0 {
-                        song_data.music_length_seconds.round() as i32
-                    } else {
-                        song_data.total_length_seconds.max(0)
-                    };
-                    rating_total_seconds = rating_total_seconds.saturating_add(len.max(0));
-                    push_song_bpm_range(&mut rating_min_bpm, &mut rating_max_bpm, song_data);
-                    if let Some(chart) =
-                        resolve_course_chart(song_data, entry, target_chart_type, course_diff)
-                    {
-                        difficulty = chart.difficulty.to_ascii_lowercase();
-                        meter = Some(chart.meter);
-                        step_artist = chart_step_artist(chart);
-                        runtime_stages.push(CourseStagePlan {
-                            song: song_data.clone(),
-                            chart_hash: chart.short_hash.clone(),
-                        });
-                        add_chart_totals(&mut totals, chart);
-                        rated_entry_count = rated_entry_count.saturating_add(1);
-                        meter_sum = meter_sum.saturating_add(chart.meter);
-                        meter_count = meter_count.saturating_add(1);
-                    }
-                }
+                ) else {
+                    continue;
+                };
+                let song_data = &stage.song;
+                let Some(chart) = song_data.charts.get(stage.chart_index) else {
+                    continue;
+                };
+                previous_rating_song_key = Some(song_unique_key(song_data));
+                let len = if song_data.music_length_seconds > 0.0 {
+                    song_data.music_length_seconds.round() as i32
+                } else {
+                    song_data.total_length_seconds.max(0)
+                };
+                rating_total_seconds = rating_total_seconds.saturating_add(len.max(0));
+                push_song_bpm_range(&mut rating_min_bpm, &mut rating_max_bpm, song_data);
+                runtime_stages.push(CourseStagePlan {
+                    song: song_data.clone(),
+                    chart_hash: chart.short_hash.clone(),
+                });
+                add_chart_totals(&mut totals, chart);
+                rated_entry_count = rated_entry_count.saturating_add(1);
+                meter_sum = meter_sum.saturating_add(chart.meter);
+                meter_count = meter_count.saturating_add(1);
                 entries.push(CourseSongEntry {
-                    title,
-                    difficulty,
-                    meter,
-                    step_artist,
+                    title: song_data.display_full_title(translated_titles),
+                    difficulty: chart.difficulty.to_ascii_lowercase(),
+                    meter: Some(chart.meter),
+                    step_artist: chart_step_artist(chart),
                 });
             }
 
@@ -2678,6 +2638,8 @@ mod song_lookup_tests {
 
         let (_, _, groups, all, counts) = build_song_lookup(&packs, &played);
         assert_eq!(groups.len(), 2, "empty packs must not create lookup groups");
+        assert!(groups.contains_key("Pack A"));
+        assert!(!groups.contains_key("pack a"));
         assert_eq!(all.len(), 3);
         assert_eq!(counts.get(&song_unique_key(&alpha)), Some(&u32::MAX));
         assert_eq!(counts.get(&song_unique_key(&beta)), Some(&3));

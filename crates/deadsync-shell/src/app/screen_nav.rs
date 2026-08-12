@@ -8,9 +8,9 @@ use crate::interaction::ProcessExitRequest;
 use crate::navigation::{
     FadeCompletionEffect, NavigationTransitionStart, ProcessExitNavigationEffect,
     actor_transition_music_commands, apply_actor_entry_transition, apply_actor_fade_out_transition,
-    apply_global_entry_transition, apply_global_fade_out_transition, fade_completion_plan,
-    navigation_transition_effect_plan, process_exit_navigation_plan, screen_change_plan,
-    write_current_screen_file,
+    apply_global_entry_transition, apply_global_fade_out_transition, course_plan_required,
+    fade_completion_plan, navigation_transition_effect_plan, process_exit_navigation_plan,
+    screen_change_plan, write_current_screen_file,
 };
 use crate::screen_flow::navigation_route_plan;
 use deadlib_present::actors::Actor;
@@ -19,7 +19,7 @@ use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_theme_simply_love::views::OverscanAdjustmentView;
 use deadsync_theme_simply_love::{SimplyLoveQrLoginService, screens, visual_styles};
-use log::{debug, info};
+use log::{debug, info, warn};
 use winit::event_loop::ActiveEventLoop;
 
 pub(super) fn menu_music_path(
@@ -49,6 +49,26 @@ pub(super) fn overscan_view() -> OverscanAdjustmentView {
 }
 
 impl App {
+    fn reject_missing_course_plan(
+        &mut self,
+        previous: CurrentScreen,
+        target: CurrentScreen,
+    ) -> bool {
+        if !course_plan_required(previous, target)
+            || select_course::selected_course_plan(&self.state.screens.select_course_state)
+                .is_some()
+        {
+            return false;
+        }
+        warn!("Unable to enter {target:?}: selected course has no playable stages.");
+        self.state.session.course_run = None;
+        self.state.screens.player_options_state = None;
+        self.state.shell.transition = crate::navigation::TransitionState::Idle;
+        self.sync_gameplay_input_capture();
+        deadlib_present::runtime::clear_all();
+        true
+    }
+
     fn enter_arrowcloud_login(&mut self) {
         let config = config::get();
         let color_index = self.state.screens.menu_state.active_color_index;
@@ -126,6 +146,9 @@ impl App {
         event_loop: &ActiveEventLoop,
     ) {
         let prev = self.state.screens.current_screen;
+        if self.reject_missing_course_plan(prev, target_screen) {
+            return;
+        }
         self.commit_screen_change(target_screen);
         if target_screen == CurrentScreen::SelectColor {
             select_color::sync_runtime_view(
@@ -318,6 +341,9 @@ impl App {
         }
 
         let prev = self.state.screens.current_screen;
+        if self.reject_missing_course_plan(prev, target) {
+            return;
+        }
         self.commit_screen_change(target);
         if target != CurrentScreen::Gameplay {
             self.state.gameplay_offset_save_prompt = None;
