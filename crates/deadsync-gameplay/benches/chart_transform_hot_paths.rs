@@ -24,7 +24,9 @@ struct CountingAlloc {
     allocs: AtomicU64,
     reallocs: AtomicU64,
     frees: AtomicU64,
-    bytes: AtomicU64,
+    alloc_bytes: AtomicU64,
+    realloc_bytes: AtomicU64,
+    free_bytes: AtomicU64,
 }
 
 impl CountingAlloc {
@@ -34,7 +36,9 @@ impl CountingAlloc {
             allocs: AtomicU64::new(0),
             reallocs: AtomicU64::new(0),
             frees: AtomicU64::new(0),
-            bytes: AtomicU64::new(0),
+            alloc_bytes: AtomicU64::new(0),
+            realloc_bytes: AtomicU64::new(0),
+            free_bytes: AtomicU64::new(0),
         }
     }
 
@@ -43,7 +47,9 @@ impl CountingAlloc {
             allocs: self.allocs.load(Ordering::Relaxed),
             reallocs: self.reallocs.load(Ordering::Relaxed),
             frees: self.frees.load(Ordering::Relaxed),
-            bytes: self.bytes.load(Ordering::Relaxed),
+            alloc_bytes: self.alloc_bytes.load(Ordering::Relaxed),
+            realloc_bytes: self.realloc_bytes.load(Ordering::Relaxed),
+            free_bytes: self.free_bytes.load(Ordering::Relaxed),
         }
     }
 }
@@ -56,7 +62,7 @@ unsafe impl GlobalAlloc for CountingAlloc {
         let out = unsafe { System.alloc(layout) };
         if !out.is_null() && self.enabled.load(Ordering::Relaxed) {
             self.allocs.fetch_add(1, Ordering::Relaxed);
-            self.bytes
+            self.alloc_bytes
                 .fetch_add(layout.size() as u64, Ordering::Relaxed);
         }
         out
@@ -65,6 +71,8 @@ unsafe impl GlobalAlloc for CountingAlloc {
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         if self.enabled.load(Ordering::Relaxed) {
             self.frees.fetch_add(1, Ordering::Relaxed);
+            self.free_bytes
+                .fetch_add(layout.size() as u64, Ordering::Relaxed);
         }
         // SAFETY: this pair came from the delegated allocator.
         unsafe { System.dealloc(ptr, layout) };
@@ -75,10 +83,8 @@ unsafe impl GlobalAlloc for CountingAlloc {
         let out = unsafe { System.realloc(ptr, old, new_size) };
         if !out.is_null() && self.enabled.load(Ordering::Relaxed) {
             self.reallocs.fetch_add(1, Ordering::Relaxed);
-            self.bytes.fetch_add(
-                new_size.saturating_sub(old.size()) as u64,
-                Ordering::Relaxed,
-            );
+            self.realloc_bytes
+                .fetch_add((old.size() + new_size) as u64, Ordering::Relaxed);
         }
         out
     }
@@ -89,7 +95,9 @@ struct AllocSnapshot {
     allocs: u64,
     reallocs: u64,
     frees: u64,
-    bytes: u64,
+    alloc_bytes: u64,
+    realloc_bytes: u64,
+    free_bytes: u64,
 }
 
 impl AllocSnapshot {
@@ -98,7 +106,9 @@ impl AllocSnapshot {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
             frees: self.frees - before.frees,
-            bytes: self.bytes - before.bytes,
+            alloc_bytes: self.alloc_bytes - before.alloc_bytes,
+            realloc_bytes: self.realloc_bytes - before.realloc_bytes,
+            free_bytes: self.free_bytes - before.free_bytes,
         }
     }
 
@@ -106,7 +116,13 @@ impl AllocSnapshot {
         self.allocs += other.allocs;
         self.reallocs += other.reallocs;
         self.frees += other.frees;
-        self.bytes += other.bytes;
+        self.alloc_bytes += other.alloc_bytes;
+        self.realloc_bytes += other.realloc_bytes;
+        self.free_bytes += other.free_bytes;
+    }
+
+    fn churn_bytes(self) -> u64 {
+        self.alloc_bytes + self.realloc_bytes + self.free_bytes
     }
 }
 
@@ -221,21 +237,24 @@ fn print_pair(title: &str, old: &BenchResult, new: &BenchResult) {
     assert_eq!(new.allocated.allocs, 0, "{title} still allocates");
     assert_eq!(new.allocated.reallocs, 0, "{title} still reallocates");
     assert_eq!(new.allocated.frees, 0, "{title} still frees");
-    assert_eq!(new.allocated.bytes, 0, "{title} still allocates bytes");
+    assert_eq!(new.allocated.churn_bytes(), 0, "{title} still churns bytes");
     let operations = (OPS_PER_SAMPLE * SAMPLES) as f64;
     let items = operations * NOTES as f64;
     println!("\n{title}");
     print_result("old", old, operations, items);
     print_result("new", new, operations, items);
     println!(
-        "  change: {:+.1}% latency, {:+.1}% cycles, {:+.1}% throughput, {:+.1}% bytes",
+        "  change: {:+.1}% latency, {:+.1}% cycles, {:+.1}% throughput, {:+.1}% churn bytes",
         percent_change(old.elapsed.as_secs_f64(), new.elapsed.as_secs_f64()),
         percent_change(old.cycles as f64, new.cycles as f64),
         percent_change(
             items / old.elapsed.as_secs_f64(),
             items / new.elapsed.as_secs_f64(),
         ),
-        percent_change(old.allocated.bytes as f64, new.allocated.bytes as f64),
+        percent_change(
+            old.allocated.churn_bytes() as f64,
+            new.allocated.churn_bytes() as f64,
+        ),
     );
 }
 
@@ -243,13 +262,13 @@ fn print_result(label: &str, result: &BenchResult, operations: f64, items: f64) 
     let churn = result.allocated.allocs + result.allocated.reallocs + result.allocated.frees;
     println!(
         "  {label:<4} {:>8.2} ns/note  {:>8.2} cycles/note  {:>7.1} Mnote/s  \
-         {:>8.2} us worst  {:>4.1} churn/op  {:>9.1} B/op",
+         {:>8.2} us worst  {:>4.1} churn/op  {:>9.1} churn B/op",
         result.elapsed.as_secs_f64() * 1.0e9 / items,
         result.cycles as f64 / items,
         items / result.elapsed.as_secs_f64() / 1.0e6,
         result.worst_sample.as_secs_f64() * 1.0e6 / OPS_PER_SAMPLE as f64,
         churn as f64 / operations,
-        result.allocated.bytes as f64 / operations,
+        result.allocated.churn_bytes() as f64 / operations,
     );
 }
 

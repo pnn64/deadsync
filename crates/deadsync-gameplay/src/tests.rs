@@ -16899,14 +16899,38 @@ mod tests {
                 note
             })
             .collect::<Vec<_>>();
-        for remove_mask in [
-            REMOVE_MASK_BIT_NO_MINES,
-            REMOVE_MASK_BIT_NO_LIFTS,
-            REMOVE_MASK_BIT_NO_FAKES,
-            REMOVE_MASK_BIT_LITTLE | REMOVE_MASK_BIT_NO_MINES | REMOVE_MASK_BIT_NO_LIFTS,
+        for (insert_mask, remove_mask, holds_mask) in [
+            (0, REMOVE_MASK_BIT_NO_MINES, 0),
+            (0, REMOVE_MASK_BIT_NO_LIFTS, 0),
+            (0, REMOVE_MASK_BIT_NO_FAKES, 0),
+            (
+                0,
+                REMOVE_MASK_BIT_LITTLE | REMOVE_MASK_BIT_NO_MINES | REMOVE_MASK_BIT_NO_LIFTS,
+                0,
+            ),
+            (INSERT_MASK_BIT_WIDE, 0, 0),
+            (INSERT_MASK_BIT_BIG, 0, 0),
+            (INSERT_MASK_BIT_QUICK, 0, 0),
+            (INSERT_MASK_BIT_BMRIZE, 0, 0),
+            (INSERT_MASK_BIT_SKIPPY, 0, 0),
+            (INSERT_MASK_BIT_ECHO, 0, 0),
+            (INSERT_MASK_BIT_STOMP, 0, 0),
+            (INSERT_MASK_BIT_MINES, 0, 0),
+            (0, 0, HOLDS_MASK_BIT_PLANTED),
+            (0, 0, HOLDS_MASK_BIT_FLOORED),
+            (0, 0, HOLDS_MASK_BIT_TWISTER),
+            (0, 0, HOLDS_MASK_BIT_NO_ROLLS),
+            (0, 0, HOLDS_MASK_BIT_HOLDS_TO_ROLLS),
+            (
+                INSERT_MASK_BIT_BIG | INSERT_MASK_BIT_ECHO,
+                REMOVE_MASK_BIT_NO_MINES | REMOVE_MASK_BIT_NO_LIFTS,
+                HOLDS_MASK_BIT_PLANTED | HOLDS_MASK_BIT_HOLDS_TO_ROLLS,
+            ),
         ] {
             let mut effects = [ChartAttackEffects::default(); MAX_PLAYERS];
+            effects[0].insert_mask = insert_mask;
             effects[0].remove_mask = remove_mask;
+            effects[0].holds_mask = holds_mask;
             let mut expected = source.clone();
             let mut actual = source.clone();
             let mut expected_ranges = [(0, source.len()), (0, 0)];
@@ -16927,7 +16951,11 @@ mod tests {
                 &effects,
                 &timing_refs,
             );
-            assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+            assert_eq!(
+                format!("{actual:?}"),
+                format!("{expected:?}"),
+                "insert={insert_mask:#010b}, remove={remove_mask:#010b}, holds={holds_mask:#07b}",
+            );
             assert_eq!(actual_ranges, expected_ranges);
         }
     }
