@@ -187,25 +187,12 @@ where
     let mut overlays = overlays?;
     compile_timer.push_stage("read_overlays");
     let mut tracked_actors = read_tracked_compile_actors(&lua, create_named_child_actor)?;
-    let mut overlay_trigger_counter = 0usize;
     let hidden_players = std::array::from_fn(|player| {
-        let key = if player == 0 {
-            "__songlua_top_screen_player_1"
-        } else {
-            "__songlua_top_screen_player_2"
-        };
-        globals
-            .get::<Option<Table>>(key)
-            .ok()
-            .flatten()
-            .and_then(|actor| {
-                actor
-                    .get::<Option<bool>>("__songlua_visible")
-                    .ok()
-                    .flatten()
-            })
-            .is_some_and(|visible| !visible)
+        tracked_actors
+            .get(player)
+            .is_some_and(|tracked| !tracked.actor.initial_state.visible)
     });
+    let mut overlay_trigger_counter = 0usize;
     let prefix_perframes = globals
         .get::<Option<Table>>("prefix_globals")
         .map_err(|err| err.to_string())?

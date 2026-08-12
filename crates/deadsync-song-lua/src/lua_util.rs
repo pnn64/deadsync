@@ -59,6 +59,8 @@ type ActorAssetPrefixKey = (String, String);
 type ActorAssetPrefixCache = Mutex<HashMap<ActorAssetPrefixKey, Option<PathBuf>>>;
 static ACTOR_ASSET_PREFIX_CACHE: OnceLock<ActorAssetPrefixCache> = OnceLock::new();
 const SONG_LUA_CHILD_GROUP_KEY: &str = "__songlua_child_group";
+const DRAW_CALLBACK_ACTIVE_KEY: &str = "__songlua_draw_callback_active";
+const MANUAL_DRAW_STATE_KEY: &str = "__songlua_manual_draw_state";
 
 pub struct TopScreenLuaTables {
     pub top_screen: Table,
@@ -5395,7 +5397,6 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
 pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     for name in [
         "clearzbuffer",
-        "Draw",
         "EnableAlphaBuffer",
         "EnableDepthBuffer",
         "EnableFloat",
@@ -5415,6 +5416,29 @@ pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Re
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
     }
+    actor.set(
+        "Draw",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                let in_draw_callback = lua
+                    .globals()
+                    .get::<Option<bool>>(DRAW_CALLBACK_ACTIVE_KEY)?
+                    .unwrap_or(false);
+                let visible = actor
+                    .get::<Option<bool>>("__songlua_visible")?
+                    .unwrap_or(true);
+                if in_draw_callback && visible {
+                    let state = lua.create_table()?;
+                    for (key, value) in snapshot_actor_semantic_state(lua, &actor)? {
+                        state.set(key, value)?;
+                    }
+                    actor.set(MANUAL_DRAW_STATE_KEY, state)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
     actor.set(
         "position",
         lua.create_function({
@@ -6700,7 +6724,11 @@ pub fn run_actor_draw_functions(lua: &Lua, root: &Value) {
 
 pub fn run_actor_draw_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if let Some(draw) = actor.get::<Option<Function>>("__songlua_draw_function")? {
+        let globals = lua.globals();
+        let prior_draw_state = globals.raw_get::<Value>(DRAW_CALLBACK_ACTIVE_KEY)?;
+        globals.raw_set(DRAW_CALLBACK_ACTIVE_KEY, true)?;
         let draw_result = call_actor_function(lua, actor, &draw, None);
+        globals.raw_set(DRAW_CALLBACK_ACTIVE_KEY, prior_draw_state)?;
         let drain_result = drain_actor_command_queue(lua, actor);
         if let Err(err) = draw_result {
             log::debug!(
@@ -8945,9 +8973,16 @@ pub fn tracked_song_lua_actor(
     table: Table,
     target: SongLuaTrackedActorTarget,
 ) -> Result<SongLuaTrackedActor, String> {
+    let initial_state = match table
+        .get::<Option<Table>>(MANUAL_DRAW_STATE_KEY)
+        .map_err(|err| err.to_string())?
+    {
+        Some(draw_state) => actor_overlay_initial_state(&draw_state)?,
+        None => actor_overlay_initial_state(&table)?,
+    };
     Ok(SongLuaTrackedActor {
         actor: SongLuaCapturedActor {
-            initial_state: actor_overlay_initial_state(&table)?,
+            initial_state,
             message_commands: Vec::new(),
         },
         table,

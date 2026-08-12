@@ -13562,6 +13562,38 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_preserves_player_state_at_manual_draw() {
+        let song_dir = test_dir("manual-player-draw");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        player:x(111):visible(false)
+        self:SetDrawFunction(function()
+            player:x(222):visible(true)
+            player:Draw()
+            player:x(333):visible(false)
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Manual Player Draw"),
+        )
+        .unwrap();
+        assert!(!compiled.hidden_players[0]);
+        assert!(compiled.player_actors[0].initial_state.visible);
+        assert_eq!(compiled.player_actors[0].initial_state.x, 222.0);
+    }
+
+    #[test]
     fn compile_song_lua_extracts_overlay_function_actions_and_eases() {
         let song_dir = test_dir("overlay-functions");
         let entry = song_dir.join("default.lua");
