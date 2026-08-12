@@ -1,7 +1,6 @@
 use super::*;
 use crate::assets::{FontRole, machine_font_key};
 use deadlib_present::actors::TextContent;
-use deadsync_profile::TapExplosionMask;
 
 pub(super) fn top_bar_actor(
     state: &State,
@@ -559,28 +558,6 @@ pub(super) fn selection_border_width() -> f32 {
     widescale(2.0, 2.5)
 }
 
-fn tap_explosion_choice_mask(mask: TapExplosionMask) -> u16 {
-    [
-        TapExplosionMask::FANTASTIC,
-        TapExplosionMask::EXCELLENT,
-        TapExplosionMask::GREAT,
-        TapExplosionMask::DECENT,
-        TapExplosionMask::WAY_OFF,
-        TapExplosionMask::MISS,
-        TapExplosionMask::HELD,
-        TapExplosionMask::HOLDING,
-    ]
-    .into_iter()
-    .enumerate()
-    .fold(0u16, |bits, (i, flag)| {
-        if mask.contains(flag) {
-            bits | (1u16 << i)
-        } else {
-            bits
-        }
-    })
-}
-
 /// Simply Love / Arrow Cloud offset stacked P1/P2 cursors by one pixel.
 #[inline(always)]
 pub(super) fn cursor_stack_y(active: [bool; PLAYER_SLOTS], player_idx: usize) -> f32 {
@@ -609,58 +586,22 @@ pub(super) fn select_preview_texture<'a>(
         })
 }
 
-/// Returns the active mask (zero-extended to u16) for a row that
-/// supports multi-select underlining, or `None` if the row uses the
-/// default single-select underline behavior.
-pub(super) fn multi_select_mask(state: &State, row_id: RowId, player_idx: usize) -> Option<u16> {
-    use RowId::*;
-    Some(match row_id {
-        Scroll => state.option_masks[player_idx].scroll.bits().into(),
-        Hide => state.option_masks[player_idx].hide.bits().into(),
-        Insert => state.option_masks[player_idx].insert.bits().into(),
-        Remove => state.option_masks[player_idx].remove.bits().into(),
-        Holds => state.option_masks[player_idx].holds.bits().into(),
-        Accel => state.option_masks[player_idx].accel_effects.bits().into(),
-        Effect => state.option_masks[player_idx].visual_effects.bits(),
-        Appearance => state.option_masks[player_idx]
-            .appearance_effects
-            .bits()
-            .into(),
-        LifeBarOptions => state.option_masks[player_idx]
-            .life_bar_options
-            .bits()
-            .into(),
-        FAPlusOptions => (state.option_masks[player_idx].fa_plus.bits() & 0b0000_1111).into(),
-        FAPlusWindowOptions => ((state.option_masks[player_idx].fa_plus.bits() >> 4) & 0b11).into(),
-        DataVisualizations => {
-            step_statistics_choice_bits(state.option_masks[player_idx].step_statistics)
-        }
-        GameplayExtras => state.option_masks[player_idx].gameplay_extras.bits(),
-        ColumnFlashJudgments => state.option_masks[player_idx].column_flash.bits().into(),
-        LiveTimingStats => state.option_masks[player_idx]
-            .live_timing_stats
-            .bits()
-            .into(),
-        GameplayExtrasMore => state.option_masks[player_idx]
-            .gameplay_extras_more
-            .bits()
-            .into(),
-        ResultsExtras => state.option_masks[player_idx].results_extras.bits().into(),
-        MeasureCounterOptions => state.option_masks[player_idx]
-            .measure_counter_options
-            .bits()
-            .into(),
-        ErrorBar => state.option_masks[player_idx].error_bar.bits().into(),
-        ErrorBarOptions => state.option_masks[player_idx]
-            .error_bar_options
-            .bits()
-            .into(),
-        EarlyDecentWayOffOptions => state.option_masks[player_idx].early_dw.bits().into(),
-        TapExplosionOptions => {
-            tap_explosion_choice_mask(state.option_masks[player_idx].tap_explosion)
-        }
-        _ => return None,
-    })
+/// Project a bitmask row's stored bits into choice-index bits for underlining.
+/// Returns `None` when the row does not use bitmask behavior.
+pub(super) fn multi_select_mask(state: &State, row: &Row, player_idx: usize) -> Option<u16> {
+    let RowBehavior::Bitmask(BitmaskBinding::Generic { init, writeback }) = row.behavior else {
+        return None;
+    };
+    let active_bits = (init.get_active)(&state.option_masks[player_idx]);
+    Some(
+        (0..row.choices.len().min(u16::BITS as usize)).fold(0u16, |choice_bits, index| {
+            let active = writeback
+                .bit_mapping
+                .bit_for_choice(index)
+                .is_some_and(|bit| active_bits & bit != 0);
+            choice_bits | (u16::from(active) << index)
+        }),
+    )
 }
 
 /// Whether a row uses multi-select underlining (one underline per set bit
@@ -721,7 +662,7 @@ pub(super) fn draw_multi_select_underlines(
         }
     };
     for player_idx in active_player_indices(active) {
-        let Some(mask) = multi_select_mask(state, row.id, player_idx) else {
+        let Some(mask) = multi_select_mask(state, row, player_idx) else {
             continue;
         };
         if mask == 0 {

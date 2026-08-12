@@ -13,7 +13,7 @@ pub(super) mod tests {
         count_visible_rows, effective_scroll_speed_with_alt, handle_arcade_start_event,
         handle_nav_event, handle_start_event, hud_offset_choices, init_cycle_row_from_binding,
         init_noteskin_state, init_numeric_row_from_binding, is_row_visible,
-        judgment_tilt_options_visible, on_start_press, player_option_column_x,
+        judgment_tilt_options_visible, multi_select_mask, on_start_press, player_option_column_x,
         prepend_pending_effects, preview_noteskin_names, queue_audio, queue_sfx,
         repeat_held_arcade_start, row_f_pos_for_index, sync_profile_scroll_speed,
         sync_speed_mod_type_row, update,
@@ -4099,6 +4099,35 @@ pub(super) mod tests {
 
         assert_eq!(row.choices[1].as_ref(), "Sudden");
         assert_eq!(row.choices[2].as_ref(), "Dynamic Sudden");
+    }
+
+    #[test]
+    fn uncommon_appearance_underlines_follow_choice_order() {
+        let (mut state, _) = setup_state();
+
+        state.option_masks[P1].appearance_effects = AppearanceEffectsMask::DYNAMIC_SUDDEN;
+        assert_eq!(
+            multi_select_mask(
+                &state,
+                state.panes[OptionsPane::Uncommon.index()]
+                    .row_map
+                    .row(RowId::Appearance),
+                P1,
+            ),
+            Some(1 << 2)
+        );
+
+        state.option_masks[P1].appearance_effects = AppearanceEffectsMask::RANDOM_VANISH;
+        assert_eq!(
+            multi_select_mask(
+                &state,
+                state.panes[OptionsPane::Uncommon.index()]
+                    .row_map
+                    .row(RowId::Appearance),
+                P1,
+            ),
+            Some(1 << 5)
+        );
     }
 
     #[test]
