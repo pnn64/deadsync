@@ -106,6 +106,7 @@ const MAX_INPUT_LATENCY_SECONDS: f32 = 0.0;
 // selected note against the active timing window.
 const STEP_SEARCH_DISTANCE_SECONDS: f32 = 1.0;
 const COLUMN_CUE_MIN_SECONDS: f32 = 1.5;
+const COLUMN_CUE_INITIAL_CAPACITY: usize = 64;
 const STEP_CAL_JUMP_WINDOW_S: f32 = 0.25;
 pub const ASSIST_TICK_LOOKAHEAD_MARGIN_SECONDS: f32 = 0.050;
 const QUANT_4TH: u8 = 0;

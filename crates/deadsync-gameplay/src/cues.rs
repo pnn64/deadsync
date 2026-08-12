@@ -296,6 +296,86 @@ pub fn build_crossover_rows<const LANES: usize>(
     note_range: (usize, usize),
     col_start: usize,
 ) -> (Vec<[u8; LANES]>, Vec<f32>, Vec<usize>) {
+    let (start, end) = note_range;
+    let mut row_indices = Vec::with_capacity((end - start).saturating_mul(2));
+    for note in &notes[start..end] {
+        if note.column < col_start
+            || note.column - col_start >= LANES
+            || crossover_note_char(note).is_none()
+        {
+            continue;
+        }
+        row_indices.push(note.row_index);
+        if let Some(hold) = note.hold.as_ref() {
+            row_indices.push(hold.end_row_index);
+        }
+    }
+    row_indices.sort_unstable();
+    row_indices.dedup();
+
+    let mut row_arrays = vec![[b'0'; LANES]; row_indices.len()];
+    let mut row_to_beat = vec![0.0_f32; row_indices.len()];
+    for note in &notes[start..end] {
+        if note.column < col_start || note.column - col_start >= LANES {
+            continue;
+        }
+        let Some(ch) = crossover_note_char(note) else {
+            continue;
+        };
+        let lane = note.column - col_start;
+        let head = row_indices
+            .binary_search(&note.row_index)
+            .expect("eligible crossover head row must be indexed");
+        if row_arrays[head] == [b'0'; LANES] {
+            row_to_beat[head] = note.beat;
+        }
+        apply_crossover_cell(&mut row_arrays[head], lane, ch);
+        if let Some(hold) = note.hold.as_ref() {
+            let tail = row_indices
+                .binary_search(&hold.end_row_index)
+                .expect("eligible crossover tail row must be indexed");
+            if row_arrays[tail] == [b'0'; LANES] {
+                row_to_beat[tail] = hold.end_beat;
+            }
+            apply_crossover_cell(&mut row_arrays[tail], lane, b'3');
+        }
+    }
+    (row_arrays, row_to_beat, row_indices)
+}
+
+#[inline(always)]
+fn crossover_note_char(note: &Note) -> Option<u8> {
+    if note.is_fake {
+        return (note.note_type == NoteType::Mine).then_some(b'M');
+    }
+    match note.note_type {
+        NoteType::Tap => Some(b'1'),
+        NoteType::Lift => Some(b'L'),
+        NoteType::Hold => Some(b'2'),
+        NoteType::Roll => Some(b'4'),
+        NoteType::Mine => Some(b'M'),
+        NoteType::Fake => None,
+    }
+}
+
+#[inline(always)]
+fn apply_crossover_cell<const LANES: usize>(row: &mut [u8; LANES], lane: usize, ch: u8) {
+    if matches!(ch, b'M' | b'3') {
+        if row[lane] == b'0' {
+            row[lane] = ch;
+        }
+    } else {
+        row[lane] = ch;
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn build_crossover_rows_reference<const LANES: usize>(
+    notes: &[Note],
+    note_range: (usize, usize),
+    col_start: usize,
+) -> (Vec<[u8; LANES]>, Vec<f32>, Vec<usize>) {
     use std::collections::BTreeMap;
 
     let (start, end) = note_range;
@@ -304,39 +384,19 @@ pub fn build_crossover_rows<const LANES: usize>(
         if note.column < col_start || note.column - col_start >= LANES {
             continue;
         }
-        let lane = note.column - col_start;
-        let ch = if note.is_fake {
-            match note.note_type {
-                NoteType::Mine => b'M',
-                _ => continue,
-            }
-        } else {
-            match note.note_type {
-                NoteType::Tap => b'1',
-                NoteType::Lift => b'L',
-                NoteType::Hold => b'2',
-                NoteType::Roll => b'4',
-                NoteType::Mine => b'M',
-                NoteType::Fake => continue,
-            }
+        let Some(ch) = crossover_note_char(note) else {
+            continue;
         };
+        let lane = note.column - col_start;
         let entry = rows
             .entry(note.row_index)
             .or_insert(([b'0'; LANES], note.beat));
-        if ch == b'M' {
-            if entry.0[lane] == b'0' {
-                entry.0[lane] = b'M';
-            }
-        } else {
-            entry.0[lane] = ch;
-        }
+        apply_crossover_cell(&mut entry.0, lane, ch);
         if let Some(hold) = note.hold.as_ref() {
             let tail = rows
                 .entry(hold.end_row_index)
                 .or_insert(([b'0'; LANES], hold.end_beat));
-            if tail.0[lane] == b'0' {
-                tail.0[lane] = b'3';
-            }
+            apply_crossover_cell(&mut tail.0, lane, b'3');
         }
     }
     let mut row_arrays = Vec::with_capacity(rows.len());

@@ -13132,6 +13132,69 @@ mod tests {
     }
 
     #[test]
+    fn streamed_column_cues_match_materialized_reference() {
+        let mut notes = Vec::new();
+        let mut note_times = Vec::new();
+        for row in 0..512usize {
+            for lane in 0..4usize {
+                let note_type = match (row + lane) % 6 {
+                    0 => NoteType::Mine,
+                    1 => NoteType::Lift,
+                    2 => NoteType::Fake,
+                    _ => NoteType::Tap,
+                };
+                let mut note = test_note_at(
+                    note_type,
+                    None,
+                    (row + lane) % 13 == 0,
+                    row * 12,
+                    row as f32 * 0.25,
+                );
+                note.column = lane;
+                note.can_be_judged = (row + lane) % 17 != 0;
+                notes.push(note);
+                note_times.push(song_time_ns_from_seconds(row as f32 * 0.125));
+            }
+        }
+        let sparse_note_times = notes
+            .iter()
+            .map(|note| song_time_ns_from_seconds(note.row_index as f32 / 12.0 * 2.0))
+            .collect::<Vec<_>>();
+
+        for times in [&note_times, &sparse_note_times] {
+            for (range, col_start, col_end, first_visible) in [
+                ((0, notes.len()), 0, 4, 0.0),
+                ((7, notes.len() - 9), 1, 3, -0.5),
+                ((12, 12), 0, 4, 0.0),
+                ((0, notes.len()), 4, 4, -2.0),
+            ] {
+                let actual = build_column_cues_for_player(
+                    &notes,
+                    range,
+                    times,
+                    col_start,
+                    col_end,
+                    first_visible,
+                );
+                let expected = build_column_cues_for_player_reference(
+                    &notes,
+                    range,
+                    times,
+                    col_start,
+                    col_end,
+                    first_visible,
+                );
+                assert_eq!(actual.len(), expected.len());
+                for (actual, expected) in actual.iter().zip(&expected) {
+                    assert_eq!(actual.start_time.to_bits(), expected.start_time.to_bits());
+                    assert_eq!(actual.duration.to_bits(), expected.duration.to_bits());
+                    assert_eq!(actual.columns, expected.columns);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn active_column_cue_returns_latest_started_cue() {
         let cues = [
             ColumnCue {
@@ -13386,6 +13449,45 @@ mod tests {
         );
         assert_eq!(beats, vec![1.0, 2.0]);
         assert_eq!(row_indices, vec![48, 96]);
+    }
+
+    #[test]
+    fn indexed_crossover_rows_match_tree_reference() {
+        let mut notes = Vec::new();
+        for row in 0..1_024usize {
+            for lane in 0..4usize {
+                let note_type = match (row * 3 + lane) % 8 {
+                    0 => NoteType::Mine,
+                    1 => NoteType::Lift,
+                    2 => NoteType::Hold,
+                    3 => NoteType::Roll,
+                    4 => NoteType::Fake,
+                    _ => NoteType::Tap,
+                };
+                let hold = matches!(note_type, NoteType::Hold | NoteType::Roll).then(|| HoldData {
+                    end_row_index: row * 12 + 24 + lane,
+                    end_beat: row as f32 * 0.25 + 0.5 + lane as f32 / 48.0,
+                    ..test_hold()
+                });
+                let mut note = test_note_at(
+                    note_type,
+                    hold,
+                    (row + lane) % 19 == 0,
+                    row * 12,
+                    row as f32 * 0.25,
+                );
+                note.column = lane + 2;
+                notes.push(note);
+            }
+        }
+
+        for range in [(0, notes.len()), (17, notes.len() - 13), (31, 31)] {
+            assert_eq!(
+                build_crossover_rows::<4>(&notes, range, 2),
+                build_crossover_rows_reference::<4>(&notes, range, 2),
+                "range={range:?}",
+            );
+        }
     }
 
     #[test]
@@ -15954,6 +16056,46 @@ mod tests {
         ];
 
         assert_eq!(pump_tap_rows(&notes, (0, notes.len())), vec![24]);
+    }
+
+    #[test]
+    fn streamed_pump_tap_rows_match_sorting_reference() {
+        let mut notes = (0..4_096usize)
+            .map(|index| {
+                let note_type = match index % 6 {
+                    0 => NoteType::Tap,
+                    1 => NoteType::Hold,
+                    2 => NoteType::Roll,
+                    3 => NoteType::Lift,
+                    4 => NoteType::Mine,
+                    _ => NoteType::Fake,
+                };
+                let mut note = test_note_at(
+                    note_type,
+                    None,
+                    index % 23 == 0,
+                    index,
+                    (index / 4) as f32 * 0.25,
+                );
+                note.can_be_judged = index % 29 != 0;
+                note
+            })
+            .collect::<Vec<_>>();
+
+        for range in [(0, notes.len()), (9, notes.len() - 11), (8, 8)] {
+            assert_eq!(
+                pump_tap_rows(&notes, range),
+                pump_tap_rows_reference(&notes, range),
+                "ordered range={range:?}",
+            );
+        }
+
+        notes.reverse();
+        assert_eq!(
+            pump_tap_rows(&notes, (0, notes.len())),
+            pump_tap_rows_reference(&notes, (0, notes.len())),
+            "unordered fallback",
+        );
     }
 
     #[test]

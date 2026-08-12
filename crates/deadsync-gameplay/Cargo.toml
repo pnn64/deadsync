@@ -16,6 +16,11 @@ name = "chart_transform_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "gameplay_init_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }

@@ -30,6 +30,39 @@ pub struct PumpHoldEvent {
 
 fn pump_tap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
     let end = note_range.1.min(notes.len());
+    let start = note_range.0.min(end);
+    let mut rows = Vec::with_capacity(end - start);
+    let mut ordered = true;
+    for note in &notes[start..end] {
+        if !note.can_be_judged
+            || note.is_fake
+            || !matches!(
+                note.note_type,
+                NoteType::Tap | NoteType::Hold | NoteType::Roll
+            )
+        {
+            continue;
+        }
+        let row = beat_to_note_row(note.beat).max(0) as usize;
+        match rows.last().copied() {
+            Some(last) if row == last => {}
+            Some(last) => {
+                ordered &= row > last;
+                rows.push(row);
+            }
+            None => rows.push(row),
+        }
+    }
+    if !ordered {
+        rows.sort_unstable();
+        rows.dedup();
+    }
+    rows
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn pump_tap_rows_reference(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
+    let end = note_range.1.min(notes.len());
     let mut rows: Vec<usize> = notes[note_range.0.min(end)..end]
         .iter()
         .filter(|note| {
@@ -45,6 +78,21 @@ fn pump_tap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
     rows.sort_unstable();
     rows.dedup();
     rows
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn pump_tap_rows_for_bench(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
+    pump_tap_rows(notes, note_range)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn pump_tap_rows_reference_for_bench(
+    notes: &[Note],
+    note_range: (usize, usize),
+) -> Vec<usize> {
+    pump_tap_rows_reference(notes, note_range)
 }
 
 fn push_pump_checkpoints(

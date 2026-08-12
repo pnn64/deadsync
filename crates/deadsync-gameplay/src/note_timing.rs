@@ -122,6 +122,65 @@ pub fn build_column_cues_for_player(
         return Vec::new();
     }
 
+    let mut cues = Vec::with_capacity((end - start).min(COLUMN_CUE_INITIAL_CAPACITY));
+    let mut prev_time = 0.0_f32;
+    let mut i = start;
+    while i < end {
+        let row = notes[i].row_index;
+        let mut row_time = 0.0_f32;
+        let mut has_row_time = false;
+        let mut columns = ColumnCueColumns::default();
+        while i < end && notes[i].row_index == row {
+            let note = &notes[i];
+            if note.column >= col_start
+                && note.column < col_end
+                && let Some(is_mine) = column_cue_is_mine(note)
+            {
+                if !has_row_time {
+                    row_time = song_time_ns_to_seconds(note_time_cache_ns[i]);
+                    has_row_time = true;
+                }
+                columns.insert(note.column, is_mine);
+            }
+            i += 1;
+        }
+        if has_row_time {
+            let duration = row_time - prev_time;
+            if duration >= COLUMN_CUE_MIN_SECONDS || prev_time == 0.0 {
+                cues.push(ColumnCue {
+                    start_time: prev_time,
+                    duration,
+                    columns,
+                });
+            }
+            prev_time = row_time;
+        }
+    }
+
+    if first_visible_time < 0.0
+        && let Some(first) = cues.first_mut()
+    {
+        first.duration -= first_visible_time;
+        first.start_time += first_visible_time;
+    }
+    cues
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn build_column_cues_for_player_reference(
+    notes: &[Note],
+    note_range: (usize, usize),
+    note_time_cache_ns: &[SongTimeNs],
+    col_start: usize,
+    col_end: usize,
+    first_visible_time: f32,
+) -> Vec<ColumnCue> {
+    let (start, end) = note_range;
+    if start >= end || col_start >= col_end {
+        return Vec::new();
+    }
+
     let mut column_times: Vec<(f32, ColumnCueColumns)> = Vec::with_capacity(end - start);
     let mut i = start;
     while i < end {
