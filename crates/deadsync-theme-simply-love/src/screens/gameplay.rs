@@ -12,6 +12,7 @@ use crate::screens::components::shared::heart_rate;
 pub use crate::screens::components::shared::heart_rate::{HeartRatePlayerView, HeartRateView};
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::components::shared::{gs_scorebox, lobby_hud};
+use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{GameplayInitView, GameplayRuntimeView, GameplayScoreRuntimeView};
 use deadlib_present::actors::{
@@ -1829,6 +1830,7 @@ pub struct State {
     itl_cmod_warning: [bool; MAX_PLAYERS],
     runtime_view: GameplayRuntimeView,
     live_lobby_runtime: bool,
+    lobby_hud_visibility: GameplayLobbyHudVisibility,
     pub lobby_music_started: bool,
     pub lobby_ready_p1: bool,
     pub lobby_ready_p2: bool,
@@ -2413,6 +2415,7 @@ impl State {
             scorebox_refresh_pending,
             itl_cmod_warning: [false; MAX_PLAYERS],
             live_lobby_runtime: runtime_view.lobby.snapshot.joined_lobby.is_some(),
+            lobby_hud_visibility: GameplayLobbyHudVisibility::default(),
             runtime_view,
             lobby_music_started: false,
             lobby_ready_p1: false,
@@ -3638,6 +3641,67 @@ fn local_lobby_side_is_active(state: &State, side: profile_data::PlayerSide) -> 
     }
 }
 
+#[derive(Debug)]
+struct GameplayLobbyHudVisibility {
+    visible: bool,
+    menu_lr_chord: screen_input::MenuLrChordTracker,
+}
+
+impl Default for GameplayLobbyHudVisibility {
+    fn default() -> Self {
+        Self {
+            visible: true,
+            menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        }
+    }
+}
+
+impl GameplayLobbyHudVisibility {
+    fn handle_input(
+        &mut self,
+        ev: &InputEvent,
+        joined_lobby: bool,
+        waiting: bool,
+        joined_sides: [bool; 2],
+        fallback_side: profile_data::PlayerSide,
+    ) -> bool {
+        if !joined_lobby || waiting {
+            self.menu_lr_chord = screen_input::MenuLrChordTracker::default();
+            return false;
+        }
+        // Keep gameplay arrows available to the chart. Only explicitly mapped
+        // menu buttons participate in the lobby-HUD chord.
+        let side = match ev.action {
+            VirtualAction::p1_menu_left | VirtualAction::p1_menu_right => {
+                profile_data::PlayerSide::P1
+            }
+            VirtualAction::p2_menu_left | VirtualAction::p2_menu_right => {
+                profile_data::PlayerSide::P2
+            }
+            _ => return false,
+        };
+        let [p1_joined, p2_joined] = joined_sides;
+        let side_is_active = if p1_joined || p2_joined {
+            match side {
+                profile_data::PlayerSide::P1 => p1_joined,
+                profile_data::PlayerSide::P2 => p2_joined,
+            }
+        } else {
+            side == fallback_side
+        };
+        if !side_is_active || self.menu_lr_chord.update(ev).is_none() {
+            return false;
+        }
+        self.visible = !self.visible;
+        true
+    }
+
+    #[inline(always)]
+    const fn should_render(&self, joined_lobby: bool, waiting: bool) -> bool {
+        joined_lobby && (waiting || self.visible)
+    }
+}
+
 fn intro_text_width_for_font(asset_manager: &AssetManager, font_key: &str, text: &str) -> f32 {
     asset_manager.with_fonts(|all_fonts| {
         asset_manager
@@ -4571,7 +4635,16 @@ pub fn report_smx_sensor_profile(state: &State) {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    if gameplay_lobby_wait_active(state) {
+    let lobby_waiting = gameplay_lobby_wait_active(state);
+    let joined_lobby = state.runtime_view.lobby.snapshot.joined_lobby.is_some();
+    let lobby_hud_toggled = state.lobby_hud_visibility.handle_input(
+        ev,
+        joined_lobby,
+        lobby_waiting,
+        state.runtime_view.joined,
+        state.runtime_view.player_side,
+    );
+    if lobby_waiting {
         match ev.action {
             VirtualAction::p1_start => {
                 if ev.pressed {
@@ -4599,6 +4672,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             }
             _ => {}
         }
+        return ThemeEffect::None;
+    }
+    if lobby_hud_toggled {
         return ThemeEffect::None;
     }
     let action = handle_core_input(state, ev);
@@ -14369,7 +14445,11 @@ pub fn push_actors(
 
     if !hide_gameplay_hud {
         let overlay_start = actors.len();
-        if state.runtime_view.lobby.snapshot.joined_lobby.is_some() {
+        let joined_lobby = state.runtime_view.lobby.snapshot.joined_lobby.is_some();
+        if state
+            .lobby_hud_visibility
+            .should_render(joined_lobby, gameplay_lobby_wait_active(state))
+        {
             let has_status = write_gameplay_lobby_hud_status(state, lobby_hud_status_scratch);
             let joined = state
                 .runtime_view
@@ -17785,6 +17865,23 @@ mod tests {
             judgments: None,
             score: None,
             ex_score: None,
+        }
+    }
+
+    fn lobby_hud_input_event(
+        action: VirtualAction,
+        pressed: bool,
+        timestamp: Instant,
+    ) -> InputEvent {
+        InputEvent {
+            action,
+            input_slot: 0,
+            pressed,
+            source: deadsync_core::input::InputSource::Keyboard,
+            timestamp,
+            timestamp_host_nanos: 0,
+            stored_at: timestamp,
+            emitted_at: timestamp,
         }
     }
 
@@ -22541,6 +22638,150 @@ mod tests {
             &mut actual
         ));
         assert!(actual.is_empty());
+    }
+
+    #[test]
+    fn lobby_hud_visibility_starts_visible_for_each_gameplay_state() {
+        let visibility = GameplayLobbyHudVisibility::default();
+
+        assert!(visibility.should_render(true, false));
+        assert!(!visibility.should_render(false, false));
+    }
+
+    #[test]
+    fn lobby_hud_menu_lr_chord_toggles_once_per_press_cycle_for_both_sides() {
+        let at = Instant::now();
+        let mut visibility = GameplayLobbyHudVisibility::default();
+        let p1 = [true, false];
+
+        assert!(!visibility.handle_input(
+            &lobby_hud_input_event(VirtualAction::p1_menu_left, true, at),
+            true,
+            false,
+            p1,
+            profile_data::PlayerSide::P1,
+        ));
+        assert!(visibility.handle_input(
+            &lobby_hud_input_event(VirtualAction::p1_menu_right, true, at),
+            true,
+            false,
+            p1,
+            profile_data::PlayerSide::P1,
+        ));
+        assert!(!visibility.visible);
+
+        assert!(!visibility.handle_input(
+            &lobby_hud_input_event(VirtualAction::p1_menu_right, true, at),
+            true,
+            false,
+            p1,
+            profile_data::PlayerSide::P1,
+        ));
+        assert!(!visibility.visible);
+
+        for (action, pressed) in [
+            (VirtualAction::p1_menu_left, false),
+            (VirtualAction::p1_menu_right, false),
+            (VirtualAction::p1_menu_left, true),
+        ] {
+            assert!(!visibility.handle_input(
+                &lobby_hud_input_event(action, pressed, at),
+                true,
+                false,
+                p1,
+                profile_data::PlayerSide::P1,
+            ));
+        }
+        assert!(visibility.handle_input(
+            &lobby_hud_input_event(VirtualAction::p1_menu_right, true, at),
+            true,
+            false,
+            p1,
+            profile_data::PlayerSide::P1,
+        ));
+        assert!(visibility.visible);
+
+        for action in [VirtualAction::p1_menu_left, VirtualAction::p1_menu_right] {
+            assert!(!visibility.handle_input(
+                &lobby_hud_input_event(action, false, at),
+                true,
+                false,
+                p1,
+                profile_data::PlayerSide::P1,
+            ));
+        }
+        let p2 = [false, true];
+        assert!(!visibility.handle_input(
+            &lobby_hud_input_event(VirtualAction::p2_menu_left, true, at),
+            true,
+            false,
+            p2,
+            profile_data::PlayerSide::P2,
+        ));
+        assert!(visibility.handle_input(
+            &lobby_hud_input_event(VirtualAction::p2_menu_right, true, at),
+            true,
+            false,
+            p2,
+            profile_data::PlayerSide::P2,
+        ));
+        assert!(!visibility.visible);
+    }
+
+    #[test]
+    fn lobby_hud_toggle_ignores_dance_arrows_inactive_sides_and_non_lobby_play() {
+        let at = Instant::now();
+        let mut visibility = GameplayLobbyHudVisibility::default();
+
+        for action in [VirtualAction::p1_left, VirtualAction::p1_right] {
+            assert!(!visibility.handle_input(
+                &lobby_hud_input_event(action, true, at),
+                true,
+                false,
+                [true, false],
+                profile_data::PlayerSide::P1,
+            ));
+        }
+        for action in [VirtualAction::p2_menu_left, VirtualAction::p2_menu_right] {
+            assert!(!visibility.handle_input(
+                &lobby_hud_input_event(action, true, at),
+                true,
+                false,
+                [true, false],
+                profile_data::PlayerSide::P1,
+            ));
+        }
+        for action in [VirtualAction::p1_menu_left, VirtualAction::p1_menu_right] {
+            assert!(!visibility.handle_input(
+                &lobby_hud_input_event(action, true, at),
+                false,
+                false,
+                [true, false],
+                profile_data::PlayerSide::P1,
+            ));
+        }
+        assert!(visibility.visible);
+    }
+
+    #[test]
+    fn lobby_hud_remains_rendered_and_does_not_toggle_during_ready_wait() {
+        let at = Instant::now();
+        let mut visibility = GameplayLobbyHudVisibility {
+            visible: false,
+            ..GameplayLobbyHudVisibility::default()
+        };
+
+        for action in [VirtualAction::p1_menu_left, VirtualAction::p1_menu_right] {
+            assert!(!visibility.handle_input(
+                &lobby_hud_input_event(action, true, at),
+                true,
+                true,
+                [true, false],
+                profile_data::PlayerSide::P1,
+            ));
+        }
+        assert!(!visibility.visible);
+        assert!(visibility.should_render(true, true));
     }
 
     #[test]
