@@ -344,8 +344,8 @@ where
         score_missed_holds_rolls[1] = score_missed_holds_rolls[0];
         note_ranges[1] = note_ranges[0];
     }
-    let note_count_stats: [Vec<NoteCountStat>; MAX_PLAYERS] =
-        std::array::from_fn(|player| build_note_count_stats(&notes, note_ranges[player]));
+    let note_count_stats =
+        build_note_count_stats_for_players(&notes, &note_ranges, num_players);
     let transform_ms = transform_started.elapsed().as_secs_f64() * 1000.0;
 
     let note_player_for_col =
@@ -395,52 +395,14 @@ where
 
     log::debug!("Parsed {} notes from chart data.", notes.len());
 
-    let mut row_entries: Vec<RowEntry> = Vec::with_capacity(notes.len() / 2);
-    let mut row_entry_ranges = [(0usize, 0usize); MAX_PLAYERS];
-    let mut note_row_entry_indices = vec![u32::MAX; notes.len()];
-    let mut tap_row_hold_roll_flags = vec![0u8; notes.len()];
-    for player in 0..num_players {
-        let row_range_start = row_entries.len();
-        let (note_start, note_end) = note_ranges[player];
-        let mut cursor = note_start;
-        while cursor < note_end {
-            let row_index = notes[cursor].row_index;
-            let row_start = cursor;
-            let mut row_flags = 0u8;
-            let mut nonmine_note_indices = [usize::MAX; MAX_COLS];
-            let mut nonmine_note_count = 0u8;
-            while cursor < note_end && notes[cursor].row_index == row_index {
-                let note = &notes[cursor];
-                match note.note_type {
-                    NoteType::Hold => row_flags |= 0b01,
-                    NoteType::Roll => row_flags |= 0b10,
-                    _ => {}
-                }
-                if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
-                    let count = usize::from(nonmine_note_count);
-                    debug_assert!(count < MAX_COLS);
-                    nonmine_note_indices[count] = cursor;
-                    nonmine_note_count += 1;
-                }
-                cursor += 1;
-            }
-            if nonmine_note_count != 0 {
-                let row_entry_index = row_entries.len() as u32;
-                for &note_index in &nonmine_note_indices[..usize::from(nonmine_note_count)] {
-                    note_row_entry_indices[note_index] = row_entry_index;
-                }
-                row_entries.push(build_row_entry(
-                    row_index,
-                    nonmine_note_indices,
-                    nonmine_note_count,
-                    &notes,
-                    &note_time_cache_ns,
-                ));
-            }
-            tap_row_hold_roll_flags[row_start..cursor].fill(row_flags);
-        }
-        row_entry_ranges[player] = (row_range_start, row_entries.len());
-    }
+    let (row_entries, row_entry_ranges, note_row_entry_indices, tap_row_hold_roll_flags) =
+        build_gameplay_row_indices(
+            &notes,
+            &note_ranges,
+            &note_time_cache_ns,
+            num_players,
+            notes.len() / 2,
+        );
     let cache_build_ms = cache_build_started.elapsed().as_secs_f64() * 1000.0;
 
     let timing_prep_started = Instant::now();
@@ -971,7 +933,7 @@ where
             notes,
             column_judgment_eligible: vec![false; notes_len],
             note_ranges: GameplayNoteRangeState::new(note_ranges),
-            note_count_stats: GameplayNoteCountStatsState::new(note_count_stats),
+            note_count_stats: GameplayNoteCountStatsState::new(note_count_stats, num_players),
             lane_indices: GameplayLaneIndexState::new(
                 lane_note_indices,
                 lane_note_row_indices,

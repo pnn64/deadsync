@@ -1,5 +1,44 @@
 ﻿#[inline(always)]
+const fn build_quantization_table() -> [u8; 48] {
+    let mut table = [QUANT_192ND; 48];
+    let mut row = 0usize;
+    while row < table.len() {
+        table[row] = if row % 48 == 0 {
+            QUANT_4TH
+        } else if row % 24 == 0 {
+            QUANT_8TH
+        } else if row % 16 == 0 {
+            QUANT_12TH
+        } else if row % 12 == 0 {
+            QUANT_16TH
+        } else if row % 8 == 0 {
+            QUANT_24TH
+        } else if row % 6 == 0 {
+            QUANT_32ND
+        } else if row % 4 == 0 {
+            QUANT_48TH
+        } else if row % 3 == 0 {
+            QUANT_64TH
+        } else {
+            QUANT_192ND
+        };
+        row += 1;
+    }
+    table
+}
+
+const QUANTIZATION_BY_ROW: [u8; 48] = build_quantization_table();
+
+#[inline(always)]
 pub fn quantization_index_from_beat(beat: f32) -> u8 {
+    let row = (beat * 48.0).round() as i32;
+    QUANTIZATION_BY_ROW[row.rem_euclid(48) as usize]
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[inline(always)]
+pub fn quantization_index_from_beat_reference(beat: f32) -> u8 {
     // Match ITG's BeatToNoteType path: round beat->row at 48 rows/beat,
     // then classify by measure-subdivision divisibility.
     let row = (beat * 48.0).round() as i32;

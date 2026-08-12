@@ -254,6 +254,74 @@ pub fn build_row_entry(
     }
 }
 
+type GameplayRowIndexBuild = (
+    Vec<RowEntry>,
+    [(usize, usize); MAX_PLAYERS],
+    Vec<u32>,
+    Vec<u8>,
+);
+
+fn build_gameplay_row_indices(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+    note_time_cache_ns: &[SongTimeNs],
+    num_players: usize,
+    row_capacity: usize,
+) -> GameplayRowIndexBuild {
+    let mut row_entries = Vec::with_capacity(row_capacity);
+    let mut row_entry_ranges = [(0usize, 0usize); MAX_PLAYERS];
+    let mut note_row_entry_indices = vec![u32::MAX; notes.len()];
+    let mut tap_row_hold_roll_flags = vec![0u8; notes.len()];
+    for player in 0..num_players.min(MAX_PLAYERS) {
+        let row_range_start = row_entries.len();
+        let (note_start, note_end) = note_ranges[player];
+        let mut cursor = note_start;
+        while cursor < note_end {
+            let row_index = notes[cursor].row_index;
+            let row_start = cursor;
+            let mut row_flags = 0u8;
+            let mut nonmine_note_indices = [usize::MAX; MAX_COLS];
+            let mut nonmine_note_count = 0u8;
+            while cursor < note_end && notes[cursor].row_index == row_index {
+                let note = &notes[cursor];
+                match note.note_type {
+                    NoteType::Hold => row_flags |= 0b01,
+                    NoteType::Roll => row_flags |= 0b10,
+                    _ => {}
+                }
+                if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+                    let count = usize::from(nonmine_note_count);
+                    debug_assert!(count < MAX_COLS);
+                    nonmine_note_indices[count] = cursor;
+                    nonmine_note_count += 1;
+                }
+                cursor += 1;
+            }
+            if nonmine_note_count != 0 {
+                let row_entry_index = row_entries.len() as u32;
+                for &note_index in &nonmine_note_indices[..usize::from(nonmine_note_count)] {
+                    note_row_entry_indices[note_index] = row_entry_index;
+                }
+                row_entries.push(build_row_entry(
+                    row_index,
+                    nonmine_note_indices,
+                    nonmine_note_count,
+                    notes,
+                    note_time_cache_ns,
+                ));
+            }
+            tap_row_hold_roll_flags[row_start..cursor].fill(row_flags);
+        }
+        row_entry_ranges[player] = (row_range_start, row_entries.len());
+    }
+    (
+        row_entries,
+        row_entry_ranges,
+        note_row_entry_indices,
+        tap_row_hold_roll_flags,
+    )
+}
+
 pub fn reset_practice_notes_and_rows(
     notes: &mut [Note],
     row_entries: &mut [RowEntry],

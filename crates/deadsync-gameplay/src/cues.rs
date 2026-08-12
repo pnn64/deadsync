@@ -183,7 +183,7 @@ impl IntoIterator for &ColumnCueColumns {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ColumnCue {
     pub start_time: f32,
     pub duration: f32,
@@ -512,6 +512,36 @@ fn build_crossover_cues_core(
     include_brackets: bool,
     first_visible_time: f32,
 ) -> Vec<ColumnCue> {
+    let cue_capacity = annos
+        .windows(2)
+        .filter(|pair| {
+            pair[1].is_active_crossover(include_brackets)
+                && !pair[0].is_active_crossover(include_brackets)
+        })
+        .count();
+    build_crossover_cues_core_with_capacity(
+        annos,
+        arrow_time,
+        col_start,
+        duration_ms,
+        quantization,
+        include_brackets,
+        first_visible_time,
+        cue_capacity,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_crossover_cues_core_with_capacity(
+    annos: &[CrossoverRow],
+    arrow_time: impl Fn(f32) -> f32,
+    col_start: usize,
+    duration_ms: u16,
+    quantization: u8,
+    include_brackets: bool,
+    first_visible_time: f32,
+    initial_capacity: usize,
+) -> Vec<ColumnCue> {
     if annos.len() < 2 {
         return Vec::new();
     }
@@ -603,6 +633,9 @@ fn build_crossover_cues_core(
             start_time = prev_end - fade;
             cue_duration = cue_duration - duration_difference + fade;
         }
+        if cues.is_empty() {
+            cues.reserve(initial_capacity);
+        }
         cues.push(ColumnCue {
             start_time,
             duration: cue_duration,
@@ -618,4 +651,25 @@ fn build_crossover_cues_core(
         first.start_time += first_visible_time;
     }
     cues
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn build_crossover_cues_for_bench(annos: &[CrossoverRow]) -> Vec<ColumnCue> {
+    build_crossover_cues_core(annos, |beat| beat * 0.5, 0, 500, 8, false, 0.0)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn build_crossover_cues_reference_for_bench(annos: &[CrossoverRow]) -> Vec<ColumnCue> {
+    build_crossover_cues_core_with_capacity(
+        annos,
+        |beat| beat * 0.5,
+        0,
+        500,
+        8,
+        false,
+        0.0,
+        0,
+    )
 }

@@ -1,24 +1,33 @@
 #[derive(Clone, Debug)]
 pub struct GameplayNoteCountStatsState {
     stats: [Vec<NoteCountStat>; MAX_PLAYERS],
+    player_stat_indices: [u8; MAX_PLAYERS],
 }
 
 impl Default for GameplayNoteCountStatsState {
     fn default() -> Self {
         Self {
             stats: std::array::from_fn(|_| Vec::new()),
+            player_stat_indices: std::array::from_fn(|player| player as u8),
         }
     }
 }
 
 impl GameplayNoteCountStatsState {
-    pub fn new(stats: [Vec<NoteCountStat>; MAX_PLAYERS]) -> Self {
-        Self { stats }
+    pub fn new(stats: [Vec<NoteCountStat>; MAX_PLAYERS], num_players: usize) -> Self {
+        let player_stat_indices = if num_players == 1 { [0, 0] } else { [0, 1] };
+        Self {
+            stats,
+            player_stat_indices,
+        }
     }
 
     #[inline(always)]
     pub fn player_stats(&self, player: usize) -> &[NoteCountStat] {
-        self.stats.get(player).map_or(&[], Vec::as_slice)
+        self.player_stat_indices
+            .get(player)
+            .and_then(|&index| self.stats.get(usize::from(index)))
+            .map_or(&[], Vec::as_slice)
     }
 }
 

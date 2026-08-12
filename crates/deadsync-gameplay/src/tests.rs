@@ -13644,6 +13644,34 @@ mod tests {
     }
 
     #[test]
+    fn preallocated_crossover_cues_match_growth_reference() {
+        let mut annos = Vec::with_capacity(96);
+        for pair in 0..48 {
+            let beat = pair as f32 * 2.0;
+            annos.push(xover_anno(beat, 1, 0b0010, false));
+            annos.push(xover_anno(
+                beat + 0.25,
+                1,
+                if pair % 2 == 0 { 0b0001 } else { 0b1000 },
+                true,
+            ));
+        }
+        let expected = build_crossover_cues_core_with_capacity(
+            &annos, xover_time, 2, 500, 8, false, -0.3, 0,
+        );
+        let actual = build_crossover_cues_core(&annos, xover_time, 2, 500, 8, false, -0.3);
+        assert_eq!(actual, expected);
+
+        let no_cues = [
+            xover_anno(0.0, 1, 0b0010, false),
+            xover_anno(8.0, 1, 0b0001, true),
+        ];
+        let empty = build_crossover_cues_core(&no_cues, xover_time, 0, 500, 8, false, 0.0);
+        assert!(empty.is_empty());
+        assert_eq!(empty.capacity(), 0);
+    }
+
+    #[test]
     fn late_resolution_uses_largest_gameplay_window() {
         let timing_profile = TimingProfile::default_itg_with_fa_plus();
         let seconds = song_time_ns_to_seconds(late_note_resolution_window_ns(&timing_profile, 1.0));
@@ -14761,18 +14789,58 @@ mod tests {
 
     #[test]
     fn note_count_stats_state_returns_player_slices() {
-        let mut stats: [Vec<NoteCountStat>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
-        stats[1].push(NoteCountStat {
-            beat: 4.0,
-            notes_lower: 7,
-            notes_upper: 9,
-        });
-        let state = GameplayNoteCountStatsState::new(stats);
+        let stats = [
+            Vec::new(),
+            vec![NoteCountStat {
+                beat: 4.0,
+                notes_lower: 7,
+                notes_upper: 9,
+            }],
+        ];
+        let state = GameplayNoteCountStatsState::new(stats, 2);
 
         assert!(state.player_stats(0).is_empty());
         assert_eq!(state.player_stats(1)[0].beat, 4.0);
         assert_eq!(state.player_stats(1)[0].notes_lower, 7);
         assert!(state.player_stats(MAX_PLAYERS).is_empty());
+    }
+
+    #[test]
+    fn single_player_note_stats_alias_one_built_table() {
+        let mut notes = Vec::new();
+        for row in 0..256 {
+            for column in 0..=row % 5 {
+                let mut note = test_note_at(
+                    NoteType::Tap,
+                    None,
+                    false,
+                    row * 12,
+                    row as f32 * 0.25,
+                );
+                note.column = column;
+                notes.push(note);
+            }
+        }
+        let ranges = [(0, notes.len()), (0, notes.len())];
+        let expected = build_note_count_stats_for_players_reference(&notes, &ranges);
+        let built = build_note_count_stats_for_players(&notes, &ranges, 1);
+        assert_eq!(built[0].len(), expected[0].len());
+        for (actual, expected) in built[0].iter().zip(&expected[0]) {
+            assert_eq!(actual.beat, expected.beat);
+            assert_eq!(actual.notes_lower, expected.notes_lower);
+            assert_eq!(actual.notes_upper, expected.notes_upper);
+        }
+        assert!(built[1].is_empty());
+
+        let state = GameplayNoteCountStatsState::new(built, 1);
+        for player in 0..MAX_PLAYERS {
+            assert_eq!(state.player_stats(player).len(), expected[player].len());
+            for (actual, expected) in state.player_stats(player).iter().zip(&expected[player]) {
+                assert_eq!(actual.beat, expected.beat);
+                assert_eq!(actual.notes_lower, expected.notes_lower);
+                assert_eq!(actual.notes_upper, expected.notes_upper);
+            }
+        }
     }
 
     #[test]
@@ -17974,6 +18042,24 @@ mod tests {
         assert_eq!(quantization_index_from_beat(1.0 / 12.0), QUANT_48TH);
         assert_eq!(quantization_index_from_beat(1.0 / 16.0), QUANT_64TH);
         assert_eq!(quantization_index_from_beat(1.0 / 48.0), QUANT_192ND);
+    }
+
+    #[test]
+    fn quantization_lookup_matches_divisibility_reference() {
+        for row in -32_768..=32_768 {
+            let beat = row as f32 / ROWS_PER_BEAT as f32;
+            assert_eq!(
+                quantization_index_from_beat(beat),
+                quantization_index_from_beat_reference(beat),
+                "row={row}",
+            );
+        }
+        for beat in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(
+                quantization_index_from_beat(beat),
+                quantization_index_from_beat_reference(beat),
+            );
+        }
     }
 
     #[test]

@@ -1136,6 +1136,42 @@ pub fn build_note_count_stats(notes: &[Note], note_range: (usize, usize)) -> Vec
     stats
 }
 
+fn build_note_count_stats_for_players(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+    num_players: usize,
+) -> [Vec<NoteCountStat>; MAX_PLAYERS] {
+    let players = num_players.min(MAX_PLAYERS);
+    std::array::from_fn(|player| {
+        if player < players {
+            build_note_count_stats(notes, note_ranges[player])
+        } else {
+            Vec::new()
+        }
+    })
+}
+
+#[cfg(test)]
+fn build_note_count_stats_for_players_reference(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+) -> [Vec<NoteCountStat>; MAX_PLAYERS] {
+    std::array::from_fn(|player| build_note_count_stats(notes, note_ranges[player]))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn build_note_count_stats_for_players_for_bench(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+    num_players: usize,
+) -> GameplayNoteCountStatsState {
+    GameplayNoteCountStatsState::new(
+        build_note_count_stats_for_players(notes, note_ranges, num_players),
+        num_players,
+    )
+}
+
 #[cfg(any(test, feature = "bench-support"))]
 pub fn build_note_count_stats_reference(
     notes: &[Note],

@@ -1,11 +1,14 @@
 use deadsync_chart::GameplayChartData;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{
-    PumpHoldEventKind, build_assist_clap_rows_preallocated_for_bench,
+    CrossoverRow, PumpHoldEventKind, build_assist_clap_rows_preallocated_for_bench,
     build_assist_clap_rows_reference_for_bench, build_column_cues_for_player,
-    build_column_cues_for_player_reference, build_crossover_rows, build_crossover_rows_reference,
-    build_note_count_stats, build_note_count_stats_reference, build_pump_hold_events,
-    build_pump_hold_events_reference, pump_tap_rows_for_bench, pump_tap_rows_reference_for_bench,
+    build_column_cues_for_player_reference, build_crossover_cues_for_bench,
+    build_crossover_cues_reference_for_bench, build_crossover_rows, build_crossover_rows_reference,
+    build_note_count_stats, build_note_count_stats_for_players_for_bench,
+    build_note_count_stats_reference, build_pump_hold_events, build_pump_hold_events_reference,
+    pump_tap_rows_for_bench, pump_tap_rows_reference_for_bench, quantization_index_from_beat,
+    quantization_index_from_beat_reference,
 };
 use deadsync_rules::note::{HoldData, Note};
 use deadsync_rules::timing::{TickcountSegment, TimingData, TimingSegments};
@@ -245,6 +248,9 @@ fn print_pair(
 }
 
 fn percent(new: f64, old: f64) -> f64 {
+    if old == 0.0 {
+        return 0.0;
+    }
     (new / old - 1.0) * 100.0
 }
 
@@ -325,6 +331,57 @@ fn note_stat_checksum(stats: Vec<deadsync_gameplay::NoteCountStat>) -> u64 {
             .wrapping_add(stat.beat.to_bits() as u64)
             .wrapping_add(stat.notes_lower as u64)
             .wrapping_add(stat.notes_upper as u64)
+    })
+}
+
+fn player_note_stat_checksum(stats: deadsync_gameplay::GameplayNoteCountStatsState) -> u64 {
+    (0..2).fold(0u64, |sum, player| {
+        stats
+            .player_stats(player)
+            .iter()
+            .fold(sum.rotate_left(3), |sum, stat| {
+                sum.rotate_left(7)
+                    .wrapping_add(stat.beat.to_bits() as u64)
+                    .wrapping_add(stat.notes_lower as u64)
+                    .wrapping_add(stat.notes_upper as u64)
+            })
+    })
+}
+
+fn player_note_stat_vec_checksum(stats: [Vec<deadsync_gameplay::NoteCountStat>; 2]) -> u64 {
+    stats.into_iter().fold(0u64, |sum, player| {
+        player.into_iter().fold(sum.rotate_left(3), |sum, stat| {
+            sum.rotate_left(7)
+                .wrapping_add(stat.beat.to_bits() as u64)
+                .wrapping_add(stat.notes_lower as u64)
+                .wrapping_add(stat.notes_upper as u64)
+        })
+    })
+}
+
+fn crossover_cue_fixture() -> Vec<CrossoverRow> {
+    let mut rows = Vec::with_capacity(96);
+    for pair in 0..48 {
+        let beat = pair as f32 * 2.0;
+        rows.push(CrossoverRow {
+            beat,
+            column_mask: 0b0010,
+            crossover: false,
+            bracket: false,
+        });
+        rows.push(CrossoverRow {
+            beat: beat + 0.25,
+            column_mask: if pair % 2 == 0 { 0b0001 } else { 0b1000 },
+            crossover: true,
+            bracket: false,
+        });
+    }
+    rows
+}
+
+fn quantization_checksum(beats: &[f32], classify: impl Fn(f32) -> u8) -> u64 {
+    beats.iter().fold(0u64, |sum, &beat| {
+        sum.rotate_left(3).wrapping_add(u64::from(classify(beat)))
     })
 }
 
@@ -595,4 +652,74 @@ fn main() {
         },
     );
     print_pair("6. pre-sized Pump events", old, new, old_alloc, new_alloc);
+
+    let single_ranges = [(0, notes.len()), (0, notes.len())];
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        notes.len() * 2,
+        METADATA_ITERS,
+        || {
+            player_note_stat_vec_checksum([
+                build_note_count_stats(black_box(&notes), black_box(single_ranges[0])),
+                build_note_count_stats(black_box(&notes), black_box(single_ranges[1])),
+            ])
+        },
+        || {
+            player_note_stat_checksum(build_note_count_stats_for_players_for_bench(
+                black_box(&notes),
+                black_box(&single_ranges),
+                1,
+            ))
+        },
+    );
+    print_pair(
+        "7. shared single-player note stats",
+        old,
+        new,
+        old_alloc,
+        new_alloc,
+    );
+
+    let quantization_beats = (-32_768..32_768)
+        .map(|row| row as f32 / 48.0)
+        .collect::<Vec<_>>();
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        quantization_beats.len(),
+        METADATA_ITERS,
+        || {
+            quantization_checksum(black_box(&quantization_beats), |beat| {
+                quantization_index_from_beat_reference(black_box(beat))
+            })
+        },
+        || {
+            quantization_checksum(black_box(&quantization_beats), |beat| {
+                quantization_index_from_beat(black_box(beat))
+            })
+        },
+    );
+    print_pair(
+        "8. precomputed quantization lookup",
+        old,
+        new,
+        old_alloc,
+        new_alloc,
+    );
+
+    let crossover_cues = crossover_cue_fixture();
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        crossover_cues.len(),
+        CROSSOVER_ITERS,
+        || {
+            cue_checksum(build_crossover_cues_reference_for_bench(black_box(
+                &crossover_cues,
+            )))
+        },
+        || cue_checksum(build_crossover_cues_for_bench(black_box(&crossover_cues))),
+    );
+    print_pair(
+        "9. pre-sized crossover cues",
+        old,
+        new,
+        old_alloc,
+        new_alloc,
+    );
 }
