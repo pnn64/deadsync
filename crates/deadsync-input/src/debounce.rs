@@ -1,5 +1,3 @@
-use std::cmp::{Ordering, Reverse};
-use std::collections::BinaryHeap;
 #[cfg(test)]
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -18,40 +16,35 @@ struct DebounceState {
     last_report_time: Instant,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+const NOT_SCHEDULED: u32 = u32::MAX;
+
+#[derive(Clone, Copy, Debug)]
 struct SlotState {
     state: Option<DebounceState>,
     due_at: Option<Instant>,
-    generation: u32,
+    scheduled_ix: u32,
+    epoch: u32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct DueSlot {
-    due_at: Instant,
-    slot: usize,
-    generation: u32,
-}
-
-impl Ord for DueSlot {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.due_at
-            .cmp(&other.due_at)
-            .then_with(|| self.slot.cmp(&other.slot))
-            .then_with(|| self.generation.cmp(&other.generation))
-    }
-}
-
-impl PartialOrd for DueSlot {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+impl Default for SlotState {
+    fn default() -> Self {
+        Self {
+            state: None,
+            due_at: None,
+            scheduled_ix: NOT_SCHEDULED,
+            epoch: 0,
+        }
     }
 }
 
 #[derive(Debug, Default)]
 pub struct DebounceStore {
     slots: Vec<SlotState>,
-    due_slots: BinaryHeap<Reverse<DueSlot>>,
+    // Indexed min-heap: each slot occurs at most once, so input chatter updates
+    // bounded storage instead of appending stale records until the next drain.
+    due_slots: Vec<usize>,
     active_len: usize,
+    epoch: u32,
 }
 
 impl DebounceStore {
@@ -59,26 +52,34 @@ impl DebounceStore {
     pub fn new() -> Self {
         Self {
             slots: Vec::new(),
-            due_slots: BinaryHeap::new(),
+            due_slots: Vec::new(),
             active_len: 0,
+            epoch: 0,
         }
     }
 
     #[inline(always)]
     pub fn clear_and_reserve(&mut self, cap: usize) {
-        self.slots.clear();
         self.due_slots.clear();
         self.active_len = 0;
-        self.slots.reserve(cap);
-        let due_cap = cap.saturating_mul(2);
-        self.due_slots.reserve(due_cap);
+        self.epoch = self.epoch.wrapping_add(1);
+        if self.epoch == 0 {
+            self.slots.fill(SlotState::default());
+            self.epoch = 1;
+        }
+        if self.slots.capacity() < cap {
+            self.slots.reserve(cap.saturating_sub(self.slots.len()));
+        }
+        self.due_slots.reserve(cap);
     }
 
     #[inline(always)]
     pub fn prepare_slots(&mut self, len: usize) {
         self.clear_and_reserve(len);
-        if len != 0 {
+        if self.slots.len() < len {
             self.slots.resize(len, SlotState::default());
+        } else {
+            self.slots.truncate(len);
         }
     }
 
@@ -92,6 +93,12 @@ impl DebounceStore {
         if slot >= self.slots.len() {
             self.slots.resize(slot + 1, SlotState::default());
         }
+        if self.slots[slot].epoch != self.epoch {
+            self.slots[slot] = SlotState {
+                epoch: self.epoch,
+                ..SlotState::default()
+            };
+        }
     }
 
     #[inline(always)]
@@ -101,20 +108,113 @@ impl DebounceStore {
         old_due_at: Option<Instant>,
         new_due_at: Option<Instant>,
     ) {
-        let slot_state = &mut self.slots[slot];
         if old_due_at == new_due_at {
-            slot_state.due_at = new_due_at;
+            self.slots[slot].due_at = new_due_at;
             return;
         }
-        slot_state.generation = slot_state.generation.wrapping_add(1);
-        slot_state.due_at = new_due_at;
-        if let Some(due_at) = new_due_at {
-            self.due_slots.push(Reverse(DueSlot {
-                due_at,
-                slot,
-                generation: slot_state.generation,
-            }));
+        match (old_due_at, new_due_at) {
+            (None, Some(due_at)) => {
+                let scheduled_ix = self.due_slots.len();
+                self.slots[slot].due_at = Some(due_at);
+                self.slots[slot].scheduled_ix = scheduled_ix.min(u32::MAX as usize) as u32;
+                self.due_slots.push(slot);
+                self.sift_up(scheduled_ix);
+            }
+            (Some(_), None) => self.unschedule_slot(slot),
+            (Some(_), Some(due_at)) => {
+                self.slots[slot].due_at = Some(due_at);
+                self.repair_due_slot(slot);
+            }
+            (None, None) => self.slots[slot].due_at = None,
         }
+    }
+
+    #[inline(always)]
+    fn unschedule_slot(&mut self, slot: usize) {
+        let scheduled_ix = self.slots[slot].scheduled_ix as usize;
+        debug_assert!(scheduled_ix < self.due_slots.len());
+        self.due_slots.swap_remove(scheduled_ix);
+        self.slots[slot].due_at = None;
+        self.slots[slot].scheduled_ix = NOT_SCHEDULED;
+        if scheduled_ix < self.due_slots.len() {
+            let moved_slot = self.due_slots[scheduled_ix];
+            self.slots[moved_slot].scheduled_ix = scheduled_ix as u32;
+            self.repair_due_slot(moved_slot);
+        }
+    }
+
+    #[inline(always)]
+    fn due_slot_lt(&self, lhs: usize, rhs: usize) -> bool {
+        let lhs_due = self.slots[lhs]
+            .due_at
+            .expect("scheduled debounce slot must have a deadline");
+        let rhs_due = self.slots[rhs]
+            .due_at
+            .expect("scheduled debounce slot must have a deadline");
+        (lhs_due, lhs) < (rhs_due, rhs)
+    }
+
+    #[inline(always)]
+    fn swap_due_slots(&mut self, lhs: usize, rhs: usize) {
+        self.due_slots.swap(lhs, rhs);
+        self.slots[self.due_slots[lhs]].scheduled_ix = lhs as u32;
+        self.slots[self.due_slots[rhs]].scheduled_ix = rhs as u32;
+    }
+
+    #[inline(always)]
+    fn sift_up(&mut self, mut ix: usize) -> usize {
+        while ix != 0 {
+            let parent = (ix - 1) / 2;
+            if !self.due_slot_lt(self.due_slots[ix], self.due_slots[parent]) {
+                break;
+            }
+            self.swap_due_slots(ix, parent);
+            ix = parent;
+        }
+        ix
+    }
+
+    #[inline(always)]
+    fn sift_down(&mut self, mut ix: usize) {
+        loop {
+            let left = ix.saturating_mul(2).saturating_add(1);
+            if left >= self.due_slots.len() {
+                return;
+            }
+            let right = left + 1;
+            let child = if right < self.due_slots.len()
+                && self.due_slot_lt(self.due_slots[right], self.due_slots[left])
+            {
+                right
+            } else {
+                left
+            };
+            if !self.due_slot_lt(self.due_slots[child], self.due_slots[ix]) {
+                return;
+            }
+            self.swap_due_slots(ix, child);
+            ix = child;
+        }
+    }
+
+    #[inline(always)]
+    fn repair_due_slot(&mut self, slot: usize) {
+        let ix = self.slots[slot].scheduled_ix as usize;
+        let ix = self.sift_up(ix);
+        self.sift_down(ix);
+    }
+
+    #[inline(always)]
+    fn take_next_due_slot(&mut self, now: Instant) -> Option<usize> {
+        let &slot = self.due_slots.first()?;
+        let due_at = self.slots[slot]
+            .due_at
+            .expect("scheduled debounce slot must have a deadline");
+        if due_at > now {
+            return None;
+        }
+        self.unschedule_slot(slot);
+        Some(slot)
     }
 }
 
@@ -357,8 +457,17 @@ pub fn debounce_input_edge_in_store_mut(
     timestamp_host_nanos: u64,
     windows: DebounceWindows,
 ) -> DebounceEdges {
-    let now = Instant::now();
     states.ensure_slot(slot);
+    // Native backends can repeat a held value (IOHID deliberately does). Once
+    // raw and reported state agree, another identical value cannot emit,
+    // reschedule, or update timestamps, so avoid the platform clock entirely.
+    if states.slots[slot]
+        .state
+        .is_some_and(|state| state.held_raw == pressed && state.held_reported == pressed)
+    {
+        return DebounceEdges::default();
+    }
+    let now = Instant::now();
     let input_slot = slot.min(u32::MAX as usize) as u32;
     let debug_log = log::log_enabled!(log::Level::Debug);
     let was_empty = states.slots[slot].state.is_none();
@@ -449,26 +558,13 @@ pub fn emit_due_debounce_edges_from_mut(
     // carry the original raw timestamp that caused the debounce holdoff.
     let mut flushed = false;
 
-    while let Some(Reverse(next)) = states.due_slots.peek().copied() {
-        if next.due_at > now {
-            break;
-        }
-        states.due_slots.pop();
-        if next.slot >= states.slots.len() {
-            continue;
-        }
-
-        let (edge, remove, old_due_at, new_due_at, after_state) = {
-            let slot_state = &mut states.slots[next.slot];
-            if slot_state.generation != next.generation || slot_state.due_at != Some(next.due_at) {
-                continue;
-            }
+    while let Some(next_slot) = states.take_next_due_slot(now) {
+        let (edge, remove, new_due_at, after_state) = {
+            let slot_state = &mut states.slots[next_slot];
             let Some(mut state) = slot_state.state else {
-                slot_state.due_at = None;
                 continue;
             };
-            let old_due_at = slot_state.due_at;
-            let input_slot = next.slot.min(u32::MAX as usize) as u32;
+            let input_slot = next_slot.min(u32::MAX as usize) as u32;
             let edge = debounce_emit_if_due(&mut state, input_slot, now, windows);
             let remove = should_prune_debounce_state(state, now, windows);
             let new_due_at = if remove {
@@ -478,7 +574,7 @@ pub fn emit_due_debounce_edges_from_mut(
                 slot_state.state = Some(state);
                 debounce_due_at(state, windows)
             };
-            (edge, remove, old_due_at, new_due_at, slot_state.state)
+            (edge, remove, new_due_at, slot_state.state)
         };
 
         if let Some(edge) = edge {
@@ -488,15 +584,15 @@ pub fn emit_due_debounce_edges_from_mut(
         if remove {
             states.active_len = states.active_len.saturating_sub(1);
         }
-        states.refresh_due_slot(next.slot, old_due_at, new_due_at);
+        states.refresh_due_slot(next_slot, None, new_due_at);
         if let Some(edge) = edge
             && log::log_enabled!(log::Level::Debug)
         {
             log_debounce_due(
-                next.slot,
+                next_slot,
                 edge,
                 after_state,
-                states.slots[next.slot].due_at,
+                states.slots[next_slot].due_at,
                 states.active_len,
                 now,
             );
@@ -547,15 +643,15 @@ mod tests {
     }
 
     #[test]
-    fn clear_and_reserve_presizes_due_queue_with_stale_slack() {
+    fn clear_and_reserve_presizes_bounded_schedule() {
         let mut store = DebounceStore::new();
         store.clear_and_reserve(8);
         assert!(store.slots.capacity() >= 8);
-        assert!(store.due_slots.capacity() >= 16);
+        assert!(store.due_slots.capacity() >= 8);
 
         store.clear_and_reserve(16);
         assert!(store.slots.capacity() >= 16);
-        assert!(store.due_slots.capacity() >= 32);
+        assert!(store.due_slots.capacity() >= 16);
     }
 
     #[test]
@@ -682,6 +778,52 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn settled_duplicate_skips_clock_independent_state_changes() {
+        let window = Duration::from_millis(20);
+        let windows = DebounceWindows::uniform(window);
+        let timestamp = Instant::now();
+        let mut store = DebounceStore::new();
+        store.prepare_slots(1);
+
+        let press = debounce_input_edge_in_store_mut(
+            &mut store,
+            0,
+            TEST_MASK,
+            InputSource::Keyboard,
+            true,
+            timestamp,
+            100,
+            windows,
+        );
+        assert!(press.second.is_some());
+        let before = store.slots[0];
+
+        let duplicate = debounce_input_edge_in_store_mut(
+            &mut store,
+            0,
+            TEST_MASK,
+            InputSource::Keyboard,
+            true,
+            timestamp + Duration::from_secs(1),
+            999,
+            windows,
+        );
+
+        assert!(duplicate.first.is_none());
+        assert!(duplicate.second.is_none());
+        assert_eq!(store.slots[0].due_at, before.due_at);
+        let after = store.slots[0].state.expect("settled state");
+        let before = before.state.expect("settled state");
+        assert_eq!(after.last_raw_change_time, before.last_raw_change_time);
+        assert_eq!(
+            after.last_raw_change_host_nanos,
+            before.last_raw_change_host_nanos
+        );
+        assert_eq!(after.last_raw_store_time, before.last_raw_store_time);
+        assert_eq!(after.last_report_time, before.last_report_time);
     }
 
     #[test]
@@ -878,7 +1020,7 @@ mod tests {
     }
 
     #[test]
-    fn due_queue_ignores_stale_slots_after_chatter_cancel() {
+    fn due_schedule_removes_slot_after_chatter_cancel() {
         let window = Duration::from_millis(20);
         let windows = DebounceWindows::uniform(window);
         let states = Mutex::new(DebounceStore::new());
@@ -925,6 +1067,7 @@ mod tests {
         assert!(repress.first.is_none());
         assert!(repress.second.is_none());
         assert!(states.lock().unwrap().slots[3].due_at.is_none());
+        assert!(states.lock().unwrap().due_slots.is_empty());
 
         let mut emitted = Vec::new();
         assert!(!emit_due_debounce_edges_from(

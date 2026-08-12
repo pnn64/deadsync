@@ -30,6 +30,11 @@ pub use keymap::{
 pub const INPUT_SLOT_INVALID: u32 = u32::MAX;
 pub const INPUT_DEBOUNCE_MIN_SECONDS: f32 = 0.0;
 pub const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
+/// Number of native `PadId` values supported without growing hot-path state.
+///
+/// IDs `0..64` cover the 64 persisted device positions plus the shared
+/// overflow position assigned by the native backends.
+pub const PAD_ID_COUNT_CAP: usize = 65;
 
 pub type ButtonLabeler = fn(usize, u32) -> Option<String>;
 static BUTTON_LABELER: OnceLock<ButtonLabeler> = OnceLock::new();

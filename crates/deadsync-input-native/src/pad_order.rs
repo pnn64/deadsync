@@ -2,10 +2,12 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::sync::{LazyLock, Mutex};
 
+use deadsync_input::PAD_ID_COUNT_CAP;
+
 use crate::backend::{PAD_ORDER_BACKENDS, PadOrderBackend};
 
 /// Maximum UUIDs persisted per backend, bounding saved order growth.
-pub const PAD_ORDER_CAP: usize = 64;
+pub const PAD_ORDER_CAP: usize = PAD_ID_COUNT_CAP - 1;
 
 /// Stable pad index assignment result.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

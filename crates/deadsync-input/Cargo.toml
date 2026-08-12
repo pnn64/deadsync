@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[[bench]]
+name = "input_pipeline_hot_paths"
+harness = false
+
 [dependencies]
 deadsync-core = { path = "../deadsync-core" }
 log = "0.4.33"
