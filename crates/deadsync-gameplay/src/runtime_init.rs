@@ -916,6 +916,7 @@ where
             num_cols,
             cols_per_player,
             num_players,
+            song_seed,
             viewport,
             session,
             config,

@@ -850,6 +850,8 @@ mod tests {
         scroll_travel(ScrollTravelRequest {
             timing,
             accel: AccelYParams::default(),
+            random_speed: 0.0,
+            stage_seed: 0,
             scroll_speed: speed,
             current_time_ns: timing.get_time_for_beat_ns(0.0),
             visible_beat: 0.0,
@@ -1003,6 +1005,8 @@ mod tests {
                 boomerang: 1.0,
                 ..AccelYParams::default()
             },
+            random_speed: 0.0,
+            stage_seed: 0,
             scroll_speed: ScrollSpeedSetting::XMod(1.0),
             current_time_ns: timing.get_time_for_beat_ns(0.0),
             visible_beat: 0.0,

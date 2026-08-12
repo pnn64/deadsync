@@ -1,13 +1,15 @@
 use mlua::{Function, Lua, Table, Value};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    LUA_PLAYERS, SongLuaCompileContext, SongLuaCompileInfo, SongLuaEaseTarget, SongLuaEaseWindow,
-    SongLuaOverlayCompileActor, SongLuaOverlayEase, SongLuaOverlayState, SongLuaSpanMode,
-    SongLuaTimeUnit, SongLuaTrackedActor, SongLuaTrackedActorTarget, actor_overlay_initial_state,
-    actor_tree_has_update_functions, compile_song_runtime_delta_values,
-    compile_song_runtime_values, overlay_delta_pair_from_states, push_unique_compile_detail,
-    read_f32, reset_overlay_compile_actor_capture_tables, reset_tracked_capture_tables,
-    run_actor_update_functions_with_delta, set_compile_song_runtime_beat,
+    LUA_PLAYERS, SONG_LUA_PLAYER_OPTIONS_KEYS, SongLuaCompileContext, SongLuaCompileInfo,
+    SongLuaEaseTarget, SongLuaEaseWindow, SongLuaOverlayCompileActor, SongLuaOverlayEase,
+    SongLuaOverlayState, SongLuaSpanMode, SongLuaTimeUnit, SongLuaTrackedActor,
+    SongLuaTrackedActorTarget, actor_overlay_initial_state, actor_tree_has_update_functions,
+    compile_song_runtime_delta_values, compile_song_runtime_values, overlay_delta_pair_from_states,
+    push_unique_compile_detail, read_f32, reset_overlay_compile_actor_capture_tables,
+    reset_tracked_capture_tables, run_actor_update_functions_with_delta,
+    runtime_player_option_ease_target, set_compile_song_runtime_beat,
     set_compile_song_runtime_delta_values, set_compile_song_runtime_values, song_display_bps,
     song_elapsed_seconds_for_beat, song_lua_side_effect_count, song_music_rate,
 };
@@ -41,6 +43,8 @@ pub struct SongLuaPerframePlayerState {
     pub skew_x: Option<f32>,
     pub skew_y: Option<f32>,
 }
+
+pub type SongLuaUpdateModState = BTreeMap<String, f32>;
 
 pub fn read_perframe_entries(table: Option<Table>) -> Result<Vec<SongLuaPerframeEntry>, String> {
     let Some(table) = table else {
@@ -152,6 +156,56 @@ pub fn tracked_player_tables(
         }
     }
     out
+}
+
+pub fn update_player_option_tables(lua: &Lua) -> Result<[Table; LUA_PLAYERS], String> {
+    let globals = lua.globals();
+    Ok([
+        globals
+            .get::<Table>(SONG_LUA_PLAYER_OPTIONS_KEYS[0])
+            .map_err(|err| err.to_string())?,
+        globals
+            .get::<Table>(SONG_LUA_PLAYER_OPTIONS_KEYS[1])
+            .map_err(|err| err.to_string())?,
+    ])
+}
+
+pub fn player_option_sample(table: &Table) -> Result<SongLuaUpdateModState, String> {
+    let mut out = SongLuaUpdateModState::new();
+    if let Some(state) = table
+        .raw_get::<Option<Table>>("__songlua_player_option_state")
+        .map_err(|err| err.to_string())?
+    {
+        for pair in state.pairs::<String, Value>() {
+            let (key, value) = pair.map_err(|err| err.to_string())?;
+            let value = match value {
+                Value::Boolean(value) => f32::from(value),
+                value => match read_f32(value) {
+                    Some(value) => value,
+                    None => continue,
+                },
+            };
+            out.insert(key, value);
+        }
+    }
+    for key in ["xmod", "cmod", "mmod"] {
+        if let Some(value) = table
+            .get::<Option<f32>>(format!("__songlua_speedmod_{key}"))
+            .map_err(|err| err.to_string())?
+        {
+            out.insert(key.to_string(), value);
+        }
+    }
+    Ok(out)
+}
+
+pub fn current_update_mod_states(
+    tables: &[Table; LUA_PLAYERS],
+) -> Result<[SongLuaUpdateModState; LUA_PLAYERS], String> {
+    Ok([
+        player_option_sample(&tables[0])?,
+        player_option_sample(&tables[1])?,
+    ])
 }
 
 pub fn active_perframe_entries(
@@ -535,6 +589,51 @@ pub fn push_perframe_player_targets(
     }
 }
 
+#[inline(always)]
+fn update_mod_runtime_value(key: &str, value: f32) -> f32 {
+    if matches!(key, "xmod" | "cmod" | "mmod") {
+        value
+    } else {
+        value * 100.0
+    }
+}
+
+pub fn push_update_mod_targets(
+    out: &mut Vec<SongLuaEaseWindow>,
+    start: f32,
+    end: f32,
+    from_players: &[SongLuaUpdateModState; LUA_PLAYERS],
+    to_players: &[SongLuaUpdateModState; LUA_PLAYERS],
+    baseline_players: &[SongLuaUpdateModState; LUA_PLAYERS],
+) {
+    for player in 0..LUA_PLAYERS {
+        let keys = from_players[player]
+            .keys()
+            .chain(to_players[player].keys())
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        for key in keys {
+            let baseline = baseline_players[player].get(key).copied().unwrap_or(0.0);
+            let from = from_players[player].get(key).copied().unwrap_or(baseline);
+            let to = to_players[player].get(key).copied().unwrap_or(baseline);
+            let Some(target) = runtime_player_option_ease_target(key, key) else {
+                continue;
+            };
+            push_perframe_player_target(
+                out,
+                start,
+                end,
+                Some(update_mod_runtime_value(key, from)),
+                Some(update_mod_runtime_value(key, to)),
+                Some(update_mod_runtime_value(key, baseline)),
+                0.0,
+                target,
+                player,
+            );
+        }
+    }
+}
+
 pub fn push_perframe_static_targets(
     out_eases: &mut Vec<SongLuaEaseWindow>,
     out_overlay_eases: &mut Vec<SongLuaOverlayEase>,
@@ -637,29 +736,33 @@ pub fn call_update_functions_at(
     result
 }
 
-pub fn compile_update_function_overlays<Kind>(
+pub fn compile_update_functions<Kind>(
     lua: &Lua,
     root: &Value,
     context: &SongLuaCompileContext,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
     tracked_actors: &[SongLuaTrackedActor],
-) -> Result<Vec<SongLuaOverlayEase>, String> {
-    if overlays.is_empty()
-        || !actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())?
-    {
-        return Ok(Vec::new());
+) -> Result<(Vec<SongLuaEaseWindow>, Vec<SongLuaOverlayEase>), String> {
+    if !actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())? {
+        return Ok((Vec::new(), Vec::new()));
     }
     let start = 0.0;
     let end = update_function_end_beat(context);
     if end <= start {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     }
 
+    let player_tables = tracked_player_tables(tracked_actors);
+    let option_tables = update_player_option_tables(lua)?;
     reset_overlay_compile_actor_capture_tables(lua, overlays)?;
     reset_tracked_capture_tables(lua, tracked_actors)?;
     call_update_functions_at(lua, root, start, 0.0, 0.0)?;
+    let baseline_players = current_perframe_player_states(&player_tables)?;
+    let baseline_mods = current_update_mod_states(&option_tables)?;
     let baseline_overlays = current_overlay_compile_actor_states(overlays)?;
     let mut sample_beats = vec![start];
+    let mut player_samples = vec![baseline_players];
+    let mut mod_samples = vec![baseline_mods.clone()];
     let mut overlay_samples = vec![baseline_overlays.clone()];
 
     for sample in update_function_samples(start, end) {
@@ -674,15 +777,45 @@ pub fn compile_update_function_overlays<Kind>(
             delta_seconds,
         )?;
         sample_beats.push(sample.beat);
+        player_samples.push(current_perframe_player_states(&player_tables)?);
+        mod_samples.push(current_update_mod_states(&option_tables)?);
         overlay_samples.push(current_overlay_compile_actor_states(overlays)?);
     }
 
-    Ok(update_function_overlay_eases(
-        end,
-        &baseline_overlays,
-        &sample_beats,
-        &overlay_samples,
-    ))
+    let mut eases = Vec::new();
+    for index in 0..sample_beats.len() {
+        let seg_start = sample_beats[index];
+        let seg_end = sample_beats.get(index + 1).copied().unwrap_or(end);
+        if seg_end <= seg_start {
+            continue;
+        }
+        let from_players = player_samples[index];
+        let to_players = player_samples
+            .get(index + 1)
+            .copied()
+            .unwrap_or(from_players);
+        push_perframe_player_targets(
+            &mut eases,
+            seg_start,
+            seg_end,
+            &from_players,
+            &to_players,
+            &baseline_players,
+        );
+        let from_mods = &mod_samples[index];
+        let to_mods = mod_samples.get(index + 1).unwrap_or(from_mods);
+        push_update_mod_targets(
+            &mut eases,
+            seg_start,
+            seg_end,
+            from_mods,
+            to_mods,
+            &baseline_mods,
+        );
+    }
+    let overlay_eases =
+        update_function_overlay_eases(end, &baseline_overlays, &sample_beats, &overlay_samples);
+    Ok((eases, overlay_eases))
 }
 
 pub fn compile_perframes<Kind>(

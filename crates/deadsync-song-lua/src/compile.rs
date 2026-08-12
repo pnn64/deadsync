@@ -8,8 +8,8 @@ use crate::{
     SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayKind, SongLuaOverlayModelLayer,
     SongLuaOverlayState, SongLuaTimeUnit, SongLuaTrackedActorTarget as TrackedCompileActorTarget,
     add_actor_child_from_path as add_host_actor_child_from_path,
-    compile_multitap_update_overlays_for_actors, compile_perframes,
-    compile_update_function_overlays, create_dummy_actor as create_host_dummy_actor,
+    compile_multitap_update_overlays_for_actors, compile_perframes, compile_update_functions,
+    create_dummy_actor as create_host_dummy_actor,
     create_named_child_actor as create_host_named_child_actor, ensure_overlay_arrow_visual,
     entry_file_path, execute_script_file, install_actor_methods as install_host_actor_methods,
     install_compile_host, log_song_lua_compile_timing, merge_compile_info,
@@ -337,7 +337,7 @@ where
     compile_timer.push_stage("perframes");
     out.note_hides = read_note_column_zoom_hides(&lua)?;
     compile_timer.push_stage("note_hides");
-    let update_overlay_eases = match compile_multitap_update_overlays_for_actors(
+    let (update_eases, update_overlay_eases) = match compile_multitap_update_overlays_for_actors(
         &lua,
         context,
         &mut overlays,
@@ -354,11 +354,10 @@ where
             )
         },
     )? {
-        Some(eases) => eases,
-        None => {
-            compile_update_function_overlays(&lua, &root, context, &mut overlays, &tracked_actors)?
-        }
+        Some(eases) => (Vec::new(), eases),
+        None => compile_update_functions(&lua, &root, context, &mut overlays, &tracked_actors)?,
     };
+    out.eases.extend(update_eases);
     out.overlay_eases.extend(update_overlay_eases);
     compile_timer.push_stage("update_overlays");
     push_startup_message_if_listened(

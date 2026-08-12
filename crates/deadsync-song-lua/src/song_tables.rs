@@ -30,6 +30,7 @@ pub fn create_song_options_table(lua: &Lua, music_rate: f32) -> mlua::Result<Tab
 
 pub struct PlayerLuaTables {
     pub player_states: [Table; LUA_PLAYERS],
+    pub player_options: [Table; LUA_PLAYERS],
     pub steps: [Table; LUA_PLAYERS],
 }
 
@@ -38,7 +39,7 @@ pub fn create_player_tables(
     context: &SongLuaCompileContext,
     song_runtime: &Table,
 ) -> mlua::Result<PlayerLuaTables> {
-    let player_states = [
+    let players = [
         create_player_state_table(lua, context.players[0].clone(), 0, song_runtime)?,
         create_player_state_table(lua, context.players[1].clone(), 1, song_runtime)?,
     ];
@@ -57,7 +58,8 @@ pub fn create_player_tables(
         )?,
     ];
     Ok(PlayerLuaTables {
-        player_states,
+        player_states: [players[0].0.clone(), players[1].0.clone()],
+        player_options: [players[0].1.clone(), players[1].1.clone()],
         steps,
     })
 }
@@ -83,7 +85,7 @@ fn create_player_state_table(
     player: SongLuaPlayerContext,
     player_index: usize,
     song_runtime: &Table,
-) -> mlua::Result<Table> {
+) -> mlua::Result<(Table, Table)> {
     let controller = if player.enabled {
         "PlayerController_Human"
     } else {
@@ -102,11 +104,12 @@ fn create_player_state_table(
     set_string_method(lua, &table, "GetPlayerController", controller)?;
     set_string_method(lua, &table, "GetHealthState", health_state)?;
     set_string_method(lua, &table, "GetPlayerNumber", player_number)?;
+    let options_for_get = options.clone();
     let options_for_current = options.clone();
     let options_for_set = options.clone();
     table.set(
         "GetPlayerOptions",
-        lua.create_function(move |_, _args: MultiValue| Ok(options.clone()))?,
+        lua.create_function(move |_, _args: MultiValue| Ok(options_for_get.clone()))?,
     )?;
     table.set(
         "GetCurrentPlayerOptions",
@@ -163,7 +166,7 @@ fn create_player_state_table(
             }
         })?,
     )?;
-    Ok(table)
+    Ok((table, options))
 }
 
 fn create_player_options_array(lua: &Lua, owner: &Table) -> mlua::Result<Table> {

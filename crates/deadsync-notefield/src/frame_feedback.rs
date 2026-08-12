@@ -862,6 +862,7 @@ mod tests {
             view: ViewOverride::default(),
             geometry: NotefieldGeometry {
                 player_idx,
+                stage_seed: 0,
                 num_players,
                 cols_per_player,
                 total_cols,

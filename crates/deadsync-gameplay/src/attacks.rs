@@ -548,8 +548,10 @@ pub enum SongLuaEaseMaskTarget {
     VisualPulsePeriod,
     VisualPulseOffset,
     VisualBeat,
+    VisualRandomSpeed,
     AppearanceHidden,
     AppearanceSudden,
+    AppearanceSuddenOffset,
     AppearanceStealth,
     AppearanceBlink,
     AppearanceRandomVanish,
@@ -1697,8 +1699,14 @@ fn append_song_lua_ease_targets_key(
         "pulseperiod" => push(SongLuaEaseMaskTarget::VisualPulsePeriod, pct_from, pct_to),
         "pulseoffset" => push(SongLuaEaseMaskTarget::VisualPulseOffset, pct_from, pct_to),
         "beat" => push(SongLuaEaseMaskTarget::VisualBeat, pct_from, pct_to),
+        "randomspeed" => push(SongLuaEaseMaskTarget::VisualRandomSpeed, pct_from, pct_to),
         "hidden" => push(SongLuaEaseMaskTarget::AppearanceHidden, pct_from, pct_to),
         "sudden" => push(SongLuaEaseMaskTarget::AppearanceSudden, pct_from, pct_to),
+        "suddenoffset" => push(
+            SongLuaEaseMaskTarget::AppearanceSuddenOffset,
+            pct_from,
+            pct_to,
+        ),
         "stealth" => push(SongLuaEaseMaskTarget::AppearanceStealth, pct_from, pct_to),
         "blink" => push(SongLuaEaseMaskTarget::AppearanceBlink, pct_from, pct_to),
         "rvanish" | "randomvanish" | "reversevanish" => push(
@@ -2225,8 +2233,10 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualPulsePeriod => visual.pulse_period = Some(value),
         SongLuaEaseMaskTarget::VisualPulseOffset => visual.pulse_offset = Some(value),
         SongLuaEaseMaskTarget::VisualBeat => visual.beat = Some(value),
+        SongLuaEaseMaskTarget::VisualRandomSpeed => visual.random_speed = Some(value),
         SongLuaEaseMaskTarget::AppearanceHidden => appearance.hidden = value,
         SongLuaEaseMaskTarget::AppearanceSudden => appearance.sudden = value,
+        SongLuaEaseMaskTarget::AppearanceSuddenOffset => appearance.sudden_offset = value,
         SongLuaEaseMaskTarget::AppearanceStealth => appearance.stealth = value,
         SongLuaEaseMaskTarget::AppearanceBlink => appearance.blink = value,
         SongLuaEaseMaskTarget::AppearanceRandomVanish => appearance.random_vanish = value,
@@ -2401,8 +2411,10 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualPulsePeriod => window.visual.pulse_period.is_some(),
         SongLuaEaseMaskTarget::VisualPulseOffset => window.visual.pulse_offset.is_some(),
         SongLuaEaseMaskTarget::VisualBeat => window.visual.beat.is_some(),
+        SongLuaEaseMaskTarget::VisualRandomSpeed => window.visual.random_speed.is_some(),
         SongLuaEaseMaskTarget::AppearanceHidden => window.appearance.hidden.is_some(),
         SongLuaEaseMaskTarget::AppearanceSudden => window.appearance.sudden.is_some(),
+        SongLuaEaseMaskTarget::AppearanceSuddenOffset => window.appearance.sudden_offset.is_some(),
         SongLuaEaseMaskTarget::AppearanceStealth => window.appearance.stealth.is_some(),
         SongLuaEaseMaskTarget::AppearanceBlink => window.appearance.blink.is_some(),
         SongLuaEaseMaskTarget::AppearanceRandomVanish => window.appearance.random_vanish.is_some(),
@@ -3096,6 +3108,7 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.pulse_period, visual.pulse_period);
     mark_active_target(&mut targets.pulse_offset, visual.pulse_offset);
     mark_active_target(&mut targets.beat, visual.beat);
+    mark_active_target(&mut targets.random_speed, visual.random_speed);
 }
 
 fn mark_scroll_targets(targets: &mut ScrollOverrides, scroll: ScrollOverrides) {
@@ -4243,6 +4256,15 @@ fn apply_active_visual_window(
         active_clear_all,
         persisted,
     );
+    apply_active_visual_target(
+        &mut values.visual.random_speed,
+        &mut values.visual_speed.random_speed,
+        window.visual.random_speed,
+        window.visual_speed.random_speed,
+        active_targets.visual.random_speed,
+        active_clear_all,
+        persisted,
+    );
 }
 
 fn apply_active_scroll_target(
@@ -4712,6 +4734,12 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "randomspeed" => set_approached_mod(
+            &mut out.visual.random_speed,
+            &mut out.visual_speed.random_speed,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "tiny" => set_approached_mod(
             &mut out.visual.tiny,
             &mut out.visual_speed.tiny,
@@ -5117,6 +5145,7 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         pulse_period: merge_attack_value(base.pulse_period, attack.pulse_period),
         pulse_offset: merge_attack_value(base.pulse_offset, attack.pulse_offset),
         beat: merge_attack_value(base.beat, attack.beat),
+        random_speed: merge_attack_value(base.random_speed, attack.random_speed),
     }
 }
 

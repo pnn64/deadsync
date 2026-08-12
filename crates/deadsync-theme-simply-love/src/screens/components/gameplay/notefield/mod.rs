@@ -527,6 +527,7 @@ pub(crate) fn compose_frame(
         view,
         geometry: NotefieldGeometry {
             player_idx,
+            stage_seed: state.setup.song_seed as u32,
             num_players: state.num_players(),
             cols_per_player: state.cols_per_player(),
             total_cols: state.num_cols(),

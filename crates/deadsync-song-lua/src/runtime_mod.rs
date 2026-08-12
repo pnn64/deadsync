@@ -712,12 +712,11 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         "boost" | "brake" | "wave" | "expand" | "boomerang" | "drunk" | "dizzy" | "confusion"
         | "confusionoffset" | "flip" | "invert" | "tornado" | "tipsy" | "bumpy" | "bumpyoffset"
         | "bumpyperiod" | "pulseinner" | "pulseouter" | "pulseperiod" | "pulseoffset" | "beat"
-        | "hidden" | "sudden" | "stealth" | "blink" | "rvanish" | "randomvanish"
-        | "reversevanish" | "dark" | "blind" | "cover" | "reverse" | "split" | "alternate"
-        | "cross" | "centered" | "incoming" | "space" | "hallway" | "distant" | "overhead"
-        | "xmod" | "cmod" | "mmod" | "tiny" | "mini" | "confusionyoffset" | "skewx" | "skewy" => {
-            SongLuaEaseTarget::Mod(original.to_string())
-        }
+        | "randomspeed" | "hidden" | "sudden" | "suddenoffset" | "stealth" | "blink"
+        | "rvanish" | "randomvanish" | "reversevanish" | "dark" | "blind" | "cover" | "reverse"
+        | "split" | "alternate" | "cross" | "centered" | "incoming" | "space" | "hallway"
+        | "distant" | "overhead" | "xmod" | "cmod" | "mmod" | "tiny" | "mini"
+        | "confusionyoffset" | "skewx" | "skewy" => SongLuaEaseTarget::Mod(original.to_string()),
         _ => return None,
     })
 }

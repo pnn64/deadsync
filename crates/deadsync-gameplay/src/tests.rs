@@ -7073,6 +7073,18 @@ mod tests {
             None,
             None,
         ));
+        assert!(append_song_lua_ease_targets(
+            &mut windows,
+            0.0,
+            1.0,
+            1.0,
+            "randomspeed",
+            0.0,
+            50.0,
+            None,
+            None,
+            None,
+        ));
 
         assert_eq!(windows[0].target, SongLuaEaseMaskTarget::ScrollSpeedC);
         assert_near(windows[0].from, 300.0);
@@ -7080,6 +7092,12 @@ mod tests {
         assert_eq!(windows[1].target, SongLuaEaseMaskTarget::MiniPercent);
         assert_near(windows[1].from, 25.0);
         assert_near(windows[1].to, 50.0);
+        assert_eq!(
+            windows[2].target,
+            SongLuaEaseMaskTarget::VisualRandomSpeed
+        );
+        assert_near(windows[2].from, 0.0);
+        assert_near(windows[2].to, 0.5);
     }
 
     #[test]

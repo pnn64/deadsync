@@ -8,10 +8,10 @@ use mlua::{Function, Lua, MultiValue, Table, Value};
 use crate::{
     LUA_PLAYERS, SONG_LUA_EASING_NAME_KEY, SONG_LUA_EASING_NAMES,
     SONG_LUA_PLAYER_OPTION_CAPABILITIES, SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES,
-    SONG_LUA_PRODUCT_FAMILY, SONG_LUA_PRODUCT_ID, SONG_LUA_PRODUCT_VERSION,
-    SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY, SONG_LUA_RUNTIME_SECONDS_KEY,
-    SONG_LUA_SIDE_EFFECT_COUNT_KEY, SONG_LUA_SOUND_PATHS_KEY, SongLuaCompileContext,
-    SongLuaNoteskinResolver, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
+    SONG_LUA_PLAYER_OPTIONS_KEYS, SONG_LUA_PRODUCT_FAMILY, SONG_LUA_PRODUCT_ID,
+    SONG_LUA_PRODUCT_VERSION, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY,
+    SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY, SONG_LUA_SOUND_PATHS_KEY,
+    SongLuaCompileContext, SongLuaNoteskinResolver, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
     broadcast_song_lua_message, create_branch_table, create_charman_table, create_conf_option_row,
     create_course_table, create_custom_option_row, create_difficulty_table,
     create_display_bpms_table, create_display_table, create_enabled_players_table,
@@ -1059,6 +1059,12 @@ pub fn install_game_state_globals(
     globals.set(SONG_LUA_RUNTIME_KEY, song_runtime.clone())?;
     let song = create_song_table(lua, context)?;
     let players = create_player_tables(lua, context, &song_runtime)?;
+    for (key, options) in SONG_LUA_PLAYER_OPTIONS_KEYS
+        .iter()
+        .zip(players.player_options.iter())
+    {
+        globals.set(*key, options.clone())?;
+    }
     let song_options = create_song_options_table(lua, context.song_music_rate)?;
     let display_bpms = context.song_display_bpms;
     let default_music_rate = song_music_rate(context);

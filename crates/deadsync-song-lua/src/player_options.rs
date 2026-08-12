@@ -283,10 +283,9 @@ pub fn split_first_word(text: &str) -> (&str, &str) {
 
 pub fn parse_player_option_amount(text: &str) -> Option<f32> {
     let text = text.trim();
-    let percent = text.ends_with('%');
     let raw = text.trim_end_matches('%');
     let value = raw.parse::<f32>().ok()?;
-    Some(if percent { value / 100.0 } else { value })
+    Some(value / 100.0)
 }
 
 pub fn normalize_player_option_key(text: &str) -> String {
@@ -447,7 +446,7 @@ mod tests {
     fn parses_player_option_amounts() {
         assert_eq!(parse_player_option_amount("50%"), Some(0.5));
         assert_eq!(parse_player_option_amount("-25%"), Some(-0.25));
-        assert_eq!(parse_player_option_amount("1.5"), Some(1.5));
+        assert_eq!(parse_player_option_amount("1.5"), Some(0.015));
         assert_eq!(parse_player_option_amount("Mini"), None);
     }
 

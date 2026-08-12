@@ -198,15 +198,16 @@ pub use option_rows::{
 };
 pub use perframe::{
     SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES, SongLuaPerframeEntry, SongLuaPerframePlayerState,
-    SongLuaPerframeSample, active_perframe_entries, actor_perframe_player_state,
-    call_perframe_entry, call_update_functions_at, compile_perframes,
-    compile_update_function_overlays, current_overlay_compile_actor_states,
-    current_perframe_player_states, perframe_boundaries, perframe_delta_seconds, perframe_samples,
-    perframe_segment_step, push_perframe_overlay_targets, push_perframe_player_target,
-    push_perframe_player_targets, push_perframe_static_targets, push_sampled_perframe_targets,
-    read_perframe_entries, relative_player_target, tracked_player_tables,
-    unsupported_perframe_info, update_function_end_beat, update_function_overlay_eases,
-    update_function_sample_step, update_function_samples,
+    SongLuaPerframeSample, SongLuaUpdateModState, active_perframe_entries,
+    actor_perframe_player_state, call_perframe_entry, call_update_functions_at, compile_perframes,
+    compile_update_functions, current_overlay_compile_actor_states, current_perframe_player_states,
+    current_update_mod_states, perframe_boundaries, perframe_delta_seconds, perframe_samples,
+    perframe_segment_step, player_option_sample, push_perframe_overlay_targets,
+    push_perframe_player_target, push_perframe_player_targets, push_perframe_static_targets,
+    push_sampled_perframe_targets, push_update_mod_targets, read_perframe_entries,
+    relative_player_target, tracked_player_tables, unsupported_perframe_info,
+    update_function_end_beat, update_function_overlay_eases, update_function_sample_step,
+    update_function_samples, update_player_option_tables,
 };
 pub use player_options::{
     SONG_LUA_PLAYER_OPTION_CAPABILITIES, SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES,
@@ -301,6 +302,8 @@ pub const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
 pub const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
 pub const SONG_LUA_BROADCASTS_KEY: &str = "__songlua_broadcast_messages";
 pub const SONG_LUA_SOUND_PATHS_KEY: &str = "__songlua_sound_paths";
+pub const SONG_LUA_PLAYER_OPTIONS_KEYS: [&str; LUA_PLAYERS] =
+    ["__songlua_player_options_1", "__songlua_player_options_2"];
 pub const SONG_LUA_PROBE_METHODS_KEY: &str = "__songlua_probe_methods";
 pub const SONG_LUA_PROBE_ACTORS_KEY: &str = "__songlua_probe_actors";
 pub const SONG_LUA_PROBE_ACTOR_SET_KEY: &str = "__songlua_probe_actor_set";
@@ -6194,6 +6197,62 @@ return Def.ActorFrame{
         assert!(compiled.overlay_eases.iter().any(|ease| {
             ease.overlay_index == 0 && ease.from.visible.is_some() && ease.to.visible.is_some()
         }));
+    }
+
+    #[test]
+    fn compile_song_lua_samples_update_player_mods_and_transforms() {
+        let song_dir = test_dir("set-update-function-player-mods");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        local options = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
+        self:SetUpdateFunction(function()
+            local beat = GAMESTATE:GetSongBeat()
+            if beat >= 2 and beat <= 4 then
+                local amount = (beat - 2) / 2
+                options:FromString(
+                    tostring(amount * 100) .. " drunk," ..
+                    tostring(amount * 50) .. " suddenoffset," ..
+                    tostring(amount * 75) .. " randomspeed"
+                )
+                player:rotationx(amount * 180):skewx(amount)
+            end
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Update Player Mods");
+        context.song_display_bpms = [120.0, 120.0];
+        context.music_length_seconds = 3.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert!(compiled.eases.iter().any(
+            |ease| matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "drunk")
+        ));
+        assert!(compiled.eases.iter().any(
+            |ease| matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "suddenoffset")
+        ));
+        assert!(compiled.eases.iter().any(
+            |ease| matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "randomspeed")
+        ));
+        assert!(
+            compiled
+                .eases
+                .iter()
+                .any(|ease| matches!(ease.target, SongLuaEaseTarget::PlayerRotationX))
+        );
+        assert!(
+            compiled
+                .eases
+                .iter()
+                .any(|ease| matches!(ease.target, SongLuaEaseTarget::PlayerSkewX))
+        );
     }
 
     #[test]

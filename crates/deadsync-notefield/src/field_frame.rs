@@ -378,8 +378,9 @@ fn compose_field_contents<S, F>(
             request.chart.cached_note_time_ns(note_index, true),
             request.chart.cached_displayed_beat(note_index, true),
         );
-        let head_adjusted_travel = travel.adjusted(head_travel_offset);
-        let tail_adjusted_travel = travel.adjusted(tail_travel_offset);
+        let head_adjusted_travel = travel.adjusted_note(head_travel_offset, head_beat, local_col);
+        let tail_adjusted_travel =
+            travel.adjusted_note(tail_travel_offset, hold.end_beat, local_col);
         let head_y = lane_receptor_y + dir * head_adjusted_travel + lane_offset;
         let tail_y = lane_receptor_y + dir * tail_adjusted_travel + lane_offset;
         let note_display = ns.note_display_metrics;
@@ -824,12 +825,16 @@ fn compose_visible_notes<S, F>(
                         return;
                     }
                 }
-                let adjusted_travel = travel.adjusted(travel.raw_note_cached(
-                    note,
-                    false,
-                    request.chart.cached_note_time_ns(note_index, false),
-                    request.chart.cached_displayed_beat(note_index, false),
-                ));
+                let adjusted_travel = travel.adjusted_note(
+                    travel.raw_note_cached(
+                        note,
+                        false,
+                        request.chart.cached_note_time_ns(note_index, false),
+                        request.chart.cached_displayed_beat(note_index, false),
+                    ),
+                    note.beat,
+                    local_col,
+                );
                 if adjusted_travel < -request.geometry.draw_distance_after_targets
                     || adjusted_travel > request.geometry.draw_distance_before_targets
                 {

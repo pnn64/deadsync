@@ -24,6 +24,7 @@ use deadsync_theme::NotefieldStyle;
 #[derive(Clone, Copy, Debug)]
 pub struct NotefieldGeometry {
     pub player_idx: usize,
+    pub stage_seed: u32,
     pub num_players: usize,
     pub cols_per_player: usize,
     pub total_cols: usize,
@@ -388,6 +389,8 @@ fn prepare_notes<'a, S>(
             boomerang: request.visual.accel.boomerang,
             expand: request.visual.accel.expand,
         },
+        random_speed: request.visual.visual.random_speed,
+        stage_seed: request.geometry.stage_seed,
         scroll_speed,
         current_time_ns: request.chart.visible_music_time_ns,
         visible_beat: request.chart.visible_beat,

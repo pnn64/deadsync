@@ -385,6 +385,8 @@ fn compose_note_glow<S, F>(
 pub(crate) struct ScrollTravelRequest<'a> {
     pub timing: &'a TimingData,
     pub accel: AccelYParams,
+    pub random_speed: f32,
+    pub stage_seed: u32,
     pub scroll_speed: ScrollSpeedSetting,
     pub current_time_ns: SongTimeNs,
     pub visible_beat: f32,
@@ -628,6 +630,21 @@ impl ScrollTravel<'_> {
     }
 
     #[inline(always)]
+    pub(crate) fn adjusted_note(&self, raw_travel: f32, beat: f32, local_col: usize) -> f32 {
+        let adjusted = self.adjusted(raw_travel);
+        if raw_travel < 0.0 || self.request.random_speed <= 0.0 {
+            return adjusted;
+        }
+        adjusted
+            * random_speed_mult(
+                self.request.stage_seed,
+                beat_to_note_row(beat),
+                local_col,
+                self.request.random_speed,
+            )
+    }
+
+    #[inline(always)]
     pub(crate) fn adjusted_hold_anchor(
         &self,
         raw_travel: f32,
@@ -756,6 +773,17 @@ impl ScrollTravel<'_> {
     pub fn arrow_effect_time_s(&self) -> f32 {
         self.request.arrow_effect_time_s
     }
+}
+
+#[inline(always)]
+fn random_speed_mult(stage_seed: u32, note_row: i32, local_col: usize, amount: f32) -> f32 {
+    let mut seed = stage_seed
+        .wrapping_add((note_row as u32).wrapping_shl(8))
+        .wrapping_add((local_col as u32).wrapping_mul(100));
+    for _ in 0..3 {
+        seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+    }
+    1.0 + (seed as f32 / 4_294_967_296.0) * amount
 }
 
 pub(crate) fn note_itg_row(note: &Note) -> i32 {
@@ -1316,6 +1344,8 @@ mod tests {
         ScrollTravelRequest {
             timing,
             accel: AccelYParams::default(),
+            random_speed: 0.0,
+            stage_seed: 0,
             scroll_speed,
             current_time_ns: timing.get_time_for_beat_ns(visible_beat),
             visible_beat,
@@ -1870,6 +1900,27 @@ mod tests {
         assert_near(displayed.raw_beat(5.0), 16.0);
         assert_near(edit.raw_beat(5.0), 64.0);
         assert_near(edit.adjusted(edit.raw_beat(5.0)), 128.0);
+    }
+
+    #[test]
+    fn random_speed_matches_itg_per_note_scroll_scaling() {
+        let timing = timing();
+        let mut travel_request = request(&timing, ScrollSpeedSetting::XMod(1.0), 4.0);
+        travel_request.random_speed = 0.5;
+        travel_request.stage_seed = 0x1234_5678;
+        let travel = scroll_travel(travel_request);
+        let raw = travel.raw_beat(5.0);
+        let base = travel.adjusted(raw);
+        let first = travel.adjusted_note(raw, 5.0, 0);
+        let second = travel.adjusted_note(raw, 5.0, 1);
+
+        assert!((base..=base * 1.5).contains(&first));
+        assert!((base..=base * 1.5).contains(&second));
+        assert_ne!(first.to_bits(), second.to_bits());
+        assert_eq!(
+            travel.adjusted_note(-raw, 3.0, 0).to_bits(),
+            travel.adjusted(-raw).to_bits()
+        );
     }
 
     #[test]

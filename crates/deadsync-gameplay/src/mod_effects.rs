@@ -188,6 +188,7 @@ pub struct VisualOverrides {
     pub pulse_period: Option<f32>,
     pub pulse_offset: Option<f32>,
     pub beat: Option<f32>,
+    pub random_speed: Option<f32>,
 }
 
 impl Default for VisualOverrides {
@@ -215,6 +216,7 @@ impl Default for VisualOverrides {
             pulse_period: None,
             pulse_offset: None,
             beat: None,
+            random_speed: None,
         }
     }
 }
@@ -244,6 +246,7 @@ impl VisualOverrides {
             || self.pulse_period.is_some()
             || self.pulse_offset.is_some()
             || self.beat.is_some()
+            || self.random_speed.is_some()
     }
 }
 
@@ -365,6 +368,7 @@ pub struct VisualEffects {
     pub pulse_period: f32,
     pub pulse_offset: f32,
     pub beat: f32,
+    pub random_speed: f32,
 }
 
 impl VisualEffects {
@@ -399,6 +403,7 @@ impl VisualEffects {
             pulse_period: 0.0,
             pulse_offset: 0.0,
             beat: f32::from((mask & VISUAL_MASK_BIT_BEAT) != 0),
+            random_speed: 0.0,
         }
     }
 
@@ -496,6 +501,7 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.pulse_period, base.pulse_period, step);
     approach_optional_visual(&mut visual.pulse_offset, base.pulse_offset, step);
     approach_optional_visual(&mut visual.beat, base.beat, step);
+    approach_optional_visual(&mut visual.random_speed, base.random_speed, step);
 }
 
 #[inline(always)]
@@ -686,6 +692,14 @@ pub fn approach_visual_overrides_to_target(
         target.beat,
         base.beat,
         speed.beat,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.random_speed,
+        target.random_speed,
+        base.random_speed,
+        speed.random_speed,
         delta_time,
         1.0,
     );

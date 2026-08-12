@@ -234,6 +234,7 @@ pub struct GameplaySetupRuntimeState {
     pub num_cols: usize,
     pub cols_per_player: usize,
     pub num_players: usize,
+    pub song_seed: u64,
     pub viewport: GameplayViewport,
     pub session: GameplaySession,
     pub config: GameplayConfig,

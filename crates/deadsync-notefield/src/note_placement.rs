@@ -42,6 +42,8 @@ mod tests {
         scroll_travel(ScrollTravelRequest {
             timing,
             accel,
+            random_speed: 0.0,
+            stage_seed: 0,
             scroll_speed: speed,
             current_time_ns: time_ns,
             visible_beat: beat,
