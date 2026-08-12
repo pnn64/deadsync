@@ -74,6 +74,52 @@ where
     };
 
     let mut km = Keymap::default();
+    let mut seen = 0u32;
+
+    for (key, value) in section {
+        if let Some(action) = crate::action_from_ini_key(key) {
+            let mut bindings = Vec::new();
+            for tok in value.split(',') {
+                if let Some(binding) = parse_binding_token(tok) {
+                    bindings.push(binding);
+                }
+            }
+            km.bind(action, &bindings);
+            seen |= action.bit();
+        }
+    }
+
+    let defaults = default_keymap();
+    for action in ALL_VIRTUAL_ACTIONS {
+        if seen & action.bit() != 0 {
+            continue;
+        }
+        let mut bindings = Vec::new();
+        let mut i = 0;
+        while let Some(binding) = defaults.binding_at(action, i) {
+            bindings.push(binding);
+            i += 1;
+        }
+        if !bindings.is_empty() {
+            km.bind(action, &bindings);
+        }
+    }
+    restore_available_default_bindings(&mut km);
+
+    km
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn load_keymap_from_ini_entries_reference<'a, I>(section: Option<I>) -> Keymap
+where
+    I: IntoIterator<Item = (&'a str, &'a str)>,
+{
+    let Some(section) = section else {
+        return default_keymap();
+    };
+
+    let mut km = Keymap::default();
     let mut seen: Vec<VirtualAction> = Vec::new();
 
     for (key, value) in section {
@@ -890,6 +936,32 @@ mod tests {
             keymap.binding_at(VirtualAction::p1_start, 0),
             Some(InputBinding::Key(KeyCode::Enter))
         );
+    }
+
+    #[test]
+    fn stack_keys_and_seen_mask_match_allocating_keymap_loader() {
+        let entries = [
+            ("P1_LEFT", "KeyCode::KeyA, PadDir::Left"),
+            ("p1_left", "KeyCode::ArrowLeft"),
+            ("P2_Start", "KeyCode::NumpadEnter"),
+            ("SYSTEM_FASTFORWARD", "KeyCode::Tab"),
+            ("P1_Operator", ""),
+            ("P1_Coin", "KeyCode::KeyC"),
+            ("System_FastForward_extra", "KeyCode::KeyF"),
+            ("é", "KeyCode::KeyE"),
+        ];
+        let expected = load_keymap_from_ini_entries_reference(Some(entries));
+        let actual = load_keymap_from_ini_entries(Some(entries));
+
+        for action in ALL_VIRTUAL_ACTIONS {
+            for index in 0..8 {
+                assert_eq!(
+                    actual.binding_at(action, index),
+                    expected.binding_at(action, index),
+                    "action={action:?}, index={index}"
+                );
+            }
+        }
     }
 
     #[test]

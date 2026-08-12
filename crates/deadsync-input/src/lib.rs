@@ -10,6 +10,9 @@ pub mod debounce;
 pub mod fsr;
 pub mod keymap;
 
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub use bindings::load_keymap_from_ini_entries_reference;
 pub use bindings::{
     DEFAULT_KEYMAP_INI_LINES, binding_to_token, cleared_keymap, default_binding_for_action,
     default_key_for_action, default_keymap, editable_key_binding_slot_indices, keycode_to_token,
@@ -69,6 +72,31 @@ pub fn clamp_input_debounce_seconds(seconds: f32) -> f32 {
 }
 
 pub fn parse_input_debounce_seconds(raw: &str) -> Option<f32> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let millis = raw
+        .as_bytes()
+        .get(raw.len().saturating_sub(2)..)
+        .filter(|suffix| suffix.eq_ignore_ascii_case(b"ms"))
+        .and_then(|_| raw.get(..raw.len() - 2));
+    if let Some(ms) = millis {
+        return ms
+            .trim()
+            .parse::<f32>()
+            .ok()
+            .map(|n| clamp_input_debounce_seconds(n / 1000.0));
+    }
+    raw.parse::<f32>().ok().map(|n| {
+        let seconds = if n > 1.0 { n / 1000.0 } else { n };
+        clamp_input_debounce_seconds(seconds)
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn parse_input_debounce_seconds_reference(raw: &str) -> Option<f32> {
     let raw = raw.trim();
     if raw.is_empty() {
         return None;
@@ -182,7 +210,19 @@ pub struct GamepadCodeBinding {
 }
 
 pub fn gamepad_code_binding_to_token(binding: GamepadCodeBinding) -> String {
-    let mut s = String::new();
+    const BASE_LEN: usize = "PadCode[0x00000000]".len();
+    const UUID_LEN: usize = 33;
+
+    let device_len = binding.device.map_or(0, |mut device| {
+        let mut digits = 1;
+        while device >= 10 {
+            device /= 10;
+            digits += 1;
+        }
+        digits + 1
+    });
+    let capacity = BASE_LEN + device_len + if binding.uuid.is_some() { UUID_LEN } else { 0 };
+    let mut s = String::with_capacity(capacity);
     use std::fmt::Write;
     let _ = write!(&mut s, "PadCode[0x{:08X}]", binding.code_u32);
     if let Some(device) = binding.device {
@@ -192,6 +232,26 @@ pub fn gamepad_code_binding_to_token(binding: GamepadCodeBinding) -> String {
         s.push('#');
         for b in &uuid {
             let _ = write!(&mut s, "{b:02X}");
+        }
+    }
+    s
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn gamepad_code_binding_to_token_reference(binding: GamepadCodeBinding) -> String {
+    let mut s = String::new();
+    use std::fmt::Write;
+    let _ = write!(&mut s, "PadCode[0x{:08X}]", binding.code_u32);
+    if let Some(device) = binding.device {
+        let _ = write!(&mut s, "@{device}");
+    }
+    if let Some(uuid) = binding.uuid {
+        const HEX: &[u8; 16] = b"0123456789ABCDEF";
+        s.push('#');
+        for b in &uuid {
+            s.push(HEX[usize::from(b >> 4)] as char);
+            s.push(HEX[usize::from(b & 0x0f)] as char);
         }
     }
     s
@@ -504,6 +564,21 @@ pub fn action_from_ini_key_lower(key: &str) -> Option<VirtualAction> {
     }
 }
 
+const INI_ACTION_KEY_MAX_BYTES: usize = "system_fastforward".len();
+
+#[inline(always)]
+fn action_from_ini_key(key: &str) -> Option<VirtualAction> {
+    if key.len() > INI_ACTION_KEY_MAX_BYTES {
+        return None;
+    }
+    let mut normalized = [0u8; INI_ACTION_KEY_MAX_BYTES];
+    normalized[..key.len()].copy_from_slice(key.as_bytes());
+    normalized[..key.len()].make_ascii_lowercase();
+    let normalized =
+        std::str::from_utf8(&normalized[..key.len()]).expect("ASCII case folding preserves UTF-8");
+    action_from_ini_key_lower(normalized)
+}
+
 #[inline(always)]
 pub const fn action_to_ini_key(action: VirtualAction) -> &'static str {
     use VirtualAction::{
@@ -680,10 +755,12 @@ impl InputEvent {
 mod tests {
     use super::{
         ALL_VIRTUAL_ACTIONS, GamepadCodeBinding, Lane, PadCode, PadDir, PadEvent, PadId,
-        VirtualAction, action_from_ini_key_lower, action_to_ini_key, clamp_input_debounce_seconds,
-        emit_normalized_actions, gamepad_code_binding_to_token, lane_from_action, lane_from_column,
+        VirtualAction, action_from_ini_key, action_from_ini_key_lower, action_to_ini_key,
+        clamp_input_debounce_seconds, emit_normalized_actions, gamepad_code_binding_to_token,
+        gamepad_code_binding_to_token_reference, lane_from_action, lane_from_column,
         pad_dir_from_action, parse_gamepad_code_binding, parse_input_debounce_seconds,
-        parse_pad_dir, raw_button_label, secondary_menu_mask, set_button_labeler,
+        parse_input_debounce_seconds_reference, parse_pad_dir, raw_button_label,
+        secondary_menu_mask, set_button_labeler,
     };
     use std::time::Instant;
 
@@ -751,6 +828,34 @@ mod tests {
         assert_eq!(parse_input_debounce_seconds("500ms"), Some(0.2));
         assert_eq!(parse_input_debounce_seconds(""), None);
         assert_eq!(parse_input_debounce_seconds("fast"), None);
+    }
+
+    #[test]
+    fn allocation_free_debounce_parser_matches_lowercase_reference() {
+        for raw in [
+            "",
+            "   ",
+            "20ms",
+            "20mS",
+            " 200MS ",
+            "0.05",
+            "50",
+            "500ms",
+            "NaNms",
+            "infMS",
+            "-25Ms",
+            "fast",
+            "m",
+            "ms",
+            "éMS",
+            "100milliseconds",
+        ] {
+            assert_eq!(
+                parse_input_debounce_seconds(raw).map(f32::to_bits),
+                parse_input_debounce_seconds_reference(raw).map(f32::to_bits),
+                "input: {raw:?}"
+            );
+        }
     }
 
     #[test]
@@ -861,6 +966,37 @@ mod tests {
     }
 
     #[test]
+    fn presized_gamepad_tokens_match_geometric_growth() {
+        for binding in [
+            GamepadCodeBinding {
+                code_u32: 0,
+                device: None,
+                uuid: None,
+            },
+            GamepadCodeBinding {
+                code_u32: u32::MAX,
+                device: Some(0),
+                uuid: None,
+            },
+            GamepadCodeBinding {
+                code_u32: 0xDEAD_BEEF,
+                device: Some(usize::MAX),
+                uuid: Some([0xAB; 16]),
+            },
+            GamepadCodeBinding {
+                code_u32: 42,
+                device: None,
+                uuid: Some([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
+            },
+        ] {
+            assert_eq!(
+                gamepad_code_binding_to_token(binding),
+                gamepad_code_binding_to_token_reference(binding)
+            );
+        }
+    }
+
+    #[test]
     fn gameplay_arrow_and_menu_aliases_match() {
         assert_eq!(ALL_VIRTUAL_ACTIONS.len(), VirtualAction::COUNT);
         assert!(VirtualAction::p1_left.is_gameplay_arrow());
@@ -903,6 +1039,30 @@ mod tests {
         }
         assert_eq!(action_from_ini_key_lower("p1_menu_up"), None);
         assert_eq!(action_from_ini_key_lower("p1_coin"), None);
+    }
+
+    #[test]
+    fn stack_normalized_ini_actions_match_allocating_case_fold() {
+        let mut inputs = ALL_VIRTUAL_ACTIONS
+            .into_iter()
+            .flat_map(|action| {
+                let key = action_to_ini_key(action);
+                [key.to_owned(), key.to_ascii_uppercase()]
+            })
+            .collect::<Vec<_>>();
+        inputs.extend(
+            ["", "p1_coin", "P1_Menu_Up", "é", "System_FastForward_extra"]
+                .into_iter()
+                .map(str::to_owned),
+        );
+
+        for input in inputs {
+            assert_eq!(
+                action_from_ini_key(&input),
+                action_from_ini_key_lower(&input.to_ascii_lowercase()),
+                "input: {input:?}"
+            );
+        }
     }
 
     #[test]

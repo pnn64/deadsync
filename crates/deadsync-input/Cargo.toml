@@ -4,9 +4,17 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+bench-support = []
+
 [[bench]]
 name = "input_pipeline_hot_paths"
 harness = false
+
+[[bench]]
+name = "input_config_hot_paths"
+harness = false
+required-features = ["bench-support"]
 
 [dependencies]
 deadsync-core = { path = "../deadsync-core" }
