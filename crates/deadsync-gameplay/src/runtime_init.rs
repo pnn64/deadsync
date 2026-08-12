@@ -929,7 +929,11 @@ where
             caps,
         )
     });
-    let assist_clap_rows = build_assist_clap_rows(&notes, note_ranges[0]);
+    let assist_clap_rows = build_assist_clap_rows_with_capacity(
+        &notes,
+        note_ranges[0],
+        note_count_stats[0].len(),
+    );
     let song_offset_seconds = song.offset;
     let base_attack_appearance = std::array::from_fn(|player| {
         if player < num_players {

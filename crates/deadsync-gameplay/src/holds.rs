@@ -28,11 +28,15 @@ pub struct PumpHoldEvent {
     pub has_tap: bool,
 }
 
-fn pump_tap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
+fn pump_tap_rows_and_hold_count(
+    notes: &[Note],
+    note_range: (usize, usize),
+) -> (Vec<usize>, usize) {
     let end = note_range.1.min(notes.len());
     let start = note_range.0.min(end);
     let mut rows = Vec::with_capacity(end - start);
     let mut ordered = true;
+    let mut hold_count = 0usize;
     for note in &notes[start..end] {
         if !note.can_be_judged
             || note.is_fake
@@ -43,6 +47,7 @@ fn pump_tap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
         {
             continue;
         }
+        hold_count += usize::from(matches!(note.note_type, NoteType::Hold | NoteType::Roll));
         let row = beat_to_note_row(note.beat).max(0) as usize;
         match rows.last().copied() {
             Some(last) if row == last => {}
@@ -57,7 +62,12 @@ fn pump_tap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
         rows.sort_unstable();
         rows.dedup();
     }
-    rows
+    (rows, hold_count)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn pump_tap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
+    pump_tap_rows_and_hold_count(notes, note_range).0
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -157,10 +167,36 @@ pub fn build_pump_hold_events(
     gameplay_charts: &[Arc<GameplayChartData>; MAX_PLAYERS],
     num_players: usize,
 ) -> (Vec<PumpHoldEvent>, [u32; MAX_PLAYERS]) {
+    build_pump_hold_events_core(
+        notes,
+        note_ranges,
+        note_time_cache_ns,
+        hold_end_time_cache_ns,
+        timing_players,
+        gameplay_charts,
+        num_players,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_pump_hold_events_core(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+    note_time_cache_ns: &[SongTimeNs],
+    hold_end_time_cache_ns: &[Option<SongTimeNs>],
+    timing_players: &[Arc<TimingData>; MAX_PLAYERS],
+    gameplay_charts: &[Arc<GameplayChartData>; MAX_PLAYERS],
+    num_players: usize,
+    reserve_events: bool,
+) -> (Vec<PumpHoldEvent>, [u32; MAX_PLAYERS]) {
     let mut events = Vec::new();
     for player in 0..num_players.min(MAX_PLAYERS) {
         let note_range = note_ranges[player];
-        let tap_rows = pump_tap_rows(notes, note_range);
+        let (tap_rows, hold_count) = pump_tap_rows_and_hold_count(notes, note_range);
+        if reserve_events {
+            events.reserve(hold_count.saturating_mul(2));
+        }
         let end = note_range
             .1
             .min(notes.len())
@@ -231,6 +267,29 @@ pub fn build_pump_hold_events(
         }
     }
     (events, score_rows)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::too_many_arguments)]
+pub fn build_pump_hold_events_reference(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+    note_time_cache_ns: &[SongTimeNs],
+    hold_end_time_cache_ns: &[Option<SongTimeNs>],
+    timing_players: &[Arc<TimingData>; MAX_PLAYERS],
+    gameplay_charts: &[Arc<GameplayChartData>; MAX_PLAYERS],
+    num_players: usize,
+) -> (Vec<PumpHoldEvent>, [u32; MAX_PLAYERS]) {
+    build_pump_hold_events_core(
+        notes,
+        note_ranges,
+        note_time_cache_ns,
+        hold_end_time_cache_ns,
+        timing_players,
+        gameplay_charts,
+        num_players,
+        false,
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

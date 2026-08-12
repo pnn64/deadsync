@@ -2281,6 +2281,16 @@ mod runtime_regression_tests {
             &gameplay_charts,
             1,
         );
+        let reference = build_pump_hold_events_reference(
+            &notes,
+            &note_ranges,
+            &note_time_cache_ns,
+            &hold_end_time_cache_ns,
+            &timing_players,
+            &gameplay_charts,
+            1,
+        );
+        assert_eq!((events.clone(), score_rows), reference);
         let checkpoint_rows: Vec<_> = events
             .iter()
             .filter(|event| event.kind == PumpHoldEventKind::Checkpoint)

@@ -973,14 +973,58 @@ pub fn assist_clap_music_seconds_for_row(timing: &TimingData, row: usize) -> Opt
     Some(timing.get_time_for_beat_no_offset_ns(beat) as f64 * 1.0e-9)
 }
 
-pub fn build_assist_clap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
+#[inline]
+fn note_row_count(notes: &[Note], note_range: (usize, usize)) -> usize {
+    let end = note_range.1.min(notes.len());
+    let start = note_range.0.min(end);
+    if start >= end {
+        return 0;
+    }
+    let Some(first) = notes.get(start) else {
+        return 0;
+    };
+    let mut rows = 1usize;
+    let mut previous = first.row_index;
+    for note in &notes[start + 1..end] {
+        if note.row_index != previous {
+            rows = rows.saturating_add(1);
+            previous = note.row_index;
+        }
+    }
+    rows
+}
+
+const NOTE_STATS_CAP_SAMPLE: usize = 256;
+
+fn note_stats_capacity(notes: &[Note], note_range: (usize, usize)) -> usize {
+    let end = note_range.1.min(notes.len());
+    let start = note_range.0.min(end);
+    let note_count = end - start;
+    if note_count == 0 {
+        return 0;
+    }
+    let sample_end = start.saturating_add(NOTE_STATS_CAP_SAMPLE).min(end);
+    let sample_len = sample_end - start;
+    let sample_rows = note_row_count(notes, (start, sample_end));
+    note_count
+        .saturating_mul(sample_rows)
+        .div_ceil(sample_len)
+        .max(sample_rows)
+}
+
+fn build_assist_clap_rows_with_capacity(
+    notes: &[Note],
+    note_range: (usize, usize),
+    row_capacity: usize,
+) -> Vec<usize> {
     let (start, end) = note_range;
     if start >= end {
         return Vec::new();
     }
 
-    let mut rows = Vec::with_capacity(end - start);
-    let mut i = start;
+    let end = end.min(notes.len());
+    let mut rows = Vec::with_capacity(row_capacity.min(end.saturating_sub(start)));
+    let mut i = start.min(end);
     while i < end {
         let row = notes[i].row_index;
         let mut has_clap = false;
@@ -1002,6 +1046,42 @@ pub fn build_assist_clap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec
         }
     }
     rows
+}
+
+pub fn build_assist_clap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
+    build_assist_clap_rows_with_capacity(notes, note_range, note_row_count(notes, note_range))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn build_assist_clap_rows_reference(
+    notes: &[Note],
+    note_range: (usize, usize),
+) -> Vec<usize> {
+    let end = note_range.1.min(notes.len());
+    build_assist_clap_rows_with_capacity(
+        notes,
+        note_range,
+        end.saturating_sub(note_range.0.min(end)),
+    )
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn build_assist_clap_rows_preallocated_for_bench(
+    notes: &[Note],
+    note_range: (usize, usize),
+    row_capacity: usize,
+) -> Vec<usize> {
+    build_assist_clap_rows_with_capacity(notes, note_range, row_capacity)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn build_assist_clap_rows_reference_for_bench(
+    notes: &[Note],
+    note_range: (usize, usize),
+) -> Vec<usize> {
+    build_assist_clap_rows_reference(notes, note_range)
 }
 
 #[inline(always)]
@@ -1032,6 +1112,35 @@ pub fn assist_lookahead_future_row(
 }
 
 pub fn build_note_count_stats(notes: &[Note], note_range: (usize, usize)) -> Vec<NoteCountStat> {
+    let (start, end) = note_range;
+    let mut cursor = start.min(notes.len());
+    let end = end.min(notes.len());
+    let mut count = 0usize;
+    let mut stats = Vec::with_capacity(note_stats_capacity(notes, (cursor, end)));
+
+    while cursor < end {
+        let row_index = notes[cursor].row_index;
+        let beat = notes[cursor].beat;
+        let notes_lower = count;
+        while cursor < end && notes[cursor].row_index == row_index {
+            count = count.saturating_add(1);
+            cursor += 1;
+        }
+        stats.push(NoteCountStat {
+            beat,
+            notes_lower,
+            notes_upper: count,
+        });
+    }
+
+    stats
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn build_note_count_stats_reference(
+    notes: &[Note],
+    note_range: (usize, usize),
+) -> Vec<NoteCountStat> {
     let (start, end) = note_range;
     let mut cursor = start.min(notes.len());
     let end = end.min(notes.len());

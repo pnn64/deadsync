@@ -1,11 +1,17 @@
+use deadsync_chart::GameplayChartData;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{
-    build_column_cues_for_player, build_column_cues_for_player_reference, build_crossover_rows,
-    build_crossover_rows_reference, pump_tap_rows_for_bench, pump_tap_rows_reference_for_bench,
+    PumpHoldEventKind, build_assist_clap_rows_preallocated_for_bench,
+    build_assist_clap_rows_reference_for_bench, build_column_cues_for_player,
+    build_column_cues_for_player_reference, build_crossover_rows, build_crossover_rows_reference,
+    build_note_count_stats, build_note_count_stats_reference, build_pump_hold_events,
+    build_pump_hold_events_reference, pump_tap_rows_for_bench, pump_tap_rows_reference_for_bench,
 };
 use deadsync_rules::note::{HoldData, Note};
+use deadsync_rules::timing::{TickcountSegment, TimingData, TimingSegments};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
@@ -18,6 +24,8 @@ const SAMPLES: usize = 7;
 const COLUMN_ITERS: usize = 128;
 const PUMP_ITERS: usize = 256;
 const CROSSOVER_ITERS: usize = 64;
+const METADATA_ITERS: usize = 128;
+const PUMP_EVENT_ITERS: usize = 32;
 
 struct CountingAlloc {
     enabled: AtomicBool,
@@ -311,6 +319,92 @@ fn row_checksum(rows: (Vec<[u8; LANES]>, Vec<f32>, Vec<usize>)) -> u64 {
         })
 }
 
+fn note_stat_checksum(stats: Vec<deadsync_gameplay::NoteCountStat>) -> u64 {
+    stats.into_iter().fold(0u64, |sum, stat| {
+        sum.rotate_left(7)
+            .wrapping_add(stat.beat.to_bits() as u64)
+            .wrapping_add(stat.notes_lower as u64)
+            .wrapping_add(stat.notes_upper as u64)
+    })
+}
+
+fn usize_checksum(values: Vec<usize>) -> u64 {
+    values
+        .into_iter()
+        .fold(0u64, |sum, value| sum.rotate_left(5) ^ value as u64)
+}
+
+struct PumpFixture {
+    notes: Vec<Note>,
+    note_ranges: [(usize, usize); 2],
+    note_times: Vec<i64>,
+    hold_end_times: Vec<Option<i64>>,
+    timing_players: [Arc<TimingData>; 2],
+    gameplay_charts: [Arc<GameplayChartData>; 2],
+}
+
+fn pump_fixture(notes: &[Note]) -> PumpFixture {
+    let mut segments = TimingSegments::default();
+    segments.bpms = vec![(0.0, 120.0)];
+    segments.tickcounts = vec![TickcountSegment {
+        beat: 0.0,
+        ticks: 4,
+    }];
+    let row_to_beat = (0..=ROWS + 8)
+        .map(|row| row as f32 * 0.25)
+        .collect::<Vec<_>>();
+    let timing = Arc::new(TimingData::from_segments(0.0, 0.0, &segments, &row_to_beat));
+    let note_times = notes
+        .iter()
+        .map(|note| timing.get_time_for_beat_ns(note.beat))
+        .collect::<Vec<_>>();
+    let hold_end_times = notes
+        .iter()
+        .map(|note| {
+            note.hold
+                .as_ref()
+                .map(|hold| timing.get_time_for_beat_ns(hold.end_beat))
+        })
+        .collect::<Vec<_>>();
+    let chart = Arc::new(GameplayChartData {
+        notes: Vec::new(),
+        parsed_notes: Vec::new(),
+        row_to_beat,
+        timing_segments: segments,
+        timing: timing.as_ref().clone(),
+        chart_attacks: None,
+    });
+    PumpFixture {
+        notes: notes.to_vec(),
+        note_ranges: [(0, notes.len()), (notes.len(), notes.len())],
+        note_times,
+        hold_end_times,
+        timing_players: std::array::from_fn(|_| Arc::clone(&timing)),
+        gameplay_charts: std::array::from_fn(|_| Arc::clone(&chart)),
+    }
+}
+
+fn pump_event_checksum(value: (Vec<deadsync_gameplay::PumpHoldEvent>, [u32; 2])) -> u64 {
+    let (events, score_rows) = value;
+    events.into_iter().fold(
+        u64::from(score_rows[0]) | (u64::from(score_rows[1]) << 32),
+        |sum, event| {
+            let kind = match event.kind {
+                PumpHoldEventKind::Head => 1,
+                PumpHoldEventKind::Checkpoint => 2,
+                PumpHoldEventKind::Tail => 3,
+            };
+            sum.rotate_left(5)
+                ^ event.time_ns as u64
+                ^ (event.row_index as u64).rotate_left(11)
+                ^ (event.note_index as u64).rotate_left(19)
+                ^ (event.column as u64).rotate_left(27)
+                ^ kind
+                ^ u64::from(event.has_tap)
+        },
+    )
+}
+
 #[cfg(target_arch = "x86_64")]
 fn cycle_counter() -> Option<u64> {
     // SAFETY: `_mm_lfence` and `_rdtsc` require only the guaranteed x86-64
@@ -428,4 +522,77 @@ fn main() {
         },
     );
     print_pair("3. indexed crossover rows", old, new, old_alloc, new_alloc);
+
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        notes.len(),
+        METADATA_ITERS,
+        || {
+            note_stat_checksum(build_note_count_stats_reference(
+                black_box(&notes),
+                (0, notes.len()),
+            ))
+        },
+        || note_stat_checksum(build_note_count_stats(black_box(&notes), (0, notes.len()))),
+    );
+    print_pair(
+        "4. density-sized note stats",
+        old,
+        new,
+        old_alloc,
+        new_alloc,
+    );
+
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        notes.len(),
+        METADATA_ITERS,
+        || {
+            usize_checksum(build_assist_clap_rows_reference_for_bench(
+                black_box(&notes),
+                (0, notes.len()),
+            ))
+        },
+        || {
+            usize_checksum(build_assist_clap_rows_preallocated_for_bench(
+                black_box(&notes),
+                (0, notes.len()),
+                ROWS,
+            ))
+        },
+    );
+    print_pair(
+        "5. row-sized assist clap storage",
+        old,
+        new,
+        old_alloc,
+        new_alloc,
+    );
+
+    let pump = pump_fixture(&notes);
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        pump.notes.len(),
+        PUMP_EVENT_ITERS,
+        || {
+            pump_event_checksum(build_pump_hold_events_reference(
+                black_box(&pump.notes),
+                black_box(&pump.note_ranges),
+                black_box(&pump.note_times),
+                black_box(&pump.hold_end_times),
+                black_box(&pump.timing_players),
+                black_box(&pump.gameplay_charts),
+                1,
+            ))
+        },
+        || {
+            pump_event_checksum(build_pump_hold_events(
+                black_box(&pump.notes),
+                black_box(&pump.note_ranges),
+                black_box(&pump.note_times),
+                black_box(&pump.hold_end_times),
+                black_box(&pump.timing_players),
+                black_box(&pump.gameplay_charts),
+                1,
+            ))
+        },
+    );
+    print_pair("6. pre-sized Pump events", old, new, old_alloc, new_alloc);
 }

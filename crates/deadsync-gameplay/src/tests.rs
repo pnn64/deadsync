@@ -14090,11 +14090,32 @@ mod tests {
             .expect("roll has hold data")
             .end_row_index = 192;
 
+        let rows = build_assist_clap_rows(&notes, (0, notes.len()));
+        assert_eq!(rows, vec![48, 144]);
         assert_eq!(
-            build_assist_clap_rows(&notes, (0, notes.len())),
-            vec![48, 144]
+            rows,
+            build_assist_clap_rows_reference(&notes, (0, notes.len()))
         );
         assert_eq!(build_assist_clap_rows(&notes, (2, 2)), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn preallocated_assist_rows_match_note_capacity_reference() {
+        let mut notes = Vec::new();
+        for row in 0..64 {
+            for column in 0..4 {
+                let mut note = test_note_at(NoteType::Tap, None, false, row * 48, row as f32);
+                note.column = column;
+                notes.push(note);
+            }
+        }
+        let range = (0, notes.len());
+        let actual = build_assist_clap_rows_with_capacity(&notes, range, 64);
+        let expected = build_assist_clap_rows_reference(&notes, range);
+
+        assert_eq!(actual, expected);
+        assert_eq!(actual.capacity(), 64);
+        assert_eq!(expected.capacity(), notes.len());
     }
 
     #[test]
@@ -14693,6 +14714,49 @@ mod tests {
         assert_eq!(stats[1].beat, 2.0);
         assert_eq!(stats[1].notes_lower, 2);
         assert_eq!(stats[1].notes_upper, 3);
+        let reference = build_note_count_stats_reference(&notes, (0, 99));
+        assert_eq!(stats.len(), reference.len());
+        for (actual, expected) in stats.iter().zip(&reference) {
+            assert_eq!(actual.beat, expected.beat);
+            assert_eq!(actual.notes_lower, expected.notes_lower);
+            assert_eq!(actual.notes_upper, expected.notes_upper);
+        }
+        assert_eq!(stats.capacity(), stats.len());
+    }
+
+    #[test]
+    fn density_sized_note_stats_match_growth_reference() {
+        let mut notes = Vec::new();
+        for row in 0..768 {
+            for column in 0..=row % 7 {
+                let mut note = test_note_at(
+                    NoteType::Tap,
+                    None,
+                    false,
+                    row * 12,
+                    row as f32 * 0.25,
+                );
+                note.column = column;
+                notes.push(note);
+            }
+        }
+
+        for range in [
+            (0, notes.len()),
+            (3, notes.len().saturating_sub(5)),
+            (notes.len() / 3, notes.len() * 2 / 3),
+            (notes.len(), notes.len()),
+            (notes.len() + 10, notes.len() + 20),
+        ] {
+            let actual = build_note_count_stats(&notes, range);
+            let expected = build_note_count_stats_reference(&notes, range);
+            assert_eq!(actual.len(), expected.len());
+            for (actual, expected) in actual.iter().zip(&expected) {
+                assert_eq!(actual.beat, expected.beat);
+                assert_eq!(actual.notes_lower, expected.notes_lower);
+                assert_eq!(actual.notes_upper, expected.notes_upper);
+            }
+        }
     }
 
     #[test]
