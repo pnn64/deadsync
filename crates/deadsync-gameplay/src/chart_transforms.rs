@@ -1,4 +1,4 @@
-﻿pub fn enforce_max_simultaneous_notes(
+pub fn enforce_max_simultaneous_notes(
     notes: &mut Vec<Note>,
     max_simultaneous: usize,
     col_offset: usize,
@@ -467,7 +467,6 @@ pub fn apply_mines_insert(
         }
     }
 }
-
 
 #[inline(always)]
 pub fn stomp_mirror_track(local_track: usize, cols: usize) -> usize {
@@ -1007,6 +1006,33 @@ pub fn apply_uncommon_chart_transforms(
         return;
     }
 
+    if num_players == 1 {
+        let (start, end) = note_ranges[0];
+        let end = end.min(notes.len());
+        let start = start.min(end);
+        if start == 0 && end == notes.len() {
+            // This is the normal single-player shape. The transform already
+            // accepts the owned buffer, so rebuilding it through two copies
+            // only adds chart-sized allocation and memory traffic.
+            let effects = player_effects[0];
+            apply_uncommon_masks_with_masks(
+                notes,
+                effects.insert_mask,
+                effects.remove_mask,
+                effects.holds_mask,
+                timing_players[0],
+                0,
+                cols_per_player,
+                &[],
+                None,
+                0,
+            );
+            note_ranges[0] = (0, notes.len());
+            note_ranges[1] = note_ranges[0];
+            return;
+        }
+    }
+
     let mut transformed = Vec::with_capacity(notes.len());
     let mut transformed_ranges = [(0usize, 0usize); MAX_PLAYERS];
 
@@ -1047,40 +1073,133 @@ pub fn apply_uncommon_chart_transforms(
     *note_ranges = transformed_ranges;
 }
 
-fn turn_take_from(turn: GameplayTurnOption, cols: usize, seed: u64) -> Option<Vec<usize>> {
-    if cols == 0 {
+#[cfg(any(test, feature = "bench-support"))]
+pub fn apply_uncommon_chart_transforms_reference(
+    notes: &mut Vec<Note>,
+    note_ranges: &mut [(usize, usize); MAX_PLAYERS],
+    cols_per_player: usize,
+    num_players: usize,
+    player_effects: &[ChartAttackEffects; MAX_PLAYERS],
+    timing_players: &[&TimingData; MAX_PLAYERS],
+) {
+    if num_players == 0
+        || !player_effects
+            .iter()
+            .take(num_players)
+            .any(|effects| effects.has_note_masks())
+    {
+        return;
+    }
+
+    let mut transformed = Vec::with_capacity(notes.len());
+    let mut transformed_ranges = [(0usize, 0usize); MAX_PLAYERS];
+    for player in 0..num_players {
+        let (start, end) = note_ranges[player];
+        let slice_end = end.min(notes.len());
+        let slice_start = start.min(slice_end);
+        let out_start = transformed.len();
+        let effects = player_effects[player];
+        if !effects.has_note_masks() {
+            transformed.extend_from_slice(&notes[slice_start..slice_end]);
+            transformed_ranges[player] = (out_start, transformed.len());
+            continue;
+        }
+        let mut player_notes = notes[slice_start..slice_end].to_vec();
+        apply_uncommon_masks_with_masks(
+            &mut player_notes,
+            effects.insert_mask,
+            effects.remove_mask,
+            effects.holds_mask,
+            timing_players[player],
+            player.saturating_mul(cols_per_player),
+            cols_per_player,
+            &[],
+            None,
+            player,
+        );
+        transformed.extend(player_notes);
+        transformed_ranges[player] = (out_start, transformed.len());
+    }
+    if num_players == 1 {
+        transformed_ranges[1] = transformed_ranges[0];
+    }
+    *notes = transformed;
+    *note_ranges = transformed_ranges;
+}
+
+fn fill_turn_take_from(
+    turn: GameplayTurnOption,
+    cols: usize,
+    seed: u64,
+    out: &mut [usize; MAX_COLS],
+) -> Option<usize> {
+    // Gameplay has a fixed MAX_COLS lane domain. Keeping both permutations in
+    // fixed arrays removes two tiny heap operations from every ordinary turn.
+    if cols == 0 || cols > MAX_COLS {
         return None;
     }
-    match (turn, cols) {
+    let fixed: Option<&[usize]> = match (turn, cols) {
         (GameplayTurnOption::None, _) => None,
-        (GameplayTurnOption::Mirror, 5) => Some(vec![3, 4, 2, 0, 1]),
-        (GameplayTurnOption::Mirror, 10) => Some(vec![8, 9, 7, 5, 6, 3, 4, 2, 0, 1]),
-        (GameplayTurnOption::Mirror, _) => Some((0..cols).rev().collect()),
-        (GameplayTurnOption::LRMirror, 5) => Some(vec![4, 3, 2, 1, 0]),
-        (GameplayTurnOption::LRMirror, 10) => Some(vec![9, 8, 7, 6, 5, 4, 3, 2, 1, 0]),
-        (GameplayTurnOption::LRMirror, 4) => Some(vec![3, 1, 2, 0]),
-        (GameplayTurnOption::LRMirror, 8) => Some(vec![7, 5, 6, 4, 3, 1, 2, 0]),
-        (GameplayTurnOption::UDMirror, 4) => Some(vec![0, 2, 1, 3]),
-        (GameplayTurnOption::UDMirror, 8) => Some(vec![0, 2, 1, 3, 4, 6, 5, 7]),
-        (GameplayTurnOption::UDMirror, 5) => Some(vec![1, 0, 2, 4, 3]),
-        (GameplayTurnOption::UDMirror, 10) => {
-            Some(vec![1, 0, 2, 4, 3, 6, 5, 7, 9, 8])
+        (GameplayTurnOption::Mirror, 5) => Some(&[3, 4, 2, 0, 1]),
+        (GameplayTurnOption::Mirror, 10) => Some(&[8, 9, 7, 5, 6, 3, 4, 2, 0, 1]),
+        (GameplayTurnOption::Mirror, _) => {
+            for (value, source) in out[..cols].iter_mut().zip((0..cols).rev()) {
+                *value = source;
+            }
+            return Some(cols);
         }
-        (GameplayTurnOption::Left, 4) => Some(vec![2, 0, 3, 1]),
-        (GameplayTurnOption::Left, 8) => Some(vec![2, 0, 3, 1, 6, 4, 7, 5]),
-        (GameplayTurnOption::Left, 5) => Some(vec![1, 3, 2, 4, 0]),
-        (GameplayTurnOption::Left, 10) => Some(vec![8, 9, 7, 5, 6, 3, 4, 2, 0, 1]),
-        (GameplayTurnOption::Right, 4) => Some(vec![1, 3, 0, 2]),
-        (GameplayTurnOption::Right, 8) => Some(vec![1, 3, 0, 2, 5, 7, 4, 6]),
-        (GameplayTurnOption::Right, 5) => Some(vec![4, 0, 2, 1, 3]),
-        (GameplayTurnOption::Right, 10) => Some(vec![8, 9, 7, 5, 6, 3, 4, 2, 0, 1]),
+        (GameplayTurnOption::LRMirror, 5) => Some(&[4, 3, 2, 1, 0]),
+        (GameplayTurnOption::LRMirror, 10) => Some(&[9, 8, 7, 6, 5, 4, 3, 2, 1, 0]),
+        (GameplayTurnOption::LRMirror, 4) => Some(&[3, 1, 2, 0]),
+        (GameplayTurnOption::LRMirror, 8) => Some(&[7, 5, 6, 4, 3, 1, 2, 0]),
+        (GameplayTurnOption::UDMirror, 4) => Some(&[0, 2, 1, 3]),
+        (GameplayTurnOption::UDMirror, 8) => Some(&[0, 2, 1, 3, 4, 6, 5, 7]),
+        (GameplayTurnOption::UDMirror, 5) => Some(&[1, 0, 2, 4, 3]),
+        (GameplayTurnOption::UDMirror, 10) => Some(&[1, 0, 2, 4, 3, 6, 5, 7, 9, 8]),
+        (GameplayTurnOption::Left, 4) => Some(&[2, 0, 3, 1]),
+        (GameplayTurnOption::Left, 8) => Some(&[2, 0, 3, 1, 6, 4, 7, 5]),
+        (GameplayTurnOption::Left, 5) => Some(&[1, 3, 2, 4, 0]),
+        (GameplayTurnOption::Left, 10) => Some(&[8, 9, 7, 5, 6, 3, 4, 2, 0, 1]),
+        (GameplayTurnOption::Right, 4) => Some(&[1, 3, 0, 2]),
+        (GameplayTurnOption::Right, 8) => Some(&[1, 3, 0, 2, 5, 7, 4, 6]),
+        (GameplayTurnOption::Right, 5) => Some(&[4, 0, 2, 1, 3]),
+        (GameplayTurnOption::Right, 10) => Some(&[8, 9, 7, 5, 6, 3, 4, 2, 0, 1]),
         (GameplayTurnOption::Shuffle, _) => {
-            let mut out: Vec<usize> = (0..cols).collect();
+            for (value, source) in out[..cols].iter_mut().zip(0..cols) {
+                *value = source;
+            }
+            let mut attempt_seed = seed as u32;
+            loop {
+                let mut rng = TurnRng::new(u64::from(attempt_seed));
+                rng.shuffle(&mut out[..cols]);
+                if cols <= 1 || out[..cols].iter().copied().ne(0..cols) {
+                    return Some(cols);
+                }
+                attempt_seed = attempt_seed.wrapping_add(1);
+            }
+        }
+        _ => None,
+    };
+    let fixed = fixed?;
+    out[..fixed.len()].copy_from_slice(fixed);
+    Some(fixed.len())
+}
+
+fn turn_take_from(turn: GameplayTurnOption, cols: usize, seed: u64) -> Option<Vec<usize>> {
+    if cols <= MAX_COLS {
+        let mut out = [0usize; MAX_COLS];
+        let len = fill_turn_take_from(turn, cols, seed, &mut out)?;
+        return Some(out[..len].to_vec());
+    }
+    match turn {
+        GameplayTurnOption::Mirror => Some((0..cols).rev().collect()),
+        GameplayTurnOption::Shuffle => {
+            let mut out = (0..cols).collect::<Vec<_>>();
             let mut attempt_seed = seed as u32;
             loop {
                 let mut rng = TurnRng::new(u64::from(attempt_seed));
                 rng.shuffle(&mut out);
-                if cols <= 1 || out.iter().copied().ne(0..cols) {
+                if out.iter().copied().ne(0..cols) {
                     return Some(out);
                 }
                 attempt_seed = attempt_seed.wrapping_add(1);
@@ -1091,6 +1210,61 @@ fn turn_take_from(turn: GameplayTurnOption, cols: usize, seed: u64) -> Option<Ve
 }
 
 pub fn apply_turn_permutation(
+    notes: &mut [Note],
+    note_range: (usize, usize),
+    col_offset: usize,
+    cols: usize,
+    turn: GameplayTurnOption,
+    seed: u64,
+) {
+    if cols <= MAX_COLS {
+        let mut take_from = [0usize; MAX_COLS];
+        let Some(len) = fill_turn_take_from(turn, cols, seed, &mut take_from) else {
+            return;
+        };
+        if len != cols {
+            return;
+        }
+        let mut old_to_new = [0usize; MAX_COLS];
+        for (new_col, &old_col) in take_from[..len].iter().enumerate() {
+            if old_col < cols {
+                old_to_new[old_col] = new_col;
+            }
+        }
+        let (start, end) = note_range;
+        for note in &mut notes[start..end] {
+            if note.column < col_offset {
+                continue;
+            }
+            let local = note.column - col_offset;
+            if local < cols {
+                note.column = col_offset + old_to_new[local];
+            }
+        }
+        return;
+    }
+
+    let Some(take_from) = turn_take_from(turn, cols, seed) else {
+        return;
+    };
+    let mut old_to_new = vec![0usize; cols];
+    for (new_col, &old_col) in take_from.iter().enumerate() {
+        old_to_new[old_col] = new_col;
+    }
+    let (start, end) = note_range;
+    for note in &mut notes[start..end] {
+        if note.column < col_offset {
+            continue;
+        }
+        let local = note.column - col_offset;
+        if local < cols {
+            note.column = col_offset + old_to_new[local];
+        }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn apply_turn_permutation_reference(
     notes: &mut [Note],
     note_range: (usize, usize),
     col_offset: usize,
@@ -1111,13 +1285,13 @@ pub fn apply_turn_permutation(
         }
     }
     let (start, end) = note_range;
-    for n in &mut notes[start..end] {
-        if n.column < col_offset {
+    for note in &mut notes[start..end] {
+        if note.column < col_offset {
             continue;
         }
-        let local = n.column - col_offset;
+        let local = note.column - col_offset;
         if local < cols {
-            n.column = col_offset + old_to_new[local];
+            note.column = col_offset + old_to_new[local];
         }
     }
 }
@@ -1162,11 +1336,14 @@ pub fn apply_super_shuffle_taps(
     if cols == 0 || cols > MAX_COLS {
         return;
     }
-    let row_grids = build_row_grids(notes, note_range, col_offset, cols);
+    let (start, end) = note_range;
+    debug_assert!(start <= end && end <= notes.len());
+    debug_assert!(notes_row_sorted(&notes[start..end]));
+    let mut row_cursor = start;
     let mut rng = TurnRng::new(seed);
     let mut hold_end_row: [Option<usize>; MAX_COLS] = [None; MAX_COLS];
 
-    for row_grid in row_grids {
+    while let Some(row_grid) = next_row_grid(notes, &mut row_cursor, end, col_offset, cols) {
         let row = row_grid.row_index;
         let mut grid = row_grid.note_indices;
         update_active_turn_holds_for_row(notes, row, &grid, cols, &mut hold_end_row);
@@ -1229,11 +1406,14 @@ pub fn apply_hyper_shuffle(
     if cols == 0 || cols > MAX_COLS {
         return;
     }
-    let row_grids = build_row_grids(notes, note_range, col_offset, cols);
+    let (start, end) = note_range;
+    debug_assert!(start <= end && end <= notes.len());
+    debug_assert!(notes_row_sorted(&notes[start..end]));
+    let mut row_cursor = start;
     let mut rng = TurnRng::new(seed);
     let mut hold_end_row: [Option<usize>; MAX_COLS] = [None; MAX_COLS];
 
-    for row_grid in row_grids {
+    while let Some(row_grid) = next_row_grid(notes, &mut row_cursor, end, col_offset, cols) {
         let row = row_grid.row_index;
         let grid = row_grid.note_indices;
         for hold_end in hold_end_row.iter_mut().take(cols) {
@@ -1290,6 +1470,80 @@ pub fn apply_hyper_shuffle(
                 .hold
                 .as_ref()
                 .map(|h| h.end_row_index)
+                .unwrap_or(row);
+            hold_end_row[local] = Some(end);
+        }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn apply_hyper_shuffle_reference(
+    notes: &mut [Note],
+    note_range: (usize, usize),
+    col_offset: usize,
+    cols: usize,
+    seed: u64,
+) {
+    if cols == 0 || cols > MAX_COLS {
+        return;
+    }
+    let row_grids = build_row_grids_reference(notes, note_range, col_offset, cols);
+    let mut rng = TurnRng::new(seed);
+    let mut hold_end_row: [Option<usize>; MAX_COLS] = [None; MAX_COLS];
+
+    for row_grid in row_grids {
+        let row = row_grid.row_index;
+        let grid = row_grid.note_indices;
+        for hold_end in hold_end_row.iter_mut().take(cols) {
+            if let Some(end) = *hold_end
+                && row > end
+            {
+                *hold_end = None;
+            }
+        }
+
+        let mut free_cols = [0usize; MAX_COLS];
+        let mut free_len = 0usize;
+        for (col, hold_end) in hold_end_row.iter().enumerate().take(cols) {
+            if hold_end.is_none() {
+                free_cols[free_len] = col;
+                free_len += 1;
+            }
+        }
+        if free_len == 0 {
+            continue;
+        }
+
+        let mut row_notes = [usize::MAX; MAX_COLS];
+        let mut notes_len = 0usize;
+        for (col, &idx) in grid.iter().enumerate().take(cols) {
+            if hold_end_row[col].is_some() || idx == usize::MAX {
+                continue;
+            }
+            row_notes[notes_len] = idx;
+            notes_len += 1;
+        }
+        if notes_len == 0 {
+            continue;
+        }
+
+        rng.shuffle(&mut free_cols[..free_len]);
+        let place_len = notes_len.min(free_len);
+        for (&idx, &col) in row_notes.iter().zip(free_cols.iter()).take(place_len) {
+            notes[idx].column = col_offset + col;
+        }
+        for &idx in row_notes.iter().take(place_len) {
+            if !matches!(notes[idx].note_type, NoteType::Hold | NoteType::Roll) {
+                continue;
+            }
+            let local = notes[idx].column.saturating_sub(col_offset);
+            if local >= cols {
+                continue;
+            }
+            let end = notes[idx]
+                .hold
+                .as_ref()
+                .map(|hold| hold.end_row_index)
                 .unwrap_or(row);
             hold_end_row[local] = Some(end);
         }
@@ -1353,4 +1607,3 @@ pub fn apply_turn_options(
         }
     }
 }
-

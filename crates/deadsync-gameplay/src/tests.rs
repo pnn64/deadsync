@@ -13532,7 +13532,13 @@ mod tests {
         let included = build_crossover_cues_core(&bracket_scooby, xover_time, 0, 500, 8, true, 0.0);
         assert_eq!(included.len(), 1);
         assert_eq!(included[0].columns.len(), 3);
-        assert!(included[0].columns.get(2).expect("third cue column").is_mine);
+        assert!(
+            included[0]
+                .columns
+                .get(2)
+                .expect("third cue column")
+                .is_mine
+        );
     }
 
     #[test]
@@ -14638,11 +14644,7 @@ mod tests {
 
     #[test]
     fn row_index_state_clears_ranges_cursors_and_note_indices() {
-        let mut state = GameplayRowIndexState::new(
-            [(1, 3), (4, 6)],
-            [2, 5],
-            vec![0, 1, u32::MAX],
-        );
+        let mut state = GameplayRowIndexState::new([(1, 3), (4, 6)], [2, 5], vec![0, 1, u32::MAX]);
 
         assert_eq!(state.row_entry_ranges[0], (1, 3));
         assert_eq!(state.judged_row_cursor[1], 5);
@@ -14719,8 +14721,7 @@ mod tests {
         let mut measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] =
             std::array::from_fn(|_| Vec::new());
         let mut column_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
-        let mut crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS] =
-            std::array::from_fn(|_| Vec::new());
+        let mut crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
         measure_counter_segments[0].push(StreamSegment {
             start: 1,
             end: 3,
@@ -14906,13 +14907,12 @@ mod tests {
             if target > legacy_cursor {
                 for index in legacy_cursor..target {
                     let start = cues[index].start_time;
-                    legacy_entries[index] = Some(
-                        if current_time - start < CROSSOVER_CUE_SEEK_GUARD_SECONDS {
+                    legacy_entries[index] =
+                        Some(if current_time - start < CROSSOVER_CUE_SEEK_GUARD_SECONDS {
                             start
                         } else {
                             current_time
-                        },
-                    );
+                        });
                 }
             } else if target < legacy_cursor {
                 legacy_entries[target..legacy_cursor].fill(None);
@@ -15584,8 +15584,8 @@ mod tests {
         });
         let note_row_entry_indices = [0, u32::MAX];
 
-        let row_entry = row_entry_for_note(&row_entries, &note_row_entry_indices, 0)
-            .expect("note-aligned row");
+        let row_entry =
+            row_entry_for_note(&row_entries, &note_row_entry_indices, 0).expect("note-aligned row");
         let outcome = finalized_row_outcome_for_note(&row_entries, &note_row_entry_indices, 0)
             .expect("finalized row outcome");
 
@@ -16223,7 +16223,7 @@ mod tests {
         notes[2].column = 3;
         notes[3].column = 5;
 
-        let rows = build_row_grids(&notes, (0, notes.len()), 0, 4);
+        let rows = build_row_grids_reference(&notes, (0, notes.len()), 0, 4);
 
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].row_index, 48);
@@ -16787,6 +16787,149 @@ mod tests {
             turn_take_from(GameplayTurnOption::Right, 5, 0),
             Some(vec![4, 0, 2, 1, 3])
         );
+    }
+
+    #[test]
+    fn fixed_turn_permutations_match_allocating_reference() {
+        let turns = [
+            GameplayTurnOption::Mirror,
+            GameplayTurnOption::LRMirror,
+            GameplayTurnOption::UDMirror,
+            GameplayTurnOption::Left,
+            GameplayTurnOption::Right,
+            GameplayTurnOption::Shuffle,
+        ];
+        for cols in 1..=MAX_COLS {
+            for turn in turns {
+                for seed in [0, 1, 29, u32::MAX as u64, u64::MAX] {
+                    let notes = (0..cols * 3)
+                        .map(|index| {
+                            let mut note = test_note_at(
+                                NoteType::Tap,
+                                None,
+                                false,
+                                (index / cols) * 48,
+                                (index / cols) as f32,
+                            );
+                            note.column = index % cols;
+                            note
+                        })
+                        .collect::<Vec<_>>();
+                    let mut expected = notes.clone();
+                    let mut actual = notes;
+                    let range = (0, actual.len());
+                    apply_turn_permutation_reference(&mut expected, range, 0, cols, turn, seed);
+                    apply_turn_permutation(&mut actual, range, 0, cols, turn, seed);
+                    assert_eq!(
+                        actual.iter().map(|note| note.column).collect::<Vec<_>>(),
+                        expected.iter().map(|note| note.column).collect::<Vec<_>>(),
+                        "turn={turn:?}, cols={cols}, seed={seed}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn streaming_hyper_shuffle_matches_materialized_rows() {
+        let mut source = Vec::new();
+        for row in 0..512 {
+            for column in 0..4 {
+                if (row + column * 3) % 5 <= 1 {
+                    continue;
+                }
+                let row_index = row * 12;
+                let is_hold = row % 53 == 0 && column == 3;
+                let hold = is_hold.then(|| {
+                    let mut hold = test_hold();
+                    hold.end_row_index = row_index + 36;
+                    hold.end_beat = hold.end_row_index as f32 / ROWS_PER_BEAT as f32;
+                    hold
+                });
+                let mut note = test_note_at(
+                    if is_hold {
+                        NoteType::Hold
+                    } else {
+                        NoteType::Tap
+                    },
+                    hold,
+                    false,
+                    row_index,
+                    row_index as f32 / ROWS_PER_BEAT as f32,
+                );
+                note.column = column;
+                source.push(note);
+            }
+        }
+        for seed in [0, 1, 29, 0xA5A5_5A5A, u64::MAX] {
+            let mut expected = source.clone();
+            let mut actual = source.clone();
+            let range = (0, source.len());
+            apply_hyper_shuffle_reference(&mut expected, range, 0, 4, seed);
+            apply_hyper_shuffle(&mut actual, range, 0, 4, seed);
+            assert_eq!(
+                actual.iter().map(|note| note.column).collect::<Vec<_>>(),
+                expected.iter().map(|note| note.column).collect::<Vec<_>>(),
+                "seed={seed}",
+            );
+        }
+    }
+
+    #[test]
+    fn single_player_in_place_masks_match_rebuild_reference() {
+        let timing = test_timing(ROWS_PER_BEAT as usize * 32);
+        let timing_refs: [&TimingData; MAX_PLAYERS] = std::array::from_fn(|_| &timing);
+        let source = (0..128)
+            .map(|index| {
+                let note_type = if index % 11 == 0 {
+                    NoteType::Mine
+                } else if index % 7 == 0 {
+                    NoteType::Lift
+                } else {
+                    NoteType::Tap
+                };
+                let mut note = test_note_at(
+                    note_type,
+                    None,
+                    index % 13 == 0,
+                    index * 12,
+                    index as f32 / 4.0,
+                );
+                note.column = index % 4;
+                note
+            })
+            .collect::<Vec<_>>();
+        for remove_mask in [
+            REMOVE_MASK_BIT_NO_MINES,
+            REMOVE_MASK_BIT_NO_LIFTS,
+            REMOVE_MASK_BIT_NO_FAKES,
+            REMOVE_MASK_BIT_LITTLE | REMOVE_MASK_BIT_NO_MINES | REMOVE_MASK_BIT_NO_LIFTS,
+        ] {
+            let mut effects = [ChartAttackEffects::default(); MAX_PLAYERS];
+            effects[0].remove_mask = remove_mask;
+            let mut expected = source.clone();
+            let mut actual = source.clone();
+            let mut expected_ranges = [(0, source.len()), (0, 0)];
+            let mut actual_ranges = expected_ranges;
+            apply_uncommon_chart_transforms_reference(
+                &mut expected,
+                &mut expected_ranges,
+                4,
+                1,
+                &effects,
+                &timing_refs,
+            );
+            apply_uncommon_chart_transforms(
+                &mut actual,
+                &mut actual_ranges,
+                4,
+                1,
+                &effects,
+                &timing_refs,
+            );
+            assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+            assert_eq!(actual_ranges, expected_ranges);
+        }
     }
 
     #[test]

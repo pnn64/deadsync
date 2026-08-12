@@ -4,9 +4,17 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+bench-support = []
+
 [[bench]]
 name = "gameplay_hot_paths"
 harness = false
+
+[[bench]]
+name = "chart_transform_hot_paths"
+harness = false
+required-features = ["bench-support"]
 
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }

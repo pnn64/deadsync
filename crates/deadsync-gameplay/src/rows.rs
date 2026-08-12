@@ -881,7 +881,45 @@ pub fn notes_row_sorted(notes: &[Note]) -> bool {
         .all(|pair| pair[0].row_index <= pair[1].row_index)
 }
 
-pub fn build_row_grids(
+fn next_row_grid(
+    notes: &[Note],
+    cursor: &mut usize,
+    end: usize,
+    col_offset: usize,
+    cols: usize,
+) -> Option<RowGrid> {
+    // Turn transforms consume one row at a time, so keeping this bounded grid
+    // on the stack avoids retaining memory proportional to the chart length.
+    while *cursor < end {
+        let row_index = notes[*cursor].row_index;
+        let mut note_indices = [usize::MAX; MAX_COLS];
+        let mut populated = false;
+        while *cursor < end && notes[*cursor].row_index == row_index {
+            let note_idx = *cursor;
+            let note = &notes[note_idx];
+            *cursor += 1;
+            if note.column < col_offset {
+                continue;
+            }
+            let local = note.column - col_offset;
+            if local >= cols || local >= MAX_COLS {
+                continue;
+            }
+            note_indices[local] = note_idx;
+            populated = true;
+        }
+        if populated {
+            return Some(RowGrid {
+                row_index,
+                note_indices,
+            });
+        }
+    }
+    None
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn build_row_grids_reference(
     notes: &[Note],
     note_range: (usize, usize),
     col_offset: usize,
