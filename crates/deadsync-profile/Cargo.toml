@@ -9,6 +9,11 @@ name = "select_music_profile_snapshot"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "profile_option_parse_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [features]
 bench-support = []
 

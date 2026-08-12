@@ -1590,10 +1590,21 @@ pub fn initials_from_name(name: &str) -> String {
 }
 
 pub fn parse_profile_bool(value: &str) -> Option<bool> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "1" | "true" | "yes" | "on" => Some(true),
-        "0" | "false" | "no" | "off" => Some(false),
-        _ => None,
+    let value = value.trim();
+    if value == "1"
+        || value.eq_ignore_ascii_case("true")
+        || value.eq_ignore_ascii_case("yes")
+        || value.eq_ignore_ascii_case("on")
+    {
+        Some(true)
+    } else if value == "0"
+        || value.eq_ignore_ascii_case("false")
+        || value.eq_ignore_ascii_case("no")
+        || value.eq_ignore_ascii_case("off")
+    {
+        Some(false)
+    } else {
+        None
     }
 }
 
@@ -4284,6 +4295,49 @@ impl SessionState {
     }
 }
 
+const OPTION_KEY_STACK_BYTES: usize = 64;
+
+#[inline]
+fn with_lower_option_key<R>(value: &str, use_key: impl FnOnce(&str) -> R) -> R {
+    let value = value.trim();
+    if value.is_ascii() && value.len() <= OPTION_KEY_STACK_BYTES {
+        let mut bytes = [0u8; OPTION_KEY_STACK_BYTES];
+        for (dst, src) in bytes.iter_mut().zip(value.bytes()) {
+            *dst = src.to_ascii_lowercase();
+        }
+        let key = std::str::from_utf8(&bytes[..value.len()])
+            .expect("ASCII profile option key must remain valid UTF-8");
+        use_key(key)
+    } else {
+        let key = value.to_lowercase();
+        use_key(&key)
+    }
+}
+
+#[inline]
+fn with_compact_option_key<R>(value: &str, use_key: impl FnOnce(&str) -> R) -> R {
+    let value = value.trim();
+    let mut bytes = [0u8; OPTION_KEY_STACK_BYTES];
+    let mut len = 0;
+    for byte in value.bytes().filter(u8::is_ascii_alphanumeric) {
+        if len == OPTION_KEY_STACK_BYTES {
+            let mut key = String::with_capacity(value.len());
+            key.extend(
+                value
+                    .bytes()
+                    .filter(u8::is_ascii_alphanumeric)
+                    .map(|byte| byte.to_ascii_lowercase() as char),
+            );
+            return use_key(&key);
+        }
+        bytes[len] = byte.to_ascii_lowercase();
+        len += 1;
+    }
+    let key = std::str::from_utf8(&bytes[..len])
+        .expect("ASCII profile option key must remain valid UTF-8");
+    use_key(key)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Perspective {
     #[default]
@@ -4311,15 +4365,14 @@ impl FromStr for Perspective {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let v = s.trim().to_lowercase();
-        match v.as_str() {
+        with_lower_option_key(s, |key| match key {
             "overhead" => Ok(Self::Overhead),
             "hallway" => Ok(Self::Hallway),
             "distant" => Ok(Self::Distant),
             "incoming" => Ok(Self::Incoming),
             "space" => Ok(Self::Space),
             other => Err(format!("'{other}' is not a valid Perspective setting")),
-        }
+        })
     }
 }
 
@@ -4354,20 +4407,14 @@ impl FromStr for NoCmodAlternative {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "" | "none" | "off" => Ok(Self::None),
             "xmod" | "x" => Ok(Self::XMod),
             "mmod" | "m" => Ok(Self::MMod),
             other => Err(format!(
                 "'{other}' is not a valid NoCmodAlternative setting"
             )),
-        }
+        })
     }
 }
 
@@ -4399,13 +4446,7 @@ impl FromStr for TurnOption {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "" | "none" | "noturn" | "noturning" | "noturns" => Ok(Self::None),
             "mirror" => Ok(Self::Mirror),
             "left" => Ok(Self::Left),
@@ -4416,7 +4457,7 @@ impl FromStr for TurnOption {
             "blender" | "supershuffle" => Ok(Self::Blender),
             "random" | "hypershuffle" => Ok(Self::Random),
             other => Err(format!("'{other}' is not a valid Turn setting")),
-        }
+        })
     }
 }
 
@@ -4483,22 +4524,26 @@ impl FromStr for ScrollOption {
         if raw.is_empty() {
             return Err("Scroll setting is empty".to_string());
         }
-        let lower = raw.to_lowercase();
         let mut result = Self::empty();
-        for token in lower.split(|c: char| c == '+' || c == ',' || c.is_whitespace()) {
+        for token in raw.split(|c: char| c == '+' || c == ',' || c.is_whitespace()) {
             if token.is_empty() {
                 continue;
             }
-            let flag = match token {
-                "normal" => Self::Normal,
-                "reverse" => Self::Reverse,
-                "split" => Self::Split,
-                "alternate" => Self::Alternate,
-                "cross" => Self::Cross,
-                "centered" => Self::Centered,
-                other => {
-                    return Err(format!("'{other}' is not a valid Scroll setting"));
-                }
+            let flag = if token.eq_ignore_ascii_case("normal") {
+                Self::Normal
+            } else if token.eq_ignore_ascii_case("reverse") {
+                Self::Reverse
+            } else if token.eq_ignore_ascii_case("split") {
+                Self::Split
+            } else if token.eq_ignore_ascii_case("alternate") {
+                Self::Alternate
+            } else if token.eq_ignore_ascii_case("cross") {
+                Self::Cross
+            } else if token.eq_ignore_ascii_case("centered") {
+                Self::Centered
+            } else {
+                let token = token.to_lowercase();
+                return Err(format!("'{token}' is not a valid Scroll setting"));
             };
             if flag.0 != 0 {
                 result = result.union(flag);
@@ -4545,17 +4590,11 @@ impl FromStr for ComboMode {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "fullcombo" => Ok(Self::FullCombo),
             "currentcombo" => Ok(Self::CurrentCombo),
             other => Err(format!("'{other}' is not a valid ComboMode setting")),
-        }
+        })
     }
 }
 
@@ -4582,20 +4621,14 @@ impl FromStr for ComboColors {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "glow" => Ok(Self::Glow),
             "solid" => Ok(Self::Solid),
             "rainbow" => Ok(Self::Rainbow),
             "rainbowscroll" => Ok(Self::RainbowScroll),
             "none" => Ok(Self::None),
             other => Err(format!("'{other}' is not a valid ComboColors setting")),
-        }
+        })
     }
 }
 
@@ -4629,8 +4662,7 @@ impl FromStr for ComboFont {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let v = s.trim().to_lowercase();
-        match v.as_str() {
+        with_lower_option_key(s, |key| match key {
             "wendy" => Ok(Self::Wendy),
             "arial rounded" | "arialrounded" => Ok(Self::ArialRounded),
             "asap" => Ok(Self::Asap),
@@ -4641,7 +4673,7 @@ impl FromStr for ComboFont {
             "mega" => Ok(Self::Mega),
             "none" => Ok(Self::None),
             other => Err(format!("'{other}' is not a valid ComboFont setting")),
-        }
+        })
     }
 }
 
@@ -4689,13 +4721,7 @@ impl FromStr for TargetScoreSetting {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "cminus" | "c-" => Ok(Self::CMinus),
             "c" => Ok(Self::C),
             "cplus" | "c+" => Ok(Self::CPlus),
@@ -4716,7 +4742,7 @@ impl FromStr for TargetScoreSetting {
             "machinebest" | "machine" => Ok(Self::MachineBest),
             "personalbest" | "personal" => Ok(Self::PersonalBest),
             other => Err(format!("'{other}' is not a valid TargetScore setting")),
-        }
+        })
     }
 }
 
@@ -4759,13 +4785,7 @@ impl FromStr for TargetScoreMissPolicy {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let key: String = s
-            .trim()
-            .chars()
-            .filter(|ch| ch.is_ascii_alphanumeric())
-            .map(|ch| ch.to_ascii_lowercase())
-            .collect();
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "" | "nothing" => Ok(Self::Nothing),
             "dimsscore" | "dimminiindicator" | "dim" => Ok(Self::DimMiniIndicator),
             "fail" => Ok(Self::Fail),
@@ -4773,7 +4793,7 @@ impl FromStr for TargetScoreMissPolicy {
             other => Err(format!(
                 "'{other}' is not a valid ActionOnMissedTarget setting"
             )),
-        }
+        })
     }
 }
 
@@ -4803,7 +4823,7 @@ impl FromStr for ErrorBarStyle {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_lowercase().as_str() {
+        with_lower_option_key(s, |key| match key {
             "none" => Ok(Self::None),
             "colorful" => Ok(Self::Colorful),
             "monochrome" => Ok(Self::Monochrome),
@@ -4811,7 +4831,7 @@ impl FromStr for ErrorBarStyle {
             "highlight" => Ok(Self::Highlight),
             "average" => Ok(Self::Average),
             other => Err(format!("'{other}' is not a valid ErrorBar setting")),
-        }
+        })
     }
 }
 
@@ -5011,19 +5031,13 @@ impl FromStr for ColumnFlashBrightness {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "" | "normal" | "default" | "standard" => Ok(Self::Normal),
             "dimmed" | "dim" | "chris" | "compact" => Ok(Self::Dimmed),
             other => Err(format!(
                 "'{other}' is not a valid ColumnFlashBrightness setting"
             )),
-        }
+        })
     }
 }
 
@@ -5047,17 +5061,11 @@ impl FromStr for ColumnFlashSize {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "" | "default" | "normal" | "full" | "standard" => Ok(Self::Default),
             "compact" | "short" | "shorter" | "chris" => Ok(Self::Compact),
             other => Err(format!("'{other}' is not a valid ColumnFlashSize setting")),
-        }
+        })
     }
 }
 
@@ -5082,18 +5090,12 @@ impl FromStr for AttackMode {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "off" | "noattacks" | "noattack" => Ok(Self::Off),
             "on" | "normal" => Ok(Self::On),
             "random" | "randomattacks" => Ok(Self::Random),
             other => Err(format!("'{other}' is not a valid AttackMode setting")),
-        }
+        })
     }
 }
 
@@ -5122,13 +5124,7 @@ impl FromStr for ScatterplotMaxWindow {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "" | "off" | "none" | "autoscale" | "0" => Ok(Self::Off),
             "fantastic" | "fantasticmax" | "fa" => Ok(Self::Fantastic),
             "excellent" | "excellentmax" | "ex" => Ok(Self::Excellent),
@@ -5136,7 +5132,7 @@ impl FromStr for ScatterplotMaxWindow {
             other => Err(format!(
                 "'{other}' is not a valid ScatterplotMaxWindow setting"
             )),
-        }
+        })
     }
 }
 
@@ -5163,17 +5159,11 @@ impl FromStr for ScorePosition {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "" | "normal" | "default" | "top" => Ok(Self::Normal),
             "stepstatistics" | "stepstats" | "stats" => Ok(Self::StepStatistics),
             other => Err(format!("'{other}' is not a valid ScorePosition setting")),
-        }
+        })
     }
 }
 
@@ -5198,17 +5188,11 @@ impl FromStr for ScoreDisplayMode {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "" | "normal" | "default" | "actual" | "current" => Ok(Self::Normal),
             "predictive" | "predicted" | "prediction" => Ok(Self::Predictive),
             other => Err(format!("'{other}' is not a valid ScoreDisplay setting")),
-        }
+        })
     }
 }
 
@@ -5233,12 +5217,12 @@ impl FromStr for LifeMeterType {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_lowercase().as_str() {
+        with_lower_option_key(s, |key| match key {
             "" | "standard" => Ok(Self::Standard),
             "surround" => Ok(Self::Surround),
             "vertical" => Ok(Self::Vertical),
             other => Err(format!("'{other}' is not a valid LifeMeterType setting")),
-        }
+        })
     }
 }
 
@@ -5265,13 +5249,13 @@ impl FromStr for ErrorBarTrim {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_lowercase().as_str() {
+        with_lower_option_key(s, |key| match key {
             "off" => Ok(Self::Off),
             "fantastic" => Ok(Self::Fantastic),
             "excellent" => Ok(Self::Excellent),
             "great" => Ok(Self::Great),
             other => Err(format!("'{other}' is not a valid ErrorBarTrim setting")),
-        }
+        })
     }
 }
 
@@ -5311,7 +5295,7 @@ impl FromStr for TimingWindowsOption {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_lowercase().as_str() {
+        with_lower_option_key(s, |key| match key {
             "none" => Ok(Self::None),
             "way offs" | "wayoffs" => Ok(Self::WayOffs),
             "decents + way offs" | "decents+wayoffs" | "decents and way offs" => {
@@ -5321,7 +5305,7 @@ impl FromStr for TimingWindowsOption {
                 Ok(Self::FantasticsAndExcellents)
             }
             other => Err(format!("'{other}' is not a valid TimingWindows setting")),
-        }
+        })
     }
 }
 
@@ -5372,16 +5356,6 @@ impl StepStatisticsMask {
     }
 }
 
-fn normalize_option_key(s: &str) -> String {
-    let mut key = String::with_capacity(s.len());
-    for ch in s.trim().chars() {
-        if ch.is_ascii_alphanumeric() {
-            key.push(ch.to_ascii_lowercase());
-        }
-    }
-    key
-}
-
 fn step_statistics_bit_from_key(key: &str) -> Option<StepStatisticsMask> {
     match key {
         "densitygraph" | "density" => Some(StepStatisticsMask::DENSITY_GRAPH),
@@ -5406,13 +5380,14 @@ impl FromStr for StepStatisticsMask {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let trimmed = s.trim();
-        let key = normalize_option_key(trimmed);
-        match key.as_str() {
-            "" | "none" => return Ok(Self::empty()),
+        if let Some(mask) = with_compact_option_key(trimmed, |key| match key {
+            "" | "none" => Some(Self::empty()),
             // Legacy DataVisualizations values.
-            "targetscoregraph" | "targetscore" | "target" => return Ok(Self::empty()),
-            "stepstatistics" | "stepstats" => return Ok(Self::all_widgets()),
-            _ => {}
+            "targetscoregraph" | "targetscore" | "target" => Some(Self::empty()),
+            "stepstatistics" | "stepstats" => Some(Self::all_widgets()),
+            _ => None,
+        }) {
+            return Ok(mask);
         }
 
         if let Ok(bits) = trimmed.parse::<u16>() {
@@ -5421,15 +5396,19 @@ impl FromStr for StepStatisticsMask {
 
         let mut mask = Self::empty();
         for part in trimmed.split([',', '|', ';']) {
-            let key = normalize_option_key(part);
-            if key.is_empty() {
-                continue;
-            }
-            if matches!(key.as_str(), "gsbox" | "groovestatsbox" | "scorebox") {
-                continue;
-            }
-            let Some(bit) = step_statistics_bit_from_key(key.as_str()) else {
-                return Err(format!("'{part}' is not a valid StepStatistics setting"));
+            let parsed = with_compact_option_key(part, |key| {
+                if key.is_empty() || matches!(key, "gsbox" | "groovestatsbox" | "scorebox") {
+                    Ok(None)
+                } else {
+                    step_statistics_bit_from_key(key).map(Some).ok_or(())
+                }
+            });
+            let bit = match parsed {
+                Ok(Some(bit)) => bit,
+                Ok(None) => continue,
+                Err(()) => {
+                    return Err(format!("'{part}' is not a valid StepStatistics setting"));
+                }
             };
             mask.insert(bit);
         }
@@ -5518,7 +5497,7 @@ impl FromStr for StepStatsExtra {
         if trimmed.chars().any(char::is_control) {
             return Err("StepStatsExtra contains a control character".to_string());
         }
-        Ok(match normalize_option_key(trimmed).as_str() {
+        Ok(with_compact_option_key(trimmed, |key| match key {
             "" | "none" => Self::None,
             "errorstats" | "error" => Self::ErrorStats,
             "randomizer" | "random" => Self::Randomizer,
@@ -5526,7 +5505,7 @@ impl FromStr for StepStatsExtra {
             "nyancat" => Self::gif("Nyan Cat"),
             "rincat" => Self::gif("Rin Cat"),
             _ => Self::gif(trimmed),
-        })
+        }))
     }
 }
 
@@ -5574,7 +5553,7 @@ impl FromStr for MeasureCounter {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_lowercase().as_str() {
+        with_lower_option_key(s, |key| match key {
             "none" => Ok(Self::None),
             "8th" => Ok(Self::Eighth),
             "12th" => Ok(Self::Twelfth),
@@ -5582,7 +5561,7 @@ impl FromStr for MeasureCounter {
             "24th" => Ok(Self::TwentyFourth),
             "32nd" => Ok(Self::ThirtySecond),
             other => Err(format!("'{other}' is not a valid MeasureCounter setting")),
-        }
+        })
     }
 }
 
@@ -5612,13 +5591,13 @@ impl FromStr for MeasureLines {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_lowercase().as_str() {
+        with_lower_option_key(s, |key| match key {
             "off" => Ok(Self::Off),
             "measure" => Ok(Self::Measure),
             "quarter" => Ok(Self::Quarter),
             "eighth" => Ok(Self::Eighth),
             other => Err(format!("'{other}' is not a valid MeasureLines setting")),
-        }
+        })
     }
 }
 
@@ -5649,13 +5628,7 @@ impl FromStr for MiniIndicator {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "" | "none" => Ok(Self::None),
             "subtractivescoring" | "subtractive" => Ok(Self::SubtractiveScoring),
             "predictivescoring" | "predictive" => Ok(Self::PredictiveScoring),
@@ -5664,7 +5637,7 @@ impl FromStr for MiniIndicator {
             "pacemaker" => Ok(Self::Pacemaker),
             "streamprog" | "streamprogress" | "stream" => Ok(Self::StreamProg),
             other => Err(format!("'{other}' is not a valid MiniIndicator setting")),
-        }
+        })
     }
 }
 
@@ -5694,20 +5667,14 @@ impl FromStr for MiniIndicatorScoreType {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "" | "itg" => Ok(Self::Itg),
             "ex" => Ok(Self::Ex),
             "hardex" | "hex" => Ok(Self::HardEx),
             other => Err(format!(
                 "'{other}' is not a valid MiniIndicatorScoreType setting"
             )),
-        }
+        })
     }
 }
 
@@ -5732,19 +5699,13 @@ impl FromStr for MiniIndicatorSubtractiveDisplay {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "" | "percent" | "percentage" => Ok(Self::Percent),
             "points" | "point" | "dancepoints" | "dp" => Ok(Self::Points),
             other => Err(format!(
                 "'{other}' is not a valid MiniIndicatorSubtractiveDisplay setting"
             )),
-        }
+        })
     }
 }
 
@@ -5768,19 +5729,13 @@ impl FromStr for MiniIndicatorSize {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "" | "default" => Ok(Self::Default),
             "large" | "big" => Ok(Self::Large),
             other => Err(format!(
                 "'{other}' is not a valid MiniIndicatorSize setting"
             )),
-        }
+        })
     }
 }
 
@@ -5805,20 +5760,14 @@ impl FromStr for MiniIndicatorColor {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "" | "default" => Ok(Self::Default),
             "detailed" => Ok(Self::Detailed),
             "combo" | "combocolor" | "combocolour" => Ok(Self::Combo),
             other => Err(format!(
                 "'{other}' is not a valid MiniIndicatorColor setting"
             )),
-        }
+        })
     }
 }
 
@@ -5843,19 +5792,13 @@ impl FromStr for MiniIndicatorPosition {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "" | "default" | "normal" => Ok(Self::Default),
             "underuparrow" | "uparrow" | "arrow" | "left" => Ok(Self::UnderUpArrow),
             other => Err(format!(
                 "'{other}' is not a valid MiniIndicatorPosition setting"
             )),
-        }
+        })
     }
 }
 
@@ -5881,19 +5824,13 @@ impl FromStr for HideLightType {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
+        with_compact_option_key(s, |key| match key {
             "nohidelights" => Ok(Self::NoHideLights),
             "hidealllights" => Ok(Self::HideAllLights),
             "hidemarqueelights" => Ok(Self::HideMarqueeLights),
             "hidebasslights" => Ok(Self::HideBassLights),
             other => Err(format!("'{other}' is not a valid HideLightType setting")),
-        }
+        })
     }
 }
 
@@ -5969,12 +5906,14 @@ impl FromStr for BackgroundFilter {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let trimmed = s.trim();
-        match trimmed.to_ascii_lowercase().as_str() {
-            "off" => return Ok(Self(0)),
-            "dark" => return Ok(Self(50)),
-            "darker" => return Ok(Self(75)),
-            "darkest" => return Ok(Self(95)),
-            _ => {}
+        if let Some(value) = with_lower_option_key(trimmed, |key| match key {
+            "off" => Some(Self(0)),
+            "dark" => Some(Self(50)),
+            "darker" => Some(Self(75)),
+            "darkest" => Some(Self(95)),
+            _ => None,
+        }) {
+            return Ok(value);
         }
 
         let numeric = trimmed.trim_end_matches('%').trim();
@@ -5993,6 +5932,119 @@ impl FromStr for BackgroundFilter {
 impl core::fmt::Display for BackgroundFilter {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+/// Pre-optimization implementations retained only for differential tests and benchmarks.
+#[doc(hidden)]
+#[cfg(any(test, feature = "bench-support"))]
+pub mod option_parse_reference {
+    use super::*;
+
+    pub fn lower_key(value: &str) -> String {
+        value.trim().to_lowercase()
+    }
+
+    pub fn compact_key(value: &str) -> String {
+        let mut key = String::with_capacity(value.len());
+        for ch in value.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        key
+    }
+
+    pub fn profile_bool(value: &str) -> Option<bool> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => Some(true),
+            "0" | "false" | "no" | "off" => Some(false),
+            _ => None,
+        }
+    }
+
+    pub fn perspective(value: &str) -> Result<Perspective, String> {
+        match lower_key(value).as_str() {
+            "overhead" => Ok(Perspective::Overhead),
+            "hallway" => Ok(Perspective::Hallway),
+            "distant" => Ok(Perspective::Distant),
+            "incoming" => Ok(Perspective::Incoming),
+            "space" => Ok(Perspective::Space),
+            other => Err(format!("'{other}' is not a valid Perspective setting")),
+        }
+    }
+
+    pub fn turn_option(value: &str) -> Result<TurnOption, String> {
+        match compact_key(value).as_str() {
+            "" | "none" | "noturn" | "noturning" | "noturns" => Ok(TurnOption::None),
+            "mirror" => Ok(TurnOption::Mirror),
+            "left" => Ok(TurnOption::Left),
+            "right" => Ok(TurnOption::Right),
+            "lrmirror" => Ok(TurnOption::LRMirror),
+            "udmirror" => Ok(TurnOption::UDMirror),
+            "shuffle" => Ok(TurnOption::Shuffle),
+            "blender" | "supershuffle" => Ok(TurnOption::Blender),
+            "random" | "hypershuffle" => Ok(TurnOption::Random),
+            other => Err(format!("'{other}' is not a valid Turn setting")),
+        }
+    }
+
+    pub fn scroll_option(value: &str) -> Result<ScrollOption, String> {
+        let raw = value.trim();
+        if raw.is_empty() {
+            return Err("Scroll setting is empty".to_string());
+        }
+        let lower = raw.to_lowercase();
+        let mut result = ScrollOption::empty();
+        for token in lower.split(|c: char| c == '+' || c == ',' || c.is_whitespace()) {
+            if token.is_empty() {
+                continue;
+            }
+            let flag = match token {
+                "normal" => ScrollOption::Normal,
+                "reverse" => ScrollOption::Reverse,
+                "split" => ScrollOption::Split,
+                "alternate" => ScrollOption::Alternate,
+                "cross" => ScrollOption::Cross,
+                "centered" => ScrollOption::Centered,
+                other => return Err(format!("'{other}' is not a valid Scroll setting")),
+            };
+            if flag.0 != 0 {
+                result = result.union(flag);
+            }
+        }
+        Ok(result)
+    }
+
+    pub fn step_statistics(value: &str) -> Result<StepStatisticsMask, String> {
+        let trimmed = value.trim();
+        match compact_key(trimmed).as_str() {
+            "" | "none" => return Ok(StepStatisticsMask::empty()),
+            "targetscoregraph" | "targetscore" | "target" => {
+                return Ok(StepStatisticsMask::empty());
+            }
+            "stepstatistics" | "stepstats" => return Ok(StepStatisticsMask::all_widgets()),
+            _ => {}
+        }
+
+        if let Ok(bits) = trimmed.parse::<u16>() {
+            return Ok(StepStatisticsMask::from_bits_retain(
+                bits & StepStatisticsMask::ALL_WIDGET_BITS,
+            ));
+        }
+
+        let mut mask = StepStatisticsMask::empty();
+        for part in trimmed.split([',', '|', ';']) {
+            let key = compact_key(part);
+            if key.is_empty() || matches!(key.as_str(), "gsbox" | "groovestatsbox" | "scorebox") {
+                continue;
+            }
+            let Some(bit) = step_statistics_bit_from_key(&key) else {
+                return Err(format!("'{part}' is not a valid StepStatistics setting"));
+            };
+            mask.insert(bit);
+        }
+        Ok(mask)
     }
 }
 
@@ -14783,5 +14835,112 @@ ApiKey = gs-key
         assert_eq!(profile.display_name, "Keep Me");
         assert_eq!(profile.current_combo, 42);
         assert!(!profile.set_current_player_options(options));
+    }
+
+    #[test]
+    fn allocation_free_profile_bool_matches_reference() {
+        for value in [
+            "1",
+            " TRUE ",
+            "YeS",
+            "ON",
+            "0",
+            " false ",
+            "No",
+            "OFF",
+            "",
+            "maybe",
+            "trüe",
+            "truefalse",
+        ] {
+            assert_eq!(
+                parse_profile_bool(value),
+                option_parse_reference::profile_bool(value),
+                "input {value:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn stack_option_keys_and_parsers_match_reference() {
+        let long_ascii = "A".repeat(OPTION_KEY_STACK_BYTES + 17);
+        for value in [
+            " Incoming ",
+            "WENDY (CURSED)",
+            "İncoming",
+            "Straße",
+            "日本語",
+            "  ",
+            long_ascii.as_str(),
+        ] {
+            let actual = with_lower_option_key(value, str::to_owned);
+            assert_eq!(actual, option_parse_reference::lower_key(value));
+        }
+
+        for value in [
+            " Super Shuffle ",
+            "LR-Mirror",
+            "Judgements Counter",
+            "Straße-123",
+            "日本語",
+            "  ",
+            long_ascii.as_str(),
+        ] {
+            let actual = with_compact_option_key(value, str::to_owned);
+            assert_eq!(actual, option_parse_reference::compact_key(value));
+        }
+
+        for value in ["OVERHEAD", " Incoming ", "space", "İncoming", &long_ascii] {
+            assert_eq!(
+                Perspective::from_str(value),
+                option_parse_reference::perspective(value)
+            );
+        }
+        for value in [
+            "Mirror",
+            "super shuffle",
+            "LR-Mirror",
+            "日本語",
+            &long_ascii,
+        ] {
+            assert_eq!(
+                TurnOption::from_str(value),
+                option_parse_reference::turn_option(value)
+            );
+        }
+        for value in [
+            "None",
+            "stepstats",
+            "Judgements Counter, Peak NPS",
+            "Step Counts, GS Box",
+            "255",
+            "lanes",
+            &long_ascii,
+        ] {
+            assert_eq!(
+                StepStatisticsMask::from_str(value),
+                option_parse_reference::step_statistics(value)
+            );
+        }
+    }
+
+    #[test]
+    fn borrowed_scroll_tokens_match_reference() {
+        for value in [
+            "Normal",
+            "REVERSE",
+            "Reverse+Cross Centered",
+            " normal,REVERSE | split ",
+            "hidden",
+            "HİDDEN",
+            "",
+            "   ",
+        ] {
+            assert_eq!(
+                ScrollOption::from_str(value),
+                option_parse_reference::scroll_option(value),
+                "input {value:?}"
+            );
+        }
     }
 }
