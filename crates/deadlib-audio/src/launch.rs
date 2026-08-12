@@ -12,7 +12,6 @@ use deadlib_audio_backend_freebsd_pcm as freebsd_pcm;
 #[cfg(target_os = "linux")]
 use deadlib_audio_backend_jack as linux_jack;
 #[cfg(target_os = "linux")]
-#[cfg(feature = "pipewire-audio")]
 use deadlib_audio_backend_pipewire as linux_pipewire;
 #[cfg(target_os = "linux")]
 use deadlib_audio_backend_pulse as linux_pulse;
@@ -119,7 +118,6 @@ struct JackBackendHint {
 }
 
 #[cfg(target_os = "linux")]
-#[cfg(feature = "pipewire-audio")]
 #[derive(Clone, Debug)]
 struct PipeWireBackendHint {
     pub requested_device_name: Option<String>,
@@ -170,7 +168,6 @@ struct NativeBackendLaunch {
     #[cfg(target_os = "linux")]
     pub jack: Option<JackBackendHint>,
     #[cfg(target_os = "linux")]
-    #[cfg(feature = "pipewire-audio")]
     pub pipewire: Option<PipeWireBackendHint>,
     #[cfg(target_os = "linux")]
     #[cfg(target_os = "linux")]
@@ -194,7 +191,6 @@ enum NativeOutputBackend {
         _stream: linux_jack::JackOutputStream,
     },
     #[cfg(target_os = "linux")]
-    #[cfg(feature = "pipewire-audio")]
     PipeWire {
         _stream: linux_pipewire::PipeWireOutputStream,
     },
@@ -286,17 +282,29 @@ pub fn prepare_output(cfg: &InitConfig, controls: Arc<MixControls>) -> OutputPla
 
 #[cfg(target_os = "linux")]
 pub fn available_linux_backends() -> Vec<LinuxAudioBackend> {
+    available_linux_backends_for(
+        linux_pipewire::is_available(),
+        linux_pulse::is_available(),
+        linux_jack::is_available(),
+    )
+}
+
+#[cfg(target_os = "linux")]
+fn available_linux_backends_for(
+    pipewire_available: bool,
+    pulse_available: bool,
+    jack_available: bool,
+) -> Vec<LinuxAudioBackend> {
     let mut backends = Vec::with_capacity(5);
     backends.push(LinuxAudioBackend::Auto);
-    #[cfg(feature = "pipewire-audio")]
-    backends.push(LinuxAudioBackend::PipeWire);
-    #[cfg(target_os = "linux")]
-    if linux_pulse::is_available() {
+    if pipewire_available {
+        backends.push(LinuxAudioBackend::PipeWire);
+    }
+    if pulse_available {
         backends.push(LinuxAudioBackend::PulseAudio);
     }
     backends.push(LinuxAudioBackend::Alsa);
-    #[cfg(target_os = "linux")]
-    if linux_jack::is_available() {
+    if jack_available {
         backends.push(LinuxAudioBackend::Jack);
     }
     backends
@@ -404,7 +412,6 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBacken
                 requested_rate_hz: cfg.sample_rate_hz,
                 output_mode,
             }),
-            #[cfg(feature = "pipewire-audio")]
             pipewire: Some(PipeWireBackendHint {
                 requested_device_name: explicit_device_requested.then_some(device_name.clone()),
                 sample_rate_hz: native_sample_rate_hz,
@@ -569,7 +576,6 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBacken
             #[cfg(target_os = "linux")]
             jack: None,
             #[cfg(target_os = "linux")]
-            #[cfg(feature = "pipewire-audio")]
             pipewire: None,
             #[cfg(target_os = "linux")]
             #[cfg(target_os = "linux")]
@@ -733,7 +739,6 @@ fn start_linux_jack_backend(
 }
 
 #[cfg(target_os = "linux")]
-#[cfg(feature = "pipewire-audio")]
 fn start_linux_pipewire_backend(
     pipewire: PipeWireBackendHint,
     controls: &Arc<MixControls>,
@@ -907,7 +912,6 @@ fn start_output_backend(
         #[cfg(target_os = "linux")]
         jack,
         #[cfg(target_os = "linux")]
-        #[cfg(feature = "pipewire-audio")]
         pipewire,
         #[cfg(target_os = "linux")]
         #[cfg(target_os = "linux")]
@@ -923,17 +927,7 @@ fn start_output_backend(
     let requested_output_mode = alsa
         .as_ref()
         .map(|hint| hint.output_mode)
-        .or({
-            #[cfg(target_os = "linux")]
-            #[cfg(feature = "pipewire-audio")]
-            {
-                pipewire.as_ref().map(|hint| hint.output_mode)
-            }
-            #[cfg(not(all(target_os = "linux", feature = "pipewire-audio")))]
-            {
-                None
-            }
-        })
+        .or_else(|| pipewire.as_ref().map(|hint| hint.output_mode))
         .or({
             #[cfg(target_os = "linux")]
             #[cfg(target_os = "linux")]
@@ -979,17 +973,10 @@ fn start_output_backend(
             }
         }
         LinuxAudioBackend::PipeWire => {
-            #[cfg(feature = "pipewire-audio")]
-            {
-                let Some(pipewire) = pipewire else {
-                    return Err("PipeWire backend hint unavailable.".to_string());
-                };
-                return start_linux_pipewire_backend(pipewire, &controls);
-            }
-            #[cfg(not(feature = "pipewire-audio"))]
-            {
-                Err("PipeWire backend support was not built into this binary.".to_string())
-            }
+            let Some(pipewire) = pipewire else {
+                return Err("PipeWire backend hint unavailable.".to_string());
+            };
+            start_linux_pipewire_backend(pipewire, &controls)
         }
         LinuxAudioBackend::PulseAudio => {
             #[cfg(target_os = "linux")]
@@ -1028,8 +1015,9 @@ fn start_output_backend(
                     )
                 });
             }
-            #[cfg(feature = "pipewire-audio")]
-            if let Some(pipewire) = pipewire {
+            if linux_pipewire::is_available()
+                && let Some(pipewire) = pipewire
+            {
                 match start_linux_pipewire_backend(pipewire, &controls) {
                     Ok(output) => return Ok(output),
                     Err(err) => {
@@ -1154,6 +1142,8 @@ fn start_wasapi_backend(
 #[cfg(test)]
 mod tests {
     use super::LinuxAudioBackend;
+    #[cfg(target_os = "linux")]
+    use super::available_linux_backends_for;
     use std::str::FromStr;
 
     #[test]
@@ -1168,5 +1158,24 @@ mod tests {
             assert_eq!(LinuxAudioBackend::from_str(text), Ok(expected));
             assert_ne!(expected.as_str(), "");
         }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_backend_list_reflects_runtime_availability() {
+        assert_eq!(
+            available_linux_backends_for(true, true, true),
+            [
+                LinuxAudioBackend::Auto,
+                LinuxAudioBackend::PipeWire,
+                LinuxAudioBackend::PulseAudio,
+                LinuxAudioBackend::Alsa,
+                LinuxAudioBackend::Jack,
+            ]
+        );
+        assert_eq!(
+            available_linux_backends_for(false, false, false),
+            [LinuxAudioBackend::Auto, LinuxAudioBackend::Alsa]
+        );
     }
 }

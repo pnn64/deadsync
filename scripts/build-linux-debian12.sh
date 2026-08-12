@@ -40,8 +40,10 @@ docker run --rm \
       pkg-config \
       cmake \
       ninja-build \
+      libclang-dev \
       libdbus-1-dev \
       libasound2-dev \
+      libpipewire-0.3-dev \
       libudev-dev \
       libgl1-mesa-dev \
       libx11-dev \

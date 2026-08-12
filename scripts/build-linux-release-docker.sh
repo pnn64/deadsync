@@ -50,8 +50,10 @@ apt-get install --no-install-recommends -y \
   pkg-config \
   cmake \
   ninja-build \
+  libclang-dev \
   libdbus-1-dev \
   libasound2-dev \
+  libpipewire-0.3-dev \
   libx11-dev \
   libx11-xcb-dev \
   libxi-dev \
@@ -68,6 +70,9 @@ apt-get install --no-install-recommends -y \
 curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain stable
 . "$HOME/.cargo/env"
 cargo build --release --locked
+install -D -m 0755 \
+  /usr/lib/x86_64-linux-gnu/libpipewire-0.3.so.0 \
+  /work/target/linux-runtime/x86_64/libpipewire-0.3.so.0
 EOF
 }
 
@@ -93,10 +98,12 @@ apt-get install --no-install-recommends -y \
   pkg-config \
   cmake \
   ninja-build \
+  libclang-dev \
   gcc-aarch64-linux-gnu \
   libc6-dev-arm64-cross \
   libdbus-1-dev:arm64 \
   libasound2-dev:arm64 \
+  libpipewire-0.3-dev:arm64 \
   libx11-dev:arm64 \
   libx11-xcb-dev:arm64 \
   libxi-dev:arm64 \
@@ -117,6 +124,9 @@ export PKG_CONFIG_ALLOW_CROSS=1
 export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
 export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
 cargo build --release --locked --target aarch64-unknown-linux-gnu
+install -D -m 0755 \
+  /usr/lib/aarch64-linux-gnu/libpipewire-0.3.so.0 \
+  /work/target/linux-runtime/arm64/libpipewire-0.3.so.0
 EOF
 }
 

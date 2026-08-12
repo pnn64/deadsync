@@ -14,6 +14,7 @@ use spa::param::format_utils;
 use spa::pod::Pod;
 use std::io::Cursor;
 use std::mem;
+use std::sync::OnceLock;
 use std::sync::mpsc::{Sender, channel};
 use std::thread::{self, JoinHandle};
 
@@ -21,6 +22,20 @@ pub struct PipeWireOutputPrep {
     device_name: String,
     sample_rate_hz: u32,
     channels: usize,
+}
+
+static PIPEWIRE_AVAILABLE: OnceLock<bool> = OnceLock::new();
+
+pub fn is_available() -> bool {
+    *PIPEWIRE_AVAILABLE.get_or_init(|| {
+        let Ok(mainloop) = pw::main_loop::MainLoopRc::new(None) else {
+            return false;
+        };
+        let Ok(context) = pw::context::ContextRc::new(&mainloop, None) else {
+            return false;
+        };
+        context.connect_rc(None).is_ok()
+    })
 }
 
 impl PipeWireOutputPrep {
@@ -315,4 +330,15 @@ fn frames_to_nanos(sample_rate_hz: u32, frames: u32) -> u64 {
         return 0;
     }
     (u64::from(frames) * 1_000_000_000) / u64::from(sample_rate_hz.max(1))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_available;
+
+    #[test]
+    fn availability_probe_is_stable_without_reconnecting() {
+        let available = is_available();
+        assert_eq!(is_available(), available);
+    }
 }

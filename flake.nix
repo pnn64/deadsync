@@ -31,9 +31,11 @@
             nativeBuildInputs = with pkgs; [
               pkg-config
               makeWrapper
+              llvmPackages.libclang
             ];
             buildInputs = with pkgs; [
               alsa-lib
+              pipewire
               libGL
               libxcursor
               libxi
@@ -49,6 +51,7 @@
             doCheck = false;
 
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;
+            LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
             VK_LAYER_PATH = "${pkgs.vulkan-validation-layers}/share/vulkan/explicit_layer.d";
             postInstall = ''
               wrapProgram \

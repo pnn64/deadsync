@@ -8,9 +8,6 @@ license = "GPL-3.0"
 deadlib-audio-core = { path = "../deadlib-audio-core" }
 log = "0.4.33"
 
-[features]
-pipewire-audio = ["dep:deadlib-audio-backend-pipewire"]
-
 [target.'cfg(windows)'.dependencies]
 deadlib-audio-backend-wasapi = { path = "../deadlib-audio-backend-wasapi" }
 
@@ -20,7 +17,7 @@ deadlib-audio-backend-freebsd-pcm = { path = "../deadlib-audio-backend-freebsd-p
 [target.'cfg(target_os = "linux")'.dependencies]
 deadlib-audio-backend-alsa = { path = "../deadlib-audio-backend-alsa" }
 deadlib-audio-backend-jack = { path = "../deadlib-audio-backend-jack" }
-deadlib-audio-backend-pipewire = { path = "../deadlib-audio-backend-pipewire", optional = true }
+deadlib-audio-backend-pipewire = { path = "../deadlib-audio-backend-pipewire" }
 deadlib-audio-backend-pulse = { path = "../deadlib-audio-backend-pulse" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
