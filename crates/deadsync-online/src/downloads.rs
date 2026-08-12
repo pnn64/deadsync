@@ -542,8 +542,105 @@ where
 }
 
 pub fn unlock_destination_pack(destination: &str, roots: &[PathBuf]) -> PathBuf {
+    if let Some(existing) = pack_paths_in_roots(destination, roots).pop() {
+        return existing;
+    }
+    if let Some(base_name) = base_pack_name(destination) {
+        for base in pack_paths_in_roots(base_name, roots).into_iter().rev() {
+            let Some(parent) = base.parent() else {
+                continue;
+            };
+            match child_path_ci(parent, destination) {
+                Some(path) if path.is_dir() => return path,
+                Some(_) => continue,
+                None => return parent.join(destination),
+            }
+        }
+    }
     let root_idx = choose_unlock_root(destination, roots).unwrap_or(0);
     roots[root_idx].join(destination)
+}
+
+pub(crate) fn pack_paths_in_roots(pack_name: &str, roots: &[PathBuf]) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    for root in roots {
+        let Ok(entries) = fs::read_dir(root) else {
+            continue;
+        };
+        let mut top_dirs = entries
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.is_dir())
+            .collect::<Vec<_>>();
+        top_dirs.sort_by_cached_key(|path| {
+            path.file_name()
+                .map(|name| name.to_string_lossy().to_ascii_lowercase())
+                .unwrap_or_default()
+        });
+        for top in top_dirs {
+            if path_name_eq(&top, pack_name) {
+                paths.push(top);
+                continue;
+            }
+            if let Some(nested) = child_path_ci(&top, pack_name)
+                && nested.is_dir()
+                && looks_like_pack(&nested)
+            {
+                paths.push(nested);
+            }
+        }
+    }
+    paths
+}
+
+fn base_pack_name(destination: &str) -> Option<&str> {
+    let lower = destination.to_ascii_lowercase();
+    let split = lower.find(" unlocks").or_else(|| lower.find(" - "))?;
+    let base = destination[..split].trim();
+    (!base.is_empty()).then_some(base)
+}
+
+fn child_path_ci(parent: &Path, name: &str) -> Option<PathBuf> {
+    let mut matches = fs::read_dir(parent)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path_name_eq(path, name))
+        .collect::<Vec<_>>();
+    matches.sort_by_cached_key(|path| path.to_string_lossy().to_ascii_lowercase());
+    matches.pop()
+}
+
+fn path_name_eq(path: &Path, name: &str) -> bool {
+    path.file_name()
+        .is_some_and(|candidate| candidate.to_string_lossy().eq_ignore_ascii_case(name))
+}
+
+fn looks_like_pack(path: &Path) -> bool {
+    if child_path_ci(path, "Pack.ini").is_some() {
+        return true;
+    }
+    let Ok(entries) = fs::read_dir(path) else {
+        return false;
+    };
+    entries.flatten().any(|entry| {
+        let song_dir = entry.path();
+        song_dir.is_dir() && contains_simfile(&song_dir)
+    })
+}
+
+fn contains_simfile(path: &Path) -> bool {
+    let Ok(entries) = fs::read_dir(path) else {
+        return false;
+    };
+    entries.flatten().any(|entry| {
+        entry.path().extension().is_some_and(|extension| {
+            let extension = extension.to_string_lossy();
+            extension.eq_ignore_ascii_case("sm")
+                || extension.eq_ignore_ascii_case("ssc")
+                || extension.eq_ignore_ascii_case("dwi")
+        })
+    })
 }
 
 fn download_failure(error: DownloadZipError) -> UnlockDownloadFailure {
@@ -839,6 +936,12 @@ mod tests {
             "deadsync-downloads-{label}-{}-{unique}",
             std::process::id()
         ))
+    }
+
+    fn create_pack(path: &Path) {
+        let song = path.join("Test Song");
+        fs::create_dir_all(&song).expect("create test song");
+        fs::write(song.join("song.sm"), b"#TITLE:Test Song;").expect("write test simfile");
     }
 
     #[test]
@@ -1234,12 +1337,114 @@ mod tests {
         let primary = root.join("songs");
         let extra = root.join("extra");
         fs::create_dir_all(&primary).expect("create primary song root");
-        fs::create_dir_all(extra.join("ITL Online 2026 Unlocks")).expect("create extra pack");
+        create_pack(&extra.join("ITL Online 2026 Unlocks"));
         let roots = vec![primary, extra.clone()];
 
         assert_eq!(
             unlock_destination_pack("ITL Online 2026 Unlocks", &roots),
             extra.join("ITL Online 2026 Unlocks")
+        );
+        fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn unlock_destination_pack_joins_nested_itl_base_series() {
+        let root = temp_root("nested-itl-base");
+        let songs = root.join("songs");
+        let series = songs.join("ITL Online");
+        create_pack(&series.join("ITL Online 2026"));
+
+        assert_eq!(
+            unlock_destination_pack("ITL Online 2026 Unlocks", std::slice::from_ref(&songs)),
+            series.join("ITL Online 2026 Unlocks")
+        );
+        assert_eq!(
+            unlock_destination_pack(
+                "ITL Online 2026 Unlocks - Player",
+                std::slice::from_ref(&songs),
+            ),
+            series.join("ITL Online 2026 Unlocks - Player")
+        );
+        fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn unlock_destination_pack_joins_nested_srpg_base_series() {
+        let root = temp_root("nested-srpg-base");
+        let songs = root.join("songs");
+        let series = songs.join("Stamina RPG");
+        create_pack(&series.join("Stamina RPG 10"));
+
+        assert_eq!(
+            unlock_destination_pack("Stamina RPG 10 - Shops", std::slice::from_ref(&songs)),
+            series.join("Stamina RPG 10 - Shops")
+        );
+        assert_eq!(
+            unlock_destination_pack("Stamina RPG 10 Unlocks", std::slice::from_ref(&songs)),
+            series.join("Stamina RPG 10 Unlocks")
+        );
+        fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn unlock_destination_pack_keeps_existing_nested_pack_without_base() {
+        let root = temp_root("nested-existing-no-base");
+        let songs = root.join("songs");
+        let destination = songs
+            .join("Tournament Series")
+            .join("ITL Online 2026 Unlocks");
+        create_pack(&destination);
+
+        assert_eq!(
+            unlock_destination_pack("ITL Online 2026 Unlocks", std::slice::from_ref(&songs)),
+            destination
+        );
+        fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn unlock_destination_pack_joins_flat_base_root() {
+        let root = temp_root("flat-base");
+        let primary = root.join("songs");
+        let extra = root.join("extra");
+        create_pack(&primary.join("Stamina RPG 10"));
+        fs::create_dir_all(&extra).expect("create extra song root");
+
+        assert_eq!(
+            unlock_destination_pack("Stamina RPG 10 - Shops", &[primary.clone(), extra]),
+            primary.join("Stamina RPG 10 - Shops")
+        );
+        fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn unlock_destination_pack_keeps_new_pack_fallback() {
+        let root = temp_root("new-pack-fallback");
+        let primary = root.join("songs");
+        let extra = root.join("extra");
+        fs::create_dir_all(&primary).expect("create primary song root");
+        fs::create_dir_all(&extra).expect("create extra song root");
+
+        assert_eq!(
+            unlock_destination_pack("Other Event Unlocks", &[primary, extra.clone()]),
+            extra.join("Other Event Unlocks")
+        );
+        fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn pack_paths_find_flat_and_nested_installs() {
+        let root = temp_root("pack-paths");
+        let primary = root.join("songs");
+        let extra = root.join("extra");
+        let flat = primary.join("Stamina RPG 10 - Shops");
+        let nested = extra.join("Stamina RPG").join("Stamina RPG 10 - Shops");
+        create_pack(&flat);
+        create_pack(&nested);
+
+        assert_eq!(
+            pack_paths_in_roots("stamina rpg 10 - shops", &[primary, extra]),
+            vec![flat, nested]
         );
         fs::remove_dir_all(root).expect("remove test root");
     }

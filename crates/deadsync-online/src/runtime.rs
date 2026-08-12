@@ -92,7 +92,7 @@ pub(crate) fn installed_pack_paths(pack_name: &str) -> Vec<PathBuf> {
             roots.push(root);
         }
     }
-    roots.into_iter().map(|root| root.join(pack_name)).collect()
+    crate::downloads::pack_paths_in_roots(pack_name, &roots)
 }
 
 fn load_unlock_cache() -> UnlockCache {
