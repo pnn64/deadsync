@@ -1,18 +1,22 @@
 use deadsync_chart::GameplayChartData;
-use deadsync_core::note::NoteType;
+use deadsync_core::{input::MAX_COLS, note::NoteType};
 use deadsync_gameplay::{
-    CrossoverRow, PumpHoldEventKind, build_assist_clap_rows_preallocated_for_bench,
-    build_assist_clap_rows_reference_for_bench, build_column_cues_for_player,
-    build_column_cues_for_player_reference, build_crossover_cues_for_bench,
-    build_crossover_cues_reference_for_bench, build_crossover_rows, build_crossover_rows_reference,
-    build_note_count_stats, build_note_count_stats_for_players_for_bench,
-    build_note_count_stats_reference, build_pump_hold_events, build_pump_hold_events_reference,
+    CrossoverRow, PumpHoldEventKind, SongLuaEaseMaskWindow, SongLuaNoteHideWindows,
+    append_song_lua_ease_targets, append_song_lua_ease_targets_reference,
+    build_assist_clap_rows_preallocated_for_bench, build_assist_clap_rows_reference_for_bench,
+    build_column_cues_for_player, build_column_cues_for_player_reference,
+    build_crossover_cues_for_bench, build_crossover_cues_reference_for_bench, build_crossover_rows,
+    build_crossover_rows_reference, build_note_count_stats,
+    build_note_count_stats_for_players_for_bench, build_note_count_stats_reference,
+    build_pump_hold_events, build_pump_hold_events_reference,
     build_song_lua_message_command_indices, build_song_lua_message_command_indices_reference,
-    parse_attack_mods, parse_attack_mods_reference, parse_chart_attack_windows,
-    parse_chart_attack_windows_reference, pump_tap_rows_for_bench,
+    build_song_lua_note_hide_windows_for_players,
+    build_song_lua_note_hide_windows_for_players_reference, parse_attack_mods,
+    parse_attack_mods_reference, parse_chart_attack_windows, parse_chart_attack_windows_reference,
+    parse_song_lua_runtime_mods, parse_song_lua_runtime_mods_reference, pump_tap_rows_for_bench,
     pump_tap_rows_reference_for_bench, quantization_index_from_beat,
     quantization_index_from_beat_reference, song_lua_message_command_index,
-    song_lua_message_command_index_reference, turn_option_bits,
+    song_lua_message_command_index_reference, song_lua_note_hidden, turn_option_bits,
 };
 use deadsync_rules::note::{HoldData, Note};
 use deadsync_rules::timing::{TickcountSegment, TimingData, TimingSegments};
@@ -34,6 +38,7 @@ const CROSSOVER_ITERS: usize = 64;
 const METADATA_ITERS: usize = 128;
 const PUMP_EVENT_ITERS: usize = 32;
 const ATTACK_PARSE_ITERS: usize = 64;
+const SONG_LUA_HIDE_ITERS: usize = 32;
 
 struct CountingAlloc {
     enabled: AtomicBool,
@@ -441,6 +446,75 @@ fn command_index_checksum(commands: &[String], queries: &[String], reference: bo
             song_lua_message_command_index(&indices, query).unwrap_or(usize::MAX) as u64,
         )
     })
+}
+
+fn ease_window_checksum(windows: Vec<SongLuaEaseMaskWindow>, supported: usize) -> u64 {
+    windows.into_iter().fold(supported as u64, |sum, window| {
+        sum.rotate_left(5)
+            ^ u64::from(window.start_second.to_bits())
+            ^ u64::from(window.end_second.to_bits()).rotate_left(7)
+            ^ u64::from(window.sustain_end_second.to_bits()).rotate_left(13)
+            ^ u64::from(window.from.to_bits()).rotate_left(19)
+            ^ u64::from(window.to.to_bits()).rotate_left(29)
+    })
+}
+
+fn ease_target_checksum(targets: &[&str], reference: bool) -> u64 {
+    let mut windows = Vec::with_capacity(targets.len().saturating_mul(2));
+    let mut supported = 0usize;
+    for (index, target) in targets.iter().copied().enumerate() {
+        let appended = if reference {
+            append_song_lua_ease_targets_reference(
+                &mut windows,
+                index as f32,
+                index as f32 + 1.0,
+                index as f32 + 2.0,
+                target,
+                -25.0,
+                75.0,
+                Some("outQuad"),
+                Some(0.5),
+                Some(1.5),
+            )
+        } else {
+            append_song_lua_ease_targets(
+                &mut windows,
+                index as f32,
+                index as f32 + 1.0,
+                index as f32 + 2.0,
+                target,
+                -25.0,
+                75.0,
+                Some("outQuad"),
+                Some(0.5),
+                Some(1.5),
+            )
+        };
+        supported += usize::from(appended);
+    }
+    ease_window_checksum(windows, supported)
+}
+
+fn note_hide_checksum(players: [SongLuaNoteHideWindows; 2]) -> u64 {
+    players
+        .iter()
+        .enumerate()
+        .fold(0u64, |sum, (player, windows)| {
+            let sum = windows.iter().fold(
+                sum.rotate_left(3)
+                    .wrapping_add(windows.storage_bytes() as u64),
+                |sum, window| {
+                    sum.rotate_left(5)
+                        ^ window.column as u64
+                        ^ u64::from(window.start_beat.to_bits()).rotate_left(11)
+                        ^ u64::from(window.end_beat.to_bits()).rotate_left(23)
+                },
+            );
+            (0..MAX_COLS).fold(sum, |sum, column| {
+                let beat = ((column * 37 + player * 11) % 512) as f32 * 0.25;
+                sum.rotate_left(1) ^ u64::from(song_lua_note_hidden(windows, column, beat))
+            })
+        })
 }
 
 fn usize_checksum(values: Vec<usize>) -> u64 {
@@ -851,6 +925,90 @@ fn main() {
     );
     print_pair(
         "12. contiguous Song-Lua command index",
+        old,
+        new,
+        old_alloc,
+        new_alloc,
+    );
+
+    let song_lua_mods = (0..16)
+        .map(|_| {
+            "*9999 25 invert,*9999 no hidden,*9999 3x,*9999 -25 tiny,\
+             *9999 25 mini,*9999 50 incoming,*9999 15 bumpy3,\
+             *9999 250 tiny2,*9999 -125 bumpyperiod,*9999 100 pulseouter"
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let song_lua_mod_count = song_lua_mods.split(',').count();
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        song_lua_mod_count,
+        ATTACK_PARSE_ITERS,
+        || {
+            parsed_mod_checksum(parse_song_lua_runtime_mods_reference(black_box(
+                &song_lua_mods,
+            )))
+        },
+        || parsed_mod_checksum(parse_song_lua_runtime_mods(black_box(&song_lua_mods))),
+    );
+    print_pair(
+        "13. stack-normalized Song-Lua runtime mods",
+        old,
+        new,
+        old_alloc,
+        new_alloc,
+    );
+
+    const EASE_TARGETS: [&str; 10] = [
+        "Dr_Un-K",
+        "Bumpy4",
+        "reverse vanish",
+        "incoming",
+        "confusion-offset3",
+        "mini",
+        "cmod",
+        "pulseouter",
+        "tiny2",
+        "unsupported",
+    ];
+    let ease_targets = (0..128)
+        .map(|index| EASE_TARGETS[index % EASE_TARGETS.len()])
+        .collect::<Vec<_>>();
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        ease_targets.len(),
+        ATTACK_PARSE_ITERS,
+        || ease_target_checksum(black_box(&ease_targets), true),
+        || ease_target_checksum(black_box(&ease_targets), false),
+    );
+    print_pair(
+        "14. stack-normalized Song-Lua ease targets",
+        old,
+        new,
+        old_alloc,
+        new_alloc,
+    );
+
+    let note_hides = (0..4_096)
+        .map(|index| {
+            let start = ((index * 37) % 4_096) as f32 * 0.25;
+            (index % 2, (index * 13) % MAX_COLS, start, start + 2.0)
+        })
+        .collect::<Vec<_>>();
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        note_hides.len(),
+        SONG_LUA_HIDE_ITERS,
+        || {
+            note_hide_checksum(build_song_lua_note_hide_windows_for_players_reference(
+                black_box(note_hides.iter().copied()),
+            ))
+        },
+        || {
+            note_hide_checksum(build_song_lua_note_hide_windows_for_players(black_box(
+                note_hides.iter().copied(),
+            )))
+        },
+    );
+    print_pair(
+        "15. single-pass Song-Lua note-hide index",
         old,
         new,
         old_alloc,

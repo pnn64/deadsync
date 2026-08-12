@@ -582,7 +582,7 @@ pub enum SongLuaEaseMaskTarget {
     ConfusionYOffsetY,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SongLuaEaseMaskWindow {
     pub start_second: f32,
     pub end_second: f32,
@@ -717,6 +717,62 @@ impl SongLuaNoteHideWindows {
                 .cmp(&right.column)
                 .then_with(|| left.start_beat.total_cmp(&right.start_beat))
         });
+        let mut lane_ranges = [SongLuaNoteHideRange::default(); MAX_COLS];
+        let mut lane_has_nonfinite = [false; MAX_COLS];
+        let mut prefix_max_ends = Vec::with_capacity(windows.len());
+        let mut column = usize::MAX;
+        let mut max_end = f32::NEG_INFINITY;
+        let mut next_lane = 0usize;
+        for (index, window) in windows.iter().enumerate() {
+            while next_lane < MAX_COLS && next_lane < window.column {
+                lane_ranges[next_lane] = SongLuaNoteHideRange {
+                    start: index,
+                    end: index,
+                };
+                next_lane += 1;
+            }
+            if window.column < MAX_COLS {
+                if next_lane == window.column {
+                    lane_ranges[next_lane] = SongLuaNoteHideRange {
+                        start: index,
+                        end: index,
+                    };
+                    next_lane += 1;
+                }
+                lane_ranges[window.column].end = index + 1;
+                lane_has_nonfinite[window.column] |=
+                    !window.start_beat.is_finite() || !window.end_beat.is_finite();
+            }
+            if window.column != column {
+                column = window.column;
+                max_end = f32::NEG_INFINITY;
+            }
+            max_end = max_end.max(window.end_beat);
+            prefix_max_ends.push(max_end);
+        }
+        while next_lane < MAX_COLS {
+            lane_ranges[next_lane] = SongLuaNoteHideRange {
+                start: windows.len(),
+                end: windows.len(),
+            };
+            next_lane += 1;
+        }
+        Self {
+            windows: windows.into_boxed_slice(),
+            prefix_max_ends: prefix_max_ends.into_boxed_slice(),
+            lane_ranges,
+            lane_has_nonfinite,
+        }
+    }
+
+    #[cfg(any(test, feature = "bench-support"))]
+    #[doc(hidden)]
+    pub fn new_reference(mut windows: Vec<SongLuaNoteHideWindowRuntime>) -> Self {
+        windows.sort_unstable_by(|left, right| {
+            left.column
+                .cmp(&right.column)
+                .then_with(|| left.start_beat.total_cmp(&right.start_beat))
+        });
         let lane_ranges = std::array::from_fn(|column| {
             let start = windows.partition_point(|window| window.column < column);
             let end = windows.partition_point(|window| window.column <= column);
@@ -813,6 +869,34 @@ pub const fn build_song_lua_note_hide_window_runtime(
 pub fn build_song_lua_note_hide_windows_for_players(
     hides: impl IntoIterator<Item = (usize, usize, f32, f32)>,
 ) -> [SongLuaNoteHideWindows; MAX_PLAYERS] {
+    const PLAYER_RESERVE_CAP: usize = MAX_COLS * 512;
+
+    let hides = hides.into_iter();
+    let (lower, upper) = hides.size_hint();
+    let player_capacity = upper
+        .unwrap_or(lower)
+        .div_ceil(MAX_PLAYERS)
+        .min(PLAYER_RESERVE_CAP);
+    let mut out: [Vec<SongLuaNoteHideWindowRuntime>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
+    for (player, column, start_beat, end_beat) in hides {
+        if player < MAX_PLAYERS {
+            if out[player].capacity() == 0 && player_capacity != 0 {
+                out[player].reserve(player_capacity);
+            }
+            out[player].push(build_song_lua_note_hide_window_runtime(
+                column, start_beat, end_beat,
+            ));
+        }
+    }
+    out.map(SongLuaNoteHideWindows::new)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn build_song_lua_note_hide_windows_for_players_reference(
+    hides: impl IntoIterator<Item = (usize, usize, f32, f32)>,
+) -> [SongLuaNoteHideWindows; MAX_PLAYERS] {
     let mut out: [Vec<SongLuaNoteHideWindowRuntime>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
     for (player, column, start_beat, end_beat) in hides {
@@ -822,7 +906,7 @@ pub fn build_song_lua_note_hide_windows_for_players(
             ));
         }
     }
-    out.map(SongLuaNoteHideWindows::new)
+    out.map(SongLuaNoteHideWindows::new_reference)
 }
 
 pub fn build_song_lua_hidden_players(flags: &[bool]) -> [bool; MAX_PLAYERS] {
@@ -1468,7 +1552,64 @@ pub fn append_song_lua_ease_targets(
     opt1: Option<f32>,
     opt2: Option<f32>,
 ) -> bool {
+    let mut key_buffer = [0u8; ATTACK_KEY_STACK_BYTES];
+    let key = buffered_attack_token_key(target_name, &mut key_buffer);
+    append_song_lua_ease_targets_key(
+        out,
+        start_second,
+        end_second,
+        sustain_end_second,
+        key.as_str(),
+        from,
+        to,
+        easing,
+        opt1,
+        opt2,
+    )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn append_song_lua_ease_targets_reference(
+    out: &mut Vec<SongLuaEaseMaskWindow>,
+    start_second: f32,
+    end_second: f32,
+    sustain_end_second: f32,
+    target_name: &str,
+    from: f32,
+    to: f32,
+    easing: Option<&str>,
+    opt1: Option<f32>,
+    opt2: Option<f32>,
+) -> bool {
     let key = attack_token_key(target_name);
+    append_song_lua_ease_targets_key(
+        out,
+        start_second,
+        end_second,
+        sustain_end_second,
+        key.as_str(),
+        from,
+        to,
+        easing,
+        opt1,
+        opt2,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_song_lua_ease_targets_key(
+    out: &mut Vec<SongLuaEaseMaskWindow>,
+    start_second: f32,
+    end_second: f32,
+    sustain_end_second: f32,
+    key: &str,
+    from: f32,
+    to: f32,
+    easing: Option<&str>,
+    opt1: Option<f32>,
+    opt2: Option<f32>,
+) -> bool {
     if key.is_empty() {
         return false;
     }
@@ -1530,7 +1671,7 @@ pub fn append_song_lua_ease_targets(
         return true;
     }
 
-    match key.as_str() {
+    match key {
         "boost" => push(SongLuaEaseMaskTarget::AccelBoost, pct_from, pct_to),
         "brake" => push(SongLuaEaseMaskTarget::AccelBrake, pct_from, pct_to),
         "wave" => push(SongLuaEaseMaskTarget::AccelWave, pct_from, pct_to),
@@ -4687,8 +4828,30 @@ fn parse_song_lua_mod_amount(word: &str) -> Option<f32> {
     word.parse::<f32>().ok()
 }
 
+fn song_lua_runtime_attack_key<'a, const BUFFERED: bool>(
+    token: &str,
+    buffer: &'a mut [u8; ATTACK_KEY_STACK_BYTES],
+) -> BufferedAttackKey<'a> {
+    if BUFFERED {
+        buffered_attack_token_key(token, buffer)
+    } else {
+        BufferedAttackKey::Heap(attack_token_key(token))
+    }
+}
+
 pub fn parse_song_lua_runtime_mods(mods: &str) -> ParsedAttackMods {
+    parse_song_lua_runtime_mods_core::<true>(mods)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn parse_song_lua_runtime_mods_reference(mods: &str) -> ParsedAttackMods {
+    parse_song_lua_runtime_mods_core::<false>(mods)
+}
+
+fn parse_song_lua_runtime_mods_core<const BUFFERED: bool>(mods: &str) -> ParsedAttackMods {
     let mut out = ParsedAttackMods::default();
+    let mut key_buffer = [0u8; ATTACK_KEY_STACK_BYTES];
     for token in mods.split(',') {
         let mut parts = token.trim().split_ascii_whitespace();
         let Some(first) = parts.next() else {
@@ -4699,7 +4862,8 @@ pub fn parse_song_lua_runtime_mods(mods: &str) -> ParsedAttackMods {
                 out.scroll_speed = Some(scroll_speed);
                 continue;
             }
-            let key = attack_token_key(first);
+            let key = song_lua_runtime_attack_key::<BUFFERED>(first, &mut key_buffer);
+            let key = key.as_str();
             if key.is_empty() {
                 continue;
             }
@@ -4710,7 +4874,7 @@ pub fn parse_song_lua_runtime_mods(mods: &str) -> ParsedAttackMods {
                 };
                 continue;
             }
-            apply_runtime_mod(&mut out, key.as_str(), Some(100.0), 1.0);
+            apply_runtime_mod(&mut out, key, Some(100.0), 1.0);
             continue;
         };
 
@@ -4721,27 +4885,30 @@ pub fn parse_song_lua_runtime_mods(mods: &str) -> ParsedAttackMods {
                     out.scroll_speed = Some(scroll_speed);
                     continue;
                 }
-                let key = attack_token_key(second);
+                let key = song_lua_runtime_attack_key::<BUFFERED>(second, &mut key_buffer);
+                let key = key.as_str();
                 if !key.is_empty() {
-                    apply_runtime_mod(&mut out, key.as_str(), Some(100.0), approach_speed);
+                    apply_runtime_mod(&mut out, key, Some(100.0), approach_speed);
                 }
                 continue;
             };
-            let key = attack_token_key(third);
+            let key = song_lua_runtime_attack_key::<BUFFERED>(third, &mut key_buffer);
+            let key = key.as_str();
             if key.is_empty() {
                 continue;
             }
             let amount = parse_song_lua_mod_amount(second).unwrap_or(0.0);
-            apply_runtime_mod(&mut out, key.as_str(), Some(amount), approach_speed);
+            apply_runtime_mod(&mut out, key, Some(amount), approach_speed);
             continue;
         }
 
-        let key = attack_token_key(second);
+        let key = song_lua_runtime_attack_key::<BUFFERED>(second, &mut key_buffer);
+        let key = key.as_str();
         if key.is_empty() {
             continue;
         }
         let amount = parse_song_lua_mod_amount(first).unwrap_or(0.0);
-        apply_runtime_mod(&mut out, key.as_str(), Some(amount), 1.0);
+        apply_runtime_mod(&mut out, key, Some(amount), 1.0);
     }
     out
 }

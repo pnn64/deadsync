@@ -3227,6 +3227,20 @@ mod tests {
     }
 
     #[test]
+    fn stack_song_lua_runtime_keys_match_allocating_parser() {
+        let long_unknown = "A".repeat(ATTACK_KEY_STACK_BYTES + 19);
+        let mods = format!(
+            "clearall,001drunk,50 reverse ignored,*2 dizzy,*3 25 tipsy ignored,2x,\
+             *9999 15 bumpy3,*9999 no hidden,Ä_move-x2,{long_unknown}"
+        );
+
+        assert_eq!(
+            parse_song_lua_runtime_mods(&mods),
+            parse_song_lua_runtime_mods_reference(&mods),
+        );
+    }
+
+    #[test]
     fn effect_overrides_report_active_scalar_values() {
         assert!(!AccelOverrides::default().any());
         assert!(!AppearanceOverrides::default().any());
@@ -6907,6 +6921,51 @@ mod tests {
     }
 
     #[test]
+    fn stack_song_lua_ease_keys_match_allocating_builder() {
+        let long_unknown = "A".repeat(ATTACK_KEY_STACK_BYTES + 23);
+        for target in [
+            "Bumpy4",
+            "reverse vanish",
+            "incoming",
+            "confusion-offset3",
+            "001mini",
+            "Ä_move-x2",
+            long_unknown.as_str(),
+            "",
+        ] {
+            let mut actual = Vec::new();
+            let mut expected = Vec::new();
+            let actual_supported = append_song_lua_ease_targets(
+                &mut actual,
+                1.0,
+                2.0,
+                4.0,
+                target,
+                -25.0,
+                75.0,
+                Some("outQuad"),
+                Some(0.5),
+                Some(1.5),
+            );
+            let expected_supported = append_song_lua_ease_targets_reference(
+                &mut expected,
+                1.0,
+                2.0,
+                4.0,
+                target,
+                -25.0,
+                75.0,
+                Some("outQuad"),
+                Some(0.5),
+                Some(1.5),
+            );
+
+            assert_eq!(actual_supported, expected_supported, "target={target}");
+            assert_eq!(actual, expected, "target={target}");
+        }
+    }
+
+    #[test]
     fn song_lua_ease_targets_convert_confusion_y_offset() {
         let mut windows = Vec::new();
 
@@ -7417,6 +7476,23 @@ mod tests {
             source.len()
                 * (std::mem::size_of::<SongLuaNoteHideWindowRuntime>()
                     + std::mem::size_of::<f32>())
+        );
+    }
+
+    #[test]
+    fn presized_note_hide_players_match_growth_reference() {
+        let hides = vec![
+            (1, 7, -4.0, 1.0),
+            (0, 2, 40.0, 44.0),
+            (0, 2, 42.0, 48.0),
+            (MAX_PLAYERS, 3, 1.0, 2.0),
+            (1, MAX_COLS + 1, 3.0, 6.0),
+            (0, 31, 9.0, 12.0),
+        ];
+
+        assert_eq!(
+            build_song_lua_note_hide_windows_for_players(hides.iter().copied()),
+            build_song_lua_note_hide_windows_for_players_reference(hides.iter().copied()),
         );
     }
 
