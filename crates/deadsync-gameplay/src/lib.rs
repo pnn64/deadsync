@@ -30,10 +30,9 @@ use deadsync_rules::timing::{
     TimingProfileNs, TimingSegments, WindowCounts, classify_offset_ns_with_disabled_windows,
     combo_multipliers_at_beat, largest_enabled_tap_window_ns,
 };
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::VecDeque;
 use std::hash::Hasher;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::{
     Arc,
     atomic::{AtomicI64, AtomicU64, Ordering},

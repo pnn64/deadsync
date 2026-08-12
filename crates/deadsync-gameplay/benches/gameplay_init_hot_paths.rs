@@ -7,8 +7,12 @@ use deadsync_gameplay::{
     build_crossover_cues_reference_for_bench, build_crossover_rows, build_crossover_rows_reference,
     build_note_count_stats, build_note_count_stats_for_players_for_bench,
     build_note_count_stats_reference, build_pump_hold_events, build_pump_hold_events_reference,
-    pump_tap_rows_for_bench, pump_tap_rows_reference_for_bench, quantization_index_from_beat,
-    quantization_index_from_beat_reference,
+    build_song_lua_message_command_indices, build_song_lua_message_command_indices_reference,
+    parse_attack_mods, parse_attack_mods_reference, parse_chart_attack_windows,
+    parse_chart_attack_windows_reference, pump_tap_rows_for_bench,
+    pump_tap_rows_reference_for_bench, quantization_index_from_beat,
+    quantization_index_from_beat_reference, song_lua_message_command_index,
+    song_lua_message_command_index_reference, turn_option_bits,
 };
 use deadsync_rules::note::{HoldData, Note};
 use deadsync_rules::timing::{TickcountSegment, TimingData, TimingSegments};
@@ -29,6 +33,7 @@ const PUMP_ITERS: usize = 256;
 const CROSSOVER_ITERS: usize = 64;
 const METADATA_ITERS: usize = 128;
 const PUMP_EVENT_ITERS: usize = 32;
+const ATTACK_PARSE_ITERS: usize = 64;
 
 struct CountingAlloc {
     enabled: AtomicBool,
@@ -385,6 +390,59 @@ fn quantization_checksum(beats: &[f32], classify: impl Fn(f32) -> u8) -> u64 {
     })
 }
 
+fn attack_window_checksum(windows: Vec<deadsync_gameplay::ChartAttackWindow>) -> u64 {
+    windows.into_iter().fold(0u64, |sum, window| {
+        window.mods.bytes().fold(
+            sum.rotate_left(5)
+                .wrapping_add(u64::from(window.start_second.to_bits()))
+                .wrapping_add(u64::from(window.len_seconds.to_bits())),
+            |sum, byte| sum.rotate_left(3).wrapping_add(u64::from(byte)),
+        )
+    })
+}
+
+fn parsed_mod_checksum(mods: deadsync_gameplay::ParsedAttackMods) -> u64 {
+    let option_bits = |value: Option<f32>| value.map_or(0, |value| u64::from(value.to_bits()));
+    u64::from(mods.insert_mask)
+        | (u64::from(mods.remove_mask) << 8)
+        | (u64::from(mods.holds_mask) << 16)
+        | (u64::from(turn_option_bits(mods.turn_option)) << 24)
+            ^ option_bits(mods.visual.drunk).rotate_left(7)
+            ^ option_bits(mods.visual.bumpy_cols[2]).rotate_left(13)
+            ^ option_bits(mods.appearance.hidden_offset).rotate_left(19)
+            ^ option_bits(mods.scroll.reverse).rotate_left(29)
+            ^ option_bits(mods.mini_percent).rotate_left(37)
+            ^ u64::from(mods.clear_all)
+}
+
+fn command_index_checksum(commands: &[String], queries: &[String], reference: bool) -> u64 {
+    if reference {
+        let indices = build_song_lua_message_command_indices_reference(
+            commands
+                .iter()
+                .enumerate()
+                .map(|(index, command)| (index, command.as_str())),
+        );
+        return queries.iter().fold(0u64, |sum, query| {
+            sum.rotate_left(5).wrapping_add(
+                song_lua_message_command_index_reference(&indices, query).unwrap_or(usize::MAX)
+                    as u64,
+            )
+        });
+    }
+    let indices = build_song_lua_message_command_indices(
+        commands
+            .iter()
+            .enumerate()
+            .map(|(index, command)| (index, command.as_str())),
+    );
+    queries.iter().fold(0u64, |sum, query| {
+        sum.rotate_left(5).wrapping_add(
+            song_lua_message_command_index(&indices, query).unwrap_or(usize::MAX) as u64,
+        )
+    })
+}
+
 fn usize_checksum(values: Vec<usize>) -> u64 {
     values
         .into_iter()
@@ -717,6 +775,82 @@ fn main() {
     );
     print_pair(
         "9. pre-sized crossover cues",
+        old,
+        new,
+        old_alloc,
+        new_alloc,
+    );
+
+    let attack_chunks = (0..128)
+        .map(|index| {
+            format!(
+                "TiMe={}:LeN=2.5:MoDs=*2 50% drunk,25% hidden",
+                index as f32 * 3.0
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(":");
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        128,
+        ATTACK_PARSE_ITERS,
+        || {
+            attack_window_checksum(parse_chart_attack_windows_reference(black_box(
+                &attack_chunks,
+            )))
+        },
+        || attack_window_checksum(parse_chart_attack_windows(black_box(&attack_chunks))),
+    );
+    print_pair(
+        "10. borrowed chart-attack case folding",
+        old,
+        new,
+        old_alloc,
+        new_alloc,
+    );
+
+    let attack_mods = (0..16)
+        .map(|_| {
+            "50% Dr_Un-K,*2.4 75% HiddenOffset,30% reverse,bumpy3,\
+             confusion-offset4,00125% mini,wide,noholds"
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let attack_mod_count = attack_mods.split(',').count();
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        attack_mod_count,
+        ATTACK_PARSE_ITERS,
+        || parsed_mod_checksum(parse_attack_mods_reference(black_box(&attack_mods))),
+        || parsed_mod_checksum(parse_attack_mods(black_box(&attack_mods))),
+    );
+    print_pair(
+        "11. stack-normalized attack keys",
+        old,
+        new,
+        old_alloc,
+        new_alloc,
+    );
+
+    let commands = (0..128)
+        .map(|index| {
+            if index % 16 == 0 {
+                format!("{}Command{index}", "A".repeat(144))
+            } else {
+                format!("Command_{index}")
+            }
+        })
+        .collect::<Vec<_>>();
+    let queries = commands
+        .iter()
+        .map(|command| command.to_ascii_uppercase())
+        .collect::<Vec<_>>();
+    let (old, new, old_alloc, new_alloc) = measure_pair(
+        commands.len() + queries.len(),
+        ATTACK_PARSE_ITERS,
+        || command_index_checksum(black_box(&commands), black_box(&queries), true),
+        || command_index_checksum(black_box(&commands), black_box(&queries), false),
+    );
+    print_pair(
+        "12. contiguous Song-Lua command index",
         old,
         new,
         old_alloc,

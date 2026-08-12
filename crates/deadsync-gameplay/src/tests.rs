@@ -2012,6 +2012,19 @@ mod tests {
     }
 
     #[test]
+    fn allocation_free_chart_attack_casefold_matches_reference() {
+        let raw = "  time=1.25:LeN=2.5:MoDs=drunk,50% hidden:\
+                   TIME=5:END=9:mods=mirror:\
+                   TiMe=bad:len=2:mods=ignored:\
+                   TIME=12:LEN=-3:MODS=clearall  ";
+
+        assert_eq!(
+            parse_chart_attack_windows(raw),
+            parse_chart_attack_windows_reference(raw),
+        );
+    }
+
+    #[test]
     fn chart_attack_windows_skip_bad_chunks_and_clamp_lengths() {
         let windows = parse_chart_attack_windows(
             "garbage TIME=nan:LEN=2:MODS=drunk TIME=4:END=2:MODS=tipsy \
@@ -3127,6 +3140,34 @@ mod tests {
         assert_eq!(mods.visibility.dark, Some(1.0));
         assert_eq!(mods.visibility.blind, Some(0.5));
         assert_eq!(mods.visibility.cover, Some(0.75));
+    }
+
+    #[test]
+    fn stack_attack_keys_match_allocating_parser() {
+        let long_unknown = "A".repeat(ATTACK_KEY_STACK_BYTES + 17);
+        let mods = format!(
+            "00150% Dr_Un-K,123 reverse,*2.4 75% HiddenOffset,\
+             bumpy3,confusion-offset4,{long_unknown},clearall,25% mini"
+        );
+
+        assert_eq!(parse_attack_mods(&mods), parse_attack_mods_reference(&mods));
+        for token in [
+            "C600", "c 450", "X2", "x 1.5", "M800", "m 700", "3x", "3X", "Cinf", "C0",
+            "C-1", "garbage",
+        ] {
+            assert_eq!(
+                parse_attack_mods(token),
+                parse_attack_mods_reference(token),
+                "token={token}",
+            );
+        }
+        assert!(matches!(
+            parse_attack_mods("CNaN").scroll_speed,
+            Some(ScrollSpeedSetting::CMod(value)) if value.is_nan()
+        ));
+        for token in ["00123 reverse", "Ä_B-C 42", long_unknown.as_str()] {
+            assert_eq!(attack_token_key(token), attack_token_key_reference(token));
+        }
     }
 
     #[test]
@@ -7471,6 +7512,37 @@ mod tests {
             Some(4)
         );
         assert_eq!(song_lua_message_command_index(&indices, "missing"), None);
+    }
+
+    #[test]
+    fn contiguous_message_indices_match_tree_reference() {
+        let long_command = format!("{}Command", "A".repeat(160));
+        let commands = [
+            (90, "zeta"),
+            (70, "Hide"),
+            (12, "SHOW"),
+            (3, "hide"),
+            (44, "Äction"),
+            (55, long_command.as_str()),
+        ];
+        let actual = build_song_lua_message_command_indices(commands);
+        let expected = build_song_lua_message_command_indices_reference(commands);
+
+        for query in [
+            "ZETA",
+            "hide",
+            "HIDE",
+            "show",
+            "ÄCTION",
+            long_command.as_str(),
+            "missing",
+        ] {
+            assert_eq!(
+                song_lua_message_command_index(&actual, query),
+                song_lua_message_command_index_reference(&expected, query),
+                "query={query}",
+            );
+        }
     }
 
     #[test]

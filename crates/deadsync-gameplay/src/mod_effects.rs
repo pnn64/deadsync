@@ -247,7 +247,7 @@ impl VisualOverrides {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct AppearanceOverrides {
     pub hidden: Option<f32>,
     pub hidden_offset: Option<f32>,

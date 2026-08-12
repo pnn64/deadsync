@@ -118,7 +118,9 @@ pub fn player_changes_chart<Profile: GameplayProfileData>(
     )
 }
 
-pub fn parse_chart_attack_windows(raw: &str) -> Vec<ChartAttackWindow> {
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn parse_chart_attack_windows_reference(raw: &str) -> Vec<ChartAttackWindow> {
     let raw = raw.trim();
     if raw.is_empty() {
         return Vec::new();
@@ -189,6 +191,87 @@ pub fn parse_chart_attack_windows(raw: &str) -> Vec<ChartAttackWindow> {
         });
     }
 
+    out
+}
+
+#[inline]
+fn find_attack_time(raw: &[u8], start: usize) -> Option<usize> {
+    const TIME: &[u8; 5] = b"TIME=";
+    raw.get(start..)?
+        .windows(TIME.len())
+        .position(|window| window.eq_ignore_ascii_case(TIME))
+        .map(|offset| start + offset)
+}
+
+fn parse_chart_attack_chunk(chunk: &str) -> Option<ChartAttackWindow> {
+    let mut time = None;
+    let mut len = None;
+    let mut end_time = None;
+    let mut mods = None;
+    for part in chunk.split(':') {
+        let part = part.trim();
+        let Some((key, value)) = part.split_once('=') else {
+            continue;
+        };
+        let key = key.trim();
+        let value = value.trim().trim_end_matches(',').trim();
+        if value.is_empty() {
+            continue;
+        }
+        if key.eq_ignore_ascii_case("TIME") {
+            time = value.parse::<f32>().ok();
+        } else if key.eq_ignore_ascii_case("LEN") {
+            len = value.parse::<f32>().ok();
+        } else if key.eq_ignore_ascii_case("END") {
+            end_time = value.parse::<f32>().ok();
+        } else if key.eq_ignore_ascii_case("MODS") {
+            mods = Some(value.to_string());
+        }
+    }
+
+    let (Some(start_second), Some(mods)) = (time, mods) else {
+        return None;
+    };
+    if !start_second.is_finite() || mods.is_empty() {
+        return None;
+    }
+    let mut len_seconds = len.unwrap_or(0.0);
+    if let Some(end_second) = end_time
+        && end_second.is_finite()
+    {
+        len_seconds = end_second - start_second;
+    }
+    if !len_seconds.is_finite() || len_seconds < 0.0 {
+        len_seconds = 0.0;
+    }
+    Some(ChartAttackWindow {
+        start_second,
+        len_seconds,
+        mods,
+    })
+}
+
+pub fn parse_chart_attack_windows(raw: &str) -> Vec<ChartAttackWindow> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Vec::new();
+    }
+    let mut starts = Vec::with_capacity(8);
+    let mut scan = 0usize;
+    while let Some(start) = find_attack_time(raw.as_bytes(), scan) {
+        starts.push(start);
+        scan = start.saturating_add(5);
+        if scan >= raw.len() {
+            break;
+        }
+    }
+    let mut out = Vec::with_capacity(starts.len());
+    for (index, start) in starts.iter().copied().enumerate() {
+        let end = starts.get(index + 1).copied().unwrap_or(raw.len());
+        if let Some(window) = parse_chart_attack_chunk(&raw[start..end]) {
+            out.push(window);
+        }
+    }
     out
 }
 
@@ -274,7 +357,7 @@ pub fn build_attack_mask_windows_for_mode(
     build_attack_mask_windows(&attacks)
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ParsedAttackMods {
     pub insert_mask: u8,
     pub remove_mask: u8,
@@ -773,19 +856,92 @@ pub const fn build_song_lua_overlay_message_runtime(
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct SongLuaMessageCommandEntry {
+    key_start: usize,
+    key_len: usize,
+    index: usize,
+    order: usize,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SongLuaMessageCommandIndices {
+    keys: Vec<u8>,
+    entries: Vec<SongLuaMessageCommandEntry>,
+}
+
+fn song_lua_message_key<'a>(
+    keys: &'a [u8],
+    entry: &SongLuaMessageCommandEntry,
+) -> &'a [u8] {
+    &keys[entry.key_start..entry.key_start + entry.key_len]
+}
+
 pub fn build_song_lua_message_command_indices<'a>(
     commands: impl IntoIterator<Item = (usize, &'a str)>,
-) -> BTreeMap<String, usize> {
-    let mut out = BTreeMap::new();
-    for (idx, command) in commands {
-        out.entry(command.to_ascii_lowercase()).or_insert(idx);
+) -> SongLuaMessageCommandIndices {
+    let commands = commands.into_iter();
+    let (lower, upper) = commands.size_hint();
+    let command_capacity = upper.unwrap_or(lower);
+    let mut keys = Vec::with_capacity(command_capacity.saturating_mul(24));
+    let mut entries = Vec::with_capacity(command_capacity);
+    for (order, (index, command)) in commands.enumerate() {
+        let key_start = keys.len();
+        keys.extend(command.bytes().map(|byte| byte.to_ascii_lowercase()));
+        entries.push(SongLuaMessageCommandEntry {
+            key_start,
+            key_len: command.len(),
+            index,
+            order,
+        });
     }
-    out
+    entries.sort_unstable_by(|left, right| {
+        song_lua_message_key(&keys, left)
+            .cmp(song_lua_message_key(&keys, right))
+            .then_with(|| left.order.cmp(&right.order))
+    });
+    entries.dedup_by(|right, left| {
+        song_lua_message_key(&keys, right) == song_lua_message_key(&keys, left)
+    });
+    SongLuaMessageCommandIndices { keys, entries }
 }
 
 #[inline(always)]
 pub fn song_lua_message_command_index(
-    indices: &BTreeMap<String, usize>,
+    indices: &SongLuaMessageCommandIndices,
+    message: &str,
+) -> Option<usize> {
+    let found = if message.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        indices.entries.binary_search_by(|entry| {
+            song_lua_message_key(&indices.keys, entry)
+                .iter()
+                .copied()
+                .cmp(message.bytes().map(|byte| byte.to_ascii_lowercase()))
+        })
+    } else {
+        indices.entries.binary_search_by(|entry| {
+            song_lua_message_key(&indices.keys, entry).cmp(message.as_bytes())
+        })
+    };
+    found.ok().map(|entry| indices.entries[entry].index)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn build_song_lua_message_command_indices_reference<'a>(
+    commands: impl IntoIterator<Item = (usize, &'a str)>,
+) -> std::collections::BTreeMap<String, usize> {
+    let mut out = std::collections::BTreeMap::new();
+    for (index, command) in commands {
+        out.entry(command.to_ascii_lowercase()).or_insert(index);
+    }
+    out
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn song_lua_message_command_index_reference(
+    indices: &std::collections::BTreeMap<String, usize>,
     message: &str,
 ) -> Option<usize> {
     const STACK_MESSAGE_BYTES: usize = 128;
@@ -4004,7 +4160,58 @@ pub const fn turn_option_bits(turn: GameplayTurnOption) -> u16 {
     }
 }
 
+const ATTACK_KEY_STACK_BYTES: usize = 128;
+
+enum BufferedAttackKey<'a> {
+    Stack(&'a str),
+    Heap(String),
+}
+
+impl BufferedAttackKey<'_> {
+    #[inline(always)]
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Stack(key) => key,
+            Self::Heap(key) => key,
+        }
+    }
+}
+
+fn buffered_attack_token_key<'a>(
+    token: &str,
+    buffer: &'a mut [u8; ATTACK_KEY_STACK_BYTES],
+) -> BufferedAttackKey<'a> {
+    let mut len = 0usize;
+    for byte in token.bytes().filter(u8::is_ascii_alphanumeric) {
+        if len == 0 && byte.is_ascii_digit() {
+            continue;
+        }
+        if len == buffer.len() {
+            return BufferedAttackKey::Heap(attack_token_key(token));
+        }
+        buffer[len] = byte.to_ascii_lowercase();
+        len += 1;
+    }
+    BufferedAttackKey::Stack(
+        std::str::from_utf8(&buffer[..len]).expect("attack keys contain only ASCII bytes"),
+    )
+}
+
 pub fn attack_token_key(token: &str) -> String {
+    let mut key = String::with_capacity(token.len());
+    for ch in token.chars() {
+        if ch.is_ascii_alphanumeric() {
+            if key.is_empty() && ch.is_ascii_digit() {
+                continue;
+            }
+            key.push(ch.to_ascii_lowercase());
+        }
+    }
+    key
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn attack_token_key_reference(token: &str) -> String {
     let mut key = String::with_capacity(token.len());
     for ch in token.chars() {
         if ch.is_ascii_alphanumeric() {
@@ -4029,6 +4236,31 @@ pub fn mod_column_suffix(key: &str, prefix: &str) -> Option<usize> {
 
 #[inline(always)]
 fn parse_attack_scroll_override(token: &str) -> Option<ScrollSpeedSetting> {
+    let trimmed = token.trim();
+    let value = trimmed
+        .strip_suffix('x')
+        .or_else(|| trimmed.strip_suffix('X'))
+        .and_then(|v| v.trim().parse::<f32>().ok());
+    if let Some(v) = value.filter(|v| v.is_finite() && *v > 0.0) {
+        return Some(ScrollSpeedSetting::XMod(v));
+    }
+    let (&kind, value) = trimmed.as_bytes().split_first()?;
+    let value = std::str::from_utf8(value).ok()?.trim().parse::<f32>().ok()?;
+    if value <= 0.0 {
+        return None;
+    }
+    match kind.to_ascii_lowercase() {
+        b'c' => Some(ScrollSpeedSetting::CMod(value)),
+        b'x' => Some(ScrollSpeedSetting::XMod(value)),
+        b'm' => Some(ScrollSpeedSetting::MMod(value)),
+        _ => None,
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_attack_scroll_override_reference(token: &str) -> Option<ScrollSpeedSetting> {
+    use std::str::FromStr;
+
     let trimmed = token.trim();
     let value = trimmed
         .strip_suffix('x')
@@ -4383,6 +4615,7 @@ fn apply_runtime_mod(
 
 pub fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
     let mut out = ParsedAttackMods::default();
+    let mut key_buffer = [0u8; ATTACK_KEY_STACK_BYTES];
     for token in mods.split(',') {
         let (approach_speed, token) = parse_attack_approach_prefix(token);
         if token.is_empty() {
@@ -4393,7 +4626,39 @@ pub fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
             continue;
         }
         let (percent_value, token_key) = parse_attack_level_token(token);
-        let key = attack_token_key(token_key);
+        let key = buffered_attack_token_key(token_key, &mut key_buffer);
+        let key = key.as_str();
+        if key.is_empty() {
+            continue;
+        }
+        match key {
+            "clearall" => {
+                out = ParsedAttackMods {
+                    clear_all: true,
+                    ..ParsedAttackMods::default()
+                };
+            }
+            _ => apply_runtime_mod(&mut out, key, percent_value, approach_speed),
+        }
+    }
+    out
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn parse_attack_mods_reference(mods: &str) -> ParsedAttackMods {
+    let mut out = ParsedAttackMods::default();
+    for token in mods.split(',') {
+        let (approach_speed, token) = parse_attack_approach_prefix(token);
+        if token.is_empty() {
+            continue;
+        }
+        if let Some(scroll_speed) = parse_attack_scroll_override_reference(token) {
+            out.scroll_speed = Some(scroll_speed);
+            continue;
+        }
+        let (percent_value, token_key) = parse_attack_level_token(token);
+        let key = attack_token_key_reference(token_key);
         if key.is_empty() {
             continue;
         }
