@@ -158,6 +158,29 @@ pub fn sort_player_notes(notes: &mut [Note]) {
 
 pub fn player_rows(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usize> {
     let mut rows = Vec::with_capacity(notes.len());
+    let mut ordered = true;
+    for note in notes {
+        if local_player_col(note.column, col_offset, cols).is_some() {
+            match rows.last().copied() {
+                Some(last) if last == note.row_index => {}
+                Some(last) => {
+                    ordered &= last < note.row_index;
+                    rows.push(note.row_index);
+                }
+                None => rows.push(note.row_index),
+            }
+        }
+    }
+    if !ordered {
+        rows.sort_unstable();
+        rows.dedup();
+    }
+    rows
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn player_rows_reference(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usize> {
+    let mut rows = Vec::with_capacity(notes.len());
     for note in notes {
         if local_player_col(note.column, col_offset, cols).is_some() {
             rows.push(note.row_index);
@@ -359,14 +382,19 @@ pub fn set_added_mine_note(
     row: usize,
     column: usize,
 ) -> bool {
-    let Some(beat) = timing_player.get_beat_for_row(row) else {
+    let Some(note) = added_mine_note(timing_player, row, column) else {
         return false;
     };
     remove_cell_notes(notes, row, column);
-    let quantization_idx = quantization_index_from_beat(beat);
-    notes.push(Note {
+    notes.push(note);
+    true
+}
+
+fn added_mine_note(timing_player: &TimingData, row: usize, column: usize) -> Option<Note> {
+    let beat = timing_player.get_beat_for_row(row)?;
+    Some(Note {
         beat,
-        quantization_idx,
+        quantization_idx: quantization_index_from_beat(beat),
         column,
         note_type: NoteType::Mine,
         row_index: row,
@@ -376,8 +404,7 @@ pub fn set_added_mine_note(
         mine_result: None,
         is_fake: false,
         can_be_judged: timing_player.is_judgable_at_beat(beat),
-    });
-    true
+    })
 }
 
 pub fn convert_tap_row_to_mines(notes: &mut [Note], row: usize) {
@@ -401,6 +428,31 @@ pub fn track_range_has_any_note(
     })
 }
 
+fn sorted_track_range_has_any_note(
+    notes: &[Note],
+    column: usize,
+    start_row: usize,
+    end_row: usize,
+) -> bool {
+    if end_row < start_row {
+        return false;
+    }
+    debug_assert!(notes_row_sorted(notes));
+    let start = notes.partition_point(|note| note.row_index < start_row);
+    let end = notes.partition_point(|note| note.row_index <= end_row);
+    notes[start..end].iter().any(|note| note.column == column)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn sorted_track_range_has_any_note_bench(
+    notes: &[Note],
+    column: usize,
+    start_row: usize,
+    end_row: usize,
+) -> bool {
+    sorted_track_range_has_any_note(notes, column, start_row, end_row)
+}
+
 pub fn apply_mines_insert(
     notes: &mut Vec<Note>,
     context_notes: &[Note],
@@ -413,8 +465,91 @@ pub fn apply_mines_insert(
     if cols == 0 || cols > MAX_COLS || end_row < start_row {
         return;
     }
+    debug_assert!(notes_row_sorted(notes));
+    debug_assert!(notes_row_sorted(context_notes));
 
-    let player_rows = player_rows(notes, col_offset, cols);
+    let original_len = notes.len();
+    let mut row_count = 0usize;
+    let mut place_every_rows = 6usize;
+    let mut row_start = 0usize;
+    while row_start < original_len {
+        let row = notes[row_start].row_index;
+        let mut row_end = row_start + 1;
+        while row_end < original_len && notes[row_end].row_index == row {
+            row_end += 1;
+        }
+        if row >= start_row
+            && row <= end_row
+            && notes[row_start..row_end]
+                .iter()
+                .any(|note| local_player_col(note.column, col_offset, cols).is_some())
+        {
+            row_count = row_count.saturating_add(1);
+            if row_count >= place_every_rows {
+                convert_tap_row_to_mines(&mut notes[row_start..row_end], row);
+                row_count = 0;
+                place_every_rows = if place_every_rows == 6 { 7 } else { 6 };
+            }
+        }
+        row_start = row_end;
+    }
+
+    let half_beat_rows = (ROWS_PER_BEAT.max(1) / 2) as usize;
+    for note_index in 0..original_len {
+        let Some((column, end_row_index)) = (|| {
+            let note = &notes[note_index];
+            matches!(note.note_type, NoteType::Hold | NoteType::Roll)
+                .then_some((note.column, note.hold.as_ref()?.end_row_index))
+        })() else {
+            continue;
+        };
+        let mine_row = end_row_index.saturating_add(half_beat_rows);
+        if mine_row < start_row || mine_row > end_row {
+            continue;
+        }
+        let range_start = mine_row.saturating_sub(half_beat_rows).saturating_add(1);
+        let range_end = mine_row.saturating_add(half_beat_rows).saturating_sub(1);
+        if sorted_track_range_has_any_note(context_notes, column, range_start, range_end)
+            || sorted_track_range_has_any_note(
+                &notes[..original_len],
+                column,
+                range_start,
+                range_end,
+            )
+            || track_range_has_any_note(
+                &notes[original_len..],
+                column,
+                range_start,
+                range_end,
+            )
+        {
+            continue;
+        }
+        let Some(mine) = added_mine_note(timing_player, mine_row, column) else {
+            continue;
+        };
+        let mine_start = notes[..original_len].partition_point(|note| note.row_index < mine_row);
+        let mine_end = notes[..original_len].partition_point(|note| note.row_index <= mine_row);
+        convert_tap_row_to_mines(&mut notes[mine_start..mine_end], mine_row);
+        notes.push(mine);
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn apply_mines_insert_reference(
+    notes: &mut Vec<Note>,
+    context_notes: &[Note],
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    start_row: usize,
+    end_row: usize,
+) {
+    if cols == 0 || cols > MAX_COLS || end_row < start_row {
+        return;
+    }
+
+    let player_rows = player_rows_reference(notes, col_offset, cols);
     let hold_heads: Vec<(usize, usize)> = notes
         .iter()
         .filter_map(|note| {
@@ -945,6 +1080,9 @@ pub fn apply_uncommon_masks_with_masks(
     if (insert_mask & INSERT_MASK_BIT_MINES) != 0
         && let Some((start_row, end_row)) = row_bounds
     {
+        if !notes_row_sorted(notes) {
+            sort_player_notes(notes);
+        }
         apply_mines_insert(
             notes,
             context_notes,

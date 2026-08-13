@@ -1409,7 +1409,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.520"
+version = "0.5.523"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1844,7 +1844,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.520"
+version = "0.5.523"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1903,7 +1903,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.520"
+version = "0.5.523"
 dependencies = [
  "log",
  "semver",
@@ -4743,8 +4743,8 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rssp"
-version = "0.4.111"
-source = "git+https://github.com/pnn64/rssp?branch=main#cca88f9df6f7af1328462f6a5a4c8b34aaedbd98"
+version = "0.4.112"
+source = "git+https://github.com/pnn64/rssp?branch=main#bf2b7757df650951447586de9a73bebe9a3cad33"
 dependencies = [
  "memchr",
  "rssp-core",
@@ -4754,8 +4754,8 @@ dependencies = [
 
 [[package]]
 name = "rssp-core"
-version = "0.4.111"
-source = "git+https://github.com/pnn64/rssp?branch=main#cca88f9df6f7af1328462f6a5a4c8b34aaedbd98"
+version = "0.4.112"
+source = "git+https://github.com/pnn64/rssp?branch=main#bf2b7757df650951447586de9a73bebe9a3cad33"
 
 [[package]]
 name = "rtrb"

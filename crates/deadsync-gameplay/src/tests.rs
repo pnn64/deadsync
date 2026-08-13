@@ -16925,6 +16925,43 @@ mod tests {
     }
 
     #[test]
+    fn player_rows_streaming_matches_sort_reference_for_any_input_order() {
+        let mut state = 0xD1B5_4A32_D192_ED03u64;
+        let mut notes = (0..513)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                let row = (state as usize % 97) * 12;
+                let mut note = test_note_at(NoteType::Tap, None, false, row, row as f32 / 48.0);
+                note.column = (state.rotate_left(19) as usize) % 12;
+                note
+            })
+            .collect::<Vec<_>>();
+
+        for col_offset in 0..=8 {
+            for cols in 0..=8 {
+                assert_eq!(
+                    player_rows(&notes, col_offset, cols),
+                    player_rows_reference(&notes, col_offset, cols),
+                    "unsorted offset={col_offset} cols={cols}",
+                );
+            }
+        }
+
+        sort_player_notes(&mut notes);
+        for col_offset in 0..=8 {
+            for cols in 0..=8 {
+                assert_eq!(
+                    player_rows(&notes, col_offset, cols),
+                    player_rows_reference(&notes, col_offset, cols),
+                    "sorted offset={col_offset} cols={cols}",
+                );
+            }
+        }
+    }
+
+    #[test]
     fn column_field_helpers_resolve_player_and_local_column() {
         assert_eq!(player_index_for_column(1, 4, 7), 0);
         assert_eq!(player_index_for_column(2, 0, 7), 0);
@@ -17099,6 +17136,105 @@ mod tests {
                 && note.column == 1
                 && note.note_type == NoteType::Mine
         }));
+    }
+
+    #[test]
+    fn sorted_track_range_matches_full_scan_across_boundaries() {
+        let mut notes = (0..257)
+            .map(|index| {
+                let row = (index / 3) * 12;
+                let mut note = test_note_at(
+                    NoteType::Tap,
+                    None,
+                    false,
+                    row,
+                    row as f32 / ROWS_PER_BEAT as f32,
+                );
+                note.column = (index * 5 + index / 7) % 8;
+                note
+            })
+            .collect::<Vec<_>>();
+        sort_player_notes(&mut notes);
+
+        for column in 0..10 {
+            for start in (0..1_100).step_by(11) {
+                for width in [0, 1, 23, 96, 511] {
+                    let end = start + width;
+                    assert_eq!(
+                        sorted_track_range_has_any_note(&notes, column, start, end),
+                        track_range_has_any_note(&notes, column, start, end),
+                        "column={column} range={start}..={end}",
+                    );
+                }
+            }
+        }
+        assert!(!sorted_track_range_has_any_note(&notes, 0, 9, 8));
+    }
+
+    #[test]
+    fn fused_mines_insert_matches_previous_algorithm() {
+        let last_row = ROWS_PER_BEAT as usize * 1_100;
+        let timing = test_timing(last_row);
+        let mut notes = (0..768)
+            .map(|index| {
+                let row = index * 48;
+                let is_hold = index % 11 == 0;
+                let mut hold = is_hold.then(test_hold);
+                if let Some(hold) = &mut hold {
+                    hold.end_row_index = row + 24 + (index % 5) * 12;
+                    hold.end_beat = hold.end_row_index as f32 / ROWS_PER_BEAT as f32;
+                }
+                let mut note = test_note_at(
+                    if is_hold {
+                        NoteType::Hold
+                    } else {
+                        NoteType::Tap
+                    },
+                    hold,
+                    false,
+                    row,
+                    row as f32 / ROWS_PER_BEAT as f32,
+                );
+                note.column = (index * 3 + index / 13) % 4;
+                note
+            })
+            .collect::<Vec<_>>();
+        let mut context = (0..64)
+            .map(|index| {
+                let row = index * 48 + 12;
+                let mut note = test_note_at(
+                    NoteType::Tap,
+                    None,
+                    false,
+                    row,
+                    row as f32 / ROWS_PER_BEAT as f32,
+                );
+                note.column = (index * 7) % 4;
+                note
+            })
+            .collect::<Vec<_>>();
+        sort_player_notes(&mut notes);
+        sort_player_notes(&mut context);
+        let mut expected = notes.clone();
+
+        apply_mines_insert_reference(&mut expected, &context, &timing, 0, 4, 0, last_row);
+        apply_mines_insert(&mut notes, &context, &timing, 0, 4, 0, last_row);
+
+        assert_eq!(notes.len(), expected.len());
+        for (index, (actual, expected)) in notes.iter().zip(&expected).enumerate() {
+            assert_eq!(actual.beat.to_bits(), expected.beat.to_bits(), "beat {index}");
+            assert_eq!(actual.quantization_idx, expected.quantization_idx, "quant {index}");
+            assert_eq!(actual.column, expected.column, "column {index}");
+            assert_eq!(actual.note_type, expected.note_type, "type {index}");
+            assert_eq!(actual.row_index, expected.row_index, "row {index}");
+            assert_eq!(actual.is_fake, expected.is_fake, "fake {index}");
+            assert_eq!(actual.can_be_judged, expected.can_be_judged, "judge {index}");
+            assert_eq!(
+                actual.hold.as_ref().map(|hold| hold.end_row_index),
+                expected.hold.as_ref().map(|hold| hold.end_row_index),
+                "hold end {index}",
+            );
+        }
     }
 
     #[test]
@@ -17284,6 +17420,36 @@ mod tests {
                 .life,
             INITIAL_HOLD_LIFE
         );
+    }
+
+    #[test]
+    fn combined_tap_and_mine_inserts_restore_row_order_before_mines() {
+        let timing = test_timing(ROWS_PER_BEAT as usize * 8);
+        let mut notes = (0..8)
+            .map(|beat| {
+                let row = beat * ROWS_PER_BEAT as usize;
+                let mut note = test_note_at(NoteType::Tap, None, false, row, beat as f32);
+                note.column = beat % 4;
+                note
+            })
+            .collect::<Vec<_>>();
+        let last_row = 7 * ROWS_PER_BEAT as usize;
+
+        apply_uncommon_masks_with_masks(
+            &mut notes,
+            INSERT_MASK_BIT_BIG | INSERT_MASK_BIT_MINES,
+            0,
+            0,
+            &timing,
+            0,
+            4,
+            &[],
+            Some((0, last_row)),
+            0,
+        );
+
+        assert!(notes_row_sorted(&notes));
+        assert!(notes.iter().any(|note| note.note_type == NoteType::Mine));
     }
 
     #[test]
