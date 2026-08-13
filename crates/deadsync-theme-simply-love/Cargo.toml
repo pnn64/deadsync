@@ -24,6 +24,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "gameplay_numeric_text_memo"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "direct_notefield_presentation"
 harness = false
 required-features = ["bench-support"]

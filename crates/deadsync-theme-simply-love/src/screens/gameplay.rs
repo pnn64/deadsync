@@ -7,7 +7,8 @@ use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter,
 };
 use crate::screens::components::gameplay::{
-    FRAME_TEXT_LIFE_BASE, FRAME_TEXT_VERTEX_BUFFERS, gameplay_stats, notefield, step_stats_gifs,
+    FRAME_TEXT_BPM, FRAME_TEXT_LIFE_BASE, FRAME_TEXT_VERTEX_BUFFERS, gameplay_stats, notefield,
+    step_stats_gifs,
 };
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::heart_rate;
@@ -1719,8 +1720,9 @@ impl SongLuaLayerActivity {
 struct GameplayFrameScratch {
     lobby_hud_cache: lobby_hud::LobbyHudCache,
     lobby_hud_status_scratch: String,
-    /// Stable frames compare one compact key and clone the retained handle; a
-    /// timing-segment change resolves the prewarmed bounded shared cache.
+    /// Stable frames compare one compact key and copy its inline payload; a
+    /// timing-segment change performs bounded stack formatting into one
+    /// song-prewarmed glyph slot.
     bpm_text: GameplayBpmTextPlan,
     song_lua_overlay_order: SongLuaOverlayOrderCache,
     song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
@@ -4691,7 +4693,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 
 thread_local! {
     static RATE_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(128));
-    static BPM_TEXT_CACHE: RefCell<TextCache<(u64, bool)>> = RefCell::new(text_cache_with_capacity(512));
     static METER_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(64));
     static AUTOSYNC_TEXT_CACHE: RefCell<TextCache<AutosyncTextKey>> =
         RefCell::new(text_cache_with_capacity(256));
@@ -4738,31 +4739,62 @@ fn cached_rate_text(rate: f32) -> Arc<str> {
     })
 }
 
-#[inline(always)]
-fn shared_cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
+fn owned_bpm_text(bpm: f64, show_decimal: bool) -> String {
     if !bpm.is_finite() {
-        return Arc::<str>::from("0");
+        return "0".to_owned();
     }
     if !show_decimal {
         let rounded = bpm.round().max(0.0);
-        let key = (rounded.to_bits(), false);
-        return cached_text(&BPM_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
-            format!("{rounded:.0}")
-        });
+        return format!("{rounded:.0}");
     }
     let rounded_thousandth = (bpm * 1_000.0).round() / 1_000.0;
     let rounded_thousandth = rounded_thousandth.max(0.0);
-    let key = (rounded_thousandth.to_bits(), true);
-    cached_text(&BPM_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
-        let mut text = format!("{rounded_thousandth:.3}");
-        while text.ends_with('0') {
-            text.pop();
+    let mut text = format!("{rounded_thousandth:.3}");
+    while text.ends_with('0') {
+        text.pop();
+    }
+    if text.ends_with('.') {
+        text.pop();
+    }
+    text
+}
+
+#[inline]
+fn inline_bpm_text(bpm: f64, show_decimal: bool) -> Option<InlineText> {
+    if !bpm.is_finite() {
+        return InlineText::copy_from("0");
+    }
+    if !show_decimal {
+        let rounded = bpm.round().max(0.0);
+        if rounded > f64::from(u32::MAX) {
+            return None;
         }
-        if text.ends_with('.') {
-            text.pop();
-        }
-        text
-    })
+        let mut text = InlineText::new();
+        return text.push_u32(rounded as u32).then_some(text);
+    }
+
+    let scaled = (bpm * 1_000.0).round().max(0.0);
+    if scaled > f64::from(u32::MAX) * 1_000.0 + 999.0 {
+        return None;
+    }
+    let scaled = scaled as u64;
+    let whole = (scaled / 1_000) as u32;
+    let fraction = (scaled % 1_000) as u16;
+    let mut text = InlineText::new();
+    if !text.push_u32(whole) || fraction == 0 {
+        return (fraction == 0).then_some(text);
+    }
+    if !text.push_ascii(b'.') {
+        return None;
+    }
+    let hundreds = (fraction / 100) as u8;
+    let tens = ((fraction / 10) % 10) as u8;
+    let ones = (fraction % 10) as u8;
+    let wrote = text.push_ascii(b'0' + hundreds)
+        && (fraction.is_multiple_of(100)
+            || (text.push_ascii(b'0' + tens)
+                && (fraction.is_multiple_of(10) || text.push_ascii(b'0' + ones))));
+    wrote.then_some(text)
 }
 
 #[inline(always)]
@@ -4779,33 +4811,128 @@ fn display_bpm(base_bpm: f32, music_rate: f32) -> f64 {
     }
 }
 
+enum GameplayBpmText {
+    Inline(InlineText),
+    Shared(Arc<str>),
+}
+
+/// Song-owned current-BPM formatter for the game/render frame thread.
+///
+/// Capacity/lifetime: one last-value entry plus one prepared geometry slot for
+/// the gameplay screen. Warmup happens during transition text prewarm. Normal
+/// BPM values through `u32::MAX` format into 14 stack bytes; stable frames only
+/// compare the key and copy that payload. There is no lookup, pruning,
+/// synchronization, or eviction. Values too wide for the fixed payload retain
+/// the previous owned-string behavior as a cold compatibility fallback. The
+/// screen transition drops that fallback. The numeric memo benchmark reports
+/// setup/live cycles and allocations; worst normal-frame work is ten decimal
+/// digit writes plus the optional three fractional digits.
 struct GameplayBpmTextPlan {
     key: (u64, bool),
-    text: Arc<str>,
+    text: GameplayBpmText,
 }
 
 impl GameplayBpmTextPlan {
     fn new(bpm: f64, show_decimal: bool) -> Self {
         Self {
             key: (bpm.to_bits(), show_decimal),
-            text: shared_cached_bpm_text(bpm, show_decimal),
+            text: Self::format(bpm, show_decimal),
         }
     }
 
     #[inline(always)]
-    fn resolve(&mut self, bpm: f64, show_decimal: bool) -> Arc<str> {
+    fn resolve(&mut self, bpm: f64, show_decimal: bool) -> TextContent {
         let key = (bpm.to_bits(), show_decimal);
         if self.key != key {
             self.key = key;
-            self.text = shared_cached_bpm_text(bpm, show_decimal);
+            self.text = Self::format(bpm, show_decimal);
         }
-        Arc::clone(&self.text)
+        match &self.text {
+            GameplayBpmText::Inline(text) => TextContent::frame_inline_slot(*text, FRAME_TEXT_BPM),
+            GameplayBpmText::Shared(text) => TextContent::Shared(Arc::clone(text)),
+        }
+    }
+
+    #[cold]
+    fn format(bpm: f64, show_decimal: bool) -> GameplayBpmText {
+        inline_bpm_text(bpm, show_decimal).map_or_else(
+            || GameplayBpmText::Shared(Arc::from(owned_bpm_text(bpm, show_decimal))),
+            GameplayBpmText::Inline,
+        )
     }
 }
 
 impl Default for GameplayBpmTextPlan {
     fn default() -> Self {
         Self::new(0.0, false)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct GameplayBpmTextBenchmark {
+    old_values: rustc_hash::FxHashMap<(u64, bool), Arc<str>>,
+    old_key: (u64, bool),
+    old_text: Arc<str>,
+    plan: GameplayBpmTextPlan,
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayBpmTextBenchmark {
+    pub fn new() -> Self {
+        let old_values = (0..2_048u32)
+            .map(|index| {
+                let bpm = 40.0 + f64::from(index) * 0.001;
+                ((bpm.to_bits(), true), Arc::from(owned_bpm_text(bpm, true)))
+            })
+            .collect::<rustc_hash::FxHashMap<_, _>>();
+        let old_key = (40.0f64.to_bits(), true);
+        let old_text = Arc::clone(
+            old_values
+                .get(&old_key)
+                .expect("benchmark BPM was inserted"),
+        );
+        Self {
+            old_values,
+            old_key,
+            old_text,
+            plan: GameplayBpmTextPlan::default(),
+        }
+    }
+
+    pub fn legacy_frame(&mut self, frame: u32) -> u64 {
+        let bpm = 40.0 + f64::from((frame / 60) % 2_048) * 0.001;
+        let key = (bpm.to_bits(), true);
+        if self.old_key != key {
+            self.old_key = key;
+            self.old_text = Arc::clone(
+                self.old_values
+                    .get(&key)
+                    .expect("benchmark BPM was prewarmed"),
+            );
+        }
+        let text = Arc::clone(&self.old_text);
+        text.bytes().fold(0u64, |checksum, byte| {
+            (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
+        })
+    }
+
+    pub fn optimized_frame(&mut self, frame: u32) -> u64 {
+        let bpm = 40.0 + f64::from((frame / 60) % 2_048) * 0.001;
+        self.plan
+            .resolve(bpm, true)
+            .as_str()
+            .bytes()
+            .fold(0u64, |checksum, byte| {
+                (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
+            })
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for GameplayBpmTextBenchmark {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -4941,6 +5068,56 @@ fn prewarm_life_text_slots(
             FRAME_TEXT_VERTEX_BUFFERS,
         );
     }
+}
+
+fn prewarm_bpm_text_slot(
+    cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    fonts: &font::FontMap,
+) {
+    let bpm_glyphs =
+        InlineText::copy_from(".0123456789").expect("the BPM glyph domain fits inline");
+    prewarm_prepared_inline_text_slot(
+        cache,
+        scratch,
+        fonts,
+        "miso",
+        bpm_glyphs,
+        FRAME_TEXT_BPM,
+        TextAlign::Center,
+        FRAME_TEXT_VERTEX_BUFFERS,
+    );
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_bpm_text_setup(
+    fonts: &font::FontMap,
+    scratch: &mut ComposeScratch,
+    optimized: bool,
+) -> (u64, u32) {
+    let mut cache = TextLayoutCache::new(4_096);
+    cache.begin_frame_stats(true);
+    let mut checksum = 0xcbf2_9ce4_8422_2325u64;
+    if optimized {
+        let mut plan = GameplayBpmTextPlan::default();
+        prewarm_bpm_text_slot(&mut cache, scratch, fonts);
+        for index in 0..2_048u32 {
+            let text = plan.resolve(40.0 + f64::from(index) * 0.001, true);
+            for byte in text.as_str().bytes() {
+                checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+            }
+        }
+    } else {
+        for index in 0..2_048u32 {
+            let text = owned_bpm_text(40.0 + f64::from(index) * 0.001, true);
+            cache.prewarm_text(fonts, "miso", &text, None);
+            for byte in text.bytes() {
+                checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+            }
+        }
+    }
+    (checksum, cache.frame_stats().owned_entries)
 }
 
 #[cfg(feature = "bench-support")]
@@ -5275,6 +5452,7 @@ pub fn prewarm_text_layout(
         cache.prewarm_text(fonts, "miso", state.rate_text.as_ref(), None);
     }
     prewarm_life_text_slots(cache, scratch, fonts, state.num_players());
+    prewarm_bpm_text_slot(cache, scratch, fonts);
     for player in 0..state.num_players() {
         let chart = &state.charts()[player];
         let meter_text = cached_meter_text(chart.meter);
@@ -5290,16 +5468,6 @@ pub fn prewarm_text_layout(
             policy.zmod_rating_box_text,
         );
         cache.prewarm_text(fonts, "miso", detail, None);
-        let Some(gameplay_chart) = state.gameplay_chart(player) else {
-            continue;
-        };
-        for &(_, bpm) in &gameplay_chart.timing_segments.bpms {
-            let text = shared_cached_bpm_text(
-                f64::from(bpm.max(0.0)) * f64::from(state.music_rate()),
-                policy.show_bpm_decimal,
-            );
-            cache.prewarm_text(fonts, "miso", text.as_ref(), None);
-        }
     }
     cache.prewarm_text(
         fonts,
@@ -17142,17 +17310,11 @@ mod tests {
 
     #[test]
     fn bpm_decimal_shows_authored_precision_without_trailing_zeroes() {
-        assert_eq!(
-            shared_cached_bpm_text(f64::from(100.001_f32), true).as_ref(),
-            "100.001"
-        );
-        assert_eq!(
-            shared_cached_bpm_text(f64::from(133.33_f32), true).as_ref(),
-            "133.33"
-        );
-        assert_eq!(shared_cached_bpm_text(100.000, true).as_ref(), "100");
-        assert_eq!(shared_cached_bpm_text(150.0, true).as_ref(), "150");
-        assert_eq!(shared_cached_bpm_text(100.001, false).as_ref(), "100");
+        assert_eq!(owned_bpm_text(f64::from(100.001_f32), true), "100.001");
+        assert_eq!(owned_bpm_text(f64::from(133.33_f32), true), "133.33");
+        assert_eq!(owned_bpm_text(100.000, true), "100");
+        assert_eq!(owned_bpm_text(150.0, true), "150");
+        assert_eq!(owned_bpm_text(100.001, false), "100");
     }
 
     #[test]
@@ -17167,10 +17329,42 @@ mod tests {
             (150.0, false),
         ] {
             assert_eq!(
-                bpm_plan.resolve(bpm, show_decimal),
-                shared_cached_bpm_text(bpm, show_decimal)
+                bpm_plan.resolve(bpm, show_decimal).as_str(),
+                owned_bpm_text(bpm, show_decimal)
             );
         }
+        for thousandths in 0..=1_000_000u32 {
+            let bpm = f64::from(thousandths) / 1_000.0;
+            assert_eq!(
+                bpm_plan.resolve(bpm, true).as_str(),
+                owned_bpm_text(bpm, true),
+                "decimal BPM mismatch at {bpm}",
+            );
+        }
+        for bpm in [
+            -100.0,
+            -0.000_6,
+            -0.0,
+            f64::from(u32::MAX),
+            f64::from(u32::MAX) + 0.499,
+            f64::from(u32::MAX) + 1.0,
+            f64::MAX,
+        ] {
+            for show_decimal in [false, true] {
+                assert_eq!(
+                    bpm_plan.resolve(bpm, show_decimal).as_str(),
+                    owned_bpm_text(bpm, show_decimal),
+                    "BPM boundary mismatch at {bpm} decimal={show_decimal}",
+                );
+            }
+        }
+        assert!(matches!(
+            bpm_plan.resolve(133.33, true),
+            TextContent::FrameInline {
+                slot: FRAME_TEXT_BPM,
+                ..
+            }
+        ));
         let life_plan = GameplayLifeTextPlan::new();
         for key in 0..=1_000 {
             let life = key as f32 / 10.0;

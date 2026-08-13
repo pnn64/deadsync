@@ -39,6 +39,8 @@ use super::{
 const PEAK_NPS_GRAPH_PAD: f32 = 4.0;
 const PEAK_NPS_ALPHA: f32 = 0.75;
 const DISABLED_WINDOW_RGBA: [f32; 4] = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
+const GAME_TIME_WIDTH_BASELINE_SLOT: usize = 4;
+const PADDED_NUM_SLOT_COUNT: usize = FRAME_TEXT_STATS_COUNT_ROWS as usize * 3;
 
 static EMPTY_STATS_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from(""));
 
@@ -107,23 +109,29 @@ impl<K: Copy + Eq, V: Copy, const N: usize> SlotTextCache<K, V, N> {
 
 // Gameplay-thread-only, session-lifetime inline memo tables. They have fixed
 // entry caps, are populated during song-load text prewarm and first use, and
-// never allocate, scan-prune, or destroy heap resources. A miss performs at
-// most N key comparisons plus <=14 bytes of stack formatting, then overwrites
-// one slot round-robin. Their compile-time bounds are their instrumentation:
-// full-width padded values retain 32 visible HUD keys, game-time widths retain
-// 8, clocks have one direct slot for each of the 4 two-player rows, and live
-// timing has one direct slot for each of the 6 two-player stat pairs.
-// Destruction occurs at thread shutdown. Split judgment counts bypass a cache
-// entirely by combining a static zero run with inline decimal text.
+// never allocate, scan-prune, or destroy heap resources. Stable HUD actors use
+// their prepared text slot directly: disabled full-width counts use 21 compact
+// actor slots, clocks use four row slots, live timing uses six stat
+// slots, and clock widths use four clock-row slots plus one baseline slot. A
+// miss performs one key comparison plus <=14 bytes of stack formatting, with
+// no eviction work beyond overwriting that actor's own value. Destruction
+// occurs at thread shutdown. The remaining 32-entry table serves only
+// non-slotted panes. Split judgment counts bypass a cache entirely by combining
+// a static zero run with inline decimal text. Benchmark counters report all
+// allocator activity; the worst frame performs one bounded rebuild per changed
+// actor.
 thread_local! {
     static PADDED_NUM_INLINE_CACHE: RefCell<FixedTextCache<(u32, u8), InlineText, 32>> = const {
         RefCell::new(FixedTextCache::new())
     };
+    static PADDED_NUM_SLOT_CACHE: RefCell<SlotTextCache<(u32, u8), InlineText, PADDED_NUM_SLOT_COUNT>> = const {
+        RefCell::new(SlotTextCache::new())
+    };
     static GAME_TIME_SLOT_CACHE: RefCell<SlotTextCache<(u32, u8), InlineText, 4>> = const {
         RefCell::new(SlotTextCache::new())
     };
-    static GAME_TIME_WIDTH_INLINE_CACHE: RefCell<FixedTextCache<(u32, u8), f32, 8>> = const {
-        RefCell::new(FixedTextCache::new())
+    static GAME_TIME_WIDTH_SLOT_CACHE: RefCell<SlotTextCache<(u32, u8), f32, 5>> = const {
+        RefCell::new(SlotTextCache::new())
     };
     static LIVE_TIMING_INLINE_CACHE: RefCell<SlotTextCache<(i32, i32), InlineText, 6>> = const {
         RefCell::new(SlotTextCache::new())
@@ -835,17 +843,40 @@ fn push_density_graph_at(
 }
 
 #[inline(always)]
+fn format_padded_num_inline(count: u32, digits: usize) -> InlineText {
+    InlineText::format(format_args!("{count:0digits$}"))
+        .expect("a padded u32 within the inline capacity fits")
+}
+
+#[inline(always)]
 fn padded_num_text(count: u32, digits: usize) -> TextContent {
     let digits = digits.clamp(1, u8::MAX as usize);
     if digits <= InlineText::CAPACITY {
         let key = (count, digits as u8);
         let text = PADDED_NUM_INLINE_CACHE.with(|cache| {
-            cache.borrow_mut().get_or_insert(key, || {
-                InlineText::format(format_args!("{count:0digits$}"))
-                    .expect("a padded u32 within the inline capacity fits")
-            })
+            cache
+                .borrow_mut()
+                .get_or_insert(key, || format_padded_num_inline(count, digits))
         });
         TextContent::Inline(text)
+    } else {
+        TextContent::Owned(format!("{count:0digits$}"))
+    }
+}
+
+#[inline(always)]
+fn padded_num_text_in_slot(count: u32, digits: usize, slot: u8) -> TextContent {
+    let digits = digits.clamp(1, u8::MAX as usize);
+    if digits <= InlineText::CAPACITY {
+        let key = (count, digits as u8);
+        let text = PADDED_NUM_SLOT_CACHE.with(|cache| {
+            let cache_slot = usize::from(slot.saturating_sub(FRAME_TEXT_STATS_COUNT_LEFT_BASE))
+                .min(PADDED_NUM_SLOT_COUNT - 1);
+            cache
+                .borrow_mut()
+                .get_or_insert(cache_slot, key, || format_padded_num_inline(count, digits))
+        });
+        TextContent::frame_inline_slot(text, slot)
     } else {
         TextContent::Owned(format!("{count:0digits$}"))
     }
@@ -919,7 +950,7 @@ fn padded_runs_for_window(
 ) -> (TextContent, TextContent) {
     if disabled {
         (
-            padded_num_text(count, digits).with_frame_inline_slot(slot),
+            padded_num_text_in_slot(count, digits, slot),
             TextContent::default(),
         )
     } else {
@@ -1099,6 +1130,18 @@ mod dynamic_hud_text_tests {
             assert!(empty.is_empty());
         }
 
+        for count in [0, 1, 9, 10, 99, 100, 9_999, 10_000, u32::MAX] {
+            for digits in 1..=InlineText::CAPACITY {
+                let slot = count_text_slot(count as usize % 2, digits % 7, false);
+                let text = super::padded_num_text_in_slot(count, digits, slot);
+                assert_eq!(text.as_str(), format!("{count:0digits$}"));
+                assert!(matches!(
+                    text,
+                    TextContent::FrameInline { slot: found, .. } if found == slot
+                ));
+            }
+        }
+
         let mut slots = [false; u8::MAX as usize + 1];
         for player in 0..2 {
             for row in 0..7 {
@@ -1148,6 +1191,23 @@ mod dynamic_hud_text_tests {
                     game_time_text(seconds, mode, (seconds % 4) as usize).as_str(),
                     expected
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn direct_actor_memos_match_scanned_memos_across_value_changes() {
+        let mut scanned = super::FixedTextCache::<(u32, u8), InlineText, 8>::new();
+        let mut slotted = super::SlotTextCache::<(u32, u8), InlineText, 3>::new();
+        for frame in 0..10_000u32 {
+            for slot in 0..3 {
+                let seconds = (frame.wrapping_mul(17) + slot as u32 * 113) % 7_201;
+                let mode = (frame as usize + slot) as u8 % 3;
+                let key = (seconds, mode);
+                let old = scanned.get_or_insert(key, || super::format_game_time(seconds, mode));
+                let new =
+                    slotted.get_or_insert(slot, key, || super::format_game_time(seconds, mode));
+                assert_eq!(new, old, "frame={frame} slot={slot}");
             }
         }
     }
@@ -1279,9 +1339,13 @@ fn push_versus_count_texts(
 }
 
 #[inline(always)]
-fn cached_game_time_width_for_key(key: (u32, u8), asset_manager: &AssetManager) -> f32 {
-    GAME_TIME_WIDTH_INLINE_CACHE.with(|cache| {
-        cache.borrow_mut().get_or_insert(key, || {
+fn cached_game_time_width_for_key(
+    key: (u32, u8),
+    slot: usize,
+    asset_manager: &AssetManager,
+) -> f32 {
+    GAME_TIME_WIDTH_SLOT_CACHE.with(|cache| {
+        cache.borrow_mut().get_or_insert(slot, key, || {
             let text = format_game_time(key.0, key.1);
             asset_manager
                 .with_fonts(|all_fonts| {
@@ -1367,13 +1431,18 @@ pub fn prewarm_text_layout(
         .max(0.0) as u32;
     let end_seconds = end_seconds.max(display_end_seconds);
     let mode = game_time_mode(end_seconds as f32);
-    let _ = cached_game_time_width_for_key((end_seconds, mode), asset_manager);
-    let _ = cached_game_time_width_for_key((9 * 60 + 59, 2), asset_manager);
+    let _ = cached_game_time_width_for_key((end_seconds, mode), 0, asset_manager);
+    let _ = cached_game_time_width_for_key((end_seconds, mode), 2, asset_manager);
+    let _ = cached_game_time_width_for_key(
+        (9 * 60 + 59, 2),
+        GAME_TIME_WIDTH_BASELINE_SLOT,
+        asset_manager,
+    );
     for player in 0..state.num_players() {
         let display = step_stats_time_display(state, player);
         let remaining = (display.total_seconds - display.elapsed_seconds).max(0.0);
         let key = game_time_key(remaining, display.total_seconds);
-        let _ = cached_game_time_width_for_key(key, asset_manager);
+        let _ = cached_game_time_width_for_key(key, player * 2 + 1, asset_manager);
     }
     cache.prewarm_text(fonts, "miso", time_total_text(state).as_ref(), None);
     cache.prewarm_text(fonts, "miso", &tr("Gameplay", "TimeSong"), None);
@@ -1448,13 +1517,16 @@ fn prewarm_count_slots(
         InlineText::copy_from("0123456789").expect("the count glyph domain fits inline");
     for player in 0..num_players.min(MAX_PLAYERS) {
         for row in 0..FRAME_TEXT_STATS_COUNT_ROWS {
+            let slot =
+                FRAME_TEXT_STATS_COUNT_LEFT_BASE + player as u8 * FRAME_TEXT_STATS_COUNT_ROWS + row;
+            let _ = padded_num_text_in_slot(0, 4, slot);
             prewarm_prepared_inline_text_slot(
                 cache,
                 scratch,
                 fonts,
                 font_name,
                 count_glyphs,
-                FRAME_TEXT_STATS_COUNT_LEFT_BASE + player as u8 * FRAME_TEXT_STATS_COUNT_ROWS + row,
+                slot,
                 TextAlign::Left,
                 FRAME_TEXT_VERTEX_BUFFERS,
             );
@@ -1462,13 +1534,15 @@ fn prewarm_count_slots(
     }
     if num_players > 1 {
         for row in 0..FRAME_TEXT_STATS_COUNT_ROWS {
+            let slot = FRAME_TEXT_STATS_COUNT_RIGHT_BASE + row;
+            let _ = padded_num_text_in_slot(0, 4, slot);
             prewarm_prepared_inline_text_slot(
                 cache,
                 scratch,
                 fonts,
                 font_name,
                 count_glyphs,
-                FRAME_TEXT_STATS_COUNT_RIGHT_BASE + row,
+                slot,
                 TextAlign::Right,
                 FRAME_TEXT_VERTEX_BUFFERS,
             );
@@ -1580,6 +1654,107 @@ impl GameplayStatsNumericHotBenchmark {
 
 #[cfg(feature = "bench-support")]
 impl Default for GameplayStatsNumericHotBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct GameplayHudMemoBenchmark {
+    old_count: FixedTextCache<(u32, u8), InlineText, 32>,
+    new_count: SlotTextCache<(u32, u8), InlineText, 7>,
+    old_width: FixedTextCache<(u32, u8), f32, 8>,
+    new_width: SlotTextCache<(u32, u8), f32, 3>,
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayHudMemoBenchmark {
+    pub fn new() -> Self {
+        Self {
+            old_count: FixedTextCache::new(),
+            new_count: SlotTextCache::new(),
+            old_width: FixedTextCache::new(),
+            new_width: SlotTextCache::new(),
+        }
+    }
+
+    pub fn warm(&mut self, frame: u32) {
+        for row in 0..7 {
+            let count = ((frame / 60) + row as u32 * 37) % 10_000;
+            let count_key = (count, 4);
+            let _ = self
+                .old_count
+                .get_or_insert(count_key, || format_padded_num_inline(count, 4));
+            let _ = self
+                .new_count
+                .get_or_insert(row, count_key, || format_padded_num_inline(count, 4));
+        }
+        let seconds = 599 - (frame / 60) % 600;
+        for (slot, value) in [599, seconds, 599].into_iter().enumerate() {
+            let width_key = (value, 2);
+            let width = || f32::from(format_game_time(value, 2).as_str().len() as u16) * 8.0;
+            let _ = self.old_width.get_or_insert(width_key, width);
+            let _ = self.new_width.get_or_insert(slot, width_key, width);
+        }
+    }
+
+    pub fn legacy_count_frame(&mut self, frame: u32) -> u64 {
+        let mut checksum = 0u64;
+        for row in 0..7 {
+            let count = ((frame / 60) + row as u32 * 37) % 10_000;
+            let text = self
+                .old_count
+                .get_or_insert((count, 4), || format_padded_num_inline(count, 4));
+            for byte in text.as_str().bytes() {
+                checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+            }
+        }
+        checksum
+    }
+
+    pub fn optimized_count_frame(&mut self, frame: u32) -> u64 {
+        let mut checksum = 0u64;
+        for row in 0..7 {
+            let count = ((frame / 60) + row as u32 * 37) % 10_000;
+            let text = self
+                .new_count
+                .get_or_insert(row, (count, 4), || format_padded_num_inline(count, 4));
+            for byte in text.as_str().bytes() {
+                checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+            }
+        }
+        checksum
+    }
+
+    pub fn legacy_width_frame(&mut self, frame: u32) -> u64 {
+        let seconds = 599 - (frame / 60) % 600;
+        [599, seconds, 599]
+            .into_iter()
+            .fold(0u64, |checksum, value| {
+                let width = self.old_width.get_or_insert((value, 2), || {
+                    f32::from(format_game_time(value, 2).as_str().len() as u16) * 8.0
+                });
+                checksum.rotate_left(7) ^ u64::from(width.to_bits())
+            })
+    }
+
+    pub fn optimized_width_frame(&mut self, frame: u32) -> u64 {
+        let seconds = 599 - (frame / 60) % 600;
+        [599, seconds, 599]
+            .into_iter()
+            .enumerate()
+            .fold(0u64, |checksum, (slot, value)| {
+                let width = self.new_width.get_or_insert(slot, (value, 2), || {
+                    f32::from(format_game_time(value, 2).as_str().len() as u16) * 8.0
+                });
+                checksum.rotate_left(7) ^ u64::from(width.to_bits())
+            })
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for GameplayHudMemoBenchmark {
     fn default() -> Self {
         Self::new()
     }
@@ -2476,7 +2651,7 @@ pub fn push_double_step_stats(
 
         let number_zoom = banner_data_zoom;
         let label_zoom = 0.833 * number_zoom;
-        let total_w = cached_game_time_width_for_key(total_time_key, asset_manager);
+        let total_w = cached_game_time_width_for_key(total_time_key, 0, asset_manager);
 
         // Simply Love (Time.lua):
         // label x = 32 + (total_width - 28) == total_width + 4
@@ -3397,13 +3572,22 @@ fn build_side_pane(
             let numbers_block_width = (digits as f32) * max_digit_w;
             let numbers_left_x = numbers_cx - numbers_block_width + 2.0;
 
-            let total_width_px =
-                cached_game_time_width_for_key(total_time_key, asset_manager) * time_value_zoom;
-            let remaining_width_px =
-                cached_game_time_width_for_key(remaining_time_key, asset_manager) * time_value_zoom;
+            let total_width_px = cached_game_time_width_for_key(
+                total_time_key,
+                time_slot,
+                asset_manager,
+            ) * time_value_zoom;
+            let remaining_width_px = cached_game_time_width_for_key(
+                remaining_time_key,
+                time_slot + 1,
+                asset_manager,
+            ) * time_value_zoom;
             // Use "9:59" as the baseline look the layout was tuned for.
-            let baseline_width_px =
-                cached_game_time_width_for_key((9 * 60 + 59, 2), asset_manager) * time_value_zoom;
+            let baseline_width_px = cached_game_time_width_for_key(
+                (9 * 60 + 59, 2),
+                GAME_TIME_WIDTH_BASELINE_SLOT,
+                asset_manager,
+            ) * time_value_zoom;
 
             let red_color = color::rgba_hex("#ff3030");
             let white_color = [1.0, 1.0, 1.0, 1.0];
