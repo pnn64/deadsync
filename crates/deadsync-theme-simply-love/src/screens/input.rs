@@ -70,7 +70,7 @@ pub enum ThreeKeyMenuAction {
 
 /// Apply ITGmania's game-button-to-menu-button mapping.
 ///
-/// Pump Center has Start as its secondary menu button. Like ITGmania, the
+/// Pump panels use ITGmania's secondary menu mapping. Like ITGmania, the
 /// secondary mapping is disabled when only dedicated menu buttons are allowed.
 #[inline(always)]
 pub const fn menu_action(
@@ -79,7 +79,11 @@ pub const fn menu_action(
     only_dedicated_menu_buttons: bool,
 ) -> VirtualAction {
     match (game, only_dedicated_menu_buttons, action) {
+        (GameFlag::Pump, false, VirtualAction::p1_down) => VirtualAction::p1_menu_up,
+        (GameFlag::Pump, false, VirtualAction::p1_up) => VirtualAction::p1_menu_down,
         (GameFlag::Pump, false, VirtualAction::p1_center) => VirtualAction::p1_start,
+        (GameFlag::Pump, false, VirtualAction::p2_down) => VirtualAction::p2_menu_up,
+        (GameFlag::Pump, false, VirtualAction::p2_up) => VirtualAction::p2_menu_down,
         (GameFlag::Pump, false, VirtualAction::p2_center) => VirtualAction::p2_start,
         _ => action,
     }
@@ -383,10 +387,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pump_center_is_start_except_in_dedicated_mode() {
+    fn pump_panels_use_itgmania_menu_mapping() {
+        assert_eq!(
+            menu_action(VirtualAction::p1_down, GameFlag::Pump, false),
+            VirtualAction::p1_menu_up,
+        );
+        assert_eq!(
+            menu_action(VirtualAction::p1_up, GameFlag::Pump, false),
+            VirtualAction::p1_menu_down,
+        );
         assert_eq!(
             menu_action(VirtualAction::p1_center, GameFlag::Pump, false),
             VirtualAction::p1_start,
+        );
+        assert_eq!(
+            menu_action(VirtualAction::p2_down, GameFlag::Pump, false),
+            VirtualAction::p2_menu_up,
+        );
+        assert_eq!(
+            menu_action(VirtualAction::p2_up, GameFlag::Pump, false),
+            VirtualAction::p2_menu_down,
         );
         assert_eq!(
             menu_action(VirtualAction::p2_center, GameFlag::Pump, false),

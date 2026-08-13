@@ -222,18 +222,28 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         let target_reverse = targets_visible
             .then(|| receptor.receptor_off_reverse.get(local_col).copied())
             .flatten();
+        let distinct_idle_glow = receptor
+            .receptor_idle_glow_layers
+            .get(local_col)
+            .and_then(Option::as_ref);
         let idle_glow_slot = (targets_visible && receptor.receptor_idle_glow.is_visible())
             .then(|| {
-                receptor
-                    .receptor_glow
-                    .get(local_col)
-                    .and_then(Option::as_ref)
+                distinct_idle_glow.or_else(|| {
+                    receptor
+                        .receptor_glow
+                        .get(local_col)
+                        .and_then(Option::as_ref)
+                })
             })
             .flatten();
-        let idle_glow_reverse = idle_glow_slot
-            .is_some()
-            .then(|| receptor.receptor_glow_reverse.get(local_col).copied())
-            .flatten();
+        let idle_glow_reverse = idle_glow_slot.and_then(|_| {
+            if distinct_idle_glow.is_some() {
+                receptor.receptor_idle_glow_reverse.get(local_col).copied()
+            } else {
+                receptor.receptor_glow_reverse.get(local_col).copied()
+            }
+        });
+        let idle_glow_shares_press = idle_glow_slot.is_some() && distinct_idle_glow.is_none();
         let resolve_press = || {
             let visual = lane.receptor_press_visual?;
             let slot = receptor
@@ -255,6 +265,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     target_reverse,
                     idle_glow_slot,
                     idle_glow_reverse,
+                    idle_glow_shares_press,
                     hold_slot,
                     center,
                     hidden,
@@ -528,8 +539,10 @@ mod tests {
             lift_note_layers: Vec::new(),
             receptor_off: vec![TestSlot::new("target0"), TestSlot::new("target1")],
             receptor_glow: vec![Some(TestSlot::new("press0")), Some(TestSlot::new("press1"))],
+            receptor_idle_glow_layers: vec![None; 2],
             receptor_off_reverse: vec![Default::default(); 2],
             receptor_glow_reverse: vec![Default::default(); 2],
+            receptor_idle_glow_reverse: vec![Default::default(); 2],
             receptor_step_behaviors: Vec::new(),
             mines: Vec::new(),
             mine_fill_slots: Vec::new(),

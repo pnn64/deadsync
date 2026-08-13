@@ -505,6 +505,18 @@ mod tests {
                 .any(|slot| (slot.model_draw.fade[2] - 1.0).abs() <= f32::EPSILON),
             "delta tap-note layers should retain fadetop,1"
         );
+        let tap = ns.receptor_glow[2]
+            .as_ref()
+            .expect("delta should expose its Tap receptor layer");
+        let idle = ns.receptor_idle_glow_layers[2]
+            .as_ref()
+            .expect("delta should expose its animated Glow receptor layer");
+        assert_eq!(ns.receptor_off[2].def.src[0], 0);
+        assert_eq!(idle.def.src[0], 64);
+        assert_eq!(tap.def.src[0], 128);
+        assert_eq!(ns.receptor_idle_glow, ReceptorIdleGlow::ActorEffect);
+        assert!((ns.receptor_glow_behavior.press_alpha_start - 0.6).abs() <= 1e-6);
+        assert!((ns.receptor_glow_behavior.press_alpha_end - 0.6).abs() <= 1e-6);
     }
 
     #[test]

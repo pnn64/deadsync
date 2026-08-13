@@ -75,6 +75,7 @@ pub(crate) struct ReceptorActorsRequest<'a, S> {
     pub target_reverse: Option<ReceptorReverseBehavior>,
     pub idle_glow_slot: Option<&'a S>,
     pub idle_glow_reverse: Option<ReceptorReverseBehavior>,
+    pub idle_glow_shares_press: bool,
     pub hold_slot: Option<&'a S>,
     pub center: [f32; 2],
     pub hidden: bool,
@@ -130,7 +131,7 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
 {
     let targets_visible =
         !request.hidden && !request.hide_targets && request.receptor_alpha > f32::EPSILON;
-    let idle_press_zoom = if request.idle_glow.is_visible() {
+    let idle_press_zoom = if request.idle_glow_shares_press {
         request.press_visual.map_or(1.0, |visual| visual.1)
     } else {
         1.0
@@ -222,7 +223,9 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
                     rotation_y_deg: request.rotation_y_deg,
                     rotation_z_deg: draw.rot[2] - rotation + request.confusion_rotation_deg,
                     uv,
-                    blend: if request.press_behavior.blend_add || draw.blend_add {
+                    blend: if draw.blend_add
+                        || (request.idle_glow_shares_press && request.press_behavior.blend_add)
+                    {
                         BlendMode::Add
                     } else {
                         BlendMode::Alpha
@@ -327,7 +330,7 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
     }
 
     if targets_visible
-        && !request.idle_glow.is_visible()
+        && !request.idle_glow_shares_press
         && let Some(press) = resolve_press()
     {
         let (alpha, zoom) = press.visual;
@@ -579,6 +582,7 @@ mod tests {
             target_reverse: None,
             idle_glow_slot: None,
             idle_glow_reverse: None,
+            idle_glow_shares_press: false,
             hold_slot: hold,
             center: [10.0, 20.0],
             hidden: false,
@@ -670,6 +674,7 @@ mod tests {
         let mut request = request(Some(&target), None, &pulse);
         request.idle_glow = ReceptorIdleGlow::BeatFade;
         request.idle_glow_slot = Some(&glow);
+        request.idle_glow_shares_press = true;
         request.beat = 0.25;
         let mut actors = Vec::new();
 
@@ -699,6 +704,7 @@ mod tests {
             let mut request = request(Some(&target), None, &pulse);
             request.idle_glow = ReceptorIdleGlow::BeatFade;
             request.idle_glow_slot = Some(&glow);
+            request.idle_glow_shares_press = true;
             request.beat = beat;
             request.is_in_delay = is_in_delay;
             let mut actors = Vec::new();
@@ -714,6 +720,37 @@ mod tests {
             assert_eq!(actors.len(), 1, "beat={beat}, delay={is_in_delay}");
             assert_sprite(&actors[0], "target", 100, BlendMode::Alpha);
         }
+    }
+
+    #[test]
+    fn actor_effect_idle_layer_does_not_suppress_distinct_press_glow() {
+        let target = TestSlot::sprite("target");
+        let idle = TestSlot::sprite("idle");
+        let press = TestSlot::sprite("press");
+        let pulse = pulse();
+        let mut request = request(Some(&target), None, &pulse);
+        request.idle_glow = ReceptorIdleGlow::ActorEffect;
+        request.idle_glow_slot = Some(&idle);
+        let mut actors = Vec::new();
+
+        compose_receptor_actors(
+            &mut actors,
+            &mut ModelMeshCache::default(),
+            request,
+            || {
+                Some(ReceptorPress {
+                    slot: &press,
+                    reverse: None,
+                    visual: (0.6, 1.0),
+                })
+            },
+            &texture_source,
+        );
+
+        assert_eq!(actors.len(), 3);
+        assert_sprite(&actors[0], "target", 100, BlendMode::Alpha);
+        assert_sprite(&actors[1], "idle", 105, BlendMode::Alpha);
+        assert_sprite(&actors[2], "press", 105, BlendMode::Add);
     }
 
     #[test]

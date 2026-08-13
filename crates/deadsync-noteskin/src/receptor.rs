@@ -88,18 +88,20 @@ pub enum ReceptorIdleGlow {
     #[default]
     None,
     BeatFade,
+    ActorEffect,
 }
 
 impl ReceptorIdleGlow {
     #[inline(always)]
     pub const fn is_visible(self) -> bool {
-        matches!(self, Self::BeatFade)
+        !matches!(self, Self::None)
     }
 
     #[inline(always)]
     pub fn alpha(self, beat: f32, is_in_delay: bool) -> f32 {
         match self {
             Self::None => 0.0,
+            Self::ActorEffect => 1.0,
             Self::BeatFade => {
                 if !beat.is_finite() || beat < 0.0 {
                     return 0.0;

@@ -10,36 +10,42 @@ use crate::{
 pub fn default_keymap() -> Keymap {
     use VirtualAction as A;
     let mut km = Keymap::default();
-    // Player 1 defaults (WASD + arrows, Enter/Escape).
+    // Player 1 defaults (Pump-standard QESZC + arrows, Enter/Escape).
     km.bind(
         A::p1_up,
         &[
             InputBinding::Key(KeyCode::ArrowUp),
-            InputBinding::Key(KeyCode::KeyW),
+            InputBinding::Key(KeyCode::KeyE),
         ],
     );
     km.bind(
         A::p1_down,
         &[
             InputBinding::Key(KeyCode::ArrowDown),
-            InputBinding::Key(KeyCode::KeyS),
+            InputBinding::Key(KeyCode::KeyQ),
         ],
     );
     km.bind(
         A::p1_left,
         &[
             InputBinding::Key(KeyCode::ArrowLeft),
-            InputBinding::Key(KeyCode::KeyA),
+            InputBinding::Key(KeyCode::KeyZ),
         ],
     );
     km.bind(
         A::p1_right,
         &[
             InputBinding::Key(KeyCode::ArrowRight),
-            InputBinding::Key(KeyCode::KeyD),
+            InputBinding::Key(KeyCode::KeyC),
         ],
     );
-    km.bind(A::p1_center, &[InputBinding::Key(KeyCode::Space)]);
+    km.bind(
+        A::p1_center,
+        &[
+            InputBinding::Key(KeyCode::Space),
+            InputBinding::Key(KeyCode::KeyS),
+        ],
+    );
     km.bind(A::p1_select, &[InputBinding::Key(KeyCode::Slash)]);
     km.bind(A::p1_start, &[InputBinding::Key(KeyCode::Enter)]);
     km.bind(A::p1_back, &[InputBinding::Key(KeyCode::Escape)]);
@@ -158,18 +164,18 @@ where
 
 pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 30] = [
     ("P1_Back", "KeyCode::Escape"),
-    ("P1_Down", "KeyCode::ArrowDown,KeyCode::KeyS"),
-    ("P1_Left", "KeyCode::ArrowLeft,KeyCode::KeyA"),
+    ("P1_Down", "KeyCode::ArrowDown,KeyCode::KeyQ"),
+    ("P1_Left", "KeyCode::ArrowLeft,KeyCode::KeyZ"),
     ("P1_MenuDown", ""),
     ("P1_MenuLeft", ""),
     ("P1_MenuRight", ""),
     ("P1_MenuUp", ""),
     ("P1_Operator", "KeyCode::ScrollLock"),
     ("P1_Restart", ""),
-    ("P1_Right", "KeyCode::ArrowRight,KeyCode::KeyD"),
+    ("P1_Right", "KeyCode::ArrowRight,KeyCode::KeyC"),
     ("P1_Select", "KeyCode::Slash"),
     ("P1_Start", "KeyCode::Enter"),
-    ("P1_Up", "KeyCode::ArrowUp,KeyCode::KeyW"),
+    ("P1_Up", "KeyCode::ArrowUp,KeyCode::KeyE"),
     ("P2_Back", "KeyCode::Numpad0"),
     ("P2_Down", "KeyCode::Numpad2"),
     ("P2_Left", "KeyCode::Numpad4"),
@@ -185,7 +191,7 @@ pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 30] = [
     ("P2_Up", "KeyCode::Numpad8"),
     ("System_FastForward", "KeyCode::Tab"),
     ("System_SlowDown", "KeyCode::Backquote"),
-    ("P1_Center", "KeyCode::Space"),
+    ("P1_Center", "KeyCode::Space,KeyCode::KeyS"),
     ("P2_Center", "KeyCode::Numpad5"),
 ];
 
@@ -773,6 +779,26 @@ mod tests {
             Some(InputBinding::Key(KeyCode::ScrollLock))
         );
         assert_eq!(defaults.binding_at(VirtualAction::p2_operator, 0), None);
+    }
+
+    #[test]
+    fn default_p1_letter_keys_use_pump_qeszc_layout() {
+        let defaults = default_keymap();
+        let bindings = [
+            (VirtualAction::p1_down, KeyCode::KeyQ),
+            (VirtualAction::p1_up, KeyCode::KeyE),
+            (VirtualAction::p1_center, KeyCode::KeyS),
+            (VirtualAction::p1_left, KeyCode::KeyZ),
+            (VirtualAction::p1_right, KeyCode::KeyC),
+        ];
+
+        for (action, key) in bindings {
+            assert_eq!(
+                defaults.binding_at(action, 1),
+                Some(InputBinding::Key(key)),
+                "action={action:?}",
+            );
+        }
     }
 
     #[test]
