@@ -13,8 +13,9 @@ use crate::stats::build_stamina_counts;
 use crate::timing::{
     parse_combos, parse_tickcounts, parse_time_signatures, timing_segments_from_rssp,
 };
-use deadsync_chart::SongData;
+use deadsync_chart::{STANDARD_DIFFICULTY_NAMES, SongData, song::standard_difficulty_index};
 use rssp::{AnalysisOptions, SimfileSummary, analyze};
+use std::cmp::Ordering;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -183,7 +184,7 @@ fn build_charts(
     let global_combos = summary.normalized_combos.as_str();
     let allow_steps_timing =
         rssp::timing::steps_timing_allowed(summary.ssc_version, summary.timing_format);
-    charts
+    let mut charts: Vec<SerializableChartData> = charts
         .into_iter()
         .map(|chart| {
             let lanes = step_type_lanes(&chart.step_type_str);
@@ -281,7 +282,84 @@ fn build_charts(
                 max_bpm,
             }
         })
-        .collect()
+        .collect();
+    adjust_duplicate_charts(&mut charts);
+    charts
+}
+
+/// Match ITGmania's `SongUtil::AdjustDuplicateSteps`: within each standard
+/// difficulty and step type, retain the easiest chart at that difficulty and
+/// expose the others as edits. The chart vector itself stays in simfile order.
+fn adjust_duplicate_charts(charts: &mut Vec<SerializableChartData>) {
+    remove_identical_charts(charts);
+
+    let mut groups: Vec<(String, usize)> = Vec::new();
+    for chart in charts.iter() {
+        let Some(difficulty) = standard_difficulty_index(&chart.difficulty) else {
+            continue;
+        };
+        if !groups.iter().any(|(chart_type, group_difficulty)| {
+            *group_difficulty == difficulty && chart_type.eq_ignore_ascii_case(&chart.chart_type)
+        }) {
+            groups.push((chart.chart_type.clone(), difficulty));
+        }
+    }
+
+    for (chart_type, difficulty) in groups {
+        let difficulty_name = STANDARD_DIFFICULTY_NAMES[difficulty];
+        let mut indices: Vec<usize> = charts
+            .iter()
+            .enumerate()
+            .filter_map(|(index, chart)| {
+                (chart.chart_type.eq_ignore_ascii_case(&chart_type)
+                    && chart.difficulty.eq_ignore_ascii_case(difficulty_name))
+                .then_some(index)
+            })
+            .collect();
+        if indices.len() < 2 {
+            continue;
+        }
+
+        indices.sort_by(|&left, &right| duplicate_chart_cmp(&charts[left], &charts[right]));
+        for index in indices.into_iter().skip(1) {
+            let chart = &mut charts[index];
+            chart.difficulty = "Edit".to_string();
+            if chart.description.is_empty() {
+                chart.description = format!("{difficulty_name} Edit");
+            }
+        }
+    }
+}
+
+fn remove_identical_charts(charts: &mut Vec<SerializableChartData>) {
+    let mut unique: Vec<SerializableChartData> = Vec::with_capacity(charts.len());
+    for chart in charts.drain(..) {
+        let is_standard = standard_difficulty_index(&chart.difficulty).is_some();
+        let duplicate = is_standard
+            && unique.iter().any(|candidate| {
+                candidate.chart_type.eq_ignore_ascii_case(&chart.chart_type)
+                    && candidate.difficulty.eq_ignore_ascii_case(&chart.difficulty)
+                    && candidate.description == chart.description
+                    && candidate.step_artist == chart.step_artist
+                    && candidate.meter == chart.meter
+                    && candidate.notes == chart.notes
+            });
+        if !duplicate {
+            unique.push(chart);
+        }
+    }
+    *charts = unique;
+}
+
+fn duplicate_chart_cmp(left: &SerializableChartData, right: &SerializableChartData) -> Ordering {
+    left.meter
+        .cmp(&right.meter)
+        .then_with(|| left.stats.total_steps.cmp(&right.stats.total_steps))
+        .then_with(|| {
+            left.description
+                .to_lowercase()
+                .cmp(&right.description.to_lowercase())
+        })
 }
 
 fn chart_music_path(
@@ -413,6 +491,114 @@ mod tests {
         );
         assert_eq!(timing.combos[0].combo, 3);
         assert_eq!(timing.combos[0].miss_combo, 2);
+    }
+
+    #[test]
+    fn duplicate_pump_difficulties_become_meter_sorted_edits() {
+        let root = test_dir("pump-duplicate-difficulty");
+        let simfile = root.join("song.ssc");
+        fs::write(
+            &simfile,
+            br#"#VERSION:0.83;
+#TITLE:Duplicate Pump Difficulty;
+#BPMS:0.000=120.000;
+#NOTEDATA:;
+#STEPSTYPE:pump-single;
+#DIFFICULTY:Challenge;
+#METER:20;
+#NOTES:
+10000
+;
+#NOTEDATA:;
+#STEPSTYPE:pump-single;
+#DIFFICULTY:Challenge;
+#METER:3;
+#NOTES:
+01000
+;
+#NOTEDATA:;
+#STEPSTYPE:pump-single;
+#DIFFICULTY:Challenge;
+#METER:15;
+#NOTES:
+00100
+;
+"#,
+        )
+        .unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+
+        let song = parse_song_file(&simfile, &options, |_| 0.0).unwrap();
+
+        assert_eq!(
+            song.charts
+                .iter()
+                .map(|chart| chart.meter)
+                .collect::<Vec<_>>(),
+            [20, 3, 15]
+        );
+        assert_eq!(
+            song.charts
+                .iter()
+                .map(|chart| chart.difficulty.as_str())
+                .collect::<Vec<_>>(),
+            ["Edit", "Challenge", "Edit"]
+        );
+        assert_eq!(song.charts[0].description, "Challenge Edit");
+        assert!(song.charts[1].description.is_empty());
+        assert_eq!(song.charts[2].description, "Challenge Edit");
+
+        let song = build_song_meta(song, 0.0);
+        assert_eq!(
+            song.chart_for_steps_index("pump-single", 4)
+                .map(|chart| chart.meter),
+            Some(3)
+        );
+        assert_eq!(
+            song.edit_charts_sorted("pump-single")
+                .into_iter()
+                .map(|chart| chart.meter)
+                .collect::<Vec<_>>(),
+            [15, 20]
+        );
+    }
+
+    #[test]
+    fn identical_standard_charts_are_removed_before_edit_conversion() {
+        let root = test_dir("identical-standard-charts");
+        let simfile = root.join("song.ssc");
+        fs::write(
+            &simfile,
+            br#"#VERSION:0.83;
+#TITLE:Identical Charts;
+#BPMS:0.000=120.000;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DESCRIPTION:Same;
+#CREDIT:Author;
+#DIFFICULTY:Hard;
+#METER:9;
+#NOTES:
+1000
+;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DESCRIPTION:Same;
+#CREDIT:Author;
+#DIFFICULTY:Hard;
+#METER:9;
+#NOTES:
+1000
+;
+"#,
+        )
+        .unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+
+        let song = parse_song_file(&simfile, &options, |_| 0.0).unwrap();
+
+        assert_eq!(song.charts.len(), 1);
+        assert_eq!(song.charts[0].difficulty, "Hard");
     }
 
     #[test]

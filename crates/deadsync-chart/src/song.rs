@@ -96,9 +96,10 @@ fn lowercase_cmp(left: &str, right: &str) -> Ordering {
 
 #[inline]
 fn edit_chart_cmp(left: &ChartData, right: &ChartData) -> Ordering {
-    lowercase_cmp(&left.description, &right.description)
-        .then_with(|| left.meter.cmp(&right.meter))
-        .then_with(|| left.short_hash.cmp(&right.short_hash))
+    left.meter
+        .cmp(&right.meter)
+        .then_with(|| left.stats.total_steps.cmp(&right.stats.total_steps))
+        .then_with(|| lowercase_cmp(&left.description, &right.description))
 }
 
 #[inline(always)]
@@ -339,13 +340,7 @@ impl SongData {
             .iter()
             .filter(|chart| is_edit_chart(chart, chart_type))
             .collect();
-        edits.sort_by_cached_key(|chart| {
-            (
-                chart.description.to_lowercase(),
-                chart.meter,
-                chart.short_hash.as_str(),
-            )
-        });
+        edits.sort_by(|left, right| edit_chart_cmp(left, right));
         edits
     }
 
@@ -356,14 +351,7 @@ impl SongData {
             .enumerate()
             .filter_map(|(index, chart)| is_edit_chart(chart, chart_type).then_some(index))
             .collect();
-        indices.sort_by_cached_key(|&index| {
-            let chart = &self.charts[index];
-            (
-                chart.description.to_lowercase(),
-                chart.meter,
-                chart.short_hash.as_str(),
-            )
-        });
+        indices.sort_by(|&left, &right| edit_chart_cmp(&self.charts[left], &self.charts[right]));
         indices
     }
 
@@ -938,7 +926,7 @@ mod tests {
     }
 
     #[test]
-    fn edit_chart_steps_follow_sorted_order_after_standard_slots() {
+    fn edit_chart_steps_follow_itg_difficulty_order_after_standard_slots() {
         let mut song = song_with_charts(&["Easy"]);
         let mut later = chart_with_difficulty("Edit");
         later.description = "Zeta".to_string();
@@ -958,12 +946,41 @@ mod tests {
         assert_eq!(
             song.chart_for_steps_index("dance-single", STANDARD_DIFFICULTY_COUNT)
                 .map(|chart| chart.short_hash.as_str()),
-            Some("first-edit")
+            Some("later-edit")
         );
         assert_eq!(
-            song.steps_index_for_chart_hash("dance-single", "later-edit"),
+            song.steps_index_for_chart_hash("dance-single", "first-edit"),
             Some(STANDARD_DIFFICULTY_COUNT + 1)
         );
+    }
+
+    #[test]
+    fn edit_chart_steps_use_tap_count_then_description_for_meter_ties() {
+        let mut song = song_with_charts(&["Easy"]);
+        let mut dense = chart_with_difficulty("Edit");
+        dense.description = "Alpha".to_string();
+        dense.meter = 9;
+        dense.stats.total_steps = 200;
+        dense.short_hash = "dense-edit".to_string();
+        let mut sparse_zeta = chart_with_difficulty("Edit");
+        sparse_zeta.description = "Zeta".to_string();
+        sparse_zeta.meter = 9;
+        sparse_zeta.stats.total_steps = 100;
+        sparse_zeta.short_hash = "sparse-zeta".to_string();
+        let mut sparse_alpha = chart_with_difficulty("Edit");
+        sparse_alpha.description = "alpha".to_string();
+        sparse_alpha.meter = 9;
+        sparse_alpha.stats.total_steps = 100;
+        sparse_alpha.short_hash = "sparse-alpha".to_string();
+        song.charts.extend([dense, sparse_zeta, sparse_alpha]);
+
+        let hashes: Vec<&str> = song
+            .edit_charts_sorted("dance-single")
+            .into_iter()
+            .map(|chart| chart.short_hash.as_str())
+            .collect();
+
+        assert_eq!(hashes, ["sparse-alpha", "sparse-zeta", "dense-edit"]);
     }
 
     #[test]
