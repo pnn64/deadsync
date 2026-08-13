@@ -31,6 +31,11 @@ name = "hold_conversion_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "attack_window_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }

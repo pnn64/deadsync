@@ -2739,6 +2739,109 @@ mod tests {
     }
 
     #[test]
+    fn bounded_chart_attack_window_matches_full_partition_reference() {
+        let row_count = 513usize;
+        let last_row = row_count * 12 + ROWS_PER_BEAT as usize * 2;
+        let timing = test_timing(last_row);
+        let mut source = Vec::with_capacity(row_count * 2);
+        for row_index in 0..row_count {
+            let row = row_index * 12;
+            for lane_index in 0..=usize::from(row_index.is_multiple_of(7)) {
+                let selector = row_index * 3 + lane_index;
+                let note_type = if selector.is_multiple_of(29) {
+                    NoteType::Mine
+                } else if selector.is_multiple_of(23) {
+                    NoteType::Lift
+                } else {
+                    NoteType::Tap
+                };
+                let mut note = test_note_at(
+                    note_type,
+                    None,
+                    selector.is_multiple_of(31),
+                    row,
+                    row as f32 / ROWS_PER_BEAT as f32,
+                );
+                note.column = (row_index * 3 + lane_index * 5) % 4;
+                source.push(note);
+            }
+        }
+        sort_player_notes(&mut source);
+        let row_bounds = (120 * 12, 248 * 12);
+
+        for mods_text in [
+            "mirror,nomines,nolifts",
+            "wide,stomp,echo",
+            "big,quick,bmrize,skippy",
+            "mines,planted,norolls",
+        ] {
+            let mods = parse_attack_mods(mods_text);
+            let mut expected = source.clone();
+            let mut actual = source.clone();
+            apply_chart_attack_window_reference(
+                &mut expected,
+                &timing,
+                0,
+                4,
+                0,
+                row_bounds,
+                mods,
+                0xA5A5_5A5A,
+            );
+            apply_chart_attack_window(
+                &mut actual,
+                &timing,
+                0,
+                4,
+                0,
+                row_bounds,
+                mods,
+                0xA5A5_5A5A,
+            );
+            assert!(chart_attack_notes_sorted(&actual));
+            assert!(chart_attack_notes_sorted(&expected));
+            let mut actual_notes = actual.iter().map(|note| format!("{note:?}")).collect::<Vec<_>>();
+            let mut expected_notes = expected
+                .iter()
+                .map(|note| format!("{note:?}"))
+                .collect::<Vec<_>>();
+            actual_notes.sort_unstable();
+            expected_notes.sort_unstable();
+            assert_eq!(actual_notes, expected_notes, "mods={mods_text}");
+        }
+
+        for row_bounds in [(0, 0), (last_row + 1, last_row + 48)] {
+            let range = chart_attack_note_range(&source, row_bounds.0, row_bounds.1);
+            let expected = source
+                .iter()
+                .position(|note| note.row_index >= row_bounds.0)
+                .unwrap_or(source.len())
+                ..source
+                    .iter()
+                    .position(|note| note.row_index > row_bounds.1)
+                    .unwrap_or(source.len());
+            assert_eq!(range, expected);
+        }
+
+        source.reverse();
+        let mods = parse_attack_mods("mirror,nomines,nolifts");
+        let mut expected = source.clone();
+        let mut actual = source;
+        apply_chart_attack_window_reference(
+            &mut expected,
+            &timing,
+            0,
+            4,
+            0,
+            row_bounds,
+            mods,
+            29,
+        );
+        apply_chart_attack_window(&mut actual, &timing, 0, 4, 0, row_bounds, mods, 29);
+        assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+    }
+
+    #[test]
     fn chart_attacks_for_mode_apply_enabled_chart_windows() {
         let timing = test_timing(ROWS_PER_BEAT as usize * 3);
         let mut notes = vec![
