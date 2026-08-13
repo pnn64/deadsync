@@ -2,11 +2,18 @@ use deadsync_core::{song_time::song_time_ns_delta_seconds, timing::beat_to_note_
 use deadsync_gameplay::NoteCountStat;
 use deadsync_notefield::{
     BrokenRunLookup, StreamProgressLookup,
-    performance::{find_first_displayed_beat, find_first_displayed_row, find_last_displayed_row},
+    performance::{
+        EditBeatBarCursor, cue_segment_ranges, edit_beat_bar_info_for_row,
+        find_first_displayed_beat, find_first_displayed_row, find_last_displayed_row,
+        measure_cue_range_search_enabled,
+    },
 };
 use deadsync_rules::{
+    scroll::ScrollSpeedSetting,
     stream::StreamSegment,
-    timing::{TimingData, TimingSegments},
+    timing::{
+        DelaySegment, ScrollSegment, StopSegment, TimeSignatureSegment, TimingData, TimingSegments,
+    },
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -19,6 +26,11 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 const NOTE_SEARCHES: usize = 300_000;
 const NOTE_STATS: usize = 8_192;
 const CMOD_SEARCHES: usize = 50_000;
+const CUE_FRAMES: usize = 500_000;
+const CUE_SEGMENTS: usize = 4_096;
+const EDIT_FRAMES: usize = 5_000;
+const EDIT_SIGNATURES: usize = 128;
+const EDIT_BARS_PER_SIDE: i32 = 48;
 const HUD_FRAMES: usize = 2_000_000;
 const HUD_SEGMENTS: usize = 512;
 const WARMUP_DIVISOR: usize = 20;
@@ -398,6 +410,263 @@ fn row_precision_benchmark() {
     print_change(&old, &new);
 }
 
+fn cmod_cue_search_benchmark() {
+    let timing = TimingData::from_segments(
+        0.0,
+        0.0,
+        &TimingSegments {
+            bpms: (0..64)
+                .map(|index| (index as f32 * 16.0, 120.0 + (index % 5) as f32 * 15.0))
+                .collect(),
+            ..TimingSegments::default()
+        },
+        &[],
+    );
+    let stats = (0..NOTE_STATS)
+        .map(|index| NoteCountStat {
+            beat: index as f32 * 0.125,
+            notes_lower: index * 2,
+            notes_upper: index * 2 + 2,
+        })
+        .collect::<Vec<_>>();
+    let queries = (0..4_096)
+        .map(|query| {
+            let beat = 80.0 + (query % (NOTE_STATS - 640)) as f32 * 0.125;
+            (beat, timing.get_time_for_beat_ns(beat))
+        })
+        .collect::<Vec<_>>();
+    assert!(!measure_cue_range_search_enabled(
+        true,
+        ScrollSpeedSetting::CMod(600.0),
+        true,
+    ));
+
+    let mut old_query = 0usize;
+    let old = measure(CMOD_SEARCHES, || {
+        let (beat, current_time_ns) = queries[old_query % queries.len()];
+        old_query += 1;
+        black_box(legacy_visible_rows(
+            black_box(&timing),
+            current_time_ns,
+            black_box(beat),
+            768.0,
+            1_424.0,
+            black_box(&stats),
+        ));
+        0
+    });
+    let mut new_query = 0usize;
+    let new = measure(CMOD_SEARCHES, || {
+        let (beat, current_time_ns) = queries[new_query % queries.len()];
+        new_query += 1;
+        let range = measure_cue_range_search_enabled(
+            black_box(true),
+            black_box(ScrollSpeedSetting::CMod(600.0)),
+            black_box(true),
+        )
+        .then(|| {
+            legacy_visible_rows(
+                black_box(&timing),
+                current_time_ns,
+                black_box(beat),
+                768.0,
+                1_424.0,
+                black_box(&stats),
+            )
+        })
+        .flatten();
+        black_box(range);
+        0
+    });
+    assert_eq!(old.checksum, new.checksum);
+    assert_zero_alloc(&old);
+    assert_zero_alloc(&new);
+
+    println!("\nCMod measure-cue range planning ({CMOD_SEARCHES} frames)");
+    print_result("old discarded search", &old);
+    print_result("new mode gate", &new);
+    print_change(&old, &new);
+}
+
+fn range_checksum(ranges: &deadsync_notefield::performance::CueSegmentRanges) -> u64 {
+    ranges.scrolls.start as u64
+        ^ (ranges.scrolls.end as u64).rotate_left(7)
+        ^ (ranges.bpms.start as u64).rotate_left(13)
+        ^ (ranges.bpms.end as u64).rotate_left(19)
+        ^ (ranges.delays.start as u64).rotate_left(29)
+        ^ (ranges.delays.end as u64).rotate_left(37)
+        ^ (ranges.stops.start as u64).rotate_left(43)
+        ^ (ranges.stops.end as u64).rotate_left(53)
+}
+
+fn cue_segment_window_benchmark() {
+    let scrolls = (0..CUE_SEGMENTS)
+        .map(|index| ScrollSegment {
+            beat: index as f32 * 0.5,
+            ratio: 0.5 + (index % 7) as f32 * 0.125,
+        })
+        .collect::<Vec<_>>();
+    let bpms = (0..CUE_SEGMENTS)
+        .map(|index| (index as f32 * 0.5, 90.0 + (index % 11) as f32 * 15.0))
+        .collect::<Vec<_>>();
+    let delays = (0..CUE_SEGMENTS)
+        .map(|index| DelaySegment {
+            beat: index as f32 * 0.5,
+            duration: 0.025,
+        })
+        .collect::<Vec<_>>();
+    let stops = (0..CUE_SEGMENTS)
+        .map(|index| StopSegment {
+            beat: index as f32 * 0.5,
+            duration: 0.05,
+        })
+        .collect::<Vec<_>>();
+    let cycle = CUE_SEGMENTS as f32 * 0.5 - 24.0;
+
+    for query in 0..4_096 {
+        let low = (query as f32 * 0.37) % cycle;
+        let range = Some((low, low + 24.0));
+        let first = cue_segment_ranges(&scrolls, &bpms, &delays, &stops, range);
+        let second = cue_segment_ranges(&scrolls, &bpms, &delays, &stops, range);
+        assert_eq!(range_checksum(&first), range_checksum(&second));
+    }
+
+    let mut old_frame = 0usize;
+    let old = measure(CUE_FRAMES, || {
+        let low = (old_frame as f32 * 0.37) % cycle;
+        old_frame += 1;
+        let range = Some((low, low + 24.0));
+        let first = cue_segment_ranges(
+            black_box(&scrolls),
+            black_box(&bpms),
+            black_box(&delays),
+            black_box(&stops),
+            black_box(range),
+        );
+        let second = cue_segment_ranges(
+            black_box(&scrolls),
+            black_box(&bpms),
+            black_box(&delays),
+            black_box(&stops),
+            black_box(range),
+        );
+        range_checksum(&first).wrapping_add(range_checksum(&second))
+    });
+    let mut new_frame = 0usize;
+    let new = measure(CUE_FRAMES, || {
+        let low = (new_frame as f32 * 0.37) % cycle;
+        new_frame += 1;
+        let ranges = cue_segment_ranges(
+            black_box(&scrolls),
+            black_box(&bpms),
+            black_box(&delays),
+            black_box(&stops),
+            black_box(Some((low, low + 24.0))),
+        );
+        range_checksum(&ranges).wrapping_mul(2)
+    });
+    assert_eq!(old.checksum, new.checksum);
+    assert_zero_alloc(&old);
+    assert_zero_alloc(&new);
+
+    println!("\nmixed-direction cue windows ({CUE_SEGMENTS} segments/type, {CUE_FRAMES} frames)");
+    print_result("old per-group windows", &old);
+    print_result("new shared windows", &new);
+    print_change(&old, &new);
+}
+
+fn edit_info_checksum(info: Option<deadsync_notefield::performance::EditBeatBarInfo>) -> u64 {
+    info.map_or(u64::MAX, |info| {
+        u64::from(info.frame) ^ (info.measure_index.unwrap_or(-1) as u64).rotate_left(17)
+    })
+}
+
+fn edit_bar_cursor_benchmark() {
+    let signatures = (0..EDIT_SIGNATURES)
+        .map(|index| TimeSignatureSegment {
+            beat: index as f32 * 16.0,
+            numerator: [4, 3, 7, 5][index % 4],
+            denominator: [4, 8, 8, 16][index % 4],
+        })
+        .collect::<Vec<_>>();
+    let step_rows = 12;
+    let cycle_rows = beat_to_note_row(16.0 * EDIT_SIGNATURES as f32 - 32.0);
+
+    for frame in 0..4_096 {
+        let center = (frame * 37 % cycle_rows as usize) as i32 + 96;
+        let mut backward = EditBeatBarCursor::new(center, &signatures);
+        let mut forward = backward;
+        for offset in 0..=EDIT_BARS_PER_SIDE {
+            let row = center - offset * step_rows;
+            assert_eq!(
+                backward.info_for_row(row),
+                edit_beat_bar_info_for_row(row, &signatures),
+            );
+        }
+        for offset in 1..=EDIT_BARS_PER_SIDE {
+            let row = center + offset * step_rows;
+            assert_eq!(
+                forward.info_for_row(row),
+                edit_beat_bar_info_for_row(row, &signatures),
+            );
+        }
+    }
+
+    let mut old_frame = 0usize;
+    let old = measure(EDIT_FRAMES, || {
+        let center = (old_frame * 37 % cycle_rows as usize) as i32 + 96;
+        old_frame += 1;
+        let mut checksum = 0u64;
+        for offset in 0..=EDIT_BARS_PER_SIDE {
+            checksum = checksum.wrapping_add(edit_info_checksum(edit_beat_bar_info_for_row(
+                black_box(center - offset * step_rows),
+                black_box(&signatures),
+            )));
+        }
+        for offset in 1..=EDIT_BARS_PER_SIDE {
+            checksum = checksum.wrapping_add(edit_info_checksum(edit_beat_bar_info_for_row(
+                black_box(center + offset * step_rows),
+                black_box(&signatures),
+            )));
+        }
+        checksum
+    });
+    let mut new_frame = 0usize;
+    let new = measure(EDIT_FRAMES, || {
+        let center = (new_frame * 37 % cycle_rows as usize) as i32 + 96;
+        new_frame += 1;
+        let mut backward = EditBeatBarCursor::new(center, black_box(&signatures));
+        let mut forward = backward;
+        let mut checksum = 0u64;
+        for offset in 0..=EDIT_BARS_PER_SIDE {
+            checksum = checksum.wrapping_add(edit_info_checksum(
+                backward.info_for_row(black_box(center - offset * step_rows)),
+            ));
+        }
+        for offset in 1..=EDIT_BARS_PER_SIDE {
+            checksum = checksum.wrapping_add(edit_info_checksum(
+                forward.info_for_row(black_box(center + offset * step_rows)),
+            ));
+        }
+        checksum
+    });
+    assert_eq!(old.checksum, new.checksum);
+    assert_zero_alloc(&old);
+    assert_zero_alloc(&new);
+
+    println!(
+        "\nedit beat-bar metadata ({EDIT_SIGNATURES} signatures, {} bars/frame, {EDIT_FRAMES} frames)",
+        EDIT_BARS_PER_SIDE * 2 + 1,
+    );
+    print_result("old per-bar rescans", &old);
+    print_result("new stack cursors", &new);
+    print_change(&old, &new);
+    println!(
+        "  transient cursor storage: {} B",
+        std::mem::size_of::<EditBeatBarCursor<'_>>() * 2,
+    );
+}
+
 #[derive(Clone, Copy)]
 struct ProgressEntry {
     start: f32,
@@ -587,6 +856,9 @@ fn counter_hud_lookup_benchmark() {
 fn main() {
     note_search_benchmark();
     row_precision_benchmark();
+    cmod_cue_search_benchmark();
+    cue_segment_window_benchmark();
+    edit_bar_cursor_benchmark();
     stream_progress_benchmark();
     counter_hud_lookup_benchmark();
 }

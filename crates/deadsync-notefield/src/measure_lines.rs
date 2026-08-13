@@ -65,8 +65,17 @@ struct MeasureLinePlan {
     edit_candidate_step_rows: i32,
 }
 
+/// Four immutable timing slices resolved once for every direction group.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CueSegmentRanges {
+    pub scrolls: Range<usize>,
+    pub bpms: Range<usize>,
+    pub delays: Range<usize>,
+    pub stops: Range<usize>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct EditBeatBarInfo {
+pub struct EditBeatBarInfo {
     pub frame: u32,
     pub measure_index: Option<i64>,
 }
@@ -123,28 +132,97 @@ fn measure_index_before(segments: &[TimeSignatureSegment], index: usize) -> i64 
     total
 }
 
+/// Stack-only cursor for a monotonic or seeking sequence of edit-bar rows.
+#[derive(Clone, Copy)]
+pub struct EditBeatBarCursor<'a> {
+    segments: &'a [TimeSignatureSegment],
+    index: usize,
+    measure_index_before: i64,
+}
+
+impl<'a> EditBeatBarCursor<'a> {
+    pub fn new(row: i32, segments: &'a [TimeSignatureSegment]) -> Self {
+        let index = sig_index_at_row(segments, row);
+        Self {
+            segments,
+            index,
+            measure_index_before: measure_index_before(segments, index),
+        }
+    }
+
+    fn advance_to(&mut self, row: i32) {
+        while self.index + 1 < self.segments.len()
+            && row >= beat_to_note_row(self.segments[self.index + 1].beat)
+        {
+            let sig = sig_at(self.segments, self.index);
+            let next_sig = sig_at(self.segments, self.index + 1);
+            self.measure_index_before += bars_in_segment(
+                beat_to_note_row(sig.beat),
+                beat_to_note_row(next_sig.beat),
+                sig,
+            );
+            self.index += 1;
+        }
+        while self.index > 0 && row < beat_to_note_row(self.segments[self.index].beat) {
+            let previous = self.index - 1;
+            let sig = sig_at(self.segments, previous);
+            let next_sig = sig_at(self.segments, self.index);
+            self.measure_index_before -= bars_in_segment(
+                beat_to_note_row(sig.beat),
+                beat_to_note_row(next_sig.beat),
+                sig,
+            );
+            self.index = previous;
+        }
+    }
+
+    pub fn info_for_row(&mut self, row: i32) -> Option<EditBeatBarInfo> {
+        if row < 0 {
+            return None;
+        }
+        self.advance_to(row);
+        edit_beat_bar_info(row, self.segments, self.index, self.measure_index_before)
+    }
+}
+
 fn sig_index_at_row(segments: &[TimeSignatureSegment], row: i32) -> usize {
     if segments.is_empty() {
         return 0;
     }
-    let mut idx = 0;
-    for (i, sig) in segments.iter().enumerate() {
-        if row >= beat_to_note_row(sig.beat) {
-            idx = i;
-        }
-    }
-    idx
+    segments
+        .partition_point(|sig| row >= beat_to_note_row(sig.beat))
+        .saturating_sub(1)
 }
 
-pub(crate) fn edit_beat_bar_info_for_row(
+#[cfg(any(test, feature = "bench-support"))]
+fn legacy_sig_index_at_row(segments: &[TimeSignatureSegment], row: i32) -> usize {
+    let mut index = 0;
+    for (candidate, sig) in segments.iter().enumerate() {
+        if row >= beat_to_note_row(sig.beat) {
+            index = candidate;
+        }
+    }
+    index
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn edit_beat_bar_info_for_row(
     row: i32,
     segments: &[TimeSignatureSegment],
 ) -> Option<EditBeatBarInfo> {
     if row < 0 {
         return None;
     }
+    let idx = legacy_sig_index_at_row(segments, row);
+    edit_beat_bar_info(row, segments, idx, measure_index_before(segments, idx))
+}
 
-    let idx = sig_index_at_row(segments, row);
+fn edit_beat_bar_info(
+    row: i32,
+    segments: &[TimeSignatureSegment],
+    idx: usize,
+    measure_index_before: i64,
+) -> Option<EditBeatBarInfo> {
     let sig = sig_at(segments, idx);
     let start_row = beat_to_note_row(sig.beat);
     if row < start_row {
@@ -169,8 +247,8 @@ pub(crate) fn edit_beat_bar_info_for_row(
     } else {
         3
     };
-    let measure_index = is_measure
-        .then(|| measure_index_before(segments, idx) + i64::from(bars_drawn / measure_frequency));
+    let measure_index =
+        is_measure.then(|| measure_index_before + i64::from(bars_drawn / measure_frequency));
     Some(EditBeatBarInfo {
         frame,
         measure_index,
@@ -325,7 +403,7 @@ fn group_geometry(
 fn candidate_for_unit(
     unit: i64,
     plan: MeasureLinePlan,
-    time_signatures: &[TimeSignatureSegment],
+    edit_cursor: Option<&mut EditBeatBarCursor<'_>>,
 ) -> Option<(f32, Option<EditBeatBarInfo>)> {
     if !plan.edit {
         return Some(((unit as f32) * plan.line_step, None));
@@ -333,10 +411,7 @@ fn candidate_for_unit(
     let row = unit
         .checked_mul(i64::from(plan.edit_candidate_step_rows))
         .and_then(|row| i32::try_from(row).ok())?;
-    Some((
-        note_row_to_beat(row),
-        edit_beat_bar_info_for_row(row, time_signatures),
-    ))
+    Some((note_row_to_beat(row), Some(edit_cursor?.info_for_row(row)?)))
 }
 
 fn line_alpha(unit: i64, info: Option<EditBeatBarInfo>, plan: MeasureLinePlan) -> f32 {
@@ -411,6 +486,7 @@ fn append_group_lines(
     request: &MeasureComposeRequest<'_, '_>,
     plan: MeasureLinePlan,
     group: MeasureGroup,
+    edit_cursor: Option<EditBeatBarCursor<'_>>,
 ) {
     let Some((x_center, width)) = group_geometry(request, group) else {
         return;
@@ -418,6 +494,8 @@ fn append_group_lines(
     let y_min = -request.style.measure_line_overscan_y;
     let y_max = request.screen_height + request.style.measure_line_overscan_y;
     let start = (request.current_beat / plan.line_step).floor() as i64;
+    let mut backward_cursor = edit_cursor;
+    let mut forward_cursor = edit_cursor;
 
     let mut unit = if plan.edit { start.max(0) } else { start };
     let mut iterations = 0;
@@ -425,7 +503,7 @@ fn append_group_lines(
         if plan.edit && unit < 0 {
             break;
         }
-        let Some((beat, info)) = candidate_for_unit(unit, plan, request.time_signatures) else {
+        let Some((beat, info)) = candidate_for_unit(unit, plan, backward_cursor.as_mut()) else {
             break;
         };
         let y = request
@@ -449,7 +527,7 @@ fn append_group_lines(
     };
     let mut iterations = 0;
     while iterations < 2000 {
-        let Some((beat, info)) = candidate_for_unit(unit, plan, request.time_signatures) else {
+        let Some((beat, info)) = candidate_for_unit(unit, plan, forward_cursor.as_mut()) else {
             break;
         };
         let y = request
@@ -486,6 +564,7 @@ fn append_group_cues(
     actors: &mut Vec<Actor>,
     request: &MeasureComposeRequest<'_, '_>,
     group: MeasureGroup,
+    ranges: &CueSegmentRanges,
 ) {
     let Some((x_center, width)) = group_geometry(request, group) else {
         return;
@@ -510,27 +589,36 @@ fn append_group_cues(
         }
     };
 
-    let beat_range = visible_cue_beat_range(request);
-    let scroll_range =
-        transition_segment_range(request.scrolls, beat_range, |segment| segment.beat);
-    for window in request.scrolls[scroll_range].windows(2) {
+    for window in request.scrolls[ranges.scrolls.clone()].windows(2) {
         if window[1].ratio != window[0].ratio {
             append_cue(window[1].beat, request.style.measure_cue_scroll_color);
         }
     }
-    let bpm_range = transition_segment_range(request.bpms, beat_range, |segment| segment.0);
-    for window in request.bpms[bpm_range].windows(2) {
+    for window in request.bpms[ranges.bpms.clone()].windows(2) {
         if window[1].1 != window[0].1 {
             append_cue(window[1].0, request.style.measure_cue_bpm_color);
         }
     }
-    let delay_range = point_segment_range(request.delays, beat_range, |segment| segment.beat);
-    for delay in &request.delays[delay_range] {
+    for delay in &request.delays[ranges.delays.clone()] {
         append_cue(delay.beat, request.style.measure_cue_delay_color);
     }
-    let stop_range = point_segment_range(request.stops, beat_range, |segment| segment.beat);
-    for stop in &request.stops[stop_range] {
+    for stop in &request.stops[ranges.stops.clone()] {
         append_cue(stop.beat, request.style.measure_cue_stop_color);
+    }
+}
+
+pub fn cue_segment_ranges(
+    scrolls: &[ScrollSegment],
+    bpms: &[(f32, f32)],
+    delays: &[DelaySegment],
+    stops: &[StopSegment],
+    beat_range: Option<(f32, f32)>,
+) -> CueSegmentRanges {
+    CueSegmentRanges {
+        scrolls: transition_segment_range(scrolls, beat_range, |segment| segment.beat),
+        bpms: transition_segment_range(bpms, beat_range, |segment| segment.0),
+        delays: point_segment_range(delays, beat_range, |segment| segment.beat),
+        stops: point_segment_range(stops, beat_range, |segment| segment.beat),
     }
 }
 
@@ -584,14 +672,29 @@ pub(crate) fn compose_measure_lines(
     }
     let plan = measure_line_plan(&request);
     let groups = measure_groups(&request);
+    let start = (request.current_beat / plan.line_step).floor() as i64;
+    let edit_cursor = plan.edit.then(|| {
+        let row = start
+            .checked_mul(i64::from(plan.edit_candidate_step_rows))
+            .and_then(|row| i32::try_from(row).ok())
+            .unwrap_or_default();
+        EditBeatBarCursor::new(row, request.time_signatures)
+    });
     if request.mode != MeasureLineMode::Off {
         for group in groups.into_iter().flatten() {
-            append_group_lines(actors, &request, plan, group);
+            append_group_lines(actors, &request, plan, group, edit_cursor);
         }
     }
     if request.show_cues {
+        let ranges = cue_segment_ranges(
+            request.scrolls,
+            request.bpms,
+            request.delays,
+            request.stops,
+            visible_cue_beat_range(&request),
+        );
         for group in groups.into_iter().flatten() {
-            append_group_cues(actors, &request, group);
+            append_group_cues(actors, &request, group, &ranges);
         }
     }
 }
@@ -980,8 +1083,8 @@ mod tests {
 
                 let mut legacy = Vec::new();
                 let mut optimized = Vec::new();
-                append_group_lines(&mut legacy, &request, legacy_plan, group);
-                append_group_lines(&mut optimized, &request, optimized_plan, group);
+                append_group_lines(&mut legacy, &request, legacy_plan, group, None);
+                append_group_lines(&mut optimized, &request, optimized_plan, group, None);
                 assert_eq!(
                     legacy.iter().filter_map(sprite_parts).collect::<Vec<_>>(),
                     optimized
@@ -1220,8 +1323,22 @@ mod tests {
             .expect("forward field group");
         let mut old_actors = Vec::new();
         let mut new_actors = Vec::new();
-        append_group_cues(&mut old_actors, &baseline, group);
-        append_group_cues(&mut new_actors, &optimized, group);
+        let old_ranges = cue_segment_ranges(
+            baseline.scrolls,
+            baseline.bpms,
+            baseline.delays,
+            baseline.stops,
+            visible_cue_beat_range(&baseline),
+        );
+        let new_ranges = cue_segment_ranges(
+            optimized.scrolls,
+            optimized.bpms,
+            optimized.delays,
+            optimized.stops,
+            visible_cue_beat_range(&optimized),
+        );
+        append_group_cues(&mut old_actors, &baseline, group, &old_ranges);
+        append_group_cues(&mut new_actors, &optimized, group, &new_ranges);
         assert_eq!(
             old_actors
                 .iter()
@@ -1296,5 +1413,33 @@ mod tests {
                 [1.0, 0.0, 0.0, 0.7],
             ]
         );
+    }
+
+    #[test]
+    fn edit_cursor_matches_legacy_metadata_across_playback_and_seeks() {
+        let signatures = (0..128)
+            .map(|index| TimeSignatureSegment {
+                beat: index as f32 * 16.0,
+                numerator: [4, 3, 7, 5][index % 4],
+                denominator: [4, 8, 8, 16][index % 4],
+            })
+            .collect::<Vec<_>>();
+        let last_row = beat_to_note_row(16.0 * signatures.len() as f32);
+        let mut rows = (-96..=last_row).step_by(3).collect::<Vec<_>>();
+        rows.extend((-96..=last_row).rev().step_by(5));
+        let mut seed = 0x9e37_79b9_u32;
+        rows.extend((0..20_000).map(|_| {
+            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            (seed % (last_row as u32 + 193)) as i32 - 96
+        }));
+
+        let mut cursor = EditBeatBarCursor::new(rows[0], &signatures);
+        for row in rows {
+            assert_eq!(
+                cursor.info_for_row(row),
+                edit_beat_bar_info_for_row(row, &signatures),
+                "row={row}",
+            );
+        }
     }
 }

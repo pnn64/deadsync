@@ -232,15 +232,17 @@ fn compose_field_contents<S, F>(
         )
     };
     let visible_row_range = crate::note_placement::expand_range(travel.visible_row_range());
-    let cue_visible_row_range = options
-        .frame_features
-        .measure_cues
-        .then(|| {
-            crate::note_placement::expand_range(
-                travel.visible_row_range_with_extra(style.measure_line_overscan_y),
-            )
-        })
-        .flatten();
+    let cue_visible_row_range = measure_cue_range_search_enabled(
+        options.frame_features.measure_cues,
+        scroll_speed,
+        request.chart.displayed_beat_monotonic,
+    )
+    .then(|| {
+        crate::note_placement::expand_range(
+            travel.visible_row_range_with_extra(style.measure_line_overscan_y),
+        )
+    })
+    .flatten();
 
     let measure_line_mode = if request.view.edit_beat_bars {
         MeasureLineMode::Edit
@@ -747,6 +749,20 @@ fn compose_field_contents<S, F>(
         &scale_mine_slot,
         sprite_source,
     );
+}
+
+#[inline(always)]
+pub fn measure_cue_range_search_enabled(
+    show_cues: bool,
+    scroll_speed: ScrollSpeedSetting,
+    displayed_beat_monotonic: bool,
+) -> bool {
+    show_cues
+        && displayed_beat_monotonic
+        && matches!(
+            scroll_speed,
+            ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_)
+        )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1494,8 +1510,9 @@ fn finish_field_camera(
 
 #[cfg(test)]
 mod camera_wrap_tests {
-    use super::finish_field_camera;
+    use super::{finish_field_camera, measure_cue_range_search_enabled};
     use deadlib_present::actors::Actor;
+    use deadsync_rules::scroll::ScrollSpeedSetting;
     use glam::Mat4;
 
     #[test]
@@ -1518,6 +1535,23 @@ mod camera_wrap_tests {
         }];
         finish_field_camera(&mut empty, 0, 1, true);
         assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn cue_range_search_only_runs_for_invertible_beat_scroll() {
+        for speed in [
+            ScrollSpeedSetting::XMod(1.0),
+            ScrollSpeedSetting::MMod(600.0),
+        ] {
+            assert!(measure_cue_range_search_enabled(true, speed, true));
+            assert!(!measure_cue_range_search_enabled(false, speed, true));
+            assert!(!measure_cue_range_search_enabled(true, speed, false));
+        }
+        assert!(!measure_cue_range_search_enabled(
+            true,
+            ScrollSpeedSetting::CMod(600.0),
+            true,
+        ));
     }
 }
 

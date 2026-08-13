@@ -151,6 +151,12 @@ pub(crate) use notes::{
 /// Stable entry points used by the standalone hot-path benchmark.
 #[doc(hidden)]
 pub mod performance {
+    pub use crate::field_frame::measure_cue_range_search_enabled;
+    #[cfg(feature = "bench-support")]
+    pub use crate::measure_lines::edit_beat_bar_info_for_row;
+    pub use crate::measure_lines::{
+        CueSegmentRanges, EditBeatBarCursor, EditBeatBarInfo, cue_segment_ranges,
+    };
     pub use crate::notes::{
         find_first_displayed_beat, find_first_displayed_row, find_last_displayed_row,
     };
