@@ -13843,12 +13843,8 @@ pub fn push_actors(
                 center_x.clamp(half_w, screen_w - half_w)
             }
         };
-        let scorebox_center_p1 = fit_scorebox_x(
+        let scorebox_center_wheel = fit_scorebox_x(
             screen_width() * 0.25 - 5.0 + scorebox_side_inset,
-            scorebox_zoom,
-        );
-        let scorebox_center_p2 = fit_scorebox_x(
-            screen_width() * 0.75 + 5.0 - scorebox_side_inset,
             scorebox_zoom,
         );
         let footer_top = screen_height() - 32.0;
@@ -13946,33 +13942,16 @@ pub fn push_actors(
                 );
             }
         } else if is_versus {
-            let incumbent = state.session.player_side;
-            if incumbent == profile_data::PlayerSide::P2 {
+            // A sole GS box belongs beside the wheel; the opposite slot overlaps chart UI.
+            let sole_gs_side = match (p1_gs, p2_gs) {
+                (true, false) => Some(profile_data::PlayerSide::P1),
+                (false, true) => Some(profile_data::PlayerSide::P2),
+                _ => None,
+            };
+            if let Some(side) = sole_gs_side {
                 push_scorebox(
-                    profile_data::PlayerSide::P2,
-                    scorebox_center_p1,
-                    scorebox_center_y_above_pane,
-                    scorebox_zoom,
-                    0,
-                );
-                push_scorebox(
-                    profile_data::PlayerSide::P1,
-                    scorebox_center_p2,
-                    scorebox_center_y_above_pane,
-                    scorebox_zoom,
-                    0,
-                );
-            } else {
-                push_scorebox(
-                    profile_data::PlayerSide::P1,
-                    scorebox_center_p1,
-                    scorebox_center_y_above_pane,
-                    scorebox_zoom,
-                    0,
-                );
-                push_scorebox(
-                    profile_data::PlayerSide::P2,
-                    scorebox_center_p2,
+                    side,
+                    scorebox_center_wheel,
                     scorebox_center_y_above_pane,
                     scorebox_zoom,
                     0,
@@ -13981,7 +13960,7 @@ pub fn push_actors(
         } else if solo_side == profile_data::PlayerSide::P2 {
             push_scorebox(
                 profile_data::PlayerSide::P2,
-                scorebox_center_p1,
+                scorebox_center_wheel,
                 scorebox_center_y_above_pane,
                 scorebox_zoom,
                 0,
@@ -13989,7 +13968,7 @@ pub fn push_actors(
         } else {
             push_scorebox(
                 profile_data::PlayerSide::P1,
-                scorebox_center_p1,
+                scorebox_center_wheel,
                 scorebox_center_y_p1_single,
                 scorebox_zoom,
                 0,
@@ -14648,6 +14627,7 @@ mod tests {
     use crate::screens::ThemeEffect;
     use crate::screens::components::select_music::music_wheel;
     use crate::views::ProfilePickerView;
+    use deadlib_present::actors::Actor;
     use deadsync_chart::{SongData, SongPack, SyncPref};
     use deadsync_core::input::InputSource;
     use deadsync_input::{
@@ -14668,6 +14648,55 @@ mod tests {
             timestamp: Instant::now(),
             host_nanos: 0,
         }
+    }
+
+    fn texture_offset(actor: &Actor, key: &str) -> Option<[f32; 2]> {
+        match actor {
+            Actor::Sprite { source, offset, .. } if source.texture_key() == Some(key) => {
+                Some(*offset)
+            }
+            Actor::Frame { children, .. } => {
+                children.iter().find_map(|actor| texture_offset(actor, key))
+            }
+            _ => None,
+        }
+    }
+
+    fn versus_scorebox_state(
+        incumbent: profile_data::PlayerSide,
+        gs_sides: [bool; 2],
+    ) -> super::State {
+        let song = super::test_folder_stats_song(0);
+        let mut state = init_placeholder();
+        state.session.play_style = profile_data::PlayStyle::Versus;
+        state.session.player_side = incumbent;
+        state.session.joined = [true, true];
+        state.session.guest = gs_sides.map(|active| !active);
+        state.time_since_selection_change = PREVIEW_DELAY_SECONDS;
+        state.policy.presentation.show_scorebox = true;
+        state.policy.presentation.scorebox_cycle_enabled = true;
+        state.policy.presentation.scorebox_in_step_pane = false;
+        state.entries = vec![super::MusicWheelEntry::Song(song.clone())];
+        super::ensure_chart_cache_for_song(&mut state, &song, "dance-single", true);
+
+        for side_idx in 0..2 {
+            if !gs_sides[side_idx] {
+                continue;
+            }
+            let chart_hash =
+                super::immediate_selected_charts(&state, profile_data::PlayStyle::Versus)[side_idx]
+                    .expect("versus test song should have a chart for each side")
+                    .short_hash
+                    .clone();
+            state.scoreboxes[side_idx] = crate::views::ScoreboxSideView {
+                joined: true,
+                chart_hash: Some(chart_hash),
+                groovestats_active: true,
+                leaderboards: Some(deadsync_score::CachedPlayerLeaderboardData::loading()),
+                ..Default::default()
+            };
+        }
+        state
     }
 
     #[test]
@@ -15569,22 +15598,9 @@ mod tests {
 
     #[test]
     fn gs_scorebox_remains_visible_at_cabinet_aspect_ratio() {
-        use deadlib_present::actors::Actor;
         use deadlib_present::space::{
             metrics_for_window, screen_width, set_current_metrics, set_current_window_px,
         };
-
-        fn texture_offset(actor: &Actor, key: &str) -> Option<[f32; 2]> {
-            match actor {
-                Actor::Sprite { source, offset, .. } if source.texture_key() == Some(key) => {
-                    Some(*offset)
-                }
-                Actor::Frame { children, .. } => {
-                    children.iter().find_map(|actor| texture_offset(actor, key))
-                }
-                _ => None,
-            }
-        }
 
         let mut state = init_placeholder();
         state.session.play_style = profile_data::PlayStyle::Single;
@@ -15626,6 +15642,57 @@ mod tests {
             (0.0..=logical_width).contains(&x),
             "GS box center {x} should fit within logical width {logical_width}"
         );
+    }
+
+    #[test]
+    fn sole_versus_gs_scorebox_stays_on_wheel_side() {
+        use deadlib_present::space::{
+            metrics_for_window, screen_center_x, set_current_metrics, set_current_window_px,
+        };
+
+        set_current_window_px(854, 480);
+        set_current_metrics(metrics_for_window(854, 480));
+        let wheel_side_min_x = screen_center_x();
+
+        for incumbent in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
+            for gs_side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
+                let side_idx = profile_data::player_side_index(gs_side);
+                let state = versus_scorebox_state(incumbent, [side_idx == 0, side_idx == 1]);
+
+                let actors = super::get_actors(&state, &crate::assets::AssetManager::new(), 1);
+                let [x, _] = actors
+                    .iter()
+                    .find_map(|actor| texture_offset(actor, "GrooveStats.png"))
+                    .expect("the sole active GS side should construct a scorebox");
+                assert!(
+                    x > wheel_side_min_x,
+                    "incumbent {incumbent:?}, GS side {gs_side:?} placed scorebox at {x}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn dual_versus_gs_scoreboxes_stay_in_player_panes() {
+        use deadlib_present::space::{
+            metrics_for_window, screen_center_x, set_current_metrics, set_current_window_px,
+        };
+
+        set_current_window_px(854, 480);
+        set_current_metrics(metrics_for_window(854, 480));
+        let center_x = screen_center_x();
+        let state = versus_scorebox_state(profile_data::PlayerSide::P1, [true, true]);
+        let actors = super::get_actors(&state, &crate::assets::AssetManager::new(), 1);
+        let mut logo_xs: Vec<_> = actors
+            .iter()
+            .filter_map(|actor| texture_offset(actor, "GrooveStats.png"))
+            .map(|[x, _]| x)
+            .collect();
+        logo_xs.sort_by(f32::total_cmp);
+
+        assert_eq!(logo_xs.len(), 2);
+        assert!(logo_xs[0] < center_x);
+        assert!(logo_xs[1] > center_x);
     }
 
     #[test]
