@@ -264,11 +264,9 @@ impl App {
         let [p1_hash, p2_hash] = scorebox_hashes;
         let [p1_leaderboards, p2_leaderboards] = scorebox_leaderboards;
         let pane_filter = super::scorebox_pane_filter(config);
-        let srpg10 = matches!(config.srpg_variant, config::SrpgVariant::Srpg10)
-            && config.visual_style.is_srpg();
         let scoreboxes = [
-            Self::scorebox_side_view(p1_profile, p1_hash, p1_leaderboards, pane_filter, srpg10),
-            Self::scorebox_side_view(p2_profile, p2_hash, p2_leaderboards, pane_filter, srpg10),
+            Self::scorebox_side_view(p1_profile, p1_hash, p1_leaderboards, pane_filter),
+            Self::scorebox_side_view(p2_profile, p2_hash, p2_leaderboards, pane_filter),
         ];
         let favorites = (select_music::local_profile_ids(&self.state.screens.select_music_state)
             != &profiles.local_profile_ids)

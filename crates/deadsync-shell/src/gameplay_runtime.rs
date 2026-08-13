@@ -47,8 +47,6 @@ fn policy_view(config: &config::Config) -> GameplayPolicyView {
             hard_ex: config.select_music_scorebox_cycle_hard_ex,
             tournaments: config.select_music_scorebox_cycle_tournaments,
         },
-        srpg10_scorebox: matches!(config.srpg_variant, config::SrpgVariant::Srpg10)
-            && config.visual_style.is_srpg(),
         smx_profile_enabled: smx_profile_enabled(),
     }
 }

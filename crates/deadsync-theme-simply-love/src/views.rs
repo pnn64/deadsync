@@ -73,7 +73,6 @@ pub struct GameplayPolicyView {
     pub bpm_position: deadsync_config::prelude::GameplayBpmPosition,
     pub machine_font: deadsync_config::prelude::MachineFont,
     pub scorebox_pane_filter: deadsync_score::SelectMusicScoreboxFilter,
-    pub srpg10_scorebox: bool,
     pub smx_profile_enabled: bool,
 }
 
@@ -91,7 +90,6 @@ impl Default for GameplayPolicyView {
             bpm_position: config.gameplay_bpm_position,
             machine_font: config.machine_font,
             scorebox_pane_filter: deadsync_score::SelectMusicScoreboxFilter::default(),
-            srpg10_scorebox: false,
             smx_profile_enabled: false,
         }
     }
@@ -465,7 +463,6 @@ pub struct ScoreboxSideView {
     pub groovestats_active: bool,
     pub show_ex_score: bool,
     pub pane_filter: deadsync_score::SelectMusicScoreboxFilter,
-    pub srpg10: bool,
     pub display_name: Arc<str>,
     pub groovestats_username: Arc<str>,
     pub player_initials: Arc<str>,

@@ -1561,8 +1561,6 @@ impl App {
         config: &config::Config,
     ) -> EvaluationRuntimeView {
         let pane_filter = scorebox_pane_filter(config);
-        let srpg10 = matches!(config.srpg_variant, config::SrpgVariant::Srpg10)
-            && config.visual_style.is_srpg();
         let player_queries = std::array::from_fn(|player_idx| {
             state
                 .score_info
@@ -1624,7 +1622,6 @@ impl App {
                     Some(score_info.chart.short_hash.clone()),
                     leaderboards[player_idx].clone(),
                     pane_filter,
-                    srpg10,
                 )
             }),
             favorites,
@@ -1686,7 +1683,6 @@ impl App {
         chart_hash: Option<String>,
         leaderboards: Option<deadsync_score::CachedPlayerLeaderboardData>,
         pane_filter: deadsync_score::SelectMusicScoreboxFilter,
-        srpg10: bool,
     ) -> ScoreboxSideView {
         let profile_id = player.leaderboard.persistent_profile_id();
         let local_itg = chart_hash.as_deref().and_then(|hash| {
@@ -1738,7 +1734,6 @@ impl App {
             groovestats_active: player.leaderboard.gs_active,
             show_ex_score: player.leaderboard.show_ex_score,
             pane_filter,
-            srpg10,
             display_name: Arc::clone(&player.display_name),
             groovestats_username: Arc::clone(&player.groovestats_username),
             player_initials: Arc::clone(&player.player_initials),

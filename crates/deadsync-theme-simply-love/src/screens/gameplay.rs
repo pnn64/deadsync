@@ -4217,7 +4217,6 @@ pub fn push_scorebox_actors_for_side(
 ) {
     state.scorebox_plans[profile_data::player_side_index(side)].push_actors(
         actors,
-        state.runtime_view.policy.srpg10_scorebox,
         center_x,
         center_y,
         zoom,

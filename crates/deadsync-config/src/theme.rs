@@ -516,6 +516,9 @@ pub enum SrpgVariant {
 impl SrpgVariant {
     pub const ALL: [Self; 2] = [Self::Srpg9, Self::Srpg10];
 
+    /// Current SRPG event represented by GrooveStats' generic RPG panes.
+    pub const CURRENT: Self = Self::Srpg10;
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Srpg9 => "SRPG9",

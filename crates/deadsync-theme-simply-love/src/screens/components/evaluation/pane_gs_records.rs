@@ -5,6 +5,7 @@ use crate::screens::components::shared::gs_scorebox::{
 use crate::views::ScoreboxSideView;
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::color;
+use deadsync_config::prelude::SrpgVariant;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 
@@ -47,10 +48,10 @@ impl RecordsPaneKind {
     }
 
     #[inline(always)]
-    fn logo(self, srpg10: bool) -> &'static str {
+    fn logo(self) -> &'static str {
         match self {
             Self::ItlEx => "ITL.png",
-            Self::Srpg => srpg_logo_texture_key(srpg10),
+            Self::Srpg => srpg_logo_texture_key(SrpgVariant::CURRENT),
             Self::ArrowCloudHardEx => "arrowcloud.png",
             Self::GrooveStatsItg => "GrooveStats.png",
             Self::GrooveStatsEx => "BoogieStatsEX.png",
@@ -225,7 +226,7 @@ fn build_records_pane(
     }
 
     let mut children = Vec::with_capacity(GS_RECORD_ROWS * 4 + 1);
-    let logo = kind.logo(runtime.srpg10);
+    let logo = kind.logo();
     children.push(act!(sprite_static(logo):
         align(0.5, 0.5):
         xy(0.0, 100.0 * pane_zoom):
@@ -385,13 +386,7 @@ mod tests {
 
     #[test]
     fn groovestats_ex_uses_in_pane_ex_logo() {
-        assert_eq!(
-            RecordsPaneKind::GrooveStatsItg.logo(false),
-            "GrooveStats.png"
-        );
-        assert_eq!(
-            RecordsPaneKind::GrooveStatsEx.logo(false),
-            "BoogieStatsEX.png"
-        );
+        assert_eq!(RecordsPaneKind::GrooveStatsItg.logo(), "GrooveStats.png");
+        assert_eq!(RecordsPaneKind::GrooveStatsEx.logo(), "BoogieStatsEX.png");
     }
 }

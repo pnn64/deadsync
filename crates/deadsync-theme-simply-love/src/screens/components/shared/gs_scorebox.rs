@@ -9,6 +9,7 @@ use crate::views::ScoreboxSideView;
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
+use deadsync_config::prelude::SrpgVariant;
 use deadsync_score as score_data;
 use std::borrow::Cow;
 use std::cell::RefCell;
@@ -102,7 +103,6 @@ impl GameplayScoreboxPlan {
     pub(crate) fn push_actors(
         &self,
         actors: &mut Vec<Actor>,
-        srpg10: bool,
         center_x: f32,
         center_y: f32,
         zoom: f32,
@@ -111,7 +111,6 @@ impl GameplayScoreboxPlan {
         push_gameplay_scorebox_actors_from_panes(
             actors,
             &self.panes,
-            srpg10,
             center_x,
             center_y,
             zoom,
@@ -886,7 +885,6 @@ fn push_srpg_logo_overlay(
     center_y: f32,
     zoom: f32,
     z_base: i16,
-    srpg10: bool,
 ) {
     let alpha = logo_alpha(
         cycle,
@@ -897,7 +895,7 @@ fn push_srpg_logo_overlay(
     );
     push_centered_logo(
         actors,
-        srpg_logo_texture_key(srpg10),
+        srpg_logo_texture_key(SrpgVariant::CURRENT),
         center_x,
         center_y,
         zoom,
@@ -907,11 +905,10 @@ fn push_srpg_logo_overlay(
     );
 }
 
-pub(crate) const fn srpg_logo_texture_key(srpg10: bool) -> &'static str {
-    if srpg10 {
-        "srpg10_logo_alt.png"
-    } else {
-        "srpg9_logo_alt.png"
+pub(crate) const fn srpg_logo_texture_key(variant: SrpgVariant) -> &'static str {
+    match variant {
+        SrpgVariant::Srpg9 => "srpg9_logo_alt.png",
+        SrpgVariant::Srpg10 => "srpg10_logo_alt.png",
     }
 }
 
@@ -946,14 +943,13 @@ fn push_header_overlays(
     center_y: f32,
     zoom: f32,
     z_base: i16,
-    srpg10: bool,
 ) {
     push_gs_logo_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
     push_arrowcloud_logo_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
     push_ex_header_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
     push_hard_ex_header_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
     push_srpg_logo_overlay(
-        actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base, srpg10,
+        actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base,
     );
     push_itl_logo_overlay(
         actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base,
@@ -1066,19 +1062,11 @@ pub fn select_music_scorebox_actors(
         return Vec::new();
     };
     let panes = select_music_panes_from_snapshot(snapshot, runtime);
-    gameplay_scorebox_actors_from_panes(
-        &panes,
-        runtime.srpg10,
-        center_x,
-        center_y,
-        zoom,
-        elapsed_seconds,
-    )
+    gameplay_scorebox_actors_from_panes(&panes, center_x, center_y, zoom, elapsed_seconds)
 }
 
 fn gameplay_scorebox_actors_from_panes(
     panes: &[GameplayScoreboxPane],
-    srpg10: bool,
     center_x: f32,
     center_y: f32,
     zoom: f32,
@@ -1088,7 +1076,6 @@ fn gameplay_scorebox_actors_from_panes(
     push_gameplay_scorebox_actors_from_panes(
         &mut actors,
         panes,
-        srpg10,
         center_x,
         center_y,
         zoom,
@@ -1100,7 +1087,6 @@ fn gameplay_scorebox_actors_from_panes(
 fn push_gameplay_scorebox_actors_from_panes(
     actors: &mut Vec<Actor>,
     panes: &[GameplayScoreboxPane],
-    srpg10: bool,
     center_x: f32,
     center_y: f32,
     zoom: f32,
@@ -1139,9 +1125,7 @@ fn push_gameplay_scorebox_actors_from_panes(
         diffuse(0.0, 0.0, 0.0, 1.0):
         z(z_base + 1)
     ));
-    push_header_overlays(
-        actors, cycle, cur, next, center_x, center_y, zoom, z_base, srpg10,
-    );
+    push_header_overlays(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
 
     push_rows(
         actors,
@@ -1229,7 +1213,7 @@ impl GameplayScoreboxBenchmark {
         };
         let plan = GameplayScoreboxPlan::new(Some(&snapshot), &profile, filter);
         let mut scratch = Vec::new();
-        plan.push_actors(&mut scratch, false, 320.0, 160.0, 1.0, 4.25);
+        plan.push_actors(&mut scratch, 320.0, 160.0, 1.0, 4.25);
         scratch.clear();
         Self { plan, scratch }
     }
@@ -1237,7 +1221,7 @@ impl GameplayScoreboxBenchmark {
     pub fn frame(&mut self, elapsed_seconds: f32) -> usize {
         self.scratch.clear();
         self.plan
-            .push_actors(&mut self.scratch, false, 320.0, 160.0, 1.0, elapsed_seconds);
+            .push_actors(&mut self.scratch, 320.0, 160.0, 1.0, elapsed_seconds);
         gameplay_scorebox_actor_checksum(std::hint::black_box(&self.scratch))
     }
 }
@@ -1245,6 +1229,19 @@ impl GameplayScoreboxBenchmark {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn active_srpg_panes_use_current_event_logo() {
+        assert_eq!(SrpgVariant::CURRENT, SrpgVariant::Srpg10);
+        assert_eq!(
+            srpg_logo_texture_key(SrpgVariant::CURRENT),
+            "srpg10_logo_alt.png"
+        );
+        assert_eq!(
+            srpg_logo_texture_key(SrpgVariant::Srpg9),
+            "srpg9_logo_alt.png"
+        );
+    }
 
     fn entry(rank: u32, name: &str, is_self: bool, is_rival: bool) -> score_data::LeaderboardEntry {
         score_data::LeaderboardEntry {
