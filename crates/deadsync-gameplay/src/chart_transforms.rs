@@ -156,6 +156,13 @@ pub fn sort_player_notes(notes: &mut [Note]) {
     notes.sort_unstable_by_key(|note| (note.row_index, note.column));
 }
 
+#[inline(always)]
+fn notes_row_col_sorted(notes: &[Note]) -> bool {
+    notes.windows(2).all(|pair| {
+        (pair[0].row_index, pair[0].column) <= (pair[1].row_index, pair[1].column)
+    })
+}
+
 pub fn player_rows(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usize> {
     let mut rows = Vec::with_capacity(notes.len());
     let mut ordered = true;
@@ -359,14 +366,19 @@ pub fn set_added_tap_note(
     row: usize,
     column: usize,
 ) -> bool {
-    let Some(beat) = timing_player.get_beat_for_row(row) else {
+    let Some(note) = added_tap_note(timing_player, row, column) else {
         return false;
     };
     remove_cell_notes(notes, row, column);
-    let quantization_idx = quantization_index_from_beat(beat);
-    notes.push(Note {
+    notes.push(note);
+    true
+}
+
+fn added_tap_note(timing_player: &TimingData, row: usize, column: usize) -> Option<Note> {
+    let beat = timing_player.get_beat_for_row(row)?;
+    Some(Note {
         beat,
-        quantization_idx,
+        quantization_idx: quantization_index_from_beat(beat),
         column,
         note_type: NoteType::Tap,
         row_index: row,
@@ -376,8 +388,7 @@ pub fn set_added_tap_note(
         mine_result: None,
         is_fake: false,
         can_be_judged: timing_player.is_judgable_at_beat(beat),
-    });
-    true
+    })
 }
 
 pub fn set_added_mine_note(
@@ -616,7 +627,153 @@ pub fn stomp_mirror_track(local_track: usize, cols: usize) -> usize {
     }
 }
 
-pub fn apply_insert_intelligent_taps(
+#[derive(Clone, Copy, Default)]
+struct IntelligentRowSummary {
+    nonempty: u64,
+    tap_or_hold: u64,
+}
+
+impl IntelligentRowSummary {
+    #[inline(always)]
+    fn single_endpoint(self) -> bool {
+        self.nonempty.count_ones() == 1 && self.tap_or_hold.count_ones() == 1
+    }
+
+    #[inline(always)]
+    fn first_track(self) -> Option<usize> {
+        (self.nonempty != 0).then(|| self.nonempty.trailing_zeros() as usize)
+    }
+}
+
+fn intelligent_row_summary(
+    notes: &[Note],
+    row: usize,
+    col_offset: usize,
+    cols: usize,
+) -> IntelligentRowSummary {
+    let start = notes.partition_point(|note| note.row_index < row);
+    let end = notes.partition_point(|note| note.row_index <= row);
+    intelligent_row_summary_slice(&notes[start..end], col_offset, cols)
+}
+
+fn intelligent_row_summary_slice(
+    notes: &[Note],
+    col_offset: usize,
+    cols: usize,
+) -> IntelligentRowSummary {
+    notes.iter().fold(
+        IntelligentRowSummary::default(),
+        |mut summary, note| {
+            let Some(local) = local_player_col(note.column, col_offset, cols) else {
+                return summary;
+            };
+            let bit = 1u64 << local;
+            summary.nonempty |= bit;
+            if matches!(
+                note.note_type,
+                NoteType::Tap | NoteType::Lift | NoteType::Hold | NoteType::Roll
+            ) {
+                summary.tap_or_hold |= bit;
+            }
+            summary
+        },
+    )
+}
+
+fn intelligent_range_has_note(
+    notes: &[Note],
+    start_row: usize,
+    end_row: usize,
+    col_offset: usize,
+    cols: usize,
+) -> bool {
+    if end_row < start_row {
+        return false;
+    }
+    let start = notes.partition_point(|note| note.row_index < start_row);
+    let end = notes.partition_point(|note| note.row_index <= end_row);
+    notes[start..end]
+        .iter()
+        .any(|note| local_player_col(note.column, col_offset, cols).is_some())
+}
+
+fn intelligent_candidate_count(
+    notes: &[Note],
+    col_offset: usize,
+    cols: usize,
+    window_stride_rows: usize,
+) -> usize {
+    let mut count = 0usize;
+    let mut row_start = 0usize;
+    while row_start < notes.len() {
+        let row = notes[row_start].row_index;
+        let mut row_end = row_start + 1;
+        while row_end < notes.len() && notes[row_end].row_index == row {
+            row_end += 1;
+        }
+        if row.is_multiple_of(window_stride_rows)
+            && notes[row_start..row_end]
+                .iter()
+                .any(|note| local_player_col(note.column, col_offset, cols).is_some())
+        {
+            count += 1;
+        }
+        row_start = row_end;
+    }
+    count
+}
+
+fn intelligent_add_track(
+    earlier_track: Option<usize>,
+    later_track: usize,
+    cols: usize,
+    skippy_mode: bool,
+) -> usize {
+    if skippy_mode && earlier_track.is_some() && earlier_track != Some(later_track) {
+        earlier_track.unwrap_or(0)
+    } else if let Some(earlier_track) = earlier_track {
+        if earlier_track.abs_diff(later_track) >= 2 {
+            earlier_track.min(later_track).saturating_add(1)
+        } else if earlier_track.min(later_track) >= 1 {
+            earlier_track.min(later_track) - 1
+        } else if earlier_track.max(later_track).saturating_add(1) < cols {
+            earlier_track.max(later_track).saturating_add(1)
+        } else {
+            0
+        }
+    } else {
+        0
+    }
+}
+
+fn set_added_tap_note_sorted(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    row: usize,
+    column: usize,
+) -> bool {
+    let Some(note) = added_tap_note(timing_player, row, column) else {
+        return false;
+    };
+    let row_start = notes.partition_point(|note| note.row_index < row);
+    let mut row_end = notes.partition_point(|note| note.row_index <= row);
+    let mut index = row_start;
+    while index < row_end {
+        if notes[index].column == column {
+            notes.remove(index);
+            row_end -= 1;
+        } else {
+            index += 1;
+        }
+    }
+    let insert = row_start
+        + notes[row_start..row_end].partition_point(|existing| existing.column <= column);
+    notes.insert(insert, note);
+    true
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_insert_intelligent_taps_rescan(
     notes: &mut Vec<Note>,
     timing_player: &TimingData,
     col_offset: usize,
@@ -633,7 +790,7 @@ pub fn apply_insert_intelligent_taps(
     let require_begin = !skippy_mode;
     let require_end = true;
     for &row in &rows {
-        if row % window_stride_rows != 0 {
+        if !row.is_multiple_of(window_stride_rows) {
             continue;
         }
         let row_earlier = row;
@@ -682,22 +839,7 @@ pub fn apply_insert_intelligent_taps(
         let Some(later_track) = later_track else {
             continue;
         };
-        let track_to_add =
-            if skippy_mode && earlier_track.is_some() && earlier_track != Some(later_track) {
-                earlier_track.unwrap_or(0)
-            } else if let Some(earlier_track) = earlier_track {
-                if earlier_track.abs_diff(later_track) >= 2 {
-                    earlier_track.min(later_track).saturating_add(1)
-                } else if earlier_track.min(later_track) >= 1 {
-                    earlier_track.min(later_track) - 1
-                } else if earlier_track.max(later_track).saturating_add(1) < cols {
-                    earlier_track.max(later_track).saturating_add(1)
-                } else {
-                    0
-                }
-            } else {
-                0
-            };
+        let track_to_add = intelligent_add_track(earlier_track, later_track, cols, skippy_mode);
 
         let _ = set_added_tap_note(
             notes,
@@ -706,6 +848,272 @@ pub fn apply_insert_intelligent_taps(
             col_offset.saturating_add(track_to_add),
         );
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_insert_intelligent_taps_sorted(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    window_size_rows: usize,
+    insert_offset_rows: usize,
+    window_stride_rows: usize,
+    skippy_mode: bool,
+) {
+    debug_assert!(notes_row_sorted(notes));
+    let candidate_count =
+        intelligent_candidate_count(notes, col_offset, cols, window_stride_rows);
+    notes.reserve(candidate_count);
+
+    let require_begin = !skippy_mode;
+    let mut row_cursor = 0usize;
+    let mut hold_cursor = 0usize;
+    let mut latest = [usize::MAX; MAX_COLS];
+    while row_cursor < notes.len() {
+        let row = notes[row_cursor].row_index;
+        let row_start = row_cursor;
+        row_cursor += 1;
+        while row_cursor < notes.len() && notes[row_cursor].row_index == row {
+            row_cursor += 1;
+        }
+        let earlier =
+            intelligent_row_summary_slice(&notes[row_start..row_cursor], col_offset, cols);
+        if earlier.nonempty == 0 || !row.is_multiple_of(window_stride_rows) {
+            continue;
+        }
+
+        let row_later = row.saturating_add(window_size_rows);
+        let later = intelligent_row_summary(notes, row_later, col_offset, cols);
+        if (require_begin && !earlier.single_endpoint()) || !later.single_endpoint() {
+            continue;
+        }
+
+        let body_row = row.saturating_add(1);
+        let body_cells = advance_latest_notes(
+            notes,
+            &mut hold_cursor,
+            body_row,
+            col_offset,
+            cols,
+            &mut latest,
+        );
+        let body_mask = tracks_down_mask(notes, &latest, body_row, cols) & !body_cells;
+        if body_mask != 0
+            || intelligent_range_has_note(
+                notes,
+                body_row,
+                row_later.saturating_sub(1),
+                col_offset,
+                cols,
+            )
+        {
+            continue;
+        }
+
+        let Some(later_track) = later.first_track() else {
+            continue;
+        };
+        let track_to_add =
+            intelligent_add_track(earlier.first_track(), later_track, cols, skippy_mode);
+        let _ = set_added_tap_note_sorted(
+            notes,
+            timing_player,
+            row.saturating_add(insert_offset_rows),
+            col_offset.saturating_add(track_to_add),
+        );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn apply_insert_intelligent_taps(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    window_size_rows: usize,
+    insert_offset_rows: usize,
+    window_stride_rows: usize,
+    skippy_mode: bool,
+) {
+    if cols == 0 || cols > MAX_COLS || insert_offset_rows > window_size_rows {
+        return;
+    }
+    let can_stream = window_stride_rows != 0
+        && insert_offset_rows > 1
+        && !insert_offset_rows.is_multiple_of(window_stride_rows)
+        && notes_row_col_sorted(notes)
+        && notes.last().is_none_or(|note| {
+            note.row_index.checked_add(window_size_rows).is_some()
+                && note.row_index.checked_add(insert_offset_rows).is_some()
+        });
+    if can_stream {
+        apply_insert_intelligent_taps_sorted(
+            notes,
+            timing_player,
+            col_offset,
+            cols,
+            window_size_rows,
+            insert_offset_rows,
+            window_stride_rows,
+            skippy_mode,
+        );
+    } else {
+        apply_insert_intelligent_taps_rescan(
+            notes,
+            timing_player,
+            col_offset,
+            cols,
+            window_size_rows,
+            insert_offset_rows,
+            window_stride_rows,
+            skippy_mode,
+        );
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::too_many_arguments)]
+pub fn apply_insert_intelligent_taps_reference(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    window_size_rows: usize,
+    insert_offset_rows: usize,
+    window_stride_rows: usize,
+    skippy_mode: bool,
+) {
+    apply_insert_intelligent_taps_rescan(
+        notes,
+        timing_player,
+        col_offset,
+        cols,
+        window_size_rows,
+        insert_offset_rows,
+        window_stride_rows,
+        skippy_mode,
+    );
+}
+
+#[cfg(feature = "bench-support")]
+pub fn intelligent_candidate_count_bench(
+    notes: &[Note],
+    col_offset: usize,
+    cols: usize,
+    window_stride_rows: usize,
+) -> usize {
+    intelligent_candidate_count(notes, col_offset, cols, window_stride_rows)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn intelligent_candidate_count_reference_bench(
+    notes: &[Note],
+    col_offset: usize,
+    cols: usize,
+    window_stride_rows: usize,
+) -> usize {
+    player_rows(notes, col_offset, cols)
+        .into_iter()
+        .filter(|row| row % window_stride_rows == 0)
+        .count()
+}
+
+#[cfg(feature = "bench-support")]
+pub fn intelligent_endpoint_checksum_bench(
+    notes: &[Note],
+    rows: &[usize],
+    window_size_rows: usize,
+    col_offset: usize,
+    cols: usize,
+) -> u64 {
+    rows.iter().fold(0u64, |checksum, &row| {
+        let earlier = intelligent_row_summary(notes, row, col_offset, cols);
+        let later = intelligent_row_summary(
+            notes,
+            row.saturating_add(window_size_rows),
+            col_offset,
+            cols,
+        );
+        let value = u64::from(earlier.nonempty.count_ones())
+            ^ u64::from(earlier.tap_or_hold.count_ones()).rotate_left(8)
+            ^ u64::from(later.nonempty.count_ones()).rotate_left(16)
+            ^ u64::from(later.tap_or_hold.count_ones()).rotate_left(24);
+        checksum.rotate_left(7) ^ value
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn intelligent_endpoint_checksum_reference_bench(
+    notes: &[Note],
+    rows: &[usize],
+    window_size_rows: usize,
+    col_offset: usize,
+    cols: usize,
+) -> u64 {
+    rows.iter().fold(0u64, |checksum, &row| {
+        let later = row.saturating_add(window_size_rows);
+        let value = count_nonempty_tracks_at_row(notes, row, col_offset, cols) as u64
+            ^ (count_tap_or_hold_tracks_at_row(notes, row, col_offset, cols) as u64).rotate_left(8)
+            ^ (count_nonempty_tracks_at_row(notes, later, col_offset, cols) as u64).rotate_left(16)
+            ^ (count_tap_or_hold_tracks_at_row(notes, later, col_offset, cols) as u64)
+                .rotate_left(24);
+        checksum.rotate_left(7) ^ value
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn intelligent_window_checksum_bench(
+    notes: &[Note],
+    rows: &[usize],
+    window_size_rows: usize,
+    col_offset: usize,
+    cols: usize,
+) -> u64 {
+    let mut cursor = 0usize;
+    let mut latest = [usize::MAX; MAX_COLS];
+    rows.iter().fold(0u64, |checksum, &row| {
+        let body_row = row.saturating_add(1);
+        let cells = advance_latest_notes(
+            notes,
+            &mut cursor,
+            body_row,
+            col_offset,
+            cols,
+            &mut latest,
+        );
+        let body = tracks_down_mask(notes, &latest, body_row, cols) & !cells;
+        let middle = intelligent_range_has_note(
+            notes,
+            body_row,
+            row.saturating_add(window_size_rows).saturating_sub(1),
+            col_offset,
+            cols,
+        );
+        checksum.rotate_left(7) ^ body ^ ((middle as u64) << 63)
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn intelligent_window_checksum_reference_bench(
+    notes: &[Note],
+    rows: &[usize],
+    window_size_rows: usize,
+    col_offset: usize,
+    cols: usize,
+) -> u64 {
+    rows.iter().fold(0u64, |checksum, &row| {
+        let body_row = row.saturating_add(1);
+        let body = (0..cols).fold(0u64, |mask, local| {
+            mask | ((is_hold_body_at_row(notes, body_row, col_offset + local) as u64) << local)
+        });
+        let middle = notes.iter().any(|note| {
+            local_player_col(note.column, col_offset, cols).is_some()
+                && note.row_index >= body_row
+                && note.row_index <= row.saturating_add(window_size_rows).saturating_sub(1)
+        });
+        checksum.rotate_left(7) ^ body ^ ((middle as u64) << 63)
+    })
 }
 
 pub fn apply_wide_insert(
@@ -1452,7 +1860,9 @@ pub fn apply_uncommon_masks_with_masks(
         notes.retain(|note| note.note_type != NoteType::Lift);
     }
 
-    sort_player_notes(notes);
+    if !notes_row_col_sorted(notes) {
+        sort_player_notes(notes);
+    }
 }
 
 pub fn apply_uncommon_chart_transforms(

@@ -17374,6 +17374,182 @@ mod tests {
     }
 
     #[test]
+    fn streamed_intelligent_insert_matches_full_rescans() {
+        let row_count = 513usize;
+        let last_row = row_count * ROWS_PER_BEAT as usize + ROWS_PER_BEAT as usize * 2;
+        let timing = test_timing(last_row);
+        let mut source = Vec::with_capacity(row_count * 2);
+        for row_index in 0..row_count {
+            let row = row_index * ROWS_PER_BEAT as usize;
+            let note_count = 1 + usize::from(row_index.is_multiple_of(13));
+            for note_index in 0..note_count {
+                let selector = row_index * 3 + note_index;
+                let note_type = if selector.is_multiple_of(29) {
+                    NoteType::Mine
+                } else if selector.is_multiple_of(23) {
+                    NoteType::Lift
+                } else {
+                    NoteType::Tap
+                };
+                let mut note = test_note_at(
+                    note_type,
+                    None,
+                    selector.is_multiple_of(31),
+                    row,
+                    row as f32 / ROWS_PER_BEAT as f32,
+                );
+                note.column = (row_index * 3 + note_index * 5) % 8;
+                source.push(note);
+            }
+        }
+        for row_index in (8..row_count).step_by(47) {
+            let row = row_index * ROWS_PER_BEAT as usize + ROWS_PER_BEAT as usize / 4;
+            let mut hold = test_hold();
+            hold.end_row_index = row + ROWS_PER_BEAT as usize;
+            hold.end_beat = hold.end_row_index as f32 / ROWS_PER_BEAT as f32;
+            hold.last_held_row_index = row;
+            hold.last_held_beat = row as f32 / ROWS_PER_BEAT as f32;
+            let mut note = test_note_at(
+                NoteType::Hold,
+                Some(hold),
+                false,
+                row,
+                row as f32 / ROWS_PER_BEAT as f32,
+            );
+            note.column = row_index % 8;
+            source.push(note);
+        }
+        let other_player_row = 100 * ROWS_PER_BEAT as usize + ROWS_PER_BEAT as usize / 2;
+        let mut other_player = test_note_at(
+            NoteType::Tap,
+            None,
+            false,
+            other_player_row,
+            other_player_row as f32 / ROWS_PER_BEAT as f32,
+        );
+        other_player.column = 7;
+        source.push(other_player);
+        sort_player_notes(&mut source);
+
+        for (col_offset, cols) in [(0, 4), (4, 4), (0, 8)] {
+            for (window, offset, stride, skippy) in [
+                (
+                    ROWS_PER_BEAT as usize,
+                    ROWS_PER_BEAT as usize / 2,
+                    ROWS_PER_BEAT as usize,
+                    false,
+                ),
+                (
+                    ROWS_PER_BEAT as usize / 2,
+                    ROWS_PER_BEAT as usize / 4,
+                    ROWS_PER_BEAT as usize,
+                    false,
+                ),
+                (
+                    ROWS_PER_BEAT as usize,
+                    ROWS_PER_BEAT as usize * 3 / 4,
+                    ROWS_PER_BEAT as usize,
+                    true,
+                ),
+            ] {
+                let mut expected = source.clone();
+                let mut actual = source.clone();
+                apply_insert_intelligent_taps_reference(
+                    &mut expected,
+                    &timing,
+                    col_offset,
+                    cols,
+                    window,
+                    offset,
+                    stride,
+                    skippy,
+                );
+                sort_player_notes(&mut expected);
+                apply_insert_intelligent_taps(
+                    &mut actual,
+                    &timing,
+                    col_offset,
+                    cols,
+                    window,
+                    offset,
+                    stride,
+                    skippy,
+                );
+                assert_eq!(
+                    format!("{actual:?}"),
+                    format!("{expected:?}"),
+                    "offset={col_offset} cols={cols} window={window} insert={offset} skippy={skippy}",
+                );
+            }
+        }
+
+        let mut expected = source.clone();
+        let mut actual = source.clone();
+        for (window, offset) in [
+            (
+                ROWS_PER_BEAT as usize,
+                ROWS_PER_BEAT as usize / 2,
+            ),
+            (
+                ROWS_PER_BEAT as usize / 2,
+                ROWS_PER_BEAT as usize / 4,
+            ),
+        ] {
+            apply_insert_intelligent_taps_reference(
+                &mut expected,
+                &timing,
+                0,
+                8,
+                window,
+                offset,
+                ROWS_PER_BEAT as usize,
+                false,
+            );
+            apply_insert_intelligent_taps(
+                &mut actual,
+                &timing,
+                0,
+                8,
+                window,
+                offset,
+                ROWS_PER_BEAT as usize,
+                false,
+            );
+        }
+        sort_player_notes(&mut expected);
+        assert_eq!(
+            format!("{actual:?}"),
+            format!("{expected:?}"),
+            "BMRize composition",
+        );
+
+        source.reverse();
+        let mut expected = source.clone();
+        let mut actual = source;
+        apply_insert_intelligent_taps_reference(
+            &mut expected,
+            &timing,
+            0,
+            8,
+            ROWS_PER_BEAT as usize,
+            ROWS_PER_BEAT as usize / 2,
+            ROWS_PER_BEAT as usize,
+            false,
+        );
+        apply_insert_intelligent_taps(
+            &mut actual,
+            &timing,
+            0,
+            8,
+            ROWS_PER_BEAT as usize,
+            ROWS_PER_BEAT as usize / 2,
+            ROWS_PER_BEAT as usize,
+            false,
+        );
+        assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+    }
+
+    #[test]
     fn wide_stomp_and_echo_insert_expected_taps() {
         let timing = TimingData::from_segments(
             0.0,

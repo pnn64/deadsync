@@ -36,6 +36,11 @@ name = "attack_window_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "intelligent_insert_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
