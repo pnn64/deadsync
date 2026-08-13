@@ -486,7 +486,11 @@ pub fn scan_song_roots(song_roots: &[PathBuf]) -> (Vec<PackScan>, Vec<ScanFailur
                     continue;
                 }
             };
-            let mut nested = scan_nested_packs(&path, &mut failures);
+            let direct_songs = flat
+                .as_ref()
+                .map(|pack| pack.songs.as_slice())
+                .unwrap_or_default();
+            let mut nested = scan_nested_packs(&path, direct_songs, &mut failures);
             if flat.is_some() && !nested.is_empty() {
                 failures.push(ScanFailure {
                     path: path.clone(),
@@ -531,7 +535,11 @@ fn scan_pack(path: &Path) -> Result<Option<PackScan>, String> {
         .map_err(|error| format!("{error:?}"))
 }
 
-fn scan_nested_packs(series_dir: &Path, failures: &mut Vec<ScanFailure>) -> Vec<PackScan> {
+fn scan_nested_packs(
+    series_dir: &Path,
+    direct_songs: &[SongScan],
+    failures: &mut Vec<ScanFailure>,
+) -> Vec<PackScan> {
     let series = series_dir
         .file_name()
         .and_then(|name| name.to_str())
@@ -550,8 +558,16 @@ fn scan_nested_packs(series_dir: &Path, failures: &mut Vec<ScanFailure>) -> Vec<
         }
     };
     let mut packs = Vec::new();
+    let mut ignored_nested = 0;
+    let mut first_nested = None;
     for path in nested_dirs {
         match scan_pack(&path) {
+            Ok(Some(pack)) if direct_songs.iter().any(|song| song.dir == path) => {
+                ignored_nested += pack.songs.len();
+                if first_nested.is_none() {
+                    first_nested = pack.songs.first().map(|song| song.simfile.clone());
+                }
+            }
             Ok(Some(mut pack)) => {
                 pack.folder_series = series.to_string();
                 packs.push(pack);
@@ -559,6 +575,15 @@ fn scan_nested_packs(series_dir: &Path, failures: &mut Vec<ScanFailure>) -> Vec<
             Ok(None) => {}
             Err(error) => failures.push(ScanFailure { path, error }),
         }
+    }
+    if let Some(first_nested) = first_nested {
+        failures.push(ScanFailure {
+            path: series_dir.to_path_buf(),
+            error: format!(
+                "ignored {ignored_nested} nested simfile(s) below directories already recognized as songs; first nested simfile: '{}'",
+                first_nested.display()
+            ),
+        });
     }
     packs
 }
@@ -1889,6 +1914,38 @@ mod tests {
         assert_eq!(nested.series, "Metadata Series");
         assert_eq!(nested.folder_series, "Folder Series");
         assert_eq!(nested.dir, nested_pack);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn scan_song_roots_ignores_nested_simfiles_below_song_dirs() {
+        let root = test_dir("scan-nested-song-copy");
+        let pack = root.join("05 - NX~NX2");
+        let first_song = pack.join("E06 - Nice to Meet You");
+        let second_song = pack.join("E07 - Very Old Couples");
+        let nested_song = first_song.join("E05 - Monkey Fingers 2");
+        fs::create_dir_all(&nested_song).unwrap();
+        fs::create_dir_all(&second_song).unwrap();
+        fs::write(first_song.join("E06.ssc"), b"#TITLE:Nice to Meet You;").unwrap();
+        fs::write(second_song.join("E07.ssc"), b"#TITLE:Very Old Couples;").unwrap();
+        fs::write(nested_song.join("E05.ssc"), b"#TITLE:Monkey Fingers 2;").unwrap();
+
+        let (packs, failures) = scan_song_roots(std::slice::from_ref(&root));
+
+        assert_eq!(packs.len(), 1);
+        assert_eq!(packs[0].group_name, "05 - NX~NX2");
+        assert_eq!(packs[0].songs.len(), 2);
+        assert!(
+            packs[0]
+                .songs
+                .iter()
+                .all(|song| song.simfile != nested_song.join("E05.ssc"))
+        );
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].path, pack);
+        assert!(failures[0].error.contains("ignored 1 nested simfile"));
+        assert!(failures[0].error.contains("E05.ssc"));
 
         let _ = fs::remove_dir_all(root);
     }
