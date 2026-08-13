@@ -3726,6 +3726,8 @@ pub struct SongLuaOverlayEase {
 pub struct SongLuaCapturedActor {
     pub initial_state: SongLuaOverlayState,
     pub message_commands: Vec<SongLuaOverlayMessageCommand>,
+    /// The chart directly draws a Judgment or Combo child outside the Player draw.
+    pub manual_hud_draw: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -6267,9 +6269,14 @@ return Def.ActorFrame{
         local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
         self:SetUpdateFunction(function()
             local beat = GAMESTATE:GetSongBeat()
+            if beat >= 2 and beat < 3 then
+                local amount = beat - 2
+                player:rotationx(180 * (1 - amount) * (1 - amount))
+            end
             if beat >= 2 and beat < 4 then
                 local amount = (beat - 2) / 2
-                player:skewx((1 - amount) * (1 - amount))
+                player:rotationz(-360 * amount)
+                      :skewx((1 - amount) * (1 - amount))
             end
         end)
     end,
@@ -6282,13 +6289,19 @@ return Def.ActorFrame{
         context.song_display_bpms = [120.0, 120.0];
         context.music_length_seconds = 75.0;
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
-        let tail = compiled
-            .eases
-            .iter()
-            .rev()
-            .find(|ease| matches!(ease.target, SongLuaEaseTarget::PlayerSkewX))
-            .expect("update function should compile player skew samples");
-        assert!(tail.to.abs() < 0.001, "unexpected skew tail: {}", tail.to);
+        for target in [
+            SongLuaEaseTarget::PlayerRotationX,
+            SongLuaEaseTarget::PlayerRotationZ,
+            SongLuaEaseTarget::PlayerSkewX,
+        ] {
+            let tail = compiled
+                .eases
+                .iter()
+                .rev()
+                .find(|ease| ease.target == target)
+                .expect("update function should compile player transform samples");
+            assert_eq!(tail.to, 0.0, "transform tail did not close: {target:?}");
+        }
     }
 
     #[test]
@@ -13666,8 +13679,11 @@ return Def.ActorFrame{
 return Def.ActorFrame{
     OnCommand=function(self)
         local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        local judgment = player:GetChild("Judgment")
         player:x(111):visible(false)
+        judgment:visible(false)
         self:SetDrawFunction(function()
+            judgment:visible(true):Draw():visible(false)
             player:x(222):visible(true)
             player:Draw()
             player:x(333):visible(false)
@@ -13686,6 +13702,7 @@ return Def.ActorFrame{
         assert!(!compiled.hidden_players[0]);
         assert!(compiled.player_actors[0].initial_state.visible);
         assert_eq!(compiled.player_actors[0].initial_state.x, 222.0);
+        assert!(compiled.player_actors[0].manual_hud_draw);
     }
 
     #[test]

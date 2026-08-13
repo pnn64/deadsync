@@ -3309,6 +3309,7 @@ fn build_song_lua_runtime_windows_for_data(
                 ..SongLuaOverlayState::default()
             },
             message_commands: Vec::new(),
+            manual_hud_draw: false,
         }
     });
     let mut player_events: [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS] =
@@ -13956,6 +13957,7 @@ enum PlayerActorAssembly {
 struct PlayerActorSegment {
     player: usize,
     assembly: PlayerActorAssembly,
+    manual_hud_draw: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -14002,11 +14004,18 @@ impl GameplayActorSegments {
                     );
                 }
                 PlayerActorAssembly::DirectFold { z_shift, x_fold } => {
-                    segments[first] = ActorSegment::folded(
-                        &scratch.notefield_hud_actor_scratch[segment.player],
-                        z_shift,
-                        x_fold,
-                    );
+                    segments[first] = if segment.manual_hud_draw {
+                        ActorSegment::shifted(
+                            &scratch.notefield_hud_actor_scratch[segment.player],
+                            z_shift,
+                        )
+                    } else {
+                        ActorSegment::folded(
+                            &scratch.notefield_hud_actor_scratch[segment.player],
+                            z_shift,
+                            x_fold,
+                        )
+                    };
                     segments[first + 1] = ActorSegment::folded(
                         &scratch.notefield_actor_scratch[segment.player],
                         z_shift,
@@ -14021,15 +14030,22 @@ impl GameplayActorSegments {
                     field_camera_suffix,
                     x_fold,
                 } => {
-                    segments[first] = ActorSegment::transformed(
-                        &scratch.notefield_hud_actor_scratch[segment.player],
-                        z_shift,
-                        tint,
-                        blend,
-                        root_camera,
-                        Matrix4::IDENTITY,
-                        x_fold,
-                    );
+                    segments[first] = if segment.manual_hud_draw {
+                        ActorSegment::shifted(
+                            &scratch.notefield_hud_actor_scratch[segment.player],
+                            z_shift,
+                        )
+                    } else {
+                        ActorSegment::transformed(
+                            &scratch.notefield_hud_actor_scratch[segment.player],
+                            z_shift,
+                            tint,
+                            blend,
+                            root_camera,
+                            Matrix4::IDENTITY,
+                            x_fold,
+                        )
+                    };
                     segments[first + 1] = ActorSegment::transformed(
                         &scratch.notefield_actor_scratch[segment.player],
                         z_shift,
@@ -15127,6 +15143,7 @@ pub fn push_actors(
             segment_players[0] = Some(PlayerActorSegment {
                 player: 1,
                 assembly: p2_actor_assembly,
+                manual_hud_draw: song_lua_visuals.player_actors[1].manual_hud_draw,
             });
         } else {
             clear_player_actor_bundle(
@@ -15139,6 +15156,7 @@ pub fn push_actors(
         segment_players[1] = Some(PlayerActorSegment {
             player: 0,
             assembly: p1_actor_assembly,
+            manual_hud_draw: song_lua_visuals.player_actors[0].manual_hud_draw,
         });
     } else {
         clear_player_actor_bundle(
@@ -17016,6 +17034,7 @@ mod tests {
                 ..SongLuaOverlayState::default()
             },
             message_commands: Vec::new(),
+            manual_hud_draw: false,
         };
         let mut expected_cache = SongLuaMessageStateCache::default();
         let mut fast_cache = SongLuaMessageStateCache::default();

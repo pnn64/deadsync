@@ -8980,14 +8980,45 @@ pub fn tracked_song_lua_actor(
         Some(draw_state) => actor_overlay_initial_state(&draw_state)?,
         None => actor_overlay_initial_state(&table)?,
     };
+    let manual_hud_draw = if matches!(target, SongLuaTrackedActorTarget::Player(_)) {
+        manually_draws_player_hud(&table)?
+    } else {
+        false
+    };
     Ok(SongLuaTrackedActor {
         actor: SongLuaCapturedActor {
             initial_state,
             message_commands: Vec::new(),
+            manual_hud_draw,
         },
         table,
         target,
     })
+}
+
+fn manually_draws_player_hud(player: &Table) -> Result<bool, String> {
+    let Some(children) = player
+        .get::<Option<Table>>("__songlua_children")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(false);
+    };
+    for name in ["Judgment", "Combo"] {
+        let Some(child) = children
+            .get::<Option<Table>>(name)
+            .map_err(|err| err.to_string())?
+        else {
+            continue;
+        };
+        if child
+            .get::<Option<Table>>(MANUAL_DRAW_STATE_KEY)
+            .map_err(|err| err.to_string())?
+            .is_some()
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 pub fn tracked_indices_for_actor_pointers(

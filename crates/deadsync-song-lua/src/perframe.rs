@@ -160,46 +160,116 @@ pub fn current_perframe_player_states(
     Ok(out)
 }
 
-fn capture_block_has_player_transform(block: &Table) -> Result<bool, String> {
-    for key in PLAYER_TRANSFORM_CAPTURE_KEYS {
+fn capture_transform_mask(block: &Table) -> Result<u16, String> {
+    let mut mask = 0;
+    for (index, key) in PLAYER_TRANSFORM_CAPTURE_KEYS.iter().enumerate() {
         if !matches!(
-            block.raw_get::<Value>(key).map_err(|err| err.to_string())?,
+            block
+                .raw_get::<Value>(*key)
+                .map_err(|err| err.to_string())?,
             Value::Nil
         ) {
-            return Ok(true);
+            mask |= 1 << index;
         }
     }
-    Ok(false)
+    Ok(mask)
 }
 
-fn actor_touched_player_transform(actor: &Table) -> Result<bool, String> {
+fn actor_transform_mask(actor: &Table) -> Result<u16, String> {
+    let mut mask = 0;
     if let Some(block) = actor
         .get::<Option<Table>>("__songlua_capture_block")
         .map_err(|err| err.to_string())?
-        && capture_block_has_player_transform(&block)?
     {
-        return Ok(true);
+        mask |= capture_transform_mask(&block)?;
     }
     if let Some(blocks) = actor
         .get::<Option<Table>>("__songlua_capture_blocks")
         .map_err(|err| err.to_string())?
     {
         for block in blocks.sequence_values::<Table>() {
-            if capture_block_has_player_transform(&block.map_err(|err| err.to_string())?)? {
-                return Ok(true);
-            }
+            mask |= capture_transform_mask(&block.map_err(|err| err.to_string())?)?;
         }
     }
-    Ok(false)
+    Ok(mask)
 }
 
-fn player_transform_touched(player_tables: &[Option<Table>; LUA_PLAYERS]) -> Result<bool, String> {
-    for actor in player_tables.iter().flatten() {
-        if actor_touched_player_transform(actor)? {
-            return Ok(true);
+fn player_transform_masks(
+    player_tables: &[Option<Table>; LUA_PLAYERS],
+) -> Result<[u16; LUA_PLAYERS], String> {
+    let mut masks = [0; LUA_PLAYERS];
+    for (player, actor) in player_tables.iter().enumerate() {
+        if let Some(actor) = actor {
+            masks[player] = actor_transform_mask(actor)?;
         }
     }
-    Ok(false)
+    Ok(masks)
+}
+
+fn transform_distance(left: f32, right: f32, cyclic: bool) -> f32 {
+    let distance = (left - right).abs();
+    if cyclic {
+        let wrapped = distance.rem_euclid(360.0);
+        wrapped.min(360.0 - wrapped)
+    } else {
+        distance
+    }
+}
+
+fn transform_tail_closes(
+    current: Option<f32>,
+    prior: Option<f32>,
+    baseline: Option<f32>,
+    default: f32,
+    cyclic: bool,
+) -> bool {
+    let current = current.unwrap_or(default);
+    let prior = prior.unwrap_or(default);
+    let baseline = baseline.unwrap_or(default);
+    let remaining = transform_distance(current, baseline, cyclic);
+    let prior_remaining = transform_distance(prior, baseline, cyclic);
+    let last_step = transform_distance(current, prior, cyclic);
+    remaining < prior_remaining && remaining <= last_step + f32::EPSILON
+}
+
+fn snap_ended_transforms(
+    actor: &Table,
+    current: &mut SongLuaPerframePlayerState,
+    prior: SongLuaPerframePlayerState,
+    baseline: SongLuaPerframePlayerState,
+    ended: u16,
+) -> Result<(), String> {
+    macro_rules! snap {
+        ($index:expr, $field:ident, $state_key:literal, $default:expr, $cyclic:expr) => {
+            if ended & (1 << $index) != 0
+                && transform_tail_closes(
+                    current.$field,
+                    prior.$field,
+                    baseline.$field,
+                    $default,
+                    $cyclic,
+                )
+            {
+                current.$field = baseline.$field;
+                actor
+                    .set($state_key, baseline.$field)
+                    .map_err(|err| err.to_string())?;
+            }
+        };
+    }
+
+    snap!(0, x, "__songlua_state_x", 0.0, false);
+    snap!(1, y, "__songlua_state_y", 0.0, false);
+    snap!(2, z, "__songlua_state_z", 0.0, false);
+    snap!(3, rotation_x, "__songlua_state_rot_x_deg", 0.0, true);
+    snap!(4, rotation_z, "__songlua_state_rot_z_deg", 0.0, true);
+    snap!(5, rotation_y, "__songlua_state_rot_y_deg", 0.0, true);
+    snap!(6, zoom_x, "__songlua_state_zoom_x", 1.0, false);
+    snap!(7, zoom_y, "__songlua_state_zoom_y", 1.0, false);
+    snap!(8, zoom_z, "__songlua_state_zoom_z", 1.0, false);
+    snap!(9, skew_x, "__songlua_state_skew_x", 0.0, false);
+    snap!(10, skew_y, "__songlua_state_skew_y", 0.0, false);
+    Ok(())
 }
 
 pub fn tracked_player_tables(
@@ -824,10 +894,10 @@ pub fn compile_update_functions<Kind>(
     let coarse_step = update_function_sample_step(end - start);
     let fine_step = coarse_step / SONG_LUA_PLAYER_TRANSFORM_SAMPLE_DIVISOR;
     let mut beat = start;
-    let mut transforms_active = player_transform_touched(&player_tables)?;
+    let mut transform_masks = player_transform_masks(&player_tables)?;
     while beat < end - f32::EPSILON {
         let next_beat = (beat
-            + if transforms_active {
+            + if transform_masks.iter().any(|mask| *mask != 0) {
                 fine_step
             } else {
                 coarse_step
@@ -838,9 +908,30 @@ pub fn compile_update_functions<Kind>(
         reset_overlay_compile_actor_capture_tables(lua, overlays)?;
         reset_tracked_capture_tables(lua, tracked_actors)?;
         call_update_functions_at(lua, root, next_beat, delta_beats, delta_seconds)?;
-        transforms_active = player_transform_touched(&player_tables)?;
+        let next_masks = player_transform_masks(&player_tables)?;
+        let prior_active = if player_samples.len() >= 2 {
+            player_samples[player_samples.len() - 2]
+        } else {
+            baseline_players
+        };
+        let mut next_players = current_perframe_player_states(&player_tables)?;
+        for player in 0..LUA_PLAYERS {
+            let ended = transform_masks[player] & !next_masks[player];
+            if ended != 0 {
+                if let Some(actor) = player_tables[player].as_ref() {
+                    snap_ended_transforms(
+                        actor,
+                        &mut next_players[player],
+                        prior_active[player],
+                        baseline_players[player],
+                        ended,
+                    )?;
+                }
+            }
+        }
+        transform_masks = next_masks;
         sample_beats.push(next_beat);
-        player_samples.push(current_perframe_player_states(&player_tables)?);
+        player_samples.push(next_players);
         mod_samples.push(current_update_mod_states(&option_tables)?);
         overlay_samples.push(current_overlay_compile_actor_states(overlays)?);
         beat = next_beat;
