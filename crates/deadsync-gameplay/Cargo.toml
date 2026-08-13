@@ -41,6 +41,11 @@ name = "intelligent_insert_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "wide_stomp_echo_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }

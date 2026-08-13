@@ -17585,6 +17585,132 @@ mod tests {
     }
 
     #[test]
+    fn streamed_wide_stomp_echo_match_full_rescans() {
+        let row_count = 513usize;
+        let last_row = row_count * ROWS_PER_BEAT as usize + ROWS_PER_BEAT as usize * 4;
+        let timing = test_timing(last_row);
+        let mut source = Vec::with_capacity(row_count * 2);
+        for index in 0..row_count {
+            let row = index * ROWS_PER_BEAT as usize;
+            let selector = index * 7;
+            let note_type = if selector.is_multiple_of(37) {
+                NoteType::Mine
+            } else if selector.is_multiple_of(31) {
+                NoteType::Lift
+            } else if selector.is_multiple_of(29) {
+                NoteType::Hold
+            } else if selector.is_multiple_of(23) {
+                NoteType::Roll
+            } else {
+                NoteType::Tap
+            };
+            let mut hold = matches!(note_type, NoteType::Hold | NoteType::Roll).then(test_hold);
+            if let Some(hold) = &mut hold {
+                hold.end_row_index = row + ROWS_PER_BEAT as usize * 2;
+                hold.end_beat = hold.end_row_index as f32 / ROWS_PER_BEAT as f32;
+                hold.last_held_row_index = row;
+                hold.last_held_beat = row as f32 / ROWS_PER_BEAT as f32;
+            }
+            let mut note = test_note_at(
+                note_type,
+                hold,
+                selector.is_multiple_of(41),
+                row,
+                row as f32 / ROWS_PER_BEAT as f32,
+            );
+            let primary_column = (index * 3 + index / 11) % 8;
+            note.column = primary_column;
+            source.push(note);
+
+            if index.is_multiple_of(17) {
+                let middle_row = row + ROWS_PER_BEAT as usize / 4;
+                let mut middle = test_note_at(
+                    NoteType::Tap,
+                    None,
+                    index.is_multiple_of(34),
+                    middle_row,
+                    middle_row as f32 / ROWS_PER_BEAT as f32,
+                );
+                middle.column = (index * 5 + 1) % 8;
+                source.push(middle);
+            }
+            if index.is_multiple_of(19) {
+                let mut simultaneous = test_note_at(
+                    NoteType::Tap,
+                    None,
+                    false,
+                    row,
+                    row as f32 / ROWS_PER_BEAT as f32,
+                );
+                simultaneous.column = (primary_column + 3) % 8;
+                source.push(simultaneous);
+            }
+        }
+        sort_player_notes(&mut source);
+
+        for (col_offset, cols) in [(0, 4), (4, 4), (0, 8)] {
+            for modifier in 0..3 {
+                let mut expected = source.clone();
+                let mut actual = source.clone();
+                match modifier {
+                    0 => {
+                        apply_wide_insert_reference(&mut expected, &timing, col_offset, cols);
+                        apply_wide_insert(&mut actual, &timing, col_offset, cols);
+                    }
+                    1 => {
+                        apply_stomp_insert_reference(&mut expected, &timing, col_offset, cols);
+                        apply_stomp_insert(&mut actual, &timing, col_offset, cols);
+                    }
+                    _ => {
+                        apply_echo_insert_reference(&mut expected, &timing, col_offset, cols);
+                        apply_echo_insert(&mut actual, &timing, col_offset, cols);
+                    }
+                }
+                sort_player_notes(&mut expected);
+                assert_eq!(
+                    format!("{actual:?}"),
+                    format!("{expected:?}"),
+                    "modifier={modifier} offset={col_offset} cols={cols}",
+                );
+            }
+
+            let mut expected = source.clone();
+            let mut actual = source.clone();
+            apply_echo_insert_reference(&mut expected, &timing, col_offset, cols);
+            apply_echo_insert(&mut actual, &timing, col_offset, cols);
+            assert_eq!(
+                player_rows(&expected, col_offset, cols),
+                player_rows(&actual, col_offset, cols),
+                "combined echo rows offset={col_offset} cols={cols}",
+            );
+            apply_wide_insert_reference(&mut expected, &timing, col_offset, cols);
+            apply_wide_insert(&mut actual, &timing, col_offset, cols);
+            apply_stomp_insert_reference(&mut expected, &timing, col_offset, cols);
+            apply_stomp_insert(&mut actual, &timing, col_offset, cols);
+            sort_player_notes(&mut expected);
+            assert_eq!(
+                actual.len(),
+                expected.len(),
+                "combined length offset={col_offset} cols={cols}",
+            );
+            for (index, (actual, expected)) in actual.iter().zip(&expected).enumerate() {
+                assert_eq!(
+                    format!("{actual:?}"),
+                    format!("{expected:?}"),
+                    "combined note={index} offset={col_offset} cols={cols}",
+                );
+            }
+        }
+
+        source.reverse();
+        let mut expected = source.clone();
+        let mut actual = source;
+        apply_echo_insert_reference(&mut expected, &timing, 0, 8);
+        apply_echo_insert(&mut actual, &timing, 0, 8);
+        assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+    }
+
+    #[test]
     fn convert_taps_to_holds_sets_hold_metadata() {
         let timing = TimingData::from_segments(
             0.0,
