@@ -178,8 +178,7 @@ pub fn player_rows(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usize>
     rows
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub fn player_rows_reference(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usize> {
+fn player_rows_rescan(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usize> {
     let mut rows = Vec::with_capacity(notes.len());
     for note in notes {
         if local_player_col(note.column, col_offset, cols).is_some() {
@@ -189,6 +188,11 @@ pub fn player_rows_reference(notes: &[Note], col_offset: usize, cols: usize) -> 
     rows.sort_unstable();
     rows.dedup();
     rows
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn player_rows_reference(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usize> {
+    player_rows_rescan(notes, col_offset, cols)
 }
 
 pub fn count_nonempty_tracks_at_row(
@@ -884,6 +888,102 @@ fn find_tap_index(notes: &[Note], row: usize, column: usize) -> Option<usize> {
     })
 }
 
+fn fill_row_taps(
+    notes: &[Note],
+    note_range: std::ops::Range<usize>,
+    col_offset: usize,
+    cols: usize,
+    taps: &mut [usize; MAX_COLS],
+) {
+    taps[..cols].fill(usize::MAX);
+    for note_index in note_range {
+        let note = &notes[note_index];
+        let Some(local) = local_player_col(note.column, col_offset, cols) else {
+            continue;
+        };
+        if taps[local] == usize::MAX && note.note_type == NoteType::Tap && !note.is_fake {
+            taps[local] = note_index;
+        }
+    }
+}
+
+fn advance_latest_notes(
+    notes: &[Note],
+    cursor: &mut usize,
+    row: usize,
+    col_offset: usize,
+    cols: usize,
+    latest: &mut [usize; MAX_COLS],
+) -> u64 {
+    let mut row_mask = 0u64;
+    while *cursor < notes.len() && notes[*cursor].row_index <= row {
+        let note = &notes[*cursor];
+        if let Some(local) = local_player_col(note.column, col_offset, cols) {
+            latest[local] = *cursor;
+            if note.row_index == row {
+                row_mask |= 1u64 << local;
+            }
+        }
+        *cursor += 1;
+    }
+    row_mask
+}
+
+#[derive(Clone, Copy)]
+struct HoldScanRow {
+    row: usize,
+    note_start: usize,
+    note_end: usize,
+    cell_mask: u64,
+}
+
+fn next_hold_scan_row(
+    notes: &[Note],
+    cursor: &mut usize,
+    col_offset: usize,
+    cols: usize,
+    latest: &mut [usize; MAX_COLS],
+) -> Option<HoldScanRow> {
+    while *cursor < notes.len() {
+        let row = notes[*cursor].row_index;
+        let note_start = *cursor;
+        let cell_mask = advance_latest_notes(notes, cursor, row, col_offset, cols, latest);
+        if cell_mask != 0 {
+            return Some(HoldScanRow {
+                row,
+                note_start,
+                note_end: *cursor,
+                cell_mask,
+            });
+        }
+    }
+    None
+}
+
+fn tracks_down_mask(
+    notes: &[Note],
+    latest: &[usize; MAX_COLS],
+    row: usize,
+    cols: usize,
+) -> u64 {
+    latest[..cols]
+        .iter()
+        .enumerate()
+        .fold(0u64, |mask, (local, &note_index)| {
+            let Some(note) = notes.get(note_index) else {
+                return mask;
+            };
+            let down = note.row_index == row
+                || (note.row_index < row
+                    && matches!(note.note_type, NoteType::Hold | NoteType::Roll)
+                    && note
+                        .hold
+                        .as_ref()
+                        .is_some_and(|hold| hold.end_row_index >= row));
+            mask | ((down as u64) << local)
+        })
+}
+
 pub fn convert_taps_to_holds(
     notes: &mut [Note],
     timing_player: &TimingData,
@@ -894,7 +994,106 @@ pub fn convert_taps_to_holds(
     if cols == 0 || cols > MAX_COLS {
         return;
     }
-    let rows = player_rows(notes, col_offset, cols);
+    if !notes_row_sorted(notes) {
+        convert_taps_to_holds_rescan(
+            notes,
+            timing_player,
+            col_offset,
+            cols,
+            simultaneous_holds,
+        );
+        return;
+    }
+    debug_assert!(notes_row_sorted(notes));
+    let rows_per_beat = ROWS_PER_BEAT.max(1) as usize;
+    let mut latest = [usize::MAX; MAX_COLS];
+    let mut note_cursor = 0usize;
+    let mut taps = [usize::MAX; MAX_COLS];
+
+    while let Some(scan_row) =
+        next_hold_scan_row(notes, &mut note_cursor, col_offset, cols, &mut latest)
+    {
+        let row = scan_row.row;
+        fill_row_taps(
+            notes,
+            scan_row.note_start..scan_row.note_end,
+            col_offset,
+            cols,
+            &mut taps,
+        );
+
+        let mut added_this_row = 0usize;
+        for (local, &head_idx) in taps[..cols].iter().enumerate() {
+            if added_this_row > simultaneous_holds {
+                break;
+            }
+            if head_idx == usize::MAX {
+                continue;
+            }
+            let mut taps_left = simultaneous_holds as isize;
+            let mut end_row = row.saturating_add(1);
+            let mut add_hold = true;
+            let mut scan_latest = latest;
+            let mut scan_cursor = note_cursor;
+
+            while let Some(next) =
+                next_hold_scan_row(notes, &mut scan_cursor, col_offset, cols, &mut scan_latest)
+            {
+                end_row = next.row;
+                if next.cell_mask & (1u64 << local) != 0 {
+                    add_hold = false;
+                    break;
+                }
+
+                taps_left -= tracks_down_mask(notes, &scan_latest, next.row, cols).count_ones()
+                    as isize;
+                if taps_left == 0 {
+                    break;
+                }
+                if taps_left < 0 {
+                    add_hold = false;
+                    break;
+                }
+            }
+
+            if !add_hold {
+                continue;
+            }
+            if end_row == row.saturating_add(1) {
+                end_row = row.saturating_add(rows_per_beat);
+            }
+
+            let Some(end_beat) = timing_player.get_beat_for_row(end_row) else {
+                continue;
+            };
+            let head_beat = notes[head_idx].beat;
+            notes[head_idx].note_type = NoteType::Hold;
+            notes[head_idx].hold = Some(HoldData {
+                end_row_index: end_row,
+                end_beat,
+                result: None,
+                life: INITIAL_HOLD_LIFE,
+                let_go_started_at: None,
+                let_go_starting_life: 0.0,
+                last_held_row_index: row,
+                last_held_beat: head_beat,
+            });
+            added_this_row = added_this_row.saturating_add(1);
+        }
+    }
+}
+
+fn convert_taps_to_holds_rescan(
+    notes: &mut [Note],
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    simultaneous_holds: usize,
+) {
+    if cols == 0 || cols > MAX_COLS {
+        return;
+    }
+    let rows = player_rows_rescan(notes, col_offset, cols);
     let rows_per_beat = ROWS_PER_BEAT.max(1) as usize;
 
     for &row in &rows {
@@ -963,6 +1162,130 @@ pub fn convert_taps_to_holds(
             added_this_row = added_this_row.saturating_add(1);
         }
     }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn convert_taps_to_holds_reference(
+    notes: &mut [Note],
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    simultaneous_holds: usize,
+) {
+    convert_taps_to_holds_rescan(
+        notes,
+        timing_player,
+        col_offset,
+        cols,
+        simultaneous_holds,
+    );
+}
+
+#[cfg(feature = "bench-support")]
+pub fn hold_rows_reference_bench(notes: &[Note], col_offset: usize, cols: usize) -> u64 {
+    player_rows_reference(notes, col_offset, cols)
+        .into_iter()
+        .fold(0u64, |checksum, row| {
+            checksum
+                .wrapping_mul(0x9E37_79B1)
+                .wrapping_add(row as u64)
+        })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn hold_rows_bench(notes: &[Note], col_offset: usize, cols: usize) -> u64 {
+    let mut cursor = 0usize;
+    let mut latest = [usize::MAX; MAX_COLS];
+    let mut checksum = 0u64;
+    while let Some(row) = next_hold_scan_row(notes, &mut cursor, col_offset, cols, &mut latest) {
+        checksum = checksum
+            .wrapping_mul(0x9E37_79B1)
+            .wrapping_add(row.row as u64);
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+pub fn hold_row_local_reference_bench(
+    notes: &[Note],
+    row: usize,
+    col_offset: usize,
+    cols: usize,
+) -> u64 {
+    (0..cols).fold(0u64, |checksum, local| {
+        let column = col_offset + local;
+        let tap = find_tap_index(notes, row, column).unwrap_or(usize::MAX) as u64;
+        checksum
+            .wrapping_mul(0x9E37_79B1)
+            .wrapping_add(tap)
+            .wrapping_add((cell_has_any_note(notes, row, column) as u64) << 63)
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn hold_row_local_bench(
+    notes: &[Note],
+    row: usize,
+    col_offset: usize,
+    cols: usize,
+) -> u64 {
+    let start = notes.partition_point(|note| note.row_index < row);
+    let end = notes.partition_point(|note| note.row_index <= row);
+    let mut taps = [usize::MAX; MAX_COLS];
+    fill_row_taps(notes, start..end, col_offset, cols, &mut taps);
+    let cell_mask = notes[start..end].iter().fold(0u64, |mask, note| {
+        let Some(local) = local_player_col(note.column, col_offset, cols) else {
+            return mask;
+        };
+        mask | (1u64 << local)
+    });
+    taps[..cols]
+        .iter()
+        .enumerate()
+        .fold(0u64, |checksum, (local, &tap)| {
+            checksum
+                .wrapping_mul(0x9E37_79B1)
+                .wrapping_add(tap as u64)
+                .wrapping_add(((cell_mask >> local) & 1) << 63)
+        })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn hold_body_masks_reference_bench(
+    notes: &[Note],
+    rows: &[usize],
+    col_offset: usize,
+    cols: usize,
+) -> u64 {
+    rows.iter().fold(0u64, |checksum, &row| {
+        let mask = (0..cols).fold(0u64, |mask, local| {
+            mask | ((is_hold_body_at_row(notes, row, col_offset + local) as u64) << local)
+        });
+        checksum.rotate_left(7) ^ mask
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn hold_body_masks_bench(
+    notes: &[Note],
+    rows: &[usize],
+    col_offset: usize,
+    cols: usize,
+) -> u64 {
+    let mut cursor = 0usize;
+    let mut latest = [usize::MAX; MAX_COLS];
+    rows.iter().fold(0u64, |checksum, &row| {
+        let cell_mask = advance_latest_notes(
+            notes,
+            &mut cursor,
+            row,
+            col_offset,
+            cols,
+            &mut latest,
+        );
+        let mask = tracks_down_mask(notes, &latest, row, cols) & !cell_mask;
+        checksum.rotate_left(7) ^ mask
+    })
 }
 
 pub fn apply_uncommon_masks_with_masks(
@@ -1103,6 +1426,11 @@ pub fn apply_uncommon_masks_with_masks(
         apply_stomp_insert(notes, timing_player, col_offset, cols);
     }
 
+    if holds_mask & (HOLDS_MASK_BIT_PLANTED | HOLDS_MASK_BIT_FLOORED | HOLDS_MASK_BIT_TWISTER) != 0
+        && !notes_row_sorted(notes)
+    {
+        sort_player_notes(notes);
+    }
     if (holds_mask & HOLDS_MASK_BIT_PLANTED) != 0 {
         convert_taps_to_holds(notes, timing_player, col_offset, cols, 1);
     }

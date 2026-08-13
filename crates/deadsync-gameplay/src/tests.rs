@@ -17326,6 +17326,82 @@ mod tests {
     }
 
     #[test]
+    fn streamed_hold_conversion_matches_full_rescans() {
+        let row_count = 257usize;
+        let last_row = row_count * 12 + ROWS_PER_BEAT as usize * 2;
+        let timing = test_timing(last_row);
+        let mut source = Vec::with_capacity(row_count * 2);
+        for row_index in 0..row_count {
+            let row = row_index * 12;
+            for lane_index in 0..=row_index % 2 {
+                let selector = row_index * 3 + lane_index;
+                let note_type = if selector.is_multiple_of(29) {
+                    NoteType::Hold
+                } else if selector.is_multiple_of(31) {
+                    NoteType::Roll
+                } else if selector.is_multiple_of(17) {
+                    NoteType::Mine
+                } else if selector.is_multiple_of(13) {
+                    NoteType::Lift
+                } else {
+                    NoteType::Tap
+                };
+                let hold = matches!(note_type, NoteType::Hold | NoteType::Roll).then(|| {
+                    let mut hold = test_hold();
+                    hold.end_row_index = row + 12 * (2 + selector % 5);
+                    hold.end_beat = hold.end_row_index as f32 / ROWS_PER_BEAT as f32;
+                    hold.last_held_row_index = row;
+                    hold.last_held_beat = row as f32 / ROWS_PER_BEAT as f32;
+                    hold
+                });
+                let mut note = test_note_at(
+                    note_type,
+                    hold,
+                    note_type == NoteType::Tap && selector.is_multiple_of(23),
+                    row,
+                    row as f32 / ROWS_PER_BEAT as f32,
+                );
+                note.column = (row_index * 3 + lane_index * 5) % 8;
+                source.push(note);
+            }
+        }
+        sort_player_notes(&mut source);
+
+        for (col_offset, cols) in [(0, 4), (4, 4), (0, 8)] {
+            for simultaneous in 0..=5 {
+                let mut expected = source.clone();
+                let mut actual = source.clone();
+                convert_taps_to_holds_reference(
+                    &mut expected,
+                    &timing,
+                    col_offset,
+                    cols,
+                    simultaneous,
+                );
+                convert_taps_to_holds(
+                    &mut actual,
+                    &timing,
+                    col_offset,
+                    cols,
+                    simultaneous,
+                );
+                assert_eq!(
+                    format!("{actual:?}"),
+                    format!("{expected:?}"),
+                    "offset={col_offset} cols={cols} simultaneous={simultaneous}",
+                );
+            }
+        }
+
+        source.reverse();
+        let mut expected = source.clone();
+        let mut actual = source;
+        convert_taps_to_holds_reference(&mut expected, &timing, 0, 8, 3);
+        convert_taps_to_holds(&mut actual, &timing, 0, 8, 3);
+        assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+    }
+
+    #[test]
     fn uncommon_remove_masks_filter_convert_and_cap_notes() {
         let timing = test_timing(ROWS_PER_BEAT as usize * 5);
         let mut notes = vec![

@@ -26,6 +26,11 @@ name = "mine_insert_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "hold_conversion_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
