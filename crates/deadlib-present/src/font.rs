@@ -2256,9 +2256,18 @@ pub fn parse_with_texture_context(
             rel.set_extension("ini");
         }
 
-        // Try Fonts root (parent of the font dir), then sibling of current ini
+        // ITGmania resolves imports from the theme's Fonts root even when the
+        // current font lives in nested directories such as `_Combo Fonts/X`.
+        // Keep the immediate parent fallback for standalone/test font trees.
         let font_dir = base_ini.parent()?;
-        let fonts_root = font_dir.parent();
+        let fonts_root = base_ini
+            .ancestors()
+            .find(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.eq_ignore_ascii_case("fonts"))
+            })
+            .or_else(|| font_dir.parent());
 
         let candidates = [fonts_root.map(|r| r.join(&rel)), Some(font_dir.join(&rel))];
         for c in candidates.iter().flatten() {

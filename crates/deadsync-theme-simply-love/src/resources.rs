@@ -966,6 +966,39 @@ mod tests {
     }
 
     #[test]
+    fn nested_combo_fonts_inherit_common_default_glyph() {
+        let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let asset_roots = [project_root.join("assets")];
+        let spec = *FONT_ASSETS
+            .iter()
+            .find(|spec| spec.name == "combo_arial_rounded")
+            .expect("Arial Rounded font spec");
+        let mut parsed = deadlib_assets::parse_font_asset_specs([spec], &asset_roots, |path| {
+            project_root.join(path)
+        })
+        .expect("parse Arial Rounded with Common default");
+        let font = parsed.pop().expect("parsed Arial Rounded font").font;
+        let mut fonts = deadlib_present::font::FontMap::default();
+        fonts.insert(spec.name, font);
+        deadlib_present::font::refresh_chain_keys(&mut fonts);
+        let font = fonts.get(spec.name).expect("registered Arial Rounded font");
+        let default = font.default_glyph.as_ref().expect("default glyph");
+        let plus = deadlib_present::font::find_glyph(font, '+', &fonts)
+            .expect("resolved missing plus glyph");
+
+        assert_eq!(default.texture_key.as_ref(), "fonts/Common default 2x1.png");
+        assert_eq!(plus.texture_key, default.texture_key);
+        assert_ne!(
+            default.texture_key,
+            font.glyph_map
+                .get(&'1')
+                .expect("Arial Rounded digit 1")
+                .texture_key
+        );
+        assert!(!font.glyph_map.contains_key(&'+'));
+    }
+
+    #[test]
     fn initial_texture_assets_include_base_and_theme_catalogs() {
         let assets: Vec<_> = initial_texture_assets().collect();
         assert!(assets.iter().any(|asset| asset.key == "logo.png"));
