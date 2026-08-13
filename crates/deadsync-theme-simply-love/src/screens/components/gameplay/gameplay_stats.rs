@@ -30,10 +30,12 @@ use deadsync_rules::timing::LiveTimingSnapshot;
 use std::cell::RefCell;
 use std::sync::{Arc, LazyLock};
 
-use super::{FRAME_TEXT_LIVE_TIMING_BASE, FRAME_TEXT_VERTEX_BUFFERS};
+use super::{
+    FRAME_TEXT_LIVE_TIMING_BASE, FRAME_TEXT_STATS_COUNT_LEFT_BASE,
+    FRAME_TEXT_STATS_COUNT_RIGHT_BASE, FRAME_TEXT_STATS_COUNT_ROWS, FRAME_TEXT_TIME_BASE,
+    FRAME_TEXT_VERTEX_BUFFERS,
+};
 
-const COUNT_PREWARM_CAP: u32 = 2048;
-const TIME_PREWARM_CAP_S: u32 = 600;
 const PEAK_NPS_GRAPH_PAD: f32 = 4.0;
 const PEAK_NPS_ALPHA: f32 = 0.75;
 const DISABLED_WINDOW_RGBA: [f32; 4] = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
@@ -108,17 +110,17 @@ impl<K: Copy + Eq, V: Copy, const N: usize> SlotTextCache<K, V, N> {
 // never allocate, scan-prune, or destroy heap resources. A miss performs at
 // most N key comparisons plus <=14 bytes of stack formatting, then overwrites
 // one slot round-robin. Their compile-time bounds are their instrumentation:
-// full-width padded values retain 32 visible HUD keys, game-time text and
-// widths retain 8, and live timing has one direct slot for each of the 6
-// two-player stat pairs.
+// full-width padded values retain 32 visible HUD keys, game-time widths retain
+// 8, clocks have one direct slot for each of the 4 two-player rows, and live
+// timing has one direct slot for each of the 6 two-player stat pairs.
 // Destruction occurs at thread shutdown. Split judgment counts bypass a cache
 // entirely by combining a static zero run with inline decimal text.
 thread_local! {
     static PADDED_NUM_INLINE_CACHE: RefCell<FixedTextCache<(u32, u8), InlineText, 32>> = const {
         RefCell::new(FixedTextCache::new())
     };
-    static GAME_TIME_INLINE_CACHE: RefCell<FixedTextCache<(u32, u8), InlineText, 8>> = const {
-        RefCell::new(FixedTextCache::new())
+    static GAME_TIME_SLOT_CACHE: RefCell<SlotTextCache<(u32, u8), InlineText, 4>> = const {
+        RefCell::new(SlotTextCache::new())
     };
     static GAME_TIME_WIDTH_INLINE_CACHE: RefCell<FixedTextCache<(u32, u8), f32, 8>> = const {
         RefCell::new(FixedTextCache::new())
@@ -909,11 +911,31 @@ fn split_row_disabled(disabled_windows: [bool; 5], row: usize) -> bool {
 }
 
 #[inline(always)]
-fn padded_runs_for_window(count: u32, digits: usize, disabled: bool) -> (TextContent, TextContent) {
+fn padded_runs_for_window(
+    count: u32,
+    digits: usize,
+    disabled: bool,
+    slot: u8,
+) -> (TextContent, TextContent) {
     if disabled {
-        (padded_num_text(count, digits), TextContent::default())
+        (
+            padded_num_text(count, digits).with_frame_inline_slot(slot),
+            TextContent::default(),
+        )
     } else {
-        padded_runs(count, digits)
+        let (dim, bright) = padded_runs(count, digits);
+        (dim, bright.with_frame_inline_slot(slot))
+    }
+}
+
+#[inline(always)]
+fn count_text_slot(player: usize, row: usize, right_aligned: bool) -> u8 {
+    if right_aligned {
+        FRAME_TEXT_STATS_COUNT_RIGHT_BASE + row.min(FRAME_TEXT_STATS_COUNT_ROWS as usize - 1) as u8
+    } else {
+        FRAME_TEXT_STATS_COUNT_LEFT_BASE
+            + (player.min(MAX_PLAYERS - 1) * FRAME_TEXT_STATS_COUNT_ROWS as usize
+                + row.min(FRAME_TEXT_STATS_COUNT_ROWS as usize - 1)) as u8
     }
 }
 
@@ -927,26 +949,32 @@ fn peak_nps_text(peak: f32) -> Arc<str> {
 }
 
 #[inline(always)]
-fn game_time_text(seconds: u32, mode: u8) -> TextContent {
+fn format_game_time(seconds: u32, mode: u8) -> InlineText {
+    let seconds = seconds as u64;
+    let minutes = seconds / 60;
+    let secs = seconds % 60;
+    match mode {
+        0 => {
+            let hours = seconds / 3600;
+            let mins = (seconds % 3600) / 60;
+            InlineText::format(format_args!("{hours}:{mins:02}:{secs:02}"))
+        }
+        1 => InlineText::format(format_args!("{minutes:02}:{secs:02}")),
+        _ => InlineText::format(format_args!("{minutes}:{secs:02}")),
+    }
+    .expect("a u32 game time always fits the inline text payload")
+}
+
+#[inline(always)]
+fn game_time_text(seconds: u32, mode: u8, slot: usize) -> TextContent {
+    let slot = slot.min(3);
     let key = (seconds, mode);
-    let text = GAME_TIME_INLINE_CACHE.with(|cache| {
-        cache.borrow_mut().get_or_insert(key, || {
-            let seconds = seconds as u64;
-            let minutes = seconds / 60;
-            let secs = seconds % 60;
-            match mode {
-                0 => {
-                    let hours = seconds / 3600;
-                    let mins = (seconds % 3600) / 60;
-                    InlineText::format(format_args!("{hours}:{mins:02}:{secs:02}"))
-                }
-                1 => InlineText::format(format_args!("{minutes:02}:{secs:02}")),
-                _ => InlineText::format(format_args!("{minutes}:{secs:02}")),
-            }
-            .expect("a u32 game time always fits the inline text payload")
-        })
+    let text = GAME_TIME_SLOT_CACHE.with(|cache| {
+        cache
+            .borrow_mut()
+            .get_or_insert(slot, key, || format_game_time(seconds, mode))
     });
-    TextContent::Inline(text)
+    TextContent::frame_inline_slot(text, FRAME_TEXT_TIME_BASE + slot as u8)
 }
 
 #[inline(always)]
@@ -1026,7 +1054,8 @@ fn game_time_key(seconds: f32, total_seconds: f32) -> (u32, u8) {
 #[cfg(test)]
 mod dynamic_hud_text_tests {
     use super::{
-        game_time_text, live_timing_pair_text_in_slot, padded_num_text, padded_runs_for_window,
+        count_text_slot, game_time_text, live_timing_pair_text_in_slot, padded_num_text,
+        padded_runs_for_window,
     };
     use deadlib_present::actors::{InlineText, TextContent};
 
@@ -1044,10 +1073,13 @@ mod dynamic_hud_text_tests {
             assert!(matches!(text, TextContent::Inline(_)));
         }
 
-        let (dim, bright) = padded_runs_for_window(42, 4, false);
+        let slot = count_text_slot(1, 3, false);
+        let (dim, bright) = padded_runs_for_window(42, 4, false, slot);
         assert_eq!((dim.as_str(), bright.as_str()), ("00", "42"));
-        let (disabled, empty) = padded_runs_for_window(42, 4, true);
+        assert!(matches!(bright, TextContent::FrameInline { slot: found, .. } if found == slot));
+        let (disabled, empty) = padded_runs_for_window(42, 4, true, slot);
         assert_eq!((disabled.as_str(), empty.as_str()), ("0042", ""));
+        assert!(matches!(disabled, TextContent::FrameInline { slot: found, .. } if found == slot));
         assert!(matches!(empty, TextContent::Static("")));
 
         let oversized = padded_num_text(7, InlineText::CAPACITY + 1);
@@ -1056,6 +1088,30 @@ mod dynamic_hud_text_tests {
             format!("{:0width$}", 7, width = InlineText::CAPACITY + 1)
         );
         assert!(matches!(oversized, TextContent::Owned(_)));
+
+        for count in 0..=4_096 {
+            let expected = format!("{count:04}");
+            let slot = count_text_slot(count as usize % 2, count as usize % 7, false);
+            let (dim, bright) = padded_runs_for_window(count, 4, false, slot);
+            assert_eq!(format!("{}{}", dim.as_str(), bright.as_str()), expected);
+            let (disabled, empty) = padded_runs_for_window(count, 4, true, slot);
+            assert_eq!(disabled.as_str(), expected);
+            assert!(empty.is_empty());
+        }
+
+        let mut slots = [false; u8::MAX as usize + 1];
+        for player in 0..2 {
+            for row in 0..7 {
+                let slot = count_text_slot(player, row, false) as usize;
+                assert!(!slots[slot], "duplicate left count slot {slot}");
+                slots[slot] = true;
+            }
+        }
+        for row in 0..7 {
+            let slot = count_text_slot(1, row, true) as usize;
+            assert!(!slots[slot], "duplicate right count slot {slot}");
+            slots[slot] = true;
+        }
     }
 
     #[test]
@@ -1068,9 +1124,31 @@ mod dynamic_hud_text_tests {
             (3_600, 0, "1:00:00"),
             (u32::MAX, 0, "1193046:28:15"),
         ] {
-            let text = game_time_text(seconds, mode);
+            let text = game_time_text(seconds, mode, 0);
             assert_eq!(text.as_str(), expected);
-            assert!(matches!(text, TextContent::Inline(_)));
+            assert!(matches!(
+                text,
+                TextContent::FrameInline {
+                    slot: super::FRAME_TEXT_TIME_BASE,
+                    ..
+                }
+            ));
+        }
+
+        for mode in 0..=2 {
+            for seconds in 0..=7_200 {
+                let minutes = seconds / 60;
+                let secs = seconds % 60;
+                let expected = match mode {
+                    0 => format!("{}:{:02}:{secs:02}", seconds / 3600, (seconds % 3600) / 60),
+                    1 => format!("{minutes:02}:{secs:02}"),
+                    _ => format!("{minutes}:{secs:02}"),
+                };
+                assert_eq!(
+                    game_time_text(seconds, mode, (seconds % 4) as usize).as_str(),
+                    expected
+                );
+            }
         }
     }
 
@@ -1204,7 +1282,7 @@ fn push_versus_count_texts(
 fn cached_game_time_width_for_key(key: (u32, u8), asset_manager: &AssetManager) -> f32 {
     GAME_TIME_WIDTH_INLINE_CACHE.with(|cache| {
         cache.borrow_mut().get_or_insert(key, || {
-            let text = game_time_text(key.0, key.1);
+            let text = format_game_time(key.0, key.1);
             asset_manager
                 .with_fonts(|all_fonts| {
                     asset_manager.with_font("miso", |f| {
@@ -1235,6 +1313,20 @@ fn holds_mines_rolls_label_text(state: &State, index: usize) -> Arc<str> {
     state.gameplay_stats_text.holds_mines_rolls(index)
 }
 
+fn prewarm_count_static_text(
+    cache: &mut TextLayoutCache,
+    fonts: &font::FontMap,
+    font_name: &'static str,
+    digits: usize,
+) {
+    for zeroes in ZERO_RUNS.iter().take(digits.min(ZERO_RUNS.len())) {
+        cache.prewarm_text(fonts, font_name, zeroes, None);
+    }
+    for digit in DIGIT_TEXT.iter() {
+        cache.prewarm_text(fonts, font_name, digit.as_ref(), None);
+    }
+}
+
 pub fn prewarm_text_layout(
     cache: &mut TextLayoutCache,
     fonts: &font::FontMap,
@@ -1259,76 +1351,10 @@ pub fn prewarm_text_layout(
     } else {
         4
     };
-    for count in 0..=max_count.min(COUNT_PREWARM_CAP) {
-        let (dim, bright) = padded_runs(count, digits);
-        cache.prewarm_text(
-            fonts,
-            gameplay_font_key(state, FontRole::ScreenEval),
-            dim.as_str(),
-            None,
-        );
-        cache.prewarm_text(
-            fonts,
-            gameplay_font_key(state, FontRole::ScreenEval),
-            bright.as_str(),
-            None,
-        );
-    }
-    let (dim, bright) = padded_runs(max_count, digits);
-    cache.prewarm_text(
-        fonts,
-        gameplay_font_key(state, FontRole::ScreenEval),
-        dim.as_str(),
-        None,
-    );
-    cache.prewarm_text(
-        fonts,
-        gameplay_font_key(state, FontRole::ScreenEval),
-        bright.as_str(),
-        None,
-    );
-    for player in 0..state.num_players() {
-        let totals = state.display_totals_for_player(player);
-        for count in [
-            totals.total_steps,
-            totals.holds_total,
-            totals.rolls_total,
-            totals.mines_total,
-        ] {
-            let (dim, bright) = padded_runs(count, digits);
-            cache.prewarm_text(
-                fonts,
-                gameplay_font_key(state, FontRole::ScreenEval),
-                dim.as_str(),
-                None,
-            );
-            cache.prewarm_text(
-                fonts,
-                gameplay_font_key(state, FontRole::ScreenEval),
-                bright.as_str(),
-                None,
-            );
-        }
-        for (_, achieved, total) in step_stats_hmr_categories(state, player) {
-            for count in [achieved, total] {
-                let (dim, bright) = padded_runs(count, digits);
-                cache.prewarm_text(
-                    fonts,
-                    gameplay_font_key(state, FontRole::ScreenEval),
-                    dim.as_str(),
-                    None,
-                );
-                cache.prewarm_text(
-                    fonts,
-                    gameplay_font_key(state, FontRole::ScreenEval),
-                    bright.as_str(),
-                    None,
-                );
-            }
-        }
-    }
-    // Leave the first gameplay frame's full-width disabled counter resident
-    // after the bounded prewarm walk has cycled through large chart totals.
+    let count_font = gameplay_font_key(state, FontRole::ScreenEval);
+    prewarm_count_static_text(cache, fonts, count_font, digits);
+    // Seed the fixed inline formatter for the disabled full-width counter. The
+    // changing value itself is handled by a prepared row slot.
     let _ = padded_num_text(0, digits);
     let end_seconds = deadsync_core::song_time::song_time_ns_to_seconds(
         state.music_end_time_ns().max(state.notes_end_time_ns()),
@@ -1341,16 +1367,14 @@ pub fn prewarm_text_layout(
         .max(0.0) as u32;
     let end_seconds = end_seconds.max(display_end_seconds);
     let mode = game_time_mode(end_seconds as f32);
-    for second in 0..=end_seconds.min(TIME_PREWARM_CAP_S) {
-        let key = (second, mode);
-        let text = game_time_text(second, mode);
-        cache.prewarm_text(fonts, "miso", text.as_str(), None);
+    let _ = cached_game_time_width_for_key((end_seconds, mode), asset_manager);
+    let _ = cached_game_time_width_for_key((9 * 60 + 59, 2), asset_manager);
+    for player in 0..state.num_players() {
+        let display = step_stats_time_display(state, player);
+        let remaining = (display.total_seconds - display.elapsed_seconds).max(0.0);
+        let key = game_time_key(remaining, display.total_seconds);
         let _ = cached_game_time_width_for_key(key, asset_manager);
     }
-    let key = (end_seconds, mode);
-    let text = game_time_text(end_seconds, mode);
-    cache.prewarm_text(fonts, "miso", text.as_str(), None);
-    let _ = cached_game_time_width_for_key(key, asset_manager);
     cache.prewarm_text(fonts, "miso", time_total_text(state).as_ref(), None);
     cache.prewarm_text(fonts, "miso", &tr("Gameplay", "TimeSong"), None);
     cache.prewarm_text(fonts, "miso", &tr("Gameplay", "TimeCourse"), None);
@@ -1385,13 +1409,199 @@ pub fn prewarm_text_layout(
     }
 }
 
-/// Prepares the six direct slots used by two players' live timing values.
+fn prewarm_clock_slots(
+    cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    fonts: &font::FontMap,
+) {
+    let numeric_glyphs =
+        InlineText::copy_from(":0123456789").expect("the clock glyph domain fits inline");
+    for side in 0..2 {
+        let align = if side == 0 {
+            TextAlign::Left
+        } else {
+            TextAlign::Right
+        };
+        for row in 0..2 {
+            prewarm_prepared_inline_text_slot(
+                cache,
+                scratch,
+                fonts,
+                "miso",
+                numeric_glyphs,
+                FRAME_TEXT_TIME_BASE + (side * 2 + row) as u8,
+                align,
+                FRAME_TEXT_VERTEX_BUFFERS,
+            );
+        }
+    }
+}
+
+fn prewarm_count_slots(
+    cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    fonts: &font::FontMap,
+    font_name: &'static str,
+    num_players: usize,
+) {
+    let count_glyphs =
+        InlineText::copy_from("0123456789").expect("the count glyph domain fits inline");
+    for player in 0..num_players.min(MAX_PLAYERS) {
+        for row in 0..FRAME_TEXT_STATS_COUNT_ROWS {
+            prewarm_prepared_inline_text_slot(
+                cache,
+                scratch,
+                fonts,
+                font_name,
+                count_glyphs,
+                FRAME_TEXT_STATS_COUNT_LEFT_BASE + player as u8 * FRAME_TEXT_STATS_COUNT_ROWS + row,
+                TextAlign::Left,
+                FRAME_TEXT_VERTEX_BUFFERS,
+            );
+        }
+    }
+    if num_players > 1 {
+        for row in 0..FRAME_TEXT_STATS_COUNT_ROWS {
+            prewarm_prepared_inline_text_slot(
+                cache,
+                scratch,
+                fonts,
+                font_name,
+                count_glyphs,
+                FRAME_TEXT_STATS_COUNT_RIGHT_BASE + row,
+                TextAlign::Right,
+                FRAME_TEXT_VERTEX_BUFFERS,
+            );
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn numeric_bench_checksum(mut checksum: u64, text: &str) -> u64 {
+    for byte in text.bytes() {
+        checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_count_text_setup(
+    fonts: &font::FontMap,
+    scratch: &mut ComposeScratch,
+    font_name: &'static str,
+    optimized: bool,
+) -> (u64, u32) {
+    const MAX_COUNT: u32 = 2_048;
+    let mut cache = TextLayoutCache::new(4_096);
+    cache.begin_frame_stats(true);
+    let mut checksum = 0xcbf2_9ce4_8422_2325u64;
+    if optimized {
+        prewarm_count_static_text(&mut cache, fonts, font_name, 4);
+        prewarm_count_slots(&mut cache, scratch, fonts, font_name, MAX_PLAYERS);
+        for count in 0..=MAX_COUNT {
+            let slot = count_text_slot(count as usize % MAX_PLAYERS, count as usize % 7, false);
+            let (dim, bright) = padded_runs_for_window(count, 4, false, slot);
+            checksum = numeric_bench_checksum(checksum, dim.as_str());
+            checksum = numeric_bench_checksum(checksum, bright.as_str());
+        }
+    } else {
+        for count in 0..=MAX_COUNT {
+            let (dim, bright) = padded_runs(count, 4);
+            cache.prewarm_text(fonts, font_name, dim.as_str(), None);
+            cache.prewarm_text(fonts, font_name, bright.as_str(), None);
+            checksum = numeric_bench_checksum(checksum, dim.as_str());
+            checksum = numeric_bench_checksum(checksum, bright.as_str());
+        }
+    }
+    (checksum, cache.frame_stats().owned_entries)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_clock_text_setup(
+    fonts: &font::FontMap,
+    scratch: &mut ComposeScratch,
+    optimized: bool,
+) -> (u64, u32) {
+    const LAST_SECOND: u32 = 600;
+    let mut cache = TextLayoutCache::new(4_096);
+    cache.begin_frame_stats(true);
+    let mut checksum = 0xcbf2_9ce4_8422_2325u64;
+    if optimized {
+        prewarm_clock_slots(&mut cache, scratch, fonts);
+        for second in 0..=LAST_SECOND {
+            let text = game_time_text(second, 1, second as usize % 4);
+            checksum = numeric_bench_checksum(checksum, text.as_str());
+        }
+    } else {
+        for second in 0..=LAST_SECOND {
+            let text = format_game_time(second, 1);
+            cache.prewarm_text(fonts, "miso", text.as_str(), None);
+            checksum = numeric_bench_checksum(checksum, text.as_str());
+        }
+    }
+    (checksum, cache.frame_stats().owned_entries)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct GameplayStatsNumericHotBenchmark;
+
+#[cfg(feature = "bench-support")]
+impl GameplayStatsNumericHotBenchmark {
+    pub const fn new() -> Self {
+        Self
+    }
+
+    pub fn frame(&self, frame: u32) -> u64 {
+        let second = (frame / 60) % 601;
+        let mut checksum = 0xcbf2_9ce4_8422_2325u64;
+        for (slot, value) in [600, 600 - second, 600, 600 - second]
+            .into_iter()
+            .enumerate()
+        {
+            let text = game_time_text(value, 1, slot);
+            checksum = numeric_bench_checksum(checksum, text.as_str());
+        }
+        for player in 0..MAX_PLAYERS {
+            for row in 0..FRAME_TEXT_STATS_COUNT_ROWS as usize {
+                let count = (frame / (row as u32 + 1)) % 2_049;
+                let slot = count_text_slot(player, row, false);
+                let (dim, bright) = padded_runs_for_window(count, 4, row == 6, slot);
+                checksum = numeric_bench_checksum(checksum, dim.as_str());
+                checksum = numeric_bench_checksum(checksum, bright.as_str());
+            }
+        }
+        checksum
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for GameplayStatsNumericHotBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Prepares the fixed clock, step-count, and live-timing glyph slots used by a
+/// gameplay screen. Each slot owns one actor's alignment and reusable geometry.
 pub fn prewarm_frame_text_scratch(
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
     fonts: &font::FontMap,
     state: &State,
 ) {
+    prewarm_clock_slots(cache, scratch, fonts);
+    prewarm_count_slots(
+        cache,
+        scratch,
+        fonts,
+        gameplay_font_key(state, FontRole::ScreenEval),
+        state.num_players(),
+    );
+
     let glyph_domain =
         InlineText::copy_from("-./0123456789").expect("the live-timing glyph domain fits inline");
     for player in 0..state.num_players() {
@@ -1737,8 +1947,9 @@ pub fn push_versus_step_stats(
                             let disabled = split_row_disabled(disabled_windows, row_i);
                             let y = group_origin_y
                                 + (y_base + row_i as f32 * row_height) * group_zoom_y;
+                            let slot = count_text_slot(player_idx, row_i, !is_p1);
                             let (dim_text, bright_text) =
-                                padded_runs_for_window(count, digits, disabled);
+                                padded_runs_for_window(count, digits, disabled, slot);
                             let dim_color = if disabled {
                                 DISABLED_WINDOW_RGBA
                             } else {
@@ -1778,8 +1989,9 @@ pub fn push_versus_step_stats(
                             let disabled = standard_row_disabled(disabled_windows, row_i);
                             let y = group_origin_y
                                 + (y_base + row_i as f32 * row_height) * group_zoom_y;
+                            let slot = count_text_slot(player_idx, row_i, !is_p1);
                             let (dim_text, bright_text) =
-                                padded_runs_for_window(count, digits, disabled);
+                                padded_runs_for_window(count, digits, disabled, slot);
                             let dim_color = if disabled {
                                 DISABLED_WINDOW_RGBA
                             } else {
@@ -2068,8 +2280,9 @@ pub fn push_double_step_stats(
                         } else {
                             color::JUDGMENT_DIM_RGBA[row_i]
                         };
+                        let slot = count_text_slot(0, row_i, false);
                         let (dim_text, bright_text) =
-                            padded_runs_for_window(count, digits, disabled);
+                            padded_runs_for_window(count, digits, disabled, slot);
                         let dim_len = dim_text.len() as f32;
 
                         if !dim_text.is_empty() {
@@ -2164,8 +2377,9 @@ pub fn push_double_step_stats(
                             dim_colors[row_i]
                         };
                         let count = counts[row_i];
+                        let slot = count_text_slot(0, row_i, false);
                         let (dim_text, bright_text) =
-                            padded_runs_for_window(count, digits, disabled);
+                            padded_runs_for_window(count, digits, disabled, slot);
                         let dim_len = dim_text.len() as f32;
 
                         if !dim_text.is_empty() {
@@ -2255,10 +2469,10 @@ pub fn push_double_step_stats(
         let elapsed_display_seconds = time_display.elapsed_seconds;
 
         let total_time_key = game_time_key(total_display_seconds, total_display_seconds);
-        let total_time_str = game_time_text(total_time_key.0, total_time_key.1);
+        let total_time_str = game_time_text(total_time_key.0, total_time_key.1, 0);
         let remaining_display_seconds = (total_display_seconds - elapsed_display_seconds).max(0.0);
         let remaining_time_key = game_time_key(remaining_display_seconds, total_display_seconds);
-        let remaining_time_str = game_time_text(remaining_time_key.0, remaining_time_key.1);
+        let remaining_time_str = game_time_text(remaining_time_key.0, remaining_time_key.1, 1);
 
         let number_zoom = banner_data_zoom;
         let label_zoom = 0.833 * number_zoom;
@@ -2955,7 +3169,9 @@ fn build_side_pane(
                 } else {
                     color::JUDGMENT_DIM_RGBA[index]
                 };
-                let (dim_text, bright_text) = padded_runs_for_window(count, digits, disabled);
+                let slot = count_text_slot(player_idx, index, false);
+                let (dim_text, bright_text) =
+                    padded_runs_for_window(count, digits, disabled, slot);
                 let dim_len = dim_text.len() as f32;
                 let bright_len = bright_text.len() as f32;
 
@@ -3065,8 +3281,9 @@ fn build_side_pane(
                 } else {
                     *dim
                 };
+                let slot = count_text_slot(player_idx, index, false);
                 let (dim_text, bright_text) =
-                    padded_runs_for_window(*count, digits, disabled);
+                    padded_runs_for_window(*count, digits, disabled, slot);
                 let dim_len = dim_text.len() as f32;
                 let bright_len = bright_text.len() as f32;
 
@@ -3159,13 +3376,18 @@ fn build_side_pane(
             let elapsed_display_seconds = time_display.elapsed_seconds;
 
             let total_time_key = game_time_key(total_display_seconds, total_display_seconds);
-            let total_time_str = game_time_text(total_time_key.0, total_time_key.1);
+            let time_slot = if player_side == profile_data::PlayerSide::P1 {
+                0
+            } else {
+                2
+            };
+            let total_time_str = game_time_text(total_time_key.0, total_time_key.1, time_slot);
 
             let remaining_display_seconds =
                 (total_display_seconds - elapsed_display_seconds).max(0.0);
             let remaining_time_key = game_time_key(remaining_display_seconds, total_display_seconds);
             let remaining_time_str =
-                game_time_text(remaining_time_key.0, remaining_time_key.1);
+                game_time_text(remaining_time_key.0, remaining_time_key.1, time_slot + 1);
 
             let font_name = "miso";
             let text_zoom = layout.banner_data_zoom * 0.833;

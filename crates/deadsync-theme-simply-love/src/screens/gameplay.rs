@@ -6,7 +6,9 @@ use crate::assets::{FontRole, machine_font_key, visual_styles};
 use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter,
 };
-use crate::screens::components::gameplay::{gameplay_stats, notefield, step_stats_gifs};
+use crate::screens::components::gameplay::{
+    FRAME_TEXT_LIFE_BASE, FRAME_TEXT_VERTEX_BUFFERS, gameplay_stats, notefield, step_stats_gifs,
+};
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::heart_rate;
 pub use crate::screens::components::shared::heart_rate::{HeartRatePlayerView, HeartRateView};
@@ -16,13 +18,15 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{GameplayInitView, GameplayRuntimeView, GameplayScoreRuntimeView};
 use deadlib_present::actors::{
-    Actor, ActorResourceArena, RetainedActorFrame, SharedActorFrameScratch, SizeSpec, SpriteSource,
-    TextAlign, TextAttribute, TextAttributes, TextContent,
+    Actor, ActorResourceArena, InlineText, RetainedActorFrame, SharedActorFrameScratch, SizeSpec,
+    SpriteSource, TextAlign, TextAttribute, TextAttributes, TextContent,
 };
 use deadlib_present::anim::EffectState;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
-use deadlib_present::compose::{ActorSegment, ActorXFold, ComposeScratch, TextLayoutCache};
+use deadlib_present::compose::{
+    ActorSegment, ActorXFold, ComposeScratch, TextLayoutCache, prewarm_prepared_inline_text_slot,
+};
 use deadlib_present::density::{self, DensityHistCache};
 use deadlib_present::font;
 use deadlib_present::space::widescale;
@@ -1861,9 +1865,13 @@ pub struct State {
     /// its localized label once; gameplay reads the stored `Arc` directly and
     /// skips the actor entirely for the empty 1.0x label.
     rate_text: Arc<str>,
-    /// Exact 0.0%-100.0% lookup table prepared at screen entry. Gameplay uses a
-    /// direct quantized index; the fixed song-lifetime storage has no misses,
-    /// growth, eviction, synchronization, or live-frame destruction.
+    /// Two fixed life-text slots owned by the gameplay thread for one song.
+    /// Transition prewarm resolves the complete ASCII glyph domain. A miss
+    /// writes at most six stack bytes and replaces one player's last value; a
+    /// hit is one quantized-key comparison. There is no synchronization,
+    /// allocation, or eviction, and destruction occurs with the gameplay state
+    /// at screen transition. Text-layout counters and the numeric HUD benchmark
+    /// cover activity; six byte writes are the worst-case live-frame work.
     life_percent_text: GameplayLifeTextPlan,
     /// One song-static logical width for the Stage/Event label. The game thread
     /// warms it during the transition, reads it without synchronization during
@@ -4801,25 +4809,37 @@ impl Default for GameplayBpmTextPlan {
     }
 }
 
-const LIFE_PERCENT_TEXT_COUNT: usize = 1_001;
-
 struct GameplayLifeTextPlan {
-    values: Box<[Arc<str>; LIFE_PERCENT_TEXT_COUNT]>,
+    cached: [Cell<Option<(u16, InlineText)>>; MAX_PLAYERS],
 }
 
 impl GameplayLifeTextPlan {
     fn new() -> Self {
         Self {
-            values: Box::new(std::array::from_fn(|key| {
-                Arc::from(format!("{:.1}%", key as f32 / 10.0))
-            })),
+            cached: std::array::from_fn(|_| Cell::new(None)),
         }
     }
 
     #[inline(always)]
-    fn resolve(&self, life_percent: f32) -> Arc<str> {
-        let key = quantize_tenths_u32(life_percent).min((LIFE_PERCENT_TEXT_COUNT - 1) as u32);
-        Arc::clone(&self.values[key as usize])
+    fn resolve(&self, life_percent: f32, player: usize) -> TextContent {
+        let key = quantize_tenths_u32(life_percent).min(1_000) as u16;
+        let player = player.min(MAX_PLAYERS - 1);
+        let text = match self.cached[player].get() {
+            Some((cached, text)) if cached == key => text,
+            _ => {
+                let mut text = InlineText::new();
+                let whole = u32::from(key) / 10;
+                let tenth = (key % 10) as u8;
+                let wrote_whole = text.push_u32(whole);
+                let wrote_dot = text.push_ascii(b'.');
+                let wrote_tenth = text.push_ascii(b'0' + tenth);
+                let wrote_percent = text.push_ascii(b'%');
+                debug_assert!(wrote_whole && wrote_dot && wrote_tenth && wrote_percent);
+                self.cached[player].set(Some((key, text)));
+                text
+            }
+        };
+        TextContent::frame_inline_slot(text, FRAME_TEXT_LIFE_BASE + player as u8)
     }
 }
 
@@ -4884,12 +4904,13 @@ fn surround_life_color(profile: &profile_data::Profile, life: f32, elapsed: f32)
 #[inline]
 fn visible_life_percent_text(
     text_plan: &GameplayLifeTextPlan,
+    player: usize,
     life_percent: f32,
     lifemeter_type: profile_data::LifeMeterType,
     enabled: bool,
     standard_layout_visible: bool,
     is_hot: bool,
-) -> Option<Arc<str>> {
+) -> Option<TextContent> {
     let visible = enabled
         && !is_hot
         && match lifemeter_type {
@@ -4897,7 +4918,99 @@ fn visible_life_percent_text(
             profile_data::LifeMeterType::Vertical => true,
             profile_data::LifeMeterType::Surround => false,
         };
-    visible.then(|| text_plan.resolve(life_percent))
+    visible.then(|| text_plan.resolve(life_percent, player))
+}
+
+fn prewarm_life_text_slots(
+    cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    fonts: &font::FontMap,
+    num_players: usize,
+) {
+    let life_glyphs =
+        InlineText::copy_from(".%0123456789").expect("the life-percent glyph domain fits inline");
+    for player in 0..num_players.min(MAX_PLAYERS) {
+        prewarm_prepared_inline_text_slot(
+            cache,
+            scratch,
+            fonts,
+            "miso",
+            life_glyphs,
+            FRAME_TEXT_LIFE_BASE + player as u8,
+            TextAlign::Left,
+            FRAME_TEXT_VERTEX_BUFFERS,
+        );
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_life_text_setup(
+    fonts: &font::FontMap,
+    scratch: &mut ComposeScratch,
+    optimized: bool,
+) -> (u64, u32) {
+    let mut cache = TextLayoutCache::new(4_096);
+    cache.begin_frame_stats(true);
+    let mut checksum = 0xcbf2_9ce4_8422_2325u64;
+    if optimized {
+        let plan = GameplayLifeTextPlan::new();
+        prewarm_life_text_slots(&mut cache, scratch, fonts, MAX_PLAYERS);
+        for key in 0..=1_000 {
+            for byte in plan
+                .resolve(key as f32 / 10.0, key as usize % MAX_PLAYERS)
+                .as_str()
+                .bytes()
+            {
+                checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+            }
+        }
+    } else {
+        let values: Box<[Arc<str>; 1_001]> = Box::new(std::array::from_fn(|key| {
+            Arc::from(format!("{:.1}%", key as f32 / 10.0))
+        }));
+        for text in values.iter() {
+            cache.prewarm_text(fonts, "miso", text.as_ref(), None);
+        }
+        for text in values.iter() {
+            for byte in text.bytes() {
+                checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+            }
+        }
+    }
+    (checksum, cache.frame_stats().owned_entries)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct GameplayLifeTextHotBenchmark {
+    plan: GameplayLifeTextPlan,
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayLifeTextHotBenchmark {
+    pub fn new() -> Self {
+        Self {
+            plan: GameplayLifeTextPlan::new(),
+        }
+    }
+
+    pub fn frame(&self, frame: u32) -> u64 {
+        let key = (frame / 60) % 1_001;
+        let text = self
+            .plan
+            .resolve(key as f32 / 10.0, frame as usize % MAX_PLAYERS);
+        text.as_str().bytes().fold(0u64, |checksum, byte| {
+            (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
+        })
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for GameplayLifeTextHotBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[inline(always)]
@@ -5161,9 +5274,7 @@ pub fn prewarm_text_layout(
     if !state.rate_text.is_empty() {
         cache.prewarm_text(fonts, "miso", state.rate_text.as_ref(), None);
     }
-    for text in state.life_percent_text.values.iter() {
-        cache.prewarm_text(fonts, "miso", text.as_ref(), None);
-    }
+    prewarm_life_text_slots(cache, scratch, fonts, state.num_players());
     for player in 0..state.num_players() {
         let chart = &state.charts()[player];
         let meter_text = cached_meter_text(chart.meter);
@@ -15351,6 +15462,7 @@ pub fn push_actors(
                 let profile = &state.profiles()[player_idx];
                 let life_percent_text = visible_life_percent_text(
                     &state.life_percent_text,
+                    player_idx,
                     life_for_render * 100.0,
                     profile.lifemeter_type,
                     profile.show_life_percent,
@@ -17060,10 +17172,17 @@ mod tests {
             );
         }
         let life_plan = GameplayLifeTextPlan::new();
-        for life in [87.34, 87.35, 0.0, 100.0, f32::NAN, 87.34] {
+        for key in 0..=1_000 {
+            let life = key as f32 / 10.0;
+            assert_eq!(
+                life_plan.resolve(life, key as usize % MAX_PLAYERS).as_str(),
+                format!("{:.1}%", key as f32 / 10.0)
+            );
+        }
+        for life in [87.34, 87.35, f32::NAN, f32::INFINITY, 87.34] {
             let key = quantize_tenths_u32(life).min(1_000);
             assert_eq!(
-                life_plan.resolve(life).as_ref(),
+                life_plan.resolve(life, 0).as_str(),
                 format!("{:.1}%", key as f32 / 10.0)
             );
         }
@@ -17075,6 +17194,7 @@ mod tests {
         assert!(
             visible_life_percent_text(
                 &text_plan,
+                0,
                 87.3,
                 profile_data::LifeMeterType::Standard,
                 false,
@@ -17086,6 +17206,7 @@ mod tests {
         assert!(
             visible_life_percent_text(
                 &text_plan,
+                0,
                 87.3,
                 profile_data::LifeMeterType::Surround,
                 true,
@@ -17097,6 +17218,7 @@ mod tests {
         assert!(
             visible_life_percent_text(
                 &text_plan,
+                0,
                 100.0,
                 profile_data::LifeMeterType::Vertical,
                 true,
@@ -17108,15 +17230,29 @@ mod tests {
         assert_eq!(
             visible_life_percent_text(
                 &text_plan,
+                1,
                 87.3,
                 profile_data::LifeMeterType::Vertical,
                 true,
                 false,
                 false,
             )
-            .as_deref(),
+            .as_ref()
+            .map(TextContent::as_str),
             Some("87.3%")
         );
+        assert!(matches!(
+            visible_life_percent_text(
+                &text_plan,
+                1,
+                87.3,
+                profile_data::LifeMeterType::Vertical,
+                true,
+                false,
+                false,
+            ),
+            Some(TextContent::FrameInline { slot, .. }) if slot == FRAME_TEXT_LIFE_BASE + 1
+        ));
     }
 
     #[test]
