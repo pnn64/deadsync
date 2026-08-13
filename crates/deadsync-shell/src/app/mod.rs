@@ -4654,10 +4654,7 @@ impl App {
         let Some(gs) = self.state.screens.gameplay_state.as_ref() else {
             return false;
         };
-        (0..gs.num_players().min(MAX_PLAYERS)).any(|player_idx| {
-            let p = &gs.players()[player_idx];
-            p.is_failing || p.life <= 0.0 || p.fail_time.is_some()
-        })
+        gs.all_joined_players_failed()
     }
 
     fn append_stage_results_from_eval(

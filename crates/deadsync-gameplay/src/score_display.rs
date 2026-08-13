@@ -43,8 +43,11 @@ pub fn ex_score_data_from_display_inputs(
         carry.rolls_let_go_for_score,
     );
     judgment::ExScoreData {
-        counts: inputs.counts,
-        counts_10ms: inputs.counts_10ms,
+        counts: judgment::add_window_counts(inputs.counts, carry.window_counts),
+        counts_10ms: judgment::add_window_counts(
+            inputs.counts_10ms,
+            carry.window_counts_10ms_blue,
+        ),
         holds_held,
         holds_resolved,
         rolls_held,

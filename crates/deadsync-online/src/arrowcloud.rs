@@ -5,7 +5,6 @@ use deadsync_gameplay::GameplayProfileData;
 use deadsync_net::{self as network, NetworkError};
 use deadsync_profile as profile_data;
 use deadsync_profile::Profile;
-use deadsync_profile_gameplay::blue_fantastic_window_ms_for_profile;
 use deadsync_rules::{
     judgment,
     note::Note,
@@ -2199,26 +2198,6 @@ pub fn payload_from_gameplay_input(input: ArrowCloudGameplayPayloadInput<'_>) ->
     })
 }
 
-pub fn player_blue_window_ms_from_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
-    gs: &deadsync_gameplay::GameplayRuntimeState<
-        RuntimeProfile,
-        OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
-    player_idx: usize,
-) -> f32
-where
-    RuntimeProfile: Deref<Target = profile_data::Profile> + GameplayProfileData,
-{
-    let base = gs.default_fa_plus_window_s();
-    gs.profiles()
-        .get(player_idx)
-        .map_or(base * 1000.0, |profile| {
-            blue_fantastic_window_ms_for_profile(base, profile.deref())
-        })
-}
-
 #[inline(always)]
 pub fn live_submit_stats_from_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
     gs: &deadsync_gameplay::GameplayRuntimeState<
@@ -2290,7 +2269,7 @@ where
         .map(deadsync_core::song_time::song_time_ns_from_seconds);
     let submit_stats = submit_stats_from_runtime(gs, player_idx, fail_time_ns);
     let song = gs.song();
-    let totals = gs.display_totals_for_player(player_idx);
+    let totals = gs.stage_totals_for_player(player_idx);
     let (start, end) = gs.note_range_for_player(player_idx);
     let graph = gs.density_graph_view();
     Some(payload_from_gameplay_input(
@@ -2349,19 +2328,14 @@ where
     RuntimeProfile: Deref<Target = profile_data::Profile> + GameplayProfileData,
 {
     let chart_hash = gs.charts()[player_idx].short_hash.clone();
-    let blue_window_ms = player_blue_window_ms_from_runtime(gs, player_idx);
     ArrowCloudGameplaySubmitPlayer {
         side,
         chart_hash: chart_hash.clone(),
         api_key: gs.profiles()[player_idx].arrowcloud_api_key.clone(),
         profile_id,
-        itg_percent: gs.display_itg_score_percent(player_idx).clamp(0.0, 100.0),
-        ex_percent: gs
-            .display_ex_score_percent(player_idx, blue_window_ms)
-            .clamp(0.0, 100.0),
-        hard_ex_percent: gs
-            .display_hard_ex_score_percent(player_idx, blue_window_ms)
-            .clamp(0.0, 100.0),
+        itg_percent: (gs.stage_itg_score_percent(player_idx) * 100.0).clamp(0.0, 100.0),
+        ex_percent: gs.stage_ex_score_percent(player_idx).clamp(0.0, 100.0),
+        hard_ex_percent: gs.stage_hard_ex_score_percent(player_idx).clamp(0.0, 100.0),
         song_has_lua: gs.song().has_lua,
         lua_submit_allowed: lua_submit_allowed(chart_hash.as_str()),
         song_completed_naturally: gs.song_completed_naturally(),

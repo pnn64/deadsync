@@ -30,7 +30,7 @@ use crate::screens::input as screen_input;
 use crate::views::SimplyLoveLobbyRuntimeView;
 use deadlib_present::font;
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_gameplay::{FantasticWindowOptions, blue_fantastic_window_ms, build_crossover_rows};
+use deadsync_gameplay::build_crossover_rows;
 use deadsync_online::lobbies as lobby_data;
 use deadsync_rules::judgment;
 use deadsync_rules::timing as timing_stats;
@@ -55,23 +55,6 @@ use chrono::Local;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
-
-#[inline(always)]
-fn player_blue_window_ms(gs: &gameplay::State, player_idx: usize) -> f32 {
-    let base = gs.default_fa_plus_window_s();
-    let Some(profile) = gs.profiles().get(player_idx) else {
-        return base * 1000.0;
-    };
-    blue_fantastic_window_ms(FantasticWindowOptions {
-        base_fa_plus_s: base,
-        custom_fantastic_window_s: profile.custom_fantastic_window.then(|| {
-            f32::from(profile_data::clamp_custom_fantastic_window_ms(
-                profile.custom_fantastic_window_ms,
-            )) / 1000.0
-        }),
-        fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
-    })
-}
 
 fn collect_foot_parity<const LANES: usize>(
     notes: &[deadsync_rules::note::Note],
@@ -2358,7 +2341,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                 .song()
                 .precise_last_second()
                 .max(graph_first_second + 0.001);
-            let totals = gs.display_totals_for_player(player_idx);
+            let totals = gs.stage_totals_for_player(player_idx);
 
             let score_percent = judgment::calculate_itg_score_percent_from_counts(
                 &p.scoring_counts,
@@ -2439,14 +2422,9 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
             // Per-window counts for the FA+ pane should reflect tracked
             // gameplay counts. These continue after failure but skip live
             // autoplay, matching Simply Love's JudgmentMessage guards.
-            let blue_window_ms = player_blue_window_ms(&gs, player_idx);
-            let window_counts = gs.display_window_counts(player_idx, None, blue_window_ms);
-            let window_counts_10ms = gs.display_window_counts(
-                player_idx,
-                Some(timing_stats::FA_PLUS_W010_MS),
-                blue_window_ms,
-            );
-            let ex_data = gs.display_scored_ex_score_data(player_idx, blue_window_ms);
+            let window_counts = gs.live_window_counts(player_idx);
+            let window_counts_10ms = gs.live_window_counts_10ms(player_idx);
+            let ex_data = gs.stage_scored_ex_score_data(player_idx);
             let ex_score_percent = judgment::ex_score_percent(&ex_data);
             let hard_ex_score_percent = judgment::hard_ex_score_percent(&ex_data);
 

@@ -3093,6 +3093,71 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn course_stage_scores_keep_submission_totals_separate_from_display_totals() {
+        let mut state = regression_state();
+        state.progress.chart_totals = GameplayChartTotalsState::new(
+            [10, 10],
+            [1, 1],
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0],
+        );
+        state.progress.course_display = GameplayCourseDisplayState::new(
+            Some([
+                CourseDisplayCarry {
+                    scoring_counts: [3, 0, 0, 0, 0, 0],
+                    window_counts: WindowCounts {
+                        w0: 3,
+                        ..WindowCounts::default()
+                    },
+                    window_counts_10ms_blue: WindowCounts {
+                        w0: 3,
+                        ..WindowCounts::default()
+                    },
+                    ..CourseDisplayCarry::default()
+                },
+                CourseDisplayCarry::default(),
+            ]),
+            Some([
+                CourseDisplayTotals {
+                    possible_grade_points: 100,
+                    total_steps: 10,
+                    ..CourseDisplayTotals::default()
+                },
+                CourseDisplayTotals::default(),
+            ]),
+            None,
+        );
+        state.players_runtime.players[0].scoring_counts = [1, 0, 0, 0, 0, 0];
+        state.set_live_window_counts(
+            0,
+            WindowCounts {
+                w0: 1,
+                ..WindowCounts::default()
+            },
+            WindowCounts {
+                w0: 1,
+                ..WindowCounts::default()
+            },
+            WindowCounts::default(),
+        );
+
+        assert_eq!(state.stage_totals_for_player(0).total_steps, 1);
+        assert_eq!(state.display_totals_for_player(0).total_steps, 10);
+        assert!((state.stage_itg_score_percent(0) - 0.5).abs() <= f64::EPSILON);
+        assert!((state.display_itg_score_percent(0) - 0.2).abs() <= f64::EPSILON);
+        assert_eq!(state.stage_scored_ex_score_data(0).counts.w0, 1);
+        assert_eq!(
+            state
+                .display_scored_ex_score_data(0, state.player_blue_window_ms(0))
+                .counts
+                .w0,
+            4
+        );
+    }
+
+    #[test]
     fn autoplay_rows_do_not_record_ex_counts() {
         let mut state = regression_state();
         let row_index = 48usize;

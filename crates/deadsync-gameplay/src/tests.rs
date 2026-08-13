@@ -10084,12 +10084,18 @@ mod tests {
             GameplayChartTotalsState::new([100, 200], [10, 20], [1, 2], [3, 4], [5, 6], [7, 8]);
 
         let live = state.display_totals(None, 1);
+        let stage = state.stage_totals(1);
 
         assert_eq!(live.possible_grade_points, 200);
         assert_eq!(live.total_steps, 20);
         assert_eq!(live.holds_total, 2);
         assert_eq!(live.rolls_total, 4);
         assert_eq!(live.mines_total, 6);
+        assert_eq!(stage.possible_grade_points, live.possible_grade_points);
+        assert_eq!(stage.total_steps, live.total_steps);
+        assert_eq!(stage.holds_total, live.holds_total);
+        assert_eq!(stage.rolls_total, live.rolls_total);
+        assert_eq!(stage.mines_total, live.mines_total);
         assert_eq!(state.hands_total[1], 8);
 
         let overrides = [
@@ -11042,6 +11048,14 @@ mod tests {
                 mines_hit_for_score: 6,
             },
             CourseDisplayCarry {
+                window_counts: WindowCounts {
+                    w1: 7,
+                    ..WindowCounts::default()
+                },
+                window_counts_10ms_blue: WindowCounts {
+                    w0: 11,
+                    ..WindowCounts::default()
+                },
                 holds_held_for_score: 7,
                 holds_let_go_for_score: 3,
                 rolls_held_for_score: 8,
@@ -11058,8 +11072,8 @@ mod tests {
             },
         );
 
-        assert_eq!(data.counts.w1, 3);
-        assert_eq!(data.counts_10ms.w0, 2);
+        assert_eq!(data.counts.w1, 10);
+        assert_eq!(data.counts_10ms.w0, 13);
         assert_eq!(data.holds_held, 11);
         assert_eq!(data.holds_resolved, 15);
         assert_eq!(data.rolls_held, 13);

@@ -1415,7 +1415,7 @@ where
     if player_idx >= gs.num_players() {
         return None;
     }
-    let totals = gs.display_totals_for_player(player_idx);
+    let totals = gs.stage_totals_for_player(player_idx);
     let player = &gs.players()[player_idx];
     let profile = gs.profiles()[player_idx].deref();
     let (start, end) = gs.note_range_for_player(player_idx);

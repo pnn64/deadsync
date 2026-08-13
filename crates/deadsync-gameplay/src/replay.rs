@@ -346,6 +346,11 @@ impl GameplayChartTotalsState {
             player_idx,
         )
     }
+
+    #[inline(always)]
+    pub fn stage_totals(&self, player_idx: usize) -> CourseDisplayTotals {
+        self.display_totals(None, player_idx)
+    }
 }
 
 #[derive(Clone, Debug)]

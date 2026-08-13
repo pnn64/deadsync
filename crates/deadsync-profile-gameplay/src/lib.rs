@@ -1383,7 +1383,7 @@ where
     RuntimeProfile: deadsync_gameplay::GameplayProfileData,
 {
     let (start, end) = gs.note_range_for_player(player_idx);
-    let totals = gs.display_totals_for_player(player_idx);
+    let totals = gs.stage_totals_for_player(player_idx);
     deadsync_score::ItlScoreCalcInput {
         notes: &gs.notes()[start..end],
         note_times: &gs.note_time_cache_ns()[start..end],
@@ -1437,7 +1437,7 @@ where
         Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
 {
     let player = &gs.players()[player_idx];
-    let totals = gs.display_totals_for_player(player_idx);
+    let totals = gs.stage_totals_for_player(player_idx);
     let windows = gs.live_window_counts(player_idx);
     let disabled = gs.profiles()[player_idx].timing_windows.disabled_windows();
     deadsync_score::itl_judgments_from_counts(deadsync_score::ItlJudgmentCountsInput {
@@ -1852,7 +1852,7 @@ where
     let player = &gs.players()[player_idx];
     let profile = gs.profiles()[player_idx].deref();
     let chart = gs.charts()[player_idx].as_ref();
-    let totals = gs.display_totals_for_player(player_idx);
+    let totals = gs.stage_totals_for_player(player_idx);
     let invalid_reasons = if gs.score_valid_for_player(player_idx) {
         Vec::new()
     } else {

@@ -1485,6 +1485,11 @@ where
     }
 
     #[inline(always)]
+    pub fn live_window_counts_10ms(&self, player_idx: usize) -> WindowCounts {
+        self.progress.window_counts.ten_ms_blue(player_idx)
+    }
+
+    #[inline(always)]
     pub fn set_live_window_counts(
         &mut self,
         player_idx: usize,
@@ -1505,6 +1510,11 @@ where
         self.progress
             .chart_totals
             .display_totals(self.progress.course_display.totals(), player_idx)
+    }
+
+    #[inline(always)]
+    pub fn stage_totals_for_player(&self, player_idx: usize) -> CourseDisplayTotals {
+        self.progress.chart_totals.stage_totals(player_idx)
     }
 
     #[inline(always)]
@@ -1660,14 +1670,10 @@ where
         )
     }
 
-    pub fn live_ex_score_inputs(
-        &self,
-        player_idx: usize,
-        player_blue_window_ms: f32,
-    ) -> ExScoreInputs {
+    pub fn live_ex_score_inputs(&self, player_idx: usize) -> ExScoreInputs {
         ex_score_inputs_from_display(
-            self.display_window_counts(player_idx, None, player_blue_window_ms),
-            self.display_window_counts_10ms(player_idx),
+            self.live_window_counts(player_idx),
+            self.live_window_counts_10ms(player_idx),
             self.display_score_stage(player_idx),
         )
     }
@@ -1696,8 +1702,24 @@ where
         ))
     }
 
+    pub fn stage_itg_score_inputs(&self, player_idx: usize) -> Option<ItgScoreInputs> {
+        if player_idx >= self.setup.num_players {
+            return None;
+        }
+        Some(itg_score_inputs_from_display(
+            self.display_score_stage(player_idx),
+            CourseDisplayCarry::default(),
+            self.stage_totals_for_player(player_idx),
+        ))
+    }
+
     pub fn display_itg_score_percent(&self, player_idx: usize) -> f64 {
         self.display_itg_score_inputs(player_idx)
+            .map_or(0.0, itg_score_percent_from_inputs)
+    }
+
+    pub fn stage_itg_score_percent(&self, player_idx: usize) -> f64 {
+        self.stage_itg_score_inputs(player_idx)
             .map_or(0.0, itg_score_percent_from_inputs)
     }
 
@@ -1720,12 +1742,12 @@ where
     pub fn capture_failed_ex_score_inputs(
         &mut self,
         player_idx: usize,
-        player_blue_window_ms: f32,
+        _player_blue_window_ms: f32,
     ) {
         if player_idx >= self.setup.num_players || player_idx >= MAX_PLAYERS {
             return;
         }
-        let live = self.live_ex_score_inputs(player_idx, player_blue_window_ms);
+        let live = self.live_ex_score_inputs(player_idx);
         capture_player_failed_ex_score_inputs(&mut self.players_runtime.players[player_idx], live);
     }
 
@@ -1748,29 +1770,51 @@ where
     pub fn display_ex_score_data(
         &self,
         player_idx: usize,
-        player_blue_window_ms: f32,
+        _player_blue_window_ms: f32,
     ) -> judgment::ExScoreData {
         if player_idx >= self.setup.num_players {
             return judgment::ExScoreData::default();
         }
         self.ex_score_data_from_inputs(
             player_idx,
-            self.live_ex_score_inputs(player_idx, player_blue_window_ms),
+            self.live_ex_score_inputs(player_idx),
         )
     }
 
     pub fn display_scored_ex_score_data(
         &self,
         player_idx: usize,
-        player_blue_window_ms: f32,
+        _player_blue_window_ms: f32,
     ) -> judgment::ExScoreData {
         if player_idx >= self.setup.num_players {
             return judgment::ExScoreData::default();
         }
-        let live = self.live_ex_score_inputs(player_idx, player_blue_window_ms);
+        let live = self.live_ex_score_inputs(player_idx);
         let inputs =
             player_effective_ex_score_inputs(&self.players_runtime.players[player_idx], live);
         self.ex_score_data_from_inputs(player_idx, inputs)
+    }
+
+    pub fn stage_scored_ex_score_data(&self, player_idx: usize) -> judgment::ExScoreData {
+        if player_idx >= self.setup.num_players {
+            return judgment::ExScoreData::default();
+        }
+        let live = self.live_ex_score_inputs(player_idx);
+        let inputs =
+            player_effective_ex_score_inputs(&self.players_runtime.players[player_idx], live);
+        ex_score_data_from_display_inputs(
+            inputs,
+            CourseDisplayCarry::default(),
+            self.stage_totals_for_player(player_idx),
+        )
+    }
+
+    pub fn stage_ex_score_percent(&self, player_idx: usize) -> f64 {
+        judgment::ex_score_percent(&self.stage_scored_ex_score_data(player_idx))
+    }
+
+    pub fn stage_hard_ex_score_percent(&self, player_idx: usize) -> f64 {
+        judgment::hard_ex_score_percent(&self.stage_scored_ex_score_data(player_idx))
     }
 
     pub fn display_ex_score_percent(&self, player_idx: usize, player_blue_window_ms: f32) -> f64 {
