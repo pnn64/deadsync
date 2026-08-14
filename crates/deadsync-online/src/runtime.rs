@@ -7,7 +7,7 @@ use crate::downloads::{
 pub use crate::downloads::{
     runtime_completion_counts as unlock_download_completion_counts,
     runtime_snapshots_if_changed as unlock_download_snapshots_if_changed,
-    runtime_take_ready_song_reload_request as take_ready_song_reload_request,
+    runtime_take_ready_song_reload_request_if_changed as take_ready_song_reload_request_if_changed,
 };
 use deadlib_platform::dirs;
 use log::warn;
@@ -56,6 +56,11 @@ pub fn unlock_downloads_available(auto_download_unlocks: bool) -> bool {
         auto_download_unlocks,
         &crate::groovestats::runtime_get_status(),
     )
+}
+
+#[inline(always)]
+pub fn unlock_download_status_generation() -> u64 {
+    crate::groovestats::runtime_status_generation()
 }
 
 pub fn queue_event_unlock_download(url: &str, unlock_name: &str, pack_name: &str) {

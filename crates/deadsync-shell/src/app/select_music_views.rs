@@ -8,7 +8,7 @@ use deadsync_theme_simply_love::views::{
     SelectMusicDownloadView, SelectMusicLeaderboardRequest, SelectMusicLeaderboardSideView,
     SelectMusicLeaderboardView, SelectMusicPadProfileView, SelectMusicPolicyView,
     SelectMusicProfileView, SelectMusicRuntimeView, SelectMusicScoreboxRequest,
-    SelectMusicSessionView, SimplyLoveLobbyRuntimeView,
+    SelectMusicSessionView, SelectMusicSettingsView, SimplyLoveLobbyRuntimeView,
 };
 use std::{sync::Arc, time::Instant};
 
@@ -208,6 +208,17 @@ impl SelectMusicFramePolicy {
             enable_arrowcloud: config.enable_arrowcloud,
             auto_populate_gs_scores: config.auto_populate_gs_scores,
             auto_download_unlocks: config.auto_download_unlocks,
+        }
+    }
+
+    fn settings_view(self) -> SelectMusicSettingsView {
+        SelectMusicSettingsView {
+            arrow_bounce_offset: self.arrow_bounce_offset,
+            policy: self.view,
+            sync_graph_mode: self.sync_graph_mode,
+            sync_graph_orientation: self.sync_graph_orientation,
+            sync_graph_origin: self.sync_graph_origin,
+            sync_confidence_percent: self.sync_confidence_percent,
         }
     }
 }
@@ -610,6 +621,27 @@ impl App {
                 != &profile_snapshot.local_profile_ids)
             .then(deadsync_profile::runtime_favorite_snapshot);
         let pad_profiles = self.select_music_pad_profiles(session_view, &profile_snapshot);
+        let settings = self
+            .select_music_settings_rebuild
+            .then(|| policy.settings_view());
+        self.select_music_settings_rebuild = false;
+        let unlock_status_generation =
+            deadsync_online::runtime::unlock_download_status_generation();
+        let unlock_dirty = self.select_music_unlock_rebuild
+            || self.select_music_unlock_status_generation != unlock_status_generation;
+        let unlock_downloads_available = unlock_dirty.then(|| {
+            self.select_music_unlock_status_generation = unlock_status_generation;
+            deadsync_online::runtime::unlock_downloads_available(policy.auto_download_unlocks)
+        });
+        self.select_music_unlock_rebuild = false;
+        let ready_song_reload_dirs =
+            deadsync_online::runtime::take_ready_song_reload_request_if_changed(
+                self.select_music_ready_reload_generation,
+            )
+            .map(|(generation, dirs)| {
+                self.select_music_ready_reload_generation = generation;
+                dirs
+            });
         select_music::sync_runtime_view(
             &mut self.state.screens.select_music_state,
             SelectMusicRuntimeView {
@@ -623,19 +655,12 @@ impl App {
                 lobby,
                 downloads,
                 srpg_shop,
-                arrow_bounce_offset: policy.arrow_bounce_offset,
-                policy: policy.view,
+                settings,
                 music_wheel,
                 scoreboxes,
                 leaderboard,
-                unlock_downloads_available: deadsync_online::runtime::unlock_downloads_available(
-                    policy.auto_download_unlocks,
-                ),
-                ready_song_reload_dirs: deadsync_online::runtime::take_ready_song_reload_request(),
-                sync_graph_mode: policy.sync_graph_mode,
-                sync_graph_orientation: policy.sync_graph_orientation,
-                sync_graph_origin: policy.sync_graph_origin,
-                sync_confidence_percent: policy.sync_confidence_percent,
+                unlock_downloads_available,
+                ready_song_reload_dirs,
             },
         );
     }

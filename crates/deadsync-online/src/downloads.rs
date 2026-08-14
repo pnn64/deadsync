@@ -172,10 +172,16 @@ static RUNTIME_DOWNLOAD_STATE: LazyLock<Mutex<DownloadState>> =
     LazyLock::new(|| Mutex::new(DownloadState::default()));
 static RUNTIME_NEXT_DOWNLOAD_ID: AtomicU64 = AtomicU64::new(1);
 static RUNTIME_SNAPSHOT_GENERATION: AtomicU64 = AtomicU64::new(1);
+static RUNTIME_READY_RELOAD_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 #[inline(always)]
 fn runtime_mark_snapshots_changed() {
     RUNTIME_SNAPSHOT_GENERATION.fetch_add(1, Ordering::Release);
+}
+
+#[inline(always)]
+fn runtime_mark_ready_reload_changed() {
+    RUNTIME_READY_RELOAD_GENERATION.fetch_add(1, Ordering::Release);
 }
 
 impl DownloadState {
@@ -299,15 +305,16 @@ impl DownloadState {
         removed
     }
 
-    pub fn queue_ready_song_reload_dir(&mut self, path: PathBuf) {
+    pub fn queue_ready_song_reload_dir(&mut self, path: PathBuf) -> bool {
         if self
             .ready_song_reload_dirs
             .iter()
             .any(|existing| existing == &path)
         {
-            return;
+            return false;
         }
         self.ready_song_reload_dirs.push(path);
+        true
     }
 
     pub fn set_download_progress(&mut self, id: u64, current_bytes: u64, total_bytes: u64) -> bool {
@@ -354,11 +361,18 @@ pub fn runtime_completion_counts() -> (usize, usize) {
     RUNTIME_DOWNLOAD_STATE.lock().unwrap().completion_counts()
 }
 
-pub fn runtime_take_ready_song_reload_request() -> Vec<PathBuf> {
-    RUNTIME_DOWNLOAD_STATE
-        .lock()
-        .unwrap()
-        .take_ready_song_reload_request()
+/// Takes completed song directories only after their queue or completion state
+/// changes. An unchanged frame reads one atomic and does not lock download
+/// state.
+pub fn runtime_take_ready_song_reload_request_if_changed(
+    last_generation: u64,
+) -> Option<(u64, Vec<PathBuf>)> {
+    if RUNTIME_READY_RELOAD_GENERATION.load(Ordering::Acquire) == last_generation {
+        return None;
+    }
+    let mut state = RUNTIME_DOWNLOAD_STATE.lock().unwrap();
+    let generation = RUNTIME_READY_RELOAD_GENERATION.load(Ordering::Acquire);
+    Some((generation, state.take_ready_song_reload_request()))
 }
 
 pub fn runtime_forget_cached_destination(
@@ -485,10 +499,10 @@ fn runtime_mark_cache_success(hooks: UnlockDownloadRuntimeHooks, url: &str, dest
 }
 
 fn runtime_queue_ready_song_reload_dir(path: PathBuf) {
-    RUNTIME_DOWNLOAD_STATE
-        .lock()
-        .unwrap()
-        .queue_ready_song_reload_dir(path);
+    let mut state = RUNTIME_DOWNLOAD_STATE.lock().unwrap();
+    if state.queue_ready_song_reload_dir(path) {
+        runtime_mark_ready_reload_changed();
+    }
 }
 
 fn runtime_set_download_progress(id: u64, current_bytes: u64, total_bytes: u64) {
@@ -502,6 +516,7 @@ fn runtime_finish_download(id: u64, error_message: Option<String>) {
     let mut state = RUNTIME_DOWNLOAD_STATE.lock().unwrap();
     if state.finish_download(id, error_message) {
         runtime_mark_snapshots_changed();
+        runtime_mark_ready_reload_changed();
     }
 }
 
@@ -1290,8 +1305,8 @@ mod tests {
         );
 
         let reload_dir = PathBuf::from("Songs/ITL Unlocks");
-        state.queue_ready_song_reload_dir(reload_dir.clone());
-        state.queue_ready_song_reload_dir(reload_dir.clone());
+        assert!(state.queue_ready_song_reload_dir(reload_dir.clone()));
+        assert!(!state.queue_ready_song_reload_dir(reload_dir.clone()));
         assert!(state.take_ready_song_reload_request().is_empty());
 
         let cache =

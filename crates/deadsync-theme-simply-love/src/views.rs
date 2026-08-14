@@ -834,6 +834,18 @@ impl Default for SelectMusicLastPlayedView {
     }
 }
 
+/// Config-derived Select Music state replaced only when the compiled frame
+/// policy changes or the screen is re-entered.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SelectMusicSettingsView {
+    pub arrow_bounce_offset: f32,
+    pub policy: SelectMusicPolicyView,
+    pub sync_graph_mode: deadsync_config::prelude::SyncGraphMode,
+    pub sync_graph_orientation: deadsync_config::prelude::GraphOrientation,
+    pub sync_graph_origin: deadsync_config::prelude::GraphOrigin,
+    pub sync_confidence_percent: u8,
+}
+
 /// Shell-prepared runtime data consumed by Simply Love's Select Music screen.
 #[derive(Clone, Debug)]
 pub struct SelectMusicRuntimeView {
@@ -852,21 +864,18 @@ pub struct SelectMusicRuntimeView {
     pub downloads: Option<Vec<SelectMusicDownloadView>>,
     /// Replacement snapshot emitted only when the shop runtime changes.
     pub srpg_shop: Option<Arc<deadsync_online::srpg_shop::SrpgShopSnapshot>>,
-    /// Beat offset applied to the selection arrow bounce animation.
-    pub arrow_bounce_offset: f32,
-    pub policy: SelectMusicPolicyView,
+    /// Replacement config state emitted only when the compiled policy changes.
+    pub settings: Option<SelectMusicSettingsView>,
     /// Replacement snapshot emitted only when wheel inputs or score data change.
     pub music_wheel: Option<MusicWheelRuntimeView>,
     /// Replacement panes emitted only when chart, profile, or score data changes.
     pub scoreboxes: Option<[ScoreboxSideView; 2]>,
     /// Replacement overlay data emitted only when its request or cache changes.
     pub leaderboard: Option<SelectMusicLeaderboardView>,
-    pub unlock_downloads_available: bool,
-    pub ready_song_reload_dirs: Vec<PathBuf>,
-    pub sync_graph_mode: deadsync_config::prelude::SyncGraphMode,
-    pub sync_graph_orientation: deadsync_config::prelude::GraphOrientation,
-    pub sync_graph_origin: deadsync_config::prelude::GraphOrigin,
-    pub sync_confidence_percent: u8,
+    /// Replacement availability emitted when GrooveStats status or policy changes.
+    pub unlock_downloads_available: Option<bool>,
+    /// Completed download event emitted only when the worker queue changes.
+    pub ready_song_reload_dirs: Option<Vec<PathBuf>>,
 }
 
 impl Default for SelectMusicRuntimeView {
@@ -880,17 +889,12 @@ impl Default for SelectMusicRuntimeView {
             lobby: None,
             downloads: None,
             srpg_shop: None,
-            arrow_bounce_offset: 0.0,
-            policy: Default::default(),
+            settings: None,
             music_wheel: None,
             scoreboxes: None,
             leaderboard: None,
-            unlock_downloads_available: false,
-            ready_song_reload_dirs: Vec::new(),
-            sync_graph_mode: deadsync_config::prelude::SyncGraphMode::PostKernelFingerprint,
-            sync_graph_orientation: deadsync_config::prelude::GraphOrientation::Vertical,
-            sync_graph_origin: deadsync_config::prelude::GraphOrigin::Bottom,
-            sync_confidence_percent: 80,
+            unlock_downloads_available: None,
+            ready_song_reload_dirs: None,
         }
     }
 }

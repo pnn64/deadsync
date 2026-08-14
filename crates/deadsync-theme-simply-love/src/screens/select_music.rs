@@ -717,9 +717,15 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     if let Some(srpg_shop) = view.srpg_shop {
         state.srpg_shop_snapshot = srpg_shop;
     }
-    state.arrow_bounce_offset = view.arrow_bounce_offset;
-    state.policy = view.policy;
-    pad_config::set_fsr_enabled(&mut state.pad_config_overlay, state.policy.fsr_profiles);
+    if let Some(settings) = view.settings {
+        state.arrow_bounce_offset = settings.arrow_bounce_offset;
+        state.policy = settings.policy;
+        pad_config::set_fsr_enabled(&mut state.pad_config_overlay, state.policy.fsr_profiles);
+        state.sync_graph_mode = settings.sync_graph_mode;
+        state.sync_graph_orientation = settings.sync_graph_orientation;
+        state.sync_graph_origin = settings.sync_graph_origin;
+        state.sync_confidence_percent = settings.sync_confidence_percent.min(100);
+    }
     if let Some(music_wheel) = view.music_wheel {
         state.music_wheel = music_wheel;
     }
@@ -729,14 +735,12 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     if let Some(leaderboard) = view.leaderboard {
         select_music_menu::sync_leaderboard_overlay(&mut state.leaderboard, leaderboard);
     }
-    state.unlock_downloads_available = view.unlock_downloads_available;
-    state
-        .ready_song_reload_dirs
-        .extend(view.ready_song_reload_dirs);
-    state.sync_graph_mode = view.sync_graph_mode;
-    state.sync_graph_orientation = view.sync_graph_orientation;
-    state.sync_graph_origin = view.sync_graph_origin;
-    state.sync_confidence_percent = view.sync_confidence_percent.min(100);
+    if let Some(available) = view.unlock_downloads_available {
+        state.unlock_downloads_available = available;
+    }
+    if let Some(ready_dirs) = view.ready_song_reload_dirs {
+        state.ready_song_reload_dirs.extend(ready_dirs);
+    }
 }
 
 pub fn sync_profile_picker(state: &mut State, view: ProfilePickerView) {
@@ -16127,30 +16131,36 @@ mod tests {
                     phase: deadsync_online::srpg_shop::SrpgShopPhase::Ready,
                     ..Default::default()
                 })),
-                arrow_bounce_offset: -0.25,
-                policy: crate::views::SelectMusicPolicyView {
-                    machine_font: crate::config::MachineFont::Mega,
-                    media: crate::views::SelectMusicMediaPolicyView {
-                        show_previews: true,
-                        replay_gain: true,
+                settings: Some(crate::views::SelectMusicSettingsView {
+                    arrow_bounce_offset: -0.25,
+                    policy: crate::views::SelectMusicPolicyView {
+                        machine_font: crate::config::MachineFont::Mega,
+                        media: crate::views::SelectMusicMediaPolicyView {
+                            show_previews: true,
+                            replay_gain: true,
+                            ..Default::default()
+                        },
+                        wheel: crate::views::SelectMusicWheelPolicyView {
+                            show_grades: true,
+                            itl_rank_mode: crate::config::SelectMusicItlRankMode::Overall,
+                            ..Default::default()
+                        },
+                        interaction: crate::views::SelectMusicInteractionPolicyView {
+                            song_search_shortcut: KeyCode::KeyQ,
+                            ..Default::default()
+                        },
+                        presentation: crate::views::SelectMusicPresentationPolicyView {
+                            show_stage_display: false,
+                            breakdown_style: crate::config::BreakdownStyle::Sn,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
-                    wheel: crate::views::SelectMusicWheelPolicyView {
-                        show_grades: true,
-                        itl_rank_mode: crate::config::SelectMusicItlRankMode::Overall,
-                        ..Default::default()
-                    },
-                    interaction: crate::views::SelectMusicInteractionPolicyView {
-                        song_search_shortcut: KeyCode::KeyQ,
-                        ..Default::default()
-                    },
-                    presentation: crate::views::SelectMusicPresentationPolicyView {
-                        show_stage_display: false,
-                        breakdown_style: crate::config::BreakdownStyle::Sn,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
+                    sync_graph_mode: crate::config::SyncGraphMode::Frequency,
+                    sync_graph_orientation: crate::config::GraphOrientation::Horizontal,
+                    sync_graph_origin: crate::config::GraphOrigin::Top,
+                    sync_confidence_percent: 75,
+                }),
                 music_wheel: Some(crate::views::MusicWheelRuntimeView {
                     translated_titles: true,
                     ..Default::default()
@@ -16163,12 +16173,8 @@ mod tests {
                     Default::default(),
                 ]),
                 leaderboard: Some(Default::default()),
-                unlock_downloads_available: true,
-                ready_song_reload_dirs: vec![std::path::PathBuf::from("Songs/Unlocks")],
-                sync_graph_mode: crate::config::SyncGraphMode::Frequency,
-                sync_graph_orientation: crate::config::GraphOrientation::Horizontal,
-                sync_graph_origin: crate::config::GraphOrigin::Top,
-                sync_confidence_percent: 75,
+                unlock_downloads_available: Some(true),
+                ready_song_reload_dirs: Some(vec![std::path::PathBuf::from("Songs/Unlocks")]),
             },
         );
         assert!(state.scoreboxes[0].groovestats_active);
@@ -16252,6 +16258,14 @@ mod tests {
             state.srpg_shop_snapshot.phase,
             deadsync_online::srpg_shop::SrpgShopPhase::Ready,
             "unchanged shop snapshot stays retained"
+        );
+        assert!(
+            state.policy.media.show_previews,
+            "unchanged config settings stay retained"
+        );
+        assert!(
+            state.unlock_downloads_available,
+            "unchanged download availability stays retained"
         );
     }
 

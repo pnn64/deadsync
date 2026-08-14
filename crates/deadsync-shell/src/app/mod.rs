@@ -1287,6 +1287,16 @@ pub struct App {
     frame_policy: FramePolicy,
     smx_gif_defaults: SmxGifDefaults,
     select_music_policy: select_music_views::SelectMusicFramePolicy,
+    /// Config-derived Select Music state is handed off once per config
+    /// generation and once on screen re-entry, then retained by the theme.
+    select_music_settings_rebuild: bool,
+    /// GrooveStats connection changes publish one atomic generation. Stable
+    /// Select Music frames avoid locking and cloning the connection status.
+    select_music_unlock_status_generation: u64,
+    select_music_unlock_rebuild: bool,
+    /// Completed unlock directories use an event generation so stable frames
+    /// do not lock the download runtime just to observe an empty queue.
+    select_music_ready_reload_generation: u64,
     options_song_pack_generation: u64,
     /// Last download row generation integrated into Select Music. Rows are
     /// rebuilt only while the overlay is visible and the worker changes them.
@@ -2784,6 +2794,8 @@ impl App {
             self.smx_gif_defaults = SmxGifDefaults::from_config(&config);
             self.select_music_policy =
                 select_music_views::SelectMusicFramePolicy::from_config(&config);
+            self.select_music_settings_rebuild = true;
+            self.select_music_unlock_rebuild = true;
         }
         let frame_policy = self.frame_policy;
         if work_caps & frame_work::SMX_CONFIG != 0 {
@@ -2843,6 +2855,8 @@ impl App {
             self.select_music_profile_rebuild = true;
             self.select_music_wheel_rebuild = true;
             self.select_music_score_views_rebuild = true;
+            self.select_music_settings_rebuild = true;
+            self.select_music_unlock_rebuild = true;
         }
         if work_caps & frame_work::SELECT_COURSE_VIEW != 0 {
             let frame_config = self.frame_config;
@@ -3472,6 +3486,10 @@ impl App {
             frame_policy,
             smx_gif_defaults,
             select_music_policy,
+            select_music_settings_rebuild: true,
+            select_music_unlock_status_generation: 0,
+            select_music_unlock_rebuild: true,
+            select_music_ready_reload_generation: 0,
             options_song_pack_generation: deadsync_simfile::runtime_cache::song_cache_generation(),
             select_music_download_generation: 0,
             select_music_downloads_visible: false,

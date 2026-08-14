@@ -2,7 +2,7 @@ use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::thread;
 use std::time::Instant;
@@ -414,16 +414,24 @@ pub fn probe_connection_transition(service: Service) -> ConnectionProbeTransitio
 
 static RUNTIME_STATUS: LazyLock<Mutex<ConnectionStatus>> =
     LazyLock::new(|| Mutex::new(ConnectionStatus::Pending));
+static RUNTIME_STATUS_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 pub type ConnectionProbeLogFn = fn(Option<ConnectionProbeLog>);
 
 #[inline(always)]
 fn runtime_set_status(status: ConnectionStatus) {
     *RUNTIME_STATUS.lock().unwrap() = status;
+    RUNTIME_STATUS_GENERATION.fetch_add(1, Ordering::Release);
 }
 
 pub fn runtime_get_status() -> ConnectionStatus {
     RUNTIME_STATUS.lock().unwrap().clone()
+}
+
+/// Lets frame code avoid locking and cloning an unchanged connection status.
+#[inline(always)]
+pub fn runtime_status_generation() -> u64 {
+    RUNTIME_STATUS_GENERATION.load(Ordering::Acquire)
 }
 
 pub fn runtime_init(enabled: bool, service: Service, log_probe: ConnectionProbeLogFn) {
