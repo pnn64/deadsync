@@ -4,16 +4,24 @@ use crate::views::{SimplyLoveVisualPolicyView, VisualBackgroundView};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use std::sync::{
-    Arc, Mutex, OnceLock,
-    atomic::{AtomicU64, Ordering},
-};
+use std::cell::{Cell, RefCell};
+use std::sync::{Arc, OnceLock};
 
 // Shared UI elapsed clock advanced by `app` using post-Tab-acceleration dt so
 // menu backgrounds stay phase-locked across screens while still honoring
 // fast/slow/paused menu animation controls.
-static GLOBAL_ELAPSED_BITS: AtomicU64 = AtomicU64::new(0.0_f64.to_bits());
-static SRPG_BACKGROUND_KEY: OnceLock<Mutex<Option<Arc<str>>>> = OnceLock::new();
+//
+// Owner/thread model: the app/game thread is the sole producer and consumer.
+// Lifetime/capacity: one clock and one optional key for the app thread's life.
+// Warmup: the first app tick and SRPG media sync. Stable frames use `Cell` /
+// `RefCell` access only; there are no locks, atomics, allocations, scans, or
+// eviction. A key replacement allocates one `Arc<str>` on a menu transition;
+// the previous key is destroyed there, never on a live-song frame. Existing
+// update and actor-build timing account for the bounded access cost.
+thread_local! {
+    static GLOBAL_ELAPSED: Cell<f64> = const { Cell::new(0.0) };
+    static SRPG_BACKGROUND_KEY: RefCell<Option<Arc<str>>> = const { RefCell::new(None) };
+}
 static SRPG9_FALLBACK_KEY: OnceLock<Arc<str>> = OnceLock::new();
 static SRPG10_FALLBACK_KEY: OnceLock<Arc<str>> = OnceLock::new();
 
@@ -195,10 +203,7 @@ fn push_srpg(out: &mut Vec<Actor>, params: &Params) {
 
 fn srpg_background_key(fallback_key: &'static str) -> Arc<str> {
     let fallback = || srpg_fallback_key(fallback_key);
-    match SRPG_BACKGROUND_KEY.get_or_init(|| Mutex::new(None)).lock() {
-        Ok(key) => key.clone().unwrap_or_else(fallback),
-        Err(_) => fallback(),
-    }
+    SRPG_BACKGROUND_KEY.with(|key| key.borrow().clone().unwrap_or_else(fallback))
 }
 
 fn srpg_fallback_key(fallback_key: &'static str) -> Arc<str> {
@@ -216,12 +221,13 @@ fn srpg_fallback_key(fallback_key: &'static str) -> Arc<str> {
 }
 
 pub fn set_srpg_background_key(key: Option<String>) {
-    if let Ok(mut slot) = SRPG_BACKGROUND_KEY.get_or_init(|| Mutex::new(None)).lock() {
+    SRPG_BACKGROUND_KEY.with(|slot| {
+        let mut slot = slot.borrow_mut();
         if slot.as_deref() == key.as_deref() {
             return;
         }
         *slot = key.map(Arc::<str>::from);
-    }
+    });
 }
 
 fn srpg_background_tint(active_color_index: i32, srpg10: bool) -> [f32; 4] {
@@ -244,36 +250,22 @@ pub fn tick_global(dt: f32) {
     if !dt.is_finite() || dt <= 0.0 {
         return;
     }
-    let dt = f64::from(dt);
-    let mut bits = GLOBAL_ELAPSED_BITS.load(Ordering::Relaxed);
-    loop {
-        let elapsed = f64::from_bits(bits);
-        let next = elapsed + dt;
-        let next_bits = if next.is_finite() {
-            next.max(0.0).to_bits()
-        } else {
-            bits
-        };
-        match GLOBAL_ELAPSED_BITS.compare_exchange_weak(
-            bits,
-            next_bits,
-            Ordering::Relaxed,
-            Ordering::Relaxed,
-        ) {
-            Ok(_) => break,
-            Err(observed) => bits = observed,
+    GLOBAL_ELAPSED.with(|elapsed| {
+        let next = elapsed.get() + f64::from(dt);
+        if next.is_finite() {
+            elapsed.set(next.max(0.0));
         }
-    }
+    });
 }
 
 #[inline]
 fn global_elapsed_s() -> f64 {
-    f64::from_bits(GLOBAL_ELAPSED_BITS.load(Ordering::Relaxed))
+    GLOBAL_ELAPSED.with(Cell::get)
 }
 
 #[cfg(test)]
 fn set_global_elapsed_for_test(elapsed_s: f64) {
-    GLOBAL_ELAPSED_BITS.store(elapsed_s.max(0.0).to_bits(), Ordering::Relaxed);
+    GLOBAL_ELAPSED.with(|elapsed| elapsed.set(elapsed_s.max(0.0)));
 }
 
 #[cfg(test)]
@@ -282,7 +274,6 @@ mod tests {
     use deadsync_config::prelude::{SrpgVariant, VisualStyle};
 
     const EPS: f64 = 1e-3;
-    static SRPG_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn params() -> Params {
         Params {
@@ -400,16 +391,13 @@ mod tests {
 
     #[test]
     fn publishing_the_same_srpg_key_preserves_its_allocation() {
-        let _guard = SRPG_TEST_LOCK.lock().expect("SRPG test lock poisoned");
         set_srpg_background_key(Some("dynamic/same-video".to_string()));
         let first = SRPG_BACKGROUND_KEY
-            .get()
-            .and_then(|key| key.lock().ok()?.clone())
+            .with(|key| key.borrow().clone())
             .expect("published key");
         set_srpg_background_key(Some("dynamic/same-video".to_string()));
         let second = SRPG_BACKGROUND_KEY
-            .get()
-            .and_then(|key| key.lock().ok()?.clone())
+            .with(|key| key.borrow().clone())
             .expect("published key");
         assert!(Arc::ptr_eq(&first, &second));
         set_srpg_background_key(None);
