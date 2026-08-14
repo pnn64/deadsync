@@ -106,6 +106,7 @@ static RUNTIME_PROFILE_DIR_CACHE: LazyLock<Mutex<Option<RuntimeProfileDirCache>>
 static RUNTIME_SESSION_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::LockWaitStats::new();
 static RUNTIME_PROFILES_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::LockWaitStats::new();
 static HEART_RATE_DEVICE_GENERATION: AtomicU64 = AtomicU64::new(1);
+static FAVORITES_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 #[inline(always)]
 pub fn runtime_heart_rate_device_generation() -> u64 {
@@ -115,6 +116,17 @@ pub fn runtime_heart_rate_device_generation() -> u64 {
 #[inline(always)]
 pub(crate) fn runtime_mark_heart_rate_devices_changed() {
     HEART_RATE_DEVICE_GENERATION.fetch_add(1, Ordering::Release);
+}
+
+/// Current revision of profile-backed song, pack, and series favorites.
+#[inline(always)]
+pub fn runtime_favorites_generation() -> u64 {
+    FAVORITES_GENERATION.load(Ordering::Acquire)
+}
+
+#[inline(always)]
+fn runtime_mark_favorites_changed() {
+    FAVORITES_GENERATION.fetch_add(1, Ordering::Release);
 }
 
 #[inline(always)]
@@ -148,7 +160,12 @@ pub fn runtime_update_profile_for_side(
     update: impl FnOnce(&mut Profile) -> bool,
 ) -> bool {
     let mut profiles = runtime_lock_profiles();
-    update(&mut profiles[player_side_index(side)])
+    let changed = update(&mut profiles[player_side_index(side)]);
+    drop(profiles);
+    if changed {
+        runtime_mark_favorites_changed();
+    }
+    changed
 }
 
 pub fn runtime_profile_for_side(side: PlayerSide) -> Profile {
@@ -481,6 +498,7 @@ pub fn default_profile_with_player_options(player_options: &PlayerOptionsData) -
 
 pub fn runtime_set_guest_profile_for_side(side: PlayerSide, player_options: &PlayerOptionsData) {
     runtime_lock_profiles()[player_side_index(side)] = guest_profile(player_options);
+    runtime_mark_favorites_changed();
     runtime_mark_heart_rate_devices_changed();
 }
 
@@ -525,6 +543,7 @@ pub fn runtime_apply_loaded_profile_data_for_side(
     profile.avatar_path = avatar_path;
     profile.avatar_texture_key = None;
     drop(profiles);
+    runtime_mark_favorites_changed();
     runtime_mark_heart_rate_devices_changed();
 }
 
@@ -893,6 +912,7 @@ pub fn runtime_toggle_favorite_for_side(
         let mut profiles = runtime_lock_profiles();
         toggle_favorite_for_side(&mut profiles, side, chart_hash)
     };
+    runtime_mark_favorites_changed();
     save_favorites_dir(
         &runtime_profile_dir_for_id(root, &profile_id, duplicate),
         &favorites,
@@ -914,6 +934,8 @@ pub fn runtime_favorite_membership<const N: usize>(
 pub fn runtime_seed_favorite_for_side(side: PlayerSide, chart_hash: &str) {
     let mut profiles = runtime_lock_profiles();
     seed_favorite_for_side(&mut profiles, side, chart_hash);
+    drop(profiles);
+    runtime_mark_favorites_changed();
 }
 
 pub fn runtime_toggle_favorited_pack_for_side(
@@ -929,6 +951,7 @@ pub fn runtime_toggle_favorited_pack_for_side(
         let mut profiles = runtime_lock_profiles();
         toggle_favorited_pack_for_side(&mut profiles, side, pack_name)
     };
+    runtime_mark_favorites_changed();
     save_favorited_packs_dir(
         &runtime_profile_dir_for_id(root, &profile_id, duplicate),
         &packs,
@@ -949,6 +972,7 @@ pub fn runtime_toggle_favorited_series_for_side(
         let mut profiles = runtime_lock_profiles();
         toggle_favorited_series_for_side(&mut profiles, side, series_name)
     };
+    runtime_mark_favorites_changed();
     save_favorited_series_dir(
         &runtime_profile_dir_for_id(root, &profile_id, duplicate),
         &series,

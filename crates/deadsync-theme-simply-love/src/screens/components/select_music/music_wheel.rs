@@ -1947,7 +1947,7 @@ mod tests {
                 song: prepared,
                 chart_hashes: [None, None],
                 ..
-            } if std::ptr::eq(prepared, song.as_ref())
+            } if Arc::ptr_eq(prepared, &song)
         ));
         assert!(matches!(
             slots[center - 1],

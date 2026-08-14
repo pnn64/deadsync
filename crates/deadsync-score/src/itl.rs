@@ -228,6 +228,7 @@ pub fn set_online_itl_self_score(
         .set_value(profile_id, api_key, chart_hash, score);
     if update.changed {
         ONLINE_ITL_SELF_SCORE_GENERATION.fetch_add(1, AtomicOrdering::Relaxed);
+        crate::runtime_mark_music_wheel_scores_changed();
     }
     update
 }
@@ -310,10 +311,14 @@ pub fn set_online_itl_self_rank(
     chart_hash: &str,
     rank: Option<u32>,
 ) -> OnlineItlSelfCacheUpdate {
-    ONLINE_ITL_SELF_RANK_CACHE
+    let update = ONLINE_ITL_SELF_RANK_CACHE
         .lock()
         .unwrap()
-        .set_value(profile_id, api_key, chart_hash, rank)
+        .set_value(profile_id, api_key, chart_hash, rank);
+    if update.changed {
+        crate::runtime_mark_music_wheel_scores_changed();
+    }
+    update
 }
 
 pub fn runtime_set_online_itl_self_rank<L, S>(
@@ -382,10 +387,14 @@ pub fn set_online_srpg_self_score(
     chart_hash: &str,
     score: Option<u32>,
 ) -> OnlineItlSelfCacheUpdate {
-    ONLINE_SRPG_SELF_SCORE_CACHE
+    let update = ONLINE_SRPG_SELF_SCORE_CACHE
         .lock()
         .unwrap()
-        .set_value(profile_id, api_key, chart_hash, score)
+        .set_value(profile_id, api_key, chart_hash, score);
+    if update.changed {
+        crate::runtime_mark_music_wheel_scores_changed();
+    }
+    update
 }
 
 pub fn runtime_set_online_srpg_self_score<L, S>(
@@ -845,6 +854,7 @@ pub fn set_itl_score_profile(profile_id: &str, data: ItlFileData) {
         .lock()
         .unwrap()
         .set_profile_data(profile_id, data);
+    crate::runtime_mark_music_wheel_scores_changed();
 }
 
 pub fn runtime_ensure_itl_score_profile_loaded<L>(profile_id: &str, mut load_profile: L)
@@ -922,6 +932,7 @@ where
         .lock()
         .unwrap()
         .mark_unlock_folders(profile_id, folders);
+    crate::runtime_mark_music_wheel_scores_changed();
 }
 
 pub fn cached_itl_chart_score(profile_id: &str, chart_hash: &str) -> Option<CachedItlScore> {

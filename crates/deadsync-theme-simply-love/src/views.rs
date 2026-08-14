@@ -527,7 +527,7 @@ pub enum MusicWheelSlotRuntimeRequest<'a> {
         key: &'a str,
     },
     Song {
-        song: &'a deadsync_chart::SongData,
+        song: &'a Arc<deadsync_chart::SongData>,
         chart_hashes: [Option<&'a str>; 2],
         lua_submit_allowed: [bool; 2],
         has_edit: bool,
@@ -852,7 +852,8 @@ pub struct SelectMusicRuntimeView {
     /// Beat offset applied to the selection arrow bounce animation.
     pub arrow_bounce_offset: f32,
     pub policy: SelectMusicPolicyView,
-    pub music_wheel: MusicWheelRuntimeView,
+    /// Replacement snapshot emitted only when wheel inputs or score data change.
+    pub music_wheel: Option<MusicWheelRuntimeView>,
     pub scoreboxes: [ScoreboxSideView; 2],
     pub leaderboard: SelectMusicLeaderboardView,
     pub unlock_downloads_available: bool,
@@ -876,7 +877,7 @@ impl Default for SelectMusicRuntimeView {
             srpg_shop: None,
             arrow_bounce_offset: 0.0,
             policy: Default::default(),
-            music_wheel: Default::default(),
+            music_wheel: None,
             scoreboxes: Default::default(),
             leaderboard: Default::default(),
             unlock_downloads_available: false,

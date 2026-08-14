@@ -1294,6 +1294,16 @@ pub struct App {
     select_music_downloads_visible: bool,
     select_music_shop_generation: u64,
     select_music_shop_visible: bool,
+    /// Game-thread-only dirty key for the wheel snapshot retained by the
+    /// Select Music screen. The session-lifetime cache has one fixed-size
+    /// entry and warms on its first frame. A miss performs one bounded
+    /// 19-slot rebuild; a hit performs bounded borrowed comparisons without
+    /// allocation or locks. Score and favorite generations publish external
+    /// changes. There is no eviction scan or gameplay destruction path;
+    /// leaving marks the retained key stale, and re-entry replaces it on the
+    /// menu frame. Existing frame update timing accounts for rebuild cost.
+    select_music_wheel_key: Option<select_music_views::MusicWheelRuntimeKey>,
+    select_music_wheel_rebuild: bool,
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
     content_reload: crate::content_reload::Service,
@@ -2796,6 +2806,8 @@ impl App {
                 frame_policy.machine_enable_heart_rate_monitors,
             );
             self.sync_select_music_runtime_view(self.select_music_policy);
+        } else {
+            self.select_music_wheel_rebuild = true;
         }
         if work_caps & frame_work::SELECT_COURSE_VIEW != 0 {
             let frame_config = self.frame_config;
@@ -3430,6 +3442,8 @@ impl App {
             select_music_downloads_visible: false,
             select_music_shop_generation: 0,
             select_music_shop_visible: false,
+            select_music_wheel_key: None,
+            select_music_wheel_rebuild: true,
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
             content_reload: crate::content_reload::Service::default(),

@@ -573,6 +573,20 @@ static RUNTIME_LOCAL_SCORE_CACHE: LazyLock<Mutex<LocalScoreCacheState>> =
     LazyLock::new(|| Mutex::new(LocalScoreCacheState::default()));
 static RUNTIME_MACHINE_LOCAL_SCORE_CACHE: LazyLock<Mutex<MachineLocalScoreCacheState>> =
     LazyLock::new(|| Mutex::new(MachineLocalScoreCacheState::default()));
+static MUSIC_WHEEL_SCORE_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+/// Changes whenever score data displayed by the Select Music wheel mutates.
+/// Cache loading is excluded because the load and first read happen in the
+/// same view build; later writes publish a new generation after mutation.
+#[inline(always)]
+pub fn runtime_music_wheel_score_generation() -> u64 {
+    MUSIC_WHEEL_SCORE_GENERATION.load(AtomicOrdering::Acquire)
+}
+
+#[inline(always)]
+pub(crate) fn runtime_mark_music_wheel_scores_changed() {
+    MUSIC_WHEEL_SCORE_GENERATION.fetch_add(1, AtomicOrdering::Release);
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScoreCacheLoadKind {
@@ -892,6 +906,7 @@ pub fn runtime_set_gs_score_for_profile(
     else {
         return result;
     };
+    runtime_mark_music_wheel_scores_changed();
     if let Err(error) =
         save_gs_score_index_file(&score_paths(profile_id).gs_index_path(), &snapshot)
     {
@@ -1015,6 +1030,7 @@ pub fn runtime_seed_gs_score(
         .lock()
         .unwrap()
         .seed_profile_score(profile_id, chart_hash, score);
+    runtime_mark_music_wheel_scores_changed();
     result
 }
 
@@ -1122,6 +1138,7 @@ pub fn runtime_set_ac_scores_for_profile_bulk(
     else {
         return result;
     };
+    runtime_mark_music_wheel_scores_changed();
     if let Err(error) =
         save_ac_score_index_file(&score_paths(profile_id).ac_index_path(), &snapshot)
     {
@@ -1167,6 +1184,7 @@ pub fn runtime_merge_ac_submit_scores(
     else {
         return result;
     };
+    runtime_mark_music_wheel_scores_changed();
     if let Err(error) =
         save_ac_score_index_file(&score_paths(profile_id).ac_index_path(), &snapshot)
     {
@@ -1453,10 +1471,14 @@ pub fn runtime_update_local_score_cache_after_append(
     chart_hash: &str,
     header: &LocalScoreHeader,
 ) -> Option<Arc<LocalScoreIndex>> {
-    RUNTIME_LOCAL_SCORE_CACHE
+    let snapshot = RUNTIME_LOCAL_SCORE_CACHE
         .lock()
         .unwrap()
-        .update_loaded_profile_index(profile_id, chart_hash, header)
+        .update_loaded_profile_index(profile_id, chart_hash, header);
+    if snapshot.is_some() {
+        runtime_mark_music_wheel_scores_changed();
+    }
+    snapshot
 }
 
 #[derive(Debug)]
@@ -1549,6 +1571,7 @@ pub fn runtime_seed_local_itg_score(
         .lock()
         .unwrap()
         .seed_profile_itg_score(profile_id, chart_hash, score);
+    runtime_mark_music_wheel_scores_changed();
     result
 }
 
