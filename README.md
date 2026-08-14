@@ -290,13 +290,13 @@ On first run in non-portable mode, if DeadSync finds a `deadsync.ini` next to th
 
 ## Contributing
 
-We welcome contributions of all sizes. These notes are directional, not law—open a discussion or draft PR if you are unsure.
+We welcome contributions of all sizes. Keep changes focused, and open a discussion or draft PR when the direction is uncertain.
 
-- Keep code simple and direct; stick to functional or procedural styles and avoid OOP patterns (even in Rust).
-- Write small, single-purpose functions with clear names; compose simple pieces instead of building deep abstractions.
-- Prefer immutability and pure functions; minimize global state and side effects so behavior stays predictable and testable.
-- Reduce duplication by reusing and composing functions rather than repeating logic or adding one-off helpers.
-- Bias toward efficient, low-overhead code: favor `Vec` and iterators, borrow instead of clone, and keep dependencies lean.
+- Keep layer boundaries sharp: `engine` is reusable infrastructure, `game` owns domain rules, `screens` owns UI, and `app`/`assets` bridge systems.
+- Favor idiomatic, direct Rust: small cohesive functions, short names, explicit ownership, and methods or traits only when they reduce complexity.
+- Use `Result` for external failures, panic only on programmer errors, document `unsafe`, and test observable behavior rather than implementation details.
+- Profile before optimizing hot paths. Pre-size and reuse buffers, favor contiguous data, and avoid surprise allocations, I/O, or locks during gameplay.
+- Remove dead or replaced code and keep dependencies lean. Run `cargo fmt --check`, `cargo check`, `cargo clippy`, and relevant tests before submitting.
 
 ## Collecting Logs
 
