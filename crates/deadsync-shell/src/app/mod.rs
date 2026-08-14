@@ -216,6 +216,123 @@ const SERVICE_SWITCH_PRESSED: &str = "Service switch pressed";
 
 type FrameWorkMask = u16;
 
+/// Compact, generation-built configuration used by the live frame loop.
+///
+/// The full `Config` remains the canonical persisted snapshot for broad screen
+/// view construction. This policy is rebuilt only when that snapshot changes,
+/// so gameplay does not copy or repeatedly resolve the full machine config.
+#[derive(Clone, Copy)]
+struct FramePolicy {
+    visual: SimplyLoveVisualPolicyView,
+    smx: SmxFramePolicy,
+    lights: LightingFramePolicy,
+    theme_background_video: Option<&'static str>,
+    game_flag: config::GameFlag,
+    gameplay_banner_mode: config::GameplayBannerMode,
+    version_overlay_side: config::VersionOverlaySide,
+    log_level: config::LogLevel,
+    auto_screenshot_eval: u8,
+    machine_enable_heart_rate_monitors: bool,
+    show_video_backgrounds: bool,
+    show_select_music_banners: bool,
+    show_select_music_video_banners: bool,
+    show_course_individual_scores: bool,
+    show_version_overlay: bool,
+}
+
+impl FramePolicy {
+    fn from_config(config: &config::Config) -> Self {
+        let visual = simply_love_visual_policy(config);
+        Self {
+            visual,
+            smx: SmxFramePolicy::from_config(config),
+            lights: LightingFramePolicy::from_config(config),
+            theme_background_video: (config.visual_style.is_srpg()
+                && config.show_video_backgrounds)
+                .then_some(visual.assets.shared_background_video)
+                .flatten(),
+            game_flag: config.game_flag,
+            gameplay_banner_mode: config.gameplay_banner_mode,
+            version_overlay_side: config.version_overlay_side,
+            log_level: config.log_level,
+            auto_screenshot_eval: config.auto_screenshot_eval,
+            machine_enable_heart_rate_monitors: config.machine_enable_heart_rate_monitors,
+            show_video_backgrounds: config.show_video_backgrounds,
+            show_select_music_banners: config.show_select_music_banners,
+            show_select_music_video_banners: config.show_select_music_video_banners,
+            show_course_individual_scores: config.show_course_individual_scores,
+            show_version_overlay: config.show_version_overlay,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct SmxFramePolicy {
+    default_pad_config: config::SmxPadPreset,
+    default_light_brightness: u8,
+    input: bool,
+    manages_pad_config: bool,
+    underglow_theme: bool,
+    underglow_grb: bool,
+    use_fsrs: bool,
+}
+
+impl SmxFramePolicy {
+    const fn from_config(config: &config::Config) -> Self {
+        Self {
+            default_pad_config: config.smx_default_pad_config,
+            default_light_brightness: config.smx_default_light_brightness,
+            input: config.smx_input,
+            manages_pad_config: config.smx_manages_pad_config,
+            underglow_theme: config.smx_underglow_theme,
+            underglow_grb: config.smx_underglow_grb,
+            use_fsrs: config.use_fsrs,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct LightingFramePolicy {
+    driver: lights::DriverKind,
+    gameplay_pad_lights: lights::GameplayPadLightMode,
+    theme_index: i32,
+    simplify_bass: bool,
+    smx_input: bool,
+    smx_panel_lights: bool,
+    smx_idle_lights_black: bool,
+}
+
+impl LightingFramePolicy {
+    const fn from_config(config: &config::Config) -> Self {
+        Self {
+            driver: config.lights_driver,
+            gameplay_pad_lights: config.lights_gameplay_pad_lights,
+            theme_index: config.simply_love_color,
+            simplify_bass: config.lights_simplify_bass,
+            smx_input: config.smx_input,
+            smx_panel_lights: config.smx_panel_lights,
+            smx_idle_lights_black: config.smx_idle_lights_black,
+        }
+    }
+}
+
+/// Larger fixed-capacity pack names stay out of the always-copied frame policy.
+/// They are copied only when the SMX panel-light path actually resolves packs.
+#[derive(Clone, Copy)]
+struct SmxGifDefaults {
+    pad: config::SmxPackName,
+    judge: config::SmxPackName,
+}
+
+impl SmxGifDefaults {
+    const fn from_config(config: &config::Config) -> Self {
+        Self {
+            pad: config.smx_pad_gifs_pack,
+            judge: config.smx_judge_gifs_pack,
+        }
+    }
+}
+
 // Static screen eligibility for dirty/runtime integration. Worker results stay
 // queued while their bit is absent; cadence work remains explicit in `run_frame`.
 mod frame_work {
@@ -1142,10 +1259,14 @@ pub struct App {
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
     /// Last immutable runtime configuration snapshot observed by the game
-    /// thread. The global store publishes a generation on mutation, so stable
-    /// gameplay frames avoid its mutex and the full `Config` copy.
+    /// thread. Broad screen view builders consume this canonical value; the
+    /// live loop consumes `frame_policy` instead.
     frame_config: config::Config,
     frame_config_generation: u64,
+    /// Compact frame representation rebuilt with `frame_config`, never derived
+    /// again on an unchanged frame.
+    frame_policy: FramePolicy,
+    smx_gif_defaults: SmxGifDefaults,
     options_song_pack_generation: u64,
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
@@ -1449,29 +1570,27 @@ impl App {
         }
     }
 
-    fn sync_lights(&mut self, delta_time: f32, elapsed_seconds: f32, config: &config::Config) {
-        self.lights
-            .set_driver(config.lights_driver, config.lights_com_port.as_str());
+    fn sync_lights(&mut self, delta_time: f32, elapsed_seconds: f32, policy: LightingFramePolicy) {
         let active = lighting_frame_active(
             self.state.screens.current_screen,
-            config.lights_driver,
-            config.smx_input,
-            config.smx_panel_lights,
+            policy.driver,
+            policy.smx_input,
+            policy.smx_panel_lights,
         );
         if !active {
             if self.lighting_active {
-                self.deactivate_lighting(config.simply_love_color);
+                self.deactivate_lighting(policy.theme_index);
             }
             self.lighting_active = false;
             return;
         }
         self.lighting_active = true;
         self.lights
-            .set_gameplay_pad_lights(config.lights_gameplay_pad_lights);
+            .set_gameplay_pad_lights(policy.gameplay_pad_lights);
         let plan = lighting_frame_plan(
             self.state.screens.current_screen,
-            config.smx_input,
-            config.smx_panel_lights,
+            policy.smx_input,
+            policy.smx_panel_lights,
         );
         if let Some(context) = plan.screen_mode {
             self.lights.set_mode(lights::screen_light_mode(context));
@@ -1484,7 +1603,7 @@ impl App {
         self.lights.set_hide_flags(self.current_light_hide_flags());
         self.sync_gameplay_light_blinks(
             plan.gameplay_target,
-            config.lights_simplify_bass,
+            policy.simplify_bass,
             plan.smx_panels_enabled,
             session.play_style,
             session.player_side,
@@ -1493,16 +1612,17 @@ impl App {
         // mode P1's pad uses P1's pack and P2's pad uses P2's pack. One profile
         // lock, no clones; skipped entirely while the feature is off.
         let (bg_packs, judge_packs) = if plan.smx_panels_enabled {
-            profile::smx_gif_packs(config.smx_pad_gifs_pack, config.smx_judge_gifs_pack)
+            let defaults = self.smx_gif_defaults;
+            profile::smx_gif_packs(defaults.pad, defaults.judge)
         } else {
             let none = [config::SmxPackName::default(); 2];
             (none, none)
         };
         self.sync_smx_pad_gifs(
             plan.smx_panels_enabled,
-            config.smx_input,
-            config.smx_idle_lights_black,
-            config.simply_love_color,
+            policy.smx_input,
+            policy.smx_idle_lights_black,
+            policy.theme_index,
             bg_packs,
             judge_packs,
         );
@@ -1684,7 +1804,7 @@ impl App {
         retried
     }
 
-    fn sync_active_online_runtime_view(&mut self, config: &config::Config) {
+    fn sync_active_online_runtime_view(&mut self, evaluation_config: Option<config::Config>) {
         match self.state.screens.current_screen {
             CurrentScreen::Gameplay => {
                 let Some(state) = self.state.screens.gameplay_state.as_ref() else {
@@ -1702,6 +1822,9 @@ impl App {
                 }
             }
             CurrentScreen::Evaluation => {
+                let config = evaluation_config
+                    .as_ref()
+                    .expect("Evaluation runtime requires its broad config view");
                 scores::tick_evaluation_auto_retries(
                     config.enable_groovestats,
                     config.enable_boogiestats,
@@ -2566,16 +2689,6 @@ impl App {
             .controls()
             .logic_delta(delta_time, tab_acceleration_allowed);
 
-        // One immutable configuration snapshot owns this frame. Stable frames
-        // only read the generation atomic; the global mutex and full Config copy
-        // are paid once after an actual mutation.
-        if let Some((generation, config)) =
-            config::snapshot_if_changed(self.frame_config_generation)
-        {
-            self.frame_config = config;
-            self.frame_config_generation = generation;
-        }
-        let frame_config = self.frame_config;
         self.sync_gameplay_input_capture();
 
         let mut upload_us: u32 = 0;
@@ -2591,13 +2704,27 @@ impl App {
 
         let work_caps = frame_work::screen_caps(self.state.screens.current_screen);
         let maintenance_started = Instant::now();
+        // Compile config changes only after the critical input path. Stable
+        // frames read one generation atomic; a mutation pays the full snapshot
+        // copy and policy rebuild once, attributed to maintenance.
+        if let Some((generation, config)) =
+            config::snapshot_if_changed(self.frame_config_generation)
+        {
+            self.lights
+                .set_driver(config.lights_driver, config.lights_com_port.as_str());
+            self.frame_config = config;
+            self.frame_config_generation = generation;
+            self.frame_policy = FramePolicy::from_config(&config);
+            self.smx_gif_defaults = SmxGifDefaults::from_config(&config);
+        }
+        let frame_policy = self.frame_policy;
         if work_caps & frame_work::SMX_CONFIG != 0 {
-            self.reconcile_smx_assignment(&frame_config);
-            self.apply_smx_managed_preset(&frame_config);
-            self.drive_smx_light_brightness(&frame_config);
+            self.reconcile_smx_assignment(frame_policy.smx);
+            self.apply_smx_managed_preset(frame_policy.smx);
+            self.drive_smx_light_brightness(frame_policy.smx);
         }
         if work_caps & frame_work::MENU_AUTOPROMPT != 0 {
-            self.maybe_autoprompt_smx_assign(&frame_config);
+            self.maybe_autoprompt_smx_assign(frame_policy.smx);
         }
         if work_caps & frame_work::OPTIONS_VIEW != 0 {
             self.sync_options_song_packs();
@@ -2618,7 +2745,7 @@ impl App {
         }
         if work_caps & frame_work::HEART_RATE_CONFIG != 0 {
             self.heart_rate.sync(
-                frame_config.machine_enable_heart_rate_monitors,
+                frame_policy.machine_enable_heart_rate_monitors,
                 self.state.screens.current_screen == CurrentScreen::PlayerOptions,
             );
         }
@@ -2627,21 +2754,26 @@ impl App {
         let update_started = Instant::now();
         deadlib_present::runtime::tick(logic_dt);
         screens::components::shared::visual_style_bg::tick_global(logic_dt);
-        self.sync_pad_config_fsr(&frame_config);
-        self.drive_smx_options_lights(delta_time, &frame_config);
-        self.drive_smx_player_options_lights(delta_time, &frame_config);
+        self.sync_pad_config_fsr(frame_policy.smx);
+        self.drive_smx_options_lights(delta_time, frame_policy.smx);
+        self.drive_smx_player_options_lights(delta_time, frame_policy.smx);
         self.state.shell.interaction.update_message(redraw_started);
         if work_caps & frame_work::ONLINE_VIEW != 0 {
-            self.sync_active_online_runtime_view(&frame_config);
+            let evaluation_config = (self.state.screens.current_screen
+                == CurrentScreen::Evaluation)
+                .then(|| self.frame_config);
+            self.sync_active_online_runtime_view(evaluation_config);
         }
         if work_caps & frame_work::SELECT_MUSIC_VIEW != 0 {
             crate::heart_rate::refresh_select_music(
                 &mut self.state.screens.select_music_state,
-                frame_config.machine_enable_heart_rate_monitors,
+                frame_policy.machine_enable_heart_rate_monitors,
             );
+            let frame_config = self.frame_config;
             self.sync_select_music_runtime_view(&frame_config);
         }
         if work_caps & frame_work::SELECT_COURSE_VIEW != 0 {
+            let frame_config = self.frame_config;
             self.sync_select_course_runtime_view(&frame_config);
         }
         let transition_plan = self.state.shell.transition.advance_frame(
@@ -2702,7 +2834,7 @@ impl App {
                     already_taken: self.state.screens.evaluation_state.auto_screenshot_taken,
                     ready: auto_screenshot_ready,
                     mask: if current_screen == CurrentScreen::Evaluation {
-                        frame_config.auto_screenshot_eval
+                        frame_policy.auto_screenshot_eval
                     } else {
                         0
                     },
@@ -2725,7 +2857,7 @@ impl App {
             }
             None => {}
         }
-        self.sync_lights(delta_time, total_elapsed, &frame_config);
+        self.sync_lights(delta_time, total_elapsed, frame_policy.lights);
         let update_us: u32 = elapsed_us_since(update_started);
 
         if self.window.as_ref().map(|w| w.id()) != Some(window.id()) {
@@ -2738,20 +2870,24 @@ impl App {
             return;
         }
 
-        self.sync_gameplay_background(frame_config.show_video_backgrounds);
-        self.sync_theme_background_video(total_elapsed, &frame_config);
+        self.sync_gameplay_background(frame_policy.show_video_backgrounds);
+        self.sync_theme_background_video(
+            total_elapsed,
+            frame_policy.theme_background_video,
+            frame_policy.show_video_backgrounds,
+        );
         let actor_build_started = Instant::now();
         let arrow_effect_time_s = arrow_effect_time_seconds(actor_build_started);
         let (mut actors, clear_color, gameplay_segments) =
-            self.get_current_actors(arrow_effect_time_s, &frame_config);
+            self.get_current_actors(arrow_effect_time_s, frame_policy);
         let actor_build_us = elapsed_us_since(actor_build_started);
         self.state.shell.update_fps_stats(redraw_started);
         let screens = &self.state.screens;
         let current_screen = screens.current_screen;
-        let show_select_music_video_banners = frame_config.show_select_music_video_banners;
-        let show_select_music_banners = frame_config.show_select_music_banners;
-        let show_course_individual_scores = frame_config.show_course_individual_scores;
-        let gameplay_banner_mode = frame_config.gameplay_banner_mode;
+        let show_select_music_video_banners = frame_policy.show_select_music_video_banners;
+        let show_select_music_banners = frame_policy.show_select_music_banners;
+        let show_course_individual_scores = frame_policy.show_course_individual_scores;
+        let gameplay_banner_mode = frame_policy.gameplay_banner_mode;
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
             let gameplay_time = match current_screen {
@@ -3229,6 +3365,8 @@ impl App {
     ) -> Self {
         let software_renderer_threads = config.software_renderer_threads;
         let gfx_debug_enabled = config.gfx_debug;
+        let frame_policy = FramePolicy::from_config(&config);
+        let smx_gif_defaults = SmxGifDefaults::from_config(&config);
         let state = AppState::new(config, profile_data, overlay_mode, color_index);
         Self {
             window: None,
@@ -3258,6 +3396,8 @@ impl App {
             dynamic_media: DynamicMedia::new(),
             frame_config: config,
             frame_config_generation: config_generation,
+            frame_policy,
+            smx_gif_defaults,
             options_song_pack_generation: deadsync_simfile::runtime_cache::song_cache_generation(),
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
@@ -5214,7 +5354,12 @@ impl App {
         }
     }
 
-    fn sync_theme_background_video(&mut self, ui_time_sec: f32, config: &config::Config) {
+    fn sync_theme_background_video(
+        &mut self,
+        ui_time_sec: f32,
+        path: Option<&'static str>,
+        enabled: bool,
+    ) {
         if matches!(
             self.state.screens.current_screen,
             CurrentScreen::Gameplay | CurrentScreen::Practice
@@ -5222,13 +5367,7 @@ impl App {
             return;
         }
 
-        let path = (config.visual_style.is_srpg() && config.show_video_backgrounds)
-            .then(|| {
-                visual_styles::for_style_and_variant(config.visual_style, config.srpg_variant)
-                    .shared_background_video
-            })
-            .flatten()
-            .map(|path| dirs::app_dirs().resolve_asset_path(path));
+        let path = path.map(|path| dirs::app_dirs().resolve_asset_path(path));
 
         let Some(backend) = self.backend.as_mut() else {
             screens::components::shared::visual_style_bg::set_srpg_background_key(None);
@@ -5240,7 +5379,7 @@ impl App {
             backend,
             path,
             ui_time_sec,
-            config.show_video_backgrounds,
+            enabled,
         );
         let srpg_key = if key == "__black" { None } else { Some(key) };
         screens::components::shared::visual_style_bg::set_srpg_background_key(srpg_key);
@@ -5336,7 +5475,7 @@ impl App {
     fn get_current_actors(
         &mut self,
         arrow_effect_time_s: f32,
-        config: &config::Config,
+        policy: FramePolicy,
     ) -> (
         Vec<Actor>,
         [f32; 4],
@@ -5380,7 +5519,7 @@ impl App {
         let mut actors = std::mem::take(&mut self.actor_scratch);
         actors.clear();
         let mut gameplay_segments = None;
-        let visual_policy = simply_love_visual_policy(config);
+        let visual_policy = policy.visual;
 
         match self.state.screens.current_screen {
             CurrentScreen::Menu => {
@@ -5483,7 +5622,7 @@ impl App {
             CurrentScreen::Input => input_screen::push_actors(
                 &mut actors,
                 &self.state.screens.input_state,
-                config.game_flag,
+                policy.game_flag,
                 visual_policy,
             ),
             CurrentScreen::ConfigurePads => {
@@ -5599,7 +5738,7 @@ impl App {
                 );
             }
             CurrentScreen::EvaluationSummary => {
-                let stages = self.post_select_display_stages(config.show_course_individual_scores);
+                let stages = self.post_select_display_stages(policy.show_course_individual_scores);
                 evaluation_summary::push_actors(
                     &mut actors,
                     &self.state.screens.evaluation_summary_state,
@@ -5609,7 +5748,7 @@ impl App {
                 );
             }
             CurrentScreen::Initials => {
-                let stages = self.post_select_display_stages(config.show_course_individual_scores);
+                let stages = self.post_select_display_stages(policy.show_course_individual_scores);
                 initials::push_actors(
                     &mut actors,
                     &self.state.screens.initials_state,
@@ -5651,10 +5790,10 @@ impl App {
         // Bottom-corner build watermark so videos / screenshots always
         // carry the running version. Default on; user-toggleable via
         // Options, with a separate Left/Right side preference.
-        if config.show_version_overlay {
+        if policy.show_version_overlay {
             actors.extend(screens::components::shared::version_overlay::build(
-                config.version_overlay_side,
-                config.log_level,
+                policy.version_overlay_side,
+                policy.log_level,
                 option_env!("DEADSYNC_BUILD_HASH"),
             ));
         }
@@ -8356,6 +8495,35 @@ mod tests {
         assert_ne!(evaluation & frame_work::ONLINE_VIEW, 0);
         assert_ne!(evaluation & frame_work::ASYNC_RESULTS, 0);
         assert_eq!(evaluation & frame_work::CONTENT_RELOAD, 0);
+    }
+
+    #[test]
+    fn frame_policy_stays_compact() {
+        assert!(
+            std::mem::size_of::<FramePolicy>() * 2 < std::mem::size_of::<config::Config>(),
+            "frame policy must stay less than half the full config size"
+        );
+    }
+
+    #[test]
+    fn frame_policy_compiles_live_config_values() {
+        let config = config::Config {
+            smx_input: true,
+            smx_panel_lights: true,
+            show_video_backgrounds: false,
+            show_select_music_banners: false,
+            show_version_overlay: false,
+            ..Default::default()
+        };
+        let policy = FramePolicy::from_config(&config);
+
+        assert!(policy.smx.input);
+        assert!(policy.lights.smx_panel_lights);
+        assert!(!policy.show_video_backgrounds);
+        assert!(policy.theme_background_video.is_none());
+        assert!(!policy.show_select_music_banners);
+        assert!(!policy.show_version_overlay);
+        assert_eq!(policy.visual, simply_love_visual_policy(&config));
     }
 
     #[test]

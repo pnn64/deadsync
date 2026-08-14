@@ -1,4 +1,4 @@
-use super::App;
+use super::{App, SmxFramePolicy};
 use crate::navigation::TransitionState;
 use crate::pad_config::{
     PadConfigFsrTarget, apply_pad_commands, pad_config_fsr_frame_needed, pad_config_fsr_plan,
@@ -19,26 +19,26 @@ impl App {
     /// Drive the Configure Pads screen: enable live FSR reads while it's open,
     /// apply queued threshold edits, and refresh the pad snapshot.
     #[inline(always)]
-    pub(super) fn sync_pad_config_fsr(&mut self, cfg: &config::Config) {
+    pub(super) fn sync_pad_config_fsr(&mut self, policy: SmxFramePolicy) {
         use screens::pad_config;
         let screen = self.state.screens.current_screen;
         if !pad_config_fsr_frame_needed(screen, self.fsr_pads_active) {
             return;
         }
-        pad_config::set_fsr_enabled(&mut self.state.screens.pad_config_state, cfg.use_fsrs);
+        pad_config::set_fsr_enabled(&mut self.state.screens.pad_config_state, policy.use_fsrs);
         pad_config::set_fsr_enabled(
             &mut self.state.screens.select_music_state.pad_config_overlay,
-            cfg.use_fsrs,
+            policy.use_fsrs,
         );
         let Some(plan) = pad_config_fsr_plan(
             screen,
-            cfg.use_fsrs,
+            policy.use_fsrs,
             self.state
                 .screens
                 .select_music_state
                 .pad_config_overlay_visible,
             self.fsr_pads_active,
-            cfg.smx_manages_pad_config,
+            policy.manages_pad_config,
         ) else {
             return;
         };
@@ -171,9 +171,9 @@ impl App {
     /// - **Two pads, distinct jumpers:** persist the jumper-derived P1/P2 map.
     /// - **Single pad:** persist its hardware jumper side.
     /// The ambiguous same-jumper-two-pad case is left for the user to assign.
-    pub(super) fn reconcile_smx_assignment(&mut self, cfg: &config::Config) {
+    pub(super) fn reconcile_smx_assignment(&mut self, policy: SmxFramePolicy) {
         let screen = self.state.screens.current_screen;
-        let smx_input = cfg.smx_input;
+        let smx_input = policy.input;
         if matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice) || !smx_input {
             return;
         }
@@ -213,7 +213,7 @@ impl App {
     /// From the main Menu, if two pads share a P1/P2 jumper and no assignment
     /// resolves them, open the assignment screen automatically (once per conflict
     /// episode). Cancelling won't re-prompt until the conflict clears and returns.
-    pub(super) fn maybe_autoprompt_smx_assign(&mut self, cfg: &config::Config) {
+    pub(super) fn maybe_autoprompt_smx_assign(&mut self, policy: SmxFramePolicy) {
         if self.state.screens.current_screen != CurrentScreen::Menu
             || !matches!(self.state.shell.transition, TransitionState::Idle)
         {
@@ -222,7 +222,7 @@ impl App {
         let plan = smx_autoprompt_plan(
             self.state.screens.current_screen,
             true,
-            cfg.smx_input,
+            policy.input,
             deadsync_smx::conflict_warning_active(),
             self.state.screens.smx_autoprompt_latched,
         );
@@ -246,7 +246,7 @@ impl App {
     /// and the theme underglow on leaving the page, unless the assignment screen
     /// is taking the lights over. (Driven from the app loop so the lifecycle is
     /// in one place.)
-    pub(super) fn drive_smx_options_lights(&mut self, dt: f32, cfg: &config::Config) {
+    pub(super) fn drive_smx_options_lights(&mut self, dt: f32, policy: SmxFramePolicy) {
         let screen = self.state.screens.current_screen;
         if !smx_options_light_frame_needed(
             screen,
@@ -256,7 +256,7 @@ impl App {
         }
         let active = smx_options_light_preview_active(
             screen,
-            cfg.smx_input,
+            policy.input,
             options::is_smx_config_view(&self.state.screens.options_state),
         );
 
@@ -269,8 +269,8 @@ impl App {
             active,
             dt,
             colors,
-            cfg.smx_default_light_brightness,
-            (cfg.smx_underglow_theme, cfg.smx_underglow_grb),
+            policy.default_light_brightness,
+            (policy.underglow_theme, policy.underglow_grb),
             screen == CurrentScreen::SmxAssignPads,
         );
         // Put the strips back on the theme colour (no-op when underglow is off;
@@ -285,7 +285,7 @@ impl App {
     /// the user previews the brightness they're picking. Restores auto-lighting
     /// once no side is previewing (or on leaving the page). Sent every frame; the
     /// SDK coalesces light writes to the pad's refresh rate.
-    pub(super) fn drive_smx_player_options_lights(&mut self, dt: f32, cfg: &config::Config) {
+    pub(super) fn drive_smx_player_options_lights(&mut self, dt: f32, policy: SmxFramePolicy) {
         let screen = self.state.screens.current_screen;
         if !smx_player_options_light_frame_needed(
             screen,
@@ -293,7 +293,7 @@ impl App {
         ) {
             return;
         }
-        let preview = smx_player_options_light_preview_allowed(screen, cfg.smx_input)
+        let preview = smx_player_options_light_preview_allowed(screen, policy.input)
             .then(|| {
                 self.state
                     .screens
@@ -311,7 +311,7 @@ impl App {
         );
     }
 
-    pub(super) fn apply_smx_managed_preset(&mut self, cfg: &config::Config) {
+    pub(super) fn apply_smx_managed_preset(&mut self, policy: SmxFramePolicy) {
         use pad_config_sync::PadConfigSignature;
 
         // Skip entirely on the gameplay hot path. Pad config can't change mid-song
@@ -338,7 +338,7 @@ impl App {
         // With it off (or SMX input disabled) there is nothing to resolve or write, so
         // skip the per-pad `get_info` lock entirely and just clear the cached signature.
         // The marker mirror below still runs so a screen rebuild can't lose stale markers.
-        let managing = cfg.smx_input && cfg.smx_manages_pad_config;
+        let managing = policy.input && policy.manages_pad_config;
         for pad in 0..2 {
             if !managing {
                 self.pad_config_sync.signature[pad] = None;
@@ -359,7 +359,7 @@ impl App {
             // `Sig` is built (by moving these values) only when we re-resolve.
             if self.pad_config_sync.signature_matches(
                 pad,
-                cfg.smx_default_pad_config,
+                policy.default_pad_config,
                 &info.serial,
                 profile_id.as_deref(),
                 pad_type.as_deref(),
@@ -371,7 +371,7 @@ impl App {
                 profile_id.as_deref(),
                 pad_type.as_deref(),
                 &info.serial,
-                cfg.smx_default_pad_config,
+                policy.default_pad_config,
             );
             // One line per actual (re)resolve — fires only past the signature
             // short-circuit above (connect, profile/style switch, preset change,
@@ -395,7 +395,7 @@ impl App {
             if applied {
                 // Move (don't clone) the resolved inputs into the cached signature.
                 self.pad_config_sync.signature[pad] = Some(PadConfigSignature {
-                    preset: cfg.smx_default_pad_config,
+                    preset: policy.default_pad_config,
                     serial: info.serial,
                     profile_id,
                     pad_type,
@@ -419,12 +419,12 @@ impl App {
     /// a per-player profile value that can't change mid-song, so the value resolved on
     /// the last non-gameplay frame stays valid and the profile lock stays off the
     /// gameplay loop. With SMX input off there are no light sends, so hold at full.
-    pub(super) fn drive_smx_light_brightness(&mut self, cfg: &config::Config) {
+    pub(super) fn drive_smx_light_brightness(&mut self, policy: SmxFramePolicy) {
         let screen = self.state.screens.current_screen;
         if matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice) {
             return;
         }
-        let smx_input = cfg.smx_input;
+        let smx_input = policy.input;
         let profile_resolved = if smx_input {
             profile::pad_light_brightness()
         } else {
