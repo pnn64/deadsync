@@ -324,6 +324,25 @@ struct SmxGifDefaults {
     judge: config::SmxPackName,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct MusicWheelDisplayPolicy {
+    translated_titles: bool,
+    song_bg_dimmed: bool,
+    section_bg_dimmed: bool,
+}
+
+impl MusicWheelDisplayPolicy {
+    fn from_config(config: &config::Config) -> Self {
+        let bar_color = config.machine_bar_color.resolve(config.visual_style);
+        Self {
+            translated_titles: config.translated_titles,
+            song_bg_dimmed: config.visual_style.is_srpg()
+                || bar_color == config::MachineBarColor::Transparent,
+            section_bg_dimmed: bar_color == config::MachineBarColor::Transparent,
+        }
+    }
+}
+
 impl SmxGifDefaults {
     const fn from_config(config: &config::Config) -> Self {
         Self {
@@ -1267,6 +1286,7 @@ pub struct App {
     /// again on an unchanged frame.
     frame_policy: FramePolicy,
     smx_gif_defaults: SmxGifDefaults,
+    select_music_policy: select_music_views::SelectMusicFramePolicy,
     options_song_pack_generation: u64,
     /// Last download row generation integrated into Select Music. Rows are
     /// rebuilt only while the overlay is visible and the worker changes them.
@@ -1919,7 +1939,7 @@ impl App {
     fn prepare_music_wheel_runtime(
         request: MusicWheelRuntimeRequest<'_>,
         profiles: &profile_data::ScoreboxRuntimeView,
-        config: &config::Config,
+        display: MusicWheelDisplayPolicy,
     ) -> MusicWheelRuntimeView {
         let joined = [profiles.sides[0].joined, profiles.sides[1].joined];
         let profile_ids: [Option<&str>; 2] = std::array::from_fn(|side_idx| {
@@ -2100,14 +2120,12 @@ impl App {
             }
             view
         });
-        let effective_bar_color = config.machine_bar_color.resolve(config.visual_style);
         MusicWheelRuntimeView {
             joined,
             play_style: profiles.play_style,
-            translated_titles: config.translated_titles,
-            song_bg_dimmed: config.visual_style.is_srpg()
-                || effective_bar_color == config::MachineBarColor::Transparent,
-            section_bg_dimmed: effective_bar_color == config::MachineBarColor::Transparent,
+            translated_titles: display.translated_titles,
+            song_bg_dimmed: display.song_bg_dimmed,
+            section_bg_dimmed: display.section_bg_dimmed,
             slots,
         }
     }
@@ -2169,7 +2187,7 @@ impl App {
         let music_wheel = Self::prepare_music_wheel_runtime(
             select_course::music_wheel_runtime_request(&self.state.screens.select_course_state),
             &profile_view,
-            config,
+            MusicWheelDisplayPolicy::from_config(config),
         );
         let score = Self::prepare_select_course_score(
             select_course::score_runtime_request(&self.state.screens.select_course_state),
@@ -2722,6 +2740,8 @@ impl App {
             self.frame_config_generation = generation;
             self.frame_policy = FramePolicy::from_config(&config);
             self.smx_gif_defaults = SmxGifDefaults::from_config(&config);
+            self.select_music_policy =
+                select_music_views::SelectMusicFramePolicy::from_config(&config);
         }
         let frame_policy = self.frame_policy;
         if work_caps & frame_work::SMX_CONFIG != 0 {
@@ -2775,8 +2795,7 @@ impl App {
                 &mut self.state.screens.select_music_state,
                 frame_policy.machine_enable_heart_rate_monitors,
             );
-            let frame_config = self.frame_config;
-            self.sync_select_music_runtime_view(&frame_config);
+            self.sync_select_music_runtime_view(self.select_music_policy);
         }
         if work_caps & frame_work::SELECT_COURSE_VIEW != 0 {
             let frame_config = self.frame_config;
@@ -3373,6 +3392,7 @@ impl App {
         let gfx_debug_enabled = config.gfx_debug;
         let frame_policy = FramePolicy::from_config(&config);
         let smx_gif_defaults = SmxGifDefaults::from_config(&config);
+        let select_music_policy = select_music_views::SelectMusicFramePolicy::from_config(&config);
         let state = AppState::new(config, profile_data, overlay_mode, color_index);
         Self {
             window: None,
@@ -3404,6 +3424,7 @@ impl App {
             frame_config_generation: config_generation,
             frame_policy,
             smx_gif_defaults,
+            select_music_policy,
             options_song_pack_generation: deadsync_simfile::runtime_cache::song_cache_generation(),
             select_music_download_generation: 0,
             select_music_downloads_visible: false,

@@ -51,9 +51,9 @@ pub fn active_groovestats_service() -> crate::groovestats::Service {
     crate::groovestats::active_service(cfg.enable_groovestats, cfg.enable_boogiestats)
 }
 
-pub fn unlock_downloads_available() -> bool {
+pub fn unlock_downloads_available(auto_download_unlocks: bool) -> bool {
     downloads_available(
-        deadsync_config::runtime::get().auto_download_unlocks,
+        auto_download_unlocks,
         &crate::groovestats::runtime_get_status(),
     )
 }

@@ -1,4 +1,4 @@
-use super::App;
+use super::{App, MusicWheelDisplayPolicy};
 use deadsync_config::prelude as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
@@ -6,10 +6,48 @@ use deadsync_theme::views::AudioPlaybackView;
 use deadsync_theme_simply_love::screens::{SimplyLoveScreen as CurrentScreen, select_music};
 use deadsync_theme_simply_love::views::{
     SelectMusicDownloadView, SelectMusicLeaderboardSideView, SelectMusicLeaderboardView,
-    SelectMusicPadProfileView, SelectMusicProfileView, SelectMusicRuntimeView,
-    SelectMusicSessionView,
+    SelectMusicPadProfileView, SelectMusicPolicyView, SelectMusicProfileView,
+    SelectMusicRuntimeView, SelectMusicSessionView,
 };
 use std::sync::Arc;
+
+/// Config-generation policy for Select Music's frame-time view preparation.
+/// The persisted `Config` remains owned by the app; this compact value carries
+/// only resolved inputs needed by the active screen.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct SelectMusicFramePolicy {
+    view: SelectMusicPolicyView,
+    wheel: MusicWheelDisplayPolicy,
+    pane_filter: deadsync_score::SelectMusicScoreboxFilter,
+    sync_graph_mode: config::SyncGraphMode,
+    sync_graph_orientation: config::GraphOrientation,
+    sync_graph_origin: config::GraphOrigin,
+    arrow_bounce_offset: f32,
+    sync_confidence_percent: u8,
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    auto_populate_gs_scores: bool,
+    auto_download_unlocks: bool,
+}
+
+impl SelectMusicFramePolicy {
+    pub(super) fn from_config(config: &config::Config) -> Self {
+        Self {
+            view: crate::select_music::policy_view(config),
+            wheel: MusicWheelDisplayPolicy::from_config(config),
+            pane_filter: super::scorebox_pane_filter(config),
+            sync_graph_mode: config.null_or_die_sync_graph,
+            sync_graph_orientation: config.null_or_die_graph_orientation,
+            sync_graph_origin: config.null_or_die_graph_origin,
+            arrow_bounce_offset: -10.0 * config.global_offset_seconds,
+            sync_confidence_percent: config.null_or_die_confidence_percent,
+            enable_groovestats: config.enable_groovestats,
+            enable_arrowcloud: config.enable_arrowcloud,
+            auto_populate_gs_scores: config.auto_populate_gs_scores,
+            auto_download_unlocks: config.auto_download_unlocks,
+        }
+    }
+}
 
 fn pad_in_play(session: SelectMusicSessionView, pad: usize) -> bool {
     match session.play_style {
@@ -112,7 +150,7 @@ impl App {
         })
     }
 
-    pub(super) fn sync_select_music_runtime_view(&mut self, config: &config::Config) {
+    pub(super) fn sync_select_music_runtime_view(&mut self, policy: SelectMusicFramePolicy) {
         if self.state.screens.current_screen != CurrentScreen::SelectMusic {
             return;
         }
@@ -173,27 +211,18 @@ impl App {
             select_music::scorebox_runtime_request(&self.state.screens.select_music_state);
         let leaderboard_request =
             select_music::leaderboard_runtime_request(&self.state.screens.select_music_state);
-        let arrow_bounce_offset = -10.0 * config.global_offset_seconds;
-        let policy = crate::select_music::policy_view(config);
-        let sync_graph_mode = config.null_or_die_sync_graph;
-        let sync_graph_orientation = config.null_or_die_graph_orientation;
-        let sync_graph_origin = config.null_or_die_graph_origin;
-        let sync_confidence_percent = config.null_or_die_confidence_percent;
-        let scorebox_enabled = config.show_select_music_scorebox
-            && (config.select_music_scorebox_cycle_itg
-                || config.select_music_scorebox_cycle_ex
-                || config.select_music_scorebox_cycle_hard_ex
-                || config.select_music_scorebox_cycle_tournaments);
+        let scorebox_enabled = policy.view.presentation.show_scorebox
+            && policy.view.presentation.scorebox_cycle_enabled;
         let profile_snapshot = profile_data::runtime_music_profile_snapshot(
-            config.enable_groovestats,
-            config.enable_arrowcloud,
-            config.auto_populate_gs_scores,
+            policy.enable_groovestats,
+            policy.enable_arrowcloud,
+            policy.auto_populate_gs_scores,
         );
         let profile_view = &profile_snapshot.scorebox;
         let music_wheel = Self::prepare_music_wheel_runtime(
             select_music::music_wheel_runtime_request(&self.state.screens.select_music_state),
             profile_view,
-            config,
+            policy.wheel,
         );
         let mut scorebox_hashes: [Option<String>; 2] = Default::default();
         if profile_view.play_style.is_versus() {
@@ -289,10 +318,9 @@ impl App {
         let [p1_profile, p2_profile] = &profile_snapshot.scorebox.sides;
         let [p1_hash, p2_hash] = scorebox_hashes;
         let [p1_leaderboards, p2_leaderboards] = scorebox_leaderboards;
-        let pane_filter = super::scorebox_pane_filter(config);
         let scoreboxes = [
-            Self::scorebox_side_view(p1_profile, p1_hash, p1_leaderboards, pane_filter),
-            Self::scorebox_side_view(p2_profile, p2_hash, p2_leaderboards, pane_filter),
+            Self::scorebox_side_view(p1_profile, p1_hash, p1_leaderboards, policy.pane_filter),
+            Self::scorebox_side_view(p2_profile, p2_hash, p2_leaderboards, policy.pane_filter),
         ];
         let favorites = (select_music::local_profile_ids(&self.state.screens.select_music_state)
             != &profiles.local_profile_ids)
@@ -311,17 +339,19 @@ impl App {
                 lobby,
                 downloads,
                 srpg_shop,
-                arrow_bounce_offset,
-                policy,
+                arrow_bounce_offset: policy.arrow_bounce_offset,
+                policy: policy.view,
                 music_wheel,
                 scoreboxes,
                 leaderboard,
-                unlock_downloads_available: deadsync_online::runtime::unlock_downloads_available(),
+                unlock_downloads_available: deadsync_online::runtime::unlock_downloads_available(
+                    policy.auto_download_unlocks,
+                ),
                 ready_song_reload_dirs: deadsync_online::runtime::take_ready_song_reload_request(),
-                sync_graph_mode,
-                sync_graph_orientation,
-                sync_graph_origin,
-                sync_confidence_percent,
+                sync_graph_mode: policy.sync_graph_mode,
+                sync_graph_orientation: policy.sync_graph_orientation,
+                sync_graph_origin: policy.sync_graph_origin,
+                sync_confidence_percent: policy.sync_confidence_percent,
             },
         );
     }
@@ -380,5 +410,40 @@ mod tests {
         };
         assert!(pad_in_play(double, 0));
         assert!(pad_in_play(double, 1));
+    }
+
+    #[test]
+    fn frame_policy_compiles_select_music_config() {
+        let config = config::Config {
+            translated_titles: false,
+            machine_bar_color: config::MachineBarColor::Transparent,
+            global_offset_seconds: 0.025,
+            null_or_die_confidence_percent: 91,
+            enable_groovestats: false,
+            enable_arrowcloud: false,
+            auto_populate_gs_scores: true,
+            auto_download_unlocks: true,
+            select_music_scorebox_cycle_itg: false,
+            select_music_scorebox_cycle_ex: true,
+            select_music_scorebox_cycle_hard_ex: false,
+            select_music_scorebox_cycle_tournaments: true,
+            ..Default::default()
+        };
+
+        let policy = SelectMusicFramePolicy::from_config(&config);
+        assert_eq!(policy.view, crate::select_music::policy_view(&config));
+        assert!(!policy.wheel.translated_titles);
+        assert!(policy.wheel.song_bg_dimmed);
+        assert!(policy.wheel.section_bg_dimmed);
+        assert!((policy.arrow_bounce_offset + 0.25).abs() <= f32::EPSILON);
+        assert_eq!(policy.sync_confidence_percent, 91);
+        assert!(!policy.enable_groovestats);
+        assert!(!policy.enable_arrowcloud);
+        assert!(policy.auto_populate_gs_scores);
+        assert!(policy.auto_download_unlocks);
+        assert!(!policy.pane_filter.itg);
+        assert!(policy.pane_filter.ex);
+        assert!(!policy.pane_filter.hard_ex);
+        assert!(policy.pane_filter.tournaments);
     }
 }
