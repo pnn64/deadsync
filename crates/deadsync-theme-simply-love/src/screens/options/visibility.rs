@@ -169,6 +169,21 @@ pub(super) fn submenu_visible_row_indices(
                 })
                 .collect()
         }
+        SubmenuKind::Course => {
+            let autosubmit_individual = get_choice_by_id(
+                &state.sub[SubmenuKind::Course].choice_indices,
+                COURSE_OPTIONS_ROWS,
+                SubRowId::AutosubmitIndividual,
+            )
+            .is_some_and(yes_no_from_choice);
+            rows.iter()
+                .enumerate()
+                .filter_map(|(idx, row)| {
+                    (row.id != SubRowId::AutosubmitPostFailPasses || autosubmit_individual)
+                        .then_some(idx)
+                })
+                .collect()
+        }
         SubmenuKind::Advanced => rows.iter().enumerate().map(|(idx, _)| idx).collect(),
         SubmenuKind::SelectMusic => {
             let show_banners = get_choice_by_id(

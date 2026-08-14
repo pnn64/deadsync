@@ -190,6 +190,7 @@ pub enum ItemId {
     CrsShowMostPlayed,
     CrsShowIndividualScores,
     CrsAutosubmitIndividual,
+    CrsAutosubmitPostFailPasses,
 
     // Advanced Options submenu
     AdvDefaultFailType,
@@ -487,6 +488,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsCourse", "ShowMostPlayed")),
             HelpEntry::Bullet(lookup_key("OptionsCourse", "ShowIndividualScores")),
             HelpEntry::Bullet(lookup_key("OptionsCourse", "AutosubmitIndividual")),
+            HelpEntry::Bullet(lookup_key("OptionsCourse", "AutosubmitPostFailPasses")),
         ],
     },
     Item {

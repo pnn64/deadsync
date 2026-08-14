@@ -381,7 +381,7 @@ where
                 let player_update = apply_mine_hit_player_state(
                     &mut player_state,
                     scoring_blocked,
-                    self.player_is_dead(player),
+                    self.player_score_is_blocked(player),
                 );
                 let combo_milestones_enabled =
                     self.profiles_runtime.profiles[player].combo_milestones_enabled();
@@ -529,7 +529,7 @@ where
         let player = self.player_for_col(column);
         let scoring_blocked = self.autoplay_blocks_scoring();
         let note_type = self.chart_runtime.notes[note_index].note_type;
-        let player_dead = self.player_is_dead(player);
+        let player_dead = self.player_score_is_blocked(player);
         let Some(update) = apply_hold_let_go_update(
             self.chart_runtime.notes[note_index].hold.as_mut(),
             &mut self.hold_runtime.hold_decay_active,
@@ -570,7 +570,7 @@ where
         if hold_resolution_updates_grade_totals(
             update.result,
             player_update.stats_update,
-            self.player_is_dead(player),
+            self.player_score_is_blocked(player),
         ) {
             update_itg_grade_totals(&mut self.players_runtime.players[player]);
         }
@@ -590,7 +590,7 @@ where
         let player = self.player_for_col(column);
         let scoring_blocked = self.autoplay_blocks_scoring();
         let note_type = self.chart_runtime.notes[note_index].note_type;
-        let player_dead = self.player_is_dead(player);
+        let player_dead = self.player_score_is_blocked(player);
         let Some(update) = apply_hold_success_update(
             self.chart_runtime.notes[note_index].hold.as_mut(),
             &mut self.hold_runtime.hold_decay_active,
@@ -623,7 +623,7 @@ where
         if hold_resolution_updates_grade_totals(
             update.result,
             player_update.stats_update,
-            self.player_is_dead(player),
+            self.player_score_is_blocked(player),
         ) {
             update_itg_grade_totals(&mut self.players_runtime.players[player]);
         }
@@ -919,7 +919,7 @@ where
                 self.trigger_hold_explosion(column);
             }
         }
-        if self.autoplay_blocks_scoring() || self.player_is_dead(player) {
+        if self.autoplay_blocks_scoring() || self.player_score_is_blocked(player) {
             return;
         }
 
@@ -1580,7 +1580,7 @@ where
     fn latch_column_judgment_health(&mut self) {
         self.players_runtime.column_judgments_active = std::array::from_fn(|player| {
             player < self.setup.num_players
-                && !player_runtime_is_dead(&self.players_runtime.players[player])
+                && !self.player_score_is_blocked(player)
         });
     }
 
@@ -1636,8 +1636,8 @@ where
             );
             let combo_milestones_enabled =
                 self.profiles_runtime.profiles[player].combo_milestones_enabled();
+            let player_dead = self.player_score_is_blocked(player);
             let p = &mut self.players_runtime.players[player];
-            let player_dead = player_runtime_is_dead(p);
             let carried_holds_down = carried_holds_down_at_row(
                 &self.chart_runtime.notes,
                 &self.hold_runtime.active_holds,

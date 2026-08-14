@@ -466,6 +466,7 @@ fn system_options(cfg: &Config) -> SystemOptions {
         center_image_add_width: cfg.center_image_add_width,
         center_image_add_height: cfg.center_image_add_height,
         autosubmit_course_scores_individually: cfg.autosubmit_course_scores_individually,
+        autosubmit_course_post_fail_passes: cfg.autosubmit_course_post_fail_passes,
         show_course_individual_scores: cfg.show_course_individual_scores,
         show_most_played_courses: cfg.show_most_played_courses,
         show_random_courses: cfg.show_random_courses,

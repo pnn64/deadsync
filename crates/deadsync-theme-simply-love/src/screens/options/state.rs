@@ -1044,6 +1044,12 @@ pub fn init(view: OptionsInitView) -> State {
         yes_no_choice_index(cfg.autosubmit_course_scores_individually),
     );
     set_choice_by_id(
+        &mut state.sub[SubmenuKind::Course].choice_indices,
+        COURSE_OPTIONS_ROWS,
+        SubRowId::AutosubmitPostFailPasses,
+        yes_no_choice_index(cfg.autosubmit_course_post_fail_passes),
+    );
+    set_choice_by_id(
         &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
         SubRowId::BgBrightness,

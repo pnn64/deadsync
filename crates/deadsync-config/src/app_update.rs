@@ -652,6 +652,10 @@ pub fn set_autosubmit_course_scores_individually(cfg: &mut Config, enabled: bool
     set_if_changed(&mut cfg.autosubmit_course_scores_individually, enabled)
 }
 
+pub fn set_autosubmit_course_post_fail_passes(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.autosubmit_course_post_fail_passes, enabled)
+}
+
 pub fn set_zmod_rating_box_text(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.zmod_rating_box_text, enabled)
 }

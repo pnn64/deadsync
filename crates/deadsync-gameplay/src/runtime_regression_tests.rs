@@ -926,6 +926,7 @@ mod runtime_regression_tests {
             None,
             None,
             [CourseLifeConfig::Bar; MAX_PLAYERS],
+            false,
             [0; MAX_PLAYERS],
         )
     }
@@ -962,6 +963,7 @@ mod runtime_regression_tests {
             None,
             None,
             [CourseLifeConfig::Bar; MAX_PLAYERS],
+            false,
             [0; MAX_PLAYERS],
         )
     }
@@ -1029,6 +1031,7 @@ mod runtime_regression_tests {
             None,
             None,
             [CourseLifeConfig::Bar; MAX_PLAYERS],
+            false,
             [0; MAX_PLAYERS],
         )
     }
@@ -3171,6 +3174,43 @@ mod runtime_regression_tests {
                 .w0,
             4
         );
+    }
+
+    #[test]
+    fn post_fail_pass_option_keeps_individual_score_accounting_live() {
+        let mut state = regression_state();
+        let player = &mut state.players_runtime.players[0];
+        player.life = 0.0;
+        player.is_failing = true;
+        player.fail_time = Some(3.0);
+        player.course_submit_life =
+            Some(deadsync_rules::life::LifeMeter::course_submit_start());
+        player.failed_ex_score_inputs = Some(ExScoreInputs::default());
+        state.set_live_window_counts(
+            0,
+            WindowCounts {
+                w0: 1,
+                ..WindowCounts::default()
+            },
+            WindowCounts {
+                w0: 1,
+                ..WindowCounts::default()
+            },
+            WindowCounts::default(),
+        );
+
+        assert!(state.player_is_dead(0));
+        assert!(state.player_score_is_blocked(0));
+        assert_eq!(state.stage_scored_ex_score_data(0).counts.w0, 0);
+
+        state.setup.include_post_fail_passes = true;
+
+        assert!(state.player_is_dead(0));
+        assert!(!state.player_score_is_blocked(0));
+        assert_eq!(state.stage_scored_ex_score_data(0).counts.w0, 1);
+        let outcome = state.individual_song_outcome(0);
+        assert!(!outcome.is_failing);
+        assert_eq!(outcome.fail_time, None);
     }
 
     #[test]

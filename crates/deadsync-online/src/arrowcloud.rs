@@ -2264,7 +2264,8 @@ where
     let chart = gs.charts()[player_idx].as_ref();
     let profile = gs.profiles()[player_idx].deref();
     let player = &gs.players()[player_idx];
-    let fail_time_ns = player
+    let outcome = gs.individual_song_outcome(player_idx);
+    let fail_time_ns = outcome
         .fail_time
         .map(deadsync_core::song_time::song_time_ns_from_seconds);
     let submit_stats = submit_stats_from_runtime(gs, player_idx, fail_time_ns);
@@ -2300,8 +2301,8 @@ where
             profile,
             music_rate: gs.music_rate(),
             used_autoplay: gs.autoplay_used(),
-            is_failing: player.is_failing,
-            has_fail_time: player.fail_time.is_some(),
+            is_failing: outcome.is_failing,
+            has_fail_time: outcome.fail_time.is_some(),
         },
     ))
 }
@@ -2328,6 +2329,7 @@ where
     RuntimeProfile: Deref<Target = profile_data::Profile> + GameplayProfileData,
 {
     let chart_hash = gs.charts()[player_idx].short_hash.clone();
+    let outcome = gs.individual_song_outcome(player_idx);
     ArrowCloudGameplaySubmitPlayer {
         side,
         chart_hash: chart_hash.clone(),
@@ -2338,10 +2340,10 @@ where
         hard_ex_percent: gs.stage_hard_ex_score_percent(player_idx).clamp(0.0, 100.0),
         song_has_lua: gs.song().has_lua,
         lua_submit_allowed: lua_submit_allowed(chart_hash.as_str()),
-        song_completed_naturally: gs.song_completed_naturally(),
-        is_failing: gs.players()[player_idx].is_failing,
-        life: gs.players()[player_idx].life,
-        has_fail_time: gs.players()[player_idx].fail_time.is_some(),
+        song_completed_naturally: outcome.song_completed_naturally,
+        is_failing: outcome.is_failing,
+        life: outcome.life,
+        has_fail_time: outcome.fail_time.is_some(),
         course_stage_life_submit_eligible: gs.course_stage_life_submit_eligible(player_idx),
         payload: payload_from_runtime(gs, player_idx, pack_group),
     }

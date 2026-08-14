@@ -1009,6 +1009,7 @@ where
 
     let chart = gs.charts()[player_idx].as_ref();
     let profile = gs.profiles()[player_idx].deref();
+    let outcome = gs.individual_song_outcome(player_idx);
     let result = deadsync_score::groovestats_eval_state_from_gameplay_parts(
         groovestats_eval_state_from_profile(
             chart,
@@ -1022,10 +1023,10 @@ where
         deadsync_score::GrooveStatsGameplayEvalInput {
             song_has_lua: gs.song().has_lua,
             lua_submit_allowed: deadsync_score::lua_chart_submit_allowed(chart.short_hash.as_str()),
-            song_completed_naturally: gs.song_completed_naturally(),
-            is_failing: gs.players()[player_idx].is_failing,
-            life: gs.players()[player_idx].life,
-            has_fail_time: gs.players()[player_idx].fail_time.is_some(),
+            song_completed_naturally: outcome.song_completed_naturally,
+            is_failing: outcome.is_failing,
+            life: outcome.life,
+            has_fail_time: outcome.fail_time.is_some(),
             course_stage_life_submit_eligible: gs.course_stage_life_submit_eligible(player_idx),
         },
     );
@@ -1384,6 +1385,7 @@ where
 {
     let (start, end) = gs.note_range_for_player(player_idx);
     let totals = gs.stage_totals_for_player(player_idx);
+    let outcome = gs.individual_song_outcome(player_idx);
     deadsync_score::ItlScoreCalcInput {
         notes: &gs.notes()[start..end],
         note_times: &gs.note_time_cache_ns()[start..end],
@@ -1392,7 +1394,7 @@ where
         holds_total: totals.holds_total,
         rolls_total: totals.rolls_total,
         mines_total: totals.mines_total,
-        fail_time: gs.players()[player_idx]
+        fail_time: outcome
             .fail_time
             .map(deadsync_core::song_time::song_time_ns_from_seconds),
     }
@@ -1478,11 +1480,12 @@ where
 {
     let profile = gs.profiles()[player_idx].deref();
     let disabled_windows = profile.timing_windows.disabled_windows();
+    let outcome = gs.individual_song_outcome(player_idx);
     let passed = deadsync_score::gameplay_run_passed(
-        gs.song_completed_naturally(),
-        gs.players()[player_idx].is_failing,
-        gs.players()[player_idx].life,
-        gs.players()[player_idx].fail_time.is_some(),
+        outcome.song_completed_naturally,
+        outcome.is_failing,
+        outcome.life,
+        outcome.fail_time.is_some(),
     );
     deadsync_score::itl_eval_state_from_gameplay_context(deadsync_score::ItlGameplayEvalInput {
         song_dir,
@@ -1688,11 +1691,12 @@ where
     let profile = gs.profiles()[player_idx].deref();
     let chart = gs.charts()[player_idx].as_ref();
     let disabled_windows = profile.timing_windows.disabled_windows();
+    let outcome = gs.individual_song_outcome(player_idx);
     let passed = deadsync_score::gameplay_run_passed(
-        gs.song_completed_naturally(),
-        gs.players()[player_idx].is_failing,
-        gs.players()[player_idx].life,
-        gs.players()[player_idx].fail_time.is_some(),
+        outcome.song_completed_naturally,
+        outcome.is_failing,
+        outcome.life,
+        outcome.fail_time.is_some(),
     );
     deadsync_score::ItlGameplaySavePlayer {
         player_idx,
@@ -1853,6 +1857,7 @@ where
     let profile = gs.profiles()[player_idx].deref();
     let chart = gs.charts()[player_idx].as_ref();
     let totals = gs.stage_totals_for_player(player_idx);
+    let outcome = gs.individual_song_outcome(player_idx);
     let invalid_reasons = if gs.score_valid_for_player(player_idx) {
         Vec::new()
     } else {
@@ -1886,10 +1891,10 @@ where
         rolls_held_for_score: player.rolls_held_for_score,
         mines_hit_for_score: player.mines_hit_for_score,
         possible_grade_points: totals.possible_grade_points,
-        song_completed_naturally: gs.song_completed_naturally(),
-        is_failing: player.is_failing,
-        life: player.life,
-        fail_time: player.fail_time,
+        song_completed_naturally: outcome.song_completed_naturally,
+        is_failing: outcome.is_failing,
+        life: outcome.life,
+        fail_time: outcome.fail_time,
         notes: &gs.notes()[start..end],
         note_times: &gs.note_time_cache_ns()[start..end],
         hold_end_times: &gs.hold_end_time_cache_ns()[start..end],

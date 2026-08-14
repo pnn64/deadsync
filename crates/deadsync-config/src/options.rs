@@ -2,14 +2,14 @@ use crate::bools::{parse_bool_str, parse_loose_bool_str, parse_u8_bool_or_defaul
 use crate::defaults::{
     DEFAULT_ALLOW_SHUTDOWN_HOST, DEFAULT_ALLOW_SONG_DELETION, DEFAULT_ARCADE_OPTIONS_NAVIGATION,
     DEFAULT_AUTO_DOWNLOAD_UNLOCKS, DEFAULT_AUTO_POPULATE_GS_SCORES, DEFAULT_AUTO_SCREENSHOT_EVAL,
-    DEFAULT_AUTOSUBMIT_COURSE_SCORES_INDIVIDUALLY, DEFAULT_BANNER_CACHE, DEFAULT_BG_BRIGHTNESS,
-    DEFAULT_CACHE_SONGS, DEFAULT_CDTITLE_CACHE, DEFAULT_CENTER_1PLAYER_NOTEFIELD,
-    DEFAULT_CENTER_IMAGE_ADD_HEIGHT, DEFAULT_CENTER_IMAGE_ADD_WIDTH,
-    DEFAULT_CENTER_IMAGE_TRANSLATE_X, DEFAULT_CENTER_IMAGE_TRANSLATE_Y, DEFAULT_DELAYED_BACK,
-    DEFAULT_ENABLE_ARROWCLOUD, DEFAULT_ENABLE_BOOGIESTATS, DEFAULT_ENABLE_GROOVESTATS,
-    DEFAULT_FASTLOAD, DEFAULT_GFX_DEBUG, DEFAULT_GLOBAL_OFFSET_SECONDS,
-    DEFAULT_HIDE_INACTIVE_SERIES, DEFAULT_HIDE_MOUSE_CURSOR, DEFAULT_HIGH_DPI,
-    DEFAULT_LIGHTS_SIMPLIFY_BASS, DEFAULT_LOG_TO_FILE, DEFAULT_MINE_HIT_SOUND,
+    DEFAULT_AUTOSUBMIT_COURSE_POST_FAIL_PASSES, DEFAULT_AUTOSUBMIT_COURSE_SCORES_INDIVIDUALLY,
+    DEFAULT_BANNER_CACHE, DEFAULT_BG_BRIGHTNESS, DEFAULT_CACHE_SONGS, DEFAULT_CDTITLE_CACHE,
+    DEFAULT_CENTER_1PLAYER_NOTEFIELD, DEFAULT_CENTER_IMAGE_ADD_HEIGHT,
+    DEFAULT_CENTER_IMAGE_ADD_WIDTH, DEFAULT_CENTER_IMAGE_TRANSLATE_X,
+    DEFAULT_CENTER_IMAGE_TRANSLATE_Y, DEFAULT_DELAYED_BACK, DEFAULT_ENABLE_ARROWCLOUD,
+    DEFAULT_ENABLE_BOOGIESTATS, DEFAULT_ENABLE_GROOVESTATS, DEFAULT_FASTLOAD, DEFAULT_GFX_DEBUG,
+    DEFAULT_GLOBAL_OFFSET_SECONDS, DEFAULT_HIDE_INACTIVE_SERIES, DEFAULT_HIDE_MOUSE_CURSOR,
+    DEFAULT_HIGH_DPI, DEFAULT_LIGHTS_SIMPLIFY_BASS, DEFAULT_LOG_TO_FILE, DEFAULT_MINE_HIT_SOUND,
     DEFAULT_ONLY_DEDICATED_MENU_BUTTONS, DEFAULT_SELECT_MUSIC_CHART_INFO_EFFECTIVE_BPM,
     DEFAULT_SELECT_MUSIC_CHART_INFO_MATRIX_RATING, DEFAULT_SELECT_MUSIC_CHART_INFO_PEAK_NPS,
     DEFAULT_SELECT_MUSIC_PREVIEW_LOOP, DEFAULT_SELECT_MUSIC_PREVIEW_STARTS_IMMEDIATELY,
@@ -243,6 +243,7 @@ pub struct SystemOptions {
     pub center_image_add_width: i32,
     pub center_image_add_height: i32,
     pub autosubmit_course_scores_individually: bool,
+    pub autosubmit_course_post_fail_passes: bool,
     pub show_course_individual_scores: bool,
     pub show_most_played_courses: bool,
     pub show_random_courses: bool,
@@ -305,6 +306,7 @@ impl Default for SystemOptions {
             center_image_add_width: DEFAULT_CENTER_IMAGE_ADD_WIDTH,
             center_image_add_height: DEFAULT_CENTER_IMAGE_ADD_HEIGHT,
             autosubmit_course_scores_individually: DEFAULT_AUTOSUBMIT_COURSE_SCORES_INDIVIDUALLY,
+            autosubmit_course_post_fail_passes: DEFAULT_AUTOSUBMIT_COURSE_POST_FAIL_PASSES,
             show_course_individual_scores: DEFAULT_SHOW_COURSE_INDIVIDUAL_SCORES,
             show_most_played_courses: DEFAULT_SHOW_MOST_PLAYED_COURSES,
             show_random_courses: DEFAULT_SHOW_RANDOM_COURSES,
@@ -647,6 +649,10 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             conf.get("Options", "CourseAutosubmitScoresIndividually"),
             default.autosubmit_course_scores_individually,
         ),
+        autosubmit_course_post_fail_passes: parse_u8_bool_or_default(
+            conf.get("Options", "CourseAutosubmitPostFailPasses"),
+            default.autosubmit_course_post_fail_passes,
+        ),
         show_course_individual_scores: parse_u8_bool_or_default(
             conf.get("Options", "CourseShowIndividualScores"),
             default.show_course_individual_scores,
@@ -800,6 +806,11 @@ pub fn push_system_course_option_lines(content: &mut String, options: SystemOpti
         content,
         "CourseAutosubmitScoresIndividually",
         options.autosubmit_course_scores_individually,
+    );
+    push_bool(
+        content,
+        "CourseAutosubmitPostFailPasses",
+        options.autosubmit_course_post_fail_passes,
     );
     push_bool(
         content,
@@ -2328,6 +2339,7 @@ mod tests {
             center_image_add_width: 0,
             center_image_add_height: 0,
             autosubmit_course_scores_individually: true,
+            autosubmit_course_post_fail_passes: false,
             show_course_individual_scores: true,
             show_most_played_courses: true,
             show_random_courses: true,
@@ -2611,6 +2623,7 @@ mod tests {
             CenterImageAddWidth=20
             CenterImageAddHeight=-4
             CourseAutosubmitScoresIndividually=0
+            CourseAutosubmitPostFailPasses=1
             CourseShowIndividualScores=0
             CourseShowMostPlayed=0
             CourseShowRandom=0
@@ -2670,6 +2683,7 @@ mod tests {
         assert_eq!(loaded.center_image_add_width, 20);
         assert_eq!(loaded.center_image_add_height, -4);
         assert!(!loaded.autosubmit_course_scores_individually);
+        assert!(loaded.autosubmit_course_post_fail_passes);
         assert!(!loaded.show_course_individual_scores);
         assert!(!loaded.show_most_played_courses);
         assert!(!loaded.show_random_courses);
@@ -2750,6 +2764,7 @@ mod tests {
         options.auto_populate_gs_scores = true;
         options.updater_install_enabled = false;
         options.autosubmit_course_scores_individually = false;
+        options.autosubmit_course_post_fail_passes = true;
         options.show_course_individual_scores = true;
         options.show_most_played_courses = false;
         options.show_random_courses = true;
@@ -2781,6 +2796,7 @@ mod tests {
                 "AutoPopulateGrooveStatsScores=1\n",
                 "UpdaterInstallEnabled=0\n",
                 "CourseAutosubmitScoresIndividually=0\n",
+                "CourseAutosubmitPostFailPasses=1\n",
                 "CourseShowIndividualScores=1\n",
                 "CourseShowMostPlayed=0\n",
                 "CourseShowRandom=1\n",

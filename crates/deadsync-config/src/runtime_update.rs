@@ -201,6 +201,7 @@ update_config_fn!(pub fn update_show_random_courses(enabled: bool) => set_show_r
 update_config_fn!(pub fn update_show_most_played_courses(enabled: bool) => set_show_most_played_courses);
 update_config_fn!(pub fn update_show_course_individual_scores(enabled: bool) => set_show_course_individual_scores);
 update_config_fn!(pub fn update_autosubmit_course_scores_individually(enabled: bool) => set_autosubmit_course_scores_individually);
+update_config_fn!(pub fn update_autosubmit_course_post_fail_passes(enabled: bool) => set_autosubmit_course_post_fail_passes);
 update_config_fn!(pub fn update_zmod_rating_box_text(enabled: bool) => set_zmod_rating_box_text);
 update_config_fn!(pub fn update_show_bpm_decimal(enabled: bool) => set_show_bpm_decimal);
 update_config_fn!(pub fn update_gameplay_bpm_position(position: GameplayBpmPosition) => set_gameplay_bpm_position);

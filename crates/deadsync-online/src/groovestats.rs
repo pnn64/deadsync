@@ -1418,6 +1418,7 @@ where
     let totals = gs.stage_totals_for_player(player_idx);
     let player = &gs.players()[player_idx];
     let profile = gs.profiles()[player_idx].deref();
+    let outcome = gs.individual_song_outcome(player_idx);
     let (start, end) = gs.note_range_for_player(player_idx);
     Some(submit_player_payload_from_gameplay_input(
         GrooveStatsGameplayPayloadInput {
@@ -1438,7 +1439,7 @@ where
             notes: &gs.notes()[start..end],
             note_times: &gs.note_time_cache_ns()[start..end],
             hold_end_times: &gs.hold_end_time_cache_ns()[start..end],
-            fail_time_ns: player
+            fail_time_ns: outcome
                 .fail_time
                 .map(deadsync_core::song_time::song_time_ns_from_seconds),
             profile,
@@ -1502,6 +1503,7 @@ where
     }
     let chart = gs.charts()[player_idx].as_ref();
     let profile = gs.profiles()[player_idx].deref();
+    let outcome = gs.individual_song_outcome(player_idx);
     let result = groovestats_eval_state_from_gameplay_parts(
         groovestats_eval_state_from_profile(
             chart,
@@ -1515,10 +1517,10 @@ where
         GrooveStatsGameplayEvalInput {
             song_has_lua: gs.song().has_lua,
             lua_submit_allowed: lua_submit_allowed(chart.short_hash.as_str()),
-            song_completed_naturally: gs.song_completed_naturally(),
-            is_failing: gs.players()[player_idx].is_failing,
-            life: gs.players()[player_idx].life,
-            has_fail_time: gs.players()[player_idx].fail_time.is_some(),
+            song_completed_naturally: outcome.song_completed_naturally,
+            is_failing: outcome.is_failing,
+            life: outcome.life,
+            has_fail_time: outcome.fail_time.is_some(),
             course_stage_life_submit_eligible: gs.course_stage_life_submit_eligible(player_idx),
         },
     );
@@ -1576,6 +1578,7 @@ where
     let profile = gs.profiles()[player_idx].deref();
     let chart = gs.charts()[player_idx].as_ref();
     let chart_hash = chart.short_hash.as_str();
+    let outcome = gs.individual_song_outcome(player_idx);
     GrooveStatsGameplaySubmitPlayer {
         side,
         slot: profile_data::player_side_index(side) as u8 + 1,
@@ -1595,10 +1598,10 @@ where
             gs.music_rate(),
             fail_type_ok,
         ),
-        song_completed_naturally: gs.song_completed_naturally(),
-        is_failing: gs.players()[player_idx].is_failing,
-        life: gs.players()[player_idx].life,
-        has_fail_time: gs.players()[player_idx].fail_time.is_some(),
+        song_completed_naturally: outcome.song_completed_naturally,
+        is_failing: outcome.is_failing,
+        life: outcome.life,
+        has_fail_time: outcome.fail_time.is_some(),
         course_stage_life_submit_eligible: gs.course_stage_life_submit_eligible(player_idx),
         payload: submit_player_payload_from_runtime(gs, player_idx),
     }

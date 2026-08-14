@@ -681,6 +681,38 @@ mod tests {
     }
 
     #[test]
+    fn individual_song_outcome_promotes_only_post_fail_passes() {
+        let mut player = init_player_runtime();
+        player.life = 0.0;
+        player.is_failing = true;
+        player.fail_time = Some(8.0);
+        player.course_submit_life =
+            Some(deadsync_rules::life::LifeMeter::course_submit_start());
+
+        let disabled = individual_song_outcome(&player, true, false);
+        assert!(disabled.is_failing);
+        assert_eq!(disabled.life, 0.0);
+        assert_eq!(disabled.fail_time, Some(8.0));
+
+        let passed = individual_song_outcome(&player, true, true);
+        assert!(passed.song_completed_naturally);
+        assert!(!passed.is_failing);
+        assert_eq!(passed.life, 0.5);
+        assert_eq!(passed.fail_time, None);
+
+        player.course_submit_life = Some(deadsync_rules::life::LifeMeter {
+            life: 0.0,
+            is_failing: true,
+            fail_time: Some(12.0),
+            ..deadsync_rules::life::LifeMeter::course_submit_start()
+        });
+        let failed = individual_song_outcome(&player, true, true);
+        assert!(failed.is_failing);
+        assert_eq!(failed.life, 0.0);
+        assert_eq!(failed.fail_time, Some(8.0));
+    }
+
+    #[test]
     fn gameplay_life_delta_records_history_for_life_changes() {
         let mut meter = deadsync_rules::life::LifeMeter::new(0.5);
         let mut history = vec![(0.0, 0.5)];
@@ -787,6 +819,31 @@ mod tests {
         assert!(meter.is_failing);
         assert_eq!(meter.fail_time, None);
         assert_eq!(history, vec![(0.0, 0.0)]);
+    }
+
+    #[test]
+    fn gameplay_life_delta_keeps_post_fail_submit_life_active() {
+        let mut meter = deadsync_rules::life::LifeMeter {
+            life: 0.0,
+            is_failing: true,
+            fail_time: Some(4.0),
+            ..deadsync_rules::life::LifeMeter::new(0.0)
+        };
+        let mut course_submit_life = deadsync_rules::life::LifeMeter::course_submit_start();
+        let mut history = vec![(0.0, 0.0)];
+
+        let update = apply_gameplay_life_delta(
+            &mut meter,
+            &mut history,
+            Some(&mut course_submit_life),
+            8.0,
+            deadsync_rules::life::LIFE_GREAT,
+        );
+
+        assert!(update.was_dead);
+        assert_eq!(meter.life, 0.0);
+        assert_near(course_submit_life.life, 0.504);
+        assert!(!course_submit_life.is_failing);
     }
 
     fn song_lua_ease_mask_window(

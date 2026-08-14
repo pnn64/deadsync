@@ -452,6 +452,53 @@ fn course_choice_emits_shell_config_request() {
 }
 
 #[test]
+fn post_fail_pass_choice_follows_individual_autosubmit_visibility() {
+    let mut state = init();
+    let parent = row_position(COURSE_OPTIONS_ROWS, SubRowId::AutosubmitIndividual)
+        .expect("course options should contain individual autosubmit");
+    let child = row_position(COURSE_OPTIONS_ROWS, SubRowId::AutosubmitPostFailPasses)
+        .expect("course options should contain post-fail passes");
+
+    state.sub[SubmenuKind::Course].choice_indices[parent] = yes_no_choice_index(false);
+    let hidden = submenu_visible_row_indices(&state, SubmenuKind::Course, COURSE_OPTIONS_ROWS);
+    assert!(!hidden.contains(&child));
+
+    state.sub[SubmenuKind::Course].choice_indices[parent] = yes_no_choice_index(true);
+    let shown = submenu_visible_row_indices(&state, SubmenuKind::Course, COURSE_OPTIONS_ROWS);
+    assert!(shown.contains(&child));
+}
+
+#[test]
+fn post_fail_pass_choice_emits_course_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut config = config::Config {
+        autosubmit_course_scores_individually: true,
+        ..config::Config::default()
+    };
+    config.autosubmit_course_post_fail_passes = false;
+    let mut state = init_with_config(config);
+    state.view = OptionsView::Submenu(SubmenuKind::Course);
+    let row = select_visible_row(
+        &mut state,
+        SubmenuKind::Course,
+        SubRowId::AutosubmitPostFailPasses,
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("post-fail pass choice should emit shell config work");
+    let enabled = state.sub[SubmenuKind::Course].cursor_indices[row] == 1;
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Course(
+                crate::SimplyLoveCourseConfigRequest::AutosubmitPostFailPasses(value)
+            )
+        )) if value == enabled
+    ));
+}
+
+#[test]
 fn gameplay_choice_emits_shell_config_request() {
     let asset_manager = AssetManager::new();
     let mut state = init();

@@ -280,6 +280,7 @@ pub struct Config {
     pub show_most_played_courses: bool,
     pub show_course_individual_scores: bool,
     pub autosubmit_course_scores_individually: bool,
+    pub autosubmit_course_post_fail_passes: bool,
     pub global_offset_seconds: f32,
     pub visual_delay_seconds: f32,
     /// Visual-only clock used for scrolling note placement.
@@ -503,6 +504,7 @@ impl Default for Config {
             show_most_played_courses: system.show_most_played_courses,
             show_course_individual_scores: system.show_course_individual_scores,
             autosubmit_course_scores_individually: system.autosubmit_course_scores_individually,
+            autosubmit_course_post_fail_passes: system.autosubmit_course_post_fail_passes,
             global_offset_seconds: system.global_offset_seconds,
             visual_delay_seconds: audio.visual_delay_seconds,
             note_scroll_clock: audio.note_scroll_clock,

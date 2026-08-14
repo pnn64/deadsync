@@ -238,6 +238,7 @@ pub struct GameplaySetupRuntimeState {
     pub viewport: GameplayViewport,
     pub session: GameplaySession,
     pub config: GameplayConfig,
+    pub include_post_fail_passes: bool,
 }
 
 #[derive(Clone, Debug)]

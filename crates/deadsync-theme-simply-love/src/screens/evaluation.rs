@@ -2373,12 +2373,14 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
             let local_score_valid = score_valid && !disqualified;
             let groovestats = player_init.groovestats.clone();
             let itl = player_init.itl.clone();
-            let failed = score_data::gameplay_run_failed(p.is_failing, p.fail_time.is_some());
+            let outcome = gs.individual_song_outcome(player_idx);
+            let failed =
+                score_data::gameplay_run_failed(outcome.is_failing, outcome.fail_time.is_some());
             let passed = score_data::gameplay_run_passed(
-                gs.song_completed_naturally(),
-                p.is_failing,
-                p.life,
-                p.fail_time.is_some(),
+                outcome.song_completed_naturally,
+                outcome.is_failing,
+                outcome.life,
+                outcome.fail_time.is_some(),
             );
             let chart_hash = gs.charts()[player_idx].short_hash.as_str();
             let lua_submit_allowed = score_data::lua_submit_allowed(gs.song().has_lua, chart_hash);
@@ -2413,8 +2415,8 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
             let show_machine_personal_split = !earned_machine_record && earned_top2_personal;
 
             let mut grade = eval_grade_for_result(
-                p.is_failing,
-                gs.song_completed_naturally(),
+                outcome.is_failing,
+                outcome.song_completed_naturally,
                 disqualified,
                 score_percent,
             );

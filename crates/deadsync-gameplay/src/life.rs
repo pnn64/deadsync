@@ -276,6 +276,40 @@ pub fn all_joined_player_runtimes_failed(
     all_joined_players_failed(&statuses, num_players)
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct IndividualSongOutcome {
+    pub song_completed_naturally: bool,
+    pub is_failing: bool,
+    pub life: f32,
+    pub fail_time: Option<f32>,
+}
+
+pub fn individual_song_outcome(
+    player: &PlayerRuntime,
+    song_completed_naturally: bool,
+    include_post_fail_passes: bool,
+) -> IndividualSongOutcome {
+    let post_fail_life = include_post_fail_passes
+        .then_some(player.course_submit_life.as_ref())
+        .flatten()
+        .filter(|life| {
+            player_runtime_is_dead(player)
+                && !life.is_failing
+                && life.fail_time.is_none()
+                && life.life > 0.0
+        });
+    let (life, is_failing, fail_time) = post_fail_life.map_or(
+        (player.life, player.is_failing, player.fail_time),
+        |life| (life.life, life.is_failing, life.fail_time),
+    );
+    IndividualSongOutcome {
+        song_completed_naturally,
+        is_failing,
+        life,
+        fail_time,
+    }
+}
+
 #[inline(always)]
 pub fn course_submit_life_eligible(life: Option<&deadsync_rules::life::LifeMeter>) -> bool {
     life.is_none_or(|life| !life.is_failing && life.fail_time.is_none() && life.life > 0.0)
@@ -294,6 +328,9 @@ pub fn apply_gameplay_life_delta(
     current_music_time: f32,
     delta: f32,
 ) -> GameplayLifeDeltaUpdate {
+    if let Some(meter) = course_submit_life {
+        let _ = deadsync_rules::life::apply_life_delta(meter, current_music_time, delta);
+    }
     if player_life_is_dead(meter.life, meter.is_failing) {
         meter.life = 0.0;
         meter.is_failing = true;
@@ -316,10 +353,6 @@ pub fn apply_gameplay_life_delta(
             result.new_life,
         );
     }
-    if let Some(meter) = course_submit_life {
-        let _ = deadsync_rules::life::apply_life_delta(meter, current_music_time, delta);
-    }
-
     GameplayLifeDeltaUpdate {
         failed_now: result.failed_now,
         was_dead: false,

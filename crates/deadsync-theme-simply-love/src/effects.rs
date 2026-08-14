@@ -607,6 +607,7 @@ pub enum SimplyLoveCourseConfigRequest {
     ShowMostPlayed(bool),
     ShowIndividualScores(bool),
     AutosubmitIndividual(bool),
+    AutosubmitPostFailPasses(bool),
 }
 
 /// Gameplay presentation preferences chosen by Simply Love and persisted by shell.

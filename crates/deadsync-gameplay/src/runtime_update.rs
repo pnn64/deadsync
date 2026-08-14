@@ -1817,8 +1817,11 @@ where
             return judgment::ExScoreData::default();
         }
         let live = self.live_ex_score_inputs(player_idx);
-        let inputs =
-            player_effective_ex_score_inputs(&self.players_runtime.players[player_idx], live);
+        let inputs = if self.individual_song_uses_post_fail_life(player_idx) {
+            live
+        } else {
+            player_effective_ex_score_inputs(&self.players_runtime.players[player_idx], live)
+        };
         self.ex_score_data_from_inputs(player_idx, inputs)
     }
 
@@ -1827,8 +1830,11 @@ where
             return judgment::ExScoreData::default();
         }
         let live = self.live_ex_score_inputs(player_idx);
-        let inputs =
-            player_effective_ex_score_inputs(&self.players_runtime.players[player_idx], live);
+        let inputs = if self.individual_song_uses_post_fail_life(player_idx) {
+            live
+        } else {
+            player_effective_ex_score_inputs(&self.players_runtime.players[player_idx], live)
+        };
         ex_score_data_from_display_inputs(
             inputs,
             CourseDisplayCarry::default(),
@@ -1883,6 +1889,34 @@ where
     #[inline(always)]
     pub fn player_is_dead(&self, player: usize) -> bool {
         player_runtime_is_dead(&self.players_runtime.players[player])
+    }
+
+    #[inline(always)]
+    pub fn player_score_is_blocked(&self, player: usize) -> bool {
+        self.player_is_dead(player) && !self.setup.include_post_fail_passes
+    }
+
+    #[inline(always)]
+    fn individual_song_uses_post_fail_life(&self, player_idx: usize) -> bool {
+        if player_idx >= self.setup.num_players.min(MAX_PLAYERS) {
+            return false;
+        }
+        let player = &self.players_runtime.players[player_idx];
+        self.setup.include_post_fail_passes
+            && player_runtime_is_dead(player)
+            && player_course_submit_life_eligible(player)
+    }
+
+    #[inline(always)]
+    pub fn individual_song_outcome(&self, player_idx: usize) -> IndividualSongOutcome {
+        let Some(player) = self.players_runtime.players.get(player_idx) else {
+            return IndividualSongOutcome::default();
+        };
+        individual_song_outcome(
+            player,
+            self.song_completed_naturally(),
+            self.setup.include_post_fail_passes,
+        )
     }
 
     #[inline(always)]

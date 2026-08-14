@@ -2131,6 +2131,7 @@ fn simply_love_course_options_persist_through_shell() {
         "config::update_show_most_played_courses",
         "config::update_show_course_individual_scores",
         "config::update_autosubmit_course_scores_individually",
+        "config::update_autosubmit_course_post_fail_passes",
     ] {
         assert!(
             !options_source.contains(direct_update),
@@ -2150,10 +2151,12 @@ fn simply_love_course_options_persist_through_shell() {
             && effects.contains("Course(SimplyLoveCourseConfigRequest)")
             && options_source.contains("SimplyLoveCourseConfigRequest::ShowRandom")
             && options_source.contains("SimplyLoveCourseConfigRequest::AutosubmitIndividual")
+            && options_source.contains("SimplyLoveCourseConfigRequest::AutosubmitPostFailPasses")
             && shell.contains("config_requests::execute_course(request)")
             && executor.contains("pub(super) fn execute_course")
             && executor.contains("config::update_show_random_courses(enabled)")
-            && executor.contains("config::update_autosubmit_course_scores_individually(enabled)"),
+            && executor.contains("config::update_autosubmit_course_scores_individually(enabled)")
+            && executor.contains("config::update_autosubmit_course_post_fail_passes(enabled)"),
         "Course option values must cross typed requests and be persisted by shell"
     );
 }

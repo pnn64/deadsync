@@ -6988,6 +6988,7 @@ impl App {
                     None,
                     None,
                     [deadsync_gameplay::CourseLifeConfig::Bar; MAX_PLAYERS],
+                    false,
                     None,
                     None,
                     [0; MAX_PLAYERS],
@@ -7388,6 +7389,9 @@ impl App {
                     &player_profiles,
                     &gameplay_session,
                 );
+                let include_post_fail_passes = self.state.session.course_run.is_some()
+                    && cfg.autosubmit_course_scores_individually
+                    && cfg.autosubmit_course_post_fail_passes;
                 let init_started = Instant::now();
                 let mut gs = gameplay::init(
                     song_arc,
@@ -7410,6 +7414,7 @@ impl App {
                     course_display_timing,
                     course_modifiers,
                     course_life_config,
+                    include_post_fail_passes,
                     course_display_info,
                     course_banner_path,
                     combo_carry,

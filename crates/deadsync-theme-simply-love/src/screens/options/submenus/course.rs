@@ -37,6 +37,15 @@ pub(in crate::screens::options) const COURSE_OPTIONS_ROWS: &[SubRow] = &[
         ],
         inline: true,
     },
+    SubRow {
+        id: SubRowId::AutosubmitPostFailPasses,
+        label: lookup_key("OptionsCourse", "AutosubmitPostFailPasses"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
 ];
 
 pub(in crate::screens::options) const COURSE_OPTIONS_ITEMS: &[Item] = &[
@@ -70,6 +79,14 @@ pub(in crate::screens::options) const COURSE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsCourseHelp",
             "AutosubmitIndividualHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::CrsAutosubmitPostFailPasses,
+        name: lookup_key("OptionsCourse", "AutosubmitPostFailPasses"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsCourseHelp",
+            "AutosubmitPostFailPassesHelp",
         ))],
     },
     Item {

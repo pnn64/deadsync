@@ -790,6 +790,9 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::AutosubmitIndividual => {
                 crate::SimplyLoveCourseConfigRequest::AutosubmitIndividual(enabled)
             }
+            SubRowId::AutosubmitPostFailPasses => {
+                crate::SimplyLoveCourseConfigRequest::AutosubmitPostFailPasses(enabled)
+            }
             _ => return None,
         };
         action = Some(course_config_effect(request));

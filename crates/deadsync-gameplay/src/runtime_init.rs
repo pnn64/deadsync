@@ -416,6 +416,7 @@ pub fn init_gameplay_runtime<
     course_display_timing: Option<CourseDisplayTiming>,
     course_modifiers: Option<Arc<str>>,
     course_life_config: [CourseLifeConfig; MAX_PLAYERS],
+    include_post_fail_passes: bool,
     mut combo_carry: [u32; MAX_PLAYERS],
 ) -> GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>
 where
@@ -1273,6 +1274,7 @@ where
             viewport,
             session,
             config,
+            include_post_fail_passes,
         },
         boundary: GameplayBoundaryRuntimeState::new(8, 2),
         timing_runtime: GameplayTimingRuntimeState {

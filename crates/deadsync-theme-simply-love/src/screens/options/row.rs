@@ -156,6 +156,7 @@ pub enum SubRowId {
     ShowMostPlayed,
     ShowIndividualScores,
     AutosubmitIndividual,
+    AutosubmitPostFailPasses,
     // Advanced Options
     DefaultFailType,
     BannerCache,

@@ -262,6 +262,7 @@ fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.center_image_add_width = loaded.center_image_add_width;
     cfg.center_image_add_height = loaded.center_image_add_height;
     cfg.autosubmit_course_scores_individually = loaded.autosubmit_course_scores_individually;
+    cfg.autosubmit_course_post_fail_passes = loaded.autosubmit_course_post_fail_passes;
     cfg.show_course_individual_scores = loaded.show_course_individual_scores;
     cfg.show_most_played_courses = loaded.show_most_played_courses;
     cfg.show_random_courses = loaded.show_random_courses;

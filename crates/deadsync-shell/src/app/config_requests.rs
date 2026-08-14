@@ -106,6 +106,9 @@ pub(super) fn execute_course(request: SimplyLoveCourseConfigRequest) {
         Request::AutosubmitIndividual(enabled) => {
             config::update_autosubmit_course_scores_individually(enabled)
         }
+        Request::AutosubmitPostFailPasses(enabled) => {
+            config::update_autosubmit_course_post_fail_passes(enabled)
+        }
     }
 }
 
