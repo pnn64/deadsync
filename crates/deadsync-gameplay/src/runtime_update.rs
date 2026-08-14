@@ -1259,7 +1259,7 @@ where
     #[inline(always)]
     pub fn tap_row_hold_roll_flags(&self, note_index: usize) -> u8 {
         self.chart_runtime
-            .lane_indices
+            .row_indices
             .tap_row_hold_roll_flags(note_index)
     }
 
@@ -2193,7 +2193,7 @@ where
     }
 
     #[inline(always)]
-    pub fn hold_end_time_cache_ns(&self) -> &[Option<SongTimeNs>] {
+    pub fn hold_end_time_cache_ns(&self) -> &[SongTimeNs] {
         &self.chart_runtime.hold_end_time_cache_ns
     }
 
@@ -2222,6 +2222,7 @@ where
             .hold_end_time_cache_ns
             .get(index)
             .copied()
+            .map(cached_hold_end_time_ns)
     }
 
     #[inline(always)]

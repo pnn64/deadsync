@@ -2701,7 +2701,7 @@ pub fn arrowcloud_time_in_submit_window(time_ns: i64, fail_time_ns: Option<i64>)
 pub fn arrowcloud_submit_stats_from_results(
     notes: &[Note],
     note_times: &[i64],
-    hold_end_times: &[Option<i64>],
+    hold_end_times: &[i64],
     fail_time_ns: Option<i64>,
 ) -> ArrowCloudSubmitStats {
     let mut stats = ArrowCloudSubmitStats::default();
@@ -2745,7 +2745,8 @@ pub fn arrowcloud_submit_stats_from_results(
             NoteType::Hold | NoteType::Roll => {
                 let result_time = hold_end_times
                     .get(i)
-                    .and_then(|time| *time)
+                    .copied()
+                    .filter(|&time_ns| !song_time_ns_invalid(time_ns))
                     .unwrap_or(note_time);
                 if !arrowcloud_time_in_submit_window(result_time, fail_time_ns) {
                     continue;
@@ -2784,7 +2785,7 @@ pub fn arrowcloud_submit_stats_from_live_or_results(
     fail_time_ns: Option<i64>,
     notes: &[Note],
     note_times: &[i64],
-    hold_end_times: &[Option<i64>],
+    hold_end_times: &[i64],
 ) -> ArrowCloudSubmitStats {
     match fail_time_ns {
         None => live_stats,
@@ -3984,7 +3985,7 @@ pub struct LocalScoreGameplayPlayer<'a> {
     pub fail_time: Option<f32>,
     pub notes: &'a [Note],
     pub note_times: &'a [SongTimeNs],
-    pub hold_end_times: &'a [Option<SongTimeNs>],
+    pub hold_end_times: &'a [SongTimeNs],
     pub total_steps: u32,
     pub holds_total: u32,
     pub rolls_total: u32,
@@ -4214,7 +4215,7 @@ pub struct LocalScoreGameplayEntryInput<'a> {
     pub fail_time: Option<f32>,
     pub notes: &'a [Note],
     pub note_times: &'a [SongTimeNs],
-    pub hold_end_times: &'a [Option<SongTimeNs>],
+    pub hold_end_times: &'a [SongTimeNs],
     pub total_steps: u32,
     pub holds_total: u32,
     pub rolls_total: u32,
@@ -7766,7 +7767,7 @@ mod tests {
         counts[judgment::judge_grade_ix(judgment::JudgeGrade::Excellent)] = 20;
         let notes: [Note; 0] = [];
         let times: [SongTimeNs; 0] = [];
-        let hold_times: [Option<SongTimeNs>; 0] = [];
+        let hold_times: [SongTimeNs; 0] = [];
         let mut written = Vec::new();
         let mut skips = Vec::new();
         let player = |player_idx,
@@ -9055,7 +9056,15 @@ mod tests {
             ns(3.0),
             ns(3.5),
         ];
-        let hold_end_times = vec![None, Some(ns(1.8)), Some(ns(2.4)), None, None, None, None];
+        let hold_end_times = vec![
+            i64::MIN,
+            ns(1.8),
+            ns(2.4),
+            i64::MIN,
+            i64::MIN,
+            i64::MIN,
+            i64::MIN,
+        ];
 
         let stats = arrowcloud_submit_stats_from_results(
             &notes,

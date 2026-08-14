@@ -12508,7 +12508,7 @@ mod tests {
         waiting.hold.as_mut().unwrap().result = Some(HoldResult::Missed);
         waiting.column = 2;
         let notes = vec![missed, scored, waiting];
-        let hold_end_times = [Some(10), Some(10), Some(30)];
+        let hold_end_times = [10, 10, 30];
         let mut pending = [true, true, true];
         let mut indices = vec![0, 1, 2];
         let score_by_col = [true, true, true];
@@ -12578,7 +12578,7 @@ mod tests {
         let mut no_action = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
         no_action.result = Some(test_judgment(JudgeGrade::Great));
         let notes = vec![no_action];
-        let hold_end_times = [Some(10)];
+        let hold_end_times = [10];
         let mut pending = [true, true, true];
         let mut indices = vec![0, 1, 2];
         let mut events = [None; 2];
@@ -15188,7 +15188,7 @@ mod tests {
     fn end_times_wait_for_audio_tail() {
         let notes = [test_note_at(NoteType::Tap, None, false, 96, 2.0)];
         let note_times = [song_time_ns_from_seconds(2.0)];
-        let hold_end_times = [None];
+        let hold_end_times = [INVALID_SONG_TIME_NS];
         let audio_end_time_ns = song_time_ns_from_seconds(10.0);
 
         let (notes_end_time_ns, music_end_time_ns) =
@@ -15207,7 +15207,7 @@ mod tests {
             song_time_ns_from_seconds(1.0),
             song_time_ns_from_seconds(5.0),
         ];
-        let hold_end_times = [None, None];
+        let hold_end_times = [INVALID_SONG_TIME_NS; 2];
 
         let (notes_end_time_ns, music_end_time_ns) =
             compute_end_times_ns(&notes, &note_times, &hold_end_times, 1.0, 0);
@@ -15665,17 +15665,12 @@ mod tests {
     }
 
     #[test]
-    fn lane_index_state_returns_slices_flags_and_clears() {
+    fn lane_index_state_returns_slices_and_clears() {
         let mut note_indices: [Vec<usize>; MAX_COLS] = std::array::from_fn(|_| Vec::new());
         let mut hold_indices: [Vec<usize>; MAX_COLS] = std::array::from_fn(|_| Vec::new());
         note_indices[1].push(7);
         hold_indices[1].push(9);
-        let mut state = GameplayLaneIndexState::new(
-            note_indices,
-            hold_indices,
-            vec![12, 24],
-            vec![0, 3],
-        );
+        let mut state = GameplayLaneIndexState::new(note_indices, hold_indices, vec![12, 24]);
 
         assert_eq!(state.note_indices(1), &[7]);
         assert_eq!(state.note_row_indices(1), &[7]);
@@ -15685,9 +15680,7 @@ mod tests {
         );
         assert_eq!(state.hold_indices(1), &[9]);
         assert_eq!(state.note_itg_rows(), &[12, 24]);
-        assert_eq!(state.tap_row_hold_roll_flags(1), 3);
         assert!(state.note_indices(MAX_COLS).is_empty());
-        assert_eq!(state.tap_row_hold_roll_flags(99), 0);
 
         state.clear_for_test();
 
@@ -15695,7 +15688,6 @@ mod tests {
         assert!(state.note_row_indices(1).is_empty());
         assert!(state.hold_indices(1).is_empty());
         assert!(state.note_itg_rows().is_empty());
-        assert_eq!(state.tap_row_hold_roll_flags(1), 0);
     }
 
     #[test]
@@ -15783,18 +15775,138 @@ mod tests {
     }
 
     #[test]
+    fn gameplay_time_bounds_packed_rows_and_hold_cache_match_references() {
+        let mut notes = Vec::new();
+        for player in 0..MAX_PLAYERS {
+            for local_index in 0..16 {
+                let note_type = match local_index % 8 {
+                    1 => NoteType::Mine,
+                    3 => NoteType::Hold,
+                    5 => NoteType::Roll,
+                    _ => NoteType::Tap,
+                };
+                let beat = (local_index / 2) as f32 * 0.25;
+                let hold = matches!(note_type, NoteType::Hold | NoteType::Roll)
+                    .then(|| HoldData {
+                        end_row_index: local_index / 2 * 12 + 6,
+                        end_beat: beat + 0.125,
+                        ..test_hold()
+                    });
+                let mut note = test_note_at(
+                    note_type,
+                    hold,
+                    false,
+                    local_index / 2 * 12,
+                    beat,
+                );
+                note.column = player * 4 + local_index % 4;
+                notes.push(note);
+            }
+        }
+        let note_ranges = [(0, 16), (16, 32)];
+        let note_time_ns = (0..notes.len())
+            .map(|index| {
+                song_time_ns_from_seconds((index % 16) as f32 * 0.125 + (index / 16) as f32)
+            })
+            .collect::<Vec<_>>();
+        let reference_hold_end_time_ns = notes
+            .iter()
+            .enumerate()
+            .map(|(index, note)| {
+                note.hold
+                    .is_some()
+                    .then_some(note_time_ns[index] + song_time_ns_from_seconds(0.25))
+            })
+            .collect::<Vec<_>>();
+        let hold_end_time_ns = reference_hold_end_time_ns
+            .iter()
+            .map(|&time_ns| time_ns.unwrap_or(INVALID_SONG_TIME_NS))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            hold_end_time_ns
+                .iter()
+                .copied()
+                .map(cached_hold_end_time_ns)
+                .collect::<Vec<_>>(),
+            reference_hold_end_time_ns
+        );
+
+        let reference_bounds = compute_gameplay_time_bounds_reference_ns(
+            &notes,
+            &note_time_ns,
+            &hold_end_time_ns,
+            1.25,
+            song_time_ns_from_seconds(6.0),
+        );
+        let bounds = compute_gameplay_time_bounds_ns(
+            &notes,
+            &note_time_ns,
+            &hold_end_time_ns,
+            1.25,
+            song_time_ns_from_seconds(6.0),
+        );
+        assert_eq!(bounds, reference_bounds);
+
+        let (reference_rows, reference_ranges, reference_indices, reference_flags) =
+            build_gameplay_row_indices_reference(
+                &notes,
+                &note_ranges,
+                &note_time_ns,
+                2,
+                notes.len() / 2,
+            );
+        let (rows, ranges, metadata) = build_gameplay_row_indices(
+            &notes,
+            &note_ranges,
+            &note_time_ns,
+            2,
+            notes.len() / 2,
+        );
+        assert_eq!(ranges, reference_ranges);
+        assert_eq!(rows.len(), reference_rows.len());
+        for (row, reference) in rows.iter().zip(&reference_rows) {
+            assert_eq!(row.row_index, reference.row_index);
+            assert_eq!(row.time_ns, reference.time_ns);
+            assert_eq!(row.note_indices(), reference.note_indices());
+            assert_eq!(row.rescore_track_count, reference.rescore_track_count);
+            assert_eq!(row.unresolved_count, reference.unresolved_count);
+            assert_eq!(
+                row.unresolved_nonlift_count,
+                reference.unresolved_nonlift_count
+            );
+        }
+        for note_index in 0..notes.len() {
+            assert_eq!(
+                row_entry_index_for_note(&metadata, note_index),
+                row_entry_index_for_note(&reference_indices, note_index)
+            );
+            assert_eq!(
+                tap_row_hold_roll_flags_from_metadata(&metadata, note_index),
+                reference_flags[note_index]
+            );
+        }
+    }
+
+    #[test]
     fn row_index_state_clears_ranges_cursors_and_note_indices() {
-        let mut state = GameplayRowIndexState::new([(1, 3), (4, 6)], [2, 5], vec![0, 1, u32::MAX]);
+        let mut state = GameplayRowIndexState::new(
+            [(1, 3), (4, 6)],
+            [2, 5],
+            vec![0, (3 << NOTE_ROW_FLAGS_SHIFT) | 1, u32::MAX],
+        );
 
         assert_eq!(state.row_entry_ranges[0], (1, 3));
         assert_eq!(state.judged_row_cursor[1], 5);
-        assert_eq!(state.note_row_entry_indices[1], 1);
+        assert_eq!(row_entry_index_for_note(&state.note_row_entry_indices, 1), Some(1));
+        assert_eq!(state.tap_row_hold_roll_flags(1), 3);
+        assert_eq!(state.tap_row_hold_roll_flags(99), 0);
 
         state.clear_for_test();
 
         assert_eq!(state.row_entry_ranges, [(0, 0); MAX_PLAYERS]);
         assert_eq!(state.judged_row_cursor, [0; MAX_PLAYERS]);
         assert!(state.note_row_entry_indices.is_empty());
+        assert_eq!(state.tap_row_hold_roll_flags(1), 0);
     }
 
     #[test]
@@ -16589,7 +16701,7 @@ mod tests {
         p2_mine.column = 5;
         let notes = vec![p1_tap, p2_hold, p2_mine];
         let mut note_time_cache_ns = vec![0; notes.len()];
-        let mut hold_end_time_cache_ns = vec![None; notes.len()];
+        let mut hold_end_time_cache_ns = vec![INVALID_SONG_TIME_NS; notes.len()];
         let mut row_note_indices = [usize::MAX; MAX_COLS];
         row_note_indices[0] = 1;
         let mut row_entries = vec![build_row_entry(48, row_note_indices, 1, &notes, &[0; 3])];
@@ -16613,7 +16725,7 @@ mod tests {
         assert_eq!(note_time_cache_ns[2], timing_p2.get_time_for_beat_ns(2.0));
         assert_eq!(
             hold_end_time_cache_ns[1],
-            Some(timing_p2.get_time_for_beat_ns(2.0))
+            timing_p2.get_time_for_beat_ns(2.0)
         );
         assert_eq!(row_entries[0].time_ns, note_time_cache_ns[1]);
         assert!(mine_note_time_ns[0].is_empty());

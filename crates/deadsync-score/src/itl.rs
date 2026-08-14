@@ -1528,7 +1528,7 @@ pub fn itl_judgments_from_groovestats_counts(
 pub struct ItlScoreCalcInput<'a> {
     pub notes: &'a [deadsync_rules::note::Note],
     pub note_times: &'a [deadsync_core::song_time::SongTimeNs],
-    pub hold_end_times: &'a [Option<deadsync_core::song_time::SongTimeNs>],
+    pub hold_end_times: &'a [deadsync_core::song_time::SongTimeNs],
     pub total_steps: u32,
     pub holds_total: u32,
     pub rolls_total: u32,
@@ -2391,7 +2391,7 @@ mod tests {
 
         let notes: Vec<deadsync_rules::note::Note> = Vec::new();
         let note_times: Vec<deadsync_core::song_time::SongTimeNs> = Vec::new();
-        let hold_end_times: Vec<Option<deadsync_core::song_time::SongTimeNs>> = Vec::new();
+        let hold_end_times: Vec<deadsync_core::song_time::SongTimeNs> = Vec::new();
         assert_eq!(
             itl_current_score_hundredths(ItlScoreCalcInput {
                 notes: notes.as_slice(),

@@ -424,8 +424,11 @@ mod runtime_regression_tests {
             for &note_index in row_entry.note_indices() {
                 debug_assert!(note_index < state.chart_runtime.notes.len());
                 debug_assert_eq!(
-                    state.chart_runtime.row_indices.note_row_entry_indices[note_index],
-                    row_entry_index as u32
+                    row_entry_index_for_note(
+                        &state.chart_runtime.row_indices.note_row_entry_indices,
+                        note_index,
+                    ),
+                    Some(row_entry_index)
                 );
                 let note = &state.chart_runtime.notes[note_index];
                 debug_assert_eq!(note.row_index, row_entry.row_index);
@@ -1550,10 +1553,16 @@ mod runtime_regression_tests {
         let (note_start, note_end) = state.note_range_for_player(0);
         let first_note = note_start;
         let last_note = note_end - 1;
-        let first_row_entry =
-            state.chart_runtime.row_indices.note_row_entry_indices[first_note] as usize;
-        let last_row_entry =
-            state.chart_runtime.row_indices.note_row_entry_indices[last_note] as usize;
+        let first_row_entry = row_entry_index_for_note(
+            &state.chart_runtime.row_indices.note_row_entry_indices,
+            first_note,
+        )
+        .expect("first note has a row entry");
+        let last_row_entry = row_entry_index_for_note(
+            &state.chart_runtime.row_indices.note_row_entry_indices,
+            last_note,
+        )
+        .expect("last note has a row entry");
         let miss_ix = judgment::judge_grade_ix(JudgeGrade::Miss);
 
         state.set_final_note_result(
@@ -1714,7 +1723,7 @@ mod runtime_regression_tests {
         let mut state = regression_state();
         let hold_end_ns = song_time_ns_from_seconds(1.0);
         state.chart_runtime.notes[0] = test_hold(0, 0, ROWS_PER_BEAT as usize);
-        state.chart_runtime.hold_end_time_cache_ns[0] = Some(hold_end_ns);
+        state.chart_runtime.hold_end_time_cache_ns[0] = hold_end_ns;
         set_regression_mine(&mut state, 1, 1, ROWS_PER_BEAT as usize, hold_end_ns);
         state.players_runtime.players[0].life = 0.04;
         state.set_active_hold(0, Some(ActiveHold {
@@ -1762,7 +1771,7 @@ mod runtime_regression_tests {
         state.progress.stage.score_missed_holds_rolls[0] = true;
         state.chart_runtime.notes[0] = test_hold(0, 48, 96);
         state.chart_runtime.note_time_cache_ns[0] = note_time_ns;
-        state.chart_runtime.hold_end_time_cache_ns[0] = Some(hold_end_ns);
+        state.chart_runtime.hold_end_time_cache_ns[0] = hold_end_ns;
         state.chart_runtime.notes[1].can_be_judged = false;
 
         let miss_time_ns = note_time_ns
@@ -1825,7 +1834,7 @@ mod runtime_regression_tests {
         state.progress.stage.score_missed_holds_rolls[0] = false;
         state.chart_runtime.notes[0] = test_hold(0, 48, 96);
         state.chart_runtime.note_time_cache_ns[0] = note_time_ns;
-        state.chart_runtime.hold_end_time_cache_ns[0] = Some(hold_end_ns);
+        state.chart_runtime.hold_end_time_cache_ns[0] = hold_end_ns;
         state.chart_runtime.notes[1].can_be_judged = false;
 
         let miss_time_ns = note_time_ns
@@ -1933,7 +1942,7 @@ mod runtime_regression_tests {
 
         let hold_end_ns = song_time_ns_from_seconds(2.0);
         state.chart_runtime.notes[0] = test_hold(0, 0, ROWS_PER_BEAT as usize * 2);
-        state.chart_runtime.hold_end_time_cache_ns[0] = Some(hold_end_ns);
+        state.chart_runtime.hold_end_time_cache_ns[0] = hold_end_ns;
         state.chart_runtime.notes[0]
             .hold
             .as_mut()
@@ -1973,8 +1982,8 @@ mod runtime_regression_tests {
         state.chart_runtime.notes[0] = test_hold(0, 0, ROWS_PER_BEAT as usize);
         state.chart_runtime.notes[1] =
             test_hold(0, ROWS_PER_BEAT as usize + 12, ROWS_PER_BEAT as usize * 2);
-        state.chart_runtime.hold_end_time_cache_ns[0] = Some(previous_end_ns);
-        state.chart_runtime.hold_end_time_cache_ns[1] = Some(next_end_ns);
+        state.chart_runtime.hold_end_time_cache_ns[0] = previous_end_ns;
+        state.chart_runtime.hold_end_time_cache_ns[1] = next_end_ns;
         state.set_active_hold(0, Some(ActiveHold {
             note_index: 0,
             start_time_ns: 0,
@@ -2260,7 +2269,7 @@ mod runtime_regression_tests {
         let notes = vec![hold];
         let note_ranges = [(0, 1), (1, 1)];
         let note_time_cache_ns = vec![timing.get_time_for_beat_ns(1.0)];
-        let hold_end_time_cache_ns = vec![Some(timing.get_time_for_beat_ns(2.0))];
+        let hold_end_time_cache_ns = vec![timing.get_time_for_beat_ns(2.0)];
         let timing_players = std::array::from_fn(|_| Arc::clone(&timing));
         let gameplay_chart = GameplayChartData {
             notes: Vec::new(),
@@ -2425,7 +2434,7 @@ mod runtime_regression_tests {
             55,
         );
         let head_time_ns = state.chart_runtime.note_time_cache_ns[0];
-        let tail_time_ns = state.chart_runtime.hold_end_time_cache_ns[0]
+        let tail_time_ns = cached_hold_end_time_ns(state.chart_runtime.hold_end_time_cache_ns[0])
             .expect("short Pump hold tail time");
 
         state.process_pump_hold_events(head_time_ns.saturating_sub(1), tail_time_ns, &[false; MAX_COLS]);
@@ -3935,7 +3944,7 @@ mod runtime_regression_tests {
         enable_tap_explosion_durations(&mut state);
         state.chart_runtime.notes = vec![test_note(column, row_index, NoteType::Tap)];
         state.chart_runtime.note_time_cache_ns = vec![note_time];
-        state.chart_runtime.hold_end_time_cache_ns = vec![Some(note_time)];
+        state.chart_runtime.hold_end_time_cache_ns = vec![note_time];
         for col in 0..MAX_COLS {
             state.chart_runtime.lane_indices.note_indices[col].clear();
             state.chart_runtime.lane_indices.hold_indices[col].clear();

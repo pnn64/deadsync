@@ -166,6 +166,15 @@ pub fn build_column_cues_for_player(
     cues
 }
 
+#[inline(always)]
+pub const fn cached_hold_end_time_ns(time_ns: SongTimeNs) -> Option<SongTimeNs> {
+    if song_time_ns_invalid(time_ns) {
+        None
+    } else {
+        Some(time_ns)
+    }
+}
+
 #[cfg(any(test, feature = "bench-support"))]
 #[doc(hidden)]
 pub fn build_column_cues_for_player_reference(
@@ -263,7 +272,7 @@ pub fn judged_row_lookahead_time_ns(
 pub fn compute_end_times_ns(
     notes: &[Note],
     note_time_cache_ns: &[SongTimeNs],
-    hold_end_time_cache_ns: &[Option<SongTimeNs>],
+    hold_end_time_cache_ns: &[SongTimeNs],
     rate: f32,
     audio_end_time_ns: SongTimeNs,
 ) -> (SongTimeNs, SongTimeNs) {
@@ -274,9 +283,8 @@ pub fn compute_end_times_ns(
         if song_time_ns_invalid(start_time_ns) {
             continue;
         }
-        let end_time_ns = hold_end_time_cache_ns[i]
-            .filter(|&time_ns| !song_time_ns_invalid(time_ns))
-            .unwrap_or(start_time_ns);
+        let end_time_ns =
+            cached_hold_end_time_ns(hold_end_time_cache_ns[i]).unwrap_or(start_time_ns);
         last_relevant_time_ns = last_relevant_time_ns.max(end_time_ns);
         if note.can_be_judged {
             last_judgable_time_ns = last_judgable_time_ns.max(end_time_ns);
@@ -1063,6 +1071,127 @@ fn build_assist_clap_rows_reference(
         note_range,
         end.saturating_sub(note_range.0.min(end)),
     )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayTimeBounds {
+    pub first_judgable_second: f32,
+    pub notes_end_time_ns: SongTimeNs,
+    pub music_end_time_ns: SongTimeNs,
+}
+
+pub fn compute_gameplay_time_bounds_ns(
+    notes: &[Note],
+    note_time_cache_ns: &[SongTimeNs],
+    hold_end_time_cache_ns: &[SongTimeNs],
+    rate: f32,
+    audio_end_time_ns: SongTimeNs,
+) -> GameplayTimeBounds {
+    let mut first_judgable_second: Option<f32> = None;
+    let mut last_judgable_time_ns = 0;
+    let mut last_relevant_time_ns = 0;
+    for (index, note) in notes.iter().enumerate() {
+        let start_time_ns = note_time_cache_ns[index];
+        if note.can_be_judged {
+            let second = song_time_ns_to_seconds(start_time_ns);
+            first_judgable_second = Some(first_judgable_second.map_or(second, |old| old.min(second)));
+        }
+        if song_time_ns_invalid(start_time_ns) {
+            continue;
+        }
+        let end_time_ns =
+            cached_hold_end_time_ns(hold_end_time_cache_ns[index]).unwrap_or(start_time_ns);
+        last_relevant_time_ns = last_relevant_time_ns.max(end_time_ns);
+        if note.can_be_judged {
+            last_judgable_time_ns = last_judgable_time_ns.max(end_time_ns);
+        }
+    }
+
+    let timing_profile = TimingProfile::default_itg_with_fa_plus();
+    let resolution_distance_ns = max_step_distance_ns(&timing_profile, rate);
+    GameplayTimeBounds {
+        first_judgable_second: first_judgable_second.unwrap_or(0.0),
+        notes_end_time_ns: last_judgable_time_ns.saturating_add(resolution_distance_ns),
+        music_end_time_ns: last_relevant_time_ns
+            .saturating_add(resolution_distance_ns)
+            .max(audio_end_time_ns),
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn compute_gameplay_time_bounds_reference_ns(
+    notes: &[Note],
+    note_time_cache_ns: &[SongTimeNs],
+    hold_end_time_cache_ns: &[SongTimeNs],
+    rate: f32,
+    audio_end_time_ns: SongTimeNs,
+) -> GameplayTimeBounds {
+    let first_judgable_second = notes
+        .iter()
+        .zip(note_time_cache_ns)
+        .filter_map(|(note, &time_ns)| {
+            note.can_be_judged
+                .then_some(song_time_ns_to_seconds(time_ns))
+        })
+        .reduce(f32::min)
+        .unwrap_or(0.0);
+    let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
+        notes,
+        note_time_cache_ns,
+        hold_end_time_cache_ns,
+        rate,
+        audio_end_time_ns,
+    );
+    GameplayTimeBounds {
+        first_judgable_second,
+        notes_end_time_ns,
+        music_end_time_ns,
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn hold_end_cache_checksum(cache: impl IntoIterator<Item = SongTimeNs>) -> u64 {
+    cache.into_iter().fold(0u64, |checksum, time_ns| {
+        checksum.rotate_left(7) ^ (time_ns as u64).wrapping_mul(0x9E37_79B1)
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn build_hold_end_time_cache_reference_for_bench(
+    notes: &[Note],
+    note_time_cache_ns: &[SongTimeNs],
+) -> u64 {
+    let mut cache = Vec::with_capacity(notes.len());
+    for (index, note) in notes.iter().enumerate() {
+        cache.push(
+            note.hold
+                .is_some()
+                .then_some(note_time_cache_ns[index].saturating_add(31_250_000)),
+        );
+    }
+    hold_end_cache_checksum(
+        cache
+            .into_iter()
+            .map(|time_ns| time_ns.unwrap_or(INVALID_SONG_TIME_NS)),
+    )
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn build_hold_end_time_cache_for_bench(
+    notes: &[Note],
+    note_time_cache_ns: &[SongTimeNs],
+) -> u64 {
+    let mut cache = Vec::with_capacity(notes.len());
+    for (index, note) in notes.iter().enumerate() {
+        cache.push(if note.hold.is_some() {
+            note_time_cache_ns[index].saturating_add(31_250_000)
+        } else {
+            INVALID_SONG_TIME_NS
+        });
+    }
+    hold_end_cache_checksum(cache)
 }
 
 #[cfg(feature = "bench-support")]

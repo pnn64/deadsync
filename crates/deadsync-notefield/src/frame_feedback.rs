@@ -918,7 +918,7 @@ mod tests {
                 hold_end_time_cache_ns: &[],
                 note_displayed_beat_cache: &[],
                 decaying_hold_indices: &[],
-                tap_row_hold_roll_flags: &[],
+                note_row_metadata: &[],
                 visible_music_time_ns: 100_000_000,
                 visible_beat: 1.0,
                 is_in_delay: false,

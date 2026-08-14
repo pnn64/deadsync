@@ -1,6 +1,6 @@
 use crate::note::{HoldResult, MineResult, Note};
 use crate::timing::{FA_PLUS_W0_MS, FA_PLUS_W010_MS, WindowCounts};
-use deadsync_core::note::NoteType;
+use deadsync_core::{note::NoteType, song_time::song_time_ns_invalid};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TimingWindow {
@@ -416,7 +416,7 @@ struct ExScoreCounts {
 fn compute_ex_score_counts(
     notes: &[Note],
     note_times_ns: &[i64],
-    hold_end_times_ns: &[Option<i64>],
+    hold_end_times_ns: &[i64],
     fail_time_ns: Option<i64>,
 ) -> ExScoreCounts {
     let mut windows = WindowCounts::default();
@@ -484,7 +484,11 @@ fn compute_ex_score_counts(
 
         if let Some(ft) = fail_time_ns {
             let relevant_time = if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
-                hold_end_times_ns.get(i).and_then(|t| *t).unwrap_or(0)
+                hold_end_times_ns
+                    .get(i)
+                    .copied()
+                    .filter(|&time_ns| !song_time_ns_invalid(time_ns))
+                    .unwrap_or(0)
             } else {
                 note_times_ns.get(i).copied().unwrap_or(0)
             };
@@ -662,7 +666,7 @@ pub fn predictive_hard_ex_score_percents(data: &ExScoreData) -> (f64, f64, f64) 
 pub fn calculate_ex_score_from_notes(
     notes: &[Note],
     note_times_ns: &[i64],
-    hold_end_times_ns: &[Option<i64>],
+    hold_end_times_ns: &[i64],
     total_steps: u32,
     holds_total: u32,
     rolls_total: u32,
@@ -689,7 +693,7 @@ pub fn calculate_ex_score_from_notes(
 pub fn calculate_hard_ex_score_from_notes(
     notes: &[Note],
     note_times_ns: &[i64],
-    hold_end_times_ns: &[Option<i64>],
+    hold_end_times_ns: &[i64],
     total_steps: u32,
     holds_total: u32,
     rolls_total: u32,
@@ -1071,7 +1075,7 @@ mod tests {
         }
 
         let note_times = vec![0_i64; notes.len()];
-        let hold_end_times = vec![None; notes.len()];
+        let hold_end_times = vec![i64::MIN; notes.len()];
         let ex = calculate_ex_score_from_notes(
             &notes,
             &note_times,
@@ -1163,7 +1167,7 @@ mod tests {
         }
 
         let note_times = vec![0_i64; notes.len()];
-        let hold_end_times = vec![None; notes.len()];
+        let hold_end_times = vec![i64::MIN; notes.len()];
         let ex = calculate_ex_score_from_notes(
             &notes,
             &note_times,
@@ -1232,7 +1236,7 @@ mod tests {
         }
 
         let note_times = vec![0_i64; notes.len()];
-        let hold_end_times = vec![None; notes.len()];
+        let hold_end_times = vec![i64::MIN; notes.len()];
         let ex = calculate_ex_score_from_notes(
             &notes,
             &note_times,
@@ -1300,7 +1304,7 @@ mod tests {
         }
 
         let note_times = vec![0_i64; notes.len()];
-        let hold_end_times = vec![None; notes.len()];
+        let hold_end_times = vec![i64::MIN; notes.len()];
         let hard_ex = calculate_hard_ex_score_from_notes(
             &notes,
             &note_times,

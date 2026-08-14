@@ -1,5 +1,5 @@
 use deadsync_chart::GameplayChartData;
-use deadsync_core::{input::MAX_COLS, note::NoteType};
+use deadsync_core::{input::MAX_COLS, note::NoteType, song_time::INVALID_SONG_TIME_NS};
 use deadsync_gameplay::{
     AttackMaskWindow, CrossoverRow, PumpHoldEventKind, SongLuaColumnOffsetWindowRuntime,
     SongLuaEaseMaskWindow, SongLuaNoteHideWindows, SongLuaRuntimeColumnOffsetWindow,
@@ -563,7 +563,7 @@ struct PumpFixture {
     notes: Vec<Note>,
     note_ranges: [(usize, usize); 2],
     note_times: Vec<i64>,
-    hold_end_times: Vec<Option<i64>>,
+    hold_end_times: Vec<i64>,
     timing_players: [Arc<TimingData>; 2],
     gameplay_charts: [Arc<GameplayChartData>; 2],
 }
@@ -586,9 +586,9 @@ fn pump_fixture(notes: &[Note]) -> PumpFixture {
     let hold_end_times = notes
         .iter()
         .map(|note| {
-            note.hold
-                .as_ref()
-                .map(|hold| timing.get_time_for_beat_ns(hold.end_beat))
+            note.hold.as_ref().map_or(INVALID_SONG_TIME_NS, |hold| {
+                timing.get_time_for_beat_ns(hold.end_beat)
+            })
         })
         .collect::<Vec<_>>();
     let chart = Arc::new(GameplayChartData {

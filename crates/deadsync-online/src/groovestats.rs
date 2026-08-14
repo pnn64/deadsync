@@ -1315,7 +1315,7 @@ pub struct GrooveStatsGameplayPayloadInput<'a> {
     pub total_rolls: u32,
     pub notes: &'a [Note],
     pub note_times: &'a [i64],
-    pub hold_end_times: &'a [Option<i64>],
+    pub hold_end_times: &'a [i64],
     pub fail_time_ns: Option<i64>,
     pub profile: &'a profile_data::Profile,
 }
@@ -3795,7 +3795,7 @@ mod tests {
         profile.scroll_speed = ScrollSpeedSetting::CMod(650.0);
         let notes: [Note; 0] = [];
         let note_times: [i64; 0] = [];
-        let hold_end_times: [Option<i64>; 0] = [];
+        let hold_end_times: [i64; 0] = [];
 
         let payload = submit_player_payload_from_gameplay_input(GrooveStatsGameplayPayloadInput {
             scoring_counts: &scoring_counts,

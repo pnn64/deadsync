@@ -572,7 +572,7 @@ pub(crate) fn compose_frame(
             hold_end_time_cache_ns: state.hold_end_time_cache_ns(),
             note_displayed_beat_cache: state.note_displayed_beat_cache(),
             decaying_hold_indices: state.decaying_hold_indices(),
-            tap_row_hold_roll_flags: &state.chart_runtime.lane_indices.tap_row_hold_roll_flags,
+            note_row_metadata: &state.chart_runtime.row_indices.note_row_entry_indices,
             visible_music_time_ns: state.visible_music_time_ns(player_idx),
             visible_beat: state.visible_beat(player_idx),
             is_in_delay: state.is_in_delay(),

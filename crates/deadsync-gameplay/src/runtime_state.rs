@@ -84,7 +84,6 @@ pub struct GameplayLaneIndexState {
     /// chasing into the much wider `Note` array and repeating float-to-row
     /// conversion for every binary-search comparison on every frame.
     pub note_itg_rows: Vec<i32>,
-    pub tap_row_hold_roll_flags: Vec<u8>,
 }
 
 impl Default for GameplayLaneIndexState {
@@ -94,7 +93,6 @@ impl Default for GameplayLaneIndexState {
             note_search_cursors: [LaneNoteWindowCursor::default(); MAX_COLS],
             hold_indices: std::array::from_fn(|_| Vec::new()),
             note_itg_rows: Vec::new(),
-            tap_row_hold_roll_flags: Vec::new(),
         }
     }
 }
@@ -104,14 +102,12 @@ impl GameplayLaneIndexState {
         note_indices: [Vec<usize>; MAX_COLS],
         hold_indices: [Vec<usize>; MAX_COLS],
         note_itg_rows: Vec<i32>,
-        tap_row_hold_roll_flags: Vec<u8>,
     ) -> Self {
         Self {
             note_indices,
             note_search_cursors: [LaneNoteWindowCursor::default(); MAX_COLS],
             hold_indices,
             note_itg_rows,
-            tap_row_hold_roll_flags,
         }
     }
 
@@ -136,14 +132,6 @@ impl GameplayLaneIndexState {
     }
 
     #[inline(always)]
-    pub fn tap_row_hold_roll_flags(&self, note_index: usize) -> u8 {
-        self.tap_row_hold_roll_flags
-            .get(note_index)
-            .copied()
-            .unwrap_or(0)
-    }
-
-    #[inline(always)]
     pub fn clear_for_test(&mut self) {
         for indices in &mut self.note_indices {
             indices.clear();
@@ -153,7 +141,6 @@ impl GameplayLaneIndexState {
             indices.clear();
         }
         self.note_itg_rows.clear();
-        self.tap_row_hold_roll_flags.clear();
     }
 }
 
@@ -166,7 +153,9 @@ pub struct GameplayRowIndexState {
     /// The game thread builds this once before gameplay. Judgment and
     /// presentation use the already-known note index to read the corresponding
     /// row directly, avoiding a second dense allocation sized to the chart's
-    /// largest row number. `u32::MAX` marks mines, fakes, and unjudgable notes.
+    /// largest row number. The lower 30 bits store that index (all ones marks
+    /// mines, fakes, and unjudgable notes); the upper two bits store the row's
+    /// hold/roll flags, avoiding a second note-aligned allocation.
     pub note_row_entry_indices: Vec<u32>,
 }
 
@@ -198,6 +187,11 @@ impl GameplayRowIndexState {
         self.row_entry_ranges.fill((0, 0));
         self.judged_row_cursor.fill(0);
         self.note_row_entry_indices.clear();
+    }
+
+    #[inline(always)]
+    pub fn tap_row_hold_roll_flags(&self, note_index: usize) -> u8 {
+        tap_row_hold_roll_flags_from_metadata(&self.note_row_entry_indices, note_index)
     }
 }
 
@@ -276,7 +270,13 @@ pub struct GameplayChartRuntimeState {
     pub lane_indices: GameplayLaneIndexState,
     pub row_indices: GameplayRowIndexState,
     pub note_time_cache_ns: Vec<SongTimeNs>,
-    pub hold_end_time_cache_ns: Vec<Option<SongTimeNs>>,
+    /// Song-lifetime, note-aligned hold-tail times owned by the game thread.
+    ///
+    /// Setup allocates the exact note count before gameplay; offset changes
+    /// refresh it in place. `INVALID_SONG_TIME_NS` marks notes without a tail,
+    /// so each entry remains eight bytes. It has no miss, eviction, per-frame
+    /// growth, or separate destruction path beyond the chart runtime itself.
+    pub hold_end_time_cache_ns: Vec<SongTimeNs>,
     /// Song-lifetime displayed-beat values for note heads and hold tails.
     ///
     /// XMod/MMod rendering reads these compact pairs instead of binary

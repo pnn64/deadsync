@@ -5,7 +5,7 @@ use deadsync_gameplay::{
     GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior, GameplayRuntimeState,
     GameplaySession, GameplayTween, GameplayViewport, LeadInTiming, MINE_EXPLOSION_DURATION,
     RECEPTOR_STEP_WINDOWS, ReplayInputEdge, ReplayOffsetSnapshot, TAP_EXPLOSION_WINDOWS,
-    refresh_active_attack_masks,
+    cached_hold_end_time_ns, refresh_active_attack_masks,
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
 
@@ -2036,8 +2036,10 @@ M000
             deadsync_gameplay::ActiveHold {
                 note_index,
                 start_time_ns: state.chart_runtime.note_time_cache_ns[note_index],
-                end_time_ns: state.chart_runtime.hold_end_time_cache_ns[note_index]
-                    .expect("fixture hold should have a cached tail time"),
+                end_time_ns: cached_hold_end_time_ns(
+                    state.chart_runtime.hold_end_time_cache_ns[note_index],
+                )
+                .expect("fixture hold should have a cached tail time"),
                 note_type: note.note_type,
                 let_go: false,
                 is_pressed,

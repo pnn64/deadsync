@@ -162,7 +162,7 @@ pub fn build_pump_hold_events(
     notes: &[Note],
     note_ranges: &[(usize, usize); MAX_PLAYERS],
     note_time_cache_ns: &[SongTimeNs],
-    hold_end_time_cache_ns: &[Option<SongTimeNs>],
+    hold_end_time_cache_ns: &[SongTimeNs],
     timing_players: &[Arc<TimingData>; MAX_PLAYERS],
     gameplay_charts: &[Arc<GameplayChartData>; MAX_PLAYERS],
     num_players: usize,
@@ -184,7 +184,7 @@ fn build_pump_hold_events_core(
     notes: &[Note],
     note_ranges: &[(usize, usize); MAX_PLAYERS],
     note_time_cache_ns: &[SongTimeNs],
-    hold_end_time_cache_ns: &[Option<SongTimeNs>],
+    hold_end_time_cache_ns: &[SongTimeNs],
     timing_players: &[Arc<TimingData>; MAX_PLAYERS],
     gameplay_charts: &[Arc<GameplayChartData>; MAX_PLAYERS],
     num_players: usize,
@@ -210,7 +210,8 @@ fn build_pump_hold_events_core(
             {
                 continue;
             }
-            let Some(end_time_ns) = hold_end_time_cache_ns[note_index] else {
+            let Some(end_time_ns) = cached_hold_end_time_ns(hold_end_time_cache_ns[note_index])
+            else {
                 continue;
             };
             events.push(PumpHoldEvent {
@@ -275,7 +276,7 @@ pub fn build_pump_hold_events_reference(
     notes: &[Note],
     note_ranges: &[(usize, usize); MAX_PLAYERS],
     note_time_cache_ns: &[SongTimeNs],
-    hold_end_time_cache_ns: &[Option<SongTimeNs>],
+    hold_end_time_cache_ns: &[SongTimeNs],
     timing_players: &[Arc<TimingData>; MAX_PLAYERS],
     gameplay_charts: &[Arc<GameplayChartData>; MAX_PLAYERS],
     num_players: usize,
@@ -791,7 +792,7 @@ pub fn pending_missed_hold_resolution_for_note(
 
 pub fn collect_pending_missed_hold_resolutions(
     notes: &[Note],
-    hold_end_time_cache_ns: &[Option<SongTimeNs>],
+    hold_end_time_cache_ns: &[SongTimeNs],
     pending_resolution: &mut [bool],
     pending_indices: &mut Vec<usize>,
     current_time_ns: SongTimeNs,
@@ -804,7 +805,8 @@ pub fn collect_pending_missed_hold_resolutions(
         let note_index = pending_indices[i];
         let end_time_ns = hold_end_time_cache_ns
             .get(note_index)
-            .and_then(|time| *time);
+            .copied()
+            .and_then(cached_hold_end_time_ns);
         let note = notes.get(note_index);
         let score_missed_holds_rolls = note
             .and_then(|note| score_missed_holds_rolls_by_column.get(note.column))

@@ -846,7 +846,7 @@ where
             .hold_end_time_cache_ns
             .get(event.note_index)
             .copied()
-            .flatten()
+            .and_then(cached_hold_end_time_ns)
         else {
             return;
         };
@@ -1009,8 +1009,9 @@ where
         if held {
             self.handle_hold_success(column, note_index);
         } else {
-            let tail_time_ns = self.chart_runtime.hold_end_time_cache_ns[note_index]
-                .unwrap_or(self.clock.song_position.current_music_time_ns);
+            let tail_time_ns =
+                cached_hold_end_time_ns(self.chart_runtime.hold_end_time_cache_ns[note_index])
+                    .unwrap_or(self.clock.song_position.current_music_time_ns);
             self.handle_hold_let_go(column, note_index, tail_time_ns);
             self.hold_runtime.hold_decay_active[note_index] = false;
         }
@@ -1724,7 +1725,7 @@ where
             .hold_end_time_cache_ns
             .get(note_index)
             .copied()
-            .flatten();
+            .and_then(cached_hold_end_time_ns);
         if let Some(plan) = hit_active_hold_start(
             self.chart_runtime.notes[note_index].note_type,
             note_index,

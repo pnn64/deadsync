@@ -258,8 +258,17 @@ type GameplayRowIndexBuild = (
     Vec<RowEntry>,
     [(usize, usize); MAX_PLAYERS],
     Vec<u32>,
-    Vec<u8>,
 );
+
+pub const NOTE_ROW_ENTRY_INDEX_MASK: u32 = (1 << 30) - 1;
+pub const NOTE_ROW_FLAGS_SHIFT: u32 = 30;
+
+#[inline(always)]
+pub fn tap_row_hold_roll_flags_from_metadata(metadata: &[u32], note_index: usize) -> u8 {
+    metadata
+        .get(note_index)
+        .map_or(0, |&value| (value >> NOTE_ROW_FLAGS_SHIFT) as u8)
+}
 
 fn build_gameplay_row_indices(
     notes: &[Note],
@@ -268,6 +277,76 @@ fn build_gameplay_row_indices(
     num_players: usize,
     row_capacity: usize,
 ) -> GameplayRowIndexBuild {
+    let mut row_entries = Vec::with_capacity(row_capacity);
+    let mut row_entry_ranges = [(0usize, 0usize); MAX_PLAYERS];
+    let mut note_row_entry_indices = vec![NOTE_ROW_ENTRY_INDEX_MASK; notes.len()];
+    for player in 0..num_players.min(MAX_PLAYERS) {
+        let row_range_start = row_entries.len();
+        let (note_start, note_end) = note_ranges[player];
+        let mut cursor = note_start;
+        while cursor < note_end {
+            let row_index = notes[cursor].row_index;
+            let row_start = cursor;
+            let mut row_flags = 0u8;
+            let mut nonmine_note_indices = [usize::MAX; MAX_COLS];
+            let mut nonmine_note_count = 0u8;
+            while cursor < note_end && notes[cursor].row_index == row_index {
+                let note = &notes[cursor];
+                match note.note_type {
+                    NoteType::Hold => row_flags |= 0b01,
+                    NoteType::Roll => row_flags |= 0b10,
+                    _ => {}
+                }
+                if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+                    let count = usize::from(nonmine_note_count);
+                    debug_assert!(count < MAX_COLS);
+                    nonmine_note_indices[count] = cursor;
+                    nonmine_note_count += 1;
+                }
+                cursor += 1;
+            }
+            let packed_flags = u32::from(row_flags) << NOTE_ROW_FLAGS_SHIFT;
+            for metadata in &mut note_row_entry_indices[row_start..cursor] {
+                *metadata |= packed_flags;
+            }
+            if nonmine_note_count != 0 {
+                let row_entry_index = row_entries.len() as u32;
+                debug_assert!(row_entry_index < NOTE_ROW_ENTRY_INDEX_MASK);
+                for &note_index in &nonmine_note_indices[..usize::from(nonmine_note_count)] {
+                    note_row_entry_indices[note_index] =
+                        (note_row_entry_indices[note_index] & !NOTE_ROW_ENTRY_INDEX_MASK)
+                            | row_entry_index;
+                }
+                row_entries.push(build_row_entry(
+                    row_index,
+                    nonmine_note_indices,
+                    nonmine_note_count,
+                    notes,
+                    note_time_cache_ns,
+                ));
+            }
+        }
+        row_entry_ranges[player] = (row_range_start, row_entries.len());
+    }
+    (row_entries, row_entry_ranges, note_row_entry_indices)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+type GameplayRowIndexBuildReference = (
+    Vec<RowEntry>,
+    [(usize, usize); MAX_PLAYERS],
+    Vec<u32>,
+    Vec<u8>,
+);
+
+#[cfg(any(test, feature = "bench-support"))]
+fn build_gameplay_row_indices_reference(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+    note_time_cache_ns: &[SongTimeNs],
+    num_players: usize,
+    row_capacity: usize,
+) -> GameplayRowIndexBuildReference {
     let mut row_entries = Vec::with_capacity(row_capacity);
     let mut row_entry_ranges = [(0usize, 0usize); MAX_PLAYERS];
     let mut note_row_entry_indices = vec![u32::MAX; notes.len()];
@@ -322,6 +401,84 @@ fn build_gameplay_row_indices(
     )
 }
 
+#[cfg(feature = "bench-support")]
+fn row_entry_checksum(entries: &[RowEntry]) -> u64 {
+    entries.iter().fold(0u64, |checksum, entry| {
+        entry
+            .note_indices()
+            .iter()
+            .fold(checksum.rotate_left(7) ^ entry.row_index as u64, |sum, &index| {
+                sum.rotate_left(7) ^ index as u64
+            })
+            ^ (entry.time_ns as u64).rotate_left(17)
+            ^ u64::from(entry.rescore_track_count) << 40
+            ^ u64::from(entry.unresolved_count) << 48
+    })
+}
+
+#[cfg(feature = "bench-support")]
+fn row_metadata_checksum(
+    entries: &[RowEntry],
+    ranges: &[(usize, usize); MAX_PLAYERS],
+    indices: &[u32],
+    flags: impl Iterator<Item = u8>,
+) -> u64 {
+    let checksum = ranges.iter().fold(row_entry_checksum(entries), |sum, range| {
+        sum.rotate_left(7) ^ range.0 as u64 ^ (range.1 as u64).rotate_left(19)
+    });
+    indices
+        .iter()
+        .copied()
+        .zip(flags)
+        .fold(checksum, |sum, (index, flags)| {
+            let index = index & NOTE_ROW_ENTRY_INDEX_MASK;
+            sum.rotate_left(7) ^ u64::from(index) ^ (u64::from(flags) << 40)
+        })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn build_gameplay_row_indices_reference_for_bench(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+    note_time_cache_ns: &[SongTimeNs],
+    num_players: usize,
+    row_capacity: usize,
+) -> u64 {
+    let (entries, ranges, indices, flags) = build_gameplay_row_indices_reference(
+        notes,
+        note_ranges,
+        note_time_cache_ns,
+        num_players,
+        row_capacity,
+    );
+    row_metadata_checksum(&entries, &ranges, &indices, flags.into_iter())
+}
+
+#[cfg(feature = "bench-support")]
+pub fn build_gameplay_row_indices_for_bench(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+    note_time_cache_ns: &[SongTimeNs],
+    num_players: usize,
+    row_capacity: usize,
+) -> u64 {
+    let (entries, ranges, metadata) = build_gameplay_row_indices(
+        notes,
+        note_ranges,
+        note_time_cache_ns,
+        num_players,
+        row_capacity,
+    );
+    row_metadata_checksum(
+        &entries,
+        &ranges,
+        &metadata,
+        metadata
+            .iter()
+            .map(|&value| (value >> NOTE_ROW_FLAGS_SHIFT) as u8),
+    )
+}
+
 pub fn reset_practice_notes_and_rows(
     notes: &mut [Note],
     row_entries: &mut [RowEntry],
@@ -358,7 +515,7 @@ pub fn refresh_timing_caches_for_offset_change(
     num_players: usize,
     cols_per_player: usize,
     note_time_cache_ns: &mut [SongTimeNs],
-    hold_end_time_cache_ns: &mut [Option<SongTimeNs>],
+    hold_end_time_cache_ns: &mut [SongTimeNs],
     row_entries: &mut [RowEntry],
     mine_note_ix: &[Vec<usize>; MAX_PLAYERS],
     mine_note_time_ns: &mut [Vec<SongTimeNs>; MAX_PLAYERS],
@@ -367,12 +524,14 @@ pub fn refresh_timing_caches_for_offset_change(
         let player = player_index_for_column(num_players, cols_per_player, note.column);
         *time_ns = timing_players[player].get_time_for_beat_ns(note.beat);
     }
-    for (time_opt_ns, note) in hold_end_time_cache_ns.iter_mut().zip(notes) {
+    for (time_ns, note) in hold_end_time_cache_ns.iter_mut().zip(notes) {
         let player = player_index_for_column(num_players, cols_per_player, note.column);
-        *time_opt_ns = note
+        *time_ns = note
             .hold
             .as_ref()
-            .map(|hold| timing_players[player].get_time_for_beat_ns(hold.end_beat));
+            .map_or(INVALID_SONG_TIME_NS, |hold| {
+                timing_players[player].get_time_for_beat_ns(hold.end_beat)
+            });
     }
     for row_entry in row_entries {
         row_entry.time_ns = note_time_cache_ns[row_entry.note_indices()[0]];
@@ -394,10 +553,11 @@ pub fn mark_row_entry_provisional_early_result(
     note_row_entry_indices: &[u32],
     note_index: usize,
 ) -> bool {
-    let Some(&row_entry_index) = note_row_entry_indices.get(note_index) else {
+    let Some(&metadata) = note_row_entry_indices.get(note_index) else {
         return false;
     };
-    if row_entry_index == u32::MAX {
+    let row_entry_index = metadata & NOTE_ROW_ENTRY_INDEX_MASK;
+    if row_entry_index == NOTE_ROW_ENTRY_INDEX_MASK {
         return false;
     }
     let Some(row_entry) = row_entries.get_mut(row_entry_index as usize) else {
@@ -414,10 +574,11 @@ pub fn mark_row_entry_note_finalized(
     note_index: usize,
     note_type: NoteType,
 ) -> bool {
-    let Some(&row_entry_index) = note_row_entry_indices.get(note_index) else {
+    let Some(&metadata) = note_row_entry_indices.get(note_index) else {
         return false;
     };
-    if row_entry_index == u32::MAX {
+    let row_entry_index = metadata & NOTE_ROW_ENTRY_INDEX_MASK;
+    if row_entry_index == NOTE_ROW_ENTRY_INDEX_MASK {
         return false;
     }
     let Some(row_entry) = row_entries.get_mut(row_entry_index as usize) else {
@@ -435,8 +596,8 @@ pub fn row_entry_index_for_note(
     note_row_entry_indices: &[u32],
     note_index: usize,
 ) -> Option<usize> {
-    let pos = *note_row_entry_indices.get(note_index)?;
-    if pos == u32::MAX {
+    let pos = *note_row_entry_indices.get(note_index)? & NOTE_ROW_ENTRY_INDEX_MASK;
+    if pos == NOTE_ROW_ENTRY_INDEX_MASK {
         return None;
     }
     Some(pos as usize)

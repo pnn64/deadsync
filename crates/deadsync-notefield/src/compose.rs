@@ -6,7 +6,7 @@ use crate::{
     effective_mini_value, field_effect_height, field_layout, fill_lane_col_offsets,
     notefield_frame_plan, scroll_travel, song_time_ns_to_seconds,
 };
-use deadsync_core::input::MAX_COLS;
+use deadsync_core::{input::MAX_COLS, song_time::song_time_ns_invalid};
 use deadsync_gameplay::{
     AccelEffects, AppearanceEffects, PerspectiveEffects, ScrollEffects,
     SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindows, VisibilityEffects, VisualEffects,
@@ -74,10 +74,12 @@ pub struct NotefieldChartView<'a> {
     /// Song-load timing caches aligned one-to-one with `notes`. Empty or short
     /// slices are valid and fall back to canonical timing queries.
     pub note_time_cache_ns: &'a [i64],
-    pub hold_end_time_cache_ns: &'a [Option<i64>],
+    pub hold_end_time_cache_ns: &'a [i64],
     pub note_displayed_beat_cache: &'a [[f32; 2]],
     pub decaying_hold_indices: &'a [usize],
-    pub tap_row_hold_roll_flags: &'a [u8],
+    /// Packed gameplay row metadata. The upper two bits contain the row's
+    /// hold/roll flags; the lower bits belong to the gameplay row index.
+    pub note_row_metadata: &'a [u32],
     pub visible_music_time_ns: i64,
     pub visible_beat: f32,
     pub is_in_delay: bool,
@@ -110,10 +112,9 @@ impl NotefieldChartView<'_> {
 
     #[inline(always)]
     pub fn tap_row_flags(&self, note_index: usize) -> u8 {
-        self.tap_row_hold_roll_flags
+        self.note_row_metadata
             .get(note_index)
-            .copied()
-            .unwrap_or_default()
+            .map_or(0, |&metadata| (metadata >> 30) as u8)
     }
 
     #[inline(always)]
@@ -122,7 +123,7 @@ impl NotefieldChartView<'_> {
             self.hold_end_time_cache_ns
                 .get(note_index)
                 .copied()
-                .flatten()
+                .filter(|&time_ns| !song_time_ns_invalid(time_ns))
         } else {
             self.note_time_cache_ns.get(note_index).copied()
         }
@@ -511,7 +512,7 @@ mod tests {
             hold_end_time_cache_ns: &[],
             note_displayed_beat_cache: &[],
             decaying_hold_indices: &[],
-            tap_row_hold_roll_flags: &[],
+            note_row_metadata: &[],
             visible_music_time_ns: 0,
             visible_beat: 0.0,
             is_in_delay: false,

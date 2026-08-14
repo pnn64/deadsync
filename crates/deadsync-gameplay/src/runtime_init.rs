@@ -736,27 +736,23 @@ where
         build_note_count_stats_for_players(&notes, &note_ranges, num_players);
     let transform_ms = transform_started.elapsed().as_secs_f64() * 1000.0;
 
-    let note_player_for_col =
-        |col: usize| -> usize { player_index_for_column(num_players, cols_per_player, col) };
-
     let cache_build_started = Instant::now();
     let mut note_time_cache_ns = Vec::with_capacity(notes.len());
     let mut hold_end_time_cache_ns = Vec::with_capacity(notes.len());
     let mut note_displayed_beat_cache = Vec::with_capacity(notes.len());
     for note in &notes {
-        let timing_player = &timing_players[note_player_for_col(note.column)];
-        let note_time_ns = timing_player.get_time_for_beat_ns(note.beat);
-        note_time_cache_ns.push(note_time_ns);
+        let player = player_index_for_column(num_players, cols_per_player, note.column);
+        let timing_player = &timing_players[player];
+        note_time_cache_ns.push(timing_player.get_time_for_beat_ns(note.beat));
         let displayed_head = timing_player.get_displayed_beat(note.beat);
         if let Some(hold) = note.hold.as_ref() {
-            let end_time_ns = timing_player.get_time_for_beat_ns(hold.end_beat);
-            hold_end_time_cache_ns.push(Some(end_time_ns));
+            hold_end_time_cache_ns.push(timing_player.get_time_for_beat_ns(hold.end_beat));
             note_displayed_beat_cache.push([
                 displayed_head,
                 timing_player.get_displayed_beat(hold.end_beat),
             ]);
         } else {
-            hold_end_time_cache_ns.push(None);
+            hold_end_time_cache_ns.push(INVALID_SONG_TIME_NS);
             note_displayed_beat_cache.push([displayed_head; 2]);
         }
     }
@@ -783,7 +779,7 @@ where
 
     log::debug!("Parsed {} notes from chart data.", notes.len());
 
-    let (row_entries, row_entry_ranges, note_row_entry_indices, tap_row_hold_roll_flags) =
+    let (row_entries, row_entry_ranges, note_row_entry_indices) =
         build_gameplay_row_indices(
             &notes,
             &note_ranges,
@@ -794,12 +790,18 @@ where
     let cache_build_ms = cache_build_started.elapsed().as_secs_f64() * 1000.0;
 
     let timing_prep_started = Instant::now();
-    let first_second = notes
-        .iter()
-        .zip(&note_time_cache_ns)
-        .filter_map(|(n, &t_ns)| n.can_be_judged.then_some(song_time_ns_to_seconds(t_ns)))
-        .reduce(f32::min)
-        .unwrap_or(0.0);
+    let audio_end_time_ns = song_audio_end_time_ns(&song);
+    let GameplayTimeBounds {
+        first_judgable_second: first_second,
+        notes_end_time_ns,
+        music_end_time_ns,
+    } = compute_gameplay_time_bounds_ns(
+        &notes,
+        &note_time_cache_ns,
+        &hold_end_time_cache_ns,
+        rate,
+        audio_end_time_ns,
+    );
     // ITGmania's ScreenGameplay::StartPlayingSong uses theme metrics
     // MinSecondsToStep / MinSecondsToMusic. Simply Love scales both by
     // MusicRate, so we apply the same here to keep real-world lead-in time
@@ -890,14 +892,6 @@ where
     let player_judgment_timing = std::array::from_fn(|player| {
         build_player_judgment_timing(timing_profile, &player_profiles[player], rate)
     });
-    let audio_end_time_ns = song_audio_end_time_ns(&song);
-    let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
-        &notes,
-        &note_time_cache_ns,
-        &hold_end_time_cache_ns,
-        rate,
-        audio_end_time_ns,
-    );
     let notes_len = notes.len();
     let mut column_scroll_dirs = [1.0_f32; MAX_COLS];
     for (player, player_profile) in player_profiles.iter().enumerate().take(num_players) {
@@ -1288,7 +1282,6 @@ where
                 lane_note_indices,
                 lane_hold_indices,
                 note_itg_rows,
-                tap_row_hold_roll_flags,
             ),
             row_indices: GameplayRowIndexState::new(
                 row_entry_ranges,

@@ -1,11 +1,15 @@
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
-use deadsync_core::timing::beat_to_note_row;
+use deadsync_core::song_time::INVALID_SONG_TIME_NS;
+use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
 use deadsync_gameplay::{
     build_gameplay_lane_mine_indices_for_bench,
-    build_gameplay_lane_mine_indices_reference_for_bench,
-    build_lane_note_row_indices_reference_for_bench, count_gameplay_setup_notes_for_bench,
-    count_gameplay_setup_notes_reference_for_bench, reuse_lane_note_indices_for_bench,
+    build_gameplay_lane_mine_indices_reference_for_bench, build_gameplay_row_indices_for_bench,
+    build_gameplay_row_indices_reference_for_bench, build_hold_end_time_cache_for_bench,
+    build_hold_end_time_cache_reference_for_bench, build_lane_note_row_indices_reference_for_bench,
+    compute_gameplay_time_bounds_ns, compute_gameplay_time_bounds_reference_ns,
+    count_gameplay_setup_notes_for_bench, count_gameplay_setup_notes_reference_for_bench,
+    reuse_lane_note_indices_for_bench,
 };
 use deadsync_rules::note::{HoldData, Note};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -23,6 +27,9 @@ const SAMPLES: usize = 7;
 const COUNT_ITERS: usize = 128;
 const FILL_ITERS: usize = 128;
 const ROW_ITERS: usize = 256;
+const HOLD_CACHE_ITERS: usize = 128;
+const BOUNDS_ITERS: usize = 256;
+const METADATA_ITERS: usize = 64;
 
 struct CountingAlloc {
     enabled: AtomicBool,
@@ -266,6 +273,32 @@ fn note_fixture() -> Vec<Note> {
     notes
 }
 
+fn row_note_fixture(notes: &[Note]) -> Vec<Note> {
+    let mut row_notes = notes.to_vec();
+    for player in 0..MAX_PLAYERS {
+        for local_index in 0..NOTES_PER_PLAYER {
+            let note = &mut row_notes[player * NOTES_PER_PLAYER + local_index];
+            let row_index = local_index / 4 * 12;
+            let beat = row_index as f32 / ROWS_PER_BEAT as f32;
+            note.row_index = row_index;
+            note.beat = beat;
+            if let Some(hold) = note.hold.as_mut() {
+                hold.end_row_index = row_index + 6;
+                hold.end_beat = beat + 0.125;
+                hold.last_held_row_index = row_index;
+                hold.last_held_beat = beat;
+            }
+        }
+    }
+    row_notes
+}
+
+fn bounds_checksum(bounds: deadsync_gameplay::GameplayTimeBounds) -> u64 {
+    u64::from(bounds.first_judgable_second.to_bits())
+        ^ (bounds.notes_end_time_ns as u64).rotate_left(17)
+        ^ (bounds.music_end_time_ns as u64).rotate_left(37)
+}
+
 fn main() {
     let notes = note_fixture();
     let note_ranges = [
@@ -355,6 +388,91 @@ fn main() {
         "3. shared canonical lane-row indices",
         NOTES,
         ROW_ITERS,
+        old,
+        new,
+    );
+
+    let row_notes = row_note_fixture(&notes);
+    let row_note_time_cache_ns = (0..NOTES)
+        .map(|index| (index % NOTES_PER_PLAYER / 4) as i64 * 125_000_000)
+        .collect::<Vec<_>>();
+    let exact_row_capacity = NOTES / 4;
+    let old = measure(HOLD_CACHE_ITERS, || {
+        build_hold_end_time_cache_reference_for_bench(
+            black_box(&notes),
+            black_box(&note_time_cache_ns),
+        )
+    });
+    let new = measure(HOLD_CACHE_ITERS, || {
+        build_hold_end_time_cache_for_bench(black_box(&notes), black_box(&note_time_cache_ns))
+    });
+    print_pair(
+        "4. compact hold-end time cache",
+        NOTES,
+        HOLD_CACHE_ITERS,
+        old,
+        new,
+    );
+
+    let hold_end_time_cache_ns = notes
+        .iter()
+        .enumerate()
+        .map(|(index, note)| {
+            if note.hold.is_some() {
+                note_time_cache_ns[index] + 31_250_000
+            } else {
+                INVALID_SONG_TIME_NS
+            }
+        })
+        .collect::<Vec<_>>();
+    let old = measure(BOUNDS_ITERS, || {
+        bounds_checksum(compute_gameplay_time_bounds_reference_ns(
+            black_box(&notes),
+            black_box(&note_time_cache_ns),
+            black_box(&hold_end_time_cache_ns),
+            1.25,
+            600_000_000_000,
+        ))
+    });
+    let new = measure(BOUNDS_ITERS, || {
+        bounds_checksum(compute_gameplay_time_bounds_ns(
+            black_box(&notes),
+            black_box(&note_time_cache_ns),
+            black_box(&hold_end_time_cache_ns),
+            1.25,
+            600_000_000_000,
+        ))
+    });
+    print_pair(
+        "5. single-pass gameplay time bounds",
+        NOTES,
+        BOUNDS_ITERS,
+        old,
+        new,
+    );
+
+    let old = measure(METADATA_ITERS, || {
+        build_gameplay_row_indices_reference_for_bench(
+            black_box(&row_notes),
+            black_box(&note_ranges),
+            black_box(&row_note_time_cache_ns),
+            MAX_PLAYERS,
+            exact_row_capacity,
+        )
+    });
+    let new = measure(METADATA_ITERS, || {
+        build_gameplay_row_indices_for_bench(
+            black_box(&row_notes),
+            black_box(&note_ranges),
+            black_box(&row_note_time_cache_ns),
+            MAX_PLAYERS,
+            exact_row_capacity,
+        )
+    });
+    print_pair(
+        "6. packed row index and hold-roll flags",
+        NOTES,
+        METADATA_ITERS,
         old,
         new,
     );
