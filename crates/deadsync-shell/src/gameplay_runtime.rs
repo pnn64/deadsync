@@ -23,6 +23,49 @@ use std::time::Instant;
 
 const GAMEPLAY_SCOREBOX_ENTRIES: usize = 5;
 
+/// Game-thread-owned cursor for the current Gameplay or Practice song's
+/// asynchronous leaderboard snapshots. It is single-threaded and retains one
+/// lock-free generation for the song lifetime, seeded before initial requests.
+/// Completed songs read only the retained pending flag; while loading, stable
+/// frames read one atomic and take no cache locks or allocations. A changed
+/// generation performs at most two leaderboard-cache lookups and cheap `Arc`
+/// clones; it never retries a completed error, scans, evicts, or performs I/O.
+/// Replacement and destruction happen at screen transitions, and existing
+/// frame-update timing accounts for the bounded miss cost.
+#[derive(Debug, Default)]
+pub(crate) struct ScoreRuntimeCursor {
+    generation: Option<u64>,
+}
+
+#[inline(always)]
+fn score_generation_changed(cached: Option<u64>, current: u64) -> bool {
+    cached != Some(current)
+}
+
+impl ScoreRuntimeCursor {
+    #[inline(always)]
+    fn begin_song(&mut self) {
+        self.generation = Some(deadsync_score::runtime_player_leaderboard_generation());
+    }
+
+    #[inline(always)]
+    fn sync_if_dirty(&mut self, state: &mut gameplay::State) {
+        if !gameplay::scorebox_refresh_pending(state) {
+            return;
+        }
+        let generation = deadsync_score::runtime_player_leaderboard_generation();
+        if !score_generation_changed(self.generation, generation) {
+            return;
+        }
+
+        // Capture the generation before taking cache locks. A completion racing
+        // this refresh can cause one redundant pass, but cannot be hidden.
+        let view = score_runtime_view(state);
+        self.generation = Some(generation);
+        gameplay::sync_score_runtime_view(state, view);
+    }
+}
+
 fn smx_profile_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {
@@ -268,7 +311,11 @@ pub(crate) fn init_view(
     gameplay_charts: &[Arc<GameplayChartData>; 2],
     profiles: &[profile_data::Profile; 2],
     session: &GameplaySession,
+    score_cursor: &mut ScoreRuntimeCursor,
 ) -> GameplayInitView {
+    // Seed before `score_init_view` can start a request so even an immediate
+    // worker completion publishes a generation newer than this song's cursor.
+    score_cursor.begin_song();
     GameplayInitView {
         runtime: runtime_view(config, lobby),
         hud: profile::gameplay_hud_snapshot(),
@@ -321,18 +368,10 @@ pub(crate) fn score_runtime_view(state: &gameplay::State) -> GameplayScoreRuntim
 /// score-polling path: its app-runtime adapter may inspect profile and catalog
 /// state, while the result cannot change during a stage.
 pub(crate) fn sync_initial_scores(state: &mut gameplay::State) {
-    let mut view = score_runtime_view(state);
+    let mut view = GameplayScoreRuntimeView::default();
     view.itl_cmod_warning = std::array::from_fn(|player| {
         player < state.num_players() && scores::should_warn_cmod_for_itl_chart(state, player)
     });
-    gameplay::sync_score_runtime_view(state, view);
-}
-
-pub(crate) fn sync_scores(state: &mut gameplay::State) {
-    if !gameplay::scorebox_refresh_pending(state) {
-        return;
-    }
-    let view = score_runtime_view(state);
     gameplay::sync_score_runtime_view(state, view);
 }
 
@@ -552,7 +591,12 @@ fn sequence_effects(first: ThemeEffect, second: ThemeEffect) -> ThemeEffect {
     }
 }
 
-pub(crate) fn update(state: &mut gameplay::State, delta_time: f32, smx_input: bool) -> ThemeEffect {
+pub(crate) fn update(
+    state: &mut gameplay::State,
+    delta_time: f32,
+    smx_input: bool,
+    score_cursor: &mut ScoreRuntimeCursor,
+) -> ThemeEffect {
     crate::heart_rate::refresh_gameplay(state);
     let (run_core, lobby_effect) = gameplay::prepare_update(state);
     if !run_core {
@@ -572,7 +616,7 @@ pub(crate) fn update(state: &mut gameplay::State, delta_time: f32, smx_input: bo
         snapshot(),
         deadlib_platform::host_time::now_nanos,
     );
-    sync_scores(state);
+    score_cursor.sync_if_dirty(state);
     drain(state);
     let current_song_lua_time = state.current_music_time_display();
     gameplay::for_each_song_lua_sound_event(
@@ -590,7 +634,11 @@ pub(crate) fn handle_input(state: &mut gameplay::State, ev: &InputEvent) -> Them
     effect
 }
 
-pub(crate) fn update_practice(state: &mut practice::State, delta_time: f32) -> ThemeEffect {
+pub(crate) fn update_practice(
+    state: &mut practice::State,
+    delta_time: f32,
+    score_cursor: &mut ScoreRuntimeCursor,
+) -> ThemeEffect {
     let effect = practice::update(
         state,
         delta_time,
@@ -598,7 +646,7 @@ pub(crate) fn update_practice(state: &mut practice::State, delta_time: f32) -> T
         deadlib_platform::host_time::now_nanos,
         deadsync_audio_stream::snap_music_start_sec,
     );
-    sync_scores(&mut state.gameplay);
+    score_cursor.sync_if_dirty(&mut state.gameplay);
     drain(&mut state.gameplay);
     effect
 }
@@ -628,7 +676,7 @@ pub(crate) fn handle_practice_raw_key(
 mod tests {
     use super::{
         background_chart, mini_indicator_percent, mini_indicator_rival_score, policy_view,
-        scorebox_profiles, smx_sensor_value,
+        score_generation_changed, scorebox_profiles, smx_sensor_value,
     };
     use deadsync_chart::GameplayChartData;
     use deadsync_gameplay::GameplaySession;
@@ -663,6 +711,13 @@ mod tests {
             itl_self_score: None,
             itl_self_rank: None,
         })
+    }
+
+    #[test]
+    fn score_refresh_waits_for_a_new_completion_generation() {
+        assert!(!score_generation_changed(Some(7), 7));
+        assert!(score_generation_changed(Some(7), 8));
+        assert!(score_generation_changed(None, 7));
     }
 
     #[test]

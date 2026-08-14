@@ -1245,16 +1245,6 @@ fn runtime_view_refresh(now: Instant) -> RuntimeViewRefresh {
     }
 }
 
-pub fn runtime_view() -> (Arc<Snapshot>, Option<String>) {
-    let refresh = runtime_view_refresh(Instant::now());
-    (refresh.snapshot, refresh.reconnect_status_text)
-}
-
-pub fn runtime_refresh_view_default() -> (Arc<Snapshot>, Option<String>) {
-    let refresh = runtime_refresh_view(DEFAULT_RUNTIME_HOOKS);
-    (refresh.snapshot, refresh.reconnect_status_text)
-}
-
 pub fn runtime_refresh_view_state_default() -> RuntimeViewRefresh {
     runtime_refresh_view(DEFAULT_RUNTIME_HOOKS)
 }
@@ -1810,12 +1800,12 @@ mod tests {
         runtime_lock_reconnect().set_join_target("ROOM".to_string(), "PASS".to_string());
         Arc::make_mut(&mut *runtime_lock_snapshot()).connection = ConnectionState::Connecting;
 
-        let (snapshot, reconnect_status) = runtime_view();
-        let (same_snapshot, _) = runtime_view();
-        assert!(Arc::ptr_eq(&snapshot, &same_snapshot));
-        assert_eq!(snapshot.connection, ConnectionState::Connecting);
+        let refresh = runtime_view_refresh(Instant::now());
+        let same_refresh = runtime_view_refresh(Instant::now());
+        assert!(Arc::ptr_eq(&refresh.snapshot, &same_refresh.snapshot));
+        assert_eq!(refresh.snapshot.connection, ConnectionState::Connecting);
         assert_eq!(
-            reconnect_status.as_deref(),
+            refresh.reconnect_status_text.as_deref(),
             Some("Reconnecting to lobby...")
         );
 

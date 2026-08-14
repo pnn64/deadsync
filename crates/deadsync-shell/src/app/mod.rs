@@ -8,6 +8,7 @@ mod config_requests;
 mod evaluation_views;
 mod graphics;
 mod input_routing;
+mod lobby_views;
 mod screen_nav;
 mod screenshot;
 mod select_music_views;
@@ -186,8 +187,7 @@ use deadsync_theme_simply_love::views::{
     ScoreboxMachineView, ScoreboxSideView, ScreenBarBackgroundView, SelectCourseContextView,
     SelectCoursePolicyView, SelectCourseRuntimeView, SelectCourseScoreRequest,
     SelectCourseScoreView, SelectFlowPlayerView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
-    SimplyLoveGrooveStatsService, SimplyLoveLobbyRuntimeView, SimplyLoveVisualPolicyView,
-    VisualBackgroundView,
+    SimplyLoveGrooveStatsService, SimplyLoveVisualPolicyView, VisualBackgroundView,
 };
 use deadsync_theme_simply_love::{
     SimplyLoveConfigRequest, SimplyLoveContentRequest, SimplyLoveEffect as ThemeEffect,
@@ -535,6 +535,7 @@ pub struct ScreensState {
     menu_state: menu::State,
     gameplay_state: Option<gameplay::State>,
     practice_state: Option<practice::State>,
+    gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor,
     options_state: options::State,
     credits_state: credits::State,
     manage_local_profiles_state: manage_local_profiles::State,
@@ -1038,6 +1039,7 @@ impl ScreensState {
             menu_state,
             gameplay_state: None,
             practice_state: None,
+            gameplay_score_cursor: Default::default(),
             options_state,
             credits_state,
             manage_local_profiles_state,
@@ -1086,12 +1088,25 @@ impl ScreensState {
             CurrentScreen::Gameplay => self
                 .gameplay_state
                 .as_mut()
-                .map(|gs| crate::gameplay_runtime::update(gs, delta_time, gameplay_smx_input))
+                .map(|gs| {
+                    crate::gameplay_runtime::update(
+                        gs,
+                        delta_time,
+                        gameplay_smx_input,
+                        &mut self.gameplay_score_cursor,
+                    )
+                })
                 .map_or((None, false), |action| (Some(action), false)),
             CurrentScreen::Practice => self
                 .practice_state
                 .as_mut()
-                .map(|ps| crate::gameplay_runtime::update_practice(ps, delta_time))
+                .map(|ps| {
+                    crate::gameplay_runtime::update_practice(
+                        ps,
+                        delta_time,
+                        &mut self.gameplay_score_cursor,
+                    )
+                })
                 .map_or((None, false), |action| (Some(action), false)),
             CurrentScreen::Init => (Some(init::update(&mut self.init_state, delta_time)), false),
             CurrentScreen::Options => (
@@ -1358,14 +1373,9 @@ pub struct App {
     select_music_downloads_visible: bool,
     select_music_shop_generation: u64,
     select_music_shop_visible: bool,
-    /// Last lobby revision integrated by Select Music plus the next reconnect
-    /// countdown/retry deadline. Stable frames read one atomic and take no
-    /// lobby locks; a worker revision or deadline rebuilds one retained theme
-    /// view. Re-entry forces handoff without discarding lobby state during
-    /// gameplay. Frame update timing accounts for the bounded refresh.
-    select_music_lobby_generation: u64,
-    select_music_lobby_refresh_at: Option<Instant>,
-    select_music_lobby_rebuild: bool,
+    /// Select Music's app-session lobby cursor. The shared cursor contract
+    /// documents its ownership, capacity, miss behavior, and instrumentation.
+    select_music_lobby: lobby_views::RuntimeCursor,
     /// Game-thread-only, session-lifetime cache of the immutable profile view
     /// shared by the music and course selection screens. The one entry warms
     /// on entry and is checked through one atomic generation read; stable
@@ -1424,9 +1434,7 @@ pub struct App {
     /// gameplay-frame destruction. Existing frame-update timing accounts for
     /// each bounded two-player miss; stable hits expose no separate work.
     evaluation_context_rebuild: bool,
-    evaluation_lobby_generation: u64,
-    evaluation_lobby_refresh_at: Option<Instant>,
-    evaluation_lobby_rebuild: bool,
+    evaluation_lobby: lobby_views::RuntimeCursor,
     evaluation_favorite_key: Option<evaluation_views::EvaluationFavoriteKey>,
     evaluation_favorites_rebuild: bool,
     evaluation_scorebox_key: Option<evaluation_views::EvaluationScoreboxKey>,
@@ -1436,6 +1444,10 @@ pub struct App {
     evaluation_submission_refresh_at: Option<Instant>,
     evaluation_submission_auto_retry_at: Option<Instant>,
     evaluation_submissions_rebuild: bool,
+    /// Song-lifetime joined-Gameplay lobby cursor. Offline songs leave it idle;
+    /// joined songs seed it during construction and refresh only on a published
+    /// lobby revision or explicit reconnect/countdown deadline.
+    gameplay_lobby: lobby_views::RuntimeCursor,
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
     content_reload: crate::content_reload::Service,
@@ -1846,16 +1858,6 @@ impl App {
         changed
     }
 
-    fn refresh_lobby_runtime_view() -> SimplyLoveLobbyRuntimeView {
-        let (snapshot, reconnect_status_text) =
-            deadsync_online::lobbies::runtime_refresh_view_default();
-        SimplyLoveLobbyRuntimeView {
-            snapshot,
-            reconnect_status_text,
-            disconnect_hold_seconds: deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS,
-        }
-    }
-
     fn evaluation_init_view(
         gameplay: &gameplay::State,
         config: &config::Config,
@@ -1914,25 +1916,29 @@ impl App {
         retried
     }
 
-    fn sync_active_online_runtime_view(&mut self) {
+    fn sync_active_online_runtime_view(&mut self, now: Instant) {
         match self.state.screens.current_screen {
             CurrentScreen::Gameplay => {
-                let Some(state) = self.state.screens.gameplay_state.as_ref() else {
-                    return;
-                };
                 // Offline stages cannot become lobby stages mid-song. Avoid the
                 // snapshot/reconnect locks entirely unless this stage entered
                 // Gameplay from a joined lobby (including reconnecting lobbies).
-                if !gameplay::uses_live_lobby_runtime(state) {
+                let uses_live_lobby = self
+                    .state
+                    .screens
+                    .gameplay_state
+                    .as_ref()
+                    .is_some_and(gameplay::uses_live_lobby_runtime);
+                if !uses_live_lobby {
                     return;
                 }
-                let lobby = Self::refresh_lobby_runtime_view();
-                if let Some(state) = self.state.screens.gameplay_state.as_mut() {
+                if let Some(lobby) = self.gameplay_lobby.refresh_if_dirty(now)
+                    && let Some(state) = self.state.screens.gameplay_state.as_mut()
+                {
                     gameplay::sync_lobby_runtime_view(state, lobby);
                 }
             }
             CurrentScreen::Evaluation => {
-                self.sync_evaluation_runtime_view(self.evaluation_policy);
+                self.sync_evaluation_runtime_view(self.evaluation_policy, now);
             }
             _ => {}
         }
@@ -2926,7 +2932,7 @@ impl App {
         self.drive_smx_player_options_lights(delta_time, frame_policy.smx);
         self.state.shell.interaction.update_message(redraw_started);
         if work_caps & frame_work::ONLINE_VIEW != 0 {
-            self.sync_active_online_runtime_view();
+            self.sync_active_online_runtime_view(redraw_started);
         }
         if self.state.screens.current_screen != CurrentScreen::Evaluation {
             self.mark_evaluation_runtime_dirty();
@@ -2938,7 +2944,7 @@ impl App {
             );
             self.sync_select_music_runtime_view(self.select_music_policy);
         } else {
-            self.select_music_lobby_rebuild = true;
+            self.select_music_lobby.force_refresh();
             self.select_music_profile_rebuild = true;
             self.select_music_wheel_rebuild = true;
             self.select_music_score_views_rebuild = true;
@@ -2966,6 +2972,7 @@ impl App {
                 gs,
                 delta_time,
                 self.state.play_input_policy.smx_input,
+                &mut self.state.screens.gameplay_score_cursor,
             ))
         } else {
             None
@@ -3589,9 +3596,7 @@ impl App {
             select_music_downloads_visible: false,
             select_music_shop_generation: 0,
             select_music_shop_visible: false,
-            select_music_lobby_generation: 0,
-            select_music_lobby_refresh_at: None,
-            select_music_lobby_rebuild: true,
+            select_music_lobby: Default::default(),
             selection_profile_generation: 0,
             selection_profile_policy: None,
             selection_profile_snapshot: None,
@@ -3608,9 +3613,7 @@ impl App {
             select_course_runtime_key: None,
             select_course_runtime_rebuild: true,
             evaluation_context_rebuild: true,
-            evaluation_lobby_generation: 0,
-            evaluation_lobby_refresh_at: None,
-            evaluation_lobby_rebuild: true,
+            evaluation_lobby: Default::default(),
             evaluation_favorite_key: None,
             evaluation_favorites_rebuild: true,
             evaluation_scorebox_key: None,
@@ -3620,6 +3623,7 @@ impl App {
             evaluation_submission_refresh_at: None,
             evaluation_submission_auto_retry_at: None,
             evaluation_submissions_rebuild: true,
+            gameplay_lobby: Default::default(),
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
             content_reload: crate::content_reload::Service::default(),
@@ -5253,7 +5257,7 @@ impl App {
         page.auto_advance_seconds = None;
         self.state.screens.evaluation_state = page;
         self.mark_evaluation_runtime_dirty();
-        self.sync_evaluation_runtime_view(self.evaluation_policy);
+        self.sync_evaluation_runtime_view(self.evaluation_policy, Instant::now());
         deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
     }
 
@@ -7363,12 +7367,13 @@ impl App {
                 let gameplay_session = gameplay_session();
                 let gameplay_init_view = crate::gameplay_runtime::init_view(
                     &cfg,
-                    Self::refresh_lobby_runtime_view(),
+                    lobby_views::refresh(),
                     song_arc.as_ref(),
                     &charts,
                     &gameplay_charts,
                     &player_profiles,
                     &gameplay_session,
+                    &mut self.state.screens.gameplay_score_cursor,
                 );
                 let practice_runtime_view =
                     crate::gameplay_runtime::practice_view(&cfg, &gameplay_init_view);
@@ -7791,12 +7796,13 @@ impl App {
                 let gameplay_session = gameplay_session();
                 let gameplay_init_view = crate::gameplay_runtime::init_view(
                     &cfg,
-                    Self::refresh_lobby_runtime_view(),
+                    self.gameplay_lobby.refresh_now(),
                     song_arc.as_ref(),
                     &charts,
                     &gameplay_charts,
                     &player_profiles,
                     &gameplay_session,
+                    &mut self.state.screens.gameplay_score_cursor,
                 );
                 let include_post_fail_passes = self.state.session.course_run.is_some()
                     && cfg.autosubmit_course_scores_individually
@@ -7979,7 +7985,7 @@ impl App {
             self.finalize_entered_evaluation(&config);
             self.evaluation_policy = evaluation_views::EvaluationFramePolicy::from_config(&config);
             self.mark_evaluation_runtime_dirty();
-            self.sync_evaluation_runtime_view(self.evaluation_policy);
+            self.sync_evaluation_runtime_view(self.evaluation_policy, Instant::now());
         }
 
         if target == CurrentScreen::EvaluationSummary {

@@ -8,7 +8,7 @@ use deadsync_theme_simply_love::views::{
     SelectMusicDownloadView, SelectMusicLeaderboardRequest, SelectMusicLeaderboardSideView,
     SelectMusicLeaderboardView, SelectMusicPadProfileView, SelectMusicPolicyView,
     SelectMusicProfileView, SelectMusicRuntimeView, SelectMusicScoreboxRequest,
-    SelectMusicSessionView, SelectMusicSettingsView, SimplyLoveLobbyRuntimeView,
+    SelectMusicSessionView, SelectMusicSettingsView,
 };
 use std::{sync::Arc, time::Instant};
 
@@ -345,24 +345,7 @@ impl App {
             return;
         }
         let now = Instant::now();
-        let lobby_generation = deadsync_online::lobbies::runtime_view_generation();
-        let lobby_refresh_due = self
-            .select_music_lobby_refresh_at
-            .is_some_and(|refresh_at| now >= refresh_at);
-        let lobby_dirty = self.select_music_lobby_rebuild
-            || self.select_music_lobby_generation != lobby_generation
-            || lobby_refresh_due;
-        let lobby = lobby_dirty.then(|| {
-            let refresh = deadsync_online::lobbies::runtime_refresh_view_state_default();
-            self.select_music_lobby_generation = refresh.generation;
-            self.select_music_lobby_refresh_at = refresh.next_refresh_at;
-            SimplyLoveLobbyRuntimeView {
-                snapshot: refresh.snapshot,
-                reconnect_status_text: refresh.reconnect_status_text,
-                disconnect_hold_seconds: deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS,
-            }
-        });
-        self.select_music_lobby_rebuild = false;
+        let lobby = self.select_music_lobby.refresh_if_dirty(now);
         let downloads_visible =
             select_music::downloads_overlay_visible(&self.state.screens.select_music_state);
         let downloads = if downloads_visible {

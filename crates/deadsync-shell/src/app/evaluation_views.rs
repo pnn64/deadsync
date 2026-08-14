@@ -1,7 +1,7 @@
 use super::{
     App, EVALUATION_LEADERBOARD_ROWS, EvaluationPolicyView, EvaluationRuntimeView,
     EvaluationSubmissionView, MAX_PLAYERS, ScoreboxSideView, SimplyLoveGrooveStatsService,
-    SimplyLoveLobbyRuntimeView, evaluation_context_view, scorebox_pane_filter,
+    evaluation_context_view, scorebox_pane_filter,
 };
 use deadsync_config::prelude as config;
 use deadsync_online::score_compat as scores;
@@ -303,46 +303,27 @@ fn refresh_submissions(
 impl App {
     pub(super) fn mark_evaluation_runtime_dirty(&mut self) {
         self.evaluation_context_rebuild = true;
-        self.evaluation_lobby_rebuild = true;
+        self.evaluation_lobby.force_refresh();
         self.evaluation_favorites_rebuild = true;
         self.evaluation_scoreboxes_rebuild = true;
         self.evaluation_submissions_rebuild = true;
     }
 
-    fn refresh_evaluation_lobby(&mut self, now: Instant) -> Option<SimplyLoveLobbyRuntimeView> {
-        let generation = deadsync_online::lobbies::runtime_view_generation();
-        let deadline_due = self
-            .evaluation_lobby_refresh_at
-            .is_some_and(|refresh_at| now >= refresh_at);
-        let dirty = self.evaluation_lobby_rebuild
-            || self.evaluation_lobby_generation != generation
-            || deadline_due;
-        let view = dirty.then(|| {
-            let refresh = deadsync_online::lobbies::runtime_refresh_view_state_default();
-            self.evaluation_lobby_generation = refresh.generation;
-            self.evaluation_lobby_refresh_at = refresh.next_refresh_at;
-            SimplyLoveLobbyRuntimeView {
-                snapshot: refresh.snapshot,
-                reconnect_status_text: refresh.reconnect_status_text,
-                disconnect_hold_seconds: deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS,
-            }
-        });
-        self.evaluation_lobby_rebuild = false;
-        view
-    }
-
     /// Evaluation's dirty-view coordinator stays ordered in one state-machine
     /// function so borrowed chart hashes cannot outlive or diverge from the
     /// screen page whose retained fields they refresh.
-    pub(super) fn sync_evaluation_runtime_view(&mut self, policy: EvaluationFramePolicy) {
+    pub(super) fn sync_evaluation_runtime_view(
+        &mut self,
+        policy: EvaluationFramePolicy,
+        now: Instant,
+    ) {
         if self.state.screens.current_screen != CurrentScreen::Evaluation {
             return;
         }
 
-        let now = Instant::now();
         let profile_snapshot_changed =
             self.refresh_selection_profile_snapshot(policy.profile_policy());
-        let lobby = self.refresh_evaluation_lobby(now);
+        let lobby = self.evaluation_lobby.refresh_if_dirty(now);
         let profile_snapshot = self
             .selection_profile_snapshot
             .as_ref()
