@@ -1,3 +1,391 @@
+#[derive(Debug, PartialEq, Eq)]
+struct GameplaySetupIndices {
+    lane_note_indices: [Vec<usize>; MAX_COLS],
+    lane_hold_indices: [Vec<usize>; MAX_COLS],
+    note_itg_rows: Vec<i32>,
+    mine_note_ix: [Vec<usize>; MAX_PLAYERS],
+    mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS],
+    replay_cells: usize,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct GameplaySetupCounts {
+    lane_note_counts: [usize; MAX_COLS],
+    lane_hold_counts: [usize; MAX_COLS],
+    note_itg_rows: Vec<i32>,
+    replay_cells: usize,
+}
+
+fn count_gameplay_setup_notes(notes: &[Note], num_cols: usize) -> GameplaySetupCounts {
+    let mut lane_note_counts = [0usize; MAX_COLS];
+    let mut lane_hold_counts = [0usize; MAX_COLS];
+    let mut replay_cells = 0usize;
+    let mut note_itg_rows = Vec::with_capacity(notes.len());
+    for note in notes {
+        let col = note.column;
+        if col < num_cols && col < MAX_COLS {
+            lane_note_counts[col] = lane_note_counts[col].saturating_add(1);
+            if note_has_displayable_hold(note) {
+                lane_hold_counts[col] = lane_hold_counts[col].saturating_add(1);
+            }
+        }
+        if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+            replay_cells = replay_cells.saturating_add(1);
+        }
+        note_itg_rows.push(beat_to_note_row(note.beat));
+    }
+    GameplaySetupCounts {
+        lane_note_counts,
+        lane_hold_counts,
+        note_itg_rows,
+        replay_cells,
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct GameplayLaneMineIndices {
+    lane_note_indices: [Vec<usize>; MAX_COLS],
+    lane_hold_indices: [Vec<usize>; MAX_COLS],
+    mine_note_ix: [Vec<usize>; MAX_PLAYERS],
+    mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS],
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_gameplay_lane_mine_indices(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+    note_time_cache_ns: &[SongTimeNs],
+    mines_total: &[u32; MAX_PLAYERS],
+    lane_note_counts: &[usize; MAX_COLS],
+    lane_hold_counts: &[usize; MAX_COLS],
+    num_players: usize,
+    num_cols: usize,
+) -> GameplayLaneMineIndices {
+    let mut lane_note_indices: [Vec<usize>; MAX_COLS] =
+        std::array::from_fn(|col| Vec::with_capacity(lane_note_counts[col]));
+    let mut lane_hold_indices: [Vec<usize>; MAX_COLS] =
+        std::array::from_fn(|col| Vec::with_capacity(lane_hold_counts[col]));
+    let mut mine_note_ix: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|player| {
+        Vec::with_capacity(mines_total.get(player).copied().unwrap_or(0) as usize)
+    });
+    let mut mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS] =
+        std::array::from_fn(|player| {
+            Vec::with_capacity(mines_total.get(player).copied().unwrap_or(0) as usize)
+        });
+
+    let mut covered_end = 0usize;
+    for &(start, end) in note_ranges.iter().take(num_players.min(MAX_PLAYERS)) {
+        debug_assert_eq!(start, covered_end, "gameplay player ranges must be contiguous");
+        debug_assert!(end >= start && end <= notes.len());
+        covered_end = end;
+    }
+    debug_assert_eq!(covered_end, notes.len(), "gameplay ranges must cover notes");
+    debug_assert_eq!(note_time_cache_ns.len(), notes.len());
+
+    for player in 0..num_players.min(MAX_PLAYERS) {
+        let (start, end) = note_ranges[player];
+        for note_index in start..end {
+            let note = &notes[note_index];
+            let col = note.column;
+            if col < num_cols && col < MAX_COLS {
+                lane_note_indices[col].push(note_index);
+                if note_has_displayable_hold(note) {
+                    lane_hold_indices[col].push(note_index);
+                }
+            }
+            if matches!(note.note_type, NoteType::Mine) {
+                mine_note_ix[player].push(note_index);
+                mine_note_time_ns[player].push(note_time_cache_ns[note_index]);
+            }
+        }
+    }
+    GameplayLaneMineIndices {
+        lane_note_indices,
+        lane_hold_indices,
+        mine_note_ix,
+        mine_note_time_ns,
+    }
+}
+
+fn build_gameplay_setup_indices(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+    note_time_cache_ns: &[SongTimeNs],
+    mines_total: &[u32; MAX_PLAYERS],
+    num_players: usize,
+    num_cols: usize,
+) -> GameplaySetupIndices {
+    let GameplaySetupCounts {
+        lane_note_counts,
+        lane_hold_counts,
+        note_itg_rows,
+        replay_cells,
+    } = count_gameplay_setup_notes(notes, num_cols);
+    let GameplayLaneMineIndices {
+        lane_note_indices,
+        lane_hold_indices,
+        mine_note_ix,
+        mine_note_time_ns,
+    } = build_gameplay_lane_mine_indices(
+        notes,
+        note_ranges,
+        note_time_cache_ns,
+        mines_total,
+        &lane_note_counts,
+        &lane_hold_counts,
+        num_players,
+        num_cols,
+    );
+
+    debug_assert!(
+        lane_note_indices
+            .iter()
+            .take(num_cols.min(MAX_COLS))
+            .all(|indices| indices.windows(2).all(|pair| {
+                (note_itg_rows[pair[0]], pair[0]) <= (note_itg_rows[pair[1]], pair[1])
+            })),
+        "gameplay notes must remain in canonical row order"
+    );
+
+    GameplaySetupIndices {
+        lane_note_indices,
+        lane_hold_indices,
+        note_itg_rows,
+        mine_note_ix,
+        mine_note_time_ns,
+        replay_cells,
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn count_gameplay_setup_notes_reference(
+    notes: &[Note],
+    num_cols: usize,
+) -> GameplaySetupCounts {
+    let mut lane_note_counts = [0usize; MAX_COLS];
+    let mut lane_hold_counts = [0usize; MAX_COLS];
+    let mut replay_cells = 0usize;
+    for note in notes {
+        let col = note.column;
+        if col < num_cols && col < MAX_COLS {
+            lane_note_counts[col] = lane_note_counts[col].saturating_add(1);
+            if note_has_displayable_hold(note) {
+                lane_hold_counts[col] = lane_hold_counts[col].saturating_add(1);
+            }
+        }
+        if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+            replay_cells = replay_cells.saturating_add(1);
+        }
+    }
+    let note_itg_rows = notes
+        .iter()
+        .map(|note| beat_to_note_row(note.beat))
+        .collect();
+    GameplaySetupCounts {
+        lane_note_counts,
+        lane_hold_counts,
+        note_itg_rows,
+        replay_cells,
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::too_many_arguments)]
+fn build_gameplay_lane_mine_indices_reference(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+    note_time_cache_ns: &[SongTimeNs],
+    mines_total: &[u32; MAX_PLAYERS],
+    lane_note_counts: &[usize; MAX_COLS],
+    lane_hold_counts: &[usize; MAX_COLS],
+    num_players: usize,
+    num_cols: usize,
+) -> GameplayLaneMineIndices {
+    let mut lane_note_indices: [Vec<usize>; MAX_COLS] =
+        std::array::from_fn(|col| Vec::with_capacity(lane_note_counts[col]));
+    let mut lane_hold_indices: [Vec<usize>; MAX_COLS] =
+        std::array::from_fn(|col| Vec::with_capacity(lane_hold_counts[col]));
+    for (note_index, note) in notes.iter().enumerate() {
+        let col = note.column;
+        if col < num_cols && col < MAX_COLS {
+            lane_note_indices[col].push(note_index);
+            if note_has_displayable_hold(note) {
+                lane_hold_indices[col].push(note_index);
+            }
+        }
+    }
+
+    let mut mine_note_ix: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+    let mut mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
+    for player in 0..num_players.min(MAX_PLAYERS) {
+        let (start, end) = note_ranges[player];
+        let mut mine_ix = Vec::with_capacity(mines_total[player] as usize);
+        let mut mine_times_ns = Vec::with_capacity(mines_total[player] as usize);
+        for note_index in start..end {
+            if matches!(notes[note_index].note_type, NoteType::Mine) {
+                mine_ix.push(note_index);
+                mine_times_ns.push(note_time_cache_ns[note_index]);
+            }
+        }
+        mine_note_ix[player] = mine_ix;
+        mine_note_time_ns[player] = mine_times_ns;
+    }
+    GameplayLaneMineIndices {
+        lane_note_indices,
+        lane_hold_indices,
+        mine_note_ix,
+        mine_note_time_ns,
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn build_lane_note_row_indices_reference(
+    lane_note_indices: &[Vec<usize>; MAX_COLS],
+    note_itg_rows: &[i32],
+    num_cols: usize,
+) -> [Vec<usize>; MAX_COLS] {
+    let mut lane_note_row_indices = lane_note_indices.clone();
+    for indices in lane_note_row_indices
+        .iter_mut()
+        .take(num_cols.min(MAX_COLS))
+    {
+        indices.sort_unstable_by_key(|&note_index| (note_itg_rows[note_index], note_index));
+    }
+    lane_note_row_indices
+}
+
+#[cfg(feature = "bench-support")]
+fn setup_counts_checksum(counts: &GameplaySetupCounts) -> u64 {
+    counts
+        .lane_note_counts
+        .iter()
+        .chain(&counts.lane_hold_counts)
+        .map(|&value| value as u64)
+        .chain(counts.note_itg_rows.iter().map(|&row| row as u64))
+        .fold(counts.replay_cells as u64, |checksum, value| {
+            checksum.rotate_left(7) ^ value.wrapping_mul(0x9E37_79B1)
+        })
+}
+
+#[cfg(feature = "bench-support")]
+fn lane_mine_checksum(indices: &GameplayLaneMineIndices) -> u64 {
+    indices
+        .lane_note_indices
+        .iter()
+        .chain(&indices.lane_hold_indices)
+        .chain(indices.mine_note_ix.iter())
+        .flat_map(|indices| indices.iter().copied())
+        .map(|index| index as u64)
+        .chain(
+            indices
+                .mine_note_time_ns
+                .iter()
+                .flat_map(|times| times.iter().map(|&time| time as u64)),
+        )
+        .fold(0u64, |checksum, value| {
+            checksum.rotate_left(7) ^ value.wrapping_mul(0x9E37_79B1)
+        })
+}
+
+#[cfg(feature = "bench-support")]
+fn lane_rows_checksum(indices: &[Vec<usize>; MAX_COLS]) -> u64 {
+    indices
+        .iter()
+        .flat_map(|indices| indices.iter().copied())
+        .fold(0u64, |checksum, index| {
+            checksum.rotate_left(7) ^ (index as u64).wrapping_mul(0x9E37_79B1)
+        })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn count_gameplay_setup_notes_reference_for_bench(notes: &[Note], num_cols: usize) -> u64 {
+    setup_counts_checksum(&count_gameplay_setup_notes_reference(notes, num_cols))
+}
+
+#[cfg(feature = "bench-support")]
+pub fn count_gameplay_setup_notes_for_bench(notes: &[Note], num_cols: usize) -> u64 {
+    setup_counts_checksum(&count_gameplay_setup_notes(notes, num_cols))
+}
+
+#[cfg(feature = "bench-support")]
+#[allow(clippy::too_many_arguments)]
+pub fn build_gameplay_lane_mine_indices_reference_for_bench(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+    note_time_cache_ns: &[SongTimeNs],
+    mines_total: &[u32; MAX_PLAYERS],
+    lane_note_counts: &[usize; MAX_COLS],
+    lane_hold_counts: &[usize; MAX_COLS],
+    num_players: usize,
+    num_cols: usize,
+) -> u64 {
+    lane_mine_checksum(&build_gameplay_lane_mine_indices_reference(
+        notes,
+        note_ranges,
+        note_time_cache_ns,
+        mines_total,
+        lane_note_counts,
+        lane_hold_counts,
+        num_players,
+        num_cols,
+    ))
+}
+
+#[cfg(feature = "bench-support")]
+#[allow(clippy::too_many_arguments)]
+pub fn build_gameplay_lane_mine_indices_for_bench(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+    note_time_cache_ns: &[SongTimeNs],
+    mines_total: &[u32; MAX_PLAYERS],
+    lane_note_counts: &[usize; MAX_COLS],
+    lane_hold_counts: &[usize; MAX_COLS],
+    num_players: usize,
+    num_cols: usize,
+) -> u64 {
+    lane_mine_checksum(&build_gameplay_lane_mine_indices(
+        notes,
+        note_ranges,
+        note_time_cache_ns,
+        mines_total,
+        lane_note_counts,
+        lane_hold_counts,
+        num_players,
+        num_cols,
+    ))
+}
+
+#[cfg(feature = "bench-support")]
+pub fn build_lane_note_row_indices_reference_for_bench(
+    lane_note_indices: &[Vec<usize>; MAX_COLS],
+    note_itg_rows: &[i32],
+    num_cols: usize,
+) -> u64 {
+    lane_rows_checksum(&build_lane_note_row_indices_reference(
+        lane_note_indices,
+        note_itg_rows,
+        num_cols,
+    ))
+}
+
+#[cfg(feature = "bench-support")]
+pub fn reuse_lane_note_indices_for_bench(
+    lane_note_indices: &[Vec<usize>; MAX_COLS],
+    note_itg_rows: &[i32],
+    num_cols: usize,
+) -> u64 {
+    debug_assert!(
+        lane_note_indices
+            .iter()
+            .take(num_cols.min(MAX_COLS))
+            .all(|indices| indices.windows(2).all(|pair| {
+                (note_itg_rows[pair[0]], pair[0]) <= (note_itg_rows[pair[1]], pair[1])
+            }))
+    );
+    lane_rows_checksum(lane_note_indices)
+}
+
 pub fn init_gameplay_runtime<
     Profile,
     BuildSongLuaRuntime,
@@ -533,60 +921,21 @@ where
         std::array::from_fn(|player| note_ranges[player].0);
     let row_entry_range_start: [usize; MAX_PLAYERS] =
         std::array::from_fn(|player| row_entry_ranges[player].0);
-    let mut mine_note_ix: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
-    let mut mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
-    for player in 0..num_players {
-        let (start, end) = note_ranges[player];
-        let mut mine_ix = Vec::with_capacity(mines_total[player] as usize);
-        let mut mine_times_ns = Vec::with_capacity(mines_total[player] as usize);
-        for note_idx in start..end {
-            if matches!(notes[note_idx].note_type, NoteType::Mine) {
-                mine_ix.push(note_idx);
-                mine_times_ns.push(note_time_cache_ns[note_idx]);
-            }
-        }
-        mine_note_ix[player] = mine_ix;
-        mine_note_time_ns[player] = mine_times_ns;
-    }
-    let mut lane_note_counts = [0usize; MAX_COLS];
-    let mut lane_hold_counts = [0usize; MAX_COLS];
-    let mut replay_cells = 0usize;
-    for note in &notes {
-        let col = note.column;
-        if col < num_cols && col < MAX_COLS {
-            lane_note_counts[col] = lane_note_counts[col].saturating_add(1);
-            if note_has_displayable_hold(note) {
-                lane_hold_counts[col] = lane_hold_counts[col].saturating_add(1);
-            }
-        }
-        if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
-            replay_cells = replay_cells.saturating_add(1);
-        }
-    }
-    let mut lane_note_indices: [Vec<usize>; MAX_COLS] =
-        std::array::from_fn(|col| Vec::with_capacity(lane_note_counts[col]));
-    let mut lane_hold_indices: [Vec<usize>; MAX_COLS] =
-        std::array::from_fn(|col| Vec::with_capacity(lane_hold_counts[col]));
-    for (note_index, note) in notes.iter().enumerate() {
-        let col = note.column;
-        if col < num_cols && col < MAX_COLS {
-            lane_note_indices[col].push(note_index);
-            if note_has_displayable_hold(note) {
-                lane_hold_indices[col].push(note_index);
-            }
-        }
-    }
-    let note_itg_rows = notes
-        .iter()
-        .map(|note| beat_to_note_row(note.beat))
-        .collect::<Vec<_>>();
-    let mut lane_note_row_indices = lane_note_indices.clone();
-    for indices in lane_note_row_indices
-        .iter_mut()
-        .take(num_cols.min(MAX_COLS))
-    {
-        indices.sort_unstable_by_key(|&note_index| (note_itg_rows[note_index], note_index));
-    }
+    let GameplaySetupIndices {
+        lane_note_indices,
+        lane_hold_indices,
+        note_itg_rows,
+        mine_note_ix,
+        mine_note_time_ns,
+        replay_cells,
+    } = build_gameplay_setup_indices(
+        &notes,
+        &note_ranges,
+        &note_time_cache_ns,
+        &mines_total,
+        num_players,
+        num_cols,
+    );
     let pending_edges_capacity = input_queue_cap(num_cols);
     let replay_seconds = (song_time_ns_to_seconds(music_end_time_ns) + start_delay)
         .max(song_time_ns_to_seconds(notes_end_time_ns) + start_delay);
@@ -937,7 +1286,6 @@ where
             note_count_stats: GameplayNoteCountStatsState::new(note_count_stats, num_players),
             lane_indices: GameplayLaneIndexState::new(
                 lane_note_indices,
-                lane_note_row_indices,
                 lane_hold_indices,
                 note_itg_rows,
                 tap_row_hold_roll_flags,

@@ -1248,7 +1248,7 @@ where
 
     #[inline(always)]
     pub fn lane_note_row_index_lists(&self) -> &[Vec<usize>] {
-        &self.chart_runtime.lane_indices.note_row_indices
+        &self.chart_runtime.lane_indices.note_indices
     }
 
     #[inline(always)]

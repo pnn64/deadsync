@@ -15667,21 +15667,22 @@ mod tests {
     #[test]
     fn lane_index_state_returns_slices_flags_and_clears() {
         let mut note_indices: [Vec<usize>; MAX_COLS] = std::array::from_fn(|_| Vec::new());
-        let mut note_row_indices: [Vec<usize>; MAX_COLS] = std::array::from_fn(|_| Vec::new());
         let mut hold_indices: [Vec<usize>; MAX_COLS] = std::array::from_fn(|_| Vec::new());
         note_indices[1].push(7);
-        note_row_indices[1].push(8);
         hold_indices[1].push(9);
         let mut state = GameplayLaneIndexState::new(
             note_indices,
-            note_row_indices,
             hold_indices,
             vec![12, 24],
             vec![0, 3],
         );
 
         assert_eq!(state.note_indices(1), &[7]);
-        assert_eq!(state.note_row_indices(1), &[8]);
+        assert_eq!(state.note_row_indices(1), &[7]);
+        assert_eq!(
+            state.note_indices(1).as_ptr(),
+            state.note_row_indices(1).as_ptr()
+        );
         assert_eq!(state.hold_indices(1), &[9]);
         assert_eq!(state.note_itg_rows(), &[12, 24]);
         assert_eq!(state.tap_row_hold_roll_flags(1), 3);
@@ -15695,6 +15696,90 @@ mod tests {
         assert!(state.hold_indices(1).is_empty());
         assert!(state.note_itg_rows().is_empty());
         assert_eq!(state.tap_row_hold_roll_flags(1), 0);
+    }
+
+    #[test]
+    fn gameplay_setup_indices_match_multi_pass_reference() {
+        let mut notes = Vec::new();
+        for player in 0..MAX_PLAYERS {
+            for local_index in 0..16 {
+                let note_type = match local_index % 8 {
+                    1 => NoteType::Mine,
+                    3 => NoteType::Hold,
+                    5 => NoteType::Roll,
+                    _ => NoteType::Tap,
+                };
+                let hold = matches!(note_type, NoteType::Hold | NoteType::Roll)
+                    .then(|| HoldData {
+                        end_row_index: local_index * 12 + 6,
+                        end_beat: local_index as f32 * 0.25 + 0.125,
+                        ..test_hold()
+                    });
+                let mut note = test_note_at(
+                    note_type,
+                    hold,
+                    false,
+                    local_index * 12,
+                    local_index as f32 * 0.25,
+                );
+                note.column = player * 4 + local_index % 4;
+                notes.push(note);
+            }
+        }
+        let note_ranges = [(0, 16), (16, 32)];
+        let note_time_cache_ns = (0..notes.len())
+            .map(|index| song_time_ns_from_seconds((index % 16) as f32 * 0.125))
+            .collect::<Vec<_>>();
+        let mines_total = [2, 2];
+
+        let reference_counts = count_gameplay_setup_notes_reference(&notes, 8);
+        let counts = count_gameplay_setup_notes(&notes, 8);
+        assert_eq!(counts, reference_counts);
+
+        let reference_indices = build_gameplay_lane_mine_indices_reference(
+            &notes,
+            &note_ranges,
+            &note_time_cache_ns,
+            &mines_total,
+            &counts.lane_note_counts,
+            &counts.lane_hold_counts,
+            2,
+            8,
+        );
+        let indices = build_gameplay_lane_mine_indices(
+            &notes,
+            &note_ranges,
+            &note_time_cache_ns,
+            &mines_total,
+            &counts.lane_note_counts,
+            &counts.lane_hold_counts,
+            2,
+            8,
+        );
+        assert_eq!(indices, reference_indices);
+        assert_eq!(
+            build_lane_note_row_indices_reference(
+                &indices.lane_note_indices,
+                &counts.note_itg_rows,
+                8,
+            ),
+            indices.lane_note_indices
+        );
+
+        let combined = build_gameplay_setup_indices(
+            &notes,
+            &note_ranges,
+            &note_time_cache_ns,
+            &mines_total,
+            2,
+            8,
+        );
+        assert_eq!(combined.lane_note_indices, indices.lane_note_indices);
+        assert_eq!(combined.lane_hold_indices, indices.lane_hold_indices);
+        assert_eq!(combined.mine_note_ix, indices.mine_note_ix);
+        assert_eq!(combined.mine_note_time_ns, indices.mine_note_time_ns);
+        assert_eq!(combined.note_itg_rows, counts.note_itg_rows);
+        assert_eq!(combined.replay_cells, counts.replay_cells);
     }
 
     #[test]

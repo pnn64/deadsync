@@ -77,7 +77,6 @@ impl GameplayNoteRangeState {
 pub struct GameplayLaneIndexState {
     pub note_indices: [Vec<usize>; MAX_COLS],
     pub note_search_cursors: [LaneNoteWindowCursor; MAX_COLS],
-    pub note_row_indices: [Vec<usize>; MAX_COLS],
     pub hold_indices: [Vec<usize>; MAX_COLS],
     /// Song-lifetime `beat_to_note_row` values indexed by note index.
     ///
@@ -93,7 +92,6 @@ impl Default for GameplayLaneIndexState {
         Self {
             note_indices: std::array::from_fn(|_| Vec::new()),
             note_search_cursors: [LaneNoteWindowCursor::default(); MAX_COLS],
-            note_row_indices: std::array::from_fn(|_| Vec::new()),
             hold_indices: std::array::from_fn(|_| Vec::new()),
             note_itg_rows: Vec::new(),
             tap_row_hold_roll_flags: Vec::new(),
@@ -104,7 +102,6 @@ impl Default for GameplayLaneIndexState {
 impl GameplayLaneIndexState {
     pub fn new(
         note_indices: [Vec<usize>; MAX_COLS],
-        note_row_indices: [Vec<usize>; MAX_COLS],
         hold_indices: [Vec<usize>; MAX_COLS],
         note_itg_rows: Vec<i32>,
         tap_row_hold_roll_flags: Vec<u8>,
@@ -112,7 +109,6 @@ impl GameplayLaneIndexState {
         Self {
             note_indices,
             note_search_cursors: [LaneNoteWindowCursor::default(); MAX_COLS],
-            note_row_indices,
             hold_indices,
             note_itg_rows,
             tap_row_hold_roll_flags,
@@ -126,7 +122,7 @@ impl GameplayLaneIndexState {
 
     #[inline(always)]
     pub fn note_row_indices(&self, col: usize) -> &[usize] {
-        self.note_row_indices.get(col).map_or(&[], Vec::as_slice)
+        self.note_indices(col)
     }
 
     #[inline(always)]
@@ -153,9 +149,6 @@ impl GameplayLaneIndexState {
             indices.clear();
         }
         self.note_search_cursors = [LaneNoteWindowCursor::default(); MAX_COLS];
-        for indices in &mut self.note_row_indices {
-            indices.clear();
-        }
         for indices in &mut self.hold_indices {
             indices.clear();
         }

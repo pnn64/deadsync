@@ -458,11 +458,11 @@ mod runtime_regression_tests {
                 debug_assert_eq!(state.chart_runtime.notes[note_index].column, col);
             }
             debug_assert_eq!(
-                state.chart_runtime.lane_indices.note_row_indices[col].len(),
+                state.chart_runtime.lane_indices.note_row_indices(col).len(),
                 state.chart_runtime.lane_indices.note_indices[col].len()
             );
             debug_assert!(
-                state.chart_runtime.lane_indices.note_row_indices[col]
+                state.chart_runtime.lane_indices.note_row_indices(col)
                     .windows(2)
                     .all(|pair| {
                         let left = pair[0];
@@ -474,7 +474,7 @@ mod runtime_regression_tests {
                             )
                     })
             );
-            for &note_index in &state.chart_runtime.lane_indices.note_row_indices[col] {
+            for &note_index in state.chart_runtime.lane_indices.note_row_indices(col) {
                 debug_assert!(note_index < state.chart_runtime.notes.len());
                 debug_assert_eq!(state.chart_runtime.notes[note_index].column, col);
             }
@@ -500,7 +500,7 @@ mod runtime_regression_tests {
         }
         for col in state.setup.num_cols..MAX_COLS {
             debug_assert!(state.chart_runtime.lane_indices.note_indices[col].is_empty());
-            debug_assert!(state.chart_runtime.lane_indices.note_row_indices[col].is_empty());
+            debug_assert!(state.chart_runtime.lane_indices.note_row_indices(col).is_empty());
             debug_assert!(state.chart_runtime.lane_indices.hold_indices[col].is_empty());
         }
         let mut lane_positions = [0usize; MAX_COLS];
@@ -3938,11 +3938,9 @@ mod runtime_regression_tests {
         state.chart_runtime.hold_end_time_cache_ns = vec![Some(note_time)];
         for col in 0..MAX_COLS {
             state.chart_runtime.lane_indices.note_indices[col].clear();
-            state.chart_runtime.lane_indices.note_row_indices[col].clear();
             state.chart_runtime.lane_indices.hold_indices[col].clear();
         }
         state.chart_runtime.lane_indices.note_indices[column].push(0);
-        state.chart_runtime.lane_indices.note_row_indices[column].push(0);
         state.chart_runtime.row_indices.note_row_entry_indices = vec![0];
         state.chart_runtime.row_entries = vec![test_row_entry_with_times(
             &state.chart_runtime.notes,
