@@ -5,6 +5,7 @@ use deadsync_score::stage_stats;
 mod audio_requests;
 mod commands;
 mod config_requests;
+mod evaluation_views;
 mod graphics;
 mod input_routing;
 mod screen_nav;
@@ -623,34 +624,12 @@ fn apply_course_summary_column_judgments(
 }
 
 fn evaluation_context_view(
-    config: &config::Config,
-    profiles: &profile_data::ScoreboxRuntimeView,
-    mut avatar_texture_keys: [Option<String>; MAX_PLAYERS],
+    policy: EvaluationPolicyView,
+    profile: &profile_data::MusicProfileSnapshot,
 ) -> EvaluationContextView {
+    let profiles = &profile.scorebox;
     EvaluationContextView {
-        policy: EvaluationPolicyView {
-            enable_groovestats: config.enable_groovestats,
-            enable_arrowcloud: config.enable_arrowcloud,
-            autosubmit_course_scores_individually: config.autosubmit_course_scores_individually,
-            submit_arrowcloud_fails: config.submit_arrowcloud_fails,
-            smooth_histogram: config.smooth_histogram,
-            shade_scatterplot_judgments: config.shade_scatterplot_judgments,
-            only_dedicated_menu_buttons: config.only_dedicated_menu_buttons,
-            three_key_navigation: config.three_key_navigation,
-            machine_easter_eggs: config.machine_easter_eggs,
-            machine_nice_sound: config.machine_nice_sound,
-            show_gameplay_timer: config.show_select_music_gameplay_timer,
-            translated_titles: config.translated_titles,
-            transparent_panels: matches!(
-                config.machine_evaluation_style.resolve(config.visual_style),
-                config::MachineEvaluationStyle::Transparent
-            ),
-            srpg10_visuals: config.visual_style.is_srpg()
-                && matches!(config.srpg_variant, config::SrpgVariant::Srpg10),
-            machine_font: config.machine_font,
-            zmod_rating_box_text: config.zmod_rating_box_text,
-            breakdown_style: config.select_music_breakdown_style,
-        },
+        policy,
         play_style: profiles.play_style,
         player_side: profiles.player_side,
         players: std::array::from_fn(|player_idx| {
@@ -658,7 +637,9 @@ fn evaluation_context_view(
             EvaluationPlayerView {
                 joined: player.joined,
                 guest: player.guest,
-                avatar_texture_key: avatar_texture_keys[player_idx].take(),
+                avatar_texture_key: profile.avatar_texture_keys[player_idx]
+                    .as_ref()
+                    .map(ToString::to_string),
                 display_name: player.display_name.to_string(),
                 groovestats_linked: !player.leaderboard.api_key().trim().is_empty(),
                 arrowcloud_linked: !player.leaderboard.arrowcloud_api_key().trim().is_empty(),
@@ -712,22 +693,24 @@ fn build_course_summary_eval_state(
     gameplay_elapsed: f32,
     config: &config::Config,
 ) -> evaluation::State {
-    let (profiles, avatars, _) = profile_data::runtime_evaluation_profile_view(
+    let profile = profile_data::runtime_music_profile_snapshot(
         config.enable_groovestats,
         config.enable_arrowcloud,
         config.auto_populate_gs_scores,
-        &[None; MAX_PLAYERS],
     );
     let score_info = build_course_summary_score_info(
         stage,
         course_graph_stages,
-        profiles.play_style,
-        profiles.player_side,
+        profile.scorebox.play_style,
+        profile.scorebox.player_side,
     );
     let mut state = evaluation::init_from_score_info(
         score_info,
         stage.duration_seconds,
-        evaluation_context_view(config, &profiles, avatars),
+        evaluation_context_view(
+            evaluation_views::EvaluationFramePolicy::from_config(config).context(),
+            &profile,
+        ),
     );
     state.active_color_index = active_color_index;
     state.session_elapsed = session_elapsed;
@@ -1357,6 +1340,7 @@ pub struct App {
     smx_gif_defaults: SmxGifDefaults,
     select_music_policy: select_music_views::SelectMusicFramePolicy,
     select_course_policy: SelectCourseFramePolicy,
+    evaluation_policy: evaluation_views::EvaluationFramePolicy,
     /// Config-derived Select Music state is handed off once per config
     /// generation and once on screen re-entry, then retained by the theme.
     select_music_settings_rebuild: bool,
@@ -1428,6 +1412,24 @@ pub struct App {
     select_course_profile_rebuild: bool,
     select_course_runtime_key: Option<SelectCourseRuntimeKey>,
     select_course_runtime_rebuild: bool,
+    /// Game-thread-owned Evaluation views are split by source. Context shares
+    /// the one-entry immutable profile cache used by selection; lobby state is
+    /// generation/deadline gated; favorites and scoreboxes each retain one
+    /// fixed key. Stable frames allocate nothing and take none of those locks.
+    /// Misses rebuild at most two sides on the non-gameplay Evaluation frame,
+    /// with leaderboard error retries represented by an explicit deadline.
+    /// Entries are replaced on source changes and destroyed at app shutdown;
+    /// there is no growth, scan, eviction, or gameplay-frame destruction.
+    /// Submission status remains a separate live cadence in the online layer.
+    evaluation_context_rebuild: bool,
+    evaluation_lobby_generation: u64,
+    evaluation_lobby_refresh_at: Option<Instant>,
+    evaluation_lobby_rebuild: bool,
+    evaluation_favorite_key: Option<evaluation_views::EvaluationFavoriteKey>,
+    evaluation_favorites_rebuild: bool,
+    evaluation_scorebox_key: Option<evaluation_views::EvaluationScoreboxKey>,
+    evaluation_scorebox_retry_at: Option<Instant>,
+    evaluation_scoreboxes_rebuild: bool,
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
     content_reload: crate::content_reload::Service,
@@ -1848,27 +1850,16 @@ impl App {
         }
     }
 
-    fn groovestats_service_view() -> SimplyLoveGrooveStatsService {
-        match deadsync_online::runtime::active_groovestats_service() {
-            deadsync_online::groovestats::Service::GrooveStats => {
-                SimplyLoveGrooveStatsService::GrooveStats
-            }
-            deadsync_online::groovestats::Service::BoogieStats => {
-                SimplyLoveGrooveStatsService::BoogieStats
-            }
-        }
-    }
-
     fn evaluation_init_view(
         gameplay: &gameplay::State,
         config: &config::Config,
     ) -> EvaluationInitView {
-        let (profiles, avatars, _) = profile_data::runtime_evaluation_profile_view(
+        let profile = profile_data::runtime_music_profile_snapshot(
             config.enable_groovestats,
             config.enable_arrowcloud,
             config.auto_populate_gs_scores,
-            &[None; MAX_PLAYERS],
         );
+        let profiles = &profile.scorebox;
         EvaluationInitView {
             players: std::array::from_fn(|player_idx| {
                 if player_idx >= gameplay.num_players().min(MAX_PLAYERS) {
@@ -1891,79 +1882,10 @@ impl App {
                     itl: scores::itl_eval_state_from_gameplay(gameplay, player_idx),
                 }
             }),
-            context: evaluation_context_view(config, &profiles, avatars),
-        }
-    }
-
-    fn evaluation_runtime_view(
-        state: &evaluation::State,
-        config: &config::Config,
-    ) -> EvaluationRuntimeView {
-        let pane_filter = scorebox_pane_filter(config);
-        let player_queries = std::array::from_fn(|player_idx| {
-            state
-                .score_info
-                .get(player_idx)
-                .and_then(Option::as_ref)
-                .map(|score_info| (score_info.side, score_info.chart.short_hash.as_str()))
-        });
-        let (profile_view, avatars, favorites) = profile_data::runtime_evaluation_profile_view(
-            config.enable_groovestats,
-            config.enable_arrowcloud,
-            config.auto_populate_gs_scores,
-            &player_queries,
-        );
-        let submissions =
-            scores::evaluation_submission_snapshots(&player_queries).map(|snapshot| {
-                EvaluationSubmissionView {
-                    groovestats_status: snapshot.groovestats_status,
-                    arrowcloud_status: snapshot.arrowcloud_status,
-                    event_progress: snapshot.event_progress,
-                    record_banner: snapshot.record_banner,
-                    groovestats_next_retry_secs: snapshot.groovestats_next_retry_secs,
-                    arrowcloud_next_retry_secs: snapshot.arrowcloud_next_retry_secs,
-                    groovestats_next_retry_is_auto: snapshot.groovestats_next_retry_is_auto,
-                    arrowcloud_next_retry_is_auto: snapshot.arrowcloud_next_retry_is_auto,
-                }
-            });
-        let leaderboard_requests = evaluation::leaderboard_requests(state);
-        let leaderboards: [Option<deadsync_score::CachedPlayerLeaderboardData>; MAX_PLAYERS] =
-            std::array::from_fn(|player_idx| {
-                if !state.allow_online_panes || !leaderboard_requests[player_idx] {
-                    return None;
-                }
-                let score_info = state.score_info.get(player_idx)?.as_ref()?;
-                scores::get_or_fetch_player_leaderboards_for_profile(
-                    score_info.chart.short_hash.as_str(),
-                    &profile_view.sides[profile_data::player_side_index(score_info.side)]
-                        .leaderboard,
-                    EVALUATION_LEADERBOARD_ROWS,
-                )
-            });
-        let context = evaluation_context_view(config, &profile_view, avatars);
-        let mut profile_sides = profile_view.sides.map(Some);
-        EvaluationRuntimeView {
-            context,
-            lobby: Self::refresh_lobby_runtime_view(),
-            groovestats_service: Self::groovestats_service_view(),
-            submissions,
-            scoreboxes: std::array::from_fn(|player_idx| {
-                let Some(score_info) = state.score_info.get(player_idx).and_then(Option::as_ref)
-                else {
-                    return ScoreboxSideView::default();
-                };
-                let side_idx = profile_data::player_side_index(score_info.side);
-                let player = profile_sides[side_idx]
-                    .take()
-                    .expect("one Evaluation scorebox per player side");
-                Self::scorebox_side_view(
-                    &player,
-                    Some(score_info.chart.short_hash.clone()),
-                    leaderboards[player_idx].clone(),
-                    pane_filter,
-                )
-            }),
-            favorites,
+            context: evaluation_context_view(
+                evaluation_views::EvaluationFramePolicy::from_config(config).context(),
+                &profile,
+            ),
         }
     }
 
@@ -1986,7 +1908,7 @@ impl App {
         retried
     }
 
-    fn sync_active_online_runtime_view(&mut self, evaluation_config: Option<config::Config>) {
+    fn sync_active_online_runtime_view(&mut self) {
         match self.state.screens.current_screen {
             CurrentScreen::Gameplay => {
                 let Some(state) = self.state.screens.gameplay_state.as_ref() else {
@@ -2004,17 +1926,7 @@ impl App {
                 }
             }
             CurrentScreen::Evaluation => {
-                let config = evaluation_config
-                    .as_ref()
-                    .expect("Evaluation runtime requires its broad config view");
-                scores::tick_evaluation_auto_retries(
-                    config.enable_groovestats,
-                    config.enable_boogiestats,
-                    config.enable_arrowcloud,
-                );
-                let view =
-                    Self::evaluation_runtime_view(&self.state.screens.evaluation_state, config);
-                evaluation::sync_runtime_view(&mut self.state.screens.evaluation_state, view);
+                self.sync_evaluation_runtime_view(self.evaluation_policy);
             }
             _ => {}
         }
@@ -2958,9 +2870,12 @@ impl App {
             self.select_music_policy =
                 select_music_views::SelectMusicFramePolicy::from_config(&config);
             self.select_course_policy = SelectCourseFramePolicy::from_config(&config);
+            self.evaluation_policy = evaluation_views::EvaluationFramePolicy::from_config(&config);
             self.select_music_settings_rebuild = true;
             self.select_music_unlock_rebuild = true;
             self.select_course_settings_rebuild = true;
+            self.evaluation_context_rebuild = true;
+            self.evaluation_scoreboxes_rebuild = true;
         }
         let frame_policy = self.frame_policy;
         if work_caps & frame_work::SMX_CONFIG != 0 {
@@ -3004,10 +2919,10 @@ impl App {
         self.drive_smx_player_options_lights(delta_time, frame_policy.smx);
         self.state.shell.interaction.update_message(redraw_started);
         if work_caps & frame_work::ONLINE_VIEW != 0 {
-            let evaluation_config = (self.state.screens.current_screen
-                == CurrentScreen::Evaluation)
-                .then(|| self.frame_config);
-            self.sync_active_online_runtime_view(evaluation_config);
+            self.sync_active_online_runtime_view();
+        }
+        if self.state.screens.current_screen != CurrentScreen::Evaluation {
+            self.mark_evaluation_runtime_dirty();
         }
         if work_caps & frame_work::SELECT_MUSIC_VIEW != 0 {
             crate::heart_rate::refresh_select_music(
@@ -3623,6 +3538,7 @@ impl App {
         let smx_gif_defaults = SmxGifDefaults::from_config(&config);
         let select_music_policy = select_music_views::SelectMusicFramePolicy::from_config(&config);
         let select_course_policy = SelectCourseFramePolicy::from_config(&config);
+        let evaluation_policy = evaluation_views::EvaluationFramePolicy::from_config(&config);
         let state = AppState::new(config, profile_data, overlay_mode, color_index);
         Self {
             window: None,
@@ -3656,6 +3572,7 @@ impl App {
             smx_gif_defaults,
             select_music_policy,
             select_course_policy,
+            evaluation_policy,
             select_music_settings_rebuild: true,
             select_music_unlock_status_generation: 0,
             select_music_unlock_rebuild: true,
@@ -3683,6 +3600,15 @@ impl App {
             select_course_profile_rebuild: true,
             select_course_runtime_key: None,
             select_course_runtime_rebuild: true,
+            evaluation_context_rebuild: true,
+            evaluation_lobby_generation: 0,
+            evaluation_lobby_refresh_at: None,
+            evaluation_lobby_rebuild: true,
+            evaluation_favorite_key: None,
+            evaluation_favorites_rebuild: true,
+            evaluation_scorebox_key: None,
+            evaluation_scorebox_retry_at: None,
+            evaluation_scoreboxes_rebuild: true,
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
             content_reload: crate::content_reload::Service::default(),
@@ -5315,9 +5241,8 @@ impl App {
         page.return_to_course = true;
         page.auto_advance_seconds = None;
         self.state.screens.evaluation_state = page;
-        let config = config::get();
-        let view = Self::evaluation_runtime_view(&self.state.screens.evaluation_state, &config);
-        evaluation::sync_runtime_view(&mut self.state.screens.evaluation_state, view);
+        self.mark_evaluation_runtime_dirty();
+        self.sync_evaluation_runtime_view(self.evaluation_policy);
         deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
     }
 
@@ -8041,8 +7966,9 @@ impl App {
             self.state.screens.evaluation_state.gameplay_elapsed =
                 stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
             self.finalize_entered_evaluation(&config);
-            let view = Self::evaluation_runtime_view(&self.state.screens.evaluation_state, &config);
-            evaluation::sync_runtime_view(&mut self.state.screens.evaluation_state, view);
+            self.evaluation_policy = evaluation_views::EvaluationFramePolicy::from_config(&config);
+            self.mark_evaluation_runtime_dirty();
+            self.sync_evaluation_runtime_view(self.evaluation_policy);
         }
 
         if target == CurrentScreen::EvaluationSummary {
@@ -8856,13 +8782,15 @@ mod tests {
     }
 
     fn test_evaluation_context(config: &config::Config) -> EvaluationContextView {
-        let (profiles, avatars, _) = profile_data::runtime_evaluation_profile_view(
+        let profile = profile_data::runtime_music_profile_snapshot(
             config.enable_groovestats,
             config.enable_arrowcloud,
             config.auto_populate_gs_scores,
-            &[None; MAX_PLAYERS],
         );
-        evaluation_context_view(config, &profiles, avatars)
+        evaluation_context_view(
+            evaluation_views::EvaluationFramePolicy::from_config(config).context(),
+            &profile,
+        )
     }
 
     #[test]

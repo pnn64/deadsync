@@ -1026,12 +1026,14 @@ pub struct EvaluationSubmissionView {
 /// Shell-prepared runtime data consumed by Simply Love's Evaluation screen.
 #[derive(Clone, Debug, Default)]
 pub struct EvaluationRuntimeView {
-    pub context: EvaluationContextView,
-    pub lobby: SimplyLoveLobbyRuntimeView,
-    pub groovestats_service: SimplyLoveGrooveStatsService,
+    /// Replacement values are present only when their source generation or
+    /// explicit refresh deadline changes. The screen retains prior values.
+    pub context: Option<EvaluationContextView>,
+    pub lobby: Option<SimplyLoveLobbyRuntimeView>,
+    pub groovestats_service: Option<SimplyLoveGrooveStatsService>,
     pub submissions: [EvaluationSubmissionView; 2],
-    pub scoreboxes: [ScoreboxSideView; 2],
-    pub favorites: [bool; 2],
+    pub scoreboxes: Option<[ScoreboxSideView; 2]>,
+    pub favorites: Option<[bool; 2]>,
 }
 
 /// One playlist file loaded by the shell for Simply Love's playlist wheel.

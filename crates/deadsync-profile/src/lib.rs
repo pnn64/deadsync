@@ -2181,7 +2181,7 @@ pub struct ScoreboxRuntimeView {
     pub sides: [ScoreboxProfileView; PLAYER_SLOTS],
 }
 
-/// Profile-owned song/course selection data captured under one session lock
+/// Profile-owned song/course/Evaluation data captured under one session lock
 /// and one profile lock. The snapshot copies only strings retained by those
 /// screens; full `Profile` values and their large favorite/history collections
 /// stay in the process-global store.
@@ -2198,8 +2198,8 @@ pub struct MusicProfileSnapshot {
 /// service policy remains unchanged.
 ///
 /// The owner is one game-thread caller. It is single-thread-only, lives for the
-/// caller's thread, has one entry, and is warmed by the first music or course
-/// selection frame. A miss rebuilds the small snapshot without I/O;
+/// caller's thread, has one entry, and is warmed by the first music, course, or
+/// Evaluation frame. A miss rebuilds the small snapshot without I/O;
 /// replacement drops the previous shared strings on the game thread. There is
 /// no eviction scan or capacity growth. Benchmarks cover hits/misses and
 /// allocation counters; a hit is bounded by two source-field comparisons plus
@@ -2553,45 +2553,13 @@ pub fn runtime_music_profile_snapshot(
     })
 }
 
-/// Capture all profile-owned Evaluation frame data under one session lock and
-/// one profile lock. The scorebox strings and avatar keys are the final owned
-/// copies consumed by the screen snapshot; no full `Profile` leaves the store.
-pub fn runtime_evaluation_profile_view(
-    enable_groovestats: bool,
-    enable_arrowcloud: bool,
-    auto_populate_gs_scores: bool,
+/// Resolve the two Evaluation chart favorite flags under one profile lock.
+/// Callers gate this query with [`runtime_favorites_generation`] so stable
+/// frames do not lock the profile store.
+pub fn runtime_evaluation_favorite_membership(
     favorite_queries: &[Option<(PlayerSide, &str)>; PLAYER_SLOTS],
-) -> (
-    ScoreboxRuntimeView,
-    [Option<String>; PLAYER_SLOTS],
-    [bool; PLAYER_SLOTS],
-) {
-    let (play_style, player_side, joined_mask, active_profiles) = {
-        let session = runtime_lock_session();
-        (
-            session.play_style,
-            session.player_side,
-            session.joined_mask,
-            session.active_profiles.clone(),
-        )
-    };
-    let profiles = runtime_lock_profiles();
-    let avatars = std::array::from_fn(|side_idx| profiles[side_idx].avatar_texture_key.clone());
-    let favorites = evaluation_favorite_membership(&profiles, favorite_queries);
-    (
-        scorebox_runtime_view(
-            &profiles,
-            &active_profiles,
-            joined_mask,
-            play_style,
-            player_side,
-            enable_groovestats,
-            enable_arrowcloud,
-            auto_populate_gs_scores,
-        ),
-        avatars,
-        favorites,
-    )
+) -> [bool; PLAYER_SLOTS] {
+    evaluation_favorite_membership(&runtime_lock_profiles(), favorite_queries)
 }
 
 fn evaluation_favorite_membership(

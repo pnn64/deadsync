@@ -912,9 +912,10 @@ mod tests {
         eval_pane_cycle, eval_pane_shift, eval_pane_skip_duplicate, fail_seconds_remaining,
         graph_display_life_points, leaderboard_requests, life_record_lerp_at,
         stage_in_stinger_texture_key, submission_retry_available, submit_footer_gs_label,
-        submit_footer_gs_label_for, submit_footer_lines,
+        submit_footer_gs_label_for, submit_footer_lines, sync_runtime_view,
     };
     use crate::assets::i18n;
+    use crate::views::EvaluationRuntimeView;
     use deadlib_present::actors::{Actor, TextAlign};
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use deadsync_score as score_data;
@@ -989,6 +990,30 @@ mod tests {
 
         state.leaderboards_requested[1] = true;
         assert_eq!(leaderboard_requests(&state), [false, true]);
+    }
+
+    #[test]
+    fn partial_runtime_view_retains_clean_subviews() {
+        let mut state = super::init(None, Default::default());
+        state.context.players[0].display_name = "Retained".to_owned();
+        state.favorites = [true, false];
+        state.groovestats_service = SimplyLoveGrooveStatsService::BoogieStats;
+        let mut view = EvaluationRuntimeView::default();
+        view.submissions[0].groovestats_status =
+            Some(score_data::GrooveStatsSubmitUiStatus::Submitted);
+
+        sync_runtime_view(&mut state, view);
+
+        assert_eq!(state.context.players[0].display_name, "Retained");
+        assert_eq!(state.favorites, [true, false]);
+        assert_eq!(
+            state.groovestats_service,
+            SimplyLoveGrooveStatsService::BoogieStats
+        );
+        assert_eq!(
+            state.submissions[0].groovestats_status,
+            Some(score_data::GrooveStatsSubmitUiStatus::Submitted)
+        );
     }
 
     #[test]
@@ -3215,12 +3240,22 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
 
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: EvaluationRuntimeView) {
-    state.context = view.context;
-    state.lobby_view = view.lobby;
-    state.groovestats_service = view.groovestats_service;
+    if let Some(context) = view.context {
+        state.context = context;
+    }
+    if let Some(lobby) = view.lobby {
+        state.lobby_view = lobby;
+    }
+    if let Some(service) = view.groovestats_service {
+        state.groovestats_service = service;
+    }
     state.submissions = view.submissions;
-    state.scoreboxes = view.scoreboxes;
-    state.favorites = view.favorites;
+    if let Some(scoreboxes) = view.scoreboxes {
+        state.scoreboxes = scoreboxes;
+    }
+    if let Some(favorites) = view.favorites {
+        state.favorites = favorites;
+    }
 }
 
 #[inline(always)]
