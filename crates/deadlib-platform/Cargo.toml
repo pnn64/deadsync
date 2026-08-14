@@ -26,8 +26,8 @@ windows = { version = "0.62.2", features = [
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 raw-window-handle = "0.6.2"
-smithay-client-toolkit = { version = "0.21.0", default-features = false }
-xcb = { version = "1.7.0", features = ["dpms", "randr", "screensaver"] }
+smithay-client-toolkit = { version = "0.21.1", default-features = false }
+xcb = { version = "1.7.1", features = ["dpms", "randr", "screensaver"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { version = "0.6.4", features = ["relax-sign-encoding"] }
