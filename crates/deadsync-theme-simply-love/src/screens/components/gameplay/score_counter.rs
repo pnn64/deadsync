@@ -5,6 +5,27 @@ use deadlib_present::font;
 
 const MAX_SCORE_GLYPHS: usize = 11;
 const SCORE_GLYPH_TEXT: [&str; 11] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "."];
+const LEADING_SCORE_ALPHA: f32 = 1.0;
+const TRAILING_SCORE_ALPHA: f32 = 0.65;
+
+#[inline(always)]
+pub(crate) const fn score_comparison_enabled(
+    player_count: usize,
+    show_ex_score: [bool; 2],
+) -> bool {
+    player_count == 2 && show_ex_score[0] == show_ex_score[1]
+}
+
+/// Match Simply Love's two-player score emphasis: ties remain fully opaque,
+/// while only the trailing player's score is dimmed.
+#[inline(always)]
+pub(crate) fn score_leader_alphas(scores: [f64; 2]) -> [f32; 2] {
+    match scores[0].partial_cmp(&scores[1]) {
+        Some(std::cmp::Ordering::Greater) => [LEADING_SCORE_ALPHA, TRAILING_SCORE_ALPHA],
+        Some(std::cmp::Ordering::Less) => [TRAILING_SCORE_ALPHA, LEADING_SCORE_ALPHA],
+        Some(std::cmp::Ordering::Equal) | None => [LEADING_SCORE_ALPHA; 2],
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct ScoreGlyphs {
@@ -167,6 +188,23 @@ mod tests {
                 expected
             );
         }
+    }
+
+    #[test]
+    fn score_comparison_requires_two_players_using_the_same_system() {
+        assert!(!score_comparison_enabled(1, [false, false]));
+        assert!(score_comparison_enabled(2, [false, false]));
+        assert!(score_comparison_enabled(2, [true, true]));
+        assert!(!score_comparison_enabled(2, [false, true]));
+        assert!(!score_comparison_enabled(2, [true, false]));
+    }
+
+    #[test]
+    fn score_leader_is_full_opacity_and_trailing_score_is_dimmed() {
+        assert_eq!(score_leader_alphas([90.0, 89.0]), [1.0, 0.65]);
+        assert_eq!(score_leader_alphas([89.0, 90.0]), [0.65, 1.0]);
+        assert_eq!(score_leader_alphas([90.0, 90.0]), [1.0, 1.0]);
+        assert_eq!(score_leader_alphas([f64::NAN, 90.0]), [1.0, 1.0]);
     }
 
     #[test]

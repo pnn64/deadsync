@@ -4,7 +4,8 @@ use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::sprite_sheet_dims;
 use crate::assets::{FontRole, machine_font_key, visual_styles};
 use crate::screens::components::gameplay::score_counter::{
-    ScoreCounterParams, prewarm_score_counter_layout, push_score_counter,
+    ScoreCounterParams, prewarm_score_counter_layout, push_score_counter, score_comparison_enabled,
+    score_leader_alphas,
 };
 use crate::screens::components::gameplay::{
     FRAME_TEXT_BPM, FRAME_TEXT_LIFE_BASE, FRAME_TEXT_VERTEX_BUFFERS, gameplay_stats, notefield,
@@ -228,6 +229,32 @@ fn player_blue_window_ms(state: &GameplayCoreState, player_idx: usize) -> f32 {
         }),
         fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
     })
+}
+
+/// Score opacity for Simply Love's two-player "currently winning" treatment.
+/// Compare the precise normal score values rather than their formatted or
+/// predictive display values, matching the upstream theme's behavior.
+pub(crate) fn gameplay_score_leader_alphas(state: &GameplayCoreState) -> [f32; MAX_PLAYERS] {
+    let show_ex_score = [
+        state.profiles()[0].show_ex_score,
+        state.profiles()[1].show_ex_score,
+    ];
+    if !score_comparison_enabled(state.num_players(), show_ex_score) {
+        return [1.0; MAX_PLAYERS];
+    }
+
+    let scores = if show_ex_score[0] {
+        [
+            state.display_ex_score_percent(0, player_blue_window_ms(state, 0)),
+            state.display_ex_score_percent(1, player_blue_window_ms(state, 1)),
+        ]
+    } else {
+        [
+            state.display_itg_score_percent(0),
+            state.display_itg_score_percent(1),
+        ]
+    };
+    score_leader_alphas(scores)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -15351,6 +15378,7 @@ pub fn push_actors(
             }
         }
 
+        let score_alphas = gameplay_score_leader_alphas(state);
         for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in
             &players[..player_count]
         {
@@ -15445,7 +15473,7 @@ pub fn push_actors(
             if !profile.hide_score && !hide_score_for_top_graph && !score_in_versus_step_stats {
                 let show_ex_score = profile.show_ex_score;
                 let show_hard_ex_score = show_ex_score && profile.show_hard_ex_score;
-                let (score_value, score_color) = if show_ex_score {
+                let (score_value, mut score_color) = if show_ex_score {
                     let blue_window_ms = player_blue_window_ms(state, player_idx);
                     let ex_percent = state.display_gameplay_ex_score_percent(
                         player_idx,
@@ -15460,6 +15488,7 @@ pub fn push_actors(
                     );
                     (score_percent, [1.0, 1.0, 1.0, 1.0])
                 };
+                score_color[3] *= score_alphas[player_idx];
 
                 let is_p2_side = player_side == profile_data::PlayerSide::P2;
                 // Arrow Cloud parity: EX remains the "normal" score position/anchor.
@@ -15486,7 +15515,8 @@ pub fn push_actors(
                         score_display_mode_from_profile(profile.score_display_mode),
                         blue_window_ms,
                     );
-                    let hex = color::HARD_EX_SCORE_RGBA;
+                    let mut hex = color::HARD_EX_SCORE_RGBA;
+                    hex[3] *= score_alphas[player_idx];
                     let (hard_ex_x, hard_ex_y) = if let Some(pos) = step_stats_score_pos {
                         (pos.hard_ex_x, pos.hard_ex_y)
                     } else if single_score_swapped {

@@ -2199,6 +2199,7 @@ pub fn push_versus_step_stats(
         });
     }
 
+    let score_alphas = gameplay_screen::gameplay_score_leader_alphas(state);
     for (player_idx, show) in show_judgments_for.iter().copied().enumerate() {
         let player_profile = &state.profiles()[player_idx];
         if !show && !show_score_for[player_idx] {
@@ -2208,7 +2209,7 @@ pub fn push_versus_step_stats(
             continue;
         }
 
-        let (score_value, score_color) = if player_profile.show_ex_score {
+        let (score_value, mut score_color) = if player_profile.show_ex_score {
             let blue_window_ms = state.gameplay_stats_text.blue_window_ms(player_idx);
             (
                 state
@@ -2227,6 +2228,7 @@ pub fn push_versus_step_stats(
             );
             (score_percent, [1.0, 1.0, 1.0, 1.0])
         };
+        score_color[3] *= score_alphas[player_idx];
         let x = center_x + if player_idx == 0 { -7.0 } else { 65.0 };
         push_score_counter(
             actors,
@@ -2250,7 +2252,8 @@ pub fn push_versus_step_stats(
                 score_display_mode_from_profile(player_profile.score_display_mode),
                 blue_window_ms,
             );
-            let hex = color::HARD_EX_SCORE_RGBA;
+            let mut hex = color::HARD_EX_SCORE_RGBA;
+            hex[3] *= score_alphas[player_idx];
             let is_p1 = player_idx == 0;
             push_score_counter(
                 actors,

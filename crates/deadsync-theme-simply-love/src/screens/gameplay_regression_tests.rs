@@ -2705,6 +2705,58 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn versus_score_leader_alpha_tracks_live_itg_scores() {
+        let simfile = write_fixture("versus-score-leader", generated_sprite_core_simfile());
+        with_session(
+            profile_data::PlayStyle::Versus,
+            profile_data::PlayerSide::P1,
+            true,
+            true,
+            || {
+                let mut profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
+                profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+                profiles[1].noteskin = profile_data::NoteSkin::new("lambda");
+                let session = GameplaySession {
+                    play_style: deadsync_gameplay::GameplayInputPlayStyle::Versus,
+                    player_side: deadsync_gameplay::GameplayInputPlayerSide::P1,
+                    joined_sides: [true, true],
+                    ..GameplaySession::default()
+                };
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(1280.0, 720.0),
+                    session,
+                    profiles,
+                );
+
+                assert_eq!(
+                    screen_gameplay::gameplay_score_leader_alphas(&state.gameplay),
+                    [1.0, 1.0]
+                );
+
+                let fantastic = deadsync_rules::judgment::judge_grade_ix(JudgeGrade::Fantastic);
+                let excellent = deadsync_rules::judgment::judge_grade_ix(JudgeGrade::Excellent);
+                state.players_runtime.players[0].scoring_counts[fantastic] = 1;
+                state.players_runtime.players[1].scoring_counts[excellent] = 1;
+                assert!(state.display_itg_score_percent(0) > state.display_itg_score_percent(1));
+                assert_eq!(
+                    screen_gameplay::gameplay_score_leader_alphas(&state.gameplay),
+                    [1.0, 0.65]
+                );
+
+                state.profiles_runtime.profiles[1].show_ex_score = true;
+                assert_eq!(
+                    screen_gameplay::gameplay_score_leader_alphas(&state.gameplay),
+                    [1.0, 1.0]
+                );
+            },
+        );
+    }
+
+    #[test]
     fn versus_modes_frame_is_structurally_repeatable() {
         let simfile = write_fixture("f0-versus-modes", generated_sprite_core_simfile());
         let metrics = space::metrics_for_window(1280, 720);
