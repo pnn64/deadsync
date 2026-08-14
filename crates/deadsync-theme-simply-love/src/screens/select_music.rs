@@ -1969,6 +1969,52 @@ pub fn select_preferred_steps(state: &mut State) {
     apply_initial_steps_for_song(state, song.as_ref(), chart_type, None);
 }
 
+fn meter_steps_index(song: &SongData, chart_type: &str, meter: u32) -> Option<usize> {
+    (0..song.steps_len(chart_type)).rev().find(|&index| {
+        song.chart_for_steps_index(chart_type, index)
+            .is_some_and(|chart| chart.meter == meter)
+    })
+}
+
+fn wheel_steps_index(
+    song: &SongData,
+    chart_type: &str,
+    sort_mode: WheelSortMode,
+    section: Option<&str>,
+    preferred: usize,
+) -> Option<usize> {
+    if sort_mode == WheelSortMode::Meter
+        && let Some(meter) = section.and_then(|value| value.parse().ok())
+        && let Some(index) = meter_steps_index(song, chart_type, meter)
+    {
+        return Some(index);
+    }
+    song.best_steps_index(chart_type, preferred)
+}
+
+fn select_wheel_steps(state: &mut State, song: &SongData) {
+    let chart_type = state.session.play_style.chart_type();
+    let section = state.expanded_pack_name.as_deref();
+    if let Some(index) = wheel_steps_index(
+        song,
+        chart_type,
+        state.sort_mode,
+        section,
+        state.preferred_difficulty_index,
+    ) {
+        state.selected_steps_index = index;
+    }
+    if let Some(index) = wheel_steps_index(
+        song,
+        chart_type,
+        state.sort_mode,
+        section,
+        state.p2_preferred_difficulty_index,
+    ) {
+        state.p2_selected_steps_index = index;
+    }
+}
+
 fn rebuild_displayed_entries(state: &mut State) {
     fill_displayed_entries(
         &mut state.entries,
@@ -3321,6 +3367,10 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
             .selected_index
             .min(state.entries.len().saturating_sub(1))
     };
+
+    if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index).cloned() {
+        select_wheel_steps(state, song.as_ref());
+    }
 
     state.prev_selected_index = state.selected_index;
     state.time_since_selection_change = 0.0;
@@ -11471,18 +11521,9 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
             state.displayed_chart_p2 = None;
         }
 
-        if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-            let target_chart_type = state.session.play_style.chart_type();
-            if let Some(idx) =
-                song.best_steps_index(target_chart_type, state.preferred_difficulty_index)
-            {
-                state.selected_steps_index = idx;
-            }
-            if let Some(idx) =
-                song.best_steps_index(target_chart_type, state.p2_preferred_difficulty_index)
-            {
-                state.p2_selected_steps_index = idx;
-            }
+        if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index).cloned()
+        {
+            select_wheel_steps(state, song.as_ref());
         }
     }
 
@@ -16327,6 +16368,65 @@ mod tests {
             pack_key: pack_key.map(Arc::from),
             parent_series: None,
         }
+    }
+
+    #[test]
+    fn meter_sort_selects_open_section_chart_without_changing_preferences() {
+        let song_with_meters = |index, meters| {
+            let mut song = (*super::test_folder_stats_song(index)).clone();
+            for (chart, meter) in song.charts.iter_mut().zip(meters) {
+                chart.meter = meter;
+            }
+            Arc::new(song)
+        };
+        let song_a = song_with_meters(0, [2, 5, 8, 10, 12]);
+        let song_b = song_with_meters(1, [3, 8, 9, 11, 13]);
+        let group_entries = vec![
+            header("Test Pack", 0, 2, Some("Test Pack")),
+            super::MusicWheelEntry::Song(song_a.clone()),
+            super::MusicWheelEntry::Song(song_b.clone()),
+        ];
+        let meter_entries = vec![
+            header("08", 0, 2, None),
+            super::MusicWheelEntry::Song(song_a),
+            super::MusicWheelEntry::Song(song_b),
+        ];
+        let mut state = init_placeholder();
+        state.group_entries = group_entries.clone().into();
+        state.all_entries = group_entries.clone().into();
+        state.entries = group_entries;
+        state.meter_entries = meter_entries.into();
+        state.selected_index = 1;
+        state.prev_selected_index = 1;
+        state.selected_steps_index = 4;
+        state.preferred_difficulty_index = 4;
+        state.p2_selected_steps_index = 3;
+        state.p2_preferred_difficulty_index = 3;
+
+        super::apply_wheel_sort(&mut state, WheelSortMode::Meter);
+
+        assert_eq!(state.expanded_pack_name.as_deref(), Some("08"));
+        assert_eq!(state.selected_steps_index, 2);
+        assert_eq!(state.p2_selected_steps_index, 2);
+        assert_eq!(state.preferred_difficulty_index, 4);
+        assert_eq!(state.p2_preferred_difficulty_index, 3);
+
+        state.selected_index = 2;
+        let _ = super::update_impl(
+            &mut state,
+            0.0,
+            &deadsync_theme::views::SmxAssignmentView::default(),
+        );
+
+        assert_eq!(state.selected_steps_index, 1);
+        assert_eq!(state.p2_selected_steps_index, 1);
+        assert_eq!(state.preferred_difficulty_index, 4);
+        assert_eq!(state.p2_preferred_difficulty_index, 3);
+
+        super::apply_wheel_sort(&mut state, WheelSortMode::Group);
+
+        assert_eq!(state.selected_steps_index, 4);
+        assert_eq!(state.p2_selected_steps_index, 3);
     }
 
     fn song_titles(entries: &[super::MusicWheelEntry]) -> Vec<&str> {
