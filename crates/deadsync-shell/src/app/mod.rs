@@ -182,10 +182,11 @@ use deadsync_theme_simply_love::views::{
     EvaluationPolicyView, EvaluationRuntimeView, EvaluationSubmissionView, MUSIC_WHEEL_SLOT_COUNT,
     MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
     MusicWheelSlotRuntimeRequest, MusicWheelSlotRuntimeView, ScoreboxLocalView,
-    ScoreboxMachineView, ScoreboxSideView, ScreenBarBackgroundView, SelectCourseRuntimeView,
-    SelectCourseScoreRequest, SelectCourseScoreView,
-    SimplyLoveDensityGraphSlot as DensityGraphSlot, SimplyLoveGrooveStatsService,
-    SimplyLoveLobbyRuntimeView, SimplyLoveVisualPolicyView, VisualBackgroundView,
+    ScoreboxMachineView, ScoreboxSideView, ScreenBarBackgroundView, SelectCourseContextView,
+    SelectCoursePolicyView, SelectCourseRuntimeView, SelectCourseScoreRequest,
+    SelectCourseScoreView, SelectFlowPlayerView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
+    SimplyLoveGrooveStatsService, SimplyLoveLobbyRuntimeView, SimplyLoveVisualPolicyView,
+    VisualBackgroundView,
 };
 use deadsync_theme_simply_love::{
     SimplyLoveConfigRequest, SimplyLoveContentRequest, SimplyLoveEffect as ThemeEffect,
@@ -329,6 +330,74 @@ struct MusicWheelDisplayPolicy {
     translated_titles: bool,
     song_bg_dimmed: bool,
     section_bg_dimmed: bool,
+}
+
+/// Config-generation policy for Select Course view preparation.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct SelectCourseFramePolicy {
+    context: SelectCoursePolicyView,
+    wheel: MusicWheelDisplayPolicy,
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    auto_populate_gs_scores: bool,
+}
+
+impl SelectCourseFramePolicy {
+    fn from_config(config: &config::Config) -> Self {
+        Self {
+            context: crate::profile_load::select_course_policy_view(config),
+            wheel: MusicWheelDisplayPolicy::from_config(config),
+            enable_groovestats: config.enable_groovestats,
+            enable_arrowcloud: config.enable_arrowcloud,
+            auto_populate_gs_scores: config.auto_populate_gs_scores,
+        }
+    }
+
+    const fn profile_policy(self) -> (bool, bool, bool) {
+        (
+            self.enable_groovestats,
+            self.enable_arrowcloud,
+            self.auto_populate_gs_scores,
+        )
+    }
+}
+
+#[derive(Debug)]
+struct SelectCourseRuntimeKey {
+    source: select_course::SelectCourseRuntimeToken,
+    profile_snapshot: Arc<profile_data::MusicProfileSnapshot>,
+    display: MusicWheelDisplayPolicy,
+    favorites_generation: u64,
+    score_generation: u64,
+}
+
+impl SelectCourseRuntimeKey {
+    fn new(
+        source: select_course::SelectCourseRuntimeToken,
+        profile_snapshot: &Arc<profile_data::MusicProfileSnapshot>,
+        display: MusicWheelDisplayPolicy,
+    ) -> Self {
+        Self {
+            source,
+            profile_snapshot: Arc::clone(profile_snapshot),
+            display,
+            favorites_generation: profile_data::runtime_favorites_generation(),
+            score_generation: deadsync_score::runtime_music_wheel_score_generation(),
+        }
+    }
+
+    fn matches(
+        &self,
+        source: select_course::SelectCourseRuntimeToken,
+        profile_snapshot: &Arc<profile_data::MusicProfileSnapshot>,
+        display: MusicWheelDisplayPolicy,
+    ) -> bool {
+        self.source == source
+            && Arc::ptr_eq(&self.profile_snapshot, profile_snapshot)
+            && self.display == display
+            && self.favorites_generation == profile_data::runtime_favorites_generation()
+            && self.score_generation == deadsync_score::runtime_music_wheel_score_generation()
+    }
 }
 
 impl MusicWheelDisplayPolicy {
@@ -1287,6 +1356,7 @@ pub struct App {
     frame_policy: FramePolicy,
     smx_gif_defaults: SmxGifDefaults,
     select_music_policy: select_music_views::SelectMusicFramePolicy,
+    select_course_policy: SelectCourseFramePolicy,
     /// Config-derived Select Music state is handed off once per config
     /// generation and once on screen re-entry, then retained by the theme.
     select_music_settings_rebuild: bool,
@@ -1313,15 +1383,14 @@ pub struct App {
     select_music_lobby_refresh_at: Option<Instant>,
     select_music_lobby_rebuild: bool,
     /// Game-thread-only, session-lifetime cache of the immutable profile view
-    /// shared by Select Music subviews. The one entry warms on screen entry and
-    /// is checked through one atomic generation read; stable frames take no
-    /// profile locks. A miss locks the session and two profiles, then replaces
-    /// the entry on a menu frame. Re-entry marks the presentation stale without
-    /// destroying the retained entry during gameplay. There is no scan or
-    /// eviction; frame update timing accounts for the bounded rebuild.
-    select_music_profile_generation: u64,
-    select_music_profile_policy: Option<(bool, bool, bool)>,
-    select_music_profile_snapshot: Option<Arc<profile_data::MusicProfileSnapshot>>,
+    /// shared by the music and course selection screens. The one entry warms
+    /// on entry and is checked through one atomic generation read; stable
+    /// frames take no profile locks. A miss locks the session and two profiles,
+    /// then replaces the entry on a menu frame. There is no scan or eviction;
+    /// frame update timing accounts for the bounded rebuild.
+    selection_profile_generation: u64,
+    selection_profile_policy: Option<(bool, bool, bool)>,
+    selection_profile_snapshot: Option<Arc<profile_data::MusicProfileSnapshot>>,
     select_music_profile_rebuild: bool,
     /// Game-thread-only dirty key for the wheel snapshot retained by the
     /// Select Music screen. The session-lifetime cache has one fixed-size
@@ -1346,6 +1415,19 @@ pub struct App {
     select_music_scorebox_retry_at: Option<Instant>,
     select_music_leaderboard_retry_at: Option<Instant>,
     select_music_score_views_rebuild: bool,
+    /// Game-thread-owned Select Course state retains config/profile context
+    /// separately from its fixed wheel and score snapshot. Both one-entry
+    /// caches warm on the first screen frame and live for the app session.
+    /// Stable hits compare compact generations and a screen token without
+    /// profile locks, cache locks, cloning, or request construction. A miss
+    /// rebuilds at most 19 wheel slots and one score pane on a menu frame. The
+    /// retained values are replaced there and destroyed at app shutdown; there
+    /// is no growth, scan, eviction, or gameplay-frame destruction. Existing
+    /// frame update timing instruments the bounded miss cost.
+    select_course_settings_rebuild: bool,
+    select_course_profile_rebuild: bool,
+    select_course_runtime_key: Option<SelectCourseRuntimeKey>,
+    select_course_runtime_rebuild: bool,
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
     content_reload: crate::content_reload::Service,
@@ -1732,6 +1814,28 @@ impl App {
                 self.smx_panels.set_pad_blackout(pad, false);
             }
         }
+    }
+
+    fn refresh_selection_profile_snapshot(&mut self, policy: (bool, bool, bool)) -> bool {
+        let generation = profile_data::runtime_profile_generation();
+        let source_dirty = self.selection_profile_snapshot.is_none()
+            || self.selection_profile_generation != generation
+            || self.selection_profile_policy != Some(policy);
+        let changed = if source_dirty {
+            let snapshot =
+                profile_data::runtime_music_profile_snapshot(policy.0, policy.1, policy.2);
+            let changed = self
+                .selection_profile_snapshot
+                .as_ref()
+                .is_none_or(|previous| !Arc::ptr_eq(previous, &snapshot));
+            self.selection_profile_generation = generation;
+            self.selection_profile_policy = Some(policy);
+            self.selection_profile_snapshot = Some(snapshot);
+            changed
+        } else {
+            false
+        };
+        changed
     }
 
     fn refresh_lobby_runtime_view() -> SimplyLoveLobbyRuntimeView {
@@ -2226,30 +2330,89 @@ impl App {
         }
     }
 
-    fn sync_select_course_runtime_view(&mut self, config: &config::Config) {
+    fn select_course_context(
+        policy: SelectCoursePolicyView,
+        profile: &profile_data::MusicProfileSnapshot,
+    ) -> SelectCourseContextView {
+        let scorebox = &profile.scorebox;
+        SelectCourseContextView {
+            policy,
+            play_style: scorebox.play_style,
+            player_side: scorebox.player_side,
+            joined: scorebox.sides.each_ref().map(|side| side.joined),
+            music_rate: profile.music_rate,
+        }
+    }
+
+    fn select_course_players(
+        profile: &profile_data::MusicProfileSnapshot,
+    ) -> [SelectFlowPlayerView; 2] {
+        std::array::from_fn(|side_idx| {
+            let side = &profile.scorebox.sides[side_idx];
+            SelectFlowPlayerView {
+                joined: side.joined,
+                guest: side.guest,
+                display_name: side.display_name.to_string(),
+                avatar_texture_key: profile.avatar_texture_keys[side_idx]
+                    .as_ref()
+                    .map(ToString::to_string),
+            }
+        })
+    }
+
+    fn sync_select_course_runtime_view(&mut self, policy: SelectCourseFramePolicy) {
         if self.state.screens.current_screen != CurrentScreen::SelectCourse {
             return;
         }
-        let context = crate::profile_load::select_course_context_view(config);
-        let profile_view = profile_data::runtime_scorebox_view(
-            config.enable_groovestats,
-            config.enable_arrowcloud,
-            config.auto_populate_gs_scores,
-        );
-        let music_wheel = Self::prepare_music_wheel_runtime(
-            select_course::music_wheel_runtime_request(&self.state.screens.select_course_state),
-            &profile_view,
-            MusicWheelDisplayPolicy::from_config(config),
-        );
-        let score = Self::prepare_select_course_score(
-            select_course::score_runtime_request(&self.state.screens.select_course_state),
-            &profile_view,
-        );
+        let profile_snapshot_changed =
+            self.refresh_selection_profile_snapshot(policy.profile_policy());
+        let profile_snapshot = self
+            .selection_profile_snapshot
+            .as_ref()
+            .expect("Select Course profile snapshot should be warmed");
+        let profile_dirty = self.select_course_profile_rebuild || profile_snapshot_changed;
+        self.select_course_profile_rebuild = false;
+        if self.select_course_settings_rebuild || profile_dirty {
+            let context = Self::select_course_context(policy.context, &profile_snapshot);
+            select_course::sync_context(&mut self.state.screens.select_course_state, context);
+        }
+        self.select_course_settings_rebuild = false;
+
+        let source = select_course::runtime_token(&self.state.screens.select_course_state);
+        let runtime_dirty = self.select_course_runtime_rebuild
+            || self
+                .select_course_runtime_key
+                .as_ref()
+                .is_none_or(|key| !key.matches(source, &profile_snapshot, policy.wheel));
+        let (music_wheel, score) = if runtime_dirty {
+            let profile_view = &profile_snapshot.scorebox;
+            let music_wheel = Self::prepare_music_wheel_runtime(
+                select_course::music_wheel_runtime_request(&self.state.screens.select_course_state),
+                profile_view,
+                policy.wheel,
+            );
+            let score = Self::prepare_select_course_score(
+                select_course::score_runtime_request(&self.state.screens.select_course_state),
+                profile_view,
+            );
+            self.select_course_runtime_key = Some(SelectCourseRuntimeKey::new(
+                source,
+                &profile_snapshot,
+                policy.wheel,
+            ));
+            (Some(music_wheel), Some(score))
+        } else {
+            (None, None)
+        };
+        self.select_course_runtime_rebuild = false;
+        let players = profile_dirty.then(|| Self::select_course_players(&profile_snapshot));
+        if players.is_none() && music_wheel.is_none() {
+            return;
+        }
         select_course::sync_runtime_view(
             &mut self.state.screens.select_course_state,
             SelectCourseRuntimeView {
-                context,
-                players: crate::select_flow::players_view(),
+                players,
                 music_wheel,
                 score,
             },
@@ -2794,8 +2957,10 @@ impl App {
             self.smx_gif_defaults = SmxGifDefaults::from_config(&config);
             self.select_music_policy =
                 select_music_views::SelectMusicFramePolicy::from_config(&config);
+            self.select_course_policy = SelectCourseFramePolicy::from_config(&config);
             self.select_music_settings_rebuild = true;
             self.select_music_unlock_rebuild = true;
+            self.select_course_settings_rebuild = true;
         }
         let frame_policy = self.frame_policy;
         if work_caps & frame_work::SMX_CONFIG != 0 {
@@ -2859,8 +3024,11 @@ impl App {
             self.select_music_unlock_rebuild = true;
         }
         if work_caps & frame_work::SELECT_COURSE_VIEW != 0 {
-            let frame_config = self.frame_config;
-            self.sync_select_course_runtime_view(&frame_config);
+            self.sync_select_course_runtime_view(self.select_course_policy);
+        } else {
+            self.select_course_settings_rebuild = true;
+            self.select_course_profile_rebuild = true;
+            self.select_course_runtime_rebuild = true;
         }
         let transition_plan = self.state.shell.transition.advance_frame(
             logic_dt,
@@ -3454,6 +3622,7 @@ impl App {
         let frame_policy = FramePolicy::from_config(&config);
         let smx_gif_defaults = SmxGifDefaults::from_config(&config);
         let select_music_policy = select_music_views::SelectMusicFramePolicy::from_config(&config);
+        let select_course_policy = SelectCourseFramePolicy::from_config(&config);
         let state = AppState::new(config, profile_data, overlay_mode, color_index);
         Self {
             window: None,
@@ -3486,6 +3655,7 @@ impl App {
             frame_policy,
             smx_gif_defaults,
             select_music_policy,
+            select_course_policy,
             select_music_settings_rebuild: true,
             select_music_unlock_status_generation: 0,
             select_music_unlock_rebuild: true,
@@ -3498,9 +3668,9 @@ impl App {
             select_music_lobby_generation: 0,
             select_music_lobby_refresh_at: None,
             select_music_lobby_rebuild: true,
-            select_music_profile_generation: 0,
-            select_music_profile_policy: None,
-            select_music_profile_snapshot: None,
+            selection_profile_generation: 0,
+            selection_profile_policy: None,
+            selection_profile_snapshot: None,
             select_music_profile_rebuild: true,
             select_music_wheel_key: None,
             select_music_wheel_rebuild: true,
@@ -3509,6 +3679,10 @@ impl App {
             select_music_scorebox_retry_at: None,
             select_music_leaderboard_retry_at: None,
             select_music_score_views_rebuild: true,
+            select_course_settings_rebuild: true,
+            select_course_profile_rebuild: true,
+            select_course_runtime_key: None,
+            select_course_runtime_rebuild: true,
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
             content_reload: crate::content_reload::Service::default(),
@@ -8634,6 +8808,32 @@ mod tests {
         assert!(!policy.show_select_music_banners);
         assert!(!policy.show_version_overlay);
         assert_eq!(policy.visual, simply_love_visual_policy(&config));
+    }
+
+    #[test]
+    fn select_course_policy_compiles_only_runtime_inputs() {
+        let config = config::Config {
+            show_random_courses: false,
+            show_most_played_courses: false,
+            music_wheel_switch_speed: 23,
+            global_offset_seconds: 0.025,
+            three_key_navigation: true,
+            only_dedicated_menu_buttons: true,
+            translated_titles: false,
+            enable_groovestats: false,
+            enable_arrowcloud: false,
+            auto_populate_gs_scores: true,
+            ..Default::default()
+        };
+        let policy = SelectCourseFramePolicy::from_config(&config);
+
+        assert!(!policy.context.show_random_courses);
+        assert!(!policy.context.show_most_played_courses);
+        assert_eq!(policy.context.music_wheel_switch_speed, 23);
+        assert_eq!(policy.context.global_offset_seconds, 0.025);
+        assert!(policy.context.dedicated_three_key_nav);
+        assert!(!policy.wheel.translated_titles);
+        assert_eq!(policy.profile_policy(), (false, false, true));
     }
 
     #[test]

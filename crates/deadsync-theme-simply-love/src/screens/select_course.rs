@@ -38,6 +38,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::Hasher;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
@@ -68,6 +69,7 @@ const COURSE_TRACKLIST_ROW_SPACING: f32 = 23.0;
 const COURSE_TRACKLIST_SCROLL_STEP_SECONDS: f32 = 0.5;
 const COURSE_TRACKLIST_SCROLL_END_PAUSE_SECONDS: f32 = 0.5;
 const COURSE_TRACKLIST_TARGET_VISIBLE_ROWS: usize = 6;
+static WHEEL_CONTENT_GENERATION: AtomicU64 = AtomicU64::new(1);
 const COURSE_TRACKLIST_SCROLL_MIN_ENTRIES: usize = 6;
 const COURSE_RATING_VISIBLE_SLOTS: usize = 5;
 const COURSE_TRACKLIST_RATING_BOX_W: f32 = 32.0;
@@ -239,6 +241,7 @@ pub struct State {
     players: [SelectFlowPlayerView; 2],
     music_wheel: MusicWheelRuntimeView,
     score_view: SelectCourseScoreView,
+    wheel_content_generation: u64,
 
     all_entries: Vec<MusicWheelEntry>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
@@ -767,6 +770,7 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
 }
 
 fn rebuild_displayed_entries(state: &mut State) {
+    state.wheel_content_generation = WHEEL_CONTENT_GENERATION.fetch_add(1, Ordering::Relaxed);
     let selected_path = match state.entries.get(state.selected_index) {
         Some(MusicWheelEntry::Song(song)) => Some(song.simfile_path.clone()),
         _ => None,
@@ -1015,6 +1019,7 @@ pub fn init(init_view: SelectCourseInitView) -> State {
         players: Default::default(),
         music_wheel: MusicWheelRuntimeView::default(),
         score_view: SelectCourseScoreView::default(),
+        wheel_content_generation: 0,
         all_entries: init.all_entries,
         course_meta_by_path: init.course_meta_by_path,
         course_text_color_overrides: init.course_text_color_overrides,
@@ -1824,6 +1829,23 @@ pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_
     }
 }
 
+/// Compact identity for every field used by the Select Course wheel and score
+/// requests. Content rebuilds receive a process-wide revision so replacing a
+/// screen state cannot collide with the previous state's token.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SelectCourseRuntimeToken {
+    content_generation: u64,
+    selected_index: usize,
+}
+
+#[inline(always)]
+pub fn runtime_token(state: &State) -> SelectCourseRuntimeToken {
+    SelectCourseRuntimeToken {
+        content_generation: state.wheel_content_generation,
+        selected_index: state.selected_index,
+    }
+}
+
 #[inline(always)]
 pub fn score_runtime_request(state: &State) -> SelectCourseScoreRequest<'_> {
     let course_hash = state
@@ -1840,17 +1862,26 @@ pub fn score_runtime_request(state: &State) -> SelectCourseScoreRequest<'_> {
 }
 
 #[inline(always)]
-pub fn sync_runtime_view(state: &mut State, view: SelectCourseRuntimeView) {
+pub fn sync_context(state: &mut State, context: SelectCourseContextView) {
     let course_filter_changed = state.context.policy.show_random_courses
-        != view.context.policy.show_random_courses
-        || state.context.policy.show_most_played_courses
-            != view.context.policy.show_most_played_courses;
-    state.context = view.context;
-    state.players = view.players;
-    state.music_wheel = view.music_wheel;
-    state.score_view = view.score;
+        != context.policy.show_random_courses
+        || state.context.policy.show_most_played_courses != context.policy.show_most_played_courses;
+    state.context = context;
     if course_filter_changed {
         rebuild_displayed_entries(state);
+    }
+}
+
+#[inline(always)]
+pub fn sync_runtime_view(state: &mut State, view: SelectCourseRuntimeView) {
+    if let Some(players) = view.players {
+        state.players = players;
+    }
+    if let Some(music_wheel) = view.music_wheel {
+        state.music_wheel = music_wheel;
+    }
+    if let Some(score) = view.score {
+        state.score_view = score;
     }
 }
 
@@ -2670,6 +2701,45 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 mod song_lookup_tests {
     use super::*;
     use deadsync_chart::SyncPref;
+
+    #[test]
+    fn runtime_updates_retain_clean_subviews_and_revise_filtered_content() {
+        let mut state = init(SelectCourseInitView::default());
+        let initial_token = runtime_token(&state);
+        let mut context = state.context;
+        context.policy.show_random_courses = !context.policy.show_random_courses;
+        sync_context(&mut state, context);
+        assert_ne!(initial_token, runtime_token(&state));
+
+        sync_runtime_view(
+            &mut state,
+            SelectCourseRuntimeView {
+                players: Some([
+                    SelectFlowPlayerView {
+                        joined: true,
+                        display_name: "Alice".to_owned(),
+                        ..Default::default()
+                    },
+                    Default::default(),
+                ]),
+                music_wheel: Some(MusicWheelRuntimeView {
+                    translated_titles: true,
+                    ..Default::default()
+                }),
+                score: Some(SelectCourseScoreView {
+                    player_initials: "AAA".to_owned(),
+                    player_score_percent: Some(0.95),
+                    ..Default::default()
+                }),
+            },
+        );
+        sync_runtime_view(&mut state, SelectCourseRuntimeView::default());
+
+        assert_eq!(state.players[0].display_name, "Alice");
+        assert!(state.music_wheel.translated_titles);
+        assert_eq!(state.score_view.player_initials, "AAA");
+        assert_eq!(state.score_view.player_score_percent, Some(0.95));
+    }
 
     fn chart(hash: &str) -> ChartData {
         ChartData {

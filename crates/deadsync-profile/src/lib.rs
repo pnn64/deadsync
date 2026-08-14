@@ -2181,10 +2181,10 @@ pub struct ScoreboxRuntimeView {
     pub sides: [ScoreboxProfileView; PLAYER_SLOTS],
 }
 
-/// Profile-owned Select Music data captured under one session lock and one
-/// profile lock. The snapshot copies only strings retained by the screen; full
-/// `Profile` values and their large favorite/history collections stay in the
-/// process-global store.
+/// Profile-owned song/course selection data captured under one session lock
+/// and one profile lock. The snapshot copies only strings retained by those
+/// screens; full `Profile` values and their large favorite/history collections
+/// stay in the process-global store.
 #[derive(Debug, Clone)]
 pub struct MusicProfileSnapshot {
     pub scorebox: ScoreboxRuntimeView,
@@ -2194,15 +2194,16 @@ pub struct MusicProfileSnapshot {
     pub pad_profile_ids: [Option<Arc<str>>; PLAYER_SLOTS],
 }
 
-/// Reuses an immutable Select Music profile snapshot while every source field
-/// and service policy remains unchanged.
+/// Reuses an immutable selection profile snapshot while every source field and
+/// service policy remains unchanged.
 ///
 /// The owner is one game-thread caller. It is single-thread-only, lives for the
-/// caller's thread, has one entry, and is warmed by the first Select Music
-/// frame. A miss rebuilds the small snapshot without I/O; replacement drops the
-/// previous shared strings on the game thread. There is no eviction scan or
-/// capacity growth. Benchmarks cover hits/misses and allocation counters; a hit
-/// is bounded by two source-field comparisons plus `Arc` refcount increments.
+/// caller's thread, has one entry, and is warmed by the first music or course
+/// selection frame. A miss rebuilds the small snapshot without I/O;
+/// replacement drops the previous shared strings on the game thread. There is
+/// no eviction scan or capacity growth. Benchmarks cover hits/misses and
+/// allocation counters; a hit is bounded by two source-field comparisons plus
+/// `Arc` refcount increments.
 #[derive(Default)]
 pub struct MusicProfileSnapshotCache {
     snapshot: Option<Arc<MusicProfileSnapshot>>,
@@ -2332,32 +2333,6 @@ pub fn scorebox_runtime_view(
             }
         }),
     }
-}
-
-pub fn runtime_scorebox_view(
-    enable_groovestats: bool,
-    enable_arrowcloud: bool,
-    auto_populate_gs_scores: bool,
-) -> ScoreboxRuntimeView {
-    let (play_style, player_side, joined_mask, active_profiles) = {
-        let session = runtime_lock_session();
-        (
-            session.play_style,
-            session.player_side,
-            session.joined_mask,
-            session.active_profiles.clone(),
-        )
-    };
-    scorebox_runtime_view(
-        &runtime_lock_profiles(),
-        &active_profiles,
-        joined_mask,
-        play_style,
-        player_side,
-        enable_groovestats,
-        enable_arrowcloud,
-        auto_populate_gs_scores,
-    )
 }
 
 #[cfg(any(test, feature = "bench-support"))]

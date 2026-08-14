@@ -62,17 +62,20 @@ impl Service {
     }
 }
 
+pub(crate) fn select_course_policy_view(config: &config::Config) -> SelectCoursePolicyView {
+    SelectCoursePolicyView {
+        show_random_courses: config.show_random_courses,
+        show_most_played_courses: config.show_most_played_courses,
+        music_wheel_switch_speed: config.music_wheel_switch_speed,
+        global_offset_seconds: config.global_offset_seconds,
+        dedicated_three_key_nav: config.three_key_navigation && config.only_dedicated_menu_buttons,
+    }
+}
+
 pub(crate) fn select_course_context_view(config: &config::Config) -> SelectCourseContextView {
     let session = profile::get_session_snapshot();
     SelectCourseContextView {
-        policy: SelectCoursePolicyView {
-            show_random_courses: config.show_random_courses,
-            show_most_played_courses: config.show_most_played_courses,
-            music_wheel_switch_speed: config.music_wheel_switch_speed,
-            global_offset_seconds: config.global_offset_seconds,
-            dedicated_three_key_nav: config.three_key_navigation
-                && config.only_dedicated_menu_buttons,
-        },
+        policy: select_course_policy_view(config),
         play_style: session.play_style,
         player_side: session.player_side,
         joined: std::array::from_fn(|idx| {

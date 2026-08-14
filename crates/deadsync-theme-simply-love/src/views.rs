@@ -620,10 +620,12 @@ pub struct SelectCourseScoreView {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SelectCourseRuntimeView {
-    pub context: SelectCourseContextView,
-    pub players: [SelectFlowPlayerView; 2],
-    pub music_wheel: MusicWheelRuntimeView,
-    pub score: SelectCourseScoreView,
+    /// Replacement profile footer emitted only when profile state changes.
+    pub players: Option<[SelectFlowPlayerView; 2]>,
+    /// Replacement fixed wheel emitted only when its source data changes.
+    pub music_wheel: Option<MusicWheelRuntimeView>,
+    /// Replacement score pane emitted with the corresponding wheel data.
+    pub score: Option<SelectCourseScoreView>,
 }
 
 /// Shell-owned policy used by Select Course input and presentation.

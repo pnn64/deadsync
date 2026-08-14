@@ -415,46 +415,26 @@ impl App {
         } else {
             0.0
         };
-        let scorebox_request =
-            select_music::scorebox_runtime_request(&self.state.screens.select_music_state);
-        let leaderboard_request =
-            select_music::leaderboard_runtime_request(&self.state.screens.select_music_state);
         let scorebox_enabled = policy.view.presentation.show_scorebox
             && policy.view.presentation.scorebox_cycle_enabled;
-        let profile_generation = profile_data::runtime_profile_generation();
         let profile_policy = (
             policy.enable_groovestats,
             policy.enable_arrowcloud,
             policy.auto_populate_gs_scores,
         );
-        let profile_source_dirty = self.select_music_profile_snapshot.is_none()
-            || self.select_music_profile_generation != profile_generation
-            || self.select_music_profile_policy != Some(profile_policy);
-        let profile_snapshot_changed = if profile_source_dirty {
-            let snapshot = profile_data::runtime_music_profile_snapshot(
-                policy.enable_groovestats,
-                policy.enable_arrowcloud,
-                policy.auto_populate_gs_scores,
-            );
-            let changed = self
-                .select_music_profile_snapshot
-                .as_ref()
-                .is_none_or(|previous| !Arc::ptr_eq(previous, &snapshot));
-            self.select_music_profile_generation = profile_generation;
-            self.select_music_profile_policy = Some(profile_policy);
-            self.select_music_profile_snapshot = Some(snapshot);
-            changed
-        } else {
-            false
-        };
+        let profile_snapshot_changed = self.refresh_selection_profile_snapshot(profile_policy);
         let profile_views_dirty = self.select_music_profile_rebuild || profile_snapshot_changed;
         self.select_music_profile_rebuild = false;
         let profile_snapshot = Arc::clone(
-            self.select_music_profile_snapshot
+            self.selection_profile_snapshot
                 .as_ref()
                 .expect("Select Music profile snapshot should be warmed"),
         );
         let profile_view = &profile_snapshot.scorebox;
+        let scorebox_request =
+            select_music::scorebox_runtime_request(&self.state.screens.select_music_state);
+        let leaderboard_request =
+            select_music::leaderboard_runtime_request(&self.state.screens.select_music_state);
         let music_wheel_source =
             select_music::music_wheel_runtime_token(&self.state.screens.select_music_state);
         let music_wheel_dirty = self.select_music_wheel_rebuild
