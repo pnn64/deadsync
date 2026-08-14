@@ -158,7 +158,28 @@ pub fn apply_chart_attacks_transforms(
     timing_players: &[Arc<TimingData>; MAX_PLAYERS],
     base_seed: u64,
     song_length_seconds: f32,
+    course_modifiers: Option<&str>,
 ) {
+    if let Some(modifiers) = course_modifiers.filter(|mods| !mods.trim().is_empty()) {
+        let course_attack = format!(
+            "TIME=-1000000:LEN={}:MODS={modifiers}",
+            song_length_seconds.max(0.0) + 2_000_000.0
+        );
+        let players = std::array::from_fn(|player| ChartAttackTransformPlayer {
+            chart_attacks: Some(course_attack.as_str()),
+            attack_mode: GameplayAttackMode::On,
+            timing_player: timing_players[player].as_ref(),
+        });
+        apply_chart_attack_transforms(
+            notes,
+            note_ranges,
+            cols_per_player,
+            num_players,
+            &players,
+            base_seed,
+            song_length_seconds,
+        );
+    }
     let players = std::array::from_fn(|player| ChartAttackTransformPlayer {
         chart_attacks: gameplay_charts[player].chart_attacks.as_deref(),
         attack_mode: player_attack_modes[player],

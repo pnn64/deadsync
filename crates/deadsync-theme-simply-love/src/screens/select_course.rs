@@ -14,9 +14,9 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 pub use crate::views::{CourseStagePlan, SelectedCoursePlan};
 use crate::views::{
-    MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView, SelectCourseContextView,
-    SelectCourseInitView, SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView,
-    SelectFlowPlayerView,
+    CourseTypeView, MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
+    SelectCourseContextView, SelectCourseInitView, SelectCourseRuntimeView,
+    SelectCourseScoreRequest, SelectCourseScoreView, SelectFlowPlayerView,
 };
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
@@ -144,6 +144,7 @@ struct CourseSongEntry {
 
 #[derive(Clone, Debug)]
 struct CourseMeta {
+    source: CourseFile,
     path: PathBuf,
     score_hash: String,
     name: String,
@@ -157,10 +158,13 @@ struct CourseMeta {
     total_length_seconds: i32,
     has_random_entries: bool,
     has_most_played_entries: bool,
+    course_type: CourseTypeView,
+    lives: i32,
 }
 
 #[derive(Clone, Debug)]
 struct CourseRatingMeta {
+    course_difficulty: Difficulty,
     entries: Vec<CourseSongEntry>,
     totals: CourseTotals,
     rated_entry_count: usize,
@@ -179,6 +183,17 @@ struct InitData {
     all_entries: Vec<MusicWheelEntry>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
     course_text_color_overrides: HashMap<usize, [f32; 4]>,
+    resolver: CourseResolver,
+}
+
+struct CourseResolver {
+    by_group_song: HashMap<(String, String), Arc<SongData>>,
+    by_song: HashMap<String, Arc<SongData>>,
+    songs_by_group: HashMap<String, Vec<Arc<SongData>>>,
+    all_songs: Vec<Arc<SongData>>,
+    song_play_counts: HashMap<String, u32>,
+    song_grade_counts: HashMap<String, course::CourseGradeCounts>,
+    target_chart_type: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -228,6 +243,7 @@ pub struct State {
     all_entries: Vec<MusicWheelEntry>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
     course_text_color_overrides: HashMap<usize, [f32; 4]>,
+    resolver: CourseResolver,
     bg: visual_style_bg::State,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
@@ -348,6 +364,44 @@ fn build_song_play_counts(
     song_play_counts
 }
 
+fn build_song_grade_counts(
+    song_packs: &[SongPack],
+    chart_grades: &[(String, u8)],
+    chart_type: &str,
+) -> HashMap<String, course::CourseGradeCounts> {
+    if chart_grades.is_empty() {
+        return HashMap::new();
+    }
+    let grades_by_chart: FxHashMap<&str, u8> = chart_grades
+        .iter()
+        .map(|(chart_hash, grade)| (chart_hash.as_str(), *grade))
+        .collect();
+    let mut song_grades = HashMap::new();
+    for pack in song_packs {
+        for song in &pack.songs {
+            let mut counts = course::CourseGradeCounts::default();
+            let mut has_grade = false;
+            for chart in &song.charts {
+                if !chart.chart_type.eq_ignore_ascii_case(chart_type) {
+                    continue;
+                }
+                let Some(grade) = grades_by_chart.get(chart.short_hash.as_str()).copied() else {
+                    continue;
+                };
+                let Some(count) = counts.get_mut(grade as usize) else {
+                    continue;
+                };
+                *count = count.saturating_add(1);
+                has_grade = true;
+            }
+            if has_grade {
+                song_grades.insert(song_unique_key(song), counts);
+            }
+        }
+    }
+    song_grades
+}
+
 #[inline(always)]
 fn course_group_name(path: &Path) -> String {
     path.parent()
@@ -412,6 +466,7 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
         } else {
             meta.scripter.clone()
         },
+        translit_artist: String::new(),
         genre: String::new(),
         banner_path: meta.banner_path.clone(),
         background_path: None,
@@ -443,16 +498,21 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
     let target_chart_type = init_view.context.play_style.chart_type();
     let (by_group_song, by_song, songs_by_group, all_songs, song_play_counts) =
         build_song_lookup(&init_view.song_packs, &init_view.played_chart_counts);
-    let song_grade_counts = HashMap::new();
+    let song_grade_counts = build_song_grade_counts(
+        &init_view.song_packs,
+        &init_view.chart_grades,
+        target_chart_type,
+    );
 
     let mut grouped: HashMap<String, Vec<Arc<CourseMeta>>> = HashMap::new();
     let mut course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>> = HashMap::new();
 
     for (path, course) in &init_view.courses {
+        let course_type = course::course_type(course);
         let mut total_seconds = 0i32;
         let mut min_bpm = None;
         let mut max_bpm = None;
-        let mut previous_song_key = None;
+        let mut selected_song_keys = Vec::with_capacity(course.entries.len());
         let mut has_random_entries = false;
         let mut has_most_played_entries = false;
         let random_seed = std::time::SystemTime::now()
@@ -492,14 +552,15 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
                 &songs_by_group,
                 &song_play_counts,
                 &song_grade_counts,
-                previous_song_key.as_deref(),
+                course_type,
+                &selected_song_keys,
                 target_chart_type,
                 Difficulty::Medium,
             );
 
             if let Some(stage) = resolved.as_ref() {
                 let song_data = &stage.song;
-                previous_song_key = Some(song_unique_key(song_data));
+                selected_song_keys.push(song_unique_key(song_data));
                 let len = if song_data.music_length_seconds > 0.0 {
                     song_data.music_length_seconds.round() as i32
                 } else {
@@ -538,7 +599,7 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
             let mut rated_entry_count = 0usize;
             let mut meter_sum = 0u32;
             let mut meter_count = 0usize;
-            let mut previous_rating_song_key = None;
+            let mut rating_song_keys = Vec::with_capacity(course.entries.len());
             let mut rating_total_seconds = 0i32;
             let mut rating_min_bpm = None;
             let mut rating_max_bpm = None;
@@ -555,7 +616,8 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
                     &songs_by_group,
                     &song_play_counts,
                     &song_grade_counts,
-                    previous_rating_song_key.as_deref(),
+                    course_type,
+                    &rating_song_keys,
                     target_chart_type,
                     course_diff,
                 ) else {
@@ -565,7 +627,7 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
                 let Some(chart) = song_data.charts.get(stage.chart_index) else {
                     continue;
                 };
-                previous_rating_song_key = Some(song_unique_key(song_data));
+                rating_song_keys.push(song_unique_key(song_data));
                 let len = if song_data.music_length_seconds > 0.0 {
                     song_data.music_length_seconds.round() as i32
                 } else {
@@ -576,6 +638,9 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
                 runtime_stages.push(CourseStagePlan {
                     song: song_data.clone(),
                     chart_hash: chart.short_hash.clone(),
+                    modifiers: stage.modifiers,
+                    gain_seconds: stage.gain_seconds,
+                    gain_lives: stage.gain_lives,
                 });
                 add_chart_totals(&mut totals, chart);
                 rated_entry_count = rated_entry_count.saturating_add(1);
@@ -611,6 +676,7 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
                 course_stepchart_label(course_difficulty_name.as_str(), course_meter);
 
             ratings[course_diff as usize] = Some(CourseRatingMeta {
+                course_difficulty: course_diff,
                 entries,
                 totals,
                 rated_entry_count,
@@ -641,6 +707,7 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
             })
             .unwrap_or((min_bpm, max_bpm, total_seconds.max(0)));
         let meta = Arc::new(CourseMeta {
+            source: course.clone(),
             path: path.clone(),
             score_hash: course_score_hash(path),
             name: course_name(path, course),
@@ -654,6 +721,13 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
             total_length_seconds: meta_total_length_seconds,
             has_random_entries,
             has_most_played_entries,
+            course_type: match course_type {
+                course::CourseType::Nonstop => CourseTypeView::Nonstop,
+                course::CourseType::Oni => CourseTypeView::Oni,
+                course::CourseType::Endless => CourseTypeView::Endless,
+                course::CourseType::Survival => CourseTypeView::Survival,
+            },
+            lives: course.lives,
         });
 
         grouped.entry(group_name).or_default().push(meta.clone());
@@ -680,6 +754,15 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
         all_entries,
         course_meta_by_path,
         course_text_color_overrides,
+        resolver: CourseResolver {
+            by_group_song,
+            by_song,
+            songs_by_group,
+            all_songs,
+            song_play_counts,
+            song_grade_counts,
+            target_chart_type: target_chart_type.to_string(),
+        },
     }
 }
 
@@ -828,17 +911,76 @@ pub fn selected_course_plan(state: &State) -> Option<SelectedCoursePlan> {
     if rating.runtime_stages.is_empty() {
         return None;
     }
-    Some(SelectedCoursePlan {
+    Some(course_plan(&meta, rating, rating.runtime_stages.clone()))
+}
+
+fn course_plan(
+    meta: &CourseMeta,
+    rating: &CourseRatingMeta,
+    stages: Vec<CourseStagePlan>,
+) -> SelectedCoursePlan {
+    SelectedCoursePlan {
         path: meta.path.clone(),
         name: meta.name.clone(),
         banner_path: meta.banner_path.clone(),
         score_hash: meta.score_hash.clone(),
-        song_stub: Arc::new(make_course_song(&meta)),
+        song_stub: Arc::new(make_course_song(meta)),
         course_difficulty_name: rating.course_difficulty_name.clone(),
         course_meter: rating.course_meter,
         course_stepchart_label: rating.course_stepchart_label.clone(),
-        stages: rating.runtime_stages.clone(),
-    })
+        course_type: meta.course_type,
+        lives: meta.lives,
+        stages,
+    }
+}
+
+fn fresh_course_seed() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0_u64, |duration| duration.as_nanos() as u64)
+}
+
+pub fn reroll_selected_endless_plan(state: &State) -> Option<SelectedCoursePlan> {
+    let meta = selected_course_meta(state)?;
+    if meta.course_type != CourseTypeView::Endless {
+        return None;
+    }
+    let rating = selected_course_rating(state, &meta)?;
+    let mut selected_song_keys = Vec::with_capacity(meta.source.entries.len());
+    let mut stages = Vec::with_capacity(meta.source.entries.len());
+    let seed = fresh_course_seed();
+    for (entry_index, entry) in meta.source.entries.iter().enumerate() {
+        let Some(stage) = resolve_course_stage(
+            &meta.path,
+            entry_index,
+            seed,
+            entry,
+            &state.resolver.by_group_song,
+            &state.resolver.by_song,
+            &state.resolver.all_songs,
+            &state.resolver.songs_by_group,
+            &state.resolver.song_play_counts,
+            &state.resolver.song_grade_counts,
+            course::CourseType::Endless,
+            &selected_song_keys,
+            &state.resolver.target_chart_type,
+            rating.course_difficulty,
+        ) else {
+            continue;
+        };
+        let Some(chart) = stage.song.charts.get(stage.chart_index) else {
+            continue;
+        };
+        selected_song_keys.push(song_unique_key(&stage.song));
+        stages.push(CourseStagePlan {
+            song: stage.song.clone(),
+            chart_hash: chart.short_hash.clone(),
+            modifiers: stage.modifiers,
+            gain_seconds: stage.gain_seconds,
+            gain_lives: stage.gain_lives,
+        });
+    }
+    (!stages.is_empty()).then(|| course_plan(&meta, rating, stages))
 }
 
 #[inline(always)]
@@ -876,6 +1018,7 @@ pub fn init(init_view: SelectCourseInitView) -> State {
         all_entries: init.all_entries,
         course_meta_by_path: init.course_meta_by_path,
         course_text_color_overrides: init.course_text_color_overrides,
+        resolver: init.resolver,
         bg: visual_style_bg::State::new(),
         nav_key_held_direction: None,
         nav_key_held_since: None,
@@ -2576,6 +2719,7 @@ mod song_lookup_tests {
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: String::new(),
+            translit_artist: String::new(),
             genre: String::new(),
             banner_path: None,
             background_path: None,

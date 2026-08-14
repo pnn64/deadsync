@@ -721,6 +721,7 @@ bright.ogv=1
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: String::new(),
+            translit_artist: String::new(),
             genre: genre.to_string(),
             banner_path: None,
             background_path: None,

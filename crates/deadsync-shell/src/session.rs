@@ -88,8 +88,7 @@ impl<EvaluationPage> SessionState<EvaluationPage> {
         failed: bool,
     ) -> Option<(CourseRunState, Vec<EvaluationPage>)> {
         let course = self.course_run.as_ref()?;
-        if !stage_stats::course_eval_is_final(course.next_stage_index, course.stages.len(), failed)
-        {
+        if !course.is_finished(failed) {
             return None;
         }
         let course = self

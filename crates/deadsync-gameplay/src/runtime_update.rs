@@ -154,10 +154,17 @@ where
             return Some(GameplayAction::Navigate(GameplayExit::Complete));
         }
 
-        if matches!(
+        let battery_forces_immediate = self
+            .players_runtime
+            .players
+            .iter()
+            .take(self.setup.num_players.min(MAX_PLAYERS))
+            .any(|player| matches!(player.course_life, CourseLifeState::Battery { .. }));
+        if (matches!(
             self.setup.config.default_fail_type,
             GameplayFailType::Immediate
-        ) && self.all_joined_players_failed()
+        ) || battery_forces_immediate)
+            && self.all_joined_players_failed()
         {
             log::debug!("All joined players failed. Transitioning to evaluation.");
             self.progress.stage.song_completed_naturally = false;
@@ -258,6 +265,25 @@ where
             trace_enabled,
             &mut phase_timings,
         );
+
+        let survival_tick = if music_time_sec >= self.source.song.first_second
+            && music_time_sec < self.source.song.precise_last_second()
+        {
+            delta_time
+        } else {
+            0.0
+        };
+        for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
+            let old_life = self.players_runtime.players[player].life;
+            update_course_life_time(
+                &mut self.players_runtime.players[player],
+                music_time_sec,
+                survival_tick,
+            );
+            if (self.players_runtime.players[player].life - old_life).abs() > 0.000_001_f32 {
+                self.display.density_graph.life_dirty[player] = true;
+            }
+        }
 
         if let Some(action) = self.finish_gameplay_if_ready(trace_enabled) {
             self.finalize_update_trace(
@@ -1757,10 +1783,11 @@ where
             return false;
         }
         let current_music_time = self.current_music_time_seconds();
-        apply_life_change(
+        apply_course_life_event(
             &mut self.players_runtime.players[player_idx],
             current_music_time,
             -1.0,
+            CourseLifeEvent::ForceFail,
         );
         self.capture_failed_ex_score_inputs(player_idx, self.player_blue_window_ms(player_idx));
         self.display.density_graph.life_dirty[player_idx] = true;

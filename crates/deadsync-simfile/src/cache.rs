@@ -24,7 +24,7 @@ use twox_hash::XxHash64;
 
 use crate::song::{ParseSongOptions, parse_song_data_file};
 
-pub const SONG_CACHE_VERSION: u8 = 20;
+pub const SONG_CACHE_VERSION: u8 = 21;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 
@@ -747,6 +747,7 @@ pub struct SerializableSongData {
     pub translit_title: String,
     pub translit_subtitle: String,
     pub artist: String,
+    pub translit_artist: String,
     pub genre: String,
     pub banner_path: Option<String>,
     pub background_path: Option<String>,
@@ -890,6 +891,7 @@ pub struct CachedSongMeta {
     pub translit_title: String,
     pub translit_subtitle: String,
     pub artist: String,
+    pub translit_artist: String,
     pub genre: String,
     pub banner_path: Option<String>,
     pub background_path: Option<String>,
@@ -1308,6 +1310,7 @@ pub fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -
         translit_title: song.translit_title,
         translit_subtitle: song.translit_subtitle,
         artist: song.artist,
+        translit_artist: song.translit_artist,
         genre: song.genre,
         banner_path: song.banner_path.map(PathBuf::from),
         background_path: song.background_path.map(PathBuf::from),
@@ -1370,6 +1373,7 @@ pub fn build_cached_song_meta(
         translit_title: song.translit_title.clone(),
         translit_subtitle: song.translit_subtitle.clone(),
         artist: song.artist.clone(),
+        translit_artist: song.translit_artist.clone(),
         genre: song.genre.clone(),
         banner_path: song.banner_path.clone(),
         background_path: song.background_path.clone(),
@@ -1408,6 +1412,7 @@ pub fn build_song_meta_from_cache(song: CachedSongMeta) -> SongData {
         translit_title: song.translit_title,
         translit_subtitle: song.translit_subtitle,
         artist: song.artist,
+        translit_artist: song.translit_artist,
         genre: song.genre,
         banner_path: song.banner_path.map(PathBuf::from),
         background_path: song.background_path.map(PathBuf::from),
@@ -2451,6 +2456,7 @@ mod tests {
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: String::new(),
+            translit_artist: String::new(),
             genre: String::new(),
             banner_path: None,
             background_path: None,
@@ -2621,6 +2627,7 @@ mod tests {
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: String::new(),
+            translit_artist: String::new(),
             genre: String::new(),
             banner_path: None,
             background_path: None,

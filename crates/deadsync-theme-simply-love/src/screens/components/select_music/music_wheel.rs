@@ -1624,6 +1624,7 @@ mod tests {
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: String::new(),
+            translit_artist: String::new(),
             genre: String::new(),
             banner_path: banner_path.map(PathBuf::from),
             background_path: background_path.map(PathBuf::from),

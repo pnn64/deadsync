@@ -75,6 +75,7 @@ pub struct PlayerRuntime {
     pub last_mine_judgment: Option<MineJudgmentRenderInfo>,
 
     pub life: f32,
+    pub course_life: CourseLifeState,
     pub combo_after_miss: u32,
     pub is_failing: bool,
     pub fail_time: Option<f32>,
@@ -221,6 +222,7 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
         last_judgment: None,
         last_mine_judgment: None,
         life: 0.5,
+        course_life: CourseLifeState::Bar,
         combo_after_miss: 0,
         is_failing: false,
         fail_time: None,
@@ -310,11 +312,42 @@ pub fn init_player_runtime_for_song_with_caps(
     combo_carry: u32,
     caps: PlayerBufferCaps,
 ) -> PlayerRuntime {
+    init_player_runtime_for_song_with_course_life(
+        init_music_time,
+        in_course_stage,
+        course_carry,
+        CourseLifeConfig::Bar,
+        carry_combo_between_songs,
+        replay_mode,
+        combo_carry,
+        caps,
+    )
+}
+
+pub fn init_player_runtime_for_song_with_course_life(
+    init_music_time: f32,
+    in_course_stage: bool,
+    course_carry: Option<CourseDisplayCarry>,
+    course_life_config: CourseLifeConfig,
+    carry_combo_between_songs: bool,
+    replay_mode: bool,
+    combo_carry: u32,
+    caps: PlayerBufferCaps,
+) -> PlayerRuntime {
     let mut player = init_player_runtime_with_caps(caps);
     if in_course_stage {
         player.course_submit_life = Some(deadsync_rules::life::LifeMeter::course_submit_start());
     }
-    player.life = course_life_after_carry(player.life, course_carry);
+    let (course_life, course_life_value) = init_course_life(
+        course_life_config,
+        course_carry.map(|carry| carry.course_life),
+    );
+    player.course_life = course_life;
+    player.life = if matches!(course_life_config, CourseLifeConfig::Bar) {
+        course_life_after_carry(player.life, course_carry)
+    } else {
+        course_life_value
+    };
     apply_course_combo_carry(
         &mut player,
         carry_combo_between_songs,

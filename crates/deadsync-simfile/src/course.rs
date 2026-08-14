@@ -27,6 +27,31 @@ pub const COURSE_RATING_ORDER: [Difficulty; 6] = [
 ];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CourseType {
+    #[default]
+    Nonstop,
+    Oni,
+    Endless,
+    Survival,
+}
+
+pub fn course_type(course: &CourseFile) -> CourseType {
+    if course.repeat {
+        CourseType::Endless
+    } else if course.lives > 0 {
+        CourseType::Oni
+    } else if course
+        .entries
+        .first()
+        .is_some_and(|entry| entry.gain_seconds > 0.0)
+    {
+        CourseType::Survival
+    } else {
+        CourseType::Nonstop
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CourseTotals {
     pub steps: u32,
     pub jumps: u32,
@@ -40,6 +65,9 @@ pub struct CourseTotals {
 pub struct ResolvedCourseStage {
     pub song: Arc<SongData>,
     pub chart_index: usize,
+    pub modifiers: String,
+    pub gain_seconds: f32,
+    pub gain_lives: i32,
 }
 
 pub type CourseGradeCounts = [u32; 19];
@@ -343,7 +371,8 @@ pub fn resolve_course_stage(
     songs_by_group: &HashMap<String, Vec<Arc<SongData>>>,
     song_play_counts: &HashMap<String, u32>,
     song_grade_counts: &HashMap<String, CourseGradeCounts>,
-    previous_song_key: Option<&str>,
+    course_type: CourseType,
+    selected_song_keys: &[String],
     chart_type: &str,
     course_difficulty: Difficulty,
 ) -> Option<ResolvedCourseStage> {
@@ -376,16 +405,17 @@ pub fn resolve_course_stage(
         CourseSong::Unknown { .. } => return None,
     };
 
-    if candidates.len() > 1
-        && let Some(previous) = previous_song_key
-    {
-        candidates.retain(|candidate| song_unique_key(&candidate.song) != previous);
-    }
     let (sort, pick) = match &entry.song {
         CourseSong::SortPick { sort, index } => (Some(*sort), (*index).max(0) as usize),
         CourseSong::Select(select) => (select.sort, select.index.max(0) as usize),
         _ => (None, 0),
     };
+    avoid_course_repeats(
+        &mut candidates,
+        course_type,
+        sort.is_none(),
+        selected_song_keys,
+    );
     let candidate = pick_course_candidate(
         &mut candidates,
         sort,
@@ -413,7 +443,43 @@ pub fn resolve_course_stage(
     Some(ResolvedCourseStage {
         song: candidate.song,
         chart_index,
+        modifiers: entry.modifiers.clone(),
+        gain_seconds: entry.gain_seconds,
+        gain_lives: entry.gain_lives,
     })
+}
+
+fn avoid_course_repeats(
+    candidates: &mut Vec<CourseCandidate>,
+    course_type: CourseType,
+    random_sort: bool,
+    selected_song_keys: &[String],
+) {
+    if candidates.len() <= 1 || selected_song_keys.is_empty() {
+        return;
+    }
+    let last = selected_song_keys.last().map(String::as_str);
+    if course_type != CourseType::Endless {
+        candidates.retain(|candidate| Some(song_unique_key(&candidate.song).as_str()) != last);
+        return;
+    }
+    if !random_sort {
+        return;
+    }
+
+    let original = candidates.clone();
+    candidates.retain(|candidate| {
+        let key = song_unique_key(&candidate.song);
+        !selected_song_keys.iter().any(|selected| selected == &key)
+    });
+    if !candidates.is_empty() {
+        return;
+    }
+    candidates.clone_from(&original);
+    candidates.retain(|candidate| Some(song_unique_key(&candidate.song).as_str()) != last);
+    if candidates.is_empty() {
+        candidates.clone_from(&original);
+    }
 }
 
 #[derive(Clone)]
@@ -550,7 +616,12 @@ fn song_select_matches(song: &SongData, select: &SongSelect) -> bool {
     {
         return false;
     }
-    if !select.artists.is_empty() && !select.artists.iter().any(|artist| artist == &song.artist) {
+    if !select.artists.is_empty()
+        && !select
+            .artists
+            .iter()
+            .any(|artist| artist == &song.artist || artist == &song.translit_artist)
+    {
         return false;
     }
     if !select.genres.is_empty() && !select.genres.iter().any(|genre| genre == &song.genre) {
@@ -838,19 +909,12 @@ pub fn validate_course_refs(
                 validate_song_dir(course, entry_num, &song_dir)?;
             }
             rssp::course::CourseSong::SortPick { sort, index } => {
-                let supports_sort = matches!(
+                let choose_index = (*index).max(0) as usize;
+                if matches!(
                     sort,
                     rssp::course::SongSort::MostPlays | rssp::course::SongSort::FewestPlays
-                );
-                if !supports_sort {
-                    return Err(course_ref_error(format!(
-                        "Course '{}' has unsupported sort selector in entry {entry_num} ({sort:?}).",
-                        course.name
-                    )));
-                }
-
-                let choose_index = (*index).max(0) as usize;
-                if choose_index >= total_song_count {
+                ) && choose_index >= total_song_count
+                {
                     return Err(course_ref_error(format!(
                         "Course '{}' entry {entry_num} references out-of-range sort pick '{}{}' with only {} songs installed.",
                         course.name,
@@ -1141,6 +1205,7 @@ mod tests {
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: String::new(),
+            translit_artist: String::new(),
             genre: String::new(),
             banner_path: None,
             background_path: None,
@@ -1578,7 +1643,8 @@ mod tests {
             &songs_by_group,
             &song_play_counts,
             &HashMap::new(),
-            None,
+            CourseType::Nonstop,
+            &[],
             "dance-single",
             Difficulty::Medium,
         )
@@ -1609,12 +1675,115 @@ mod tests {
             &songs_by_group,
             &song_play_counts,
             &HashMap::new(),
-            Some(&previous),
+            CourseType::Nonstop,
+            &[previous],
             "dance-single",
             Difficulty::Medium,
         )
         .expect("random pick");
         assert_eq!(random.song.simfile_path, slow.simfile_path);
+    }
+
+    #[test]
+    fn course_type_follows_itg_precedence() {
+        let mut course = fixed_course(None, "Song");
+        assert_eq!(course_type(&course), CourseType::Nonstop);
+        course.entries[0].gain_seconds = 30.0;
+        assert_eq!(course_type(&course), CourseType::Survival);
+        course.lives = 4;
+        assert_eq!(course_type(&course), CourseType::Oni);
+        course.repeat = true;
+        assert_eq!(course_type(&course), CourseType::Endless);
+    }
+
+    #[test]
+    fn endless_random_avoids_the_cycle_then_falls_back_from_last_song() {
+        let a = song_with_charts("Pack/A/song.ssc", vec![test_chart("Hard", 7, true, "a")]);
+        let b = song_with_charts("Pack/B/song.ssc", vec![test_chart("Hard", 8, true, "b")]);
+        let c = song_with_charts("Pack/C/song.ssc", vec![test_chart("Hard", 9, true, "c")]);
+        let all = [&a, &b, &c]
+            .map(|song| CourseCandidate {
+                song: song.clone(),
+                chart_indices: vec![0],
+                source_index: 0,
+            })
+            .to_vec();
+        let selected = vec![song_unique_key(&a), song_unique_key(&b)];
+
+        let mut candidates = all.clone();
+        avoid_course_repeats(&mut candidates, CourseType::Endless, true, &selected);
+        assert_eq!(candidates.len(), 1);
+        assert!(Arc::ptr_eq(&candidates[0].song, &c));
+
+        let mut exhausted = all.clone();
+        let all_selected = vec![
+            song_unique_key(&a),
+            song_unique_key(&b),
+            song_unique_key(&c),
+        ];
+        avoid_course_repeats(&mut exhausted, CourseType::Endless, true, &all_selected);
+        assert_eq!(exhausted.len(), 2);
+        assert!(
+            exhausted
+                .iter()
+                .all(|candidate| !Arc::ptr_eq(&candidate.song, &c))
+        );
+
+        let mut sorted = all;
+        avoid_course_repeats(&mut sorted, CourseType::Endless, false, &all_selected);
+        assert_eq!(sorted.len(), 3);
+    }
+
+    #[test]
+    fn grade_sorts_compare_best_grade_counts_first() {
+        let a = song_with_charts("Pack/A/song.ssc", vec![test_chart("Hard", 7, true, "a")]);
+        let b = song_with_charts("Pack/B/song.ssc", vec![test_chart("Hard", 8, true, "b")]);
+        let candidates = vec![
+            CourseCandidate {
+                song: a.clone(),
+                chart_indices: vec![0],
+                source_index: 0,
+            },
+            CourseCandidate {
+                song: b.clone(),
+                chart_indices: vec![0],
+                source_index: 1,
+            },
+        ];
+        let mut a_grades = CourseGradeCounts::default();
+        a_grades[1] = 1;
+        let mut b_grades = CourseGradeCounts::default();
+        b_grades[2] = 10;
+        let grades = HashMap::from([
+            (song_unique_key(&a), a_grades),
+            (song_unique_key(&b), b_grades),
+        ]);
+
+        let top = pick_course_candidate(
+            &mut candidates.clone(),
+            Some(SongSort::TopGrades),
+            0,
+            &HashMap::new(),
+            &grades,
+            0,
+            Path::new("course.crs"),
+            0,
+        )
+        .expect("top grades");
+        assert!(Arc::ptr_eq(&top.song, &a));
+
+        let lowest = pick_course_candidate(
+            &mut candidates.clone(),
+            Some(SongSort::LowestGrades),
+            0,
+            &HashMap::new(),
+            &grades,
+            0,
+            Path::new("course.crs"),
+            0,
+        )
+        .expect("lowest grades");
+        assert!(Arc::ptr_eq(&lowest.song, &b));
     }
 
     #[test]
@@ -1630,7 +1799,8 @@ mod tests {
         ))
         .clone();
         matching.title = "Match".to_string();
-        matching.artist = "Artist".to_string();
+        matching.artist = "Localized Artist".to_string();
+        matching.translit_artist = "Artist".to_string();
         matching.genre = "Genre".to_string();
         matching.display_bpm = "120:180".to_string();
         matching.music_length_seconds = 90.0;
@@ -1639,6 +1809,7 @@ mod tests {
         let mut wrong_artist = (*matching).clone();
         wrong_artist.simfile_path = PathBuf::from("Pack/Wrong/song.ssc");
         wrong_artist.artist = "Other".to_string();
+        wrong_artist.translit_artist = "Other".to_string();
         let all_songs = vec![matching.clone(), Arc::new(wrong_artist)];
         let songs_by_group = HashMap::from([("Pack".to_string(), all_songs.clone())]);
         let entry = CourseEntry {
@@ -1671,7 +1842,8 @@ mod tests {
             &songs_by_group,
             &HashMap::new(),
             &HashMap::new(),
-            None,
+            CourseType::Nonstop,
+            &[],
             "dance-single",
             Difficulty::Challenge,
         )

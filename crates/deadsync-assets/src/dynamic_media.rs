@@ -635,6 +635,7 @@ mod tests {
             translit_title: "Test".to_string(),
             translit_subtitle: String::new(),
             artist: String::new(),
+            translit_artist: String::new(),
             genre: String::new(),
             banner_path: None,
             background_path: None,

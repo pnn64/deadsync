@@ -15,12 +15,13 @@ mod updater;
 
 use self::screenshot::auto_screenshot_eval_results;
 use crate::command::Command;
-#[cfg(test)]
-use crate::course::{CourseRunState, CourseStageRuntime, score_info_from_stage};
 use crate::course::{
-    build_course_graph_stages, build_course_run_from_selection, build_course_summary_score_info,
-    build_course_summary_stage, course_display_timing_for_run, merge_course_score_columns,
+    CourseRunState, append_endless_cycle, build_course_graph_stages,
+    build_course_run_from_selection, build_course_summary_score_info, build_course_summary_stage,
+    course_display_timing_for_run, course_life_config_for_stage, merge_course_score_columns,
 };
+#[cfg(test)]
+use crate::course::{CourseStageRuntime, score_info_from_stage};
 use crate::diagnostics::timing_health;
 use crate::dynamic_media::{BgVideoTiming, DynamicMedia};
 use crate::frame_loop::{FrameScreenStepContext, FrameWaitControl, frame_screen_step_plan};
@@ -3240,7 +3241,7 @@ impl App {
             .session
             .course_run
             .as_ref()
-            .is_some_and(|course| course.next_stage_index < course.stages.len());
+            .is_some_and(CourseRunState::has_next_stage);
         let gameplay_failed = matches!(action, ThemeEffect::Navigate(CurrentScreen::Evaluation))
             && current_screen == CurrentScreen::Gameplay
             && self.current_gameplay_stage_failed();
@@ -4295,10 +4296,36 @@ impl App {
         color_index: i32,
         prewarm_noteskin_catalog: bool,
     ) -> bool {
+        let reroll_endless = self
+            .state
+            .session
+            .course_run
+            .as_ref()
+            .is_some_and(|course| {
+                course.course_type == deadsync_theme_simply_love::views::CourseTypeView::Endless
+                    && course.next_stage_index == course.stages.len()
+            });
+        if reroll_endless {
+            let selection = select_course::reroll_selected_endless_plan(
+                &self.state.screens.select_course_state,
+            )
+            .or_else(|| {
+                select_course::selected_course_plan(&self.state.screens.select_course_state)
+            });
+            if let Some(selection) = selection
+                && let Some(course) = self.state.session.course_run.as_mut()
+            {
+                let _ = append_endless_cycle(
+                    course,
+                    selection,
+                    profile::get_session_play_style().chart_type(),
+                );
+            }
+        }
         let Some(course_run) = self.state.session.course_run.as_ref() else {
             return false;
         };
-        let Some(stage) = course_run.stages.get(course_run.next_stage_index) else {
+        let Some(stage) = course_run.next_stage() else {
             return false;
         };
         let init = if prewarm_noteskin_catalog {
@@ -6960,6 +6987,8 @@ impl App {
                     None,
                     None,
                     None,
+                    [deadsync_gameplay::CourseLifeConfig::Bar; MAX_PLAYERS],
+                    None,
                     None,
                     [0; MAX_PLAYERS],
                     gameplay_init_view,
@@ -7060,6 +7089,22 @@ impl App {
                 .course_run
                 .as_ref()
                 .map(course_display_timing_for_run);
+            let course_modifiers = self
+                .state
+                .session
+                .course_run
+                .as_ref()
+                .and_then(CourseRunState::next_stage)
+                .map(|stage| Arc::<str>::from(stage.modifiers.as_str()));
+            let course_life_config = self.state.session.course_run.as_ref().map_or(
+                [deadsync_gameplay::CourseLifeConfig::Bar; MAX_PLAYERS],
+                |course| {
+                    course_life_config_for_stage(
+                        course,
+                        profile::get_session_play_style().chart_type(),
+                    )
+                },
+            );
             if prev == CurrentScreen::Gameplay
                 && self.state.session.course_run.is_some()
                 && let Some(gs) = self.state.screens.gameplay_state.as_mut()
@@ -7312,8 +7357,14 @@ impl App {
                     self.state.session.course_run.as_ref()
                 {
                     let stage_num = course.next_stage_index.saturating_add(1);
-                    let total = course.stages.len().max(1);
-                    Arc::from(format!("STAGE {stage_num} / {total}"))
+                    if course.course_type
+                        == deadsync_theme_simply_love::views::CourseTypeView::Endless
+                    {
+                        Arc::from(format!("STAGE {stage_num}"))
+                    } else {
+                        let total = course.stages.len().max(1);
+                        Arc::from(format!("STAGE {stage_num} / {total}"))
+                    }
                 } else if cfg.keyboard_features && self.state.session.gameplay_restart_count > 0 {
                     Arc::from(format!(
                         "RESTART {}",
@@ -7357,6 +7408,8 @@ impl App {
                     course_display_carry,
                     course_display_totals,
                     course_display_timing,
+                    course_modifiers,
+                    course_life_config,
                     course_display_info,
                     course_banner_path,
                     combo_carry,
@@ -8354,6 +8407,7 @@ mod tests {
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: String::new(),
+            translit_artist: String::new(),
             genre: String::new(),
             banner_path: None,
             background_path: None,
@@ -8480,6 +8534,9 @@ mod tests {
             song,
             steps_index: [0; MAX_PLAYERS],
             preferred_difficulty_index: [0; MAX_PLAYERS],
+            modifiers: String::new(),
+            gain_seconds: 0.0,
+            gain_lives: -1,
         }
     }
 
@@ -8604,6 +8661,8 @@ mod tests {
             course_difficulty_name: "Hard".to_string(),
             course_meter: Some(12),
             course_stepchart_label: "Hard".to_string(),
+            course_type: deadsync_theme_simply_love::views::CourseTypeView::Nonstop,
+            lives: -1,
             song_stub: song_a.clone(),
             stages: vec![
                 test_course_stage(song_a.clone()),

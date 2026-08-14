@@ -414,6 +414,8 @@ pub fn init_gameplay_runtime<
     course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
     course_display_timing: Option<CourseDisplayTiming>,
+    course_modifiers: Option<Arc<str>>,
+    course_life_config: [CourseLifeConfig; MAX_PLAYERS],
     mut combo_carry: [u32; MAX_PLAYERS],
 ) -> GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>
 where
@@ -664,6 +666,7 @@ where
         &timing_players,
         song_seed,
         attack_song_length_seconds,
+        course_modifiers.as_deref(),
     );
 
     let mut score_valid = [true; MAX_PLAYERS];
@@ -998,6 +1001,12 @@ where
             )
         };
         windows.extend(song_lua_mask_windows[player].iter().copied());
+        if let Some(window) = course_modifiers
+            .as_deref()
+            .and_then(build_course_modifier_mask_window)
+        {
+            windows.push(window);
+        }
         windows
     });
     let reverse_scroll: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
@@ -1224,10 +1233,11 @@ where
             player_profiles[p].error_bar_options(),
         );
         let course_carry = course_display_carry.as_ref().map(|carry| carry[p]);
-        init_player_runtime_for_song_with_caps(
+        init_player_runtime_for_song_with_course_life(
             init_music_time,
             in_course_stage,
             course_carry,
+            course_life_config[p],
             player_profiles[p].carry_combo_between_songs(),
             replay_mode,
             combo_carry[p],

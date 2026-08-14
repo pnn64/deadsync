@@ -367,10 +367,11 @@ where
 
                 let side_effect_plan = mine_hit_side_effect_plan(scoring_blocked);
                 if side_effect_plan.apply_life_change {
-                    apply_life_change(
+                    apply_course_life_event(
                         &mut self.players_runtime.players[player],
                         current_music_time,
                         side_effect_plan.life_delta,
+                        CourseLifeEvent::Mine,
                     );
                 }
                 if side_effect_plan.capture_failed_ex_score_inputs {
@@ -556,10 +557,11 @@ where
         }
         if player_update.apply_life_change {
             let current_music_time = self.current_music_time_seconds();
-            apply_life_change(
+            apply_course_life_event(
                 &mut self.players_runtime.players[player],
                 current_music_time,
                 player_update.life_delta,
+                CourseLifeEvent::HoldLetGo,
             );
         }
         if player_update.capture_failed_ex_score_inputs {
@@ -608,10 +610,11 @@ where
         apply_hold_resolution_player_state(&mut self.players_runtime.players[player], player_state);
         if player_update.apply_life_change {
             let current_music_time = self.current_music_time_seconds();
-            apply_life_change(
+            apply_course_life_event(
                 &mut self.players_runtime.players[player],
                 current_music_time,
                 player_update.life_delta,
+                CourseLifeEvent::HoldHeld,
             );
         }
         if player_update.capture_failed_ex_score_inputs {
@@ -953,10 +956,15 @@ where
         } else {
             deadsync_rules::life::LIFE_LET_GO
         };
-        apply_life_change(
+        apply_course_life_event(
             player_runtime,
             song_time_ns_to_seconds(self.hold_runtime.pump_events[row_start].time_ns),
             life_delta,
+            if checkpoint_hit {
+                CourseLifeEvent::CheckpointHit
+            } else {
+                CourseLifeEvent::CheckpointMiss
+            },
         );
         apply_combo_update(player_runtime, combo_update, combo_milestones_enabled);
         if !checkpoint_hit {
@@ -1652,7 +1660,12 @@ where
                 update_itg_grade_totals(p);
             }
             if plan.apply_life_change {
-                apply_life_change(p, current_music_time, plan.life_delta);
+                apply_course_life_event(
+                    p,
+                    current_music_time,
+                    plan.life_delta,
+                    CourseLifeEvent::Tap(final_judgment.grade),
+                );
             }
             apply_combo_update(p, update.combo_update, combo_milestones_enabled);
         }
@@ -2234,10 +2247,11 @@ where
                         self.register_provisional_early_result(note_index, judgment);
                         let current_music_time = self.current_music_time_seconds();
                         if plan.apply_life_change {
-                            apply_life_change(
+                            apply_course_life_event(
                                 &mut self.players_runtime.players[player],
                                 current_music_time,
                                 plan.life_delta,
+                                CourseLifeEvent::Tap(judgment.grade),
                             );
                         }
                         if plan.capture_failed_ex_score_inputs {
@@ -2513,10 +2527,11 @@ where
                     self.register_provisional_early_result(note_index, judgment);
                     let current_music_time = self.current_music_time_seconds();
                     if plan.apply_life_change {
-                        apply_life_change(
+                        apply_course_life_event(
                             &mut self.players_runtime.players[player],
                             current_music_time,
                             plan.life_delta,
+                            CourseLifeEvent::Tap(judgment.grade),
                         );
                     }
                     if plan.capture_failed_ex_score_inputs {

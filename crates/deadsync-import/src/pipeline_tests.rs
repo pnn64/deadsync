@@ -98,6 +98,7 @@ fn song(simfile_path: &str, charts: Vec<ChartData>) -> SongData {
         translit_title: String::new(),
         translit_subtitle: String::new(),
         artist: String::new(),
+        translit_artist: String::new(),
         genre: String::new(),
         banner_path: None,
         background_path: None,

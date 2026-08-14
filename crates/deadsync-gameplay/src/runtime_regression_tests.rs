@@ -802,6 +802,7 @@ mod runtime_regression_tests {
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: "Tests".to_string(),
+            translit_artist: String::new(),
             genre: String::new(),
             banner_path: None,
             background_path: None,
@@ -923,6 +924,8 @@ mod runtime_regression_tests {
             None,
             None,
             None,
+            None,
+            [CourseLifeConfig::Bar; MAX_PLAYERS],
             [0; MAX_PLAYERS],
         )
     }
@@ -957,6 +960,8 @@ mod runtime_regression_tests {
             None,
             None,
             None,
+            None,
+            [CourseLifeConfig::Bar; MAX_PLAYERS],
             [0; MAX_PLAYERS],
         )
     }
@@ -1022,6 +1027,8 @@ mod runtime_regression_tests {
             None,
             None,
             None,
+            None,
+            [CourseLifeConfig::Bar; MAX_PLAYERS],
             [0; MAX_PLAYERS],
         )
     }

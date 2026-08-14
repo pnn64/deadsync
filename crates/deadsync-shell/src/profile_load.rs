@@ -91,10 +91,27 @@ pub(crate) fn select_course_init_view() -> SelectCourseInitView {
         .clone();
     let song_packs = get_song_cache().clone();
     let courses = get_course_cache().clone();
+    scores::prewarm_select_music_score_caches();
+    let chart_type = context.play_style.chart_type();
+    let chart_grades = song_packs
+        .iter()
+        .flat_map(|pack| pack.songs.iter())
+        .flat_map(|song| song.charts.iter())
+        .filter(|chart| chart.chart_type.eq_ignore_ascii_case(chart_type))
+        .filter_map(|chart| {
+            scores::get_machine_record_local(chart.short_hash.as_str()).map(|(_, score)| {
+                (
+                    chart.short_hash.clone(),
+                    score.grade.to_sprite_state() as u8,
+                )
+            })
+        })
+        .collect();
     SelectCourseInitView {
         song_packs,
         courses,
         played_chart_counts: scores::played_chart_counts_for_machine(),
+        chart_grades,
         translated_titles,
         last_course_path: last_course.course_path.map(PathBuf::from),
         last_course_difficulty: last_course.difficulty_name,

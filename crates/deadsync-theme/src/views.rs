@@ -213,6 +213,18 @@ pub struct SmxGifCatalogView {
 pub struct CourseStageView {
     pub song: Arc<SongData>,
     pub chart_hash: String,
+    pub modifiers: String,
+    pub gain_seconds: f32,
+    pub gain_lives: i32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CourseTypeView {
+    #[default]
+    Nonstop,
+    Oni,
+    Endless,
+    Survival,
 }
 
 /// A selected course prepared by a theme for runtime startup.
@@ -226,6 +238,8 @@ pub struct SelectedCourseView {
     pub course_difficulty_name: String,
     pub course_meter: Option<u32>,
     pub course_stepchart_label: String,
+    pub course_type: CourseTypeView,
+    pub lives: i32,
     pub stages: Vec<CourseStageView>,
 }
 

@@ -3,6 +3,245 @@ pub const fn player_life_is_dead(life: f32, is_failing: bool) -> bool {
     is_failing || life <= 0.0
 }
 
+const SURVIVAL_FULL_LIFE_SECONDS: f32 = 90.0;
+const SURVIVAL_MIN_GAIN_SECONDS: f32 = 15.0;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum CourseLifeConfig {
+    #[default]
+    Bar,
+    Battery {
+        total_lives: u32,
+        reward_lives: u32,
+    },
+    Survival {
+        gain_seconds: f32,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum CourseLifeState {
+    #[default]
+    Bar,
+    Battery {
+        lives: u32,
+        total_lives: u32,
+        reward_lives: u32,
+    },
+    Survival {
+        remaining_seconds: f32,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CourseLifeEvent {
+    Tap(JudgeGrade),
+    Mine,
+    CheckpointHit,
+    CheckpointMiss,
+    HoldHeld,
+    HoldLetGo,
+    ForceFail,
+}
+
+#[inline(always)]
+fn survival_life(seconds: f32) -> f32 {
+    (seconds / SURVIVAL_FULL_LIFE_SECONDS).clamp(0.0, 1.0)
+}
+
+pub fn init_course_life(
+    config: CourseLifeConfig,
+    carry: Option<CourseLifeState>,
+) -> (CourseLifeState, f32) {
+    match config {
+        CourseLifeConfig::Bar => (CourseLifeState::Bar, 0.5),
+        CourseLifeConfig::Battery {
+            total_lives,
+            reward_lives,
+        } => {
+            let total_lives = total_lives.max(1);
+            let lives = match carry {
+                Some(CourseLifeState::Battery { lives, .. }) => lives.min(total_lives),
+                _ => total_lives,
+            };
+            (
+                CourseLifeState::Battery {
+                    lives,
+                    total_lives,
+                    reward_lives,
+                },
+                lives as f32 / total_lives as f32,
+            )
+        }
+        CourseLifeConfig::Survival { gain_seconds } => {
+            let carried_seconds = match carry {
+                Some(CourseLifeState::Survival {
+                    remaining_seconds, ..
+                }) => remaining_seconds.max(0.0),
+                _ => 0.0,
+            };
+            let start_seconds = carried_seconds
+                + if gain_seconds.is_finite() {
+                    gain_seconds.max(SURVIVAL_MIN_GAIN_SECONDS)
+                } else {
+                    SURVIVAL_MIN_GAIN_SECONDS
+                };
+            (
+                CourseLifeState::Survival {
+                    remaining_seconds: start_seconds,
+                },
+                survival_life(start_seconds),
+            )
+        }
+    }
+}
+
+pub fn course_life_carry(state: CourseLifeState) -> CourseLifeState {
+    match state {
+        CourseLifeState::Battery {
+            lives,
+            total_lives,
+            reward_lives,
+        } => CourseLifeState::Battery {
+            lives: if lives == 0 {
+                0
+            } else {
+                lives.saturating_add(reward_lives).min(total_lives)
+            },
+            total_lives,
+            reward_lives: 0,
+        },
+        state => state,
+    }
+}
+
+#[inline(always)]
+const fn battery_lives_lost(event: CourseLifeEvent) -> u32 {
+    match event {
+        CourseLifeEvent::Tap(
+            JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great,
+        )
+        | CourseLifeEvent::CheckpointHit
+        | CourseLifeEvent::CheckpointMiss
+        | CourseLifeEvent::HoldHeld => 0,
+        CourseLifeEvent::Tap(JudgeGrade::Decent | JudgeGrade::WayOff | JudgeGrade::Miss)
+        | CourseLifeEvent::Mine
+        | CourseLifeEvent::HoldLetGo => 1,
+        CourseLifeEvent::ForceFail => u32::MAX,
+    }
+}
+
+#[inline(always)]
+const fn survival_seconds_change(event: CourseLifeEvent) -> f32 {
+    match event {
+        CourseLifeEvent::Tap(JudgeGrade::Fantastic) => 0.2,
+        CourseLifeEvent::Tap(JudgeGrade::Excellent)
+        | CourseLifeEvent::CheckpointHit
+        | CourseLifeEvent::CheckpointMiss
+        | CourseLifeEvent::HoldHeld => 0.0,
+        CourseLifeEvent::Tap(JudgeGrade::Great) => -0.5,
+        CourseLifeEvent::Tap(JudgeGrade::Decent) => -1.0,
+        CourseLifeEvent::Tap(JudgeGrade::WayOff) | CourseLifeEvent::Mine => -2.0,
+        CourseLifeEvent::Tap(JudgeGrade::Miss) | CourseLifeEvent::HoldLetGo => -4.0,
+        CourseLifeEvent::ForceFail => f32::MIN,
+    }
+}
+
+fn record_player_life_change(
+    player: &mut PlayerRuntime,
+    current_music_time: f32,
+    old_life: f32,
+) {
+    if (player.life - old_life).abs() <= 0.000_001_f32 {
+        return;
+    }
+    deadsync_rules::life::record_life_history(
+        &mut player.life_history,
+        current_music_time,
+        old_life,
+    );
+    deadsync_rules::life::record_life_history(
+        &mut player.life_history,
+        current_music_time,
+        player.life,
+    );
+}
+
+fn fail_course_life(player: &mut PlayerRuntime, current_music_time: f32) {
+    if player.life > 0.0 {
+        return;
+    }
+    player.life = 0.0;
+    player.is_failing = true;
+    player.fail_time.get_or_insert(current_music_time);
+}
+
+pub fn update_course_life_time(
+    player: &mut PlayerRuntime,
+    current_music_time: f32,
+    delta_time: f32,
+) {
+    let CourseLifeState::Survival { remaining_seconds } = &mut player.course_life
+    else {
+        return;
+    };
+    if player.is_failing {
+        return;
+    }
+    let old_life = player.life;
+    if delta_time.is_finite() {
+        *remaining_seconds = (*remaining_seconds - delta_time.max(0.0)).max(0.0);
+    }
+    player.life = survival_life(*remaining_seconds);
+    record_player_life_change(player, current_music_time, old_life);
+    fail_course_life(player, current_music_time);
+}
+
+pub fn apply_course_life_event(
+    player: &mut PlayerRuntime,
+    current_music_time: f32,
+    normal_delta: f32,
+    event: CourseLifeEvent,
+) {
+    if matches!(player.course_life, CourseLifeState::Bar) {
+        apply_life_change(player, current_music_time, normal_delta);
+        return;
+    }
+
+    if let Some(submit_life) = player.course_submit_life.as_mut() {
+        let _ = deadsync_rules::life::apply_life_delta(
+            submit_life,
+            current_music_time,
+            normal_delta,
+        );
+    }
+    if player.is_failing {
+        return;
+    }
+
+    let old_life = player.life;
+    match &mut player.course_life {
+        CourseLifeState::Bar => unreachable!(),
+        CourseLifeState::Battery {
+            lives, total_lives, ..
+        } => {
+            *lives = lives.saturating_sub(battery_lives_lost(event));
+            player.life = *lives as f32 / (*total_lives).max(1) as f32;
+        }
+        CourseLifeState::Survival { remaining_seconds } => {
+            let change = survival_seconds_change(event);
+            if change == f32::MIN {
+                player.life = 0.0;
+            } else {
+                *remaining_seconds = (*remaining_seconds + change).max(0.0);
+                player.life = survival_life(*remaining_seconds);
+            }
+        }
+    }
+    record_player_life_change(player, current_music_time, old_life);
+    fail_course_life(player, current_music_time);
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PlayerLifeStatus {
     pub life: f32,
@@ -137,4 +376,3 @@ pub fn apply_life_change(player: &mut PlayerRuntime, current_music_time: f32, de
 pub fn player_runtime_is_dead(player: &PlayerRuntime) -> bool {
     player_life_is_dead(player.life, player.is_failing)
 }
-

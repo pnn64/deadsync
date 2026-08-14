@@ -174,6 +174,7 @@ pub(super) mod tests {
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: "Test Artist".to_string(),
+            translit_artist: String::new(),
             genre: String::new(),
             banner_path: None,
             background_path: None,

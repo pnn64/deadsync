@@ -3495,6 +3495,20 @@ mod tests {
     }
 
     #[test]
+    fn course_modifier_window_persists_for_the_whole_song() {
+        let window = build_course_modifier_mask_window("C650,30% reverse,25% mini")
+            .expect("course modifier window");
+
+        assert_eq!(window.start_second, f32::MIN);
+        assert_eq!(window.end_second, f32::MAX);
+        assert!(window.persist_after_end);
+        assert_eq!(window.scroll_speed, Some(ScrollSpeedSetting::CMod(650.0)));
+        assert_eq!(window.scroll.reverse, Some(0.3));
+        assert_eq!(window.mini_percent, Some(25.0));
+        assert_eq!(window.mini_mode, MiniAttackMode::Absolute);
+    }
+
+    #[test]
     fn attack_mod_parser_maps_chart_masks_and_turn_options() {
         let mods = parse_attack_mods(
             "wide,big,quick,bmrize,skippy,echo,stomp,mines,little,nomines,noholds,\
@@ -10940,6 +10954,80 @@ mod tests {
     }
 
     #[test]
+    fn oni_battery_uses_itg_loss_and_song_reward_rules() {
+        let mut player = init_player_runtime();
+        let (state, life) = init_course_life(
+            CourseLifeConfig::Battery {
+                total_lives: 4,
+                reward_lives: 2,
+            },
+            None,
+        );
+        player.course_life = state;
+        player.life = life;
+
+        apply_course_life_event(&mut player, 1.0, -0.02, CourseLifeEvent::Tap(JudgeGrade::Great));
+        assert_near(player.life, 1.0);
+        apply_course_life_event(
+            &mut player,
+            2.0,
+            -0.04,
+            CourseLifeEvent::Tap(JudgeGrade::Decent),
+        );
+        apply_course_life_event(&mut player, 3.0, -0.10, CourseLifeEvent::Mine);
+        assert_near(player.life, 0.5);
+
+        assert_eq!(
+            course_life_carry(player.course_life),
+            CourseLifeState::Battery {
+                lives: 4,
+                total_lives: 4,
+                reward_lives: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn survival_meter_carries_time_and_applies_itg_deltas() {
+        let mut player = init_player_runtime();
+        let (state, life) = init_course_life(
+            CourseLifeConfig::Survival { gain_seconds: 5.0 },
+            None,
+        );
+        player.course_life = state;
+        player.life = life;
+        update_course_life_time(&mut player, 5.0, 5.0);
+        apply_course_life_event(
+            &mut player,
+            5.0,
+            -0.02,
+            CourseLifeEvent::Tap(JudgeGrade::Great),
+        );
+
+        let CourseLifeState::Survival {
+            remaining_seconds, ..
+        } = player.course_life
+        else {
+            panic!("expected survival life");
+        };
+        assert_near(remaining_seconds, 9.5);
+        assert_near(player.life, 9.5 / 90.0);
+
+        let (next, next_life) = init_course_life(
+            CourseLifeConfig::Survival { gain_seconds: 0.0 },
+            Some(course_life_carry(player.course_life)),
+        );
+        let CourseLifeState::Survival {
+            remaining_seconds, ..
+        } = next
+        else {
+            panic!("expected carried survival life");
+        };
+        assert_near(remaining_seconds, 24.5);
+        assert_near(next_life, 24.5 / 90.0);
+    }
+
+    #[test]
     fn course_combo_carry_restores_combo_color_state() {
         let carry = CourseDisplayCarry {
             full_combo_grade: Some(JudgeGrade::Excellent),
@@ -13569,6 +13657,7 @@ mod tests {
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: String::new(),
+            translit_artist: String::new(),
             genre: String::new(),
             banner_path: None,
             background_path: None,

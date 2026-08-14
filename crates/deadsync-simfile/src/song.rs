@@ -141,6 +141,7 @@ fn build_song_data(
         translit_title: summary.titletranslit_str,
         translit_subtitle: summary.subtitletranslit_str,
         artist: summary.artist_str,
+        translit_artist: summary.artisttranslit_str,
         genre: summary.genre_str,
         banner_path: artwork
             .banner_path

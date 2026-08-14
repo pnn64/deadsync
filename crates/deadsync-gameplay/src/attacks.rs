@@ -633,6 +633,34 @@ pub fn build_song_lua_constant_attack_mask_window(
     })
 }
 
+pub fn build_course_modifier_mask_window(modifiers: &str) -> Option<AttackMaskWindow> {
+    let mods = parse_attack_mods(modifiers);
+    if !mods.has_runtime_mask_effect() {
+        return None;
+    }
+    Some(AttackMaskWindow {
+        start_second: f32::MIN,
+        end_second: f32::MAX,
+        sustain_end_second: f32::MAX,
+        persist_after_end: true,
+        clear_all: mods.clear_all,
+        chart: ChartAttackEffects::default(),
+        accel: mods.accel,
+        visual: mods.visual,
+        visual_speed: mods.visual_speed,
+        appearance: mods.appearance,
+        appearance_speed: mods.appearance_speed,
+        visibility: mods.visibility,
+        scroll: mods.scroll,
+        scroll_approach_speed: mods.scroll_approach_speed,
+        perspective: mods.perspective,
+        scroll_speed: mods.scroll_speed,
+        mini_percent: mods.mini_percent,
+        mini_mode: MiniAttackMode::Absolute,
+        mini_speed: mods.mini_speed,
+    })
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SongLuaEaseMaskTarget {
     AccelBoost,

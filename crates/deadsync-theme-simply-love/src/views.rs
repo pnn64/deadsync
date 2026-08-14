@@ -7,9 +7,9 @@ use std::sync::Arc;
 
 pub use deadsync_config::frame_pacing::VisibleStutterSample;
 pub use deadsync_theme::views::{
-    AudioTimingView, CourseGraphStageView, CourseStageView, DensityGraphView, EvaluationView,
-    FrameStatsSample, FrameStatsSummary, OverlayAnchor, OverlayStyle, SelectedCourseView,
-    TimingHealthView,
+    AudioTimingView, CourseGraphStageView, CourseStageView, CourseTypeView, DensityGraphView,
+    EvaluationView, FrameStatsSample, FrameStatsSummary, OverlayAnchor, OverlayStyle,
+    SelectedCourseView, TimingHealthView,
 };
 
 /// Concrete evaluation view used by the Simply Love screens.
@@ -679,6 +679,7 @@ pub struct SelectCourseInitView {
     pub song_packs: Vec<deadsync_chart::SongPack>,
     pub courses: Vec<deadsync_simfile::runtime_cache::CourseData>,
     pub played_chart_counts: Vec<(String, u32)>,
+    pub chart_grades: Vec<(String, u8)>,
     pub translated_titles: bool,
     pub last_course_path: Option<PathBuf>,
     pub last_course_difficulty: Option<String>,

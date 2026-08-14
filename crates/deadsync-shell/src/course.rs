@@ -1,7 +1,7 @@
 use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
-    CourseDisplayTiming, CourseDisplayTotals, course_display_timing_for_stages,
+    CourseDisplayTiming, CourseDisplayTotals, CourseLifeConfig, course_display_timing_for_stages,
     course_display_totals_for_chart,
 };
 use deadsync_online::score_compat as scores;
@@ -9,7 +9,7 @@ use deadsync_profile::compat as profile;
 use deadsync_profile::{self as profile_data, PlayStyle, PlayerSide};
 use deadsync_score::{self as score_data, ColumnJudgments, stage_stats};
 use deadsync_theme_simply_love::views::{
-    CourseGraphStage, CourseStagePlan, ScoreInfo, SelectedCoursePlan,
+    CourseGraphStage, CourseStagePlan, CourseTypeView, ScoreInfo, SelectedCoursePlan,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,6 +19,9 @@ pub struct CourseStageRuntime {
     pub song: Arc<SongData>,
     pub steps_index: [usize; MAX_PLAYERS],
     pub preferred_difficulty_index: [usize; MAX_PLAYERS],
+    pub modifiers: String,
+    pub gain_seconds: f32,
+    pub gain_lives: i32,
 }
 
 #[derive(Clone)]
@@ -30,11 +33,71 @@ pub struct CourseRunState {
     pub course_difficulty_name: String,
     pub course_meter: Option<u32>,
     pub course_stepchart_label: String,
+    pub course_type: CourseTypeView,
+    pub lives: i32,
     pub song_stub: Arc<SongData>,
     pub stages: Vec<CourseStageRuntime>,
     pub course_display_totals: [CourseDisplayTotals; MAX_PLAYERS],
     pub next_stage_index: usize,
     pub stage_summaries: Vec<stage_stats::StageSummary>,
+}
+
+impl CourseRunState {
+    pub fn has_next_stage(&self) -> bool {
+        !self.stages.is_empty()
+            && (self.course_type == CourseTypeView::Endless
+                || self.next_stage_index < self.stages.len())
+    }
+
+    pub fn next_stage(&self) -> Option<&CourseStageRuntime> {
+        if self.stages.is_empty() {
+            return None;
+        }
+        let index = if self.course_type == CourseTypeView::Endless {
+            self.next_stage_index % self.stages.len()
+        } else {
+            self.next_stage_index
+        };
+        self.stages.get(index)
+    }
+
+    pub fn is_finished(&self, failed: bool) -> bool {
+        failed
+            || (self.course_type != CourseTypeView::Endless
+                && self.next_stage_index >= self.stages.len())
+    }
+}
+
+pub fn course_life_config_for_stage(
+    course: &CourseRunState,
+    chart_type: &str,
+) -> [CourseLifeConfig; MAX_PLAYERS] {
+    let Some(stage) = course.next_stage() else {
+        return [CourseLifeConfig::Bar; MAX_PLAYERS];
+    };
+    match course.course_type {
+        CourseTypeView::Nonstop | CourseTypeView::Endless => [CourseLifeConfig::Bar; MAX_PLAYERS],
+        CourseTypeView::Oni => {
+            let total_lives = u32::try_from(course.lives).unwrap_or(1).max(1);
+            std::array::from_fn(|player| {
+                let reward_lives = u32::try_from(stage.gain_lives).unwrap_or_else(|_| {
+                    stage
+                        .song
+                        .chart_for_steps_index(chart_type, stage.steps_index[player])
+                        .map_or(1, |chart| if chart.meter >= 8 { 2 } else { 1 })
+                });
+                CourseLifeConfig::Battery {
+                    total_lives,
+                    reward_lives,
+                }
+            })
+        }
+        CourseTypeView::Survival => {
+            [CourseLifeConfig::Survival {
+                gain_seconds: stage.gain_seconds,
+            }; MAX_PLAYERS]
+        }
+    }
 }
 
 fn course_stage_runtime_from_plan(
@@ -48,7 +111,56 @@ fn course_stage_runtime_from_plan(
         song: plan.song.clone(),
         steps_index: [steps_idx; MAX_PLAYERS],
         preferred_difficulty_index: [steps_idx; MAX_PLAYERS],
+        modifiers: plan.modifiers.clone(),
+        gain_seconds: plan.gain_seconds,
+        gain_lives: plan.gain_lives,
     })
+}
+
+fn add_course_stage_totals(
+    totals: &mut [CourseDisplayTotals; MAX_PLAYERS],
+    stage: &CourseStageRuntime,
+    chart_type: &str,
+) {
+    for (player_idx, total) in totals.iter_mut().enumerate() {
+        let Some(chart) = stage
+            .song
+            .chart_for_steps_index(chart_type, stage.steps_index[player_idx])
+        else {
+            continue;
+        };
+        let add = course_display_totals_for_chart(chart);
+        total.possible_grade_points = total
+            .possible_grade_points
+            .saturating_add(add.possible_grade_points);
+        total.total_steps = total.total_steps.saturating_add(add.total_steps);
+        total.holds_total = total.holds_total.saturating_add(add.holds_total);
+        total.rolls_total = total.rolls_total.saturating_add(add.rolls_total);
+        total.mines_total = total.mines_total.saturating_add(add.mines_total);
+    }
+}
+
+pub fn append_endless_cycle(
+    course: &mut CourseRunState,
+    selection: SelectedCoursePlan,
+    chart_type: &str,
+) -> bool {
+    if course.course_type != CourseTypeView::Endless || selection.path != course.path {
+        return false;
+    }
+    let stages: Vec<_> = selection
+        .stages
+        .iter()
+        .filter_map(|stage| course_stage_runtime_from_plan(stage, chart_type))
+        .collect();
+    if stages.is_empty() {
+        return false;
+    }
+    for stage in &stages {
+        add_course_stage_totals(&mut course.course_display_totals, stage, chart_type);
+    }
+    course.stages.extend(stages);
+    true
 }
 
 pub fn build_course_run_from_selection(
@@ -67,22 +179,7 @@ pub fn build_course_run_from_selection(
 
     let mut course_display_totals = [CourseDisplayTotals::default(); MAX_PLAYERS];
     for stage in &stages {
-        for (player_idx, total) in course_display_totals.iter_mut().enumerate() {
-            let Some(chart) = stage
-                .song
-                .chart_for_steps_index(chart_type, stage.steps_index[player_idx])
-            else {
-                continue;
-            };
-            let add = course_display_totals_for_chart(chart);
-            total.possible_grade_points = total
-                .possible_grade_points
-                .saturating_add(add.possible_grade_points);
-            total.total_steps = total.total_steps.saturating_add(add.total_steps);
-            total.holds_total = total.holds_total.saturating_add(add.holds_total);
-            total.rolls_total = total.rolls_total.saturating_add(add.rolls_total);
-            total.mines_total = total.mines_total.saturating_add(add.mines_total);
-        }
+        add_course_stage_totals(&mut course_display_totals, stage, chart_type);
     }
 
     Some(CourseRunState {
@@ -93,6 +190,8 @@ pub fn build_course_run_from_selection(
         course_difficulty_name: selection.course_difficulty_name,
         course_meter: selection.course_meter,
         course_stepchart_label: selection.course_stepchart_label,
+        course_type: selection.course_type,
+        lives: selection.lives,
         song_stub: selection.song_stub,
         stages,
         course_display_totals,
@@ -121,15 +220,19 @@ pub fn course_display_timing_for_run(course: &CourseRunState) -> CourseDisplayTi
 }
 
 pub fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::StageSummary> {
-    let totals = course
-        .course_display_totals
-        .map(|total| stage_stats::CourseSummaryTotals {
-            possible_grade_points: total.possible_grade_points,
-            total_steps: total.total_steps,
-            holds_total: total.holds_total,
-            rolls_total: total.rolls_total,
-            mines_total: total.mines_total,
-        });
+    let totals = if course.course_type == CourseTypeView::Endless {
+        [stage_stats::CourseSummaryTotals::default(); MAX_PLAYERS]
+    } else {
+        course
+            .course_display_totals
+            .map(|total| stage_stats::CourseSummaryTotals {
+                possible_grade_points: total.possible_grade_points,
+                total_steps: total.total_steps,
+                holds_total: total.holds_total,
+                rolls_total: total.rolls_total,
+                mines_total: total.mines_total,
+            })
+    };
     stage_stats::build_course_summary_stage(stage_stats::CourseSummaryInput {
         path: course.path.as_path(),
         name: course.name.as_str(),

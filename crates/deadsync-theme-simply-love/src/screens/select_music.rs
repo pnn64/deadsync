@@ -12182,6 +12182,7 @@ fn test_media_song(index: usize) -> Arc<SongData> {
         translit_title: String::new(),
         translit_subtitle: String::new(),
         artist: "Benchmark".to_string(),
+        translit_artist: String::new(),
         genre: String::new(),
         banner_path: Some(PathBuf::from(format!("Songs/Bench/Song{index}/banner.png"))),
         background_path: Some(PathBuf::from(format!(
@@ -15253,6 +15254,7 @@ mod tests {
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: String::new(),
+            translit_artist: String::new(),
             genre: String::new(),
             banner_path: None,
             background_path: None,
@@ -15471,6 +15473,7 @@ mod tests {
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: String::new(),
+            translit_artist: String::new(),
             genre: String::new(),
             banner_path: None,
             background_path: None,

@@ -264,6 +264,8 @@ mod tests {
             course_display_carry,
             course_display_totals,
             course_display_timing,
+            None,
+            [deadsync_gameplay::CourseLifeConfig::Bar; MAX_PLAYERS],
             combo_carry,
         )
     }
@@ -575,6 +577,8 @@ mod tests {
             None,
             None,
             None,
+            None,
+            [deadsync_gameplay::CourseLifeConfig::Bar; MAX_PLAYERS],
             None,
             None,
             [0; MAX_PLAYERS],
