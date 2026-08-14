@@ -410,7 +410,7 @@ impl App {
     fn select_music_pad_profiles(
         &mut self,
         session: SelectMusicSessionView,
-        profiles: &SelectMusicProfileView,
+        profiles: &profile_data::MusicProfileSnapshot,
     ) -> Option<[Vec<SelectMusicPadProfileView>; 2]> {
         let state = &self.state.screens.select_music_state;
         if !select_music::pad_profile_menu_visible(state) {
@@ -420,15 +420,15 @@ impl App {
         let active: [bool; 2] = std::array::from_fn(|pad| {
             state.smx_pads[pad].connected
                 && pad_in_play(session, pad)
-                && profiles.pad_profile_id(pad).is_some()
+                && profiles.pad_profile_ids[pad].is_some()
         });
         for pad in 0..2 {
             if !active[pad] {
                 continue;
             }
             let smx = &state.smx_pads[pad];
-            let profile_id = profiles
-                .pad_profile_id(pad)
+            let profile_id = profiles.pad_profile_ids[pad]
+                .as_deref()
                 .expect("active pad profile should have an id");
             if self
                 .pad_config_sync
@@ -546,10 +546,38 @@ impl App {
             select_music::leaderboard_runtime_request(&self.state.screens.select_music_state);
         let scorebox_enabled = policy.view.presentation.show_scorebox
             && policy.view.presentation.scorebox_cycle_enabled;
-        let profile_snapshot = profile_data::runtime_music_profile_snapshot(
+        let profile_generation = profile_data::runtime_profile_generation();
+        let profile_policy = (
             policy.enable_groovestats,
             policy.enable_arrowcloud,
             policy.auto_populate_gs_scores,
+        );
+        let profile_source_dirty = self.select_music_profile_snapshot.is_none()
+            || self.select_music_profile_generation != profile_generation
+            || self.select_music_profile_policy != Some(profile_policy);
+        let profile_snapshot_changed = if profile_source_dirty {
+            let snapshot = profile_data::runtime_music_profile_snapshot(
+                policy.enable_groovestats,
+                policy.enable_arrowcloud,
+                policy.auto_populate_gs_scores,
+            );
+            let changed = self
+                .select_music_profile_snapshot
+                .as_ref()
+                .is_none_or(|previous| !Arc::ptr_eq(previous, &snapshot));
+            self.select_music_profile_generation = profile_generation;
+            self.select_music_profile_policy = Some(profile_policy);
+            self.select_music_profile_snapshot = Some(snapshot);
+            changed
+        } else {
+            false
+        };
+        let profile_views_dirty = self.select_music_profile_rebuild || profile_snapshot_changed;
+        self.select_music_profile_rebuild = false;
+        let profile_snapshot = Arc::clone(
+            self.select_music_profile_snapshot
+                .as_ref()
+                .expect("Select Music profile snapshot should be warmed"),
         );
         let profile_view = &profile_snapshot.scorebox;
         let music_wheel_request =
@@ -686,14 +714,15 @@ impl App {
             view
         });
         self.select_music_score_views_rebuild = false;
-        let session = SelectMusicSessionView {
+        let session_view = SelectMusicSessionView {
             play_style: profile_view.play_style,
             player_side: profile_view.player_side,
             joined: profile_view.sides.each_ref().map(|side| side.joined),
             guest: profile_view.sides.each_ref().map(|side| side.guest),
             music_rate: profile_snapshot.music_rate,
         };
-        let profiles = SelectMusicProfileView {
+        let session = profile_views_dirty.then_some(session_view);
+        let profiles = profile_views_dirty.then(|| SelectMusicProfileView {
             display_names: profile_view
                 .sides
                 .each_ref()
@@ -710,11 +739,12 @@ impl App {
                 .pad_profile_ids
                 .each_ref()
                 .map(|id| id.as_ref().map(Arc::clone)),
-        };
-        let favorites = (select_music::local_profile_ids(&self.state.screens.select_music_state)
-            != &profiles.local_profile_ids)
+        });
+        let favorites = (profile_views_dirty
+            && select_music::local_profile_ids(&self.state.screens.select_music_state)
+                != &profile_snapshot.local_profile_ids)
             .then(deadsync_profile::runtime_favorite_snapshot);
-        let pad_profiles = self.select_music_pad_profiles(session, &profiles);
+        let pad_profiles = self.select_music_pad_profiles(session_view, &profile_snapshot);
         select_music::sync_runtime_view(
             &mut self.state.screens.select_music_state,
             SelectMusicRuntimeView {

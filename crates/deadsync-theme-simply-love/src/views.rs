@@ -837,8 +837,10 @@ impl Default for SelectMusicLastPlayedView {
 /// Shell-prepared runtime data consumed by Simply Love's Select Music screen.
 #[derive(Clone, Debug)]
 pub struct SelectMusicRuntimeView {
-    pub session: SelectMusicSessionView,
-    pub profiles: SelectMusicProfileView,
+    /// Replacement session routing emitted only when its profile snapshot changes.
+    pub session: Option<SelectMusicSessionView>,
+    /// Replacement profile identity emitted only when its snapshot changes.
+    pub profiles: Option<SelectMusicProfileView>,
     /// Refreshed only when the active local profile IDs change.
     pub favorites: Option<deadsync_profile::FavoriteSnapshot>,
     /// Refreshed on demand from the shell-owned pad-config cache.
@@ -869,8 +871,8 @@ pub struct SelectMusicRuntimeView {
 impl Default for SelectMusicRuntimeView {
     fn default() -> Self {
         Self {
-            session: Default::default(),
-            profiles: Default::default(),
+            session: None,
+            profiles: None,
             favorites: None,
             pad_profiles: None,
             audio_playback: Default::default(),

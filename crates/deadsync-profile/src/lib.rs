@@ -8,6 +8,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
 use std::fs;
+use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -105,8 +106,54 @@ static RUNTIME_PROFILE_DIR_CACHE: LazyLock<Mutex<Option<RuntimeProfileDirCache>>
 
 static RUNTIME_SESSION_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::LockWaitStats::new();
 static RUNTIME_PROFILES_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::LockWaitStats::new();
+static RUNTIME_PROFILE_GENERATION: AtomicU64 = AtomicU64::new(1);
 static HEART_RATE_DEVICE_GENERATION: AtomicU64 = AtomicU64::new(1);
 static FAVORITES_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+/// Publishes mutations made through the process-global profile stores when the
+/// lock guard leaves scope. Immutable reads do not advance the generation.
+pub struct RuntimeProfileGuard<T: 'static> {
+    guard: MutexGuard<'static, T>,
+    dirty: bool,
+}
+
+impl<T> RuntimeProfileGuard<T> {
+    fn new(guard: MutexGuard<'static, T>) -> Self {
+        Self {
+            guard,
+            dirty: false,
+        }
+    }
+}
+
+impl<T> Deref for RuntimeProfileGuard<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.guard
+    }
+}
+
+impl<T> DerefMut for RuntimeProfileGuard<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.dirty = true;
+        &mut self.guard
+    }
+}
+
+impl<T> Drop for RuntimeProfileGuard<T> {
+    fn drop(&mut self) {
+        if self.dirty {
+            RUNTIME_PROFILE_GENERATION.fetch_add(1, Ordering::Release);
+        }
+    }
+}
+
+/// Current revision of the runtime session and player profile stores.
+#[inline(always)]
+pub fn runtime_profile_generation() -> u64 {
+    RUNTIME_PROFILE_GENERATION.load(Ordering::Acquire)
+}
 
 #[inline(always)]
 pub fn runtime_heart_rate_device_generation() -> u64 {
@@ -130,21 +177,21 @@ fn runtime_mark_favorites_changed() {
 }
 
 #[inline(always)]
-pub fn runtime_lock_session() -> MutexGuard<'static, SessionState> {
-    lock_wait::lock_with_wait_stats(
+pub fn runtime_lock_session() -> RuntimeProfileGuard<SessionState> {
+    RuntimeProfileGuard::new(lock_wait::lock_with_wait_stats(
         "SESSION",
         &RUNTIME_SESSION_LOCK_WAIT_STATS,
         &RUNTIME_SESSION,
-    )
+    ))
 }
 
 #[inline(always)]
-pub fn runtime_lock_profiles() -> MutexGuard<'static, [Profile; PLAYER_SLOTS]> {
-    lock_wait::lock_with_wait_stats(
+pub fn runtime_lock_profiles() -> RuntimeProfileGuard<[Profile; PLAYER_SLOTS]> {
+    RuntimeProfileGuard::new(lock_wait::lock_with_wait_stats(
         "PROFILES",
         &RUNTIME_PROFILES_LOCK_WAIT_STATS,
         &RUNTIME_PROFILES,
-    )
+    ))
 }
 
 pub fn runtime_machine_player_defaults() -> MachinePlayerDefaults {
@@ -10283,6 +10330,18 @@ impl Profile {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn runtime_profile_generation_tracks_mutable_guards() {
+        let before = runtime_profile_generation();
+        {
+            let mut session = runtime_lock_session();
+            let rate = session.music_rate();
+            session.set_music_rate(rate);
+        }
+
+        assert!(runtime_profile_generation() > before);
+    }
 
     #[test]
     fn machine_style_preference_uses_the_active_game() {

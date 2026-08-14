@@ -1294,6 +1294,17 @@ pub struct App {
     select_music_downloads_visible: bool,
     select_music_shop_generation: u64,
     select_music_shop_visible: bool,
+    /// Game-thread-only, session-lifetime cache of the immutable profile view
+    /// shared by Select Music subviews. The one entry warms on screen entry and
+    /// is checked through one atomic generation read; stable frames take no
+    /// profile locks. A miss locks the session and two profiles, then replaces
+    /// the entry on a menu frame. Re-entry marks the presentation stale without
+    /// destroying the retained entry during gameplay. There is no scan or
+    /// eviction; frame update timing accounts for the bounded rebuild.
+    select_music_profile_generation: u64,
+    select_music_profile_policy: Option<(bool, bool, bool)>,
+    select_music_profile_snapshot: Option<Arc<profile_data::MusicProfileSnapshot>>,
+    select_music_profile_rebuild: bool,
     /// Game-thread-only dirty key for the wheel snapshot retained by the
     /// Select Music screen. The session-lifetime cache has one fixed-size
     /// entry and warms on its first frame. A miss performs one bounded
@@ -2819,6 +2830,7 @@ impl App {
             );
             self.sync_select_music_runtime_view(self.select_music_policy);
         } else {
+            self.select_music_profile_rebuild = true;
             self.select_music_wheel_rebuild = true;
             self.select_music_score_views_rebuild = true;
         }
@@ -3455,6 +3467,10 @@ impl App {
             select_music_downloads_visible: false,
             select_music_shop_generation: 0,
             select_music_shop_visible: false,
+            select_music_profile_generation: 0,
+            select_music_profile_policy: None,
+            select_music_profile_snapshot: None,
+            select_music_profile_rebuild: true,
             select_music_wheel_key: None,
             select_music_wheel_rebuild: true,
             select_music_scorebox_key: None,

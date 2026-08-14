@@ -676,8 +676,12 @@ pub fn selection_anim_beat(state: &State) -> f32 {
 
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
-    state.session = view.session;
-    state.profiles = view.profiles;
+    if let Some(session) = view.session {
+        state.session = session;
+    }
+    if let Some(profiles) = view.profiles {
+        state.profiles = profiles;
+    }
     if let Some(favorites) = view.favorites {
         state.favorites = favorites;
         state.joined_favorites_entries = build_favorites_view_entries(
@@ -16026,19 +16030,19 @@ mod tests {
         super::sync_runtime_view(
             &mut state,
             crate::views::SelectMusicRuntimeView {
-                session: crate::views::SelectMusicSessionView {
+                session: Some(crate::views::SelectMusicSessionView {
                     play_style: profile_data::PlayStyle::Versus,
                     player_side: profile_data::PlayerSide::P2,
                     joined: [true, true],
                     guest: [false, true],
                     music_rate: 1.25,
-                },
-                profiles: crate::views::SelectMusicProfileView {
+                }),
+                profiles: Some(crate::views::SelectMusicProfileView {
                     display_names: ["Alice".into(), "Bob".into()],
                     avatar_texture_keys: [Some("alice-avatar".into()), None],
                     local_profile_ids: [Some("alice".into()), None],
                     pad_profile_ids: [Some("alice".into()), Some("alice".into())],
-                },
+                }),
                 favorites: None,
                 pad_profiles: Some([
                     vec![crate::views::SelectMusicPadProfileView {
@@ -16167,6 +16171,15 @@ mod tests {
         assert!(
             state.scoreboxes[0].groovestats_active,
             "unchanged scorebox snapshot stays retained"
+        );
+        assert_eq!(
+            state.session.music_rate, 1.25,
+            "unchanged session stays retained"
+        );
+        assert_eq!(
+            state.profiles.display_name(profile_data::PlayerSide::P1),
+            "Alice",
+            "unchanged profile identity stays retained"
         );
         assert_eq!(state.downloads.len(), 1, "unchanged rows stay retained");
         assert_eq!(
