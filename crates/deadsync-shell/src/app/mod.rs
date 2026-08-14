@@ -1304,6 +1304,18 @@ pub struct App {
     /// menu frame. Existing frame update timing accounts for rebuild cost.
     select_music_wheel_key: Option<select_music_views::MusicWheelRuntimeKey>,
     select_music_wheel_rebuild: bool,
+    /// Game-thread-only, session-lifetime dirty keys for the two retained score
+    /// subviews. Each has one entry, warms on the first Select Music frame, and
+    /// compares borrowed chart/profile data plus score-cache generations. A
+    /// miss rebuilds at most two sides on a menu frame; key hits allocate
+    /// nothing and acquire no additional locks. Error retries carry explicit
+    /// deadlines. Re-entry marks both stale without gameplay destruction.
+    /// Frame update timing accounts for misses; there is no scan or eviction.
+    select_music_scorebox_key: Option<select_music_views::ScoreboxRuntimeKey>,
+    select_music_leaderboard_key: Option<select_music_views::LeaderboardRuntimeKey>,
+    select_music_scorebox_retry_at: Option<Instant>,
+    select_music_leaderboard_retry_at: Option<Instant>,
+    select_music_score_views_rebuild: bool,
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
     content_reload: crate::content_reload::Service,
@@ -2808,6 +2820,7 @@ impl App {
             self.sync_select_music_runtime_view(self.select_music_policy);
         } else {
             self.select_music_wheel_rebuild = true;
+            self.select_music_score_views_rebuild = true;
         }
         if work_caps & frame_work::SELECT_COURSE_VIEW != 0 {
             let frame_config = self.frame_config;
@@ -3444,6 +3457,11 @@ impl App {
             select_music_shop_visible: false,
             select_music_wheel_key: None,
             select_music_wheel_rebuild: true,
+            select_music_scorebox_key: None,
+            select_music_leaderboard_key: None,
+            select_music_scorebox_retry_at: None,
+            select_music_leaderboard_retry_at: None,
+            select_music_score_views_rebuild: true,
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
             content_reload: crate::content_reload::Service::default(),

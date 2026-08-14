@@ -4,6 +4,7 @@ use deadsync_core::song_time::{SongTimeNs, song_time_ns_invalid};
 use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -938,6 +939,18 @@ impl PlayerLeaderboardCacheState {
 
 static RUNTIME_PLAYER_LEADERBOARD_CACHE: LazyLock<Mutex<PlayerLeaderboardCacheState>> =
     LazyLock::new(|| Mutex::new(PlayerLeaderboardCacheState::default()));
+static RUNTIME_PLAYER_LEADERBOARD_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+/// Current revision of cached player leaderboard presentation data.
+#[inline(always)]
+pub fn runtime_player_leaderboard_generation() -> u64 {
+    RUNTIME_PLAYER_LEADERBOARD_GENERATION.load(AtomicOrdering::Acquire)
+}
+
+#[inline(always)]
+fn mark_runtime_player_leaderboards_changed() {
+    RUNTIME_PLAYER_LEADERBOARD_GENERATION.fetch_add(1, AtomicOrdering::Release);
+}
 
 pub fn runtime_request_player_leaderboard(
     key: &PlayerLeaderboardCacheKey,
@@ -994,7 +1007,7 @@ pub fn runtime_complete_player_leaderboard_fetch<T>(
     should_auto_populate: bool,
     auto_profile_id_exists: bool,
 ) -> PlayerLeaderboardFetchCompletion<T> {
-    RUNTIME_PLAYER_LEADERBOARD_CACHE
+    let completion = RUNTIME_PLAYER_LEADERBOARD_CACHE
         .lock()
         .unwrap()
         .complete_fetch(
@@ -1006,7 +1019,9 @@ pub fn runtime_complete_player_leaderboard_fetch<T>(
             fetched,
             should_auto_populate,
             auto_profile_id_exists,
-        )
+        );
+    mark_runtime_player_leaderboards_changed();
+    completion
 }
 
 pub fn runtime_run_player_leaderboard_fetch<T>(
@@ -1065,6 +1080,21 @@ pub fn runtime_cached_player_leaderboard_srpg_self_score(
     cached_player_leaderboard_srpg_self_score(&cache.by_key, chart_hash, profile_snapshot)
 }
 
+/// Retry deadline for a cached leaderboard error, excluding requests already
+/// in flight. Callers can retain presentation data until this cadence expires.
+pub fn runtime_player_leaderboard_retry_deadline(
+    chart_hash: &str,
+    profile_snapshot: &GameplayScoreboxProfileSnapshot,
+) -> Option<Instant> {
+    let cache = RUNTIME_PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+    let key_ref = player_leaderboard_cache_key_ref(chart_hash, profile_snapshot)?;
+    let (key, entry) = cache.by_key.get_key_value(&key_ref)?;
+    if cache.in_flight.contains_key(key) {
+        return None;
+    }
+    entry.retry_after
+}
+
 pub fn runtime_invalidate_player_leaderboard_chart_for_api(
     api_key: &str,
     chart_hash: &str,
@@ -1074,6 +1104,7 @@ pub fn runtime_invalidate_player_leaderboard_chart_for_api(
         .lock()
         .unwrap()
         .invalidate_chart_for_api(api_key, chart_hash, invalidated_at);
+    mark_runtime_player_leaderboards_changed();
 }
 
 pub fn runtime_seed_player_leaderboard_entry(
@@ -1085,14 +1116,18 @@ pub fn runtime_seed_player_leaderboard_entry(
         .unwrap()
         .by_key
         .insert(key, entry);
+    mark_runtime_player_leaderboards_changed();
 }
 
 pub fn runtime_remove_player_leaderboard_entry(key: &PlayerLeaderboardCacheKey) {
-    RUNTIME_PLAYER_LEADERBOARD_CACHE
+    let removed = RUNTIME_PLAYER_LEADERBOARD_CACHE
         .lock()
         .unwrap()
         .by_key
         .remove(key);
+    if removed.is_some() {
+        mark_runtime_player_leaderboards_changed();
+    }
 }
 
 pub fn runtime_lock_player_leaderboard_cache() -> MutexGuard<'static, PlayerLeaderboardCacheState> {
@@ -1474,6 +1509,57 @@ mod tests {
             first.data.as_ref().unwrap(),
             second.data.as_ref().unwrap()
         ));
+    }
+
+    #[test]
+    fn runtime_retry_deadline_hides_in_flight_requests() {
+        let chart_hash = format!(
+            "retry-deadline-{}-{:#?}",
+            std::process::id(),
+            Instant::now()
+        );
+        let snapshot = scorebox_snapshot(
+            true,
+            false,
+            true,
+            true,
+            false,
+            false,
+            "retry-api",
+            "",
+            "player",
+            Some("profile".to_string()),
+        );
+        let key = player_leaderboard_cache_key(&chart_hash, &snapshot).unwrap();
+        let now = Instant::now();
+        let retry_at = now - Duration::from_millis(1);
+        let generation = runtime_player_leaderboard_generation();
+        runtime_seed_player_leaderboard_entry(
+            key.clone(),
+            PlayerLeaderboardCacheEntry {
+                value: PlayerLeaderboardCacheValue::Error(Arc::from("network")),
+                max_entries: 5,
+                refreshed_at: now - Duration::from_secs(1),
+                retry_after: Some(retry_at),
+            },
+        );
+
+        assert!(runtime_player_leaderboard_generation() > generation);
+        assert_eq!(
+            runtime_player_leaderboard_retry_deadline(&chart_hash, &snapshot),
+            Some(retry_at)
+        );
+        assert!(runtime_request_player_leaderboard(&key, 5, false, now).should_spawn);
+        assert_eq!(
+            runtime_player_leaderboard_retry_deadline(&chart_hash, &snapshot),
+            None
+        );
+
+        runtime_invalidate_player_leaderboard_chart_for_api(
+            snapshot.api_key(),
+            &chart_hash,
+            Instant::now(),
+        );
     }
 
     #[test]

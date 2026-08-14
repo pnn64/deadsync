@@ -6,11 +6,12 @@ use deadsync_theme::views::AudioPlaybackView;
 use deadsync_theme_simply_love::screens::{SimplyLoveScreen as CurrentScreen, select_music};
 use deadsync_theme_simply_love::views::{
     MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource, MusicWheelRuntimeRequest,
-    MusicWheelSlotRuntimeRequest, SelectMusicDownloadView, SelectMusicLeaderboardSideView,
-    SelectMusicLeaderboardView, SelectMusicPadProfileView, SelectMusicPolicyView,
-    SelectMusicProfileView, SelectMusicRuntimeView, SelectMusicSessionView,
+    MusicWheelSlotRuntimeRequest, SelectMusicDownloadView, SelectMusicLeaderboardRequest,
+    SelectMusicLeaderboardSideView, SelectMusicLeaderboardView, SelectMusicPadProfileView,
+    SelectMusicPolicyView, SelectMusicProfileView, SelectMusicRuntimeView,
+    SelectMusicScoreboxRequest, SelectMusicSessionView,
 };
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 /// Config-generation policy for Select Music's frame-time view preparation.
 /// The persisted `Config` remains owned by the app; this compact value carries
@@ -222,6 +223,130 @@ impl MusicWheelRuntimeKey {
     }
 }
 
+#[derive(Debug)]
+struct ChartPairKey([Option<Box<str>>; 2]);
+
+impl ChartPairKey {
+    fn new(hashes: [Option<&str>; 2]) -> Self {
+        Self(hashes.map(|hash| hash.map(Into::into)))
+    }
+
+    fn matches(&self, hashes: [Option<&str>; 2]) -> bool {
+        self.0
+            .iter()
+            .zip(hashes)
+            .all(|(stored, hash)| stored.as_deref() == hash)
+    }
+}
+
+#[derive(Debug)]
+pub(super) struct ScoreboxRuntimeKey {
+    chart_hashes: ChartPairKey,
+    leaderboards_allowed: bool,
+    max_entries: usize,
+    profile_snapshot: Arc<profile_data::MusicProfileSnapshot>,
+    pane_filter: deadsync_score::SelectMusicScoreboxFilter,
+    enabled: bool,
+    score_generation: u64,
+    leaderboard_generation: u64,
+}
+
+impl ScoreboxRuntimeKey {
+    fn new(
+        request: SelectMusicScoreboxRequest<'_>,
+        profile_snapshot: &Arc<profile_data::MusicProfileSnapshot>,
+        pane_filter: deadsync_score::SelectMusicScoreboxFilter,
+        enabled: bool,
+    ) -> Self {
+        Self {
+            chart_hashes: ChartPairKey::new(request.chart_hashes),
+            leaderboards_allowed: request.leaderboards_allowed,
+            max_entries: request.max_entries,
+            profile_snapshot: Arc::clone(profile_snapshot),
+            pane_filter,
+            enabled,
+            score_generation: deadsync_score::runtime_music_wheel_score_generation(),
+            leaderboard_generation: deadsync_score::runtime_player_leaderboard_generation(),
+        }
+    }
+
+    fn matches(
+        &self,
+        request: SelectMusicScoreboxRequest<'_>,
+        profile_snapshot: &Arc<profile_data::MusicProfileSnapshot>,
+        pane_filter: deadsync_score::SelectMusicScoreboxFilter,
+        enabled: bool,
+    ) -> bool {
+        self.chart_hashes.matches(request.chart_hashes)
+            && self.leaderboards_allowed == request.leaderboards_allowed
+            && self.max_entries == request.max_entries
+            && Arc::ptr_eq(&self.profile_snapshot, profile_snapshot)
+            && self.pane_filter == pane_filter
+            && self.enabled == enabled
+            && self.score_generation == deadsync_score::runtime_music_wheel_score_generation()
+            && self.leaderboard_generation
+                == deadsync_score::runtime_player_leaderboard_generation()
+    }
+}
+
+#[derive(Debug)]
+struct LeaderboardRequestKey {
+    chart_hashes: ChartPairKey,
+    max_entries: usize,
+}
+
+impl LeaderboardRequestKey {
+    fn new(request: SelectMusicLeaderboardRequest<'_>) -> Self {
+        Self {
+            chart_hashes: ChartPairKey::new(request.chart_hashes),
+            max_entries: request.max_entries,
+        }
+    }
+
+    fn matches(&self, request: SelectMusicLeaderboardRequest<'_>) -> bool {
+        self.chart_hashes.matches(request.chart_hashes) && self.max_entries == request.max_entries
+    }
+}
+
+#[derive(Debug)]
+pub(super) struct LeaderboardRuntimeKey {
+    request: Option<LeaderboardRequestKey>,
+    profile_snapshot: Arc<profile_data::MusicProfileSnapshot>,
+    score_generation: u64,
+    leaderboard_generation: u64,
+}
+
+impl LeaderboardRuntimeKey {
+    fn new(
+        request: Option<SelectMusicLeaderboardRequest<'_>>,
+        profile_snapshot: &Arc<profile_data::MusicProfileSnapshot>,
+    ) -> Self {
+        Self {
+            request: request.map(LeaderboardRequestKey::new),
+            profile_snapshot: Arc::clone(profile_snapshot),
+            score_generation: deadsync_score::runtime_music_wheel_score_generation(),
+            leaderboard_generation: deadsync_score::runtime_player_leaderboard_generation(),
+        }
+    }
+
+    fn matches(
+        &self,
+        request: Option<SelectMusicLeaderboardRequest<'_>>,
+        profile_snapshot: &Arc<profile_data::MusicProfileSnapshot>,
+    ) -> bool {
+        let request_matches = match (&self.request, request) {
+            (None, None) => true,
+            (Some(stored), Some(request)) => stored.matches(request),
+            _ => false,
+        };
+        request_matches
+            && Arc::ptr_eq(&self.profile_snapshot, profile_snapshot)
+            && self.score_generation == deadsync_score::runtime_music_wheel_score_generation()
+            && self.leaderboard_generation
+                == deadsync_score::runtime_player_leaderboard_generation()
+    }
+}
+
 impl SelectMusicFramePolicy {
     pub(super) fn from_config(config: &config::Config) -> Self {
         Self {
@@ -251,6 +376,22 @@ fn pad_in_play(session: SelectMusicSessionView, pad: usize) -> bool {
             session.joined.get(pad).copied().unwrap_or(false)
         }
     }
+}
+
+fn leaderboard_retry_deadline(
+    hashes: [Option<&str>; 2],
+    profiles: &profile_data::ScoreboxRuntimeView,
+) -> Option<Instant> {
+    hashes
+        .into_iter()
+        .enumerate()
+        .filter_map(|(side_idx, hash)| {
+            deadsync_score::runtime_player_leaderboard_retry_deadline(
+                hash?,
+                &profiles.sides[side_idx].leaderboard,
+            )
+        })
+        .min()
 }
 
 fn pad_profile_rows_match(
@@ -426,72 +567,125 @@ impl App {
             self.select_music_wheel_rebuild = false;
             Self::prepare_music_wheel_runtime(music_wheel_request, profile_view, policy.wheel)
         });
-        let mut scorebox_hashes: [Option<String>; 2] = Default::default();
-        if profile_view.play_style.is_versus() {
-            scorebox_hashes = scorebox_request.chart_hashes;
-        } else {
-            let side = if profile_data::runtime_player_is_p2(
-                profile_view.play_style,
-                profile_view.player_side,
-            ) {
-                profile_data::PlayerSide::P2
-            } else {
-                profile_data::PlayerSide::P1
-            };
-            scorebox_hashes[profile_data::player_side_index(side)] =
-                scorebox_request.chart_hashes[0].clone();
-        }
-        let scorebox_leaderboards: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2] =
-            std::array::from_fn(|side_idx| {
-                if !(scorebox_request.leaderboards_allowed && scorebox_enabled) {
-                    return None;
-                }
-                scorebox_hashes[side_idx].as_deref().and_then(|hash| {
-                    scores::get_or_fetch_player_leaderboards_for_profile(
-                        hash,
-                        &profile_view.sides[side_idx].leaderboard,
-                        scorebox_request.max_entries,
-                    )
-                })
+        let now = Instant::now();
+        let scorebox_retry_due = self
+            .select_music_scorebox_retry_at
+            .is_some_and(|retry_at| now >= retry_at);
+        let scoreboxes_dirty = self.select_music_score_views_rebuild
+            || scorebox_retry_due
+            || self.select_music_scorebox_key.as_ref().is_none_or(|key| {
+                !key.matches(
+                    scorebox_request,
+                    &profile_snapshot,
+                    policy.pane_filter,
+                    scorebox_enabled,
+                )
             });
-        let leaderboard =
-            leaderboard_request.map_or_else(SelectMusicLeaderboardView::default, |request| {
-                SelectMusicLeaderboardView {
-                    sides: std::array::from_fn(|side_idx| {
-                        let chart_hash = request.chart_hashes[side_idx].clone();
-                        let player = &profile_view.sides[side_idx];
-                        let machine_entries = if player.joined {
-                            chart_hash
-                                .as_deref()
-                                .map(|hash| {
-                                    scores::get_machine_leaderboard_local_with_names(
+        let scoreboxes = scoreboxes_dirty.then(|| {
+            self.select_music_scorebox_key = Some(ScoreboxRuntimeKey::new(
+                scorebox_request,
+                &profile_snapshot,
+                policy.pane_filter,
+                scorebox_enabled,
+            ));
+            let mut hashes = [None, None];
+            if profile_view.play_style.is_versus() {
+                hashes = scorebox_request.chart_hashes;
+            } else {
+                let side = if profile_data::runtime_player_is_p2(
+                    profile_view.play_style,
+                    profile_view.player_side,
+                ) {
+                    profile_data::PlayerSide::P2
+                } else {
+                    profile_data::PlayerSide::P1
+                };
+                hashes[profile_data::player_side_index(side)] = scorebox_request.chart_hashes[0];
+            }
+            let leaderboards: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2] =
+                std::array::from_fn(|side_idx| {
+                    if !(scorebox_request.leaderboards_allowed && scorebox_enabled) {
+                        return None;
+                    }
+                    hashes[side_idx].and_then(|hash| {
+                        scores::get_or_fetch_player_leaderboards_for_profile(
+                            hash,
+                            &profile_view.sides[side_idx].leaderboard,
+                            scorebox_request.max_entries,
+                        )
+                    })
+                });
+            self.select_music_scorebox_retry_at =
+                if scorebox_request.leaderboards_allowed && scorebox_enabled {
+                    leaderboard_retry_deadline(hashes, profile_view)
+                } else {
+                    None
+                };
+            std::array::from_fn(|side_idx| {
+                Self::scorebox_side_view(
+                    &profile_view.sides[side_idx],
+                    hashes[side_idx].map(str::to_owned),
+                    leaderboards[side_idx].clone(),
+                    policy.pane_filter,
+                )
+            })
+        });
+        let leaderboard_retry_due = self
+            .select_music_leaderboard_retry_at
+            .is_some_and(|retry_at| now >= retry_at);
+        let leaderboard_dirty = self.select_music_score_views_rebuild
+            || leaderboard_retry_due
+            || self
+                .select_music_leaderboard_key
+                .as_ref()
+                .is_none_or(|key| !key.matches(leaderboard_request, &profile_snapshot));
+        let leaderboard = leaderboard_dirty.then(|| {
+            self.select_music_leaderboard_key = Some(LeaderboardRuntimeKey::new(
+                leaderboard_request,
+                &profile_snapshot,
+            ));
+            let view =
+                leaderboard_request.map_or_else(SelectMusicLeaderboardView::default, |request| {
+                    SelectMusicLeaderboardView {
+                        sides: std::array::from_fn(|side_idx| {
+                            let chart_hash = request.chart_hashes[side_idx];
+                            let player = &profile_view.sides[side_idx];
+                            let machine_entries = if player.joined {
+                                chart_hash
+                                    .map(|hash| {
+                                        scores::get_machine_leaderboard_local_with_names(
+                                            hash,
+                                            request.max_entries,
+                                        )
+                                    })
+                                    .unwrap_or_default()
+                            } else {
+                                Vec::new()
+                            };
+                            let leaderboards = if player.leaderboard.gs_active {
+                                chart_hash.and_then(|hash| {
+                                    scores::get_or_fetch_player_leaderboards_for_profile(
                                         hash,
+                                        &player.leaderboard,
                                         request.max_entries,
                                     )
                                 })
-                                .unwrap_or_default()
-                        } else {
-                            Vec::new()
-                        };
-                        let leaderboards = if player.leaderboard.gs_active {
-                            chart_hash.as_deref().and_then(|hash| {
-                                scores::get_or_fetch_player_leaderboards_for_profile(
-                                    hash,
-                                    &player.leaderboard,
-                                    request.max_entries,
-                                )
-                            })
-                        } else {
-                            None
-                        };
-                        SelectMusicLeaderboardSideView {
-                            chart_hash,
-                            machine_entries,
-                            leaderboards,
-                        }
-                    }),
-                }
-            });
+                            } else {
+                                None
+                            };
+                            SelectMusicLeaderboardSideView {
+                                chart_hash: chart_hash.map(str::to_owned),
+                                machine_entries,
+                                leaderboards,
+                            }
+                        }),
+                    }
+                });
+            self.select_music_leaderboard_retry_at = leaderboard_request
+                .and_then(|request| leaderboard_retry_deadline(request.chart_hashes, profile_view));
+            view
+        });
+        self.select_music_score_views_rebuild = false;
         let session = SelectMusicSessionView {
             play_style: profile_view.play_style,
             player_side: profile_view.player_side,
@@ -517,13 +711,6 @@ impl App {
                 .each_ref()
                 .map(|id| id.as_ref().map(Arc::clone)),
         };
-        let [p1_profile, p2_profile] = &profile_snapshot.scorebox.sides;
-        let [p1_hash, p2_hash] = scorebox_hashes;
-        let [p1_leaderboards, p2_leaderboards] = scorebox_leaderboards;
-        let scoreboxes = [
-            Self::scorebox_side_view(p1_profile, p1_hash, p1_leaderboards, policy.pane_filter),
-            Self::scorebox_side_view(p2_profile, p2_hash, p2_leaderboards, policy.pane_filter),
-        ];
         let favorites = (select_music::local_profile_ids(&self.state.screens.select_music_state)
             != &profiles.local_profile_ids)
             .then(deadsync_profile::runtime_favorite_snapshot);

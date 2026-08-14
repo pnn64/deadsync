@@ -244,12 +244,15 @@ pub fn show_leaderboard_overlay(
 
 pub fn leaderboard_runtime_request(
     state: &LeaderboardOverlayState,
-) -> Option<SelectMusicLeaderboardRequest> {
+) -> Option<SelectMusicLeaderboardRequest<'_>> {
     let LeaderboardOverlayState::Visible(overlay) = state else {
         return None;
     };
     Some(SelectMusicLeaderboardRequest {
-        chart_hashes: [overlay.p1.chart_hash.clone(), overlay.p2.chart_hash.clone()],
+        chart_hashes: [
+            overlay.p1.chart_hash.as_deref(),
+            overlay.p2.chart_hash.as_deref(),
+        ],
         max_entries: GS_LEADERBOARD_NUM_ENTRIES,
     })
 }

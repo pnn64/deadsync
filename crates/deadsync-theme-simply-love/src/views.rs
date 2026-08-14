@@ -475,18 +475,18 @@ pub struct ScoreboxSideView {
 }
 
 /// Selected player-slot charts whose scorebox data shell should prepare.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct SelectMusicScoreboxRequest {
-    pub chart_hashes: [Option<String>; 2],
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SelectMusicScoreboxRequest<'a> {
+    pub chart_hashes: [Option<&'a str>; 2],
     pub leaderboards_allowed: bool,
     pub max_entries: usize,
 }
 
 /// On-demand chart selection whose full leaderboard overlay shell should
 /// prepare. Hidden overlays return no request and perform no leaderboard work.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct SelectMusicLeaderboardRequest {
-    pub chart_hashes: [Option<String>; 2],
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SelectMusicLeaderboardRequest<'a> {
+    pub chart_hashes: [Option<&'a str>; 2],
     pub max_entries: usize,
 }
 
@@ -854,8 +854,10 @@ pub struct SelectMusicRuntimeView {
     pub policy: SelectMusicPolicyView,
     /// Replacement snapshot emitted only when wheel inputs or score data change.
     pub music_wheel: Option<MusicWheelRuntimeView>,
-    pub scoreboxes: [ScoreboxSideView; 2],
-    pub leaderboard: SelectMusicLeaderboardView,
+    /// Replacement panes emitted only when chart, profile, or score data changes.
+    pub scoreboxes: Option<[ScoreboxSideView; 2]>,
+    /// Replacement overlay data emitted only when its request or cache changes.
+    pub leaderboard: Option<SelectMusicLeaderboardView>,
     pub unlock_downloads_available: bool,
     pub ready_song_reload_dirs: Vec<PathBuf>,
     pub sync_graph_mode: deadsync_config::prelude::SyncGraphMode,
@@ -878,8 +880,8 @@ impl Default for SelectMusicRuntimeView {
             arrow_bounce_offset: 0.0,
             policy: Default::default(),
             music_wheel: None,
-            scoreboxes: Default::default(),
-            leaderboard: Default::default(),
+            scoreboxes: None,
+            leaderboard: None,
             unlock_downloads_available: false,
             ready_song_reload_dirs: Vec::new(),
             sync_graph_mode: deadsync_config::prelude::SyncGraphMode::PostKernelFingerprint,

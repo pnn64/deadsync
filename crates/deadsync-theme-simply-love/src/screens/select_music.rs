@@ -710,8 +710,12 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     if let Some(music_wheel) = view.music_wheel {
         state.music_wheel = music_wheel;
     }
-    state.scoreboxes = view.scoreboxes;
-    select_music_menu::sync_leaderboard_overlay(&mut state.leaderboard, view.leaderboard);
+    if let Some(scoreboxes) = view.scoreboxes {
+        state.scoreboxes = scoreboxes;
+    }
+    if let Some(leaderboard) = view.leaderboard {
+        select_music_menu::sync_leaderboard_overlay(&mut state.leaderboard, leaderboard);
+    }
     state.unlock_downloads_available = view.unlock_downloads_available;
     state
         .ready_song_reload_dirs
@@ -12525,16 +12529,16 @@ fn immediate_selected_charts(
     [p1, p2]
 }
 
-pub fn scorebox_runtime_request(state: &State) -> SelectMusicScoreboxRequest {
+pub fn scorebox_runtime_request(state: &State) -> SelectMusicScoreboxRequest<'_> {
     let charts = immediate_selected_charts(state, state.session.play_style);
     SelectMusicScoreboxRequest {
-        chart_hashes: charts.map(|chart| chart.map(|chart| chart.short_hash.clone())),
+        chart_hashes: charts.map(|chart| chart.map(|chart| chart.short_hash.as_str())),
         leaderboards_allowed: allow_gs_fetch_for_selection(state),
         max_entries: SELECT_MUSIC_LEADERBOARD_NUM_ENTRIES,
     }
 }
 
-pub fn leaderboard_runtime_request(state: &State) -> Option<SelectMusicLeaderboardRequest> {
+pub fn leaderboard_runtime_request(state: &State) -> Option<SelectMusicLeaderboardRequest<'_>> {
     select_music_menu::leaderboard_runtime_request(&state.leaderboard)
 }
 
@@ -16086,14 +16090,14 @@ mod tests {
                     translated_titles: true,
                     ..Default::default()
                 }),
-                scoreboxes: [
+                scoreboxes: Some([
                     crate::views::ScoreboxSideView {
                         groovestats_active: true,
                         ..Default::default()
                     },
                     Default::default(),
-                ],
-                leaderboard: Default::default(),
+                ]),
+                leaderboard: Some(Default::default()),
                 unlock_downloads_available: true,
                 ready_song_reload_dirs: vec![std::path::PathBuf::from("Songs/Unlocks")],
                 sync_graph_mode: crate::config::SyncGraphMode::Frequency,
@@ -16159,6 +16163,10 @@ mod tests {
         assert!(
             state.music_wheel.translated_titles,
             "unchanged wheel snapshot stays retained"
+        );
+        assert!(
+            state.scoreboxes[0].groovestats_active,
+            "unchanged scorebox snapshot stays retained"
         );
         assert_eq!(state.downloads.len(), 1, "unchanged rows stay retained");
         assert_eq!(
