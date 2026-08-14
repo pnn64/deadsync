@@ -3063,6 +3063,108 @@ fn chart_attack_notes_sorted(notes: &[Note]) -> bool {
     })
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ChartAttackOrder {
+    Canonical,
+    Rows,
+    Unsorted,
+}
+
+#[inline]
+fn chart_attack_note_order(notes: &[Note]) -> ChartAttackOrder {
+    let Some(first) = notes.first() else {
+        return ChartAttackOrder::Canonical;
+    };
+    let mut order = ChartAttackOrder::Canonical;
+    let mut row = first.row_index;
+    let mut column = first.column;
+    let mut row_local_compatible = column < MAX_COLS && column < u128::BITS as usize;
+    let mut columns = if row_local_compatible {
+        1u128 << column
+    } else {
+        0
+    };
+    for note in &notes[1..] {
+        if row > note.row_index {
+            return ChartAttackOrder::Unsorted;
+        }
+        if row != note.row_index {
+            row = note.row_index;
+            column = note.column;
+            if column < MAX_COLS && column < u128::BITS as usize {
+                columns = 1u128 << column;
+            } else {
+                row_local_compatible = false;
+                columns = 0;
+            }
+            continue;
+        }
+        if note.column >= MAX_COLS || note.column >= u128::BITS as usize {
+            row_local_compatible = false;
+        } else {
+            let bit = 1u128 << note.column;
+            if columns & bit != 0 {
+                row_local_compatible = false;
+            }
+            columns |= bit;
+        }
+        if column > note.column {
+            order = ChartAttackOrder::Rows;
+        }
+        column = note.column;
+    }
+    if order == ChartAttackOrder::Rows && !row_local_compatible {
+        ChartAttackOrder::Unsorted
+    } else {
+        order
+    }
+}
+
+fn sort_attack_row_columns(notes: &mut [Note]) {
+    debug_assert!(notes_row_sorted(notes));
+    let mut start = 0usize;
+    while start < notes.len() {
+        let row = notes[start].row_index;
+        let mut end = start + 1;
+        let mut columns = if notes[start].column < MAX_COLS
+            && notes[start].column < u128::BITS as usize
+        {
+            1u128 << notes[start].column
+        } else {
+            sort_player_notes(notes);
+            return;
+        };
+        while end < notes.len() && notes[end].row_index == row {
+            let column = notes[end].column;
+            if column >= MAX_COLS
+                || column >= u128::BITS as usize
+                || columns & (1u128 << column) != 0
+            {
+                // Duplicate or invalid cells are compatibility input. Preserve
+                // the former whole-slice unstable-sort behavior for them.
+                sort_player_notes(notes);
+                return;
+            }
+            columns |= 1u128 << column;
+            end += 1;
+        }
+        notes[start..end].sort_unstable_by_key(|note| note.column);
+        start = end;
+    }
+}
+
+#[inline]
+fn prepare_chart_attack_order(notes: &mut [Note]) -> bool {
+    match chart_attack_note_order(notes) {
+        ChartAttackOrder::Canonical => true,
+        ChartAttackOrder::Rows => {
+            sort_attack_row_columns(notes);
+            true
+        }
+        ChartAttackOrder::Unsorted => false,
+    }
+}
+
 #[inline]
 fn chart_attack_note_range(
     notes: &[Note],
@@ -3130,7 +3232,7 @@ fn apply_chart_attack_window_sorted_with_scratch(
             turn_seed,
             player,
         );
-        sort_player_notes(&mut notes[note_range]);
+        sort_attack_row_columns(&mut notes[note_range]);
         debug_assert!(chart_attack_notes_sorted(notes));
         return;
     }
@@ -3159,7 +3261,7 @@ fn apply_chart_attack_window_sorted_with_scratch(
         player,
     );
     if mods.turn_option != GameplayTurnOption::None {
-        sort_player_notes(in_range);
+        sort_attack_row_columns(in_range);
     }
 
     let mut insert_at = insert_at;
@@ -3255,7 +3357,10 @@ pub fn apply_chart_attack_window(
     mods: ParsedAttackMods,
     turn_seed: u64,
 ) {
-    if chart_attack_notes_sorted(notes) {
+    if notes.is_empty() || row_bounds.1 < row_bounds.0 || !mods.has_chart_effect() {
+        return;
+    }
+    if prepare_chart_attack_order(notes) {
         apply_chart_attack_window_sorted(
             notes,
             timing_player,
@@ -3347,7 +3452,7 @@ pub fn apply_chart_attack_windows(
     player: usize,
     base_seed: u64,
 ) {
-    let mut ordered = chart_attack_notes_sorted(notes);
+    let mut ordered = None;
     let mut scratch = Vec::new();
     for (i, attack) in attacks.iter().enumerate() {
         let mods = parse_attack_mods(&attack.mods);
@@ -3358,8 +3463,136 @@ pub fn apply_chart_attack_windows(
             continue;
         };
         let turn_seed = chart_attack_turn_seed(base_seed, player, i);
-        if ordered {
+        let notes_ordered = *ordered.get_or_insert_with(|| prepare_chart_attack_order(notes));
+        if notes_ordered {
             apply_chart_attack_window_sorted_with_scratch(
+                notes,
+                timing_player,
+                col_offset,
+                cols,
+                player,
+                row_bounds,
+                mods,
+                turn_seed,
+                &mut scratch,
+            );
+        } else {
+            apply_chart_attack_window_rescan(
+                notes,
+                timing_player,
+                col_offset,
+                cols,
+                player,
+                row_bounds,
+                mods,
+                turn_seed,
+            );
+            ordered = Some(true);
+        }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::too_many_arguments)]
+fn apply_window_order_ref(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    player: usize,
+    row_bounds: (usize, usize),
+    mods: ParsedAttackMods,
+    turn_seed: u64,
+    in_range: &mut Vec<Note>,
+) {
+    let (start_row, end_row) = row_bounds;
+    if notes.is_empty() || end_row < start_row || !mods.has_chart_effect() {
+        return;
+    }
+    let note_range = chart_attack_note_range(notes, start_row, end_row);
+    if note_range.is_empty() {
+        return;
+    }
+    if mods.insert_mask == 0 && mods.remove_mask == 0 && mods.holds_mask == 0 {
+        apply_attack_turn_mod(
+            &mut notes[note_range.clone()],
+            col_offset,
+            cols,
+            mods.turn_option,
+            turn_seed,
+            player,
+        );
+        sort_player_notes(&mut notes[note_range]);
+        return;
+    }
+
+    let insert_at = note_range.start;
+    debug_assert!(in_range.is_empty());
+    in_range.reserve(note_range.len());
+    in_range.extend(notes.drain(note_range));
+    apply_uncommon_masks_with_masks(
+        in_range,
+        mods.insert_mask,
+        mods.remove_mask,
+        mods.holds_mask,
+        timing_player,
+        col_offset,
+        cols,
+        notes,
+        Some(row_bounds),
+        player,
+    );
+    apply_attack_turn_mod(
+        in_range,
+        col_offset,
+        cols,
+        mods.turn_option,
+        turn_seed,
+        player,
+    );
+    if mods.turn_option != GameplayTurnOption::None {
+        sort_player_notes(in_range);
+    }
+
+    let mut insert_at = insert_at;
+    if let (Some(first), Some(last)) = (in_range.first(), in_range.last()) {
+        let first_key = (first.row_index, first.column);
+        let last_key = (last.row_index, last.column);
+        let merge_start = notes.partition_point(|note| (note.row_index, note.column) < first_key);
+        let merge_end = notes.partition_point(|note| (note.row_index, note.column) <= last_key);
+        if merge_start < merge_end {
+            in_range.extend(notes.drain(merge_start..merge_end));
+            sort_player_notes(in_range);
+        }
+        insert_at = merge_start;
+    }
+    drop(notes.splice(insert_at..insert_at, in_range.drain(..)));
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::too_many_arguments)]
+pub fn apply_chart_attack_windows_order_reference(
+    notes: &mut Vec<Note>,
+    attacks: &[ChartAttackWindow],
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    player: usize,
+    base_seed: u64,
+) {
+    let mut ordered = chart_attack_notes_sorted(notes);
+    let mut scratch = Vec::new();
+    for (index, attack) in attacks.iter().enumerate() {
+        let mods = parse_attack_mods(&attack.mods);
+        if !mods.has_chart_effect() {
+            continue;
+        }
+        let Some(row_bounds) = chart_attack_row_range(attack, timing_player) else {
+            continue;
+        };
+        let turn_seed = chart_attack_turn_seed(base_seed, player, index);
+        if ordered {
+            apply_window_order_ref(
                 notes,
                 timing_player,
                 col_offset,
@@ -3460,7 +3693,7 @@ fn apply_borrowed_chart_attacks(
             continue;
         };
         let turn_seed = chart_attack_turn_seed(base_seed, player, index);
-        let notes_ordered = *ordered.get_or_insert_with(|| chart_attack_notes_sorted(notes));
+        let notes_ordered = *ordered.get_or_insert_with(|| prepare_chart_attack_order(notes));
         if notes_ordered {
             apply_chart_attack_window_sorted_with_scratch(
                 notes,
@@ -3484,7 +3717,7 @@ fn apply_borrowed_chart_attacks(
                 mods,
                 turn_seed,
             );
-            ordered = Some(chart_attack_notes_sorted(notes));
+            ordered = Some(true);
         }
     }
 }

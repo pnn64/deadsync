@@ -2987,6 +2987,113 @@ mod tests {
     }
 
     #[test]
+    fn chart_attack_order_paths_match_former_pipeline() {
+        let timing = test_timing(256 * 12);
+        let source = (0..256)
+            .flat_map(|row| {
+                (0..4).map(move |column| {
+                    let row_index = row * 12;
+                    let kind = if (row + column) % 29 == 0 {
+                        NoteType::Mine
+                    } else {
+                        NoteType::Tap
+                    };
+                    let mut note = test_note_at(
+                        kind,
+                        None,
+                        false,
+                        row_index,
+                        row_index as f32 / 48.0,
+                    );
+                    note.column = column;
+                    note
+                })
+            })
+            .collect::<Vec<_>>();
+        let attacks = [
+            ChartAttackWindow {
+                start_second: 0.0,
+                len_seconds: 64.0,
+                mods: "drunk".to_string(),
+            },
+            ChartAttackWindow {
+                start_second: 1.0,
+                len_seconds: 20.0,
+                mods: "mirror".to_string(),
+            },
+            ChartAttackWindow {
+                start_second: 8.0,
+                len_seconds: 16.0,
+                mods: "random".to_string(),
+            },
+            ChartAttackWindow {
+                start_second: 24.0,
+                len_seconds: 24.0,
+                mods: "wide,nomines,mirror".to_string(),
+            },
+        ];
+
+        for layout in 0..5 {
+            let mut expected = source.clone();
+            if layout == 1 {
+                for row in expected.chunks_exact_mut(4) {
+                    row.reverse();
+                }
+            } else if layout == 2 {
+                expected.reverse();
+            } else if layout == 3 {
+                expected[1].column = expected[0].column;
+            } else if layout == 4 {
+                expected[1].column = expected[0].column;
+                for row in expected.chunks_exact_mut(4) {
+                    row.reverse();
+                }
+            }
+            let mut actual = expected.clone();
+            apply_chart_attack_windows_order_reference(
+                &mut expected,
+                &attacks,
+                &timing,
+                0,
+                4,
+                0,
+                0x1234_5678,
+            );
+            apply_chart_attack_windows(
+                &mut actual,
+                &attacks,
+                &timing,
+                0,
+                4,
+                0,
+                0x1234_5678,
+            );
+            assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+        }
+    }
+
+    #[test]
+    fn runtime_only_owned_attacks_preserve_note_order() {
+        let timing = test_timing(96);
+        let mut notes = vec![
+            test_note_at(NoteType::Tap, None, false, 96, 2.0),
+            test_note_at(NoteType::Tap, None, false, 48, 1.0),
+        ];
+        notes[0].column = 3;
+        notes[1].column = 0;
+        let expected = notes.clone();
+        let attacks = [ChartAttackWindow {
+            start_second: 0.0,
+            len_seconds: 4.0,
+            mods: "drunk,hidden,50% mini".to_string(),
+        }];
+
+        apply_chart_attack_windows(&mut notes, &attacks, &timing, 0, 4, 0, 7);
+
+        assert_eq!(format!("{notes:?}"), format!("{expected:?}"));
+    }
+
+    #[test]
     fn chart_attacks_for_mode_noops_when_disabled_or_missing() {
         let timing = test_timing(ROWS_PER_BEAT as usize * 3);
         let original = vec![
