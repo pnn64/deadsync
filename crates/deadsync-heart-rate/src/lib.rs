@@ -28,7 +28,10 @@ pub struct DiscoverySnapshot {
 mod platform;
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-pub use platform::{configure, discovery_snapshot, player_readings, player_readings_generation};
+pub use platform::{
+    configure, discovery_generation, discovery_snapshot, player_readings,
+    player_readings_generation,
+};
 
 #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
 pub fn configure(_enabled: bool, _discover: bool, _device_ids: [Option<&str>; 2]) {}
@@ -40,6 +43,11 @@ pub fn player_readings() -> [PlayerReading; 2] {
 
 #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
 pub const fn player_readings_generation() -> u64 {
+    0
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+pub const fn discovery_generation() -> u64 {
     0
 }
 

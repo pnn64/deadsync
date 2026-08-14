@@ -2,16 +2,22 @@ use deadsync_theme_simply_love::screens::{gameplay, player_options, select_music
 
 /// Game-thread owner for heart-rate configuration invalidation.
 ///
-/// Lifetime: process. Warmup: first frame. Capacity: one fixed snapshot.
-/// Unchanged gameplay frames perform one atomic generation load and no locks,
-/// allocations, discovery work, eviction, or destruction. Configuration work
-/// occurs only after a machine setting, profile device, or screen-mode change.
+/// Lifetime: process. Warmup: first owning-screen frame. Capacity: one fixed
+/// configuration key and two fixed view keys. Unchanged Player Options and
+/// Select Music frames perform at most two atomic generation loads and no
+/// locks, allocations, discovery clones, eviction, or destruction. A miss
+/// rebuilds at most two device choices/readings on a menu frame. Configuration
+/// work occurs only after a machine setting, profile device, or screen-mode
+/// change. Entries are replaced in place and destroyed at app shutdown;
+/// existing frame timing accounts for their bounded miss cost.
 #[derive(Default)]
 pub(crate) struct Runtime {
     initialized: bool,
     enabled: bool,
     discover: bool,
     profile_generation: u64,
+    player_options_view_key: Option<(u64, u64)>,
+    select_music_view_key: Option<(bool, u64)>,
 }
 
 impl Runtime {
@@ -37,6 +43,43 @@ impl Runtime {
         self.profile_generation = profile_generation;
         true
     }
+
+    pub(crate) fn refresh_player_options(&mut self, state: &mut player_options::State) -> bool {
+        let key = (
+            deadsync_heart_rate::discovery_generation(),
+            deadsync_heart_rate::player_readings_generation(),
+        );
+        if self.player_options_view_key == Some(key) {
+            return false;
+        }
+        // Capture both generations before the discovery lock. A concurrent
+        // publication may cause one redundant refresh, but cannot be hidden.
+        let view = devices_view();
+        self.player_options_view_key = Some(key);
+        player_options::set_heart_rate_devices(state, &view);
+        true
+    }
+
+    pub(crate) fn refresh_select_music(
+        &mut self,
+        state: &mut select_music::State,
+        enabled: bool,
+    ) -> bool {
+        let key = select_music_view_key(enabled, || {
+            deadsync_heart_rate::player_readings_generation()
+        });
+        if self.select_music_view_key == Some(key) {
+            return false;
+        }
+        let view = if enabled {
+            readings_view()
+        } else {
+            gameplay::HeartRateView::default()
+        };
+        self.select_music_view_key = Some(key);
+        select_music::set_heart_rate_view(state, view);
+        true
+    }
 }
 
 const fn runtime_config_changed(
@@ -45,6 +88,10 @@ const fn runtime_config_changed(
     next: (bool, bool, u64),
 ) -> bool {
     !initialized || current.0 != next.0 || current.1 != next.1 || current.2 != next.2
+}
+
+fn select_music_view_key(enabled: bool, generation: impl FnOnce() -> u64) -> (bool, u64) {
+    (enabled, if enabled { generation() } else { 0 })
 }
 
 pub(crate) fn devices_view() -> player_options::HeartRateDevicesView {
@@ -72,10 +119,6 @@ pub(crate) fn devices_view() -> player_options::HeartRateDevicesView {
     }
 }
 
-pub(crate) fn refresh_player_options(state: &mut player_options::State) {
-    player_options::set_heart_rate_devices(state, &devices_view());
-}
-
 fn readings_view() -> gameplay::HeartRateView {
     let players =
         deadsync_heart_rate::player_readings().map(|reading| gameplay::HeartRatePlayerView {
@@ -95,18 +138,9 @@ pub(crate) fn refresh_gameplay(state: &mut gameplay::State) -> bool {
     true
 }
 
-pub(crate) fn refresh_select_music(state: &mut select_music::State, enabled: bool) {
-    let view = if enabled {
-        readings_view()
-    } else {
-        gameplay::HeartRateView::default()
-    };
-    select_music::set_heart_rate_view(state, view);
-}
-
 #[cfg(test)]
 mod tests {
-    use super::runtime_config_changed;
+    use super::{runtime_config_changed, select_music_view_key};
 
     #[test]
     fn runtime_config_only_invalidates_on_input_changes() {
@@ -116,5 +150,12 @@ mod tests {
         assert!(runtime_config_changed(true, current, (false, false, 7)));
         assert!(runtime_config_changed(true, current, (true, true, 7)));
         assert!(runtime_config_changed(true, current, (true, false, 8)));
+    }
+
+    #[test]
+    fn disabled_select_music_view_does_not_read_the_generation() {
+        let key = select_music_view_key(false, || panic!("disabled view read generation"));
+        assert_eq!(key, (false, 0));
+        assert_eq!(select_music_view_key(true, || 9), (true, 9));
     }
 }

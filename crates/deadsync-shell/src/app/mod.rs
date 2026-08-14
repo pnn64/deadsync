@@ -1154,17 +1154,12 @@ impl ScreensState {
                 ),
                 false,
             ),
-            CurrentScreen::PlayerOptions => {
-                if let Some(state) = self.player_options_state.as_mut() {
-                    crate::heart_rate::refresh_player_options(state);
-                }
-                (
-                    self.player_options_state
-                        .as_mut()
-                        .and_then(|pos| player_options::update(pos, delta_time, asset_manager)),
-                    false,
-                )
-            }
+            CurrentScreen::PlayerOptions => (
+                self.player_options_state
+                    .as_mut()
+                    .and_then(|pos| player_options::update(pos, delta_time, asset_manager)),
+                false,
+            ),
             CurrentScreen::Sandbox => {
                 sandbox::update(&mut self.sandbox_state, delta_time);
                 (None, false)
@@ -2921,6 +2916,11 @@ impl App {
                 frame_policy.machine_enable_heart_rate_monitors,
                 self.state.screens.current_screen == CurrentScreen::PlayerOptions,
             );
+            if self.state.screens.current_screen == CurrentScreen::PlayerOptions
+                && let Some(state) = self.state.screens.player_options_state.as_mut()
+            {
+                self.heart_rate.refresh_player_options(state);
+            }
         }
         let maintenance_us = elapsed_us_since(maintenance_started);
 
@@ -2938,7 +2938,7 @@ impl App {
             self.mark_evaluation_runtime_dirty();
         }
         if work_caps & frame_work::SELECT_MUSIC_VIEW != 0 {
-            crate::heart_rate::refresh_select_music(
+            self.heart_rate.refresh_select_music(
                 &mut self.state.screens.select_music_state,
                 frame_policy.machine_enable_heart_rate_monitors,
             );

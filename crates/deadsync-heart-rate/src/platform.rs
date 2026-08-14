@@ -51,6 +51,7 @@ impl Default for Shared {
 // so zero remains `None`.
 static PLAYER_READINGS: [AtomicU32; 2] = [AtomicU32::new(0), AtomicU32::new(0)];
 static PLAYER_READINGS_GENERATION: AtomicU64 = AtomicU64::new(0);
+static DISCOVERY_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 #[inline(always)]
 fn encode_reading(reading: PlayerReading) -> u32 {
@@ -141,6 +142,15 @@ pub fn player_readings() -> [PlayerReading; 2] {
 
 pub fn player_readings_generation() -> u64 {
     PLAYER_READINGS_GENERATION.load(Ordering::Acquire)
+}
+
+pub fn discovery_generation() -> u64 {
+    DISCOVERY_GENERATION.load(Ordering::Acquire)
+}
+
+#[inline(always)]
+fn mark_discovery_changed() {
+    DISCOVERY_GENERATION.fetch_add(1, Ordering::Release);
 }
 
 pub fn discovery_snapshot() -> DiscoverySnapshot {
@@ -371,8 +381,11 @@ fn publish_devices(shared: &Arc<RwLock<Shared>>, devices: &HashMap<String, (Stri
         .collect();
     snapshot.sort_unstable_by(|a, b| a.label.cmp(&b.label).then_with(|| a.id.cmp(&b.id)));
     let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
-    shared.discovery.devices = snapshot;
-    shared.discovery.error = None;
+    if shared.discovery.devices != snapshot || shared.discovery.error.is_some() {
+        shared.discovery.devices = snapshot;
+        shared.discovery.error = None;
+        mark_discovery_changed();
+    }
 }
 
 fn prune_monitors(
@@ -542,8 +555,12 @@ fn set_connecting(desired: &Desired, id: &str) {
 
 fn set_disabled(shared: &Arc<RwLock<Shared>>) {
     let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
-    shared.discovery.scanning = false;
-    shared.discovery.error = None;
+    if shared.discovery.scanning || shared.discovery.error.is_some() {
+        shared.discovery.scanning = false;
+        shared.discovery.error = None;
+        mark_discovery_changed();
+    }
+    drop(shared);
     for player in 0..2 {
         publish_reading(player, PlayerReading::default());
     }
@@ -551,14 +568,21 @@ fn set_disabled(shared: &Arc<RwLock<Shared>>) {
 
 fn set_scanning(shared: &Arc<RwLock<Shared>>, scanning: bool) {
     let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
-    shared.discovery.scanning = scanning;
-    shared.discovery.error = None;
+    if shared.discovery.scanning != scanning || shared.discovery.error.is_some() {
+        shared.discovery.scanning = scanning;
+        shared.discovery.error = None;
+        mark_discovery_changed();
+    }
 }
 
 fn set_error(shared: &Arc<RwLock<Shared>>, error: String) {
     let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
-    shared.discovery.scanning = false;
-    shared.discovery.error = Some(error);
+    if shared.discovery.scanning || shared.discovery.error.as_deref() != Some(error.as_str()) {
+        shared.discovery.scanning = false;
+        shared.discovery.error = Some(error);
+        mark_discovery_changed();
+    }
+    drop(shared);
     for player in 0..2 {
         let mut reading = decode_reading(PLAYER_READINGS[player].load(Ordering::Acquire));
         reading.connected = false;
@@ -634,6 +658,22 @@ mod tests {
         publish_reading_bits(&reading, &generation, 9);
         assert_eq!(reading.load(Ordering::Relaxed), 9);
         assert_eq!(generation.load(Ordering::Relaxed), 12);
+    }
+
+    #[test]
+    fn discovery_generation_advances_only_when_visible_status_changes() {
+        let shared = Arc::new(RwLock::new(Shared::default()));
+        let generation = discovery_generation();
+
+        set_scanning(&shared, false);
+        assert_eq!(discovery_generation(), generation);
+
+        set_scanning(&shared, true);
+        let scanning_generation = discovery_generation();
+        assert!(scanning_generation > generation);
+
+        set_scanning(&shared, true);
+        assert_eq!(discovery_generation(), scanning_generation);
     }
 
     #[test]
