@@ -9,7 +9,7 @@ use deadsync_theme_simply_love::views::{
     MusicWheelSlotRuntimeRequest, SelectMusicDownloadView, SelectMusicLeaderboardRequest,
     SelectMusicLeaderboardSideView, SelectMusicLeaderboardView, SelectMusicPadProfileView,
     SelectMusicPolicyView, SelectMusicProfileView, SelectMusicRuntimeView,
-    SelectMusicScoreboxRequest, SelectMusicSessionView,
+    SelectMusicScoreboxRequest, SelectMusicSessionView, SimplyLoveLobbyRuntimeView,
 };
 use std::{sync::Arc, time::Instant};
 
@@ -487,7 +487,25 @@ impl App {
         if self.state.screens.current_screen != CurrentScreen::SelectMusic {
             return;
         }
-        let lobby = Self::refresh_lobby_runtime_view();
+        let now = Instant::now();
+        let lobby_generation = deadsync_online::lobbies::runtime_view_generation();
+        let lobby_refresh_due = self
+            .select_music_lobby_refresh_at
+            .is_some_and(|refresh_at| now >= refresh_at);
+        let lobby_dirty = self.select_music_lobby_rebuild
+            || self.select_music_lobby_generation != lobby_generation
+            || lobby_refresh_due;
+        let lobby = lobby_dirty.then(|| {
+            let refresh = deadsync_online::lobbies::runtime_refresh_view_state_default();
+            self.select_music_lobby_generation = refresh.generation;
+            self.select_music_lobby_refresh_at = refresh.next_refresh_at;
+            SimplyLoveLobbyRuntimeView {
+                snapshot: refresh.snapshot,
+                reconnect_status_text: refresh.reconnect_status_text,
+                disconnect_hold_seconds: deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS,
+            }
+        });
+        self.select_music_lobby_rebuild = false;
         let downloads_visible =
             select_music::downloads_overlay_visible(&self.state.screens.select_music_state);
         let downloads = if downloads_visible {
@@ -595,7 +613,6 @@ impl App {
             self.select_music_wheel_rebuild = false;
             Self::prepare_music_wheel_runtime(music_wheel_request, profile_view, policy.wheel)
         });
-        let now = Instant::now();
         let scorebox_retry_due = self
             .select_music_scorebox_retry_at
             .is_some_and(|retry_at| now >= retry_at);

@@ -701,7 +701,9 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
         rebuild_select_music_menu(state);
     }
     state.audio_playback = view.audio_playback;
-    state.lobby_view = view.lobby;
+    if let Some(lobby) = view.lobby {
+        state.lobby_view = lobby;
+    }
     if let Some(downloads) = view.downloads {
         state.downloads = downloads;
     }
@@ -16054,7 +16056,13 @@ mod tests {
                 audio_playback: deadsync_theme::views::AudioPlaybackView {
                     music_position_seconds: 12.5,
                 },
-                lobby: Default::default(),
+                lobby: Some(crate::views::SimplyLoveLobbyRuntimeView {
+                    snapshot: Arc::new(deadsync_online::lobbies::Snapshot {
+                        connection: deadsync_online::lobbies::ConnectionState::Connected,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
                 downloads: Some(vec![crate::views::SelectMusicDownloadView {
                     name: "Unlock Pack".to_string(),
                     current_bytes: 512,
@@ -16180,6 +16188,11 @@ mod tests {
             state.profiles.display_name(profile_data::PlayerSide::P1),
             "Alice",
             "unchanged profile identity stays retained"
+        );
+        assert_eq!(
+            state.lobby_view.snapshot.connection,
+            deadsync_online::lobbies::ConnectionState::Connected,
+            "unchanged lobby view stays retained"
         );
         assert_eq!(state.downloads.len(), 1, "unchanged rows stay retained");
         assert_eq!(

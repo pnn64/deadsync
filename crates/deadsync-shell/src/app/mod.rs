@@ -1294,6 +1294,14 @@ pub struct App {
     select_music_downloads_visible: bool,
     select_music_shop_generation: u64,
     select_music_shop_visible: bool,
+    /// Last lobby revision integrated by Select Music plus the next reconnect
+    /// countdown/retry deadline. Stable frames read one atomic and take no
+    /// lobby locks; a worker revision or deadline rebuilds one retained theme
+    /// view. Re-entry forces handoff without discarding lobby state during
+    /// gameplay. Frame update timing accounts for the bounded refresh.
+    select_music_lobby_generation: u64,
+    select_music_lobby_refresh_at: Option<Instant>,
+    select_music_lobby_rebuild: bool,
     /// Game-thread-only, session-lifetime cache of the immutable profile view
     /// shared by Select Music subviews. The one entry warms on screen entry and
     /// is checked through one atomic generation read; stable frames take no
@@ -2830,6 +2838,7 @@ impl App {
             );
             self.sync_select_music_runtime_view(self.select_music_policy);
         } else {
+            self.select_music_lobby_rebuild = true;
             self.select_music_profile_rebuild = true;
             self.select_music_wheel_rebuild = true;
             self.select_music_score_views_rebuild = true;
@@ -3467,6 +3476,9 @@ impl App {
             select_music_downloads_visible: false,
             select_music_shop_generation: 0,
             select_music_shop_visible: false,
+            select_music_lobby_generation: 0,
+            select_music_lobby_refresh_at: None,
+            select_music_lobby_rebuild: true,
             select_music_profile_generation: 0,
             select_music_profile_policy: None,
             select_music_profile_snapshot: None,

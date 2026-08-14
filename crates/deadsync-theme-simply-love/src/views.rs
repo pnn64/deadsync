@@ -846,7 +846,8 @@ pub struct SelectMusicRuntimeView {
     /// Refreshed on demand from the shell-owned pad-config cache.
     pub pad_profiles: Option<[Vec<SelectMusicPadProfileView>; 2]>,
     pub audio_playback: deadsync_theme::views::AudioPlaybackView,
-    pub lobby: SimplyLoveLobbyRuntimeView,
+    /// Replacement lobby view emitted on worker changes or reconnect deadlines.
+    pub lobby: Option<SimplyLoveLobbyRuntimeView>,
     /// Replacement rows emitted only when the download runtime generation changes.
     pub downloads: Option<Vec<SelectMusicDownloadView>>,
     /// Replacement snapshot emitted only when the shop runtime changes.
@@ -876,7 +877,7 @@ impl Default for SelectMusicRuntimeView {
             favorites: None,
             pad_profiles: None,
             audio_playback: Default::default(),
-            lobby: Default::default(),
+            lobby: None,
             downloads: None,
             srpg_shop: None,
             arrow_bounce_offset: 0.0,
