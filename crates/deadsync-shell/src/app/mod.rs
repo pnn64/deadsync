@@ -1316,11 +1316,12 @@ pub struct App {
     /// Game-thread-only dirty key for the wheel snapshot retained by the
     /// Select Music screen. The session-lifetime cache has one fixed-size
     /// entry and warms on its first frame. A miss performs one bounded
-    /// 19-slot rebuild; a hit performs bounded borrowed comparisons without
-    /// allocation or locks. Score and favorite generations publish external
-    /// changes. There is no eviction scan or gameplay destruction path;
-    /// leaving marks the retained key stale, and re-entry replaces it on the
-    /// menu frame. Existing frame update timing accounts for rebuild cost.
+    /// 19-slot rebuild; a hit compares one compact screen token plus profile,
+    /// score, and favorite generations without rebuilding or scanning slots.
+    /// Hits allocate nothing and take no locks. There is no eviction scan or
+    /// gameplay destruction path; leaving marks the retained key stale, and
+    /// re-entry replaces it on the menu frame. Existing frame update timing
+    /// accounts for rebuild cost.
     select_music_wheel_key: Option<select_music_views::MusicWheelRuntimeKey>,
     select_music_wheel_rebuild: bool,
     /// Game-thread-only, session-lifetime dirty keys for the two retained score

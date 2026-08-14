@@ -79,6 +79,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::cell::RefCell;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
@@ -93,6 +94,12 @@ const SYNC_OVERLAY_Z: i16 = 1495;
 const SYNC_HEAT_TEXTURE_KEY: &str = "__generated/sync-overlay-heat";
 const SYNC_HEAT_ALPHA: f32 = 1.0;
 const SYNC_READY_TEXT_ZOOM: f32 = 0.95;
+static NEXT_WHEEL_CONTENT_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+#[inline(always)]
+fn next_wheel_content_generation() -> u64 {
+    NEXT_WHEEL_CONTENT_GENERATION.fetch_add(1, Ordering::Relaxed)
+}
 const SYNC_READY_LINE_STEP: f32 = 24.0 * SYNC_READY_TEXT_ZOOM;
 const SYNC_BEAT_MARKER_INSET: f32 = 7.0;
 const SYNC_ADJUST_STEP_SECONDS: f32 = 0.001;
@@ -1479,6 +1486,10 @@ pub struct State {
     /// `select_music_hot_paths` benchmark instruments allocator churn and the
     /// worst per-frame work is one linear scan of the active sort list.
     pub entries: Vec<MusicWheelEntry>,
+    /// Main-thread content revision assigned whenever `entries` is refilled.
+    /// It lets the shell skip reconstructing the fixed 19-slot request while
+    /// the active wheel contents are unchanged.
+    wheel_content_generation: u64,
     pub selected_index: usize,
     pub selected_steps_index: usize,
     pub preferred_difficulty_index: usize,
@@ -2043,6 +2054,7 @@ fn rebuild_displayed_entries(state: &mut State) {
     if state.entries.is_empty() {
         state.wheel_offset_from_selection = 0.0;
     }
+    state.wheel_content_generation = next_wheel_content_generation();
 }
 
 #[cfg(test)]
@@ -3676,6 +3688,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         history: init_view.history,
         active_playlist_id: None,
         entries: Vec::with_capacity(cached_sort_capacity),
+        wheel_content_generation: next_wheel_content_generation(),
         selected_index: 0,
         selected_steps_index: initial_diff_index,
         preferred_difficulty_index: initial_diff_index,
@@ -3919,6 +3932,7 @@ pub fn init_placeholder() -> State {
         history: SelectMusicHistoryView::default(),
         active_playlist_id: None,
         entries: Vec::new(),
+        wheel_content_generation: next_wheel_content_generation(),
         selected_index: 0,
         selected_steps_index: initial_diff_index,
         preferred_difficulty_index: initial_diff_index,
@@ -12506,6 +12520,18 @@ fn solo_runtime_side(
     }
 }
 
+#[inline(always)]
+fn selected_chart_cache_matches(state: &State, play_style: profile_data::PlayStyle) -> bool {
+    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+        return false;
+    };
+    state
+        .cached_song
+        .as_ref()
+        .is_some_and(|cached_song| Arc::ptr_eq(cached_song, song))
+        && state.cached_chart_type == play_style.chart_type()
+}
+
 fn immediate_selected_charts(
     state: &State,
     play_style: profile_data::PlayStyle,
@@ -12513,12 +12539,7 @@ fn immediate_selected_charts(
     let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
         return [None, None];
     };
-    let cache_matches = state
-        .cached_song
-        .as_ref()
-        .is_some_and(|cached_song| Arc::ptr_eq(cached_song, song))
-        && state.cached_chart_type == play_style.chart_type();
-    if !cache_matches {
+    if !selected_chart_cache_matches(state, play_style) {
         return [None, None];
     }
     let p1 = state
@@ -12533,6 +12554,38 @@ fn immediate_selected_charts(
         })
         .flatten();
     [p1, p2]
+}
+
+/// Compact exact identity for the inputs used to build the fixed wheel
+/// request. Score/profile generations remain shell-owned and are checked
+/// alongside this token.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MusicWheelRuntimeToken {
+    content_generation: u64,
+    selected_index: usize,
+    preferred_difficulty: [usize; 2],
+    cached_chart_ix: [Option<usize>; 2],
+    chart_cache_matches: bool,
+    play_style: profile_data::PlayStyle,
+    fetch_allowed: bool,
+    policy: crate::views::SelectMusicWheelPolicyView,
+}
+
+pub fn music_wheel_runtime_token(state: &State) -> MusicWheelRuntimeToken {
+    let play_style = state.session.play_style;
+    MusicWheelRuntimeToken {
+        content_generation: state.wheel_content_generation,
+        selected_index: state.selected_index,
+        preferred_difficulty: [
+            state.preferred_difficulty_index,
+            state.p2_preferred_difficulty_index,
+        ],
+        cached_chart_ix: [state.cached_chart_ix_p1, state.cached_chart_ix_p2],
+        chart_cache_matches: selected_chart_cache_matches(state, play_style),
+        play_style,
+        fetch_allowed: allow_gs_fetch_for_selection(state),
+        policy: state.policy.wheel,
+    }
 }
 
 pub fn scorebox_runtime_request(state: &State) -> SelectMusicScoreboxRequest<'_> {
@@ -16200,6 +16253,20 @@ mod tests {
             deadsync_online::srpg_shop::SrpgShopPhase::Ready,
             "unchanged shop snapshot stays retained"
         );
+    }
+
+    #[test]
+    fn wheel_runtime_token_tracks_selection_and_content_sources() {
+        let mut state = init_placeholder();
+        let stable = super::music_wheel_runtime_token(&state);
+        assert_eq!(stable, super::music_wheel_runtime_token(&state));
+
+        state.selected_index = 1;
+        assert_ne!(stable, super::music_wheel_runtime_token(&state));
+
+        state.selected_index = 0;
+        super::rebuild_displayed_entries(&mut state);
+        assert_ne!(stable, super::music_wheel_runtime_token(&state));
     }
 
     #[test]

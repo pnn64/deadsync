@@ -5,11 +5,10 @@ use deadsync_profile as profile_data;
 use deadsync_theme::views::AudioPlaybackView;
 use deadsync_theme_simply_love::screens::{SimplyLoveScreen as CurrentScreen, select_music};
 use deadsync_theme_simply_love::views::{
-    MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource, MusicWheelRuntimeRequest,
-    MusicWheelSlotRuntimeRequest, SelectMusicDownloadView, SelectMusicLeaderboardRequest,
-    SelectMusicLeaderboardSideView, SelectMusicLeaderboardView, SelectMusicPadProfileView,
-    SelectMusicPolicyView, SelectMusicProfileView, SelectMusicRuntimeView,
-    SelectMusicScoreboxRequest, SelectMusicSessionView, SimplyLoveLobbyRuntimeView,
+    SelectMusicDownloadView, SelectMusicLeaderboardRequest, SelectMusicLeaderboardSideView,
+    SelectMusicLeaderboardView, SelectMusicPadProfileView, SelectMusicPolicyView,
+    SelectMusicProfileView, SelectMusicRuntimeView, SelectMusicScoreboxRequest,
+    SelectMusicSessionView, SimplyLoveLobbyRuntimeView,
 };
 use std::{sync::Arc, time::Instant};
 
@@ -33,161 +32,8 @@ pub(super) struct SelectMusicFramePolicy {
 }
 
 #[derive(Debug)]
-struct WheelSideKey {
-    chart_hash: Option<Box<str>>,
-    fetch_itl_rank: bool,
-    fetch_itl_score: bool,
-    fetch_srpg_score: bool,
-}
-
-impl WheelSideKey {
-    fn new(side: deadsync_theme_simply_love::views::MusicWheelSideRuntimeRequest<'_>) -> Self {
-        Self {
-            chart_hash: side.chart_hash.map(Into::into),
-            fetch_itl_rank: side.fetch_itl_rank,
-            fetch_itl_score: side.fetch_itl_score,
-            fetch_srpg_score: side.fetch_srpg_score,
-        }
-    }
-
-    fn matches(
-        &self,
-        side: deadsync_theme_simply_love::views::MusicWheelSideRuntimeRequest<'_>,
-    ) -> bool {
-        self.chart_hash.as_deref() == side.chart_hash
-            && self.fetch_itl_rank == side.fetch_itl_rank
-            && self.fetch_itl_score == side.fetch_itl_score
-            && self.fetch_srpg_score == side.fetch_srpg_score
-    }
-}
-
-#[derive(Debug)]
-enum WheelSlotKey {
-    Empty,
-    Pack(Option<Box<str>>),
-    Series(Box<str>),
-    Song {
-        song: Arc<deadsync_chart::SongData>,
-        chart_hashes: [Option<Box<str>>; 2],
-        lua_submit_allowed: [bool; 2],
-        has_edit: bool,
-        is_srpg_event: bool,
-        unlock_song_dir: Option<Box<str>>,
-        sync_pref: deadsync_chart::SyncPref,
-    },
-}
-
-impl WheelSlotKey {
-    fn new(slot: MusicWheelSlotRuntimeRequest<'_>) -> Self {
-        match slot {
-            MusicWheelSlotRuntimeRequest::Empty => Self::Empty,
-            MusicWheelSlotRuntimeRequest::Pack { key } => Self::Pack(key.map(Into::into)),
-            MusicWheelSlotRuntimeRequest::Series { key } => Self::Series(key.into()),
-            MusicWheelSlotRuntimeRequest::Song {
-                song,
-                chart_hashes,
-                lua_submit_allowed,
-                has_edit,
-                is_srpg_event,
-                unlock_song_dir,
-                sync_pref,
-            } => Self::Song {
-                song: Arc::clone(song),
-                chart_hashes: chart_hashes.map(|hash| hash.map(Into::into)),
-                lua_submit_allowed,
-                has_edit,
-                is_srpg_event,
-                unlock_song_dir: unlock_song_dir.map(Into::into),
-                sync_pref,
-            },
-        }
-    }
-
-    fn matches(&self, slot: MusicWheelSlotRuntimeRequest<'_>) -> bool {
-        match (self, slot) {
-            (Self::Empty, MusicWheelSlotRuntimeRequest::Empty) => true,
-            (Self::Pack(stored), MusicWheelSlotRuntimeRequest::Pack { key }) => {
-                stored.as_deref() == key
-            }
-            (Self::Series(stored), MusicWheelSlotRuntimeRequest::Series { key }) => {
-                stored.as_ref() == key
-            }
-            (
-                Self::Song {
-                    song: stored_song,
-                    chart_hashes: stored_hashes,
-                    lua_submit_allowed: stored_lua,
-                    has_edit: stored_edit,
-                    is_srpg_event: stored_srpg,
-                    unlock_song_dir: stored_unlock,
-                    sync_pref: stored_sync,
-                },
-                MusicWheelSlotRuntimeRequest::Song {
-                    song,
-                    chart_hashes,
-                    lua_submit_allowed,
-                    has_edit,
-                    is_srpg_event,
-                    unlock_song_dir,
-                    sync_pref,
-                },
-            ) => {
-                Arc::ptr_eq(stored_song, song)
-                    && stored_hashes
-                        .iter()
-                        .zip(chart_hashes)
-                        .all(|(stored, hash)| stored.as_deref() == hash)
-                    && *stored_lua == lua_submit_allowed
-                    && *stored_edit == has_edit
-                    && *stored_srpg == is_srpg_event
-                    && stored_unlock.as_deref() == unlock_song_dir
-                    && *stored_sync == sync_pref
-            }
-            _ => false,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct WheelRequestKey {
-    read_scores: bool,
-    rank_source: MusicWheelRankSource,
-    read_itl_scores: bool,
-    sides: [WheelSideKey; 2],
-    slots: [WheelSlotKey; MUSIC_WHEEL_SLOT_COUNT],
-}
-
-impl WheelRequestKey {
-    fn new(request: &MusicWheelRuntimeRequest<'_>) -> Self {
-        Self {
-            read_scores: request.read_scores,
-            rank_source: request.rank_source,
-            read_itl_scores: request.read_itl_scores,
-            sides: request.sides.map(WheelSideKey::new),
-            slots: request.slots.map(WheelSlotKey::new),
-        }
-    }
-
-    fn matches(&self, request: &MusicWheelRuntimeRequest<'_>) -> bool {
-        self.read_scores == request.read_scores
-            && self.rank_source == request.rank_source
-            && self.read_itl_scores == request.read_itl_scores
-            && self
-                .sides
-                .iter()
-                .zip(request.sides)
-                .all(|(stored, side)| stored.matches(side))
-            && self
-                .slots
-                .iter()
-                .zip(request.slots)
-                .all(|(stored, slot)| stored.matches(slot))
-    }
-}
-
-#[derive(Debug)]
 pub(super) struct MusicWheelRuntimeKey {
-    request: WheelRequestKey,
+    source: select_music::MusicWheelRuntimeToken,
     profile_snapshot: Arc<profile_data::MusicProfileSnapshot>,
     display: MusicWheelDisplayPolicy,
     favorites_generation: u64,
@@ -196,12 +42,12 @@ pub(super) struct MusicWheelRuntimeKey {
 
 impl MusicWheelRuntimeKey {
     fn new(
-        request: &MusicWheelRuntimeRequest<'_>,
+        source: select_music::MusicWheelRuntimeToken,
         profile_snapshot: &Arc<profile_data::MusicProfileSnapshot>,
         display: MusicWheelDisplayPolicy,
     ) -> Self {
         Self {
-            request: WheelRequestKey::new(request),
+            source,
             profile_snapshot: Arc::clone(profile_snapshot),
             display,
             favorites_generation: profile_data::runtime_favorites_generation(),
@@ -211,11 +57,11 @@ impl MusicWheelRuntimeKey {
 
     fn matches(
         &self,
-        request: &MusicWheelRuntimeRequest<'_>,
+        source: select_music::MusicWheelRuntimeToken,
         profile_snapshot: &Arc<profile_data::MusicProfileSnapshot>,
         display: MusicWheelDisplayPolicy,
     ) -> bool {
-        self.request.matches(request)
+        self.source == source
             && Arc::ptr_eq(&self.profile_snapshot, profile_snapshot)
             && self.display == display
             && self.favorites_generation == profile_data::runtime_favorites_generation()
@@ -598,20 +444,22 @@ impl App {
                 .expect("Select Music profile snapshot should be warmed"),
         );
         let profile_view = &profile_snapshot.scorebox;
-        let music_wheel_request =
-            select_music::music_wheel_runtime_request(&self.state.screens.select_music_state);
+        let music_wheel_source =
+            select_music::music_wheel_runtime_token(&self.state.screens.select_music_state);
         let music_wheel_dirty = self.select_music_wheel_rebuild
             || self.select_music_wheel_key.as_ref().is_none_or(|key| {
-                !key.matches(&music_wheel_request, &profile_snapshot, policy.wheel)
+                !key.matches(music_wheel_source, &profile_snapshot, policy.wheel)
             });
         let music_wheel = music_wheel_dirty.then(|| {
+            let request =
+                select_music::music_wheel_runtime_request(&self.state.screens.select_music_state);
             self.select_music_wheel_key = Some(MusicWheelRuntimeKey::new(
-                &music_wheel_request,
+                music_wheel_source,
                 &profile_snapshot,
                 policy.wheel,
             ));
             self.select_music_wheel_rebuild = false;
-            Self::prepare_music_wheel_runtime(music_wheel_request, profile_view, policy.wheel)
+            Self::prepare_music_wheel_runtime(request, profile_view, policy.wheel)
         });
         let scorebox_retry_due = self
             .select_music_scorebox_retry_at
@@ -881,21 +729,5 @@ mod tests {
         assert!(policy.pane_filter.ex);
         assert!(!policy.pane_filter.hard_ex);
         assert!(policy.pane_filter.tournaments);
-    }
-
-    #[test]
-    fn wheel_key_compares_borrowed_text_by_value() {
-        let series_a = String::from("ITG Series");
-        let mut request = MusicWheelRuntimeRequest::default();
-        request.sides[0].chart_hash = Some("chart-a");
-        request.slots[0] = MusicWheelSlotRuntimeRequest::Series { key: &series_a };
-        let key = WheelRequestKey::new(&request);
-
-        let series_b = String::from("ITG Series");
-        request.slots[0] = MusicWheelSlotRuntimeRequest::Series { key: &series_b };
-        assert!(key.matches(&request));
-
-        request.sides[0].chart_hash = Some("chart-b");
-        assert!(!key.matches(&request));
     }
 }
