@@ -84,7 +84,7 @@ pub fn stutter_diag_dump_lines(
             0.0
         };
         lines.push(format!(
-            "Stutter recorder frame age_ms={:.3} screen={:?} dt_ms={:.3} expected_ms={:.3} x{:.2} req={} phases_ms=[pre:{:.3} rq:{:.3} maintenance:{:.3} in:{:.3} up:{:.3} comp:{:.3} upload:{:.3} draw:{:.3}] draw_ms=[acq:{:.3} sub:{:.3} present:{:.3} gpu_wait:{:.3} setup:{:.3} prep:{:.3} record:{:.3}] display=[err_ms:{:+.3} catch:{}] present=[mode:{} display:{} host:{} inflight:{} wait:{} back:{} idle:{} subopt:{}]",
+            "Stutter recorder frame age_ms={:.3} screen={:?} dt_ms={:.3} expected_ms={:.3} x{:.2} req={} phases_ms=[pre:{:.3} rq:{:.3} in:{:.3} maintenance:{:.3} up:{:.3} comp:{:.3} upload:{:.3} draw:{:.3}] draw_ms=[acq:{:.3} sub:{:.3} present:{:.3} gpu_wait:{:.3} setup:{:.3} prep:{:.3} record:{:.3}] display=[err_ms:{:+.3} catch:{}] present=[mode:{} display:{} host:{} inflight:{} wait:{} back:{} idle:{} subopt:{}]",
             age_ms,
             sample.screen,
             sample.frame_us as f64 / 1000.0,
@@ -93,8 +93,8 @@ pub fn stutter_diag_dump_lines(
             sample.redraw_request_reason,
             sample.pre_redraw_gap_us as f64 / 1000.0,
             sample.request_to_redraw_us as f64 / 1000.0,
-            sample.maintenance_us as f64 / 1000.0,
             sample.input_us as f64 / 1000.0,
+            sample.maintenance_us as f64 / 1000.0,
             sample.update_us as f64 / 1000.0,
             sample.compose_us as f64 / 1000.0,
             sample.upload_us as f64 / 1000.0,

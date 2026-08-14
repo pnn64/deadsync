@@ -214,6 +214,42 @@ const LIVE_TEXTURE_UPLOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
 const EVALUATION_LEADERBOARD_ROWS: usize = 10;
 const SERVICE_SWITCH_PRESSED: &str = "Service switch pressed";
 
+type FrameWorkMask = u16;
+
+// Static screen eligibility for dirty/runtime integration. Worker results stay
+// queued while their bit is absent; cadence work remains explicit in `run_frame`.
+mod frame_work {
+    use super::FrameWorkMask;
+
+    pub const SMX_CONFIG: FrameWorkMask = 1 << 0;
+    pub const MENU_AUTOPROMPT: FrameWorkMask = 1 << 1;
+    pub const OPTIONS_VIEW: FrameWorkMask = 1 << 2;
+    pub const CONTENT_RELOAD: FrameWorkMask = 1 << 3;
+    pub const PROFILE_LOAD: FrameWorkMask = 1 << 4;
+    pub const ASYNC_RESULTS: FrameWorkMask = 1 << 5;
+    pub const ONLINE_VIEW: FrameWorkMask = 1 << 6;
+    pub const HEART_RATE_CONFIG: FrameWorkMask = 1 << 7;
+    pub const SELECT_MUSIC_VIEW: FrameWorkMask = 1 << 8;
+    pub const SELECT_COURSE_VIEW: FrameWorkMask = 1 << 9;
+
+    const NON_GAMEPLAY: FrameWorkMask = SMX_CONFIG | ASYNC_RESULTS | HEART_RATE_CONFIG;
+
+    pub const fn screen_caps(screen: super::CurrentScreen) -> FrameWorkMask {
+        match screen {
+            super::CurrentScreen::Gameplay => ONLINE_VIEW,
+            super::CurrentScreen::Practice => 0,
+            super::CurrentScreen::Menu => NON_GAMEPLAY | MENU_AUTOPROMPT,
+            super::CurrentScreen::Options => NON_GAMEPLAY | OPTIONS_VIEW | CONTENT_RELOAD,
+            super::CurrentScreen::Init => NON_GAMEPLAY | CONTENT_RELOAD,
+            super::CurrentScreen::ProfileLoad => NON_GAMEPLAY | PROFILE_LOAD,
+            super::CurrentScreen::SelectMusic => NON_GAMEPLAY | CONTENT_RELOAD | SELECT_MUSIC_VIEW,
+            super::CurrentScreen::SelectCourse => NON_GAMEPLAY | SELECT_COURSE_VIEW,
+            super::CurrentScreen::Evaluation => NON_GAMEPLAY | ONLINE_VIEW,
+            _ => NON_GAMEPLAY,
+        }
+    }
+}
+
 fn sequence_effects(first: ThemeEffect, second: ThemeEffect) -> ThemeEffect {
     match (first, second) {
         (ThemeEffect::None, second) => second,
@@ -2515,7 +2551,6 @@ impl App {
         let total_elapsed = redraw_started
             .duration_since(self.state.shell.start_time)
             .as_secs_f32();
-        let maintenance_started = Instant::now();
 
         // Tab acceleration scales non-gameplay screen dt. Gameplay, Practice,
         // and gameplay steps under evaluation transitions stay on wall-clock
@@ -2530,8 +2565,6 @@ impl App {
             .interaction
             .controls()
             .logic_delta(delta_time, tab_acceleration_allowed);
-        deadlib_present::runtime::tick(logic_dt);
-        screens::components::shared::visual_style_bg::tick_global(logic_dt);
 
         // One immutable configuration snapshot owns this frame. Stable frames
         // only read the generation atomic; the global mutex and full Config copy
@@ -2544,39 +2577,10 @@ impl App {
         }
         let frame_config = self.frame_config;
         self.sync_gameplay_input_capture();
-        self.sync_pad_config_fsr(&frame_config);
-        self.reconcile_smx_assignment(&frame_config);
-        self.maybe_autoprompt_smx_assign(&frame_config);
-        self.drive_smx_options_lights(delta_time, &frame_config);
-        self.drive_smx_player_options_lights(delta_time, &frame_config);
-        self.apply_smx_managed_preset(&frame_config);
-        self.drive_smx_light_brightness(&frame_config);
-        self.state.shell.interaction.update_message(redraw_started);
-        self.sync_options_song_packs();
-        self.sync_content_reload_events();
-        self.sync_options_stepmaniaonline();
-        self.poll_profile_load();
-        self.poll_profile_import();
-        self.poll_qr_login();
-        self.poll_score_import();
-        self.poll_sync_analysis();
-        self.poll_apply_replaygain();
-        self.sync_active_online_runtime_view(&frame_config);
-        self.heart_rate.sync(
-            frame_config.machine_enable_heart_rate_monitors,
-            self.state.screens.current_screen == CurrentScreen::PlayerOptions,
-        );
-        if self.state.screens.current_screen == CurrentScreen::SelectMusic {
-            crate::heart_rate::refresh_select_music(
-                &mut self.state.screens.select_music_state,
-                frame_config.machine_enable_heart_rate_monitors,
-            );
-        }
 
         let mut upload_us: u32 = 0;
         let mut draw_us: u32 = 0;
         let mut draw_stats = renderer::DrawStats::default();
-        let maintenance_us = elapsed_us_since(maintenance_started);
         let input_started = Instant::now();
         if let Err(e) = self.flush_due_input_events(event_loop) {
             error!("Failed to handle debounced input: {e}");
@@ -2585,7 +2589,61 @@ impl App {
         }
         let input_us: u32 = elapsed_us_since(input_started);
 
+        let work_caps = frame_work::screen_caps(self.state.screens.current_screen);
+        let maintenance_started = Instant::now();
+        if work_caps & frame_work::SMX_CONFIG != 0 {
+            self.reconcile_smx_assignment(&frame_config);
+            self.apply_smx_managed_preset(&frame_config);
+            self.drive_smx_light_brightness(&frame_config);
+        }
+        if work_caps & frame_work::MENU_AUTOPROMPT != 0 {
+            self.maybe_autoprompt_smx_assign(&frame_config);
+        }
+        if work_caps & frame_work::OPTIONS_VIEW != 0 {
+            self.sync_options_song_packs();
+            self.sync_options_stepmaniaonline();
+        }
+        if work_caps & frame_work::CONTENT_RELOAD != 0 {
+            self.sync_content_reload_events();
+        }
+        if work_caps & frame_work::PROFILE_LOAD != 0 {
+            self.poll_profile_load();
+        }
+        if work_caps & frame_work::ASYNC_RESULTS != 0 {
+            self.poll_profile_import();
+            self.poll_qr_login();
+            self.poll_score_import();
+            self.poll_sync_analysis();
+            self.poll_apply_replaygain();
+        }
+        if work_caps & frame_work::HEART_RATE_CONFIG != 0 {
+            self.heart_rate.sync(
+                frame_config.machine_enable_heart_rate_monitors,
+                self.state.screens.current_screen == CurrentScreen::PlayerOptions,
+            );
+        }
+        let maintenance_us = elapsed_us_since(maintenance_started);
+
         let update_started = Instant::now();
+        deadlib_present::runtime::tick(logic_dt);
+        screens::components::shared::visual_style_bg::tick_global(logic_dt);
+        self.sync_pad_config_fsr(&frame_config);
+        self.drive_smx_options_lights(delta_time, &frame_config);
+        self.drive_smx_player_options_lights(delta_time, &frame_config);
+        self.state.shell.interaction.update_message(redraw_started);
+        if work_caps & frame_work::ONLINE_VIEW != 0 {
+            self.sync_active_online_runtime_view(&frame_config);
+        }
+        if work_caps & frame_work::SELECT_MUSIC_VIEW != 0 {
+            crate::heart_rate::refresh_select_music(
+                &mut self.state.screens.select_music_state,
+                frame_config.machine_enable_heart_rate_monitors,
+            );
+            self.sync_select_music_runtime_view(&frame_config);
+        }
+        if work_caps & frame_work::SELECT_COURSE_VIEW != 0 {
+            self.sync_select_course_runtime_view(&frame_config);
+        }
         let transition_plan = self.state.shell.transition.advance_frame(
             logic_dt,
             self.state.screens.current_screen,
@@ -2667,10 +2725,8 @@ impl App {
             }
             None => {}
         }
-        self.sync_select_music_runtime_view(&frame_config);
-        self.sync_select_course_runtime_view(&frame_config);
-        let update_us: u32 = elapsed_us_since(update_started);
         self.sync_lights(delta_time, total_elapsed, &frame_config);
+        let update_us: u32 = elapsed_us_since(update_started);
 
         if self.window.as_ref().map(|w| w.id()) != Some(window.id()) {
             self.state.shell.last_frame_end_time = Instant::now();
@@ -8271,6 +8327,36 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
+
+    #[test]
+    fn gameplay_work_caps_defer_unrelated_integration() {
+        assert_eq!(
+            frame_work::screen_caps(CurrentScreen::Gameplay),
+            frame_work::ONLINE_VIEW
+        );
+        assert_eq!(frame_work::screen_caps(CurrentScreen::Practice), 0);
+    }
+
+    #[test]
+    fn menu_work_caps_match_screen_ownership() {
+        let options = frame_work::screen_caps(CurrentScreen::Options);
+        assert_ne!(options & frame_work::OPTIONS_VIEW, 0);
+        assert_ne!(options & frame_work::CONTENT_RELOAD, 0);
+        assert_eq!(options & frame_work::ONLINE_VIEW, 0);
+
+        let select_music = frame_work::screen_caps(CurrentScreen::SelectMusic);
+        assert_ne!(select_music & frame_work::SELECT_MUSIC_VIEW, 0);
+        assert_eq!(select_music & frame_work::SELECT_COURSE_VIEW, 0);
+
+        let select_course = frame_work::screen_caps(CurrentScreen::SelectCourse);
+        assert_ne!(select_course & frame_work::SELECT_COURSE_VIEW, 0);
+        assert_eq!(select_course & frame_work::SELECT_MUSIC_VIEW, 0);
+
+        let evaluation = frame_work::screen_caps(CurrentScreen::Evaluation);
+        assert_ne!(evaluation & frame_work::ONLINE_VIEW, 0);
+        assert_ne!(evaluation & frame_work::ASYNC_RESULTS, 0);
+        assert_eq!(evaluation & frame_work::CONTENT_RELOAD, 0);
+    }
 
     #[test]
     fn wheel_banner_path_owns_shared_pack_banner_for_shell_command() {
