@@ -41,18 +41,18 @@ fn push_qr(
         children.push(qr_fallback(center_x, center_y));
         return;
     };
-    let qr_actors = qr_code::build(qr_code::QrCodeParams {
-        content,
-        center_x,
-        center_y,
-        size,
-        border_modules: 1,
-        z: GS_QR_PANE_Z,
-    });
-    if qr_actors.is_empty() {
+    if !qr_code::push(
+        children,
+        qr_code::QrCodeParams {
+            content,
+            center_x,
+            center_y,
+            size,
+            border_modules: 1,
+            z: GS_QR_PANE_Z,
+        },
+    ) {
         children.push(qr_fallback(center_x, center_y));
-    } else {
-        children.extend(qr_actors);
     }
 }
 

@@ -313,15 +313,17 @@ fn push_slot_panel(
             short_code,
             verification_url,
         } => {
-            let qr_actors = qr_code::build(qr_code::QrCodeParams {
-                content: verification_url,
-                center_x: panel_cx,
-                center_y: panel_cy,
-                size: qr_size,
-                border_modules: 2,
-                z: 301,
-            });
-            if qr_actors.is_empty() {
+            if !qr_code::push(
+                out,
+                qr_code::QrCodeParams {
+                    content: verification_url,
+                    center_x: panel_cx,
+                    center_y: panel_cy,
+                    size: qr_size,
+                    border_modules: 2,
+                    z: 301,
+                },
+            ) {
                 out.push(act!(text:
                     font("miso"):
                     settext(tr(section, "QrUnavailable").to_string()):
@@ -332,8 +334,6 @@ fn push_slot_panel(
                     z(301):
                     diffuse(1.0, 0.3, 0.3, 1.0)
                 ));
-            } else {
-                out.extend(qr_actors);
             }
 
             let below_qr = panel_cy + qr_size * 0.5;

@@ -4,7 +4,8 @@ use deadlib_render_core::{BlendMode, MeshVertex};
 use qrcodegen::{QrCode, QrCodeEcc};
 use rustc_hash::FxHashMap;
 use smallvec::{SmallVec, smallvec};
-use std::sync::{Arc, LazyLock, Mutex};
+use std::cell::RefCell;
+use std::sync::Arc;
 
 const QR_BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 const QR_WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
@@ -81,14 +82,17 @@ pub struct QrCodeParams<'a> {
     pub z: i16,
 }
 
-static QR_CACHE: LazyLock<Mutex<QrMeshCache>> =
-    // Owner: shared UI actor builders behind a mutex.
-    // Lifetime: process/session.
-    // Capacity: 64 entries, saturating once full.
-    // Warmup: first use.
-    // Miss: rebuild QR geometry in memory; no I/O or GPU work here.
-    // Eviction: none. Once full, misses bypass insertion.
-    LazyLock::new(|| Mutex::new(QrMeshCache::with_capacity(QR_CACHE_LIMIT)));
+thread_local! {
+    // Owner/thread model: game-thread UI actor builders only.
+    // Lifetime: game thread. Capacity: 64 entries, saturating once full.
+    // Warmup: first QR actor build. A hit clones one `Arc` with no locks or
+    // allocations. A miss builds geometry in memory; there is no I/O or GPU
+    // work. There is no eviction: full-cache misses bypass insertion, and all
+    // retained geometry is destroyed when the game thread exits. Existing
+    // actor-build timing accounts for the bounded lookup and miss work.
+    static QR_CACHE: RefCell<QrMeshCache> =
+        RefCell::new(QrMeshCache::with_capacity(QR_CACHE_LIMIT));
+}
 
 #[inline(always)]
 fn push_quad(out: &mut Vec<MeshVertex>, x: f32, y: f32, w: f32, h: f32, color: [f32; 4]) {
@@ -161,30 +165,29 @@ fn build_qr_mesh(content: &str, size: f32) -> Option<QrMeshData> {
 }
 
 fn mesh_for(content: &str, size: f32) -> Option<QrMeshData> {
-    if let Ok(cache) = QR_CACHE.lock()
-        && let Some(data) = cache.get(content, size)
-    {
-        return Some(data.clone());
+    if let Some(data) = QR_CACHE.with(|cache| cache.borrow().get(content, size).cloned()) {
+        return Some(data);
     }
 
     let data = build_qr_mesh(content, size)?;
-    if let Ok(mut cache) = QR_CACHE.lock()
-        && cache.len() < QR_CACHE_LIMIT
-    {
-        cache.insert(content, size, data.clone());
-    }
+    QR_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if cache.len() < QR_CACHE_LIMIT {
+            cache.insert(content, size, data.clone());
+        }
+    });
     Some(data)
 }
 
-pub fn build(params: QrCodeParams<'_>) -> Vec<Actor> {
+pub fn push(out: &mut Vec<Actor>, params: QrCodeParams<'_>) -> bool {
     let Some(data) = mesh_for(params.content, params.size) else {
-        return vec![];
+        return false;
     };
 
     let border_px = data.module_px * params.border_modules as f32;
     let outer_size = params.size + border_px * 2.0;
 
-    vec![Actor::Frame {
+    out.push(Actor::Frame {
         align: [0.5, 0.5],
         offset: [params.center_x, params.center_y],
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -209,34 +212,35 @@ pub fn build(params: QrCodeParams<'_>) -> Vec<Actor> {
                 z: 1,
             },
         ],
-    }]
+    });
+    true
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-
     fn clear_qr_cache() {
-        QR_CACHE.lock().unwrap().clear();
+        QR_CACHE.with(|cache| cache.borrow_mut().clear());
+    }
+
+    fn qr_cache_len() -> usize {
+        QR_CACHE.with(|cache| cache.borrow().len())
     }
 
     #[test]
     fn mesh_for_reuses_cached_vertices() {
-        let _guard = TEST_LOCK.lock().unwrap();
         clear_qr_cache();
 
         let first = mesh_for("https://example.com/score/1", 96.0).expect("qr should build");
         let second = mesh_for("https://example.com/score/1", 96.0).expect("qr should reuse");
 
         assert!(Arc::ptr_eq(&first.vertices, &second.vertices));
-        assert_eq!(QR_CACHE.lock().unwrap().len(), 1);
+        assert_eq!(qr_cache_len(), 1);
     }
 
     #[test]
     fn mesh_for_saturates_after_cache_limit() {
-        let _guard = TEST_LOCK.lock().unwrap();
         clear_qr_cache();
 
         for i in 0..QR_CACHE_LIMIT {
@@ -248,8 +252,8 @@ mod tests {
         let first = mesh_for(overflow, 96.0).expect("overflow qr should build");
         let second = mesh_for(overflow, 96.0).expect("overflow qr should rebuild");
 
-        assert_eq!(QR_CACHE.lock().unwrap().len(), QR_CACHE_LIMIT);
-        assert!(!QR_CACHE.lock().unwrap().contains(overflow, 96.0));
+        assert_eq!(qr_cache_len(), QR_CACHE_LIMIT);
+        assert!(!QR_CACHE.with(|cache| cache.borrow().contains(overflow, 96.0)));
         assert!(!Arc::ptr_eq(&first.vertices, &second.vertices));
     }
 }
