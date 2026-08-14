@@ -1015,18 +1015,8 @@ fn start_output_backend(
                     )
                 });
             }
-            if linux_pipewire::is_available()
-                && let Some(pipewire) = pipewire
-            {
-                match start_linux_pipewire_backend(pipewire, &controls) {
-                    Ok(output) => return Ok(output),
-                    Err(err) => {
-                        warn!(
-                            "Failed to start native PipeWire output: {err}. Falling back to PulseAudio/ALSA."
-                        );
-                    }
-                }
-            }
+            // Preserve the pre-PipeWire Auto policy. PipeWire remains available
+            // through the explicit backend selection arm above.
             #[cfg(target_os = "linux")]
             if linux_pulse::is_available()
                 && let Some(pulse) = pulse
