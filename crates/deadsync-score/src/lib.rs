@@ -1992,6 +1992,10 @@ pub struct SubmitRetryState<T> {
 pub struct SubmitRetryView {
     pub remaining_secs: Option<u32>,
     pub attempt: Option<u8>,
+    /// Exact retry target used by the owner to schedule automatic work.
+    pub retry_at: Option<Instant>,
+    /// First instant at which the rounded-up countdown text can change.
+    pub next_refresh_at: Option<Instant>,
 }
 
 impl<T> Default for SubmitRetryState<T> {
@@ -2178,10 +2182,22 @@ impl<T> SubmitRetryState<T> {
         let Some(entry) = self.get_by_key(side_index, chart_hash, key) else {
             return SubmitRetryView::default();
         };
+        let retry_at = next_retry_at(entry);
+        let remaining_secs =
+            retry_at.map(|target| duration_to_ceil_secs(target.saturating_duration_since(now)));
+        let next_refresh_at = retry_at.and_then(|target| {
+            (target > now).then(|| {
+                let unchanged_secs = remaining_secs.unwrap_or(0).saturating_sub(1);
+                target
+                    .checked_sub(Duration::from_secs(u64::from(unchanged_secs)))
+                    .unwrap_or(now)
+            })
+        });
         SubmitRetryView {
-            remaining_secs: next_retry_at(entry)
-                .map(|target| duration_to_ceil_secs(target.saturating_duration_since(now))),
+            remaining_secs,
             attempt: Some(retry_attempt(entry)),
+            retry_at,
+            next_refresh_at,
         }
     }
 
@@ -2389,23 +2405,24 @@ impl<P: Clone + Default, B: Clone> SubmitEventUiState<P, B> {
         token: u64,
         progress: P,
         banner: Option<B>,
-    ) {
+    ) -> bool {
         let hash = chart_hash.trim();
         if hash.is_empty() {
-            return;
+            return false;
         }
         let Some(entry) = self
             .entries_mut(side_index)
             .iter_mut()
             .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
         else {
-            return;
+            return false;
         };
         if entry.token != token {
-            return;
+            return false;
         }
         entry.progress = progress;
         entry.banner = banner;
+        true
     }
 
     pub fn progress(&self, side_index: usize, chart_hash: &str) -> P {
@@ -6325,6 +6342,7 @@ pub fn groovestats_submit_record_banner(
 static GROOVESTATS_SUBMIT_UI_STATUS: LazyLock<Mutex<SubmitUiState<GrooveStatsSubmitUiStatus>>> =
     LazyLock::new(|| Mutex::new(SubmitUiState::default()));
 static GROOVESTATS_SUBMIT_UI_TOKEN: AtomicU64 = AtomicU64::new(1);
+static EVALUATION_SUBMISSION_UI_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 static GROOVESTATS_SUBMIT_EVENT_UI: LazyLock<
     Mutex<SubmitEventUiState<Vec<EventProgress>, GrooveStatsSubmitRecordBanner>>,
@@ -6333,6 +6351,17 @@ static GROOVESTATS_SUBMIT_EVENT_UI: LazyLock<
 static ARROWCLOUD_SUBMIT_UI_STATUS: LazyLock<Mutex<SubmitUiState<ArrowCloudSubmitUiStatus>>> =
     LazyLock::new(|| Mutex::new(SubmitUiState::default()));
 static ARROWCLOUD_SUBMIT_UI_TOKEN: AtomicU64 = AtomicU64::new(1);
+
+/// Current revision of the status/event payloads shown by Evaluation.
+#[inline(always)]
+pub fn runtime_evaluation_submission_ui_generation() -> u64 {
+    EVALUATION_SUBMISSION_UI_GENERATION.load(AtomicOrdering::Acquire)
+}
+
+#[inline(always)]
+fn mark_evaluation_submission_ui_changed() {
+    EVALUATION_SUBMISSION_UI_GENERATION.fetch_add(1, AtomicOrdering::Release);
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct GrooveStatsSubmitUiSnapshot {
@@ -6375,6 +6404,7 @@ pub fn groovestats_reset_submit_ui_status(side_index: usize, chart_hash: &str) {
         .lock()
         .unwrap()
         .reset(side_index, chart_hash);
+    mark_evaluation_submission_ui_changed();
 }
 
 #[inline(always)]
@@ -6388,6 +6418,7 @@ pub fn groovestats_set_submit_ui_status(
         .lock()
         .unwrap()
         .set(side_index, chart_hash, token, status);
+    mark_evaluation_submission_ui_changed();
 }
 
 #[inline(always)]
@@ -6397,10 +6428,14 @@ pub fn groovestats_update_submit_ui_status_if_token(
     token: u64,
     status: GrooveStatsSubmitUiStatus,
 ) -> bool {
-    GROOVESTATS_SUBMIT_UI_STATUS
+    let changed = GROOVESTATS_SUBMIT_UI_STATUS
         .lock()
         .unwrap()
-        .update_if_token(side_index, chart_hash, token, status)
+        .update_if_token(side_index, chart_hash, token, status);
+    if changed {
+        mark_evaluation_submission_ui_changed();
+    }
+    changed
 }
 
 #[inline(always)]
@@ -6425,6 +6460,7 @@ pub fn groovestats_reset_submit_event_ui(side_index: usize, chart_hash: &str) {
         .lock()
         .unwrap()
         .reset(side_index, chart_hash);
+    mark_evaluation_submission_ui_changed();
 }
 
 #[inline(always)]
@@ -6433,6 +6469,7 @@ pub fn groovestats_arm_submit_event_ui(side_index: usize, chart_hash: &str, toke
         .lock()
         .unwrap()
         .arm(side_index, chart_hash, token);
+    mark_evaluation_submission_ui_changed();
 }
 
 #[inline(always)]
@@ -6443,13 +6480,16 @@ pub fn groovestats_update_submit_event_ui_if_token(
     event_progress: Vec<EventProgress>,
     record_banner: Option<GrooveStatsSubmitRecordBanner>,
 ) {
-    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap().update_if_token(
+    let changed = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap().update_if_token(
         side_index,
         chart_hash,
         token,
         event_progress,
         record_banner,
     );
+    if changed {
+        mark_evaluation_submission_ui_changed();
+    }
 }
 
 #[inline(always)]
@@ -6480,6 +6520,7 @@ pub fn arrowcloud_reset_submit_ui_status(side_index: usize, chart_hash: &str) {
         .lock()
         .unwrap()
         .reset(side_index, chart_hash);
+    mark_evaluation_submission_ui_changed();
 }
 
 #[inline(always)]
@@ -6493,6 +6534,7 @@ pub fn arrowcloud_set_submit_ui_status(
         .lock()
         .unwrap()
         .set(side_index, chart_hash, token, status);
+    mark_evaluation_submission_ui_changed();
 }
 
 #[inline(always)]
@@ -6502,10 +6544,14 @@ pub fn arrowcloud_update_submit_ui_status_if_token(
     token: u64,
     status: ArrowCloudSubmitUiStatus,
 ) -> bool {
-    ARROWCLOUD_SUBMIT_UI_STATUS
+    let changed = ARROWCLOUD_SUBMIT_UI_STATUS
         .lock()
         .unwrap()
-        .update_if_token(side_index, chart_hash, token, status)
+        .update_if_token(side_index, chart_hash, token, status);
+    if changed {
+        mark_evaluation_submission_ui_changed();
+    }
+    changed
 }
 
 #[inline(always)]
@@ -8170,6 +8216,8 @@ mod tests {
             SubmitRetryView {
                 remaining_secs: Some(2),
                 attempt: Some(1),
+                retry_at: Some(now + Duration::from_secs(2)),
+                next_refresh_at: Some(now + Duration::from_secs(1)),
             }
         );
         assert!(state.has_scheduled_retry(|entry| entry.next_retry_at));
@@ -8266,6 +8314,18 @@ mod tests {
 
         state.reset(0, "ABC");
         assert_eq!(state.get(0, "abc"), None);
+    }
+
+    #[test]
+    fn evaluation_submission_generation_tracks_ui_mutations() {
+        let hash = "generation-submit-ui";
+        groovestats_reset_submit_ui_status(0, hash);
+        let before = runtime_evaluation_submission_ui_generation();
+
+        groovestats_set_submit_ui_status(0, hash, 44, GrooveStatsSubmitUiStatus::Submitting);
+
+        assert!(runtime_evaluation_submission_ui_generation() > before);
+        groovestats_reset_submit_ui_status(0, hash);
     }
 
     #[test]

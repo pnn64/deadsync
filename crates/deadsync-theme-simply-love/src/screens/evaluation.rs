@@ -998,9 +998,13 @@ mod tests {
         state.context.players[0].display_name = "Retained".to_owned();
         state.favorites = [true, false];
         state.groovestats_service = SimplyLoveGrooveStatsService::BoogieStats;
-        let mut view = EvaluationRuntimeView::default();
-        view.submissions[0].groovestats_status =
-            Some(score_data::GrooveStatsSubmitUiStatus::Submitted);
+        let mut submissions: [crate::views::EvaluationSubmissionView; 2] =
+            std::array::from_fn(|_| Default::default());
+        submissions[0].groovestats_status = Some(score_data::GrooveStatsSubmitUiStatus::Submitted);
+        let view = EvaluationRuntimeView {
+            submissions: Some(submissions),
+            ..Default::default()
+        };
 
         sync_runtime_view(&mut state, view);
 
@@ -1010,6 +1014,12 @@ mod tests {
             state.groovestats_service,
             SimplyLoveGrooveStatsService::BoogieStats
         );
+        assert_eq!(
+            state.submissions[0].groovestats_status,
+            Some(score_data::GrooveStatsSubmitUiStatus::Submitted)
+        );
+
+        sync_runtime_view(&mut state, EvaluationRuntimeView::default());
         assert_eq!(
             state.submissions[0].groovestats_status,
             Some(score_data::GrooveStatsSubmitUiStatus::Submitted)
@@ -3249,7 +3259,9 @@ pub fn sync_runtime_view(state: &mut State, view: EvaluationRuntimeView) {
     if let Some(service) = view.groovestats_service {
         state.groovestats_service = service;
     }
-    state.submissions = view.submissions;
+    if let Some(submissions) = view.submissions {
+        state.submissions = submissions;
+    }
     if let Some(scoreboxes) = view.scoreboxes {
         state.scoreboxes = scoreboxes;
     }

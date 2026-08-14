@@ -2202,6 +2202,17 @@ impl GrooveStatsSubmitRetryEntry {
 static GROOVESTATS_SUBMIT_RETRY: LazyLock<Mutex<SubmitRetryState<GrooveStatsSubmitRetryEntry>>> =
     LazyLock::new(|| Mutex::new(SubmitRetryState::default()));
 static GROOVESTATS_SUBMIT_RETRY_SCHEDULED: AtomicBool = AtomicBool::new(false);
+static GROOVESTATS_SUBMIT_RETRY_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+#[inline(always)]
+pub fn submit_retry_generation() -> u64 {
+    GROOVESTATS_SUBMIT_RETRY_GENERATION.load(Ordering::Acquire)
+}
+
+#[inline(always)]
+fn mark_submit_retry_changed() {
+    GROOVESTATS_SUBMIT_RETRY_GENERATION.fetch_add(1, Ordering::Release);
+}
 
 fn sync_submit_retry_scheduled(retry: &SubmitRetryState<GrooveStatsSubmitRetryEntry>) {
     GROOVESTATS_SUBMIT_RETRY_SCHEDULED.store(
@@ -2324,6 +2335,8 @@ pub struct EvaluationSubmissionSnapshot {
     pub record_banner: Option<GrooveStatsSubmitRecordBanner>,
     pub next_retry_secs: Option<u32>,
     pub next_retry_is_auto: bool,
+    pub next_refresh_at: Option<Instant>,
+    pub next_auto_retry_at: Option<Instant>,
 }
 
 pub fn evaluation_submission_snapshots<const N: usize>(
@@ -2351,15 +2364,18 @@ pub fn evaluation_submission_snapshots<const N: usize>(
     std::array::from_fn(|idx| {
         let ui = std::mem::take(&mut ui[idx]);
         let retry = retry_views[idx];
+        let next_retry_is_auto = retry.attempt.is_some_and(|attempt| {
+            attempt < GROOVESTATS_RETRY_MAX_ATTEMPTS
+                && ui.status.is_some_and(|status| status.is_auto_retryable())
+        });
         EvaluationSubmissionSnapshot {
-            next_retry_is_auto: retry.attempt.is_some_and(|attempt| {
-                attempt < GROOVESTATS_RETRY_MAX_ATTEMPTS
-                    && ui.status.is_some_and(|status| status.is_auto_retryable())
-            }),
+            next_retry_is_auto,
             status: ui.status,
             event_progress: ui.event_progress,
             record_banner: ui.record_banner,
             next_retry_secs: retry.remaining_secs,
+            next_refresh_at: retry.next_refresh_at,
+            next_auto_retry_at: next_retry_is_auto.then_some(retry.retry_at).flatten(),
         }
     })
 }
@@ -2371,6 +2387,8 @@ pub fn reset_submit_retry(side: profile_data::PlayerSide, chart_hash: &str) {
         entry.chart_hash.as_str()
     });
     sync_submit_retry_scheduled(&retry);
+    drop(retry);
+    mark_submit_retry_changed();
 }
 
 #[inline(always)]
@@ -2384,6 +2402,8 @@ pub fn store_submit_retry(entry: GrooveStatsSubmitRetryEntry) {
         GROOVESTATS_SUBMIT_RETRY_TRACKED_PER_SIDE,
     );
     sync_submit_retry_scheduled(&retry);
+    drop(retry);
+    mark_submit_retry_changed();
 }
 
 #[inline(always)]
@@ -2402,6 +2422,10 @@ pub fn take_ready_submit_retry(
         |entry| &mut entry.next_retry_at,
     );
     sync_submit_retry_scheduled(&retry);
+    drop(retry);
+    if ready.is_some() {
+        mark_submit_retry_changed();
+    }
     ready
 }
 
@@ -2542,7 +2566,7 @@ pub fn record_submit_failure(
     status: GrooveStatsSubmitUiStatus,
 ) {
     let mut retry = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-    retry.record_failure_by_key(
+    let changed = retry.record_failure_by_key(
         profile_data::player_side_index(side),
         chart_hash,
         status.can_retry(),
@@ -2553,6 +2577,10 @@ pub fn record_submit_failure(
         |entry| &mut entry.next_retry_at,
     );
     sync_submit_retry_scheduled(&retry);
+    drop(retry);
+    if changed {
+        mark_submit_retry_changed();
+    }
 }
 
 #[inline(always)]

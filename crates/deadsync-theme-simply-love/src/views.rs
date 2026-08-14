@@ -1031,7 +1031,7 @@ pub struct EvaluationRuntimeView {
     pub context: Option<EvaluationContextView>,
     pub lobby: Option<SimplyLoveLobbyRuntimeView>,
     pub groovestats_service: Option<SimplyLoveGrooveStatsService>,
-    pub submissions: [EvaluationSubmissionView; 2],
+    pub submissions: Option<[EvaluationSubmissionView; 2]>,
     pub scoreboxes: Option<[ScoreboxSideView; 2]>,
     pub favorites: Option<[bool; 2]>,
 }

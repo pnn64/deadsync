@@ -1,4 +1,5 @@
 use deadsync_profile::compat as profile;
+use std::time::Instant;
 
 pub use crate::arrowcloud::{
     retry_manual_submit_from_app_runtime as retry_arrowcloud_submit,
@@ -81,6 +82,35 @@ pub struct EvaluationSubmissionSnapshot {
     pub arrowcloud_next_retry_is_auto: bool,
 }
 
+/// Lock-free revision tuple for every source feeding Evaluation submission UI.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EvaluationSubmissionGeneration {
+    pub ui: u64,
+    pub groovestats_retry: u64,
+    pub arrowcloud_retry: u64,
+}
+
+/// Bounded Evaluation submission refresh prepared off the stable frame path.
+/// The owner retains `snapshots` until `generation` or `next_refresh_at`
+/// changes, and schedules automatic retries at the service-specific targets.
+#[derive(Clone, Debug)]
+pub struct EvaluationSubmissionRefresh<const N: usize> {
+    pub generation: EvaluationSubmissionGeneration,
+    pub snapshots: [EvaluationSubmissionSnapshot; N],
+    pub next_refresh_at: Option<Instant>,
+    pub groovestats_next_auto_retry_at: Option<Instant>,
+    pub arrowcloud_next_auto_retry_at: Option<Instant>,
+}
+
+#[inline(always)]
+pub fn evaluation_submission_generation() -> EvaluationSubmissionGeneration {
+    EvaluationSubmissionGeneration {
+        ui: deadsync_score::runtime_evaluation_submission_ui_generation(),
+        groovestats_retry: crate::groovestats::submit_retry_generation(),
+        arrowcloud_retry: crate::arrowcloud::submit_retry_generation(),
+    }
+}
+
 pub fn tick_evaluation_auto_retries(
     groovestats_enabled: bool,
     boogiestats_enabled: bool,
@@ -93,12 +123,32 @@ pub fn tick_evaluation_auto_retries(
     groovestats || arrowcloud
 }
 
-pub fn evaluation_submission_snapshots<const N: usize>(
+pub fn evaluation_submission_refresh<const N: usize>(
     queries: &[Option<(deadsync_profile::PlayerSide, &str)>; N],
-) -> [EvaluationSubmissionSnapshot; N] {
+) -> EvaluationSubmissionRefresh<N> {
+    // Capture before the locks. A concurrent mutation can cause one redundant
+    // refresh, but cannot leave a changed source hidden behind a newer token.
+    let generation = evaluation_submission_generation();
     let mut groovestats = crate::groovestats::evaluation_submission_snapshots(queries);
     let arrowcloud = crate::arrowcloud::evaluation_submission_snapshots(queries);
-    std::array::from_fn(|idx| {
+    let next_refresh_at = groovestats
+        .iter()
+        .filter_map(|snapshot| snapshot.next_refresh_at)
+        .chain(
+            arrowcloud
+                .iter()
+                .filter_map(|snapshot| snapshot.next_refresh_at),
+        )
+        .min();
+    let groovestats_next_auto_retry_at = groovestats
+        .iter()
+        .filter_map(|snapshot| snapshot.next_auto_retry_at)
+        .min();
+    let arrowcloud_next_auto_retry_at = arrowcloud
+        .iter()
+        .filter_map(|snapshot| snapshot.next_auto_retry_at)
+        .min();
+    let snapshots = std::array::from_fn(|idx| {
         let groovestats = std::mem::take(&mut groovestats[idx]);
         EvaluationSubmissionSnapshot {
             groovestats_status: groovestats.status,
@@ -110,5 +160,12 @@ pub fn evaluation_submission_snapshots<const N: usize>(
             groovestats_next_retry_is_auto: groovestats.next_retry_is_auto,
             arrowcloud_next_retry_is_auto: arrowcloud[idx].next_retry_is_auto,
         }
-    })
+    });
+    EvaluationSubmissionRefresh {
+        generation,
+        snapshots,
+        next_refresh_at,
+        groovestats_next_auto_retry_at,
+        arrowcloud_next_auto_retry_at,
+    }
 }

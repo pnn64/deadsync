@@ -104,6 +104,28 @@ pub(super) struct EvaluationFavoriteKey {
     generation: u64,
 }
 
+#[derive(Debug)]
+pub(super) struct EvaluationSubmissionKey {
+    query: EvaluationQueryKey,
+    generation: scores::EvaluationSubmissionGeneration,
+}
+
+impl EvaluationSubmissionKey {
+    fn new(
+        queries: &PlayerQueries<'_>,
+        generation: scores::EvaluationSubmissionGeneration,
+    ) -> Self {
+        Self {
+            query: EvaluationQueryKey::new(queries),
+            generation,
+        }
+    }
+
+    fn matches(&self, queries: &PlayerQueries<'_>) -> bool {
+        self.query.matches(queries) && self.generation == scores::evaluation_submission_generation()
+    }
+}
+
 impl EvaluationFavoriteKey {
     fn new(queries: &[Option<(profile_data::PlayerSide, &str)>; MAX_PLAYERS]) -> Self {
         Self {
@@ -225,8 +247,10 @@ fn scorebox_views(
     )
 }
 
-fn submission_views(queries: &PlayerQueries<'_>) -> [EvaluationSubmissionView; MAX_PLAYERS] {
-    scores::evaluation_submission_snapshots(queries).map(|snapshot| EvaluationSubmissionView {
+fn submission_views(
+    snapshots: [scores::EvaluationSubmissionSnapshot; MAX_PLAYERS],
+) -> [EvaluationSubmissionView; MAX_PLAYERS] {
+    snapshots.map(|snapshot| EvaluationSubmissionView {
         groovestats_status: snapshot.groovestats_status,
         arrowcloud_status: snapshot.arrowcloud_status,
         event_progress: snapshot.event_progress,
@@ -238,12 +262,51 @@ fn submission_views(queries: &PlayerQueries<'_>) -> [EvaluationSubmissionView; M
     })
 }
 
+fn auto_retry_at(
+    policy: EvaluationFramePolicy,
+    refresh: &scores::EvaluationSubmissionRefresh<MAX_PLAYERS>,
+) -> Option<Instant> {
+    [
+        policy
+            .context
+            .enable_groovestats
+            .then_some(refresh.groovestats_next_auto_retry_at)
+            .flatten(),
+        policy
+            .context
+            .enable_arrowcloud
+            .then_some(refresh.arrowcloud_next_auto_retry_at)
+            .flatten(),
+    ]
+    .into_iter()
+    .flatten()
+    .min()
+}
+
+fn refresh_submissions(
+    policy: EvaluationFramePolicy,
+    queries: &PlayerQueries<'_>,
+    now: Instant,
+) -> scores::EvaluationSubmissionRefresh<MAX_PLAYERS> {
+    let mut refresh = scores::evaluation_submission_refresh(queries);
+    if auto_retry_at(policy, &refresh).is_some_and(|retry_at| now >= retry_at) {
+        scores::tick_evaluation_auto_retries(
+            policy.context.enable_groovestats,
+            policy.enable_boogiestats,
+            policy.context.enable_arrowcloud,
+        );
+        refresh = scores::evaluation_submission_refresh(queries);
+    }
+    refresh
+}
+
 impl App {
     pub(super) fn mark_evaluation_runtime_dirty(&mut self) {
         self.evaluation_context_rebuild = true;
         self.evaluation_lobby_rebuild = true;
         self.evaluation_favorites_rebuild = true;
         self.evaluation_scoreboxes_rebuild = true;
+        self.evaluation_submissions_rebuild = true;
     }
 
     fn refresh_evaluation_lobby(&mut self, now: Instant) -> Option<SimplyLoveLobbyRuntimeView> {
@@ -276,12 +339,6 @@ impl App {
             return;
         }
 
-        scores::tick_evaluation_auto_retries(
-            policy.context.enable_groovestats,
-            policy.enable_boogiestats,
-            policy.context.enable_arrowcloud,
-        );
-
         let now = Instant::now();
         let profile_snapshot_changed =
             self.refresh_selection_profile_snapshot(policy.profile_policy());
@@ -307,6 +364,38 @@ impl App {
         });
         let leaderboard_requests = evaluation::leaderboard_requests(state);
         let allow_online_panes = state.allow_online_panes;
+
+        let submission_auto_retry_due = self
+            .evaluation_submission_auto_retry_at
+            .is_some_and(|retry_at| now >= retry_at);
+        if submission_auto_retry_due {
+            scores::tick_evaluation_auto_retries(
+                policy.context.enable_groovestats,
+                policy.enable_boogiestats,
+                policy.context.enable_arrowcloud,
+            );
+        }
+        let submission_refresh_due = self
+            .evaluation_submission_refresh_at
+            .is_some_and(|refresh_at| now >= refresh_at);
+        let submissions_dirty = self.evaluation_submissions_rebuild
+            || submission_auto_retry_due
+            || submission_refresh_due
+            || self
+                .evaluation_submission_key
+                .as_ref()
+                .is_none_or(|key| !key.matches(&player_queries));
+        let submissions = submissions_dirty.then(|| {
+            let refresh = refresh_submissions(policy, &player_queries, now);
+            self.evaluation_submission_key = Some(EvaluationSubmissionKey::new(
+                &player_queries,
+                refresh.generation,
+            ));
+            self.evaluation_submission_refresh_at = refresh.next_refresh_at;
+            self.evaluation_submission_auto_retry_at = auto_retry_at(policy, &refresh);
+            submission_views(refresh.snapshots)
+        });
+        self.evaluation_submissions_rebuild = false;
 
         let favorites_dirty = self.evaluation_favorites_rebuild
             || self
@@ -353,7 +442,15 @@ impl App {
             views
         });
         self.evaluation_scoreboxes_rebuild = false;
-        let submissions = submission_views(&player_queries);
+
+        if context.is_none()
+            && lobby.is_none()
+            && submissions.is_none()
+            && scoreboxes.is_none()
+            && favorites.is_none()
+        {
+            return;
+        }
 
         evaluation::sync_runtime_view(
             &mut self.state.screens.evaluation_state,
@@ -412,5 +509,27 @@ mod tests {
             Some((profile_data::PlayerSide::P1, "chart-a")),
             Some((profile_data::PlayerSide::P2, "chart-c")),
         ]));
+    }
+
+    #[test]
+    fn auto_retry_deadline_respects_enabled_services() {
+        let now = Instant::now();
+        let refresh = scores::EvaluationSubmissionRefresh {
+            generation: Default::default(),
+            snapshots: std::array::from_fn(|_| Default::default()),
+            next_refresh_at: None,
+            groovestats_next_auto_retry_at: Some(now),
+            arrowcloud_next_auto_retry_at: Some(now + std::time::Duration::from_secs(1)),
+        };
+        let policy = EvaluationFramePolicy::from_config(&config::Config {
+            enable_groovestats: false,
+            enable_arrowcloud: true,
+            ..Default::default()
+        });
+
+        assert_eq!(
+            auto_retry_at(policy, &refresh),
+            refresh.arrowcloud_next_auto_retry_at
+        );
     }
 }

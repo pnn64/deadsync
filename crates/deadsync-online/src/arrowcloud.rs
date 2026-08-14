@@ -35,7 +35,7 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::ops::Deref;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::thread;
 use std::time::Instant;
@@ -623,6 +623,17 @@ pub struct ArrowCloudSubmitRunSummary {
 static ARROWCLOUD_SUBMIT_RETRY: LazyLock<Mutex<SubmitRetryState<ArrowCloudSubmitRetryEntry>>> =
     LazyLock::new(|| Mutex::new(SubmitRetryState::default()));
 static ARROWCLOUD_SUBMIT_RETRY_SCHEDULED: AtomicBool = AtomicBool::new(false);
+static ARROWCLOUD_SUBMIT_RETRY_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+#[inline(always)]
+pub fn submit_retry_generation() -> u64 {
+    ARROWCLOUD_SUBMIT_RETRY_GENERATION.load(Ordering::Acquire)
+}
+
+#[inline(always)]
+fn mark_submit_retry_changed() {
+    ARROWCLOUD_SUBMIT_RETRY_GENERATION.fetch_add(1, Ordering::Release);
+}
 
 fn sync_submit_retry_scheduled(retry: &SubmitRetryState<ArrowCloudSubmitRetryEntry>) {
     ARROWCLOUD_SUBMIT_RETRY_SCHEDULED.store(
@@ -687,6 +698,8 @@ pub struct EvaluationSubmissionSnapshot {
     pub status: Option<ArrowCloudSubmitUiStatus>,
     pub next_retry_secs: Option<u32>,
     pub next_retry_is_auto: bool,
+    pub next_refresh_at: Option<Instant>,
+    pub next_auto_retry_at: Option<Instant>,
 }
 
 pub fn evaluation_submission_snapshots<const N: usize>(
@@ -711,13 +724,19 @@ pub fn evaluation_submission_snapshots<const N: usize>(
             })
         })
     };
-    std::array::from_fn(|idx| EvaluationSubmissionSnapshot {
-        status: statuses[idx],
-        next_retry_secs: retry_views[idx].remaining_secs,
-        next_retry_is_auto: retry_views[idx].attempt.is_some_and(|attempt| {
+    std::array::from_fn(|idx| {
+        let retry = retry_views[idx];
+        let next_retry_is_auto = retry.attempt.is_some_and(|attempt| {
             attempt < ARROWCLOUD_RETRY_MAX_ATTEMPTS
                 && statuses[idx].is_some_and(|status| status.is_auto_retryable())
-        }),
+        });
+        EvaluationSubmissionSnapshot {
+            status: statuses[idx],
+            next_retry_secs: retry.remaining_secs,
+            next_retry_is_auto,
+            next_refresh_at: retry.next_refresh_at,
+            next_auto_retry_at: next_retry_is_auto.then_some(retry.retry_at).flatten(),
+        }
     })
 }
 
@@ -728,6 +747,8 @@ pub fn reset_submit_retry(side: profile_data::PlayerSide, chart_hash: &str) {
         entry.payload.hash.as_str()
     });
     sync_submit_retry_scheduled(&retry);
+    drop(retry);
+    mark_submit_retry_changed();
 }
 
 #[inline(always)]
@@ -741,6 +762,8 @@ pub fn store_submit_retry(entry: ArrowCloudSubmitRetryEntry) {
         ARROWCLOUD_SUBMIT_RETRY_TRACKED_PER_SIDE,
     );
     sync_submit_retry_scheduled(&retry);
+    drop(retry);
+    mark_submit_retry_changed();
 }
 
 #[inline(always)]
@@ -759,6 +782,10 @@ pub fn take_ready_submit_retry(
         |entry| &mut entry.next_retry_at,
     );
     sync_submit_retry_scheduled(&retry);
+    drop(retry);
+    if ready.is_some() {
+        mark_submit_retry_changed();
+    }
     ready
 }
 
@@ -912,7 +939,7 @@ pub fn record_submit_failure(
     status: ArrowCloudSubmitUiStatus,
 ) {
     let mut retry = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
-    retry.record_failure_by_key(
+    let changed = retry.record_failure_by_key(
         profile_data::player_side_index(side),
         chart_hash,
         status.can_retry(),
@@ -923,6 +950,10 @@ pub fn record_submit_failure(
         |entry| &mut entry.next_retry_at,
     );
     sync_submit_retry_scheduled(&retry);
+    drop(retry);
+    if changed {
+        mark_submit_retry_changed();
+    }
 }
 
 #[inline(always)]

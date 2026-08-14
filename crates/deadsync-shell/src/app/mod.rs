@@ -1418,9 +1418,11 @@ pub struct App {
     /// fixed key. Stable frames allocate nothing and take none of those locks.
     /// Misses rebuild at most two sides on the non-gameplay Evaluation frame,
     /// with leaderboard error retries represented by an explicit deadline.
-    /// Entries are replaced on source changes and destroyed at app shutdown;
-    /// there is no growth, scan, eviction, or gameplay-frame destruction.
-    /// Submission status remains a separate live cadence in the online layer.
+    /// Submission status has its own three-source generation plus exact display
+    /// and automatic-retry deadlines. Entries are replaced on source changes
+    /// and destroyed at app shutdown; there is no growth, scan, eviction, or
+    /// gameplay-frame destruction. Existing frame-update timing accounts for
+    /// each bounded two-player miss; stable hits expose no separate work.
     evaluation_context_rebuild: bool,
     evaluation_lobby_generation: u64,
     evaluation_lobby_refresh_at: Option<Instant>,
@@ -1430,6 +1432,10 @@ pub struct App {
     evaluation_scorebox_key: Option<evaluation_views::EvaluationScoreboxKey>,
     evaluation_scorebox_retry_at: Option<Instant>,
     evaluation_scoreboxes_rebuild: bool,
+    evaluation_submission_key: Option<evaluation_views::EvaluationSubmissionKey>,
+    evaluation_submission_refresh_at: Option<Instant>,
+    evaluation_submission_auto_retry_at: Option<Instant>,
+    evaluation_submissions_rebuild: bool,
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
     content_reload: crate::content_reload::Service,
@@ -2876,6 +2882,7 @@ impl App {
             self.select_course_settings_rebuild = true;
             self.evaluation_context_rebuild = true;
             self.evaluation_scoreboxes_rebuild = true;
+            self.evaluation_submissions_rebuild = true;
         }
         let frame_policy = self.frame_policy;
         if work_caps & frame_work::SMX_CONFIG != 0 {
@@ -3609,6 +3616,10 @@ impl App {
             evaluation_scorebox_key: None,
             evaluation_scorebox_retry_at: None,
             evaluation_scoreboxes_rebuild: true,
+            evaluation_submission_key: None,
+            evaluation_submission_refresh_at: None,
+            evaluation_submission_auto_retry_at: None,
+            evaluation_submissions_rebuild: true,
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
             content_reload: crate::content_reload::Service::default(),
