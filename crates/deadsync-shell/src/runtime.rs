@@ -243,6 +243,7 @@ impl ShellState {
         &mut self,
         frame_host_nanos: u64,
         frame_seconds: f32,
+        maintenance_us: u32,
         input_us: u32,
         update_us: u32,
         compose_us: u32,
@@ -261,6 +262,7 @@ impl ShellState {
         self.frame_stats.record(FrameStatsSample {
             host_nanos: frame_host_nanos.max(1),
             frame_us: seconds_to_us_u32(frame_seconds),
+            maintenance_us,
             input_us,
             update_us,
             compose_us,

@@ -87,6 +87,7 @@ const COMPACT_W: f32 = COMPACT_GRAPH_W + GRAPH_TEXT_GAP + COMPACT_TEXT_W;
 const COMPACT_H: f32 = COMPACT_GRAPH_H;
 
 // Per-phase segment colors (stacked from the bottom of each column).
+const COLOR_MAINTENANCE: [f32; 3] = [0.75, 0.55, 0.35];
 const COLOR_INPUT: [f32; 3] = [0.35, 0.70, 1.00];
 const COLOR_UPDATE: [f32; 3] = [0.40, 0.90, 0.45];
 const COLOR_COMPOSE: [f32; 3] = [0.95, 0.85, 0.30];
@@ -315,6 +316,16 @@ fn build_graph(
             px_per_us,
             col_w,
             COLOR_IDLE,
+        );
+        segment(
+            actors,
+            x,
+            baseline,
+            &mut drawn,
+            s.maintenance_us,
+            px_per_us,
+            col_w,
+            COLOR_MAINTENANCE,
         );
         segment(
             actors,

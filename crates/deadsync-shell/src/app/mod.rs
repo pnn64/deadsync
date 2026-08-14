@@ -2515,6 +2515,7 @@ impl App {
         let total_elapsed = redraw_started
             .duration_since(self.state.shell.start_time)
             .as_secs_f32();
+        let maintenance_started = Instant::now();
 
         // Tab acceleration scales non-gameplay screen dt. Gameplay, Practice,
         // and gameplay steps under evaluation transitions stay on wall-clock
@@ -2575,6 +2576,7 @@ impl App {
         let mut upload_us: u32 = 0;
         let mut draw_us: u32 = 0;
         let mut draw_stats = renderer::DrawStats::default();
+        let maintenance_us = elapsed_us_since(maintenance_started);
         let input_started = Instant::now();
         if let Err(e) = self.flush_due_input_events(event_loop) {
             error!("Failed to handle debounced input: {e}");
@@ -2983,14 +2985,10 @@ impl App {
             )
         };
         let build_screen_us = elapsed_us_since(build_screen_started);
-        let resolve_textures_us = 0;
-        let compose_us: u32 = actor_build_us
-            .saturating_add(build_screen_us)
-            .saturating_add(resolve_textures_us);
+        let compose_us: u32 = actor_build_us.saturating_add(build_screen_us);
         let compose_breakdown: ComposeBreakdown = ComposeBreakdown {
             actor_build_us,
             build_screen_us,
-            resolve_textures_us,
             render_ops: saturating_u32(screen.ops.len()),
             render_cameras: saturating_u32(screen.cameras.len()),
             text_layout,
@@ -3063,6 +3061,7 @@ impl App {
         self.state.shell.record_frame_stats_sample(
             frame_host_nanos,
             frame_seconds,
+            maintenance_us,
             input_us,
             update_us,
             compose_us,
@@ -3079,20 +3078,16 @@ impl App {
             pre_redraw_gap_us,
             request_to_redraw_us,
             redraw_request_reason,
+            maintenance_us,
             input_us,
             update_us,
             compose_us,
             upload_us,
             draw_us,
             draw_stats,
+            display_clock.error_seconds,
+            display_clock.catching_up,
         );
-        let display_clock = self
-            .state
-            .screens
-            .gameplay_state
-            .as_ref()
-            .map(|state| state.display_clock_health())
-            .unwrap_or_default();
         trace_frame_stutter(
             frame_seconds,
             self.state
@@ -3103,6 +3098,7 @@ impl App {
             pre_redraw_gap_us,
             request_to_redraw_us,
             redraw_request_reason,
+            maintenance_us,
             input_us,
             update_us,
             compose_us,
@@ -3130,6 +3126,7 @@ impl App {
             draw_us,
             draw_stats,
             GameplayPacingPhases {
+                maintenance_us,
                 actor_build_us,
                 build_screen_us,
                 compose_us,
@@ -5724,23 +5721,19 @@ impl App {
         pre_redraw_gap_us: u32,
         request_to_redraw_us: u32,
         redraw_request_reason: &'static str,
+        maintenance_us: u32,
         input_us: u32,
         update_us: u32,
         compose_us: u32,
         upload_us: u32,
         draw_us: u32,
         draw_stats: renderer::DrawStats,
+        display_error_seconds: f32,
+        display_catching_up: bool,
     ) {
         if !stutter_diag_enabled() {
             return;
         }
-        let display_clock = self
-            .state
-            .screens
-            .gameplay_state
-            .as_ref()
-            .map(|gs| gs.display_clock_health())
-            .unwrap_or_default();
         let expected_seconds = self.state.shell.expected_frame_seconds(screen);
         self.state.shell.stutter_diag.record_frame(
             frame_host_nanos,
@@ -5750,14 +5743,15 @@ impl App {
             pre_redraw_gap_us,
             request_to_redraw_us,
             redraw_request_reason,
+            maintenance_us,
             input_us,
             update_us,
             compose_us,
             upload_us,
             draw_us,
             draw_stats,
-            display_clock.error_seconds,
-            display_clock.catching_up,
+            display_error_seconds,
+            display_catching_up,
         );
     }
 

@@ -453,6 +453,7 @@ impl OverlayStyle {
 pub struct FrameStatsSample {
     pub host_nanos: u64,
     pub frame_us: u32,
+    pub maintenance_us: u32,
     pub input_us: u32,
     pub update_us: u32,
     pub compose_us: u32,
@@ -469,6 +470,7 @@ impl FrameStatsSample {
         Self {
             host_nanos: 0,
             frame_us: 0,
+            maintenance_us: 0,
             input_us: 0,
             update_us: 0,
             compose_us: 0,
@@ -487,7 +489,8 @@ impl FrameStatsSample {
 
     #[inline(always)]
     pub const fn measured_us(&self) -> u32 {
-        self.input_us
+        self.maintenance_us
+            .saturating_add(self.input_us)
             .saturating_add(self.update_us)
             .saturating_add(self.compose_us)
             .saturating_add(self.upload_us)
@@ -502,7 +505,8 @@ impl FrameStatsSample {
 
     #[inline(always)]
     pub const fn cpu_work_us(&self) -> u32 {
-        self.input_us
+        self.maintenance_us
+            .saturating_add(self.input_us)
             .saturating_add(self.update_us)
             .saturating_add(self.compose_us)
             .saturating_add(self.upload_us)
@@ -578,6 +582,7 @@ mod tests {
         let sample = FrameStatsSample {
             host_nanos: 1,
             frame_us: 10_000,
+            maintenance_us: 50,
             input_us: 100,
             update_us: 200,
             compose_us: 300,
@@ -587,9 +592,9 @@ mod tests {
             display_error_us: 0,
             catching_up: false,
         };
-        assert_eq!(sample.cpu_work_us(), 1_500);
-        assert_eq!(sample.measured_us(), 2_100);
-        assert_eq!(sample.idle_us(), 7_900);
+        assert_eq!(sample.cpu_work_us(), 1_550);
+        assert_eq!(sample.measured_us(), 2_150);
+        assert_eq!(sample.idle_us(), 7_850);
     }
 
     #[test]

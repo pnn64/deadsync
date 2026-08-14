@@ -679,6 +679,7 @@ mod tests {
         let sample = FrameStatsSample {
             host_nanos: 1,
             frame_us: 16_000,
+            maintenance_us: 750,
             input_us: 1_000,
             update_us: 2_000,
             compose_us: 1_000,
@@ -687,8 +688,8 @@ mod tests {
             gpu_wait_us: 1_500,
             ..FrameStatsSample::empty()
         };
-        assert_eq!(sample.measured_us(), 9_000);
-        assert_eq!(sample.idle_us(), 7_000);
+        assert_eq!(sample.measured_us(), 9_750);
+        assert_eq!(sample.idle_us(), 6_250);
     }
 
     #[test]

@@ -8,7 +8,6 @@ use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 pub struct ComposeBreakdown {
     pub actor_build_us: u32,
     pub build_screen_us: u32,
-    pub resolve_textures_us: u32,
     pub render_ops: u32,
     pub render_cameras: u32,
     pub text_layout: TextLayoutFrameStats,
@@ -23,6 +22,7 @@ pub fn trace_frame_stutter(
     pre_redraw_gap_us: u32,
     request_to_redraw_us: u32,
     redraw_request_reason: &'static str,
+    maintenance_us: u32,
     input_us: u32,
     update_us: u32,
     compose_us: u32,
@@ -47,7 +47,8 @@ pub fn trace_frame_stutter(
     } else {
         frame_us_f as u32
     };
-    let frame_work_us = input_us
+    let frame_work_us = maintenance_us
+        .saturating_add(input_us)
         .saturating_add(update_us)
         .saturating_add(compose_us)
         .saturating_add(upload_us)
@@ -66,6 +67,7 @@ pub fn trace_frame_stutter(
     let redraw_late_us = pre_redraw_gap_us.saturating_sub(request_to_redraw_us);
     let dominant = dominant_phase(
         request_to_redraw_us,
+        maintenance_us,
         input_us,
         update_us,
         compose_us,
@@ -84,7 +86,7 @@ pub fn trace_frame_stutter(
     let present = draw_stats.present_stats;
     let audio = deadsync_audio_stream::get_output_timing_snapshot();
     log::trace!(
-        "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] compose_dbg=[actors:{:.3} build:{:.3} resolve:{:.3} nodes:{} sprites:{} text:{} chars:{} frames:{} mesh:{} tmesh:{} cameras:{} shadows:{} objects:{} render_cameras:{} txt_hits:{} txt_shared:{} txt_miss:{} txt_lines:{} txt_glyphs:{} txt_entries:{} txt_aliases:{}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] display_dbg=[active:{} err_ms:{:+.3} catch:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
+        "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} maintenance:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] compose_dbg=[actors:{:.3} build:{:.3} nodes:{} sprites:{} text:{} chars:{} frames:{} mesh:{} tmesh:{} cameras:{} shadows:{} objects:{} render_cameras:{} txt_hits:{} txt_shared:{} txt_miss:{} txt_lines:{} txt_glyphs:{} txt_entries:{} txt_aliases:{}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] display_dbg=[active:{} err_ms:{:+.3} catch:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
         total_elapsed,
         severity,
         screen,
@@ -95,6 +97,7 @@ pub fn trace_frame_stutter(
         dominant.0,
         dominant.1 as f32 / 1000.0,
         pre_redraw_gap_us as f32 / 1000.0,
+        maintenance_us as f32 / 1000.0,
         input_us as f32 / 1000.0,
         update_us as f32 / 1000.0,
         compose_us as f32 / 1000.0,
@@ -103,7 +106,6 @@ pub fn trace_frame_stutter(
         unaccounted_gap_us as f32 / 1000.0,
         compose_breakdown.actor_build_us as f32 / 1000.0,
         compose_breakdown.build_screen_us as f32 / 1000.0,
-        compose_breakdown.resolve_textures_us as f32 / 1000.0,
         actor_stats.total,
         actor_stats.sprites,
         actor_stats.texts,
@@ -171,6 +173,7 @@ pub fn trace_frame_stutter(
 #[allow(clippy::too_many_arguments)]
 fn dominant_phase(
     redraw_delivery_us: u32,
+    maintenance_us: u32,
     input_us: u32,
     update_us: u32,
     compose_us: u32,
@@ -182,6 +185,7 @@ fn dominant_phase(
 ) -> (&'static str, u32) {
     let mut dominant = ("redraw_delivery", redraw_delivery_us);
     for candidate in [
+        ("maintenance", maintenance_us),
         ("input", input_us),
         ("update", update_us),
         ("compose", compose_us),
@@ -209,12 +213,12 @@ mod tests {
     #[test]
     fn dominant_phase_selects_largest_measurement() {
         let draw = DrawStats {
-            present_us: 900,
+            present_us: 1_000,
             ..DrawStats::default()
         };
         assert_eq!(
-            dominant_phase(100, 200, 300, 400, 500, draw, 600, 700, 800),
-            ("present", 900)
+            dominant_phase(100, 200, 300, 400, 500, 600, draw, 700, 800, 900),
+            ("present", 1_000)
         );
     }
 }
