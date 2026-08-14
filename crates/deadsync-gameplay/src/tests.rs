@@ -2025,6 +2025,59 @@ mod tests {
     }
 
     #[test]
+    fn streamed_chart_attack_chunks_match_materialized_starts() {
+        for raw in [
+            "",
+            "LEN=1:MODS=drunk",
+            "TIME=1:LEN=2:MODS=drunk",
+            "  time=1.25:LeN=2.5:MoDs=drunk,50% hidden:\
+             TIME=5:END=9:mods=mirror:\
+             TiMe=bad:len=2:mods=ignored:\
+             TIME=12:LEN=-3:MODS=clearall  ",
+            "TIME=nan:LEN=2:MODS=drunk TIME=4:END=2:MODS=tipsy \
+             TIME=6:LEN=abc:MODS=wave TIME=9:LEN=1:MODS=,",
+            "prefix TIME=0:LEN=1:MODS=drunkTIME=2:LEN=3:MODS=mirror suffix",
+        ] {
+            assert_eq!(
+                stream_attack_windows(raw),
+                parse_chart_attack_windows_starts_reference(raw),
+                "raw={raw:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn borrowed_attack_mask_windows_match_owned_pipeline() {
+        let raw = "time=0:len=2:mods=drunk,50% hidden:\
+                   TIME=bad:LEN=2:MODS=mirror:\
+                   TIME=4:END=8:MODS=wide,nomines,25% mini:\
+                   TIME=9:LEN=-3:MODS=clearall";
+        for (chart_attacks, mode) in [
+            (Some(raw), GameplayAttackMode::On),
+            (Some(raw), GameplayAttackMode::Off),
+            (None, GameplayAttackMode::On),
+            (None, GameplayAttackMode::Random),
+        ] {
+            assert_eq!(
+                build_attack_mask_windows_for_mode(
+                    chart_attacks,
+                    mode,
+                    1,
+                    0xA5A5_5A5A,
+                    64.0,
+                ),
+                build_attack_mask_windows_for_mode_reference(
+                    chart_attacks,
+                    mode,
+                    1,
+                    0xA5A5_5A5A,
+                    64.0,
+                ),
+            );
+        }
+    }
+
+    #[test]
     fn chart_attack_windows_skip_bad_chunks_and_clamp_lengths() {
         let windows = parse_chart_attack_windows(
             "garbage TIME=nan:LEN=2:MODS=drunk TIME=4:END=2:MODS=tipsy \
@@ -2877,6 +2930,60 @@ mod tests {
                 (ROWS_PER_BEAT as usize * 2, 2),
             ],
         );
+    }
+
+    #[test]
+    fn borrowed_chart_attack_application_matches_owned_pipeline() {
+        let timing = test_timing(256 * 12);
+        let mut source = (0..256)
+            .map(|index| {
+                let row = index * 12;
+                let kind = if index % 19 == 0 {
+                    NoteType::Mine
+                } else {
+                    NoteType::Tap
+                };
+                let mut note = test_note_at(kind, None, false, row, row as f32 / 48.0);
+                note.column = index % 4;
+                note
+            })
+            .collect::<Vec<_>>();
+        let raw = "TIME=bad:LEN=1:MODS=mirror:\
+                   time=0:len=4:mods=drunk:\
+                   TIME=1:LEN=12:MODS=shuffle,nomines:\
+                   TIME=15:LEN=3:MODS=random:\
+                   TIME=20:LEN=8:MODS=wide,mirror";
+
+        for reverse in [false, true] {
+            if reverse {
+                source.reverse();
+            }
+            let mut expected = source.clone();
+            let mut actual = source.clone();
+            apply_chart_attacks_for_mode_reference(
+                &mut expected,
+                Some(raw),
+                GameplayAttackMode::On,
+                &timing,
+                0,
+                4,
+                0,
+                0x1234_5678,
+                64.0,
+            );
+            apply_chart_attacks_for_mode(
+                &mut actual,
+                Some(raw),
+                GameplayAttackMode::On,
+                &timing,
+                0,
+                4,
+                0,
+                0x1234_5678,
+                64.0,
+            );
+            assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+        }
     }
 
     #[test]

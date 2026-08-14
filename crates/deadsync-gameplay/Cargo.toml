@@ -51,6 +51,11 @@ name = "player_transform_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "attack_parse_pipeline_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }

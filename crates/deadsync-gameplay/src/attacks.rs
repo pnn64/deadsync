@@ -203,7 +203,51 @@ fn find_attack_time(raw: &[u8], start: usize) -> Option<usize> {
         .map(|offset| start + offset)
 }
 
-fn parse_chart_attack_chunk(chunk: &str) -> Option<ChartAttackWindow> {
+#[derive(Clone, Copy)]
+struct BorrowedChartAttack<'a> {
+    start_second: f32,
+    len_seconds: f32,
+    mods: &'a str,
+}
+
+impl BorrowedChartAttack<'_> {
+    fn to_owned(self) -> ChartAttackWindow {
+        ChartAttackWindow {
+            start_second: self.start_second,
+            len_seconds: self.len_seconds,
+            mods: self.mods.to_string(),
+        }
+    }
+}
+
+struct ChartAttackChunks<'a> {
+    raw: &'a str,
+    next_start: Option<usize>,
+}
+
+impl<'a> ChartAttackChunks<'a> {
+    fn new(raw: &'a str) -> Self {
+        let raw = raw.trim();
+        Self {
+            raw,
+            next_start: find_attack_time(raw.as_bytes(), 0),
+        }
+    }
+}
+
+impl<'a> Iterator for ChartAttackChunks<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let start = self.next_start?;
+        let scan = start.saturating_add(5);
+        let end = find_attack_time(self.raw.as_bytes(), scan).unwrap_or(self.raw.len());
+        self.next_start = (end < self.raw.len()).then_some(end);
+        Some(&self.raw[start..end])
+    }
+}
+
+fn parse_chart_attack_chunk(chunk: &str) -> Option<BorrowedChartAttack<'_>> {
     let mut time = None;
     let mut len = None;
     let mut end_time = None;
@@ -225,7 +269,7 @@ fn parse_chart_attack_chunk(chunk: &str) -> Option<ChartAttackWindow> {
         } else if key.eq_ignore_ascii_case("END") {
             end_time = value.parse::<f32>().ok();
         } else if key.eq_ignore_ascii_case("MODS") {
-            mods = Some(value.to_string());
+            mods = Some(value);
         }
     }
 
@@ -244,11 +288,44 @@ fn parse_chart_attack_chunk(chunk: &str) -> Option<ChartAttackWindow> {
     if !len_seconds.is_finite() || len_seconds < 0.0 {
         len_seconds = 0.0;
     }
-    Some(ChartAttackWindow {
+    Some(BorrowedChartAttack {
         start_second,
         len_seconds,
         mods,
     })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn parse_chart_attack_windows_starts_reference(raw: &str) -> Vec<ChartAttackWindow> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Vec::new();
+    }
+    let mut starts = Vec::with_capacity(8);
+    let mut scan = 0usize;
+    while let Some(start) = find_attack_time(raw.as_bytes(), scan) {
+        starts.push(start);
+        scan = start.saturating_add(5);
+        if scan >= raw.len() {
+            break;
+        }
+    }
+    let mut out = Vec::with_capacity(starts.len());
+    for (index, start) in starts.iter().copied().enumerate() {
+        let end = starts.get(index + 1).copied().unwrap_or(raw.len());
+        if let Some(window) = parse_chart_attack_chunk(&raw[start..end]) {
+            out.push(window.to_owned());
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+pub(crate) fn stream_attack_windows(raw: &str) -> Vec<ChartAttackWindow> {
+    ChartAttackChunks::new(raw)
+        .filter_map(parse_chart_attack_chunk)
+        .map(BorrowedChartAttack::to_owned)
+        .collect()
 }
 
 pub fn parse_chart_attack_windows(raw: &str) -> Vec<ChartAttackWindow> {
@@ -269,7 +346,7 @@ pub fn parse_chart_attack_windows(raw: &str) -> Vec<ChartAttackWindow> {
     for (index, start) in starts.iter().copied().enumerate() {
         let end = starts.get(index + 1).copied().unwrap_or(raw.len());
         if let Some(window) = parse_chart_attack_chunk(&raw[start..end]) {
-            out.push(window);
+            out.push(window.to_owned());
         }
     }
     out
@@ -344,6 +421,23 @@ pub fn build_attack_mask_windows_for_mode(
     base_seed: u64,
     song_length_seconds: f32,
 ) -> Vec<AttackMaskWindow> {
+    if attack_mode == GameplayAttackMode::On {
+        let Some(raw) = chart_attacks else {
+            return Vec::new();
+        };
+        let mut windows = Vec::with_capacity(ChartAttackChunks::new(raw).count());
+        for attack in ChartAttackChunks::new(raw).filter_map(parse_chart_attack_chunk) {
+            if let Some(window) = attack_mask_window_from_values(
+                attack.start_second,
+                attack.len_seconds,
+                parse_attack_mods(attack.mods),
+            ) {
+                windows.push(window);
+            }
+        }
+        return windows;
+    }
+
     let attacks = build_attack_windows_for_mode(
         chart_attacks,
         attack_mode,
@@ -351,6 +445,26 @@ pub fn build_attack_mask_windows_for_mode(
         base_seed,
         song_length_seconds,
     );
+    build_attack_mask_windows(&attacks)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn build_attack_mask_windows_for_mode_reference(
+    chart_attacks: Option<&str>,
+    attack_mode: GameplayAttackMode,
+    player: usize,
+    base_seed: u64,
+    song_length_seconds: f32,
+) -> Vec<AttackMaskWindow> {
+    let attacks = match attack_mode {
+        GameplayAttackMode::Off => Vec::new(),
+        GameplayAttackMode::On => chart_attacks
+            .map(parse_chart_attack_windows_starts_reference)
+            .unwrap_or_default(),
+        GameplayAttackMode::Random => {
+            build_random_attack_windows(song_length_seconds, player, base_seed)
+        }
+    };
     if attacks.is_empty() {
         return Vec::new();
     }
@@ -2288,11 +2402,18 @@ pub fn attack_mask_window_from_parts(
     attack: &ChartAttackWindow,
     mods: ParsedAttackMods,
 ) -> Option<AttackMaskWindow> {
+    attack_mask_window_from_values(attack.start_second, attack.len_seconds, mods)
+}
+
+fn attack_mask_window_from_values(
+    start_second: f32,
+    len_seconds: f32,
+    mods: ParsedAttackMods,
+) -> Option<AttackMaskWindow> {
     if !mods.has_runtime_mask_effect() && !mods.has_chart_effect() {
         return None;
     }
-    let start_second = attack.start_second;
-    let end_second = start_second + attack.len_seconds.max(0.0);
+    let end_second = start_second + len_seconds.max(0.0);
     if !start_second.is_finite() || !end_second.is_finite() || end_second <= start_second {
         return None;
     }
@@ -2810,8 +2931,17 @@ pub fn chart_attack_row_range(
     attack: &ChartAttackWindow,
     timing_player: &TimingData,
 ) -> Option<(usize, usize)> {
-    let start_beat = timing_player.get_beat_for_time(attack.start_second);
-    let end_beat = timing_player.get_beat_for_time(attack.start_second + attack.len_seconds);
+    chart_attack_row_range_values(attack.start_second, attack.len_seconds, timing_player)
+}
+
+#[inline(always)]
+fn chart_attack_row_range_values(
+    start_second: f32,
+    len_seconds: f32,
+    timing_player: &TimingData,
+) -> Option<(usize, usize)> {
+    let start_beat = timing_player.get_beat_for_time(start_second);
+    let end_beat = timing_player.get_beat_for_time(start_second + len_seconds);
     let rows_per_beat = ROWS_PER_BEAT.max(1) as f32;
     let start_row = (start_beat.max(0.0) * rows_per_beat).round() as usize;
     let end_row = (end_beat.max(0.0) * rows_per_beat).round() as usize;
@@ -2955,12 +3085,120 @@ fn apply_chart_attack_window_sorted(
     mods: ParsedAttackMods,
     turn_seed: u64,
 ) {
+    let mut scratch = Vec::new();
+    apply_chart_attack_window_sorted_with_scratch(
+        notes,
+        timing_player,
+        col_offset,
+        cols,
+        player,
+        row_bounds,
+        mods,
+        turn_seed,
+        &mut scratch,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_chart_attack_window_sorted_with_scratch(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    player: usize,
+    row_bounds: (usize, usize),
+    mods: ParsedAttackMods,
+    turn_seed: u64,
+    in_range: &mut Vec<Note>,
+) {
     let (start_row, end_row) = row_bounds;
     if notes.is_empty() || end_row < start_row || !mods.has_chart_effect() {
         return;
     }
     debug_assert!(chart_attack_notes_sorted(notes));
 
+    let note_range = chart_attack_note_range(notes, start_row, end_row);
+    if note_range.is_empty() {
+        return;
+    }
+    if mods.insert_mask == 0 && mods.remove_mask == 0 && mods.holds_mask == 0 {
+        apply_attack_turn_mod(
+            &mut notes[note_range.clone()],
+            col_offset,
+            cols,
+            mods.turn_option,
+            turn_seed,
+            player,
+        );
+        sort_player_notes(&mut notes[note_range]);
+        debug_assert!(chart_attack_notes_sorted(notes));
+        return;
+    }
+    let insert_at = note_range.start;
+    debug_assert!(in_range.is_empty());
+    in_range.reserve(note_range.len());
+    in_range.extend(notes.drain(note_range));
+    apply_uncommon_masks_with_masks(
+        in_range,
+        mods.insert_mask,
+        mods.remove_mask,
+        mods.holds_mask,
+        timing_player,
+        col_offset,
+        cols,
+        notes,
+        Some(row_bounds),
+        player,
+    );
+    apply_attack_turn_mod(
+        in_range,
+        col_offset,
+        cols,
+        mods.turn_option,
+        turn_seed,
+        player,
+    );
+    if mods.turn_option != GameplayTurnOption::None {
+        sort_player_notes(in_range);
+    }
+
+    let mut insert_at = insert_at;
+    if let (Some(first), Some(last)) = (in_range.first(), in_range.last()) {
+        let first_key = (first.row_index, first.column);
+        let last_key = (last.row_index, last.column);
+        let merge_start = notes.partition_point(|note| (note.row_index, note.column) < first_key);
+        let merge_end = notes.partition_point(|note| (note.row_index, note.column) <= last_key);
+        if merge_start < merge_end {
+            in_range.extend(notes.drain(merge_start..merge_end));
+            sort_player_notes(in_range);
+        }
+        insert_at = merge_start;
+    }
+
+    // The drain retained the chart's allocation. Splice shifts only the tail
+    // following the attacked rows (plus any rows reached by an insert mod) and
+    // grows solely when inserted notes exceed the existing capacity.
+    drop(notes.splice(insert_at..insert_at, in_range.drain(..)));
+    debug_assert!(in_range.is_empty());
+    debug_assert!(chart_attack_notes_sorted(notes));
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::too_many_arguments)]
+fn apply_chart_attack_window_sorted_owned_reference(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    player: usize,
+    row_bounds: (usize, usize),
+    mods: ParsedAttackMods,
+    turn_seed: u64,
+) {
+    let (start_row, end_row) = row_bounds;
+    if notes.is_empty() || end_row < start_row || !mods.has_chart_effect() {
+        return;
+    }
     let note_range = chart_attack_note_range(notes, start_row, end_row);
     if note_range.is_empty() {
         return;
@@ -3003,12 +3241,7 @@ fn apply_chart_attack_window_sorted(
         }
         insert_at = merge_start;
     }
-
-    // The drain retained the chart's allocation. Splice shifts only the tail
-    // following the attacked rows (plus any rows reached by an insert mod) and
-    // grows solely when inserted notes exceed the existing capacity.
     drop(notes.splice(insert_at..insert_at, in_range));
-    debug_assert!(chart_attack_notes_sorted(notes));
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3115,6 +3348,7 @@ pub fn apply_chart_attack_windows(
     base_seed: u64,
 ) {
     let mut ordered = chart_attack_notes_sorted(notes);
+    let mut scratch = Vec::new();
     for (i, attack) in attacks.iter().enumerate() {
         let mods = parse_attack_mods(&attack.mods);
         if !mods.has_chart_effect() {
@@ -3125,7 +3359,7 @@ pub fn apply_chart_attack_windows(
         };
         let turn_seed = chart_attack_turn_seed(base_seed, player, i);
         if ordered {
-            apply_chart_attack_window_sorted(
+            apply_chart_attack_window_sorted_with_scratch(
                 notes,
                 timing_player,
                 col_offset,
@@ -3134,6 +3368,7 @@ pub fn apply_chart_attack_windows(
                 row_bounds,
                 mods,
                 turn_seed,
+                &mut scratch,
             );
         } else {
             apply_chart_attack_window_rescan(
@@ -3162,6 +3397,21 @@ pub fn apply_chart_attacks_for_mode(
     base_seed: u64,
     song_length_seconds: f32,
 ) {
+    if attack_mode == GameplayAttackMode::On {
+        if let Some(raw) = chart_attacks {
+            apply_borrowed_chart_attacks(
+                notes,
+                raw,
+                timing_player,
+                col_offset,
+                cols,
+                player,
+                base_seed,
+            );
+        }
+        return;
+    }
+
     let attacks = build_attack_windows_for_mode(
         chart_attacks,
         attack_mode,
@@ -3179,6 +3429,146 @@ pub fn apply_chart_attacks_for_mode(
             player,
             base_seed,
         );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_borrowed_chart_attacks(
+    notes: &mut Vec<Note>,
+    raw: &str,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    player: usize,
+    base_seed: u64,
+) {
+    let mut ordered = None;
+    let mut scratch = Vec::new();
+    for (index, attack) in ChartAttackChunks::new(raw)
+        .filter_map(parse_chart_attack_chunk)
+        .enumerate()
+    {
+        let mods = parse_attack_mods(attack.mods);
+        if !mods.has_chart_effect() {
+            continue;
+        }
+        let Some(row_bounds) = chart_attack_row_range_values(
+            attack.start_second,
+            attack.len_seconds,
+            timing_player,
+        ) else {
+            continue;
+        };
+        let turn_seed = chart_attack_turn_seed(base_seed, player, index);
+        let notes_ordered = *ordered.get_or_insert_with(|| chart_attack_notes_sorted(notes));
+        if notes_ordered {
+            apply_chart_attack_window_sorted_with_scratch(
+                notes,
+                timing_player,
+                col_offset,
+                cols,
+                player,
+                row_bounds,
+                mods,
+                turn_seed,
+                &mut scratch,
+            );
+        } else {
+            apply_chart_attack_window_rescan(
+                notes,
+                timing_player,
+                col_offset,
+                cols,
+                player,
+                row_bounds,
+                mods,
+                turn_seed,
+            );
+            ordered = Some(chart_attack_notes_sorted(notes));
+        }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::too_many_arguments)]
+pub fn apply_chart_attacks_for_mode_reference(
+    notes: &mut Vec<Note>,
+    chart_attacks: Option<&str>,
+    attack_mode: GameplayAttackMode,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    player: usize,
+    base_seed: u64,
+    song_length_seconds: f32,
+) {
+    let attacks = match attack_mode {
+        GameplayAttackMode::Off => Vec::new(),
+        GameplayAttackMode::On => chart_attacks
+            .map(parse_chart_attack_windows_starts_reference)
+            .unwrap_or_default(),
+        GameplayAttackMode::Random => {
+            build_random_attack_windows(song_length_seconds, player, base_seed)
+        }
+    };
+    if !attacks.is_empty() {
+        apply_chart_attack_windows_per_window_reference(
+            notes,
+            &attacks,
+            timing_player,
+            col_offset,
+            cols,
+            player,
+            base_seed,
+        );
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::too_many_arguments)]
+fn apply_chart_attack_windows_per_window_reference(
+    notes: &mut Vec<Note>,
+    attacks: &[ChartAttackWindow],
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    player: usize,
+    base_seed: u64,
+) {
+    let mut ordered = chart_attack_notes_sorted(notes);
+    for (index, attack) in attacks.iter().enumerate() {
+        let mods = parse_attack_mods(&attack.mods);
+        if !mods.has_chart_effect() {
+            continue;
+        }
+        let Some(row_bounds) = chart_attack_row_range(attack, timing_player) else {
+            continue;
+        };
+        let turn_seed = chart_attack_turn_seed(base_seed, player, index);
+        if ordered {
+            apply_chart_attack_window_sorted_owned_reference(
+                notes,
+                timing_player,
+                col_offset,
+                cols,
+                player,
+                row_bounds,
+                mods,
+                turn_seed,
+            );
+        } else {
+            apply_chart_attack_window_rescan(
+                notes,
+                timing_player,
+                col_offset,
+                cols,
+                player,
+                row_bounds,
+                mods,
+                turn_seed,
+            );
+            ordered = chart_attack_notes_sorted(notes);
+        }
     }
 }
 
