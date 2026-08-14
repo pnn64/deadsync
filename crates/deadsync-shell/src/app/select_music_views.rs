@@ -117,27 +117,53 @@ impl App {
             return;
         }
         let lobby = Self::refresh_lobby_runtime_view();
-        let downloads =
-            if select_music::downloads_overlay_visible(&self.state.screens.select_music_state) {
-                deadsync_online::runtime::unlock_download_snapshots()
-                    .into_iter()
-                    .map(|snapshot| SelectMusicDownloadView {
-                        name: snapshot.name,
-                        current_bytes: snapshot.current_bytes,
-                        total_bytes: snapshot.total_bytes,
-                        complete: snapshot.complete,
-                        error_message: snapshot.error_message,
-                    })
-                    .collect()
+        let downloads_visible =
+            select_music::downloads_overlay_visible(&self.state.screens.select_music_state);
+        let downloads = if downloads_visible {
+            let last_generation = if self.select_music_downloads_visible {
+                self.select_music_download_generation
             } else {
-                Vec::new()
+                0
             };
-        let srpg_shop =
-            if select_music::srpg_shop_overlay_visible(&self.state.screens.select_music_state) {
-                deadsync_online::srpg_shop::runtime_snapshot()
+            self.select_music_downloads_visible = true;
+            deadsync_online::runtime::unlock_download_snapshots_if_changed(last_generation).map(
+                |(generation, snapshots)| {
+                    self.select_music_download_generation = generation;
+                    snapshots
+                        .into_iter()
+                        .map(|snapshot| SelectMusicDownloadView {
+                            name: snapshot.name,
+                            current_bytes: snapshot.current_bytes,
+                            total_bytes: snapshot.total_bytes,
+                            complete: snapshot.complete,
+                            error_message: snapshot.error_message,
+                        })
+                        .collect()
+                },
+            )
+        } else {
+            self.select_music_downloads_visible = false;
+            None
+        };
+        let shop_visible =
+            select_music::srpg_shop_overlay_visible(&self.state.screens.select_music_state);
+        let srpg_shop = if shop_visible {
+            let last_generation = if self.select_music_shop_visible {
+                self.select_music_shop_generation
             } else {
-                Default::default()
+                0
             };
+            self.select_music_shop_visible = true;
+            deadsync_online::srpg_shop::runtime_snapshot_if_changed(last_generation).map(
+                |(generation, snapshot)| {
+                    self.select_music_shop_generation = generation;
+                    snapshot
+                },
+            )
+        } else {
+            self.select_music_shop_visible = false;
+            None
+        };
         let music_position_seconds = if deadsync_audio_stream::is_initialized() {
             f64::from(deadsync_audio_stream::get_music_stream_clock_snapshot().music_seconds)
         } else {

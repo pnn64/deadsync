@@ -845,8 +845,10 @@ pub struct SelectMusicRuntimeView {
     pub pad_profiles: Option<[Vec<SelectMusicPadProfileView>; 2]>,
     pub audio_playback: deadsync_theme::views::AudioPlaybackView,
     pub lobby: SimplyLoveLobbyRuntimeView,
-    pub downloads: Vec<SelectMusicDownloadView>,
-    pub srpg_shop: Arc<deadsync_online::srpg_shop::SrpgShopSnapshot>,
+    /// Replacement rows emitted only when the download runtime generation changes.
+    pub downloads: Option<Vec<SelectMusicDownloadView>>,
+    /// Replacement snapshot emitted only when the shop runtime changes.
+    pub srpg_shop: Option<Arc<deadsync_online::srpg_shop::SrpgShopSnapshot>>,
     /// Beat offset applied to the selection arrow bounce animation.
     pub arrow_bounce_offset: f32,
     pub policy: SelectMusicPolicyView,
@@ -870,8 +872,8 @@ impl Default for SelectMusicRuntimeView {
             pad_profiles: None,
             audio_playback: Default::default(),
             lobby: Default::default(),
-            downloads: Vec::new(),
-            srpg_shop: Default::default(),
+            downloads: None,
+            srpg_shop: None,
             arrow_bounce_offset: 0.0,
             policy: Default::default(),
             music_wheel: Default::default(),

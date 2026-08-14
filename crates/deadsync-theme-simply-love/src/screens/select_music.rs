@@ -698,8 +698,12 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     }
     state.audio_playback = view.audio_playback;
     state.lobby_view = view.lobby;
-    state.downloads = view.downloads;
-    state.srpg_shop_snapshot = view.srpg_shop;
+    if let Some(downloads) = view.downloads {
+        state.downloads = downloads;
+    }
+    if let Some(srpg_shop) = view.srpg_shop {
+        state.srpg_shop_snapshot = srpg_shop;
+    }
     state.arrow_bounce_offset = view.arrow_bounce_offset;
     state.policy = view.policy;
     pad_config::set_fsr_enabled(&mut state.pad_config_overlay, state.policy.fsr_profiles);
@@ -16041,14 +16045,17 @@ mod tests {
                     music_position_seconds: 12.5,
                 },
                 lobby: Default::default(),
-                downloads: vec![crate::views::SelectMusicDownloadView {
+                downloads: Some(vec![crate::views::SelectMusicDownloadView {
                     name: "Unlock Pack".to_string(),
                     current_bytes: 512,
                     total_bytes: 1024,
                     complete: false,
                     error_message: None,
-                }],
-                srpg_shop: Default::default(),
+                }]),
+                srpg_shop: Some(Arc::new(deadsync_online::srpg_shop::SrpgShopSnapshot {
+                    phase: deadsync_online::srpg_shop::SrpgShopPhase::Ready,
+                    ..Default::default()
+                })),
                 arrow_bounce_offset: -0.25,
                 policy: crate::views::SelectMusicPolicyView {
                     machine_font: crate::config::MachineFont::Mega,
@@ -16141,6 +16148,14 @@ mod tests {
             crate::config::BreakdownStyle::Sn
         );
         assert_eq!(super::preview_song_sec(&state), Some(12.5));
+
+        super::sync_runtime_view(&mut state, Default::default());
+        assert_eq!(state.downloads.len(), 1, "unchanged rows stay retained");
+        assert_eq!(
+            state.srpg_shop_snapshot.phase,
+            deadsync_online::srpg_shop::SrpgShopPhase::Ready,
+            "unchanged shop snapshot stays retained"
+        );
     }
 
     #[test]

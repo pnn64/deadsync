@@ -7,6 +7,7 @@ use std::fmt::{self, Display, Formatter};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::thread;
 
@@ -114,9 +115,21 @@ impl Default for RuntimeState {
 
 static RUNTIME: LazyLock<Mutex<RuntimeState>> =
     LazyLock::new(|| Mutex::new(RuntimeState::default()));
+static RUNTIME_SNAPSHOT_GENERATION: AtomicU64 = AtomicU64::new(1);
 
-pub fn runtime_snapshot() -> Arc<SrpgShopSnapshot> {
-    Arc::clone(&RUNTIME.lock().unwrap().snapshot)
+fn set_runtime_snapshot(runtime: &mut RuntimeState, snapshot: Arc<SrpgShopSnapshot>) {
+    runtime.snapshot = snapshot;
+    RUNTIME_SNAPSHOT_GENERATION.fetch_add(1, Ordering::Release);
+}
+
+/// Clones the shared shop snapshot only after its display generation changes.
+pub fn runtime_snapshot_if_changed(last_generation: u64) -> Option<(u64, Arc<SrpgShopSnapshot>)> {
+    if RUNTIME_SNAPSHOT_GENERATION.load(Ordering::Acquire) == last_generation {
+        return None;
+    }
+    let runtime = RUNTIME.lock().unwrap();
+    let generation = RUNTIME_SNAPSHOT_GENERATION.load(Ordering::Acquire);
+    Some((generation, Arc::clone(&runtime.snapshot)))
 }
 
 pub(crate) fn runtime_mark_downloaded(url: &str, destination: &str) {
@@ -136,7 +149,7 @@ pub(crate) fn runtime_mark_downloaded(url: &str, destination: &str) {
         }
     }
     if changed {
-        runtime.snapshot = Arc::new(snapshot);
+        set_runtime_snapshot(&mut runtime, Arc::new(snapshot));
     }
 }
 
@@ -160,13 +173,17 @@ pub fn runtime_refresh(username: String, password: String) {
         let mut runtime = RUNTIME.lock().unwrap();
         runtime.generation = runtime.generation.wrapping_add(1);
         runtime.session = None;
-        runtime.snapshot = Arc::new(SrpgShopSnapshot {
-            phase: SrpgShopPhase::Error,
-            shops: Vec::new(),
-            message: Some(
-                "Add Username=... and Password=... to this profile's groovestats.ini.".to_string(),
-            ),
-        });
+        set_runtime_snapshot(
+            &mut runtime,
+            Arc::new(SrpgShopSnapshot {
+                phase: SrpgShopPhase::Error,
+                shops: Vec::new(),
+                message: Some(
+                    "Add Username=... and Password=... to this profile's groovestats.ini."
+                        .to_string(),
+                ),
+            }),
+        );
         return;
     }
 
@@ -175,11 +192,14 @@ pub fn runtime_refresh(username: String, password: String) {
         runtime.generation = runtime.generation.wrapping_add(1);
         let previous = Arc::clone(&runtime.snapshot);
         runtime.session = None;
-        runtime.snapshot = Arc::new(SrpgShopSnapshot {
-            phase: SrpgShopPhase::Loading,
-            shops: Vec::new(),
-            message: Some("Signing in to SRPG10...".to_string()),
-        });
+        set_runtime_snapshot(
+            &mut runtime,
+            Arc::new(SrpgShopSnapshot {
+                phase: SrpgShopPhase::Loading,
+                shops: Vec::new(),
+                message: Some("Signing in to SRPG10...".to_string()),
+            }),
+        );
         (runtime.generation, previous)
     };
 
@@ -197,15 +217,18 @@ pub fn runtime_refresh(username: String, password: String) {
         match result {
             Ok((session, snapshot)) => {
                 runtime.session = Some(session);
-                runtime.snapshot = Arc::new(snapshot);
+                set_runtime_snapshot(&mut runtime, Arc::new(snapshot));
             }
             Err(error) => {
                 runtime.session = None;
-                runtime.snapshot = Arc::new(SrpgShopSnapshot {
-                    phase: SrpgShopPhase::Error,
-                    shops: Vec::new(),
-                    message: Some(error.to_string()),
-                });
+                set_runtime_snapshot(
+                    &mut runtime,
+                    Arc::new(SrpgShopSnapshot {
+                        phase: SrpgShopPhase::Error,
+                        shops: Vec::new(),
+                        message: Some(error.to_string()),
+                    }),
+                );
             }
         }
     });
@@ -226,7 +249,7 @@ pub fn runtime_purchase(shop_id: u32, item_id: String, type_id: u8) {
         snapshot.phase = SrpgShopPhase::Purchasing;
         snapshot.message = Some("Confirming purchase with SRPG10...".to_string());
         let previous = snapshot.clone();
-        runtime.snapshot = Arc::new(snapshot);
+        set_runtime_snapshot(&mut runtime, Arc::new(snapshot));
         (generation, session, previous)
     };
 
@@ -253,11 +276,11 @@ pub fn runtime_purchase(shop_id: u32, item_id: String, type_id: u8) {
         }
         runtime.session = Some(session);
         match result {
-            Ok(snapshot) => runtime.snapshot = Arc::new(snapshot),
+            Ok(snapshot) => set_runtime_snapshot(&mut runtime, Arc::new(snapshot)),
             Err(error) => {
                 previous.phase = SrpgShopPhase::Ready;
                 previous.message = Some(format!("Purchase failed: {error}"));
-                runtime.snapshot = Arc::new(previous);
+                set_runtime_snapshot(&mut runtime, Arc::new(previous));
             }
         }
     });

@@ -171,6 +171,12 @@ pub fn unlock_destination_roots(
 static RUNTIME_DOWNLOAD_STATE: LazyLock<Mutex<DownloadState>> =
     LazyLock::new(|| Mutex::new(DownloadState::default()));
 static RUNTIME_NEXT_DOWNLOAD_ID: AtomicU64 = AtomicU64::new(1);
+static RUNTIME_SNAPSHOT_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+#[inline(always)]
+fn runtime_mark_snapshots_changed() {
+    RUNTIME_SNAPSHOT_GENERATION.fetch_add(1, Ordering::Release);
+}
 
 impl DownloadState {
     pub fn snapshots(&self) -> Vec<DownloadSnapshot> {
@@ -304,26 +310,44 @@ impl DownloadState {
         self.ready_song_reload_dirs.push(path);
     }
 
-    pub fn set_download_progress(&mut self, id: u64, current_bytes: u64, total_bytes: u64) {
+    pub fn set_download_progress(&mut self, id: u64, current_bytes: u64, total_bytes: u64) -> bool {
         if let Some(entry) = self.entries.iter_mut().find(|entry| entry.id == id) {
+            if entry.current_bytes == current_bytes && entry.total_bytes == total_bytes {
+                return false;
+            }
             entry.current_bytes = current_bytes;
             entry.total_bytes = total_bytes;
+            return true;
         }
+        false
     }
 
-    pub fn finish_download(&mut self, id: u64, error_message: Option<String>) {
+    pub fn finish_download(&mut self, id: u64, error_message: Option<String>) -> bool {
         if let Some(entry) = self.entries.iter_mut().find(|entry| entry.id == id) {
+            let changed = !entry.complete
+                || entry.error_message != error_message
+                || (entry.total_bytes == 0 && entry.total_bytes != entry.current_bytes);
             entry.complete = true;
             entry.error_message = error_message;
             if entry.total_bytes == 0 {
                 entry.total_bytes = entry.current_bytes;
             }
+            return changed;
         }
+        false
     }
 }
 
-pub fn runtime_snapshots() -> Vec<DownloadSnapshot> {
-    RUNTIME_DOWNLOAD_STATE.lock().unwrap().snapshots()
+/// Returns a newly materialized row snapshot only after display state changes.
+/// The generation check keeps unchanged Select Music frames off the download
+/// mutex and avoids cloning every row's strings.
+pub fn runtime_snapshots_if_changed(last_generation: u64) -> Option<(u64, Vec<DownloadSnapshot>)> {
+    if RUNTIME_SNAPSHOT_GENERATION.load(Ordering::Acquire) == last_generation {
+        return None;
+    }
+    let state = RUNTIME_DOWNLOAD_STATE.lock().unwrap();
+    let generation = RUNTIME_SNAPSHOT_GENERATION.load(Ordering::Acquire);
+    Some((generation, state.snapshots()))
 }
 
 pub fn runtime_completion_counts() -> (usize, usize) {
@@ -362,14 +386,18 @@ pub fn runtime_queue_event_unlock_download(
 ) {
     let start = {
         let mut state = RUNTIME_DOWNLOAD_STATE.lock().unwrap();
-        queue_event_unlock_download(
+        let start = queue_event_unlock_download(
             &mut state,
             url,
             unlock_name,
             pack_name,
             hooks.load_unlock_cache,
             || RUNTIME_NEXT_DOWNLOAD_ID.fetch_add(1, Ordering::Relaxed),
-        )
+        );
+        if matches!(&start, QueueEventUnlockDownloadResult::Queued(_)) {
+            runtime_mark_snapshots_changed();
+        }
+        start
     };
     let download = match start {
         QueueEventUnlockDownloadResult::Queued(download) => download,
@@ -393,7 +421,14 @@ pub fn runtime_queue_event_unlock_download(
 }
 
 pub fn runtime_retry_failed_downloads(hooks: UnlockDownloadRuntimeHooks) -> usize {
-    let downloads = RUNTIME_DOWNLOAD_STATE.lock().unwrap().retry_failed();
+    let downloads = {
+        let mut state = RUNTIME_DOWNLOAD_STATE.lock().unwrap();
+        let downloads = state.retry_failed();
+        if !downloads.is_empty() {
+            runtime_mark_snapshots_changed();
+        }
+        downloads
+    };
     let count = downloads.len();
     for download in downloads {
         spawn_runtime_download(hooks, download);
@@ -457,17 +492,17 @@ fn runtime_queue_ready_song_reload_dir(path: PathBuf) {
 }
 
 fn runtime_set_download_progress(id: u64, current_bytes: u64, total_bytes: u64) {
-    RUNTIME_DOWNLOAD_STATE
-        .lock()
-        .unwrap()
-        .set_download_progress(id, current_bytes, total_bytes);
+    let mut state = RUNTIME_DOWNLOAD_STATE.lock().unwrap();
+    if state.set_download_progress(id, current_bytes, total_bytes) {
+        runtime_mark_snapshots_changed();
+    }
 }
 
 fn runtime_finish_download(id: u64, error_message: Option<String>) {
-    RUNTIME_DOWNLOAD_STATE
-        .lock()
-        .unwrap()
-        .finish_download(id, error_message);
+    let mut state = RUNTIME_DOWNLOAD_STATE.lock().unwrap();
+    if state.finish_download(id, error_message) {
+        runtime_mark_snapshots_changed();
+    }
 }
 
 pub fn queue_event_unlock_download<F, L>(
@@ -1052,7 +1087,8 @@ mod tests {
         );
         assert_eq!(state.completion_counts(), (0, 1));
 
-        state.set_download_progress(7, 10, 30);
+        assert!(state.set_download_progress(7, 10, 30));
+        assert!(!state.set_download_progress(7, 10, 30));
         let snapshots = state.snapshots();
         assert_eq!(snapshots.len(), 1);
         let snapshot = &snapshots[0];
@@ -1062,7 +1098,8 @@ mod tests {
         assert!(!snapshot.complete);
         assert_eq!(snapshot.error_message, None);
 
-        state.finish_download(7, Some("failed".to_string()));
+        assert!(state.finish_download(7, Some("failed".to_string())));
+        assert!(!state.finish_download(7, Some("failed".to_string())));
         let snapshots = state.snapshots();
         let snapshot = &snapshots[0];
         assert!(snapshot.complete);
@@ -1085,10 +1122,10 @@ mod tests {
                 QueueDownloadResult::Queued(id)
             );
         }
-        state.set_download_progress(1, 512, 1_024);
-        state.finish_download(1, Some("timed out".to_string()));
-        state.finish_download(2, None);
-        state.set_download_progress(3, 256, 1_024);
+        assert!(state.set_download_progress(1, 512, 1_024));
+        assert!(state.finish_download(1, Some("timed out".to_string())));
+        assert!(state.finish_download(2, None));
+        assert!(state.set_download_progress(3, 256, 1_024));
 
         assert_eq!(
             state.retry_failed(),
@@ -1267,7 +1304,7 @@ mod tests {
             "ITL Unlocks"
         ));
 
-        state.finish_download(1, None);
+        assert!(state.finish_download(1, None));
         assert_eq!(state.take_ready_song_reload_request(), vec![reload_dir]);
         assert!(state.take_ready_song_reload_request().is_empty());
     }

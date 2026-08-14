@@ -6,7 +6,7 @@ use crate::downloads::{
 };
 pub use crate::downloads::{
     runtime_completion_counts as unlock_download_completion_counts,
-    runtime_snapshots as unlock_download_snapshots,
+    runtime_snapshots_if_changed as unlock_download_snapshots_if_changed,
     runtime_take_ready_song_reload_request as take_ready_song_reload_request,
 };
 use deadlib_platform::dirs;

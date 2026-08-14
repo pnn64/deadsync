@@ -1268,6 +1268,12 @@ pub struct App {
     frame_policy: FramePolicy,
     smx_gif_defaults: SmxGifDefaults,
     options_song_pack_generation: u64,
+    /// Last download row generation integrated into Select Music. Rows are
+    /// rebuilt only while the overlay is visible and the worker changes them.
+    select_music_download_generation: u64,
+    select_music_downloads_visible: bool,
+    select_music_shop_generation: u64,
+    select_music_shop_visible: bool,
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
     content_reload: crate::content_reload::Service,
@@ -3399,6 +3405,10 @@ impl App {
             frame_policy,
             smx_gif_defaults,
             options_song_pack_generation: deadsync_simfile::runtime_cache::song_cache_generation(),
+            select_music_download_generation: 0,
+            select_music_downloads_visible: false,
+            select_music_shop_generation: 0,
+            select_music_shop_visible: false,
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
             content_reload: crate::content_reload::Service::default(),
