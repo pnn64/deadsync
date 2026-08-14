@@ -2298,6 +2298,41 @@ pub fn apply_uncommon_chart_transforms(
         }
     }
 
+    if num_players == 2 {
+        let [(first_start, first_end), (second_start, second_end)] = *note_ranges;
+        if first_start == 0
+            && first_end == second_start
+            && second_end == notes.len()
+        {
+            // The normal versus shape is two adjacent player ranges. Retain
+            // player one's chart allocation and move only player two into a
+            // temporary buffer instead of cloning both ranges into a third
+            // chart-sized allocation.
+            let mut second_notes = notes.split_off(first_end);
+            for (player, player_notes) in [&mut *notes, &mut second_notes].into_iter().enumerate() {
+                let effects = player_effects[player];
+                if effects.has_note_masks() {
+                    apply_uncommon_masks_with_masks(
+                        player_notes,
+                        effects.insert_mask,
+                        effects.remove_mask,
+                        effects.holds_mask,
+                        timing_players[player],
+                        player.saturating_mul(cols_per_player),
+                        cols_per_player,
+                        &[],
+                        None,
+                        player,
+                    );
+                }
+            }
+            let second_start = notes.len();
+            notes.append(&mut second_notes);
+            *note_ranges = [(0, second_start), (second_start, notes.len())];
+            return;
+        }
+    }
+
     let mut transformed = Vec::with_capacity(notes.len());
     let mut transformed_ranges = [(0usize, 0usize); MAX_PLAYERS];
 

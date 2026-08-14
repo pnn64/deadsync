@@ -3215,6 +3215,116 @@ pub fn apply_chart_attack_transforms(
         return;
     }
 
+    if active_players == 1 {
+        let (start, end) = note_ranges[0];
+        let end = end.min(notes.len());
+        let start = start.min(end);
+        if start == 0 && end == notes.len() {
+            let attack_player = players[0];
+            apply_chart_attacks_for_mode(
+                notes,
+                attack_player.chart_attacks,
+                attack_player.attack_mode,
+                attack_player.timing_player,
+                0,
+                cols_per_player,
+                0,
+                base_seed,
+                song_length_seconds,
+            );
+            note_ranges[0] = (0, notes.len());
+            note_ranges[1] = note_ranges[0];
+            return;
+        }
+    }
+
+    if active_players == 2 {
+        let [(first_start, first_end), (second_start, second_end)] = *note_ranges;
+        if first_start == 0
+            && first_end == second_start
+            && second_end == notes.len()
+        {
+            let mut second_notes = notes.split_off(first_end);
+            for (player, player_notes) in [&mut *notes, &mut second_notes].into_iter().enumerate() {
+                let attack_player = players[player];
+                if attack_player.has_chart_attacks() {
+                    apply_chart_attacks_for_mode(
+                        player_notes,
+                        attack_player.chart_attacks,
+                        attack_player.attack_mode,
+                        attack_player.timing_player,
+                        player.saturating_mul(cols_per_player),
+                        cols_per_player,
+                        player,
+                        base_seed,
+                        song_length_seconds,
+                    );
+                }
+            }
+            let second_start = notes.len();
+            notes.append(&mut second_notes);
+            *note_ranges = [(0, second_start), (second_start, notes.len())];
+            return;
+        }
+    }
+
+    let mut transformed = Vec::with_capacity(notes.len());
+    let mut transformed_ranges = [(0usize, 0usize); MAX_PLAYERS];
+    for player in 0..active_players {
+        let (start, end) = note_ranges[player];
+        let slice_end = end.min(notes.len());
+        let slice_start = start.min(slice_end);
+        let out_start = transformed.len();
+        let attack_player = players[player];
+        if !attack_player.has_chart_attacks() {
+            transformed.extend_from_slice(&notes[slice_start..slice_end]);
+            transformed_ranges[player] = (out_start, transformed.len());
+            continue;
+        }
+
+        let mut player_notes = notes[slice_start..slice_end].to_vec();
+        apply_chart_attacks_for_mode(
+            &mut player_notes,
+            attack_player.chart_attacks,
+            attack_player.attack_mode,
+            attack_player.timing_player,
+            player.saturating_mul(cols_per_player),
+            cols_per_player,
+            player,
+            base_seed,
+            song_length_seconds,
+        );
+        transformed.extend(player_notes);
+        transformed_ranges[player] = (out_start, transformed.len());
+    }
+
+    if active_players == 1 {
+        transformed_ranges[1] = transformed_ranges[0];
+    }
+    *notes = transformed;
+    *note_ranges = transformed_ranges;
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn apply_chart_attack_transforms_reference(
+    notes: &mut Vec<Note>,
+    note_ranges: &mut [(usize, usize); MAX_PLAYERS],
+    cols_per_player: usize,
+    num_players: usize,
+    players: &[ChartAttackTransformPlayer<'_>; MAX_PLAYERS],
+    base_seed: u64,
+    song_length_seconds: f32,
+) {
+    let active_players = num_players.min(MAX_PLAYERS);
+    if active_players == 0
+        || !players
+            .iter()
+            .take(active_players)
+            .any(|player| player.has_chart_attacks())
+    {
+        return;
+    }
+
     let mut transformed = Vec::with_capacity(notes.len());
     let mut transformed_ranges = [(0usize, 0usize); MAX_PLAYERS];
     for player in 0..active_players {

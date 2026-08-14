@@ -3001,6 +3001,119 @@ mod tests {
     }
 
     #[test]
+    fn chart_attack_single_player_in_place_matches_rebuild() {
+        let timing = test_timing(512 * 12);
+        let source = (0..512)
+            .map(|index| {
+                let row = index * 12;
+                let kind = if index % 17 == 0 {
+                    NoteType::Mine
+                } else {
+                    NoteType::Tap
+                };
+                let mut note = test_note_at(kind, None, false, row, row as f32 / 48.0);
+                note.column = index % 4;
+                note
+            })
+            .collect::<Vec<_>>();
+        let players = [
+            ChartAttackTransformPlayer {
+                chart_attacks: Some("TIME=0:LEN=128:MODS=nomines,wide,mirror"),
+                attack_mode: GameplayAttackMode::On,
+                timing_player: &timing,
+            },
+            ChartAttackTransformPlayer {
+                chart_attacks: None,
+                attack_mode: GameplayAttackMode::On,
+                timing_player: &timing,
+            },
+        ];
+        let mut expected = source.clone();
+        let mut actual = source;
+        let mut expected_ranges = [(0, expected.len()), (99, 100)];
+        let mut actual_ranges = expected_ranges;
+
+        apply_chart_attack_transforms_reference(
+            &mut expected,
+            &mut expected_ranges,
+            4,
+            1,
+            &players,
+            0xA5A5_5A5A,
+            128.0,
+        );
+        apply_chart_attack_transforms(
+            &mut actual,
+            &mut actual_ranges,
+            4,
+            1,
+            &players,
+            0xA5A5_5A5A,
+            128.0,
+        );
+
+        assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+        assert_eq!(actual_ranges, expected_ranges);
+    }
+
+    #[test]
+    fn chart_attack_two_player_split_matches_rebuild() {
+        let timing = test_timing(256 * 12);
+        let mut source = Vec::with_capacity(512);
+        for player in 0..2 {
+            source.extend((0..256).map(|index| {
+                let row = index * 12;
+                let kind = if index % 19 == 0 {
+                    NoteType::Mine
+                } else {
+                    NoteType::Tap
+                };
+                let mut note = test_note_at(kind, None, false, row, row as f32 / 48.0);
+                note.column = player * 4 + index % 4;
+                note
+            }));
+        }
+        let players = [
+            ChartAttackTransformPlayer {
+                chart_attacks: Some("TIME=0:LEN=64:MODS=nomines,wide"),
+                attack_mode: GameplayAttackMode::On,
+                timing_player: &timing,
+            },
+            ChartAttackTransformPlayer {
+                chart_attacks: Some("TIME=0:LEN=64:MODS=mirror,echo"),
+                attack_mode: GameplayAttackMode::On,
+                timing_player: &timing,
+            },
+        ];
+        let mut expected = source.clone();
+        let mut actual = source;
+        let mut expected_ranges = [(0, 256), (256, 512)];
+        let mut actual_ranges = expected_ranges;
+
+        apply_chart_attack_transforms_reference(
+            &mut expected,
+            &mut expected_ranges,
+            4,
+            2,
+            &players,
+            0x1234_5678,
+            64.0,
+        );
+        apply_chart_attack_transforms(
+            &mut actual,
+            &mut actual_ranges,
+            4,
+            2,
+            &players,
+            0x1234_5678,
+            64.0,
+        );
+
+        assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+        assert_eq!(actual_ranges, expected_ranges);
+    }
+
+    #[test]
     fn active_attack_targets_mark_current_runtime_targets_only() {
         let windows = build_attack_mask_windows(&[
             ChartAttackWindow {
@@ -18005,6 +18118,57 @@ mod tests {
         assert_eq!(notes[0].note_type, NoteType::Tap);
         assert_eq!(ranges[0], (0, 1));
         assert_eq!(ranges[1], (0, 1));
+    }
+
+    #[test]
+    fn uncommon_two_player_split_matches_rebuild() {
+        let timing = test_timing(256 * 12);
+        let timing_refs: [&TimingData; MAX_PLAYERS] = std::array::from_fn(|_| &timing);
+        let mut source = Vec::with_capacity(512);
+        for player in 0..2 {
+            source.extend((0..256).map(|index| {
+                let row = index * 12;
+                let kind = if index % 19 == 0 {
+                    NoteType::Mine
+                } else if index % 23 == 0 {
+                    NoteType::Lift
+                } else {
+                    NoteType::Tap
+                };
+                let mut note = test_note_at(kind, None, false, row, row as f32 / 48.0);
+                note.column = player * 4 + index % 4;
+                note
+            }));
+        }
+        let mut effects = [ChartAttackEffects::default(); MAX_PLAYERS];
+        effects[0].insert_mask = INSERT_MASK_BIT_WIDE;
+        effects[0].remove_mask = REMOVE_MASK_BIT_NO_MINES;
+        effects[1].insert_mask = INSERT_MASK_BIT_STOMP;
+        effects[1].remove_mask = REMOVE_MASK_BIT_NO_LIFTS;
+        let mut expected = source.clone();
+        let mut actual = source;
+        let mut expected_ranges = [(0, 256), (256, 512)];
+        let mut actual_ranges = expected_ranges;
+
+        apply_uncommon_chart_transforms_reference(
+            &mut expected,
+            &mut expected_ranges,
+            4,
+            2,
+            &effects,
+            &timing_refs,
+        );
+        apply_uncommon_chart_transforms(
+            &mut actual,
+            &mut actual_ranges,
+            4,
+            2,
+            &effects,
+            &timing_refs,
+        );
+
+        assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+        assert_eq!(actual_ranges, expected_ranges);
     }
 
     #[test]
