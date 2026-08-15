@@ -58,6 +58,15 @@ pub enum ThemeFlowEvent<S> {
 }
 
 impl<S, R> ThemeEffect<S, R> {
+    /// Append this effect to a caller-owned flat handoff buffer.
+    ///
+    /// This is the migration boundary for producers that still return owned
+    /// batches. Direct producers should push their atomic effects into the
+    /// caller's buffer instead.
+    pub fn append_to(self, effects: &mut Vec<Self>) {
+        self.append_flat(effects);
+    }
+
     /// Collapse an ordered effect list into the canonical flat representation.
     ///
     /// Empty and singleton lists do not retain a batch allocation. Nested
@@ -205,6 +214,26 @@ mod tests {
                 ThemeEffect::Navigate(MENU),
                 ThemeEffect::Runtime(2),
             ])
+        );
+    }
+
+    #[test]
+    fn append_to_writes_one_flat_caller_owned_sequence() {
+        let mut effects = Vec::with_capacity(3);
+        ThemeEffect::<ThemeScreenId, u8>::Batch(vec![
+            ThemeEffect::Runtime(1),
+            ThemeEffect::Batch(vec![ThemeEffect::None, ThemeEffect::Navigate(MENU)]),
+            ThemeEffect::Runtime(2),
+        ])
+        .append_to(&mut effects);
+
+        assert_eq!(
+            effects,
+            vec![
+                ThemeEffect::Runtime(1),
+                ThemeEffect::Navigate(MENU),
+                ThemeEffect::Runtime(2),
+            ]
         );
     }
 

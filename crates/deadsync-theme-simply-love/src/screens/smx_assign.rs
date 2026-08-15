@@ -90,10 +90,14 @@ pub fn on_enter(state: &mut State, view: &SmxAssignmentView, return_screen: Scre
     state.lights_pending = true;
 }
 
-pub fn update(state: &mut State, dt: f32, view: &SmxAssignmentView) -> Option<ThemeEffect> {
+pub fn update(
+    state: &mut State,
+    dt: f32,
+    view: &SmxAssignmentView,
+    effects: &mut Vec<ThemeEffect>,
+) {
     sync_view(state, view);
     let connected = connected_count(view);
-    let mut effects = Vec::with_capacity(2);
     // Keep the phase consistent with how many pads are present (hot-plug safe).
     if connected < 2 && state.phase != Phase::NeedTwoPads {
         state.phase = Phase::NeedTwoPads;
@@ -154,11 +158,6 @@ pub fn update(state: &mut State, dt: f32, view: &SmxAssignmentView) -> Option<Th
         effects.push(hardware_effect(
             crate::SimplyLoveHardwareRequest::SetSmxPlayerLights(light_colors(state, view)),
         ));
-    }
-    match effects.len() {
-        0 => None,
-        1 => effects.pop(),
-        _ => Some(ThemeEffect::batch(effects)),
     }
 }
 
@@ -467,28 +466,38 @@ mod tests {
     fn assignment_uses_prepared_input_and_emits_shell_requests() {
         let idle = assignment_view([0, 0]);
         let mut state = init();
+        let mut effects = Vec::with_capacity(2);
         on_enter(&mut state, &idle, crate::screens::Screen::Options);
         assert!(matches!(
-            update(&mut state, 0.0, &idle),
-            Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Hardware(
+            {
+                update(&mut state, 0.0, &idle, &mut effects);
+                effects.as_slice()
+            },
+            [ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Hardware(
                 SimplyLoveHardwareRequest::SetSmxPlayerLights(_)
-            )))
+            ))]
         ));
 
+        effects.clear();
         let p1 = assignment_view([1, 0]);
         assert!(matches!(
-            update(&mut state, 0.0, &p1),
-            Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Hardware(
+            {
+                update(&mut state, 0.0, &p1, &mut effects);
+                effects.as_slice()
+            },
+            [ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Hardware(
                 SimplyLoveHardwareRequest::SetSmxPlayerLights(_)
-            )))
+            ))]
         ));
+
+        effects.clear();
         let released = assignment_view([0, 0]);
-        assert!(update(&mut state, 0.0, &released).is_none());
+        update(&mut state, 0.0, &released, &mut effects);
+        assert!(effects.is_empty());
 
         let p2 = assignment_view([0, 1]);
-        let Some(ThemeEffect::Batch(effects)) = update(&mut state, 0.0, &p2) else {
-            panic!("P2 selection should assign pads and refresh lights");
-        };
+        update(&mut state, 0.0, &p2, &mut effects);
+        assert_eq!(effects.len(), 2);
         assert!(matches!(
             &effects[0],
             ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Hardware(

@@ -741,9 +741,8 @@ fn start_finish(state: &mut State) -> ThemeEffect {
     }
 }
 
-pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
+pub fn update(state: &mut State, dt: f32, effects: &mut Vec<ThemeEffect>) {
     state.elapsed = (state.elapsed + dt).max(0.0);
-    let mut effects = Vec::with_capacity(2);
 
     for p in &mut state.players {
         if state.finish_hold_elapsed.is_none() && update_hold_scroll(p) {
@@ -760,15 +759,8 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     if let Some(t) = &mut state.finish_hold_elapsed {
         *t = (*t + dt).max(0.0);
         if *t >= WHEEL_HIDE_FADE_SECONDS {
-            return Some(ThemeEffect::Navigate(Screen::GameOver));
+            effects.push(ThemeEffect::Navigate(Screen::GameOver));
         }
-        return None;
-    }
-
-    match effects.len() {
-        0 => None,
-        1 => effects.pop(),
-        _ => Some(ThemeEffect::batch(effects)),
     }
 }
 

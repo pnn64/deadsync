@@ -1126,8 +1126,9 @@ impl ScreensState {
         asset_manager: &AssetManager,
         smx_assignment: Option<&SmxAssignmentView>,
         gameplay_smx_input: bool,
-    ) -> (Option<ThemeEffect>, bool) {
-        match self.current_screen {
+        effects: &mut Vec<ThemeEffect>,
+    ) {
+        let (effect, _) = match self.current_screen {
             CurrentScreen::Gameplay => self
                 .gameplay_state
                 .as_mut()
@@ -1189,14 +1190,15 @@ impl ScreensState {
                 overscan_adjustment::update(&mut self.overscan_adjustment_state, delta_time),
                 false,
             ),
-            CurrentScreen::SmxAssignPads => (
+            CurrentScreen::SmxAssignPads => {
                 screens::smx_assign::update(
                     &mut self.smx_assign_state,
                     delta_time,
                     smx_assignment.expect("SMX assignment requires the live assignment view"),
-                ),
-                false,
-            ),
+                    effects,
+                );
+                (None, false)
+            }
             CurrentScreen::PlayerOptions => (
                 self.player_options_state
                     .as_mut()
@@ -1265,10 +1267,10 @@ impl ScreensState {
                 evaluation_summary::update(&mut self.evaluation_summary_state, delta_time);
                 (None, false)
             }
-            CurrentScreen::Initials => (
-                initials::update(&mut self.initials_state, delta_time),
-                false,
-            ),
+            CurrentScreen::Initials => {
+                initials::update(&mut self.initials_state, delta_time, effects);
+                (None, false)
+            }
             CurrentScreen::GameOver => (
                 gameover::update(&mut self.gameover_state, delta_time),
                 false,
@@ -1310,6 +1312,9 @@ impl ScreensState {
                 )
             }
             CurrentScreen::Menu => (None, false),
+        };
+        if let Some(effect) = effect {
+            effect.append_to(effects);
         }
     }
 }
@@ -1533,6 +1538,11 @@ pub struct App {
     gameplay_text_layout_cache: compose::TextLayoutCache,
     ui_compose_scratch: compose::ComposeScratch,
     gameplay_compose_scratch: compose::ComposeScratch,
+    /// Game-thread-owned flat effect handoff, cleared after each frame step.
+    /// Eight entries cover the audited direct producers; legacy owned batches
+    /// may grow it at their existing allocation boundary. Capacity is retained
+    /// for the app lifetime, with no pruning or cross-thread access.
+    theme_effect_scratch: Vec<ThemeEffect>,
     actor_scratch: Vec<Actor>,
     state: AppState,
     software_renderer_threads: u8,
@@ -3108,19 +3118,22 @@ impl App {
                         | CurrentScreen::SelectMusic
                 )
                 .then(crate::smx_config::smx_assignment_view);
-                let (action, _) = self.state.screens.step_idle(
+                let mut effects = std::mem::take(&mut self.theme_effect_scratch);
+                debug_assert!(effects.is_empty());
+                self.state.screens.step_idle(
                     logic_dt,
                     redraw_started,
                     &self.state.session,
                     &self.asset_manager,
                     smx_assignment.as_ref(),
                     self.state.play_input_policy.smx_input,
+                    &mut effects,
                 );
-                if let Some(action) = action
-                    && !matches!(action, ThemeEffect::None)
-                {
-                    let _ = self.handle_action(action, event_loop);
-                }
+                let result = effects
+                    .drain(..)
+                    .try_for_each(|effect| self.handle_single_action(effect, event_loop));
+                self.theme_effect_scratch = effects;
+                let _ = result;
             }
             let current_screen = self.state.screens.current_screen;
             let auto_screenshot_ready = current_screen == CurrentScreen::Evaluation
@@ -3788,6 +3801,7 @@ impl App {
             ),
             ui_compose_scratch: compose::ComposeScratch::default(),
             gameplay_compose_scratch: compose::ComposeScratch::default(),
+            theme_effect_scratch: Vec::with_capacity(8),
             actor_scratch: Vec::with_capacity(256),
             state,
             software_renderer_threads,
