@@ -4208,9 +4208,10 @@ pub(super) mod tests {
         state: &mut super::State,
         key: Option<&deadsync_input::RawKeyboardEvent>,
         text: Option<&str>,
+        ctrl_held: bool,
     ) -> bool {
         let mut effects = Vec::new();
-        super::handle_raw_key_event(state, key, text, &mut effects)
+        super::handle_raw_key_event(state, key, text, ctrl_held, &mut effects)
     }
 
     #[test]
@@ -4262,27 +4263,56 @@ pub(super) mod tests {
         assert!(!music_rate.label.contains('{'));
     }
 
+    /// Open the setting search the way the shell does: Ctrl+F.
+    fn open_search(state: &mut super::State) -> bool {
+        search_key(
+            state,
+            Some(&raw_key(deadsync_input::KeyCode::KeyF)),
+            None,
+            true,
+        )
+    }
+
     #[test]
-    fn slash_opens_and_escape_closes_search() {
+    fn ctrl_f_opens_and_escape_closes_search() {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();
         assert!(!state.search.is_open());
 
-        let effect = search_key(&mut state, None, Some("/"));
+        let effect = open_search(&mut state);
         assert!(effect, "key should be consumed");
         assert!(state.search.is_open());
 
-        search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Escape)), None);
+        search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::Escape)),
+            None,
+            false,
+        );
         assert!(!state.search.is_open());
     }
 
     #[test]
-    fn slash_does_not_open_search_without_keyboard_features() {
+    fn plain_f_without_ctrl_does_not_open_search() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        let effect = search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::KeyF)),
+            None,
+            false,
+        );
+        assert!(!effect, "key should not be consumed");
+        assert!(!state.search.is_open(), "bare F must not open the search");
+    }
+
+    #[test]
+    fn ctrl_f_does_not_open_search_without_keyboard_features() {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();
         state.policy.keyboard_features = false;
 
-        let effect = search_key(&mut state, None, Some("/"));
+        let effect = open_search(&mut state);
         assert!(!effect, "key should not be consumed");
         assert!(
             !state.search.is_open(),
@@ -4291,12 +4321,12 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn slash_that_opened_is_not_added_to_query() {
+    fn ctrl_modified_text_is_not_added_to_query() {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();
-        search_key(&mut state, None, Some("/"));
-        // A redelivered `/` on an empty query must be ignored.
-        search_key(&mut state, None, Some("/"));
+        open_search(&mut state);
+        // Ctrl-modified text (e.g. a redelivered Ctrl+F) must not be typed.
+        search_key(&mut state, None, Some("f"), true);
         if let super::search::SettingSearchState::Open(open) = &state.search {
             assert_eq!(open.query, "");
         } else {
@@ -4310,10 +4340,15 @@ pub(super) mod tests {
         let (mut state, _asset_manager) = setup_state();
         assert_eq!(state.current_pane, OptionsPane::Main);
 
-        search_key(&mut state, None, Some("/"));
+        open_search(&mut state);
         // "Turn" lives on the Advanced pane.
-        search_key(&mut state, None, Some("turn"));
-        search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Enter)), None);
+        search_key(&mut state, None, Some("turn"), false);
+        search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::Enter)),
+            None,
+            false,
+        );
 
         assert!(!state.search.is_open());
         assert_eq!(state.current_pane, OptionsPane::Advanced);
@@ -4328,14 +4363,15 @@ pub(super) mod tests {
     fn backspace_never_closes_search() {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();
-        search_key(&mut state, None, Some("/"));
-        search_key(&mut state, None, Some("ab"));
+        open_search(&mut state);
+        search_key(&mut state, None, Some("ab"), false);
         // Delete both chars, then press Backspace again on the empty query.
         for _ in 0..3 {
             search_key(
                 &mut state,
                 Some(&raw_key(deadsync_input::KeyCode::Backspace)),
                 None,
+                false,
             );
         }
         assert!(
@@ -4346,7 +4382,12 @@ pub(super) mod tests {
             assert_eq!(open.query, "");
         }
         // Escape is the only way out.
-        search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Escape)), None);
+        search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::Escape)),
+            None,
+            false,
+        );
         assert!(!state.search.is_open());
     }
 
@@ -4354,9 +4395,14 @@ pub(super) mod tests {
     fn tab_accepts_ghost_completion() {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();
-        search_key(&mut state, None, Some("/"));
-        search_key(&mut state, None, Some("spe"));
-        search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Tab)), None);
+        open_search(&mut state);
+        search_key(&mut state, None, Some("spe"), false);
+        search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::Tab)),
+            None,
+            false,
+        );
         if let super::search::SettingSearchState::Open(open) = &state.search {
             assert!(open.query.to_ascii_lowercase().starts_with("spe"));
             assert!(open.query.len() > 3, "ghost completion should extend the query");

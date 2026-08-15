@@ -1,6 +1,6 @@
 //! Fuzzy "search for a setting" overlay for Player Options.
 //!
-//! `/` opens a live typeahead: each keystroke re-ranks the visible settings
+//! Ctrl+F opens a live typeahead: each keystroke re-ranks the visible settings
 //! across all four panes, offers a ghost completion (Tab accepts), and Enter
 //! jumps the cursor to the chosen row. Only visible rows are indexed, so hidden
 //! sub-options never appear as dead-end results.

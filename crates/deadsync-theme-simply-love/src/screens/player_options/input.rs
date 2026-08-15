@@ -850,7 +850,7 @@ pub fn handle_input(
     append_pending_effects(state, effect, effects);
 }
 
-/// Raw keyboard entry for the setting search: `/` opens, then typing filters,
+/// Raw keyboard entry for the setting search: Ctrl+F opens, then typing filters,
 /// Tab completes, arrows move, Enter jumps, Escape closes.
 ///
 /// The shell delivers control keys via `key` and typed characters via `text`
@@ -859,13 +859,17 @@ pub fn handle_raw_key_event(
     state: &mut State,
     key: Option<&deadsync_input::RawKeyboardEvent>,
     text: Option<&str>,
+    ctrl_held: bool,
     _effects: &mut Vec<ThemeEffect>,
 ) -> bool {
     use deadsync_input::KeyCode;
 
     // Gated on keyboard_features so keyboard-less cabinets never reach it.
     if !state.search.is_open() {
-        if state.policy.keyboard_features && text == Some("/") {
+        if state.policy.keyboard_features
+            && ctrl_held
+            && key.is_some_and(|k| k.pressed && k.code == KeyCode::KeyF)
+        {
             let opener = search_opener_player(state);
             search::open(state, opener);
             return true;
@@ -892,21 +896,13 @@ pub fn handle_raw_key_event(
     }
 
     if let Some(text) = text {
-        // Ignore the `/` that opened the prompt if it is redelivered as text.
-        if text != "/" || !is_query_empty(state) {
+        // Never type Ctrl-modified text, e.g. a redelivered Ctrl+F.
+        if !ctrl_held {
             search::add_text(state, text);
         }
     }
 
     true
-}
-
-#[inline]
-fn is_query_empty(state: &State) -> bool {
-    matches!(
-        &state.search,
-        search::SettingSearchState::Open(open) if open.query.is_empty()
-    )
 }
 
 /// Slot whose cursor a jump moves: persisted player, else first active, else P1.
