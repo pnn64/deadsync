@@ -131,8 +131,13 @@ pub(super) fn rebuild_matches(state: &State, query: &str) -> Vec<SettingMatch> {
 }
 
 /// Open the overlay for `opener_player`, seeded with the full visible list.
+///
+/// Clears hold state like `switch_to_pane` does: the overlay swallows input, so
+/// a direction held as it opens would never see its release and stay stuck.
 pub(super) fn open(state: &mut State, opener_player: usize) {
     let matches = rebuild_matches(state, "");
+    state.nav_input = [PlayerNavInput::default(); PLAYER_SLOTS];
+    state.start_input = [PlayerStartInput::default(); PLAYER_SLOTS];
     state.search = SettingSearchState::Open(SettingSearchOpen {
         query: String::new(),
         matches,
@@ -142,7 +147,10 @@ pub(super) fn open(state: &mut State, opener_player: usize) {
     });
 }
 
+/// Close the overlay, clearing hold state so nothing leaks into the screen below.
 pub(super) fn close(state: &mut State) {
+    state.nav_input = [PlayerNavInput::default(); PLAYER_SLOTS];
+    state.start_input = [PlayerStartInput::default(); PLAYER_SLOTS];
     state.search = SettingSearchState::Hidden;
 }
 

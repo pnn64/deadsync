@@ -21,8 +21,15 @@ pub fn update(
     let mut pending_action: Option<ThemeEffect> = None;
     sync_selected_rows_with_visibility(state, active);
 
+    // Suppress hold-repeat while the modal is open so a held pad direction
+    // can't scroll the cursor behind it, or away from a row it just jumped to.
+    let search_open = state.search.is_open();
+
     // Hold-to-scroll per player.
     for player_idx in active_player_indices(active) {
+        if search_open {
+            break;
+        }
         let Some(direction) = state.nav_input[player_idx].held_direction else {
             continue;
         };
@@ -73,7 +80,7 @@ pub fn update(
         }
     }
 
-    if arcade_style {
+    if arcade_style && !search_open {
         for player_idx in active_player_indices(active) {
             let action = repeat_held_arcade_start(state, asset_manager, active, player_idx, dt);
             if pending_action.is_none() {

@@ -4335,6 +4335,60 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn opening_search_clears_held_input_state() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        // Simulate a direction held on the pad when the overlay opens.
+        let active = state.active;
+        handle_nav_event(
+            &mut state,
+            &asset_manager,
+            active,
+            P1,
+            NavDirection::Down,
+            true,
+        );
+        assert!(state.nav_input[P1].held_direction.is_some());
+
+        open_search(&mut state);
+        assert!(
+            state.nav_input[P1].held_direction.is_none(),
+            "opening the search must clear held nav state; the modal swallows \
+             the release so it would otherwise stay held forever"
+        );
+
+        // Closing clears it too, so nothing leaks back into the screen.
+        search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::Escape)),
+            None,
+            false,
+        );
+        assert!(state.nav_input[P1].held_direction.is_none());
+    }
+
+    #[test]
+    fn held_direction_does_not_scroll_while_search_is_open() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        open_search(&mut state);
+        // Force a stale hold as if it survived from before the overlay opened.
+        state.nav_input[P1].held_direction = Some(NavDirection::Down);
+        state.nav_input[P1].next_repeat_at = std::time::Duration::ZERO;
+        let before = state.pane().selected_row[P1];
+
+        for _ in 0..10 {
+            update(&mut state, 0.5, &asset_manager, &mut Vec::new());
+        }
+
+        assert_eq!(
+            state.pane().selected_row[P1],
+            before,
+            "cursor must not scroll behind the modal while search is open"
+        );
+    }
+
+    #[test]
     fn enter_jumps_to_matched_setting_across_panes() {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();
