@@ -476,6 +476,22 @@ const fn screen_entry_runtime_views(screen: CurrentScreen) -> u8 {
     }
 }
 
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+pub fn benchmark_smx_screen_work(
+    screen: CurrentScreen,
+    fsr_active: bool,
+    options_lights_active: bool,
+    player_options_lights_active: bool,
+) -> u8 {
+    smx_runtime::screen_work(
+        screen,
+        fsr_active,
+        options_lights_active,
+        player_options_lights_active,
+    )
+}
+
 fn sequence_effects(first: ThemeEffect, second: ThemeEffect) -> ThemeEffect {
     match (first, second) {
         (ThemeEffect::None, second) => second,
@@ -3028,9 +3044,21 @@ impl App {
         let update_started = Instant::now();
         deadlib_present::runtime::tick(logic_dt);
         screens::components::shared::visual_style_bg::tick_global(logic_dt);
-        self.sync_pad_config_fsr(frame_policy.smx);
-        self.drive_smx_options_lights(delta_time, frame_policy.smx);
-        self.drive_smx_player_options_lights(delta_time, frame_policy.smx);
+        let smx_screen_work = smx_runtime::screen_work(
+            self.state.screens.current_screen,
+            self.fsr_pads_active,
+            self.state.screens.smx_options_light_preview.is_active(),
+            self.state.screens.smx_po_light_preview.is_active(),
+        );
+        if smx_screen_work & smx_runtime::PAD_CONFIG_FSR != 0 {
+            self.sync_pad_config_fsr(frame_policy.smx);
+        }
+        if smx_screen_work & smx_runtime::OPTIONS_LIGHTS != 0 {
+            self.drive_smx_options_lights(delta_time, frame_policy.smx);
+        }
+        if smx_screen_work & smx_runtime::PLAYER_OPTIONS_LIGHTS != 0 {
+            self.drive_smx_player_options_lights(delta_time, frame_policy.smx);
+        }
         self.state.shell.interaction.update_message(redraw_started);
         if work_caps & frame_work::ONLINE_VIEW != 0 {
             self.sync_active_online_runtime_view(redraw_started);

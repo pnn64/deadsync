@@ -27,6 +27,11 @@ name = "runtime_view_invalidation"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "screen_service_gating"
+harness = false
+required-features = ["bench-support"]
+
 
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }

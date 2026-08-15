@@ -49,6 +49,8 @@ mod transition_effects;
 mod window;
 mod window_state;
 
+#[cfg(feature = "bench-support")]
+pub use app::benchmark_smx_screen_work;
 pub(crate) use command::Command;
 #[cfg(feature = "bench-support")]
 pub use content_reload::{benchmark_receive_ready, benchmark_sample_progress};

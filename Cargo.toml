@@ -71,7 +71,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.5.612"
+version = "0.5.613"
 
 [[bin]]
 name = "generate_pseudo"

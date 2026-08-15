@@ -1,19 +1,49 @@
 use super::{App, SmxFramePolicy};
 use crate::navigation::TransitionState;
 use crate::pad_config::{
-    PadConfigFsrTarget, apply_pad_commands, pad_config_fsr_frame_needed, pad_config_fsr_plan,
-    pad_config_profile_cursor, pad_config_profile_entries,
+    PadConfigFsrTarget, apply_pad_commands, pad_config_fsr_plan, pad_config_profile_cursor,
+    pad_config_profile_entries,
 };
 use crate::smx_config::{
     SmxAssignmentSource, resolve_smx_pad_config, smx_autoprompt_plan, smx_light_brightness_plan,
-    smx_light_preview_restore_auto, smx_options_light_frame_needed,
-    smx_options_light_preview_active, smx_player_options_light_frame_needed,
+    smx_light_preview_restore_auto, smx_options_light_preview_active,
     smx_player_options_light_preview_allowed, smx_runtime_assignment_plan,
 };
 use deadsync_config::prelude as config;
 use deadsync_profile::{compat as profile, pad_config as pad_profile_data, pad_config_sync};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::screens::{self, options, player_options};
+
+pub(super) const PAD_CONFIG_FSR: u8 = 1 << 0;
+pub(super) const OPTIONS_LIGHTS: u8 = 1 << 1;
+pub(super) const PLAYER_OPTIONS_LIGHTS: u8 = 1 << 2;
+
+/// Screen-owned SMX work plus one-frame teardown for services that were active
+/// on the preceding frame. One screen match replaces three independent
+/// per-service screen checks on steady unrelated frames.
+pub(super) const fn screen_work(
+    screen: CurrentScreen,
+    fsr_active: bool,
+    options_lights_active: bool,
+    player_options_lights_active: bool,
+) -> u8 {
+    let mut work = match screen {
+        CurrentScreen::ConfigurePads | CurrentScreen::SelectMusic => PAD_CONFIG_FSR,
+        CurrentScreen::Options => OPTIONS_LIGHTS,
+        CurrentScreen::PlayerOptions => PLAYER_OPTIONS_LIGHTS,
+        _ => 0,
+    };
+    if fsr_active {
+        work |= PAD_CONFIG_FSR;
+    }
+    if options_lights_active {
+        work |= OPTIONS_LIGHTS;
+    }
+    if player_options_lights_active {
+        work |= PLAYER_OPTIONS_LIGHTS;
+    }
+    work
+}
 
 impl App {
     /// Drive the Configure Pads screen: enable live FSR reads while it's open,
@@ -22,9 +52,6 @@ impl App {
     pub(super) fn sync_pad_config_fsr(&mut self, policy: SmxFramePolicy) {
         use screens::pad_config;
         let screen = self.state.screens.current_screen;
-        if !pad_config_fsr_frame_needed(screen, self.fsr_pads_active) {
-            return;
-        }
         pad_config::set_fsr_enabled(&mut self.state.screens.pad_config_state, policy.use_fsrs);
         pad_config::set_fsr_enabled(
             &mut self.state.screens.select_music_state.pad_config_overlay,
@@ -248,12 +275,6 @@ impl App {
     /// in one place.)
     pub(super) fn drive_smx_options_lights(&mut self, dt: f32, policy: SmxFramePolicy) {
         let screen = self.state.screens.current_screen;
-        if !smx_options_light_frame_needed(
-            screen,
-            self.state.screens.smx_options_light_preview.is_active(),
-        ) {
-            return;
-        }
         let active = smx_options_light_preview_active(
             screen,
             policy.input,
@@ -287,12 +308,6 @@ impl App {
     /// SDK coalesces light writes to the pad's refresh rate.
     pub(super) fn drive_smx_player_options_lights(&mut self, dt: f32, policy: SmxFramePolicy) {
         let screen = self.state.screens.current_screen;
-        if !smx_player_options_light_frame_needed(
-            screen,
-            self.state.screens.smx_po_light_preview.is_active(),
-        ) {
-            return;
-        }
         let preview = smx_player_options_light_preview_allowed(screen, policy.input)
             .then(|| {
                 self.state
@@ -441,6 +456,90 @@ impl App {
         if plan.apply {
             self.smx_light_brightness = plan.resolved;
             deadsync_smx::set_light_brightness(plan.resolved);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const fn former_screen_work(
+        screen: CurrentScreen,
+        fsr_active: bool,
+        options_lights_active: bool,
+        player_options_lights_active: bool,
+    ) -> u8 {
+        let mut work = 0;
+        if fsr_active
+            || matches!(
+                screen,
+                CurrentScreen::ConfigurePads | CurrentScreen::SelectMusic
+            )
+        {
+            work |= PAD_CONFIG_FSR;
+        }
+        if options_lights_active || matches!(screen, CurrentScreen::Options) {
+            work |= OPTIONS_LIGHTS;
+        }
+        if player_options_lights_active || matches!(screen, CurrentScreen::PlayerOptions) {
+            work |= PLAYER_OPTIONS_LIGHTS;
+        }
+        work
+    }
+
+    #[test]
+    fn screen_work_gates_owners_and_preserves_teardown() {
+        assert_eq!(screen_work(CurrentScreen::Menu, false, false, false), 0);
+        assert_eq!(
+            screen_work(CurrentScreen::ConfigurePads, false, false, false),
+            PAD_CONFIG_FSR
+        );
+        assert_eq!(
+            screen_work(CurrentScreen::SelectMusic, false, false, false),
+            PAD_CONFIG_FSR
+        );
+        assert_eq!(
+            screen_work(CurrentScreen::Options, false, false, false),
+            OPTIONS_LIGHTS
+        );
+        assert_eq!(
+            screen_work(CurrentScreen::PlayerOptions, false, false, false),
+            PLAYER_OPTIONS_LIGHTS
+        );
+        assert_eq!(
+            screen_work(CurrentScreen::Gameplay, true, true, true),
+            PAD_CONFIG_FSR | OPTIONS_LIGHTS | PLAYER_OPTIONS_LIGHTS
+        );
+
+        for screen in [
+            CurrentScreen::Menu,
+            CurrentScreen::Gameplay,
+            CurrentScreen::ConfigurePads,
+            CurrentScreen::SelectMusic,
+            CurrentScreen::Options,
+            CurrentScreen::PlayerOptions,
+            CurrentScreen::SmxAssignPads,
+        ] {
+            for flags in 0u8..8 {
+                let fsr_active = flags & 1 != 0;
+                let options_lights_active = flags & 2 != 0;
+                let player_options_lights_active = flags & 4 != 0;
+                assert_eq!(
+                    screen_work(
+                        screen,
+                        fsr_active,
+                        options_lights_active,
+                        player_options_lights_active,
+                    ),
+                    former_screen_work(
+                        screen,
+                        fsr_active,
+                        options_lights_active,
+                        player_options_lights_active,
+                    )
+                );
+            }
         }
     }
 }
