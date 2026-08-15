@@ -719,6 +719,9 @@ impl DynamicMedia {
         const FALLBACK_KEY: &str = "__black";
 
         let Some(path) = desired_path else {
+            if self.gameplay_background_settled(None, None, false, timing) {
+                return None;
+            }
             self.failed_gameplay_background_key = None;
             self.reset_pending_gameplay_background();
             let had_background = self.current_dynamic_background.is_some();
@@ -729,19 +732,25 @@ impl DynamicMedia {
             .map(Cow::Borrowed)
             .unwrap_or_else(|| path.to_string_lossy());
         let desired_key = desired_key.as_ref();
-        if self.failed_gameplay_background_key.as_deref() != Some(desired_key) {
-            self.failed_gameplay_background_key = None;
-        }
         let wants_video = animate_video && dynamic::is_dynamic_video_path(path);
         let timing = BgVideoTiming {
             rate: dynamic::normalize_video_rate(timing.rate),
             ..timing
         };
+        if !wants_video || self.failed_gameplay_background_key.as_deref() != Some(desired_key) {
+            self.failed_gameplay_background_key = None;
+        }
+        if self.gameplay_background_settled(Some(path), Some(desired_key), wants_video, timing) {
+            return None;
+        }
 
         if wants_video {
             self.drain_gameplay_background_preps(assets, backend, desired_key, timing);
         } else {
             self.reset_pending_gameplay_background();
+        }
+        if self.gameplay_background_settled(Some(path), Some(desired_key), wants_video, timing) {
+            return None;
         }
 
         if !assets.has_texture_key(desired_key) {
@@ -754,23 +763,6 @@ impl DynamicMedia {
                 self.destroy_current_dynamic_background(assets, backend);
                 return Some(FALLBACK_KEY.to_string());
             }
-            return None;
-        }
-
-        let current_matches = self
-            .current_dynamic_background
-            .as_ref()
-            .is_some_and(|state| {
-                state.path == path
-                    && state.key == desired_key
-                    && (state.video.is_some() == wants_video)
-                    && (!wants_video || (state.video_rate() - timing.rate).abs() <= f32::EPSILON)
-                    && (!wants_video
-                        || timing.start_sec.is_none_or(|start| {
-                            (state.video_start_sec() - start).abs() <= f32::EPSILON
-                        }))
-            });
-        if current_matches {
             return None;
         }
 
@@ -827,6 +819,50 @@ impl DynamicMedia {
             self.spawn_gameplay_background_prep(path);
         }
         None
+    }
+
+    /// Whether the game-thread-owned background state needs no maintenance.
+    ///
+    /// A settled frame performs only bounded field/path comparisons. It does
+    /// not poll worker channels, query texture registries, allocate, evict, or
+    /// destroy resources. Pending video work keeps the request unsettled until
+    /// its bounded completion drain finishes; a failed video request saturates
+    /// on its prewarmed poster until the desired path or mode changes.
+    fn gameplay_background_settled(
+        &self,
+        desired_path: Option<&Path>,
+        desired_key: Option<&str>,
+        wants_video: bool,
+        timing: BgVideoTiming,
+    ) -> bool {
+        if !self.pending_gameplay_background_preps.is_empty() {
+            return false;
+        }
+        let Some(path) = desired_path else {
+            return self.current_dynamic_background.is_none()
+                && self.failed_gameplay_background_key.is_none();
+        };
+        let Some(key) = desired_key else {
+            return false;
+        };
+        let Some(state) = self.current_dynamic_background.as_ref() else {
+            return false;
+        };
+        if state.path != path || state.key != key {
+            return false;
+        }
+        if state.video.is_some() == wants_video
+            && (!wants_video || (state.video_rate() - timing.rate).abs() <= f32::EPSILON)
+            && (!wants_video
+                || timing
+                    .start_sec
+                    .is_none_or(|start| (state.video_start_sec() - start).abs() <= f32::EPSILON))
+        {
+            return true;
+        }
+        wants_video
+            && state.video.is_none()
+            && self.failed_gameplay_background_key.as_deref() == Some(key)
     }
 
     pub fn sync_active_song_lua_videos(
@@ -1387,6 +1423,64 @@ mod tests {
         );
         assert_eq!(state.video_start_sec(), -1.0);
         assert_eq!(state.video_play_time(1.0), 1.0);
+    }
+
+    #[test]
+    fn absent_gameplay_background_settles_only_without_pending_state() {
+        let timing = BgVideoTiming {
+            current_sec: 4.0,
+            start_sec: None,
+            rate: 1.0,
+        };
+        let mut media = DynamicMedia::new();
+
+        assert!(media.gameplay_background_settled(None, None, false, timing));
+
+        media
+            .pending_gameplay_background_preps
+            .insert("old.mp4".to_owned());
+        assert!(!media.gameplay_background_settled(None, None, false, timing));
+        media.pending_gameplay_background_preps.clear();
+
+        media.failed_gameplay_background_key = Some("old.mp4".to_owned());
+        assert!(!media.gameplay_background_settled(None, None, false, timing));
+    }
+
+    #[test]
+    fn gameplay_background_settles_static_and_failed_video_posters() {
+        let path = Path::new("background.png");
+        let key = "background.png";
+        let timing = BgVideoTiming {
+            current_sec: 12.0,
+            start_sec: Some(3.0),
+            rate: 1.25,
+        };
+        let mut media = DynamicMedia::new();
+        media.current_dynamic_background = Some(DynamicBackgroundState::new(
+            key.to_owned(),
+            1,
+            path.to_path_buf(),
+            None,
+            0.0,
+            1.0,
+        ));
+
+        assert!(media.gameplay_background_settled(Some(path), Some(key), false, timing));
+        assert!(!media.gameplay_background_settled(
+            Some(Path::new("next.png")),
+            Some("next.png"),
+            false,
+            timing,
+        ));
+        assert!(!media.gameplay_background_settled(Some(path), Some(key), true, timing));
+
+        media.failed_gameplay_background_key = Some(key.to_owned());
+        assert!(media.gameplay_background_settled(Some(path), Some(key), true, timing));
+
+        media
+            .pending_gameplay_background_preps
+            .insert(key.to_owned());
+        assert!(!media.gameplay_background_settled(Some(path), Some(key), true, timing));
     }
 
     #[test]
