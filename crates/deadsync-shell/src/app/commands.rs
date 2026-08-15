@@ -1,7 +1,7 @@
 use super::App;
 use crate::command::{
-    BannerSlot, Command, DeferredCommandEffect, DeferredCommandResourceContext,
-    execute_command_resources, log_command_timing_for_screen,
+    BannerSlot, Command, CommandContext, CommandEffect, execute_command_resources,
+    log_command_timing_for_screen,
 };
 use deadsync_config::prelude as config;
 use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
@@ -28,7 +28,7 @@ impl App {
         command: Command,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
-        let context = self.deferred_command_context();
+        let context = self.command_context();
         let result = execute_command_resources(
             command,
             &mut self.state.session,
@@ -37,13 +37,13 @@ impl App {
             self.backend.as_mut(),
             context,
         );
-        self.apply_deferred_effect(result.effect, Some(event_loop));
+        self.apply_command_effect(result.effect, Some(event_loop));
         log_command_timing_for_screen(result.timing, self.state.screens.current_screen);
         Ok(())
     }
 
-    fn deferred_command_context(&self) -> DeferredCommandResourceContext {
-        DeferredCommandResourceContext {
+    fn command_context(&self) -> CommandContext {
+        CommandContext {
             current_screen: self.state.screens.current_screen,
             select_music_color_index: self.state.screens.select_music_state.active_color_index,
             select_course_color_index: self.state.screens.select_course_state.active_color_index,
@@ -71,19 +71,19 @@ impl App {
             .unwrap_or(0.0)
     }
 
-    fn apply_deferred_effect(
+    fn apply_command_effect(
         &mut self,
-        effect: DeferredCommandEffect,
+        effect: CommandEffect,
         event_loop: Option<&ActiveEventLoop>,
     ) {
         match effect {
-            DeferredCommandEffect::None => {}
-            DeferredCommandEffect::ExitNow => {
+            CommandEffect::None => {}
+            CommandEffect::ExitNow => {
                 if let Some(event_loop) = event_loop {
                     event_loop.exit();
                 }
             }
-            DeferredCommandEffect::Shutdown => {
+            CommandEffect::Shutdown => {
                 if let Err(e) = deadlib_platform::power::shutdown_host() {
                     warn!("host shutdown failed; exiting application only: {e}");
                 }
@@ -91,7 +91,7 @@ impl App {
                     event_loop.exit();
                 }
             }
-            DeferredCommandEffect::Banner { slot, key } => match slot {
+            CommandEffect::Banner { slot, key } => match slot {
                 BannerSlot::SelectCourse => {
                     self.state.screens.select_course_state.current_banner_key = key;
                 }
@@ -99,10 +99,10 @@ impl App {
                     self.state.screens.select_music_state.current_banner_key = key;
                 }
             },
-            DeferredCommandEffect::CdTitle(key) => {
+            CommandEffect::CdTitle(key) => {
                 self.state.screens.select_music_state.current_cdtitle_key = key;
             }
-            DeferredCommandEffect::DensityGraph { slot, mesh } => match slot {
+            CommandEffect::DensityGraph { slot, mesh } => match slot {
                 DensityGraphSlot::SelectMusicP1 => {
                     self.state.screens.select_music_state.current_graph_mesh = mesh;
                     self.state.screens.select_music_state.current_graph_key =
@@ -114,7 +114,7 @@ impl App {
                         WHITE_GRAPH_KEY.to_string();
                 }
             },
-            DeferredCommandEffect::DynamicBackground(media) => {
+            CommandEffect::DynamicBackground(media) => {
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
                     let was_dirty = gs.background_path_dirty;
                     gs.current_background_path = media.path.clone();
