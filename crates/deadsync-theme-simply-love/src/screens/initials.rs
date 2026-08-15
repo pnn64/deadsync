@@ -5,7 +5,7 @@ use crate::assets::{FontRole, machine_font_key};
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PostSelectStageView, PostSongPlayerView, PostSongRuntimeView};
-use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
 use deadsync_input::{InputEvent, VirtualAction};
@@ -109,13 +109,19 @@ struct ChartScoreCache {
 
 #[derive(Clone, Debug)]
 struct HighScoreRow {
-    rank: String,
-    name: String,
-    score: String,
-    date: String,
+    rank: Arc<str>,
+    name: Arc<str>,
+    score: Arc<str>,
+    date: Arc<str>,
     is_highlight: bool,
 }
 
+/// Actor-ready leaderboard rows owned by the game thread for one Initials screen.
+///
+/// `set_highscore_lists` warms at most five rows per player and selected stage.
+/// There are no live misses, insertions, eviction, locking, or background work;
+/// replacing the screen drops every row. Focused list tests cover construction,
+/// and the actor path performs at most twenty `Arc` clones per joined player.
 #[derive(Clone, Debug)]
 struct StageHighScores {
     rows: Vec<HighScoreRow>,
@@ -494,30 +500,30 @@ fn build_stage_highscores(
 
     for rank in lower..=upper {
         let entry = entries.get(rank.saturating_sub(1) as usize);
-        let (name, score, date) = if let Some(entry) = entry {
+        let (name, score, date): (Arc<str>, Arc<str>, Arc<str>) = if let Some(entry) = entry {
             let name = {
                 let trimmed = entry.name.trim();
                 if trimmed.is_empty() {
-                    "----".to_string()
+                    Arc::from("----")
                 } else {
-                    entry.name.clone()
+                    Arc::from(entry.name.as_str())
                 }
             };
             (
                 name,
-                highscore_text_score(entry.score),
-                format_highscore_date(&entry.date),
+                Arc::from(highscore_text_score(entry.score)),
+                Arc::from(format_highscore_date(&entry.date)),
             )
         } else {
             (
-                "----".to_string(),
-                "------".to_string(),
-                "----------".to_string(),
+                Arc::from("----"),
+                Arc::from("------"),
+                Arc::from("----------"),
             )
         };
 
         rows.push(HighScoreRow {
-            rank: format!("{rank}."),
+            rank: Arc::from(format!("{rank}.")),
             name,
             score,
             date,
@@ -595,7 +601,7 @@ fn player_entry_for(player: &PostSongPlayerView) -> PlayerEntry {
     let can_enter = persistent;
 
     let name = if persistent {
-        player.player_initials.clone()
+        sanitize_name(&player.player_initials)
     } else {
         String::new()
     };
@@ -1112,7 +1118,7 @@ fn build_highscore_list(
 
         children.push(act!(text:
             font("miso"):
-            settext(row.rank.clone()):
+            settext(Arc::clone(&row.rank)):
             align(1.0, 0.0):
             xy(rank_x, y):
             zoom(HIGHSCORE_TEXT_ZOOM):
@@ -1122,7 +1128,7 @@ fn build_highscore_list(
         ));
         children.push(act!(text:
             font("miso"):
-            settext(row.name.clone()):
+            settext(Arc::clone(&row.name)):
             align(0.0, 0.0):
             xy(name_x, y):
             zoom(HIGHSCORE_TEXT_ZOOM):
@@ -1132,7 +1138,7 @@ fn build_highscore_list(
         ));
         children.push(act!(text:
             font("miso"):
-            settext(row.score.clone()):
+            settext(Arc::clone(&row.score)):
             align(0.0, 0.0):
             xy(score_x, y):
             zoom(HIGHSCORE_TEXT_ZOOM):
@@ -1142,7 +1148,7 @@ fn build_highscore_list(
         ));
         children.push(act!(text:
             font("miso"):
-            settext(row.date.clone()):
+            settext(Arc::clone(&row.date)):
             align(0.0, 0.0):
             xy(date_x, y):
             zoom(HIGHSCORE_TEXT_ZOOM):
@@ -1197,9 +1203,11 @@ fn build_player_frame(side: profile_data::PlayerSide, state: &State) -> Actor {
 
     if p.can_enter {
         // PlayerName text (stays visible even after finishing input).
+        let name = TextContent::inline_str(&p.name)
+            .expect("sanitized player initials fit the inline text payload");
         children.push(act!(text:
             font(headline_font):
-            settext(p.name.clone()):
+            settext(name):
             align(0.0, 0.5):
             xy(PLAYERNAME_X, 0.0):
             zoom(0.75):
@@ -1316,6 +1324,19 @@ mod tests {
     use super::*;
     use deadsync_core::input::InputSource;
 
+    fn leaderboard_entry(rank: u32, name: &str, score: f64) -> score_data::LeaderboardEntry {
+        score_data::LeaderboardEntry {
+            rank,
+            name: name.to_owned(),
+            machine_tag: None,
+            score,
+            date: "2026-08-15".to_owned(),
+            is_rival: false,
+            is_self: false,
+            is_fail: false,
+        }
+    }
+
     fn player(focus_char_index1: i32, name: &str) -> PlayerEntry {
         PlayerEntry {
             joined: true,
@@ -1358,6 +1379,37 @@ mod tests {
         assert_eq!(stage_index_for(12.0, 3), 0);
         assert_eq!(stage_index_for(f32::NAN, 3), 0);
         assert_eq!(stage_index_for(5.0, 0), 0);
+    }
+
+    #[test]
+    fn highscore_rows_retain_actor_ready_shared_text() {
+        let rows = build_stage_highscores(&[leaderboard_entry(1, "AAA", 9987.0)], Some(1));
+        assert_eq!(rows.rows.len(), HIGHSCORE_ROW_COUNT);
+
+        let first = &rows.rows[0];
+        assert_eq!(first.rank.as_ref(), "1.");
+        assert_eq!(first.name.as_ref(), "AAA");
+        assert_eq!(first.score.as_ref(), "99.87%");
+        assert!(first.is_highlight);
+        let cloned_name = Arc::clone(&first.name);
+        assert!(Arc::ptr_eq(&cloned_name, &first.name));
+
+        let empty = &rows.rows[1];
+        assert_eq!(empty.name.as_ref(), "----");
+        assert_eq!(empty.score.as_ref(), "------");
+        assert_eq!(empty.date.as_ref(), "----------");
+    }
+
+    #[test]
+    fn player_entry_sanitizes_initials_for_inline_actor_text() {
+        let mut player = PostSongPlayerView {
+            joined: true,
+            guest: false,
+            ..Default::default()
+        };
+        player.player_initials = "ab?c!".to_owned();
+
+        assert_eq!(player_entry_for(&player).name, "AB?C");
     }
 
     #[test]

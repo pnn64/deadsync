@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::assets::i18n::tr;
+use crate::assets::i18n::{self, tr};
 use crate::assets::{FontRole, machine_font_key};
 use crate::effects::{sfx, sfx_then};
 use crate::rgba_const;
@@ -99,14 +99,12 @@ const TEXT_CACHE_LIMIT: usize = 4096;
 
 thread_local! {
     static SCORE_PERCENT_CACHE: RefCell<TextCache<u64>> = RefCell::new(text_cache_with_capacity(1024));
-    static UINT_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(1024));
 }
 
 #[inline(always)]
-fn cached_u32_text(value: u32) -> Arc<str> {
-    cached_text(&UINT_TEXT_CACHE, value, TEXT_CACHE_LIMIT, || {
-        value.to_string()
-    })
+fn zero_count_text() -> Arc<str> {
+    static ZERO: OnceLock<Arc<str>> = OnceLock::new();
+    ZERO.get_or_init(|| Arc::<str>::from("0")).clone()
 }
 
 #[inline(always)]
@@ -116,9 +114,33 @@ fn unknown_text() -> Arc<str> {
 }
 
 #[inline(always)]
+fn empty_text() -> Arc<str> {
+    static EMPTY: OnceLock<Arc<str>> = OnceLock::new();
+    EMPTY.get_or_init(|| Arc::<str>::from("")).clone()
+}
+
+#[inline(always)]
+fn missing_step_index_text() -> Arc<str> {
+    static MISSING: OnceLock<Arc<str>> = OnceLock::new();
+    MISSING.get_or_init(|| Arc::<str>::from("#-")).clone()
+}
+
+#[inline(always)]
+fn zero_time_text() -> Arc<str> {
+    static ZERO: OnceLock<Arc<str>> = OnceLock::new();
+    ZERO.get_or_init(|| Arc::<str>::from("0:00")).clone()
+}
+
+#[inline(always)]
 fn placeholder_score_percent() -> Arc<str> {
     static UNKNOWN: OnceLock<Arc<str>> = OnceLock::new();
     UNKNOWN.get_or_init(|| Arc::<str>::from("??.??%")).clone()
+}
+
+#[inline(always)]
+fn placeholder_name_text() -> Arc<str> {
+    static PLACEHOLDER: OnceLock<Arc<str>> = OnceLock::new();
+    PLACEHOLDER.get_or_init(|| Arc::<str>::from("----")).clone()
 }
 
 #[inline(always)]
@@ -136,12 +158,37 @@ fn cached_score_percent_text(score_percent: f64) -> Arc<str> {
     )
 }
 
+/// Immutable actor-ready text compiled with resolved course metadata.
+///
+/// The game thread builds each entry once during Select Course initialization.
+/// Values live for the screen, have no miss/eviction path or background work,
+/// and are dropped with the metadata map. Actor frames clone fixed `Arc`s; the
+/// worst-case text work is therefore bounded by the visible row count.
 #[derive(Clone, Debug)]
 struct CourseSongEntry {
-    title: String,
+    title: Arc<str>,
     difficulty: String,
-    meter: Option<u32>,
-    step_artist: String,
+    meter_text: Arc<str>,
+    index_text: Arc<str>,
+    step_artist: Arc<str>,
+}
+
+impl CourseSongEntry {
+    fn new(
+        title: String,
+        difficulty: String,
+        meter: u32,
+        index: usize,
+        step_artist: String,
+    ) -> Self {
+        Self {
+            title: title.into(),
+            difficulty,
+            meter_text: meter.to_string().into(),
+            index_text: format!("#{}", index + 1).into(),
+            step_artist: step_artist.into(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -151,7 +198,7 @@ struct CourseMeta {
     score_hash: String,
     name: String,
     scripter: String,
-    description: String,
+    description: Arc<str>,
     banner_path: Option<PathBuf>,
     ratings: Vec<Option<CourseRatingMeta>>,
     default_rating_index: usize,
@@ -168,17 +215,215 @@ struct CourseMeta {
 struct CourseRatingMeta {
     course_difficulty: Difficulty,
     entries: Vec<CourseSongEntry>,
-    totals: CourseTotals,
-    rated_entry_count: usize,
+    stats_text: CourseStatsText,
     course_difficulty_name: String,
     course_stepchart_label: String,
     course_meter: Option<u32>,
-    meter_sum: u32,
-    meter_count: usize,
+    course_meter_text: Arc<str>,
+    entry_count_text: Arc<str>,
     min_bpm: Option<f64>,
     max_bpm: Option<f64>,
     total_length_seconds: i32,
     runtime_stages: Vec<CourseStagePlan>,
+}
+
+/// Immutable actor-ready stat text compiled with each course rating.
+///
+/// The game thread creates this fixed six-string value during Select Course
+/// initialization. It lives with course metadata for the screen and has no
+/// misses, growth, eviction, locking, or background work. Actor frames only
+/// clone its `Arc`s, teardown runs on the game thread, focused tests provide
+/// instrumentation, and worst-case frame work is six reference-count bumps.
+#[derive(Clone, Debug)]
+struct CourseStatsText {
+    steps: Arc<str>,
+    jumps: Arc<str>,
+    holds: Arc<str>,
+    mines: Arc<str>,
+    hands: Arc<str>,
+    rolls: Arc<str>,
+}
+
+impl CourseStatsText {
+    fn new(totals: &CourseTotals, has_rated_entries: bool) -> Self {
+        if !has_rated_entries {
+            return Self::unknown();
+        }
+        Self {
+            steps: totals.steps.to_string().into(),
+            jumps: totals.jumps.to_string().into(),
+            holds: totals.holds.to_string().into(),
+            mines: totals.mines.to_string().into(),
+            hands: totals.hands.to_string().into(),
+            rolls: totals.rolls.to_string().into(),
+        }
+    }
+
+    fn unknown() -> Self {
+        Self {
+            steps: unknown_text(),
+            jumps: unknown_text(),
+            holds: unknown_text(),
+            mines: unknown_text(),
+            hands: unknown_text(),
+            rolls: unknown_text(),
+        }
+    }
+}
+
+/// Fixed Select Course score-pane presentation owned by the game thread.
+///
+/// Four shared strings live for the screen and are rebuilt only when the shell
+/// supplies changed score data. There is no per-frame miss path, growth,
+/// eviction, locking, or background work; replacement and teardown drop values
+/// on the game thread. Focused synchronization tests provide instrumentation,
+/// and worst-case rebuild work is four short string conversions.
+struct CourseScoreText {
+    machine_name: Arc<str>,
+    machine_score: Arc<str>,
+    player_name: Arc<str>,
+    player_score: Arc<str>,
+}
+
+impl CourseScoreText {
+    fn new(view: &SelectCourseScoreView) -> Self {
+        let (player_name, player_score) = view.player_score_percent.map_or_else(
+            || (placeholder_name_text(), placeholder_score_percent()),
+            |score| {
+                (
+                    Arc::from(view.player_initials.as_str()),
+                    cached_score_percent_text(score),
+                )
+            },
+        );
+        let (machine_name, machine_score) =
+            match (view.machine_initials.as_deref(), view.machine_score_percent) {
+                (Some(initials), Some(score)) => {
+                    (Arc::from(initials), cached_score_percent_text(score))
+                }
+                _ => (placeholder_name_text(), placeholder_score_percent()),
+            };
+        Self {
+            machine_name,
+            machine_score,
+            player_name,
+            player_score,
+        }
+    }
+}
+
+/// Actor-ready course summary presentation owned by the game thread.
+///
+/// A fixed four-string value is populated during screen initialization, lives
+/// for the screen, and is rebuilt only when course selection, rating, or music
+/// rate changes. There is no per-frame miss path, growth, eviction, locking, or
+/// background work; replacement and teardown happen on the game thread. Focused
+/// formatting tests provide instrumentation, and worst-case rebuild work is
+/// bounded BPM and duration formatting.
+struct CourseSummaryText {
+    songs: Arc<str>,
+    bpm: Arc<str>,
+    length: Arc<str>,
+    description: Arc<str>,
+}
+
+impl CourseSummaryText {
+    fn empty() -> Self {
+        Self {
+            songs: zero_count_text(),
+            bpm: unknown_text(),
+            length: zero_time_text(),
+            description: empty_text(),
+        }
+    }
+
+    fn selected(
+        songs: Arc<str>,
+        min_bpm: Option<f64>,
+        max_bpm: Option<f64>,
+        length_seconds: i32,
+        music_rate: f32,
+        description: Arc<str>,
+    ) -> Self {
+        Self {
+            songs,
+            bpm: format_bpm_range(min_bpm, max_bpm).into(),
+            length: format_len(((length_seconds.max(0) as f32) / music_rate).round() as i32).into(),
+            description,
+        }
+    }
+}
+
+/// Resolved course selection owned by the game thread.
+///
+/// This fixed view is populated during screen initialization and refreshed at
+/// wheel or rating transitions. It lives for the screen, performs one bounded
+/// metadata lookup on a course change, and has no frame-time misses, growth,
+/// eviction, locking, or background work. Replacement and teardown happen on
+/// the game thread; selection tests provide instrumentation, and actor-frame
+/// lookup cost is a borrowed field access.
+#[derive(Default)]
+struct CourseSelection {
+    meta: Option<Arc<CourseMeta>>,
+    rating_index: usize,
+}
+
+/// Game-thread-owned, fixed-size translated text for Select Course's stable
+/// actor labels.
+///
+/// The 14 entries are loaded during screen initialization and refreshed only
+/// after the observable locale revision changes. There is no miss or eviction
+/// path, replaced `Arc`s are released on the game thread, and steady-frame work
+/// is one atomic revision load. Sync's result is test-visible; the bounded
+/// refresh cost is 14 language-map lookups.
+struct SelectCourseLabels {
+    revision: u64,
+    title: Arc<str>,
+    songs: Arc<str>,
+    bpm: Arc<str>,
+    length: Arc<str>,
+    step_artist: Arc<str>,
+    select_hint: Arc<str>,
+    pick_prompt: Arc<str>,
+    options_prompt: Arc<str>,
+    entering_options: Arc<str>,
+    exit_prompt: Arc<str>,
+    no: Arc<str>,
+    yes: Arc<str>,
+    keep_playing: Arc<str>,
+    finished: Arc<str>,
+}
+
+impl SelectCourseLabels {
+    fn load() -> Self {
+        let mut labels = Self {
+            revision: 0,
+            title: tr("ScreenTitles", "SelectCourse"),
+            songs: tr("SelectCourse", "SongsLabel"),
+            bpm: tr("SelectMusic", "BPMLabel"),
+            length: tr("SelectMusic", "LengthLabel"),
+            step_artist: tr("SelectCourse", "StepArtistPlaceholder"),
+            select_hint: tr("SelectCourse", "SelectCourseHint"),
+            pick_prompt: tr("SelectCourse", "PickCoursePrompt"),
+            options_prompt: tr("SelectMusic", "PressStartForOptions"),
+            entering_options: tr("SelectMusic", "EnteringOptions"),
+            exit_prompt: tr("SelectMusic", "ExitGamePrompt"),
+            no: tr("Common", "No"),
+            yes: tr("Common", "Yes"),
+            keep_playing: tr("SelectMusic", "KeepPlayingInfo"),
+            finished: tr("SelectMusic", "FinishedInfo"),
+        };
+        labels.revision = i18n::revision();
+        labels
+    }
+
+    fn sync(&mut self) -> bool {
+        if self.revision == i18n::revision() {
+            return false;
+        }
+        *self = Self::load();
+        true
+    }
 }
 
 struct InitData {
@@ -236,11 +481,16 @@ pub struct State {
     pub selection_animation_timer: f32,
     pub wheel_offset_from_selection: f32,
     pub current_banner_key: Arc<str>,
-    pub session_elapsed: f32,
+    session_elapsed: f32,
+    session_timer: timers::TimerText,
     context: SelectCourseContextView,
     players: [SelectFlowPlayerView; 2],
     music_wheel: MusicWheelRuntimeView,
     score_view: SelectCourseScoreView,
+    score_text: CourseScoreText,
+    summary_text: CourseSummaryText,
+    course_selection: CourseSelection,
+    labels: SelectCourseLabels,
     wheel_content_generation: u64,
 
     all_entries: Vec<MusicWheelEntry>,
@@ -649,12 +899,14 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
                 rated_entry_count = rated_entry_count.saturating_add(1);
                 meter_sum = meter_sum.saturating_add(chart.meter);
                 meter_count = meter_count.saturating_add(1);
-                entries.push(CourseSongEntry {
-                    title: song_data.display_full_title(translated_titles),
-                    difficulty: chart.difficulty.to_ascii_lowercase(),
-                    meter: Some(chart.meter),
-                    step_artist: chart_step_artist(chart),
-                });
+                let entry_index = entries.len();
+                entries.push(CourseSongEntry::new(
+                    song_data.display_full_title(translated_titles),
+                    chart.difficulty.to_ascii_lowercase(),
+                    chart.meter,
+                    entry_index,
+                    chart_step_artist(chart),
+                ));
             }
 
             let explicit_meter = course_meter(course, course_diff)
@@ -677,17 +929,20 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
             let course_difficulty_name = course::difficulty_label(course_diff).to_string();
             let course_stepchart_label =
                 course_stepchart_label(course_difficulty_name.as_str(), course_meter);
+            let course_meter_text =
+                course_meter.map_or_else(unknown_text, |meter| Arc::<str>::from(meter.to_string()));
+            let entry_count_text = Arc::<str>::from(entries.len().to_string());
+            let stats_text = CourseStatsText::new(&totals, rated_entry_count > 0);
 
             ratings[course_diff as usize] = Some(CourseRatingMeta {
                 course_difficulty: course_diff,
                 entries,
-                totals,
-                rated_entry_count,
+                stats_text,
                 course_difficulty_name,
                 course_stepchart_label,
                 course_meter,
-                meter_sum,
-                meter_count,
+                course_meter_text,
+                entry_count_text,
                 min_bpm: rating_min_bpm,
                 max_bpm: rating_max_bpm,
                 total_length_seconds: rating_total_seconds.max(0),
@@ -715,7 +970,7 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
             score_hash: course_score_hash(path),
             name: course_name(path, course),
             scripter: course.scripter.clone(),
-            description: course.description.clone(),
+            description: Arc::from(course.description.as_str()),
             banner_path: course::resolve_course_banner_path(path, &course.banner),
             ratings,
             default_rating_index,
@@ -804,6 +1059,7 @@ fn rebuild_displayed_entries(state: &mut State) {
         state.last_rating_nav_time_p1 = None;
         state.last_rating_nav_dir_p2 = None;
         state.last_rating_nav_time_p2 = None;
+        sync_course_selection(state);
         return;
     }
     if let Some(path) = selected_path
@@ -825,13 +1081,57 @@ fn rebuild_displayed_entries(state: &mut State) {
     state.last_rating_nav_time_p1 = None;
     state.last_rating_nav_dir_p2 = None;
     state.last_rating_nav_time_p2 = None;
+    sync_course_selection(state);
 }
 
-fn selected_course_meta(state: &State) -> Option<Arc<CourseMeta>> {
-    let MusicWheelEntry::Song(song) = state.entries.get(state.selected_index)? else {
-        return None;
-    };
-    state.course_meta_by_path.get(&song.simfile_path).cloned()
+fn selected_course_meta(state: &State) -> Option<&CourseMeta> {
+    state.course_selection.meta.as_deref()
+}
+
+fn course_selection_matches(state: &State) -> bool {
+    match (
+        state.entries.get(state.selected_index),
+        selected_course_meta(state),
+    ) {
+        (Some(MusicWheelEntry::Song(song)), Some(meta)) => song.simfile_path == meta.path,
+        (Some(MusicWheelEntry::PackHeader { .. }) | None, None) => true,
+        _ => false,
+    }
+}
+
+fn stored_rating_index(state: &State, meta: &CourseMeta) -> usize {
+    let len = meta.ratings.len();
+    if len == 0 {
+        return 0;
+    }
+    let preferred = state
+        .selected_rating_index_by_path
+        .get(meta.path.as_path())
+        .copied()
+        .unwrap_or(meta.default_rating_index)
+        .min(len.saturating_sub(1));
+    nearest_filled_slot(&meta.ratings, preferred).unwrap_or(preferred)
+}
+
+fn sync_course_selection(state: &mut State) {
+    let meta = state
+        .entries
+        .get(state.selected_index)
+        .and_then(|entry| match entry {
+            MusicWheelEntry::Song(song) => state.course_meta_by_path.get(&song.simfile_path),
+            MusicWheelEntry::PackHeader { .. } => None,
+        })
+        .cloned();
+    let rating_index = meta
+        .as_deref()
+        .map_or(0, |meta| stored_rating_index(state, meta));
+    if let Some(meta) = meta.as_deref() {
+        state
+            .selected_rating_index_by_path
+            .insert(meta.path.clone(), rating_index);
+    }
+    state.course_selection = CourseSelection { meta, rating_index };
+    rebuild_course_summary(state);
 }
 
 pub fn restore_selection_for_course(
@@ -848,24 +1148,21 @@ pub fn restore_selection_for_course(
     state.prev_selected_index = index;
     state.wheel_offset_from_selection = 0.0;
     state.time_since_selection_change = 0.0;
+    sync_course_selection(state);
 
     if let Some(meta) = selected_course_meta(state) {
-        if let Some(diff_name) = course_difficulty_name
-            && let Some(slot_idx) = meta.ratings.iter().position(|slot| {
-                slot.as_ref().is_some_and(|rating| {
-                    rating
-                        .course_difficulty_name
-                        .eq_ignore_ascii_case(diff_name)
+        let idx = course_difficulty_name
+            .and_then(|diff_name| {
+                meta.ratings.iter().position(|slot| {
+                    slot.as_ref().is_some_and(|rating| {
+                        rating
+                            .course_difficulty_name
+                            .eq_ignore_ascii_case(diff_name)
+                    })
                 })
             })
-        {
-            set_selected_course_rating_index(state, &meta, slot_idx);
-        } else {
-            let idx = selected_course_rating_index(state, &meta);
-            state
-                .selected_rating_index_by_path
-                .insert(meta.path.clone(), idx);
-        }
+            .unwrap_or_else(|| selected_course_rating_index(state));
+        set_selected_course_rating_index(state, idx);
     }
 
     state.last_rating_nav_dir_p1 = None;
@@ -876,46 +1173,71 @@ pub fn restore_selection_for_course(
 }
 
 #[inline(always)]
-fn selected_course_rating_index(state: &State, meta: &CourseMeta) -> usize {
-    let len = meta.ratings.len();
-    if len == 0 {
-        return 0;
-    }
-    let preferred = state
-        .selected_rating_index_by_path
-        .get(meta.path.as_path())
-        .copied()
-        .unwrap_or(meta.default_rating_index)
-        .min(len.saturating_sub(1));
-    nearest_filled_slot(&meta.ratings, preferred).unwrap_or(preferred)
+fn selected_course_rating_index(state: &State) -> usize {
+    state.course_selection.rating_index
 }
 
 #[inline(always)]
 fn selected_course_rating<'a>(state: &State, meta: &'a CourseMeta) -> Option<&'a CourseRatingMeta> {
     meta.ratings
-        .get(selected_course_rating_index(state, meta))
+        .get(selected_course_rating_index(state))
         .and_then(Option::as_ref)
 }
 
+fn rebuild_course_summary(state: &mut State) {
+    let Some(meta) = selected_course_meta(state) else {
+        state.summary_text = CourseSummaryText::empty();
+        return;
+    };
+    let rating = selected_course_rating(state, meta);
+    let min_bpm = rating.and_then(|rating| rating.min_bpm).or(meta.min_bpm);
+    let max_bpm = rating.and_then(|rating| rating.max_bpm).or(meta.max_bpm);
+    let length_seconds = rating
+        .map(|rating| rating.total_length_seconds.max(0))
+        .filter(|seconds| *seconds > 0)
+        .unwrap_or(meta.total_length_seconds.max(0));
+    let songs = rating.map_or_else(zero_count_text, |rating| {
+        Arc::clone(&rating.entry_count_text)
+    });
+    let summary = CourseSummaryText::selected(
+        songs,
+        min_bpm,
+        max_bpm,
+        length_seconds,
+        state.context.music_rate,
+        Arc::clone(&meta.description),
+    );
+    state.summary_text = summary;
+}
+
 #[inline(always)]
-fn set_selected_course_rating_index(state: &mut State, meta: &CourseMeta, idx: usize) {
+fn set_selected_course_rating_index(state: &mut State, idx: usize) {
+    let Some(meta) = selected_course_meta(state) else {
+        rebuild_course_summary(state);
+        return;
+    };
     if meta.ratings.is_empty() {
+        rebuild_course_summary(state);
         return;
     }
     let preferred = idx.min(meta.ratings.len().saturating_sub(1));
     let selected = nearest_filled_slot(&meta.ratings, preferred).unwrap_or(preferred);
-    state
-        .selected_rating_index_by_path
-        .insert(meta.path.clone(), selected);
+    if selected == state.course_selection.rating_index {
+        return;
+    }
+    let path = meta.path.clone();
+    state.selected_rating_index_by_path.insert(path, selected);
+    state.course_selection.rating_index = selected;
+    rebuild_course_summary(state);
 }
 
 pub fn selected_course_plan(state: &State) -> Option<SelectedCoursePlan> {
     let meta = selected_course_meta(state)?;
-    let rating = selected_course_rating(state, &meta)?;
+    let rating = selected_course_rating(state, meta)?;
     if rating.runtime_stages.is_empty() {
         return None;
     }
-    Some(course_plan(&meta, rating, rating.runtime_stages.clone()))
+    Some(course_plan(meta, rating, rating.runtime_stages.clone()))
 }
 
 fn course_plan(
@@ -949,7 +1271,7 @@ pub fn reroll_selected_endless_plan(state: &State) -> Option<SelectedCoursePlan>
     if meta.course_type != CourseTypeView::Endless {
         return None;
     }
-    let rating = selected_course_rating(state, &meta)?;
+    let rating = selected_course_rating(state, meta)?;
     let mut selected_song_keys = Vec::with_capacity(meta.source.entries.len());
     let mut stages = Vec::with_capacity(meta.source.entries.len());
     let seed = fresh_course_seed();
@@ -984,7 +1306,7 @@ pub fn reroll_selected_endless_plan(state: &State) -> Option<SelectedCoursePlan>
             gain_lives: stage.gain_lives,
         });
     }
-    (!stages.is_empty()).then(|| course_plan(&meta, rating, stages))
+    (!stages.is_empty()).then(|| course_plan(meta, rating, stages))
 }
 
 #[inline(always)]
@@ -1005,8 +1327,16 @@ fn restore_last_course(state: &mut State, init_view: &SelectCourseInitView) {
     restore_selection_for_course(state, path, init_view.last_course_difficulty.as_deref());
 }
 
+/// Synchronizes the shell-owned session time and its retained presentation.
+pub fn sync_session_elapsed(state: &mut State, session_elapsed: f32) {
+    state.session_elapsed = session_elapsed;
+    state.session_timer.sync(session_elapsed);
+}
+
 pub fn init(init_view: SelectCourseInitView) -> State {
     let init = build_init_data(&init_view);
+    let score_view = SelectCourseScoreView::default();
+    let score_text = CourseScoreText::new(&score_view);
     let mut state = State {
         entries: Vec::new(),
         selected_index: 0,
@@ -1015,10 +1345,15 @@ pub fn init(init_view: SelectCourseInitView) -> State {
         wheel_offset_from_selection: 0.0,
         current_banner_key: Arc::<str>::from("banner1.png"),
         session_elapsed: 0.0,
+        session_timer: timers::TimerText::default(),
         context: init_view.context,
         players: Default::default(),
         music_wheel: MusicWheelRuntimeView::default(),
-        score_view: SelectCourseScoreView::default(),
+        score_view,
+        score_text,
+        summary_text: CourseSummaryText::empty(),
+        course_selection: CourseSelection::default(),
+        labels: SelectCourseLabels::load(),
         wheel_content_generation: 0,
         all_entries: init.all_entries,
         course_meta_by_path: init.course_meta_by_path,
@@ -1083,6 +1418,7 @@ fn music_wheel_change(state: &mut State, dist: isize) {
         state.time_since_selection_change = 0.0;
         return;
     }
+    let previous_index = state.selected_index;
     if dist > 0 {
         state.selected_index = (state.selected_index + 1) % len;
         state.wheel_offset_from_selection += 1.0;
@@ -1091,6 +1427,11 @@ fn music_wheel_change(state: &mut State, dist: isize) {
         state.wheel_offset_from_selection -= 1.0;
     }
     state.time_since_selection_change = 0.0;
+    if state.selected_index != previous_index {
+        if !course_selection_matches(state) {
+            sync_course_selection(state);
+        }
+    }
 }
 
 #[inline(always)]
@@ -1201,7 +1542,7 @@ fn handle_rating_dir(
     if available <= 1 {
         return ThemeEffect::None;
     }
-    let current = selected_course_rating_index(state, &meta);
+    let current = selected_course_rating_index(state);
     let next = match dir {
         PadDir::Up => (0..current).rev().find(|&idx| meta.ratings[idx].is_some()),
         PadDir::Down => {
@@ -1210,7 +1551,7 @@ fn handle_rating_dir(
         _ => None,
     };
     if let Some(next) = next {
-        set_selected_course_rating_index(state, &meta, next);
+        set_selected_course_rating_index(state, next);
         return sfx(if matches!(dir, PadDir::Up) {
             "assets/sounds/easier.ogg"
         } else {
@@ -1244,7 +1585,7 @@ fn shift_selected_course_rating(state: &mut State, delta: isize) -> Option<&'sta
     if available <= 1 {
         return None;
     }
-    let current = selected_course_rating_index(state, &meta);
+    let current = selected_course_rating_index(state);
     let next = if delta < 0 {
         (0..current).rev().find(|&idx| meta.ratings[idx].is_some())
     } else {
@@ -1253,7 +1594,7 @@ fn shift_selected_course_rating(state: &mut State, delta: isize) -> Option<&'sta
     let Some(next) = next else {
         return None;
     };
-    set_selected_course_rating_index(state, &meta, next);
+    set_selected_course_rating_index(state, next);
     Some(if delta < 0 {
         "assets/sounds/easier.ogg"
     } else {
@@ -1551,6 +1892,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 }
 
 pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
+    state.labels.sync();
     let dt = dt.max(0.0);
 
     match state.out_prompt {
@@ -1618,11 +1960,8 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
         state.last_rating_nav_time_p1 = None;
         state.last_rating_nav_dir_p2 = None;
         state.last_rating_nav_time_p2 = None;
-        if let Some(meta) = selected_course_meta(state) {
-            let idx = selected_course_rating_index(state, &meta);
-            state
-                .selected_rating_index_by_path
-                .insert(meta.path.clone(), idx);
+        if !course_selection_matches(state) {
+            sync_course_selection(state);
         }
     }
 
@@ -1685,19 +2024,6 @@ pub fn trigger_immediate_refresh(state: &mut State) {
 #[inline(always)]
 pub fn allows_late_join(_state: &State) -> bool {
     true
-}
-
-fn format_session_time(seconds: f32) -> String {
-    if seconds < 0.0 {
-        return "00:00".to_string();
-    }
-    let s = seconds as u64;
-    let (h, m, s) = (s / 3600, (s % 3600) / 60, s % 60);
-    if h > 0 {
-        format!("{h}:{m:02}:{s:02}")
-    } else {
-        format!("{m:02}:{s:02}")
-    }
 }
 
 fn format_len(seconds: i32) -> String {
@@ -1848,16 +2174,7 @@ pub fn runtime_token(state: &State) -> SelectCourseRuntimeToken {
 
 #[inline(always)]
 pub fn score_runtime_request(state: &State) -> SelectCourseScoreRequest<'_> {
-    let course_hash = state
-        .entries
-        .get(state.selected_index)
-        .and_then(|entry| match entry {
-            MusicWheelEntry::Song(song) => state
-                .course_meta_by_path
-                .get(song.simfile_path.as_path())
-                .map(|meta| meta.score_hash.as_str()),
-            MusicWheelEntry::PackHeader { .. } => None,
-        });
+    let course_hash = selected_course_meta(state).map(|meta| meta.score_hash.as_str());
     SelectCourseScoreRequest { course_hash }
 }
 
@@ -1866,9 +2183,12 @@ pub fn sync_context(state: &mut State, context: SelectCourseContextView) {
     let course_filter_changed = state.context.policy.show_random_courses
         != context.policy.show_random_courses
         || state.context.policy.show_most_played_courses != context.policy.show_most_played_courses;
+    let music_rate_changed = state.context.music_rate.to_bits() != context.music_rate.to_bits();
     state.context = context;
     if course_filter_changed {
         rebuild_displayed_entries(state);
+    } else if music_rate_changed {
+        rebuild_course_summary(state);
     }
 }
 
@@ -1880,7 +2200,10 @@ pub fn sync_runtime_view(state: &mut State, view: SelectCourseRuntimeView) {
     if let Some(music_wheel) = view.music_wheel {
         state.music_wheel = music_wheel;
     }
-    if let Some(score) = view.score {
+    if let Some(score) = view.score
+        && score != state.score_view
+    {
+        state.score_text = CourseScoreText::new(&score);
         state.score_view = score;
     }
 }
@@ -1897,12 +2220,8 @@ pub fn push_actors(
     let is_p2_single = profile_data::is_single_p2_side(play_style, side);
     let selected_entry = state.entries.get(state.selected_index);
     let selected_meta = selected_course_meta(state);
-    let selected_rating = selected_meta
-        .as_ref()
-        .and_then(|meta| selected_course_rating(state, meta));
-    let selected_rating_index = selected_meta
-        .as_ref()
-        .map_or(0, |meta| selected_course_rating_index(state, meta));
+    let selected_rating = selected_meta.and_then(|meta| selected_course_rating(state, meta));
+    let selected_rating_index = selected_course_rating_index(state);
     let selection_animation_beat = course_selection_anim_beat(state);
     let selected_diff_col = selected_rating.map(|rating| {
         color::difficulty_rgba(
@@ -1923,7 +2242,7 @@ pub fn push_actors(
     actors.push(sl_select_music_bg_flash());
     screen_bars::push(
         actors,
-        &tr("ScreenTitles", "SelectCourse"),
+        state.labels.title.as_ref(),
         std::array::from_fn(|idx| screen_bars::Player {
             joined: state.players[idx].joined,
             guest: state.players[idx].guest,
@@ -1933,7 +2252,7 @@ pub fn push_actors(
         visual_policy,
     );
     actors.push(timers::build_session(
-        format_session_time(state.session_elapsed),
+        Arc::clone(state.session_timer.text()),
         visual_policy.machine_font,
     ));
 
@@ -1962,83 +2281,21 @@ pub fn push_actors(
         51,
     ));
 
-    let music_rate = state.context.music_rate;
-    let (songs_label, songs_value, bpm_text, len_text, desc_text) =
-        match (selected_entry, selected_meta.as_ref()) {
-            (Some(MusicWheelEntry::Song(_)), Some(meta)) => {
-                let diff_min_bpm = selected_rating
-                    .and_then(|rating| rating.min_bpm)
-                    .or(meta.min_bpm);
-                let diff_max_bpm = selected_rating
-                    .and_then(|rating| rating.max_bpm)
-                    .or(meta.max_bpm);
-                let diff_len_secs = selected_rating
-                    .map(|rating| rating.total_length_seconds.max(0))
-                    .filter(|secs| *secs > 0)
-                    .unwrap_or(meta.total_length_seconds.max(0));
-                (
-                    tr("SelectCourse", "SongsLabel").to_string(),
-                    selected_rating
-                        .map_or(0, |rating| rating.entries.len())
-                        .to_string(),
-                    format_bpm_range(diff_min_bpm, diff_max_bpm),
-                    format_len(((diff_len_secs as f32) / music_rate).round() as i32),
-                    meta.description.clone(),
-                )
-            }
-            _ => (
-                tr("SelectCourse", "SongsLabel").to_string(),
-                "0".to_string(),
-                "?".to_string(),
-                "0:00".to_string(),
-                String::new(),
-            ),
-        };
+    let songs_label = Arc::clone(&state.labels.songs);
+    let songs_value = Arc::clone(&state.summary_text.songs);
+    let bpm_text = Arc::clone(&state.summary_text.bpm);
+    let len_text = Arc::clone(&state.summary_text.length);
+    let desc_text = Arc::clone(&state.summary_text.description);
 
-    let (steps_text, jumps_text, holds_text, mines_text, hands_text, rolls_text, meter_text) =
-        match selected_rating {
-            Some(rating) => {
-                let meter = if let Some(course_meter) = rating.course_meter {
-                    cached_u32_text(course_meter)
-                } else if rating.meter_count > 0 {
-                    cached_u32_text(
-                        (rating.meter_sum as f32 / rating.meter_count as f32).round() as u32,
-                    )
-                } else {
-                    unknown_text()
-                };
-                if rating.rated_entry_count > 0 {
-                    (
-                        cached_u32_text(rating.totals.steps),
-                        cached_u32_text(rating.totals.jumps),
-                        cached_u32_text(rating.totals.holds),
-                        cached_u32_text(rating.totals.mines),
-                        cached_u32_text(rating.totals.hands),
-                        cached_u32_text(rating.totals.rolls),
-                        meter,
-                    )
-                } else {
-                    (
-                        unknown_text(),
-                        unknown_text(),
-                        unknown_text(),
-                        unknown_text(),
-                        unknown_text(),
-                        unknown_text(),
-                        meter,
-                    )
-                }
-            }
-            None => (
-                unknown_text(),
-                unknown_text(),
-                unknown_text(),
-                unknown_text(),
-                unknown_text(),
-                unknown_text(),
-                unknown_text(),
-            ),
-        };
+    let (stats_text, meter_text) = selected_rating.map_or_else(
+        || (CourseStatsText::unknown(), unknown_text()),
+        |rating| {
+            (
+                rating.stats_text.clone(),
+                Arc::clone(&rating.course_meter_text),
+            )
+        },
+    );
 
     let pane_sel_col =
         selected_diff_col.unwrap_or_else(|| color::simply_love_rgba(state.active_color_index));
@@ -2047,35 +2304,6 @@ pub fn push_actors(
     } else {
         screen_width() * 0.25 - 5.0
     };
-    let placeholder = ("----".to_string(), placeholder_score_percent());
-    let fallback_player = state.score_view.player_score_percent.map_or_else(
-        || placeholder.clone(),
-        |score_percent| {
-            (
-                state.score_view.player_initials.clone(),
-                cached_score_percent_text(score_percent),
-            )
-        },
-    );
-    let fallback_machine = match (
-        state.score_view.machine_initials.as_ref(),
-        state.score_view.machine_score_percent,
-    ) {
-        (Some(initials), Some(score_percent)) => {
-            (initials.clone(), cached_score_percent_text(score_percent))
-        }
-        _ => placeholder,
-    };
-    let gs_view = gs_scorebox::SelectMusicScoreboxView {
-        mode_text: gs_scorebox::select_music_mode_text(state.score_view.pane_show_ex_score),
-        machine_name: fallback_machine.0,
-        machine_score: fallback_machine.1,
-        player_name: fallback_player.0,
-        player_score: fallback_player.1,
-        rivals: std::array::from_fn(|_| ("----".to_string(), placeholder_score_percent())),
-        show_rivals: false,
-        loading_text: None,
-    };
     select_pane::push_base(
         actors,
         select_pane::StatsPaneParams {
@@ -2083,34 +2311,30 @@ pub fn push_actors(
             pane_cx,
             accent_color: pane_sel_col,
             values: select_pane::StatsValues {
-                steps: steps_text,
-                mines: mines_text,
-                jumps: jumps_text,
-                hands: hands_text,
-                holds: holds_text,
-                rolls: rolls_text,
+                steps: stats_text.steps,
+                mines: stats_text.mines,
+                jumps: stats_text.jumps,
+                hands: stats_text.hands,
+                holds: stats_text.holds,
+                rolls: stats_text.rolls,
             },
-            meter: (!gs_view.show_rivals).then_some(meter_text),
+            meter: Some(meter_text),
         },
     );
     let pane_layout = select_pane::layout();
     let lines = [
-        (gs_view.machine_name.clone(), gs_view.machine_score.clone()),
-        (gs_view.player_name.clone(), gs_view.player_score.clone()),
+        (
+            Arc::clone(&state.score_text.machine_name),
+            Arc::clone(&state.score_text.machine_score),
+        ),
+        (
+            Arc::clone(&state.score_text.player_name),
+            Arc::clone(&state.score_text.player_score),
+        ),
     ];
     for (i, (name, pct)) in lines.into_iter().enumerate() {
         actors.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + pane_layout.cols[2] - 50.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): maxwidth(30.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
         actors.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + pane_layout.cols[2] + 25.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-    }
-    if let Some(status) = gs_view.loading_text {
-        actors.push(act!(text: font("miso"): settext(status): align(0.5, 0.5): xy(pane_cx + pane_layout.cols[2] - 15.0, pane_layout.pane_top + pane_layout.rows[2]): maxwidth(90.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
-    }
-    if gs_view.show_rivals {
-        for i in 0..3 {
-            let (name, pct) = (&gs_view.rivals[i].0, &gs_view.rivals[i].1);
-            actors.push(act!(text: font("miso"): settext(name.clone()): align(0.5, 0.5): xy(pane_cx + pane_layout.cols[2] + 50.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): maxwidth(30.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-            actors.push(act!(text: font("miso"): settext(pct.clone()): align(1.0, 0.5): xy(pane_cx + pane_layout.cols[2] + 125.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-        }
     }
 
     let (box_w, frame_x, frame_y) = if is_wide() {
@@ -2138,9 +2362,9 @@ pub fn push_actors(
                 children: vec![
                     act!(text: font("miso"): settext(songs_label): align(1.0, 0.0): y(-11.0): maxwidth(56.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
                     act!(text: font("miso"): settext(songs_value): align(0.0, 0.0): xy(5.0, -11.0): maxwidth(box_w - 60.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-                    act!(text: font("miso"): settext(tr("SelectMusic", "BPMLabel")): align(1.0, 0.0): y(10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
+                    act!(text: font("miso"): settext(Arc::clone(&state.labels.bpm)): align(1.0, 0.0): y(10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
                     act!(text: font("miso"): settext(bpm_text): align(0.0, 0.0): xy(5.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-                    act!(text: font("miso"): settext(tr("SelectMusic", "LengthLabel")): align(1.0, 0.0): xy(box_w - 130.0, 10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
+                    act!(text: font("miso"): settext(Arc::clone(&state.labels.length)): align(1.0, 0.0): xy(box_w - 130.0, 10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
                     act!(text: font("miso"): settext(len_text): align(0.0, 0.0): xy(box_w - 125.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
                 ],
             },
@@ -2172,19 +2396,19 @@ pub fn push_actors(
             let idx = ((state.session_elapsed / 2.0).floor() as usize) % rating.entries.len();
             let entry = &rating.entries[idx];
             (
-                format!("#{}", idx + 1),
-                entry.step_artist.clone(),
+                Arc::clone(&entry.index_text),
+                Arc::clone(&entry.step_artist),
                 selected_diff_col.unwrap_or([0.5, 0.5, 0.5, 1.0]),
             )
         }
         Some(_) => (
-            "#-".to_string(),
-            tr("SelectCourse", "StepArtistPlaceholder").to_string(),
+            missing_step_index_text(),
+            Arc::clone(&state.labels.step_artist),
             selected_diff_col.unwrap_or([0.5, 0.5, 0.5, 1.0]),
         ),
         _ => (
-            "#-".to_string(),
-            tr("SelectCourse", "StepArtistPlaceholder").to_string(),
+            missing_step_index_text(),
+            Arc::clone(&state.labels.step_artist),
             [0.5, 0.5, 0.5, 1.0],
         ),
     };
@@ -2216,14 +2440,10 @@ pub fn push_actors(
             if y > panel_bottom + row_spacing {
                 break;
             }
-            let diff_text = entry
-                .meter
-                .map(|meter| meter.to_string())
-                .unwrap_or_else(|| "?".to_string());
             let diff_color = color::difficulty_rgba(&entry.difficulty, state.active_color_index);
             let mut meter_actor = act!(text:
                 font("miso"):
-                settext(diff_text):
+                settext(Arc::clone(&entry.meter_text)):
                 align(0.0, 0.0):
                 xy(list_left_x, y):
                 zoomtoheight(COURSE_TRACKLIST_TEXT_HEIGHT):
@@ -2238,7 +2458,7 @@ pub fn push_actors(
 
             let mut title_actor = act!(text:
                 font("miso"):
-                settext(entry.title.clone()):
+                settext(Arc::clone(&entry.title)):
                 align(0.0, 0.0):
                 xy(list_title_x, y):
                 zoomtoheight(COURSE_TRACKLIST_TEXT_HEIGHT):
@@ -2254,7 +2474,7 @@ pub fn push_actors(
     } else {
         let mut no_course_actor = act!(text:
             font("miso"):
-            settext(tr("SelectCourse", "SelectCourseHint")):
+            settext(Arc::clone(&state.labels.select_hint)):
             align(0.0, 0.0):
             xy(list_left_x, list_start_y):
             zoom(0.72):
@@ -2275,7 +2495,7 @@ pub fn push_actors(
         z(120):
         diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])
     ));
-    let rating_len = selected_meta.as_ref().map_or(0, |meta| meta.ratings.len());
+    let rating_len = selected_meta.map_or(0, |meta| meta.ratings.len());
     let rating_top_index = if rating_len > COURSE_RATING_VISIBLE_SLOTS {
         selected_rating_index
             .saturating_sub(COURSE_RATING_VISIBLE_SLOTS - 1)
@@ -2283,7 +2503,7 @@ pub fn push_actors(
     } else {
         0
     };
-    if let Some(meta) = selected_meta.as_ref() {
+    if let Some(meta) = selected_meta {
         for slot in 0..COURSE_RATING_VISIBLE_SLOTS {
             let y = rating_box_cy + (slot as i32 - 2) as f32 * 30.0;
             actors.push(act!(quad:
@@ -2298,16 +2518,13 @@ pub fn push_actors(
                 continue;
             }
             if let Some(rating) = meta.ratings[idx].as_ref() {
-                let meter_text = rating
-                    .course_meter
-                    .map_or_else(|| "?".to_string(), |meter| meter.to_string());
                 let color = color::difficulty_rgba(
                     rating.course_difficulty_name.as_str(),
                     state.active_color_index,
                 );
                 actors.push(act!(text:
                     font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
-                    settext(meter_text):
+                    settext(Arc::clone(&rating.course_meter_text)):
                     align(0.5, 0.5):
                     xy(rating_box_cx, y):
                     zoom(0.45):
@@ -2423,7 +2640,7 @@ pub fn push_actors(
     if !matches!(selected_entry, Some(MusicWheelEntry::Song(_))) {
         actors.push(act!(text:
             font("miso"):
-            settext(tr("SelectCourse", "PickCoursePrompt")):
+            settext(Arc::clone(&state.labels.pick_prompt)):
             align(0.5, 0.5):
             xy(screen_center_x() - 26.0, screen_center_y() + 67.0):
             zoom(0.8):
@@ -2448,7 +2665,7 @@ pub fn push_actors(
             OutPromptState::PressStartForOptions { .. } => {
                 actors.push(act!(text:
                     font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
-                    settext(tr("SelectMusic", "PressStartForOptions")):
+                    settext(Arc::clone(&state.labels.options_prompt)):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
                     zoom(0.75):
@@ -2459,7 +2676,7 @@ pub fn push_actors(
             OutPromptState::EnteringOptions { .. } => {
                 actors.push(act!(text:
                     font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
-                    settext(tr("SelectMusic", "PressStartForOptions")):
+                    settext(Arc::clone(&state.labels.options_prompt)):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
                     zoom(0.75):
@@ -2469,7 +2686,7 @@ pub fn push_actors(
                 ));
                 actors.push(act!(text:
                     font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
-                    settext(tr("SelectMusic", "EnteringOptions")):
+                    settext(Arc::clone(&state.labels.entering_options)):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
                     zoom(0.75):
@@ -2507,7 +2724,7 @@ pub fn push_actors(
         ));
         actors.push(act!(text:
             font("miso"):
-            settext(tr("SelectMusic", "ExitGamePrompt")):
+            settext(Arc::clone(&state.labels.exit_prompt)):
             align(0.5, 0.0):
             xy(screen_center_x(), screen_center_y() + SL_EXIT_PROMPT_PROMPT_Y_OFFSET):
             zoom(SL_EXIT_PROMPT_PROMPT_ZOOM):
@@ -2520,10 +2737,10 @@ pub fn push_actors(
         let zoom_no = exit_prompt_choice_zoom(0, active_choice, switch_from, switch_elapsed);
         let zoom_yes = exit_prompt_choice_zoom(1, active_choice, switch_from, switch_elapsed);
         let cx = screen_center_x();
-        let no_label = tr("Common", "No");
-        let yes_label = tr("Common", "Yes");
-        let no_info = tr("SelectMusic", "KeepPlayingInfo");
-        let yes_info = tr("SelectMusic", "FinishedInfo");
+        let no_label = Arc::clone(&state.labels.no);
+        let yes_label = Arc::clone(&state.labels.yes);
+        let no_info = Arc::clone(&state.labels.keep_playing);
+        let yes_info = Arc::clone(&state.labels.finished);
         push_exit_prompt_choice(
             actors,
             cx - SL_EXIT_PROMPT_CHOICE_X_OFFSET,
@@ -2701,6 +2918,140 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 mod song_lookup_tests {
     use super::*;
     use deadsync_chart::SyncPref;
+
+    #[test]
+    fn course_song_entry_compiles_actor_text_once() {
+        let entry = CourseSongEntry::new(
+            "Song Title".to_owned(),
+            "hard".to_owned(),
+            12,
+            2,
+            "Step Artist".to_owned(),
+        );
+
+        assert_eq!(entry.title.as_ref(), "Song Title");
+        assert_eq!(entry.meter_text.as_ref(), "12");
+        assert_eq!(entry.index_text.as_ref(), "#3");
+        assert_eq!(entry.step_artist.as_ref(), "Step Artist");
+
+        let title = Arc::clone(&entry.title);
+        assert!(Arc::ptr_eq(&title, &entry.title));
+    }
+
+    #[test]
+    fn course_score_text_rebuilds_only_for_changed_score_data() {
+        let mut state = init(SelectCourseInitView::default());
+        let score = SelectCourseScoreView {
+            player_initials: "AAA".to_owned(),
+            player_score_percent: Some(0.95),
+            machine_initials: Some("MCH".to_owned()),
+            machine_score_percent: Some(0.99),
+            ..Default::default()
+        };
+        sync_runtime_view(
+            &mut state,
+            SelectCourseRuntimeView {
+                score: Some(score.clone()),
+                ..Default::default()
+            },
+        );
+        let player_name = Arc::clone(&state.score_text.player_name);
+        let player_score = Arc::clone(&state.score_text.player_score);
+
+        assert_eq!(player_name.as_ref(), "AAA");
+        assert_eq!(player_score.as_ref(), "95.00%");
+
+        sync_runtime_view(
+            &mut state,
+            SelectCourseRuntimeView {
+                score: Some(score),
+                ..Default::default()
+            },
+        );
+        assert!(Arc::ptr_eq(&state.score_text.player_name, &player_name));
+        assert!(Arc::ptr_eq(&state.score_text.player_score, &player_score));
+
+        sync_runtime_view(
+            &mut state,
+            SelectCourseRuntimeView {
+                score: Some(SelectCourseScoreView {
+                    player_initials: "BBB".to_owned(),
+                    player_score_percent: Some(0.96),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        );
+        assert_eq!(state.score_text.player_name.as_ref(), "BBB");
+        assert_eq!(state.score_text.player_score.as_ref(), "96.00%");
+        assert!(!Arc::ptr_eq(&state.score_text.player_name, &player_name));
+    }
+
+    #[test]
+    fn course_summary_compiles_actor_text_at_transition_time() {
+        let summary = CourseSummaryText::selected(
+            Arc::from("3"),
+            Some(120.0),
+            Some(180.0),
+            125,
+            2.0,
+            Arc::from("A short course"),
+        );
+
+        assert_eq!(summary.songs.as_ref(), "3");
+        assert_eq!(summary.bpm.as_ref(), "120-180");
+        assert_eq!(summary.length.as_ref(), "1:03");
+        assert_eq!(summary.description.as_ref(), "A short course");
+    }
+
+    #[test]
+    fn course_stats_compile_actor_text_once() {
+        let stats = CourseStatsText::new(
+            &CourseTotals {
+                steps: 100,
+                jumps: 20,
+                holds: 10,
+                mines: 5,
+                hands: 4,
+                rolls: 3,
+            },
+            true,
+        );
+
+        assert_eq!(stats.steps.as_ref(), "100");
+        assert_eq!(stats.jumps.as_ref(), "20");
+        assert_eq!(stats.holds.as_ref(), "10");
+        assert_eq!(stats.mines.as_ref(), "5");
+        assert_eq!(stats.hands.as_ref(), "4");
+        assert_eq!(stats.rolls.as_ref(), "3");
+
+        let steps = Arc::clone(&stats.steps);
+        assert!(Arc::ptr_eq(&steps, &stats.steps));
+    }
+
+    #[test]
+    fn course_labels_remain_shared_while_locale_is_unchanged() {
+        let mut labels = SelectCourseLabels::load();
+        let title = Arc::clone(&labels.title);
+
+        assert!(!labels.sync());
+        assert!(Arc::ptr_eq(&labels.title, &title));
+    }
+
+    #[test]
+    fn session_elapsed_sync_retains_text_until_the_visible_second_changes() {
+        let mut state = init(SelectCourseInitView::default());
+        sync_session_elapsed(&mut state, 125.1);
+        let first = Arc::clone(state.session_timer.text());
+
+        assert_eq!(first.as_ref(), "02:05");
+        sync_session_elapsed(&mut state, 125.9);
+        assert!(Arc::ptr_eq(state.session_timer.text(), &first));
+
+        sync_session_elapsed(&mut state, 126.0);
+        assert_eq!(state.session_timer.text().as_ref(), "02:06");
+        assert!(!Arc::ptr_eq(state.session_timer.text(), &first));
+    }
 
     #[test]
     fn runtime_updates_retain_clean_subviews_and_revise_filtered_content() {

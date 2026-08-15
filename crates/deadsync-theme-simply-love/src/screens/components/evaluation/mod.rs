@@ -1,6 +1,7 @@
 pub mod eval_grades;
 pub mod eval_graphs;
 pub mod event_progress;
+mod footer_clock;
 pub mod pane_column;
 pub mod pane_gs_records;
 pub mod pane_machine_records;
@@ -12,6 +13,7 @@ pub mod pane_timing;
 pub mod pane_timing_arrows;
 mod utils;
 
+pub(crate) use footer_clock::FooterClock;
 pub(crate) use utils::{eval_style_alpha, pane_origin_x as test_input_pane_origin_x};
 
 pub use event_progress::build_event_overlay;

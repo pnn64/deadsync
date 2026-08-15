@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, machine_font_key};
-use crate::screens::components::evaluation::eval_grades;
+use crate::screens::components::evaluation::{FooterClock, eval_grades};
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
@@ -12,7 +12,6 @@ use crate::screens::components::shared::{
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PostSelectStageView, PostSongRuntimeView};
-use chrono::{DateTime, Local};
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_height, screen_width, widescale};
@@ -29,56 +28,6 @@ const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 
 const ROWS_PER_PAGE: usize = 4;
-
-/// Screen-local clock cache owned by the game thread.
-///
-/// It holds one value for the Summary screen lifetime, warms at screen init,
-/// checks the wall clock at most once per second, and allocates only when the
-/// displayed minute changes. There is no eviction or background work; dropping
-/// the screen destroys the value. Worst-case update cost is one clock read and
-/// one short string allocation in a frame, with no additional instrumentation
-/// beyond the cadence tests below.
-struct FooterClock {
-    check_elapsed: f32,
-    minute: i64,
-    text: Arc<str>,
-}
-
-impl FooterClock {
-    fn new() -> Self {
-        Self::at(Local::now())
-    }
-
-    fn at(now: DateTime<Local>) -> Self {
-        Self {
-            check_elapsed: 0.0,
-            minute: now.timestamp().div_euclid(60),
-            text: Arc::from(now.format("%Y/%m/%d %H:%M").to_string()),
-        }
-    }
-
-    fn update(&mut self, dt: f32) {
-        self.update_with(dt, Local::now);
-    }
-
-    fn update_with(&mut self, dt: f32, now: impl FnOnce() -> DateTime<Local>) {
-        if dt.is_finite() && dt > 0.0 {
-            self.check_elapsed += dt;
-        }
-        if self.check_elapsed < 1.0 {
-            return;
-        }
-        self.check_elapsed %= 1.0;
-
-        let now = now();
-        let minute = now.timestamp().div_euclid(60);
-        if minute == self.minute {
-            return;
-        }
-        self.minute = minute;
-        self.text = Arc::from(now.format("%Y/%m/%d %H:%M").to_string());
-    }
-}
 
 struct SummaryPlayerText {
     profile_name: Option<Arc<str>>,
@@ -165,6 +114,59 @@ impl SummaryRows {
     }
 }
 
+/// Fixed-size localized label cache owned by the game thread.
+///
+/// Four `Arc` values live for the Summary screen and warm before actor
+/// construction. Locale, page, or page-count changes replace them immediately;
+/// there is no growth, eviction, locking beyond the localization lookup, or
+/// background work. Sync's boolean result is test-visible, and worst-case work
+/// is four bounded lookups plus one short page-label format.
+struct SummaryLabels {
+    screen_title: Arc<str>,
+    no_stage_data: Arc<str>,
+    itg_label: Arc<str>,
+    page_label: Arc<str>,
+    i18n_revision: u64,
+    page: usize,
+    pages: usize,
+}
+
+impl SummaryLabels {
+    fn new() -> Self {
+        Self {
+            screen_title: Arc::from(""),
+            no_stage_data: Arc::from(""),
+            itg_label: Arc::from(""),
+            page_label: Arc::from(""),
+            i18n_revision: u64::MAX,
+            page: 0,
+            pages: 0,
+        }
+    }
+
+    fn sync(&mut self, page: usize, pages: usize) -> bool {
+        let i18n_revision = crate::assets::i18n::revision();
+        if self.i18n_revision == i18n_revision && self.page == page && self.pages == pages {
+            return false;
+        }
+
+        let page_text = TextContent::inline_u32(page as u32);
+        let pages_text = TextContent::inline_u32(pages as u32);
+        self.screen_title = tr("EvaluationSummary", "ScreenTitle");
+        self.no_stage_data = tr("EvaluationSummary", "NoStageDataAvailable");
+        self.itg_label = tr("EvaluationSummary", "ITGLabel");
+        self.page_label = tr_fmt(
+            "EvaluationSummary",
+            "PageFormat",
+            &[("page", page_text.as_str()), ("pages", pages_text.as_str())],
+        );
+        self.i18n_revision = crate::assets::i18n::revision();
+        self.page = page;
+        self.pages = pages;
+        true
+    }
+}
+
 pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
@@ -175,6 +177,7 @@ pub struct State {
     menu_lr_undo: [i8; 2],
     footer_clock: FooterClock,
     stage_rows: SummaryRows,
+    labels: SummaryLabels,
     runtime: PostSongRuntimeView,
 }
 
@@ -193,6 +196,7 @@ pub fn init_for_return(runtime: PostSongRuntimeView, return_to: Screen) -> State
         menu_lr_undo: [0; 2],
         footer_clock: FooterClock::new(),
         stage_rows: SummaryRows::new(),
+        labels: SummaryLabels::new(),
         runtime,
     }
 }
@@ -207,12 +211,16 @@ pub fn mark_stage_rows_dirty(state: &mut State) {
 }
 
 pub fn sync_stage_rows(state: &mut State, stages: PostSelectStageView<'_>) -> bool {
-    state.stage_rows.sync(
+    let pages = pages_for(stages.len());
+    let page = state.page.clamp(1, pages);
+    let labels_changed = state.labels.sync(page, pages);
+    let rows_changed = state.stage_rows.sync(
         stages,
         state.active_color_index,
         state.runtime.translated_titles,
         state.runtime.zmod_rating_box_text,
-    )
+    );
+    labels_changed || rows_changed
 }
 
 #[inline(always)]
@@ -781,10 +789,9 @@ pub fn push_actors(
     );
 
     // Top Bar
-    let eval_title = tr("EvaluationSummary", "ScreenTitle");
     actors.push(screen_bar::build(ScreenBarParams {
         visual_policy,
-        title: &eval_title,
+        title: &state.labels.screen_title,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
         transparent: false,
@@ -799,7 +806,7 @@ pub fn push_actors(
     if stages.is_empty() {
         actors.push(act!(text:
             font(machine_font_key(state.runtime.machine_font, FontRole::Header)):
-            settext(tr("EvaluationSummary", "NoStageDataAvailable")):
+            settext(Arc::clone(&state.labels.no_stage_data)):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_height() * 0.5):
             zoom(0.8):
@@ -813,13 +820,11 @@ pub fn push_actors(
 
     let pages = pages_for(stages.len());
     let page = state.page.clamp(1, pages);
-    let page_text = TextContent::inline_u32(page as u32);
-    let pages_text = TextContent::inline_u32(pages as u32);
 
     // Centered "Page x/y"
     actors.push(act!(text:
         font(machine_font_key(state.runtime.machine_font, FontRole::Header)):
-        settext(tr_fmt("EvaluationSummary", "PageFormat", &[("page", page_text.as_str()), ("pages", pages_text.as_str())])):
+        settext(Arc::clone(&state.labels.page_label)):
         align(0.5, 0.5):
         xy(screen_center_x(), 15.0):
         zoom(widescale(0.5, 0.6)):
@@ -833,7 +838,7 @@ pub fn push_actors(
         let itg_text_x = screen_width() - 10.0;
         actors.push(act!(text:
                 font(machine_font_key(state.runtime.machine_font, FontRole::Header)):
-                settext(tr("EvaluationSummary", "ITGLabel")):
+                settext(Arc::clone(&state.labels.itg_label)):
                 align(1.0, 0.5):
             xy(itg_text_x, 15.0):
             zoom(widescale(0.5, 0.6)):
@@ -903,7 +908,7 @@ pub fn push_actors(
 
         actors.push(act!(text:
             font(machine_font_key(state.runtime.machine_font, FontRole::Numbers)):
-            settext(Arc::clone(&state.footer_clock.text)):
+            settext(Arc::clone(state.footer_clock.text())):
             align(0.5, 1.0):
             xy(screen_center_x(), screen_height() - 14.0):
             zoom(0.18):
@@ -941,44 +946,6 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
-
-    #[test]
-    fn footer_clock_reads_once_per_second_and_formats_once_per_minute() {
-        let first = Local.timestamp_opt(0, 0).single().expect("valid timestamp");
-        let same_minute = Local
-            .timestamp_opt(30, 0)
-            .single()
-            .expect("valid timestamp");
-        let next_minute = Local
-            .timestamp_opt(60, 0)
-            .single()
-            .expect("valid timestamp");
-        let mut clock = FooterClock::at(first);
-        let first_text = Arc::clone(&clock.text);
-
-        clock.update_with(0.5, || panic!("clock read before cadence elapsed"));
-        assert!(Arc::ptr_eq(&clock.text, &first_text));
-
-        let mut reads = 0;
-        clock.update_with(0.5, || {
-            reads += 1;
-            same_minute
-        });
-        assert_eq!(reads, 1);
-        assert!(Arc::ptr_eq(&clock.text, &first_text));
-
-        clock.update_with(10.0, || {
-            reads += 1;
-            next_minute
-        });
-        assert_eq!(reads, 2);
-        assert!(!Arc::ptr_eq(&clock.text, &first_text));
-        assert_eq!(
-            clock.text.as_ref(),
-            next_minute.format("%Y/%m/%d %H:%M").to_string()
-        );
-    }
 
     #[test]
     fn summary_rows_rebuild_only_when_dirty_or_policy_changes() {
@@ -997,6 +964,21 @@ mod tests {
         state.active_color_index += 1;
         assert!(sync_stage_rows(&mut state, view));
         assert!(!sync_stage_rows(&mut state, view));
+    }
+
+    #[test]
+    fn summary_labels_reformat_only_when_page_or_locale_changes() {
+        let mut labels = SummaryLabels::new();
+
+        assert!(labels.sync(1, 3));
+        let first_page = Arc::clone(&labels.page_label);
+        assert!(!labels.sync(1, 3));
+        assert!(Arc::ptr_eq(&labels.page_label, &first_page));
+
+        assert!(labels.sync(2, 3));
+        assert!(!Arc::ptr_eq(&labels.page_label, &first_page));
+        assert!(labels.page_label.contains('2'));
+        assert!(!labels.sync(2, 3));
     }
 
     #[test]

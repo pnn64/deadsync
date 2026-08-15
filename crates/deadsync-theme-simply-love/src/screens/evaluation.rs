@@ -4,7 +4,7 @@ use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::{
-    evaluation::{self as eval_panes, eval_grades, eval_graphs},
+    evaluation::{self as eval_panes, FooterClock, eval_grades, eval_graphs},
     shared::{
         banner as shared_banner, lobby_hud, mode_pads, screen_bar, test_input, timers, transitions,
         visual_style_bg,
@@ -51,7 +51,6 @@ use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 use deadsync_profile as profile_data;
 pub use deadsync_score::ColumnJudgments;
 // Keyboard handling is centralized in app via virtual actions
-use chrono::Local;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -205,7 +204,6 @@ impl ScatterWindow {
 }
 
 thread_local! {
-    static SESSION_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(2048));
     static BPM_TEXT_CACHE: RefCell<TextCache<(i32, i32, u32)>> = RefCell::new(text_cache_with_capacity(1024));
     static SONG_LENGTH_CACHE: RefCell<TextCache<i32>> = RefCell::new(text_cache_with_capacity(2048));
     static RECORD_TEXT_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(text_cache_with_capacity(256));
@@ -928,6 +926,57 @@ mod tests {
     }
 
     #[test]
+    fn step_artist_text_trims_deduplicates_and_cycles() {
+        let text = super::StepArtistText::new(" Alice ", "Alice", " Challenge ");
+
+        assert_eq!(text.len(), 2);
+        assert_eq!(text.joined.as_ref(), "Alice\nChallenge");
+        assert_eq!(text.cycled(0.0).map(|line| line.as_ref()), Some("Alice"));
+        assert_eq!(
+            text.cycled(2.0).map(|line| line.as_ref()),
+            Some("Challenge")
+        );
+        assert_eq!(text.cycled(4.0).map(|line| line.as_ref()), Some("Alice"));
+    }
+
+    #[test]
+    fn step_artist_text_handles_empty_sources_and_invalid_time() {
+        let empty = super::StepArtistText::new(" ", "", "  ");
+        assert_eq!(empty.len(), 0);
+        assert!(empty.joined.is_empty());
+        assert!(empty.cycled(0.0).is_none());
+
+        let text = super::StepArtistText::new("Author", "", "");
+        assert_eq!(
+            text.cycled(f32::NAN).map(|line| line.as_ref()),
+            Some("Author")
+        );
+        assert_eq!(
+            text.cycled(f32::INFINITY).map(|line| line.as_ref()),
+            Some("Author")
+        );
+        assert_eq!(text.cycled(-1.0).map(|line| line.as_ref()), Some("Author"));
+    }
+
+    #[test]
+    fn elapsed_sync_retains_timer_text_until_the_visible_second_changes() {
+        let mut state = super::init(None, Default::default());
+        super::sync_elapsed(&mut state, 65.1, 3_600.0);
+        let session_text = Arc::clone(state.session_timer.text());
+
+        assert_eq!(super::elapsed_times(&state), (65.1, 3_600.0));
+        assert_eq!(session_text.as_ref(), "01:05");
+        assert_eq!(state.gameplay_timer.text().as_ref(), "1:00:00");
+
+        super::sync_elapsed(&mut state, 65.9, 3_600.9);
+        assert!(Arc::ptr_eq(state.session_timer.text(), &session_text));
+
+        super::sync_elapsed(&mut state, 66.0, 3_601.0);
+        assert_eq!(state.session_timer.text().as_ref(), "01:06");
+        assert!(!Arc::ptr_eq(state.session_timer.text(), &session_text));
+    }
+
+    #[test]
     fn scatter_cycle_includes_quantization_and_real_foot_parity() {
         assert_eq!(
             eval_graph_cycle(false, false),
@@ -1047,6 +1096,15 @@ mod tests {
         assert!(buf.has_fixed2(12.69)); // ".69" fractional
         assert!(!buf.has_fixed2(6.90)); // "6.90" — dot breaks 6|9 adjacency
         assert!(!buf.has_fixed2(12.34));
+    }
+
+    #[test]
+    fn nice_eligibility_is_compiled_and_preserved_by_state_clone() {
+        let mut state = super::init(None, Default::default());
+        assert_eq!(state.nice_scores, [false; 2]);
+
+        state.nice_scores = [true, false];
+        assert_eq!(state.clone().nice_scores, [true, false]);
     }
 
     fn test_course_graph_stage(song_last_second: f32) -> CourseGraphStage {
@@ -2082,6 +2140,85 @@ struct ChromeCacheKey {
     header_alpha_bits: u32,
 }
 
+/// Fixed per-result step-artist presentation compiled on the game thread.
+///
+/// At most three shared strings and one joined value live with Evaluation.
+/// Initialization trims and deduplicates the source fields; actor frames only
+/// select a retained entry or clone the joined value. There are no live misses,
+/// growth, eviction, locking, or background work, and state teardown drops all
+/// values. The fixed capacity and cadence are covered by focused tests.
+#[derive(Clone, Debug)]
+struct StepArtistText {
+    lines: [Arc<str>; 3],
+    len: u8,
+    joined: Arc<str>,
+}
+
+impl StepArtistText {
+    fn new(author: &str, description: &str, chart_name: &str) -> Self {
+        let mut lines: [Arc<str>; 3] = std::array::from_fn(|_| Arc::from(""));
+        let mut len = 0usize;
+        for source in [author, description, chart_name] {
+            let source = source.trim();
+            if source.is_empty() || lines[..len].iter().any(|line| line.as_ref() == source) {
+                continue;
+            }
+            lines[len] = Arc::from(source);
+            len += 1;
+        }
+
+        let joined = match len {
+            0 => Arc::from(""),
+            1 => Arc::clone(&lines[0]),
+            _ => {
+                let capacity = lines[..len].iter().map(|line| line.len()).sum::<usize>()
+                    + len.saturating_sub(1);
+                let mut joined = String::with_capacity(capacity);
+                for (index, line) in lines[..len].iter().enumerate() {
+                    if index > 0 {
+                        joined.push('\n');
+                    }
+                    joined.push_str(line);
+                }
+                Arc::from(joined)
+            }
+        };
+
+        Self {
+            lines,
+            len: len as u8,
+            joined,
+        }
+    }
+
+    fn from_score(score: &ScoreInfo) -> Self {
+        Self::new(
+            &score.chart.step_artist,
+            &score.chart.description,
+            &score.chart.chart_name,
+        )
+    }
+
+    #[inline(always)]
+    const fn len(&self) -> usize {
+        self.len as usize
+    }
+
+    fn cycled(&self, elapsed: f32) -> Option<&Arc<str>> {
+        let len = self.len();
+        if len == 0 {
+            return None;
+        }
+        let elapsed = if elapsed.is_finite() && elapsed > 0.0 {
+            elapsed
+        } else {
+            0.0
+        };
+        let index = ((elapsed / 2.0).floor() as usize) % len;
+        self.lines.get(index)
+    }
+}
+
 #[inline]
 fn fnv1a_str(s: &str) -> u64 {
     let mut h = 0xcbf2_9ce4_8422_2325_u64;
@@ -2096,10 +2233,16 @@ pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
     pub screen_elapsed: f32,
-    pub session_elapsed: f32, // To display the timer
-    pub gameplay_elapsed: f32,
+    footer_clock: FooterClock,
+    session_elapsed: f32,
+    gameplay_elapsed: f32,
+    session_timer: timers::TimerText,
+    gameplay_timer: timers::TimerText,
     pub stage_duration_seconds: f32,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    /// Immutable per-result Nice eligibility compiled with `score_info`.
+    nice_scores: [bool; MAX_PLAYERS],
+    step_artist_text: [StepArtistText; MAX_PLAYERS],
     context: EvaluationContextView,
     favorites: [bool; MAX_PLAYERS],
     fail_stream_progress: [Option<(u32, u32)>; MAX_PLAYERS],
@@ -2162,10 +2305,15 @@ impl Clone for State {
             active_color_index: self.active_color_index,
             bg: self.bg.clone(),
             screen_elapsed: self.screen_elapsed,
+            footer_clock: self.footer_clock.clone(),
             session_elapsed: self.session_elapsed,
             gameplay_elapsed: self.gameplay_elapsed,
+            session_timer: self.session_timer.clone(),
+            gameplay_timer: self.gameplay_timer.clone(),
             stage_duration_seconds: self.stage_duration_seconds,
             score_info: self.score_info.clone(),
+            nice_scores: self.nice_scores,
+            step_artist_text: self.step_artist_text.clone(),
             context: self.context.clone(),
             favorites: self.favorites,
             fail_stream_progress: self.fail_stream_progress,
@@ -2217,6 +2365,19 @@ impl Clone for State {
             song_features_cache: RefCell::new(None),
         }
     }
+}
+
+/// Synchronizes shell-owned elapsed values and their retained presentation.
+pub fn sync_elapsed(state: &mut State, session_elapsed: f32, gameplay_elapsed: f32) {
+    state.session_elapsed = session_elapsed;
+    state.gameplay_elapsed = gameplay_elapsed;
+    state.session_timer.sync(session_elapsed);
+    state.gameplay_timer.sync(gameplay_elapsed);
+}
+
+#[inline(always)]
+pub const fn elapsed_times(state: &State) -> (f32, f32) {
+    (state.session_elapsed, state.gameplay_elapsed)
 }
 
 pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInitView) -> State {
@@ -2771,14 +2932,28 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         }
     }
 
+    let nice_scores =
+        std::array::from_fn(|index| score_info[index].as_ref().is_some_and(score_info_is_nice));
+    let step_artist_text = std::array::from_fn(|index| {
+        score_info[index].as_ref().map_or_else(
+            || StepArtistText::new("", "", ""),
+            StepArtistText::from_score,
+        )
+    });
+
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // This will be overwritten by app
         bg: visual_style_bg::State::new(),
         screen_elapsed: 0.0,
+        footer_clock: FooterClock::new(),
         session_elapsed: 0.0,
         gameplay_elapsed: 0.0,
+        session_timer: timers::TimerText::default(),
+        gameplay_timer: timers::TimerText::default(),
         stage_duration_seconds,
         score_info,
+        nice_scores,
+        step_artist_text,
         context,
         favorites: [false; MAX_PLAYERS],
         fail_stream_progress,
@@ -2958,14 +3133,28 @@ pub fn init_from_score_info(
             )
         });
 
+    let nice_scores =
+        std::array::from_fn(|index| score_info[index].as_ref().is_some_and(score_info_is_nice));
+    let step_artist_text = std::array::from_fn(|index| {
+        score_info[index].as_ref().map_or_else(
+            || StepArtistText::new("", "", ""),
+            StepArtistText::from_score,
+        )
+    });
+
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: visual_style_bg::State::new(),
         screen_elapsed: 0.0,
+        footer_clock: FooterClock::new(),
         session_elapsed: 0.0,
         gameplay_elapsed: 0.0,
+        session_timer: timers::TimerText::default(),
+        gameplay_timer: timers::TimerText::default(),
         stage_duration_seconds,
         score_info,
+        nice_scores,
+        step_artist_text,
         context,
         favorites: [false; MAX_PLAYERS],
         fail_stream_progress: [None; MAX_PLAYERS],
@@ -3109,8 +3298,8 @@ fn sync_submit_record_sfx(state: &mut State) {
 /// actual + possible counts for Holds / Rolls / Mines / Hands, the chart
 /// difficulty meter, and the song title.
 /// Stack-only check for whether a value's decimal rendering contains "69" — the
-/// Simply Love "Nice" easter egg. Replaces per-frame `format!`/`to_string` heap
-/// allocations (this predicate runs every frame in both `get_actors` and `update`).
+/// Simply Love "Nice" easter egg. Evaluation initialization runs this predicate
+/// once per result and retains the boolean for update and actor construction.
 struct Nice69Buf {
     bytes: [u8; 48],
     len: usize,
@@ -3201,8 +3390,7 @@ fn sync_nice_sfx(state: &mut State) {
     if state.nice_sfx_played || !state.context.policy.machine_nice_sound {
         return;
     }
-    let is_nice = state.score_info.iter().flatten().any(score_info_is_nice);
-    if !is_nice {
+    if !state.nice_scores.contains(&true) {
         return;
     }
     crate::assets::audio_folder::play_random_screen_sfx("assets/sounds/evaluation_nice");
@@ -3292,6 +3480,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     if dt > 0.0 {
         state.screen_elapsed += dt;
     }
+    state.footer_clock.update(dt);
 
     let mut effect = evaluation_lobby_machine_state(state);
     if evaluation_lobby_lock_text(state).is_some() {
@@ -3812,27 +4001,6 @@ pub fn in_transition() -> (Vec<Actor>, f32) {
 
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
-}
-
-fn format_session_time(seconds_total: f32) -> Arc<str> {
-    let seconds_total = if !seconds_total.is_finite() || seconds_total < 0.0 {
-        0_u64
-    } else {
-        seconds_total as u64
-    };
-    let key = seconds_total.min(u32::MAX as u64) as u32;
-    cached_text(&SESSION_TIME_CACHE, key, TEXT_CACHE_LIMIT, || {
-        let hours = seconds_total / 3600;
-        let minutes = (seconds_total % 3600) / 60;
-        let seconds = seconds_total % 60;
-        if seconds_total < 3600 {
-            format!("{minutes:02}:{seconds:02}")
-        } else if seconds_total < 36000 {
-            format!("{hours}:{minutes:02}:{seconds:02}")
-        } else {
-            format!("{hours:02}:{minutes:02}:{seconds:02}")
-        }
-    })
 }
 
 #[inline(always)]
@@ -4557,12 +4725,12 @@ pub fn push_actors(
 
     // Header timers (zmod parity): session timer + optional cumulative gameplay timer.
     actors.push(timers::build_session(
-        format_session_time(state.session_elapsed),
+        Arc::clone(state.session_timer.text()),
         policy.machine_font,
     ));
     if policy.show_gameplay_timer {
         actors.push(timers::build_gameplay(
-            format_session_time(state.gameplay_elapsed),
+            Arc::clone(state.gameplay_timer.text()),
             policy.machine_font,
         ));
     }
@@ -4931,7 +5099,7 @@ pub fn push_actors(
             // when enabled and a `69` shows up anywhere notable in the score,
             // draw nice.png just below the letter grade, matching SL's placement
             // (x = grade x, y = cy - 94, zoom 0.4).
-            if policy.machine_nice_sound && score_info_is_nice(si) {
+            if policy.machine_nice_sound && state.nice_scores[player_idx] {
                 actors.push(act!(sprite("nice.png"):
                     align(0.5, 0.5):
                     xy(upper_origin_x + 70.0 * dir, cy - 94.0):
@@ -4940,26 +5108,12 @@ pub fn push_actors(
                 ));
             }
 
-            // Step artist / description / chart name:
-            // SL-style source list is [AuthorCredit, Description, ChartName] (if distinct).
-            let mut step_artist_lines: Vec<String> = Vec::with_capacity(3);
-            let author = si.chart.step_artist.trim();
-            if !author.is_empty() {
-                step_artist_lines.push(author.to_owned());
-            }
-            let description = si.chart.description.trim();
-            if !description.is_empty() && step_artist_lines.iter().all(|line| line != description) {
-                step_artist_lines.push(description.to_owned());
-            }
-            let chart_name = si.chart.chart_name.trim();
-            if !chart_name.is_empty() && step_artist_lines.iter().all(|line| line != chart_name) {
-                step_artist_lines.push(chart_name.to_owned());
-            }
+            let step_artist = &state.step_artist_text[player_idx];
 
             if policy.zmod_rating_box_text {
-                let step_artist_text = step_artist_lines.join("\n");
+                let step_artist_text = &step_artist.joined;
                 if !step_artist_text.is_empty() {
-                    let line_count = step_artist_lines.len().max(1);
+                    let line_count = step_artist.len().max(1);
                     let zmod_diff_box_x = upper_origin_x + 129.5 * dir;
                     let x = zmod_diff_box_x - 21.5 * dir;
                     // DeadSync's bottom-aligned text block does not include
@@ -5018,26 +5172,22 @@ pub fn push_actors(
                     ));
 
                     if side == profile_data::PlayerSide::P1 {
-                        actors.push(act!(text: font("miso"): settext(step_artist_text):
-                            align(align_x, 1.0): xy(x, y): zoom(text_zoom): z(103):
-                            diffuse(1.0, 1.0, 1.0, 1.0)
-                        ));
+                        actors.push(
+                            act!(text: font("miso"): settext(Arc::clone(step_artist_text)):
+                                align(align_x, 1.0): xy(x, y): zoom(text_zoom): z(103):
+                                diffuse(1.0, 1.0, 1.0, 1.0)
+                            ),
+                        );
                     } else {
-                        actors.push(act!(text: font("miso"): settext(step_artist_text):
-                            align(align_x, 1.0): xy(x, y): zoom(text_zoom): z(103):
-                            diffuse(1.0, 1.0, 1.0, 1.0): horizalign(right)
-                        ));
+                        actors.push(
+                            act!(text: font("miso"): settext(Arc::clone(step_artist_text)):
+                                align(align_x, 1.0): xy(x, y): zoom(text_zoom): z(103):
+                                diffuse(1.0, 1.0, 1.0, 1.0): horizalign(right)
+                            ),
+                        );
                     }
                 }
-            } else {
-                let step_artist_text = if step_artist_lines.is_empty() {
-                    String::new()
-                } else {
-                    // Simply Love StepArtist.lua marquee cadence: 2s per entry.
-                    let cycle_idx = ((state.screen_elapsed.max(0.0) / 2.0).floor() as usize)
-                        % step_artist_lines.len();
-                    step_artist_lines[cycle_idx].clone()
-                };
+            } else if let Some(step_artist_text) = step_artist.cycled(state.screen_elapsed) {
                 if !step_artist_text.is_empty() {
                     let x = upper_origin_x + 115.0 * dir;
                     let align_x = if side == profile_data::PlayerSide::P1 {
@@ -5046,15 +5196,19 @@ pub fn push_actors(
                         1.0
                     };
                     if side == profile_data::PlayerSide::P1 {
-                        actors.push(act!(text: font("miso"): settext(step_artist_text):
-                            align(align_x, 0.5): xy(x, cy - 81.0): zoom(0.7): z(101):
-                            diffuse(1.0, 1.0, 1.0, 1.0)
-                        ));
+                        actors.push(
+                            act!(text: font("miso"): settext(Arc::clone(step_artist_text)):
+                                align(align_x, 0.5): xy(x, cy - 81.0): zoom(0.7): z(101):
+                                diffuse(1.0, 1.0, 1.0, 1.0)
+                            ),
+                        );
                     } else {
-                        actors.push(act!(text: font("miso"): settext(step_artist_text):
-                            align(align_x, 0.5): xy(x, cy - 81.0): zoom(0.7): z(101):
-                            diffuse(1.0, 1.0, 1.0, 1.0): horizalign(right)
-                        ));
+                        actors.push(
+                            act!(text: font("miso"): settext(Arc::clone(step_artist_text)):
+                                align(align_x, 0.5): xy(x, cy - 81.0): zoom(0.7): z(101):
+                                diffuse(1.0, 1.0, 1.0, 1.0): horizalign(right)
+                            ),
+                        );
                     }
                 }
             }
@@ -6118,14 +6272,9 @@ pub fn push_actors(
         right_avatar,
     }));
 
-    // --- Date/Time in footer (like ScreenEvaluation decorations) ---
-    let now = Local::now();
-    // The format matches YYYY/MM/DD HH:MM from the Lua script.
-    let timestamp_text = now.format("%Y/%m/%d %H:%M").to_string();
-
     actors.push(act!(text:
         font(machine_font_key(policy.machine_font, FontRole::Numbers)):
-        settext(timestamp_text):
+        settext(Arc::clone(state.footer_clock.text())):
         align(0.5, 1.0): // align bottom-center of text block
         xy(screen_center_x(), screen_height() - 14.0):
         zoom(0.18):

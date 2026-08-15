@@ -716,8 +716,7 @@ fn build_course_summary_eval_state(
         ),
     );
     state.active_color_index = active_color_index;
-    state.session_elapsed = session_elapsed;
-    state.gameplay_elapsed = gameplay_elapsed;
+    evaluation::sync_elapsed(&mut state, session_elapsed, gameplay_elapsed);
     state.return_to_course = true;
     state.allow_online_panes = false;
     state
@@ -1210,11 +1209,17 @@ impl ScreensState {
                 false,
             ),
             CurrentScreen::Evaluation => {
-                if let Some(start) = session.session_start_time {
-                    self.evaluation_state.session_elapsed = now.duration_since(start).as_secs_f32();
-                }
-                self.evaluation_state.gameplay_elapsed =
+                let (session_elapsed, _) = evaluation::elapsed_times(&self.evaluation_state);
+                let session_elapsed = session.session_start_time.map_or(session_elapsed, |start| {
+                    now.duration_since(start).as_secs_f32()
+                });
+                let gameplay_elapsed =
                     stage_stats::total_stage_duration_seconds(&session.played_stages);
+                evaluation::sync_elapsed(
+                    &mut self.evaluation_state,
+                    session_elapsed,
+                    gameplay_elapsed,
+                );
                 let update_effect = evaluation::update(&mut self.evaluation_state, delta_time);
                 let navigation = if let Some(delay) = self.evaluation_state.auto_advance_seconds
                     && self.evaluation_state.screen_elapsed >= delay
@@ -1239,12 +1244,17 @@ impl ScreensState {
                 false,
             ),
             CurrentScreen::SelectMusic => {
-                if let Some(start) = session.session_start_time {
-                    self.select_music_state.session_elapsed =
-                        now.duration_since(start).as_secs_f32();
-                }
-                self.select_music_state.gameplay_elapsed =
+                let (session_elapsed, _) = select_music::elapsed_times(&self.select_music_state);
+                let session_elapsed = session.session_start_time.map_or(session_elapsed, |start| {
+                    now.duration_since(start).as_secs_f32()
+                });
+                let gameplay_elapsed =
                     stage_stats::total_stage_duration_seconds(&session.played_stages);
+                select_music::sync_elapsed(
+                    &mut self.select_music_state,
+                    session_elapsed,
+                    gameplay_elapsed,
+                );
                 (
                     Some(select_music::update(
                         &mut self.select_music_state,
@@ -1256,8 +1266,10 @@ impl ScreensState {
             }
             CurrentScreen::SelectCourse => {
                 if let Some(start) = session.session_start_time {
-                    self.select_course_state.session_elapsed =
-                        now.duration_since(start).as_secs_f32();
+                    select_course::sync_session_elapsed(
+                        &mut self.select_course_state,
+                        now.duration_since(start).as_secs_f32(),
+                    );
                 }
                 (
                     Some(select_course::update(
@@ -5261,7 +5273,8 @@ impl App {
 
                 let gameplay_elapsed =
                     stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
-                let session_elapsed = self.state.screens.evaluation_state.session_elapsed;
+                let (session_elapsed, _) =
+                    evaluation::elapsed_times(&self.state.screens.evaluation_state);
                 let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
                 let mut course_page = build_course_summary_eval_state(
                     &course_stage,
@@ -5281,8 +5294,7 @@ impl App {
                     page.return_to_course = true;
                     page.auto_advance_seconds = None;
                     page.screen_elapsed = screen_elapsed;
-                    page.session_elapsed = session_elapsed;
-                    page.gameplay_elapsed = gameplay_elapsed;
+                    evaluation::sync_elapsed(&mut page, session_elapsed, gameplay_elapsed);
                     pages.push(page);
                 }
                 self.state.session.replace_course_eval_pages(pages);
@@ -5291,8 +5303,14 @@ impl App {
             self.state.session.clear_course_eval_pages();
         }
 
-        self.state.screens.evaluation_state.gameplay_elapsed =
+        let (session_elapsed, _) = evaluation::elapsed_times(&self.state.screens.evaluation_state);
+        let gameplay_elapsed =
             stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
+        evaluation::sync_elapsed(
+            &mut self.state.screens.evaluation_state,
+            session_elapsed,
+            gameplay_elapsed,
+        );
     }
 
     fn post_select_display_stages(
@@ -5357,8 +5375,9 @@ impl App {
             return;
         };
         page.screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
-        page.session_elapsed = self.state.screens.evaluation_state.session_elapsed;
-        page.gameplay_elapsed = self.state.screens.evaluation_state.gameplay_elapsed;
+        let (session_elapsed, gameplay_elapsed) =
+            evaluation::elapsed_times(&self.state.screens.evaluation_state);
+        evaluation::sync_elapsed(&mut page, session_elapsed, gameplay_elapsed);
         page.return_to_course = true;
         page.auto_advance_seconds = None;
         self.state.screens.evaluation_state = page;
@@ -6109,13 +6128,18 @@ impl App {
                     visual_policy,
                 );
             }
-            CurrentScreen::GameOver => gameover::push_actors(
-                &mut actors,
-                &self.state.screens.gameover_state,
-                &self.state.session.played_stages,
-                &self.asset_manager,
-                visual_policy,
-            ),
+            CurrentScreen::GameOver => {
+                gameover::sync_text(
+                    &mut self.state.screens.gameover_state,
+                    &self.state.session.played_stages,
+                );
+                gameover::push_actors(
+                    &mut actors,
+                    &self.state.screens.gameover_state,
+                    &self.asset_manager,
+                    visual_policy,
+                );
+            }
         };
 
         if self.state.shell.overlay_mode.shows_fps() {
@@ -8110,12 +8134,16 @@ impl App {
             self.state.screens.evaluation_state.return_to_course =
                 self.state.session.course_run.is_some();
             self.state.screens.evaluation_state.auto_advance_seconds = None;
-            if let Some(start) = self.state.session.session_start_time {
-                self.state.screens.evaluation_state.session_elapsed =
-                    Instant::now().duration_since(start).as_secs_f32();
-            }
-            self.state.screens.evaluation_state.gameplay_elapsed =
+            let session_elapsed = self.state.session.session_start_time.map_or(0.0, |start| {
+                Instant::now().duration_since(start).as_secs_f32()
+            });
+            let gameplay_elapsed =
                 stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
+            evaluation::sync_elapsed(
+                &mut self.state.screens.evaluation_state,
+                session_elapsed,
+                gameplay_elapsed,
+            );
             self.finalize_entered_evaluation(&config);
             self.evaluation_policy = evaluation_views::EvaluationFramePolicy::from_config(&config);
             self.mark_evaluation_runtime_dirty();
@@ -8355,8 +8383,15 @@ impl App {
                     );
                 }
             }
-            self.state.screens.select_music_state.gameplay_elapsed =
+            let (session_elapsed, _) =
+                select_music::elapsed_times(&self.state.screens.select_music_state);
+            let gameplay_elapsed =
                 stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
+            select_music::sync_elapsed(
+                &mut self.state.screens.select_music_state,
+                session_elapsed,
+                gameplay_elapsed,
+            );
 
             // Prime the delayed panes (tech counts, breakdown, etc.) for the selected chart so they
             // render immediately on entry (no initial debounce delay).

@@ -229,7 +229,7 @@ const NUM_STANDARD_DIFFICULTIES: usize = STANDARD_DIFFICULTY_COUNT;
 const TEXT_CACHE_LIMIT: usize = 8192;
 
 thread_local! {
-    static SESSION_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(2048));
+    static PADDED_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(2048));
     static CHART_LENGTH_CACHE: RefCell<TextCache<i32>> = RefCell::new(text_cache_with_capacity(2048));
     static BPM_TEXT_CACHE: RefCell<TextCache<(u64, u64, u32)>> = RefCell::new(text_cache_with_capacity(2048));
     static UINT_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(4096));
@@ -1588,8 +1588,10 @@ pub struct State {
     pub current_graph_key_p2: String,
     pub current_graph_mesh: Option<Arc<[MeshVertex]>>,
     pub current_graph_mesh_p2: Option<Arc<[MeshVertex]>>,
-    pub session_elapsed: f32,
-    pub gameplay_elapsed: f32,
+    session_elapsed: f32,
+    gameplay_elapsed: f32,
+    session_timer: timers::TimerText,
+    gameplay_timer: timers::TimerText,
     heart_rate_view: heart_rate::HeartRateView,
     displayed_chart_p1: Option<DisplayedChart>,
     displayed_chart_p2: Option<DisplayedChart>,
@@ -3504,6 +3506,19 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
     state.cached_standard_chart_ixs = [None; NUM_STANDARD_DIFFICULTIES];
 }
 
+/// Synchronizes shell-owned elapsed values and their retained presentation.
+pub fn sync_elapsed(state: &mut State, session_elapsed: f32, gameplay_elapsed: f32) {
+    state.session_elapsed = session_elapsed;
+    state.gameplay_elapsed = gameplay_elapsed;
+    state.session_timer.sync(session_elapsed);
+    state.gameplay_timer.sync(gameplay_elapsed);
+}
+
+#[inline(always)]
+pub const fn elapsed_times(state: &State) -> (f32, f32) {
+    (state.session_elapsed, state.gameplay_elapsed)
+}
+
 pub fn init(init_view: SelectMusicInitView) -> State {
     let started = Instant::now();
     debug!("Preparing SelectMusic state...");
@@ -3903,6 +3918,8 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         music_wheel_moved: false,
         session_elapsed: 0.0,
         gameplay_elapsed: 0.0,
+        session_timer: timers::TimerText::default(),
+        gameplay_timer: timers::TimerText::default(),
         heart_rate_view: heart_rate::HeartRateView::default(),
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
@@ -4144,6 +4161,8 @@ pub fn init_placeholder() -> State {
         music_wheel_moved: false,
         session_elapsed: 0.0,
         gameplay_elapsed: 0.0,
+        session_timer: timers::TimerText::default(),
+        gameplay_timer: timers::TimerText::default(),
         heart_rate_view: heart_rate::HeartRateView::default(),
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
@@ -7045,8 +7064,7 @@ fn refresh_after_style_switch(state: &mut State) {
     let mut refreshed = init(init_view);
     refreshed.active_color_index = active_color_index;
     refreshed.active_playlist_id = active_playlist_id;
-    refreshed.session_elapsed = session_elapsed;
-    refreshed.gameplay_elapsed = gameplay_elapsed;
+    sync_elapsed(&mut refreshed, session_elapsed, gameplay_elapsed);
     refreshed.pending_audio = pending_audio;
     refreshed.pending_profile = pending_profile;
     refreshed.audio_playback = audio_playback;
@@ -12030,14 +12048,14 @@ pub fn allows_late_join(state: &State) -> bool {
 }
 
 // Fast non-allocating formatters where possible
-fn format_session_time(seconds: f32) -> Arc<str> {
+fn format_padded_time(seconds: f32) -> Arc<str> {
     let s = if !seconds.is_finite() || seconds < 0.0 {
         0_u64
     } else {
         seconds as u64
     };
     let key = s.min(u32::MAX as u64) as u32;
-    cached_text(&SESSION_TIME_CACHE, key, TEXT_CACHE_LIMIT, || {
+    cached_text(&PADDED_TIME_CACHE, key, TEXT_CACHE_LIMIT, || {
         let (h, m, sec) = (s / 3600, (s % 3600) / 60, s % 60);
         if s < 3600 {
             format!("{m:02}:{sec:02}")
@@ -12976,7 +12994,7 @@ pub fn push_actors(
 
     // Timer (zmod parity: optional gameplay timer to the right of session timer).
     actors.push(timers::build_session(
-        format_session_time(state.session_elapsed),
+        Arc::clone(state.session_timer.text()),
         state.policy.machine_font,
     ));
     if presentation.show_stage_display {
@@ -12987,7 +13005,7 @@ pub fn push_actors(
     }
     if presentation.show_gameplay_timer {
         actors.push(timers::build_gameplay(
-            format_session_time(state.gameplay_elapsed),
+            Arc::clone(state.gameplay_timer.text()),
             state.policy.machine_font,
         ));
     }
@@ -13126,7 +13144,7 @@ pub fn push_actors(
             (
                 cached_str_ref(""),
                 cached_str_ref(""),
-                format_session_time((total_sec / music_rate as f64) as f32),
+                format_padded_time((total_sec / music_rate as f64) as f32),
             )
         }
         None => (cached_str_ref(""), cached_str_ref(""), cached_str_ref("")),
@@ -14845,6 +14863,24 @@ mod tests {
             timestamp: Instant::now(),
             host_nanos: 0,
         }
+    }
+
+    #[test]
+    fn elapsed_sync_retains_timer_text_until_the_visible_second_changes() {
+        let mut state = init_placeholder();
+        super::sync_elapsed(&mut state, 125.1, 3_600.0);
+        let session_text = Arc::clone(state.session_timer.text());
+
+        assert_eq!(super::elapsed_times(&state), (125.1, 3_600.0));
+        assert_eq!(session_text.as_ref(), "02:05");
+        assert_eq!(state.gameplay_timer.text().as_ref(), "1:00:00");
+
+        super::sync_elapsed(&mut state, 125.9, 3_600.9);
+        assert!(Arc::ptr_eq(state.session_timer.text(), &session_text));
+
+        super::sync_elapsed(&mut state, 126.0, 3_601.0);
+        assert_eq!(state.session_timer.text().as_ref(), "02:06");
+        assert!(!Arc::ptr_eq(state.session_timer.text(), &session_text));
     }
 
     fn texture_offset(actor: &Actor, key: &str) -> Option<[f32; 2]> {
