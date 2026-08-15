@@ -524,14 +524,15 @@ pub(crate) fn handle_input(
     state: &mut OverlayState,
     ev: &InputEvent,
     navigation: NavigationPolicy,
-) -> crate::screens::ThemeEffect {
+    effects: &mut Vec<crate::screens::ThemeEffect>,
+) {
     if screen_input::dedicated_blocks_arrow(ev.action, navigation.only_dedicated_menu_buttons) {
-        return crate::screens::ThemeEffect::None;
+        return;
     }
 
     let three_key_action = {
         let OverlayState::Visible(overlay) = state else {
-            return crate::screens::ThemeEffect::None;
+            return;
         };
         screen_input::three_key_menu_action_enabled(
             &mut overlay.menu_lr_chord,
@@ -540,7 +541,7 @@ pub(crate) fn handle_input(
         )
     };
     if !ev.pressed {
-        return crate::screens::ThemeEffect::None;
+        return;
     }
 
     let mut close_overlay = false;
@@ -550,7 +551,7 @@ pub(crate) fn handle_input(
 
     {
         let OverlayState::Visible(overlay) = state else {
-            return crate::screens::ThemeEffect::None;
+            return;
         };
         let page_delta = view_rows(overlay).saturating_sub(1).max(1) as isize;
         if navigation.dedicated_three_key()
@@ -701,7 +702,6 @@ pub(crate) fn handle_input(
         }
     }
 
-    let mut effects = Vec::with_capacity(3);
     if play_change {
         effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
     }
@@ -721,11 +721,6 @@ pub(crate) fn handle_input(
                 crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { changes },
             ),
         ));
-    }
-    match effects.len() {
-        0 => crate::screens::ThemeEffect::None,
-        1 => effects.remove(0),
-        _ => crate::screens::ThemeEffect::batch(effects),
     }
 }
 
@@ -1088,11 +1083,14 @@ pub(crate) fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSync
 #[cfg(test)]
 mod tests {
     use super::{
-        NavigationPolicy, RowDisposition, RowPhase, RowState, confidence_threshold_percent,
-        result_text, review_choice_delta, row_disposition,
+        NavigationPolicy, OverlayPhase, OverlayState, OverlayStateData, RowDisposition, RowPhase,
+        RowState, confidence_threshold_percent, result_text, review_choice_delta, row_disposition,
     };
-    use deadsync_input::VirtualAction;
+    use crate::screens::ThemeEffect;
+    use deadsync_core::input::InputSource;
+    use deadsync_input::{InputEvent, VirtualAction};
     use std::path::PathBuf;
+    use std::time::Instant;
 
     fn pack_row(bias_ms: f64, confidence: f64) -> RowState {
         RowState {
@@ -1106,6 +1104,26 @@ mod tests {
             phase: RowPhase::Ready,
             error_text: None,
         }
+    }
+
+    fn overlay(phase: OverlayPhase) -> OverlayState {
+        OverlayState::Visible(OverlayStateData {
+            pack_name: "Test Pack".to_string(),
+            rows: vec![pack_row(12.5, 0.87)],
+            scroll_index: 0,
+            auto_follow: false,
+            yes_selected: true,
+            phase,
+            min_confidence: 0.80,
+            owner: crate::SimplyLoveSyncOwner::SelectMusicPack,
+            current_row: None,
+            menu_lr_chord: crate::screens::input::MenuLrChordTracker::default(),
+        })
+    }
+
+    fn press(action: VirtualAction) -> InputEvent {
+        let now = Instant::now();
+        InputEvent::new(action, 0, true, InputSource::Keyboard, now, 0, now, now)
     }
 
     #[test]
@@ -1167,5 +1185,64 @@ mod tests {
         );
         assert_eq!(review_choice_delta(VirtualAction::p1_left, false), Some(-1));
         assert_eq!(review_choice_delta(VirtualAction::p1_right, false), Some(1));
+    }
+
+    #[test]
+    fn running_cancel_appends_sound_before_sync_cancel() {
+        let mut state = overlay(OverlayPhase::Running);
+        let mut effects = Vec::with_capacity(8);
+
+        super::handle_input(
+            &mut state,
+            &press(VirtualAction::p1_start),
+            NavigationPolicy::default(),
+            &mut effects,
+        );
+
+        assert!(matches!(state, OverlayState::Hidden));
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::PlaySfx(path)
+                )),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Sync(
+                    crate::SimplyLoveSyncRequest::CancelAnalysis(
+                        crate::SimplyLoveSyncOwner::SelectMusicPack
+                    )
+                )),
+            ] if path == "assets/sounds/start.ogg"
+        ));
+        assert_eq!(effects.capacity(), 8);
+    }
+
+    #[test]
+    fn review_confirm_appends_sound_before_offset_changes() {
+        let mut state = overlay(OverlayPhase::Review);
+        let mut effects = Vec::with_capacity(8);
+
+        super::handle_input(
+            &mut state,
+            &press(VirtualAction::p1_start),
+            NavigationPolicy::default(),
+            &mut effects,
+        );
+
+        assert!(matches!(state, OverlayState::Hidden));
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::PlaySfx(path)
+                )),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Sync(
+                    crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { changes }
+                )),
+            ] if path == "assets/sounds/start.ogg"
+                && matches!(changes.as_slice(), [change]
+                    if change.simfile_path == PathBuf::from("Songs/Test/song.ssc")
+                        && (change.delta_seconds + 0.0125).abs() <= f32::EPSILON)
+        ));
+        assert_eq!(effects.capacity(), 8);
     }
 }

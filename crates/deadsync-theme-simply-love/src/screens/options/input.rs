@@ -2008,7 +2008,7 @@ pub fn handle_input(
     ev: &InputEvent,
     effects: &mut Vec<ThemeEffect>,
 ) {
-    let effect = handle_input_impl(state, asset_manager, updater, ev);
+    let effect = handle_input_impl(state, asset_manager, updater, ev, effects);
     append_pending_effects(state, effect, effects);
 }
 
@@ -2017,6 +2017,7 @@ fn handle_input_impl(
     asset_manager: &AssetManager,
     updater: &SimplyLoveUpdaterView,
     ev: &InputEvent,
+    effects: &mut Vec<ThemeEffect>,
 ) -> ThemeEffect {
     use crate::screens::components::shared::{ffmpeg_overlay, update_overlay};
 
@@ -2215,7 +2216,9 @@ fn handle_input_impl(
         state.pack_sync_overlay,
         shared_pack_sync::OverlayState::Hidden
     ) {
-        return handle_pack_sync_input(state, ev);
+        append_pending_effects(state, ThemeEffect::None, effects);
+        handle_pack_sync_input(state, ev, effects);
+        return ThemeEffect::None;
     }
     if let Some(confirm) = state.score_import_confirm.as_mut() {
         if let Some((_, nav)) = three_key_action {

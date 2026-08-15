@@ -124,9 +124,13 @@ pub(super) fn begin_pack_sync(state: &mut State, selection: SyncPackSelection) {
     queue_sync(state, request);
 }
 
-pub(super) fn handle_pack_sync_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+pub(super) fn handle_pack_sync_input(
+    state: &mut State,
+    ev: &InputEvent,
+    effects: &mut Vec<ThemeEffect>,
+) {
     let navigation = navigation_policy(state);
-    shared_pack_sync::handle_input(&mut state.pack_sync_overlay, ev, navigation)
+    shared_pack_sync::handle_input(&mut state.pack_sync_overlay, ev, navigation, effects);
 }
 
 pub(super) fn begin_pack_sync_from_confirm(state: &mut State) {

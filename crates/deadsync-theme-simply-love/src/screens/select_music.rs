@@ -11106,7 +11106,7 @@ pub fn handle_input(
         menu_ev.action =
             screen_input::menu_action(ev.action, game, state.policy.dedicated_menu_only);
     }
-    let effect = handle_input_impl(state, &menu_ev, fine, game_action);
+    let effect = handle_input_impl(state, &menu_ev, fine, game_action, effects);
     append_pending_runtime(state, effect, effects);
 }
 
@@ -11115,6 +11115,7 @@ fn handle_input_impl(
     ev: &InputEvent,
     fine: bool,
     game_action: VirtualAction,
+    effects: &mut Vec<ThemeEffect>,
 ) -> ThemeEffect {
     update_select_hold_state(state, ev);
 
@@ -11183,7 +11184,9 @@ fn handle_input_impl(
         state.pack_sync_overlay,
         crate::screens::pack_sync::OverlayState::Hidden
     ) {
-        return pack_sync::handle_input(state, ev);
+        append_pending_runtime(state, ThemeEffect::None, effects);
+        pack_sync::handle_input(state, ev, effects);
+        return ThemeEffect::None;
     }
 
     if !matches!(state.sync_overlay, SyncOverlayState::Hidden) {

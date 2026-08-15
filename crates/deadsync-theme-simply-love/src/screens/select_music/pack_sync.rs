@@ -29,7 +29,7 @@ pub(super) fn poll(state: &mut State) -> bool {
     shared_pack_sync::poll(&mut state.pack_sync_overlay)
 }
 
-pub(super) fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+pub(super) fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeEffect>) {
     shared_pack_sync::handle_input(
         &mut state.pack_sync_overlay,
         ev,
@@ -37,7 +37,8 @@ pub(super) fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             only_dedicated_menu_buttons: state.policy.dedicated_menu_only,
             three_key_navigation: state.policy.three_key_navigation,
         },
-    )
+        effects,
+    );
 }
 
 fn preferred_difficulty_index(state: &State) -> usize {
