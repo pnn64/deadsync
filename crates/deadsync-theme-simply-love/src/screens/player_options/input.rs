@@ -1,7 +1,12 @@
 use super::*;
 use deadsync_profile as profile_data;
 
-pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ThemeEffect> {
+pub fn update(
+    state: &mut State,
+    dt: f32,
+    asset_manager: &AssetManager,
+    effects: &mut Vec<ThemeEffect>,
+) {
     // Keep options-screen noteskin previews on a stable clock.
     // ITG/SL preview actors are not driven by selected chart BPM, so tying this to song BPM
     // makes beat-based skins (e.g. cel) appear too fast/slow depending on the selected chart.
@@ -253,10 +258,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         }
     }
 
-    match prepend_pending_effects(state, pending_action.unwrap_or(ThemeEffect::None)) {
-        ThemeEffect::None => None,
-        effect => Some(effect),
-    }
+    append_pending_effects(state, pending_action.unwrap_or(ThemeEffect::None), effects);
 }
 
 pub fn on_nav_press(state: &mut State, player_idx: usize, dir: NavDirection) {
@@ -837,7 +839,8 @@ pub fn handle_input(
     state: &mut State,
     asset_manager: &AssetManager,
     ev: &InputEvent,
-) -> ThemeEffect {
+    effects: &mut Vec<ThemeEffect>,
+) {
     let effect = handle_input_inner(state, asset_manager, ev);
-    prepend_pending_effects(state, effect)
+    append_pending_effects(state, effect, effects);
 }

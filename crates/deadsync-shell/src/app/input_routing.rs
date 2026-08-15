@@ -183,6 +183,18 @@ impl App {
                 return Ok(());
             }
         }
+        if current_screen == CurrentScreen::PlayerOptions {
+            debug_assert!(self.theme_effect_scratch.is_empty());
+            if let Some(state) = self.state.screens.player_options_state.as_mut() {
+                screens::player_options::handle_input(
+                    state,
+                    &self.asset_manager,
+                    &ev,
+                    &mut self.theme_effect_scratch,
+                );
+            }
+            return self.drain_theme_effects(event_loop);
+        }
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
                 self.sync_main_menu_runtime_view();
@@ -259,13 +271,7 @@ impl App {
                 &mut self.state.screens.select_course_state,
                 &ev,
             ),
-            CurrentScreen::PlayerOptions => {
-                if let Some(pos) = &mut self.state.screens.player_options_state {
-                    screens::player_options::handle_input(pos, &self.asset_manager, &ev)
-                } else {
-                    ThemeEffect::None
-                }
-            }
+            CurrentScreen::PlayerOptions => unreachable!("Player Options input routed directly"),
             CurrentScreen::Evaluation => {
                 screens::evaluation::handle_input(&mut self.state.screens.evaluation_state, &ev)
             }

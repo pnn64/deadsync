@@ -1203,12 +1203,12 @@ impl ScreensState {
                 );
                 (None, false)
             }
-            CurrentScreen::PlayerOptions => (
-                self.player_options_state
-                    .as_mut()
-                    .and_then(|pos| player_options::update(pos, delta_time, asset_manager)),
-                false,
-            ),
+            CurrentScreen::PlayerOptions => {
+                if let Some(state) = self.player_options_state.as_mut() {
+                    player_options::update(state, delta_time, asset_manager, effects);
+                }
+                (None, false)
+            }
             CurrentScreen::Sandbox => {
                 sandbox::update(&mut self.sandbox_state, delta_time);
                 (None, false)
@@ -3122,8 +3122,7 @@ impl App {
                         | CurrentScreen::SelectMusic
                 )
                 .then(crate::smx_config::smx_assignment_view);
-                let mut effects = std::mem::take(&mut self.theme_effect_scratch);
-                debug_assert!(effects.is_empty());
+                debug_assert!(self.theme_effect_scratch.is_empty());
                 self.state.screens.step_idle(
                     logic_dt,
                     redraw_started,
@@ -3131,13 +3130,9 @@ impl App {
                     &self.asset_manager,
                     smx_assignment.as_ref(),
                     self.state.play_input_policy.smx_input,
-                    &mut effects,
+                    &mut self.theme_effect_scratch,
                 );
-                let result = effects
-                    .drain(..)
-                    .try_for_each(|effect| self.handle_single_action(effect, event_loop));
-                self.theme_effect_scratch = effects;
-                let _ = result;
+                let _ = self.drain_theme_effects(event_loop);
             }
             let current_screen = self.state.screens.current_screen;
             let auto_screenshot_ready = current_screen == CurrentScreen::Evaluation
@@ -3811,6 +3806,15 @@ impl App {
             software_renderer_threads,
             gfx_debug_enabled,
         }
+    }
+
+    fn drain_theme_effects(&mut self, event_loop: &ActiveEventLoop) -> Result<(), Box<dyn Error>> {
+        let mut effects = std::mem::take(&mut self.theme_effect_scratch);
+        let result = effects
+            .drain(..)
+            .try_for_each(|effect| self.handle_single_action(effect, event_loop));
+        self.theme_effect_scratch = effects;
+        result
     }
 
     fn handle_action(

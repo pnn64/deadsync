@@ -9,12 +9,12 @@ pub(super) mod tests {
         CycleInit, ErrorBarMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask,
         HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
         NavDirection, NumericBinding, NumericInit, OptionsPane, P1, P2, PlayerOptionMasks, Row,
-        RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, compute_row_window,
-        count_visible_rows, effective_scroll_speed_with_alt, handle_arcade_start_event,
-        handle_nav_event, handle_start_event, hud_offset_choices, init_cycle_row_from_binding,
-        init_noteskin_state, init_numeric_row_from_binding, is_row_visible,
-        judgment_tilt_options_visible, multi_select_mask, on_start_press, player_option_column_x,
-        prepend_pending_effects, preview_noteskin_names, queue_audio, queue_sfx,
+        RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, append_pending_effects,
+        compute_row_window, count_visible_rows, effective_scroll_speed_with_alt,
+        handle_arcade_start_event, handle_nav_event, handle_start_event, hud_offset_choices,
+        init_cycle_row_from_binding, init_noteskin_state, init_numeric_row_from_binding,
+        is_row_visible, judgment_tilt_options_visible, multi_select_mask, on_start_press,
+        player_option_column_x, preview_noteskin_names, queue_audio, queue_sfx,
         repeat_held_arcade_start, row_f_pos_for_index, sync_profile_scroll_speed,
         sync_speed_mod_type_row, update,
     };
@@ -1883,12 +1883,15 @@ pub(super) mod tests {
     fn dirty_row_layout_retargets_once_without_changing_destinations() {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
-        update(&mut state, 0.0, &asset_manager);
+        let mut effects = Vec::new();
+        update(&mut state, 0.0, &asset_manager, &mut effects);
+        effects.clear();
         let next_row =
             (state.pane().selected_row[P1] + 12).min(state.pane().row_map.len().saturating_sub(1));
         state.pane_mut().selected_row[P1] = next_row;
 
-        update(&mut state, 0.0, &asset_manager);
+        update(&mut state, 0.0, &asset_manager, &mut effects);
+        effects.clear();
         let expected = super::super::init_row_tweens(
             &state.pane().row_map,
             state.pane().selected_row,
@@ -1908,7 +1911,7 @@ pub(super) mod tests {
             .iter()
             .map(|tween| (tween.to_y, tween.to_a))
             .collect::<Vec<_>>();
-        update(&mut state, 1.0 / 120.0, &asset_manager);
+        update(&mut state, 1.0 / 120.0, &asset_manager, &mut effects);
         assert_eq!(state.pane().layout_key, key);
         assert_eq!(
             state
@@ -1961,14 +1964,11 @@ pub(super) mod tests {
     }
 
     fn assert_profile_update_then_sfx(
-        effect: &ThemeEffect,
+        effects: &[ThemeEffect],
         side: PlayerSide,
         options_data: &PlayerOptionsData,
         selected_hrm: &Option<String>,
     ) {
-        let ThemeEffect::Batch(effects) = effect else {
-            panic!("profile update and change cue should be batched");
-        };
         assert_eq!(effects.len(), 2);
         let ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
             crate::SimplyLoveProfileRequest::UpdatePlayerOptions {
@@ -1994,10 +1994,13 @@ pub(super) mod tests {
         queue_sfx(&mut state, "assets/sounds/change_value.ogg");
         queue_sfx(&mut state, "assets/sounds/start.ogg");
 
-        let effect = prepend_pending_effects(&mut state, ThemeEffect::Navigate(Screen::Gameplay));
-        let ThemeEffect::Batch(effects) = effect else {
-            panic!("queued Player Options audio should precede navigation");
-        };
+        let pending_capacity = state.pending_effects.capacity();
+        let mut effects = Vec::with_capacity(4);
+        append_pending_effects(
+            &mut state,
+            ThemeEffect::Navigate(Screen::Gameplay),
+            &mut effects,
+        );
         assert_eq!(effects.len(), 4);
         assert!(matches!(
             effects[0],
@@ -2012,6 +2015,7 @@ pub(super) mod tests {
             ThemeEffect::Navigate(Screen::Gameplay)
         ));
         assert!(state.pending_effects.is_empty());
+        assert_eq!(state.pending_effects.capacity(), pending_capacity);
     }
 
     #[test]
@@ -2038,11 +2042,8 @@ pub(super) mod tests {
             NavDirection::Right,
             true,
         );
-        let effect = update(&mut state, 0.0, &asset_manager)
-            .expect("music-rate change should emit ordered audio work");
-        let ThemeEffect::Batch(effects) = effect else {
-            panic!("rate update and change cue should be batched");
-        };
+        let mut effects = Vec::with_capacity(4);
+        update(&mut state, 0.0, &asset_manager, &mut effects);
         assert_eq!(effects.len(), 3);
         assert!(matches!(
             effects[0],
@@ -2086,24 +2087,25 @@ pub(super) mod tests {
         let after_press = state.speed_mod[P1].value;
         assert!(after_press > before);
 
-        let press_effect = update(&mut state, 0.0, &asset_manager)
-            .expect("initial choice change should emit its queued sound");
+        let mut effects = Vec::with_capacity(4);
+        update(&mut state, 0.0, &asset_manager, &mut effects);
         assert_profile_update_then_sfx(
-            &press_effect,
+            &effects,
             PlayerSide::P1,
             &state.player_options[P1],
             &state.heart_rate_device_ids[P1],
         );
         assert_eq!(state.speed_mod[P1].value, after_press);
 
-        let repeat_effect = update(
+        effects.clear();
+        update(
             &mut state,
             (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
             &asset_manager,
-        )
-        .expect("held choice repeat should emit its queued sound");
+            &mut effects,
+        );
         assert_profile_update_then_sfx(
-            &repeat_effect,
+            &effects,
             PlayerSide::P1,
             &state.player_options[P1],
             &state.heart_rate_device_ids[P1],
@@ -2310,10 +2312,12 @@ pub(super) mod tests {
         state.pane_mut().prev_selected_row[P1] = speed_row;
 
         let before_val = state.speed_mod[P1].value;
+        let mut effects = Vec::new();
         super::super::input::handle_input(
             &mut state,
             &asset_manager,
             &press(VirtualAction::p1_menu_right),
+            &mut effects,
         );
 
         assert_eq!(

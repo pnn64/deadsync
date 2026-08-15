@@ -129,23 +129,9 @@ fn queue_sfx(state: &mut State, path: &'static str) {
     queue_audio(state, AudioRequest::PlaySfx(path.to_owned()));
 }
 
-fn prepend_pending_effects(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
-    let request_count = state.pending_effects.len();
-    if request_count == 0 {
-        return effect;
-    }
-
-    let has_effect = !matches!(effect, ThemeEffect::None);
-    let mut effects = Vec::with_capacity(request_count + usize::from(has_effect));
+fn append_pending_effects(state: &mut State, effect: ThemeEffect, effects: &mut Vec<ThemeEffect>) {
     effects.append(&mut state.pending_effects);
-    if has_effect {
-        effects.push(effect);
-    }
-    if effects.len() == 1 {
-        effects.pop().expect("one queued PlayerOptions effect")
-    } else {
-        ThemeEffect::batch(effects)
-    }
+    effect.append_to(effects);
 }
 
 fn queue_profile_update(state: &mut State, player_idx: usize) {
