@@ -154,6 +154,25 @@ pub fn post_select_display_stage_count(
     visible
 }
 
+pub fn fill_stage_indices(
+    out: &mut Vec<usize>,
+    stage_count: usize,
+    hidden_indices: &[usize],
+    show_course_individual_scores: bool,
+) {
+    out.clear();
+    out.reserve(stage_count);
+    if show_course_individual_scores || hidden_indices.is_empty() {
+        out.extend(0..stage_count);
+        return;
+    }
+    if let Some(range) = contiguous_visible_stage_range(stage_count, hidden_indices) {
+        out.extend(range);
+        return;
+    }
+    out.extend((0..stage_count).filter(|index| hidden_indices.binary_search(index).is_err()));
+}
+
 fn contiguous_visible_stage_range(
     stage_count: usize,
     hidden_indices: &[usize],
@@ -184,7 +203,9 @@ fn contiguous_visible_stage_range(
 
 #[cfg(test)]
 mod tests {
-    use super::{contiguous_visible_stage_range, post_select_display_stage_count};
+    use super::{
+        contiguous_visible_stage_range, fill_stage_indices, post_select_display_stage_count,
+    };
 
     #[test]
     fn visible_stage_range_borrows_common_course_shapes() {
@@ -204,5 +225,18 @@ mod tests {
         assert_eq!(post_select_display_stage_count(5, &[0, 2, 4], false), 2);
         assert_eq!(post_select_display_stage_count(5, &[0, 2, 4], true), 5);
         assert_eq!(post_select_display_stage_count(3, &[1, 1, 8], false), 2);
+    }
+
+    #[test]
+    fn display_stage_indices_cover_contiguous_and_disjoint_results() {
+        let mut indices = Vec::new();
+        fill_stage_indices(&mut indices, 4, &[0, 1, 2], false);
+        assert_eq!(indices, [3]);
+
+        fill_stage_indices(&mut indices, 5, &[0, 2, 4], false);
+        assert_eq!(indices, [1, 3]);
+
+        fill_stage_indices(&mut indices, 3, &[1], true);
+        assert_eq!(indices, [0, 1, 2]);
     }
 }

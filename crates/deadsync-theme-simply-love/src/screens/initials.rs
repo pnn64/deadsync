@@ -4,7 +4,7 @@ use crate::assets::i18n::tr;
 use crate::assets::{FontRole, machine_font_key};
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ThemeEffect};
-use crate::views::{PostSongPlayerView, PostSongRuntimeView};
+use crate::views::{PostSelectStageView, PostSongPlayerView, PostSongRuntimeView};
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::cache::{SharedStrCache, cached_shared_str, shared_str_cache_with_capacity};
 use deadlib_present::color;
@@ -860,7 +860,7 @@ fn fallback_banner_key(active_color_index: i32) -> String {
     format!("banner{banner_num}.png")
 }
 
-fn build_banner_and_title(state: &State, stages: &[stage_stats::StageSummary]) -> Vec<Actor> {
+fn build_banner_and_title(state: &State, stages: PostSelectStageView<'_>) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(4);
     let cx = screen_center_x();
 
@@ -889,7 +889,7 @@ fn build_banner_and_title(state: &State, stages: &[stage_stats::StageSummary]) -
     }
 
     let idx = stage_index_for(state.elapsed, stages.len());
-    let stage = &stages[idx];
+    let stage = stages.get(idx).expect("cycled stage index must be visible");
 
     let banner_key = stage
         .song
@@ -1188,7 +1188,7 @@ fn build_player_frame(side: profile_data::PlayerSide, state: &State) -> Actor {
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    stages: &[stage_stats::StageSummary],
+    stages: PostSelectStageView<'_>,
     _asset_manager: &AssetManager,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
@@ -1227,7 +1227,7 @@ pub fn push_actors(
 
 pub fn get_actors(
     state: &State,
-    stages: &[stage_stats::StageSummary],
+    stages: PostSelectStageView<'_>,
     asset_manager: &AssetManager,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(64);

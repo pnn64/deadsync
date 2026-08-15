@@ -77,7 +77,8 @@ use crate::screen_flow::{
 use crate::screenshot::{AutoScreenshotFrameContext, auto_screenshot_frame_plan};
 use crate::session::SessionState as ShellSessionState;
 use crate::session_results::{
-    post_select_display_stage_count, post_select_display_stages, stage_summary_from_score_info,
+    fill_stage_indices, post_select_display_stage_count, post_select_display_stages,
+    stage_summary_from_score_info,
 };
 use crate::stutter_diag::{
     STUTTER_DIAG_FRAME_CAPACITY, STUTTER_DIAG_WINDOW_NS, StutterDiagDumpContext,
@@ -183,11 +184,12 @@ use deadsync_theme_simply_love::views::{
     EvaluationContextView, EvaluationInitPlayerView, EvaluationInitView, EvaluationPlayerView,
     EvaluationPolicyView, EvaluationRuntimeView, EvaluationSubmissionView, MUSIC_WHEEL_SLOT_COUNT,
     MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
-    MusicWheelSlotRuntimeRequest, MusicWheelSlotRuntimeView, ScoreboxLocalView,
-    ScoreboxMachineView, ScoreboxSideView, ScreenBarBackgroundView, SelectCourseContextView,
-    SelectCoursePolicyView, SelectCourseRuntimeView, SelectCourseScoreRequest,
-    SelectCourseScoreView, SelectFlowPlayerView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
-    SimplyLoveGrooveStatsService, SimplyLoveVisualPolicyView, VisualBackgroundView,
+    MusicWheelSlotRuntimeRequest, MusicWheelSlotRuntimeView, PostSelectStageView,
+    ScoreboxLocalView, ScoreboxMachineView, ScoreboxSideView, ScreenBarBackgroundView,
+    SelectCourseContextView, SelectCoursePolicyView, SelectCourseRuntimeView,
+    SelectCourseScoreRequest, SelectCourseScoreView, SelectFlowPlayerView,
+    SimplyLoveDensityGraphSlot as DensityGraphSlot, SimplyLoveGrooveStatsService,
+    SimplyLoveVisualPolicyView, VisualBackgroundView,
 };
 use deadsync_theme_simply_love::{
     SimplyLoveConfigRequest, SimplyLoveContentRequest, SimplyLoveEffect as ThemeEffect,
@@ -726,6 +728,14 @@ struct GameplayBannerSyncKey {
     screen: CurrentScreen,
     window_px: (u32, u32),
     mode: config::GameplayBannerMode,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PostSelectStageKey {
+    stage_count: usize,
+    hidden_count: usize,
+    show_individual: bool,
+    video_banners: bool,
 }
 
 fn sync_gameplay_banners(
@@ -1354,6 +1364,17 @@ pub struct App {
     /// reconciliation. Worst steady-frame work is one compact key comparison
     /// and one pending-work boolean, with no path derivation or collection.
     gameplay_banner_sync_key: Option<GameplayBannerSyncKey>,
+    /// Game-thread-owned compact selection for post-stage presentation and
+    /// banner media. It retains at most one index per played stage for the
+    /// current Summary/Initials visit and reuses capacity across visits. The
+    /// first target frame and policy changes rebuild it; session results cannot
+    /// mutate while either target screen is active. There is no eviction or
+    /// synchronization, and storage drops with `App`. Existing post-select
+    /// tests cover selection semantics. A stable frame compares one fixed key;
+    /// no `StageSummary` is cloned, filtered, or destroyed.
+    post_select_stage_indices: Vec<usize>,
+    post_select_stage_key: Option<PostSelectStageKey>,
+    post_select_banners_dirty: bool,
     /// Last immutable runtime configuration snapshot observed by the game
     /// thread. Broad screen view builders consume this canonical value; the
     /// live loop consumes `frame_policy` instead.
@@ -3074,6 +3095,10 @@ impl App {
             frame_policy.theme_background_video,
             frame_policy.show_video_backgrounds,
         );
+        self.sync_post_select_stages(
+            frame_policy.show_course_individual_scores,
+            frame_policy.show_select_music_video_banners,
+        );
         let actor_build_started = Instant::now();
         let arrow_effect_time_s = arrow_effect_time_seconds(actor_build_started);
         let (mut actors, clear_color, gameplay_segments) =
@@ -3084,7 +3109,6 @@ impl App {
         let current_screen = screens.current_screen;
         let show_select_music_video_banners = frame_policy.show_select_music_video_banners;
         let show_select_music_banners = frame_policy.show_select_music_banners;
-        let show_course_individual_scores = frame_policy.show_course_individual_scores;
         let gameplay_banner_mode = frame_policy.gameplay_banner_mode;
         if !matches!(
             current_screen,
@@ -3095,24 +3119,6 @@ impl App {
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
             {
-                let post_select_stages = if show_select_music_video_banners
-                    && matches!(
-                        current_screen,
-                        CurrentScreen::EvaluationSummary | CurrentScreen::Initials
-                    ) {
-                    Some(post_select_display_stages(
-                        &self.state.session.played_stages,
-                        &self.state.session.course_individual_stage_indices,
-                        show_course_individual_scores,
-                    ))
-                } else {
-                    None
-                };
-                let post_select_banner_paths: SmallVec<[&Path; 8]> = post_select_stages
-                    .iter()
-                    .flat_map(|stages| stages.iter())
-                    .filter_map(|stage| stage.song.banner_path.as_deref())
-                    .collect();
                 match current_screen {
                     CurrentScreen::SelectMusic => {
                         let state = &screens.select_music_state;
@@ -3185,12 +3191,31 @@ impl App {
                         );
                     }
                     CurrentScreen::EvaluationSummary | CurrentScreen::Initials => {
-                        self.dynamic_media.sync_active_banner_videos(
-                            &mut self.asset_manager,
-                            backend,
-                            &post_select_banner_paths,
-                            true,
-                        );
+                        if self.post_select_banners_dirty
+                            || self.dynamic_media.banner_sync_pending()
+                        {
+                            let mut paths: SmallVec<[&Path; 8]> = SmallVec::new();
+                            if show_select_music_video_banners {
+                                paths.extend(self.post_select_stage_indices.iter().filter_map(
+                                    |&index| {
+                                        self.state
+                                            .session
+                                            .played_stages
+                                            .get(index)?
+                                            .song
+                                            .banner_path
+                                            .as_deref()
+                                    },
+                                ));
+                            }
+                            self.dynamic_media.sync_active_banner_videos(
+                                &mut self.asset_manager,
+                                backend,
+                                &paths,
+                                true,
+                            );
+                            self.post_select_banners_dirty = false;
+                        }
                     }
                     CurrentScreen::Gameplay | CurrentScreen::Practice => {
                         let state = match current_screen {
@@ -3620,6 +3645,9 @@ impl App {
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
             gameplay_banner_sync_key: None,
+            post_select_stage_indices: Vec::new(),
+            post_select_stage_key: None,
+            post_select_banners_dirty: true,
             frame_config: config,
             frame_config_generation: config_generation,
             frame_policy,
@@ -5278,6 +5306,37 @@ impl App {
         )
     }
 
+    fn sync_post_select_stages(
+        &mut self,
+        show_course_individual_scores: bool,
+        show_video_banners: bool,
+    ) {
+        if !matches!(
+            self.state.screens.current_screen,
+            CurrentScreen::EvaluationSummary | CurrentScreen::Initials
+        ) {
+            self.post_select_stage_key = None;
+            return;
+        }
+        let key = PostSelectStageKey {
+            stage_count: self.state.session.played_stages.len(),
+            hidden_count: self.state.session.course_individual_stage_indices.len(),
+            show_individual: show_course_individual_scores,
+            video_banners: show_video_banners,
+        };
+        if self.post_select_stage_key == Some(key) {
+            return;
+        }
+        fill_stage_indices(
+            &mut self.post_select_stage_indices,
+            key.stage_count,
+            &self.state.session.course_individual_stage_indices,
+            show_course_individual_scores,
+        );
+        self.post_select_stage_key = Some(key);
+        self.post_select_banners_dirty = true;
+    }
+
     fn post_select_display_stage_count(&self, show_course_individual_scores: bool) -> usize {
         post_select_display_stage_count(
             self.state.session.played_stages.len(),
@@ -6014,21 +6073,27 @@ impl App {
                 );
             }
             CurrentScreen::EvaluationSummary => {
-                let stages = self.post_select_display_stages(policy.show_course_individual_scores);
+                let stages = PostSelectStageView::new(
+                    &self.state.session.played_stages,
+                    &self.post_select_stage_indices,
+                );
                 evaluation_summary::push_actors(
                     &mut actors,
                     &self.state.screens.evaluation_summary_state,
-                    &stages,
+                    stages,
                     &self.asset_manager,
                     visual_policy,
                 );
             }
             CurrentScreen::Initials => {
-                let stages = self.post_select_display_stages(policy.show_course_individual_scores);
+                let stages = PostSelectStageView::new(
+                    &self.state.session.played_stages,
+                    &self.post_select_stage_indices,
+                );
                 initials::push_actors(
                     &mut actors,
                     &self.state.screens.initials_state,
-                    &stages,
+                    stages,
                     &self.asset_manager,
                     visual_policy,
                 );

@@ -11,7 +11,7 @@ use crate::screens::components::shared::{
 };
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
-use crate::views::PostSongRuntimeView;
+use crate::views::{PostSelectStageView, PostSongRuntimeView};
 use chrono::Local;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::color;
@@ -191,7 +191,7 @@ fn difficulty_display_name(difficulty: &str, zmod_rating_box_text: bool) -> &'st
     color::difficulty_display_name(difficulty, zmod_rating_box_text)
 }
 
-fn should_display_profile_names(stages: &[stage_stats::StageSummary]) -> bool {
+fn should_display_profile_names(stages: PostSelectStageView<'_>) -> bool {
     (0..2).any(|side| {
         profile_name_changed(
             stages
@@ -579,7 +579,7 @@ fn build_row(
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    stages: &[stage_stats::StageSummary],
+    stages: PostSelectStageView<'_>,
     _asset_manager: &AssetManager,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
@@ -731,7 +731,7 @@ pub fn push_actors(
 
 pub fn get_actors(
     state: &State,
-    stages: &[stage_stats::StageSummary],
+    stages: PostSelectStageView<'_>,
     asset_manager: &AssetManager,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(32);

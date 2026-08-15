@@ -20,6 +20,42 @@ pub type SelectedCoursePlan = SelectedCourseView;
 pub type DensityGraphSource = DensityGraphView;
 pub type TimingHealth = TimingHealthView<PresentModeTrace, ClockDomainTrace, AudioTimingView>;
 
+/// Borrowed post-stage results selected by shell-owned display indices.
+#[derive(Clone, Copy, Debug)]
+pub struct PostSelectStageView<'a> {
+    stages: &'a [deadsync_score::stage_stats::StageSummary],
+    indices: &'a [usize],
+}
+
+impl<'a> PostSelectStageView<'a> {
+    pub const fn new(
+        stages: &'a [deadsync_score::stage_stats::StageSummary],
+        indices: &'a [usize],
+    ) -> Self {
+        Self { stages, indices }
+    }
+
+    pub const fn len(self) -> usize {
+        self.indices.len()
+    }
+
+    pub const fn is_empty(self) -> bool {
+        self.indices.is_empty()
+    }
+
+    pub fn get(self, index: usize) -> Option<&'a deadsync_score::stage_stats::StageSummary> {
+        self.indices
+            .get(index)
+            .and_then(|&stage_index| self.stages.get(stage_index))
+    }
+
+    pub fn iter(self) -> impl Iterator<Item = &'a deadsync_score::stage_stats::StageSummary> + 'a {
+        self.indices
+            .iter()
+            .filter_map(move |&index| self.stages.get(index))
+    }
+}
+
 /// Shell-prepared visual policy shared by screen backgrounds and screen bars.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SimplyLoveVisualPolicyView {
