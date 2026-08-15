@@ -825,6 +825,10 @@ impl DynamicMedia {
         !self.pending_gameplay_background_preps.is_empty()
     }
 
+    pub(crate) fn banner_sync_pending(&self) -> bool {
+        !self.banner_video_request.settled
+    }
+
     /// Whether the game-thread-owned background state needs no maintenance.
     ///
     /// A settled frame performs only bounded field/path comparisons. It does
@@ -1524,16 +1528,19 @@ mod tests {
     #[test]
     fn settled_banner_request_skips_until_paths_or_mode_change() {
         let paths = [Path::new("p1.mp4"), Path::new("p2.webm")];
-        let mut request = BannerVideoRequest::default();
+        let mut media = DynamicMedia::new();
 
-        assert!(request.begin(&paths, true));
-        request.settled = true;
-        assert!(!request.begin(&paths, true));
-        assert!(request.begin(&paths, false));
+        assert!(media.banner_sync_pending());
+        assert!(media.banner_video_request.begin(&paths, true));
+        media.banner_video_request.settled = true;
+        assert!(!media.banner_sync_pending());
+        assert!(!media.banner_video_request.begin(&paths, true));
+        assert!(media.banner_video_request.begin(&paths, false));
+        assert!(media.banner_sync_pending());
 
         let changed = [Path::new("p1.mp4"), Path::new("p3.avi")];
-        request.settled = true;
-        assert!(request.begin(&changed, false));
+        media.banner_video_request.settled = true;
+        assert!(media.banner_video_request.begin(&changed, false));
     }
 
     #[test]

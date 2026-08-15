@@ -721,6 +721,13 @@ fn build_course_summary_eval_state(
     state
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct GameplayBannerSyncKey {
+    screen: CurrentScreen,
+    window_px: (u32, u32),
+    mode: config::GameplayBannerMode,
+}
+
 fn sync_gameplay_banners(
     media: &mut DynamicMedia,
     assets: &mut AssetManager,
@@ -1339,6 +1346,14 @@ pub struct App {
     >,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
+    /// Game-thread-only one-entry cursor for Gameplay banner media intent.
+    /// Its session lifetime and fixed capacity require no allocation or
+    /// eviction. The first Gameplay/Practice frame warms it; screen, window,
+    /// or mode changes replace it, while unfinished media workers bypass it.
+    /// Destruction follows `App`. The banner-media benchmark covers request
+    /// reconciliation. Worst steady-frame work is one compact key comparison
+    /// and one pending-work boolean, with no path derivation or collection.
+    gameplay_banner_sync_key: Option<GameplayBannerSyncKey>,
     /// Last immutable runtime configuration snapshot observed by the game
     /// thread. Broad screen view builders consume this canonical value; the
     /// live loop consumes `frame_policy` instead.
@@ -3071,6 +3086,12 @@ impl App {
         let show_select_music_banners = frame_policy.show_select_music_banners;
         let show_course_individual_scores = frame_policy.show_course_individual_scores;
         let gameplay_banner_mode = frame_policy.gameplay_banner_mode;
+        if !matches!(
+            current_screen,
+            CurrentScreen::Gameplay | CurrentScreen::Practice
+        ) {
+            self.gameplay_banner_sync_key = None;
+        }
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
             {
@@ -3180,13 +3201,23 @@ impl App {
                             _ => None,
                         };
                         if let Some(state) = state {
-                            sync_gameplay_banners(
-                                &mut self.dynamic_media,
-                                &mut self.asset_manager,
-                                backend,
-                                state,
-                                gameplay_banner_mode,
-                            );
+                            let sync_key = GameplayBannerSyncKey {
+                                screen: current_screen,
+                                window_px: space::current_window_px(),
+                                mode: gameplay_banner_mode,
+                            };
+                            if self.gameplay_banner_sync_key != Some(sync_key)
+                                || self.dynamic_media.banner_sync_pending()
+                            {
+                                sync_gameplay_banners(
+                                    &mut self.dynamic_media,
+                                    &mut self.asset_manager,
+                                    backend,
+                                    state,
+                                    gameplay_banner_mode,
+                                );
+                                self.gameplay_banner_sync_key = Some(sync_key);
+                            }
                         }
                     }
                     _ => {
@@ -3588,6 +3619,7 @@ impl App {
             smx_difficulty_tint_cache: std::collections::HashMap::new(),
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
+            gameplay_banner_sync_key: None,
             frame_config: config,
             frame_config_generation: config_generation,
             frame_policy,
