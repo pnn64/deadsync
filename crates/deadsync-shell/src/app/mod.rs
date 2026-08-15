@@ -494,27 +494,29 @@ pub fn benchmark_smx_screen_work(
     )
 }
 
-fn lobby_effect_only(effect: ThemeEffect) -> Option<ThemeEffect> {
+const MAX_TRANSITION_LOBBY_EFFECTS: usize = 3;
+
+fn append_lobby_effects(effect: ThemeEffect, effects: &mut Vec<ThemeEffect>) {
+    let start_len = effects.len();
     match effect {
         effect @ ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
             SimplyLoveOnlineRequest::Lobby(_),
-        )) => Some(effect),
-        ThemeEffect::Batch(effects) => {
-            let lobby_effects = effects
-                .into_iter()
-                .filter(|effect| {
-                    matches!(
-                        effect,
-                        ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
-                            SimplyLoveOnlineRequest::Lobby(_)
-                        ))
-                    )
-                })
-                .collect::<Vec<_>>();
-            (!lobby_effects.is_empty()).then(|| ThemeEffect::batch(lobby_effects))
+        )) => effects.push(effect),
+        ThemeEffect::Batch(batch) => {
+            for effect in batch {
+                if matches!(
+                    effect,
+                    ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+                        SimplyLoveOnlineRequest::Lobby(_)
+                    ))
+                ) {
+                    effects.push(effect);
+                }
+            }
         }
-        _ => None,
+        _ => {}
     }
+    debug_assert!(effects.len() - start_len <= MAX_TRANSITION_LOBBY_EFFECTS);
 }
 
 fn gameplay_viewport(metrics: Metrics) -> GameplayViewport {
@@ -3091,22 +3093,22 @@ impl App {
         if transition_plan.sync_input_capture {
             self.sync_gameplay_input_capture();
         }
-        let transition_lobby_effect = if transition_plan.tick_gameplay
+        if transition_plan.tick_gameplay
             && let Some(gs) = self.state.screens.gameplay_state.as_mut()
         {
             // Keep gameplay stepping under evaluation fades so late judgments
             // and HUD animations settle while transition input remains blocked.
-            lobby_effect_only(crate::gameplay_runtime::update(
+            debug_assert!(self.theme_effect_scratch.is_empty());
+            let effect = crate::gameplay_runtime::update(
                 gs,
                 delta_time,
                 self.state.play_input_policy.smx_input,
                 &mut self.state.screens.gameplay_score_cursor,
-            ))
-        } else {
-            None
-        };
-        if let Some(effect) = transition_lobby_effect {
-            let _ = self.handle_action(effect, event_loop);
+            );
+            append_lobby_effects(effect, &mut self.theme_effect_scratch);
+        }
+        if !self.theme_effect_scratch.is_empty() {
+            let _ = self.drain_theme_effects(event_loop);
         }
         let step_plan = frame_screen_step_plan(FrameScreenStepContext {
             current_screen: self.state.screens.current_screen,
@@ -9232,13 +9234,71 @@ mod tests {
                 SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::Disconnect),
             )),
         ]);
+        let mut effects = Vec::with_capacity(8);
+
+        append_lobby_effects(effect, &mut effects);
 
         assert!(matches!(
-            lobby_effect_only(effect),
-            Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+            effects.as_slice(),
+            [ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
                 SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::Disconnect)
-            )))
+            ))]
         ));
+        assert_eq!(effects.capacity(), 8);
+    }
+
+    #[test]
+    fn transition_gameplay_retains_bounded_lobby_order() {
+        let effect = ThemeEffect::Batch(vec![
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+                SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::Disconnect),
+            )),
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+                SimplyLoveOnlineRequest::Reinitialize,
+            )),
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+                SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::UpdateMachineState {
+                    screen_name: "ScreenGameplay",
+                    ready: false,
+                }),
+            )),
+            ThemeEffect::Navigate(CurrentScreen::Evaluation),
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+                SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::UpdateMachineStats {
+                    screen_name: "ScreenGameplay",
+                    p1_ready: true,
+                    p2_ready: true,
+                    p1_stats: None,
+                    p2_stats: None,
+                }),
+            )),
+        ]);
+        let mut effects = Vec::with_capacity(8);
+
+        append_lobby_effects(effect, &mut effects);
+
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+                    SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::Disconnect)
+                )),
+                ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+                    SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::UpdateMachineState {
+                        ready: false,
+                        ..
+                    })
+                )),
+                ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+                    SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::UpdateMachineStats {
+                        p1_ready: true,
+                        p2_ready: true,
+                        ..
+                    })
+                )),
+            ]
+        ));
+        assert_eq!(effects.capacity(), 8);
     }
 
     fn test_chart(hash: &str) -> ChartData {
