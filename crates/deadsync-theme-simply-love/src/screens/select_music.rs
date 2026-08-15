@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
+use crate::assets::i18n::{self, tr, tr_fmt};
 use crate::assets::{self, AssetManager};
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::{
@@ -1313,6 +1313,76 @@ struct PatternInfoState {
     last_select_at: [Option<Instant>; 2],
 }
 
+/// Game-thread-owned, fixed-size translated text for Select Music's stable
+/// actor labels. The 23 entries are loaded when the screen is created and only
+/// refreshed after the observable locale revision changes. There is no miss or
+/// eviction path, the replaced `Arc`s are released on the game thread, and the
+/// steady-frame cost is one revision load. The revision itself is the
+/// invalidation counter; the bounded refresh cost is 23 language-map lookups.
+struct SelectMusicLabels {
+    revision: u64,
+    title: Arc<str>,
+    artist: Arc<str>,
+    bpm: Arc<str>,
+    length: Arc<str>,
+    steps: Arc<str>,
+    ex_score: Arc<str>,
+    itg_score: Arc<str>,
+    boxes: Arc<str>,
+    anchors: Arc<str>,
+    staircases: Arc<str>,
+    sweeps: Arc<str>,
+    triangles: Arc<str>,
+    hip_breakers: Arc<str>,
+    doritos: Arc<str>,
+    towers: Arc<str>,
+    spirals: Arc<str>,
+    copters: Arc<str>,
+    total_stream: Arc<str>,
+    crossovers: Arc<str>,
+    footswitches: Arc<str>,
+    sideswitches: Arc<str>,
+    jacks: Arc<str>,
+    brackets: Arc<str>,
+}
+
+impl SelectMusicLabels {
+    fn load() -> Self {
+        Self {
+            revision: i18n::revision(),
+            title: tr("ScreenTitles", "SelectMusic"),
+            artist: tr("SelectMusic", "ArtistLabel"),
+            bpm: tr("SelectMusic", "BPMLabel"),
+            length: tr("SelectMusic", "LengthLabel"),
+            steps: tr("SelectMusic", "StepsLabel"),
+            ex_score: tr("SelectMusic", "ExScore"),
+            itg_score: tr("SelectMusic", "ItgScore"),
+            boxes: tr("PatternInfo", "Boxes"),
+            anchors: tr("PatternInfo", "Anchors"),
+            staircases: tr("PatternInfo", "Staircases"),
+            sweeps: tr("PatternInfo", "Sweeps"),
+            triangles: tr("PatternInfo", "Triangles"),
+            hip_breakers: tr("PatternInfo", "HipBreakers"),
+            doritos: tr("PatternInfo", "Doritos"),
+            towers: tr("PatternInfo", "Towers"),
+            spirals: tr("PatternInfo", "Spirals"),
+            copters: tr("PatternInfo", "Copters"),
+            total_stream: tr("PatternInfo", "TotalStream"),
+            crossovers: tr("PatternInfo", "Crossovers"),
+            footswitches: tr("PatternInfo", "Footswitches"),
+            sideswitches: tr("PatternInfo", "Sideswitches"),
+            jacks: tr("PatternInfo", "Jacks"),
+            brackets: tr("PatternInfo", "Brackets"),
+        }
+    }
+
+    fn sync(&mut self) {
+        if self.revision != i18n::revision() {
+            *self = Self::load();
+        }
+    }
+}
+
 fn register_pattern_info_select(
     state: &mut PatternInfoState,
     side: profile_data::PlayerSide,
@@ -1417,26 +1487,36 @@ impl InfoBoxActorCache {
     fn resolve(
         &mut self,
         box_w: f32,
+        labels: &SelectMusicLabels,
         artist: Arc<str>,
         bpm: Arc<str>,
         length: Arc<str>,
     ) -> Arc<[Actor]> {
-        let key = InfoBoxActorKey {
-            box_w_bits: box_w.to_bits(),
-            artist_label: tr("SelectMusic", "ArtistLabel"),
-            bpm_label: tr("SelectMusic", "BPMLabel"),
-            length_label: tr("SelectMusic", "LengthLabel"),
-            artist,
-            bpm,
-            length,
-        };
-        if self.key.as_ref() == Some(&key) {
+        if let Some(key) = self.key.as_ref()
+            && key.box_w_bits == box_w.to_bits()
+            && key.artist_label == labels.artist
+            && key.bpm_label == labels.bpm
+            && key.length_label == labels.length
+            && key.artist == artist
+            && key.bpm == bpm
+            && key.length == length
+        {
             return Arc::clone(
                 self.children
                     .as_ref()
                     .expect("matching info-box cache key should have children"),
             );
         }
+
+        let key = InfoBoxActorKey {
+            box_w_bits: box_w.to_bits(),
+            artist_label: Arc::clone(&labels.artist),
+            bpm_label: Arc::clone(&labels.bpm),
+            length_label: Arc::clone(&labels.length),
+            artist,
+            bpm,
+            length,
+        };
 
         let children = Arc::<[Actor]>::from(build_info_box_children(&key, box_w));
         self.key = Some(key);
@@ -1597,6 +1677,7 @@ pub struct State {
     pending_hardware: Vec<crate::SimplyLoveHardwareRequest>,
     pending_online: Vec<crate::SimplyLoveOnlineRequest>,
     bg: visual_style_bg::State,
+    labels: RefCell<SelectMusicLabels>,
     info_box_actor_cache: RefCell<InfoBoxActorCache>,
     matrix_rating_cache: RefCell<MatrixRatingCache>,
     last_requested_banner_path: Option<PathBuf>,
@@ -3743,6 +3824,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         pending_hardware: Vec::new(),
         pending_online: Vec::new(),
         bg: visual_style_bg::State::new(),
+        labels: RefCell::new(SelectMusicLabels::load()),
         info_box_actor_cache: RefCell::new(InfoBoxActorCache::default()),
         matrix_rating_cache: RefCell::new(MatrixRatingCache::default()),
         last_requested_banner_path: None,
@@ -3983,6 +4065,7 @@ pub fn init_placeholder() -> State {
         pending_hardware: Vec::new(),
         pending_online: Vec::new(),
         bg: visual_style_bg::State::new(),
+        labels: RefCell::new(SelectMusicLabels::load()),
         info_box_actor_cache: RefCell::new(InfoBoxActorCache::default()),
         matrix_rating_cache: RefCell::new(MatrixRatingCache::default()),
         last_requested_banner_path: None,
@@ -12826,6 +12909,8 @@ pub fn push_actors(
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(256);
+    state.labels.borrow_mut().sync();
+    let labels = state.labels.borrow();
     let side = state.session.player_side;
     let play_style = state.session.play_style;
     let solo_side = solo_runtime_side(play_style, side);
@@ -12853,10 +12938,9 @@ pub fn push_actors(
     );
     push_sl_select_music_bg_flash(actors, state.selection_animation_timer);
 
-    let select_music_label = tr("ScreenTitles", "SelectMusic");
     screen_bars::push(
         actors,
-        select_music_label.as_ref(),
+        labels.title.as_ref(),
         std::array::from_fn(|idx| screen_bars::Player {
             joined: state.session.joined[idx],
             guest: state.session.guest[idx],
@@ -13051,7 +13135,7 @@ pub fn push_actors(
     let info_box_children = state
         .info_box_actor_cache
         .borrow_mut()
-        .resolve(box_w, artist, bpm, len_text);
+        .resolve(box_w, &labels, artist, bpm, len_text);
     actors.push(Actor::SharedFrame {
         align: [0.0, 0.0],
         offset: [frame_x, frame_y],
@@ -13105,7 +13189,6 @@ pub fn push_actors(
 
     // Step Artist & Steps
     let base_y = (screen_center_y() - 9.0) - 0.5 * (screen_height() / 28.0);
-    let steps_label = tr("SelectMusic", "StepsLabel");
     let mut push_step_artist =
         |y_cen: f32,
          x0: f32,
@@ -13122,7 +13205,7 @@ pub fn push_actors(
                     expanded_line_count: line_count,
                     accent_color: sel_col,
                     z_base: 120,
-                    label_text: steps_label.clone().into(),
+                    label_text: labels.steps.clone().into(),
                     label_max_width: 40.0,
                     artist_text: step_artist.into(),
                     artist_x_offset: 75.0,
@@ -13436,7 +13519,12 @@ pub fn push_actors(
                 out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
                 out.push(act!(text: font("miso"): settext(score): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
             }
-            out.push(act!(text: font("miso"): settext(if show_ex_score { tr("SelectMusic", "ExScore") } else { tr("SelectMusic", "ItgScore") }): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
+            let score_label = if show_ex_score {
+                &labels.ex_score
+            } else {
+                &labels.itg_score
+            };
+            out.push(act!(text: font("miso"): settext(score_label): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
         }
     };
 
@@ -13618,7 +13706,7 @@ pub fn push_actors(
                                      num_right_x: f32,
                                      row: usize,
                                      num: &Arc<str>,
-                                     label: Arc<str>| {
+                                     label: &Arc<str>| {
                 let y = stamina_base_y + row as f32 * stamina_row_step;
                 let label_x = num_right_x + 3.0;
                 let num_w = (num_right_x - col_left).max(8.0);
@@ -13639,7 +13727,7 @@ pub fn push_actors(
                 col1_num_x,
                 0,
                 &boxes,
-                tr("PatternInfo", "Boxes"),
+                &labels.boxes,
             );
             push_pattern_line(
                 actors,
@@ -13648,7 +13736,7 @@ pub fn push_actors(
                 col1_num_x,
                 1,
                 &anchors,
-                tr("PatternInfo", "Anchors"),
+                &labels.anchors,
             );
             push_pattern_line(
                 actors,
@@ -13657,7 +13745,7 @@ pub fn push_actors(
                 col1_num_x,
                 2,
                 &staircases,
-                tr("PatternInfo", "Staircases"),
+                &labels.staircases,
             );
             push_pattern_line(
                 actors,
@@ -13666,7 +13754,7 @@ pub fn push_actors(
                 col1_num_x,
                 3,
                 &sweeps,
-                tr("PatternInfo", "Sweeps"),
+                &labels.sweeps,
             );
 
             push_pattern_line(
@@ -13676,7 +13764,7 @@ pub fn push_actors(
                 col2_num_x,
                 0,
                 &triangles,
-                tr("PatternInfo", "Triangles"),
+                &labels.triangles,
             );
             push_pattern_line(
                 actors,
@@ -13685,7 +13773,7 @@ pub fn push_actors(
                 col2_num_x,
                 1,
                 &hip_breakers,
-                tr("PatternInfo", "HipBreakers"),
+                &labels.hip_breakers,
             );
             push_pattern_line(
                 actors,
@@ -13694,7 +13782,7 @@ pub fn push_actors(
                 col2_num_x,
                 2,
                 &doritos,
-                tr("PatternInfo", "Doritos"),
+                &labels.doritos,
             );
             push_pattern_line(
                 actors,
@@ -13703,7 +13791,7 @@ pub fn push_actors(
                 col2_num_x,
                 3,
                 &towers,
-                tr("PatternInfo", "Towers"),
+                &labels.towers,
             );
 
             push_pattern_line(
@@ -13713,7 +13801,7 @@ pub fn push_actors(
                 col3_num_x,
                 0,
                 &spirals,
-                tr("PatternInfo", "Spirals"),
+                &labels.spirals,
             );
             push_pattern_line(
                 actors,
@@ -13722,7 +13810,7 @@ pub fn push_actors(
                 col3_num_x,
                 1,
                 &copters,
-                tr("PatternInfo", "Copters"),
+                &labels.copters,
             );
 
             let col3_label_x = col3_num_x + 3.0;
@@ -13736,7 +13824,7 @@ pub fn push_actors(
 
             let stream_y = stamina_base_y + 3.0 * stamina_row_step;
             actors.push(act!(text: font("miso"): settext(total_stream): align(1.0, 0.5): horizalign(right): xy(col3_num_x, stream_y): maxwidth(relaxed_num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
-            actors.push(act!(text: font("miso"): settext(tr("PatternInfo", "TotalStream")): align(0.0, 0.5): horizalign(left): xy(col3_label_x, stream_y): maxwidth(col3_label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+            actors.push(act!(text: font("miso"): settext(&labels.total_stream): align(0.0, 0.5): horizalign(left): xy(col3_label_x, stream_y): maxwidth(col3_label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
         } else {
             let (cross, foot, side, jack, brack, stream): (
                 Arc<str>,
@@ -13780,19 +13868,13 @@ pub fn push_actors(
             let tech_row_step = if step_artist_expanded { 17.0 } else { 19.0 };
             let tech_value_zoom = if step_artist_expanded { 0.7 } else { 0.78 };
             let tech_label_zoom = if step_artist_expanded { 0.8 } else { 0.78 };
-            let items: [(Arc<str>, Arc<str>, u8, u8, Option<f32>); 6] = [
-                (cross, tr("PatternInfo", "Crossovers"), 0_u8, 0_u8, None),
-                (foot, tr("PatternInfo", "Footswitches"), 1_u8, 0_u8, None),
-                (side, tr("PatternInfo", "Sideswitches"), 0_u8, 1_u8, None),
-                (jack, tr("PatternInfo", "Jacks"), 1_u8, 1_u8, None),
-                (brack, tr("PatternInfo", "Brackets"), 0_u8, 2_u8, None),
-                (
-                    stream,
-                    tr("PatternInfo", "TotalStream"),
-                    1_u8,
-                    2_u8,
-                    Some(100.0),
-                ),
+            let items: [(Arc<str>, &Arc<str>, u8, u8, Option<f32>); 6] = [
+                (cross, &labels.crossovers, 0_u8, 0_u8, None),
+                (foot, &labels.footswitches, 1_u8, 0_u8, None),
+                (side, &labels.sideswitches, 0_u8, 1_u8, None),
+                (jack, &labels.jacks, 1_u8, 1_u8, None),
+                (brack, &labels.brackets, 0_u8, 2_u8, None),
+                (stream, &labels.total_stream, 1_u8, 2_u8, Some(100.0)),
             ];
 
             for (val, lbl, c, r, mw) in items {
@@ -15019,8 +15101,10 @@ mod tests {
     #[test]
     fn info_box_cache_preserves_children_and_refreshes_changed_content() {
         let mut cache = super::InfoBoxActorCache::default();
+        let labels = super::SelectMusicLabels::load();
         let first = cache.resolve(
             320.0,
+            &labels,
             Arc::from("Artist A"),
             Arc::from("120"),
             Arc::from("2:00"),
@@ -15036,6 +15120,7 @@ mod tests {
 
         let repeated = cache.resolve(
             320.0,
+            &labels,
             Arc::from("Artist A"),
             Arc::from("120"),
             Arc::from("2:00"),
@@ -15044,6 +15129,7 @@ mod tests {
 
         let changed = cache.resolve(
             320.0,
+            &labels,
             Arc::from("Artist B"),
             Arc::from("120"),
             Arc::from("2:00"),
