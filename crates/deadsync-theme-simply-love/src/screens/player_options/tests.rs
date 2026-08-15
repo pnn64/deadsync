@@ -4479,6 +4479,35 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn tab_is_a_noop_when_no_ghost_completion_is_offered() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        open_search(&mut state);
+        // Alias-only match: no ghost is drawn, so Tab must not rewrite the query.
+        search_key(&mut state, None, Some("arrows"), false);
+        if let super::search::SettingSearchState::Open(open) = &state.search {
+            assert!(
+                super::search::completion(open).is_none(),
+                "alias match should offer no completion"
+            );
+        }
+        search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::Tab)),
+            None,
+            false,
+        );
+        if let super::search::SettingSearchState::Open(open) = &state.search {
+            assert_eq!(
+                open.query, "arrows",
+                "Tab must not complete to a label that was never shown as a ghost"
+            );
+        } else {
+            panic!("search should still be open");
+        }
+    }
+
+    #[test]
     fn tab_accepts_ghost_completion() {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();

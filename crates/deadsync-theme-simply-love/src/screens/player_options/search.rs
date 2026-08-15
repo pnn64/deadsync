@@ -223,16 +223,33 @@ pub(super) fn move_selection(state: &mut State, delta: isize) {
     }
 }
 
-/// Complete the typed query to the focused match's label (Tab / →).
+/// Ghost completion for the focused match: `(full_label, typed_prefix)`.
+///
+/// Single source of truth shared by the renderer and `accept_ghost`, so Tab can
+/// only complete to something visibly offered. Prefix extensions only — alias
+/// matches (e.g. "arrows" focusing "NoteSkin") deliberately offer none.
+pub(super) fn completion(open: &SettingSearchOpen) -> Option<(String, String)> {
+    if open.query.is_empty() {
+        return None;
+    }
+    let m = focused_match(open)?;
+    let consumed = fuzzy::folded_prefix_len(&open.query, &m.label)?;
+    (m.label.chars().count() > consumed).then(|| {
+        let prefix: String = m.label.chars().take(consumed).collect();
+        (m.label.clone(), prefix)
+    })
+}
+
+/// Accept the ghost completion (Tab / →). No-op when none is offered.
 pub(super) fn accept_ghost(state: &mut State) {
     let label = match &state.search {
-        SettingSearchState::Open(open) => open
-            .matches
-            .get(open.selected_index)
-            .map(|m| m.label.clone()),
+        SettingSearchState::Open(open) => completion(open).map(|(label, _)| label),
         SettingSearchState::Hidden => None,
     };
-    if let (Some(label), SettingSearchState::Open(open)) = (label, &mut state.search) {
+    let Some(label) = label else {
+        return;
+    };
+    if let SettingSearchState::Open(open) = &mut state.search {
         open.query = label;
         open.selected_index = 0;
     }
@@ -336,13 +353,8 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
             diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
         ));
     } else {
-        let ghost = focused_match(open).and_then(|m| {
-            let consumed = fuzzy::folded_prefix_len(&open.query, &m.label)?;
-            (m.label.chars().count() > consumed).then(|| {
-                let prefix: String = m.label.chars().take(consumed).collect();
-                (m.label.clone(), prefix)
-            })
-        });
+        // Shared with accept_ghost so Tab does exactly what the ghost shows.
+        let ghost = completion(open);
         match ghost {
             Some((full_label, prefix)) => {
                 actors.push(act!(text:
