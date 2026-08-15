@@ -44,6 +44,7 @@ use crate::input::{
     raw_key_text_route, raw_pad_screen_route, smx_panel_press_feedback_plan,
 };
 use crate::input_backend::{InputBackendConfig, launch_input_backends};
+use crate::interaction::ProcessExitRequest;
 use crate::lighting::{
     GameplayLightSyncTarget, LightInputRoute, OperatorMenuButtonRoute, SmxAnimationSyncKey,
     SmxPanelDriver, hide_flags_for_profiles, light_input_route, lighting_frame_active,
@@ -70,9 +71,9 @@ use crate::restart::{
 };
 use crate::runtime::ShellState;
 use crate::screen_flow::{
-    LateJoinContext, ProfileSelectionContext, SelectMusicJoinContext, ThemeEffectExecution,
-    ThemeEffectRouteContext, evaluation_summary_return_to, execute_effect_batch, late_join_side,
-    profile_selection_plan, select_music_join_plan, theme_effect_execution_plan,
+    LateJoinContext, ProfileSelectionContext, SelectMusicJoinContext, ThemeEffectRouteContext,
+    evaluation_summary_return_to, late_join_side, profile_selection_plan, select_music_join_plan,
+    theme_effect_route_plan,
 };
 use crate::screenshot::{AutoScreenshotFrameContext, auto_screenshot_frame_plan};
 use crate::session::SessionState as ShellSessionState;
@@ -192,10 +193,11 @@ use deadsync_theme_simply_love::views::{
     SimplyLoveVisualPolicyView, VisualBackgroundView,
 };
 use deadsync_theme_simply_love::{
-    SimplyLoveConfigRequest, SimplyLoveContentRequest, SimplyLoveEffect as ThemeEffect,
-    SimplyLoveHardwareRequest, SimplyLoveLobbyRequest, SimplyLoveOnlineRequest,
-    SimplyLoveProfileImportEvent, SimplyLoveProfileRequest, SimplyLoveQrLoginService,
-    SimplyLoveRuntimeRequest, SimplyLoveSyncOwner, SimplyLoveSyncRequest,
+    SimplyLoveConfigRequest, SimplyLoveContentRequest, SimplyLoveDebugRequest,
+    SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest, SimplyLoveLobbyRequest,
+    SimplyLoveMediaRequest, SimplyLoveOnlineRequest, SimplyLoveProfileImportEvent,
+    SimplyLoveProfileRequest, SimplyLoveQrLoginService, SimplyLoveRuntimeRequest,
+    SimplyLoveSyncOwner, SimplyLoveSyncRequest,
 };
 
 /// Imperative effects to be executed by the shell.
@@ -3804,42 +3806,46 @@ impl App {
         action: ThemeEffect,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
-        let current_screen = self.state.screens.current_screen;
-        let course_active = self.state.session.course_run.is_some();
-        let course_has_next_stage = self
-            .state
-            .session
-            .course_run
-            .as_ref()
-            .is_some_and(CourseRunState::has_next_stage);
-        let gameplay_failed = matches!(action, ThemeEffect::Navigate(CurrentScreen::Evaluation))
-            && current_screen == CurrentScreen::Gameplay
-            && self.current_gameplay_stage_failed();
-        let plan = theme_effect_execution_plan(
-            action,
-            ThemeEffectRouteContext {
-                current_screen,
-                restart_pending: self.state.session.restart_pending,
-                course_active,
-                course_has_next_stage,
-                gameplay_failed,
-            },
-        );
-        if plan.clear_restart_pending {
+        let (action, clear_restart_pending) = match action {
+            action @ (ThemeEffect::Navigate(_) | ThemeEffect::NavigateNoFade(_)) => {
+                let current_screen = self.state.screens.current_screen;
+                let course = self.state.session.course_run.as_ref();
+                let gameplay_failed =
+                    matches!(action, ThemeEffect::Navigate(CurrentScreen::Evaluation))
+                        && current_screen == CurrentScreen::Gameplay
+                        && self.current_gameplay_stage_failed();
+                let plan = theme_effect_route_plan(
+                    action,
+                    ThemeEffectRouteContext {
+                        current_screen,
+                        restart_pending: self.state.session.restart_pending,
+                        course_active: course.is_some(),
+                        course_has_next_stage: course.is_some_and(CourseRunState::has_next_stage),
+                        gameplay_failed,
+                    },
+                );
+                (plan.action, plan.clear_restart_pending)
+            }
+            action => (action, false),
+        };
+        if clear_restart_pending {
             self.state.session.restart_pending = false;
         }
 
-        let commands = match plan.effect {
-            ThemeEffectExecution::None => Vec::new(),
-            ThemeEffectExecution::Batch(effects) => {
-                execute_effect_batch(effects, |effect| self.handle_action(effect, event_loop))?;
+        let commands = match action {
+            ThemeEffect::None | ThemeEffect::ConsumeInput => Vec::new(),
+            ThemeEffect::Batch(effects) => {
+                // Re-enter after each effect so routing observes earlier mutations.
+                for effect in effects {
+                    self.handle_action(effect, event_loop)?;
+                }
                 return Ok(());
             }
-            ThemeEffectExecution::Navigate(screen) => {
+            ThemeEffect::Navigate(screen) => {
                 self.handle_navigation_action(screen);
                 Vec::new()
             }
-            ThemeEffectExecution::NavigateNoFade(screen) => {
+            ThemeEffect::NavigateNoFade(screen) => {
                 if self.maybe_begin_gameplay_offset_prompt(
                     self.state.screens.current_screen,
                     screen,
@@ -3854,59 +3860,84 @@ impl App {
                 }
                 return Ok(());
             }
-            ThemeEffectExecution::ProcessExit(request) => self.handle_process_exit(request),
-            ThemeEffectExecution::RequestScreenshot(side) => {
-                self.state.shell.screenshot.request(side);
-                Vec::new()
-            }
-            ThemeEffectExecution::RunCommands(commands) => commands,
-            ThemeEffectExecution::LinkOnlineProfile(link) => {
-                match link.target {
-                    CurrentScreen::ArrowCloudLogin => {
-                        self.state.screens.arrowcloud_login_state.active_color_index =
-                            self.state.screens.menu_state.active_color_index;
-                        self.state.screens.arrowcloud_login_state.target_profile =
-                            Some(screens::arrowcloud_login::ProfileTarget {
-                                id: link.profile_id,
-                                display_name: link.display_name,
-                            });
-                    }
-                    CurrentScreen::GrooveStatsLogin => {
-                        self.state
-                            .screens
-                            .groovestats_login_state
-                            .active_color_index = self.state.screens.menu_state.active_color_index;
-                        self.state.screens.groovestats_login_state.target_profile =
-                            Some(screens::groovestats_login::ProfileTarget {
-                                id: link.profile_id,
-                                display_name: link.display_name,
-                            });
-                    }
-                    _ => {}
+            ThemeEffect::Exit => self.handle_process_exit(ProcessExitRequest::Exit),
+            ThemeEffect::Shutdown => self.handle_process_exit(ProcessExitRequest::Shutdown),
+            ThemeEffect::Runtime(request) => match request {
+                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::LinkArrowCloud {
+                    profile_id,
+                    display_name,
+                }) => {
+                    self.link_online_profile(
+                        CurrentScreen::ArrowCloudLogin,
+                        profile_id,
+                        display_name,
+                    );
+                    Vec::new()
                 }
-                self.handle_navigation_action(link.target);
-                Vec::new()
-            }
-            ThemeEffectExecution::WriteFsrDump { path } => {
-                match self.fsr_monitor.write_debug_dump(&path) {
-                    Ok(()) => {
-                        info!("Wrote FSR debug dump to '{}'", path.display());
-                        self.state
-                            .shell
-                            .interaction
-                            .show_message(format!("Wrote {}", path.display()), Instant::now());
-                    }
-                    Err(e) => {
-                        warn!("Failed to write FSR debug dump: {e}");
-                        self.state
-                            .shell
-                            .interaction
-                            .show_message(format!("FSR dump failed: {e}"), Instant::now());
-                    }
+                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::LinkGrooveStats {
+                    profile_id,
+                    display_name,
+                }) => {
+                    self.link_online_profile(
+                        CurrentScreen::GrooveStatsLogin,
+                        profile_id,
+                        display_name,
+                    );
+                    Vec::new()
                 }
-                Vec::new()
-            }
-            ThemeEffectExecution::Runtime(request) => match request {
+                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::Screenshot(side)) => {
+                    self.state.shell.screenshot.request(side);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::Banner(path)) => {
+                    self.execute_command(Command::SetBanner(path), event_loop);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::CdTitle(path)) => {
+                    self.execute_command(Command::SetCdTitle(path), event_loop);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::PackBanner(path)) => {
+                    self.execute_command(Command::SetPackBanner(path), event_loop);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::WheelItemBackgrounds(
+                    paths,
+                )) => {
+                    self.execute_command(Command::SetWheelItemBackgrounds(paths), event_loop);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::DensityGraph {
+                    slot,
+                    chart_opt,
+                }) => {
+                    self.execute_command(Command::SetDensityGraph { slot, chart_opt }, event_loop);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::FetchGrade(hash)) => {
+                    self.execute_command(Command::FetchOnlineGrade(hash), event_loop);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Debug(SimplyLoveDebugRequest::WriteFsrDump) => {
+                    let path = dirs::app_dirs().data_dir.join("fsrdump.txt");
+                    match self.fsr_monitor.write_debug_dump(&path) {
+                        Ok(()) => {
+                            info!("Wrote FSR debug dump to '{}'", path.display());
+                            self.state
+                                .shell
+                                .interaction
+                                .show_message(format!("Wrote {}", path.display()), Instant::now());
+                        }
+                        Err(e) => {
+                            warn!("Failed to write FSR debug dump: {e}");
+                            self.state
+                                .shell
+                                .interaction
+                                .show_message(format!("FSR dump failed: {e}"), Instant::now());
+                        }
+                    }
+                    Vec::new()
+                }
                 SimplyLoveRuntimeRequest::RestartGameplay => {
                     self.try_gameplay_restart(event_loop, "missed target");
                     Vec::new()
@@ -4660,13 +4691,42 @@ impl App {
                     deadsync_online::srpg_shop::runtime_purchase(shop_id, item_id, type_id);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Media(_)
-                | SimplyLoveRuntimeRequest::Online(_)
-                | SimplyLoveRuntimeRequest::Debug(_) => Vec::new(),
             },
         };
         self.run_commands(commands, event_loop);
         Ok(())
+    }
+
+    fn link_online_profile(
+        &mut self,
+        target: CurrentScreen,
+        profile_id: String,
+        display_name: String,
+    ) {
+        match target {
+            CurrentScreen::ArrowCloudLogin => {
+                self.state.screens.arrowcloud_login_state.active_color_index =
+                    self.state.screens.menu_state.active_color_index;
+                self.state.screens.arrowcloud_login_state.target_profile =
+                    Some(screens::arrowcloud_login::ProfileTarget {
+                        id: profile_id,
+                        display_name,
+                    });
+            }
+            CurrentScreen::GrooveStatsLogin => {
+                self.state
+                    .screens
+                    .groovestats_login_state
+                    .active_color_index = self.state.screens.menu_state.active_color_index;
+                self.state.screens.groovestats_login_state.target_profile =
+                    Some(screens::groovestats_login::ProfileTarget {
+                        id: profile_id,
+                        display_name,
+                    });
+            }
+            _ => {}
+        }
+        self.handle_navigation_action(target);
     }
 
     fn save_song_offset_changes(

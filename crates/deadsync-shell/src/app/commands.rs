@@ -23,7 +23,7 @@ impl App {
         }
     }
 
-    fn execute_command(&mut self, command: Command, event_loop: &ActiveEventLoop) {
+    pub(super) fn execute_command(&mut self, command: Command, event_loop: &ActiveEventLoop) {
         let kind = command.kind();
         let started = Instant::now();
         match command {
