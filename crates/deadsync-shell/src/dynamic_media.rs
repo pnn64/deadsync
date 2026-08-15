@@ -1016,6 +1016,17 @@ impl DynamicMedia {
         }
     }
 
+    pub(crate) fn has_gameplay_video(&self) -> bool {
+        self.current_dynamic_background
+            .as_ref()
+            .is_some_and(|state| state.video.is_some())
+            || !self.active_song_lua_videos.is_empty()
+    }
+
+    pub(crate) fn has_active_video(&self) -> bool {
+        !self.active_banner_videos.is_empty() || self.has_gameplay_video()
+    }
+
     pub fn queue_video_frames(
         &mut self,
         assets: &mut AssetManager,
@@ -1451,6 +1462,26 @@ mod tests {
 
         media.failed_gameplay_background_key = Some("old.mp4".to_owned());
         assert!(!media.gameplay_background_settled(None, None, false, timing));
+    }
+
+    #[test]
+    fn video_tick_requires_an_active_decoder() {
+        let mut media = DynamicMedia::new();
+        assert!(!media.has_active_video());
+        assert!(!media.has_gameplay_video());
+
+        media.current_dynamic_background = Some(DynamicBackgroundState::new(
+            "background.png".to_owned(),
+            1,
+            PathBuf::from("background.png"),
+            None,
+            0.0,
+            1.0,
+        ));
+        media.banner_video_workers = 1;
+
+        assert!(!media.has_active_video());
+        assert!(!media.has_gameplay_video());
     }
 
     #[test]

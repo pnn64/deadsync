@@ -3073,17 +3073,6 @@ impl App {
         let gameplay_banner_mode = frame_policy.gameplay_banner_mode;
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
-            let gameplay_time = match current_screen {
-                CurrentScreen::Gameplay => screens.gameplay_state.as_ref().map(|state| {
-                    deadsync_core::song_time::song_time_ns_to_seconds(state.current_music_time_ns())
-                }),
-                CurrentScreen::Practice => screens.practice_state.as_ref().map(|state| {
-                    deadsync_core::song_time::song_time_ns_to_seconds(
-                        state.gameplay.current_music_time_ns(),
-                    )
-                }),
-                _ => None,
-            };
             {
                 let post_select_stages = if show_select_music_video_banners
                     && matches!(
@@ -3210,11 +3199,30 @@ impl App {
                     }
                 }
             }
-            self.dynamic_media.queue_video_frames(
-                &mut self.asset_manager,
-                gameplay_time,
-                total_elapsed,
-            );
+            if self.dynamic_media.has_active_video() {
+                let gameplay_time = if self.dynamic_media.has_gameplay_video() {
+                    match current_screen {
+                        CurrentScreen::Gameplay => screens.gameplay_state.as_ref().map(|state| {
+                            deadsync_core::song_time::song_time_ns_to_seconds(
+                                state.current_music_time_ns(),
+                            )
+                        }),
+                        CurrentScreen::Practice => screens.practice_state.as_ref().map(|state| {
+                            deadsync_core::song_time::song_time_ns_to_seconds(
+                                state.gameplay.current_music_time_ns(),
+                            )
+                        }),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+                self.dynamic_media.queue_video_frames(
+                    &mut self.asset_manager,
+                    gameplay_time,
+                    total_elapsed,
+                );
+            }
             self.asset_manager.queue_pending_generated_textures();
             self.asset_manager.drain_texture_uploads(
                 backend,
