@@ -4382,18 +4382,7 @@ fn queue_lobby_sounds(state: &mut State) {
     }
 }
 
-fn prepend_pending_runtime(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
-    let request_count = state.pending_audio.len()
-        + state.pending_profile.len()
-        + state.pending_sync.len()
-        + state.pending_hardware.len()
-        + state.pending_online.len();
-    if request_count == 0 {
-        return effect;
-    }
-
-    let has_effect = !matches!(effect, ThemeEffect::None);
-    let mut effects = Vec::with_capacity(request_count + usize::from(has_effect));
+fn append_pending_runtime(state: &mut State, effect: ThemeEffect, effects: &mut Vec<ThemeEffect>) {
     effects.extend(
         state
             .pending_profile
@@ -4423,10 +4412,7 @@ fn prepend_pending_runtime(state: &mut State, effect: ThemeEffect) -> ThemeEffec
             .drain(..)
             .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(request))),
     );
-    if has_effect {
-        effects.push(effect);
-    }
-    ThemeEffect::batch(effects)
+    effect.append_to(effects);
 }
 
 #[inline(always)]
@@ -5298,7 +5284,8 @@ fn show_profile_switch_overlay(state: &mut State) {
 pub fn open_late_join_profile_overlay(
     state: &mut State,
     joining_side: profile_data::PlayerSide,
-) -> ThemeEffect {
+    effects: &mut Vec<ThemeEffect>,
+) {
     clear_preview(state);
     state.select_music_menu = select_music_menu::State::Hidden;
     state.song_search = select_music_menu::SongSearchState::Hidden;
@@ -5330,7 +5317,7 @@ pub fn open_late_join_profile_overlay(
     profile_boxes::enter_late_join(&mut overlay, joining_side);
     state.profile_switch_overlay = Some(overlay);
     state.profile_switch_overlay_is_late_join = true;
-    prepend_pending_runtime(state, ThemeEffect::None)
+    append_pending_runtime(state, ThemeEffect::None, effects);
 }
 
 #[inline(always)]
@@ -10220,9 +10207,10 @@ pub fn handle_pad_dir(
     dir: PadDir,
     pressed: bool,
     timestamp: Instant,
-) -> ThemeEffect {
+    effects: &mut Vec<ThemeEffect>,
+) {
     let effect = handle_pad_dir_impl(state, side, dir, pressed, timestamp, None);
-    prepend_pending_runtime(state, effect)
+    append_pending_runtime(state, effect, effects);
 }
 
 fn handle_pad_dir_event(
@@ -10231,15 +10219,14 @@ fn handle_pad_dir_event(
     dir: PadDir,
     ev: &InputEvent,
 ) -> ThemeEffect {
-    let effect = handle_pad_dir_impl(
+    handle_pad_dir_impl(
         state,
         side,
         dir,
         ev.pressed,
         ev.timestamp,
         Some(InputId::from_event(ev)),
-    );
-    prepend_pending_runtime(state, effect)
+    )
 }
 
 fn handle_pad_dir_impl(
@@ -10543,9 +10530,9 @@ fn handle_pad_dir_p2(
     ThemeEffect::None
 }
 
-pub fn handle_confirm(state: &mut State) -> ThemeEffect {
+pub fn handle_confirm(state: &mut State, effects: &mut Vec<ThemeEffect>) {
     let effect = handle_confirm_impl(state);
-    prepend_pending_runtime(state, effect)
+    append_pending_runtime(state, effect, effects);
 }
 
 fn handle_confirm_impl(state: &mut State) -> ThemeEffect {
@@ -10747,13 +10734,12 @@ fn handle_mute_hotkey(
 pub fn handle_player_options_mute_hotkey(
     state: &mut State,
     key: &RawKeyboardEvent,
-) -> ThemeInputResult {
+    effects: &mut Vec<ThemeEffect>,
+) -> bool {
     let consumed = handle_mute_hotkey(state, Some(key), true);
-    let effect = prepend_pending_runtime(state, ThemeEffect::None);
-    ThemeInputResult {
-        consumed: consumed || !matches!(effect, ThemeEffect::None),
-        effect,
-    }
+    let start_len = effects.len();
+    append_pending_runtime(state, ThemeEffect::None, effects);
+    consumed || effects.len() != start_len
 }
 
 #[inline(always)]
@@ -10779,9 +10765,10 @@ pub fn handle_raw_key_event(
     state: &mut State,
     key: Option<&RawKeyboardEvent>,
     text: Option<&str>,
-) -> ThemeInputResult {
+    effects: &mut Vec<ThemeEffect>,
+) -> bool {
     let result = handle_raw_key_event_impl(state, key, text, false, false);
-    finish_raw_key_result(state, result)
+    finish_raw_key_result(state, result, effects)
 }
 
 pub fn handle_raw_key_event_with_modifiers(
@@ -10790,17 +10777,20 @@ pub fn handle_raw_key_event_with_modifiers(
     text: Option<&str>,
     ctrl_held: bool,
     shift_held: bool,
-) -> ThemeInputResult {
+    effects: &mut Vec<ThemeEffect>,
+) -> bool {
     let result = handle_raw_key_event_impl(state, key, text, ctrl_held, shift_held);
-    finish_raw_key_result(state, result)
+    finish_raw_key_result(state, result, effects)
 }
 
-fn finish_raw_key_result(state: &mut State, result: ThemeInputResult) -> ThemeInputResult {
-    let effect = prepend_pending_runtime(state, result.effect);
-    ThemeInputResult {
-        consumed: result.consumed || !matches!(effect, ThemeEffect::None),
-        effect,
-    }
+fn finish_raw_key_result(
+    state: &mut State,
+    result: ThemeInputResult,
+    effects: &mut Vec<ThemeEffect>,
+) -> bool {
+    let start_len = effects.len();
+    append_pending_runtime(state, result.effect, effects);
+    result.consumed || effects.len() != start_len
 }
 
 fn handle_srpg_shop_raw_key(state: &mut State, key: Option<&RawKeyboardEvent>) -> bool {
@@ -11099,7 +11089,12 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     test_input::apply_raw_pad_event(&mut state.test_input_overlay, pad_event);
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffect {
+pub fn handle_input(
+    state: &mut State,
+    ev: &InputEvent,
+    fine: bool,
+    effects: &mut Vec<ThemeEffect>,
+) {
     let game_action = ev.action;
     let mut menu_ev = *ev;
     if !state.pad_config_overlay_visible && !state.test_input_overlay_visible {
@@ -11112,7 +11107,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffe
             screen_input::menu_action(ev.action, game, state.policy.dedicated_menu_only);
     }
     let effect = handle_input_impl(state, &menu_ev, fine, game_action);
-    prepend_pending_runtime(state, effect)
+    append_pending_runtime(state, effect, effects);
 }
 
 fn handle_input_impl(
@@ -11287,19 +11282,21 @@ fn handle_input_impl(
             VirtualAction::p1_right | VirtualAction::p1_menu_right => {
                 handle_pad_dir_event(state, profile_data::PlayerSide::P1, PadDir::Right, ev)
             }
-            VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_pad_dir(
+            VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_pad_dir_impl(
                 state,
                 profile_data::PlayerSide::P1,
                 PadDir::Up,
                 ev.pressed,
                 ev.timestamp,
+                None,
             ),
-            VirtualAction::p1_down | VirtualAction::p1_menu_down => handle_pad_dir(
+            VirtualAction::p1_down | VirtualAction::p1_menu_down => handle_pad_dir_impl(
                 state,
                 profile_data::PlayerSide::P1,
                 PadDir::Down,
                 ev.pressed,
                 ev.timestamp,
+                None,
             ),
             VirtualAction::p1_start if ev.pressed => {
                 if try_open_select_music_menu_with_select_start(
@@ -11309,7 +11306,7 @@ fn handle_input_impl(
                 ) {
                     ThemeEffect::None
                 } else {
-                    handle_confirm(state)
+                    handle_confirm_impl(state)
                 }
             }
             VirtualAction::p1_back if ev.pressed => {
@@ -11345,7 +11342,7 @@ fn handle_input_impl(
                 ) {
                     ThemeEffect::None
                 } else {
-                    handle_confirm(state)
+                    handle_confirm_impl(state)
                 }
             }
             VirtualAction::p2_back if ev.pressed => {
@@ -11389,7 +11386,7 @@ fn handle_input_impl(
                 ) {
                     ThemeEffect::None
                 } else {
-                    handle_confirm(state)
+                    handle_confirm_impl(state)
                 }
             }
             VirtualAction::p2_back if ev.pressed => {
@@ -11408,19 +11405,21 @@ fn handle_input_impl(
             VirtualAction::p1_right | VirtualAction::p1_menu_right => {
                 handle_pad_dir_event(state, profile_data::PlayerSide::P1, PadDir::Right, ev)
             }
-            VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_pad_dir(
+            VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_pad_dir_impl(
                 state,
                 profile_data::PlayerSide::P1,
                 PadDir::Up,
                 ev.pressed,
                 ev.timestamp,
+                None,
             ),
-            VirtualAction::p1_down | VirtualAction::p1_menu_down => handle_pad_dir(
+            VirtualAction::p1_down | VirtualAction::p1_menu_down => handle_pad_dir_impl(
                 state,
                 profile_data::PlayerSide::P1,
                 PadDir::Down,
                 ev.pressed,
                 ev.timestamp,
+                None,
             ),
             VirtualAction::p1_start if ev.pressed => {
                 if try_open_select_music_menu_with_select_start(
@@ -11430,7 +11429,7 @@ fn handle_input_impl(
                 ) {
                     ThemeEffect::None
                 } else {
-                    handle_confirm(state)
+                    handle_confirm_impl(state)
                 }
             }
             VirtualAction::p1_back if ev.pressed => {
@@ -11488,9 +11487,9 @@ fn take_ready_song_reload_dirs(state: &mut State) -> Vec<PathBuf> {
     }
 }
 
-pub fn update(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffect {
+pub fn update(state: &mut State, dt: f32, smx: &SmxAssignmentView, effects: &mut Vec<ThemeEffect>) {
     let effect = update_impl(state, dt, smx);
-    prepend_pending_runtime(state, effect)
+    append_pending_runtime(state, effect, effects);
 }
 
 fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffect {
@@ -14835,8 +14834,7 @@ mod tests {
         PREVIEW_DELAY_SECONDS, ProfileBoxEffectOutcome, SyncGraphCols, WheelSortMode,
         banner_texture_key, build_displayed_entries, build_playlist_entries_from_text,
         build_playlist_song_lookup, build_sync_heat_image, delayed_selection_updates_blocked,
-        first_song_entry_index, handle_confirm, handle_downloads_overlay_raw_key,
-        handle_player_options_mute_hotkey, handle_raw_key_event, init_placeholder,
+        first_song_entry_index, handle_downloads_overlay_raw_key, init_placeholder,
         keymap_has_player_input, maybe_prewarm_replaygain_for_pack,
         maybe_refresh_select_music_leaderboard, prepend_pending_effect, profile_boxes,
         reset_preview_after_gameplay, route_profile_box_effect, select_music_lobby_lock_text,
@@ -14870,6 +14868,110 @@ mod tests {
             repeat,
             timestamp: Instant::now(),
             host_nanos: 0,
+        }
+    }
+
+    fn collected_effect(mut effects: Vec<ThemeEffect>) -> ThemeEffect {
+        match effects.len() {
+            0 => ThemeEffect::None,
+            1 => effects.pop().expect("one collected effect"),
+            _ => ThemeEffect::Batch(effects),
+        }
+    }
+
+    fn append_pending(state: &mut super::State, effect: ThemeEffect) -> ThemeEffect {
+        let mut effects = Vec::new();
+        super::append_pending_runtime(state, effect, &mut effects);
+        collected_effect(effects)
+    }
+
+    fn handle_confirm(state: &mut super::State) -> ThemeEffect {
+        let mut effects = Vec::new();
+        super::handle_confirm(state, &mut effects);
+        collected_effect(effects)
+    }
+
+    fn handle_pad_dir(
+        state: &mut super::State,
+        side: profile_data::PlayerSide,
+        dir: PadDir,
+        pressed: bool,
+        timestamp: Instant,
+    ) -> ThemeEffect {
+        let mut effects = Vec::new();
+        super::handle_pad_dir(state, side, dir, pressed, timestamp, &mut effects);
+        collected_effect(effects)
+    }
+
+    fn handle_input(state: &mut super::State, ev: &InputEvent, fine: bool) -> ThemeEffect {
+        let mut effects = Vec::new();
+        super::handle_input(state, ev, fine, &mut effects);
+        collected_effect(effects)
+    }
+
+    fn update(
+        state: &mut super::State,
+        dt: f32,
+        smx: &deadsync_theme::views::SmxAssignmentView,
+    ) -> ThemeEffect {
+        let mut effects = Vec::new();
+        super::update(state, dt, smx, &mut effects);
+        collected_effect(effects)
+    }
+
+    fn open_late_join_profile_overlay(
+        state: &mut super::State,
+        side: profile_data::PlayerSide,
+    ) -> ThemeEffect {
+        let mut effects = Vec::new();
+        super::open_late_join_profile_overlay(state, side, &mut effects);
+        collected_effect(effects)
+    }
+
+    fn handle_player_options_mute_hotkey(
+        state: &mut super::State,
+        key: &RawKeyboardEvent,
+    ) -> ThemeInputResult {
+        let mut effects = Vec::new();
+        let consumed = super::handle_player_options_mute_hotkey(state, key, &mut effects);
+        ThemeInputResult {
+            consumed,
+            effect: collected_effect(effects),
+        }
+    }
+
+    fn handle_raw_key_event(
+        state: &mut super::State,
+        key: Option<&RawKeyboardEvent>,
+        text: Option<&str>,
+    ) -> ThemeInputResult {
+        let mut effects = Vec::new();
+        let consumed = super::handle_raw_key_event(state, key, text, &mut effects);
+        ThemeInputResult {
+            consumed,
+            effect: collected_effect(effects),
+        }
+    }
+
+    fn handle_raw_key_event_with_modifiers(
+        state: &mut super::State,
+        key: Option<&RawKeyboardEvent>,
+        text: Option<&str>,
+        ctrl_held: bool,
+        shift_held: bool,
+    ) -> ThemeInputResult {
+        let mut effects = Vec::new();
+        let consumed = super::handle_raw_key_event_with_modifiers(
+            state,
+            key,
+            text,
+            ctrl_held,
+            shift_held,
+            &mut effects,
+        );
+        ThemeInputResult {
+            consumed,
+            effect: collected_effect(effects),
         }
     }
 
@@ -15436,8 +15538,7 @@ mod tests {
     fn opening_late_join_returns_its_preview_stop_request() {
         let mut state = init_placeholder();
 
-        let effect =
-            super::open_late_join_profile_overlay(&mut state, profile_data::PlayerSide::P2);
+        let effect = open_late_join_profile_overlay(&mut state, profile_data::PlayerSide::P2);
 
         assert!(matches!(
             effect,
@@ -15958,7 +16059,7 @@ mod tests {
             crate::SimplyLoveMediaRequest::Banner(None),
         ));
 
-        let ThemeEffect::Batch(effects) = super::prepend_pending_runtime(&mut state, later) else {
+        let ThemeEffect::Batch(effects) = append_pending(&mut state, later) else {
             panic!("queued audio and later work should be batched");
         };
         assert!(matches!(
@@ -15998,6 +16099,83 @@ mod tests {
     }
 
     #[test]
+    fn pending_runtime_drains_flat_in_contract_order_and_retains_capacity() {
+        let mut state = init_placeholder();
+        state
+            .pending_profile
+            .push(crate::SimplyLoveProfileRequest::SetMusicRate(1.25));
+        state
+            .pending_hardware
+            .push(crate::SimplyLoveHardwareRequest::ReenableSmxAutoLights);
+        state
+            .pending_audio
+            .push(deadsync_theme::AudioRequest::StopMusic);
+        state
+            .pending_sync
+            .push(crate::SimplyLoveSyncRequest::CancelAnalysis(
+                crate::SimplyLoveSyncOwner::SelectMusicSong,
+            ));
+        state
+            .pending_online
+            .push(crate::SimplyLoveOnlineRequest::Reinitialize);
+        let capacities = [
+            state.pending_profile.capacity(),
+            state.pending_hardware.capacity(),
+            state.pending_audio.capacity(),
+            state.pending_sync.capacity(),
+            state.pending_online.capacity(),
+        ];
+        let mut effects = Vec::with_capacity(8);
+
+        super::append_pending_runtime(
+            &mut state,
+            ThemeEffect::Navigate(super::Screen::Menu),
+            &mut effects,
+        );
+
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                    crate::SimplyLoveProfileRequest::SetMusicRate(rate)
+                )),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Hardware(
+                    crate::SimplyLoveHardwareRequest::ReenableSmxAutoLights
+                )),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::StopMusic
+                )),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Sync(
+                    crate::SimplyLoveSyncRequest::CancelAnalysis(
+                        crate::SimplyLoveSyncOwner::SelectMusicSong
+                    )
+                )),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+                    crate::SimplyLoveOnlineRequest::Reinitialize
+                )),
+                ThemeEffect::Navigate(super::Screen::Menu),
+            ] if (*rate - 1.25).abs() <= f32::EPSILON
+        ));
+        assert_eq!(
+            [
+                state.pending_profile.capacity(),
+                state.pending_hardware.capacity(),
+                state.pending_audio.capacity(),
+                state.pending_sync.capacity(),
+                state.pending_online.capacity(),
+            ],
+            capacities
+        );
+        assert!(
+            state.pending_profile.is_empty()
+                && state.pending_hardware.is_empty()
+                && state.pending_audio.is_empty()
+                && state.pending_sync.is_empty()
+                && state.pending_online.is_empty()
+        );
+    }
+
+    #[test]
     fn session_change_updates_local_view_before_shell_persistence() {
         let mut state = init_placeholder();
         super::set_session(
@@ -16012,9 +16190,7 @@ mod tests {
         assert_eq!(state.session.player_side, profile_data::PlayerSide::P2);
         assert_eq!(state.session.joined, [false, true]);
 
-        let ThemeEffect::Batch(effects) =
-            super::prepend_pending_runtime(&mut state, ThemeEffect::None)
-        else {
+        let ThemeEffect::Batch(effects) = append_pending(&mut state, ThemeEffect::None) else {
             panic!("profile persistence should precede the queued sound");
         };
         assert!(matches!(
@@ -16042,7 +16218,7 @@ mod tests {
 
         assert_eq!(state.session.music_rate, 1.25);
         assert!(matches!(
-            super::prepend_pending_runtime(&mut state, ThemeEffect::None),
+            append_pending(&mut state, ThemeEffect::None),
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
                 crate::SimplyLoveProfileRequest::SetMusicRate(rate)
             )) if (rate - 1.25).abs() <= f32::EPSILON
@@ -16066,9 +16242,7 @@ mod tests {
         super::toggle_favorite_for_selected_entry(&mut state, profile_data::PlayerSide::P1);
 
         assert!(state.favorites.pack_names[0].contains("Pack A"));
-        let ThemeEffect::Batch(effects) =
-            super::prepend_pending_runtime(&mut state, ThemeEffect::None)
-        else {
+        let ThemeEffect::Batch(effects) = append_pending(&mut state, ThemeEffect::None) else {
             panic!("favorite persistence should precede its sound");
         };
         assert!(matches!(
@@ -16110,9 +16284,7 @@ mod tests {
 
         assert!(state.favorites.series_names[0].contains("ITG Series"));
         assert!(state.favorites.pack_names[0].is_empty());
-        let ThemeEffect::Batch(effects) =
-            super::prepend_pending_runtime(&mut state, ThemeEffect::None)
-        else {
+        let ThemeEffect::Batch(effects) = append_pending(&mut state, ThemeEffect::None) else {
             panic!("favorite persistence should precede its sound");
         };
         assert!(matches!(
@@ -16194,7 +16366,7 @@ mod tests {
             &mut state,
             super::lobby_overlay::InputOutcome::SearchRequested,
         );
-        let ThemeEffect::Batch(effects) = super::prepend_pending_runtime(&mut state, effect) else {
+        let ThemeEffect::Batch(effects) = append_pending(&mut state, effect) else {
             panic!("lobby sound and shell request should be batched");
         };
         assert!(matches!(
@@ -16554,7 +16726,7 @@ mod tests {
         state.currently_playing_preview_start_sec = Some(1.0);
         state.currently_playing_preview_length_sec = Some(10.0);
 
-        let action = super::update(
+        let action = update(
             &mut state,
             0.016,
             &deadsync_theme::views::SmxAssignmentView::default(),
@@ -16769,7 +16941,7 @@ mod tests {
         .into();
 
         select_favorites_menu_item(&mut state);
-        let _ = super::handle_input(
+        let _ = handle_input(
             &mut state,
             &input_event(VirtualAction::p1_start, InputSource::Gamepad, true),
             false,
@@ -16781,7 +16953,7 @@ mod tests {
         assert_eq!(song_titles(&state.all_entries), ["Song A1", "Song A2"]);
 
         select_favorites_menu_item(&mut state);
-        let _ = super::handle_input(
+        let _ = handle_input(
             &mut state,
             &input_event(VirtualAction::p2_start, InputSource::Gamepad, true),
             false,
@@ -17125,7 +17297,7 @@ mod tests {
         state.prev_selected_index = 2;
 
         let now = Instant::now();
-        super::handle_pad_dir(
+        handle_pad_dir(
             &mut state,
             profile_data::PlayerSide::P1,
             PadDir::Right,
@@ -17138,7 +17310,7 @@ mod tests {
             Some(super::NavDirection::Right)
         );
 
-        super::handle_pad_dir(
+        handle_pad_dir(
             &mut state,
             profile_data::PlayerSide::P1,
             PadDir::Left,
@@ -17148,7 +17320,7 @@ mod tests {
         assert_eq!(state.selected_index, 2);
         assert_eq!(state.nav_key_held_direction, None);
 
-        super::handle_pad_dir(
+        handle_pad_dir(
             &mut state,
             profile_data::PlayerSide::P1,
             PadDir::Right,
@@ -17182,10 +17354,10 @@ mod tests {
         let sequence_len = sequence.len();
         for (idx, dir) in sequence.into_iter().enumerate() {
             let t = now + Duration::from_millis(idx as u64 * 100);
-            super::handle_pad_dir(&mut state, profile_data::PlayerSide::P1, dir, true, t);
+            handle_pad_dir(&mut state, profile_data::PlayerSide::P1, dir, true, t);
             if idx + 1 < sequence_len {
                 assert_eq!(state.exit_prompt, super::ExitPromptState::None);
-                super::handle_pad_dir(
+                handle_pad_dir(
                     &mut state,
                     profile_data::PlayerSide::P1,
                     dir,
@@ -17222,14 +17394,14 @@ mod tests {
         state.prev_selected_index = 0;
 
         let now = Instant::now();
-        super::handle_pad_dir(
+        handle_pad_dir(
             &mut state,
             profile_data::PlayerSide::P1,
             PadDir::Up,
             true,
             now,
         );
-        super::handle_pad_dir(
+        handle_pad_dir(
             &mut state,
             profile_data::PlayerSide::P1,
             PadDir::Down,
@@ -17280,7 +17452,7 @@ mod tests {
 
         let now = Instant::now();
         let menu_slot = 100;
-        super::handle_input(
+        handle_input(
             &mut state,
             &input_event_at(
                 VirtualAction::p1_menu_left,
@@ -17309,7 +17481,7 @@ mod tests {
                 input_event_at(gameplay, InputSource::Gamepad, slot, false, timestamp),
                 input_event_at(menu_alias, InputSource::Gamepad, slot, false, timestamp),
             ] {
-                super::handle_input(&mut state, &event, false);
+                handle_input(&mut state, &event, false);
             }
             assert_eq!(
                 state.nav_key_held_direction,
@@ -17318,7 +17490,7 @@ mod tests {
             assert_eq!(state.nav_key_held_elapsed, Duration::from_secs(1));
         }
 
-        super::handle_input(
+        handle_input(
             &mut state,
             &input_event_at(
                 VirtualAction::p1_menu_left,
@@ -17520,7 +17692,7 @@ mod tests {
         assert_ignored(action);
         assert_eq!(song_search_query(&state), Some("n"));
 
-        let action = super::handle_input(
+        let action = handle_input(
             &mut state,
             &input_event(VirtualAction::p2_start, InputSource::Keyboard, true),
             false,
@@ -17538,7 +17710,7 @@ mod tests {
         assert_ignored(action);
 
         for action in [VirtualAction::p1_back, VirtualAction::p2_select] {
-            let screen_action = super::handle_input(
+            let screen_action = handle_input(
                 &mut state,
                 &input_event(action, InputSource::Keyboard, true),
                 false,
@@ -17555,7 +17727,7 @@ mod tests {
 
         let action = handle_raw_key_event(&mut state, None, Some("song"));
         assert_ignored(action);
-        let action = super::handle_input(
+        let action = handle_input(
             &mut state,
             &input_event(VirtualAction::p1_start, InputSource::Gamepad, true),
             false,
@@ -17568,7 +17740,7 @@ mod tests {
         let action = handle_raw_key_event(&mut state, None, Some("song"));
         assert!(!action.consumed);
         assert!(matches!(action.effect, ThemeEffect::None));
-        let action = super::handle_input(
+        let action = handle_input(
             &mut state,
             &input_event(VirtualAction::p2_back, InputSource::Gamepad, true),
             false,
@@ -17674,7 +17846,7 @@ mod tests {
         state.session.play_style = profile_data::PlayStyle::PumpSingle;
         state.out_prompt = super::OutPromptState::PressStartForOptions { elapsed: 0.0 };
 
-        super::handle_input(
+        handle_input(
             &mut state,
             &input_event(VirtualAction::p1_center, InputSource::Gamepad, true),
             false,
@@ -17692,7 +17864,7 @@ mod tests {
         state.session.play_style = profile_data::PlayStyle::PumpSingle;
         state.test_input_overlay_visible = true;
 
-        super::handle_input(
+        handle_input(
             &mut state,
             &input_event(VirtualAction::p1_center, InputSource::Gamepad, true),
             false,
@@ -17775,20 +17947,18 @@ mod tests {
         state.entries = vec![super::MusicWheelEntry::Song(test_song("Delete Me"))];
 
         let disabled =
-            super::handle_raw_key_event_with_modifiers(&mut state, Some(&key), None, true, false);
+            handle_raw_key_event_with_modifiers(&mut state, Some(&key), None, true, false);
         assert_ignored(disabled);
         assert!(state.song_delete_prompt.is_none());
 
         state.policy.allow_song_deletion = true;
         state.wheel_offset_from_selection = 0.25;
-        let moving =
-            super::handle_raw_key_event_with_modifiers(&mut state, Some(&key), None, true, false);
+        let moving = handle_raw_key_event_with_modifiers(&mut state, Some(&key), None, true, false);
         assert_ignored(moving);
         assert!(state.song_delete_prompt.is_none());
 
         state.wheel_offset_from_selection = 0.0;
-        let opened =
-            super::handle_raw_key_event_with_modifiers(&mut state, Some(&key), None, true, false);
+        let opened = handle_raw_key_event_with_modifiers(&mut state, Some(&key), None, true, false);
         assert_stop_then_consume(opened);
         assert!(
             state
@@ -18483,14 +18653,14 @@ mod tests {
 
         assert_eq!(state.entries.len(), 1);
         assert!(state.entries[0].is_series_header());
-        super::handle_confirm(&mut state);
+        handle_confirm(&mut state);
 
         state.selected_index = state
             .entries
             .iter()
             .position(|entry| entry.pack_key() == Some("Pack A"))
             .expect("open series should list its child pack");
-        super::handle_confirm(&mut state);
+        handle_confirm(&mut state);
 
         assert_eq!(state.expanded_series_name.as_deref(), Some("ITG Series"));
         assert_eq!(state.expanded_pack_name.as_deref(), Some("Pack A"));
@@ -18600,7 +18770,7 @@ mod tests {
             .position(|entry| entry.pack_key() == Some("Stamina RPG 9 - Unlocks"))
             .expect("lower duplicate-title pack should be visible");
         state.selected_index = lower_header;
-        super::handle_confirm(&mut state);
+        handle_confirm(&mut state);
 
         assert_eq!(
             state.expanded_pack_name.as_deref(),
@@ -18718,7 +18888,7 @@ mod tests {
             .position(|entry| entry.section_key() == Some("Loose Pack"))
             .expect("loose pack should remain visible beside an open Series");
 
-        super::handle_confirm(&mut state);
+        handle_confirm(&mut state);
 
         assert_eq!(state.expanded_series_name, None);
         assert_eq!(state.expanded_pack_name.as_deref(), Some("Loose Pack"));

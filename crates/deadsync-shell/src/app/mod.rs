@@ -1292,14 +1292,13 @@ impl ScreensState {
                     session_elapsed,
                     gameplay_elapsed,
                 );
-                (
-                    Some(select_music::update(
-                        &mut self.select_music_state,
-                        delta_time,
-                        smx_assignment.expect("Select Music requires the live SMX assignment view"),
-                    )),
-                    false,
-                )
+                select_music::update(
+                    &mut self.select_music_state,
+                    delta_time,
+                    smx_assignment.expect("Select Music requires the live SMX assignment view"),
+                    effects,
+                );
+                (None, false)
             }
             CurrentScreen::SelectCourse => {
                 if let Some(start) = session.session_start_time {
@@ -5582,7 +5581,7 @@ impl App {
         select_music::prime_displayed_chart_data(sm);
     }
 
-    fn try_handle_late_join(&mut self, ev: &InputEvent) -> Option<ThemeEffect> {
+    fn try_handle_late_join(&mut self, ev: &InputEvent) -> bool {
         let screen = self.state.screens.current_screen;
         let screen_allows_join = match screen {
             CurrentScreen::SelectMusic => {
@@ -5600,7 +5599,7 @@ impl App {
             || !ev.pressed
             || !matches!(ev.action, VirtualAction::p1_start | VirtualAction::p2_start)
         {
-            return None;
+            return false;
         }
         let session = profile::get_session_snapshot();
         let joined = [
@@ -5617,8 +5616,10 @@ impl App {
                 joined,
             },
         ) else {
-            return None;
+            return false;
         };
+
+        debug_assert!(self.theme_effect_scratch.is_empty());
 
         profile::set_session_joined(true, true);
         let joined_style = if session.play_style.is_pump() {
@@ -5665,27 +5666,25 @@ impl App {
                 crate::select_flow::runtime_view(),
             );
         }
-        let mut pending = ThemeEffect::None;
         if screen == CurrentScreen::SelectMusic {
             self.apply_select_music_join(join_side);
             // Per Simply-Love-SM5#741: when the Select Profile screen is on,
             // prompt the late-joining player with the profile-select widget
             // instead of silently leaving them as Guest.
             if show_select_profile {
-                pending = screens::select_music::open_late_join_profile_overlay(
+                screens::select_music::open_late_join_profile_overlay(
                     &mut self.state.screens.select_music_state,
                     join_side,
+                    &mut self.theme_effect_scratch,
                 );
             }
         }
 
-        let start = ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(
-            "assets/sounds/start.ogg".to_owned(),
-        )));
-        Some(match pending {
-            ThemeEffect::None => start,
-            pending => ThemeEffect::sequence(pending, start),
-        })
+        self.theme_effect_scratch
+            .push(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlaySfx("assets/sounds/start.ogg".to_owned()),
+            )));
+        true
     }
 
     fn route_operator_menu_button(&mut self, ev: &InputEvent) -> bool {
@@ -6618,12 +6617,17 @@ impl App {
                 return;
             }
             RawKeyTextRoute::SelectMusic => {
+                debug_assert!(self.theme_effect_scratch.is_empty());
                 screens::select_music::handle_raw_key_event(
                     &mut self.state.screens.select_music_state,
                     None,
                     Some(text),
-                )
-                .effect
+                    &mut self.theme_effect_scratch,
+                );
+                if let Err(e) = self.drain_theme_effects(event_loop) {
+                    log::error!("Failed to handle Select Music text input action: {e}");
+                }
+                return;
             }
             RawKeyTextRoute::Ignore => ThemeEffect::None,
         };
@@ -6772,14 +6776,20 @@ impl App {
             }
             RawKeyScreenRoute::SelectMusic => {
                 // Route screen-specific raw key handling (e.g., F7 fetch) to the screen
-                let result = screens::select_music::handle_raw_key_event_with_modifiers(
+                debug_assert!(self.theme_effect_scratch.is_empty());
+                let consumed = screens::select_music::handle_raw_key_event_with_modifiers(
                     &mut self.state.screens.select_music_state,
                     Some(&raw_key),
                     None,
                     ctrl_held,
                     shift_held,
+                    &mut self.theme_effect_scratch,
                 );
-                if self.handle_theme_input_result(event_loop, result, "SelectMusic") {
+                let has_effect = !self.theme_effect_scratch.is_empty();
+                if let Err(e) = self.drain_theme_effects(event_loop) {
+                    log::error!("Failed to handle Select Music raw key action: {e}");
+                }
+                if consumed || has_effect {
                     return true;
                 }
             }
@@ -6791,11 +6801,17 @@ impl App {
                     .as_ref()
                     .is_some_and(|state| state.return_screen == CurrentScreen::SelectMusic);
                 if returns_to_select_music {
-                    let result = screens::select_music::handle_player_options_mute_hotkey(
+                    debug_assert!(self.theme_effect_scratch.is_empty());
+                    let consumed = screens::select_music::handle_player_options_mute_hotkey(
                         &mut self.state.screens.select_music_state,
                         &raw_key,
+                        &mut self.theme_effect_scratch,
                     );
-                    if self.handle_theme_input_result(event_loop, result, "PlayerOptions mute") {
+                    let has_effect = !self.theme_effect_scratch.is_empty();
+                    if let Err(e) = self.drain_theme_effects(event_loop) {
+                        log::error!("Failed to handle Player Options mute action: {e}");
+                    }
+                    if consumed || has_effect {
                         return true;
                     }
                 }

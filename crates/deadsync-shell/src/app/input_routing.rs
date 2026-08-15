@@ -144,9 +144,8 @@ impl App {
             config::get().game_flag,
             input_policy.only_dedicated_menu_buttons,
         );
-        if let Some(action) = self.try_handle_late_join(&menu_ev) {
-            self.handle_action(action, event_loop)?;
-            return Ok(());
+        if self.try_handle_late_join(&menu_ev) {
+            return self.drain_theme_effects(event_loop);
         }
         let mut ev = ev;
         if !matches!(
@@ -182,6 +181,16 @@ impl App {
                 self.try_gameplay_restart(event_loop, "Restart button");
                 return Ok(());
             }
+        }
+        if current_screen == CurrentScreen::SelectMusic {
+            debug_assert!(self.theme_effect_scratch.is_empty());
+            screens::select_music::handle_input(
+                &mut self.state.screens.select_music_state,
+                &ev,
+                self.state.shell.interaction.controls().shift(),
+                &mut self.theme_effect_scratch,
+            );
+            return self.drain_theme_effects(event_loop);
         }
         if current_screen == CurrentScreen::Options {
             debug_assert!(self.theme_effect_scratch.is_empty());
@@ -266,11 +275,7 @@ impl App {
             CurrentScreen::SmxAssignPads => {
                 screens::smx_assign::handle_input(&mut self.state.screens.smx_assign_state, &ev)
             }
-            CurrentScreen::SelectMusic => screens::select_music::handle_input(
-                &mut self.state.screens.select_music_state,
-                &ev,
-                self.state.shell.interaction.controls().shift(),
-            ),
+            CurrentScreen::SelectMusic => unreachable!("Select Music input routed directly"),
             CurrentScreen::SelectCourse => screens::select_course::handle_input(
                 &mut self.state.screens.select_course_state,
                 &ev,
