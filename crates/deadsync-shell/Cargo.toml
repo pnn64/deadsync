@@ -22,6 +22,11 @@ name = "input_capture_maintenance"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "runtime_view_invalidation"
+harness = false
+required-features = ["bench-support"]
+
 
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }

@@ -132,6 +132,9 @@ impl App {
         {
             crate::gameplay_runtime::exit(gs);
         }
+        if prev != target {
+            self.mark_screen_entry_runtime_dirty(target);
+        }
         self.state.screens.current_screen = target;
         self.sync_gameplay_input_capture();
         write_current_screen_file(target);
