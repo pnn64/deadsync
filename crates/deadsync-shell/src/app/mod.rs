@@ -1153,15 +1153,16 @@ impl ScreensState {
                 })
                 .map_or((None, false), |action| (Some(action), false)),
             CurrentScreen::Init => (Some(init::update(&mut self.init_state, delta_time)), false),
-            CurrentScreen::Options => (
+            CurrentScreen::Options => {
                 options::update(
                     &mut self.options_state,
                     delta_time,
                     asset_manager,
                     smx_assignment.expect("Options requires the live SMX assignment view"),
-                ),
-                false,
-            ),
+                    effects,
+                );
+                (None, false)
+            }
             CurrentScreen::Credits => {
                 credits::update(&mut self.credits_state, delta_time);
                 (None, false)
@@ -6604,12 +6605,17 @@ impl App {
                 text,
             ),
             RawKeyTextRoute::Options => {
+                debug_assert!(self.theme_effect_scratch.is_empty());
                 screens::options::handle_raw_key_event(
                     &mut self.state.screens.options_state,
                     None,
                     Some(text),
-                )
-                .effect
+                    &mut self.theme_effect_scratch,
+                );
+                if let Err(e) = self.drain_theme_effects(event_loop) {
+                    log::error!("Failed to handle Options text input action: {e}");
+                }
+                return;
             }
             RawKeyTextRoute::SelectMusic => {
                 screens::select_music::handle_raw_key_event(
@@ -6749,12 +6755,18 @@ impl App {
                 }
             }
             RawKeyScreenRoute::Options => {
-                let result = screens::options::handle_raw_key_event(
+                debug_assert!(self.theme_effect_scratch.is_empty());
+                let consumed = screens::options::handle_raw_key_event(
                     &mut self.state.screens.options_state,
                     Some(&raw_key),
                     None,
+                    &mut self.theme_effect_scratch,
                 );
-                if self.handle_theme_input_result(event_loop, result, "Options") {
+                let has_effect = !self.theme_effect_scratch.is_empty();
+                if let Err(e) = self.drain_theme_effects(event_loop) {
+                    log::error!("Failed to handle Options raw key action: {e}");
+                }
+                if consumed || has_effect {
                     return true;
                 }
             }

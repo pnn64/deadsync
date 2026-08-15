@@ -236,10 +236,11 @@ pub fn update(
     dt: f32,
     asset_manager: &AssetManager,
     smx_assignment: &SmxAssignmentView,
-) -> Option<ThemeEffect> {
+    effects: &mut Vec<ThemeEffect>,
+) {
     sync_smx_assignment(state, smx_assignment);
     let effect = update_impl(state, dt, asset_manager);
-    prepend_pending_sfx_opt(state, effect)
+    append_pending_effects(state, effect.unwrap_or(ThemeEffect::None), effects);
 }
 
 pub(super) fn sync_smx_assignment(state: &mut State, view: &SmxAssignmentView) {

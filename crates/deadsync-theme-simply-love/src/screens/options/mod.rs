@@ -34,7 +34,7 @@ use crate::config::{
 use crate::screens::input as screen_input;
 use crate::screens::pack_sync as shared_pack_sync;
 use crate::screens::select_music;
-use crate::screens::{Screen, ThemeEffect, ThemeInputResult};
+use crate::screens::{Screen, ThemeEffect};
 use crate::views::{
     OptionsInitView, OptionsPackSyncView, OptionsSongPackView, SimplyLoveUpdaterCapabilities,
     SimplyLoveUpdaterView,
@@ -213,15 +213,7 @@ fn queue_online(state: &mut State, request: crate::SimplyLoveOnlineRequest) {
     state.pending_online.push(request);
 }
 
-fn prepend_pending_sfx(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
-    let request_count =
-        state.pending_sfx.len() + state.pending_sync.len() + state.pending_online.len();
-    if request_count == 0 {
-        return effect;
-    }
-
-    let has_effect = !matches!(effect, ThemeEffect::None);
-    let mut effects = Vec::with_capacity(request_count + usize::from(has_effect));
+fn append_pending_effects(state: &mut State, effect: ThemeEffect, effects: &mut Vec<ThemeEffect>) {
     effects.extend(state.pending_sfx.drain(..).map(crate::effects::sfx));
     effects.extend(
         state
@@ -235,10 +227,7 @@ fn prepend_pending_sfx(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
             .drain(..)
             .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(request))),
     );
-    if has_effect {
-        effects.push(effect);
-    }
-    ThemeEffect::batch(effects)
+    effect.append_to(effects);
 }
 
 pub fn apply_sync_analysis_events(state: &mut State, events: Vec<crate::SimplyLoveSyncEvent>) {
@@ -263,19 +252,6 @@ pub fn apply_apply_replaygain_events(
     for event in events {
         apply_apply_replaygain_event(state, event);
     }
-}
-
-fn prepend_pending_sfx_opt(state: &mut State, effect: Option<ThemeEffect>) -> Option<ThemeEffect> {
-    if state.pending_sfx.is_empty()
-        && state.pending_sync.is_empty()
-        && state.pending_online.is_empty()
-    {
-        return effect;
-    }
-    Some(prepend_pending_sfx(
-        state,
-        effect.unwrap_or(ThemeEffect::None),
-    ))
 }
 
 #[cfg(test)]

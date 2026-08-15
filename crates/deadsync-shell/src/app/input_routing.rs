@@ -183,6 +183,18 @@ impl App {
                 return Ok(());
             }
         }
+        if current_screen == CurrentScreen::Options {
+            debug_assert!(self.theme_effect_scratch.is_empty());
+            let updater = super::updater::view();
+            screens::options::handle_input(
+                &mut self.state.screens.options_state,
+                &self.asset_manager,
+                &updater,
+                &ev,
+                &mut self.theme_effect_scratch,
+            );
+            return self.drain_theme_effects(event_loop);
+        }
         if current_screen == CurrentScreen::PlayerOptions {
             debug_assert!(self.theme_effect_scratch.is_empty());
             if let Some(state) = self.state.screens.player_options_state.as_mut() {
@@ -225,15 +237,7 @@ impl App {
             CurrentScreen::ProfileLoad => {
                 screens::profile_load::handle_input(&mut self.state.screens.profile_load_state, &ev)
             }
-            CurrentScreen::Options => {
-                let updater = super::updater::view();
-                screens::options::handle_input(
-                    &mut self.state.screens.options_state,
-                    &self.asset_manager,
-                    &updater,
-                    &ev,
-                )
-            }
+            CurrentScreen::Options => unreachable!("Options input routed directly"),
             CurrentScreen::Credits => {
                 screens::credits::handle_input(&mut self.state.screens.credits_state, &ev)
             }

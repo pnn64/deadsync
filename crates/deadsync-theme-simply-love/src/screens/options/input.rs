@@ -2006,9 +2006,10 @@ pub fn handle_input(
     asset_manager: &AssetManager,
     updater: &SimplyLoveUpdaterView,
     ev: &InputEvent,
-) -> ThemeEffect {
+    effects: &mut Vec<ThemeEffect>,
+) {
     let effect = handle_input_impl(state, asset_manager, updater, ev);
-    prepend_pending_sfx(state, effect)
+    append_pending_effects(state, effect, effects);
 }
 
 fn handle_input_impl(

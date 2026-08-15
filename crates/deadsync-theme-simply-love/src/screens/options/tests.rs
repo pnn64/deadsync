@@ -954,13 +954,20 @@ fn srpg_shop_folder_is_hidden_when_shop_is_disabled() {
     assert!(visible.contains(&folder_index));
 }
 
-fn press(state: &mut State, asset_manager: &AssetManager, action: VirtualAction) -> ThemeEffect {
+fn press(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    action: VirtualAction,
+) -> Vec<ThemeEffect> {
+    let mut effects = Vec::new();
     handle_input(
         state,
         asset_manager,
         &updater_view(),
         &input_event(action, true),
-    )
+        &mut effects,
+    );
+    effects
 }
 
 fn dedicated_press(
@@ -1198,7 +1205,10 @@ fn apply_replaygain_start_opens_overlay_and_requests_analysis() {
         "starting the action should open the progress overlay"
     );
     assert!(
-        effect_contains_content(&effect, crate::SimplyLoveContentRequest::ApplyReplayGain),
+        effect.iter().any(|effect| effect_contains_content(
+            effect,
+            crate::SimplyLoveContentRequest::ApplyReplayGain
+        )),
         "start should request bulk ReplayGain analysis"
     );
 }
@@ -1220,7 +1230,10 @@ fn apply_replaygain_cancel_requests_worker_stop() {
     let effect = press(&mut state, &asset_manager, VirtualAction::p1_back);
 
     assert!(
-        effect_contains_content(&effect, crate::SimplyLoveContentRequest::SkipReplayGain),
+        effect.iter().any(|effect| effect_contains_content(
+            effect,
+            crate::SimplyLoveContentRequest::SkipReplayGain
+        )),
         "back should request cooperative skip of the analysis pass"
     );
     assert!(
@@ -1601,12 +1614,14 @@ fn p2_can_navigate_and_change_system_options() {
         1.0,
         &asset_manager,
         &SmxAssignmentView::default(),
+        &mut Vec::new(),
     );
     update(
         &mut state,
         1.0,
         &asset_manager,
         &SmxAssignmentView::default(),
+        &mut Vec::new(),
     );
     assert!(matches!(
         state.view,
@@ -1720,6 +1735,7 @@ fn link_row_lr_release_clears_the_nav_hold() {
         &asset_manager,
         &updater_view(),
         &input_event(VirtualAction::p1_right, false),
+        &mut Vec::new(),
     );
     assert_eq!(state.nav_key_held_direction, None);
 }
@@ -1799,6 +1815,7 @@ fn service_child_three_key_lr_repeat_uses_update_dt() {
         0.0,
         &asset_manager,
         &SmxAssignmentView::default(),
+        &mut Vec::new(),
     );
     assert_eq!(
         state.sub[SubmenuKind::Graphics].cursor_indices[row],
@@ -1810,6 +1827,7 @@ fn service_child_three_key_lr_repeat_uses_update_dt() {
         (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
         &asset_manager,
         &SmxAssignmentView::default(),
+        &mut Vec::new(),
     );
     assert_ne!(
         state.sub[SubmenuKind::Graphics].cursor_indices[row],
@@ -1880,6 +1898,7 @@ fn online_scoring_three_key_menu_lr_moves_rows() {
         &asset_manager,
         &updater_view(),
         &input_event(VirtualAction::p1_menu_right, false),
+        &mut Vec::new(),
     );
     assert_eq!(state.nav_key_held_direction, None);
 
@@ -2312,9 +2331,9 @@ fn queued_sfx_precede_follow_up_runtime_work() {
         crate::SimplyLoveConfigRequest::ShowOverlay(2),
     ));
 
-    let ThemeEffect::Batch(effects) = prepend_pending_sfx(&mut state, effect) else {
-        panic!("queued sound and config work should be batched");
-    };
+    let pending_capacity = state.pending_sfx.capacity();
+    let mut effects = Vec::with_capacity(2);
+    append_pending_effects(&mut state, effect, &mut effects);
     assert!(matches!(
         &effects[0],
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
@@ -2328,6 +2347,7 @@ fn queued_sfx_precede_follow_up_runtime_work() {
         ))
     ));
     assert!(state.pending_sfx.is_empty());
+    assert_eq!(state.pending_sfx.capacity(), pending_capacity);
 }
 
 #[test]
@@ -2339,9 +2359,8 @@ fn queued_sfx_precede_score_import_runtime_work() {
         crate::SimplyLoveOnlineRequest::CancelScoreImport,
     );
 
-    let ThemeEffect::Batch(effects) = prepend_pending_sfx(&mut state, ThemeEffect::None) else {
-        panic!("queued sound and score-import work should be batched");
-    };
+    let mut effects = Vec::with_capacity(2);
+    append_pending_effects(&mut state, ThemeEffect::None, &mut effects);
     assert!(matches!(
         &effects[0],
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
@@ -2416,13 +2435,13 @@ fn update_drain_emits_a_queued_sound_without_follow_up_work() {
     let mut state = init();
     queue_sfx(&mut state, "assets/sounds/change.ogg");
 
-    let effect = prepend_pending_sfx_opt(&mut state, None)
-        .expect("queued update sound should become an effect");
+    let mut effects = Vec::new();
+    append_pending_effects(&mut state, ThemeEffect::None, &mut effects);
     assert!(matches!(
-        effect,
-        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+        effects.as_slice(),
+        [ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
             deadsync_theme::AudioRequest::PlaySfx(path)
-        )) if path == "assets/sounds/change.ogg"
+        ))] if path == "assets/sounds/change.ogg"
     ));
     assert!(state.pending_sfx.is_empty());
 }
@@ -2477,13 +2496,15 @@ fn shell_content_events_drive_reload_progress_and_completion() {
     );
     assert!(reload.done);
 
-    let effect = update(
+    let mut effects = Vec::new();
+    update(
         &mut state,
         0.0,
         &AssetManager::new(),
         &SmxAssignmentView::default(),
+        &mut effects,
     );
-    assert!(effect.is_none());
+    assert!(effects.is_empty());
     assert!(state.reload_ui.is_none());
 }
 
@@ -2499,6 +2520,7 @@ fn settle_submenu(state: &mut State, asset_manager: &AssetManager) {
             SUBMENU_FADE_DURATION + 0.001,
             asset_manager,
             &SmxAssignmentView::default(),
+            &mut Vec::new(),
         );
     }
     panic!("submenu transition did not settle");
@@ -2574,23 +2596,25 @@ fn graphics_threads_emit_neutral_request_on_exit() {
     .expect("software thread row") = 2;
     state.submenu_transition = SubmenuTransition::FadeOutToMain;
 
-    let effect = update(
+    let mut effects = Vec::new();
+    update(
         &mut state,
         SUBMENU_FADE_DURATION + 0.001,
         &asset_manager,
         &SmxAssignmentView::default(),
+        &mut effects,
     );
 
     assert!(
         matches!(
-            &effect,
-            Some(ThemeEffect::Runtime(
+            effects.as_slice(),
+            [ThemeEffect::Runtime(
                 crate::SimplyLoveRuntimeRequest::Graphics(deadsync_theme::GraphicsRequest {
                     software_threads: Some(2),
                     ..
                 })
-            ))
+            )]
         ),
-        "unexpected effect: {effect:?}"
+        "unexpected effects: {effects:?}"
     );
 }
