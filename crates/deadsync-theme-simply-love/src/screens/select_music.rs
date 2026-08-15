@@ -16406,6 +16406,26 @@ mod tests {
     }
 
     #[test]
+    fn held_scroll_can_advance_selection_after_runtime_snapshot() {
+        let mut state = init_placeholder();
+        state.entries = test_entries();
+        state.selected_index = 1;
+        state.prev_selected_index = 1;
+        state.nav_key_held_direction = Some(super::NavDirection::Right);
+        state.nav_key_held_elapsed = super::NAV_INITIAL_HOLD_DELAY;
+        let before_step = super::music_wheel_runtime_token(&state);
+
+        let _ = super::update_impl(
+            &mut state,
+            0.1,
+            &deadsync_theme::views::SmxAssignmentView::default(),
+        );
+
+        assert_eq!(state.selected_index, 2);
+        assert_ne!(before_step, super::music_wheel_runtime_token(&state));
+    }
+
+    #[test]
     fn sibling_refresh_intent_targets_other_slot_when_profile_matches() {
         use super::{PadConfigIntent, sibling_refresh_intent};
         // Same profile + connected sibling: save/rename (reresolve=false) refreshes

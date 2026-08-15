@@ -1,8 +1,10 @@
-use super::{App, MusicWheelDisplayPolicy};
+use super::{App, MusicWheelDisplayPolicy, post_step_sync_needed};
 use deadsync_config::prelude as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_theme::views::AudioPlaybackView;
+#[cfg(test)]
+use deadsync_theme_simply_love::screens::select_course;
 use deadsync_theme_simply_love::screens::{SimplyLoveScreen as CurrentScreen, select_music};
 use deadsync_theme_simply_love::views::{
     SelectMusicDownloadView, SelectMusicLeaderboardRequest, SelectMusicLeaderboardSideView,
@@ -264,6 +266,23 @@ fn pad_profile_rows_match(
 }
 
 impl App {
+    /// Held wheel scrolling can advance the selection inside `step_idle`,
+    /// after the normal pre-update runtime snapshot was prepared. Refresh only
+    /// on that boundary so actor construction never pairs new row positions
+    /// with the previous selection's grade, score, or favorite slots.
+    pub(super) fn sync_select_music_runtime_after_step(&mut self, policy: SelectMusicFramePolicy) {
+        if self.state.screens.current_screen != CurrentScreen::SelectMusic {
+            return;
+        }
+        let source =
+            select_music::music_wheel_runtime_token(&self.state.screens.select_music_state);
+        let synced = self.select_music_wheel_key.as_ref().map(|key| key.source);
+        if !post_step_sync_needed(synced, source) {
+            return;
+        }
+        self.sync_select_music_runtime_view(policy);
+    }
+
     fn select_music_pad_profiles(
         &mut self,
         session: SelectMusicSessionView,
@@ -682,6 +701,28 @@ mod tests {
         };
         assert!(pad_in_play(double, 0));
         assert!(pad_in_play(double, 1));
+    }
+
+    #[test]
+    fn post_step_wheel_sources_detect_selection_advance() {
+        let mut music = select_music::init_placeholder();
+        let synced = select_music::music_wheel_runtime_token(&music);
+
+        music.selected_index = music.selected_index.wrapping_add(1);
+        let after_step = select_music::music_wheel_runtime_token(&music);
+
+        assert!(!post_step_sync_needed(Some(synced), synced));
+        assert!(post_step_sync_needed(Some(synced), after_step));
+        assert!(post_step_sync_needed(None, after_step));
+
+        let mut course = select_course::init(Default::default());
+        let synced = select_course::runtime_token(&course);
+        course.selected_index = course.selected_index.wrapping_add(1);
+
+        assert!(post_step_sync_needed(
+            Some(synced),
+            select_course::runtime_token(&course),
+        ));
     }
 
     #[test]

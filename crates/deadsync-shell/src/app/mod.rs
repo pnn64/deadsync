@@ -374,6 +374,11 @@ struct SelectCourseRuntimeKey {
     score_generation: u64,
 }
 
+#[inline(always)]
+fn post_step_sync_needed<T: Copy + PartialEq>(synced: Option<T>, current: T) -> bool {
+    synced != Some(current)
+}
+
 impl SelectCourseRuntimeKey {
     fn new(
         source: select_course::SelectCourseRuntimeToken,
@@ -455,6 +460,19 @@ mod frame_work {
             super::CurrentScreen::Evaluation => NON_GAMEPLAY | ONLINE_VIEW,
             _ => NON_GAMEPLAY,
         }
+    }
+}
+
+const EVALUATION_RUNTIME_VIEWS: u8 = 1 << 0;
+const SELECT_MUSIC_RUNTIME_VIEWS: u8 = 1 << 1;
+const SELECT_COURSE_RUNTIME_VIEWS: u8 = 1 << 2;
+
+const fn screen_entry_runtime_views(screen: CurrentScreen) -> u8 {
+    match screen {
+        CurrentScreen::Evaluation => EVALUATION_RUNTIME_VIEWS,
+        CurrentScreen::SelectMusic => SELECT_MUSIC_RUNTIME_VIEWS,
+        CurrentScreen::SelectCourse => SELECT_COURSE_RUNTIME_VIEWS,
+        _ => 0,
     }
 }
 
@@ -1600,6 +1618,26 @@ impl App {
         );
     }
 
+    fn mark_screen_entry_runtime_dirty(&mut self, target: CurrentScreen) {
+        let views = screen_entry_runtime_views(target);
+        if views & EVALUATION_RUNTIME_VIEWS != 0 {
+            self.mark_evaluation_runtime_dirty();
+        }
+        if views & SELECT_MUSIC_RUNTIME_VIEWS != 0 {
+            self.select_music_lobby.force_refresh();
+            self.select_music_profile_rebuild = true;
+            self.select_music_wheel_rebuild = true;
+            self.select_music_score_views_rebuild = true;
+            self.select_music_settings_rebuild = true;
+            self.select_music_unlock_rebuild = true;
+        }
+        if views & SELECT_COURSE_RUNTIME_VIEWS != 0 {
+            self.select_course_settings_rebuild = true;
+            self.select_course_profile_rebuild = true;
+            self.select_course_runtime_rebuild = true;
+        }
+    }
+
     fn poll_profile_load(&mut self) {
         if self.state.screens.current_screen != CurrentScreen::ProfileLoad {
             return;
@@ -2386,6 +2424,23 @@ impl App {
         );
     }
 
+    /// Select Course advances its wheel from held input during `step_idle` too.
+    /// Keep its retained wheel and score presentation on the same selection as
+    /// actor construction without rebuilding anything on a steady frame.
+    fn sync_select_course_runtime_after_step(&mut self, policy: SelectCourseFramePolicy) {
+        if self.state.screens.current_screen != CurrentScreen::SelectCourse {
+            return;
+        }
+        let source = select_course::runtime_token(&self.state.screens.select_course_state);
+        let synced = self
+            .select_course_runtime_key
+            .as_ref()
+            .map(|key| key.source);
+        if post_step_sync_needed(synced, source) {
+            self.sync_select_course_runtime_view(policy);
+        }
+    }
+
     fn sync_main_menu_runtime_view(&mut self) {
         let view = crate::main_menu::runtime_view();
         menu::sync_runtime_view(&mut self.state.screens.menu_state, view);
@@ -2980,29 +3035,15 @@ impl App {
         if work_caps & frame_work::ONLINE_VIEW != 0 {
             self.sync_active_online_runtime_view(redraw_started);
         }
-        if self.state.screens.current_screen != CurrentScreen::Evaluation {
-            self.mark_evaluation_runtime_dirty();
-        }
         if work_caps & frame_work::SELECT_MUSIC_VIEW != 0 {
             self.heart_rate.refresh_select_music(
                 &mut self.state.screens.select_music_state,
                 frame_policy.machine_enable_heart_rate_monitors,
             );
             self.sync_select_music_runtime_view(self.select_music_policy);
-        } else {
-            self.select_music_lobby.force_refresh();
-            self.select_music_profile_rebuild = true;
-            self.select_music_wheel_rebuild = true;
-            self.select_music_score_views_rebuild = true;
-            self.select_music_settings_rebuild = true;
-            self.select_music_unlock_rebuild = true;
         }
         if work_caps & frame_work::SELECT_COURSE_VIEW != 0 {
             self.sync_select_course_runtime_view(self.select_course_policy);
-        } else {
-            self.select_course_settings_rebuild = true;
-            self.select_course_profile_rebuild = true;
-            self.select_course_runtime_rebuild = true;
         }
         let transition_plan = self.state.shell.transition.advance_frame(
             logic_dt,
@@ -3080,6 +3121,8 @@ impl App {
                 self.state.shell.screenshot.request(None);
             }
         }
+        self.sync_select_music_runtime_after_step(self.select_music_policy);
+        self.sync_select_course_runtime_after_step(self.select_course_policy);
         match transition_plan.completion {
             Some(TransitionCompletion::ActorFadeOut(target)) => {
                 self.finish_actor_fade_out(target, event_loop);
@@ -8891,6 +8934,24 @@ mod tests {
         assert_ne!(evaluation & frame_work::ONLINE_VIEW, 0);
         assert_ne!(evaluation & frame_work::ASYNC_RESULTS, 0);
         assert_eq!(evaluation & frame_work::CONTENT_RELOAD, 0);
+    }
+
+    #[test]
+    fn retained_runtime_views_invalidate_only_on_their_screen_entry() {
+        assert_eq!(
+            screen_entry_runtime_views(CurrentScreen::Evaluation),
+            EVALUATION_RUNTIME_VIEWS
+        );
+        assert_eq!(
+            screen_entry_runtime_views(CurrentScreen::SelectMusic),
+            SELECT_MUSIC_RUNTIME_VIEWS
+        );
+        assert_eq!(
+            screen_entry_runtime_views(CurrentScreen::SelectCourse),
+            SELECT_COURSE_RUNTIME_VIEWS
+        );
+        assert_eq!(screen_entry_runtime_views(CurrentScreen::Menu), 0);
+        assert_eq!(screen_entry_runtime_views(CurrentScreen::Gameplay), 0);
     }
 
     #[test]
