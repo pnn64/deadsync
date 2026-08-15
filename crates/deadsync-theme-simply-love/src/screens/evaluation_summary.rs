@@ -80,6 +80,91 @@ impl FooterClock {
     }
 }
 
+struct SummaryPlayerText {
+    profile_name: Option<Arc<str>>,
+    difficulty: Arc<str>,
+    step_artist: Arc<str>,
+}
+
+struct SummaryRowText {
+    banner_key: Arc<str>,
+    full_title: Arc<str>,
+    bpm_line: Arc<str>,
+    players: [Option<SummaryPlayerText>; 2],
+}
+
+/// Retained Summary row text owned exclusively by the game thread.
+///
+/// The cache lives for one Summary screen, is warmed before actor construction,
+/// and is capped by the shell-selected stage count. Stable frames compare a
+/// dirty bit, the localization revision, and three scalar presentation values;
+/// misses rebuild all selected rows at the screen/config transition boundary.
+/// Rebuilds reuse vector capacity and replace old `Arc` values synchronously;
+/// screen teardown drops the remaining rows. The boolean rebuild result is
+/// available for tests, and worst-case work is one linear selected-stage pass.
+struct SummaryRows {
+    rows: Vec<SummaryRowText>,
+    dirty: bool,
+    i18n_revision: u64,
+    active_color_index: i32,
+    translated_titles: bool,
+    zmod_rating_box_text: bool,
+}
+
+impl SummaryRows {
+    fn new() -> Self {
+        Self {
+            rows: Vec::new(),
+            dirty: true,
+            i18n_revision: u64::MAX,
+            active_color_index: color::DEFAULT_COLOR_INDEX,
+            translated_titles: false,
+            zmod_rating_box_text: false,
+        }
+    }
+
+    fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    fn sync(
+        &mut self,
+        stages: PostSelectStageView<'_>,
+        active_color_index: i32,
+        translated_titles: bool,
+        zmod_rating_box_text: bool,
+    ) -> bool {
+        let i18n_revision = crate::assets::i18n::revision();
+        if !self.dirty
+            && self.i18n_revision == i18n_revision
+            && self.active_color_index == active_color_index
+            && self.translated_titles == translated_titles
+            && self.zmod_rating_box_text == zmod_rating_box_text
+        {
+            return false;
+        }
+
+        let show_profile_names = should_display_profile_names(stages);
+        self.rows.clear();
+        self.rows.reserve(stages.len());
+        for stage in stages.iter() {
+            self.rows.push(build_row_text(
+                stage,
+                show_profile_names,
+                active_color_index,
+                translated_titles,
+                zmod_rating_box_text,
+            ));
+        }
+        self.dirty = false;
+        self.i18n_revision = i18n_revision;
+        self.active_color_index = active_color_index;
+        self.translated_titles = translated_titles;
+        self.zmod_rating_box_text = zmod_rating_box_text;
+        true
+    }
+}
+
 pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
@@ -89,6 +174,7 @@ pub struct State {
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; 2],
     footer_clock: FooterClock,
+    stage_rows: SummaryRows,
     runtime: PostSongRuntimeView,
 }
 
@@ -106,6 +192,7 @@ pub fn init_for_return(runtime: PostSongRuntimeView, return_to: Screen) -> State
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; 2],
         footer_clock: FooterClock::new(),
+        stage_rows: SummaryRows::new(),
         runtime,
     }
 }
@@ -113,6 +200,19 @@ pub fn init_for_return(runtime: PostSongRuntimeView, return_to: Screen) -> State
 pub fn update(state: &mut State, dt: f32) {
     state.elapsed = (state.elapsed + dt).max(0.0);
     state.footer_clock.update(dt);
+}
+
+pub fn mark_stage_rows_dirty(state: &mut State) {
+    state.stage_rows.mark_dirty();
+}
+
+pub fn sync_stage_rows(state: &mut State, stages: PostSelectStageView<'_>) -> bool {
+    state.stage_rows.sync(
+        stages,
+        state.active_color_index,
+        state.runtime.translated_titles,
+        state.runtime.zmod_rating_box_text,
+    )
 }
 
 #[inline(always)]
@@ -244,6 +344,72 @@ fn difficulty_display_name(difficulty: &str, zmod_rating_box_text: bool) -> &'st
     color::difficulty_display_name(difficulty, zmod_rating_box_text)
 }
 
+fn build_player_text(
+    player: &stage_stats::PlayerStageSummary,
+    show_profile_name: bool,
+    zmod_rating_box_text: bool,
+) -> SummaryPlayerText {
+    let style = steps_type_label(&player.chart.chart_type);
+    let difficulty = difficulty_display_name(&player.chart.difficulty, zmod_rating_box_text);
+    SummaryPlayerText {
+        profile_name: show_profile_name.then(|| Arc::from(player.profile_name.as_str())),
+        difficulty: tr_fmt(
+            "EvaluationSummary",
+            "DifficultyFormat",
+            &[("style", &style), ("difficulty", difficulty)],
+        ),
+        step_artist: Arc::from(player.chart.step_artist.as_str()),
+    }
+}
+
+fn build_row_text(
+    stage: &stage_stats::StageSummary,
+    show_profile_names: bool,
+    active_color_index: i32,
+    translated_titles: bool,
+    zmod_rating_box_text: bool,
+) -> SummaryRowText {
+    let banner_key = stage
+        .song
+        .banner_path
+        .as_deref()
+        .map(crate::assets::media_path_key)
+        .unwrap_or_else(|| {
+            let banner_num = active_color_index.rem_euclid(12) + 1;
+            Arc::from(format!("banner{banner_num}.png"))
+        });
+    let full_title = Arc::from(stage.song.display_full_title(translated_titles));
+    let eval_chart = stage
+        .players
+        .iter()
+        .flatten()
+        .next()
+        .map(|player| player.chart.as_ref());
+    let bpm = stringify_display_bpms(&stage.song, eval_chart, stage.music_rate);
+    let bpm_line = if bpm.is_empty() {
+        Arc::from("")
+    } else if (stage.music_rate - 1.0).abs() > 0.001 {
+        tr_fmt(
+            "EvaluationSummary",
+            "BpmWithRate",
+            &[("bpm", &bpm), ("rate", &format_rate_x(stage.music_rate))],
+        )
+    } else {
+        tr_fmt("EvaluationSummary", "BpmDisplay", &[("bpm", &bpm)])
+    };
+
+    SummaryRowText {
+        banner_key,
+        full_title,
+        bpm_line,
+        players: std::array::from_fn(|index| {
+            stage.players[index]
+                .as_ref()
+                .map(|player| build_player_text(player, show_profile_names, zmod_rating_box_text))
+        }),
+    }
+}
+
 fn should_display_profile_names(stages: PostSelectStageView<'_>) -> bool {
     (0..2).any(|side| {
         profile_name_changed(
@@ -290,9 +456,8 @@ pub fn benchmark_eval_numeric_text(percent: f64, ex: f64, counts: &[u32; 8]) -> 
 fn build_player_stats(
     side: profile_data::PlayerSide,
     p: &stage_stats::PlayerStageSummary,
-    show_profile_names: bool,
+    text: &SummaryPlayerText,
     active_color_index: i32,
-    zmod_rating_box_text: bool,
     elapsed: f32,
     machine_font: deadsync_config::prelude::MachineFont,
 ) -> Vec<Actor> {
@@ -323,10 +488,10 @@ fn build_player_stats(
     let mut out = Vec::with_capacity(24);
 
     // Profile name (only if there were any profile switches this session)
-    if show_profile_names {
+    if let Some(profile_name) = text.profile_name.as_ref() {
         let mut a = act!(text:
             font("miso"):
-            settext(p.profile_name.clone()):
+            settext(Arc::clone(profile_name)):
             align(align1_x, 0.5):
             xy(col1x, -43.0):
             zoom(0.5):
@@ -393,16 +558,9 @@ fn build_player_stats(
 
     // Stepchart style + difficulty text
     {
-        let style = steps_type_label(&p.chart.chart_type);
-        let diff = difficulty_display_name(&p.chart.difficulty, zmod_rating_box_text);
-        let text = tr_fmt(
-            "EvaluationSummary",
-            "DifficultyFormat",
-            &[("style", &style), ("difficulty", diff)],
-        );
         let mut a = act!(text:
             font("miso"):
-            settext(text):
+            settext(Arc::clone(&text.difficulty)):
             align(align1_x, 0.5):
             xy(col1x + col1_eps, 17.0):
             zoom(0.65):
@@ -438,7 +596,7 @@ fn build_player_stats(
     {
         let mut a = act!(text:
             font("miso"):
-            settext(p.chart.step_artist.clone()):
+            settext(Arc::clone(&text.step_artist)):
             align(align1_x, 0.5):
             xy(col1x, 32.0):
             zoom(0.65):
@@ -514,50 +672,13 @@ fn build_player_stats(
 fn build_row(
     row_pos: usize,
     stage: &stage_stats::StageSummary,
-    show_profile_names: bool,
+    text: &SummaryRowText,
     active_color_index: i32,
-    translated_titles: bool,
-    zmod_rating_box_text: bool,
     elapsed: f32,
     machine_font: deadsync_config::prelude::MachineFont,
 ) -> Actor {
     let cx = screen_center_x();
     let y = (screen_height() / 4.75) * (row_pos as f32);
-
-    let banner_key = stage
-        .song
-        .banner_path
-        .as_ref()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| {
-            let banner_num = active_color_index.rem_euclid(12) + 1;
-            format!("banner{banner_num}.png")
-        });
-
-    let full_title = stage.song.display_full_title(translated_titles);
-
-    let eval_chart = stage
-        .players
-        .iter()
-        .flatten()
-        .next()
-        .map(|p| p.chart.as_ref());
-    let bpm_str = stringify_display_bpms(&stage.song, eval_chart, stage.music_rate);
-    let bpm_line = if bpm_str.is_empty() {
-        String::new()
-    } else if (stage.music_rate - 1.0).abs() > 0.001 {
-        tr_fmt(
-            "EvaluationSummary",
-            "BpmWithRate",
-            &[
-                ("bpm", &bpm_str),
-                ("rate", &format_rate_x(stage.music_rate)),
-            ],
-        )
-        .to_string()
-    } else {
-        tr_fmt("EvaluationSummary", "BpmDisplay", &[("bpm", &bpm_str)]).to_string()
-    };
 
     let mut children: Vec<Actor> = Vec::with_capacity(64);
 
@@ -572,13 +693,19 @@ fn build_row(
 
     // Banner
     children.push(shared_banner::sprite(
-        banner_key, 0.0, -6.0, 418.0, 164.0, 0.333, 1,
+        Arc::clone(&text.banner_key),
+        0.0,
+        -6.0,
+        418.0,
+        164.0,
+        0.333,
+        1,
     ));
 
     // Song title
     children.push(act!(text:
         font("miso"):
-        settext(full_title):
+        settext(Arc::clone(&text.full_title)):
         align(0.5, 0.5):
         xy(0.0, -43.0):
         zoom(0.8):
@@ -591,7 +718,7 @@ fn build_row(
     // BPM(s)
     children.push(act!(text:
         font("miso"):
-        settext(bpm_line):
+        settext(Arc::clone(&text.bpm_line)):
         align(0.5, 0.5):
         xy(0.0, 32.0):
         zoom(0.65):
@@ -605,15 +732,19 @@ fn build_row(
         (0, profile_data::PlayerSide::P1),
         (1, profile_data::PlayerSide::P2),
     ] {
-        let Some(p) = stage.players.get(idx).and_then(|p| p.as_ref()) else {
+        let Some((player, player_text)) = stage
+            .players
+            .get(idx)
+            .and_then(|player| player.as_ref())
+            .zip(text.players.get(idx).and_then(|text| text.as_ref()))
+        else {
             continue;
         };
         children.extend(build_player_stats(
             side,
-            p,
-            show_profile_names,
+            player,
+            player_text,
             active_color_index,
-            zmod_rating_box_text,
             elapsed,
             machine_font,
         ));
@@ -678,6 +809,7 @@ pub fn push_actors(
         ));
         return;
     }
+    debug_assert_eq!(state.stage_rows.rows.len(), stages.len());
 
     let pages = pages_for(stages.len());
     let page = state.page.clamp(1, pages);
@@ -710,19 +842,19 @@ pub fn push_actors(
         ));
     }
 
-    let show_profile_names = should_display_profile_names(stages);
     for row in 1..=ROWS_PER_PAGE {
         let stage_index = (page - 1) * ROWS_PER_PAGE + (row - 1);
-        let Some(stage) = stages.get(stage_index) else {
+        let Some((stage, text)) = stages
+            .get(stage_index)
+            .zip(state.stage_rows.rows.get(stage_index))
+        else {
             continue;
         };
         actors.push(build_row(
             row,
             stage,
-            show_profile_names,
+            text,
             state.active_color_index,
-            state.runtime.translated_titles,
-            state.runtime.zmod_rating_box_text,
             state.elapsed,
             state.runtime.machine_font,
         ));
@@ -782,10 +914,11 @@ pub fn push_actors(
 }
 
 pub fn get_actors(
-    state: &State,
+    state: &mut State,
     stages: PostSelectStageView<'_>,
     asset_manager: &AssetManager,
 ) -> Vec<Actor> {
+    sync_stage_rows(state, stages);
     let mut actors = Vec::with_capacity(32);
     push_actors(
         &mut actors,
@@ -845,6 +978,25 @@ mod tests {
             clock.text.as_ref(),
             next_minute.format("%Y/%m/%d %H:%M").to_string()
         );
+    }
+
+    #[test]
+    fn summary_rows_rebuild_only_when_dirty_or_policy_changes() {
+        let stages: [stage_stats::StageSummary; 0] = [];
+        let indices: [usize; 0] = [];
+        let view = PostSelectStageView::new(&stages, &indices);
+        let mut state = init(Default::default());
+
+        assert!(sync_stage_rows(&mut state, view));
+        assert!(!sync_stage_rows(&mut state, view));
+
+        mark_stage_rows_dirty(&mut state);
+        assert!(sync_stage_rows(&mut state, view));
+        assert!(!sync_stage_rows(&mut state, view));
+
+        state.active_color_index += 1;
+        assert!(sync_stage_rows(&mut state, view));
+        assert!(!sync_stage_rows(&mut state, view));
     }
 
     #[test]

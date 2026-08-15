@@ -5333,6 +5333,11 @@ impl App {
             &self.state.session.course_individual_stage_indices,
             show_course_individual_scores,
         );
+        if self.state.screens.current_screen == CurrentScreen::EvaluationSummary {
+            evaluation_summary::mark_stage_rows_dirty(
+                &mut self.state.screens.evaluation_summary_state,
+            );
+        }
         self.post_select_stage_key = Some(key);
         self.post_select_banners_dirty = true;
     }
@@ -6076,6 +6081,10 @@ impl App {
                 let stages = PostSelectStageView::new(
                     &self.state.session.played_stages,
                     &self.post_select_stage_indices,
+                );
+                evaluation_summary::sync_stage_rows(
+                    &mut self.state.screens.evaluation_summary_state,
+                    stages,
                 );
                 evaluation_summary::push_actors(
                     &mut actors,
