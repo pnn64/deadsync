@@ -336,18 +336,12 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
             diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
         ));
     } else {
-        let q_chars = open.query.chars().count();
         let ghost = focused_match(open).and_then(|m| {
-            let starts = m
-                .label
-                .to_ascii_lowercase()
-                .starts_with(&open.query.to_ascii_lowercase());
-            if starts && m.label.chars().count() > q_chars {
-                let prefix: String = m.label.chars().take(q_chars).collect();
-                Some((m.label.clone(), prefix))
-            } else {
-                None
-            }
+            let consumed = fuzzy::folded_prefix_len(&open.query, &m.label)?;
+            (m.label.chars().count() > consumed).then(|| {
+                let prefix: String = m.label.chars().take(consumed).collect();
+                (m.label.clone(), prefix)
+            })
         });
         match ghost {
             Some((full_label, prefix)) => {

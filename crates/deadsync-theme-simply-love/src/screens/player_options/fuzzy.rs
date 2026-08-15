@@ -16,12 +16,19 @@ const GAP_PENALTY_MAX: i32 = 10;
 const ALIAS_PENALTY: i32 = 30;
 const TYPO_BASE: i32 = 40;
 
+/// Full Unicode fold, not `to_ascii_lowercase`: localized labels are
+/// capitalized and often non-Latin.
+#[inline]
+fn fold(c: char) -> char {
+    c.to_lowercase().next().unwrap_or(c)
+}
+
 /// Folded query characters, computed once per keystroke and reused per candidate.
 pub(super) fn query_chars(query: &str) -> Vec<char> {
     query
         .chars()
         .filter(|c| !c.is_whitespace())
-        .map(|c| c.to_ascii_lowercase())
+        .map(fold)
         .collect()
 }
 
@@ -59,7 +66,7 @@ pub(super) fn subsequence_score(query: &[char], candidate: &str) -> Option<i32> 
     for &qc in query {
         let mut matched = None;
         while ci < cand.len() {
-            if cand[ci].to_ascii_lowercase() == qc {
+            if fold(cand[ci]) == qc {
                 matched = Some(ci);
                 break;
             }
@@ -96,6 +103,26 @@ pub(super) fn subsequence_score(query: &[char], candidate: &str) -> Option<i32> 
     Some(score)
 }
 
+/// Case-insensitive prefix test returning candidate chars consumed, so callers
+/// can split the original candidate. Compares char-by-char because folding can
+/// change byte *and* char length, so a folded byte-prefix isn't a char prefix.
+pub(super) fn folded_prefix_len(query: &str, candidate: &str) -> Option<usize> {
+    let mut q = query.chars().map(fold);
+    let mut consumed = 0usize;
+    for cc in candidate.chars() {
+        match q.next() {
+            None => return Some(consumed),
+            Some(qc) => {
+                if fold(cc) != qc {
+                    return None;
+                }
+                consumed += 1;
+            }
+        }
+    }
+    q.next().is_none().then_some(consumed)
+}
+
 /// Edit-distance fallback, only consulted when subsequence matching fails.
 fn typo_score(query: &[char], candidate: &str) -> Option<i32> {
     if query.is_empty() {
@@ -103,19 +130,18 @@ fn typo_score(query: &[char], candidate: &str) -> Option<i32> {
     }
     let query_str: String = query.iter().collect();
     let threshold = (query.len() / 3).max(1);
-    let cand_lower = candidate.to_ascii_lowercase();
+    let cand_lower = candidate.to_lowercase();
 
     let mut best_distance: Option<usize> = None;
     for word in std::iter::once(cand_lower.as_str()).chain(cand_lower.split_whitespace()) {
-        // Only compare against words of comparable length; skip tiny words that
-        // would match almost anything.
-        if word.len() + threshold < query.len() {
+        // Skip words too short to plausibly match. Counts chars, not bytes, or
+        // multi-byte labels look several times longer than they are.
+        if word.chars().count() + threshold < query.len() {
             continue;
         }
         let distance = strsim::levenshtein(&query_str, word);
         best_distance = Some(best_distance.map_or(distance, |b| b.min(distance)));
     }
-
     match best_distance {
         Some(distance) if distance <= threshold => Some(TYPO_BASE - distance as i32),
         _ => None,
@@ -165,6 +191,30 @@ mod tests {
 
     fn score(query: &str, label: &str) -> Option<i32> {
         subsequence_score(&query_chars(query), label)
+    }
+
+    #[test]
+    fn folds_non_ascii_case_for_localized_labels() {
+        // Only matches with full Unicode folding; to_ascii_lowercase is a no-op here.
+        assert!(score("скор", "Скорость").is_some());
+        assert!(score("ταχ", "Ταχύτητα").is_some());
+    }
+
+    #[test]
+    fn folded_prefix_len_handles_non_ascii_and_counts_chars() {
+        assert_eq!(folded_prefix_len("spe", "Speed Mod"), Some(3));
+        assert_eq!(folded_prefix_len("скор", "Скорость"), Some(4));
+        assert_eq!(folded_prefix_len("Speed Mod", "Speed Mod"), Some(9));
+        assert_eq!(folded_prefix_len("Speed Mod Extra", "Speed Mod"), None);
+        assert_eq!(folded_prefix_len("xyz", "Speed Mod"), None);
+        assert_eq!(folded_prefix_len("", "Speed Mod"), Some(0));
+    }
+
+    #[test]
+    fn typo_threshold_uses_char_counts_not_bytes() {
+        // "Скор" is 4 chars but 8 bytes; a byte guard would skip the comparison.
+        let q = query_chars("скол");
+        assert!(best_match_score(&q, "Скор", RowId::SpeedMod).is_some());
     }
 
     #[test]
