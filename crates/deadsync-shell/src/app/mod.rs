@@ -1166,10 +1166,14 @@ impl ScreensState {
                 credits::update(&mut self.credits_state, delta_time);
                 (None, false)
             }
-            CurrentScreen::ManageLocalProfiles => (
-                manage_local_profiles::update(&mut self.manage_local_profiles_state, delta_time),
-                false,
-            ),
+            CurrentScreen::ManageLocalProfiles => {
+                manage_local_profiles::update(
+                    &mut self.manage_local_profiles_state,
+                    delta_time,
+                    effects,
+                );
+                (None, false)
+            }
             CurrentScreen::Mappings => (
                 Some(mappings::update(&mut self.mappings_state, delta_time)),
                 false,

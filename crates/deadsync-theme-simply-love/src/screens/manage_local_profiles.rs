@@ -450,7 +450,7 @@ fn update_name_entry_blink(state: &mut State, dt: f32) {
     entry.blink_t = (entry.blink_t + dt) % 1.0;
 }
 
-pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
+pub fn update(state: &mut State, dt: f32, effects: &mut Vec<ThemeEffect>) {
     update_hold_scroll(state);
     update_name_entry_blink(state, dt);
     if state.selected != state.prev_selected {
@@ -459,12 +459,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
             .pending_effects
             .push(crate::effects::sfx("assets/sounds/change.ogg"));
     }
-    let effects = std::mem::take(&mut state.pending_effects);
-    match effects.len() {
-        0 => None,
-        1 => effects.into_iter().next(),
-        _ => Some(ThemeEffect::batch(effects)),
-    }
+    effects.append(&mut state.pending_effects);
 }
 
 fn name_conflicts(state: &State, name: &str, skip_profile_id: Option<&str>) -> bool {
@@ -2968,6 +2963,26 @@ mod tests {
     }
 
     #[test]
+    fn update_drains_ordered_effects_and_retains_queue_storage() {
+        let mut state = init(ManageLocalProfilesView::default());
+        state
+            .pending_effects
+            .push(ThemeEffect::Navigate(Screen::Menu));
+        state.pending_effects.push(ThemeEffect::Exit);
+        let pending_capacity = state.pending_effects.capacity();
+        let mut effects = Vec::with_capacity(2);
+
+        update(&mut state, 0.0, &mut effects);
+
+        assert!(matches!(
+            effects.as_slice(),
+            [ThemeEffect::Navigate(Screen::Menu), ThemeEffect::Exit]
+        ));
+        assert!(state.pending_effects.is_empty());
+        assert_eq!(state.pending_effects.capacity(), pending_capacity);
+    }
+
+    #[test]
     fn create_request_waits_for_shell_result_then_selects_profile() {
         let mut state = init(ManageLocalProfilesView::default());
         state.name_entry = Some(NameEntryState {
@@ -2999,11 +3014,13 @@ mod tests {
 
         assert!(state.name_entry.is_none());
         assert_eq!(state.selected, 2);
+        let mut effects = Vec::new();
+        update(&mut state, 0.0, &mut effects);
         assert!(matches!(
-            update(&mut state, 0.0),
-            Some(ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            effects.as_slice(),
+            [ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 deadsync_theme::AudioRequest::PlaySfx(path)
-            ))) if path == "assets/sounds/start.ogg"
+            ))] if path == "assets/sounds/start.ogg"
         ));
     }
 
@@ -3057,20 +3074,21 @@ mod tests {
     #[test]
     fn profile_list_up_and_down_emit_one_change_sfx() {
         let mut state = state_with_profile_row();
+        let mut effects = Vec::new();
 
         for (action, selected) in [(VirtualAction::p1_down, 1), (VirtualAction::p1_up, 0)] {
             press(&mut state, action);
             assert_eq!(state.selected, selected);
-            let Some(effect) = update(&mut state, 0.0) else {
-                panic!("expected profile-list navigation SFX");
-            };
+            update(&mut state, 0.0, &mut effects);
             assert!(matches!(
-                effect,
-                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                effects.as_slice(),
+                [ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                     deadsync_theme::AudioRequest::PlaySfx(path)
-                )) if path == "assets/sounds/change.ogg"
+                ))] if path == "assets/sounds/change.ogg"
             ));
-            assert!(update(&mut state, 0.0).is_none());
+            effects.clear();
+            update(&mut state, 0.0, &mut effects);
+            assert!(effects.is_empty());
         }
     }
 
