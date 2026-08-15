@@ -1,4 +1,7 @@
-use deadsync_shell::{benchmark_prepare_gameplay_capture, benchmark_sync_gameplay_capture};
+use deadsync_shell::{
+    benchmark_prepare_gameplay_capture, benchmark_smx_screen_work, benchmark_sync_gameplay_capture,
+};
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -103,19 +106,78 @@ struct BenchResult {
     checksum: u64,
 }
 
-fn old_frame(frame: u64) -> u64 {
+#[repr(C)]
+struct DirtyState {
+    evaluation: [bool; 5],
+    select_music: [bool; 6],
+    select_course: [bool; 3],
+}
+
+impl DirtyState {
+    const fn inactive() -> Self {
+        Self {
+            evaluation: [true; 5],
+            select_music: [true; 6],
+            select_course: [true; 3],
+        }
+    }
+}
+
+fn old_frame(_state: &mut DirtyState, frame: u64) -> u64 {
     let first = benchmark_sync_gameplay_capture(black_box(true));
     let second = benchmark_sync_gameplay_capture(black_box(true));
     frame.rotate_left(7) ^ u64::from(first) ^ u64::from(second)
 }
 
-fn event_driven_frame(frame: u64) -> u64 {
+fn event_driven_frame(_state: &mut DirtyState, frame: u64) -> u64 {
     frame.rotate_left(7) ^ u64::from(black_box(true)) ^ u64::from(black_box(true))
 }
 
-fn measure(frame: fn(u64) -> u64) -> BenchResult {
+#[inline(always)]
+const fn former_smx_screen_work(screen: Screen) -> u8 {
+    let mut work = 0;
+    if matches!(screen, Screen::ConfigurePads | Screen::SelectMusic) {
+        work |= 1 << 0;
+    }
+    if matches!(screen, Screen::Options) {
+        work |= 1 << 1;
+    }
+    if matches!(screen, Screen::PlayerOptions) {
+        work |= 1 << 2;
+    }
+    work
+}
+
+fn old_aggregate_frame(state: &mut DirtyState, frame: u64) -> u64 {
+    let first = benchmark_sync_gameplay_capture(black_box(true));
+    let second = benchmark_sync_gameplay_capture(black_box(true));
+    let screen = black_box(Screen::Gameplay);
+    if screen != Screen::Evaluation {
+        state.evaluation.fill(true);
+    }
+    if screen != Screen::SelectMusic {
+        state.select_music.fill(true);
+    }
+    if screen != Screen::SelectCourse {
+        state.select_course.fill(true);
+    }
+    let work = former_smx_screen_work(screen);
+    black_box(&mut *state);
+    frame.rotate_left(7) ^ u64::from(first) ^ u64::from(second) ^ u64::from(black_box(work))
+}
+
+fn current_aggregate_frame(state: &mut DirtyState, frame: u64) -> u64 {
+    let first = black_box(true);
+    let second = black_box(true);
+    let work = benchmark_smx_screen_work(black_box(Screen::Gameplay), false, false, false);
+    black_box(&mut *state);
+    frame.rotate_left(7) ^ u64::from(first) ^ u64::from(second) ^ u64::from(black_box(work))
+}
+
+fn measure(frame: fn(&mut DirtyState, u64) -> u64) -> BenchResult {
+    let mut state = DirtyState::inactive();
     for index in 0..WARMUP_FRAMES as u64 {
-        black_box(frame(index));
+        black_box(frame(&mut state, index));
     }
 
     let cycle_start = cycle_counter();
@@ -126,7 +188,7 @@ fn measure(frame: fn(u64) -> u64) -> BenchResult {
         let sample_started = Instant::now();
         let start = sample * SAMPLE_FRAMES;
         for index in start..start + SAMPLE_FRAMES {
-            checksum = checksum.wrapping_add(black_box(frame(index as u64)));
+            checksum = checksum.wrapping_add(black_box(frame(&mut state, index as u64)));
         }
         worst_sample_ns = worst_sample_ns
             .max(sample_started.elapsed().as_secs_f64() * 1e9 / SAMPLE_FRAMES as f64);
@@ -137,7 +199,7 @@ fn measure(frame: fn(u64) -> u64) -> BenchResult {
     let before = ALLOC.snapshot();
     ALLOC.enabled.store(true, Ordering::Relaxed);
     for index in 0..MEASURE_FRAMES as u64 {
-        black_box(frame(index));
+        black_box(frame(&mut state, index));
     }
     ALLOC.enabled.store(false, Ordering::Relaxed);
 
@@ -157,19 +219,35 @@ fn main() {
     let old = measure(old_frame);
     let new = measure(event_driven_frame);
 
-    assert_eq!(old.checksum, new.checksum);
-    assert_eq!(old.allocated.allocs, 0);
-    assert_eq!(old.allocated.reallocs, 0);
-    assert_eq!(old.allocated.frees, 0);
-    assert_eq!(old.allocated.bytes, 0);
-    assert_eq!(new.allocated.allocs, 0);
-    assert_eq!(new.allocated.reallocs, 0);
-    assert_eq!(new.allocated.frees, 0);
-    assert_eq!(new.allocated.bytes, 0);
+    validate_pair(&old, &new);
 
     println!("steady gameplay shell input-capture maintenance");
     print_result("old (2 syncs/frame)", &old);
     print_result("new (event-driven)", &new);
+    print_change(&old, &new);
+
+    let aggregate_old = measure(old_aggregate_frame);
+    let aggregate_new = measure(current_aggregate_frame);
+
+    validate_pair(&aggregate_old, &aggregate_new);
+
+    println!("steady gameplay aggregate F9 shell maintenance");
+    print_result("old (passes 27-29)", &aggregate_old);
+    print_result("new (passes 27-29)", &aggregate_new);
+    print_change(&aggregate_old, &aggregate_new);
+}
+
+fn validate_pair(old: &BenchResult, new: &BenchResult) {
+    assert_eq!(old.checksum, new.checksum);
+    for result in [old, new] {
+        assert_eq!(result.allocated.allocs, 0);
+        assert_eq!(result.allocated.reallocs, 0);
+        assert_eq!(result.allocated.frees, 0);
+        assert_eq!(result.allocated.bytes, 0);
+    }
+}
+
+fn print_change(old: &BenchResult, new: &BenchResult) {
     println!(
         "  change: {:+.2}% latency  {:+.2}% cycles  {:+.2}% worst sample",
         change(old.ns_per_frame, new.ns_per_frame),
