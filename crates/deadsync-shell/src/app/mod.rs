@@ -5337,6 +5337,8 @@ impl App {
             evaluation_summary::mark_stage_rows_dirty(
                 &mut self.state.screens.evaluation_summary_state,
             );
+        } else if self.state.screens.current_screen == CurrentScreen::Initials {
+            initials::mark_stage_texts_dirty(&mut self.state.screens.initials_state);
         }
         self.post_select_stage_key = Some(key);
         self.post_select_banners_dirty = true;
@@ -6099,10 +6101,10 @@ impl App {
                     &self.state.session.played_stages,
                     &self.post_select_stage_indices,
                 );
+                initials::sync_stage_texts(&mut self.state.screens.initials_state, stages);
                 initials::push_actors(
                     &mut actors,
                     &self.state.screens.initials_state,
-                    stages,
                     &self.asset_manager,
                     visual_policy,
                 );

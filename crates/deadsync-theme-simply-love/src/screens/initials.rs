@@ -6,14 +6,12 @@ use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PostSelectStageView, PostSongPlayerView, PostSongRuntimeView};
 use deadlib_present::actors::{Actor, SizeSpec};
-use deadlib_present::cache::{SharedStrCache, cached_shared_str, shared_str_cache_with_capacity};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_score::stage_stats;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
@@ -36,7 +34,6 @@ const WHEEL_NUM_ITEMS: usize = 7;
 const WHEEL_FOCUS_POS: usize = 3; // Simply Love's sick_wheel focus_pos for num_items=7
 const WHEEL_SLIDE_SECONDS: f32 = 0.075; // SL: AlphabetCharacterMT.lua linear(0.075)
 const WHEEL_HIDE_FADE_SECONDS: f32 = 0.25;
-const TEXT_CACHE_LIMIT: usize = 256;
 
 // Layout (Simply Love semantics)
 const PLAYER_FRAME_X_OFF: f32 = 160.0;
@@ -68,11 +65,6 @@ const POSSIBLE_CHARS: [&str; 40] = [
 
 static POSSIBLE_CHAR_TEXT: LazyLock<[Arc<str>; POSSIBLE_CHARS.len()]> =
     LazyLock::new(|| POSSIBLE_CHARS.map(Arc::<str>::from));
-
-thread_local! {
-    static STR_REF_CACHE: RefCell<SharedStrCache> =
-        RefCell::new(shared_str_cache_with_capacity(64));
-}
 
 #[derive(Clone, Copy, Debug)]
 struct WheelItem {
@@ -129,6 +121,86 @@ struct StageHighScores {
     rows: Vec<HighScoreRow>,
 }
 
+struct InitialsStageText {
+    banner_key: Arc<str>,
+    title: Arc<str>,
+}
+
+/// Retained Initials banner/title data owned exclusively by the game thread.
+///
+/// The cache lives for one Initials screen, warms before actor construction,
+/// and is capped by the shell-selected stage count. Stable frames compare a
+/// dirty bit, localization revision, and two scalar presentation values; a
+/// miss performs one linear selected-stage pass and reuses vector capacity.
+/// Replaced values are dropped at explicit selection/policy invalidation, and
+/// remaining values drop with the screen. The sync result supports cadence
+/// tests; steady-state work is O(1) with no allocation or eviction.
+struct InitialsStageTexts {
+    stages: Vec<InitialsStageText>,
+    fallback_banner_key: Arc<str>,
+    no_stage_text: Arc<str>,
+    dirty: bool,
+    i18n_revision: u64,
+    active_color_index: i32,
+    translated_titles: bool,
+}
+
+impl InitialsStageTexts {
+    fn new() -> Self {
+        Self {
+            stages: Vec::new(),
+            fallback_banner_key: Arc::from(""),
+            no_stage_text: Arc::from(""),
+            dirty: true,
+            i18n_revision: u64::MAX,
+            active_color_index: color::DEFAULT_COLOR_INDEX,
+            translated_titles: false,
+        }
+    }
+
+    fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    fn sync(
+        &mut self,
+        stages: PostSelectStageView<'_>,
+        active_color_index: i32,
+        translated_titles: bool,
+    ) -> bool {
+        let i18n_revision = crate::assets::i18n::revision();
+        if !self.dirty
+            && self.i18n_revision == i18n_revision
+            && self.active_color_index == active_color_index
+            && self.translated_titles == translated_titles
+        {
+            return false;
+        }
+
+        let banner_num = active_color_index.rem_euclid(12) + 1;
+        self.fallback_banner_key = Arc::from(format!("banner{banner_num}.png"));
+        self.no_stage_text = tr("EvaluationSummary", "NoStageDataAvailable");
+        self.stages.clear();
+        self.stages.reserve(stages.len());
+        for stage in stages.iter() {
+            self.stages.push(InitialsStageText {
+                banner_key: stage
+                    .song
+                    .banner_path
+                    .as_deref()
+                    .map(crate::assets::media_path_key)
+                    .unwrap_or_else(|| Arc::clone(&self.fallback_banner_key)),
+                title: Arc::from(stage.song.display_title(translated_titles)),
+            });
+        }
+        self.dirty = false;
+        self.i18n_revision = crate::assets::i18n::revision();
+        self.active_color_index = active_color_index;
+        self.translated_titles = translated_titles;
+        true
+    }
+}
+
 pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
@@ -136,6 +208,7 @@ pub struct State {
     finish_hold_elapsed: Option<f32>,
     players: [PlayerEntry; 2],
     highscore_lists: [Vec<Option<StageHighScores>>; 2],
+    stage_texts: InitialsStageTexts,
     runtime: PostSongRuntimeView,
 }
 
@@ -306,11 +379,6 @@ fn month_abbr(index: usize) -> std::sync::Arc<str> {
     } else {
         std::sync::Arc::from("???")
     }
-}
-
-#[inline(always)]
-fn cached_str_ref(text: &str) -> Arc<str> {
-    cached_shared_str(&STR_REF_CACHE, text, TEXT_CACHE_LIMIT)
 }
 
 fn format_highscore_date(date: &str) -> String {
@@ -614,8 +682,21 @@ pub fn init(runtime: PostSongRuntimeView) -> State {
             player_entry_for(&runtime.players[1]),
         ],
         highscore_lists: [Vec::new(), Vec::new()],
+        stage_texts: InitialsStageTexts::new(),
         runtime,
     }
+}
+
+pub fn mark_stage_texts_dirty(state: &mut State) {
+    state.stage_texts.mark_dirty();
+}
+
+pub fn sync_stage_texts(state: &mut State, stages: PostSelectStageView<'_>) -> bool {
+    state.stage_texts.sync(
+        stages,
+        state.active_color_index,
+        state.runtime.translated_titles,
+    )
 }
 
 fn all_done(state: &State) -> bool {
@@ -855,29 +936,24 @@ fn stage_index_for(elapsed: f32, num_stages: usize) -> usize {
     ((t / STAGE_CYCLE_SECONDS).floor() as usize) % num_stages
 }
 
-fn fallback_banner_key(active_color_index: i32) -> String {
-    let banner_num = active_color_index.rem_euclid(12) + 1;
-    format!("banner{banner_num}.png")
-}
-
-fn build_banner_and_title(state: &State, stages: PostSelectStageView<'_>) -> Vec<Actor> {
+fn build_banner_and_title(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(4);
     let cx = screen_center_x();
 
-    let fallback_key = fallback_banner_key(state.active_color_index);
-    actors.push(act!(sprite(fallback_key):
-        align(0.5, 0.5):
-        xy(cx, 121.5):
-        setsize(418.0, 164.0):
-        zoom(0.7):
-        z(10)
-    ));
+    actors.push(
+        act!(sprite(Arc::clone(&state.stage_texts.fallback_banner_key)):
+            align(0.5, 0.5):
+            xy(cx, 121.5):
+            setsize(418.0, 164.0):
+            zoom(0.7):
+            z(10)
+        ),
+    );
 
-    if stages.is_empty() {
-        let no_data = tr("EvaluationSummary", "NoStageDataAvailable");
+    if state.stage_texts.stages.is_empty() {
         actors.push(act!(text:
             font("miso"):
-            settext(no_data):
+            settext(Arc::clone(&state.stage_texts.no_stage_text)):
             align(0.5, 0.5):
             xy(cx, 54.0):
             zoom(0.8):
@@ -888,16 +964,9 @@ fn build_banner_and_title(state: &State, stages: PostSelectStageView<'_>) -> Vec
         return actors;
     }
 
-    let idx = stage_index_for(state.elapsed, stages.len());
-    let stage = stages.get(idx).expect("cycled stage index must be visible");
-
-    let banner_key = stage
-        .song
-        .banner_path
-        .as_ref()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| fallback_banner_key(state.active_color_index));
-    actors.push(act!(sprite(banner_key):
+    let idx = stage_index_for(state.elapsed, state.stage_texts.stages.len());
+    let stage = &state.stage_texts.stages[idx];
+    actors.push(act!(sprite(Arc::clone(&stage.banner_key)):
         align(0.5, 0.5):
         xy(cx, 121.5):
         setsize(418.0, 164.0):
@@ -905,10 +974,9 @@ fn build_banner_and_title(state: &State, stages: PostSelectStageView<'_>) -> Vec
         z(11)
     ));
 
-    let title = stage.song.display_title(state.runtime.translated_titles);
     actors.push(act!(text:
         font("miso"):
-        settext(cached_str_ref(title)):
+        settext(Arc::clone(&stage.title)):
         align(0.5, 0.5):
         xy(cx, 54.0):
         zoom(1.0):
@@ -1188,7 +1256,6 @@ fn build_player_frame(side: profile_data::PlayerSide, state: &State) -> Actor {
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    stages: PostSelectStageView<'_>,
     _asset_manager: &AssetManager,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
@@ -1206,7 +1273,7 @@ pub fn push_actors(
     );
 
     // Banner + title cycling (Simply Love behavior)
-    actors.extend(build_banner_and_title(state, stages));
+    actors.extend(build_banner_and_title(state));
 
     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
         if !state.players[profile_data::player_side_index(side)].joined {
@@ -1219,25 +1286,20 @@ pub fn push_actors(
         if !state.players[profile_data::player_side_index(side)].joined {
             continue;
         }
-        if let Some(list) = build_highscore_list(side, state, stages.len()) {
+        if let Some(list) = build_highscore_list(side, state, state.stage_texts.stages.len()) {
             actors.push(list);
         }
     }
 }
 
 pub fn get_actors(
-    state: &State,
+    state: &mut State,
     stages: PostSelectStageView<'_>,
     asset_manager: &AssetManager,
 ) -> Vec<Actor> {
+    sync_stage_texts(state, stages);
     let mut actors = Vec::with_capacity(64);
-    push_actors(
-        &mut actors,
-        state,
-        stages,
-        asset_manager,
-        Default::default(),
-    );
+    push_actors(&mut actors, state, asset_manager, Default::default());
     actors
 }
 
@@ -1266,6 +1328,36 @@ mod tests {
             nav_key_held_since: None,
             nav_key_last_scrolled_at: None,
         }
+    }
+
+    #[test]
+    fn stage_texts_rebuild_only_when_dirty_or_policy_changes() {
+        let stages: [stage_stats::StageSummary; 0] = [];
+        let indices: [usize; 0] = [];
+        let view = PostSelectStageView::new(&stages, &indices);
+        let mut state = init(Default::default());
+
+        assert!(sync_stage_texts(&mut state, view));
+        assert!(!sync_stage_texts(&mut state, view));
+
+        mark_stage_texts_dirty(&mut state);
+        assert!(sync_stage_texts(&mut state, view));
+        assert!(!sync_stage_texts(&mut state, view));
+
+        state.active_color_index += 1;
+        assert!(sync_stage_texts(&mut state, view));
+        assert!(!sync_stage_texts(&mut state, view));
+    }
+
+    #[test]
+    fn stage_cycle_changes_only_at_four_second_boundaries() {
+        assert_eq!(stage_index_for(0.0, 3), 0);
+        assert_eq!(stage_index_for(3.999, 3), 0);
+        assert_eq!(stage_index_for(4.0, 3), 1);
+        assert_eq!(stage_index_for(8.0, 3), 2);
+        assert_eq!(stage_index_for(12.0, 3), 0);
+        assert_eq!(stage_index_for(f32::NAN, 3), 0);
+        assert_eq!(stage_index_for(5.0, 0), 0);
     }
 
     #[test]
