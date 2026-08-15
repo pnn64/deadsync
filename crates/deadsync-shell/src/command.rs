@@ -1,7 +1,5 @@
 use deadlib_present::density;
-use deadlib_render::Backend;
 use deadlib_render_core::MeshVertex;
-use deadsync_assets::{AssetManager, media_path_key};
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
 use deadsync_profile::{PlayStyle, PlayerSide};
@@ -12,25 +10,6 @@ use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGrap
 use log::{debug, warn};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
-
-use crate::SessionState;
-use crate::dynamic_media::DynamicMedia;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BannerSlot {
-    SelectMusic,
-    SelectCourse,
-}
-
-#[inline(always)]
-pub const fn banner_slot(screen: Screen) -> BannerSlot {
-    if matches!(screen, Screen::SelectCourse) {
-        BannerSlot::SelectCourse
-    } else {
-        BannerSlot::SelectMusic
-    }
-}
 
 #[inline(always)]
 pub fn fallback_banner_key(color_index: i32) -> String {
@@ -62,39 +41,6 @@ pub fn build_density_graph_mesh(
     })
 }
 
-pub struct DynamicBackgroundMediaResult {
-    pub path: Option<PathBuf>,
-    pub path_key: Option<Arc<str>>,
-    pub texture_key: Arc<str>,
-    pub allow_video: bool,
-}
-
-#[derive(Clone, Copy)]
-pub struct CommandContext {
-    pub current_screen: Screen,
-    pub select_music_color_index: i32,
-    pub select_course_color_index: i32,
-    pub video_started_at_sec: f32,
-    pub show_video_backgrounds: bool,
-    pub wide_screen: bool,
-}
-
-pub enum CommandEffect {
-    None,
-    ExitNow,
-    Shutdown,
-    Banner {
-        slot: BannerSlot,
-        key: Arc<str>,
-    },
-    CdTitle(Option<Arc<str>>),
-    DensityGraph {
-        slot: DensityGraphSlot,
-        mesh: Option<Arc<[MeshVertex]>>,
-    },
-    DynamicBackground(DynamicBackgroundMediaResult),
-}
-
 pub struct CommandTimingResult {
     #[cfg(test)]
     pub kind: CommandKind,
@@ -103,216 +49,7 @@ pub struct CommandTimingResult {
     pub log: CommandTimingLog,
 }
 
-pub struct CommandExecutionResult {
-    pub effect: CommandEffect,
-    pub timing: CommandTimingResult,
-}
-
-pub fn apply_banner_media(
-    dynamic_media: &mut DynamicMedia,
-    assets: &mut AssetManager,
-    backend: &mut Backend,
-    path_opt: Option<PathBuf>,
-    fallback_color_index: i32,
-) -> Arc<str> {
-    if let Some(path) = path_opt {
-        dynamic_media.set_banner(assets, backend, Some(path))
-    } else {
-        dynamic_media.destroy_banner(assets, backend);
-        Arc::<str>::from(fallback_banner_key(fallback_color_index))
-    }
-}
-
-pub fn apply_cdtitle_media(
-    dynamic_media: &mut DynamicMedia,
-    assets: &mut AssetManager,
-    backend: &mut Backend,
-    path_opt: Option<PathBuf>,
-) -> Option<Arc<str>> {
-    dynamic_media.set_cdtitle(assets, backend, path_opt)
-}
-
-pub fn apply_pack_banner_media(
-    dynamic_media: &mut DynamicMedia,
-    assets: &mut AssetManager,
-    backend: &mut Backend,
-    path_opt: Option<PathBuf>,
-) {
-    dynamic_media.set_pack_banner(assets, backend, path_opt);
-}
-
-pub fn apply_wheel_item_backgrounds_media(
-    dynamic_media: &mut DynamicMedia,
-    assets: &mut AssetManager,
-    backend: &mut Backend,
-    paths: Vec<PathBuf>,
-) {
-    dynamic_media.set_wheel_item_backgrounds(assets, backend, paths);
-}
-
-pub fn apply_dynamic_background_media(
-    dynamic_media: &mut DynamicMedia,
-    assets: &mut AssetManager,
-    backend: &mut Backend,
-    path_opt: Option<PathBuf>,
-    video_started_at_sec: f32,
-    allow_video: bool,
-) -> DynamicBackgroundMediaResult {
-    let texture_key = dynamic_media.set_background(
-        assets,
-        backend,
-        path_opt.clone(),
-        video_started_at_sec,
-        allow_video,
-    );
-    DynamicBackgroundMediaResult {
-        path_key: path_opt.as_deref().map(media_path_key),
-        path: path_opt,
-        texture_key: Arc::<str>::from(texture_key),
-        allow_video,
-    }
-}
-
-fn apply_command<EvaluationPage>(
-    command: Command,
-    session: &mut SessionState<EvaluationPage>,
-    dynamic_media: &mut DynamicMedia,
-    assets: &mut AssetManager,
-    backend: Option<&mut Backend>,
-    context: CommandContext,
-) -> CommandEffect {
-    match command {
-        Command::ExitNow => CommandEffect::ExitNow,
-        Command::Shutdown => CommandEffect::Shutdown,
-        Command::SetBanner(path_opt) => {
-            let Some(backend) = backend else {
-                return CommandEffect::None;
-            };
-            let slot = banner_slot(context.current_screen);
-            let fallback_color_index = match slot {
-                BannerSlot::SelectMusic => context.select_music_color_index,
-                BannerSlot::SelectCourse => context.select_course_color_index,
-            };
-            let key = apply_banner_media(
-                dynamic_media,
-                assets,
-                backend,
-                path_opt,
-                fallback_color_index,
-            );
-            CommandEffect::Banner { slot, key }
-        }
-        Command::SetCdTitle(path_opt) => {
-            let Some(backend) = backend else {
-                return CommandEffect::None;
-            };
-            CommandEffect::CdTitle(apply_cdtitle_media(
-                dynamic_media,
-                assets,
-                backend,
-                path_opt,
-            ))
-        }
-        Command::SetPackBanner(path_opt) => {
-            if let Some(backend) = backend {
-                apply_pack_banner_media(dynamic_media, assets, backend, path_opt);
-            }
-            CommandEffect::None
-        }
-        Command::SetWheelItemBackgrounds(paths) => {
-            if let Some(backend) = backend {
-                apply_wheel_item_backgrounds_media(dynamic_media, assets, backend, paths);
-            }
-            CommandEffect::None
-        }
-        Command::SetDensityGraph { slot, chart_opt } => CommandEffect::DensityGraph {
-            slot,
-            mesh: build_density_graph_mesh(chart_opt, context.wide_screen),
-        },
-        Command::SetDynamicBackground(path_opt) => {
-            let Some(backend) = backend else {
-                return CommandEffect::None;
-            };
-            CommandEffect::DynamicBackground(apply_dynamic_background_media(
-                dynamic_media,
-                assets,
-                backend,
-                path_opt,
-                context.video_started_at_sec,
-                context.show_video_backgrounds,
-            ))
-        }
-        Command::FetchOnlineGrade(hash) => {
-            spawn_online_grade_fetch(hash);
-            CommandEffect::None
-        }
-        Command::PlayMusic {
-            path,
-            looped,
-            volume,
-        } => {
-            deadsync_audio_stream::play_music(
-                path,
-                deadsync_audio_stream::Cut::default(),
-                looped,
-                volume,
-            );
-            CommandEffect::None
-        }
-        Command::StopMusic => {
-            deadsync_audio_stream::stop_music();
-            CommandEffect::None
-        }
-        Command::UpdateScrollSpeed { side, setting } => {
-            profile::update_scroll_speed_for_side(side, setting);
-            CommandEffect::None
-        }
-        Command::UpdateSessionMusicRate(rate) => {
-            profile::set_session_music_rate(rate);
-            CommandEffect::None
-        }
-        Command::UpdatePreferredDifficulty(index) => {
-            session.preferred_difficulty_index = index;
-            CommandEffect::None
-        }
-        Command::UpdateLastPlayed {
-            side,
-            play_style,
-            music_path,
-            chart_hash,
-            difficulty_index,
-        } => {
-            profile::update_last_played_for_side(
-                side,
-                play_style,
-                music_path.as_deref(),
-                chart_hash.as_deref(),
-                difficulty_index,
-            );
-            CommandEffect::None
-        }
-    }
-}
-
-pub fn execute_command_resources<EvaluationPage>(
-    command: Command,
-    session: &mut SessionState<EvaluationPage>,
-    dynamic_media: &mut DynamicMedia,
-    assets: &mut AssetManager,
-    backend: Option<&mut Backend>,
-    context: CommandContext,
-) -> CommandExecutionResult {
-    let kind = command.kind();
-    let started = Instant::now();
-    let effect = apply_command(command, session, dynamic_media, assets, backend, context);
-    let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
-    CommandExecutionResult {
-        effect,
-        timing: command_timing_result(kind, elapsed_ms),
-    }
-}
-
-fn spawn_online_grade_fetch(hash: String) {
+pub fn spawn_online_grade_fetch(hash: String) {
     debug!("Fetching online grade for chart hash: {hash}");
     let mut spawned = 0;
     for side in [PlayerSide::P1, PlayerSide::P2] {
@@ -539,9 +276,7 @@ mod tests {
     }
 
     #[test]
-    fn banner_policy_preserves_course_slot_and_color_cycle() {
-        assert_eq!(banner_slot(Screen::SelectCourse), BannerSlot::SelectCourse);
-        assert_eq!(banner_slot(Screen::Gameplay), BannerSlot::SelectMusic);
+    fn fallback_banner_key_preserves_color_cycle() {
         assert_eq!(fallback_banner_key(0), "banner1.png");
         assert_eq!(fallback_banner_key(12), "banner1.png");
         assert_eq!(fallback_banner_key(-1), "banner12.png");
@@ -559,105 +294,5 @@ mod tests {
         };
 
         assert!(build_density_graph_mesh(Some(source), true).is_some());
-    }
-
-    fn command_context() -> CommandContext {
-        CommandContext {
-            current_screen: Screen::SelectMusic,
-            select_music_color_index: 0,
-            select_course_color_index: 0,
-            video_started_at_sec: 0.0,
-            show_video_backgrounds: true,
-            wide_screen: true,
-        }
-    }
-
-    #[test]
-    fn density_graph_command_builds_screen_update_without_backend() {
-        let mut session = SessionState::<()>::new(0, [0; 2]);
-        let result = execute_command_resources(
-            Command::SetDensityGraph {
-                slot: DensityGraphSlot::SelectMusicP1,
-                chart_opt: None,
-            },
-            &mut session,
-            &mut DynamicMedia::new(),
-            &mut AssetManager::new(),
-            None,
-            command_context(),
-        );
-
-        assert!(matches!(
-            result.effect,
-            CommandEffect::DensityGraph {
-                slot: DensityGraphSlot::SelectMusicP1,
-                mesh: None,
-            }
-        ));
-    }
-
-    #[test]
-    fn process_commands_become_root_effects() {
-        for (command, expected) in [
-            (Command::ExitNow, CommandKind::ExitNow),
-            (Command::Shutdown, CommandKind::Shutdown),
-        ] {
-            let mut session = SessionState::<()>::new(0, [0; 2]);
-            let result = execute_command_resources(
-                command,
-                &mut session,
-                &mut DynamicMedia::new(),
-                &mut AssetManager::new(),
-                None,
-                command_context(),
-            );
-            assert_eq!(result.timing.kind, expected);
-            assert!(matches!(
-                (expected, result.effect),
-                (CommandKind::ExitNow, CommandEffect::ExitNow)
-                    | (CommandKind::Shutdown, CommandEffect::Shutdown)
-            ));
-        }
-    }
-
-    #[test]
-    fn timed_command_execution_combines_shell_and_resource_effects() {
-        let mut session = SessionState::<()>::new(0, [0; 2]);
-        let result = execute_command_resources(
-            Command::SetDensityGraph {
-                slot: DensityGraphSlot::SelectMusicP2,
-                chart_opt: None,
-            },
-            &mut session,
-            &mut DynamicMedia::new(),
-            &mut AssetManager::new(),
-            None,
-            command_context(),
-        );
-
-        assert_eq!(result.timing.kind, CommandKind::SetDensityGraph);
-        assert_eq!(result.timing.label, "SetDensityGraph");
-        assert!(matches!(
-            result.effect,
-            CommandEffect::DensityGraph {
-                slot: DensityGraphSlot::SelectMusicP2,
-                mesh: None,
-            }
-        ));
-    }
-
-    #[test]
-    fn preferred_difficulty_command_updates_shell_session_directly() {
-        let mut session = SessionState::<()>::new(1, [0; 2]);
-        let result = execute_command_resources(
-            Command::UpdatePreferredDifficulty(4),
-            &mut session,
-            &mut DynamicMedia::new(),
-            &mut AssetManager::new(),
-            None,
-            command_context(),
-        );
-        assert!(matches!(result.effect, CommandEffect::None));
-        assert_eq!(session.preferred_difficulty_index, 4);
     }
 }

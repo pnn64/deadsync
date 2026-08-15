@@ -4665,7 +4665,8 @@ impl App {
                 | SimplyLoveRuntimeRequest::Debug(_) => Vec::new(),
             },
         };
-        self.run_commands(commands, event_loop)
+        self.run_commands(commands, event_loop);
+        Ok(())
     }
 
     fn save_song_offset_changes(

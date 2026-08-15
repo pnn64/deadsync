@@ -178,7 +178,7 @@ impl App {
             menu_music_path(config.visual_style, config.srpg_variant),
             gameover_music_path(),
         );
-        let _ = self.run_commands(commands, event_loop);
+        self.run_commands(commands, event_loop);
 
         if target_screen == CurrentScreen::ConfigurePads {
             // The full screen is reached only from Options (Song Select uses an
@@ -382,7 +382,7 @@ impl App {
         apply_global_entry_transition(&mut self.state.shell, prev, target, in_duration);
         self.sync_gameplay_input_capture();
         deadlib_present::runtime::clear_all();
-        let _ = self.run_commands(commands, event_loop);
+        self.run_commands(commands, event_loop);
     }
 
     pub(super) fn get_out_transition_for_route(

@@ -447,7 +447,7 @@ impl App {
         reset: RendererSwitchResourceResetPlan,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
-        self.run_commands(reset.commands, event_loop)?;
+        self.run_commands(reset.commands, event_loop);
 
         if reset.refresh_select_music {
             select_music::trigger_immediate_refresh(&mut self.state.screens.select_music_state);
