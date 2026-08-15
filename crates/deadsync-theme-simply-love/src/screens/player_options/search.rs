@@ -281,13 +281,15 @@ pub(super) fn help_text(state: &State, m: &SettingMatch) -> Option<String> {
     if text.is_empty() { None } else { Some(text) }
 }
 
-fn pane_label(pane: OptionsPane) -> &'static str {
-    match pane {
-        OptionsPane::Main => "Main",
-        OptionsPane::Display => "Display",
-        OptionsPane::Advanced => "Advanced",
-        OptionsPane::Uncommon => "Uncommon",
-    }
+fn pane_label(pane: OptionsPane) -> String {
+    // Reuse existing translated pane names instead of English-only new keys.
+    let key = match pane {
+        OptionsPane::Main => "WhatComesNextMainModifiers",
+        OptionsPane::Display => "WhatComesNextDisplayModifiers",
+        OptionsPane::Advanced => "WhatComesNextAdvancedModifiers",
+        OptionsPane::Uncommon => "WhatComesNextUncommonModifiers",
+    };
+    tr("PlayerOptions", key).to_string()
 }
 
 /// Build the overlay actors, or `None` when the search is hidden.
@@ -327,9 +329,11 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
         diffuse(PANEL_BG[0], PANEL_BG[1], PANEL_BG[2], 1.0): z(Z_PANEL)
     ));
 
+    let title = tr("PlayerOptions", "SettingSearchTitle").to_string();
     actors.push(act!(text:
-        font("wendy"): settext("Setting Search"):
+        font("wendy"): settext(title):
         align(0.5, 0.5): xy(cx, top + 20.0): zoom(0.4):
+        maxwidth(panel_w - 24.0):
         diffuse(WHITE[0], WHITE[1], WHITE[2], 1.0): z(Z_TEXT): horizalign(center)
     ));
 
@@ -346,8 +350,9 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
         diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
     ));
     if open.query.is_empty() {
+        let placeholder = tr("PlayerOptions", "SettingSearchPlaceholder").to_string();
         actors.push(act!(text:
-            font("miso"): settext("type to search"):
+            font("miso"): settext(placeholder):
             align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
             maxwidth(panel_w - 40.0):
             diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
@@ -393,9 +398,11 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
     let list_x = cx - panel_w * 0.5 + 16.0;
     let pane_x = cx + panel_w * 0.5 - 16.0;
     if open.matches.is_empty() {
+        let no_matches = tr("PlayerOptions", "SettingSearchNoMatches").to_string();
         actors.push(act!(text:
-            font("miso"): settext("No matches"):
+            font("miso"): settext(no_matches):
             align(0.0, 0.5): xy(list_x, list_top): zoom(0.8):
+            maxwidth(panel_w - 32.0):
             diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
         ));
     }
@@ -426,6 +433,7 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
         actors.push(act!(text:
             font("miso"): settext(pane_label(m.pane)):
             align(1.0, 0.5): xy(pane_x, y): zoom(0.7):
+            maxwidth(panel_w * 0.34):
             diffuse(pane_rgb[0], pane_rgb[1], pane_rgb[2], 1.0): z(Z_TEXT + 1): horizalign(right)
         ));
     }
@@ -434,8 +442,10 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
     if let Some(m) = focused_match(open) {
         let value_y = cy + panel_h * 0.5 - 74.0;
         if let Some(value) = current_value(state, m, open.opener_player) {
+            let current = tr_fmt("PlayerOptions", "SettingSearchCurrent", &[("value", &value)])
+                .to_string();
             actors.push(act!(text:
-                font("miso"): settext(format!("Current: {value}")):
+                font("miso"): settext(current):
                 align(0.0, 0.5): xy(list_x, value_y): zoom(0.75):
                 maxwidth(panel_w - 32.0):
                 diffuse(WHITE[0], WHITE[1], WHITE[2], 1.0): z(Z_TEXT): horizalign(left)
@@ -451,8 +461,9 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
         }
     }
 
+    let footer = tr("PlayerOptions", "SettingSearchFooter").to_string();
     actors.push(act!(text:
-        font("miso"): settext("Up/Down: Move    Tab: Complete    Enter: Go    Esc: Cancel"):
+        font("miso"): settext(footer):
         align(0.5, 0.5): xy(cx, cy + panel_h * 0.5 - 14.0): zoom(0.7):
         maxwidth(panel_w - 24.0):
         diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(center)
