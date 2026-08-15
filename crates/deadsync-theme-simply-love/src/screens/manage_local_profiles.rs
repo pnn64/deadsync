@@ -463,7 +463,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     match effects.len() {
         0 => None,
         1 => effects.into_iter().next(),
-        _ => Some(ThemeEffect::Batch(effects)),
+        _ => Some(ThemeEffect::batch(effects)),
     }
 }
 

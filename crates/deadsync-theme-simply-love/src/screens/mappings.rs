@@ -1003,7 +1003,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                         let navigate = ThemeEffect::Navigate(Screen::Options);
                         match move_effect {
                             ThemeEffect::None => navigate,
-                            effect => ThemeEffect::Batch(vec![effect, navigate]),
+                            effect => ThemeEffect::sequence(effect, navigate),
                         }
                     }
                 }

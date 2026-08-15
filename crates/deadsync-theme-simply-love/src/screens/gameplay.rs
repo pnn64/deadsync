@@ -4444,7 +4444,7 @@ pub fn prepare_update(state: &mut State) -> (bool, ThemeEffect) {
             state.runtime_view.lobby.reconnect_status_text = None;
         }
 
-        effect = crate::effects::sequence(effect, update_lobby_machine_state(state));
+        effect = ThemeEffect::sequence(effect, update_lobby_machine_state(state));
 
         if gameplay_lobby_wait_active(state) {
             return (false, effect);
@@ -4455,7 +4455,7 @@ pub fn prepare_update(state: &mut State) -> (bool, ThemeEffect) {
         state.start_stage_music();
         state.lobby_music_started = true;
     }
-    effect = crate::effects::sequence(effect, update_lobby_machine_state(state));
+    effect = ThemeEffect::sequence(effect, update_lobby_machine_state(state));
     (true, effect)
 }
 

@@ -124,7 +124,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             apply_preview(values);
             ThemeEffect::None
         }
-        OverscanAction::Commit(values) => ThemeEffect::Batch(vec![
+        OverscanAction::Commit(values) => ThemeEffect::batch(vec![
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
                 crate::SimplyLoveConfigRequest::Overscan {
                     translate_x: values.translate_x,

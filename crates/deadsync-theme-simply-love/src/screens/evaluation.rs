@@ -3839,7 +3839,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
             .is_some_and(|elapsed| elapsed >= state.lobby_view.disconnect_hold_seconds)
         {
             clear_lobby_disconnect_holds(state);
-            effect = crate::effects::sequence(
+            effect = ThemeEffect::sequence(
                 effect,
                 crate::effects::lobby(crate::SimplyLoveLobbyRequest::Disconnect),
             );
@@ -4573,7 +4573,7 @@ fn favorite_toggle_effect(
     is_now_favorite: bool,
 ) -> ThemeEffect {
     let sound = crate::screens::favorite_code::toggle_sfx(is_now_favorite);
-    crate::effects::sequence(
+    ThemeEffect::sequence(
         crate::effects::sfx(sound),
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
             crate::SimplyLoveProfileRequest::ToggleFavorite { side, chart_hash },
@@ -4638,7 +4638,7 @@ mod input_audio_effect_tests {
     }
 
     #[test]
-    fn favorite_sfx_precedes_navigation_start_sfx() {
+    fn favorite_sfx_and_navigation_stay_flat_and_ordered() {
         let navigation = prepend_sfx(
             Some("assets/sounds/start.ogg"),
             ThemeEffect::Navigate(Screen::SelectMusic),
@@ -4648,18 +4648,23 @@ mod input_audio_effect_tests {
             panic!("favorite and navigation sounds should remain ordered");
         };
 
-        assert_eq!(effects.len(), 2);
+        assert_eq!(effects.len(), 3);
         assert!(matches!(
             &effects[0],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 AudioRequest::PlaySfx(path)
             )) if path == "assets/sounds/common_invalid.ogg"
         ));
-        assert_sfx_then(
-            effects[1].clone(),
-            "assets/sounds/start.ogg",
-            Screen::SelectMusic,
-        );
+        assert!(matches!(
+            &effects[1],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/start.ogg"
+        ));
+        assert!(matches!(
+            effects[2],
+            ThemeEffect::Navigate(Screen::SelectMusic)
+        ));
     }
 
     #[test]
@@ -4761,13 +4766,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             }
             _ => {}
         }
-        return crate::effects::sequence(favorite_effect, ThemeEffect::None);
+        return ThemeEffect::sequence(favorite_effect, ThemeEffect::None);
     }
     if !ev.pressed {
-        return crate::effects::sequence(favorite_effect, ThemeEffect::None);
+        return ThemeEffect::sequence(favorite_effect, ThemeEffect::None);
     }
     if state.auto_advance_seconds.is_some() {
-        return crate::effects::sequence(favorite_effect, ThemeEffect::None);
+        return ThemeEffect::sequence(favorite_effect, ThemeEffect::None);
     }
     if state.event_overlay_visible {
         let play_style = state.context.play_style;
@@ -4798,14 +4803,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             if undo != 0 {
                 let _ = shift_event_page(side, i32::from(undo));
             }
-            return crate::effects::sequence(
+            return ThemeEffect::sequence(
                 favorite_effect,
                 ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
                     crate::SimplyLoveMediaRequest::Screenshot(Some(side)),
                 )),
             );
         }
-        return crate::effects::sequence(
+        return ThemeEffect::sequence(
             favorite_effect,
             match ev.action {
                 VirtualAction::p1_back
@@ -4965,7 +4970,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         if undo != 0 {
             let _ = shift_pane_for(side, i32::from(undo));
         }
-        return crate::effects::sequence(
+        return ThemeEffect::sequence(
             favorite_effect,
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
                 crate::SimplyLoveMediaRequest::Screenshot(Some(side)),
@@ -5035,7 +5040,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         }
         _ => ThemeEffect::None,
     };
-    crate::effects::sequence(favorite_effect, effect)
+    ThemeEffect::sequence(favorite_effect, effect)
 }
 
 pub fn push_actors(

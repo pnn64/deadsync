@@ -494,33 +494,24 @@ pub fn benchmark_smx_screen_work(
     )
 }
 
-fn sequence_effects(first: ThemeEffect, second: ThemeEffect) -> ThemeEffect {
-    match (first, second) {
-        (ThemeEffect::None, second) => second,
-        (first, ThemeEffect::None) => first,
-        (ThemeEffect::Batch(mut effects), second) => {
-            effects.push(second);
-            ThemeEffect::Batch(effects)
-        }
-        (first, second) => ThemeEffect::Batch(vec![first, second]),
-    }
-}
-
 fn lobby_effect_only(effect: ThemeEffect) -> Option<ThemeEffect> {
     match effect {
         effect @ ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
             SimplyLoveOnlineRequest::Lobby(_),
         )) => Some(effect),
         ThemeEffect::Batch(effects) => {
-            let mut lobby_effects = effects
+            let lobby_effects = effects
                 .into_iter()
-                .filter_map(lobby_effect_only)
+                .filter(|effect| {
+                    matches!(
+                        effect,
+                        ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+                            SimplyLoveOnlineRequest::Lobby(_)
+                        ))
+                    )
+                })
                 .collect::<Vec<_>>();
-            match lobby_effects.len() {
-                0 => None,
-                1 => lobby_effects.pop(),
-                _ => Some(ThemeEffect::Batch(lobby_effects)),
-            }
+            (!lobby_effects.is_empty()).then(|| ThemeEffect::batch(lobby_effects))
         }
         _ => None,
     }
@@ -1265,7 +1256,10 @@ impl ScreensState {
                 } else {
                     ThemeEffect::None
                 };
-                (Some(sequence_effects(update_effect, navigation)), false)
+                (
+                    Some(ThemeEffect::sequence(update_effect, navigation)),
+                    false,
+                )
             }
             CurrentScreen::EvaluationSummary => {
                 evaluation_summary::update(&mut self.evaluation_summary_state, delta_time);
@@ -3806,6 +3800,29 @@ impl App {
         action: ThemeEffect,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
+        match action {
+            ThemeEffect::Batch(effects) => {
+                debug_assert!(
+                    effects
+                        .iter()
+                        .all(|effect| !matches!(effect, ThemeEffect::None | ThemeEffect::Batch(_)))
+                );
+                // Route each effect after applying the previous one so navigation
+                // observes state mutations made earlier in the source sequence.
+                for effect in effects {
+                    self.handle_single_action(effect, event_loop)?;
+                }
+                Ok(())
+            }
+            action => self.handle_single_action(action, event_loop),
+        }
+    }
+
+    fn handle_single_action(
+        &mut self,
+        action: ThemeEffect,
+        event_loop: &ActiveEventLoop,
+    ) -> Result<(), Box<dyn Error>> {
         let (action, clear_restart_pending) = match action {
             action @ (ThemeEffect::Navigate(_) | ThemeEffect::NavigateNoFade(_)) => {
                 let current_screen = self.state.screens.current_screen;
@@ -3834,13 +3851,7 @@ impl App {
 
         let commands = match action {
             ThemeEffect::None | ThemeEffect::ConsumeInput => Vec::new(),
-            ThemeEffect::Batch(effects) => {
-                // Re-enter after each effect so routing observes earlier mutations.
-                for effect in effects {
-                    self.handle_action(effect, event_loop)?;
-                }
-                return Ok(());
-            }
+            ThemeEffect::Batch(_) => unreachable!("batched effects must be flat"),
             ThemeEffect::Navigate(screen) => {
                 self.handle_navigation_action(screen);
                 Vec::new()
@@ -5650,7 +5661,7 @@ impl App {
         )));
         Some(match pending {
             ThemeEffect::None => start,
-            pending => ThemeEffect::Batch(vec![pending, start]),
+            pending => ThemeEffect::sequence(pending, start),
         })
     }
 

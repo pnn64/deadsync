@@ -1760,7 +1760,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                     }
                     state.three_key_focus = ThreeKeyFocus::Wheel;
                     if let Some(path) = undo_sound {
-                        ThemeEffect::Batch(vec![sfx(path), sfx("assets/sounds/change.ogg")])
+                        ThemeEffect::batch(vec![sfx(path), sfx("assets/sounds/change.ogg")])
                     } else {
                         sfx("assets/sounds/change.ogg")
                     }

@@ -407,11 +407,7 @@ fn prepend_pending_sfx(pending_sfx: &mut Vec<&'static str>, effect: ThemeEffect)
     if has_effect {
         effects.push(effect);
     }
-    if effects.len() == 1 {
-        effects.pop().expect("one queued Practice effect")
-    } else {
-        ThemeEffect::Batch(effects)
-    }
+    ThemeEffect::batch(effects)
 }
 
 fn prepend_pending_effects(
@@ -430,16 +426,8 @@ fn prepend_pending_effects(
             .drain(..)
             .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(request))),
     );
-    match trailing {
-        ThemeEffect::None => {}
-        ThemeEffect::Batch(mut trailing) => effects.append(&mut trailing),
-        trailing => effects.push(trailing),
-    }
-    if effects.len() == 1 {
-        effects.pop().expect("one queued Practice effect")
-    } else {
-        ThemeEffect::Batch(effects)
-    }
+    effects.push(trailing);
+    ThemeEffect::batch(effects)
 }
 
 fn finish_effect(state: &mut State, effect: ThemeEffect) -> ThemeEffect {

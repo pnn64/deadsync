@@ -725,7 +725,7 @@ pub(crate) fn handle_input(
     match effects.len() {
         0 => crate::screens::ThemeEffect::None,
         1 => effects.remove(0),
-        _ => crate::screens::ThemeEffect::Batch(effects),
+        _ => crate::screens::ThemeEffect::batch(effects),
     }
 }
 

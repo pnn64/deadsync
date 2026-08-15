@@ -144,7 +144,7 @@ fn prepend_pending_effects(state: &mut State, effect: ThemeEffect) -> ThemeEffec
     if effects.len() == 1 {
         effects.pop().expect("one queued PlayerOptions effect")
     } else {
-        ThemeEffect::Batch(effects)
+        ThemeEffect::batch(effects)
     }
 }
 

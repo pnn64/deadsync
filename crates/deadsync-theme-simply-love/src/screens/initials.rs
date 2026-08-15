@@ -768,7 +768,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     match effects.len() {
         0 => None,
         1 => effects.pop(),
-        _ => Some(ThemeEffect::Batch(effects)),
+        _ => Some(ThemeEffect::batch(effects)),
     }
 }
 
@@ -927,7 +927,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     } else {
         ThemeEffect::None
     };
-    crate::effects::sequence(effect, finish)
+    ThemeEffect::sequence(effect, finish)
 }
 
 fn stage_index_for(elapsed: f32, num_stages: usize) -> usize {

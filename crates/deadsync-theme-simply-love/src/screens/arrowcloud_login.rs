@@ -140,7 +140,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         } else {
             Screen::SelectColor
         };
-        return ThemeEffect::Batch(vec![
+        return ThemeEffect::batch(vec![
             crate::effects::sfx("assets/sounds/start.ogg"),
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
                 crate::SimplyLoveOnlineRequest::CancelQrLogin(
@@ -160,7 +160,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             Screen::Menu
         };
         log::info!("ArrowCloud QR login cancelled — returning to {next:?}.");
-        return ThemeEffect::Batch(vec![
+        return ThemeEffect::batch(vec![
             crate::effects::sfx("assets/sounds/change.ogg"),
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
                 crate::SimplyLoveOnlineRequest::CancelQrLogin(

@@ -869,25 +869,13 @@ pub(crate) fn sfx(path: &str) -> SimplyLoveEffect {
 }
 
 pub(crate) fn sfx_then(path: &str, effect: SimplyLoveEffect) -> SimplyLoveEffect {
-    SimplyLoveEffect::Batch(vec![sfx(path), effect])
+    SimplyLoveEffect::sequence(sfx(path), effect)
 }
 
 pub(crate) fn lobby(request: SimplyLoveLobbyRequest) -> SimplyLoveEffect {
     SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Online(
         SimplyLoveOnlineRequest::Lobby(request),
     ))
-}
-
-pub(crate) fn sequence(first: SimplyLoveEffect, second: SimplyLoveEffect) -> SimplyLoveEffect {
-    match (first, second) {
-        (SimplyLoveEffect::None, second) => second,
-        (first, SimplyLoveEffect::None) => first,
-        (SimplyLoveEffect::Batch(mut effects), second) => {
-            effects.push(second);
-            SimplyLoveEffect::Batch(effects)
-        }
-        (first, second) => SimplyLoveEffect::Batch(vec![first, second]),
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1018,7 +1006,7 @@ mod tests {
 
     #[test]
     fn single_lobby_request_stays_unbatched() {
-        let effect = sequence(
+        let effect = SimplyLoveEffect::sequence(
             SimplyLoveEffect::None,
             lobby(SimplyLoveLobbyRequest::UpdateMachineStats {
                 screen_name: "ScreenGameplay",

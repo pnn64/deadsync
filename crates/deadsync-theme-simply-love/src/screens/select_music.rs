@@ -4315,7 +4315,7 @@ fn maybe_prewarm_replaygain_for_pack(
 #[inline(always)]
 fn prepend_pending_effect(pending: Option<ThemeEffect>, next: ThemeEffect) -> ThemeEffect {
     match pending {
-        Some(pending) => ThemeEffect::Batch(vec![pending, next]),
+        Some(pending) => ThemeEffect::sequence(pending, next),
         None => next,
     }
 }
@@ -4425,13 +4425,7 @@ fn prepend_pending_runtime(state: &mut State, effect: ThemeEffect) -> ThemeEffec
     if has_effect {
         effects.push(effect);
     }
-    if effects.len() == 1 {
-        effects
-            .pop()
-            .expect("one queued Select Music runtime effect")
-    } else {
-        ThemeEffect::Batch(effects)
-    }
+    ThemeEffect::batch(effects)
 }
 
 #[inline(always)]
@@ -9391,37 +9385,31 @@ enum ProfileBoxEffectOutcome {
 }
 
 fn profile_box_effect_outcome(effect: &ThemeEffect) -> ProfileBoxEffectOutcome {
-    match effect {
-        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
-            crate::SimplyLoveProfileRequest::Select { .. },
-        )) => ProfileBoxEffectOutcome::Selected,
-        ThemeEffect::Navigate(_) => ProfileBoxEffectOutcome::Cancelled,
-        ThemeEffect::Batch(effects) => effects
-            .iter()
-            .map(profile_box_effect_outcome)
-            .find(|outcome| *outcome != ProfileBoxEffectOutcome::Continue)
-            .unwrap_or(ProfileBoxEffectOutcome::Continue),
-        _ => ProfileBoxEffectOutcome::Continue,
-    }
+    let effects = match effect {
+        ThemeEffect::Batch(effects) => effects.as_slice(),
+        effect => std::slice::from_ref(effect),
+    };
+    effects
+        .iter()
+        .find_map(|effect| match effect {
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::Select { .. },
+            )) => Some(ProfileBoxEffectOutcome::Selected),
+            ThemeEffect::Navigate(_) => Some(ProfileBoxEffectOutcome::Cancelled),
+            _ => None,
+        })
+        .unwrap_or(ProfileBoxEffectOutcome::Continue)
 }
 
 fn remove_profile_box_navigation(effect: ThemeEffect) -> ThemeEffect {
     match effect {
         ThemeEffect::Navigate(_) => ThemeEffect::None,
-        ThemeEffect::Batch(effects) => {
-            let mut remaining = effects
+        ThemeEffect::Batch(effects) => ThemeEffect::batch(
+            effects
                 .into_iter()
-                .map(remove_profile_box_navigation)
-                .filter(|effect| !matches!(effect, ThemeEffect::None))
-                .collect::<Vec<_>>();
-            match remaining.len() {
-                0 => ThemeEffect::None,
-                1 => remaining
-                    .pop()
-                    .expect("one profile-box effect should remain"),
-                _ => ThemeEffect::Batch(remaining),
-            }
-        }
+                .filter(|effect| !matches!(effect, ThemeEffect::Navigate(_)))
+                .collect(),
+        ),
         effect => effect,
     }
 }

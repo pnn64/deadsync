@@ -158,7 +158,7 @@ pub fn update(state: &mut State, dt: f32, view: &SmxAssignmentView) -> Option<Th
     match effects.len() {
         0 => None,
         1 => effects.pop(),
-        _ => Some(ThemeEffect::Batch(effects)),
+        _ => Some(ThemeEffect::batch(effects)),
     }
 }
 
@@ -183,7 +183,7 @@ fn exit(state: &State) -> ThemeEffect {
     if state.return_screen == Screen::Options {
         navigate
     } else {
-        ThemeEffect::Batch(vec![
+        ThemeEffect::batch(vec![
             hardware_effect(crate::SimplyLoveHardwareRequest::ReenableSmxAutoLights),
             navigate,
         ])

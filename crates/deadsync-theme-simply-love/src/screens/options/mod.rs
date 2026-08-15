@@ -123,7 +123,7 @@ fn queue_sfx(state: &mut State, path: &'static str) {
 }
 
 fn volume_change_effect(target: AudioVolumeTarget, percent: u8) -> ThemeEffect {
-    ThemeEffect::Batch(vec![
+    ThemeEffect::batch(vec![
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
             AudioRequest::SetVolume { target, percent },
         )),
@@ -147,7 +147,7 @@ fn audio_requests_effect(requests: Vec<AudioRequest>) -> ThemeEffect {
         let mut batch = Vec::with_capacity(rest.len() + 1);
         batch.push(first);
         batch.extend(rest);
-        ThemeEffect::Batch(batch)
+        ThemeEffect::batch(batch)
     }
 }
 
@@ -238,11 +238,7 @@ fn prepend_pending_sfx(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
     if has_effect {
         effects.push(effect);
     }
-    if effects.len() == 1 {
-        effects.pop().expect("one queued Options effect")
-    } else {
-        ThemeEffect::Batch(effects)
-    }
+    ThemeEffect::batch(effects)
 }
 
 pub fn apply_sync_analysis_events(state: &mut State, events: Vec<crate::SimplyLoveSyncEvent>) {

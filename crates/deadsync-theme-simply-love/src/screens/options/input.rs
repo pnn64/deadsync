@@ -1070,7 +1070,7 @@ pub(super) fn apply_submenu_choice_delta(
                 row.id,
                 SubRowId::EnableGrooveStats | SubRowId::EnableBoogieStats
             ) {
-                ThemeEffect::Batch(vec![effect, online_reinitialize_effect()])
+                ThemeEffect::batch(vec![effect, online_reinitialize_effect()])
             } else {
                 effect
             },
@@ -1092,7 +1092,7 @@ pub(super) fn apply_submenu_choice_delta(
         };
         let effect = online_config_effect(request);
         action = Some(if row.id == SubRowId::EnableArrowCloud {
-            ThemeEffect::Batch(vec![effect, online_reinitialize_effect()])
+            ThemeEffect::batch(vec![effect, online_reinitialize_effect()])
         } else {
             effect
         });
