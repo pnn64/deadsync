@@ -2895,8 +2895,6 @@ impl App {
             .controls()
             .logic_delta(delta_time, tab_acceleration_allowed);
 
-        self.sync_gameplay_input_capture();
-
         let mut upload_us: u32 = 0;
         let mut draw_us: u32 = 0;
         let mut draw_stats = renderer::DrawStats::default();
@@ -3011,6 +3009,9 @@ impl App {
             self.state.screens.current_screen,
             MENU_ACTORS_FADE_DURATION,
         );
+        if transition_plan.sync_input_capture {
+            self.sync_gameplay_input_capture();
+        }
         let transition_lobby_effect = if transition_plan.tick_gameplay
             && let Some(gs) = self.state.screens.gameplay_state.as_mut()
         {
@@ -8779,7 +8780,6 @@ impl ApplicationHandler<UserEvent> for App {
             .shell
             .gameplay_input_trace
             .finish_batch_if_enabled(self.state.screens.current_screen);
-        self.sync_gameplay_input_capture();
         match self.flush_due_input_events(event_loop) {
             Ok(true) => self.request_redraw(&window, "input_debounce"),
             Ok(false) => {}

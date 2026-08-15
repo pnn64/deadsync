@@ -413,9 +413,8 @@ fn footer_status_from_arrowcloud(
 /// One per-backend cell in the condensed submit footer.
 ///
 /// Rendering: each cell becomes a bracketed text run like `[GS ⧗ 4s Timeout]`.
-/// Animated icons (`Spinner`, `Hourglass`) are emitted as a sprite actor
-/// inserted between the bracket text fragments at render time; static glyphs
-/// are baked into the surrounding text.
+/// Every icon is emitted as a sprite actor inserted between retained bracket
+/// text fragments; spinner and hourglass sprites advance at render time.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum CellIcon {
     Spinner,
@@ -427,30 +426,45 @@ enum CellIcon {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct SubmitFooterCell {
-    backend_label: Arc<str>,
     icon: CellIcon,
-    countdown_secs: Option<u32>,
-    reason: Option<Arc<str>>,
+    prefix: Arc<str>,
+    suffix: Arc<str>,
 }
 
 impl SubmitFooterCell {
-    /// All cells now use a sprite for their icon. Returns the `(prefix, suffix)`
-    /// text fragments that surround the icon. The renderer composes:
-    /// `text(prefix) + sprite(icon) + text(suffix)`.
-    fn sprite_render_parts(&self) -> (Arc<str>, Arc<str>) {
-        let prefix: Arc<str> = format!("[{} ", self.backend_label).into();
+    fn new(
+        backend_label: Arc<str>,
+        icon: CellIcon,
+        countdown_secs: Option<u32>,
+        reason: Option<Arc<str>>,
+    ) -> Self {
+        let prefix: Arc<str> = format!("[{backend_label} ").into();
         let mut suffix = String::with_capacity(16);
-        if let Some(n) = self.countdown_secs {
+        if matches!(icon, CellIcon::Refresh) {
+            suffix.push(' ');
+            suffix.push_str(SUBMIT_FOOTER_F5_LABEL);
+        }
+        if let Some(n) = countdown_secs {
             suffix.push(' ');
             suffix.push_str(&n.to_string());
             suffix.push('s');
         }
-        if let Some(reason) = &self.reason {
+        if let Some(reason) = reason {
             suffix.push(' ');
-            suffix.push_str(reason);
+            suffix.push_str(&reason);
         }
         suffix.push(']');
-        (prefix, suffix.into())
+        Self {
+            icon,
+            prefix,
+            suffix: suffix.into(),
+        }
+    }
+
+    /// Returns retained text fragments surrounding the icon sprite.
+    #[inline(always)]
+    fn sprite_render_parts(&self) -> (&Arc<str>, &Arc<str>) {
+        (&self.prefix, &self.suffix)
     }
 
     /// Texture key for the cell's icon sprite.
@@ -540,12 +554,7 @@ fn submit_footer_cell(backend_label: Arc<str>, status: SubmitFooterStatus) -> Su
             (CellIcon::Rejected, None, Some(Arc::from(reason.label())))
         }
     };
-    SubmitFooterCell {
-        backend_label,
-        icon,
-        countdown_secs,
-        reason,
-    }
+    SubmitFooterCell::new(backend_label, icon, countdown_secs, reason)
 }
 
 fn measure_text_width(asset_manager: &AssetManager, font_key: &str, text: &str, zoom: f32) -> f32 {
@@ -566,7 +575,8 @@ fn measure_footer_text_width(asset_manager: &AssetManager, text: &str, zoom: f32
     measure_text_width(asset_manager, "miso", text, zoom)
 }
 
-fn submit_footer_lines_for_service(
+fn fill_submit_footer_cells(
+    cells: &mut Vec<SubmitFooterCell>,
     service: SimplyLoveGrooveStatsService,
     expected_groovestats_submit: bool,
     expected_arrowcloud_submit: bool,
@@ -576,8 +586,11 @@ fn submit_footer_lines_for_service(
     arrowcloud_next_retry_remaining_secs: Option<u32>,
     groovestats_next_retry_is_auto: bool,
     arrowcloud_next_retry_is_auto: bool,
-) -> Vec<SubmitFooterCell> {
-    let mut cells = Vec::with_capacity(2);
+) {
+    cells.clear();
+    if cells.capacity() < 2 {
+        cells.reserve(2);
+    }
     if expected_groovestats_submit {
         let status = groovestats_status
             .map(|s| {
@@ -605,7 +618,6 @@ fn submit_footer_lines_for_service(
             .unwrap_or(SubmitFooterStatus::Submitting);
         cells.push(submit_footer_cell(tr("SubmitStatus", "ACLabel"), status));
     }
-    cells
 }
 
 #[cfg(test)]
@@ -619,7 +631,9 @@ fn submit_footer_lines(
     groovestats_next_retry_is_auto: bool,
     arrowcloud_next_retry_is_auto: bool,
 ) -> Vec<SubmitFooterCell> {
-    submit_footer_lines_for_service(
+    let mut cells = Vec::with_capacity(2);
+    fill_submit_footer_cells(
+        &mut cells,
         SimplyLoveGrooveStatsService::GrooveStats,
         expected_groovestats_submit,
         expected_arrowcloud_submit,
@@ -629,7 +643,161 @@ fn submit_footer_lines(
         arrowcloud_next_retry_remaining_secs,
         groovestats_next_retry_is_auto,
         arrowcloud_next_retry_is_auto,
-    )
+    );
+    cells
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct SubmitSource {
+    service: SimplyLoveGrooveStatsService,
+    machine_font: deadsync_config::prelude::MachineFont,
+    expected_gs: bool,
+    expected_ac: bool,
+    gs_status: Option<score_data::GrooveStatsSubmitUiStatus>,
+    ac_status: Option<score_data::ArrowCloudSubmitUiStatus>,
+    record_banner: Option<score_data::GrooveStatsSubmitRecordBanner>,
+    gs_retry_secs: Option<u32>,
+    ac_retry_secs: Option<u32>,
+    gs_retry_auto: bool,
+    ac_retry_auto: bool,
+}
+
+/// Game-thread-owned submission presentation retained for one player.
+///
+/// Its cell vector is permanently capped at the two supported backends and
+/// allocated before first use. Submission transitions, visible retry-second
+/// changes, service changes, and locale revisions rebuild it in place; actor
+/// frames only borrow its shared text. There is no eviction or background
+/// work, and teardown releases the strings and bounded vector on the game
+/// thread. `generation` exposes rebuilds to the layout cache and tests.
+#[derive(Clone, Debug)]
+struct SubmitPresentation {
+    source: Option<SubmitSource>,
+    i18n_revision: u64,
+    generation: u64,
+    record_text: Option<Arc<str>>,
+    record_font: Option<&'static str>,
+    cells: Vec<SubmitFooterCell>,
+}
+
+impl Default for SubmitPresentation {
+    fn default() -> Self {
+        Self {
+            source: None,
+            i18n_revision: u64::MAX,
+            generation: 0,
+            record_text: None,
+            record_font: None,
+            cells: Vec::with_capacity(2),
+        }
+    }
+}
+
+impl SubmitPresentation {
+    fn sync(&mut self, source: SubmitSource) -> bool {
+        let revision = crate::assets::i18n::revision();
+        if self.source == Some(source) && self.i18n_revision == revision {
+            return false;
+        }
+
+        self.record_text = source.record_banner.map(submit_record_text);
+        self.record_font = self
+            .record_text
+            .as_ref()
+            .map(|text| machine_font_key_for_text(source.machine_font, FontRole::Header, text));
+        fill_submit_footer_cells(
+            &mut self.cells,
+            source.service,
+            source.expected_gs,
+            source.expected_ac,
+            source.gs_status,
+            source.ac_status,
+            source.gs_retry_secs,
+            source.ac_retry_secs,
+            source.gs_retry_auto,
+            source.ac_retry_auto,
+        );
+        self.source = Some(source);
+        // Translation lookup can initialize the test bundle and advance the
+        // observable revision, so record it after every localized field loads.
+        self.i18n_revision = crate::assets::i18n::revision();
+        self.generation = self.generation.wrapping_add(1);
+        true
+    }
+}
+
+enum SubmitFrag {
+    Text {
+        text: Arc<str>,
+        width: f32,
+    },
+    Sprite {
+        texture_key: &'static str,
+        animated: bool,
+        tint: [f32; 4],
+        scale_y: f32,
+    },
+}
+
+struct SubmitLayout {
+    record_width: f32,
+    footer_width: f32,
+    frags: Vec<SubmitFrag>,
+}
+
+fn build_submit_layout(
+    asset_manager: &AssetManager,
+    presentation: &SubmitPresentation,
+) -> SubmitLayout {
+    let record_width = presentation
+        .record_text
+        .as_ref()
+        .zip(presentation.record_font)
+        .map_or(0.0, |(text, font)| {
+            measure_text_width(asset_manager, font, text, AUTO_SUBMIT_RECORD_TEXT_ZOOM)
+        });
+    let frag_capacity = presentation.cells.len().saturating_mul(4).saturating_sub(1);
+    let mut frags = Vec::with_capacity(frag_capacity);
+    let separator = (presentation.cells.len() > 1).then(|| Arc::<str>::from(" "));
+    let separator_width = separator.as_ref().map_or(0.0, |text| {
+        measure_footer_text_width(asset_manager, text, SUBMIT_FOOTER_TEXT_ZOOM)
+    });
+
+    for (index, cell) in presentation.cells.iter().enumerate() {
+        if index > 0 {
+            frags.push(SubmitFrag::Text {
+                text: Arc::clone(separator.as_ref().expect("two cells have a separator")),
+                width: separator_width,
+            });
+        }
+        let (prefix, suffix) = cell.sprite_render_parts();
+        frags.push(SubmitFrag::Text {
+            text: Arc::clone(prefix),
+            width: measure_footer_text_width(asset_manager, prefix, SUBMIT_FOOTER_TEXT_ZOOM),
+        });
+        frags.push(SubmitFrag::Sprite {
+            texture_key: cell.sprite_texture_key(),
+            animated: cell.icon_is_animated(),
+            tint: cell.sprite_tint(),
+            scale_y: cell.sprite_scale_y(),
+        });
+        frags.push(SubmitFrag::Text {
+            text: Arc::clone(suffix),
+            width: measure_footer_text_width(asset_manager, suffix, SUBMIT_FOOTER_TEXT_ZOOM),
+        });
+    }
+    let footer_width = frags
+        .iter()
+        .map(|frag| match frag {
+            SubmitFrag::Text { width, .. } => *width,
+            SubmitFrag::Sprite { .. } => SUBMIT_FOOTER_SPRITE_PX,
+        })
+        .sum();
+    SubmitLayout {
+        record_width,
+        footer_width,
+        frags,
+    }
 }
 
 #[inline(always)]
@@ -903,14 +1071,14 @@ fn course_graph_stripe_actors(
 mod tests {
     use super::{
         CellIcon, CourseGraphStage, EvalGraphPane, EvalPane, GRAPH_LIFE_SAMPLE_COUNT, Nice69Buf,
-        SUBMIT_FOOTER_F5_LABEL, SimplyLoveGrooveStatsService, SubmitFooterCell,
-        active_groovestats_service_name, build_course_density_graph_mesh, build_fail_label_text,
-        cached_fail_label_text, course_graph_stage_spans, course_graph_stripe_actors,
-        eval_grade_for_result, eval_graph_cycle, eval_graph_pane_label, eval_graph_x,
-        eval_pane_cycle, eval_pane_shift, eval_pane_skip_duplicate, fail_seconds_remaining,
-        graph_display_life_points, leaderboard_requests, life_record_lerp_at,
-        stage_in_stinger_texture_key, submission_retry_available, submit_footer_gs_label,
-        submit_footer_gs_label_for, submit_footer_lines, sync_runtime_view,
+        SimplyLoveGrooveStatsService, SubmitFooterCell, active_groovestats_service_name,
+        build_course_density_graph_mesh, build_fail_label_text, cached_fail_label_text,
+        course_graph_stage_spans, course_graph_stripe_actors, eval_grade_for_result,
+        eval_graph_cycle, eval_graph_pane_label, eval_graph_x, eval_pane_cycle, eval_pane_shift,
+        eval_pane_skip_duplicate, fail_seconds_remaining, graph_display_life_points,
+        leaderboard_requests, life_record_lerp_at, stage_in_stinger_texture_key,
+        submission_retry_available, submit_footer_gs_label, submit_footer_gs_label_for,
+        submit_footer_lines, sync_runtime_view,
     };
     use crate::assets::i18n;
     use crate::views::EvaluationRuntimeView;
@@ -956,6 +1124,36 @@ mod tests {
             Some("Author")
         );
         assert_eq!(text.cycled(-1.0).map(|line| line.as_ref()), Some("Author"));
+    }
+
+    #[test]
+    fn result_text_compiles_shared_actor_fields() {
+        let text = super::ResultText::new(
+            16,
+            "Artist",
+            Some(std::path::Path::new("Songs/Pack/Song/banner.png")),
+            "Title Mix".to_owned(),
+            "Title Mix".to_owned(),
+        );
+
+        assert_eq!(text.meter.as_ref(), "16");
+        assert_eq!(text.artist.as_ref(), "Artist");
+        assert!(text.banner_key.is_some());
+        assert_eq!(text.full_title(false).as_ref(), "Title Mix");
+        assert!(Arc::ptr_eq(text.full_title(false), text.full_title(true)));
+
+        let translated = super::ResultText::new(
+            9,
+            "Artist",
+            None,
+            "Original".to_owned(),
+            "Translated".to_owned(),
+        );
+        assert_eq!(translated.full_title(true).as_ref(), "Translated");
+        assert!(!Arc::ptr_eq(
+            translated.full_title(false),
+            translated.full_title(true)
+        ));
     }
 
     #[test]
@@ -1284,18 +1482,43 @@ mod tests {
     fn cell_text(cell: &SubmitFooterCell) -> String {
         let (prefix, suffix) = cell.sprite_render_parts();
         let mut s = String::with_capacity(prefix.len() + suffix.len() + 6);
-        s.push_str(&prefix);
+        s.push_str(prefix);
         s.push_str(icon_glyph(&cell.icon));
-        if matches!(cell.icon, CellIcon::Refresh) {
-            s.push(' ');
-            s.push_str(SUBMIT_FOOTER_F5_LABEL);
-        }
-        s.push_str(&suffix);
+        s.push_str(suffix);
         s
     }
 
     fn cells_text(cells: &[SubmitFooterCell]) -> Vec<String> {
         cells.iter().map(cell_text).collect()
+    }
+
+    #[test]
+    fn submit_presentation_reuses_text_until_source_changes() {
+        i18n::init_for_tests();
+        let mut presentation = super::SubmitPresentation::default();
+        let mut source = super::SubmitSource {
+            expected_gs: true,
+            gs_status: Some(score_data::GrooveStatsSubmitUiStatus::NetworkError),
+            record_banner: Some(score_data::GrooveStatsSubmitRecordBanner::PersonalBest),
+            gs_retry_secs: Some(4),
+            ..Default::default()
+        };
+
+        assert!(presentation.sync(source));
+        let generation = presentation.generation;
+        let prefix = Arc::clone(&presentation.cells[0].prefix);
+        assert_eq!(cells_text(&presentation.cells), vec!["[GS ⧗ 4s Network]"]);
+        assert_eq!(presentation.record_text.as_deref(), Some("Personal Best!"));
+        assert!(presentation.record_font.is_some());
+
+        assert!(!presentation.sync(source));
+        assert_eq!(presentation.generation, generation);
+        assert!(Arc::ptr_eq(&presentation.cells[0].prefix, &prefix));
+
+        source.gs_retry_secs = Some(3);
+        assert!(presentation.sync(source));
+        assert_eq!(presentation.generation, generation.wrapping_add(1));
+        assert_eq!(cells_text(&presentation.cells), vec!["[GS ⧗ 3s Network]"]);
     }
 
     #[test]
@@ -2219,6 +2442,69 @@ impl StepArtistText {
     }
 }
 
+/// Fixed actor-ready song and chart text compiled with an Evaluation result.
+///
+/// Each player owns one bounded record for the screen lifetime. Initialization
+/// formats the meter and titles and resolves the optional banner path; actor
+/// frames only borrow or clone shared strings. There are no live misses,
+/// growth, eviction, locking, or background work, and state teardown drops all
+/// values.
+#[derive(Clone, Debug)]
+struct ResultText {
+    meter: Arc<str>,
+    artist: Arc<str>,
+    banner_key: Option<Arc<str>>,
+    full_titles: [Arc<str>; 2],
+}
+
+impl ResultText {
+    fn empty() -> Self {
+        Self {
+            meter: Arc::from(""),
+            artist: Arc::from(""),
+            banner_key: None,
+            full_titles: std::array::from_fn(|_| Arc::from("")),
+        }
+    }
+
+    fn new(
+        meter: u32,
+        artist: &str,
+        banner_path: Option<&std::path::Path>,
+        full_title: String,
+        translit_title: String,
+    ) -> Self {
+        let full_title: Arc<str> = Arc::from(full_title);
+        let translit_title = if translit_title == full_title.as_ref() {
+            Arc::clone(&full_title)
+        } else {
+            Arc::from(translit_title)
+        };
+
+        Self {
+            meter: Arc::from(meter.to_string()),
+            artist: Arc::from(artist),
+            banner_key: banner_path.map(crate::assets::media_path_key),
+            full_titles: [full_title, translit_title],
+        }
+    }
+
+    fn from_score(score: &ScoreInfo) -> Self {
+        Self::new(
+            score.chart.meter,
+            &score.song.artist,
+            score.song.banner_path.as_deref(),
+            score.song.display_full_title(false),
+            score.song.display_full_title(true),
+        )
+    }
+
+    #[inline(always)]
+    fn full_title(&self, translit: bool) -> &Arc<str> {
+        &self.full_titles[usize::from(translit)]
+    }
+}
+
 #[inline]
 fn fnv1a_str(s: &str) -> u64 {
     let mut h = 0xcbf2_9ce4_8422_2325_u64;
@@ -2242,6 +2528,7 @@ pub struct State {
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
     /// Immutable per-result Nice eligibility compiled with `score_info`.
     nice_scores: [bool; MAX_PLAYERS],
+    result_text: [ResultText; MAX_PLAYERS],
     step_artist_text: [StepArtistText; MAX_PLAYERS],
     context: EvaluationContextView,
     favorites: [bool; MAX_PLAYERS],
@@ -2275,6 +2562,7 @@ pub struct State {
     submit_groovestats_fallback: [Option<score_data::GrooveStatsSubmitUiStatus>; MAX_PLAYERS],
     submit_arrowcloud_fallback: [Option<score_data::ArrowCloudSubmitUiStatus>; MAX_PLAYERS],
     submissions: [EvaluationSubmissionView; MAX_PLAYERS],
+    submit_text: [SubmitPresentation; MAX_PLAYERS],
     leaderboards_requested: [bool; MAX_PLAYERS],
     scoreboxes: [ScoreboxSideView; MAX_PLAYERS],
     groovestats_service: SimplyLoveGrooveStatsService,
@@ -2297,6 +2585,13 @@ pub struct State {
     chrome_cache: RefCell<Option<(ChromeCacheKey, Arc<[Actor]>)>>,
     /// Memoized center-column song-features frame (cf. `ChromeCacheKey`).
     song_features_cache: RefCell<Option<(ChromeCacheKey, Arc<[Actor]>)>>,
+    /// Game-thread-only, screen-lifetime layouts for at most two backend cells
+    /// per player. First draw and presentation/font changes perform at most six
+    /// bounded font measurements and allocate at most seven fragments; hits are
+    /// a key comparison and borrowed iteration. Replacement is immediate on
+    /// Evaluation (never gameplay), teardown drops entries on the game thread,
+    /// and the generation key is the miss/rebuild instrumentation.
+    submit_layout_cache: [RefCell<Option<(u64, SubmitLayout)>>; MAX_PLAYERS],
 }
 
 impl Clone for State {
@@ -2313,6 +2608,7 @@ impl Clone for State {
             stage_duration_seconds: self.stage_duration_seconds,
             score_info: self.score_info.clone(),
             nice_scores: self.nice_scores,
+            result_text: self.result_text.clone(),
             step_artist_text: self.step_artist_text.clone(),
             context: self.context.clone(),
             favorites: self.favorites,
@@ -2344,6 +2640,7 @@ impl Clone for State {
             submit_groovestats_fallback: self.submit_groovestats_fallback,
             submit_arrowcloud_fallback: self.submit_arrowcloud_fallback,
             submissions: self.submissions.clone(),
+            submit_text: self.submit_text.clone(),
             leaderboards_requested: self.leaderboards_requested,
             scoreboxes: self.scoreboxes.clone(),
             groovestats_service: self.groovestats_service,
@@ -2363,6 +2660,7 @@ impl Clone for State {
             graph_cache: std::array::from_fn(|_| RefCell::new(None)),
             chrome_cache: RefCell::new(None),
             song_features_cache: RefCell::new(None),
+            submit_layout_cache: std::array::from_fn(|_| RefCell::new(None)),
         }
     }
 }
@@ -2934,6 +3232,11 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
 
     let nice_scores =
         std::array::from_fn(|index| score_info[index].as_ref().is_some_and(score_info_is_nice));
+    let result_text = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map_or_else(ResultText::empty, ResultText::from_score)
+    });
     let step_artist_text = std::array::from_fn(|index| {
         score_info[index].as_ref().map_or_else(
             || StepArtistText::new("", "", ""),
@@ -2941,7 +3244,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         )
     });
 
-    State {
+    let mut state = State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // This will be overwritten by app
         bg: visual_style_bg::State::new(),
         screen_elapsed: 0.0,
@@ -2953,6 +3256,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         stage_duration_seconds,
         score_info,
         nice_scores,
+        result_text,
         step_artist_text,
         context,
         favorites: [false; MAX_PLAYERS],
@@ -2984,6 +3288,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         submit_groovestats_fallback: std::array::from_fn(|_| None),
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
         submissions: std::array::from_fn(|_| Default::default()),
+        submit_text: std::array::from_fn(|_| Default::default()),
         leaderboards_requested: [false; MAX_PLAYERS],
         scoreboxes: Default::default(),
         groovestats_service: Default::default(),
@@ -3000,7 +3305,10 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         graph_cache: std::array::from_fn(|_| RefCell::new(None)),
         chrome_cache: RefCell::new(None),
         song_features_cache: RefCell::new(None),
-    }
+        submit_layout_cache: std::array::from_fn(|_| RefCell::new(None)),
+    };
+    sync_submit_text(&mut state);
+    state
 }
 
 pub fn init_from_score_info(
@@ -3135,6 +3443,11 @@ pub fn init_from_score_info(
 
     let nice_scores =
         std::array::from_fn(|index| score_info[index].as_ref().is_some_and(score_info_is_nice));
+    let result_text = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map_or_else(ResultText::empty, ResultText::from_score)
+    });
     let step_artist_text = std::array::from_fn(|index| {
         score_info[index].as_ref().map_or_else(
             || StepArtistText::new("", "", ""),
@@ -3142,7 +3455,7 @@ pub fn init_from_score_info(
         )
     });
 
-    State {
+    let mut state = State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: visual_style_bg::State::new(),
         screen_elapsed: 0.0,
@@ -3154,6 +3467,7 @@ pub fn init_from_score_info(
         stage_duration_seconds,
         score_info,
         nice_scores,
+        result_text,
         step_artist_text,
         context,
         favorites: [false; MAX_PLAYERS],
@@ -3185,6 +3499,7 @@ pub fn init_from_score_info(
         submit_groovestats_fallback: std::array::from_fn(|_| None),
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
         submissions: std::array::from_fn(|_| Default::default()),
+        submit_text: std::array::from_fn(|_| Default::default()),
         leaderboards_requested: [false; MAX_PLAYERS],
         scoreboxes: Default::default(),
         groovestats_service: Default::default(),
@@ -3201,7 +3516,10 @@ pub fn init_from_score_info(
         graph_cache: std::array::from_fn(|_| RefCell::new(None)),
         chrome_cache: RefCell::new(None),
         song_features_cache: RefCell::new(None),
-    }
+        submit_layout_cache: std::array::from_fn(|_| RefCell::new(None)),
+    };
+    sync_submit_text(&mut state);
+    state
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app
@@ -3436,6 +3754,38 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
     }
 }
 
+fn submit_source(state: &State, player_idx: usize) -> SubmitSource {
+    let Some(score) = state.score_info[player_idx].as_ref() else {
+        return SubmitSource::default();
+    };
+    let submission = &state.submissions[player_idx];
+    SubmitSource {
+        service: state.groovestats_service,
+        machine_font: state.context.policy.machine_font,
+        expected_gs: score.expected_groovestats_submit,
+        expected_ac: score.expected_arrowcloud_submit,
+        gs_status: submission
+            .groovestats_status
+            .or(state.submit_groovestats_fallback[player_idx]),
+        ac_status: submission
+            .arrowcloud_status
+            .or(state.submit_arrowcloud_fallback[player_idx]),
+        record_banner: submission.record_banner,
+        gs_retry_secs: submission.groovestats_next_retry_secs,
+        ac_retry_secs: submission.arrowcloud_next_retry_secs,
+        gs_retry_auto: submission.groovestats_next_retry_is_auto,
+        ac_retry_auto: submission.arrowcloud_next_retry_is_auto,
+    }
+}
+
+fn sync_submit_text(state: &mut State) {
+    let sources: [SubmitSource; MAX_PLAYERS] =
+        std::array::from_fn(|player_idx| submit_source(state, player_idx));
+    for (presentation, source) in state.submit_text.iter_mut().zip(sources) {
+        presentation.sync(source);
+    }
+}
+
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: EvaluationRuntimeView) {
     if let Some(context) = view.context {
@@ -3456,6 +3806,7 @@ pub fn sync_runtime_view(state: &mut State, view: EvaluationRuntimeView) {
     if let Some(favorites) = view.favorites {
         state.favorites = favorites;
     }
+    sync_submit_text(state);
 }
 
 #[inline(always)]
@@ -3502,6 +3853,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     }
     sync_submit_event_progress(state);
     sync_missing_submit_status_fallbacks(state);
+    sync_submit_text(state);
     sync_submit_record_sfx(state);
     sync_nice_sfx(state);
     let play_style = state.context.play_style;
@@ -4738,7 +5090,12 @@ pub fn push_actors(
     let play_style = state.context.play_style;
     let player_side = state.context.player_side;
 
-    let Some(score_info) = state.score_info.iter().find_map(|s| s.as_ref()) else {
+    let Some((score_index, score_info)) = state
+        .score_info
+        .iter()
+        .enumerate()
+        .find_map(|(index, score)| score.as_ref().map(|score| (index, score)))
+    else {
         let no_data_text = tr("Evaluation", "NoScoreDataAvailable");
         let no_data_font =
             machine_font_key_for_text(policy.machine_font, FontRole::Header, &no_data_text);
@@ -4751,6 +5108,7 @@ pub fn push_actors(
         ));
         return;
     };
+    let result_text = &state.result_text[score_index];
 
     // --- Lower Stats Pane Background ---
     {
@@ -4790,7 +5148,7 @@ pub fn push_actors(
         // Both center-column frames are clock-free, so cache their built children and
         // emit `SharedFrame` (neutral tint/blend ⇒ identical compose to `Frame`),
         // cloning the cached `Arc` on subsequent frames instead of rebuilding the
-        // leaf actors and reallocating the `banner_key` / `full_title` Strings.
+        // leaf actors. Immutable song text is already compiled with the result.
         let chrome_key = ChromeCacheKey {
             active_color_index: state.active_color_index,
             translated_titles: policy.translated_titles,
@@ -4805,20 +5163,19 @@ pub fn push_actors(
         let title_children: Arc<[Actor]> = if title_hit {
             Arc::clone(&state.chrome_cache.borrow().as_ref().unwrap().1)
         } else {
-            let banner_key = score_info
-                .song
-                .banner_path
+            let banner_key = result_text
+                .banner_key
                 .as_ref()
-                .map(|p| p.to_string_lossy().into_owned())
+                .map(Arc::clone)
                 .unwrap_or_else(|| {
-                    BANNER_FALLBACK_KEYS[state.active_color_index.rem_euclid(12) as usize]
-                        .to_string()
+                    Arc::from(
+                        BANNER_FALLBACK_KEYS[state.active_color_index.rem_euclid(12) as usize],
+                    )
                 });
-            let full_title = score_info.song.display_full_title(policy.translated_titles);
             let children: Arc<[Actor]> = Arc::from(vec![
                 shared_banner::sprite(banner_key, 0.0, 66.0, 418.0, 164.0, 0.7, 0),
                 act!(quad: align(0.5, 0.5): xy(0.0, 0.0): setsize(418.0, 25.0): zoom(0.7): diffuse(0.117, 0.157, 0.184, sl_header_alpha): z(1)),
-                act!(text: font("miso"): settext(full_title): align(0.5, 0.5): xy(0.0, 0.0): maxwidth(418.0 * 0.7): z(2)),
+                act!(text: font("miso"): settext(Arc::clone(result_text.full_title(policy.translated_titles))): align(0.5, 0.5): xy(0.0, 0.0): maxwidth(418.0 * 0.7): z(2)),
             ]);
             *state.chrome_cache.borrow_mut() = Some((chrome_key, Arc::clone(&children)));
             children
@@ -4881,7 +5238,7 @@ pub fn push_actors(
 
             let children: Arc<[Actor]> = Arc::from(vec![
                 act!(quad: align(0.5, 0.5): xy(0.0, 0.0): setsize(418.0, 16.0): zoom(0.7): diffuse(0.117, 0.157, 0.184, sl_header_alpha): z(0) ),
-                act!(text: font("miso"): settext(score_info.song.artist.clone()): align(0.0, 0.5): xy(-145.0, 0.0): zoom(0.6): maxwidth(418.0 / 3.5): z(1) ),
+                act!(text: font("miso"): settext(Arc::clone(&result_text.artist)): align(0.0, 0.5): xy(-145.0, 0.0): zoom(0.6): maxwidth(418.0 / 3.5): z(1) ),
                 act!(text: font("miso"): settext(bpm_text): align(0.5, 0.5): xy(0.0, 0.0): zoom(0.6): maxwidth(418.0 / 0.875): z(1) ),
                 act!(text: font("miso"): settext(length_text): align(1.0, 0.5): xy(145.0, 0.0): zoom(0.6): z(1) ),
             ]);
@@ -5026,7 +5383,7 @@ pub fn push_actors(
                     ));
                     actors.push(act!(text:
                         font(machine_font_key(policy.machine_font, FontRole::Bold)):
-                        settext(si.chart.meter.to_string()):
+                        settext(Arc::clone(&state.result_text[player_idx].meter)):
                         align(0.5, 0.5):
                         xy(box_x, cy - 76.0):
                         zoom(0.55):
@@ -5085,7 +5442,7 @@ pub fn push_actors(
                     ));
                     actors.push(act!(text:
                         font(machine_font_key(policy.machine_font, FontRole::Bold)):
-                        settext(si.chart.meter.to_string()):
+                        settext(Arc::clone(&state.result_text[player_idx].meter)):
                         align(0.5, 0.5):
                         xy(box_x, cy - 71.0):
                         zoom(0.4):
@@ -6026,34 +6383,39 @@ pub fn push_actors(
                 continue;
             }
             let player_idx = profile_data::runtime_player_index(play_style, side);
-            let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
+            if state.score_info[player_idx].is_none() {
                 continue;
-            };
-            let submission = &state.submissions[player_idx];
-            if let Some(banner) = submission.record_banner {
+            }
+            let presentation = &state.submit_text[player_idx];
+            let layout_key = presentation.generation;
+            let layout_hit = state.submit_layout_cache[player_idx]
+                .borrow()
+                .as_ref()
+                .is_some_and(|(key, _)| *key == layout_key);
+            if !layout_hit {
+                let layout = build_submit_layout(asset_manager, presentation);
+                *state.submit_layout_cache[player_idx].borrow_mut() = Some((layout_key, layout));
+            }
+            let layout_slot = state.submit_layout_cache[player_idx].borrow();
+            let layout = &layout_slot.as_ref().expect("submit layout was populated").1;
+
+            if let (Some(banner_text), Some(banner_font)) =
+                (presentation.record_text.as_ref(), presentation.record_font)
+            {
                 let x = if side == profile_data::PlayerSide::P1 {
                     screen_center_x() - 225.0
                 } else {
                     screen_center_x() + 225.0
                 };
-                let banner_text = submit_record_text(banner);
-                let banner_font =
-                    machine_font_key_for_text(policy.machine_font, FontRole::Header, &banner_text);
-                let banner_w = measure_text_width(
-                    asset_manager,
-                    banner_font,
-                    &banner_text,
-                    AUTO_SUBMIT_RECORD_TEXT_ZOOM,
-                );
                 actors.push(act!(sprite("GrooveStats.png"):
                     align(1.0, 0.5):
-                    xy(x - banner_w * 0.5, AUTO_SUBMIT_RECORD_TEXT_Y):
+                    xy(x - layout.record_width * 0.5, AUTO_SUBMIT_RECORD_TEXT_Y):
                     zoom(AUTO_SUBMIT_GS_ICON_ZOOM):
                     z(100)
                 ));
                 actors.push(act!(text:
                     font(banner_font):
-                    settext(banner_text):
+                    settext(Arc::clone(banner_text)):
                     align(0.5, 0.5):
                     xy(x, AUTO_SUBMIT_RECORD_TEXT_Y):
                     zoom(AUTO_SUBMIT_RECORD_TEXT_ZOOM):
@@ -6065,24 +6427,7 @@ pub fn push_actors(
                     effectperiod(AUTO_SUBMIT_RECORD_TEXT_PERIOD)
                 ));
             }
-            let groovestats_status = submission
-                .groovestats_status
-                .or(state.submit_groovestats_fallback[player_idx]);
-            let arrowcloud_status = submission
-                .arrowcloud_status
-                .or(state.submit_arrowcloud_fallback[player_idx]);
-            let lines = submit_footer_lines_for_service(
-                state.groovestats_service,
-                si.expected_groovestats_submit,
-                si.expected_arrowcloud_submit,
-                groovestats_status,
-                arrowcloud_status,
-                submission.groovestats_next_retry_secs,
-                submission.arrowcloud_next_retry_secs,
-                submission.groovestats_next_retry_is_auto,
-                submission.arrowcloud_next_retry_is_auto,
-            );
-            if lines.is_empty() {
+            if presentation.cells.is_empty() {
                 continue;
             }
             let submit_center_x = if side == profile_data::PlayerSide::P1 {
@@ -6093,93 +6438,32 @@ pub fn push_actors(
             let base_y = screen_height() - 15.0;
             let frame = ((state.screen_elapsed.max(0.0) * SUBMIT_FOOTER_SPRITE_FPS) as u32)
                 % SUBMIT_FOOTER_SPRITE_FRAMES;
-            let sep_w = measure_footer_text_width(asset_manager, " ", SUBMIT_FOOTER_TEXT_ZOOM);
 
-            #[derive(Clone)]
-            enum FooterFrag {
-                Text {
-                    text: Arc<str>,
-                    width: f32,
-                },
-                Sprite {
-                    texture_key: &'static str,
-                    animated: bool,
-                    tint: [f32; 4],
-                    scale_y: f32,
-                },
-            }
-
-            let mut frags: Vec<FooterFrag> = Vec::with_capacity(lines.len() * 3);
-            for (idx, cell) in lines.iter().enumerate() {
-                if idx > 0 {
-                    frags.push(FooterFrag::Text {
-                        text: " ".into(),
-                        width: sep_w,
-                    });
-                }
-                let (prefix, suffix) = cell.sprite_render_parts();
-                let pw = measure_footer_text_width(asset_manager, &prefix, SUBMIT_FOOTER_TEXT_ZOOM);
-                frags.push(FooterFrag::Text {
-                    text: prefix,
-                    width: pw,
-                });
-                frags.push(FooterFrag::Sprite {
-                    texture_key: cell.sprite_texture_key(),
-                    animated: cell.icon_is_animated(),
-                    tint: cell.sprite_tint(),
-                    scale_y: cell.sprite_scale_y(),
-                });
-                // For the manual-retry icon (Refresh), append the "F5" key
-                // hint inside the brackets after the icon. e.g. `[GS ↻ F5 Network]`.
-                let suffix_text: Arc<str> = if matches!(cell.icon, CellIcon::Refresh) {
-                    let mut s = String::with_capacity(suffix.len() + 3);
-                    s.push(' ');
-                    s.push_str(SUBMIT_FOOTER_F5_LABEL);
-                    s.push_str(&suffix);
-                    s.into()
-                } else {
-                    suffix
-                };
-                let sw =
-                    measure_footer_text_width(asset_manager, &suffix_text, SUBMIT_FOOTER_TEXT_ZOOM);
-                frags.push(FooterFrag::Text {
-                    text: suffix_text,
-                    width: sw,
-                });
-            }
-
-            let total_w: f32 = frags
-                .iter()
-                .map(|f| match f {
-                    FooterFrag::Text { width, .. } => *width,
-                    FooterFrag::Sprite { .. } => SUBMIT_FOOTER_SPRITE_PX,
-                })
-                .sum();
-            let mut cursor = submit_center_x - total_w * 0.5;
-            for frag in frags {
+            let mut cursor = submit_center_x - layout.footer_width * 0.5;
+            for frag in &layout.frags {
                 match frag {
-                    FooterFrag::Text { text, width } => {
+                    SubmitFrag::Text { text, width } => {
                         actors.push(act!(text:
                             font("miso"):
-                            settext(text):
+                            settext(Arc::clone(text)):
                             align(0.0, 0.5):
                             xy(cursor, base_y):
                             zoom(SUBMIT_FOOTER_TEXT_ZOOM):
                             z(121):
                             diffuse(1.0, 1.0, 1.0, 1.0)
                         ));
-                        cursor += width;
+                        cursor += *width;
                     }
-                    FooterFrag::Sprite {
+                    SubmitFrag::Sprite {
                         texture_key,
                         animated,
                         tint,
                         scale_y,
                     } => {
-                        let icon_frame = if animated { frame } else { 0 };
-                        let [tr, tg, tb, ta] = tint;
-                        let h = SUBMIT_FOOTER_SPRITE_PX * scale_y;
-                        actors.push(act!(sprite(texture_key):
+                        let icon_frame = if *animated { frame } else { 0 };
+                        let [tr, tg, tb, ta] = *tint;
+                        let h = SUBMIT_FOOTER_SPRITE_PX * *scale_y;
+                        actors.push(act!(sprite(*texture_key):
                             align(0.0, 0.5):
                             xy(cursor, base_y):
                             setsize(SUBMIT_FOOTER_SPRITE_PX, h):

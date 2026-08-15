@@ -5,7 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [features]
-bench-support = []
+bench-support = ["deadsync-input-native/bench-support"]
 
 [[bench]]
 name = "dynamic_media_completion_budget"
@@ -14,6 +14,11 @@ required-features = ["bench-support"]
 
 [[bench]]
 name = "content_worker_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
+name = "input_capture_maintenance"
 harness = false
 required-features = ["bench-support"]
 

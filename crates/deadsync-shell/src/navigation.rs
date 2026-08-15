@@ -53,6 +53,7 @@ pub enum TransitionCompletion {
 pub struct TransitionFramePlan {
     pub tick_gameplay: bool,
     pub step_screen: bool,
+    pub sync_input_capture: bool,
     pub completion: Option<TransitionCompletion>,
 }
 
@@ -149,6 +150,7 @@ impl TransitionState {
         let mut plan = TransitionFramePlan {
             tick_gameplay: false,
             step_screen: false,
+            sync_input_capture: false,
             completion: None,
         };
         match self {
@@ -180,12 +182,14 @@ impl TransitionState {
                 plan.tick_gameplay = current_screen == Screen::Gameplay;
                 if *elapsed >= *duration {
                     *self = Self::Idle;
+                    plan.sync_input_capture = true;
                 }
             }
             Self::ActorsFadeIn { elapsed } => {
                 *elapsed += delta_time;
                 if *elapsed >= actor_fade_in_duration {
                     *self = Self::Idle;
+                    plan.sync_input_capture = true;
                 }
             }
         }
@@ -956,6 +960,7 @@ mod tests {
             TransitionFramePlan {
                 tick_gameplay: false,
                 step_screen: true,
+                sync_input_capture: false,
                 completion: None,
             }
         );
@@ -1001,6 +1006,7 @@ mod tests {
 
         assert!(plan.tick_gameplay);
         assert!(!plan.step_screen);
+        assert!(plan.sync_input_capture);
         assert!(matches!(transition, TransitionState::Idle));
     }
 
@@ -1019,6 +1025,7 @@ mod tests {
         let mut fade_in = TransitionState::ActorsFadeIn { elapsed: 0.6 };
         let plan = fade_in.advance_frame(0.05, Screen::Menu, 0.65);
         assert!(!plan.step_screen);
+        assert!(plan.sync_input_capture);
         assert!(matches!(fade_in, TransitionState::Idle));
     }
 }

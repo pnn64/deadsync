@@ -191,6 +191,7 @@ impl App {
         }
 
         apply_actor_entry_transition(&mut self.state.shell, target_screen);
+        self.sync_gameplay_input_capture();
         deadlib_present::runtime::clear_all();
     }
 
@@ -249,6 +250,7 @@ impl App {
             menu::reset_for_entry(&mut self.state.screens.menu_state);
             self.commit_screen_change(target);
             apply_actor_entry_transition(&mut self.state.shell, target);
+            self.sync_gameplay_input_capture();
             deadlib_present::runtime::clear_all();
             return;
         }
@@ -262,6 +264,7 @@ impl App {
             NavigationTransitionStart::DirectEntry { target } => {
                 self.commit_screen_change(target);
                 apply_actor_entry_transition(&mut self.state.shell, target);
+                self.sync_gameplay_input_capture();
                 deadlib_present::runtime::clear_all();
             }
             NavigationTransitionStart::Busy => {}
@@ -314,6 +317,7 @@ impl App {
             ProcessExitNavigationEffect::BeginFade { target } => {
                 let (_, out_duration) = self.get_out_transition_for_route(current, target);
                 apply_global_fade_out_transition(&mut self.state.shell, target, out_duration);
+                self.sync_gameplay_input_capture();
                 Vec::new()
             }
             ProcessExitNavigationEffect::Execute(command) => vec![command],

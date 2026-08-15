@@ -60,6 +60,8 @@ pub(crate) use frame_loop::FrameLoopState;
 pub(crate) use frame_pacing_trace::GameplayPacingTrace;
 pub(crate) use frame_stats::FrameStatsController;
 pub(crate) use input::UserEvent;
+#[cfg(feature = "bench-support")]
+pub use input::{benchmark_prepare_gameplay_capture, benchmark_sync_gameplay_capture};
 pub(crate) use input_trace::GameplayInputTrace;
 #[cfg(test)]
 pub(crate) use interaction::ExitIntent;
