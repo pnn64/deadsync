@@ -821,6 +821,10 @@ impl DynamicMedia {
         None
     }
 
+    pub(crate) fn gameplay_bg_pending(&self) -> bool {
+        !self.pending_gameplay_background_preps.is_empty()
+    }
+
     /// Whether the game-thread-owned background state needs no maintenance.
     ///
     /// A settled frame performs only bounded field/path comparisons. It does
@@ -1434,13 +1438,16 @@ mod tests {
         };
         let mut media = DynamicMedia::new();
 
+        assert!(!media.gameplay_bg_pending());
         assert!(media.gameplay_background_settled(None, None, false, timing));
 
         media
             .pending_gameplay_background_preps
             .insert("old.mp4".to_owned());
+        assert!(media.gameplay_bg_pending());
         assert!(!media.gameplay_background_settled(None, None, false, timing));
         media.pending_gameplay_background_preps.clear();
+        assert!(!media.gameplay_bg_pending());
 
         media.failed_gameplay_background_key = Some("old.mp4".to_owned());
         assert!(!media.gameplay_background_settled(None, None, false, timing));

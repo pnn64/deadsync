@@ -5449,6 +5449,8 @@ impl App {
         ) {
             return;
         }
+        let background_worker_pending = self.dynamic_media.gameplay_bg_pending();
+        let background_backend_ready = self.backend.is_some();
         let (bg_video_timing, foreground_videos_changed) = {
             let gs = match self.state.screens.current_screen {
                 CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_mut(),
@@ -5465,6 +5467,7 @@ impl App {
             };
             let foreground_videos_changed = gameplay::refresh_foreground_media(gs);
             let had_pending_background_change = gs.background_path_dirty;
+            let video_mode_changed = gs.background_allow_video != show_video_backgrounds;
             let mut background_changed = false;
             while let Some(change) = gs.background_changes.get(gs.next_background_change_ix) {
                 if gs.current_beat() < change.start_beat {
@@ -5480,7 +5483,7 @@ impl App {
             let old_path_key = should_track_transition.then(|| gs.current_background_key.clone());
             let old_texture_key =
                 should_track_transition.then(|| gs.background_texture_key.clone());
-            if gs.background_path_dirty || gs.background_allow_video != show_video_backgrounds {
+            if gs.background_path_dirty || video_mode_changed {
                 Self::refresh_gameplay_background_path(gs, show_video_backgrounds);
             }
             if should_track_transition
@@ -5496,22 +5499,31 @@ impl App {
                     deadsync_core::song_time::song_time_ns_to_seconds(gs.current_music_time_ns());
                 gameplay::begin_background_transition(gs, old_texture_key, &transition, start_time);
             }
-            let active_change = Self::active_gameplay_background_change(gs);
-            let bg_start_change = active_change.filter(|change| {
-                matches!(
-                    &change.target,
-                    deadsync_chart::SongBackgroundChangeTarget::File(path)
-                        if gs.current_background_path.as_ref() == Some(path)
-                )
-            });
+            let background_sync_due = had_pending_background_change
+                || background_changed
+                || video_mode_changed
+                || background_worker_pending;
+            if background_sync_due && !background_backend_ready {
+                gs.background_path_dirty = true;
+            }
             (
-                BgVideoTiming {
-                    current_sec: deadsync_core::song_time::song_time_ns_to_seconds(
-                        gs.current_music_time_ns(),
-                    ),
-                    start_sec: bg_start_change.and_then(|_| gs.active_background_start_sec()),
-                    rate: active_change.map_or(1.0, |change| change.rate),
-                },
+                (background_sync_due && background_backend_ready).then(|| {
+                    let active_change = Self::active_gameplay_background_change(gs);
+                    let bg_start_change = active_change.filter(|change| {
+                        matches!(
+                            &change.target,
+                            deadsync_chart::SongBackgroundChangeTarget::File(path)
+                                if gs.current_background_path.as_ref() == Some(path)
+                        )
+                    });
+                    BgVideoTiming {
+                        current_sec: deadsync_core::song_time::song_time_ns_to_seconds(
+                            gs.current_music_time_ns(),
+                        ),
+                        start_sec: bg_start_change.and_then(|_| gs.active_background_start_sec()),
+                        rate: active_change.map_or(1.0, |change| change.rate),
+                    }
+                }),
                 foreground_videos_changed,
             )
         };
@@ -5526,14 +5538,14 @@ impl App {
                 .map(|state| &state.gameplay),
             _ => None,
         };
-        let next_key = match (gs, self.backend.as_mut()) {
-            (Some(gs), Some(backend)) => self.dynamic_media.sync_gameplay_background(
+        let next_key = match (bg_video_timing, gs, self.backend.as_mut()) {
+            (Some(timing), Some(gs), Some(backend)) => self.dynamic_media.sync_gameplay_background(
                 &mut self.asset_manager,
                 backend,
                 gs.current_background_path.as_deref(),
                 gs.current_background_key.as_deref(),
                 show_video_backgrounds,
-                bg_video_timing,
+                timing,
             ),
             _ => None,
         };
@@ -7473,6 +7485,9 @@ impl App {
                 let background_path =
                     Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
                 commands.push(Command::SetDynamicBackground(background_path));
+                // Reconcile chart timing and any video fallback once after the
+                // deferred command installs the initial media.
+                gs.background_path_dirty = true;
                 let mut practice_state = practice::init(gs, practice_runtime_view);
                 if let Some(snapshot) = edit_snapshot {
                     practice::restore_edit_snapshot(&mut practice_state, snapshot);
@@ -7919,6 +7934,9 @@ impl App {
                 let background_path =
                     Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
                 commands.push(Command::SetDynamicBackground(background_path));
+                // Reconcile chart timing and any video fallback once after the
+                // deferred command installs the initial media.
+                gs.background_path_dirty = true;
                 self.state.screens.gameplay_state = Some(gs);
                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                     crate::gameplay_runtime::enter(gs, self.state.play_input_policy.smx_input);
