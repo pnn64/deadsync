@@ -4049,19 +4049,21 @@ fn gameplay_lobby_player_stats(
     })
 }
 
-fn update_lobby_machine_state(state: &State) -> ThemeEffect {
+fn append_lobby_machine_state(state: &State, effects: &mut Vec<ThemeEffect>) {
     if !lobby_data::can_update_machine_state(&state.runtime_view.lobby.snapshot) {
-        return ThemeEffect::None;
+        return;
     }
 
     let (p1_ready, p2_ready) = local_lobby_ready_tuple(state);
-    crate::effects::lobby(crate::SimplyLoveLobbyRequest::UpdateMachineStats {
-        screen_name: "ScreenGameplay",
-        p1_ready,
-        p2_ready,
-        p1_stats: gameplay_lobby_player_stats(state, profile_data::PlayerSide::P1),
-        p2_stats: gameplay_lobby_player_stats(state, profile_data::PlayerSide::P2),
-    })
+    effects.push(crate::effects::lobby(
+        crate::SimplyLoveLobbyRequest::UpdateMachineStats {
+            screen_name: "ScreenGameplay",
+            p1_ready,
+            p2_ready,
+            p1_stats: gameplay_lobby_player_stats(state, profile_data::PlayerSide::P1),
+            p2_stats: gameplay_lobby_player_stats(state, profile_data::PlayerSide::P2),
+        },
+    ));
 }
 
 fn local_lobby_ready_tuple(state: &State) -> (bool, bool) {
@@ -4430,24 +4432,25 @@ pub fn rival_score_type_for_side(
 ///
 /// Starting stage music only queues a gameplay audio command. The shell drains
 /// that command before it samples the stream clock for [`update`].
-pub fn prepare_update(state: &mut State) -> (bool, ThemeEffect) {
-    let mut effect = ThemeEffect::None;
+pub fn prepare_update(state: &mut State, effects: &mut Vec<ThemeEffect>) -> bool {
     if !state.lobby_music_started {
         if lobby_disconnect_hold_elapsed(state)
             .is_some_and(|elapsed| elapsed >= state.runtime_view.lobby.disconnect_hold_seconds)
         {
             clear_lobby_disconnect_holds(state);
-            effect = crate::effects::lobby(crate::SimplyLoveLobbyRequest::Disconnect);
+            effects.push(crate::effects::lobby(
+                crate::SimplyLoveLobbyRequest::Disconnect,
+            ));
             lobby_data::apply_local_lobby_disconnect(std::sync::Arc::make_mut(
                 &mut state.runtime_view.lobby.snapshot,
             ));
             state.runtime_view.lobby.reconnect_status_text = None;
         }
 
-        effect = ThemeEffect::sequence(effect, update_lobby_machine_state(state));
+        append_lobby_machine_state(state, effects);
 
         if gameplay_lobby_wait_active(state) {
-            return (false, effect);
+            return false;
         }
 
         clear_lobby_disconnect_holds(state);
@@ -4455,8 +4458,8 @@ pub fn prepare_update(state: &mut State) -> (bool, ThemeEffect) {
         state.start_stage_music();
         state.lobby_music_started = true;
     }
-    effect = ThemeEffect::sequence(effect, update_lobby_machine_state(state));
-    (true, effect)
+    append_lobby_machine_state(state, effects);
+    true
 }
 
 /// Advances deterministic gameplay using the shell-prepared audio snapshot.
@@ -4466,11 +4469,16 @@ pub fn update(
     delta_time: f32,
     audio_snapshot: GameplayAudioSnapshot,
     fallback_host_nanos: impl FnOnce() -> u64,
-) -> ThemeEffect {
+    effects: &mut Vec<ThemeEffect>,
+) {
     let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);
     match action {
-        GameplayAction::None => missed_target_effect(state).unwrap_or(ThemeEffect::None),
-        action => map_gameplay_action(action),
+        GameplayAction::None => {
+            if let Some(effect) = missed_target_effect(state) {
+                effects.push(effect);
+            }
+        }
+        action => effects.push(map_gameplay_action(action)),
     }
 }
 
@@ -4677,7 +4685,7 @@ pub fn report_smx_sensor_profile(state: &State) {
     smx_profile::maybe_report(state.runtime_view.policy.smx_profile_enabled);
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeEffect>) {
     let lobby_waiting = gameplay_lobby_wait_active(state);
     let joined_lobby = state.runtime_view.lobby.snapshot.joined_lobby.is_some();
     let lobby_hud_toggled = state.lobby_hud_visibility.handle_input(
@@ -4715,13 +4723,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             }
             _ => {}
         }
-        return ThemeEffect::None;
+        return;
     }
     if lobby_hud_toggled {
-        return ThemeEffect::None;
+        return;
     }
     let action = handle_core_input(state, ev);
-    map_gameplay_action(action)
+    map_gameplay_action(action).append_to(effects);
 }
 
 thread_local! {

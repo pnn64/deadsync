@@ -581,16 +581,21 @@ pub(crate) fn enter(state: &mut gameplay::State, smx_input: bool) {
     drain(state);
 }
 
+pub(crate) const MAX_UPDATE_EFFECTS: usize = 4;
+const MAX_INPUT_EFFECTS: usize = 1;
+
 pub(crate) fn update(
     state: &mut gameplay::State,
     delta_time: f32,
     smx_input: bool,
     score_cursor: &mut ScoreRuntimeCursor,
-) -> ThemeEffect {
+    effects: &mut Vec<ThemeEffect>,
+) {
+    let start_len = effects.len();
     crate::heart_rate::refresh_gameplay(state);
-    let (run_core, lobby_effect) = gameplay::prepare_update(state);
-    if !run_core {
-        return lobby_effect;
+    if !gameplay::prepare_update(state, effects) {
+        debug_assert!(effects.len() - start_len <= MAX_UPDATE_EFFECTS);
+        return;
     }
 
     refresh_smx_sensors(state, delta_time, smx_input);
@@ -600,11 +605,12 @@ pub(crate) fn update(
     // stream mapping on the same frame, matching the pre-boundary behavior.
     drain(state);
     let previous_song_lua_time = state.current_music_time_display();
-    let effect = gameplay::update(
+    gameplay::update(
         state,
         delta_time,
         snapshot(),
         deadlib_platform::host_time::now_nanos,
+        effects,
     );
     score_cursor.sync_if_dirty(state);
     drain(state);
@@ -615,13 +621,18 @@ pub(crate) fn update(
         current_song_lua_time,
         play_song_lua_sfx,
     );
-    ThemeEffect::sequence(lobby_effect, effect)
+    debug_assert!(effects.len() - start_len <= MAX_UPDATE_EFFECTS);
 }
 
-pub(crate) fn handle_input(state: &mut gameplay::State, ev: &InputEvent) -> ThemeEffect {
-    let effect = gameplay::handle_input(state, ev);
+pub(crate) fn handle_input(
+    state: &mut gameplay::State,
+    ev: &InputEvent,
+    effects: &mut Vec<ThemeEffect>,
+) {
+    let start_len = effects.len();
+    gameplay::handle_input(state, ev, effects);
     drain(state);
-    effect
+    debug_assert!(effects.len() - start_len <= MAX_INPUT_EFFECTS);
 }
 
 pub(crate) fn update_practice(

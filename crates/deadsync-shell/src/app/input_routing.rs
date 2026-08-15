@@ -182,6 +182,13 @@ impl App {
                 return Ok(());
             }
         }
+        if current_screen == CurrentScreen::Gameplay {
+            debug_assert!(self.theme_effect_scratch.is_empty());
+            if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
+                crate::gameplay_runtime::handle_input(gs, &ev, &mut self.theme_effect_scratch);
+            }
+            return self.drain_theme_effects(event_loop);
+        }
         if current_screen == CurrentScreen::SelectMusic {
             debug_assert!(self.theme_effect_scratch.is_empty());
             screens::select_music::handle_input(
@@ -305,13 +312,7 @@ impl App {
             CurrentScreen::Init => {
                 screens::init::handle_input(&mut self.state.screens.init_state, &ev)
             }
-            CurrentScreen::Gameplay => {
-                if let Some(gs) = &mut self.state.screens.gameplay_state {
-                    crate::gameplay_runtime::handle_input(gs, &ev)
-                } else {
-                    ThemeEffect::None
-                }
-            }
+            CurrentScreen::Gameplay => unreachable!("Gameplay input routed directly"),
             CurrentScreen::Practice => {
                 if let Some(ps) = &mut self.state.screens.practice_state {
                     crate::gameplay_runtime::handle_practice_input(ps, &ev)

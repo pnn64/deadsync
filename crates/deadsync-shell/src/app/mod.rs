@@ -496,27 +496,17 @@ pub fn benchmark_smx_screen_work(
 
 const MAX_TRANSITION_LOBBY_EFFECTS: usize = 3;
 
-fn append_lobby_effects(effect: ThemeEffect, effects: &mut Vec<ThemeEffect>) {
-    let start_len = effects.len();
-    match effect {
-        effect @ ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
-            SimplyLoveOnlineRequest::Lobby(_),
-        )) => effects.push(effect),
-        ThemeEffect::Batch(batch) => {
-            for effect in batch {
-                if matches!(
-                    effect,
-                    ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
-                        SimplyLoveOnlineRequest::Lobby(_)
-                    ))
-                ) {
-                    effects.push(effect);
-                }
-            }
-        }
-        _ => {}
-    }
-    debug_assert!(effects.len() - start_len <= MAX_TRANSITION_LOBBY_EFFECTS);
+fn retain_lobby_effects(effects: &mut Vec<ThemeEffect>) {
+    debug_assert!(effects.len() <= crate::gameplay_runtime::MAX_UPDATE_EFFECTS);
+    effects.retain(|effect| {
+        matches!(
+            effect,
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+                SimplyLoveOnlineRequest::Lobby(_)
+            ))
+        )
+    });
+    debug_assert!(effects.len() <= MAX_TRANSITION_LOBBY_EFFECTS);
 }
 
 fn gameplay_viewport(metrics: Metrics) -> GameplayViewport {
@@ -1131,18 +1121,18 @@ impl ScreensState {
         effects: &mut Vec<ThemeEffect>,
     ) {
         let (effect, _) = match self.current_screen {
-            CurrentScreen::Gameplay => self
-                .gameplay_state
-                .as_mut()
-                .map(|gs| {
+            CurrentScreen::Gameplay => {
+                if let Some(gs) = self.gameplay_state.as_mut() {
                     crate::gameplay_runtime::update(
                         gs,
                         delta_time,
                         gameplay_smx_input,
                         &mut self.gameplay_score_cursor,
-                    )
-                })
-                .map_or((None, false), |action| (Some(action), false)),
+                        effects,
+                    );
+                }
+                (None, false)
+            }
             CurrentScreen::Practice => self
                 .practice_state
                 .as_mut()
@@ -3099,13 +3089,14 @@ impl App {
             // Keep gameplay stepping under evaluation fades so late judgments
             // and HUD animations settle while transition input remains blocked.
             debug_assert!(self.theme_effect_scratch.is_empty());
-            let effect = crate::gameplay_runtime::update(
+            crate::gameplay_runtime::update(
                 gs,
                 delta_time,
                 self.state.play_input_policy.smx_input,
                 &mut self.state.screens.gameplay_score_cursor,
+                &mut self.theme_effect_scratch,
             );
-            append_lobby_effects(effect, &mut self.theme_effect_scratch);
+            retain_lobby_effects(&mut self.theme_effect_scratch);
         }
         if !self.theme_effect_scratch.is_empty() {
             let _ = self.drain_theme_effects(event_loop);
@@ -9228,15 +9219,15 @@ mod tests {
 
     #[test]
     fn transition_gameplay_keeps_only_lobby_runtime_effects() {
-        let effect = ThemeEffect::Batch(vec![
+        let mut effects = Vec::with_capacity(8);
+        effects.extend([
             ThemeEffect::Navigate(CurrentScreen::Evaluation),
             ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
                 SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::Disconnect),
             )),
         ]);
-        let mut effects = Vec::with_capacity(8);
 
-        append_lobby_effects(effect, &mut effects);
+        retain_lobby_effects(&mut effects);
 
         assert!(matches!(
             effects.as_slice(),
@@ -9249,12 +9240,10 @@ mod tests {
 
     #[test]
     fn transition_gameplay_retains_bounded_lobby_order() {
-        let effect = ThemeEffect::Batch(vec![
+        let mut effects = Vec::with_capacity(8);
+        effects.extend([
             ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
                 SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::Disconnect),
-            )),
-            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
-                SimplyLoveOnlineRequest::Reinitialize,
             )),
             ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
                 SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::UpdateMachineState {
@@ -9273,9 +9262,8 @@ mod tests {
                 }),
             )),
         ]);
-        let mut effects = Vec::with_capacity(8);
 
-        append_lobby_effects(effect, &mut effects);
+        retain_lobby_effects(&mut effects);
 
         assert!(matches!(
             effects.as_slice(),
