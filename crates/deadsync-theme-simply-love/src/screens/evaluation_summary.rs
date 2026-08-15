@@ -12,7 +12,7 @@ use crate::screens::components::shared::{
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PostSelectStageView, PostSongRuntimeView};
-use chrono::Local;
+use chrono::{DateTime, Local};
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_height, screen_width, widescale};
@@ -30,6 +30,56 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 
 const ROWS_PER_PAGE: usize = 4;
 
+/// Screen-local clock cache owned by the game thread.
+///
+/// It holds one value for the Summary screen lifetime, warms at screen init,
+/// checks the wall clock at most once per second, and allocates only when the
+/// displayed minute changes. There is no eviction or background work; dropping
+/// the screen destroys the value. Worst-case update cost is one clock read and
+/// one short string allocation in a frame, with no additional instrumentation
+/// beyond the cadence tests below.
+struct FooterClock {
+    check_elapsed: f32,
+    minute: i64,
+    text: Arc<str>,
+}
+
+impl FooterClock {
+    fn new() -> Self {
+        Self::at(Local::now())
+    }
+
+    fn at(now: DateTime<Local>) -> Self {
+        Self {
+            check_elapsed: 0.0,
+            minute: now.timestamp().div_euclid(60),
+            text: Arc::from(now.format("%Y/%m/%d %H:%M").to_string()),
+        }
+    }
+
+    fn update(&mut self, dt: f32) {
+        self.update_with(dt, Local::now);
+    }
+
+    fn update_with(&mut self, dt: f32, now: impl FnOnce() -> DateTime<Local>) {
+        if dt.is_finite() && dt > 0.0 {
+            self.check_elapsed += dt;
+        }
+        if self.check_elapsed < 1.0 {
+            return;
+        }
+        self.check_elapsed %= 1.0;
+
+        let now = now();
+        let minute = now.timestamp().div_euclid(60);
+        if minute == self.minute {
+            return;
+        }
+        self.minute = minute;
+        self.text = Arc::from(now.format("%Y/%m/%d %H:%M").to_string());
+    }
+}
+
 pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
@@ -38,6 +88,7 @@ pub struct State {
     pub return_to: Screen,
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; 2],
+    footer_clock: FooterClock,
     runtime: PostSongRuntimeView,
 }
 
@@ -54,12 +105,14 @@ pub fn init_for_return(runtime: PostSongRuntimeView, return_to: Screen) -> State
         return_to,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; 2],
+        footer_clock: FooterClock::new(),
         runtime,
     }
 }
 
 pub fn update(state: &mut State, dt: f32) {
     state.elapsed = (state.elapsed + dt).max(0.0);
+    state.footer_clock.update(dt);
 }
 
 #[inline(always)]
@@ -716,10 +769,9 @@ pub fn push_actors(
             ));
         }
 
-        let timestamp_text = Local::now().format("%Y/%m/%d %H:%M").to_string();
         actors.push(act!(text:
             font(machine_font_key(state.runtime.machine_font, FontRole::Numbers)):
-            settext(timestamp_text):
+            settext(Arc::clone(&state.footer_clock.text)):
             align(0.5, 1.0):
             xy(screen_center_x(), screen_height() - 14.0):
             zoom(0.18):
@@ -756,6 +808,44 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
+
+    #[test]
+    fn footer_clock_reads_once_per_second_and_formats_once_per_minute() {
+        let first = Local.timestamp_opt(0, 0).single().expect("valid timestamp");
+        let same_minute = Local
+            .timestamp_opt(30, 0)
+            .single()
+            .expect("valid timestamp");
+        let next_minute = Local
+            .timestamp_opt(60, 0)
+            .single()
+            .expect("valid timestamp");
+        let mut clock = FooterClock::at(first);
+        let first_text = Arc::clone(&clock.text);
+
+        clock.update_with(0.5, || panic!("clock read before cadence elapsed"));
+        assert!(Arc::ptr_eq(&clock.text, &first_text));
+
+        let mut reads = 0;
+        clock.update_with(0.5, || {
+            reads += 1;
+            same_minute
+        });
+        assert_eq!(reads, 1);
+        assert!(Arc::ptr_eq(&clock.text, &first_text));
+
+        clock.update_with(10.0, || {
+            reads += 1;
+            next_minute
+        });
+        assert_eq!(reads, 2);
+        assert!(!Arc::ptr_eq(&clock.text, &first_text));
+        assert_eq!(
+            clock.text.as_ref(),
+            next_minute.format("%Y/%m/%d %H:%M").to_string()
+        );
+    }
 
     #[test]
     fn profile_change_scan_matches_distinct_name_behavior() {
