@@ -194,10 +194,10 @@ use deadsync_theme_simply_love::views::{
 };
 use deadsync_theme_simply_love::{
     SimplyLoveConfigRequest, SimplyLoveContentRequest, SimplyLoveDebugRequest,
-    SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest, SimplyLoveLobbyRequest,
-    SimplyLoveMediaRequest, SimplyLoveOnlineRequest, SimplyLoveProfileImportEvent,
-    SimplyLoveProfileRequest, SimplyLoveQrLoginService, SimplyLoveRuntimeRequest,
-    SimplyLoveSyncOwner, SimplyLoveSyncRequest,
+    SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest,
+    SimplyLoveInputResult as ThemeInputResult, SimplyLoveLobbyRequest, SimplyLoveMediaRequest,
+    SimplyLoveOnlineRequest, SimplyLoveProfileImportEvent, SimplyLoveProfileRequest,
+    SimplyLoveQrLoginService, SimplyLoveRuntimeRequest, SimplyLoveSyncOwner, SimplyLoveSyncRequest,
 };
 
 /// Imperative effects to be executed by the shell.
@@ -3850,7 +3850,7 @@ impl App {
         }
 
         let commands = match action {
-            ThemeEffect::None | ThemeEffect::ConsumeInput => Vec::new(),
+            ThemeEffect::None => Vec::new(),
             ThemeEffect::Batch(_) => unreachable!("batched effects must be flat"),
             ThemeEffect::Navigate(screen) => {
                 self.handle_navigation_action(screen);
@@ -6561,22 +6561,42 @@ impl App {
     /* -------------------- keyboard: map -> route -------------------- */
 
     #[inline(always)]
+    fn handle_theme_input_result(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        result: ThemeInputResult,
+        label: &str,
+    ) -> bool {
+        let has_effect = !matches!(result.effect, ThemeEffect::None);
+        if has_effect && let Err(e) = self.handle_action(result.effect, event_loop) {
+            log::error!("Failed to handle {label} raw key action: {e}");
+        }
+        result.consumed || has_effect
+    }
+
+    #[inline(always)]
     fn handle_key_text(&mut self, event_loop: &ActiveEventLoop, text: &str) {
         let action = match raw_key_text_route(self.state.screens.current_screen) {
             RawKeyTextRoute::ManageLocalProfiles => screens::manage_local_profiles::handle_text(
                 &mut self.state.screens.manage_local_profiles_state,
                 text,
             ),
-            RawKeyTextRoute::Options => screens::options::handle_raw_key_event(
-                &mut self.state.screens.options_state,
-                None,
-                Some(text),
-            ),
-            RawKeyTextRoute::SelectMusic => screens::select_music::handle_raw_key_event(
-                &mut self.state.screens.select_music_state,
-                None,
-                Some(text),
-            ),
+            RawKeyTextRoute::Options => {
+                screens::options::handle_raw_key_event(
+                    &mut self.state.screens.options_state,
+                    None,
+                    Some(text),
+                )
+                .effect
+            }
+            RawKeyTextRoute::SelectMusic => {
+                screens::select_music::handle_raw_key_event(
+                    &mut self.state.screens.select_music_state,
+                    None,
+                    Some(text),
+                )
+                .effect
+            }
             RawKeyTextRoute::Ignore => ThemeEffect::None,
         };
         if matches!(action, ThemeEffect::None) {
@@ -6675,17 +6695,11 @@ impl App {
                 return true;
             }
             RawKeyScreenRoute::ManageLocalProfiles => {
-                let (consumed, action) = screens::manage_local_profiles::handle_raw_key_event(
+                let result = screens::manage_local_profiles::handle_raw_key_event(
                     &mut self.state.screens.manage_local_profiles_state,
                     &raw_key,
                 );
-                if !matches!(action, ThemeEffect::None) {
-                    if let Err(e) = self.handle_action(action, event_loop) {
-                        log::error!("Failed to handle ManageLocalProfiles raw key action: {e}");
-                    }
-                    return true;
-                }
-                if consumed {
+                if self.handle_theme_input_result(event_loop, result, "ManageLocalProfiles") {
                     return true;
                 }
             }
@@ -6713,31 +6727,25 @@ impl App {
                 }
             }
             RawKeyScreenRoute::Options => {
-                let action = screens::options::handle_raw_key_event(
+                let result = screens::options::handle_raw_key_event(
                     &mut self.state.screens.options_state,
                     Some(&raw_key),
                     None,
                 );
-                if !matches!(action, ThemeEffect::None) {
-                    if let Err(e) = self.handle_action(action, event_loop) {
-                        log::error!("Failed to handle Options raw key action: {e}");
-                    }
+                if self.handle_theme_input_result(event_loop, result, "Options") {
                     return true;
                 }
             }
             RawKeyScreenRoute::SelectMusic => {
                 // Route screen-specific raw key handling (e.g., F7 fetch) to the screen
-                let action = screens::select_music::handle_raw_key_event_with_modifiers(
+                let result = screens::select_music::handle_raw_key_event_with_modifiers(
                     &mut self.state.screens.select_music_state,
                     Some(&raw_key),
                     None,
                     ctrl_held,
                     shift_held,
                 );
-                if !matches!(action, ThemeEffect::None) {
-                    if let Err(e) = self.handle_action(action, event_loop) {
-                        log::error!("Failed to handle SelectMusic raw key action: {e}");
-                    }
+                if self.handle_theme_input_result(event_loop, result, "SelectMusic") {
                     return true;
                 }
             }
@@ -6749,14 +6757,11 @@ impl App {
                     .as_ref()
                     .is_some_and(|state| state.return_screen == CurrentScreen::SelectMusic);
                 if returns_to_select_music {
-                    let action = screens::select_music::handle_player_options_mute_hotkey(
+                    let result = screens::select_music::handle_player_options_mute_hotkey(
                         &mut self.state.screens.select_music_state,
                         &raw_key,
                     );
-                    if !matches!(action, ThemeEffect::None) {
-                        if let Err(e) = self.handle_action(action, event_loop) {
-                            log::error!("Failed to handle PlayerOptions mute shortcut: {e}");
-                        }
+                    if self.handle_theme_input_result(event_loop, result, "PlayerOptions mute") {
                         return true;
                     }
                 }
@@ -6775,15 +6780,8 @@ impl App {
                     return true;
                 }
                 if let Some(ps) = self.state.screens.practice_state.as_mut() {
-                    let (consumed, action) =
-                        crate::gameplay_runtime::handle_practice_raw_key(ps, &raw_key);
-                    if !matches!(action, ThemeEffect::None) {
-                        if let Err(e) = self.handle_action(action, event_loop) {
-                            log::error!("Failed to handle Practice raw key action: {e}");
-                        }
-                        return true;
-                    }
-                    if consumed {
+                    let result = crate::gameplay_runtime::handle_practice_raw_key(ps, &raw_key);
+                    if self.handle_theme_input_result(event_loop, result, "Practice") {
                         return true;
                     }
                 }

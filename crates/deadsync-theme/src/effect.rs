@@ -7,8 +7,6 @@
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ThemeEffect<S, R> {
     None,
-    /// Consume the current input edge without scheduling shell work.
-    ConsumeInput,
     /// Execute multiple effects in order. Construct batches through
     /// [`ThemeEffect::batch`] or [`ThemeEffect::sequence`] so this payload stays
     /// flat. Runtime owners must route each effect normally so redirects
@@ -20,6 +18,34 @@ pub enum ThemeEffect<S, R> {
     Exit,
     Shutdown,
     Runtime(R),
+}
+
+/// Result of theme-owned raw input handling.
+///
+/// Consumption controls whether the shell continues mapping the same physical
+/// edge. Scheduled work remains an independent effect sequence.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ThemeInputResult<S, R> {
+    pub consumed: bool,
+    pub effect: ThemeEffect<S, R>,
+}
+
+impl<S, R> ThemeInputResult<S, R> {
+    #[inline(always)]
+    pub const fn ignored() -> Self {
+        Self {
+            consumed: false,
+            effect: ThemeEffect::None,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn consumed(effect: ThemeEffect<S, R>) -> Self {
+        Self {
+            consumed: true,
+            effect,
+        }
+    }
 }
 
 /// The flow-only subset of [`ThemeEffect`].
@@ -106,14 +132,14 @@ impl<S: Copy, R> ThemeEffect<S, R> {
             Self::NavigateNoFade(screen) => Some(ThemeFlowEvent::NavigateNoFade(*screen)),
             Self::Exit => Some(ThemeFlowEvent::Exit),
             Self::Shutdown => Some(ThemeFlowEvent::Shutdown),
-            Self::None | Self::ConsumeInput | Self::Batch(_) | Self::Runtime(_) => None,
+            Self::None | Self::Batch(_) | Self::Runtime(_) => None,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ThemeEffect, ThemeFlowEvent};
+    use super::{ThemeEffect, ThemeFlowEvent, ThemeInputResult};
     use crate::ThemeScreenId;
 
     const MENU: ThemeScreenId = ThemeScreenId::new("menu");
@@ -126,13 +152,20 @@ mod tests {
         let runtime = ThemeEffect::<ThemeScreenId, u8>::Runtime(7);
         assert_eq!(runtime.flow_event(), None);
         assert_eq!(
-            ThemeEffect::<ThemeScreenId, ()>::ConsumeInput.flow_event(),
-            None
-        );
-        assert_eq!(
             ThemeEffect::<ThemeScreenId, ()>::Batch(vec![ThemeEffect::Navigate(MENU)]).flow_event(),
             None
         );
+    }
+
+    #[test]
+    fn input_consumption_is_independent_of_scheduled_work() {
+        let ignored = ThemeInputResult::<ThemeScreenId, u8>::ignored();
+        assert!(!ignored.consumed);
+        assert_eq!(ignored.effect, ThemeEffect::None);
+
+        let consumed = ThemeInputResult::consumed(ThemeEffect::<ThemeScreenId, u8>::Runtime(7));
+        assert!(consumed.consumed);
+        assert_eq!(consumed.effect, ThemeEffect::Runtime(7));
     }
 
     #[test]

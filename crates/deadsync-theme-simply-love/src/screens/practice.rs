@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::i18n::{self, LookupKey, lookup_key};
 use crate::assets::{AssetManager, FontRole, machine_font_key};
 use crate::screens::gameplay as gameplay_screen;
-use crate::screens::{Screen, ThemeEffect};
+use crate::screens::{Screen, ThemeEffect, ThemeInputResult};
 use crate::views::PracticeRuntimeView;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
@@ -612,9 +612,13 @@ pub fn handle_raw_key_event(
     state: &mut State,
     raw_key: &RawKeyboardEvent,
     snap_music_start: MusicStartSnap,
-) -> (bool, ThemeEffect) {
+) -> ThemeInputResult {
     let (consumed, effect) = handle_raw_key_event_inner(state, raw_key, snap_music_start);
-    (consumed, finish_effect(state, effect))
+    let effect = finish_effect(state, effect);
+    ThemeInputResult {
+        consumed: consumed || !matches!(effect, ThemeEffect::None),
+        effect,
+    }
 }
 
 fn handle_raw_key_event_inner(

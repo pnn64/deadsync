@@ -11,11 +11,13 @@ use deadsync_profile::compat as profile;
 use deadsync_profile_gameplay::{
     gameplay_runtime_profile_data, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
 };
-use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens::{gameplay, practice};
 use deadsync_theme_simply_love::views::{
     GameplayInitView, GameplayPolicyView, GameplayRuntimeView, GameplayScoreInitView,
     GameplayScoreRuntimeView, PracticeRuntimeView, SimplyLoveLobbyRuntimeView,
+};
+use deadsync_theme_simply_love::{
+    SimplyLoveEffect as ThemeEffect, SimplyLoveInputResult as ThemeInputResult,
 };
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
@@ -653,7 +655,7 @@ pub(crate) fn handle_practice_input(state: &mut practice::State, ev: &InputEvent
 pub(crate) fn handle_practice_raw_key(
     state: &mut practice::State,
     ev: &RawKeyboardEvent,
-) -> (bool, ThemeEffect) {
+) -> ThemeInputResult {
     let result =
         practice::handle_raw_key_event(state, ev, deadsync_audio_stream::snap_music_start_sec);
     drain(&mut state.gameplay);

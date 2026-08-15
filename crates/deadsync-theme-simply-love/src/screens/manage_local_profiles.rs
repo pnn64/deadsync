@@ -9,7 +9,7 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::transitions;
 use crate::screens::components::shared::visual_style_bg;
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ThemeEffect};
+use crate::screens::{Screen, ThemeEffect, ThemeInputResult};
 use crate::views::{LocalProfileView, ManageLocalProfilesView};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
@@ -1493,17 +1493,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     ThemeEffect::None
 }
 
-pub fn handle_raw_key_event(
-    state: &mut State,
-    key_event: &RawKeyboardEvent,
-) -> (bool, ThemeEffect) {
+pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> ThemeInputResult {
     if state.name_entry.is_none() {
-        return (false, ThemeEffect::None);
+        return ThemeInputResult::ignored();
     }
     if !key_event.pressed {
         // Let releases clear any keymap state established by the press that
         // opened this modal. Name entry ignores mapped release events.
-        return (false, ThemeEffect::None);
+        return ThemeInputResult::ignored();
     }
     match key_event.code {
         KeyCode::Backspace => {
@@ -1516,11 +1513,11 @@ pub fn handle_raw_key_event(
         }
         KeyCode::Escape if !key_event.repeat => cancel_name_entry(state),
         KeyCode::Enter | KeyCode::NumpadEnter if !key_event.repeat => {
-            return (true, confirm_name_entry(state));
+            return ThemeInputResult::consumed(confirm_name_entry(state));
         }
         _ => {}
     }
-    (true, ThemeEffect::None)
+    ThemeInputResult::consumed(ThemeEffect::None)
 }
 
 pub fn handle_text(state: &mut State, text: &str) -> ThemeEffect {
@@ -2897,15 +2894,13 @@ mod tests {
         let mut state = state_with_profile_row();
         begin_name_entry_rename(&mut state, "test-profile", "Chanc");
 
-        let (consumed, action) =
-            handle_raw_key_event(&mut state, &raw_key(KeyCode::KeyE, true, false));
-        assert!(consumed);
-        assert!(matches!(action, ThemeEffect::None));
-        let (release_consumed, release_action) =
-            handle_raw_key_event(&mut state, &raw_key(KeyCode::KeyE, false, false));
-        assert!(!release_consumed);
-        assert!(matches!(release_action, ThemeEffect::None));
-        if !consumed {
+        let result = handle_raw_key_event(&mut state, &raw_key(KeyCode::KeyE, true, false));
+        assert!(result.consumed);
+        assert!(matches!(result.effect, ThemeEffect::None));
+        let release = handle_raw_key_event(&mut state, &raw_key(KeyCode::KeyE, false, false));
+        assert!(!release.consumed);
+        assert!(matches!(release.effect, ThemeEffect::None));
+        if !result.consumed {
             let _ = press(&mut state, VirtualAction::p1_start);
         }
         let _ = handle_text(&mut state, "e");
@@ -2921,20 +2916,18 @@ mod tests {
         let mut state = state_with_profile_row();
         begin_name_entry_rename(&mut state, "test-profile", "Chance");
 
-        let (consumed, action) =
-            handle_raw_key_event(&mut state, &raw_key(KeyCode::Backspace, true, false));
-        assert!(consumed);
-        assert!(matches!(action, ThemeEffect::None));
+        let result = handle_raw_key_event(&mut state, &raw_key(KeyCode::Backspace, true, false));
+        assert!(result.consumed);
+        assert!(matches!(result.effect, ThemeEffect::None));
         assert_eq!(
             state.name_entry.as_ref().map(|entry| entry.value.as_str()),
             Some("Chanc")
         );
 
-        let (consumed, action) =
-            handle_raw_key_event(&mut state, &raw_key(KeyCode::Enter, true, false));
-        assert!(consumed);
+        let result = handle_raw_key_event(&mut state, &raw_key(KeyCode::Enter, true, false));
+        assert!(result.consumed);
         assert!(matches!(
-            action,
+            result.effect,
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
                 crate::SimplyLoveProfileRequest::RenameLocalProfile {
                     profile_id,
@@ -2943,10 +2936,9 @@ mod tests {
             )) if profile_id == "test-profile" && display_name == "Chanc"
         ));
 
-        let (consumed, action) =
-            handle_raw_key_event(&mut state, &raw_key(KeyCode::Escape, true, false));
-        assert!(consumed);
-        assert!(matches!(action, ThemeEffect::None));
+        let result = handle_raw_key_event(&mut state, &raw_key(KeyCode::Escape, true, false));
+        assert!(result.consumed);
+        assert!(matches!(result.effect, ThemeEffect::None));
         assert!(state.name_entry.is_none());
     }
 

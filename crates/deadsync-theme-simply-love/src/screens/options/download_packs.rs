@@ -344,18 +344,13 @@ pub fn handle_raw_key_event(
     state: &mut State,
     key: Option<&RawKeyboardEvent>,
     text: Option<&str>,
-) -> ThemeEffect {
+) -> ThemeInputResult {
     if !overlay_visible(&state.download_packs_overlay) {
-        return ThemeEffect::None;
+        return ThemeInputResult::ignored();
     }
     if let Some(outcome) = handle_raw_shortcut(&mut state.download_packs_overlay, key) {
         let effect = apply_outcome(state, outcome);
-        let effect = if matches!(effect, ThemeEffect::None) {
-            ThemeEffect::ConsumeInput
-        } else {
-            effect
-        };
-        return prepend_pending_sfx(state, effect);
+        return ThemeInputResult::consumed(prepend_pending_sfx(state, effect));
     }
     // Text entry owns keyboard keys so WASD-style pad mappings do not move the
     // list while typing. Arrows retain normal menu navigation, and the two
@@ -375,7 +370,7 @@ pub fn handle_raw_key_event(
                 )
         });
     if !owns_input {
-        return ThemeEffect::None;
+        return ThemeInputResult::ignored();
     }
     let outcome = handle_raw_input(
         &mut state.download_packs_overlay,
@@ -384,12 +379,7 @@ pub fn handle_raw_key_event(
         &state.stepmaniaonline_snapshot,
     );
     let effect = apply_outcome(state, outcome);
-    let effect = if matches!(effect, ThemeEffect::None) {
-        ThemeEffect::ConsumeInput
-    } else {
-        effect
-    };
-    prepend_pending_sfx(state, effect)
+    ThemeInputResult::consumed(prepend_pending_sfx(state, effect))
 }
 
 fn handle_raw_shortcut(

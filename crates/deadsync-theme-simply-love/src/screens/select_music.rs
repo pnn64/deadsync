@@ -19,7 +19,8 @@ use crate::screens::components::{
 };
 use crate::screens::pad_config;
 use crate::screens::{
-    DensityGraphSlot, DensityGraphSource, Screen, ThemeEffect, input as screen_input,
+    DensityGraphSlot, DensityGraphSource, Screen, ThemeEffect, ThemeInputResult,
+    input as screen_input,
 };
 use crate::views::{
     MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
@@ -9247,16 +9248,15 @@ fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEf
     ThemeEffect::None
 }
 
-fn handle_downloads_overlay_raw_key(
-    state: &mut State,
-    key: Option<&RawKeyboardEvent>,
-) -> Option<ThemeEffect> {
+fn handle_downloads_overlay_raw_key(state: &mut State, key: Option<&RawKeyboardEvent>) -> bool {
     if !downloads_overlay_visible(state) {
-        return None;
+        return false;
     }
-    let key = key?;
+    let Some(key) = key else {
+        return false;
+    };
     if key.code != KeyCode::F5 {
-        return None;
+        return false;
     }
     if key.pressed
         && !key.repeat
@@ -9268,7 +9268,7 @@ fn handle_downloads_overlay_raw_key(
         queue_sfx(state, "assets/sounds/start.ogg");
         queue_online(state, crate::SimplyLoveOnlineRequest::RetryUnlockDownloads);
     }
-    Some(ThemeEffect::ConsumeInput)
+    true
 }
 
 fn handle_srpg_shop_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
@@ -10728,8 +10728,10 @@ fn handle_mute_hotkey(
     state: &mut State,
     key: Option<&RawKeyboardEvent>,
     resume_immediately: bool,
-) -> Option<ThemeEffect> {
-    let key = key?;
+) -> bool {
+    let Some(key) = key else {
+        return false;
+    };
     if key.pressed
         && key.code == KeyCode::KeyM
         && !key.repeat
@@ -10737,14 +10739,21 @@ fn handle_mute_hotkey(
         && preview_hotkey_allowed(state)
     {
         toggle_preview_mute(state, resume_immediately);
-        return Some(ThemeEffect::ConsumeInput);
+        return true;
     }
-    None
+    false
 }
 
-pub fn handle_player_options_mute_hotkey(state: &mut State, key: &RawKeyboardEvent) -> ThemeEffect {
-    let effect = handle_mute_hotkey(state, Some(key), true).unwrap_or(ThemeEffect::None);
-    prepend_pending_runtime(state, effect)
+pub fn handle_player_options_mute_hotkey(
+    state: &mut State,
+    key: &RawKeyboardEvent,
+) -> ThemeInputResult {
+    let consumed = handle_mute_hotkey(state, Some(key), true);
+    let effect = prepend_pending_runtime(state, ThemeEffect::None);
+    ThemeInputResult {
+        consumed: consumed || !matches!(effect, ThemeEffect::None),
+        effect,
+    }
 }
 
 #[inline(always)]
@@ -10770,9 +10779,9 @@ pub fn handle_raw_key_event(
     state: &mut State,
     key: Option<&RawKeyboardEvent>,
     text: Option<&str>,
-) -> ThemeEffect {
-    let effect = handle_raw_key_event_impl(state, key, text, false, false);
-    prepend_pending_runtime(state, effect)
+) -> ThemeInputResult {
+    let result = handle_raw_key_event_impl(state, key, text, false, false);
+    finish_raw_key_result(state, result)
 }
 
 pub fn handle_raw_key_event_with_modifiers(
@@ -10781,33 +10790,40 @@ pub fn handle_raw_key_event_with_modifiers(
     text: Option<&str>,
     ctrl_held: bool,
     shift_held: bool,
-) -> ThemeEffect {
-    let effect = handle_raw_key_event_impl(state, key, text, ctrl_held, shift_held);
-    prepend_pending_runtime(state, effect)
+) -> ThemeInputResult {
+    let result = handle_raw_key_event_impl(state, key, text, ctrl_held, shift_held);
+    finish_raw_key_result(state, result)
 }
 
-fn handle_srpg_shop_raw_key(
-    state: &mut State,
-    key: Option<&RawKeyboardEvent>,
-) -> Option<ThemeEffect> {
+fn finish_raw_key_result(state: &mut State, result: ThemeInputResult) -> ThemeInputResult {
+    let effect = prepend_pending_runtime(state, result.effect);
+    ThemeInputResult {
+        consumed: result.consumed || !matches!(effect, ThemeEffect::None),
+        effect,
+    }
+}
+
+fn handle_srpg_shop_raw_key(state: &mut State, key: Option<&RawKeyboardEvent>) -> bool {
     if !srpg_shop_overlay_visible(state) {
         state.srpg_tab_held = false;
-        return None;
+        return false;
     }
-    let key = key?;
+    let Some(key) = key else {
+        return false;
+    };
     match key.code {
         KeyCode::Tab => {
             state.srpg_tab_held = key.pressed;
-            Some(ThemeEffect::ConsumeInput)
+            true
         }
         KeyCode::PageUp | KeyCode::PageDown => {
             if key.pressed && !key.repeat {
                 let direction = if key.code == KeyCode::PageUp { -1 } else { 1 };
                 srpg_shop_page(state, direction);
             }
-            Some(ThemeEffect::ConsumeInput)
+            true
         }
-        _ => None,
+        _ => false,
     }
 }
 
@@ -10817,15 +10833,15 @@ fn handle_raw_key_event_impl(
     text: Option<&str>,
     ctrl_held: bool,
     shift_held: bool,
-) -> ThemeEffect {
-    if let Some(effect) = handle_srpg_shop_raw_key(state, key) {
-        return effect;
+) -> ThemeInputResult {
+    if handle_srpg_shop_raw_key(state, key) {
+        return ThemeInputResult::consumed(ThemeEffect::None);
     }
     if state.reload_ui.is_some() {
-        return ThemeEffect::None;
+        return ThemeInputResult::ignored();
     }
     if state.song_delete_prompt.is_some() {
-        return ThemeEffect::None;
+        return ThemeInputResult::ignored();
     }
 
     if !matches!(
@@ -10836,7 +10852,7 @@ fn handle_raw_key_event_impl(
             pack_sync::hide_overlay(state);
             state.song_search_ignore_next_back_select = true;
         }
-        return ThemeEffect::None;
+        return ThemeInputResult::ignored();
     }
 
     if !matches!(state.sync_overlay, SyncOverlayState::Hidden) {
@@ -10847,7 +10863,7 @@ fn handle_raw_key_event_impl(
             hide_sync_overlay(state);
             state.song_search_ignore_next_back_select = true;
         }
-        return ThemeEffect::None;
+        return ThemeInputResult::ignored();
     }
 
     if !matches!(
@@ -10857,9 +10873,9 @@ fn handle_raw_key_event_impl(
         if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
             state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
             state.song_search_ignore_next_back_select = true;
-            return ThemeEffect::None;
+            return ThemeInputResult::ignored();
         }
-        return ThemeEffect::None;
+        return ThemeInputResult::ignored();
     }
     if state.pad_config_overlay_visible {
         // While the save name box is open, raw keys type the name (and keyboard
@@ -10894,7 +10910,7 @@ fn handle_raw_key_event_impl(
             }
             // Consume so this key isn't ALSO mapped to a virtual action and
             // re-processed (which would leak Enter/Back through to the pad UI).
-            return ThemeEffect::ConsumeInput;
+            return ThemeInputResult::consumed(ThemeEffect::None);
         }
         // Profiles management list: navigation / apply / set-default come through
         // virtual actions (handled in apply_edit); rename and delete are
@@ -10906,48 +10922,53 @@ fn handle_raw_key_event_impl(
                 match k.code {
                     KeyCode::KeyR => {
                         pad_config::begin_rename(&mut state.pad_config_overlay);
-                        return ThemeEffect::ConsumeInput;
+                        return ThemeInputResult::consumed(ThemeEffect::None);
                     }
                     KeyCode::Delete => {
                         if pad_config::delete_key(&mut state.pad_config_overlay) {
                             perform_pad_profile_delete(state);
                         }
-                        return ThemeEffect::ConsumeInput;
+                        return ThemeInputResult::consumed(ThemeEffect::None);
                     }
                     KeyCode::KeyO => {
                         perform_pad_profile_overwrite(state);
-                        return ThemeEffect::ConsumeInput;
+                        return ThemeInputResult::consumed(ThemeEffect::None);
                     }
                     _ => {}
                 }
             }
-            return ThemeEffect::None;
+            return ThemeInputResult::ignored();
         }
-        return ThemeEffect::None;
+        return ThemeInputResult::ignored();
     }
     if state.test_input_overlay_visible {
         if let Some(key) = key {
             test_input::apply_raw_key_event(&mut state.test_input_overlay, key);
         }
-        return ThemeEffect::None;
+        return ThemeInputResult::ignored();
     }
     if state.profile_switch_overlay.is_some() {
-        return ThemeEffect::None;
+        return ThemeInputResult::ignored();
     }
     if !matches!(state.lobby_overlay, lobby_overlay::OverlayState::Hidden) {
-        return handle_lobby_overlay_raw_key(state, key, text);
+        let effect = handle_lobby_overlay_raw_key(state, key, text);
+        return if matches!(effect, ThemeEffect::None) {
+            ThemeInputResult::ignored()
+        } else {
+            ThemeInputResult::consumed(effect)
+        };
     }
 
-    if let Some(effect) = handle_downloads_overlay_raw_key(state, key) {
-        return effect;
+    if handle_downloads_overlay_raw_key(state, key) {
+        return ThemeInputResult::consumed(ThemeEffect::None);
     }
 
-    if let Some(action) = handle_mute_hotkey(state, key, false) {
-        return action;
+    if handle_mute_hotkey(state, key, false) {
+        return ThemeInputResult::consumed(ThemeEffect::None);
     }
 
     if select_music_lobby_lock_text(state).is_some() {
-        return ThemeEffect::None;
+        return ThemeInputResult::ignored();
     }
 
     if key.is_some_and(|key| key.pressed) {
@@ -10957,7 +10978,7 @@ fn handle_raw_key_event_impl(
         ) && key.is_some_and(|key| key.code == KeyCode::Escape)
         {
             cancel_song_search(state);
-            return ThemeEffect::ConsumeInput;
+            return ThemeInputResult::consumed(ThemeEffect::None);
         }
         let mut prompt_start: Option<String> = None;
         let mut prompt_close = false;
@@ -10971,7 +10992,7 @@ fn handle_raw_key_event_impl(
                 match code {
                     KeyCode::Backspace => {
                         select_music_menu::song_search_backspace(entry);
-                        return ThemeEffect::ConsumeInput;
+                        return ThemeInputResult::consumed(ThemeEffect::None);
                     }
                     KeyCode::Escape => {
                         prompt_close = true;
@@ -10993,28 +11014,28 @@ fn handle_raw_key_event_impl(
 
             if let Some(search_text) = prompt_start {
                 start_song_search_results(state, search_text);
-                return ThemeEffect::ConsumeInput;
+                return ThemeInputResult::consumed(ThemeEffect::None);
             }
             if prompt_close {
                 cancel_song_search(state);
-                return ThemeEffect::ConsumeInput;
+                return ThemeInputResult::consumed(ThemeEffect::None);
             }
-            return ThemeEffect::None;
+            return ThemeInputResult::ignored();
         }
     } else if key.is_none()
         && let Some(text) = text
     {
         if take_song_search_ignored_text(state) {
-            return ThemeEffect::None;
+            return ThemeInputResult::ignored();
         }
         if let select_music_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
             select_music_menu::song_search_add_text(entry, text);
-            return ThemeEffect::None;
+            return ThemeInputResult::ignored();
         }
     }
 
     if !key.is_some_and(|key| key.pressed) {
-        return ThemeEffect::None;
+        return ThemeInputResult::ignored();
     }
     if let Some(key) = key
         && ctrl_held
@@ -11022,17 +11043,14 @@ fn handle_raw_key_event_impl(
         && !key.repeat
         && begin_song_delete_prompt(state)
     {
-        return ThemeEffect::ConsumeInput;
+        return ThemeInputResult::consumed(ThemeEffect::None);
     }
     if let Some(action) = configurable_shortcut_action(state, key) {
         let ignore_open_text = matches!(action, select_music_menu::Action::SongSearch);
-        // Consume the key even when the dispatched action itself reports
-        // ThemeEffect::None, so a successful raw shortcut stays single-action.
+        // Consume the key even when the dispatched action schedules no work,
+        // so a successful raw shortcut stays single-action.
         let side = state.session.player_side;
-        let action = match dispatch_menu_action(state, action, side) {
-            ThemeEffect::None => ThemeEffect::ConsumeInput,
-            other => other,
-        };
+        let effect = dispatch_menu_action(state, action, side);
         if ignore_open_text
             && matches!(
                 state.song_search,
@@ -11041,7 +11059,7 @@ fn handle_raw_key_event_impl(
         {
             state.song_search_ignore_next_text = true;
         }
-        return action;
+        return ThemeInputResult::consumed(effect);
     }
     if let Some(key) = key
         && ctrl_held
@@ -11053,7 +11071,7 @@ fn handle_raw_key_event_impl(
         && !key_bound_to_player_input(key)
         && let Some(effect) = reload_selected_song(state)
     {
-        return effect;
+        return ThemeInputResult::consumed(effect);
     }
     if let Some(key) = key
         && key.code == KeyCode::F7
@@ -11064,12 +11082,14 @@ fn handle_raw_key_event_impl(
             && let Some(chart) =
                 song.chart_for_steps_index(target_chart_type, state.selected_steps_index)
         {
-            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
-                crate::SimplyLoveOnlineRequest::FetchGrade(chart.short_hash.clone()),
+            return ThemeInputResult::consumed(ThemeEffect::Runtime(
+                crate::SimplyLoveRuntimeRequest::Online(
+                    crate::SimplyLoveOnlineRequest::FetchGrade(chart.short_hash.clone()),
+                ),
             ));
         }
     }
-    ThemeEffect::None
+    ThemeInputResult::ignored()
 }
 
 pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
@@ -14827,8 +14847,8 @@ mod tests {
     use crate::config::{
         GraphOrientation, GraphOrigin, SelectMusicSeriesSource, SelectMusicWheelStyle,
     };
-    use crate::screens::ThemeEffect;
     use crate::screens::components::select_music::music_wheel;
+    use crate::screens::{ThemeEffect, ThemeInputResult};
     use crate::views::ProfilePickerView;
     use deadlib_present::actors::Actor;
     use deadsync_chart::{SongData, SongPack, SyncPref};
@@ -15190,18 +15210,18 @@ mod tests {
             error_message: Some("timed out".to_string()),
         });
 
-        let effect =
+        let consumed =
             handle_downloads_overlay_raw_key(&mut state, Some(&raw_key(KeyCode::F5, true, false)));
-        assert!(matches!(effect, Some(ThemeEffect::ConsumeInput)));
+        assert!(consumed);
         assert!(matches!(
             state.pending_online.as_slice(),
             [crate::SimplyLoveOnlineRequest::RetryUnlockDownloads]
         ));
 
         state.pending_online.clear();
-        let effect =
+        let consumed =
             handle_downloads_overlay_raw_key(&mut state, Some(&raw_key(KeyCode::F5, true, true)));
-        assert!(matches!(effect, Some(ThemeEffect::ConsumeInput)));
+        assert!(consumed);
         assert!(state.pending_online.is_empty());
     }
 
@@ -15313,19 +15333,19 @@ mod tests {
         }
     }
 
-    fn assert_stop_then_consume(effect: ThemeEffect) {
-        let ThemeEffect::Batch(effects) = effect else {
-            panic!("expected stop-music request before consumed input");
-        };
+    fn assert_stop_then_consume(result: ThemeInputResult) {
+        assert!(result.consumed);
         assert!(matches!(
-            effects.as_slice(),
-            [
-                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
-                    deadsync_theme::AudioRequest::StopMusic
-                )),
-                ThemeEffect::ConsumeInput,
-            ]
+            result.effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::StopMusic
+            ))
         ));
+    }
+
+    fn assert_ignored(result: ThemeInputResult) {
+        assert!(!result.consumed);
+        assert!(matches!(result.effect, ThemeEffect::None));
     }
 
     #[test]
@@ -17351,7 +17371,8 @@ mod tests {
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
 
-        assert!(matches!(action, ThemeEffect::ConsumeInput));
+        assert!(action.consumed);
+        assert!(matches!(action.effect, ThemeEffect::None));
         assert!(!state.preview_music_muted);
         assert_eq!(state.time_since_selection_change, PREVIEW_DELAY_SECONDS);
     }
@@ -17376,17 +17397,12 @@ mod tests {
 
         let action =
             handle_player_options_mute_hotkey(&mut state, &raw_key(KeyCode::KeyM, true, false));
-        let ThemeEffect::Batch(effects) = action else {
-            panic!("expected play-music request before consumed input");
-        };
+        assert!(action.consumed);
         assert!(matches!(
-            effects.as_slice(),
-            [
-                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
-                    deadsync_theme::AudioRequest::PlayMusic { path, .. }
-                )),
-                ThemeEffect::ConsumeInput,
-            ] if path == &PathBuf::from("preview.ogg")
+            action.effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlayMusic { path, .. }
+            )) if path == PathBuf::from("preview.ogg")
         ));
         assert!(!state.preview_music_muted);
         assert_eq!(
@@ -17437,20 +17453,20 @@ mod tests {
         let mut state = init_placeholder();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, true)), None);
-        assert!(matches!(action, ThemeEffect::None));
+        assert_ignored(action);
         assert!(!state.preview_music_muted);
 
         state.song_search = super::select_music_menu::begin_song_search_prompt();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
-        assert!(matches!(action, ThemeEffect::None));
+        assert_ignored(action);
         assert!(!state.preview_music_muted);
 
         let mut state = init_placeholder();
         state.lobby_overlay = super::lobby_overlay::show_overlay();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
-        assert!(matches!(action, ThemeEffect::None));
+        assert_ignored(action);
         assert!(!state.preview_music_muted);
 
         let mut state = init_placeholder();
@@ -17458,7 +17474,7 @@ mod tests {
             super::select_music_menu::State::Visible(super::select_music_menu::open());
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
-        assert!(matches!(action, ThemeEffect::None));
+        assert_ignored(action);
         assert!(!state.preview_music_muted);
     }
 
@@ -17468,7 +17484,7 @@ mod tests {
         state.policy.interaction.song_search_shortcut = KeyCode::KeyQ;
         let default_action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyS, true, false)), None);
-        assert!(matches!(default_action, ThemeEffect::None));
+        assert_ignored(default_action);
 
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyQ, true, false)), None);
@@ -17487,11 +17503,11 @@ mod tests {
         assert_stop_then_consume(action);
 
         let action = handle_raw_key_event(&mut state, None, Some("s"));
-        assert!(matches!(action, ThemeEffect::None));
+        assert_ignored(action);
         assert_eq!(song_search_query(&state), Some(""));
 
         let action = handle_raw_key_event(&mut state, None, Some("abc"));
-        assert!(matches!(action, ThemeEffect::None));
+        assert_ignored(action);
         assert_eq!(song_search_query(&state), Some("abc"));
     }
 
@@ -17501,7 +17517,7 @@ mod tests {
         state.song_search = super::select_music_menu::begin_song_search_prompt();
 
         let action = handle_raw_key_event(&mut state, None, Some("n"));
-        assert!(matches!(action, ThemeEffect::None));
+        assert_ignored(action);
         assert_eq!(song_search_query(&state), Some("n"));
 
         let action = super::handle_input(
@@ -17519,7 +17535,7 @@ mod tests {
         state.song_search = super::select_music_menu::begin_song_search_prompt();
 
         let action = handle_raw_key_event(&mut state, None, Some("abc"));
-        assert!(matches!(action, ThemeEffect::None));
+        assert_ignored(action);
 
         for action in [VirtualAction::p1_back, VirtualAction::p2_select] {
             let screen_action = super::handle_input(
@@ -17538,7 +17554,7 @@ mod tests {
         state.song_search = super::select_music_menu::begin_song_search_prompt();
 
         let action = handle_raw_key_event(&mut state, None, Some("song"));
-        assert!(matches!(action, ThemeEffect::None));
+        assert_ignored(action);
         let action = super::handle_input(
             &mut state,
             &input_event(VirtualAction::p1_start, InputSource::Gamepad, true),
@@ -17550,7 +17566,8 @@ mod tests {
         let mut state = init_placeholder();
         state.song_search = super::select_music_menu::begin_song_search_prompt();
         let action = handle_raw_key_event(&mut state, None, Some("song"));
-        assert!(matches!(action, ThemeEffect::None));
+        assert!(!action.consumed);
+        assert!(matches!(action.effect, ThemeEffect::None));
         let action = super::handle_input(
             &mut state,
             &input_event(VirtualAction::p2_back, InputSource::Gamepad, true),
@@ -17568,25 +17585,29 @@ mod tests {
         let mut state = init_placeholder();
         state.song_search = super::select_music_menu::begin_song_search_prompt();
         let action = handle_raw_key_event(&mut state, None, Some("song"));
-        assert!(matches!(action, ThemeEffect::None));
+        assert!(!action.consumed);
+        assert!(matches!(action.effect, ThemeEffect::None));
         let action = handle_raw_key_event(
             &mut state,
             Some(&raw_key(KeyCode::Enter, true, false)),
             None,
         );
-        assert!(matches!(action, ThemeEffect::ConsumeInput));
+        assert!(action.consumed);
+        assert!(matches!(action.effect, ThemeEffect::None));
         assert_eq!(song_search_results_text(&state), Some("song"));
 
         let mut state = init_placeholder();
         state.song_search = super::select_music_menu::begin_song_search_prompt();
         let action = handle_raw_key_event(&mut state, None, Some("song"));
-        assert!(matches!(action, ThemeEffect::None));
+        assert!(!action.consumed);
+        assert!(matches!(action.effect, ThemeEffect::None));
         let action = handle_raw_key_event(
             &mut state,
             Some(&raw_key(KeyCode::Escape, true, false)),
             None,
         );
-        assert!(matches!(action, ThemeEffect::ConsumeInput));
+        assert!(action.consumed);
+        assert!(matches!(action.effect, ThemeEffect::None));
         assert!(matches!(
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
@@ -17600,7 +17621,8 @@ mod tests {
             Some(&raw_key(KeyCode::Escape, true, false)),
             None,
         );
-        assert!(matches!(action, ThemeEffect::ConsumeInput));
+        assert!(action.consumed);
+        assert!(matches!(action.effect, ThemeEffect::None));
         assert!(matches!(
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
@@ -17609,13 +17631,15 @@ mod tests {
         let mut state = init_placeholder();
         state.song_search = super::select_music_menu::begin_song_search_prompt();
         let action = handle_raw_key_event(&mut state, None, Some("ab"));
-        assert!(matches!(action, ThemeEffect::None));
+        assert!(!action.consumed);
+        assert!(matches!(action.effect, ThemeEffect::None));
         let action = handle_raw_key_event(
             &mut state,
             Some(&raw_key(KeyCode::Backspace, true, false)),
             None,
         );
-        assert!(matches!(action, ThemeEffect::ConsumeInput));
+        assert!(action.consumed);
+        assert!(matches!(action.effect, ThemeEffect::None));
         assert_eq!(song_search_query(&state), Some("a"));
     }
 
@@ -17686,7 +17710,7 @@ mod tests {
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyP, true, false)), None);
         assert!(!matches!(
-            action,
+            action.effect,
             ThemeEffect::Navigate(super::Screen::Practice)
         ));
 
@@ -17696,8 +17720,9 @@ mod tests {
         state.selected_index = 0;
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyP, true, false)), None);
+        assert!(action.consumed);
         assert!(matches!(
-            action,
+            action.effect,
             ThemeEffect::Navigate(super::Screen::Practice)
         ));
     }
@@ -17708,7 +17733,7 @@ mod tests {
         let mut state = init_placeholder();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyS, true, true)), None);
-        assert!(matches!(action, ThemeEffect::None));
+        assert_ignored(action);
         assert!(matches!(
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
@@ -17724,7 +17749,7 @@ mod tests {
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
         ));
-        assert!(!matches!(action, ThemeEffect::ConsumeInput));
+        assert_ignored(action);
 
         // The shortcut is suppressed while the exit prompt is showing.
         let mut state = init_placeholder();
@@ -17740,7 +17765,7 @@ mod tests {
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
         ));
-        assert!(!matches!(action, ThemeEffect::ConsumeInput));
+        assert_ignored(action);
     }
 
     #[test]
@@ -17751,14 +17776,14 @@ mod tests {
 
         let disabled =
             super::handle_raw_key_event_with_modifiers(&mut state, Some(&key), None, true, false);
-        assert!(matches!(disabled, ThemeEffect::None));
+        assert_ignored(disabled);
         assert!(state.song_delete_prompt.is_none());
 
         state.policy.allow_song_deletion = true;
         state.wheel_offset_from_selection = 0.25;
         let moving =
             super::handle_raw_key_event_with_modifiers(&mut state, Some(&key), None, true, false);
-        assert!(matches!(moving, ThemeEffect::None));
+        assert_ignored(moving);
         assert!(state.song_delete_prompt.is_none());
 
         state.wheel_offset_from_selection = 0.0;

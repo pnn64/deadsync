@@ -861,6 +861,8 @@ pub enum SimplyLoveRuntimeRequest {
 }
 
 pub type SimplyLoveEffect = deadsync_theme::ThemeEffect<SimplyLoveScreen, SimplyLoveRuntimeRequest>;
+pub type SimplyLoveInputResult =
+    deadsync_theme::ThemeInputResult<SimplyLoveScreen, SimplyLoveRuntimeRequest>;
 
 pub(crate) fn sfx(path: &str) -> SimplyLoveEffect {
     SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(
