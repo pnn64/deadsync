@@ -79,10 +79,9 @@ pub(super) fn apply_submenu_choice_delta(
                         VOLUME_MAX_PERCENT,
                     ) {
                         clear_render_cache(state);
-                        return Some(volume_change_effect(
-                            AudioVolumeTarget::Master,
-                            state.master_volume_pct as u8,
-                        ));
+                        let percent = state.master_volume_pct as u8;
+                        queue_volume_change(state, AudioVolumeTarget::Master, percent);
+                        return Some(ThemeEffect::None);
                     }
                     return None;
                 }
@@ -94,10 +93,9 @@ pub(super) fn apply_submenu_choice_delta(
                         VOLUME_MAX_PERCENT,
                     ) {
                         clear_render_cache(state);
-                        return Some(volume_change_effect(
-                            AudioVolumeTarget::Sfx,
-                            state.sfx_volume_pct as u8,
-                        ));
+                        let percent = state.sfx_volume_pct as u8;
+                        queue_volume_change(state, AudioVolumeTarget::Sfx, percent);
+                        return Some(ThemeEffect::None);
                     }
                     return None;
                 }
@@ -109,10 +107,9 @@ pub(super) fn apply_submenu_choice_delta(
                         VOLUME_MAX_PERCENT,
                     ) {
                         clear_render_cache(state);
-                        return Some(volume_change_effect(
-                            AudioVolumeTarget::AssistTick,
-                            state.assist_tick_volume_pct as u8,
-                        ));
+                        let percent = state.assist_tick_volume_pct as u8;
+                        queue_volume_change(state, AudioVolumeTarget::AssistTick, percent);
+                        return Some(ThemeEffect::None);
                     }
                     return None;
                 }
@@ -124,10 +121,9 @@ pub(super) fn apply_submenu_choice_delta(
                         VOLUME_MAX_PERCENT,
                     ) {
                         clear_render_cache(state);
-                        return Some(volume_change_effect(
-                            AudioVolumeTarget::Music,
-                            state.music_volume_pct as u8,
-                        ));
+                        let percent = state.music_volume_pct as u8;
+                        queue_volume_change(state, AudioVolumeTarget::Music, percent);
+                        return Some(ThemeEffect::None);
                     }
                     return None;
                 }
@@ -143,9 +139,9 @@ pub(super) fn apply_submenu_choice_delta(
             ) {
                 queue_sfx(state, "assets/sounds/change_value.ogg");
                 clear_render_cache(state);
-                return Some(audio_requests_effect(vec![
-                    AudioRequest::SetGlobalOffsetMillis(state.global_offset_ms),
-                ]));
+                let milliseconds = state.global_offset_ms;
+                queue_audio(state, AudioRequest::SetGlobalOffsetMillis(milliseconds));
+                return Some(ThemeEffect::None);
             }
             return None;
         }
@@ -841,20 +837,19 @@ pub(super) fn apply_submenu_choice_delta(
                 state.audio_options.output_device = device;
                 let current_rate = state.audio_options.sample_rate_hz;
                 let rate_choice = sample_rate_choice_index(state, current_rate);
-                let mut requests = vec![AudioRequest::SetOutputDevice(device)];
+                queue_audio(state, AudioRequest::SetOutputDevice(device));
                 if current_rate.is_some() && rate_choice == 0 {
                     state.audio_options.sample_rate_hz = None;
-                    requests.push(AudioRequest::SetSampleRate(None));
+                    queue_audio(state, AudioRequest::SetSampleRate(None));
                 }
                 set_sound_choice_index(state, SubRowId::AudioSampleRate, rate_choice);
-                action = Some(audio_requests_effect(requests));
+                action = Some(ThemeEffect::None);
             }
             SubRowId::AudioOutputMode => {
                 let mode = AudioOutputModeChoice::from_choice(new_index);
                 state.audio_options.output_mode = mode;
-                action = Some(audio_requests_effect(vec![AudioRequest::SetOutputMode(
-                    mode,
-                )]));
+                queue_audio(state, AudioRequest::SetOutputMode(mode));
+                action = Some(ThemeEffect::None);
                 #[cfg(target_os = "linux")]
                 set_sound_choice_index(state, SubRowId::AlsaExclusive, 0);
             }
@@ -863,7 +858,7 @@ pub(super) fn apply_submenu_choice_delta(
                 let backend_name =
                     linux_audio_backend_name_from_choice(state, new_index).to_owned();
                 state.audio_options.selected_backend_name = backend_name.clone();
-                let mut requests = vec![AudioRequest::SetOutputBackend(backend_name.clone())];
+                queue_audio(state, AudioRequest::SetOutputBackend(backend_name.clone()));
                 if backend_name.eq_ignore_ascii_case("ALSA") {
                     let exclusive_index = state.audio_options.output_mode.exclusive_choice_index();
                     set_sound_choice_index(state, SubRowId::AlsaExclusive, exclusive_index);
@@ -871,45 +866,40 @@ pub(super) fn apply_submenu_choice_delta(
                     if state.audio_options.output_mode == AudioOutputModeChoice::Exclusive {
                         let mode = selected_audio_output_mode(state);
                         state.audio_options.output_mode = mode;
-                        requests.push(AudioRequest::SetOutputMode(mode));
+                        queue_audio(state, AudioRequest::SetOutputMode(mode));
                     }
                     set_sound_choice_index(state, SubRowId::AlsaExclusive, 0);
                 }
-                action = Some(audio_requests_effect(requests));
+                action = Some(ThemeEffect::None);
             }
             #[cfg(target_os = "linux")]
             SubRowId::AlsaExclusive => {
                 let mode = selected_audio_output_mode(state).with_exclusive(new_index == 1);
                 state.audio_options.output_mode = mode;
-                action = Some(audio_requests_effect(vec![AudioRequest::SetOutputMode(
-                    mode,
-                )]));
+                queue_audio(state, AudioRequest::SetOutputMode(mode));
+                action = Some(ThemeEffect::None);
             }
             SubRowId::AudioSampleRate => {
                 let rate = sample_rate_from_choice(state, new_index);
                 state.audio_options.sample_rate_hz = rate;
-                action = Some(audio_requests_effect(vec![AudioRequest::SetSampleRate(
-                    rate,
-                )]));
+                queue_audio(state, AudioRequest::SetSampleRate(rate));
+                action = Some(ThemeEffect::None);
             }
             SubRowId::MineSounds => {
-                action = Some(audio_requests_effect(vec![AudioRequest::SetMineHitSound(
-                    new_index == 1,
-                )]));
+                queue_audio(state, AudioRequest::SetMineHitSound(new_index == 1));
+                action = Some(ThemeEffect::None);
             }
             SubRowId::RateModPreservesPitch => {
                 let enabled = new_index == 1;
                 state.audio_options.preserve_pitch = enabled;
-                action = Some(audio_requests_effect(vec![AudioRequest::SetPreservePitch(
-                    enabled,
-                )]));
+                queue_audio(state, AudioRequest::SetPreservePitch(enabled));
+                action = Some(ThemeEffect::None);
             }
             SubRowId::ReplayGain => {
                 let enabled = new_index == 1;
                 state.audio_options.replay_gain = enabled;
-                action = Some(audio_requests_effect(vec![AudioRequest::SetReplayGain(
-                    enabled,
-                )]));
+                queue_audio(state, AudioRequest::SetReplayGain(enabled));
+                action = Some(ThemeEffect::None);
             }
             _ => {}
         }

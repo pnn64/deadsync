@@ -970,6 +970,27 @@ fn press(
     effects
 }
 
+fn apply_choice_effects(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    delta: isize,
+    wrap: NavWrap,
+) -> Vec<ThemeEffect> {
+    let effect = apply_submenu_choice_delta(state, asset_manager, delta, wrap)
+        .expect("choice should change");
+    let mut effects = Vec::new();
+    append_pending_effects(state, effect, &mut effects);
+    effects
+}
+
+fn is_change_value_sfx(effect: &ThemeEffect) -> bool {
+    matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(path)))
+            if path == "assets/sounds/change_value.ogg"
+    )
+}
+
 fn dedicated_press(
     state: &mut State,
     asset_manager: &AssetManager,
@@ -1073,24 +1094,21 @@ fn sound_device_change_emits_output_and_invalid_rate_requests() {
     state.view = OptionsView::Submenu(SubmenuKind::Sound);
     select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::SoundDevice);
 
-    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Clamp)
-        .expect("device change should emit requests");
+    let effects = apply_choice_effects(&mut state, &asset_manager, 1, NavWrap::Clamp);
 
     assert_eq!(state.audio_options.output_device, Some(0));
     assert_eq!(state.audio_options.sample_rate_hz, None);
     assert_eq!(sample_rate_choice_index(&state, None), 0);
-    let ThemeEffect::Batch(effects) = effect else {
-        panic!("expected batched device/rate requests");
-    };
-    assert_eq!(effects.len(), 2);
+    assert_eq!(effects.len(), 3);
+    assert!(is_change_value_sfx(&effects[0]));
     assert!(matches!(
-        &effects[0],
+        &effects[1],
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
             AudioRequest::SetOutputDevice(Some(0))
         ))
     ));
     assert!(matches!(
-        &effects[1],
+        &effects[2],
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
             AudioRequest::SetSampleRate(None)
         ))
@@ -1112,43 +1130,54 @@ fn sound_runtime_toggles_emit_neutral_audio_requests() {
         SubmenuKind::Sound,
         SubRowId::RateModPreservesPitch,
     );
-    let pitch = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Clamp);
+    let pitch = apply_choice_effects(&mut state, &asset_manager, 1, NavWrap::Clamp);
+    assert_eq!(pitch.len(), 2);
+    assert!(is_change_value_sfx(&pitch[0]));
     assert!(matches!(
-        pitch,
-        Some(ThemeEffect::Runtime(
-            crate::SimplyLoveRuntimeRequest::Audio(AudioRequest::SetPreservePitch(true))
+        &pitch[1],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            AudioRequest::SetPreservePitch(true)
         ))
     ));
     assert!(state.audio_options.preserve_pitch);
 
     select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::ReplayGain);
-    let replay_gain = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Clamp);
+    let replay_gain = apply_choice_effects(&mut state, &asset_manager, 1, NavWrap::Clamp);
+    assert_eq!(replay_gain.len(), 2);
+    assert!(is_change_value_sfx(&replay_gain[0]));
     assert!(matches!(
-        replay_gain,
-        Some(ThemeEffect::Runtime(
-            crate::SimplyLoveRuntimeRequest::Audio(AudioRequest::SetReplayGain(true))
+        &replay_gain[1],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            AudioRequest::SetReplayGain(true)
         ))
     ));
     assert!(state.audio_options.replay_gain);
 
     set_sound_choice_index(&mut state, SubRowId::MineSounds, 0);
     select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::MineSounds);
-    let mine_sound = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Clamp);
+    let mine_sound = apply_choice_effects(&mut state, &asset_manager, 1, NavWrap::Clamp);
+    assert_eq!(mine_sound.len(), 2);
+    assert!(is_change_value_sfx(&mine_sound[0]));
     assert!(matches!(
-        mine_sound,
-        Some(ThemeEffect::Runtime(
-            crate::SimplyLoveRuntimeRequest::Audio(AudioRequest::SetMineHitSound(true))
+        &mine_sound[1],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            AudioRequest::SetMineHitSound(true)
         ))
     ));
 
     state.global_offset_ms = 0;
     select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::GlobalOffset);
-    let global_offset = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Clamp);
+    let global_offset = apply_choice_effects(&mut state, &asset_manager, 1, NavWrap::Clamp);
     assert!(matches!(
-        global_offset,
-        Some(ThemeEffect::Runtime(
-            crate::SimplyLoveRuntimeRequest::Audio(AudioRequest::SetGlobalOffsetMillis(1))
-        ))
+        global_offset.as_slice(),
+        [
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlaySfx(path)
+            )),
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::SetGlobalOffsetMillis(1)
+            ))
+        ] if path == "assets/sounds/change_value.ogg"
     ));
     assert_eq!(state.global_offset_ms, 1);
 }
@@ -1698,11 +1727,7 @@ fn volume_rows_emit_shell_request_before_feedback_sound() {
     state.view = OptionsView::Submenu(SubmenuKind::Sound);
     select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::MasterVolume);
 
-    let Some(ThemeEffect::Batch(effects)) =
-        apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
-    else {
-        panic!("volume adjustment should emit an ordered request batch");
-    };
+    let effects = apply_choice_effects(&mut state, &asset_manager, 1, NavWrap::Wrap);
     assert!(matches!(
         effects[0],
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
@@ -2348,6 +2373,40 @@ fn queued_sfx_precede_follow_up_runtime_work() {
     ));
     assert!(state.pending_sfx.is_empty());
     assert_eq!(state.pending_sfx.capacity(), pending_capacity);
+}
+
+#[test]
+fn queued_audio_follows_returned_work_without_spilling() {
+    let mut state = init();
+    queue_audio(&mut state, AudioRequest::SetSampleRate(Some(48_000)));
+    queue_audio(
+        &mut state,
+        AudioRequest::SetOutputMode(AudioOutputModeChoice::Shared),
+    );
+    assert!(!state.pending_audio.spilled());
+    let effect = ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+        crate::SimplyLoveConfigRequest::ShowOverlay(2),
+    ));
+
+    let mut effects = Vec::with_capacity(3);
+    append_pending_effects(&mut state, effect, &mut effects);
+
+    assert!(matches!(
+        effects.as_slice(),
+        [
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+                crate::SimplyLoveConfigRequest::ShowOverlay(2)
+            )),
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::SetSampleRate(Some(48_000))
+            )),
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::SetOutputMode(AudioOutputModeChoice::Shared)
+            ))
+        ]
+    ));
+    assert!(state.pending_audio.is_empty());
+    assert!(!state.pending_audio.spilled());
 }
 
 #[test]

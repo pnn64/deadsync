@@ -122,33 +122,19 @@ fn queue_sfx(state: &mut State, path: &'static str) {
     state.pending_sfx.push(path);
 }
 
-fn volume_change_effect(target: AudioVolumeTarget, percent: u8) -> ThemeEffect {
-    ThemeEffect::batch(vec![
-        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
-            AudioRequest::SetVolume { target, percent },
-        )),
-        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
-            AudioRequest::PlaySfx("assets/sounds/change_value.ogg".to_owned()),
-        )),
-    ])
+const MAX_PENDING_AUDIO_REQUESTS: usize = 2;
+
+fn queue_audio(state: &mut State, request: AudioRequest) {
+    state.pending_audio.push(request);
+    debug_assert!(state.pending_audio.len() <= MAX_PENDING_AUDIO_REQUESTS);
 }
 
-fn audio_requests_effect(requests: Vec<AudioRequest>) -> ThemeEffect {
-    let mut effects = requests
-        .into_iter()
-        .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(request)));
-    let Some(first) = effects.next() else {
-        return ThemeEffect::None;
-    };
-    let rest: Vec<_> = effects.collect();
-    if rest.is_empty() {
-        first
-    } else {
-        let mut batch = Vec::with_capacity(rest.len() + 1);
-        batch.push(first);
-        batch.extend(rest);
-        ThemeEffect::batch(batch)
-    }
+fn queue_volume_change(state: &mut State, target: AudioVolumeTarget, percent: u8) {
+    queue_audio(state, AudioRequest::SetVolume { target, percent });
+    queue_audio(
+        state,
+        AudioRequest::PlaySfx("assets/sounds/change_value.ogg".to_owned()),
+    );
 }
 
 fn select_music_config_effect(request: crate::SimplyLoveSelectMusicConfigRequest) -> ThemeEffect {
@@ -228,6 +214,12 @@ fn append_pending_effects(state: &mut State, effect: ThemeEffect, effects: &mut 
             .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(request))),
     );
     effect.append_to(effects);
+    effects.extend(
+        state
+            .pending_audio
+            .drain(..)
+            .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(request))),
+    );
 }
 
 pub fn apply_sync_analysis_events(state: &mut State, events: Vec<crate::SimplyLoveSyncEvent>) {
