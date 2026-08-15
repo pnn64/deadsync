@@ -354,6 +354,9 @@ pub(super) fn jump_to_setting(
     row_id: RowId,
     player_idx: usize,
 ) {
+    // Cancel any in-flight fade first, or completing it would call apply_pane
+    // -> reset_cursor and discard the cursor set below.
+    state.pane_transition = PaneTransition::None;
     if state.current_pane != pane {
         apply_pane(state, pane);
     }

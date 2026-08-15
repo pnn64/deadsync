@@ -4389,6 +4389,39 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn jump_survives_an_in_flight_pane_transition() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        assert_eq!(state.current_pane, OptionsPane::Main);
+
+        // Start a pane fade, then search and jump while it is still running.
+        super::switch_to_pane(&mut state, OptionsPane::Uncommon);
+        assert!(state.pane_transition.is_active());
+
+        open_search(&mut state);
+        search_key(&mut state, None, Some("turn"), false);
+        search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::Enter)),
+            None,
+            false,
+        );
+
+        // Let the (now cancelled) transition have a chance to complete.
+        for _ in 0..5 {
+            update(&mut state, 0.1, &asset_manager, &mut Vec::new());
+        }
+
+        assert_eq!(
+            state.current_pane,
+            OptionsPane::Advanced,
+            "a completing pane fade must not override the search jump"
+        );
+        let landed = state.pane().row_map.id_at(state.pane().selected_row[P1]);
+        assert_eq!(landed, RowId::Turn, "cursor must stay on the jumped-to row");
+    }
+
+    #[test]
     fn enter_jumps_to_matched_setting_across_panes() {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();
