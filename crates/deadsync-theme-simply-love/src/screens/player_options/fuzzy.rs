@@ -1,12 +1,11 @@
-//! Fuzzy matcher for the setting search.
+//! Domain-agnostic fuzzy matcher: callers pass a label plus any synonym
+//! aliases, so this is reusable beyond player options (the song wheel is next).
 //!
 //! Subsequence scoring (fzf-style) first; an edit-distance fallback via
 //! `strsim` runs only when that finds nothing, so typos like `prespective`
 //! still resolve without costing anything on normal queries.
 //!
 //! Scores are an ordering within a single query, not a stable scale.
-
-use super::row::RowId;
 
 const CONTIGUOUS_BONUS: i32 = 15;
 const BOUNDARY_BONUS: i32 = 10;
@@ -32,12 +31,12 @@ pub(super) fn query_chars(query: &str) -> Vec<char> {
         .collect()
 }
 
-/// Best score for a candidate label plus its aliases, or `None` when nothing
-/// matches (neither by subsequence nor within the typo threshold).
-pub(super) fn best_match_score(query: &[char], label: &str, id: RowId) -> Option<i32> {
+/// Best score across `label` and `aliases`, or `None` if nothing matches.
+/// Pass `&[]` when a domain has no synonyms.
+pub(super) fn best_match_score(query: &[char], label: &str, aliases: &[&str]) -> Option<i32> {
     let mut best = subsequence_score(query, label);
 
-    for alias in aliases(id) {
+    for alias in aliases {
         if let Some(score) = subsequence_score(query, alias) {
             let adjusted = score - ALIAS_PENALTY;
             best = Some(best.map_or(adjusted, |b| b.max(adjusted)));
@@ -158,36 +157,12 @@ fn is_word_boundary(cand: &[char], i: usize) -> bool {
     !prev.is_alphanumeric() || (prev.is_lowercase() && cur.is_uppercase())
 }
 
-/// Synonym keywords per row, so "cmod" or "arrows" resolve to the right setting.
-pub(super) fn aliases(id: RowId) -> &'static [&'static str] {
-    match id {
-        RowId::SpeedMod => &["speed", "cmod", "mmod", "xmod", "bpm", "rate"],
-        RowId::TypeOfSpeedMod => &["speed type", "cmod", "mmod", "xmod"],
-        RowId::NoteSkin => &["arrows", "skin", "notes"],
-        RowId::MineSkin => &["mines", "bombs"],
-        RowId::ReceptorSkin => &["receptors", "targets"],
-        RowId::BackgroundFilter => &["bg", "background", "darken", "brightness"],
-        RowId::Perspective => &["tilt", "hallway", "incoming", "overhead"],
-        RowId::Mini => &["small", "size", "zoom"],
-        RowId::MusicRate => &["rate", "speed", "tempo", "haste"],
-        RowId::VisualDelay => &["offset", "delay", "sync"],
-        RowId::GlobalOffsetShift => &["offset", "sync", "global"],
-        RowId::Hide => &["hide", "hidden", "targets", "danger"],
-        RowId::Scroll => &["reverse", "split", "cross", "centered"],
-        RowId::Turn => &["mirror", "left", "right", "shuffle"],
-        RowId::ErrorBar => &["error bar", "timing", "offset"],
-        RowId::MeasureCounter => &["measure", "counter", "stream"],
-        RowId::LifeMeterType => &["life", "health", "bar"],
-        RowId::JudgmentFont => &["judgment", "judgement", "font"],
-        RowId::ComboFont => &["combo", "font"],
-        RowId::HeartRateMonitor => &["heart rate", "hr", "bpm"],
-        _ => &[],
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const SPEED_ALIASES: &[&str] = &["speed", "cmod", "mmod", "xmod"];
+    const NOTESKIN_ALIASES: &[&str] = &["arrows", "skin", "notes"];
 
     fn score(query: &str, label: &str) -> Option<i32> {
         subsequence_score(&query_chars(query), label)
@@ -214,7 +189,7 @@ mod tests {
     fn typo_threshold_uses_char_counts_not_bytes() {
         // "Скор" is 4 chars but 8 bytes; a byte guard would skip the comparison.
         let q = query_chars("скол");
-        assert!(best_match_score(&q, "Скор", RowId::SpeedMod).is_some());
+        assert!(best_match_score(&q, "Скор", &[]).is_some());
     }
 
     #[test]
@@ -243,8 +218,8 @@ mod tests {
     #[test]
     fn better_label_ranks_higher_across_candidates() {
         let q = query_chars("speed");
-        let direct = best_match_score(&q, "Speed Mod", RowId::SpeedMod).unwrap();
-        let unrelated = best_match_score(&q, "Perspective", RowId::Perspective);
+        let direct = best_match_score(&q, "Speed Mod", SPEED_ALIASES).unwrap();
+        let unrelated = best_match_score(&q, "Perspective", &[]);
         assert!(unrelated.is_none() || direct > unrelated.unwrap());
     }
 
@@ -252,19 +227,19 @@ mod tests {
     fn alias_matches_when_label_differs() {
         let q = query_chars("arrows");
         assert!(subsequence_score(&q, "NoteSkin").is_none());
-        assert!(best_match_score(&q, "NoteSkin", RowId::NoteSkin).is_some());
+        assert!(best_match_score(&q, "NoteSkin", NOTESKIN_ALIASES).is_some());
     }
 
     #[test]
     fn typo_tolerance_resolves_misspellings() {
         let q = query_chars("prespective");
         assert!(subsequence_score(&q, "Perspective").is_none());
-        assert!(best_match_score(&q, "Perspective", RowId::Perspective).is_some());
+        assert!(best_match_score(&q, "Perspective", &[]).is_some());
     }
 
     #[test]
     fn typo_tolerance_rejects_unrelated() {
         let q = query_chars("xylophone");
-        assert!(best_match_score(&q, "Speed Mod", RowId::SpeedMod).is_none());
+        assert!(best_match_score(&q, "Speed Mod", SPEED_ALIASES).is_none());
     }
 }

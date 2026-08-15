@@ -77,6 +77,34 @@ fn clean_label(raw: &str) -> String {
     raw[..end].trim().to_string()
 }
 
+/// English synonym keywords matched alongside the localized label, so queries
+/// like "cmod" or "arrows" resolve. Lives here because `fuzzy` is domain-agnostic.
+fn row_aliases(id: RowId) -> &'static [&'static str] {
+    match id {
+        RowId::SpeedMod => &["speed", "cmod", "mmod", "xmod", "bpm", "rate"],
+        RowId::TypeOfSpeedMod => &["speed type", "cmod", "mmod", "xmod"],
+        RowId::NoteSkin => &["arrows", "skin", "notes"],
+        RowId::MineSkin => &["mines", "bombs"],
+        RowId::ReceptorSkin => &["receptors", "targets"],
+        RowId::BackgroundFilter => &["bg", "background", "darken", "brightness"],
+        RowId::Perspective => &["tilt", "hallway", "incoming", "overhead"],
+        RowId::Mini => &["small", "size", "zoom"],
+        RowId::MusicRate => &["rate", "speed", "tempo", "haste"],
+        RowId::VisualDelay => &["offset", "delay", "sync"],
+        RowId::GlobalOffsetShift => &["offset", "sync", "global"],
+        RowId::Hide => &["hide", "hidden", "targets", "danger"],
+        RowId::Scroll => &["reverse", "split", "cross", "centered"],
+        RowId::Turn => &["mirror", "left", "right", "shuffle"],
+        RowId::ErrorBar => &["error bar", "timing", "offset"],
+        RowId::MeasureCounter => &["measure", "counter", "stream"],
+        RowId::LifeMeterType => &["life", "health", "bar"],
+        RowId::JudgmentFont => &["judgment", "judgement", "font"],
+        RowId::ComboFont => &["combo", "font"],
+        RowId::HeartRateMonitor => &["heart rate", "hr", "bpm"],
+        _ => &[],
+    }
+}
+
 /// Build the ranked match list for `query` from the currently-visible rows.
 pub(super) fn rebuild_matches(state: &State, query: &str) -> Vec<SettingMatch> {
     let q = fuzzy::query_chars(query);
@@ -107,7 +135,7 @@ pub(super) fn rebuild_matches(state: &State, query: &str) -> Vec<SettingMatch> {
                     label,
                     score: 0,
                 });
-            } else if let Some(score) = fuzzy::best_match_score(&q, &label, id) {
+            } else if let Some(score) = fuzzy::best_match_score(&q, &label, row_aliases(id)) {
                 matches.push(SettingMatch {
                     row_id: id,
                     pane,
