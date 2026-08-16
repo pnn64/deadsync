@@ -48,9 +48,12 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     profile_boxes::out_transition()
 }
 
-#[inline(always)]
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    profile_boxes::handle_input(state, ev)
+pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeEffect>) {
+    if let profile_boxes::InputOutcome::Cancelled(screen) =
+        profile_boxes::handle_input(state, ev, effects)
+    {
+        effects.push(ThemeEffect::Navigate(screen));
+    }
 }
 
 #[inline(always)]
@@ -106,11 +109,12 @@ mod tests {
         let mut state = init(ProfilePickerView::default());
         set_joined(&mut state, true, false);
 
-        let ThemeEffect::Batch(effects) =
-            handle_input(&mut state, &press(deadsync_input::VirtualAction::p1_start))
-        else {
-            panic!("profile confirmation should return an ordered effect batch");
-        };
+        let mut effects = Vec::new();
+        handle_input(
+            &mut state,
+            &press(deadsync_input::VirtualAction::p1_start),
+            &mut effects,
+        );
         assert_eq!(effects.len(), 2);
         assert!(matches!(
             &effects[0],
@@ -136,11 +140,12 @@ mod tests {
         set_fast_switch(&mut state, true);
         set_joined(&mut state, true, false);
 
-        let ThemeEffect::Batch(effects) =
-            handle_input(&mut state, &press(deadsync_input::VirtualAction::p1_start))
-        else {
-            panic!("profile confirmation should return an ordered effect batch");
-        };
+        let mut effects = Vec::new();
+        handle_input(
+            &mut state,
+            &press(deadsync_input::VirtualAction::p1_start),
+            &mut effects,
+        );
         assert!(matches!(
             &effects[1],
             ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Profile(
@@ -154,16 +159,28 @@ mod tests {
         let mut state = init(ProfilePickerView::default());
         set_fast_switch(&mut state, true);
         set_joined(&mut state, false, false);
+        let mut effects = Vec::new();
+        handle_input(
+            &mut state,
+            &press(deadsync_input::VirtualAction::p1_back),
+            &mut effects,
+        );
         assert!(matches!(
-            handle_input(&mut state, &press(deadsync_input::VirtualAction::p1_back)),
-            ThemeEffect::Navigate(crate::screens::Screen::SelectMusic)
+            effects.as_slice(),
+            [ThemeEffect::Navigate(crate::screens::Screen::SelectMusic)]
         ));
 
         let mut state = init(ProfilePickerView::default());
         set_joined(&mut state, false, false);
+        let mut effects = Vec::new();
+        handle_input(
+            &mut state,
+            &press(deadsync_input::VirtualAction::p1_back),
+            &mut effects,
+        );
         assert!(matches!(
-            handle_input(&mut state, &press(deadsync_input::VirtualAction::p1_back)),
-            ThemeEffect::Navigate(crate::screens::Screen::Menu)
+            effects.as_slice(),
+            [ThemeEffect::Navigate(crate::screens::Screen::Menu)]
         ));
     }
 }

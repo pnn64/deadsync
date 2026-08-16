@@ -9364,69 +9364,26 @@ fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffec
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ProfileBoxEffectOutcome {
-    Continue,
-    Selected,
-    Cancelled,
-}
-
-fn profile_box_effect_outcome(effect: &ThemeEffect) -> ProfileBoxEffectOutcome {
-    let effects = match effect {
-        ThemeEffect::Batch(effects) => effects.as_slice(),
-        effect => std::slice::from_ref(effect),
-    };
-    effects
-        .iter()
-        .find_map(|effect| match effect {
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
-                crate::SimplyLoveProfileRequest::Select { .. },
-            )) => Some(ProfileBoxEffectOutcome::Selected),
-            ThemeEffect::Navigate(_) => Some(ProfileBoxEffectOutcome::Cancelled),
-            _ => None,
-        })
-        .unwrap_or(ProfileBoxEffectOutcome::Continue)
-}
-
-fn remove_profile_box_navigation(effect: ThemeEffect) -> ThemeEffect {
-    match effect {
-        ThemeEffect::Navigate(_) => ThemeEffect::None,
-        ThemeEffect::Batch(effects) => ThemeEffect::batch(
-            effects
-                .into_iter()
-                .filter(|effect| !matches!(effect, ThemeEffect::Navigate(_)))
-                .collect(),
-        ),
-        effect => effect,
-    }
-}
-
-fn route_profile_box_effect(effect: ThemeEffect) -> (ProfileBoxEffectOutcome, ThemeEffect) {
-    let outcome = profile_box_effect_outcome(&effect);
-    let effect = if outcome == ProfileBoxEffectOutcome::Cancelled {
-        remove_profile_box_navigation(effect)
-    } else {
-        effect
-    };
-    (outcome, effect)
-}
-
-fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+fn handle_profile_switch_overlay_input(
+    state: &mut State,
+    ev: &InputEvent,
+    effects: &mut Vec<ThemeEffect>,
+) -> ThemeEffect {
     if modal_blocks_arrow(state, ev.action) {
         return ThemeEffect::None;
     }
 
+    append_pending_runtime(state, ThemeEffect::None, effects);
     let Some(overlay) = &mut state.profile_switch_overlay else {
         return ThemeEffect::None;
     };
-    let (outcome, effect) = route_profile_box_effect(profile_boxes::handle_input(overlay, ev));
+    let outcome = profile_boxes::handle_input(overlay, ev, effects);
     match outcome {
-        ProfileBoxEffectOutcome::Selected => {
+        profile_boxes::InputOutcome::Selected => {
             state.profile_switch_overlay = None;
             state.profile_switch_overlay_is_late_join = false;
-            effect
         }
-        ProfileBoxEffectOutcome::Cancelled => {
+        profile_boxes::InputOutcome::Cancelled(_) => {
             let was_late_join = state.profile_switch_overlay_is_late_join;
             state.profile_switch_overlay = None;
             state.profile_switch_overlay_is_late_join = false;
@@ -9440,10 +9397,10 @@ fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> Th
             } else {
                 restore_select_music_menu_after_profile_overlay(state);
             }
-            effect
         }
-        ProfileBoxEffectOutcome::Continue => effect,
+        profile_boxes::InputOutcome::Continue => {}
     }
+    ThemeEffect::None
 }
 
 /// Revert the session to single-player after a late-join was cancelled from
@@ -11203,7 +11160,7 @@ fn handle_input_impl(
         return handle_test_input_overlay_input(state, ev);
     }
     if state.profile_switch_overlay.is_some() {
-        return handle_profile_switch_overlay_input(state, ev);
+        return handle_profile_switch_overlay_input(state, ev, effects);
     }
 
     if select_music_lobby_lock_text(state).is_some() {
@@ -14834,16 +14791,16 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 #[cfg(test)]
 mod tests {
     use super::{
-        PREVIEW_DELAY_SECONDS, ProfileBoxEffectOutcome, SyncGraphCols, WheelSortMode,
+        PREVIEW_DELAY_SECONDS, SyncGraphCols, WheelSortMode, append_pending_runtime,
         banner_texture_key, build_displayed_entries, build_playlist_entries_from_text,
         build_playlist_song_lookup, build_sync_heat_image, delayed_selection_updates_blocked,
-        first_song_entry_index, handle_downloads_overlay_raw_key, init_placeholder,
-        keymap_has_player_input, maybe_prewarm_replaygain_for_pack,
-        maybe_refresh_select_music_leaderboard, prepend_pending_effect, profile_boxes,
-        reset_preview_after_gameplay, route_profile_box_effect, select_music_lobby_lock_text,
-        select_music_lobby_lock_text_for, solo_runtime_side, steps_index_for_side,
-        sync_beat_axis_rows, sync_beat_marker_rows, sync_beat_row_y, sync_bias_axis_pos,
-        sync_graph_cols, sync_low_confidence_warning, sync_overlay_graph_size,
+        first_song_entry_index, handle_downloads_overlay_raw_key,
+        handle_profile_switch_overlay_input, init_placeholder, keymap_has_player_input,
+        maybe_prewarm_replaygain_for_pack, maybe_refresh_select_music_leaderboard,
+        prepend_pending_effect, profile_boxes, reset_preview_after_gameplay,
+        select_music_lobby_lock_text, select_music_lobby_lock_text_for, solo_runtime_side,
+        steps_index_for_side, sync_beat_axis_rows, sync_beat_marker_rows, sync_beat_row_y,
+        sync_bias_axis_pos, sync_graph_cols, sync_low_confidence_warning, sync_overlay_graph_size,
     };
     use crate::config::{
         GraphOrientation, GraphOrigin, SelectMusicSeriesSource, SelectMusicWheelStyle,
@@ -15455,23 +15412,21 @@ mod tests {
 
     #[test]
     fn embedded_profile_consumer_preserves_sound_before_selection() {
-        let effect = ThemeEffect::Batch(vec![
-            crate::effects::sfx("assets/sounds/start.ogg"),
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
-                crate::SimplyLoveProfileRequest::Select {
-                    p1: profile_data::ActiveProfile::Guest,
-                    p2: profile_data::ActiveProfile::Guest,
-                    p1_joined: true,
-                    p2_joined: false,
-                    fast_switch: true,
-                },
-            )),
-        ]);
+        let mut state = init_placeholder();
+        let mut overlay = profile_boxes::init(ProfilePickerView::default());
+        profile_boxes::set_fast_switch(&mut overlay, true);
+        profile_boxes::set_joined(&mut overlay, true, false);
+        state.profile_switch_overlay = Some(overlay);
+        let mut effects = Vec::with_capacity(2);
 
-        let (outcome, ThemeEffect::Batch(effects)) = route_profile_box_effect(effect) else {
-            panic!("embedded profile selection should remain an ordered batch");
-        };
-        assert_eq!(outcome, ProfileBoxEffectOutcome::Selected);
+        let effect = handle_profile_switch_overlay_input(
+            &mut state,
+            &input_event(VirtualAction::p1_start, InputSource::Keyboard, true),
+            &mut effects,
+        );
+        append_pending_runtime(&mut state, effect, &mut effects);
+
+        assert!(state.profile_switch_overlay.is_none());
         assert_eq!(effects.len(), 2);
         assert!(matches!(
             &effects[0],
@@ -15492,16 +15447,42 @@ mod tests {
 
     #[test]
     fn embedded_profile_consumer_forwards_sound_only_effects() {
-        let (outcome, effect) =
-            route_profile_box_effect(crate::effects::sfx("assets/sounds/expand.ogg"));
+        let mut overlay = profile_boxes::init(ProfilePickerView::default());
+        profile_boxes::set_joined(&mut overlay, false, false);
+        let mut effects = Vec::with_capacity(1);
+        let outcome = profile_boxes::handle_input(
+            &mut overlay,
+            &input_event(VirtualAction::p1_start, InputSource::Keyboard, true),
+            &mut effects,
+        );
 
-        assert_eq!(outcome, ProfileBoxEffectOutcome::Continue);
+        assert_eq!(outcome, profile_boxes::InputOutcome::Continue);
         assert!(matches!(
-            effect,
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            effects.as_slice(),
+            [ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 deadsync_theme::AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/expand.ogg"
+            ))] if path == "assets/sounds/start.ogg"
         ));
+    }
+
+    #[test]
+    fn embedded_profile_consumer_suppresses_cancel_navigation() {
+        let mut state = init_placeholder();
+        let mut overlay = profile_boxes::init(ProfilePickerView::default());
+        profile_boxes::set_fast_switch(&mut overlay, true);
+        profile_boxes::set_joined(&mut overlay, false, false);
+        state.profile_switch_overlay = Some(overlay);
+        let mut effects = Vec::with_capacity(1);
+
+        let effect = handle_profile_switch_overlay_input(
+            &mut state,
+            &input_event(VirtualAction::p1_back, InputSource::Keyboard, true),
+            &mut effects,
+        );
+        append_pending_runtime(&mut state, effect, &mut effects);
+
+        assert!(state.profile_switch_overlay.is_none());
+        assert!(effects.is_empty());
     }
 
     #[test]
@@ -15515,15 +15496,13 @@ mod tests {
         profile_boxes::set_fast_switch(&mut overlay, true);
         profile_boxes::enter_late_join(&mut overlay, joining_side);
 
-        let (outcome, ThemeEffect::Batch(effects)) =
-            route_profile_box_effect(profile_boxes::handle_input(
-                &mut overlay,
-                &input_event(VirtualAction::p2_start, InputSource::Keyboard, true),
-            ))
-        else {
-            panic!("late-join confirmation should remain an ordered effect batch");
-        };
-        assert_eq!(outcome, ProfileBoxEffectOutcome::Selected);
+        let mut effects = Vec::with_capacity(2);
+        let outcome = profile_boxes::handle_input(
+            &mut overlay,
+            &input_event(VirtualAction::p2_start, InputSource::Keyboard, true),
+            &mut effects,
+        );
+        assert_eq!(outcome, profile_boxes::InputOutcome::Selected);
         assert!(matches!(
             &effects[1],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(

@@ -189,6 +189,15 @@ impl App {
             }
             return self.drain_theme_effects(event_loop);
         }
+        if current_screen == CurrentScreen::SelectProfile {
+            debug_assert!(self.theme_effect_scratch.is_empty());
+            screens::select_profile::handle_input(
+                &mut self.state.screens.select_profile_state,
+                &ev,
+                &mut self.theme_effect_scratch,
+            );
+            return self.drain_theme_effects(event_loop);
+        }
         if current_screen == CurrentScreen::SelectMusic {
             debug_assert!(self.theme_effect_scratch.is_empty());
             screens::select_music::handle_input(
@@ -228,10 +237,7 @@ impl App {
                 self.sync_main_menu_runtime_view();
                 screens::menu::handle_input(&mut self.state.screens.menu_state, &ev)
             }
-            CurrentScreen::SelectProfile => screens::select_profile::handle_input(
-                &mut self.state.screens.select_profile_state,
-                &ev,
-            ),
+            CurrentScreen::SelectProfile => unreachable!("Select Profile uses the flat buffer"),
             CurrentScreen::SelectColor => {
                 screens::select_color::handle_input(&mut self.state.screens.select_color_state, &ev)
             }
