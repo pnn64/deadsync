@@ -1183,10 +1183,10 @@ impl ScreensState {
                 test_lights::update(&mut self.test_lights_state, delta_time),
                 false,
             ),
-            CurrentScreen::OverscanAdjustment => (
-                overscan_adjustment::update(&mut self.overscan_adjustment_state, delta_time),
-                false,
-            ),
+            CurrentScreen::OverscanAdjustment => {
+                overscan_adjustment::update(&mut self.overscan_adjustment_state, delta_time);
+                (None, false)
+            }
             CurrentScreen::SmxAssignPads => {
                 screens::smx_assign::update(
                     &mut self.smx_assign_state,

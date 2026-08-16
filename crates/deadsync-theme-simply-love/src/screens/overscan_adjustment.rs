@@ -89,9 +89,7 @@ pub fn on_enter(state: &mut State, view: OverscanAdjustmentView) {
     apply_preview(values);
 }
 
-pub fn update(_state: &mut State, _dt: f32) -> Option<ThemeEffect> {
-    None
-}
+pub fn update(_state: &mut State, _dt: f32) {}
 
 /// Raw keyboard handling for the per-field key bindings. Returns `true`
 /// when the key was consumed so it does not also fire as a virtual menu action
@@ -117,14 +115,12 @@ pub fn handle_raw_key_event(state: &mut State, ev: &RawKeyboardEvent) -> bool {
     true
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeEffect>) {
+    let start_len = effects.len();
     match crate::screens::overscan::handle_input(&mut state.edit, ev) {
-        OverscanAction::None => ThemeEffect::None,
-        OverscanAction::Preview(values) => {
-            apply_preview(values);
-            ThemeEffect::None
-        }
-        OverscanAction::Commit(values) => ThemeEffect::batch(vec![
+        OverscanAction::None => {}
+        OverscanAction::Preview(values) => apply_preview(values),
+        OverscanAction::Commit(values) => effects.extend([
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
                 crate::SimplyLoveConfigRequest::Overscan {
                     translate_x: values.translate_x,
@@ -137,9 +133,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         ]),
         OverscanAction::Cancel(values) => {
             apply_preview(values);
-            ThemeEffect::Navigate(Screen::Options)
+            effects.push(ThemeEffect::Navigate(Screen::Options));
         }
     }
+    debug_assert!(effects.len() - start_len <= 2);
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -310,6 +307,7 @@ mod tests {
     #[test]
     fn overscan_commit_emits_config_before_navigation() {
         let mut state = init();
+        let mut effects = Vec::with_capacity(8);
         on_enter(
             &mut state,
             OverscanAdjustmentView {
@@ -319,12 +317,11 @@ mod tests {
                 add_height: 4,
             },
         );
-        handle_input(&mut state, &press(VirtualAction::p1_right));
+        handle_input(&mut state, &press(VirtualAction::p1_right), &mut effects);
+        assert!(effects.is_empty());
+        handle_input(&mut state, &press(VirtualAction::p1_start), &mut effects);
 
-        let ThemeEffect::Batch(effects) = handle_input(&mut state, &press(VirtualAction::p1_start))
-        else {
-            panic!("overscan commit should batch persistence before navigation");
-        };
+        assert_eq!(effects.capacity(), 8);
         assert!(matches!(
             effects.as_slice(),
             [
@@ -338,6 +335,36 @@ mod tests {
                 )),
                 ThemeEffect::Navigate(Screen::Options),
             ]
+        ));
+    }
+
+    #[test]
+    fn overscan_cancel_restores_preview_before_navigation() {
+        let initial = Values {
+            translate_x: 1,
+            translate_y: 2,
+            add_width: 3,
+            add_height: 4,
+        };
+        let mut state = init();
+        let mut effects = Vec::with_capacity(8);
+        on_enter(
+            &mut state,
+            OverscanAdjustmentView {
+                translate_x: initial.translate_x,
+                translate_y: initial.translate_y,
+                add_width: initial.add_width,
+                add_height: initial.add_height,
+            },
+        );
+        handle_input(&mut state, &press(VirtualAction::p1_right), &mut effects);
+        handle_input(&mut state, &press(VirtualAction::p2_back), &mut effects);
+
+        assert_eq!(state.edit.values(), initial);
+        assert_eq!(effects.capacity(), 8);
+        assert!(matches!(
+            effects.as_slice(),
+            [ThemeEffect::Navigate(Screen::Options)]
         ));
     }
 }

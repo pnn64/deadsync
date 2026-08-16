@@ -250,6 +250,15 @@ impl App {
             }
             return self.drain_theme_effects(event_loop);
         }
+        if current_screen == CurrentScreen::OverscanAdjustment {
+            debug_assert!(self.theme_effect_scratch.is_empty());
+            screens::overscan_adjustment::handle_input(
+                &mut self.state.screens.overscan_adjustment_state,
+                &ev,
+                &mut self.theme_effect_scratch,
+            );
+            return self.drain_theme_effects(event_loop);
+        }
         if current_screen == CurrentScreen::SmxAssignPads {
             debug_assert!(self.theme_effect_scratch.is_empty());
             screens::smx_assign::handle_input(
@@ -303,10 +312,9 @@ impl App {
             CurrentScreen::TestLights => {
                 screens::test_lights::handle_input(&mut self.state.screens.test_lights_state, &ev)
             }
-            CurrentScreen::OverscanAdjustment => screens::overscan_adjustment::handle_input(
-                &mut self.state.screens.overscan_adjustment_state,
-                &ev,
-            ),
+            CurrentScreen::OverscanAdjustment => {
+                unreachable!("Overscan Adjustment input uses the flat buffer")
+            }
             CurrentScreen::SmxAssignPads => unreachable!("SMX Assign input uses the flat buffer"),
             CurrentScreen::SelectMusic => unreachable!("Select Music input routed directly"),
             CurrentScreen::SelectCourse => screens::select_course::handle_input(
