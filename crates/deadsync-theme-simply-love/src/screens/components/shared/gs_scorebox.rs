@@ -120,15 +120,61 @@ impl GameplayScoreboxPlan {
 }
 
 #[derive(Clone, Debug)]
-pub struct SelectMusicScoreboxView {
-    pub mode_text: String,
-    pub machine_name: String,
+pub(crate) struct SelectMusicScoreboxView {
+    pub mode_label: Arc<str>,
+    pub machine_name: Arc<str>,
     pub machine_score: Arc<str>,
-    pub player_name: String,
+    pub player_name: Arc<str>,
     pub player_score: Arc<str>,
-    pub rivals: [(String, Arc<str>); 3],
+    pub rivals: [(Arc<str>, Arc<str>); 3],
     pub show_rivals: bool,
-    pub loading_text: Option<String>,
+}
+
+/// Screen-owned actor-ready Select Music scorebox text.
+///
+/// The main thread owns three fixed views per side and rebuilds them only when
+/// the shell emits a changed chart/profile/score snapshot. Actor frames borrow
+/// one view and clone its Arcs. A chart mismatch selects the stale placeholder
+/// view, so a newly moved wheel row never displays the previous chart's
+/// records. There is no miss insertion, growth, eviction, or pruning.
+/// Replacement and final cache release happen on the main thread; frame-local
+/// actor Arc decrements remain bounded. Focused scorebox tests cover matched and
+/// stale selection, and performance pass 56 records allocation counts.
+/// Worst-case frame work is one chart comparison, one view branch, and eleven
+/// bounded Arc clones per visible side.
+#[derive(Clone, Debug)]
+pub(crate) struct SelectMusicScoreboxPresentation {
+    local: SelectMusicScoreboxView,
+    online: SelectMusicScoreboxView,
+    stale: SelectMusicScoreboxView,
+}
+
+impl SelectMusicScoreboxPresentation {
+    pub(crate) fn new(runtime: &ScoreboxSideView) -> Self {
+        let chart_present = runtime.chart_hash.is_some();
+        Self {
+            local: build_select_music_scorebox_view(runtime, true, chart_present, false),
+            online: build_select_music_scorebox_view(runtime, true, chart_present, true),
+            stale: build_select_music_scorebox_view(runtime, false, false, false),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn view(&self, chart_matches: bool, show_online: bool) -> &SelectMusicScoreboxView {
+        if !chart_matches {
+            &self.stale
+        } else if show_online {
+            &self.online
+        } else {
+            &self.local
+        }
+    }
+}
+
+impl Default for SelectMusicScoreboxPresentation {
+    fn default() -> Self {
+        Self::new(&ScoreboxSideView::default())
+    }
 }
 
 #[inline(always)]
@@ -194,6 +240,16 @@ fn rank_text(rank: u32) -> Arc<str> {
 #[inline(always)]
 fn owned_text(text: &str) -> Arc<str> {
     Arc::<str>::from(text)
+}
+
+#[inline(always)]
+fn placeholder_text() -> Arc<str> {
+    static PLACEHOLDER: OnceLock<Arc<str>> = OnceLock::new();
+    PLACEHOLDER.get_or_init(|| Arc::<str>::from("----")).clone()
+}
+
+fn score_mode_label(mode: &str) -> Arc<str> {
+    Arc::<str>::from(format!("{mode} Score"))
 }
 
 fn local_self_machine_tag(view: &ScoreboxSideView) -> Option<String> {
@@ -295,44 +351,44 @@ pub(crate) fn entries_with_local_self_state<'a>(
     Cow::Borrowed(pane.entries.as_slice())
 }
 
-#[inline(always)]
-pub fn select_music_scorebox_view(
+fn build_select_music_scorebox_view(
     runtime: &ScoreboxSideView,
-    chart_hash: Option<&str>,
+    chart_matches: bool,
+    chart_present: bool,
     show_rivals: bool,
 ) -> SelectMusicScoreboxView {
-    let chart_matches = runtime.chart_hash.as_deref() == chart_hash;
     let fallback_player = chart_matches
         .then_some(runtime.local_itg)
         .flatten()
         .filter(|score| !score.failed || score.score_10000 > 0.0)
         .map(|score| {
             (
-                runtime.player_initials.to_string(),
+                Arc::clone(&runtime.player_initials),
                 score_text_with_percent(score.score_10000),
             )
         })
-        .unwrap_or_else(|| ("----".to_string(), unknown_score_percent_text()));
+        .unwrap_or_else(|| (placeholder_text(), unknown_score_percent_text()));
     let fallback_machine = chart_matches
         .then_some(runtime.machine_itg.as_ref())
         .flatten()
         .filter(|score| !score.failed || score.score_10000 > 0.0)
         .map(|score| {
             (
-                score.name.clone(),
+                Arc::<str>::from(score.name.as_str()),
                 score_text_with_percent(score.score_10000),
             )
         })
-        .unwrap_or_else(|| ("----".to_string(), unknown_score_percent_text()));
+        .unwrap_or_else(|| (placeholder_text(), unknown_score_percent_text()));
     let mut view = SelectMusicScoreboxView {
-        mode_text: score_data::default_scorebox_mode_text(runtime.show_ex_score).to_string(),
+        mode_label: score_mode_label(score_data::default_scorebox_mode_text(
+            runtime.show_ex_score,
+        )),
         machine_name: fallback_machine.0,
         machine_score: fallback_machine.1,
         player_name: fallback_player.0,
         player_score: fallback_player.1,
-        rivals: std::array::from_fn(|_| ("----".to_string(), unknown_score_percent_text())),
+        rivals: std::array::from_fn(|_| (placeholder_text(), unknown_score_percent_text())),
         show_rivals: false,
-        loading_text: None,
     };
 
     if !show_rivals || !runtime.groovestats_active || !chart_matches {
@@ -342,13 +398,13 @@ pub fn select_music_scorebox_view(
     if !score_data::select_music_scorebox_filter_has_any(filter) {
         return view;
     }
-    view.machine_name = "----".to_string();
+    view.machine_name = placeholder_text();
     view.machine_score = unknown_score_percent_text();
-    view.player_name = "----".to_string();
+    view.player_name = placeholder_text();
     view.player_score = unknown_score_percent_text();
     view.show_rivals = true;
 
-    if chart_hash.is_none() {
+    if !chart_present {
         return view;
     }
     let Some(snapshot) = runtime.leaderboards.as_ref() else {
@@ -356,11 +412,11 @@ pub fn select_music_scorebox_view(
     };
 
     if snapshot.loading {
-        view.loading_text = Some("Loading ...".to_string());
+        view.mode_label = owned_text("Loading ...");
         return view;
     }
     if let Some(error) = snapshot.error.as_deref() {
-        view.loading_text = Some(error_text(error).to_string());
+        view.mode_label = owned_text(error_text(error));
         return view;
     }
 
@@ -373,15 +429,15 @@ pub fn select_music_scorebox_view(
     let Some(pane) =
         score_data::preferred_primary_scorebox_pane(filtered_panes.as_slice(), show_ex)
     else {
-        view.loading_text = Some("No Scores".to_string());
+        view.mode_label = owned_text("No Scores");
         return view;
     };
 
     let kind = score_data::scorebox_pane_kind(pane);
     let entries = entries_with_local_self_state(runtime, pane);
-    view.mode_text = score_data::scorebox_pane_mode_text(kind, pane).to_string();
+    view.mode_label = score_mode_label(score_data::scorebox_pane_mode_text(kind, pane));
     if entries.is_empty() {
-        view.loading_text = Some("No Scores".to_string());
+        view.mode_label = owned_text("No Scores");
         return view;
     }
 
@@ -390,18 +446,20 @@ pub fn select_music_scorebox_view(
         .find(|entry| entry.rank == 1)
         .or_else(|| entries.first())
     {
-        view.machine_name =
-            score_data::scorebox_machine_tag(world.machine_tag.as_deref(), &world.name);
+        view.machine_name = Arc::from(score_data::scorebox_machine_tag(
+            world.machine_tag.as_deref(),
+            &world.name,
+        ));
         view.machine_score = score_text_with_percent(world.score);
     }
     if let Some(player_entry) = entries.iter().find(|entry| entry.is_self) {
-        view.player_name = score_data::scorebox_machine_tag(
+        view.player_name = Arc::from(score_data::scorebox_machine_tag(
             player_entry.machine_tag.as_deref(),
             &player_entry.name,
-        );
+        ));
         view.player_score = score_text_with_percent(player_entry.score);
     } else if let Some((local_score_10000, _)) = local_self_score_10000(runtime, kind) {
-        view.player_name = local_self_scorebox_name(runtime);
+        view.player_name = Arc::from(local_self_scorebox_name(runtime));
         view.player_score = score_text_with_percent(local_score_10000);
     }
     for (idx, rival) in entries
@@ -411,15 +469,14 @@ pub fn select_music_scorebox_view(
         .enumerate()
     {
         view.rivals[idx] = (
-            score_data::scorebox_machine_tag(rival.machine_tag.as_deref(), &rival.name),
+            Arc::from(score_data::scorebox_machine_tag(
+                rival.machine_tag.as_deref(),
+                &rival.name,
+            )),
             score_text_with_percent(rival.score),
         );
     }
     view
-}
-
-pub fn select_music_mode_text(show_ex_score: bool) -> String {
-    score_data::default_scorebox_mode_text(show_ex_score).to_string()
 }
 
 #[inline(always)]
@@ -1387,17 +1444,22 @@ mod tests {
             ..Default::default()
         };
 
-        let view = select_music_scorebox_view(&runtime, Some("chart"), false);
+        let presentation = SelectMusicScoreboxPresentation::new(&runtime);
+        let view = presentation.view(true, false);
 
-        assert_eq!(view.player_name, "P1");
+        assert_eq!(view.player_name.as_ref(), "P1");
         assert_eq!(view.player_score.as_ref(), "98.76%");
-        assert_eq!(view.machine_name, "AAA");
+        assert_eq!(view.machine_name.as_ref(), "AAA");
         assert_eq!(view.machine_score.as_ref(), "99.99%");
+        assert_eq!(view.mode_label.as_ref(), "ITG Score");
         assert!(!view.show_rivals);
+        assert!(std::ptr::eq(view, presentation.view(true, false)));
 
-        let stale = select_music_scorebox_view(&runtime, Some("other"), false);
-        assert_eq!(stale.player_name, "----");
-        assert_eq!(stale.machine_name, "----");
+        let stale = presentation.view(false, false);
+        assert_eq!(stale.player_name.as_ref(), "----");
+        assert_eq!(stale.machine_name.as_ref(), "----");
+        assert_eq!(stale.player_score.as_ref(), "??.??%");
+        assert_eq!(stale.machine_score.as_ref(), "??.??%");
     }
 
     #[test]

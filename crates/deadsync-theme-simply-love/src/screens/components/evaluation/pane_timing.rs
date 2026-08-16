@@ -5,7 +5,7 @@ use crate::assets::{FontRole, machine_font_key_for_text};
 use crate::config::MachineFont;
 use crate::screens::components::evaluation::eval_graphs::TimingHistogramScale;
 use crate::screens::evaluation::ScoreInfo;
-use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::color;
 use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_profile as profile_data;
@@ -27,6 +27,28 @@ const EMPTY_BAND: TimingBand = TimingBand {
     end_ms: 0.0,
     color: [0.0, 0.0, 0.0, 0.0],
 };
+
+#[derive(Clone)]
+pub(crate) struct TimingPaneText {
+    values: [TextContent; 4],
+}
+
+impl TimingPaneText {
+    pub(crate) fn new(score: &ScoreInfo) -> Self {
+        Self::from_timing(score.timing)
+    }
+
+    fn from_timing(stats: timing::TimingStats) -> Self {
+        Self {
+            values: [
+                super::retained_text(format_args!("{:.2}ms", stats.mean_abs_ms)),
+                super::retained_text(format_args!("{:.2}ms", stats.mean_ms)),
+                super::retained_text(format_args!("{:.2}ms", stats.stddev_ms * 3.0)),
+                super::retained_text(format_args!("{:.2}ms", stats.max_abs_ms)),
+            ],
+        }
+    }
+}
 
 #[inline(always)]
 const fn band(label: &'static str, start_ms: f32, end_ms: f32, color: [f32; 4]) -> TimingBand {
@@ -138,8 +160,9 @@ fn timing_bands_ms(
 }
 
 /// Builds the timing statistics pane (Simply Love Pane5), shown inside a 300px evaluation pane.
-pub fn build_timing_pane(
+pub(crate) fn build_timing_pane(
     score_info: &ScoreInfo,
+    text: &TimingPaneText,
     timing_hist_mesh: Option<&Arc<[MeshVertex]>>,
     controller: profile_data::PlayerSide,
     scale: TimingHistogramScale,
@@ -253,20 +276,19 @@ pub fn build_timing_pane(
     let label_zoom = 0.575;
     let value_zoom = 0.8;
 
-    let max_error_text = format!("{:.2}ms", score_info.timing.max_abs_ms);
-    let mean_abs_text = format!("{:.2}ms", score_info.timing.mean_abs_ms);
-    let mean_text = format!("{:.2}ms", score_info.timing.mean_ms);
-    let stddev3_text = format!("{:.2}ms", score_info.timing.stddev_ms * 3.0);
-
     let labels_and_values = [
-        ("mean abs error", 40.0, mean_abs_text),
-        ("mean", 40.0 + (pane_width - 80.0_f32) / 3.0_f32, mean_text),
+        ("mean abs error", 40.0, &text.values[0]),
+        (
+            "mean",
+            40.0 + (pane_width - 80.0_f32) / 3.0_f32,
+            &text.values[1],
+        ),
         (
             "std dev * 3",
             ((pane_width - 80.0_f32) / 3.0_f32).mul_add(2.0_f32, 40.0),
-            stddev3_text,
+            &text.values[2],
         ),
-        ("max error", pane_width - 40.0, max_error_text),
+        ("max error", pane_width - 40.0, &text.values[3]),
     ];
 
     for (label, x, value) in labels_and_values {
@@ -274,7 +296,7 @@ pub fn build_timing_pane(
             align(0.5, 0.0): xy(x, top_label_y):
             zoom(label_zoom)
         ));
-        children.push(act!(text: font("miso"): settext(value):
+        children.push(act!(text: font("miso"): settext(value.clone()):
             align(0.5, 0.0): xy(x, top_value_y):
             zoom(value_zoom)
         ));
@@ -288,4 +310,47 @@ pub fn build_timing_pane(
         background: None,
         z: 101,
     }]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timing_pane_text_compiles_normal_values_inline() {
+        let text = TimingPaneText::from_timing(timing::TimingStats {
+            mean_abs_ms: 12.345,
+            mean_ms: -3.5,
+            stddev_ms: 2.25,
+            max_abs_ms: 20.0,
+        });
+
+        assert_eq!(text.values[0].as_str(), "12.35ms");
+        assert_eq!(text.values[1].as_str(), "-3.50ms");
+        assert_eq!(text.values[2].as_str(), "6.75ms");
+        assert_eq!(text.values[3].as_str(), "20.00ms");
+        assert!(
+            text.values
+                .iter()
+                .all(|value| matches!(value, TextContent::Inline(_)))
+        );
+    }
+
+    #[test]
+    fn timing_pane_text_shares_oversized_fallback() {
+        let text = TimingPaneText::from_timing(timing::TimingStats {
+            mean_abs_ms: f32::MAX,
+            mean_ms: f32::MIN,
+            stddev_ms: f32::MAX,
+            max_abs_ms: f32::MAX,
+        });
+        let clone = text.values[0].clone();
+
+        assert_eq!(text.values[0].as_str(), format!("{:.2}ms", f32::MAX));
+        let (TextContent::Shared(text), TextContent::Shared(clone)) = (&text.values[0], &clone)
+        else {
+            panic!("oversized timing values should use shared text");
+        };
+        assert!(Arc::ptr_eq(text, clone));
+    }
 }

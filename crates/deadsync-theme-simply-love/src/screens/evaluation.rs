@@ -44,7 +44,7 @@ use crate::screens::ThemeEffect;
 pub use crate::views::{CourseGraphStage, ScoreInfo};
 use crate::views::{
     EvaluationContextView, EvaluationInitView, EvaluationRuntimeView, EvaluationSubmissionView,
-    ScoreboxSideView, SimplyLoveGrooveStatsService,
+    SimplyLoveGrooveStatsService,
 };
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
@@ -2529,7 +2529,12 @@ pub struct State {
     /// Immutable per-result Nice eligibility compiled with `score_info`.
     nice_scores: [bool; MAX_PLAYERS],
     result_text: [ResultText; MAX_PLAYERS],
+    percentage_text: [Option<eval_panes::PercentageText>; MAX_PLAYERS],
+    timing_pane_text: [Option<eval_panes::TimingPaneText>; MAX_PLAYERS],
+    machine_records_text: [Option<eval_panes::MachineRecordsPaneText>; MAX_PLAYERS],
+    qr_presentation: [Option<eval_panes::QrPanePresentation>; MAX_PLAYERS],
     step_artist_text: [StepArtistText; MAX_PLAYERS],
+    timing_arrows_text: [Option<eval_panes::TimingArrowsText>; MAX_PLAYERS],
     context: EvaluationContextView,
     favorites: [bool; MAX_PLAYERS],
     fail_stream_progress: [Option<(u32, u32)>; MAX_PLAYERS],
@@ -2564,7 +2569,7 @@ pub struct State {
     submissions: [EvaluationSubmissionView; MAX_PLAYERS],
     submit_text: [SubmitPresentation; MAX_PLAYERS],
     leaderboards_requested: [bool; MAX_PLAYERS],
-    scoreboxes: [ScoreboxSideView; MAX_PLAYERS],
+    online_records: [eval_panes::OnlineRecordsPresentation; MAX_PLAYERS],
     groovestats_service: SimplyLoveGrooveStatsService,
     lobby_view: SimplyLoveLobbyRuntimeView,
     lobby_disconnect_hold_p1: Option<Instant>,
@@ -2609,7 +2614,12 @@ impl Clone for State {
             score_info: self.score_info.clone(),
             nice_scores: self.nice_scores,
             result_text: self.result_text.clone(),
+            percentage_text: self.percentage_text.clone(),
+            timing_pane_text: self.timing_pane_text.clone(),
+            machine_records_text: self.machine_records_text.clone(),
+            qr_presentation: self.qr_presentation.clone(),
             step_artist_text: self.step_artist_text.clone(),
+            timing_arrows_text: self.timing_arrows_text.clone(),
             context: self.context.clone(),
             favorites: self.favorites,
             fail_stream_progress: self.fail_stream_progress,
@@ -2642,7 +2652,7 @@ impl Clone for State {
             submissions: self.submissions.clone(),
             submit_text: self.submit_text.clone(),
             leaderboards_requested: self.leaderboards_requested,
-            scoreboxes: self.scoreboxes.clone(),
+            online_records: self.online_records.clone(),
             groovestats_service: self.groovestats_service,
             lobby_view: self.lobby_view.clone(),
             lobby_disconnect_hold_p1: self.lobby_disconnect_hold_p1,
@@ -3237,11 +3247,36 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
             .as_ref()
             .map_or_else(ResultText::empty, ResultText::from_score)
     });
+    let percentage_text = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(eval_panes::PercentageText::new)
+    });
+    let timing_pane_text = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(eval_panes::TimingPaneText::new)
+    });
+    let machine_records_text = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(eval_panes::MachineRecordsPaneText::new)
+    });
+    let qr_presentation = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(eval_panes::QrPanePresentation::new)
+    });
     let step_artist_text = std::array::from_fn(|index| {
         score_info[index].as_ref().map_or_else(
             || StepArtistText::new("", "", ""),
             StepArtistText::from_score,
         )
+    });
+    let timing_arrows_text = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .and_then(|score| eval_panes::TimingArrowsText::new(&score.arrow_timing))
     });
 
     let mut state = State {
@@ -3257,7 +3292,12 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         score_info,
         nice_scores,
         result_text,
+        percentage_text,
+        timing_pane_text,
+        machine_records_text,
+        qr_presentation,
         step_artist_text,
+        timing_arrows_text,
         context,
         favorites: [false; MAX_PLAYERS],
         fail_stream_progress,
@@ -3290,7 +3330,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         submissions: std::array::from_fn(|_| Default::default()),
         submit_text: std::array::from_fn(|_| Default::default()),
         leaderboards_requested: [false; MAX_PLAYERS],
-        scoreboxes: Default::default(),
+        online_records: Default::default(),
         groovestats_service: Default::default(),
         lobby_view: Default::default(),
         lobby_disconnect_hold_p1: None,
@@ -3448,11 +3488,36 @@ pub fn init_from_score_info(
             .as_ref()
             .map_or_else(ResultText::empty, ResultText::from_score)
     });
+    let percentage_text = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(eval_panes::PercentageText::new)
+    });
+    let timing_pane_text = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(eval_panes::TimingPaneText::new)
+    });
+    let machine_records_text = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(eval_panes::MachineRecordsPaneText::new)
+    });
+    let qr_presentation = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(eval_panes::QrPanePresentation::new)
+    });
     let step_artist_text = std::array::from_fn(|index| {
         score_info[index].as_ref().map_or_else(
             || StepArtistText::new("", "", ""),
             StepArtistText::from_score,
         )
+    });
+    let timing_arrows_text = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .and_then(|score| eval_panes::TimingArrowsText::new(&score.arrow_timing))
     });
 
     let mut state = State {
@@ -3468,7 +3533,12 @@ pub fn init_from_score_info(
         score_info,
         nice_scores,
         result_text,
+        percentage_text,
+        timing_pane_text,
+        machine_records_text,
+        qr_presentation,
         step_artist_text,
+        timing_arrows_text,
         context,
         favorites: [false; MAX_PLAYERS],
         fail_stream_progress: [None; MAX_PLAYERS],
@@ -3501,7 +3571,7 @@ pub fn init_from_score_info(
         submissions: std::array::from_fn(|_| Default::default()),
         submit_text: std::array::from_fn(|_| Default::default()),
         leaderboards_requested: [false; MAX_PLAYERS],
-        scoreboxes: Default::default(),
+        online_records: Default::default(),
         groovestats_service: Default::default(),
         lobby_view: Default::default(),
         lobby_disconnect_hold_p1: None,
@@ -3801,7 +3871,9 @@ pub fn sync_runtime_view(state: &mut State, view: EvaluationRuntimeView) {
         state.submissions = submissions;
     }
     if let Some(scoreboxes) = view.scoreboxes {
-        state.scoreboxes = scoreboxes;
+        state.online_records = scoreboxes
+            .each_ref()
+            .map(eval_panes::OnlineRecordsPresentation::new);
     }
     if let Some(favorites) = view.favorites {
         state.favorites = favorites;
@@ -4556,7 +4628,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) {
 }
 
 #[inline]
-fn prepend_sfx(path_opt: Option<&str>, effect: ThemeEffect) -> ThemeEffect {
+fn prepend_sfx(path_opt: Option<&'static str>, effect: ThemeEffect) -> ThemeEffect {
     let Some(path) = path_opt else {
         return effect;
     };
@@ -4596,7 +4668,7 @@ mod input_audio_effect_tests {
             &effects[0],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 AudioRequest::PlaySfx(path)
-            )) if path == expected_path
+            )) if *path == expected_path
         ));
         assert!(matches!(effects[1], ThemeEffect::Navigate(screen) if screen == expected_next));
     }
@@ -4653,13 +4725,13 @@ mod input_audio_effect_tests {
             &effects[0],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/common_invalid.ogg"
+            )) if *path == "assets/sounds/common_invalid.ogg"
         ));
         assert!(matches!(
             &effects[1],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/start.ogg"
+            )) if *path == "assets/sounds/start.ogg"
         ));
         assert!(matches!(
             effects[2],
@@ -4679,7 +4751,7 @@ mod input_audio_effect_tests {
             &effects[0],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/start.ogg"
+            )) if *path == "assets/sounds/start.ogg"
         ));
         assert!(matches!(
             &effects[1],
@@ -5288,7 +5360,6 @@ pub fn push_actors(
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 continue;
             };
-
             let upper_origin_x = match side {
                 profile_data::PlayerSide::P1 => screen_center_x() - 155.0,
                 profile_data::PlayerSide::P2 => screen_center_x() + 155.0,
@@ -5750,6 +5821,9 @@ pub fn push_actors(
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 continue;
             };
+            let timing_text = state.timing_pane_text[player_idx]
+                .as_ref()
+                .expect("score players have retained timing pane text");
             let pane = if ENABLE_GS_QR_PANE {
                 state.active_pane[controller_idx]
             } else if state.active_pane[controller_idx] == EvalPane::QrCode {
@@ -5758,17 +5832,21 @@ pub fn push_actors(
                 state.active_pane[controller_idx]
             };
 
-            actors.extend(eval_panes::build_pane_percentage_display(
-                si,
-                pane,
-                controller,
-                policy.transparent_panels,
-                policy.machine_font,
-            ));
+            if let Some(text) = state.percentage_text[player_idx].as_ref() {
+                actors.extend(eval_panes::build_pane_percentage_display(
+                    si,
+                    text,
+                    pane,
+                    controller,
+                    policy.transparent_panels,
+                    policy.machine_font,
+                ));
+            }
 
             match pane {
                 EvalPane::Timing => actors.extend(eval_panes::build_timing_pane(
                     si,
+                    timing_text,
                     state.timing_hist_mesh[player_idx].as_ref(),
                     controller,
                     eval_graphs::TimingHistogramScale::Itg,
@@ -5777,6 +5855,7 @@ pub fn push_actors(
                 )),
                 EvalPane::TimingEx => actors.extend(eval_panes::build_timing_pane(
                     si,
+                    timing_text,
                     state.timing_hist_mesh_ex[player_idx].as_ref(),
                     controller,
                     eval_graphs::TimingHistogramScale::Ex,
@@ -5785,6 +5864,7 @@ pub fn push_actors(
                 )),
                 EvalPane::TimingHardEx => actors.extend(eval_panes::build_timing_pane(
                     si,
+                    timing_text,
                     state.timing_hist_mesh_hard_ex[player_idx].as_ref(),
                     controller,
                     eval_graphs::TimingHistogramScale::HardEx,
@@ -5792,44 +5872,55 @@ pub fn push_actors(
                     policy.machine_font,
                 )),
                 EvalPane::TimingArrows => {
-                    actors.extend(eval_panes::build_timing_arrows_pane(
-                        si,
-                        controller,
-                        state.screen_elapsed,
-                        policy.machine_font,
-                    ));
+                    if let Some(text) = state.timing_arrows_text[player_idx].as_ref() {
+                        actors.extend(eval_panes::build_timing_arrows_pane(
+                            si,
+                            text,
+                            controller,
+                            state.screen_elapsed,
+                            policy.machine_font,
+                        ));
+                    }
                 }
-                EvalPane::QrCode => actors.extend(eval_panes::build_gs_qr_pane(
-                    si,
-                    controller,
-                    policy.machine_font,
-                )),
+                EvalPane::QrCode => {
+                    if let Some(presentation) = state.qr_presentation[player_idx].as_ref() {
+                        actors.extend(eval_panes::build_gs_qr_pane(
+                            presentation,
+                            controller,
+                            policy.machine_font,
+                        ));
+                    }
+                }
                 EvalPane::GrooveStats => actors.extend(eval_panes::build_gs_records_pane(
                     controller,
-                    &state.scoreboxes[player_idx],
+                    &state.online_records[player_idx],
                 )),
                 EvalPane::GrooveStatsEx => actors.extend(eval_panes::build_gs_ex_records_pane(
                     controller,
-                    &state.scoreboxes[player_idx],
+                    &state.online_records[player_idx],
                 )),
                 EvalPane::Srpg => actors.extend(eval_panes::build_srpg_records_pane(
                     controller,
-                    &state.scoreboxes[player_idx],
+                    &state.online_records[player_idx],
                 )),
                 EvalPane::Itl => actors.extend(eval_panes::build_itl_records_pane(
                     controller,
-                    &state.scoreboxes[player_idx],
+                    &state.online_records[player_idx],
                 )),
                 EvalPane::ArrowCloud => actors.extend(eval_panes::build_arrowcloud_records_pane(
                     controller,
-                    &state.scoreboxes[player_idx],
+                    &state.online_records[player_idx],
                 )),
-                EvalPane::MachineRecords => actors.extend(eval_panes::build_machine_records_pane(
-                    si,
-                    controller,
-                    state.active_color_index,
-                    state.screen_elapsed,
-                )),
+                EvalPane::MachineRecords => {
+                    if let Some(text) = state.machine_records_text[player_idx].as_ref() {
+                        actors.extend(eval_panes::build_machine_records_pane(
+                            text,
+                            controller,
+                            state.active_color_index,
+                            state.screen_elapsed,
+                        ));
+                    }
+                }
                 EvalPane::Column => {
                     let pane3_player_side = if play_style.is_versus() {
                         controller

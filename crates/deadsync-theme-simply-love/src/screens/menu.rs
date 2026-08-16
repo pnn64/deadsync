@@ -821,7 +821,7 @@ mod tests {
             &effects[0],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 deadsync_theme::AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/start.ogg"
+            )) if *path == "assets/sounds/start.ogg"
         ));
         assert!(matches!(
             effects[1],

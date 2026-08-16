@@ -828,13 +828,14 @@ fn online_enable_choice_persists_before_reinitializing_services() {
     let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
         .expect("online enable choice should emit shell work");
     let enabled = state.sub[SubmenuKind::GrooveStats].cursor_indices[row] == 1;
-    let ThemeEffect::Batch(effects) = effect else {
-        panic!("online enable choice should persist before reinitializing services");
-    };
+    let mut effects = Vec::with_capacity(8);
+    append_pending_effects(&mut state, effect, &mut effects);
 
-    assert_eq!(effects.len(), 2);
+    assert_eq!(effects.capacity(), 8);
+    assert_eq!(effects.len(), 3);
+    assert!(is_change_value_sfx(&effects[0]));
     assert!(matches!(
-        &effects[0],
+        &effects[1],
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
             crate::SimplyLoveConfigRequest::Online(
                 crate::SimplyLoveOnlineConfigRequest::EnableGrooveStats(value)
@@ -842,11 +843,49 @@ fn online_enable_choice_persists_before_reinitializing_services() {
         )) if *value == enabled
     ));
     assert!(matches!(
-        &effects[1],
+        &effects[2],
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
             crate::SimplyLoveOnlineRequest::Reinitialize
         ))
     ));
+    assert!(!state.online_reinit_pending);
+}
+
+#[test]
+fn arrowcloud_enable_persists_before_reinitializing_services() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::ArrowCloud);
+    let row = select_visible_row(
+        &mut state,
+        SubmenuKind::ArrowCloud,
+        SubRowId::EnableArrowCloud,
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("ArrowCloud enable choice should emit shell work");
+    let enabled = state.sub[SubmenuKind::ArrowCloud].cursor_indices[row] == 1;
+    let mut effects = Vec::with_capacity(8);
+    append_pending_effects(&mut state, effect, &mut effects);
+
+    assert_eq!(effects.capacity(), 8);
+    assert_eq!(effects.len(), 3);
+    assert!(is_change_value_sfx(&effects[0]));
+    assert!(matches!(
+        &effects[1],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Online(
+                crate::SimplyLoveOnlineConfigRequest::EnableArrowCloud(value)
+            )
+        )) if *value == enabled
+    ));
+    assert!(matches!(
+        &effects[2],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+            crate::SimplyLoveOnlineRequest::Reinitialize
+        ))
+    ));
+    assert!(!state.online_reinit_pending);
 }
 
 fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
@@ -987,7 +1026,7 @@ fn is_change_value_sfx(effect: &ThemeEffect) -> bool {
     matches!(
         effect,
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(path)))
-            if path == "assets/sounds/change_value.ogg"
+            if *path == "assets/sounds/change_value.ogg"
     )
 }
 
@@ -1177,7 +1216,7 @@ fn sound_runtime_toggles_emit_neutral_audio_requests() {
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 AudioRequest::SetGlobalOffsetMillis(1)
             ))
-        ] if path == "assets/sounds/change_value.ogg"
+        ] if *path == "assets/sounds/change_value.ogg"
     ));
     assert_eq!(state.global_offset_ms, 1);
 }
@@ -1741,7 +1780,7 @@ fn volume_rows_emit_shell_request_before_feedback_sound() {
         &effects[1],
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
             deadsync_theme::AudioRequest::PlaySfx(path)
-        )) if path == "assets/sounds/change_value.ogg"
+        )) if *path == "assets/sounds/change_value.ogg"
     ));
 }
 
@@ -2337,7 +2376,7 @@ fn folder_activation_requests_audio_before_platform_reveal() {
         &effects[0],
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
             deadsync_theme::AudioRequest::PlaySfx(path)
-        )) if path == "assets/sounds/start.ogg"
+        )) if *path == "assets/sounds/start.ogg"
     ));
     assert!(matches!(
         &effects[1],
@@ -2363,7 +2402,7 @@ fn queued_sfx_precede_follow_up_runtime_work() {
         &effects[0],
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
             deadsync_theme::AudioRequest::PlaySfx(path)
-        )) if path == "assets/sounds/change_value.ogg"
+        )) if *path == "assets/sounds/change_value.ogg"
     ));
     assert!(matches!(
         effects[1],
@@ -2424,7 +2463,7 @@ fn queued_sfx_precede_score_import_runtime_work() {
         &effects[0],
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
             deadsync_theme::AudioRequest::PlaySfx(path)
-        )) if path == "assets/sounds/start.ogg"
+        )) if *path == "assets/sounds/start.ogg"
     ));
     assert!(matches!(
         effects[1],
@@ -2500,7 +2539,7 @@ fn update_drain_emits_a_queued_sound_without_follow_up_work() {
         effects.as_slice(),
         [ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
             deadsync_theme::AudioRequest::PlaySfx(path)
-        ))] if path == "assets/sounds/change.ogg"
+        ))] if *path == "assets/sounds/change.ogg"
     ));
     assert!(state.pending_sfx.is_empty());
 }

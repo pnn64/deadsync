@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
-use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::color;
 use deadsync_profile as profile_data;
 
@@ -18,6 +18,28 @@ const SMALL_SCORE_ZOOM_MEGA: f32 = 0.406;
 const COMPANION_SCORE_ZOOM_WENDY: f32 = 0.32;
 const COMPANION_SCORE_ZOOM_MEGA: f32 = 0.52;
 
+#[derive(Clone)]
+pub(crate) struct PercentageText {
+    score: TextContent,
+    ex: TextContent,
+    hard_ex: TextContent,
+}
+
+impl PercentageText {
+    pub(crate) fn new(score: &ScoreInfo) -> Self {
+        Self {
+            score: percent_text(score.score_percent * 100.0),
+            ex: percent_text(score.ex_score_percent.max(0.0)),
+            hard_ex: percent_text(score.hard_ex_score_percent.max(0.0)),
+        }
+    }
+}
+
+#[inline]
+fn percent_text(value: f64) -> TextContent {
+    super::retained_text(format_args!("{value:.2}"))
+}
+
 #[inline(always)]
 const fn choose_score_zoom(machine_font: MachineFont, wendy: f32, mega: f32) -> f32 {
     match machine_font {
@@ -28,6 +50,7 @@ const fn choose_score_zoom(machine_font: MachineFont, wendy: f32, mega: f32) -> 
 
 pub(crate) fn build_pane_percentage_display(
     score_info: &ScoreInfo,
+    text: &PercentageText,
     pane: EvalPane,
     controller: profile_data::PlayerSide,
     transparent: bool,
@@ -57,9 +80,6 @@ pub(crate) fn build_pane_percentage_display(
     };
     let cy = deadlib_present::space::screen_center_y();
 
-    let percent_text = format!("{:.2}", score_info.score_percent * 100.0);
-    let ex_percent_text = format!("{:.2}", score_info.ex_score_percent.max(0.0));
-    let hard_ex_percent_text = format!("{:.2}", score_info.hard_ex_score_percent.max(0.0));
     let score_bg_color = color::rgba_hex("#101519");
     let score_bg_alpha = eval_style_alpha(transparent, 1.0, 0.5);
     let score_zoom = choose_score_zoom(machine_font, SCORE_ZOOM_WENDY, SCORE_ZOOM_MEGA);
@@ -106,7 +126,7 @@ pub(crate) fn build_pane_percentage_display(
             ));
             children.push(act!(text:
                 font(machine_font_key(machine_font, FontRole::Headline)):
-                settext(percent_text):
+                settext(text.score.clone()):
                 align(1.0, 0.5):
                 xy(30.0, -2.0):
                 zoom(small_score_zoom):
@@ -118,21 +138,9 @@ pub(crate) fn build_pane_percentage_display(
             let white = [1.0, 1.0, 1.0, 1.0];
             let (main_text, main_color, bottom_label, bottom_text, bottom_color) =
                 if score_info.show_ex_score {
-                    (
-                        ex_percent_text.clone(),
-                        ex_color,
-                        "ITG",
-                        percent_text.clone(),
-                        white,
-                    )
+                    (text.ex.clone(), ex_color, "ITG", text.score.clone(), white)
                 } else {
-                    (
-                        percent_text.clone(),
-                        white,
-                        "EX",
-                        ex_percent_text.clone(),
-                        ex_color,
-                    )
+                    (text.score.clone(), white, "EX", text.ex.clone(), ex_color)
                 };
             children.push(act!(quad:
                 align(bg_align_x, 0.5):
@@ -190,7 +198,7 @@ pub(crate) fn build_pane_percentage_display(
             let hex_color = color::HARD_EX_SCORE_RGBA;
             children.push(act!(text:
                 font(machine_font_key(machine_font, FontRole::Headline)):
-                settext(ex_percent_text):
+                settext(text.ex.clone()):
                 align(1.0, 0.5):
                 xy(percent_x, 0.0):
                 zoom(score_zoom):
@@ -215,7 +223,7 @@ pub(crate) fn build_pane_percentage_display(
             ));
             children.push(act!(text:
                 font(machine_font_key(machine_font, FontRole::Headline)):
-                settext(hard_ex_percent_text):
+                settext(text.hard_ex.clone()):
                 align(1.0, 0.5):
                 xy(bottom_value_x, 40.0):
                 zoom(companion_score_zoom):
@@ -232,7 +240,7 @@ pub(crate) fn build_pane_percentage_display(
             ));
             children.push(act!(text:
                 font(machine_font_key(machine_font, FontRole::Headline)):
-                settext(percent_text):
+                settext(text.score.clone()):
                 align(1.0, 0.5):
                 xy(percent_x, 0.0):
                 zoom(score_zoom):
@@ -249,4 +257,31 @@ pub(crate) fn build_pane_percentage_display(
         z: 102,
         children,
     }]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn percentage_text_formats_normal_values_inline() {
+        let text = percent_text(98.765);
+        assert_eq!(text.as_str(), "98.77");
+        assert!(matches!(text, TextContent::Inline(_)));
+
+        let text = percent_text(f64::NAN);
+        assert_eq!(text.as_str(), "NaN");
+        assert!(matches!(text, TextContent::Inline(_)));
+    }
+
+    #[test]
+    fn percentage_text_shares_oversized_fallback() {
+        let text = percent_text(f64::MAX);
+        let clone = text.clone();
+        assert_eq!(text.as_str(), format!("{:.2}", f64::MAX));
+        let (TextContent::Shared(text), TextContent::Shared(clone)) = (text, clone) else {
+            panic!("oversized percentages should use shared text");
+        };
+        assert!(std::sync::Arc::ptr_eq(&text, &clone));
+    }
 }

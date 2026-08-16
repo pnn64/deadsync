@@ -72,7 +72,7 @@ fn linux_backend(name: &str) -> config::LinuxAudioBackend {
 
 pub(super) fn execute(request: AudioRequest) {
     match request {
-        AudioRequest::PlaySfx(path) => deadsync_audio_stream::play_sfx(&path),
+        AudioRequest::PlaySfx(path) => deadsync_audio_stream::play_sfx(path),
         AudioRequest::PlayMusic {
             path,
             cut,

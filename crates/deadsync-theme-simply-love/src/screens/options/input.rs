@@ -1055,16 +1055,13 @@ pub(super) fn apply_submenu_choice_delta(
             _ => return None,
         };
         let effect = online_config_effect(request);
-        action = Some(
-            if matches!(
-                row.id,
-                SubRowId::EnableGrooveStats | SubRowId::EnableBoogieStats
-            ) {
-                ThemeEffect::batch(vec![effect, online_reinitialize_effect()])
-            } else {
-                effect
-            },
-        );
+        if matches!(
+            row.id,
+            SubRowId::EnableGrooveStats | SubRowId::EnableBoogieStats
+        ) {
+            queue_online_reinitialize(state);
+        }
+        action = Some(effect);
     } else if matches!(kind, SubmenuKind::ArrowCloud) {
         let row = &rows[row_index];
         let enabled = yes_no_from_choice(new_index);
@@ -1081,11 +1078,10 @@ pub(super) fn apply_submenu_choice_delta(
             _ => return None,
         };
         let effect = online_config_effect(request);
-        action = Some(if row.id == SubRowId::EnableArrowCloud {
-            ThemeEffect::batch(vec![effect, online_reinitialize_effect()])
-        } else {
-            effect
-        });
+        if row.id == SubRowId::EnableArrowCloud {
+            queue_online_reinitialize(state);
+        }
+        action = Some(effect);
     } else if matches!(kind, SubmenuKind::ScoreImport) {
         let row = &rows[row_index];
         if row.id == SubRowId::ScoreImportEndpoint {
@@ -1094,12 +1090,6 @@ pub(super) fn apply_submenu_choice_delta(
     }
     clear_render_cache(state);
     action
-}
-
-fn online_reinitialize_effect() -> ThemeEffect {
-    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
-        crate::SimplyLoveOnlineRequest::Reinitialize,
-    ))
 }
 
 const fn qr_login_policy_from_index(index: usize) -> crate::SimplyLoveQrLoginPolicy {

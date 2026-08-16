@@ -864,13 +864,11 @@ pub type SimplyLoveEffect = deadsync_theme::ThemeEffect<SimplyLoveScreen, Simply
 pub type SimplyLoveInputResult =
     deadsync_theme::ThemeInputResult<SimplyLoveScreen, SimplyLoveRuntimeRequest>;
 
-pub(crate) fn sfx(path: &str) -> SimplyLoveEffect {
-    SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(
-        path.to_owned(),
-    )))
+pub(crate) fn sfx(path: &'static str) -> SimplyLoveEffect {
+    SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(path)))
 }
 
-pub(crate) fn sfx_then(path: &str, effect: SimplyLoveEffect) -> SimplyLoveEffect {
+pub(crate) fn sfx_then(path: &'static str, effect: SimplyLoveEffect) -> SimplyLoveEffect {
     SimplyLoveEffect::sequence(sfx(path), effect)
 }
 
@@ -998,7 +996,7 @@ mod tests {
             &effects[0],
             SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
                 AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/start.ogg"
+            )) if *path == "assets/sounds/start.ogg"
         ));
         assert!(matches!(
             effects[1],

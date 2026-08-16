@@ -133,7 +133,7 @@ fn queue_volume_change(state: &mut State, target: AudioVolumeTarget, percent: u8
     queue_audio(state, AudioRequest::SetVolume { target, percent });
     queue_audio(
         state,
-        AudioRequest::PlaySfx("assets/sounds/change_value.ogg".to_owned()),
+        AudioRequest::PlaySfx("assets/sounds/change_value.ogg"),
     );
 }
 
@@ -199,6 +199,11 @@ fn queue_online(state: &mut State, request: crate::SimplyLoveOnlineRequest) {
     state.pending_online.push(request);
 }
 
+fn queue_online_reinitialize(state: &mut State) {
+    debug_assert!(!state.online_reinit_pending);
+    state.online_reinit_pending = true;
+}
+
 fn append_pending_effects(state: &mut State, effect: ThemeEffect, effects: &mut Vec<ThemeEffect>) {
     effects.extend(state.pending_sfx.drain(..).map(crate::effects::sfx));
     effects.extend(
@@ -214,6 +219,11 @@ fn append_pending_effects(state: &mut State, effect: ThemeEffect, effects: &mut 
             .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(request))),
     );
     effect.append_to(effects);
+    if std::mem::take(&mut state.online_reinit_pending) {
+        effects.push(ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::Online(crate::SimplyLoveOnlineRequest::Reinitialize),
+        ));
+    }
     effects.extend(
         state
             .pending_audio

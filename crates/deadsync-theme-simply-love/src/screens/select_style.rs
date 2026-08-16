@@ -95,7 +95,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     match style_flow::handle_input(&mut state.flow, ev, state.runtime.game) {
         InputEffect::None => ThemeEffect::None,
         InputEffect::Move => ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
-            AudioRequest::PlaySfx("assets/sounds/change.ogg".to_owned()),
+            AudioRequest::PlaySfx("assets/sounds/change.ogg"),
         )),
         InputEffect::Confirm(play_style) => {
             let _ = exit_anim_t(true);
@@ -346,7 +346,7 @@ mod tests {
             &effects[0],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/start.ogg"
+            )) if *path == "assets/sounds/start.ogg"
         ));
         assert!(matches!(
             effects[1],

@@ -3020,7 +3020,7 @@ mod tests {
             effects.as_slice(),
             [ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 deadsync_theme::AudioRequest::PlaySfx(path)
-            ))] if path == "assets/sounds/start.ogg"
+            ))] if *path == "assets/sounds/start.ogg"
         ));
     }
 
@@ -3066,7 +3066,7 @@ mod tests {
             &effects[0],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 deadsync_theme::AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/start.ogg"
+            )) if *path == "assets/sounds/start.ogg"
         ));
         assert!(matches!(effects[1], ThemeEffect::Navigate(Screen::Options)));
     }
@@ -3084,7 +3084,7 @@ mod tests {
                 effects.as_slice(),
                 [ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                     deadsync_theme::AudioRequest::PlaySfx(path)
-                ))] if path == "assets/sounds/change.ogg"
+                ))] if *path == "assets/sounds/change.ogg"
             ));
             effects.clear();
             update(&mut state, 0.0, &mut effects);
@@ -3131,7 +3131,7 @@ mod tests {
             &effects[0],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 deadsync_theme::AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/start.ogg"
+            )) if *path == "assets/sounds/start.ogg"
         ));
         assert!(matches!(
             &effects[1],

@@ -537,7 +537,10 @@ fn config_effect(request: SimplyLoveMappingsConfigRequest) -> ThemeEffect {
     ))
 }
 
-fn mapping_change_effect(path: &str, request: SimplyLoveMappingsConfigRequest) -> ThemeEffect {
+fn mapping_change_effect(
+    path: &'static str,
+    request: SimplyLoveMappingsConfigRequest,
+) -> ThemeEffect {
     crate::effects::sfx_then(path, config_effect(request))
 }
 
@@ -1949,7 +1952,7 @@ mod tests {
             effect,
             SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
                 AudioRequest::PlaySfx(path)
-            )) if path == expected_path
+            )) if *path == expected_path
         ));
     }
 

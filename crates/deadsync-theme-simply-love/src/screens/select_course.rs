@@ -2,13 +2,11 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{self, tr};
 use crate::assets::{FontRole, machine_font_key};
-use crate::effects::{sfx, sfx_then};
+use crate::effects::sfx;
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{music_wheel, screen_bars, select_pane, step_artist_bar},
-    shared::{
-        banner as shared_banner, gs_scorebox, mode_pads, timers, transitions, visual_style_bg,
-    },
+    shared::{banner as shared_banner, mode_pads, timers, transitions, visual_style_bg},
 };
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
@@ -28,6 +26,7 @@ use deadsync_chart::song::standard_difficulty_index;
 use deadsync_chart::{ChartData, SongData, SongPack};
 use deadsync_input::{InputEvent, PadDir, VirtualAction};
 use deadsync_profile as profile_data;
+use deadsync_score::default_scorebox_mode_text;
 use deadsync_simfile::course::{
     self, COURSE_RATING_ORDER, CourseFile, CourseSong, CourseTotals, Difficulty, SongSort,
     add_chart_totals, course_difficulty_from_meters, course_meter, nearest_filled_slot,
@@ -474,6 +473,21 @@ enum ExitPromptState {
     },
 }
 
+enum BannerSource {
+    Song(Arc<SongData>),
+    Shared(Arc<Path>),
+}
+
+impl BannerSource {
+    #[inline(always)]
+    fn path(&self) -> Option<&Path> {
+        match self {
+            Self::Song(song) => song.banner_path.as_deref(),
+            Self::Shared(path) => Some(path),
+        }
+    }
+}
+
 pub struct State {
     pub entries: Vec<MusicWheelEntry>,
     pub selected_index: usize,
@@ -500,7 +514,7 @@ pub struct State {
     bg: visual_style_bg::State,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
-    last_requested_banner_path: Option<PathBuf>,
+    last_requested_banner_source: Option<BannerSource>,
     pub banner_high_quality_requested: bool,
     prev_selected_index: usize,
     time_since_selection_change: f32,
@@ -1053,7 +1067,7 @@ fn rebuild_displayed_entries(state: &mut State) {
         state.prev_selected_index = 0;
         state.wheel_offset_from_selection = 0.0;
         state.time_since_selection_change = 0.0;
-        state.last_requested_banner_path = None;
+        state.last_requested_banner_source = None;
         state.banner_high_quality_requested = false;
         state.last_rating_nav_dir_p1 = None;
         state.last_rating_nav_time_p1 = None;
@@ -1075,7 +1089,7 @@ fn rebuild_displayed_entries(state: &mut State) {
     state.prev_selected_index = state.selected_index;
     state.wheel_offset_from_selection = 0.0;
     state.time_since_selection_change = 0.0;
-    state.last_requested_banner_path = None;
+    state.last_requested_banner_source = None;
     state.banner_high_quality_requested = false;
     state.last_rating_nav_dir_p1 = None;
     state.last_rating_nav_time_p1 = None;
@@ -1310,13 +1324,25 @@ pub fn reroll_selected_endless_plan(state: &State) -> Option<SelectedCoursePlan>
 }
 
 #[inline(always)]
-fn selected_banner_path(state: &State) -> Option<PathBuf> {
+fn selected_banner_path(state: &State) -> Option<&Path> {
     match state.entries.get(state.selected_index) {
-        Some(MusicWheelEntry::Song(song)) => song.banner_path.clone(),
-        Some(MusicWheelEntry::PackHeader { banner_path, .. }) => {
-            banner_path.as_deref().map(Path::to_path_buf)
-        }
+        Some(MusicWheelEntry::Song(song)) => song.banner_path.as_deref(),
+        Some(MusicWheelEntry::PackHeader { banner_path, .. }) => banner_path.as_deref(),
         None => None,
+    }
+}
+
+#[inline(always)]
+fn selected_banner_source(state: &State) -> Option<BannerSource> {
+    match state.entries.get(state.selected_index) {
+        Some(MusicWheelEntry::Song(song)) if song.banner_path.is_some() => {
+            Some(BannerSource::Song(song.clone()))
+        }
+        Some(MusicWheelEntry::PackHeader {
+            banner_path: Some(path),
+            ..
+        }) => Some(BannerSource::Shared(path.clone())),
+        _ => None,
     }
 }
 
@@ -1362,7 +1388,7 @@ pub fn init(init_view: SelectCourseInitView) -> State {
         bg: visual_style_bg::State::new(),
         nav_key_held_direction: None,
         nav_key_held_since: None,
-        last_requested_banner_path: None,
+        last_requested_banner_source: None,
         banner_high_quality_requested: false,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
@@ -1602,6 +1628,15 @@ fn shift_selected_course_rating(state: &mut State, delta: isize) -> Option<&'sta
     })
 }
 
+fn append_rating_cancel_sounds(effects: &mut Vec<ThemeEffect>, undo_sound: Option<&'static str>) {
+    let start_len = effects.len();
+    if let Some(path) = undo_sound {
+        effects.push(sfx(path));
+    }
+    effects.push(sfx("assets/sounds/change.ogg"));
+    debug_assert!(matches!(effects.len() - start_len, 1 | 2));
+}
+
 pub fn handle_confirm(state: &mut State) -> ThemeEffect {
     if state.out_prompt != OutPromptState::None {
         return ThemeEffect::None;
@@ -1623,7 +1658,17 @@ pub fn handle_confirm(state: &mut State) -> ThemeEffect {
     }
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeEffect>) {
+    let start_len = effects.len();
+    handle_input_impl(state, ev, effects).append_to(effects);
+    debug_assert!(effects.len() - start_len <= 2);
+}
+
+fn handle_input_impl(
+    state: &mut State,
+    ev: &InputEvent,
+    effects: &mut Vec<ThemeEffect>,
+) -> ThemeEffect {
     let dedicated_three_key_nav = state.context.policy.dedicated_three_key_nav;
     let three_key_action = screen_input::three_key_menu_action_enabled(
         &mut state.menu_lr_chord,
@@ -1682,17 +1727,18 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                     };
                     state.exit_prompt = ExitPromptState::None;
                     if active_choice == 1 {
-                        sfx_then(
-                            "assets/sounds/start.ogg",
+                        effects.extend([
+                            sfx("assets/sounds/start.ogg"),
                             ThemeEffect::Navigate(Screen::Menu),
-                        )
+                        ]);
+                        ThemeEffect::None
                     } else {
                         sfx("assets/sounds/start.ogg")
                     }
                 }
             };
         }
-        return handle_exit_prompt_input(state, ev);
+        return handle_exit_prompt_input(state, ev, effects);
     }
 
     if state.out_prompt != OutPromptState::None {
@@ -1759,11 +1805,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                         state.menu_lr_undo = 0;
                     }
                     state.three_key_focus = ThreeKeyFocus::Wheel;
-                    if let Some(path) = undo_sound {
-                        ThemeEffect::batch(vec![sfx(path), sfx("assets/sounds/change.ogg")])
-                    } else {
-                        sfx("assets/sounds/change.ogg")
-                    }
+                    append_rating_cancel_sounds(effects, undo_sound);
+                    ThemeEffect::None
                 } else {
                     if state.menu_lr_undo != 0 {
                         music_wheel_change(state, state.menu_lr_undo as isize);
@@ -1891,7 +1934,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     }
 }
 
-pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
+pub fn update(state: &mut State, dt: f32, effects: &mut Vec<ThemeEffect>) {
+    let start_len = effects.len();
+    update_impl(state, dt, effects);
+    debug_assert!(effects.len() - start_len <= 1);
+}
+
+fn update_impl(state: &mut State, dt: f32, effects: &mut Vec<ThemeEffect>) {
     state.labels.sync();
     let dt = dt.max(0.0);
 
@@ -1900,19 +1949,21 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
             let elapsed = elapsed + dt;
             if elapsed >= SHOW_OPTIONS_MESSAGE_SECONDS {
                 state.out_prompt = OutPromptState::None;
-                return ThemeEffect::NavigateNoFade(Screen::Gameplay);
+                effects.push(ThemeEffect::NavigateNoFade(Screen::Gameplay));
+                return;
             }
             state.out_prompt = OutPromptState::PressStartForOptions { elapsed };
-            return ThemeEffect::None;
+            return;
         }
         OutPromptState::EnteringOptions { elapsed } => {
             let elapsed = elapsed + dt;
             if elapsed >= ENTERING_OPTIONS_TOTAL_SECONDS {
                 state.out_prompt = OutPromptState::None;
-                return ThemeEffect::NavigateNoFade(Screen::PlayerOptions);
+                effects.push(ThemeEffect::NavigateNoFade(Screen::PlayerOptions));
+                return;
             }
             state.out_prompt = OutPromptState::EnteringOptions { elapsed };
-            return ThemeEffect::None;
+            return;
         }
         OutPromptState::None => {}
     }
@@ -1967,39 +2018,40 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
 
     if state.time_since_selection_change >= BANNER_UPDATE_DELAY_SECONDS {
         let banner = selected_banner_path(state);
-        if banner != state.last_requested_banner_path {
-            state.last_requested_banner_path.clone_from(&banner);
+        let last_banner = state
+            .last_requested_banner_source
+            .as_ref()
+            .and_then(BannerSource::path);
+        if banner != last_banner {
+            let request_path = banner.map(Path::to_path_buf);
+            let retained_source = selected_banner_source(state);
+            state.last_requested_banner_source = retained_source;
             state.banner_high_quality_requested = false;
-            let effect = ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
-                crate::SimplyLoveMediaRequest::Banner(banner),
+            effects.push(ThemeEffect::Runtime(
+                crate::SimplyLoveRuntimeRequest::Media(crate::SimplyLoveMediaRequest::Banner(
+                    request_path,
+                )),
             ));
-            return if selection_changed {
-                sfx_then("assets/sounds/change.ogg", effect)
-            } else {
-                effect
-            };
+            return;
         }
         if banner.is_some()
             && !state.banner_high_quality_requested
             && state.nav_key_held_direction.is_none()
             && state.wheel_offset_from_selection.abs() < 0.0001
         {
+            let request_path = banner.map(Path::to_path_buf);
             state.banner_high_quality_requested = true;
-            let effect = ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
-                crate::SimplyLoveMediaRequest::Banner(banner),
+            effects.push(ThemeEffect::Runtime(
+                crate::SimplyLoveRuntimeRequest::Media(crate::SimplyLoveMediaRequest::Banner(
+                    request_path,
+                )),
             ));
-            return if selection_changed {
-                sfx_then("assets/sounds/change.ogg", effect)
-            } else {
-                effect
-            };
+            return;
         }
     }
 
     if selection_changed {
-        sfx("assets/sounds/change.ogg")
-    } else {
-        ThemeEffect::None
+        effects.push(sfx("assets/sounds/change.ogg"));
     }
 }
 
@@ -2015,7 +2067,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 pub fn trigger_immediate_refresh(state: &mut State) {
     rebuild_displayed_entries(state);
     state.time_since_selection_change = BANNER_UPDATE_DELAY_SECONDS;
-    state.last_requested_banner_path = None;
+    state.last_requested_banner_source = None;
     state.banner_high_quality_requested = false;
     state.out_prompt = OutPromptState::None;
     state.exit_prompt = ExitPromptState::None;
@@ -2256,9 +2308,8 @@ pub fn push_actors(
         visual_policy.machine_font,
     ));
 
-    let mode_text = gs_scorebox::select_music_mode_text(state.score_view.mode_show_ex_score);
     actors.push(mode_pads::build_label(
-        mode_text,
+        default_scorebox_mode_text(state.score_view.mode_show_ex_score),
         visual_policy.machine_font,
     ));
     actors.extend(mode_pads::build(
@@ -2857,7 +2908,11 @@ fn push_exit_prompt_choice(
     ));
 }
 
-fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+fn handle_exit_prompt_input(
+    state: &mut State,
+    ev: &InputEvent,
+    effects: &mut Vec<ThemeEffect>,
+) -> ThemeEffect {
     if !ev.pressed {
         return ThemeEffect::None;
     }
@@ -2901,10 +2956,11 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         VirtualAction::p1_start | VirtualAction::p2_start => {
             state.exit_prompt = ExitPromptState::None;
             if active_choice == 1 {
-                sfx_then(
-                    "assets/sounds/start.ogg",
+                effects.extend([
+                    sfx("assets/sounds/start.ogg"),
                     ThemeEffect::Navigate(Screen::Menu),
-                )
+                ]);
+                ThemeEffect::None
             } else {
                 sfx("assets/sounds/start.ogg")
             }
@@ -2915,9 +2971,154 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 }
 
 #[cfg(test)]
+mod effect_buffer_tests {
+    use super::*;
+    use deadsync_core::input::InputSource;
+    use deadsync_theme::AudioRequest;
+
+    fn press(action: VirtualAction) -> InputEvent {
+        let now = Instant::now();
+        InputEvent {
+            action,
+            input_slot: 0,
+            pressed: true,
+            source: InputSource::Keyboard,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+        }
+    }
+
+    fn is_sfx(effect: &ThemeEffect, expected: &str) -> bool {
+        matches!(
+            effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlaySfx(path)
+            )) if *path == expected
+        )
+    }
+
+    #[test]
+    fn rating_cancel_appends_undo_sound_before_change_sound() {
+        let mut effects = Vec::with_capacity(8);
+        append_rating_cancel_sounds(&mut effects, Some("assets/sounds/easier.ogg"));
+
+        assert_eq!(effects.capacity(), 8);
+        assert_eq!(effects.len(), 2);
+        assert!(is_sfx(&effects[0], "assets/sounds/easier.ogg"));
+        assert!(is_sfx(&effects[1], "assets/sounds/change.ogg"));
+    }
+
+    #[test]
+    fn exit_confirm_appends_start_sound_before_navigation() {
+        let mut state = init(SelectCourseInitView::default());
+        begin_exit_prompt(&mut state);
+        let ExitPromptState::Active { active_choice, .. } = &mut state.exit_prompt else {
+            unreachable!();
+        };
+        *active_choice = 1;
+        let mut effects = Vec::with_capacity(8);
+
+        handle_input(&mut state, &press(VirtualAction::p1_start), &mut effects);
+
+        assert_eq!(effects.capacity(), 8);
+        assert_eq!(effects.len(), 2);
+        assert!(is_sfx(&effects[0], "assets/sounds/start.ogg"));
+        assert!(matches!(effects[1], ThemeEffect::Navigate(Screen::Menu)));
+    }
+
+    #[test]
+    fn selection_update_separates_sound_from_delayed_banner_request() {
+        let mut state = init(SelectCourseInitView::default());
+        state.selected_index = 1;
+        state.last_requested_banner_source = Some(super::BannerSource::Shared(Arc::from(
+            PathBuf::from("old-banner"),
+        )));
+        state.time_since_selection_change = BANNER_UPDATE_DELAY_SECONDS;
+        let mut effects = Vec::with_capacity(8);
+
+        update(&mut state, 0.0, &mut effects);
+
+        assert_eq!(effects.capacity(), 8);
+        assert_eq!(effects.len(), 1);
+        assert!(is_sfx(&effects[0], "assets/sounds/change.ogg"));
+
+        effects.clear();
+        update(&mut state, BANNER_UPDATE_DELAY_SECONDS, &mut effects);
+
+        assert!(matches!(
+            effects.as_slice(),
+            [ThemeEffect::Runtime(
+                crate::SimplyLoveRuntimeRequest::Media(crate::SimplyLoveMediaRequest::Banner(None))
+            )]
+        ));
+    }
+
+    #[test]
+    fn settled_banner_retains_wheel_source_without_repeat_request() {
+        let mut state = init(SelectCourseInitView::default());
+        let banner: Arc<Path> = Arc::from(PathBuf::from("course-banner.png"));
+        state.entries = vec![MusicWheelEntry::PackHeader {
+            name: Arc::from("Course"),
+            original_index: 0,
+            banner_path: Some(banner.clone()),
+            song_count: 1,
+            pack_key: Some(Arc::from("Course")),
+            parent_series: None,
+        }];
+        state.selected_index = 0;
+        state.prev_selected_index = 0;
+        state.time_since_selection_change = BANNER_UPDATE_DELAY_SECONDS;
+        let mut effects = Vec::with_capacity(8);
+
+        update(&mut state, 0.0, &mut effects);
+
+        assert!(matches!(
+            effects.as_slice(),
+            [ThemeEffect::Runtime(
+                crate::SimplyLoveRuntimeRequest::Media(crate::SimplyLoveMediaRequest::Banner(
+                    Some(path)
+                ))
+            )] if path == &PathBuf::from("course-banner.png")
+        ));
+        let Some(super::BannerSource::Shared(retained)) =
+            state.last_requested_banner_source.as_ref()
+        else {
+            panic!("banner state should retain the selected wheel source");
+        };
+        assert!(Arc::ptr_eq(retained, &banner));
+
+        state.banner_high_quality_requested = true;
+        effects.clear();
+        update(&mut state, 0.0, &mut effects);
+        assert!(effects.is_empty());
+    }
+}
+
+#[cfg(test)]
 mod song_lookup_tests {
     use super::*;
+    use deadlib_present::actors::TextContent;
     use deadsync_chart::SyncPref;
+
+    #[test]
+    fn course_mode_label_uses_static_actor_text() {
+        let mut state = init(SelectCourseInitView::default());
+        for (show_ex, expected) in [(false, "ITG"), (true, "EX")] {
+            state.score_view.mode_show_ex_score = show_ex;
+            let actors = get_actors(&state, &AssetManager::new());
+            assert!(actors.iter().any(|actor| {
+                matches!(
+                    actor,
+                    Actor::Text {
+                        content: TextContent::Static(text),
+                        ..
+                    } if *text == expected
+                )
+            }));
+        }
+    }
 
     #[test]
     fn course_song_entry_compiles_actor_text_once() {

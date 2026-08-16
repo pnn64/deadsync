@@ -23,7 +23,7 @@ impl Default for AudioCut {
 /// Audio work requested by a concrete theme and executed by the shell.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AudioRequest {
-    PlaySfx(String),
+    PlaySfx(&'static str),
     PlayMusic {
         path: PathBuf,
         cut: AudioCut,
@@ -326,12 +326,9 @@ mod tests {
     }
 
     #[test]
-    fn audio_request_owns_its_theme_asset_key() {
-        let request = AudioRequest::PlaySfx("assets/sounds/start.ogg".to_owned());
-        assert_eq!(
-            request,
-            AudioRequest::PlaySfx("assets/sounds/start.ogg".to_owned())
-        );
+    fn audio_request_borrows_its_theme_asset_key() {
+        let request = AudioRequest::PlaySfx("assets/sounds/start.ogg");
+        assert_eq!(request, AudioRequest::PlaySfx("assets/sounds/start.ogg"));
     }
 
     #[test]

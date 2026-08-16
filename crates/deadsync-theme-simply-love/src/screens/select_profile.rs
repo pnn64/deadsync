@@ -119,7 +119,7 @@ mod tests {
         assert!(matches!(
             &effects[0],
             ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(path)))
-                if path == "assets/sounds/start.ogg"
+                if *path == "assets/sounds/start.ogg"
         ));
         assert!(matches!(
             &effects[1],

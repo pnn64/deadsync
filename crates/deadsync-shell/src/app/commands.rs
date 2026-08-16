@@ -14,8 +14,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use winit::event_loop::ActiveEventLoop;
 
-const WHITE_GRAPH_KEY: &str = "__white";
-
 impl App {
     pub(super) fn run_commands(&mut self, commands: Vec<Command>, event_loop: &ActiveEventLoop) {
         for command in commands {
@@ -135,13 +133,9 @@ impl App {
         match slot {
             DensityGraphSlot::SelectMusicP1 => {
                 self.state.screens.select_music_state.current_graph_mesh = mesh;
-                self.state.screens.select_music_state.current_graph_key =
-                    WHITE_GRAPH_KEY.to_string();
             }
             DensityGraphSlot::SelectMusicP2 => {
                 self.state.screens.select_music_state.current_graph_mesh_p2 = mesh;
-                self.state.screens.select_music_state.current_graph_key_p2 =
-                    WHITE_GRAPH_KEY.to_string();
             }
         }
     }

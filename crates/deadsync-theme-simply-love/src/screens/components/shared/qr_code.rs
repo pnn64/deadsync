@@ -17,6 +17,34 @@ struct QrMeshData {
     vertices: Arc<[MeshVertex]>,
 }
 
+/// Screen-owned immutable QR geometry prepared outside recurring actor builds.
+#[derive(Clone, Debug)]
+pub(crate) struct PreparedQrCode {
+    size: f32,
+    data: QrMeshData,
+}
+
+impl PreparedQrCode {
+    pub(crate) fn push(
+        &self,
+        out: &mut Vec<Actor>,
+        center_x: f32,
+        center_y: f32,
+        border_modules: u8,
+        z: i16,
+    ) {
+        push_mesh(
+            out,
+            self.data.clone(),
+            self.size,
+            center_x,
+            center_y,
+            border_modules,
+            z,
+        );
+    }
+}
+
 type QrSizeVariants = SmallVec<[(u32, QrMeshData); 1]>;
 
 struct QrMeshCache {
@@ -164,6 +192,10 @@ fn build_qr_mesh(content: &str, size: f32) -> Option<QrMeshData> {
     })
 }
 
+pub(crate) fn prepare(content: &str, size: f32) -> Option<PreparedQrCode> {
+    build_qr_mesh(content, size).map(|data| PreparedQrCode { size, data })
+}
+
 fn mesh_for(content: &str, size: f32) -> Option<QrMeshData> {
     if let Some(data) = QR_CACHE.with(|cache| cache.borrow().get(content, size).cloned()) {
         return Some(data);
@@ -184,15 +216,36 @@ pub fn push(out: &mut Vec<Actor>, params: QrCodeParams<'_>) -> bool {
         return false;
     };
 
-    let border_px = data.module_px * params.border_modules as f32;
-    let outer_size = params.size + border_px * 2.0;
+    push_mesh(
+        out,
+        data,
+        params.size,
+        params.center_x,
+        params.center_y,
+        params.border_modules,
+        params.z,
+    );
+    true
+}
+
+fn push_mesh(
+    out: &mut Vec<Actor>,
+    data: QrMeshData,
+    size: f32,
+    center_x: f32,
+    center_y: f32,
+    border_modules: u8,
+    z: i16,
+) {
+    let border_px = data.module_px * border_modules as f32;
+    let outer_size = size + border_px * 2.0;
 
     out.push(Actor::Frame {
         align: [0.5, 0.5],
-        offset: [params.center_x, params.center_y],
+        offset: [center_x, center_y],
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         background: None,
-        z: params.z,
+        z,
         children: vec![
             act!(quad:
                 align(0.5, 0.5):
@@ -204,7 +257,7 @@ pub fn push(out: &mut Vec<Actor>, params: QrCodeParams<'_>) -> bool {
             Actor::Mesh {
                 align: [0.5, 0.5],
                 offset: [0.0, 0.0],
-                size: [SizeSpec::Px(params.size), SizeSpec::Px(params.size)],
+                size: [SizeSpec::Px(size), SizeSpec::Px(size)],
                 tint: [1.0; 4],
                 vertices: data.vertices,
                 visible: true,
@@ -213,7 +266,6 @@ pub fn push(out: &mut Vec<Actor>, params: QrCodeParams<'_>) -> bool {
             },
         ],
     });
-    true
 }
 
 #[cfg(test)]
@@ -237,6 +289,18 @@ mod tests {
 
         assert!(Arc::ptr_eq(&first.vertices, &second.vertices));
         assert_eq!(qr_cache_len(), 1);
+    }
+
+    #[test]
+    fn prepared_qr_shares_geometry_without_populating_cache() {
+        clear_qr_cache();
+
+        let prepared =
+            prepare("https://example.com/score/prepared", 96.0).expect("prepared QR should build");
+        let clone = prepared.clone();
+
+        assert!(Arc::ptr_eq(&prepared.data.vertices, &clone.data.vertices));
+        assert_eq!(qr_cache_len(), 0);
     }
 
     #[test]

@@ -1959,7 +1959,7 @@ pub(super) mod tests {
             effect,
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 AudioRequest::PlaySfx(path)
-            )) if path == expected_path
+            )) if *path == expected_path
         ));
     }
 

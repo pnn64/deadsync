@@ -245,7 +245,7 @@ mod tests {
                     )
                 )),
                 ThemeEffect::Navigate(Screen::SelectColor)
-            ] if path == "assets/sounds/start.ogg"
+            ] if *path == "assets/sounds/start.ogg"
         ));
         assert_eq!(effects.capacity(), 8);
     }
@@ -273,7 +273,7 @@ mod tests {
                     )
                 )),
                 ThemeEffect::Navigate(Screen::ManageLocalProfiles)
-            ] if path == "assets/sounds/change.ogg"
+            ] if *path == "assets/sounds/change.ogg"
         ));
         assert!(state.target_profile.is_none());
     }

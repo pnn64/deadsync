@@ -682,6 +682,14 @@ pub fn selection_anim_beat(state: &State) -> f32 {
     sl_selection_anim_beat(state.entries.get(state.selected_index), state)
 }
 
+fn prepare_scorebox_presentation(
+    scoreboxes: &[ScoreboxSideView; 2],
+) -> [gs_scorebox::SelectMusicScoreboxPresentation; 2] {
+    scoreboxes
+        .each_ref()
+        .map(gs_scorebox::SelectMusicScoreboxPresentation::new)
+}
+
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     if let Some(session) = view.session {
@@ -731,6 +739,7 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
         state.music_wheel = music_wheel;
     }
     if let Some(scoreboxes) = view.scoreboxes {
+        state.scorebox_presentation = prepare_scorebox_presentation(&scoreboxes);
         state.scoreboxes = scoreboxes;
     }
     if let Some(leaderboard) = view.leaderboard {
@@ -814,8 +823,7 @@ fn song_music_length(song: &SongData) -> f32 {
     }
 }
 
-fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, AudioCut)> {
-    let path = song.music_path.clone()?;
+fn compute_preview_cut(song: &SongData) -> AudioCut {
     let mut start = song.sample_start.unwrap_or(0.0) as f64;
     let mut length = song.sample_length.unwrap_or(0.0) as f64;
     let total_len = f64::from(song_music_length(song));
@@ -834,15 +842,12 @@ fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, AudioCut)
         length = DEFAULT_PREVIEW_LENGTH;
     }
 
-    Some((
-        path,
-        AudioCut {
-            start_sec: start,
-            length_sec: length,
-            fade_out_sec: PREVIEW_FADE_OUT_SECONDS,
-            ..Default::default()
-        },
-    ))
+    AudioCut {
+        start_sec: start,
+        length_sec: length,
+        fade_out_sec: PREVIEW_FADE_OUT_SECONDS,
+        ..Default::default()
+    }
 }
 
 static FALLBACK_BANNER_KEYS: LazyLock<[Arc<str>; 12]> = LazyLock::new(|| {
@@ -1161,6 +1166,23 @@ pub enum MusicWheelEntry {
     Song(Arc<SongData>),
 }
 
+enum MediaPathSource {
+    SongBanner(Arc<SongData>),
+    SongCdTitle(Arc<SongData>),
+    Shared(Arc<Path>),
+}
+
+impl MediaPathSource {
+    #[inline(always)]
+    fn path(&self) -> Option<&Path> {
+        match self {
+            Self::SongBanner(song) => song.banner_path.as_deref(),
+            Self::SongCdTitle(song) => song.cdtitle_path.as_deref(),
+            Self::Shared(path) => Some(path),
+        }
+    }
+}
+
 impl MusicWheelEntry {
     pub fn pack_key(&self) -> Option<&str> {
         match self {
@@ -1200,6 +1222,7 @@ impl MusicWheelEntry {
 struct FolderStatsPackIndex {
     header_index: usize,
     entry_range: Range<usize>,
+    banner_texture_key: Option<Arc<str>>,
 }
 
 #[derive(Default)]
@@ -1211,10 +1234,12 @@ struct FolderStatsPackSummaries {
 ///
 /// Owner/threading: Select Music owns it on the main thread; `RefCell` only
 /// permits immutable actor composition to populate a missing summary.
-/// Capacity: one index per pack and at most one summary per requested
-/// `(pack, side, single/double, difficulty)` tuple.
-/// Warmup: pack ranges and song identities are indexed when the screen is
-/// initialized. Summaries are populated on their first visible menu frame.
+/// Capacity: one index and optional actor-ready banner key per pack, plus at
+/// most one summary per requested `(pack, side, single/double, difficulty)`
+/// tuple.
+/// Warmup: pack ranges, song identities, and banner keys are compiled when the
+/// screen is initialized. Summaries are populated on their first visible menu
+/// frame.
 /// Miss: scans only the selected pack range and performs cached-score lookups.
 /// Hits: two Fx lookups with no allocation or source entry/chart scan.
 /// Eviction: none; history replacement clears summaries and content reload
@@ -1239,7 +1264,11 @@ impl FolderStatsCache {
         let mut current_pack: Option<usize> = None;
         for (entry_index, entry) in entries.iter().enumerate() {
             match entry {
-                MusicWheelEntry::PackHeader { pack_key, .. } => {
+                MusicWheelEntry::PackHeader {
+                    pack_key,
+                    banner_path,
+                    ..
+                } => {
                     if let Some(pack_index) = current_pack.take() {
                         packs[pack_index].entry_range.end = entry_index;
                     }
@@ -1248,6 +1277,9 @@ impl FolderStatsCache {
                         packs.push(FolderStatsPackIndex {
                             header_index: entry_index,
                             entry_range: entry_index + 1..entries.len(),
+                            banner_texture_key: banner_path
+                                .as_deref()
+                                .map(|path| Arc::<str>::from(path.to_string_lossy().as_ref())),
                         });
                         pack_by_key.insert(pack_key.clone(), pack_index);
                         current_pack = Some(pack_index);
@@ -1585,8 +1617,6 @@ pub struct State {
     pub wheel_offset_from_selection: f32,
     pub current_banner_key: Arc<str>,
     pub current_cdtitle_key: Option<Arc<str>>,
-    pub current_graph_key: String,
-    pub current_graph_key_p2: String,
     pub current_graph_mesh: Option<Arc<[MeshVertex]>>,
     pub current_graph_mesh_p2: Option<Arc<[MeshVertex]>>,
     session_elapsed: f32,
@@ -1683,9 +1713,9 @@ pub struct State {
     labels: RefCell<SelectMusicLabels>,
     info_box_actor_cache: RefCell<InfoBoxActorCache>,
     matrix_rating_cache: RefCell<MatrixRatingCache>,
-    last_requested_banner_path: Option<PathBuf>,
-    last_requested_cdtitle_path: Option<PathBuf>,
-    last_requested_folder_stats_banner_path: Option<PathBuf>,
+    last_requested_banner_source: Option<MediaPathSource>,
+    last_requested_cdtitle_source: Option<MediaPathSource>,
+    last_requested_folder_stats_banner_source: Option<MediaPathSource>,
     /// Aligned song-select background paths and texture keys retained until
     /// the visible wheel set changes. The media request owns separate paths.
     last_requested_wheel_item_bg_paths: Vec<PathBuf>,
@@ -1723,7 +1753,9 @@ pub struct State {
     overlay_nav_held_since: Option<Instant>,
     overlay_nav_last_scrolled_at: Option<Instant>,
     srpg_tab_held: bool,
-    currently_playing_preview_path: Option<PathBuf>,
+    /// Retain the wheel's song identity while its preview is active so the
+    /// audio request is the only owner that must copy the decoder path.
+    currently_playing_preview_song: Option<Arc<SongData>>,
     currently_playing_preview_start_sec: Option<f32>,
     currently_playing_preview_length_sec: Option<f32>,
     audio_playback: AudioPlaybackView,
@@ -1739,6 +1771,7 @@ pub struct State {
     downloads: Vec<SelectMusicDownloadView>,
     srpg_shop_snapshot: Arc<deadsync_online::srpg_shop::SrpgShopSnapshot>,
     scoreboxes: [ScoreboxSideView; 2],
+    scorebox_presentation: [gs_scorebox::SelectMusicScoreboxPresentation; 2],
     unlock_downloads_available: bool,
     ready_song_reload_dirs: Vec<PathBuf>,
     sync_graph_mode: SyncGraphMode,
@@ -2403,12 +2436,9 @@ fn series_name_for_pack<'a>(
     })
 }
 
-#[inline(always)]
-fn media_path_key_string(path: &Path) -> String {
-    path.to_string_lossy().into_owned()
-}
-
-fn selected_group_header_for_folder_stats(state: &State) -> Option<(usize, &str, Option<&Path>)> {
+fn selected_group_header_for_folder_stats(
+    state: &State,
+) -> Option<(usize, &str, Option<&Arc<Path>>)> {
     if !matches!(
         state.sort_mode,
         WheelSortMode::Series | WheelSortMode::Group
@@ -2435,7 +2465,7 @@ fn selected_group_header_for_folder_stats(state: &State) -> Option<(usize, &str,
     match state.group_entries.get(header_index)? {
         MusicWheelEntry::PackHeader {
             name, banner_path, ..
-        } => Some((pack_index, name.as_ref(), banner_path.as_deref())),
+        } => Some((pack_index, name.as_ref(), banner_path.as_ref())),
         MusicWheelEntry::Song(_) => None,
     }
 }
@@ -3491,9 +3521,9 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
     state.prev_selected_index = state.selected_index;
     state.time_since_selection_change = 0.0;
     state.wheel_offset_from_selection = 0.0;
-    state.last_requested_banner_path = None;
-    state.last_requested_cdtitle_path = None;
-    state.last_requested_folder_stats_banner_path = None;
+    state.last_requested_banner_source = None;
+    state.last_requested_cdtitle_source = None;
+    state.last_requested_folder_stats_banner_source = None;
     state.last_requested_wheel_item_bg_paths.clear();
     state.wheel_item_bg_texture_keys.clear();
     state.cdtitle_spin_elapsed = 0.0;
@@ -3843,9 +3873,9 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         labels: RefCell::new(SelectMusicLabels::load()),
         info_box_actor_cache: RefCell::new(InfoBoxActorCache::default()),
         matrix_rating_cache: RefCell::new(MatrixRatingCache::default()),
-        last_requested_banner_path: None,
-        last_requested_cdtitle_path: None,
-        last_requested_folder_stats_banner_path: None,
+        last_requested_banner_source: None,
+        last_requested_cdtitle_source: None,
+        last_requested_folder_stats_banner_source: None,
         last_requested_wheel_item_bg_paths: Vec::new(),
         wheel_item_bg_texture_keys: Vec::new(),
         banner_high_quality_requested: false,
@@ -3854,8 +3884,6 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         current_banner_key: Arc::<str>::from("banner1.png"),
         current_cdtitle_key: None,
         last_requested_chart_hash: None,
-        current_graph_key: "__white".to_string(),
-        current_graph_key_p2: "__white".to_string(),
         current_graph_mesh: None,
         current_graph_mesh_p2: None,
         displayed_chart_p1: None,
@@ -3889,7 +3917,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         overlay_nav_held_since: None,
         overlay_nav_last_scrolled_at: None,
         srpg_tab_held: false,
-        currently_playing_preview_path: None,
+        currently_playing_preview_song: None,
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
         audio_playback: AudioPlaybackView::default(),
@@ -3905,6 +3933,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         downloads: Vec::new(),
         srpg_shop_snapshot: Default::default(),
         scoreboxes: Default::default(),
+        scorebox_presentation: Default::default(),
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
         sync_graph_mode: SyncGraphMode::PostKernelFingerprint,
@@ -4086,9 +4115,9 @@ pub fn init_placeholder() -> State {
         labels: RefCell::new(SelectMusicLabels::load()),
         info_box_actor_cache: RefCell::new(InfoBoxActorCache::default()),
         matrix_rating_cache: RefCell::new(MatrixRatingCache::default()),
-        last_requested_banner_path: None,
-        last_requested_cdtitle_path: None,
-        last_requested_folder_stats_banner_path: None,
+        last_requested_banner_source: None,
+        last_requested_cdtitle_source: None,
+        last_requested_folder_stats_banner_source: None,
         last_requested_wheel_item_bg_paths: Vec::new(),
         wheel_item_bg_texture_keys: Vec::new(),
         banner_high_quality_requested: false,
@@ -4097,8 +4126,6 @@ pub fn init_placeholder() -> State {
         current_banner_key: Arc::<str>::from("banner1.png"),
         current_cdtitle_key: None,
         last_requested_chart_hash: None,
-        current_graph_key: "__white".to_string(),
-        current_graph_key_p2: "__white".to_string(),
         current_graph_mesh: None,
         current_graph_mesh_p2: None,
         displayed_chart_p1: None,
@@ -4132,7 +4159,7 @@ pub fn init_placeholder() -> State {
         overlay_nav_held_since: None,
         overlay_nav_last_scrolled_at: None,
         srpg_tab_held: false,
-        currently_playing_preview_path: None,
+        currently_playing_preview_song: None,
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
         audio_playback: AudioPlaybackView::default(),
@@ -4148,6 +4175,7 @@ pub fn init_placeholder() -> State {
         downloads: Vec::new(),
         srpg_shop_snapshot: Default::default(),
         scoreboxes: Default::default(),
+        scorebox_presentation: Default::default(),
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
         sync_graph_mode: SyncGraphMode::PostKernelFingerprint,
@@ -4261,8 +4289,16 @@ fn music_wheel_update_hold_scroll(state: &mut State, dt: f32, dir: NavDirection)
 }
 
 #[inline(always)]
+fn current_preview_path(state: &State) -> Option<&Path> {
+    state
+        .currently_playing_preview_song
+        .as_deref()
+        .and_then(|song| song.music_path.as_deref())
+}
+
+#[inline(always)]
 fn clear_preview(state: &mut State) {
-    state.currently_playing_preview_path = None;
+    state.currently_playing_preview_song = None;
     state.currently_playing_preview_start_sec = None;
     state.currently_playing_preview_length_sec = None;
     queue_audio(state, AudioRequest::StopMusic);
@@ -4357,7 +4393,7 @@ fn set_music_rate(state: &mut State, rate: f32) {
 
 #[inline(always)]
 fn queue_sfx(state: &mut State, path: &'static str) {
-    queue_audio(state, AudioRequest::PlaySfx(path.to_owned()));
+    queue_audio(state, AudioRequest::PlaySfx(path));
 }
 
 #[inline(always)]
@@ -4425,14 +4461,18 @@ fn sync_preview_song(
     if !state.music_wheel_moved && !preview_starts_immediately {
         return;
     }
-    let music_path = selected_song.and_then(|s| s.music_path.clone());
-    if state.currently_playing_preview_path == music_path {
+    let selected_path = selected_song.and_then(|song| song.music_path.as_deref());
+    let current_path = current_preview_path(state);
+    if current_path == selected_path {
         return;
     }
 
-    state.currently_playing_preview_path = music_path;
+    state.currently_playing_preview_song = selected_song
+        .filter(|song| song.music_path.is_some())
+        .cloned();
     if let Some(song) = selected_song {
-        if let Some((path, cut)) = compute_preview_cut(song) {
+        if let Some(path) = song.music_path.clone() {
+            let cut = compute_preview_cut(song);
             state.currently_playing_preview_start_sec = Some(cut.start_sec as f32);
             state.currently_playing_preview_length_sec = Some(cut.length_sec as f32);
             queue_audio(
@@ -4463,10 +4503,10 @@ fn clear_stale_preview(
     previews_ready: bool,
 ) {
     let should_clear = {
-        let Some(current_path) = state.currently_playing_preview_path.as_ref() else {
+        let Some(current_path) = current_preview_path(state) else {
             return;
         };
-        let selected_path = selected_song.and_then(|song| song.music_path.as_ref());
+        let selected_path = selected_song.and_then(|song| song.music_path.as_deref());
         !previews_ready || selected_path != Some(current_path)
     };
     if should_clear {
@@ -5357,9 +5397,9 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
         state.selected_index = index;
         state.time_since_selection_change = 0.0;
         state.wheel_offset_from_selection = 0.0;
-        state.last_requested_banner_path = None;
-        state.last_requested_cdtitle_path = None;
-        state.last_requested_folder_stats_banner_path = None;
+        state.last_requested_banner_source = None;
+        state.last_requested_cdtitle_source = None;
+        state.last_requested_folder_stats_banner_source = None;
         state.last_requested_wheel_item_bg_paths.clear();
         state.wheel_item_bg_texture_keys.clear();
         state.cdtitle_spin_elapsed = 0.0;
@@ -5377,9 +5417,9 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
             state.selected_index = index;
             state.time_since_selection_change = 0.0;
             state.wheel_offset_from_selection = 0.0;
-            state.last_requested_banner_path = None;
-            state.last_requested_cdtitle_path = None;
-            state.last_requested_folder_stats_banner_path = None;
+            state.last_requested_banner_source = None;
+            state.last_requested_cdtitle_source = None;
+            state.last_requested_folder_stats_banner_source = None;
             state.last_requested_wheel_item_bg_paths.clear();
             state.wheel_item_bg_texture_keys.clear();
             state.cdtitle_spin_elapsed = 0.0;
@@ -5406,9 +5446,9 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
     }
     state.time_since_selection_change = 0.0;
     state.wheel_offset_from_selection = 0.0;
-    state.last_requested_banner_path = None;
-    state.last_requested_cdtitle_path = None;
-    state.last_requested_folder_stats_banner_path = None;
+    state.last_requested_banner_source = None;
+    state.last_requested_cdtitle_source = None;
+    state.last_requested_folder_stats_banner_source = None;
     state.last_requested_wheel_item_bg_paths.clear();
     state.wheel_item_bg_texture_keys.clear();
     state.cdtitle_spin_elapsed = 0.0;
@@ -6838,6 +6878,7 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
     let arrow_bounce_offset = state.arrow_bounce_offset;
     let policy = state.policy;
     let scoreboxes = state.scoreboxes.clone();
+    let scorebox_presentation = state.scorebox_presentation.clone();
     let unlock_downloads_available = state.unlock_downloads_available;
     let ready_song_reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
     let init_view = SelectMusicInitView {
@@ -6867,6 +6908,7 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
     refreshed.arrow_bounce_offset = arrow_bounce_offset;
     refreshed.policy = policy;
     refreshed.scoreboxes = scoreboxes;
+    refreshed.scorebox_presentation = scorebox_presentation;
     refreshed.unlock_downloads_available = unlock_downloads_available;
     refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
 
@@ -7024,6 +7066,7 @@ fn refresh_after_style_switch(state: &mut State) {
     let arrow_bounce_offset = state.arrow_bounce_offset;
     let policy = state.policy;
     let scoreboxes = state.scoreboxes.clone();
+    let scorebox_presentation = state.scorebox_presentation.clone();
     let unlock_downloads_available = state.unlock_downloads_available;
     let ready_song_reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
     let song_packs = std::mem::take(&mut state.song_packs);
@@ -7053,6 +7096,7 @@ fn refresh_after_style_switch(state: &mut State) {
     refreshed.arrow_bounce_offset = arrow_bounce_offset;
     refreshed.policy = policy;
     refreshed.scoreboxes = scoreboxes;
+    refreshed.scorebox_presentation = scorebox_presentation;
     refreshed.unlock_downloads_available = unlock_downloads_available;
     refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
 
@@ -7802,9 +7846,9 @@ fn apply_remote_lobby_song_selection(
     state.last_steps_nav_dir_p2 = None;
     state.last_steps_nav_time_p2 = None;
     state.step_artist_cycle_base = state.session_elapsed;
-    state.last_requested_banner_path = None;
-    state.last_requested_cdtitle_path = None;
-    state.last_requested_folder_stats_banner_path = None;
+    state.last_requested_banner_source = None;
+    state.last_requested_cdtitle_source = None;
+    state.last_requested_folder_stats_banner_source = None;
     state.last_requested_wheel_item_bg_paths.clear();
     state.wheel_item_bg_texture_keys.clear();
     state.cdtitle_spin_elapsed = 0.0;
@@ -11646,7 +11690,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
     sync_lobby_select_music(state);
 
     let overlays_block_delayed_updates = delayed_selection_updates_blocked(state);
-    if overlays_block_delayed_updates && state.currently_playing_preview_path.is_some() {
+    if overlays_block_delayed_updates && state.currently_playing_preview_song.is_some() {
         clear_preview(state);
     }
 
@@ -11667,14 +11711,14 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
     );
 
     let selected_pack_banner = match state.entries.get(state.selected_index) {
-        Some(MusicWheelEntry::PackHeader { banner_path, .. }) => banner_path.as_deref(),
+        Some(MusicWheelEntry::PackHeader { banner_path, .. }) => banner_path.as_ref(),
         _ => None,
     };
     let new_banner = if state.policy.media.show_banners {
         selected_song
             .as_deref()
             .and_then(|song| song.banner_path.as_deref())
-            .or(selected_pack_banner)
+            .or_else(|| selected_pack_banner.map(Arc::as_ref))
     } else {
         None
     };
@@ -11685,11 +11729,12 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
     } else {
         None
     };
-    let new_folder_stats_banner = if state.policy.media.show_folder_stats {
+    let new_folder_stats_banner_source = if state.policy.media.show_folder_stats {
         selected_group_header_for_folder_stats(state).and_then(|(_, _, path)| path)
     } else {
         None
     };
+    let new_folder_stats_banner = new_folder_stats_banner_source.map(Arc::as_ref);
     let wheel_item_bg_paths_match = music_wheel::visible_song_select_bg_paths_match(
         &state.entries,
         state.selected_index,
@@ -11698,12 +11743,25 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         &state.last_requested_wheel_item_bg_paths,
     );
 
-    if state.last_requested_banner_path.as_deref() != new_banner {
-        let new_banner = new_banner.map(Path::to_path_buf);
-        state.last_requested_banner_path.clone_from(&new_banner);
+    if state
+        .last_requested_banner_source
+        .as_ref()
+        .and_then(MediaPathSource::path)
+        != new_banner
+    {
+        state.last_requested_banner_source = if !state.policy.media.show_banners {
+            None
+        } else if let Some(song) = selected_song
+            .as_ref()
+            .filter(|song| song.banner_path.is_some())
+        {
+            Some(MediaPathSource::SongBanner(song.clone()))
+        } else {
+            selected_pack_banner.cloned().map(MediaPathSource::Shared)
+        };
         state.banner_high_quality_requested = false;
         return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
-            crate::SimplyLoveMediaRequest::Banner(new_banner),
+            crate::SimplyLoveMediaRequest::Banner(new_banner.map(Path::to_path_buf)),
         ));
     }
     if new_banner.is_some()
@@ -11716,24 +11774,42 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
             crate::SimplyLoveMediaRequest::Banner(new_banner.map(Path::to_path_buf)),
         ));
     }
-    if state.last_requested_cdtitle_path.as_deref() != new_cdtitle {
-        let new_cdtitle = new_cdtitle.map(Path::to_path_buf);
+    if state
+        .last_requested_cdtitle_source
+        .as_ref()
+        .and_then(MediaPathSource::path)
+        != new_cdtitle
+    {
         if new_cdtitle.is_some() {
             state.cdtitle_spin_elapsed = 0.0;
             state.cdtitle_anim_elapsed = 0.0;
         }
-        state.last_requested_cdtitle_path.clone_from(&new_cdtitle);
+        state.last_requested_cdtitle_source = if state.policy.media.show_cdtitles {
+            selected_song
+                .as_ref()
+                .filter(|song| song.cdtitle_path.is_some())
+                .cloned()
+                .map(MediaPathSource::SongCdTitle)
+        } else {
+            None
+        };
         return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
-            crate::SimplyLoveMediaRequest::CdTitle(new_cdtitle),
+            crate::SimplyLoveMediaRequest::CdTitle(new_cdtitle.map(Path::to_path_buf)),
         ));
     }
-    if state.last_requested_folder_stats_banner_path.as_deref() != new_folder_stats_banner {
-        let new_folder_stats_banner = new_folder_stats_banner.map(Path::to_path_buf);
-        state
-            .last_requested_folder_stats_banner_path
-            .clone_from(&new_folder_stats_banner);
+    if state
+        .last_requested_folder_stats_banner_source
+        .as_ref()
+        .and_then(MediaPathSource::path)
+        != new_folder_stats_banner
+    {
+        let request_path = new_folder_stats_banner.map(Path::to_path_buf);
+        let retained_source = new_folder_stats_banner_source
+            .cloned()
+            .map(MediaPathSource::Shared);
+        state.last_requested_folder_stats_banner_source = retained_source;
         return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
-            crate::SimplyLoveMediaRequest::PackBanner(new_folder_stats_banner),
+            crate::SimplyLoveMediaRequest::PackBanner(request_path),
         ));
     }
     if !wheel_item_bg_paths_match {
@@ -11775,7 +11851,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
             state.policy.media.preview_loop,
             state.policy.media.preview_starts_immediately,
         );
-    } else if state.currently_playing_preview_path.is_some() {
+    } else if state.currently_playing_preview_song.is_some() {
         clear_preview(state);
     }
 
@@ -11927,9 +12003,9 @@ pub fn trigger_immediate_refresh(state: &mut State) {
     state.time_since_selection_change = PREVIEW_DELAY_SECONDS;
     state.last_requested_chart_hash = None;
     state.last_requested_chart_hash_p2 = None;
-    state.last_requested_banner_path = None;
-    state.last_requested_cdtitle_path = None;
-    state.last_requested_folder_stats_banner_path = None;
+    state.last_requested_banner_source = None;
+    state.last_requested_cdtitle_source = None;
+    state.last_requested_folder_stats_banner_source = None;
     state.last_requested_wheel_item_bg_paths.clear();
     state.wheel_item_bg_texture_keys.clear();
     state.banner_high_quality_requested = false;
@@ -11955,7 +12031,7 @@ pub fn reset_preview_after_gameplay(state: &mut State, history: SelectMusicHisto
         state.sort_mode = WheelSortMode::Group;
         apply_wheel_sort(state, WheelSortMode::Popularity);
     }
-    state.currently_playing_preview_path = None;
+    state.currently_playing_preview_song = None;
     state.currently_playing_preview_start_sec = None;
     state.currently_playing_preview_length_sec = None;
     state.music_wheel_moved = false;
@@ -12425,8 +12501,7 @@ fn push_folder_stats_overlay(
     {
         return;
     }
-    let Some((pack_index, group_name, banner_path)) = selected_group_header_for_folder_stats(state)
-    else {
+    let Some((pack_index, group_name, _)) = selected_group_header_for_folder_stats(state) else {
         return;
     };
     let difficulty = chart
@@ -12469,16 +12544,17 @@ fn push_folder_stats_overlay(
         z(121):
         diffuse(0.0, 0.0, 0.0, 1.0)
     ));
-    if let Some(path) = banner_path {
-        let key = media_path_key_string(path);
-        if asset_manager.has_texture_key(&key) {
-            children.push(act!(sprite(key):
-                align(0.5, 0.5):
-                xy(cx, cy):
-                setsize(frame_w, frame_h):
-                z(122)
-            ));
-        }
+    if let Some(key) = state.folder_stats.packs[pack_index]
+        .banner_texture_key
+        .as_ref()
+        && asset_manager.has_texture_key(key)
+    {
+        children.push(act!(sprite(Arc::clone(key)):
+            align(0.5, 0.5):
+            xy(cx, cy):
+            setsize(frame_w, frame_h):
+            z(122)
+        ));
     }
     children.push(act!(quad:
         align(0.5, 0.5):
@@ -13265,7 +13341,6 @@ pub fn push_actors(
     let push_breakdown_panel = |out: &mut Vec<Actor>,
                                 graph_cy: f32,
                                 is_p2_layout: bool,
-                                graph_key: &str,
                                 graph_mesh: Option<Arc<[MeshVertex]>>,
                                 preview_marker: Option<PreviewMarker>,
                                 displayed: Option<&DisplayedChart>| {
@@ -13351,10 +13426,6 @@ pub fn push_actors(
                     blend: BlendMode::Alpha,
                     z: 0,
                 });
-            } else if graph_key != "__white" {
-                push_child(act!(sprite(cached_str_ref(graph_key)):
-                    align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, graph_h)
-                ));
             }
             if let Some(marker) = preview_marker {
                 push_child(act!(quad:
@@ -13387,7 +13458,6 @@ pub fn push_actors(
                     actors,
                     screen_center_y() + 23.0,
                     false,
-                    &state.current_graph_key,
                     state.current_graph_mesh.clone(),
                     preview_marker_p1,
                     state.displayed_chart_p1.as_ref(),
@@ -13398,7 +13468,6 @@ pub fn push_actors(
                     actors,
                     screen_center_y() + 111.0,
                     true,
-                    &state.current_graph_key_p2,
                     state.current_graph_mesh_p2.clone(),
                     preview_marker_p2,
                     state.displayed_chart_p2.as_ref(),
@@ -13417,7 +13486,6 @@ pub fn push_actors(
                 actors,
                 graph_cy,
                 is_p2_single,
-                &state.current_graph_key,
                 state.current_graph_mesh.clone(),
                 preview_marker_p1,
                 state.displayed_chart_p1.as_ref(),
@@ -13450,9 +13518,8 @@ pub fn push_actors(
         let show_ex_score = scorebox_runtime.show_ex_score;
 
         let chart_hash = chart.map(|c| c.short_hash.as_str());
-        let gs_view = gs_scorebox::select_music_scorebox_view(
-            scorebox_runtime,
-            chart_hash,
+        let gs_view = state.scorebox_presentation[profile_data::player_side_index(side)].view(
+            scorebox_runtime.chart_hash.as_deref() == chart_hash,
             allow_gs_fetch && show_rivals,
         );
         select_pane::push_base(
@@ -13476,29 +13543,36 @@ pub fn push_actors(
         if show_rivals {
             // Simply Love PaneDisplay order: Machine/World first, then Player.
             let lines = [
-                (gs_view.machine_name.clone(), gs_view.machine_score.clone()),
-                (gs_view.player_name.clone(), gs_view.player_score.clone()),
+                (
+                    Arc::clone(&gs_view.machine_name),
+                    Arc::clone(&gs_view.machine_score),
+                ),
+                (
+                    Arc::clone(&gs_view.player_name),
+                    Arc::clone(&gs_view.player_score),
+                ),
             ];
             for (i, (name, pct)) in lines.into_iter().enumerate() {
                 out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
                 out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
             }
-            let score_mode_label_storage = format!("{} Score", gs_view.mode_text);
-            let score_mode_label = gs_view
-                .loading_text
-                .clone()
-                .unwrap_or(score_mode_label_storage);
-            out.push(act!(text: font("miso"): settext(score_mode_label): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
+            out.push(act!(text: font("miso"): settext(Arc::clone(&gs_view.mode_label)): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
             if gs_view.show_rivals {
                 for (i, (name, pct)) in gs_view.rivals.iter().enumerate() {
-                    out.push(act!(text: font("miso"): settext(name.clone()): align(0.5, 0.5): xy(pane_cx + cols[2] + 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-                    out.push(act!(text: font("miso"): settext(pct.clone()): align(1.0, 0.5): xy(pane_cx + cols[2] + 125.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                    out.push(act!(text: font("miso"): settext(Arc::clone(name)): align(0.5, 0.5): xy(pane_cx + cols[2] + 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                    out.push(act!(text: font("miso"): settext(Arc::clone(pct)): align(1.0, 0.5): xy(pane_cx + cols[2] + 125.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
                 }
             }
         } else {
             let lines = [
-                (gs_view.machine_name, gs_view.machine_score),
-                (gs_view.player_name, gs_view.player_score),
+                (
+                    Arc::clone(&gs_view.machine_name),
+                    Arc::clone(&gs_view.machine_score),
+                ),
+                (
+                    Arc::clone(&gs_view.player_name),
+                    Arc::clone(&gs_view.player_score),
+                ),
             ];
             for (i, (name, score)) in lines.into_iter().enumerate() {
                 out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
@@ -14793,14 +14867,15 @@ mod tests {
     use super::{
         PREVIEW_DELAY_SECONDS, SyncGraphCols, WheelSortMode, append_pending_runtime,
         banner_texture_key, build_displayed_entries, build_playlist_entries_from_text,
-        build_playlist_song_lookup, build_sync_heat_image, delayed_selection_updates_blocked,
-        first_song_entry_index, handle_downloads_overlay_raw_key,
-        handle_profile_switch_overlay_input, init_placeholder, keymap_has_player_input,
-        maybe_prewarm_replaygain_for_pack, maybe_refresh_select_music_leaderboard,
-        prepend_pending_effect, profile_boxes, reset_preview_after_gameplay,
-        select_music_lobby_lock_text, select_music_lobby_lock_text_for, solo_runtime_side,
-        steps_index_for_side, sync_beat_axis_rows, sync_beat_marker_rows, sync_beat_row_y,
-        sync_bias_axis_pos, sync_graph_cols, sync_low_confidence_warning, sync_overlay_graph_size,
+        build_playlist_song_lookup, build_sync_heat_image, current_preview_path,
+        delayed_selection_updates_blocked, first_song_entry_index,
+        handle_downloads_overlay_raw_key, handle_profile_switch_overlay_input, init_placeholder,
+        keymap_has_player_input, maybe_prewarm_replaygain_for_pack,
+        maybe_refresh_select_music_leaderboard, prepend_pending_effect, profile_boxes,
+        reset_preview_after_gameplay, select_music_lobby_lock_text,
+        select_music_lobby_lock_text_for, solo_runtime_side, steps_index_for_side,
+        sync_beat_axis_rows, sync_beat_marker_rows, sync_beat_row_y, sync_bias_axis_pos,
+        sync_graph_cols, sync_low_confidence_warning, sync_overlay_graph_size,
     };
     use crate::config::{
         GraphOrientation, GraphOrigin, SelectMusicSeriesSource, SelectMusicWheelStyle,
@@ -14963,6 +15038,82 @@ mod tests {
             }
             _ => None,
         }
+    }
+
+    fn actor_has_text(actor: &Actor, expected: &str) -> bool {
+        match actor {
+            Actor::Text { content, .. } => content.as_str() == expected,
+            Actor::Frame { children, .. } => {
+                children.iter().any(|actor| actor_has_text(actor, expected))
+            }
+            _ => false,
+        }
+    }
+
+    #[test]
+    fn scorebox_presentation_hides_records_until_chart_snapshot_matches() {
+        let mut state = init_placeholder();
+        state.session.play_style = profile_data::PlayStyle::Single;
+        state.session.player_side = profile_data::PlayerSide::P1;
+        state.session.joined = [true, false];
+        state.selected_steps_index = 0;
+
+        let song = super::test_folder_stats_song(0);
+        state.entries = vec![super::MusicWheelEntry::Song(song.clone())];
+        super::ensure_chart_cache_for_song(&mut state, &song, "dance-single", false);
+        let current_hash =
+            super::immediate_selected_charts(&state, profile_data::PlayStyle::Single)[0]
+                .expect("test song should have a selected chart")
+                .short_hash
+                .clone();
+        let scorebox = |chart_hash: String| crate::views::ScoreboxSideView {
+            joined: true,
+            chart_hash: Some(chart_hash),
+            machine_itg: Some(crate::views::ScoreboxMachineView {
+                name: "LEAK".to_string(),
+                score_10000: 9999.0,
+                failed: false,
+            }),
+            ..Default::default()
+        };
+
+        super::sync_runtime_view(
+            &mut state,
+            crate::views::SelectMusicRuntimeView {
+                scoreboxes: Some([scorebox("previous-chart".to_string()), Default::default()]),
+                ..Default::default()
+            },
+        );
+        let stale_actors = super::get_actors(&state, &crate::assets::AssetManager::new(), 1);
+        assert!(
+            !stale_actors
+                .iter()
+                .any(|actor| actor_has_text(actor, "LEAK"))
+        );
+        assert!(
+            !stale_actors
+                .iter()
+                .any(|actor| actor_has_text(actor, "99.99%"))
+        );
+
+        super::sync_runtime_view(
+            &mut state,
+            crate::views::SelectMusicRuntimeView {
+                scoreboxes: Some([scorebox(current_hash), Default::default()]),
+                ..Default::default()
+            },
+        );
+        let matched_actors = super::get_actors(&state, &crate::assets::AssetManager::new(), 1);
+        assert!(
+            matched_actors
+                .iter()
+                .any(|actor| actor_has_text(actor, "LEAK"))
+        );
+        assert!(
+            matched_actors
+                .iter()
+                .any(|actor| actor_has_text(actor, "99.99%"))
+        );
     }
 
     fn versus_scorebox_state(
@@ -15432,7 +15583,7 @@ mod tests {
             &effects[0],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 deadsync_theme::AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/start.ogg"
+            )) if *path == "assets/sounds/start.ogg"
         ));
         assert!(matches!(
             &effects[1],
@@ -15461,7 +15612,7 @@ mod tests {
             effects.as_slice(),
             [ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 deadsync_theme::AudioRequest::PlaySfx(path)
-            ))] if path == "assets/sounds/start.ogg"
+            ))] if *path == "assets/sounds/start.ogg"
         ));
     }
 
@@ -15567,6 +15718,12 @@ mod tests {
         })
     }
 
+    fn test_song_with_music(title: &str, path: &str) -> Arc<SongData> {
+        let mut song = (*test_song(title)).clone();
+        song.music_path = Some(PathBuf::from(path));
+        Arc::new(song)
+    }
+
     fn folder_stats_state() -> super::State {
         let song = super::test_folder_stats_song(0);
         let entries = vec![
@@ -15610,8 +15767,12 @@ mod tests {
         assert_eq!(song_pack, 0);
         assert_eq!(song_name, "Folder Stats Pack");
         assert_eq!(
-            song_banner,
-            Some(PathBuf::from("folder-stats.png").as_path())
+            song_banner.map(Arc::as_ref),
+            Some(Path::new("folder-stats.png"))
+        );
+        assert_eq!(
+            state.folder_stats.packs[0].banner_texture_key.as_deref(),
+            Some("folder-stats.png")
         );
         assert_eq!(state.folder_stats.packs[0].entry_range, 1..2);
 
@@ -15845,9 +16006,10 @@ mod tests {
         song.music_path = Some(PathBuf::from("Pack/Preview Song/music.ogg"));
         song.music_length_seconds = 30.0;
         song.total_length_seconds = 30;
+        let song = Arc::new(song);
 
         let mut disabled = init_placeholder();
-        disabled.entries = vec![super::MusicWheelEntry::Song(Arc::new(song.clone()))];
+        disabled.entries = vec![super::MusicWheelEntry::Song(song.clone())];
         let effect = handle_confirm(&mut disabled);
         assert!(matches!(
             effect,
@@ -15855,10 +16017,10 @@ mod tests {
                 deadsync_theme::AudioRequest::PlaySfx(_)
             ))
         ));
-        assert_eq!(disabled.currently_playing_preview_path, None);
+        assert!(disabled.currently_playing_preview_song.is_none());
 
         let mut enabled = init_placeholder();
-        enabled.entries = vec![super::MusicWheelEntry::Song(Arc::new(song))];
+        enabled.entries = vec![super::MusicWheelEntry::Song(song.clone())];
         enabled.policy.media.show_previews = true;
         enabled.policy.media.preview_loop = true;
         enabled.policy.media.preview_starts_immediately = true;
@@ -15878,9 +16040,13 @@ mod tests {
             ))
         ));
         assert_eq!(
-            enabled.currently_playing_preview_path,
-            Some(PathBuf::from("Pack/Preview Song/music.ogg"))
+            current_preview_path(&enabled),
+            Some(Path::new("Pack/Preview Song/music.ogg"))
         );
+        let Some(current_song) = enabled.currently_playing_preview_song.as_ref() else {
+            panic!("preview should retain the selected wheel song");
+        };
+        assert!(Arc::ptr_eq(current_song, &song));
     }
 
     #[test]
@@ -16048,7 +16214,7 @@ mod tests {
             &effects[0],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 deadsync_theme::AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/change.ogg"
+            )) if *path == "assets/sounds/change.ogg"
         ));
         assert!(matches!(
             &effects[1],
@@ -16188,7 +16354,7 @@ mod tests {
                 ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                     deadsync_theme::AudioRequest::PlaySfx(path)
                 )),
-            ] if path == "assets/sounds/start.ogg"
+            ] if *path == "assets/sounds/start.ogg"
         ));
         assert!(state.pending_profile.is_empty());
     }
@@ -16238,7 +16404,7 @@ mod tests {
                 )),
             ] if *side == profile_data::PlayerSide::P1
                 && pack_name == "Pack A"
-                && path == "assets/sounds/start.ogg"
+                && *path == "assets/sounds/start.ogg"
         ));
     }
 
@@ -16280,7 +16446,7 @@ mod tests {
                 )),
             ] if *side == profile_data::PlayerSide::P1
                 && series_name == "ITG Series"
-                && path == "assets/sounds/start.ogg"
+                && *path == "assets/sounds/start.ogg"
         ));
     }
 
@@ -16309,8 +16475,8 @@ mod tests {
             [
                 deadsync_theme::AudioRequest::PlaySfx(added),
                 deadsync_theme::AudioRequest::PlaySfx(removed),
-            ] if added == "assets/sounds/start.ogg"
-                && removed == "assets/sounds/common_invalid.ogg"
+            ] if *added == "assets/sounds/start.ogg"
+                && *removed == "assets/sounds/common_invalid.ogg"
         ));
     }
 
@@ -16355,7 +16521,7 @@ mod tests {
             &effects[0],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 deadsync_theme::AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/start.ogg"
+            )) if *path == "assets/sounds/start.ogg"
         ));
         assert!(matches!(
             effects[1],
@@ -16661,7 +16827,7 @@ mod tests {
         assert!(matches!(
             state.pending_audio.as_slice(),
             [deadsync_theme::AudioRequest::PlaySfx(path)]
-                if path == "assets/sounds/start.ogg"
+                if *path == "assets/sounds/start.ogg"
         ));
     }
 
@@ -16675,7 +16841,7 @@ mod tests {
         song.total_length_seconds = 18;
         song.normalized_bpms = "0.000=128.000".to_string();
 
-        let (_, cut) = super::compute_preview_cut(&song).unwrap();
+        let cut = super::compute_preview_cut(&song);
 
         assert!((cut.start_sec - 7.5).abs() <= 0.0001);
         assert!((cut.length_sec - 0.001).abs() <= 0.000001);
@@ -16704,7 +16870,7 @@ mod tests {
         state.selected_index = 0;
         state.prev_selected_index = 0;
         state.nav_key_held_direction = Some(super::NavDirection::Right);
-        state.currently_playing_preview_path = Some(PathBuf::from("old.ogg"));
+        state.currently_playing_preview_song = Some(test_song_with_music("old", "old.ogg"));
         state.currently_playing_preview_start_sec = Some(1.0);
         state.currently_playing_preview_length_sec = Some(10.0);
 
@@ -16728,9 +16894,93 @@ mod tests {
                 )),
             ]
         ));
-        assert_eq!(state.currently_playing_preview_path, None);
+        assert!(state.currently_playing_preview_song.is_none());
         assert_eq!(state.currently_playing_preview_start_sec, None);
         assert_eq!(state.currently_playing_preview_length_sec, None);
+    }
+
+    #[test]
+    fn media_state_retains_selected_song_source() {
+        let mut state = init_placeholder();
+        state.policy.media.show_banners = true;
+        state.policy.media.show_cdtitles = true;
+        let mut song = (*test_song("media source")).clone();
+        song.banner_path = Some(PathBuf::from("song-banner.png"));
+        song.cdtitle_path = Some(PathBuf::from("song-cdtitle.png"));
+        let song = Arc::new(song);
+        state.entries = vec![super::MusicWheelEntry::Song(song.clone())];
+
+        let banner = update(
+            &mut state,
+            0.016,
+            &deadsync_theme::views::SmxAssignmentView::default(),
+        );
+        assert!(matches!(
+            banner,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                crate::SimplyLoveMediaRequest::Banner(Some(path))
+            )) if path == PathBuf::from("song-banner.png")
+        ));
+        let Some(super::MediaPathSource::SongBanner(retained)) =
+            state.last_requested_banner_source.as_ref()
+        else {
+            panic!("banner state should retain the selected song");
+        };
+        assert!(Arc::ptr_eq(retained, &song));
+
+        state.banner_high_quality_requested = true;
+        let cdtitle = update(
+            &mut state,
+            0.016,
+            &deadsync_theme::views::SmxAssignmentView::default(),
+        );
+        assert!(matches!(
+            cdtitle,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                crate::SimplyLoveMediaRequest::CdTitle(Some(path))
+            )) if path == PathBuf::from("song-cdtitle.png")
+        ));
+        let Some(super::MediaPathSource::SongCdTitle(retained)) =
+            state.last_requested_cdtitle_source.as_ref()
+        else {
+            panic!("CDTitle state should retain the selected song");
+        };
+        assert!(Arc::ptr_eq(retained, &song));
+    }
+
+    #[test]
+    fn folder_banner_state_retains_group_header_source() {
+        let mut state = folder_stats_state();
+        state.policy.media.show_banners = false;
+        state.policy.media.show_cdtitles = false;
+        state.policy.media.show_folder_stats = true;
+        state.prev_selected_index = state.selected_index;
+        let Some(super::MusicWheelEntry::PackHeader {
+            banner_path: Some(banner),
+            ..
+        }) = state.group_entries.first()
+        else {
+            panic!("folder fixture should retain a header banner");
+        };
+        let banner = banner.clone();
+
+        let effect = update(
+            &mut state,
+            0.016,
+            &deadsync_theme::views::SmxAssignmentView::default(),
+        );
+        assert!(matches!(
+            effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                crate::SimplyLoveMediaRequest::PackBanner(Some(path))
+            )) if path == PathBuf::from("folder-stats.png")
+        ));
+        let Some(super::MediaPathSource::Shared(retained)) =
+            state.last_requested_folder_stats_banner_source.as_ref()
+        else {
+            panic!("folder banner state should retain the header source");
+        };
+        assert!(Arc::ptr_eq(retained, &banner));
     }
 
     fn test_entries() -> Vec<super::MusicWheelEntry> {
@@ -17509,7 +17759,7 @@ mod tests {
     #[test]
     fn preview_mute_hotkey_toggles_plain_wheel() {
         let mut state = init_placeholder();
-        state.currently_playing_preview_path = Some(PathBuf::from("preview.ogg"));
+        state.currently_playing_preview_song = Some(test_song_with_music("preview", "preview.ogg"));
         state.currently_playing_preview_start_sec = Some(1.0);
         state.currently_playing_preview_length_sec = Some(10.0);
 
@@ -17518,7 +17768,7 @@ mod tests {
 
         assert_stop_then_consume(action);
         assert!(state.preview_music_muted);
-        assert_eq!(state.currently_playing_preview_path, None);
+        assert!(state.currently_playing_preview_song.is_none());
         assert_eq!(state.currently_playing_preview_start_sec, None);
         assert_eq!(state.currently_playing_preview_length_sec, None);
 
@@ -17539,9 +17789,10 @@ mod tests {
         song.music_path = Some(PathBuf::from("preview.ogg"));
         song.sample_start = Some(1.0);
         song.sample_length = Some(10.0);
-        state.entries = vec![super::MusicWheelEntry::Song(Arc::new(song))];
+        let song = Arc::new(song);
+        state.entries = vec![super::MusicWheelEntry::Song(song.clone())];
         state.selected_index = 0;
-        state.currently_playing_preview_path = Some(PathBuf::from("preview.ogg"));
+        state.currently_playing_preview_song = Some(song);
         state.currently_playing_preview_start_sec = Some(1.0);
         state.currently_playing_preview_length_sec = Some(10.0);
 
@@ -17559,16 +17810,13 @@ mod tests {
             )) if path == PathBuf::from("preview.ogg")
         ));
         assert!(!state.preview_music_muted);
-        assert_eq!(
-            state.currently_playing_preview_path,
-            Some(PathBuf::from("preview.ogg"))
-        );
+        assert_eq!(current_preview_path(&state), Some(Path::new("preview.ogg")));
     }
 
     #[test]
     fn preview_mute_hotkey_toggles_lobby_locked_wheel() {
         let mut state = init_placeholder();
-        state.currently_playing_preview_path = Some(PathBuf::from("preview.ogg"));
+        state.currently_playing_preview_song = Some(test_song_with_music("preview", "preview.ogg"));
         state.currently_playing_preview_start_sec = Some(1.0);
         state.currently_playing_preview_length_sec = Some(10.0);
 
@@ -17597,7 +17845,7 @@ mod tests {
 
         assert_stop_then_consume(action);
         assert!(state.preview_music_muted);
-        assert_eq!(state.currently_playing_preview_path, None);
+        assert!(state.currently_playing_preview_song.is_none());
         assert_eq!(state.currently_playing_preview_start_sec, None);
         assert_eq!(state.currently_playing_preview_length_sec, None);
     }

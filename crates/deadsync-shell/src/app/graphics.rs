@@ -452,8 +452,6 @@ impl App {
         if reset.refresh_select_music {
             select_music::trigger_immediate_refresh(&mut self.state.screens.select_music_state);
         }
-        self.state.screens.select_music_state.current_graph_key = reset.graph_key.to_string();
-        self.state.screens.select_music_state.current_graph_key_p2 = reset.graph_key.to_string();
         Ok(())
     }
 

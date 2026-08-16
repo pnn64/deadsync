@@ -207,6 +207,7 @@ pub struct State {
     pub(super) pending_sfx: Vec<&'static str>,
     pub(super) pending_sync: Vec<crate::SimplyLoveSyncRequest>,
     pub(super) pending_online: Vec<crate::SimplyLoveOnlineRequest>,
+    pub(super) online_reinit_pending: bool,
     pub(super) pending_audio: smallvec::SmallVec<[AudioRequest; MAX_PENDING_AUDIO_REQUESTS]>,
     // Submenu state
     pub(super) sub_selected: usize,
@@ -391,6 +392,7 @@ pub fn init(view: OptionsInitView) -> State {
         pending_sfx: Vec::new(),
         pending_sync: Vec::new(),
         pending_online: Vec::new(),
+        online_reinit_pending: false,
         pending_audio: smallvec::SmallVec::new(),
         view: OptionsView::Main,
         sub_selected: 0,

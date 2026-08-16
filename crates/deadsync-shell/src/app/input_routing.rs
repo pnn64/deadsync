@@ -226,6 +226,15 @@ impl App {
             );
             return self.drain_theme_effects(event_loop);
         }
+        if current_screen == CurrentScreen::SelectCourse {
+            debug_assert!(self.theme_effect_scratch.is_empty());
+            screens::select_course::handle_input(
+                &mut self.state.screens.select_course_state,
+                &ev,
+                &mut self.theme_effect_scratch,
+            );
+            return self.drain_theme_effects(event_loop);
+        }
         if current_screen == CurrentScreen::Options {
             debug_assert!(self.theme_effect_scratch.is_empty());
             let updater = super::updater::view();
@@ -317,10 +326,9 @@ impl App {
             }
             CurrentScreen::SmxAssignPads => unreachable!("SMX Assign input uses the flat buffer"),
             CurrentScreen::SelectMusic => unreachable!("Select Music input routed directly"),
-            CurrentScreen::SelectCourse => screens::select_course::handle_input(
-                &mut self.state.screens.select_course_state,
-                &ev,
-            ),
+            CurrentScreen::SelectCourse => {
+                unreachable!("Select Course input uses the flat buffer")
+            }
             CurrentScreen::PlayerOptions => unreachable!("Player Options input routed directly"),
             CurrentScreen::Evaluation => {
                 screens::evaluation::handle_input(&mut self.state.screens.evaluation_state, &ev)

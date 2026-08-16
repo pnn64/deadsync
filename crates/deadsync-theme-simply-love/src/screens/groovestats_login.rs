@@ -256,7 +256,7 @@ mod tests {
                     )
                 )),
                 ThemeEffect::Navigate(Screen::ArrowCloudLogin)
-            ] if path == "assets/sounds/start.ogg"
+            ] if *path == "assets/sounds/start.ogg"
         ));
         assert_eq!(effects.capacity(), 8);
     }
@@ -280,7 +280,7 @@ mod tests {
                     )
                 )),
                 ThemeEffect::Navigate(Screen::Menu)
-            ] if path == "assets/sounds/change.ogg"
+            ] if *path == "assets/sounds/change.ogg"
         ));
         assert_eq!(effects.capacity(), 8);
     }

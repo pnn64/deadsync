@@ -3,7 +3,7 @@ use crate::screens::components::shared::gs_scorebox::{
     entries_with_local_self_state, srpg_logo_texture_key,
 };
 use crate::views::ScoreboxSideView;
-use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::color;
 use deadsync_config::prelude::SrpgVariant;
 use deadsync_profile as profile_data;
@@ -34,6 +34,25 @@ enum RecordsPaneKind {
 }
 
 impl RecordsPaneKind {
+    const ALL: [Self; 5] = [
+        Self::GrooveStatsItg,
+        Self::GrooveStatsEx,
+        Self::Srpg,
+        Self::ItlEx,
+        Self::ArrowCloudHardEx,
+    ];
+
+    #[inline(always)]
+    const fn index(self) -> usize {
+        match self {
+            Self::GrooveStatsItg => 0,
+            Self::GrooveStatsEx => 1,
+            Self::Srpg => 2,
+            Self::ItlEx => 3,
+            Self::ArrowCloudHardEx => 4,
+        }
+    }
+
     #[inline(always)]
     fn matches(self, pane: &score_data::LeaderboardPane) -> bool {
         match self {
@@ -42,7 +61,13 @@ impl RecordsPaneKind {
             Self::Srpg => {
                 score_data::scorebox_pane_kind(pane) == score_data::ScoreboxPaneKind::Srpg
             }
-            Self::ItlEx => pane.name.to_ascii_lowercase().contains("itl") && pane.is_ex,
+            Self::ItlEx => {
+                pane.name
+                    .as_bytes()
+                    .windows(3)
+                    .any(|window| window.eq_ignore_ascii_case(b"itl"))
+                    && pane.is_ex
+            }
             Self::ArrowCloudHardEx => pane.is_arrowcloud() && pane.is_hard_ex(),
         }
     }
@@ -70,44 +95,177 @@ impl RecordsPaneKind {
     }
 }
 
-fn format_gs_error_text(error: &str) -> String {
+fn format_gs_error_text(error: &str) -> &'static str {
     if error.eq_ignore_ascii_case("disabled") {
-        return GS_ERROR_DISABLED.to_string();
+        return GS_ERROR_DISABLED;
     }
-    let lower = error.to_ascii_lowercase();
-    if lower.contains("timed out") || lower.contains("timeout") {
-        GS_ERROR_TIMEOUT.to_string()
+    if error
+        .as_bytes()
+        .windows(7)
+        .any(|window| window.eq_ignore_ascii_case(b"timeout"))
+        || error
+            .as_bytes()
+            .windows(9)
+            .any(|window| window.eq_ignore_ascii_case(b"timed out"))
+    {
+        GS_ERROR_TIMEOUT
     } else {
-        GS_ERROR_FAILED.to_string()
+        GS_ERROR_FAILED
     }
 }
 
-fn gs_player_name(entry: &score_data::LeaderboardEntry) -> String {
+fn gs_player_name(entry: &score_data::LeaderboardEntry) -> TextContent {
     let trimmed_name = entry.name.trim();
     if !trimmed_name.is_empty() {
-        return trimmed_name.to_string();
+        return super::retained_str(trimmed_name);
     }
     if let Some(tag) = entry.machine_tag.as_deref() {
         let trimmed_tag = tag.trim();
         if !trimmed_tag.is_empty() {
-            return trimmed_tag.to_string();
+            return super::retained_str(trimmed_tag);
         }
     }
-    GS_ROW_PLACEHOLDER_NAME.to_string()
+    TextContent::static_str(GS_ROW_PLACEHOLDER_NAME)
 }
 
-fn pane_display_entries(
-    runtime: &ScoreboxSideView,
-    pane: &score_data::LeaderboardPane,
-) -> Vec<score_data::LeaderboardEntry> {
-    let entries = entries_with_local_self_state(runtime, pane);
-    score_data::prioritized_leaderboard_entries(entries.as_ref(), GS_RECORD_ROWS)
+#[derive(Clone)]
+struct RecordsRow {
+    rank: TextContent,
+    name: TextContent,
+    score: TextContent,
+    date: TextContent,
+    row_color: [f32; 4],
+    score_color: [f32; 4],
+}
+
+impl RecordsRow {
+    fn placeholder() -> Self {
+        Self {
+            rank: TextContent::static_str(GS_ROW_PLACEHOLDER_RANK),
+            name: TextContent::static_str(GS_ROW_PLACEHOLDER_NAME),
+            score: TextContent::static_str(GS_ROW_PLACEHOLDER_SCORE),
+            date: TextContent::static_str(GS_ROW_PLACEHOLDER_DATE),
+            row_color: [1.0; 4],
+            score_color: [1.0; 4],
+        }
+    }
+
+    fn status(message: &'static str) -> Self {
+        Self {
+            rank: TextContent::static_str(""),
+            name: TextContent::static_str(message),
+            score: TextContent::static_str(""),
+            date: TextContent::static_str(""),
+            row_color: [1.0; 4],
+            score_color: [1.0; 4],
+        }
+    }
+
+    fn entry(entry: &score_data::LeaderboardEntry, pane: &score_data::LeaderboardPane) -> Self {
+        let row_color = if entry.is_rival {
+            GS_RIVAL_COLOR
+        } else if entry.is_self {
+            GS_SELF_COLOR
+        } else {
+            [1.0; 4]
+        };
+        let score_color = if entry.is_fail {
+            [1.0, 0.0, 0.0, 1.0]
+        } else if pane.is_ex {
+            color::JUDGMENT_RGBA[0]
+        } else if pane.is_hard_ex() {
+            color::HARD_EX_SCORE_RGBA
+        } else {
+            row_color
+        };
+        let date = score_data::format_leaderboard_date_or_placeholder(&entry.date);
+        Self {
+            rank: super::retained_text(format_args!("{}.", entry.rank)),
+            name: gs_player_name(entry),
+            score: super::retained_text(format_args!("{:.2}%", entry.score / 100.0)),
+            date: super::retained_str(&date),
+            row_color,
+            score_color,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct RecordsPanePresentation {
+    kind: RecordsPaneKind,
+    rows: [RecordsRow; GS_RECORD_ROWS],
+}
+
+impl RecordsPanePresentation {
+    fn new(runtime: &ScoreboxSideView, kind: RecordsPaneKind) -> Self {
+        let mut presentation = Self {
+            kind,
+            rows: std::array::from_fn(|_| RecordsRow::placeholder()),
+        };
+        let status = match runtime.leaderboards.as_ref() {
+            None => Some(GS_ERROR_DISABLED),
+            Some(snapshot) if snapshot.loading => Some(GS_LOADING_TEXT),
+            Some(snapshot) if snapshot.error.is_some() => Some(format_gs_error_text(
+                snapshot.error.as_deref().unwrap_or_default(),
+            )),
+            Some(_) => None,
+        };
+        if let Some(status) = status {
+            presentation.rows[0] = RecordsRow::status(status);
+            return presentation;
+        }
+
+        let pane = runtime
+            .leaderboards
+            .as_ref()
+            .and_then(|snapshot| snapshot.data.as_ref())
+            .and_then(|data| data.panes.iter().find(|pane| kind.matches(pane)));
+        let Some(pane) = pane else {
+            presentation.rows[0] = RecordsRow::status(GS_NO_SCORES_TEXT);
+            return presentation;
+        };
+        let entries = entries_with_local_self_state(runtime, pane);
+        let display =
+            score_data::prioritized_leaderboard_entry_refs(entries.as_ref(), GS_RECORD_ROWS);
+        if display.is_empty() {
+            presentation.rows[0] = RecordsRow::status(GS_NO_SCORES_TEXT);
+            return presentation;
+        }
+        for (row, entry) in presentation.rows.iter_mut().zip(display) {
+            *row = RecordsRow::entry(entry, pane);
+        }
+        presentation
+    }
+}
+
+/// Five actor-ready online panes replaced atomically with each shell snapshot.
+#[derive(Clone)]
+pub(crate) struct OnlineRecordsPresentation {
+    panes: [RecordsPanePresentation; 5],
+}
+
+impl OnlineRecordsPresentation {
+    pub(crate) fn new(runtime: &ScoreboxSideView) -> Self {
+        Self {
+            panes: RecordsPaneKind::ALL.map(|kind| RecordsPanePresentation::new(runtime, kind)),
+        }
+    }
+
+    #[inline(always)]
+    fn pane(&self, kind: RecordsPaneKind) -> &RecordsPanePresentation {
+        &self.panes[kind.index()]
+    }
+}
+
+impl Default for OnlineRecordsPresentation {
+    fn default() -> Self {
+        Self::new(&ScoreboxSideView::default())
+    }
 }
 
 fn build_records_pane(
     controller: profile_data::PlayerSide,
-    runtime: &ScoreboxSideView,
-    kind: RecordsPaneKind,
+    presentation: &RecordsPanePresentation,
 ) -> Vec<Actor> {
     let pane_origin_x = pane_origin_x(controller);
     let pane_origin_y = deadlib_present::space::screen_center_y() - 62.0;
@@ -122,160 +280,57 @@ fn build_records_pane(
     let rank_max_width = 55.0;
     let name_max_width = 130.0;
 
-    let mut rows: Vec<(String, String, String, String, [f32; 4], [f32; 4])> =
-        Vec::with_capacity(GS_RECORD_ROWS);
-
-    match runtime.leaderboards.as_ref() {
-        None => {
-            rows.push((
-                String::new(),
-                GS_ERROR_DISABLED.to_string(),
-                String::new(),
-                String::new(),
-                [1.0, 1.0, 1.0, 1.0],
-                [1.0, 1.0, 1.0, 1.0],
-            ));
-        }
-        Some(snapshot) if snapshot.loading => {
-            rows.push((
-                String::new(),
-                GS_LOADING_TEXT.to_string(),
-                String::new(),
-                String::new(),
-                [1.0, 1.0, 1.0, 1.0],
-                [1.0, 1.0, 1.0, 1.0],
-            ));
-        }
-        Some(snapshot) if snapshot.error.is_some() => {
-            rows.push((
-                String::new(),
-                format_gs_error_text(snapshot.error.as_deref().unwrap_or_default()),
-                String::new(),
-                String::new(),
-                [1.0, 1.0, 1.0, 1.0],
-                [1.0, 1.0, 1.0, 1.0],
-            ));
-        }
-        Some(snapshot) => {
-            let records_pane = snapshot
-                .data
-                .as_ref()
-                .and_then(|data| data.panes.iter().find(|pane| kind.matches(pane)));
-            if let Some(pane) = records_pane {
-                let display_entries = pane_display_entries(runtime, pane);
-                if display_entries.is_empty() {
-                    rows.push((
-                        String::new(),
-                        GS_NO_SCORES_TEXT.to_string(),
-                        String::new(),
-                        String::new(),
-                        [1.0, 1.0, 1.0, 1.0],
-                        [1.0, 1.0, 1.0, 1.0],
-                    ));
-                } else {
-                    for entry in display_entries {
-                        let base_col = if entry.is_rival {
-                            GS_RIVAL_COLOR
-                        } else if entry.is_self {
-                            GS_SELF_COLOR
-                        } else {
-                            [1.0, 1.0, 1.0, 1.0]
-                        };
-                        let mut score_col = if pane.is_ex {
-                            color::JUDGMENT_RGBA[0]
-                        } else if pane.is_hard_ex() {
-                            color::HARD_EX_SCORE_RGBA
-                        } else {
-                            base_col
-                        };
-                        if entry.is_fail {
-                            score_col = [1.0, 0.0, 0.0, 1.0];
-                        }
-                        rows.push((
-                            format!("{}.", entry.rank),
-                            gs_player_name(&entry),
-                            format!("{:.2}%", entry.score / 100.0),
-                            score_data::format_leaderboard_date_or_placeholder(&entry.date),
-                            base_col,
-                            score_col,
-                        ));
-                    }
-                }
-            } else {
-                rows.push((
-                    String::new(),
-                    GS_NO_SCORES_TEXT.to_string(),
-                    String::new(),
-                    String::new(),
-                    [1.0, 1.0, 1.0, 1.0],
-                    [1.0, 1.0, 1.0, 1.0],
-                ));
-            }
-        }
-    }
-
-    while rows.len() < GS_RECORD_ROWS {
-        rows.push((
-            GS_ROW_PLACEHOLDER_RANK.to_string(),
-            GS_ROW_PLACEHOLDER_NAME.to_string(),
-            GS_ROW_PLACEHOLDER_SCORE.to_string(),
-            GS_ROW_PLACEHOLDER_DATE.to_string(),
-            [1.0, 1.0, 1.0, 1.0],
-            [1.0, 1.0, 1.0, 1.0],
-        ));
-    }
-
     let mut children = Vec::with_capacity(GS_RECORD_ROWS * 4 + 1);
-    let logo = kind.logo();
+    let logo = presentation.kind.logo();
     children.push(act!(sprite_static(logo):
         align(0.5, 0.5):
         xy(0.0, 100.0 * pane_zoom):
-        zoom(kind.logo_zoom(pane_zoom, logo)):
+        zoom(presentation.kind.logo_zoom(pane_zoom, logo)):
         diffuse(1.0, 1.0, 1.0, 0.5):
         z(100)
     ));
-    for (i, (rank, name, score, date, row_col, score_col)) in rows.into_iter().enumerate() {
+    for (i, row) in presentation.rows.iter().enumerate() {
         let y = first_row_y + i as f32 * row_height;
         children.push(act!(text:
             font("miso"):
-            settext(rank):
+            settext(row.rank.clone()):
             align(1.0, 0.5):
             xy(rank_x, y):
             zoom(text_zoom):
             maxwidth(rank_max_width):
             z(101):
-            diffuse(row_col[0], row_col[1], row_col[2], row_col[3]):
+            diffuse(row.row_color[0], row.row_color[1], row.row_color[2], row.row_color[3]):
             horizalign(right)
         ));
         children.push(act!(text:
             font("miso"):
-            settext(name):
+            settext(row.name.clone()):
             align(0.0, 0.5):
             xy(name_x, y):
             zoom(text_zoom):
             maxwidth(name_max_width):
             z(101):
-            diffuse(row_col[0], row_col[1], row_col[2], row_col[3]):
+            diffuse(row.row_color[0], row.row_color[1], row.row_color[2], row.row_color[3]):
             horizalign(left)
         ));
         children.push(act!(text:
             font("miso"):
-            settext(score):
+            settext(row.score.clone()):
             align(0.0, 0.5):
             xy(score_x, y):
             zoom(text_zoom):
             z(101):
-            diffuse(score_col[0], score_col[1], score_col[2], score_col[3]):
+            diffuse(row.score_color[0], row.score_color[1], row.score_color[2], row.score_color[3]):
             horizalign(left)
         ));
         children.push(act!(text:
             font("miso"):
-            settext(date):
+            settext(row.date.clone()):
             align(0.0, 0.5):
             xy(date_x, y):
             zoom(text_zoom):
             z(101):
-            diffuse(row_col[0], row_col[1], row_col[2], row_col[3]):
+            diffuse(row.row_color[0], row.row_color[1], row.row_color[2], row.row_color[3]):
             horizalign(left)
         ));
     }
@@ -290,43 +345,54 @@ fn build_records_pane(
     }]
 }
 
-pub fn build_gs_records_pane(
+pub(crate) fn build_gs_records_pane(
     controller: profile_data::PlayerSide,
-    runtime: &ScoreboxSideView,
+    presentation: &OnlineRecordsPresentation,
 ) -> Vec<Actor> {
-    build_records_pane(controller, runtime, RecordsPaneKind::GrooveStatsItg)
+    build_records_pane(
+        controller,
+        presentation.pane(RecordsPaneKind::GrooveStatsItg),
+    )
 }
 
-pub fn build_gs_ex_records_pane(
+pub(crate) fn build_gs_ex_records_pane(
     controller: profile_data::PlayerSide,
-    runtime: &ScoreboxSideView,
+    presentation: &OnlineRecordsPresentation,
 ) -> Vec<Actor> {
-    build_records_pane(controller, runtime, RecordsPaneKind::GrooveStatsEx)
+    build_records_pane(
+        controller,
+        presentation.pane(RecordsPaneKind::GrooveStatsEx),
+    )
 }
 
-pub fn build_itl_records_pane(
+pub(crate) fn build_itl_records_pane(
     controller: profile_data::PlayerSide,
-    runtime: &ScoreboxSideView,
+    presentation: &OnlineRecordsPresentation,
 ) -> Vec<Actor> {
-    build_records_pane(controller, runtime, RecordsPaneKind::ItlEx)
+    build_records_pane(controller, presentation.pane(RecordsPaneKind::ItlEx))
 }
 
-pub fn build_srpg_records_pane(
+pub(crate) fn build_srpg_records_pane(
     controller: profile_data::PlayerSide,
-    runtime: &ScoreboxSideView,
+    presentation: &OnlineRecordsPresentation,
 ) -> Vec<Actor> {
-    build_records_pane(controller, runtime, RecordsPaneKind::Srpg)
+    build_records_pane(controller, presentation.pane(RecordsPaneKind::Srpg))
 }
 
-pub fn build_arrowcloud_records_pane(
+pub(crate) fn build_arrowcloud_records_pane(
     controller: profile_data::PlayerSide,
-    runtime: &ScoreboxSideView,
+    presentation: &OnlineRecordsPresentation,
 ) -> Vec<Actor> {
-    build_records_pane(controller, runtime, RecordsPaneKind::ArrowCloudHardEx)
+    build_records_pane(
+        controller,
+        presentation.pane(RecordsPaneKind::ArrowCloudHardEx),
+    )
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
 
     fn entry(rank: u32, name: &str, is_self: bool, is_rival: bool) -> score_data::LeaderboardEntry {
@@ -388,5 +454,81 @@ mod tests {
     fn groovestats_ex_uses_in_pane_ex_logo() {
         assert_eq!(RecordsPaneKind::GrooveStatsItg.logo(), "GrooveStats.png");
         assert_eq!(RecordsPaneKind::GrooveStatsEx.logo(), "BoogieStatsEX.png");
+    }
+
+    #[test]
+    fn online_records_replace_loading_rows_with_ready_snapshot() {
+        let loading = ScoreboxSideView {
+            leaderboards: Some(score_data::CachedPlayerLeaderboardData::loading()),
+            ..Default::default()
+        };
+        let loading = OnlineRecordsPresentation::new(&loading);
+        assert_eq!(
+            loading.pane(RecordsPaneKind::GrooveStatsItg).rows[0]
+                .name
+                .as_str(),
+            GS_LOADING_TEXT
+        );
+
+        let ready = ScoreboxSideView {
+            leaderboards: Some(score_data::CachedPlayerLeaderboardData::ready(
+                score_data::PlayerLeaderboardData {
+                    panes: vec![score_data::LeaderboardPane {
+                        name: "GrooveStats".into(),
+                        entries: vec![entry(1, "AAA", true, false)],
+                        is_ex: false,
+                        disabled: false,
+                        personalized: true,
+                        arrowcloud_kind: None,
+                    }],
+                    srpg_self_score: None,
+                    itl_self_score: None,
+                    itl_self_rank: None,
+                },
+            )),
+            ..Default::default()
+        };
+        let ready = OnlineRecordsPresentation::new(&ready);
+        let rows = &ready.pane(RecordsPaneKind::GrooveStatsItg).rows;
+
+        assert_eq!(rows[0].rank.as_str(), "1.");
+        assert_eq!(rows[0].name.as_str(), "AAA");
+        assert_eq!(rows[0].score.as_str(), "97.99%");
+        assert_eq!(rows[0].date.as_str(), GS_ROW_PLACEHOLDER_DATE);
+        assert_eq!(rows[0].row_color, GS_SELF_COLOR);
+        assert_eq!(rows[1].rank.as_str(), GS_ROW_PLACEHOLDER_RANK);
+        assert_ne!(rows[0].name.as_str(), GS_LOADING_TEXT);
+    }
+
+    #[test]
+    fn online_records_share_oversized_snapshot_fields() {
+        let long = "x".repeat(deadlib_present::actors::InlineText::CAPACITY + 1);
+        let pane = score_data::LeaderboardPane {
+            name: "GrooveStats".into(),
+            entries: vec![entry(1, &long, false, false)],
+            is_ex: false,
+            disabled: false,
+            personalized: true,
+            arrowcloud_kind: None,
+        };
+        let runtime = ScoreboxSideView {
+            leaderboards: Some(score_data::CachedPlayerLeaderboardData::ready(
+                score_data::PlayerLeaderboardData {
+                    panes: vec![pane],
+                    srpg_self_score: None,
+                    itl_self_score: None,
+                    itl_self_rank: None,
+                },
+            )),
+            ..Default::default()
+        };
+        let presentation = OnlineRecordsPresentation::new(&runtime);
+        let source = &presentation.pane(RecordsPaneKind::GrooveStatsItg).rows[0].name;
+        let clone = source.clone();
+
+        let (TextContent::Shared(source), TextContent::Shared(clone)) = (source, &clone) else {
+            panic!("oversized online names should use shared text");
+        };
+        assert!(Arc::ptr_eq(source, clone));
     }
 }

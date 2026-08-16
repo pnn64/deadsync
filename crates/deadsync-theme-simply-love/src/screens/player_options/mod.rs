@@ -126,7 +126,7 @@ fn queue_profile_request(state: &mut State, request: crate::SimplyLoveProfileReq
 
 #[inline(always)]
 fn queue_sfx(state: &mut State, path: &'static str) {
-    queue_audio(state, AudioRequest::PlaySfx(path.to_owned()));
+    queue_audio(state, AudioRequest::PlaySfx(path));
 }
 
 fn append_pending_effects(state: &mut State, effect: ThemeEffect, effects: &mut Vec<ThemeEffect>) {

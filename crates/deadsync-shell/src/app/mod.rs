@@ -1307,13 +1307,8 @@ impl ScreensState {
                         now.duration_since(start).as_secs_f32(),
                     );
                 }
-                (
-                    Some(select_course::update(
-                        &mut self.select_course_state,
-                        delta_time,
-                    )),
-                    false,
-                )
+                select_course::update(&mut self.select_course_state, delta_time, effects);
+                (None, false)
             }
             CurrentScreen::Menu => (None, false),
         };
@@ -4291,7 +4286,7 @@ impl App {
                                         song_packs,
                                     );
                                     audio_requests::execute(AudioRequest::PlaySfx(
-                                        "assets/sounds/change.ogg".to_owned(),
+                                        "assets/sounds/change.ogg",
                                     ));
                                     debug!(
                                         "Force-reloaded song from disk: {}",
@@ -5683,7 +5678,7 @@ impl App {
 
         self.theme_effect_scratch
             .push(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
-                AudioRequest::PlaySfx("assets/sounds/start.ogg".to_owned()),
+                AudioRequest::PlaySfx("assets/sounds/start.ogg"),
             )));
         true
     }

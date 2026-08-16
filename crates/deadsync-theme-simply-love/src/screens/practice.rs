@@ -2891,7 +2891,7 @@ mod tests {
             else {
                 panic!("queued Practice sound should become an audio request");
             };
-            assert_eq!(path, expected);
+            assert_eq!(*path, expected);
         }
         assert!(pending.is_empty());
     }
@@ -2917,7 +2917,7 @@ mod tests {
         assert!(matches!(
             &effects[1],
             ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(path)))
-                if path == "assets/sounds/change.ogg"
+                if *path == "assets/sounds/change.ogg"
         ));
         assert!(matches!(
             effects[2],

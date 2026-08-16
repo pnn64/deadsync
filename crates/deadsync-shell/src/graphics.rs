@@ -133,7 +133,6 @@ pub struct RendererSwitchFailurePlan {
 pub struct RendererSwitchResourceResetPlan {
     pub commands: Vec<Command>,
     pub refresh_select_music: bool,
-    pub graph_key: &'static str,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -372,7 +371,6 @@ pub fn renderer_switch_resource_reset_plan() -> RendererSwitchResourceResetPlan 
     RendererSwitchResourceResetPlan {
         commands: renderer_switch_resource_reset_commands(),
         refresh_select_music: true,
-        graph_key: "__white",
     }
 }
 
@@ -1445,7 +1443,6 @@ mod tests {
         ));
         assert_eq!(commands.len(), 5);
         assert!(reset.refresh_select_music);
-        assert_eq!(reset.graph_key, "__white");
     }
 
     #[test]

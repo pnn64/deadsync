@@ -1211,7 +1211,7 @@ mod tests {
                         crate::SimplyLoveSyncOwner::SelectMusicPack
                     )
                 )),
-            ] if path == "assets/sounds/start.ogg"
+            ] if *path == "assets/sounds/start.ogg"
         ));
         assert_eq!(effects.capacity(), 8);
     }
@@ -1238,7 +1238,7 @@ mod tests {
                 ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Sync(
                     crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { changes }
                 )),
-            ] if path == "assets/sounds/start.ogg"
+            ] if *path == "assets/sounds/start.ogg"
                 && matches!(changes.as_slice(), [change]
                     if change.simfile_path == PathBuf::from("Songs/Test/song.ssc")
                         && (change.delta_seconds + 0.0125).abs() <= f32::EPSILON)
