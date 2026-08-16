@@ -1214,14 +1214,22 @@ impl ScreensState {
                 select_color::update(&mut self.select_color_state, delta_time);
                 (None, false)
             }
-            CurrentScreen::ArrowCloudLogin => (
-                screens::arrowcloud_login::update(&mut self.arrowcloud_login_state, delta_time),
-                false,
-            ),
-            CurrentScreen::GrooveStatsLogin => (
-                screens::groovestats_login::update(&mut self.groovestats_login_state, delta_time),
-                false,
-            ),
+            CurrentScreen::ArrowCloudLogin => {
+                screens::arrowcloud_login::update(
+                    &mut self.arrowcloud_login_state,
+                    delta_time,
+                    effects,
+                );
+                (None, false)
+            }
+            CurrentScreen::GrooveStatsLogin => {
+                screens::groovestats_login::update(
+                    &mut self.groovestats_login_state,
+                    delta_time,
+                    effects,
+                );
+                (None, false)
+            }
             CurrentScreen::SelectStyle => (
                 select_style::update(&mut self.select_style_state, delta_time),
                 false,

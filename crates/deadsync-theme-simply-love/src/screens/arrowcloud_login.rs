@@ -12,7 +12,8 @@
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::options::qr_login::{
-    QrLoginUiState, apply_events as apply_qr_events, build_qr_login_overlay_actors, create_login_ui,
+    QrLoginUiState, append_dismiss_effects, apply_events as apply_qr_events,
+    build_qr_login_overlay_actors, create_login_ui,
 };
 use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
@@ -82,12 +83,16 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
-pub fn update(state: &mut State, _dt: f32) -> Option<ThemeEffect> {
-    state.pending_start.take().map(|request| {
-        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
-            crate::SimplyLoveOnlineRequest::StartQrLogin(request),
-        ))
-    })
+pub fn update(state: &mut State, _dt: f32, effects: &mut Vec<ThemeEffect>) {
+    let start_len = effects.len();
+    if let Some(request) = state.pending_start.take() {
+        effects.push(ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::Online(crate::SimplyLoveOnlineRequest::StartQrLogin(
+                request,
+            )),
+        ));
+    }
+    debug_assert!(effects.len() - start_len <= 1);
 }
 
 pub fn apply_events(state: &mut State, events: Vec<crate::SimplyLoveQrLoginEvent>) {
@@ -105,7 +110,8 @@ pub fn apply_events(state: &mut State, events: Vec<crate::SimplyLoveQrLoginEvent
 ///                          as Back on `SelectProfile`.
 ///
 /// Any other input is consumed.
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeEffect>) {
+    let start_len = effects.len();
     let three_key = screen_input::three_key_menu_action(
         &mut state.menu_lr_chord,
         ev,
@@ -140,17 +146,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         } else {
             Screen::SelectColor
         };
-        return ThemeEffect::batch(vec![
-            crate::effects::sfx("assets/sounds/start.ogg"),
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
-                crate::SimplyLoveOnlineRequest::CancelQrLogin(
-                    crate::SimplyLoveQrLoginService::ArrowCloud,
-                ),
-            )),
-            ThemeEffect::Navigate(next),
-        ]);
-    }
-    if is_back {
+        append_dismiss_effects(
+            effects,
+            "assets/sounds/start.ogg",
+            crate::SimplyLoveQrLoginService::ArrowCloud,
+            next,
+        );
+    } else if is_back {
         state.ui = None;
         state.pending_start = None;
         state.target_profile = None;
@@ -160,17 +162,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             Screen::Menu
         };
         log::info!("ArrowCloud QR login cancelled — returning to {next:?}.");
-        return ThemeEffect::batch(vec![
-            crate::effects::sfx("assets/sounds/change.ogg"),
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
-                crate::SimplyLoveOnlineRequest::CancelQrLogin(
-                    crate::SimplyLoveQrLoginService::ArrowCloud,
-                ),
-            )),
-            ThemeEffect::Navigate(next),
-        ]);
+        append_dismiss_effects(
+            effects,
+            "assets/sounds/change.ogg",
+            crate::SimplyLoveQrLoginService::ArrowCloud,
+            next,
+        );
     }
-    ThemeEffect::None
+    debug_assert!(effects.len() - start_len <= 3);
 }
 
 pub fn push_actors(
@@ -205,4 +204,77 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(32);
     push_actors(&mut actors, state, alpha_multiplier, Default::default());
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use deadsync_core::input::InputSource;
+    use std::time::Instant;
+
+    fn press(action: VirtualAction) -> InputEvent {
+        let now = Instant::now();
+        InputEvent {
+            action,
+            input_slot: 0,
+            pressed: true,
+            source: InputSource::Keyboard,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+        }
+    }
+
+    #[test]
+    fn confirm_appends_sound_cancel_and_select_color() {
+        let mut state = init(0, false);
+        let mut effects = Vec::with_capacity(8);
+
+        handle_input(&mut state, &press(VirtualAction::p1_start), &mut effects);
+
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::PlaySfx(path)
+                )),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+                    crate::SimplyLoveOnlineRequest::CancelQrLogin(
+                        crate::SimplyLoveQrLoginService::ArrowCloud
+                    )
+                )),
+                ThemeEffect::Navigate(Screen::SelectColor)
+            ] if path == "assets/sounds/start.ogg"
+        ));
+        assert_eq!(effects.capacity(), 8);
+    }
+
+    #[test]
+    fn targeted_back_appends_change_cancel_and_profile_menu() {
+        let mut state = init(0, false);
+        state.target_profile = Some(ProfileTarget {
+            id: "profile".to_owned(),
+            display_name: "Player".to_owned(),
+        });
+        let mut effects = Vec::with_capacity(8);
+
+        handle_input(&mut state, &press(VirtualAction::p1_back), &mut effects);
+
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::PlaySfx(path)
+                )),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+                    crate::SimplyLoveOnlineRequest::CancelQrLogin(
+                        crate::SimplyLoveQrLoginService::ArrowCloud
+                    )
+                )),
+                ThemeEffect::Navigate(Screen::ManageLocalProfiles)
+            ] if path == "assets/sounds/change.ogg"
+        ));
+        assert!(state.target_profile.is_none());
+    }
 }

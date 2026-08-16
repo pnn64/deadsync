@@ -12,6 +12,7 @@ use std::sync::Arc;
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::screens::components::shared::qr_code;
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -19,6 +20,23 @@ use deadsync_profile as profile_data;
 
 const ALL_SIDES: [profile_data::PlayerSide; 2] =
     [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2];
+
+pub(crate) fn append_dismiss_effects(
+    effects: &mut Vec<ThemeEffect>,
+    sound_path: &'static str,
+    service: crate::SimplyLoveQrLoginService,
+    next: Screen,
+) {
+    let start_len = effects.len();
+    effects.extend([
+        crate::effects::sfx(sound_path),
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+            crate::SimplyLoveOnlineRequest::CancelQrLogin(service),
+        )),
+        ThemeEffect::Navigate(next),
+    ]);
+    debug_assert_eq!(effects.len() - start_len, 3);
+}
 
 #[inline]
 fn side_label(kind: BackendKind, side: profile_data::PlayerSide) -> Arc<str> {

@@ -198,6 +198,24 @@ impl App {
             );
             return self.drain_theme_effects(event_loop);
         }
+        if current_screen == CurrentScreen::ArrowCloudLogin {
+            debug_assert!(self.theme_effect_scratch.is_empty());
+            screens::arrowcloud_login::handle_input(
+                &mut self.state.screens.arrowcloud_login_state,
+                &ev,
+                &mut self.theme_effect_scratch,
+            );
+            return self.drain_theme_effects(event_loop);
+        }
+        if current_screen == CurrentScreen::GrooveStatsLogin {
+            debug_assert!(self.theme_effect_scratch.is_empty());
+            screens::groovestats_login::handle_input(
+                &mut self.state.screens.groovestats_login_state,
+                &ev,
+                &mut self.theme_effect_scratch,
+            );
+            return self.drain_theme_effects(event_loop);
+        }
         if current_screen == CurrentScreen::SelectMusic {
             debug_assert!(self.theme_effect_scratch.is_empty());
             screens::select_music::handle_input(
@@ -241,14 +259,9 @@ impl App {
             CurrentScreen::SelectColor => {
                 screens::select_color::handle_input(&mut self.state.screens.select_color_state, &ev)
             }
-            CurrentScreen::ArrowCloudLogin => screens::arrowcloud_login::handle_input(
-                &mut self.state.screens.arrowcloud_login_state,
-                &ev,
-            ),
-            CurrentScreen::GrooveStatsLogin => screens::groovestats_login::handle_input(
-                &mut self.state.screens.groovestats_login_state,
-                &ev,
-            ),
+            CurrentScreen::ArrowCloudLogin | CurrentScreen::GrooveStatsLogin => {
+                unreachable!("QR login input uses the flat buffer")
+            }
             CurrentScreen::SelectStyle => {
                 screens::select_style::handle_input(&mut self.state.screens.select_style_state, &ev)
             }
