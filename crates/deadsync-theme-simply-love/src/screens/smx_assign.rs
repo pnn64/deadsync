@@ -161,32 +161,32 @@ pub fn update(
     }
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    if !ev.pressed {
-        return ThemeEffect::None;
-    }
-    match ev.action {
-        VirtualAction::p1_back | VirtualAction::p2_back => exit(state),
-        VirtualAction::p1_start | VirtualAction::p2_start if state.phase == Phase::Done => {
-            exit(state)
+pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeEffect>) {
+    let start_len = effects.len();
+    if ev.pressed {
+        match ev.action {
+            VirtualAction::p1_back | VirtualAction::p2_back => append_exit_effects(state, effects),
+            VirtualAction::p1_start | VirtualAction::p2_start if state.phase == Phase::Done => {
+                append_exit_effects(state, effects);
+            }
+            _ => {}
         }
-        _ => ThemeEffect::None,
     }
+    debug_assert!(effects.len() - start_len <= 2);
 }
 
 /// Leave the screen. The options StepManiaX page re-drives the pad lights itself,
 /// so only restore auto-lighting when returning somewhere that won't (e.g. the
 /// Menu), to avoid a one-frame flicker on the handoff.
-fn exit(state: &State) -> ThemeEffect {
-    let navigate = ThemeEffect::Navigate(state.return_screen);
-    if state.return_screen == Screen::Options {
-        navigate
-    } else {
-        ThemeEffect::batch(vec![
-            hardware_effect(crate::SimplyLoveHardwareRequest::ReenableSmxAutoLights),
-            navigate,
-        ])
+fn append_exit_effects(state: &State, effects: &mut Vec<ThemeEffect>) {
+    let start_len = effects.len();
+    if state.return_screen != Screen::Options {
+        effects.push(hardware_effect(
+            crate::SimplyLoveHardwareRequest::ReenableSmxAutoLights,
+        ));
     }
+    effects.push(ThemeEffect::Navigate(state.return_screen));
+    debug_assert!(matches!(effects.len() - start_len, 1 | 2));
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -413,10 +413,27 @@ pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
 
 #[cfg(test)]
 mod tests {
-    use super::{accept_p2_serial, exit, init, on_enter, pressed_slot, update};
+    use super::{accept_p2_serial, handle_input, init, on_enter, pressed_slot, update};
     use crate::screens::ThemeEffect;
     use crate::{SimplyLoveHardwareRequest, SimplyLoveRuntimeRequest};
+    use deadsync_core::input::InputSource;
+    use deadsync_input::{InputEvent, VirtualAction};
     use deadsync_theme::views::{SmxAssignmentPadView, SmxAssignmentView};
+    use std::time::Instant;
+
+    fn press(action: VirtualAction) -> InputEvent {
+        let now = Instant::now();
+        InputEvent {
+            action,
+            input_slot: 0,
+            pressed: true,
+            source: InputSource::Keyboard,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+        }
+    }
 
     fn assignment_view(input: [u16; 2]) -> SmxAssignmentView {
         SmxAssignmentView {
@@ -517,13 +534,15 @@ mod tests {
     }
 
     #[test]
-    fn non_options_exit_restores_shell_owned_auto_lights() {
+    fn menu_back_appends_auto_lights_before_navigation() {
         let idle = assignment_view([0, 0]);
         let mut state = init();
         on_enter(&mut state, &idle, crate::screens::Screen::Menu);
-        let ThemeEffect::Batch(effects) = exit(&state) else {
-            panic!("menu return should restore lights before navigation");
-        };
+        let mut effects = Vec::with_capacity(8);
+        handle_input(&mut state, &press(VirtualAction::p1_back), &mut effects);
+
+        assert_eq!(effects.capacity(), 8);
+        assert_eq!(effects.len(), 2);
         assert!(matches!(
             effects[0],
             ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Hardware(
@@ -533,6 +552,21 @@ mod tests {
         assert!(matches!(
             effects[1],
             ThemeEffect::Navigate(crate::screens::Screen::Menu)
+        ));
+    }
+
+    #[test]
+    fn options_back_appends_navigation_without_light_reset() {
+        let idle = assignment_view([0, 0]);
+        let mut state = init();
+        on_enter(&mut state, &idle, crate::screens::Screen::Options);
+        let mut effects = Vec::with_capacity(8);
+        handle_input(&mut state, &press(VirtualAction::p2_back), &mut effects);
+
+        assert_eq!(effects.capacity(), 8);
+        assert!(matches!(
+            effects.as_slice(),
+            [ThemeEffect::Navigate(crate::screens::Screen::Options)]
         ));
     }
 }

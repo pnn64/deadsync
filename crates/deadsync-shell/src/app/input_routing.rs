@@ -250,6 +250,15 @@ impl App {
             }
             return self.drain_theme_effects(event_loop);
         }
+        if current_screen == CurrentScreen::SmxAssignPads {
+            debug_assert!(self.theme_effect_scratch.is_empty());
+            screens::smx_assign::handle_input(
+                &mut self.state.screens.smx_assign_state,
+                &ev,
+                &mut self.theme_effect_scratch,
+            );
+            return self.drain_theme_effects(event_loop);
+        }
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
                 self.sync_main_menu_runtime_view();
@@ -298,9 +307,7 @@ impl App {
                 &mut self.state.screens.overscan_adjustment_state,
                 &ev,
             ),
-            CurrentScreen::SmxAssignPads => {
-                screens::smx_assign::handle_input(&mut self.state.screens.smx_assign_state, &ev)
-            }
+            CurrentScreen::SmxAssignPads => unreachable!("SMX Assign input uses the flat buffer"),
             CurrentScreen::SelectMusic => unreachable!("Select Music input routed directly"),
             CurrentScreen::SelectCourse => screens::select_course::handle_input(
                 &mut self.state.screens.select_course_state,
