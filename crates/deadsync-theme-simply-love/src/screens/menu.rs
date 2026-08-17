@@ -3,7 +3,6 @@ use crate::assets::i18n::{self, tr, tr_fmt};
 use crate::assets::{FontRole, machine_font_key};
 // Screen navigation is handled in app
 use crate::screens::components::menu::logo::{self, LogoParams};
-use crate::screens::components::menu::menu_list::{self};
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
@@ -16,7 +15,7 @@ use deadlib_present::color;
 use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::sync::Arc;
 
 use deadlib_present::space::{screen_center_x, screen_height, screen_width};
@@ -55,6 +54,9 @@ fn shutdown_index(state: &State) -> Option<usize> {
 
 const MENU_BELOW_LOGO: f32 = 29.0;
 const MENU_ROW_SPACING: f32 = 28.0;
+const MENU_BASE_PX: f32 = 32.0;
+const MENU_FOCUS_ZOOM: f32 = 0.5;
+const MENU_UNFOCUSED_ZOOM: f32 = 0.4;
 
 const INFO_PX: f32 = 15.0;
 const INFO_GAP: f32 = 5.0;
@@ -100,6 +102,33 @@ struct InfoTextKey {
     course_count: usize,
 }
 
+/// Locale-owned chrome compiled once and replaced only when translations change.
+struct MenuChromeText {
+    i18n_revision: u64,
+    options: [Arc<str>; OPTION_COUNT + 1],
+    event_mode: Arc<str>,
+    press_start: Arc<str>,
+    smx_warnings: [Arc<str>; 2],
+}
+
+fn build_chrome_text(i18n_revision: u64) -> MenuChromeText {
+    MenuChromeText {
+        i18n_revision,
+        options: [
+            tr("Menu", "Gameplay"),
+            tr("Menu", "Options"),
+            tr("Menu", "Exit"),
+            tr("Menu", "Shutdown"),
+        ],
+        event_mode: tr("Common", "EventMode"),
+        press_start: tr("Common", "PressStart"),
+        smx_warnings: [
+            tr("Menu", "SmxAssignWarning1"),
+            tr("Menu", "SmxAssignWarning2"),
+        ],
+    }
+}
+
 pub struct State {
     pub selected_index: usize,
     pub active_color_index: i32,
@@ -107,7 +136,7 @@ pub struct State {
     pub started_by_p2: bool,
     runtime_view: MainMenuRuntimeView,
     bg: visual_style_bg::State,
-    i18n_revision: Cell<u64>,
+    chrome_text: RefCell<MenuChromeText>,
     info_text_cache: RefCell<Option<(InfoTextKey, Arc<str>)>>,
     groovestats_text_cache: RefCell<Option<StatusTextCache<MainMenuGrooveStatus, 3>>>,
     arrowcloud_text_cache: RefCell<Option<StatusTextCache<MainMenuArrowCloudStatus, 1>>>,
@@ -116,6 +145,7 @@ pub struct State {
 }
 
 pub fn init() -> State {
+    let i18n_revision = i18n::revision();
     State {
         selected_index: 0,
         active_color_index: color::DEFAULT_COLOR_INDEX, // was 0
@@ -123,7 +153,7 @@ pub fn init() -> State {
         started_by_p2: false,
         runtime_view: MainMenuRuntimeView::default(),
         bg: visual_style_bg::State::new(),
-        i18n_revision: Cell::new(i18n::revision()),
+        chrome_text: RefCell::new(build_chrome_text(i18n_revision)),
         info_text_cache: RefCell::new(None),
         groovestats_text_cache: RefCell::new(None),
         arrowcloud_text_cache: RefCell::new(None),
@@ -208,11 +238,11 @@ pub fn clear_render_cache(state: &State) {
 
 fn sync_i18n_cache(state: &State) {
     let revision = i18n::revision();
-    if state.i18n_revision.get() == revision {
+    if state.chrome_text.borrow().i18n_revision == revision {
         return;
     }
     clear_render_cache(state);
-    state.i18n_revision.set(revision);
+    *state.chrome_text.borrow_mut() = build_chrome_text(revision);
 }
 
 #[inline(always)]
@@ -409,6 +439,7 @@ pub fn push_actors(
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     sync_i18n_cache(state);
+    let chrome_text = state.chrome_text.borrow();
     let lp = LogoParams::default();
     actors.reserve(96);
 
@@ -467,47 +498,45 @@ pub fn push_actors(
     selected[3] *= alpha_multiplier;
     normal[3] *= alpha_multiplier;
 
-    let mut menu_labels: Vec<Arc<str>> = Vec::with_capacity(4);
-    menu_labels.push(tr("Menu", "Gameplay"));
-    menu_labels.push(tr("Menu", "Options"));
-    menu_labels.push(tr("Menu", "Exit"));
-    if state.runtime_view.allow_shutdown_host {
-        menu_labels.push(tr("Menu", "Shutdown"));
-    }
-
-    // --- UPDATED PARAMS FOR THE NEW MENU LIST BUILDER ---
-    let params = menu_list::MenuParams {
-        options: &menu_labels,
-        selected_index: state.selected_index,
-        start_center_y: base_y,
-        row_spacing: MENU_ROW_SPACING,
-        selected_color: selected,
-        normal_color: normal,
-        font: machine_font_key(visual_policy.machine_font, FontRole::Bold),
-    };
-    for (index, mut actor) in menu_list::build_vertical_menu(params)
-        .into_iter()
+    let menu_font = machine_font_key(visual_policy.machine_font, FontRole::Bold);
+    let menu_center_x = screen_center_x();
+    for (index, label) in chrome_text.options[..option_count(state)]
+        .iter()
         .enumerate()
     {
-        actor.mul_alpha(row_exit_alpha(index, exit_elapsed));
-        actors.push(actor);
+        let is_selected = index == state.selected_index;
+        let zoom = if is_selected {
+            MENU_FOCUS_ZOOM
+        } else {
+            MENU_UNFOCUSED_ZOOM
+        };
+        let mut row_color = if is_selected { selected } else { normal };
+        row_color[3] *= row_exit_alpha(index, exit_elapsed);
+        let center_y = (index as f32).mul_add(MENU_ROW_SPACING, base_y);
+        actors.push(act!(text:
+            align(0.5, 0.5):
+            xy(menu_center_x, center_y):
+            zoomtoheight(MENU_BASE_PX * zoom):
+            diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
+            shadowlength(0.8):
+            font(menu_font):
+            settext(Arc::clone(label)):
+            horizalign(center)
+        ));
     }
 
     // --- footer bar ---
     let mut footer_fg = [1.0, 1.0, 1.0, 1.0];
     footer_fg[3] *= alpha_multiplier;
-    let event_mode = tr("Common", "EventMode");
-    let press_start = tr("Common", "PressStart");
-
     actors.push(screen_bar::build_title_menu(screen_bar::ScreenBarParams {
         visual_policy,
-        title: event_mode.as_ref(),
+        title: chrome_text.event_mode.as_ref(),
         title_placement: screen_bar::ScreenBarTitlePlacement::Center,
         position: screen_bar::ScreenBarPosition::Bottom,
         transparent: true,
-        left_text: Some(press_start.as_ref()),
+        left_text: Some(chrome_text.press_start.as_ref()),
         center_text: None,
-        right_text: Some(press_start.as_ref()),
+        right_text: Some(chrome_text.press_start.as_ref()),
         left_avatar: None,
         right_avatar: None,
         fg_color: footer_fg,
@@ -571,14 +600,10 @@ pub fn push_actors(
         let smx_base_y = (STATUS_LINE_HEIGHT * (ac_text.line_count as f32 + 1.0))
             .mul_add(STATUS_ZOOM, ac_base_y + STATUS_BLOCK_GAP);
         // Two short lines (kept compact for the main screen).
-        let lines = [
-            tr("Menu", "SmxAssignWarning1"),
-            tr("Menu", "SmxAssignWarning2"),
-        ];
-        for (i, text) in lines.into_iter().enumerate() {
+        for (i, text) in chrome_text.smx_warnings.iter().enumerate() {
             let y = (STATUS_LINE_HEIGHT * i as f32).mul_add(STATUS_ZOOM, smx_base_y);
             let mut actor = status_text_actor(
-                text,
+                Arc::clone(text),
                 0.0,
                 STATUS_BASE_X,
                 y,
@@ -854,6 +879,36 @@ mod tests {
         state.selected_index = OPTION_COUNT;
         sync_runtime_view(&mut state, MainMenuRuntimeView::default());
         assert_eq!(state.selected_index, OPTION_COUNT - 1);
+    }
+
+    #[test]
+    fn prepared_chrome_preserves_optional_shutdown_row() {
+        fn has_text(actors: &[Actor], expected: &str) -> bool {
+            actors.iter().any(|actor| {
+                matches!(actor, Actor::Text { content, .. } if content.as_str() == expected)
+            })
+        }
+
+        let mut state = init();
+        let gameplay = tr("Menu", "Gameplay");
+        let options = tr("Menu", "Options");
+        let exit = tr("Menu", "Exit");
+        let shutdown = tr("Menu", "Shutdown");
+        let actors = get_actors(&state, None, 1.0);
+        assert!(has_text(&actors, &gameplay));
+        assert!(has_text(&actors, &options));
+        assert!(has_text(&actors, &exit));
+        assert!(!has_text(&actors, &shutdown));
+
+        sync_runtime_view(
+            &mut state,
+            MainMenuRuntimeView {
+                allow_shutdown_host: true,
+                ..MainMenuRuntimeView::default()
+            },
+        );
+        let actors = get_actors(&state, None, 1.0);
+        assert!(has_text(&actors, &shutdown));
     }
 
     #[test]
