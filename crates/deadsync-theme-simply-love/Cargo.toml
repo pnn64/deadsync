@@ -44,6 +44,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "select_music_lobby_reconcile"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "screen_allocation_hot_paths"
 harness = false
 required-features = ["bench-support"]
