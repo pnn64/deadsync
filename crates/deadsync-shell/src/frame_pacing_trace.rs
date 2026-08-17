@@ -3,6 +3,7 @@ use deadlib_render_core::{
     ClockDomainTrace, DRAW_STORAGE_NAMES, DRAW_STORAGE_SLOTS, DrawStats, DrawStorageStats,
     PresentModeTrace,
 };
+use serde::Serialize;
 use std::time::{Duration, Instant};
 
 const LOG_INTERVAL: Duration = Duration::from_secs(5);
@@ -15,6 +16,21 @@ const PHASE_FINE_BINS: usize = 1_024;
 const PHASE_HIST_BINS: usize = 2_048;
 const PHASE_COARSE_BUCKET_US: u32 = 16;
 const STORAGE_SLOTS: usize = 1 + COMPOSE_STORAGE_SLOTS + DRAW_STORAGE_SLOTS;
+
+const PHASE_NAMES: [&str; PHASE_COUNT] = [
+    "frame",
+    "maintenance",
+    "actor_build",
+    "build_screen",
+    "compose",
+    "sort",
+    "asset_upload",
+    "draw",
+    "backend_setup",
+    "backend_prepare",
+    "backend_upload",
+    "backend_record",
+];
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GameplayPacingPhases {
@@ -135,12 +151,96 @@ impl Phase {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 struct PhaseTail {
+    #[serde(rename = "p50_us")]
     p50: u32,
+    #[serde(rename = "p95_us")]
     p95: u32,
+    #[serde(rename = "p99_us")]
     p99: u32,
+    #[serde(rename = "worst_us")]
     worst: u32,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct NamedPhaseTail {
+    phase: &'static str,
+    #[serde(flatten)]
+    tail: PhaseTail,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct StorageSlotReport {
+    name: String,
+    high_capacity: u32,
+    growth_events: u32,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct GameplayPacingReport {
+    pub frames: u32,
+    pub chain_frames: u32,
+    pub other_frames: u32,
+    pub frame_avg_us: f64,
+    pub frame_max_us: u32,
+    pub redraw_late_avg_us: f64,
+    pub redraw_late_max_us: u32,
+    pub redraw_delivery_avg_us: f64,
+    pub redraw_delivery_max_us: u32,
+    pub redraw_delivery_over_1ms: u32,
+    pub redraw_delivery_over_2ms: u32,
+    pub draw_avg_us: f64,
+    pub draw_max_us: u32,
+    pub present_avg_us: f64,
+    pub present_max_us: u32,
+    pub present_over_1ms: u32,
+    pub present_over_3ms: u32,
+    pub sort_fallback_frames: u32,
+    pub sprite_gather_frames: u32,
+    pub sprites_gathered: u64,
+    pub sprite_runs_before: u64,
+    pub sprite_runs_after: u64,
+    pub tail_capped_samples: u32,
+    pub phase_tails: Vec<NamedPhaseTail>,
+    pub total_growth_events: u32,
+    pub storage: Vec<StorageSlotReport>,
+    pub display_error_last_us: i32,
+    pub display_error_abs_avg_us: f64,
+    pub display_error_abs_max_us: u32,
+    pub display_catching_up_frames: u32,
+    pub present_mode: String,
+    pub present_display_clock: String,
+    pub present_host_clock: String,
+    pub present_host_mapped_frames: u32,
+    pub present_inflight_avg: f64,
+    pub present_inflight_max: u8,
+    pub present_image_wait_frames: u32,
+    pub present_back_pressure_frames: u32,
+    pub present_queue_idle_frames: u32,
+    pub present_suboptimal_frames: u32,
+    pub present_refresh_ns: u64,
+    pub present_interval_avg_ns: f64,
+    pub present_interval_max_ns: u64,
+    pub present_margin_avg_ns: f64,
+    pub present_margin_max_ns: u64,
+    pub present_calibration_error_avg_ns: f64,
+    pub present_calibration_error_max_ns: u64,
+    pub audio_backend: String,
+    pub audio_requested_output_mode: String,
+    pub audio_fallback_from_native: bool,
+    pub audio_clock: String,
+    pub audio_timing_quality: String,
+    pub audio_sample_rate_hz: u32,
+    pub audio_device_period_ns: u64,
+    pub audio_stream_latency_ns: u64,
+    pub audio_buffer_frames: u32,
+    pub audio_padding_frames: u32,
+    pub audio_queued_frames: u32,
+    pub audio_estimated_output_delay_ns: u64,
+    pub audio_sanity_failures: u64,
+    pub audio_clock_fallbacks: u64,
+    pub audio_underruns: u64,
 }
 
 impl std::fmt::Display for PhaseTail {
@@ -210,6 +310,7 @@ impl PhaseHist {
 }
 
 pub struct GameplayPacingTrace {
+    capture_frames: Option<u32>,
     started_at: Instant,
     frames: u32,
     chain_frames: u32,
@@ -251,6 +352,7 @@ pub struct GameplayPacingTrace {
     present_back_pressure_frames: u32,
     present_queue_idle_frames: u32,
     present_suboptimal_frames: u32,
+    present_refresh_ns_last: u64,
     present_host_mapped_frames: u32,
     present_calibration_error_sum_ns: u64,
     present_calibration_error_max_ns: u64,
@@ -273,6 +375,7 @@ impl GameplayPacingTrace {
 
     fn with_phase_storage(now: Instant, phase_hists: Box<[PhaseHist]>) -> Self {
         Self {
+            capture_frames: None,
             started_at: now,
             frames: 0,
             chain_frames: 0,
@@ -314,6 +417,7 @@ impl GameplayPacingTrace {
             present_back_pressure_frames: 0,
             present_queue_idle_frames: 0,
             present_suboptimal_frames: 0,
+            present_refresh_ns_last: 0,
             present_host_mapped_frames: 0,
             present_calibration_error_sum_ns: 0,
             present_calibration_error_max_ns: 0,
@@ -337,11 +441,25 @@ impl GameplayPacingTrace {
         *self = Self::with_phase_storage(now, phase_hists);
     }
 
+    /// Start one fixed-frame capture. This explicit mode is independent of log
+    /// filters and suppresses the periodic five-second reset until the exact
+    /// requested sample count has been collected.
+    pub(crate) fn start_capture(&mut self, now: Instant, frames: u32) {
+        debug_assert!(frames > 0);
+        self.reset(now);
+        self.capture_frames = Some(frames);
+    }
+
+    #[inline(always)]
+    pub(crate) const fn capture_active(&self) -> bool {
+        self.capture_frames.is_some()
+    }
+
     #[expect(
         clippy::too_many_arguments,
         reason = "the trace records one value for each measured frame phase"
     )]
-    pub fn record_frame(
+    pub(crate) fn record_frame(
         &mut self,
         now: Instant,
         gameplay: bool,
@@ -354,9 +472,9 @@ impl GameplayPacingTrace {
         phases: GameplayPacingPhases,
         display_error_seconds: f32,
         display_catching_up: bool,
-    ) {
+    ) -> Option<GameplayPacingReport> {
         self.record_frame_if_enabled(
-            log::log_enabled!(log::Level::Trace),
+            self.capture_active() || log::log_enabled!(log::Level::Trace),
             now,
             gameplay,
             frame_seconds,
@@ -368,7 +486,7 @@ impl GameplayPacingTrace {
             phases,
             display_error_seconds,
             display_catching_up,
-        );
+        )
     }
 
     #[expect(
@@ -389,16 +507,16 @@ impl GameplayPacingTrace {
         phases: GameplayPacingPhases,
         display_error_seconds: f32,
         display_catching_up: bool,
-    ) {
+    ) -> Option<GameplayPacingReport> {
         if !enabled {
             if self.frames != 0 || self.storage.initialized {
                 self.reset(now);
             }
-            return;
+            return None;
         }
         if !gameplay {
             self.reset(now);
-            return;
+            return None;
         }
         if self.frames == 0 {
             self.started_at = now;
@@ -500,6 +618,7 @@ impl GameplayPacingTrace {
         self.present_back_pressure_frames += u32::from(present.applied_back_pressure);
         self.present_queue_idle_frames += u32::from(present.queue_idle_waited);
         self.present_suboptimal_frames += u32::from(present.suboptimal);
+        self.present_refresh_ns_last = present.refresh_ns;
         self.present_host_mapped_frames += u32::from(present.host_present_ns != 0);
         self.present_calibration_error_sum_ns = self
             .present_calibration_error_sum_ns
@@ -522,9 +641,18 @@ impl GameplayPacingTrace {
             self.present_margin_max_ns = self.present_margin_max_ns.max(present.present_margin_ns);
             self.present_margin_samples = self.present_margin_samples.saturating_add(1);
         }
-        if now.duration_since(self.started_at) >= LOG_INTERVAL {
+        if self
+            .capture_frames
+            .is_some_and(|capture_frames| self.frames >= capture_frames)
+        {
+            let report = self.report();
+            self.reset(now);
+            return Some(report);
+        }
+        if self.capture_frames.is_none() && now.duration_since(self.started_at) >= LOG_INTERVAL {
             self.log_and_reset(now);
         }
+        None
     }
 
     fn log_and_reset(&mut self, now: Instant) {
@@ -635,6 +763,117 @@ impl GameplayPacingTrace {
         self.reset(now);
         storage.reset_window();
         self.storage = storage;
+    }
+
+    fn report(&self) -> GameplayPacingReport {
+        let frames = self.frames.max(1);
+        let average = |sum: u64| sum as f64 / frames as f64;
+        let interval_samples = self.present_interval_samples.max(1);
+        let margin_samples = self.present_margin_samples.max(1);
+        let phase_tails = PHASE_NAMES
+            .into_iter()
+            .enumerate()
+            .map(|(index, phase)| NamedPhaseTail {
+                phase,
+                tail: self.phase_hists[index].tail(),
+            })
+            .collect();
+        let mut storage = Vec::with_capacity(STORAGE_SLOTS);
+        storage.push(StorageSlotReport {
+            name: "actor".to_owned(),
+            high_capacity: self.storage.high[0],
+            growth_events: self.storage.growths[0],
+        });
+        storage.extend(
+            COMPOSE_STORAGE_NAMES
+                .iter()
+                .enumerate()
+                .map(|(offset, name)| {
+                    let index = 1 + offset;
+                    StorageSlotReport {
+                        name: (*name).to_owned(),
+                        high_capacity: self.storage.high[index],
+                        growth_events: self.storage.growths[index],
+                    }
+                }),
+        );
+        storage.extend(DRAW_STORAGE_NAMES.iter().enumerate().map(|(offset, name)| {
+            let index = 1 + COMPOSE_STORAGE_SLOTS + offset;
+            StorageSlotReport {
+                name: format!("draw_{name}"),
+                high_capacity: self.storage.high[index],
+                growth_events: self.storage.growths[index],
+            }
+        }));
+        let audio = deadsync_audio_stream::get_output_timing_snapshot();
+        GameplayPacingReport {
+            frames: self.frames,
+            chain_frames: self.chain_frames,
+            other_frames: self.other_frames,
+            frame_avg_us: average(self.dt_sum_us),
+            frame_max_us: self.dt_max_us,
+            redraw_late_avg_us: average(self.redraw_late_sum_us),
+            redraw_late_max_us: self.redraw_late_max_us,
+            redraw_delivery_avg_us: average(self.redraw_delivery_sum_us),
+            redraw_delivery_max_us: self.redraw_delivery_max_us,
+            redraw_delivery_over_1ms: self.redraw_delivery_over_1ms,
+            redraw_delivery_over_2ms: self.redraw_delivery_over_2ms,
+            draw_avg_us: average(self.draw_sum_us),
+            draw_max_us: self.draw_max_us,
+            present_avg_us: average(self.present_sum_us),
+            present_max_us: self.present_max_us,
+            present_over_1ms: self.present_over_1ms,
+            present_over_3ms: self.present_over_3ms,
+            sort_fallback_frames: self.sort_fallback_frames,
+            sprite_gather_frames: self.sprite_gather_frames,
+            sprites_gathered: self.sprites_gathered,
+            sprite_runs_before: self.sprite_runs_before,
+            sprite_runs_after: self.sprite_runs_after,
+            tail_capped_samples: self
+                .phase_hists
+                .iter()
+                .fold(0, |sum, hist| sum.saturating_add(hist.capped)),
+            phase_tails,
+            total_growth_events: self.storage.total_growths(),
+            storage,
+            display_error_last_us: self.display_error_last_us,
+            display_error_abs_avg_us: average(self.display_error_abs_sum_us),
+            display_error_abs_max_us: self.display_error_abs_max_us,
+            display_catching_up_frames: self.display_catching_up_frames,
+            present_mode: self.present_last_mode.to_string(),
+            present_display_clock: self.present_display_clock_last.to_string(),
+            present_host_clock: self.present_host_clock_last.to_string(),
+            present_host_mapped_frames: self.present_host_mapped_frames,
+            present_inflight_avg: self.present_inflight_sum as f64 / frames as f64,
+            present_inflight_max: self.present_inflight_max,
+            present_image_wait_frames: self.present_image_wait_frames,
+            present_back_pressure_frames: self.present_back_pressure_frames,
+            present_queue_idle_frames: self.present_queue_idle_frames,
+            present_suboptimal_frames: self.present_suboptimal_frames,
+            present_refresh_ns: self.present_refresh_ns_last,
+            present_interval_avg_ns: self.present_interval_sum_ns as f64
+                / f64::from(interval_samples),
+            present_interval_max_ns: self.present_interval_max_ns,
+            present_margin_avg_ns: self.present_margin_sum_ns as f64 / f64::from(margin_samples),
+            present_margin_max_ns: self.present_margin_max_ns,
+            present_calibration_error_avg_ns: average(self.present_calibration_error_sum_ns),
+            present_calibration_error_max_ns: self.present_calibration_error_max_ns,
+            audio_backend: audio.backend.to_string(),
+            audio_requested_output_mode: audio.requested_output_mode.as_str().to_owned(),
+            audio_fallback_from_native: audio.fallback_from_native,
+            audio_clock: audio.timing_clock.to_string(),
+            audio_timing_quality: audio.timing_quality.to_string(),
+            audio_sample_rate_hz: audio.sample_rate_hz,
+            audio_device_period_ns: audio.device_period_ns,
+            audio_stream_latency_ns: audio.stream_latency_ns,
+            audio_buffer_frames: audio.buffer_frames,
+            audio_padding_frames: audio.padding_frames,
+            audio_queued_frames: audio.queued_frames,
+            audio_estimated_output_delay_ns: audio.estimated_output_delay_ns,
+            audio_sanity_failures: audio.timing_sanity_failure_count,
+            audio_clock_fallbacks: audio.clock_fallback_count,
+            audio_underruns: audio.underrun_count,
+        }
     }
 
     fn record_phase(&mut self, phase: Phase, value_us: u32) {
@@ -785,6 +1024,52 @@ mod tests {
         assert_eq!(trace.frames, 0);
         assert!(!trace.storage.initialized);
         assert_eq!(trace.phase_hist(Phase::Frame).samples, 0);
+    }
+
+    #[test]
+    fn fixed_capture_returns_exact_frame_report_without_log_timer() {
+        let now = Instant::now();
+        let mut trace = GameplayPacingTrace::new(now);
+        trace.start_capture(now, 2);
+
+        let first = trace.record_frame_if_enabled(
+            true,
+            now + Duration::from_secs(6),
+            true,
+            0.010,
+            100,
+            50,
+            "chain",
+            200,
+            DrawStats::default(),
+            GameplayPacingPhases::default(),
+            0.0,
+            false,
+        );
+        assert!(first.is_none());
+        assert_eq!(trace.frames, 1);
+
+        let report = trace
+            .record_frame_if_enabled(
+                true,
+                now + Duration::from_secs(12),
+                true,
+                0.020,
+                200,
+                100,
+                "case",
+                400,
+                DrawStats::default(),
+                GameplayPacingPhases::default(),
+                0.0,
+                false,
+            )
+            .expect("second fixed frame completes capture");
+        assert_eq!(report.frames, 2);
+        assert_eq!(report.chain_frames, 1);
+        assert_eq!(report.other_frames, 1);
+        assert_eq!(report.frame_avg_us, 15_000.0);
+        assert!(!trace.capture_active());
     }
 
     #[test]

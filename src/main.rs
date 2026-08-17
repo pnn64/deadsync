@@ -141,6 +141,19 @@ fn resolve_show_console() -> bool {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = deadsync_updater::cli::UpdaterCli::from_env();
+    let live_case = deadsync_shell::live_case::LiveCase::from_args(
+        &cli.remaining,
+        deadsync_shell::live_case::BuildIdentity {
+            version: env!("CARGO_PKG_VERSION"),
+            hash: option_env!("DEADSYNC_BUILD_HASH").unwrap_or("unknown"),
+            stamp: option_env!("DEADSYNC_BUILD_STAMP").unwrap_or("unknown"),
+        },
+    )
+    .map_err(std::io::Error::other)?;
+    if let Some(case) = live_case.as_ref() {
+        deadlib_platform::dirs::install_data_dir(case.data_dir().to_path_buf())
+            .map_err(std::io::Error::other)?;
+    }
     deadlib_platform::runtime_dir::set_current_dir_to_exe_dir()?;
     deadlib_platform::host_time::init();
 
@@ -169,6 +182,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     config::load();
     let cfg = config::get();
+    if let Some(case) = live_case.as_ref() {
+        case.validate_config(&cfg).map_err(std::io::Error::other)?;
+        log::info!(
+            "Loaded deterministic performance case '{}' from isolated data root '{}'",
+            case.name(),
+            case.data_dir().display()
+        );
+    }
     deadsync_updater::action::set_install_enabled(cfg.updater_install_enabled);
     log::set_max_level(cfg.log_level.as_level_filter());
     logging::write_startup_report(
@@ -188,9 +209,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    if let Some(exe_dir) = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(std::path::PathBuf::from))
+    if live_case.is_none()
+        && let Some(exe_dir) = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(std::path::PathBuf::from))
     {
         let _ = cli.cleanup_old.as_deref();
         let report = deadsync_updater::apply_journal::recover(&exe_dir);
@@ -205,9 +227,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    deadsync_updater::state::load_persisted_cache();
-    if cli.no_update_check {
-        log::info!("Startup update check disabled by --no-update-check");
+    if live_case.is_none() {
+        deadsync_updater::state::load_persisted_cache();
+    }
+    if cli.no_update_check || live_case.is_some() {
+        log::info!("Startup update check disabled");
     } else {
         deadsync_updater::state::spawn_startup_check();
     }
@@ -240,7 +264,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // cached tracks are a cheap disk hit, so this is a no-op once warmed.
             // Gated on the audio runtime initializing, since that is what sets up
             // the ReplayGain subsystem the prewarm workers depend on.
-            if cfg.enable_replaygain {
+            if cfg.enable_replaygain && live_case.is_none() {
                 deadsync_audio_replaygain::prewarm_paths(
                     visual_styles::bundled_music_asset_paths()
                         .collect::<std::collections::BTreeSet<_>>()
@@ -252,11 +276,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             clock
         }
         Err(e) => {
+            if live_case.is_some() {
+                return Err(std::io::Error::other(format!(
+                    "performance case requires a live audio output: {e}"
+                ))
+                .into());
+            }
             // The game can run without audio; log the error and continue.
             log::error!("Failed to initialize audio runtime: {e}");
             deadsync_audio_stream::MusicClock::without_audio()
         }
     };
 
-    app::run(music_clock)
+    app::run(music_clock, live_case)
 }

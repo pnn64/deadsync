@@ -2,6 +2,7 @@ use log::warn;
 use std::path::{Path, PathBuf};
 
 /// Single source of truth for all resolved application directories.
+#[derive(Clone, Debug)]
 pub struct AppDirs {
     /// Root for user data (config, saves, songs, courses, log).
     pub data_dir: PathBuf,
@@ -173,12 +174,31 @@ impl AppDirs {
     }
 }
 
-static APP_DIRS: std::sync::LazyLock<AppDirs> = std::sync::LazyLock::new(AppDirs::resolve);
+static APP_DIRS: std::sync::OnceLock<AppDirs> = std::sync::OnceLock::new();
 
 /// Returns the globally-resolved application directories.
 #[inline(always)]
 pub fn app_dirs() -> &'static AppDirs {
-    &APP_DIRS
+    APP_DIRS.get_or_init(AppDirs::resolve)
+}
+
+/// Install an explicit application-data root before any directory consumer
+/// starts. Bundled assets continue to resolve from the executable directory;
+/// configuration, saves, songs, and regenerable caches are isolated below the
+/// supplied root. The one-shot startup contract prevents runtime path changes.
+pub fn install_data_dir(data_dir: PathBuf) -> Result<(), String> {
+    if !data_dir.is_absolute() {
+        return Err(format!(
+            "application data directory must be absolute: '{}'",
+            data_dir.display()
+        ));
+    }
+    let exe_path = std::env::current_exe()
+        .map_err(|error| format!("cannot determine executable path: {error}"))?;
+    let dirs = AppDirs::isolated_layout(data_dir, AppDirs::runtime_root_from_exe_path(&exe_path));
+    APP_DIRS
+        .set(dirs)
+        .map_err(|_| "application directories were already initialized".to_owned())
 }
 
 fn cache_dir_under(root: &std::path::Path) -> PathBuf {
@@ -230,6 +250,15 @@ impl AppDirs {
             cache_dir,
             exe_dir,
             portable: true,
+        }
+    }
+
+    fn isolated_layout(data_dir: PathBuf, exe_dir: PathBuf) -> Self {
+        Self {
+            cache_dir: cache_dir_under(&data_dir),
+            data_dir,
+            exe_dir,
+            portable: false,
         }
     }
 
@@ -399,6 +428,19 @@ mod tests {
             dirs.song_cache_dir(),
             Path::new("/tmp/deadsync-portable/cache/songs")
         );
+    }
+
+    #[test]
+    fn isolated_layout_keeps_bundled_assets_separate_from_case_data() {
+        let dirs = AppDirs::isolated_layout(
+            PathBuf::from("/tmp/deadsync-case"),
+            PathBuf::from("/opt/deadsync"),
+        );
+
+        assert_eq!(dirs.data_dir, Path::new("/tmp/deadsync-case"));
+        assert_eq!(dirs.cache_dir, Path::new("/tmp/deadsync-case/cache"));
+        assert_eq!(dirs.exe_dir, Path::new("/opt/deadsync"));
+        assert!(!dirs.portable);
     }
 
     #[test]

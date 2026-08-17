@@ -1409,7 +1409,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.654"
+version = "0.5.655"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1779,6 +1779,9 @@ dependencies = [
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
  "rfd",
+ "serde",
+ "serde_json",
+ "sha2",
  "smallvec",
  "winit",
 ]
@@ -1844,7 +1847,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.654"
+version = "0.5.655"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1903,7 +1906,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.654"
+version = "0.5.655"
 dependencies = [
  "log",
  "semver",

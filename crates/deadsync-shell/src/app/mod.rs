@@ -8,6 +8,7 @@ mod config_requests;
 mod evaluation_views;
 mod graphics;
 mod input_routing;
+mod live_case;
 mod lobby_views;
 mod screen_nav;
 mod screenshot;
@@ -1433,6 +1434,10 @@ pub struct App {
     /// The callback publishes through a bounded lock-free ring; this retained
     /// reader and its derived map live with `App` and require no global lock.
     music_clock: deadsync_audio_stream::MusicClock,
+    /// Optional deterministic shipping-path performance run. The manifest is
+    /// parsed before startup; App owns direct Gameplay entry, warmup, capture,
+    /// artifact emission, and automatic exit.
+    live_case: Option<live_case::LiveCaseRuntime>,
     /// Game-thread-only one-entry cursor for Gameplay banner media intent.
     /// Its session lifetime and fixed capacity require no allocation or
     /// eviction. The first Gameplay/Practice frame warms it; screen, window,
@@ -3427,10 +3432,11 @@ impl App {
         );
         let collect_text_layout_stats = stutter_diag_enabled();
         let collect_pacing_stats = uses_gameplay_present
-            && log::log_enabled!(
-                target: "deadsync_shell::frame_pacing_trace",
-                log::Level::Trace
-            );
+            && (self.state.shell.gameplay_pacing_trace.capture_active()
+                || log::log_enabled!(
+                    target: "deadsync_shell::frame_pacing_trace",
+                    log::Level::Trace
+                ));
         let actor_resources = match self.state.screens.current_screen {
             CurrentScreen::Gameplay => self
                 .state
@@ -3595,8 +3601,11 @@ impl App {
             self.ui_compose_scratch.recycle_frame(&mut screen);
         }
         let gameplay_storage = if uses_gameplay_present
-            && log::log_enabled!(target: "deadsync_shell::frame_pacing_trace", log::Level::Trace)
-        {
+            && (self.state.shell.gameplay_pacing_trace.capture_active()
+                || log::log_enabled!(
+                    target: "deadsync_shell::frame_pacing_trace",
+                    log::Level::Trace
+                )) {
             GameplayStorageSample::new(
                 actors.capacity(),
                 self.gameplay_compose_scratch.storage_stats(),
@@ -3685,7 +3694,7 @@ impl App {
             self.state.screens.current_screen,
             frame_seconds,
         );
-        self.state.shell.gameplay_pacing_trace.record_frame(
+        let pacing_report = self.state.shell.gameplay_pacing_trace.record_frame(
             frame_finished,
             uses_gameplay_present,
             frame_seconds,
@@ -3710,6 +3719,13 @@ impl App {
             display_clock.error_seconds,
             display_clock.catching_up,
         );
+        if let Some(report) = pacing_report {
+            self.finish_live_case(report, event_loop);
+        } else {
+            // The warmup counter advances only after a complete shipping-path
+            // Gameplay frame. Starting here makes the next frame sample one.
+            self.advance_live_case_capture(frame_finished);
+        }
         actors.clear();
         self.actor_scratch = actors;
     }
@@ -3733,14 +3749,15 @@ impl App {
     }
 
     fn new(
-        backend_type: BackendType,
         overlay_mode: u8,
         color_index: i32,
         config_generation: u64,
         config: config::Config,
         profile_data: profile_data::Profile,
         music_clock: deadsync_audio_stream::MusicClock,
+        live_case: Option<crate::live_case::LiveCase>,
     ) -> Self {
+        let backend_type = config.video_renderer;
         let software_renderer_threads = config.software_renderer_threads;
         let gfx_debug_enabled = config.gfx_debug;
         let frame_policy = FramePolicy::from_config(&config);
@@ -3776,6 +3793,7 @@ impl App {
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
             music_clock,
+            live_case: live_case.map(live_case::LiveCaseRuntime::new),
             gameplay_banner_sync_key: None,
             post_select_stage_indices: Vec::new(),
             post_select_stage_key: None,
@@ -8923,9 +8941,19 @@ impl ApplicationHandler<UserEvent> for App {
             if let Err(e) = self.init_graphics(event_loop) {
                 error!("Failed to initialize graphics: {e}");
                 event_loop.exit();
+                return;
+            }
+            if self.live_case.is_some()
+                && let Err(error) = self.launch_live_case(event_loop)
+            {
+                error!("Failed to launch performance case: {error}");
+                event_loop.exit();
+                return;
             }
             // After all initial loading is complete, start network checks.
-            deadsync_online::runtime::init();
+            if self.live_case.is_none() {
+                deadsync_online::runtime::init();
+            }
         }
     }
 
@@ -9084,21 +9112,21 @@ impl ApplicationHandler<UserEvent> for App {
 
 pub fn run(
     music_clock: deadsync_audio_stream::MusicClock,
+    live_case: Option<crate::live_case::LiveCase>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (config_generation, config) = config::snapshot();
-    let backend_type = config.video_renderer;
     let show_stats_mode = config.show_stats_mode.min(2);
     let color_index = config.simply_love_color;
     let profile_data = profile::get();
     let event_loop: EventLoop<UserEvent> = EventLoop::<UserEvent>::with_user_event().build()?;
     let mut app = App::new(
-        backend_type,
         show_stats_mode,
         color_index,
         config_generation,
         config,
         profile_data,
         music_clock,
+        live_case,
     );
 
     // Spawn background input backend threads; all input stays decoupled from frame rate.
@@ -9109,16 +9137,18 @@ pub fn run(
     // routed into the game while it is launched into the background.
     app.sync_gameplay_input_capture();
     let (smx_p1_serial, smx_p2_serial) = config::smx_pad_assignment();
-    launch_input_backends(
-        proxy,
-        InputBackendConfig {
-            #[cfg(target_os = "windows")]
-            windows_pad_backend: config.windows_gamepad_backend,
-            smx_input: config.smx_input,
-            smx_p1_serial,
-            smx_p2_serial,
-        },
-    );
+    if app.live_case.is_none() {
+        launch_input_backends(
+            proxy,
+            InputBackendConfig {
+                #[cfg(target_os = "windows")]
+                windows_pad_backend: config.windows_gamepad_backend,
+                smx_input: config.smx_input,
+                smx_p1_serial,
+                smx_p2_serial,
+            },
+        );
+    }
     event_loop.run_app(&mut app)?;
     Ok(())
 }
