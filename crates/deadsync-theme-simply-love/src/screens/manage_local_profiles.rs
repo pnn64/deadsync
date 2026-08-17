@@ -77,6 +77,19 @@ enum RowKind {
 #[derive(Clone, Debug)]
 struct Row {
     kind: RowKind,
+    presentation: RowPresentation,
+}
+
+/// Actor-ready text compiled with the shell-owned profile/default snapshot.
+/// Rows own it for the screen lifetime and replace it only when that snapshot
+/// changes; stable frames clone bounded `Arc` handles without localization,
+/// formatting, temporary strings, cache misses, or maintenance.
+#[derive(Clone, Debug)]
+struct RowPresentation {
+    label: Arc<str>,
+    indicator: Option<Arc<str>>,
+    help_title: Arc<str>,
+    help_bullets: Arc<str>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -275,7 +288,6 @@ pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
     rows: Vec<Row>,
-    default_profile_ids: [Option<String>; 2],
     dedicated_three_key_nav: bool,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
@@ -293,15 +305,19 @@ pub struct State {
 }
 
 pub fn init(view: ManageLocalProfilesView) -> State {
-    let rows = build_rows(view.profiles);
+    let ManageLocalProfilesView {
+        profiles,
+        default_profile_ids,
+        dedicated_three_key_nav,
+    } = view;
+    let rows = build_rows(profiles, &default_profile_ids);
     State {
         selected: 0,
         prev_selected: 0,
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: visual_style_bg::State::new(),
         rows,
-        default_profile_ids: view.default_profile_ids,
-        dedicated_three_key_nav: view.dedicated_three_key_nav,
+        dedicated_three_key_nav,
         nav_key_held_direction: None,
         nav_key_held_since: None,
         nav_key_last_scrolled_at: None,
@@ -318,32 +334,37 @@ pub fn init(view: ManageLocalProfilesView) -> State {
     }
 }
 
-fn build_rows(profiles: Vec<LocalProfileView>) -> Vec<Row> {
+fn build_rows(
+    profiles: Vec<LocalProfileView>,
+    default_profile_ids: &[Option<String>; 2],
+) -> Vec<Row> {
+    let p1_id = default_profile_ids[0].as_deref();
+    let p2_id = default_profile_ids[1].as_deref();
     let mut out = Vec::with_capacity(profiles.len() + 2);
-    out.push(Row {
-        kind: RowKind::CreateNew,
-    });
-    out.push(Row {
-        kind: RowKind::ImportItg,
-    });
+    out.push(build_row(RowKind::CreateNew, p1_id, p2_id));
+    out.push(build_row(RowKind::ImportItg, p1_id, p2_id));
     for p in profiles {
-        out.push(Row {
-            kind: RowKind::Profile {
+        out.push(build_row(
+            RowKind::Profile {
                 id: p.id,
                 display_name: p.display_name,
             },
-        });
+            p1_id,
+            p2_id,
+        ));
     }
-    out.push(Row {
-        kind: RowKind::Exit,
-    });
+    out.push(build_row(RowKind::Exit, p1_id, p2_id));
     out
 }
 
 pub fn sync_runtime_view(state: &mut State, view: ManageLocalProfilesView) {
-    state.rows = build_rows(view.profiles);
-    state.default_profile_ids = view.default_profile_ids;
-    state.dedicated_three_key_nav = view.dedicated_three_key_nav;
+    let ManageLocalProfilesView {
+        profiles,
+        default_profile_ids,
+        dedicated_three_key_nav,
+    } = view;
+    state.rows = build_rows(profiles, &default_profile_ids);
+    state.dedicated_three_key_nav = dedicated_three_key_nav;
     if state.rows.is_empty() {
         state.selected = 0;
         state.prev_selected = 0;
@@ -1584,12 +1605,8 @@ fn indicator_text(id: &str, p1_id: Option<&str>, p2_id: Option<&str>) -> Option<
     }
 }
 
-fn help_for_selected(state: &State, p1_id: Option<&str>, p2_id: Option<&str>) -> (String, String) {
-    let Some(row) = state.rows.get(state.selected) else {
-        return (String::new(), String::new());
-    };
-
-    match &row.kind {
+fn help_for_row(kind: &RowKind, p1_id: Option<&str>, p2_id: Option<&str>) -> (String, String) {
+    match kind {
         RowKind::CreateNew => {
             let title = tr("Profiles", "CreateProfileTitle");
             let b1 = tr("Profiles", "EnterProfileNamePrompt");
@@ -1641,12 +1658,29 @@ fn make_bullets(lines: &[&str]) -> String {
     out
 }
 
+fn build_row(kind: RowKind, p1_id: Option<&str>, p2_id: Option<&str>) -> Row {
+    let label = row_label(&kind);
+    let indicator = match &kind {
+        RowKind::Profile { id, .. } => indicator_text(id, p1_id, p2_id),
+        _ => None,
+    };
+    let (help_title, help_bullets) = help_for_row(&kind, p1_id, p2_id);
+    Row {
+        kind,
+        presentation: RowPresentation {
+            label,
+            indicator,
+            help_title: Arc::from(help_title),
+            help_bullets: Arc::from(help_bullets),
+        },
+    }
+}
+
 fn push_desc(ui: &mut Vec<Actor>, state: &State, s: f32, desc_x: f32, list_y: f32) {
-    let (title, bullets) = help_for_selected(
-        state,
-        state.default_profile_ids[0].as_deref(),
-        state.default_profile_ids[1].as_deref(),
-    );
+    let Some(row) = state.rows.get(state.selected) else {
+        return;
+    };
+    let presentation = &row.presentation;
 
     let mut cursor_y = DESC_TITLE_TOP_PAD_PX.mul_add(s, list_y);
     let title_x = desc_x + DESC_TITLE_SIDE_PAD_PX * s;
@@ -1660,12 +1694,12 @@ fn push_desc(ui: &mut Vec<Actor>, state: &State, s: f32, desc_x: f32, list_y: f3
         diffuse(1.0, 1.0, 1.0, 1.0):
         font("miso"):
         maxwidth(max_title_w):
-        settext(title):
+        settext(Arc::clone(&presentation.help_title)):
         horizalign(left)
     ));
 
     cursor_y += DESC_BULLET_TOP_PAD_PX * s;
-    if bullets.is_empty() {
+    if presentation.help_bullets.is_empty() {
         return;
     }
 
@@ -1681,7 +1715,7 @@ fn push_desc(ui: &mut Vec<Actor>, state: &State, s: f32, desc_x: f32, list_y: f3
         diffuse(1.0, 1.0, 1.0, 1.0):
         font("miso"):
         maxwidth(max_bullet_w):
-        settext(bullets):
+        settext(Arc::clone(&presentation.help_bullets)):
         horizalign(left)
     ));
 }
@@ -2505,7 +2539,7 @@ fn row_text_color(colors: &RowColors, is_active: bool, is_exit: bool) -> [f32; 4
 
 fn push_row(
     ui: &mut Vec<Actor>,
-    kind: &RowKind,
+    row: &Row,
     is_active: bool,
     row_y: f32,
     list_x: f32,
@@ -2513,10 +2547,9 @@ fn push_row(
     sep_w: f32,
     s: f32,
     colors: &RowColors,
-    p1_id: Option<&str>,
-    p2_id: Option<&str>,
     assets: &'static crate::visual_styles::Assets,
 ) {
+    let kind = &row.kind;
     let is_exit = row_is_exit(kind);
     let row_mid_y = (0.5 * ROW_H).mul_add(s, row_y);
     let row_w = row_width(list_w, sep_w, is_active, is_exit);
@@ -2554,20 +2587,18 @@ fn push_row(
         zoom(ITEM_TEXT_ZOOM):
         diffuse(text_col[0], text_col[1], text_col[2], text_col[3]):
         font("miso"):
-        settext(row_label(kind)):
+        settext(Arc::clone(&row.presentation.label)):
         horizalign(left)
     ));
 
-    if let RowKind::Profile { id, .. } = kind
-        && let Some(tag) = indicator_text(id, p1_id, p2_id)
-    {
+    if let Some(tag) = row.presentation.indicator.as_ref() {
         ui.push(act!(text:
             align(1.0, 0.5):
             xy(list_x + list_w - 12.0 * s, row_mid_y):
             zoom(0.75):
             diffuse(text_col[0], text_col[1], text_col[2], text_col[3]):
             font("miso"):
-            settext(tag):
+            settext(Arc::clone(tag)):
             horizalign(right)
         ));
     }
@@ -2596,9 +2627,6 @@ fn push_rows(
         black: [0.0, 0.0, 0.0, 1.0],
     };
 
-    let p1_id = state.default_profile_ids[0].as_deref();
-    let p2_id = state.default_profile_ids[1].as_deref();
-
     for i_vis in 0..VISIBLE_ROWS {
         let row_idx = offset + i_vis;
         if row_idx >= total_rows {
@@ -2608,7 +2636,7 @@ fn push_rows(
         let is_active = row_idx == state.selected;
         push_row(
             ui,
-            &state.rows[row_idx].kind,
+            &state.rows[row_idx],
             is_active,
             row_y,
             list_x,
@@ -2616,8 +2644,6 @@ fn push_rows(
             sep_w,
             s,
             &colors,
-            p1_id,
-            p2_id,
             assets,
         );
     }
@@ -2866,18 +2892,16 @@ mod tests {
     fn state_with_profile_row() -> State {
         let mut state = init(ManageLocalProfilesView::default());
         state.rows = vec![
-            Row {
-                kind: RowKind::CreateNew,
-            },
-            Row {
-                kind: RowKind::Profile {
+            build_row(RowKind::CreateNew, None, None),
+            build_row(
+                RowKind::Profile {
                     id: "test-profile".to_string(),
                     display_name: "Test Profile".to_string(),
                 },
-            },
-            Row {
-                kind: RowKind::Exit,
-            },
+                None,
+                None,
+            ),
+            build_row(RowKind::Exit, None, None),
         ];
         state.selected = 0;
         state.prev_selected = 0;
@@ -2959,7 +2983,35 @@ mod tests {
             RowKind::Profile { id, display_name } if id == "alice" && display_name == "Alice"
         ));
         assert!(matches!(state.rows[3].kind, RowKind::Exit));
-        assert_eq!(state.default_profile_ids, [Some("alice".to_owned()), None]);
+        assert_eq!(state.rows[2].presentation.label.as_ref(), "Alice");
+        assert!(state.rows[2].presentation.indicator.is_some());
+        assert!(state.rows[2].presentation.help_title.contains("Alice"));
+        assert!(state.rows[2].presentation.help_bullets.contains("alice"));
+    }
+
+    #[test]
+    fn profile_snapshot_rebuilds_assignment_presentation() {
+        let mut state = init(ManageLocalProfilesView {
+            profiles: vec![profile_view("alice", "Alice")],
+            default_profile_ids: [None, None],
+            dedicated_three_key_nav: false,
+        });
+        assert!(state.rows[2].presentation.indicator.is_none());
+
+        sync_runtime_view(
+            &mut state,
+            ManageLocalProfilesView {
+                profiles: vec![profile_view("alice", "Alice")],
+                default_profile_ids: [None, Some("alice".to_owned())],
+                dedicated_three_key_nav: false,
+            },
+        );
+
+        assert_eq!(
+            state.rows[2].presentation.indicator.as_deref(),
+            Some(tr("Profiles", "P2Assigned").as_ref())
+        );
+        assert!(state.rows[2].presentation.help_bullets.contains("alice"));
     }
 
     #[test]
