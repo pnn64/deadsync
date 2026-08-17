@@ -9,29 +9,105 @@ use deadsync_simfile::runtime_cache::get_song_cache;
 use deadsync_theme_simply_love::{
     SimplyLoveItgImportSummary, SimplyLoveItgProfileCandidate, SimplyLoveProfileImportEvent,
 };
+use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, mpsc};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, TryLockError, mpsc};
 
-const PENDING_EVENTS: usize = 64;
+const PENDING_TERMINALS: usize = 8;
+const TERMINALS_PER_FRAME: usize = 8;
+const FRAME_EVENTS: usize = TERMINALS_PER_FRAME + 1;
+
+enum WorkerEvent {
+    View(SimplyLoveProfileImportEvent),
+    ImportFinished {
+        import_id: u64,
+        result: Result<SimplyLoveItgImportSummary, String>,
+    },
+}
+
+#[derive(Default)]
+struct LatestProgress {
+    active_import_id: AtomicU64,
+    value: Mutex<Option<(usize, usize, String)>>,
+}
+
+impl LatestProgress {
+    fn start(&self, import_id: u64) {
+        let mut value = self.value.lock().unwrap_or_else(|error| error.into_inner());
+        self.active_import_id.store(import_id, Ordering::Release);
+        *value = None;
+    }
+
+    fn publish(&self, import_id: u64, done: usize, total: usize, label: &str) {
+        if self.active_import_id.load(Ordering::Acquire) != import_id {
+            return;
+        }
+        let mut value = self.value.lock().unwrap_or_else(|error| error.into_inner());
+        if self.active_import_id.load(Ordering::Relaxed) == import_id {
+            *value = Some((done, total, label.to_owned()));
+        }
+    }
+
+    fn take(&self, import_id: u64) -> Option<SimplyLoveProfileImportEvent> {
+        if self.active_import_id.load(Ordering::Acquire) != import_id {
+            return None;
+        }
+        let mut value = match self.value.try_lock() {
+            Ok(value) => value,
+            Err(TryLockError::Poisoned(error)) => error.into_inner(),
+            Err(TryLockError::WouldBlock) => return None,
+        };
+        if self.active_import_id.load(Ordering::Relaxed) != import_id {
+            return None;
+        }
+        value.take().map(
+            |(done, total, label)| SimplyLoveProfileImportEvent::Progress { done, total, label },
+        )
+    }
+
+    fn finish(&self, import_id: u64) {
+        if self
+            .active_import_id
+            .compare_exchange(import_id, 0, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return;
+        }
+        self.value
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take();
+    }
+}
 
 /// Shell-owned ITGmania discovery, native folder selection, and import worker.
+///
+/// Progress is sampled through one latest-value slot because the screen replaces
+/// its progress row on every update. Discovery and completion still cross a
+/// reliable eight-entry queue and integration drains at most eight terminals
+/// plus one progress sample per frame. Replaced progress strings are destroyed
+/// on the worker, never as an unbounded application-frame burst.
 pub(crate) struct Service {
-    tx: mpsc::SyncSender<SimplyLoveProfileImportEvent>,
-    rx: mpsc::Receiver<SimplyLoveProfileImportEvent>,
-    import_cancel: Option<Arc<AtomicBool>>,
+    tx: mpsc::SyncSender<WorkerEvent>,
+    rx: mpsc::Receiver<WorkerEvent>,
+    progress: Arc<LatestProgress>,
+    active_import: Option<(u64, Arc<AtomicBool>)>,
     active_jobs: usize,
+    next_import_id: u64,
 }
 
 impl Default for Service {
     fn default() -> Self {
-        let (tx, rx) = mpsc::sync_channel(PENDING_EVENTS);
+        let (tx, rx) = mpsc::sync_channel(PENDING_TERMINALS);
         Self {
             tx,
             rx,
-            import_cancel: None,
+            progress: Arc::new(LatestProgress::default()),
+            active_import: None,
             active_jobs: 0,
+            next_import_id: 0,
         }
     }
 }
@@ -42,10 +118,12 @@ impl Service {
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let candidates = candidate_views(detect_itg_local_profiles());
-            let _ = tx.send(SimplyLoveProfileImportEvent::Candidates {
-                candidates,
-                browsed_dir: None,
-            });
+            let _ = tx.send(WorkerEvent::View(
+                SimplyLoveProfileImportEvent::Candidates {
+                    candidates,
+                    browsed_dir: None,
+                },
+            ));
         });
     }
 
@@ -54,44 +132,48 @@ impl Service {
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let Some(dir) = rfd::FileDialog::new().set_title(title).pick_folder() else {
-                let _ = tx.send(SimplyLoveProfileImportEvent::BrowseCanceled);
+                let _ = tx.send(WorkerEvent::View(
+                    SimplyLoveProfileImportEvent::BrowseCanceled,
+                ));
                 return;
             };
             let candidates = candidate_views(detect_itg_profiles_from_game_dir(&dir));
-            let _ = tx.send(SimplyLoveProfileImportEvent::Candidates {
-                candidates,
-                browsed_dir: Some(dir),
-            });
+            let _ = tx.send(WorkerEvent::View(
+                SimplyLoveProfileImportEvent::Candidates {
+                    candidates,
+                    browsed_dir: Some(dir),
+                },
+            ));
         });
     }
 
     pub(crate) fn start(&mut self, dir: PathBuf) {
         self.cancel();
+        self.next_import_id = self.next_import_id.wrapping_add(1).max(1);
+        let import_id = self.next_import_id;
         self.active_jobs += 1;
         let cancel = Arc::new(AtomicBool::new(false));
         let thread_cancel = Arc::clone(&cancel);
         let tx = self.tx.clone();
+        let progress = Arc::clone(&self.progress);
+        progress.start(import_id);
         std::thread::spawn(move || {
             let result = import_itg_profile(
                 &dir,
                 |done, total, label| {
-                    let _ = tx.send(SimplyLoveProfileImportEvent::Progress {
-                        done,
-                        total,
-                        label: label.to_owned(),
-                    });
+                    progress.publish(import_id, done, total, label);
                 },
                 || thread_cancel.load(Ordering::Relaxed),
             )
             .map(import_summary)
             .map_err(|error| error.to_string());
-            let _ = tx.send(SimplyLoveProfileImportEvent::Finished(result));
+            let _ = tx.send(WorkerEvent::ImportFinished { import_id, result });
         });
-        self.import_cancel = Some(cancel);
+        self.active_import = Some((import_id, cancel));
     }
 
     pub(crate) fn cancel(&self) {
-        if let Some(cancel) = &self.import_cancel {
+        if let Some((_, cancel)) = &self.active_import {
             cancel.store(true, Ordering::Relaxed);
         }
     }
@@ -99,37 +181,76 @@ impl Service {
     /// Returns `None` without probing the channel when discovery, browsing,
     /// and import workers are all inactive. Every worker sends exactly one
     /// terminal event, which keeps the activity count live until it is drained.
-    pub(crate) fn poll(&mut self) -> Option<Vec<SimplyLoveProfileImportEvent>> {
+    pub(crate) fn poll(
+        &mut self,
+    ) -> Option<SmallVec<[SimplyLoveProfileImportEvent; FRAME_EVENTS]>> {
         if self.active_jobs == 0 {
             return None;
         }
         Some(self.drain_events())
     }
 
-    fn drain_events(&mut self) -> Vec<SimplyLoveProfileImportEvent> {
-        let events = self.rx.try_iter().collect::<Vec<_>>();
-        let completed = events
-            .iter()
-            .filter(|event| profile_import_event_is_terminal(event))
-            .count();
-        self.active_jobs = self.active_jobs.saturating_sub(completed);
-        if events
-            .iter()
-            .any(|event| matches!(event, SimplyLoveProfileImportEvent::Finished(_)))
+    fn drain_events(&mut self) -> SmallVec<[SimplyLoveProfileImportEvent; FRAME_EVENTS]> {
+        let mut events = SmallVec::new();
+        if let Some((import_id, _)) = self.active_import.as_ref()
+            && let Some(progress) = self.progress.take(*import_id)
         {
-            self.import_cancel = None;
+            events.push(progress);
+        }
+        for _ in 0..TERMINALS_PER_FRAME {
+            let Ok(event) = self.rx.try_recv() else {
+                break;
+            };
+            self.active_jobs = self.active_jobs.saturating_sub(1);
+            match event {
+                WorkerEvent::View(event) => events.push(event),
+                WorkerEvent::ImportFinished { import_id, result } => {
+                    if self
+                        .active_import
+                        .as_ref()
+                        .is_some_and(|(active_id, _)| *active_id == import_id)
+                    {
+                        self.active_import = None;
+                        self.progress.finish(import_id);
+                        events.push(SimplyLoveProfileImportEvent::Finished(result));
+                    }
+                }
+            }
         }
         events
     }
 }
 
-fn profile_import_event_is_terminal(event: &SimplyLoveProfileImportEvent) -> bool {
-    matches!(
-        event,
-        SimplyLoveProfileImportEvent::Candidates { .. }
-            | SimplyLoveProfileImportEvent::BrowseCanceled
-            | SimplyLoveProfileImportEvent::Finished(_)
-    )
+#[cfg(feature = "bench-support")]
+pub struct BenchmarkProfileImportService(Service);
+
+#[cfg(feature = "bench-support")]
+impl BenchmarkProfileImportService {
+    pub fn active() -> Self {
+        let mut service = Service::default();
+        let import_id = 1;
+        service.active_jobs = 1;
+        service.active_import = Some((import_id, Arc::new(AtomicBool::new(false))));
+        service.progress.start(import_id);
+        Self(service)
+    }
+
+    pub fn publish_progress(&self, done: usize, total: usize, label: &str) {
+        self.0.progress.publish(1, done, total, label);
+    }
+
+    pub fn with_progress_burst(events: usize, label_bytes: usize) -> Self {
+        let service = Self::active();
+        let label = "p".repeat(label_bytes);
+        for done in 1..=events {
+            service.publish_progress(done, events, &label);
+        }
+        service
+    }
+
+    pub fn poll(&mut self) -> Option<SmallVec<[SimplyLoveProfileImportEvent; FRAME_EVENTS]>> {
+        self.0.poll()
+    }
 }
 
 fn candidate_views(candidates: Vec<ItgProfileCandidate>) -> Vec<SimplyLoveItgProfileCandidate> {
@@ -246,12 +367,106 @@ mod tests {
         assert!(service.poll().is_some_and(|events| events.is_empty()));
         service
             .tx
-            .send(SimplyLoveProfileImportEvent::BrowseCanceled)
+            .send(WorkerEvent::View(
+                SimplyLoveProfileImportEvent::BrowseCanceled,
+            ))
             .expect("the service owns the matching receiver");
         assert!(matches!(
             service.poll().expect("the worker is active").as_slice(),
             [SimplyLoveProfileImportEvent::BrowseCanceled]
         ));
         assert!(service.poll().is_none());
+    }
+
+    #[test]
+    fn profile_import_progress_keeps_only_the_latest_sample() {
+        let mut service = Service::default();
+        let import_id = 1;
+        service.active_jobs = 1;
+        service.active_import = Some((import_id, Arc::new(AtomicBool::new(false))));
+        service.progress.start(import_id);
+        for done in 1..=64 {
+            service
+                .progress
+                .publish(import_id, done, 64, &"p".repeat(24));
+        }
+        let events = service.poll().expect("the import is active");
+
+        assert!(matches!(
+            events.as_slice(),
+            [SimplyLoveProfileImportEvent::Progress { done: 64, total: 64, label }]
+                if label.len() == 24
+        ));
+    }
+
+    #[test]
+    fn superseded_import_progress_cannot_replace_the_active_sample() {
+        let progress = LatestProgress::default();
+        progress.start(1);
+        progress.publish(1, 1, 2, "old");
+        progress.start(2);
+        progress.publish(1, 2, 2, "stale");
+        progress.publish(2, 3, 4, "current");
+
+        assert!(matches!(
+            progress.take(2),
+            Some(SimplyLoveProfileImportEvent::Progress { done: 3, total: 4, label })
+                if label == "current"
+        ));
+    }
+
+    #[test]
+    fn current_import_delivers_latest_progress_before_completion() {
+        let mut service = Service::default();
+        let import_id = 3;
+        service.active_jobs = 1;
+        service.active_import = Some((import_id, Arc::new(AtomicBool::new(false))));
+        service.progress.start(import_id);
+        service.progress.publish(import_id, 8, 10, "last visible");
+        service
+            .tx
+            .send(WorkerEvent::ImportFinished {
+                import_id,
+                result: Ok(SimplyLoveItgImportSummary::default()),
+            })
+            .expect("the service owns the matching receiver");
+
+        let events = service.poll().expect("the import is active");
+        assert!(matches!(
+            events.as_slice(),
+            [
+                SimplyLoveProfileImportEvent::Progress {
+                    done: 8,
+                    total: 10,
+                    ..
+                },
+                SimplyLoveProfileImportEvent::Finished(Ok(_)),
+            ]
+        ));
+        assert!(service.poll().is_none());
+    }
+
+    #[test]
+    fn superseded_completion_does_not_finish_the_active_import() {
+        let mut service = Service::default();
+        service.active_jobs = 2;
+        service.active_import = Some((2, Arc::new(AtomicBool::new(false))));
+        service.progress.start(2);
+        service.progress.publish(2, 1, 2, "current");
+        service
+            .tx
+            .send(WorkerEvent::ImportFinished {
+                import_id: 1,
+                result: Err("stale".to_owned()),
+            })
+            .expect("the service owns the matching receiver");
+
+        let events = service.poll().expect("workers remain active");
+        assert!(matches!(
+            events.as_slice(),
+            [SimplyLoveProfileImportEvent::Progress { label, .. }] if label == "current"
+        ));
+        assert!(service.active_import.is_some());
+        assert_eq!(service.active_jobs, 1);
     }
 }
