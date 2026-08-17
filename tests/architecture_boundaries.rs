@@ -2968,7 +2968,7 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
         fs::read_to_string(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
             .expect("shell gameplay runtime bridge should be readable");
     for execution in [
-        "deadsync_audio_stream::get_music_stream_clock_snapshot()",
+        "music_clock.snapshot()",
         "GameplayAudioCommand::PlayMusic",
         "GameplayAudioCommand::SetMusicRate(rate)",
         "deadsync_audio_stream::snap_music_start_sec",
@@ -3048,6 +3048,26 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
     let profile = fs::read_to_string(root.join("crates/deadsync-profile/src/lib.rs"))
         .expect("profile crate should be readable");
     assert!(!profile.contains("fast_profile_switch_from_select_music"));
+}
+
+#[test]
+fn music_clock_reader_is_application_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let music_map = fs::read_to_string(root.join("crates/deadsync-audio-stream/src/music_map.rs"))
+        .expect("music clock reader should be readable");
+    assert!(music_map.contains("pub struct MusicClock"));
+    assert!(music_map.contains("played: Option<PlayedMapReader>"));
+    assert!(!music_map.contains("static MUSIC_MAP_RUNTIME"));
+    assert!(!music_map.contains("Mutex<"));
+
+    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    assert!(app.contains("music_clock: deadsync_audio_stream::MusicClock"));
+
+    let runtime = fs::read_to_string(root.join("crates/deadsync-audio-stream/src/runtime.rs"))
+        .expect("audio runtime should be readable");
+    assert!(!runtime.contains("clear_music_pos_map"));
+    assert!(!runtime.contains("get_music_stream_clock_snapshot"));
 }
 
 #[test]

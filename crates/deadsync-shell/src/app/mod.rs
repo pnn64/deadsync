@@ -1140,6 +1140,7 @@ impl ScreensState {
         now: Instant,
         session: &SessionState,
         asset_manager: &AssetManager,
+        music_clock: &mut deadsync_audio_stream::MusicClock,
         smx_assignment: Option<&SmxAssignmentView>,
         gameplay_smx_input: bool,
         effects: &mut Vec<ThemeEffect>,
@@ -1151,6 +1152,7 @@ impl ScreensState {
                         gs,
                         delta_time,
                         gameplay_smx_input,
+                        music_clock,
                         &mut self.gameplay_score_cursor,
                         effects,
                     );
@@ -1162,6 +1164,7 @@ impl ScreensState {
                     crate::gameplay_runtime::update_practice(
                         ps,
                         delta_time,
+                        music_clock,
                         &mut self.gameplay_score_cursor,
                         effects,
                     );
@@ -1426,6 +1429,10 @@ pub struct App {
     >,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
+    /// Sole application-thread reader for played music-position segments.
+    /// The callback publishes through a bounded lock-free ring; this retained
+    /// reader and its derived map live with `App` and require no global lock.
+    music_clock: deadsync_audio_stream::MusicClock,
     /// Game-thread-only one-entry cursor for Gameplay banner media intent.
     /// Its session lifetime and fixed capacity require no allocation or
     /// eviction. The first Gameplay/Practice frame warms it; screen, window,
@@ -3129,6 +3136,7 @@ impl App {
                 gs,
                 delta_time,
                 self.state.play_input_policy.smx_input,
+                &mut self.music_clock,
                 &mut self.state.screens.gameplay_score_cursor,
                 &mut self.theme_effect_scratch,
             );
@@ -3157,6 +3165,7 @@ impl App {
                     redraw_started,
                     &self.state.session,
                     &self.asset_manager,
+                    &mut self.music_clock,
                     smx_assignment.as_ref(),
                     self.state.play_input_policy.smx_input,
                     &mut self.theme_effect_scratch,
@@ -3730,6 +3739,7 @@ impl App {
         config_generation: u64,
         config: config::Config,
         profile_data: profile_data::Profile,
+        music_clock: deadsync_audio_stream::MusicClock,
     ) -> Self {
         let software_renderer_threads = config.software_renderer_threads;
         let gfx_debug_enabled = config.gfx_debug;
@@ -3765,6 +3775,7 @@ impl App {
             smx_difficulty_tint_cache: std::collections::HashMap::new(),
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
+            music_clock,
             gameplay_banner_sync_key: None,
             post_select_stage_indices: Vec::new(),
             post_select_stage_key: None,
@@ -5184,7 +5195,7 @@ impl App {
                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                     let already_exiting = gs.exit_transition_active();
                     gs.begin_restart_exit();
-                    crate::gameplay_runtime::drain(gs);
+                    crate::gameplay_runtime::drain(gs, &mut self.music_clock);
                     if let Some(plan) = fast_gameplay_restart_plan(
                         self.state.session.gameplay_restart_count,
                         already_exiting,
@@ -6873,6 +6884,7 @@ impl App {
                     crate::gameplay_runtime::handle_practice_raw_key(
                         state,
                         &raw_key,
+                        &mut self.music_clock,
                         &mut self.theme_effect_scratch,
                     )
                 } else {
@@ -7876,7 +7888,7 @@ impl App {
                 }
                 self.state.screens.practice_state = Some(practice_state);
                 if let Some(ps) = self.state.screens.practice_state.as_mut() {
-                    crate::gameplay_runtime::enter_practice(ps);
+                    crate::gameplay_runtime::enter_practice(ps, &mut self.music_clock);
                 }
             } else {
                 panic!("Navigating to Practice without PlayerOptions state!");
@@ -8321,7 +8333,11 @@ impl App {
                 gs.background_path_dirty = true;
                 self.state.screens.gameplay_state = Some(gs);
                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                    crate::gameplay_runtime::enter(gs, self.state.play_input_policy.smx_input);
+                    crate::gameplay_runtime::enter(
+                        gs,
+                        self.state.play_input_policy.smx_input,
+                        &mut self.music_clock,
+                    );
                 }
                 // Song Start / Restart SFX (zmod parity, issue #375). At this
                 // point `gameplay_restart_count` has already been zeroed for
@@ -9066,7 +9082,9 @@ impl ApplicationHandler<UserEvent> for App {
     }
 }
 
-pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(
+    music_clock: deadsync_audio_stream::MusicClock,
+) -> Result<(), Box<dyn std::error::Error>> {
     let (config_generation, config) = config::snapshot();
     let backend_type = config.video_renderer;
     let show_stats_mode = config.show_stats_mode.min(2);
@@ -9080,6 +9098,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         config_generation,
         config,
         profile_data,
+        music_clock,
     );
 
     // Spawn background input backend threads; all input stays decoupled from frame rate.

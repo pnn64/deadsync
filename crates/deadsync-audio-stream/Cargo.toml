@@ -8,6 +8,10 @@ license = "GPL-3.0"
 name = "audio_sample_transforms"
 harness = false
 
+[[bench]]
+name = "music_clock_ownership"
+harness = false
+
 [features]
 test-support = []
 

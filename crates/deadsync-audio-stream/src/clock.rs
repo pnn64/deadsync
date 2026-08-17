@@ -1,4 +1,4 @@
-use crate::lookup_music_position;
+use crate::MusicClock;
 use deadlib_audio_core::{
     CallbackClockSource, CallbackClockWindow, MusicStreamClockSnapshot,
     fallback_stream_position_frames, music_nanos_from_seconds, music_track_has_started,
@@ -61,6 +61,7 @@ fn stream_position_frames_from_window(
 
 #[inline(always)]
 fn music_stream_clock_snapshot_at_nanos(
+    clock: &mut MusicClock,
     sample_rate: u32,
     start: u64,
     valid_at: Instant,
@@ -71,7 +72,7 @@ fn music_stream_clock_snapshot_at_nanos(
     let stream_frames = stream_position_frames_from_window(sample_rate, start, at_nanos, window);
     let stream_seconds = (stream_frames / sample_rate as f64) as f32;
     let (music_seconds, music_seconds_per_second, has_music_mapping) =
-        match lookup_music_position(stream_frames, sample_rate) {
+        match clock.lookup(stream_frames) {
             Some((music_seconds, slope)) => (music_seconds, slope, true),
             None => match seeded_music_position(stream_seconds) {
                 Some((music_seconds, slope)) => (music_seconds, slope, true),
@@ -96,32 +97,42 @@ fn music_stream_clock_snapshot_at_nanos(
     }
 }
 
-/// Returns the current stream position and the `Instant` it is valid for.
-pub fn music_stream_clock_snapshot(sample_rate: u32) -> MusicStreamClockSnapshot {
-    let sample_rate = sample_rate.max(1);
-    if !music_track_has_started() {
-        if let Some((music_seconds, slope)) = seeded_music_position(0.0) {
+impl MusicClock {
+    /// Returns the current stream position and the `Instant` it is valid for.
+    pub fn snapshot(&mut self) -> MusicStreamClockSnapshot {
+        let sample_rate = self.sample_rate();
+        if !music_track_has_started() {
+            if let Some((music_seconds, slope)) = seeded_music_position(0.0) {
+                return MusicStreamClockSnapshot {
+                    stream_seconds: 0.0,
+                    music_seconds,
+                    music_nanos: music_nanos_from_seconds(f64::from(music_seconds)),
+                    music_seconds_per_second: slope,
+                    has_music_mapping: true,
+                    valid_at: Instant::now(),
+                    valid_at_host_nanos: 0,
+                };
+            }
             return MusicStreamClockSnapshot {
                 stream_seconds: 0.0,
-                music_seconds,
-                music_nanos: music_nanos_from_seconds(f64::from(music_seconds)),
-                music_seconds_per_second: slope,
-                has_music_mapping: true,
+                music_seconds: 0.0,
+                music_nanos: 0,
+                music_seconds_per_second: 1.0,
+                has_music_mapping: false,
                 valid_at: Instant::now(),
                 valid_at_host_nanos: 0,
             };
         }
-        return MusicStreamClockSnapshot {
-            stream_seconds: 0.0,
-            music_seconds: 0.0,
-            music_nanos: 0,
-            music_seconds_per_second: 1.0,
-            has_music_mapping: false,
-            valid_at: Instant::now(),
-            valid_at_host_nanos: 0,
-        };
+        let start = music_track_start_frame();
+        let (valid_at, at_nanos, source, window) = load_callback_clock_snapshot_now();
+        music_stream_clock_snapshot_at_nanos(
+            self,
+            sample_rate,
+            start,
+            valid_at,
+            at_nanos,
+            source,
+            window,
+        )
     }
-    let start = music_track_start_frame();
-    let (valid_at, at_nanos, source, window) = load_callback_clock_snapshot_now();
-    music_stream_clock_snapshot_at_nanos(sample_rate, start, valid_at, at_nanos, source, window)
 }

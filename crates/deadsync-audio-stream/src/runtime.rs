@@ -2,8 +2,8 @@
 use deadlib_audio::LinuxAudioBackend;
 use deadlib_audio::{InitConfig, OutputPlan, prepare_output};
 use deadlib_audio_core::{
-    MusicStreamClockSnapshot, OutputBackendReady, OutputDeviceInfo, OutputTimingSnapshot,
-    SfxSender, StutterDiagAudioEvent, normalized_music_rate,
+    OutputBackendReady, OutputDeviceInfo, OutputTimingSnapshot, PlayedMapReader, SfxSender,
+    StutterDiagAudioEvent, bump_music_map_generation, normalized_music_rate,
 };
 use deadlib_platform::dirs;
 use deadsync_audio_replaygain as replaygain;
@@ -18,15 +18,9 @@ use crate::mix::{
     EFFECT_BUS, SCREEN_BUS, assist_tick_generation, init_controls, stop_assist_tick_bus,
     stop_screen_bus,
 };
-use crate::music_map::install_played_map;
-use crate::{
-    Cut, MusicStreamRuntime, OutputFormat, SfxCache, StreamCommand, clear_music_pos_map,
-    force_music_map_runtime, music_stream_clock_snapshot,
-};
+use crate::{Cut, MusicClock, MusicStreamRuntime, OutputFormat, SfxCache, StreamCommand};
 
-static ENGINE_INIT_CFG: OnceLock<InitConfig> = OnceLock::new();
-static ENGINE: std::sync::LazyLock<AudioEngine> =
-    std::sync::LazyLock::new(|| init_engine_and_thread(engine_init_cfg()));
+static ENGINE: OnceLock<AudioEngine> = OnceLock::new();
 static REPLAYGAIN_ENABLED: AtomicBool = AtomicBool::new(false);
 static PRESERVE_PITCH_ENABLED: AtomicBool = AtomicBool::new(false);
 
@@ -41,13 +35,21 @@ struct AudioEngine {
 struct AudioThreadReady {
     backend_ready: OutputBackendReady,
     sfx_sender: SfxSender,
+    played_map: PlayedMapReader,
+}
+
+#[inline(always)]
+fn engine() -> &'static AudioEngine {
+    ENGINE
+        .get()
+        .expect("deadsync_audio_stream::init must be called before audio use")
 }
 
 #[inline(always)]
 fn output_format() -> OutputFormat {
     OutputFormat {
-        sample_rate_hz: ENGINE.device_sample_rate,
-        channels: ENGINE.device_channels,
+        sample_rate_hz: engine().device_sample_rate,
+        channels: engine().device_channels,
     }
 }
 
@@ -69,24 +71,13 @@ pub fn collect_stutter_diag_events(
 }
 
 #[inline(always)]
-fn engine_init_cfg() -> InitConfig {
-    *ENGINE_INIT_CFG
-        .get()
-        .expect("deadsync_audio_stream::init must be called before audio use")
-}
-
-#[inline(always)]
 pub fn is_initialized() -> bool {
-    ENGINE_INIT_CFG.get().is_some()
+    ENGINE.get().is_some()
 }
 
-pub fn init(cfg: InitConfig) -> Result<(), String> {
-    if let Some(existing) = ENGINE_INIT_CFG.get() {
-        if *existing != cfg {
-            return Err("audio runtime already initialized with different config".to_string());
-        }
-    } else {
-        let _ = ENGINE_INIT_CFG.set(cfg);
+pub fn init(cfg: InitConfig) -> Result<MusicClock, String> {
+    if is_initialized() {
+        return Err("audio runtime already initialized; music clock is already owned".to_string());
     }
     let app_dirs = dirs::app_dirs();
     replaygain::init(replaygain::InitConfig {
@@ -95,13 +86,15 @@ pub fn init(cfg: InitConfig) -> Result<(), String> {
         result_callback: set_music_replaygain_if_matches,
     })
     .map_err(str::to_string)?;
-    std::sync::LazyLock::force(&ENGINE);
-    force_music_map_runtime();
-    Ok(())
+    let (engine, clock) = init_engine_and_thread(&cfg);
+    ENGINE
+        .set(engine)
+        .map_err(|_| "audio runtime initialized concurrently".to_string())?;
+    Ok(clock)
 }
 
 pub fn startup_output_devices() -> Vec<OutputDeviceInfo> {
-    ENGINE.startup_output_devices.clone()
+    engine().startup_output_devices.clone()
 }
 
 #[cfg(target_os = "linux")]
@@ -129,13 +122,15 @@ pub fn set_preserve_pitch_enabled(enabled: bool) {
     PRESERVE_PITCH_ENABLED.store(enabled, Ordering::Relaxed);
     // Only touch the engine if it has actually been initialised; this is also
     // called during config load before the audio engine exists, and forcing
-    // the LazyLock there would open the output device too early.
+    // initialization there would open the output device too early.
     if is_initialized() {
-        let generation = clear_music_pos_map();
-        let _ = ENGINE.command_sender.send(StreamCommand::SetPreservePitch {
-            enabled,
-            generation,
-        });
+        let generation = bump_music_map_generation();
+        let _ = engine()
+            .command_sender
+            .send(StreamCommand::SetPreservePitch {
+                enabled,
+                generation,
+            });
     }
 }
 
@@ -165,7 +160,7 @@ pub fn play_assist_tick(path: &str) {
     if !is_initialized() {
         return;
     }
-    ENGINE
+    engine()
         .sfx_cache
         .play_assist_tick(path, output_format(), resolve_asset_path);
 }
@@ -175,11 +170,11 @@ pub fn play_preloaded_assist_tick(path: &str) {
     if !is_initialized() {
         return;
     }
-    ENGINE.sfx_cache.play_preloaded_assist_tick(path);
+    engine().sfx_cache.play_preloaded_assist_tick(path);
 }
 
 /// Plays a preloaded gameplay assist tick scheduled to become audible at an
-/// absolute stream frame (see [`assist_tick_stream_frame_for_music_seconds`]).
+/// absolute stream frame (see [`MusicClock::assist_tick_stream_frame`]).
 /// Because the target frame lies on the same audio stream timeline the mixer
 /// writes against, output latency is compensated implicitly. Falls back to
 /// immediate playback when `target_stream_frame == 0`.
@@ -188,7 +183,7 @@ pub fn play_scheduled_assist_tick(path: &str, target_stream_frame: u64) {
     if !is_initialized() {
         return;
     }
-    ENGINE
+    engine()
         .sfx_cache
         .play_scheduled_assist_tick(path, target_stream_frame);
 }
@@ -198,7 +193,7 @@ fn play_preloaded_sfx_on_bus(path: &str, bus: deadlib_audio_core::MixBus) {
     if !is_initialized() {
         return;
     }
-    ENGINE.sfx_cache.play_preloaded(path, bus);
+    engine().sfx_cache.play_preloaded(path, bus);
 }
 
 fn play_sfx_on_bus(path: &str, bus: deadlib_audio_core::MixBus) {
@@ -206,13 +201,13 @@ fn play_sfx_on_bus(path: &str, bus: deadlib_audio_core::MixBus) {
     if !is_initialized() {
         return;
     }
-    ENGINE
+    engine()
         .sfx_cache
         .play(path, bus, output_format(), resolve_asset_path);
 }
 
 pub fn preload_sfx(path: &str) {
-    ENGINE
+    engine()
         .sfx_cache
         .preload(path, output_format(), resolve_asset_path);
 }
@@ -229,7 +224,7 @@ fn reset_music_stream_clock() -> u64 {
     // Invalidate any assist ticks scheduled against the previous timeline; their
     // absolute target frames no longer correspond to the music position.
     stop_assist_tick_bus();
-    clear_music_pos_map()
+    bump_music_map_generation()
 }
 
 pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
@@ -248,7 +243,7 @@ pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
     // gain doesn't audibly bleed into the start of this one.
     deadlib_audio_core::snap_music_gain_generation();
 
-    let _ = ENGINE.command_sender.send(StreamCommand::PlayMusic {
+    let _ = engine().command_sender.send(StreamCommand::PlayMusic {
         path,
         cut,
         looping,
@@ -276,7 +271,7 @@ pub fn stop_music() {
     let generation = reset_music_stream_clock();
     deadlib_audio_core::reset_music_target_gain();
     deadlib_audio_core::snap_music_gain_generation();
-    let _ = ENGINE
+    let _ = engine()
         .command_sender
         .send(StreamCommand::StopMusic { generation });
 }
@@ -284,25 +279,14 @@ pub fn stop_music() {
 pub fn set_music_rate(rate: f32) {
     let rate = normalized_music_rate(rate);
     deadlib_audio_core::set_music_clock_rate(rate);
-    let generation = clear_music_pos_map();
-    let _ = ENGINE
+    let generation = bump_music_map_generation();
+    let _ = engine()
         .command_sender
         .send(StreamCommand::SetMusicRate { rate, generation });
 }
 
-/// Returns the elapsed real time (in seconds) of the currently playing music
-/// stream, measured from the moment the first sample of that stream reached
-/// the output callback.
-pub fn get_music_stream_position_seconds() -> f32 {
-    get_music_stream_clock_snapshot().stream_seconds
-}
-
 pub fn assist_sfx_generation() -> u64 {
     assist_tick_generation()
-}
-
-pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
-    music_stream_clock_snapshot(ENGINE.device_sample_rate)
 }
 
 pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
@@ -314,11 +298,11 @@ fn publish_output_backend_ready(ready: OutputBackendReady) {
     deadlib_audio_core::publish_output_backend_ready(ready);
 }
 
-fn init_engine_and_thread(cfg: InitConfig) -> AudioEngine {
+fn init_engine_and_thread(cfg: &InitConfig) -> (AudioEngine, MusicClock) {
     let (command_sender, command_receiver) = channel();
     let (ready_sender, ready_receiver) = channel();
     let controls = init_controls();
-    let output_plan = prepare_output(&cfg, controls.clone());
+    let output_plan = prepare_output(cfg, controls.clone());
     let startup_output_devices = output_plan.devices().to_vec();
 
     thread::spawn(move || {
@@ -333,6 +317,7 @@ fn init_engine_and_thread(cfg: InitConfig) -> AudioEngine {
     let AudioThreadReady {
         backend_ready: ready,
         sfx_sender,
+        played_map,
     } = thread_ready;
 
     info!(
@@ -347,13 +332,17 @@ fn init_engine_and_thread(cfg: InitConfig) -> AudioEngine {
         ready.device_name
     );
     publish_output_backend_ready(ready.clone());
-    AudioEngine {
-        command_sender,
-        sfx_cache: SfxCache::new(controls, sfx_sender),
-        device_sample_rate: ready.device_sample_rate,
-        device_channels: ready.device_channels,
-        startup_output_devices,
-    }
+    let music_clock = MusicClock::new(played_map, ready.device_sample_rate);
+    (
+        AudioEngine {
+            command_sender,
+            sfx_cache: SfxCache::new(controls, sfx_sender),
+            device_sample_rate: ready.device_sample_rate,
+            device_channels: ready.device_channels,
+            startup_output_devices,
+        },
+        music_clock,
+    )
 }
 
 fn audio_manager_thread(
@@ -370,7 +359,6 @@ fn audio_manager_thread(
     };
     let (_session, ready, sfx_sender, stream_handle) = opened.into_parts();
     let deadlib_audio_core::AudioStreamHandle { writer, played_map } = stream_handle;
-    install_played_map(played_map);
     let stream_output = OutputFormat {
         sample_rate_hz: ready.device_sample_rate,
         channels: ready.device_channels,
@@ -379,6 +367,7 @@ fn audio_manager_thread(
         .send(Ok(AudioThreadReady {
             backend_ready: ready,
             sfx_sender,
+            played_map,
         }))
         .is_err()
     {

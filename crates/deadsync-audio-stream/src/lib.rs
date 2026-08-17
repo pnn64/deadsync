@@ -29,18 +29,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::thread;
 
-pub use clock::{music_stream_clock_snapshot, timing_diag_enabled};
+pub use clock::timing_diag_enabled;
 pub use mix::{AudioMixLevels, audio_mix_levels, set_audio_mix_levels};
-pub use music_map::{
-    assist_tick_stream_frame_for_music_seconds, clear_music_pos_map, force_music_map_runtime,
-    lookup_music_position,
-};
+pub use music_map::MusicClock;
 #[cfg(target_os = "linux")]
 pub use runtime::available_linux_backends;
 pub use runtime::{
-    assist_sfx_generation, collect_stutter_diag_events, get_music_stream_clock_snapshot,
-    get_music_stream_position_seconds, get_output_timing_snapshot, init, is_initialized,
-    play_assist_tick, play_music, play_preloaded_assist_tick, play_preloaded_sfx,
+    assist_sfx_generation, collect_stutter_diag_events, get_output_timing_snapshot, init,
+    is_initialized, play_assist_tick, play_music, play_preloaded_assist_tick, play_preloaded_sfx,
     play_scheduled_assist_tick, play_screen_sfx, play_sfx, preload_sfx, preserve_pitch_enabled,
     replaygain_enabled, set_music_rate, set_preserve_pitch_enabled, set_replaygain_enabled,
     startup_output_devices, stop_music, stop_screen_sfx, stutter_diag_trigger_seq,

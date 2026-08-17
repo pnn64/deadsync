@@ -413,7 +413,7 @@ impl App {
             None
         };
         let music_position_seconds = if deadsync_audio_stream::is_initialized() {
-            f64::from(deadsync_audio_stream::get_music_stream_clock_snapshot().music_seconds)
+            f64::from(self.music_clock.snapshot().music_seconds)
         } else {
             0.0
         };

@@ -92,14 +92,15 @@ impl App {
                 ctrl_held: self.state.shell.interaction.controls().ctrl(),
             },
         );
-        let Some(gs) = self.state.screens.gameplay_state.as_mut() else {
-            return;
-        };
         let Some(plan) = plan else {
             return;
         };
+        let audio_snapshot = crate::gameplay_runtime::snapshot(&mut self.music_clock);
+        let Some(gs) = self.state.screens.gameplay_state.as_mut() else {
+            return;
+        };
         gs.set_raw_modifier_state(plan.shift_held, plan.ctrl_held);
-        let now_music_time = gs.music_time_from_audio_snapshot(crate::gameplay_runtime::snapshot());
+        let now_music_time = gs.music_time_from_audio_snapshot(audio_snapshot);
         let action = gs.handle_queued_raw_key_input(
             plan.input,
             plan.modifier_key,
@@ -108,7 +109,7 @@ impl App {
             now_music_time,
             plan.allow_commands,
         );
-        crate::gameplay_runtime::drain(gs);
+        crate::gameplay_runtime::drain(gs, &mut self.music_clock);
         match allowed_gameplay_raw_action(
             action,
             self.state.play_input_policy.keyboard_features,
@@ -185,7 +186,12 @@ impl App {
         if current_screen == CurrentScreen::Gameplay {
             debug_assert!(self.theme_effect_scratch.is_empty());
             if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                crate::gameplay_runtime::handle_input(gs, &ev, &mut self.theme_effect_scratch);
+                crate::gameplay_runtime::handle_input(
+                    gs,
+                    &ev,
+                    &mut self.music_clock,
+                    &mut self.theme_effect_scratch,
+                );
             }
             return self.drain_theme_effects(event_loop);
         }
@@ -195,6 +201,7 @@ impl App {
                 crate::gameplay_runtime::handle_practice_input(
                     state,
                     &ev,
+                    &mut self.music_clock,
                     &mut self.theme_effect_scratch,
                 );
             }
