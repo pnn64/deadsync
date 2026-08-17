@@ -298,7 +298,7 @@ impl App {
     fn start_global_fade(&mut self, target: CurrentScreen, stop_screen_sfx: bool) {
         debug!("Starting global fade out to screen: {target:?}");
         if stop_screen_sfx {
-            deadsync_audio_stream::stop_screen_sfx();
+            self.audio.stop_screen_sfx();
         }
         let (_, out_duration) =
             self.get_out_transition_for_route(self.state.screens.current_screen, target);

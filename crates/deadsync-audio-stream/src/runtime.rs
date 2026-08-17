@@ -9,7 +9,6 @@ use deadlib_platform::dirs;
 use deadsync_audio_replaygain as replaygain;
 use log::info;
 use std::path::PathBuf;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread;
@@ -18,11 +17,20 @@ use crate::mix::{
     EFFECT_BUS, SCREEN_BUS, assist_tick_generation, init_controls, stop_assist_tick_bus,
     stop_screen_bus,
 };
-use crate::{Cut, MusicClock, MusicStreamRuntime, OutputFormat, SfxCache, StreamCommand};
+use crate::sfx_cache::SfxCache;
+use crate::{Cut, MusicClock, MusicStreamRuntime, OutputFormat, SfxId, StreamCommand};
 
-static ENGINE: OnceLock<AudioEngine> = OnceLock::new();
 static REPLAYGAIN_ENABLED: AtomicBool = AtomicBool::new(false);
 static PRESERVE_PITCH_ENABLED: AtomicBool = AtomicBool::new(false);
+
+/// Application-thread owner for audio commands and the sole SFX producer.
+///
+/// A successful initialization installs one engine. The no-audio value keeps
+/// the same API but has no shared runtime state. `AudioControl` is deliberately
+/// non-`Clone`: `App` is the only producer for the callback's bounded ring.
+pub struct AudioControl {
+    engine: Option<AudioEngine>,
+}
 
 struct AudioEngine {
     command_sender: Sender<StreamCommand>,
@@ -38,18 +46,10 @@ struct AudioThreadReady {
     played_map: PlayedMapReader,
 }
 
-#[inline(always)]
-fn engine() -> &'static AudioEngine {
-    ENGINE
-        .get()
-        .expect("deadsync_audio_stream::init must be called before audio use")
-}
-
-#[inline(always)]
-fn output_format() -> OutputFormat {
+fn output_format(engine: &AudioEngine) -> OutputFormat {
     OutputFormat {
-        sample_rate_hz: engine().device_sample_rate,
-        channels: engine().device_channels,
+        sample_rate_hz: engine.device_sample_rate,
+        channels: engine.device_channels,
     }
 }
 
@@ -70,15 +70,7 @@ pub fn collect_stutter_diag_events(
     deadlib_audio_core::collect_stutter_diag_events(now_host_nanos, window_ns, out);
 }
 
-#[inline(always)]
-pub fn is_initialized() -> bool {
-    ENGINE.get().is_some()
-}
-
-pub fn init(cfg: InitConfig) -> Result<MusicClock, String> {
-    if is_initialized() {
-        return Err("audio runtime already initialized; music clock is already owned".to_string());
-    }
+pub fn init(cfg: InitConfig) -> Result<(AudioControl, MusicClock), String> {
     let app_dirs = dirs::app_dirs();
     replaygain::init(replaygain::InitConfig {
         cache_file: app_dirs.replaygain_cache_file(),
@@ -86,15 +78,7 @@ pub fn init(cfg: InitConfig) -> Result<MusicClock, String> {
         result_callback: set_music_replaygain_if_matches,
     })
     .map_err(str::to_string)?;
-    let (engine, clock) = init_engine_and_thread(&cfg);
-    ENGINE
-        .set(engine)
-        .map_err(|_| "audio runtime initialized concurrently".to_string())?;
-    Ok(clock)
-}
-
-pub fn startup_output_devices() -> Vec<OutputDeviceInfo> {
-    engine().startup_output_devices.clone()
+    Ok(init_engine_and_thread(&cfg))
 }
 
 #[cfg(target_os = "linux")]
@@ -114,24 +98,11 @@ pub fn replaygain_enabled() -> bool {
     REPLAYGAIN_ENABLED.load(Ordering::Relaxed)
 }
 
-/// Sets the user's global `RateModPreservesPitch` preference. `play_music` reads
-/// this when starting a track to decide whether to run the SOLA time-stretcher.
-/// If a track is already playing, the change is pushed to it live so toggling
-/// the option takes effect without a restart (mirrors the ITGMania behaviour).
+/// Sets the startup `RateModPreservesPitch` preference before an audio control
+/// exists. Live application changes go through [`AudioControl`] so the current
+/// track receives the update as well.
 pub fn set_preserve_pitch_enabled(enabled: bool) {
     PRESERVE_PITCH_ENABLED.store(enabled, Ordering::Relaxed);
-    // Only touch the engine if it has actually been initialised; this is also
-    // called during config load before the audio engine exists, and forcing
-    // initialization there would open the output device too early.
-    if is_initialized() {
-        let generation = bump_music_map_generation();
-        let _ = engine()
-            .command_sender
-            .send(StreamCommand::SetPreservePitch {
-                enabled,
-                generation,
-            });
-    }
 }
 
 #[inline(always)]
@@ -139,77 +110,96 @@ pub fn preserve_pitch_enabled() -> bool {
     PRESERVE_PITCH_ENABLED.load(Ordering::Relaxed)
 }
 
-pub fn play_sfx(path: &str) {
-    play_sfx_on_bus(path, EFFECT_BUS);
-}
-
-pub fn play_screen_sfx(path: &str) {
-    play_sfx_on_bus(path, SCREEN_BUS);
-}
-
-pub fn play_preloaded_sfx(path: &str) {
-    play_preloaded_sfx_on_bus(path, EFFECT_BUS);
-}
-
-pub fn stop_screen_sfx() {
-    stop_screen_bus();
-}
-
-pub fn play_assist_tick(path: &str) {
-    #[cfg(test)]
-    if !is_initialized() {
-        return;
+impl AudioControl {
+    pub const fn without_audio() -> Self {
+        Self { engine: None }
     }
-    engine()
-        .sfx_cache
-        .play_assist_tick(path, output_format(), resolve_asset_path);
-}
 
-pub fn play_preloaded_assist_tick(path: &str) {
-    #[cfg(test)]
-    if !is_initialized() {
-        return;
+    #[inline(always)]
+    pub const fn is_available(&self) -> bool {
+        self.engine.is_some()
     }
-    engine().sfx_cache.play_preloaded_assist_tick(path);
-}
 
-/// Plays a preloaded gameplay assist tick scheduled to become audible at an
-/// absolute stream frame (see [`MusicClock::assist_tick_stream_frame`]).
-/// Because the target frame lies on the same audio stream timeline the mixer
-/// writes against, output latency is compensated implicitly. Falls back to
-/// immediate playback when `target_stream_frame == 0`.
-pub fn play_scheduled_assist_tick(path: &str, target_stream_frame: u64) {
-    #[cfg(test)]
-    if !is_initialized() {
-        return;
+    pub fn startup_output_devices(&self) -> &[OutputDeviceInfo] {
+        self.engine
+            .as_ref()
+            .map_or(&[], |engine| engine.startup_output_devices.as_slice())
     }
-    engine()
-        .sfx_cache
-        .play_scheduled_assist_tick(path, target_stream_frame);
-}
 
-fn play_preloaded_sfx_on_bus(path: &str, bus: deadlib_audio_core::MixBus) {
-    #[cfg(test)]
-    if !is_initialized() {
-        return;
+    pub fn play_sfx(&mut self, path: &str) {
+        self.play_sfx_on_bus(path, EFFECT_BUS);
     }
-    engine().sfx_cache.play_preloaded(path, bus);
-}
 
-fn play_sfx_on_bus(path: &str, bus: deadlib_audio_core::MixBus) {
-    #[cfg(any(test, feature = "test-support"))]
-    if !is_initialized() {
-        return;
+    pub fn play_screen_sfx(&mut self, path: &str) {
+        self.play_sfx_on_bus(path, SCREEN_BUS);
     }
-    engine()
-        .sfx_cache
-        .play(path, bus, output_format(), resolve_asset_path);
-}
 
-pub fn preload_sfx(path: &str) {
-    engine()
-        .sfx_cache
-        .preload(path, output_format(), resolve_asset_path);
+    fn play_sfx_on_bus(&mut self, path: &str, bus: deadlib_audio_core::MixBus) {
+        let Some(engine) = self.engine.as_mut() else {
+            return;
+        };
+        let output = output_format(engine);
+        engine.sfx_cache.play(path, bus, output, resolve_asset_path);
+    }
+
+    pub fn preload_sfx(&mut self, path: &str) -> Option<SfxId> {
+        let engine = self.engine.as_mut()?;
+        let output = output_format(engine);
+        engine.sfx_cache.preload(path, output, resolve_asset_path)
+    }
+
+    pub fn play_resolved_sfx(&mut self, sound: &SfxId) {
+        if let Some(engine) = self.engine.as_mut() {
+            engine.sfx_cache.play_resolved(sound, EFFECT_BUS, 0);
+        }
+    }
+
+    pub fn play_resolved_assist_tick(&mut self, sound: &SfxId) {
+        if let Some(engine) = self.engine.as_mut() {
+            engine.sfx_cache.play_assist_tick(sound, 0);
+        }
+    }
+
+    /// Schedules a resolved assist tick on the callback's absolute stream
+    /// timeline. A target of zero preserves immediate-play fallback behavior.
+    pub fn play_scheduled_assist_tick(&mut self, sound: &SfxId, target_stream_frame: u64) {
+        if let Some(engine) = self.engine.as_mut() {
+            engine
+                .sfx_cache
+                .play_assist_tick(sound, target_stream_frame);
+        }
+    }
+
+    pub fn stop_screen_sfx(&self) {
+        stop_screen_bus();
+    }
+
+    pub fn play_music(&self, path: PathBuf, cut: Cut, looping: bool, rate: f32) {
+        play_music(self.engine.as_ref(), path, cut, looping, rate);
+    }
+
+    pub fn stop_music(&self) {
+        stop_music(self.engine.as_ref());
+    }
+
+    pub fn set_music_rate(&self, rate: f32) {
+        set_music_rate(self.engine.as_ref(), rate);
+    }
+
+    pub fn set_preserve_pitch_enabled(&self, enabled: bool) {
+        set_preserve_pitch_enabled(enabled);
+        if let Some(engine) = self.engine.as_ref() {
+            let generation = bump_music_map_generation();
+            let _ = engine.command_sender.send(StreamCommand::SetPreservePitch {
+                enabled,
+                generation,
+            });
+        }
+    }
+
+    pub fn set_replaygain_enabled(&self, enabled: bool) {
+        set_replaygain_enabled(enabled);
+    }
 }
 
 fn resolve_asset_path(path: &str) -> PathBuf {
@@ -227,7 +217,7 @@ fn reset_music_stream_clock() -> u64 {
     bump_music_map_generation()
 }
 
-pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
+fn play_music(engine: Option<&AudioEngine>, path: PathBuf, cut: Cut, looping: bool, rate: f32) {
     let rate = normalized_music_rate(rate);
     let generation = reset_music_stream_clock();
     deadlib_audio_core::seed_music_stream_clock(cut.start_sec, rate);
@@ -243,14 +233,16 @@ pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
     // gain doesn't audibly bleed into the start of this one.
     deadlib_audio_core::snap_music_gain_generation();
 
-    let _ = engine().command_sender.send(StreamCommand::PlayMusic {
-        path,
-        cut,
-        looping,
-        rate,
-        preserve_pitch: preserve_pitch_enabled(),
-        generation,
-    });
+    if let Some(engine) = engine {
+        let _ = engine.command_sender.send(StreamCommand::PlayMusic {
+            path,
+            cut,
+            looping,
+            rate,
+            preserve_pitch: preserve_pitch_enabled(),
+            generation,
+        });
+    }
 }
 
 /// Applies a ReplayGain result from the background analyzer, but only if it
@@ -267,22 +259,26 @@ pub fn set_music_replaygain_if_matches(track_id: u64, gain_linear: f32) {
     deadlib_audio_core::set_music_target_gain(gain_linear);
 }
 
-pub fn stop_music() {
+fn stop_music(engine: Option<&AudioEngine>) {
     let generation = reset_music_stream_clock();
     deadlib_audio_core::reset_music_target_gain();
     deadlib_audio_core::snap_music_gain_generation();
-    let _ = engine()
-        .command_sender
-        .send(StreamCommand::StopMusic { generation });
+    if let Some(engine) = engine {
+        let _ = engine
+            .command_sender
+            .send(StreamCommand::StopMusic { generation });
+    }
 }
 
-pub fn set_music_rate(rate: f32) {
+fn set_music_rate(engine: Option<&AudioEngine>, rate: f32) {
     let rate = normalized_music_rate(rate);
     deadlib_audio_core::set_music_clock_rate(rate);
     let generation = bump_music_map_generation();
-    let _ = engine()
-        .command_sender
-        .send(StreamCommand::SetMusicRate { rate, generation });
+    if let Some(engine) = engine {
+        let _ = engine
+            .command_sender
+            .send(StreamCommand::SetMusicRate { rate, generation });
+    }
 }
 
 pub fn assist_sfx_generation() -> u64 {
@@ -298,7 +294,7 @@ fn publish_output_backend_ready(ready: OutputBackendReady) {
     deadlib_audio_core::publish_output_backend_ready(ready);
 }
 
-fn init_engine_and_thread(cfg: &InitConfig) -> (AudioEngine, MusicClock) {
+fn init_engine_and_thread(cfg: &InitConfig) -> (AudioControl, MusicClock) {
     let (command_sender, command_receiver) = channel();
     let (ready_sender, ready_receiver) = channel();
     let controls = init_controls();
@@ -334,12 +330,14 @@ fn init_engine_and_thread(cfg: &InitConfig) -> (AudioEngine, MusicClock) {
     publish_output_backend_ready(ready.clone());
     let music_clock = MusicClock::new(played_map, ready.device_sample_rate);
     (
-        AudioEngine {
-            command_sender,
-            sfx_cache: SfxCache::new(controls, sfx_sender),
-            device_sample_rate: ready.device_sample_rate,
-            device_channels: ready.device_channels,
-            startup_output_devices,
+        AudioControl {
+            engine: Some(AudioEngine {
+                command_sender,
+                sfx_cache: SfxCache::new(controls, sfx_sender),
+                device_sample_rate: ready.device_sample_rate,
+                device_channels: ready.device_channels,
+                startup_output_devices,
+            }),
         },
         music_clock,
     )

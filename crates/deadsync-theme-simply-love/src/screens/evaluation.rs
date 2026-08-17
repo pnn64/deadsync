@@ -3645,9 +3645,9 @@ fn sync_submit_event_progress(state: &mut State) {
 /// GrooveStats submit response first lands with a record banner. Triggers
 /// once per evaluation visit; subsequent retries or repeated banners do not
 /// re-fire the SFX.
-fn sync_submit_record_sfx(state: &mut State) {
+fn sync_submit_record_sfx(state: &mut State) -> ThemeEffect {
     if state.submit_record_sfx_played {
-        return;
+        return ThemeEffect::None;
     }
     let mut best: Option<score_data::GrooveStatsSubmitRecordBanner> = None;
     for player_idx in 0..MAX_PLAYERS {
@@ -3667,15 +3667,20 @@ fn sync_submit_record_sfx(state: &mut State) {
         });
     }
     let Some(banner) = best else {
-        return;
+        return ThemeEffect::None;
     };
     let folder = match banner {
         score_data::GrooveStatsSubmitRecordBanner::WorldRecord
         | score_data::GrooveStatsSubmitRecordBanner::WorldRecordEx => "assets/sounds/evaluation_wr",
         score_data::GrooveStatsSubmitRecordBanner::PersonalBest => "assets/sounds/evaluation_pb",
     };
-    crate::assets::audio_folder::play_random_screen_sfx(folder);
+    let path = crate::assets::audio_folder::random_sfx(folder);
     state.submit_record_sfx_played = true;
+    path.map_or(ThemeEffect::None, |path| {
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            deadsync_theme::AudioRequest::PlayScreenSfxPath(path),
+        ))
+    })
 }
 
 /// Returns `true` if a `69` appears anywhere notable in a player's score,
@@ -3774,15 +3779,20 @@ fn score_info_is_nice(si: &ScoreInfo) -> bool {
 /// (one is chosen at random, files starting with `_` are ignored). It ships
 /// with Simply Love's `nice.ogg` bundled; drop additional `.ogg` files in to
 /// randomize, or disable the clip via `MachineNiceSound`.
-fn sync_nice_sfx(state: &mut State) {
+fn sync_nice_sfx(state: &mut State) -> ThemeEffect {
     if state.nice_sfx_played || !state.context.policy.machine_nice_sound {
-        return;
+        return ThemeEffect::None;
     }
     if !state.nice_scores.contains(&true) {
-        return;
+        return ThemeEffect::None;
     }
-    crate::assets::audio_folder::play_random_screen_sfx("assets/sounds/evaluation_nice");
+    let path = crate::assets::audio_folder::random_sfx("assets/sounds/evaluation_nice");
     state.nice_sfx_played = true;
+    path.map_or(ThemeEffect::None, |path| {
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            deadsync_theme::AudioRequest::PlayScreenSfxPath(path),
+        ))
+    })
 }
 
 fn sync_missing_submit_status_fallbacks(state: &mut State) {
@@ -3926,8 +3936,8 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     sync_submit_event_progress(state);
     sync_missing_submit_status_fallbacks(state);
     sync_submit_text(state);
-    sync_submit_record_sfx(state);
-    sync_nice_sfx(state);
+    effect = ThemeEffect::sequence(effect, sync_submit_record_sfx(state));
+    effect = ThemeEffect::sequence(effect, sync_nice_sfx(state));
     let play_style = state.context.play_style;
     for controller_idx in 0..MAX_PLAYERS {
         if state.active_pane[controller_idx] != EvalPane::QrCode {

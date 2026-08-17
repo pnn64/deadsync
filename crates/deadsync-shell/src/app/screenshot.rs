@@ -93,7 +93,7 @@ impl App {
             }
         };
 
-        deadsync_audio_stream::play_sfx("assets/sounds/screenshot.ogg");
+        self.audio.play_sfx("assets/sounds/screenshot.ogg");
         info!("Saved screenshot to {}", saved_path.display());
     }
 

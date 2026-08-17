@@ -1221,9 +1221,10 @@ fn generic_runtime_requests_stay_backend_neutral() {
     }
     assert!(
         shell.contains("SimplyLoveRuntimeRequest::Audio(request)")
-            && shell.contains("audio_requests::execute(request)")
+            && shell.contains("audio_requests::execute(&mut self.audio, request)")
             && audio.contains("AudioRequest::PlaySfx(path)")
-            && audio.contains("deadsync_audio_stream::play_sfx(&path)")
+            && audio.contains("audio.play_sfx(path)")
+            && audio.contains("AudioRequest::PlayScreenSfxPath(path)")
             && audio.contains("AudioRequest::PrewarmReplayGain(paths)")
             && audio.contains("deadsync_audio_replaygain::prewarm_paths(")
             && shell.contains("SimplyLoveRuntimeRequest::Graphics(request)")
@@ -3071,6 +3072,39 @@ fn music_clock_reader_is_application_owned() {
 }
 
 #[test]
+fn audio_control_and_hot_sfx_are_application_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let runtime = fs::read_to_string(root.join("crates/deadsync-audio-stream/src/runtime.rs"))
+        .expect("audio runtime should be readable");
+    assert!(runtime.contains("pub struct AudioControl"));
+    assert!(runtime.contains("engine: Option<AudioEngine>"));
+    assert!(!runtime.contains("static ENGINE"));
+    assert!(!runtime.contains("OnceLock<AudioEngine>"));
+
+    let cache = fs::read_to_string(root.join("crates/deadsync-audio-stream/src/sfx_cache.rs"))
+        .expect("SFX cache should be readable");
+    assert!(cache.contains("pub struct SfxId"));
+    assert!(cache.contains("sender: SfxSender"));
+    assert!(cache.contains("pub fn play_resolved"));
+    assert!(!cache.contains("Mutex<"));
+
+    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    assert!(app.contains("audio: deadsync_audio_stream::AudioControl"));
+    assert!(app.contains("gameplay_sfx: GameplaySfx"));
+
+    let prewarm = fs::read_to_string(root.join("crates/deadsync-shell/src/gameplay_prewarm.rs"))
+        .expect("gameplay prewarm should be readable");
+    assert!(prewarm.contains("pub struct GameplaySfx"));
+    assert!(prewarm.contains("audio.preload_sfx"));
+
+    let assets = fs::read_to_string(root.join("crates/deadsync-assets/src/audio_folder.rs"))
+        .expect("audio folder resolver should be readable");
+    assert!(!assets.contains("deadsync_audio_stream"));
+    assert!(!assets.contains("play_random_screen_sfx"));
+}
+
+#[test]
 fn simply_love_crossover_parity_stays_behind_simfile() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
@@ -4512,7 +4546,8 @@ fn content_reload_execution_is_shell_owned() {
         "content_reload: crate::content_reload::Service",
         "SimplyLoveRuntimeRequest::Content(request)",
         "self.content_reload.start_library",
-        ".start_initialization(songs_root, courses_root)",
+        ".start_initialization(",
+        "self.audio.is_available()",
         "self.content_reload.start_song_dirs",
         "crate::content_reload::reload_song",
         "fn sync_content_reload_events",

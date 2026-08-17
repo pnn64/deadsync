@@ -81,25 +81,40 @@ pub(crate) struct Service {
 }
 
 impl Service {
-    pub(crate) fn start_initialization(&mut self, songs_root: PathBuf, courses_root: PathBuf) {
+    pub(crate) fn start_initialization(
+        &mut self,
+        songs_root: PathBuf,
+        courses_root: PathBuf,
+        audio_available: bool,
+    ) {
         self.start(move |tx| {
             scan_library(&tx, &songs_root, &courses_root);
             prewarm_artwork(&tx);
             compile_noteskins(&tx);
-            analyze_replaygain(&tx, None);
+            analyze_replaygain(&tx, None, audio_available);
             send_finished(&tx);
         });
     }
 
-    pub(crate) fn start_library(&mut self, songs_root: PathBuf, courses_root: PathBuf) {
+    pub(crate) fn start_library(
+        &mut self,
+        songs_root: PathBuf,
+        courses_root: PathBuf,
+        audio_available: bool,
+    ) {
         self.start(move |tx| {
             scan_library(&tx, &songs_root, &courses_root);
-            analyze_replaygain(&tx, None);
+            analyze_replaygain(&tx, None, audio_available);
             send_finished(&tx);
         });
     }
 
-    pub(crate) fn start_song_dirs(&mut self, songs_root: PathBuf, pack_dirs: Vec<PathBuf>) {
+    pub(crate) fn start_song_dirs(
+        &mut self,
+        songs_root: PathBuf,
+        pack_dirs: Vec<PathBuf>,
+        audio_available: bool,
+    ) {
         self.start(move |tx| {
             let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
                 SimplyLoveContentReloadPhase::Songs,
@@ -126,7 +141,7 @@ impl Service {
                 &pack_dirs,
                 &mut on_song,
             );
-            analyze_replaygain(&tx, Some(&pack_dirs));
+            analyze_replaygain(&tx, Some(&pack_dirs), audio_available);
             send_finished(&tx);
         });
     }
@@ -303,8 +318,9 @@ fn compile_noteskins(tx: &SyncSender<SimplyLoveContentReloadEvent>) {
 fn analyze_replaygain(
     tx: &SyncSender<SimplyLoveContentReloadEvent>,
     restrict_to: Option<&[PathBuf]>,
+    audio_available: bool,
 ) {
-    if !config::get().enable_replaygain || !deadsync_audio_stream::is_initialized() {
+    if !config::get().enable_replaygain || !audio_available {
         return;
     }
     let paths = replaygain_music_paths(restrict_to);

@@ -2,20 +2,17 @@ use deadsync_config::prelude as config;
 use deadsync_theme::views::{AudioOptionsView, AudioOutputDeviceView};
 use deadsync_theme::{AudioOutputModeChoice, AudioRequest, AudioVolumeTarget};
 
-pub(super) fn options_view() -> AudioOptionsView {
+pub(super) fn options_view(audio: &deadsync_audio_stream::AudioControl) -> AudioOptionsView {
     let cfg = config::get();
-    let output_devices = if deadsync_audio_stream::is_initialized() {
-        deadsync_audio_stream::startup_output_devices()
-            .into_iter()
-            .map(|device| AudioOutputDeviceView {
-                name: device.name,
-                is_default: device.is_default,
-                sample_rates_hz: device.sample_rates_hz,
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
+    let output_devices = audio
+        .startup_output_devices()
+        .iter()
+        .map(|device| AudioOutputDeviceView {
+            name: device.name.clone(),
+            is_default: device.is_default,
+            sample_rates_hz: device.sample_rates_hz.clone(),
+        })
+        .collect();
     #[cfg(target_os = "linux")]
     let (available_backend_names, selected_backend_name) = (
         deadsync_audio_stream::available_linux_backends()
@@ -70,15 +67,19 @@ fn linux_backend(name: &str) -> config::LinuxAudioBackend {
     }
 }
 
-pub(super) fn execute(request: AudioRequest) {
+pub(super) fn execute(audio: &mut deadsync_audio_stream::AudioControl, request: AudioRequest) {
     match request {
-        AudioRequest::PlaySfx(path) => deadsync_audio_stream::play_sfx(path),
+        AudioRequest::PlaySfx(path) => audio.play_sfx(path),
+        AudioRequest::PlaySfxPath(path) => audio.play_sfx(path.to_string_lossy().as_ref()),
+        AudioRequest::PlayScreenSfxPath(path) => {
+            audio.play_screen_sfx(path.to_string_lossy().as_ref());
+        }
         AudioRequest::PlayMusic {
             path,
             cut,
             looping,
             rate,
-        } => deadsync_audio_stream::play_music(
+        } => audio.play_music(
             path,
             deadsync_audio_stream::Cut {
                 start_sec: cut.start_sec,
@@ -89,8 +90,8 @@ pub(super) fn execute(request: AudioRequest) {
             looping,
             rate,
         ),
-        AudioRequest::StopMusic => deadsync_audio_stream::stop_music(),
-        AudioRequest::SetMusicRate(rate) => deadsync_audio_stream::set_music_rate(rate),
+        AudioRequest::StopMusic => audio.stop_music(),
+        AudioRequest::SetMusicRate(rate) => audio.set_music_rate(rate),
         AudioRequest::SetVolume { target, percent } => match target {
             AudioVolumeTarget::Master => config::update_master_volume(percent),
             AudioVolumeTarget::Music => config::update_music_volume(percent),
@@ -112,8 +113,12 @@ pub(super) fn execute(request: AudioRequest) {
         }
         AudioRequest::SetPreservePitch(enabled) => {
             config::update_rate_mod_preserves_pitch(enabled);
+            audio.set_preserve_pitch_enabled(enabled);
         }
-        AudioRequest::SetReplayGain(enabled) => config::update_enable_replaygain(enabled),
+        AudioRequest::SetReplayGain(enabled) => {
+            config::update_enable_replaygain(enabled);
+            audio.set_replaygain_enabled(enabled);
+        }
         AudioRequest::PrewarmReplayGain(paths) => deadsync_audio_replaygain::prewarm_paths(
             paths,
             deadsync_audio_replaygain::Priority::Background,

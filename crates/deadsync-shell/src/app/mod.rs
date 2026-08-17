@@ -34,7 +34,7 @@ use crate::frame_stats::{
 };
 use crate::frame_stutter::{ComposeBreakdown, trace_frame_stutter};
 use crate::gameplay_entry::{gameplay_chart_entry_plan, gameplay_last_played_commands};
-use crate::gameplay_prewarm::{prewarm_gameplay_assets, prewarm_gameplay_sfx};
+use crate::gameplay_prewarm::{GameplaySfx, prewarm_gameplay_assets, prewarm_gameplay_sfx};
 pub use crate::input::UserEvent;
 use crate::input::{
     AppRawKeyShortcut, EvaluationRawKeyShortcut, GameplayQueuedEvent, QueuedInputBatchState,
@@ -177,8 +177,8 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 #[cfg(test)]
 use deadsync_rules::timing as timing_rules;
 use deadsync_theme::views::{
-    AppPathView, AppPathsView, DensityGraphView as DensityGraphSource, NoteskinCatalogView,
-    SmxAssignmentView,
+    AppPathView, AppPathsView, AudioOptionsView, DensityGraphView as DensityGraphSource,
+    NoteskinCatalogView, SmxAssignmentView,
 };
 use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
@@ -992,12 +992,12 @@ fn noteskin_catalog_view() -> NoteskinCatalogView {
     }
 }
 
-fn options_init_view() -> OptionsInitView {
+fn options_init_view(audio: AudioOptionsView) -> OptionsInitView {
     OptionsInitView {
         config: config::get(),
         updater_capabilities: updater::capabilities(),
         app_paths: app_paths_view(),
-        audio: audio_requests::options_view(),
+        audio,
         graphics: graphics::options_graphics_view(),
         song_packs: options_song_pack_view(),
         pack_sync: options_pack_sync_view(),
@@ -1014,6 +1014,7 @@ impl ScreensState {
         color_index: i32,
         preferred_difficulty_index: usize,
         dedicated_three_key_nav: bool,
+        audio_options: AudioOptionsView,
     ) -> Self {
         let mut menu_state = menu::init();
         menu_state.active_color_index = color_index;
@@ -1055,7 +1056,7 @@ impl ScreensState {
         let app_paths = app_paths_view();
         let init_songs_root = app_paths.songs.path.clone();
         let init_courses_root = app_paths.courses.path.clone();
-        let mut options_state = options::init(options_init_view());
+        let mut options_state = options::init(options_init_view(audio_options));
         options_state.active_color_index = color_index;
 
         let mut credits_state = credits::init();
@@ -1142,6 +1143,8 @@ impl ScreensState {
         now: Instant,
         session: &SessionState,
         asset_manager: &AssetManager,
+        audio: &mut deadsync_audio_stream::AudioControl,
+        gameplay_sfx: &GameplaySfx,
         music_clock: &mut deadsync_audio_stream::MusicClock,
         smx_assignment: Option<&SmxAssignmentView>,
         gameplay_smx_input: bool,
@@ -1154,6 +1157,8 @@ impl ScreensState {
                         gs,
                         delta_time,
                         gameplay_smx_input,
+                        audio,
+                        gameplay_sfx,
                         music_clock,
                         &mut self.gameplay_score_cursor,
                         effects,
@@ -1166,6 +1171,8 @@ impl ScreensState {
                     crate::gameplay_runtime::update_practice(
                         ps,
                         delta_time,
+                        audio,
+                        gameplay_sfx,
                         music_clock,
                         &mut self.gameplay_score_cursor,
                         effects,
@@ -1353,6 +1360,7 @@ impl AppState {
         profile_data: profile_data::Profile,
         overlay_mode: u8,
         color_index: i32,
+        audio_options: AudioOptionsView,
     ) -> Self {
         let play_style = profile::get_session_play_style();
         let preferred = deadsync_profile::preferred_difficulty_index(&profile_data, play_style);
@@ -1363,6 +1371,7 @@ impl AppState {
             color_index,
             preferred,
             cfg.three_key_navigation && cfg.only_dedicated_menu_buttons,
+            audio_options,
         );
 
         Self {
@@ -1431,6 +1440,11 @@ pub struct App {
     >,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
+    /// Sole application-thread audio command and SFX producer owner.
+    audio: deadsync_audio_stream::AudioControl,
+    /// Resolved song-lifetime gameplay sounds; replaced at Gameplay/Practice
+    /// prewarm and borrowed by hot command submission.
+    gameplay_sfx: GameplaySfx,
     /// Sole application-thread reader for played music-position segments.
     /// The callback publishes through a bounded lock-free ring; this retained
     /// reader and its derived map live with `App` and require no global lock.
@@ -3142,6 +3156,8 @@ impl App {
                 gs,
                 delta_time,
                 self.state.play_input_policy.smx_input,
+                &mut self.audio,
+                &self.gameplay_sfx,
                 &mut self.music_clock,
                 &mut self.state.screens.gameplay_score_cursor,
                 &mut self.theme_effect_scratch,
@@ -3171,6 +3187,8 @@ impl App {
                     redraw_started,
                     &self.state.session,
                     &self.asset_manager,
+                    &mut self.audio,
+                    &self.gameplay_sfx,
                     &mut self.music_clock,
                     smx_assignment.as_ref(),
                     self.state.play_input_policy.smx_input,
@@ -3734,7 +3752,8 @@ impl App {
 
     fn reset_options_state_for_entry(&mut self, from: CurrentScreen) {
         let current_color_index = self.state.screens.options_state.active_color_index;
-        self.state.screens.options_state = options::init(options_init_view());
+        self.state.screens.options_state =
+            options::init(options_init_view(audio_requests::options_view(&self.audio)));
         self.state.screens.options_state.active_color_index = current_color_index;
         self.options_song_pack_generation =
             deadsync_simfile::runtime_cache::song_cache_generation();
@@ -3756,6 +3775,7 @@ impl App {
         config_generation: u64,
         config: config::Config,
         profile_data: profile_data::Profile,
+        audio: deadsync_audio_stream::AudioControl,
         music_clock: deadsync_audio_stream::MusicClock,
         live_case: Option<crate::live_case::LiveCase>,
     ) -> Self {
@@ -3767,7 +3787,14 @@ impl App {
         let select_music_policy = select_music_views::SelectMusicFramePolicy::from_config(&config);
         let select_course_policy = SelectCourseFramePolicy::from_config(&config);
         let evaluation_policy = evaluation_views::EvaluationFramePolicy::from_config(&config);
-        let state = AppState::new(config, profile_data, overlay_mode, color_index);
+        let audio_options = audio_requests::options_view(&audio);
+        let state = AppState::new(
+            config,
+            profile_data,
+            overlay_mode,
+            color_index,
+            audio_options,
+        );
         Self {
             window: None,
             backend: None,
@@ -3794,6 +3821,8 @@ impl App {
             smx_difficulty_tint_cache: std::collections::HashMap::new(),
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
+            audio,
+            gameplay_sfx: GameplaySfx::default(),
             music_clock,
             live_case: live_case.map(live_case::LiveCaseRuntime::new),
             gameplay_banner_sync_key: None,
@@ -4324,7 +4353,7 @@ impl App {
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Audio(request) => {
-                    audio_requests::execute(request);
+                    audio_requests::execute(&mut self.audio, request);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Content(request) => {
@@ -4332,17 +4361,27 @@ impl App {
                         SimplyLoveContentRequest::InitializeLibrary {
                             songs_root,
                             courses_root,
-                        } => self
-                            .content_reload
-                            .start_initialization(songs_root, courses_root),
+                        } => self.content_reload.start_initialization(
+                            songs_root,
+                            courses_root,
+                            self.audio.is_available(),
+                        ),
                         SimplyLoveContentRequest::ReloadLibrary {
                             songs_root,
                             courses_root,
-                        } => self.content_reload.start_library(songs_root, courses_root),
+                        } => self.content_reload.start_library(
+                            songs_root,
+                            courses_root,
+                            self.audio.is_available(),
+                        ),
                         SimplyLoveContentRequest::ReloadSongDirs {
                             songs_root,
                             pack_dirs,
-                        } => self.content_reload.start_song_dirs(songs_root, pack_dirs),
+                        } => self.content_reload.start_song_dirs(
+                            songs_root,
+                            pack_dirs,
+                            self.audio.is_available(),
+                        ),
                         SimplyLoveContentRequest::ReloadSong { simfile_path } => {
                             match crate::content_reload::reload_song(&simfile_path) {
                                 Ok(song_packs) => {
@@ -4350,9 +4389,10 @@ impl App {
                                         &mut self.state.screens.select_music_state,
                                         song_packs,
                                     );
-                                    audio_requests::execute(AudioRequest::PlaySfx(
-                                        "assets/sounds/change.ogg",
-                                    ));
+                                    audio_requests::execute(
+                                        &mut self.audio,
+                                        AudioRequest::PlaySfx("assets/sounds/change.ogg"),
+                                    );
                                     debug!(
                                         "Force-reloaded song from disk: {}",
                                         simfile_path.display()
@@ -4973,10 +5013,10 @@ impl App {
         match input {
             OffsetPromptInput::Consumed => {}
             OffsetPromptInput::ChoiceChanged => {
-                deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
+                self.audio.play_sfx("assets/sounds/change.ogg");
             }
             OffsetPromptInput::Decide(save_changes) => {
-                deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
+                self.audio.play_sfx("assets/sounds/start.ogg");
                 self.finalize_gameplay_offset_prompt(save_changes, event_loop);
             }
         }
@@ -5215,7 +5255,12 @@ impl App {
                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                     let already_exiting = gs.exit_transition_active();
                     gs.begin_restart_exit();
-                    crate::gameplay_runtime::drain(gs, &mut self.music_clock);
+                    crate::gameplay_runtime::drain(
+                        gs,
+                        &mut self.audio,
+                        &self.gameplay_sfx,
+                        &mut self.music_clock,
+                    );
                     if let Some(plan) = fast_gameplay_restart_plan(
                         self.state.session.gameplay_restart_count,
                         already_exiting,
@@ -5465,14 +5510,16 @@ impl App {
             } else {
                 visual_styles::SRPG10_EVAL_PASSED_SFX
             };
-            deadsync_audio_stream::play_screen_sfx(sfx);
+            self.audio.play_screen_sfx(sfx);
         } else {
             let folder = if failed {
                 "assets/sounds/evaluation_fail"
             } else {
                 "assets/sounds/evaluation_pass"
             };
-            deadsync_assets::audio_folder::play_random_screen_sfx(folder);
+            if let Some(path) = deadsync_assets::audio_folder::random_sfx(folder) {
+                self.audio.play_screen_sfx(path.to_string_lossy().as_ref());
+            }
         }
 
         if let Some((course_run, per_song_pages)) = self.state.session.take_final_course(failed) {
@@ -5610,7 +5657,7 @@ impl App {
         self.state.screens.evaluation_state = page;
         self.mark_evaluation_runtime_dirty();
         self.sync_evaluation_runtime_view(self.evaluation_policy, Instant::now());
-        deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
+        self.audio.play_sfx("assets/sounds/change.ogg");
     }
 
     fn apply_select_music_join(&mut self, join_side: profile_data::PlayerSide) {
@@ -6904,6 +6951,8 @@ impl App {
                     crate::gameplay_runtime::handle_practice_raw_key(
                         state,
                         &raw_key,
+                        &mut self.audio,
+                        &self.gameplay_sfx,
                         &mut self.music_clock,
                         &mut self.theme_effect_scratch,
                     )
@@ -7034,7 +7083,7 @@ impl App {
             let new_value = !config::get().translated_titles;
             config::update_translated_titles(new_value);
             options::sync_translated_titles(&mut self.state.screens.options_state, new_value);
-            deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
+            self.audio.play_sfx("assets/sounds/change.ogg");
         }
         // Screen-specific Escape handling resides in per-screen raw handlers now
 
@@ -7289,7 +7338,7 @@ impl App {
             ),
         });
         if plan.stop_screen_sfx {
-            deadsync_audio_stream::stop_screen_sfx();
+            self.audio.stop_screen_sfx();
         }
         if plan.clear_play_background
             && let Some(backend) = self.backend.as_mut()
@@ -7675,7 +7724,7 @@ impl App {
                 .clear_gameplay_backgrounds(&mut self.asset_manager, backend);
         }
         if target == CurrentScreen::Practice {
-            deadsync_audio_stream::stop_music();
+            self.audio.stop_music();
             if let Some(mut po_state) = self.state.screens.player_options_state.take() {
                 // Preserve the editor cursor/selection across a returning
                 // PlayerOptions->Practice trip and across an in-place Practice
@@ -7839,7 +7888,11 @@ impl App {
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
 
                 let sfx_prewarm_started = Instant::now();
-                prewarm_gameplay_sfx(gs.song_lua_visuals(), &gs.song_lua_sound_paths);
+                self.gameplay_sfx = prewarm_gameplay_sfx(
+                    &mut self.audio,
+                    gs.song_lua_visuals(),
+                    &gs.song_lua_sound_paths,
+                );
                 let sfx_prewarm_ms = sfx_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let show_video_backgrounds = cfg.show_video_backgrounds;
                 let background_path =
@@ -7908,14 +7961,19 @@ impl App {
                 }
                 self.state.screens.practice_state = Some(practice_state);
                 if let Some(ps) = self.state.screens.practice_state.as_mut() {
-                    crate::gameplay_runtime::enter_practice(ps, &mut self.music_clock);
+                    crate::gameplay_runtime::enter_practice(
+                        ps,
+                        &mut self.audio,
+                        &self.gameplay_sfx,
+                        &mut self.music_clock,
+                    );
                 }
             } else {
                 panic!("Navigating to Practice without PlayerOptions state!");
             }
         }
         if target == CurrentScreen::Gameplay {
-            deadsync_audio_stream::stop_music();
+            self.audio.stop_music();
             if prev != CurrentScreen::Gameplay {
                 self.state.session.gameplay_restart_count = 0;
                 self.state.session.restart_pending = false;
@@ -8268,7 +8326,11 @@ impl App {
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
 
                 let sfx_prewarm_started = Instant::now();
-                prewarm_gameplay_sfx(gs.song_lua_visuals(), &gs.song_lua_sound_paths);
+                self.gameplay_sfx = prewarm_gameplay_sfx(
+                    &mut self.audio,
+                    gs.song_lua_visuals(),
+                    &gs.song_lua_sound_paths,
+                );
                 let sfx_prewarm_ms = sfx_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let show_video_backgrounds = cfg.show_video_backgrounds;
                 let background_path =
@@ -8356,6 +8418,8 @@ impl App {
                     crate::gameplay_runtime::enter(
                         gs,
                         self.state.play_input_policy.smx_input,
+                        &mut self.audio,
+                        &self.gameplay_sfx,
                         &mut self.music_clock,
                     );
                 }
@@ -8365,14 +8429,17 @@ impl App {
                 // restarts (`try_gameplay_restart` incremented it before we
                 // arrived).
                 let restart_count = self.state.session.gameplay_restart_count;
-                if restart_count == 0 {
-                    deadsync_assets::audio_folder::play_random_sfx("assets/sounds/song_start");
+                let song_start_sfx = if restart_count == 0 {
+                    deadsync_assets::audio_folder::random_sfx("assets/sounds/song_start")
                 } else {
-                    deadsync_assets::audio_folder::play_indexed_sfx(
+                    deadsync_assets::audio_folder::indexed_sfx(
                         "assets/sounds/song_start/restart",
                         restart_count,
                         "restart.ogg",
-                    );
+                    )
+                };
+                if let Some(path) = song_start_sfx {
+                    self.audio.play_sfx(path.to_string_lossy().as_ref());
                 }
                 if let Some(course) = self.state.session.course_run.as_mut() {
                     course.next_stage_index = course.next_stage_index.saturating_add(1);
@@ -9113,6 +9180,7 @@ impl ApplicationHandler<UserEvent> for App {
 }
 
 pub fn run(
+    audio: deadsync_audio_stream::AudioControl,
     music_clock: deadsync_audio_stream::MusicClock,
     live_case: Option<crate::live_case::LiveCase>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -9127,6 +9195,7 @@ pub fn run(
         config_generation,
         config,
         profile_data,
+        audio,
         music_clock,
         live_case,
     );

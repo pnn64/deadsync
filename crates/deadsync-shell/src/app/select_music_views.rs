@@ -412,7 +412,7 @@ impl App {
             self.select_music_shop_visible = false;
             None
         };
-        let music_position_seconds = if deadsync_audio_stream::is_initialized() {
+        let music_position_seconds = if self.audio.is_available() {
             f64::from(self.music_clock.snapshot().music_seconds)
         } else {
             0.0

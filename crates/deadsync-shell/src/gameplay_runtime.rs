@@ -517,38 +517,44 @@ pub(crate) fn snapshot(
 
 pub(crate) fn drain_core(
     state: &mut gameplay::GameplayCoreState,
+    audio: &mut deadsync_audio_stream::AudioControl,
+    sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) {
     for command in state.drain_audio_commands() {
         match command {
             GameplayAudioCommand::StopMusic => {
-                if deadsync_audio_stream::is_initialized() {
-                    deadsync_audio_stream::stop_music();
-                }
+                audio.stop_music();
             }
             GameplayAudioCommand::SetMusicRate(rate) => {
-                deadsync_audio_stream::set_music_rate(rate);
+                audio.set_music_rate(rate);
             }
             GameplayAudioCommand::PlayMusic {
                 path,
                 cut,
                 looping,
                 rate,
-            } => deadsync_audio_stream::play_music(path, audio_cut(cut), looping, rate),
+            } => audio.play_music(path, audio_cut(cut), looping, rate),
             GameplayAudioCommand::PlayPreloadedSfx(path) => {
-                deadsync_audio_stream::play_preloaded_sfx(path);
+                if let Some(sound) = sounds.resolve(path) {
+                    audio.play_resolved_sfx(sound);
+                }
             }
             GameplayAudioCommand::PlayPreloadedAssistTick(path) => {
-                deadsync_audio_stream::play_preloaded_assist_tick(path);
+                if let Some(sound) = sounds.resolve(path) {
+                    audio.play_resolved_assist_tick(sound);
+                }
             }
             GameplayAudioCommand::PlayAssistTickAtMusicTime {
                 path,
                 music_seconds,
             } => {
-                if let Some(frame) = music_clock.assist_tick_stream_frame(music_seconds) {
-                    deadsync_audio_stream::play_scheduled_assist_tick(path, frame);
-                } else {
-                    deadsync_audio_stream::play_preloaded_assist_tick(path);
+                if let Some(sound) = sounds.resolve(path) {
+                    if let Some(frame) = music_clock.assist_tick_stream_frame(music_seconds) {
+                        audio.play_scheduled_assist_tick(sound, frame);
+                    } else {
+                        audio.play_resolved_assist_tick(sound);
+                    }
                 }
             }
         }
@@ -568,25 +574,23 @@ pub(crate) fn drain_core(
 #[inline(always)]
 pub(crate) fn drain(
     state: &mut gameplay::State,
+    audio: &mut deadsync_audio_stream::AudioControl,
+    sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) {
-    drain_core(&mut state.gameplay, music_clock);
-}
-
-#[inline(always)]
-fn play_song_lua_sfx(path: &Path) {
-    let key = path.to_string_lossy();
-    deadsync_audio_stream::play_preloaded_sfx(key.as_ref());
+    drain_core(&mut state.gameplay, audio, sounds, music_clock);
 }
 
 pub(crate) fn enter(
     state: &mut gameplay::State,
     smx_input: bool,
+    audio: &mut deadsync_audio_stream::AudioControl,
+    sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) {
     gameplay::on_enter(state);
     enter_smx_sensors(state, smx_input);
-    drain(state, music_clock);
+    drain(state, audio, sounds, music_clock);
 }
 
 pub(crate) const MAX_UPDATE_EFFECTS: usize = 4;
@@ -596,6 +600,8 @@ pub(crate) fn update(
     state: &mut gameplay::State,
     delta_time: f32,
     smx_input: bool,
+    audio: &mut deadsync_audio_stream::AudioControl,
+    sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
     score_cursor: &mut ScoreRuntimeCursor,
     effects: &mut Vec<ThemeEffect>,
@@ -612,7 +618,7 @@ pub(crate) fn update(
     // A lobby can queue stage music during `prepare_update`. Execute it before
     // taking the clock snapshot so the deterministic update sees the new
     // stream mapping on the same frame, matching the pre-boundary behavior.
-    drain(state, music_clock);
+    drain(state, audio, sounds, music_clock);
     let previous_song_lua_time = state.current_music_time_display();
     gameplay::update(
         state,
@@ -622,13 +628,17 @@ pub(crate) fn update(
         effects,
     );
     score_cursor.sync_if_dirty(state);
-    drain(state, music_clock);
+    drain(state, audio, sounds, music_clock);
     let current_song_lua_time = state.current_music_time_display();
     gameplay::for_each_song_lua_sound_event(
         state,
         previous_song_lua_time,
         current_song_lua_time,
-        play_song_lua_sfx,
+        |path: &Path| {
+            if let Some(sound) = sounds.resolve_path(path) {
+                audio.play_resolved_sfx(sound);
+            }
+        },
     );
     debug_assert!(effects.len() - start_len <= MAX_UPDATE_EFFECTS);
 }
@@ -636,18 +646,22 @@ pub(crate) fn update(
 pub(crate) fn handle_input(
     state: &mut gameplay::State,
     ev: &InputEvent,
+    audio: &mut deadsync_audio_stream::AudioControl,
+    sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
     effects: &mut Vec<ThemeEffect>,
 ) {
     let start_len = effects.len();
     gameplay::handle_input(state, ev, effects);
-    drain(state, music_clock);
+    drain(state, audio, sounds, music_clock);
     debug_assert!(effects.len() - start_len <= MAX_INPUT_EFFECTS);
 }
 
 pub(crate) fn update_practice(
     state: &mut practice::State,
     delta_time: f32,
+    audio: &mut deadsync_audio_stream::AudioControl,
+    sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
     score_cursor: &mut ScoreRuntimeCursor,
     effects: &mut Vec<ThemeEffect>,
@@ -661,20 +675,24 @@ pub(crate) fn update_practice(
         effects,
     );
     score_cursor.sync_if_dirty(&mut state.gameplay);
-    drain(&mut state.gameplay, music_clock);
+    drain(&mut state.gameplay, audio, sounds, music_clock);
 }
 
 pub(crate) fn enter_practice(
     state: &mut practice::State,
+    audio: &mut deadsync_audio_stream::AudioControl,
+    sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) {
     practice::on_enter(state);
-    drain(&mut state.gameplay, music_clock);
+    drain(&mut state.gameplay, audio, sounds, music_clock);
 }
 
 pub(crate) fn handle_practice_input(
     state: &mut practice::State,
     ev: &InputEvent,
+    audio: &mut deadsync_audio_stream::AudioControl,
+    sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
     effects: &mut Vec<ThemeEffect>,
 ) {
@@ -684,12 +702,14 @@ pub(crate) fn handle_practice_input(
         deadsync_audio_stream::snap_music_start_sec,
         effects,
     );
-    drain(&mut state.gameplay, music_clock);
+    drain(&mut state.gameplay, audio, sounds, music_clock);
 }
 
 pub(crate) fn handle_practice_raw_key(
     state: &mut practice::State,
     ev: &RawKeyboardEvent,
+    audio: &mut deadsync_audio_stream::AudioControl,
+    sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
     effects: &mut Vec<ThemeEffect>,
 ) -> bool {
@@ -699,7 +719,7 @@ pub(crate) fn handle_practice_raw_key(
         deadsync_audio_stream::snap_music_start_sec,
         effects,
     );
-    drain(&mut state.gameplay, music_clock);
+    drain(&mut state.gameplay, audio, sounds, music_clock);
     consumed
 }
 

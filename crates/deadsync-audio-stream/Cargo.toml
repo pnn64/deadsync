@@ -12,6 +12,10 @@ harness = false
 name = "music_clock_ownership"
 harness = false
 
+[[bench]]
+name = "sfx_control_handoff"
+harness = false
+
 [features]
 test-support = []
 

@@ -12,7 +12,6 @@
 
 use deadlib_platform::dirs;
 use deadsync_audio_decode::folder as audio_folder;
-use deadsync_audio_stream as audio;
 use log::{debug, warn};
 use std::path::{Path, PathBuf};
 
@@ -50,41 +49,28 @@ pub fn pick_indexed_in(dir: &Path, index: u32, fallback_name: &str) -> Option<Pa
     audio_folder::pick_indexed_ogg(dir, index, fallback_name)
 }
 
-fn play_random_sfx_with(rel_dir: &str, play: fn(&str)) {
+/// Resolves one enabled custom sound without executing audio work.
+pub fn random_sfx(rel_dir: &str) -> Option<PathBuf> {
     if !enabled() {
-        return;
+        return None;
     }
-    if let Some(path) = random_sfx_in(rel_dir) {
-        let path_str = path.to_string_lossy().into_owned();
-        play(&path_str);
-    } else {
+    let path = random_sfx_in(rel_dir);
+    if path.is_none() {
         debug!("No custom SFX picked for {rel_dir}");
     }
+    path
 }
 
-/// Plays a random `.ogg` from `rel_dir` via [`audio::play_sfx`]. No-op when
-/// custom sounds are disabled or the folder is empty.
-pub fn play_random_sfx(rel_dir: &str) {
-    play_random_sfx_with(rel_dir, audio::play_sfx);
-}
-
-/// Plays a random `.ogg` from `rel_dir` as screen-owned SFX.
-pub fn play_random_screen_sfx(rel_dir: &str) {
-    play_random_sfx_with(rel_dir, audio::play_screen_sfx);
-}
-
-/// Plays the indexed `.ogg` (or fallback) from `rel_dir` via [`audio::play_sfx`].
-/// No-op when custom sounds are disabled.
-pub fn play_indexed_sfx(rel_dir: &str, index: u32, fallback_name: &str) {
+/// Resolves one enabled indexed custom sound without executing audio work.
+pub fn indexed_sfx(rel_dir: &str, index: u32, fallback_name: &str) -> Option<PathBuf> {
     if !enabled() {
-        return;
+        return None;
     }
-    if let Some(path) = indexed_sfx_in(rel_dir, index, fallback_name) {
-        let path_str = path.to_string_lossy().into_owned();
-        audio::play_sfx(&path_str);
-    } else {
+    let path = indexed_sfx_in(rel_dir, index, fallback_name);
+    if path.is_none() {
         debug!("No custom SFX for {rel_dir} index {index} (fallback {fallback_name})");
     }
+    path
 }
 
 /// Resolves a music path from a folder (or single file). If `rel_path` points

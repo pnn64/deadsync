@@ -387,14 +387,16 @@ impl App {
             config_sha256,
             expected_runtime: &runtime.spec.expected_runtime,
             display,
-            audio_devices: deadsync_audio_stream::startup_output_devices()
-                .into_iter()
+            audio_devices: self
+                .audio
+                .startup_output_devices()
+                .iter()
                 .enumerate()
                 .map(|(index, device)| AudioDevice {
                     index,
-                    name: device.name,
+                    name: device.name.clone(),
                     is_default: device.is_default,
-                    sample_rates_hz: device.sample_rates_hz,
+                    sample_rates_hz: device.sample_rates_hz.clone(),
                 })
                 .collect(),
             build: ArtifactBuild {

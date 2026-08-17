@@ -24,6 +24,10 @@ impl Default for AudioCut {
 #[derive(Clone, Debug, PartialEq)]
 pub enum AudioRequest {
     PlaySfx(&'static str),
+    /// Cold filesystem-selected effect resolved by the shell's audio owner.
+    PlaySfxPath(PathBuf),
+    /// Cold filesystem-selected effect stopped with its owning screen.
+    PlayScreenSfxPath(PathBuf),
     PlayMusic {
         path: PathBuf,
         cut: AudioCut,

@@ -109,7 +109,12 @@ impl App {
             now_music_time,
             plan.allow_commands,
         );
-        crate::gameplay_runtime::drain(gs, &mut self.music_clock);
+        crate::gameplay_runtime::drain(
+            gs,
+            &mut self.audio,
+            &self.gameplay_sfx,
+            &mut self.music_clock,
+        );
         match allowed_gameplay_raw_action(
             action,
             self.state.play_input_policy.keyboard_features,
@@ -189,6 +194,8 @@ impl App {
                 crate::gameplay_runtime::handle_input(
                     gs,
                     &ev,
+                    &mut self.audio,
+                    &self.gameplay_sfx,
                     &mut self.music_clock,
                     &mut self.theme_effect_scratch,
                 );
@@ -201,6 +208,8 @@ impl App {
                 crate::gameplay_runtime::handle_practice_input(
                     state,
                     &ev,
+                    &mut self.audio,
+                    &self.gameplay_sfx,
                     &mut self.music_clock,
                     &mut self.theme_effect_scratch,
                 );

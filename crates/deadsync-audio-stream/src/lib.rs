@@ -35,14 +35,11 @@ pub use music_map::MusicClock;
 #[cfg(target_os = "linux")]
 pub use runtime::available_linux_backends;
 pub use runtime::{
-    assist_sfx_generation, collect_stutter_diag_events, get_output_timing_snapshot, init,
-    is_initialized, play_assist_tick, play_music, play_preloaded_assist_tick, play_preloaded_sfx,
-    play_scheduled_assist_tick, play_screen_sfx, play_sfx, preload_sfx, preserve_pitch_enabled,
-    replaygain_enabled, set_music_rate, set_preserve_pitch_enabled, set_replaygain_enabled,
-    startup_output_devices, stop_music, stop_screen_sfx, stutter_diag_trigger_seq,
-    timing_diag_last_callback_gap_ns,
+    AudioControl, assist_sfx_generation, collect_stutter_diag_events, get_output_timing_snapshot,
+    init, preserve_pitch_enabled, replaygain_enabled, set_preserve_pitch_enabled,
+    set_replaygain_enabled, stutter_diag_trigger_seq, timing_diag_last_callback_gap_ns,
 };
-pub use sfx_cache::SfxCache;
+pub use sfx_cache::SfxId;
 pub use stream_runtime::{MusicStreamRuntime, StreamCommand};
 use stretch::SolaStretcher;
 

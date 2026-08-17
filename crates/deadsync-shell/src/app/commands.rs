@@ -57,13 +57,10 @@ impl App {
                 path,
                 looped,
                 volume,
-            } => deadsync_audio_stream::play_music(
-                path,
-                deadsync_audio_stream::Cut::default(),
-                looped,
-                volume,
-            ),
-            Command::StopMusic => deadsync_audio_stream::stop_music(),
+            } => self
+                .audio
+                .play_music(path, deadsync_audio_stream::Cut::default(), looped, volume),
+            Command::StopMusic => self.audio.stop_music(),
             Command::SetDynamicBackground(path) => self.set_dynamic_background(path),
             Command::UpdateScrollSpeed { side, setting } => {
                 profile::update_scroll_speed_for_side(side, setting);

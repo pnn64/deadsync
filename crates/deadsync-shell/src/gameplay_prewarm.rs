@@ -7,8 +7,8 @@ use deadsync_chart::{SongBackgroundChange, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::SongLuaRuntimeVisuals;
 use log::warn;
-use std::collections::HashSet;
-use std::path::PathBuf;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 fn prewarm_model_texture_key(
@@ -187,12 +187,42 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
     }
 }
 
+const BOOM_SFX_PATH: &str = "assets/sounds/boom.ogg";
+
+/// Song-lifetime resolved sounds retained by the application thread.
+///
+/// Fixed gameplay sounds take direct fields. Arbitrary SongLua paths use the
+/// prewarmed map because their domain is chart-authored and not statically
+/// bounded. Submission borrows an `SfxId`; no decode, allocation, lock, or
+/// audio-cache lookup occurs on gameplay frames.
+#[derive(Default)]
+pub struct GameplaySfx {
+    boom: Option<deadsync_audio_stream::SfxId>,
+    assist_tick: Option<deadsync_audio_stream::SfxId>,
+    song_lua: HashMap<String, deadsync_audio_stream::SfxId>,
+}
+
+impl GameplaySfx {
+    pub fn resolve(&self, path: &str) -> Option<&deadsync_audio_stream::SfxId> {
+        match path {
+            BOOM_SFX_PATH => self.boom.as_ref(),
+            deadsync_gameplay::ASSIST_TICK_SFX_PATH => self.assist_tick.as_ref(),
+            _ => self.song_lua.get(path),
+        }
+    }
+
+    pub fn resolve_path(&self, path: &Path) -> Option<&deadsync_audio_stream::SfxId> {
+        self.resolve(path.to_string_lossy().as_ref())
+    }
+}
+
 pub fn prewarm_gameplay_sfx<CapturedActor, StateDelta>(
+    audio: &mut deadsync_audio_stream::AudioControl,
     song_lua_visuals: &SongLuaRuntimeVisuals<SongLuaOverlayActor, CapturedActor, StateDelta>,
     song_lua_sound_paths: &[PathBuf],
-) {
-    deadsync_audio_stream::preload_sfx("assets/sounds/boom.ogg");
-    deadsync_audio_stream::preload_sfx("assets/sounds/assist_tick.ogg");
+) -> GameplaySfx {
+    let boom = audio.preload_sfx(BOOM_SFX_PATH);
+    let assist_tick = audio.preload_sfx(deadsync_gameplay::ASSIST_TICK_SFX_PATH);
 
     let mut sound_paths = Vec::<PathBuf>::with_capacity(song_lua_sound_paths.len());
     let mut seen = HashSet::<String>::with_capacity(song_lua_sound_paths.len());
@@ -211,8 +241,16 @@ pub fn prewarm_gameplay_sfx<CapturedActor, StateDelta>(
         &mut seen,
         &mut sound_paths,
     );
+    let mut song_lua = HashMap::with_capacity(sound_paths.len());
     for sound_path in sound_paths {
         let key = sound_path.to_string_lossy();
-        deadsync_audio_stream::preload_sfx(key.as_ref());
+        if let Some(sound) = audio.preload_sfx(key.as_ref()) {
+            song_lua.insert(key.into_owned(), sound);
+        }
+    }
+    GameplaySfx {
+        boom,
+        assist_tick,
+        song_lua,
     }
 }
