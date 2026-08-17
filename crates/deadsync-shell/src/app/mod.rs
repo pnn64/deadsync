@@ -763,12 +763,15 @@ fn sync_gameplay_banners(
     state: &gameplay::State,
     mode: config::GameplayBannerMode,
 ) {
-    let visible_paths = gameplay::visible_banner_paths(state);
-    let desired_paths: SmallVec<[&Path; 2]> = mode
-        .looped()
+    let visible_paths: SmallVec<[&Path; 2]> = gameplay::visible_banner_paths(state)
         .into_iter()
-        .flat_map(|_| visible_paths.into_iter().flatten())
+        .flatten()
         .collect();
+    let desired_paths = if mode.looped().is_some() {
+        independent_banner_video_paths(&visible_paths, gameplay_background_video_path(state))
+    } else {
+        SmallVec::new()
+    };
     media.sync_active_banner_videos(
         assets,
         backend,
@@ -807,8 +810,29 @@ fn prewarm_gameplay_banners(
         }
     }
     if let Some(looped) = mode.looped() {
-        media.sync_active_banner_videos(assets, backend, &visible_paths, looped);
+        let desired_paths =
+            independent_banner_video_paths(&visible_paths, gameplay_background_video_path(state));
+        media.sync_active_banner_videos(assets, backend, &desired_paths, looped);
     }
+}
+
+fn gameplay_background_video_path(state: &gameplay::State) -> Option<&Path> {
+    state
+        .background_allow_video
+        .then_some(state.current_background_path.as_deref())
+        .flatten()
+        .filter(|path| deadlib_assets::dynamic::is_dynamic_video_path(path))
+}
+
+fn independent_banner_video_paths<'a>(
+    visible_paths: &[&'a Path],
+    background_video_path: Option<&Path>,
+) -> SmallVec<[&'a Path; 2]> {
+    visible_paths
+        .iter()
+        .copied()
+        .filter(|path| Some(*path) != background_video_path)
+        .collect()
 }
 
 fn prewarm_gameplay_text_layout_cache(
@@ -5748,7 +5772,7 @@ impl App {
         }
         let background_worker_pending = self.dynamic_media.gameplay_bg_pending();
         let background_backend_ready = self.backend.is_some();
-        let (bg_video_timing, foreground_videos_changed) = {
+        let (bg_video_timing, foreground_videos_changed, banner_ownership_changed) = {
             let gs = match self.state.screens.current_screen {
                 CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_mut(),
                 CurrentScreen::Practice => self
@@ -5822,8 +5846,12 @@ impl App {
                     }
                 }),
                 foreground_videos_changed,
+                had_pending_background_change || background_changed || video_mode_changed,
             )
         };
+        if banner_ownership_changed {
+            self.gameplay_banner_sync_key = None;
+        }
 
         let gs = match self.state.screens.current_screen {
             CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_ref(),
@@ -7781,6 +7809,9 @@ impl App {
                 let sfx_prewarm_started = Instant::now();
                 prewarm_gameplay_sfx(gs.song_lua_visuals(), &gs.song_lua_sound_paths);
                 let sfx_prewarm_ms = sfx_prewarm_started.elapsed().as_secs_f64() * 1000.0;
+                let show_video_backgrounds = cfg.show_video_backgrounds;
+                let background_path =
+                    Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
                 let asset_prewarm_started = Instant::now();
                 if let Some(backend) = self.backend.as_mut() {
                     prewarm_gameplay_assets(
@@ -7835,9 +7866,6 @@ impl App {
                     song.title
                 );
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
-                let show_video_backgrounds = cfg.show_video_backgrounds;
-                let background_path =
-                    Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
                 commands.push(Command::SetDynamicBackground(background_path));
                 // Reconcile chart timing and any video fallback once after the
                 // deferred command installs the initial media.
@@ -8210,6 +8238,9 @@ impl App {
                 let sfx_prewarm_started = Instant::now();
                 prewarm_gameplay_sfx(gs.song_lua_visuals(), &gs.song_lua_sound_paths);
                 let sfx_prewarm_ms = sfx_prewarm_started.elapsed().as_secs_f64() * 1000.0;
+                let show_video_backgrounds = cfg.show_video_backgrounds;
+                let background_path =
+                    Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
                 let asset_prewarm_started = Instant::now();
                 if let Some(backend) = self.backend.as_mut() {
                     prewarm_gameplay_assets(
@@ -8284,9 +8315,6 @@ impl App {
                     );
                 }
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
-                let show_video_backgrounds = cfg.show_video_backgrounds;
-                let background_path =
-                    Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
                 commands.push(Command::SetDynamicBackground(background_path));
                 // Reconcile chart timing and any video fallback once after the
                 // deferred command installs the initial media.
@@ -9088,6 +9116,22 @@ mod tests {
             frame_work::ONLINE_VIEW
         );
         assert_eq!(frame_work::screen_caps(CurrentScreen::Practice), 0);
+    }
+
+    #[test]
+    fn gameplay_background_owns_shared_banner_video_decoder() {
+        let shared = Path::new("Abracadabra-bn.mp4");
+        let pack = Path::new("pack-banner.mp4");
+        let visible = [shared, pack];
+
+        assert_eq!(
+            independent_banner_video_paths(&visible, Some(shared)).as_slice(),
+            [pack]
+        );
+        assert_eq!(
+            independent_banner_video_paths(&visible, None).as_slice(),
+            visible
+        );
     }
 
     #[test]
