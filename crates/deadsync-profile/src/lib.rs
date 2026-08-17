@@ -232,6 +232,13 @@ pub fn with_runtime_heart_rate_device_ids<R>(
     }))
 }
 
+/// Per-player configured maximum heart rate (bpm), read from the live profiles.
+/// Used to convert a monitor's bpm reading into a percentage-of-max color zone.
+pub fn runtime_max_heart_rates() -> [u16; PLAYER_SLOTS] {
+    let profiles = runtime_lock_profiles();
+    std::array::from_fn(|player| profiles[player].max_heart_rate)
+}
+
 pub fn profile_combo_carry(profiles: &[Profile; PLAYER_SLOTS]) -> [u32; PLAYER_SLOTS] {
     std::array::from_fn(|idx| profiles[idx].current_combo)
 }

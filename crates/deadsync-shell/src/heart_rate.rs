@@ -120,12 +120,14 @@ pub(crate) fn devices_view() -> player_options::HeartRateDevicesView {
 }
 
 fn readings_view() -> gameplay::HeartRateView {
-    let players =
-        deadsync_heart_rate::player_readings().map(|reading| gameplay::HeartRatePlayerView {
-            configured: reading.configured,
-            connected: reading.connected,
-            bpm: reading.bpm,
-        });
+    let readings = deadsync_heart_rate::player_readings();
+    let max_heart_rates = deadsync_profile::runtime_max_heart_rates();
+    let players = std::array::from_fn(|idx| gameplay::HeartRatePlayerView {
+        configured: readings[idx].configured,
+        connected: readings[idx].connected,
+        bpm: readings[idx].bpm,
+        max_heart_rate: max_heart_rates[idx],
+    });
     gameplay::HeartRateView { players }
 }
 

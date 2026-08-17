@@ -12910,6 +12910,7 @@ mod select_heart_rate_tests {
         configured: true,
         connected: true,
         bpm: Some(108),
+        max_heart_rate: 190,
     };
 
     #[test]
