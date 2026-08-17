@@ -232,6 +232,24 @@ const HEART_RATE_MONITOR: CustomBinding = CustomBinding {
             .cloned()
             .unwrap_or(None);
         state.heart_rate_device_ids[player_idx] = device_id;
+        // Selecting/clearing a monitor shows or hides the Max Heart Rate row.
+        Outcome::persisted_with_visibility()
+    },
+};
+
+const MAX_HEART_RATE: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(choice_idx) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
+            return Outcome::NONE;
+        };
+        let bpm = deadsync_profile::MAX_HEART_RATE_MIN
+            .saturating_add(choice_idx as u16)
+            .clamp(
+                deadsync_profile::MAX_HEART_RATE_MIN,
+                deadsync_profile::MAX_HEART_RATE_MAX,
+            );
+        state.max_heart_rate[player_idx] = bpm;
         Outcome::persisted()
     },
 };
@@ -1108,6 +1126,15 @@ pub(super) fn build_main_rows(
             lookup_key("PlayerOptionsHelp", "HeartRateMonitorHelp"),
             HEART_RATE_MONITOR,
             heart_rate_choices.to_vec(),
+        ));
+        b.push(Row::custom(
+            RowId::MaxHeartRate,
+            lookup_key("PlayerOptions", "MaxHeartRate"),
+            lookup_key("PlayerOptionsHelp", "MaxHeartRateHelp"),
+            MAX_HEART_RATE,
+            (deadsync_profile::MAX_HEART_RATE_MIN..=deadsync_profile::MAX_HEART_RATE_MAX)
+                .map(|bpm| bpm.to_string())
+                .collect(),
         ));
     }
     b.push(

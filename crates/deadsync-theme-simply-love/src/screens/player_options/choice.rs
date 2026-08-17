@@ -102,6 +102,7 @@ pub(super) fn dispatch_behavior_delta(
     let before = (
         state.player_options[player_idx].clone(),
         state.heart_rate_device_ids[player_idx].clone(),
+        state.max_heart_rate[player_idx],
     );
 
     let outcome = match behavior {
@@ -133,6 +134,7 @@ pub(super) fn dispatch_behavior_delta(
         if (
             state.player_options[player_idx].clone(),
             state.heart_rate_device_ids[player_idx].clone(),
+            state.max_heart_rate[player_idx],
         ) != before
         {
             queue_profile_update(state, player_idx);

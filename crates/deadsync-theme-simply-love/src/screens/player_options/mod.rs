@@ -154,6 +154,7 @@ fn queue_profile_update(state: &mut State, player_idx: usize) {
                 side,
                 options: Box::new(state.player_options[idx].clone()),
                 heart_rate_device_id: state.heart_rate_device_ids[idx].clone(),
+                max_heart_rate: state.max_heart_rate[idx],
             },
         ),
     ));
@@ -262,6 +263,12 @@ fn init_with_noteskin_prewarm(
     } = init_view;
     let [p1, p2] = players;
     let heart_rate_device_ids = [p1.heart_rate_device_id, p2.heart_rate_device_id];
+    let max_heart_rate = [
+        p1.max_heart_rate
+            .clamp(profile_data::MAX_HEART_RATE_MIN, profile_data::MAX_HEART_RATE_MAX),
+        p2.max_heart_rate
+            .clamp(profile_data::MAX_HEART_RATE_MIN, profile_data::MAX_HEART_RATE_MAX),
+    ];
     let player_options = [p1.options, p2.options];
     let active = active_players(play_style, player_side, joined);
     let persisted_player_idx = persisted_player_idx(play_style, player_side);
@@ -440,6 +447,7 @@ fn init_with_noteskin_prewarm(
         cols_per_player,
         player_options,
         heart_rate_device_ids,
+        max_heart_rate,
         heart_rate_choice_ids,
         heart_rate_readings: heart_rate_devices.readings,
         noteskin,
@@ -463,6 +471,7 @@ fn init_with_noteskin_prewarm(
     };
     sync_speed_mod_type_rows(&mut state);
     sync_heart_rate_selections(&mut state);
+    sync_max_heart_rate_selection(&mut state);
     state
 }
 
@@ -505,6 +514,26 @@ fn sync_heart_rate_selections(state: &mut State) {
             .iter()
             .position(|id| id == &state.heart_rate_device_ids[player])
             .unwrap_or(0);
+    }
+}
+
+/// Place each player's Max Heart Rate cursor on the choice matching the stored
+/// bpm. Choices are the contiguous range `MAX_HEART_RATE_MIN..=MAX_HEART_RATE_MAX`,
+/// so the choice index is simply `bpm - MAX_HEART_RATE_MIN`.
+fn sync_max_heart_rate_selection(state: &mut State) {
+    let values = state.max_heart_rate;
+    let Some(row) = state.panes[OptionsPane::Main.index()]
+        .row_map
+        .get_mut(RowId::MaxHeartRate)
+    else {
+        return;
+    };
+    let max_choice = row.choices.len().saturating_sub(1);
+    for player in 0..PLAYER_SLOTS {
+        let bpm = values[player]
+            .clamp(profile_data::MAX_HEART_RATE_MIN, profile_data::MAX_HEART_RATE_MAX);
+        row.selected_choice_index[player] =
+            usize::from(bpm - profile_data::MAX_HEART_RATE_MIN).min(max_choice);
     }
 }
 

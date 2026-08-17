@@ -59,6 +59,10 @@ pub const NOTE_FIELD_OFFSET_Y_MIN: i32 = -50;
 pub const NOTE_FIELD_OFFSET_Y_MAX: i32 = 50;
 pub const VISUAL_DELAY_MS_MIN: i32 = -100;
 pub const VISUAL_DELAY_MS_MAX: i32 = 100;
+/// Per-player maximum heart rate (bpm), used with a paired heart-rate monitor.
+pub const MAX_HEART_RATE_MIN: u16 = 160;
+pub const MAX_HEART_RATE_MAX: u16 = 220;
+pub const MAX_HEART_RATE_DEFAULT: u16 = 190;
 pub const TILT_THRESHOLD_MIN_MS: u32 = 0;
 pub const TILT_THRESHOLD_MAX_MS: u32 = 100;
 pub const TILT_MIN_THRESHOLD_DEFAULT_MS: u32 = 0;
@@ -3115,6 +3119,10 @@ pub fn apply_loaded_profile_data(
             .map(|id| id.trim().to_owned())
             .filter(|id| !id.is_empty())
             .or_else(|| default_profile.heart_rate_device_id.clone());
+        profile.max_heart_rate = profile_get("userprofile", "MaxHeartRate")
+            .and_then(|value| value.trim().parse::<u16>().ok())
+            .map(|bpm| bpm.clamp(MAX_HEART_RATE_MIN, MAX_HEART_RATE_MAX))
+            .unwrap_or(default_profile.max_heart_rate);
 
         let mut load_player_options = |section: &str, default: &PlayerOptionsData| {
             load_player_options_section(
@@ -8517,6 +8525,7 @@ pub fn append_userprofile_section(content: &mut String, guid: &str, profile: &Pr
     if let Some(id) = profile.heart_rate_device_id.as_deref() {
         content.push_str(&format!("HeartRateDeviceId={id}\n"));
     }
+    content.push_str(&format!("MaxHeartRate={}\n", profile.max_heart_rate));
     content.push('\n');
 }
 
@@ -8731,6 +8740,9 @@ pub struct Profile {
     pub player_initials: String,
     /// Platform-stable BLE peripheral identifier selected for this player.
     pub heart_rate_device_id: Option<String>,
+    /// Per-player maximum heart rate in bpm. Clamped to
+    /// [`MAX_HEART_RATE_MIN`]..=[`MAX_HEART_RATE_MAX`].
+    pub max_heart_rate: u16,
     // Profile stats (Simply Love / StepMania semantics).
     pub weight_pounds: i32,
     pub birth_year: i32,
@@ -8955,6 +8967,7 @@ impl Default for Profile {
             display_name: "Player 1".to_string(),
             player_initials: "P1".to_string(),
             heart_rate_device_id: None,
+            max_heart_rate: MAX_HEART_RATE_DEFAULT,
             weight_pounds: 0,
             birth_year: 0,
             calories_burned_today: 0.0,
@@ -9207,6 +9220,13 @@ impl Profile {
             .map(|id| id.trim().to_owned())
             .filter(|id| !id.is_empty());
         set_value_if_changed(&mut self.heart_rate_device_id, device_id)
+    }
+
+    pub fn set_max_heart_rate(&mut self, bpm: u16) -> bool {
+        set_value_if_changed(
+            &mut self.max_heart_rate,
+            bpm.clamp(MAX_HEART_RATE_MIN, MAX_HEART_RATE_MAX),
+        )
     }
 
     pub fn set_scroll_speed(&mut self, setting: ScrollSpeedSetting) -> bool {

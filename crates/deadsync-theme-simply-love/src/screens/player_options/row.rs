@@ -33,6 +33,7 @@ pub enum RowId {
     MusicRate,
     Stepchart,
     HeartRateMonitor,
+    MaxHeartRate,
     WhatComesNext,
     Exit,
     // Advanced pane

@@ -4209,9 +4209,15 @@ impl App {
                         side,
                         options,
                         heart_rate_device_id,
+                        max_heart_rate,
                     },
                 ) => {
-                    profile::update_player_options_for_side(side, *options, heart_rate_device_id);
+                    profile::update_player_options_for_side(
+                        side,
+                        *options,
+                        heart_rate_device_id,
+                        max_heart_rate,
+                    );
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::UpdateInitials(

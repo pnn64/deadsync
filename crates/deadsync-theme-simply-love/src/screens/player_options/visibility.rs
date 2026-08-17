@@ -36,6 +36,7 @@ pub(super) struct RowVisibility {
     pub(super) show_smx_pad_input_display: bool,
     pub(super) show_smx_bg_pack: bool,
     pub(super) show_smx_judge_pack: bool,
+    pub(super) show_max_heart_rate: bool,
 }
 
 #[inline(always)]
@@ -164,6 +165,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     if id == RowId::SmxJudgePack {
         return visibility.show_smx_judge_pack;
     }
+    if id == RowId::MaxHeartRate {
+        return visibility.show_max_heart_rate;
+    }
     true
 }
 
@@ -250,6 +254,9 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
     }
     if id == RowId::FAPlusWindowOptions {
         return Some(RowId::FAPlusOptions);
+    }
+    if id == RowId::MaxHeartRate {
+        return Some(RowId::HeartRateMonitor);
     }
     None
 }
@@ -713,6 +720,17 @@ pub(super) fn tap_explosion_options_visible(
     !any_active
 }
 
+/// The Max Heart Rate row is shown only when some active player has a heart-rate
+/// monitor selected (HeartRateMonitor choice index other than 0 = "Off"). When
+/// the HeartRateMonitor row is absent (HRM feature disabled) the row is hidden.
+pub(super) fn max_heart_rate_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    if row_map.get(RowId::HeartRateMonitor).is_none() {
+        return false;
+    }
+    active_player_indices(active)
+        .any(|player_idx| selected_choice(row_map, RowId::HeartRateMonitor, player_idx) != Some(0))
+}
+
 #[inline(always)]
 pub(super) fn row_visibility(
     row_map: &RowMap,
@@ -763,6 +781,7 @@ pub(super) fn row_visibility(
         show_smx_pad_input_display: policy.smx_input,
         show_smx_bg_pack: policy.smx_input && policy.smx_panel_lights,
         show_smx_judge_pack: policy.smx_input && policy.smx_panel_lights,
+        show_max_heart_rate: max_heart_rate_visible(row_map, active),
     }
 }
 

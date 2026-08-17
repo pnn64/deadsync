@@ -98,12 +98,14 @@ pub fn update_player_options_for_side(
     side: PlayerSide,
     options: crate::PlayerOptionsData,
     heart_rate_device_id: Option<String>,
+    max_heart_rate: u16,
 ) {
     let mut heart_rate_changed = false;
     let changed = runtime_update_profile_for_side(side, |profile| {
         let options_changed = profile.set_current_player_options(options);
         heart_rate_changed = profile.set_heart_rate_device_id(heart_rate_device_id);
-        options_changed || heart_rate_changed
+        let max_heart_rate_changed = profile.set_max_heart_rate(max_heart_rate);
+        options_changed || heart_rate_changed || max_heart_rate_changed
     });
     if changed {
         save_profile_ini_for_side(side);

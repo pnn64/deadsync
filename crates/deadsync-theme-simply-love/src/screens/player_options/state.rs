@@ -354,6 +354,9 @@ pub struct State {
     pub(super) cols_per_player: usize,
     pub player_options: [deadsync_profile::PlayerOptionsData; PLAYER_SLOTS],
     pub heart_rate_device_ids: [Option<String>; PLAYER_SLOTS],
+    /// Per-player maximum heart rate (bpm). Persisted alongside the HRM device
+    /// selection; edited via the Max Heart Rate row when a monitor is selected.
+    pub max_heart_rate: [u16; PLAYER_SLOTS],
     pub(super) heart_rate_choice_ids: Vec<Option<String>>,
     pub(super) heart_rate_readings: [HeartRateReadingView; PLAYER_SLOTS],
     pub(super) noteskin: NoteskinState,

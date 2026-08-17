@@ -87,6 +87,7 @@ pub enum SimplyLoveProfileRequest {
         side: PlayerSide,
         options: Box<deadsync_profile::PlayerOptionsData>,
         heart_rate_device_id: Option<String>,
+        max_heart_rate: u16,
     },
     UpdateInitials([Option<String>; 2]),
     ToggleFavorite {

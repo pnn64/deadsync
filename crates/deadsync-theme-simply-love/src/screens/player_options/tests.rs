@@ -2351,6 +2351,7 @@ pub(super) mod tests {
                 side: request_side,
                 options,
                 heart_rate_device_id,
+                max_heart_rate: _,
             },
         )) = &effects[0]
         else {
