@@ -889,7 +889,10 @@ fn merge_import_candidates(
     added
 }
 
-pub fn apply_import_events(state: &mut State, events: Vec<crate::SimplyLoveProfileImportEvent>) {
+pub fn apply_import_events(
+    state: &mut State,
+    events: impl IntoIterator<Item = crate::SimplyLoveProfileImportEvent>,
+) {
     for event in events {
         match event {
             crate::SimplyLoveProfileImportEvent::Candidates {

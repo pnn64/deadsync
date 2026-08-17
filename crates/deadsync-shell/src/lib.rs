@@ -70,6 +70,8 @@ pub(crate) use input_trace::GameplayInputTrace;
 pub(crate) use interaction::ExitIntent;
 pub(crate) use interaction::ShellInteractionState;
 pub(crate) use navigation::{TransitionMusicPaths, TransitionState, transition_audio_plan};
+#[cfg(feature = "bench-support")]
+pub use profile_import::BenchmarkProfileImportService;
 pub(crate) use runtime::ShellState;
 pub(crate) use session::SessionState;
 pub(crate) use stutter_diag::StutterDiagRecorder;
