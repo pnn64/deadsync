@@ -1,5 +1,5 @@
 use super::*;
-use crate::frame_pacing_trace::GameplayPacingReport;
+use crate::frame_pacing_trace::{GameplayPacingReport, GameplayStorageSample};
 use crate::live_case::{ExpectedRuntime, LiveCase, sha256_file, verify_hash};
 use deadsync_theme_simply_love::views::PlayerOptionsPlayerView;
 use serde::Serialize;
@@ -8,6 +8,7 @@ pub(super) struct LiveCaseRuntime {
     spec: LiveCase,
     launched: bool,
     warmup_frames_seen: u32,
+    warmup_storage: GameplayStorageSample,
     resolved: Option<ResolvedCase>,
     display: Option<RuntimeDisplay>,
 }
@@ -84,6 +85,7 @@ impl LiveCaseRuntime {
             spec,
             launched: false,
             warmup_frames_seen: 0,
+            warmup_storage: GameplayStorageSample::default(),
             resolved: None,
             display: None,
         }
@@ -94,12 +96,16 @@ impl LiveCaseRuntime {
         self.launched
     }
 
-    pub(super) fn note_warmup_frame(&mut self) -> bool {
+    pub(super) fn note_warmup_frame(
+        &mut self,
+        storage: GameplayStorageSample,
+    ) -> Option<GameplayStorageSample> {
         if !self.launched || self.resolved.is_none() {
-            return false;
+            return None;
         }
+        self.warmup_storage.include(storage);
         self.warmup_frames_seen = self.warmup_frames_seen.saturating_add(1);
-        self.warmup_frames_seen == self.spec.warmup_frames
+        (self.warmup_frames_seen == self.spec.warmup_frames).then_some(self.warmup_storage)
     }
 }
 
@@ -271,18 +277,25 @@ impl App {
         Ok(())
     }
 
-    pub(super) fn advance_live_case_capture(&mut self, frame_finished: Instant) {
+    pub(super) fn advance_live_case_capture(
+        &mut self,
+        frame_finished: Instant,
+        storage: GameplayStorageSample,
+    ) {
         let Some(runtime) = self.live_case.as_mut() else {
             return;
         };
         if self.state.screens.current_screen != CurrentScreen::Gameplay || !runtime.launched() {
             return;
         }
-        if !self.state.shell.gameplay_pacing_trace.capture_active() && runtime.note_warmup_frame() {
-            self.state
-                .shell
-                .gameplay_pacing_trace
-                .start_capture(frame_finished, runtime.spec.measured_frames);
+        if !self.state.shell.gameplay_pacing_trace.capture_active()
+            && let Some(warmed_storage) = runtime.note_warmup_frame(storage)
+        {
+            self.state.shell.gameplay_pacing_trace.start_capture(
+                frame_finished,
+                runtime.spec.measured_frames,
+                warmed_storage,
+            );
             info!(
                 "Performance case '{}' warmup complete; collecting {} frames",
                 runtime.spec.name, runtime.spec.measured_frames

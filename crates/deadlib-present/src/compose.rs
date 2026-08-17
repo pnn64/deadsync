@@ -7,7 +7,7 @@ use smallvec::SmallVec;
 use space::Metrics;
 use std::cell::{Cell, OnceCell};
 use std::collections::HashMap;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{BuildHasher, DefaultHasher, Hash, Hasher};
 use std::num::NonZeroU32;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -17,6 +17,19 @@ use std::time::Instant;
 
 const MAX_RECYCLED_TEXT_MESH_VERTEX_BUFFERS: usize = 512;
 const MAX_RETAINED_FRAME_ENTRIES: usize = 64;
+
+fn reserve_vec_headroom<T>(values: &mut Vec<T>, floor: usize) {
+    let target = values.capacity().saturating_mul(2).max(floor);
+    values.reserve(target.saturating_sub(values.len()));
+}
+
+fn reserve_map_headroom<K: Eq + Hash, V, S: BuildHasher>(
+    values: &mut HashMap<K, V, S>,
+    floor: usize,
+) {
+    let target = values.capacity().saturating_mul(2).max(floor);
+    values.reserve(target.saturating_sub(values.len()));
+}
 
 /// Detached draw used only while clipping or copying a retained fragment.
 /// Live frame composition stays in `FrameBuilder`'s typed arrays.
@@ -1029,6 +1042,27 @@ impl ComposeScratch {
             self.z_perm
                 .reserve(draw_count.saturating_sub(self.z_perm.len()));
         }
+    }
+
+    /// Retains one representative working-set of spare capacity after a screen
+    /// has composed its transition frame and prewarmed its dynamic text paths.
+    ///
+    /// The caller owns the lifetime boundary. This only grows the bounded maps
+    /// and vectors whose live occupancy varies with actor density; it performs
+    /// no per-frame work and never shrinks or evicts storage.
+    pub fn retain_working_set_headroom(
+        &mut self,
+        draw_floor: usize,
+        sorted_sprite_floor: usize,
+        textured_mesh_floor: usize,
+        lookup_floor: usize,
+    ) {
+        reserve_vec_headroom(&mut self.frame_builder.items, draw_floor);
+        reserve_vec_headroom(&mut self.frame_builder.textured_meshes, textured_mesh_floor);
+        reserve_vec_headroom(&mut self.sprite_instances, draw_floor);
+        reserve_vec_headroom(&mut self.sorted_sprite_instances, sorted_sprite_floor);
+        reserve_vec_headroom(&mut self.sparse_z_keys, lookup_floor);
+        reserve_map_headroom(&mut self.texture_cache.handles, lookup_floor);
     }
 
     /// Enables or disables low-overhead timing for the next composition pass.
@@ -11105,6 +11139,36 @@ mod tests {
             .expect("text vertex storage slot exists");
         assert!(storage.capacities[recycle_slot] >= 1);
         assert!(storage.capacities[vertices_slot] >= 6);
+    }
+
+    #[test]
+    fn working_set_headroom_retains_another_dynamic_footprint() {
+        let mut scratch = ComposeScratch::default();
+        scratch.frame_builder.items.reserve(8);
+        scratch.frame_builder.textured_meshes.reserve(4);
+        scratch.sprite_instances.reserve(16);
+        scratch.sorted_sprite_instances.reserve(16);
+        scratch.sparse_z_keys.reserve(8);
+        scratch.texture_cache.handles.reserve(4);
+        let before = scratch.storage_stats();
+
+        scratch.retain_working_set_headroom(32, 32, 16, 16);
+
+        let after = scratch.storage_stats();
+        for name in [
+            "draw_items",
+            "tmesh_payloads",
+            "sprite_inst",
+            "sprite_sort",
+            "sparse_z_keys",
+            "texture_handles",
+        ] {
+            let slot = super::COMPOSE_STORAGE_NAMES
+                .iter()
+                .position(|candidate| *candidate == name)
+                .expect("working-set storage slot exists");
+            assert!(after.capacities[slot] >= before.capacities[slot].saturating_mul(2));
+        }
     }
 
     #[test]

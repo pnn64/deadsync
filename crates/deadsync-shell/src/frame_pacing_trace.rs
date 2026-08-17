@@ -64,11 +64,16 @@ impl GameplayStorageSample {
         capacities[1 + COMPOSE_STORAGE_SLOTS..].copy_from_slice(&draw.capacities);
         Self { capacities }
     }
+
+    pub(crate) fn include(&mut self, sample: Self) {
+        for (high, capacity) in self.capacities.iter_mut().zip(sample.capacities) {
+            *high = (*high).max(capacity);
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
 struct StorageTrace {
-    last: [u32; STORAGE_SLOTS],
     high: [u32; STORAGE_SLOTS],
     growths: [u32; STORAGE_SLOTS],
     initialized: bool,
@@ -77,31 +82,32 @@ struct StorageTrace {
 impl StorageTrace {
     const fn new() -> Self {
         Self {
-            last: [0; STORAGE_SLOTS],
             high: [0; STORAGE_SLOTS],
             growths: [0; STORAGE_SLOTS],
             initialized: false,
         }
     }
 
+    fn seed(&mut self, sample: GameplayStorageSample) {
+        self.high = sample.capacities;
+        self.growths.fill(0);
+        self.initialized = true;
+    }
+
     fn record(&mut self, sample: GameplayStorageSample) {
         if !self.initialized {
             // The first traced frame is the warmed baseline, not a growth event.
-            self.last = sample.capacities;
-            self.high = sample.capacities;
-            self.initialized = true;
+            self.seed(sample);
             return;
         }
         for (index, capacity) in sample.capacities.into_iter().enumerate() {
             self.growths[index] =
-                self.growths[index].saturating_add(u32::from(capacity > self.last[index]));
-            self.last[index] = capacity;
+                self.growths[index].saturating_add(u32::from(capacity > self.high[index]));
             self.high[index] = self.high[index].max(capacity);
         }
     }
 
     fn reset_window(&mut self) {
-        self.high = self.last;
         self.growths.fill(0);
     }
 
@@ -444,9 +450,15 @@ impl GameplayPacingTrace {
     /// Start one fixed-frame capture. This explicit mode is independent of log
     /// filters and suppresses the periodic five-second reset until the exact
     /// requested sample count has been collected.
-    pub(crate) fn start_capture(&mut self, now: Instant, frames: u32) {
+    pub(crate) fn start_capture(
+        &mut self,
+        now: Instant,
+        frames: u32,
+        warmed_storage: GameplayStorageSample,
+    ) {
         debug_assert!(frames > 0);
         self.reset(now);
+        self.storage.seed(warmed_storage);
         self.capture_frames = Some(frames);
     }
 
@@ -1030,7 +1042,7 @@ mod tests {
     fn fixed_capture_returns_exact_frame_report_without_log_timer() {
         let now = Instant::now();
         let mut trace = GameplayPacingTrace::new(now);
-        trace.start_capture(now, 2);
+        trace.start_capture(now, 2, GameplayStorageSample::default());
 
         let first = trace.record_frame_if_enabled(
             true,
@@ -1111,7 +1123,7 @@ mod tests {
     }
 
     #[test]
-    fn storage_trace_counts_capacity_growth_and_preserves_window_baseline() {
+    fn storage_trace_counts_only_new_retained_capacity_highs() {
         let mut trace = StorageTrace::new();
         let mut first = GameplayStorageSample::default();
         first.capacities.fill(8);
@@ -1126,8 +1138,30 @@ mod tests {
         assert_eq!(trace.high[0], 16);
         assert_eq!(trace.high[1 + COMPOSE_STORAGE_SLOTS], 32);
 
+        trace.record(first);
+        trace.record(grown);
+        assert_eq!(trace.total_growths(), 2);
+
         trace.reset_window();
         assert_eq!(trace.total_growths(), 0);
         assert_eq!(trace.high, grown.capacities);
+    }
+
+    #[test]
+    fn fixed_capture_uses_warm_storage_ceiling() {
+        let now = Instant::now();
+        let mut trace = GameplayPacingTrace::new(now);
+        let mut low = GameplayStorageSample::default();
+        low.capacities.fill(8);
+        let mut high = low;
+        high.capacities[3] = 16;
+        low.include(high);
+
+        trace.start_capture(now, 2, low);
+        trace.storage.record(high);
+        trace.storage.record(low);
+
+        assert_eq!(trace.storage.total_growths(), 0);
+        assert_eq!(trace.storage.high, low.capacities);
     }
 }

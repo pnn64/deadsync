@@ -5582,6 +5582,23 @@ pub fn prewarm_text_layout(
     scratch.prewarm_draw_sort(16);
 }
 
+/// Reserve the presentation buffers behind the bounded per-player notefield
+/// actor envelope before the song starts. Song Lua can still exceed this base
+/// envelope and is measured separately by its fixture class.
+pub fn prewarm_compose_storage(scratch: &mut ComposeScratch, state: &State) {
+    let players = state.num_players();
+    let draw_floor = PLAYER_ACTOR_SCRATCH_CAPACITY.saturating_mul(players);
+    let sorted_sprite_floor = usize::from(players > 1).saturating_mul(draw_floor);
+    let textured_mesh_floor =
+        NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY.saturating_mul(players.saturating_add(1));
+    scratch.retain_working_set_headroom(
+        draw_floor,
+        sorted_sprite_floor,
+        textured_mesh_floor,
+        NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
+    );
+}
+
 // --- TRANSITIONS ---
 pub fn in_transition(
     state: Option<&State>,

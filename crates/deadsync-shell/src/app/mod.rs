@@ -898,6 +898,7 @@ fn prewarm_gameplay_text_layout_cache(
         fonts,
         state,
     );
+    gameplay::prewarm_compose_storage(compose_scratch, state);
     // Keep a bounded song-local allowance for genuinely dynamic values. Reserving
     // it here avoids layout-arena growth and all pruning during live gameplay.
     cache.lock_growth_with_reserve(GAMEPLAY_TEXT_LAYOUT_LIVE_RESERVE);
@@ -3602,6 +3603,7 @@ impl App {
         }
         let gameplay_storage = if uses_gameplay_present
             && (self.state.shell.gameplay_pacing_trace.capture_active()
+                || self.live_case.is_some()
                 || log::log_enabled!(
                     target: "deadsync_shell::frame_pacing_trace",
                     log::Level::Trace
@@ -3724,7 +3726,7 @@ impl App {
         } else {
             // The warmup counter advances only after a complete shipping-path
             // Gameplay frame. Starting here makes the next frame sample one.
-            self.advance_live_case_capture(frame_finished);
+            self.advance_live_case_capture(frame_finished, gameplay_storage);
         }
         actors.clear();
         self.actor_scratch = actors;
