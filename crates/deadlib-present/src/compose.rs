@@ -593,10 +593,13 @@ pub fn build_screen_segments_cached_with_scratch_and_texture_context_and_actor_r
     )
 }
 
-/// A borrowed actor slice with optional presentation metadata applied during composition.
+/// A borrowed actor slice plus an optional already-resolved draw tail, with
+/// presentation metadata applied to both during composition.
 #[derive(Clone, Copy, Debug)]
 pub struct ActorSegment<'a> {
     actors: &'a [actors::Actor],
+    flat_draws: &'a [actors::FlatDraw],
+    flat_camera: Option<Matrix4>,
     z_shift: i16,
     tint: [f32; 4],
     blend: Option<BlendMode>,
@@ -639,6 +642,8 @@ impl<'a> ActorSegment<'a> {
     pub const fn new(actors: &'a [actors::Actor]) -> Self {
         Self {
             actors,
+            flat_draws: &[],
+            flat_camera: None,
             z_shift: 0,
             tint: [1.0; 4],
             blend: None,
@@ -650,6 +655,8 @@ impl<'a> ActorSegment<'a> {
     pub const fn shifted(actors: &'a [actors::Actor], z_shift: i16) -> Self {
         Self {
             actors,
+            flat_draws: &[],
+            flat_camera: None,
             z_shift,
             tint: [1.0; 4],
             blend: None,
@@ -661,6 +668,8 @@ impl<'a> ActorSegment<'a> {
     pub const fn folded(actors: &'a [actors::Actor], z_shift: i16, x_fold: ActorXFold) -> Self {
         Self {
             actors,
+            flat_draws: &[],
+            flat_camera: None,
             z_shift,
             tint: [1.0; 4],
             blend: None,
@@ -680,6 +689,8 @@ impl<'a> ActorSegment<'a> {
     ) -> Self {
         Self {
             actors,
+            flat_draws: &[],
+            flat_camera: None,
             z_shift,
             tint,
             blend,
@@ -689,6 +700,19 @@ impl<'a> ActorSegment<'a> {
             }),
             x_fold,
         }
+    }
+
+    /// Appends an already-resolved flat draw tail after this actor slice. The
+    /// optional camera is the final view-projection matrix for those draws;
+    /// actor camera scopes must be closed before the tail begins.
+    pub const fn with_flat_draws(
+        mut self,
+        draws: &'a [actors::FlatDraw],
+        camera: Option<Matrix4>,
+    ) -> Self {
+        self.flat_draws = draws;
+        self.flat_camera = camera;
+        self
     }
 }
 
@@ -737,7 +761,9 @@ fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
     let mut builder = std::mem::take(&mut scratch.frame_builder);
     builder.clear();
     let actor_count = actor_segments.iter().fold(0usize, |count, segment| {
-        count.saturating_add(segment.actors.len())
+        count
+            .saturating_add(segment.actors.len())
+            .saturating_add(segment.flat_draws.len())
     });
     let object_capacity = actor_count.saturating_mul(4).max(64);
     if builder.items.capacity() < object_capacity {
@@ -777,39 +803,60 @@ fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
     };
     let camera: u8 = 0;
 
-    build_actor_sequence(
-        actor_segments.iter().flat_map(|segment| {
-            let base_z = segment.z_shift;
-            let style = ComposeStyle {
-                tint: segment.tint,
-                blend: segment.blend,
-            };
-            let camera = segment.camera.as_ref();
-            let x_fold = segment.x_fold;
-            segment.actors.iter().map(move |actor| ActorBuild {
-                actor,
-                base_z,
-                style,
-                camera,
-                x_fold,
-            })
-        }),
-        root_rect,
-        m,
-        fonts,
-        scratch,
-        camera,
-        &mut cameras,
-        &mut masks,
-        &mut order_counter,
-        &mut builder,
-        &mut sprite_instances,
-        text_cache,
-        &mut texture_cache,
-        texture_ctx,
-        actor_textures.as_deref(),
-        total_elapsed,
-    );
+    let mut sequence = ActorSequenceState::new(camera);
+    for segment in actor_segments {
+        build_actor_sequence_with_state(
+            segment.actors.iter().map(|actor| {
+                let base_z = segment.z_shift;
+                let style = ComposeStyle {
+                    tint: segment.tint,
+                    blend: segment.blend,
+                };
+                let camera = segment.camera.as_ref();
+                let x_fold = segment.x_fold;
+                ActorBuild {
+                    actor,
+                    base_z,
+                    style,
+                    camera,
+                    x_fold,
+                }
+            }),
+            root_rect,
+            m,
+            fonts,
+            scratch,
+            &mut sequence,
+            &mut cameras,
+            &mut masks,
+            &mut order_counter,
+            &mut builder,
+            &mut sprite_instances,
+            text_cache,
+            &mut texture_cache,
+            texture_ctx,
+            actor_textures.as_deref(),
+            total_elapsed,
+        );
+        debug_assert!(
+            segment.flat_draws.is_empty() || sequence.camera_stack.is_empty(),
+            "flat draws cannot begin inside an actor camera scope"
+        );
+        build_flat_draws(
+            segment,
+            root_rect,
+            m,
+            &mut sequence,
+            &mut cameras,
+            &mut order_counter,
+            &mut builder,
+            &mut sprite_instances,
+            &mut texture_cache,
+            texture_ctx,
+            actor_textures.as_deref(),
+            total_elapsed,
+        );
+    }
 
     let sort_fallback = !builder
         .items
@@ -4872,6 +4919,36 @@ struct ActorBuild<'a, 'segment> {
     x_fold: Option<ActorXFold>,
 }
 
+struct ActorSequenceState {
+    base_camera: u8,
+    active_camera: u8,
+    camera_stack: SmallVec<[u8; 4]>,
+    last_root_camera: Option<(Matrix4, u8)>,
+}
+
+impl ActorSequenceState {
+    fn new(base_camera: u8) -> Self {
+        Self {
+            base_camera,
+            active_camera: base_camera,
+            camera_stack: SmallVec::new(),
+            last_root_camera: None,
+        }
+    }
+
+    fn camera_id(&mut self, matrix: Matrix4, cameras: &mut Vec<Matrix4>) -> u8 {
+        if let Some((last, id)) = self.last_root_camera
+            && last == matrix
+        {
+            return id;
+        }
+        cameras.push(matrix);
+        let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
+        self.last_root_camera = Some((matrix, id));
+        id
+    }
+}
+
 impl ComposeStyle {
     #[inline(always)]
     fn child(self, tint: [f32; 4], blend: Option<BlendMode>) -> Self {
@@ -4909,7 +4986,8 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
     actor_textures: Option<&[Arc<str>]>,
     total_elapsed: f32,
 ) {
-    build_actor_sequence(
+    let mut sequence = ActorSequenceState::new(camera);
+    build_actor_sequence_with_state(
         actors.iter().map(|actor| ActorBuild {
             actor,
             base_z,
@@ -4921,7 +4999,7 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
         m,
         fonts,
         scratch,
-        camera,
+        &mut sequence,
         cameras,
         masks,
         order_counter,
@@ -4936,13 +5014,13 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn build_actor_sequence<'a, 'segment, T, I>(
+fn build_actor_sequence_with_state<'a, 'segment, T, I>(
     actor_builds: I,
     parent: SmRect,
     m: &Metrics,
     fonts: &'a font::FontMap,
     scratch: &mut ComposeScratch,
-    camera: u8,
+    sequence: &mut ActorSequenceState,
     cameras: &mut Vec<Matrix4>,
     masks: &mut Vec<WorldRect>,
     order_counter: &mut u32,
@@ -4957,9 +5035,6 @@ fn build_actor_sequence<'a, 'segment, T, I>(
     T: TextureContext + ?Sized,
     I: IntoIterator<Item = ActorBuild<'a, 'segment>>,
 {
-    let mut active_camera = camera;
-    let mut camera_stack: SmallVec<[u8; 4]> = SmallVec::new();
-    let mut last_root_camera: Option<(Matrix4, u8)> = None;
     for ActorBuild {
         actor,
         base_z,
@@ -4970,13 +5045,15 @@ fn build_actor_sequence<'a, 'segment, T, I>(
     {
         match actor {
             actors::Actor::CameraPush { view_proj } => {
-                cameras
-                    .push(segment_camera.map_or(*view_proj, |camera| *view_proj * camera.suffix));
-                camera_stack.push(active_camera);
-                active_camera = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
+                let matrix = segment_camera.map_or(*view_proj, |camera| *view_proj * camera.suffix);
+                cameras.push(matrix);
+                sequence.camera_stack.push(sequence.active_camera);
+                sequence.active_camera = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
+                sequence.last_root_camera = Some((matrix, sequence.active_camera));
             }
             actors::Actor::CameraPop => {
-                active_camera = camera_stack.pop().unwrap_or(camera);
+                sequence.active_camera =
+                    sequence.camera_stack.pop().unwrap_or(sequence.base_camera);
             }
             actors::Actor::Camera {
                 view_proj,
@@ -5008,21 +5085,12 @@ fn build_actor_sequence<'a, 'segment, T, I>(
                 );
             }
             _ => {
-                if camera_stack.is_empty() {
-                    active_camera =
+                if sequence.camera_stack.is_empty() {
+                    sequence.active_camera =
                         if let Some(root_camera) = segment_camera.map(|camera| camera.root) {
-                            if let Some((last_camera, id)) = last_root_camera
-                                && last_camera == root_camera
-                            {
-                                id
-                            } else {
-                                cameras.push(root_camera);
-                                let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
-                                last_root_camera = Some((root_camera, id));
-                                id
-                            }
+                            sequence.camera_id(root_camera, cameras)
                         } else {
-                            camera
+                            sequence.base_camera
                         };
                 }
                 build_actor_recursive(
@@ -5032,7 +5100,7 @@ fn build_actor_sequence<'a, 'segment, T, I>(
                     fonts,
                     scratch,
                     base_z,
-                    active_camera,
+                    sequence.active_camera,
                     style,
                     x_fold,
                     cameras,
@@ -5047,6 +5115,204 @@ fn build_actor_sequence<'a, 'segment, T, I>(
                     total_elapsed,
                 );
             }
+        }
+    }
+}
+
+fn resolved_sprite_source<'a>(
+    source: &'a actors::SpriteSource,
+    actor_textures: Option<&'a [Arc<str>]>,
+) -> Option<(bool, &'a str, *const str)> {
+    let arena_texture_key = if let actors::SpriteSource::ArenaTextureHandle { id, .. } = source {
+        let Some(textures) = actor_textures else {
+            debug_assert!(false, "arena texture draw composed without its arena");
+            return None;
+        };
+        let Some(key) = textures.get(id.0 as usize) else {
+            debug_assert!(false, "arena texture draw has an invalid texture ID");
+            return None;
+        };
+        Some(key.as_ref())
+    } else {
+        None
+    };
+    Some(match source {
+        actors::SpriteSource::TextureStatic(name) => (false, *name, str_ptr(name)),
+        actors::SpriteSource::TextureStaticHandle { key, .. } => (false, *key, str_ptr(key)),
+        actors::SpriteSource::Texture(name) => {
+            let name = name.as_ref();
+            (false, name, str_ptr(name))
+        }
+        actors::SpriteSource::TextureHandle { key, .. } => {
+            let name = key.as_ref();
+            (false, name, str_ptr(name))
+        }
+        actors::SpriteSource::ArenaTextureHandle { .. } => {
+            let name = arena_texture_key.expect("arena texture key resolved above");
+            (false, name, str_ptr(name))
+        }
+        actors::SpriteSource::Solid => (true, "__white", str_ptr("__white")),
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_flat_sprite<T: TextureContext + ?Sized>(
+    sprite: &actors::FlatSprite,
+    parent: SmRect,
+    m: &Metrics,
+    base_z: i16,
+    camera: u8,
+    style: ComposeStyle,
+    x_fold: Option<ActorXFold>,
+    order_counter: &mut u32,
+    out: &mut FrameBuilder,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
+    texture_cache: &mut TextureLookupCache,
+    texture_ctx: &T,
+    actor_textures: Option<&[Arc<str>]>,
+    total_elapsed: f32,
+) {
+    let Some((is_solid, texture_name, texture_key_ptr)) =
+        resolved_sprite_source(&sprite.source, actor_textures)
+    else {
+        return;
+    };
+    let center = x_fold.map_or(sprite.center, |fold| fold.offset(sprite.center));
+    let rect = place_rect(
+        parent,
+        [0.5, 0.5],
+        center,
+        [SizeSpec::Px(sprite.size[0]), SizeSpec::Px(sprite.size[1])],
+    );
+    let blend = style.blend.unwrap_or(sprite.blend);
+    let layer = base_z.saturating_add(sprite.z);
+    let mut push_pass = |tint: [f32; 4], glow_pass: bool| {
+        let before = out.len();
+        push_sprite(
+            out,
+            sprite_instances,
+            camera,
+            rect,
+            m,
+            is_solid,
+            texture_name,
+            texture_key_ptr,
+            mul_rgba(tint, style.tint),
+            Some(sprite.uv_rect),
+            None,
+            None,
+            sprite.flip_x,
+            sprite.flip_y,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            sprite.fade[0],
+            sprite.fade[1],
+            sprite.fade[2],
+            sprite.fade[3],
+            blend,
+            0.0,
+            sprite.rot_y_deg,
+            sprite.rot_z_deg,
+            sprite.world_z,
+            [0.0, 0.0],
+            [0.0, 1.0],
+            None,
+            sprite_source_handle(&sprite.source, texture_cache.generation),
+            texture_cache,
+            texture_ctx,
+            total_elapsed,
+            glow_pass,
+        );
+        for item in &mut out.items[before..] {
+            item.z = layer;
+            item.order = *order_counter;
+            *order_counter = order_counter.saturating_add(1);
+        }
+    };
+    push_pass(sprite.tint, false);
+    if sprite.glow[3] > 0.0001 {
+        push_pass(sprite.glow, true);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_flat_draws<T: TextureContext + ?Sized>(
+    segment: &ActorSegment<'_>,
+    parent: SmRect,
+    m: &Metrics,
+    sequence: &mut ActorSequenceState,
+    cameras: &mut Vec<Matrix4>,
+    order_counter: &mut u32,
+    out: &mut FrameBuilder,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
+    texture_cache: &mut TextureLookupCache,
+    texture_ctx: &T,
+    actor_textures: Option<&[Arc<str>]>,
+    total_elapsed: f32,
+) {
+    if segment.flat_draws.is_empty() {
+        return;
+    }
+    let camera = segment
+        .flat_camera
+        .map_or(sequence.active_camera, |matrix| {
+            sequence.camera_id(matrix, cameras)
+        });
+    let style = ComposeStyle {
+        tint: segment.tint,
+        blend: segment.blend,
+    };
+    for draw in segment.flat_draws {
+        match draw {
+            actors::FlatDraw::Sprite(sprite) => build_flat_sprite(
+                sprite,
+                parent,
+                m,
+                segment.z_shift,
+                camera,
+                style,
+                segment.x_fold,
+                order_counter,
+                out,
+                sprite_instances,
+                texture_cache,
+                texture_ctx,
+                actor_textures,
+                total_elapsed,
+            ),
+            actors::FlatDraw::TexturedMesh(mesh) => build_textured_mesh_actor(
+                TexturedMeshActorView {
+                    align: [0.0, 0.0],
+                    offset: mesh.offset,
+                    world_z: mesh.world_z,
+                    size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                    local_transform: mesh.local_transform,
+                    texture: &mesh.texture,
+                    tint: mesh.tint,
+                    glow: mesh.glow,
+                    vertices: TexturedMeshActorVertices::Shared(&mesh.vertices),
+                    geom_cache_key: mesh.geom_cache_key,
+                    uv_scale: mesh.uv_scale,
+                    uv_offset: mesh.uv_offset,
+                    uv_tex_shift: mesh.uv_tex_shift,
+                    depth_test: mesh.depth_test,
+                    visible: true,
+                    blend: mesh.blend,
+                    z: mesh.z,
+                },
+                parent,
+                m,
+                segment.z_shift,
+                camera,
+                style,
+                segment.x_fold,
+                order_counter,
+                out,
+                texture_cache,
+                texture_ctx,
+            ),
         }
     }
 }
@@ -5361,38 +5627,10 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 return;
             }
 
-            let arena_texture_key =
-                if let actors::SpriteSource::ArenaTextureHandle { id, .. } = source {
-                    let Some(textures) = actor_textures else {
-                        debug_assert!(false, "arena texture actor composed without its arena");
-                        return;
-                    };
-                    let Some(key) = textures.get(id.0 as usize) else {
-                        debug_assert!(false, "arena texture actor has an invalid texture ID");
-                        return;
-                    };
-                    Some(key.as_ref())
-                } else {
-                    None
-                };
-            let (is_solid, texture_name, texture_key_ptr) = match source {
-                actors::SpriteSource::TextureStatic(name) => (false, *name, str_ptr(name)),
-                actors::SpriteSource::TextureStaticHandle { key, .. } => {
-                    (false, *key, str_ptr(key))
-                }
-                actors::SpriteSource::Texture(name) => {
-                    let name = name.as_ref();
-                    (false, name, str_ptr(name))
-                }
-                actors::SpriteSource::TextureHandle { key, .. } => {
-                    let name = key.as_ref();
-                    (false, name, str_ptr(name))
-                }
-                actors::SpriteSource::ArenaTextureHandle { .. } => {
-                    let name = arena_texture_key.expect("arena texture key resolved above");
-                    (false, name, str_ptr(name))
-                }
-                actors::SpriteSource::Solid => (true, "__white", str_ptr("__white")),
+            let Some((is_solid, texture_name, texture_key_ptr)) =
+                resolved_sprite_source(source, actor_textures)
+            else {
+                return;
             };
 
             let mut chosen_cell = *cell;
@@ -7953,8 +8191,9 @@ mod tests {
         wrap_text_lines_by_words,
     };
     use crate::actors::{
-        Actor, ActorResourceArena, InlineText, RetainedActorFrame, SizeSpec, SpriteSource,
-        TextAlign, TextAttribute, TextAttributes, TextContent,
+        Actor, ActorResourceArena, FlatDraw, FlatSprite, FlatTexturedMesh, InlineText,
+        RetainedActorFrame, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextAttributes,
+        TextContent,
     };
     use crate::font;
     use crate::font::{Font, Glyph, GlyphMap};
@@ -8657,6 +8896,217 @@ mod tests {
                 &resources,
             );
         assert_test_frames_equal(&expected, &actual);
+    }
+
+    #[test]
+    fn flat_draw_tail_matches_actor_render_frame() {
+        let view_proj = Matrix4::from_translation(Vector3::new(3.0, 4.0, 5.0));
+        let source = SpriteSource::static_texture("flat-note.png");
+        let vertices: Arc<[TexturedMeshVertex]> = Arc::from([
+            TexturedMeshVertex {
+                pos: [-1.0, -1.0, 0.0],
+                uv: [0.0, 0.0],
+                tex_matrix_scale: [1.0, 1.0],
+                color: [1.0; 4],
+            },
+            TexturedMeshVertex {
+                pos: [1.0, -1.0, 0.0],
+                uv: [1.0, 0.0],
+                tex_matrix_scale: [1.0, 1.0],
+                color: [1.0; 4],
+            },
+            TexturedMeshVertex {
+                pos: [0.0, 1.0, 0.0],
+                uv: [0.5, 1.0],
+                tex_matrix_scale: [1.0, 1.0],
+                color: [1.0; 4],
+            },
+        ]);
+        let sprite = FlatSprite {
+            center: [32.0, 48.0],
+            world_z: 7.0,
+            size: [64.0, 64.0],
+            source: source.clone(),
+            tint: [0.8, 0.7, 0.6, 0.5],
+            glow: [1.0, 1.0, 1.0, 0.25],
+            uv_rect: [0.1, 0.2, 0.8, 0.9],
+            flip_x: true,
+            flip_y: false,
+            fade: [0.1, 0.2, 0.3, 0.4],
+            blend: BlendMode::Alpha,
+            rot_y_deg: 12.0,
+            rot_z_deg: 24.0,
+            z: 8,
+        };
+        let mesh = FlatTexturedMesh {
+            offset: [16.0, 20.0],
+            world_z: 9.0,
+            local_transform: Matrix4::from_rotation_z(0.25),
+            texture: Arc::from("flat-model.png"),
+            tint: [0.4, 0.5, 0.6, 0.7],
+            glow: [0.8, 0.9, 1.0, 0.2],
+            vertices: Arc::clone(&vertices),
+            geom_cache_key: 41,
+            uv_scale: [0.5, 0.75],
+            uv_offset: [0.1, 0.2],
+            uv_tex_shift: [0.3, 0.4],
+            depth_test: false,
+            blend: BlendMode::Add,
+            z: 9,
+        };
+        let actor_sprite = Actor::Sprite {
+            align: [0.5, 0.5],
+            offset: sprite.center,
+            world_z: sprite.world_z,
+            size: [SizeSpec::Px(sprite.size[0]), SizeSpec::Px(sprite.size[1])],
+            source,
+            tint: sprite.tint,
+            glow: sprite.glow,
+            z: sprite.z,
+            cell: None,
+            grid: None,
+            uv_rect: Some(sprite.uv_rect),
+            visible: true,
+            flip_x: sprite.flip_x,
+            flip_y: sprite.flip_y,
+            cropleft: 0.0,
+            cropright: 0.0,
+            croptop: 0.0,
+            cropbottom: 0.0,
+            fadeleft: sprite.fade[0],
+            faderight: sprite.fade[1],
+            fadetop: sprite.fade[2],
+            fadebottom: sprite.fade[3],
+            blend: sprite.blend,
+            mask_source: false,
+            mask_dest: false,
+            rot_x_deg: 0.0,
+            rot_y_deg: sprite.rot_y_deg,
+            rot_z_deg: sprite.rot_z_deg,
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            texcoordvelocity: None,
+            animate: false,
+            state_delay: 0.0,
+            scale: [1.0, 1.0],
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0; 4],
+            effect: Default::default(),
+        };
+        let actor_mesh = Actor::TexturedMesh {
+            align: [0.0, 0.0],
+            offset: mesh.offset,
+            world_z: mesh.world_z,
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            local_transform: mesh.local_transform,
+            texture: Arc::clone(&mesh.texture),
+            tint: mesh.tint,
+            glow: mesh.glow,
+            vertices,
+            geom_cache_key: mesh.geom_cache_key,
+            uv_scale: mesh.uv_scale,
+            uv_offset: mesh.uv_offset,
+            uv_tex_shift: mesh.uv_tex_shift,
+            depth_test: mesh.depth_test,
+            visible: true,
+            blend: mesh.blend,
+            z: mesh.z,
+        };
+        let mut prefix = actor_mesh.clone();
+        let Actor::TexturedMesh { z, .. } = &mut prefix else {
+            unreachable!();
+        };
+        *z = 7;
+        let expected_actors = [
+            Actor::CameraPush { view_proj },
+            prefix.clone(),
+            actor_sprite,
+            actor_mesh,
+            Actor::CameraPop,
+        ];
+        let flat_draws = [FlatDraw::Sprite(sprite), FlatDraw::TexturedMesh(mesh)];
+        let camera_scope = [Actor::CameraPush { view_proj }, prefix, Actor::CameraPop];
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let fonts = font::FontMap::default();
+        let expected = build_screen(
+            &expected_actors,
+            [0.0, 0.0, 0.0, 1.0],
+            &metrics,
+            &fonts,
+            0.0,
+        );
+        let resources = ActorResourceArena::new(0);
+        let mut text = TextLayoutCache::default();
+        let mut scratch = ComposeScratch::default();
+        let actual =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::new(&camera_scope).with_flat_draws(&flat_draws, Some(view_proj))],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut text,
+                &mut scratch,
+                &TestDrawTextureContext,
+                &resources,
+            );
+        assert_test_frames_equal(&expected, &actual);
+
+        let root_camera = Matrix4::from_scale(Vector3::new(0.8, 0.9, 1.0));
+        let camera_suffix = Matrix4::from_rotation_z(0.2);
+        let tint = [0.7, 0.8, 0.9, 0.6];
+        let fold = Some(ActorXFold::new(50.0, 0.75));
+        let mut expected_text = TextLayoutCache::default();
+        let mut expected_scratch = ComposeScratch::default();
+        let expected_transformed =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::transformed(
+                    &expected_actors,
+                    100,
+                    tint,
+                    Some(BlendMode::Add),
+                    root_camera,
+                    camera_suffix,
+                    fold,
+                )],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut expected_text,
+                &mut expected_scratch,
+                &TestDrawTextureContext,
+                &resources,
+            );
+        let mut actual_text = TextLayoutCache::default();
+        let mut actual_scratch = ComposeScratch::default();
+        let actual_transformed =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::transformed(
+                    &camera_scope,
+                    100,
+                    tint,
+                    Some(BlendMode::Add),
+                    root_camera,
+                    camera_suffix,
+                    fold,
+                )
+                .with_flat_draws(&flat_draws, Some(view_proj * camera_suffix))],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut actual_text,
+                &mut actual_scratch,
+                &TestDrawTextureContext,
+                &resources,
+            );
+        assert_test_frames_equal(&expected_transformed, &actual_transformed);
     }
 
     #[test]

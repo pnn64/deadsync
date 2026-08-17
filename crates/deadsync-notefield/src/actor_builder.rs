@@ -94,6 +94,7 @@ pub(crate) fn notefield_frame_plan(
 
 pub struct BuiltNotefield {
     pub layout_center_x: f32,
+    pub field_camera: Option<glam::Mat4>,
     pub field_actors: Option<CapturedActorSource>,
     pub judgment_actors: Option<CapturedActorSource>,
     pub combo_actors: Option<CapturedActorSource>,
@@ -133,6 +134,7 @@ impl BuiltNotefield {
     pub fn empty(layout_center_x: f32) -> Self {
         Self {
             layout_center_x,
+            field_camera: None,
             field_actors: None,
             judgment_actors: None,
             combo_actors: None,

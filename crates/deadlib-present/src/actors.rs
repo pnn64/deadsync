@@ -502,6 +502,56 @@ pub enum Actor {
     },
 }
 
+/// Compact actor-free payload for dynamic sprite draws whose layout is already
+/// resolved by the owning screen. Unlike [`Actor::Sprite`], this carries no
+/// animation, sizing, masking, cropping, or shadow state for the presentation
+/// layer to interpret every frame.
+#[derive(Clone, Debug)]
+pub struct FlatSprite {
+    pub center: [f32; 2],
+    pub world_z: f32,
+    pub size: [f32; 2],
+    pub source: SpriteSource,
+    pub tint: [f32; 4],
+    pub glow: [f32; 4],
+    pub uv_rect: [f32; 4],
+    pub flip_x: bool,
+    pub flip_y: bool,
+    pub fade: [f32; 4],
+    pub blend: BlendMode,
+    pub rot_y_deg: f32,
+    pub rot_z_deg: f32,
+    pub z: i16,
+}
+
+/// Compact actor-free payload for one retained textured-mesh draw.
+#[derive(Clone, Debug)]
+pub struct FlatTexturedMesh {
+    pub offset: [f32; 2],
+    pub world_z: f32,
+    pub local_transform: Matrix4,
+    pub texture: Arc<str>,
+    pub tint: [f32; 4],
+    pub glow: [f32; 4],
+    pub vertices: Arc<[TexturedMeshVertex]>,
+    pub geom_cache_key: TMeshCacheKey,
+    pub uv_scale: [f32; 2],
+    pub uv_offset: [f32; 2],
+    pub uv_tex_shift: [f32; 2],
+    pub depth_test: bool,
+    pub blend: BlendMode,
+    pub z: i16,
+}
+
+/// Narrow dynamic presentation stream used when a screen has already resolved
+/// its high-volume draws. It deliberately supports only the two payloads that
+/// can bypass actor interpretation without losing presentation semantics.
+#[derive(Clone, Debug)]
+pub enum FlatDraw {
+    Sprite(FlatSprite),
+    TexturedMesh(FlatTexturedMesh),
+}
+
 /// Scene- or screen-owned reusable backing for an identity `SharedFrame`.
 ///
 /// The game/render thread is the sole writer. `refill` reuses the child `Vec`

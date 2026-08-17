@@ -4,8 +4,8 @@ use crate::{
     MeasureComposeRequest, MeasureLineMode, MineLayerRequest, ModelMeshCache, NoteAlphaParams,
     NoteLayerRequest, NoteXParams, NotefieldComposeRequest, NotefieldFeedbackFrameView,
     PreparedNotefield, PreparedNotefieldNotes, TornadoBounds, VisualEffectParams,
-    appearance_note_alpha_glow_cached, compose_hold_body_caps, compose_measure_lines,
-    compose_mine_layers, compose_note_layer, compose_notefield_feedback,
+    appearance_note_alpha_glow_cached, compose_flat_mine_layers, compose_flat_note_layer,
+    compose_hold_body_caps, compose_measure_lines, compose_note_layer, compose_notefield_feedback,
     fill_gameplay_lane_effects, fill_static_note_x_offsets, for_each_lane_index,
     hold_entry_head_beat, hold_entry_plan, hold_overlaps_visible_window, hold_parts_for_note_type,
     lane_hold_window_bounds_by_note_row_from_cursor, lane_note_transform_cache,
@@ -16,7 +16,7 @@ use crate::{
     visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
     visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
-use deadlib_present::actors::{Actor, SpriteSource};
+use deadlib_present::actors::{Actor, FlatDraw, SizeSpec, SpriteSource};
 use deadlib_render_core::BlendMode;
 use deadsync_core::{input::MAX_COLS, note::NoteType};
 use deadsync_gameplay::{
@@ -42,6 +42,7 @@ pub struct NotefieldFieldFrameView<'a> {
 #[derive(Clone, Debug, Default)]
 pub struct NotefieldFieldResult {
     pub captured_actors: Option<CapturedActorSource>,
+    pub camera: Option<glam::Mat4>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -56,6 +57,7 @@ struct HoldLaneFrame {
 /// measure lines/cues, receptor feedback, holds, taps/mines, then camera wrap.
 pub fn compose_notefield_field<S, F>(
     actors: &mut Vec<Actor>,
+    flat_draws: &mut Vec<FlatDraw>,
     cue_hud_actors: &mut Vec<Actor>,
     model_cache: &mut ModelMeshCache,
     hold_mesh_scratch: &mut HoldMeshScratch,
@@ -71,17 +73,20 @@ where
 {
     model_cache.begin_frame();
     hold_mesh_scratch.begin_frame();
+    flat_draws.clear();
+    flat_draws.reserve(prepared.frame_plan.field_actor_reserve);
     let field_start = actors.len();
     actors.reserve(prepared.frame_plan.field_actor_reserve.saturating_add(2));
     cue_hud_actors.reserve(prepared.frame_plan.hud_actor_reserve);
     let Some(notes) = prepared.notes.as_ref() else {
         return NotefieldFieldResult::default();
     };
-    let camera_pushed = push_field_camera(actors, request, prepared);
+    let field_camera = push_field_camera(actors, request, prepared);
     let field_content_start = actors.len();
 
     compose_field_contents(
         actors,
+        flat_draws,
         cue_hud_actors,
         model_cache,
         hold_mesh_scratch,
@@ -91,19 +96,31 @@ where
         frame,
         sprite_source,
     );
-    finish_field_camera(actors, field_start, field_content_start, camera_pushed);
+    if request.capture_requests.note_field {
+        actors.extend(flat_draws.drain(..).map(flat_draw_actor));
+    }
+    finish_field_camera(
+        actors,
+        field_start,
+        field_content_start,
+        field_camera.is_some(),
+    );
 
     let captured_actors = request
         .capture_requests
         .note_field
         .then(|| share_actor_range(actors, field_start, &mut capture_scratch.note_field))
         .flatten();
-    NotefieldFieldResult { captured_actors }
+    NotefieldFieldResult {
+        captured_actors,
+        camera: field_camera,
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
 fn compose_field_contents<S, F>(
     actors: &mut Vec<Actor>,
+    flat_draws: &mut Vec<FlatDraw>,
     cue_hud_actors: &mut Vec<Actor>,
     model_cache: &mut ModelMeshCache,
     hold_mesh_scratch: &mut HoldMeshScratch,
@@ -732,7 +749,7 @@ fn compose_field_contents<S, F>(
         render_hold(note_index);
     }
     compose_visible_notes(
-        actors,
+        flat_draws,
         model_cache,
         request,
         prepared,
@@ -767,7 +784,7 @@ pub fn measure_cue_range_search_enabled(
 
 #[allow(clippy::too_many_arguments)]
 fn compose_visible_notes<S, F>(
-    actors: &mut Vec<Actor>,
+    flat_draws: &mut Vec<FlatDraw>,
     model_cache: &mut ModelMeshCache,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
@@ -923,8 +940,8 @@ fn compose_visible_notes<S, F>(
                             request.geometry.target_arrow_pixel_size * note_scale,
                             request.geometry.target_arrow_pixel_size * note_scale,
                         ]);
-                    compose_mine_layers(
-                        actors,
+                    compose_flat_mine_layers(
+                        flat_draws,
                         model_cache,
                         MineLayerRequest {
                             fill_slot,
@@ -976,8 +993,8 @@ fn compose_visible_notes<S, F>(
                         .or(visuals.head_active_layers.as_deref())
                     {
                         for head_slot in head_slots {
-                            compose_noteskin_layer(
-                                actors,
+                            compose_flat_noteskin_layer(
+                                flat_draws,
                                 model_cache,
                                 head_slot,
                                 center,
@@ -1004,8 +1021,8 @@ fn compose_visible_notes<S, F>(
                         .as_ref()
                         .or(visuals.head_active.as_ref())
                     {
-                        compose_single_slot(
-                            actors,
+                        compose_flat_single_slot(
+                            flat_draws,
                             model_cache,
                             head_slot,
                             center,
@@ -1037,8 +1054,8 @@ fn compose_visible_notes<S, F>(
                     let center = [column_center_x, y_pos];
                     let phase = ns.part_uv_phase(tap_part, elapsed, current_beat, note.beat);
                     for note_slot in note_slots.iter() {
-                        compose_noteskin_layer(
-                            actors,
+                        compose_flat_noteskin_layer(
+                            flat_draws,
                             model_cache,
                             note_slot,
                             center,
@@ -1077,8 +1094,8 @@ fn compose_visible_notes<S, F>(
                         note_rotation_y,
                     );
                     let rotation = -note_slot.sprite_def().rotation_deg as f32;
-                    compose_note_layer(
-                        actors,
+                    compose_flat_note_layer(
+                        flat_draws,
                         model_cache,
                         NoteLayerRequest {
                             slot: note_slot,
@@ -1103,6 +1120,151 @@ fn compose_visible_notes<S, F>(
             },
         );
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compose_flat_noteskin_layer<S, F>(
+    draws: &mut Vec<FlatDraw>,
+    model_cache: &mut ModelMeshCache,
+    slot: &S,
+    center: [f32; 2],
+    scale: f32,
+    phase: f32,
+    translation: [f32; 2],
+    elapsed: f32,
+    current_beat: f32,
+    rotation_y_deg: f32,
+    face_rotation_y_deg: f32,
+    rotation_z_deg: f32,
+    tint_scale: [f32; 4],
+    glow_alpha: f32,
+    z: i16,
+    world_z: f32,
+    prefer_sprite: bool,
+    sprite_source: &F,
+) where
+    S: NoteskinSlot,
+    F: Fn(&S) -> SpriteSource,
+{
+    let draw = song_lua_note_model_draw(
+        model_cache.draw_at(slot, elapsed, current_beat),
+        rotation_y_deg,
+    );
+    if !draw.visible {
+        return;
+    }
+    let frame_index = slot.frame_index_from_phase(phase);
+    let uv_elapsed = if slot.model().is_some() {
+        phase
+    } else {
+        elapsed
+    };
+    let uv = translated_uv_rect(slot.uv_for_frame_at(frame_index, uv_elapsed), translation);
+    let base_size = note_slot_base_size(slot, scale);
+    let local_offset = [draw.pos[0] * scale, draw.pos[1] * scale];
+    let rotation_sin_cos = slot.base_rot_sin_cos();
+    let size = [
+        base_size[0] * draw.zoom[0].max(0.0),
+        base_size[1] * draw.zoom[1].max(0.0),
+    ];
+    if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
+        return;
+    }
+    let blend = if draw.blend_add {
+        BlendMode::Add
+    } else {
+        BlendMode::Alpha
+    };
+    let tint = [
+        draw.tint[0] * tint_scale[0],
+        draw.tint[1] * tint_scale[1],
+        draw.tint[2] * tint_scale[2],
+        draw.tint[3] * tint_scale[3],
+    ];
+    let rotation = -slot.sprite_def().rotation_deg as f32;
+    compose_flat_note_layer(
+        draws,
+        model_cache,
+        NoteLayerRequest {
+            slot,
+            draw,
+            model_center: model_center(slot, center, local_offset, rotation_sin_cos),
+            sprite_center: offset_center(center, local_offset, rotation_sin_cos),
+            size,
+            uv,
+            rotation_y_deg: face_rotation_y_deg,
+            model_rotation_z_deg: rotation + rotation_z_deg,
+            sprite_rotation_z_deg: draw.rot[2] + rotation + rotation_z_deg,
+            tint,
+            glow_alpha,
+            blend,
+            z,
+            world_z,
+            prefer_sprite,
+        },
+        sprite_source,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compose_flat_single_slot<S, F>(
+    draws: &mut Vec<FlatDraw>,
+    model_cache: &mut ModelMeshCache,
+    slot: &S,
+    center: [f32; 2],
+    scale: f32,
+    phase: f32,
+    translation: [f32; 2],
+    elapsed: f32,
+    current_beat: f32,
+    rotation_y_deg: f32,
+    face_rotation_y_deg: f32,
+    rotation_z_deg: f32,
+    tint: [f32; 4],
+    glow_alpha: f32,
+    z: i16,
+    world_z: f32,
+    prefer_sprite: bool,
+    sprite_source: &F,
+) where
+    S: NoteskinSlot,
+    F: Fn(&S) -> SpriteSource,
+{
+    let frame_index = slot.frame_index_from_phase(phase);
+    let uv_elapsed = if slot.model().is_some() {
+        phase
+    } else {
+        elapsed
+    };
+    let uv = translated_uv_rect(slot.uv_for_frame_at(frame_index, uv_elapsed), translation);
+    let size = note_slot_base_size(slot, scale);
+    let draw = song_lua_note_model_draw(
+        model_cache.draw_at(slot, elapsed, current_beat),
+        rotation_y_deg,
+    );
+    let rotation = -slot.sprite_def().rotation_deg as f32;
+    compose_flat_note_layer(
+        draws,
+        model_cache,
+        NoteLayerRequest {
+            slot,
+            draw,
+            model_center: center,
+            sprite_center: center,
+            size,
+            uv,
+            rotation_y_deg: face_rotation_y_deg,
+            model_rotation_z_deg: rotation + rotation_z_deg,
+            sprite_rotation_z_deg: rotation + rotation_z_deg,
+            tint,
+            glow_alpha,
+            blend: BlendMode::Alpha,
+            z,
+            world_z,
+            prefer_sprite,
+        },
+        sprite_source,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1181,67 +1343,6 @@ fn compose_noteskin_layer<S, F>(
             tint,
             glow_alpha,
             blend,
-            z,
-            world_z,
-            prefer_sprite,
-        },
-        sprite_source,
-    );
-}
-
-#[allow(clippy::too_many_arguments)]
-fn compose_single_slot<S, F>(
-    actors: &mut Vec<Actor>,
-    model_cache: &mut ModelMeshCache,
-    slot: &S,
-    center: [f32; 2],
-    scale: f32,
-    phase: f32,
-    translation: [f32; 2],
-    elapsed: f32,
-    current_beat: f32,
-    rotation_y_deg: f32,
-    face_rotation_y_deg: f32,
-    rotation_z_deg: f32,
-    tint: [f32; 4],
-    glow_alpha: f32,
-    z: i16,
-    world_z: f32,
-    prefer_sprite: bool,
-    sprite_source: &F,
-) where
-    S: NoteskinSlot,
-    F: Fn(&S) -> SpriteSource,
-{
-    let frame_index = slot.frame_index_from_phase(phase);
-    let uv_elapsed = if slot.model().is_some() {
-        phase
-    } else {
-        elapsed
-    };
-    let uv = translated_uv_rect(slot.uv_for_frame_at(frame_index, uv_elapsed), translation);
-    let size = note_slot_base_size(slot, scale);
-    let draw = song_lua_note_model_draw(
-        model_cache.draw_at(slot, elapsed, current_beat),
-        rotation_y_deg,
-    );
-    let rotation = -slot.sprite_def().rotation_deg as f32;
-    compose_note_layer(
-        actors,
-        model_cache,
-        NoteLayerRequest {
-            slot,
-            draw,
-            model_center: center,
-            sprite_center: center,
-            size,
-            uv,
-            rotation_y_deg: face_rotation_y_deg,
-            model_rotation_z_deg: rotation + rotation_z_deg,
-            sprite_rotation_z_deg: rotation + rotation_z_deg,
-            tint,
-            glow_alpha,
-            blend: BlendMode::Alpha,
             z,
             world_z,
             prefer_sprite,
@@ -1476,7 +1577,7 @@ fn push_field_camera<S>(
     actors: &mut Vec<Actor>,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
-) -> bool {
+) -> Option<glam::Mat4> {
     let field = prepared.field;
     let center_y = 0.5 * (field.receptor_y_normal + field.receptor_y_reverse);
     let perspective = request.visual.perspective;
@@ -1489,10 +1590,75 @@ fn push_field_camera<S>(
         perspective.skew,
         request.geometry.reverse_scroll,
     ) else {
-        return false;
+        return None;
     };
     actors.push(Actor::CameraPush { view_proj });
-    true
+    Some(view_proj)
+}
+
+/// Cold SongLua proxy adapter. Ordinary gameplay keeps flat draws in their
+/// compact stream; only an explicit field/player capture reconstructs actors.
+fn flat_draw_actor(draw: FlatDraw) -> Actor {
+    match draw {
+        FlatDraw::Sprite(sprite) => Actor::Sprite {
+            align: [0.5, 0.5],
+            offset: sprite.center,
+            world_z: sprite.world_z,
+            size: [SizeSpec::Px(sprite.size[0]), SizeSpec::Px(sprite.size[1])],
+            source: sprite.source,
+            tint: sprite.tint,
+            glow: sprite.glow,
+            z: sprite.z,
+            cell: None,
+            grid: None,
+            uv_rect: Some(sprite.uv_rect),
+            visible: true,
+            flip_x: sprite.flip_x,
+            flip_y: sprite.flip_y,
+            cropleft: 0.0,
+            cropright: 0.0,
+            croptop: 0.0,
+            cropbottom: 0.0,
+            fadeleft: sprite.fade[0],
+            faderight: sprite.fade[1],
+            fadetop: sprite.fade[2],
+            fadebottom: sprite.fade[3],
+            blend: sprite.blend,
+            mask_source: false,
+            mask_dest: false,
+            rot_x_deg: 0.0,
+            rot_y_deg: sprite.rot_y_deg,
+            rot_z_deg: sprite.rot_z_deg,
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            texcoordvelocity: None,
+            animate: false,
+            state_delay: 0.0,
+            scale: [1.0, 1.0],
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0; 4],
+            effect: Default::default(),
+        },
+        FlatDraw::TexturedMesh(mesh) => Actor::TexturedMesh {
+            align: [0.0, 0.0],
+            offset: mesh.offset,
+            world_z: mesh.world_z,
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            local_transform: mesh.local_transform,
+            texture: mesh.texture,
+            tint: mesh.tint,
+            glow: mesh.glow,
+            vertices: mesh.vertices,
+            geom_cache_key: mesh.geom_cache_key,
+            uv_scale: mesh.uv_scale,
+            uv_offset: mesh.uv_offset,
+            uv_tex_shift: mesh.uv_tex_shift,
+            depth_test: mesh.depth_test,
+            visible: true,
+            blend: mesh.blend,
+            z: mesh.z,
+        },
+    }
 }
 
 fn finish_field_camera(
@@ -1510,8 +1676,9 @@ fn finish_field_camera(
 
 #[cfg(test)]
 mod camera_wrap_tests {
-    use super::{finish_field_camera, measure_cue_range_search_enabled};
-    use deadlib_present::actors::Actor;
+    use super::{finish_field_camera, flat_draw_actor, measure_cue_range_search_enabled};
+    use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SizeSpec, SpriteSource};
+    use deadlib_render_core::BlendMode;
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use glam::Mat4;
 
@@ -1535,6 +1702,71 @@ mod camera_wrap_tests {
         }];
         finish_field_camera(&mut empty, 0, 1, true);
         assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn capture_materializes_flat_tail_inside_field_camera() {
+        let mut actors = vec![Actor::CameraPush {
+            view_proj: Mat4::IDENTITY,
+        }];
+        actors.push(flat_draw_actor(FlatDraw::Sprite(FlatSprite {
+            center: [12.0, 34.0],
+            world_z: 5.0,
+            size: [64.0, 48.0],
+            source: SpriteSource::static_texture("capture-note"),
+            tint: [0.8, 0.7, 0.6, 0.5],
+            glow: [1.0, 1.0, 1.0, 0.25],
+            uv_rect: [0.1, 0.2, 0.8, 0.9],
+            flip_x: true,
+            flip_y: false,
+            fade: [0.1, 0.2, 0.3, 0.4],
+            blend: BlendMode::Add,
+            rot_y_deg: 11.0,
+            rot_z_deg: 22.0,
+            z: 140,
+        })));
+        finish_field_camera(&mut actors, 0, 1, true);
+
+        assert_eq!(actors.len(), 3);
+        let Actor::Sprite {
+            align,
+            offset,
+            world_z,
+            size,
+            tint,
+            glow,
+            uv_rect,
+            flip_x,
+            fadeleft,
+            faderight,
+            fadetop,
+            fadebottom,
+            blend,
+            rot_y_deg,
+            rot_z_deg,
+            z,
+            ..
+        } = &actors[1]
+        else {
+            panic!("capture tail should materialize the resolved sprite");
+        };
+        assert_eq!(*align, [0.5, 0.5]);
+        assert_eq!(*offset, [12.0, 34.0]);
+        assert_eq!(*world_z, 5.0);
+        assert!(matches!(size, [SizeSpec::Px(64.0), SizeSpec::Px(48.0)]));
+        assert_eq!(*tint, [0.8, 0.7, 0.6, 0.5]);
+        assert_eq!(*glow, [1.0, 1.0, 1.0, 0.25]);
+        assert_eq!(*uv_rect, Some([0.1, 0.2, 0.8, 0.9]));
+        assert!(*flip_x);
+        assert_eq!(
+            [*fadeleft, *faderight, *fadetop, *fadebottom],
+            [0.1, 0.2, 0.3, 0.4]
+        );
+        assert_eq!(*blend, BlendMode::Add);
+        assert_eq!(*rot_y_deg, 11.0);
+        assert_eq!(*rot_z_deg, 22.0);
+        assert_eq!(*z, 140);
+        assert!(matches!(actors[2], Actor::CameraPop));
     }
 
     #[test]

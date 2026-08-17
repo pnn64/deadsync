@@ -1,5 +1,5 @@
 use crate::notes::LaneWindowCursor;
-use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::actors::{Actor, FlatTexturedMesh, SizeSpec};
 use deadlib_render_core::{BlendMode, TMeshCacheKey, TexturedMeshVertex};
 use deadsync_core::input::MAX_COLS;
 use deadsync_noteskin::{
@@ -515,6 +515,38 @@ fn actor_from_vertices<S: NoteskinSlot>(
 }
 
 #[inline(always)]
+fn flat_from_vertices<S: NoteskinSlot>(
+    slot: &S,
+    xy: [f32; 2],
+    tint: [f32; 4],
+    vertices: Arc<[TexturedMeshVertex]>,
+    geom_cache_key: TMeshCacheKey,
+    local_transform: Matrix4,
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+    blend: BlendMode,
+    z: i16,
+) -> FlatTexturedMesh {
+    FlatTexturedMesh {
+        offset: xy,
+        world_z: 0.0,
+        local_transform,
+        texture: slot.texture_key_shared(),
+        tint,
+        glow: [1.0, 1.0, 1.0, 0.0],
+        vertices,
+        geom_cache_key,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
+        depth_test: false,
+        blend,
+        z,
+    }
+}
+
+#[inline(always)]
 fn actor_from_draw<S: NoteskinSlot>(
     slot: &S,
     draw: ModelDrawState,
@@ -602,6 +634,44 @@ pub fn noteskin_model_actor_from_draw_cached<S: NoteskinSlot>(
         uv_offset,
         uv_tex_shift,
         false,
+        model_blend(draw, blend),
+        z,
+    ))
+}
+
+#[inline(always)]
+pub(crate) fn noteskin_model_flat_draw_cached<S: NoteskinSlot>(
+    slot: &S,
+    draw: ModelDrawState,
+    xy: [f32; 2],
+    size: [f32; 2],
+    uv_rect: [f32; 4],
+    rotation_deg: f32,
+    color: [f32; 4],
+    blend: BlendMode,
+    z: i16,
+    cache: &mut ModelMeshCache,
+) -> Option<FlatTexturedMesh> {
+    let model = slot.model()?;
+    if !draw.visible || model.vertices.is_empty() {
+        return None;
+    }
+
+    let tint = model_tint(color, draw);
+    let affine = model_affine_transform(model, size, rotation_deg, draw);
+    let local_transform = model_draw_transform(model.size(), affine);
+    let (geom_cache_key, vertices) = cache.model_geometry(slot)?;
+    let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
+    Some(flat_from_vertices(
+        slot,
+        xy,
+        tint,
+        vertices,
+        geom_cache_key,
+        local_transform,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
         model_blend(draw, blend),
         z,
     ))

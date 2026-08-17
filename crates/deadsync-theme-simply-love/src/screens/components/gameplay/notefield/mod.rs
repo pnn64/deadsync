@@ -1,7 +1,7 @@
 use crate::assets;
 use crate::notefield_style::notefield_style;
 use crate::screens::gameplay::{GameplayCoreState as State, GameplayNoteskinAssets};
-use deadlib_present::actors::{Actor, ActorResourceArena, SpriteSource, TextContent};
+use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw, SpriteSource, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::*;
 use deadsync_assets::noteskin::SpriteSlot;
@@ -468,9 +468,11 @@ pub(crate) fn compose_frame(
     display_mods_text: &std::sync::Arc<str>,
     view: ViewOverride,
     actors: &mut Vec<Actor>,
+    flat_draws: &mut Vec<FlatDraw>,
     hud_actors: &mut Vec<Actor>,
 ) -> BuiltNotefield {
     actors.clear();
+    flat_draws.clear();
     hud_actors.clear();
     let hold_judgment_texture = judgment_assets.hold_judgment();
     let held_miss_texture = judgment_assets.held_miss();
@@ -678,6 +680,7 @@ pub(crate) fn compose_frame(
         let mut proxy_scratch = capture_scratch[player_idx].borrow_mut();
         compose_notefield_field(
             actors,
+            flat_draws,
             hud_actors,
             &mut model_cache,
             &mut hold_scratch,
@@ -852,6 +855,7 @@ pub(crate) fn compose_frame(
 
     BuiltNotefield {
         layout_center_x,
+        field_camera: field_result.camera,
         field_actors: field_result.captured_actors,
         judgment_actors: hud_result.judgment_actors,
         combo_actors: hud_result.combo_actors,

@@ -6,9 +6,10 @@ use crate::transforms::{
 };
 use crate::{
     ModelMeshCache, actor_with_world_z, itg_actor_glow_alpha,
-    noteskin_model_actor_from_draw_cached, song_lua_note_model_draw,
+    noteskin_model_actor_from_draw_cached, noteskin_model_flat_draw_cached,
+    song_lua_note_model_draw,
 };
-use deadlib_present::actors::{Actor, SpriteSource};
+use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SpriteSource};
 use deadlib_present::dsl::SpriteBuilder;
 use deadlib_render_core::BlendMode;
 use deadsync_core::song_time::SongTimeNs;
@@ -85,9 +86,118 @@ struct MineSlotPass<'a, S> {
     z: i16,
 }
 
-/// Appends a mine's gradient-or-fill actors followed by its frame actors.
-pub(crate) fn compose_mine_layers<S, F, Z>(
-    actors: &mut Vec<Actor>,
+#[inline(always)]
+fn flat_sprite<S, F>(
+    slot: &S,
+    request: &NoteLayerRequest<'_, S>,
+    tint: [f32; 4],
+    glow: [f32; 4],
+    blend: BlendMode,
+    sprite_source: &F,
+) -> FlatDraw
+where
+    S: NoteskinSlot,
+    F: Fn(&S) -> SpriteSource,
+{
+    FlatDraw::Sprite(FlatSprite {
+        center: request.sprite_center,
+        world_z: request.world_z,
+        size: request.size,
+        source: sprite_source(slot),
+        tint,
+        glow,
+        uv_rect: request.uv,
+        flip_x: slot.sprite_def().mirror_h,
+        flip_y: slot.sprite_def().mirror_v,
+        fade: request.draw.fade,
+        blend,
+        rot_y_deg: request.rotation_y_deg,
+        rot_z_deg: request.sprite_rotation_z_deg,
+        z: request.z,
+    })
+}
+
+/// Writes one pre-resolved tap or mine layer into the narrow flat presentation
+/// stream. Hold heads retain the actor route because they share capture and
+/// legacy hold-body composition state.
+pub(crate) fn compose_flat_note_layer<S, F>(
+    draws: &mut Vec<FlatDraw>,
+    model_cache: &mut ModelMeshCache,
+    request: NoteLayerRequest<'_, S>,
+    sprite_source: &F,
+) where
+    S: NoteskinSlot,
+    F: Fn(&S) -> SpriteSource,
+{
+    if !request.prefer_sprite
+        && let Some(mut mesh) = noteskin_model_flat_draw_cached(
+            request.slot,
+            request.draw,
+            request.model_center,
+            request.size,
+            request.uv,
+            request.model_rotation_z_deg,
+            request.tint,
+            request.blend,
+            request.z,
+            model_cache,
+        )
+    {
+        mesh.world_z = request.world_z;
+        draws.push(FlatDraw::TexturedMesh(mesh));
+    } else {
+        draws.push(flat_sprite(
+            request.slot,
+            &request,
+            request.tint,
+            [1.0, 1.0, 1.0, 0.0],
+            request.blend,
+            sprite_source,
+        ));
+    }
+
+    let glow_alpha = itg_actor_glow_alpha(request.glow_alpha);
+    if glow_alpha <= f32::EPSILON {
+        return;
+    }
+    let glow = [1.0, 1.0, 1.0, glow_alpha];
+    let glow_blend = if request.draw.blend_add {
+        BlendMode::Add
+    } else {
+        BlendMode::Alpha
+    };
+    if !request.prefer_sprite
+        && let Some(mut mesh) = noteskin_model_flat_draw_cached(
+            request.slot,
+            request.draw,
+            request.model_center,
+            request.size,
+            request.uv,
+            request.model_rotation_z_deg,
+            [1.0, 1.0, 1.0, 0.0],
+            request.blend,
+            request.z,
+            model_cache,
+        )
+    {
+        mesh.world_z = request.world_z;
+        mesh.glow = glow;
+        draws.push(FlatDraw::TexturedMesh(mesh));
+    } else {
+        draws.push(flat_sprite(
+            request.slot,
+            &request,
+            [1.0, 1.0, 1.0, 0.0],
+            glow,
+            glow_blend,
+            sprite_source,
+        ));
+    }
+}
+
+/// Appends a mine's gradient-or-fill draws followed by its frame draws.
+pub(crate) fn compose_flat_mine_layers<S, F, Z>(
+    draws: &mut Vec<FlatDraw>,
     model_cache: &mut ModelMeshCache,
     request: MineLayerRequest<'_, S>,
     size_for_slot: &Z,
@@ -103,8 +213,8 @@ pub(crate) fn compose_mine_layers<S, F, Z>(
             .is_some_and(|slot| slot.model().is_none() && slot.frame_count() <= 1)
         && request.gradient_slot.is_some();
     if use_gradient {
-        compose_mine_gradient(
-            actors,
+        compose_flat_mine_gradient(
+            draws,
             model_cache,
             request
                 .gradient_slot
@@ -113,8 +223,8 @@ pub(crate) fn compose_mine_layers<S, F, Z>(
             sprite_source,
         );
     } else if let Some(slot) = request.fill_slot {
-        compose_mine_slot(
-            actors,
+        compose_flat_mine_slot(
+            draws,
             model_cache,
             MineSlotPass {
                 slot,
@@ -127,8 +237,8 @@ pub(crate) fn compose_mine_layers<S, F, Z>(
         );
     }
     if let Some(slot) = request.frame_slot {
-        compose_mine_slot(
-            actors,
+        compose_flat_mine_slot(
+            draws,
             model_cache,
             MineSlotPass {
                 slot,
@@ -142,8 +252,8 @@ pub(crate) fn compose_mine_layers<S, F, Z>(
     }
 }
 
-fn compose_mine_gradient<S, F>(
-    actors: &mut Vec<Actor>,
+fn compose_flat_mine_gradient<S, F>(
+    draws: &mut Vec<FlatDraw>,
     model_cache: &mut ModelMeshCache,
     slot: &S,
     request: &MineLayerRequest<'_, S>,
@@ -157,8 +267,8 @@ fn compose_mine_gradient<S, F>(
     }
     let frame = slot.frame_index_from_phase(request.mine_fill_phase);
     let uv = slot.uv_for_frame_at(frame, request.elapsed_s);
-    compose_note_layer(
-        actors,
+    compose_flat_note_layer(
+        draws,
         model_cache,
         NoteLayerRequest {
             slot,
@@ -181,8 +291,8 @@ fn compose_mine_gradient<S, F>(
     );
 }
 
-fn compose_mine_slot<S, F, Z>(
-    actors: &mut Vec<Actor>,
+fn compose_flat_mine_slot<S, F, Z>(
+    draws: &mut Vec<FlatDraw>,
     model_cache: &mut ModelMeshCache,
     pass: MineSlotPass<'_, S>,
     request: &MineLayerRequest<'_, S>,
@@ -212,8 +322,8 @@ fn compose_mine_slot<S, F, Z>(
         request.uv_translation,
     );
     let base_rotation = -slot.sprite_def().rotation_deg as f32;
-    compose_note_layer(
-        actors,
+    compose_flat_note_layer(
+        draws,
         model_cache,
         NoteLayerRequest {
             slot,
@@ -1173,16 +1283,16 @@ use crate::style::MAX_NOTES_AFTER;
 mod tests {
     use super::{
         MineLayerRequest, NoteGlowRequest, NoteLayerRequest, ScrollTravelRequest,
-        compose_mine_layers, compose_note_glow, compose_note_layer, find_first_displayed_beat,
-        find_first_displayed_row, find_last_displayed_beat, find_last_displayed_row,
-        for_each_visible_hold_index, for_each_visible_note_index, hold_overlaps_visible_window,
-        scroll_travel, song_time_ns_delta_seconds,
+        compose_flat_mine_layers, compose_flat_note_layer, compose_note_glow, compose_note_layer,
+        find_first_displayed_beat, find_first_displayed_row, find_last_displayed_beat,
+        find_last_displayed_row, for_each_visible_hold_index, for_each_visible_note_index,
+        hold_overlaps_visible_window, scroll_travel, song_time_ns_delta_seconds,
     };
     use crate::{
         AccelYParams, ModelMeshCache, ModelMeshCacheStats, apply_accel_y, move_col_extra,
         tipsy_y_extra,
     };
-    use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
+    use deadlib_present::actors::{Actor, FlatDraw, SizeSpec, SpriteSource};
     use deadlib_render_core::BlendMode;
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::beat_to_note_row;
@@ -1607,6 +1717,83 @@ mod tests {
     }
 
     #[test]
+    fn flat_note_layer_preserves_legacy_sprite_payloads() {
+        let mut slot = GlowSlot::sprite();
+        slot.def.mirror_h = true;
+        slot.def.mirror_v = true;
+        let mut actor_request = layer_request(&slot);
+        actor_request.draw.blend_add = true;
+        actor_request.draw.fade = [0.1, 0.2, 0.3, 0.4];
+        actor_request.blend = BlendMode::Add;
+        let mut flat_request = layer_request(&slot);
+        flat_request.draw.blend_add = true;
+        flat_request.draw.fade = [0.1, 0.2, 0.3, 0.4];
+        flat_request.blend = BlendMode::Add;
+        let source = |_: &GlowSlot| SpriteSource::static_texture("flat-layer");
+        let mut actors = Vec::new();
+        let mut draws = Vec::new();
+
+        compose_note_layer(
+            &mut actors,
+            &mut ModelMeshCache::default(),
+            actor_request,
+            &source,
+        );
+        compose_flat_note_layer(
+            &mut draws,
+            &mut ModelMeshCache::default(),
+            flat_request,
+            &source,
+        );
+
+        assert_eq!(actors.len(), draws.len());
+        for (actor, draw) in actors.iter().zip(&draws) {
+            let Actor::Sprite {
+                align,
+                offset,
+                world_z,
+                size,
+                source,
+                tint,
+                glow,
+                z,
+                uv_rect,
+                flip_x,
+                flip_y,
+                fadeleft,
+                faderight,
+                fadetop,
+                fadebottom,
+                blend,
+                rot_y_deg,
+                rot_z_deg,
+                ..
+            } = actor
+            else {
+                panic!("legacy note layer should emit sprites");
+            };
+            let FlatDraw::Sprite(sprite) = draw else {
+                panic!("flat note layer should emit sprites");
+            };
+            assert_eq!(*align, [0.5, 0.5]);
+            assert_eq!(*offset, sprite.center);
+            assert_eq!(*world_z, sprite.world_z);
+            assert!(matches!(size, [SizeSpec::Px(w), SizeSpec::Px(h)] if [*w, *h] == sprite.size));
+            assert_eq!(source.texture_key(), sprite.source.texture_key());
+            assert_eq!(*tint, sprite.tint);
+            assert_eq!(*glow, sprite.glow);
+            assert_eq!(*z, sprite.z);
+            assert_eq!(*uv_rect, Some(sprite.uv_rect));
+            assert_eq!(*flip_x, sprite.flip_x);
+            assert_eq!(*flip_y, sprite.flip_y);
+            assert_eq!([*fadeleft, *faderight, *fadetop, *fadebottom], sprite.fade);
+            assert_eq!(*blend, sprite.blend);
+            assert_eq!(*rot_y_deg, sprite.rot_y_deg);
+            assert_eq!(*rot_z_deg, sprite.rot_z_deg);
+        }
+    }
+
+    #[test]
     fn note_layer_model_reuses_cached_geometry_for_diffuse_and_glow() {
         let slot = GlowSlot::model();
         let mut actors = Vec::new();
@@ -1694,12 +1881,12 @@ mod tests {
         let mut frame = named_slot(GlowSlot::sprite(), "mine-frame");
         frame.def.rotation_deg = 10;
         frame.draw.rot[2] = 3.0;
-        let mut actors = Vec::new();
+        let mut draws = Vec::new();
         let mut cache = ModelMeshCache::default();
         let size_calls = Cell::new(0);
 
-        compose_mine_layers(
-            &mut actors,
+        compose_flat_mine_layers(
+            &mut draws,
             &mut cache,
             mine_request(Some(&fill), Some(&gradient), Some(&frame)),
             &|slot| {
@@ -1710,14 +1897,14 @@ mod tests {
             &|slot| SpriteSource::Texture(slot.texture.clone()),
         );
 
-        assert_eq!(actors.len(), 4);
+        assert_eq!(draws.len(), 4);
         assert_eq!(size_calls.get(), 1);
         assert_eq!(cache.stats(), ModelMeshCacheStats::default());
-        let keys = actors
+        let keys = draws
             .iter()
-            .map(|actor| match actor {
-                Actor::Sprite { source, .. } => source.texture_key().unwrap_or_default(),
-                actor => panic!("mine sprite path emitted {actor:?}"),
+            .map(|draw| match draw {
+                FlatDraw::Sprite(sprite) => sprite.source.texture_key().unwrap_or_default(),
+                draw => panic!("mine sprite path emitted {draw:?}"),
             })
             .collect::<Vec<_>>();
         assert_eq!(
@@ -1725,7 +1912,10 @@ mod tests {
             ["mine-gradient", "mine-gradient", "mine-frame", "mine-frame"]
         );
 
-        let Actor::Sprite {
+        let FlatDraw::Sprite(sprite) = &draws[0] else {
+            unreachable!();
+        };
+        let deadlib_present::actors::FlatSprite {
             size,
             tint,
             glow,
@@ -1734,11 +1924,8 @@ mod tests {
             rot_y_deg,
             rot_z_deg,
             ..
-        } = &actors[0]
-        else {
-            unreachable!();
-        };
-        assert!(matches!(size, [SizeSpec::Px(18.0), SizeSpec::Px(20.0)]));
+        } = sprite;
+        assert_eq!(*size, [18.0, 20.0]);
         assert_eq!(*tint, [1.0, 1.0, 1.0, 0.8]);
         assert_eq!(*glow, [1.0, 1.0, 1.0, 0.0]);
         assert_eq!(*z, 138);
@@ -1746,7 +1933,10 @@ mod tests {
         assert_eq!(*rot_y_deg, 0.0);
         assert_eq!(*rot_z_deg, 0.0);
 
-        let Actor::Sprite {
+        let FlatDraw::Sprite(sprite) = &draws[2] else {
+            unreachable!();
+        };
+        let deadlib_present::actors::FlatSprite {
             size,
             tint,
             glow,
@@ -1755,22 +1945,19 @@ mod tests {
             rot_y_deg,
             rot_z_deg,
             ..
-        } = &actors[2]
-        else {
-            unreachable!();
-        };
-        assert!(matches!(size, [SizeSpec::Px(70.0), SizeSpec::Px(72.0)]));
+        } = sprite;
+        assert_eq!(*size, [70.0, 72.0]);
         assert_eq!(*tint, [1.0, 1.0, 1.0, 0.8]);
         assert_eq!(*glow, [1.0, 1.0, 1.0, 0.0]);
         assert_eq!(*z, 140);
         assert_eq!(*world_z, 9.0);
         assert_eq!(*rot_y_deg, 12.0);
         assert_eq!(*rot_z_deg, -2.0);
-        let Actor::Sprite { tint, glow, .. } = &actors[3] else {
+        let FlatDraw::Sprite(sprite) = &draws[3] else {
             unreachable!();
         };
-        assert_eq!(*tint, [1.0, 1.0, 1.0, 0.0]);
-        assert_eq!(*glow, [1.0, 1.0, 1.0, 0.6]);
+        assert_eq!(sprite.tint, [1.0, 1.0, 1.0, 0.0]);
+        assert_eq!(sprite.glow, [1.0, 1.0, 1.0, 0.6]);
     }
 
     #[test]
@@ -1778,13 +1965,13 @@ mod tests {
         let mut fill = named_slot(GlowSlot::model(), "mine-model-fill");
         fill.def.rotation_deg = 10;
         fill.draw.rot[2] = 3.0;
-        let mut actors = Vec::new();
+        let mut draws = Vec::new();
         let mut cache = ModelMeshCache::with_capacity(1);
         cache.begin_hit_stats(true);
         let source_calls = Cell::new(0);
 
-        compose_mine_layers(
-            &mut actors,
+        compose_flat_mine_layers(
+            &mut draws,
             &mut cache,
             mine_request(Some(&fill), None, None),
             &|_| [64.0, 66.0],
@@ -1794,7 +1981,7 @@ mod tests {
             },
         );
 
-        assert_eq!(actors.len(), 2);
+        assert_eq!(draws.len(), 2);
         assert_eq!(source_calls.get(), 0);
         assert_eq!(
             cache.stats(),
@@ -1804,26 +1991,19 @@ mod tests {
                 saturated_misses: 0,
             }
         );
-        let Actor::TexturedMesh {
-            tint,
-            glow,
-            z,
-            world_z,
-            ..
-        } = &actors[0]
-        else {
+        let FlatDraw::TexturedMesh(mesh) = &draws[0] else {
             panic!("model-backed mine fill should emit a textured mesh");
         };
-        assert_eq!(tint[..3], [1.0, 1.0, 1.0]);
-        assert_near(tint[3], 0.72);
-        assert_eq!(*glow, [1.0, 1.0, 1.0, 0.0]);
-        assert_eq!(*z, 139);
-        assert_eq!(*world_z, 9.0);
-        let Actor::TexturedMesh { tint, glow, .. } = &actors[1] else {
+        assert_eq!(mesh.tint[..3], [1.0, 1.0, 1.0]);
+        assert_near(mesh.tint[3], 0.72);
+        assert_eq!(mesh.glow, [1.0, 1.0, 1.0, 0.0]);
+        assert_eq!(mesh.z, 139);
+        assert_eq!(mesh.world_z, 9.0);
+        let FlatDraw::TexturedMesh(mesh) = &draws[1] else {
             unreachable!();
         };
-        assert_eq!(*tint, [1.0, 1.0, 1.0, 0.0]);
-        assert_eq!(*glow, [1.0, 1.0, 1.0, 0.6]);
+        assert_eq!(mesh.tint, [1.0, 1.0, 1.0, 0.0]);
+        assert_eq!(mesh.glow, [1.0, 1.0, 1.0, 0.6]);
     }
 
     fn note(beat: f32) -> Note {

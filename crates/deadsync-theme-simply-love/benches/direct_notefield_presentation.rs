@@ -1,4 +1,6 @@
-use deadlib_present::actors::{Actor, ActorResourceArena, SizeSpec};
+use deadlib_present::actors::{
+    Actor, ActorResourceArena, FlatDraw, FlatSprite, SizeSpec, SpriteSource,
+};
 use deadlib_present::compose::{
     ActorSegment, ComposeScratch, NullTextureContext, TextLayoutCache,
     build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
@@ -31,6 +33,12 @@ const MEASURE_PEAK_FRAMES: usize = 10_000;
 const TRANSFORM_BATCH_FRAMES: usize = 128;
 const TRANSFORM_WARMUP_BATCHES: usize = 8;
 const TRANSFORM_MEASURE_BATCHES: usize = 400;
+const BOUNDARY_PLAYERS: usize = 2;
+const BOUNDARY_FIELD_DRAWS: usize = PEAK_FIELD_ACTORS;
+const BOUNDARY_HUD_ACTORS: usize = PEAK_HUD_ACTORS;
+const BOUNDARY_BATCH_FRAMES: usize = 32;
+const BOUNDARY_WARMUP_BATCHES: usize = 32;
+const BOUNDARY_MEASURE_BATCHES: usize = 400;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -455,6 +463,302 @@ fn print_transform_result(label: &str, result: &BenchResult, players: usize) {
     );
 }
 
+#[derive(Clone, Copy)]
+enum BoundaryKind {
+    WideActors,
+    FlatDraws,
+}
+
+struct BoundaryScratch {
+    actor_fields: [Vec<Actor>; BOUNDARY_PLAYERS],
+    flat_fields: [Vec<FlatDraw>; BOUNDARY_PLAYERS],
+    huds: [Vec<Actor>; BOUNDARY_PLAYERS],
+    hud_vertices: Arc<[MeshVertex]>,
+}
+
+impl BoundaryScratch {
+    fn new() -> Self {
+        Self {
+            actor_fields: std::array::from_fn(|_| Vec::with_capacity(BOUNDARY_FIELD_DRAWS)),
+            flat_fields: std::array::from_fn(|_| Vec::with_capacity(BOUNDARY_FIELD_DRAWS)),
+            huds: std::array::from_fn(|_| Vec::with_capacity(BOUNDARY_HUD_ACTORS)),
+            hud_vertices: Arc::from([
+                MeshVertex {
+                    pos: [0.0, 0.0],
+                    color: [1.0; 4],
+                },
+                MeshVertex {
+                    pos: [12.0, 0.0],
+                    color: [1.0; 4],
+                },
+                MeshVertex {
+                    pos: [0.0, 9.0],
+                    color: [1.0; 4],
+                },
+            ]),
+        }
+    }
+
+    fn prepare(&mut self, kind: BoundaryKind, frame: usize) {
+        for player in 0..BOUNDARY_PLAYERS {
+            let base = player * 20_000 + frame;
+            let hud = &mut self.huds[player];
+            hud.clear();
+            for index in 0..BOUNDARY_HUD_ACTORS {
+                hud.push(transform_actor(&self.hud_vertices, base + index));
+            }
+            match kind {
+                BoundaryKind::WideActors => {
+                    let field = &mut self.actor_fields[player];
+                    field.clear();
+                    for index in 0..BOUNDARY_FIELD_DRAWS {
+                        field.push(boundary_actor(base + index));
+                    }
+                }
+                BoundaryKind::FlatDraws => {
+                    let field = &mut self.flat_fields[player];
+                    field.clear();
+                    for index in 0..BOUNDARY_FIELD_DRAWS {
+                        field.push(boundary_flat_draw(base + index));
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn boundary_fields(index: usize) -> ([f32; 2], f32, [f32; 4], [f32; 4], i16) {
+    let lane = (index % 8) as f32;
+    let row = (index % 96) as f32;
+    let glow = if index % 7 == 0 {
+        [1.0, 1.0, 1.0, 0.35]
+    } else {
+        [1.0, 1.0, 1.0, 0.0]
+    };
+    (
+        [96.0 + lane * 32.0, -120.0 + row * 7.0],
+        (index % 9) as f32 * 0.125,
+        [0.8, 0.9, 1.0, 0.75],
+        glow,
+        (index % 4) as i16 + 140,
+    )
+}
+
+fn boundary_actor(index: usize) -> Actor {
+    let (center, world_z, tint, glow, z) = boundary_fields(index);
+    Actor::Sprite {
+        align: [0.5, 0.5],
+        offset: center,
+        world_z,
+        size: [SizeSpec::Px(64.0), SizeSpec::Px(64.0)],
+        source: SpriteSource::Solid,
+        tint,
+        glow,
+        z,
+        cell: None,
+        grid: None,
+        uv_rect: Some([0.0, 0.0, 1.0, 1.0]),
+        visible: true,
+        flip_x: index % 2 == 0,
+        flip_y: false,
+        cropleft: 0.0,
+        cropright: 0.0,
+        croptop: 0.0,
+        cropbottom: 0.0,
+        fadeleft: 0.0,
+        faderight: 0.0,
+        fadetop: 0.0,
+        fadebottom: 0.0,
+        blend: BlendMode::Alpha,
+        mask_source: false,
+        mask_dest: false,
+        rot_x_deg: 0.0,
+        rot_y_deg: 0.0,
+        rot_z_deg: (index % 360) as f32,
+        local_offset: [0.0, 0.0],
+        local_offset_rot_sin_cos: [0.0, 1.0],
+        texcoordvelocity: None,
+        animate: false,
+        state_delay: 0.0,
+        scale: [1.0, 1.0],
+        shadow_len: [0.0, 0.0],
+        shadow_color: [0.0; 4],
+        effect: Default::default(),
+    }
+}
+
+fn boundary_flat_draw(index: usize) -> FlatDraw {
+    let (center, world_z, tint, glow, z) = boundary_fields(index);
+    FlatDraw::Sprite(FlatSprite {
+        center,
+        world_z,
+        size: [64.0, 64.0],
+        source: SpriteSource::Solid,
+        tint,
+        glow,
+        uv_rect: [0.0, 0.0, 1.0, 1.0],
+        flip_x: index % 2 == 0,
+        flip_y: false,
+        fade: [0.0; 4],
+        blend: BlendMode::Alpha,
+        rot_y_deg: 0.0,
+        rot_z_deg: (index % 360) as f32,
+        z,
+    })
+}
+
+struct BoundaryResult {
+    elapsed: Duration,
+    cycles: u64,
+    allocated: AllocSnapshot,
+    samples_ns: Vec<u64>,
+    checksum: f32,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn boundary_frame(
+    kind: BoundaryKind,
+    frame_index: usize,
+    source: &mut BoundaryScratch,
+    metrics: &deadlib_present::space::Metrics,
+    fonts: &font::FontMap,
+    resources: &ActorResourceArena,
+    text: &mut TextLayoutCache,
+    compose: &mut ComposeScratch,
+) -> f32 {
+    source.prepare(kind, frame_index);
+    let root_camera = Mat4::from_rotation_x(0.07) * Mat4::from_rotation_z(0.11);
+    let tint = [0.8, 0.7, 0.6, 0.5];
+    let mut segments = [ActorSegment::new(&[]); BOUNDARY_PLAYERS * 2];
+    for player in 0..BOUNDARY_PLAYERS {
+        segments[player * 2] = ActorSegment::transformed(
+            &source.huds[player],
+            900,
+            tint,
+            Some(BlendMode::Add),
+            root_camera,
+            Mat4::IDENTITY,
+            None,
+        );
+        segments[player * 2 + 1] = match kind {
+            BoundaryKind::WideActors => ActorSegment::transformed(
+                &source.actor_fields[player],
+                900,
+                tint,
+                Some(BlendMode::Add),
+                root_camera,
+                Mat4::IDENTITY,
+                None,
+            ),
+            BoundaryKind::FlatDraws => ActorSegment::transformed(
+                &[],
+                900,
+                tint,
+                Some(BlendMode::Add),
+                root_camera,
+                Mat4::IDENTITY,
+                None,
+            )
+            .with_flat_draws(&source.flat_fields[player], Some(root_camera)),
+        };
+    }
+    let mut output =
+        build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+            &segments,
+            [0.0, 0.0, 0.0, 1.0],
+            metrics,
+            fonts,
+            0.0,
+            text,
+            compose,
+            &NullTextureContext,
+            resources,
+        );
+    let checksum =
+        (output.ops.len() + output.sprite_instances.len() + output.mesh_vertices.len()) as f32;
+    black_box(&output);
+    compose.recycle_frame(&mut output);
+    checksum
+}
+
+fn measure_boundary(kind: BoundaryKind) -> BoundaryResult {
+    let metrics = deadlib_present::space::metrics_for_window(854, 480);
+    let fonts = font::FontMap::default();
+    let resources = ActorResourceArena::new(0);
+    let mut text = TextLayoutCache::default();
+    let mut compose = ComposeScratch::default();
+    let mut source = BoundaryScratch::new();
+    let mut frame_index = 0usize;
+    for _ in 0..BOUNDARY_WARMUP_BATCHES * BOUNDARY_BATCH_FRAMES {
+        black_box(boundary_frame(
+            kind,
+            frame_index,
+            &mut source,
+            &metrics,
+            &fonts,
+            &resources,
+            &mut text,
+            &mut compose,
+        ));
+        frame_index += 1;
+    }
+
+    let mut samples_ns = Vec::with_capacity(BOUNDARY_MEASURE_BATCHES);
+    let before_alloc = ALLOC.snapshot();
+    let before_cycles = read_cycles();
+    let mut elapsed = Duration::ZERO;
+    let mut checksum = 0.0;
+    for _ in 0..BOUNDARY_MEASURE_BATCHES {
+        let started = Instant::now();
+        for _ in 0..BOUNDARY_BATCH_FRAMES {
+            checksum += black_box(boundary_frame(
+                kind,
+                frame_index,
+                &mut source,
+                &metrics,
+                &fonts,
+                &resources,
+                &mut text,
+                &mut compose,
+            ));
+            frame_index += 1;
+        }
+        let sample = started.elapsed();
+        elapsed += sample;
+        samples_ns.push((sample.as_nanos() / BOUNDARY_BATCH_FRAMES as u128) as u64);
+    }
+    let cycles = read_cycles().saturating_sub(before_cycles);
+    let allocated = ALLOC.snapshot().delta(before_alloc);
+    samples_ns.sort_unstable();
+    BoundaryResult {
+        elapsed,
+        cycles,
+        allocated,
+        samples_ns,
+        checksum,
+    }
+}
+
+fn print_boundary_result(label: &str, result: &BoundaryResult) {
+    let frames = (BOUNDARY_MEASURE_BATCHES * BOUNDARY_BATCH_FRAMES) as f64;
+    let p99_index = (result.samples_ns.len() * 99)
+        .div_ceil(100)
+        .saturating_sub(1);
+    let p99_ns = result.samples_ns[p99_index];
+    let worst_ns = result.samples_ns.last().copied().unwrap_or_default();
+    println!(
+        "{label:<17} mean {:>8.2} us  p99 {:>8.2} us  worst {:>8.2} us  \
+         {:>8.0} cycles/frame  {} alloc  {} realloc  {} bytes",
+        result.elapsed.as_secs_f64() * 1_000_000.0 / frames,
+        p99_ns as f64 / 1_000.0,
+        worst_ns as f64 / 1_000.0,
+        result.cycles as f64 / frames,
+        result.allocated.allocs,
+        result.allocated.reallocs,
+        result.allocated.bytes,
+    );
+}
+
 fn main() {
     deadlib_present::space::set_current_metrics(deadlib_present::space::metrics_for_window(
         854, 480,
@@ -496,6 +800,35 @@ fn main() {
         println!("{players}P");
         print_transform_result("borrowed segments", &direct, players);
     }
+
+    println!(
+        "\ncomplete 2P tap/mine boundary benchmark \
+         ({BOUNDARY_FIELD_DRAWS} field draws + {BOUNDARY_HUD_ACTORS} HUD actors/player)"
+    );
+    println!(
+        "payload size: Actor {} bytes, FlatDraw {} bytes; lock acquisitions/frame: 0",
+        std::mem::size_of::<Actor>(),
+        std::mem::size_of::<FlatDraw>(),
+    );
+    let wide = measure_boundary(BoundaryKind::WideActors);
+    assert_zero_alloc(&BenchResult {
+        elapsed: wide.elapsed,
+        cycles: wide.cycles,
+        allocated: wide.allocated,
+        checksum: wide.checksum,
+    });
+    black_box(wide.checksum);
+    print_boundary_result("wide actor control", &wide);
+    let flat = measure_boundary(BoundaryKind::FlatDraws);
+    assert_zero_alloc(&BenchResult {
+        elapsed: flat.elapsed,
+        cycles: flat.cycles,
+        allocated: flat.allocated,
+        checksum: flat.checksum,
+    });
+    assert_eq!(wide.checksum, flat.checksum);
+    black_box(flat.checksum);
+    print_boundary_result("flat draw path", &flat);
 }
 
 #[cfg(target_arch = "x86_64")]

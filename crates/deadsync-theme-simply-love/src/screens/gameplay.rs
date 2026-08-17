@@ -20,8 +20,8 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{GameplayInitView, GameplayRuntimeView, GameplayScoreRuntimeView};
 use deadlib_present::actors::{
-    Actor, ActorResourceArena, InlineText, RetainedActorFrame, SharedActorFrameScratch, SizeSpec,
-    SpriteSource, TextAlign, TextAttribute, TextAttributes, TextContent,
+    Actor, ActorResourceArena, FlatDraw, InlineText, RetainedActorFrame, SharedActorFrameScratch,
+    SizeSpec, SpriteSource, TextAlign, TextAttribute, TextAttributes, TextContent,
 };
 use deadlib_present::anim::EffectState;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
@@ -1576,9 +1576,9 @@ pub struct SmxSensorPadView {
     pub panels: [SmxSensorPanelView; SMX_SENSOR_PANEL_COUNT],
 }
 
-// One dense notefield frame's reusable actor envelope. Reserving this at
-// gameplay setup keeps later density spikes from geometrically growing and
-// copying the large `Actor` enum on the render thread.
+// One dense notefield frame's reusable presentation envelope. Actor and compact
+// draw storage are both reserved at gameplay setup so later density spikes do
+// not grow either buffer on the render thread.
 const NOTEFIELD_ACTOR_SCRATCH_CAPACITY: usize = 384;
 const NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY: usize = 32;
 const PLAYER_ACTOR_SCRATCH_CAPACITY: usize =
@@ -1595,6 +1595,16 @@ fn gameplay_actor_scratch(active_players: usize, capacity: usize) -> [Vec<Actor>
     std::array::from_fn(|player| {
         if player < active_players {
             Vec::with_capacity(capacity)
+        } else {
+            Vec::new()
+        }
+    })
+}
+
+fn gameplay_flat_draw_scratch(active_players: usize) -> [Vec<FlatDraw>; MAX_PLAYERS] {
+    std::array::from_fn(|player| {
+        if player < active_players {
+            Vec::with_capacity(NOTEFIELD_ACTOR_SCRATCH_CAPACITY)
         } else {
             Vec::new()
         }
@@ -1784,6 +1794,7 @@ struct GameplayFrameScratch {
     song_lua_capture_visit_scratch: SongLuaCaptureVisitScratch,
     song_lua_proxy_actor_scratch: Option<SongLuaProxyActorScratch>,
     notefield_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
+    notefield_flat_draw_scratch: [Vec<FlatDraw>; MAX_PLAYERS],
     notefield_hud_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
     presentation_skeleton: GameplayPresentationSkeleton,
 }
@@ -2347,6 +2358,7 @@ impl State {
         let active_players = gameplay.num_players();
         let notefield_actor_scratch =
             gameplay_actor_scratch(active_players, NOTEFIELD_ACTOR_SCRATCH_CAPACITY);
+        let notefield_flat_draw_scratch = gameplay_flat_draw_scratch(active_players);
         let notefield_hud_actor_scratch =
             gameplay_actor_scratch(active_players, NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY);
         let step_stats_mode = gameplay_step_stats_mode(
@@ -2396,6 +2408,7 @@ impl State {
                 SongLuaProxyActorScratch::with_proxy_counts(active_players, proxy_pool_counts)
             }),
             notefield_actor_scratch,
+            notefield_flat_draw_scratch,
             notefield_hud_actor_scratch,
             presentation_skeleton: GameplayPresentationSkeleton::default(),
         };
@@ -13997,6 +14010,7 @@ enum PlayerActorAssembly {
 struct PlayerActorSegment {
     player: usize,
     assembly: PlayerActorAssembly,
+    field_camera: Option<Matrix4>,
     manual_hud_draw: bool,
 }
 
@@ -14023,6 +14037,7 @@ impl GameplayActorSegments {
             let first = 1 + slot * 2;
             match segment.assembly {
                 PlayerActorAssembly::Captured => {
+                    debug_assert!(scratch.notefield_flat_draw_scratch[segment.player].is_empty());
                     let source = scratch
                         .song_lua_proxy_actor_scratch
                         .as_ref()
@@ -14041,6 +14056,10 @@ impl GameplayActorSegments {
                     segments[first + 1] = ActorSegment::shifted(
                         &scratch.notefield_actor_scratch[segment.player],
                         z_shift,
+                    )
+                    .with_flat_draws(
+                        &scratch.notefield_flat_draw_scratch[segment.player],
+                        segment.field_camera,
                     );
                 }
                 PlayerActorAssembly::DirectFold { z_shift, x_fold } => {
@@ -14060,6 +14079,10 @@ impl GameplayActorSegments {
                         &scratch.notefield_actor_scratch[segment.player],
                         z_shift,
                         x_fold,
+                    )
+                    .with_flat_draws(
+                        &scratch.notefield_flat_draw_scratch[segment.player],
+                        segment.field_camera,
                     );
                 }
                 PlayerActorAssembly::DirectTransform {
@@ -14094,6 +14117,14 @@ impl GameplayActorSegments {
                         root_camera,
                         field_camera_suffix,
                         x_fold,
+                    )
+                    .with_flat_draws(
+                        &scratch.notefield_flat_draw_scratch[segment.player],
+                        Some(
+                            segment
+                                .field_camera
+                                .map_or(root_camera, |camera| camera * field_camera_suffix),
+                        ),
                     );
                 }
             }
@@ -14165,8 +14196,13 @@ fn player_actor_assembly_for_transform(
 }
 
 #[inline(always)]
-fn clear_player_actor_bundle(field_scratch: &mut Vec<Actor>, hud_scratch: &mut Vec<Actor>) {
+fn clear_player_actor_bundle(
+    field_scratch: &mut Vec<Actor>,
+    flat_draw_scratch: &mut Vec<FlatDraw>,
+    hud_scratch: &mut Vec<Actor>,
+) {
     field_scratch.clear();
+    flat_draw_scratch.clear();
     hud_scratch.clear();
 }
 
@@ -14435,6 +14471,7 @@ pub fn push_actors(
         song_lua_capture_visit_scratch,
         song_lua_proxy_actor_scratch,
         notefield_actor_scratch,
+        notefield_flat_draw_scratch,
         notefield_hud_actor_scratch,
         presentation_skeleton,
     } = frame_scratch.as_mut();
@@ -14845,9 +14882,11 @@ pub fn push_actors(
          placement: FieldPlacement,
          requests: SongLuaPlayerProxyRequests| {
             let field_scratch = &mut notefield_actor_scratch[player_idx];
+            let flat_draw_scratch = &mut notefield_flat_draw_scratch[player_idx];
             let hud_scratch = &mut notefield_hud_actor_scratch[player_idx];
             let deadsync_notefield::BuiltNotefield {
                 layout_center_x,
+                field_camera,
                 field_actors,
                 judgment_actors,
                 combo_actors,
@@ -14870,7 +14909,9 @@ pub fn push_actors(
                 play_style,
                 center_1player_notefield,
                 ProxyCaptureRequests {
-                    note_field: requests.note_field,
+                    // Whole-player captures consume the same field source, so
+                    // materialize compact notes into that cold actor capture.
+                    note_field: requests.note_field || requests.player,
                     judgment: requests.judgment,
                     combo: requests.combo,
                 },
@@ -14878,6 +14919,7 @@ pub fn push_actors(
                 state.display_mods_text(player_idx),
                 notefield_view,
                 field_scratch,
+                flat_draw_scratch,
                 hud_scratch,
             );
             let player_actor = &song_lua_visuals.player_actors[player_idx];
@@ -14969,7 +15011,13 @@ pub fn push_actors(
                     prepare_proxy_source(source, ProxyCapturePart::Hud, capture_transform, scratch)
                 }),
             ];
-            (layout_center_x, player_source, proxy_sources, assembly)
+            (
+                layout_center_x,
+                player_source,
+                proxy_sources,
+                assembly,
+                field_camera,
+            )
         };
 
     let (
@@ -14980,6 +15028,8 @@ pub fn push_actors(
         p2_proxy_sources,
         p1_actor_assembly,
         p2_actor_assembly,
+        p1_field_camera,
+        p2_field_camera,
         playfield_center_x,
         per_player_fields,
     ): (
@@ -14990,17 +15040,19 @@ pub fn push_actors(
         [Option<PreparedProxySource>; 3],
         PlayerActorAssembly,
         PlayerActorAssembly,
+        Option<Matrix4>,
+        Option<Matrix4>,
         f32,
         [(usize, f32); 2],
     ) = match play_style {
         profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
-            let (p1_x, p1_player_source, p1_sources, p1_assembly) = build_player_bundle(
+            let (p1_x, p1_player_source, p1_sources, p1_assembly, p1_camera) = build_player_bundle(
                 0,
                 &state.profiles()[0],
                 FieldPlacement::P1,
                 proxy_requests.players[0],
             );
-            let (p2_x, p2_player_source, p2_sources, p2_assembly) = build_player_bundle(
+            let (p2_x, p2_player_source, p2_sources, p2_assembly, p2_camera) = build_player_bundle(
                 1,
                 &state.profiles()[1],
                 FieldPlacement::P2,
@@ -15014,6 +15066,8 @@ pub fn push_actors(
                 p2_sources,
                 p1_assembly,
                 p2_assembly,
+                p1_camera,
+                p2_camera,
                 p1_x,
                 [(0, p1_x), (1, p2_x)],
             )
@@ -15024,7 +15078,7 @@ pub fn push_actors(
             } else {
                 FieldPlacement::P1
             };
-            let (nf_x, nf_player_source, nf_sources, nf_assembly) = build_player_bundle(
+            let (nf_x, nf_player_source, nf_sources, nf_assembly, nf_camera) = build_player_bundle(
                 0,
                 &state.profiles()[0],
                 placement,
@@ -15038,6 +15092,8 @@ pub fn push_actors(
                 [None, None, None],
                 nf_assembly,
                 PlayerActorAssembly::Hidden,
+                nf_camera,
+                None,
                 nf_x,
                 [(0, nf_x), (usize::MAX, 0.0)],
             )
@@ -15183,11 +15239,13 @@ pub fn push_actors(
             segment_players[0] = Some(PlayerActorSegment {
                 player: 1,
                 assembly: p2_actor_assembly,
+                field_camera: p2_field_camera,
                 manual_hud_draw: song_lua_visuals.player_actors[1].manual_hud_draw,
             });
         } else {
             clear_player_actor_bundle(
                 &mut notefield_actor_scratch[1],
+                &mut notefield_flat_draw_scratch[1],
                 &mut notefield_hud_actor_scratch[1],
             );
         }
@@ -15196,11 +15254,13 @@ pub fn push_actors(
         segment_players[1] = Some(PlayerActorSegment {
             player: 0,
             assembly: p1_actor_assembly,
+            field_camera: p1_field_camera,
             manual_hud_draw: song_lua_visuals.player_actors[0].manual_hud_draw,
         });
     } else {
         clear_player_actor_bundle(
             &mut notefield_actor_scratch[0],
+            &mut notefield_flat_draw_scratch[0],
             &mut notefield_hud_actor_scratch[0],
         );
     }
@@ -16815,12 +16875,16 @@ mod tests {
     use deadlib_present::actors::{SizeSpec, TextAlign};
 
     #[test]
-    fn gameplay_actor_scratch_presizes_only_active_players() {
-        let scratch = gameplay_actor_scratch(1, 384);
+    fn gameplay_presentation_scratch_presizes_only_active_players() {
+        let actors = gameplay_actor_scratch(1, 384);
+        let draws = gameplay_flat_draw_scratch(1);
 
-        assert!(scratch.iter().all(Vec::is_empty));
-        assert!(scratch[0].capacity() >= 384);
-        assert_eq!(scratch[1].capacity(), 0);
+        assert!(actors.iter().all(Vec::is_empty));
+        assert!(actors[0].capacity() >= 384);
+        assert_eq!(actors[1].capacity(), 0);
+        assert!(draws.iter().all(Vec::is_empty));
+        assert!(draws[0].capacity() >= NOTEFIELD_ACTOR_SCRATCH_CAPACITY);
+        assert_eq!(draws[1].capacity(), 0);
     }
 
     #[test]

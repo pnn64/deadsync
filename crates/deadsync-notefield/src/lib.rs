@@ -142,11 +142,12 @@ pub(crate) use notes::for_each_visible_hold_index;
 #[cfg(test)]
 pub(crate) use notes::for_each_visible_note_index;
 pub(crate) use notes::{
-    MineLayerRequest, NoteLayerRequest, ScrollTravelRequest, compose_mine_layers,
-    compose_note_layer, for_each_lane_index, hold_overlaps_visible_window,
+    MineLayerRequest, NoteLayerRequest, ScrollTravelRequest, compose_flat_mine_layers,
+    compose_flat_note_layer, compose_note_layer, for_each_lane_index, hold_overlaps_visible_window,
     lane_hold_window_bounds_by_note_row_from_cursor, lane_window_bounds_by_note_row_from_cursor,
     mine_hides_after_resolution, scroll_travel,
 };
+pub(crate) use noteskin_model::noteskin_model_flat_draw_cached;
 
 /// Stable entry points used by the standalone hot-path benchmark.
 #[doc(hidden)]
