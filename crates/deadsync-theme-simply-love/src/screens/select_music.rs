@@ -1764,6 +1764,7 @@ pub struct State {
     currently_playing_preview_length_sec: Option<f32>,
     audio_playback: AudioPlaybackView,
     lobby_view: SimplyLoveLobbyRuntimeView,
+    lobby_hud_cache: RefCell<lobby_hud::LobbyHudCache>,
     arrow_bounce_offset: f32,
     policy: SelectMusicPolicyView,
     session: SelectMusicSessionView,
@@ -3932,6 +3933,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         currently_playing_preview_length_sec: None,
         audio_playback: AudioPlaybackView::default(),
         lobby_view: SimplyLoveLobbyRuntimeView::default(),
+        lobby_hud_cache: RefCell::new(lobby_hud::LobbyHudCache::default()),
         arrow_bounce_offset: 0.0,
         policy: init_view.policy,
         session: init_view.session,
@@ -4175,6 +4177,7 @@ pub fn init_placeholder() -> State {
         currently_playing_preview_length_sec: None,
         audio_playback: AudioPlaybackView::default(),
         lobby_view: SimplyLoveLobbyRuntimeView::default(),
+        lobby_hud_cache: RefCell::new(lobby_hud::LobbyHudCache::default()),
         arrow_bounce_offset: 0.0,
         policy: SelectMusicPolicyView::default(),
         session,
@@ -14402,15 +14405,20 @@ pub fn push_actors(
     }
 
     if let Some(joined) = state.lobby_view.snapshot.joined_lobby.as_ref() {
-        actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
-            screen_name: "ScreenSelectMusic",
-            joined,
-            z: 1288,
-            show_song_info: true,
-            status_text: None,
-            joined_sides: state.session.joined,
-            player_side: state.session.player_side,
-        }));
+        let mut cache = state.lobby_hud_cache.borrow_mut();
+        lobby_hud::push_cached_panel(
+            actors,
+            &mut cache,
+            lobby_hud::CachedRenderParams {
+                screen_name: "ScreenSelectMusic",
+                joined,
+                z: 1288,
+                show_song_info: true,
+                status_text: None,
+                joined_sides: state.session.joined,
+                player_side: state.session.player_side,
+            },
+        );
     }
 
     if let select_music_menu::State::Visible(ref menu_state) = state.select_music_menu {
@@ -17423,6 +17431,30 @@ mod tests {
             players,
             song_info,
         }
+    }
+
+    #[test]
+    fn stable_lobby_hud_reuses_select_music_presentation() {
+        let mut state = init_placeholder();
+        let joined = test_joined_lobby(
+            vec![test_lobby_player("ScreenSelectMusic")],
+            Some(test_lobby_song_info("Pack/Song")),
+        );
+        state.lobby_view.snapshot = Arc::new(lobby_data::Snapshot {
+            connection: lobby_data::ConnectionState::Connected,
+            available_lobbies: Vec::new(),
+            joined_lobby: Some(joined),
+            last_status: None,
+        });
+        let assets = crate::assets::AssetManager::new();
+
+        let _ = super::get_actors(&state, &assets, 1);
+        let _ = super::get_actors(&state, &assets, 1);
+
+        assert_eq!(
+            state.lobby_hud_cache.borrow().stats(),
+            super::lobby_hud::LobbyHudCacheStats { hits: 1, misses: 1 }
+        );
     }
 
     #[test]

@@ -147,7 +147,10 @@ pub(super) mod tests {
     fn boxed_texts(values: &[&str]) -> Box<[TextContent]> {
         values
             .iter()
-            .map(|value| TextContent::inline_str(value).expect("test choice fits inline"))
+            .map(|value| {
+                TextContent::inline_str(value)
+                    .unwrap_or_else(|| TextContent::Shared(Arc::from(*value)))
+            })
             .collect()
     }
 
@@ -1660,6 +1663,7 @@ pub(super) mod tests {
             super::HeartRateDevicesView::default(),
             test_init_view(),
         );
+        super::super::prepare_presentation(&mut state, &asset_manager);
         let active = session_active_players(&state);
         let first_row = state.pane().selected_row[P1];
         assert!(handle_arcade_start_event(&mut state, &asset_manager, active, P1).is_none());
@@ -2765,7 +2769,8 @@ pub(super) mod tests {
     #[test]
     fn dispatch_what_comes_next_cycles_and_mirrors() {
         ensure_i18n();
-        let (mut state, _) = setup_state();
+        let (mut state, asset_manager) = setup_state();
+        super::super::prepare_presentation(&mut state, &asset_manager);
 
         let row_index = state
             .pane()
@@ -2853,7 +2858,7 @@ pub(super) mod tests {
     #[test]
     fn dispatch_judgment_tilt_marks_visibility_change() {
         ensure_i18n();
-        let (mut state, _) = setup_state();
+        let (mut state, asset_manager) = setup_state();
 
         // Insert JudgmentTilt and JudgmentTiltIntensity into the row_map.
         let tilt_binding = super::ChoiceBinding::<bool> {
@@ -2894,6 +2899,7 @@ pub(super) mod tests {
             .display_order
             .push(RowId::JudgmentTiltIntensity);
         state.pane_mut().row_map.insert(tilt_intensity_row);
+        super::super::prepare_presentation(&mut state, &asset_manager);
 
         let row_index = state
             .pane()

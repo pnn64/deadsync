@@ -133,17 +133,18 @@ fn percent_value_matches(left: Option<f32>, right: Option<f32>) -> bool {
     }
 }
 
-/// Gameplay-owned cache for the stable online lobby panel.
+/// Screen-owned cache for the stable online lobby panel.
 ///
-/// The game/render thread owns one instance for the gameplay screen. Its
+/// The application thread owns one instance for each screen that uses it. Its
 /// lifetime is one screen visit and its capacity is exactly one snapshot plus
 /// one rendered text block. It is populated on first render and rebuilt only
 /// when the lobby, status, language-facing text inputs, or placement inputs
-/// change. A hit performs comparisons and two actor pushes with no allocation;
-/// there is no eviction, scanning, synchronization, or gameplay-time pruning.
-/// Replaced strings are freed on an external lobby-state change, and the final
-/// snapshot is freed with the screen. Hit and miss counters provide runtime
-/// instrumentation; their costs are covered by the lobby HUD gameplay benchmark.
+/// change. A hit performs bounded player comparisons and two actor pushes with
+/// no allocation; there is no eviction, synchronization, or live-frame
+/// pruning. Replaced strings are freed on an external lobby-state change, and
+/// the final snapshot is freed with the screen. Hit and miss counters provide
+/// runtime instrumentation. Worst-case boundary work sorts and formats the
+/// current lobby's finite player list once.
 #[derive(Default)]
 pub struct LobbyHudCache {
     snapshot: Option<LobbyHudSnapshot>,
