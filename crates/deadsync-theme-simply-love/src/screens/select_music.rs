@@ -1720,6 +1720,10 @@ pub struct State {
     /// the visible wheel set changes. The media request owns separate paths.
     last_requested_wheel_item_bg_paths: Vec<PathBuf>,
     wheel_item_bg_texture_keys: Vec<Arc<str>>,
+    /// Last fixed-size wheel layout whose borrowed art paths were compared.
+    /// The content generation invalidates entry replacement; selection, slot
+    /// visibility, and media mode cover the remaining path sources.
+    wheel_item_bg_layout: Option<music_wheel::WheelBgLayout>,
     pub banner_high_quality_requested: bool,
     cdtitle_spin_elapsed: f32,
     cdtitle_anim_elapsed: f32,
@@ -2176,6 +2180,12 @@ fn rebuild_displayed_entries(state: &mut State) {
         state.wheel_offset_from_selection = 0.0;
     }
     state.wheel_content_generation = next_wheel_content_generation();
+}
+
+fn clear_wheel_item_bg(state: &mut State) {
+    state.last_requested_wheel_item_bg_paths.clear();
+    state.wheel_item_bg_texture_keys.clear();
+    state.wheel_item_bg_layout = None;
 }
 
 #[cfg(test)]
@@ -3524,8 +3534,7 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
     state.last_requested_banner_source = None;
     state.last_requested_cdtitle_source = None;
     state.last_requested_folder_stats_banner_source = None;
-    state.last_requested_wheel_item_bg_paths.clear();
-    state.wheel_item_bg_texture_keys.clear();
+    clear_wheel_item_bg(state);
     state.cdtitle_spin_elapsed = 0.0;
     state.cdtitle_anim_elapsed = 0.0;
     state.last_requested_chart_hash = None;
@@ -3878,6 +3887,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         last_requested_folder_stats_banner_source: None,
         last_requested_wheel_item_bg_paths: Vec::new(),
         wheel_item_bg_texture_keys: Vec::new(),
+        wheel_item_bg_layout: None,
         banner_high_quality_requested: false,
         cdtitle_spin_elapsed: 0.0,
         cdtitle_anim_elapsed: 0.0,
@@ -4120,6 +4130,7 @@ pub fn init_placeholder() -> State {
         last_requested_folder_stats_banner_source: None,
         last_requested_wheel_item_bg_paths: Vec::new(),
         wheel_item_bg_texture_keys: Vec::new(),
+        wheel_item_bg_layout: None,
         banner_high_quality_requested: false,
         cdtitle_spin_elapsed: 0.0,
         cdtitle_anim_elapsed: 0.0,
@@ -5400,8 +5411,7 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
         state.last_requested_banner_source = None;
         state.last_requested_cdtitle_source = None;
         state.last_requested_folder_stats_banner_source = None;
-        state.last_requested_wheel_item_bg_paths.clear();
-        state.wheel_item_bg_texture_keys.clear();
+        clear_wheel_item_bg(state);
         state.cdtitle_spin_elapsed = 0.0;
         state.cdtitle_anim_elapsed = 0.0;
         state.last_requested_chart_hash = None;
@@ -5420,8 +5430,7 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
             state.last_requested_banner_source = None;
             state.last_requested_cdtitle_source = None;
             state.last_requested_folder_stats_banner_source = None;
-            state.last_requested_wheel_item_bg_paths.clear();
-            state.wheel_item_bg_texture_keys.clear();
+            clear_wheel_item_bg(state);
             state.cdtitle_spin_elapsed = 0.0;
             state.cdtitle_anim_elapsed = 0.0;
             state.last_requested_chart_hash = None;
@@ -5449,8 +5458,7 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
     state.last_requested_banner_source = None;
     state.last_requested_cdtitle_source = None;
     state.last_requested_folder_stats_banner_source = None;
-    state.last_requested_wheel_item_bg_paths.clear();
-    state.wheel_item_bg_texture_keys.clear();
+    clear_wheel_item_bg(state);
     state.cdtitle_spin_elapsed = 0.0;
     state.cdtitle_anim_elapsed = 0.0;
     state.last_requested_chart_hash = None;
@@ -7849,8 +7857,7 @@ fn apply_remote_lobby_song_selection(
     state.last_requested_banner_source = None;
     state.last_requested_cdtitle_source = None;
     state.last_requested_folder_stats_banner_source = None;
-    state.last_requested_wheel_item_bg_paths.clear();
-    state.wheel_item_bg_texture_keys.clear();
+    clear_wheel_item_bg(state);
     state.cdtitle_spin_elapsed = 0.0;
     state.cdtitle_anim_elapsed = 0.0;
     state.last_requested_chart_hash = None;
@@ -11735,13 +11742,14 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         None
     };
     let new_folder_stats_banner = new_folder_stats_banner_source.map(Arc::as_ref);
-    let wheel_item_bg_paths_match = music_wheel::visible_song_select_bg_paths_match(
-        &state.entries,
+    let wheel_item_bg_layout = music_wheel::wheel_bg_layout(
+        state.wheel_content_generation,
+        state.entries.len(),
         state.selected_index,
         state.wheel_offset_from_selection,
         state.policy.media.song_select_bg_mode,
-        &state.last_requested_wheel_item_bg_paths,
     );
+    let wheel_item_bg_layout_changed = state.wheel_item_bg_layout != Some(wheel_item_bg_layout);
 
     if state
         .last_requested_banner_source
@@ -11812,28 +11820,37 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
             crate::SimplyLoveMediaRequest::PackBanner(request_path),
         ));
     }
-    if !wheel_item_bg_paths_match {
-        let new_wheel_item_bg_paths = music_wheel::visible_song_select_bg_paths(
+    if wheel_item_bg_layout_changed {
+        state.wheel_item_bg_layout = Some(wheel_item_bg_layout);
+        if !music_wheel::visible_song_select_bg_paths_match(
             &state.entries,
             state.selected_index,
             state.wheel_offset_from_selection,
             state.policy.media.song_select_bg_mode,
-        );
-        state.wheel_item_bg_texture_keys.clear();
-        state
-            .wheel_item_bg_texture_keys
-            .reserve(new_wheel_item_bg_paths.len());
-        state.wheel_item_bg_texture_keys.extend(
-            new_wheel_item_bg_paths
-                .iter()
-                .map(|path| Arc::<str>::from(path.to_string_lossy().as_ref())),
-        );
-        state
-            .last_requested_wheel_item_bg_paths
-            .clone_from(&new_wheel_item_bg_paths);
-        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
-            crate::SimplyLoveMediaRequest::WheelItemBackgrounds(new_wheel_item_bg_paths),
-        ));
+            &state.last_requested_wheel_item_bg_paths,
+        ) {
+            let new_wheel_item_bg_paths = music_wheel::visible_song_select_bg_paths(
+                &state.entries,
+                state.selected_index,
+                state.wheel_offset_from_selection,
+                state.policy.media.song_select_bg_mode,
+            );
+            state.wheel_item_bg_texture_keys.clear();
+            state
+                .wheel_item_bg_texture_keys
+                .reserve(new_wheel_item_bg_paths.len());
+            state.wheel_item_bg_texture_keys.extend(
+                new_wheel_item_bg_paths
+                    .iter()
+                    .map(|path| Arc::<str>::from(path.to_string_lossy().as_ref())),
+            );
+            state
+                .last_requested_wheel_item_bg_paths
+                .clone_from(&new_wheel_item_bg_paths);
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                crate::SimplyLoveMediaRequest::WheelItemBackgrounds(new_wheel_item_bg_paths),
+            ));
+        }
     }
 
     if overlays_block_delayed_updates {
@@ -12006,8 +12023,7 @@ pub fn trigger_immediate_refresh(state: &mut State) {
     state.last_requested_banner_source = None;
     state.last_requested_cdtitle_source = None;
     state.last_requested_folder_stats_banner_source = None;
-    state.last_requested_wheel_item_bg_paths.clear();
-    state.wheel_item_bg_texture_keys.clear();
+    clear_wheel_item_bg(state);
     state.banner_high_quality_requested = false;
     state.cdtitle_spin_elapsed = 0.0;
     state.cdtitle_anim_elapsed = 0.0;
@@ -16946,6 +16962,56 @@ mod tests {
             panic!("CDTitle state should retain the selected song");
         };
         assert!(Arc::ptr_eq(retained, &song));
+    }
+
+    #[test]
+    fn wheel_bg_layout_gates_stable_path_checks() {
+        let mut state = init_placeholder();
+        state.policy.media.show_banners = false;
+        state.policy.media.show_cdtitles = false;
+        state.policy.media.show_folder_stats = false;
+        state.policy.media.show_previews = false;
+        state.policy.media.song_select_bg_mode = crate::config::SelectMusicSongSelectBgMode::Banner;
+        let mut song = (*test_song("wheel background")).clone();
+        song.banner_path = Some(PathBuf::from("song-banner.png"));
+        state.entries = vec![super::MusicWheelEntry::Song(Arc::new(song))];
+        state.selected_index = 0;
+        state.prev_selected_index = 0;
+
+        let first = update(
+            &mut state,
+            0.016,
+            &deadsync_theme::views::SmxAssignmentView::default(),
+        );
+        assert!(matches!(
+            first,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                crate::SimplyLoveMediaRequest::WheelItemBackgrounds(paths)
+            )) if paths == [PathBuf::from("song-banner.png")]
+        ));
+        let settled_layout = state.wheel_item_bg_layout;
+
+        state.wheel_offset_from_selection = 0.25;
+        let stable = update(
+            &mut state,
+            0.0,
+            &deadsync_theme::views::SmxAssignmentView::default(),
+        );
+        assert!(matches!(stable, ThemeEffect::None));
+        assert_eq!(state.wheel_item_bg_layout, settled_layout);
+
+        state.wheel_offset_from_selection = 0.75;
+        let boundary = update(
+            &mut state,
+            0.0,
+            &deadsync_theme::views::SmxAssignmentView::default(),
+        );
+        assert!(matches!(boundary, ThemeEffect::None));
+        assert_ne!(state.wheel_item_bg_layout, settled_layout);
+        assert_eq!(
+            state.last_requested_wheel_item_bg_paths,
+            [PathBuf::from("song-banner.png")]
+        );
     }
 
     #[test]

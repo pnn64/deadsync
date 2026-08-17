@@ -303,39 +303,32 @@ impl CursorRect {
 }
 
 pub(super) struct PlayerOptionsTopBarCache {
-    pub(super) title: Arc<str>,
+    pub(super) i18n_revision: u64,
     pub(super) visual_policy: crate::views::SimplyLoveVisualPolicyView,
     pub(super) screen_size_bits: [u32; 2],
     pub(super) actor: Actor,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct SpeedTextKey {
-    pub(super) mod_type: SpeedModType,
-    pub(super) value_bits: u32,
-    pub(super) music_rate_bits: u32,
-    pub(super) chart_steps_index: [usize; PLAYER_SLOTS],
-    pub(super) mini_percent: i32,
-    pub(super) perspective: deadsync_profile::Perspective,
+pub(super) struct PlayerOptionsRowTitles {
+    pub(super) i18n_revision: u64,
+    pub(super) titles: Box<[deadlib_present::actors::TextContent]>,
 }
 
-pub(super) struct SpeedTextCache {
-    pub(super) key: SpeedTextKey,
-    pub(super) main: Arc<str>,
-    pub(super) scaled: Option<Arc<str>>,
-    pub(super) value: Arc<str>,
+pub(super) struct SpeedHeaderPresentation {
+    pub(super) main: deadlib_present::actors::TextContent,
+    pub(super) scaled: Option<deadlib_present::actors::TextContent>,
+    pub(super) main_draw_width: f32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct MusicRateTextKey {
-    pub(super) music_rate_bits: u32,
-    pub(super) chart_steps_index: [usize; PLAYER_SLOTS],
+pub(super) struct SpeedValuePresentation {
+    pub(super) text: deadlib_present::actors::TextContent,
+    pub(super) value_draw_width: f32,
+    pub(super) value_draw_height: f32,
 }
 
-pub(super) struct MusicRateTextCache {
-    pub(super) key: MusicRateTextKey,
-    pub(super) first: Arc<str>,
-    pub(super) second: Option<Arc<str>>,
+pub(super) struct MusicRatePresentation {
+    pub(super) first: deadlib_present::actors::TextContent,
+    pub(super) second: Option<deadlib_present::actors::TextContent>,
 }
 
 pub struct State {
@@ -371,8 +364,70 @@ pub struct State {
     pub(super) combo_preview_count: u32,
     pub(super) combo_preview_elapsed: f32,
     pub(super) top_bar_cache: RefCell<Option<PlayerOptionsTopBarCache>>,
-    pub(super) speed_text_cache: RefCell<[Option<SpeedTextCache>; PLAYER_SLOTS]>,
-    pub(super) music_rate_text_cache: RefCell<Option<MusicRateTextCache>>,
+    /// Actor-ready row titles retained for all four immutable pane maps.
+    ///
+    /// The application thread owns four exact-size boxed slices for the
+    /// Player Options screen lifetime. They warm during screen construction,
+    /// and explicit screen-entry/update preparation rebuilds the active pane
+    /// only when the locale revision changes. Short titles compile into
+    /// fixed-capacity actor payloads; oversized localized titles retain shared
+    /// text. Actor construction copies the prepared payload, with no lookup,
+    /// allocation, eviction, pruning, locking, worker work, or atomic ownership
+    /// traffic on the normal stable-frame path. Replaced slices drop during
+    /// preparation and all remaining slices drop at screen teardown. Locale
+    /// revision is the invalidation instrumentation; one pane's
+    /// `RowId::COUNT`-bounded rebuild is the worst boundary work.
+    pub(super) row_titles: [PlayerOptionsRowTitles; OptionsPane::COUNT],
+    /// Actor-ready speed-helper text and geometry retained per player.
+    ///
+    /// The application thread owns these two records for the Player Options
+    /// screen lifetime. Screen entry marks both players dirty; speed, rate,
+    /// Mini, and Perspective mutations mark only affected records for update
+    /// preparation. Normal values compile into fixed-capacity actor payloads;
+    /// only oversized external BPM values retain shared text. Actor construction
+    /// copies the prepared payload and geometry without formatting or atomic
+    /// reference-count traffic on the normal path. Records never evict or prune;
+    /// replacement and screen teardown drop fallbacks on the application thread.
+    /// The dirty mask is the invalidation instrumentation; two bounded speed
+    /// formats and two header-font traversals are the worst boundary rebuild.
+    pub(super) speed_headers: [Option<SpeedHeaderPresentation>; PLAYER_SLOTS],
+    pub(super) speed_header_dirty: u8,
+    /// Actor-ready Speed Mod row text and geometry retained per player.
+    ///
+    /// The application thread owns these two records for the Player Options
+    /// screen lifetime. A two-bit dirty mask marks only players whose speed-mod
+    /// type or value changed; screen-entry and update preparation consumes those
+    /// bits. Cursor planning and rendering consume the prepared text and
+    /// geometry without mutation. Normal values compile into fixed-capacity
+    /// actor payloads; only an oversized externally supplied value retains
+    /// shared text. Records never evict or prune; replacement and screen teardown
+    /// drop fallbacks on the application thread. The dirty mask is the
+    /// invalidation instrumentation, and two bounded formats plus two short Miso
+    /// traversals are the worst boundary rebuild.
+    pub(super) speed_values: [Option<SpeedValuePresentation>; PLAYER_SLOTS],
+    pub(super) speed_value_dirty: u8,
+    /// Prepared geometry for the static Arcade `next row` label.
+    ///
+    /// The application thread owns this single optional pair for the Player
+    /// Options screen lifetime. It warms with choice layout preparation after
+    /// fonts are registered, or lazily at the first direct consumer in tests.
+    /// The text, Miso font, and zoom are immutable, so there is no invalidation,
+    /// eviction, pruning, synchronization, or capacity growth. A miss performs
+    /// one three-byte font traversal; hits read two `f32`s. Screen teardown is
+    /// the destruction context and the `Option` state is the instrumentation.
+    pub(super) arcade_next_row_size: Cell<Option<[f32; 2]>>,
+    /// Actor-ready Music Rate title retained for the screen lifetime.
+    ///
+    /// The application thread compiles this one optional record at screen entry
+    /// and after an actual Music Rate change. Short lines compile into bounded
+    /// actor payloads; oversized localized lines retain shared text. Actor
+    /// construction copies the prepared one- or two-line payload. There is no
+    /// capacity growth, synchronization, eviction, pruning, or worker work;
+    /// replacement and screen teardown drop fallbacks on the application thread.
+    /// The dirty bit is the invalidation instrumentation and one bounded
+    /// display-name build is the worst boundary work.
+    pub(super) music_rate_text: Option<MusicRatePresentation>,
+    pub(super) music_rate_text_dirty: bool,
     pub(super) pane_transition: PaneTransition,
     pub(super) menu_lr_chord: screen_input::MenuLrChordTracker,
     /// Ordered runtime work awaiting emission at the input/update boundary.
@@ -388,6 +443,17 @@ pub struct PaneState {
     pub prev_selected_row: [usize; PLAYER_SLOTS],
     pub(super) inline_choice_x: [f32; PLAYER_SLOTS],
     pub(super) arcade_row_focus: [bool; PLAYER_SLOTS],
+    /// Whether every row's choice widths, offsets, and height are prepared.
+    ///
+    /// The application thread owns this pane-lifetime bit. The active pane warms
+    /// at screen entry; pane switches and choice replacements warm during their
+    /// owning update before actor construction. Stable updates read this bit and
+    /// return without touching fonts or rows. Music Rate and heart-rate device
+    /// choice replacement invalidate it. There is no eviction, pruning, or
+    /// synchronization, and pane teardown is the destruction context. The bit
+    /// itself is instrumentation; one full pane scan and exact-size retained
+    /// geometry allocation is the bounded miss cost.
+    pub(super) choice_layout_ready: bool,
     pub(super) row_tweens: Vec<RowTween>,
     pub(super) layout_key: Option<RowLayoutKey>,
     // Cursor ring tween (StopTweening/BeginTweening parity with ITGmania ScreenOptions::TweenCursor).
@@ -405,6 +471,7 @@ impl PaneState {
             prev_selected_row: [0; PLAYER_SLOTS],
             inline_choice_x: [f32::NAN; PLAYER_SLOTS],
             arcade_row_focus: [false; PLAYER_SLOTS],
+            choice_layout_ready: false,
             row_tweens: Vec::new(),
             layout_key: None,
             cursor_initialized: [false; PLAYER_SLOTS],

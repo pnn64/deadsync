@@ -597,7 +597,6 @@ pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
-    updater: &SimplyLoveUpdaterView,
     alpha_multiplier: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
@@ -1517,19 +1516,37 @@ pub fn push_actors(
     }
 
     actors.extend(crate::screens::components::shared::update_overlay::build(
-        &updater.update,
+        state.update_panel.as_ref(),
         state.active_color_index,
     ));
     actors.extend(crate::screens::components::shared::ffmpeg_overlay::build(
-        &updater.ffmpeg,
+        state.ffmpeg_panel.as_ref(),
         state.active_color_index,
     ));
+}
+
+pub fn sync_updater_panels(
+    state: &mut State,
+    updater: &SimplyLoveUpdaterView,
+    update_changed: bool,
+    ffmpeg_changed: bool,
+) {
+    let revision = crate::assets::i18n::revision();
+    let locale_changed = state.updater_i18n_revision != revision;
+    if update_changed || locale_changed {
+        state.update_panel =
+            crate::screens::components::shared::update_overlay::prepare(&updater.update);
+    }
+    if ffmpeg_changed || locale_changed {
+        state.ffmpeg_panel =
+            crate::screens::components::shared::ffmpeg_overlay::prepare(&updater.ffmpeg);
+    }
+    state.updater_i18n_revision = revision;
 }
 
 pub fn get_actors(
     state: &State,
     asset_manager: &AssetManager,
-    updater: &SimplyLoveUpdaterView,
     alpha_multiplier: f32,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(320);
@@ -1537,7 +1554,6 @@ pub fn get_actors(
         &mut actors,
         state,
         asset_manager,
-        updater,
         alpha_multiplier,
         Default::default(),
     );

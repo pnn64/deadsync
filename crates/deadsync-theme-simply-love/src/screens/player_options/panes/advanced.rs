@@ -2044,8 +2044,7 @@ mod bitmask_binding_init_tests {
             name,
             choices: choices
                 .iter()
-                .copied()
-                .map(Arc::<str>::from)
+                .map(|choice| TextContent::inline_str(choice).expect("test choice must fit inline"))
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
             selected_choice_index: [0, 0],

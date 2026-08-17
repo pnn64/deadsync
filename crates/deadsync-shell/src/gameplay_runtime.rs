@@ -11,13 +11,11 @@ use deadsync_profile::compat as profile;
 use deadsync_profile_gameplay::{
     gameplay_runtime_profile_data, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
 };
+use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens::{gameplay, practice};
 use deadsync_theme_simply_love::views::{
     GameplayInitView, GameplayPolicyView, GameplayRuntimeView, GameplayScoreInitView,
     GameplayScoreRuntimeView, PracticeRuntimeView, SimplyLoveLobbyRuntimeView,
-};
-use deadsync_theme_simply_love::{
-    SimplyLoveEffect as ThemeEffect, SimplyLoveInputResult as ThemeInputResult,
 };
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
@@ -639,17 +637,18 @@ pub(crate) fn update_practice(
     state: &mut practice::State,
     delta_time: f32,
     score_cursor: &mut ScoreRuntimeCursor,
-) -> ThemeEffect {
-    let effect = practice::update(
+    effects: &mut Vec<ThemeEffect>,
+) {
+    practice::update(
         state,
         delta_time,
         snapshot(),
         deadlib_platform::host_time::now_nanos,
         deadsync_audio_stream::snap_music_start_sec,
+        effects,
     );
     score_cursor.sync_if_dirty(&mut state.gameplay);
     drain(&mut state.gameplay);
-    effect
 }
 
 pub(crate) fn enter_practice(state: &mut practice::State) {
@@ -657,20 +656,33 @@ pub(crate) fn enter_practice(state: &mut practice::State) {
     drain(&mut state.gameplay);
 }
 
-pub(crate) fn handle_practice_input(state: &mut practice::State, ev: &InputEvent) -> ThemeEffect {
-    let effect = practice::handle_input(state, ev, deadsync_audio_stream::snap_music_start_sec);
+pub(crate) fn handle_practice_input(
+    state: &mut practice::State,
+    ev: &InputEvent,
+    effects: &mut Vec<ThemeEffect>,
+) {
+    practice::handle_input(
+        state,
+        ev,
+        deadsync_audio_stream::snap_music_start_sec,
+        effects,
+    );
     drain(&mut state.gameplay);
-    effect
 }
 
 pub(crate) fn handle_practice_raw_key(
     state: &mut practice::State,
     ev: &RawKeyboardEvent,
-) -> ThemeInputResult {
-    let result =
-        practice::handle_raw_key_event(state, ev, deadsync_audio_stream::snap_music_start_sec);
+    effects: &mut Vec<ThemeEffect>,
+) -> bool {
+    let consumed = practice::handle_raw_key_event(
+        state,
+        ev,
+        deadsync_audio_stream::snap_music_start_sec,
+        effects,
+    );
     drain(&mut state.gameplay);
-    result
+    consumed
 }
 
 #[cfg(test)]

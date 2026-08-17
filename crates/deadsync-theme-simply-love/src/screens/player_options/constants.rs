@@ -1,5 +1,7 @@
 use super::*;
 
+pub(super) const ALL_PLAYER_BITS: u8 = (1_u8 << PLAYER_SLOTS) - 1;
+
 pub(super) const TRANSITION_IN_DURATION: f32 = 0.4;
 
 pub(super) const TRANSITION_OUT_DURATION: f32 = 0.4;

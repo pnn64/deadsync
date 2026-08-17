@@ -365,15 +365,20 @@ const TAP_EXPLOSION_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
 const MUSIC_RATE: CustomBinding = CustomBinding {
     apply: |state, _player_idx, row_id, delta, _wrap| {
         let increment = 0.01f32;
+        let previous_bits = state.music_rate.to_bits();
         state.music_rate += delta as f32 * increment;
         state.music_rate = (state.music_rate / increment).round() * increment;
         state.music_rate = state.music_rate.clamp(0.05, 3.00);
+        if state.music_rate.to_bits() != previous_bits {
+            mark_music_rate_dirty(state);
+        }
         let formatted = fmt_music_rate(state.music_rate);
         if let Some(row) = state.pane_mut().row_map.get_mut(row_id) {
             row.replace_choices(vec![formatted]);
             for slot in 0..PLAYER_SLOTS {
                 row.selected_choice_index[slot] = 0;
             }
+            state.pane_mut().choice_layout_ready = false;
         }
         let music_rate = state.music_rate;
         super::super::queue_profile_request(
@@ -390,8 +395,9 @@ const MUSIC_RATE: CustomBinding = CustomBinding {
 
 const SPEED_MOD: CustomBinding = CustomBinding {
     apply: |state, player_idx, _row_id, delta, _wrap| {
-        let speed_mod = {
+        let (speed_mod, changed) = {
             let speed_mod = &mut state.speed_mod[player_idx];
+            let previous_bits = speed_mod.value.to_bits();
             let (upper, increment) = match speed_mod.mod_type {
                 SpeedModType::X => (20.0, 0.05),
                 SpeedModType::C | SpeedModType::M => (2000.0, 5.0),
@@ -399,8 +405,14 @@ const SPEED_MOD: CustomBinding = CustomBinding {
             speed_mod.value += delta as f32 * increment;
             speed_mod.value = (speed_mod.value / increment).round() * increment;
             speed_mod.value = speed_mod.value.clamp(increment, upper);
-            speed_mod.clone()
+            (
+                speed_mod.clone(),
+                speed_mod.value.to_bits() != previous_bits,
+            )
         };
+        if changed {
+            mark_speed_value_dirty(state, player_idx);
+        }
         sync_profile_scroll_speed(&mut state.player_options[player_idx], &speed_mod);
         Outcome::persisted()
     },
@@ -422,16 +434,17 @@ const TYPE_OF_SPEED_MOD: CustomBinding = CustomBinding {
         } else {
             1.0
         };
-        let speed_mod = {
-            let converted = convert_speed_mod_to_type(
-                &state.speed_mod[player_idx],
-                new_type,
-                reference_bpm,
-                rate,
-            );
+        let (speed_mod, changed) = {
+            let previous = &state.speed_mod[player_idx];
+            let converted = convert_speed_mod_to_type(previous, new_type, reference_bpm, rate);
+            let changed = previous.mod_type != converted.mod_type
+                || previous.value.to_bits() != converted.value.to_bits();
             state.speed_mod[player_idx] = converted.clone();
-            converted
+            (converted, changed)
         };
+        if changed {
+            mark_speed_value_dirty(state, player_idx);
+        }
         sync_profile_scroll_speed(&mut state.player_options[player_idx], &speed_mod);
         Outcome::persisted()
     },
@@ -455,7 +468,10 @@ const MINI: CustomBinding = CustomBinding {
         let Ok(val) = choice.trim_end_matches('%').parse::<i32>() else {
             return Outcome::persisted();
         };
-        state.player_options[player_idx].mini_percent = val;
+        if state.player_options[player_idx].mini_percent != val {
+            state.player_options[player_idx].mini_percent = val;
+            mark_speed_header_dirty(state, player_idx);
+        }
         Outcome::persisted()
     },
 };

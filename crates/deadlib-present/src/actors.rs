@@ -1257,6 +1257,28 @@ impl Default for TextContent {
     }
 }
 
+impl AsRef<str> for TextContent {
+    #[inline(always)]
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl std::ops::Deref for TextContent {
+    type Target = str;
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl std::fmt::Display for TextContent {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
 impl From<String> for TextContent {
     fn from(value: String) -> Self {
         Self::Owned(value)
@@ -1385,6 +1407,16 @@ mod tests {
         assert_eq!(utf8.as_str(), "sync ±");
         assert!(TextContent::inline_format(format_args!("{}", "x".repeat(15))).is_none());
         assert_eq!(std::mem::size_of::<TextContent>(), 24);
+    }
+
+    #[test]
+    fn text_content_exposes_its_string_view() {
+        let text = TextContent::inline_str("  Medium  ").expect("choice fits inline");
+        let borrowed: &str = text.as_ref();
+
+        assert_eq!(borrowed, "  Medium  ");
+        assert_eq!(text.trim(), "Medium");
+        assert_eq!(text.to_string(), "  Medium  ");
     }
 
     #[test]

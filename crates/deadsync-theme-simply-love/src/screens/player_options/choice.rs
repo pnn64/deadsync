@@ -78,7 +78,6 @@ pub(super) fn cycle_choice_index(
 /// the returned `Outcome`.
 pub(super) fn dispatch_behavior_delta(
     state: &mut State,
-    asset_manager: &AssetManager,
     player_idx: usize,
     delta: isize,
     wrap: NavWrap,
@@ -114,6 +113,13 @@ pub(super) fn dispatch_behavior_delta(
     };
 
     if outcome.persisted
+        && id == RowId::Perspective
+        && state.player_options[player_idx].perspective != before.0.perspective
+    {
+        mark_speed_header_dirty(state, player_idx);
+    }
+
+    if outcome.persisted
         && mirror_across_players
         && let Some(row) = state.pane_mut().row_map.get_mut(id)
     {
@@ -131,7 +137,7 @@ pub(super) fn dispatch_behavior_delta(
         {
             queue_profile_update(state, player_idx);
         }
-        super::sync_inline_intent_from_row(state, asset_manager, player_idx, row_index);
+        super::sync_inline_intent_from_row(state, player_idx, row_index);
         queue_sfx(state, CHANGE_VALUE_SFX);
     }
     if outcome.changed_visibility {
@@ -265,21 +271,14 @@ fn apply_cycle(
 
 pub(super) fn change_choice_for_player(
     state: &mut State,
-    asset_manager: &AssetManager,
     player_idx: usize,
     delta: isize,
     wrap: NavWrap,
 ) {
-    dispatch_behavior_delta(state, asset_manager, player_idx, delta, wrap);
+    dispatch_behavior_delta(state, player_idx, delta, wrap);
 }
 
-pub fn apply_choice_delta(
-    state: &mut State,
-    asset_manager: &AssetManager,
-    player_idx: usize,
-    delta: isize,
-    wrap: NavWrap,
-) {
+pub fn apply_choice_delta(state: &mut State, player_idx: usize, delta: isize, wrap: NavWrap) {
     if state.pane().row_map.is_empty() {
         return;
     }
@@ -294,15 +293,15 @@ pub fn apply_choice_delta(
         && row_supports_inline_nav(row)
     {
         if state.current_pane == OptionsPane::Main || row_selects_on_focus_move(row.id) {
-            change_choice_for_player(state, asset_manager, idx, delta, wrap);
+            change_choice_for_player(state, idx, delta, wrap);
             return;
         }
-        if move_inline_focus(state, asset_manager, idx, delta, wrap) {
+        if move_inline_focus(state, idx, delta, wrap) {
             queue_sfx(state, CHANGE_VALUE_SFX);
         }
         return;
     }
-    change_choice_for_player(state, asset_manager, player_idx, delta, wrap);
+    change_choice_for_player(state, player_idx, delta, wrap);
 }
 
 pub(super) fn apply_pane(state: &mut State, pane: OptionsPane) {

@@ -1,5 +1,6 @@
 use super::state::PlayerOptionMasks;
 use super::*;
+use deadlib_present::actors::TextContent;
 use deadsync_profile::PlayerOptionsData;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -321,6 +322,31 @@ impl BitMapping {
         }
     }
 
+    /// Project active storage bits into the choice-index bits used by the UI.
+    #[inline]
+    pub fn active_choice_bits(self, active_bits: u32, choice_count: usize) -> u16 {
+        let count = choice_count.min(u16::BITS as usize);
+        match self {
+            BitMapping::Sequential { width } => {
+                let count = count.min(width as usize);
+                (active_bits & low_bit_mask(count)) as u16
+            }
+            BitMapping::SequentialOffset { offset, width } => {
+                let count = count.min(width as usize);
+                let shifted = active_bits.checked_shr(u32::from(offset)).unwrap_or(0);
+                (shifted & low_bit_mask(count)) as u16
+            }
+            BitMapping::Explicit(bits) => {
+                bits.iter()
+                    .take(count)
+                    .enumerate()
+                    .fold(0u16, |choice_bits, (index, bit)| {
+                        choice_bits | (u16::from(active_bits & bit != 0) << index)
+                    })
+            }
+        }
+    }
+
     /// The number of choices a row using this mapping must declare.
     /// Enforced by a debug assertion at `Row::bitmask` construction so
     /// "row has more choices than the mask exposes" cannot silently
@@ -334,6 +360,11 @@ impl BitMapping {
             BitMapping::Explicit(bits) => bits.len(),
         }
     }
+}
+
+#[inline(always)]
+fn low_bit_mask(count: usize) -> u32 {
+    if count == 0 { 0 } else { (1u32 << count) - 1 }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -808,9 +839,18 @@ pub struct Row {
     pub id: RowId,
     pub behavior: RowBehavior,
     pub name: LookupKey,
-    pub choices: Box<[Arc<str>]>,
+    /// Actor-ready choice labels owned by this immutable pane row.
+    ///
+    /// Short labels live in fixed-capacity inline payloads. Oversized localized
+    /// or catalog labels retain shared text. The application thread owns this
+    /// exact-size slice for the screen lifetime; heart-rate refresh is the only
+    /// replacement path. There is no growth, eviction, pruning, synchronization,
+    /// or worker work after construction. Replacement and screen teardown drop
+    /// shared fallbacks on the application thread.
+    pub choices: Box<[TextContent]>,
     pub selected_choice_index: [usize; PLAYER_SLOTS],
-    pub help: Box<[Arc<str>]>,
+    /// Immutable help presentation compiled with its Unicode character count.
+    pub help: Box<[HelpLine]>,
     pub choice_difficulty_indices: Option<Vec<usize>>,
     /// When `true`, after a delta apply that persisted the row, the
     /// dispatcher copies `selected_choice_index[player_idx]` to every other
@@ -823,18 +863,32 @@ pub struct Row {
     pub(super) choice_height: f32,
 }
 
-/// Expand a help `LookupKey` into the pre-split shared-text shape that
-/// `Row::help` expects.
+pub struct HelpLine {
+    pub text: Arc<str>,
+    pub char_count: usize,
+}
+
+impl HelpLine {
+    fn new(text: Arc<str>) -> Self {
+        Self {
+            char_count: text.chars().count(),
+            text,
+        }
+    }
+}
+
+/// Expand a help key into pre-split shared text and Unicode character counts.
 #[inline]
-pub(super) fn expand_help(help: LookupKey) -> Box<[Arc<str>]> {
+pub(super) fn expand_help(help: LookupKey) -> Box<[HelpLine]> {
     let text = help.get();
     if !text.contains("\\n") {
-        return vec![text].into_boxed_slice();
+        return help_lines([text]);
     }
-    text.split("\\n")
-        .map(Arc::<str>::from)
-        .collect::<Vec<_>>()
-        .into_boxed_slice()
+    help_lines(text.split("\\n").map(Arc::<str>::from))
+}
+
+pub(super) fn help_lines(texts: impl IntoIterator<Item = Arc<str>>) -> Box<[HelpLine]> {
+    texts.into_iter().map(HelpLine::new).collect::<Box<[_]>>()
 }
 
 impl Row {
@@ -955,12 +1009,12 @@ impl Row {
     /// (currently only the Exit row's empty placeholder line). Prefer the
     /// `help: LookupKey` parameter on the public constructors.
     fn with_help_lines(mut self, lines: Vec<String>) -> Self {
-        self.help = shared_texts(lines);
+        self.help = help_lines(lines.into_iter().map(Arc::<str>::from));
         self
     }
 
     pub(super) fn replace_choices(&mut self, choices: Vec<String>) {
-        self.choices = shared_texts(choices);
+        self.choices = actor_texts(choices);
         self.choice_widths = Box::new([]);
         self.choice_offsets = Box::new([]);
         self.choice_height = 0.0;
@@ -977,7 +1031,7 @@ impl Row {
             id,
             behavior,
             name,
-            choices: shared_texts(choices),
+            choices: actor_texts(choices),
             selected_choice_index: [0; PLAYER_SLOTS],
             help: expand_help(help),
             choice_difficulty_indices: None,
@@ -989,10 +1043,13 @@ impl Row {
     }
 }
 
-fn shared_texts(texts: Vec<String>) -> Box<[Arc<str>]> {
+pub(super) fn actor_texts(texts: Vec<String>) -> Box<[TextContent]> {
     texts
         .into_iter()
-        .map(Arc::<str>::from)
+        .map(|text| {
+            TextContent::inline_str(&text)
+                .unwrap_or_else(|| TextContent::Shared(Arc::<str>::from(text)))
+        })
         .collect::<Vec<_>>()
         .into_boxed_slice()
 }

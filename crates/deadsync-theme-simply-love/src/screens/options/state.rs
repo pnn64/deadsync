@@ -208,6 +208,11 @@ pub struct State {
     pub(super) pending_sync: Vec<crate::SimplyLoveSyncRequest>,
     pub(super) pending_online: Vec<crate::SimplyLoveOnlineRequest>,
     pub(super) online_reinit_pending: bool,
+    pub(super) update_panel:
+        Option<crate::screens::components::shared::update_overlay::PanelContent>,
+    pub(super) ffmpeg_panel:
+        Option<crate::screens::components::shared::update_overlay::PanelContent>,
+    pub(super) updater_i18n_revision: u64,
     pub(super) pending_audio: smallvec::SmallVec<[AudioRequest; MAX_PENDING_AUDIO_REQUESTS]>,
     // Submenu state
     pub(super) sub_selected: usize,
@@ -393,6 +398,9 @@ pub fn init(view: OptionsInitView) -> State {
         pending_sync: Vec::new(),
         pending_online: Vec::new(),
         online_reinit_pending: false,
+        update_panel: None,
+        ffmpeg_panel: None,
+        updater_i18n_revision: u64::MAX,
         pending_audio: smallvec::SmallVec::new(),
         view: OptionsView::Main,
         sub_selected: 0,

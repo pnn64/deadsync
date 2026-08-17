@@ -1,4 +1,5 @@
 use super::*;
+use deadlib_present::actors::TextContent;
 use deadsync_profile::NoteSkin;
 
 mod advanced;
@@ -115,11 +116,11 @@ pub(super) fn build_rows(
 
 fn find_noteskin_choice_index(
     profile_value: Option<&NoteSkin>,
-    choices: &[Arc<str>],
+    choices: &[TextContent],
     match_label: &str,
     none_label: Option<&str>,
 ) -> usize {
-    let position_eq = |label: &str| choices.iter().position(|c| c.as_ref() == label);
+    let position_eq = |label: &str| choices.iter().position(|c| c.as_str() == label);
     match profile_value {
         None => position_eq(match_label).unwrap_or(0),
         Some(skin) => {
@@ -130,7 +131,7 @@ fn find_noteskin_choice_index(
             }
             choices
                 .iter()
-                .position(|c| c.eq_ignore_ascii_case(skin.as_str()))
+                .position(|c| c.as_str().eq_ignore_ascii_case(skin.as_str()))
                 .or_else(|| position_eq(match_label))
                 .unwrap_or(0)
         }

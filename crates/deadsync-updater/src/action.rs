@@ -218,6 +218,7 @@ impl ProgressThrottle {
 }
 
 static PHASE: LazyLock<RwLock<ActionPhase>> = LazyLock::new(|| RwLock::new(ActionPhase::Idle));
+static PHASE_REVISION: AtomicU64 = AtomicU64::new(0);
 
 /// App-controlled install gate.  Defaults to enabled so tests and
 /// embedded updater callers get the normal release flow unless the app
@@ -298,6 +299,12 @@ pub fn current() -> ActionPhase {
         .unwrap_or(ActionPhase::Idle)
 }
 
+/// Monotonic presentation revision for the published action phase.
+#[inline(always)]
+pub fn phase_revision() -> u64 {
+    PHASE_REVISION.load(Ordering::Acquire)
+}
+
 /// Reset the overlay to [`ActionPhase::Idle`].  Called on Cancel /
 /// Escape from the UI; safe to call from any state.
 pub fn dismiss() {
@@ -307,6 +314,7 @@ pub fn dismiss() {
 fn set_phase(next: ActionPhase) {
     if let Ok(mut guard) = PHASE.write() {
         *guard = next;
+        PHASE_REVISION.fetch_add(1, Ordering::Release);
     }
 }
 
@@ -325,6 +333,7 @@ fn set_phase_if_current(generation: u64, next: ActionPhase) -> bool {
         && OP_GENERATION.load(Ordering::SeqCst) == generation
     {
         *guard = next;
+        PHASE_REVISION.fetch_add(1, Ordering::Release);
         return true;
     }
     false
@@ -570,7 +579,11 @@ pub fn rollback_move(delta: i32) {
     {
         let last = candidates.len() as i32 - 1;
         let next = (*selected as i32 + delta).clamp(0, last);
-        *selected = next as usize;
+        let next = next as usize;
+        if *selected != next {
+            *selected = next;
+            PHASE_REVISION.fetch_add(1, Ordering::Release);
+        }
     }
 }
 
@@ -590,6 +603,7 @@ pub fn request_rollback_confirm() {
         let info = info.clone();
         let asset = asset.clone();
         *guard = ActionPhase::ConfirmDownload { info, asset };
+        PHASE_REVISION.fetch_add(1, Ordering::Release);
     }
 }
 

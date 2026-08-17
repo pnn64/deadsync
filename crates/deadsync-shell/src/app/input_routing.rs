@@ -189,6 +189,17 @@ impl App {
             }
             return self.drain_theme_effects(event_loop);
         }
+        if current_screen == CurrentScreen::Practice {
+            debug_assert!(self.theme_effect_scratch.is_empty());
+            if let Some(state) = self.state.screens.practice_state.as_mut() {
+                crate::gameplay_runtime::handle_practice_input(
+                    state,
+                    &ev,
+                    &mut self.theme_effect_scratch,
+                );
+            }
+            return self.drain_theme_effects(event_loop);
+        }
         if current_screen == CurrentScreen::SelectProfile {
             debug_assert!(self.theme_effect_scratch.is_empty());
             screens::select_profile::handle_input(
@@ -237,11 +248,17 @@ impl App {
         }
         if current_screen == CurrentScreen::Options {
             debug_assert!(self.theme_effect_scratch.is_empty());
-            let updater = super::updater::view();
+            let change = self.updater_view.refresh();
+            screens::options::sync_updater_panels(
+                &mut self.state.screens.options_state,
+                self.updater_view.view(),
+                change.update,
+                change.ffmpeg,
+            );
             screens::options::handle_input(
                 &mut self.state.screens.options_state,
                 &self.asset_manager,
-                &updater,
+                self.updater_view.view(),
                 &ev,
                 &mut self.theme_effect_scratch,
             );
@@ -355,13 +372,7 @@ impl App {
                 screens::init::handle_input(&mut self.state.screens.init_state, &ev)
             }
             CurrentScreen::Gameplay => unreachable!("Gameplay input routed directly"),
-            CurrentScreen::Practice => {
-                if let Some(ps) = &mut self.state.screens.practice_state {
-                    crate::gameplay_runtime::handle_practice_input(ps, &ev)
-                } else {
-                    ThemeEffect::None
-                }
-            }
+            CurrentScreen::Practice => unreachable!("Practice input uses the flat buffer"),
         };
         if matches!(action, ThemeEffect::None) {
             return Ok(());

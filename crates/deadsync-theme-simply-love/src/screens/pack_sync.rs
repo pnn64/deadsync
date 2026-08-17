@@ -4,7 +4,7 @@ use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
 use crate::screens::components::shared::loading_bar;
 use crate::screens::input as screen_input;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, widescale};
 use deadsync_chart::ChartData;
@@ -59,14 +59,20 @@ enum RowDisposition {
 
 struct RowState {
     simfile_path: PathBuf,
-    song_title: String,
-    chart_label: String,
+    text: RowText,
     total_beats: usize,
     beats_processed: usize,
     final_bias_ms: Option<f64>,
     final_confidence: Option<f64>,
     phase: RowPhase,
     error_text: Option<String>,
+}
+
+struct RowText {
+    title: TextContent,
+    chart: TextContent,
+    bar: TextContent,
+    result: TextContent,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,8 +82,9 @@ enum OverlayPhase {
 }
 
 pub(crate) struct OverlayStateData {
-    pack_name: String,
     rows: Vec<RowState>,
+    summary: Summary,
+    text: OverlayText,
     scroll_index: usize,
     auto_follow: bool,
     yes_selected: bool,
@@ -86,6 +93,20 @@ pub(crate) struct OverlayStateData {
     owner: crate::SimplyLoveSyncOwner,
     current_row: Option<usize>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
+}
+
+struct OverlayText {
+    pack_name: TextContent,
+    title: TextContent,
+    counts: TextContent,
+    pagination: Option<TextContent>,
+    song_column: TextContent,
+    progress_column: TextContent,
+    result_column: TextContent,
+    prompt: TextContent,
+    yes_option: TextContent,
+    no_option: TextContent,
+    help: TextContent,
 }
 
 pub(crate) enum OverlayState {
@@ -120,6 +141,147 @@ fn confidence_percent(confidence: Option<f64>) -> u32 {
     (confidence.unwrap_or(0.0).clamp(0.0, 1.0) * 100.0).round() as u32
 }
 
+#[inline]
+fn retained_text(args: std::fmt::Arguments<'_>) -> TextContent {
+    TextContent::inline_format(args)
+        .unwrap_or_else(|| TextContent::Shared(Arc::from(args.to_string())))
+}
+
+#[inline]
+fn retained_str(value: &str) -> TextContent {
+    TextContent::inline_str(value).unwrap_or_else(|| TextContent::Shared(Arc::from(value)))
+}
+
+fn retained_arc(value: Arc<str>) -> TextContent {
+    TextContent::inline_str(value.as_ref()).unwrap_or(TextContent::Shared(value))
+}
+
+fn localized(key: &str) -> TextContent {
+    retained_arc(tr("PackSync", key))
+}
+
+fn overlay_title(phase: OverlayPhase, can_save: bool) -> TextContent {
+    localized(match (phase, can_save) {
+        (OverlayPhase::Running, _) => "SyncingPackTitle",
+        (OverlayPhase::Review, true) => "ReviewTitle",
+        (OverlayPhase::Review, false) => "CompleteTitle",
+    })
+}
+
+fn counts_text(summary: Summary, min_confidence: f64) -> TextContent {
+    retained_text(format_args!(
+        "{}/{} chart(s) analyzed - {} ready, {} below {}%, {} no change, {} failed",
+        summary.analyzed,
+        summary.total,
+        summary.eligible,
+        summary.below_threshold,
+        confidence_threshold_percent(min_confidence),
+        summary.no_change,
+        summary.failed
+    ))
+}
+
+fn pagination_text(total: usize, start: usize, view_rows: usize) -> Option<TextContent> {
+    (total > view_rows).then(|| {
+        retained_arc(tr_fmt(
+            "PackSync",
+            "RowsPaginationFormat",
+            &[
+                ("start", &(start + 1).to_string()),
+                ("end", &(start + view_rows).min(total).to_string()),
+                ("total", &total.to_string()),
+            ],
+        ))
+    })
+}
+
+fn prompt_text(summary: Summary, min_confidence: f64) -> TextContent {
+    let min_conf_pct = confidence_threshold_percent(min_confidence);
+    let text = if summary.eligible == 0 {
+        tr_fmt(
+            "PackSync",
+            "NothingToSaveMessage",
+            &[
+                ("below", &summary.below_threshold.to_string()),
+                ("threshold", &min_conf_pct.to_string()),
+                ("nochange", &summary.no_change.to_string()),
+                ("failed", &summary.failed.to_string()),
+            ],
+        )
+    } else {
+        tr_fmt(
+            "PackSync",
+            "SaveConfirmFormat",
+            &[
+                ("count", &summary.eligible.to_string()),
+                ("below", &summary.below_threshold.to_string()),
+                ("threshold", &min_conf_pct.to_string()),
+                ("nochange", &summary.no_change.to_string()),
+                ("failed", &summary.failed.to_string()),
+            ],
+        )
+    };
+    retained_arc(text)
+}
+
+fn overlay_help(phase: OverlayPhase, can_save: bool) -> TextContent {
+    localized(match (phase, can_save) {
+        (OverlayPhase::Running, _) => "HelpTextRunning",
+        (OverlayPhase::Review, true) => "HelpTextReview",
+        (OverlayPhase::Review, false) => "HelpTextComplete",
+    })
+}
+
+fn build_overlay_text(
+    pack_name: &str,
+    summary: Summary,
+    min_confidence: f64,
+    phase: OverlayPhase,
+    scroll_index: usize,
+) -> OverlayText {
+    let can_save = summary.eligible > 0;
+    OverlayText {
+        pack_name: retained_str(pack_name),
+        title: overlay_title(phase, can_save),
+        counts: counts_text(summary, min_confidence),
+        pagination: pagination_text(summary.total, scroll_index, view_rows_for_phase(phase)),
+        song_column: localized("SongColumnHeader"),
+        progress_column: localized("ProgressColumnHeader"),
+        result_column: localized("ResultColumnHeader"),
+        prompt: if phase == OverlayPhase::Review {
+            prompt_text(summary, min_confidence)
+        } else {
+            TextContent::Static("")
+        },
+        yes_option: localized("YesOption"),
+        no_option: localized("NoOption"),
+        help: overlay_help(phase, can_save),
+    }
+}
+
+fn refresh_counts_text(overlay: &mut OverlayStateData) {
+    overlay.text.counts = counts_text(overlay.summary, overlay.min_confidence);
+}
+
+fn refresh_phase_text(overlay: &mut OverlayStateData) {
+    let can_save = can_save(overlay);
+    overlay.text.title = overlay_title(overlay.phase, can_save);
+    overlay.text.help = overlay_help(overlay.phase, can_save);
+    overlay.text.prompt = if overlay.phase == OverlayPhase::Review {
+        prompt_text(overlay.summary, overlay.min_confidence)
+    } else {
+        TextContent::Static("")
+    };
+}
+
+fn refresh_pagination_text(overlay: &mut OverlayStateData) {
+    overlay.text.pagination = pagination_text(
+        overlay.summary.total,
+        overlay.scroll_index,
+        view_rows(overlay),
+    );
+}
+
 pub(crate) fn build_overlay(
     state: &OverlayState,
     active_color_index: i32,
@@ -129,7 +291,6 @@ pub(crate) fn build_overlay(
         return None;
     };
 
-    let summary = summary(overlay);
     let pane_w = widescale(580.0, 760.0);
     let pane_h = 470.0;
     let pane_cx = screen_center_x();
@@ -143,35 +304,7 @@ pub(crate) fn build_overlay(
     let start = overlay
         .scroll_index
         .min(scroll_limit(overlay.rows.len(), view_rows));
-    let title = if overlay.phase == OverlayPhase::Running {
-        tr("PackSync", "SyncingPackTitle")
-    } else if can_save(overlay) {
-        tr("PackSync", "ReviewTitle")
-    } else {
-        tr("PackSync", "CompleteTitle")
-    };
-    let counts_text = format!(
-        "{}/{} chart(s) analyzed - {} ready, {} below {}%, {} no change, {} failed",
-        summary.analyzed,
-        summary.total,
-        summary.eligible,
-        summary.below_threshold,
-        confidence_threshold_percent(overlay.min_confidence),
-        summary.no_change,
-        summary.failed
-    );
-    let scroll_text = (summary.total > view_rows).then(|| {
-        tr_fmt(
-            "PackSync",
-            "RowsPaginationFormat",
-            &[
-                ("start", &(start + 1).to_string()),
-                ("end", &(start + view_rows).min(summary.total).to_string()),
-                ("total", &summary.total.to_string()),
-            ],
-        )
-    });
-    let counts_maxwidth = if scroll_text.is_some() {
+    let counts_maxwidth = if overlay.text.pagination.is_some() {
         pane_w - 240.0
     } else {
         pane_w - 56.0
@@ -205,7 +338,7 @@ pub(crate) fn build_overlay(
     ));
     actors.push(act!(text:
         font(machine_font_key(machine_font, FontRole::Header)):
-        settext(title):
+        settext(overlay.text.title.clone()):
         align(0.5, 0.5):
         xy(pane_cx, pane_top + 28.0):
         zoom(0.6):
@@ -215,7 +348,7 @@ pub(crate) fn build_overlay(
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(overlay.pack_name.clone()):
+        settext(overlay.text.pack_name.clone()):
         align(0.5, 0.5):
         xy(pane_cx, pane_top + 56.0):
         zoom(0.92):
@@ -226,7 +359,7 @@ pub(crate) fn build_overlay(
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(counts_text):
+        settext(overlay.text.counts.clone()):
         align(0.0, 0.5):
         xy(song_x, pane_top + 86.0):
         zoom(0.8):
@@ -235,10 +368,10 @@ pub(crate) fn build_overlay(
         z(OVERLAY_Z + 3):
         horizalign(left)
     ));
-    if let Some(scroll_text) = scroll_text {
+    if let Some(scroll_text) = &overlay.text.pagination {
         actors.push(act!(text:
             font("miso"):
-            settext(scroll_text):
+            settext(scroll_text.clone()):
             align(1.0, 0.5):
             xy(result_x, pane_top + 86.0):
             zoom(0.8):
@@ -247,10 +380,9 @@ pub(crate) fn build_overlay(
             horizalign(right)
         ));
     }
-    let col_song = tr("PackSync", "SongColumnHeader");
     actors.push(act!(text:
         font("miso"):
-        settext(col_song):
+        settext(overlay.text.song_column.clone()):
         align(0.0, 0.5):
         xy(song_x, row_top - 20.0):
         zoom(0.75):
@@ -258,10 +390,9 @@ pub(crate) fn build_overlay(
         z(OVERLAY_Z + 3):
         horizalign(left)
     ));
-    let col_progress = tr("PackSync", "ProgressColumnHeader");
     actors.push(act!(text:
         font("miso"):
-        settext(col_progress):
+        settext(overlay.text.progress_column.clone()):
         align(0.0, 0.5):
         xy(bar_x, row_top - 20.0):
         zoom(0.75):
@@ -269,10 +400,9 @@ pub(crate) fn build_overlay(
         z(OVERLAY_Z + 3):
         horizalign(left)
     ));
-    let col_result = tr("PackSync", "ResultColumnHeader");
     actors.push(act!(text:
         font("miso"):
-        settext(col_result):
+        settext(overlay.text.result_column.clone()):
         align(1.0, 0.5):
         xy(result_x, row_top - 20.0):
         zoom(0.75):
@@ -304,7 +434,7 @@ pub(crate) fn build_overlay(
 
         actors.push(act!(text:
             font("miso"):
-            settext(format!("{}. {}", row_index + 1, row.song_title)):
+            settext(row.text.title.clone()):
             align(0.0, 0.5):
             xy(song_x, row_y - 6.0):
             zoom(0.84):
@@ -315,7 +445,7 @@ pub(crate) fn build_overlay(
         ));
         actors.push(act!(text:
             font("miso"):
-            settext(row.chart_label.clone()):
+            settext(row.text.chart.clone()):
             align(0.0, 0.5):
             xy(song_x, row_y + 12.0):
             zoom(0.7):
@@ -330,7 +460,7 @@ pub(crate) fn build_overlay(
             width: widescale(160.0, 220.0),
             height: 18.0,
             progress: progress(row),
-            label: bar_label(row, overlay.min_confidence).into(),
+            label: row.text.bar.clone(),
             fill_rgba: [fill[0], fill[1], fill[2], 1.0],
             bg_rgba: [0.0, 0.0, 0.0, 1.0],
             border_rgba: [1.0, 1.0, 1.0, 1.0],
@@ -340,7 +470,7 @@ pub(crate) fn build_overlay(
         }));
         actors.push(act!(text:
             font("miso"):
-            settext(result_text(row, overlay.min_confidence)):
+            settext(row.text.result.clone()):
             align(1.0, 0.5):
             xy(result_x, row_y + 2.0):
             zoom(0.72):
@@ -360,10 +490,9 @@ pub(crate) fn build_overlay(
 
     match overlay.phase {
         OverlayPhase::Running => {
-            let help = tr("PackSync", "HelpTextRunning");
             actors.push(act!(text:
                 font("miso"):
-                settext(help):
+                settext(overlay.text.help.clone()):
                 align(0.5, 0.5):
                 xy(pane_cx, pane_top + pane_h - 24.0):
                 zoom(0.8):
@@ -373,7 +502,6 @@ pub(crate) fn build_overlay(
             ));
         }
         OverlayPhase::Review => {
-            let prompt = save_prompt(overlay);
             if can_save(overlay) {
                 let answer_y = pane_top + pane_h - 44.0;
                 let choice_yes_x = pane_cx - 100.0;
@@ -393,7 +521,7 @@ pub(crate) fn build_overlay(
                 ));
                 actors.push(act!(text:
                     font("miso"):
-                    settext(prompt):
+                    settext(overlay.text.prompt.clone()):
                     align(0.5, 0.5):
                     xy(pane_cx, pane_top + pane_h - 92.0):
                     zoom(0.86):
@@ -402,10 +530,9 @@ pub(crate) fn build_overlay(
                     z(OVERLAY_Z + 4):
                     horizalign(center)
                 ));
-                let yes_label = tr("PackSync", "YesOption");
                 actors.push(act!(text:
                     font(machine_font_key(machine_font, FontRole::Header)):
-                    settext(yes_label):
+                    settext(overlay.text.yes_option.clone()):
                     align(0.5, 0.5):
                     xy(choice_yes_x, answer_y):
                     zoom(0.72):
@@ -413,10 +540,9 @@ pub(crate) fn build_overlay(
                     z(OVERLAY_Z + 4):
                     horizalign(center)
                 ));
-                let no_label = tr("PackSync", "NoOption");
                 actors.push(act!(text:
                     font(machine_font_key(machine_font, FontRole::Header)):
-                    settext(no_label):
+                    settext(overlay.text.no_option.clone()):
                     align(0.5, 0.5):
                     xy(choice_no_x, answer_y):
                     zoom(0.72):
@@ -424,10 +550,9 @@ pub(crate) fn build_overlay(
                     z(OVERLAY_Z + 4):
                     horizalign(center)
                 ));
-                let help = tr("PackSync", "HelpTextReview");
                 actors.push(act!(text:
                     font("miso"):
-                    settext(help):
+                    settext(overlay.text.help.clone()):
                     align(0.5, 0.5):
                     xy(pane_cx, pane_top + pane_h - 18.0):
                     zoom(0.74):
@@ -438,7 +563,7 @@ pub(crate) fn build_overlay(
             } else {
                 actors.push(act!(text:
                     font("miso"):
-                    settext(prompt):
+                    settext(overlay.text.prompt.clone()):
                     align(0.5, 0.5):
                     xy(pane_cx, pane_top + pane_h - 56.0):
                     zoom(0.84):
@@ -447,10 +572,9 @@ pub(crate) fn build_overlay(
                     z(OVERLAY_Z + 4):
                     horizalign(center)
                 ));
-                let help = tr("PackSync", "HelpTextComplete");
                 actors.push(act!(text:
                     font("miso"):
-                    settext(help):
+                    settext(overlay.text.help.clone()):
                     align(0.5, 0.5):
                     xy(pane_cx, pane_top + pane_h - 18.0):
                     zoom(0.74):
@@ -488,22 +612,23 @@ pub(crate) fn begin(
     }
 
     let min_confidence = f64::from(confidence_percent.min(100)) / 100.0;
-    let rows = build_rows(&targets);
-    let request_targets = targets
-        .into_iter()
-        .map(|target| crate::SimplyLoveSyncTarget {
-            song: target.song,
-            chart_ix: target.chart_ix,
-        })
-        .collect();
+    let (rows, request_targets) = build_rows(targets, min_confidence);
+    let summary = Summary {
+        total: rows.len(),
+        ..Summary::default()
+    };
+    let phase = OverlayPhase::Running;
+    let scroll_index = 0;
+    let text = build_overlay_text(&pack_name, summary, min_confidence, phase, scroll_index);
 
     *state = OverlayState::Visible(OverlayStateData {
-        pack_name,
         rows,
-        scroll_index: 0,
+        summary,
+        text,
+        scroll_index,
         auto_follow: true,
         yes_selected: true,
-        phase: OverlayPhase::Running,
+        phase,
         min_confidence,
         owner,
         current_row: None,
@@ -724,22 +849,36 @@ pub(crate) fn handle_input(
     }
 }
 
-fn build_rows(targets: &[TargetSpec]) -> Vec<RowState> {
+fn build_rows(
+    targets: Vec<TargetSpec>,
+    min_confidence: f64,
+) -> (Vec<RowState>, Vec<crate::SimplyLoveSyncTarget>) {
     let mut rows = Vec::with_capacity(targets.len());
-    for target in targets {
-        rows.push(RowState {
-            simfile_path: target.simfile_path.clone(),
-            song_title: target.song_title.clone(),
-            chart_label: target.chart_label.clone(),
+    let mut request_targets = Vec::with_capacity(targets.len());
+    for (index, target) in targets.into_iter().enumerate() {
+        let mut row = RowState {
+            simfile_path: target.simfile_path,
+            text: RowText {
+                title: retained_text(format_args!("{}. {}", index + 1, target.song_title)),
+                chart: retained_str(&target.chart_label),
+                bar: TextContent::Static(""),
+                result: TextContent::Static(""),
+            },
             total_beats: 0,
             beats_processed: 0,
             final_bias_ms: None,
             final_confidence: None,
             phase: RowPhase::Pending,
             error_text: None,
+        };
+        refresh_row_text(&mut row, min_confidence);
+        rows.push(row);
+        request_targets.push(crate::SimplyLoveSyncTarget {
+            song: target.song,
+            chart_ix: target.chart_ix,
         });
     }
-    rows
+    (rows, request_targets)
 }
 
 #[inline(always)]
@@ -770,38 +909,46 @@ fn row_disposition(row: &RowState, min_confidence: f64) -> RowDisposition {
     }
 }
 
-fn summary(overlay: &OverlayStateData) -> Summary {
-    let mut summary = Summary {
-        total: overlay.rows.len(),
-        ..Summary::default()
+fn add_disposition(summary: &mut Summary, disposition: RowDisposition) {
+    let counter = match disposition {
+        RowDisposition::Pending | RowDisposition::Running => return,
+        RowDisposition::Eligible => &mut summary.eligible,
+        RowDisposition::BelowThreshold => &mut summary.below_threshold,
+        RowDisposition::NoChange => &mut summary.no_change,
+        RowDisposition::Failed => &mut summary.failed,
     };
-    for row in &overlay.rows {
-        match row_disposition(row, overlay.min_confidence) {
-            RowDisposition::Pending | RowDisposition::Running => {}
-            RowDisposition::Eligible => {
-                summary.analyzed += 1;
-                summary.eligible += 1;
-            }
-            RowDisposition::BelowThreshold => {
-                summary.analyzed += 1;
-                summary.below_threshold += 1;
-            }
-            RowDisposition::NoChange => {
-                summary.analyzed += 1;
-                summary.no_change += 1;
-            }
-            RowDisposition::Failed => {
-                summary.analyzed += 1;
-                summary.failed += 1;
-            }
-        }
+    summary.analyzed += 1;
+    *counter += 1;
+}
+
+fn remove_disposition(summary: &mut Summary, disposition: RowDisposition) {
+    let counter = match disposition {
+        RowDisposition::Pending | RowDisposition::Running => return,
+        RowDisposition::Eligible => &mut summary.eligible,
+        RowDisposition::BelowThreshold => &mut summary.below_threshold,
+        RowDisposition::NoChange => &mut summary.no_change,
+        RowDisposition::Failed => &mut summary.failed,
+    };
+    summary.analyzed = summary.analyzed.saturating_sub(1);
+    *counter = counter.saturating_sub(1);
+}
+
+fn replace_disposition(
+    summary: &mut Summary,
+    previous: RowDisposition,
+    current: RowDisposition,
+) -> bool {
+    if previous == current {
+        return false;
     }
-    summary
+    remove_disposition(summary, previous);
+    add_disposition(summary, current);
+    true
 }
 
 #[inline(always)]
 fn can_save(overlay: &OverlayStateData) -> bool {
-    summary(overlay).eligible > 0
+    overlay.summary.eligible > 0
 }
 
 fn collect_changes(overlay: &OverlayStateData) -> Vec<SongOffsetSyncChange> {
@@ -853,43 +1000,17 @@ const fn review_choice_delta(action: VirtualAction, dedicated_menu_only: bool) -
     }
 }
 
-fn save_prompt(overlay: &OverlayStateData) -> String {
-    let summary = summary(overlay);
-    let min_conf_pct = confidence_threshold_percent(overlay.min_confidence);
-    if summary.eligible == 0 {
-        return tr_fmt(
-            "PackSync",
-            "NothingToSaveMessage",
-            &[
-                ("below", &summary.below_threshold.to_string()),
-                ("threshold", &min_conf_pct.to_string()),
-                ("nochange", &summary.no_change.to_string()),
-                ("failed", &summary.failed.to_string()),
-            ],
-        )
-        .to_string();
-    }
-    tr_fmt(
-        "PackSync",
-        "SaveConfirmFormat",
-        &[
-            ("count", &summary.eligible.to_string()),
-            ("below", &summary.below_threshold.to_string()),
-            ("threshold", &min_conf_pct.to_string()),
-            ("nochange", &summary.no_change.to_string()),
-            ("failed", &summary.failed.to_string()),
-        ],
-    )
-    .to_string()
-}
-
 #[inline(always)]
 fn scroll_limit(total: usize, view_rows: usize) -> usize {
     total.saturating_sub(view_rows)
 }
 
 fn view_rows(overlay: &OverlayStateData) -> usize {
-    match overlay.phase {
+    view_rows_for_phase(overlay.phase)
+}
+
+const fn view_rows_for_phase(phase: OverlayPhase) -> usize {
+    match phase {
         OverlayPhase::Running => VIEW_ROWS_RUNNING,
         OverlayPhase::Review => VIEW_ROWS_REVIEW,
     }
@@ -910,11 +1031,11 @@ fn progress(row: &RowState) -> f32 {
     }
 }
 
-fn bar_label(row: &RowState, min_confidence: f64) -> String {
-    match row_disposition(row, min_confidence) {
-        RowDisposition::Pending => tr("PackSync", "StatusQueued").to_string(),
+fn bar_text(row: &RowState, min_confidence: f64) -> TextContent {
+    let text = match row_disposition(row, min_confidence) {
+        RowDisposition::Pending => tr("PackSync", "StatusQueued"),
         RowDisposition::Running => match row.total_beats.max(row.beats_processed) {
-            0 => tr("PackSync", "StatusStarting").to_string(),
+            0 => tr("PackSync", "StatusStarting"),
             total => tr_fmt(
                 "PackSync",
                 "ProgressFormat",
@@ -922,10 +1043,9 @@ fn bar_label(row: &RowState, min_confidence: f64) -> String {
                     ("current", &row.beats_processed.min(total).to_string()),
                     ("total", &total.to_string()),
                 ],
-            )
-            .to_string(),
+            ),
         },
-        RowDisposition::Eligible => tr("PackSync", "StatusReady").to_string(),
+        RowDisposition::Eligible => tr("PackSync", "StatusReady"),
         RowDisposition::BelowThreshold => tr_fmt(
             "PackSync",
             "StatusBelowThresholdFormat",
@@ -933,45 +1053,50 @@ fn bar_label(row: &RowState, min_confidence: f64) -> String {
                 "threshold",
                 &confidence_threshold_percent(min_confidence).to_string(),
             )],
-        )
-        .to_string(),
-        RowDisposition::NoChange => tr("PackSync", "StatusNoChange").to_string(),
-        RowDisposition::Failed => tr("PackSync", "StatusError").to_string(),
-    }
+        ),
+        RowDisposition::NoChange => tr("PackSync", "StatusNoChange"),
+        RowDisposition::Failed => tr("PackSync", "StatusError"),
+    };
+    retained_arc(text)
 }
 
-fn result_text(row: &RowState, min_confidence: f64) -> String {
+fn result_text(row: &RowState, min_confidence: f64) -> TextContent {
     let confidence_pct = confidence_percent(row.final_confidence);
     match row_disposition(row, min_confidence) {
-        RowDisposition::Pending => tr("PackSync", "StatusQueued").to_string(),
+        RowDisposition::Pending => retained_arc(tr("PackSync", "StatusQueued")),
         RowDisposition::Running => {
             if let Some(bias_ms) = row.final_bias_ms {
-                format!("{bias_ms:+.2} ms")
+                retained_text(format_args!("{bias_ms:+.2} ms"))
             } else {
-                tr("PackSync", "StatusWorking").to_string()
+                retained_arc(tr("PackSync", "StatusWorking"))
             }
         }
-        RowDisposition::Eligible | RowDisposition::BelowThreshold => tr_fmt(
+        RowDisposition::Eligible | RowDisposition::BelowThreshold => retained_arc(tr_fmt(
             "PackSync",
             "ResultConfidenceFormat",
             &[
                 ("bias", &format!("{:+.2}", row.final_bias_ms.unwrap_or(0.0))),
                 ("confidence", &confidence_pct.to_string()),
             ],
-        )
-        .to_string(),
-        RowDisposition::NoChange => tr_fmt(
+        )),
+        RowDisposition::NoChange => retained_arc(tr_fmt(
             "PackSync",
             "ResultNoChangeFormat",
             &[("confidence", &confidence_pct.to_string())],
-        )
-        .to_string(),
+        )),
         RowDisposition::Failed => row
             .error_text
             .as_deref()
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| tr("PackSync", "AnalysisFailed").to_string()),
+            .map(retained_str)
+            .unwrap_or_else(|| retained_arc(tr("PackSync", "AnalysisFailed"))),
     }
+}
+
+fn refresh_row_text(row: &mut RowState, min_confidence: f64) {
+    let bar = bar_text(row, min_confidence);
+    let result = result_text(row, min_confidence);
+    row.text.bar = bar;
+    row.text.result = result;
 }
 
 fn follow_row(overlay: &mut OverlayStateData, row_index: usize) {
@@ -994,6 +1119,7 @@ fn shift(overlay: &mut OverlayStateData, delta: isize) -> bool {
     }
     overlay.scroll_index = next;
     overlay.auto_follow = false;
+    refresh_pagination_text(overlay);
     true
 }
 
@@ -1001,15 +1127,22 @@ pub(crate) fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSync
     let OverlayState::Visible(overlay) = state else {
         return;
     };
+    let previous_phase = overlay.phase;
+    let previous_scroll = overlay.scroll_index;
+    let mut summary_changed = false;
     match event {
         crate::SimplyLoveSyncEvent::RowStarted { index } => {
             if let Some(row) = overlay.rows.get_mut(index) {
+                let previous = row_disposition(row, overlay.min_confidence);
                 row.total_beats = 0;
                 row.beats_processed = 0;
                 row.final_bias_ms = None;
                 row.final_confidence = None;
                 row.phase = RowPhase::Running;
                 row.error_text = None;
+                refresh_row_text(row, overlay.min_confidence);
+                let current = row_disposition(row, overlay.min_confidence);
+                summary_changed |= replace_disposition(&mut overlay.summary, previous, current);
                 overlay.current_row = Some(index);
                 if overlay.auto_follow {
                     follow_row(overlay, index);
@@ -1019,6 +1152,7 @@ pub(crate) fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSync
         crate::SimplyLoveSyncEvent::RowInit { index, total_beats } => {
             if let Some(row) = overlay.rows.get_mut(index) {
                 row.total_beats = total_beats;
+                refresh_row_text(row, overlay.min_confidence);
                 if overlay.auto_follow && overlay.current_row == Some(index) {
                     follow_row(overlay, index);
                 }
@@ -1030,9 +1164,13 @@ pub(crate) fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSync
             total_beats,
         } => {
             if let Some(row) = overlay.rows.get_mut(index) {
+                let previous = row_disposition(row, overlay.min_confidence);
                 row.phase = RowPhase::Running;
                 row.total_beats = row.total_beats.max(total_beats);
                 row.beats_processed = row.beats_processed.max(beats_processed);
+                refresh_row_text(row, overlay.min_confidence);
+                let current = row_disposition(row, overlay.min_confidence);
+                summary_changed |= replace_disposition(&mut overlay.summary, previous, current);
                 if overlay.auto_follow && overlay.current_row == Some(index) {
                     follow_row(overlay, index);
                 }
@@ -1040,6 +1178,7 @@ pub(crate) fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSync
         }
         crate::SimplyLoveSyncEvent::RowFinished { index, result } => {
             if let Some(row) = overlay.rows.get_mut(index) {
+                let previous = row_disposition(row, overlay.min_confidence);
                 if overlay.current_row == Some(index) {
                     overlay.current_row = None;
                 }
@@ -1055,6 +1194,9 @@ pub(crate) fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSync
                         row.error_text = Some(err);
                     }
                 }
+                refresh_row_text(row, overlay.min_confidence);
+                let current = row_disposition(row, overlay.min_confidence);
+                summary_changed |= replace_disposition(&mut overlay.summary, previous, current);
             }
         }
         crate::SimplyLoveSyncEvent::Finished => {
@@ -1078,38 +1220,64 @@ pub(crate) fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSync
     {
         follow_row(overlay, index);
     }
+    let phase_changed = overlay.phase != previous_phase;
+    if summary_changed {
+        refresh_counts_text(overlay);
+    }
+    if phase_changed || (summary_changed && overlay.phase == OverlayPhase::Review) {
+        refresh_phase_text(overlay);
+    }
+    if phase_changed || overlay.scroll_index != previous_scroll {
+        refresh_pagination_text(overlay);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         NavigationPolicy, OverlayPhase, OverlayState, OverlayStateData, RowDisposition, RowPhase,
-        RowState, confidence_threshold_percent, result_text, review_choice_delta, row_disposition,
+        RowState, RowText, Summary, build_overlay_text, confidence_threshold_percent,
+        refresh_row_text, result_text, review_choice_delta, row_disposition,
     };
     use crate::screens::ThemeEffect;
+    use deadlib_present::actors::TextContent;
     use deadsync_core::input::InputSource;
     use deadsync_input::{InputEvent, VirtualAction};
     use std::path::PathBuf;
     use std::time::Instant;
 
     fn pack_row(bias_ms: f64, confidence: f64) -> RowState {
-        RowState {
+        let mut row = RowState {
             simfile_path: PathBuf::from("Songs/Test/song.ssc"),
-            song_title: "Test Song".to_string(),
-            chart_label: "Challenge".to_string(),
+            text: RowText {
+                title: TextContent::Static("1. Test Song"),
+                chart: TextContent::Static("Challenge"),
+                bar: TextContent::Static(""),
+                result: TextContent::Static(""),
+            },
             total_beats: 100,
             beats_processed: 100,
             final_bias_ms: Some(bias_ms),
             final_confidence: Some(confidence),
             phase: RowPhase::Ready,
             error_text: None,
-        }
+        };
+        refresh_row_text(&mut row, 0.80);
+        row
     }
 
     fn overlay(phase: OverlayPhase) -> OverlayState {
+        let rows = vec![pack_row(12.5, 0.87)];
+        let summary = Summary {
+            analyzed: 1,
+            total: 1,
+            eligible: 1,
+            ..Summary::default()
+        };
         OverlayState::Visible(OverlayStateData {
-            pack_name: "Test Pack".to_string(),
-            rows: vec![pack_row(12.5, 0.87)],
+            rows,
+            summary,
+            text: build_overlay_text("Test Pack", summary, 0.80, phase, 0),
             scroll_index: 0,
             auto_follow: false,
             yes_selected: true,
@@ -1136,7 +1304,93 @@ mod tests {
     fn pack_sync_result_text_labels_confidence() {
         let row = pack_row(12.5, 0.87);
         let text = result_text(&row, 0.80);
-        assert!(text.contains("87% confidence"));
+        assert!(text.as_str().contains("87% confidence"));
+    }
+
+    #[test]
+    fn pack_sync_row_text_refreshes_at_worker_events() {
+        let mut state = overlay(OverlayPhase::Running);
+
+        super::apply_event(
+            &mut state,
+            crate::SimplyLoveSyncEvent::RowStarted { index: 0 },
+        );
+        let OverlayState::Visible(overlay) = &state else {
+            panic!("pack sync overlay should remain visible");
+        };
+        assert_eq!(overlay.rows[0].text.bar.as_str(), "Starting");
+        assert_eq!(overlay.rows[0].text.result.as_str(), "Working");
+
+        super::apply_event(
+            &mut state,
+            crate::SimplyLoveSyncEvent::RowBeat {
+                index: 0,
+                beats_processed: 25,
+                total_beats: 100,
+            },
+        );
+        let OverlayState::Visible(overlay) = &state else {
+            panic!("pack sync overlay should remain visible");
+        };
+        assert!(overlay.rows[0].text.bar.as_str().contains("25"));
+        assert!(overlay.rows[0].text.bar.as_str().contains("100"));
+    }
+
+    #[test]
+    fn pack_sync_summary_text_refreshes_at_source_transitions() {
+        let mut state = overlay(OverlayPhase::Running);
+
+        super::apply_event(
+            &mut state,
+            crate::SimplyLoveSyncEvent::RowStarted { index: 0 },
+        );
+        let OverlayState::Visible(overlay) = &state else {
+            panic!("pack sync overlay should remain visible");
+        };
+        assert_eq!(overlay.summary.analyzed, 0);
+        assert_eq!(overlay.summary.eligible, 0);
+        assert!(overlay.text.counts.as_str().starts_with("0/1"));
+
+        super::apply_event(
+            &mut state,
+            crate::SimplyLoveSyncEvent::RowFinished {
+                index: 0,
+                result: Ok(crate::SimplyLoveSyncResult {
+                    bias_ms: 12.5,
+                    confidence: 0.87,
+                }),
+            },
+        );
+        super::apply_event(&mut state, crate::SimplyLoveSyncEvent::Finished);
+        let OverlayState::Visible(overlay) = &state else {
+            panic!("pack sync overlay should remain visible");
+        };
+        assert_eq!(overlay.summary.analyzed, 1);
+        assert_eq!(overlay.summary.eligible, 1);
+        assert!(overlay.text.counts.as_str().starts_with("1/1"));
+        assert!(overlay.text.prompt.as_str().contains('1'));
+        assert!(overlay.text.help.as_str().contains("ACCEPT"));
+    }
+
+    #[test]
+    fn pack_sync_oversized_row_text_is_pointer_shared() {
+        let text = super::retained_str("an external pack label too long for inline text");
+        let clone = text.clone();
+        let (TextContent::Shared(text), TextContent::Shared(clone)) = (&text, &clone) else {
+            panic!("oversized retained text should use shared storage");
+        };
+        assert!(std::sync::Arc::ptr_eq(text, clone));
+    }
+
+    #[test]
+    fn pack_sync_retains_localized_arc_without_copying() {
+        let source =
+            std::sync::Arc::<str>::from("a localized Pack Sync label too long for inline text");
+        let text = super::retained_arc(std::sync::Arc::clone(&source));
+        let TextContent::Shared(text) = text else {
+            panic!("oversized localized text should keep shared storage");
+        };
+        assert!(std::sync::Arc::ptr_eq(&source, &text));
     }
 
     #[test]

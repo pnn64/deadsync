@@ -23,7 +23,7 @@ use deadsync_notefield::noteskin_model_actor;
 use deadsync_profile as profile_data;
 use deadsync_theme::AudioRequest;
 use deadsync_theme::views::{NoteskinCatalogView, SmxGifCatalogView};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -83,6 +83,14 @@ pub use profile::{
 pub use render::{get_actors, push_actors};
 pub use row::{FixedStepchart, RowId};
 pub use state::State;
+
+pub fn prepare_presentation(state: &mut State, asset_manager: &AssetManager) {
+    prepare_row_titles(state);
+    prepare_speed_values(state, asset_manager);
+    prepare_speed_headers(state, asset_manager);
+    prepare_music_rate_text(state);
+    prepare_choice_layouts(state, asset_manager);
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HeartRateDeviceView {
@@ -407,6 +415,9 @@ fn init_with_noteskin_prewarm(
     ];
     panes[OptionsPane::Main.index()].row_tweens = main_row_tweens;
     panes[OptionsPane::Main.index()].arcade_row_focus = [true; PLAYER_SLOTS];
+    let i18n_revision = crate::assets::i18n::revision();
+    let row_titles =
+        std::array::from_fn(|idx| compile_row_titles(&panes[idx].row_map, i18n_revision));
     let mut state = State {
         song,
         return_screen,
@@ -438,8 +449,14 @@ fn init_with_noteskin_prewarm(
         combo_preview_count: 0,
         combo_preview_elapsed: 0.0,
         top_bar_cache: RefCell::new(None),
-        speed_text_cache: RefCell::new([None, None]),
-        music_rate_text_cache: RefCell::new(None),
+        row_titles,
+        speed_headers: [None, None],
+        speed_header_dirty: ALL_PLAYER_BITS,
+        speed_values: [None, None],
+        speed_value_dirty: ALL_PLAYER_BITS,
+        arcade_next_row_size: Cell::new(None),
+        music_rate_text: None,
+        music_rate_text_dirty: true,
         pane_transition: PaneTransition::None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         pending_effects: Vec::with_capacity(4),
@@ -513,6 +530,7 @@ pub fn set_heart_rate_devices(state: &mut State, devices: &HeartRateDevicesView)
         return;
     }
     row.replace_choices(choices);
+    state.panes[OptionsPane::Main.index()].choice_layout_ready = false;
     state.heart_rate_choice_ids = ids;
     sync_heart_rate_selections(state);
 }

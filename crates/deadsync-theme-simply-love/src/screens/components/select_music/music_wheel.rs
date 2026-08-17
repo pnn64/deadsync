@@ -141,6 +141,38 @@ fn push_unique_path(paths: &mut Vec<PathBuf>, path: &Path) {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct WheelBgLayout {
+    content_generation: u64,
+    selected_index: usize,
+    visible_slots: u32,
+    mode: SelectMusicSongSelectBgMode,
+}
+
+pub(crate) fn wheel_bg_layout(
+    content_generation: u64,
+    entry_count: usize,
+    selected_index: usize,
+    position_offset_from_selection: f32,
+    mode: SelectMusicSongSelectBgMode,
+) -> WheelBgLayout {
+    let mut visible_slots = 0;
+    if entry_count != 0 && mode != SelectMusicSongSelectBgMode::Off {
+        for slot in 0..NUM_WHEEL_SLOTS {
+            let offset = slot as isize - CENTER_WHEEL_SLOT_INDEX as isize;
+            if (offset as f32 + position_offset_from_selection).abs() <= WHEEL_DRAW_RADIUS {
+                visible_slots |= 1 << slot;
+            }
+        }
+    }
+    WheelBgLayout {
+        content_generation,
+        selected_index,
+        visible_slots,
+        mode,
+    }
+}
+
 fn visit_visible_song_select_bg_paths(
     entries: &[MusicWheelEntry],
     selected_index: usize,
@@ -1600,7 +1632,7 @@ mod tests {
         itl_rank_color, itl_wheel_mode_for_sides, lua_badge_submit_allowed, pack_header_color,
         pack_header_text_x, preferred_chart_indices, runtime_slot_requests, song_select_bg_path,
         srpg_rate_color, visible_song_select_bg_paths, visible_song_select_bg_paths_match,
-        wheel_song_meta,
+        wheel_bg_layout, wheel_song_meta,
     };
     use crate::config::{
         SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
@@ -2094,6 +2126,31 @@ mod tests {
         let song = song_with_art(None, Some("background.png"));
         let path = song_select_bg_path(&song, SelectMusicSongSelectBgMode::Banner).unwrap();
         assert_eq!(path.as_path(), PathBuf::from("background.png").as_path());
+    }
+
+    #[test]
+    fn wheel_bg_layout_changes_only_at_visible_sources() {
+        let base = wheel_bg_layout(7, 20, 3, 0.0, SelectMusicSongSelectBgMode::Banner);
+        assert_eq!(
+            base,
+            wheel_bg_layout(7, 20, 3, 0.25, SelectMusicSongSelectBgMode::Banner)
+        );
+        assert_ne!(
+            base,
+            wheel_bg_layout(7, 20, 3, 0.5, SelectMusicSongSelectBgMode::Banner)
+        );
+        assert_ne!(
+            base,
+            wheel_bg_layout(7, 20, 4, 0.0, SelectMusicSongSelectBgMode::Banner)
+        );
+        assert_ne!(
+            base,
+            wheel_bg_layout(8, 20, 3, 0.0, SelectMusicSongSelectBgMode::Banner)
+        );
+        assert_ne!(
+            base,
+            wheel_bg_layout(7, 20, 3, 0.0, SelectMusicSongSelectBgMode::Bg)
+        );
     }
 
     #[test]

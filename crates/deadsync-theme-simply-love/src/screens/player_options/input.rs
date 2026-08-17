@@ -11,8 +11,7 @@ pub fn update(
     // ITG/SL preview actors are not driven by selected chart BPM, so tying this to song BPM
     // makes beat-based skins (e.g. cel) appear too fast/slow depending on the selected chart.
     const PREVIEW_BPM: f32 = 120.0;
-    let prepared_pane = state.current_pane;
-    prepare_choice_layouts(state, asset_manager);
+    prepare_presentation(state, asset_manager);
     state.preview_time += dt;
     state.preview_beat += dt * (PREVIEW_BPM / 60.0);
     let active = state.active;
@@ -60,13 +59,13 @@ pub fn update(
                 );
             }
             NavDirection::Left => {
-                if !move_arcade_horizontal_focus(state, asset_manager, player_idx, -1) {
-                    apply_choice_delta(state, asset_manager, player_idx, -1, NavWrap::Clamp);
+                if !move_arcade_horizontal_focus(state, player_idx, -1) {
+                    apply_choice_delta(state, player_idx, -1, NavWrap::Clamp);
                 }
             }
             NavDirection::Right => {
-                if !move_arcade_horizontal_focus(state, asset_manager, player_idx, 1) {
-                    apply_choice_delta(state, asset_manager, player_idx, 1, NavWrap::Clamp);
+                if !move_arcade_horizontal_focus(state, player_idx, 1) {
+                    apply_choice_delta(state, player_idx, 1, NavWrap::Clamp);
                 }
             }
         }
@@ -110,9 +109,7 @@ pub fn update(
             }
         }
     }
-    if state.current_pane != prepared_pane {
-        prepare_choice_layouts(state, asset_manager);
-    }
+    prepare_presentation(state, asset_manager);
 
     // Advance help reveal timers.
     for player_idx in active_player_indices(active) {
@@ -364,16 +361,16 @@ pub(super) fn handle_nav_event(
                 NavWrap::Wrap,
             ),
             NavDirection::Left => {
-                if !move_arcade_horizontal_focus(state, asset_manager, player_idx, -1) {
-                    apply_choice_delta(state, asset_manager, player_idx, -1, NavWrap::Wrap);
+                if !move_arcade_horizontal_focus(state, player_idx, -1) {
+                    apply_choice_delta(state, player_idx, -1, NavWrap::Wrap);
                     if arcade_row_uses_choice_focus(state, player_idx) {
                         state.pane_mut().arcade_row_focus[player_idx.min(PLAYER_SLOTS - 1)] = false;
                     }
                 }
             }
             NavDirection::Right => {
-                if !move_arcade_horizontal_focus(state, asset_manager, player_idx, 1) {
-                    apply_choice_delta(state, asset_manager, player_idx, 1, NavWrap::Wrap);
+                if !move_arcade_horizontal_focus(state, player_idx, 1) {
+                    apply_choice_delta(state, player_idx, 1, NavWrap::Wrap);
                     if arcade_row_uses_choice_focus(state, player_idx) {
                         state.pane_mut().arcade_row_focus[player_idx.min(PLAYER_SLOTS - 1)] = false;
                     }
@@ -446,7 +443,6 @@ pub(super) fn repeat_held_arcade_start(
 
 pub(super) fn move_arcade_horizontal_focus(
     state: &mut State,
-    asset_manager: &AssetManager,
     player_idx: usize,
     delta: isize,
 ) -> bool {
@@ -476,7 +472,7 @@ pub(super) fn move_arcade_horizontal_focus(
         return false;
     }
     if row_supports_inline {
-        apply_choice_delta(state, asset_manager, idx, delta, NavWrap::Wrap);
+        apply_choice_delta(state, idx, delta, NavWrap::Wrap);
         return true;
     }
     if num_choices <= 1 {
@@ -490,13 +486,7 @@ pub(super) fn move_arcade_horizontal_focus(
         if current_choice == 0 {
             queue_sfx(state, CHANGE_VALUE_SFX);
         } else {
-            change_choice_for_player(
-                state,
-                asset_manager,
-                idx,
-                -(current_choice as isize),
-                NavWrap::Wrap,
-            );
+            change_choice_for_player(state, idx, -(current_choice as isize), NavWrap::Wrap);
         }
         return true;
     }
@@ -506,13 +496,13 @@ pub(super) fn move_arcade_horizontal_focus(
             queue_sfx(state, CHANGE_VALUE_SFX);
             return true;
         }
-        change_choice_for_player(state, asset_manager, idx, -1, NavWrap::Wrap);
+        change_choice_for_player(state, idx, -1, NavWrap::Wrap);
         return true;
     }
     if current_choice + 1 >= num_choices {
         return false;
     }
-    change_choice_for_player(state, asset_manager, idx, 1, NavWrap::Wrap);
+    change_choice_for_player(state, idx, 1, NavWrap::Wrap);
     true
 }
 
@@ -561,10 +551,10 @@ pub(super) fn handle_arcade_start_event(
     let row_index = state.pane().selected_row[idx].min(num_rows.saturating_sub(1));
     if row_index + 1 == num_rows {
         state.pane_mut().arcade_row_focus[idx] = row_allows_arcade_next_row(state, row_index);
-        return handle_start_event(state, asset_manager, active, idx);
+        return handle_start_event(state, active, idx);
     }
     if arcade_row_uses_choice_focus(state, idx) && !state.pane().arcade_row_focus[idx] {
-        let action = handle_start_event(state, asset_manager, active, idx);
+        let action = handle_start_event(state, active, idx);
         state.pane_mut().arcade_row_focus[idx] = row_allows_arcade_next_row(state, row_index);
         return action;
     }
@@ -583,7 +573,6 @@ pub(super) fn handle_arcade_start_event(
 
 pub(super) fn handle_start_event(
     state: &mut State,
-    asset_manager: &AssetManager,
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
 ) -> Option<ThemeEffect> {
@@ -607,9 +596,9 @@ pub(super) fn handle_start_event(
     let row_supports_inline = row_supports_inline_nav(row);
     let row_toggles = row_toggles_with_start(row);
     if row_supports_inline {
-        let changed = commit_inline_focus_selection(state, asset_manager, player_idx, row_index);
+        let changed = commit_inline_focus_selection(state, player_idx, row_index);
         if changed && !row_toggles {
-            change_choice_for_player(state, asset_manager, player_idx, 0, NavWrap::Wrap);
+            change_choice_for_player(state, player_idx, 0, NavWrap::Wrap);
             return finish_start_without_action(state, active, player_idx, should_focus_exit);
         }
     }
@@ -760,7 +749,7 @@ fn handle_input_inner(
                 }
                 return ThemeEffect::None;
             }
-            if let Some(action) = handle_start_event(state, asset_manager, active, P1) {
+            if let Some(action) = handle_start_event(state, active, P1) {
                 return action;
             }
         }
@@ -822,7 +811,7 @@ fn handle_input_inner(
                 }
                 return ThemeEffect::None;
             }
-            if let Some(action) = handle_start_event(state, asset_manager, active, P2) {
+            if let Some(action) = handle_start_event(state, active, P2) {
                 return action;
             }
         }

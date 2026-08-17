@@ -23,11 +23,63 @@ pub(super) fn available_update_tag() -> Option<String> {
     }
 }
 
-pub(super) fn view() -> SimplyLoveUpdaterView {
-    SimplyLoveUpdaterView {
-        update: update_phase(action::current()),
-        ffmpeg: ffmpeg_phase(ffmpeg::current()),
+pub(super) struct RuntimeCursor {
+    update_revision: u64,
+    ffmpeg_revision: u64,
+    view: SimplyLoveUpdaterView,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct RuntimeChange {
+    pub(super) update: bool,
+    pub(super) ffmpeg: bool,
+}
+
+impl RuntimeCursor {
+    pub(super) fn new() -> Self {
+        let mut cursor = Self {
+            update_revision: u64::MAX,
+            ffmpeg_revision: u64::MAX,
+            view: SimplyLoveUpdaterView::default(),
+        };
+        let _ = cursor.refresh();
+        cursor
     }
+
+    pub(super) fn refresh(&mut self) -> RuntimeChange {
+        let update = replace_on_revision(
+            &mut self.update_revision,
+            &mut self.view.update,
+            action::phase_revision(),
+            || update_phase(action::current()),
+        );
+        let ffmpeg = replace_on_revision(
+            &mut self.ffmpeg_revision,
+            &mut self.view.ffmpeg,
+            ffmpeg::phase_revision(),
+            || ffmpeg_phase(ffmpeg::current()),
+        );
+        RuntimeChange { update, ffmpeg }
+    }
+
+    #[inline(always)]
+    pub(super) const fn view(&self) -> &SimplyLoveUpdaterView {
+        &self.view
+    }
+}
+
+fn replace_on_revision<T>(
+    seen: &mut u64,
+    target: &mut T,
+    revision: u64,
+    build: impl FnOnce() -> T,
+) -> bool {
+    if *seen == revision {
+        return false;
+    }
+    *target = build();
+    *seen = revision;
+    true
 }
 
 pub(super) fn execute(request: SimplyLoveUpdaterRequest) {
@@ -176,5 +228,37 @@ const fn error_kind(kind: ActionErrorKind) -> SimplyLoveUpdateErrorKind {
         ActionErrorKind::NoAssetForHost => SimplyLoveUpdateErrorKind::NoAssetForHost,
         ActionErrorKind::Checksum => SimplyLoveUpdateErrorKind::Checksum,
         ActionErrorKind::Io => SimplyLoveUpdateErrorKind::Io,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    #[test]
+    fn updater_view_rebuilds_only_for_a_new_revision() {
+        let builds = Cell::new(0);
+        let mut seen = 7;
+        let mut value = String::from("retained");
+
+        assert!(!super::replace_on_revision(
+            &mut seen,
+            &mut value,
+            7,
+            || {
+                builds.set(builds.get() + 1);
+                String::from("unexpected")
+            }
+        ));
+        assert_eq!(value, "retained");
+        assert_eq!(builds.get(), 0);
+
+        assert!(super::replace_on_revision(&mut seen, &mut value, 8, || {
+            builds.set(builds.get() + 1);
+            String::from("replacement")
+        }));
+        assert_eq!(seen, 8);
+        assert_eq!(value, "replacement");
+        assert_eq!(builds.get(), 1);
     }
 }

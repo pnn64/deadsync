@@ -1,9 +1,8 @@
 //! Modal overlay that visualises a shell-prepared FFmpeg install phase.
 //!
-//! Mirrors [`super::update_overlay`] but for the ffmpeg install flow. It
-//! owns no state: each frame the screen passes in the current
-//! [`FfmpegPhase`], [`build`] returns the actors, and [`handle_input`]
-//! decides whether to consume the input or pass it to the menu.
+//! Mirrors [`super::update_overlay`] for the FFmpeg install flow. Options
+//! retains prepared panel content between source revisions, while input
+//! continues to inspect the current [`FfmpegPhase`].
 
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::effects::SimplyLoveUpdaterRequest;
@@ -17,35 +16,35 @@ use super::update_overlay::{
     InputOutcome, PanelContent, format_eta, format_size, format_speed, render_panel,
 };
 
-/// Build the actor list for the overlay, or an empty `Vec` when
-/// [`FfmpegPhase::Idle`] so callers can unconditionally extend with it.
-pub fn build(phase: &FfmpegPhase, active_color_index: i32) -> Vec<Actor> {
+/// Compile actor-ready panel content when the FFmpeg phase changes.
+pub(crate) fn prepare(phase: &FfmpegPhase) -> Option<PanelContent> {
     if matches!(phase, FfmpegPhase::Idle) {
-        return Vec::new();
+        return None;
     }
-    let content = panel_content(phase);
-    render_panel(&content, active_color_index)
+    Some(panel_content(phase))
+}
+
+/// Build the actor list from retained content, or no actors when idle.
+pub(crate) fn build(content: Option<&PanelContent>, active_color_index: i32) -> Vec<Actor> {
+    content.map_or_else(Vec::new, |content| {
+        render_panel(content, active_color_index)
+    })
 }
 
 /// Map a [`FfmpegPhase`] to renderable [`PanelContent`].
 fn panel_content(phase: &FfmpegPhase) -> PanelContent {
     match phase {
-        FfmpegPhase::Idle => PanelContent {
-            title: String::new(),
-            version_tag: None,
-            body_lines: Vec::new(),
-            footer: String::new(),
-            progress: None,
-            show_spinner: false,
-        },
-        FfmpegPhase::Checking => PanelContent {
-            title: tr("FfmpegInstall", "TitleChecking").to_string(),
-            version_tag: None,
-            body_lines: vec![tr("FfmpegInstall", "BodyChecking").to_string()],
-            footer: tr("FfmpegInstall", "FooterPleaseWait").to_string(),
-            progress: None,
-            show_spinner: true,
-        },
+        FfmpegPhase::Idle => {
+            PanelContent::new(String::new(), None, Vec::new(), String::new(), None, false)
+        }
+        FfmpegPhase::Checking => PanelContent::new(
+            tr("FfmpegInstall", "TitleChecking").to_string(),
+            None,
+            vec![tr("FfmpegInstall", "BodyChecking").to_string()],
+            tr("FfmpegInstall", "FooterPleaseWait").to_string(),
+            None,
+            true,
+        ),
         FfmpegPhase::Confirm {
             version,
             origin,
@@ -68,14 +67,14 @@ fn panel_content(phase: &FfmpegPhase) -> PanelContent {
             } else {
                 tr("FfmpegInstall", "TitleConfirm")
             };
-            PanelContent {
-                title: title.to_string(),
-                version_tag: version_tag(version),
-                body_lines: body,
-                footer: tr("FfmpegInstall", "FooterConfirm").to_string(),
-                progress: None,
-                show_spinner: false,
-            }
+            PanelContent::new(
+                title.to_string(),
+                version_tag(version),
+                body,
+                tr("FfmpegInstall", "FooterConfirm").to_string(),
+                None,
+                false,
+            )
         }
         FfmpegPhase::Downloading {
             version,
@@ -99,61 +98,61 @@ fn panel_content(phase: &FfmpegPhase) -> PanelContent {
                 body.push(tr("FfmpegInstall", "BodySpeed").replace("{speed}", &format_speed(*bps)));
             }
             let progress = total.and_then(|t| (t > 0).then_some(*written as f32 / t as f32));
-            PanelContent {
-                title: tr("FfmpegInstall", "TitleDownloading").to_string(),
-                version_tag: version_tag(version),
-                body_lines: body,
-                footer: tr("FfmpegInstall", "FooterPleaseWait").to_string(),
-                progress: progress.or(Some(0.0)),
-                show_spinner: false,
-            }
+            PanelContent::new(
+                tr("FfmpegInstall", "TitleDownloading").to_string(),
+                version_tag(version),
+                body,
+                tr("FfmpegInstall", "FooterPleaseWait").to_string(),
+                progress.or(Some(0.0)),
+                false,
+            )
         }
-        FfmpegPhase::Extracting { version } => PanelContent {
-            title: tr("FfmpegInstall", "TitleExtracting").to_string(),
-            version_tag: version_tag(version),
-            body_lines: vec![tr("FfmpegInstall", "BodyExtracting").to_string()],
-            footer: tr("FfmpegInstall", "FooterPleaseWait").to_string(),
-            progress: None,
-            show_spinner: true,
-        },
-        FfmpegPhase::Installed { version } => PanelContent {
-            title: tr("FfmpegInstall", "TitleInstalled").to_string(),
-            version_tag: version_tag(version),
-            body_lines: vec![tr("FfmpegInstall", "BodyInstalled").to_string()],
-            footer: tr("FfmpegInstall", "FooterDismiss").to_string(),
-            progress: None,
-            show_spinner: false,
-        },
-        FfmpegPhase::Unsupported => PanelContent {
-            title: tr("FfmpegInstall", "TitleUnsupported").to_string(),
-            version_tag: None,
-            body_lines: vec![
+        FfmpegPhase::Extracting { version } => PanelContent::new(
+            tr("FfmpegInstall", "TitleExtracting").to_string(),
+            version_tag(version),
+            vec![tr("FfmpegInstall", "BodyExtracting").to_string()],
+            tr("FfmpegInstall", "FooterPleaseWait").to_string(),
+            None,
+            true,
+        ),
+        FfmpegPhase::Installed { version } => PanelContent::new(
+            tr("FfmpegInstall", "TitleInstalled").to_string(),
+            version_tag(version),
+            vec![tr("FfmpegInstall", "BodyInstalled").to_string()],
+            tr("FfmpegInstall", "FooterDismiss").to_string(),
+            None,
+            false,
+        ),
+        FfmpegPhase::Unsupported => PanelContent::new(
+            tr("FfmpegInstall", "TitleUnsupported").to_string(),
+            None,
+            vec![
                 tr("FfmpegInstall", "BodyUnsupported").to_string(),
                 tr("FfmpegInstall", "BodyUnsupportedHint").to_string(),
             ],
-            footer: tr("FfmpegInstall", "FooterDismiss").to_string(),
-            progress: None,
-            show_spinner: false,
-        },
-        FfmpegPhase::AlreadyAvailable => PanelContent {
-            title: tr("FfmpegInstall", "TitleAlready").to_string(),
-            version_tag: None,
-            body_lines: vec![tr("FfmpegInstall", "BodyAlready").to_string()],
-            footer: tr("FfmpegInstall", "FooterDismiss").to_string(),
-            progress: None,
-            show_spinner: false,
-        },
-        FfmpegPhase::Error { kind, detail } => PanelContent {
-            title: tr("FfmpegInstall", "TitleError").to_string(),
-            version_tag: None,
-            body_lines: vec![
+            tr("FfmpegInstall", "FooterDismiss").to_string(),
+            None,
+            false,
+        ),
+        FfmpegPhase::AlreadyAvailable => PanelContent::new(
+            tr("FfmpegInstall", "TitleAlready").to_string(),
+            None,
+            vec![tr("FfmpegInstall", "BodyAlready").to_string()],
+            tr("FfmpegInstall", "FooterDismiss").to_string(),
+            None,
+            false,
+        ),
+        FfmpegPhase::Error { kind, detail } => PanelContent::new(
+            tr("FfmpegInstall", "TitleError").to_string(),
+            None,
+            vec![
                 tr("FfmpegInstall", error_kind_key(*kind)).to_string(),
                 truncate(detail, 80),
             ],
-            footer: tr("FfmpegInstall", "FooterDismiss").to_string(),
-            progress: None,
-            show_spinner: false,
-        },
+            tr("FfmpegInstall", "FooterDismiss").to_string(),
+            None,
+            false,
+        ),
     }
 }
 
@@ -250,6 +249,11 @@ fn truncate(s: &str, max_chars: usize) -> String {
 mod tests {
     use super::*;
 
+    fn build_phase(phase: &FfmpegPhase, active_color_index: i32) -> Vec<Actor> {
+        let content = prepare(phase);
+        build(content.as_ref(), active_color_index)
+    }
+
     fn press(action: VirtualAction) -> InputEvent {
         use deadsync_core::input::InputSource;
         use std::time::Instant;
@@ -268,7 +272,7 @@ mod tests {
 
     #[test]
     fn build_idle_returns_no_actors() {
-        assert!(build(&FfmpegPhase::Idle, 0).is_empty());
+        assert!(build_phase(&FfmpegPhase::Idle, 0).is_empty());
     }
 
     #[test]
@@ -279,7 +283,7 @@ mod tests {
             total: Some(90_000_000),
             already_available: false,
         };
-        assert!(!build(&phase, 0).is_empty());
+        assert!(!build_phase(&phase, 0).is_empty());
     }
 
     #[test]
@@ -302,7 +306,7 @@ mod tests {
 
     #[test]
     fn already_available_builds_and_dismisses() {
-        assert!(!build(&FfmpegPhase::AlreadyAvailable, 0).is_empty());
+        assert!(!build_phase(&FfmpegPhase::AlreadyAvailable, 0).is_empty());
         let ev = press(VirtualAction::p1_start);
         assert_eq!(
             handle_input(&FfmpegPhase::AlreadyAvailable, &ev),

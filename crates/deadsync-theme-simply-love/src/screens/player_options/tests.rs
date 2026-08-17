@@ -21,6 +21,7 @@ pub(super) mod tests {
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
     use crate::screens::{Screen, ThemeEffect};
+    use deadlib_present::actors::TextContent;
     use deadlib_present::font::{Font, Glyph, GlyphMap};
     use deadsync_chart::{ChartData, SongData};
     use deadsync_profile::PlayerOptionsData;
@@ -70,6 +71,17 @@ pub(super) mod tests {
 
     fn session_active_players(state: &super::State) -> [bool; 2] {
         state.active
+    }
+
+    fn music_rate_lines(state: &super::State) -> (String, Option<String>) {
+        let presentation = super::super::music_rate_text(state);
+        (
+            presentation.first.as_str().to_owned(),
+            presentation
+                .second
+                .as_ref()
+                .map(|line| line.as_str().to_owned()),
+        )
     }
 
     fn row_visibility(
@@ -132,8 +144,11 @@ pub(super) mod tests {
         }
     }
 
-    fn boxed_texts(values: &[&str]) -> Box<[Arc<str>]> {
-        values.iter().copied().map(Arc::<str>::from).collect()
+    fn boxed_texts(values: &[&str]) -> Box<[TextContent]> {
+        values
+            .iter()
+            .map(|value| TextContent::inline_str(value).expect("test choice fits inline"))
+            .collect()
     }
 
     fn test_bitmask_row(
@@ -1705,6 +1720,12 @@ pub(super) mod tests {
     }
 
     fn setup_state() -> (super::State, AssetManager) {
+        setup_state_with(test_init_view())
+    }
+
+    fn setup_state_with(
+        init_view: crate::views::PlayerOptionsInitView,
+    ) -> (super::State, AssetManager) {
         let song = test_song();
         let mut asset_manager = AssetManager::new();
         register_test_fonts(&mut asset_manager);
@@ -1718,7 +1739,7 @@ pub(super) mod tests {
             test_noteskin_catalog(),
             deadsync_theme::views::SmxGifCatalogView::default(),
             super::HeartRateDevicesView::default(),
-            test_init_view(),
+            init_view,
         );
         (state, asset_manager)
     }
@@ -1743,7 +1764,7 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn cached_choice_layout_preserves_inline_cursor_geometry() {
+    fn prepared_choice_layout_drives_inline_cursor_geometry() {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
         let row_idx = state
@@ -1754,35 +1775,39 @@ pub(super) mod tests {
             .position(|&id| id == RowId::Perspective)
             .expect("Perspective row present");
         state.pane_mut().selected_row[P1] = row_idx;
+        let last_choice = state
+            .pane()
+            .row_map
+            .get(RowId::Perspective)
+            .expect("Perspective row present")
+            .choices
+            .len()
+            .saturating_sub(1);
         state
             .pane_mut()
             .row_map
             .get_mut(RowId::Perspective)
             .expect("Perspective row present")
-            .selected_choice_index[P1] = 2;
+            .selected_choice_index[P1] = last_choice;
 
-        let uncached =
-            super::super::cursor_dest_for_player(&state, &asset_manager, P1).expect("cursor");
-        super::super::prepare_choice_layouts(&mut state, &asset_manager);
-        let cached =
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let row = state.pane().row_map.get(RowId::Perspective).unwrap();
+        let left_x = super::super::inline_choice_left_x_for_row(&state, row_idx);
+        let expected_x =
+            row.choice_widths[last_choice].mul_add(0.5, left_x + row.choice_offsets[last_choice]);
+        let cursor =
             super::super::cursor_dest_for_player(&state, &asset_manager, P1).expect("cursor");
 
-        for (actual, expected) in [cached.0, cached.1, cached.2, cached.3]
-            .into_iter()
-            .zip([uncached.0, uncached.1, uncached.2, uncached.3])
-        {
-            assert!(
-                (actual - expected).abs() < 0.001,
-                "cached cursor geometry changed: expected {expected}, got {actual}"
-            );
-        }
+        assert!((cursor.0 - expected_x).abs() < 0.001);
+        assert!(cursor.2 > row.choice_widths[last_choice]);
+        assert!(cursor.3 > row.choice_height);
     }
 
     #[test]
-    fn settled_choice_text_reuses_row_storage() {
+    fn settled_choice_text_uses_actor_ready_payloads() {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
-        super::super::prepare_choice_layouts(&mut state, &asset_manager);
+        super::super::prepare_presentation(&mut state, &asset_manager);
         let actors = super::get_actors(&state, &asset_manager);
         let row = state
             .pane()
@@ -1791,48 +1816,395 @@ pub(super) mod tests {
             .expect("Perspective row present");
 
         for choice in &row.choices {
+            assert!(matches!(choice, TextContent::Inline(_)));
             assert!(actors.iter().any(|actor| {
                 matches!(
                     actor,
                     deadlib_present::actors::Actor::Text {
-                        content: deadlib_present::actors::TextContent::Shared(rendered),
+                        content: deadlib_present::actors::TextContent::Inline(rendered),
                         ..
-                    } if Arc::ptr_eq(rendered, choice)
+                    } if rendered.as_str() == choice.as_str()
                 )
             }));
         }
     }
 
     #[test]
-    fn render_text_caches_reuse_and_refresh_derived_text() {
-        ensure_i18n();
-        let (mut state, _) = setup_state();
+    fn choice_text_keeps_oversized_shared_fallback() {
+        let choices = super::super::actor_texts(vec![
+            "Off".to_owned(),
+            "localized option label beyond inline capacity".to_owned(),
+        ]);
 
-        let first_speed = super::super::cached_speed_text(&state, P1);
-        let first_main = first_speed.main.clone();
-        let first_value = first_speed.value.clone();
-        drop(first_speed);
-        let second_speed = super::super::cached_speed_text(&state, P1);
-        assert!(Arc::ptr_eq(&first_main, &second_speed.main));
-        assert!(Arc::ptr_eq(&first_value, &second_speed.value));
-        drop(second_speed);
+        assert!(matches!(choices[0], TextContent::Inline(_)));
+        assert_eq!(choices[0].as_str(), "Off");
+        assert!(matches!(choices[1], TextContent::Shared(_)));
+        assert_eq!(
+            choices[1].as_str(),
+            "localized option label beyond inline capacity"
+        );
+    }
+
+    #[test]
+    fn render_text_caches_and_speed_presentation_refresh() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let machine_font = state.policy.machine_font;
+        super::super::prepare_presentation(&mut state, &asset_manager);
+
+        let first_header = super::super::speed_header(&state, P1);
+        let first_main = first_header.main.clone();
+        let first_main_width = first_header.main_draw_width;
+        assert_eq!(
+            first_main_width,
+            super::super::measure_header_text_width(
+                &asset_manager,
+                first_main.as_str(),
+                machine_font,
+            )
+        );
+        assert!(matches!(first_main, TextContent::Inline(_)));
+        let first_value = super::super::speed_value(&state, P1);
+        let first_value_text = first_value.text.clone();
+        let first_value_width = first_value.value_draw_width;
+        let first_value_height = first_value.value_draw_height;
+        let measured_value = super::super::measure_option_text(
+            &asset_manager,
+            first_value_text.as_str(),
+            super::super::INLINE_CHOICE_VALUE_ZOOM,
+        );
+        assert!(matches!(first_value_text, TextContent::Inline(_)));
+        assert_eq!(first_value_width, measured_value.0);
+        assert_eq!(first_value_height, measured_value.1);
+        let second_header = super::super::speed_header(&state, P1);
+        assert_eq!(first_main.as_str(), second_header.main.as_str());
+        assert_eq!(first_main_width, second_header.main_draw_width);
+        let second_value = super::super::speed_value(&state, P1);
+        assert_eq!(first_value_text.as_str(), second_value.text.as_str());
+        assert_eq!(first_value_width, second_value.value_draw_width);
+        assert_eq!(first_value_height, second_value.value_draw_height);
 
         state.speed_mod[P1].value += 50.0;
-        let changed_speed = super::super::cached_speed_text(&state, P1);
-        assert!(!Arc::ptr_eq(&first_main, &changed_speed.main));
-        assert!(!Arc::ptr_eq(&first_value, &changed_speed.value));
-        drop(changed_speed);
+        super::super::mark_speed_value_dirty(&mut state, P1);
+        assert_eq!(
+            first_main.as_str(),
+            super::super::speed_header(&state, P1).main.as_str()
+        );
+        assert_eq!(
+            first_value_text.as_str(),
+            super::super::speed_value(&state, P1).text.as_str()
+        );
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let changed_header = super::super::speed_header(&state, P1);
+        assert_ne!(first_main.as_str(), changed_header.main.as_str());
+        let changed_main = changed_header.main.clone();
+        let changed_value = super::super::speed_value(&state, P1);
+        assert_ne!(first_value_text.as_str(), changed_value.text.as_str());
 
-        let first_rate = super::super::cached_music_rate_text(&state);
-        let first_line = first_rate.first.clone();
-        drop(first_rate);
-        let second_rate = super::super::cached_music_rate_text(&state);
-        assert!(Arc::ptr_eq(&first_line, &second_rate.first));
-        drop(second_rate);
+        let first_rate = music_rate_lines(&state);
 
         state.music_rate = 1.5;
-        let changed_rate = super::super::cached_music_rate_text(&state);
-        assert!(!Arc::ptr_eq(&first_line, &changed_rate.first));
+        super::super::mark_music_rate_dirty(&mut state);
+        assert_ne!(state.speed_header_dirty, 0);
+        assert_eq!(music_rate_lines(&state), first_rate);
+        assert_eq!(
+            changed_main.as_str(),
+            super::super::speed_header(&state, P1).main.as_str()
+        );
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        assert_ne!(music_rate_lines(&state), first_rate);
+        assert_eq!(state.speed_header_dirty, 0);
+        assert_eq!(
+            changed_main.as_str(),
+            super::super::speed_header(&state, P1).main.as_str()
+        );
+    }
+
+    #[test]
+    fn music_rate_line_keeps_oversized_shared_fallback() {
+        let short = super::super::music_rate_line_content("bpm: 120");
+        assert!(matches!(short, TextContent::Inline(_)));
+        assert_eq!(short.as_str(), "bpm: 120");
+
+        let oversized = super::super::music_rate_line_content(
+            "localized music rate line beyond inline capacity",
+        );
+        assert!(matches!(oversized, TextContent::Shared(_)));
+        assert_eq!(
+            oversized.as_str(),
+            "localized music rate line beyond inline capacity"
+        );
+    }
+
+    #[test]
+    fn speed_text_uses_inline_with_oversized_fallback() {
+        let value = super::super::speed_value_content(&SpeedMod {
+            mod_type: SpeedModType::C,
+            value: 650.0,
+        });
+        assert!(matches!(value, TextContent::Inline(_)));
+        assert_eq!(value.as_str(), "C650");
+
+        let header = super::super::speed_header_content("X", Some([120, 240]));
+        assert!(matches!(header, TextContent::Inline(_)));
+        assert_eq!(header.as_str(), "X120-240");
+
+        let oversized = super::super::speed_header_content("C", Some([i32::MIN, i32::MAX]));
+        assert!(matches!(oversized, TextContent::Shared(_)));
+        assert_eq!(oversized.as_str(), "C-2147483648-2147483647");
+    }
+
+    #[test]
+    fn speed_cursor_reuses_retained_value_geometry() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let speed_row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::SpeedMod)
+            .expect("Speed Mod row present");
+        state.pane_mut().selected_row[P1] = speed_row;
+        state.pane_mut().arcade_row_focus[P1] = false;
+        let first_text = super::super::speed_value(&state, P1).text.clone();
+
+        let first = super::super::cursor_dest_for_player(&state, &asset_manager, P1)
+            .expect("speed cursor destination");
+        let second = super::super::cursor_dest_for_player(&state, &asset_manager, P1)
+            .expect("speed cursor destination");
+        let second_text = super::super::speed_value(&state, P1).text.clone();
+
+        assert_eq!(first, second);
+        assert_eq!(first_text.as_str(), second_text.as_str());
+        assert!(matches!(second_text, TextContent::Inline(_)));
+    }
+
+    #[test]
+    fn speed_header_dirty_follows_mini_and_perspective() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let mut previous = super::super::speed_header(&state, P1)
+            .scaled
+            .as_ref()
+            .map(|text| text.as_str().to_owned());
+
+        for id in [RowId::Mini, RowId::Perspective] {
+            let row_idx = state
+                .pane()
+                .row_map
+                .display_order()
+                .iter()
+                .position(|&row_id| row_id == id)
+                .expect("header-affecting row present");
+            state.pane_mut().selected_row[P1] = row_idx;
+            super::super::dispatch_behavior_delta(&mut state, P1, 1, super::NavWrap::Wrap);
+
+            assert_ne!(state.speed_header_dirty & (1 << P1), 0);
+            assert_eq!(
+                previous.as_deref(),
+                super::super::speed_header(&state, P1)
+                    .scaled
+                    .as_ref()
+                    .map(TextContent::as_str)
+            );
+            super::super::prepare_presentation(&mut state, &asset_manager);
+            let current = super::super::speed_header(&state, P1)
+                .scaled
+                .as_ref()
+                .map(|text| text.as_str().to_owned());
+            assert_ne!(previous, current);
+            previous = current;
+        }
+    }
+
+    #[test]
+    fn arcade_next_row_geometry_prepares_once() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        state.policy.arcade_navigation = true;
+        state.current_pane = OptionsPane::Display;
+        let row_idx = (0..state.pane().row_map.len())
+            .find(|&row_idx| super::super::row_allows_arcade_next_row(&state, row_idx))
+            .expect("Arcade next-row label has an eligible row");
+        assert_eq!(state.arcade_next_row_size.get(), None);
+
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let prepared = state
+            .arcade_next_row_size
+            .get()
+            .expect("choice preparation compiled Arcade label geometry");
+        let measured = super::super::measure_option_text(
+            &asset_manager,
+            super::super::ARCADE_NEXT_ROW_TEXT,
+            super::super::INLINE_CHOICE_VALUE_ZOOM,
+        );
+        assert_eq!(prepared, [measured.0, measured.1]);
+
+        let first = super::super::arcade_next_row_layout(&state, row_idx, &asset_manager);
+        let second = super::super::arcade_next_row_layout(&state, row_idx, &asset_manager);
+        assert_eq!(first, second);
+        assert_eq!([first.1, first.2], prepared);
+    }
+
+    #[test]
+    fn choice_layout_readiness_tracks_panes_and_choice_replacement() {
+        ensure_i18n();
+        let mut init_view = test_init_view();
+        init_view.policy.heart_rate_monitors = true;
+        let (mut state, asset_manager) = setup_state_with(init_view);
+        assert!(state.panes.iter().all(|pane| !pane.choice_layout_ready));
+
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        assert!(state.pane().choice_layout_ready);
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        assert!(state.pane().choice_layout_ready);
+
+        let devices = super::HeartRateDevicesView {
+            supported: true,
+            scanning: false,
+            devices: vec![super::HeartRateDeviceView {
+                id: "new-device".to_owned(),
+                label: "New HRM".to_owned(),
+            }],
+            error: None,
+            readings: [super::HeartRateReadingView::default(); 2],
+        };
+        super::set_heart_rate_devices(&mut state, &devices);
+        assert!(!state.pane().choice_layout_ready);
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        assert!(state.pane().choice_layout_ready);
+        let row = state
+            .pane()
+            .row_map
+            .get(RowId::HeartRateMonitor)
+            .expect("Heart Rate Monitor row present");
+        assert_eq!(row.choice_widths.len(), row.choices.len());
+
+        state.current_pane = OptionsPane::Display;
+        assert!(!state.pane().choice_layout_ready);
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        assert!(state.pane().choice_layout_ready);
+    }
+
+    #[test]
+    fn choice_layout_prepares_every_inline_row_for_rendering() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+
+        for pane in [
+            OptionsPane::Main,
+            OptionsPane::Display,
+            OptionsPane::Advanced,
+            OptionsPane::Uncommon,
+        ] {
+            state.current_pane = pane;
+            super::super::prepare_presentation(&mut state, &asset_manager);
+            assert!(state.pane().choice_layout_ready);
+
+            for row_idx in 0..state.pane().row_map.len() {
+                let row = state.pane().row_map.get_at(row_idx).expect("row exists");
+                if !super::super::row_shows_all_choices_inline(row.id) {
+                    continue;
+                }
+                assert_eq!(row.choice_widths.len(), row.choices.len());
+                assert_eq!(row.choice_offsets.len(), row.choices.len());
+                assert!(row.choice_height > 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn row_titles_refresh_at_preparation_boundary() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let main_titles = state.row_titles[state.current_pane.index()].titles.as_ref();
+        let main_ptr = main_titles.as_ptr() as usize;
+        let expected = state
+            .pane()
+            .row_map
+            .get_at(0)
+            .expect("main row exists")
+            .name
+            .get();
+        assert_eq!(main_titles[0].as_str(), expected.as_ref());
+
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let stable_titles = state.row_titles[state.current_pane.index()].titles.as_ref();
+        assert_eq!(stable_titles.as_ptr() as usize, main_ptr);
+        assert_eq!(stable_titles[0].as_str(), expected.as_ref());
+
+        state.current_pane = OptionsPane::Display;
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let display_ptr = state.row_titles[state.current_pane.index()].titles.as_ptr() as usize;
+        assert_ne!(display_ptr, main_ptr);
+
+        state.current_pane = OptionsPane::Main;
+        assert_eq!(
+            state.row_titles[state.current_pane.index()].titles.as_ptr() as usize,
+            main_ptr
+        );
+
+        let pane_idx = OptionsPane::Main.index();
+        let revision = crate::assets::i18n::revision();
+        let sentinel = Arc::<str>::from("stale row title");
+        state.row_titles[pane_idx] = super::super::PlayerOptionsRowTitles {
+            i18n_revision: revision.wrapping_sub(1),
+            titles: vec![TextContent::Shared(Arc::clone(&sentinel))].into_boxed_slice(),
+        };
+        assert!(matches!(
+            &state.row_titles[state.current_pane.index()].titles[0],
+            TextContent::Shared(text) if Arc::ptr_eq(text, &sentinel)
+        ));
+
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let refreshed = state.row_titles[state.current_pane.index()].titles.as_ref();
+        assert_eq!(refreshed[0].as_str(), expected.as_ref());
+        assert!(!matches!(
+            &refreshed[0],
+            TextContent::Shared(text) if Arc::ptr_eq(text, &sentinel)
+        ));
+        assert_eq!(state.row_titles[pane_idx].i18n_revision, revision);
+    }
+
+    #[test]
+    fn row_title_text_keeps_oversized_shared_fallback() {
+        let short = super::super::row_title_content(Arc::from("Speed Mod"));
+        assert!(matches!(short, TextContent::Inline(_)));
+        assert_eq!(short.as_str(), "Speed Mod");
+
+        let source = Arc::<str>::from("localized row title beyond inline capacity");
+        let oversized = super::super::row_title_content(Arc::clone(&source));
+        assert!(matches!(
+            &oversized,
+            TextContent::Shared(text) if Arc::ptr_eq(text, &source)
+        ));
+        assert_eq!(oversized.as_str(), source.as_ref());
+    }
+
+    #[test]
+    fn help_lines_retain_unicode_counts_for_reveal() {
+        let lines =
+            super::super::help_lines([Arc::<str>::from("Aé🙂"), Arc::<str>::from("second line")]);
+        assert_eq!([lines[0].char_count, lines[1].char_count], [3, 11]);
+
+        let partial = super::super::revealed_text(&lines[0].text, 2, lines[0].char_count);
+        assert!(matches!(
+            partial,
+            deadlib_present::actors::TextContent::Owned(text) if text == "Aé"
+        ));
+
+        let full =
+            super::super::revealed_text(&lines[0].text, lines[0].char_count, lines[0].char_count);
+        assert!(matches!(
+            full,
+            deadlib_present::actors::TextContent::Shared(text)
+                if Arc::ptr_eq(&text, &lines[0].text)
+        ));
     }
 
     #[test]
@@ -2033,6 +2405,8 @@ pub(super) mod tests {
         state.pane_mut().prev_selected_row[P1] = rate_row;
         let before = state.music_rate;
         let active = session_active_players(&state);
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        assert!(state.pane().choice_layout_ready);
 
         handle_nav_event(
             &mut state,
@@ -2042,8 +2416,10 @@ pub(super) mod tests {
             NavDirection::Right,
             true,
         );
+        assert!(!state.pane().choice_layout_ready);
         let mut effects = Vec::with_capacity(4);
         update(&mut state, 0.0, &asset_manager, &mut effects);
+        assert!(state.pane().choice_layout_ready);
         assert_eq!(effects.len(), 3);
         assert!(matches!(
             effects[0],
@@ -2058,6 +2434,48 @@ pub(super) mod tests {
             )) if rate == state.music_rate && rate > before
         ));
         assert_sfx(&effects[2], "assets/sounds/change_value.ogg");
+    }
+
+    #[test]
+    fn held_music_rate_repeat_reprepares_choice_layout() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let rate_row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::MusicRate)
+            .expect("Music Rate should be in Main pane");
+        state.pane_mut().selected_row[P1] = rate_row;
+        state.pane_mut().prev_selected_row[P1] = rate_row;
+        let active = session_active_players(&state);
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let before_title = music_rate_lines(&state);
+
+        handle_nav_event(
+            &mut state,
+            &asset_manager,
+            active,
+            P1,
+            NavDirection::Right,
+            true,
+        );
+        let after_press = state.music_rate;
+        assert!(state.music_rate_text_dirty);
+        assert_eq!(music_rate_lines(&state), before_title);
+        let mut effects = Vec::with_capacity(8);
+        update(
+            &mut state,
+            (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
+            &asset_manager,
+            &mut effects,
+        );
+
+        assert!(state.music_rate > after_press);
+        assert!(state.pane().choice_layout_ready);
+        assert!(!state.music_rate_text_dirty);
+        assert_ne!(music_rate_lines(&state), before_title);
     }
 
     #[test]
@@ -2096,6 +2514,9 @@ pub(super) mod tests {
             &state.heart_rate_device_ids[P1],
         );
         assert_eq!(state.speed_mod[P1].value, after_press);
+        let after_press_text = super::super::speed_value(&state, P1).text.clone();
+        let after_press_header = super::super::speed_header(&state, P1).main.clone();
+        assert_eq!(after_press_text.as_str(), state.speed_mod[P1].display());
 
         effects.clear();
         update(
@@ -2111,6 +2532,13 @@ pub(super) mod tests {
             &state.heart_rate_device_ids[P1],
         );
         assert!(state.speed_mod[P1].value > after_press);
+        let after_repeat_text = &super::super::speed_value(&state, P1).text;
+        assert_ne!(after_press_text.as_str(), after_repeat_text.as_str());
+        assert_eq!(after_repeat_text.as_str(), state.speed_mod[P1].display());
+        assert_ne!(
+            after_press_header.as_str(),
+            super::super::speed_header(&state, P1).main.as_str()
+        );
     }
 
     #[test]
@@ -2125,6 +2553,7 @@ pub(super) mod tests {
             mod_type: SpeedModType::M,
             value: 250.0,
         };
+        super::super::prepare_presentation(&mut state, &asset_manager);
 
         let speed_row = state
             .pane()
@@ -2166,7 +2595,8 @@ pub(super) mod tests {
     #[test]
     fn player_options_keeps_header_without_footer() {
         ensure_i18n();
-        let (state, asset_manager) = setup_state();
+        let (mut state, asset_manager) = setup_state();
+        super::super::prepare_presentation(&mut state, &asset_manager);
         let actors = super::get_actors(&state, &asset_manager);
 
         let is_screen_bar = |actor: &deadlib_present::actors::Actor, bottom: bool| {
@@ -2253,7 +2683,7 @@ pub(super) mod tests {
     #[test]
     fn dispatch_with_zero_delta_commits_choice() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
 
         let row_index = state
             .pane()
@@ -2274,7 +2704,7 @@ pub(super) mod tests {
         state.pane_mut().selected_row[P1] = row_index;
 
         // delta=0 should still apply the current choice
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 0, super::NavWrap::Wrap);
+        super::change_choice_for_player(&mut state, P1, 0, super::NavWrap::Wrap);
 
         assert_eq!(
             state.player_options[P1].background_filter,
@@ -2335,7 +2765,7 @@ pub(super) mod tests {
     #[test]
     fn dispatch_what_comes_next_cycles_and_mirrors() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
 
         let row_index = state
             .pane()
@@ -2353,7 +2783,7 @@ pub(super) mod tests {
             .unwrap()
             .selected_choice_index[P1];
 
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
+        super::change_choice_for_player(&mut state, P1, 1, super::NavWrap::Wrap);
 
         let row = state.pane().row_map.get(RowId::WhatComesNext).unwrap();
         let n = row.choices.len();
@@ -2371,7 +2801,7 @@ pub(super) mod tests {
     #[test]
     fn dispatch_bitmask_via_toggle() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
 
         // Inline Scroll binding (toggle-capable) for this dispatch test.
         // Mirrors the shape of the production SCROLL binding without
@@ -2411,7 +2841,7 @@ pub(super) mod tests {
         state.option_masks[P1].scroll = ScrollMask::empty();
 
         let active = session_active_players(&state);
-        handle_start_event(&mut state, &asset_manager, active, P1);
+        handle_start_event(&mut state, active, P1);
 
         assert_ne!(
             state.option_masks[P1].scroll,
@@ -2423,7 +2853,7 @@ pub(super) mod tests {
     #[test]
     fn dispatch_judgment_tilt_marks_visibility_change() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
 
         // Insert JudgmentTilt and JudgmentTiltIntensity into the row_map.
         let tilt_binding = super::ChoiceBinding::<bool> {
@@ -2482,7 +2912,7 @@ pub(super) mod tests {
         );
 
         // Advance to index 1 (enabled) — apply returns persisted_with_visibility → syncs
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
+        super::change_choice_for_player(&mut state, P1, 1, super::NavWrap::Wrap);
 
         assert!(
             judgment_tilt_options_visible(&state.pane().row_map, active),
@@ -2493,7 +2923,7 @@ pub(super) mod tests {
     #[test]
     fn dispatch_cycle_index_advances_per_player_only() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
 
         let row_index = state
             .pane()
@@ -2514,7 +2944,7 @@ pub(super) mod tests {
         assert!(n >= 2, "BackgroundFilter should have at least 2 choices");
         state.pane_mut().selected_row[P1] = row_index;
 
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
+        super::change_choice_for_player(&mut state, P1, 1, super::NavWrap::Wrap);
 
         let row = state.pane().row_map.get(RowId::BackgroundFilter).unwrap();
         assert_eq!(row.selected_choice_index[0], 1, "P1 should have advanced");
@@ -2527,7 +2957,7 @@ pub(super) mod tests {
     #[test]
     fn dispatch_wraps_at_choice_bounds() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
 
         let row_index = state
             .pane()
@@ -2554,7 +2984,7 @@ pub(super) mod tests {
             .get_mut(RowId::BackgroundFilter)
             .unwrap()
             .selected_choice_index[P1] = n - 1;
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
+        super::change_choice_for_player(&mut state, P1, 1, super::NavWrap::Wrap);
         assert_eq!(
             state
                 .pane()
@@ -2573,7 +3003,7 @@ pub(super) mod tests {
             .get_mut(RowId::BackgroundFilter)
             .unwrap()
             .selected_choice_index[P1] = 0;
-        super::change_choice_for_player(&mut state, &asset_manager, P1, -1, super::NavWrap::Wrap);
+        super::change_choice_for_player(&mut state, P1, -1, super::NavWrap::Wrap);
         assert_eq!(
             state
                 .pane()
@@ -2589,7 +3019,7 @@ pub(super) mod tests {
     #[test]
     fn dispatch_on_exit_action_is_no_op_for_delta() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
 
         let row_index = state
             .pane()
@@ -2609,8 +3039,8 @@ pub(super) mod tests {
 
         // RowBehavior::Exit returns Outcome::NONE so the dispatcher must not panic,
         // mutate the row, or play SFX (which would panic — audio uninit in tests).
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
-        super::change_choice_for_player(&mut state, &asset_manager, P1, -3, super::NavWrap::Wrap);
+        super::change_choice_for_player(&mut state, P1, 1, super::NavWrap::Wrap);
+        super::change_choice_for_player(&mut state, P1, -3, super::NavWrap::Wrap);
 
         let after = state
             .pane()
@@ -2627,7 +3057,7 @@ pub(super) mod tests {
     #[test]
     fn versus_exit_requires_both_players_on_exit_row() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_versus_state();
+        let (mut state, _) = setup_versus_state();
 
         let exit_row = state
             .pane()
@@ -2648,7 +3078,7 @@ pub(super) mod tests {
             "versus setup should activate both players"
         );
 
-        let action = handle_start_event(&mut state, &asset_manager, active, P1);
+        let action = handle_start_event(&mut state, active, P1);
         assert!(
             matches!(action, None),
             "ITG parity: pressing Exit in versus is a no-op until both players are on the last row"
@@ -2660,7 +3090,7 @@ pub(super) mod tests {
     #[test]
     fn versus_exit_navigates_once_both_players_are_on_exit_row() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_versus_state();
+        let (mut state, _) = setup_versus_state();
 
         let exit_row = state
             .pane()
@@ -2672,7 +3102,7 @@ pub(super) mod tests {
         state.pane_mut().selected_row = [exit_row, exit_row];
 
         let active = session_active_players(&state);
-        let action = handle_start_event(&mut state, &asset_manager, active, P2);
+        let action = handle_start_event(&mut state, active, P2);
         assert!(
             matches!(action, Some(ThemeEffect::Navigate(Screen::Gameplay))),
             "once both players are on Exit, either player should be able to leave the screen"
@@ -2682,7 +3112,7 @@ pub(super) mod tests {
     #[test]
     fn practice_exit_starts_practice_from_player_options() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
         state.return_screen = Screen::Practice;
 
         let exit_row = state
@@ -2695,7 +3125,7 @@ pub(super) mod tests {
         state.pane_mut().selected_row[P1] = exit_row;
 
         let active = [true, false];
-        let action = handle_start_event(&mut state, &asset_manager, active, P1);
+        let action = handle_start_event(&mut state, active, P1);
         assert!(
             matches!(action, Some(ThemeEffect::Navigate(Screen::Practice))),
             "practice-launched player options should start Practice, not Gameplay"
@@ -2705,7 +3135,7 @@ pub(super) mod tests {
     #[test]
     fn practice_choose_different_returns_to_select_music() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
         state.return_screen = Screen::Practice;
 
         let exit_row = state
@@ -2724,7 +3154,7 @@ pub(super) mod tests {
             .selected_choice_index[P1] = 1;
 
         let active = [true, false];
-        let action = handle_start_event(&mut state, &asset_manager, active, P1);
+        let action = handle_start_event(&mut state, active, P1);
         assert!(
             matches!(action, Some(ThemeEffect::Navigate(Screen::SelectMusic))),
             "choose different song from practice options should return to the wheel"
@@ -2757,7 +3187,7 @@ pub(super) mod tests {
     #[test]
     fn dispatch_on_bitmask_via_delta_is_no_op() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
 
         // Insert a Bitmask row (Scroll lives in the Advanced pane, so attach it
         // to the Main row_map directly for this isolated test).
@@ -2798,8 +3228,8 @@ pub(super) mod tests {
 
         // L/R on a bitmask row returns Outcome::NONE — mask must not change,
         // and no SFX should be played (audio uninit in tests would panic).
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
-        super::change_choice_for_player(&mut state, &asset_manager, P1, -1, super::NavWrap::Wrap);
+        super::change_choice_for_player(&mut state, P1, 1, super::NavWrap::Wrap);
+        super::change_choice_for_player(&mut state, P1, -1, super::NavWrap::Wrap);
 
         assert_eq!(
             [state.option_masks[P1].scroll, state.option_masks[P2].scroll],
@@ -3103,7 +3533,7 @@ pub(super) mod tests {
     #[test]
     fn dispatch_mirror_flag_off_keeps_per_player_index() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
 
         // BackgroundFilter is a Numeric row with mirror_across_players: false.
         let row_index = state
@@ -3122,7 +3552,7 @@ pub(super) mod tests {
         );
         let p2_before = row.selected_choice_index[1];
 
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
+        super::change_choice_for_player(&mut state, P1, 1, super::NavWrap::Wrap);
 
         let row = state.pane().row_map.get(RowId::BackgroundFilter).unwrap();
         assert_eq!(
@@ -3134,7 +3564,7 @@ pub(super) mod tests {
     #[test]
     fn dispatch_mirror_skipped_when_apply_returns_none() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
 
         // Insert a fixture Custom row whose apply always returns Outcome::NONE,
         // even though mirror_across_players is true. The dispatcher must NOT
@@ -3168,7 +3598,7 @@ pub(super) mod tests {
             .unwrap()
             .selected_choice_index[1] = 2;
 
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
+        super::change_choice_for_player(&mut state, P1, 1, super::NavWrap::Wrap);
 
         let row = state.pane().row_map.get(RowId::Hide).unwrap();
         assert_eq!(
@@ -3210,20 +3640,15 @@ pub(super) mod tests {
             .get_mut(RowId::WhatComesNext)
             .unwrap()
             .selected_choice_index = [0, 0];
+        super::super::prepare_presentation(&mut state, &asset_manager);
         let row = state.pane().row_map.get(RowId::WhatComesNext).unwrap();
         let left_x = super::inline_nav::inline_choice_left_x_for_row(&state, row_index);
-        let centers =
-            super::inline_nav::inline_choice_centers(&row.choices, &asset_manager, left_x);
-        assert_eq!(centers.len(), n);
         let target = 1usize;
-        state.pane_mut().inline_choice_x[P1] = centers[target];
+        let [target_x, _] = super::inline_nav::inline_choice_geometry(row, left_x, target)
+            .expect("prepared inline choice center");
+        state.pane_mut().inline_choice_x[P1] = target_x;
 
-        let changed = super::inline_nav::commit_inline_focus_selection(
-            &mut state,
-            &asset_manager,
-            P1,
-            row_index,
-        );
+        let changed = super::inline_nav::commit_inline_focus_selection(&mut state, P1, row_index);
         assert!(changed, "commit should report a change");
 
         let row = state.pane().row_map.get(RowId::WhatComesNext).unwrap();
@@ -3232,6 +3657,45 @@ pub(super) mod tests {
             [target, target],
             "WhatComesNext (mirror_across_players=true) must sync both player slots on inline focus commit"
         );
+    }
+
+    #[test]
+    fn inline_focus_moves_to_prepared_choice_center() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        state.current_pane = OptionsPane::Display;
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let row_idx = (0..state.pane().row_map.len())
+            .find(|&row_idx| {
+                state.pane().row_map.get_at(row_idx).is_some_and(|row| {
+                    super::row_supports_inline_nav(row) && row.choices.len() >= 2
+                })
+            })
+            .expect("Display pane has a multi-choice inline row");
+        state.pane_mut().selected_row[P1] = row_idx;
+        state.pane_mut().arcade_row_focus[P1] = false;
+        super::inline_nav::sync_inline_intent_from_row(&mut state, P1, row_idx);
+        let row = state.pane().row_map.get_at(row_idx).unwrap();
+        let current = row.selected_choice_index[P1].min(row.choices.len() - 1);
+        let (delta, target_idx) = if current + 1 < row.choices.len() {
+            (1, current + 1)
+        } else {
+            (-1, current - 1)
+        };
+        let [target_x, _] = super::inline_nav::inline_choice_geometry(
+            row,
+            super::inline_nav::inline_choice_left_x_for_row(&state, row_idx),
+            target_idx,
+        )
+        .expect("target center");
+
+        assert!(super::inline_nav::move_inline_focus(
+            &mut state,
+            P1,
+            delta,
+            super::NavWrap::Clamp,
+        ));
+        assert_eq!(state.pane().inline_choice_x[P1], target_x);
     }
 
     fn cycle_test_row(choices: &[&str], initial: [usize; 2]) -> Row {
@@ -3839,7 +4303,7 @@ pub(super) mod tests {
     #[test]
     fn generic_toggle_insert_row_sets_bit_and_profile() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
 
         let binding = BitmaskBinding::Generic {
             init: BitmaskInit {
@@ -3867,7 +4331,7 @@ pub(super) mod tests {
         state.player_options[P1].insert_active_mask = InsertMask::empty();
 
         let active = session_active_players(&state);
-        handle_start_event(&mut state, &asset_manager, active, P1);
+        handle_start_event(&mut state, active, P1);
 
         assert_eq!(
             state.option_masks[P1].insert.bits(),
@@ -3881,7 +4345,7 @@ pub(super) mod tests {
         );
 
         // Toggle again to clear.
-        handle_start_event(&mut state, &asset_manager, active, P1);
+        handle_start_event(&mut state, active, P1);
         assert_eq!(state.option_masks[P1].insert, InsertMask::empty());
         assert_eq!(
             state.player_options[P1].insert_active_mask,
@@ -3895,7 +4359,7 @@ pub(super) mod tests {
         // selected index of 7 (impossible in practice; defensive) must
         // produce no toggle.
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
 
         let binding = BitmaskBinding::Generic {
             init: BitmaskInit {
@@ -3923,7 +4387,7 @@ pub(super) mod tests {
         state.option_masks[P1].insert = InsertMask::empty();
 
         let active = session_active_players(&state);
-        handle_start_event(&mut state, &asset_manager, active, P1);
+        handle_start_event(&mut state, active, P1);
 
         assert_eq!(
             state.option_masks[P1].insert,
@@ -3935,7 +4399,7 @@ pub(super) mod tests {
     #[test]
     fn generic_toggle_remove_row_sets_bit_and_profile() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
         let binding = BitmaskBinding::Generic {
             init: BitmaskInit {
                 from_profile: |p| p.remove_active_mask.bits() as u32,
@@ -3962,7 +4426,7 @@ pub(super) mod tests {
         state.player_options[P1].remove_active_mask = RemoveMask::empty();
 
         let active = session_active_players(&state);
-        handle_start_event(&mut state, &asset_manager, active, P1);
+        handle_start_event(&mut state, active, P1);
 
         assert_eq!(state.option_masks[P1].remove.bits(), 1u8 << 5);
         assert_eq!(state.player_options[P1].remove_active_mask.bits(), 1u8 << 5);
@@ -3971,7 +4435,7 @@ pub(super) mod tests {
     #[test]
     fn generic_toggle_holds_row_sets_bit_and_profile() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
         let binding = BitmaskBinding::Generic {
             init: BitmaskInit {
                 from_profile: |p| p.holds_active_mask.bits() as u32,
@@ -3999,7 +4463,7 @@ pub(super) mod tests {
         state.player_options[P1].holds_active_mask = HoldsMask::empty();
 
         let active = session_active_players(&state);
-        handle_start_event(&mut state, &asset_manager, active, P1);
+        handle_start_event(&mut state, active, P1);
 
         assert_eq!(state.option_masks[P1].holds.bits(), 1u8 << 3);
         assert_eq!(state.player_options[P1].holds_active_mask.bits(), 1u8 << 3);
@@ -4008,7 +4472,7 @@ pub(super) mod tests {
     #[test]
     fn generic_toggle_accel_row_sets_bit_and_profile() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
         let binding = BitmaskBinding::Generic {
             init: BitmaskInit {
                 from_profile: |p| p.accel_effects_active_mask.bits() as u32,
@@ -4035,7 +4499,7 @@ pub(super) mod tests {
         state.player_options[P1].accel_effects_active_mask = AccelEffectsMask::empty();
 
         let active = session_active_players(&state);
-        handle_start_event(&mut state, &asset_manager, active, P1);
+        handle_start_event(&mut state, active, P1);
 
         assert_eq!(state.option_masks[P1].accel_effects.bits(), 1u8 << 1);
         assert_eq!(
@@ -4047,7 +4511,7 @@ pub(super) mod tests {
     #[test]
     fn generic_toggle_visual_effects_row_sets_bit_and_profile() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
         let binding = BitmaskBinding::Generic {
             init: BitmaskInit {
                 from_profile: |p| p.visual_effects_active_mask.bits() as u32,
@@ -4085,7 +4549,7 @@ pub(super) mod tests {
         state.player_options[P1].visual_effects_active_mask = VisualEffectsMask::empty();
 
         let active = session_active_players(&state);
-        handle_start_event(&mut state, &asset_manager, active, P1);
+        handle_start_event(&mut state, active, P1);
 
         assert_eq!(state.option_masks[P1].visual_effects.bits(), 1u16 << 9);
         assert_eq!(
@@ -4104,6 +4568,44 @@ pub(super) mod tests {
 
         assert_eq!(row.choices[1].as_ref(), "Sudden");
         assert_eq!(row.choices[2].as_ref(), "Dynamic Sudden");
+    }
+
+    #[test]
+    fn bit_mapping_projects_active_bits_into_choice_order() {
+        assert_eq!(
+            BitMapping::Sequential { width: 10 }.active_choice_bits(0b10_1010_0101, 10),
+            0b10_1010_0101
+        );
+        assert_eq!(
+            BitMapping::Sequential { width: 10 }.active_choice_bits(0b10_1010_0101, 4),
+            0b0101
+        );
+        assert_eq!(
+            BitMapping::SequentialOffset {
+                offset: 4,
+                width: 5,
+            }
+            .active_choice_bits(0b1_0101 << 4, 5),
+            0b1_0101
+        );
+        assert_eq!(
+            BitMapping::Explicit(&[1 << 0, 1 << 5, 1 << 2])
+                .active_choice_bits((1 << 5) | (1 << 2), 3),
+            0b110
+        );
+    }
+
+    #[test]
+    fn active_choice_iteration_is_sparse_and_ordered() {
+        let mut mask = (1 << 1) | (1 << 5) | (1 << 12);
+        let mut choices = Vec::new();
+        while let Some(choice) = super::super::take_active_choice(&mut mask) {
+            choices.push(choice);
+        }
+
+        assert_eq!(choices, [1, 5, 12]);
+        assert_eq!(mask, 0);
+        assert_eq!(super::super::take_active_choice(&mut mask), None);
     }
 
     #[test]
@@ -4138,7 +4640,7 @@ pub(super) mod tests {
     #[test]
     fn generic_toggle_appearance_row_sets_bit_and_profile() {
         ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
+        let (mut state, _) = setup_state();
         let binding = BitmaskBinding::Generic {
             init: BitmaskInit {
                 from_profile: |p| p.appearance_effects_active_mask.bits() as u32,
@@ -4182,7 +4684,7 @@ pub(super) mod tests {
         state.player_options[P1].appearance_effects_active_mask = AppearanceEffectsMask::empty();
 
         let active = session_active_players(&state);
-        handle_start_event(&mut state, &asset_manager, active, P1);
+        handle_start_event(&mut state, active, P1);
 
         assert_eq!(state.option_masks[P1].appearance_effects.bits(), 1u8 << 5);
         assert_eq!(

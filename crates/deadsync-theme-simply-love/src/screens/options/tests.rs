@@ -107,7 +107,7 @@ fn options_select_color_actors_keep_static_texture_sources() {
     let state = init();
     let asset_manager = AssetManager::new();
     let texture = selected_visual_assets(&state).select_color;
-    let actors = get_actors(&state, &asset_manager, &updater_view(), 1.0);
+    let actors = get_actors(&state, &asset_manager, 1.0);
     let sources: Vec<_> = actors
         .iter()
         .filter_map(|actor| match actor {
@@ -128,6 +128,46 @@ fn options_select_color_actors_keep_static_texture_sources() {
 
 fn updater_view() -> SimplyLoveUpdaterView {
     SimplyLoveUpdaterView::default()
+}
+
+#[test]
+fn updater_panels_replace_only_for_changed_slots() {
+    let mut state = init();
+    let mut updater = SimplyLoveUpdaterView {
+        update: crate::views::SimplyLoveUpdatePhase::Checking,
+        ffmpeg: crate::views::SimplyLoveFfmpegPhase::Checking,
+    };
+    sync_updater_panels(&mut state, &updater, true, true);
+    assert!(state.update_panel.is_some());
+    assert!(state.ffmpeg_panel.is_some());
+
+    updater.update = crate::views::SimplyLoveUpdatePhase::Idle;
+    updater.ffmpeg = crate::views::SimplyLoveFfmpegPhase::Idle;
+    sync_updater_panels(&mut state, &updater, false, false);
+    assert!(state.update_panel.is_some());
+    assert!(state.ffmpeg_panel.is_some());
+
+    sync_updater_panels(&mut state, &updater, true, false);
+    assert!(state.update_panel.is_none());
+    assert!(state.ffmpeg_panel.is_some());
+    sync_updater_panels(&mut state, &updater, false, true);
+    assert!(state.ffmpeg_panel.is_none());
+}
+
+#[test]
+fn updater_panels_rebuild_for_a_new_locale_revision() {
+    let mut state = init();
+    let mut updater = SimplyLoveUpdaterView {
+        update: crate::views::SimplyLoveUpdatePhase::Checking,
+        ffmpeg: crate::views::SimplyLoveFfmpegPhase::Checking,
+    };
+    sync_updater_panels(&mut state, &updater, true, true);
+    updater.update = crate::views::SimplyLoveUpdatePhase::Idle;
+    updater.ffmpeg = crate::views::SimplyLoveFfmpegPhase::Idle;
+    state.updater_i18n_revision = u64::MAX;
+    sync_updater_panels(&mut state, &updater, false, false);
+    assert!(state.update_panel.is_none());
+    assert!(state.ffmpeg_panel.is_none());
 }
 
 #[test]

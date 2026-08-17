@@ -238,6 +238,7 @@ pub enum FfmpegPhase {
 }
 
 static PHASE: LazyLock<RwLock<FfmpegPhase>> = LazyLock::new(|| RwLock::new(FfmpegPhase::Idle));
+static PHASE_REVISION: AtomicU64 = AtomicU64::new(0);
 static WORKER_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 static OP_GENERATION: AtomicU64 = AtomicU64::new(0);
 
@@ -257,9 +258,16 @@ pub fn current() -> FfmpegPhase {
         .unwrap_or(FfmpegPhase::Idle)
 }
 
+/// Monotonic presentation revision for the published FFmpeg phase.
+#[inline(always)]
+pub fn phase_revision() -> u64 {
+    PHASE_REVISION.load(Ordering::Acquire)
+}
+
 fn set_phase(next: FfmpegPhase) {
     if let Ok(mut guard) = PHASE.write() {
         *guard = next;
+        PHASE_REVISION.fetch_add(1, Ordering::Release);
     }
 }
 
@@ -268,6 +276,7 @@ fn set_phase_if_current(generation: u64, next: FfmpegPhase) -> bool {
         && OP_GENERATION.load(Ordering::SeqCst) == generation
     {
         *guard = next;
+        PHASE_REVISION.fetch_add(1, Ordering::Release);
         return true;
     }
     false

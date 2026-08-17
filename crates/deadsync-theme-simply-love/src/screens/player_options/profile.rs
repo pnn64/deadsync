@@ -474,15 +474,10 @@ pub(super) fn speed_mod_bpm_pair(
     }
 }
 
-#[inline(always)]
-pub(super) fn format_speed_bpm_pair(lo: f32, hi: f32) -> String {
+fn rounded_bpm_pair(lo: f32, hi: f32) -> [i32; 2] {
     let lo_i = lo.round() as i32;
     let hi_i = hi.round() as i32;
-    if lo_i == hi_i {
-        lo_i.to_string()
-    } else {
-        format!("{lo_i}-{hi_i}")
-    }
+    [lo_i, hi_i]
 }
 
 #[inline(always)]
@@ -496,33 +491,30 @@ pub(super) fn perspective_speed_mult(perspective: deadsync_profile::Perspective)
     }
 }
 
-#[inline(always)]
-pub(super) fn speed_mod_helper_scroll_text(
+pub(super) fn speed_helper_bpm(
     song: &SongData,
     chart: Option<&ChartData>,
     speed_mod: &SpeedMod,
     music_rate: f32,
-) -> String {
-    speed_mod_bpm_pair(song, chart, speed_mod, music_rate)
-        .map_or_else(String::new, |(lo, hi)| format_speed_bpm_pair(lo, hi))
+) -> Option<[i32; 2]> {
+    speed_mod_bpm_pair(song, chart, speed_mod, music_rate).map(|(lo, hi)| rounded_bpm_pair(lo, hi))
 }
 
-#[inline(always)]
-pub(super) fn speed_mod_helper_scaled_text(
+pub(super) fn scaled_speed_helper_bpm(
     song: &SongData,
     chart: Option<&ChartData>,
     speed_mod: &SpeedMod,
     music_rate: f32,
     profile: &deadsync_profile::PlayerOptionsData,
-) -> String {
+) -> Option<[i32; 2]> {
     let Some((mut lo, mut hi)) = speed_mod_bpm_pair(song, chart, speed_mod, music_rate) else {
-        return String::new();
+        return None;
     };
     let mini = profile.mini_percent.clamp(-100, 150) as f32;
     let scale = ((200.0 - mini) / 200.0) * perspective_speed_mult(profile.perspective);
     lo *= scale;
     hi *= scale;
-    format_speed_bpm_pair(lo, hi)
+    Some(rounded_bpm_pair(lo, hi))
 }
 
 #[inline(always)]

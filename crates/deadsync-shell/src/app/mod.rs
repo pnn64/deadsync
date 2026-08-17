@@ -1133,17 +1133,17 @@ impl ScreensState {
                 }
                 (None, false)
             }
-            CurrentScreen::Practice => self
-                .practice_state
-                .as_mut()
-                .map(|ps| {
+            CurrentScreen::Practice => {
+                if let Some(ps) = self.practice_state.as_mut() {
                     crate::gameplay_runtime::update_practice(
                         ps,
                         delta_time,
                         &mut self.gameplay_score_cursor,
-                    )
-                })
-                .map_or((None, false), |action| (Some(action), false)),
+                        effects,
+                    );
+                }
+                (None, false)
+            }
             CurrentScreen::Init => (Some(init::update(&mut self.init_state, delta_time)), false),
             CurrentScreen::Options => {
                 options::update(
@@ -1444,6 +1444,15 @@ pub struct App {
     /// do not lock the download runtime just to observe an empty queue.
     select_music_ready_reload_generation: u64,
     options_song_pack_generation: u64,
+    /// Game-thread-owned, app-lifetime updater cursor with one action slot and
+    /// one FFmpeg slot. It warms during App construction, then two atomic
+    /// revision reads gate all phase locking, deep cloning, and shell-view
+    /// conversion. A miss replaces only the changed slot on an Options frame
+    /// or input event; there is no growth, eviction, pruning, cross-thread
+    /// mutation, or gameplay-frame destruction. Source revisions provide the
+    /// instrumentation, and worst-case refresh work is one clone of each
+    /// service's latest published phase. Both slots drop at App shutdown.
+    updater_view: updater::RuntimeCursor,
     /// Last download row generation integrated into Select Music. Rows are
     /// rebuilt only while the overlay is visible and the worker changes them.
     select_music_download_generation: u64,
@@ -3748,6 +3757,7 @@ impl App {
             select_music_unlock_rebuild: true,
             select_music_ready_reload_generation: 0,
             options_song_pack_generation: deadsync_simfile::runtime_cache::song_cache_generation(),
+            updater_view: updater::RuntimeCursor::new(),
             select_music_download_generation: 0,
             select_music_downloads_visible: false,
             select_music_shop_generation: 0,
@@ -6113,12 +6123,17 @@ impl App {
                 }
             }
             CurrentScreen::Options => {
-                let updater = updater::view();
+                let change = self.updater_view.refresh();
+                options::sync_updater_panels(
+                    &mut self.state.screens.options_state,
+                    self.updater_view.view(),
+                    change.update,
+                    change.ffmpeg,
+                );
                 options::push_actors(
                     &mut actors,
                     &self.state.screens.options_state,
                     &self.asset_manager,
-                    &updater,
                     screen_alpha_multiplier,
                     visual_policy,
                 );
@@ -6825,11 +6840,22 @@ impl App {
                     self.try_practice_reload(event_loop, "Ctrl+Shift+R");
                     return true;
                 }
-                if let Some(ps) = self.state.screens.practice_state.as_mut() {
-                    let result = crate::gameplay_runtime::handle_practice_raw_key(ps, &raw_key);
-                    if self.handle_theme_input_result(event_loop, result, "Practice") {
-                        return true;
-                    }
+                debug_assert!(self.theme_effect_scratch.is_empty());
+                let consumed = if let Some(state) = self.state.screens.practice_state.as_mut() {
+                    crate::gameplay_runtime::handle_practice_raw_key(
+                        state,
+                        &raw_key,
+                        &mut self.theme_effect_scratch,
+                    )
+                } else {
+                    false
+                };
+                let has_effect = !self.theme_effect_scratch.is_empty();
+                if let Err(e) = self.drain_theme_effects(event_loop) {
+                    log::error!("Failed to handle Practice raw key action: {e}");
+                }
+                if consumed || has_effect {
+                    return true;
                 }
             }
             RawKeyScreenRoute::Evaluation => {
@@ -8734,6 +8760,11 @@ impl App {
             );
             commands.push(Command::SetBanner(banner_path));
             commands.push(Command::SetCdTitle(None));
+        }
+        if target == CurrentScreen::PlayerOptions
+            && let Some(state) = self.state.screens.player_options_state.as_mut()
+        {
+            player_options::prepare_presentation(state, &self.asset_manager);
         }
         if prev == CurrentScreen::PlayerOptions && target != CurrentScreen::PlayerOptions {
             self.state.screens.player_options_state = None;

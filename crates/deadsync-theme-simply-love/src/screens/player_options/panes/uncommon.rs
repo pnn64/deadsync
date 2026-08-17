@@ -195,14 +195,13 @@ pub(super) fn build_uncommon_rows(return_screen: Screen) -> RowMap {
     ));
     // `WhatComesNext` here uses two distinct lookup keys for its two help
     // lines (not a single `\n`-split key), so the standard `help: LookupKey`
-    // constructor parameter cannot express it. Keep the help vec as a
+    // constructor parameter cannot express it. Keep the help slice as a
     // struct-update literal.
     b.push(Row {
-        help: vec![
+        help: help_lines([
             tr("PlayerOptionsHelp", "WhatComesNextHelp1"),
             tr("PlayerOptionsHelp", "WhatComesNextHelp2"),
-        ]
-        .into_boxed_slice(),
+        ]),
         ..Row::custom(
             RowId::WhatComesNext,
             lookup_key("PlayerOptions", "WhatComesNext"),

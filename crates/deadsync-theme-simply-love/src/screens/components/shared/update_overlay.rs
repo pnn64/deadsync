@@ -1,10 +1,9 @@
 //! Modal overlay that visualises a shell-prepared app-update phase.
 //!
-//! The overlay renders only when the action state is non-Idle.  It owns
-//! no state of its own — every frame the screen passes the current
-//! [`ActionPhase`] in, [`build`] returns the actor list, and
-//! [`handle_input`] decides whether the screen should consume the input
-//! or pass it through to the underlying menu.
+//! The overlay renders only when the action state is non-Idle. Options
+//! retains prepared [`PanelContent`] until the shell publishes a new phase;
+//! [`build`] borrows that actor-ready presentation, while [`handle_input`]
+//! continues to inspect the current phase.
 //!
 //! Layout (centred):
 //!
@@ -13,9 +12,8 @@
 //! * title / body / footer text     — z 1502
 //! * progress bar (Downloading)     — child of panel
 //!
-//! No animation: a static panel keeps the modal's geometry deterministic
-//! (so the unit tests can assert actor counts) and avoids new tween work
-//! while the underlying flow is still being built out.
+//! Panel geometry is static so unit tests can assert actor counts. Only the
+//! footer dots and spinner select wall-clock animation frames.
 
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
@@ -23,10 +21,11 @@ use crate::effects::SimplyLoveUpdaterRequest;
 use crate::views::{
     SimplyLoveUpdateErrorKind as ActionErrorKind, SimplyLoveUpdatePhase as ActionPhase,
 };
-use deadlib_present::actors::{Actor, TextAlign};
+use deadlib_present::actors::{Actor, TextAlign, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
+use std::sync::Arc;
 
 use super::loading_bar;
 
@@ -76,25 +75,56 @@ impl InputOutcome {
 /// phase-specific string selection (per overlay) from the shared panel
 /// rendering, so multiple overlays (self-update, ffmpeg install) can
 /// reuse the exact same geometry / styling via [`render_panel`].
-pub struct PanelContent {
+pub(crate) struct PanelContent {
     /// Large heading at the top of the panel.
-    pub title: String,
+    title: TextContent,
     /// Optional focal tag rendered BIG below the title (e.g. a version).
-    pub version_tag: Option<String>,
+    version_tag: Option<TextContent>,
     /// Centre-aligned body lines.
-    pub body_lines: Vec<String>,
-    /// Footer hint; a trailing "…" animates as a dot cycle.
-    pub footer: String,
-    /// Determinate progress fraction (0.0–1.0) for the loading bar, if any.
-    pub progress: Option<f32>,
+    body_lines: Vec<TextContent>,
+    /// Four prepared footer frames; a trailing "…" animates as a dot cycle.
+    footer_frames: [TextContent; 4],
+    footer_animated: bool,
+    /// Determinate progress and its prepared label, if any.
+    progress: Option<PanelProgress>,
     /// Whether to render the animated spinner sprite.
-    pub show_spinner: bool,
+    show_spinner: bool,
+}
+
+struct PanelProgress {
+    fraction: f32,
+    label: TextContent,
+}
+
+impl PanelContent {
+    pub(super) fn new(
+        title: String,
+        version_tag: Option<String>,
+        body_lines: Vec<String>,
+        footer: String,
+        progress: Option<f32>,
+        show_spinner: bool,
+    ) -> Self {
+        let (footer_frames, footer_animated) = footer_frames(footer);
+        Self {
+            title: retained_string(title),
+            version_tag: version_tag.map(retained_string),
+            body_lines: body_lines.into_iter().map(retained_string).collect(),
+            footer_frames,
+            footer_animated,
+            progress: progress.map(|fraction| PanelProgress {
+                fraction,
+                label: retained_string(progress_label(fraction)),
+            }),
+            show_spinner,
+        }
+    }
 }
 
 /// Render a modal panel from pre-computed [`PanelContent`].  Always draws
 /// the dim backdrop, bordered panel, title/body/footer and (optionally) a
 /// progress bar and spinner.  Shared by the self-update and ffmpeg overlays.
-pub fn render_panel(content: &PanelContent, active_color_index: i32) -> Vec<Actor> {
+pub(super) fn render_panel(content: &PanelContent, active_color_index: i32) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(8);
 
     // 1) full-screen dim
@@ -130,7 +160,7 @@ pub fn render_panel(content: &PanelContent, active_color_index: i32) -> Vec<Acto
 
     let white = [1.0, 1.0, 1.0, 1.0];
     actors.push(panel_text_tinted(
-        &content.title,
+        content.title.clone(),
         cx,
         title_y,
         TITLE_PX,
@@ -144,7 +174,7 @@ pub fn render_panel(content: &PanelContent, active_color_index: i32) -> Vec<Acto
     if let Some(tag) = &content.version_tag {
         next_y += VERSION_PX * 0.5;
         actors.push(panel_text_tinted(
-            tag,
+            tag.clone(),
             cx,
             next_y,
             VERSION_PX,
@@ -158,7 +188,7 @@ pub fn render_panel(content: &PanelContent, active_color_index: i32) -> Vec<Acto
     for (i, line) in content.body_lines.iter().enumerate() {
         let y = next_y + (i as f32) * line_gap;
         actors.push(panel_text_tinted(
-            line,
+            line.clone(),
             cx,
             y,
             BODY_PX,
@@ -167,7 +197,7 @@ pub fn render_panel(content: &PanelContent, active_color_index: i32) -> Vec<Acto
         ));
     }
 
-    if let Some(progress) = content.progress {
+    if let Some(progress) = &content.progress {
         let bar_w = PANEL_W - 100.0;
         let bar_h = 32.0;
         let bar_x = cx - bar_w * 0.5;
@@ -178,8 +208,8 @@ pub fn render_panel(content: &PanelContent, active_color_index: i32) -> Vec<Acto
             offset: [bar_x, bar_y],
             width: bar_w,
             height: bar_h,
-            progress,
-            label: progress_label(progress).into(),
+            progress: progress.fraction,
+            label: progress.label.clone(),
             fill_rgba: [fill[0], fill[1], fill[2], 1.0],
             bg_rgba: [0.0, 0.0, 0.0, 1.0],
             border_rgba: [1.0, 1.0, 1.0, 1.0],
@@ -189,9 +219,8 @@ pub fn render_panel(content: &PanelContent, active_color_index: i32) -> Vec<Acto
         }));
     }
 
-    let footer_display = animated_footer(&content.footer);
     actors.push(panel_text(
-        &footer_display,
+        content.footer_text(),
         cx,
         footer_y,
         FOOTER_PX,
@@ -205,26 +234,30 @@ pub fn render_panel(content: &PanelContent, active_color_index: i32) -> Vec<Acto
     actors
 }
 
-/// Build the actor list for the overlay.  Returns an empty `Vec` when
-/// the phase is [`ActionPhase::Idle`], so callers can unconditionally
-/// `.extend(update_overlay::build(&action::current(), active_color_index))`.
-pub fn build(phase: &ActionPhase, active_color_index: i32) -> Vec<Actor> {
+/// Compile actor-ready panel content when the updater phase changes.
+pub(crate) fn prepare(phase: &ActionPhase) -> Option<PanelContent> {
     if matches!(phase, ActionPhase::Idle) {
-        return Vec::new();
+        return None;
     }
     let (title, body_lines, footer, progress) = phase_strings(phase);
-    let content = PanelContent {
+    Some(PanelContent::new(
         title,
-        version_tag: phase_version_tag(phase),
+        phase_version_tag(phase),
         body_lines,
         footer,
         progress,
-        show_spinner: matches!(
+        matches!(
             phase,
             ActionPhase::Checking | ActionPhase::Applying { .. } | ActionPhase::RollbackChecking
         ),
-    };
-    render_panel(&content, active_color_index)
+    ))
+}
+
+/// Build the actor list from retained content, or no actors when idle.
+pub(crate) fn build(content: Option<&PanelContent>, active_color_index: i32) -> Vec<Actor> {
+    content.map_or_else(Vec::new, |content| {
+        render_panel(content, active_color_index)
+    })
 }
 
 /// Animated spinner sprite, frame derived from wall-clock time so the
@@ -252,33 +285,41 @@ fn spinner_actor(cx: f32, cy: f32) -> Actor {
 /// slots so the (center-aligned) label doesn't shift left/right as
 /// dots come and go.  Cycles a hair under 1 s end-to-end (~200 ms per
 /// step) — fast enough to read as "alive" without strobing.
-fn animated_footer(footer: &str) -> String {
-    const DOT_PERIOD_S: f32 = 0.20;
+fn footer_frames(footer: String) -> ([TextContent; 4], bool) {
     let Some(stripped) = footer.strip_suffix('…') else {
-        return footer.to_owned();
+        let text = retained_string(footer);
+        return (std::array::from_fn(|_| text.clone()), false);
     };
-    use std::sync::LazyLock;
-    use std::time::Instant;
-    static DOT_START: LazyLock<Instant> = LazyLock::new(Instant::now);
-    let elapsed = DOT_START.elapsed().as_secs_f32();
-    let phase = ((elapsed / DOT_PERIOD_S) as u32) % 4;
-    let dots: &str = match phase {
-        0 => "   ",
-        1 => ".  ",
-        2 => ".. ",
-        _ => "...",
-    };
-    format!("{stripped}{dots}")
+    const DOTS: [&str; 4] = ["   ", ".  ", ".. ", "..."];
+    (
+        std::array::from_fn(|index| retained_string(format!("{stripped}{}", DOTS[index]))),
+        true,
+    )
+}
+
+impl PanelContent {
+    fn footer_text(&self) -> TextContent {
+        const DOT_PERIOD_S: f32 = 0.20;
+        if !self.footer_animated {
+            return self.footer_frames[0].clone();
+        }
+        use std::sync::LazyLock;
+        use std::time::Instant;
+        static DOT_START: LazyLock<Instant> = LazyLock::new(Instant::now);
+        let elapsed = DOT_START.elapsed().as_secs_f32();
+        let phase = ((elapsed / DOT_PERIOD_S) as usize) % self.footer_frames.len();
+        self.footer_frames[phase].clone()
+    }
 }
 
 #[inline]
-fn panel_text(text: &str, x: f32, y: f32, px: f32, align: TextAlign) -> Actor {
+fn panel_text(text: TextContent, x: f32, y: f32, px: f32, align: TextAlign) -> Actor {
     panel_text_tinted(text, x, y, px, align, [1.0, 1.0, 1.0, 1.0])
 }
 
 #[inline]
 fn panel_text_tinted(
-    text: &str,
+    text: TextContent,
     x: f32,
     y: f32,
     px: f32,
@@ -287,7 +328,7 @@ fn panel_text_tinted(
 ) -> Actor {
     let mut actor = act!(text:
         font("miso"):
-        settext(text.to_owned()):
+        settext(text):
         align(0.5, 0.5):
         xy(x, y):
         zoom(px / 28.0):
@@ -298,6 +339,10 @@ fn panel_text_tinted(
         *align_text = align;
     }
     actor
+}
+
+fn retained_string(value: String) -> TextContent {
+    TextContent::inline_str(&value).unwrap_or_else(|| TextContent::Shared(Arc::from(value)))
 }
 
 /// `(title_rgba, body_rgba)` for the phase.  Lets us tint the title green
@@ -665,6 +710,11 @@ fn format_sha256_short(raw: Option<&str>) -> Option<String> {
 mod tests {
     use super::*;
 
+    fn build_phase(phase: &ActionPhase, active_color_index: i32) -> Vec<Actor> {
+        let content = prepare(phase);
+        build(content.as_ref(), active_color_index)
+    }
+
     fn sample_release() -> crate::views::SimplyLoveReleaseView {
         crate::views::SimplyLoveReleaseView {
             tag: "v9.9.9".to_owned(),
@@ -682,12 +732,12 @@ mod tests {
 
     #[test]
     fn build_idle_returns_no_actors() {
-        assert!(build(&ActionPhase::Idle, 0).is_empty());
+        assert!(build_phase(&ActionPhase::Idle, 0).is_empty());
     }
 
     #[test]
     fn build_checking_returns_actors() {
-        let actors = build(&ActionPhase::Checking, 0);
+        let actors = build_phase(&ActionPhase::Checking, 0);
         assert!(!actors.is_empty(), "checking phase should render actors");
     }
 
@@ -703,7 +753,7 @@ mod tests {
             eta_secs: None,
         };
         let active_color_index = 5;
-        let actors = build(&phase, active_color_index);
+        let actors = build_phase(&phase, active_color_index);
         let Some(children) = actors.iter().find_map(|actor| match actor {
             Actor::Frame {
                 size: [SizeSpec::Px(w), SizeSpec::Px(h)],
@@ -989,7 +1039,7 @@ mod tests {
 
     #[test]
     fn build_rollback_checking_shows_spinner() {
-        let actors = build(&ActionPhase::RollbackChecking, 0);
+        let actors = build_phase(&ActionPhase::RollbackChecking, 0);
         assert!(
             actors.iter().any(|a| matches!(a, Actor::Sprite { .. })),
             "rollback-checking should render the spinner sprite",

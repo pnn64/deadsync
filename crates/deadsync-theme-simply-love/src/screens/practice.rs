@@ -2,13 +2,14 @@ use crate::act;
 use crate::assets::i18n::{self, LookupKey, lookup_key};
 use crate::assets::{AssetManager, FontRole, machine_font_key};
 use crate::screens::gameplay as gameplay_screen;
-use crate::screens::{Screen, ThemeEffect, ThemeInputResult};
+use crate::screens::{Screen, ThemeEffect};
 use crate::views::PracticeRuntimeView;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     AutosyncMode, GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot,
     GameplayOffsetAdjustKey, GameplayRawKeyInput, GameplayTimingTickMode, handle_core_input,
@@ -144,6 +145,145 @@ struct PracticeFieldGeom {
     zoom: f32,
 }
 
+struct PracticeTimingLabel {
+    text: Arc<str>,
+    beat: f32,
+    style: TimingLabelStyle,
+}
+
+#[derive(Clone, Copy)]
+struct EditInfoSource {
+    cursor_beat: f32,
+    current_second: f32,
+    selection_anchor: Option<f32>,
+    selection_end: Option<f32>,
+    snap_index: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct EditInfoKey {
+    cursor_beat: u32,
+    current_second: u32,
+    selection_anchor: Option<u32>,
+    selection_end: Option<u32>,
+    snap_index: usize,
+}
+
+impl EditInfoSource {
+    fn key(self) -> EditInfoKey {
+        EditInfoKey {
+            cursor_beat: self.cursor_beat.to_bits(),
+            current_second: self.current_second.to_bits(),
+            selection_anchor: self.selection_anchor.map(f32::to_bits),
+            selection_end: self.selection_end.map(f32::to_bits),
+            snap_index: self.snap_index,
+        }
+    }
+}
+
+struct PracticeEditLabels {
+    title: Arc<str>,
+    help_titles: [Arc<str>; 3],
+    help_bodies: [Arc<str>; 3],
+    info_suffix: Arc<str>,
+}
+
+/// Localized actor-ready Practice sidebar text owned by the game thread.
+///
+/// Static labels rebuild only on locale revision. The larger chart/status
+/// payload rebuilds on locale, cursor, selection, or snap changes. Capacity is
+/// one fixed label set and one shared status string; there is no eviction,
+/// pruning, synchronization, or background work. Stable actor frames perform
+/// one revision load, one compact key comparison, and shared-reference clones.
+struct PracticeEditText {
+    labels: Option<PracticeEditLabels>,
+    info: Option<(EditInfoKey, Arc<str>)>,
+    i18n_revision: u64,
+}
+
+impl PracticeEditText {
+    fn new() -> Self {
+        Self {
+            labels: None,
+            info: None,
+            i18n_revision: u64::MAX,
+        }
+    }
+
+    fn sync(&mut self, gameplay: &gameplay_screen::State, source: EditInfoSource) {
+        let revision = i18n::revision();
+        let labels_dirty = self.labels.is_none() || self.i18n_revision != revision;
+        if labels_dirty {
+            self.labels = Some(PracticeEditLabels {
+                title: i18n::tr("Practice", "TitlePracticeMode"),
+                help_titles: [
+                    i18n::tr("Practice", "HelpSidebarNavigatingTitle"),
+                    i18n::tr("Practice", "HelpSidebarMenusTitle"),
+                    i18n::tr("Practice", "HelpSidebarMiscTitle"),
+                ],
+                help_bodies: [
+                    i18n::tr("Practice", "HelpSidebarNavigatingBody"),
+                    i18n::tr("Practice", "HelpSidebarMenusBody"),
+                    i18n::tr("Practice", "HelpSidebarMiscBody"),
+                ],
+                info_suffix: Arc::from(build_edit_info_suffix(gameplay)),
+            });
+            self.info = None;
+            self.i18n_revision = revision;
+        }
+
+        let key = source.key();
+        let info_dirty = self.info.as_ref().is_none_or(|(cached, _)| *cached != key);
+        if info_dirty {
+            let suffix = &self
+                .labels
+                .as_ref()
+                .expect("Practice edit labels sync before info")
+                .info_suffix;
+            self.info = Some((key, Arc::from(build_edit_info_text(source, suffix))));
+        }
+    }
+}
+
+/// Localized rows retained for the active Practice menu on the app thread.
+///
+/// Capacity is one exact-size boxed slice for the screen lifetime. It warms on
+/// the first visible menu frame and replaces only when the menu definition or
+/// locale revision changes. There is no growth, eviction, pruning, locking, or
+/// worker work on a stable frame; the revision and definition pointer are the
+/// invalidation instrumentation. Replaced rows drop during menu rendering and
+/// remaining rows drop at screen teardown. A miss performs at most the 14
+/// bounded Help-menu lookups and one boxed-slice allocation.
+struct PracticeMenuText {
+    def: Option<&'static MenuDef>,
+    labels: Option<Box<[Arc<str>]>>,
+    i18n_revision: u64,
+}
+
+impl PracticeMenuText {
+    fn new() -> Self {
+        Self {
+            def: None,
+            labels: None,
+            i18n_revision: u64::MAX,
+        }
+    }
+
+    fn sync(&mut self, def: &'static MenuDef) {
+        let revision = i18n::revision();
+        let current = self.labels.is_some()
+            && self.i18n_revision == revision
+            && self.def.is_some_and(|cached| std::ptr::eq(cached, def));
+        if current {
+            return;
+        }
+
+        self.labels = Some(def.rows.iter().map(|row| row.label.get()).collect());
+        self.def = Some(def);
+        self.i18n_revision = revision;
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CursorHoldDir {
     Up,
@@ -172,6 +312,14 @@ enum PracticeNavMode {
 pub struct State {
     pub gameplay: gameplay_screen::State,
     runtime: PracticeRuntimeView,
+    /// Actor-ready immutable timing labels, compiled once per player at
+    /// Practice entry. The boxed slices have exact song-lifetime capacity and
+    /// require no invalidation, eviction, synchronization, or frame-time
+    /// formatting. Actor construction computes only dynamic position,
+    /// visibility, and glow before cloning a visible label's shared text.
+    timing_labels: [Box<[PracticeTimingLabel]>; MAX_PLAYERS],
+    edit_text: PracticeEditText,
+    menu_text: PracticeMenuText,
     mode: Mode,
     menu: Option<MenuState>,
     cursor_beat: f32,
@@ -199,7 +347,10 @@ pub struct State {
     music_rate_hold_raise_count: u8,
     music_rate_hold_delay_left: f32,
     music_rate_hold_repeat_left: f32,
-    flash: Option<(String, f32)>,
+    /// Shared action-time text plus frame-driven remaining visibility. Message
+    /// construction and localization happen only when the flash changes;
+    /// visible actor frames clone the shared reference and update alpha.
+    flash: Option<(Arc<str>, f32)>,
     pending_sfx: Vec<&'static str>,
     pending_profile: Vec<crate::SimplyLoveProfileRequest>,
 }
@@ -240,7 +391,7 @@ impl MenuDef {
     }
 }
 
-const MAIN_MENU: MenuDef = MenuDef {
+static MAIN_MENU: MenuDef = MenuDef {
     rows: &[
         MenuRow {
             label: lookup_key("Practice", "MenuPlayWholeSong"),
@@ -273,7 +424,7 @@ const MAIN_MENU: MenuDef = MenuDef {
     ],
 };
 
-const HELP_MENU: MenuDef = MenuDef {
+static HELP_MENU: MenuDef = MenuDef {
     rows: &[
         MenuRow {
             label: lookup_key("Practice", "HelpHoldUpDown"),
@@ -351,9 +502,23 @@ const SNAP_BEATS: [f32; 9] = [
 
 pub fn init(mut gameplay: gameplay_screen::State, runtime: PracticeRuntimeView) -> State {
     gameplay.disable_score_for_practice();
+    let active_players = gameplay.num_players();
+    let timing_labels = std::array::from_fn(|player| {
+        if player < active_players {
+            gameplay.gameplay_chart(player).map_or_else(
+                || Vec::new().into_boxed_slice(),
+                |chart| compile_timing_labels(&chart.timing_segments),
+            )
+        } else {
+            Vec::new().into_boxed_slice()
+        }
+    });
     let mut state = State {
         gameplay,
         runtime,
+        timing_labels,
+        edit_text: PracticeEditText::new(),
+        menu_text: PracticeMenuText::new(),
         mode: Mode::Editing,
         menu: None,
         cursor_beat: 0.0,
@@ -395,43 +560,27 @@ fn queue_sfx(state: &mut State, path: &'static str) {
     state.pending_sfx.push(path);
 }
 
-fn prepend_pending_sfx(pending_sfx: &mut Vec<&'static str>, effect: ThemeEffect) -> ThemeEffect {
-    let sound_count = pending_sfx.len();
-    if sound_count == 0 {
-        return effect;
-    }
-
-    let has_effect = !matches!(effect, ThemeEffect::None);
-    let mut effects = Vec::with_capacity(sound_count + usize::from(has_effect));
-    effects.extend(pending_sfx.drain(..).map(crate::effects::sfx));
-    if has_effect {
-        effects.push(effect);
-    }
-    ThemeEffect::batch(effects)
-}
-
-fn prepend_pending_effects(
+fn append_pending_effects(
     pending_profile: &mut Vec<crate::SimplyLoveProfileRequest>,
     pending_sfx: &mut Vec<&'static str>,
     effect: ThemeEffect,
-) -> ThemeEffect {
-    let trailing = prepend_pending_sfx(pending_sfx, effect);
-    if pending_profile.is_empty() {
-        return trailing;
-    }
-
-    let mut effects = Vec::with_capacity(pending_profile.len() + 2);
+    effects: &mut Vec<ThemeEffect>,
+) {
+    effects.reserve(
+        pending_profile.len()
+            + pending_sfx.len()
+            + usize::from(!matches!(effect, ThemeEffect::None)),
+    );
     effects.extend(
         pending_profile
             .drain(..)
             .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(request))),
     );
-    effects.push(trailing);
-    ThemeEffect::batch(effects)
-}
-
-fn finish_effect(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
-    prepend_pending_effects(&mut state.pending_profile, &mut state.pending_sfx, effect)
+    effects.extend(pending_sfx.drain(..).map(crate::effects::sfx));
+    if !matches!(&effect, ThemeEffect::None) {
+        debug_assert!(!matches!(&effect, ThemeEffect::Batch(_)));
+        effects.push(effect);
+    }
 }
 
 pub fn edit_snapshot(state: &State) -> EditSnapshot {
@@ -483,7 +632,8 @@ pub fn update(
     audio_snapshot: GameplayAudioSnapshot,
     fallback_host_nanos: impl FnOnce() -> u64,
     snap_music_start: MusicStartSnap,
-) -> ThemeEffect {
+    effects: &mut Vec<ThemeEffect>,
+) {
     let effect = update_inner(
         state,
         delta_time,
@@ -491,7 +641,12 @@ pub fn update(
         fallback_host_nanos,
         snap_music_start,
     );
-    finish_effect(state, effect)
+    append_pending_effects(
+        &mut state.pending_profile,
+        &mut state.pending_sfx,
+        effect,
+        effects,
+    );
 }
 
 fn update_inner(
@@ -539,9 +694,15 @@ pub fn handle_input(
     state: &mut State,
     ev: &InputEvent,
     snap_music_start: MusicStartSnap,
-) -> ThemeEffect {
+    effects: &mut Vec<ThemeEffect>,
+) {
     let effect = handle_input_inner(state, ev, snap_music_start);
-    finish_effect(state, effect)
+    append_pending_effects(
+        &mut state.pending_profile,
+        &mut state.pending_sfx,
+        effect,
+        effects,
+    );
 }
 
 fn handle_input_inner(
@@ -612,13 +773,17 @@ pub fn handle_raw_key_event(
     state: &mut State,
     raw_key: &RawKeyboardEvent,
     snap_music_start: MusicStartSnap,
-) -> ThemeInputResult {
+    effects: &mut Vec<ThemeEffect>,
+) -> bool {
+    let start_len = effects.len();
     let (consumed, effect) = handle_raw_key_event_inner(state, raw_key, snap_music_start);
-    let effect = finish_effect(state, effect);
-    ThemeInputResult {
-        consumed: consumed || !matches!(effect, ThemeEffect::None),
+    append_pending_effects(
+        &mut state.pending_profile,
+        &mut state.pending_sfx,
         effect,
-    }
+        effects,
+    );
+    consumed || effects.len() != start_len
 }
 
 fn handle_raw_key_event_inner(
@@ -873,7 +1038,7 @@ fn set_offset_adjust_flash(state: &mut State) {
         ("FlashSongOffset", state.gameplay.song_offset_seconds())
     };
     let ms = format!("{:+.0}", seconds * 1000.0);
-    let text = i18n::tr_fmt("Practice", key, &[("ms", &ms)]).replace("\\n", "\n");
+    let text = normalize_flash_text(i18n::tr_fmt("Practice", key, &[("ms", &ms)]));
     state.flash = Some((text, FLASH_DURATION_SECS));
 }
 
@@ -1753,13 +1918,20 @@ fn change_music_rate(state: &mut State, delta: f32) -> bool {
 
 fn set_music_rate_flash(state: &mut State, key: &str, rate: f32) {
     let bpm_str = effective_bpm_str(state, rate);
-    let text = i18n::tr_fmt(
+    let text = normalize_flash_text(i18n::tr_fmt(
         "Practice",
         key,
         &[("rate", &fmt_music_rate(rate)), ("bpm", &bpm_str)],
-    )
-    .replace("\\n", "\n");
+    ));
     state.flash = Some((text, FLASH_DURATION_SECS));
+}
+
+fn normalize_flash_text(text: Arc<str>) -> Arc<str> {
+    if text.contains("\\n") {
+        Arc::from(text.replace("\\n", "\n"))
+    } else {
+        text
+    }
 }
 
 fn effective_bpm_str(state: &State, rate: f32) -> String {
@@ -1788,7 +1960,7 @@ fn effective_bpm_str(state: &State, rate: f32) -> String {
 }
 
 fn set_flash_tr(state: &mut State, key: &str) {
-    state.flash = Some((i18n::tr("Practice", key).to_string(), FLASH_DURATION_SECS));
+    state.flash = Some((i18n::tr("Practice", key), FLASH_DURATION_SECS));
 }
 
 fn fmt_music_rate(rate: f32) -> String {
@@ -2074,110 +2246,71 @@ fn append_player_markers(
 }
 
 fn append_timing_segment_labels(state: &State, actors: &mut Vec<Actor>, geom: PracticeFieldGeom) {
-    let Some(gameplay_chart) = state.gameplay.gameplay_chart(geom.player_idx) else {
+    let Some(labels) = state.timing_labels.get(geom.player_idx) else {
         return;
     };
-    let timing = &gameplay_chart.timing_segments;
     let glow_alpha = timing_label_glow_alpha(state.gameplay.total_elapsed_in_screen());
-    append_timing_labels_from_segments(state, actors, geom, timing, glow_alpha);
+    for label in labels {
+        append_timing_segment_label(
+            state,
+            actors,
+            geom,
+            label.style,
+            &label.text,
+            label.beat,
+            glow_alpha,
+        );
+    }
 }
 
-fn append_timing_labels_from_segments(
-    state: &State,
-    actors: &mut Vec<Actor>,
-    geom: PracticeFieldGeom,
-    timing: &TimingSegments,
-    glow_alpha: f32,
-) {
+fn compile_timing_labels(timing: &TimingSegments) -> Box<[PracticeTimingLabel]> {
+    let capacity = timing.scrolls.len()
+        + timing.bpms.len()
+        + timing.stops.len()
+        + timing.delays.len()
+        + timing.warps.len()
+        + timing.time_signatures.len()
+        + timing.speeds.len()
+        + timing.fakes.len();
+    let mut labels = Vec::with_capacity(capacity);
+    let mut push = |text: String, beat, style| {
+        labels.push(PracticeTimingLabel {
+            text: Arc::from(text),
+            beat,
+            style,
+        });
+    };
+
     // PARITY[ITGmania NoteField::DrawPrimitives]: segment text draw order.
     for seg in &timing.scrolls {
-        append_timing_segment_label(
-            state,
-            actors,
-            geom,
-            SCROLL_LABEL_STYLE,
-            fmt_itg_float(seg.ratio),
-            seg.beat,
-            glow_alpha,
-        );
+        push(fmt_itg_float(seg.ratio), seg.beat, SCROLL_LABEL_STYLE);
     }
     for &(beat, bpm) in &timing.bpms {
-        append_timing_segment_label(
-            state,
-            actors,
-            geom,
-            BPM_LABEL_STYLE,
-            fmt_itg_float(bpm),
-            beat,
-            glow_alpha,
-        );
+        push(fmt_itg_float(bpm), beat, BPM_LABEL_STYLE);
     }
     for seg in &timing.stops {
-        append_timing_segment_label(
-            state,
-            actors,
-            geom,
-            STOP_LABEL_STYLE,
-            fmt_itg_float(seg.duration),
-            seg.beat,
-            glow_alpha,
-        );
+        push(fmt_itg_float(seg.duration), seg.beat, STOP_LABEL_STYLE);
     }
     for seg in &timing.delays {
-        append_timing_segment_label(
-            state,
-            actors,
-            geom,
-            DELAY_LABEL_STYLE,
-            fmt_itg_float(seg.duration),
-            seg.beat,
-            glow_alpha,
-        );
+        push(fmt_itg_float(seg.duration), seg.beat, DELAY_LABEL_STYLE);
     }
     for seg in &timing.warps {
-        append_timing_segment_label(
-            state,
-            actors,
-            geom,
-            WARP_LABEL_STYLE,
-            fmt_itg_float(seg.length),
-            seg.beat,
-            glow_alpha,
-        );
+        push(fmt_itg_float(seg.length), seg.beat, WARP_LABEL_STYLE);
     }
     for seg in &timing.time_signatures {
-        append_timing_segment_label(
-            state,
-            actors,
-            geom,
-            TIME_SIG_LABEL_STYLE,
+        push(
             format!("{}\n--\n{}", seg.numerator, seg.denominator),
             seg.beat,
-            glow_alpha,
+            TIME_SIG_LABEL_STYLE,
         );
     }
     for seg in &timing.speeds {
-        append_timing_segment_label(
-            state,
-            actors,
-            geom,
-            SPEED_LABEL_STYLE,
-            timing_speed_label(*seg),
-            seg.beat,
-            glow_alpha,
-        );
+        push(timing_speed_label(*seg), seg.beat, SPEED_LABEL_STYLE);
     }
     for seg in &timing.fakes {
-        append_timing_segment_label(
-            state,
-            actors,
-            geom,
-            FAKE_LABEL_STYLE,
-            fmt_itg_float(seg.length),
-            seg.beat,
-            glow_alpha,
-        );
+        push(fmt_itg_float(seg.length), seg.beat, FAKE_LABEL_STYLE);
     }
+    labels.into_boxed_slice()
 }
 
 fn append_timing_segment_label(
@@ -2185,7 +2318,7 @@ fn append_timing_segment_label(
     actors: &mut Vec<Actor>,
     geom: PracticeFieldGeom,
     style: TimingLabelStyle,
-    text: String,
+    text: &Arc<str>,
     beat: f32,
     glow_alpha: f32,
 ) {
@@ -2343,12 +2476,31 @@ fn append_snap_cursor_heart(actors: &mut Vec<Actor>, x: f32, y: f32, zoom: f32, 
     ));
 }
 
-fn append_edit_overlay(state: &State, actors: &mut Vec<Actor>) {
+fn append_edit_overlay(state: &mut State, actors: &mut Vec<Actor>) {
+    let source = EditInfoSource {
+        cursor_beat: state.cursor_beat,
+        current_second: state.gameplay.music_time_for_beat(state.cursor_beat),
+        selection_anchor: state.selection_anchor,
+        selection_end: state.selection_end,
+        snap_index: state.snap_index,
+    };
+    state.edit_text.sync(&state.gameplay, source);
+    let labels = state
+        .edit_text
+        .labels
+        .as_ref()
+        .expect("Practice edit labels sync before actor construction");
+    let status = &state
+        .edit_text
+        .info
+        .as_ref()
+        .expect("Practice edit info sync before actor construction")
+        .1;
     let pc = practice_player_color(state);
     let header_font = machine_font_key(state.gameplay.machine_font(), FontRole::Header);
     actors.push(act!(text:
         font(header_font):
-        settext(i18n::tr("Practice", "TitlePracticeMode")):
+        settext(&labels.title):
         align(1.0, 0.5):
         xy(screen_width() - 35.0, 10.0):
         zoom(EDIT_HELP_HEADER_ZOOM):
@@ -2363,27 +2515,26 @@ fn append_edit_overlay(state: &State, actors: &mut Vec<Actor>) {
         z(2999)
     ));
 
-    let status = edit_info_text(state);
     append_help_section(
         actors,
-        i18n::tr("Practice", "HelpSidebarNavigatingTitle"),
-        i18n::tr("Practice", "HelpSidebarNavigatingBody"),
+        &labels.help_titles[0],
+        &labels.help_bodies[0],
         0.0,
         pc,
         header_font,
     );
     append_help_section(
         actors,
-        i18n::tr("Practice", "HelpSidebarMenusTitle"),
-        i18n::tr("Practice", "HelpSidebarMenusBody"),
+        &labels.help_titles[1],
+        &labels.help_bodies[1],
         EDIT_HELP_MENU_Y,
         pc,
         header_font,
     );
     append_help_section(
         actors,
-        i18n::tr("Practice", "HelpSidebarMiscTitle"),
-        i18n::tr("Practice", "HelpSidebarMiscBody"),
+        &labels.help_titles[2],
+        &labels.help_bodies[2],
         EDIT_HELP_MISC_Y,
         pc,
         header_font,
@@ -2421,31 +2572,36 @@ fn practice_player_color(state: &State) -> [f32; 4] {
     color::simply_love_rgba(state.gameplay.active_color_index())
 }
 
-fn edit_info_text(state: &State) -> String {
-    let chart = &state.gameplay.charts()[0];
-    let song = state.gameplay.song();
-    let current_second = state.gameplay.music_time_for_beat(state.cursor_beat);
-    let difficulty = color::difficulty_display_name_for_song(&chart.difficulty, &song.title, true);
-    let snap = SNAP_LABELS[state.snap_index];
+fn build_edit_info_text(source: EditInfoSource, suffix: &str) -> String {
+    let snap = SNAP_LABELS[source.snap_index];
     let mut status = String::new();
     status.push_str(&i18n::tr_fmt(
         "Practice",
         "InfoCurrentBeat",
-        &[("beat", &format!("{:.3}", state.cursor_beat))],
+        &[("beat", &format!("{:.3}", source.cursor_beat))],
     ));
     status.push('\n');
     status.push_str(&i18n::tr_fmt(
         "Practice",
         "InfoCurrentSecond",
-        &[("sec", &format!("{current_second:.6}"))],
+        &[("sec", &format!("{:.6}", source.current_second))],
     ));
     status.push('\n');
     status.push_str(&i18n::tr_fmt("Practice", "InfoSnapTo", &[("snap", snap)]));
     status.push('\n');
-    if let Some(selection) = selection_info_text(state) {
+    if let Some(selection) = selection_info_text(source.selection_anchor, source.selection_end) {
         status.push_str(&selection);
         status.push('\n');
     }
+    status.push_str(suffix);
+    status
+}
+
+fn build_edit_info_suffix(gameplay: &gameplay_screen::State) -> String {
+    let chart = &gameplay.charts()[0];
+    let song = gameplay.song();
+    let difficulty = color::difficulty_display_name_for_song(&chart.difficulty, &song.title, true);
+    let mut status = String::new();
     status.push_str(&i18n::tr_fmt(
         "Practice",
         "InfoDifficulty",
@@ -2486,7 +2642,7 @@ fn edit_info_text(state: &State) -> String {
         &chart.chart_type,
     );
     status.push('\n');
-    let totals = state.gameplay.display_totals_for_player(0);
+    let totals = gameplay.display_totals_for_player(0);
     let stat_lines: [(&str, String); 8] = [
         ("InfoNumSteps", chart.stats.total_steps.to_string()),
         ("InfoNumJumps", chart.stats.jumps.to_string()),
@@ -2506,8 +2662,11 @@ fn edit_info_text(state: &State) -> String {
     status
 }
 
-fn selection_info_text(state: &State) -> Option<String> {
-    match (state.selection_anchor, state.selection_end) {
+fn selection_info_text(
+    selection_anchor: Option<f32>,
+    selection_end: Option<f32>,
+) -> Option<String> {
+    match (selection_anchor, selection_end) {
         (Some(start), Some(stop)) if stop > start => Some(
             i18n::tr_fmt(
                 "Practice",
@@ -2559,19 +2718,26 @@ fn push_clipped(status: &mut String, value: &str, max_chars: usize) {
     }
 }
 
-fn append_main_menu(state: &State, actors: &mut Vec<Actor>) {
+fn append_main_menu(state: &mut State, actors: &mut Vec<Actor>) {
     let Some(menu) = state.menu else {
         return;
     };
     let row_count = menu.def.rows.len();
     let selected_color = practice_player_color(state);
-    for (idx, row) in menu.def.rows.iter().enumerate() {
+    state.menu_text.sync(menu.def);
+    let labels = state
+        .menu_text
+        .labels
+        .as_deref()
+        .expect("Practice menu labels sync before actor construction");
+    debug_assert_eq!(labels.len(), row_count);
+    for (idx, label) in labels.iter().enumerate() {
         append_menu_row(
             actors,
             idx,
             row_count,
             menu.selected == idx,
-            row.label.get(),
+            label,
             selected_color,
         );
     }
@@ -2582,7 +2748,7 @@ fn append_menu_row(
     idx: usize,
     row_count: usize,
     selected: bool,
-    label: Arc<str>,
+    label: &Arc<str>,
     selected_color: [f32; 4],
 ) {
     let y = menu_row_y(idx, row_count);
@@ -2624,8 +2790,8 @@ fn menu_row_y(idx: usize, row_count: usize) -> f32 {
 
 fn append_help_section(
     actors: &mut Vec<Actor>,
-    label: Arc<str>,
-    body: Arc<str>,
+    label: &Arc<str>,
+    body: &Arc<str>,
     y: f32,
     player_color: [f32; 4],
     header_font: &'static str,
@@ -2662,16 +2828,16 @@ fn append_help_section(
 mod tests {
     use super::{
         BPM_LABEL_STYLE, CursorHoldDir, DISPLAY_SCROLL_MAX_SMOOTH_BEATS,
-        DISPLAY_SCROLL_SNAP_EPSILON, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX,
+        DISPLAY_SCROLL_SNAP_EPSILON, EditInfoSource, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX,
         MUSIC_RATE_HOTKEY_MIN, MUSIC_RATE_HOTKEY_STEP, MenuDef, MusicRateHoldDir, PageHoldDir,
-        PracticeNavMode, SPEED_LABEL_STYLE, TAB_FAST_MULTIPLIER, clamp_selection,
+        PracticeMenuText, PracticeNavMode, SPEED_LABEL_STYLE, TAB_FAST_MULTIPLIER,
+        append_pending_effects, clamp_selection, compile_timing_labels,
         edit_cursor_hold_dir_for_action_in_mode, edit_scroll_hold_rate,
         edit_snap_delta_for_action_in_mode, fmt_itg_float, fmt_music_rate, gameplay_hotkey_input,
         menu_step_delta_for_action_in_mode, music_rate_delta_for_dir,
-        music_rate_hold_dir_for_event, next_display_beat, page_hold_dir_for_key,
-        practice_edit_beat_travel, practice_nav_mode_from_config, prepend_pending_effects,
-        prepend_pending_sfx, quantized_music_rate, timing_label_glow_alpha, timing_label_x,
-        timing_speed_label,
+        music_rate_hold_dir_for_event, next_display_beat, normalize_flash_text,
+        page_hold_dir_for_key, practice_edit_beat_travel, practice_nav_mode_from_config,
+        quantized_music_rate, timing_label_glow_alpha, timing_label_x, timing_speed_label,
     };
     use crate::SimplyLoveRuntimeRequest;
     use crate::assets::i18n;
@@ -2680,8 +2846,12 @@ mod tests {
     use deadsync_input::KeyCode;
     use deadsync_input::VirtualAction;
     use deadsync_rules::scroll::ScrollSpeedSetting;
-    use deadsync_rules::timing::{SpeedSegment, SpeedUnit};
+    use deadsync_rules::timing::{
+        DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment,
+        TimeSignatureSegment, TimingSegments, WarpSegment,
+    };
     use deadsync_theme::AudioRequest;
+    use std::sync::Arc;
 
     /// Every i18n key the practice screen looks up at runtime, outside of the
     /// menu definitions (which already have their own coverage tests). Keep
@@ -2736,6 +2906,53 @@ mod tests {
         "InfoNumLifts",
         "InfoNumFakes",
     ];
+
+    #[test]
+    fn edit_info_key_tracks_every_dynamic_text_source() {
+        let source = EditInfoSource {
+            cursor_beat: 12.0,
+            current_second: 6.0,
+            selection_anchor: Some(8.0),
+            selection_end: Some(16.0),
+            snap_index: 3,
+        };
+        let key = source.key();
+        assert_eq!(key, source.key());
+        for changed in [
+            EditInfoSource {
+                cursor_beat: 12.25,
+                ..source
+            },
+            EditInfoSource {
+                current_second: 6.125,
+                ..source
+            },
+            EditInfoSource {
+                selection_anchor: None,
+                ..source
+            },
+            EditInfoSource {
+                selection_end: None,
+                ..source
+            },
+            EditInfoSource {
+                snap_index: 4,
+                ..source
+            },
+        ] {
+            assert_ne!(key, changed.key());
+        }
+    }
+
+    #[test]
+    fn flash_text_reuses_plain_translations_and_normalizes_escaped_lines() {
+        let plain: Arc<str> = Arc::from("Music rate 1.25x");
+        let normalized = normalize_flash_text(Arc::clone(&plain));
+        assert!(Arc::ptr_eq(&plain, &normalized));
+
+        let multiline = normalize_flash_text(Arc::from("Music rate 1.25x\\n180 BPM"));
+        assert_eq!(multiline.as_ref(), "Music rate 1.25x\n180 BPM");
+    }
 
     #[test]
     fn practice_nav_mode_follows_dedicated_menu_config() {
@@ -2871,13 +3088,15 @@ mod tests {
 
     #[test]
     fn pending_practice_sfx_keep_order_before_navigation() {
+        let mut profiles = Vec::new();
         let mut pending = vec!["assets/sounds/change.ogg", "assets/sounds/start.ogg"];
-        let effect =
-            prepend_pending_sfx(&mut pending, ThemeEffect::Navigate(Screen::PlayerOptions));
-
-        let ThemeEffect::Batch(effects) = effect else {
-            panic!("multiple Practice effects should be batched");
-        };
+        let mut effects = Vec::new();
+        append_pending_effects(
+            &mut profiles,
+            &mut pending,
+            ThemeEffect::Navigate(Screen::PlayerOptions),
+            &mut effects,
+        );
         let [first, second, ThemeEffect::Navigate(Screen::PlayerOptions)] = effects.as_slice()
         else {
             panic!("Practice SFX should precede navigation");
@@ -2900,13 +3119,13 @@ mod tests {
     fn practice_rate_persistence_precedes_sound_and_navigation() {
         let mut profiles = vec![crate::SimplyLoveProfileRequest::SetMusicRate(1.25)];
         let mut sounds = vec!["assets/sounds/change.ogg"];
-        let ThemeEffect::Batch(effects) = prepend_pending_effects(
+        let mut effects = Vec::new();
+        append_pending_effects(
             &mut profiles,
             &mut sounds,
             ThemeEffect::Navigate(Screen::PlayerOptions),
-        ) else {
-            panic!("Practice rate change should preserve ordered effects");
-        };
+            &mut effects,
+        );
 
         assert!(matches!(
             &effects[0],
@@ -3048,6 +3267,64 @@ mod tests {
     }
 
     #[test]
+    fn compiled_timing_labels_preserve_draw_order_and_text() {
+        let timing = TimingSegments {
+            scrolls: vec![ScrollSegment {
+                beat: 1.0,
+                ratio: 0.5,
+            }],
+            bpms: vec![(2.0, 120.0)],
+            stops: vec![StopSegment {
+                beat: 3.0,
+                duration: 0.25,
+            }],
+            delays: vec![DelaySegment {
+                beat: 4.0,
+                duration: 0.125,
+            }],
+            warps: vec![WarpSegment {
+                beat: 5.0,
+                length: 8.0,
+            }],
+            time_signatures: vec![TimeSignatureSegment {
+                beat: 6.0,
+                numerator: 3,
+                denominator: 4,
+            }],
+            speeds: vec![SpeedSegment {
+                beat: 7.0,
+                ratio: 2.0,
+                delay: 0.5,
+                unit: SpeedUnit::Beats,
+            }],
+            fakes: vec![FakeSegment {
+                beat: 8.0,
+                length: 4.0,
+            }],
+            ..TimingSegments::default()
+        };
+
+        let labels = compile_timing_labels(&timing);
+        let actual: Vec<_> = labels
+            .iter()
+            .map(|label| (label.beat, label.text.as_ref()))
+            .collect();
+        assert_eq!(
+            actual,
+            [
+                (1.0, "0.500000"),
+                (2.0, "120.000000"),
+                (3.0, "0.250000"),
+                (4.0, "0.125000"),
+                (5.0, "8.000000"),
+                (6.0, "3\n--\n4"),
+                (7.0, "2.000000\nB\n0.500000"),
+                (8.0, "4.000000"),
+            ]
+        );
+    }
+
+    #[test]
     fn timing_label_x_uses_inherited_side_offsets() {
         assert_eq!(timing_label_x(400.0, 160.0, 0.5, BPM_LABEL_STYLE), 290.0);
         assert_eq!(timing_label_x(400.0, 160.0, 0.5, SPEED_LABEL_STYLE), 495.0);
@@ -3091,6 +3368,43 @@ mod tests {
     fn main_menu_item_keys_resolve_through_i18n() {
         i18n::init_for_tests();
         assert_menu_labels_localized(&MAIN_MENU);
+    }
+
+    #[test]
+    fn menu_text_reuses_stable_rows_and_rebuilds_on_source_change() {
+        i18n::init_for_tests();
+        let mut text = PracticeMenuText::new();
+
+        text.sync(&MAIN_MENU);
+        let first_rows = text.labels.as_deref().expect("main labels compiled");
+        let first_ptr = first_rows.as_ptr() as usize;
+        assert_eq!(first_rows.len(), MAIN_MENU.rows.len());
+
+        text.sync(&MAIN_MENU);
+        assert_eq!(
+            text.labels
+                .as_deref()
+                .expect("stable main labels retained")
+                .as_ptr() as usize,
+            first_ptr
+        );
+
+        text.i18n_revision = text.i18n_revision.wrapping_sub(1);
+        text.sync(&MAIN_MENU);
+        assert_ne!(
+            text.labels
+                .as_deref()
+                .expect("revision rebuilt main labels")
+                .as_ptr() as usize,
+            first_ptr
+        );
+
+        text.sync(&HELP_MENU);
+        assert_eq!(
+            text.labels.as_deref().expect("help labels compiled").len(),
+            HELP_MENU.rows.len()
+        );
+        assert!(text.def.is_some_and(|def| std::ptr::eq(def, &HELP_MENU)));
     }
 
     #[test]

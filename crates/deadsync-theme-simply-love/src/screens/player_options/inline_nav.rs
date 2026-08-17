@@ -1,63 +1,63 @@
 use super::*;
 
-pub(super) fn inline_choice_centers(
-    choices: &[Arc<str>],
-    asset_manager: &AssetManager,
+pub(super) fn inline_choice_geometry(
+    row: &Row,
     left_x: f32,
-) -> Vec<f32> {
-    if choices.is_empty() {
-        return Vec::new();
-    }
-    let mut centers: Vec<f32> = Vec::with_capacity(choices.len());
-    let mut x = left_x;
-    let zoom = 0.835_f32;
-    for text in choices {
-        let (draw_w, _) = measure_option_text(asset_manager, text, zoom);
-        centers.push(draw_w.mul_add(0.5, x));
-        x += draw_w + INLINE_SPACING;
-    }
-    centers
+    choice_idx: usize,
+) -> Option<[f32; 2]> {
+    debug_assert_eq!(row.choice_offsets.len(), row.choices.len());
+    debug_assert_eq!(row.choice_widths.len(), row.choices.len());
+    let width = *row.choice_widths.get(choice_idx)?;
+    let offset = *row.choice_offsets.get(choice_idx)?;
+    Some([width.mul_add(0.5, left_x + offset), width])
 }
 
 pub(super) fn prepare_choice_layouts(state: &mut State, asset_manager: &AssetManager) {
-    asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font("miso", |metrics_font| {
-            let text_h = (metrics_font.height as f32).max(1.0) * INLINE_CHOICE_VALUE_ZOOM;
-            for row in state.pane_mut().row_map.rows.iter_mut().flatten() {
-                if row.choice_widths.len() == row.choices.len() && row.choice_height > 0.0 {
-                    continue;
-                }
-                let mut widths = Vec::with_capacity(row.choices.len());
-                for text in &row.choices {
-                    let mut width = deadlib_present::font::measure_line_width_logical(
-                        metrics_font,
-                        text,
-                        all_fonts,
-                    ) as f32;
-                    if !width.is_finite() || width <= 0.0 {
-                        width = 1.0;
+    if state.pane().choice_layout_ready {
+        return;
+    }
+    arcade_next_row_size(state, asset_manager);
+    let prepared = asset_manager.with_fonts(|all_fonts| {
+        asset_manager
+            .with_font("miso", |metrics_font| {
+                let text_h = (metrics_font.height as f32).max(1.0) * INLINE_CHOICE_VALUE_ZOOM;
+                for row in state.pane_mut().row_map.rows.iter_mut().flatten() {
+                    if row.choice_widths.len() == row.choices.len() && row.choice_height > 0.0 {
+                        continue;
                     }
-                    widths.push(width * INLINE_CHOICE_VALUE_ZOOM);
+                    let mut widths = Vec::with_capacity(row.choices.len());
+                    for text in &row.choices {
+                        let mut width = deadlib_present::font::measure_line_width_logical(
+                            metrics_font,
+                            text,
+                            all_fonts,
+                        ) as f32;
+                        if !width.is_finite() || width <= 0.0 {
+                            width = 1.0;
+                        }
+                        widths.push(width * INLINE_CHOICE_VALUE_ZOOM);
+                    }
+                    row.choice_offsets = if row_shows_all_choices_inline(row.id) {
+                        let mut x = 0.0;
+                        widths
+                            .iter()
+                            .map(|width| {
+                                let offset = x;
+                                x += *width + INLINE_CHOICE_SPACING;
+                                offset
+                            })
+                            .collect::<Vec<_>>()
+                            .into_boxed_slice()
+                    } else {
+                        Box::new([])
+                    };
+                    row.choice_widths = widths.into_boxed_slice();
+                    row.choice_height = text_h;
                 }
-                row.choice_offsets = if row_shows_all_choices_inline(row.id) {
-                    let mut x = 0.0;
-                    widths
-                        .iter()
-                        .map(|width| {
-                            let offset = x;
-                            x += *width + INLINE_CHOICE_SPACING;
-                            offset
-                        })
-                        .collect::<Vec<_>>()
-                        .into_boxed_slice()
-                } else {
-                    Box::new([])
-                };
-                row.choice_widths = widths.into_boxed_slice();
-                row.choice_height = text_h;
-            }
-        });
+            })
+            .is_some()
     });
+    state.pane_mut().choice_layout_ready = prepared;
 }
 
 fn inline_row(state: &State, row_idx: usize) -> Option<&Row> {
@@ -65,37 +65,8 @@ fn inline_row(state: &State, row_idx: usize) -> Option<&Row> {
     row_supports_inline_nav(row).then_some(row)
 }
 
-/// Common lookup used by every inline-nav function: resolve `row_idx` to a
-/// `Row` that supports inline navigation, plus its computed choice centers.
-/// Returns `None` if the row index is out of bounds, the row doesn't support
-/// inline nav, or the row has no choices to navigate.
-fn inline_row_and_centers<'a>(
-    state: &'a State,
-    asset_manager: &AssetManager,
-    row_idx: usize,
-) -> Option<(&'a Row, Vec<f32>)> {
-    let row = inline_row(state, row_idx)?;
-    let left_x = inline_choice_left_x_for_row(state, row_idx);
-    let centers = if row.choice_offsets.len() == row.choices.len()
-        && row.choice_widths.len() == row.choices.len()
-    {
-        row.choice_offsets
-            .iter()
-            .zip(row.choice_widths.iter())
-            .map(|(offset, width)| width.mul_add(0.5, left_x + offset))
-            .collect()
-    } else {
-        inline_choice_centers(&row.choices, asset_manager, left_x)
-    };
-    if centers.is_empty() {
-        return None;
-    }
-    Some((row, centers))
-}
-
 pub(super) fn focused_inline_choice_index(
     state: &State,
-    asset_manager: &AssetManager,
     player_idx: usize,
     row_idx: usize,
 ) -> Option<usize> {
@@ -104,35 +75,21 @@ pub(super) fn focused_inline_choice_index(
     let mut focus_idx = row.selected_choice_index[idx].min(row.choices.len().saturating_sub(1));
     let anchor_x = state.pane().inline_choice_x[idx];
     if anchor_x.is_finite() {
+        debug_assert!(state.pane().choice_layout_ready);
+        debug_assert_eq!(row.choice_offsets.len(), row.choices.len());
+        debug_assert_eq!(row.choice_widths.len(), row.choices.len());
         let mut best_dist = f32::INFINITY;
-        if row.choice_offsets.len() == row.choices.len()
-            && row.choice_widths.len() == row.choices.len()
+        let left_x = inline_choice_left_x_for_row(state, row_idx);
+        for (i, (&offset, &width)) in row
+            .choice_offsets
+            .iter()
+            .zip(row.choice_widths.iter())
+            .enumerate()
         {
-            let left_x = inline_choice_left_x_for_row(state, row_idx);
-            for (i, (&offset, &width)) in row
-                .choice_offsets
-                .iter()
-                .zip(row.choice_widths.iter())
-                .enumerate()
-            {
-                let dist = (width.mul_add(0.5, left_x + offset) - anchor_x).abs();
-                if dist < best_dist {
-                    best_dist = dist;
-                    focus_idx = i;
-                }
-            }
-        } else {
-            let centers = inline_choice_centers(
-                &row.choices,
-                asset_manager,
-                inline_choice_left_x_for_row(state, row_idx),
-            );
-            for (i, &center_x) in centers.iter().enumerate() {
-                let dist = (center_x - anchor_x).abs();
-                if dist < best_dist {
-                    best_dist = dist;
-                    focus_idx = i;
-                }
+            let dist = (width.mul_add(0.5, left_x + offset) - anchor_x).abs();
+            if dist < best_dist {
+                best_dist = dist;
+                focus_idx = i;
             }
         }
     }
@@ -141,7 +98,6 @@ pub(super) fn focused_inline_choice_index(
 
 pub(super) fn move_inline_focus(
     state: &mut State,
-    asset_manager: &AssetManager,
     player_idx: usize,
     delta: isize,
     wrap: NavWrap,
@@ -151,20 +107,27 @@ pub(super) fn move_inline_focus(
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_idx = state.pane().selected_row[idx].min(state.pane().row_map.len().saturating_sub(1));
-    let Some((_row, centers)) = inline_row_and_centers(state, asset_manager, row_idx) else {
+    let Some(row) = inline_row(state, row_idx) else {
         return false;
     };
+    let choice_count = row.choices.len();
+    if choice_count == 0 {
+        return false;
+    }
+    let left_x = inline_choice_left_x_for_row(state, row_idx);
     if row_allows_arcade_next_row(state, row_idx) {
         if state.pane().arcade_row_focus[idx] {
             if delta <= 0 {
                 return false;
             }
+            let Some([target, _]) = inline_choice_geometry(row, left_x, 0) else {
+                return false;
+            };
             state.pane_mut().arcade_row_focus[idx] = false;
-            state.pane_mut().inline_choice_x[idx] = centers[0];
+            state.pane_mut().inline_choice_x[idx] = target;
             return true;
         }
-        let Some(current_idx) = focused_inline_choice_index(state, asset_manager, idx, row_idx)
-        else {
+        let Some(current_idx) = focused_inline_choice_index(state, idx, row_idx) else {
             return false;
         };
         if delta < 0 {
@@ -173,19 +136,25 @@ pub(super) fn move_inline_focus(
                 state.pane_mut().inline_choice_x[idx] = f32::NAN;
                 return true;
             }
-            state.pane_mut().inline_choice_x[idx] = centers[current_idx - 1];
+            let Some([target, _]) = inline_choice_geometry(row, left_x, current_idx - 1) else {
+                return false;
+            };
+            state.pane_mut().inline_choice_x[idx] = target;
             return true;
         }
-        if current_idx + 1 >= centers.len() {
+        if current_idx + 1 >= choice_count {
             return false;
         }
-        state.pane_mut().inline_choice_x[idx] = centers[current_idx + 1];
+        let Some([target, _]) = inline_choice_geometry(row, left_x, current_idx + 1) else {
+            return false;
+        };
+        state.pane_mut().inline_choice_x[idx] = target;
         return true;
     }
-    let Some(current_idx) = focused_inline_choice_index(state, asset_manager, idx, row_idx) else {
+    let Some(current_idx) = focused_inline_choice_index(state, idx, row_idx) else {
         return false;
     };
-    let n = centers.len() as isize;
+    let n = choice_count as isize;
     let raw = current_idx as isize + delta;
     let next_idx = match wrap {
         NavWrap::Wrap => raw.rem_euclid(n) as usize,
@@ -194,21 +163,26 @@ pub(super) fn move_inline_focus(
     if next_idx == current_idx {
         return false;
     }
-    state.pane_mut().inline_choice_x[idx] = centers[next_idx];
+    let Some([target, _]) = inline_choice_geometry(row, left_x, next_idx) else {
+        return false;
+    };
+    state.pane_mut().inline_choice_x[idx] = target;
     true
 }
 
 pub(super) fn commit_inline_focus_selection(
     state: &mut State,
-    asset_manager: &AssetManager,
     player_idx: usize,
     row_idx: usize,
 ) -> bool {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let Some((row, _centers)) = inline_row_and_centers(state, asset_manager, row_idx) else {
+    let Some(row) = inline_row(state, row_idx) else {
         return false;
     };
-    let Some(focus_idx) = focused_inline_choice_index(state, asset_manager, idx, row_idx) else {
+    if row.choices.is_empty() {
+        return false;
+    }
+    let Some(focus_idx) = focused_inline_choice_index(state, idx, row_idx) else {
         return false;
     };
     let is_shared = row.mirror_across_players;
@@ -236,23 +210,24 @@ pub(super) fn commit_inline_focus_selection(
 /// - `force = false` (`apply_inline_intent_to_row`): preserve any existing
 ///   finite anchor on non-Main panes (so horizontal intent carries between
 ///   rows), but always reset on the Main pane.
-fn write_inline_intent(
-    state: &mut State,
-    asset_manager: &AssetManager,
-    player_idx: usize,
-    row_idx: usize,
-    force: bool,
-) {
+fn write_inline_intent(state: &mut State, player_idx: usize, row_idx: usize, force: bool) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     if row_allows_arcade_next_row(state, row_idx) && state.pane().arcade_row_focus[idx] {
         state.pane_mut().inline_choice_x[idx] = f32::NAN;
         return;
     }
-    let Some((row, centers)) = inline_row_and_centers(state, asset_manager, row_idx) else {
+    let Some(row) = inline_row(state, row_idx) else {
         return;
     };
-    let sel = row.selected_choice_index[idx].min(centers.len().saturating_sub(1));
-    let target = centers[sel];
+    if row.choices.is_empty() {
+        return;
+    }
+    let sel = row.selected_choice_index[idx].min(row.choices.len() - 1);
+    let Some([target, _]) =
+        inline_choice_geometry(row, inline_choice_left_x_for_row(state, row_idx), sel)
+    else {
+        return;
+    };
     if force
         || state.current_pane == OptionsPane::Main
         || !state.pane().inline_choice_x[idx].is_finite()
@@ -261,22 +236,12 @@ fn write_inline_intent(
     }
 }
 
-pub(super) fn sync_inline_intent_from_row(
-    state: &mut State,
-    asset_manager: &AssetManager,
-    player_idx: usize,
-    row_idx: usize,
-) {
-    write_inline_intent(state, asset_manager, player_idx, row_idx, true);
+pub(super) fn sync_inline_intent_from_row(state: &mut State, player_idx: usize, row_idx: usize) {
+    write_inline_intent(state, player_idx, row_idx, true);
 }
 
-pub(super) fn apply_inline_intent_to_row(
-    state: &mut State,
-    asset_manager: &AssetManager,
-    player_idx: usize,
-    row_idx: usize,
-) {
-    write_inline_intent(state, asset_manager, player_idx, row_idx, false);
+pub(super) fn apply_inline_intent_to_row(state: &mut State, player_idx: usize, row_idx: usize) {
+    write_inline_intent(state, player_idx, row_idx, false);
 }
 
 pub(super) fn move_selection_vertical(
@@ -304,7 +269,7 @@ pub(super) fn move_selection_vertical(
         if let Some((anchor_x, _, _, _)) = cursor_dest_for_player(state, asset_manager, idx) {
             state.pane_mut().inline_choice_x[idx] = anchor_x;
         } else {
-            sync_inline_intent_from_row(state, asset_manager, idx, current_row);
+            sync_inline_intent_from_row(state, idx, current_row);
         }
     }
     if let Some(next_row) =
@@ -312,7 +277,7 @@ pub(super) fn move_selection_vertical(
     {
         state.pane_mut().selected_row[idx] = next_row;
         state.pane_mut().arcade_row_focus[idx] = row_allows_arcade_next_row(state, next_row);
-        apply_inline_intent_to_row(state, asset_manager, idx, next_row);
+        apply_inline_intent_to_row(state, idx, next_row);
     }
 }
 
@@ -381,13 +346,26 @@ pub(super) fn arcade_row_focuses_next_row(
         && state.pane().selected_row[idx] == row_idx
 }
 
+pub(super) fn arcade_next_row_size(state: &State, asset_manager: &AssetManager) -> [f32; 2] {
+    if let Some(size) = state.arcade_next_row_size.get() {
+        return size;
+    }
+    let (width, height) = measure_option_text(
+        asset_manager,
+        ARCADE_NEXT_ROW_TEXT,
+        INLINE_CHOICE_VALUE_ZOOM,
+    );
+    let size = [width, height];
+    state.arcade_next_row_size.set(Some(size));
+    size
+}
+
 pub(super) fn arcade_next_row_layout(
     state: &State,
     row_idx: usize,
     asset_manager: &AssetManager,
-    zoom: f32,
 ) -> (f32, f32, f32) {
-    let (draw_w, draw_h) = measure_option_text(asset_manager, ARCADE_NEXT_ROW_TEXT, zoom);
+    let [draw_w, draw_h] = arcade_next_row_size(state, asset_manager);
     let left_x = inline_choice_left_x_for_row(state, row_idx) - draw_w - arcade_next_row_gap_x();
     (left_x, draw_w, draw_h)
 }

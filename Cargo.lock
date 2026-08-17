@@ -1409,7 +1409,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.649"
+version = "0.5.650"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1844,7 +1844,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.649"
+version = "0.5.650"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1903,7 +1903,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.649"
+version = "0.5.650"
 dependencies = [
  "log",
  "semver",
@@ -3068,9 +3068,9 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "libredox"
-version = "0.1.19"
+version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2026a5056764a10b2bf5d56488cba40da507f5493a6a429340e2004d9ed085fa"
+checksum = "28d0a00925a9f930d679b6789b721e3a7f9ed110f41b86d2497caa780c3a070a"
 dependencies = [
  "bitflags 2.13.1",
  "libc",
@@ -4743,9 +4743,10 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rssp"
-version = "0.4.123"
-source = "git+https://github.com/pnn64/rssp?branch=main#5a26e35db018e22dfb9c179be5d1cc6a66a6a63b"
+version = "0.4.181"
+source = "git+https://github.com/pnn64/rssp?branch=main#a17df3fd8a2fb3ba6719149f0f0c94bbeaf56f6e"
 dependencies = [
+ "foldhash",
  "memchr",
  "rssp-core",
  "serde_json",
@@ -4754,8 +4755,8 @@ dependencies = [
 
 [[package]]
 name = "rssp-core"
-version = "0.4.123"
-source = "git+https://github.com/pnn64/rssp?branch=main#5a26e35db018e22dfb9c179be5d1cc6a66a6a63b"
+version = "0.4.181"
+source = "git+https://github.com/pnn64/rssp?branch=main#a17df3fd8a2fb3ba6719149f0f0c94bbeaf56f6e"
 
 [[package]]
 name = "rtrb"
@@ -5833,9 +5834,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.24.0"
+version = "1.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf3923a6f5c4c6382e0b653c4117f48d631ea17f38ed86e2a828e6f7412f5239"
+checksum = "2cefc03fd367c0c6d4305de1b312cf00248c4114f4a0418ce6a6af769e3b0bd9"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
@@ -5959,9 +5960,9 @@ dependencies = [
 
 [[package]]
 name = "wayland-backend"
-version = "0.3.16"
+version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "016ccf01d1c58b6f8999612813e17c9b2390f7d70671428869913310f83f54b8"
+checksum = "38a91b4eaddff87b1cd1074985e3713da4af2c49742d1b356b2c01670a67a078"
 dependencies = [
  "cc",
  "downcast-rs",

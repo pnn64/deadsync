@@ -6,18 +6,19 @@ pub(super) fn top_bar_actor(
     state: &State,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) -> Actor {
-    let title = tr("ScreenTitles", "SelectModifiers");
+    let i18n_revision = crate::assets::i18n::revision();
     let screen_size_bits = [screen_width().to_bits(), screen_height().to_bits()];
     {
         let cache = state.top_bar_cache.borrow();
         if let Some(cached) = cache.as_ref()
-            && cached.title == title
+            && cached.i18n_revision == i18n_revision
             && cached.visual_policy == visual_policy
             && cached.screen_size_bits == screen_size_bits
         {
             return cached.actor.clone();
         }
     }
+    let title = tr("ScreenTitles", "SelectModifiers");
     let actor = screen_bar::build_shared(ScreenBarParams {
         visual_policy,
         title: &title,
@@ -32,7 +33,7 @@ pub(super) fn top_bar_actor(
         right_avatar: None,
     });
     *state.top_bar_cache.borrow_mut() = Some(PlayerOptionsTopBarCache {
-        title,
+        i18n_revision,
         visual_policy,
         screen_size_bits,
         actor: actor.clone(),
@@ -40,33 +41,77 @@ pub(super) fn top_bar_actor(
     actor
 }
 
-fn speed_text_key(state: &State, player_idx: usize) -> SpeedTextKey {
-    let speed_mod = &state.speed_mod[player_idx];
-    let profile = &state.player_options[player_idx];
-    SpeedTextKey {
-        mod_type: speed_mod.mod_type,
-        value_bits: speed_mod.value.to_bits(),
-        music_rate_bits: state.music_rate.to_bits(),
-        chart_steps_index: state.chart_steps_index,
-        mini_percent: profile.mini_percent,
-        perspective: profile.perspective,
+pub(super) fn compile_row_titles(row_map: &RowMap, i18n_revision: u64) -> PlayerOptionsRowTitles {
+    PlayerOptionsRowTitles {
+        i18n_revision,
+        titles: row_map
+            .display_order()
+            .iter()
+            .map(|&id| row_title_content(row_map.row(id).name.get()))
+            .collect(),
     }
 }
 
-pub(super) fn cached_speed_text(
-    state: &State,
-    player_idx: usize,
-) -> std::cell::Ref<'_, SpeedTextCache> {
-    let key = speed_text_key(state, player_idx);
-    let cache_hit = state.speed_text_cache.borrow()[player_idx]
+pub(super) fn row_title_content(text: Arc<str>) -> TextContent {
+    TextContent::inline_str(&text).unwrap_or(TextContent::Shared(text))
+}
+
+pub(super) fn prepare_row_titles(state: &mut State) {
+    let pane_idx = state.current_pane.index();
+    let i18n_revision = crate::assets::i18n::revision();
+    if state.row_titles[pane_idx].i18n_revision == i18n_revision {
+        return;
+    }
+    state.row_titles[pane_idx] = compile_row_titles(&state.panes[pane_idx].row_map, i18n_revision);
+}
+
+pub(super) fn prepare_speed_values(state: &mut State, asset_manager: &AssetManager) {
+    let mut dirty = std::mem::take(&mut state.speed_value_dirty);
+    while dirty != 0 {
+        let player_idx = dirty.trailing_zeros() as usize;
+        dirty &= dirty - 1;
+        let speed_mod = &state.speed_mod[player_idx];
+        let text = speed_value_content(speed_mod);
+        let (value_draw_width, value_draw_height) =
+            measure_option_text(asset_manager, text.as_str(), INLINE_CHOICE_VALUE_ZOOM);
+        state.speed_values[player_idx] = Some(SpeedValuePresentation {
+            text,
+            value_draw_width,
+            value_draw_height,
+        });
+    }
+}
+
+pub(super) fn speed_value_content(speed_mod: &SpeedMod) -> TextContent {
+    let inline = match speed_mod.mod_type {
+        SpeedModType::X => TextContent::inline_format(format_args!("{:.2}x", speed_mod.value)),
+        SpeedModType::C => TextContent::inline_format(format_args!("C{}", speed_mod.value as i32)),
+        SpeedModType::M => TextContent::inline_format(format_args!("M{}", speed_mod.value as i32)),
+    };
+    inline.unwrap_or_else(|| TextContent::Shared(Arc::from(speed_mod.display())))
+}
+
+pub(super) fn mark_speed_value_dirty(state: &mut State, player_idx: usize) {
+    let bit = 1 << player_idx.min(PLAYER_SLOTS - 1);
+    state.speed_value_dirty |= bit;
+    state.speed_header_dirty |= bit;
+}
+
+pub(super) fn speed_value(state: &State, player_idx: usize) -> &SpeedValuePresentation {
+    state.speed_values[player_idx]
         .as_ref()
-        .is_some_and(|cached| cached.key == key);
-    if !cache_hit {
+        .expect("Player Options speed presentation must be prepared")
+}
+
+pub(super) fn prepare_speed_headers(state: &mut State, asset_manager: &AssetManager) {
+    let mut dirty = std::mem::take(&mut state.speed_header_dirty);
+    while dirty != 0 {
+        let player_idx = dirty.trailing_zeros() as usize;
+        dirty &= dirty - 1;
         let speed_mod = &state.speed_mod[player_idx];
         let chart = resolve_p1_chart(&state.song, &state.chart_steps_index, state.play_style);
-        let main_scroll =
-            speed_mod_helper_scroll_text(&state.song, chart, speed_mod, state.music_rate);
-        let scaled_scroll = speed_mod_helper_scaled_text(
+        let main_bpm = speed_helper_bpm(&state.song, chart, speed_mod, state.music_rate);
+        let scaled_bpm = scaled_speed_helper_bpm(
             &state.song,
             chart,
             speed_mod,
@@ -74,51 +119,75 @@ pub(super) fn cached_speed_text(
             &state.player_options[player_idx],
         );
         let prefix = speed_mod.mod_type.prefix();
-        let main = Arc::from(format!("{prefix}{main_scroll}"));
-        let scaled =
-            (scaled_scroll != main_scroll).then(|| Arc::from(format!("{prefix}{scaled_scroll}")));
-        state.speed_text_cache.borrow_mut()[player_idx] = Some(SpeedTextCache {
-            key,
+        let main = speed_header_content(prefix, main_bpm);
+        let scaled = (scaled_bpm != main_bpm).then(|| speed_header_content(prefix, scaled_bpm));
+        let main_draw_width =
+            measure_header_text_width(asset_manager, main.as_str(), state.policy.machine_font);
+        state.speed_headers[player_idx] = Some(SpeedHeaderPresentation {
             main,
             scaled,
-            value: Arc::from(speed_mod.display()),
+            main_draw_width,
         });
     }
-    std::cell::Ref::map(state.speed_text_cache.borrow(), |cache| {
-        cache[player_idx]
-            .as_ref()
-            .expect("speed text cache was populated above")
-    })
 }
 
-pub(super) fn cached_music_rate_text(state: &State) -> std::cell::Ref<'_, MusicRateTextCache> {
-    let key = MusicRateTextKey {
-        music_rate_bits: state.music_rate.to_bits(),
-        chart_steps_index: state.chart_steps_index,
+pub(super) fn speed_header_content(prefix: &'static str, bpm: Option<[i32; 2]>) -> TextContent {
+    let Some([lo, hi]) = bpm else {
+        return TextContent::Static(prefix);
     };
-    let cache_hit = state
-        .music_rate_text_cache
-        .borrow()
-        .as_ref()
-        .is_some_and(|cached| cached.key == key);
-    if !cache_hit {
-        let display = music_rate_display_name(state);
-        let mut lines = display.split('\n');
-        let first_line = lines.next().unwrap_or_default();
-        let second_line = lines.next();
-        let third_line = lines.next();
-        let (first, second) = if let (Some(second), None) = (second_line, third_line) {
-            (Arc::from(first_line), Some(Arc::from(second)))
-        } else {
-            (Arc::from(display), None)
-        };
-        *state.music_rate_text_cache.borrow_mut() = Some(MusicRateTextCache { key, first, second });
+    if lo == hi {
+        TextContent::inline_format(format_args!("{prefix}{lo}"))
+            .unwrap_or_else(|| TextContent::Shared(Arc::from(format!("{prefix}{lo}"))))
+    } else {
+        TextContent::inline_format(format_args!("{prefix}{lo}-{hi}"))
+            .unwrap_or_else(|| TextContent::Shared(Arc::from(format!("{prefix}{lo}-{hi}"))))
     }
-    std::cell::Ref::map(state.music_rate_text_cache.borrow(), |cache| {
-        cache
-            .as_ref()
-            .expect("music-rate text cache was populated above")
-    })
+}
+
+pub(super) fn mark_speed_header_dirty(state: &mut State, player_idx: usize) {
+    state.speed_header_dirty |= 1 << player_idx.min(PLAYER_SLOTS - 1);
+}
+
+pub(super) fn mark_music_rate_dirty(state: &mut State) {
+    state.speed_header_dirty = ALL_PLAYER_BITS;
+    state.music_rate_text_dirty = true;
+}
+
+pub(super) fn speed_header(state: &State, player_idx: usize) -> &SpeedHeaderPresentation {
+    state.speed_headers[player_idx]
+        .as_ref()
+        .expect("Player Options speed header must be prepared")
+}
+
+pub(super) fn prepare_music_rate_text(state: &mut State) {
+    if !std::mem::take(&mut state.music_rate_text_dirty) {
+        return;
+    }
+    let display = music_rate_display_name(state);
+    let mut lines = display.split('\n');
+    let first_line = lines.next().unwrap_or_default();
+    let second_line = lines.next();
+    let third_line = lines.next();
+    let (first, second) = if let (Some(second), None) = (second_line, third_line) {
+        (
+            music_rate_line_content(first_line),
+            Some(music_rate_line_content(second)),
+        )
+    } else {
+        (music_rate_line_content(&display), None)
+    };
+    state.music_rate_text = Some(MusicRatePresentation { first, second });
+}
+
+pub(super) fn music_rate_line_content(text: &str) -> TextContent {
+    TextContent::inline_str(text).unwrap_or_else(|| TextContent::Shared(Arc::from(text)))
+}
+
+pub(super) fn music_rate_text(state: &State) -> &MusicRatePresentation {
+    state
+        .music_rate_text
+        .as_ref()
+        .expect("Player Options Music Rate title must be prepared")
 }
 
 pub fn push_actors(
@@ -170,17 +239,13 @@ pub fn push_actors(
     if state.current_pane == OptionsPane::Main {
         for player_idx in active_player_indices(active) {
             let speed_color = color::simply_love_rgba(player_color_index(state, player_idx));
-            let speed_text = cached_speed_text(state, player_idx);
+            let speed_text = speed_header(state, player_idx);
             // zmod uses GetWidth() from the main helper actor (unzoomed width), then +w*0.4.
-            let main_draw_w = measure_header_text_width(
-                asset_manager,
-                &speed_text.main,
-                visual_policy.machine_font,
-            );
+            let main_draw_w = speed_text.main_draw_width;
             let speed_x = speed_x_for(player_idx);
 
             actors.push(
-                act!(text: font(machine_font_key(visual_policy.machine_font, FontRole::Header)): settext(speed_text.main.clone()):
+                act!(text: font(machine_font_key(state.policy.machine_font, FontRole::Header)): settext(speed_text.main.clone()):
                     align(0.5, 0.5): xy(speed_x, speed_mod_y): zoom(speed_mod_zoom):
                     diffuse(speed_color[0], speed_color[1], speed_color[2], pane_alpha):
                     z(Z_SPEED_MOD_TEXT)
@@ -189,7 +254,7 @@ pub fn push_actors(
 
             if let Some(scaled_text) = speed_text.scaled.as_ref() {
                 let scaled_x = speed_x + main_draw_w * 0.4;
-                actors.push(act!(text: font(machine_font_key(visual_policy.machine_font, FontRole::Header)): settext(scaled_text.clone()):
+                actors.push(act!(text: font(machine_font_key(state.policy.machine_font, FontRole::Header)): settext(scaled_text.clone()):
                     align(0.5, 0.5): xy(scaled_x, speed_mod_scaled_y): zoom(speed_mod_scaled_zoom):
                     diffuse(speed_color[0], speed_color[1], speed_color[2], 0.8 * pane_alpha):
                     z(Z_SPEED_MOD_TEXT)
@@ -204,6 +269,8 @@ pub fn push_actors(
     let help_box_x = widescale(13.0, 30.666);
     let help_box_bottom_y = screen_height() - 36.0;
     let total_rows = state.pane().row_map.len();
+    let row_titles = state.row_titles[state.current_pane.index()].titles.as_ref();
+    debug_assert_eq!(row_titles.len(), total_rows);
     let frame_h = ROW_HEIGHT;
     let (fallback_y0, fallback_row_step) = row_layout_params();
     let row_alpha_cutoff: f32 = 0.001;
@@ -292,7 +359,7 @@ pub fn push_actors(
             title_color[3] *= a;
             // Handle multi-line row titles (e.g., "Music Rate\nbpm: 120")
             if row.id == RowId::MusicRate {
-                let display = cached_music_rate_text(state);
+                let display = music_rate_text(state);
                 if let Some(second) = display.second.as_ref() {
                     actors.push(act!(text: font("miso"): settext(display.first.clone()):
                         align(0.0, 0.5): xy(title_x, current_row_y - 7.0): zoom(title_zoom):
@@ -315,12 +382,14 @@ pub fn push_actors(
                     ));
                 }
             } else {
-                actors.push(act!(text: font("miso"): settext(row.name.get()):
-                    align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
-                    diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                    horizalign(left): maxwidth(title_max_w):
-                    z(Z_ROW_FOREGROUND)
-                ));
+                actors.push(
+                    act!(text: font("miso"): settext(row_titles[item_idx].clone()):
+                        align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
+                        diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                        horizalign(left): maxwidth(title_max_w):
+                        z(Z_ROW_FOREGROUND)
+                    ),
+                );
             }
         }
         // Inactive option text color should be #808080 (alpha 1.0)
@@ -435,13 +504,14 @@ pub fn push_actors(
                 let visible_chars = if anim_time < start_time {
                     0
                 } else if anim_time >= end_time {
-                    help_line.chars().count()
+                    help_line.char_count
                 } else {
                     let line_fraction = (anim_time - start_time) / time_per_line;
-                    let char_count = help_line.chars().count();
-                    ((char_count as f32 * line_fraction).round() as usize).min(char_count)
+                    ((help_line.char_count as f32 * line_fraction).round() as usize)
+                        .min(help_line.char_count)
                 };
-                let visible_text = revealed_text(help_line, visible_chars);
+                let visible_text =
+                    revealed_text(&help_line.text, visible_chars, help_line.char_count);
 
                 let line_y = (i as f32).mul_add(line_spacing, start_y);
                 actors.push(act!(text:
@@ -455,11 +525,12 @@ pub fn push_actors(
                 ));
             }
         } else {
-            let help_text = row.help.first().cloned().unwrap_or_default();
-            let char_count = help_text.chars().count();
-            let fraction = (state.help_anim_time[player_idx] / REVEAL_DURATION).clamp(0.0, 1.0);
-            let visible_chars = ((char_count as f32 * fraction).round() as usize).min(char_count);
-            let visible_text = revealed_text(&help_text, visible_chars);
+            let visible_text = row.help.first().map_or_else(TextContent::default, |line| {
+                let fraction = (state.help_anim_time[player_idx] / REVEAL_DURATION).clamp(0.0, 1.0);
+                let visible_chars =
+                    ((line.char_count as f32 * fraction).round() as usize).min(line.char_count);
+                revealed_text(&line.text, visible_chars, line.char_count)
+            });
 
             actors.push(act!(text:
                 font("miso"): settext(visible_text):
@@ -474,8 +545,12 @@ pub fn push_actors(
     }
 }
 
-fn revealed_text(text: &Arc<str>, visible_chars: usize) -> TextContent {
-    if visible_chars >= text.chars().count() {
+pub(super) fn revealed_text(
+    text: &Arc<str>,
+    visible_chars: usize,
+    char_count: usize,
+) -> TextContent {
+    if visible_chars >= char_count {
         TextContent::Shared(text.clone())
     } else {
         TextContent::Owned(text.chars().take(visible_chars).collect())
@@ -594,46 +669,21 @@ pub(super) fn multi_select_mask(state: &State, row: &Row, player_idx: usize) -> 
     };
     let active_bits = (init.get_active)(&state.option_masks[player_idx]);
     Some(
-        (0..row.choices.len().min(u16::BITS as usize)).fold(0u16, |choice_bits, index| {
-            let active = writeback
-                .bit_mapping
-                .bit_for_choice(index)
-                .is_some_and(|bit| active_bits & bit != 0);
-            choice_bits | (u16::from(active) << index)
-        }),
+        writeback
+            .bit_mapping
+            .active_choice_bits(active_bits, row.choices.len()),
     )
 }
 
-/// Whether a row uses multi-select underlining (one underline per set bit
-/// in the row's active mask) rather than the default single-select
-/// underline (one underline under the chosen value).
-pub(super) fn is_multi_select_row(row_id: RowId) -> bool {
-    use RowId::*;
-    matches!(
-        row_id,
-        Scroll
-            | Hide
-            | Insert
-            | Remove
-            | Holds
-            | Accel
-            | Effect
-            | Appearance
-            | LifeBarOptions
-            | FAPlusOptions
-            | FAPlusWindowOptions
-            | DataVisualizations
-            | GameplayExtras
-            | ColumnFlashJudgments
-            | LiveTimingStats
-            | GameplayExtrasMore
-            | ResultsExtras
-            | MeasureCounterOptions
-            | ErrorBar
-            | ErrorBarOptions
-            | EarlyDecentWayOffOptions
-            | TapExplosionOptions
-    )
+/// Remove and return the lowest active choice index from a bounded UI mask.
+#[inline(always)]
+pub(super) fn take_active_choice(mask: &mut u16) -> Option<usize> {
+    if *mask == 0 {
+        return None;
+    }
+    let choice_idx = mask.trailing_zeros() as usize;
+    *mask &= *mask - 1;
+    Some(choice_idx)
 }
 
 /// Draw multi-select underlines for one row: one underline beneath each
@@ -662,20 +712,13 @@ pub(super) fn draw_multi_select_underlines(
         }
     };
     for player_idx in active_player_indices(active) {
-        let Some(mask) = multi_select_mask(state, row, player_idx) else {
+        let Some(mut mask) = multi_select_mask(state, row, player_idx) else {
             continue;
         };
-        if mask == 0 {
-            continue;
-        }
         let underline_y = underline_y(player_idx);
         let mut line_color = color::decorative_rgba(player_color_index(state, player_idx));
         line_color[3] *= a;
-        for idx in 0..row.choices.len() {
-            let bit: u16 = 1 << idx;
-            if (mask & bit) == 0 {
-                continue;
-            }
+        while let Some(idx) = take_active_choice(&mut mask) {
             if let Some(sel_x) = x_offsets.get(idx).map(|offset| choice_left_x + offset) {
                 let draw_w = widths.get(idx).copied().unwrap_or(40.0);
                 let underline_w = draw_w.ceil();
@@ -823,55 +866,23 @@ pub(super) fn draw_inline_choices(
     choice_inner_left: f32,
 ) {
     let value_zoom = INLINE_CHOICE_VALUE_ZOOM;
-    let spacing = INLINE_CHOICE_SPACING;
     let next_row_item = show_arcade_next_row
-        .then(|| arcade_next_row_layout(rc.fc.state, rc.item_idx, rc.fc.asset_manager, value_zoom));
-    let mut fallback_widths = Vec::new();
-    let mut fallback_offsets = Vec::new();
-    let (widths, x_offsets, text_h): (&[f32], &[f32], f32) = if rc.row.choice_widths.len()
-        == rc.row.choices.len()
-        && rc.row.choice_offsets.len() == rc.row.choices.len()
-        && rc.row.choice_height > 0.0
-    {
-        (
-            &rc.row.choice_widths,
-            &rc.row.choice_offsets,
-            rc.row.choice_height,
-        )
-    } else {
-        fallback_widths.reserve(rc.row.choices.len());
-        rc.fc.asset_manager.with_fonts(|all_fonts| {
-            rc.fc.asset_manager.with_font("miso", |metrics_font| {
-                for text in &rc.row.choices {
-                    let mut width = deadlib_present::font::measure_line_width_logical(
-                        metrics_font,
-                        text,
-                        all_fonts,
-                    ) as f32;
-                    if !width.is_finite() || width <= 0.0 {
-                        width = 1.0;
-                    }
-                    fallback_widths.push(width * value_zoom);
-                }
-            });
-        });
-        fallback_offsets.reserve(fallback_widths.len());
-        let mut x = 0.0;
-        for width in &fallback_widths {
-            fallback_offsets.push(x);
-            x += *width + spacing;
-        }
-        (
-            &fallback_widths,
-            &fallback_offsets,
-            measure_option_text(rc.fc.asset_manager, "", value_zoom).1,
-        )
-    };
+        .then(|| arcade_next_row_layout(rc.fc.state, rc.item_idx, rc.fc.asset_manager));
+    debug_assert!(
+        rc.fc.state.pane().choice_layout_ready
+            && rc.row.choice_widths.len() == rc.row.choices.len()
+            && rc.row.choice_offsets.len() == rc.row.choices.len()
+            && rc.row.choice_height > 0.0,
+        "inline choice geometry must be prepared before actor construction"
+    );
+    let widths = rc.row.choice_widths.as_ref();
+    let x_offsets = rc.row.choice_offsets.as_ref();
+    let text_h = rc.row.choice_height;
     // Draw underline under rc.fc.active options:
     // - For normal rows: underline the currently selected choice.
     // - For Scroll rc.row: underline each enabled scroll mode (multi-select).
     // - For FA+ Options rc.row: underline each enabled FA+ toggle (multi-select).
-    if is_multi_select_row(rc.row.id) {
+    if matches!(rc.row.behavior, RowBehavior::Bitmask(_)) {
         draw_multi_select_underlines(
             actors,
             rc.fc.state,
@@ -993,6 +1004,9 @@ fn draw_player_heart_rate_preview(actors: &mut Vec<Actor>, rc: &RowCtx, player_i
 }
 
 fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
+    debug_assert!(rc.fc.state.pane().choice_layout_ready);
+    debug_assert_eq!(rc.row.choice_widths.len(), rc.row.choices.len());
+    debug_assert!(rc.row.choice_height > 0.0);
     let mut choice_center_x = rc.fc.option_column_x[primary_player_idx];
     if rc.row.id == RowId::MusicRate {
         let item_col_left = rc.fc.row_left + TITLE_BG_WIDTH;
@@ -1000,49 +1014,43 @@ fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_i
     }
     let choice_idx = rc.row.selected_choice_index[primary_player_idx]
         .min(rc.row.choices.len().saturating_sub(1));
-    let choice_text = rc
-        .row
-        .choices
-        .get(choice_idx)
-        .unwrap_or_else(|| rc.row.choices.first().expect("OptionRow must have choices"));
     let choice_color = if rc.is_active {
         [1.0, 1.0, 1.0, rc.a]
     } else {
         rc.sl_gray
     };
     let value_zoom = INLINE_CHOICE_VALUE_ZOOM;
-    let display =
-        |player_idx: usize, selected_idx: usize| {
-            if arcade_row_focuses_next_row(rc.fc.state, player_idx, rc.item_idx) {
-                let (width, _) =
-                    measure_option_text(rc.fc.asset_manager, ARCADE_NEXT_ROW_TEXT, value_zoom);
-                return (TextContent::Static(ARCADE_NEXT_ROW_TEXT), width);
-            }
-            if rc.row.id == RowId::SpeedMod {
-                let text = cached_speed_text(rc.fc.state, player_idx);
-                let (width, _) = measure_option_text(rc.fc.asset_manager, &text.value, value_zoom);
-                return (TextContent::Shared(text.value.clone()), width);
-            }
-            let idx = if rc.row.id == RowId::TypeOfSpeedMod {
-                rc.fc.state.speed_mod[player_idx].mod_type.choice_index()
-            } else {
-                selected_idx
-            }
-            .min(rc.row.choices.len().saturating_sub(1));
-            let text = rc.row.choices.get(idx).cloned().unwrap_or_default();
-            let width =
-                rc.row.choice_widths.get(idx).copied().unwrap_or_else(|| {
-                    measure_option_text(rc.fc.asset_manager, &text, value_zoom).0
-                });
-            (TextContent::Shared(text), width)
-        };
+    let display = |player_idx: usize, selected_idx: usize| {
+        if arcade_row_focuses_next_row(rc.fc.state, player_idx, rc.item_idx) {
+            let [width, _] = arcade_next_row_size(rc.fc.state, rc.fc.asset_manager);
+            return (TextContent::Static(ARCADE_NEXT_ROW_TEXT), width);
+        }
+        if rc.row.id == RowId::SpeedMod {
+            let value = speed_value(rc.fc.state, player_idx);
+            return (value.text.clone(), value.value_draw_width);
+        }
+        let idx = if rc.row.id == RowId::TypeOfSpeedMod {
+            rc.fc.state.speed_mod[player_idx].mod_type.choice_index()
+        } else {
+            selected_idx
+        }
+        .min(rc.row.choices.len().saturating_sub(1));
+        let text = rc
+            .row
+            .choices
+            .get(idx)
+            .expect("prepared option row must have selected text")
+            .clone();
+        let width = *rc
+            .row
+            .choice_widths
+            .get(idx)
+            .expect("prepared option row must have selected width");
+        (text, width)
+    };
 
     let (content, draw_w) = display(primary_player_idx, choice_idx);
-    let draw_h = if rc.row.choice_height > 0.0 {
-        rc.row.choice_height
-    } else {
-        measure_option_text(rc.fc.asset_manager, choice_text, value_zoom).1
-    };
+    let draw_h = rc.row.choice_height;
     actors.push(act!(text: font("miso"): settext(content):
         align(0.5, 0.5): xy(choice_center_x, rc.current_row_y): zoom(value_zoom):
         diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
