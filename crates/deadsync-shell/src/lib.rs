@@ -58,7 +58,7 @@ pub use content_reload::{benchmark_receive_ready, benchmark_sample_progress};
 pub(crate) use course::CourseRunState;
 pub(crate) use deadsync_theme::views::FrameStatsSample;
 #[cfg(feature = "bench-support")]
-pub use dynamic_media::benchmark_media_completion_budget;
+pub use dynamic_media::{BenchmarkMediaPrepDispatch, benchmark_media_completion_budget};
 pub(crate) use frame_loop::FrameLoopState;
 pub(crate) use frame_pacing_trace::GameplayPacingTrace;
 pub(crate) use frame_stats::FrameStatsController;

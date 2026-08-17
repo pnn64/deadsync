@@ -1,4 +1,4 @@
-use deadsync_shell::benchmark_media_completion_budget;
+use deadsync_shell::{BenchmarkMediaPrepDispatch, benchmark_media_completion_budget};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -11,6 +11,8 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 const COMPLETIONS: usize = 4_096;
 const PAYLOAD_BYTES: usize = 1_024;
 const SAMPLES: usize = 31;
+const DISPATCH_SAMPLES: usize = 101;
+const DISPATCH_JOBS: usize = 8;
 
 struct Completion {
     sequence: u64,
@@ -195,6 +197,8 @@ fn eventual_drain(limit: usize) -> (f64, Option<u64>, usize, u64) {
 }
 
 fn main() {
+    benchmark_dispatch();
+
     let budget = benchmark_media_completion_budget();
     let old = median_sample(COMPLETIONS);
     let new = median_sample(budget);
@@ -220,6 +224,120 @@ fn main() {
     println!("  eventual drain (identical checksum)");
     print_total("old", old_total);
     print_total("new", new_total);
+}
+
+#[derive(Clone, Copy)]
+struct DispatchSample {
+    ns: f64,
+    cycles: Option<u64>,
+    alloc: AllocSnapshot,
+}
+
+fn benchmark_dispatch() {
+    let mut old = Vec::with_capacity(DISPATCH_SAMPLES);
+    let mut cold = Vec::with_capacity(DISPATCH_SAMPLES);
+    let mut warm = Vec::with_capacity(DISPATCH_SAMPLES);
+    let mut warm_worker = BenchmarkMediaPrepDispatch::new();
+    warm_worker.warm();
+    for sample in 0..DISPATCH_SAMPLES {
+        if sample % 2 == 0 {
+            old.push(sample_old_dispatch());
+            cold.push(sample_new_dispatch(&mut BenchmarkMediaPrepDispatch::new()));
+            warm.push(sample_new_dispatch(&mut warm_worker));
+        } else {
+            warm.push(sample_new_dispatch(&mut warm_worker));
+            cold.push(sample_new_dispatch(&mut BenchmarkMediaPrepDispatch::new()));
+            old.push(sample_old_dispatch());
+        }
+    }
+
+    println!("dynamic-media request burst ({DISPATCH_JOBS} preparations)");
+    print_dispatch("old per-request threads", &old);
+    print_dispatch("new cold bounded pool", &cold);
+    print_dispatch("new warm bounded pool", &warm);
+}
+
+fn sample_old_dispatch() -> DispatchSample {
+    let (tx, rx) = mpsc::sync_channel(DISPATCH_JOBS);
+    let mut workers = Vec::with_capacity(DISPATCH_JOBS);
+    let before = ALLOC.snapshot();
+    ALLOC.enabled.store(true, Ordering::Relaxed);
+    let cycle_start = cycle_counter();
+    let started = Instant::now();
+    for job in 0..DISPATCH_JOBS {
+        let tx = tx.clone();
+        workers.push(std::thread::spawn(move || tx.send(job).unwrap()));
+    }
+    let ns = started.elapsed().as_secs_f64() * 1e9;
+    let cycle_end = cycle_counter();
+    ALLOC.enabled.store(false, Ordering::Relaxed);
+    let alloc = ALLOC.snapshot().delta(before);
+    drop(tx);
+    let checksum = rx.iter().sum::<usize>();
+    for worker in workers {
+        worker.join().unwrap();
+    }
+    assert_eq!(checksum, (0..DISPATCH_JOBS).sum::<usize>());
+    DispatchSample {
+        ns,
+        cycles: cycle_start.zip(cycle_end).map(|(start, end)| end - start),
+        alloc,
+    }
+}
+
+fn sample_new_dispatch(worker: &mut BenchmarkMediaPrepDispatch) -> DispatchSample {
+    let before = ALLOC.snapshot();
+    ALLOC.enabled.store(true, Ordering::Relaxed);
+    let cycle_start = cycle_counter();
+    let started = Instant::now();
+    let submitted = worker.submit_burst();
+    let ns = started.elapsed().as_secs_f64() * 1e9;
+    let cycle_end = cycle_counter();
+    ALLOC.enabled.store(false, Ordering::Relaxed);
+    let alloc = ALLOC.snapshot().delta(before);
+    assert_eq!(submitted, DISPATCH_JOBS);
+    assert_eq!(
+        worker.drain_burst(),
+        (0..DISPATCH_JOBS).fold(0, |sum, job| sum ^ job)
+    );
+    DispatchSample {
+        ns,
+        cycles: cycle_start.zip(cycle_end).map(|(start, end)| end - start),
+        alloc,
+    }
+}
+
+fn print_dispatch(label: &str, samples: &[DispatchSample]) {
+    let mut ns = samples.iter().map(|sample| sample.ns).collect::<Vec<_>>();
+    ns.sort_by(f64::total_cmp);
+    let mut cycles = samples
+        .iter()
+        .filter_map(|sample| sample.cycles)
+        .collect::<Vec<_>>();
+    cycles.sort_unstable();
+    let median_alloc = {
+        let mut alloc = samples.to_vec();
+        alloc.sort_by(|a, b| a.ns.total_cmp(&b.ns));
+        alloc[alloc.len() / 2].alloc
+    };
+    println!(
+        "  {label:<23} ns p50/p95/p99/worst {:>9.2}/{:>9.2}/{:>9.2}/{:>9.2}  \
+         cycles {:>8}/{:>8}/{:>8}/{:>8}  median alloc/churn {:>3}/{:>7} B",
+        percentile(&ns, 50),
+        percentile(&ns, 95),
+        percentile(&ns, 99),
+        *ns.last().unwrap(),
+        percentile(&cycles, 50),
+        percentile(&cycles, 95),
+        percentile(&cycles, 99),
+        *cycles.last().unwrap_or(&0),
+        median_alloc.allocs,
+        median_alloc.churn(),
+    );
+}
+
+fn percentile<T: Copy>(sorted: &[T], percentile: usize) -> T {
+    sorted[(sorted.len() - 1) * percentile / 100]
 }
 
 fn print_first(label: &str, sample: DrainSample) {

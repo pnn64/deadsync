@@ -16,16 +16,179 @@ use deadsync_assets::dynamic_media::{
 use deadsync_assets::media_cache;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
-use log::warn;
+use log::{debug, warn};
 use smallvec::SmallVec;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
-    sync::{Arc, mpsc},
-    thread,
+    sync::{Arc, Mutex, mpsc},
+    thread::{self, JoinHandle},
     time::Instant,
 };
+
+/// Lazily started, session-owned transport for blocking media preparation.
+///
+/// `DynamicMedia` is the sole producer/result consumer. Worker threads share
+/// the bounded request receiver behind one mutex only while receiving a job;
+/// preparation runs after that guard is released. Capacity, worker count, and
+/// result capacity are fixed by the owning media class. First submission is the
+/// warmup point. A full queue rejects the job and leaves the caller unsettled so
+/// it retries later; there is no growth, pruning, or eviction. Results apply
+/// under the separate per-frame completion budget. Drop disconnects both
+/// channels before joining workers, so queued payloads and prepared resources
+/// are destroyed outside a live frame. Accepted/rejected totals are logged on
+/// saturation. Worst app-frame work is fixed-pool startup once plus one
+/// nonblocking send per desired media item.
+struct MediaPrepWorker<J: Send + 'static, R: Send + 'static> {
+    name: &'static str,
+    worker_count: usize,
+    request_capacity: usize,
+    result_capacity: usize,
+    prepare: fn(J) -> R,
+    request_tx: Option<mpsc::SyncSender<J>>,
+    result_rx: Option<mpsc::Receiver<R>>,
+    workers: Vec<JoinHandle<()>>,
+    accepted: u64,
+    rejected: u64,
+    #[cfg(test)]
+    test_result_tx: Option<mpsc::SyncSender<R>>,
+}
+
+impl<J: Send + 'static, R: Send + 'static> MediaPrepWorker<J, R> {
+    const fn new(
+        name: &'static str,
+        worker_count: usize,
+        request_capacity: usize,
+        result_capacity: usize,
+        prepare: fn(J) -> R,
+    ) -> Self {
+        Self {
+            name,
+            worker_count,
+            request_capacity,
+            result_capacity,
+            prepare,
+            request_tx: None,
+            result_rx: None,
+            workers: Vec::new(),
+            accepted: 0,
+            rejected: 0,
+            #[cfg(test)]
+            test_result_tx: None,
+        }
+    }
+
+    fn try_submit(&mut self, job: J) -> bool {
+        let accepted = self.start()
+            && self
+                .request_tx
+                .as_ref()
+                .is_some_and(|tx| tx.try_send(job).is_ok());
+        if accepted {
+            self.accepted = self.accepted.saturating_add(1);
+        } else {
+            self.rejected = self.rejected.saturating_add(1);
+        }
+        accepted
+    }
+
+    fn try_recv(&self) -> Result<R, mpsc::TryRecvError> {
+        self.result_rx
+            .as_ref()
+            .ok_or(mpsc::TryRecvError::Empty)?
+            .try_recv()
+    }
+
+    fn start(&mut self) -> bool {
+        if self.request_tx.is_some() {
+            return true;
+        }
+        let (request_tx, request_rx) = mpsc::sync_channel(self.request_capacity);
+        let (result_tx, result_rx) = mpsc::sync_channel(self.result_capacity);
+        let request_rx = Arc::new(Mutex::new(request_rx));
+        for index in 0..self.worker_count {
+            let request_rx = request_rx.clone();
+            let result_tx = result_tx.clone();
+            let prepare = self.prepare;
+            let name = format!("{}-{index}", self.name);
+            match thread::Builder::new().name(name).spawn(move || {
+                loop {
+                    let job = match request_rx.lock() {
+                        Ok(rx) => rx.recv(),
+                        Err(_) => return,
+                    };
+                    let Ok(job) = job else {
+                        return;
+                    };
+                    if result_tx.send(prepare(job)).is_err() {
+                        return;
+                    }
+                }
+            }) {
+                Ok(worker) => self.workers.push(worker),
+                Err(e) => warn!("Failed to start {} worker: {e}", self.name),
+            }
+        }
+        if self.workers.is_empty() {
+            return false;
+        }
+        #[cfg(test)]
+        {
+            self.test_result_tx = Some(result_tx.clone());
+        }
+        self.request_tx = Some(request_tx);
+        self.result_rx = Some(result_rx);
+        true
+    }
+
+    #[cfg(test)]
+    fn send_test_result(&mut self, result: R) {
+        assert!(self.start());
+        self.test_result_tx
+            .as_ref()
+            .expect("started media worker exposes a test result sender")
+            .send(result)
+            .expect("media test result receiver remains connected");
+    }
+}
+
+impl<J: Send + 'static, R: Send + 'static> Drop for MediaPrepWorker<J, R> {
+    fn drop(&mut self) {
+        if self.rejected > 0 {
+            debug!(
+                "{} worker dispatch totals: accepted={} rejected={}",
+                self.name, self.accepted, self.rejected
+            );
+        }
+        self.request_tx.take();
+        self.result_rx.take();
+        #[cfg(test)]
+        self.test_result_tx.take();
+        for worker in self.workers.drain(..) {
+            let _ = worker.join();
+        }
+    }
+}
+
+struct BannerVideoPrepJob {
+    key: String,
+    path: PathBuf,
+    looped: bool,
+}
+
+fn run_banner_video_prep(job: BannerVideoPrepJob) -> BannerVideoPrepResult {
+    prepare_banner_video(job.key, job.path, job.looped)
+}
+
+struct GameplayBackgroundPrepJob {
+    key: String,
+    path: PathBuf,
+}
+
+fn run_gameplay_background_prep(job: GameplayBackgroundPrepJob) -> GameplayBackgroundPrepResult {
+    prepare_gameplay_background(job.key, job.path)
+}
 
 struct DynamicBannerState {
     key: Arc<str>,
@@ -60,24 +223,84 @@ struct SongLuaVideoState {
 }
 
 const MAX_CACHED_BANNER_VIDEO_PATHS: usize = 8;
+const BANNER_VIDEO_PREP_WORKERS: usize = 2;
+const BANNER_VIDEO_PREP_RESULTS: usize = MAX_MEDIA_COMPLETIONS_PER_FRAME;
+const GAMEPLAY_BACKGROUND_PREP_WORKERS: usize = 1;
+const GAMEPLAY_BACKGROUND_PREP_REQUESTS: usize = 1;
+const GAMEPLAY_BACKGROUND_PREP_RESULTS: usize = 1;
 
 /// Maximum decoded media completions integrated by one live frame.
 ///
-/// Worker threads own decode/open work and send owned results through mpsc;
-/// `DynamicMedia` alone receives them on the frame thread. The transport is
-/// unbounded, so this limits consumer work and not retained backlog memory; a
-/// bounded worker pool remains a separate architectural change. There is no
-/// eviction. Changed requests make old results stale, and both stale and
-/// current results consume this budget before their players are retired or
-/// installed. Shutdown/explicit reset still drains cleanup results outside the
-/// live-frame path. `dynamic_media_completion_budget` measures burst latency,
-/// cycles, and destruction churn. Worst live-frame integration is exactly this
-/// many results; remaining work is deferred to later frames.
+/// Session-owned workers own decode/open work and send owned results through
+/// bounded channels; `DynamicMedia` alone receives them on the frame thread.
+/// Changed requests make old results stale, and both stale and current results
+/// consume this budget before their players are retired or installed. A full
+/// request queue rejects new work so the unsettled caller retries on a later
+/// frame; it never grows backlog memory. Shutdown/explicit reset still drains
+/// cleanup results outside the live-frame path. `dynamic_media_completion_budget`
+/// measures burst latency, cycles, and destruction churn. Worst live-frame
+/// integration is exactly this many results; remaining work is deferred.
 const MAX_MEDIA_COMPLETIONS_PER_FRAME: usize = 2;
 
 #[cfg(feature = "bench-support")]
 pub fn benchmark_media_completion_budget() -> usize {
     MAX_MEDIA_COMPLETIONS_PER_FRAME
+}
+
+#[cfg(feature = "bench-support")]
+pub struct BenchmarkMediaPrepDispatch {
+    worker: MediaPrepWorker<usize, usize>,
+}
+
+#[cfg(feature = "bench-support")]
+impl BenchmarkMediaPrepDispatch {
+    pub fn new() -> Self {
+        Self {
+            worker: MediaPrepWorker::new(
+                "media-prep-bench",
+                BANNER_VIDEO_PREP_WORKERS,
+                MAX_CACHED_BANNER_VIDEO_PATHS,
+                BANNER_VIDEO_PREP_RESULTS,
+                std::convert::identity,
+            ),
+        }
+    }
+
+    pub fn warm(&mut self) {
+        assert!(self.worker.start());
+    }
+
+    pub fn submit_burst(&mut self) -> usize {
+        (0..MAX_CACHED_BANNER_VIDEO_PATHS)
+            .filter(|&job| self.worker.try_submit(job))
+            .count()
+    }
+
+    pub fn drain_burst(&self) -> usize {
+        let mut checksum = 0usize;
+        for _ in 0..MAX_CACHED_BANNER_VIDEO_PATHS {
+            loop {
+                match self.worker.try_recv() {
+                    Ok(result) => {
+                        checksum ^= result;
+                        break;
+                    }
+                    Err(mpsc::TryRecvError::Empty) => thread::yield_now(),
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        panic!("media preparation benchmark worker disconnected")
+                    }
+                }
+            }
+        }
+        checksum
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for BenchmarkMediaPrepDispatch {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Render-thread snapshot of the desired banner-video set.
@@ -165,10 +388,8 @@ pub struct DynamicMedia {
     /// failure only while that exact path/mode remains desired, preventing
     /// live-frame retry storms without becoming a session-growing cache.
     banner_video_preps: HashMap<PathBuf, BannerVideoPrepState>,
-    banner_video_prep_tx: mpsc::Sender<BannerVideoPrepResult>,
-    banner_video_prep_rx: mpsc::Receiver<BannerVideoPrepResult>,
+    banner_video_prep: MediaPrepWorker<BannerVideoPrepJob, BannerVideoPrepResult>,
     banner_video_request: BannerVideoRequest,
-    banner_video_workers: usize,
     current_dynamic_cdtitle: Option<(Arc<str>, PathBuf)>,
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     dynamic_pack_banner_keys: std::collections::HashSet<String>,
@@ -178,8 +399,8 @@ pub struct DynamicMedia {
     failed_song_lua_video_keys: HashSet<String>,
     gameplay_background_keys: HashSet<String>,
     pending_gameplay_background_preps: HashSet<String>,
-    gameplay_background_prep_tx: mpsc::Sender<GameplayBackgroundPrepResult>,
-    gameplay_background_prep_rx: mpsc::Receiver<GameplayBackgroundPrepResult>,
+    gameplay_background_prep:
+        MediaPrepWorker<GameplayBackgroundPrepJob, GameplayBackgroundPrepResult>,
     failed_gameplay_background_key: Option<String>,
     current_profile_avatars: [Option<(String, PathBuf)>; 2],
     preloaded_profile_avatar_keys: HashSet<String>,
@@ -187,16 +408,18 @@ pub struct DynamicMedia {
 
 impl DynamicMedia {
     pub fn new() -> Self {
-        let (banner_video_prep_tx, banner_video_prep_rx) = mpsc::channel();
-        let (gameplay_background_prep_tx, gameplay_background_prep_rx) = mpsc::channel();
         Self {
             current_dynamic_banner: None,
             active_banner_videos: HashMap::new(),
             banner_video_preps: HashMap::new(),
-            banner_video_prep_tx,
-            banner_video_prep_rx,
+            banner_video_prep: MediaPrepWorker::new(
+                "banner-video-prep",
+                BANNER_VIDEO_PREP_WORKERS,
+                MAX_CACHED_BANNER_VIDEO_PATHS,
+                BANNER_VIDEO_PREP_RESULTS,
+                run_banner_video_prep,
+            ),
             banner_video_request: BannerVideoRequest::default(),
-            banner_video_workers: 0,
             current_dynamic_cdtitle: None,
             current_dynamic_pack_banner: None,
             dynamic_pack_banner_keys: std::collections::HashSet::new(),
@@ -206,8 +429,13 @@ impl DynamicMedia {
             failed_song_lua_video_keys: HashSet::new(),
             gameplay_background_keys: HashSet::new(),
             pending_gameplay_background_preps: HashSet::new(),
-            gameplay_background_prep_tx,
-            gameplay_background_prep_rx,
+            gameplay_background_prep: MediaPrepWorker::new(
+                "gameplay-background-prep",
+                GAMEPLAY_BACKGROUND_PREP_WORKERS,
+                GAMEPLAY_BACKGROUND_PREP_REQUESTS,
+                GAMEPLAY_BACKGROUND_PREP_RESULTS,
+                run_gameplay_background_prep,
+            ),
             failed_gameplay_background_key: None,
             current_profile_avatars: std::array::from_fn(|_| None),
             preloaded_profile_avatar_keys: HashSet::new(),
@@ -496,7 +724,7 @@ impl DynamicMedia {
                 .get(path)
                 .is_some_and(|prep| prep.looped() == looped)
         {
-            self.spawn_banner_video_prep(path, looped);
+            self.submit_banner_video_prep(path, looped);
         }
         self.finish_banner_video_request(desired_paths, looped);
     }
@@ -542,14 +770,13 @@ impl DynamicMedia {
             {
                 continue;
             }
-            self.spawn_banner_video_prep(path, looped);
+            self.submit_banner_video_prep(path, looped);
         }
         self.finish_banner_video_request(desired_paths, looped);
     }
 
     fn finish_banner_video_request(&mut self, desired_paths: &[&Path], looped: bool) {
         self.banner_video_request.settled = self.banner_video_request.cacheable
-            && self.banner_video_workers == 0
             && desired_paths
                 .iter()
                 .copied()
@@ -788,7 +1015,7 @@ impl DynamicMedia {
                 && !self.pending_gameplay_background_preps.contains(desired_key)
                 && self.failed_gameplay_background_key.as_deref() != Some(desired_key)
             {
-                self.spawn_gameplay_background_prep(path);
+                self.submit_gameplay_background_prep(path);
             }
             return None;
         }
@@ -807,7 +1034,7 @@ impl DynamicMedia {
                 && !self.pending_gameplay_background_preps.contains(desired_key)
                 && self.failed_gameplay_background_key.as_deref() != Some(desired_key)
             {
-                self.spawn_gameplay_background_prep(path);
+                self.submit_gameplay_background_prep(path);
             }
             return Some(desired_key.to_owned());
         }
@@ -816,7 +1043,7 @@ impl DynamicMedia {
             && !self.pending_gameplay_background_preps.contains(desired_key)
             && self.failed_gameplay_background_key.as_deref() != Some(desired_key)
         {
-            self.spawn_gameplay_background_prep(path);
+            self.submit_gameplay_background_prep(path);
         }
         None
     }
@@ -1159,7 +1386,7 @@ impl DynamicMedia {
         self.clear_gameplay_background_results();
     }
 
-    fn spawn_banner_video_prep(&mut self, path: &Path, looped: bool) {
+    fn submit_banner_video_prep(&mut self, path: &Path, looped: bool) {
         if self
             .banner_video_preps
             .get(path)
@@ -1167,17 +1394,16 @@ impl DynamicMedia {
         {
             return;
         }
-        self.banner_video_preps
-            .insert(path.to_path_buf(), BannerVideoPrepState::pending(looped));
-        self.banner_video_workers = self.banner_video_workers.saturating_add(1);
-
         let key = path.to_string_lossy().into_owned();
         let path = path.to_path_buf();
-        let tx = self.banner_video_prep_tx.clone();
-        thread::spawn(move || {
-            let result = prepare_banner_video(key, path, looped);
-            let _ = tx.send(result);
-        });
+        if self.banner_video_prep.try_submit(BannerVideoPrepJob {
+            key,
+            path: path.clone(),
+            looped,
+        }) {
+            self.banner_video_preps
+                .insert(path, BannerVideoPrepState::pending(looped));
+        }
     }
 
     fn retain_banner_video_prep(&mut self, desired_path: Option<&Path>, looped: bool) {
@@ -1191,18 +1417,22 @@ impl DynamicMedia {
         });
     }
 
-    fn spawn_gameplay_background_prep(&mut self, path: &Path) {
+    fn submit_gameplay_background_prep(&mut self, path: &Path) {
         let key = path.to_string_lossy().into_owned();
-        if !self.pending_gameplay_background_preps.insert(key.clone()) {
+        if self.pending_gameplay_background_preps.contains(&key) {
             return;
         }
 
         let path = path.to_path_buf();
-        let tx = self.gameplay_background_prep_tx.clone();
-        thread::spawn(move || {
-            let result = prepare_gameplay_background(key, path);
-            let _ = tx.send(result);
-        });
+        if self
+            .gameplay_background_prep
+            .try_submit(GameplayBackgroundPrepJob {
+                key: key.clone(),
+                path,
+            })
+        {
+            self.pending_gameplay_background_preps.insert(key);
+        }
     }
 
     fn drain_banner_video_preps(
@@ -1212,10 +1442,9 @@ impl DynamicMedia {
         looped: bool,
     ) {
         for _ in 0..MAX_MEDIA_COMPLETIONS_PER_FRAME {
-            let Ok(result) = self.banner_video_prep_rx.try_recv() else {
+            let Ok(result) = self.banner_video_prep.try_recv() else {
                 break;
             };
-            self.banner_video_workers = self.banner_video_workers.saturating_sub(1);
             match result {
                 BannerVideoPrepResult::Ready(prepared) => {
                     self.clear_pending_banner_video_prep(&prepared.path, prepared.looped);
@@ -1262,10 +1491,9 @@ impl DynamicMedia {
         looped: bool,
     ) {
         for _ in 0..MAX_MEDIA_COMPLETIONS_PER_FRAME {
-            let Ok(result) = self.banner_video_prep_rx.try_recv() else {
+            let Ok(result) = self.banner_video_prep.try_recv() else {
                 break;
             };
-            self.banner_video_workers = self.banner_video_workers.saturating_sub(1);
             match result {
                 BannerVideoPrepResult::Ready(prepared) => {
                     self.clear_pending_banner_video_prep(&prepared.path, prepared.looped);
@@ -1329,7 +1557,7 @@ impl DynamicMedia {
         timing: BgVideoTiming,
     ) {
         for _ in 0..MAX_MEDIA_COMPLETIONS_PER_FRAME {
-            let Ok(result) = self.gameplay_background_prep_rx.try_recv() else {
+            let Ok(result) = self.gameplay_background_prep.try_recv() else {
                 break;
             };
             match result {
@@ -1378,7 +1606,7 @@ impl DynamicMedia {
     }
 
     fn clear_gameplay_background_results(&mut self) {
-        while let Ok(result) = self.gameplay_background_prep_rx.try_recv() {
+        while let Ok(result) = self.gameplay_background_prep.try_recv() {
             if let GameplayBackgroundPrepResult::Ready(prepared) = result {
                 retire_video_player(prepared.player);
             }
@@ -1410,6 +1638,61 @@ impl Default for DynamicMedia {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Barrier;
+
+    struct BlockingPrep {
+        value: usize,
+        started: Arc<Barrier>,
+        release: Arc<Barrier>,
+    }
+
+    fn run_blocking_prep(job: BlockingPrep) -> usize {
+        job.started.wait();
+        job.release.wait();
+        job.value
+    }
+
+    fn recv_blocking_prep(worker: &MediaPrepWorker<BlockingPrep, usize>) -> usize {
+        loop {
+            match worker.try_recv() {
+                Ok(value) => return value,
+                Err(mpsc::TryRecvError::Empty) => thread::yield_now(),
+                Err(mpsc::TryRecvError::Disconnected) => panic!("bounded worker disconnected"),
+            }
+        }
+    }
+
+    #[test]
+    fn media_prep_worker_rejects_work_beyond_its_fixed_capacity() {
+        let started = Arc::new(Barrier::new(2));
+        let release = Arc::new(Barrier::new(2));
+        let mut worker = MediaPrepWorker::new("bounded-test", 1, 1, 1, run_blocking_prep);
+
+        assert!(worker.workers.is_empty());
+        assert!(worker.try_submit(BlockingPrep {
+            value: 1,
+            started: started.clone(),
+            release: release.clone(),
+        }));
+        started.wait();
+        assert!(worker.try_submit(BlockingPrep {
+            value: 2,
+            started: started.clone(),
+            release: release.clone(),
+        }));
+        assert!(!worker.try_submit(BlockingPrep {
+            value: 3,
+            started: started.clone(),
+            release: release.clone(),
+        }));
+        assert_eq!((worker.accepted, worker.rejected), (2, 1));
+
+        release.wait();
+        assert_eq!(recv_blocking_prep(&worker), 1);
+        started.wait();
+        release.wait();
+        assert_eq!(recv_blocking_prep(&worker), 2);
+    }
 
     #[test]
     fn bg_timing_resets_segment() {
@@ -1482,8 +1765,6 @@ mod tests {
             0.0,
             1.0,
         ));
-        media.banner_video_workers = 1;
-
         assert!(!media.has_active_video());
         assert!(!media.has_gameplay_video());
     }
@@ -1561,20 +1842,21 @@ mod tests {
     }
 
     #[test]
-    fn banner_request_settles_only_after_workers_finish() {
+    fn banner_request_settles_only_after_pending_prep_finishes() {
         let path = Path::new("banner.mp4");
         let paths = [path];
         let mut media = DynamicMedia::new();
         assert!(media.banner_video_request.begin(&paths, true));
         media
             .banner_video_preps
-            .insert(path.to_path_buf(), BannerVideoPrepState::failed(true));
+            .insert(path.to_path_buf(), BannerVideoPrepState::pending(true));
 
-        media.banner_video_workers = 1;
         media.finish_banner_video_request(&paths, true);
         assert!(!media.banner_video_request.settled);
 
-        media.banner_video_workers = 0;
+        media
+            .banner_video_preps
+            .insert(path.to_path_buf(), BannerVideoPrepState::failed(true));
         media.finish_banner_video_request(&paths, true);
         assert!(media.banner_video_request.settled);
     }
@@ -1674,13 +1956,12 @@ mod tests {
             .banner_video_preps
             .insert(PathBuf::from(&key), BannerVideoPrepState::pending(false));
         media
-            .banner_video_prep_tx
-            .send(BannerVideoPrepResult::Failed {
+            .banner_video_prep
+            .send_test_result(BannerVideoPrepResult::Failed {
                 path: PathBuf::from(&key),
                 looped: false,
                 msg: "failed".to_string(),
-            })
-            .unwrap();
+            });
 
         media.drain_banner_video_preps(&mut assets, Some(Path::new(&key)), false);
 
@@ -1705,29 +1986,42 @@ mod tests {
             media
                 .banner_video_preps
                 .insert(path.clone(), BannerVideoPrepState::pending(false));
+        }
+        for path in &paths[..MAX_MEDIA_COMPLETIONS_PER_FRAME] {
             media
-                .banner_video_prep_tx
-                .send(BannerVideoPrepResult::Failed {
+                .banner_video_prep
+                .send_test_result(BannerVideoPrepResult::Failed {
                     path: path.clone(),
                     looped: false,
                     msg: "stale".to_string(),
-                })
-                .unwrap();
+                });
         }
-        media.banner_video_workers = paths.len();
 
         media.drain_banner_video_preps(&mut assets, None, false);
-        assert_eq!(media.banner_video_workers, 3);
         assert_eq!(media.banner_video_preps.len(), 3);
 
+        for path in &paths[MAX_MEDIA_COMPLETIONS_PER_FRAME..MAX_MEDIA_COMPLETIONS_PER_FRAME * 2] {
+            media
+                .banner_video_prep
+                .send_test_result(BannerVideoPrepResult::Failed {
+                    path: path.clone(),
+                    looped: false,
+                    msg: "stale".to_string(),
+                });
+        }
         media.drain_banner_video_preps(&mut assets, None, false);
-        assert_eq!(media.banner_video_workers, 1);
         assert_eq!(media.banner_video_preps.len(), 1);
 
+        media
+            .banner_video_prep
+            .send_test_result(BannerVideoPrepResult::Failed {
+                path: paths[4].clone(),
+                looped: false,
+                msg: "stale".to_string(),
+            });
         media.drain_banner_video_preps(&mut assets, None, false);
-        assert_eq!(media.banner_video_workers, 0);
         assert!(media.banner_video_preps.is_empty());
-        assert!(media.banner_video_prep_rx.try_recv().is_err());
+        assert!(media.banner_video_prep.try_recv().is_err());
     }
 
     #[test]
@@ -1739,13 +2033,12 @@ mod tests {
             .banner_video_preps
             .insert(path.clone(), BannerVideoPrepState::pending(false));
         media
-            .banner_video_prep_tx
-            .send(BannerVideoPrepResult::Failed {
+            .banner_video_prep
+            .send_test_result(BannerVideoPrepResult::Failed {
                 path: path.clone(),
                 looped: true,
                 msg: "stale failure".to_string(),
-            })
-            .unwrap();
+            });
 
         media.drain_banner_video_preps(&mut assets, Some(&path), false);
 
