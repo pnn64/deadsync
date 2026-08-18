@@ -9,8 +9,8 @@ use crate::{
     ScrollOption, StepStatisticsMask, StepStatsExtra, TapExplosionMask, TargetScoreSetting,
     TimingWindowsOption, TurnOption, VisualEffectsMask,
     app_runtime::{save_profile_ini_for_side, save_profile_stats_for_side},
-    runtime_mark_heart_rate_devices_changed, runtime_session_side_guest,
-    runtime_update_profile_for_side,
+    runtime_mark_heart_rate_devices_changed, runtime_mark_max_heart_rates_changed,
+    runtime_session_side_guest, runtime_update_profile_for_side,
 };
 use chrono::Local;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -101,10 +101,11 @@ pub fn update_player_options_for_side(
     max_heart_rate: u16,
 ) {
     let mut heart_rate_changed = false;
+    let mut max_heart_rate_changed = false;
     let changed = runtime_update_profile_for_side(side, |profile| {
         let options_changed = profile.set_current_player_options(options);
         heart_rate_changed = profile.set_heart_rate_device_id(heart_rate_device_id);
-        let max_heart_rate_changed = profile.set_max_heart_rate(max_heart_rate);
+        max_heart_rate_changed = profile.set_max_heart_rate(max_heart_rate);
         options_changed || heart_rate_changed || max_heart_rate_changed
     });
     if changed {
@@ -112,6 +113,9 @@ pub fn update_player_options_for_side(
     }
     if heart_rate_changed {
         runtime_mark_heart_rate_devices_changed();
+    }
+    if max_heart_rate_changed {
+        runtime_mark_max_heart_rates_changed();
     }
 }
 

@@ -2357,14 +2357,20 @@ pub(super) mod tests {
             max_row_idx,
             visibility
         ));
+        let max_heart_rate_row = state
+            .pane()
+            .row_map
+            .get(RowId::MaxHeartRate)
+            .expect("Max Heart Rate row present");
         assert_eq!(
-            state
-                .pane()
-                .row_map
-                .get(RowId::MaxHeartRate)
-                .expect("Max Heart Rate row present")
-                .selected_choice_index[P1],
+            max_heart_rate_row.selected_choice_index[P1],
             usize::from(205 - deadsync_profile::MAX_HEART_RATE_MIN)
+        );
+        assert!(
+            max_heart_rate_row
+                .choices
+                .iter()
+                .all(|choice| matches!(choice, TextContent::InlineU16(_)))
         );
 
         state.pane_mut().selected_row[P1] = max_row_idx;

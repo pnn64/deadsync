@@ -112,6 +112,7 @@ static RUNTIME_SESSION_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::Lo
 static RUNTIME_PROFILES_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::LockWaitStats::new();
 static RUNTIME_PROFILE_GENERATION: AtomicU64 = AtomicU64::new(1);
 static HEART_RATE_DEVICE_GENERATION: AtomicU64 = AtomicU64::new(1);
+static MAX_HEART_RATE_GENERATION: AtomicU64 = AtomicU64::new(1);
 static FAVORITES_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 /// Publishes mutations made through the process-global profile stores when the
@@ -167,6 +168,17 @@ pub fn runtime_heart_rate_device_generation() -> u64 {
 #[inline(always)]
 pub(crate) fn runtime_mark_heart_rate_devices_changed() {
     HEART_RATE_DEVICE_GENERATION.fetch_add(1, Ordering::Release);
+}
+
+/// Current revision of the maximum-heart-rate values in the live profiles.
+#[inline(always)]
+pub fn runtime_max_heart_rate_generation() -> u64 {
+    MAX_HEART_RATE_GENERATION.load(Ordering::Acquire)
+}
+
+#[inline(always)]
+pub(crate) fn runtime_mark_max_heart_rates_changed() {
+    MAX_HEART_RATE_GENERATION.fetch_add(1, Ordering::Release);
 }
 
 /// Current revision of profile-backed song, pack, and series favorites.
@@ -555,9 +567,17 @@ pub fn default_profile_with_player_options(player_options: &PlayerOptionsData) -
 }
 
 pub fn runtime_set_guest_profile_for_side(side: PlayerSide, player_options: &PlayerOptionsData) {
-    runtime_lock_profiles()[player_side_index(side)] = guest_profile(player_options);
+    let mut profiles = runtime_lock_profiles();
+    let profile = &mut profiles[player_side_index(side)];
+    let previous_max_heart_rate = profile.max_heart_rate;
+    *profile = guest_profile(player_options);
+    let max_heart_rate_changed = profile.max_heart_rate != previous_max_heart_rate;
+    drop(profiles);
     runtime_mark_favorites_changed();
     runtime_mark_heart_rate_devices_changed();
+    if max_heart_rate_changed {
+        runtime_mark_max_heart_rates_changed();
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -581,6 +601,7 @@ pub fn runtime_apply_loaded_profile_data_for_side(
     let play_style = runtime_session_play_style();
     let mut profiles = runtime_lock_profiles();
     let profile = &mut profiles[player_side_index(side)];
+    let previous_max_heart_rate = profile.max_heart_rate;
     apply_loaded_profile_data(
         profile,
         default_profile,
@@ -600,9 +621,13 @@ pub fn runtime_apply_loaded_profile_data_for_side(
     );
     profile.avatar_path = avatar_path;
     profile.avatar_texture_key = None;
+    let max_heart_rate_changed = profile.max_heart_rate != previous_max_heart_rate;
     drop(profiles);
     runtime_mark_favorites_changed();
     runtime_mark_heart_rate_devices_changed();
+    if max_heart_rate_changed {
+        runtime_mark_max_heart_rates_changed();
+    }
 }
 
 #[derive(Debug)]

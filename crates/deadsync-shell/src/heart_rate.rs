@@ -91,7 +91,7 @@ const fn runtime_config_changed(
 fn heart_rate_view_generation() -> (u64, u64) {
     (
         deadsync_heart_rate::player_readings_generation(),
-        deadsync_profile::runtime_profile_generation(),
+        deadsync_profile::runtime_max_heart_rate_generation(),
     )
 }
 
@@ -171,7 +171,7 @@ mod tests {
     }
 
     #[test]
-    fn select_music_view_key_tracks_profile_changes() {
+    fn select_music_view_key_tracks_max_heart_rate_changes() {
         let before = select_music_view_key(true, || (9, 4));
         let after = select_music_view_key(true, || (9, 5));
 

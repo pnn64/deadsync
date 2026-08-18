@@ -89,20 +89,22 @@ pub(crate) fn pulse_scale(elapsed: f32, bpm: u16) -> f32 {
 }
 
 fn zone_color(bpm: u16, max_heart_rate: u16) -> [f32; 4] {
-    let max = if max_heart_rate == 0 {
+    let max = u32::from(if max_heart_rate == 0 {
         deadsync_profile::MAX_HEART_RATE_DEFAULT
     } else {
         max_heart_rate
-    };
-    // Percentage of the player's maximum heart rate (integer math).
-    let percent = u32::from(bpm) * 100 / u32::from(max);
-    ZONE_RGBA[match percent {
-        0..=49 => 0,  // grey
-        50..=59 => 1, // white
-        60..=69 => 2, // blue
-        70..=79 => 3, // green
-        80..=89 => 4, // yellow
-        _ => 5,       // red (90%+)
+    });
+    // Compare equivalent scaled integer ratios so this per-frame path avoids
+    // integer division. For example, floor(bpm * 100 / max) < 50 exactly when
+    // bpm * 10 < max * 5.
+    let scaled_bpm = u32::from(bpm) * 10;
+    ZONE_RGBA[match scaled_bpm {
+        value if value < max * 5 => 0, // grey (<50%)
+        value if value < max * 6 => 1, // white (50-59%)
+        value if value < max * 7 => 2, // blue (60-69%)
+        value if value < max * 8 => 3, // green (70-79%)
+        value if value < max * 9 => 4, // yellow (80-89%)
+        _ => 5,                        // red (90%+)
     }]
 }
 
@@ -172,6 +174,36 @@ mod tests {
         assert_eq!(zone_color(120, 160), ZONE_RGBA[3]); // 75% -> green
         // Zero max falls back to the default so we never divide by zero.
         assert_eq!(zone_color(95, 0), zone_color(95, 190));
+    }
+
+    #[test]
+    fn scaled_zone_comparisons_match_integer_percentage_behavior() {
+        fn reference_zone_color(bpm: u16, max_heart_rate: u16) -> [f32; 4] {
+            let max = if max_heart_rate == 0 {
+                deadsync_profile::MAX_HEART_RATE_DEFAULT
+            } else {
+                max_heart_rate
+            };
+            let percent = u32::from(bpm) * 100 / u32::from(max);
+            ZONE_RGBA[match percent {
+                0..=49 => 0,
+                50..=59 => 1,
+                60..=69 => 2,
+                70..=79 => 3,
+                80..=89 => 4,
+                _ => 5,
+            }]
+        }
+
+        for max in [0, 1, 159, 160, 161, 190, 219, 220, 221, u16::MAX] {
+            for bpm in 0..=u16::MAX {
+                assert_eq!(
+                    zone_color(bpm, max),
+                    reference_zone_color(bpm, max),
+                    "bpm={bpm}, max={max}"
+                );
+            }
+        }
     }
 
     #[test]

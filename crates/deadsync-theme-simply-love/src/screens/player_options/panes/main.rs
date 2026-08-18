@@ -1127,14 +1127,14 @@ pub(super) fn build_main_rows(
             HEART_RATE_MONITOR,
             heart_rate_choices.to_vec(),
         ));
-        b.push(Row::custom(
+        b.push(Row::custom_actor_texts(
             RowId::MaxHeartRate,
             lookup_key("PlayerOptions", "MaxHeartRate"),
             lookup_key("PlayerOptionsHelp", "MaxHeartRateHelp"),
             MAX_HEART_RATE,
             (deadsync_profile::MAX_HEART_RATE_MIN..=deadsync_profile::MAX_HEART_RATE_MAX)
-                .map(|bpm| bpm.to_string())
-                .collect(),
+                .map(TextContent::inline_u16)
+                .collect::<Box<[_]>>(),
         ));
     }
     b.push(
