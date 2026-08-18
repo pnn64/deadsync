@@ -52,19 +52,21 @@ pub fn gameplay_chart_load_options<'a>(
 }
 
 pub fn sync_analysis_chart_load_options<'a>(
-    song: &SongData,
+    _song: &SongData,
     cache_dir: &'a Path,
     parse_options: &'a ParseSongOptions,
-    config: RuntimeSongConfig,
-    mut group_is_never_cached: impl FnMut(&str) -> bool,
+    _config: RuntimeSongConfig,
+    _group_is_never_cached: impl FnMut(&str) -> bool,
 ) -> GameplayChartLoadOptions<'a> {
-    let never_cache = song_group_is_never_cached(&song.simfile_path, &mut group_is_never_cached);
+    // Sync analysis must observe a just-saved #OFFSET even when FastLoad is enabled.
+    // Parsing the simfile is cheap compared with decoding and analyzing its audio,
+    // and avoids a stale cache producing the exact same suggestion after apply.
     GameplayChartLoadOptions {
         cache_dir,
         parse_options,
-        allow_cache_read: (config.fastload || config.cachesongs) && !never_cache,
+        allow_cache_read: false,
         allow_cache_write: false,
-        verify_cache_freshness: !config.fastload,
+        verify_cache_freshness: true,
         global_offset_seconds: 0.0,
     }
 }

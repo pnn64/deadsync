@@ -10,7 +10,7 @@ use deadlib_present::space::{screen_center_x, screen_center_y, widescale};
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_simfile::sync_offset::SongOffsetSyncChange;
+use deadsync_simfile::sync_offset::{SongOffsetSyncChange, quantize_sync_offset_seconds};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -886,6 +886,7 @@ fn row_delta_seconds(row: &RowState) -> Option<f32> {
     row.final_bias_ms
         .map(|bias_ms| -(bias_ms as f32) * 0.001)
         .filter(|v| v.is_finite())
+        .map(quantize_sync_offset_seconds)
 }
 
 fn row_disposition(row: &RowState, min_confidence: f64) -> RowDisposition {
@@ -1075,7 +1076,10 @@ fn result_text(row: &RowState, min_confidence: f64) -> TextContent {
             "PackSync",
             "ResultConfidenceFormat",
             &[
-                ("bias", &format!("{:+.2}", row.final_bias_ms.unwrap_or(0.0))),
+                (
+                    "adjustment",
+                    &format!("{:+.0}", row_delta_seconds(row).unwrap_or(0.0) * 1_000.0),
+                ),
                 ("confidence", &confidence_pct.to_string()),
             ],
         )),
@@ -1302,9 +1306,21 @@ mod tests {
 
     #[test]
     fn pack_sync_result_text_labels_confidence() {
-        let row = pack_row(12.5, 0.87);
+        let row = pack_row(-2.72, 0.87);
         let text = result_text(&row, 0.80);
+        assert!(text.as_str().contains("+3 ms"));
+        assert!(!text.as_str().contains("-2.72 ms"));
         assert!(text.as_str().contains("87% confidence"));
+    }
+
+    #[test]
+    fn pack_sync_uses_same_whole_millisecond_adjustment_as_song_sync() {
+        let no_change = pack_row(-0.49, 0.87);
+        assert_eq!(row_disposition(&no_change, 0.80), RowDisposition::NoChange);
+
+        let eligible = pack_row(-0.50, 0.87);
+        assert_eq!(row_disposition(&eligible, 0.80), RowDisposition::Eligible);
+        assert_eq!(super::row_delta_seconds(&eligible), Some(0.001));
     }
 
     #[test]
@@ -1495,7 +1511,7 @@ mod tests {
             ] if *path == "assets/sounds/start.ogg"
                 && matches!(changes.as_slice(), [change]
                     if change.simfile_path == PathBuf::from("Songs/Test/song.ssc")
-                        && (change.delta_seconds + 0.0125).abs() <= f32::EPSILON)
+                        && (change.delta_seconds + 0.013).abs() <= f32::EPSILON)
         ));
         assert_eq!(effects.capacity(), 8);
     }

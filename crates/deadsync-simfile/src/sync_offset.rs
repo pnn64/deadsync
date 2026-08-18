@@ -11,9 +11,13 @@ pub struct SongOffsetSyncChange {
 pub struct SongOffsetSaveSummary {
     pub saved_files: usize,
     pub skipped_read_only: usize,
+    pub failed_files: usize,
+    pub cache_refresh_failures: usize,
     pub changed_tags_total: usize,
     pub first_saved_path: Option<PathBuf>,
     pub first_skipped_path: Option<PathBuf>,
+    pub first_failure_path: Option<PathBuf>,
+    pub first_failure_error: Option<String>,
 }
 
 #[inline(always)]
@@ -221,7 +225,7 @@ pub fn save_song_offset_changes<W, A>(
     changes: &[SongOffsetSyncChange],
     mut is_writable: W,
     mut after_save: A,
-) -> Result<SongOffsetSaveSummary, String>
+) -> SongOffsetSaveSummary
 where
     W: FnMut(&Path) -> bool,
     A: FnMut(&Path) -> Result<(), String>,
@@ -241,16 +245,33 @@ where
             continue;
         }
 
-        summary.changed_tags_total +=
-            save_song_offset_delta_to_simfile(path, change.delta_seconds)?;
-        after_save(path)?;
+        let changed_tags = match save_song_offset_delta_to_simfile(path, change.delta_seconds) {
+            Ok(changed_tags) => changed_tags,
+            Err(error) => {
+                summary.failed_files = summary.failed_files.saturating_add(1);
+                record_first_failure(&mut summary, path, error);
+                continue;
+            }
+        };
+        summary.changed_tags_total = summary.changed_tags_total.saturating_add(changed_tags);
         summary.saved_files = summary.saved_files.saturating_add(1);
         if summary.first_saved_path.is_none() {
             summary.first_saved_path = Some(path.to_path_buf());
         }
+        if let Err(error) = after_save(path) {
+            summary.cache_refresh_failures = summary.cache_refresh_failures.saturating_add(1);
+            record_first_failure(&mut summary, path, error);
+        }
     }
 
-    Ok(summary)
+    summary
+}
+
+fn record_first_failure(summary: &mut SongOffsetSaveSummary, path: &Path, error: String) {
+    if summary.first_failure_error.is_none() {
+        summary.first_failure_path = Some(path.to_path_buf());
+        summary.first_failure_error = Some(error);
+    }
 }
 
 #[cfg(test)]
@@ -347,8 +368,13 @@ mod tests {
         std::fs::create_dir_all(&root).expect("create temp dir");
         let writable = root.join("writable.ssc");
         let read_only = root.join("read_only.ssc");
+        let invalid = root.join("invalid.ssc");
+        let after_failure = root.join("after_failure.ssc");
         std::fs::write(&writable, b"#TITLE:test;\n#OFFSET:0.100;\n").expect("write simfile");
         std::fs::write(&read_only, b"#TITLE:test;\n#OFFSET:0.200;\n").expect("write simfile");
+        std::fs::write(&invalid, b"#TITLE:no offset;\n").expect("write invalid simfile");
+        std::fs::write(&after_failure, b"#TITLE:test;\n#OFFSET:0.300;\n")
+            .expect("write simfile after failure");
 
         let changes = vec![
             SongOffsetSyncChange {
@@ -357,6 +383,14 @@ mod tests {
             },
             SongOffsetSyncChange {
                 simfile_path: read_only.clone(),
+                delta_seconds: 0.001,
+            },
+            SongOffsetSyncChange {
+                simfile_path: invalid.clone(),
+                delta_seconds: 0.001,
+            },
+            SongOffsetSyncChange {
+                simfile_path: after_failure.clone(),
                 delta_seconds: 0.001,
             },
             SongOffsetSyncChange {
@@ -372,12 +406,13 @@ mod tests {
                 reloaded.push(path.to_path_buf());
                 Ok(())
             },
-        )
-        .expect("save changes");
+        );
 
-        assert_eq!(summary.saved_files, 1);
+        assert_eq!(summary.saved_files, 2);
         assert_eq!(summary.skipped_read_only, 1);
-        assert_eq!(summary.changed_tags_total, 1);
+        assert_eq!(summary.failed_files, 1);
+        assert_eq!(summary.cache_refresh_failures, 0);
+        assert_eq!(summary.changed_tags_total, 2);
         assert_eq!(
             summary.first_saved_path.as_deref(),
             Some(writable.as_path())
@@ -386,13 +421,84 @@ mod tests {
             summary.first_skipped_path.as_deref(),
             Some(read_only.as_path())
         );
-        assert_eq!(reloaded, vec![writable.clone()]);
+        assert_eq!(
+            summary.first_failure_path.as_deref(),
+            Some(invalid.as_path())
+        );
+        assert!(
+            summary
+                .first_failure_error
+                .as_deref()
+                .is_some_and(|error| error.contains("No #OFFSET tags"))
+        );
+        assert_eq!(reloaded, vec![writable.clone(), after_failure.clone()]);
         let rewritten = std::fs::read_to_string(&writable).expect("read rewritten");
         assert!(rewritten.contains("#OFFSET:0.101;"));
+        let rewritten = std::fs::read_to_string(&after_failure).expect("read rewritten");
+        assert!(rewritten.contains("#OFFSET:0.301;"));
 
         let _ = std::fs::remove_file(root.join("writable.ssc.old"));
+        let _ = std::fs::remove_file(root.join("after_failure.ssc.old"));
         let _ = std::fs::remove_file(writable);
         let _ = std::fs::remove_file(read_only);
+        let _ = std::fs::remove_file(invalid);
+        let _ = std::fs::remove_file(after_failure);
+        let _ = std::fs::remove_dir(root);
+    }
+
+    #[test]
+    fn save_song_offset_changes_continues_after_cache_refresh_failure() {
+        let id = TEST_ID.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "deadsync_sync_offset_cache_test_{}_{}",
+            std::process::id(),
+            id
+        ));
+        std::fs::create_dir_all(&root).expect("create temp dir");
+        let first = root.join("first.ssc");
+        let second = root.join("second.ssc");
+        std::fs::write(&first, b"#OFFSET:0.100;\n").expect("write first simfile");
+        std::fs::write(&second, b"#OFFSET:0.200;\n").expect("write second simfile");
+
+        let changes = [
+            SongOffsetSyncChange {
+                simfile_path: first.clone(),
+                delta_seconds: 0.001,
+            },
+            SongOffsetSyncChange {
+                simfile_path: second.clone(),
+                delta_seconds: 0.001,
+            },
+        ];
+        let mut reload_attempts = Vec::new();
+        let summary = save_song_offset_changes(
+            &changes,
+            |_| true,
+            |path| {
+                reload_attempts.push(path.to_path_buf());
+                if path == first.as_path() {
+                    Err("test cache refresh failure".to_string())
+                } else {
+                    Ok(())
+                }
+            },
+        );
+
+        assert_eq!(summary.saved_files, 2);
+        assert_eq!(summary.failed_files, 0);
+        assert_eq!(summary.cache_refresh_failures, 1);
+        assert_eq!(summary.first_failure_path.as_deref(), Some(first.as_path()));
+        assert_eq!(reload_attempts, vec![first.clone(), second.clone()]);
+        assert!(
+            std::fs::read_to_string(&second)
+                .expect("read second simfile")
+                .contains("#OFFSET:0.201;")
+        );
+
+        let _ = std::fs::remove_file(root.join("first.ssc.old"));
+        let _ = std::fs::remove_file(root.join("second.ssc.old"));
+        let _ = std::fs::remove_file(first);
+        let _ = std::fs::remove_file(second);
         let _ = std::fs::remove_dir(root);
     }
 }

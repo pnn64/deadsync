@@ -4335,6 +4335,10 @@ impl App {
                         self.save_gameplay_song_offset(simfile_path.as_path(), delta_seconds)
                     {
                         warn!("Failed to save song offset sync changes: {e}");
+                        self.state.shell.interaction.show_message(
+                            format!("Song sync save incomplete: {e}"),
+                            Instant::now(),
+                        );
                     }
                     Vec::new()
                 }
@@ -4353,8 +4357,20 @@ impl App {
                 SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::ApplySongOffsetBatch {
                     changes,
                 }) => {
-                    if let Err(e) = self.save_song_offset_changes(&changes) {
-                        warn!("Failed to save pack sync changes: {e}");
+                    match self.save_song_offset_changes(&changes) {
+                        Ok(summary) => {
+                            self.state.shell.interaction.show_message(
+                                format!("Saved {} pack sync change(s).", summary.saved_files),
+                                Instant::now(),
+                            );
+                        }
+                        Err(e) => {
+                            warn!("Failed to save all pack sync changes: {e}");
+                            self.state.shell.interaction.show_message(
+                                format!("Pack sync save incomplete: {e}"),
+                                Instant::now(),
+                            );
+                        }
                     }
                     Vec::new()
                 }
@@ -4872,7 +4888,7 @@ impl App {
     fn save_song_offset_changes(
         &mut self,
         changes: &[sync_offset::SongOffsetSyncChange],
-    ) -> Result<(), String> {
+    ) -> Result<sync_offset::SongOffsetSaveSummary, String> {
         let summary = sync_offset::save_song_offset_changes(
             changes,
             config::song_path_is_writable,
@@ -4886,22 +4902,14 @@ impl App {
                 }
                 Ok(())
             },
-        )?;
-
-        if summary.saved_files == 0 {
-            if let Some(path) = summary.first_skipped_path {
-                return Err(format!(
-                    "Song offset sync changes target read-only AdditionalSongFoldersReadOnly path '{}'",
-                    path.display()
-                ));
-            }
-            return Ok(());
-        }
-
-        select_music::refresh_from_song_packs(
-            &mut self.state.screens.select_music_state,
-            deadsync_simfile::runtime_cache::get_song_cache().clone(),
         );
+
+        if summary.saved_files > 0 {
+            select_music::refresh_from_song_packs(
+                &mut self.state.screens.select_music_state,
+                deadsync_simfile::runtime_cache::get_song_cache().clone(),
+            );
+        }
         if summary.skipped_read_only > 0
             && let Some(path) = summary.first_skipped_path.as_deref()
         {
@@ -4911,7 +4919,22 @@ impl App {
                 path.display()
             );
         }
-        if summary.saved_files == 1 {
+        if summary.failed_files > 0 || summary.cache_refresh_failures > 0 {
+            warn!(
+                "Failed {} song offset write(s) and {} post-save cache refresh(es); first failure for '{}': {}",
+                summary.failed_files,
+                summary.cache_refresh_failures,
+                summary
+                    .first_failure_path
+                    .as_deref()
+                    .map_or_else(|| "unknown".into(), |path| path.display().to_string()),
+                summary
+                    .first_failure_error
+                    .as_deref()
+                    .unwrap_or("unknown error")
+            );
+        }
+        if summary.saved_files == 1 && summary.cache_refresh_failures == 0 {
             if let Some(path) = summary.first_saved_path.as_deref() {
                 info!(
                     "Saved song offset sync changes to '{}' (updated {} #OFFSET tags; refreshed song cache).",
@@ -4925,7 +4948,28 @@ impl App {
                 summary.saved_files, summary.changed_tags_total
             );
         }
-        Ok(())
+        if summary.skipped_read_only > 0
+            || summary.failed_files > 0
+            || summary.cache_refresh_failures > 0
+        {
+            let mut message = format!(
+                "saved {} of {} change(s); {} read-only, {} write failure(s), {} cache refresh failure(s)",
+                summary.saved_files,
+                changes.len(),
+                summary.skipped_read_only,
+                summary.failed_files,
+                summary.cache_refresh_failures
+            );
+            if let Some(error) = summary.first_failure_error.as_deref() {
+                message.push_str("; first error: ");
+                message.push_str(error);
+            } else if let Some(path) = summary.first_skipped_path.as_deref() {
+                message.push_str("; first read-only path: ");
+                message.push_str(path.to_string_lossy().as_ref());
+            }
+            return Err(message);
+        }
+        Ok(summary)
     }
 
     fn save_gameplay_song_offset(&mut self, simfile_path: &Path, delta: f32) -> Result<(), String> {
@@ -4933,6 +4977,7 @@ impl App {
             simfile_path: simfile_path.to_path_buf(),
             delta_seconds: delta,
         }])
+        .map(|_| ())
     }
 
     fn maybe_begin_gameplay_offset_prompt(
