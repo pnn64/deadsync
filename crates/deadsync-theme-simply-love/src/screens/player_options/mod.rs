@@ -264,10 +264,14 @@ fn init_with_noteskin_prewarm(
     let [p1, p2] = players;
     let heart_rate_device_ids = [p1.heart_rate_device_id, p2.heart_rate_device_id];
     let max_heart_rate = [
-        p1.max_heart_rate
-            .clamp(profile_data::MAX_HEART_RATE_MIN, profile_data::MAX_HEART_RATE_MAX),
-        p2.max_heart_rate
-            .clamp(profile_data::MAX_HEART_RATE_MIN, profile_data::MAX_HEART_RATE_MAX),
+        p1.max_heart_rate.clamp(
+            profile_data::MAX_HEART_RATE_MIN,
+            profile_data::MAX_HEART_RATE_MAX,
+        ),
+        p2.max_heart_rate.clamp(
+            profile_data::MAX_HEART_RATE_MIN,
+            profile_data::MAX_HEART_RATE_MAX,
+        ),
     ];
     let player_options = [p1.options, p2.options];
     let active = active_players(play_style, player_side, joined);
@@ -530,8 +534,10 @@ fn sync_max_heart_rate_selection(state: &mut State) {
     };
     let max_choice = row.choices.len().saturating_sub(1);
     for player in 0..PLAYER_SLOTS {
-        let bpm = values[player]
-            .clamp(profile_data::MAX_HEART_RATE_MIN, profile_data::MAX_HEART_RATE_MAX);
+        let bpm = values[player].clamp(
+            profile_data::MAX_HEART_RATE_MIN,
+            profile_data::MAX_HEART_RATE_MAX,
+        );
         row.selected_choice_index[player] =
             usize::from(bpm - profile_data::MAX_HEART_RATE_MIN).min(max_choice);
     }

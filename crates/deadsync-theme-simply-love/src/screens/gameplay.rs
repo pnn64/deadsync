@@ -1960,7 +1960,7 @@ pub struct State {
     song_lua_foreground_owner_index: SongLuaForegroundOwnerIndex,
     smx_sensor_views: [Option<SmxSensorPadView>; 2],
     pub heart_rate_view: HeartRateView,
-    heart_rate_generation: u64,
+    heart_rate_generation: (u64, u64),
     pub(crate) heart_rate_text: heart_rate::HeartRateTextPlan,
     // Time banked toward the next shell-owned sensor refresh. Seeded to fire on
     // the first frame.
@@ -2515,7 +2515,7 @@ impl State {
             song_lua_foreground_owner_index,
             smx_sensor_views: [None, None],
             heart_rate_view: HeartRateView::default(),
-            heart_rate_generation: u64::MAX,
+            heart_rate_generation: (u64::MAX, u64::MAX),
             heart_rate_text: heart_rate::HeartRateTextPlan::default(),
             smx_sensor_refresh_accum: SMX_SENSOR_REFRESH_INTERVAL,
             frame_scratch: Some(Box::new(frame_scratch)),
@@ -4663,11 +4663,11 @@ pub fn set_smx_sensor_pad_view(
     }
 }
 
-pub fn heart_rate_generation(state: &State) -> u64 {
+pub fn heart_rate_generation(state: &State) -> (u64, u64) {
     state.heart_rate_generation
 }
 
-pub fn set_heart_rate_view(state: &mut State, generation: u64, view: HeartRateView) {
+pub fn set_heart_rate_view(state: &mut State, generation: (u64, u64), view: HeartRateView) {
     state.heart_rate_text.sync(view);
     state.heart_rate_view = view;
     state.heart_rate_generation = generation;

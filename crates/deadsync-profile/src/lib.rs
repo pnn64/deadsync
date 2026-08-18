@@ -12678,6 +12678,17 @@ mod tests {
     }
 
     #[test]
+    fn max_heart_rate_setter_clamps_to_supported_range() {
+        let mut profile = Profile::default();
+
+        assert!(profile.set_max_heart_rate(MAX_HEART_RATE_MIN - 1));
+        assert_eq!(profile.max_heart_rate, MAX_HEART_RATE_MIN);
+        assert!(!profile.set_max_heart_rate(MAX_HEART_RATE_MIN));
+        assert!(profile.set_max_heart_rate(MAX_HEART_RATE_MAX + 1));
+        assert_eq!(profile.max_heart_rate, MAX_HEART_RATE_MAX);
+    }
+
+    #[test]
     fn profile_stat_defaults_match_itg_fallbacks() {
         assert_eq!(resolved_weight_pounds(0), DEFAULT_WEIGHT_POUNDS);
         assert_eq!(resolved_weight_pounds(165), 165);
@@ -12945,6 +12956,7 @@ mod tests {
             display_name: "Test Player".to_string(),
             player_initials: "TEST".to_string(),
             heart_rate_device_id: Some("AA:BB:CC:DD:EE:FF".to_string()),
+            max_heart_rate: 205,
             weight_pounds: 165,
             birth_year: 2000,
             calories_burned_day: "2026-06-23".to_string(),
@@ -12970,6 +12982,7 @@ mod tests {
         assert!(profile_ini.contains("DisplayName=Test Player\n"));
         assert!(profile_ini.contains("PlayerInitials=TEST\n"));
         assert!(profile_ini.contains("HeartRateDeviceId=AA:BB:CC:DD:EE:FF\n"));
+        assert!(profile_ini.contains("MaxHeartRate=205\n"));
         assert!(profile_ini.contains("[Editable]\nWeightPounds=165\nBirthYear=2000\n"));
         assert!(profile_ini.contains("IgnoreStepCountCalories=1\n"));
         assert!(profile_ini.contains("[LastPlayedSingles]\n"));
@@ -13291,6 +13304,7 @@ ApiKey = gs-key
                 ("userprofile", "HeartRateDeviceId"),
                 " AA:BB:CC:DD:EE:FF ".to_string(),
             ),
+            (("userprofile", "MaxHeartRate"), "225".to_string()),
             (("Editable", "WeightPounds"), "180".to_string()),
             (("Stats", "IgnoreStepCountCalories"), "1".to_string()),
             (("Stats", "CaloriesBurnedDate"), today.to_string()),
@@ -13333,6 +13347,7 @@ ApiKey = gs-key
             profile.heart_rate_device_id.as_deref(),
             Some("AA:BB:CC:DD:EE:FF")
         );
+        assert_eq!(profile.max_heart_rate, MAX_HEART_RATE_MAX);
         assert_eq!(profile.weight_pounds, 180);
         assert!(profile.ignore_step_count_calories);
         assert_eq!(profile.calories_burned_day, today);

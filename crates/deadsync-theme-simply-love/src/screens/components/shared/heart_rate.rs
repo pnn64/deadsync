@@ -97,12 +97,12 @@ fn zone_color(bpm: u16, max_heart_rate: u16) -> [f32; 4] {
     // Percentage of the player's maximum heart rate (integer math).
     let percent = u32::from(bpm) * 100 / u32::from(max);
     ZONE_RGBA[match percent {
-        0..=49 => 0,   // grey
-        50..=59 => 1,  // white
-        60..=69 => 2,  // blue
-        70..=79 => 3,  // green
-        80..=89 => 4,  // yellow
-        _ => 5,        // red (90%+)
+        0..=49 => 0,  // grey
+        50..=59 => 1, // white
+        60..=69 => 2, // blue
+        70..=79 => 3, // green
+        80..=89 => 4, // yellow
+        _ => 5,       // red (90%+)
     }]
 }
 

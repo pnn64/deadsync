@@ -2330,6 +2330,80 @@ pub(super) mod tests {
         assert!(choices.iter().all(|choice| !choice.contains("saved-id")));
     }
 
+    #[test]
+    fn max_heart_rate_row_tracks_monitor_visibility_and_persists_edits() {
+        ensure_i18n();
+        let mut init_view = test_init_view();
+        init_view.policy.heart_rate_monitors = true;
+        init_view.players[P1].heart_rate_device_id = Some("saved-id".to_owned());
+        init_view.players[P1].max_heart_rate = 205;
+        let (mut state, _) = setup_state_with(init_view);
+
+        let max_row_idx = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::MaxHeartRate)
+            .expect("Max Heart Rate row present");
+        let visibility = row_visibility(
+            &state.pane().row_map,
+            state.active,
+            state.option_masks,
+            false,
+        );
+        assert!(is_row_visible(
+            &state.pane().row_map,
+            max_row_idx,
+            visibility
+        ));
+        assert_eq!(
+            state
+                .pane()
+                .row_map
+                .get(RowId::MaxHeartRate)
+                .expect("Max Heart Rate row present")
+                .selected_choice_index[P1],
+            usize::from(205 - deadsync_profile::MAX_HEART_RATE_MIN)
+        );
+
+        state.pane_mut().selected_row[P1] = max_row_idx;
+        super::super::dispatch_behavior_delta(&mut state, P1, 1, super::NavWrap::Clamp);
+        assert_eq!(state.max_heart_rate[P1], 206);
+        assert!(matches!(
+            &state.pending_effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::UpdatePlayerOptions {
+                    side: PlayerSide::P1,
+                    max_heart_rate: 206,
+                    ..
+                }
+            ))
+        ));
+
+        let monitor_row_idx = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::HeartRateMonitor)
+            .expect("Heart Rate Monitor row present");
+        state.pane_mut().selected_row[P1] = monitor_row_idx;
+        super::super::dispatch_behavior_delta(&mut state, P1, -1, super::NavWrap::Clamp);
+        assert_eq!(state.heart_rate_device_ids[P1], None);
+        let visibility = row_visibility(
+            &state.pane().row_map,
+            state.active,
+            state.option_masks,
+            false,
+        );
+        assert!(!is_row_visible(
+            &state.pane().row_map,
+            max_row_idx,
+            visibility
+        ));
+    }
+
     fn assert_sfx(effect: &ThemeEffect, expected_path: &str) {
         assert!(matches!(
             effect,
@@ -2344,6 +2418,7 @@ pub(super) mod tests {
         side: PlayerSide,
         options_data: &PlayerOptionsData,
         selected_hrm: &Option<String>,
+        max_heart_rate: u16,
     ) {
         assert_eq!(effects.len(), 2);
         let ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
@@ -2351,7 +2426,7 @@ pub(super) mod tests {
                 side: request_side,
                 options,
                 heart_rate_device_id,
-                max_heart_rate: _,
+                max_heart_rate: requested_max_heart_rate,
             },
         )) = &effects[0]
         else {
@@ -2360,6 +2435,7 @@ pub(super) mod tests {
         assert_eq!(*request_side, side);
         assert_eq!(options.as_ref(), options_data);
         assert_eq!(heart_rate_device_id, selected_hrm);
+        assert_eq!(*requested_max_heart_rate, max_heart_rate);
         assert_sfx(&effects[1], "assets/sounds/change_value.ogg");
     }
 
@@ -2517,6 +2593,7 @@ pub(super) mod tests {
             PlayerSide::P1,
             &state.player_options[P1],
             &state.heart_rate_device_ids[P1],
+            state.max_heart_rate[P1],
         );
         assert_eq!(state.speed_mod[P1].value, after_press);
         let after_press_text = super::super::speed_value(&state, P1).text.clone();
@@ -2535,6 +2612,7 @@ pub(super) mod tests {
             PlayerSide::P1,
             &state.player_options[P1],
             &state.heart_rate_device_ids[P1],
+            state.max_heart_rate[P1],
         );
         assert!(state.speed_mod[P1].value > after_press);
         let after_repeat_text = &super::super::speed_value(&state, P1).text;
