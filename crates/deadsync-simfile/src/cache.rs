@@ -523,6 +523,50 @@ impl From<&TimingSegments> for CachedTimingSegments {
     }
 }
 
+impl CachedTimingSegments {
+    pub(crate) fn from_rssp(
+        segments: &rssp::timing::TimingSegments,
+        time_signatures: Vec<TimeSignatureSegment>,
+        tickcounts: Vec<TickcountSegment>,
+        combos: Vec<ComboSegment>,
+    ) -> Self {
+        Self {
+            beat0_offset_adjust: segments.beat0_offset_adjust,
+            bpms: segments.bpms.clone(),
+            stops: segments.stops.clone(),
+            delays: segments.delays.clone(),
+            warps: segments.warps.clone(),
+            speeds: segments
+                .speeds
+                .iter()
+                .map(|&(beat, ratio, delay, unit)| CachedSpeedSegment {
+                    beat,
+                    ratio,
+                    delay,
+                    unit: match unit {
+                        rssp::timing::SpeedUnit::Beats => CachedSpeedUnit::Beats,
+                        rssp::timing::SpeedUnit::Seconds => CachedSpeedUnit::Seconds,
+                    },
+                })
+                .collect(),
+            scrolls: segments.scrolls.clone(),
+            fakes: segments.fakes.clone(),
+            time_signatures: time_signatures
+                .into_iter()
+                .map(|seg| (seg.beat, seg.numerator, seg.denominator))
+                .collect(),
+            tickcounts: tickcounts
+                .into_iter()
+                .map(|seg| (seg.beat, seg.ticks))
+                .collect(),
+            combos: combos
+                .into_iter()
+                .map(|seg| (seg.beat, seg.combo, seg.miss_combo))
+                .collect(),
+        }
+    }
+}
+
 impl From<CachedTimingSegments> for TimingSegments {
     fn from(segments: CachedTimingSegments) -> Self {
         let time_signatures: Vec<TimeSignatureSegment> = segments
@@ -2455,6 +2499,45 @@ mod tests {
         assert_eq!(round_trip.combos[0].beat, 16.0);
         assert_eq!(round_trip.combos[0].combo, 3);
         assert_eq!(round_trip.combos[0].miss_combo, 2);
+    }
+
+    #[test]
+    fn direct_rssp_timing_cache_matches_two_stage_conversion() {
+        let source = rssp::timing::TimingSegments {
+            beat0_offset_adjust: 0.25,
+            bpms: vec![(0.0, 120.0), (8.0, 180.0)],
+            stops: vec![(4.0, 0.5)],
+            delays: vec![(6.0, 0.25)],
+            warps: vec![(12.0, 2.0)],
+            speeds: vec![(2.0, 1.5, 0.5, rssp::timing::SpeedUnit::Seconds)],
+            scrolls: vec![(10.0, -1.0)],
+            fakes: vec![(16.0, 4.0)],
+        };
+        let time_signatures = vec![TimeSignatureSegment {
+            beat: 0.0,
+            numerator: 4,
+            denominator: 4,
+        }];
+        let tickcounts = vec![TickcountSegment {
+            beat: 0.0,
+            ticks: 4,
+        }];
+        let combos = vec![ComboSegment {
+            beat: 0.0,
+            combo: 1,
+            miss_combo: 1,
+        }];
+
+        let mut expanded = crate::timing::timing_segments_from_rssp(&source);
+        expanded.time_signatures = time_signatures.clone();
+        expanded.tickcounts = tickcounts.clone();
+        expanded.combos = combos.clone();
+        let expected = CachedTimingSegments::from(&expanded);
+        let actual = CachedTimingSegments::from_rssp(&source, time_signatures, tickcounts, combos);
+        let expected = bincode::encode_to_vec(expected, bincode::config::standard()).unwrap();
+        let actual = bincode::encode_to_vec(actual, bincode::config::standard()).unwrap();
+
+        assert_eq!(actual, expected);
     }
 
     #[test]

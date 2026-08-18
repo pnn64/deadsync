@@ -1,18 +1,21 @@
 use crate::artwork::resolve_song_artwork_like_itg;
 use crate::cache::{
-    CachedParsedNote, SerializableChartData, SerializableSongBackgroundChange,
-    SerializableSongData, build_song_meta, parse_chart_display_bpm, update_precise_song_bounds,
+    CachedParsedNote, CachedTimingSegments, SerializableChartData,
+    SerializableSongBackgroundChange, SerializableSongData, build_song_meta,
+    parse_chart_display_bpm, update_precise_song_bounds,
 };
 use crate::changes::{
     extract_background_lua_change_set, extract_foreground_change_sets,
     resolve_background_changes_from_roots, resolve_background_layer2_changes_from_roots,
 };
 use crate::media::resolve_song_asset_path_like_itg;
-use crate::notes::{parse_chart_notes, step_type_lanes};
+#[cfg(any(test, feature = "bench-support"))]
+use crate::notes::parse_chart_notes_legacy;
+use crate::notes::{parse_chart_notes_as, step_type_lanes};
 use crate::stats::build_stamina_counts;
-use crate::timing::{
-    parse_combos, parse_tickcounts, parse_time_signatures, timing_segments_from_rssp,
-};
+#[cfg(any(test, feature = "bench-support"))]
+use crate::timing::timing_segments_from_rssp;
+use crate::timing::{parse_combos, parse_tickcounts, parse_time_signatures};
 use deadsync_chart::{STANDARD_DIFFICULTY_NAMES, SongData, song::standard_difficulty_index};
 use rssp::{
     AnalysisOptions, AnalysisScratch, PreparedAnalysis, SimfileSummary, analyze_prepared_in,
@@ -75,6 +78,23 @@ pub struct SongParseScratch {
     analysis: AnalysisScratch,
 }
 
+#[derive(Clone, Copy)]
+enum SongBuildMode {
+    Direct,
+    #[cfg(any(test, feature = "bench-support"))]
+    Legacy,
+}
+
+struct SongBuildInput<'a> {
+    path: &'a Path,
+    simfile_dir: &'a Path,
+    simfile_data: &'a [u8],
+    song_music_path: Option<PathBuf>,
+    music_length_seconds: f32,
+    options: &'a ParseSongOptions,
+    mode: SongBuildMode,
+}
+
 pub fn parse_song_file(
     path: &Path,
     options: &ParseSongOptions,
@@ -90,6 +110,24 @@ pub fn parse_song_file_in(
     options: &ParseSongOptions,
     analyzer: &SongAnalyzer,
     scratch: &mut SongParseScratch,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<SerializableSongData, String> {
+    parse_song_file_in_mode(
+        path,
+        options,
+        analyzer,
+        scratch,
+        SongBuildMode::Direct,
+        music_len,
+    )
+}
+
+fn parse_song_file_in_mode(
+    path: &Path,
+    options: &ParseSongOptions,
+    analyzer: &SongAnalyzer,
+    scratch: &mut SongParseScratch,
+    build_mode: SongBuildMode,
     music_len: impl FnOnce(Option<&Path>) -> f32,
 ) -> Result<SerializableSongData, String> {
     if analyzer.prepared.options().mono_threshold != options.mono_threshold {
@@ -113,13 +151,16 @@ pub fn parse_song_file_in(
     let song_music_path = resolve_music_path(simfile_dir, &summary.music_path);
     let music_length_seconds = final_music_len(&summary, music_len(song_music_path.as_deref()));
     Ok(build_song_data(
-        path,
-        simfile_dir,
-        input,
         summary,
-        song_music_path,
-        music_length_seconds,
-        options,
+        SongBuildInput {
+            path,
+            simfile_dir,
+            simfile_data: input,
+            song_music_path,
+            music_length_seconds,
+            options,
+            mode: build_mode,
+        },
     ))
 }
 
@@ -179,26 +220,30 @@ fn parse_song_file_fresh(
     let song_music_path = resolve_music_path(simfile_dir, &summary.music_path);
     let music_length_seconds = final_music_len(&summary, music_len(song_music_path.as_deref()));
     Ok(build_song_data(
-        path,
-        simfile_dir,
-        &simfile_data,
         summary,
-        song_music_path,
-        music_length_seconds,
-        options,
+        SongBuildInput {
+            path,
+            simfile_dir,
+            simfile_data: &simfile_data,
+            song_music_path,
+            music_length_seconds,
+            options,
+            mode: SongBuildMode::Legacy,
+        },
     ))
 }
 
-fn build_song_data(
-    path: &Path,
-    simfile_dir: &Path,
-    simfile_data: &[u8],
-    mut summary: SimfileSummary,
-    song_music_path: Option<PathBuf>,
-    music_length_seconds: f32,
-    options: &ParseSongOptions,
-) -> SerializableSongData {
-    let charts = build_charts(&mut summary, simfile_dir, song_music_path.as_deref());
+fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> SerializableSongData {
+    let SongBuildInput {
+        path,
+        simfile_dir,
+        simfile_data,
+        song_music_path,
+        music_length_seconds,
+        options,
+        mode,
+    } = input;
+    let charts = build_charts(&mut summary, simfile_dir, song_music_path.as_deref(), mode);
     let artwork = resolve_song_artwork_like_itg(
         simfile_dir,
         simfile_data,
@@ -275,6 +320,7 @@ fn build_charts(
     summary: &mut SimfileSummary,
     simfile_dir: &Path,
     song_music_path: Option<&Path>,
+    build_mode: SongBuildMode,
 ) -> Vec<SerializableChartData> {
     let charts = std::mem::take(&mut summary.charts);
     let global_time_signatures = summary.normalized_time_signatures.as_str();
@@ -286,7 +332,26 @@ fn build_charts(
         .into_iter()
         .map(|chart| {
             let lanes = step_type_lanes(&chart.step_type_str);
-            let parsed_notes = parse_chart_notes(&chart.minimized_note_data, lanes);
+            let parsed_notes = match build_mode {
+                SongBuildMode::Direct => parse_chart_notes_as(
+                    &chart.minimized_note_data,
+                    lanes,
+                    |row_index, column, note_type| CachedParsedNote {
+                        row_index: row_index as u32,
+                        column: column as u8,
+                        note_type: note_type.into(),
+                        tail_row_index: None,
+                    },
+                    |note, tail_row_index| note.tail_row_index = Some(tail_row_index as u32),
+                ),
+                #[cfg(any(test, feature = "bench-support"))]
+                SongBuildMode::Legacy => {
+                    parse_chart_notes_legacy(&chart.minimized_note_data, lanes)
+                        .iter()
+                        .map(CachedParsedNote::from)
+                        .collect()
+                }
+            };
             let chart_time_signatures = chart
                 .chart_time_signatures
                 .as_deref()
@@ -325,17 +390,31 @@ fn build_charts(
             } else {
                 global_combos
             };
-            let mut timing_segments = timing_segments_from_rssp(chart.timing_segments.as_ref());
-            timing_segments.time_signatures = parse_time_signatures(time_signature_tag);
-            timing_segments.tickcounts = parse_tickcounts(tickcount_tag);
-            timing_segments.combos = parse_combos(combo_tag);
+            let time_signatures = parse_time_signatures(time_signature_tag);
+            let tickcounts = parse_tickcounts(tickcount_tag);
+            let combos = parse_combos(combo_tag);
             let stamina_counts = build_stamina_counts(&chart);
             let meter = chart.rating_str.parse().unwrap_or(0);
             let music_path = chart_music_path(simfile_dir, song_music_path, &chart.music_path);
-            let parsed_notes = parsed_notes.iter().map(CachedParsedNote::from).collect();
-            let min_bpm = min_chart_bpm(&timing_segments.bpms);
-            let max_bpm = max_chart_bpm(&timing_segments.bpms);
-            let timing_segments = (&timing_segments).into();
+            let min_bpm = min_chart_bpm(&chart.timing_segments.bpms);
+            let max_bpm = max_chart_bpm(&chart.timing_segments.bpms);
+            let timing_segments = match build_mode {
+                SongBuildMode::Direct => CachedTimingSegments::from_rssp(
+                    chart.timing_segments.as_ref(),
+                    time_signatures,
+                    tickcounts,
+                    combos,
+                ),
+                #[cfg(any(test, feature = "bench-support"))]
+                SongBuildMode::Legacy => {
+                    let mut timing_segments =
+                        timing_segments_from_rssp(chart.timing_segments.as_ref());
+                    timing_segments.time_signatures = time_signatures;
+                    timing_segments.tickcounts = tickcounts;
+                    timing_segments.combos = combos;
+                    (&timing_segments).into()
+                }
+            };
             let stats = (&chart.stats).into();
             let tech_counts = (&chart.tech_counts).into();
             let stamina_counts = (&stamina_counts).into();
@@ -512,6 +591,25 @@ pub fn benchmark_song_parse_legacy(path: &Path, rounds: usize) -> u64 {
 }
 
 #[cfg(feature = "bench-support")]
+pub fn benchmark_song_parse_reused(path: &Path, rounds: usize) -> u64 {
+    let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+    let analyzer = SongAnalyzer::new(&options);
+    let mut scratch = SongParseScratch::default();
+    (0..rounds).fold(0u64, |checksum, _| {
+        let song = parse_song_file_in_mode(
+            path,
+            &options,
+            &analyzer,
+            &mut scratch,
+            SongBuildMode::Legacy,
+            |_| 0.0,
+        )
+        .expect("reused legacy-note benchmark fixture should parse");
+        checksum.wrapping_add(song_parse_checksum(&song))
+    })
+}
+
+#[cfg(feature = "bench-support")]
 pub fn benchmark_song_parse_current(path: &Path, rounds: usize) -> u64 {
     let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
     let analyzer = SongAnalyzer::new(&options);
@@ -520,6 +618,47 @@ pub fn benchmark_song_parse_current(path: &Path, rounds: usize) -> u64 {
         let song = parse_song_file_in(path, &options, &analyzer, &mut scratch, |_| 0.0)
             .expect("reused benchmark fixture should parse");
         checksum.wrapping_add(song_parse_checksum(&song))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_note_parse_legacy(note_data: &[u8], lanes: usize, rounds: usize) -> u64 {
+    (0..rounds).fold(0u64, |checksum, _| {
+        let notes: Vec<_> = parse_chart_notes_legacy(note_data, lanes)
+            .iter()
+            .map(CachedParsedNote::from)
+            .collect();
+        checksum.wrapping_add(note_checksum(&notes))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_note_parse_current(note_data: &[u8], lanes: usize, rounds: usize) -> u64 {
+    (0..rounds).fold(0u64, |checksum, _| {
+        let notes = parse_chart_notes_as(
+            note_data,
+            lanes,
+            |row_index, column, note_type| CachedParsedNote {
+                row_index: row_index as u32,
+                column: column as u8,
+                note_type: note_type.into(),
+                tail_row_index: None,
+            },
+            |note, tail_row_index| note.tail_row_index = Some(tail_row_index as u32),
+        );
+        checksum.wrapping_add(note_checksum(&notes))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+fn note_checksum(notes: &[CachedParsedNote]) -> u64 {
+    notes.iter().fold(0u64, |checksum, note| {
+        checksum
+            .wrapping_mul(131)
+            .wrapping_add(u64::from(note.row_index))
+            .wrapping_add(u64::from(note.column))
+            .wrapping_add(u64::from(note.tail_row_index.unwrap_or_default()))
+            .wrapping_add(note.note_type as u64)
     })
 }
 

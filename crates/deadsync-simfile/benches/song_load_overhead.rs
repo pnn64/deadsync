@@ -19,7 +19,10 @@ use deadsync_simfile::scan::{
     benchmark_pooled_song_workers, benchmark_scan_map_fixture, benchmark_scan_maps_current,
     benchmark_scan_maps_legacy, benchmark_song_slots_current, benchmark_song_slots_legacy,
 };
-use deadsync_simfile::song::{benchmark_song_parse_current, benchmark_song_parse_legacy};
+use deadsync_simfile::song::{
+    benchmark_note_parse_current, benchmark_note_parse_legacy, benchmark_song_parse_current,
+    benchmark_song_parse_legacy, benchmark_song_parse_reused,
+};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::fs;
 use std::hint::black_box;
@@ -43,7 +46,8 @@ const CHART_REQUEST_ROUNDS: usize = 65_536;
 const MEDIA_MAP_ROUNDS: usize = 2_048;
 const CACHE_PATH_OPS: usize = 2_048;
 const CACHE_PROBE_OPS: usize = 2_048;
-const SONG_PARSE_ROUNDS: usize = 16;
+const SONG_PARSE_ROUNDS: usize = 64;
+const NOTE_PARSE_ROUNDS: usize = 2_048;
 const SAMPLES: usize = 9;
 
 struct CountingAlloc {
@@ -162,34 +166,94 @@ fn measure(item_count: usize, mut op: impl FnMut() -> u64) -> BenchResult {
     let mut checksum = 0u64;
     let mut samples = Vec::with_capacity(SAMPLES);
     for _ in 0..SAMPLES {
-        let cycle_start = cycle_counter();
-        let started = Instant::now();
-        checksum ^= black_box(op());
-        let elapsed = started.elapsed();
-        let cycle_end = cycle_counter();
-        samples.push(Sample {
+        let (sample, sample_checksum) = timed_sample(&mut op);
+        checksum ^= sample_checksum;
+        samples.push(sample);
+    }
+    let (alloc, alloc_checksum) = allocation_sample(&mut op);
+    checksum ^= alloc_checksum;
+    bench_result(item_count, samples, alloc, checksum)
+}
+
+fn measure_pair(
+    item_count: usize,
+    mut old: impl FnMut() -> u64,
+    mut new: impl FnMut() -> u64,
+) -> (BenchResult, BenchResult) {
+    black_box(old());
+    black_box(new());
+    let mut old_checksum = 0u64;
+    let mut new_checksum = 0u64;
+    let mut old_samples = Vec::with_capacity(SAMPLES);
+    let mut new_samples = Vec::with_capacity(SAMPLES);
+    for sample_index in 0..SAMPLES {
+        if sample_index % 2 == 0 {
+            let (sample, checksum) = timed_sample(&mut old);
+            old_samples.push(sample);
+            old_checksum ^= checksum;
+            let (sample, checksum) = timed_sample(&mut new);
+            new_samples.push(sample);
+            new_checksum ^= checksum;
+        } else {
+            let (sample, checksum) = timed_sample(&mut new);
+            new_samples.push(sample);
+            new_checksum ^= checksum;
+            let (sample, checksum) = timed_sample(&mut old);
+            old_samples.push(sample);
+            old_checksum ^= checksum;
+        }
+    }
+    let (old_alloc, checksum) = allocation_sample(&mut old);
+    old_checksum ^= checksum;
+    let (new_alloc, checksum) = allocation_sample(&mut new);
+    new_checksum ^= checksum;
+    (
+        bench_result(item_count, old_samples, old_alloc, old_checksum),
+        bench_result(item_count, new_samples, new_alloc, new_checksum),
+    )
+}
+
+fn timed_sample(op: &mut impl FnMut() -> u64) -> (Sample, u64) {
+    let cycle_start = cycle_counter();
+    let started = Instant::now();
+    let checksum = black_box(op());
+    let elapsed = started.elapsed();
+    let cycle_end = cycle_counter();
+    (
+        Sample {
             ns: elapsed.as_secs_f64() * 1e9,
             cycles: cycle_start
                 .zip(cycle_end)
                 .map(|(start, end)| end.wrapping_sub(start)),
-        });
-    }
-    let max_ns = samples.iter().map(|sample| sample.ns).fold(0.0, f64::max);
-    samples.sort_by(|left, right| left.ns.total_cmp(&right.ns));
-    let median = &samples[SAMPLES / 2];
+        },
+        checksum,
+    )
+}
 
+fn allocation_sample(op: &mut impl FnMut() -> u64) -> (AllocSnapshot, u64) {
     let before = ALLOC.snapshot();
     ALLOC.enabled.store(true, Ordering::Relaxed);
-    checksum ^= black_box(op());
+    let checksum = black_box(op());
     ALLOC.enabled.store(false, Ordering::Relaxed);
+    (ALLOC.snapshot().delta(before), checksum)
+}
 
+fn bench_result(
+    item_count: usize,
+    mut samples: Vec<Sample>,
+    alloc: AllocSnapshot,
+    checksum: u64,
+) -> BenchResult {
+    let max_ns = samples.iter().map(|sample| sample.ns).fold(0.0, f64::max);
+    samples.sort_by(|left, right| left.ns.total_cmp(&right.ns));
+    let median = &samples[samples.len() / 2];
     BenchResult {
         median_ns: median.ns,
         max_ns,
         cycles_per_item: median
             .cycles
             .map(|cycles| cycles as f64 / item_count as f64),
-        alloc: ALLOC.snapshot().delta(before),
+        alloc,
         checksum,
     }
 }
@@ -517,20 +581,40 @@ fn bench_rssp_boundary() {
     let simfile = root.join("chart.ssc");
     fs::write(&simfile, analysis_fixture()).unwrap();
 
+    let note_data = note_fixture();
+    let old_note_checksum = benchmark_note_parse_legacy(&note_data, 4, 1);
+    let new_note_checksum = benchmark_note_parse_current(&note_data, 4, 1);
+    assert_eq!(old_note_checksum, new_note_checksum, "note output diverged");
+    let (old_notes, new_notes) = measure_pair(
+        NOTE_PARSE_ROUNDS,
+        || benchmark_note_parse_legacy(&note_data, 4, NOTE_PARSE_ROUNDS),
+        || benchmark_note_parse_current(&note_data, 4, NOTE_PARSE_ROUNDS),
+    );
+    black_box(old_notes.checksum ^ new_notes.checksum);
+    println!("compact note output ({NOTE_PARSE_ROUNDS} parses)");
+    print_result("copy", NOTE_PARSE_ROUNDS, &old_notes);
+    print_result("direct", NOTE_PARSE_ROUNDS, &new_notes);
+    print_change(&old_notes, &new_notes);
+
     let old_checksum = benchmark_song_parse_legacy(&simfile, 1);
+    let reused_checksum = benchmark_song_parse_reused(&simfile, 1);
     let new_checksum = benchmark_song_parse_current(&simfile, 1);
+    assert_eq!(old_checksum, reused_checksum, "reused RSSP parse diverged");
     assert_eq!(old_checksum, new_checksum, "RSSP boundary parse diverged");
-    let old = measure(SONG_PARSE_ROUNDS, || {
+    let fresh = measure(SONG_PARSE_ROUNDS, || {
         benchmark_song_parse_legacy(&simfile, SONG_PARSE_ROUNDS)
     });
-    let new = measure(SONG_PARSE_ROUNDS, || {
-        benchmark_song_parse_current(&simfile, SONG_PARSE_ROUNDS)
-    });
-    black_box(old.checksum ^ new.checksum);
+    let (reused, direct) = measure_pair(
+        SONG_PARSE_ROUNDS,
+        || benchmark_song_parse_reused(&simfile, SONG_PARSE_ROUNDS),
+        || benchmark_song_parse_current(&simfile, SONG_PARSE_ROUNDS),
+    );
+    black_box(fresh.checksum ^ reused.checksum ^ direct.checksum);
     println!("RSSP song-parse boundary ({SONG_PARSE_ROUNDS} cache misses)");
-    print_result("old", SONG_PARSE_ROUNDS, &old);
-    print_result("new", SONG_PARSE_ROUNDS, &new);
-    print_change(&old, &new);
+    print_result("fresh", SONG_PARSE_ROUNDS, &fresh);
+    print_result("reuse", SONG_PARSE_ROUNDS, &reused);
+    print_result("direct", SONG_PARSE_ROUNDS, &direct);
+    print_change(&reused, &direct);
 
     fs::remove_dir_all(root).unwrap();
 }
@@ -557,6 +641,22 @@ fn analysis_fixture() -> Vec<u8> {
     }
     fixture.push_str(";\n");
     fixture.into_bytes()
+}
+
+fn note_fixture() -> Vec<u8> {
+    let mut fixture = Vec::with_capacity(512 * 22);
+    for measure in 0..512 {
+        for row in 0..4 {
+            fixture.extend_from_slice(match (measure + row) & 3 {
+                0 => b"1000\n",
+                1 => b"0100\n",
+                2 => b"0010\n",
+                _ => b"0001\n",
+            });
+        }
+        fixture.extend_from_slice(b",\n");
+    }
+    fixture
 }
 
 fn discovery_fixture() -> std::path::PathBuf {

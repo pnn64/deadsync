@@ -32,6 +32,25 @@ fn invalidate_hold(
 
 /// Parses minimized chart note data into note events, tracking hold/roll tails.
 pub fn parse_chart_notes(minimized_note_data: &[u8], lanes: usize) -> Vec<ParsedNote> {
+    parse_chart_notes_as(
+        minimized_note_data,
+        lanes,
+        |row_index, column, note_type| ParsedNote {
+            row_index,
+            column,
+            note_type,
+            tail_row_index: None,
+        },
+        |note, tail_row_index| note.tail_row_index = Some(tail_row_index),
+    )
+}
+
+pub(crate) fn parse_chart_notes_as<T>(
+    minimized_note_data: &[u8],
+    lanes: usize,
+    new_note: impl FnMut(usize, usize, NoteType) -> T,
+    set_tail: impl FnMut(&mut T, usize),
+) -> Vec<T> {
     let note_capacity = minimized_note_data
         .iter()
         .filter(|&&ch| {
@@ -41,18 +60,63 @@ pub fn parse_chart_notes(minimized_note_data: &[u8], lanes: usize) -> Vec<Parsed
             )
         })
         .count();
-    parse_chart_notes_with_capacity(minimized_note_data, lanes, note_capacity)
+    let lanes = lanes.max(1);
+    let mut stack_heads = [None; 10];
+    let mut heap_heads = Vec::new();
+    let hold_heads = if lanes <= stack_heads.len() {
+        &mut stack_heads[..lanes]
+    } else {
+        heap_heads.resize(lanes, None);
+        heap_heads.as_mut_slice()
+    };
+    parse_chart_notes_with_heads(
+        minimized_note_data,
+        hold_heads,
+        note_capacity,
+        new_note,
+        set_tail,
+    )
 }
 
-fn parse_chart_notes_with_capacity(
+#[cfg(any(test, feature = "bench-support"))]
+pub(crate) fn parse_chart_notes_legacy(
     minimized_note_data: &[u8],
     lanes: usize,
-    note_capacity: usize,
 ) -> Vec<ParsedNote> {
+    let note_capacity = minimized_note_data
+        .iter()
+        .filter(|&&ch| {
+            matches!(
+                ch,
+                b'1' | b'F' | b'f' | b'2' | b'4' | b'M' | b'm' | b'L' | b'l'
+            )
+        })
+        .count();
+    let mut hold_heads = vec![None; lanes.max(1)];
+    parse_chart_notes_with_heads(
+        minimized_note_data,
+        &mut hold_heads,
+        note_capacity,
+        |row_index, column, note_type| ParsedNote {
+            row_index,
+            column,
+            note_type,
+            tail_row_index: None,
+        },
+        |note, tail_row_index| note.tail_row_index = Some(tail_row_index),
+    )
+}
+
+fn parse_chart_notes_with_heads<T>(
+    minimized_note_data: &[u8],
+    hold_heads: &mut [Option<usize>],
+    note_capacity: usize,
+    mut new_note: impl FnMut(usize, usize, NoteType) -> T,
+    mut set_tail: impl FnMut(&mut T, usize),
+) -> Vec<T> {
     let mut notes = Vec::with_capacity(note_capacity);
     let mut row_index = 0usize;
-    let lanes = lanes.max(1);
-    let mut hold_heads: Vec<Option<usize>> = vec![None; lanes];
+    let lanes = hold_heads.len();
     let mut invalid_heads = Vec::new();
 
     for line in minimized_note_data.split(|&b| b == b'\n') {
@@ -65,62 +129,37 @@ fn parse_chart_notes_with_capacity(
             for (col_index, &ch) in trimmed_line.iter().take(lanes).enumerate() {
                 match ch {
                     b'1' => {
-                        invalidate_hold(&mut invalid_heads, &mut hold_heads, col_index);
-                        notes.push(ParsedNote {
-                            row_index,
-                            column: col_index,
-                            note_type: NoteType::Tap,
-                            tail_row_index: None,
-                        });
+                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
+                        notes.push(new_note(row_index, col_index, NoteType::Tap));
                     }
                     b'F' | b'f' => {
-                        invalidate_hold(&mut invalid_heads, &mut hold_heads, col_index);
-                        notes.push(ParsedNote {
-                            row_index,
-                            column: col_index,
-                            note_type: NoteType::Fake,
-                            tail_row_index: None,
-                        });
+                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
+                        notes.push(new_note(row_index, col_index, NoteType::Fake));
                     }
                     b'2' | b'4' => {
-                        invalidate_hold(&mut invalid_heads, &mut hold_heads, col_index);
+                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
                         let note_type = if ch == b'2' {
                             NoteType::Hold
                         } else {
                             NoteType::Roll
                         };
                         let note_index = notes.len();
-                        notes.push(ParsedNote {
-                            row_index,
-                            column: col_index,
-                            note_type,
-                            tail_row_index: None,
-                        });
+                        notes.push(new_note(row_index, col_index, note_type));
                         hold_heads[col_index] = Some(note_index);
                     }
                     b'M' | b'm' => {
-                        invalidate_hold(&mut invalid_heads, &mut hold_heads, col_index);
-                        notes.push(ParsedNote {
-                            row_index,
-                            column: col_index,
-                            note_type: NoteType::Mine,
-                            tail_row_index: None,
-                        });
+                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
+                        notes.push(new_note(row_index, col_index, NoteType::Mine));
                     }
                     b'L' | b'l' => {
-                        invalidate_hold(&mut invalid_heads, &mut hold_heads, col_index);
-                        notes.push(ParsedNote {
-                            row_index,
-                            column: col_index,
-                            note_type: NoteType::Lift,
-                            tail_row_index: None,
-                        });
+                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
+                        notes.push(new_note(row_index, col_index, NoteType::Lift));
                     }
                     b'3' => {
                         if let Some(head_idx) = hold_heads[col_index].take()
                             && let Some(note) = notes.get_mut(head_idx)
                         {
-                            note.tail_row_index = Some(row_index);
+                            set_tail(note, row_index);
                         }
                     }
                     _ => {}
@@ -131,7 +170,7 @@ fn parse_chart_notes_with_capacity(
     }
 
     for col_index in 0..lanes {
-        invalidate_hold(&mut invalid_heads, &mut hold_heads, col_index);
+        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
     }
     if invalid_heads.is_empty() {
         return notes;
@@ -153,7 +192,7 @@ fn parse_chart_notes_with_capacity(
 
 #[cfg(test)]
 mod tests {
-    use super::{ParsedNote, parse_chart_notes, step_type_lanes};
+    use super::{ParsedNote, parse_chart_notes, parse_chart_notes_legacy, step_type_lanes};
     use deadsync_core::note::NoteType;
 
     #[test]
@@ -235,5 +274,21 @@ mod tests {
                 tail_row_index: Some(2),
             }]
         );
+    }
+
+    #[test]
+    fn stack_hold_state_matches_legacy_heap_parsing() {
+        let fixtures: &[(&[u8], usize)] = &[
+            (b"2000\n0100\n3000\nM00L\nF000\n", 4),
+            (b"2400000000\n0030000000\n0000300000\n1000000001\n", 10),
+            (b"200000000000\n300000000000\n000000000001\n", 12),
+        ];
+        for &(notes, lanes) in fixtures {
+            assert_eq!(
+                parse_chart_notes(notes, lanes),
+                parse_chart_notes_legacy(notes, lanes),
+                "note parsing diverged for {lanes} lanes"
+            );
+        }
     }
 }
