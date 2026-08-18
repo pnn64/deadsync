@@ -1574,8 +1574,9 @@ pub enum SongLuaProxyTarget {
     NoteField { player_index: usize },
     Judgment { player_index: usize },
     Combo { player_index: usize },
-    Underlay,
-    Overlay,
+    Underlay { hidden: bool },
+    Overlay { hidden: bool },
+    Actor { overlay_index: usize },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -13658,6 +13659,105 @@ return Def.ActorFrame{
             compiled.overlays[0].name.as_deref(),
             Some(capture_name.as_str())
         );
+    }
+
+    #[test]
+    fn compile_song_lua_resolves_local_and_hidden_screen_proxy_targets() {
+        let song_dir = test_dir("overlay-local-screen-proxies");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local local_target = nil
+local capture = nil
+
+return Def.ActorFrame{
+    Def.ActorFrame{
+        Name="LocalTarget",
+        InitCommand=function(self) local_target = self end,
+        Def.Quad{
+            Name="LocalMarker",
+            OnCommand=function(self) self:zoomto(640, 480) end,
+        },
+    },
+    Def.ActorFrameTexture{
+        InitCommand=function(self)
+            capture = self
+            self:Create()
+        end,
+        Def.ActorProxy{
+            Name="LocalProxy",
+            ProxyStartMessageCommand=function(self)
+                local_target:visible(false)
+                self:SetTarget(local_target)
+            end,
+        },
+        Def.ActorProxy{
+            Name="UnderlayProxy",
+            ProxyStartMessageCommand=function(self)
+                local target = SCREENMAN:GetTopScreen():GetChild("Underlay")
+                target:visible(false)
+                self:SetTarget(target)
+            end,
+        },
+        Def.ActorProxy{
+            Name="OverlayProxy",
+            ProxyStartMessageCommand=function(self)
+                local target = SCREENMAN:GetTopScreen():GetChild("Overlay")
+                target:visible(false)
+                self:SetTarget(target)
+            end,
+        },
+    },
+    Def.Sprite{
+        ProxyStartMessageCommand=function(self)
+            self:SetTexture(capture:GetTexture())
+        end,
+    },
+    Def.Actor{
+        OnCommand=function(self) self:queuecommand("Bind") end,
+        BindCommand=function(self) MESSAGEMAN:Broadcast("ProxyStart") end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Local Screen Proxies"),
+        )
+        .unwrap();
+        let local_index = compiled
+            .overlays
+            .iter()
+            .position(|overlay| overlay.name.as_deref() == Some("LocalTarget"))
+            .unwrap();
+        assert!(!compiled.overlays[local_index].initial_state.visible);
+        assert!(compiled.overlays.iter().any(|overlay| {
+            matches!(
+                overlay.kind,
+                SongLuaOverlayKind::ActorProxy {
+                    target: SongLuaProxyTarget::Actor { overlay_index }
+                } if overlay_index == local_index
+            )
+        }));
+        assert!(compiled.overlays.iter().any(|overlay| {
+            matches!(
+                overlay.kind,
+                SongLuaOverlayKind::ActorProxy {
+                    target: SongLuaProxyTarget::Underlay { hidden: true }
+                }
+            )
+        }));
+        assert!(compiled.overlays.iter().any(|overlay| {
+            matches!(
+                overlay.kind,
+                SongLuaOverlayKind::ActorProxy {
+                    target: SongLuaProxyTarget::Overlay { hidden: true }
+                }
+            )
+        }));
     }
 
     #[test]

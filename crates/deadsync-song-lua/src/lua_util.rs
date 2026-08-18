@@ -1103,6 +1103,7 @@ fn init_actor_type(lua: &Lua, actor: &Table, actor_type: &'static str) -> mlua::
 pub fn set_proxy_target_fields(actor: &Table, target: &Table) -> mlua::Result<()> {
     actor.set("__songlua_proxy_target_kind", Value::Nil)?;
     actor.set("__songlua_proxy_player_index", Value::Nil)?;
+    actor.set("__songlua_proxy_target_actor", target.clone())?;
     if let Some(child_name) = target.get::<Option<String>>("__songlua_top_screen_child_name")? {
         let kind = if child_name.eq_ignore_ascii_case("Underlay") {
             Some("underlay")
@@ -1117,6 +1118,12 @@ pub fn set_proxy_target_fields(actor: &Table, target: &Table) -> mlua::Result<()
         return Ok(());
     }
     let Some(player_index) = target.get::<Option<i64>>("__songlua_player_index")? else {
+        if target
+            .get::<Option<String>>("__songlua_actor_type")?
+            .is_some()
+        {
+            actor.set("__songlua_proxy_target_kind", "actor")?;
+        }
         return Ok(());
     };
     actor.set("__songlua_proxy_player_index", player_index)?;
@@ -10398,6 +10405,23 @@ where
         &read_noteskin_tap_actor_slots,
         &mut on_skipped_message_capture,
     )?;
+    let actor_indices = out
+        .iter()
+        .enumerate()
+        .map(|(index, overlay)| (overlay.table.to_pointer() as usize, index))
+        .collect::<HashMap<_, _>>();
+    for overlay in &mut out {
+        let SongLuaOverlayKind::ActorProxy {
+            target: SongLuaProxyTarget::Actor { overlay_index },
+        } = &mut overlay.actor.kind
+        else {
+            continue;
+        };
+        *overlay_index = actor_indices
+            .get(overlay_index)
+            .copied()
+            .unwrap_or(usize::MAX);
+    }
     Ok(out)
 }
 
@@ -11008,6 +11032,18 @@ pub fn read_proxy_target_kind(actor: &Table) -> Result<Option<SongLuaProxyTarget
         .get::<Option<i64>>("__songlua_proxy_player_index")
         .map_err(|err| err.to_string())?
         .and_then(|value| usize::try_from(value).ok());
+    let target_actor = actor
+        .get::<Option<Table>>("__songlua_proxy_target_actor")
+        .map_err(|err| err.to_string())?;
+    let target_hidden = target_actor
+        .as_ref()
+        .and_then(|target| {
+            target
+                .get::<Option<bool>>("__songlua_visible")
+                .ok()
+                .flatten()
+        })
+        .is_some_and(|visible| !visible);
     Ok(match raw_kind.as_str() {
         "player" => player_index.map(|player_index| SongLuaProxyTarget::Player { player_index }),
         "notefield" => {
@@ -11017,8 +11053,15 @@ pub fn read_proxy_target_kind(actor: &Table) -> Result<Option<SongLuaProxyTarget
             player_index.map(|player_index| SongLuaProxyTarget::Judgment { player_index })
         }
         "combo" => player_index.map(|player_index| SongLuaProxyTarget::Combo { player_index }),
-        "underlay" => Some(SongLuaProxyTarget::Underlay),
-        "overlay" => Some(SongLuaProxyTarget::Overlay),
+        "underlay" => Some(SongLuaProxyTarget::Underlay {
+            hidden: target_hidden,
+        }),
+        "overlay" => Some(SongLuaProxyTarget::Overlay {
+            hidden: target_hidden,
+        }),
+        "actor" => target_actor.map(|target| SongLuaProxyTarget::Actor {
+            overlay_index: target.to_pointer() as usize,
+        }),
         _ => None,
     })
 }

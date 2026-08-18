@@ -2449,6 +2449,7 @@ M000
         r#"
 local player = nil
 local capture = nil
+local local_target = nil
 prefix_globals = {}
 
 local function offset_col(value)
@@ -2505,6 +2506,19 @@ return Def.ActorFrame{
             self:diffuse(0.15, 0.55, 0.95, 0.8)
         end,
     },
+    Def.ActorFrame{
+        Name="LocalProxyTarget",
+        InitCommand=function(self) local_target = self end,
+        Def.Quad{
+            Name="LocalProxyMarker",
+            OnCommand=function(self)
+                self:x(SCREEN_CENTER_X)
+                self:y(SCREEN_CENTER_Y)
+                self:zoomto(320, 180)
+                self:diffuse(0.8, 0.2, 0.1, 0.7)
+            end,
+        },
+    },
     Def.ActorFrameTexture{
         InitCommand=function(self)
             capture = self
@@ -2519,6 +2533,29 @@ return Def.ActorFrame{
                 self:SetTarget(player)
                 player:visible(false)
                 self:visible(true)
+            end,
+        },
+        Def.ActorProxy{
+            Name="FixtureLocalProxy",
+            OnCommand=function(self)
+                self:SetTarget(local_target)
+                local_target:visible(false)
+            end,
+        },
+        Def.ActorProxy{
+            Name="FixtureUnderlayProxy",
+            OnCommand=function(self)
+                local target = SCREENMAN:GetTopScreen():GetChild("Underlay")
+                self:SetTarget(target)
+                target:visible(false)
+            end,
+        },
+        Def.ActorProxy{
+            Name="FixtureOverlayProxy",
+            OnCommand=function(self)
+                local target = SCREENMAN:GetTopScreen():GetChild("Overlay")
+                self:SetTarget(target)
+                target:visible(false)
             end,
         },
     },
@@ -2634,6 +2671,39 @@ return Def.ActorFrame{
                             matches!(
                                 &overlay.kind,
                                 deadsync_assets::song_lua::SongLuaOverlayKind::Quad
+                            )
+                        }));
+                        assert!(visuals.overlays.iter().any(|overlay| {
+                            matches!(
+                                &overlay.kind,
+                                deadsync_assets::song_lua::SongLuaOverlayKind::ActorProxy {
+                                    target: deadsync_assets::song_lua::SongLuaProxyTarget::Actor {
+                                        overlay_index
+                                    }
+                                } if visuals.overlays[*overlay_index].name.as_deref()
+                                    == Some("LocalProxyTarget")
+                            )
+                        }));
+                        assert!(visuals.overlays.iter().any(|overlay| {
+                            matches!(
+                                &overlay.kind,
+                                deadsync_assets::song_lua::SongLuaOverlayKind::ActorProxy {
+                                    target:
+                                        deadsync_assets::song_lua::SongLuaProxyTarget::Underlay {
+                                            hidden: true
+                                        }
+                                }
+                            )
+                        }));
+                        assert!(visuals.overlays.iter().any(|overlay| {
+                            matches!(
+                                &overlay.kind,
+                                deadsync_assets::song_lua::SongLuaOverlayKind::ActorProxy {
+                                    target:
+                                        deadsync_assets::song_lua::SongLuaProxyTarget::Overlay {
+                                            hidden: true
+                                        }
+                                }
                             )
                         }));
                         assert!(visuals.overlays.iter().any(|overlay| {
