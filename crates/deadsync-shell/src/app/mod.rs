@@ -201,6 +201,16 @@ use deadsync_theme_simply_love::{
     SimplyLoveQrLoginService, SimplyLoveRuntimeRequest, SimplyLoveSyncOwner, SimplyLoveSyncRequest,
 };
 
+/// The main Options rows that launch standalone child screens should regain
+/// focus when those children return. Other entries either start at the first
+/// row or reopen a specific nested submenu below.
+const fn options_entry_restores_main_selection(from: CurrentScreen) -> bool {
+    matches!(
+        from,
+        CurrentScreen::Credits | CurrentScreen::ManageLocalProfiles
+    )
+}
+
 /// Imperative effects to be executed by the shell.
 /* -------------------- transition timing constants -------------------- */
 const MENU_ACTORS_FADE_DURATION: f32 = 0.65;
@@ -3751,10 +3761,18 @@ impl App {
     }
 
     fn reset_options_state_for_entry(&mut self, from: CurrentScreen) {
+        let main_selection = options_entry_restores_main_selection(from)
+            .then_some(self.state.screens.options_state.selected);
         let current_color_index = self.state.screens.options_state.active_color_index;
         self.state.screens.options_state =
             options::init(options_init_view(audio_requests::options_view(&self.audio)));
         self.state.screens.options_state.active_color_index = current_color_index;
+        if let Some(selected) = main_selection {
+            self.state
+                .screens
+                .options_state
+                .restore_main_selection(selected);
+        }
         self.options_song_pack_generation =
             deadsync_simfile::runtime_cache::song_cache_generation();
         if matches!(
@@ -9316,6 +9334,27 @@ pub fn run(
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
+
+    #[test]
+    fn options_restores_main_row_only_from_standalone_main_list_children() {
+        assert!(options_entry_restores_main_selection(
+            CurrentScreen::ManageLocalProfiles
+        ));
+        assert!(options_entry_restores_main_selection(
+            CurrentScreen::Credits
+        ));
+
+        for screen in [
+            CurrentScreen::Menu,
+            CurrentScreen::Mappings,
+            CurrentScreen::Input,
+            CurrentScreen::ConfigurePads,
+            CurrentScreen::TestLights,
+            CurrentScreen::SmxAssignPads,
+        ] {
+            assert!(!options_entry_restores_main_selection(screen));
+        }
+    }
 
     #[test]
     fn gameplay_work_caps_defer_unrelated_integration() {

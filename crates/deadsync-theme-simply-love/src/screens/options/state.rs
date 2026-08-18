@@ -294,6 +294,21 @@ pub struct State {
     pub(super) i18n_revision: u64,
 }
 
+impl State {
+    /// Restore the active row after returning from a screen launched by the
+    /// main Options list.
+    ///
+    /// Simply Love's `ActiveOptionRowState.lua` restores the saved
+    /// `ScreenOptionsService` row when that screen is rebuilt. Clamp here
+    /// because updater capabilities can change which main rows are visible
+    /// while a child screen is open.
+    pub fn restore_main_selection(&mut self, selected: usize) {
+        let selected = selected.min(self.main_visible_items.len().saturating_sub(1));
+        self.selected = selected;
+        self.prev_selected = selected;
+    }
+}
+
 pub fn init(view: OptionsInitView) -> State {
     let OptionsInitView {
         config: cfg,

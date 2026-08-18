@@ -103,6 +103,29 @@ fn main_visible_items_match_updater_capabilities_and_are_stable() {
 }
 
 #[test]
+fn restoring_main_selection_preserves_child_rows_clamps_and_does_not_arm_change_sfx() {
+    for item_id in [ItemId::ManageLocalProfiles, ItemId::Credits] {
+        let mut state = init();
+        let selected = visible_items(&state)
+            .iter()
+            .position(|item| item.id == item_id)
+            .expect("standalone child row should be visible");
+
+        state.restore_main_selection(selected);
+
+        assert_eq!(visible_items(&state)[state.selected].id, item_id);
+        assert_eq!(state.prev_selected, selected);
+    }
+
+    let mut state = init();
+    let last = visible_items(&state).len() - 1;
+    state.restore_main_selection(usize::MAX);
+
+    assert_eq!(state.selected, last);
+    assert_eq!(state.prev_selected, last);
+}
+
+#[test]
 fn options_select_color_actors_keep_static_texture_sources() {
     let state = init();
     let asset_manager = AssetManager::new();
