@@ -211,6 +211,20 @@ pub fn push_actors(
     );
     actors.push(top_bar_actor(state, visual_policy));
 
+    // Discoverability hint: the top bar only renders its title, so add a
+    // right-aligned note telling players they can open the fuzzy setting search.
+    // Only shown when keyboard features are enabled (the search is keyboard-only)
+    // and hidden while the search overlay itself is open (it has its own footer).
+    if state.policy.keyboard_features && !state.search.is_open() {
+        let search_hint = tr("PlayerOptions", "SettingSearchHint").to_string();
+        actors.push(act!(text:
+            font("miso"): settext(search_hint):
+            align(1.0, 0.5): xy(deadlib_present::space::screen_width() - 10.0, 16.0):
+            zoom(0.72): z(130):
+            diffuse(1.0, 1.0, 1.0, 1.0): horizalign(right)
+        ));
+    }
+
     // zmod ScreenPlayerOptions overlay/default.lua speed helper parity.
     let speed_mod_y = 48.0;
     let speed_mod_zoom = 0.5_f32;
@@ -542,6 +556,11 @@ pub fn push_actors(
                 z(Z_ROW_FOREGROUND)
             ));
         }
+    }
+
+    // BIOS-style setting search overlay draws above everything else.
+    if let Some(overlay) = search::build_overlay(state) {
+        actors.extend(overlay);
     }
 }
 

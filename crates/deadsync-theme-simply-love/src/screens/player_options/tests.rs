@@ -4785,4 +4785,338 @@ pub(super) mod tests {
             1u8 << 5
         );
     }
+
+    fn raw_key(code: deadsync_input::KeyCode) -> deadsync_input::RawKeyboardEvent {
+        deadsync_input::RawKeyboardEvent {
+            code,
+            pressed: true,
+            repeat: false,
+            timestamp: std::time::Instant::now(),
+            host_nanos: 0,
+        }
+    }
+
+    /// Drive the search's raw-key entry point; returns whether it consumed the key.
+    fn search_key(
+        state: &mut super::State,
+        key: Option<&deadsync_input::RawKeyboardEvent>,
+        text: Option<&str>,
+        ctrl_held: bool,
+    ) -> bool {
+        let mut effects = Vec::new();
+        super::handle_raw_key_event(state, key, text, ctrl_held, &mut effects)
+    }
+
+    #[test]
+    fn search_index_excludes_exit_and_is_visible_only() {
+        ensure_i18n();
+        let (state, _asset_manager) = setup_state();
+        let matches = super::search::rebuild_matches(&state, "");
+        assert!(
+            matches.iter().all(|m| m.row_id != RowId::Exit),
+            "Exit must never appear in search results"
+        );
+        assert!(
+            matches.iter().any(|m| m.row_id == RowId::SpeedMod),
+            "a common visible row should be indexed"
+        );
+        // No duplicate row ids across panes (e.g. WhatComesNext dedupes).
+        let mut ids: Vec<RowId> = matches.iter().map(|m| m.row_id).collect();
+        let before = ids.len();
+        ids.sort_by_key(|id| id.index());
+        ids.dedup();
+        assert_eq!(before, ids.len(), "search index must not contain duplicates");
+    }
+
+    #[test]
+    fn focused_match_exposes_help_text() {
+        ensure_i18n();
+        let (state, _asset_manager) = setup_state();
+        let matches = super::search::rebuild_matches(&state, "music");
+        let m = matches
+            .iter()
+            .find(|m| m.row_id == RowId::MusicRate)
+            .expect("Music Rate should match 'music'");
+        let help = super::search::help_text(&state, m).expect("Music Rate has help text");
+        assert!(!help.is_empty());
+        assert!(!help.contains("\\n"), "help must be a single joined line");
+    }
+
+    #[test]
+    fn multiline_templated_labels_are_cleaned_to_first_line() {
+        ensure_i18n();
+        let (state, _asset_manager) = setup_state();
+        let matches = super::search::rebuild_matches(&state, "");
+        let music_rate = matches
+            .iter()
+            .find(|m| m.row_id == RowId::MusicRate)
+            .expect("Music Rate row should be indexed");
+        // i18n name is "Music Rate\nbpm: {bpm}"; only the first line should show.
+        assert_eq!(music_rate.label, "Music Rate");
+        assert!(!music_rate.label.contains('{'));
+    }
+
+    /// Open the setting search the way the shell does: Ctrl+F.
+    fn open_search(state: &mut super::State) -> bool {
+        search_key(
+            state,
+            Some(&raw_key(deadsync_input::KeyCode::KeyF)),
+            None,
+            true,
+        )
+    }
+
+    #[test]
+    fn ctrl_f_opens_and_escape_closes_search() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        assert!(!state.search.is_open());
+
+        let effect = open_search(&mut state);
+        assert!(effect, "key should be consumed");
+        assert!(state.search.is_open());
+
+        search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::Escape)),
+            None,
+            false,
+        );
+        assert!(!state.search.is_open());
+    }
+
+    #[test]
+    fn plain_f_without_ctrl_does_not_open_search() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        let effect = search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::KeyF)),
+            None,
+            false,
+        );
+        assert!(!effect, "key should not be consumed");
+        assert!(!state.search.is_open(), "bare F must not open the search");
+    }
+
+    #[test]
+    fn ctrl_f_does_not_open_search_without_keyboard_features() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        state.policy.keyboard_features = false;
+
+        let effect = open_search(&mut state);
+        assert!(!effect, "key should not be consumed");
+        assert!(
+            !state.search.is_open(),
+            "search must not open on cabinets without keyboard features"
+        );
+    }
+
+    #[test]
+    fn ctrl_modified_text_is_not_added_to_query() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        open_search(&mut state);
+        // Ctrl-modified text (e.g. a redelivered Ctrl+F) must not be typed.
+        search_key(&mut state, None, Some("f"), true);
+        if let super::search::SettingSearchState::Open(open) = &state.search {
+            assert_eq!(open.query, "");
+        } else {
+            panic!("search should be open");
+        }
+    }
+
+    #[test]
+    fn opening_search_clears_held_input_state() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        // Simulate a direction held on the pad when the overlay opens.
+        let active = state.active;
+        handle_nav_event(
+            &mut state,
+            &asset_manager,
+            active,
+            P1,
+            NavDirection::Down,
+            true,
+        );
+        assert!(state.nav_input[P1].held_direction.is_some());
+
+        open_search(&mut state);
+        assert!(
+            state.nav_input[P1].held_direction.is_none(),
+            "opening the search must clear held nav state; the modal swallows \
+             the release so it would otherwise stay held forever"
+        );
+
+        // Closing clears it too, so nothing leaks back into the screen.
+        search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::Escape)),
+            None,
+            false,
+        );
+        assert!(state.nav_input[P1].held_direction.is_none());
+    }
+
+    #[test]
+    fn held_direction_does_not_scroll_while_search_is_open() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        open_search(&mut state);
+        // Force a stale hold as if it survived from before the overlay opened.
+        state.nav_input[P1].held_direction = Some(NavDirection::Down);
+        state.nav_input[P1].next_repeat_at = std::time::Duration::ZERO;
+        let before = state.pane().selected_row[P1];
+
+        for _ in 0..10 {
+            update(&mut state, 0.5, &asset_manager, &mut Vec::new());
+        }
+
+        assert_eq!(
+            state.pane().selected_row[P1],
+            before,
+            "cursor must not scroll behind the modal while search is open"
+        );
+    }
+
+    #[test]
+    fn jump_survives_an_in_flight_pane_transition() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        assert_eq!(state.current_pane, OptionsPane::Main);
+
+        // Start a pane fade, then search and jump while it is still running.
+        super::switch_to_pane(&mut state, OptionsPane::Uncommon);
+        assert!(state.pane_transition.is_active());
+
+        open_search(&mut state);
+        search_key(&mut state, None, Some("turn"), false);
+        search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::Enter)),
+            None,
+            false,
+        );
+
+        // Let the (now cancelled) transition have a chance to complete.
+        for _ in 0..5 {
+            update(&mut state, 0.1, &asset_manager, &mut Vec::new());
+        }
+
+        assert_eq!(
+            state.current_pane,
+            OptionsPane::Advanced,
+            "a completing pane fade must not override the search jump"
+        );
+        let landed = state.pane().row_map.id_at(state.pane().selected_row[P1]);
+        assert_eq!(landed, RowId::Turn, "cursor must stay on the jumped-to row");
+    }
+
+    #[test]
+    fn enter_jumps_to_matched_setting_across_panes() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        assert_eq!(state.current_pane, OptionsPane::Main);
+
+        open_search(&mut state);
+        // "Turn" lives on the Advanced pane.
+        search_key(&mut state, None, Some("turn"), false);
+        search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::Enter)),
+            None,
+            false,
+        );
+
+        assert!(!state.search.is_open());
+        assert_eq!(state.current_pane, OptionsPane::Advanced);
+        let landed = state
+            .pane()
+            .row_map
+            .id_at(state.pane().selected_row[P1]);
+        assert_eq!(landed, RowId::Turn);
+    }
+
+    #[test]
+    fn backspace_never_closes_search() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        open_search(&mut state);
+        search_key(&mut state, None, Some("ab"), false);
+        // Delete both chars, then press Backspace again on the empty query.
+        for _ in 0..3 {
+            search_key(
+                &mut state,
+                Some(&raw_key(deadsync_input::KeyCode::Backspace)),
+                None,
+                false,
+            );
+        }
+        assert!(
+            state.search.is_open(),
+            "backspace must never close the search overlay"
+        );
+        if let super::search::SettingSearchState::Open(open) = &state.search {
+            assert_eq!(open.query, "");
+        }
+        // Escape is the only way out.
+        search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::Escape)),
+            None,
+            false,
+        );
+        assert!(!state.search.is_open());
+    }
+
+    #[test]
+    fn tab_is_a_noop_when_no_ghost_completion_is_offered() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        open_search(&mut state);
+        // Alias-only match: no ghost is drawn, so Tab must not rewrite the query.
+        search_key(&mut state, None, Some("arrows"), false);
+        if let super::search::SettingSearchState::Open(open) = &state.search {
+            assert!(
+                super::search::completion(open).is_none(),
+                "alias match should offer no completion"
+            );
+        }
+        search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::Tab)),
+            None,
+            false,
+        );
+        if let super::search::SettingSearchState::Open(open) = &state.search {
+            assert_eq!(
+                open.query, "arrows",
+                "Tab must not complete to a label that was never shown as a ghost"
+            );
+        } else {
+            panic!("search should still be open");
+        }
+    }
+
+    #[test]
+    fn tab_accepts_ghost_completion() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        open_search(&mut state);
+        search_key(&mut state, None, Some("spe"), false);
+        search_key(
+            &mut state,
+            Some(&raw_key(deadsync_input::KeyCode::Tab)),
+            None,
+            false,
+        );
+        if let super::search::SettingSearchState::Open(open) = &state.search {
+            assert!(open.query.to_ascii_lowercase().starts_with("spe"));
+            assert!(open.query.len() > 3, "ghost completion should extend the query");
+        } else {
+            panic!("search should still be open after Tab");
+        }
+    }
 }

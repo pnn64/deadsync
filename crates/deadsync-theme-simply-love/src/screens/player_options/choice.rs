@@ -347,6 +347,46 @@ fn reset_what_comes_next(state: &mut State) {
     }
 }
 
+/// Move a player's cursor straight to `row_id` in `pane`, skipping the fade.
+/// Assumes `row_id` is visible there; the search only offers visible rows.
+pub(super) fn jump_to_setting(
+    state: &mut State,
+    pane: OptionsPane,
+    row_id: RowId,
+    player_idx: usize,
+) {
+    // Cancel any in-flight fade first, or completing it would call apply_pane
+    // -> reset_cursor and discard the cursor set below.
+    state.pane_transition = PaneTransition::None;
+    if state.current_pane != pane {
+        apply_pane(state, pane);
+    }
+    let display_idx = state
+        .pane()
+        .row_map
+        .display_order()
+        .iter()
+        .position(|&id| id == row_id);
+    let Some(display_idx) = display_idx else {
+        return;
+    };
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let p = state.pane_mut();
+    p.selected_row[idx] = display_idx;
+    p.prev_selected_row[idx] = display_idx;
+    // Snap the cursor ring to the new row instead of tweening across the screen.
+    p.cursor_initialized[idx] = false;
+
+    let active = state.active;
+    let policy = state.policy;
+    let option_masks = state.option_masks;
+    let p = state.pane_mut();
+    p.row_tweens = init_row_tweens(&p.row_map, p.selected_row, active, option_masks, policy);
+    state.pane_mut().arcade_row_focus = std::array::from_fn(|player_idx| {
+        row_allows_arcade_next_row(state, state.pane().selected_row[player_idx])
+    });
+}
+
 pub(super) fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     if state.current_pane == pane {
         return;

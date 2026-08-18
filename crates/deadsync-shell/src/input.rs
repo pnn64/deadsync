@@ -109,6 +109,7 @@ pub enum RawKeyTextRoute {
     ManageLocalProfiles,
     Options,
     SelectMusic,
+    PlayerOptions,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -319,6 +320,7 @@ pub const fn raw_key_text_route(screen: Screen) -> RawKeyTextRoute {
         Screen::ManageLocalProfiles => RawKeyTextRoute::ManageLocalProfiles,
         Screen::Options => RawKeyTextRoute::Options,
         Screen::SelectMusic => RawKeyTextRoute::SelectMusic,
+        Screen::PlayerOptions => RawKeyTextRoute::PlayerOptions,
         _ => RawKeyTextRoute::Ignore,
     }
 }
@@ -975,6 +977,10 @@ mod tests {
         assert_eq!(
             raw_key_text_route(Screen::SelectMusic),
             RawKeyTextRoute::SelectMusic
+        );
+        assert_eq!(
+            raw_key_text_route(Screen::PlayerOptions),
+            RawKeyTextRoute::PlayerOptions
         );
         assert_eq!(
             raw_key_text_route(Screen::Gameplay),

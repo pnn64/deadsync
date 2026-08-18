@@ -435,6 +435,8 @@ pub struct State {
     pub(super) menu_lr_chord: screen_input::MenuLrChordTracker,
     /// Ordered runtime work awaiting emission at the input/update boundary.
     pub(super) pending_effects: Vec<ThemeEffect>,
+    /// BIOS-style fuzzy "search for a setting" overlay state.
+    pub(super) search: search::SettingSearchState,
 }
 
 /// Per-pane state. Each pane keeps its own row map, cursor, and tween state so

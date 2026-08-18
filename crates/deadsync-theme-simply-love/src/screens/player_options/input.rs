@@ -14,13 +14,21 @@ pub fn update(
     prepare_presentation(state, asset_manager);
     state.preview_time += dt;
     state.preview_beat += dt * (PREVIEW_BPM / 60.0);
+    search::update(&mut state.search, dt);
     let active = state.active;
     let arcade_style = state.policy.arcade_navigation;
     let mut pending_action: Option<ThemeEffect> = None;
     sync_selected_rows_with_visibility(state, active);
 
+    // Suppress hold-repeat while the modal is open so a held pad direction
+    // can't scroll the cursor behind it, or away from a row it just jumped to.
+    let search_open = state.search.is_open();
+
     // Hold-to-scroll per player.
     for player_idx in active_player_indices(active) {
+        if search_open {
+            break;
+        }
         let Some(direction) = state.nav_input[player_idx].held_direction else {
             continue;
         };
@@ -71,7 +79,7 @@ pub fn update(
         }
     }
 
-    if arcade_style {
+    if arcade_style && !search_open {
         for player_idx in active_player_indices(active) {
             let action = repeat_held_arcade_start(state, asset_manager, active, player_idx, dt);
             if pending_action.is_none() {
@@ -830,6 +838,90 @@ pub fn handle_input(
     ev: &InputEvent,
     effects: &mut Vec<ThemeEffect>,
 ) {
+    // The open overlay owns all input.
+    if state.search.is_open() {
+        return;
+    }
     let effect = handle_input_inner(state, asset_manager, ev);
     append_pending_effects(state, effect, effects);
+}
+
+/// Raw keyboard entry for the setting search: Ctrl+F opens, then typing filters,
+/// Tab completes, arrows move, Enter jumps, Escape closes.
+///
+/// The shell delivers control keys via `key` and typed characters via `text`
+/// separately, mirroring the select-music song search.
+pub fn handle_raw_key_event(
+    state: &mut State,
+    key: Option<&deadsync_input::RawKeyboardEvent>,
+    text: Option<&str>,
+    ctrl_held: bool,
+    _effects: &mut Vec<ThemeEffect>,
+) -> bool {
+    use deadsync_input::KeyCode;
+
+    // Gated on keyboard_features so keyboard-less cabinets never reach it.
+    if !state.search.is_open() {
+        if state.policy.keyboard_features
+            && ctrl_held
+            && key.is_some_and(|k| k.pressed && k.code == KeyCode::KeyF)
+        {
+            let opener = search_opener_player(state);
+            search::open(state, opener);
+            return true;
+        }
+        return false;
+    }
+
+    if let Some(key) = key {
+        if key.pressed {
+            match key.code {
+                KeyCode::Escape => search::close(state),
+                KeyCode::Backspace => {
+                    // Only edits the query; Escape is the way out.
+                    search::backspace(state);
+                }
+                KeyCode::Tab | KeyCode::ArrowRight => search::accept_ghost(state),
+                KeyCode::ArrowUp => search::move_selection(state, -1),
+                KeyCode::ArrowDown => search::move_selection(state, 1),
+                KeyCode::Enter | KeyCode::NumpadEnter => commit_search_jump(state),
+                _ => {}
+            }
+        }
+        return true;
+    }
+
+    if let Some(text) = text {
+        // Never type Ctrl-modified text, e.g. a redelivered Ctrl+F.
+        if !ctrl_held {
+            search::add_text(state, text);
+        }
+    }
+
+    true
+}
+
+/// Slot whose cursor a jump moves: persisted player, else first active, else P1.
+fn search_opener_player(state: &State) -> usize {
+    if state.active[state.persisted_player_idx] {
+        return state.persisted_player_idx;
+    }
+    active_player_indices(state.active)
+        .into_iter()
+        .next()
+        .unwrap_or(P1)
+}
+
+/// Jump the opener's cursor to the focused result and close the overlay.
+fn commit_search_jump(state: &mut State) {
+    let target = match &state.search {
+        search::SettingSearchState::Open(open) => {
+            search::focused_match(open).map(|m| (m.pane, m.row_id, open.opener_player))
+        }
+        search::SettingSearchState::Hidden => None,
+    };
+    if let Some((pane, row_id, player_idx)) = target {
+        jump_to_setting(state, pane, row_id, player_idx);
+    }
+    search::close(state);
 }
