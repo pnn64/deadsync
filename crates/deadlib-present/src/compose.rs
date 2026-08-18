@@ -19,7 +19,7 @@ const MAX_RECYCLED_TEXT_MESH_VERTEX_BUFFERS: usize = 512;
 const MAX_RETAINED_FRAME_ENTRIES: usize = 64;
 
 fn reserve_vec_headroom<T>(values: &mut Vec<T>, floor: usize) {
-    let target = values.capacity().saturating_mul(2).max(floor);
+    let target = floor.saturating_mul(2);
     values.reserve(target.saturating_sub(values.len()));
 }
 
@@ -27,7 +27,7 @@ fn reserve_map_headroom<K: Eq + Hash, V, S: BuildHasher>(
     values: &mut HashMap<K, V, S>,
     floor: usize,
 ) {
-    let target = values.capacity().saturating_mul(2).max(floor);
+    let target = floor.saturating_mul(2);
     values.reserve(target.saturating_sub(values.len()));
 }
 
@@ -1047,9 +1047,11 @@ impl ComposeScratch {
     /// Retains one representative working-set of spare capacity after a screen
     /// has composed its transition frame and prewarmed its dynamic text paths.
     ///
-    /// The caller owns the lifetime boundary. This only grows the bounded maps
-    /// and vectors whose live occupancy varies with actor density; it performs
-    /// no per-frame work and never shrinks or evicts storage.
+    /// The caller owns the lifetime boundary. This idempotently grows the maps
+    /// and vectors to the bounded working-set floor plus one set of headroom;
+    /// repeated screen entries perform no further allocation unless a larger
+    /// floor is requested. It performs no per-frame work and never shrinks or
+    /// evicts storage.
     pub fn retain_working_set_headroom(
         &mut self,
         draw_floor: usize,
@@ -11142,7 +11144,7 @@ mod tests {
     }
 
     #[test]
-    fn working_set_headroom_retains_another_dynamic_footprint() {
+    fn working_set_headroom_is_bounded_across_screen_entries() {
         let mut scratch = ComposeScratch::default();
         scratch.frame_builder.items.reserve(8);
         scratch.frame_builder.textured_meshes.reserve(4);
@@ -11150,25 +11152,27 @@ mod tests {
         scratch.sorted_sprite_instances.reserve(16);
         scratch.sparse_z_keys.reserve(8);
         scratch.texture_cache.handles.reserve(4);
-        let before = scratch.storage_stats();
-
         scratch.retain_working_set_headroom(32, 32, 16, 16);
-
-        let after = scratch.storage_stats();
-        for name in [
-            "draw_items",
-            "tmesh_payloads",
-            "sprite_inst",
-            "sprite_sort",
-            "sparse_z_keys",
-            "texture_handles",
+        let first_entry = scratch.storage_stats();
+        for (name, target) in [
+            ("draw_items", 64),
+            ("tmesh_payloads", 32),
+            ("sprite_inst", 64),
+            ("sprite_sort", 64),
+            ("sparse_z_keys", 32),
+            ("texture_handles", 32),
         ] {
             let slot = super::COMPOSE_STORAGE_NAMES
                 .iter()
                 .position(|candidate| *candidate == name)
                 .expect("working-set storage slot exists");
-            assert!(after.capacities[slot] >= before.capacities[slot].saturating_mul(2));
+            assert!(first_entry.capacities[slot] >= target);
         }
+
+        for _ in 0..64 {
+            scratch.retain_working_set_headroom(32, 32, 16, 16);
+        }
+        assert_eq!(scratch.storage_stats(), first_entry);
     }
 
     #[test]
