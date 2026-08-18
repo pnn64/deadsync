@@ -1400,6 +1400,7 @@ pub struct MainMenuRuntimeView {
     pub song_count: usize,
     pub pack_count: usize,
     pub course_count: usize,
+    pub local_ip: Option<Arc<str>>,
     pub groovestats: MainMenuGrooveStatus,
     pub arrowcloud: MainMenuArrowCloudStatus,
     pub smx_conflict: Option<MainMenuSmxConflictView>,

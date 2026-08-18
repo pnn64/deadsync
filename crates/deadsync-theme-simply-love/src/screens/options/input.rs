@@ -685,6 +685,9 @@ pub(super) fn apply_submenu_choice_delta(
                             version_overlay_side_from_choice(new_index),
                         )
                     }
+                    SubRowId::ShowLocalIp => {
+                        crate::SimplyLoveMachineConfigRequest::ShowLocalIp(enabled)
+                    }
                     SubRowId::WriteCurrentScreen => {
                         crate::SimplyLoveMachineConfigRequest::WriteCurrentScreen(enabled)
                     }

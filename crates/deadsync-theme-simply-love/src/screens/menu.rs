@@ -138,6 +138,7 @@ pub struct State {
     bg: visual_style_bg::State,
     chrome_text: RefCell<MenuChromeText>,
     info_text_cache: RefCell<Option<(InfoTextKey, Arc<str>)>>,
+    local_ip_text_cache: RefCell<Option<(Arc<str>, Arc<str>)>>,
     groovestats_text_cache: RefCell<Option<StatusTextCache<MainMenuGrooveStatus, 3>>>,
     arrowcloud_text_cache: RefCell<Option<StatusTextCache<MainMenuArrowCloudStatus, 1>>>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
@@ -155,6 +156,7 @@ pub fn init() -> State {
         bg: visual_style_bg::State::new(),
         chrome_text: RefCell::new(build_chrome_text(i18n_revision)),
         info_text_cache: RefCell::new(None),
+        local_ip_text_cache: RefCell::new(None),
         groovestats_text_cache: RefCell::new(None),
         arrowcloud_text_cache: RefCell::new(None),
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
@@ -232,6 +234,7 @@ fn row_exit_alpha(index: usize, elapsed: Option<f32>) -> f32 {
 
 pub fn clear_render_cache(state: &State) {
     *state.info_text_cache.borrow_mut() = None;
+    *state.local_ip_text_cache.borrow_mut() = None;
     *state.groovestats_text_cache.borrow_mut() = None;
     *state.arrowcloud_text_cache.borrow_mut() = None;
 }
@@ -400,6 +403,18 @@ fn arrowcloud_text(state: &State) -> StatusTextCache<MainMenuArrowCloudStatus, 1
     cache
 }
 
+fn local_ip_text(state: &State) -> Option<Arc<str>> {
+    let ip = state.runtime_view.local_ip.as_ref()?;
+    if let Some((cached_ip, text)) = state.local_ip_text_cache.borrow().as_ref()
+        && cached_ip == ip
+    {
+        return Some(text.clone());
+    }
+    let text = tr_fmt("Menu", "LocalIpAddress", &[("address", ip.as_ref())]);
+    *state.local_ip_text_cache.borrow_mut() = Some((ip.clone(), text.clone()));
+    Some(text)
+}
+
 #[inline(always)]
 fn status_text_actor(
     text: Arc<str>,
@@ -542,13 +557,28 @@ pub fn push_actors(
         fg_color: footer_fg,
     }));
 
-    // --- GrooveStats Info Pane (top-left) ---
+    // --- Local IP (optional, top-left) ---
+    let mut gs_base_y = STATUS_BASE_Y;
+    if let Some(text) = local_ip_text(state) {
+        actors.push(status_text_actor(
+            text,
+            0.0,
+            STATUS_BASE_X,
+            STATUS_BASE_Y,
+            STATUS_ZOOM,
+            alpha_multiplier,
+            TextAlign::Left,
+        ));
+        gs_base_y += STATUS_LINE_HEIGHT.mul_add(STATUS_ZOOM, STATUS_BLOCK_GAP);
+    }
+
+    // --- GrooveStats Info Pane (below the optional local IP) ---
     let gs_text = groovestats_text(state);
     actors.push(status_text_actor(
         gs_text.main.clone(),
         0.0,
         STATUS_BASE_X,
-        STATUS_BASE_Y,
+        gs_base_y,
         STATUS_ZOOM,
         alpha_multiplier,
         TextAlign::Left,
@@ -559,7 +589,7 @@ pub fn push_actors(
                 text.clone(),
                 0.0,
                 STATUS_BASE_X,
-                (STATUS_LINE_HEIGHT * (line_idx as f32 + 1.0)).mul_add(STATUS_ZOOM, STATUS_BASE_Y),
+                (STATUS_LINE_HEIGHT * (line_idx as f32 + 1.0)).mul_add(STATUS_ZOOM, gs_base_y),
                 STATUS_ZOOM,
                 alpha_multiplier,
                 TextAlign::Left,
@@ -569,7 +599,7 @@ pub fn push_actors(
 
     // --- Arrow Cloud Info Pane (below GrooveStats/BoogieStats) ---
     let ac_base_y = (STATUS_LINE_HEIGHT * (gs_text.line_count as f32 + 1.0))
-        .mul_add(STATUS_ZOOM, STATUS_BASE_Y + STATUS_BLOCK_GAP);
+        .mul_add(STATUS_ZOOM, gs_base_y + STATUS_BLOCK_GAP);
     let ac_text = arrowcloud_text(state);
     actors.push(status_text_actor(
         ac_text.main.clone(),
@@ -909,6 +939,35 @@ mod tests {
         );
         let actors = get_actors(&state, None, 1.0);
         assert!(has_text(&actors, &shutdown));
+    }
+
+    #[test]
+    fn local_ip_renders_before_online_services_when_present() {
+        fn text_index(actors: &[Actor], expected: &str) -> Option<usize> {
+            actors.iter().position(|actor| {
+                matches!(actor, Actor::Text { content, .. } if content.as_str() == expected)
+            })
+        }
+
+        let mut state = init();
+        sync_runtime_view(
+            &mut state,
+            MainMenuRuntimeView {
+                local_ip: Some(Arc::from("192.168.1.42")),
+                ..MainMenuRuntimeView::default()
+            },
+        );
+        let actors = get_actors(&state, None, 1.0);
+        let ip_text = tr_fmt("Menu", "LocalIpAddress", &[("address", "192.168.1.42")]);
+        let gs_text = build_groovestats_text(MainMenuGrooveStatus::default()).main;
+
+        let ip_index = text_index(&actors, &ip_text).expect("local IP text");
+        let gs_index = text_index(&actors, &gs_text).expect("GrooveStats text");
+        assert!(ip_index < gs_index);
+
+        sync_runtime_view(&mut state, MainMenuRuntimeView::default());
+        let actors = get_actors(&state, None, 1.0);
+        assert_eq!(text_index(&actors, &ip_text), None);
     }
 
     #[test]

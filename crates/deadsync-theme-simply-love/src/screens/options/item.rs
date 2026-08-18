@@ -122,6 +122,7 @@ pub enum ItemId {
     MchRandomBackgroundMode,
     MchVersionOverlay,
     MchVersionOverlaySide,
+    MchShowLocalIp,
 
     // Gameplay Options submenu
     GpBgBrightness,

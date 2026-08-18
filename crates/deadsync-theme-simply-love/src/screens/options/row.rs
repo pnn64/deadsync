@@ -109,6 +109,7 @@ pub enum SubRowId {
     RandomBackgroundMode,
     VersionOverlay,
     VersionOverlaySide,
+    ShowLocalIp,
     // Gameplay Options
     BgBrightness,
     CenteredP1Notefield,

@@ -586,6 +586,7 @@ pub enum SimplyLoveMachineConfigRequest {
     RandomBackgroundMode(RandomBackgroundMode),
     ShowVersionOverlay(bool),
     VersionOverlaySide(VersionOverlaySide),
+    ShowLocalIp(bool),
     WriteCurrentScreen(bool),
 }
 

@@ -45,13 +45,14 @@ fn arrowcloud_status(status: ArrowCloudStatus) -> MainMenuArrowCloudStatus {
 }
 
 pub(crate) fn runtime_view() -> MainMenuRuntimeView {
-    let (game, allow_shutdown_host, dedicated_three_key_nav, smx_input) = {
+    let (game, allow_shutdown_host, dedicated_three_key_nav, smx_input, show_local_ip) = {
         let config = deadsync_config::prelude::get();
         (
             config.game_flag,
             config.allow_shutdown_host,
             config.three_key_navigation && config.only_dedicated_menu_buttons,
             config.smx_input,
+            config.show_local_ip,
         )
     };
     let (pack_count, song_count) = {
@@ -75,6 +76,9 @@ pub(crate) fn runtime_view() -> MainMenuRuntimeView {
         song_count,
         pack_count,
         course_count,
+        local_ip: show_local_ip
+            .then(deadlib_platform::network::local_ip)
+            .flatten(),
         groovestats: groove_status(boogie, deadsync_online::groovestats::runtime_get_status()),
         arrowcloud: arrowcloud_status(deadsync_online::arrowcloud::runtime_get_status()),
         smx_conflict,

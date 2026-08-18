@@ -16,7 +16,7 @@ use crate::defaults::{
     DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX,
     DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
     DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER, DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS, DEFAULT_SHOW_CONSOLE,
-    DEFAULT_SHOW_COURSE_INDIVIDUAL_SCORES, DEFAULT_SHOW_MOST_PLAYED_COURSES,
+    DEFAULT_SHOW_COURSE_INDIVIDUAL_SCORES, DEFAULT_SHOW_LOCAL_IP, DEFAULT_SHOW_MOST_PLAYED_COURSES,
     DEFAULT_SHOW_MUSIC_WHEEL_GRADES, DEFAULT_SHOW_MUSIC_WHEEL_LAMPS, DEFAULT_SHOW_RANDOM_COURSES,
     DEFAULT_SHOW_SELECT_MUSIC_BANNERS, DEFAULT_SHOW_SELECT_MUSIC_BREAKDOWN,
     DEFAULT_SHOW_SELECT_MUSIC_CDTITLES, DEFAULT_SHOW_SELECT_MUSIC_FOLDER_STATS,
@@ -253,6 +253,7 @@ pub struct SystemOptions {
     pub high_dpi: bool,
     pub hide_mouse_cursor: bool,
     pub allow_shutdown_host: bool,
+    pub show_local_ip: bool,
     pub smx_input: bool,
     pub smx_manages_pad_config: bool,
     pub smx_panel_lights: bool,
@@ -316,6 +317,7 @@ impl Default for SystemOptions {
             high_dpi: DEFAULT_HIGH_DPI,
             hide_mouse_cursor: DEFAULT_HIDE_MOUSE_CURSOR,
             allow_shutdown_host: DEFAULT_ALLOW_SHUTDOWN_HOST,
+            show_local_ip: DEFAULT_SHOW_LOCAL_IP,
             smx_input: DEFAULT_SMX_INPUT,
             smx_manages_pad_config: DEFAULT_SMX_MANAGES_PAD_CONFIG,
             smx_panel_lights: DEFAULT_SMX_PANEL_LIGHTS,
@@ -689,6 +691,10 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             .get("Options", "AllowShutdown")
             .and_then(parse_loose_bool_str)
             .unwrap_or(default.allow_shutdown_host),
+        show_local_ip: conf
+            .get("Options", "ShowLocalIpAddress")
+            .and_then(parse_loose_bool_str)
+            .unwrap_or(default.show_local_ip),
         smx_input: parse_u8_bool_or_default(conf.get("Options", "SmxInput"), default.smx_input),
         smx_manages_pad_config: parse_u8_bool_or_default(
             conf.get("Options", "SmxManagesPadConfig"),
@@ -966,6 +972,7 @@ pub fn push_system_diagnostics_option_lines(content: &mut String, options: Syste
     push_line(content, "Language", options.language_flag.as_str());
     push_line(content, "LogLevel", options.log_level.as_str());
     push_bool(content, "LogToFile", options.log_to_file);
+    push_bool(content, "ShowLocalIpAddress", options.show_local_ip);
     push_bool(content, "ShowConsole", options.show_console);
 }
 
@@ -2349,6 +2356,7 @@ mod tests {
             high_dpi: false,
             hide_mouse_cursor: true,
             allow_shutdown_host: false,
+            show_local_ip: false,
             smx_input: false,
             smx_manages_pad_config: false,
             smx_panel_lights: false,
@@ -2633,6 +2641,7 @@ mod tests {
             HighDPI=1
             HideMouseCursor=0
             AllowShutdown=1
+            ShowLocalIpAddress=1
             SmxInput=1
             SmxManagesPadConfig=1
             SmxPanelLights=1
@@ -2671,6 +2680,7 @@ mod tests {
             GrooveStatsQrLoginWhen::Disabled
         );
         assert!(loaded.separate_unlocks_by_player);
+        assert!(loaded.show_local_ip);
         assert!(!loaded.mine_hit_sound);
         assert_eq!(loaded.show_stats_mode, SHOW_STATS_MODE_MAX);
         assert_eq!(loaded.frame_stats_overlay_anchor, "bottom-center");
@@ -2782,6 +2792,7 @@ mod tests {
         options.language_flag = LanguageFlag::German;
         options.log_level = LogLevel::Trace;
         options.log_to_file = false;
+        options.show_local_ip = true;
         options.show_console = true;
 
         push_system_download_option_lines(&mut content, options);
@@ -2816,6 +2827,7 @@ mod tests {
                 "Language=German\n",
                 "LogLevel=Trace\n",
                 "LogToFile=0\n",
+                "ShowLocalIpAddress=1\n",
                 "ShowConsole=1\n",
             ),
         );

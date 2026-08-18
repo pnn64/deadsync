@@ -95,6 +95,8 @@ pub struct Config {
     /// Enable a "Shutdown" entry on the main menu that powers off the host
     /// machine. Off by default; intended for cabinet use.
     pub allow_shutdown_host: bool,
+    /// Show the preferred local network address on the main menu.
+    pub show_local_ip: bool,
     /// Windows-only: choose which gamepad backend to use.
     pub windows_gamepad_backend: WindowsPadBackend,
     /// Enable StepManiaX pad input via the RustManiaX SDK (all platforms).
@@ -403,6 +405,7 @@ impl Default for Config {
             hide_mouse_cursor: system.hide_mouse_cursor,
             gfx_debug: system.gfx_debug,
             allow_shutdown_host: system.allow_shutdown_host,
+            show_local_ip: system.show_local_ip,
             windows_gamepad_backend: WindowsPadBackend::RawInput,
             smx_input: system.smx_input,
             smx_manages_pad_config: system.smx_manages_pad_config,
@@ -600,6 +603,7 @@ mod tests {
             Config::default().note_scroll_clock,
             NoteScrollClock::RawAudio
         );
+        assert!(!Config::default().show_local_ip);
         assert!(!Config::default().allow_song_deletion);
         assert_eq!(DEFAULT_MACHINE_NOTESKIN, "cel");
     }

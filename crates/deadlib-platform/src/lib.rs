@@ -6,6 +6,7 @@ pub mod host_time;
 pub mod idle_inhibit;
 pub mod lock_wait;
 pub mod logging;
+pub mod network;
 pub mod open_path;
 pub mod power;
 pub mod runtime_dir;

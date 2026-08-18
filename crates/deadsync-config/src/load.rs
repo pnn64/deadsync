@@ -272,6 +272,7 @@ fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.high_dpi = loaded.high_dpi;
     cfg.hide_mouse_cursor = loaded.hide_mouse_cursor;
     cfg.allow_shutdown_host = loaded.allow_shutdown_host;
+    cfg.show_local_ip = loaded.show_local_ip;
     cfg.smx_input = loaded.smx_input;
     cfg.smx_manages_pad_config = loaded.smx_manages_pad_config;
     cfg.smx_panel_lights = loaded.smx_panel_lights;

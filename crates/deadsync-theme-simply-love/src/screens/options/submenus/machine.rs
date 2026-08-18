@@ -256,6 +256,15 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         ],
         inline: true,
     },
+    SubRow {
+        id: SubRowId::ShowLocalIp,
+        label: lookup_key("OptionsMachine", "ShowLocalIp"),
+        choices: &[
+            localized_choice("Common", "Off"),
+            localized_choice("Common", "On"),
+        ],
+        inline: true,
+    },
 ];
 
 pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
@@ -489,6 +498,14 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "VersionOverlaySideHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::MchShowLocalIp,
+        name: lookup_key("OptionsMachine", "ShowLocalIp"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "ShowLocalIpHelp",
         ))],
     },
     Item {

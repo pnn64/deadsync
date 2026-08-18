@@ -504,6 +504,10 @@ pub fn set_log_to_file(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.log_to_file, enabled)
 }
 
+pub fn set_show_local_ip(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.show_local_ip, enabled)
+}
+
 pub fn set_center_1player_notefield(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.center_1player_notefield, enabled)
 }

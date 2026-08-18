@@ -476,6 +476,7 @@ fn system_options(cfg: &Config) -> SystemOptions {
         high_dpi: cfg.high_dpi,
         hide_mouse_cursor: cfg.hide_mouse_cursor,
         allow_shutdown_host: cfg.allow_shutdown_host,
+        show_local_ip: cfg.show_local_ip,
         smx_input: cfg.smx_input,
         smx_manages_pad_config: cfg.smx_manages_pad_config,
         smx_panel_lights: cfg.smx_panel_lights,

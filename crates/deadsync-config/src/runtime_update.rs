@@ -156,6 +156,7 @@ update_config_fn!(pub fn update_separate_unlocks_by_player(enabled: bool) => set
 update_config_fn!(pub fn update_game_flag(flag: GameFlag) => set_game_flag);
 update_config_fn!(pub fn update_theme_flag(flag: ThemeFlag) => set_theme_flag);
 update_config_fn!(pub fn update_language_flag(flag: LanguageFlag) => set_language_flag);
+update_config_fn!(pub fn update_show_local_ip(enabled: bool) => set_show_local_ip);
 runtime_config_fn!(pub fn update_machine_default_noteskin(noteskin: &str) => set_machine_default_noteskin);
 
 update_config_fn!(pub fn update_machine_font(font: MachineFont) => set_machine_font);

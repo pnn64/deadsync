@@ -178,6 +178,7 @@ pub(super) fn execute_machine(request: SimplyLoveMachineConfigRequest) {
         Request::RandomBackgroundMode(mode) => config::update_random_background_mode(mode),
         Request::ShowVersionOverlay(enabled) => config::update_show_version_overlay(enabled),
         Request::VersionOverlaySide(side) => config::update_version_overlay_side(side),
+        Request::ShowLocalIp(enabled) => config::update_show_local_ip(enabled),
         Request::WriteCurrentScreen(enabled) => config::update_write_current_screen(enabled),
     }
 }

@@ -332,6 +332,43 @@ fn system_choice_emits_shell_options_config_request() {
 }
 
 #[test]
+fn show_local_ip_choice_emits_machine_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Machine);
+    let row = select_visible_row(&mut state, SubmenuKind::Machine, SubRowId::ShowLocalIp);
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("local IP choice should emit shell config work");
+    let enabled = state.sub[SubmenuKind::Machine].cursor_indices[row] == 1;
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Machine(
+                crate::SimplyLoveMachineConfigRequest::ShowLocalIp(value)
+            )
+        )) if value == enabled
+    ));
+}
+
+#[test]
+fn show_local_ip_sits_beside_version_overlay_settings() {
+    let side_row = row_position(MACHINE_OPTIONS_ROWS, SubRowId::VersionOverlaySide).unwrap();
+    let ip_row = row_position(MACHINE_OPTIONS_ROWS, SubRowId::ShowLocalIp).unwrap();
+    assert_eq!(ip_row, side_row + 1);
+
+    let side_item = MACHINE_OPTIONS_ITEMS
+        .iter()
+        .position(|item| item.id == ItemId::MchVersionOverlaySide)
+        .unwrap();
+    assert_eq!(
+        MACHINE_OPTIONS_ITEMS[side_item + 1].id,
+        ItemId::MchShowLocalIp
+    );
+}
+
+#[test]
 fn smx_numeric_choice_emits_shell_options_config_request() {
     let asset_manager = AssetManager::new();
     let mut state = init();
