@@ -45,10 +45,219 @@ fn foot_masks(annotation: &rssp::RowAnnotation) -> (u8, u8) {
 }
 
 pub fn parse_time_signatures(tag: Option<&str>) -> Vec<TimeSignatureSegment> {
+    parse_time_signatures_as(
+        tag,
+        |beat, numerator, denominator| TimeSignatureSegment {
+            beat,
+            numerator,
+            denominator,
+        },
+        |segment| segment.beat,
+    )
+}
+
+pub(crate) fn parse_cached_time_signatures(tag: Option<&str>) -> Vec<(f32, i32, i32)> {
+    parse_time_signatures_as(
+        tag,
+        |beat, numerator, denominator| (beat, numerator, denominator),
+        |segment| segment.0,
+    )
+}
+
+fn parse_time_signatures_as<T>(
+    tag: Option<&str>,
+    make: impl Fn(f32, i32, i32) -> T,
+    beat: impl Fn(&T) -> f32,
+) -> Vec<T> {
+    let Some(s) = tag.map(str::trim).filter(|s| !s.is_empty()) else {
+        return vec![make(0.0, 4, 4)];
+    };
+
+    let mut out = Vec::with_capacity(timing_segment_capacity(s));
+    for segment in s.split(',') {
+        let mut parts = segment.trim().split('=');
+        let (Some(beat), Some(numerator), Some(denominator)) =
+            (parts.next(), parts.next(), parts.next())
+        else {
+            continue;
+        };
+        let (Ok(beat), Ok(numerator), Ok(denominator)) = (
+            beat.trim().parse::<f32>(),
+            numerator.trim().parse::<i32>(),
+            denominator.trim().parse::<i32>(),
+        ) else {
+            continue;
+        };
+        if beat.is_finite() && numerator > 0 && denominator > 0 {
+            out.push(make(beat, numerator, denominator));
+        }
+    }
+
+    if out.is_empty() {
+        return vec![make(0.0, 4, 4)];
+    }
+
+    out.sort_by(|a, b| {
+        beat_to_note_row(beat(a))
+            .cmp(&beat_to_note_row(beat(b)))
+            .then_with(|| beat(a).total_cmp(&beat(b)))
+    });
+    out.dedup_by(|a, b| beat_to_note_row(beat(a)) == beat_to_note_row(beat(b)));
+    if out
+        .first()
+        .is_none_or(|segment| beat_to_note_row(beat(segment)) > 0)
+    {
+        out.insert(0, make(0.0, 4, 4));
+    }
+    out
+}
+
+pub fn parse_tickcounts(tag: Option<&str>) -> Vec<TickcountSegment> {
+    parse_tickcounts_as(
+        tag,
+        |beat, ticks| TickcountSegment { beat, ticks },
+        |segment| segment.beat,
+    )
+}
+
+pub(crate) fn parse_cached_tickcounts(tag: Option<&str>) -> Vec<(f32, u8)> {
+    parse_tickcounts_as(tag, |beat, ticks| (beat, ticks), |segment| segment.0)
+}
+
+fn parse_tickcounts_as<T>(
+    tag: Option<&str>,
+    make: impl Fn(f32, u8) -> T,
+    beat: impl Fn(&T) -> f32,
+) -> Vec<T> {
+    let Some(s) = tag.map(str::trim).filter(|s| !s.is_empty()) else {
+        return vec![make(0.0, 4)];
+    };
+
+    let mut out = Vec::with_capacity(timing_segment_capacity(s));
+    for segment in s.split(',') {
+        let mut parts = segment.trim().split('=');
+        let (Some(beat), Some(ticks)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let (Ok(beat), Some(ticks)) = (beat.trim().parse::<f32>(), parse_itg_int(ticks)) else {
+            continue;
+        };
+        if beat.is_finite() {
+            out.push(make(beat, ticks.clamp(0, 48) as u8));
+        }
+    }
+
+    if out.is_empty() {
+        return vec![make(0.0, 4)];
+    }
+
+    out.sort_by(|a, b| {
+        beat_to_note_row(beat(a))
+            .cmp(&beat_to_note_row(beat(b)))
+            .then_with(|| beat(a).total_cmp(&beat(b)))
+    });
+    dedup_last_by_row(&mut out, &beat);
+    if out
+        .first()
+        .is_none_or(|segment| beat_to_note_row(beat(segment)) > 0)
+    {
+        out.insert(0, make(0.0, 4));
+    }
+    out
+}
+
+pub fn parse_combos(tag: Option<&str>) -> Vec<ComboSegment> {
+    parse_combos_as(
+        tag,
+        |beat, combo, miss_combo| ComboSegment {
+            beat,
+            combo,
+            miss_combo,
+        },
+        |segment| segment.beat,
+    )
+}
+
+pub(crate) fn parse_cached_combos(tag: Option<&str>) -> Vec<(f32, u32, u32)> {
+    parse_combos_as(
+        tag,
+        |beat, combo, miss_combo| (beat, combo, miss_combo),
+        |segment| segment.0,
+    )
+}
+
+fn parse_combos_as<T>(
+    tag: Option<&str>,
+    make: impl Fn(f32, u32, u32) -> T,
+    beat: impl Fn(&T) -> f32,
+) -> Vec<T> {
+    let Some(s) = tag.map(str::trim).filter(|s| !s.is_empty()) else {
+        return vec![make(0.0, 1, 1)];
+    };
+
+    let mut out = Vec::with_capacity(timing_segment_capacity(s));
+    for segment in s.split(',') {
+        let mut parts = segment.trim().split('=');
+        let (Some(beat), Some(combo)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let (Ok(beat), Some(combo)) = (beat.trim().parse::<f32>(), parse_itg_int(combo)) else {
+            continue;
+        };
+        let miss_combo = parts.next().and_then(parse_itg_int).unwrap_or(combo);
+        if beat.is_finite() {
+            out.push(make(beat, combo.max(0) as u32, miss_combo.max(0) as u32));
+        }
+    }
+
+    if out.is_empty() {
+        return vec![make(0.0, 1, 1)];
+    }
+
+    out.sort_by(|a, b| {
+        beat_to_note_row(beat(a))
+            .cmp(&beat_to_note_row(beat(b)))
+            .then_with(|| beat(a).total_cmp(&beat(b)))
+    });
+    dedup_last_by_row(&mut out, &beat);
+    if out
+        .first()
+        .is_none_or(|segment| beat_to_note_row(beat(segment)) > 0)
+    {
+        out.insert(0, make(0.0, 1, 1));
+    }
+    out
+}
+
+fn timing_segment_capacity(tag: &str) -> usize {
+    tag.as_bytes()
+        .iter()
+        .filter(|&&byte| byte == b',')
+        .count()
+        .saturating_add(2)
+}
+
+fn dedup_last_by_row<T>(segments: &mut Vec<T>, beat: impl Fn(&T) -> f32) {
+    let mut write = 0usize;
+    for read in 0..segments.len() {
+        if write != 0
+            && beat_to_note_row(beat(&segments[write - 1]))
+                == beat_to_note_row(beat(&segments[read]))
+        {
+            segments.swap(write - 1, read);
+        } else {
+            segments.swap(write, read);
+            write += 1;
+        }
+    }
+    segments.truncate(write);
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub(crate) fn parse_time_signatures_baseline(tag: Option<&str>) -> Vec<TimeSignatureSegment> {
     let Some(s) = tag.map(str::trim).filter(|s| !s.is_empty()) else {
         return default_time_signatures();
     };
-
     let mut out = Vec::new();
     for segment in s.split(',') {
         let mut parts = segment.trim().split('=');
@@ -72,28 +281,29 @@ pub fn parse_time_signatures(tag: Option<&str>) -> Vec<TimeSignatureSegment> {
             });
         }
     }
-
     if out.is_empty() {
         return default_time_signatures();
     }
-
     out.sort_by(|a, b| {
         beat_to_note_row(a.beat)
             .cmp(&beat_to_note_row(b.beat))
             .then_with(|| a.beat.total_cmp(&b.beat))
     });
     out.dedup_by(|a, b| beat_to_note_row(a.beat) == beat_to_note_row(b.beat));
-    if out.first().is_none_or(|seg| beat_to_note_row(seg.beat) > 0) {
+    if out
+        .first()
+        .is_none_or(|segment| beat_to_note_row(segment.beat) > 0)
+    {
         out.insert(0, default_time_signatures()[0]);
     }
     out
 }
 
-pub fn parse_tickcounts(tag: Option<&str>) -> Vec<TickcountSegment> {
+#[cfg(any(test, feature = "bench-support"))]
+pub(crate) fn parse_tickcounts_baseline(tag: Option<&str>) -> Vec<TickcountSegment> {
     let Some(s) = tag.map(str::trim).filter(|s| !s.is_empty()) else {
         return default_tickcounts();
     };
-
     let mut out = Vec::new();
     for segment in s.split(',') {
         let mut parts = segment.trim().split('=');
@@ -110,40 +320,39 @@ pub fn parse_tickcounts(tag: Option<&str>) -> Vec<TickcountSegment> {
             });
         }
     }
-
     if out.is_empty() {
         return default_tickcounts();
     }
-
     out.sort_by(|a, b| {
         beat_to_note_row(a.beat)
             .cmp(&beat_to_note_row(b.beat))
             .then_with(|| a.beat.total_cmp(&b.beat))
     });
-    let mut deduped: Vec<TickcountSegment> = Vec::with_capacity(out.len());
+    let mut deduped = Vec::with_capacity(out.len());
     for segment in out {
-        if deduped
-            .last()
-            .is_some_and(|last| beat_to_note_row(last.beat) == beat_to_note_row(segment.beat))
-        {
+        if deduped.last().is_some_and(|last: &TickcountSegment| {
+            beat_to_note_row(last.beat) == beat_to_note_row(segment.beat)
+        }) {
             let last = deduped.len() - 1;
             deduped[last] = segment;
         } else {
             deduped.push(segment);
         }
     }
-    let mut out = deduped;
-    if out.first().is_none_or(|seg| beat_to_note_row(seg.beat) > 0) {
-        out.insert(0, default_tickcounts()[0]);
+    if deduped
+        .first()
+        .is_none_or(|segment| beat_to_note_row(segment.beat) > 0)
+    {
+        deduped.insert(0, default_tickcounts()[0]);
     }
-    out
+    deduped
 }
 
-pub fn parse_combos(tag: Option<&str>) -> Vec<ComboSegment> {
+#[cfg(any(test, feature = "bench-support"))]
+pub(crate) fn parse_combos_baseline(tag: Option<&str>) -> Vec<ComboSegment> {
     let Some(s) = tag.map(str::trim).filter(|s| !s.is_empty()) else {
         return default_combos();
     };
-
     let mut out = Vec::new();
     for segment in s.split(',') {
         let mut parts = segment.trim().split('=');
@@ -162,22 +371,19 @@ pub fn parse_combos(tag: Option<&str>) -> Vec<ComboSegment> {
             });
         }
     }
-
     if out.is_empty() {
         return default_combos();
     }
-
     out.sort_by(|a, b| {
         beat_to_note_row(a.beat)
             .cmp(&beat_to_note_row(b.beat))
             .then_with(|| a.beat.total_cmp(&b.beat))
     });
-    let mut deduped: Vec<ComboSegment> = Vec::with_capacity(out.len());
+    let mut deduped = Vec::with_capacity(out.len());
     for segment in out {
-        if deduped
-            .last()
-            .is_some_and(|last| beat_to_note_row(last.beat) == beat_to_note_row(segment.beat))
-        {
+        if deduped.last().is_some_and(|last: &ComboSegment| {
+            beat_to_note_row(last.beat) == beat_to_note_row(segment.beat)
+        }) {
             let last = deduped.len() - 1;
             deduped[last] = segment;
         } else {
@@ -191,6 +397,75 @@ pub fn parse_combos(tag: Option<&str>) -> Vec<ComboSegment> {
         deduped.insert(0, default_combos()[0]);
     }
     deduped
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_timing_tags_baseline(
+    time_signatures: &str,
+    tickcounts: &str,
+    combos: &str,
+    rounds: usize,
+) -> u64 {
+    (0..rounds).fold(0u64, |checksum, _| {
+        let time_signatures: Vec<_> = parse_time_signatures_baseline(Some(time_signatures))
+            .into_iter()
+            .map(|segment| (segment.beat, segment.numerator, segment.denominator))
+            .collect();
+        let tickcounts: Vec<_> = parse_tickcounts_baseline(Some(tickcounts))
+            .into_iter()
+            .map(|segment| (segment.beat, segment.ticks))
+            .collect();
+        let combos: Vec<_> = parse_combos_baseline(Some(combos))
+            .into_iter()
+            .map(|segment| (segment.beat, segment.combo, segment.miss_combo))
+            .collect();
+        checksum.wrapping_add(timing_tag_checksum(&time_signatures, &tickcounts, &combos))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_timing_tags_current(
+    time_signatures: &str,
+    tickcounts: &str,
+    combos: &str,
+    rounds: usize,
+) -> u64 {
+    (0..rounds).fold(0u64, |checksum, _| {
+        let time_signatures = parse_cached_time_signatures(Some(time_signatures));
+        let tickcounts = parse_cached_tickcounts(Some(tickcounts));
+        let combos = parse_cached_combos(Some(combos));
+        checksum.wrapping_add(timing_tag_checksum(&time_signatures, &tickcounts, &combos))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+fn timing_tag_checksum(
+    time_signatures: &[(f32, i32, i32)],
+    tickcounts: &[(f32, u8)],
+    combos: &[(f32, u32, u32)],
+) -> u64 {
+    let time_signatures = time_signatures.iter().fold(0u64, |checksum, segment| {
+        checksum
+            .wrapping_mul(31)
+            .wrapping_add(u64::from(segment.0.to_bits()))
+            .wrapping_add(segment.1 as u64)
+            .wrapping_add(segment.2 as u64)
+    });
+    let tickcounts = tickcounts.iter().fold(0u64, |checksum, segment| {
+        checksum
+            .wrapping_mul(31)
+            .wrapping_add(u64::from(segment.0.to_bits()))
+            .wrapping_add(u64::from(segment.1))
+    });
+    combos
+        .iter()
+        .fold(time_signatures ^ tickcounts, |checksum, segment| {
+            checksum
+                .wrapping_mul(31)
+                .wrapping_add(u64::from(segment.0.to_bits()))
+                .wrapping_add(u64::from(segment.1))
+                .wrapping_add(u64::from(segment.2))
+        })
 }
 
 pub fn timing_segments_from_rssp(segments: &rssp_timing::TimingSegments) -> TimingSegments {
@@ -326,7 +601,9 @@ pub fn crossover_annotations<const LANES: usize>(
 #[cfg(test)]
 mod tests {
     use super::{
-        crossover_annotations, parse_combos, parse_tickcounts, parse_time_signatures,
+        crossover_annotations, parse_cached_combos, parse_cached_tickcounts,
+        parse_cached_time_signatures, parse_combos, parse_combos_baseline, parse_tickcounts,
+        parse_tickcounts_baseline, parse_time_signatures, parse_time_signatures_baseline,
         rssp_timing_segments_from_deadsync, timing_segments_from_rssp,
     };
     use deadsync_rules::timing::{SpeedUnit, default_time_signature};
@@ -374,6 +651,56 @@ mod tests {
             (combos[2].beat, combos[2].combo, combos[2].miss_combo),
             (8.0, 2, 2)
         );
+    }
+
+    #[test]
+    fn cached_timing_parsers_match_baseline_for_edge_cases() {
+        let tags = [
+            None,
+            Some(""),
+            Some("bad"),
+            Some("8=3=4,4=7=8,4=6=8,-2=5=16,12=0=4"),
+        ];
+        for tag in tags {
+            let time_signatures: Vec<_> = parse_time_signatures_baseline(tag)
+                .into_iter()
+                .map(|segment| (segment.beat, segment.numerator, segment.denominator))
+                .collect();
+            assert_eq!(parse_cached_time_signatures(tag), time_signatures);
+            assert_eq!(
+                parse_time_signatures(tag)
+                    .into_iter()
+                    .map(|segment| (segment.beat, segment.numerator, segment.denominator))
+                    .collect::<Vec<_>>(),
+                time_signatures
+            );
+
+            let tickcounts: Vec<_> = parse_tickcounts_baseline(tag)
+                .into_iter()
+                .map(|segment| (segment.beat, segment.ticks))
+                .collect();
+            assert_eq!(parse_cached_tickcounts(tag), tickcounts);
+            assert_eq!(
+                parse_tickcounts(tag)
+                    .into_iter()
+                    .map(|segment| (segment.beat, segment.ticks))
+                    .collect::<Vec<_>>(),
+                tickcounts
+            );
+
+            let combos: Vec<_> = parse_combos_baseline(tag)
+                .into_iter()
+                .map(|segment| (segment.beat, segment.combo, segment.miss_combo))
+                .collect();
+            assert_eq!(parse_cached_combos(tag), combos);
+            assert_eq!(
+                parse_combos(tag)
+                    .into_iter()
+                    .map(|segment| (segment.beat, segment.combo, segment.miss_combo))
+                    .collect::<Vec<_>>(),
+                combos
+            );
+        }
     }
 
     #[test]

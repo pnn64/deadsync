@@ -5,7 +5,8 @@ use deadsync_simfile::cache::{
     benchmark_cache_probes_current, benchmark_cache_probes_legacy,
     benchmark_chart_requests_current, benchmark_chart_requests_legacy,
     benchmark_runtime_debug_logs, benchmark_song_cache_paths_current,
-    benchmark_song_cache_paths_legacy,
+    benchmark_song_cache_paths_legacy, benchmark_timing_handoff_baseline,
+    benchmark_timing_handoff_current,
 };
 use deadsync_simfile::media::{
     benchmark_genre_whitelist_current, benchmark_genre_whitelist_legacy,
@@ -20,9 +21,10 @@ use deadsync_simfile::scan::{
     benchmark_scan_maps_legacy, benchmark_song_slots_current, benchmark_song_slots_legacy,
 };
 use deadsync_simfile::song::{
-    benchmark_note_parse_current, benchmark_note_parse_legacy, benchmark_song_parse_current,
-    benchmark_song_parse_previous,
+    benchmark_note_parse_current, benchmark_note_parse_legacy, benchmark_song_bytes_current,
+    benchmark_song_bytes_previous, benchmark_song_parse_current, benchmark_song_parse_previous,
 };
+use deadsync_simfile::timing::{benchmark_timing_tags_baseline, benchmark_timing_tags_current};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::fs;
 use std::hint::black_box;
@@ -48,6 +50,8 @@ const CACHE_PATH_OPS: usize = 2_048;
 const CACHE_PROBE_OPS: usize = 2_048;
 const SONG_PARSE_ROUNDS: usize = 64;
 const NOTE_PARSE_ROUNDS: usize = 2_048;
+const TIMING_TAG_ROUNDS: usize = 4_096;
+const TIMING_HANDOFF_ROUNDS: usize = 2_048;
 const SAMPLES: usize = 9;
 
 struct CountingAlloc {
@@ -578,8 +582,53 @@ fn bench_rssp_boundary() {
         fs::remove_dir_all(&root).unwrap();
     }
     fs::create_dir_all(&root).unwrap();
-    let simfile = root.join("chart.ssc");
-    fs::write(&simfile, analysis_fixture()).unwrap();
+    let global_timing = root.join("global-timing.ssc");
+    let own_timing = root.join("own-timing.ssc");
+    fs::write(&global_timing, analysis_fixture(false)).unwrap();
+    fs::write(&own_timing, analysis_fixture(true)).unwrap();
+
+    let (time_signatures, tickcounts, combos) = timing_tag_fixture();
+    let old_timing_checksum =
+        benchmark_timing_tags_baseline(&time_signatures, &tickcounts, &combos, 1);
+    let new_timing_checksum =
+        benchmark_timing_tags_current(&time_signatures, &tickcounts, &combos, 1);
+    assert_eq!(
+        old_timing_checksum, new_timing_checksum,
+        "timing-tag output diverged"
+    );
+    let (old_timing, new_timing) = measure_pair(
+        TIMING_TAG_ROUNDS,
+        || {
+            benchmark_timing_tags_baseline(
+                &time_signatures,
+                &tickcounts,
+                &combos,
+                TIMING_TAG_ROUNDS,
+            )
+        },
+        || benchmark_timing_tags_current(&time_signatures, &tickcounts, &combos, TIMING_TAG_ROUNDS),
+    );
+    black_box(old_timing.checksum ^ new_timing.checksum);
+    println!("chart timing-tag payload ({TIMING_TAG_ROUNDS} conversions)");
+    print_result("two-stage", TIMING_TAG_ROUNDS, &old_timing);
+    print_result("direct", TIMING_TAG_ROUNDS, &new_timing);
+    print_change(&old_timing, &new_timing);
+
+    assert_eq!(
+        benchmark_timing_handoff_baseline(1),
+        benchmark_timing_handoff_current(1),
+        "timing handoff output diverged"
+    );
+    let (borrowed_timing, owned_timing) = measure_pair(
+        TIMING_HANDOFF_ROUNDS,
+        || benchmark_timing_handoff_baseline(TIMING_HANDOFF_ROUNDS),
+        || benchmark_timing_handoff_current(TIMING_HANDOFF_ROUNDS),
+    );
+    black_box(borrowed_timing.checksum ^ owned_timing.checksum);
+    println!("RSSP timing ownership handoff ({TIMING_HANDOFF_ROUNDS} conversions)");
+    print_result("clone", TIMING_HANDOFF_ROUNDS, &borrowed_timing);
+    print_result("move", TIMING_HANDOFF_ROUNDS, &owned_timing);
+    print_change(&borrowed_timing, &owned_timing);
 
     let note_data = note_fixture();
     let old_note_checksum = benchmark_note_parse_legacy(&note_data, 4, 1);
@@ -596,36 +645,60 @@ fn bench_rssp_boundary() {
     print_result("direct", NOTE_PARSE_ROUNDS, &new_notes);
     print_change(&old_notes, &new_notes);
 
-    let previous_checksum = benchmark_song_parse_previous(&simfile, 1);
-    let new_checksum = benchmark_song_parse_current(&simfile, 1);
+    bench_song_boundary("global timing", &global_timing);
+    bench_song_boundary("chart timing", &own_timing);
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+fn bench_song_boundary(label: &str, simfile: &std::path::Path) {
+    assert_eq!(
+        benchmark_song_bytes_previous(simfile),
+        benchmark_song_bytes_current(simfile),
+        "serialized RSSP boundary payload diverged"
+    );
+    let previous_checksum = benchmark_song_parse_previous(simfile, 1);
+    let new_checksum = benchmark_song_parse_current(simfile, 1);
     assert_eq!(
         previous_checksum, new_checksum,
         "RSSP boundary parse diverged"
     );
     let (previous, current) = measure_pair(
         SONG_PARSE_ROUNDS,
-        || benchmark_song_parse_previous(&simfile, SONG_PARSE_ROUNDS),
-        || benchmark_song_parse_current(&simfile, SONG_PARSE_ROUNDS),
+        || benchmark_song_parse_previous(simfile, SONG_PARSE_ROUNDS),
+        || benchmark_song_parse_current(simfile, SONG_PARSE_ROUNDS),
     );
     black_box(previous.checksum ^ current.checksum);
-    println!("RSSP song-parse boundary ({SONG_PARSE_ROUNDS} cache misses)");
-    print_result("alloc", SONG_PARSE_ROUNDS, &previous);
-    print_result("in-place", SONG_PARSE_ROUNDS, &current);
+    println!("RSSP song-parse boundary: {label} ({SONG_PARSE_ROUNDS} cache misses)");
+    print_result("baseline", SONG_PARSE_ROUNDS, &previous);
+    print_result("direct", SONG_PARSE_ROUNDS, &current);
     print_change(&previous, &current);
-
-    fs::remove_dir_all(root).unwrap();
 }
 
-fn analysis_fixture() -> Vec<u8> {
+fn analysis_fixture(own_timing: bool) -> Vec<u8> {
     let mut fixture = String::with_capacity(64 * 1024);
     fixture.push_str(
         "#VERSION:0.83;\n#TITLE:Boundary Benchmark;\n#ARTIST:DeadSync;\n\
-         #BPMS:0.000=120.000,128.000=180.000;\n",
+         #BPMS:0.000=120.000,128.000=180.000;\n\
+         #TIMESIGNATURES:32=3=4,0=4=4,16=7=8,16=5=8;\n\
+         #TICKCOUNTS:32=8,0=4,16=6,16=12;\n\
+         #COMBOS:32=3=2,0=1,16=2=4,16=5=6;\n",
     );
     for description in ["Zulu", "alpha", "İstanbul", "Beta", "gamma", "delta"] {
         fixture.push_str("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:");
         fixture.push_str(description);
-        fixture.push_str(";\n#DIFFICULTY:Challenge;\n#METER:15;\n#NOTES:\n");
+        fixture.push_str(";\n#DIFFICULTY:Challenge;\n#METER:15;\n");
+        if own_timing {
+            fixture.push_str(
+                "#BPMS:0=120,128=180;\n#STOPS:16=0.050,96=0.100;\n\
+                 #DELAYS:32=0.025,112=0.075;\n#WARPS:48=2,120=4;\n\
+                 #SPEEDS:0=1=0=0,64=2=4=0;\n#SCROLLS:0=1,80=-1;\n\
+                 #FAKES:144=4,160=8;\n#TIMESIGNATURES:32=3=4,0=4=4,16=7=8,16=5=8;\n\
+                 #TICKCOUNTS:32=8,0=4,16=6,16=12;\n\
+                 #COMBOS:32=3=2,0=1,16=2=4,16=5=6;\n",
+            );
+        }
+        fixture.push_str("#NOTES:\n");
         for measure in 0..64 {
             for row in 0..4 {
                 fixture.push_str(match (measure + row) & 3 {
@@ -642,6 +715,27 @@ fn analysis_fixture() -> Vec<u8> {
         fixture.push_str(";\n");
     }
     fixture.into_bytes()
+}
+
+fn timing_tag_fixture() -> (String, String, String) {
+    let mut time_signatures = String::with_capacity(768);
+    let mut tickcounts = String::with_capacity(512);
+    let mut combos = String::with_capacity(768);
+    for index in (0..64).rev() {
+        if index != 63 {
+            time_signatures.push(',');
+            tickcounts.push(',');
+            combos.push(',');
+        }
+        let beat = index * 4;
+        time_signatures.push_str(&format!("{beat}={}={}", 3 + index % 5, 4 << (index % 2)));
+        tickcounts.push_str(&format!("{beat}={}", index % 49));
+        combos.push_str(&format!("{beat}={}={}", 1 + index % 8, 1 + index % 5));
+    }
+    time_signatures.push_str(",16=11=16,bad");
+    tickcounts.push_str(",16=48,bad");
+    combos.push_str(",16=9=7,bad");
+    (time_signatures, tickcounts, combos)
 }
 
 fn note_fixture() -> Vec<u8> {

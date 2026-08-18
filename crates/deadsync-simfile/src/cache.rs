@@ -20,6 +20,7 @@ use std::fs;
 use std::hash::Hasher;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Instant, UNIX_EPOCH};
 use twox_hash::XxHash64;
 
@@ -526,9 +527,9 @@ impl From<&TimingSegments> for CachedTimingSegments {
 impl CachedTimingSegments {
     pub(crate) fn from_rssp(
         segments: &rssp::timing::TimingSegments,
-        time_signatures: Vec<TimeSignatureSegment>,
-        tickcounts: Vec<TickcountSegment>,
-        combos: Vec<ComboSegment>,
+        time_signatures: Vec<(f32, i32, i32)>,
+        tickcounts: Vec<(f32, u8)>,
+        combos: Vec<(f32, u32, u32)>,
     ) -> Self {
         Self {
             beat0_offset_adjust: segments.beat0_offset_adjust,
@@ -551,20 +552,150 @@ impl CachedTimingSegments {
                 .collect(),
             scrolls: segments.scrolls.clone(),
             fakes: segments.fakes.clone(),
-            time_signatures: time_signatures
-                .into_iter()
-                .map(|seg| (seg.beat, seg.numerator, seg.denominator))
-                .collect(),
-            tickcounts: tickcounts
-                .into_iter()
-                .map(|seg| (seg.beat, seg.ticks))
-                .collect(),
-            combos: combos
-                .into_iter()
-                .map(|seg| (seg.beat, seg.combo, seg.miss_combo))
-                .collect(),
+            time_signatures,
+            tickcounts,
+            combos,
         }
     }
+
+    pub(crate) fn from_rssp_owned(
+        segments: Arc<rssp::timing::TimingSegments>,
+        time_signatures: Vec<(f32, i32, i32)>,
+        tickcounts: Vec<(f32, u8)>,
+        combos: Vec<(f32, u32, u32)>,
+    ) -> Self {
+        let segments = match Arc::try_unwrap(segments) {
+            Ok(segments) => segments,
+            Err(segments) => {
+                return Self::from_rssp(&segments, time_signatures, tickcounts, combos);
+            }
+        };
+        Self {
+            beat0_offset_adjust: segments.beat0_offset_adjust,
+            bpms: segments.bpms,
+            stops: segments.stops,
+            delays: segments.delays,
+            warps: segments.warps,
+            speeds: segments
+                .speeds
+                .into_iter()
+                .map(|(beat, ratio, delay, unit)| CachedSpeedSegment {
+                    beat,
+                    ratio,
+                    delay,
+                    unit: match unit {
+                        rssp::timing::SpeedUnit::Beats => CachedSpeedUnit::Beats,
+                        rssp::timing::SpeedUnit::Seconds => CachedSpeedUnit::Seconds,
+                    },
+                })
+                .collect(),
+            scrolls: segments.scrolls,
+            fakes: segments.fakes,
+            time_signatures,
+            tickcounts,
+            combos,
+        }
+    }
+
+    #[cfg(any(test, feature = "bench-support"))]
+    pub(crate) fn from_rssp_baseline(
+        segments: &rssp::timing::TimingSegments,
+        time_signatures: Vec<TimeSignatureSegment>,
+        tickcounts: Vec<TickcountSegment>,
+        combos: Vec<ComboSegment>,
+    ) -> Self {
+        Self::from_rssp(
+            segments,
+            time_signatures
+                .into_iter()
+                .map(|segment| (segment.beat, segment.numerator, segment.denominator))
+                .collect(),
+            tickcounts
+                .into_iter()
+                .map(|segment| (segment.beat, segment.ticks))
+                .collect(),
+            combos
+                .into_iter()
+                .map(|segment| (segment.beat, segment.combo, segment.miss_combo))
+                .collect(),
+        )
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_timing_handoff_baseline(rounds: usize) -> u64 {
+    (0..rounds).fold(0u64, |checksum, _| {
+        let segments = Arc::new(timing_handoff_fixture());
+        let cached = CachedTimingSegments::from_rssp(
+            &segments,
+            vec![(0.0, 4, 4)],
+            vec![(0.0, 4)],
+            vec![(0.0, 1, 1)],
+        );
+        checksum.wrapping_add(timing_handoff_checksum(&cached))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_timing_handoff_current(rounds: usize) -> u64 {
+    (0..rounds).fold(0u64, |checksum, _| {
+        let segments = Arc::new(timing_handoff_fixture());
+        let cached = CachedTimingSegments::from_rssp_owned(
+            segments,
+            vec![(0.0, 4, 4)],
+            vec![(0.0, 4)],
+            vec![(0.0, 1, 1)],
+        );
+        checksum.wrapping_add(timing_handoff_checksum(&cached))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+fn timing_handoff_fixture() -> rssp::timing::TimingSegments {
+    let pairs = || {
+        (0..64)
+            .map(|index| (index as f32 * 4.0, index as f32 + 1.0))
+            .collect()
+    };
+    rssp::timing::TimingSegments {
+        beat0_offset_adjust: 0.25,
+        bpms: pairs(),
+        stops: pairs(),
+        delays: pairs(),
+        warps: pairs(),
+        speeds: (0..64)
+            .map(|index| {
+                (
+                    index as f32 * 4.0,
+                    index as f32 + 1.0,
+                    0.5,
+                    rssp::timing::SpeedUnit::Beats,
+                )
+            })
+            .collect(),
+        scrolls: pairs(),
+        fakes: pairs(),
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn timing_handoff_checksum(segments: &CachedTimingSegments) -> u64 {
+    [
+        segments.bpms.len(),
+        segments.stops.len(),
+        segments.delays.len(),
+        segments.warps.len(),
+        segments.speeds.len(),
+        segments.scrolls.len(),
+        segments.fakes.len(),
+        segments.time_signatures.len(),
+        segments.tickcounts.len(),
+        segments.combos.len(),
+    ]
+    .into_iter()
+    .fold(0u64, |checksum, len| {
+        checksum.wrapping_mul(31).wrapping_add(len as u64)
+    })
 }
 
 impl From<CachedTimingSegments> for TimingSegments {
@@ -2533,11 +2664,44 @@ mod tests {
         expanded.tickcounts = tickcounts.clone();
         expanded.combos = combos.clone();
         let expected = CachedTimingSegments::from(&expanded);
-        let actual = CachedTimingSegments::from_rssp(&source, time_signatures, tickcounts, combos);
+        let actual = CachedTimingSegments::from_rssp(
+            &source,
+            time_signatures
+                .into_iter()
+                .map(|segment| (segment.beat, segment.numerator, segment.denominator))
+                .collect(),
+            tickcounts
+                .into_iter()
+                .map(|segment| (segment.beat, segment.ticks))
+                .collect(),
+            combos
+                .into_iter()
+                .map(|segment| (segment.beat, segment.combo, segment.miss_combo))
+                .collect(),
+        );
+        let owned = CachedTimingSegments::from_rssp_owned(
+            Arc::new(source.clone()),
+            vec![(0.0, 4, 4)],
+            vec![(0.0, 4)],
+            vec![(0.0, 1, 1)],
+        );
+        let shared_source = Arc::new(source);
+        let shared_copy = Arc::clone(&shared_source);
+        let shared = CachedTimingSegments::from_rssp_owned(
+            shared_source,
+            vec![(0.0, 4, 4)],
+            vec![(0.0, 4)],
+            vec![(0.0, 1, 1)],
+        );
+        drop(shared_copy);
         let expected = bincode::encode_to_vec(expected, bincode::config::standard()).unwrap();
         let actual = bincode::encode_to_vec(actual, bincode::config::standard()).unwrap();
+        let owned = bincode::encode_to_vec(owned, bincode::config::standard()).unwrap();
+        let shared = bincode::encode_to_vec(shared, bincode::config::standard()).unwrap();
 
         assert_eq!(actual, expected);
+        assert_eq!(owned, expected);
+        assert_eq!(shared, expected);
     }
 
     #[test]

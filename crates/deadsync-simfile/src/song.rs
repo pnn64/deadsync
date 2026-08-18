@@ -15,7 +15,11 @@ use crate::notes::{parse_chart_notes_as, step_type_lanes};
 use crate::stats::build_stamina_counts;
 #[cfg(test)]
 use crate::timing::timing_segments_from_rssp;
-use crate::timing::{parse_combos, parse_tickcounts, parse_time_signatures};
+use crate::timing::{parse_cached_combos, parse_cached_tickcounts, parse_cached_time_signatures};
+#[cfg(any(test, feature = "bench-support"))]
+use crate::timing::{
+    parse_combos_baseline, parse_tickcounts_baseline, parse_time_signatures_baseline,
+};
 use deadsync_chart::{STANDARD_DIFFICULTY_NAMES, SongData, song::standard_difficulty_index};
 use rssp::{
     AnalysisOptions, AnalysisScratch, PreparedAnalysis, SimfileSummary, analyze_prepared_in,
@@ -82,7 +86,7 @@ pub struct SongParseScratch {
 enum SongBuildMode {
     Direct,
     #[cfg(any(test, feature = "bench-support"))]
-    Previous,
+    Baseline,
     #[cfg(test)]
     Legacy,
 }
@@ -92,9 +96,20 @@ impl SongBuildMode {
         match self {
             Self::Direct => true,
             #[cfg(any(test, feature = "bench-support"))]
-            Self::Previous => true,
+            Self::Baseline => true,
             #[cfg(test)]
             Self::Legacy => false,
+        }
+    }
+
+    #[cfg(any(test, feature = "bench-support"))]
+    fn explicit_input_reserve(self) -> bool {
+        match self {
+            Self::Direct => false,
+            #[cfg(any(test, feature = "bench-support"))]
+            Self::Baseline => true,
+            #[cfg(test)]
+            Self::Legacy => true,
         }
     }
 }
@@ -150,10 +165,11 @@ fn parse_song_file_in_mode(
     let SongParseScratch { input, analysis } = scratch;
     input.clear();
     let mut file = File::open(path).map_err(|e| format!("Could not read file: {e}"))?;
-    if let Ok(metadata) = file.metadata()
-        && let Ok(file_len) = usize::try_from(metadata.len())
+    #[cfg(any(test, feature = "bench-support"))]
     {
-        input.reserve(file_len);
+        if build_mode.explicit_input_reserve() {
+            reserve_input_from_metadata(&file, input);
+        }
     }
     file.read_to_end(input)
         .map_err(|e| format!("Could not read file: {e}"))?;
@@ -176,6 +192,15 @@ fn parse_song_file_in_mode(
             mode: build_mode,
         },
     ))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn reserve_input_from_metadata(file: &File, input: &mut Vec<u8>) {
+    if let Ok(metadata) = file.metadata()
+        && let Ok(file_len) = usize::try_from(metadata.len())
+    {
+        input.reserve(file_len);
+    }
 }
 
 pub fn parse_song_meta_file(
@@ -407,33 +432,35 @@ fn build_charts(
             } else {
                 global_combos
             };
-            let time_signatures = parse_time_signatures(time_signature_tag);
-            let tickcounts = parse_tickcounts(tickcount_tag);
-            let combos = parse_combos(combo_tag);
             let stamina_counts = build_stamina_counts(&chart);
             let meter = chart.rating_str.parse().unwrap_or(0);
             let music_path = chart_music_path(simfile_dir, song_music_path, &chart.music_path);
             let min_bpm = min_chart_bpm(&chart.timing_segments.bpms);
             let max_bpm = max_chart_bpm(&chart.timing_segments.bpms);
-            let timing_segments = if build_mode.direct_payload() {
-                CachedTimingSegments::from_rssp(
+            let timing_segments = match build_mode {
+                SongBuildMode::Direct => CachedTimingSegments::from_rssp_owned(
+                    chart.timing_segments,
+                    parse_cached_time_signatures(time_signature_tag),
+                    parse_cached_tickcounts(tickcount_tag),
+                    parse_cached_combos(combo_tag),
+                ),
+                #[cfg(any(test, feature = "bench-support"))]
+                SongBuildMode::Baseline => CachedTimingSegments::from_rssp_baseline(
                     chart.timing_segments.as_ref(),
-                    time_signatures,
-                    tickcounts,
-                    combos,
-                )
-            } else {
+                    parse_time_signatures_baseline(time_signature_tag),
+                    parse_tickcounts_baseline(tickcount_tag),
+                    parse_combos_baseline(combo_tag),
+                ),
                 #[cfg(test)]
-                {
+                SongBuildMode::Legacy => {
                     let mut timing_segments =
                         timing_segments_from_rssp(chart.timing_segments.as_ref());
-                    timing_segments.time_signatures = time_signatures;
-                    timing_segments.tickcounts = tickcounts;
-                    timing_segments.combos = combos;
+                    timing_segments.time_signatures =
+                        parse_time_signatures_baseline(time_signature_tag);
+                    timing_segments.tickcounts = parse_tickcounts_baseline(tickcount_tag);
+                    timing_segments.combos = parse_combos_baseline(combo_tag);
                     (&timing_segments).into()
                 }
-                #[cfg(not(test))]
-                unreachable!("production song builds always use direct timing payloads")
             };
             let stats = (&chart.stats).into();
             let tech_counts = (&chart.tech_counts).into();
@@ -483,9 +510,7 @@ fn build_charts(
     match build_mode {
         SongBuildMode::Direct => adjust_duplicate_charts(&mut charts),
         #[cfg(any(test, feature = "bench-support"))]
-        SongBuildMode::Previous => {
-            adjust_duplicate_charts_legacy(&mut charts);
-        }
+        SongBuildMode::Baseline => adjust_duplicate_charts(&mut charts),
         #[cfg(test)]
         SongBuildMode::Legacy => {
             adjust_duplicate_charts_legacy(&mut charts);
@@ -611,7 +636,7 @@ fn lowercase_cmp(left: &str, right: &str) -> Ordering {
         .cmp(right.chars().flat_map(char::to_lowercase))
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn adjust_duplicate_charts_legacy(charts: &mut Vec<SerializableChartData>) {
     remove_identical_charts_legacy(charts);
 
@@ -653,7 +678,7 @@ fn adjust_duplicate_charts_legacy(charts: &mut Vec<SerializableChartData>) {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn remove_identical_charts_legacy(charts: &mut Vec<SerializableChartData>) {
     let mut unique: Vec<SerializableChartData> = Vec::with_capacity(charts.len());
     for chart in charts.drain(..) {
@@ -674,7 +699,7 @@ fn remove_identical_charts_legacy(charts: &mut Vec<SerializableChartData>) {
     *charts = unique;
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn duplicate_chart_cmp_legacy(
     left: &SerializableChartData,
     right: &SerializableChartData,
@@ -732,33 +757,45 @@ fn max_chart_bpm(bpms: &[(f32, f32)]) -> f64 {
 
 #[cfg(feature = "bench-support")]
 pub fn benchmark_song_parse_previous(path: &Path, rounds: usize) -> u64 {
+    benchmark_song_parse_mode(path, SongBuildMode::Baseline, rounds)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_song_parse_current(path: &Path, rounds: usize) -> u64 {
+    benchmark_song_parse_mode(path, SongBuildMode::Direct, rounds)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_song_bytes_previous(path: &Path) -> Vec<u8> {
+    benchmark_song_bytes(path, SongBuildMode::Baseline)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_song_bytes_current(path: &Path) -> Vec<u8> {
+    benchmark_song_bytes(path, SongBuildMode::Direct)
+}
+
+#[cfg(feature = "bench-support")]
+fn benchmark_song_parse_mode(path: &Path, mode: SongBuildMode, rounds: usize) -> u64 {
     let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
     let analyzer = SongAnalyzer::new(&options);
     let mut scratch = SongParseScratch::default();
     (0..rounds).fold(0u64, |checksum, _| {
-        let song = parse_song_file_in_mode(
-            path,
-            &options,
-            &analyzer,
-            &mut scratch,
-            SongBuildMode::Previous,
-            |_| 0.0,
-        )
-        .expect("previous benchmark fixture should parse");
+        let song = parse_song_file_in_mode(path, &options, &analyzer, &mut scratch, mode, |_| 0.0)
+            .expect("benchmark fixture should parse");
         checksum.wrapping_add(song_parse_checksum(&song))
     })
 }
 
 #[cfg(feature = "bench-support")]
-pub fn benchmark_song_parse_current(path: &Path, rounds: usize) -> u64 {
+fn benchmark_song_bytes(path: &Path, mode: SongBuildMode) -> Vec<u8> {
     let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
     let analyzer = SongAnalyzer::new(&options);
     let mut scratch = SongParseScratch::default();
-    (0..rounds).fold(0u64, |checksum, _| {
-        let song = parse_song_file_in(path, &options, &analyzer, &mut scratch, |_| 0.0)
-            .expect("reused benchmark fixture should parse");
-        checksum.wrapping_add(song_parse_checksum(&song))
-    })
+    let song = parse_song_file_in_mode(path, &options, &analyzer, &mut scratch, mode, |_| 0.0)
+        .expect("benchmark fixture should parse");
+    bincode::encode_to_vec(song, bincode::config::standard())
+        .expect("benchmark fixture should serialize")
 }
 
 #[cfg(feature = "bench-support")]
