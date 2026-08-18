@@ -19,6 +19,7 @@ use deadsync_simfile::scan::{
     benchmark_pooled_song_workers, benchmark_scan_map_fixture, benchmark_scan_maps_current,
     benchmark_scan_maps_legacy, benchmark_song_slots_current, benchmark_song_slots_legacy,
 };
+use deadsync_simfile::song::{benchmark_song_parse_current, benchmark_song_parse_legacy};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::fs;
 use std::hint::black_box;
@@ -42,6 +43,7 @@ const CHART_REQUEST_ROUNDS: usize = 65_536;
 const MEDIA_MAP_ROUNDS: usize = 2_048;
 const CACHE_PATH_OPS: usize = 2_048;
 const CACHE_PROBE_OPS: usize = 2_048;
+const SONG_PARSE_ROUNDS: usize = 16;
 const SAMPLES: usize = 9;
 
 struct CountingAlloc {
@@ -205,6 +207,10 @@ fn main() {
         bench_media_map();
         return;
     }
+    if std::env::args().any(|arg| arg == "rssp-boundary") {
+        bench_rssp_boundary();
+        return;
+    }
     let discovery_root = discovery_fixture();
     let old_checksum = benchmark_child_dirs_legacy(&discovery_root).unwrap();
     let new_checksum = benchmark_child_dirs_current(&discovery_root).unwrap();
@@ -296,6 +302,7 @@ fn main() {
     bench_scan_maps();
     bench_chart_requests();
     bench_media_map();
+    bench_rssp_boundary();
 
     let simfile_path = nested_root.join("Song 00000").join("chart.sm");
     let cache_dir = nested_root.join("cache");
@@ -496,6 +503,60 @@ fn bench_media_map() {
     print_result("hash", MEDIA_MAP_ROUNDS, &old);
     print_result("borrowed", MEDIA_MAP_ROUNDS, &new);
     print_change(&old, &new);
+}
+
+fn bench_rssp_boundary() {
+    let root = std::env::temp_dir().join(format!(
+        "deadsync-rssp-boundary-bench-{}",
+        std::process::id()
+    ));
+    if root.exists() {
+        fs::remove_dir_all(&root).unwrap();
+    }
+    fs::create_dir_all(&root).unwrap();
+    let simfile = root.join("chart.ssc");
+    fs::write(&simfile, analysis_fixture()).unwrap();
+
+    let old_checksum = benchmark_song_parse_legacy(&simfile, 1);
+    let new_checksum = benchmark_song_parse_current(&simfile, 1);
+    assert_eq!(old_checksum, new_checksum, "RSSP boundary parse diverged");
+    let old = measure(SONG_PARSE_ROUNDS, || {
+        benchmark_song_parse_legacy(&simfile, SONG_PARSE_ROUNDS)
+    });
+    let new = measure(SONG_PARSE_ROUNDS, || {
+        benchmark_song_parse_current(&simfile, SONG_PARSE_ROUNDS)
+    });
+    black_box(old.checksum ^ new.checksum);
+    println!("RSSP song-parse boundary ({SONG_PARSE_ROUNDS} cache misses)");
+    print_result("old", SONG_PARSE_ROUNDS, &old);
+    print_result("new", SONG_PARSE_ROUNDS, &new);
+    print_change(&old, &new);
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+fn analysis_fixture() -> Vec<u8> {
+    let mut fixture = String::with_capacity(64 * 1024);
+    fixture.push_str(
+        "#VERSION:0.83;\n#TITLE:Boundary Benchmark;\n#ARTIST:DeadSync;\n\
+         #BPMS:0.000=120.000,128.000=180.000;\n#NOTEDATA:;\n\
+         #STEPSTYPE:dance-single;\n#DIFFICULTY:Challenge;\n#METER:15;\n#NOTES:\n",
+    );
+    for measure in 0..512 {
+        for row in 0..4 {
+            fixture.push_str(match (measure + row) & 3 {
+                0 => "1000\n",
+                1 => "0100\n",
+                2 => "0010\n",
+                _ => "0001\n",
+            });
+        }
+        if measure != 511 {
+            fixture.push_str(",\n");
+        }
+    }
+    fixture.push_str(";\n");
+    fixture.into_bytes()
 }
 
 fn discovery_fixture() -> std::path::PathBuf {

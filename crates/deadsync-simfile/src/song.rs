@@ -14,9 +14,14 @@ use crate::timing::{
     parse_combos, parse_tickcounts, parse_time_signatures, timing_segments_from_rssp,
 };
 use deadsync_chart::{STANDARD_DIFFICULTY_NAMES, SongData, song::standard_difficulty_index};
-use rssp::{AnalysisOptions, SimfileSummary, analyze};
+use rssp::{
+    AnalysisOptions, AnalysisScratch, PreparedAnalysis, SimfileSummary, analyze_prepared_in,
+};
 use std::cmp::Ordering;
+#[cfg(any(test, feature = "bench-support"))]
 use std::fs;
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 pub const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
@@ -43,18 +48,65 @@ impl ParseSongOptions {
     }
 }
 
+/// Read-only RSSP configuration prepared once for a batch of songs.
+pub struct SongAnalyzer {
+    prepared: PreparedAnalysis,
+}
+
+impl SongAnalyzer {
+    pub fn new(options: &ParseSongOptions) -> Self {
+        Self {
+            prepared: PreparedAnalysis::new(AnalysisOptions {
+                mono_threshold: options.mono_threshold,
+                ..AnalysisOptions::default()
+            }),
+        }
+    }
+}
+
+/// Worker-owned temporary storage retained across cache misses in one scan.
+///
+/// This is single-thread-only. The scan worker that creates it remains its sole
+/// owner and drops it when the worker exits, releasing the largest input and
+/// RSSP analysis buffers retained during that scan.
+#[derive(Default)]
+pub struct SongParseScratch {
+    input: Vec<u8>,
+    analysis: AnalysisScratch,
+}
+
 pub fn parse_song_file(
     path: &Path,
     options: &ParseSongOptions,
     music_len: impl FnOnce(Option<&Path>) -> f32,
 ) -> Result<SerializableSongData, String> {
-    let simfile_data = fs::read(path).map_err(|e| format!("Could not read file: {e}"))?;
+    let analyzer = SongAnalyzer::new(options);
+    let mut scratch = SongParseScratch::default();
+    parse_song_file_in(path, options, &analyzer, &mut scratch, music_len)
+}
+
+pub fn parse_song_file_in(
+    path: &Path,
+    options: &ParseSongOptions,
+    analyzer: &SongAnalyzer,
+    scratch: &mut SongParseScratch,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<SerializableSongData, String> {
+    if analyzer.prepared.options().mono_threshold != options.mono_threshold {
+        return Err("Song analyzer does not match parse options".to_string());
+    }
+    let SongParseScratch { input, analysis } = scratch;
+    input.clear();
+    let mut file = File::open(path).map_err(|e| format!("Could not read file: {e}"))?;
+    if let Ok(metadata) = file.metadata()
+        && let Ok(file_len) = usize::try_from(metadata.len())
+    {
+        input.reserve(file_len);
+    }
+    file.read_to_end(input)
+        .map_err(|e| format!("Could not read file: {e}"))?;
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    let analysis_options = AnalysisOptions {
-        mono_threshold: options.mono_threshold,
-        ..AnalysisOptions::default()
-    };
-    let summary = analyze(&simfile_data, extension, &analysis_options)?;
+    let summary = analyze_prepared_in(input, extension, &analyzer.prepared, analysis)?;
     let simfile_dir = path
         .parent()
         .ok_or_else(|| "Could not determine simfile directory".to_string())?;
@@ -63,7 +115,7 @@ pub fn parse_song_file(
     Ok(build_song_data(
         path,
         simfile_dir,
-        &simfile_data,
+        input,
         summary,
         song_music_path,
         music_length_seconds,
@@ -90,6 +142,51 @@ pub fn parse_song_data_file(
     let mut song = parse_song_file(path, options, music_len)?;
     update_precise_song_bounds(&mut song, global_offset_seconds);
     Ok(song)
+}
+
+pub fn parse_song_data_file_in(
+    path: &Path,
+    options: &ParseSongOptions,
+    analyzer: &SongAnalyzer,
+    scratch: &mut SongParseScratch,
+    global_offset_seconds: f32,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<SerializableSongData, String> {
+    let mut song = parse_song_file_in(path, options, analyzer, scratch, music_len)?;
+    update_precise_song_bounds(&mut song, global_offset_seconds);
+    Ok(song)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_song_file_fresh(
+    path: &Path,
+    options: &ParseSongOptions,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<SerializableSongData, String> {
+    let simfile_data = fs::read(path).map_err(|e| format!("Could not read file: {e}"))?;
+    let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    let summary = rssp::analyze(
+        &simfile_data,
+        extension,
+        &AnalysisOptions {
+            mono_threshold: options.mono_threshold,
+            ..AnalysisOptions::default()
+        },
+    )?;
+    let simfile_dir = path
+        .parent()
+        .ok_or_else(|| "Could not determine simfile directory".to_string())?;
+    let song_music_path = resolve_music_path(simfile_dir, &summary.music_path);
+    let music_length_seconds = final_music_len(&summary, music_len(song_music_path.as_deref()));
+    Ok(build_song_data(
+        path,
+        simfile_dir,
+        &simfile_data,
+        summary,
+        song_music_path,
+        music_length_seconds,
+        options,
+    ))
 }
 
 fn build_song_data(
@@ -404,10 +501,98 @@ fn max_chart_bpm(bpms: &[(f32, f32)]) -> f64 {
         .fold(0.0_f64, f64::max)
 }
 
+#[cfg(feature = "bench-support")]
+pub fn benchmark_song_parse_legacy(path: &Path, rounds: usize) -> u64 {
+    let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+    (0..rounds).fold(0u64, |checksum, _| {
+        let song = parse_song_file_fresh(path, &options, |_| 0.0)
+            .expect("legacy benchmark fixture should parse");
+        checksum.wrapping_add(song_parse_checksum(&song))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_song_parse_current(path: &Path, rounds: usize) -> u64 {
+    let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+    let analyzer = SongAnalyzer::new(&options);
+    let mut scratch = SongParseScratch::default();
+    (0..rounds).fold(0u64, |checksum, _| {
+        let song = parse_song_file_in(path, &options, &analyzer, &mut scratch, |_| 0.0)
+            .expect("reused benchmark fixture should parse");
+        checksum.wrapping_add(song_parse_checksum(&song))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+fn song_parse_checksum(song: &SerializableSongData) -> u64 {
+    song.charts.iter().fold(
+        (song.title.len() + song.artist.len()) as u64,
+        |checksum, chart| {
+            checksum
+                .wrapping_mul(131)
+                .wrapping_add(chart.notes.len() as u64)
+                .wrapping_add(chart.parsed_notes.len() as u64)
+                .wrapping_add(u64::from(chart.stats.total_steps))
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn reused_analysis_matches_fresh_parsing_across_files() {
+        let root = test_dir("reused-analysis");
+        let large = root.join("large.ssc");
+        let small = root.join("small.sm");
+        fs::write(
+            &large,
+            b"#VERSION:0.83;\n\
+              #TITLE:Reusable SSC;\n\
+              #ARTIST:Boundary;\n\
+              #BPMS:0.000=120.000,8.000=180.000;\n\
+              #NOTEDATA:;\n\
+              #STEPSTYPE:dance-single;\n\
+              #DIFFICULTY:Challenge;\n\
+              #METER:12;\n\
+              #NOTES:\n\
+              2000\n0100\n0010\n3000\n,\n1001\n0110\n1000\n0001\n;",
+        )
+        .unwrap();
+        fs::write(
+            &small,
+            b"#TITLE:Reusable SM;\n\
+              #BPMS:0.000=90.000;\n\
+              #NOTES:\n\
+              dance-single:\n:\nHard:\n5:\n0,0,0,0,0:\n1000\n;",
+        )
+        .unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let analyzer = SongAnalyzer::new(&options);
+        let mut scratch = SongParseScratch::default();
+
+        for path in [&large, &small, &large] {
+            let expected = parse_song_file_fresh(path, &options, |_| 7.5).unwrap();
+            let actual =
+                parse_song_file_in(path, &options, &analyzer, &mut scratch, |_| 7.5).unwrap();
+            let expected = bincode::encode_to_vec(expected, bincode::config::standard()).unwrap();
+            let actual = bincode::encode_to_vec(actual, bincode::config::standard()).unwrap();
+            assert_eq!(actual, expected, "reused parse diverged for {path:?}");
+        }
+
+        let large_len = usize::try_from(fs::metadata(large).unwrap().len()).unwrap();
+        assert!(scratch.input.capacity() >= large_len);
+
+        let mut mismatched = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        mismatched.mono_threshold += 1;
+        let error = parse_song_file_in(&small, &mismatched, &analyzer, &mut scratch, |_| 0.0).err();
+        assert_eq!(
+            error.as_deref(),
+            Some("Song analyzer does not match parse options")
+        );
+    }
 
     #[test]
     fn parses_song_payload_with_injected_music_length() {

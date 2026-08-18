@@ -1,11 +1,11 @@
 use crate::cache::{
     GameplayChartLoadLogEntry, GameplayChartLoadOptions, GameplayChartLoadReport,
     GameplayChartLoadResult, RuntimeSongLoadLogEntry, RuntimeSongLoadOptions,
-    load_gameplay_charts_with_options, load_song_with_cache_options,
+    load_gameplay_charts_with_options, load_song_with_cache_options_in,
     load_sync_analysis_chart_with_options,
 };
 use crate::runtime_cache::reload_song_in_cache_with;
-use crate::song::ParseSongOptions;
+use crate::song::{ParseSongOptions, SongAnalyzer, SongParseScratch};
 use deadsync_chart::SongData;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -114,6 +114,28 @@ pub fn load_song_for_scan_runtime(
     config: RuntimeSongConfig,
     music_len: impl FnOnce(Option<&Path>) -> f32,
 ) -> Result<(SongData, bool, Vec<RuntimeSongLoadLogEntry>), String> {
+    let analyzer = SongAnalyzer::new(parse_options);
+    let mut scratch = SongParseScratch::default();
+    load_song_for_scan_runtime_in(
+        simfile_path,
+        cache_dir,
+        parse_options,
+        &analyzer,
+        &mut scratch,
+        config,
+        music_len,
+    )
+}
+
+pub fn load_song_for_scan_runtime_in(
+    simfile_path: PathBuf,
+    cache_dir: &Path,
+    parse_options: &ParseSongOptions,
+    analyzer: &SongAnalyzer,
+    scratch: &mut SongParseScratch,
+    config: RuntimeSongConfig,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<(SongData, bool, Vec<RuntimeSongLoadLogEntry>), String> {
     let options = RuntimeSongLoadOptions {
         cache_dir,
         parse_options,
@@ -123,7 +145,8 @@ pub fn load_song_for_scan_runtime(
         global_offset_seconds: config.global_offset_seconds,
         capture_debug_logs: config.capture_debug_logs,
     };
-    let result = load_song_with_cache_options(&simfile_path, &options, music_len)?;
+    let result =
+        load_song_with_cache_options_in(&simfile_path, &options, analyzer, scratch, music_len)?;
     Ok((result.song, result.cache_hit, result.log_entries))
 }
 

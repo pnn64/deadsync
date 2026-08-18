@@ -9,7 +9,7 @@ use crate::media::{
 };
 use crate::runtime::{
     RuntimeSongConfig, gameplay_chart_load_log_entries_from_report, load_gameplay_charts_runtime,
-    load_song_for_scan_runtime, load_sync_analysis_chart_runtime, reload_song_in_cache_runtime,
+    load_song_for_scan_runtime_in, load_sync_analysis_chart_runtime, reload_song_in_cache_runtime,
 };
 use crate::scan::{
     RuntimeCourseScanEnv, RuntimeScanAdapterEvent, RuntimeScanLogEntry, RuntimeScanLogLevel,
@@ -18,7 +18,7 @@ use crate::scan::{
     runtime_song_scan_log_entry, scan_and_load_courses_with_progress_counts_runtime,
     scan_and_load_songs_with_progress_counts_runtime,
 };
-use crate::song::ParseSongOptions;
+use crate::song::{ParseSongOptions, SongAnalyzer, SongParseScratch};
 use deadlib_platform::dirs;
 use deadsync_audio_decode as decode;
 use deadsync_chart::{
@@ -35,20 +35,20 @@ where
     let env = song_scan_env(root_path);
     let cache_dir = env.cache_dir.clone();
     let parse_options = parse_song_options();
+    let analyzer = SongAnalyzer::new(&parse_options);
     let capture_debug_logs = log::log_enabled!(log::Level::Debug);
     scan_and_load_songs_with_progress_counts_runtime(
         env,
         progress,
-        move |path, fastload, cachesongs, offset| {
-            load_song_for_scan(
-                path,
+        SongParseScratch::default,
+        move |scratch, path, fastload, cachesongs, offset| {
+            let config = RuntimeSongConfig {
                 fastload,
                 cachesongs,
-                offset,
-                &cache_dir,
-                &parse_options,
+                global_offset_seconds: offset,
                 capture_debug_logs,
-            )
+            };
+            load_song_for_scan(path, config, &cache_dir, &parse_options, &analyzer, scratch)
         },
         deadsync_config::runtime::group_is_never_cached,
         emit_scan_adapter_log,
@@ -65,21 +65,21 @@ pub fn reload_song_dirs_with_progress_counts<F>(
     let env = song_scan_env(root_path);
     let cache_dir = env.cache_dir.clone();
     let parse_options = parse_song_options();
+    let analyzer = SongAnalyzer::new(&parse_options);
     let capture_debug_logs = log::log_enabled!(log::Level::Debug);
     reload_song_dirs_with_progress_counts_runtime(
         env,
         dirs,
         progress,
-        move |path, fastload, cachesongs, offset| {
-            load_song_for_scan(
-                path,
+        SongParseScratch::default,
+        move |scratch, path, fastload, cachesongs, offset| {
+            let config = RuntimeSongConfig {
                 fastload,
                 cachesongs,
-                offset,
-                &cache_dir,
-                &parse_options,
+                global_offset_seconds: offset,
                 capture_debug_logs,
-            )
+            };
+            load_song_for_scan(path, config, &cache_dir, &parse_options, &analyzer, scratch)
         },
         deadsync_config::runtime::group_is_never_cached,
         emit_scan_adapter_log,
@@ -255,23 +255,18 @@ fn emit_gameplay_chart_load_log(entry: GameplayChartLoadLogEntry) {
 
 fn load_song_for_scan(
     simfile_path: PathBuf,
-    fastload: bool,
-    cachesongs: bool,
-    global_offset_seconds: f32,
+    config: RuntimeSongConfig,
     cache_dir: &Path,
     parse_options: &ParseSongOptions,
-    capture_debug_logs: bool,
+    analyzer: &SongAnalyzer,
+    scratch: &mut SongParseScratch,
 ) -> Result<(SongData, bool), String> {
-    let config = RuntimeSongConfig {
-        fastload,
-        cachesongs,
-        global_offset_seconds,
-        capture_debug_logs,
-    };
-    let (song, cache_hit, log_entries) = load_song_for_scan_runtime(
+    let (song, cache_hit, log_entries) = load_song_for_scan_runtime_in(
         simfile_path,
         cache_dir,
         parse_options,
+        analyzer,
+        scratch,
         config,
         compute_music_length_seconds,
     )?;

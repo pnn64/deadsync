@@ -318,37 +318,58 @@ fn runtime_course_scan_input(
     }
 }
 
-pub fn scan_and_load_songs_with_progress_counts_runtime<Progress, Process, NeverCache>(
+pub fn scan_and_load_songs_with_progress_counts_runtime<
+    Progress,
+    Worker,
+    InitWorker,
+    Process,
+    NeverCache,
+>(
     env: RuntimeSongScanEnv,
     progress: &mut Progress,
+    init_worker: InitWorker,
     process_song: Process,
     group_is_never_cached: NeverCache,
     mut event: impl FnMut(RuntimeScanAdapterEvent),
 ) where
     Progress: FnMut(usize, usize, &str, &str),
-    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
+    Worker: Send,
+    InitWorker: Fn() -> Worker + Sync,
+    Process:
+        Fn(&mut Worker, PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
     NeverCache: Fn(&str) -> bool,
 {
     let input = runtime_song_scan_input(&env, &mut event);
     scan_and_load_songs_runtime(
         input,
         Some(progress),
+        init_worker,
         process_song,
         group_is_never_cached,
         |scan_event| event(RuntimeScanAdapterEvent::Song(scan_event)),
     );
 }
 
-pub fn reload_song_dirs_with_progress_counts_runtime<Progress, Process, NeverCache>(
+pub fn reload_song_dirs_with_progress_counts_runtime<
+    Progress,
+    Worker,
+    InitWorker,
+    Process,
+    NeverCache,
+>(
     env: RuntimeSongScanEnv,
     pack_dirs: &[PathBuf],
     progress: &mut Progress,
+    init_worker: InitWorker,
     process_song: Process,
     group_is_never_cached: NeverCache,
     mut event: impl FnMut(RuntimeScanAdapterEvent),
 ) where
     Progress: FnMut(usize, usize, &str, &str),
-    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
+    Worker: Send,
+    InitWorker: Fn() -> Worker + Sync,
+    Process:
+        Fn(&mut Worker, PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
     NeverCache: Fn(&str) -> bool,
 {
     let input = runtime_song_scan_input(&env, &mut event);
@@ -356,6 +377,7 @@ pub fn reload_song_dirs_with_progress_counts_runtime<Progress, Process, NeverCac
         input,
         pack_dirs,
         Some(progress),
+        init_worker,
         process_song,
         group_is_never_cached,
         |scan_event| event(RuntimeScanAdapterEvent::Song(scan_event)),
@@ -1335,19 +1357,69 @@ pub fn replace_song_packs(
     sort_song_packs(song_cache);
 }
 
+struct LoadPackHooks<OnError, OnPack, OnNeverCache> {
+    on_song_error: OnError,
+    on_pack: OnPack,
+    on_never_cache: OnNeverCache,
+}
+
 pub fn load_pack_scans_with<Progress, Process, NeverCache, OnError, OnPack, OnNeverCache>(
     packs: Vec<PackScan>,
     options: SongLoadOptions,
-    mut progress: Option<&mut Progress>,
+    progress: Option<&mut Progress>,
     process_song: Process,
     group_is_never_cached: NeverCache,
-    mut on_song_error: OnError,
-    mut on_pack: OnPack,
-    mut on_never_cache: OnNeverCache,
+    on_song_error: OnError,
+    on_pack: OnPack,
+    on_never_cache: OnNeverCache,
 ) -> (Vec<SongPack>, SongLoadStats)
 where
     Progress: FnMut(usize, usize, &str, &str),
     Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
+    NeverCache: Fn(&str) -> bool,
+    OnError: FnMut(&Path, &str),
+    OnPack: FnMut(&SongPack),
+    OnNeverCache: FnMut(&str),
+{
+    load_pack_scans_with_state(
+        packs,
+        options,
+        progress,
+        || (),
+        |_, path, fastload, cachesongs, offset| process_song(path, fastload, cachesongs, offset),
+        group_is_never_cached,
+        LoadPackHooks {
+            on_song_error,
+            on_pack,
+            on_never_cache,
+        },
+    )
+}
+
+fn load_pack_scans_with_state<
+    Progress,
+    Worker,
+    InitWorker,
+    Process,
+    NeverCache,
+    OnError,
+    OnPack,
+    OnNeverCache,
+>(
+    packs: Vec<PackScan>,
+    options: SongLoadOptions,
+    mut progress: Option<&mut Progress>,
+    init_worker: InitWorker,
+    process_song: Process,
+    group_is_never_cached: NeverCache,
+    mut hooks: LoadPackHooks<OnError, OnPack, OnNeverCache>,
+) -> (Vec<SongPack>, SongLoadStats)
+where
+    Progress: FnMut(usize, usize, &str, &str),
+    Worker: Send,
+    InitWorker: Fn() -> Worker + Sync,
+    Process:
+        Fn(&mut Worker, PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
     NeverCache: Fn(&str) -> bool,
     OnError: FnMut(&Path, &str),
     OnPack: FnMut(&SongPack),
@@ -1364,6 +1436,7 @@ where
     }
     .min(total_songs.max(1));
     let parallel_parsing = parse_threads > 1;
+    let mut sequential_worker = (!parallel_parsing).then(&init_worker);
 
     let mut loaded_packs = Vec::with_capacity(packs.len());
     let mut jobs = parallel_parsing.then(|| Vec::with_capacity(total_songs));
@@ -1386,14 +1459,14 @@ where
         let song_count = pack.songs.len();
         let mut current_pack = empty_song_pack_from_scan(&pack);
         current_pack.songs.reserve_exact(song_count);
-        on_pack(&current_pack);
+        (hooks.on_pack)(&current_pack);
         let pack_idx = loaded_packs.len();
         loaded_packs.push(current_pack);
 
         let pack_never_cache =
             group_is_never_cached(&pack.group_name) || group_is_never_cached(&pack_display);
         if pack_never_cache {
-            on_never_cache(&pack_display);
+            (hooks.on_never_cache)(&pack_display);
         }
         let pack_fastload = options.fastload && !pack_never_cache;
         let pack_cachesongs = options.cachesongs && !pack_never_cache;
@@ -1411,16 +1484,24 @@ where
                         cachesongs: pack_cachesongs,
                     });
             } else {
-                process_song_sequential(
-                    &process_song,
+                let worker = sequential_worker
+                    .as_mut()
+                    .expect("sequential song loading initializes one worker");
+                let result = process_song(
+                    worker,
                     simfile_path.clone(),
                     pack_fastload,
                     pack_cachesongs,
                     options.global_offset_seconds,
+                )
+                .map(|(song, is_hit)| (Arc::new(song), is_hit));
+                integrate_song_result(
+                    result,
                     pack_idx,
+                    &simfile_path,
                     &mut loaded_packs,
                     &mut stats,
-                    &mut on_song_error,
+                    &mut hooks.on_song_error,
                 );
                 songs_done = songs_done.saturating_add(1);
                 report_load_progress(
@@ -1436,13 +1517,15 @@ where
 
     if let Some(jobs) = jobs {
         stats.used_parallel = !jobs.is_empty();
-        run_parallel_jobs(
+        run_parallel_jobs_with_state(
             jobs.len(),
             parse_threads,
-            |job_idx| {
+            &init_worker,
+            |worker, job_idx| {
                 let job = &jobs[job_idx];
                 catch_unwind(AssertUnwindSafe(|| {
                     process_song(
+                        worker,
                         job.simfile_path.clone(),
                         job.fastload,
                         job.cachesongs,
@@ -1460,7 +1543,7 @@ where
                     &job.simfile_path,
                     &mut loaded_packs,
                     &mut stats,
-                    &mut on_song_error,
+                    &mut hooks.on_song_error,
                 );
                 songs_done = songs_done.saturating_add(1);
                 let pack_display = loaded_packs
@@ -1486,10 +1569,27 @@ fn total_song_count(packs: &[PackScan]) -> usize {
     packs.iter().map(|pack| pack.songs.len()).sum()
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 fn run_parallel_jobs<T: Send>(
     job_count: usize,
     worker_count: usize,
     process: impl Fn(usize) -> T + Sync,
+    receive: impl FnMut(usize, T),
+) {
+    run_parallel_jobs_with_state(
+        job_count,
+        worker_count,
+        || (),
+        |_, job_idx| process(job_idx),
+        receive,
+    );
+}
+
+fn run_parallel_jobs_with_state<Worker: Send, T: Send>(
+    job_count: usize,
+    worker_count: usize,
+    init_worker: impl Fn() -> Worker + Sync,
+    process: impl Fn(&mut Worker, usize) -> T + Sync,
     mut receive: impl FnMut(usize, T),
 ) {
     let next_job = AtomicUsize::new(0);
@@ -1499,14 +1599,16 @@ fn run_parallel_jobs<T: Send>(
         for _ in 0..worker_count.min(job_count) {
             let tx = tx.clone();
             let process = &process;
+            let init_worker = &init_worker;
             let next_job = &next_job;
             scope.spawn(move || {
+                let mut worker = init_worker();
                 loop {
                     let job_idx = next_job.fetch_add(1, Ordering::Relaxed);
                     if job_idx >= job_count {
                         break;
                     }
-                    if tx.send((job_idx, process(job_idx))).is_err() {
+                    if tx.send((job_idx, process(&mut worker, job_idx))).is_err() {
                         break;
                     }
                 }
@@ -1620,47 +1722,54 @@ fn emit_scan_failures(
     }
 }
 
-fn load_runtime_pack_scans<Progress, Process, NeverCache>(
+fn load_runtime_pack_scans<Progress, Worker, InitWorker, Process, NeverCache>(
     packs: Vec<PackScan>,
     input: &RuntimeSongScanInput,
     progress: Option<&mut Progress>,
+    init_worker: InitWorker,
     process_song: Process,
     group_is_never_cached: NeverCache,
     event: &mut impl FnMut(RuntimeSongScanEvent),
 ) -> (Vec<SongPack>, SongLoadStats)
 where
     Progress: FnMut(usize, usize, &str, &str),
-    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
+    Worker: Send,
+    InitWorker: Fn() -> Worker + Sync,
+    Process:
+        Fn(&mut Worker, PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
     NeverCache: Fn(&str) -> bool,
 {
     let pending_events = RefCell::new(Vec::new());
-    let (loaded_packs, stats) = load_pack_scans_with(
+    let (loaded_packs, stats) = load_pack_scans_with_state(
         packs,
         input.load_options,
         progress,
+        init_worker,
         process_song,
         group_is_never_cached,
-        |simfile_path, error| {
-            pending_events
-                .borrow_mut()
-                .push(RuntimeSongScanEvent::SongLoadFailed {
-                    simfile_path: simfile_path.to_path_buf(),
-                    error: error.to_string(),
-                });
-        },
-        |pack| {
-            pending_events
-                .borrow_mut()
-                .push(RuntimeSongScanEvent::PackScan {
-                    name: pack.name.clone(),
-                });
-        },
-        |pack_display| {
-            pending_events
-                .borrow_mut()
-                .push(RuntimeSongScanEvent::NeverCache {
-                    pack_display: pack_display.to_string(),
-                });
+        LoadPackHooks {
+            on_song_error: |simfile_path: &Path, error: &str| {
+                pending_events
+                    .borrow_mut()
+                    .push(RuntimeSongScanEvent::SongLoadFailed {
+                        simfile_path: simfile_path.to_path_buf(),
+                        error: error.to_string(),
+                    });
+            },
+            on_pack: |pack: &SongPack| {
+                pending_events
+                    .borrow_mut()
+                    .push(RuntimeSongScanEvent::PackScan {
+                        name: pack.name.clone(),
+                    });
+            },
+            on_never_cache: |pack_display: &str| {
+                pending_events
+                    .borrow_mut()
+                    .push(RuntimeSongScanEvent::NeverCache {
+                        pack_display: pack_display.to_string(),
+                    });
+            },
         },
     );
     for pending in pending_events.into_inner() {
@@ -1675,15 +1784,19 @@ where
     (loaded_packs, stats)
 }
 
-pub fn scan_and_load_songs_runtime<Progress, Process, NeverCache>(
+pub fn scan_and_load_songs_runtime<Progress, Worker, InitWorker, Process, NeverCache>(
     input: RuntimeSongScanInput,
     progress: Option<&mut Progress>,
+    init_worker: InitWorker,
     process_song: Process,
     group_is_never_cached: NeverCache,
     mut event: impl FnMut(RuntimeSongScanEvent),
 ) where
     Progress: FnMut(usize, usize, &str, &str),
-    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
+    Worker: Send,
+    InitWorker: Fn() -> Worker + Sync,
+    Process:
+        Fn(&mut Worker, PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
     NeverCache: Fn(&str) -> bool,
 {
     event(RuntimeSongScanEvent::StartScan {
@@ -1704,6 +1817,7 @@ pub fn scan_and_load_songs_runtime<Progress, Process, NeverCache>(
         packs,
         &input,
         progress,
+        init_worker,
         process_song,
         group_is_never_cached,
         &mut event,
@@ -1718,16 +1832,20 @@ pub fn scan_and_load_songs_runtime<Progress, Process, NeverCache>(
     runtime_cache::set_song_cache(loaded_packs);
 }
 
-pub fn reload_song_dirs_runtime<Progress, Process, NeverCache>(
+pub fn reload_song_dirs_runtime<Progress, Worker, InitWorker, Process, NeverCache>(
     input: RuntimeSongScanInput,
     pack_dirs: &[PathBuf],
     progress: Option<&mut Progress>,
+    init_worker: InitWorker,
     process_song: Process,
     group_is_never_cached: NeverCache,
     mut event: impl FnMut(RuntimeSongScanEvent),
 ) where
     Progress: FnMut(usize, usize, &str, &str),
-    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
+    Worker: Send,
+    InitWorker: Fn() -> Worker + Sync,
+    Process:
+        Fn(&mut Worker, PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
     NeverCache: Fn(&str) -> bool,
 {
     ensure_runtime_song_cache_dir(&input.cache_dir, &mut event);
@@ -1752,6 +1870,7 @@ pub fn reload_song_dirs_runtime<Progress, Process, NeverCache>(
         packs,
         &input,
         progress,
+        init_worker,
         process_song,
         group_is_never_cached,
         &mut event,
@@ -1788,37 +1907,6 @@ fn report_load_progress<F>(
     if let Some(cb) = progress.as_mut() {
         cb(done, total, group, item);
     }
-}
-
-fn process_song_sequential<Process, OnError>(
-    process_song: &Process,
-    simfile_path: PathBuf,
-    fastload: bool,
-    cachesongs: bool,
-    global_offset_seconds: f32,
-    pack_idx: usize,
-    loaded_packs: &mut [SongPack],
-    stats: &mut SongLoadStats,
-    on_song_error: &mut OnError,
-) where
-    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String>,
-    OnError: FnMut(&Path, &str),
-{
-    let result = process_song(
-        simfile_path.clone(),
-        fastload,
-        cachesongs,
-        global_offset_seconds,
-    )
-    .map(|(song, is_hit)| (Arc::new(song), is_hit));
-    integrate_song_result(
-        result,
-        pack_idx,
-        &simfile_path,
-        loaded_packs,
-        stats,
-        on_song_error,
-    );
 }
 
 fn integrate_song_result<OnError>(
@@ -2896,6 +2984,36 @@ mod tests {
                     completed_idx == job_idx && result == job_idx.wrapping_mul(17)
                 })
         );
+    }
+
+    #[test]
+    fn parallel_job_pool_reuses_one_state_per_worker() {
+        let initialized = AtomicUsize::new(0);
+        let mut completed = Vec::new();
+        run_parallel_jobs_with_state(
+            257,
+            4,
+            || {
+                initialized.fetch_add(1, Ordering::Relaxed);
+                0usize
+            },
+            |processed, job_idx| {
+                let before = *processed;
+                *processed += 1;
+                (job_idx, before)
+            },
+            |job_idx, result| completed.push((job_idx, result)),
+        );
+
+        completed.sort_unstable_by_key(|&(job_idx, _)| job_idx);
+        assert_eq!(initialized.load(Ordering::Relaxed), 4);
+        assert_eq!(completed.len(), 257);
+        assert!(completed.iter().any(|(_, (_, before))| *before > 0));
+        assert!(completed.iter().enumerate().all(
+            |(job_idx, &(completed_idx, (processed_idx, _)))| {
+                completed_idx == job_idx && processed_idx == job_idx
+            }
+        ));
     }
 
     #[test]

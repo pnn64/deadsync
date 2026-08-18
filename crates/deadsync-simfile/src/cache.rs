@@ -23,7 +23,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Instant, UNIX_EPOCH};
 use twox_hash::XxHash64;
 
-use crate::song::{ParseSongOptions, parse_song_data_file};
+use crate::song::{
+    ParseSongOptions, SongAnalyzer, SongParseScratch, parse_song_data_file, parse_song_data_file_in,
+};
 
 pub const SONG_CACHE_VERSION: u8 = 21;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
@@ -1810,6 +1812,21 @@ pub fn load_song_with_cache_options<F>(
 where
     F: FnOnce(Option<&Path>) -> f32,
 {
+    let analyzer = SongAnalyzer::new(options.parse_options);
+    let mut scratch = SongParseScratch::default();
+    load_song_with_cache_options_in(simfile_path, options, &analyzer, &mut scratch, music_len)
+}
+
+pub fn load_song_with_cache_options_in<F>(
+    simfile_path: &Path,
+    options: &RuntimeSongLoadOptions<'_>,
+    analyzer: &SongAnalyzer,
+    scratch: &mut SongParseScratch,
+    music_len: F,
+) -> Result<RuntimeSongLoadResult, String>
+where
+    F: FnOnce(Option<&Path>) -> f32,
+{
     let mut log_entries = if options.capture_debug_logs {
         Vec::with_capacity(3)
     } else {
@@ -1842,9 +1859,11 @@ where
     if options.capture_debug_logs {
         log_entries.push(runtime_song_parse_log_entry(simfile_path, options.fastload));
     }
-    let song_data = parse_song_data_file(
+    let song_data = parse_song_data_file_in(
         simfile_path,
         options.parse_options,
+        analyzer,
+        scratch,
         options.global_offset_seconds,
         music_len,
     )?;
