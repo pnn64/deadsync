@@ -1,6 +1,7 @@
 use deadsync_chart::{SongData, SongPack, SyncPref};
 use rssp::pack::{PackScan as RsspPackScan, SongScan as RsspSongScan};
 use std::cell::RefCell;
+#[cfg(feature = "bench-support")]
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -588,6 +589,23 @@ fn scan_nested_packs(
     direct_songs: &[SongScan],
     failures: &mut Vec<ScanFailure>,
 ) -> Vec<PackScan> {
+    // Both lists contain immediate children of `series_dir`, so exact file
+    // names are sufficient and avoid hashing or repeatedly comparing prefixes.
+    let mut direct_names = direct_songs
+        .iter()
+        .map(|song| song.dir.file_name())
+        .collect::<Vec<_>>();
+    direct_names.sort_unstable();
+    scan_nested_packs_with(series_dir, failures, |path| {
+        direct_names.binary_search(&path.file_name()).is_ok()
+    })
+}
+
+fn scan_nested_packs_with(
+    series_dir: &Path,
+    failures: &mut Vec<ScanFailure>,
+    mut is_direct_song: impl FnMut(&Path) -> bool,
+) -> Vec<PackScan> {
     let series = series_dir
         .file_name()
         .and_then(|name| name.to_str())
@@ -605,15 +623,11 @@ fn scan_nested_packs(
             return Vec::new();
         }
     };
-    let direct_dirs = direct_songs
-        .iter()
-        .map(|song| song.dir.as_path())
-        .collect::<HashSet<_>>();
     let mut packs = Vec::new();
     let mut ignored_nested = 0;
     let mut first_nested = None;
     for path in nested_dirs {
-        if direct_dirs.contains(path.as_path()) {
+        if is_direct_song(&path) {
             match scan_nested_song_dir(&path) {
                 Ok((count, first)) => {
                     ignored_nested += count;
@@ -644,6 +658,30 @@ fn scan_nested_packs(
         });
     }
     packs
+}
+
+#[cfg(feature = "bench-support")]
+fn scan_nested_packs_hash(
+    series_dir: &Path,
+    direct_songs: &[SongScan],
+    failures: &mut Vec<ScanFailure>,
+) -> Vec<PackScan> {
+    let direct_dirs = direct_songs
+        .iter()
+        .map(|song| song.dir.as_path())
+        .collect::<HashSet<_>>();
+    scan_nested_packs_with(series_dir, failures, |path| direct_dirs.contains(path))
+}
+
+#[cfg(feature = "bench-support")]
+fn scan_nested_packs_linear(
+    series_dir: &Path,
+    direct_songs: &[SongScan],
+    failures: &mut Vec<ScanFailure>,
+) -> Vec<PackScan> {
+    scan_nested_packs_with(series_dir, failures, |path| {
+        direct_songs.iter().any(|song| song.dir == path)
+    })
 }
 
 fn scan_nested_song_dir(song_dir: &Path) -> Result<(usize, Option<PathBuf>), String> {
@@ -744,6 +782,264 @@ pub fn benchmark_nested_scan_current(pack_dir: &Path) -> Result<u64, String> {
 }
 
 #[cfg(feature = "bench-support")]
+pub fn benchmark_nested_scan_hash(pack_dir: &Path) -> Result<u64, String> {
+    benchmark_nested_scan(pack_dir, scan_nested_packs_hash)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_nested_scan_linear(pack_dir: &Path) -> Result<u64, String> {
+    benchmark_nested_scan(pack_dir, scan_nested_packs_linear)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_nested_membership_hash(
+    direct_dirs: &[PathBuf],
+    queries: &[PathBuf],
+    rounds: usize,
+) -> u64 {
+    let mut matches = 0u64;
+    for _ in 0..rounds {
+        let direct_dirs = direct_dirs
+            .iter()
+            .map(PathBuf::as_path)
+            .collect::<HashSet<_>>();
+        matches = matches.wrapping_add(
+            queries
+                .iter()
+                .filter(|path| direct_dirs.contains(path.as_path()))
+                .count() as u64,
+        );
+    }
+    matches
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_nested_membership_sorted_paths(
+    direct_dirs: &[PathBuf],
+    queries: &[PathBuf],
+    rounds: usize,
+) -> u64 {
+    let mut matches = 0u64;
+    for _ in 0..rounds {
+        let mut direct_dirs = direct_dirs.iter().map(PathBuf::as_path).collect::<Vec<_>>();
+        direct_dirs.sort_unstable();
+        matches = matches.wrapping_add(
+            queries
+                .iter()
+                .filter(|path| direct_dirs.binary_search(&path.as_path()).is_ok())
+                .count() as u64,
+        );
+    }
+    matches
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_nested_membership_sorted_names(
+    direct_dirs: &[PathBuf],
+    queries: &[PathBuf],
+    rounds: usize,
+) -> u64 {
+    let mut matches = 0u64;
+    for _ in 0..rounds {
+        let mut direct_names = direct_dirs
+            .iter()
+            .map(|path| path.file_name())
+            .collect::<Vec<_>>();
+        direct_names.sort_unstable();
+        matches = matches.wrapping_add(
+            queries
+                .iter()
+                .filter(|path| direct_names.binary_search(&path.file_name()).is_ok())
+                .count() as u64,
+        );
+    }
+    matches
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_nested_membership_linear(
+    direct_dirs: &[PathBuf],
+    queries: &[PathBuf],
+    rounds: usize,
+) -> u64 {
+    let mut matches = 0u64;
+    for _ in 0..rounds {
+        matches = matches.wrapping_add(
+            queries
+                .iter()
+                .filter(|query| direct_dirs.iter().any(|path| path == *query))
+                .count() as u64,
+        );
+    }
+    matches
+}
+
+#[cfg(feature = "bench-support")]
+pub struct BenchmarkScanMapFixture {
+    packs: Vec<PackScan>,
+    dst_songs: Vec<SongScan>,
+    src_songs: Vec<SongScan>,
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_scan_map_fixture(
+    pack_count: usize,
+    group_count: usize,
+    song_count: usize,
+) -> BenchmarkScanMapFixture {
+    let group_count = group_count.max(1);
+    let mut pack_order = (0..pack_count).collect::<Vec<_>>();
+    let mut shuffle = 0x85eb_ca6bu32;
+    for index in (1..pack_order.len()).rev() {
+        shuffle = shuffle.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        pack_order.swap(index, shuffle as usize % (index + 1));
+    }
+    let packs = pack_order
+        .into_iter()
+        .map(|index| {
+            let group = index % group_count;
+            let prefix = ["Pack", "pack"][index / group_count % 2];
+            let group_name = format!("{prefix} {group:05}");
+            let dir = PathBuf::from("Songs").join("Series").join(&group_name);
+            PackScan {
+                dir,
+                group_name: group_name.clone(),
+                display_title: group_name.clone(),
+                sort_title: group_name.clone(),
+                translit_title: group_name,
+                series: String::new(),
+                folder_series: "Series".to_string(),
+                year: 0,
+                sync_pref: SyncPref::Default,
+                banner_path: None,
+                songs: Vec::new(),
+                version: 0,
+                has_pack_ini: false,
+                background_path: None,
+            }
+        })
+        .collect();
+    let make_song = |index: usize, lowercase: bool| {
+        let name = if lowercase {
+            format!("song {index:05}")
+        } else {
+            format!("Song {index:05}")
+        };
+        let dir = PathBuf::from("Songs").join("Pack").join(name);
+        SongScan {
+            simfile: dir.join("chart.ssc"),
+            dir,
+        }
+    };
+    let dst_songs = (0..song_count)
+        .map(|index| make_song(index, false))
+        .collect();
+    let src_songs = (song_count / 2..song_count + song_count / 2)
+        .map(|index| make_song(index, true))
+        .collect();
+    BenchmarkScanMapFixture {
+        packs,
+        dst_songs,
+        src_songs,
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_pack_groups_legacy(fixture: &BenchmarkScanMapFixture, rounds: usize) -> u64 {
+    let mut checksum = 0u64;
+    for _ in 0..rounds {
+        let mut groups = HashMap::<String, usize>::with_capacity(fixture.packs.len());
+        for (index, pack) in fixture.packs.iter().enumerate() {
+            let key = ci_key(&pack.group_name);
+            let representative = if key.is_empty() {
+                index
+            } else {
+                *groups.entry(key).or_insert(index)
+            };
+            checksum = checksum
+                .wrapping_mul(131)
+                .wrapping_add(representative as u64);
+        }
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_pack_groups_current(fixture: &BenchmarkScanMapFixture, rounds: usize) -> u64 {
+    let mut checksum = 0u64;
+    for _ in 0..rounds {
+        let representatives = pack_group_representatives(&fixture.packs);
+        for (index, pack) in fixture.packs.iter().enumerate() {
+            let representative = if pack.group_name.trim().is_empty() {
+                index
+            } else {
+                representatives[index]
+            };
+            checksum = checksum
+                .wrapping_mul(131)
+                .wrapping_add(representative as u64);
+        }
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_song_slots_legacy(fixture: &BenchmarkScanMapFixture, rounds: usize) -> u64 {
+    let mut checksum = 0u64;
+    for _ in 0..rounds {
+        let mut slots = HashMap::with_capacity(fixture.dst_songs.len() + fixture.src_songs.len());
+        for (index, song) in fixture.dst_songs.iter().enumerate() {
+            slots.insert(song_scan_key(song), index);
+        }
+        for (index, song) in fixture.src_songs.iter().enumerate() {
+            let key = song_scan_key(song);
+            let next = fixture.dst_songs.len() + index;
+            let slot = *slots.entry(key).or_insert(next);
+            checksum = checksum.wrapping_mul(131).wrapping_add(slot as u64);
+        }
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_song_slots_current(fixture: &BenchmarkScanMapFixture, rounds: usize) -> u64 {
+    let mut checksum = 0u64;
+    for _ in 0..rounds {
+        for slot in song_merge_targets(&fixture.dst_songs, &fixture.src_songs) {
+            checksum = checksum.wrapping_mul(131).wrapping_add(slot as u64);
+        }
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_scan_maps_legacy(fixture: &BenchmarkScanMapFixture) -> u64 {
+    let mut packs = fixture.packs.clone();
+    let mut failures = Vec::new();
+    reject_series_collisions_legacy(&mut packs, &mut failures);
+    scan_map_checksum(&merge_pack_scans_legacy(packs), &failures)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_scan_maps_current(fixture: &BenchmarkScanMapFixture) -> u64 {
+    let mut packs = fixture.packs.clone();
+    let mut failures = Vec::new();
+    reject_series_collisions(&mut packs, &mut failures);
+    scan_map_checksum(&merge_pack_scans(packs), &failures)
+}
+
+#[cfg(feature = "bench-support")]
+fn scan_map_checksum(packs: &[PackScan], failures: &[ScanFailure]) -> u64 {
+    packs.iter().fold(failures.len() as u64, |checksum, pack| {
+        checksum
+            .wrapping_mul(131)
+            .wrapping_add(pack.group_name.len() as u64)
+            .wrapping_mul(131)
+            .wrapping_add(pack.songs.len() as u64)
+    })
+}
+
+#[cfg(feature = "bench-support")]
 fn benchmark_nested_scan(
     pack_dir: &Path,
     scan_nested: fn(&Path, &[SongScan], &mut Vec<ScanFailure>) -> Vec<PackScan>,
@@ -764,6 +1060,69 @@ fn benchmark_nested_scan(
 }
 
 fn reject_series_collisions(packs: &mut Vec<PackScan>, failures: &mut Vec<ScanFailure>) {
+    let representatives = pack_group_representatives(packs);
+    let mut rejected = vec![false; packs.len()];
+    for (index, pack) in packs.iter().enumerate() {
+        let representative = representatives[index];
+        let known = &packs[representative];
+        if index != representative && !ci_eq(&pack.folder_series, &known.folder_series) {
+            rejected[representative] = true;
+            failures.push(ScanFailure {
+                path: pack.dir.clone(),
+                error: format!(
+                    "pack folder '{}' also exists under a different filesystem series at '{}'",
+                    pack.group_name,
+                    known.dir.display()
+                ),
+            });
+        }
+    }
+    let mut index = 0;
+    packs.retain(|_| {
+        let keep = !rejected[representatives[index]];
+        index += 1;
+        keep
+    });
+}
+
+fn pack_group_representatives(packs: &[PackScan]) -> Vec<usize> {
+    let hashes = packs
+        .iter()
+        .map(|pack| ci_hash(&pack.group_name))
+        .collect::<Vec<_>>();
+    let mut order = (0..packs.len()).collect::<Vec<_>>();
+    order.sort_unstable_by(|&left, &right| {
+        hashes[left]
+            .cmp(&hashes[right])
+            .then_with(|| ci_cmp(&packs[left].group_name, &packs[right].group_name))
+    });
+    let mut representatives = vec![0; packs.len()];
+    let mut start = 0;
+    while start < order.len() {
+        let mut end = start + 1;
+        while end < order.len()
+            && hashes[order[start]] == hashes[order[end]]
+            && ci_eq(
+                &packs[order[start]].group_name,
+                &packs[order[end]].group_name,
+            )
+        {
+            end += 1;
+        }
+        let representative = *order[start..end]
+            .iter()
+            .min()
+            .expect("group run is non-empty");
+        for &index in &order[start..end] {
+            representatives[index] = representative;
+        }
+        start = end;
+    }
+    representatives
+}
+
+#[cfg(feature = "bench-support")]
+fn reject_series_collisions_legacy(packs: &mut Vec<PackScan>, failures: &mut Vec<ScanFailure>) {
     let mut locations = HashMap::<String, (String, PathBuf)>::with_capacity(packs.len());
     let mut rejected = Vec::new();
     for pack in packs.iter() {
@@ -825,10 +1184,30 @@ fn folder_series_for_pack(pack_dir: &Path, song_roots: &[PathBuf]) -> String {
         .unwrap_or_default()
 }
 
-pub fn merge_pack_scans(mut packs: Vec<PackScan>) -> Vec<PackScan> {
+pub fn merge_pack_scans(packs: Vec<PackScan>) -> Vec<PackScan> {
+    let mut representatives = pack_group_representatives(&packs);
+    let mut merged = Vec::with_capacity(packs.len());
+    for (index, pack) in packs.into_iter().enumerate() {
+        if pack.group_name.trim().is_empty() {
+            merged.push(pack);
+            continue;
+        }
+        let representative = representatives[index];
+        if representative == index {
+            representatives[representative] = merged.len();
+            merged.push(pack);
+        } else {
+            let slot = representatives[representative];
+            merge_pack_scan(&mut merged[slot], pack);
+        }
+    }
+    merged
+}
+
+#[cfg(feature = "bench-support")]
+fn merge_pack_scans_legacy(mut packs: Vec<PackScan>) -> Vec<PackScan> {
     let mut merged = Vec::with_capacity(packs.len());
     let mut pack_slots = HashMap::with_capacity(packs.len());
-
     for pack in packs.drain(..) {
         let key = ci_key(&pack.group_name);
         if key.is_empty() {
@@ -836,14 +1215,13 @@ pub fn merge_pack_scans(mut packs: Vec<PackScan>) -> Vec<PackScan> {
             continue;
         }
         if let Some(slot) = pack_slots.get(&key).copied() {
-            merge_pack_scan(&mut merged[slot], pack);
+            merge_pack_scan_legacy(&mut merged[slot], pack);
         } else {
             let slot = merged.len();
             pack_slots.insert(key, slot);
             merged.push(pack);
         }
     }
-
     merged
 }
 
@@ -949,8 +1327,9 @@ pub fn replace_song_packs(
         return;
     }
     song_cache.retain(|pack| {
-        let key = ci_key(&pack.group_name);
-        !pack_keys.iter().any(|existing| existing == &key)
+        !pack_keys
+            .iter()
+            .any(|existing| ci_eq(&pack.group_name, existing))
     });
     song_cache.append(&mut reloaded);
     sort_song_packs(song_cache);
@@ -1484,6 +1863,28 @@ fn ascii_case_insensitive_cmp(left: &str, right: &str) -> std::cmp::Ordering {
 }
 
 #[inline]
+fn ci_cmp(left: &str, right: &str) -> std::cmp::Ordering {
+    ascii_case_insensitive_cmp(left.trim(), right.trim())
+}
+
+#[inline]
+fn ci_eq(left: &str, right: &str) -> bool {
+    ci_cmp(left, right).is_eq()
+}
+
+#[inline]
+fn ascii_ci_hash(text: &str) -> u64 {
+    text.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+        (hash ^ u64::from(byte.to_ascii_lowercase())).wrapping_mul(0x100_0000_01b3)
+    })
+}
+
+#[inline]
+fn ci_hash(text: &str) -> u64 {
+    ascii_ci_hash(text.trim())
+}
+
+#[inline]
 fn itgmania_sort_bytes(text: &str) -> impl Iterator<Item = u8> + '_ {
     let bytes = text.as_bytes();
     let bytes = bytes.strip_prefix(b".").unwrap_or(bytes);
@@ -1546,6 +1947,7 @@ fn ci_key(text: &str) -> String {
     text.trim().to_ascii_lowercase()
 }
 
+#[cfg(feature = "bench-support")]
 fn song_scan_key(song: &SongScan) -> String {
     song.dir
         .file_name()
@@ -1555,7 +1957,120 @@ fn song_scan_key(song: &SongScan) -> String {
         .unwrap_or_else(|| song.dir.to_string_lossy().to_ascii_lowercase())
 }
 
+fn song_scan_key_cmp(left: &SongScan, right: &SongScan) -> std::cmp::Ordering {
+    let left = song_scan_key_ref(left);
+    let right = song_scan_key_ref(right);
+    ascii_case_insensitive_cmp(left.as_ref(), right.as_ref())
+}
+
+fn song_scan_key_ref(song: &SongScan) -> std::borrow::Cow<'_, str> {
+    if let Some(name) = song
+        .dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        std::borrow::Cow::Borrowed(name)
+    } else {
+        song.dir.to_string_lossy()
+    }
+}
+
 fn merge_pack_scan(dst: &mut PackScan, mut src: PackScan) {
+    dst.dir.clone_from(&src.dir);
+    if src.has_pack_ini {
+        dst.display_title.clone_from(&src.display_title);
+        dst.sort_title.clone_from(&src.sort_title);
+        dst.translit_title.clone_from(&src.translit_title);
+        dst.series.clone_from(&src.series);
+        dst.year = src.year;
+        dst.version = src.version;
+        dst.has_pack_ini = true;
+        dst.sync_pref = src.sync_pref;
+    }
+    if src.banner_path.is_some() {
+        dst.banner_path.clone_from(&src.banner_path);
+    }
+    if src.background_path.is_some() {
+        dst.background_path.clone_from(&src.background_path);
+    }
+
+    let dst_len = dst.songs.len();
+    let mut targets = song_merge_targets(&dst.songs, &src.songs);
+    for (src_index, song) in src.songs.drain(..).enumerate() {
+        let target = targets[src_index];
+        if target < dst_len {
+            dst.songs[target] = song;
+            continue;
+        }
+        let representative = target - dst_len;
+        if representative == src_index {
+            targets[representative] = dst.songs.len();
+            dst.songs.push(song);
+        } else {
+            dst.songs[targets[representative]] = song;
+        }
+    }
+}
+
+fn song_merge_targets(dst: &[SongScan], src: &[SongScan]) -> Vec<usize> {
+    let dst_len = dst.len();
+    if src.is_empty() {
+        return Vec::new();
+    }
+    let get = |index: usize| {
+        if index < dst_len {
+            &dst[index]
+        } else {
+            &src[index - dst_len]
+        }
+    };
+    let total = dst_len + src.len();
+    let capacity = total
+        .max(1)
+        .checked_next_power_of_two()
+        .and_then(|capacity| capacity.checked_mul(2))
+        .expect("song slot table size exceeds address space");
+    let mask = capacity - 1;
+    let mut table = vec![usize::MAX; capacity];
+    let mut targets = vec![0; src.len()];
+    for index in 0..dst_len {
+        let key = song_scan_key_ref(get(index));
+        let mut slot = ascii_ci_hash(key.as_ref()) as usize & mask;
+        loop {
+            let stored = table[slot];
+            if stored == usize::MAX || song_scan_key_cmp(get(stored), get(index)).is_eq() {
+                // Match the legacy map: the last duplicate destination wins.
+                table[slot] = index;
+                break;
+            }
+            slot = (slot + 1) & mask;
+        }
+    }
+    for (src_index, target) in targets.iter_mut().enumerate() {
+        let index = dst_len + src_index;
+        let key = song_scan_key_ref(get(index));
+        let mut slot = ascii_ci_hash(key.as_ref()) as usize & mask;
+        loop {
+            let stored = table[slot];
+            if stored == usize::MAX {
+                table[slot] = index;
+                *target = index;
+                break;
+            }
+            if song_scan_key_cmp(get(stored), get(index)).is_eq() {
+                *target = stored;
+                break;
+            }
+            slot = (slot + 1) & mask;
+        }
+    }
+    targets
+}
+
+#[cfg(feature = "bench-support")]
+fn merge_pack_scan_legacy(dst: &mut PackScan, mut src: PackScan) {
     dst.dir.clone_from(&src.dir);
     if src.has_pack_ini {
         dst.display_title.clone_from(&src.display_title);
@@ -2015,6 +2530,68 @@ mod tests {
                 .any(|song| song.dir.starts_with(&extra))
         );
 
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn merge_pack_scans_preserves_duplicate_slot_precedence() {
+        let root = test_dir("merge-pack-duplicate-precedence");
+        let base = root.join("base");
+        let extra = root.join("extra");
+        let packs = vec![
+            pack_scan("Pack", "Pack", false, None, &["Dupe", "dupe"], &base),
+            pack_scan("pack", "pack", false, None, &["DUPE", "New", "new"], &extra),
+        ];
+
+        let merged = merge_pack_scans(packs);
+        let dirs = merged[0]
+            .songs
+            .iter()
+            .map(|song| song.dir.clone())
+            .collect::<Vec<_>>();
+
+        assert_eq!(dirs.len(), 3);
+        assert_eq!(dirs[0], base.join("Pack").join("Dupe"));
+        assert_eq!(dirs[1], extra.join("pack").join("DUPE"));
+        assert_eq!(dirs[2], extra.join("pack").join("new"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn series_collision_rejection_preserves_first_path_and_failure_order() {
+        let root = test_dir("series-collision-order");
+        let mut first = pack_scan("Shared", "Shared", false, None, &[], &root.join("first"));
+        first.folder_series = "Series A".to_string();
+        let mut other = pack_scan("Other", "Other", false, None, &[], &root.join("other"));
+        other.folder_series = "Series C".to_string();
+        let mut second = pack_scan("shared", "shared", false, None, &[], &root.join("second"));
+        second.folder_series = "Series B".to_string();
+        let mut third = pack_scan("SHARED", "SHARED", false, None, &[], &root.join("third"));
+        third.folder_series = "Series B".to_string();
+        let expected_paths = [second.dir.clone(), third.dir.clone()];
+        let first_path = first.dir.clone();
+        let mut packs = vec![first, other, second, third];
+        let mut failures = Vec::new();
+
+        reject_series_collisions(&mut packs, &mut failures);
+
+        assert_eq!(packs.len(), 1);
+        assert_eq!(packs[0].group_name, "Other");
+        assert_eq!(
+            failures
+                .iter()
+                .map(|failure| failure.path.as_path())
+                .collect::<Vec<_>>(),
+            expected_paths
+                .iter()
+                .map(PathBuf::as_path)
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            failures
+                .iter()
+                .all(|failure| failure.error.contains(&first_path.display().to_string()))
+        );
         let _ = fs::remove_dir_all(root);
     }
 

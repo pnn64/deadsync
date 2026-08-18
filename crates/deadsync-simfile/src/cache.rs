@@ -13,6 +13,7 @@ use deadsync_rules::timing::{
     default_combos, default_tickcounts, default_time_signatures,
 };
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "bench-support")]
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
@@ -1634,17 +1635,47 @@ fn collect_requested_cached_charts(
     mut load_chart: impl FnMut(usize) -> Option<GameplayChartData>,
 ) -> Option<Vec<GameplayChartData>> {
     let mut charts = Vec::<GameplayChartData>::with_capacity(requested_chart_ixs.len());
-    let mut loaded_positions = HashMap::<usize, usize>::with_capacity(requested_chart_ixs.len());
-    for &chart_ix in requested_chart_ixs {
-        if let Some(&loaded_position) = loaded_positions.get(&chart_ix) {
+    for (request_position, &chart_ix) in requested_chart_ixs.iter().enumerate() {
+        if let Some(loaded_position) = requested_chart_ixs[..request_position]
+            .iter()
+            .position(|&loaded_ix| loaded_ix == chart_ix)
+        {
             charts.push(charts.get(loaded_position)?.clone());
             continue;
         }
         let chart = load_chart(chart_ix)?;
-        loaded_positions.insert(chart_ix, charts.len());
         charts.push(chart);
     }
     Some(charts)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_chart_requests_legacy(requests: &[usize], rounds: usize) -> u64 {
+    let mut checksum = 0u64;
+    for _ in 0..rounds {
+        let mut positions = HashMap::<usize, usize>::with_capacity(requests.len());
+        for &chart_ix in requests {
+            let next = positions.len();
+            let position = *positions.entry(chart_ix).or_insert(next);
+            checksum = checksum.wrapping_mul(131).wrapping_add(position as u64);
+        }
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_chart_requests_current(requests: &[usize], rounds: usize) -> u64 {
+    let mut checksum = 0u64;
+    for _ in 0..rounds {
+        for (request_position, &chart_ix) in requests.iter().enumerate() {
+            let position = requests[..request_position]
+                .iter()
+                .position(|&loaded_ix| loaded_ix == chart_ix)
+                .unwrap_or(request_position);
+            checksum = checksum.wrapping_mul(131).wrapping_add(position as u64);
+        }
+    }
+    checksum
 }
 
 pub struct GameplayChartLoadOptions<'a> {
@@ -2563,6 +2594,36 @@ mod tests {
         assert_eq!(
             build_requested_gameplay_charts(&song, &[1], 0.0).unwrap_err(),
             "Chart index 1 out of range"
+        );
+    }
+
+    #[test]
+    fn duplicate_cached_chart_requests_load_once_and_preserve_order() {
+        let loads = std::cell::Cell::new(0usize);
+        let charts = collect_requested_cached_charts(&[2, 2, 1, 2], |chart_ix| {
+            loads.set(loads.get() + 1);
+            let segments = TimingSegments::default();
+            Some(build_gameplay_chart_from_payload(
+                CachedChartPayload {
+                    notes: vec![chart_ix as u8],
+                    parsed_notes: Vec::new(),
+                    row_to_beat: Vec::new(),
+                    timing_segments: CachedTimingSegments::from(&segments),
+                    chart_attacks: None,
+                },
+                0.0,
+                0.0,
+            ))
+        })
+        .unwrap();
+
+        assert_eq!(loads.get(), 2);
+        assert_eq!(
+            charts
+                .iter()
+                .map(|chart| chart.notes.as_slice())
+                .collect::<Vec<_>>(),
+            [&[2][..], &[2][..], &[1][..], &[2][..],]
         );
     }
 

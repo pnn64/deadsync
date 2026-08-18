@@ -1,6 +1,8 @@
 use deadsync_chart::SongData;
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+#[cfg(feature = "bench-support")]
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -380,24 +382,58 @@ fn song_group_name(song: &SongData) -> Option<String> {
 
 fn genre_movie_whitelist(group_dir: &Path, genre: &str) -> Option<HashSet<String>> {
     let path = group_dir.join(BACKGROUND_MAPPING_FILE);
-    let sections = parse_ini_sections(&fs::read_to_string(path).ok()?);
-    let genre_section = sections
-        .get("GenreToSection")?
-        .iter()
-        .find(|(key, _)| key.eq_ignore_ascii_case(genre.trim()))?
-        .1
-        .trim()
-        .to_owned();
-    let section = sections.get(genre_section.as_str())?;
-    let out = section
-        .iter()
-        .map(|(key, _)| key.trim().to_owned())
-        .filter(|key| !key.is_empty())
-        .collect::<HashSet<_>>();
+    genre_whitelist_from_text(&fs::read_to_string(path).ok()?, genre)
+}
+
+fn genre_whitelist_from_text(text: &str, genre: &str) -> Option<HashSet<String>> {
+    let genre_section = find_ini_value(text, "GenreToSection", genre.trim())?.trim();
+    let out = ini_section_keys(text, genre_section);
     (!out.is_empty()).then_some(out)
 }
 
-fn parse_ini_sections(text: &str) -> HashMap<String, Vec<(String, String)>> {
+fn find_ini_value<'a>(text: &'a str, section: &str, key: &str) -> Option<&'a str> {
+    let mut in_section = false;
+    for line in text.lines().map(str::trim) {
+        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            in_section = line[1..line.len() - 1].trim() == section;
+            continue;
+        }
+        if in_section
+            && let Some((candidate, value)) = line.split_once('=')
+            && candidate.trim().eq_ignore_ascii_case(key)
+        {
+            return Some(value.trim());
+        }
+    }
+    None
+}
+
+fn ini_section_keys(text: &str, section: &str) -> HashSet<String> {
+    let mut in_section = false;
+    let mut keys = HashSet::new();
+    for line in text.lines().map(str::trim) {
+        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            in_section = line[1..line.len() - 1].trim() == section;
+            continue;
+        }
+        if in_section && let Some((key, _)) = line.split_once('=') {
+            let key = key.trim();
+            if !key.is_empty() {
+                keys.insert(key.to_owned());
+            }
+        }
+    }
+    keys
+}
+
+#[cfg(feature = "bench-support")]
+fn parse_ini_sections_legacy(text: &str) -> HashMap<String, Vec<(String, String)>> {
     let mut sections = HashMap::<String, Vec<(String, String)>>::new();
     let mut current = String::new();
     for line in text.lines() {
@@ -421,6 +457,52 @@ fn parse_ini_sections(text: &str) -> HashMap<String, Vec<(String, String)>> {
         }
     }
     sections
+}
+
+#[cfg(feature = "bench-support")]
+fn genre_whitelist_from_text_legacy(text: &str, genre: &str) -> Option<HashSet<String>> {
+    let sections = parse_ini_sections_legacy(text);
+    let genre_section = sections
+        .get("GenreToSection")?
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case(genre.trim()))?
+        .1
+        .trim();
+    let out = sections
+        .get(genre_section)?
+        .iter()
+        .map(|(key, _)| key.trim().to_owned())
+        .filter(|key| !key.is_empty())
+        .collect::<HashSet<_>>();
+    (!out.is_empty()).then_some(out)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_genre_whitelist_legacy(text: &str, genre: &str, rounds: usize) -> u64 {
+    benchmark_genre_whitelist(text, genre, rounds, genre_whitelist_from_text_legacy)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_genre_whitelist_current(text: &str, genre: &str, rounds: usize) -> u64 {
+    benchmark_genre_whitelist(text, genre, rounds, genre_whitelist_from_text)
+}
+
+#[cfg(feature = "bench-support")]
+fn benchmark_genre_whitelist(
+    text: &str,
+    genre: &str,
+    rounds: usize,
+    parse: fn(&str, &str) -> Option<HashSet<String>>,
+) -> u64 {
+    let mut checksum = 0u64;
+    for _ in 0..rounds {
+        let whitelist = parse(text, genre).unwrap_or_default();
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(whitelist.len() as u64)
+            .wrapping_add(whitelist.iter().map(|key| key.len() as u64).sum::<u64>());
+    }
+    checksum
 }
 
 pub fn is_song_art_image(path: &Path) -> bool {
@@ -609,6 +691,28 @@ bright.ogv=1
 
         assert_eq!(paths, vec![bright]);
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn genre_whitelist_supports_forward_and_repeated_sections() {
+        let text = "\
+[Bright]
+first.mp4=1
+
+[GenreToSection]
+Tech=Bright
+
+[Bright]
+second.ogv=1
+";
+
+        assert_eq!(
+            genre_whitelist_from_text(text, "tech"),
+            Some(HashSet::from([
+                "first.mp4".to_string(),
+                "second.ogv".to_string(),
+            ]))
+        );
     }
 
     #[test]

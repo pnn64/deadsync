@@ -2,12 +2,22 @@ use deadsync_simfile::app_runtime::{
     benchmark_parse_options_hoisted, benchmark_parse_options_per_song,
 };
 use deadsync_simfile::cache::{
-    benchmark_cache_probes_current, benchmark_cache_probes_legacy, benchmark_runtime_debug_logs,
-    benchmark_song_cache_paths_current, benchmark_song_cache_paths_legacy,
+    benchmark_cache_probes_current, benchmark_cache_probes_legacy,
+    benchmark_chart_requests_current, benchmark_chart_requests_legacy,
+    benchmark_runtime_debug_logs, benchmark_song_cache_paths_current,
+    benchmark_song_cache_paths_legacy,
+};
+use deadsync_simfile::media::{
+    benchmark_genre_whitelist_current, benchmark_genre_whitelist_legacy,
 };
 use deadsync_simfile::scan::{
     benchmark_child_dirs_current, benchmark_child_dirs_legacy, benchmark_legacy_song_workers,
-    benchmark_nested_scan_current, benchmark_nested_scan_legacy, benchmark_pooled_song_workers,
+    benchmark_nested_membership_hash, benchmark_nested_membership_linear,
+    benchmark_nested_membership_sorted_names, benchmark_nested_membership_sorted_paths,
+    benchmark_nested_scan_current, benchmark_nested_scan_hash, benchmark_nested_scan_legacy,
+    benchmark_nested_scan_linear, benchmark_pack_groups_current, benchmark_pack_groups_legacy,
+    benchmark_pooled_song_workers, benchmark_scan_map_fixture, benchmark_scan_maps_current,
+    benchmark_scan_maps_legacy, benchmark_song_slots_current, benchmark_song_slots_legacy,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::fs;
@@ -23,6 +33,13 @@ const SONG_COUNT: usize = 2_805;
 const DISCOVERY_DIRS: usize = 2_048;
 const DISCOVERY_FILES: usize = 64;
 const NESTED_SCAN_SONGS: usize = 512;
+const MEMBERSHIP_ROUNDS: usize = 32;
+const SCAN_MAP_PACKS: usize = 1_024;
+const SCAN_MAP_GROUPS: usize = 512;
+const SCAN_MAP_SONGS: usize = 512;
+const SCAN_MAP_ROUNDS: usize = 64;
+const CHART_REQUEST_ROUNDS: usize = 65_536;
+const MEDIA_MAP_ROUNDS: usize = 2_048;
 const CACHE_PATH_OPS: usize = 2_048;
 const CACHE_PROBE_OPS: usize = 2_048;
 const SAMPLES: usize = 9;
@@ -176,6 +193,18 @@ fn measure(item_count: usize, mut op: impl FnMut() -> u64) -> BenchResult {
 }
 
 fn main() {
+    if std::env::args().any(|arg| arg == "scan-maps") {
+        bench_scan_maps();
+        return;
+    }
+    if std::env::args().any(|arg| arg == "chart-requests") {
+        bench_chart_requests();
+        return;
+    }
+    if std::env::args().any(|arg| arg == "media-map") {
+        bench_media_map();
+        return;
+    }
     let discovery_root = discovery_fixture();
     let old_checksum = benchmark_child_dirs_legacy(&discovery_root).unwrap();
     let new_checksum = benchmark_child_dirs_current(&discovery_root).unwrap();
@@ -196,18 +225,77 @@ fn main() {
     let nested_root = nested_scan_fixture();
     let old_checksum = benchmark_nested_scan_legacy(&nested_root).unwrap();
     let new_checksum = benchmark_nested_scan_current(&nested_root).unwrap();
+    let hash_checksum = benchmark_nested_scan_hash(&nested_root).unwrap();
+    let linear_checksum = benchmark_nested_scan_linear(&nested_root).unwrap();
     assert_eq!(old_checksum, new_checksum, "nested-pack detection diverged");
+    assert_eq!(old_checksum, hash_checksum, "hash membership diverged");
+    assert_eq!(old_checksum, linear_checksum, "linear membership diverged");
     let old = measure(NESTED_SCAN_SONGS, || {
         benchmark_nested_scan_legacy(&nested_root).unwrap()
+    });
+    let hash = measure(NESTED_SCAN_SONGS, || {
+        benchmark_nested_scan_hash(&nested_root).unwrap()
     });
     let new = measure(NESTED_SCAN_SONGS, || {
         benchmark_nested_scan_current(&nested_root).unwrap()
     });
-    black_box(old.checksum ^ new.checksum);
+    let linear = measure(NESTED_SCAN_SONGS, || {
+        benchmark_nested_scan_linear(&nested_root).unwrap()
+    });
+    black_box(old.checksum ^ hash.checksum ^ new.checksum ^ linear.checksum);
     println!("nested-pack validation ({NESTED_SCAN_SONGS} direct songs)");
     print_result("old", NESTED_SCAN_SONGS, &old);
+    print_result("hash", NESTED_SCAN_SONGS, &hash);
     print_result("new", NESTED_SCAN_SONGS, &new);
+    print_result("linear", NESTED_SCAN_SONGS, &linear);
+    println!("  legacy -> new");
     print_change(&old, &new);
+    println!("  hash -> new");
+    print_change(&hash, &new);
+
+    let mut direct_dirs = (0..NESTED_SCAN_SONGS)
+        .map(|index| nested_root.join(format!("Song {index:05}")))
+        .collect::<Vec<_>>();
+    let mut shuffle = 0x9e37_79b9u32;
+    for index in (1..direct_dirs.len()).rev() {
+        shuffle = shuffle.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        direct_dirs.swap(index, shuffle as usize % (index + 1));
+    }
+    let mut queries = direct_dirs.clone();
+    queries.sort_unstable();
+    let membership_items = NESTED_SCAN_SONGS * MEMBERSHIP_ROUNDS;
+    let hash_checksum = benchmark_nested_membership_hash(&direct_dirs, &queries, MEMBERSHIP_ROUNDS);
+    let sorted_path_checksum =
+        benchmark_nested_membership_sorted_paths(&direct_dirs, &queries, MEMBERSHIP_ROUNDS);
+    let sorted_name_checksum =
+        benchmark_nested_membership_sorted_names(&direct_dirs, &queries, MEMBERSHIP_ROUNDS);
+    let linear_checksum =
+        benchmark_nested_membership_linear(&direct_dirs, &queries, MEMBERSHIP_ROUNDS);
+    assert_eq!(hash_checksum, sorted_path_checksum);
+    assert_eq!(hash_checksum, sorted_name_checksum);
+    assert_eq!(hash_checksum, linear_checksum);
+    let hash = measure(membership_items, || {
+        benchmark_nested_membership_hash(&direct_dirs, &queries, MEMBERSHIP_ROUNDS)
+    });
+    let sorted_paths = measure(membership_items, || {
+        benchmark_nested_membership_sorted_paths(&direct_dirs, &queries, MEMBERSHIP_ROUNDS)
+    });
+    let sorted_names = measure(membership_items, || {
+        benchmark_nested_membership_sorted_names(&direct_dirs, &queries, MEMBERSHIP_ROUNDS)
+    });
+    let linear = measure(membership_items, || {
+        benchmark_nested_membership_linear(&direct_dirs, &queries, MEMBERSHIP_ROUNDS)
+    });
+    black_box(hash.checksum ^ sorted_paths.checksum ^ sorted_names.checksum ^ linear.checksum);
+    println!("nested-song membership ({membership_items} lookups including setup)");
+    print_result("hash", membership_items, &hash);
+    print_result("paths", membership_items, &sorted_paths);
+    print_result("names", membership_items, &sorted_names);
+    print_result("linear", membership_items, &linear);
+
+    bench_scan_maps();
+    bench_chart_requests();
+    bench_media_map();
 
     let simfile_path = nested_root.join("Song 00000").join("chart.sm");
     let cache_dir = nested_root.join("cache");
@@ -299,6 +387,115 @@ fn main() {
 
     fs::remove_dir_all(discovery_root).unwrap();
     fs::remove_dir_all(nested_root).unwrap();
+}
+
+fn bench_scan_maps() {
+    let fixture = benchmark_scan_map_fixture(SCAN_MAP_PACKS, SCAN_MAP_GROUPS, SCAN_MAP_SONGS);
+    assert_eq!(
+        benchmark_scan_maps_legacy(&fixture),
+        benchmark_scan_maps_current(&fixture),
+        "scan map behavior diverged"
+    );
+    let pack_items = SCAN_MAP_PACKS * SCAN_MAP_ROUNDS;
+    assert_eq!(
+        benchmark_pack_groups_legacy(&fixture, SCAN_MAP_ROUNDS),
+        benchmark_pack_groups_current(&fixture, SCAN_MAP_ROUNDS),
+        "pack grouping diverged"
+    );
+    black_box(measure(pack_items, || {
+        benchmark_pack_groups_legacy(&fixture, SCAN_MAP_ROUNDS)
+    }));
+    black_box(measure(pack_items, || {
+        benchmark_pack_groups_current(&fixture, SCAN_MAP_ROUNDS)
+    }));
+    let old = measure(pack_items, || {
+        benchmark_pack_groups_legacy(&fixture, SCAN_MAP_ROUNDS)
+    });
+    let new = measure(pack_items, || {
+        benchmark_pack_groups_current(&fixture, SCAN_MAP_ROUNDS)
+    });
+    black_box(old.checksum ^ new.checksum);
+    println!("pack group indexing ({pack_items} entries including setup)");
+    print_result("hash", pack_items, &old);
+    print_result("compact", pack_items, &new);
+    print_change(&old, &new);
+
+    let song_items = SCAN_MAP_SONGS * SCAN_MAP_ROUNDS;
+    assert_eq!(
+        benchmark_song_slots_legacy(&fixture, SCAN_MAP_ROUNDS),
+        benchmark_song_slots_current(&fixture, SCAN_MAP_ROUNDS),
+        "song slot mapping diverged"
+    );
+    black_box(measure(song_items, || {
+        benchmark_song_slots_legacy(&fixture, SCAN_MAP_ROUNDS)
+    }));
+    black_box(measure(song_items, || {
+        benchmark_song_slots_current(&fixture, SCAN_MAP_ROUNDS)
+    }));
+    let old = measure(song_items, || {
+        benchmark_song_slots_legacy(&fixture, SCAN_MAP_ROUNDS)
+    });
+    let new = measure(song_items, || {
+        benchmark_song_slots_current(&fixture, SCAN_MAP_ROUNDS)
+    });
+    black_box(old.checksum ^ new.checksum);
+    println!("merged-song slot indexing ({song_items} source songs including setup)");
+    print_result("hash", song_items, &old);
+    print_result("flat", song_items, &new);
+    print_change(&old, &new);
+}
+
+fn bench_chart_requests() {
+    for requests in [&[0, 1][..], &[7, 7], &[0, 1, 2, 3]] {
+        let items = requests.len() * CHART_REQUEST_ROUNDS;
+        assert_eq!(
+            benchmark_chart_requests_legacy(requests, CHART_REQUEST_ROUNDS),
+            benchmark_chart_requests_current(requests, CHART_REQUEST_ROUNDS),
+            "chart request mapping diverged"
+        );
+        let old = measure(items, || {
+            benchmark_chart_requests_legacy(requests, CHART_REQUEST_ROUNDS)
+        });
+        let new = measure(items, || {
+            benchmark_chart_requests_current(requests, CHART_REQUEST_ROUNDS)
+        });
+        black_box(old.checksum ^ new.checksum);
+        println!("chart request indexing ({items} entries, request {requests:?})");
+        print_result("hash", items, &old);
+        print_result("linear", items, &new);
+        print_change(&old, &new);
+    }
+}
+
+fn bench_media_map() {
+    let mut text = String::new();
+    for section in 0..32 {
+        text.push_str(&format!("[Unused {section}]\n"));
+        for entry in 0..16 {
+            text.push_str(&format!("Unused-{section}-{entry}=Value-{entry}\n"));
+        }
+    }
+    text.push_str("[GenreToSection]\nTechno=Techno Movies\nRock=Rock Movies\n");
+    text.push_str("[Techno Movies]\n");
+    for entry in 0..64 {
+        text.push_str(&format!("Movie-{entry:03}=1\n"));
+    }
+    assert_eq!(
+        benchmark_genre_whitelist_legacy(&text, "techno", 1),
+        benchmark_genre_whitelist_current(&text, "techno", 1),
+        "genre whitelist parsing diverged"
+    );
+    let old = measure(MEDIA_MAP_ROUNDS, || {
+        benchmark_genre_whitelist_legacy(&text, "techno", MEDIA_MAP_ROUNDS)
+    });
+    let new = measure(MEDIA_MAP_ROUNDS, || {
+        benchmark_genre_whitelist_current(&text, "techno", MEDIA_MAP_ROUNDS)
+    });
+    black_box(old.checksum ^ new.checksum);
+    println!("genre movie INI lookup ({MEDIA_MAP_ROUNDS} parses)");
+    print_result("hash", MEDIA_MAP_ROUNDS, &old);
+    print_result("borrowed", MEDIA_MAP_ROUNDS, &new);
+    print_change(&old, &new);
 }
 
 fn discovery_fixture() -> std::path::PathBuf {
