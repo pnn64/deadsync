@@ -74,12 +74,25 @@ impl SongAnalyzer {
 /// Worker-owned temporary storage retained across cache misses in one scan.
 ///
 /// This is single-thread-only. The scan worker that creates it remains its sole
-/// owner and drops it when the worker exits, releasing the largest input and
-/// RSSP analysis buffers retained during that scan.
+/// owner and drops it when the worker exits, releasing the largest simfile,
+/// RSSP analysis, cache-header, and chart-payload buffers retained during that
+/// scan.
 #[derive(Default)]
 pub struct SongParseScratch {
     input: Vec<u8>,
     analysis: AnalysisScratch,
+    cache_header: Vec<u8>,
+    cache_payloads: Vec<Vec<u8>>,
+}
+
+impl SongParseScratch {
+    pub(crate) fn cache_header(&mut self) -> &mut Vec<u8> {
+        &mut self.cache_header
+    }
+
+    pub(crate) fn cache_payloads(&mut self) -> &mut Vec<Vec<u8>> {
+        &mut self.cache_payloads
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -162,7 +175,9 @@ fn parse_song_file_in_mode(
     if analyzer.prepared.options().mono_threshold != options.mono_threshold {
         return Err("Song analyzer does not match parse options".to_string());
     }
-    let SongParseScratch { input, analysis } = scratch;
+    let SongParseScratch {
+        input, analysis, ..
+    } = scratch;
     input.clear();
     let mut file = File::open(path).map_err(|e| format!("Could not read file: {e}"))?;
     #[cfg(any(test, feature = "bench-support"))]

@@ -31,6 +31,7 @@ use crate::song::{
 pub const SONG_CACHE_VERSION: u8 = 21;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
+const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
 
 #[derive(Debug)]
 pub enum SongCacheWriteError {
@@ -1718,11 +1719,22 @@ pub fn load_song_cache_file(
     cache_path: &Path,
     verify_freshness: bool,
 ) -> Option<SongData> {
-    let cached_song = load_cached_song(path, cache_path, verify_freshness)?;
+    let mut header = Vec::new();
+    load_song_cache_file_in(path, cache_path, verify_freshness, &mut header)
+}
+
+fn load_song_cache_file_in(
+    path: &Path,
+    cache_path: &Path,
+    verify_freshness: bool,
+    header: &mut Vec<u8>,
+) -> Option<SongData> {
+    let cached_song = load_cached_song_in(path, cache_path, verify_freshness, header)?;
     Some(build_song_meta_from_cache(cached_song.data))
 }
 
-fn encode_chart_payloads_borrowed(
+#[cfg(any(test, feature = "bench-support"))]
+fn encode_chart_payloads_separate(
     data: &SerializableSongData,
 ) -> Result<Vec<Vec<u8>>, bincode::error::EncodeError> {
     data.charts
@@ -1736,19 +1748,94 @@ fn encode_chart_payloads_borrowed(
         .collect()
 }
 
+fn encode_chart_payloads_reused<'a>(
+    data: &SerializableSongData,
+    payloads: &'a mut Vec<Vec<u8>>,
+) -> Result<&'a [Vec<u8>], bincode::error::EncodeError> {
+    if payloads.len() < data.charts.len() {
+        payloads.resize_with(data.charts.len(), Vec::new);
+    }
+    for (chart, encoded) in data.charts.iter().zip(payloads.iter_mut()) {
+        let payload = BorrowedCachedChartPayload::from(chart);
+        if encoded.capacity() == 0 {
+            *encoded = bincode::encode_to_vec(payload, bincode::config::standard())?;
+        } else {
+            bincode::encode_into_vec(payload, encoded, bincode::config::standard())?;
+        }
+    }
+    Ok(&payloads[..data.charts.len()])
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_chart_payload_encoding_baseline(
+    data: &SerializableSongData,
+    iterations: usize,
+) -> u64 {
+    let mut checksum = 0u64;
+    for _ in 0..iterations {
+        let payloads = encode_chart_payloads_separate(std::hint::black_box(data))
+            .expect("benchmark chart payloads should encode");
+        for payload in &payloads {
+            checksum = fold_payload_checksum(checksum, payload);
+        }
+        std::hint::black_box(payloads);
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_chart_payload_encoding_current(
+    data: &SerializableSongData,
+    iterations: usize,
+) -> u64 {
+    let mut checksum = 0u64;
+    let mut scratch = Vec::new();
+    for _ in 0..iterations {
+        let payloads = encode_chart_payloads_reused(std::hint::black_box(data), &mut scratch)
+            .expect("benchmark chart payloads should encode");
+        for payload in payloads {
+            checksum = fold_payload_checksum(checksum, payload);
+        }
+        std::hint::black_box(&scratch);
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+fn fold_payload_checksum(mut checksum: u64, bytes: &[u8]) -> u64 {
+    for &byte in bytes {
+        checksum = checksum.wrapping_mul(131).wrapping_add(u64::from(byte));
+    }
+    checksum
+}
+
 pub fn write_song_cache_file(
     cache_path: &Path,
     data: &SerializableSongData,
     global_offset_seconds: f32,
 ) -> Result<(), SongCacheWriteError> {
+    let mut payload_scratch = Vec::new();
+    write_song_cache_file_in(
+        cache_path,
+        data,
+        global_offset_seconds,
+        &mut payload_scratch,
+    )
+}
+
+fn write_song_cache_file_in(
+    cache_path: &Path,
+    data: &SerializableSongData,
+    global_offset_seconds: f32,
+    payload_scratch: &mut Vec<Vec<u8>>,
+) -> Result<(), SongCacheWriteError> {
     let directory_hash = get_song_directory_hash(Path::new(&data.simfile_path))
         .map_err(SongCacheWriteError::DirectoryHash)?;
-    let encoded_payloads =
-        encode_chart_payloads_borrowed(data).map_err(|_| SongCacheWriteError::EncodePayload)?;
-    let meta = build_cached_song_meta(data, global_offset_seconds);
+    let encoded_payloads = encode_chart_payloads_reused(data, payload_scratch)
+        .map_err(|_| SongCacheWriteError::EncodePayload)?;
     let mut chart_payloads = Vec::with_capacity(encoded_payloads.len());
     let mut payload_offset = 0u64;
-    for encoded in &encoded_payloads {
+    for encoded in encoded_payloads {
         let len = encoded.len() as u64;
         chart_payloads.push(CachedChartPayloadIndex {
             offset: payload_offset,
@@ -1756,6 +1843,7 @@ pub fn write_song_cache_file(
         });
         payload_offset = payload_offset.saturating_add(len);
     }
+    let meta = build_cached_song_meta(data, global_offset_seconds);
     let cached_song = CachedSong {
         cache_version: SONG_CACHE_VERSION,
         rssp_version: rssp::RSSP_VERSION.to_string(),
@@ -1780,7 +1868,7 @@ pub fn write_song_cache_file(
     file.write_all(&encoded_header)
         .map_err(SongCacheWriteError::Write)?;
     for payload in encoded_payloads {
-        file.write_all(&payload)
+        file.write_all(payload)
             .map_err(SongCacheWriteError::Write)?;
     }
     Ok(())
@@ -2015,8 +2103,12 @@ where
 
     if (options.fastload || options.cachesongs)
         && let Some(cache_path) = cache_path.as_deref()
-        && let Some(song) =
-            load_song_cache_file(simfile_path, cache_path, options.verify_cache_freshness)
+        && let Some(song) = load_song_cache_file_in(
+            simfile_path,
+            cache_path,
+            options.verify_cache_freshness,
+            scratch.cache_header(),
+        )
     {
         if options.capture_debug_logs {
             log_entries.push(RuntimeSongLoadLogEntry::debug(format!(
@@ -2044,8 +2136,12 @@ where
     )?;
     if options.cachesongs
         && let Some(cache_path) = cache_path.as_deref()
-        && let Err(error) =
-            write_song_cache_file(cache_path, &song_data, options.global_offset_seconds)
+        && let Err(error) = write_song_cache_file_in(
+            cache_path,
+            &song_data,
+            options.global_offset_seconds,
+            scratch.cache_payloads(),
+        )
     {
         log_entries.push(RuntimeSongLoadLogEntry::warn(format!(
             "Could not write song cache for {:?}: {error}",
@@ -2441,6 +2537,11 @@ fn cached_song_paths_exist(song: &CachedSong) -> bool {
 }
 
 fn load_cached_song_base(cache_path: &Path) -> Option<(CachedSong, u64)> {
+    let mut header = Vec::new();
+    load_cached_song_base_in(cache_path, &mut header)
+}
+
+fn load_cached_song_base_in(cache_path: &Path, header: &mut Vec<u8>) -> Option<(CachedSong, u64)> {
     let Ok(mut file) = fs::File::open(cache_path) else {
         return None;
     };
@@ -2452,25 +2553,32 @@ fn load_cached_song_base(cache_path: &Path) -> Option<(CachedSong, u64)> {
         return None;
     }
     let header_len = u64::from_le_bytes(prefix[8..16].try_into().ok()?);
-    let file_len = file.metadata().ok()?.len();
-    if header_len == 0
-        || header_len > MAX_SONG_CACHE_HEADER_BYTES as u64
-        || header_len > file_len.saturating_sub(16)
+    if header_len == 0 || header_len > MAX_SONG_CACHE_HEADER_BYTES as u64 {
+        return None;
+    }
+    if header_len > MAX_UNCHECKED_CACHE_HEADER_BYTES
+        && header_len > file.metadata().ok()?.len().saturating_sub(16)
     {
         return None;
     }
     let header_len_usize = usize::try_from(header_len).ok()?;
-    let mut buffer = vec![0u8; header_len_usize];
-    if file.read_exact(&mut buffer).is_err() {
+    header.clear();
+    header.resize(header_len_usize, 0);
+    if file.read_exact(header).is_err() {
         return None;
     }
+    let cached_song = decode_cached_song_header(header)?;
+    Some((cached_song, 16 + header_len))
+}
+
+fn decode_cached_song_header(header: &[u8]) -> Option<CachedSong> {
     // `cache_version` is the first encoded field. Reject incompatible layouts
     // before bincode can interpret their variable-length fields.
-    if buffer.first().copied() != Some(SONG_CACHE_VERSION) {
+    if header.first().copied() != Some(SONG_CACHE_VERSION) {
         return None;
     }
     let Ok((cached_song, _)) = bincode::decode_from_slice::<CachedSong, _>(
-        &buffer,
+        header,
         bincode::config::standard().with_limit::<MAX_SONG_CACHE_HEADER_BYTES>(),
     ) else {
         return None;
@@ -2483,7 +2591,62 @@ fn load_cached_song_base(cache_path: &Path) -> Option<(CachedSong, u64)> {
     {
         return None;
     }
-    Some((cached_song, 16 + header_len))
+    Some(cached_song)
+}
+
+#[cfg(feature = "bench-support")]
+fn load_cached_song_base_baseline(cache_path: &Path) -> Option<(CachedSong, u64)> {
+    let Ok(mut file) = fs::File::open(cache_path) else {
+        return None;
+    };
+    let mut prefix = [0u8; 16];
+    file.read_exact(&mut prefix).ok()?;
+    if prefix[..8] != SONG_CACHE_MAGIC {
+        return None;
+    }
+    let header_len = u64::from_le_bytes(prefix[8..16].try_into().ok()?);
+    let file_len = file.metadata().ok()?.len();
+    if header_len == 0
+        || header_len > MAX_SONG_CACHE_HEADER_BYTES as u64
+        || header_len > file_len.saturating_sub(16)
+    {
+        return None;
+    }
+    let mut header = vec![0u8; usize::try_from(header_len).ok()?];
+    file.read_exact(&mut header).ok()?;
+    Some((decode_cached_song_header(&header)?, 16 + header_len))
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_cache_header_loads_baseline(cache_path: &Path, iterations: usize) -> u64 {
+    benchmark_cache_header_loads(cache_path, iterations, |cache_path, _| {
+        load_cached_song_base_baseline(cache_path)
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_cache_header_loads_current(cache_path: &Path, iterations: usize) -> u64 {
+    benchmark_cache_header_loads(cache_path, iterations, load_cached_song_base_in)
+}
+
+#[cfg(feature = "bench-support")]
+fn benchmark_cache_header_loads(
+    cache_path: &Path,
+    iterations: usize,
+    mut load: impl FnMut(&Path, &mut Vec<u8>) -> Option<(CachedSong, u64)>,
+) -> u64 {
+    let mut header = Vec::new();
+    let mut checksum = 0u64;
+    for _ in 0..iterations {
+        let (song, payload_start) = load(std::hint::black_box(cache_path), &mut header)
+            .expect("benchmark cache should decode");
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(payload_start)
+            .wrapping_add(song.data.charts.len() as u64);
+        std::hint::black_box(song);
+    }
+    checksum
 }
 
 #[cfg(feature = "bench-support")]
@@ -2519,8 +2682,19 @@ fn benchmark_cache_probes(
     Ok(checksum)
 }
 
+#[cfg(test)]
 fn load_cached_song(path: &Path, cache_path: &Path, verify_freshness: bool) -> Option<CachedSong> {
-    let (cached_song, _) = load_cached_song_base(cache_path)?;
+    let mut header = Vec::new();
+    load_cached_song_in(path, cache_path, verify_freshness, &mut header)
+}
+
+fn load_cached_song_in(
+    path: &Path,
+    cache_path: &Path,
+    verify_freshness: bool,
+    header: &mut Vec<u8>,
+) -> Option<CachedSong> {
+    let (cached_song, _) = load_cached_song_base_in(cache_path, header)?;
     if verify_freshness {
         validate_directory_hash(path, &cached_song)?;
     }
@@ -2969,6 +3143,32 @@ mod tests {
     }
 
     #[test]
+    fn reused_chart_payloads_match_separate_encoding() {
+        let root = test_dir("reused-chart-payloads");
+        let simfile = root.join("song.ssc");
+        let mut data = cached_song(&simfile);
+        let mut first = test_serializable_chart("dance-single", "Hard", 4, Some(12));
+        first.notes = b"2000\n0000\n3000\n".to_vec();
+        first.chart_attacks = Some("TIME=1.5:LEN=2.0:MODS=drunk".to_string());
+        let mut second = test_serializable_chart("dance-double", "Challenge", 8, None);
+        second.notes = b"10000000\n".to_vec();
+        data.charts = vec![first, second];
+
+        let separate = encode_chart_payloads_separate(&data).unwrap();
+        let mut scratch = Vec::new();
+        let reused = encode_chart_payloads_reused(&data, &mut scratch).unwrap();
+        assert_eq!(reused, separate);
+
+        data.charts.truncate(1);
+        data.charts[0].notes = b"1000\n0100\n0010\n0001\n".to_vec();
+        let separate = encode_chart_payloads_separate(&data).unwrap();
+        let reused = encode_chart_payloads_reused(&data, &mut scratch).unwrap();
+        assert_eq!(reused, separate);
+        assert_eq!(scratch.len(), 2, "unused worker buffers stay reusable");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn old_cache_version_is_rejected_before_header_decode() {
         let root = test_dir("old-version-header");
         let cache_path = root.join("cache.bin");
@@ -2998,6 +3198,37 @@ mod tests {
         let root = test_dir("missing-cache-file");
 
         assert!(load_cached_song_base(&root.join("missing.bin")).is_none());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn truncated_song_cache_header_is_a_cache_miss() {
+        let root = test_dir("truncated-cache-header");
+        let cache_path = root.join("cache.bin");
+        let mut file = fs::File::create(&cache_path).unwrap();
+        file.write_all(&SONG_CACHE_MAGIC).unwrap();
+        file.write_all(&32u64.to_le_bytes()).unwrap();
+        file.write_all(&[SONG_CACHE_VERSION, 0, 1]).unwrap();
+        drop(file);
+
+        let mut header = Vec::new();
+        assert!(load_cached_song_base_in(&cache_path, &mut header).is_none());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn oversized_truncated_cache_header_is_rejected_before_allocation() {
+        let root = test_dir("oversized-truncated-cache-header");
+        let cache_path = root.join("cache.bin");
+        let mut file = fs::File::create(&cache_path).unwrap();
+        file.write_all(&SONG_CACHE_MAGIC).unwrap();
+        file.write_all(&(MAX_UNCHECKED_CACHE_HEADER_BYTES + 1).to_le_bytes())
+            .unwrap();
+        drop(file);
+
+        let mut header = Vec::new();
+        assert!(load_cached_song_base_in(&cache_path, &mut header).is_none());
+        assert_eq!(header.capacity(), 0);
         let _ = fs::remove_dir_all(root);
     }
 

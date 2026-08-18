@@ -2,11 +2,13 @@ use deadsync_simfile::app_runtime::{
     benchmark_parse_options_hoisted, benchmark_parse_options_per_song,
 };
 use deadsync_simfile::cache::{
+    benchmark_cache_header_loads_baseline, benchmark_cache_header_loads_current,
     benchmark_cache_probes_current, benchmark_cache_probes_legacy,
+    benchmark_chart_payload_encoding_baseline, benchmark_chart_payload_encoding_current,
     benchmark_chart_requests_current, benchmark_chart_requests_legacy,
     benchmark_runtime_debug_logs, benchmark_song_cache_paths_current,
     benchmark_song_cache_paths_legacy, benchmark_timing_handoff_baseline,
-    benchmark_timing_handoff_current,
+    benchmark_timing_handoff_current, write_song_cache_file,
 };
 use deadsync_simfile::media::{
     benchmark_genre_whitelist_current, benchmark_genre_whitelist_legacy,
@@ -21,8 +23,9 @@ use deadsync_simfile::scan::{
     benchmark_scan_maps_legacy, benchmark_song_slots_current, benchmark_song_slots_legacy,
 };
 use deadsync_simfile::song::{
-    benchmark_note_parse_current, benchmark_note_parse_legacy, benchmark_song_bytes_current,
-    benchmark_song_bytes_previous, benchmark_song_parse_current, benchmark_song_parse_previous,
+    ParseSongOptions, benchmark_note_parse_current, benchmark_note_parse_legacy,
+    benchmark_song_bytes_current, benchmark_song_bytes_previous, benchmark_song_parse_current,
+    benchmark_song_parse_previous, parse_song_file,
 };
 use deadsync_simfile::timing::{benchmark_timing_tags_baseline, benchmark_timing_tags_current};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -48,6 +51,8 @@ const CHART_REQUEST_ROUNDS: usize = 65_536;
 const MEDIA_MAP_ROUNDS: usize = 2_048;
 const CACHE_PATH_OPS: usize = 2_048;
 const CACHE_PROBE_OPS: usize = 2_048;
+const CACHE_PAYLOAD_ROUNDS: usize = 256;
+const CACHE_HEADER_ROUNDS: usize = 512;
 const SONG_PARSE_ROUNDS: usize = 64;
 const NOTE_PARSE_ROUNDS: usize = 2_048;
 const TIMING_TAG_ROUNDS: usize = 4_096;
@@ -586,6 +591,42 @@ fn bench_rssp_boundary() {
     let own_timing = root.join("own-timing.ssc");
     fs::write(&global_timing, analysis_fixture(false)).unwrap();
     fs::write(&own_timing, analysis_fixture(true)).unwrap();
+
+    let parse_options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+    let song_data = parse_song_file(&global_timing, &parse_options, |_| 0.0).unwrap();
+    assert_eq!(
+        benchmark_chart_payload_encoding_baseline(&song_data, 1),
+        benchmark_chart_payload_encoding_current(&song_data, 1),
+        "chart payload cache bytes diverged"
+    );
+    let (separate_payloads, reused_payloads) = measure_pair(
+        CACHE_PAYLOAD_ROUNDS,
+        || benchmark_chart_payload_encoding_baseline(&song_data, CACHE_PAYLOAD_ROUNDS),
+        || benchmark_chart_payload_encoding_current(&song_data, CACHE_PAYLOAD_ROUNDS),
+    );
+    black_box(separate_payloads.checksum ^ reused_payloads.checksum);
+    println!("cache chart-payload encoding ({CACHE_PAYLOAD_ROUNDS} songs)");
+    print_result("separate", CACHE_PAYLOAD_ROUNDS, &separate_payloads);
+    print_result("worker-reuse", CACHE_PAYLOAD_ROUNDS, &reused_payloads);
+    print_change(&separate_payloads, &reused_payloads);
+
+    let cache_path = root.join("song-cache.bin");
+    write_song_cache_file(&cache_path, &song_data, 0.0).unwrap();
+    assert_eq!(
+        benchmark_cache_header_loads_baseline(&cache_path, 1),
+        benchmark_cache_header_loads_current(&cache_path, 1),
+        "cache header decoding diverged"
+    );
+    let (fresh_headers, reused_headers) = measure_pair(
+        CACHE_HEADER_ROUNDS,
+        || benchmark_cache_header_loads_baseline(&cache_path, CACHE_HEADER_ROUNDS),
+        || benchmark_cache_header_loads_current(&cache_path, CACHE_HEADER_ROUNDS),
+    );
+    black_box(fresh_headers.checksum ^ reused_headers.checksum);
+    println!("warm cache-header load ({CACHE_HEADER_ROUNDS} songs)");
+    print_result("allocate+stat", CACHE_HEADER_ROUNDS, &fresh_headers);
+    print_result("reuse", CACHE_HEADER_ROUNDS, &reused_headers);
+    print_change(&fresh_headers, &reused_headers);
 
     let (time_signatures, tickcounts, combos) = timing_tag_fixture();
     let old_timing_checksum =
