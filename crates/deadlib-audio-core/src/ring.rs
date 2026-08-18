@@ -1,11 +1,16 @@
 use crate::MusicMapSeg;
 use rtrb::{Consumer, Producer, PushError, RingBuffer};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub const PREROLL_IN_FRAMES: u64 = 8;
-pub const RING_CAP_SAMPLES: usize = 1 << 16;
 pub const MUSIC_SEG_RING_CAP: usize = 1 << 11;
 pub const MUSIC_BLOCK_FRAMES: usize = 256;
+/// Target duration of the fixed music pool.
+///
+/// The producer normally uses less than this so generation changes can publish
+/// replacement audio without waiting for stale blocks to be recycled.
+pub const MUSIC_POOL_DURATION_MS: usize = 700;
 const MIN_MUSIC_BLOCKS: usize = 4;
 static PLAYED_MAP_DROPS: AtomicU64 = AtomicU64::new(0);
 
@@ -43,15 +48,19 @@ impl MusicBlock {
 /// Decoder-owned endpoint for the fixed music-block pool.
 ///
 /// The decoder worker is the sole owner. Its lifetime is the output stream, its
-/// capacity is approximately [`RING_CAP_SAMPLES`], and exhaustion sleeps on the
-/// worker without adding work to the audio callback. Blocks are allocated once
-/// by [`music_transport`] and destroyed only when the output backend is torn
-/// down. Queue occupancy is available from rtrb during profiling; a miss costs
-/// one bounded pop and no allocation, lock, I/O, pruning, or destruction.
+/// duration is approximately [`MUSIC_POOL_DURATION_MS`], and exhaustion parks
+/// the worker without adding work to the audio callback. Blocks are allocated
+/// once by [`music_transport`] and destroyed only when the output backend is
+/// torn down. Queue occupancy comes from the existing recycle queue ownership
+/// transfer; a miss costs one bounded pop and no allocation, lock, I/O, pruning,
+/// or destruction.
 pub struct MusicBlockWriter {
     ready: Producer<MusicBlock>,
     recycled: Consumer<MusicBlock>,
     spare: Option<MusicBlock>,
+    published_generation: Arc<AtomicU64>,
+    render_drained_generation: Arc<AtomicU64>,
+    capacity_blocks: usize,
     channels: usize,
 }
 
@@ -59,6 +68,38 @@ impl MusicBlockWriter {
     #[inline(always)]
     pub fn channels(&self) -> usize {
         self.channels
+    }
+
+    /// Returns the fixed number of blocks in this transport.
+    #[inline(always)]
+    pub fn capacity_blocks(&self) -> usize {
+        self.capacity_blocks
+    }
+
+    /// Returns blocks currently owned by the render side (`ready + active`).
+    ///
+    /// Returned blocks are already counted by the recycle queue's write index,
+    /// so this reuses its existing ownership publication instead of adding a
+    /// second callback-written occupancy atomic.
+    #[inline(always)]
+    pub fn outstanding_blocks(&self) -> usize {
+        self.capacity_blocks
+            .saturating_sub(self.recycled.slots() + usize::from(self.spare.is_some()))
+    }
+
+    /// Announces that enough blocks for `generation` have been published for
+    /// the render side to switch without exposing a partially primed queue.
+    #[inline(always)]
+    pub fn publish_generation_ready(&self, generation: u64) {
+        self.published_generation
+            .store(generation, Ordering::Release);
+    }
+
+    /// Returns the last generation for which the render side recycled every
+    /// preceding stale block and reached current audio.
+    #[inline(always)]
+    pub fn render_drained_generation(&self) -> u64 {
+        self.render_drained_generation.load(Ordering::Acquire)
     }
 
     /// Copy and publish at most one fixed-size block, returning samples accepted.
@@ -111,9 +152,30 @@ pub struct AudioRenderHandle {
     ready: Consumer<MusicBlock>,
     recycled: Producer<MusicBlock>,
     played: Producer<TaggedMusicMapSeg>,
+    published_generation: Arc<AtomicU64>,
+    render_drained_generation: Arc<AtomicU64>,
+    capacity_blocks: usize,
 }
 
 impl AudioRenderHandle {
+    #[inline(always)]
+    pub(crate) fn capacity_blocks(&self) -> usize {
+        self.capacity_blocks
+    }
+
+    #[inline(always)]
+    pub(crate) fn published_generation(&self) -> u64 {
+        self.published_generation.load(Ordering::Acquire)
+    }
+
+    /// Acknowledges only after stale blocks have been returned to the recycle
+    /// queue, so an acquiring producer also observes those returned credits.
+    #[inline(always)]
+    pub(crate) fn acknowledge_generation_drained(&self, generation: u64) {
+        self.render_drained_generation
+            .store(generation, Ordering::Release);
+    }
+
     #[inline(always)]
     pub(crate) fn pop_block(&mut self) -> Option<MusicBlock> {
         self.ready.pop().ok()
@@ -148,19 +210,27 @@ struct TaggedMusicMapSeg {
 ///
 /// Ownership is split decoder -> callback for ready blocks, callback -> decoder
 /// for recycling, and callback -> game for played timing. The pool is warmed
-/// here, capped near 65,536 interleaved samples, never evicts, and performs no
-/// callback-time allocation, locking, waiting, scanning, or destruction. A
-/// reset is a generation comparison over at most the fixed block count. Played
-/// timing has a hard 2,048-record cap and saturates by dropping new records;
+/// here, sized by output duration, never evicts, and performs no callback-time
+/// allocation, locking, waiting, scanning, or destruction. A reset is a
+/// generation comparison over at most the fixed block count. Played timing has
+/// a hard 2,048-record cap and saturates by dropping new records;
 /// [`played_map_drops`] exposes those misses for telemetry.
-pub fn music_transport(channels: usize) -> (AudioStreamHandle, AudioRenderHandle) {
+pub fn music_transport(
+    sample_rate_hz: u32,
+    channels: usize,
+) -> (AudioStreamHandle, AudioRenderHandle) {
     let channels = channels.max(1);
     let samples_per_block = MUSIC_BLOCK_FRAMES * channels;
-    let block_count = RING_CAP_SAMPLES
-        .div_ceil(samples_per_block)
+    let pool_frames = (sample_rate_hz.max(1) as usize)
+        .saturating_mul(MUSIC_POOL_DURATION_MS)
+        .div_ceil(1_000);
+    let block_count = pool_frames
+        .div_ceil(MUSIC_BLOCK_FRAMES)
         .max(MIN_MUSIC_BLOCKS);
     let (ready, ready_consumer) = RingBuffer::new(block_count);
     let (mut recycle_producer, recycled) = RingBuffer::new(block_count);
+    let published_generation = Arc::new(AtomicU64::new(0));
+    let render_drained_generation = Arc::new(AtomicU64::new(u64::MAX));
     for _ in 0..block_count {
         let block = MusicBlock {
             samples: vec![0; samples_per_block].into_boxed_slice(),
@@ -178,6 +248,9 @@ pub fn music_transport(channels: usize) -> (AudioStreamHandle, AudioRenderHandle
                 ready,
                 recycled,
                 spare: None,
+                published_generation: Arc::clone(&published_generation),
+                render_drained_generation: Arc::clone(&render_drained_generation),
+                capacity_blocks: block_count,
                 channels,
             },
             played_map: PlayedMapReader {
@@ -188,6 +261,9 @@ pub fn music_transport(channels: usize) -> (AudioStreamHandle, AudioRenderHandle
             ready: ready_consumer,
             recycled: recycle_producer,
             played,
+            published_generation,
+            render_drained_generation,
+            capacity_blocks: block_count,
         },
     )
 }
@@ -198,9 +274,13 @@ mod tests {
     use std::thread;
     use std::time::{Duration, Instant};
 
-    fn pool_blocks(channels: usize) -> usize {
-        RING_CAP_SAMPLES
-            .div_ceil(MUSIC_BLOCK_FRAMES * channels.max(1))
+    const SAMPLE_RATE: u32 = 48_000;
+
+    fn pool_blocks(sample_rate_hz: u32) -> usize {
+        (sample_rate_hz.max(1) as usize)
+            .saturating_mul(MUSIC_POOL_DURATION_MS)
+            .div_ceil(1_000)
+            .div_ceil(MUSIC_BLOCK_FRAMES)
             .max(MIN_MUSIC_BLOCKS)
     }
 
@@ -212,8 +292,8 @@ mod tests {
     fn pool_survives_saturation_and_recycling() {
         let channels = 2;
         let block_samples = MUSIC_BLOCK_FRAMES * channels;
-        let block_count = pool_blocks(channels);
-        let (mut stream, mut render) = music_transport(channels);
+        let block_count = pool_blocks(SAMPLE_RATE);
+        let (mut stream, mut render) = music_transport(SAMPLE_RATE, channels);
         let samples = vec![17; block_samples];
         let timing = MusicBlockTiming {
             generation: 7,
@@ -222,15 +302,18 @@ mod tests {
         };
 
         assert_eq!(stream.writer.recycled.slots(), block_count);
+        assert_eq!(stream.writer.outstanding_blocks(), 0);
         assert_eq!(render.ready.slots(), 0);
         for _ in 0..block_count {
             assert_eq!(stream.writer.try_push(&samples, timing), block_samples);
         }
         assert_eq!(stream.writer.recycled.slots(), 0);
+        assert_eq!(stream.writer.outstanding_blocks(), block_count);
         assert_eq!(render.ready.slots(), block_count);
         assert_eq!(stream.writer.try_push(&samples, timing), 0);
 
         let held = render.pop_block().expect("full queue has a block");
+        assert_eq!(stream.writer.outstanding_blocks(), block_count);
         assert_eq!(held.samples(), samples);
         assert_eq!(held.timing(), timing);
         assert_eq!(
@@ -239,6 +322,7 @@ mod tests {
         );
         assert_eq!(stream.writer.try_push(&samples, timing), 0);
         recycle(&mut render, held);
+        assert_eq!(stream.writer.outstanding_blocks(), block_count - 1);
         assert_eq!(stream.writer.try_push(&samples, timing), block_samples);
         assert_eq!(render.ready.slots(), block_count);
 
@@ -250,6 +334,7 @@ mod tests {
         }
         assert_eq!(drained, block_count);
         assert_eq!(stream.writer.recycled.slots(), block_count);
+        assert_eq!(stream.writer.outstanding_blocks(), 0);
         assert_eq!(render.ready.slots(), 0);
         assert!(stream.writer.spare.is_none());
     }
@@ -266,7 +351,7 @@ mod tests {
         let generation = 91;
         let start_sec = -0.25;
         let sec_per_frame = 1.5 / 48_000.0;
-        let (mut stream, mut render) = music_transport(channels);
+        let (mut stream, mut render) = music_transport(SAMPLE_RATE, channels);
         let mut expected = Vec::new();
         let mut frame_start = 0;
 
@@ -302,7 +387,7 @@ mod tests {
             recycle(&mut render, block);
         }
         assert!(render.pop_block().is_none());
-        assert_eq!(stream.writer.recycled.slots(), pool_blocks(channels));
+        assert_eq!(stream.writer.recycled.slots(), pool_blocks(SAMPLE_RATE));
     }
 
     fn stress_sample(block: u64, index: usize) -> i16 {
@@ -322,8 +407,8 @@ mod tests {
         const TIMEOUT: Duration = Duration::from_secs(5);
         let channels = 2;
         let block_samples = MUSIC_BLOCK_FRAMES * channels;
-        let block_count = pool_blocks(channels);
-        let (stream, mut render) = music_transport(channels);
+        let block_count = pool_blocks(SAMPLE_RATE);
+        let (stream, mut render) = music_transport(SAMPLE_RATE, channels);
         let AudioStreamHandle {
             mut writer,
             played_map: _played_map,
@@ -379,7 +464,7 @@ mod tests {
 
     #[test]
     fn saturated_played_map_counts_dropped_records() {
-        let (_stream, mut render) = music_transport(2);
+        let (_stream, mut render) = music_transport(SAMPLE_RATE, 2);
         let before = played_map_drops();
         let seg = MusicMapSeg {
             stream_frame_start: 0,
@@ -393,5 +478,17 @@ mod tests {
         }
 
         assert!(played_map_drops() > before);
+    }
+
+    #[test]
+    fn pool_duration_does_not_shrink_with_channel_count() {
+        for sample_rate_hz in [44_100, 48_000, 96_000] {
+            let expected = pool_blocks(sample_rate_hz);
+            for channels in [1, 2, 6, 8] {
+                let (stream, render) = music_transport(sample_rate_hz, channels);
+                assert_eq!(stream.writer.capacity_blocks(), expected);
+                assert_eq!(render.capacity_blocks(), expected);
+            }
+        }
     }
 }

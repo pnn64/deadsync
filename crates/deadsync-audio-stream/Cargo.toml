@@ -16,6 +16,11 @@ harness = false
 name = "sfx_control_handoff"
 harness = false
 
+[[bench]]
+name = "music_backpressure"
+harness = false
+required-features = ["test-support"]
+
 [features]
 test-support = []
 

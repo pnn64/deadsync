@@ -34,6 +34,7 @@ pub struct RenderState {
     active_music: Option<MusicBlock>,
     active_sample: usize,
     music_map_generation: u64,
+    acknowledged_music_generation: Option<u64>,
     stale_blocks_left: usize,
     /// Current music gain as seen by the mixer. Ramps toward the shared music
     /// gain target over [`MUSIC_GAIN_RAMP_FRAMES`] frames so asynchronous
@@ -51,11 +52,6 @@ pub struct RenderState {
 const MUSIC_GAIN_RAMP_FRAMES: f32 = 4000.0;
 const MUSIC_GAIN_MAX_STEP: f32 = 1.0 / MUSIC_GAIN_RAMP_FRAMES;
 const MIX_CHUNK_FRAMES: usize = 2048;
-// Mono has the largest possible pool. Draining that whole fixed bound lets a
-// current-generation block already in the queue play in the same callback.
-const MAX_STALE_BLOCKS_PER_CALLBACK: usize =
-    crate::ring::RING_CAP_SAMPLES / crate::ring::MUSIC_BLOCK_FRAMES;
-
 #[inline(always)]
 fn advance_gain(current: &mut f32, target: f32) {
     let diff = target - *current;
@@ -99,6 +95,7 @@ impl RenderState {
         controls: Arc<MixControls>,
         device_channels: usize,
     ) -> Self {
+        let capacity_blocks = transport.capacity_blocks();
         Self {
             transport,
             controls,
@@ -108,7 +105,8 @@ impl RenderState {
             active_music: None,
             active_sample: 0,
             music_map_generation: music_map_generation(),
-            stale_blocks_left: MAX_STALE_BLOCKS_PER_CALLBACK,
+            acknowledged_music_generation: None,
+            stale_blocks_left: capacity_blocks,
             music_gain_current: music_target_gain(),
             music_gain_snap_seen: music_gain_snap_generation(),
         }
@@ -120,9 +118,10 @@ impl RenderState {
         anchor_nanos: u64,
         source: CallbackClockSource,
     ) -> (u64, u64) {
-        self.stale_blocks_left = MAX_STALE_BLOCKS_PER_CALLBACK;
-        self.refresh_music_generation();
-        if !music_track_active_relaxed() {
+        self.stale_blocks_left = self.transport.capacity_blocks();
+        let track_active = music_track_active_relaxed();
+        self.refresh_music_generation(!track_active);
+        if !track_active {
             let _ = self.recycle_active();
         }
         let total_before = music_total_frames();
@@ -154,20 +153,37 @@ impl RenderState {
     }
 
     #[inline(always)]
-    fn refresh_music_generation(&mut self) {
-        let generation = music_map_generation();
-        if generation != self.music_map_generation {
-            self.music_map_generation = generation;
+    fn refresh_music_generation(&mut self, allow_unpublished: bool) {
+        let target_generation = music_map_generation();
+        if target_generation != self.music_map_generation
+            && (allow_unpublished || self.transport.published_generation() == target_generation)
+        {
+            self.music_map_generation = target_generation;
         }
     }
 
     fn load_music_block(&mut self) -> bool {
         loop {
-            self.refresh_music_generation();
+            self.refresh_music_generation(false);
             if let Some(block) = &self.active_music {
                 let exhausted = self.active_sample >= block.samples().len();
                 if !exhausted && block.timing().generation == self.music_map_generation {
+                    let generation = self.music_map_generation;
+                    if self.acknowledged_music_generation != Some(generation) {
+                        // All preceding stale blocks were recycled before this
+                        // matching block was reached. Publish that fact after
+                        // the recycle queue ownership transfers.
+                        self.transport.acknowledge_generation_drained(generation);
+                        self.acknowledged_music_generation = Some(generation);
+                    }
                     return true;
+                }
+                let target_generation = music_map_generation();
+                if !exhausted && block.timing().generation == target_generation {
+                    // The producer may still be filling the transition batch.
+                    // Retain its first block until readiness is published; do
+                    // not recycle usable target audio as if it were stale.
+                    return false;
                 }
                 if !exhausted {
                     if self.stale_blocks_left == 0 {
@@ -395,14 +411,16 @@ mod tests {
         AudioRenderHandle, MusicBlockTiming, MusicBlockWriter, PlayedMapReader, music_transport,
     };
     use crate::{
-        MixBus, MixControls, QueuedSfx, activate_music_track, bump_music_map_generation,
-        i16_to_f32, music_map_generation, music_track_start_frame, reset_music_target_gain,
-        set_music_target_gain, snap_music_gain_generation, stop_music_track,
+        CallbackClockSource, MixBus, MixControls, QueuedSfx, activate_music_track,
+        bump_music_map_generation, i16_to_f32, music_map_generation, music_track_start_frame,
+        reset_music_target_gain, set_music_target_gain, snap_music_gain_generation,
+        stop_music_track,
     };
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
     const CHANNELS: usize = 2;
+    const SAMPLE_RATE: u32 = 48_000;
     const EFFECT_BUS: MixBus = MixBus::new(0);
     const SEC_PER_FRAME: f64 = 1.0 / 48_000.0;
     static GLOBAL_AUDIO_STATE_BUSY: AtomicBool = AtomicBool::new(false);
@@ -466,7 +484,7 @@ mod tests {
         let _guard = GlobalAudioGuard::acquire();
         reset_levels();
         let generation = music_map_generation();
-        let (mut stream, render_handle) = music_transport(CHANNELS);
+        let (mut stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
         let input: Vec<i16> = (0..300 * CHANNELS)
             .map(|sample| (sample as i32 * 97 % 60_000 - 30_000) as i16)
             .collect();
@@ -506,7 +524,7 @@ mod tests {
         let _guard = GlobalAudioGuard::acquire();
         reset_levels();
         let generation = music_map_generation();
-        let (mut stream, render_handle) = music_transport(CHANNELS);
+        let (mut stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
         let input: Vec<i16> = (0..3000 * CHANNELS)
             .map(|sample| (sample as i32 * 193 % 60_000 - 30_000) as i16)
             .collect();
@@ -533,7 +551,7 @@ mod tests {
         set_music_target_gain(2.0);
         snap_music_gain_generation();
         let generation = music_map_generation();
-        let (mut stream, render_handle) = music_transport(CHANNELS);
+        let (mut stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
         let input = vec![i16::MAX; 3000 * CHANNELS];
         push_all(&mut stream.writer, &input, generation, 0);
         let mut render = test_render(render_handle);
@@ -558,7 +576,7 @@ mod tests {
         let _guard = GlobalAudioGuard::acquire();
         reset_levels();
         let old_generation = music_map_generation();
-        let (mut stream, render_handle) = music_transport(CHANNELS);
+        let (mut stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
         let old = vec![11_000; 256 * CHANNELS];
         push_all(&mut stream.writer, &old, old_generation, 0);
         let mut render = test_render(render_handle);
@@ -572,6 +590,7 @@ mod tests {
         push_all(&mut stream.writer, &old, old_generation, 256);
         let new = vec![-7_000; 64 * CHANNELS];
         push_all(&mut stream.writer, &new, new_generation, 0);
+        stream.writer.publish_generation_ready(new_generation);
         let (popped, _) = render.mix_f32_buffer(track_start + 20, 32 * CHANNELS);
         assert_eq!(popped, 32 * CHANNELS);
         for &actual in &render.mix_f32[..32 * CHANNELS] {
@@ -586,11 +605,85 @@ mod tests {
     }
 
     #[test]
+    fn generation_reset_keeps_old_audio_until_replacement_is_published() {
+        let _guard = GlobalAudioGuard::acquire();
+        reset_levels();
+        let old_generation = music_map_generation();
+        let (mut stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
+        let old = vec![11_000; 128 * CHANNELS];
+        push_all(&mut stream.writer, &old, old_generation, 0);
+        let mut render = test_render(render_handle);
+        let track_start = music_track_start_frame();
+
+        let new_generation = bump_music_map_generation();
+        let (popped, _) = render.mix_f32_buffer(track_start, 32 * CHANNELS);
+        assert_eq!(popped, 32 * CHANNELS);
+        assert!(
+            render.mix_f32[..popped]
+                .iter()
+                .all(|sample| sample.to_bits() == i16_to_f32(11_000).to_bits())
+        );
+
+        let new = vec![-7_000; 64 * CHANNELS];
+        push_all(&mut stream.writer, &new, new_generation, 0);
+        stream.writer.publish_generation_ready(new_generation);
+        let (popped, _) = render.mix_f32_buffer(track_start + 32, 32 * CHANNELS);
+        assert_eq!(popped, 32 * CHANNELS);
+        assert_eq!(stream.writer.render_drained_generation(), new_generation);
+        assert!(
+            render.mix_f32[..popped]
+                .iter()
+                .all(|sample| sample.to_bits() == i16_to_f32(-7_000).to_bits())
+        );
+    }
+
+    #[test]
+    fn target_block_is_retained_while_transition_batch_is_primed() {
+        let _guard = GlobalAudioGuard::acquire();
+        reset_levels();
+        let (mut stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
+        let mut render = test_render(render_handle);
+        let new_generation = bump_music_map_generation();
+        push_all(&mut stream.writer, &[-7_000, 7_000], new_generation, 0);
+
+        assert_eq!(
+            render.mix_f32_buffer(music_track_start_frame(), CHANNELS).0,
+            0
+        );
+        assert!(render.active_music.is_some());
+
+        stream.writer.publish_generation_ready(new_generation);
+        let (popped, _) = render.mix_f32_buffer(music_track_start_frame(), CHANNELS);
+        assert_eq!(popped, CHANNELS);
+        assert_eq!(render.mix_f32[0].to_bits(), i16_to_f32(-7_000).to_bits());
+        assert_eq!(render.mix_f32[1].to_bits(), i16_to_f32(7_000).to_bits());
+    }
+
+    #[test]
+    fn stopped_track_does_not_render_an_unpublished_stale_generation() {
+        let _guard = GlobalAudioGuard::acquire();
+        reset_levels();
+        activate_music_track();
+        let generation = music_map_generation();
+        let (mut stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
+        push_all(&mut stream.writer, &[12_000, -12_000], generation, 0);
+        let mut render = test_render(render_handle);
+
+        bump_music_map_generation();
+        stop_music_track();
+        let (total_before, _) = render.begin_callback_nanos(0, CallbackClockSource::Instant);
+        let (popped, _) = render.mix_f32_buffer(total_before, CHANNELS);
+
+        assert_eq!(popped, 0);
+        assert_eq!(&render.mix_f32[..CHANNELS], &[0.0, 0.0]);
+    }
+
+    #[test]
     fn underrun_zeroes_whole_frames_and_unaligned_tail() {
         let _guard = GlobalAudioGuard::acquire();
         reset_levels();
         let generation = music_map_generation();
-        let (mut stream, render_handle) = music_transport(CHANNELS);
+        let (mut stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
         push_all(&mut stream.writer, &[1234, -1234], generation, 0);
         let mut render = test_render(render_handle);
         let (popped, _) = render.mix_f32_buffer(music_track_start_frame(), 5);
@@ -606,7 +699,7 @@ mod tests {
         let _guard = GlobalAudioGuard::acquire();
         reset_levels();
         let generation = music_map_generation();
-        let (mut stream, render_handle) = music_transport(CHANNELS);
+        let (mut stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
         let input = [10_000, -10_000, 20_000, -20_000, 30_000, -30_000];
         push_all(&mut stream.writer, &input, generation, 0);
         let mut render = test_render(render_handle);
@@ -633,7 +726,7 @@ mod tests {
         let _guard = GlobalAudioGuard::acquire();
         reset_levels();
         let generation = music_map_generation();
-        let (mut stream, render_handle) = music_transport(CHANNELS);
+        let (mut stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
         push_all(&mut stream.writer, &[1000, -1000], generation, 0);
         let mut render = test_render(render_handle);
         let delayed_callback = music_track_start_frame() + 123;
@@ -651,10 +744,9 @@ mod tests {
         let _guard = GlobalAudioGuard::acquire();
         reset_levels();
         let old_generation = music_map_generation();
-        let (mut stream, render_handle) = music_transport(CHANNELS);
+        let (mut stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
         let block = vec![500; crate::ring::MUSIC_BLOCK_FRAMES * CHANNELS];
-        let pool_blocks =
-            crate::ring::RING_CAP_SAMPLES.div_ceil(crate::ring::MUSIC_BLOCK_FRAMES * CHANNELS);
+        let pool_blocks = stream.writer.capacity_blocks();
         for block_index in 0..pool_blocks - 1 {
             push_all(
                 &mut stream.writer,
@@ -665,15 +757,13 @@ mod tests {
         }
         let new_generation = bump_music_map_generation();
         push_all(&mut stream.writer, &[700, -700], new_generation, 0);
+        stream.writer.publish_generation_ready(new_generation);
         let mut render = test_render(render_handle);
 
         let (popped, _) = render.mix_f32_buffer(music_track_start_frame(), CHANNELS);
         assert_eq!(popped, CHANNELS);
         assert_eq!(render.mix_f32[0].to_bits(), i16_to_f32(700).to_bits());
         assert_eq!(render.mix_f32[1].to_bits(), i16_to_f32(-700).to_bits());
-        assert_eq!(
-            render.stale_blocks_left,
-            super::MAX_STALE_BLOCKS_PER_CALLBACK - (pool_blocks - 1)
-        );
+        assert_eq!(render.stale_blocks_left, pool_blocks - (pool_blocks - 1));
     }
 }

@@ -103,6 +103,7 @@ impl MusicStreamRuntime {
             let control = &stream.control;
             control.rate_bits.store(rate.to_bits(), Ordering::Release);
             control.generation.store(generation, Ordering::Release);
+            control.wake.notify();
         }
     }
 
@@ -111,12 +112,14 @@ impl MusicStreamRuntime {
             let control = &stream.control;
             control.preserve_pitch.store(enabled, Ordering::Release);
             control.generation.store(generation, Ordering::Release);
+            control.wake.notify();
         }
     }
 
     fn stop_decoder(&mut self) {
         if let Some(old) = self.music_stream.take() {
-            old.control.stop_signal.store(true, Ordering::Relaxed);
+            old.control.stop_signal.store(true, Ordering::Release);
+            old.control.wake.notify();
             match old.thread.join() {
                 Ok(writer) => self.writer = Some(writer),
                 Err(_) => error!("Music decoder thread panicked; its transport writer was lost."),

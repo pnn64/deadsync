@@ -69,10 +69,11 @@ impl FromStr for LinuxAudioBackend {
 pub const SFX_QUEUE_CAP: usize = 128;
 
 fn output_transport(
+    sample_rate_hz: u32,
     device_channels: usize,
     controls: &Arc<MixControls>,
 ) -> (AudioStreamHandle, RenderState, SfxSender, SfxReceiver) {
-    let (stream_handle, render_handle) = music_transport(device_channels);
+    let (stream_handle, render_handle) = music_transport(sample_rate_hz, device_channels);
     let (sfx_sender, sfx_receiver) = sfx_transport(SFX_QUEUE_CAP);
     (
         stream_handle,
@@ -697,7 +698,7 @@ fn start_linux_alsa_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = alsa.output_mode;
     let (stream_handle, render, sfx_sender, sfx_receiver) =
-        output_transport(ready.device_channels, controls);
+        output_transport(ready.device_sample_rate, ready.device_channels, controls);
     let stream = linux_alsa::start(prep, render, sfx_receiver)?;
     Ok((
         NativeOutputBackend::Alsa { _stream: stream },
@@ -728,7 +729,7 @@ fn start_linux_jack_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = jack.output_mode;
     let (stream_handle, render, sfx_sender, sfx_receiver) =
-        output_transport(ready.device_channels, controls);
+        output_transport(ready.device_sample_rate, ready.device_channels, controls);
     let stream = linux_jack::start(prep, render, sfx_receiver)?;
     Ok((
         NativeOutputBackend::Jack { _stream: stream },
@@ -768,7 +769,7 @@ fn start_linux_pipewire_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = pipewire.output_mode;
     let (stream_handle, render, sfx_sender, sfx_receiver) =
-        output_transport(ready.device_channels, controls);
+        output_transport(ready.device_sample_rate, ready.device_channels, controls);
     let stream = linux_pipewire::start(prep, render, sfx_receiver)?;
     Ok((
         NativeOutputBackend::PipeWire { _stream: stream },
@@ -809,7 +810,7 @@ fn start_linux_pulse_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = pulse.output_mode;
     let (stream_handle, render, sfx_sender, sfx_receiver) =
-        output_transport(ready.device_channels, controls);
+        output_transport(ready.device_sample_rate, ready.device_channels, controls);
     let stream = linux_pulse::start(prep, render, sfx_receiver)?;
     Ok((
         NativeOutputBackend::Pulse { _stream: stream },
@@ -844,7 +845,7 @@ fn start_freebsd_pcm_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = pcm.output_mode;
     let (stream_handle, render, sfx_sender, sfx_receiver) =
-        output_transport(ready.device_channels, controls);
+        output_transport(ready.device_sample_rate, ready.device_channels, controls);
     let stream = freebsd_pcm::start(prep, render, sfx_receiver)?;
     Ok((
         NativeOutputBackend::FreeBsdPcm { _stream: stream },
@@ -879,7 +880,7 @@ fn start_macos_coreaudio_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = coreaudio.output_mode;
     let (stream_handle, render, sfx_sender, sfx_receiver) =
-        output_transport(ready.device_channels, controls);
+        output_transport(ready.device_sample_rate, ready.device_channels, controls);
     let stream = macos_coreaudio::start(prep, render, sfx_receiver)?;
     Ok((
         NativeOutputBackend::CoreAudio { _stream: stream },
@@ -1119,7 +1120,7 @@ fn start_wasapi_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = wasapi.output_mode;
     let (stream_handle, render, sfx_sender, sfx_receiver) =
-        output_transport(ready.device_channels, controls);
+        output_transport(ready.device_sample_rate, ready.device_channels, controls);
     let stream = windows_wasapi::start(prep, render, sfx_receiver).map_err(|err| {
         format!(
             "failed to start native WASAPI output for '{}': {err}",

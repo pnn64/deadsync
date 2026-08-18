@@ -26,8 +26,10 @@ use rubato::{Adjustable, Async, FixedAsync, ResampleError, Resampler, ResamplerC
 use smallvec::SmallVec;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::thread;
+use std::time::Duration;
 
 pub use clock::timing_diag_enabled;
 pub use mix::{AudioMixLevels, audio_mix_levels, set_audio_mix_levels};
@@ -138,6 +140,94 @@ pub struct MusicDecodeContext {
 pub struct MusicStream {
     pub thread: thread::JoinHandle<MusicBlockWriter>,
     control: Arc<MusicControl>,
+    #[cfg(feature = "test-support")]
+    backpressure_stats: Arc<MusicBackpressureCounters>,
+}
+
+#[cfg(feature = "test-support")]
+#[derive(Clone, Copy, Debug)]
+/// Backpressure variants exposed only to the benchmark harness.
+pub enum MusicBackpressureBenchmarkMode {
+    /// Retry a full pool every 300 microseconds.
+    Fixed300Micros,
+    /// Retry a full pool every 2 milliseconds.
+    Fixed2Millis,
+    /// Refill between duration-derived low and high watermarks.
+    OccupancyDeadline,
+    /// Use the same watermarks with a non-interruptible sleep for comparison.
+    OccupancySleep,
+}
+
+#[cfg(feature = "test-support")]
+#[derive(Clone, Copy, Debug, Default)]
+/// Snapshot of decoder pacing activity collected by the benchmark harness.
+pub struct MusicBackpressureStats {
+    /// Number of blocking waits entered.
+    pub waits: u64,
+    /// Blocks published into reserved capacity during a generation transition.
+    pub transition_pushes: u64,
+    /// Largest observed render-owned block count.
+    pub max_outstanding: u64,
+}
+
+#[cfg(feature = "test-support")]
+struct MusicBackpressureCounters {
+    waits: AtomicU64,
+    transition_pushes: AtomicU64,
+    max_outstanding: AtomicU64,
+}
+
+#[cfg(feature = "test-support")]
+impl MusicBackpressureCounters {
+    fn new() -> Self {
+        Self {
+            waits: AtomicU64::new(0),
+            transition_pushes: AtomicU64::new(0),
+            max_outstanding: AtomicU64::new(0),
+        }
+    }
+
+    fn snapshot(&self) -> MusicBackpressureStats {
+        MusicBackpressureStats {
+            waits: self.waits.load(Ordering::Relaxed),
+            transition_pushes: self.transition_pushes.load(Ordering::Relaxed),
+            max_outstanding: self.max_outstanding.load(Ordering::Relaxed),
+        }
+    }
+}
+
+#[cfg(feature = "test-support")]
+impl MusicStream {
+    /// Returns a snapshot of benchmark-only pacing counters.
+    pub fn backpressure_stats(&self) -> MusicBackpressureStats {
+        self.backpressure_stats.snapshot()
+    }
+
+    /// Clears benchmark-only pacing counters after warmup.
+    pub fn reset_backpressure_stats_for_benchmark(&self) {
+        self.backpressure_stats.waits.store(0, Ordering::Relaxed);
+        self.backpressure_stats
+            .transition_pushes
+            .store(0, Ordering::Relaxed);
+        self.backpressure_stats
+            .max_outstanding
+            .store(0, Ordering::Relaxed);
+    }
+
+    /// Publishes a benchmark rate generation and interrupts any current park.
+    pub fn set_rate_for_benchmark(&self, rate: f32, generation: u64) {
+        self.control
+            .rate_bits
+            .store(rate.to_bits(), Ordering::Release);
+        self.control.generation.store(generation, Ordering::Release);
+        self.control.wake.notify();
+    }
+
+    /// Stops a benchmark decoder and interrupts any current park.
+    pub fn stop_for_benchmark(&self) {
+        self.control.stop_signal.store(true, Ordering::Release);
+        self.control.wake.notify();
+    }
 }
 
 struct MusicControl {
@@ -145,6 +235,269 @@ struct MusicControl {
     rate_bits: AtomicU32,
     preserve_pitch: AtomicBool,
     generation: AtomicU64,
+    wake: DecoderWake,
+}
+
+struct DecoderWake {
+    sequence: AtomicU64,
+    thread: OnceLock<thread::Thread>,
+}
+
+impl DecoderWake {
+    fn new() -> Self {
+        Self {
+            sequence: AtomicU64::new(0),
+            thread: OnceLock::new(),
+        }
+    }
+
+    fn register_current(&self) {
+        assert!(
+            self.thread.set(thread::current()).is_ok(),
+            "music decoder wake handle registered more than once"
+        );
+    }
+
+    fn notify(&self) {
+        self.sequence.fetch_add(1, Ordering::Release);
+        if let Some(thread) = self.thread.get() {
+            thread.unpark();
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum BackpressureMode {
+    OccupancyDeadline,
+    #[cfg(feature = "test-support")]
+    OccupancySleep,
+    #[cfg(feature = "test-support")]
+    FixedRetry(Duration),
+}
+
+struct MusicBackpressure {
+    mode: BackpressureMode,
+    sample_rate_hz: u32,
+    capacity_blocks: usize,
+    low_blocks: usize,
+    high_blocks: usize,
+    transition_prefill_blocks: usize,
+    generation: u64,
+    transition: bool,
+    await_render_drain: bool,
+    transition_ready: bool,
+    transition_published: usize,
+    #[cfg(feature = "test-support")]
+    stats: Arc<MusicBackpressureCounters>,
+}
+
+// Keep enough already-decoded audio to cover the measured Ogg + rubato rebuild
+// after a live rate change. The producer then refills in roughly 100 ms batches;
+// the 700 ms pool still leaves about 200 ms of unpublished transition capacity.
+const MUSIC_LOW_WATER_MS: usize = 400;
+const MUSIC_REFILL_BATCH_MS: usize = 100;
+const MUSIC_TRANSITION_PREFILL_MS: usize = 100;
+
+fn duration_blocks(sample_rate_hz: u32, millis: usize) -> usize {
+    (sample_rate_hz.max(1) as usize)
+        .saturating_mul(millis)
+        .div_ceil(1_000)
+        .div_ceil(deadlib_audio_core::ring::MUSIC_BLOCK_FRAMES)
+        .max(1)
+}
+
+fn block_duration(blocks: usize, sample_rate_hz: u32) -> Duration {
+    let frames =
+        (blocks as u128).saturating_mul(deadlib_audio_core::ring::MUSIC_BLOCK_FRAMES as u128);
+    let nanos = frames
+        .saturating_mul(1_000_000_000)
+        .div_ceil(u128::from(sample_rate_hz.max(1)))
+        .min(u128::from(u64::MAX));
+    Duration::from_nanos(nanos as u64)
+}
+
+impl MusicBackpressure {
+    fn new(
+        mode: BackpressureMode,
+        sample_rate_hz: u32,
+        capacity_blocks: usize,
+        generation: u64,
+    ) -> Self {
+        let capacity_blocks = capacity_blocks.max(1);
+        let low_blocks = duration_blocks(sample_rate_hz, MUSIC_LOW_WATER_MS)
+            .min(capacity_blocks.saturating_sub(2).max(1));
+        let high_blocks = low_blocks
+            .saturating_add(duration_blocks(sample_rate_hz, MUSIC_REFILL_BATCH_MS))
+            .min(capacity_blocks.saturating_sub(1).max(low_blocks));
+        let transition_prefill_blocks =
+            duration_blocks(sample_rate_hz, MUSIC_TRANSITION_PREFILL_MS)
+                .min(capacity_blocks.saturating_sub(1).max(1));
+        Self {
+            mode,
+            sample_rate_hz,
+            capacity_blocks,
+            low_blocks,
+            high_blocks,
+            transition_prefill_blocks,
+            generation,
+            transition: true,
+            await_render_drain: false,
+            transition_ready: false,
+            transition_published: 0,
+            #[cfg(feature = "test-support")]
+            stats: Arc::new(MusicBackpressureCounters::new()),
+        }
+    }
+
+    fn wait_before_push(
+        &mut self,
+        writer: &MusicBlockWriter,
+        generation: u64,
+        control: &MusicControl,
+    ) -> bool {
+        if generation != self.generation {
+            self.generation = generation;
+            self.transition = true;
+            self.await_render_drain = true;
+            self.transition_ready = false;
+            self.transition_published = 0;
+        }
+
+        match self.mode {
+            BackpressureMode::OccupancyDeadline => {}
+            #[cfg(feature = "test-support")]
+            BackpressureMode::OccupancySleep => {}
+            #[cfg(feature = "test-support")]
+            BackpressureMode::FixedRetry(_) => return false,
+        }
+
+        let outstanding = writer.outstanding_blocks();
+        self.note_outstanding(outstanding);
+        if self.transition
+            && self.transition_ready
+            && self.await_render_drain
+            && writer.render_drained_generation() == generation
+        {
+            self.transition = false;
+        }
+        if self.transition {
+            if outstanding < self.capacity_blocks {
+                return false;
+            }
+            self.wait(control, generation, block_duration(1, self.sample_rate_hz));
+            return true;
+        }
+
+        if outstanding < self.high_blocks {
+            return false;
+        }
+        let blocks_to_low = outstanding.saturating_sub(self.low_blocks.saturating_add(1));
+        self.wait(
+            control,
+            generation,
+            block_duration(blocks_to_low, self.sample_rate_hz),
+        );
+        true
+    }
+
+    fn note_pushed(&mut self, writer: &MusicBlockWriter, generation: u64) {
+        if !self.transition || generation != self.generation {
+            return;
+        }
+        self.transition_published = self.transition_published.saturating_add(1);
+        self.note_transition_push();
+        if !self.transition_ready && self.transition_published >= self.transition_prefill_blocks {
+            writer.publish_generation_ready(generation);
+            self.transition_ready = true;
+            #[cfg(feature = "test-support")]
+            if matches!(self.mode, BackpressureMode::FixedRetry(_)) {
+                self.transition = false;
+                return;
+            }
+            if !self.await_render_drain {
+                self.transition = false;
+            }
+        }
+    }
+
+    /// Releases a short initial/final stream that cannot reach the normal
+    /// transition prefill. A live generation transition still waits for its
+    /// render-side drain acknowledgement before entering steady pacing.
+    fn finish_generation(&mut self, writer: &MusicBlockWriter, generation: u64) {
+        if self.transition
+            && !self.transition_ready
+            && self.transition_published > 0
+            && generation == self.generation
+        {
+            writer.publish_generation_ready(generation);
+            self.transition_ready = true;
+            if !self.await_render_drain {
+                self.transition = false;
+            }
+        }
+    }
+
+    fn wait_for_credit(&self, control: &MusicControl, generation: u64) {
+        match self.mode {
+            BackpressureMode::OccupancyDeadline => {
+                self.wait(control, generation, block_duration(1, self.sample_rate_hz));
+            }
+            #[cfg(feature = "test-support")]
+            BackpressureMode::OccupancySleep => {
+                self.wait(control, generation, block_duration(1, self.sample_rate_hz));
+            }
+            #[cfg(feature = "test-support")]
+            BackpressureMode::FixedRetry(duration) => {
+                self.note_wait();
+                thread::sleep(duration);
+            }
+        }
+    }
+
+    fn wait(&self, control: &MusicControl, generation: u64, duration: Duration) {
+        self.note_wait();
+        #[cfg(feature = "test-support")]
+        if matches!(self.mode, BackpressureMode::OccupancySleep) {
+            thread::sleep(duration);
+            return;
+        }
+        let sequence = control.wake.sequence.load(Ordering::Acquire);
+        if control.stop_signal.load(Ordering::Acquire)
+            || control.generation.load(Ordering::Acquire) != generation
+        {
+            return;
+        }
+        if control.wake.sequence.load(Ordering::Acquire) != sequence {
+            return;
+        }
+        thread::park_timeout(duration);
+    }
+
+    #[cfg(feature = "test-support")]
+    fn note_wait(&self) {
+        self.stats.waits.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[cfg(not(feature = "test-support"))]
+    fn note_wait(&self) {}
+
+    #[cfg(feature = "test-support")]
+    fn note_transition_push(&self) {
+        self.stats.transition_pushes.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[cfg(not(feature = "test-support"))]
+    fn note_transition_push(&self) {}
+
+    #[cfg(feature = "test-support")]
+    fn note_outstanding(&self, outstanding: usize) {
+        self.stats
+            .max_outstanding
+            .fetch_max(outstanding as u64, Ordering::Relaxed);
+    }
+
+    #[cfg(not(feature = "test-support"))]
+    fn note_outstanding(&self, _outstanding: usize) {}
 }
 
 pub fn snap_music_start_sec(path: &Path, start_sec: f64) -> f64 {
@@ -165,8 +518,8 @@ fn push_music_block(
     block: &[i16],
     out_channels: usize,
     timing: MusicBlockTiming,
-    generation_source: &AtomicU64,
-    stop: &AtomicBool,
+    control: &MusicControl,
+    backpressure: &mut MusicBackpressure,
 ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
     if block.is_empty() || out_channels == 0 {
         return Ok(timing.music_start_sec);
@@ -175,12 +528,15 @@ fn push_music_block(
     let mut sample_offset = 0usize;
     let mut next_music_sec = timing.music_start_sec;
     while sample_offset < block.len() {
-        if stop.load(Ordering::Relaxed) {
+        if control.stop_signal.load(Ordering::Acquire) {
             return Ok(next_music_sec);
         }
-        if generation_source.load(Ordering::Acquire) != timing.generation {
+        if control.generation.load(Ordering::Acquire) != timing.generation {
             let remaining_frames = (block.len() - sample_offset) / out_channels;
             return Ok(next_music_sec + remaining_frames as f64 * timing.music_sec_per_frame);
+        }
+        if backpressure.wait_before_push(writer, timing.generation, control) {
+            continue;
         }
         let pushed = writer.try_push(
             &block[sample_offset..],
@@ -191,9 +547,10 @@ fn push_music_block(
             },
         );
         if pushed == 0 {
-            thread::sleep(std::time::Duration::from_micros(300));
+            backpressure.wait_for_credit(control, timing.generation);
             continue;
         }
+        backpressure.note_pushed(writer, timing.generation);
         let chunk_frames = pushed / out_channels;
         sample_offset += pushed;
         next_music_sec += chunk_frames as f64 * timing.music_sec_per_frame;
@@ -205,10 +562,10 @@ fn push_silence(
     writer: &mut MusicBlockWriter,
     silence_frames: usize,
     out_channels: usize,
-    generation_source: &AtomicU64,
     music_start_sec: f64,
     music_sec_per_frame: f64,
-    stop: &AtomicBool,
+    control: &MusicControl,
+    backpressure: &mut MusicBackpressure,
 ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
     if silence_frames == 0 || out_channels == 0 {
         return Ok(music_start_sec);
@@ -219,7 +576,7 @@ fn push_silence(
     while frames_left > 0 {
         let chunk_frames = frames_left.min(SILENCE_CHUNK_FRAMES);
         let chunk_samples = chunk_frames * out_channels;
-        let generation = generation_source.load(Ordering::Acquire);
+        let generation = control.generation.load(Ordering::Acquire);
         next_music_sec = push_music_block(
             writer,
             &silence_chunk[..chunk_samples],
@@ -229,8 +586,8 @@ fn push_silence(
                 music_start_sec: next_music_sec,
                 music_sec_per_frame,
             },
-            generation_source,
-            stop,
+            control,
+            backpressure,
         )?;
         frames_left -= chunk_frames;
     }
@@ -257,22 +614,96 @@ pub fn spawn_music_decoder_thread(
     writer: MusicBlockWriter,
     context: MusicDecodeContext,
 ) -> MusicStream {
+    spawn_music_decoder_thread_with_mode(
+        path,
+        cut,
+        looping,
+        rate,
+        preserve_pitch,
+        writer,
+        context,
+        BackpressureMode::OccupancyDeadline,
+    )
+}
+
+#[cfg(feature = "test-support")]
+/// Spawns a decoder with a benchmark-selected backpressure implementation.
+#[allow(clippy::too_many_arguments)]
+pub fn spawn_music_decoder_thread_for_benchmark(
+    path: PathBuf,
+    cut: Cut,
+    looping: bool,
+    rate: f32,
+    preserve_pitch: bool,
+    writer: MusicBlockWriter,
+    context: MusicDecodeContext,
+    mode: MusicBackpressureBenchmarkMode,
+) -> MusicStream {
+    let mode = match mode {
+        MusicBackpressureBenchmarkMode::Fixed300Micros => {
+            BackpressureMode::FixedRetry(Duration::from_micros(300))
+        }
+        MusicBackpressureBenchmarkMode::Fixed2Millis => {
+            BackpressureMode::FixedRetry(Duration::from_millis(2))
+        }
+        MusicBackpressureBenchmarkMode::OccupancyDeadline => BackpressureMode::OccupancyDeadline,
+        MusicBackpressureBenchmarkMode::OccupancySleep => BackpressureMode::OccupancySleep,
+    };
+    spawn_music_decoder_thread_with_mode(
+        path,
+        cut,
+        looping,
+        rate,
+        preserve_pitch,
+        writer,
+        context,
+        mode,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_music_decoder_thread_with_mode(
+    path: PathBuf,
+    cut: Cut,
+    looping: bool,
+    rate: f32,
+    preserve_pitch: bool,
+    writer: MusicBlockWriter,
+    context: MusicDecodeContext,
+    mode: BackpressureMode,
+) -> MusicStream {
     let control = Arc::new(MusicControl {
         stop_signal: AtomicBool::new(false),
         rate_bits: AtomicU32::new(rate.to_bits()),
         preserve_pitch: AtomicBool::new(preserve_pitch),
         generation: AtomicU64::new(context.generation),
+        wake: DecoderWake::new(),
     });
     let decoder_control = Arc::clone(&control);
+    #[cfg(feature = "test-support")]
+    let backpressure_stats = Arc::new(MusicBackpressureCounters::new());
+    #[cfg(feature = "test-support")]
+    let decoder_backpressure_stats = Arc::clone(&backpressure_stats);
 
     let thread = thread::spawn(move || {
         let mut writer = writer;
+        decoder_control.wake.register_current();
         // Dev/test profiles unwind and can return the writer after a decoder
         // panic. Shipped profiles abort the process per the workspace policy.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             #[cfg(windows)]
             let _thread_policy = boost_current_thread(ThreadRole::AudioDecode);
-            music_decoder_thread_loop(path, cut, looping, &decoder_control, &mut writer, context)
+            music_decoder_thread_loop(
+                path,
+                cut,
+                looping,
+                &decoder_control,
+                &mut writer,
+                context,
+                mode,
+                #[cfg(feature = "test-support")]
+                decoder_backpressure_stats,
+            )
         }));
         match result {
             Ok(Ok(())) => {}
@@ -282,7 +713,12 @@ pub fn spawn_music_decoder_thread(
         writer
     });
 
-    MusicStream { thread, control }
+    MusicStream {
+        thread,
+        control,
+        #[cfg(feature = "test-support")]
+        backpressure_stats,
+    }
 }
 
 #[inline]
@@ -333,6 +769,7 @@ fn sfx_output_capacity(frames_total_hint: Option<u64>, in_hz: u32, output: Outpu
         .unwrap_or(0)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn music_decoder_thread_loop(
     path: PathBuf,
     cut: Cut,
@@ -340,12 +777,15 @@ fn music_decoder_thread_loop(
     control: &MusicControl,
     writer: &mut MusicBlockWriter,
     context: MusicDecodeContext,
+    backpressure_mode: BackpressureMode,
+    #[cfg(feature = "test-support")] backpressure_stats: Arc<MusicBackpressureCounters>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let MusicControl {
         stop_signal: stop,
         rate_bits,
         preserve_pitch,
         generation,
+        wake: _,
     } = control;
     let opened = decode::open_file(&path)?;
     let mut reader = opened.reader;
@@ -354,6 +794,16 @@ fn music_decoder_thread_loop(
 
     let out_ch = context.output.channels;
     let out_hz = context.output.sample_rate_hz;
+    let mut backpressure = MusicBackpressure::new(
+        backpressure_mode,
+        out_hz,
+        writer.capacity_blocks(),
+        context.generation,
+    );
+    #[cfg(feature = "test-support")]
+    {
+        backpressure.stats = backpressure_stats;
+    }
     let is_ogg_stream = matches!(&reader, decode::Reader::Ogg(_));
 
     debug!(
@@ -376,10 +826,10 @@ fn music_decoder_thread_loop(
                 writer,
                 silence_frames,
                 out_ch,
-                generation,
                 cut.start_sec,
                 music_sec_per_frame,
-                stop,
+                control,
+                &mut backpressure,
             )?;
         }
     }
@@ -551,7 +1001,7 @@ fn music_decoder_thread_loop(
         pkt_buf.clear();
 
         loop {
-            if stop.load(Ordering::Relaxed) {
+            if stop.load(Ordering::Acquire) {
                 break 'main_loop;
             }
             if !reader.read_dec_packet_into(&mut pkt_buf)? {
@@ -678,8 +1128,8 @@ fn music_decoder_thread_loop(
                                 music_start_sec: next_music_output_sec,
                                 music_sec_per_frame,
                             },
-                            generation,
-                            stop,
+                            control,
+                            &mut backpressure,
                         )?;
                     } else {
                         out_tmp.clear();
@@ -701,8 +1151,8 @@ fn music_decoder_thread_loop(
                                 music_start_sec: next_music_output_sec,
                                 music_sec_per_frame,
                             },
-                            generation,
-                            stop,
+                            control,
+                            &mut backpressure,
                         )?;
                     }
                 }
@@ -790,8 +1240,8 @@ fn music_decoder_thread_loop(
                             music_start_sec: next_music_output_sec,
                             music_sec_per_frame,
                         },
-                        generation,
-                        stop,
+                        control,
+                        &mut backpressure,
                     )?;
                 }
                 if finished {
@@ -819,7 +1269,7 @@ fn music_decoder_thread_loop(
                 // its last partial window instead of holding it back for a
                 // search that will never have enough lookahead. A looping
                 // decoder keeps feeding across the seam, so it must NOT flush.
-                if !looping || stop.load(Ordering::Relaxed) {
+                if !looping || stop.load(Ordering::Acquire) {
                     sola.finish();
                 }
                 loop {
@@ -882,8 +1332,8 @@ fn music_decoder_thread_loop(
                                 music_start_sec: next_music_output_sec,
                                 music_sec_per_frame,
                             },
-                            generation,
-                            stop,
+                            control,
+                            &mut backpressure,
                         )?;
                     }
                 }
@@ -915,14 +1365,14 @@ fn music_decoder_thread_loop(
                             music_start_sec: next_music_output_sec,
                             music_sec_per_frame,
                         },
-                        generation,
-                        stop,
+                        control,
+                        &mut backpressure,
                     )?;
                 }
             }
         }
 
-        if !looping || stop.load(Ordering::Relaxed) {
+        if !looping || stop.load(Ordering::Acquire) {
             break 'main_loop;
         }
         match decode::open_file(&path) {
@@ -935,6 +1385,9 @@ fn music_decoder_thread_loop(
                 break 'main_loop;
             }
         }
+    }
+    if !stop.load(Ordering::Acquire) {
+        backpressure.finish_generation(writer, generation.load(Ordering::Acquire));
     }
     Ok(())
 }
@@ -1051,13 +1504,26 @@ pub fn load_and_resample_sfx(
 #[cfg(test)]
 mod tests {
     use super::{
-        MAX_SFX_PREALLOC_SAMPLES, OutputFormat, lead_in_silence_timing, music_output_start_sec,
-        push_music_block, seek_preroll_in_frames, sfx_output_capacity,
+        BackpressureMode, DecoderWake, MAX_SFX_PREALLOC_SAMPLES, MusicBackpressure, MusicControl,
+        OutputFormat, lead_in_silence_timing, music_output_start_sec, push_music_block,
+        seek_preroll_in_frames, sfx_output_capacity,
     };
     use deadlib_audio_core::{MusicBlockTiming, music_transport};
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
     use std::time::{Duration, Instant};
+
+    const SAMPLE_RATE: u32 = 48_000;
+
+    fn control(generation: u64) -> MusicControl {
+        MusicControl {
+            stop_signal: AtomicBool::new(false),
+            rate_bits: AtomicU32::new(1.0f32.to_bits()),
+            preserve_pitch: AtomicBool::new(false),
+            generation: AtomicU64::new(generation),
+            wake: DecoderWake::new(),
+        }
+    }
 
     #[test]
     fn seeked_map_starts_at_decoder_frame() {
@@ -1075,7 +1541,6 @@ mod tests {
 
     #[test]
     fn negative_lead_in_silence_scales_with_music_rate() {
-        const SAMPLE_RATE: u32 = 48_000;
         let (frames, music_sec_per_frame) = lead_in_silence_timing(-9.0, 1.5, SAMPLE_RATE);
 
         assert_eq!(frames, 6 * SAMPLE_RATE as usize);
@@ -1129,7 +1594,7 @@ mod tests {
         const SEC_PER_FRAME: f64 = 0.125;
         const TIMEOUT: Duration = Duration::from_secs(1);
 
-        let (mut stream, _render) = music_transport(CHANNELS);
+        let (mut stream, _render) = music_transport(SAMPLE_RATE, CHANNELS);
         let full_block = vec![1; 256 * CHANNELS];
         let timing = MusicBlockTiming {
             generation: GENERATION,
@@ -1142,14 +1607,19 @@ mod tests {
         }
         assert!(filled > 0);
 
-        let generation = Arc::new(AtomicU64::new(GENERATION));
-        let stop = Arc::new(AtomicBool::new(false));
+        let control = Arc::new(control(GENERATION));
         let entered = Arc::new(AtomicBool::new(false));
-        let generation_thread = generation.clone();
-        let stop_thread = stop.clone();
+        let control_thread = Arc::clone(&control);
         let entered_thread = entered.clone();
         let mut writer = stream.writer;
         let thread = std::thread::spawn(move || {
+            control_thread.wake.register_current();
+            let mut backpressure = MusicBackpressure::new(
+                BackpressureMode::OccupancyDeadline,
+                SAMPLE_RATE,
+                writer.capacity_blocks(),
+                GENERATION,
+            );
             entered_thread.store(true, Ordering::Release);
             let result = push_music_block(
                 &mut writer,
@@ -1160,8 +1630,8 @@ mod tests {
                     music_start_sec: 3.25,
                     music_sec_per_frame: SEC_PER_FRAME,
                 },
-                &generation_thread,
-                &stop_thread,
+                &control_thread,
+                &mut backpressure,
             );
             (writer, result)
         });
@@ -1170,13 +1640,15 @@ mod tests {
             std::thread::yield_now();
         }
         std::thread::sleep(Duration::from_millis(2));
-        generation.store(GENERATION + 1, Ordering::Release);
+        control.generation.store(GENERATION + 1, Ordering::Release);
+        control.wake.notify();
         let deadline = Instant::now() + TIMEOUT;
         while !thread.is_finished() && Instant::now() < deadline {
             std::thread::yield_now();
         }
         if !thread.is_finished() {
-            stop.store(true, Ordering::Release);
+            control.stop_signal.store(true, Ordering::Release);
+            control.wake.notify();
         }
         let (_writer, result) = thread.join().expect("producer did not panic");
         assert!(
@@ -1185,5 +1657,146 @@ mod tests {
         );
         let next_sec = result.expect("canceling a stale block succeeds");
         assert_eq!(next_sec.to_bits(), (3.25 + SEC_PER_FRAME).to_bits());
+    }
+
+    #[test]
+    fn generation_transition_can_use_reserved_pool_blocks() {
+        const CHANNELS: usize = 2;
+        const OLD_GENERATION: u64 = 11;
+        const NEW_GENERATION: u64 = 12;
+        let (mut stream, _render) = music_transport(SAMPLE_RATE, CHANNELS);
+        let mut backpressure = MusicBackpressure::new(
+            BackpressureMode::OccupancyDeadline,
+            SAMPLE_RATE,
+            stream.writer.capacity_blocks(),
+            OLD_GENERATION,
+        );
+        let control = control(NEW_GENERATION);
+        let samples = vec![1; deadlib_audio_core::ring::MUSIC_BLOCK_FRAMES * CHANNELS];
+        let old_timing = MusicBlockTiming {
+            generation: OLD_GENERATION,
+            music_start_sec: 0.0,
+            music_sec_per_frame: 1.0 / f64::from(SAMPLE_RATE),
+        };
+        for _ in 0..backpressure.high_blocks {
+            assert_ne!(stream.writer.try_push(&samples, old_timing), 0);
+        }
+        assert_eq!(stream.writer.outstanding_blocks(), backpressure.high_blocks);
+
+        let started = Instant::now();
+        let next = push_music_block(
+            &mut stream.writer,
+            &samples,
+            CHANNELS,
+            MusicBlockTiming {
+                generation: NEW_GENERATION,
+                music_start_sec: 1.0,
+                music_sec_per_frame: 1.0 / f64::from(SAMPLE_RATE),
+            },
+            &control,
+            &mut backpressure,
+        )
+        .expect("transition push succeeds");
+
+        assert!(started.elapsed() < Duration::from_millis(20));
+        assert_eq!(
+            stream.writer.outstanding_blocks(),
+            backpressure.high_blocks + 1
+        );
+        assert!(next > 1.0);
+    }
+
+    #[test]
+    fn short_initial_stream_publishes_its_partial_prefill_at_eof() {
+        const CHANNELS: usize = 2;
+        const GENERATION: u64 = 21;
+        let (mut stream, _render) = music_transport(SAMPLE_RATE, CHANNELS);
+        let control = control(GENERATION);
+        let mut backpressure = MusicBackpressure::new(
+            BackpressureMode::OccupancyDeadline,
+            SAMPLE_RATE,
+            stream.writer.capacity_blocks(),
+            GENERATION,
+        );
+        let samples = [1, -1];
+        push_music_block(
+            &mut stream.writer,
+            &samples,
+            CHANNELS,
+            MusicBlockTiming {
+                generation: GENERATION,
+                music_start_sec: 0.0,
+                music_sec_per_frame: 1.0 / f64::from(SAMPLE_RATE),
+            },
+            &control,
+            &mut backpressure,
+        )
+        .expect("short stream block publishes");
+
+        assert!(backpressure.transition);
+        assert!(!backpressure.transition_ready);
+        backpressure.finish_generation(&stream.writer, GENERATION);
+        assert!(backpressure.transition_ready);
+        assert!(!backpressure.transition);
+    }
+
+    #[test]
+    fn live_transition_waits_for_render_drain_before_steady_pacing() {
+        const CHANNELS: usize = 2;
+        const OLD_GENERATION: u64 = 31;
+        const NEW_GENERATION: u64 = 32;
+        let (mut stream, _render) = music_transport(SAMPLE_RATE, CHANNELS);
+        let control = control(NEW_GENERATION);
+        let mut backpressure = MusicBackpressure::new(
+            BackpressureMode::OccupancyDeadline,
+            SAMPLE_RATE,
+            stream.writer.capacity_blocks(),
+            OLD_GENERATION,
+        );
+        let samples = vec![
+            1;
+            backpressure.transition_prefill_blocks
+                * deadlib_audio_core::ring::MUSIC_BLOCK_FRAMES
+                * CHANNELS
+        ];
+
+        push_music_block(
+            &mut stream.writer,
+            &samples,
+            CHANNELS,
+            MusicBlockTiming {
+                generation: NEW_GENERATION,
+                music_start_sec: 0.0,
+                music_sec_per_frame: 1.0 / f64::from(SAMPLE_RATE),
+            },
+            &control,
+            &mut backpressure,
+        )
+        .expect("transition prefill publishes");
+
+        assert!(backpressure.transition_ready);
+        assert!(backpressure.await_render_drain);
+        assert!(backpressure.transition);
+        assert!(stream.writer.outstanding_blocks() < backpressure.high_blocks);
+        assert_ne!(stream.writer.render_drained_generation(), NEW_GENERATION);
+    }
+
+    #[test]
+    fn watermarks_leave_at_least_190_ms_transition_reserve() {
+        for sample_rate_hz in [44_100, 48_000, 96_000] {
+            let (stream, _render) = music_transport(sample_rate_hz, 8);
+            let backpressure = MusicBackpressure::new(
+                BackpressureMode::OccupancyDeadline,
+                sample_rate_hz,
+                stream.writer.capacity_blocks(),
+                1,
+            );
+            let reserve_frames = (backpressure.capacity_blocks - backpressure.high_blocks)
+                * deadlib_audio_core::ring::MUSIC_BLOCK_FRAMES;
+            assert!(
+                reserve_frames * 1_000 >= sample_rate_hz as usize * 190,
+                "{sample_rate_hz} Hz reserve was only {reserve_frames} frames"
+            );
+        }
     }
 }
