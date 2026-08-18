@@ -13,7 +13,7 @@ use crate::media::resolve_song_asset_path_like_itg;
 use crate::notes::parse_chart_notes_legacy;
 use crate::notes::{parse_chart_notes_as, step_type_lanes};
 use crate::stats::build_stamina_counts;
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 use crate::timing::timing_segments_from_rssp;
 use crate::timing::{parse_combos, parse_tickcounts, parse_time_signatures};
 use deadsync_chart::{STANDARD_DIFFICULTY_NAMES, SongData, song::standard_difficulty_index};
@@ -21,7 +21,7 @@ use rssp::{
     AnalysisOptions, AnalysisScratch, PreparedAnalysis, SimfileSummary, analyze_prepared_in,
 };
 use std::cmp::Ordering;
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 use std::fs;
 use std::fs::File;
 use std::io::Read;
@@ -82,7 +82,21 @@ pub struct SongParseScratch {
 enum SongBuildMode {
     Direct,
     #[cfg(any(test, feature = "bench-support"))]
+    Previous,
+    #[cfg(test)]
     Legacy,
+}
+
+impl SongBuildMode {
+    fn direct_payload(self) -> bool {
+        match self {
+            Self::Direct => true,
+            #[cfg(any(test, feature = "bench-support"))]
+            Self::Previous => true,
+            #[cfg(test)]
+            Self::Legacy => false,
+        }
+    }
 }
 
 struct SongBuildInput<'a> {
@@ -198,7 +212,7 @@ pub fn parse_song_data_file_in(
     Ok(song)
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn parse_song_file_fresh(
     path: &Path,
     options: &ParseSongOptions,
@@ -332,8 +346,8 @@ fn build_charts(
         .into_iter()
         .map(|chart| {
             let lanes = step_type_lanes(&chart.step_type_str);
-            let parsed_notes = match build_mode {
-                SongBuildMode::Direct => parse_chart_notes_as(
+            let parsed_notes = if build_mode.direct_payload() {
+                parse_chart_notes_as(
                     &chart.minimized_note_data,
                     lanes,
                     |row_index, column, note_type| CachedParsedNote {
@@ -343,14 +357,17 @@ fn build_charts(
                         tail_row_index: None,
                     },
                     |note, tail_row_index| note.tail_row_index = Some(tail_row_index as u32),
-                ),
-                #[cfg(any(test, feature = "bench-support"))]
-                SongBuildMode::Legacy => {
+                )
+            } else {
+                #[cfg(test)]
+                {
                     parse_chart_notes_legacy(&chart.minimized_note_data, lanes)
                         .iter()
                         .map(CachedParsedNote::from)
                         .collect()
                 }
+                #[cfg(not(test))]
+                unreachable!("production song builds always use direct payloads")
             };
             let chart_time_signatures = chart
                 .chart_time_signatures
@@ -398,15 +415,16 @@ fn build_charts(
             let music_path = chart_music_path(simfile_dir, song_music_path, &chart.music_path);
             let min_bpm = min_chart_bpm(&chart.timing_segments.bpms);
             let max_bpm = max_chart_bpm(&chart.timing_segments.bpms);
-            let timing_segments = match build_mode {
-                SongBuildMode::Direct => CachedTimingSegments::from_rssp(
+            let timing_segments = if build_mode.direct_payload() {
+                CachedTimingSegments::from_rssp(
                     chart.timing_segments.as_ref(),
                     time_signatures,
                     tickcounts,
                     combos,
-                ),
-                #[cfg(any(test, feature = "bench-support"))]
-                SongBuildMode::Legacy => {
+                )
+            } else {
+                #[cfg(test)]
+                {
                     let mut timing_segments =
                         timing_segments_from_rssp(chart.timing_segments.as_ref());
                     timing_segments.time_signatures = time_signatures;
@@ -414,6 +432,8 @@ fn build_charts(
                     timing_segments.combos = combos;
                     (&timing_segments).into()
                 }
+                #[cfg(not(test))]
+                unreachable!("production song builds always use direct timing payloads")
             };
             let stats = (&chart.stats).into();
             let tech_counts = (&chart.tech_counts).into();
@@ -460,7 +480,17 @@ fn build_charts(
             }
         })
         .collect();
-    adjust_duplicate_charts(&mut charts);
+    match build_mode {
+        SongBuildMode::Direct => adjust_duplicate_charts(&mut charts),
+        #[cfg(any(test, feature = "bench-support"))]
+        SongBuildMode::Previous => {
+            adjust_duplicate_charts_legacy(&mut charts);
+        }
+        #[cfg(test)]
+        SongBuildMode::Legacy => {
+            adjust_duplicate_charts_legacy(&mut charts);
+        }
+    }
     charts
 }
 
@@ -469,6 +499,121 @@ fn build_charts(
 /// expose the others as edits. The chart vector itself stays in simfile order.
 fn adjust_duplicate_charts(charts: &mut Vec<SerializableChartData>) {
     remove_identical_charts(charts);
+
+    const STACK_GROUPS: usize = 16;
+    let mut stack_groups = [(0usize, 0usize); STACK_GROUPS];
+    let mut stack_len = 0usize;
+    let mut overflow_groups = Vec::new();
+    for (chart_index, chart) in charts.iter().enumerate() {
+        let Some(difficulty) = standard_difficulty_index(&chart.difficulty) else {
+            continue;
+        };
+        let seen = stack_groups[..stack_len]
+            .iter()
+            .chain(&overflow_groups)
+            .any(|&(first, group_difficulty)| {
+                group_difficulty == difficulty
+                    && charts[first]
+                        .chart_type
+                        .eq_ignore_ascii_case(&chart.chart_type)
+            });
+        if seen {
+            continue;
+        }
+        if stack_len < STACK_GROUPS {
+            stack_groups[stack_len] = (chart_index, difficulty);
+            stack_len += 1;
+        } else {
+            if overflow_groups.is_empty() {
+                overflow_groups.reserve(charts.len().saturating_sub(STACK_GROUPS));
+            }
+            overflow_groups.push((chart_index, difficulty));
+        }
+    }
+
+    for &(first, difficulty) in stack_groups[..stack_len].iter().chain(&overflow_groups) {
+        adjust_duplicate_group(charts, first, difficulty);
+    }
+}
+
+fn adjust_duplicate_group(charts: &mut [SerializableChartData], first: usize, difficulty: usize) {
+    let difficulty_name = STANDARD_DIFFICULTY_NAMES[difficulty];
+    let mut best = first;
+    let mut count = 0usize;
+    for index in 0..charts.len() {
+        if charts[index]
+            .chart_type
+            .eq_ignore_ascii_case(&charts[first].chart_type)
+            && charts[index]
+                .difficulty
+                .eq_ignore_ascii_case(difficulty_name)
+        {
+            count += 1;
+            if duplicate_chart_cmp(&charts[index], &charts[best]).is_lt() {
+                best = index;
+            }
+        }
+    }
+    if count < 2 {
+        return;
+    }
+
+    for index in 0..charts.len() {
+        let duplicate = index != best
+            && charts[index]
+                .chart_type
+                .eq_ignore_ascii_case(&charts[first].chart_type)
+            && charts[index]
+                .difficulty
+                .eq_ignore_ascii_case(difficulty_name);
+        if duplicate {
+            let chart = &mut charts[index];
+            chart.difficulty = "Edit".to_string();
+            if chart.description.is_empty() {
+                chart.description = format!("{difficulty_name} Edit");
+            }
+        }
+    }
+}
+
+fn remove_identical_charts(charts: &mut Vec<SerializableChartData>) {
+    let mut write = 0usize;
+    for read in 0..charts.len() {
+        let chart = &charts[read];
+        let is_standard = standard_difficulty_index(&chart.difficulty).is_some();
+        let duplicate = is_standard
+            && charts[..write].iter().any(|candidate| {
+                candidate.chart_type.eq_ignore_ascii_case(&chart.chart_type)
+                    && candidate.difficulty.eq_ignore_ascii_case(&chart.difficulty)
+                    && candidate.description == chart.description
+                    && candidate.step_artist == chart.step_artist
+                    && candidate.meter == chart.meter
+                    && candidate.notes == chart.notes
+            });
+        if !duplicate {
+            charts.swap(write, read);
+            write += 1;
+        }
+    }
+    charts.truncate(write);
+}
+
+fn duplicate_chart_cmp(left: &SerializableChartData, right: &SerializableChartData) -> Ordering {
+    left.meter
+        .cmp(&right.meter)
+        .then_with(|| left.stats.total_steps.cmp(&right.stats.total_steps))
+        .then_with(|| lowercase_cmp(&left.description, &right.description))
+}
+
+fn lowercase_cmp(left: &str, right: &str) -> Ordering {
+    left.chars()
+        .flat_map(char::to_lowercase)
+        .cmp(right.chars().flat_map(char::to_lowercase))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn adjust_duplicate_charts_legacy(charts: &mut Vec<SerializableChartData>) {
+    remove_identical_charts_legacy(charts);
 
     let mut groups: Vec<(String, usize)> = Vec::new();
     for chart in charts.iter() {
@@ -497,7 +642,7 @@ fn adjust_duplicate_charts(charts: &mut Vec<SerializableChartData>) {
             continue;
         }
 
-        indices.sort_by(|&left, &right| duplicate_chart_cmp(&charts[left], &charts[right]));
+        indices.sort_by(|&left, &right| duplicate_chart_cmp_legacy(&charts[left], &charts[right]));
         for index in indices.into_iter().skip(1) {
             let chart = &mut charts[index];
             chart.difficulty = "Edit".to_string();
@@ -508,7 +653,8 @@ fn adjust_duplicate_charts(charts: &mut Vec<SerializableChartData>) {
     }
 }
 
-fn remove_identical_charts(charts: &mut Vec<SerializableChartData>) {
+#[cfg(any(test, feature = "bench-support"))]
+fn remove_identical_charts_legacy(charts: &mut Vec<SerializableChartData>) {
     let mut unique: Vec<SerializableChartData> = Vec::with_capacity(charts.len());
     for chart in charts.drain(..) {
         let is_standard = standard_difficulty_index(&chart.difficulty).is_some();
@@ -528,7 +674,11 @@ fn remove_identical_charts(charts: &mut Vec<SerializableChartData>) {
     *charts = unique;
 }
 
-fn duplicate_chart_cmp(left: &SerializableChartData, right: &SerializableChartData) -> Ordering {
+#[cfg(any(test, feature = "bench-support"))]
+fn duplicate_chart_cmp_legacy(
+    left: &SerializableChartData,
+    right: &SerializableChartData,
+) -> Ordering {
     left.meter
         .cmp(&right.meter)
         .then_with(|| left.stats.total_steps.cmp(&right.stats.total_steps))
@@ -581,17 +731,7 @@ fn max_chart_bpm(bpms: &[(f32, f32)]) -> f64 {
 }
 
 #[cfg(feature = "bench-support")]
-pub fn benchmark_song_parse_legacy(path: &Path, rounds: usize) -> u64 {
-    let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
-    (0..rounds).fold(0u64, |checksum, _| {
-        let song = parse_song_file_fresh(path, &options, |_| 0.0)
-            .expect("legacy benchmark fixture should parse");
-        checksum.wrapping_add(song_parse_checksum(&song))
-    })
-}
-
-#[cfg(feature = "bench-support")]
-pub fn benchmark_song_parse_reused(path: &Path, rounds: usize) -> u64 {
+pub fn benchmark_song_parse_previous(path: &Path, rounds: usize) -> u64 {
     let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
     let analyzer = SongAnalyzer::new(&options);
     let mut scratch = SongParseScratch::default();
@@ -601,10 +741,10 @@ pub fn benchmark_song_parse_reused(path: &Path, rounds: usize) -> u64 {
             &options,
             &analyzer,
             &mut scratch,
-            SongBuildMode::Legacy,
+            SongBuildMode::Previous,
             |_| 0.0,
         )
-        .expect("reused legacy-note benchmark fixture should parse");
+        .expect("previous benchmark fixture should parse");
         checksum.wrapping_add(song_parse_checksum(&song))
     })
 }
@@ -665,21 +805,54 @@ fn note_checksum(notes: &[CachedParsedNote]) -> u64 {
 #[cfg(feature = "bench-support")]
 fn song_parse_checksum(song: &SerializableSongData) -> u64 {
     song.charts.iter().fold(
-        (song.title.len() + song.artist.len()) as u64,
+        checksum_bytes(checksum_bytes(0, &song.title), &song.artist),
         |checksum, chart| {
-            checksum
-                .wrapping_mul(131)
-                .wrapping_add(chart.notes.len() as u64)
-                .wrapping_add(chart.parsed_notes.len() as u64)
-                .wrapping_add(u64::from(chart.stats.total_steps))
+            checksum_bytes(
+                checksum_bytes(checksum, &chart.difficulty),
+                &chart.description,
+            )
+            .wrapping_add(chart.notes.len() as u64)
+            .wrapping_add(chart.parsed_notes.len() as u64)
+            .wrapping_add(u64::from(chart.stats.total_steps))
         },
     )
+}
+
+#[cfg(feature = "bench-support")]
+fn checksum_bytes(checksum: u64, value: &str) -> u64 {
+    value.as_bytes().iter().fold(checksum, |checksum, byte| {
+        checksum.wrapping_mul(131).wrapping_add(u64::from(*byte))
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn streaming_lowercase_order_matches_allocated_order() {
+        let values = [
+            "",
+            "alpha",
+            "ALPHA",
+            "Beta",
+            "Ärger",
+            "İstanbul",
+            "Σ",
+            "ß",
+            "🙂",
+        ];
+        for left in values {
+            for right in values {
+                assert_eq!(
+                    lowercase_cmp(left, right),
+                    left.to_lowercase().cmp(&right.to_lowercase()),
+                    "lowercase ordering diverged for {left:?} and {right:?}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn reused_analysis_matches_fresh_parsing_across_files() {
@@ -799,6 +972,11 @@ mod tests {
         let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
 
         let song = parse_song_file(&simfile, &options, |_| 0.0).unwrap();
+        let legacy = parse_song_file_fresh(&simfile, &options, |_| 0.0).unwrap();
+        assert_eq!(
+            bincode::encode_to_vec(&song, bincode::config::standard()).unwrap(),
+            bincode::encode_to_vec(&legacy, bincode::config::standard()).unwrap()
+        );
 
         assert_eq!(song.charts.len(), 1);
         assert_eq!(song.charts[0].chart_type, "pump-single");
@@ -854,6 +1032,11 @@ mod tests {
         let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
 
         let song = parse_song_file(&simfile, &options, |_| 0.0).unwrap();
+        let legacy = parse_song_file_fresh(&simfile, &options, |_| 0.0).unwrap();
+        assert_eq!(
+            bincode::encode_to_vec(&song, bincode::config::standard()).unwrap(),
+            bincode::encode_to_vec(&legacy, bincode::config::standard()).unwrap()
+        );
 
         assert_eq!(
             song.charts

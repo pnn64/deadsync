@@ -21,7 +21,7 @@ use deadsync_simfile::scan::{
 };
 use deadsync_simfile::song::{
     benchmark_note_parse_current, benchmark_note_parse_legacy, benchmark_song_parse_current,
-    benchmark_song_parse_legacy, benchmark_song_parse_reused,
+    benchmark_song_parse_previous,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::fs;
@@ -596,25 +596,22 @@ fn bench_rssp_boundary() {
     print_result("direct", NOTE_PARSE_ROUNDS, &new_notes);
     print_change(&old_notes, &new_notes);
 
-    let old_checksum = benchmark_song_parse_legacy(&simfile, 1);
-    let reused_checksum = benchmark_song_parse_reused(&simfile, 1);
+    let previous_checksum = benchmark_song_parse_previous(&simfile, 1);
     let new_checksum = benchmark_song_parse_current(&simfile, 1);
-    assert_eq!(old_checksum, reused_checksum, "reused RSSP parse diverged");
-    assert_eq!(old_checksum, new_checksum, "RSSP boundary parse diverged");
-    let fresh = measure(SONG_PARSE_ROUNDS, || {
-        benchmark_song_parse_legacy(&simfile, SONG_PARSE_ROUNDS)
-    });
-    let (reused, direct) = measure_pair(
+    assert_eq!(
+        previous_checksum, new_checksum,
+        "RSSP boundary parse diverged"
+    );
+    let (previous, current) = measure_pair(
         SONG_PARSE_ROUNDS,
-        || benchmark_song_parse_reused(&simfile, SONG_PARSE_ROUNDS),
+        || benchmark_song_parse_previous(&simfile, SONG_PARSE_ROUNDS),
         || benchmark_song_parse_current(&simfile, SONG_PARSE_ROUNDS),
     );
-    black_box(fresh.checksum ^ reused.checksum ^ direct.checksum);
+    black_box(previous.checksum ^ current.checksum);
     println!("RSSP song-parse boundary ({SONG_PARSE_ROUNDS} cache misses)");
-    print_result("fresh", SONG_PARSE_ROUNDS, &fresh);
-    print_result("reuse", SONG_PARSE_ROUNDS, &reused);
-    print_result("direct", SONG_PARSE_ROUNDS, &direct);
-    print_change(&reused, &direct);
+    print_result("alloc", SONG_PARSE_ROUNDS, &previous);
+    print_result("in-place", SONG_PARSE_ROUNDS, &current);
+    print_change(&previous, &current);
 
     fs::remove_dir_all(root).unwrap();
 }
@@ -623,23 +620,27 @@ fn analysis_fixture() -> Vec<u8> {
     let mut fixture = String::with_capacity(64 * 1024);
     fixture.push_str(
         "#VERSION:0.83;\n#TITLE:Boundary Benchmark;\n#ARTIST:DeadSync;\n\
-         #BPMS:0.000=120.000,128.000=180.000;\n#NOTEDATA:;\n\
-         #STEPSTYPE:dance-single;\n#DIFFICULTY:Challenge;\n#METER:15;\n#NOTES:\n",
+         #BPMS:0.000=120.000,128.000=180.000;\n",
     );
-    for measure in 0..512 {
-        for row in 0..4 {
-            fixture.push_str(match (measure + row) & 3 {
-                0 => "1000\n",
-                1 => "0100\n",
-                2 => "0010\n",
-                _ => "0001\n",
-            });
+    for description in ["Zulu", "alpha", "İstanbul", "Beta", "gamma", "delta"] {
+        fixture.push_str("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:");
+        fixture.push_str(description);
+        fixture.push_str(";\n#DIFFICULTY:Challenge;\n#METER:15;\n#NOTES:\n");
+        for measure in 0..64 {
+            for row in 0..4 {
+                fixture.push_str(match (measure + row) & 3 {
+                    0 => "1000\n",
+                    1 => "0100\n",
+                    2 => "0010\n",
+                    _ => "0001\n",
+                });
+            }
+            if measure != 63 {
+                fixture.push_str(",\n");
+            }
         }
-        if measure != 511 {
-            fixture.push_str(",\n");
-        }
+        fixture.push_str(";\n");
     }
-    fixture.push_str(";\n");
     fixture.into_bytes()
 }
 
