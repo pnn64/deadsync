@@ -15,6 +15,7 @@ pub struct RuntimeSongConfig {
     pub fastload: bool,
     pub cachesongs: bool,
     pub global_offset_seconds: f32,
+    pub capture_debug_logs: bool,
 }
 
 fn simfile_group_name(simfile_path: &Path) -> Option<&str> {
@@ -120,6 +121,7 @@ pub fn load_song_for_scan_runtime(
         cachesongs: config.cachesongs,
         verify_cache_freshness: !config.fastload,
         global_offset_seconds: config.global_offset_seconds,
+        capture_debug_logs: config.capture_debug_logs,
     };
     let result = load_song_with_cache_options(&simfile_path, &options, music_len)?;
     Ok((result.song, result.cache_hit, result.log_entries))
@@ -139,7 +141,7 @@ pub fn reload_song_in_cache_runtime(
     let load_config = RuntimeSongConfig {
         fastload: false,
         cachesongs,
-        global_offset_seconds: config.global_offset_seconds,
+        ..config
     };
     reload_song_in_cache_with(simfile_path, |path| {
         let (song, _cache_hit, log_entries) = load_song_for_scan_runtime(

@@ -32,10 +32,24 @@ pub fn scan_and_load_songs_with_progress_counts<F>(root_path: &Path, progress: &
 where
     F: FnMut(usize, usize, &str, &str),
 {
+    let env = song_scan_env(root_path);
+    let cache_dir = env.cache_dir.clone();
+    let parse_options = parse_song_options();
+    let capture_debug_logs = log::log_enabled!(log::Level::Debug);
     scan_and_load_songs_with_progress_counts_runtime(
-        song_scan_env(root_path),
+        env,
         progress,
-        load_song_for_scan,
+        move |path, fastload, cachesongs, offset| {
+            load_song_for_scan(
+                path,
+                fastload,
+                cachesongs,
+                offset,
+                &cache_dir,
+                &parse_options,
+                capture_debug_logs,
+            )
+        },
         deadsync_config::runtime::group_is_never_cached,
         emit_scan_adapter_log,
     );
@@ -48,11 +62,25 @@ pub fn reload_song_dirs_with_progress_counts<F>(
 ) where
     F: FnMut(usize, usize, &str, &str),
 {
+    let env = song_scan_env(root_path);
+    let cache_dir = env.cache_dir.clone();
+    let parse_options = parse_song_options();
+    let capture_debug_logs = log::log_enabled!(log::Level::Debug);
     reload_song_dirs_with_progress_counts_runtime(
-        song_scan_env(root_path),
+        env,
         dirs,
         progress,
-        load_song_for_scan,
+        move |path, fastload, cachesongs, offset| {
+            load_song_for_scan(
+                path,
+                fastload,
+                cachesongs,
+                offset,
+                &cache_dir,
+                &parse_options,
+                capture_debug_logs,
+            )
+        },
         deadsync_config::runtime::group_is_never_cached,
         emit_scan_adapter_log,
     );
@@ -230,18 +258,20 @@ fn load_song_for_scan(
     fastload: bool,
     cachesongs: bool,
     global_offset_seconds: f32,
+    cache_dir: &Path,
+    parse_options: &ParseSongOptions,
+    capture_debug_logs: bool,
 ) -> Result<(SongData, bool), String> {
-    let cache_dir = dirs::app_dirs().song_cache_dir();
-    let parse_options = parse_song_options();
     let config = RuntimeSongConfig {
         fastload,
         cachesongs,
         global_offset_seconds,
+        capture_debug_logs,
     };
     let (song, cache_hit, log_entries) = load_song_for_scan_runtime(
         simfile_path,
-        &cache_dir,
-        &parse_options,
+        cache_dir,
+        parse_options,
         config,
         compute_music_length_seconds,
     )?;
@@ -310,12 +340,39 @@ fn parse_song_options() -> ParseSongOptions {
     )
 }
 
+#[cfg(feature = "bench-support")]
+pub fn benchmark_parse_options_per_song(song_count: usize) -> usize {
+    (0..song_count)
+        .map(|_| {
+            let options = std::hint::black_box(parse_song_options());
+            parse_options_checksum(&options)
+        })
+        .sum()
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_parse_options_hoisted(song_count: usize) -> usize {
+    let options = parse_song_options();
+    (0..song_count)
+        .map(|_| parse_options_checksum(std::hint::black_box(&options)))
+        .sum()
+}
+
+#[cfg(feature = "bench-support")]
+fn parse_options_checksum(options: &ParseSongOptions) -> usize {
+    options.mono_threshold
+        ^ options.song_movie_roots.len()
+        ^ options.random_movie_roots.len()
+        ^ options.bg_animation_roots.len()
+}
+
 fn runtime_song_config() -> RuntimeSongConfig {
     let config = deadsync_config::runtime::get();
     RuntimeSongConfig {
         fastload: config.fastload,
         cachesongs: config.cachesongs,
         global_offset_seconds: config.global_offset_seconds,
+        capture_debug_logs: log::log_enabled!(log::Level::Debug),
     }
 }
 

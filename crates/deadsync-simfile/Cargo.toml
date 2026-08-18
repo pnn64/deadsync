@@ -8,6 +8,14 @@ license = "GPL-3.0"
 name = "srpg_classification"
 harness = false
 
+[[bench]]
+name = "song_load_overhead"
+harness = false
+required-features = ["bench-support"]
+
+[features]
+bench-support = []
+
 [dependencies]
 bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-bincode" }
 deadlib-platform = { path = "../deadlib-platform" }

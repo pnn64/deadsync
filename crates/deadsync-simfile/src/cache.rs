@@ -1700,6 +1700,7 @@ pub struct RuntimeSongLoadOptions<'a> {
     pub cachesongs: bool,
     pub verify_cache_freshness: bool,
     pub global_offset_seconds: f32,
+    pub capture_debug_logs: bool,
 }
 
 pub struct RuntimeSongLoadResult {
@@ -1716,7 +1717,11 @@ pub fn load_song_with_cache_options<F>(
 where
     F: FnOnce(Option<&Path>) -> f32,
 {
-    let mut log_entries = Vec::with_capacity(3);
+    let mut log_entries = if options.capture_debug_logs {
+        Vec::with_capacity(3)
+    } else {
+        Vec::new()
+    };
     let cache_path = if options.fastload || options.cachesongs {
         runtime_song_cache_path(options.cache_dir, simfile_path, &mut log_entries)
     } else {
@@ -1728,10 +1733,12 @@ where
         && let Some(song) =
             load_song_cache_file(simfile_path, cache_path, options.verify_cache_freshness)
     {
-        log_entries.push(RuntimeSongLoadLogEntry::debug(format!(
-            "Cache hit for: {:?}",
-            simfile_path.file_name().unwrap_or_default()
-        )));
+        if options.capture_debug_logs {
+            log_entries.push(RuntimeSongLoadLogEntry::debug(format!(
+                "Cache hit for: {:?}",
+                simfile_path.file_name().unwrap_or_default()
+            )));
+        }
         return Ok(RuntimeSongLoadResult {
             song,
             cache_hit: true,
@@ -1739,7 +1746,9 @@ where
         });
     }
 
-    log_entries.push(runtime_song_parse_log_entry(simfile_path, options.fastload));
+    if options.capture_debug_logs {
+        log_entries.push(runtime_song_parse_log_entry(simfile_path, options.fastload));
+    }
     let song_data = parse_song_data_file(
         simfile_path,
         options.parse_options,
@@ -1789,6 +1798,24 @@ fn runtime_song_parse_log_entry(simfile_path: &Path, fastload: bool) -> RuntimeS
     } else {
         RuntimeSongLoadLogEntry::debug(format!("Parsing (fastload disabled): {file_name:?}"))
     }
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_runtime_debug_logs(song_count: usize, capture_debug_logs: bool) -> usize {
+    let simfile_path = Path::new("Songs/Benchmark Pack/Benchmark Song/chart.ssc");
+    (0..song_count)
+        .map(|_| {
+            let mut entries = if capture_debug_logs {
+                Vec::with_capacity(3)
+            } else {
+                Vec::new()
+            };
+            if capture_debug_logs {
+                entries.push(runtime_song_parse_log_entry(simfile_path, true));
+            }
+            std::hint::black_box(entries).len()
+        })
+        .sum()
 }
 
 pub fn gameplay_chart_load_log_entries(
@@ -2616,6 +2643,48 @@ mod tests {
         assert!(result.report.warnings.is_empty());
         assert_eq!(result.charts[0].notes, b"1000\n");
 
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn runtime_song_debug_logs_follow_capture_flag() {
+        let root = test_dir("runtime-song-debug-logs");
+        let cache_dir = root.join("cache");
+        let simfile = root.join("song.ssc");
+        fs::write(&simfile, b"#TITLE:Cached;").unwrap();
+        let data = cached_song(&simfile);
+        let cache_path = song_cache_path(&cache_dir, &simfile).unwrap();
+        write_song_cache_file(&cache_path, &data, 0.0).unwrap();
+
+        let parse_options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let load = |capture_debug_logs| {
+            load_song_with_cache_options(
+                &simfile,
+                &RuntimeSongLoadOptions {
+                    cache_dir: &cache_dir,
+                    parse_options: &parse_options,
+                    fastload: true,
+                    cachesongs: true,
+                    verify_cache_freshness: false,
+                    global_offset_seconds: 0.0,
+                    capture_debug_logs,
+                },
+                |_| panic!("cache hit should not parse simfile"),
+            )
+            .unwrap()
+        };
+
+        let captured = load(true);
+        assert!(captured.cache_hit);
+        assert_eq!(captured.log_entries.len(), 1);
+        assert_eq!(
+            captured.log_entries[0].level,
+            RuntimeSongLoadLogLevel::Debug
+        );
+
+        let suppressed = load(false);
+        assert!(suppressed.cache_hit);
+        assert!(suppressed.log_entries.is_empty());
         let _ = fs::remove_dir_all(root);
     }
 

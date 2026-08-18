@@ -5,7 +5,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+    mpsc,
+};
 use std::time::{Duration, Instant};
 
 use crate::runtime_cache;
@@ -192,7 +196,14 @@ impl RuntimeScanLogEntry {
     }
 }
 
-type SongParseMsg = (usize, PathBuf, Result<(Arc<SongData>, bool), String>);
+type SongParseResult = Result<(Arc<SongData>, bool), String>;
+
+struct SongParseJob {
+    pack_idx: usize,
+    simfile_path: PathBuf,
+    fastload: bool,
+    cachesongs: bool,
+}
 
 pub fn push_unique_path(path: PathBuf, roots: &mut Vec<PathBuf>, keys: &mut Vec<String>) {
     let key = path_key(&path);
@@ -314,11 +325,7 @@ pub fn scan_and_load_songs_with_progress_counts_runtime<Progress, Process, Never
     mut event: impl FnMut(RuntimeScanAdapterEvent),
 ) where
     Progress: FnMut(usize, usize, &str, &str),
-    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String>
-        + Copy
-        + Send
-        + Sync
-        + 'static,
+    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
     NeverCache: Fn(&str) -> bool,
 {
     let input = runtime_song_scan_input(&env, &mut event);
@@ -340,11 +347,7 @@ pub fn reload_song_dirs_with_progress_counts_runtime<Progress, Process, NeverCac
     mut event: impl FnMut(RuntimeScanAdapterEvent),
 ) where
     Progress: FnMut(usize, usize, &str, &str),
-    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String>
-        + Copy
-        + Send
-        + Sync
-        + 'static,
+    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
     NeverCache: Fn(&str) -> bool,
 {
     let input = runtime_song_scan_input(&env, &mut event);
@@ -513,6 +516,35 @@ pub fn scan_song_roots(song_roots: &[PathBuf]) -> (Vec<PackScan>, Vec<ScanFailur
 fn child_dirs(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
     let mut dirs = fs::read_dir(dir)?
         .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let file_type = entry.file_type().ok()?;
+            let file_name = entry.file_name();
+            let mut path =
+                PathBuf::with_capacity(dir.as_os_str().len() + file_name.as_os_str().len() + 1);
+            path.push(dir);
+            path.push(&file_name);
+            let is_dir = file_type.is_dir() || (file_type.is_symlink() && path.is_dir());
+            (is_dir && !file_name.to_string_lossy().starts_with("._")).then_some(path)
+        })
+        .collect::<Vec<_>>();
+    dirs.sort_by(|left, right| {
+        let left = left
+            .file_name()
+            .map(|name| name.to_string_lossy())
+            .unwrap_or_default();
+        let right = right
+            .file_name()
+            .map(|name| name.to_string_lossy())
+            .unwrap_or_default();
+        ascii_case_insensitive_cmp(left.as_ref(), right.as_ref())
+    });
+    Ok(dirs)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_child_dirs_legacy(dir: &Path) -> std::io::Result<u64> {
+    let mut dirs = fs::read_dir(dir)?
+        .filter_map(Result::ok)
         .map(|entry| entry.path())
         .filter(|path| {
             path.is_dir()
@@ -526,7 +558,21 @@ fn child_dirs(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
             .map(|name| name.to_string_lossy().to_ascii_lowercase())
             .unwrap_or_default()
     });
-    Ok(dirs)
+    Ok(child_dirs_checksum(&dirs))
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_child_dirs_current(dir: &Path) -> std::io::Result<u64> {
+    child_dirs(dir).map(|dirs| child_dirs_checksum(&dirs))
+}
+
+#[cfg(feature = "bench-support")]
+fn child_dirs_checksum(dirs: &[PathBuf]) -> u64 {
+    dirs.iter().fold(dirs.len() as u64, |checksum, path| {
+        checksum
+            .wrapping_mul(131)
+            .wrapping_add(path.as_os_str().len() as u64)
+    })
 }
 
 fn scan_pack(path: &Path) -> Result<Option<PackScan>, String> {
@@ -793,11 +839,7 @@ pub fn load_pack_scans_with<Progress, Process, NeverCache, OnError, OnPack, OnNe
 ) -> (Vec<SongPack>, SongLoadStats)
 where
     Progress: FnMut(usize, usize, &str, &str),
-    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String>
-        + Copy
-        + Send
-        + Sync
-        + 'static,
+    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
     NeverCache: Fn(&str) -> bool,
     OnError: FnMut(&Path, &str),
     OnPack: FnMut(&SongPack),
@@ -806,28 +848,23 @@ where
     let avail_threads = std::thread::available_parallelism()
         .map(std::num::NonZero::get)
         .unwrap_or(1);
-    let mut parse_threads = match options.song_parsing_threads {
+    let total_songs = total_song_count(&packs);
+    let parse_threads = match options.song_parsing_threads {
         0 => avail_threads,
         1 => 1,
         n => (n as usize).min(avail_threads).max(1),
-    };
-    if parse_threads < 1 {
-        parse_threads = 1;
     }
+    .min(total_songs.max(1));
     let parallel_parsing = parse_threads > 1;
 
-    let mut loaded_packs = Vec::new();
+    let mut loaded_packs = Vec::with_capacity(packs.len());
+    let mut jobs = parallel_parsing.then(|| Vec::with_capacity(total_songs));
     let mut stats = SongLoadStats {
         parse_threads,
         ..SongLoadStats::default()
     };
-    let total_songs = packs.iter().map(|pack| pack.songs.len()).sum::<usize>();
     let mut songs_done = 0usize;
     report_load_progress(&mut progress, 0, total_songs, "", "");
-
-    let mut tx_opt: Option<std::sync::mpsc::Sender<SongParseMsg>> = None;
-    let mut rx_opt: Option<std::sync::mpsc::Receiver<SongParseMsg>> = None;
-    let mut in_flight = 0usize;
 
     for pack in packs {
         let pack_display = pack
@@ -838,7 +875,9 @@ where
             .unwrap_or(pack.group_name.as_str())
             .to_owned();
 
-        let current_pack = empty_song_pack_from_scan(&pack);
+        let song_count = pack.songs.len();
+        let mut current_pack = empty_song_pack_from_scan(&pack);
+        current_pack.songs.reserve_exact(song_count);
         on_pack(&current_pack);
         let pack_idx = loaded_packs.len();
         loaded_packs.push(current_pack);
@@ -853,71 +892,19 @@ where
 
         for song in pack.songs {
             let simfile_path = song.simfile;
-            let song_display = song_progress_name(&simfile_path);
 
             if parallel_parsing {
-                if tx_opt.is_none() || rx_opt.is_none() {
-                    let (tx, rx) = std::sync::mpsc::channel::<SongParseMsg>();
-                    tx_opt = Some(tx);
-                    rx_opt = Some(rx);
-                }
-
-                while in_flight >= parse_threads {
-                    reap_song_parse(
-                        rx_opt.as_ref(),
-                        &mut in_flight,
-                        &mut loaded_packs,
-                        &mut stats,
-                        &mut songs_done,
-                        total_songs,
-                        &mut progress,
-                        &mut on_song_error,
-                    );
-                }
-
-                let Some(tx) = tx_opt.as_ref() else {
-                    process_song_sequential(
-                        process_song,
-                        simfile_path.clone(),
-                        pack_fastload,
-                        pack_cachesongs,
-                        options.global_offset_seconds,
+                jobs.as_mut()
+                    .expect("parallel song loading always allocates a job list")
+                    .push(SongParseJob {
                         pack_idx,
-                        &mut loaded_packs,
-                        &mut stats,
-                        &mut on_song_error,
-                    );
-                    songs_done = songs_done.saturating_add(1);
-                    report_load_progress(
-                        &mut progress,
-                        songs_done,
-                        total_songs,
-                        pack_display.as_str(),
-                        song_display,
-                    );
-                    continue;
-                };
-
-                let tx = tx.clone();
-                let simfile_path_owned = simfile_path.clone();
-                stats.used_parallel = true;
-                std::thread::spawn(move || {
-                    let out = catch_unwind(AssertUnwindSafe(|| {
-                        process_song(
-                            simfile_path_owned.clone(),
-                            pack_fastload,
-                            pack_cachesongs,
-                            options.global_offset_seconds,
-                        )
-                        .map(|(data, is_hit)| (Arc::new(data), is_hit))
-                    }))
-                    .unwrap_or_else(|_| Err("Song parse panicked".to_string()));
-                    let _ = tx.send((pack_idx, simfile_path_owned, out));
-                });
-                in_flight += 1;
+                        simfile_path,
+                        fastload: pack_fastload,
+                        cachesongs: pack_cachesongs,
+                    });
             } else {
                 process_song_sequential(
-                    process_song,
+                    &process_song,
                     simfile_path.clone(),
                     pack_fastload,
                     pack_cachesongs,
@@ -933,27 +920,173 @@ where
                     songs_done,
                     total_songs,
                     pack_display.as_str(),
-                    song_display,
+                    song_progress_name(&simfile_path),
                 );
             }
         }
     }
 
-    while in_flight > 0 {
-        reap_song_parse(
-            rx_opt.as_ref(),
-            &mut in_flight,
-            &mut loaded_packs,
-            &mut stats,
-            &mut songs_done,
-            total_songs,
-            &mut progress,
-            &mut on_song_error,
+    if let Some(jobs) = jobs {
+        stats.used_parallel = !jobs.is_empty();
+        run_parallel_jobs(
+            jobs.len(),
+            parse_threads,
+            |job_idx| {
+                let job = &jobs[job_idx];
+                catch_unwind(AssertUnwindSafe(|| {
+                    process_song(
+                        job.simfile_path.clone(),
+                        job.fastload,
+                        job.cachesongs,
+                        options.global_offset_seconds,
+                    )
+                    .map(|(data, is_hit)| (Arc::new(data), is_hit))
+                }))
+                .unwrap_or_else(|_| Err("Song parse panicked".to_string()))
+            },
+            |job_idx, result| {
+                let job = &jobs[job_idx];
+                integrate_song_result(
+                    result,
+                    job.pack_idx,
+                    &job.simfile_path,
+                    &mut loaded_packs,
+                    &mut stats,
+                    &mut on_song_error,
+                );
+                songs_done = songs_done.saturating_add(1);
+                let pack_display = loaded_packs
+                    .get(job.pack_idx)
+                    .map_or("", song_pack_progress_name);
+                report_load_progress(
+                    &mut progress,
+                    songs_done,
+                    total_songs,
+                    pack_display,
+                    song_progress_name(&job.simfile_path),
+                );
+            },
         );
     }
 
     finalize_loaded_packs(&mut loaded_packs);
     (loaded_packs, stats)
+}
+
+#[inline]
+fn total_song_count(packs: &[PackScan]) -> usize {
+    packs.iter().map(|pack| pack.songs.len()).sum()
+}
+
+fn run_parallel_jobs<T: Send>(
+    job_count: usize,
+    worker_count: usize,
+    process: impl Fn(usize) -> T + Sync,
+    mut receive: impl FnMut(usize, T),
+) {
+    let next_job = AtomicUsize::new(0);
+    let (tx, rx) = mpsc::channel();
+
+    std::thread::scope(|scope| {
+        for _ in 0..worker_count.min(job_count) {
+            let tx = tx.clone();
+            let process = &process;
+            let next_job = &next_job;
+            scope.spawn(move || {
+                loop {
+                    let job_idx = next_job.fetch_add(1, Ordering::Relaxed);
+                    if job_idx >= job_count {
+                        break;
+                    }
+                    if tx.send((job_idx, process(job_idx))).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(tx);
+        for (job_idx, result) in rx {
+            receive(job_idx, result);
+        }
+    });
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_legacy_song_workers(
+    job_count: usize,
+    worker_count: usize,
+    work_iterations: usize,
+) -> u64 {
+    let worker_count = worker_count.max(1);
+    let (tx, rx) = mpsc::channel();
+    let mut in_flight = 0usize;
+    let mut checksum = 0u64;
+    let mut handles = Vec::with_capacity(job_count);
+
+    for job_idx in 0..job_count {
+        while in_flight >= worker_count {
+            let (completed_idx, result) = rx
+                .recv()
+                .expect("legacy benchmark workers keep a sender alive");
+            checksum = fold_worker_checksum(checksum, completed_idx, result);
+            in_flight -= 1;
+        }
+        let tx = tx.clone();
+        handles.push(std::thread::spawn(move || {
+            let _ = tx.send((job_idx, benchmark_worker_job(job_idx, work_iterations)));
+        }));
+        in_flight += 1;
+    }
+
+    drop(tx);
+    while in_flight > 0 {
+        let (completed_idx, result) = rx
+            .recv()
+            .expect("legacy benchmark workers keep a sender alive");
+        checksum = fold_worker_checksum(checksum, completed_idx, result);
+        in_flight -= 1;
+    }
+    for handle in handles {
+        handle
+            .join()
+            .expect("legacy benchmark worker should not panic");
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_pooled_song_workers(
+    job_count: usize,
+    worker_count: usize,
+    work_iterations: usize,
+) -> u64 {
+    let mut checksum = 0u64;
+    run_parallel_jobs(
+        job_count,
+        worker_count.max(1),
+        |job_idx| benchmark_worker_job(job_idx, work_iterations),
+        |job_idx, result| {
+            checksum = fold_worker_checksum(checksum, job_idx, result);
+        },
+    );
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+fn benchmark_worker_job(job_idx: usize, work_iterations: usize) -> u64 {
+    let mut value = (job_idx as u64).wrapping_add(0x9e37_79b9_7f4a_7c15);
+    for iteration in 0..work_iterations {
+        value = value
+            .rotate_left(7)
+            .wrapping_mul(0xbf58_476d_1ce4_e5b9)
+            .wrapping_add(iteration as u64);
+    }
+    value
+}
+
+#[cfg(feature = "bench-support")]
+fn fold_worker_checksum(checksum: u64, job_idx: usize, result: u64) -> u64 {
+    checksum.wrapping_add(result.rotate_left((job_idx & 63) as u32))
 }
 
 fn ensure_runtime_song_cache_dir(cache_dir: &Path, event: &mut impl FnMut(RuntimeSongScanEvent)) {
@@ -989,11 +1122,7 @@ fn load_runtime_pack_scans<Progress, Process, NeverCache>(
 ) -> (Vec<SongPack>, SongLoadStats)
 where
     Progress: FnMut(usize, usize, &str, &str),
-    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String>
-        + Copy
-        + Send
-        + Sync
-        + 'static,
+    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
     NeverCache: Fn(&str) -> bool,
 {
     let pending_events = RefCell::new(Vec::new());
@@ -1046,11 +1175,7 @@ pub fn scan_and_load_songs_runtime<Progress, Process, NeverCache>(
     mut event: impl FnMut(RuntimeSongScanEvent),
 ) where
     Progress: FnMut(usize, usize, &str, &str),
-    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String>
-        + Copy
-        + Send
-        + Sync
-        + 'static,
+    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
     NeverCache: Fn(&str) -> bool,
 {
     event(RuntimeSongScanEvent::StartScan {
@@ -1094,11 +1219,7 @@ pub fn reload_song_dirs_runtime<Progress, Process, NeverCache>(
     mut event: impl FnMut(RuntimeSongScanEvent),
 ) where
     Progress: FnMut(usize, usize, &str, &str),
-    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String>
-        + Copy
-        + Send
-        + Sync
-        + 'static,
+    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
     NeverCache: Fn(&str) -> bool,
 {
     ensure_runtime_song_cache_dir(&input.cache_dir, &mut event);
@@ -1162,7 +1283,7 @@ fn report_load_progress<F>(
 }
 
 fn process_song_sequential<Process, OnError>(
-    process_song: Process,
+    process_song: &Process,
     simfile_path: PathBuf,
     fastload: bool,
     cachesongs: bool,
@@ -1175,76 +1296,45 @@ fn process_song_sequential<Process, OnError>(
     Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String>,
     OnError: FnMut(&Path, &str),
 {
-    match process_song(
+    let result = process_song(
         simfile_path.clone(),
         fastload,
         cachesongs,
         global_offset_seconds,
-    ) {
+    )
+    .map(|(song, is_hit)| (Arc::new(song), is_hit));
+    integrate_song_result(
+        result,
+        pack_idx,
+        &simfile_path,
+        loaded_packs,
+        stats,
+        on_song_error,
+    );
+}
+
+fn integrate_song_result<OnError>(
+    result: SongParseResult,
+    pack_idx: usize,
+    simfile_path: &Path,
+    loaded_packs: &mut [SongPack],
+    stats: &mut SongLoadStats,
+    on_song_error: &mut OnError,
+) where
+    OnError: FnMut(&Path, &str),
+{
+    match result {
         Ok((song_data, is_hit)) => {
             if is_hit {
                 stats.songs_cache_hits += 1;
             } else {
                 stats.songs_parsed += 1;
             }
-            loaded_packs[pack_idx].songs.push(Arc::new(song_data));
+            loaded_packs[pack_idx].songs.push(song_data);
         }
         Err(error) => {
             stats.songs_failed += 1;
-            on_song_error(&simfile_path, error.as_str());
-        }
-    }
-}
-
-fn reap_song_parse<F, OnError>(
-    rx: Option<&std::sync::mpsc::Receiver<SongParseMsg>>,
-    in_flight: &mut usize,
-    loaded_packs: &mut Vec<SongPack>,
-    stats: &mut SongLoadStats,
-    songs_done: &mut usize,
-    total_songs: usize,
-    progress: &mut Option<&mut F>,
-    on_song_error: &mut OnError,
-) where
-    F: FnMut(usize, usize, &str, &str),
-    OnError: FnMut(&Path, &str),
-{
-    let Some(rx) = rx else {
-        return;
-    };
-    match rx.recv() {
-        Ok((pack_idx, simfile_path, result)) => {
-            *in_flight = in_flight.saturating_sub(1);
-            match result {
-                Ok((song_data, is_hit)) => {
-                    if is_hit {
-                        stats.songs_cache_hits += 1;
-                    } else {
-                        stats.songs_parsed += 1;
-                    }
-                    if let Some(pack) = loaded_packs.get_mut(pack_idx) {
-                        pack.songs.push(song_data);
-                    }
-                }
-                Err(error) => {
-                    stats.songs_failed += 1;
-                    on_song_error(&simfile_path, error.as_str());
-                }
-            }
-            *songs_done = songs_done.saturating_add(1);
-            let pack_display = loaded_packs
-                .get(pack_idx)
-                .map_or("", song_pack_progress_name);
-            report_load_progress(
-                progress,
-                *songs_done,
-                total_songs,
-                pack_display,
-                song_progress_name(&simfile_path),
-            );
-        }
-        Err(_) => {
-            *in_flight = 0;
+            on_song_error(simfile_path, error.as_str());
         }
     }
 }
@@ -2071,6 +2161,91 @@ mod tests {
         assert_eq!(
             progress.first(),
             Some(&(0, 3, String::new(), String::new()))
+        );
+        assert_eq!(
+            progress.last().map(|event| (event.0, event.1)),
+            Some((3, 3))
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn parallel_job_pool_processes_each_job_once() {
+        let mut completed = Vec::new();
+        run_parallel_jobs(
+            257,
+            4,
+            |job_idx| job_idx.wrapping_mul(17),
+            |job_idx, result| completed.push((job_idx, result)),
+        );
+        completed.sort_unstable();
+
+        assert_eq!(completed.len(), 257);
+        assert!(
+            completed
+                .iter()
+                .enumerate()
+                .all(|(job_idx, &(completed_idx, result))| {
+                    completed_idx == job_idx && result == job_idx.wrapping_mul(17)
+                })
+        );
+    }
+
+    #[test]
+    fn load_pack_scans_with_parallel_workers_preserves_results() {
+        let root = test_dir("load-pack-scans-parallel");
+        let packs = vec![pack_scan(
+            "Pack",
+            "Pack",
+            true,
+            None,
+            &["Parsed", "Cached", "Bad"],
+            &root,
+        )];
+        let options = SongLoadOptions {
+            fastload: true,
+            cachesongs: true,
+            global_offset_seconds: 0.25,
+            song_parsing_threads: u32::MAX,
+        };
+        let mut progress = Vec::new();
+        let mut errors = Vec::new();
+
+        let (loaded, stats) = load_pack_scans_with(
+            packs,
+            options,
+            Some(&mut |done, total, group, item| {
+                progress.push((done, total, group.to_string(), item.to_string()));
+            }),
+            process_test_song,
+            |_| false,
+            |path, error| errors.push((path.to_path_buf(), error.to_string())),
+            |_pack| {},
+            |_pack| {},
+        );
+
+        let available = std::thread::available_parallelism()
+            .map(std::num::NonZero::get)
+            .unwrap_or(1);
+        assert_eq!(stats.parse_threads, available.min(3));
+        assert_eq!(stats.used_parallel, available > 1);
+        assert_eq!(stats.songs_cache_hits, 1);
+        assert_eq!(stats.songs_parsed, 1);
+        assert_eq!(stats.songs_failed, 1);
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(
+            loaded[0]
+                .songs
+                .iter()
+                .map(|song| song.title.as_str())
+                .collect::<Vec<_>>(),
+            ["Cached", "Parsed"]
+        );
+        assert_eq!(errors.len(), 1);
+        assert_eq!(
+            progress.first().map(|event| (event.0, event.1)),
+            Some((0, 3))
         );
         assert_eq!(
             progress.last().map(|event| (event.0, event.1)),
