@@ -1,10 +1,13 @@
 use deadsync_simfile::app_runtime::{
     benchmark_parse_options_hoisted, benchmark_parse_options_per_song,
 };
-use deadsync_simfile::cache::benchmark_runtime_debug_logs;
+use deadsync_simfile::cache::{
+    benchmark_cache_probes_current, benchmark_cache_probes_legacy, benchmark_runtime_debug_logs,
+    benchmark_song_cache_paths_current, benchmark_song_cache_paths_legacy,
+};
 use deadsync_simfile::scan::{
     benchmark_child_dirs_current, benchmark_child_dirs_legacy, benchmark_legacy_song_workers,
-    benchmark_pooled_song_workers,
+    benchmark_nested_scan_current, benchmark_nested_scan_legacy, benchmark_pooled_song_workers,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::fs;
@@ -19,6 +22,9 @@ const JOB_COUNT: usize = 512;
 const SONG_COUNT: usize = 2_805;
 const DISCOVERY_DIRS: usize = 2_048;
 const DISCOVERY_FILES: usize = 64;
+const NESTED_SCAN_SONGS: usize = 512;
+const CACHE_PATH_OPS: usize = 2_048;
+const CACHE_PROBE_OPS: usize = 2_048;
 const SAMPLES: usize = 9;
 
 struct CountingAlloc {
@@ -187,6 +193,56 @@ fn main() {
     print_result("new", discovery_entries, &new);
     print_change(&old, &new);
 
+    let nested_root = nested_scan_fixture();
+    let old_checksum = benchmark_nested_scan_legacy(&nested_root).unwrap();
+    let new_checksum = benchmark_nested_scan_current(&nested_root).unwrap();
+    assert_eq!(old_checksum, new_checksum, "nested-pack detection diverged");
+    let old = measure(NESTED_SCAN_SONGS, || {
+        benchmark_nested_scan_legacy(&nested_root).unwrap()
+    });
+    let new = measure(NESTED_SCAN_SONGS, || {
+        benchmark_nested_scan_current(&nested_root).unwrap()
+    });
+    black_box(old.checksum ^ new.checksum);
+    println!("nested-pack validation ({NESTED_SCAN_SONGS} direct songs)");
+    print_result("old", NESTED_SCAN_SONGS, &old);
+    print_result("new", NESTED_SCAN_SONGS, &new);
+    print_change(&old, &new);
+
+    let simfile_path = nested_root.join("Song 00000").join("chart.sm");
+    let cache_dir = nested_root.join("cache");
+    let old_checksum =
+        benchmark_song_cache_paths_legacy(&cache_dir, &simfile_path, CACHE_PATH_OPS).unwrap();
+    let new_checksum =
+        benchmark_song_cache_paths_current(&cache_dir, &simfile_path, CACHE_PATH_OPS).unwrap();
+    assert_eq!(old_checksum, new_checksum, "song cache paths diverged");
+    let old = measure(CACHE_PATH_OPS, || {
+        benchmark_song_cache_paths_legacy(&cache_dir, &simfile_path, CACHE_PATH_OPS).unwrap()
+    });
+    let new = measure(CACHE_PATH_OPS, || {
+        benchmark_song_cache_paths_current(&cache_dir, &simfile_path, CACHE_PATH_OPS).unwrap()
+    });
+    black_box(old.checksum ^ new.checksum);
+    println!("canonical song cache path ({CACHE_PATH_OPS} paths)");
+    print_result("old", CACHE_PATH_OPS, &old);
+    print_result("new", CACHE_PATH_OPS, &new);
+    print_change(&old, &new);
+
+    let old_checksum = benchmark_cache_probes_legacy(&simfile_path, CACHE_PROBE_OPS).unwrap();
+    let new_checksum = benchmark_cache_probes_current(&simfile_path, CACHE_PROBE_OPS).unwrap();
+    assert_eq!(old_checksum, new_checksum, "cache probes diverged");
+    let old = measure(CACHE_PROBE_OPS, || {
+        benchmark_cache_probes_legacy(&simfile_path, CACHE_PROBE_OPS).unwrap()
+    });
+    let new = measure(CACHE_PROBE_OPS, || {
+        benchmark_cache_probes_current(&simfile_path, CACHE_PROBE_OPS).unwrap()
+    });
+    black_box(old.checksum ^ new.checksum);
+    println!("cache-file probe ({CACHE_PROBE_OPS} hits)");
+    print_result("old", CACHE_PROBE_OPS, &old);
+    print_result("new", CACHE_PROBE_OPS, &new);
+    print_change(&old, &new);
+
     let available = std::thread::available_parallelism()
         .map(std::num::NonZero::get)
         .unwrap_or(1);
@@ -242,6 +298,7 @@ fn main() {
     print_change(&old, &new);
 
     fs::remove_dir_all(discovery_root).unwrap();
+    fs::remove_dir_all(nested_root).unwrap();
 }
 
 fn discovery_fixture() -> std::path::PathBuf {
@@ -260,6 +317,24 @@ fn discovery_fixture() -> std::path::PathBuf {
     for index in 0..DISCOVERY_FILES {
         fs::write(root.join(format!("asset-{index:03}.png")), []).unwrap();
     }
+    root
+}
+
+fn nested_scan_fixture() -> std::path::PathBuf {
+    let root =
+        std::env::temp_dir().join(format!("deadsync-nested-scan-bench-{}", std::process::id()));
+    if root.exists() {
+        fs::remove_dir_all(&root).unwrap();
+    }
+    fs::create_dir_all(&root).unwrap();
+    for index in 0..NESTED_SCAN_SONGS {
+        let song_dir = root.join(format!("Song {index:05}"));
+        fs::create_dir(&song_dir).unwrap();
+        fs::write(song_dir.join("chart.sm"), b"#TITLE:Benchmark;").unwrap();
+    }
+    let nested = root.join("Song 00000").join("Nested");
+    fs::create_dir(&nested).unwrap();
+    fs::write(nested.join("nested.ssc"), b"#TITLE:Nested;").unwrap();
     root
 }
 

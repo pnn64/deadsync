@@ -1467,10 +1467,72 @@ pub fn song_cache_path(cache_dir: &Path, simfile_path: &Path) -> Result<PathBuf,
     let canonical_path = simfile_path.canonicalize()?;
     let mut hasher = XxHash64::with_seed(0);
     hasher.write(canonical_path.to_string_lossy().as_bytes());
-    let hash = hasher.finish();
-    let hash_hex = format!("{hash:016x}");
-    let shard2 = &hash_hex[..2];
-    Ok(cache_dir.join(shard2).join(format!("{hash_hex}.bin")))
+    Ok(cache_hash_path(cache_dir, hasher.finish()))
+}
+
+fn cache_hash_path(cache_dir: &Path, hash: u64) -> PathBuf {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut file_name = [0u8; 20];
+    for (index, digit) in file_name[..16].iter_mut().enumerate() {
+        *digit = HEX[((hash >> ((15 - index) * 4)) & 0xf) as usize];
+    }
+    file_name[16..].copy_from_slice(b".bin");
+    // The lookup table and suffix contain only valid ASCII.
+    let file_name =
+        std::str::from_utf8(&file_name).expect("cache hash filename is always valid ASCII");
+    let mut path = PathBuf::with_capacity(cache_dir.as_os_str().len() + file_name.len() + 4);
+    path.push(cache_dir);
+    path.push(&file_name[..2]);
+    path.push(file_name);
+    path
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_song_cache_paths_legacy(
+    cache_dir: &Path,
+    simfile_path: &Path,
+    iterations: usize,
+) -> Result<u64, std::io::Error> {
+    benchmark_song_cache_paths(
+        cache_dir,
+        simfile_path,
+        iterations,
+        |cache_dir, simfile_path| {
+            let canonical_path = simfile_path.canonicalize()?;
+            let mut hasher = XxHash64::with_seed(0);
+            hasher.write(canonical_path.to_string_lossy().as_bytes());
+            let hash_hex = format!("{:016x}", hasher.finish());
+            let shard2 = &hash_hex[..2];
+            Ok(cache_dir.join(shard2).join(format!("{hash_hex}.bin")))
+        },
+    )
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_song_cache_paths_current(
+    cache_dir: &Path,
+    simfile_path: &Path,
+    iterations: usize,
+) -> Result<u64, std::io::Error> {
+    benchmark_song_cache_paths(cache_dir, simfile_path, iterations, song_cache_path)
+}
+
+#[cfg(feature = "bench-support")]
+fn benchmark_song_cache_paths(
+    cache_dir: &Path,
+    simfile_path: &Path,
+    iterations: usize,
+    make_path: impl Fn(&Path, &Path) -> Result<PathBuf, std::io::Error>,
+) -> Result<u64, std::io::Error> {
+    let mut checksum = 0u64;
+    for _ in 0..iterations {
+        let path = make_path(cache_dir, simfile_path)?;
+        for byte in path.to_string_lossy().bytes() {
+            checksum = checksum.wrapping_mul(131).wrapping_add(u64::from(byte));
+        }
+        std::hint::black_box(path);
+    }
+    Ok(checksum)
 }
 
 pub fn load_song_cache_file(
@@ -2154,9 +2216,6 @@ fn cached_song_paths_exist(song: &CachedSong) -> bool {
 }
 
 fn load_cached_song_base(cache_path: &Path) -> Option<(CachedSong, u64)> {
-    if !cache_path.exists() {
-        return None;
-    }
     let Ok(mut file) = fs::File::open(cache_path) else {
         return None;
     };
@@ -2200,6 +2259,39 @@ fn load_cached_song_base(cache_path: &Path) -> Option<(CachedSong, u64)> {
         return None;
     }
     Some((cached_song, 16 + header_len))
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_cache_probes_legacy(cache_path: &Path, iterations: usize) -> std::io::Result<u64> {
+    benchmark_cache_probes(cache_path, iterations, true)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_cache_probes_current(
+    cache_path: &Path,
+    iterations: usize,
+) -> std::io::Result<u64> {
+    benchmark_cache_probes(cache_path, iterations, false)
+}
+
+#[cfg(feature = "bench-support")]
+fn benchmark_cache_probes(
+    cache_path: &Path,
+    iterations: usize,
+    check_exists: bool,
+) -> std::io::Result<u64> {
+    let mut checksum = 0u64;
+    for _ in 0..iterations {
+        if check_exists && !cache_path.exists() {
+            continue;
+        }
+        let mut file = fs::File::open(cache_path)?;
+        let mut prefix = [0u8; 16];
+        file.read_exact(&mut prefix)?;
+        checksum = checksum.wrapping_add(u64::from(prefix[0]));
+        std::hint::black_box(file);
+    }
+    Ok(checksum)
 }
 
 fn load_cached_song(path: &Path, cache_path: &Path, verify_freshness: bool) -> Option<CachedSong> {
@@ -2571,6 +2663,31 @@ mod tests {
         drop(file);
 
         assert!(load_cached_song_base(&cache_path).is_none());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn missing_song_cache_file_is_a_cache_miss() {
+        let root = test_dir("missing-cache-file");
+
+        assert!(load_cached_song_base(&root.join("missing.bin")).is_none());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn song_cache_path_preserves_the_canonical_hash_layout() {
+        let root = test_dir("cache-path-layout");
+        let cache_dir = root.join("cache");
+        let simfile = root.join("song.ssc");
+        fs::write(&simfile, b"#TITLE:Cache Path;").unwrap();
+
+        let canonical_path = simfile.canonicalize().unwrap();
+        let mut hasher = XxHash64::with_seed(0);
+        hasher.write(canonical_path.to_string_lossy().as_bytes());
+        let hash = format!("{:016x}", hasher.finish());
+        let expected = cache_dir.join(&hash[..2]).join(format!("{hash}.bin"));
+
+        assert_eq!(song_cache_path(&cache_dir, &simfile).unwrap(), expected);
         let _ = fs::remove_dir_all(root);
     }
 

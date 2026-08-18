@@ -1,7 +1,7 @@
 use deadsync_chart::{SongData, SongPack, SyncPref};
 use rssp::pack::{PackScan as RsspPackScan, SongScan as RsspSongScan};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
@@ -517,13 +517,15 @@ fn child_dirs(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
     let mut dirs = fs::read_dir(dir)?
         .filter_map(Result::ok)
         .filter_map(|entry| {
-            let file_type = entry.file_type().ok()?;
             let file_name = entry.file_name();
             let mut path =
                 PathBuf::with_capacity(dir.as_os_str().len() + file_name.as_os_str().len() + 1);
             path.push(dir);
             path.push(&file_name);
-            let is_dir = file_type.is_dir() || (file_type.is_symlink() && path.is_dir());
+            let is_dir = entry.file_type().map_or_else(
+                |_| path.is_dir(),
+                |file_type| file_type.is_dir() || (file_type.is_symlink() && path.is_dir()),
+            );
             (is_dir && !file_name.to_string_lossy().starts_with("._")).then_some(path)
         })
         .collect::<Vec<_>>();
@@ -603,8 +605,105 @@ fn scan_nested_packs(
             return Vec::new();
         }
     };
+    let direct_dirs = direct_songs
+        .iter()
+        .map(|song| song.dir.as_path())
+        .collect::<HashSet<_>>();
     let mut packs = Vec::new();
     let mut ignored_nested = 0;
+    let mut first_nested = None;
+    for path in nested_dirs {
+        if direct_dirs.contains(path.as_path()) {
+            match scan_nested_song_dir(&path) {
+                Ok((count, first)) => {
+                    ignored_nested += count;
+                    if first_nested.is_none() {
+                        first_nested = first;
+                    }
+                }
+                Err(error) => failures.push(ScanFailure { path, error }),
+            }
+            continue;
+        }
+        match scan_pack(&path) {
+            Ok(Some(mut pack)) => {
+                pack.folder_series = series.to_string();
+                packs.push(pack);
+            }
+            Ok(None) => {}
+            Err(error) => failures.push(ScanFailure { path, error }),
+        }
+    }
+    if let Some(first_nested) = first_nested {
+        failures.push(ScanFailure {
+            path: series_dir.to_path_buf(),
+            error: format!(
+                "ignored {ignored_nested} nested simfile(s) below directories already recognized as songs; first nested simfile: '{}'",
+                first_nested.display()
+            ),
+        });
+    }
+    packs
+}
+
+fn scan_nested_song_dir(song_dir: &Path) -> Result<(usize, Option<PathBuf>), String> {
+    if song_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_none()
+    {
+        return Err(format!("{:?}", rssp::pack::ScanError::InvalidUtf8Path));
+    }
+    let entries = fs::read_dir(song_dir).map_err(|error| format!("{error:?}"))?;
+    let mut count = 0usize;
+    let mut first = None;
+    for entry in entries.flatten() {
+        let file_name = entry.file_name();
+        if file_name.to_string_lossy().starts_with("._") {
+            continue;
+        }
+        let path = song_dir.join(file_name);
+        let is_dir = entry.file_type().map_or_else(
+            |_| path.is_dir(),
+            |file_type| file_type.is_dir() || (file_type.is_symlink() && path.is_dir()),
+        );
+        if !is_dir {
+            continue;
+        }
+        let nested = rssp::pack::scan_song_dir(&path, rssp::pack::ScanOpt::default())
+            .map_err(|error| format!("{error:?}"))?;
+        if let Some(nested) = nested {
+            count += 1;
+            if first.is_none() {
+                first = Some(nested.simfile);
+            }
+        }
+    }
+    Ok((count, first))
+}
+
+#[cfg(feature = "bench-support")]
+fn scan_nested_packs_legacy(
+    series_dir: &Path,
+    direct_songs: &[SongScan],
+    failures: &mut Vec<ScanFailure>,
+) -> Vec<PackScan> {
+    let series = series_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    let nested_dirs = match child_dirs(series_dir) {
+        Ok(dirs) => dirs,
+        Err(error) => {
+            failures.push(ScanFailure {
+                path: series_dir.to_path_buf(),
+                error: error.to_string(),
+            });
+            return Vec::new();
+        }
+    };
+    let mut packs = Vec::new();
+    let mut ignored_nested = 0usize;
     let mut first_nested = None;
     for path in nested_dirs {
         match scan_pack(&path) {
@@ -632,6 +731,36 @@ fn scan_nested_packs(
         });
     }
     packs
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_nested_scan_legacy(pack_dir: &Path) -> Result<u64, String> {
+    benchmark_nested_scan(pack_dir, scan_nested_packs_legacy)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_nested_scan_current(pack_dir: &Path) -> Result<u64, String> {
+    benchmark_nested_scan(pack_dir, scan_nested_packs)
+}
+
+#[cfg(feature = "bench-support")]
+fn benchmark_nested_scan(
+    pack_dir: &Path,
+    scan_nested: fn(&Path, &[SongScan], &mut Vec<ScanFailure>) -> Vec<PackScan>,
+) -> Result<u64, String> {
+    let flat = scan_pack(pack_dir)?.ok_or_else(|| "benchmark pack was not found".to_string())?;
+    let mut failures = Vec::new();
+    let nested = scan_nested(pack_dir, &flat.songs, &mut failures);
+    Ok(failures.iter().fold(
+        (flat.songs.len() as u64)
+            .wrapping_mul(131)
+            .wrapping_add(nested.iter().map(|pack| pack.songs.len() as u64).sum()),
+        |checksum, failure| {
+            checksum
+                .wrapping_mul(131)
+                .wrapping_add(failure.error.len() as u64)
+        },
+    ))
 }
 
 fn reject_series_collisions(packs: &mut Vec<PackScan>, failures: &mut Vec<ScanFailure>) {
