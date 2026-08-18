@@ -12,7 +12,6 @@ use zip::ZipArchive;
 pub const WEBSITE_URL: &str = "https://stepmaniaonline.net/";
 const CATALOG_URL: &str = "https://stepmaniaonline.net/api/packs";
 const DOWNLOAD_URL_PREFIX: &str = "https://stepmaniaonline.net/download/pack";
-const USER_AGENT: &str = "DeadSync StepManiaOnline Pack Browser/1.0";
 
 const MAX_CATALOG_BYTES: usize = 8 * 1024 * 1024;
 const MAX_CATALOG_ROWS: usize = 20_000;
@@ -513,7 +512,6 @@ fn start_catalog_request(force: bool) {
 fn fetch_catalog() -> Result<Vec<PackInfo>, StepManiaOnlineError> {
     let response = network::get_agent()
         .get(CATALOG_URL)
-        .header("User-Agent", USER_AGENT)
         .call()
         .map_err(network::error_from_ureq)?;
     let text = network::read_text_body_bounded(response, MAX_CATALOG_BYTES)?;
@@ -755,7 +753,6 @@ fn download_archive(pack: &PackInfo, archive_path: &Path) -> Result<(), StepMani
     let url = format!("{DOWNLOAD_URL_PREFIX}/{}/", pack.id);
     let response = network::get_streaming_agent()
         .get(url)
-        .header("User-Agent", USER_AGENT)
         .call()
         .map_err(network::error_from_ureq)?;
     let content_length = response

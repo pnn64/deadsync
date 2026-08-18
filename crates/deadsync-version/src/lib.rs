@@ -36,6 +36,12 @@ pub const fn current_static() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+/// User-Agent product identifying this build in outgoing HTTP requests.
+#[inline]
+pub fn user_agent() -> String {
+    format!("DeadSync/{}", current())
+}
+
 /// `format!("v{}", current())`.  Centralised so callers display the same
 /// tag string the updater will compare against.
 #[inline]
@@ -77,6 +83,17 @@ mod tests {
         unsafe { std::env::remove_var("DEADSYNC_VERSION_OVERRIDE") };
         let v = current();
         assert_eq!(v.to_string(), env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn user_agent_uses_product_version_format() {
+        let _g = ENV_LOCK.lock().unwrap();
+        // SAFETY: serialised via ENV_LOCK; only touched in these tests.
+        unsafe { std::env::remove_var("DEADSYNC_VERSION_OVERRIDE") };
+        assert_eq!(
+            user_agent(),
+            format!("DeadSync/{}", env!("CARGO_PKG_VERSION"))
+        );
     }
 
     #[test]

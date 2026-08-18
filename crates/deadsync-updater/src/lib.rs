@@ -75,10 +75,7 @@ pub fn releases_url() -> String {
 /// can correlate stale clients.
 #[inline]
 pub fn user_agent() -> String {
-    format!(
-        "deadsync/{} (+https://github.com/pnn64/deadsync)",
-        deadsync_version::current()
-    )
+    deadsync_version::user_agent()
 }
 
 /// Networking timeouts for the updater's HTTP traffic.  Two distinct
@@ -100,6 +97,7 @@ const DOWNLOAD_RESOLVE_TIMEOUT: Duration = Duration::from_secs(10);
 
 static CHECK_AGENT: std::sync::LazyLock<ureq::Agent> = std::sync::LazyLock::new(|| {
     ureq::Agent::config_builder()
+        .user_agent(user_agent())
         .timeout_global(Some(CHECK_TIMEOUT))
         .build()
         .into()
@@ -107,6 +105,7 @@ static CHECK_AGENT: std::sync::LazyLock<ureq::Agent> = std::sync::LazyLock::new(
 
 static DOWNLOAD_AGENT: std::sync::LazyLock<ureq::Agent> = std::sync::LazyLock::new(|| {
     ureq::Agent::config_builder()
+        .user_agent(user_agent())
         .timeout_connect(Some(DOWNLOAD_CONNECT_TIMEOUT))
         .timeout_resolve(Some(DOWNLOAD_RESOLVE_TIMEOUT))
         .build()
@@ -659,9 +658,10 @@ mod tests {
 
     #[test]
     fn user_agent_includes_version() {
-        let ua = user_agent();
-        assert!(ua.starts_with("deadsync/"));
-        assert!(ua.contains(&deadsync_version::current().to_string()));
+        assert_eq!(
+            user_agent(),
+            format!("DeadSync/{}", deadsync_version::current())
+        );
     }
 
     #[test]

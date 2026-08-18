@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadsync-version = { path = "../deadsync-version" }
 serde = { version = "1.0.229", features = ["derive"] }
 ureq = { version = "3.4.0", features = ["cookies", "json", "rustls"] }
 

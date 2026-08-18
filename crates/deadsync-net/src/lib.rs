@@ -131,6 +131,7 @@ pub fn log_body_snippet(text: &str) -> String {
 
 pub fn build_agent(config: AgentConfig) -> ureq::Agent {
     ureq::Agent::config_builder()
+        .user_agent(deadsync_version::user_agent())
         .timeout_global(Some(config.timeout))
         .build()
         .into()
@@ -154,6 +155,7 @@ static GROOVESTATS_AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
 // agent also keeps its connection pool across sequential downloads.
 static STREAMING_AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
     ureq::Agent::config_builder()
+        .user_agent(deadsync_version::user_agent())
         .timeout_connect(Some(STREAM_CONNECT_TIMEOUT))
         .timeout_resolve(Some(STREAM_RESOLVE_TIMEOUT))
         .build()
@@ -215,6 +217,21 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_dead_sync_user_agent(agent: &ureq::Agent) {
+        match agent.config().user_agent() {
+            ureq::config::AutoHeaderValue::Provided(value) => {
+                assert_eq!(value.as_str(), deadsync_version::user_agent());
+            }
+            other => panic!("expected configured User-Agent, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn agents_use_dead_sync_user_agent() {
+        assert_dead_sync_user_agent(&build_agent(AgentConfig::default()));
+        assert_dead_sync_user_agent(&get_streaming_agent());
+    }
 
     #[test]
     fn is_timeout_message_accepts_common_timeout_text() {

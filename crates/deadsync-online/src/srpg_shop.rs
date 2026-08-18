@@ -17,7 +17,6 @@ const LOGIN_URL: &str = "https://srpg10.groovestats.com/index.php?action=login";
 const CATALOG_API: &str = "https://srpg10.groovestats.com/api/gen-shop-list-update.php";
 const DOWNLOADS_API: &str = "https://srpg10.groovestats.com/api/gen-shop-downloads.php";
 const PURCHASE_API: &str = "https://srpg10.groovestats.com/api/gen-shop-buy-sell.php";
-const USER_AGENT: &str = "DeadSync SRPG10 Shop/1.0";
 pub const SRPG_SHOP_IDS: [u32; 4] = [3, 0, 2, 4];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -787,7 +786,6 @@ fn download_from_object(map: &Map<String, Value>) -> Option<ParsedDownload> {
 fn get_text(agent: &HttpAgent, url: &str) -> Result<String, SrpgShopError> {
     let mut response = agent
         .get(url)
-        .header("User-Agent", USER_AGENT)
         .header("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
         .call()
         .map_err(|error| network_error(network::error_from_ureq(error)))?;
@@ -810,7 +808,6 @@ fn post_form(
         .collect();
     let mut request = agent
         .post(url)
-        .header("User-Agent", USER_AGENT)
         .header(
             "Accept",
             "application/json,text/javascript,text/html,*/*;q=0.8",
@@ -839,7 +836,6 @@ fn get_form(
     let mut request = agent
         .get(url)
         .query_pairs(params.iter().map(|(key, value)| (*key, value.as_str())))
-        .header("User-Agent", USER_AGENT)
         .header(
             "Accept",
             "application/json,text/javascript,text/html,*/*;q=0.8",
