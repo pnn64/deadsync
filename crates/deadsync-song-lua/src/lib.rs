@@ -13593,6 +13593,74 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_supports_anonymous_actorframetexture_gettexture() {
+        let song_dir = test_dir("overlay-anonymous-aft");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local capture = nil
+
+return Def.ActorFrame{
+    Def.ActorFrameTexture{
+        InitCommand=function(self)
+            capture = self
+            self:Create()
+        end,
+        Def.ActorProxy{
+            ProxyStartMessageCommand=function(self)
+                local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+                self:SetTarget(player)
+                player:visible(false)
+            end,
+        },
+    },
+    Def.Sprite{
+        ProxyStartMessageCommand=function(self)
+            self:SetTexture(capture:GetTexture())
+        end,
+    },
+    Def.Actor{
+        OnCommand=function(self)
+            self:queuecommand("Bind")
+        end,
+        BindCommand=function(self)
+            MESSAGEMAN:Broadcast("ProxyStart")
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Anonymous AFT"),
+        )
+        .unwrap();
+        assert!(compiled.hidden_players[0]);
+        assert_eq!(compiled.overlays.len(), 3);
+        assert!(matches!(
+            compiled.overlays[0].kind,
+            SongLuaOverlayKind::ActorFrameTexture
+        ));
+        assert!(matches!(
+            compiled.overlays[1].kind,
+            SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::Player { player_index: 0 }
+            }
+        ));
+        let SongLuaOverlayKind::AftSprite { capture_name } = &compiled.overlays[2].kind else {
+            panic!("expected anonymous AFT output sprite");
+        };
+        assert!(capture_name.starts_with("ActorFrameTexture "));
+        assert_eq!(
+            compiled.overlays[0].name.as_deref(),
+            Some(capture_name.as_str())
+        );
+    }
+
+    #[test]
     fn compile_song_lua_supports_named_actorframetexture_sprites() {
         let song_dir = test_dir("overlay-aft-texture-name");
         let entry = song_dir.join("default.lua");

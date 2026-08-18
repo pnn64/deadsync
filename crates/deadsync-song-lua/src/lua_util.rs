@@ -59,6 +59,7 @@ type ActorAssetPrefixKey = (String, String);
 type ActorAssetPrefixCache = Mutex<HashMap<ActorAssetPrefixKey, Option<PathBuf>>>;
 static ACTOR_ASSET_PREFIX_CACHE: OnceLock<ActorAssetPrefixCache> = OnceLock::new();
 const SONG_LUA_CHILD_GROUP_KEY: &str = "__songlua_child_group";
+const SONG_LUA_AFT_COUNTER_KEY: &str = "__songlua_aft_counter";
 const DRAW_CALLBACK_ACTIVE_KEY: &str = "__songlua_draw_callback_active";
 const MANUAL_DRAW_STATE_KEY: &str = "__songlua_manual_draw_state";
 
@@ -412,7 +413,7 @@ fn make_actor_ctor(
             Value::Table(table) => table,
             _ => lua.create_table()?,
         };
-        table.set("__songlua_actor_type", actor_type)?;
+        init_actor_type(lua, &table, actor_type)?;
         if let Some(script_dir) = lua
             .globals()
             .get::<Option<String>>("__songlua_script_dir")?
@@ -1071,13 +1072,32 @@ pub fn create_dummy_actor(
     install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
 ) -> mlua::Result<Table> {
     let actor = lua.create_table()?;
-    actor.set("__songlua_actor_type", actor_type)?;
+    init_actor_type(lua, &actor, actor_type)?;
     inherit_actor_dirs(lua, &actor)?;
     install_actor_methods(lua, &actor)?;
     install_actor_metatable(lua, &actor)?;
     reset_actor_capture(lua, &actor)?;
     register_song_lua_actor(lua, &actor)?;
     Ok(actor)
+}
+
+fn init_actor_type(lua: &Lua, actor: &Table, actor_type: &'static str) -> mlua::Result<()> {
+    actor.set("__songlua_actor_type", actor_type)?;
+    if actor_type.eq_ignore_ascii_case("ActorFrameTexture")
+        && actor_aft_capture_name(actor)?.is_none()
+    {
+        let globals = lua.globals();
+        let next = globals
+            .get::<Option<i64>>(SONG_LUA_AFT_COUNTER_KEY)?
+            .unwrap_or(0)
+            .saturating_add(1);
+        globals.set(SONG_LUA_AFT_COUNTER_KEY, next)?;
+        actor.set(
+            "__songlua_aft_capture_name",
+            format!("ActorFrameTexture {next}"),
+        )?;
+    }
+    Ok(())
 }
 
 pub fn set_proxy_target_fields(actor: &Table, target: &Table) -> mlua::Result<()> {
@@ -10473,7 +10493,7 @@ where
         on_skipped_message_capture(skipped);
     }
     let message_commands = captured_commands.commands;
-    let name = actor
+    let mut name = actor
         .get::<Option<String>>("Name")
         .map_err(|err| err.to_string())?;
 
@@ -10500,6 +10520,7 @@ where
         }
         SongLuaOverlayKind::ActorFrame
     } else if actor_type.eq_ignore_ascii_case("ActorFrameTexture") {
+        name = actor_aft_capture_name(actor).map_err(|err| err.to_string())?;
         SongLuaOverlayKind::ActorFrameTexture
     } else if actor_type.eq_ignore_ascii_case("ActorProxy") {
         let Some(target) = read_proxy_target_kind(actor)? else {

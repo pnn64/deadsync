@@ -9157,7 +9157,7 @@ fn song_lua_capture_children_into(
             SongLuaOverlayKind::ActorProxy { target } => {
                 if let Some(actor) =
                     song_lua_proxy_source(target, proxy_sources).and_then(|source| {
-                        song_lua_build_proxy_frame_actor_with_scratch(
+                        song_lua_build_proxy_actor_with_scratch(
                             overlay_state,
                             draw_idx.min(i16::MAX as usize) as i16,
                             source,
@@ -18867,8 +18867,11 @@ mod tests {
         );
 
         match actors.as_slice() {
-            [Actor::Frame { offset, .. }] => assert_eq!(*offset, [0.0, 0.0]),
-            other => panic!("expected one capture proxy frame, got {other:?}"),
+            [Actor::SharedFrame { offset, tint, .. }] => {
+                assert_eq!(*offset, [0.0, 0.0]);
+                assert_eq!(*tint, [1.0; 4]);
+            }
+            other => panic!("expected one direct capture proxy, got {other:?}"),
         }
     }
 
@@ -19585,11 +19588,8 @@ mod tests {
         let [Actor::Frame { children, .. }] = children.as_ref() else {
             panic!("expected reusable capture frame");
         };
-        let [Actor::Frame { children, .. }] = children.as_slice() else {
-            panic!("expected captured proxy frame");
-        };
         let [Actor::SharedFrame { blend, tint, .. }] = children.as_slice() else {
-            panic!("expected captured source frame");
+            panic!("expected direct captured source frame");
         };
         assert_eq!(*blend, Some(BlendMode::Alpha));
         assert_eq!(*tint, [1.0; 4]);

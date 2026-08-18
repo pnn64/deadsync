@@ -212,7 +212,10 @@ mod tests {
     fn prefix_and_contiguous_outrank_scattered() {
         let prefix = score("speed", "Speed Mod").unwrap();
         let scattered = score("sd", "Speed Mod").unwrap();
-        assert!(prefix > scattered, "prefix {prefix} vs scattered {scattered}");
+        assert!(
+            prefix > scattered,
+            "prefix {prefix} vs scattered {scattered}"
+        );
     }
 
     #[test]

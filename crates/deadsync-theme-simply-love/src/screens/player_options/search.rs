@@ -114,7 +114,8 @@ pub(super) fn rebuild_matches(state: &State, query: &str) -> Vec<SettingMatch> {
 
     for pane in SEARCH_PANE_ORDER {
         let row_map = &state.panes[pane.index()].row_map;
-        let visibility = visibility::row_visibility(row_map, active, state.option_masks, state.policy);
+        let visibility =
+            visibility::row_visibility(row_map, active, state.option_masks, state.policy);
         for (display_idx, &id) in row_map.display_order().iter().enumerate() {
             if id == RowId::Exit || seen[id.index()] {
                 continue;
@@ -447,7 +448,10 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
             ));
         }
         let (text_rgb, pane_rgb) = if focused {
-            ([theme[0], theme[1], theme[2]], [theme[0], theme[1], theme[2]])
+            (
+                [theme[0], theme[1], theme[2]],
+                [theme[0], theme[1], theme[2]],
+            )
         } else {
             ([GRAY[0], GRAY[1], GRAY[2]], [GRAY[0], GRAY[1], GRAY[2]])
         };
@@ -470,8 +474,12 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
     if let Some(m) = focused_match(open) {
         let value_y = cy + panel_h * 0.5 - 74.0;
         if let Some(value) = current_value(state, m, open.opener_player) {
-            let current = tr_fmt("PlayerOptions", "SettingSearchCurrent", &[("value", &value)])
-                .to_string();
+            let current = tr_fmt(
+                "PlayerOptions",
+                "SettingSearchCurrent",
+                &[("value", &value)],
+            )
+            .to_string();
             actors.push(act!(text:
                 font("miso"): settext(current):
                 align(0.0, 0.5): xy(list_x, value_y): zoom(0.75):

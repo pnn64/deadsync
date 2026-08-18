@@ -4825,7 +4825,11 @@ pub(super) mod tests {
         let before = ids.len();
         ids.sort_by_key(|id| id.index());
         ids.dedup();
-        assert_eq!(before, ids.len(), "search index must not contain duplicates");
+        assert_eq!(
+            before,
+            ids.len(),
+            "search index must not contain duplicates"
+        );
     }
 
     #[test]
@@ -5032,10 +5036,7 @@ pub(super) mod tests {
 
         assert!(!state.search.is_open());
         assert_eq!(state.current_pane, OptionsPane::Advanced);
-        let landed = state
-            .pane()
-            .row_map
-            .id_at(state.pane().selected_row[P1]);
+        let landed = state.pane().row_map.id_at(state.pane().selected_row[P1]);
         assert_eq!(landed, RowId::Turn);
     }
 
@@ -5114,7 +5115,10 @@ pub(super) mod tests {
         );
         if let super::search::SettingSearchState::Open(open) = &state.search {
             assert!(open.query.to_ascii_lowercase().starts_with("spe"));
-            assert!(open.query.len() > 3, "ghost completion should extend the query");
+            assert!(
+                open.query.len() > 3,
+                "ghost completion should extend the query"
+            );
         } else {
             panic!("search should still be open after Tab");
         }

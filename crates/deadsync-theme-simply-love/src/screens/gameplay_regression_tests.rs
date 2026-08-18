@@ -2506,22 +2506,18 @@ return Def.ActorFrame{
         end,
     },
     Def.ActorFrameTexture{
-        Name="FixtureCapture",
         InitCommand=function(self)
             capture = self
-            self:SetTextureName("FixtureCaptureTexture")
             self:SetWidth(320)
             self:SetHeight(180)
             self:Create()
         end,
         Def.ActorProxy{
-            Name="FixtureNoteFieldProxy",
+            Name="FixturePlayerProxy",
             OnCommand=function(self)
-                local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
-                if nf:GetNumWrapperStates() == 0 then
-                    nf:AddWrapperState()
-                end
-                self:SetTarget(nf:GetWrapperState(1))
+                local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+                self:SetTarget(player)
+                player:visible(false)
                 self:visible(true)
             end,
         },
@@ -2650,20 +2646,28 @@ return Def.ActorFrame{
                             matches!(
                                 &overlay.kind,
                                 deadsync_assets::song_lua::SongLuaOverlayKind::ActorProxy {
-                                    target:
-                                        deadsync_assets::song_lua::SongLuaProxyTarget::NoteField {
-                                            player_index: 0
-                                        }
+                                    target: deadsync_assets::song_lua::SongLuaProxyTarget::Player {
+                                        player_index: 0
+                                    }
                                 }
                             )
                         }));
+                        let capture_name = visuals
+                            .overlays
+                            .iter()
+                            .find_map(|overlay| match &overlay.kind {
+                                deadsync_assets::song_lua::SongLuaOverlayKind::AftSprite {
+                                    capture_name,
+                                } => Some(capture_name),
+                                _ => None,
+                            })
+                            .expect("anonymous AFT sprite should compile");
+                        assert!(capture_name.starts_with("ActorFrameTexture "));
                         assert!(visuals.overlays.iter().any(|overlay| {
                             matches!(
-                                &overlay.kind,
-                                deadsync_assets::song_lua::SongLuaOverlayKind::AftSprite {
-                                    capture_name
-                                } if capture_name == "FixtureCaptureTexture"
-                            )
+                                overlay.kind,
+                                deadsync_assets::song_lua::SongLuaOverlayKind::ActorFrameTexture
+                            ) && overlay.name.as_deref() == Some(capture_name)
                         }));
 
                         let assets = fixture_assets();
