@@ -29,6 +29,7 @@ pub(crate) fn init_view() -> PlayerOptionsInitView {
             PlayerOptionsPlayerView {
                 options: profile.current_player_options(),
                 heart_rate_device_id: profile.heart_rate_device_id,
+                max_heart_rate: profile.max_heart_rate,
             }
         }),
     }

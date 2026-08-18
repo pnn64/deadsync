@@ -273,10 +273,21 @@ impl Default for PlayerOptionsPolicyView {
 }
 
 /// One player's shell-prepared editable options and HRM selection.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PlayerOptionsPlayerView {
     pub options: deadsync_profile::PlayerOptionsData,
     pub heart_rate_device_id: Option<String>,
+    pub max_heart_rate: u16,
+}
+
+impl Default for PlayerOptionsPlayerView {
+    fn default() -> Self {
+        Self {
+            options: deadsync_profile::PlayerOptionsData::default(),
+            heart_rate_device_id: None,
+            max_heart_rate: deadsync_profile::MAX_HEART_RATE_DEFAULT,
+        }
+    }
 }
 
 /// Shell-prepared session and option snapshot used for one Player Options

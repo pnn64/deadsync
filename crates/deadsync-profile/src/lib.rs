@@ -59,6 +59,10 @@ pub const NOTE_FIELD_OFFSET_Y_MIN: i32 = -50;
 pub const NOTE_FIELD_OFFSET_Y_MAX: i32 = 50;
 pub const VISUAL_DELAY_MS_MIN: i32 = -100;
 pub const VISUAL_DELAY_MS_MAX: i32 = 100;
+/// Per-player maximum heart rate (bpm), used with a paired heart-rate monitor.
+pub const MAX_HEART_RATE_MIN: u16 = 160;
+pub const MAX_HEART_RATE_MAX: u16 = 220;
+pub const MAX_HEART_RATE_DEFAULT: u16 = 190;
 pub const TILT_THRESHOLD_MIN_MS: u32 = 0;
 pub const TILT_THRESHOLD_MAX_MS: u32 = 100;
 pub const TILT_MIN_THRESHOLD_DEFAULT_MS: u32 = 0;
@@ -108,6 +112,7 @@ static RUNTIME_SESSION_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::Lo
 static RUNTIME_PROFILES_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::LockWaitStats::new();
 static RUNTIME_PROFILE_GENERATION: AtomicU64 = AtomicU64::new(1);
 static HEART_RATE_DEVICE_GENERATION: AtomicU64 = AtomicU64::new(1);
+static MAX_HEART_RATE_GENERATION: AtomicU64 = AtomicU64::new(1);
 static FAVORITES_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 /// Publishes mutations made through the process-global profile stores when the
@@ -163,6 +168,17 @@ pub fn runtime_heart_rate_device_generation() -> u64 {
 #[inline(always)]
 pub(crate) fn runtime_mark_heart_rate_devices_changed() {
     HEART_RATE_DEVICE_GENERATION.fetch_add(1, Ordering::Release);
+}
+
+/// Current revision of the maximum-heart-rate values in the live profiles.
+#[inline(always)]
+pub fn runtime_max_heart_rate_generation() -> u64 {
+    MAX_HEART_RATE_GENERATION.load(Ordering::Acquire)
+}
+
+#[inline(always)]
+pub(crate) fn runtime_mark_max_heart_rates_changed() {
+    MAX_HEART_RATE_GENERATION.fetch_add(1, Ordering::Release);
 }
 
 /// Current revision of profile-backed song, pack, and series favorites.
@@ -226,6 +242,13 @@ pub fn with_runtime_heart_rate_device_ids<R>(
     read(std::array::from_fn(|player| {
         profiles[player].heart_rate_device_id.as_deref()
     }))
+}
+
+/// Per-player configured maximum heart rate (bpm), read from the live profiles.
+/// Used to convert a monitor's bpm reading into a percentage-of-max color zone.
+pub fn runtime_max_heart_rates() -> [u16; PLAYER_SLOTS] {
+    let profiles = runtime_lock_profiles();
+    std::array::from_fn(|player| profiles[player].max_heart_rate)
 }
 
 pub fn profile_combo_carry(profiles: &[Profile; PLAYER_SLOTS]) -> [u32; PLAYER_SLOTS] {
@@ -544,9 +567,17 @@ pub fn default_profile_with_player_options(player_options: &PlayerOptionsData) -
 }
 
 pub fn runtime_set_guest_profile_for_side(side: PlayerSide, player_options: &PlayerOptionsData) {
-    runtime_lock_profiles()[player_side_index(side)] = guest_profile(player_options);
+    let mut profiles = runtime_lock_profiles();
+    let profile = &mut profiles[player_side_index(side)];
+    let previous_max_heart_rate = profile.max_heart_rate;
+    *profile = guest_profile(player_options);
+    let max_heart_rate_changed = profile.max_heart_rate != previous_max_heart_rate;
+    drop(profiles);
     runtime_mark_favorites_changed();
     runtime_mark_heart_rate_devices_changed();
+    if max_heart_rate_changed {
+        runtime_mark_max_heart_rates_changed();
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -570,6 +601,7 @@ pub fn runtime_apply_loaded_profile_data_for_side(
     let play_style = runtime_session_play_style();
     let mut profiles = runtime_lock_profiles();
     let profile = &mut profiles[player_side_index(side)];
+    let previous_max_heart_rate = profile.max_heart_rate;
     apply_loaded_profile_data(
         profile,
         default_profile,
@@ -589,9 +621,13 @@ pub fn runtime_apply_loaded_profile_data_for_side(
     );
     profile.avatar_path = avatar_path;
     profile.avatar_texture_key = None;
+    let max_heart_rate_changed = profile.max_heart_rate != previous_max_heart_rate;
     drop(profiles);
     runtime_mark_favorites_changed();
     runtime_mark_heart_rate_devices_changed();
+    if max_heart_rate_changed {
+        runtime_mark_max_heart_rates_changed();
+    }
 }
 
 #[derive(Debug)]
@@ -3115,6 +3151,10 @@ pub fn apply_loaded_profile_data(
             .map(|id| id.trim().to_owned())
             .filter(|id| !id.is_empty())
             .or_else(|| default_profile.heart_rate_device_id.clone());
+        profile.max_heart_rate = profile_get("userprofile", "MaxHeartRate")
+            .and_then(|value| value.trim().parse::<u16>().ok())
+            .map(|bpm| bpm.clamp(MAX_HEART_RATE_MIN, MAX_HEART_RATE_MAX))
+            .unwrap_or(default_profile.max_heart_rate);
 
         let mut load_player_options = |section: &str, default: &PlayerOptionsData| {
             load_player_options_section(
@@ -8517,6 +8557,7 @@ pub fn append_userprofile_section(content: &mut String, guid: &str, profile: &Pr
     if let Some(id) = profile.heart_rate_device_id.as_deref() {
         content.push_str(&format!("HeartRateDeviceId={id}\n"));
     }
+    content.push_str(&format!("MaxHeartRate={}\n", profile.max_heart_rate));
     content.push('\n');
 }
 
@@ -8731,6 +8772,9 @@ pub struct Profile {
     pub player_initials: String,
     /// Platform-stable BLE peripheral identifier selected for this player.
     pub heart_rate_device_id: Option<String>,
+    /// Per-player maximum heart rate in bpm. Clamped to
+    /// [`MAX_HEART_RATE_MIN`]..=[`MAX_HEART_RATE_MAX`].
+    pub max_heart_rate: u16,
     // Profile stats (Simply Love / StepMania semantics).
     pub weight_pounds: i32,
     pub birth_year: i32,
@@ -8955,6 +8999,7 @@ impl Default for Profile {
             display_name: "Player 1".to_string(),
             player_initials: "P1".to_string(),
             heart_rate_device_id: None,
+            max_heart_rate: MAX_HEART_RATE_DEFAULT,
             weight_pounds: 0,
             birth_year: 0,
             calories_burned_today: 0.0,
@@ -9207,6 +9252,13 @@ impl Profile {
             .map(|id| id.trim().to_owned())
             .filter(|id| !id.is_empty());
         set_value_if_changed(&mut self.heart_rate_device_id, device_id)
+    }
+
+    pub fn set_max_heart_rate(&mut self, bpm: u16) -> bool {
+        set_value_if_changed(
+            &mut self.max_heart_rate,
+            bpm.clamp(MAX_HEART_RATE_MIN, MAX_HEART_RATE_MAX),
+        )
     }
 
     pub fn set_scroll_speed(&mut self, setting: ScrollSpeedSetting) -> bool {
@@ -12651,6 +12703,17 @@ mod tests {
     }
 
     #[test]
+    fn max_heart_rate_setter_clamps_to_supported_range() {
+        let mut profile = Profile::default();
+
+        assert!(profile.set_max_heart_rate(MAX_HEART_RATE_MIN - 1));
+        assert_eq!(profile.max_heart_rate, MAX_HEART_RATE_MIN);
+        assert!(!profile.set_max_heart_rate(MAX_HEART_RATE_MIN));
+        assert!(profile.set_max_heart_rate(MAX_HEART_RATE_MAX + 1));
+        assert_eq!(profile.max_heart_rate, MAX_HEART_RATE_MAX);
+    }
+
+    #[test]
     fn profile_stat_defaults_match_itg_fallbacks() {
         assert_eq!(resolved_weight_pounds(0), DEFAULT_WEIGHT_POUNDS);
         assert_eq!(resolved_weight_pounds(165), 165);
@@ -12918,6 +12981,7 @@ mod tests {
             display_name: "Test Player".to_string(),
             player_initials: "TEST".to_string(),
             heart_rate_device_id: Some("AA:BB:CC:DD:EE:FF".to_string()),
+            max_heart_rate: 205,
             weight_pounds: 165,
             birth_year: 2000,
             calories_burned_day: "2026-06-23".to_string(),
@@ -12943,6 +13007,7 @@ mod tests {
         assert!(profile_ini.contains("DisplayName=Test Player\n"));
         assert!(profile_ini.contains("PlayerInitials=TEST\n"));
         assert!(profile_ini.contains("HeartRateDeviceId=AA:BB:CC:DD:EE:FF\n"));
+        assert!(profile_ini.contains("MaxHeartRate=205\n"));
         assert!(profile_ini.contains("[Editable]\nWeightPounds=165\nBirthYear=2000\n"));
         assert!(profile_ini.contains("IgnoreStepCountCalories=1\n"));
         assert!(profile_ini.contains("[LastPlayedSingles]\n"));
@@ -13264,6 +13329,7 @@ ApiKey = gs-key
                 ("userprofile", "HeartRateDeviceId"),
                 " AA:BB:CC:DD:EE:FF ".to_string(),
             ),
+            (("userprofile", "MaxHeartRate"), "225".to_string()),
             (("Editable", "WeightPounds"), "180".to_string()),
             (("Stats", "IgnoreStepCountCalories"), "1".to_string()),
             (("Stats", "CaloriesBurnedDate"), today.to_string()),
@@ -13306,6 +13372,7 @@ ApiKey = gs-key
             profile.heart_rate_device_id.as_deref(),
             Some("AA:BB:CC:DD:EE:FF")
         );
+        assert_eq!(profile.max_heart_rate, MAX_HEART_RATE_MAX);
         assert_eq!(profile.weight_pounds, 180);
         assert!(profile.ignore_step_count_calories);
         assert_eq!(profile.calories_burned_day, today);

@@ -33,6 +33,7 @@ pub enum RowId {
     MusicRate,
     Stepchart,
     HeartRateMonitor,
+    MaxHeartRate,
     WhatComesNext,
     Exit,
     // Advanced pane
@@ -960,6 +961,18 @@ impl Row {
         Self::base(id, RowBehavior::Custom(binding), name, help, choices)
     }
 
+    /// Construct a custom row whose choices are already in actor-ready form.
+    /// This avoids temporary `String` allocations for bounded inline values.
+    pub(super) fn custom_actor_texts(
+        id: RowId,
+        name: LookupKey,
+        help: LookupKey,
+        binding: CustomBinding,
+        choices: Box<[TextContent]>,
+    ) -> Self {
+        Self::base_actor_texts(id, RowBehavior::Custom(binding), name, help, choices)
+    }
+
     /// Construct an Exit row. All three pane Exit rows are byte-identical;
     /// this no-arg constructor centralizes the boilerplate.
     pub fn exit() -> Self {
@@ -1027,11 +1040,21 @@ impl Row {
         help: LookupKey,
         choices: Vec<String>,
     ) -> Self {
+        Self::base_actor_texts(id, behavior, name, help, actor_texts(choices))
+    }
+
+    fn base_actor_texts(
+        id: RowId,
+        behavior: RowBehavior,
+        name: LookupKey,
+        help: LookupKey,
+        choices: Box<[TextContent]>,
+    ) -> Self {
         Self {
             id,
             behavior,
             name,
-            choices: actor_texts(choices),
+            choices,
             selected_choice_index: [0; PLAYER_SLOTS],
             help: expand_help(help),
             choice_difficulty_indices: None,

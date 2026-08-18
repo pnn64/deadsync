@@ -17,7 +17,7 @@ pub(crate) struct Runtime {
     discover: bool,
     profile_generation: u64,
     player_options_view_key: Option<(u64, u64)>,
-    select_music_view_key: Option<(bool, u64)>,
+    select_music_view_key: Option<(bool, u64, u64)>,
 }
 
 impl Runtime {
@@ -65,9 +65,7 @@ impl Runtime {
         state: &mut select_music::State,
         enabled: bool,
     ) -> bool {
-        let key = select_music_view_key(enabled, || {
-            deadsync_heart_rate::player_readings_generation()
-        });
+        let key = select_music_view_key(enabled, heart_rate_view_generation);
         if self.select_music_view_key == Some(key) {
             return false;
         }
@@ -90,8 +88,19 @@ const fn runtime_config_changed(
     !initialized || current.0 != next.0 || current.1 != next.1 || current.2 != next.2
 }
 
-fn select_music_view_key(enabled: bool, generation: impl FnOnce() -> u64) -> (bool, u64) {
-    (enabled, if enabled { generation() } else { 0 })
+fn heart_rate_view_generation() -> (u64, u64) {
+    (
+        deadsync_heart_rate::player_readings_generation(),
+        deadsync_profile::runtime_max_heart_rate_generation(),
+    )
+}
+
+fn select_music_view_key(
+    enabled: bool,
+    generation: impl FnOnce() -> (u64, u64),
+) -> (bool, u64, u64) {
+    let (readings, profiles) = if enabled { generation() } else { (0, 0) };
+    (enabled, readings, profiles)
 }
 
 pub(crate) fn devices_view() -> player_options::HeartRateDevicesView {
@@ -120,17 +129,19 @@ pub(crate) fn devices_view() -> player_options::HeartRateDevicesView {
 }
 
 fn readings_view() -> gameplay::HeartRateView {
-    let players =
-        deadsync_heart_rate::player_readings().map(|reading| gameplay::HeartRatePlayerView {
-            configured: reading.configured,
-            connected: reading.connected,
-            bpm: reading.bpm,
-        });
+    let readings = deadsync_heart_rate::player_readings();
+    let max_heart_rates = deadsync_profile::runtime_max_heart_rates();
+    let players = std::array::from_fn(|idx| gameplay::HeartRatePlayerView {
+        configured: readings[idx].configured,
+        connected: readings[idx].connected,
+        bpm: readings[idx].bpm,
+        max_heart_rate: max_heart_rates[idx],
+    });
     gameplay::HeartRateView { players }
 }
 
 pub(crate) fn refresh_gameplay(state: &mut gameplay::State) -> bool {
-    let generation = deadsync_heart_rate::player_readings_generation();
+    let generation = heart_rate_view_generation();
     if gameplay::heart_rate_generation(state) == generation {
         return false;
     }
@@ -155,7 +166,15 @@ mod tests {
     #[test]
     fn disabled_select_music_view_does_not_read_the_generation() {
         let key = select_music_view_key(false, || panic!("disabled view read generation"));
-        assert_eq!(key, (false, 0));
-        assert_eq!(select_music_view_key(true, || 9), (true, 9));
+        assert_eq!(key, (false, 0, 0));
+        assert_eq!(select_music_view_key(true, || (9, 4)), (true, 9, 4));
+    }
+
+    #[test]
+    fn select_music_view_key_tracks_max_heart_rate_changes() {
+        let before = select_music_view_key(true, || (9, 4));
+        let after = select_music_view_key(true, || (9, 5));
+
+        assert_ne!(before, after);
     }
 }
