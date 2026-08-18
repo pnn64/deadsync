@@ -24,8 +24,8 @@ use deadsync_simfile::scan::{
 };
 use deadsync_simfile::song::{
     ParseSongOptions, benchmark_note_parse_current, benchmark_note_parse_legacy,
-    benchmark_song_bytes_current, benchmark_song_bytes_previous, benchmark_song_parse_current,
-    benchmark_song_parse_previous, parse_song_file,
+    benchmark_note_parse_precomputed, benchmark_song_bytes_current, benchmark_song_bytes_previous,
+    benchmark_song_parse_current, benchmark_song_parse_previous, parse_song_file,
 };
 use deadsync_simfile::timing::{benchmark_timing_tags_baseline, benchmark_timing_tags_current};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -685,6 +685,31 @@ fn bench_rssp_boundary() {
     print_result("copy", NOTE_PARSE_ROUNDS, &old_notes);
     print_result("direct", NOTE_PARSE_ROUNDS, &new_notes);
     print_change(&old_notes, &new_notes);
+
+    let note_capacity = note_data
+        .iter()
+        .filter(|&&ch| {
+            matches!(
+                ch,
+                b'1' | b'F' | b'f' | b'2' | b'4' | b'M' | b'm' | b'L' | b'l'
+            )
+        })
+        .count();
+    assert_eq!(
+        benchmark_note_parse_current(&note_data, 4, 1),
+        benchmark_note_parse_precomputed(&note_data, 4, note_capacity, 1),
+        "precomputed-capacity note output diverged"
+    );
+    let (counted_notes, precomputed_notes) = measure_pair(
+        NOTE_PARSE_ROUNDS,
+        || benchmark_note_parse_current(&note_data, 4, NOTE_PARSE_ROUNDS),
+        || benchmark_note_parse_precomputed(&note_data, 4, note_capacity, NOTE_PARSE_ROUNDS),
+    );
+    black_box(counted_notes.checksum ^ precomputed_notes.checksum);
+    println!("RSSP-sized note output ({NOTE_PARSE_ROUNDS} parses)");
+    print_result("count+parse", NOTE_PARSE_ROUNDS, &counted_notes);
+    print_result("precomputed", NOTE_PARSE_ROUNDS, &precomputed_notes);
+    print_change(&counted_notes, &precomputed_notes);
 
     bench_song_boundary("global timing", &global_timing);
     bench_song_boundary("chart timing", &own_timing);

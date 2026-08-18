@@ -11,7 +11,7 @@ use crate::changes::{
 use crate::media::resolve_song_asset_path_like_itg;
 #[cfg(any(test, feature = "bench-support"))]
 use crate::notes::parse_chart_notes_legacy;
-use crate::notes::{parse_chart_notes_as, step_type_lanes};
+use crate::notes::{parse_chart_notes_as, parse_chart_notes_as_with_capacity, step_type_lanes};
 use crate::stats::build_stamina_counts;
 #[cfg(test)]
 use crate::timing::timing_segments_from_rssp;
@@ -21,6 +21,7 @@ use crate::timing::{
     parse_combos_baseline, parse_tickcounts_baseline, parse_time_signatures_baseline,
 };
 use deadsync_chart::{STANDARD_DIFFICULTY_NAMES, SongData, song::standard_difficulty_index};
+use deadsync_core::note::NoteType;
 use rssp::{
     AnalysisOptions, AnalysisScratch, PreparedAnalysis, SimfileSummary, analyze_prepared_in,
 };
@@ -115,6 +116,10 @@ impl SongBuildMode {
         }
     }
 
+    fn precomputed_note_capacity(self) -> bool {
+        matches!(self, Self::Direct)
+    }
+
     #[cfg(any(test, feature = "bench-support"))]
     fn explicit_input_reserve(self) -> bool {
         match self {
@@ -124,6 +129,43 @@ impl SongBuildMode {
             #[cfg(test)]
             Self::Legacy => true,
         }
+    }
+}
+
+fn parsed_note_capacity(total_arrows: u32, mines: u32, fakes: u32) -> usize {
+    // RSSP counts taps, valid hold/roll heads, and lifts in total_arrows.
+    let total = u64::from(total_arrows) + u64::from(mines) + u64::from(fakes);
+    usize::try_from(total).unwrap_or(0)
+}
+
+fn new_cached_note(row_index: usize, column: usize, note_type: NoteType) -> CachedParsedNote {
+    CachedParsedNote {
+        row_index: row_index as u32,
+        column: column as u8,
+        note_type: note_type.into(),
+        tail_row_index: None,
+    }
+}
+
+fn set_cached_tail(note: &mut CachedParsedNote, tail_row_index: usize) {
+    note.tail_row_index = Some(tail_row_index as u32);
+}
+
+fn parse_cached_notes(
+    note_data: &[u8],
+    lanes: usize,
+    note_capacity: Option<usize>,
+) -> Vec<CachedParsedNote> {
+    if let Some(note_capacity) = note_capacity {
+        parse_chart_notes_as_with_capacity(
+            note_data,
+            lanes,
+            note_capacity,
+            new_cached_note,
+            set_cached_tail,
+        )
+    } else {
+        parse_chart_notes_as(note_data, lanes, new_cached_note, set_cached_tail)
     }
 }
 
@@ -387,17 +429,14 @@ fn build_charts(
         .map(|chart| {
             let lanes = step_type_lanes(&chart.step_type_str);
             let parsed_notes = if build_mode.direct_payload() {
-                parse_chart_notes_as(
-                    &chart.minimized_note_data,
-                    lanes,
-                    |row_index, column, note_type| CachedParsedNote {
-                        row_index: row_index as u32,
-                        column: column as u8,
-                        note_type: note_type.into(),
-                        tail_row_index: None,
-                    },
-                    |note, tail_row_index| note.tail_row_index = Some(tail_row_index as u32),
-                )
+                let note_capacity = build_mode.precomputed_note_capacity().then(|| {
+                    parsed_note_capacity(
+                        chart.stats.total_arrows,
+                        chart.stats.mines,
+                        chart.stats.fakes,
+                    )
+                });
+                parse_cached_notes(&chart.minimized_note_data, lanes, note_capacity)
             } else {
                 #[cfg(test)]
                 {
@@ -827,17 +866,20 @@ pub fn benchmark_note_parse_legacy(note_data: &[u8], lanes: usize, rounds: usize
 #[cfg(feature = "bench-support")]
 pub fn benchmark_note_parse_current(note_data: &[u8], lanes: usize, rounds: usize) -> u64 {
     (0..rounds).fold(0u64, |checksum, _| {
-        let notes = parse_chart_notes_as(
-            note_data,
-            lanes,
-            |row_index, column, note_type| CachedParsedNote {
-                row_index: row_index as u32,
-                column: column as u8,
-                note_type: note_type.into(),
-                tail_row_index: None,
-            },
-            |note, tail_row_index| note.tail_row_index = Some(tail_row_index as u32),
-        );
+        let notes = parse_cached_notes(note_data, lanes, None);
+        checksum.wrapping_add(note_checksum(&notes))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_note_parse_precomputed(
+    note_data: &[u8],
+    lanes: usize,
+    note_capacity: usize,
+    rounds: usize,
+) -> u64 {
+    (0..rounds).fold(0u64, |checksum, _| {
+        let notes = parse_cached_notes(note_data, lanes, Some(note_capacity));
         checksum.wrapping_add(note_checksum(&notes))
     })
 }
@@ -881,6 +923,41 @@ fn checksum_bytes(checksum: u64, value: &str) -> u64 {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn rssp_stats_exactly_size_valid_note_output() {
+        let summary = rssp::analyze(
+            b"#VERSION:0.83;\n\
+              #TITLE:Note Capacity;\n\
+              #BPMS:0=120;\n\
+              #NOTEDATA:;\n\
+              #STEPSTYPE:dance-single;\n\
+              #DIFFICULTY:Challenge;\n\
+              #METER:1;\n\
+              #NOTES:\n\
+              1MLF\n\
+              2000\n\
+              3000\n\
+              0400\n\
+              0300\n\
+              ;",
+            "ssc",
+            &AnalysisOptions::default(),
+        )
+        .unwrap();
+        let chart = &summary.charts[0];
+        let capacity = parsed_note_capacity(
+            chart.stats.total_arrows,
+            chart.stats.mines,
+            chart.stats.fakes,
+        );
+
+        assert_eq!(capacity, 6);
+        assert_eq!(
+            parse_cached_notes(&chart.minimized_note_data, 4, None).len(),
+            capacity
+        );
+    }
 
     #[test]
     fn streaming_lowercase_order_matches_allocated_order() {

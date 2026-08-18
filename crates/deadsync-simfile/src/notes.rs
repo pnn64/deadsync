@@ -60,6 +60,22 @@ pub(crate) fn parse_chart_notes_as<T>(
             )
         })
         .count();
+    parse_chart_notes_as_with_capacity(
+        minimized_note_data,
+        lanes,
+        note_capacity,
+        new_note,
+        set_tail,
+    )
+}
+
+pub(crate) fn parse_chart_notes_as_with_capacity<T>(
+    minimized_note_data: &[u8],
+    lanes: usize,
+    note_capacity: usize,
+    new_note: impl FnMut(usize, usize, NoteType) -> T,
+    set_tail: impl FnMut(&mut T, usize),
+) -> Vec<T> {
     let lanes = lanes.max(1);
     let mut stack_heads = [None; 10];
     let mut heap_heads = Vec::new();
@@ -192,7 +208,10 @@ fn parse_chart_notes_with_heads<T>(
 
 #[cfg(test)]
 mod tests {
-    use super::{ParsedNote, parse_chart_notes, parse_chart_notes_legacy, step_type_lanes};
+    use super::{
+        ParsedNote, parse_chart_notes, parse_chart_notes_as_with_capacity,
+        parse_chart_notes_legacy, step_type_lanes,
+    };
     use deadsync_core::note::NoteType;
 
     #[test]
@@ -289,6 +308,32 @@ mod tests {
                 parse_chart_notes_legacy(notes, lanes),
                 "note parsing diverged for {lanes} lanes"
             );
+        }
+    }
+
+    #[test]
+    fn supplied_capacity_does_not_change_note_output() {
+        let fixtures: &[(&[u8], usize)] = &[
+            (b"2000\n0100\n3000\nM00L\nF000\n", 4),
+            (b"2000\n1000\n3000\n", 4),
+            (b"2400000000\n0030000000\n0000300000\n1000000001\n", 10),
+            (b"200000000000\n300000000000\n000000000001\n", 12),
+        ];
+        for &(note_data, lanes) in fixtures {
+            let expected = parse_chart_notes(note_data, lanes);
+            let actual = parse_chart_notes_as_with_capacity(
+                note_data,
+                lanes,
+                0,
+                |row_index, column, note_type| ParsedNote {
+                    row_index,
+                    column,
+                    note_type,
+                    tail_row_index: None,
+                },
+                |note, tail_row_index| note.tail_row_index = Some(tail_row_index),
+            );
+            assert_eq!(actual, expected, "note parsing diverged for {lanes} lanes");
         }
     }
 }
