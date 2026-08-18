@@ -9,7 +9,7 @@ use deadlib_platform::{
     host_time::now_nanos,
     windows_rt::{ThreadRole, boost_current_thread},
 };
-use log::{error, warn};
+use log::{debug, error, info, warn};
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::slice;
@@ -21,6 +21,9 @@ use windows::Win32::Media::{Audio, KernelStreaming, Multimedia};
 use windows::Win32::System::Com::StructuredStorage;
 use windows::Win32::System::{Com, LibraryLoader, Threading, Variant};
 use windows::core::{PCWSTR, PWSTR, s, w};
+
+const DEVICE_HEALTH_CHECK_MS: u32 = 1_000;
+const DEVICE_RECOVERY_RETRY_MS: u32 = 1_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WasapiAccessMode {
@@ -88,11 +91,34 @@ pub struct WasapiOutputStream {
     stop_event: HANDLE,
 }
 
+struct WasapiEvent(HANDLE);
+
+impl Drop for WasapiEvent {
+    fn drop(&mut self) {
+        // SAFETY: this guard exclusively owns the event handle and closes it
+        // exactly once when the surrounding WASAPI session ends.
+        unsafe {
+            let _ = CloseHandle(self.0);
+        }
+    }
+}
+
+struct StartedAudioClient<'a>(&'a Audio::IAudioClient);
+
+impl Drop for StartedAudioClient<'_> {
+    fn drop(&mut self) {
+        // SAFETY: the guard is only constructed after `IAudioClient::Start`
+        // succeeds and cannot outlive the client it borrows.
+        unsafe {
+            let _ = self.0.Stop();
+        }
+    }
+}
+
 impl Drop for WasapiOutputStream {
     fn drop(&mut self) {
-        // SAFETY: `stop_event` is a live manual-reset event handle owned by this
-        // stream until drop. Signaling it is the shutdown path for the render
-        // thread.
+        // SAFETY: `stop_event` is a live event handle owned by this stream until
+        // drop. Signaling it is the shutdown path for the render thread.
         unsafe {
             let _ = Threading::SetEvent(self.stop_event);
         }
@@ -288,40 +314,89 @@ pub fn start(
 
 fn render_thread(
     prep: WasapiOutputPrep,
-    render: RenderState,
-    sfx_receiver: SfxReceiver,
+    mut render: RenderState,
+    mut sfx_receiver: SfxReceiver,
     stop_event: HANDLE,
     ready_tx: Sender<Result<(), String>>,
 ) {
     let _thread_policy = boost_current_thread(ThreadRole::AudioRender);
-    if let Err(err) = render_thread_inner(prep, render, sfx_receiver, stop_event, &ready_tx)
-        && ready_tx.send(Err(err.clone())).is_err()
-    {
-        error!("WASAPI render thread failed: {err}");
+    let mut startup_reported = false;
+    let mut recovering = false;
+    loop {
+        match render_thread_inner(
+            &prep,
+            &mut render,
+            &mut sfx_receiver,
+            stop_event,
+            &ready_tx,
+            &mut startup_reported,
+            &mut recovering,
+        ) {
+            Ok(()) => return,
+            Err(err) if !startup_reported => {
+                if ready_tx.send(Err(err.clone())).is_err() {
+                    error!("WASAPI render thread failed during startup: {err}");
+                }
+                return;
+            }
+            Err(err) => {
+                if recovering {
+                    debug!(
+                        "WASAPI output for '{}' is still unavailable: {err}",
+                        prep.device_name
+                    );
+                } else {
+                    warn!(
+                        "WASAPI output for '{}' was interrupted: {err}. Waiting for the device to return.",
+                        prep.device_name
+                    );
+                    recovering = true;
+                }
+                // A timed wait doubles as an interruptible recovery backoff, so
+                // dropping the output stream never has to wait for a sleep.
+                // SAFETY: `stop_event` remains owned by `WasapiOutputStream`
+                // until this render thread has been joined.
+                let wait =
+                    unsafe { Threading::WaitForSingleObject(stop_event, DEVICE_RECOVERY_RETRY_MS) };
+                if wait == Foundation::WAIT_OBJECT_0 {
+                    return;
+                }
+                if wait == WAIT_FAILED {
+                    // SAFETY: `GetLastError` reads this thread's error state.
+                    let wait_err = unsafe { Foundation::GetLastError() };
+                    error!("WASAPI recovery wait failed: {wait_err:?}");
+                    return;
+                }
+            }
+        }
     }
 }
 
 fn render_thread_inner(
-    prep: WasapiOutputPrep,
-    mut render: RenderState,
-    mut sfx_receiver: SfxReceiver,
+    prep: &WasapiOutputPrep,
+    render: &mut RenderState,
+    sfx_receiver: &mut SfxReceiver,
     stop_event: HANDLE,
     ready_tx: &Sender<Result<(), String>>,
+    startup_reported: &mut bool,
+    recovering: &mut bool,
 ) -> Result<(), String> {
     let _com = ComGuard::new()?;
     let device = open_output_device(prep.device_id.as_deref())?;
     let audio_client = build_audio_client(&device)?;
-    initialize_client(&audio_client, &prep)?;
+    initialize_client(&audio_client, prep)?;
     // SAFETY: creating an unnamed auto-reset event requires no borrowed Rust
     // memory; the returned handle is owned within this function and closed on all
     // exit paths below.
-    let event = unsafe { Threading::CreateEventW(None, false, false, PCWSTR::null()) }
-        .map_err(|e| format!("failed to create WASAPI event handle: {e}"))?;
+    let event = WasapiEvent(
+        unsafe { Threading::CreateEventW(None, false, false, PCWSTR::null()) }
+            .map_err(|e| format!("failed to create WASAPI event handle: {e}"))?,
+    );
     // SAFETY: `event` is a live event handle created above, and `audio_client` is
     // a live initialized WASAPI client that accepts an event callback handle.
     unsafe {
         audio_client
-            .SetEventHandle(event)
+            .SetEventHandle(event.0)
             .map_err(|e| format!("failed to set WASAPI event handle: {e}"))?;
     }
     // SAFETY: `audio_client` is initialized and alive, so requesting its render
@@ -371,9 +446,9 @@ fn render_thread_inner(
     write_frames(
         &audio_clock,
         &render_client,
-        &mut render,
-        &mut sfx_receiver,
-        &prep,
+        render,
+        sfx_receiver,
+        prep,
         max_frames_in_buffer,
         max_frames_in_buffer,
     )?;
@@ -398,33 +473,40 @@ fn render_thread_inner(
             .Start()
             .map_err(|e| format!("failed to start WASAPI output: {e}"))?;
     }
-    if ready_tx.send(Ok(())).is_err() {
-        // SAFETY: startup aborts before handing control back to the caller, so we
-        // stop the stream if it started and close the local event handle here.
-        unsafe {
-            let _ = audio_client.Stop();
-            let _ = CloseHandle(event);
+    let _started_client = StartedAudioClient(&audio_client);
+    if !*startup_reported {
+        if ready_tx.send(Ok(())).is_err() {
+            return Ok(());
         }
-        return Ok(());
+        *startup_reported = true;
+    } else {
+        info!(
+            "WASAPI output for '{}' recovered after a device interruption.",
+            prep.device_name
+        );
+        *recovering = false;
     }
 
-    let handles = [stop_event, event];
-    let result = loop {
+    let handles = [stop_event, event.0];
+    loop {
         // SAFETY: both handles in `handles` are valid event handles that remain
         // alive for the duration of this wait call.
         let wait = unsafe {
-            Threading::WaitForMultipleObjectsEx(&handles, false, Threading::INFINITE, false)
+            Threading::WaitForMultipleObjectsEx(&handles, false, DEVICE_HEALTH_CHECK_MS, false)
         };
         if wait == WAIT_FAILED {
             // SAFETY: `GetLastError` reads the thread-local Windows error state and
             // takes no borrowed Rust memory.
             let err = unsafe { Foundation::GetLastError() };
-            break Err(format!("WaitForMultipleObjectsEx failed: {err:?}"));
+            return Err(format!("WaitForMultipleObjectsEx failed: {err:?}"));
         }
-        let idx = wait.0.saturating_sub(Foundation::WAIT_OBJECT_0.0) as usize;
-        if idx == 0 {
-            break Ok(());
+        if wait == Foundation::WAIT_OBJECT_0 {
+            return Ok(());
         }
+        // On a callback signal this is the normal render path. On the periodic
+        // timeout it is also a liveness probe: an unplugged endpoint reports
+        // AUDCLNT_E_DEVICE_INVALIDATED here even if it stopped signaling its
+        // callback event.
         // SAFETY: `audio_client` remains alive and started while the render loop
         // runs, so querying current padding is valid here.
         let padding = unsafe {
@@ -453,22 +535,13 @@ fn render_thread_inner(
         write_frames(
             &audio_clock,
             &render_client,
-            &mut render,
-            &mut sfx_receiver,
-            &prep,
+            render,
+            sfx_receiver,
+            prep,
             frames_available,
             padding,
         )?;
-    };
-
-    // SAFETY: shutdown runs while `audio_client` and `event` are still owned by
-    // this function; stopping the client and closing the local event handle are
-    // the correct teardown steps.
-    unsafe {
-        let _ = audio_client.Stop();
-        let _ = CloseHandle(event);
     }
-    result
 }
 
 fn write_frames(

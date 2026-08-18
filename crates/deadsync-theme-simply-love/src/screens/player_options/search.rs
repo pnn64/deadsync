@@ -302,7 +302,7 @@ pub(super) fn help_text(state: &State, m: &SettingMatch) -> Option<String> {
     let text = row
         .help
         .iter()
-        .map(|s| s.trim())
+        .map(|line| line.text.trim())
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join(" ");
