@@ -24,8 +24,10 @@ use deadsync_simfile::scan::{
 };
 use deadsync_simfile::song::{
     ParseSongOptions, benchmark_note_parse_current, benchmark_note_parse_legacy,
-    benchmark_note_parse_precomputed, benchmark_song_bytes_current, benchmark_song_bytes_previous,
-    benchmark_song_parse_current, benchmark_song_parse_previous, parse_song_file,
+    benchmark_note_parse_precomputed, benchmark_rssp_note_handoff_baseline,
+    benchmark_rssp_note_handoff_current, benchmark_song_bytes_current,
+    benchmark_song_bytes_previous, benchmark_song_parse_current, benchmark_song_parse_previous,
+    parse_song_file,
 };
 use deadsync_simfile::timing::{benchmark_timing_tags_baseline, benchmark_timing_tags_current};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -54,6 +56,7 @@ const CACHE_PROBE_OPS: usize = 2_048;
 const CACHE_PAYLOAD_ROUNDS: usize = 256;
 const CACHE_HEADER_ROUNDS: usize = 512;
 const SONG_PARSE_ROUNDS: usize = 64;
+const NOTE_HANDOFF_ROUNDS: usize = 128;
 const NOTE_PARSE_ROUNDS: usize = 2_048;
 const TIMING_TAG_ROUNDS: usize = 4_096;
 const TIMING_HANDOFF_ROUNDS: usize = 2_048;
@@ -710,6 +713,23 @@ fn bench_rssp_boundary() {
     print_result("count+parse", NOTE_PARSE_ROUNDS, &counted_notes);
     print_result("precomputed", NOTE_PARSE_ROUNDS, &precomputed_notes);
     print_change(&counted_notes, &precomputed_notes);
+
+    let note_handoff = analysis_fixture(false);
+    assert_eq!(
+        benchmark_rssp_note_handoff_baseline(&note_handoff, 1),
+        benchmark_rssp_note_handoff_current(&note_handoff, 1),
+        "RSSP note handoff output diverged"
+    );
+    let (old_handoff, new_handoff) = measure_pair(
+        NOTE_HANDOFF_ROUNDS,
+        || benchmark_rssp_note_handoff_baseline(&note_handoff, NOTE_HANDOFF_ROUNDS),
+        || benchmark_rssp_note_handoff_current(&note_handoff, NOTE_HANDOFF_ROUNDS),
+    );
+    black_box(old_handoff.checksum ^ new_handoff.checksum);
+    println!("RSSP note-event handoff ({NOTE_HANDOFF_ROUNDS} analyses)");
+    print_result("post-parse", NOTE_HANDOFF_ROUNDS, &old_handoff);
+    print_result("in-pass", NOTE_HANDOFF_ROUNDS, &new_handoff);
+    print_change(&old_handoff, &new_handoff);
 
     bench_song_boundary("global timing", &global_timing);
     bench_song_boundary("chart timing", &own_timing);

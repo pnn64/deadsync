@@ -597,30 +597,6 @@ impl CachedTimingSegments {
             combos,
         }
     }
-
-    #[cfg(any(test, feature = "bench-support"))]
-    pub(crate) fn from_rssp_baseline(
-        segments: &rssp::timing::TimingSegments,
-        time_signatures: Vec<TimeSignatureSegment>,
-        tickcounts: Vec<TickcountSegment>,
-        combos: Vec<ComboSegment>,
-    ) -> Self {
-        Self::from_rssp(
-            segments,
-            time_signatures
-                .into_iter()
-                .map(|segment| (segment.beat, segment.numerator, segment.denominator))
-                .collect(),
-            tickcounts
-                .into_iter()
-                .map(|segment| (segment.beat, segment.ticks))
-                .collect(),
-            combos
-                .into_iter()
-                .map(|segment| (segment.beat, segment.combo, segment.miss_combo))
-                .collect(),
-        )
-    }
 }
 
 #[cfg(feature = "bench-support")]
