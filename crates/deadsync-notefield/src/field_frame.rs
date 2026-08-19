@@ -48,6 +48,7 @@ pub struct NotefieldFieldFrameView<'a> {
 pub struct NotefieldFieldResult {
     pub captured_actors: Option<CapturedActorSource>,
     pub camera: Option<glam::Mat4>,
+    pub camera_generation: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -127,6 +128,7 @@ where
     NotefieldFieldResult {
         captured_actors,
         camera: field_camera,
+        camera_generation: camera_cache.generation(),
     }
 }
 

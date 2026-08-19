@@ -1833,6 +1833,7 @@ struct GameplayFrameScratch {
     notefield_hud_flat_draw_scratch: [Vec<FlatDraw>; MAX_PLAYERS],
     notefield_camera_cache: [NotefieldCameraCache; MAX_PLAYERS],
     player_actor_assembly_cache: [PlayerActorAssemblyCache; MAX_PLAYERS],
+    player_field_camera_cache: [PlayerFieldCameraCache; MAX_PLAYERS],
     presentation_skeleton: GameplayPresentationSkeleton,
 }
 
@@ -2453,6 +2454,7 @@ impl State {
             notefield_hud_flat_draw_scratch,
             notefield_camera_cache: [NotefieldCameraCache::default(); MAX_PLAYERS],
             player_actor_assembly_cache: [PlayerActorAssemblyCache::default(); MAX_PLAYERS],
+            player_field_camera_cache: [PlayerFieldCameraCache::default(); MAX_PLAYERS],
             presentation_skeleton: GameplayPresentationSkeleton::default(),
         };
         debug_assert_eq!(
@@ -14511,6 +14513,10 @@ impl PlayerActorAssemblyCache {
     const fn stats(&self) -> PlayerActorAssemblyCacheStats {
         self.stats
     }
+
+    const fn generation(&self) -> u64 {
+        self.stats.rebuilds
+    }
 }
 
 #[inline(always)]
@@ -14531,6 +14537,105 @@ fn direct_player_actor_assembly(
     } else {
         None
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct PlayerFieldCameraCacheStats {
+    hits: u64,
+    rebuilds: u64,
+}
+
+/// Final flat-field camera retained from two upstream source generations.
+///
+/// The gameplay/presentation thread owns exactly one screen-lifetime entry per
+/// player. Only non-identity direct transforms enter it. Stable frames compare
+/// two `u64` tokens and copy one inline matrix; either upstream rebuild performs
+/// one bounded matrix product. There is no allocation, synchronization,
+/// overflow, pruning, or eviction scan. Screen teardown drops both entries,
+/// counters expose hit/rebuild behavior, and worst-case frame work is one
+/// matrix product per active transformed player.
+#[derive(Clone, Copy, Debug, Default)]
+struct PlayerFieldCameraCache {
+    key: Option<(u64, u64)>,
+    camera: Option<Matrix4>,
+    stats: PlayerFieldCameraCacheStats,
+}
+
+impl PlayerFieldCameraCache {
+    fn resolve(
+        &mut self,
+        field_generation: u64,
+        transform_generation: u64,
+        field_camera: Option<Matrix4>,
+        root_camera: Matrix4,
+        field_camera_suffix: Matrix4,
+    ) -> Matrix4 {
+        let key = (field_generation, transform_generation);
+        if self.key == Some(key) {
+            self.stats.hits = self.stats.hits.saturating_add(1);
+            return self
+                .camera
+                .expect("a retained transformed field-camera key has a matrix");
+        }
+        let camera = field_camera.map_or(root_camera, |camera| camera * field_camera_suffix);
+        self.key = Some(key);
+        self.camera = Some(camera);
+        self.stats.rebuilds = self.stats.rebuilds.saturating_add(1);
+        camera
+    }
+
+    const fn stats(&self) -> PlayerFieldCameraCacheStats {
+        self.stats
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[derive(Default)]
+pub struct GameplayPlayerFieldCameraBenchmark {
+    caches: [PlayerFieldCameraCache; MAX_PLAYERS],
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayPlayerFieldCameraBenchmark {
+    #[inline(always)]
+    pub fn rebuild(&self, player: usize) -> f32 {
+        let (field, suffix, _) = benchmark_player_field_cameras(player);
+        player_field_camera_checksum(field * suffix)
+    }
+
+    #[inline(always)]
+    pub fn retained(&mut self, player: usize) -> f32 {
+        let player = player.min(MAX_PLAYERS - 1);
+        let (field, suffix, root) = benchmark_player_field_cameras(player);
+        player_field_camera_checksum(self.caches[player].resolve(7, 13, Some(field), root, suffix))
+    }
+
+    pub fn stats(&self) -> [(u64, u64); MAX_PLAYERS] {
+        self.caches.map(|cache| {
+            let stats = cache.stats();
+            (stats.hits, stats.rebuilds)
+        })
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn benchmark_player_field_cameras(player: usize) -> (Matrix4, Matrix4, Matrix4) {
+    let direction = if player == 0 { 1.0 } else { -1.0 };
+    (
+        Matrix4::from_rotation_x(0.17 * direction)
+            * Matrix4::from_translation(Vector3::new(4.0 * direction, 8.0, 12.0)),
+        Matrix4::from_rotation_z(0.11 * direction)
+            * Matrix4::from_scale(Vector3::new(0.9, 1.1, 1.0)),
+        Matrix4::from_translation(Vector3::new(2.0 * direction, 3.0, 4.0)),
+    )
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn player_field_camera_checksum(camera: Matrix4) -> f32 {
+    std::hint::black_box(camera.x_axis.x + camera.y_axis.y + camera.w_axis.z)
 }
 
 #[cfg(feature = "bench-support")]
@@ -14758,11 +14863,7 @@ impl GameplayActorSegments {
                     )
                     .with_flat_draws(
                         &scratch.notefield_flat_draw_scratch[segment.player],
-                        Some(
-                            segment
-                                .field_camera
-                                .map_or(root_camera, |camera| camera * field_camera_suffix),
-                        ),
+                        segment.field_camera,
                     );
                 }
             }
@@ -15129,6 +15230,7 @@ pub fn push_actors(
         notefield_hud_flat_draw_scratch,
         notefield_camera_cache,
         player_actor_assembly_cache,
+        player_field_camera_cache,
         presentation_skeleton,
     } = frame_scratch.as_mut();
     presentation_skeleton.prepare();
@@ -15549,6 +15651,7 @@ pub fn push_actors(
             let deadsync_notefield::BuiltNotefield {
                 layout_center_x,
                 field_camera,
+                field_camera_generation,
                 field_actors,
                 judgment_actors,
                 combo_actors,
@@ -15652,6 +15755,20 @@ pub fn push_actors(
                 player_state.visible,
                 capture_transform,
             );
+            let field_camera = match assembly {
+                PlayerActorAssembly::DirectTransform {
+                    root_camera,
+                    field_camera_suffix,
+                    ..
+                } => Some(player_field_camera_cache[player_idx].resolve(
+                    field_camera_generation,
+                    player_actor_assembly_cache[player_idx].generation(),
+                    field_camera,
+                    root_camera,
+                    field_camera_suffix,
+                )),
+                _ => field_camera,
+            };
             let captured_player_source = if requests.player {
                 let scratch = song_lua_proxy_actor_scratch
                     .as_mut()
@@ -18563,6 +18680,56 @@ mod tests {
             assert_eq!(actual, expected);
             assert_eq!(cache.stats().rebuilds, 2);
         }
+    }
+
+    fn matrix_bits(matrix: Matrix4) -> [u32; 16] {
+        matrix.to_cols_array().map(f32::to_bits)
+    }
+
+    #[test]
+    fn transformed_field_camera_cache_reuses_the_exact_product() {
+        let field = Matrix4::from_rotation_x(0.17)
+            * Matrix4::from_translation(Vector3::new(4.0, 8.0, 12.0));
+        let suffix =
+            Matrix4::from_rotation_z(0.11) * Matrix4::from_scale(Vector3::new(0.9, 1.1, 1.0));
+        let root = Matrix4::from_translation(Vector3::new(2.0, 3.0, 4.0));
+        let expected = field * suffix;
+        let mut cache = PlayerFieldCameraCache::default();
+
+        let first = cache.resolve(7, 13, Some(field), root, suffix);
+        let second = cache.resolve(7, 13, Some(field), root, suffix);
+
+        assert_eq!(matrix_bits(first), matrix_bits(expected));
+        assert_eq!(matrix_bits(second), matrix_bits(expected));
+        assert_eq!(cache.stats().rebuilds, 1);
+        assert_eq!(cache.stats().hits, 1);
+    }
+
+    #[test]
+    fn transformed_field_camera_cache_follows_both_source_generations() {
+        let field = Matrix4::from_rotation_x(0.17);
+        let changed_field = Matrix4::from_rotation_x(0.23);
+        let suffix = Matrix4::from_rotation_z(0.11);
+        let changed_suffix = Matrix4::from_rotation_z(0.19);
+        let root = Matrix4::from_translation(Vector3::new(2.0, 3.0, 4.0));
+        let mut cache = PlayerFieldCameraCache::default();
+
+        cache.resolve(7, 13, Some(field), root, suffix);
+        let field_changed = cache.resolve(8, 13, Some(changed_field), root, suffix);
+        let transform_changed = cache.resolve(8, 14, Some(changed_field), root, changed_suffix);
+        let invalid_field = cache.resolve(9, 14, None, root, changed_suffix);
+
+        assert_eq!(
+            matrix_bits(field_changed),
+            matrix_bits(changed_field * suffix)
+        );
+        assert_eq!(
+            matrix_bits(transform_changed),
+            matrix_bits(changed_field * changed_suffix)
+        );
+        assert_eq!(matrix_bits(invalid_field), matrix_bits(root));
+        assert_eq!(cache.stats().rebuilds, 4);
+        assert_eq!(cache.stats().hits, 0);
     }
 
     #[test]

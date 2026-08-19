@@ -1024,6 +1024,7 @@ pub(crate) fn compose_frame(
     BuiltNotefield {
         layout_center_x,
         field_camera: field_result.camera,
+        field_camera_generation: field_result.camera_generation,
         field_actors: field_result.captured_actors,
         judgment_actors: hud_result.judgment_actors,
         combo_actors: hud_result.combo_actors,
