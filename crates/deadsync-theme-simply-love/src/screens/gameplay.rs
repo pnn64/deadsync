@@ -1832,6 +1832,7 @@ struct GameplayFrameScratch {
     notefield_hud_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
     notefield_hud_flat_draw_scratch: [Vec<FlatDraw>; MAX_PLAYERS],
     notefield_camera_cache: [NotefieldCameraCache; MAX_PLAYERS],
+    player_actor_assembly_cache: [PlayerActorAssemblyCache; MAX_PLAYERS],
     presentation_skeleton: GameplayPresentationSkeleton,
 }
 
@@ -2451,6 +2452,7 @@ impl State {
             notefield_hud_actor_scratch,
             notefield_hud_flat_draw_scratch,
             notefield_camera_cache: [NotefieldCameraCache::default(); MAX_PLAYERS],
+            player_actor_assembly_cache: [PlayerActorAssemblyCache::default(); MAX_PLAYERS],
             presentation_skeleton: GameplayPresentationSkeleton::default(),
         };
         debug_assert_eq!(
@@ -14024,16 +14026,42 @@ fn push_song_lua_capture_actor(
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct PlayerTransformMetrics {
+    screen_width: f32,
+    screen_height: f32,
+    screen_center_y: f32,
+}
+
+impl PlayerTransformMetrics {
+    #[inline(always)]
+    fn current() -> Self {
+        Self {
+            screen_width: screen_width(),
+            screen_height: screen_height(),
+            screen_center_y: screen_center_y(),
+        }
+    }
+}
+
 #[inline(always)]
-fn song_lua_player_root_camera(player_transform: Matrix4) -> Matrix4 {
+fn song_lua_player_root_camera_with_metrics(
+    player_transform: Matrix4,
+    metrics: PlayerTransformMetrics,
+) -> Matrix4 {
     glam::camera::rh::proj::opengl::orthographic(
-        -0.5 * screen_width(),
-        0.5 * screen_width(),
-        -0.5 * screen_height(),
-        0.5 * screen_height(),
+        -0.5 * metrics.screen_width,
+        0.5 * metrics.screen_width,
+        -0.5 * metrics.screen_height,
+        0.5 * metrics.screen_height,
         -4096.0,
         4096.0,
     ) * player_transform
+}
+
+#[inline(always)]
+fn song_lua_player_root_camera(player_transform: Matrix4) -> Matrix4 {
+    song_lua_player_root_camera_with_metrics(player_transform, PlayerTransformMetrics::current())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -14205,10 +14233,13 @@ fn append_song_lua_player_transform<F, H>(
 }
 
 #[inline(always)]
-fn song_lua_player_transform_has_identity_geometry(transform: SongLuaCaptureTransform) -> bool {
-    screen_width().is_finite()
-        && screen_height().is_finite()
-        && screen_center_y().is_finite()
+fn song_lua_player_transform_has_identity_geometry_with_metrics(
+    transform: SongLuaCaptureTransform,
+    metrics: PlayerTransformMetrics,
+) -> bool {
+    metrics.screen_width.is_finite()
+        && metrics.screen_height.is_finite()
+        && metrics.screen_center_y.is_finite()
         && transform.playfield_center_x.is_finite()
         && transform.target_x.is_finite()
         && transform.target_y.is_finite()
@@ -14229,7 +14260,15 @@ fn song_lua_player_transform_has_identity_geometry(transform: SongLuaCaptureTran
         && transform.zoom_z.is_finite()
         && (transform.zoom_z - 1.0).abs() <= f32::EPSILON
         && (transform.target_x - transform.playfield_center_x).abs() <= f32::EPSILON
-        && (screen_center_y() - transform.target_y).abs() <= f32::EPSILON
+        && (metrics.screen_center_y - transform.target_y).abs() <= f32::EPSILON
+}
+
+#[inline(always)]
+fn song_lua_player_transform_has_identity_geometry(transform: SongLuaCaptureTransform) -> bool {
+    song_lua_player_transform_has_identity_geometry_with_metrics(
+        transform,
+        PlayerTransformMetrics::current(),
+    )
 }
 
 #[inline(always)]
@@ -14331,6 +14370,257 @@ enum PlayerActorAssembly {
         field_camera_suffix: Matrix4,
         x_fold: Option<ActorXFold>,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PlayerActorAssemblyKey {
+    requests_player_proxy: bool,
+    visible: bool,
+    z_shift: i16,
+    blend: Option<BlendMode>,
+    metrics: [u32; 3],
+    tint: [u32; 4],
+    geometry: [u32; 11],
+}
+
+impl PlayerActorAssemblyKey {
+    fn new(
+        requests_player_proxy: bool,
+        visible: bool,
+        transform: SongLuaCaptureTransform,
+        metrics: PlayerTransformMetrics,
+    ) -> Self {
+        Self {
+            requests_player_proxy,
+            visible,
+            z_shift: transform.z_shift,
+            blend: transform.blend,
+            metrics: [
+                metrics.screen_width.to_bits(),
+                metrics.screen_height.to_bits(),
+                metrics.screen_center_y.to_bits(),
+            ],
+            tint: transform.tint.map(f32::to_bits),
+            geometry: [
+                transform.playfield_center_x.to_bits(),
+                transform.target_x.to_bits(),
+                transform.target_y.to_bits(),
+                transform.rotation_x.to_bits(),
+                transform.rotation_z.to_bits(),
+                transform.rotation_y.to_bits(),
+                transform.skew_x.to_bits(),
+                transform.skew_y.to_bits(),
+                transform.zoom_x.to_bits(),
+                transform.zoom_y.to_bits(),
+                transform.zoom_z.to_bits(),
+            ],
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct PlayerActorAssemblyCacheStats {
+    hits: u64,
+    rebuilds: u64,
+}
+
+/// Per-player transform plan retained by one gameplay screen.
+///
+/// The gameplay/presentation thread owns the fixed two-entry screen-lifetime
+/// storage for non-identity transforms. Exact source-bit or viewport changes
+/// rebuild one bounded plan synchronously through the canonical resolver;
+/// stable transformed frames copy it. Identity, hidden, and captured players
+/// retain their cheaper direct decisions without constructing a key. There is
+/// no allocation, synchronization, overflow, pruning, or eviction scan. Screen
+/// teardown drops both inline entries, counters expose hit/rebuild behavior,
+/// and worst-case frame work is one plan rebuild per active player.
+#[derive(Clone, Copy, Debug, Default)]
+struct PlayerActorAssemblyCache {
+    key: Option<PlayerActorAssemblyKey>,
+    assembly: Option<PlayerActorAssembly>,
+    stats: PlayerActorAssemblyCacheStats,
+}
+
+impl PlayerActorAssemblyCache {
+    #[inline(always)]
+    fn resolve(
+        &mut self,
+        requests_player_proxy: bool,
+        visible: bool,
+        transform: SongLuaCaptureTransform,
+    ) -> PlayerActorAssembly {
+        let metrics = PlayerTransformMetrics::current();
+        if let Some(assembly) =
+            direct_player_actor_assembly(requests_player_proxy, visible, transform, metrics)
+        {
+            return assembly;
+        }
+        self.resolve_nonidentity(requests_player_proxy, visible, transform, metrics)
+    }
+
+    #[cfg(test)]
+    fn resolve_with_metrics(
+        &mut self,
+        requests_player_proxy: bool,
+        visible: bool,
+        transform: SongLuaCaptureTransform,
+        metrics: PlayerTransformMetrics,
+    ) -> PlayerActorAssembly {
+        if let Some(assembly) =
+            direct_player_actor_assembly(requests_player_proxy, visible, transform, metrics)
+        {
+            return assembly;
+        }
+        self.resolve_nonidentity(requests_player_proxy, visible, transform, metrics)
+    }
+
+    fn resolve_nonidentity(
+        &mut self,
+        requests_player_proxy: bool,
+        visible: bool,
+        transform: SongLuaCaptureTransform,
+        metrics: PlayerTransformMetrics,
+    ) -> PlayerActorAssembly {
+        debug_assert!(
+            visible
+                && !requests_player_proxy
+                && !song_lua_player_transform_has_identity_geometry_with_metrics(
+                    transform, metrics
+                ),
+            "only non-identity visible player plans enter retained storage"
+        );
+        let key = PlayerActorAssemblyKey::new(requests_player_proxy, visible, transform, metrics);
+        if self.key == Some(key) {
+            self.stats.hits = self.stats.hits.saturating_add(1);
+            return self
+                .assembly
+                .expect("a retained player transform key has an assembly");
+        }
+        let assembly = player_actor_assembly_for_transform_with_metrics(
+            requests_player_proxy,
+            visible,
+            transform,
+            metrics,
+        );
+        self.key = Some(key);
+        self.assembly = Some(assembly);
+        self.stats.rebuilds = self.stats.rebuilds.saturating_add(1);
+        assembly
+    }
+
+    const fn stats(&self) -> PlayerActorAssemblyCacheStats {
+        self.stats
+    }
+}
+
+#[inline(always)]
+fn direct_player_actor_assembly(
+    requests_player_proxy: bool,
+    visible: bool,
+    transform: SongLuaCaptureTransform,
+    metrics: PlayerTransformMetrics,
+) -> Option<PlayerActorAssembly> {
+    if !visible {
+        Some(PlayerActorAssembly::Hidden)
+    } else if requests_player_proxy {
+        Some(PlayerActorAssembly::Captured)
+    } else if song_lua_player_transform_has_identity_geometry_with_metrics(transform, metrics) {
+        Some(PlayerActorAssembly::DirectZ {
+            z_shift: transform.z_shift,
+        })
+    } else {
+        None
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[derive(Default)]
+pub struct GameplayPlayerTransformBenchmark {
+    caches: [PlayerActorAssemblyCache; MAX_PLAYERS],
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayPlayerTransformBenchmark {
+    #[inline(always)]
+    pub fn resolve_rebuilt(&self, player: usize, transformed: bool) -> f32 {
+        player_actor_assembly_checksum(player_actor_assembly_for_transform(
+            false,
+            true,
+            benchmark_player_capture_transform(player, transformed),
+        ))
+    }
+
+    #[inline(always)]
+    pub fn resolve_retained(&mut self, player: usize, transformed: bool) -> f32 {
+        let player = player.min(MAX_PLAYERS - 1);
+        player_actor_assembly_checksum(self.caches[player].resolve(
+            false,
+            true,
+            benchmark_player_capture_transform(player, transformed),
+        ))
+    }
+
+    pub fn stats(&self) -> [(u64, u64); MAX_PLAYERS] {
+        self.caches.map(|cache| {
+            let stats = cache.stats();
+            (stats.hits, stats.rebuilds)
+        })
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn benchmark_player_capture_transform(player: usize, transformed: bool) -> SongLuaCaptureTransform {
+    let playfield_center_x = if player == 0 { 213.5 } else { 640.5 };
+    if transformed {
+        SongLuaCaptureTransform {
+            playfield_center_x,
+            target_x: playfield_center_x + 24.0,
+            ..benchmark_player_transform()
+        }
+    } else {
+        SongLuaCaptureTransform {
+            z_shift: 0,
+            tint: [1.0; 4],
+            blend: None,
+            playfield_center_x,
+            target_x: playfield_center_x,
+            target_y: screen_center_y(),
+            rotation_x: 0.0,
+            rotation_z: 0.0,
+            rotation_y: 0.0,
+            skew_x: 0.0,
+            skew_y: 0.0,
+            zoom_x: 1.0,
+            zoom_y: 1.0,
+            zoom_z: 1.0,
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn player_actor_assembly_checksum(assembly: PlayerActorAssembly) -> f32 {
+    match assembly {
+        PlayerActorAssembly::Captured => 1.0,
+        PlayerActorAssembly::Hidden => 2.0,
+        PlayerActorAssembly::DirectZ { z_shift } => 3.0 + f32::from(z_shift),
+        PlayerActorAssembly::DirectFold { z_shift, .. } => 4.0 + f32::from(z_shift),
+        PlayerActorAssembly::DirectTransform {
+            z_shift,
+            tint,
+            blend,
+            root_camera,
+            field_camera_suffix,
+            x_fold,
+        } => {
+            5.0 + f32::from(z_shift)
+                + tint.into_iter().sum::<f32>()
+                + blend.map_or(0.0, |blend| blend as u8 as f32)
+                + root_camera.to_cols_array().into_iter().sum::<f32>()
+                + field_camera_suffix.to_cols_array().into_iter().sum::<f32>()
+                + f32::from(x_fold.is_some() as u8)
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -14488,58 +14778,68 @@ fn player_actor_assembly_for_transform(
     visible: bool,
     transform: SongLuaCaptureTransform,
 ) -> PlayerActorAssembly {
-    if !visible {
-        PlayerActorAssembly::Hidden
-    } else if requests_player_proxy {
-        PlayerActorAssembly::Captured
-    } else if song_lua_player_transform_has_identity_geometry(transform) {
-        PlayerActorAssembly::DirectZ {
-            z_shift: transform.z_shift,
-        }
+    player_actor_assembly_for_transform_with_metrics(
+        requests_player_proxy,
+        visible,
+        transform,
+        PlayerTransformMetrics::current(),
+    )
+}
+
+#[inline(always)]
+fn player_actor_assembly_for_transform_with_metrics(
+    requests_player_proxy: bool,
+    visible: bool,
+    transform: SongLuaCaptureTransform,
+    metrics: PlayerTransformMetrics,
+) -> PlayerActorAssembly {
+    if let Some(assembly) =
+        direct_player_actor_assembly(requests_player_proxy, visible, transform, metrics)
+    {
+        return assembly;
+    }
+    let x_fold = if transform.playfield_center_x.is_finite()
+        && transform.rotation_y.is_finite()
+        && transform.rotation_y.abs() > f32::EPSILON
+    {
+        Some(ActorXFold::new(
+            transform.playfield_center_x,
+            transform.rotation_y.to_radians().cos(),
+        ))
     } else {
-        let x_fold = if transform.playfield_center_x.is_finite()
-            && transform.rotation_y.is_finite()
-            && transform.rotation_y.abs() > f32::EPSILON
-        {
-            Some(ActorXFold::new(
-                transform.playfield_center_x,
-                transform.rotation_y.to_radians().cos(),
-            ))
-        } else {
-            None
-        };
-        let field_camera_suffix = song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
-            screen_width: screen_width(),
-            screen_height: screen_height(),
-            screen_center_y: screen_center_y(),
-            playfield_center_x: transform.playfield_center_x,
-            target_x: transform.target_x,
-            target_y: transform.target_y,
-            rotation_x_deg: transform.rotation_x,
-            rotation_z_deg: transform.rotation_z,
-            skew_x: transform.skew_x,
-            skew_y: transform.skew_y,
-            zoom_x: transform.zoom_x,
-            zoom_y: transform.zoom_y,
-            zoom_z: transform.zoom_z,
-        });
-        match (field_camera_suffix, x_fold) {
-            (Some(field_camera_suffix), x_fold) => PlayerActorAssembly::DirectTransform {
-                z_shift: transform.z_shift,
-                tint: transform.tint,
-                blend: transform.blend,
-                root_camera: song_lua_player_root_camera(field_camera_suffix),
-                field_camera_suffix,
-                x_fold,
-            },
-            (None, Some(x_fold)) => PlayerActorAssembly::DirectFold {
-                z_shift: transform.z_shift,
-                x_fold,
-            },
-            (None, None) => PlayerActorAssembly::DirectZ {
-                z_shift: transform.z_shift,
-            },
-        }
+        None
+    };
+    let field_camera_suffix = song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
+        screen_width: metrics.screen_width,
+        screen_height: metrics.screen_height,
+        screen_center_y: metrics.screen_center_y,
+        playfield_center_x: transform.playfield_center_x,
+        target_x: transform.target_x,
+        target_y: transform.target_y,
+        rotation_x_deg: transform.rotation_x,
+        rotation_z_deg: transform.rotation_z,
+        skew_x: transform.skew_x,
+        skew_y: transform.skew_y,
+        zoom_x: transform.zoom_x,
+        zoom_y: transform.zoom_y,
+        zoom_z: transform.zoom_z,
+    });
+    match (field_camera_suffix, x_fold) {
+        (Some(field_camera_suffix), x_fold) => PlayerActorAssembly::DirectTransform {
+            z_shift: transform.z_shift,
+            tint: transform.tint,
+            blend: transform.blend,
+            root_camera: song_lua_player_root_camera_with_metrics(field_camera_suffix, metrics),
+            field_camera_suffix,
+            x_fold,
+        },
+        (None, Some(x_fold)) => PlayerActorAssembly::DirectFold {
+            z_shift: transform.z_shift,
+            x_fold,
+        },
+        (None, None) => PlayerActorAssembly::DirectZ {
+            z_shift: transform.z_shift,
+        },
     }
 }
 
@@ -14828,6 +15128,7 @@ pub fn push_actors(
         notefield_hud_actor_scratch,
         notefield_hud_flat_draw_scratch,
         notefield_camera_cache,
+        player_actor_assembly_cache,
         presentation_skeleton,
     } = frame_scratch.as_mut();
     presentation_skeleton.prepare();
@@ -15346,7 +15647,7 @@ pub fn push_actors(
                     .player(player_idx, SONG_LUA_FIELD_PROXY_SOURCE)?;
                 prepare_proxy_source(source, ProxyCapturePart::Field, capture_transform, scratch)
             });
-            let assembly = player_actor_assembly_for_transform(
+            let assembly = player_actor_assembly_cache[player_idx].resolve(
                 requests.player,
                 player_state.visible,
                 capture_transform,
@@ -18101,6 +18402,167 @@ mod tests {
         assert!(!cache.initialized);
         assert!(cache.key.is_none());
         assert!(cache.value.is_none());
+    }
+
+    fn transformed_player_fixture() -> SongLuaCaptureTransform {
+        SongLuaCaptureTransform {
+            z_shift: 900,
+            tint: [0.8, 0.7, 0.6, 0.5],
+            blend: Some(BlendMode::Add),
+            playfield_center_x: 213.5,
+            target_x: 237.5,
+            target_y: 228.0,
+            rotation_x: 4.0,
+            rotation_z: 8.0,
+            rotation_y: 13.0,
+            skew_x: 0.1,
+            skew_y: -0.05,
+            zoom_x: 0.9,
+            zoom_y: 1.1,
+            zoom_z: 1.0,
+        }
+    }
+
+    #[test]
+    fn player_transform_cache_reuses_the_exact_resolved_plan() {
+        let metrics = PlayerTransformMetrics {
+            screen_width: 854.0,
+            screen_height: 480.0,
+            screen_center_y: 240.0,
+        };
+        let transform = transformed_player_fixture();
+        let expected =
+            player_actor_assembly_for_transform_with_metrics(false, true, transform, metrics);
+        let mut cache = PlayerActorAssemblyCache::default();
+
+        let first = cache.resolve_with_metrics(false, true, transform, metrics);
+        let second = cache.resolve_with_metrics(false, true, transform, metrics);
+
+        assert_eq!(first, expected);
+        assert_eq!(second, expected);
+        assert_eq!(cache.stats().rebuilds, 1);
+        assert_eq!(cache.stats().hits, 1);
+    }
+
+    #[test]
+    fn player_transform_cache_rebuilds_for_every_plan_source() {
+        let metrics = PlayerTransformMetrics {
+            screen_width: 854.0,
+            screen_height: 480.0,
+            screen_center_y: 240.0,
+        };
+        let base = transformed_player_fixture();
+        let changed_transforms = [
+            SongLuaCaptureTransform {
+                z_shift: 901,
+                ..base
+            },
+            SongLuaCaptureTransform {
+                tint: [0.9, 0.7, 0.6, 0.5],
+                ..base
+            },
+            SongLuaCaptureTransform {
+                blend: Some(BlendMode::Multiply),
+                ..base
+            },
+            SongLuaCaptureTransform {
+                playfield_center_x: 214.5,
+                ..base
+            },
+            SongLuaCaptureTransform {
+                target_x: 238.5,
+                ..base
+            },
+            SongLuaCaptureTransform {
+                target_y: 229.0,
+                ..base
+            },
+            SongLuaCaptureTransform {
+                rotation_x: 5.0,
+                ..base
+            },
+            SongLuaCaptureTransform {
+                rotation_z: 9.0,
+                ..base
+            },
+            SongLuaCaptureTransform {
+                rotation_y: 14.0,
+                ..base
+            },
+            SongLuaCaptureTransform {
+                skew_x: 0.2,
+                ..base
+            },
+            SongLuaCaptureTransform {
+                skew_y: -0.1,
+                ..base
+            },
+            SongLuaCaptureTransform {
+                zoom_x: 0.8,
+                ..base
+            },
+            SongLuaCaptureTransform {
+                zoom_y: 1.2,
+                ..base
+            },
+            SongLuaCaptureTransform {
+                zoom_z: 0.9,
+                ..base
+            },
+        ];
+
+        for changed in changed_transforms {
+            let mut cache = PlayerActorAssemblyCache::default();
+            cache.resolve_with_metrics(false, true, base, metrics);
+            let actual = cache.resolve_with_metrics(false, true, changed, metrics);
+            let expected =
+                player_actor_assembly_for_transform_with_metrics(false, true, changed, metrics);
+            assert_eq!(actual, expected);
+            assert_eq!(cache.stats().rebuilds, 2);
+            assert_eq!(cache.stats().hits, 0);
+        }
+
+        for (requests_proxy, visible) in [(true, true), (false, false)] {
+            let mut cache = PlayerActorAssemblyCache::default();
+            cache.resolve_with_metrics(false, true, base, metrics);
+            let actual = cache.resolve_with_metrics(requests_proxy, visible, base, metrics);
+            let expected = player_actor_assembly_for_transform_with_metrics(
+                requests_proxy,
+                visible,
+                base,
+                metrics,
+            );
+            assert_eq!(actual, expected);
+            assert_eq!(cache.stats().rebuilds, 1);
+            assert_eq!(cache.stats().hits, 0);
+        }
+
+        for changed_metrics in [
+            PlayerTransformMetrics {
+                screen_width: 640.0,
+                ..metrics
+            },
+            PlayerTransformMetrics {
+                screen_height: 720.0,
+                ..metrics
+            },
+            PlayerTransformMetrics {
+                screen_center_y: 300.0,
+                ..metrics
+            },
+        ] {
+            let mut cache = PlayerActorAssemblyCache::default();
+            cache.resolve_with_metrics(false, true, base, metrics);
+            let actual = cache.resolve_with_metrics(false, true, base, changed_metrics);
+            let expected = player_actor_assembly_for_transform_with_metrics(
+                false,
+                true,
+                base,
+                changed_metrics,
+            );
+            assert_eq!(actual, expected);
+            assert_eq!(cache.stats().rebuilds, 2);
+        }
     }
 
     #[test]

@@ -15,7 +15,8 @@ use deadlib_render_core::{BlendMode, MeshVertex, TexturedMeshVertex};
 use deadsync_notefield::{NotefieldCameraCache, performance::notefield_view_proj};
 use deadsync_theme_simply_love::screens::gameplay::{
     BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
-    benchmark_present_identity_notefield, benchmark_present_transformed_notefield,
+    GameplayPlayerTransformBenchmark, benchmark_present_identity_notefield,
+    benchmark_present_transformed_notefield,
 };
 use glam::{Mat4, Vec3};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -53,6 +54,9 @@ const CAMERA_HANDOFF_MEASURE_BATCHES: usize = 400;
 const CAMERA_CACHE_BATCH_FRAMES: usize = 4_096;
 const CAMERA_CACHE_WARMUP_BATCHES: usize = 16;
 const CAMERA_CACHE_MEASURE_BATCHES: usize = 400;
+const PLAYER_TRANSFORM_BATCH_FRAMES: usize = 4_096;
+const PLAYER_TRANSFORM_WARMUP_BATCHES: usize = 16;
+const PLAYER_TRANSFORM_MEASURE_BATCHES: usize = 400;
 const HUD_TEXT_RUNS: usize = 8;
 const ERROR_BAR_TEXT_RUNS: usize = 4;
 const CUE_COUNTDOWN_RUNS: usize = 3;
@@ -1159,6 +1163,107 @@ fn print_camera_cache_benchmark() {
     }
 }
 
+#[derive(Clone, Copy)]
+enum PlayerTransformResolveKind {
+    Rebuild,
+    Retained,
+}
+
+fn measure_player_transform_resolution_pair(transformed: bool) -> [BoundaryResult; 2] {
+    let mut benchmark = GameplayPlayerTransformBenchmark::default();
+    for player in 0..BOUNDARY_PLAYERS {
+        black_box(benchmark.resolve_retained(player, transformed));
+    }
+    let mut elapsed = [Duration::ZERO; 2];
+    let mut cycles = [0u64; 2];
+    let mut allocated = [AllocSnapshot {
+        allocs: 0,
+        reallocs: 0,
+        bytes: 0,
+    }; 2];
+    let mut samples_ns: [Vec<u64>; 2] =
+        std::array::from_fn(|_| Vec::with_capacity(PLAYER_TRANSFORM_MEASURE_BATCHES));
+    let mut checksum = [0.0f32; 2];
+    for batch in 0..PLAYER_TRANSFORM_WARMUP_BATCHES + PLAYER_TRANSFORM_MEASURE_BATCHES {
+        let order = if batch % 2 == 0 { [0, 1] } else { [1, 0] };
+        for kind_index in order {
+            let kind = [
+                PlayerTransformResolveKind::Rebuild,
+                PlayerTransformResolveKind::Retained,
+            ][kind_index];
+            let before_alloc = ALLOC.snapshot();
+            let before_cycles = read_cycles();
+            let started = Instant::now();
+            let mut batch_checksum = 0.0;
+            for _ in 0..PLAYER_TRANSFORM_BATCH_FRAMES {
+                for player in 0..BOUNDARY_PLAYERS {
+                    batch_checksum += match kind {
+                        PlayerTransformResolveKind::Rebuild => {
+                            benchmark.resolve_rebuilt(black_box(player), black_box(transformed))
+                        }
+                        PlayerTransformResolveKind::Retained => {
+                            benchmark.resolve_retained(black_box(player), black_box(transformed))
+                        }
+                    };
+                }
+            }
+            let sample = started.elapsed();
+            let sample_cycles = read_cycles().saturating_sub(before_cycles);
+            let sample_allocated = ALLOC.snapshot().delta(before_alloc);
+            black_box(batch_checksum);
+            if batch >= PLAYER_TRANSFORM_WARMUP_BATCHES {
+                elapsed[kind_index] += sample;
+                cycles[kind_index] += sample_cycles;
+                allocated[kind_index].add(sample_allocated);
+                samples_ns[kind_index]
+                    .push((sample.as_nanos() / PLAYER_TRANSFORM_BATCH_FRAMES as u128) as u64);
+                checksum[kind_index] += batch_checksum;
+            }
+        }
+    }
+    for (hits, rebuilds) in benchmark.stats() {
+        if transformed {
+            assert_eq!(rebuilds, 1);
+            assert_eq!(
+                hits,
+                ((PLAYER_TRANSFORM_WARMUP_BATCHES + PLAYER_TRANSFORM_MEASURE_BATCHES)
+                    * PLAYER_TRANSFORM_BATCH_FRAMES) as u64
+            );
+        } else {
+            assert_eq!((hits, rebuilds), (0, 0));
+        }
+    }
+    for samples in &mut samples_ns {
+        samples.sort_unstable();
+    }
+    std::array::from_fn(|index| BoundaryResult {
+        elapsed: elapsed[index],
+        cycles: cycles[index],
+        allocated: allocated[index],
+        samples_ns: std::mem::take(&mut samples_ns[index]),
+        checksum: checksum[index],
+    })
+}
+
+fn print_player_transform_resolution_benchmark() {
+    println!("\nretained player-transform plan benchmark (2 players)");
+    for (label, transformed) in [("identity", false), ("transformed", true)] {
+        println!("{label}");
+        let [rebuilt, retained] = measure_player_transform_resolution_pair(transformed);
+        assert_eq!(rebuilt.checksum, retained.checksum);
+        print_sampled_result("rebuild plan", &rebuilt, PLAYER_TRANSFORM_BATCH_FRAMES);
+        print_sampled_result("retained plan", &retained, PLAYER_TRANSFORM_BATCH_FRAMES);
+        for result in [&rebuilt, &retained] {
+            assert_zero_alloc(&BenchResult {
+                elapsed: result.elapsed,
+                cycles: result.cycles,
+                allocated: result.allocated,
+                checksum: result.checksum,
+            });
+        }
+    }
+}
+
 fn print_boundary_sweep(label: &str, hold_mix: bool, draw_counts: &[usize]) {
     println!("\n{label} (draws/player)");
     for &field_draws in draw_counts {
@@ -1978,6 +2083,10 @@ fn print_cue_countdown_benchmark() {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_PLAYER_TRANSFORM_ONLY").is_some() {
+        print_player_transform_resolution_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_FIELD_CAMERA_CACHE_ONLY").is_some() {
         print_camera_cache_benchmark();
         return;
