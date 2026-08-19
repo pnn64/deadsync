@@ -1,6 +1,6 @@
 use crate::measure_actors::{append_beat_bar, append_cue_bar, append_edit_measure_number};
 use crate::notes::ScrollTravel;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, FlatDraw};
 use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{
@@ -444,6 +444,7 @@ fn line_thickness(frame: u32, plan: MeasureLinePlan, field_zoom: f32) -> f32 {
 
 fn append_line_candidate(
     actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: &MeasureComposeRequest<'_, '_>,
     plan: MeasureLinePlan,
     unit: i64,
@@ -458,7 +459,7 @@ fn append_line_candidate(
     }
     let frame = info.map_or(0, |info| info.frame);
     append_beat_bar(
-        actors,
+        draws,
         plan.edit,
         frame,
         x_center,
@@ -483,6 +484,7 @@ fn append_line_candidate(
 
 fn append_group_lines(
     actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: &MeasureComposeRequest<'_, '_>,
     plan: MeasureLinePlan,
     group: MeasureGroup,
@@ -515,7 +517,7 @@ fn append_group_lines(
         if (group.direction >= 0.0 && y < y_min) || (group.direction < 0.0 && y > y_max) {
             break;
         }
-        append_line_candidate(actors, request, plan, unit, x_center, y, width, info);
+        append_line_candidate(actors, draws, request, plan, unit, x_center, y, width, info);
         unit -= 1;
         iterations += 1;
     }
@@ -539,7 +541,7 @@ fn append_group_lines(
         if (group.direction >= 0.0 && y > y_max) || (group.direction < 0.0 && y < y_min) {
             break;
         }
-        append_line_candidate(actors, request, plan, unit, x_center, y, width, info);
+        append_line_candidate(actors, draws, request, plan, unit, x_center, y, width, info);
         unit += 1;
         iterations += 1;
     }
@@ -561,7 +563,7 @@ fn cue_thickness(beat: f32, field_zoom: f32) -> f32 {
 }
 
 fn append_group_cues(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: &MeasureComposeRequest<'_, '_>,
     group: MeasureGroup,
     ranges: &CueSegmentRanges,
@@ -577,7 +579,7 @@ fn append_group_cues(
             .lane_y_for_beat(0, beat, group.receptor_y, group.direction);
         if y.is_finite() && y >= y_min && y <= y_max {
             append_cue_bar(
-                actors,
+                draws,
                 x_center,
                 y,
                 width,
@@ -665,6 +667,7 @@ fn point_segment_range<T>(
 
 pub(crate) fn compose_measure_lines(
     actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: MeasureComposeRequest<'_, '_>,
 ) {
     if request.mode == MeasureLineMode::Off && !request.show_cues {
@@ -682,7 +685,7 @@ pub(crate) fn compose_measure_lines(
     });
     if request.mode != MeasureLineMode::Off {
         for group in groups.into_iter().flatten() {
-            append_group_lines(actors, &request, plan, group, edit_cursor);
+            append_group_lines(actors, draws, &request, plan, group, edit_cursor);
         }
     }
     if request.show_cues {
@@ -694,7 +697,7 @@ pub(crate) fn compose_measure_lines(
             visible_cue_beat_range(&request),
         );
         for group in groups.into_iter().flatten() {
-            append_group_cues(actors, &request, group, &ranges);
+            append_group_cues(draws, &request, group, &ranges);
         }
     }
 }
@@ -706,7 +709,7 @@ mod tests {
 
     use super::*;
     use crate::{AccelYParams, ScrollTravelRequest, scroll_travel};
-    use deadlib_present::actors::{Actor, SizeSpec};
+    use deadlib_present::actors::{Actor, FlatDraw, FlatSprite};
     use deadsync_rules::timing::{TimingData, TimingSegments};
     use deadsync_theme::{
         ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle,
@@ -1009,18 +1012,20 @@ mod tests {
         }
     }
 
-    fn sprite_parts(actor: &Actor) -> Option<([f32; 2], [f32; 2], [f32; 4], i16)> {
-        let Actor::Sprite {
-            offset,
-            size: [SizeSpec::Px(width), SizeSpec::Px(height)],
+    type SpriteParts = ([f32; 2], [f32; 2], [f32; 4], i16);
+
+    fn sprite_parts(draw: &FlatDraw) -> Option<SpriteParts> {
+        let FlatDraw::Sprite(FlatSprite {
+            center,
+            size,
             tint,
             z,
             ..
-        } = actor
+        }) = draw
         else {
             return None;
         };
-        Some((*offset, [*width, *height], *tint, *z))
+        Some((*center, *size, *tint, *z))
     }
 
     #[test]
@@ -1037,9 +1042,15 @@ mod tests {
             (MeasureLineMode::Eighth, 0.75),
         ] {
             let mut actors = Vec::new();
-            compose_measure_lines(&mut actors, request(mode, &travel, &dirs, &receptors));
-            counts.push(actors.len());
-            let current = actors
+            let mut draws = Vec::new();
+            compose_measure_lines(
+                &mut actors,
+                &mut draws,
+                request(mode, &travel, &dirs, &receptors),
+            );
+            assert!(actors.is_empty());
+            counts.push(draws.len());
+            let current = draws
                 .iter()
                 .filter_map(sprite_parts)
                 .find(|(offset, _, _, _)| (offset[1] - 100.0).abs() <= 0.001)
@@ -1050,8 +1061,7 @@ mod tests {
             assert_eq!(current.3, 80);
         }
 
-        assert!(counts[0] < counts[1], "counts={counts:?}");
-        assert!(counts[1] < counts[2], "counts={counts:?}");
+        assert_eq!(counts, [5, 20, 40]);
     }
 
     #[test]
@@ -1083,8 +1093,26 @@ mod tests {
 
                 let mut legacy = Vec::new();
                 let mut optimized = Vec::new();
-                append_group_lines(&mut legacy, &request, legacy_plan, group, None);
-                append_group_lines(&mut optimized, &request, optimized_plan, group, None);
+                let mut legacy_text = Vec::new();
+                let mut optimized_text = Vec::new();
+                append_group_lines(
+                    &mut legacy_text,
+                    &mut legacy,
+                    &request,
+                    legacy_plan,
+                    group,
+                    None,
+                );
+                append_group_lines(
+                    &mut optimized_text,
+                    &mut optimized,
+                    &request,
+                    optimized_plan,
+                    group,
+                    None,
+                );
+                assert!(legacy_text.is_empty());
+                assert!(optimized_text.is_empty());
                 assert_eq!(
                     legacy.iter().filter_map(sprite_parts).collect::<Vec<_>>(),
                     optimized
@@ -1198,12 +1226,10 @@ mod tests {
         let mut request = request(MeasureLineMode::Edit, &travel, &dirs, &receptors);
         request.scroll_speed = ScrollSpeedSetting::XMod(3.0);
         let mut actors = Vec::new();
-        compose_measure_lines(&mut actors, request);
+        let mut draws = Vec::new();
+        compose_measure_lines(&mut actors, &mut draws, request);
 
-        assert!(actors.iter().any(|actor| matches!(
-            actor,
-            Actor::Sprite { align, .. } if *align == [0.0, 0.5]
-        )));
+        assert!(draws.len() > 1, "edit subdivisions should emit dashed bars");
         assert!(actors.iter().any(|actor| matches!(
             actor,
             Actor::Text { font, content, z, .. }
@@ -1218,11 +1244,14 @@ mod tests {
         let dirs = [1.0, 1.0, -1.0, -1.0];
         let receptors = [100.0, 100.0, 380.0, 380.0];
         let mut actors = Vec::new();
+        let mut draws = Vec::new();
         compose_measure_lines(
             &mut actors,
+            &mut draws,
             request(MeasureLineMode::Measure, &travel, &dirs, &receptors),
         );
-        let fingerprints: Vec<_> = actors.iter().filter_map(sprite_parts).collect();
+        assert!(actors.is_empty());
+        let fingerprints: Vec<_> = draws.iter().filter_map(sprite_parts).collect();
 
         assert!(
             fingerprints
@@ -1321,8 +1350,8 @@ mod tests {
             .flatten()
             .next()
             .expect("forward field group");
-        let mut old_actors = Vec::new();
-        let mut new_actors = Vec::new();
+        let mut old_draws = Vec::new();
+        let mut new_draws = Vec::new();
         let old_ranges = cue_segment_ranges(
             baseline.scrolls,
             baseline.bpms,
@@ -1337,14 +1366,14 @@ mod tests {
             optimized.stops,
             visible_cue_beat_range(&optimized),
         );
-        append_group_cues(&mut old_actors, &baseline, group, &old_ranges);
-        append_group_cues(&mut new_actors, &optimized, group, &new_ranges);
+        append_group_cues(&mut old_draws, &baseline, group, &old_ranges);
+        append_group_cues(&mut new_draws, &optimized, group, &new_ranges);
         assert_eq!(
-            old_actors
+            old_draws
                 .iter()
                 .filter_map(sprite_parts)
                 .collect::<Vec<_>>(),
-            new_actors
+            new_draws
                 .iter()
                 .filter_map(sprite_parts)
                 .collect::<Vec<_>>(),
@@ -1397,9 +1426,11 @@ mod tests {
         request.delays = &delays;
         request.scrolls = &scrolls;
         let mut actors = Vec::new();
-        compose_measure_lines(&mut actors, request);
+        let mut draws = Vec::new();
+        compose_measure_lines(&mut actors, &mut draws, request);
+        assert!(actors.is_empty());
 
-        let tints: Vec<_> = actors
+        let tints: Vec<_> = draws
             .iter()
             .filter_map(sprite_parts)
             .map(|(_, _, tint, _)| tint)

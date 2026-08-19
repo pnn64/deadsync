@@ -269,6 +269,7 @@ fn compose_field_contents<S, F>(
     };
     compose_measure_lines(
         actors,
+        flat_draws,
         MeasureComposeRequest {
             mode: measure_line_mode,
             show_cues: options.frame_features.measure_cues,

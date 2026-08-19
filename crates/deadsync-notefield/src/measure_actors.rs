@@ -1,5 +1,6 @@
-use deadlib_present::actors::{Actor, TextAlign, TextContent};
-use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
+use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SpriteSource, TextAlign, TextContent};
+use deadlib_present::dsl::TextBuilder;
+use deadlib_render_core::BlendMode;
 
 pub(crate) fn append_edit_measure_number(
     actors: &mut Vec<Actor>,
@@ -38,7 +39,7 @@ fn edit_measure_text(measure: u64) -> TextContent {
 }
 
 pub(crate) fn append_beat_bar(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     edit_beat_bars: bool,
     edit_bar_frame: u32,
     x_center: f32,
@@ -51,7 +52,7 @@ pub(crate) fn append_beat_bar(
 ) {
     if edit_beat_bars {
         append_edit_beat_bar(
-            actors,
+            draws,
             edit_bar_frame,
             x_center,
             y,
@@ -63,7 +64,7 @@ pub(crate) fn append_beat_bar(
         );
     } else {
         append_measure_quad(
-            actors,
+            draws,
             [0.5, 0.5],
             [x_center, y],
             [width, thickness],
@@ -76,7 +77,7 @@ pub(crate) fn append_beat_bar(
 /// Colored measure cue line marking timing events such as BPM changes, stops,
 /// delays, and scrolls.
 pub(crate) fn append_cue_bar(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     x_center: f32,
     y: f32,
     width: f32,
@@ -86,7 +87,7 @@ pub(crate) fn append_cue_bar(
     z_measure_lines: i16,
 ) {
     append_measure_quad(
-        actors,
+        draws,
         [0.5, 0.5],
         [x_center, y],
         [width, thickness],
@@ -96,7 +97,7 @@ pub(crate) fn append_cue_bar(
 }
 
 fn append_edit_beat_bar(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     frame: u32,
     x_center: f32,
     y: f32,
@@ -107,17 +108,11 @@ fn append_edit_beat_bar(
     z_measure_lines: i16,
 ) {
     match frame {
-        0 | 1 => append_edit_bar_segment(
-            actors,
-            x_center,
-            y,
-            width,
-            thickness,
-            alpha,
-            z_measure_lines,
-        ),
+        0 | 1 => {
+            append_edit_bar_segment(draws, x_center, y, width, thickness, alpha, z_measure_lines)
+        }
         2 => append_dashed_edit_bar(
-            actors,
+            draws,
             x_center,
             y,
             width,
@@ -128,7 +123,7 @@ fn append_edit_beat_bar(
             z_measure_lines,
         ),
         _ => append_dashed_edit_bar(
-            actors,
+            draws,
             x_center,
             y,
             width,
@@ -142,7 +137,7 @@ fn append_edit_beat_bar(
 }
 
 fn append_edit_bar_segment(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     x_center: f32,
     y: f32,
     width: f32,
@@ -151,7 +146,7 @@ fn append_edit_bar_segment(
     z_measure_lines: i16,
 ) {
     append_measure_quad(
-        actors,
+        draws,
         [0.5, 0.5],
         [x_center, y],
         [width, thickness],
@@ -161,7 +156,7 @@ fn append_edit_bar_segment(
 }
 
 fn append_dashed_edit_bar(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     x_center: f32,
     y: f32,
     width: f32,
@@ -179,7 +174,7 @@ fn append_dashed_edit_bar(
     while x < right {
         let seg_w = dash.min(right - x);
         append_measure_quad(
-            actors,
+            draws,
             [0.0, 0.5],
             [x, y],
             [seg_w, thickness],
@@ -191,18 +186,30 @@ fn append_dashed_edit_bar(
 }
 
 fn append_measure_quad(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     align: [f32; 2],
     xy: [f32; 2],
     size: [f32; 2],
     diffuse: [f32; 4],
     z: i16,
 ) {
-    let mut quad = SpriteBuilder::solid();
-    quad.align(align[0], align[1]);
-    quad.xy(xy[0], xy[1]);
-    quad.size(size[0], size[1]);
-    quad.diffuse(diffuse);
-    quad.z(z);
-    actors.push(quad.build(0));
+    draws.push(FlatDraw::Sprite(FlatSprite {
+        center: [
+            xy[0] + (0.5 - align[0]) * size[0],
+            xy[1] + (0.5 - align[1]) * size[1],
+        ],
+        world_z: 0.0,
+        size,
+        source: SpriteSource::Solid,
+        tint: diffuse,
+        glow: [1.0, 1.0, 1.0, 0.0],
+        uv_rect: [0.0, 0.0, 1.0, 1.0],
+        flip_x: false,
+        flip_y: false,
+        fade: [0.0; 4],
+        blend: BlendMode::Alpha,
+        rot_y_deg: 0.0,
+        rot_z_deg: 0.0,
+        z,
+    }));
 }

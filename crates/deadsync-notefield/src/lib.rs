@@ -201,7 +201,7 @@ pub(crate) use transforms::{
 };
 #[cfg(test)]
 mod tests {
-    use deadlib_present::actors::{Actor, FlatDraw, SizeSpec, SpriteSource, TextAlign};
+    use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SizeSpec, SpriteSource, TextAlign};
     use deadlib_render_core::BlendMode;
     use deadsync_gameplay::VisualEffects;
     use deadsync_noteskin::NoteAnimPart;
@@ -466,68 +466,73 @@ mod tests {
     }
 
     #[test]
-    fn beat_bar_actor_builds_solid_measure_quad() {
-        let mut actors = Vec::new();
-        append_beat_bar(&mut actors, false, 0, 120.0, 80.0, 256.0, 1.0, 2.0, 0.4, 80);
+    fn beat_bar_builds_direct_solid_measure_quad() {
+        let mut draws = Vec::new();
+        append_beat_bar(&mut draws, false, 0, 120.0, 80.0, 256.0, 1.0, 2.0, 0.4, 80);
 
-        assert_eq!(actors.len(), 1);
-        match &actors[0] {
-            Actor::Sprite {
-                align,
-                offset,
+        assert_eq!(draws.len(), 1);
+        match &draws[0] {
+            FlatDraw::Sprite(FlatSprite {
+                center,
+                world_z,
                 size,
-                scale,
                 source,
                 tint,
+                glow,
+                uv_rect,
+                flip_x,
+                flip_y,
+                fade,
+                blend,
+                rot_y_deg,
+                rot_z_deg,
                 z,
-                ..
-            } => {
-                assert_eq!(*align, [0.5, 0.5]);
-                assert_eq!(*offset, [120.0, 80.0]);
-                assert!(matches!(
-                    size,
-                    [SizeSpec::Px(w), SizeSpec::Px(h)]
-                        if (*w - 256.0).abs() <= 1e-6 && (*h - 2.0).abs() <= 1e-6
-                ));
-                assert_eq!(*scale, [1.0, 1.0]);
+            }) => {
+                assert_eq!(*center, [120.0, 80.0]);
+                assert_eq!(*world_z, 0.0);
+                assert_eq!(*size, [256.0, 2.0]);
                 assert!(matches!(source, SpriteSource::Solid));
                 assert_eq!(*tint, [1.0, 1.0, 1.0, 0.4]);
+                assert_eq!(*glow, [1.0, 1.0, 1.0, 0.0]);
+                assert_eq!(*uv_rect, [0.0, 0.0, 1.0, 1.0]);
+                assert!(!*flip_x);
+                assert!(!*flip_y);
+                assert_eq!(*fade, [0.0; 4]);
+                assert_eq!(*blend, BlendMode::Alpha);
+                assert_eq!(*rot_y_deg, 0.0);
+                assert_eq!(*rot_z_deg, 0.0);
                 assert_eq!(*z, 80);
             }
-            actor => panic!("expected measure quad, got {actor:?}"),
+            draw => panic!("expected measure quad, got {draw:?}"),
         }
     }
 
     #[test]
-    fn edit_beat_bar_actor_splits_dashed_frames() {
-        let mut actors = Vec::new();
-        append_beat_bar(&mut actors, true, 2, 50.0, 20.0, 50.0, 1.0, 2.0, 0.75, 80);
+    fn edit_beat_bar_splits_direct_dashed_frames() {
+        let mut draws = Vec::new();
+        append_beat_bar(&mut draws, true, 2, 50.0, 20.0, 50.0, 1.0, 2.0, 0.75, 80);
 
-        assert_eq!(actors.len(), 3);
-        let expected_x = [25.0, 45.0, 65.0];
-        for (actor, x) in actors.iter().zip(expected_x) {
-            match actor {
-                Actor::Sprite {
-                    align,
-                    offset,
+        assert_eq!(draws.len(), 3);
+        let expected = [
+            ([31.0, 20.0], 12.0),
+            ([51.0, 20.0], 12.0),
+            ([70.0, 20.0], 10.0),
+        ];
+        for (draw, (center, width)) in draws.iter().zip(expected) {
+            match draw {
+                FlatDraw::Sprite(FlatSprite {
+                    center: actual_center,
                     size,
-                    scale,
                     tint,
                     z,
                     ..
-                } => {
-                    assert_eq!(*align, [0.0, 0.5]);
-                    assert_eq!(*offset, [x, 20.0]);
-                    assert!(matches!(
-                        size,
-                        [SizeSpec::Px(w), SizeSpec::Px(h)]
-                            if *w > 0.0 && (*h - 2.0).abs() <= 1e-6
-                    ));
-                    assert_eq!(*scale, [1.0, 1.0]);
+                }) => {
+                    assert_eq!(*actual_center, center);
+                    assert_eq!(*size, [width, 2.0]);
                     assert_eq!(*tint, [1.0, 1.0, 1.0, 0.75]);
                     assert_eq!(*z, 80);
                 }
-                actor => panic!("expected dashed segment, got {actor:?}"),
+                draw => panic!("expected dashed segment, got {draw:?}"),
             }
         }
     }
@@ -599,33 +604,25 @@ mod tests {
     }
 
     #[test]
-    fn cue_bar_actor_keeps_color_and_measure_layer() {
-        let mut actors = Vec::new();
-        append_cue_bar(&mut actors, 10.0, 20.0, 30.0, 4.0, [0.2, 0.4, 0.6], 0.8, 80);
+    fn cue_bar_direct_draw_keeps_color_and_measure_layer() {
+        let mut draws = Vec::new();
+        append_cue_bar(&mut draws, 10.0, 20.0, 30.0, 4.0, [0.2, 0.4, 0.6], 0.8, 80);
 
-        assert_eq!(actors.len(), 1);
-        match &actors[0] {
-            Actor::Sprite {
-                align,
-                offset,
+        assert_eq!(draws.len(), 1);
+        match &draws[0] {
+            FlatDraw::Sprite(FlatSprite {
+                center,
                 size,
-                scale,
                 tint,
                 z,
                 ..
-            } => {
-                assert_eq!(*align, [0.5, 0.5]);
-                assert_eq!(*offset, [10.0, 20.0]);
-                assert!(matches!(
-                    size,
-                    [SizeSpec::Px(w), SizeSpec::Px(h)]
-                        if (*w - 30.0).abs() <= 1e-6 && (*h - 4.0).abs() <= 1e-6
-                ));
-                assert_eq!(*scale, [1.0, 1.0]);
+            }) => {
+                assert_eq!(*center, [10.0, 20.0]);
+                assert_eq!(*size, [30.0, 4.0]);
                 assert_eq!(*tint, [0.2, 0.4, 0.6, 0.8]);
                 assert_eq!(*z, 80);
             }
-            actor => panic!("expected cue bar quad, got {actor:?}"),
+            draw => panic!("expected cue bar quad, got {draw:?}"),
         }
     }
 
