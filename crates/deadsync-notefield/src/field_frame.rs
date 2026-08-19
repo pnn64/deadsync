@@ -85,7 +85,11 @@ where
     let Some(notes) = prepared.notes.as_ref() else {
         return NotefieldFieldResult::default();
     };
-    let field_camera = push_field_camera(actors, request, prepared);
+    let field_camera = resolve_field_camera(request, prepared);
+    let actor_camera_scope = request.capture_requests.note_field || request.view.edit_beat_bars;
+    if actor_camera_scope && let Some(view_proj) = field_camera {
+        actors.push(Actor::CameraPush { view_proj });
+    }
     let field_content_start = actors.len();
 
     compose_field_contents(
@@ -103,11 +107,15 @@ where
     if request.capture_requests.note_field {
         actors.extend(flat_draws.drain(..).map(flat_draw_actor));
     }
+    debug_assert!(
+        actor_camera_scope || actors.len() == field_start,
+        "ordinary gameplay field presentation must stay on the direct draw stream"
+    );
     finish_field_camera(
         actors,
         field_start,
         field_content_start,
-        field_camera.is_some(),
+        actor_camera_scope && field_camera.is_some(),
     );
 
     let captured_actors = request
@@ -1494,15 +1502,14 @@ fn calc_note_rotation_z(
     )
 }
 
-fn push_field_camera<S>(
-    actors: &mut Vec<Actor>,
+fn resolve_field_camera<S>(
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
 ) -> Option<glam::Mat4> {
     let field = prepared.field;
     let center_y = 0.5 * (field.receptor_y_normal + field.receptor_y_reverse);
     let perspective = request.visual.perspective;
-    let Some(view_proj) = notefield_view_proj(
+    notefield_view_proj(
         request.geometry.screen_width,
         request.geometry.screen_height,
         field.playfield_center_x,
@@ -1510,11 +1517,7 @@ fn push_field_camera<S>(
         perspective.tilt,
         perspective.skew,
         request.geometry.reverse_scroll,
-    ) else {
-        return None;
-    };
-    actors.push(Actor::CameraPush { view_proj });
-    Some(view_proj)
+    )
 }
 
 /// Cold SongLua proxy adapter. Ordinary gameplay keeps flat draws in their

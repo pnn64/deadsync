@@ -46,6 +46,9 @@ const BOUNDARY_BATCH_FRAMES: usize = 32;
 const BOUNDARY_WARMUP_BATCHES: usize = 32;
 const BOUNDARY_MEASURE_BATCHES: usize = 400;
 const ERROR_BAR_MEASURE_BATCHES: usize = 400;
+const CAMERA_HANDOFF_BATCH_FRAMES: usize = 4_096;
+const CAMERA_HANDOFF_WARMUP_BATCHES: usize = 16;
+const CAMERA_HANDOFF_MEASURE_BATCHES: usize = 400;
 const HUD_TEXT_RUNS: usize = 8;
 const ERROR_BAR_TEXT_RUNS: usize = 4;
 const CUE_COUNTDOWN_RUNS: usize = 3;
@@ -911,7 +914,11 @@ fn measure_boundary_pair(field_draws: usize, hold_mix: bool) -> [BoundaryResult;
 }
 
 fn print_boundary_result(label: &str, result: &BoundaryResult) {
-    let frames = (result.samples_ns.len() * BOUNDARY_BATCH_FRAMES) as f64;
+    print_sampled_result(label, result, BOUNDARY_BATCH_FRAMES);
+}
+
+fn print_sampled_result(label: &str, result: &BoundaryResult, batch_frames: usize) {
+    let frames = (result.samples_ns.len() * batch_frames) as f64;
     let p95_index = (result.samples_ns.len() * 95)
         .div_ceil(100)
         .saturating_sub(1);
@@ -933,6 +940,102 @@ fn print_boundary_result(label: &str, result: &BoundaryResult) {
         result.allocated.reallocs,
         result.allocated.bytes,
     );
+}
+
+#[derive(Clone, Copy)]
+enum CameraHandoffKind {
+    WideActorScope,
+    DirectMatrix,
+}
+
+fn camera_handoff_frame(kind: CameraHandoffKind, actors: &mut Vec<Actor>, view_proj: Mat4) -> f32 {
+    actors.clear();
+    match kind {
+        CameraHandoffKind::WideActorScope => {
+            actors.push(Actor::CameraPush { view_proj });
+            black_box(actors.last());
+            actors.truncate(0);
+        }
+        CameraHandoffKind::DirectMatrix => {
+            black_box(&view_proj);
+        }
+    }
+    view_proj.x_axis.x
+}
+
+fn measure_camera_handoff_pair() -> [BoundaryResult; 2] {
+    let cameras = [
+        Mat4::from_rotation_x(0.07) * Mat4::from_rotation_z(0.11),
+        Mat4::from_rotation_x(-0.05) * Mat4::from_rotation_z(-0.09),
+    ];
+    let mut actor_scratch: [Vec<Actor>; 2] = std::array::from_fn(|_| Vec::with_capacity(1));
+    let mut elapsed = [Duration::ZERO; 2];
+    let mut cycles = [0u64; 2];
+    let mut allocated = [AllocSnapshot {
+        allocs: 0,
+        reallocs: 0,
+        bytes: 0,
+    }; 2];
+    let mut samples_ns: [Vec<u64>; 2] =
+        std::array::from_fn(|_| Vec::with_capacity(CAMERA_HANDOFF_MEASURE_BATCHES));
+    let mut checksum = [0.0f32; 2];
+    for batch in 0..CAMERA_HANDOFF_WARMUP_BATCHES + CAMERA_HANDOFF_MEASURE_BATCHES {
+        let order = if batch % 2 == 0 { [0, 1] } else { [1, 0] };
+        for kind_index in order {
+            let kind = [
+                CameraHandoffKind::WideActorScope,
+                CameraHandoffKind::DirectMatrix,
+            ][kind_index];
+            let before_alloc = ALLOC.snapshot();
+            let before_cycles = read_cycles();
+            let started = Instant::now();
+            let mut batch_checksum = 0.0;
+            for _ in 0..CAMERA_HANDOFF_BATCH_FRAMES {
+                for player in 0..2 {
+                    batch_checksum +=
+                        camera_handoff_frame(kind, &mut actor_scratch[player], cameras[player]);
+                }
+            }
+            let sample = started.elapsed();
+            let sample_cycles = read_cycles().saturating_sub(before_cycles);
+            let sample_allocated = ALLOC.snapshot().delta(before_alloc);
+            black_box(batch_checksum);
+            if batch >= CAMERA_HANDOFF_WARMUP_BATCHES {
+                elapsed[kind_index] += sample;
+                cycles[kind_index] += sample_cycles;
+                allocated[kind_index].add(sample_allocated);
+                samples_ns[kind_index]
+                    .push((sample.as_nanos() / CAMERA_HANDOFF_BATCH_FRAMES as u128) as u64);
+                checksum[kind_index] += batch_checksum;
+            }
+        }
+    }
+    for samples in &mut samples_ns {
+        samples.sort_unstable();
+    }
+    std::array::from_fn(|index| BoundaryResult {
+        elapsed: elapsed[index],
+        cycles: cycles[index],
+        allocated: allocated[index],
+        samples_ns: std::mem::take(&mut samples_ns[index]),
+        checksum: checksum[index],
+    })
+}
+
+fn print_camera_handoff_benchmark() {
+    println!("\ndirect field-camera handoff benchmark (2 players)");
+    let [wide, direct] = measure_camera_handoff_pair();
+    assert_eq!(wide.checksum, direct.checksum);
+    print_sampled_result("wide actor scope", &wide, CAMERA_HANDOFF_BATCH_FRAMES);
+    print_sampled_result("direct matrix", &direct, CAMERA_HANDOFF_BATCH_FRAMES);
+    for result in [&wide, &direct] {
+        assert_zero_alloc(&BenchResult {
+            elapsed: result.elapsed,
+            cycles: result.cycles,
+            allocated: result.allocated,
+            checksum: result.checksum,
+        });
+    }
 }
 
 fn print_boundary_sweep(label: &str, hold_mix: bool, draw_counts: &[usize]) {
@@ -1754,6 +1857,10 @@ fn print_cue_countdown_benchmark() {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_FIELD_CAMERA_ONLY").is_some() {
+        print_camera_handoff_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_CUE_COUNTDOWN_ONLY").is_some() {
         print_cue_countdown_benchmark();
         return;
