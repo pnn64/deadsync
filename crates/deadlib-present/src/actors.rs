@@ -526,6 +526,12 @@ pub struct FlatSprite {
 
 /// Compact actor-free payload for one retained textured-mesh draw.
 #[derive(Clone, Debug)]
+pub enum FlatMeshVertices {
+    Shared(Arc<[TexturedMeshVertex]>),
+    Reusable(Arc<Vec<TexturedMeshVertex>>),
+}
+
+#[derive(Clone, Debug)]
 pub struct FlatTexturedMesh {
     pub offset: [f32; 2],
     pub world_z: f32,
@@ -533,7 +539,7 @@ pub struct FlatTexturedMesh {
     pub texture: Arc<str>,
     pub tint: [f32; 4],
     pub glow: [f32; 4],
-    pub vertices: Arc<[TexturedMeshVertex]>,
+    pub vertices: FlatMeshVertices,
     pub geom_cache_key: TMeshCacheKey,
     pub uv_scale: [f32; 2],
     pub uv_offset: [f32; 2],

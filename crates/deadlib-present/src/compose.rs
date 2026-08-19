@@ -5318,37 +5318,47 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                 actor_textures,
                 total_elapsed,
             ),
-            actors::FlatDraw::TexturedMesh(mesh) => build_textured_mesh_actor(
-                TexturedMeshActorView {
-                    align: [0.0, 0.0],
-                    offset: mesh.offset,
-                    world_z: mesh.world_z,
-                    size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-                    local_transform: mesh.local_transform,
-                    texture: &mesh.texture,
-                    tint: mesh.tint,
-                    glow: mesh.glow,
-                    vertices: TexturedMeshActorVertices::Shared(&mesh.vertices),
-                    geom_cache_key: mesh.geom_cache_key,
-                    uv_scale: mesh.uv_scale,
-                    uv_offset: mesh.uv_offset,
-                    uv_tex_shift: mesh.uv_tex_shift,
-                    depth_test: mesh.depth_test,
-                    visible: true,
-                    blend: mesh.blend,
-                    z: mesh.z,
-                },
-                parent,
-                m,
-                segment.z_shift,
-                camera,
-                style,
-                segment.x_fold,
-                order_counter,
-                out,
-                texture_cache,
-                texture_ctx,
-            ),
+            actors::FlatDraw::TexturedMesh(mesh) => {
+                let vertices = match &mesh.vertices {
+                    actors::FlatMeshVertices::Shared(vertices) => {
+                        TexturedMeshActorVertices::Shared(vertices)
+                    }
+                    actors::FlatMeshVertices::Reusable(vertices) => {
+                        TexturedMeshActorVertices::Reusable(vertices)
+                    }
+                };
+                build_textured_mesh_actor(
+                    TexturedMeshActorView {
+                        align: [0.0, 0.0],
+                        offset: mesh.offset,
+                        world_z: mesh.world_z,
+                        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                        local_transform: mesh.local_transform,
+                        texture: &mesh.texture,
+                        tint: mesh.tint,
+                        glow: mesh.glow,
+                        vertices,
+                        geom_cache_key: mesh.geom_cache_key,
+                        uv_scale: mesh.uv_scale,
+                        uv_offset: mesh.uv_offset,
+                        uv_tex_shift: mesh.uv_tex_shift,
+                        depth_test: mesh.depth_test,
+                        visible: true,
+                        blend: mesh.blend,
+                        z: mesh.z,
+                    },
+                    parent,
+                    m,
+                    segment.z_shift,
+                    camera,
+                    style,
+                    segment.x_fold,
+                    order_counter,
+                    out,
+                    texture_cache,
+                    texture_ctx,
+                )
+            }
         }
     }
 }
@@ -8227,9 +8237,9 @@ mod tests {
         wrap_text_lines_by_words,
     };
     use crate::actors::{
-        Actor, ActorResourceArena, FlatDraw, FlatSprite, FlatTexturedMesh, InlineText,
-        RetainedActorFrame, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextAttributes,
-        TextContent,
+        Actor, ActorResourceArena, FlatDraw, FlatMeshVertices, FlatSprite, FlatTexturedMesh,
+        InlineText, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign, TextAttribute,
+        TextAttributes, TextContent,
     };
     use crate::font;
     use crate::font::{Font, Glyph, GlyphMap};
@@ -8981,7 +8991,7 @@ mod tests {
             texture: Arc::from("flat-model.png"),
             tint: [0.4, 0.5, 0.6, 0.7],
             glow: [0.8, 0.9, 1.0, 0.2],
-            vertices: Arc::clone(&vertices),
+            vertices: FlatMeshVertices::Shared(Arc::clone(&vertices)),
             geom_cache_key: 41,
             uv_scale: [0.5, 0.75],
             uv_offset: [0.1, 0.2],
@@ -11652,6 +11662,56 @@ mod tests {
             &geometry.vertices
         else {
             panic!("reusable actor should preserve reusable renderer storage");
+        };
+        assert!(Arc::ptr_eq(render_vertices, &vertices));
+    }
+
+    #[test]
+    fn flat_reusable_textured_mesh_preserves_shared_vec_storage() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let vertices = Arc::new(vec![TexturedMeshVertex::default(); 6]);
+        let draws = [FlatDraw::TexturedMesh(FlatTexturedMesh {
+            offset: [0.0, 0.0],
+            world_z: 0.0,
+            local_transform: Matrix4::IDENTITY,
+            texture: Arc::from("flat-reusable"),
+            tint: [1.0; 4],
+            glow: [1.0, 1.0, 1.0, 0.0],
+            vertices: FlatMeshVertices::Reusable(Arc::clone(&vertices)),
+            geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
+            uv_scale: [1.0; 2],
+            uv_offset: [0.0; 2],
+            uv_tex_shift: [0.0; 2],
+            depth_test: true,
+            blend: BlendMode::Alpha,
+            z: 0,
+        })];
+        let resources = ActorResourceArena::new(0);
+        let mut text = TextLayoutCache::default();
+        let mut scratch = ComposeScratch::default();
+        let render =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::new(&[]).with_flat_draws(&draws, None)],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &font::FontMap::default(),
+                0.0,
+                &mut text,
+                &mut scratch,
+                &TestDrawTextureContext,
+                &resources,
+            );
+
+        let (_, _, geometry) = tmesh_draw(&render, 0);
+        let deadlib_render_core::TexturedMeshVertices::Reusable(render_vertices) =
+            &geometry.vertices
+        else {
+            panic!("flat draw should preserve reusable renderer storage");
         };
         assert!(Arc::ptr_eq(render_vertices, &vertices));
     }

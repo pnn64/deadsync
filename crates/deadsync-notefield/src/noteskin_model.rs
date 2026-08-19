@@ -535,7 +535,7 @@ fn flat_from_vertices<S: NoteskinSlot>(
         texture: slot.texture_key_shared(),
         tint,
         glow: [1.0, 1.0, 1.0, 0.0],
-        vertices,
+        vertices: deadlib_present::actors::FlatMeshVertices::Shared(vertices),
         geom_cache_key,
         uv_scale,
         uv_offset,

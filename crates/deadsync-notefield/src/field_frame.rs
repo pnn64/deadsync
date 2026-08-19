@@ -5,7 +5,7 @@ use crate::{
     NoteLayerRequest, NoteXParams, NotefieldComposeRequest, NotefieldFeedbackFrameView,
     PreparedNotefield, PreparedNotefieldNotes, TornadoBounds, VisualEffectParams,
     appearance_note_alpha_glow_cached, compose_flat_mine_layers, compose_flat_note_layer,
-    compose_hold_body_caps, compose_measure_lines, compose_note_layer, compose_notefield_feedback,
+    compose_hold_body_caps, compose_measure_lines, compose_notefield_feedback,
     fill_gameplay_lane_effects, fill_static_note_x_offsets, for_each_lane_index,
     hold_entry_head_beat, hold_entry_plan, hold_overlaps_visible_window, hold_parts_for_note_type,
     lane_hold_window_bounds_by_note_row_from_cursor, lane_note_transform_cache,
@@ -16,7 +16,7 @@ use crate::{
     visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
     visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
-use deadlib_present::actors::{Actor, FlatDraw, SizeSpec, SpriteSource};
+use deadlib_present::actors::{Actor, FlatDraw, FlatMeshVertices, SizeSpec, SpriteSource};
 use deadlib_render_core::BlendMode;
 use deadsync_core::{input::MAX_COLS, note::NoteType};
 use deadsync_gameplay::{
@@ -27,11 +27,12 @@ use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinSlot};
 use deadsync_rules::note::HoldResult;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingData;
+use std::sync::Arc;
 
-/// Borrowed runtime state needed by the canonical field actor pass.
+/// Borrowed runtime state needed by the canonical field presentation pass.
 ///
 /// The concrete theme resolves gameplay state into this fixed-size view;
-/// canonical notefield code owns all actor selection, placement, and ordering.
+/// canonical notefield code owns all draw selection, placement, and ordering.
 #[derive(Clone, Copy, Debug)]
 pub struct NotefieldFieldFrameView<'a> {
     pub feedback: NotefieldFeedbackFrameView<'a>,
@@ -496,7 +497,7 @@ fn compose_field_contents<S, F>(
             }
         };
         if compose_hold_body_caps(
-            actors,
+            flat_draws,
             hold_mesh_scratch,
             HoldBodyCapRequest {
                 body_slot: hold_plan.body_slot,
@@ -621,8 +622,8 @@ fn compose_field_contents<S, F>(
                 BlendMode::Alpha
             };
             let rotation = -head_slot.sprite_def().rotation_deg as f32;
-            compose_note_layer(
-                actors,
+            compose_flat_note_layer(
+                flat_draws,
                 model_cache,
                 NoteLayerRequest {
                     slot: head_slot,
@@ -652,8 +653,8 @@ fn compose_field_contents<S, F>(
         {
             let note_scale = hold_note_scale;
             for note_slot in note_slots {
-                compose_noteskin_layer(
-                    actors,
+                compose_flat_noteskin_layer(
+                    flat_draws,
                     model_cache,
                     note_slot,
                     head_center,
@@ -695,8 +696,8 @@ fn compose_field_contents<S, F>(
                 note_rotation_y,
             );
             let rotation = -note_slot.sprite_def().rotation_deg as f32;
-            compose_note_layer(
-                actors,
+            compose_flat_note_layer(
+                flat_draws,
                 model_cache,
                 NoteLayerRequest {
                     slot: note_slot,
@@ -1267,90 +1268,6 @@ fn compose_flat_single_slot<S, F>(
     );
 }
 
-#[allow(clippy::too_many_arguments)]
-fn compose_noteskin_layer<S, F>(
-    actors: &mut Vec<Actor>,
-    model_cache: &mut ModelMeshCache,
-    slot: &S,
-    center: [f32; 2],
-    scale: f32,
-    phase: f32,
-    translation: [f32; 2],
-    elapsed: f32,
-    current_beat: f32,
-    rotation_y_deg: f32,
-    face_rotation_y_deg: f32,
-    rotation_z_deg: f32,
-    tint_scale: [f32; 4],
-    glow_alpha: f32,
-    z: i16,
-    world_z: f32,
-    prefer_sprite: bool,
-    sprite_source: &F,
-) where
-    S: NoteskinSlot,
-    F: Fn(&S) -> SpriteSource,
-{
-    let draw = song_lua_note_model_draw(
-        model_cache.draw_at(slot, elapsed, current_beat),
-        rotation_y_deg,
-    );
-    if !draw.visible {
-        return;
-    }
-    let frame_index = slot.frame_index_from_phase(phase);
-    let uv_elapsed = if slot.model().is_some() {
-        phase
-    } else {
-        elapsed
-    };
-    let uv = translated_uv_rect(slot.uv_for_frame_at(frame_index, uv_elapsed), translation);
-    let base_size = note_slot_base_size(slot, scale);
-    let local_offset = [draw.pos[0] * scale, draw.pos[1] * scale];
-    let rotation_sin_cos = slot.base_rot_sin_cos();
-    let size = [
-        base_size[0] * draw.zoom[0].max(0.0),
-        base_size[1] * draw.zoom[1].max(0.0),
-    ];
-    if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
-        return;
-    }
-    let blend = if draw.blend_add {
-        BlendMode::Add
-    } else {
-        BlendMode::Alpha
-    };
-    let tint = [
-        draw.tint[0] * tint_scale[0],
-        draw.tint[1] * tint_scale[1],
-        draw.tint[2] * tint_scale[2],
-        draw.tint[3] * tint_scale[3],
-    ];
-    let rotation = -slot.sprite_def().rotation_deg as f32;
-    compose_note_layer(
-        actors,
-        model_cache,
-        NoteLayerRequest {
-            slot,
-            draw,
-            model_center: model_center(slot, center, local_offset, rotation_sin_cos),
-            sprite_center: offset_center(center, local_offset, rotation_sin_cos),
-            size,
-            uv,
-            rotation_y_deg: face_rotation_y_deg,
-            model_rotation_z_deg: rotation + rotation_z_deg,
-            sprite_rotation_z_deg: draw.rot[2] + rotation + rotation_z_deg,
-            tint,
-            glow_alpha,
-            blend,
-            z,
-            world_z,
-            prefer_sprite,
-        },
-        sprite_source,
-    );
-}
-
 #[inline(always)]
 fn note_slot_base_size<S: NoteskinSlot>(slot: &S, scale: f32) -> [f32; 2] {
     if let Some(model) = slot.model() {
@@ -1639,25 +1556,49 @@ fn flat_draw_actor(draw: FlatDraw) -> Actor {
             shadow_color: [0.0; 4],
             effect: Default::default(),
         },
-        FlatDraw::TexturedMesh(mesh) => Actor::TexturedMesh {
-            align: [0.0, 0.0],
-            offset: mesh.offset,
-            world_z: mesh.world_z,
-            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-            local_transform: mesh.local_transform,
-            texture: mesh.texture,
-            tint: mesh.tint,
-            glow: mesh.glow,
-            vertices: mesh.vertices,
-            geom_cache_key: mesh.geom_cache_key,
-            uv_scale: mesh.uv_scale,
-            uv_offset: mesh.uv_offset,
-            uv_tex_shift: mesh.uv_tex_shift,
-            depth_test: mesh.depth_test,
-            visible: true,
-            blend: mesh.blend,
-            z: mesh.z,
-        },
+        FlatDraw::TexturedMesh(mesh) => {
+            let make_actor = |vertices| Actor::TexturedMesh {
+                align: [0.0, 0.0],
+                offset: mesh.offset,
+                world_z: mesh.world_z,
+                size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                local_transform: mesh.local_transform,
+                texture: Arc::clone(&mesh.texture),
+                tint: mesh.tint,
+                glow: mesh.glow,
+                vertices,
+                geom_cache_key: mesh.geom_cache_key,
+                uv_scale: mesh.uv_scale,
+                uv_offset: mesh.uv_offset,
+                uv_tex_shift: mesh.uv_tex_shift,
+                depth_test: mesh.depth_test,
+                visible: true,
+                blend: mesh.blend,
+                z: mesh.z,
+            };
+            match mesh.vertices {
+                FlatMeshVertices::Shared(vertices) => make_actor(vertices),
+                FlatMeshVertices::Reusable(vertices) => Actor::ReusableTexturedMesh {
+                    align: [0.0, 0.0],
+                    offset: mesh.offset,
+                    world_z: mesh.world_z,
+                    size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                    local_transform: mesh.local_transform,
+                    texture: mesh.texture,
+                    tint: mesh.tint,
+                    glow: mesh.glow,
+                    vertices,
+                    geom_cache_key: mesh.geom_cache_key,
+                    uv_scale: mesh.uv_scale,
+                    uv_offset: mesh.uv_offset,
+                    uv_tex_shift: mesh.uv_tex_shift,
+                    depth_test: mesh.depth_test,
+                    visible: true,
+                    blend: mesh.blend,
+                    z: mesh.z,
+                },
+            }
+        }
     }
 }
 
@@ -1677,10 +1618,13 @@ fn finish_field_camera(
 #[cfg(test)]
 mod camera_wrap_tests {
     use super::{finish_field_camera, flat_draw_actor, measure_cue_range_search_enabled};
-    use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SizeSpec, SpriteSource};
-    use deadlib_render_core::BlendMode;
+    use deadlib_present::actors::{
+        Actor, FlatDraw, FlatMeshVertices, FlatSprite, FlatTexturedMesh, SizeSpec, SpriteSource,
+    };
+    use deadlib_render_core::{BlendMode, TexturedMeshVertex};
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use glam::Mat4;
+    use std::sync::Arc;
 
     #[test]
     fn camera_finish_preserves_wrapped_order_and_removes_empty_wrapper() {
@@ -1767,6 +1711,38 @@ mod camera_wrap_tests {
         assert_eq!(*rot_z_deg, 22.0);
         assert_eq!(*z, 140);
         assert!(matches!(actors[2], Actor::CameraPop));
+    }
+
+    #[test]
+    fn capture_preserves_reusable_hold_mesh_storage() {
+        let vertices = Arc::new(vec![TexturedMeshVertex::default(); 6]);
+        let actor = flat_draw_actor(FlatDraw::TexturedMesh(FlatTexturedMesh {
+            offset: [12.0, 34.0],
+            world_z: 5.0,
+            local_transform: Mat4::IDENTITY,
+            texture: Arc::from("capture-hold"),
+            tint: [0.8, 0.7, 0.6, 0.5],
+            glow: [1.0, 1.0, 1.0, 0.25],
+            vertices: FlatMeshVertices::Reusable(Arc::clone(&vertices)),
+            geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
+            uv_scale: [1.0; 2],
+            uv_offset: [0.0; 2],
+            uv_tex_shift: [0.0; 2],
+            depth_test: true,
+            blend: BlendMode::Alpha,
+            z: 140,
+        }));
+
+        let Actor::ReusableTexturedMesh {
+            vertices: captured,
+            depth_test,
+            ..
+        } = actor
+        else {
+            panic!("hold capture should retain reusable mesh ownership");
+        };
+        assert!(depth_test);
+        assert!(Arc::ptr_eq(&captured, &vertices));
     }
 
     #[test]

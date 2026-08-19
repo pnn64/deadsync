@@ -1,12 +1,13 @@
 use deadlib_present::actors::{
-    Actor, ActorResourceArena, FlatDraw, FlatSprite, SizeSpec, SpriteSource,
+    Actor, ActorResourceArena, FlatDraw, FlatMeshVertices, FlatSprite, FlatTexturedMesh, SizeSpec,
+    SpriteSource,
 };
 use deadlib_present::compose::{
     ActorSegment, ComposeScratch, NullTextureContext, TextLayoutCache,
     build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
 };
 use deadlib_present::font;
-use deadlib_render_core::{BlendMode, MeshVertex};
+use deadlib_render_core::{BlendMode, MeshVertex, TexturedMeshVertex};
 use deadsync_theme_simply_love::screens::gameplay::{
     BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
     benchmark_present_identity_notefield, benchmark_present_transformed_notefield,
@@ -474,6 +475,8 @@ struct BoundaryScratch {
     flat_fields: [Vec<FlatDraw>; BOUNDARY_PLAYERS],
     huds: [Vec<Actor>; BOUNDARY_PLAYERS],
     hud_vertices: Arc<[MeshVertex]>,
+    hold_vertices: Arc<Vec<TexturedMeshVertex>>,
+    hold_texture: Arc<str>,
 }
 
 impl BoundaryScratch {
@@ -496,10 +499,13 @@ impl BoundaryScratch {
                     color: [1.0; 4],
                 },
             ]),
+            hold_vertices: Arc::new(vec![TexturedMeshVertex::default(); 6]),
+            hold_texture: Arc::from("bench-hold"),
         }
     }
 
-    fn prepare(&mut self, kind: BoundaryKind, frame: usize) {
+    fn prepare(&mut self, kind: BoundaryKind, frame: usize, field_draws: usize, hold_mix: bool) {
+        assert!(field_draws <= BOUNDARY_FIELD_DRAWS);
         for player in 0..BOUNDARY_PLAYERS {
             let base = player * 20_000 + frame;
             let hud = &mut self.huds[player];
@@ -511,15 +517,31 @@ impl BoundaryScratch {
                 BoundaryKind::WideActors => {
                     let field = &mut self.actor_fields[player];
                     field.clear();
-                    for index in 0..BOUNDARY_FIELD_DRAWS {
-                        field.push(boundary_actor(base + index));
+                    for index in 0..field_draws {
+                        field.push(if hold_mix && index % 2 == 0 {
+                            boundary_hold_actor(
+                                base + index,
+                                &self.hold_vertices,
+                                &self.hold_texture,
+                            )
+                        } else {
+                            boundary_actor(base + index)
+                        });
                     }
                 }
                 BoundaryKind::FlatDraws => {
                     let field = &mut self.flat_fields[player];
                     field.clear();
-                    for index in 0..BOUNDARY_FIELD_DRAWS {
-                        field.push(boundary_flat_draw(base + index));
+                    for index in 0..field_draws {
+                        field.push(if hold_mix && index % 2 == 0 {
+                            boundary_hold_flat_draw(
+                                base + index,
+                                &self.hold_vertices,
+                                &self.hold_texture,
+                            )
+                        } else {
+                            boundary_flat_draw(base + index)
+                        });
                     }
                 }
             }
@@ -607,6 +629,57 @@ fn boundary_flat_draw(index: usize) -> FlatDraw {
     })
 }
 
+fn boundary_hold_actor(
+    index: usize,
+    vertices: &Arc<Vec<TexturedMeshVertex>>,
+    texture: &Arc<str>,
+) -> Actor {
+    let (offset, world_z, tint, glow, z) = boundary_fields(index);
+    Actor::ReusableTexturedMesh {
+        align: [0.0, 0.0],
+        offset,
+        world_z,
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        local_transform: Mat4::IDENTITY,
+        texture: Arc::clone(texture),
+        tint,
+        glow,
+        vertices: Arc::clone(vertices),
+        geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
+        uv_scale: [1.0; 2],
+        uv_offset: [0.0; 2],
+        uv_tex_shift: [0.0; 2],
+        depth_test: true,
+        visible: true,
+        blend: BlendMode::Alpha,
+        z,
+    }
+}
+
+fn boundary_hold_flat_draw(
+    index: usize,
+    vertices: &Arc<Vec<TexturedMeshVertex>>,
+    texture: &Arc<str>,
+) -> FlatDraw {
+    let (offset, world_z, tint, glow, z) = boundary_fields(index);
+    FlatDraw::TexturedMesh(FlatTexturedMesh {
+        offset,
+        world_z,
+        local_transform: Mat4::IDENTITY,
+        texture: Arc::clone(texture),
+        tint,
+        glow,
+        vertices: FlatMeshVertices::Reusable(Arc::clone(vertices)),
+        geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
+        uv_scale: [1.0; 2],
+        uv_offset: [0.0; 2],
+        uv_tex_shift: [0.0; 2],
+        depth_test: true,
+        blend: BlendMode::Alpha,
+        z,
+    })
+}
+
 struct BoundaryResult {
     elapsed: Duration,
     cycles: u64,
@@ -619,6 +692,8 @@ struct BoundaryResult {
 fn boundary_frame(
     kind: BoundaryKind,
     frame_index: usize,
+    field_draws: usize,
+    hold_mix: bool,
     source: &mut BoundaryScratch,
     metrics: &deadlib_present::space::Metrics,
     fonts: &font::FontMap,
@@ -626,7 +701,7 @@ fn boundary_frame(
     text: &mut TextLayoutCache,
     compose: &mut ComposeScratch,
 ) -> f32 {
-    source.prepare(kind, frame_index);
+    source.prepare(kind, frame_index, field_draws, hold_mix);
     let root_camera = Mat4::from_rotation_x(0.07) * Mat4::from_rotation_z(0.11);
     let tint = [0.8, 0.7, 0.6, 0.5];
     let mut segments = [ActorSegment::new(&[]); BOUNDARY_PLAYERS * 2];
@@ -681,7 +756,7 @@ fn boundary_frame(
     checksum
 }
 
-fn measure_boundary(kind: BoundaryKind) -> BoundaryResult {
+fn measure_boundary(kind: BoundaryKind, field_draws: usize, hold_mix: bool) -> BoundaryResult {
     let metrics = deadlib_present::space::metrics_for_window(854, 480);
     let fonts = font::FontMap::default();
     let resources = ActorResourceArena::new(0);
@@ -693,6 +768,8 @@ fn measure_boundary(kind: BoundaryKind) -> BoundaryResult {
         black_box(boundary_frame(
             kind,
             frame_index,
+            field_draws,
+            hold_mix,
             &mut source,
             &metrics,
             &fonts,
@@ -714,6 +791,8 @@ fn measure_boundary(kind: BoundaryKind) -> BoundaryResult {
             checksum += black_box(boundary_frame(
                 kind,
                 frame_index,
+                field_draws,
+                hold_mix,
                 &mut source,
                 &metrics,
                 &fonts,
@@ -810,7 +889,7 @@ fn main() {
         std::mem::size_of::<Actor>(),
         std::mem::size_of::<FlatDraw>(),
     );
-    let wide = measure_boundary(BoundaryKind::WideActors);
+    let wide = measure_boundary(BoundaryKind::WideActors, BOUNDARY_FIELD_DRAWS, false);
     assert_zero_alloc(&BenchResult {
         elapsed: wide.elapsed,
         cycles: wide.cycles,
@@ -819,7 +898,7 @@ fn main() {
     });
     black_box(wide.checksum);
     print_boundary_result("wide actor control", &wide);
-    let flat = measure_boundary(BoundaryKind::FlatDraws);
+    let flat = measure_boundary(BoundaryKind::FlatDraws, BOUNDARY_FIELD_DRAWS, false);
     assert_zero_alloc(&BenchResult {
         elapsed: flat.elapsed,
         cycles: flat.cycles,
@@ -829,6 +908,28 @@ fn main() {
     assert_eq!(wide.checksum, flat.checksum);
     black_box(flat.checksum);
     print_boundary_result("flat draw path", &flat);
+
+    println!("\nhold-scale presentation boundary sweep (draws/player)");
+    for field_draws in [8, 16, 32, 64] {
+        println!("{field_draws} draws/player");
+        let wide = measure_boundary(BoundaryKind::WideActors, field_draws, true);
+        let flat = measure_boundary(BoundaryKind::FlatDraws, field_draws, true);
+        assert_eq!(wide.checksum, flat.checksum);
+        assert_zero_alloc(&BenchResult {
+            elapsed: wide.elapsed,
+            cycles: wide.cycles,
+            allocated: wide.allocated,
+            checksum: wide.checksum,
+        });
+        assert_zero_alloc(&BenchResult {
+            elapsed: flat.elapsed,
+            cycles: flat.cycles,
+            allocated: flat.allocated,
+            checksum: flat.checksum,
+        });
+        print_boundary_result("wide actor control", &wide);
+        print_boundary_result("flat draw path", &flat);
+    }
 }
 
 #[cfg(target_arch = "x86_64")]

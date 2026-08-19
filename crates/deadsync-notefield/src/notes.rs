@@ -5,11 +5,14 @@ use crate::transforms::{
     tipsy_y_extra,
 };
 use crate::{
-    ModelMeshCache, actor_with_world_z, itg_actor_glow_alpha,
-    noteskin_model_actor_from_draw_cached, noteskin_model_flat_draw_cached,
-    song_lua_note_model_draw,
+    ModelMeshCache, itg_actor_glow_alpha, noteskin_model_flat_draw_cached, song_lua_note_model_draw,
 };
-use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SpriteSource};
+#[cfg(test)]
+use crate::{actor_with_world_z, noteskin_model_actor_from_draw_cached};
+#[cfg(test)]
+use deadlib_present::actors::Actor;
+use deadlib_present::actors::{FlatDraw, FlatSprite, SpriteSource};
+#[cfg(test)]
 use deadlib_present::dsl::SpriteBuilder;
 use deadlib_render_core::BlendMode;
 use deadsync_core::song_time::SongTimeNs;
@@ -20,6 +23,7 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingData;
 
 /// Internal inputs for the white ITG Actor glow pass of a note layer.
+#[cfg(test)]
 struct NoteGlowRequest<'a, S> {
     slot: &'a S,
     draw: ModelDrawState,
@@ -117,9 +121,8 @@ where
     })
 }
 
-/// Writes one pre-resolved tap or mine layer into the narrow flat presentation
-/// stream. Hold heads retain the actor route because they share capture and
-/// legacy hold-body composition state.
+/// Writes one pre-resolved tap, mine, or hold-head layer into the narrow flat
+/// presentation stream.
 pub(crate) fn compose_flat_note_layer<S, F>(
     draws: &mut Vec<FlatDraw>,
     model_cache: &mut ModelMeshCache,
@@ -349,6 +352,7 @@ fn compose_flat_mine_slot<S, F, Z>(
 /// Appends one note layer's diffuse pass followed by its optional glow pass.
 /// Concrete asset owners inject the sprite source so cached texture handles
 /// remain outside the canonical notefield crate.
+#[cfg(test)]
 pub(crate) fn compose_note_layer<S, F>(
     actors: &mut Vec<Actor>,
     model_cache: &mut ModelMeshCache,
@@ -425,6 +429,7 @@ pub(crate) fn compose_note_layer<S, F>(
 }
 
 /// Appends one note layer's glow pass, preserving model fallback and actor order.
+#[cfg(test)]
 fn compose_note_glow<S, F>(
     actors: &mut Vec<Actor>,
     model_cache: &mut ModelMeshCache,

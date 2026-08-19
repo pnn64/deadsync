@@ -1,11 +1,11 @@
-use crate::actor_builder::actor_with_world_z;
 use crate::feedback::{hold_glow_color, itg_actor_glow_alpha};
 use crate::style::*;
 use crate::transforms::{
     NoteAlphaParams, NoteAppearanceCache, appearance_needs_rows, appearance_note_alpha_glow_cached,
 };
-use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
-use deadlib_present::dsl::SpriteBuilder;
+use deadlib_present::actors::{
+    FlatDraw, FlatMeshVertices, FlatSprite, FlatTexturedMesh, SpriteSource,
+};
 use deadlib_render_core::{BlendMode, TexturedMeshVertex};
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::{input::MAX_COLS, note::NoteType};
@@ -317,7 +317,7 @@ pub(crate) fn hold_entry_head_beat(
 }
 
 /// Plan one hold's canonical geometry, noteskin state fallbacks, and tint. The
-/// caller retains concrete asset lookup and actor/model emission. The adapter
+/// caller retains concrete asset lookup and presentation emission. The adapter
 /// supplies only Hold/Roll entries and phases computed from
 /// `hold_parts_for_note_type(note_type)` at the original note beat; keeping
 /// those eligibility and noteskin calls outside preserves their existing
@@ -439,9 +439,9 @@ pub(crate) fn hold_entry_plan<T>(request: HoldEntryPlanRequest<'_, T>) -> HoldEn
 ///
 /// Concrete asset owners inject sprite sources and a path sampler. The sampler
 /// keeps theme/profile state outside this crate while canonical hold geometry,
-/// UV clipping, actor ordering, and glow passes remain shared by every theme.
+/// UV clipping, draw ordering, and glow passes remain shared by every theme.
 pub(crate) fn compose_hold_body_caps<S, F, P>(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     mesh_scratch: &mut HoldMeshScratch,
     request: HoldBodyCapRequest<'_, S>,
     sample_path: &P,
@@ -452,9 +452,9 @@ where
     F: Fn(&S) -> SpriteSource,
     P: Fn(f32) -> HoldPathSample,
 {
-    let rendered = compose_hold_body(actors, mesh_scratch, &request, sample_path, sprite_source);
+    let rendered = compose_hold_body(draws, mesh_scratch, &request, sample_path, sprite_source);
     if compose_top_cap(
-        actors,
+        draws,
         mesh_scratch,
         &request,
         &rendered,
@@ -465,7 +465,7 @@ where
         return HoldComposeControl::AbortHold;
     }
     compose_bottom_cap(
-        actors,
+        draws,
         mesh_scratch,
         &request,
         &rendered,
@@ -501,7 +501,7 @@ struct HoldSpritePass<'a, S> {
 }
 
 fn compose_hold_sprite<S, F>(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     pass: HoldSpritePass<'_, S>,
     sprite_source: &F,
 ) where
@@ -509,41 +509,50 @@ fn compose_hold_sprite<S, F>(
     F: Fn(&S) -> SpriteSource,
 {
     if pass.alpha > f32::EPSILON {
-        let mut actor = SpriteBuilder::with_source(sprite_source(pass.slot));
-        actor.align(0.5, 0.5);
-        actor.xy(pass.center[0], pass.center[1]);
-        actor.size(pass.size[0], pass.size[1]);
-        actor.rotationy(pass.rotation_y_deg);
-        actor.rotationz(pass.rotation_z_deg);
-        actor.customtexturerect(pass.uv);
-        actor.diffuse([
-            pass.diffuse[0],
-            pass.diffuse[1],
-            pass.diffuse[2],
-            pass.diffuse[3] * pass.alpha,
-        ]);
-        actor.blend(BlendMode::Alpha);
-        actor.z(pass.diffuse_z);
-        actors.push(actor_with_world_z(actor.build(0), pass.world_z));
+        draws.push(FlatDraw::Sprite(FlatSprite {
+            center: pass.center,
+            world_z: pass.world_z,
+            size: pass.size,
+            source: sprite_source(pass.slot),
+            tint: [
+                pass.diffuse[0],
+                pass.diffuse[1],
+                pass.diffuse[2],
+                pass.diffuse[3] * pass.alpha,
+            ],
+            glow: [1.0, 1.0, 1.0, 0.0],
+            uv_rect: pass.uv,
+            flip_x: false,
+            flip_y: false,
+            fade: [0.0; 4],
+            blend: BlendMode::Alpha,
+            rot_y_deg: pass.rotation_y_deg,
+            rot_z_deg: pass.rotation_z_deg,
+            z: pass.diffuse_z,
+        }));
     }
     if pass.glow > f32::EPSILON {
-        let mut actor = SpriteBuilder::with_source(sprite_source(pass.slot));
-        actor.align(0.5, 0.5);
-        actor.xy(pass.center[0], pass.center[1]);
-        actor.size(pass.size[0], pass.size[1]);
-        actor.rotationy(pass.rotation_y_deg);
-        actor.rotationz(pass.rotation_z_deg);
-        actor.customtexturerect(pass.uv);
-        actor.diffuse([1.0, 1.0, 1.0, 0.0]);
-        actor.glow([1.0, 1.0, 1.0, pass.glow]);
-        actor.blend(BlendMode::Alpha);
-        actor.z(pass.glow_z);
-        actors.push(actor_with_world_z(actor.build(0), pass.world_z));
+        draws.push(FlatDraw::Sprite(FlatSprite {
+            center: pass.center,
+            world_z: pass.world_z,
+            size: pass.size,
+            source: sprite_source(pass.slot),
+            tint: [1.0, 1.0, 1.0, 0.0],
+            glow: [1.0, 1.0, 1.0, pass.glow],
+            uv_rect: pass.uv,
+            flip_x: false,
+            flip_y: false,
+            fade: [0.0; 4],
+            blend: BlendMode::Alpha,
+            rot_y_deg: pass.rotation_y_deg,
+            rot_z_deg: pass.rotation_z_deg,
+            z: pass.glow_z,
+        }));
     }
 }
 
 fn compose_hold_body<S, F, P>(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     mesh_scratch: &mut HoldMeshScratch,
     request: &HoldBodyCapRequest<'_, S>,
     sample_path: &P,
@@ -618,7 +627,7 @@ where
         && !appearance_needs_rows(request.appearance)
     {
         compose_legacy_hold_body(
-            actors,
+            draws,
             request,
             body_slot,
             body_top,
@@ -634,7 +643,7 @@ where
         )
     } else {
         compose_sliced_hold_body(
-            actors,
+            draws,
             mesh_scratch,
             request,
             body_slot,
@@ -711,7 +720,7 @@ fn body_segment_v(
 
 #[allow(clippy::too_many_arguments)]
 fn compose_legacy_hold_body<S, F, P>(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: &HoldBodyCapRequest<'_, S>,
     slot: &S,
     body_top: f32,
@@ -770,7 +779,7 @@ where
                     .map_or(segment_bottom, |v| v.max(segment_bottom)),
             );
             compose_hold_sprite(
-                actors,
+                draws,
                 HoldSpritePass {
                     slot,
                     center: [sample.center_x, center_y],
@@ -796,7 +805,7 @@ where
 
 #[allow(clippy::too_many_arguments)]
 fn compose_sliced_hold_body<S, F, P>(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     mesh_scratch: &mut HoldMeshScratch,
     request: &HoldBodyCapRequest<'_, S>,
     slot: &S,
@@ -825,7 +834,7 @@ where
     let rendered = if let Some(start) = pooled_pair {
         let (diffuse, glow) = mesh_scratch.bodies.pair_mut(start);
         compose_sliced_hold_body_into(
-            actors,
+            draws,
             request,
             slot,
             body_top,
@@ -843,7 +852,7 @@ where
         )
     } else {
         compose_sliced_hold_body_into(
-            actors,
+            draws,
             request,
             slot,
             body_top,
@@ -864,7 +873,7 @@ where
     if let Some(start) = pooled_pair {
         let (diffuse, glow) = mesh_scratch.bodies.shared_pair(start);
         if !diffuse.is_empty() {
-            actors.push(hold_reusable_strip_actor(
+            draws.push(hold_reusable_strip_draw(
                 slot.texture_key_shared(),
                 diffuse,
                 BlendMode::Alpha,
@@ -873,7 +882,7 @@ where
             ));
         }
         if !glow.is_empty() {
-            actors.push(hold_reusable_strip_glow_actor(
+            draws.push(hold_reusable_strip_glow_draw(
                 slot.texture_key_shared(),
                 glow,
                 request.depth_test,
@@ -882,7 +891,7 @@ where
         }
     } else {
         if !owned_diffuse.is_empty() {
-            actors.push(hold_strip_actor(
+            draws.push(hold_strip_draw(
                 slot.texture_key_shared(),
                 Arc::from(owned_diffuse),
                 BlendMode::Alpha,
@@ -891,7 +900,7 @@ where
             ));
         }
         if !owned_glow.is_empty() {
-            actors.push(hold_strip_glow_actor(
+            draws.push(hold_strip_glow_draw(
                 slot.texture_key_shared(),
                 Arc::from(owned_glow),
                 request.depth_test,
@@ -904,7 +913,7 @@ where
 
 #[allow(clippy::too_many_arguments)]
 fn compose_sliced_hold_body_into<S, F, P>(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: &HoldBodyCapRequest<'_, S>,
     slot: &S,
     body_top: f32,
@@ -1011,7 +1020,7 @@ where
                 );
             } else {
                 compose_hold_sprite(
-                    actors,
+                    draws,
                     HoldSpritePass {
                         slot,
                         center: center_xy,
@@ -1131,7 +1140,7 @@ fn append_hold_body_mesh_slice<S>(
 }
 
 fn compose_top_cap<S, F, P>(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     mesh_scratch: &mut HoldMeshScratch,
     request: &HoldBodyCapRequest<'_, S>,
     rendered: &RenderedHoldBody,
@@ -1260,7 +1269,7 @@ where
             )
         };
         compose_cap_mesh(
-            actors,
+            draws,
             mesh_scratch,
             slot,
             top_row,
@@ -1274,7 +1283,7 @@ where
         );
     } else {
         compose_hold_sprite(
-            actors,
+            draws,
             HoldSpritePass {
                 slot,
                 center: center_xy,
@@ -1298,7 +1307,7 @@ where
 
 #[allow(clippy::too_many_arguments)]
 fn compose_cap_mesh<S>(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     mesh_scratch: &mut HoldMeshScratch,
     slot: &S,
     top_row: [TexturedMeshVertex; 2],
@@ -1350,7 +1359,7 @@ fn compose_cap_mesh<S>(
         }
         let (diffuse, glow) = mesh_scratch.caps.shared_pair(start);
         if !diffuse.is_empty() {
-            actors.push(hold_reusable_strip_actor(
+            draws.push(hold_reusable_strip_draw(
                 slot.texture_key_shared(),
                 diffuse,
                 BlendMode::Alpha,
@@ -1359,7 +1368,7 @@ fn compose_cap_mesh<S>(
             ));
         }
         if !glow.is_empty() {
-            actors.push(hold_reusable_strip_glow_actor(
+            draws.push(hold_reusable_strip_glow_draw(
                 slot.texture_key_shared(),
                 glow,
                 request.depth_test,
@@ -1370,7 +1379,7 @@ fn compose_cap_mesh<S>(
     }
 
     if let Some(vertices) = diffuse_quad {
-        actors.push(hold_strip_actor(
+        draws.push(hold_strip_draw(
             slot.texture_key_shared(),
             Arc::new(vertices),
             BlendMode::Alpha,
@@ -1379,7 +1388,7 @@ fn compose_cap_mesh<S>(
         ));
     }
     if let Some(vertices) = glow_quad {
-        actors.push(hold_strip_glow_actor(
+        draws.push(hold_strip_glow_draw(
             slot.texture_key_shared(),
             Arc::new(vertices),
             request.depth_test,
@@ -1389,7 +1398,7 @@ fn compose_cap_mesh<S>(
 }
 
 fn compose_bottom_cap<S, F, P>(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     mesh_scratch: &mut HoldMeshScratch,
     request: &HoldBodyCapRequest<'_, S>,
     rendered: &RenderedHoldBody,
@@ -1527,7 +1536,7 @@ where
             ],
         );
         compose_cap_mesh(
-            actors,
+            draws,
             mesh_scratch,
             slot,
             top_row,
@@ -1541,7 +1550,7 @@ where
         );
     } else {
         compose_hold_sprite(
-            actors,
+            draws,
             HoldSpritePass {
                 slot,
                 center: center_xy,
@@ -1776,114 +1785,102 @@ pub(crate) fn hold_strip_quad(
     [top[0], top[1], bottom[1], top[0], bottom[1], bottom[0]]
 }
 
-pub(crate) fn hold_strip_actor(
+pub(crate) fn hold_strip_draw(
     texture: Arc<str>,
     vertices: Arc<[TexturedMeshVertex]>,
     blend: BlendMode,
     depth_test: bool,
     z: i16,
-) -> Actor {
-    Actor::TexturedMesh {
-        align: [0.0, 0.0],
+) -> FlatDraw {
+    FlatDraw::TexturedMesh(FlatTexturedMesh {
         offset: [0.0, 0.0],
         world_z: 0.0,
-        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         local_transform: Matrix4::IDENTITY,
         texture,
         tint: [1.0, 1.0, 1.0, 1.0],
         glow: [1.0, 1.0, 1.0, 0.0],
-        vertices,
+        vertices: FlatMeshVertices::Shared(vertices),
         geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test,
-        visible: true,
         blend,
         z,
-    }
+    })
 }
 
-pub(crate) fn hold_strip_glow_actor(
+pub(crate) fn hold_strip_glow_draw(
     texture: Arc<str>,
     vertices: Arc<[TexturedMeshVertex]>,
     depth_test: bool,
     z: i16,
-) -> Actor {
-    Actor::TexturedMesh {
-        align: [0.0, 0.0],
+) -> FlatDraw {
+    FlatDraw::TexturedMesh(FlatTexturedMesh {
         offset: [0.0, 0.0],
         world_z: 0.0,
-        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         local_transform: Matrix4::IDENTITY,
         texture,
         tint: [1.0, 1.0, 1.0, 0.0],
         glow: [1.0, 1.0, 1.0, 1.0],
-        vertices,
+        vertices: FlatMeshVertices::Shared(vertices),
         geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test,
-        visible: true,
         blend: BlendMode::Alpha,
         z,
-    }
+    })
 }
 
-fn hold_reusable_strip_actor(
+fn hold_reusable_strip_draw(
     texture: Arc<str>,
     vertices: Arc<Vec<TexturedMeshVertex>>,
     blend: BlendMode,
     depth_test: bool,
     z: i16,
-) -> Actor {
-    Actor::ReusableTexturedMesh {
-        align: [0.0, 0.0],
+) -> FlatDraw {
+    FlatDraw::TexturedMesh(FlatTexturedMesh {
         offset: [0.0, 0.0],
         world_z: 0.0,
-        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         local_transform: Matrix4::IDENTITY,
         texture,
         tint: [1.0, 1.0, 1.0, 1.0],
         glow: [1.0, 1.0, 1.0, 0.0],
-        vertices,
+        vertices: FlatMeshVertices::Reusable(vertices),
         geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test,
-        visible: true,
         blend,
         z,
-    }
+    })
 }
 
-fn hold_reusable_strip_glow_actor(
+fn hold_reusable_strip_glow_draw(
     texture: Arc<str>,
     vertices: Arc<Vec<TexturedMeshVertex>>,
     depth_test: bool,
     z: i16,
-) -> Actor {
-    Actor::ReusableTexturedMesh {
-        align: [0.0, 0.0],
+) -> FlatDraw {
+    FlatDraw::TexturedMesh(FlatTexturedMesh {
         offset: [0.0, 0.0],
         world_z: 0.0,
-        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         local_transform: Matrix4::IDENTITY,
         texture,
         tint: [1.0, 1.0, 1.0, 0.0],
         glow: [1.0, 1.0, 1.0, 1.0],
-        vertices,
+        vertices: FlatMeshVertices::Reusable(vertices),
         geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test,
-        visible: true,
         blend: BlendMode::Alpha,
         z,
-    }
+    })
 }
 
 pub(crate) const fn tap_part_for_note_type(note_type: NoteType) -> NoteAnimPart {
@@ -2141,20 +2138,29 @@ mod tests {
         SpriteSource::Texture(Arc::clone(&slot.texture))
     }
 
-    fn sprite_key(actor: &Actor) -> &str {
-        let Actor::Sprite { source, .. } = actor else {
-            panic!("expected sprite actor");
+    fn sprite_key(draw: &FlatDraw) -> &str {
+        let FlatDraw::Sprite(FlatSprite { source, .. }) = draw else {
+            panic!("expected sprite draw");
         };
         source.texture_key().expect("sprite texture")
     }
 
-    fn actor_z(actor: &Actor) -> i16 {
-        match actor {
-            Actor::Sprite { z, .. }
-            | Actor::TexturedMesh { z, .. }
-            | Actor::ReusableTexturedMesh { z, .. } => *z,
-            _ => panic!("expected drawable hold actor"),
+    fn draw_z(draw: &FlatDraw) -> i16 {
+        match draw {
+            FlatDraw::Sprite(sprite) => sprite.z,
+            FlatDraw::TexturedMesh(mesh) => mesh.z,
         }
+    }
+
+    fn reusable_vertices(draw: &FlatDraw) -> &Arc<Vec<TexturedMeshVertex>> {
+        let FlatDraw::TexturedMesh(FlatTexturedMesh {
+            vertices: FlatMeshVertices::Reusable(vertices),
+            ..
+        }) = draw
+        else {
+            panic!("sliced hold should use reusable mesh storage");
+        };
+        vertices
     }
 
     #[test]
@@ -2181,16 +2187,16 @@ mod tests {
             ["body", "body", "top", "top", "bottom", "bottom"]
         );
         assert_eq!(
-            actors.iter().map(actor_z).collect::<Vec<_>>(),
+            actors.iter().map(draw_z).collect::<Vec<_>>(),
             [110, 111, 110, 111, 110, 111]
         );
-        let Actor::Sprite {
+        let FlatDraw::Sprite(FlatSprite {
             tint,
             glow,
             world_z,
             blend,
             ..
-        } = &actors[1]
+        }) = &actors[1]
         else {
             panic!("body glow should be a sprite");
         };
@@ -2219,22 +2225,25 @@ mod tests {
         );
 
         assert_eq!(actors.len(), 2);
-        assert_eq!(actors.iter().map(actor_z).collect::<Vec<_>>(), [110, 111]);
-        for actor in &actors {
-            let Actor::ReusableTexturedMesh {
-                vertices,
+        assert_eq!(actors.iter().map(draw_z).collect::<Vec<_>>(), [110, 111]);
+        for draw in &actors {
+            let FlatDraw::TexturedMesh(FlatTexturedMesh {
                 depth_test,
                 world_z,
                 blend,
                 ..
-            } = actor
+            }) = draw
             else {
                 panic!("deformed sprite hold should use a strip mesh");
             };
             assert!(*depth_test);
             assert_eq!(*world_z, 0.0);
             assert_eq!(*blend, BlendMode::Alpha);
-            assert!(vertices.iter().any(|vertex| vertex.pos[2] > 0.0));
+            assert!(
+                reusable_vertices(draw)
+                    .iter()
+                    .any(|vertex| vertex.pos[2] > 0.0)
+            );
         }
     }
 
@@ -2257,17 +2266,11 @@ mod tests {
         );
         let first_ptrs = actors
             .iter()
-            .map(|actor| match actor {
-                Actor::ReusableTexturedMesh { vertices, .. } => vertices.as_ptr(),
-                _ => panic!("sliced hold should use reusable mesh storage"),
-            })
+            .map(|draw| reusable_vertices(draw).as_ptr())
             .collect::<Vec<_>>();
         let first_vertices = actors
             .iter()
-            .map(|actor| match actor {
-                Actor::ReusableTexturedMesh { vertices, .. } => vertices.as_slice().to_vec(),
-                _ => unreachable!(),
-            })
+            .map(|draw| reusable_vertices(draw).as_slice().to_vec())
             .collect::<Vec<_>>();
 
         actors.clear();
@@ -2279,12 +2282,9 @@ mod tests {
             &straight_path,
             &test_source,
         );
-        for ((actor, first_ptr), first_vertices) in
-            actors.iter().zip(first_ptrs).zip(first_vertices)
+        for ((draw, first_ptr), first_vertices) in actors.iter().zip(first_ptrs).zip(first_vertices)
         {
-            let Actor::ReusableTexturedMesh { vertices, .. } = actor else {
-                panic!("sliced hold should keep reusable mesh storage");
-            };
+            let vertices = reusable_vertices(draw);
             assert_eq!(vertices.as_ptr(), first_ptr);
             assert_eq!(vertices.as_slice(), first_vertices.as_slice());
         }
@@ -2362,7 +2362,7 @@ mod tests {
         assert!(
             actors
                 .iter()
-                .all(|actor| matches!(actor, Actor::Sprite { .. }))
+                .all(|draw| matches!(draw, FlatDraw::Sprite(_)))
         );
         assert_eq!(source_calls.get(), actors.len());
         assert_eq!(body.uv_elapsed.get(), 2.0);
@@ -2392,23 +2392,23 @@ mod tests {
         );
 
         assert_eq!(actors.len(), 4);
-        let Actor::Sprite {
+        let FlatDraw::Sprite(FlatSprite {
             uv_rect: top_uv,
             rot_z_deg: top_rotation,
             ..
-        } = &actors[0]
+        }) = &actors[0]
         else {
             panic!("top cap should use reverse-safe sprite fallback");
         };
-        let Actor::Sprite {
+        let FlatDraw::Sprite(FlatSprite {
             uv_rect: bottom_uv,
             rot_z_deg: bottom_rotation,
             ..
-        } = &actors[2]
+        }) = &actors[2]
         else {
             panic!("bottom cap should use reverse-safe sprite fallback");
         };
-        for actual in [top_uv.expect("top UV"), bottom_uv.expect("bottom UV")] {
+        for actual in [*top_uv, *bottom_uv] {
             for (actual, expected) in actual.into_iter().zip([0.91, 0.82, 0.11, 0.22]) {
                 assert!((actual - expected).abs() <= 1e-6);
             }

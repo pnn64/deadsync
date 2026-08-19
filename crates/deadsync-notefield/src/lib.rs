@@ -76,8 +76,10 @@ pub use transforms::{
     TornadoBounds, clamp_rounded_i16, mod_percent_key, quantize_centi_i32, quantize_centi_u32,
 };
 
+#[cfg(test)]
+pub(crate) use actor_builder::actor_with_world_z;
 pub(crate) use actor_builder::{
-    NotefieldFramePlanRequest, actor_with_world_z, notefield_frame_plan, share_actor_range,
+    NotefieldFramePlanRequest, notefield_frame_plan, share_actor_range,
 };
 #[cfg(test)]
 use display_mods::{
@@ -112,7 +114,7 @@ pub(crate) use holds::{
 use holds::{
     TapReplacementHead, bottom_cap_uv_window, clipped_hold_body_bounds,
     hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span,
-    hold_head_part_for_roll, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
+    hold_head_part_for_roll, hold_segment_pose, hold_strip_draw, hold_strip_glow_draw,
     hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds,
     maybe_mirror_uv_horiz_for_reverse_flipped, scale_cap_to_arrow, song_time_ns_delta_seconds,
     top_cap_rotation_deg,
@@ -143,7 +145,7 @@ pub(crate) use notes::for_each_visible_hold_index;
 pub(crate) use notes::for_each_visible_note_index;
 pub(crate) use notes::{
     MineLayerRequest, NoteLayerRequest, ScrollTravelRequest, compose_flat_mine_layers,
-    compose_flat_note_layer, compose_note_layer, for_each_lane_index, hold_overlaps_visible_window,
+    compose_flat_note_layer, for_each_lane_index, hold_overlaps_visible_window,
     lane_hold_window_bounds_by_note_row_from_cursor, lane_window_bounds_by_note_row_from_cursor,
     mine_hides_after_resolution, scroll_travel,
 };
@@ -199,7 +201,7 @@ pub(crate) use transforms::{
 };
 #[cfg(test)]
 mod tests {
-    use deadlib_present::actors::{Actor, SizeSpec, SpriteSource, TextAlign};
+    use deadlib_present::actors::{Actor, FlatDraw, SizeSpec, SpriteSource, TextAlign};
     use deadlib_render_core::BlendMode;
     use deadsync_gameplay::VisualEffects;
     use deadsync_noteskin::NoteAnimPart;
@@ -233,7 +235,7 @@ mod tests {
         gameplay_mods_text, gameplay_visual_effect_params, held_miss_zoom,
         hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span, hold_glow_color,
         hold_head_part_for_roll, hold_indicator_column_x, hold_overlaps_visible_window,
-        hold_parts_for_note_type, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
+        hold_parts_for_note_type, hold_segment_pose, hold_strip_draw, hold_strip_glow_draw,
         hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y,
         itg_actor_glow_alpha, itg_actor_rotation_z, judgment_actor_zoom,
         judgment_tilt_rotation_deg, maybe_mirror_uv_horiz_for_reverse_flipped,
@@ -3746,8 +3748,8 @@ mod tests {
     }
 
     #[test]
-    fn hold_strip_actor_carries_depth_test_flag() {
-        let actor = hold_strip_actor(
+    fn hold_strip_draw_carries_depth_test_flag() {
+        let draw = hold_strip_draw(
             Arc::from("hold.png"),
             Arc::from([]),
             BlendMode::Alpha,
@@ -3755,48 +3757,78 @@ mod tests {
             42,
         );
         assert!(matches!(
-            actor,
-            Actor::TexturedMesh {
-                align: [0.0, 0.0],
-                size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            draw,
+            FlatDraw::TexturedMesh(deadlib_present::actors::FlatTexturedMesh {
                 glow: [1.0, 1.0, 1.0, 0.0],
                 geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
                 depth_test: true,
                 ..
-            }
+            })
         ));
     }
 
     #[test]
-    fn hold_strip_glow_actor_uses_texture_mask_pass() {
-        let actor = hold_strip_glow_actor(Arc::from("hold.png"), Arc::from([]), true, 43);
+    fn hold_strip_glow_draw_uses_texture_mask_pass() {
+        let draw = hold_strip_glow_draw(Arc::from("hold.png"), Arc::from([]), true, 43);
         assert!(matches!(
-            actor,
-            Actor::TexturedMesh {
-                align: [0.0, 0.0],
-                size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            draw,
+            FlatDraw::TexturedMesh(deadlib_present::actors::FlatTexturedMesh {
                 tint: [1.0, 1.0, 1.0, 0.0],
                 glow: [1.0, 1.0, 1.0, 1.0],
                 geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
                 depth_test: true,
                 ..
-            }
+            })
         ));
     }
 
     #[test]
-    fn actor_with_world_z_updates_textured_mesh_depth() {
-        let actor = hold_strip_actor(
-            Arc::from("hold.png"),
-            Arc::from([]),
-            BlendMode::Alpha,
-            false,
-            42,
+    fn actor_with_world_z_updates_sprite_depth() {
+        let actor = actor_with_world_z(
+            Actor::Sprite {
+                align: [0.5; 2],
+                offset: [0.0; 2],
+                world_z: 0.0,
+                size: [SizeSpec::Px(1.0); 2],
+                source: SpriteSource::Solid,
+                tint: [1.0; 4],
+                glow: [0.0; 4],
+                z: 42,
+                cell: None,
+                grid: None,
+                uv_rect: None,
+                visible: true,
+                flip_x: false,
+                flip_y: false,
+                cropleft: 0.0,
+                cropright: 0.0,
+                croptop: 0.0,
+                cropbottom: 0.0,
+                fadeleft: 0.0,
+                faderight: 0.0,
+                fadetop: 0.0,
+                fadebottom: 0.0,
+                blend: BlendMode::Alpha,
+                mask_source: false,
+                mask_dest: false,
+                rot_x_deg: 0.0,
+                rot_y_deg: 0.0,
+                rot_z_deg: 0.0,
+                local_offset: [0.0; 2],
+                local_offset_rot_sin_cos: [0.0, 1.0],
+                texcoordvelocity: None,
+                animate: false,
+                state_delay: 0.0,
+                scale: [1.0; 2],
+                shadow_len: [0.0; 2],
+                shadow_color: [0.0; 4],
+                effect: Default::default(),
+            },
+            12.5,
         );
-        let actor = actor_with_world_z(actor, 12.5);
         assert!(matches!(
             actor,
-            Actor::TexturedMesh {
+            Actor::Sprite {
                 world_z,
                 ..
             } if (world_z - 12.5).abs() <= 1e-6
@@ -3806,20 +3838,22 @@ mod tests {
     #[test]
     fn share_actor_range_drains_into_shared_frame() {
         let mut actors = vec![
-            hold_strip_actor(
-                Arc::from("a.png"),
-                Arc::from([]),
-                BlendMode::Alpha,
-                false,
-                1,
-            ),
-            hold_strip_actor(
-                Arc::from("b.png"),
-                Arc::from([]),
-                BlendMode::Alpha,
-                false,
-                2,
-            ),
+            Actor::Frame {
+                align: [0.0; 2],
+                offset: [0.0; 2],
+                size: [SizeSpec::Px(0.0); 2],
+                children: Vec::new(),
+                background: None,
+                z: 1,
+            },
+            Actor::Frame {
+                align: [0.0; 2],
+                offset: [0.0; 2],
+                size: [SizeSpec::Px(0.0); 2],
+                children: Vec::new(),
+                background: None,
+                z: 2,
+            },
         ];
         let mut scratch = deadlib_present::actors::SharedActorFrameScratch::with_capacity(1);
         let shared =
