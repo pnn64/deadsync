@@ -174,7 +174,7 @@ pub(crate) use placement::{
 #[cfg(test)]
 use placement::{default_column_x, hud_layout_ys, hud_y, zmod_layout_ys};
 pub(crate) use receptors::{
-    ReceptorActorsRequest, ReceptorPress, compose_receptor_actors, hold_indicator_column_x,
+    ReceptorDrawRequest, ReceptorPress, compose_receptor_draws, hold_indicator_column_x,
     receptor_row_center,
 };
 pub(crate) use transforms::{

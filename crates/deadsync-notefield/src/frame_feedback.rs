@@ -1,11 +1,13 @@
 use crate::explosions::{ExplosionComposeRequest, ExplosionRotation, compose_explosion_layers};
 use crate::{
     ColumnFeedbackRequest, ModelMeshCache, NoteXParams, NotefieldComposeRequest, PreparedNotefield,
-    ReceptorActorsRequest, ReceptorPress, compose_column_feedback, compose_receptor_actors,
+    ReceptorDrawRequest, ReceptorPress, compose_column_feedback, compose_receptor_draws,
     gameplay_visual_effect_params, receptor_row_center, visual_arrow_effect_zoom,
     visual_confusion_rotation_deg,
 };
-use deadlib_present::actors::{Actor, SpriteSource};
+#[cfg(test)]
+use deadlib_present::actors::FlatSprite;
+use deadlib_present::actors::{Actor, FlatDraw, SpriteSource};
 use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{
@@ -68,7 +70,7 @@ pub struct NotefieldFeedbackFrameView<'a> {
 /// Compose cues/flashes, receptor targets and feedback, then tap and mine
 /// explosions in the canonical field ordering.
 pub(crate) fn compose_notefield_feedback<S, F>(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     hud_actors: &mut Vec<Actor>,
     model_cache: &mut ModelMeshCache,
     request: &NotefieldComposeRequest<'_, S>,
@@ -95,7 +97,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     let measure_column_xs = notes.measure_column_xs;
 
     compose_column_feedback(
-        actors,
+        draws,
         hud_actors,
         ColumnFeedbackRequest {
             style: request.style,
@@ -257,10 +259,10 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             })
         };
         if target_slot.is_some() || hold_slot.is_some() {
-            compose_receptor_actors(
-                actors,
+            compose_receptor_draws(
+                draws,
                 model_cache,
-                ReceptorActorsRequest {
+                ReceptorDrawRequest {
                     target_slot,
                     target_reverse,
                     idle_glow_slot,
@@ -315,7 +317,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             let effect = lane_effects[local_col];
             let center = lane_centers[local_col];
             compose_explosion_layers(
-                actors,
+                draws,
                 ExplosionComposeRequest {
                     layers: explosion.layers.as_ref(),
                     elapsed_s: active.elapsed,
@@ -352,7 +354,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             };
             let effect = lane_effects[local_col];
             compose_explosion_layers(
-                actors,
+                draws,
                 ExplosionComposeRequest {
                     layers: explosion.layers.as_ref(),
                     elapsed_s: active.elapsed,
@@ -1008,28 +1010,28 @@ mod tests {
         }
     }
 
-    fn sprite_keys(actors: &[Actor]) -> Vec<&str> {
-        actors
+    fn sprite_keys(draws: &[FlatDraw]) -> Vec<&str> {
+        draws
             .iter()
-            .filter_map(|actor| match actor {
-                Actor::Sprite {
+            .filter_map(|draw| match draw {
+                FlatDraw::Sprite(FlatSprite {
                     source: SpriteSource::TextureHandle { key, .. },
                     ..
-                } => Some(key.as_ref()),
+                }) => Some(key.as_ref()),
                 _ => None,
             })
             .collect()
     }
 
-    fn sprite_positions(actors: &[Actor]) -> Vec<(&str, [f32; 2])> {
-        actors
+    fn sprite_positions(draws: &[FlatDraw]) -> Vec<(&str, [f32; 2])> {
+        draws
             .iter()
-            .filter_map(|actor| match actor {
-                Actor::Sprite {
+            .filter_map(|draw| match draw {
+                FlatDraw::Sprite(FlatSprite {
                     source: SpriteSource::TextureHandle { key, .. },
-                    offset,
+                    center,
                     ..
-                } => Some((key.as_ref(), *offset)),
+                }) => Some((key.as_ref(), *center)),
                 _ => None,
             })
             .collect()
@@ -1109,10 +1111,10 @@ mod tests {
 
         assert!(matches!(
             actors.first(),
-            Some(Actor::Sprite {
+            Some(FlatDraw::Sprite(FlatSprite {
                 source: SpriteSource::Solid,
                 ..
-            })
+            }))
         ));
         assert_eq!(
             sprite_keys(&actors),
@@ -1372,16 +1374,16 @@ mod tests {
             &source,
         );
 
-        let Actor::Sprite {
+        let FlatDraw::Sprite(FlatSprite {
             source: SpriteSource::Solid,
-            offset,
+            center,
             ..
-        } = &actors[0]
+        }) = &actors[0]
         else {
             panic!("P2 global cue should emit first");
         };
         let expected_x = prepared.field.playfield_center_x + 32.0;
-        assert!((offset[0] - expected_x).abs() <= 0.001);
+        assert!((center[0] - expected_x).abs() <= 0.001);
         assert_eq!(
             sprite_keys(&actors),
             ["target1", "hold1", "press1", "tap1", "mine", "mine"]

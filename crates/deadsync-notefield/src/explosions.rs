@@ -1,6 +1,5 @@
 use crate::scale_effect_size;
-use deadlib_present::actors::{Actor, SpriteSource};
-use deadlib_present::dsl::SpriteBuilder;
+use deadlib_present::actors::{FlatDraw, FlatSprite, SpriteSource};
 use deadlib_render_core::BlendMode;
 use deadsync_noteskin::{NoteskinSlot, TapExplosionLayer};
 
@@ -31,7 +30,7 @@ pub(crate) struct ExplosionComposeRequest<'a, S> {
 /// Concrete asset owners inject sprite sources so cached texture handles remain
 /// outside the canonical notefield crate.
 pub(crate) fn compose_explosion_layers<S, F>(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: ExplosionComposeRequest<'_, S>,
     sprite_source: &F,
 ) where
@@ -66,7 +65,7 @@ pub(crate) fn compose_explosion_layers<S, F>(
         } else {
             BlendMode::Alpha
         };
-        let draw = ExplosionActorDraw {
+        let draw = ExplosionDraw {
             center: request.center,
             size,
             zoom: visual.zoom,
@@ -77,14 +76,14 @@ pub(crate) fn compose_explosion_layers<S, F>(
             blend,
             z: request.z,
         };
-        append_explosion_actor(actors, slot, sprite_source, draw);
+        append_explosion_draw(draws, slot, sprite_source, draw);
 
         if visual.glow.iter().map(|channel| channel.abs()).sum::<f32>() > f32::EPSILON {
-            append_explosion_actor(
-                actors,
+            append_explosion_draw(
+                draws,
                 slot,
                 sprite_source,
-                ExplosionActorDraw {
+                ExplosionDraw {
                     tint: visual.glow,
                     ..draw
                 },
@@ -94,7 +93,7 @@ pub(crate) fn compose_explosion_layers<S, F>(
 }
 
 #[derive(Clone, Copy)]
-struct ExplosionActorDraw {
+struct ExplosionDraw {
     center: [f32; 2],
     size: [f32; 2],
     zoom: f32,
@@ -106,33 +105,41 @@ struct ExplosionActorDraw {
     z: i16,
 }
 
-fn append_explosion_actor<S, F>(
-    actors: &mut Vec<Actor>,
+fn append_explosion_draw<S, F>(
+    draws: &mut Vec<FlatDraw>,
     slot: &S,
     sprite_source: &F,
-    draw: ExplosionActorDraw,
+    draw: ExplosionDraw,
 ) where
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
-    let mut actor = SpriteBuilder::with_source(sprite_source(slot));
-    actor.align(0.5, 0.5);
-    actor.xy(draw.center[0], draw.center[1]);
-    actor.size(draw.size[0], draw.size[1]);
-    actor.zoom(draw.zoom);
-    actor.customtexturerect(draw.uv);
-    actor.diffuse(draw.tint);
-    actor.rotationy(draw.rotation_y_deg);
-    actor.rotationz(draw.rotation_z_deg);
-    actor.blend(draw.blend);
-    actor.z(draw.z);
-    actors.push(actor.build(0));
+    let flip = draw.zoom < 0.0;
+    draws.push(FlatDraw::Sprite(FlatSprite {
+        center: draw.center,
+        world_z: 0.0,
+        size: [
+            draw.size[0] * draw.zoom.abs(),
+            draw.size[1] * draw.zoom.abs(),
+        ],
+        source: sprite_source(slot),
+        tint: draw.tint,
+        glow: [1.0, 1.0, 1.0, 0.0],
+        uv_rect: draw.uv,
+        flip_x: flip,
+        flip_y: flip,
+        fade: [0.0; 4],
+        blend: draw.blend,
+        rot_y_deg: draw.rotation_y_deg,
+        rot_z_deg: draw.rotation_z_deg,
+        z: draw.z,
+    }));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadlib_present::actors::SizeSpec;
+    use deadlib_present::actors::{FlatDraw, FlatSprite};
     use deadsync_noteskin::{
         ExplosionAnimation, ExplosionState, GlowEffect, ModelDrawState, ModelMesh, SpriteDefinition,
     };
@@ -253,9 +260,8 @@ mod tests {
         );
 
         assert_eq!(actors.len(), 2);
-        let Actor::Sprite {
+        let FlatDraw::Sprite(FlatSprite {
             size,
-            scale,
             uv_rect,
             tint,
             glow,
@@ -265,13 +271,11 @@ mod tests {
             blend,
             z,
             ..
-        } = &actors[0]
+        }) = &actors[0]
         else {
             panic!("diffuse explosion should emit a sprite");
         };
-        let [SizeSpec::Px(width), SizeSpec::Px(height)] = size else {
-            panic!("explosion size should be expressed in pixels");
-        };
+        let [width, height] = size;
         assert!(
             (*width - 45.0).abs() <= f32::EPSILON,
             "unexpected width {width}"
@@ -280,8 +284,7 @@ mod tests {
             (*height - 54.0).abs() <= f32::EPSILON,
             "unexpected height {height}"
         );
-        assert_eq!(*scale, [1.0, 1.0]);
-        assert_eq!(*uv_rect, Some([0.2, 0.0, 1.0, 1.0]));
+        assert_eq!(*uv_rect, [0.2, 0.0, 1.0, 1.0]);
         assert_eq!(*tint, [0.2, 0.3, 0.4, 0.5]);
         assert_eq!(*glow, [1.0, 1.0, 1.0, 0.0]);
         assert_eq!(*world_z, 0.0);
@@ -289,12 +292,12 @@ mod tests {
         assert_eq!(*rot_z_deg, 18.0);
         assert_eq!(*blend, BlendMode::Add);
         assert_eq!(*z, 145);
-        let Actor::Sprite {
+        let FlatDraw::Sprite(FlatSprite {
             tint,
             glow,
             world_z,
             ..
-        } = &actors[1]
+        }) = &actors[1]
         else {
             unreachable!();
         };
@@ -325,12 +328,12 @@ mod tests {
         );
 
         assert_eq!(actors.len(), 2);
-        let Actor::Sprite {
+        let FlatDraw::Sprite(FlatSprite {
             rot_y_deg,
             rot_z_deg,
             blend,
             ..
-        } = &actors[0]
+        }) = &actors[0]
         else {
             unreachable!();
         };
@@ -368,10 +371,10 @@ mod tests {
         );
 
         assert_eq!(actors.len(), 1);
-        let Actor::Sprite { uv_rect, tint, .. } = &actors[0] else {
+        let FlatDraw::Sprite(FlatSprite { uv_rect, tint, .. }) = &actors[0] else {
             unreachable!();
         };
-        assert_eq!(*uv_rect, Some([0.7, 0.0, 1.0, 1.0]));
+        assert_eq!(*uv_rect, [0.7, 0.0, 1.0, 1.0]);
         assert_eq!(*tint, [0.2, 0.3, 0.4, 0.0]);
     }
 }

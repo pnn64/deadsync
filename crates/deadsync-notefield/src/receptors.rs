@@ -1,6 +1,5 @@
 use crate::*;
-use deadlib_present::actors::{Actor, SpriteSource};
-use deadlib_present::dsl::SpriteBuilder;
+use deadlib_present::actors::{FlatDraw, FlatSprite, SpriteSource};
 use deadlib_render_core::BlendMode;
 use deadsync_noteskin::{
     NoteskinSlot, ReceptorGlowBehavior, ReceptorIdleGlow, ReceptorPulse, ReceptorReverseBehavior,
@@ -68,7 +67,7 @@ pub(crate) fn hold_indicator_column_x(
 }
 
 /// Per-lane canonical receptor inputs supplied by a concrete gameplay screen.
-pub(crate) struct ReceptorActorsRequest<'a, S> {
+pub(crate) struct ReceptorDrawRequest<'a, S> {
     /// Resolved lazily by the adapter so hidden targets preserve the old
     /// short-circuit behavior and never index the concrete noteskin slots.
     pub target_slot: Option<&'a S>,
@@ -118,10 +117,10 @@ struct ReceptorSpriteDraw {
 }
 
 /// Appends one lane's target, idle glow, hold explosion, and press glow in canonical order.
-pub(crate) fn compose_receptor_actors<'a, S, F, P>(
-    actors: &mut Vec<Actor>,
+pub(crate) fn compose_receptor_draws<'a, S, F, P>(
+    draws: &mut Vec<FlatDraw>,
     model_cache: &mut ModelMeshCache,
-    request: ReceptorActorsRequest<'a, S>,
+    request: ReceptorDrawRequest<'a, S>,
     resolve_press: P,
     sprite_source: &F,
 ) where
@@ -161,7 +160,7 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
                 request.field_zoom * request.effect_zoom,
             );
             append_receptor_sprite(
-                actors,
+                draws,
                 slot,
                 sprite_source,
                 ReceptorSpriteDraw {
@@ -211,7 +210,7 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
                 request.field_zoom * request.effect_zoom,
             );
             append_receptor_sprite(
-                actors,
+                draws,
                 slot,
                 sprite_source,
                 ReceptorSpriteDraw {
@@ -260,7 +259,7 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
         } else {
             BlendMode::Alpha
         };
-        if let Some(actor) = noteskin_model_actor_from_draw_cached(
+        if let Some(mesh) = noteskin_model_flat_draw_cached(
             slot,
             draw,
             request.center,
@@ -272,9 +271,9 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
             request.style.hold_explosion_z,
             model_cache,
         ) {
-            actors.push(actor);
+            draws.push(FlatDraw::TexturedMesh(mesh));
             if let Some(glow) = glow
-                && let Some(actor) = noteskin_model_actor_from_draw_cached(
+                && let Some(mesh) = noteskin_model_flat_draw_cached(
                     slot,
                     draw,
                     request.center,
@@ -287,11 +286,11 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
                     model_cache,
                 )
             {
-                actors.push(actor);
+                draws.push(FlatDraw::TexturedMesh(mesh));
             }
         } else {
             append_receptor_sprite(
-                actors,
+                draws,
                 slot,
                 sprite_source,
                 ReceptorSpriteDraw {
@@ -309,7 +308,7 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
             );
             if let Some(glow) = glow {
                 append_receptor_sprite(
-                    actors,
+                    draws,
                     slot,
                     sprite_source,
                     ReceptorSpriteDraw {
@@ -355,7 +354,7 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
                     request.field_zoom * request.effect_zoom,
                 );
                 append_receptor_sprite(
-                    actors,
+                    draws,
                     slot,
                     sprite_source,
                     ReceptorSpriteDraw {
@@ -423,7 +422,7 @@ fn mirrored_zoom<S: NoteskinSlot>(slot: &S, zoom: f32) -> [f32; 2] {
 }
 
 fn append_receptor_sprite<S, F>(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     slot: &S,
     sprite_source: &F,
     draw: ReceptorSpriteDraw,
@@ -431,25 +430,35 @@ fn append_receptor_sprite<S, F>(
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
-    let mut actor = SpriteBuilder::with_source(sprite_source(slot));
-    actor.align(draw.align[0], draw.align[1]);
-    actor.xy(draw.center[0], draw.center[1]);
-    actor.size(draw.size[0], draw.size[1]);
-    actor.zoomx(draw.zoom[0]);
-    actor.zoomy(draw.zoom[1]);
-    actor.diffuse(draw.tint);
-    actor.rotationy(draw.rotation_y_deg);
-    actor.rotationz(draw.rotation_z_deg);
-    actor.customtexturerect(draw.uv);
-    actor.blend(draw.blend);
-    actor.z(draw.z);
-    actors.push(actor.build(0));
+    let size = [
+        draw.size[0] * draw.zoom[0].abs(),
+        draw.size[1] * draw.zoom[1].abs(),
+    ];
+    draws.push(FlatDraw::Sprite(FlatSprite {
+        center: [
+            draw.center[0] + (0.5 - draw.align[0]) * size[0],
+            draw.center[1] + (0.5 - draw.align[1]) * size[1],
+        ],
+        world_z: 0.0,
+        size,
+        source: sprite_source(slot),
+        tint: draw.tint,
+        glow: [1.0, 1.0, 1.0, 0.0],
+        uv_rect: draw.uv,
+        flip_x: draw.zoom[0] < 0.0,
+        flip_y: draw.zoom[1] < 0.0,
+        fade: [0.0; 4],
+        blend: draw.blend,
+        rot_y_deg: draw.rotation_y_deg,
+        rot_z_deg: draw.rotation_z_deg,
+        z: draw.z,
+    }));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadlib_present::actors::SizeSpec;
+    use deadlib_present::actors::FlatDraw;
     use deadsync_noteskin::{
         ModelDrawState, ModelMesh, ModelVertex, ReceptorReverseState, SpriteDefinition,
     };
@@ -576,8 +585,8 @@ mod tests {
         target: Option<&'a TestSlot>,
         hold: Option<&'a TestSlot>,
         pulse: &'a ReceptorPulse,
-    ) -> ReceptorActorsRequest<'a, TestSlot> {
-        ReceptorActorsRequest {
+    ) -> ReceptorDrawRequest<'a, TestSlot> {
+        ReceptorDrawRequest {
             target_slot: target,
             target_reverse: None,
             idle_glow_slot: None,
@@ -613,16 +622,16 @@ mod tests {
         }
     }
 
-    fn assert_sprite(actor: &Actor, key: &str, z: i16, blend: BlendMode) {
-        let Actor::Sprite {
+    fn assert_sprite(draw: &FlatDraw, key: &str, z: i16, blend: BlendMode) {
+        let FlatDraw::Sprite(sprite) = draw else {
+            panic!("expected sprite draw, got {draw:?}");
+        };
+        let FlatSprite {
             source,
             z: actual_z,
             blend: actual_blend,
             ..
-        } = actor
-        else {
-            panic!("expected sprite actor, got {actor:?}");
-        };
+        } = sprite;
         assert_eq!(*actual_z, z);
         assert_eq!(*actual_blend, blend);
         assert!(matches!(
@@ -645,7 +654,7 @@ mod tests {
         let pulse = pulse();
         let mut actors = Vec::new();
 
-        compose_receptor_actors(
+        compose_receptor_draws(
             &mut actors,
             &mut ModelMeshCache::default(),
             request(Some(&target), Some(&hold), &pulse),
@@ -678,7 +687,7 @@ mod tests {
         request.beat = 0.25;
         let mut actors = Vec::new();
 
-        compose_receptor_actors(
+        compose_receptor_draws(
             &mut actors,
             &mut ModelMeshCache::default(),
             request,
@@ -688,7 +697,7 @@ mod tests {
 
         assert_eq!(actors.len(), 2);
         assert_sprite(&actors[1], "glow", 105, BlendMode::Add);
-        let Actor::Sprite { tint, .. } = &actors[1] else {
+        let FlatDraw::Sprite(FlatSprite { tint, .. }) = &actors[1] else {
             panic!("expected idle glow sprite");
         };
         assert_eq!(*tint, [1.0, 1.0, 1.0, 0.5]);
@@ -709,7 +718,7 @@ mod tests {
             request.is_in_delay = is_in_delay;
             let mut actors = Vec::new();
 
-            compose_receptor_actors(
+            compose_receptor_draws(
                 &mut actors,
                 &mut ModelMeshCache::default(),
                 request,
@@ -733,7 +742,7 @@ mod tests {
         request.idle_glow_slot = Some(&idle);
         let mut actors = Vec::new();
 
-        compose_receptor_actors(
+        compose_receptor_draws(
             &mut actors,
             &mut ModelMeshCache::default(),
             request,
@@ -780,7 +789,7 @@ mod tests {
         request.rotation_y_deg = 12.0;
         let mut actors = Vec::new();
 
-        compose_receptor_actors(
+        compose_receptor_draws(
             &mut actors,
             &mut ModelMeshCache::default(),
             request,
@@ -788,25 +797,21 @@ mod tests {
             &texture_source,
         );
 
-        let Actor::Sprite {
-            align,
-            offset,
+        let FlatDraw::Sprite(FlatSprite {
+            center,
             size,
             flip_x,
             flip_y,
             rot_y_deg,
             rot_z_deg,
-            scale,
             ..
-        } = &actors[0]
+        }) = &actors[0]
         else {
             panic!("expected target sprite");
         };
-        assert_eq!(*align, [0.5, 1.0]);
-        assert_eq!(*offset, [12.0, 23.0]);
-        assert!(matches!(size, [SizeSpec::Px(w), SizeSpec::Px(h)] if *w == 120.0 && *h == 20.0));
+        assert_eq!(*center, [12.0, 13.0]);
+        assert_eq!(*size, [120.0, 20.0]);
         assert!(*flip_x && *flip_y);
-        assert_eq!(*scale, [1.0, 1.0]);
         assert_eq!(*rot_y_deg, 12.0);
         assert_eq!(*rot_z_deg, -199.0);
     }
@@ -834,7 +839,7 @@ mod tests {
         request.press_behavior.blend_add = false;
         let mut actors = Vec::new();
 
-        compose_receptor_actors(
+        compose_receptor_draws(
             &mut actors,
             &mut ModelMeshCache::default(),
             request,
@@ -854,9 +859,8 @@ mod tests {
             &texture_source,
         );
 
-        let Actor::Sprite {
-            align,
-            offset,
+        let FlatDraw::Sprite(FlatSprite {
+            center,
             size,
             source,
             tint,
@@ -867,13 +871,12 @@ mod tests {
             rot_y_deg,
             rot_z_deg,
             ..
-        } = &actors[1]
+        }) = &actors[1]
         else {
             panic!("expected press sprite");
         };
-        assert_eq!(*align, [0.5, 0.25]);
-        assert_eq!(*offset, [22.0, 14.0]);
-        assert!(matches!(size, [SizeSpec::Px(w), SizeSpec::Px(h)] if *w == 15.0 && *h == 120.0));
+        assert_eq!(*center, [22.0, 44.0]);
+        assert_eq!(*size, [15.0, 120.0]);
         assert!(matches!(
             source,
             SpriteSource::TextureHandle {
@@ -883,7 +886,7 @@ mod tests {
             } if key.as_ref() == "press"
         ));
         assert_eq!(*tint, [0.2, 0.4, 0.6, 0.24000001]);
-        assert_eq!(*uv_rect, Some([0.1, 0.2, 0.8, 0.9]));
+        assert_eq!(*uv_rect, [0.1, 0.2, 0.8, 0.9]);
         assert!(*flip_x);
         assert!(!*flip_y);
         assert_eq!(*blend, BlendMode::Alpha);
@@ -900,7 +903,7 @@ mod tests {
         let resolved = Cell::new(0);
         let mut actors = Vec::new();
 
-        compose_receptor_actors(
+        compose_receptor_draws(
             &mut actors,
             &mut ModelMeshCache::default(),
             request(Some(&target), Some(&hold), &pulse),
@@ -927,7 +930,7 @@ mod tests {
         let mut cache = ModelMeshCache::default();
         cache.begin_hit_stats(true);
 
-        compose_receptor_actors(
+        compose_receptor_draws(
             &mut actors,
             &mut cache,
             request(Some(&target), Some(&hold), &pulse),
@@ -936,15 +939,15 @@ mod tests {
         );
 
         assert_eq!(actors.len(), 3);
-        let (Actor::TexturedMesh { tint: diffuse, .. }, Actor::TexturedMesh { tint: glow, .. }) =
+        let (FlatDraw::TexturedMesh(diffuse), FlatDraw::TexturedMesh(glow)) =
             (&actors[1], &actors[2])
         else {
             panic!("expected diffuse and glow model actors");
         };
-        for (actual, expected) in diffuse.iter().zip([0.25, 0.0625, 0.5625, 0.64]) {
+        for (actual, expected) in diffuse.tint.iter().zip([0.25, 0.0625, 0.5625, 0.64]) {
             assert!((actual - expected).abs() <= 1e-6);
         }
-        for (actual, expected) in glow.iter().zip([0.1, 0.1, 0.45, 0.4]) {
+        for (actual, expected) in glow.tint.iter().zip([0.1, 0.1, 0.45, 0.4]) {
             assert!((actual - expected).abs() <= 1e-6);
         }
         assert_eq!(
@@ -966,7 +969,7 @@ mod tests {
         let pulse = pulse();
         let mut actors = Vec::new();
 
-        compose_receptor_actors(
+        compose_receptor_draws(
             &mut actors,
             &mut ModelMeshCache::default(),
             request(Some(&target), Some(&hold), &pulse),

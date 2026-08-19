@@ -296,7 +296,7 @@ fn compose_field_contents<S, F>(
         },
     );
     compose_notefield_feedback(
-        actors,
+        flat_draws,
         cue_hud_actors,
         model_cache,
         request,

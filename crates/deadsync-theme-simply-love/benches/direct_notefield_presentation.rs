@@ -838,6 +838,26 @@ fn print_boundary_result(label: &str, result: &BoundaryResult) {
     );
 }
 
+fn print_boundary_sweep(label: &str, hold_mix: bool) {
+    println!("\n{label} (draws/player)");
+    for field_draws in [8, 16, 32, 64] {
+        println!("{field_draws} draws/player");
+        let wide = measure_boundary(BoundaryKind::WideActors, field_draws, hold_mix);
+        let flat = measure_boundary(BoundaryKind::FlatDraws, field_draws, hold_mix);
+        assert_eq!(wide.checksum, flat.checksum);
+        for result in [&wide, &flat] {
+            assert_zero_alloc(&BenchResult {
+                elapsed: result.elapsed,
+                cycles: result.cycles,
+                allocated: result.allocated,
+                checksum: result.checksum,
+            });
+        }
+        print_boundary_result("wide actor control", &wide);
+        print_boundary_result("flat draw path", &flat);
+    }
+}
+
 fn main() {
     deadlib_present::space::set_current_metrics(deadlib_present::space::metrics_for_window(
         854, 480,
@@ -909,27 +929,8 @@ fn main() {
     black_box(flat.checksum);
     print_boundary_result("flat draw path", &flat);
 
-    println!("\nhold-scale presentation boundary sweep (draws/player)");
-    for field_draws in [8, 16, 32, 64] {
-        println!("{field_draws} draws/player");
-        let wide = measure_boundary(BoundaryKind::WideActors, field_draws, true);
-        let flat = measure_boundary(BoundaryKind::FlatDraws, field_draws, true);
-        assert_eq!(wide.checksum, flat.checksum);
-        assert_zero_alloc(&BenchResult {
-            elapsed: wide.elapsed,
-            cycles: wide.cycles,
-            allocated: wide.allocated,
-            checksum: wide.checksum,
-        });
-        assert_zero_alloc(&BenchResult {
-            elapsed: flat.elapsed,
-            cycles: flat.cycles,
-            allocated: flat.allocated,
-            checksum: flat.checksum,
-        });
-        print_boundary_result("wide actor control", &wide);
-        print_boundary_result("flat draw path", &flat);
-    }
+    print_boundary_sweep("feedback-scale sprite boundary sweep", false);
+    print_boundary_sweep("hold-scale presentation boundary sweep", true);
 }
 
 #[cfg(target_arch = "x86_64")]

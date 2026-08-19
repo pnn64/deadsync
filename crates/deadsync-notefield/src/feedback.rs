@@ -1,6 +1,6 @@
 use crate::*;
-use deadlib_present::actors::Actor;
-use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
+use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SpriteSource};
+use deadlib_present::dsl::TextBuilder;
 use deadsync_gameplay::{
     ActiveColumnFlash, ColumnCue, active_column_cue_range, active_column_cue_range_from_cursor,
     column_flash_duration,
@@ -266,13 +266,13 @@ enum ColumnCueKind {
 /// gameplay snapshots. Concrete themes supply only style values and font/text
 /// resolution; the notefield owns placement, timing, fades, and actor shape.
 pub(crate) fn compose_column_feedback(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     hud_actors: &mut Vec<Actor>,
     request: ColumnFeedbackRequest<'_>,
 ) {
     if let Some(cues) = request.column_cues {
         compose_column_cue(
-            actors,
+            draws,
             hud_actors,
             request,
             cues,
@@ -282,7 +282,7 @@ pub(crate) fn compose_column_feedback(
     }
     if let Some(cues) = request.crossover_cues {
         compose_column_cue(
-            actors,
+            draws,
             hud_actors,
             request,
             cues,
@@ -291,12 +291,12 @@ pub(crate) fn compose_column_feedback(
         );
     }
     if let Some(flashes) = request.column_flashes {
-        compose_column_flashes(actors, request, flashes);
+        compose_column_flashes(draws, request, flashes);
     }
 }
 
 fn compose_column_cue(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     hud_actors: &mut Vec<Actor>,
     request: ColumnFeedbackRequest<'_>,
     cues: &[ColumnCue],
@@ -404,7 +404,7 @@ fn compose_column_cue(
                 style.top_y + request.field_center_y
             };
             append_column_quad(
-                actors,
+                draws,
                 x,
                 y,
                 lane_width,
@@ -456,7 +456,7 @@ fn compose_column_cue(
 }
 
 fn compose_column_flashes(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: ColumnFeedbackRequest<'_>,
     flashes: &[Option<ActiveColumnFlash>],
 ) {
@@ -500,7 +500,7 @@ fn compose_column_flashes(
             layout.top_y + request.field_center_y
         };
         append_column_quad(
-            actors,
+            draws,
             x,
             y,
             lane_width,
@@ -515,7 +515,7 @@ fn compose_column_flashes(
 
 #[allow(clippy::too_many_arguments)]
 fn append_column_quad(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     x: f32,
     y: f32,
     width: f32,
@@ -525,21 +525,26 @@ fn append_column_quad(
     color: [f32; 4],
     z: i16,
 ) {
-    let mut quad = SpriteBuilder::solid();
-    quad.align(0.5, 0.0);
-    quad.xy(x, y);
-    // A solid actor's native size is 1x1. Keep the same scale representation
-    // produced by the theme DSL's `zoomto` command.
-    quad.zoomx(width);
-    quad.zoomy(height);
-    if reverse {
-        quad.fadetop(fade);
-    } else {
-        quad.fadebottom(fade);
-    }
-    quad.diffuse(color);
-    quad.z(z);
-    actors.push(quad.build(0));
+    draws.push(FlatDraw::Sprite(FlatSprite {
+        center: [x, y + height * 0.5],
+        world_z: 0.0,
+        size: [width, height],
+        source: SpriteSource::Solid,
+        tint: color,
+        glow: [1.0, 1.0, 1.0, 0.0],
+        uv_rect: [0.0, 0.0, 1.0, 1.0],
+        flip_x: false,
+        flip_y: false,
+        fade: if reverse {
+            [0.0, 0.0, fade, 0.0]
+        } else {
+            [0.0, 0.0, 0.0, fade]
+        },
+        blend: deadlib_render_core::BlendMode::Alpha,
+        rot_y_deg: 0.0,
+        rot_z_deg: 0.0,
+        z,
+    }));
 }
 
 pub(crate) fn judgment_tilt_rotation_deg(params: JudgmentTiltParams) -> f32 {
@@ -643,7 +648,7 @@ mod tests {
     #![allow(clippy::approx_constant)]
 
     use super::*;
-    use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
+    use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SpriteSource};
     use deadsync_gameplay::ColumnCueColumn;
     use deadsync_theme::{
         ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle, CounterHudStyle,
@@ -913,7 +918,7 @@ mod tests {
     }
 
     fn assert_quad(
-        actor: &Actor,
+        draw: &FlatDraw,
         offset: [f32; 2],
         scale: [f32; 2],
         tint: [f32; 4],
@@ -921,30 +926,25 @@ mod tests {
         fade: f32,
         z: i16,
     ) {
-        match actor {
-            Actor::Sprite {
-                align,
-                offset: actual_offset,
-                size,
+        match draw {
+            FlatDraw::Sprite(FlatSprite {
+                center,
+                size: actual_size,
                 source,
                 tint: actual_tint,
                 z: actual_z,
-                fadetop,
-                fadebottom,
-                scale: actual_scale,
+                fade: actual_fade,
                 ..
-            } => {
-                assert_eq!(*align, [0.5, 0.0]);
-                assert_eq!(*actual_offset, offset);
-                assert!(matches!(size, [SizeSpec::Px(0.0), SizeSpec::Px(0.0)]));
+            }) => {
+                assert_eq!(*center, [offset[0], offset[1] + scale[1] * 0.5]);
                 assert!(matches!(source, SpriteSource::Solid));
-                assert_eq!(*actual_scale, scale);
+                assert_eq!(*actual_size, scale);
                 for (actual, expected) in actual_tint.iter().zip(tint) {
                     assert!((*actual - expected).abs() <= 1e-6);
                 }
                 assert_eq!(*actual_z, z);
-                assert_eq!(*fadetop, if reverse { fade } else { 0.0 });
-                assert_eq!(*fadebottom, if reverse { 0.0 } else { fade });
+                assert_eq!(actual_fade[2], if reverse { fade } else { 0.0 });
+                assert_eq!(actual_fade[3], if reverse { 0.0 } else { fade });
             }
             other => panic!("expected column feedback quad, got {other:?}"),
         }
