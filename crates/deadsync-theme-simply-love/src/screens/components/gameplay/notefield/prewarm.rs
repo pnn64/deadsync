@@ -11,7 +11,7 @@ use deadsync_profile as profile_data;
 use super::super::display_mods::DISPLAY_MODS_WRAP_WIDTH_PX;
 use super::super::{
     FRAME_TEXT_COMBO_BASE, FRAME_TEXT_COUNTDOWN_BASE, FRAME_TEXT_COUNTER_BASE,
-    FRAME_TEXT_MINI_BASE, FRAME_TEXT_OFFSET_BASE, FRAME_TEXT_VERTEX_BUFFERS,
+    FRAME_TEXT_ERROR_BASE, FRAME_TEXT_MINI_BASE, FRAME_TEXT_VERTEX_BUFFERS,
 };
 use super::text::{cached_int_i32, preferred_mods_text};
 use super::{
@@ -56,11 +56,6 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
             prewarm_i32(cache, mc_font_name, max_measure_len.max(16));
         }
     }
-
-    cache.prewarm_text(fonts, "game", "Early", None);
-    cache.prewarm_text(fonts, "game", "Late", None);
-    cache.prewarm_text(fonts, "wendy", "EARLY", None);
-    cache.prewarm_text(fonts, "wendy", "LATE", None);
 }
 
 pub fn prewarm_frame_text_scratch(
@@ -73,6 +68,10 @@ pub fn prewarm_frame_text_scratch(
         .expect("the mini-indicator glyph domain fits inline");
     let offset_glyphs = InlineText::copy_from("-.ms0123456789")
         .expect("the offset-indicator glyph domain fits inline");
+    let error_label_glyphs =
+        InlineText::copy_from("EarlyLate").expect("the error-bar label glyph domain fits inline");
+    let error_feedback_glyphs = InlineText::copy_from("EARLYTFSOW")
+        .expect("the error-bar feedback glyph domain fits inline");
     let counter_glyphs = InlineText::copy_from("-/()0123456789")
         .expect("the measure-counter glyph domain fits inline");
     let timer_glyphs =
@@ -122,6 +121,13 @@ pub fn prewarm_frame_text_scratch(
                 FRAME_TEXT_VERTEX_BUFFERS,
             );
         }
+        let mut error_mask = profile.error_bar_active_mask;
+        if error_mask.is_empty() {
+            error_mask =
+                profile_data::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
+        }
+        let error_slot = FRAME_TEXT_ERROR_BASE
+            + player as u8 * deadsync_notefield::ERROR_BAR_TEXT_SLOTS_PER_PLAYER;
         if profile.error_ms_display {
             deadlib_present::compose::prewarm_prepared_inline_text_slot(
                 cache,
@@ -129,7 +135,33 @@ pub fn prewarm_frame_text_scratch(
                 fonts,
                 "wendy",
                 offset_glyphs,
-                FRAME_TEXT_OFFSET_BASE + player as u8,
+                error_slot,
+                TextAlign::Center,
+                FRAME_TEXT_VERTEX_BUFFERS,
+            );
+        }
+        if error_mask.contains(profile_data::ErrorBarMask::MONOCHROME) {
+            for slot in [error_slot + 1, error_slot + 2] {
+                deadlib_present::compose::prewarm_prepared_inline_text_slot(
+                    cache,
+                    scratch,
+                    fonts,
+                    "game",
+                    error_label_glyphs,
+                    slot,
+                    TextAlign::Center,
+                    FRAME_TEXT_VERTEX_BUFFERS,
+                );
+            }
+        }
+        if error_mask.contains(profile_data::ErrorBarMask::TEXT) {
+            deadlib_present::compose::prewarm_prepared_inline_text_slot(
+                cache,
+                scratch,
+                fonts,
+                "wendy",
+                error_feedback_glyphs,
+                error_slot + 3,
                 TextAlign::Center,
                 FRAME_TEXT_VERTEX_BUFFERS,
             );

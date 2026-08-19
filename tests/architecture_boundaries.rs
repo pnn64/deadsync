@@ -9430,7 +9430,7 @@ fn measure_quads_stay_on_the_direct_field_path() {
 }
 
 #[test]
-fn error_bar_quads_stay_on_the_direct_hud_path() {
+fn error_bar_presentation_stays_on_the_direct_hud_path() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let error_bar = fs::read_to_string(root.join("crates/deadsync-notefield/src/error_bar.rs"))
         .expect("canonical error-bar composer should be readable");
@@ -9439,21 +9439,89 @@ fn error_bar_quads_stay_on_the_direct_hud_path() {
     let gameplay =
         fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
             .expect("Simply Love gameplay composer should be readable");
+    let adapter = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
+    ))
+    .expect("Simply Love notefield adapter should be readable");
+    let prewarm = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/prewarm.rs",
+    ))
+    .expect("Simply Love notefield prewarm policy should be readable");
+    let plan = fs::read_to_string(root.join("crates/deadsync-notefield/src/actor_builder.rs"))
+        .expect("canonical notefield frame plan should be readable");
 
     assert!(error_bar.contains("draws.push(FlatDraw::Sprite(FlatSprite {"));
-    assert!(error_bar.contains("let mut text = TextBuilder::new();"));
-    for removed in ["SpriteBuilder", "Actor::Sprite"] {
+    assert!(error_bar.contains("draws.push(FlatDraw::PreparedInline(FlatPreparedInline {"));
+    assert!(error_bar.contains("pub const ERROR_BAR_TEXT_SLOTS_PER_PLAYER: u8 = 4;"));
+    for removed in [
+        "TextBuilder",
+        "Actor::Text",
+        "SpriteBuilder",
+        "Actor::Sprite",
+    ] {
         assert!(
             !error_bar.contains(removed),
-            "error-bar quads must not return to the wide actor path through {removed}"
+            "error-bar presentation must not return to the wide actor path through {removed}"
         );
     }
     assert!(hud.contains("draws: &mut Vec<FlatDraw>"));
-    assert!(hud.contains("compose_error(actors, draws,"));
+    assert!(hud.contains("compose_error(draws, request, prepared, error_bar);"));
     assert!(hud.contains("actors.extend(draws.drain(..).map(flat_draw_actor));"));
+    assert!(adapter.contains("frame_text_slot: super::FRAME_TEXT_ERROR_BASE"));
+    assert!(prewarm.contains("let error_slot = FRAME_TEXT_ERROR_BASE"));
+    assert!(prewarm.contains("error_slot + 3"));
+    for removed in [
+        "cache.prewarm_text(fonts, \"game\", \"Early\", None)",
+        "cache.prewarm_text(fonts, \"wendy\", \"EARLY\", None)",
+    ] {
+        assert!(!prewarm.contains(removed));
+    }
+    assert!(!plan.contains("usize::from(features.error_bar_text)"));
     assert!(gameplay.contains("notefield_hud_flat_draw_scratch"));
-    assert!(gameplay.contains("ERROR_BAR_HUD_FLAT_DRAW_CAPACITY: usize = 82"));
+    assert!(gameplay.contains("82 + deadsync_notefield::ERROR_BAR_TEXT_SLOTS_PER_PLAYER as usize"));
     assert!(gameplay.contains("hud.with_flat_draws("));
+}
+
+#[test]
+fn column_countdowns_stay_on_the_prepared_hud_path() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let feedback = fs::read_to_string(root.join("crates/deadsync-notefield/src/feedback.rs"))
+        .expect("canonical feedback composer should be readable");
+    let frame = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_feedback.rs"))
+        .expect("canonical feedback frame should be readable");
+    let field = fs::read_to_string(root.join("crates/deadsync-notefield/src/field_frame.rs"))
+        .expect("canonical field frame should be readable");
+    let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
+        .expect("canonical HUD frame should be readable");
+    let gameplay =
+        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+            .expect("Simply Love gameplay composer should be readable");
+    let adapter = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
+    ))
+    .expect("Simply Love notefield adapter should be readable");
+    let prewarm = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/prewarm.rs",
+    ))
+    .expect("Simply Love notefield prewarm policy should be readable");
+
+    assert!(feedback.contains("hud_draws.push(FlatDraw::PreparedU32(FlatPreparedU32 {"));
+    assert!(feedback.contains("pub const COLUMN_COUNTDOWN_SLOTS_PER_PLAYER: u8 = 3;"));
+    assert!(!feedback.contains("TextBuilder"));
+    assert!(!feedback.contains("countdown_text: fn"));
+    assert!(frame.contains("compose_column_feedback(\n        draws,\n        hud_draws,"));
+    assert!(
+        field.contains("compose_notefield_feedback(\n        flat_draws,\n        cue_hud_draws,")
+    );
+    assert!(hud.contains("if request.capture_requests.player {"));
+    assert!(hud.contains("actors.extend(draws.drain(..).map(flat_draw_actor));"));
+    assert!(adapter.contains("countdown_text_slot: super::FRAME_TEXT_COUNTDOWN_BASE"));
+    assert!(adapter.contains("compose_notefield_field(\n            actors,\n            flat_draws,\n            hud_flat_draws,"));
+    assert!(prewarm.contains("let countdown_slot = FRAME_TEXT_COUNTDOWN_BASE"));
+    assert!(prewarm.contains("prewarm_u32_text_slot("));
+    assert!(!prewarm.contains("COLUMN_COUNTDOWN_PREWARM_CAP"));
+    assert!(gameplay.contains("const CUE_COUNTDOWN_FLAT_DRAW_CAPACITY: usize"));
+    assert!(gameplay.contains("+ CUE_COUNTDOWN_FLAT_DRAW_CAPACITY;"));
 }
 
 #[test]
@@ -9482,7 +9550,7 @@ fn judgment_sprites_stay_on_the_direct_hud_path() {
 }
 
 #[test]
-fn combo_milestone_sprites_stay_on_the_direct_hud_path() {
+fn combo_presentation_stays_on_the_direct_hud_path() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let combo = fs::read_to_string(root.join("crates/deadsync-notefield/src/combo_feedback.rs"))
         .expect("canonical combo-feedback composer should be readable");
@@ -9497,19 +9565,61 @@ fn combo_milestone_sprites_stay_on_the_direct_hud_path() {
     .expect("Simply Love notefield adapter should be readable");
 
     assert!(combo.contains("draws.push(FlatDraw::Sprite(FlatSprite {"));
-    assert!(combo.contains("let mut text = TextBuilder::new();"));
-    for removed in ["SpriteBuilder", "Actor::Sprite"] {
+    assert!(combo.contains("draws.push(FlatDraw::PreparedU32(FlatPreparedU32 {"));
+    for removed in [
+        "SpriteBuilder",
+        "TextBuilder",
+        "Actor::Sprite",
+        "Actor::Text",
+    ] {
         assert!(
             !combo.contains(removed),
-            "combo milestone sprites must not return through {removed}"
+            "combo presentation must not return through {removed}"
         );
     }
     assert!(hud.contains("let combo_draw_start = draws.len();"));
     assert!(hud.contains("compose_combo_milestones(draws, &feedback);"));
+    assert!(hud.contains("compose_combo_number(draws, &feedback);"));
     assert!(hud.contains("draws.drain(draw_start..).map(flat_draw_actor)"));
-    assert!(gameplay.contains("COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 6"));
+    assert!(gameplay.contains("COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 7"));
     assert!(adapter.contains("ResolvedComboMilestoneAssets"));
+    assert!(!adapter.contains("fn combo_number_text"));
     assert!(gameplay.contains("notefield_combo_assets"));
+}
+
+#[test]
+fn zmod_numeric_hud_stays_on_the_prepared_direct_path() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let zmod = fs::read_to_string(root.join("crates/deadsync-notefield/src/hud.rs"))
+        .expect("canonical ZMod HUD composer should be readable");
+    let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
+        .expect("canonical HUD-frame composer should be readable");
+    let gameplay =
+        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+            .expect("Simply Love gameplay composer should be readable");
+    let theme_zmod = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/zmod.rs",
+    ))
+    .expect("Simply Love ZMod adapter should be readable");
+    let prewarm = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/prewarm.rs",
+    ))
+    .expect("Simply Love notefield prewarm policy should be readable");
+
+    assert!(zmod.contains("draws.push(FlatDraw::PreparedInline(FlatPreparedInline {"));
+    assert!(zmod.contains("fn emit_counter_hud("));
+    assert!(zmod.contains("Some(TextContent::FrameInline { .. })"));
+    assert!(zmod.contains("actors.push(hud_text_actor(style, font, entry));"));
+    assert!(hud.contains("compose_counter_hud(\n            actors,\n            draws,"));
+    assert!(hud.contains("compose_mini_indicator(\n            actors,\n            draws,"));
+    assert!(gameplay.contains("const ZMOD_HUD_FLAT_DRAW_CAPACITY: usize"));
+    assert!(gameplay.contains("+ ZMOD_HUD_FLAT_DRAW_CAPACITY;"));
+    assert!(theme_zmod.contains(".with_frame_inline_slot(FRAME_TEXT_MINI_BASE"));
+    assert!(prewarm.contains("prewarm_prepared_inline_text_slot("));
+    assert!(
+        prewarm.contains("FRAME_TEXT_MINI_BASE + player as u8,\n                TextAlign::Left,")
+    );
+    assert!(!prewarm.contains("prewarm_frame_inline_text_slot("));
 }
 
 #[test]
@@ -9840,6 +9950,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "clamp_rounded_i16",
         "ComboHudFrame",
         "ComboMilestoneAssets",
+        "COLUMN_COUNTDOWN_SLOTS_PER_PLAYER",
         "compose_notefield_field",
         "compose_notefield_hud",
         "CounterHudFrame",
@@ -9852,6 +9963,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "DISPLAY_TURN_SHUFFLE",
         "DISPLAY_TURN_UD_MIRROR",
         "error_bar_boundaries_s",
+        "ERROR_BAR_TEXT_SLOTS_PER_PLAYER",
         "ErrorBarHudFrame",
         "ErrorBarModes",
         "FieldLayout",

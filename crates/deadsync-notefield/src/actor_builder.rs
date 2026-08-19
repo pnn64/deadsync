@@ -74,8 +74,7 @@ pub(crate) fn notefield_frame_plan(
         + usize::from(features.column_cues) * (num_cols + 4)
         + usize::from(features.crossover_cues) * (num_cols + 4)
         + usize::from(features.column_flash) * num_cols;
-    let hud_actor_reserve =
-        8 + usize::from(features.combo_visible) + usize::from(features.error_bar_text);
+    let hud_actor_reserve = 8 + usize::from(features.combo_visible);
 
     Some(NotefieldFramePlan {
         player_idx,
@@ -281,18 +280,18 @@ mod tests {
         };
         let plan = notefield_frame_plan(request).expect("feature-rich field should resolve");
         assert_eq!(plan.field_actor_reserve, 164);
-        assert_eq!(plan.hud_actor_reserve, 10);
+        assert_eq!(plan.hud_actor_reserve, 9);
 
         request.features.crossover_cues = false;
         let no_crossover = notefield_frame_plan(request).expect("field should resolve");
-        assert_eq!(no_crossover.hud_actor_reserve, 10);
+        assert_eq!(no_crossover.hud_actor_reserve, 9);
 
         request.features.crossover_countdown = false;
         let no_countdown = notefield_frame_plan(request).expect("field should resolve");
-        assert_eq!(no_countdown.hud_actor_reserve, 10);
+        assert_eq!(no_countdown.hud_actor_reserve, 9);
 
         request.features.combo_visible = false;
         let reduced = notefield_frame_plan(request).expect("field should resolve");
-        assert_eq!(reduced.hud_actor_reserve, 9);
+        assert_eq!(reduced.hud_actor_reserve, 8);
     }
 }

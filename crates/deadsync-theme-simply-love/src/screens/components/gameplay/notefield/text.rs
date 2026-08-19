@@ -81,20 +81,20 @@ pub(super) fn cached_ratio_i32(curr: i32, total: i32) -> Arc<str> {
 }
 
 #[inline(always)]
-pub(super) fn offset_ms_text(value: f32) -> TextContent {
+pub(super) fn offset_ms_text(value: f32) -> InlineText {
     let key = quantize_centi_i32(f64::from(value));
-    TextContent::inline_format(format_args!("{:.2}ms", key as f64 / 100.0))
+    InlineText::format(format_args!("{:.2}ms", key as f64 / 100.0))
         .expect("an i32 centisecond value and ms suffix fit inline")
 }
 
 #[inline(always)]
-pub(super) const fn error_bar_text_label(early: bool, scaled: bool) -> TextContent {
-    TextContent::Static(match (early, scaled) {
+pub(super) const fn error_bar_text_label(early: bool, scaled: bool) -> &'static str {
+    match (early, scaled) {
         (true, true) => "FAST",
         (true, false) => "EARLY",
         (false, true) => "SLOW",
         (false, false) => "LATE",
-    })
+    }
 }
 
 pub(super) fn zmod_run_timer_fmt(
@@ -524,7 +524,6 @@ mod tests {
             (f32::INFINITY, "0.00ms"),
         ] {
             let text = offset_ms_text(value);
-            assert!(matches!(text, TextContent::Inline(_)));
             assert_eq!(text.as_str(), expected);
         }
     }
@@ -538,8 +537,7 @@ mod tests {
             (false, false, "LATE"),
         ] {
             let text = error_bar_text_label(early, scaled);
-            assert!(matches!(text, TextContent::Static(_)));
-            assert_eq!(text.as_str(), expected);
+            assert_eq!(text, expected);
         }
     }
 

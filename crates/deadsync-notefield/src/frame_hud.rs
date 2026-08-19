@@ -19,7 +19,7 @@ use crate::judgment_feedback::{
     compose_judgment_feedback,
 };
 use crate::mini_indicator::ZmodMeasureCounterText;
-use deadlib_present::actors::{Actor, FlatDraw, TextContent};
+use deadlib_present::actors::{Actor, FlatDraw, InlineText, TextContent};
 use deadsync_gameplay::{
     ActiveComboMilestone, ErrorBarText, ErrorBarTick, HeldMissRenderInfo, HoldJudgmentRenderInfo,
     JudgmentRenderInfo, OffsetIndicatorText,
@@ -53,8 +53,8 @@ pub struct ErrorBarHudFrame<'a> {
     pub long_average_active: bool,
     pub text: Option<ErrorBarText>,
     pub frame_text_slot: u8,
-    pub offset_text: fn(f32) -> TextContent,
-    pub text_label: fn(bool, bool) -> TextContent,
+    pub offset_text: fn(f32) -> InlineText,
+    pub text_label: fn(bool, bool) -> &'static str,
 }
 
 impl ErrorBarHudFrame<'_> {
@@ -170,7 +170,7 @@ pub fn compose_notefield_hud<S>(
         .flatten();
 
     if let Some(error_bar) = frame.error_bar.as_ref() {
-        compose_error(actors, draws, request, prepared, error_bar);
+        compose_error(draws, request, prepared, error_bar);
     }
 
     if let (Some(options), Some(counter)) = (request.options.measure_counter, frame.counter) {
@@ -312,7 +312,6 @@ fn compose_combo<S>(
 }
 
 fn compose_error<S>(
-    actors: &mut Vec<Actor>,
     draws: &mut Vec<FlatDraw>,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
@@ -331,7 +330,6 @@ fn compose_error<S>(
     };
     let show = request.options.frame_features.error_bar;
     compose_error_bar(
-        actors,
         draws,
         ErrorBarComposeRequest {
             style: request.style.error_bar,

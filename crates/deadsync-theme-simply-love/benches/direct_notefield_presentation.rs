@@ -45,7 +45,9 @@ const BOUNDARY_HUD_ACTORS: usize = PEAK_HUD_ACTORS;
 const BOUNDARY_BATCH_FRAMES: usize = 32;
 const BOUNDARY_WARMUP_BATCHES: usize = 32;
 const BOUNDARY_MEASURE_BATCHES: usize = 400;
+const ERROR_BAR_MEASURE_BATCHES: usize = 400;
 const HUD_TEXT_RUNS: usize = 8;
+const ERROR_BAR_TEXT_RUNS: usize = 4;
 const CUE_COUNTDOWN_RUNS: usize = 3;
 
 struct CountingAlloc {
@@ -909,16 +911,21 @@ fn measure_boundary_pair(field_draws: usize, hold_mix: bool) -> [BoundaryResult;
 }
 
 fn print_boundary_result(label: &str, result: &BoundaryResult) {
-    let frames = (BOUNDARY_MEASURE_BATCHES * BOUNDARY_BATCH_FRAMES) as f64;
+    let frames = (result.samples_ns.len() * BOUNDARY_BATCH_FRAMES) as f64;
+    let p95_index = (result.samples_ns.len() * 95)
+        .div_ceil(100)
+        .saturating_sub(1);
     let p99_index = (result.samples_ns.len() * 99)
         .div_ceil(100)
         .saturating_sub(1);
+    let p95_ns = result.samples_ns[p95_index];
     let p99_ns = result.samples_ns[p99_index];
     let worst_ns = result.samples_ns.last().copied().unwrap_or_default();
     println!(
-        "{label:<17} mean {:>8.2} us  p99 {:>8.2} us  worst {:>8.2} us  \
+        "{label:<17} mean {:>8.2} us  p95 {:>8.2} us  p99 {:>8.2} us  worst {:>8.2} us  \
          {:>8.0} cycles/frame  {} alloc  {} realloc  {} bytes",
         result.elapsed.as_secs_f64() * 1_000_000.0 / frames,
+        p95_ns as f64 / 1_000.0,
         p99_ns as f64 / 1_000.0,
         worst_ns as f64 / 1_000.0,
         result.cycles as f64 / frames,
@@ -952,7 +959,7 @@ fn numeric_font() -> Font {
     let stroke = Arc::<str>::from("bench_numeric_stroke");
     let mut glyph_map = GlyphMap::default();
     let mut ascii = std::array::from_fn(|_| None);
-    for byte in b"0123456789-./%() " {
+    for byte in b"0123456789-./%() msEarlyLateFastSlow" {
         let ch = char::from(*byte);
         let glyph = Glyph {
             texture_key: Arc::clone(&fill),
@@ -1289,7 +1296,37 @@ fn measure_numeric_pair(case: NumericCase) -> [BoundaryResult; 2] {
     })
 }
 
-fn hud_text_value(frame: usize, player: usize, run: usize) -> InlineText {
+#[derive(Clone, Copy)]
+enum InlineCase {
+    Zmod,
+    ErrorBar,
+}
+
+const fn inline_run_count(case: InlineCase) -> usize {
+    match case {
+        InlineCase::Zmod => HUD_TEXT_RUNS,
+        InlineCase::ErrorBar => ERROR_BAR_TEXT_RUNS,
+    }
+}
+
+fn inline_text_value(case: InlineCase, frame: usize, player: usize, run: usize) -> InlineText {
+    if matches!(case, InlineCase::ErrorBar) {
+        let text = match run {
+            0 => {
+                return InlineText::format(format_args!(
+                    "{}.{:02}ms",
+                    frame / 60 % 180,
+                    frame % 60
+                ))
+                .expect("benchmark offset value fits inline");
+            }
+            1 => "Early",
+            2 => "Late",
+            3 => ["Fast", "Early", "Slow", "Late"][(frame / 60 + player) % 4],
+            _ => unreachable!("error-bar benchmark has four bounded runs"),
+        };
+        return InlineText::copy_from(text).expect("benchmark error-bar label fits inline");
+    }
     let value_frame = match run {
         0..=5 => frame / 120,
         6 => frame / 240,
@@ -1298,7 +1335,7 @@ fn hud_text_value(frame: usize, player: usize, run: usize) -> InlineText {
     };
     let a = ((value_frame * (player + 3) + run * 7) % 99 + 1) as u32;
     let b = ((value_frame * (run + 5) + player * 11) % 99 + 1) as u32;
-    let value = match run {
+    match run {
         0 => InlineText::format(format_args!("{a}")),
         1 => InlineText::format(format_args!("({a})")),
         2..=3 => InlineText::format(format_args!("{a}/{b}")),
@@ -1307,11 +1344,25 @@ fn hud_text_value(frame: usize, player: usize, run: usize) -> InlineText {
         6 => InlineText::format(format_args!("{}.{:02} ", a / 10, b)),
         7 => InlineText::format(format_args!("-{}.{:02}%", a / 10, b)),
         _ => unreachable!("ZMod HUD benchmark has eight bounded runs"),
-    };
-    value.expect("benchmark HUD value fits inline")
+    }
+    .expect("benchmark HUD value fits inline")
 }
 
-fn hud_text_style(player: usize, run: usize) -> ([f32; 2], [f32; 2], TextAlign, f32, [f32; 4]) {
+fn inline_text_style(
+    case: InlineCase,
+    player: usize,
+    run: usize,
+) -> ([f32; 2], [f32; 2], TextAlign, f32, [f32; 4], f32) {
+    if matches!(case, InlineCase::ErrorBar) {
+        return (
+            [0.5, 0.5],
+            [220.0 + player as f32 * 240.0 + run as f32 * 32.0, 220.0],
+            TextAlign::Center,
+            [0.25, 0.7, 0.7, 0.35][run],
+            [0.2 + run as f32 * 0.15, 0.8, 0.4, 0.9],
+            if matches!(run, 0 | 3) { 1.0 } else { 0.0 },
+        );
+    }
     let mini = run == HUD_TEXT_RUNS - 1;
     (
         [if mini { 0.0 } else { 0.5 }, 0.5],
@@ -1326,41 +1377,50 @@ fn hud_text_style(player: usize, run: usize) -> ([f32; 2], [f32; 2], TextAlign, 
         },
         if mini { 0.4 } else { 0.35 },
         [0.3 + run as f32 * 0.05, 0.8, 0.4, 0.9],
+        1.0,
     )
 }
 
-fn hud_text_actor(value: InlineText, player: usize, run: usize) -> Actor {
-    let (align, offset, align_text, zoom, color) = hud_text_style(player, run);
+fn inline_text_actor(case: InlineCase, value: InlineText, player: usize, run: usize) -> Actor {
+    let (align, offset, align_text, zoom, color, shadow) = inline_text_style(case, player, run);
     let mut text = TextBuilder::new();
     text.font("bench-numeric");
-    text.settext(TextContent::frame_inline_slot(
-        value,
-        (player * HUD_TEXT_RUNS + run) as u8,
-    ));
+    let slot = (player * inline_run_count(case) + run) as u8;
+    text.settext(if matches!(case, InlineCase::ErrorBar) && run != 0 {
+        TextContent::Static(match value.as_str() {
+            "Early" => "Early",
+            "Late" => "Late",
+            "Fast" => "Fast",
+            "Slow" => "Slow",
+            _ => unreachable!("benchmark error-bar label is from the fixed domain"),
+        })
+    } else {
+        TextContent::frame_inline_slot(value, slot)
+    });
     text.align(align[0], align[1]);
     text.xy(offset[0], offset[1]);
     text.zoom(zoom);
     text.horizalign(align_text);
-    text.shadowlength(1.0);
+    text.shadowlength(shadow);
     text.diffuse(color);
     text.z(85);
     text.build(0)
 }
 
-fn hud_text_draw(value: InlineText, player: usize, run: usize) -> FlatDraw {
-    let (align, offset, align_text, zoom, color) = hud_text_style(player, run);
+fn inline_text_draw(case: InlineCase, value: InlineText, player: usize, run: usize) -> FlatDraw {
+    let (align, offset, align_text, zoom, color, shadow) = inline_text_style(case, player, run);
     FlatDraw::PreparedInline(FlatPreparedInline {
         align,
         offset,
         color,
         font: "bench-numeric",
         text: value,
-        slot: (player * HUD_TEXT_RUNS + run) as u8,
+        slot: (player * inline_run_count(case) + run) as u8,
         align_text,
         z: 85,
         scale: [zoom, zoom],
         blend: BlendMode::Alpha,
-        shadow_len: [1.0, -1.0],
+        shadow_len: [shadow, -shadow],
         shadow_color: [0.0, 0.0, 0.0, 0.5],
     })
 }
@@ -1378,22 +1438,30 @@ impl HudTextScratch {
         }
     }
 
-    fn prepare(&mut self, kind: BoundaryKind, frame: usize) {
+    fn prepare(&mut self, case: InlineCase, kind: BoundaryKind, frame: usize) {
         for player in 0..BOUNDARY_PLAYERS {
             match kind {
                 BoundaryKind::WideActors => {
                     self.actors[player].clear();
-                    self.actors[player].extend((0..HUD_TEXT_RUNS).map(|run| {
-                        hud_text_actor(hud_text_value(frame, player, run), player, run)
+                    self.actors[player].extend((0..inline_run_count(case)).map(|run| {
+                        inline_text_actor(
+                            case,
+                            inline_text_value(case, frame, player, run),
+                            player,
+                            run,
+                        )
                     }));
                 }
                 BoundaryKind::FlatDraws => {
                     self.draws[player].clear();
-                    self.draws[player].extend(
-                        (0..HUD_TEXT_RUNS).map(|run| {
-                            hud_text_draw(hud_text_value(frame, player, run), player, run)
-                        }),
-                    );
+                    self.draws[player].extend((0..inline_run_count(case)).map(|run| {
+                        inline_text_draw(
+                            case,
+                            inline_text_value(case, frame, player, run),
+                            player,
+                            run,
+                        )
+                    }));
                 }
             }
         }
@@ -1402,6 +1470,7 @@ impl HudTextScratch {
 
 #[allow(clippy::too_many_arguments)]
 fn hud_text_frame(
+    case: InlineCase,
     kind: BoundaryKind,
     frame_index: usize,
     source: &mut HudTextScratch,
@@ -1411,7 +1480,7 @@ fn hud_text_frame(
     text: &mut TextLayoutCache,
     compose: &mut ComposeScratch,
 ) -> f32 {
-    source.prepare(kind, frame_index);
+    source.prepare(case, kind, frame_index);
     let root_camera = Mat4::from_rotation_z(0.11);
     let tint = [0.8, 0.7, 0.6, 0.5];
     let mut segments = [ActorSegment::new(&[]); BOUNDARY_PLAYERS];
@@ -1458,10 +1527,34 @@ fn hud_text_frame(
 }
 
 fn prewarm_hud_text(
+    case: InlineCase,
     text: &mut TextLayoutCache,
     compose: &mut ComposeScratch,
     fonts: &font::FontMap,
 ) {
+    if matches!(case, InlineCase::ErrorBar) {
+        let offset = InlineText::copy_from(".ms0123456789").expect("offset domain fits inline");
+        let labels = InlineText::copy_from("EarlyLateFsSow").expect("label domain fits inline");
+        for player in 0..BOUNDARY_PLAYERS {
+            for run in 0..ERROR_BAR_TEXT_RUNS {
+                prewarm_prepared_inline_text_slot(
+                    text,
+                    compose,
+                    fonts,
+                    "bench-numeric",
+                    if run == 0 { offset } else { labels },
+                    (player * ERROR_BAR_TEXT_RUNS + run) as u8,
+                    TextAlign::Center,
+                    BOUNDARY_PLAYERS * ERROR_BAR_TEXT_RUNS * 4,
+                );
+            }
+        }
+        for value in ["Early", "Late", "Fast", "Slow"] {
+            text.prewarm_text(fonts, "bench-numeric", value, None);
+        }
+        text.lock_growth_with_reserve(4);
+        return;
+    }
     let counter = InlineText::copy_from("-/()0123456789").expect("counter domain fits inline");
     let timer = InlineText::copy_from(" .0123456789").expect("timer domain fits inline");
     let mini = InlineText::copy_from("+-.%0123456789").expect("mini domain fits inline");
@@ -1506,15 +1599,21 @@ fn prewarm_hud_text(
     }
 }
 
-fn measure_hud_text_pair() -> [BoundaryResult; 2] {
+fn measure_hud_text_pair(case: InlineCase) -> [BoundaryResult; 2] {
     let metrics = deadlib_present::space::metrics_for_window(854, 480);
     let fonts = font::FontMap::from_iter([("bench-numeric", numeric_font())]);
     let resources = ActorResourceArena::new(0);
-    let mut text: [TextLayoutCache; 2] = std::array::from_fn(|_| TextLayoutCache::new(1));
+    let cache_entries = if matches!(case, InlineCase::ErrorBar) {
+        32
+    } else {
+        1
+    };
+    let mut text: [TextLayoutCache; 2] =
+        std::array::from_fn(|_| TextLayoutCache::new(cache_entries));
     let mut compose: [ComposeScratch; 2] = std::array::from_fn(|_| ComposeScratch::default());
     for index in 0..2 {
-        prewarm_hud_text(&mut text[index], &mut compose[index], &fonts);
-        let draw_floor = BOUNDARY_PLAYERS * HUD_TEXT_RUNS * 4;
+        prewarm_hud_text(case, &mut text[index], &mut compose[index], &fonts);
+        let draw_floor = BOUNDARY_PLAYERS * inline_run_count(case) * 4;
         compose[index].retain_working_set_headroom(draw_floor, 0, draw_floor, draw_floor);
     }
     let mut source = HudTextScratch::new();
@@ -1526,6 +1625,7 @@ fn measure_hud_text_pair() -> [BoundaryResult; 2] {
             let kind_index = (batch + offset) % 2;
             for frame_offset in 0..BOUNDARY_BATCH_FRAMES {
                 black_box(hud_text_frame(
+                    case,
                     kinds[kind_index],
                     frame_index + frame_offset,
                     &mut source,
@@ -1547,11 +1647,16 @@ fn measure_hud_text_pair() -> [BoundaryResult; 2] {
         reallocs: 0,
         bytes: 0,
     }; 2];
+    let measure_batches = if matches!(case, InlineCase::ErrorBar) {
+        ERROR_BAR_MEASURE_BATCHES
+    } else {
+        BOUNDARY_MEASURE_BATCHES
+    };
     let mut samples_ns: [Vec<u64>; 2] =
-        std::array::from_fn(|_| Vec::with_capacity(BOUNDARY_MEASURE_BATCHES));
+        std::array::from_fn(|_| Vec::with_capacity(measure_batches));
     let mut checksum = [0.0_f32; 2];
 
-    for batch in 0..BOUNDARY_MEASURE_BATCHES {
+    for batch in 0..measure_batches {
         for offset in 0..2 {
             let kind_index = (batch + offset) % 2;
             let before_alloc = ALLOC.snapshot();
@@ -1559,6 +1664,7 @@ fn measure_hud_text_pair() -> [BoundaryResult; 2] {
             let started = Instant::now();
             for frame_offset in 0..BOUNDARY_BATCH_FRAMES {
                 checksum[kind_index] += black_box(hud_text_frame(
+                    case,
                     kinds[kind_index],
                     frame_index + frame_offset,
                     &mut source,
@@ -1595,7 +1701,26 @@ fn print_hud_text_benchmark() {
         "\nprepared ZMod HUD boundary benchmark \
          (2 players, {HUD_TEXT_RUNS} changing runs/player)"
     );
-    let [wide, flat] = measure_hud_text_pair();
+    let [wide, flat] = measure_hud_text_pair(InlineCase::Zmod);
+    assert_eq!(wide.checksum, flat.checksum);
+    print_boundary_result("wide text actors", &wide);
+    print_boundary_result("prepared flat", &flat);
+    for result in [&wide, &flat] {
+        assert_zero_alloc(&BenchResult {
+            elapsed: result.elapsed,
+            cycles: result.cycles,
+            allocated: result.allocated,
+            checksum: result.checksum,
+        });
+    }
+}
+
+fn print_error_bar_text_benchmark() {
+    println!(
+        "\nprepared error-bar text boundary benchmark \
+         (2 players, {ERROR_BAR_TEXT_RUNS} simultaneous runs/player)"
+    );
+    let [wide, flat] = measure_hud_text_pair(InlineCase::ErrorBar);
     assert_eq!(wide.checksum, flat.checksum);
     print_boundary_result("wide text actors", &wide);
     print_boundary_result("prepared flat", &flat);
@@ -1635,6 +1760,10 @@ fn main() {
     }
     if std::env::var_os("DEADSYNC_BENCH_ZMOD_HUD_ONLY").is_some() {
         print_hud_text_benchmark();
+        return;
+    }
+    if std::env::var_os("DEADSYNC_BENCH_ERROR_BAR_TEXT_ONLY").is_some() {
+        print_error_bar_text_benchmark();
         return;
     }
     deadlib_present::space::set_current_metrics(deadlib_present::space::metrics_for_window(
@@ -1734,6 +1863,7 @@ fn main() {
 
     print_hud_text_benchmark();
     print_cue_countdown_benchmark();
+    print_error_bar_text_benchmark();
 }
 
 #[cfg(target_arch = "x86_64")]

@@ -1584,7 +1584,8 @@ const NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY: usize = 32;
 // Worst case: colorful and highlight each emit a background, twelve bands,
 // and ten ticks; monochrome emits a background, center, twelve bounds, and
 // fifteen ticks; average emits a center plus five ticks; long average adds one.
-const ERROR_BAR_HUD_FLAT_DRAW_CAPACITY: usize = 82;
+const ERROR_BAR_HUD_FLAT_DRAW_CAPACITY: usize =
+    82 + deadsync_notefield::ERROR_BAR_TEXT_SLOTS_PER_PLAYER as usize;
 // Tap plus split overlay and one held-miss plus hold-result sprite per column.
 const JUDGMENT_HUD_FLAT_DRAW_CAPACITY: usize = 2 + MAX_COLS * 2;
 // One unique active hundred milestone emits four sprites, one unique thousand

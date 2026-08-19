@@ -38,7 +38,7 @@ pub use display_mods::{
     DISPLAY_TURN_RANDOM, DISPLAY_TURN_RIGHT, DISPLAY_TURN_SHUFFLE, DISPLAY_TURN_UD_MIRROR,
     GameplayModsAttackMode, GameplayModsTextParams, gameplay_mods_text,
 };
-pub use error_bar::{ErrorBarModes, error_bar_boundaries_s};
+pub use error_bar::{ERROR_BAR_TEXT_SLOTS_PER_PLAYER, ErrorBarModes, error_bar_boundaries_s};
 pub use feedback::COLUMN_COUNTDOWN_SLOTS_PER_PLAYER;
 pub use field_frame::{NotefieldFieldFrameView, NotefieldFieldResult, compose_notefield_field};
 pub use frame_feedback::{NotefieldFeedbackFrameView, NotefieldLaneFeedback};
