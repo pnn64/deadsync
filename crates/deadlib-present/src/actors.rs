@@ -549,13 +549,36 @@ pub struct FlatTexturedMesh {
     pub z: i16,
 }
 
+/// Compact actor-free payload for one prewarmed unsigned decimal run.
+///
+/// This is deliberately narrower than [`Actor::Text`]: the owning screen has
+/// already selected the font, prepared-number slot, placement, and static
+/// styling. The presentation layer only rebuilds the bounded digit geometry
+/// when the value changes.
+#[derive(Clone, Copy, Debug)]
+pub struct FlatPreparedU32 {
+    pub align: [f32; 2],
+    pub offset: [f32; 2],
+    pub color: [f32; 4],
+    pub font: &'static str,
+    pub text: InlineU32Text,
+    pub slot: u8,
+    pub align_text: TextAlign,
+    pub z: i16,
+    pub scale: [f32; 2],
+    pub blend: BlendMode,
+    pub shadow_len: [f32; 2],
+    pub shadow_color: [f32; 4],
+}
+
 /// Narrow dynamic presentation stream used when a screen has already resolved
-/// its high-volume draws. It deliberately supports only the two payloads that
-/// can bypass actor interpretation without losing presentation semantics.
+/// its high-volume draws. It deliberately supports only payloads that can
+/// bypass actor interpretation without losing presentation semantics.
 #[derive(Clone, Debug)]
 pub enum FlatDraw {
     Sprite(FlatSprite),
     TexturedMesh(FlatTexturedMesh),
+    PreparedU32(FlatPreparedU32),
 }
 
 /// Scene- or screen-owned reusable backing for an identity `SharedFrame`.

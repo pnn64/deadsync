@@ -2149,6 +2149,7 @@ mod tests {
         match draw {
             FlatDraw::Sprite(sprite) => sprite.z,
             FlatDraw::TexturedMesh(mesh) => mesh.z,
+            FlatDraw::PreparedU32(text) => text.z,
         }
     }
 

@@ -35,7 +35,6 @@ pub struct ComboHudFrame<'a> {
     pub player_color: [f32; 4],
     pub combo_color: [f32; 4],
     pub font: Option<&'static str>,
-    pub number_text: fn(u32, u8) -> TextContent,
     pub number_text_slot: u8,
 }
 
@@ -301,14 +300,13 @@ fn compose_combo<S>(
         player_color,
         combo_color,
         font: frame.font,
-        number_text: frame.number_text,
         number_text_slot: frame.number_text_slot,
     };
     compose_combo_milestones(draws, &feedback);
+    compose_combo_number(draws, &feedback);
     if request.capture_requests.combo {
         actors.extend(draws.drain(draw_start..).map(flat_draw_actor));
     }
-    compose_combo_number(actors, &feedback);
 }
 
 fn compose_error<S>(

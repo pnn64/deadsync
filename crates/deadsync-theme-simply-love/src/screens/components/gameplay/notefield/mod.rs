@@ -1,7 +1,7 @@
 use crate::assets;
 use crate::notefield_style::notefield_style;
 use crate::screens::gameplay::{GameplayCoreState as State, GameplayNoteskinAssets};
-use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw, SpriteSource, TextContent};
+use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw, SpriteSource};
 use deadlib_present::color;
 use deadlib_present::space::*;
 use deadsync_assets::noteskin::SpriteSlot;
@@ -61,11 +61,6 @@ fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
         }),
         fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
     })
-}
-
-#[inline(always)]
-fn combo_number_text(value: u32, slot: u8) -> TextContent {
-    TextContent::prepared_u32(value, slot)
 }
 
 // --- CONSTANTS ---
@@ -891,7 +886,6 @@ pub(crate) fn compose_frame(
             player_color,
             combo_color,
             font: notefield_plan.combo_font,
-            number_text: combo_number_text,
             number_text_slot: super::FRAME_TEXT_COMBO_BASE + player_idx as u8,
         }
     });

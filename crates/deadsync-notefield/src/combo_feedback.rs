@@ -1,6 +1,7 @@
 use crate::combo_actor_zoom;
-use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SpriteSource, TextAlign, TextContent};
-use deadlib_present::dsl::TextBuilder;
+use deadlib_present::actors::{
+    FlatDraw, FlatPreparedU32, FlatSprite, InlineU32Text, SpriteSource, TextAlign,
+};
 use deadlib_render_core::BlendMode;
 use deadsync_gameplay::{
     ActiveComboMilestone, COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION,
@@ -38,7 +39,6 @@ pub(crate) struct ComboFeedbackRequest<'a> {
     pub player_color: [f32; 4],
     pub combo_color: [f32; 4],
     pub font: Option<&'static str>,
-    pub number_text: fn(u32, u8) -> TextContent,
     pub number_text_slot: u8,
 }
 
@@ -65,11 +65,10 @@ pub(crate) fn compose_combo_milestones(
     }
 }
 
-/// Compose the generic text half after direct milestone capture has preserved
-/// the preceding sprite order.
-pub(crate) fn compose_combo_number(actors: &mut Vec<Actor>, request: &ComboFeedbackRequest<'_>) {
+/// Compose the prepared numeric half after the milestone sprites.
+pub(crate) fn compose_combo_number(draws: &mut Vec<FlatDraw>, request: &ComboFeedbackRequest<'_>) {
     if request.show {
-        append_combo_number(actors, request, combo_actor_zoom(request.mini));
+        append_combo_number(draws, request, combo_actor_zoom(request.mini));
     }
 }
 
@@ -173,7 +172,11 @@ fn append_thousand(
     }
 }
 
-fn append_combo_number(actors: &mut Vec<Actor>, request: &ComboFeedbackRequest<'_>, zoom_mod: f32) {
+fn append_combo_number(
+    draws: &mut Vec<FlatDraw>,
+    request: &ComboFeedbackRequest<'_>,
+    zoom_mod: f32,
+) {
     let Some(font) = request.font else { return };
     let (value, color) = if request.miss_combo >= request.style.threshold {
         (request.miss_combo, request.style.miss_color)
@@ -183,17 +186,21 @@ fn append_combo_number(actors: &mut Vec<Actor>, request: &ComboFeedbackRequest<'
         return;
     };
 
-    let mut text = TextBuilder::new();
-    text.font(font);
-    text.settext((request.number_text)(value, request.number_text_slot));
-    text.align(0.5, 0.5);
-    text.xy(request.number_xy[0], request.number_xy[1]);
-    text.zoom(request.style.number_zoom * zoom_mod);
-    text.horizalign(TextAlign::Center);
-    text.shadowlength(request.style.shadow_len);
-    text.diffuse(color);
-    text.z(request.style.number_z);
-    actors.push(text.build(0));
+    let scale = request.style.number_zoom * zoom_mod;
+    draws.push(FlatDraw::PreparedU32(FlatPreparedU32 {
+        align: [0.5, 0.5],
+        offset: request.number_xy,
+        color,
+        font,
+        text: InlineU32Text::new(value),
+        slot: request.number_text_slot,
+        align_text: TextAlign::Center,
+        z: request.style.number_z,
+        scale: [scale, scale],
+        blend: BlendMode::Alpha,
+        shadow_len: [request.style.shadow_len, -request.style.shadow_len],
+        shadow_color: [0.0, 0.0, 0.0, 0.5],
+    }));
 }
 
 fn append_sprite(
@@ -293,10 +300,6 @@ mod tests {
         }
     }
 
-    fn number_text(value: u32, _slot: u8) -> TextContent {
-        TextContent::inline_u32(value)
-    }
-
     fn request<'a>(
         milestones: &'a [ActiveComboMilestone],
         assets: Option<&'a ComboMilestoneAssets>,
@@ -314,18 +317,13 @@ mod tests {
             player_color: [0.2, 0.4, 0.8, 0.25],
             combo_color: [0.1, 0.8, 0.3, 0.9],
             font: Some("combo-font"),
-            number_text,
             number_text_slot: 0,
         }
     }
 
-    fn compose_feedback(
-        actors: &mut Vec<Actor>,
-        draws: &mut Vec<FlatDraw>,
-        request: ComboFeedbackRequest<'_>,
-    ) {
+    fn compose_feedback(draws: &mut Vec<FlatDraw>, request: ComboFeedbackRequest<'_>) {
         compose_combo_milestones(draws, &request);
-        compose_combo_number(actors, &request);
+        compose_combo_number(draws, &request);
     }
 
     #[test]
@@ -337,16 +335,13 @@ mod tests {
         }];
         let mut hidden = request(&milestones, Some(&milestone_assets));
         hidden.show = false;
-        let mut actors = Vec::new();
         let mut draws = Vec::new();
-        compose_feedback(&mut actors, &mut draws, hidden);
-        assert!(actors.is_empty());
+        compose_feedback(&mut draws, hidden);
         assert!(draws.is_empty());
 
         let mut below = request(&[], None);
         below.combo = 3;
-        compose_feedback(&mut actors, &mut draws, below);
-        assert!(actors.is_empty());
+        compose_feedback(&mut draws, below);
         assert!(draws.is_empty());
     }
 
@@ -355,36 +350,34 @@ mod tests {
         let mut request = request(&[], None);
         request.combo = 120;
         request.miss_combo = 4;
-        let mut actors = Vec::new();
         let mut draws = Vec::new();
-        compose_feedback(&mut actors, &mut draws, request);
+        compose_feedback(&mut draws, request);
 
-        assert_eq!(actors.len(), 1);
-        assert!(draws.is_empty());
-        match &actors[0] {
-            Actor::Text {
+        assert_eq!(draws.len(), 1);
+        match &draws[0] {
+            FlatDraw::PreparedU32(FlatPreparedU32 {
                 align,
                 offset,
                 color,
                 font,
-                content,
+                text,
                 align_text,
                 z,
                 scale,
                 shadow_len,
                 ..
-            } => {
+            }) => {
                 assert_eq!(*align, [0.5, 0.5]);
                 assert_eq!(*offset, [310.0, 265.0]);
                 assert_eq!(*color, [1.0, 0.0, 0.0, 1.0]);
                 assert_eq!(*font, "combo-font");
-                assert_eq!(content.as_str(), "4");
+                assert_eq!(text.as_str(), "4");
                 assert_eq!(*align_text, TextAlign::Center);
                 assert_eq!(*z, 90);
                 assert_eq!(*scale, [0.75, 0.75]);
                 assert_eq!(*shadow_len, [1.0, -1.0]);
             }
-            other => panic!("expected combo text, got {other:?}"),
+            other => panic!("expected prepared combo text, got {other:?}"),
         }
     }
 
@@ -392,16 +385,15 @@ mod tests {
     fn normal_combo_uses_resolved_color() {
         let mut request = request(&[], None);
         request.combo = 10;
-        let mut actors = Vec::new();
         let mut draws = Vec::new();
-        compose_feedback(&mut actors, &mut draws, request);
+        compose_feedback(&mut draws, request);
 
-        match &actors[0] {
-            Actor::Text { color, content, .. } => {
+        match &draws[0] {
+            FlatDraw::PreparedU32(FlatPreparedU32 { color, text, .. }) => {
                 assert_eq!(*color, [0.1, 0.8, 0.3, 0.9]);
-                assert_eq!(content.as_str(), "10");
+                assert_eq!(text.as_str(), "10");
             }
-            other => panic!("expected combo text, got {other:?}"),
+            other => panic!("expected prepared combo text, got {other:?}"),
         }
     }
 
@@ -414,11 +406,9 @@ mod tests {
         }];
         let mut request = request(&milestones, Some(&milestone_assets));
         request.font = None;
-        let mut actors = Vec::new();
         let mut draws = Vec::new();
-        compose_feedback(&mut actors, &mut draws, request);
+        compose_feedback(&mut draws, request);
 
-        assert!(actors.is_empty());
         assert_eq!(draws.len(), 4);
         let expected = [
             ("burst", [20.0, 40.0], 0.0, [1.0, 1.0, 1.0, 0.5]),
@@ -440,11 +430,9 @@ mod tests {
         }];
         let mut request = request(&milestones, Some(&milestone_assets));
         request.font = None;
-        let mut actors = Vec::new();
         let mut draws = Vec::new();
-        compose_feedback(&mut actors, &mut draws, request);
+        compose_feedback(&mut draws, request);
 
-        assert!(actors.is_empty());
         assert_eq!(draws.len(), 2);
         let zoom = 1.625 * 1.5;
         assert_sprite(
@@ -482,11 +470,9 @@ mod tests {
         ];
         let mut request = request(&milestones, Some(&milestone_assets));
         request.font = None;
-        let mut actors = Vec::new();
         let mut draws = Vec::new();
-        compose_feedback(&mut actors, &mut draws, request);
+        compose_feedback(&mut draws, request);
 
-        assert!(actors.is_empty());
         assert_eq!(draws.len(), 6);
     }
 

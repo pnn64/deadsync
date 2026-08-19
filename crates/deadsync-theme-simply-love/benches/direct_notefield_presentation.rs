@@ -1,12 +1,14 @@
 use deadlib_present::actors::{
-    Actor, ActorResourceArena, FlatDraw, FlatMeshVertices, FlatSprite, FlatTexturedMesh, SizeSpec,
-    SpriteSource,
+    Actor, ActorResourceArena, FlatDraw, FlatMeshVertices, FlatPreparedU32, FlatSprite,
+    FlatTexturedMesh, InlineU32Text, SizeSpec, SpriteSource, TextAlign, TextContent,
 };
 use deadlib_present::compose::{
     ActorSegment, ComposeScratch, NullTextureContext, TextLayoutCache,
     build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
+    prewarm_u32_text_slot,
 };
-use deadlib_present::font;
+use deadlib_present::dsl::TextBuilder;
+use deadlib_present::font::{self, Font, Glyph, GlyphMap};
 use deadlib_render_core::{BlendMode, MeshVertex, TexturedMeshVertex};
 use deadsync_theme_simply_love::screens::gameplay::{
     BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
@@ -14,6 +16,7 @@ use deadsync_theme_simply_love::screens::gameplay::{
 };
 use glam::{Mat4, Vec3};
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::collections::HashMap;
 use std::hint::black_box;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -940,6 +943,250 @@ fn print_boundary_sweep(label: &str, hold_mix: bool, draw_counts: &[usize]) {
     }
 }
 
+fn numeric_font() -> Font {
+    let fill = Arc::<str>::from("bench_numeric_fill");
+    let stroke = Arc::<str>::from("bench_numeric_stroke");
+    let mut glyph_map = GlyphMap::default();
+    let mut ascii = std::array::from_fn(|_| None);
+    for digit in 0..10 {
+        let ch = char::from(b'0' + digit);
+        let glyph = Glyph {
+            texture_key: Arc::clone(&fill),
+            stroke_texture_key: Some(Arc::clone(&stroke)),
+            tex_rect: [0.0, 0.0, 8.0, 8.0],
+            uv_scale: [0.5, 0.5],
+            uv_offset: [0.0, 0.0],
+            size: [8.0, 10.0],
+            offset: [0.0, -10.0],
+            advance: 8.0,
+            advance_i32: 8,
+        };
+        glyph_map.insert(ch, glyph.clone());
+        ascii[ch as usize] = Some(glyph);
+    }
+    Font {
+        glyph_map,
+        ascii_glyphs: Box::new(ascii),
+        default_glyph: None,
+        line_spacing: 10,
+        height: 10,
+        fallback_font_name: None,
+        cache_tag: 1,
+        chain_key: 1,
+        default_stroke_color: [1.0; 4],
+        stroke_texture_map: HashMap::from([(fill.to_string(), stroke.to_string())]),
+        texture_hints_map: HashMap::new(),
+    }
+}
+
+fn numeric_actor(value: u32, player: usize) -> Actor {
+    let mut text = TextBuilder::new();
+    text.font("bench-numeric");
+    text.settext(TextContent::prepared_u32(value, player as u8));
+    text.align(0.5, 0.5);
+    text.xy(240.0 + player as f32 * 160.0, 265.0);
+    text.zoom(0.75);
+    text.horizalign(TextAlign::Center);
+    text.shadowlength(1.0);
+    text.diffuse([0.2, 0.8, 0.4, 0.9]);
+    text.z(90);
+    text.build(0)
+}
+
+fn numeric_draw(value: u32, player: usize) -> FlatDraw {
+    FlatDraw::PreparedU32(FlatPreparedU32 {
+        align: [0.5, 0.5],
+        offset: [240.0 + player as f32 * 160.0, 265.0],
+        color: [0.2, 0.8, 0.4, 0.9],
+        font: "bench-numeric",
+        text: InlineU32Text::new(value),
+        slot: player as u8,
+        align_text: TextAlign::Center,
+        z: 90,
+        scale: [0.75, 0.75],
+        blend: BlendMode::Alpha,
+        shadow_len: [1.0, -1.0],
+        shadow_color: [0.0, 0.0, 0.0, 0.5],
+    })
+}
+
+struct NumericScratch {
+    actors: [Vec<Actor>; BOUNDARY_PLAYERS],
+    draws: [Vec<FlatDraw>; BOUNDARY_PLAYERS],
+}
+
+impl NumericScratch {
+    fn new() -> Self {
+        Self {
+            actors: std::array::from_fn(|_| Vec::with_capacity(1)),
+            draws: std::array::from_fn(|_| Vec::with_capacity(1)),
+        }
+    }
+
+    fn prepare(&mut self, kind: BoundaryKind, frame: usize) {
+        for player in 0..BOUNDARY_PLAYERS {
+            let value = ((frame + 1) * (player + 3)) as u32;
+            match kind {
+                BoundaryKind::WideActors => {
+                    self.actors[player].clear();
+                    self.actors[player].push(numeric_actor(value, player));
+                }
+                BoundaryKind::FlatDraws => {
+                    self.draws[player].clear();
+                    self.draws[player].push(numeric_draw(value, player));
+                }
+            }
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn numeric_frame(
+    kind: BoundaryKind,
+    frame_index: usize,
+    source: &mut NumericScratch,
+    metrics: &deadlib_present::space::Metrics,
+    fonts: &font::FontMap,
+    resources: &ActorResourceArena,
+    text: &mut TextLayoutCache,
+    compose: &mut ComposeScratch,
+) -> f32 {
+    source.prepare(kind, frame_index);
+    let root_camera = Mat4::from_rotation_z(0.11);
+    let tint = [0.8, 0.7, 0.6, 0.5];
+    let mut segments = [ActorSegment::new(&[]); BOUNDARY_PLAYERS];
+    for (player, segment) in segments.iter_mut().enumerate() {
+        *segment = match kind {
+            BoundaryKind::WideActors => ActorSegment::transformed(
+                &source.actors[player],
+                900,
+                tint,
+                Some(BlendMode::Add),
+                root_camera,
+                Mat4::IDENTITY,
+                None,
+            ),
+            BoundaryKind::FlatDraws => ActorSegment::transformed(
+                &[],
+                900,
+                tint,
+                Some(BlendMode::Add),
+                root_camera,
+                Mat4::IDENTITY,
+                None,
+            )
+            .with_flat_draws(&source.draws[player], Some(root_camera)),
+        };
+    }
+    let mut output =
+        build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+            &segments,
+            [0.0, 0.0, 0.0, 1.0],
+            metrics,
+            fonts,
+            0.0,
+            text,
+            compose,
+            &NullTextureContext,
+            resources,
+        );
+    let checksum =
+        (output.ops.len() + output.tmesh_instances.len() + output.tmesh_geometries.len()) as f32;
+    black_box(&output);
+    compose.recycle_frame(&mut output);
+    checksum
+}
+
+fn measure_numeric_pair() -> [BoundaryResult; 2] {
+    let metrics = deadlib_present::space::metrics_for_window(854, 480);
+    let fonts = font::FontMap::from_iter([("bench-numeric", numeric_font())]);
+    let resources = ActorResourceArena::new(0);
+    let mut text: [TextLayoutCache; 2] = std::array::from_fn(|_| TextLayoutCache::new(1));
+    let mut compose: [ComposeScratch; 2] = std::array::from_fn(|_| ComposeScratch::default());
+    for cache in &mut text {
+        for player in 0..BOUNDARY_PLAYERS {
+            prewarm_u32_text_slot(
+                cache,
+                &fonts,
+                "bench-numeric",
+                player as u8,
+                TextAlign::Center,
+            );
+        }
+    }
+    let mut source = NumericScratch::new();
+    let kinds = [BoundaryKind::WideActors, BoundaryKind::FlatDraws];
+    let mut frame_index = 0usize;
+
+    for batch in 0..BOUNDARY_WARMUP_BATCHES {
+        for offset in 0..2 {
+            let kind_index = (batch + offset) % 2;
+            for frame_offset in 0..BOUNDARY_BATCH_FRAMES {
+                black_box(numeric_frame(
+                    kinds[kind_index],
+                    frame_index + frame_offset,
+                    &mut source,
+                    &metrics,
+                    &fonts,
+                    &resources,
+                    &mut text[kind_index],
+                    &mut compose[kind_index],
+                ));
+            }
+        }
+        frame_index += BOUNDARY_BATCH_FRAMES;
+    }
+
+    let mut elapsed = [Duration::ZERO; 2];
+    let mut cycles = [0_u64; 2];
+    let mut allocated = [AllocSnapshot {
+        allocs: 0,
+        reallocs: 0,
+        bytes: 0,
+    }; 2];
+    let mut samples_ns: [Vec<u64>; 2] =
+        std::array::from_fn(|_| Vec::with_capacity(BOUNDARY_MEASURE_BATCHES));
+    let mut checksum = [0.0_f32; 2];
+
+    for batch in 0..BOUNDARY_MEASURE_BATCHES {
+        for offset in 0..2 {
+            let kind_index = (batch + offset) % 2;
+            let before_alloc = ALLOC.snapshot();
+            let before_cycles = read_cycles();
+            let started = Instant::now();
+            for frame_offset in 0..BOUNDARY_BATCH_FRAMES {
+                checksum[kind_index] += black_box(numeric_frame(
+                    kinds[kind_index],
+                    frame_index + frame_offset,
+                    &mut source,
+                    &metrics,
+                    &fonts,
+                    &resources,
+                    &mut text[kind_index],
+                    &mut compose[kind_index],
+                ));
+            }
+            let sample = started.elapsed();
+            elapsed[kind_index] += sample;
+            cycles[kind_index] += read_cycles().saturating_sub(before_cycles);
+            allocated[kind_index].add(ALLOC.snapshot().delta(before_alloc));
+            samples_ns[kind_index].push((sample.as_nanos() / BOUNDARY_BATCH_FRAMES as u128) as u64);
+        }
+        frame_index += BOUNDARY_BATCH_FRAMES;
+    }
+
+    for samples in &mut samples_ns {
+        samples.sort_unstable();
+    }
+    std::array::from_fn(|index| BoundaryResult {
+        elapsed: elapsed[index],
+        cycles: cycles[index],
+        allocated: allocated[index],
+        samples_ns: std::mem::take(&mut samples_ns[index]),
+        checksum: checksum[index],
+    })
+}
+
 fn main() {
     deadlib_present::space::set_current_metrics(deadlib_present::space::metrics_for_window(
         854, 480,
@@ -1021,6 +1268,20 @@ fn main() {
         true,
         &[8, 16, 32, 64],
     );
+
+    println!("\nprepared combo-number boundary benchmark (2 players, 1 run/player)");
+    let [wide, flat] = measure_numeric_pair();
+    assert_eq!(wide.checksum, flat.checksum);
+    for result in [&wide, &flat] {
+        assert_zero_alloc(&BenchResult {
+            elapsed: result.elapsed,
+            cycles: result.cycles,
+            allocated: result.allocated,
+            checksum: result.checksum,
+        });
+    }
+    print_boundary_result("wide text actor", &wide);
+    print_boundary_result("prepared flat", &flat);
 }
 
 #[cfg(target_arch = "x86_64")]

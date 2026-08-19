@@ -16,7 +16,9 @@ use crate::{
     visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
     visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
-use deadlib_present::actors::{Actor, FlatDraw, FlatMeshVertices, SizeSpec, SpriteSource};
+use deadlib_present::actors::{
+    Actor, FlatDraw, FlatMeshVertices, SizeSpec, SpriteSource, TextAttributes, TextContent,
+};
 use deadlib_render_core::BlendMode;
 use deadsync_core::{input::MAX_COLS, note::NoteType};
 use deadsync_gameplay::{
@@ -27,6 +29,7 @@ use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinSlot};
 use deadsync_rules::note::HoldResult;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingData;
+use glam::Mat4 as Matrix4;
 use std::sync::Arc;
 
 /// Borrowed runtime state needed by the canonical field presentation pass.
@@ -1600,6 +1603,39 @@ pub(crate) fn flat_draw_actor(draw: FlatDraw) -> Actor {
                 },
             }
         }
+        FlatDraw::PreparedU32(text) => Actor::Text {
+            align: text.align,
+            offset: text.offset,
+            local_transform: Matrix4::IDENTITY,
+            color: text.color,
+            stroke_color: None,
+            glow: [1.0, 1.0, 1.0, 0.0],
+            font: text.font,
+            content: TextContent::PreparedU32 {
+                text: text.text,
+                slot: text.slot,
+            },
+            attributes: TextAttributes::default(),
+            align_text: text.align_text,
+            z: text.z,
+            scale: text.scale,
+            fit_width: None,
+            fit_height: None,
+            line_spacing: None,
+            wrap_width_pixels: None,
+            max_width: None,
+            max_height: None,
+            max_w_pre_zoom: false,
+            max_h_pre_zoom: false,
+            jitter: false,
+            distortion: 0.0,
+            clip: None,
+            mask_dest: false,
+            blend: text.blend,
+            shadow_len: text.shadow_len,
+            shadow_color: text.shadow_color,
+            effect: Default::default(),
+        },
     }
 }
 
@@ -1620,7 +1656,8 @@ fn finish_field_camera(
 mod camera_wrap_tests {
     use super::{finish_field_camera, flat_draw_actor, measure_cue_range_search_enabled};
     use deadlib_present::actors::{
-        Actor, FlatDraw, FlatMeshVertices, FlatSprite, FlatTexturedMesh, SizeSpec, SpriteSource,
+        Actor, FlatDraw, FlatMeshVertices, FlatPreparedU32, FlatSprite, FlatTexturedMesh,
+        InlineU32Text, SizeSpec, SpriteSource, TextAlign,
     };
     use deadlib_render_core::{BlendMode, TexturedMeshVertex};
     use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -1744,6 +1781,49 @@ mod camera_wrap_tests {
         };
         assert!(depth_test);
         assert!(Arc::ptr_eq(&captured, &vertices));
+    }
+
+    #[test]
+    fn capture_materializes_prepared_numeric_text() {
+        let actor = flat_draw_actor(FlatDraw::PreparedU32(FlatPreparedU32 {
+            align: [0.5, 0.5],
+            offset: [320.0, 265.0],
+            color: [0.2, 0.4, 0.8, 0.9],
+            font: "combo-font",
+            text: InlineU32Text::new(1_234),
+            slot: 3,
+            align_text: TextAlign::Center,
+            z: 90,
+            scale: [0.75, 0.75],
+            blend: BlendMode::Alpha,
+            shadow_len: [1.0, -1.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
+        }));
+
+        let Actor::Text {
+            align,
+            offset,
+            color,
+            font,
+            content,
+            align_text,
+            z,
+            scale,
+            shadow_len,
+            ..
+        } = actor
+        else {
+            panic!("combo capture should materialize prepared text");
+        };
+        assert_eq!(align, [0.5, 0.5]);
+        assert_eq!(offset, [320.0, 265.0]);
+        assert_eq!(color, [0.2, 0.4, 0.8, 0.9]);
+        assert_eq!(font, "combo-font");
+        assert_eq!(content.as_str(), "1234");
+        assert_eq!(align_text, TextAlign::Center);
+        assert_eq!(z, 90);
+        assert_eq!(scale, [0.75, 0.75]);
+        assert_eq!(shadow_len, [1.0, -1.0]);
     }
 
     #[test]

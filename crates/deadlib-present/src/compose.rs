@@ -859,11 +859,14 @@ fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
             segment,
             root_rect,
             m,
+            fonts,
+            scratch,
             &mut sequence,
             &mut cameras,
             &mut order_counter,
             &mut builder,
             &mut sprite_instances,
+            text_cache,
             &mut texture_cache,
             texture_ctx,
             actor_textures.as_deref(),
@@ -5278,11 +5281,14 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
     segment: &ActorSegment<'_>,
     parent: SmRect,
     m: &Metrics,
+    fonts: &font::FontMap,
+    scratch: &mut ComposeScratch,
     sequence: &mut ActorSequenceState,
     cameras: &mut Vec<Matrix4>,
     order_counter: &mut u32,
     out: &mut FrameBuilder,
     sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
+    text_cache: &mut TextLayoutCache,
     texture_cache: &mut TextureLookupCache,
     texture_ctx: &T,
     actor_textures: Option<&[Arc<str>]>,
@@ -5359,7 +5365,144 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                     texture_ctx,
                 )
             }
+            actors::FlatDraw::PreparedU32(text) => build_flat_prepared_u32(
+                text,
+                parent,
+                m,
+                fonts,
+                scratch,
+                segment.z_shift,
+                camera,
+                style,
+                segment.x_fold,
+                order_counter,
+                out,
+                sprite_instances,
+                text_cache,
+                texture_cache,
+                texture_ctx,
+            ),
         }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_flat_prepared_u32<T: TextureContext + ?Sized>(
+    text: &actors::FlatPreparedU32,
+    parent: SmRect,
+    m: &Metrics,
+    fonts: &font::FontMap,
+    scratch: &mut ComposeScratch,
+    base_z: i16,
+    camera: u8,
+    style: ComposeStyle,
+    x_fold: Option<ActorXFold>,
+    order_counter: &mut u32,
+    out: &mut FrameBuilder,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
+    text_cache: &mut TextLayoutCache,
+    texture_cache: &mut TextureLookupCache,
+    texture_ctx: &T,
+) {
+    let Some(font) = fonts.get(text.font) else {
+        return;
+    };
+    let content = actors::TextContent::PreparedU32 {
+        text: text.text,
+        slot: text.slot,
+    };
+    let resolved = text_cache.get_or_build(font, fonts, &content, None, None, text.align_text);
+    let layout = resolved.layout;
+    if layout.lines.is_empty() {
+        return;
+    }
+    let Some(placement) = resolve_text_layout_placement(
+        layout,
+        x_fold.map_or(text.scale, |fold| fold.text_scale(text.scale)),
+        None,
+        None,
+        None,
+        None,
+        false,
+        false,
+        parent,
+        text.align,
+        x_fold.map_or(text.offset, |fold| fold.offset(text.offset)),
+    ) else {
+        return;
+    };
+
+    let prepared_meshes = resolved.prepared_meshes;
+    let effect_color = mul_rgba(text.color, style.tint);
+    let mut stroke_color = font.default_stroke_color;
+    stroke_color[3] *= effect_color[3];
+    let needs_stroke = stroke_color[3] > 0.0 && !font.stroke_texture_map.is_empty();
+    let blend = style.blend.unwrap_or(text.blend);
+    let layer = base_z.saturating_add(text.z);
+    let before = out.len();
+
+    push_resolved_text_mesh_batches(
+        out,
+        layout,
+        prepared_meshes,
+        text.align_text,
+        false,
+        &placement,
+        [1.0; 4],
+        Matrix4::IDENTITY,
+        m,
+        texture_cache.generation,
+        texture_ctx,
+    );
+    if needs_stroke {
+        let stroke_start = out.len();
+        push_resolved_text_mesh_batches(
+            out,
+            layout,
+            prepared_meshes,
+            text.align_text,
+            true,
+            &placement,
+            stroke_color,
+            Matrix4::IDENTITY,
+            m,
+            texture_cache.generation,
+            texture_ctx,
+        );
+        for object in out.items.iter_mut().skip(stroke_start) {
+            object.z = layer;
+            object.order = *order_counter;
+            *order_counter = order_counter.saturating_add(1);
+            object.blend = blend;
+            object.camera = camera;
+        }
+    }
+    let end = out.len();
+    for object in out.items.iter_mut().take(end).skip(before) {
+        object.z = layer;
+        object.order = *order_counter;
+        *order_counter = order_counter.saturating_add(1);
+        object.blend = blend;
+        object.camera = camera;
+        if object.kind == DrawKind::TexturedMesh {
+            let payload = out.textured_meshes[object.payload_index as usize]
+                .as_mut()
+                .expect("draw item references live textured-mesh payload");
+            for (component, color) in payload.instance.tint.iter_mut().zip(effect_color) {
+                *component *= color;
+            }
+        }
+    }
+    if has_shadow(text.shadow_len) {
+        push_shadow_objects_for_range(
+            out,
+            sprite_instances,
+            &mut scratch.recycled_text_mesh_vertices,
+            before,
+            end,
+            text.shadow_len,
+            mul_rgba(text.shadow_color, style.tint),
+        );
     }
 }
 
@@ -8237,9 +8380,9 @@ mod tests {
         wrap_text_lines_by_words,
     };
     use crate::actors::{
-        Actor, ActorResourceArena, FlatDraw, FlatMeshVertices, FlatSprite, FlatTexturedMesh,
-        InlineText, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign, TextAttribute,
-        TextAttributes, TextContent,
+        Actor, ActorResourceArena, FlatDraw, FlatMeshVertices, FlatPreparedU32, FlatSprite,
+        FlatTexturedMesh, InlineText, InlineU32Text, RetainedActorFrame, SizeSpec, SpriteSource,
+        TextAlign, TextAttribute, TextAttributes, TextContent,
     };
     use crate::font;
     use crate::font::{Font, Glyph, GlyphMap};
@@ -10915,6 +11058,92 @@ mod tests {
         assert_eq!(stats.owned_entries, 0);
         assert_eq!(prepared_cache.entry_count, 0);
         assert_eq!(prepared_cache.prepared_u32_slots.len(), 8);
+    }
+
+    #[test]
+    fn flat_prepared_u32_matches_actor_with_segment_style() {
+        let fonts = font::FontMap::from_iter([("numeric", test_numeric_font())]);
+        let metrics = Metrics {
+            left: 0.0,
+            right: 640.0,
+            top: 240.0,
+            bottom: -240.0,
+        };
+        let value = 81_934;
+        let mut actor = test_numeric_actor(TextContent::prepared_u32(value, 7));
+        let Actor::Text { stroke_color, .. } = &mut actor else {
+            unreachable!("numeric actor remains text");
+        };
+        *stroke_color = None;
+        let actor = [actor];
+        let draws = [FlatDraw::PreparedU32(FlatPreparedU32 {
+            align: [0.0, 0.0],
+            offset: [10.0, 20.0],
+            color: [1.0; 4],
+            font: "numeric",
+            text: InlineU32Text::new(value),
+            slot: 7,
+            align_text: TextAlign::Center,
+            z: 0,
+            scale: [1.0, 1.0],
+            blend: BlendMode::Alpha,
+            shadow_len: [2.0, 2.0],
+            shadow_color: [0.25, 0.5, 0.75, 0.8],
+        })];
+        let resources = ActorResourceArena::new(0);
+        let root_camera = Matrix4::from_rotation_z(0.15);
+        let tint = [0.75, 0.5, 0.25, 0.8];
+        let x_fold = ActorXFold::new(100.0, 0.75);
+        let mut actor_cache = TextLayoutCache::new(1);
+        let mut actor_scratch = ComposeScratch::default();
+        prewarm_u32_text_slot(&mut actor_cache, &fonts, "numeric", 7, TextAlign::Center);
+        let expected =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::transformed(
+                    &actor,
+                    100,
+                    tint,
+                    Some(BlendMode::Add),
+                    root_camera,
+                    Matrix4::IDENTITY,
+                    Some(x_fold),
+                )],
+                [0.1, 0.2, 0.3, 1.0],
+                &metrics,
+                &fonts,
+                0.25,
+                &mut actor_cache,
+                &mut actor_scratch,
+                &TestDrawTextureContext,
+                &resources,
+            );
+
+        let mut flat_cache = TextLayoutCache::new(1);
+        let mut flat_scratch = ComposeScratch::default();
+        prewarm_u32_text_slot(&mut flat_cache, &fonts, "numeric", 7, TextAlign::Center);
+        let actual =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::transformed(
+                    &[],
+                    100,
+                    tint,
+                    Some(BlendMode::Add),
+                    root_camera,
+                    Matrix4::IDENTITY,
+                    Some(x_fold),
+                )
+                .with_flat_draws(&draws, Some(root_camera))],
+                [0.1, 0.2, 0.3, 1.0],
+                &metrics,
+                &fonts,
+                0.25,
+                &mut flat_cache,
+                &mut flat_scratch,
+                &TestDrawTextureContext,
+                &resources,
+            );
+
+        assert_test_frames_equal(&expected, &actual);
     }
 
     #[test]

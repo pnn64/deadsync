@@ -1587,9 +1587,10 @@ const NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY: usize = 32;
 const ERROR_BAR_HUD_FLAT_DRAW_CAPACITY: usize = 82;
 // Tap plus split overlay and one held-miss plus hold-result sprite per column.
 const JUDGMENT_HUD_FLAT_DRAW_CAPACITY: usize = 2 + MAX_COLS * 2;
-// One unique active hundred milestone emits four sprites and one unique
-// thousand milestone emits two; gameplay retains at most one of each kind.
-const COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 6;
+// One unique active hundred milestone emits four sprites, one unique thousand
+// milestone emits two, and the visible combo contributes one prepared digit
+// run; gameplay retains at most one milestone of each kind.
+const COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 7;
 const NOTEFIELD_HUD_FLAT_DRAW_SCRATCH_CAPACITY: usize = ERROR_BAR_HUD_FLAT_DRAW_CAPACITY
     + JUDGMENT_HUD_FLAT_DRAW_CAPACITY
     + COMBO_HUD_FLAT_DRAW_CAPACITY;
