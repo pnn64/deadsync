@@ -46,6 +46,7 @@ const BOUNDARY_BATCH_FRAMES: usize = 32;
 const BOUNDARY_WARMUP_BATCHES: usize = 32;
 const BOUNDARY_MEASURE_BATCHES: usize = 400;
 const HUD_TEXT_RUNS: usize = 8;
+const CUE_COUNTDOWN_RUNS: usize = 3;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -982,33 +983,82 @@ fn numeric_font() -> Font {
     }
 }
 
-fn numeric_actor(value: u32, player: usize) -> Actor {
+#[derive(Clone, Copy)]
+enum NumericCase {
+    Combo,
+    CueCountdown,
+}
+
+const fn numeric_run_count(case: NumericCase) -> usize {
+    match case {
+        NumericCase::Combo => 1,
+        NumericCase::CueCountdown => CUE_COUNTDOWN_RUNS,
+    }
+}
+
+fn numeric_value(case: NumericCase, frame: usize, player: usize, run: usize) -> u32 {
+    match case {
+        NumericCase::Combo => ((frame + 1) * (player + 3)) as u32,
+        NumericCase::CueCountdown => ((frame / 60 + player * 11 + run * 7) % 60 + 1) as u32,
+    }
+}
+
+fn numeric_position(case: NumericCase, player: usize, run: usize) -> [f32; 2] {
+    match case {
+        NumericCase::Combo => [240.0 + player as f32 * 160.0, 265.0],
+        NumericCase::CueCountdown => [
+            220.0 + player as f32 * 240.0 + run as f32 * 24.0,
+            if run % 2 == 0 { 160.0 } else { 340.0 },
+        ],
+    }
+}
+
+fn numeric_actor(
+    case: NumericCase,
+    value: u32,
+    player: usize,
+    run: usize,
+    cached: Arc<str>,
+) -> Actor {
     let mut text = TextBuilder::new();
     text.font("bench-numeric");
-    text.settext(TextContent::prepared_u32(value, player as u8));
+    text.settext(match case {
+        NumericCase::Combo => TextContent::prepared_u32(value, player as u8),
+        NumericCase::CueCountdown => TextContent::Shared(cached),
+    });
     text.align(0.5, 0.5);
-    text.xy(240.0 + player as f32 * 160.0, 265.0);
-    text.zoom(0.75);
+    let [x, y] = numeric_position(case, player, run);
+    text.xy(x, y);
+    text.zoom(match case {
+        NumericCase::Combo => 0.75,
+        NumericCase::CueCountdown => 0.5,
+    });
     text.horizalign(TextAlign::Center);
-    text.shadowlength(1.0);
+    if matches!(case, NumericCase::Combo) {
+        text.shadowlength(1.0);
+    }
     text.diffuse([0.2, 0.8, 0.4, 0.9]);
-    text.z(90);
+    text.z(match case {
+        NumericCase::Combo => 90,
+        NumericCase::CueCountdown => 200,
+    });
     text.build(0)
 }
 
-fn numeric_draw(value: u32, player: usize) -> FlatDraw {
+fn numeric_draw(case: NumericCase, value: u32, player: usize, run: usize) -> FlatDraw {
+    let combo = matches!(case, NumericCase::Combo);
     FlatDraw::PreparedU32(FlatPreparedU32 {
         align: [0.5, 0.5],
-        offset: [240.0 + player as f32 * 160.0, 265.0],
+        offset: numeric_position(case, player, run),
         color: [0.2, 0.8, 0.4, 0.9],
         font: "bench-numeric",
         text: InlineU32Text::new(value),
-        slot: player as u8,
+        slot: (player * numeric_run_count(case) + run) as u8,
         align_text: TextAlign::Center,
-        z: 90,
-        scale: [0.75, 0.75],
+        z: if combo { 90 } else { 200 },
+        scale: [if combo { 0.75 } else { 0.5 }; 2],
         blend: BlendMode::Alpha,
-        shadow_len: [1.0, -1.0],
+        shadow_len: if combo { [1.0, -1.0] } else { [0.0; 2] },
         shadow_color: [0.0, 0.0, 0.0, 0.5],
     })
 }
@@ -1016,27 +1066,41 @@ fn numeric_draw(value: u32, player: usize) -> FlatDraw {
 struct NumericScratch {
     actors: [Vec<Actor>; BOUNDARY_PLAYERS],
     draws: [Vec<FlatDraw>; BOUNDARY_PLAYERS],
+    cached_values: [Arc<str>; 65],
 }
 
 impl NumericScratch {
-    fn new() -> Self {
+    fn new(case: NumericCase) -> Self {
+        let runs = numeric_run_count(case);
         Self {
-            actors: std::array::from_fn(|_| Vec::with_capacity(1)),
-            draws: std::array::from_fn(|_| Vec::with_capacity(1)),
+            actors: std::array::from_fn(|_| Vec::with_capacity(runs)),
+            draws: std::array::from_fn(|_| Vec::with_capacity(runs)),
+            cached_values: std::array::from_fn(|value| Arc::from(value.to_string())),
         }
     }
 
-    fn prepare(&mut self, kind: BoundaryKind, frame: usize) {
+    fn prepare(&mut self, case: NumericCase, kind: BoundaryKind, frame: usize) {
         for player in 0..BOUNDARY_PLAYERS {
-            let value = ((frame + 1) * (player + 3)) as u32;
             match kind {
                 BoundaryKind::WideActors => {
                     self.actors[player].clear();
-                    self.actors[player].push(numeric_actor(value, player));
+                    for run in 0..numeric_run_count(case) {
+                        let value = numeric_value(case, frame, player, run);
+                        let cached = match case {
+                            NumericCase::Combo => Arc::clone(&self.cached_values[0]),
+                            NumericCase::CueCountdown => {
+                                Arc::clone(&self.cached_values[value as usize])
+                            }
+                        };
+                        self.actors[player].push(numeric_actor(case, value, player, run, cached));
+                    }
                 }
                 BoundaryKind::FlatDraws => {
                     self.draws[player].clear();
-                    self.draws[player].push(numeric_draw(value, player));
+                    for run in 0..numeric_run_count(case) {
+                        let value = numeric_value(case, frame, player, run);
+                        self.draws[player].push(numeric_draw(case, value, player, run));
+                    }
                 }
             }
         }
@@ -1045,6 +1109,7 @@ impl NumericScratch {
 
 #[allow(clippy::too_many_arguments)]
 fn numeric_frame(
+    case: NumericCase,
     kind: BoundaryKind,
     frame_index: usize,
     source: &mut NumericScratch,
@@ -1054,7 +1119,7 @@ fn numeric_frame(
     text: &mut TextLayoutCache,
     compose: &mut ComposeScratch,
 ) -> f32 {
-    source.prepare(kind, frame_index);
+    source.prepare(case, kind, frame_index);
     let root_camera = Mat4::from_rotation_z(0.11);
     let tint = [0.8, 0.7, 0.6, 0.5];
     let mut segments = [ActorSegment::new(&[]); BOUNDARY_PLAYERS];
@@ -1100,32 +1165,65 @@ fn numeric_frame(
     checksum
 }
 
-fn measure_numeric_pair() -> [BoundaryResult; 2] {
+fn measure_numeric_pair(case: NumericCase) -> [BoundaryResult; 2] {
     let metrics = deadlib_present::space::metrics_for_window(854, 480);
     let fonts = font::FontMap::from_iter([("bench-numeric", numeric_font())]);
     let resources = ActorResourceArena::new(0);
-    let mut text: [TextLayoutCache; 2] = std::array::from_fn(|_| TextLayoutCache::new(1));
+    let cache_entries = match case {
+        NumericCase::Combo => 1,
+        NumericCase::CueCountdown => 256,
+    };
+    let mut text: [TextLayoutCache; 2] =
+        std::array::from_fn(|_| TextLayoutCache::new(cache_entries));
     let mut compose: [ComposeScratch; 2] = std::array::from_fn(|_| ComposeScratch::default());
+    let mut source = NumericScratch::new(case);
     for cache in &mut text {
-        for player in 0..BOUNDARY_PLAYERS {
+        if matches!(case, NumericCase::CueCountdown) {
+            for value in &source.cached_values {
+                cache.prewarm_text(&fonts, "bench-numeric", value, None);
+            }
+            cache.lock_growth_with_reserve(source.cached_values.len());
+        }
+        for slot in 0..BOUNDARY_PLAYERS * numeric_run_count(case) {
             prewarm_u32_text_slot(
                 cache,
                 &fonts,
                 "bench-numeric",
-                player as u8,
+                slot as u8,
                 TextAlign::Center,
             );
         }
     }
-    let mut source = NumericScratch::new();
     let kinds = [BoundaryKind::WideActors, BoundaryKind::FlatDraws];
     let mut frame_index = 0usize;
+
+    if matches!(case, NumericCase::CueCountdown) {
+        // Gameplay transition warmup prepares the complete bounded countdown
+        // domain. Exercise every retained shared value here as well so the
+        // actor control does not measure first-use alias or mesh construction.
+        for kind_index in 0..2 {
+            for second in 0..60 {
+                black_box(numeric_frame(
+                    case,
+                    kinds[kind_index],
+                    second * 60,
+                    &mut source,
+                    &metrics,
+                    &fonts,
+                    &resources,
+                    &mut text[kind_index],
+                    &mut compose[kind_index],
+                ));
+            }
+        }
+    }
 
     for batch in 0..BOUNDARY_WARMUP_BATCHES {
         for offset in 0..2 {
             let kind_index = (batch + offset) % 2;
             for frame_offset in 0..BOUNDARY_BATCH_FRAMES {
                 black_box(numeric_frame(
+                    case,
                     kinds[kind_index],
                     frame_index + frame_offset,
                     &mut source,
@@ -1159,6 +1257,7 @@ fn measure_numeric_pair() -> [BoundaryResult; 2] {
             let started = Instant::now();
             for frame_offset in 0..BOUNDARY_BATCH_FRAMES {
                 checksum[kind_index] += black_box(numeric_frame(
+                    case,
                     kinds[kind_index],
                     frame_index + frame_offset,
                     &mut source,
@@ -1510,7 +1609,30 @@ fn print_hud_text_benchmark() {
     }
 }
 
+fn print_cue_countdown_benchmark() {
+    println!(
+        "\nprepared cue-countdown boundary benchmark \
+         (2 players, {CUE_COUNTDOWN_RUNS} runs/player)"
+    );
+    let [wide, flat] = measure_numeric_pair(NumericCase::CueCountdown);
+    assert_eq!(wide.checksum, flat.checksum);
+    for result in [&wide, &flat] {
+        assert_zero_alloc(&BenchResult {
+            elapsed: result.elapsed,
+            cycles: result.cycles,
+            allocated: result.allocated,
+            checksum: result.checksum,
+        });
+    }
+    print_boundary_result("cached text actors", &wide);
+    print_boundary_result("prepared flat", &flat);
+}
+
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_CUE_COUNTDOWN_ONLY").is_some() {
+        print_cue_countdown_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_ZMOD_HUD_ONLY").is_some() {
         print_hud_text_benchmark();
         return;
@@ -1597,7 +1719,7 @@ fn main() {
     );
 
     println!("\nprepared combo-number boundary benchmark (2 players, 1 run/player)");
-    let [wide, flat] = measure_numeric_pair();
+    let [wide, flat] = measure_numeric_pair(NumericCase::Combo);
     assert_eq!(wide.checksum, flat.checksum);
     for result in [&wide, &flat] {
         assert_zero_alloc(&BenchResult {
@@ -1611,6 +1733,7 @@ fn main() {
     print_boundary_result("prepared flat", &flat);
 
     print_hud_text_benchmark();
+    print_cue_countdown_benchmark();
 }
 
 #[cfg(target_arch = "x86_64")]

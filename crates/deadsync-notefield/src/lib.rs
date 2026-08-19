@@ -39,6 +39,7 @@ pub use display_mods::{
     GameplayModsAttackMode, GameplayModsTextParams, gameplay_mods_text,
 };
 pub use error_bar::{ErrorBarModes, error_bar_boundaries_s};
+pub use feedback::COLUMN_COUNTDOWN_SLOTS_PER_PLAYER;
 pub use field_frame::{NotefieldFieldFrameView, NotefieldFieldResult, compose_notefield_field};
 pub use frame_feedback::{NotefieldFeedbackFrameView, NotefieldLaneFeedback};
 pub use frame_hud::{

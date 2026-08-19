@@ -1,6 +1,8 @@
 use crate::*;
-use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SpriteSource};
-use deadlib_present::dsl::TextBuilder;
+use deadlib_present::actors::{
+    FlatDraw, FlatPreparedU32, FlatSprite, InlineU32Text, SpriteSource, TextAlign,
+};
+use deadlib_render_core::BlendMode;
 use deadsync_gameplay::{
     ActiveColumnFlash, ColumnCue, active_column_cue_range, active_column_cue_range_from_cursor,
     column_flash_duration,
@@ -8,7 +10,9 @@ use deadsync_gameplay::{
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_theme::{ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, NotefieldStyle};
-use std::sync::Arc;
+
+/// One regular countdown plus the two overlapping crossover countdowns.
+pub const COLUMN_COUNTDOWN_SLOTS_PER_PLAYER: u8 = 3;
 
 // Regular column cues fade in/out over this window, matching Simply Love's
 // `ColumnCues.lua` (`fadeTime = 0.15`).
@@ -253,7 +257,7 @@ pub(crate) struct ColumnFeedbackRequest<'a> {
     pub compact_flashes: bool,
     pub dim_flashes: bool,
     pub countdown_font: &'static str,
-    pub countdown_text: fn(i32) -> Arc<str>,
+    pub countdown_text_slot: u8,
 }
 
 #[derive(Clone, Copy)]
@@ -267,27 +271,29 @@ enum ColumnCueKind {
 /// resolution; the notefield owns placement, timing, fades, and actor shape.
 pub(crate) fn compose_column_feedback(
     draws: &mut Vec<FlatDraw>,
-    hud_actors: &mut Vec<Actor>,
+    hud_draws: &mut Vec<FlatDraw>,
     request: ColumnFeedbackRequest<'_>,
 ) {
     if let Some(cues) = request.column_cues {
         compose_column_cue(
             draws,
-            hud_actors,
+            hud_draws,
             request,
             cues,
             ColumnCueKind::Regular,
             request.regular_countdown,
+            request.countdown_text_slot,
         );
     }
     if let Some(cues) = request.crossover_cues {
         compose_column_cue(
             draws,
-            hud_actors,
+            hud_draws,
             request,
             cues,
             ColumnCueKind::Crossover,
             request.crossover_countdown,
+            request.countdown_text_slot.saturating_add(1),
         );
     }
     if let Some(flashes) = request.column_flashes {
@@ -297,11 +303,12 @@ pub(crate) fn compose_column_feedback(
 
 fn compose_column_cue(
     draws: &mut Vec<FlatDraw>,
-    hud_actors: &mut Vec<Actor>,
+    hud_draws: &mut Vec<FlatDraw>,
     request: ColumnFeedbackRequest<'_>,
     cues: &[ColumnCue],
     kind: ColumnCueKind,
     show_countdown: bool,
+    countdown_slot_base: u8,
 ) {
     // Regular cues never overlap, so at most one is active. Crossover cues are
     // built to overlap by the fade time, so up to two can be active at once;
@@ -348,7 +355,7 @@ fn compose_column_cue(
         .min(request.column_xs.len())
         .min(request.column_dirs.len());
 
-    for cue_idx in active_range {
+    for (active_index, cue_idx) in active_range.enumerate() {
         let cue = &cues[cue_idx];
         let duration_real = cue.duration / rate;
         let elapsed_real = (request.current_music_time - cue.start_time) / rate;
@@ -438,20 +445,28 @@ fn compose_column_cue(
             } else {
                 style.countdown_normal_y
             };
-        let mut text = TextBuilder::new();
-        text.font(request.countdown_font);
-        text.settext((request.countdown_text)(remaining.round() as i32).into());
-        text.align(0.5, 0.5);
-        text.xy(x, y);
-        text.zoom(style.countdown_zoom);
-        text.z(style.countdown_z);
-        text.diffuse([
-            style.countdown_color[0],
-            style.countdown_color[1],
-            style.countdown_color[2],
-            alpha_mul,
-        ]);
-        hud_actors.push(text.build(0));
+        debug_assert!(active_index < usize::from(COLUMN_COUNTDOWN_SLOTS_PER_PLAYER));
+        let countdown = remaining.round() as i32;
+        debug_assert!(countdown >= 0);
+        hud_draws.push(FlatDraw::PreparedU32(FlatPreparedU32 {
+            align: [0.5, 0.5],
+            offset: [x, y],
+            color: [
+                style.countdown_color[0],
+                style.countdown_color[1],
+                style.countdown_color[2],
+                alpha_mul,
+            ],
+            font: request.countdown_font,
+            text: InlineU32Text::new(countdown as u32),
+            slot: countdown_slot_base.saturating_add(active_index as u8),
+            align_text: TextAlign::Center,
+            z: style.countdown_z,
+            scale: [style.countdown_zoom; 2],
+            blend: BlendMode::Alpha,
+            shadow_len: [0.0; 2],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
+        }));
     }
 }
 
@@ -648,7 +663,7 @@ mod tests {
     #![allow(clippy::approx_constant)]
 
     use super::*;
-    use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SpriteSource};
+    use deadlib_present::actors::{FlatDraw, FlatPreparedU32, FlatSprite, SpriteSource, TextAlign};
     use deadsync_gameplay::ColumnCueColumn;
     use deadsync_theme::{
         ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle, CounterHudStyle,
@@ -879,10 +894,6 @@ mod tests {
         }
     }
 
-    fn countdown_text(value: i32) -> Arc<str> {
-        Arc::from(value.to_string())
-    }
-
     fn request<'a>(
         column_cues: Option<&'a [ColumnCue]>,
         crossover_cues: Option<&'a [ColumnCue]>,
@@ -913,7 +924,7 @@ mod tests {
             compact_flashes: true,
             dim_flashes: true,
             countdown_font: "countdown-font",
-            countdown_text,
+            countdown_text_slot: 24,
         }
     }
 
@@ -951,7 +962,7 @@ mod tests {
     }
 
     #[test]
-    fn regular_cue_actor_fingerprint_preserves_reverse_and_countdown() {
+    fn regular_cue_draw_fingerprint_preserves_reverse_and_countdown() {
         let cues = [ColumnCue {
             start_time: 0.0,
             duration: 6.0,
@@ -995,21 +1006,25 @@ mod tests {
         );
         assert_eq!(hud.len(), 1);
         match &hud[0] {
-            Actor::Text {
+            FlatDraw::PreparedU32(FlatPreparedU32 {
                 align,
                 offset,
                 color,
                 font,
-                content,
+                text,
+                slot,
+                align_text,
                 z,
                 scale,
                 ..
-            } => {
+            }) => {
                 assert_eq!(*align, [0.5, 0.5]);
                 assert_eq!(*offset, [288.0, 345.0]);
                 assert_eq!(*color, [1.0, 1.0, 1.0, 1.0]);
                 assert_eq!(*font, "countdown-font");
-                assert_eq!(content.as_str(), "4");
+                assert_eq!(text.as_str(), "4");
+                assert_eq!(*slot, 24);
+                assert_eq!(*align_text, TextAlign::Center);
                 assert_eq!(*z, 200);
                 assert_eq!(*scale, [0.5, 0.5]);
             }
@@ -1044,6 +1059,56 @@ mod tests {
             90,
         );
         assert!(hud.is_empty());
+    }
+
+    #[test]
+    fn simultaneous_regular_and_crossover_countdowns_use_distinct_slots() {
+        let regular = [ColumnCue {
+            start_time: 0.0,
+            duration: 6.0,
+            columns: [ColumnCueColumn {
+                column: 0,
+                is_mine: false,
+            }]
+            .into(),
+        }];
+        let crossover = [
+            ColumnCue {
+                start_time: 0.0,
+                duration: 6.0,
+                columns: [ColumnCueColumn {
+                    column: 1,
+                    is_mine: false,
+                }]
+                .into(),
+            },
+            ColumnCue {
+                start_time: 1.0,
+                duration: 6.0,
+                columns: [ColumnCueColumn {
+                    column: 2,
+                    is_mine: false,
+                }]
+                .into(),
+            },
+        ];
+        let mut draws = Vec::new();
+        let mut hud = Vec::new();
+        let mut request = request(Some(&regular), Some(&crossover), None);
+        request.column_cue_cursor = Some(1);
+        request.crossover_cue_cursor = Some(2);
+        request.crossover_countdown = true;
+
+        compose_column_feedback(&mut draws, &mut hud, request);
+
+        let countdowns = hud
+            .iter()
+            .map(|draw| match draw {
+                FlatDraw::PreparedU32(text) => (text.slot, text.text.as_str()),
+                other => panic!("expected prepared countdown, got {other:?}"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(countdowns, [(24, "4"), (25, "4"), (26, "5")]);
     }
 
     #[test]

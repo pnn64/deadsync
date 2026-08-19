@@ -15,7 +15,9 @@ pub(crate) const FRAME_TEXT_MINI_BASE: u8 = 0;
 pub(crate) const FRAME_TEXT_OFFSET_BASE: u8 = 2;
 pub(crate) const FRAME_TEXT_LIVE_TIMING_BASE: u8 = 4;
 pub(crate) const FRAME_TEXT_COUNTER_BASE: u8 = 10;
+// Prepared-u32 slots use a separate cache namespace from frame-inline slots.
 pub(crate) const FRAME_TEXT_COMBO_BASE: u8 = 10;
+pub(crate) const FRAME_TEXT_COUNTDOWN_BASE: u8 = FRAME_TEXT_COMBO_BASE + 2;
 pub(crate) const FRAME_TEXT_LIFE_BASE: u8 =
     FRAME_TEXT_COUNTER_BASE + deadsync_notefield::COUNTER_TEXT_SLOTS_PER_PLAYER * 2;
 pub(crate) const FRAME_TEXT_TIME_BASE: u8 = FRAME_TEXT_LIFE_BASE + 2;

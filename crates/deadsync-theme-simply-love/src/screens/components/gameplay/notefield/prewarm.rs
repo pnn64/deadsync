@@ -10,13 +10,12 @@ use deadsync_profile as profile_data;
 
 use super::super::display_mods::DISPLAY_MODS_WRAP_WIDTH_PX;
 use super::super::{
-    FRAME_TEXT_COMBO_BASE, FRAME_TEXT_COUNTER_BASE, FRAME_TEXT_MINI_BASE, FRAME_TEXT_OFFSET_BASE,
-    FRAME_TEXT_VERTEX_BUFFERS,
+    FRAME_TEXT_COMBO_BASE, FRAME_TEXT_COUNTDOWN_BASE, FRAME_TEXT_COUNTER_BASE,
+    FRAME_TEXT_MINI_BASE, FRAME_TEXT_OFFSET_BASE, FRAME_TEXT_VERTEX_BUFFERS,
 };
 use super::text::{cached_int_i32, preferred_mods_text};
 use super::{
-    COLUMN_COUNTDOWN_PREWARM_CAP, MEASURE_PREWARM_CAP, zmod_combo_font_name, zmod_indicator_mode,
-    zmod_small_combo_font,
+    MEASURE_PREWARM_CAP, zmod_combo_font_name, zmod_indicator_mode, zmod_small_combo_font,
 };
 
 pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, state: &State) {
@@ -56,32 +55,6 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
             }
             prewarm_i32(cache, mc_font_name, max_measure_len.max(16));
         }
-        if profile.column_cues || (profile.crossover_cues && profile.column_countdown) {
-            let music_rate = state.music_rate();
-            let rate = if music_rate.is_finite() && music_rate > 0.0 {
-                music_rate
-            } else {
-                1.0
-            };
-            let mut countdown_max = 0;
-            if profile.column_cues {
-                for cue in state.column_cues(player) {
-                    countdown_max = countdown_max.max((cue.duration / rate).ceil() as i32);
-                }
-            }
-            if profile.crossover_cues && profile.column_countdown {
-                for cue in state.crossover_cues(player) {
-                    countdown_max = countdown_max.max((cue.duration / rate).ceil() as i32);
-                }
-            }
-            let capped = countdown_max.clamp(0, COLUMN_COUNTDOWN_PREWARM_CAP);
-            for value in 0..=capped {
-                prewarm_i32(cache, mc_font_name, value);
-            }
-            if countdown_max > capped {
-                prewarm_i32(cache, mc_font_name, countdown_max);
-            }
-        }
     }
 
     cache.prewarm_text(fonts, "game", "Early", None);
@@ -114,6 +87,28 @@ pub fn prewarm_frame_text_scratch(
                 FRAME_TEXT_COMBO_BASE + player as u8,
                 TextAlign::Center,
             );
+        }
+        let countdown_slot = FRAME_TEXT_COUNTDOWN_BASE
+            + player as u8 * deadsync_notefield::COLUMN_COUNTDOWN_SLOTS_PER_PLAYER;
+        if profile.column_cues {
+            prewarm_u32_text_slot(
+                cache,
+                fonts,
+                zmod_small_combo_font(profile.combo_font),
+                countdown_slot,
+                TextAlign::Center,
+            );
+        }
+        if profile.crossover_cues && profile.column_countdown {
+            for offset in 1..deadsync_notefield::COLUMN_COUNTDOWN_SLOTS_PER_PLAYER {
+                prewarm_u32_text_slot(
+                    cache,
+                    fonts,
+                    zmod_small_combo_font(profile.combo_font),
+                    countdown_slot + offset,
+                    TextAlign::Center,
+                );
+            }
         }
         if zmod_indicator_mode(profile) != MiniIndicatorMode::None {
             deadlib_present::compose::prewarm_prepared_inline_text_slot(

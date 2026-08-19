@@ -35,7 +35,7 @@ mod zmod;
 pub use prewarm::{prewarm_frame_text_scratch, prewarm_text_layout};
 pub(crate) use text::preferred_mods_text;
 use text::{
-    cached_int_i32, effective_accel_effects_for_player, effective_mini_percent_for_player,
+    effective_accel_effects_for_player, effective_mini_percent_for_player,
     effective_perspective_effects_for_player, effective_scroll_effects_for_player,
     effective_spacing_multiplier_for_player, effective_visual_effects_for_player,
     error_bar_text_label, offset_ms_text, zmod_measure_counter_text, zmod_run_timer_fmt,
@@ -70,7 +70,6 @@ const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0; // Dance lane width for hold bodies a
 
 const TEXT_CACHE_LIMIT: usize = 8192;
 const MEASURE_PREWARM_CAP: i32 = 64;
-const COLUMN_COUNTDOWN_PREWARM_CAP: i32 = 64;
 
 #[inline(always)]
 fn column_flash_dimmed(brightness: profile_data::ColumnFlashBrightness) -> bool {
@@ -820,19 +819,21 @@ pub(crate) fn compose_frame(
             }
         }),
         countdown_font: mc_font_name,
-        countdown_text: cached_int_i32,
+        countdown_text_slot: super::FRAME_TEXT_COUNTDOWN_BASE
+            + player_idx as u8 * deadsync_notefield::COLUMN_COUNTDOWN_SLOTS_PER_PLAYER,
     };
     let field_frame = NotefieldFieldFrameView {
         feedback: feedback_frame,
         completed_rows: state.completed_row_visibility(player_idx),
     };
     let field_result = {
+        hud_actors.reserve(prepared.frame_plan.hud_actor_reserve);
         let mut hold_scratch = hold_mesh_scratch[player_idx].borrow_mut();
         let mut proxy_scratch = capture_scratch[player_idx].borrow_mut();
         compose_notefield_field(
             actors,
             flat_draws,
-            hud_actors,
+            hud_flat_draws,
             &mut model_cache,
             &mut hold_scratch,
             &mut proxy_scratch,

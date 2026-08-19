@@ -63,7 +63,7 @@ struct HoldLaneFrame {
 pub fn compose_notefield_field<S, F>(
     actors: &mut Vec<Actor>,
     flat_draws: &mut Vec<FlatDraw>,
-    cue_hud_actors: &mut Vec<Actor>,
+    cue_hud_draws: &mut Vec<FlatDraw>,
     model_cache: &mut ModelMeshCache,
     hold_mesh_scratch: &mut HoldMeshScratch,
     capture_scratch: &mut CapturedActorScratch,
@@ -82,7 +82,6 @@ where
     flat_draws.reserve(prepared.frame_plan.field_actor_reserve);
     let field_start = actors.len();
     actors.reserve(prepared.frame_plan.field_actor_reserve.saturating_add(2));
-    cue_hud_actors.reserve(prepared.frame_plan.hud_actor_reserve);
     let Some(notes) = prepared.notes.as_ref() else {
         return NotefieldFieldResult::default();
     };
@@ -92,7 +91,7 @@ where
     compose_field_contents(
         actors,
         flat_draws,
-        cue_hud_actors,
+        cue_hud_draws,
         model_cache,
         hold_mesh_scratch,
         request,
@@ -126,7 +125,7 @@ where
 fn compose_field_contents<S, F>(
     actors: &mut Vec<Actor>,
     flat_draws: &mut Vec<FlatDraw>,
-    cue_hud_actors: &mut Vec<Actor>,
+    cue_hud_draws: &mut Vec<FlatDraw>,
     model_cache: &mut ModelMeshCache,
     hold_mesh_scratch: &mut HoldMeshScratch,
     request: &NotefieldComposeRequest<'_, S>,
@@ -302,7 +301,7 @@ fn compose_field_contents<S, F>(
     );
     compose_notefield_feedback(
         flat_draws,
-        cue_hud_actors,
+        cue_hud_draws,
         model_cache,
         request,
         prepared,

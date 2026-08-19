@@ -7,7 +7,7 @@ use crate::{
 };
 #[cfg(test)]
 use deadlib_present::actors::FlatSprite;
-use deadlib_present::actors::{Actor, FlatDraw, SpriteSource};
+use deadlib_present::actors::{FlatDraw, SpriteSource};
 use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{
@@ -15,6 +15,7 @@ use deadsync_gameplay::{
     SongLuaNoteHideWindows, hold_explosion_active, song_lua_note_hidden,
 };
 use deadsync_noteskin::NoteskinSlot;
+#[cfg(test)]
 use std::sync::Arc;
 
 // ITGmania draws each Pump pad center-first so overlapping inner and outer
@@ -64,14 +65,14 @@ pub struct NotefieldFeedbackFrameView<'a> {
     /// Lane feedback is ordered by local lane within the prepared player span.
     pub lanes: [NotefieldLaneFeedback<'a>; MAX_COLS],
     pub countdown_font: &'static str,
-    pub countdown_text: fn(i32) -> Arc<str>,
+    pub countdown_text_slot: u8,
 }
 
 /// Compose cues/flashes, receptor targets and feedback, then tap and mine
 /// explosions in the canonical field ordering.
 pub(crate) fn compose_notefield_feedback<S, F>(
     draws: &mut Vec<FlatDraw>,
-    hud_actors: &mut Vec<Actor>,
+    hud_draws: &mut Vec<FlatDraw>,
     model_cache: &mut ModelMeshCache,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
@@ -98,7 +99,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
 
     compose_column_feedback(
         draws,
-        hud_actors,
+        hud_draws,
         ColumnFeedbackRequest {
             style: request.style,
             column_cues: frame.column_cues,
@@ -126,7 +127,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             compact_flashes: options.column_flash_compact,
             dim_flashes: options.column_flash_dimmed,
             countdown_font: frame.countdown_font,
-            countdown_text: frame.countdown_text,
+            countdown_text_slot: frame.countdown_text_slot,
         },
     );
 
@@ -997,10 +998,6 @@ mod tests {
         })
     }
 
-    fn countdown_text(value: i32) -> Arc<str> {
-        Arc::from(value.to_string())
-    }
-
     fn source(slot: &TestSlot) -> SpriteSource {
         SpriteSource::TextureHandle {
             key: Arc::clone(&slot.key),
@@ -1093,7 +1090,7 @@ mod tests {
                 _ => NotefieldLaneFeedback::default(),
             }),
             countdown_font: "test",
-            countdown_text,
+            countdown_text_slot: 17,
         };
         let mut actors = Vec::new();
         let mut hud = Vec::new();
@@ -1175,7 +1172,7 @@ mod tests {
             mine_explosions: Some(&inactive_mines),
             lanes: [NotefieldLaneFeedback::default(); MAX_COLS],
             countdown_font: "test",
-            countdown_text,
+            countdown_text_slot: 17,
         };
         let mut actors = Vec::new();
 
@@ -1228,7 +1225,7 @@ mod tests {
                     .unwrap_or_default()
             }),
             countdown_font: "test",
-            countdown_text,
+            countdown_text_slot: 17,
         };
         let mut actors = Vec::new();
 
@@ -1283,7 +1280,7 @@ mod tests {
                 ..NotefieldLaneFeedback::default()
             }),
             countdown_font: "test",
-            countdown_text,
+            countdown_text_slot: 17,
         };
         let mut actors = Vec::new();
 
@@ -1359,7 +1356,7 @@ mod tests {
                 }
             }),
             countdown_font: "test",
-            countdown_text,
+            countdown_text_slot: 17,
         };
         let mut actors = Vec::new();
 
