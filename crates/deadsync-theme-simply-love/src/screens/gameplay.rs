@@ -14316,7 +14316,27 @@ fn benchmark_player_transform() -> SongLuaCaptureTransform {
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+pub struct GameplayTransformedNotefieldBenchmark {
+    assembly: PlayerActorAssembly,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for GameplayTransformedNotefieldBenchmark {
+    fn default() -> Self {
+        Self {
+            assembly: player_actor_assembly_for_transform(
+                false,
+                true,
+                benchmark_player_transform(),
+            ),
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
 pub fn benchmark_present_transformed_notefield<'a>(
+    benchmark: &'a GameplayTransformedNotefieldBenchmark,
     field_actors: &'a [Actor],
     hud_actors: &'a [Actor],
 ) -> [ActorSegment<'a>; 2] {
@@ -14327,28 +14347,28 @@ pub fn benchmark_present_transformed_notefield<'a>(
         root_camera,
         field_camera_suffix,
         x_fold,
-    } = player_actor_assembly_for_transform(false, true, benchmark_player_transform())
+    } = &benchmark.assembly
     else {
         panic!("benchmark transform should compose directly");
     };
     [
         ActorSegment::transformed(
             hud_actors,
-            z_shift,
-            tint,
-            blend,
+            *z_shift,
+            *tint,
+            *blend,
             root_camera,
-            Matrix4::IDENTITY,
-            x_fold,
+            &Matrix4::IDENTITY,
+            *x_fold,
         ),
         ActorSegment::transformed(
             field_actors,
-            z_shift,
-            tint,
-            blend,
+            *z_shift,
+            *tint,
+            *blend,
             root_camera,
             field_camera_suffix,
-            x_fold,
+            *x_fold,
         ),
     ]
 }
@@ -14743,7 +14763,7 @@ pub struct GameplayActorSegments {
 }
 
 impl GameplayActorSegments {
-    pub fn segments<'a>(&self, state: &'a State, actors: &'a [Actor]) -> [ActorSegment<'a>; 6] {
+    pub fn segments<'a>(&'a self, state: &'a State, actors: &'a [Actor]) -> [ActorSegment<'a>; 6] {
         let insert = self.insert.min(actors.len());
         let empty = &actors[0..0];
         let mut segments = [ActorSegment::new(empty); 6];
@@ -14757,7 +14777,7 @@ impl GameplayActorSegments {
                 continue;
             };
             let first = 1 + slot * 2;
-            match segment.assembly {
+            match &segment.assembly {
                 PlayerActorAssembly::Captured => {
                     debug_assert!(scratch.notefield_flat_draw_scratch[segment.player].is_empty());
                     debug_assert!(
@@ -14776,7 +14796,7 @@ impl GameplayActorSegments {
                 PlayerActorAssembly::DirectZ { z_shift } => {
                     segments[first] = ActorSegment::shifted(
                         &scratch.notefield_hud_actor_scratch[segment.player],
-                        z_shift,
+                        *z_shift,
                     )
                     .with_flat_draws(
                         &scratch.notefield_hud_flat_draw_scratch[segment.player],
@@ -14784,24 +14804,24 @@ impl GameplayActorSegments {
                     );
                     segments[first + 1] = ActorSegment::shifted(
                         &scratch.notefield_actor_scratch[segment.player],
-                        z_shift,
+                        *z_shift,
                     )
                     .with_flat_draws(
                         &scratch.notefield_flat_draw_scratch[segment.player],
-                        segment.field_camera,
+                        segment.field_camera.as_ref(),
                     );
                 }
                 PlayerActorAssembly::DirectFold { z_shift, x_fold } => {
                     let hud = if segment.manual_hud_draw {
                         ActorSegment::shifted(
                             &scratch.notefield_hud_actor_scratch[segment.player],
-                            z_shift,
+                            *z_shift,
                         )
                     } else {
                         ActorSegment::folded(
                             &scratch.notefield_hud_actor_scratch[segment.player],
-                            z_shift,
-                            x_fold,
+                            *z_shift,
+                            *x_fold,
                         )
                     };
                     segments[first] = hud.with_flat_draws(
@@ -14810,12 +14830,12 @@ impl GameplayActorSegments {
                     );
                     segments[first + 1] = ActorSegment::folded(
                         &scratch.notefield_actor_scratch[segment.player],
-                        z_shift,
-                        x_fold,
+                        *z_shift,
+                        *x_fold,
                     )
                     .with_flat_draws(
                         &scratch.notefield_flat_draw_scratch[segment.player],
-                        segment.field_camera,
+                        segment.field_camera.as_ref(),
                     );
                 }
                 PlayerActorAssembly::DirectTransform {
@@ -14830,7 +14850,7 @@ impl GameplayActorSegments {
                         (
                             ActorSegment::shifted(
                                 &scratch.notefield_hud_actor_scratch[segment.player],
-                                z_shift,
+                                *z_shift,
                             ),
                             None,
                         )
@@ -14838,12 +14858,12 @@ impl GameplayActorSegments {
                         (
                             ActorSegment::transformed(
                                 &scratch.notefield_hud_actor_scratch[segment.player],
-                                z_shift,
-                                tint,
-                                blend,
+                                *z_shift,
+                                *tint,
+                                *blend,
                                 root_camera,
-                                Matrix4::IDENTITY,
-                                x_fold,
+                                &Matrix4::IDENTITY,
+                                *x_fold,
                             ),
                             Some(root_camera),
                         )
@@ -14854,16 +14874,16 @@ impl GameplayActorSegments {
                     );
                     segments[first + 1] = ActorSegment::transformed(
                         &scratch.notefield_actor_scratch[segment.player],
-                        z_shift,
-                        tint,
-                        blend,
+                        *z_shift,
+                        *tint,
+                        *blend,
                         root_camera,
                         field_camera_suffix,
-                        x_fold,
+                        *x_fold,
                     )
                     .with_flat_draws(
                         &scratch.notefield_flat_draw_scratch[segment.player],
-                        segment.field_camera,
+                        segment.field_camera.as_ref(),
                     );
                 }
             }

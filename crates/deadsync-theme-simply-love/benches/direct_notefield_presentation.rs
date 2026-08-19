@@ -4,7 +4,7 @@ use deadlib_present::actors::{
     TextContent,
 };
 use deadlib_present::compose::{
-    ActorSegment, ComposeScratch, NullTextureContext, TextLayoutCache,
+    ActorSegment, ActorXFold, ComposeScratch, NullTextureContext, TextLayoutCache,
     build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
     prewarm_cached_prepared_inline_text_slot, prewarm_prepared_inline_text_slot,
     prewarm_u32_text_slot,
@@ -16,7 +16,8 @@ use deadsync_notefield::{NotefieldCameraCache, performance::notefield_view_proj}
 use deadsync_theme_simply_love::screens::gameplay::{
     BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
     GameplayPlayerFieldCameraBenchmark, GameplayPlayerTransformBenchmark,
-    benchmark_present_identity_notefield, benchmark_present_transformed_notefield,
+    GameplayTransformedNotefieldBenchmark, benchmark_present_identity_notefield,
+    benchmark_present_transformed_notefield,
 };
 use glam::{Mat4, Vec3};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -60,6 +61,9 @@ const PLAYER_TRANSFORM_MEASURE_BATCHES: usize = 400;
 const PLAYER_FIELD_CAMERA_BATCH_FRAMES: usize = 4_096;
 const PLAYER_FIELD_CAMERA_WARMUP_BATCHES: usize = 16;
 const PLAYER_FIELD_CAMERA_MEASURE_BATCHES: usize = 400;
+const SEGMENT_CAMERA_BATCH_FRAMES: usize = 4_096;
+const SEGMENT_CAMERA_WARMUP_BATCHES: usize = 16;
+const SEGMENT_CAMERA_MEASURE_BATCHES: usize = 400;
 const HUD_TEXT_RUNS: usize = 8;
 const ERROR_BAR_TEXT_RUNS: usize = 4;
 const CUE_COUNTDOWN_RUNS: usize = 3;
@@ -364,6 +368,7 @@ fn measure_transform(players: usize) -> BenchResult {
         bytes: 0,
     };
     let mut checksum = 0.0f32;
+    let presentation = GameplayTransformedNotefieldBenchmark::default();
     for batch in 0..TRANSFORM_WARMUP_BATCHES + TRANSFORM_MEASURE_BATCHES {
         let mut actors = transform_batch(players, &vertices);
         let before = ALLOC.snapshot();
@@ -371,7 +376,8 @@ fn measure_transform(players: usize) -> BenchResult {
         let started = Instant::now();
         let mut batch_checksum = 0.0f32;
         for actors in &mut actors {
-            let segments = benchmark_present_transformed_notefield(&actors.field, &actors.hud);
+            let segments =
+                benchmark_present_transformed_notefield(&presentation, &actors.field, &actors.hud);
             black_box(segments);
             batch_checksum += (actors.field.len() + actors.hud.len()) as f32;
         }
@@ -422,6 +428,7 @@ fn measure_transform_compose(players: usize) -> BenchResult {
         bytes: 0,
     };
     let mut checksum = 0.0f32;
+    let presentation = GameplayTransformedNotefieldBenchmark::default();
     for batch in 0..TRANSFORM_WARMUP_BATCHES + TRANSFORM_MEASURE_BATCHES {
         let mut actors = transform_batch(players, &vertices);
         let before = ALLOC.snapshot();
@@ -432,7 +439,11 @@ fn measure_transform_compose(players: usize) -> BenchResult {
             let mut segments = [ActorSegment::new(&[]); 4];
             let mut segment_count = 0usize;
             for actors in frame_actors.iter() {
-                for segment in benchmark_present_transformed_notefield(&actors.field, &actors.hud) {
+                for segment in benchmark_present_transformed_notefield(
+                    &presentation,
+                    &actors.field,
+                    &actors.hud,
+                ) {
                     segments[segment_count] = segment;
                     segment_count += 1;
                 }
@@ -734,8 +745,8 @@ fn boundary_frame(
             900,
             tint,
             Some(BlendMode::Add),
-            root_camera,
-            Mat4::IDENTITY,
+            &root_camera,
+            &Mat4::IDENTITY,
             None,
         );
         segments[player * 2 + 1] = match kind {
@@ -744,8 +755,8 @@ fn boundary_frame(
                 900,
                 tint,
                 Some(BlendMode::Add),
-                root_camera,
-                Mat4::IDENTITY,
+                &root_camera,
+                &Mat4::IDENTITY,
                 None,
             ),
             BoundaryKind::FlatDraws => ActorSegment::transformed(
@@ -753,11 +764,11 @@ fn boundary_frame(
                 900,
                 tint,
                 Some(BlendMode::Add),
-                root_camera,
-                Mat4::IDENTITY,
+                &root_camera,
+                &Mat4::IDENTITY,
                 None,
             )
-            .with_flat_draws(&source.flat_fields[player], Some(root_camera)),
+            .with_flat_draws(&source.flat_fields[player], Some(&root_camera)),
         };
     }
     let mut output =
@@ -1377,6 +1388,181 @@ fn print_player_field_camera_benchmark() {
     }
 }
 
+type CopiedSegmentProbe<'a> = (
+    &'a [Actor],
+    &'a [FlatDraw],
+    Option<Mat4>,
+    i16,
+    [f32; 4],
+    Option<BlendMode>,
+    Option<(Mat4, Mat4)>,
+    Option<ActorXFold>,
+);
+
+#[derive(Clone, Copy)]
+enum SegmentCameraKind {
+    Copied,
+    Borrowed,
+}
+
+fn segment_camera_frame(
+    kind: SegmentCameraKind,
+    roots: &[Mat4; BOUNDARY_PLAYERS],
+    suffixes: &[Mat4; BOUNDARY_PLAYERS],
+    field_cameras: &[Mat4; BOUNDARY_PLAYERS],
+) -> f32 {
+    let actors: [Actor; 0] = [];
+    let draws: [FlatDraw; 0] = [];
+    let tint = [0.8, 0.7, 0.6, 0.5];
+    let fold = Some(ActorXFold::new(427.0, 0.97));
+    match kind {
+        SegmentCameraKind::Copied => {
+            let empty: CopiedSegmentProbe<'_> = (
+                &actors[..],
+                &draws[..],
+                None,
+                0_i16,
+                [1.0; 4],
+                None,
+                None,
+                None,
+            );
+            let mut segments = [empty; BOUNDARY_PLAYERS * 2 + 2];
+            for player in 0..BOUNDARY_PLAYERS {
+                for field in [false, true] {
+                    segments[1 + player * 2 + usize::from(field)] = (
+                        &actors[..],
+                        &draws[..],
+                        field.then_some(field_cameras[player]),
+                        900_i16,
+                        tint,
+                        Some(BlendMode::Add),
+                        Some((
+                            roots[player],
+                            if field {
+                                suffixes[player]
+                            } else {
+                                Mat4::IDENTITY
+                            },
+                        )),
+                        fold,
+                    );
+                }
+            }
+            black_box(segments);
+        }
+        SegmentCameraKind::Borrowed => {
+            let mut segments = [ActorSegment::new(&actors); BOUNDARY_PLAYERS * 2 + 2];
+            for player in 0..BOUNDARY_PLAYERS {
+                for field in [false, true] {
+                    segments[1 + player * 2 + usize::from(field)] = ActorSegment::transformed(
+                        &actors,
+                        900,
+                        tint,
+                        Some(BlendMode::Add),
+                        &roots[player],
+                        if field {
+                            &suffixes[player]
+                        } else {
+                            &Mat4::IDENTITY
+                        },
+                        fold,
+                    )
+                    .with_flat_draws(&draws, field.then_some(&field_cameras[player]));
+                }
+            }
+            black_box(segments);
+        }
+    }
+    roots.iter().map(|camera| camera.x_axis.x).sum::<f32>()
+        + suffixes.iter().map(|camera| camera.y_axis.y).sum::<f32>()
+        + field_cameras
+            .iter()
+            .map(|camera| camera.w_axis.z)
+            .sum::<f32>()
+}
+
+fn measure_segment_camera_pair() -> [BoundaryResult; 2] {
+    let roots = [
+        Mat4::from_rotation_x(0.07) * Mat4::from_rotation_z(0.11),
+        Mat4::from_rotation_x(-0.05) * Mat4::from_rotation_z(-0.09),
+    ];
+    let suffixes = [
+        Mat4::from_translation(Vec3::new(-24.0, 12.0, 0.0)),
+        Mat4::from_translation(Vec3::new(18.0, -8.0, 0.0)),
+    ];
+    let field_cameras = [
+        Mat4::from_scale(Vec3::new(0.9, 1.1, 1.0)) * suffixes[0],
+        Mat4::from_scale(Vec3::new(1.05, 0.95, 1.0)) * suffixes[1],
+    ];
+    let mut elapsed = [Duration::ZERO; 2];
+    let mut cycles = [0u64; 2];
+    let mut allocated = [AllocSnapshot {
+        allocs: 0,
+        reallocs: 0,
+        bytes: 0,
+    }; 2];
+    let mut samples_ns: [Vec<u64>; 2] =
+        std::array::from_fn(|_| Vec::with_capacity(SEGMENT_CAMERA_MEASURE_BATCHES));
+    let mut checksum = [0.0f32; 2];
+    for batch in 0..SEGMENT_CAMERA_WARMUP_BATCHES + SEGMENT_CAMERA_MEASURE_BATCHES {
+        let order = if batch % 2 == 0 { [0, 1] } else { [1, 0] };
+        for kind_index in order {
+            let kind = [SegmentCameraKind::Copied, SegmentCameraKind::Borrowed][kind_index];
+            let before_alloc = ALLOC.snapshot();
+            let before_cycles = read_cycles();
+            let started = Instant::now();
+            let mut batch_checksum = 0.0;
+            for _ in 0..SEGMENT_CAMERA_BATCH_FRAMES {
+                batch_checksum += segment_camera_frame(kind, &roots, &suffixes, &field_cameras);
+            }
+            let sample = started.elapsed();
+            let sample_cycles = read_cycles().saturating_sub(before_cycles);
+            let sample_allocated = ALLOC.snapshot().delta(before_alloc);
+            black_box(batch_checksum);
+            if batch >= SEGMENT_CAMERA_WARMUP_BATCHES {
+                elapsed[kind_index] += sample;
+                cycles[kind_index] += sample_cycles;
+                allocated[kind_index].add(sample_allocated);
+                samples_ns[kind_index]
+                    .push((sample.as_nanos() / SEGMENT_CAMERA_BATCH_FRAMES as u128) as u64);
+                checksum[kind_index] += batch_checksum;
+            }
+        }
+    }
+    for samples in &mut samples_ns {
+        samples.sort_unstable();
+    }
+    std::array::from_fn(|index| BoundaryResult {
+        elapsed: elapsed[index],
+        cycles: cycles[index],
+        allocated: allocated[index],
+        samples_ns: std::mem::take(&mut samples_ns[index]),
+        checksum: checksum[index],
+    })
+}
+
+fn print_segment_camera_benchmark() {
+    println!("\nborrowed segment-camera descriptor benchmark (2 players, 6 segments)");
+    println!(
+        "descriptor size: copied {} bytes, borrowed {} bytes",
+        std::mem::size_of::<CopiedSegmentProbe<'_>>(),
+        std::mem::size_of::<ActorSegment<'_>>(),
+    );
+    let [copied, borrowed] = measure_segment_camera_pair();
+    assert_eq!(copied.checksum, borrowed.checksum);
+    print_sampled_result("copied matrices", &copied, SEGMENT_CAMERA_BATCH_FRAMES);
+    print_sampled_result("borrowed matrices", &borrowed, SEGMENT_CAMERA_BATCH_FRAMES);
+    for result in [&copied, &borrowed] {
+        assert_zero_alloc(&BenchResult {
+            elapsed: result.elapsed,
+            cycles: result.cycles,
+            allocated: result.allocated,
+            checksum: result.checksum,
+        });
+    }
+}
+
 fn print_boundary_sweep(label: &str, hold_mix: bool, draw_counts: &[usize]) {
     println!("\n{label} (draws/player)");
     for &field_draws in draw_counts {
@@ -1579,8 +1765,8 @@ fn numeric_frame(
                 900,
                 tint,
                 Some(BlendMode::Add),
-                root_camera,
-                Mat4::IDENTITY,
+                &root_camera,
+                &Mat4::IDENTITY,
                 None,
             ),
             BoundaryKind::FlatDraws => ActorSegment::transformed(
@@ -1588,11 +1774,11 @@ fn numeric_frame(
                 900,
                 tint,
                 Some(BlendMode::Add),
-                root_camera,
-                Mat4::IDENTITY,
+                &root_camera,
+                &Mat4::IDENTITY,
                 None,
             )
-            .with_flat_draws(&source.draws[player], Some(root_camera)),
+            .with_flat_draws(&source.draws[player], Some(&root_camera)),
         };
     }
     let mut output =
@@ -1933,8 +2119,8 @@ fn hud_text_frame(
                 900,
                 tint,
                 Some(BlendMode::Add),
-                root_camera,
-                Mat4::IDENTITY,
+                &root_camera,
+                &Mat4::IDENTITY,
                 None,
             ),
             BoundaryKind::FlatDraws => ActorSegment::transformed(
@@ -1942,11 +2128,11 @@ fn hud_text_frame(
                 900,
                 tint,
                 Some(BlendMode::Add),
-                root_camera,
-                Mat4::IDENTITY,
+                &root_camera,
+                &Mat4::IDENTITY,
                 None,
             )
-            .with_flat_draws(&source.draws[player], Some(root_camera)),
+            .with_flat_draws(&source.draws[player], Some(&root_camera)),
         };
     }
     let mut output =
@@ -2196,6 +2382,10 @@ fn print_cue_countdown_benchmark() {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_SEGMENT_CAMERA_ONLY").is_some() {
+        print_segment_camera_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_PLAYER_FIELD_CAMERA_ONLY").is_some() {
         print_player_field_camera_benchmark();
         return;

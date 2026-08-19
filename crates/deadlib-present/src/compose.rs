@@ -607,23 +607,24 @@ pub fn build_screen_segments_cached_with_scratch_and_texture_context_and_actor_r
 }
 
 /// A borrowed actor slice plus an optional already-resolved draw tail, with
-/// presentation metadata applied to both during composition.
+/// presentation metadata applied to both during composition. Camera matrices
+/// stay with their retained owner and are borrowed for the composition call.
 #[derive(Clone, Copy, Debug)]
 pub struct ActorSegment<'a> {
     actors: &'a [actors::Actor],
     flat_draws: &'a [actors::FlatDraw],
-    flat_camera: Option<Matrix4>,
+    flat_camera: Option<&'a Matrix4>,
     z_shift: i16,
     tint: [f32; 4],
     blend: Option<BlendMode>,
-    camera: Option<ActorSegmentCamera>,
+    camera: Option<ActorSegmentCamera<'a>>,
     x_fold: Option<ActorXFold>,
 }
 
 #[derive(Clone, Copy, Debug)]
-struct ActorSegmentCamera {
-    root: Matrix4,
-    suffix: Matrix4,
+struct ActorSegmentCamera<'a> {
+    root: &'a Matrix4,
+    suffix: &'a Matrix4,
 }
 
 /// Folds actor X offsets around a fixed pivot during composition.
@@ -696,8 +697,8 @@ impl<'a> ActorSegment<'a> {
         z_shift: i16,
         tint: [f32; 4],
         blend: Option<BlendMode>,
-        root_camera: Matrix4,
-        camera_suffix: Matrix4,
+        root_camera: &'a Matrix4,
+        camera_suffix: &'a Matrix4,
         x_fold: Option<ActorXFold>,
     ) -> Self {
         Self {
@@ -721,7 +722,7 @@ impl<'a> ActorSegment<'a> {
     pub const fn with_flat_draws(
         mut self,
         draws: &'a [actors::FlatDraw],
-        camera: Option<Matrix4>,
+        camera: Option<&'a Matrix4>,
     ) -> Self {
         self.flat_draws = draws;
         self.flat_camera = camera;
@@ -4950,11 +4951,11 @@ struct ComposeStyle {
 }
 
 #[derive(Clone, Copy)]
-struct ActorBuild<'a, 'segment> {
+struct ActorBuild<'a, 'camera> {
     actor: &'a actors::Actor,
     base_z: i16,
     style: ComposeStyle,
-    camera: Option<&'segment ActorSegmentCamera>,
+    camera: Option<&'camera ActorSegmentCamera<'camera>>,
     x_fold: Option<ActorXFold>,
 }
 
@@ -5053,7 +5054,7 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn build_actor_sequence_with_state<'a, 'segment, T, I>(
+fn build_actor_sequence_with_state<'a, 'camera, T, I>(
     actor_builds: I,
     parent: SmRect,
     m: &Metrics,
@@ -5072,7 +5073,7 @@ fn build_actor_sequence_with_state<'a, 'segment, T, I>(
     total_elapsed: f32,
 ) where
     T: TextureContext + ?Sized,
-    I: IntoIterator<Item = ActorBuild<'a, 'segment>>,
+    I: IntoIterator<Item = ActorBuild<'a, 'camera>>,
 {
     for ActorBuild {
         actor,
@@ -5084,7 +5085,8 @@ fn build_actor_sequence_with_state<'a, 'segment, T, I>(
     {
         match actor {
             actors::Actor::CameraPush { view_proj } => {
-                let matrix = segment_camera.map_or(*view_proj, |camera| *view_proj * camera.suffix);
+                let matrix =
+                    segment_camera.map_or(*view_proj, |camera| *view_proj * *camera.suffix);
                 cameras.push(matrix);
                 sequence.camera_stack.push(sequence.active_camera);
                 sequence.active_camera = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
@@ -5099,7 +5101,7 @@ fn build_actor_sequence_with_state<'a, 'segment, T, I>(
                 children,
             } => {
                 cameras
-                    .push(segment_camera.map_or(*view_proj, |camera| *view_proj * camera.suffix));
+                    .push(segment_camera.map_or(*view_proj, |camera| *view_proj * *camera.suffix));
                 let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
                 build_actor_list(
                     children,
@@ -5127,7 +5129,7 @@ fn build_actor_sequence_with_state<'a, 'segment, T, I>(
                 if sequence.camera_stack.is_empty() {
                     sequence.active_camera =
                         if let Some(root_camera) = segment_camera.map(|camera| camera.root) {
-                            sequence.camera_id(root_camera, cameras)
+                            sequence.camera_id(*root_camera, cameras)
                         } else {
                             sequence.base_camera
                         };
@@ -5300,7 +5302,7 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
     let camera = segment
         .flat_camera
         .map_or(sequence.active_camera, |matrix| {
-            sequence.camera_id(matrix, cameras)
+            sequence.camera_id(*matrix, cameras)
         });
     let style = ComposeStyle {
         tint: segment.tint,
@@ -9275,6 +9277,14 @@ mod tests {
     }
 
     #[test]
+    fn actor_segment_keeps_camera_metadata_borrowed() {
+        assert!(
+            std::mem::size_of::<ActorSegment<'_>>() <= 96,
+            "actor segments must not embed retained 4x4 camera matrices"
+        );
+    }
+
+    #[test]
     fn flat_draw_tail_matches_actor_render_frame() {
         let view_proj = Matrix4::from_translation(Vector3::new(3.0, 4.0, 5.0));
         let source = SpriteSource::static_texture("flat-note.png");
@@ -9421,7 +9431,7 @@ mod tests {
         let mut scratch = ComposeScratch::default();
         let actual =
             build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
-                &[ActorSegment::new(&camera_scope).with_flat_draws(&flat_draws, Some(view_proj))],
+                &[ActorSegment::new(&camera_scope).with_flat_draws(&flat_draws, Some(&view_proj))],
                 [0.0, 0.0, 0.0, 1.0],
                 &metrics,
                 &fonts,
@@ -9446,8 +9456,8 @@ mod tests {
                     100,
                     tint,
                     Some(BlendMode::Add),
-                    root_camera,
-                    camera_suffix,
+                    &root_camera,
+                    &camera_suffix,
                     fold,
                 )],
                 [0.0, 0.0, 0.0, 1.0],
@@ -9468,11 +9478,11 @@ mod tests {
                     100,
                     tint,
                     Some(BlendMode::Add),
-                    root_camera,
-                    camera_suffix,
+                    &root_camera,
+                    &camera_suffix,
                     fold,
                 )
-                .with_flat_draws(&flat_draws, Some(view_proj * camera_suffix))],
+                .with_flat_draws(&flat_draws, Some(&(view_proj * camera_suffix)))],
                 [0.0, 0.0, 0.0, 1.0],
                 &metrics,
                 &fonts,
@@ -9571,8 +9581,8 @@ mod tests {
                     100,
                     segment_tint,
                     Some(BlendMode::Add),
-                    root_camera,
-                    camera_suffix,
+                    &root_camera,
+                    &camera_suffix,
                     None,
                 )],
                 [0.0, 0.0, 0.0, 1.0],
@@ -11291,8 +11301,8 @@ mod tests {
                     100,
                     tint,
                     Some(BlendMode::Add),
-                    root_camera,
-                    Matrix4::IDENTITY,
+                    &root_camera,
+                    &Matrix4::IDENTITY,
                     Some(x_fold),
                 )],
                 [0.1, 0.2, 0.3, 1.0],
@@ -11315,11 +11325,11 @@ mod tests {
                     100,
                     tint,
                     Some(BlendMode::Add),
-                    root_camera,
-                    Matrix4::IDENTITY,
+                    &root_camera,
+                    &Matrix4::IDENTITY,
                     Some(x_fold),
                 )
-                .with_flat_draws(&draws, Some(root_camera))],
+                .with_flat_draws(&draws, Some(&root_camera))],
                 [0.1, 0.2, 0.3, 1.0],
                 &metrics,
                 &fonts,
@@ -11388,8 +11398,8 @@ mod tests {
                     100,
                     tint,
                     Some(BlendMode::Add),
-                    root_camera,
-                    Matrix4::IDENTITY,
+                    &root_camera,
+                    &Matrix4::IDENTITY,
                     Some(x_fold),
                 )],
                 [0.1, 0.2, 0.3, 1.0],
@@ -11421,11 +11431,11 @@ mod tests {
                     100,
                     tint,
                     Some(BlendMode::Add),
-                    root_camera,
-                    Matrix4::IDENTITY,
+                    &root_camera,
+                    &Matrix4::IDENTITY,
                     Some(x_fold),
                 )
-                .with_flat_draws(&draws, Some(root_camera))],
+                .with_flat_draws(&draws, Some(&root_camera))],
                 [0.1, 0.2, 0.3, 1.0],
                 &metrics,
                 &fonts,
