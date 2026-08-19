@@ -274,6 +274,24 @@ impl Backend {
         }
     }
 
+    pub fn set_default_projection(&mut self, projection: ProjectionMatrix) {
+        match &mut self.0 {
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            BackendImpl::Vulkan(state) => vulkan::set_default_projection(state, projection),
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            BackendImpl::VulkanWgpu(state) => wgpu_core::set_default_projection(state, projection),
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(state) => metal::set_default_projection(state, projection),
+            #[cfg(target_os = "macos")]
+            BackendImpl::MetalWgpu(state) => wgpu_core::set_default_projection(state, projection),
+            BackendImpl::OpenGL(state) => opengl::set_default_projection(state, projection),
+            BackendImpl::OpenGLWgpu(state) => wgpu_core::set_default_projection(state, projection),
+            BackendImpl::Software(state) => software::set_default_projection(state, projection),
+            #[cfg(target_os = "windows")]
+            BackendImpl::DirectX(state) => wgpu_core::set_default_projection(state, projection),
+        }
+    }
+
     pub fn cleanup(&mut self) {
         match &mut self.0 {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]

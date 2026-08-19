@@ -360,26 +360,25 @@ fn display_aspect_label_from_choice(index: usize) -> &'static str {
         .unwrap_or("16:9")
 }
 
-pub(in crate::screens::options) fn display_aspect_choice_index(width: u32, height: u32) -> usize {
-    if height == 0 {
+pub(in crate::screens::options) fn display_aspect_choice_index(aspect_ratio: f32) -> usize {
+    if !aspect_ratio.is_finite() || aspect_ratio <= 0.0 {
         return 0;
     }
     if let Some(index) = DISPLAY_ASPECT_RATIO_LABELS
         .iter()
-        .position(|label| aspect_matches(width, height, label))
+        .position(|label| aspect_ratio_matches(aspect_ratio, label))
     {
         return index;
     }
-    let ratio = width as f32 / height as f32;
     DISPLAY_ASPECT_RATIO_LABELS
         .iter()
         .enumerate()
         .min_by(|(_, lhs), (_, rhs)| {
             let delta = |label: &&str| match *label {
-                "16:9" => (ratio - 16.0 / 9.0).abs(),
-                "16:10" => (ratio - 16.0 / 10.0).abs(),
-                "4:3" => (ratio - 4.0 / 3.0).abs(),
-                "1:1" => (ratio - 1.0).abs(),
+                "16:9" => (aspect_ratio - 16.0 / 9.0).abs(),
+                "16:10" => (aspect_ratio - 16.0 / 10.0).abs(),
+                "4:3" => (aspect_ratio - 4.0 / 3.0).abs(),
+                "1:1" => (aspect_ratio - 1.0).abs(),
                 _ => f32::INFINITY,
             };
             delta(lhs).total_cmp(&delta(rhs))
@@ -387,11 +386,7 @@ pub(in crate::screens::options) fn display_aspect_choice_index(width: u32, heigh
         .map_or(0, |(index, _)| index)
 }
 
-fn aspect_matches(width: u32, height: u32, label: &str) -> bool {
-    if height == 0 {
-        return false;
-    }
-    let ratio = width as f32 / height as f32;
+fn aspect_ratio_matches(ratio: f32, label: &str) -> bool {
     match label {
         "16:9" => (ratio - 1.7777).abs() < 0.05,
         "16:10" => (ratio - 1.6).abs() < 0.05,
@@ -399,6 +394,13 @@ fn aspect_matches(width: u32, height: u32, label: &str) -> bool {
         "1:1" => (ratio - 1.0).abs() < 0.05,
         _ => true,
     }
+}
+
+fn aspect_matches(width: u32, height: u32, label: &str) -> bool {
+    if height == 0 {
+        return false;
+    }
+    aspect_ratio_matches(width as f32 / height as f32, label)
 }
 
 fn preset_resolutions_for_aspect(label: &str) -> Vec<(u32, u32)> {
@@ -862,12 +864,17 @@ pub(in crate::screens::options) fn selected_aspect_label(state: &State) -> &'sta
     display_aspect_label_from_choice(idx)
 }
 
-pub(in crate::screens::options) fn sync_display_aspect_ratio(
-    state: &mut State,
-    width: u32,
-    height: u32,
-) {
-    let idx = display_aspect_choice_index(width, height);
+pub(in crate::screens::options) fn selected_aspect_ratio(state: &State) -> f32 {
+    match selected_aspect_label(state) {
+        "16:10" => 16.0 / 10.0,
+        "4:3" => 4.0 / 3.0,
+        "1:1" => 1.0,
+        _ => 16.0 / 9.0,
+    }
+}
+
+pub(in crate::screens::options) fn sync_aspect_ratio_choice(state: &mut State, aspect_ratio: f32) {
+    let idx = display_aspect_choice_index(aspect_ratio);
     if let Some(slot) = get_choice_by_id_mut(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
@@ -989,8 +996,9 @@ pub(in crate::screens::options) fn rebuild_resolution_choices(
         list = preset_resolutions_for_aspect(aspect_label);
     }
 
-    // 3. Keep the current resolution only if it matches the selected aspect.
-    if aspect_matches(width, height, aspect_label) {
+    // Keep the selected physical mode even when it uses non-square pixels and
+    // therefore does not match the configured display aspect ratio.
+    if width > 0 && height > 0 {
         push_unique_resolution(&mut list, width, height);
     }
 

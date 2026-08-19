@@ -413,6 +413,7 @@ fn display_options<'a>(
     DisplayOptions {
         width: cfg.display_width,
         height: cfg.display_height,
+        aspect_ratio: cfg.display_aspect_ratio,
         monitor: cfg.display_monitor,
         fullscreen_type: cfg.fullscreen_type.as_str(),
         max_fps: cfg.max_fps,

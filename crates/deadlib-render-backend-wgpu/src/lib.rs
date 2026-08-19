@@ -1553,6 +1553,10 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     reconfigure_surface(state);
 }
 
+pub fn set_default_projection(state: &mut State, projection: Matrix4) {
+    state.projection = projection;
+}
+
 pub fn cleanup(state: &mut State) {
     info!("{} (wgpu) backend cleanup complete.", state.api.name());
 }

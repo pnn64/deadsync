@@ -2,14 +2,14 @@ use super::App;
 use crate::graphics::{
     GraphicsChangeContext, GraphicsDisplaySync, GraphicsRuntimeSettings,
     GraphicsRuntimeUpdate as RuntimeUpdate, GraphicsWindowPlan, RendererStartupSettings,
-    RendererSwitchRequest, RendererSwitchResourceResetPlan, apply_graphics_runtime_settings,
-    apply_recreate_display_change, apply_renderer_switch_restore_display,
-    apply_runtime_display_mode, apply_runtime_resolution, available_monitor_specs,
-    begin_renderer_switch, graphics_change_context, graphics_change_plan, graphics_runtime_updates,
-    recreate_display_sync, refresh_present_config, renderer_startup_config,
-    renderer_switch_begin_plan, renderer_switch_failure_plan, renderer_switch_plan,
-    renderer_switch_resource_reset_plan, renderer_switch_success_plan, restore_display_sync,
-    runtime_display_mode_sync, start_renderer_runtime, startup_display_sync,
+    RendererSwitchRequest, RendererSwitchResourceResetPlan, apply_display_aspect_ratio,
+    apply_graphics_runtime_settings, apply_recreate_display_change,
+    apply_renderer_switch_restore_display, apply_runtime_display_mode, apply_runtime_resolution,
+    available_monitor_specs, begin_renderer_switch, graphics_change_context, graphics_change_plan,
+    graphics_runtime_updates, recreate_display_sync, refresh_present_config,
+    renderer_startup_config, renderer_switch_begin_plan, renderer_switch_failure_plan,
+    renderer_switch_plan, renderer_switch_resource_reset_plan, renderer_switch_success_plan,
+    restore_display_sync, runtime_display_mode_sync, start_renderer_runtime, startup_display_sync,
     sync_renderer_window_size,
 };
 use deadlib_render_core::{BackendType, PresentModePolicy};
@@ -118,6 +118,7 @@ pub(super) fn options_graphics_view() -> GraphicsOptionsView {
         monitor: cfg.display_monitor,
         width: cfg.display_width,
         height: cfg.display_height,
+        aspect_ratio: cfg.display_aspect_ratio,
         max_fps: cfg.max_fps,
         vsync: cfg.vsync,
         present_policy: theme_present_policy(cfg.present_mode_policy),
@@ -155,6 +156,7 @@ impl App {
             renderer,
             display_mode,
             resolution,
+            aspect_ratio,
             monitor,
             vsync,
             present_mode_policy,
@@ -179,6 +181,7 @@ impl App {
                 renderer,
                 display_mode,
                 resolution,
+                aspect_ratio,
                 monitor_requested: monitor.is_some(),
                 vsync,
                 present_mode_policy,
@@ -501,6 +504,19 @@ impl App {
                     debug!("Graphics setting changed: high_dpi={enabled}");
                     config::update_high_dpi(enabled);
                     options::sync_high_dpi(&mut self.state.screens.options_state, enabled);
+                }
+                RuntimeUpdate::AspectRatio(aspect_ratio) => {
+                    debug!("Graphics setting changed: display_aspect_ratio={aspect_ratio}");
+                    config::update_display_aspect_ratio(aspect_ratio);
+                    apply_display_aspect_ratio(
+                        &mut self.state.shell,
+                        &mut self.backend,
+                        aspect_ratio,
+                    );
+                    options::sync_display_aspect_ratio(
+                        &mut self.state.screens.options_state,
+                        aspect_ratio,
+                    );
                 }
                 RuntimeUpdate::Resolution(w, h) => {
                     config::update_display_resolution(w, h);

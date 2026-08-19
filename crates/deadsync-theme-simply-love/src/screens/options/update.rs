@@ -94,10 +94,16 @@ pub fn sync_display_mode(
 }
 
 pub fn sync_display_resolution(state: &mut State, width: u32, height: u32) {
-    sync_display_aspect_ratio(state, width, height);
     rebuild_resolution_choices(state, width, height);
     state.display_width_at_load = width;
     state.display_height_at_load = height;
+    sync_submenu_cursor_indices(state);
+    clear_render_cache(state);
+}
+
+pub fn sync_display_aspect_ratio(state: &mut State, aspect_ratio: f32) {
+    sync_aspect_ratio_choice(state, aspect_ratio);
+    state.display_aspect_ratio_at_load = aspect_ratio;
     sync_submenu_cursor_indices(state);
     clear_render_cache(state);
 }
@@ -369,6 +375,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                 desired_renderer,
                 desired_display_mode,
                 desired_resolution,
+                desired_aspect_ratio,
                 desired_monitor,
                 desired_vsync,
                 desired_present_mode_policy,
@@ -381,6 +388,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                     Some(selected_video_renderer(state)),
                     Some(selected_display_mode(state)),
                     Some(selected_resolution(state)),
+                    Some(selected_aspect_ratio(state)),
                     Some(selected_display_monitor(state)),
                     Some(vsync),
                     Some(present_mode_policy),
@@ -397,7 +405,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                     )),
                 )
             } else {
-                (None, None, None, None, None, None, None, None, None)
+                (None, None, None, None, None, None, None, None, None, None)
             };
             let step = if SUBMENU_FADE_DURATION > 0.0 {
                 dt / SUBMENU_FADE_DURATION
@@ -426,6 +434,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                 let mut renderer_change: Option<RendererChoice> = None;
                 let mut display_mode_change: Option<DisplayModeChoice> = None;
                 let mut resolution_change: Option<(u32, u32)> = None;
+                let mut aspect_ratio_change: Option<f32> = None;
                 let mut monitor_change: Option<usize> = None;
                 let mut vsync_change: Option<bool> = None;
                 let mut present_mode_policy_change: Option<PresentPolicyChoice> = None;
@@ -452,6 +461,11 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                     && (w != state.display_width_at_load || h != state.display_height_at_load)
                 {
                     resolution_change = Some((w, h));
+                }
+                if let Some(aspect_ratio) = desired_aspect_ratio
+                    && (aspect_ratio - state.display_aspect_ratio_at_load).abs() > f32::EPSILON
+                {
+                    aspect_ratio_change = Some(aspect_ratio);
                 }
                 if let Some(vsync) = desired_vsync
                     && vsync != state.vsync_at_load
@@ -487,6 +501,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                     || display_mode_change.is_some()
                     || monitor_change.is_some()
                     || resolution_change.is_some()
+                    || aspect_ratio_change.is_some()
                     || vsync_change.is_some()
                     || present_mode_policy_change.is_some()
                     || max_fps_change.is_some()
@@ -499,6 +514,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                             display_mode: display_mode_change,
                             monitor: monitor_change,
                             resolution: resolution_change,
+                            aspect_ratio: aspect_ratio_change,
                             vsync: vsync_change,
                             present_mode_policy: present_mode_policy_change,
                             max_fps: max_fps_change,

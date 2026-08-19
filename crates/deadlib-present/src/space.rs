@@ -171,14 +171,14 @@ pub fn screen_center_y() -> f32 {
 }
 
 // -----------------------------------------------------------------------------
-// Metrics for a given window (pixels → world space, clamped ≤ 16:9)
+// Metrics for a display aspect ratio (clamped ≤ 16:9)
 // -----------------------------------------------------------------------------
 #[inline(always)]
-pub fn metrics_for_window(px_w: u32, px_h: u32) -> Metrics {
-    let aspect = if px_h == 0 {
-        1.0
+pub fn metrics_for_aspect(aspect: f32) -> Metrics {
+    let aspect = if aspect.is_finite() && aspect > 0.0 {
+        aspect
     } else {
-        px_w as f32 / px_h as f32
+        1.0
     };
     let h = logical_height(); // 480 world units
     let w = if aspect >= 16.0 / 9.0 {
@@ -199,6 +199,22 @@ pub fn metrics_for_window(px_w: u32, px_h: u32) -> Metrics {
     }
 }
 
+#[inline(always)]
+pub fn metrics_for_window(px_w: u32, px_h: u32) -> Metrics {
+    let aspect = if px_h == 0 {
+        1.0
+    } else {
+        px_w as f32 / px_h as f32
+    };
+    metrics_for_aspect(aspect)
+}
+
+#[inline(always)]
+pub fn ortho_for_aspect(aspect: f32) -> Matrix4 {
+    let m = metrics_for_aspect(aspect);
+    glam::camera::rh::proj::opengl::orthographic(m.left, m.right, m.bottom, m.top, -1.0, 1.0)
+}
+
 // -----------------------------------------------------------------------------
 // Ortho for current window (also stores CURRENT_PIXEL + CURRENT_METRICS)
 // -----------------------------------------------------------------------------
@@ -207,7 +223,7 @@ pub fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
     set_current_window_px(width, height);
     let m = metrics_for_window(width, height);
     set_current_metrics(m);
-    glam::camera::rh::proj::opengl::orthographic(m.left, m.right, m.bottom, m.top, -1.0, 1.0)
+    ortho_for_aspect(width as f32 / height.max(1) as f32)
 }
 
 // -----------------------------------------------------------------------------
@@ -265,5 +281,15 @@ mod tests {
         // scaleX is column 0 row 0, scaleY is column 1 row 1.
         assert!((cols[0] - MIN_OVERSCAN_SCALE).abs() < 1e-6);
         assert!((cols[5] - MIN_OVERSCAN_SCALE).abs() < 1e-6);
+    }
+
+    #[test]
+    fn configured_aspect_is_independent_of_pixel_resolution() {
+        let from_aspect = metrics_for_aspect(4.0 / 3.0);
+        let square_pixels = metrics_for_window(3840, 780);
+
+        assert_eq!(from_aspect.right - from_aspect.left, 640.0);
+        assert_eq!(from_aspect.top - from_aspect.bottom, 480.0);
+        assert_eq!(square_pixels.right - square_pixels.left, 854.0);
     }
 }

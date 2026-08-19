@@ -25,6 +25,7 @@ pub struct RendererInitConfig {
     pub present_mode_policy: PresentModePolicy,
     pub gfx_debug_enabled: bool,
     pub software_renderer_threads: u8,
+    pub display_aspect_ratio: f32,
 }
 
 pub struct RendererInitResult {
@@ -152,7 +153,8 @@ pub fn initialize_renderer(
 ) -> Result<RendererInitResult, Box<dyn Error>> {
     let window = setup.window;
     let size = render_size_for_window(&window, config.backend_type, config.high_dpi);
-    let metrics = space::metrics_for_window(size.width, size.height);
+    let metrics = space::metrics_for_aspect(config.display_aspect_ratio);
+    space::set_current_window_px(size.width, size.height);
     space::set_current_metrics(metrics);
 
     let mut backend = create_backend(
@@ -163,6 +165,7 @@ pub fn initialize_renderer(
         config.gfx_debug_enabled,
         config.high_dpi,
     )?;
+    backend.set_default_projection(space::ortho_for_aspect(config.display_aspect_ratio));
     if config.backend_type == BackendType::Software {
         backend.configure_software_threads(software_thread_count(config.software_renderer_threads));
     }
@@ -199,6 +202,7 @@ pub fn renderer_startup_config(
             present_mode_policy: shell.present_mode_policy,
             gfx_debug_enabled: settings.gfx_debug_enabled,
             software_renderer_threads: settings.software_renderer_threads,
+            display_aspect_ratio: shell.display_aspect_ratio,
         },
     }
 }
@@ -569,13 +573,31 @@ pub fn sync_renderer_window_size(
         render_size_for_physical(window, backend_type, high_dpi, physical_size)
     });
     if render_size.width > 0 && render_size.height > 0 {
-        shell.metrics = space::metrics_for_window(render_size.width, render_size.height);
+        shell.metrics = space::metrics_for_aspect(shell.display_aspect_ratio);
+        space::set_current_window_px(render_size.width, render_size.height);
         space::set_current_metrics(shell.metrics);
     }
     if let Some(backend) = backend {
         backend.resize(render_size.width, render_size.height);
+        backend.set_default_projection(space::ortho_for_aspect(shell.display_aspect_ratio));
     }
     render_size
+}
+
+pub fn apply_display_aspect_ratio(
+    shell: &mut ShellState,
+    backend: &mut Option<Backend>,
+    aspect_ratio: f32,
+) {
+    if !aspect_ratio.is_finite() || aspect_ratio <= 0.0 {
+        return;
+    }
+    shell.display_aspect_ratio = aspect_ratio;
+    shell.metrics = space::metrics_for_aspect(aspect_ratio);
+    space::set_current_metrics(shell.metrics);
+    if let Some(backend) = backend {
+        backend.set_default_projection(space::ortho_for_aspect(aspect_ratio));
+    }
 }
 
 pub fn apply_display_mode_result(
@@ -712,7 +734,7 @@ pub struct GraphicsChangeRequest {
     pub present_config_changed: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GraphicsRuntimeSettings {
     pub renderer: Option<BackendType>,
     pub display_mode: Option<DisplayMode>,
@@ -722,9 +744,10 @@ pub struct GraphicsRuntimeSettings {
     pub present_mode_policy: Option<PresentModePolicy>,
     pub max_fps: Option<u16>,
     pub high_dpi: Option<bool>,
+    pub aspect_ratio: Option<f32>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GraphicsRuntimeSettingsResult {
     pub request: GraphicsChangeRequest,
     pub vsync: Option<bool>,
@@ -732,14 +755,16 @@ pub struct GraphicsRuntimeSettingsResult {
     pub max_fps: Option<u16>,
     pub high_dpi: Option<bool>,
     pub resolution: Option<(u32, u32)>,
+    pub aspect_ratio: Option<f32>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum GraphicsRuntimeUpdate {
     Vsync(bool),
     MaxFps(u16),
     PresentModePolicy(PresentModePolicy),
     HighDpi(bool),
+    AspectRatio(f32),
     Resolution(u32, u32),
 }
 
@@ -758,6 +783,9 @@ pub fn graphics_runtime_updates(
     }
     if let Some(enabled) = result.high_dpi {
         updates.push(GraphicsRuntimeUpdate::HighDpi(enabled));
+    }
+    if let Some(aspect_ratio) = result.aspect_ratio {
+        updates.push(GraphicsRuntimeUpdate::AspectRatio(aspect_ratio));
     }
     if let Some((width, height)) = result.resolution {
         updates.push(GraphicsRuntimeUpdate::Resolution(width, height));
@@ -845,6 +873,12 @@ pub fn apply_graphics_runtime_settings(
         shell.display_width = width;
         shell.display_height = height;
     }
+    if let Some(aspect_ratio) = settings.aspect_ratio
+        && aspect_ratio.is_finite()
+        && aspect_ratio > 0.0
+    {
+        shell.display_aspect_ratio = aspect_ratio;
+    }
 
     GraphicsRuntimeSettingsResult {
         request: GraphicsChangeRequest {
@@ -860,6 +894,7 @@ pub fn apply_graphics_runtime_settings(
         max_fps: settings.max_fps,
         high_dpi: settings.high_dpi,
         resolution: settings.resolution,
+        aspect_ratio: settings.aspect_ratio,
     }
 }
 
@@ -966,6 +1001,7 @@ mod tests {
             present_mode_policy: None,
             max_fps: None,
             high_dpi: None,
+            aspect_ratio: None,
         }
     }
 
@@ -983,11 +1019,13 @@ mod tests {
                 present_mode_policy: Some(PresentModePolicy::Immediate),
                 max_fps: Some(144),
                 high_dpi: Some(true),
+                aspect_ratio: Some(4.0 / 3.0),
             },
         );
 
         assert_eq!(shell.display_width, 1024);
         assert_eq!(shell.display_height, 768);
+        assert_eq!(shell.display_aspect_ratio, 4.0 / 3.0);
         assert!(!shell.vsync_enabled);
         assert_eq!(shell.present_mode_policy, PresentModePolicy::Immediate);
         assert_eq!(
@@ -1005,6 +1043,21 @@ mod tests {
     }
 
     #[test]
+    fn display_aspect_updates_logical_metrics_without_changing_resolution() {
+        let mut shell = ShellState::new(&Config::default(), 0);
+        shell.display_width = 3840;
+        shell.display_height = 780;
+        let mut backend = None;
+
+        apply_display_aspect_ratio(&mut shell, &mut backend, 4.0 / 3.0);
+
+        assert_eq!(shell.display_width, 3840);
+        assert_eq!(shell.display_height, 780);
+        assert_eq!(shell.metrics.right - shell.metrics.left, 640.0);
+        assert_eq!(shell.metrics.top - shell.metrics.bottom, 480.0);
+    }
+
+    #[test]
     fn runtime_settings_result_reports_ordered_root_updates() {
         let mut shell = ShellState::new(&Config::default(), 0);
         let result = apply_graphics_runtime_settings(
@@ -1015,6 +1068,7 @@ mod tests {
                 present_mode_policy: Some(PresentModePolicy::Immediate),
                 max_fps: Some(144),
                 high_dpi: Some(false),
+                aspect_ratio: Some(4.0 / 3.0),
                 ..runtime_settings()
             },
         );
@@ -1026,6 +1080,7 @@ mod tests {
                 GraphicsRuntimeUpdate::MaxFps(144),
                 GraphicsRuntimeUpdate::PresentModePolicy(PresentModePolicy::Immediate),
                 GraphicsRuntimeUpdate::HighDpi(false),
+                GraphicsRuntimeUpdate::AspectRatio(4.0 / 3.0),
                 GraphicsRuntimeUpdate::Resolution(1024, 768),
             ],
         );

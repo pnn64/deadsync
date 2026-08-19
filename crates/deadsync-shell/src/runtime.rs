@@ -41,6 +41,7 @@ pub struct ShellState {
     pub transition: TransitionState,
     pub display_width: u32,
     pub display_height: u32,
+    pub display_aspect_ratio: f32,
     pub pending_window_position: Option<PhysicalPosition<i32>>,
     pub interaction: ShellInteractionState,
     pub screenshot: ScreenshotRuntimeState<PlayerSide>,
@@ -48,7 +49,7 @@ pub struct ShellState {
 
 impl ShellState {
     pub fn new(cfg: &Config, overlay_mode: u8) -> Self {
-        let metrics = space::metrics_for_window(cfg.display_width, cfg.display_height);
+        let metrics = space::metrics_for_aspect(cfg.display_aspect_ratio);
         let now = Instant::now();
         Self {
             frame_count: 0,
@@ -81,6 +82,7 @@ impl ShellState {
             transition: TransitionState::Idle,
             display_width: cfg.display_width,
             display_height: cfg.display_height,
+            display_aspect_ratio: cfg.display_aspect_ratio,
             display_monitor: cfg.display_monitor,
             pending_window_position: None,
             interaction: ShellInteractionState::new(cfg.tab_acceleration),
@@ -296,6 +298,7 @@ mod tests {
         let mut cfg = Config::default();
         cfg.display_width = 1600;
         cfg.display_height = 900;
+        cfg.display_aspect_ratio = 4.0 / 3.0;
         cfg.display_monitor = 2;
         cfg.vsync = false;
         cfg.tab_acceleration = false;
@@ -304,6 +307,7 @@ mod tests {
 
         assert_eq!(state.display_width, 1600);
         assert_eq!(state.display_height, 900);
+        assert_eq!(state.display_aspect_ratio, 4.0 / 3.0);
         assert_eq!(state.display_monitor, 2);
         assert!(!state.vsync_enabled);
         assert_eq!(state.overlay_mode, OverlayMode::FpsAndStutter);

@@ -110,7 +110,7 @@ pub struct GraphicsMonitorView {
 
 /// Current graphics configuration and host-dependent choices exposed without
 /// renderer, windowing, or platform implementation types.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct GraphicsOptionsView {
     pub renderer: RendererChoice,
     pub display_mode: DisplayModeChoice,
@@ -118,6 +118,7 @@ pub struct GraphicsOptionsView {
     pub monitor: usize,
     pub width: u32,
     pub height: u32,
+    pub aspect_ratio: f32,
     pub max_fps: u16,
     pub vsync: bool,
     pub present_policy: PresentPolicyChoice,

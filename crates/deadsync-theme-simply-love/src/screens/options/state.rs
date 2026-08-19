@@ -255,6 +255,7 @@ pub struct State {
     pub(super) display_monitor_at_load: usize,
     pub(super) display_width_at_load: u32,
     pub(super) display_height_at_load: u32,
+    pub(super) display_aspect_ratio_at_load: f32,
     pub(super) max_fps_at_load: u16,
     pub(super) vsync_at_load: bool,
     pub(super) present_mode_policy_at_load: PresentPolicyChoice,
@@ -324,6 +325,12 @@ pub fn init(view: OptionsInitView) -> State {
         smx_gifs: smx_gif_catalog,
         score_import_profiles,
     } = view;
+    let display_aspect_ratio =
+        if graphics_options.aspect_ratio.is_finite() && graphics_options.aspect_ratio > 0.0 {
+            graphics_options.aspect_ratio
+        } else {
+            16.0 / 9.0
+        };
     let mut system_noteskin_choices = noteskin_catalog.names;
     if system_noteskin_choices.is_empty() {
         system_noteskin_choices.push(deadsync_profile::NoteSkin::DEFAULT_NAME.to_string());
@@ -487,6 +494,7 @@ pub fn init(view: OptionsInitView) -> State {
         display_monitor_at_load: graphics_options.monitor,
         display_width_at_load: graphics_options.width,
         display_height_at_load: graphics_options.height,
+        display_aspect_ratio_at_load: display_aspect_ratio,
         max_fps_at_load: graphics_options.max_fps,
         vsync_at_load: graphics_options.vsync,
         present_mode_policy_at_load: graphics_options.present_policy,
@@ -531,6 +539,7 @@ pub fn init(view: OptionsInitView) -> State {
         graphics_options.monitor,
         1,
     );
+    sync_display_aspect_ratio(&mut state, display_aspect_ratio);
     sync_display_resolution(&mut state, graphics_options.width, graphics_options.height);
 
     set_choice_by_id(

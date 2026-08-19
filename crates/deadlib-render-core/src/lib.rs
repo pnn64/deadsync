@@ -10,6 +10,7 @@ use std::{collections::HashMap, sync::Arc};
 
 // --- Public Data Contract ---
 pub type TextureHandle = u64;
+pub type ProjectionMatrix = Matrix4;
 pub const INVALID_TEXTURE_HANDLE: TextureHandle = 0;
 pub type FastU64Map<V> = HashMap<u64, V, rustc_hash::FxBuildHasher>;
 pub type TMeshCacheKey = u64;

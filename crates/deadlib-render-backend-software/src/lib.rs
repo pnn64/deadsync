@@ -609,6 +609,10 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     state.projection = ortho_for_window(width, height);
 }
 
+pub fn set_default_projection(state: &mut State, projection: Matrix4) {
+    state.projection = projection;
+}
+
 pub fn cleanup(_state: &mut State) {
     info!("Software renderer backend cleanup.");
 }

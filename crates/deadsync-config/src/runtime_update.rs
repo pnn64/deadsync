@@ -83,6 +83,7 @@ update_config_fn!(pub fn update_translated_titles(enabled: bool) => set_translat
 
 update_config_fn!(pub fn update_display_mode(mode: DisplayMode) => set_display_mode);
 update_config_fn2!(pub fn update_display_resolution(width: u32, height: u32) => set_display_resolution);
+update_config_fn!(pub fn update_display_aspect_ratio(aspect_ratio: f32) => set_display_aspect_ratio);
 update_config_fn!(pub fn update_display_monitor(monitor: usize) => set_display_monitor);
 update_config_fn!(pub fn update_video_renderer(renderer: BackendType) => set_video_renderer);
 update_config_fn!(pub fn update_gfx_debug(enabled: bool) => set_gfx_debug);

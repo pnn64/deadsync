@@ -348,10 +348,11 @@ pub struct SystemInputHardwareOptions<'a> {
     pub smx_underglow_grb: Option<bool>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DisplayOptions<'a> {
     pub width: u32,
     pub height: u32,
+    pub aspect_ratio: f32,
     pub monitor: usize,
     pub fullscreen_type: &'a str,
     pub max_fps: u16,
@@ -370,7 +371,7 @@ pub struct RuntimeIoOptions<'a> {
     pub lights_com_port: &'a str,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DisplayLoadOptions<F, P, V> {
     pub vsync: bool,
     pub max_fps: u16,
@@ -380,6 +381,7 @@ pub struct DisplayLoadOptions<F, P, V> {
     pub monitor: usize,
     pub width: u32,
     pub height: u32,
+    pub aspect_ratio: f32,
     pub video_renderer: V,
 }
 
@@ -444,6 +446,11 @@ where
             .get("Options", "DisplayHeight")
             .and_then(|value| value.parse::<u32>().ok())
             .unwrap_or(default.height),
+        aspect_ratio: conf
+            .get("Options", "DisplayAspectRatio")
+            .and_then(|value| value.parse::<f32>().ok())
+            .filter(|ratio| ratio.is_finite() && *ratio > 0.0)
+            .unwrap_or(default.aspect_ratio),
         video_renderer: conf
             .get("Options", "VideoRenderer")
             .and_then(parse_video_renderer)
@@ -907,6 +914,7 @@ pub fn push_system_input_hardware_option_lines(
 }
 
 pub fn push_display_size_option_lines(content: &mut String, options: DisplayOptions<'_>) {
+    push_line(content, "DisplayAspectRatio", options.aspect_ratio);
     push_line(content, "DisplayHeight", options.height);
     push_line(content, "DisplayWidth", options.width);
 }
@@ -2415,6 +2423,7 @@ mod tests {
                 DisplayMonitor=2
                 DisplayWidth=1920
                 DisplayHeight=1080
+                DisplayAspectRatio=1.3333334
                 VideoRenderer=a
                 "#),
             DisplayLoadOptions {
@@ -2426,6 +2435,7 @@ mod tests {
                 monitor: 0,
                 width: 1600,
                 height: 900,
+                aspect_ratio: 16.0 / 9.0,
                 video_renderer: 'b',
             },
             parse_letter_token,
@@ -2446,6 +2456,7 @@ mod tests {
                 monitor: 2,
                 width: 1920,
                 height: 1080,
+                aspect_ratio: 4.0 / 3.0,
                 video_renderer: 'a',
             },
         );
@@ -2464,6 +2475,7 @@ mod tests {
                 monitor: 0,
                 width: 1600,
                 height: 900,
+                aspect_ratio: 16.0 / 9.0,
                 video_renderer: 'b',
             },
             parse_letter_token,
@@ -2892,6 +2904,7 @@ mod tests {
         let options = DisplayOptions {
             width: 1600,
             height: 900,
+            aspect_ratio: 4.0 / 3.0,
             monitor: 2,
             fullscreen_type: "Borderless",
             max_fps: 144,
@@ -2910,6 +2923,7 @@ mod tests {
         assert_eq!(
             content,
             concat!(
+                "DisplayAspectRatio=1.3333334\n",
                 "DisplayHeight=900\n",
                 "DisplayWidth=1600\n",
                 "DisplayMonitor=2\n",

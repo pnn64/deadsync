@@ -45,6 +45,13 @@ pub fn set_display_resolution(cfg: &mut Config, width: u32, height: u32) -> bool
     )
 }
 
+pub fn set_display_aspect_ratio(cfg: &mut Config, aspect_ratio: f32) -> bool {
+    if !aspect_ratio.is_finite() || aspect_ratio <= 0.0 {
+        return false;
+    }
+    set_f32_if_changed(&mut cfg.display_aspect_ratio, aspect_ratio)
+}
+
 pub fn set_overscan(
     cfg: &mut Config,
     translate_x: i32,

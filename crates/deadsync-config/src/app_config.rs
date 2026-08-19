@@ -79,6 +79,9 @@ pub struct Config {
     pub cdtitle_cache: bool,
     pub display_width: u32,
     pub display_height: u32,
+    /// Physical display aspect ratio, independent of the framebuffer resolution.
+    /// This supports non-square-pixel displays such as arcade CRTs.
+    pub display_aspect_ratio: f32,
     /// Overscan adjustment (CenterImage). Values are in
     /// physical window pixels and scale/translate the entire rendered image so
     /// content cut off by display overscan can be pulled back into view.
@@ -396,6 +399,7 @@ impl Default for Config {
             cdtitle_cache: system.cdtitle_cache,
             display_width: DEFAULT_DISPLAY_WIDTH,
             display_height: DEFAULT_DISPLAY_HEIGHT,
+            display_aspect_ratio: DEFAULT_DISPLAY_ASPECT_RATIO,
             center_image_translate_x: system.center_image_translate_x,
             center_image_translate_y: system.center_image_translate_y,
             center_image_add_width: system.center_image_add_width,

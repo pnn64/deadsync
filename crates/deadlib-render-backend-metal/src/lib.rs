@@ -666,6 +666,10 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     set_depth_target(&state.render_pass.descriptor, &state.depth);
 }
 
+pub fn set_default_projection(state: &mut State, projection: Matrix4) {
+    state.projection = projection;
+}
+
 pub fn set_present_config(
     state: &mut State,
     vsync_enabled: bool,

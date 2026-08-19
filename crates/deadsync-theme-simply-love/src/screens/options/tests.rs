@@ -1478,7 +1478,7 @@ fn select_visible_row(state: &mut State, kind: SubmenuKind, row_id: SubRowId) ->
 
 #[test]
 fn inferred_aspect_choice_maps_1024x768_to_4_3() {
-    let idx = display_aspect_choice_index(1024, 768);
+    let idx = display_aspect_choice_index(4.0 / 3.0);
     assert!(matches!(
         DISPLAY_ASPECT_RATIO_CHOICES[idx],
         Choice::Literal("4:3")
@@ -1488,11 +1488,23 @@ fn inferred_aspect_choice_maps_1024x768_to_4_3() {
 #[test]
 fn sync_display_resolution_selects_loaded_4_3_mode() {
     let mut state = init();
+    sync_display_aspect_ratio(&mut state, 4.0 / 3.0);
     sync_display_resolution(&mut state, 1024, 768);
 
     assert_eq!(selected_aspect_label(&state), "4:3");
     assert_eq!(selected_resolution(&state), (1024, 768));
     assert!(state.resolution_choices.contains(&(1024, 768)));
+}
+
+#[test]
+fn non_square_pixel_mode_survives_aspect_change() {
+    let mut state = init();
+    sync_display_resolution(&mut state, 3840, 780);
+    sync_display_aspect_ratio(&mut state, 4.0 / 3.0);
+    rebuild_resolution_choices(&mut state, 3840, 780);
+
+    assert_eq!(selected_aspect_ratio(&state), 4.0 / 3.0);
+    assert_eq!(selected_resolution(&state), (3840, 780));
 }
 
 #[test]
@@ -2815,4 +2827,41 @@ fn graphics_threads_emit_neutral_request_on_exit() {
         ),
         "unexpected effects: {effects:?}"
     );
+}
+
+#[test]
+fn graphics_aspect_change_is_independent_of_resolution() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Graphics);
+    let (width, height) = selected_resolution(&state);
+    state.display_width_at_load = width;
+    state.display_height_at_load = height;
+    *get_choice_by_id_mut(
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::DisplayAspectRatio,
+    )
+    .expect("display aspect row") = 2;
+    state.submenu_transition = SubmenuTransition::FadeOutToMain;
+
+    let mut effects = Vec::new();
+    update(
+        &mut state,
+        SUBMENU_FADE_DURATION + 0.001,
+        &asset_manager,
+        &SmxAssignmentView::default(),
+        &mut effects,
+    );
+
+    assert!(matches!(
+        effects.as_slice(),
+        [ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::Graphics(deadsync_theme::GraphicsRequest {
+                aspect_ratio: Some(ratio),
+                resolution: None,
+                ..
+            })
+        )] if (*ratio - 4.0 / 3.0).abs() <= f32::EPSILON
+    ));
 }

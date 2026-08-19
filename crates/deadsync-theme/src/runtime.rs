@@ -287,12 +287,13 @@ pub fn thread_count_from_choice(values: &[u8], index: usize) -> u8 {
 ///
 /// The shell maps these semantic choices to its renderer, window, and persisted
 /// configuration types before applying them.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GraphicsRequest {
     pub renderer: Option<RendererChoice>,
     pub display_mode: Option<DisplayModeChoice>,
     pub monitor: Option<usize>,
     pub resolution: Option<(u32, u32)>,
+    pub aspect_ratio: Option<f32>,
     pub vsync: Option<bool>,
     pub present_mode_policy: Option<PresentPolicyChoice>,
     pub max_fps: Option<u16>,

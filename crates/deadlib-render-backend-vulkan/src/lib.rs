@@ -2287,6 +2287,10 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     }
 }
 
+pub fn set_default_projection(state: &mut State, projection: Matrix4) {
+    state.projection = projection;
+}
+
 // --- ALL HELPER FUNCTIONS ---
 
 fn create_image_view(

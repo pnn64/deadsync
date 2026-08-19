@@ -1931,6 +1931,10 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     state.projection = ortho_for_window(width, height);
 }
 
+pub fn set_default_projection(state: &mut State, projection: Matrix4) {
+    state.projection = projection;
+}
+
 pub fn cleanup(state: &mut State) {
     info!("Cleaning up OpenGL resources...");
     // SAFETY: all GL object handles below were created by this backend and are
