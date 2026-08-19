@@ -113,12 +113,17 @@ fn resolved_held_miss_texture(
 }
 
 #[inline(always)]
-fn judgment_frame_size(texture_key: &str) -> [f32; 2] {
+fn sprite_frame_size(texture_key: &str, fallback: [f32; 2]) -> [f32; 2] {
     let Some(meta) = assets::texture_dims(texture_key) else {
-        return [0.0, 76.0];
+        return fallback;
     };
     let (w, h) = assets::texture_source_frame_dims_from_real(texture_key, meta.w, meta.h);
     [w as f32, h as f32]
+}
+
+#[inline(always)]
+fn judgment_frame_size(texture_key: &str) -> [f32; 2] {
+    sprite_frame_size(texture_key, [0.0, 76.0])
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -146,6 +151,8 @@ pub(crate) struct ResolvedJudgmentAssets {
     held_miss: Option<&'static assets::TextureChoice>,
     held_miss_scale: Option<f32>,
     judgment_sprite: Cell<Option<CachedJudgmentSpriteMetadata>>,
+    hold_judgment_sprite: Cell<Option<CachedJudgmentSpriteMetadata>>,
+    held_miss_sprite: Cell<Option<CachedJudgmentSpriteMetadata>>,
 }
 
 impl ResolvedJudgmentAssets {
@@ -163,6 +170,8 @@ impl ResolvedJudgmentAssets {
                 }
             }),
             judgment_sprite: Cell::new(None),
+            hold_judgment_sprite: Cell::new(None),
+            held_miss_sprite: Cell::new(None),
         }
     }
 
@@ -200,24 +209,80 @@ impl ResolvedJudgmentAssets {
         registry_generation: u64,
         resolve: impl FnOnce(&assets::TextureChoice) -> JudgmentSpriteMetadata,
     ) -> Option<JudgmentSpriteMetadata> {
-        let texture = self.judgment?;
-        if let Some(cached) = self.judgment_sprite.get()
-            && cached.registry_generation == registry_generation
-        {
-            return Some(cached.metadata);
-        }
-
-        let metadata = resolve(texture);
-        self.judgment_sprite.set(Some(CachedJudgmentSpriteMetadata {
+        cached_sprite_metadata(
+            self.judgment,
+            &self.judgment_sprite,
             registry_generation,
-            metadata,
-        }));
-        Some(metadata)
+            resolve,
+        )
+    }
+
+    #[inline(always)]
+    fn hold_judgment_sprite_metadata(&self) -> Option<JudgmentSpriteMetadata> {
+        cached_sprite_metadata(
+            self.hold_judgment,
+            &self.hold_judgment_sprite,
+            assets::texture_registry_generation(),
+            |texture| resolve_sprite_metadata(texture, [0.0; 2]),
+        )
+    }
+
+    #[inline(always)]
+    fn held_miss_sprite_metadata(&self) -> Option<JudgmentSpriteMetadata> {
+        cached_sprite_metadata(
+            self.held_miss,
+            &self.held_miss_sprite,
+            assets::texture_registry_generation(),
+            |texture| resolve_sprite_metadata(texture, [0.0; 2]),
+        )
     }
 
     pub(crate) fn prewarm(&self) {
         let _ = self.judgment_sprite_metadata();
+        let _ = self.hold_judgment_sprite_metadata();
+        let _ = self.held_miss_sprite_metadata();
     }
+}
+
+fn resolve_sprite_metadata(
+    texture: &assets::TextureChoice,
+    fallback: [f32; 2],
+) -> JudgmentSpriteMetadata {
+    let (frame_cols, frame_rows) = assets::parse_sprite_sheet_dims(texture.key.as_ref());
+    let frame_size = assets::texture_dims(texture.key.as_ref()).map_or(fallback, |meta| {
+        [
+            meta.w as f32 / frame_cols.max(1) as f32,
+            meta.h as f32 / frame_rows.max(1) as f32,
+        ]
+    });
+    JudgmentSpriteMetadata {
+        // Indicator SpriteBuilders previously used their texture's native
+        // atlas-cell size. Preserve that exact contract; held-miss scaling
+        // already handles the authored `(doubleres)` option separately.
+        frame_size,
+        frame_cols: frame_cols as usize,
+        frame_rows: frame_rows as usize,
+    }
+}
+
+fn cached_sprite_metadata(
+    texture: Option<&'static assets::TextureChoice>,
+    cache: &Cell<Option<CachedJudgmentSpriteMetadata>>,
+    registry_generation: u64,
+    resolve: impl FnOnce(&assets::TextureChoice) -> JudgmentSpriteMetadata,
+) -> Option<JudgmentSpriteMetadata> {
+    let texture = texture?;
+    if let Some(cached) = cache.get()
+        && cached.registry_generation == registry_generation
+    {
+        return Some(cached.metadata);
+    }
+    let metadata = resolve(texture);
+    cache.set(Some(CachedJudgmentSpriteMetadata {
+        registry_generation,
+        metadata,
+    }));
+    Some(metadata)
 }
 
 #[inline(always)]
@@ -334,7 +399,6 @@ pub(crate) fn gameplay_notefield_plan(
             column_flash: profile.column_flash_on_miss,
             error_bar: !error_bar_mask.is_empty(),
             error_bar_text: error_bar_mask.contains(profile_data::ErrorBarMask::TEXT),
-            held_miss_asset: judgment_assets.held_miss().is_some(),
             combo_visible: !profile.hide_combo,
         },
         notefield_offset: [
@@ -476,8 +540,12 @@ pub(crate) fn compose_frame(
     flat_draws.clear();
     hud_actors.clear();
     hud_flat_draws.clear();
-    let hold_judgment_texture = judgment_assets.hold_judgment();
-    let held_miss_texture = judgment_assets.held_miss();
+    let hold_judgment_texture = judgment_assets
+        .hold_judgment()
+        .zip(judgment_assets.hold_judgment_sprite_metadata());
+    let held_miss_texture = judgment_assets
+        .held_miss()
+        .zip(judgment_assets.held_miss_sprite_metadata());
     let p = &state.players()[player_idx];
     let mut model_cache = model_caches[player_idx].borrow_mut();
 
@@ -801,8 +869,8 @@ pub(crate) fn compose_frame(
                 source: texture.actor_texture_source(actor_resources),
                 frame_size: sprite.frame_size,
                 frame_cols: sprite.frame_cols,
+                frame_rows: sprite.frame_rows,
             },
-            frame_rows: sprite.frame_rows,
         })
     } else {
         None
@@ -821,8 +889,11 @@ pub(crate) fn compose_frame(
         .iter()
         .any(Option::is_some)
         .then(|| {
-            held_miss_texture.map(|(texture, scale)| IndicatorSprite {
+            held_miss_texture.map(|((texture, scale), sprite)| IndicatorSprite {
                 source: texture.actor_texture_source(actor_resources),
+                frame_size: sprite.frame_size,
+                frame_cols: sprite.frame_cols,
+                frame_rows: sprite.frame_rows,
                 scale,
             })
         })
@@ -830,7 +901,15 @@ pub(crate) fn compose_frame(
     let hold_sprite = hold_judgments
         .iter()
         .any(Option::is_some)
-        .then(|| hold_judgment_texture.map(|texture| texture.actor_texture_source(actor_resources)))
+        .then(|| {
+            hold_judgment_texture.map(|(texture, sprite)| IndicatorSprite {
+                source: texture.actor_texture_source(actor_resources),
+                frame_size: sprite.frame_size,
+                frame_cols: sprite.frame_cols,
+                frame_rows: sprite.frame_rows,
+                scale: 1.0,
+            })
+        })
         .flatten();
     let judgment_frame = (tap.is_some() || held_miss_sprite.is_some() || hold_sprite.is_some())
         .then_some(JudgmentHudFrame {

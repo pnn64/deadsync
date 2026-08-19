@@ -17,7 +17,7 @@ use crate::judgment_feedback::{
     compose_judgment_feedback,
 };
 use crate::mini_indicator::ZmodMeasureCounterText;
-use deadlib_present::actors::{Actor, FlatDraw, SpriteSource, TextContent};
+use deadlib_present::actors::{Actor, FlatDraw, TextContent};
 use deadsync_gameplay::{
     ActiveComboMilestone, ErrorBarText, ErrorBarTick, HeldMissRenderInfo, HoldJudgmentRenderInfo,
     JudgmentRenderInfo, OffsetIndicatorText,
@@ -93,7 +93,6 @@ pub struct MiniHudFrame {
 pub struct TapJudgmentHudFrame<'a> {
     pub render: &'a JudgmentRenderInfo,
     pub sprite: TapJudgmentSprite,
-    pub frame_rows: usize,
 }
 
 impl TapJudgmentHudFrame<'_> {
@@ -110,7 +109,7 @@ pub struct JudgmentHudFrame<'a> {
     pub held_misses: &'a [Option<HeldMissRenderInfo>],
     pub held_miss_sprite: Option<IndicatorSprite>,
     pub hold_judgments: &'a [Option<HoldJudgmentRenderInfo>],
-    pub hold_sprite: Option<SpriteSource>,
+    pub hold_sprite: Option<IndicatorSprite>,
 }
 
 /// Theme-prepared runtime snapshots for the canonical post-chrome HUD pass.
@@ -223,8 +222,12 @@ pub fn compose_notefield_hud<S>(
     }
 
     let judgment_capture_start = actors.len();
+    let judgment_draw_start = draws.len();
     if let Some(judgment) = frame.judgment.as_ref() {
-        compose_judgment(actors, request, prepared, judgment);
+        compose_judgment(draws, request, prepared, judgment);
+    }
+    if request.capture_requests.judgment {
+        actors.extend(draws.drain(judgment_draw_start..).map(flat_draw_actor));
     }
     let judgment_actors = request
         .capture_requests
@@ -375,7 +378,7 @@ fn compose_error<S>(
 }
 
 fn compose_judgment<S>(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
     frame: &JudgmentHudFrame<'_>,
@@ -389,7 +392,7 @@ fn compose_judgment<S>(
             grade: judgment.grade,
             window: judgment.window,
             time_error_ms: judgment.time_error_ms,
-            frame_rows: frame.frame_rows,
+            frame_rows: frame.sprite.frame_rows,
             show_fa_plus_window: options.show_fa_plus_window,
             fa_plus_10ms_blue_window: options.fa_plus_10ms_blue_window,
             split_15_10ms: options.split_15_10ms,
@@ -428,7 +431,7 @@ fn compose_judgment<S>(
         .as_ref()
         .map(|notes| notes.base.column_xs.as_slice());
     compose_judgment_feedback(
-        actors,
+        draws,
         JudgmentFeedbackRequest {
             style: request.style.judgment_feedback,
             blind: prepared.blind_active,

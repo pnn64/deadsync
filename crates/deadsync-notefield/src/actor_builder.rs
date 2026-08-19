@@ -13,7 +13,6 @@ pub struct NotefieldFrameFeatures {
     pub column_flash: bool,
     pub error_bar: bool,
     pub error_bar_text: bool,
-    pub held_miss_asset: bool,
     pub combo_visible: bool,
 }
 
@@ -74,12 +73,10 @@ pub(crate) fn notefield_frame_plan(
         + usize::from(features.measure_cues) * 32
         + usize::from(features.column_cues) * (num_cols + 4)
         + usize::from(features.crossover_cues) * (num_cols + 4)
-        + usize::from(features.column_flash) * num_cols
-        + usize::from(features.error_bar) * 18;
+        + usize::from(features.column_flash) * num_cols;
     let hud_actor_reserve = 8
         + usize::from(features.column_cues)
         + usize::from(features.crossover_cues && features.crossover_countdown)
-        + usize::from(features.held_miss_asset) * num_cols
         + usize::from(features.combo_visible) * 2
         + usize::from(features.error_bar_text);
 
@@ -186,7 +183,6 @@ mod tests {
             column_flash: false,
             error_bar: false,
             error_bar_text: false,
-            held_miss_asset: false,
             combo_visible: false,
         }
     }
@@ -284,22 +280,20 @@ mod tests {
             column_flash: true,
             error_bar: true,
             error_bar_text: true,
-            held_miss_asset: true,
             combo_visible: true,
         };
         let plan = notefield_frame_plan(request).expect("feature-rich field should resolve");
-        assert_eq!(plan.field_actor_reserve, 182);
-        assert_eq!(plan.hud_actor_reserve, 17);
+        assert_eq!(plan.field_actor_reserve, 164);
+        assert_eq!(plan.hud_actor_reserve, 13);
 
         request.features.crossover_cues = false;
         let no_crossover = notefield_frame_plan(request).expect("field should resolve");
-        assert_eq!(no_crossover.hud_actor_reserve, 16);
+        assert_eq!(no_crossover.hud_actor_reserve, 12);
 
         request.features.crossover_countdown = false;
         let no_countdown = notefield_frame_plan(request).expect("field should resolve");
-        assert_eq!(no_countdown.hud_actor_reserve, 16);
+        assert_eq!(no_countdown.hud_actor_reserve, 12);
 
-        request.features.held_miss_asset = false;
         request.features.combo_visible = false;
         let reduced = notefield_frame_plan(request).expect("field should resolve");
         assert_eq!(reduced.hud_actor_reserve, 10);

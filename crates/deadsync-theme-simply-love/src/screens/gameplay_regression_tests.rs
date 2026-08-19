@@ -2536,6 +2536,14 @@ return Def.ActorFrame{
             end,
         },
         Def.ActorProxy{
+            Name="FixtureJudgmentProxy",
+            OnCommand=function(self)
+                local judgment = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("Judgment")
+                self:SetTarget(judgment)
+                self:visible(true)
+            end,
+        },
+        Def.ActorProxy{
             Name="FixtureLocalProxy",
             OnCommand=function(self)
                 self:SetTarget(local_target)
@@ -2657,6 +2665,7 @@ return Def.ActorFrame{
                             GameplaySession::default(),
                             profiles,
                         );
+                        add_sprite_core_feedback(&mut state, 0, 0, 42);
 
                         let visuals = state.gameplay.song_lua_visuals();
                         assert!(visuals.note_hides[0].iter().any(|window| {
@@ -2671,6 +2680,17 @@ return Def.ActorFrame{
                             matches!(
                                 &overlay.kind,
                                 deadsync_assets::song_lua::SongLuaOverlayKind::Quad
+                            )
+                        }));
+                        assert!(visuals.overlays.iter().any(|overlay| {
+                            matches!(
+                                &overlay.kind,
+                                deadsync_assets::song_lua::SongLuaOverlayKind::ActorProxy {
+                                    target:
+                                        deadsync_assets::song_lua::SongLuaProxyTarget::Judgment {
+                                            player_index: 0
+                                        }
+                                }
                             )
                         }));
                         assert!(visuals.overlays.iter().any(|overlay| {

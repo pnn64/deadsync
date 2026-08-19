@@ -818,6 +818,89 @@ fn measure_boundary(kind: BoundaryKind, field_draws: usize, hold_mix: bool) -> B
     }
 }
 
+fn measure_boundary_pair(field_draws: usize, hold_mix: bool) -> [BoundaryResult; 2] {
+    let metrics = deadlib_present::space::metrics_for_window(854, 480);
+    let fonts = font::FontMap::default();
+    let resources = ActorResourceArena::new(0);
+    let mut text = TextLayoutCache::default();
+    let mut compose = ComposeScratch::default();
+    let mut source = BoundaryScratch::new();
+    let kinds = [BoundaryKind::WideActors, BoundaryKind::FlatDraws];
+    let mut frame_index = 0usize;
+
+    for batch in 0..BOUNDARY_WARMUP_BATCHES {
+        for offset in 0..2 {
+            let kind = kinds[(batch + offset) % 2];
+            for frame_offset in 0..BOUNDARY_BATCH_FRAMES {
+                black_box(boundary_frame(
+                    kind,
+                    frame_index + frame_offset,
+                    field_draws,
+                    hold_mix,
+                    &mut source,
+                    &metrics,
+                    &fonts,
+                    &resources,
+                    &mut text,
+                    &mut compose,
+                ));
+            }
+        }
+        frame_index += BOUNDARY_BATCH_FRAMES;
+    }
+
+    let mut elapsed = [Duration::ZERO; 2];
+    let mut cycles = [0_u64; 2];
+    let mut allocated = [AllocSnapshot {
+        allocs: 0,
+        reallocs: 0,
+        bytes: 0,
+    }; 2];
+    let mut samples_ns: [Vec<u64>; 2] =
+        std::array::from_fn(|_| Vec::with_capacity(BOUNDARY_MEASURE_BATCHES));
+    let mut checksum = [0.0_f32; 2];
+
+    for batch in 0..BOUNDARY_MEASURE_BATCHES {
+        for offset in 0..2 {
+            let kind_index = (batch + offset) % 2;
+            let before_alloc = ALLOC.snapshot();
+            let before_cycles = read_cycles();
+            let started = Instant::now();
+            for frame_offset in 0..BOUNDARY_BATCH_FRAMES {
+                checksum[kind_index] += black_box(boundary_frame(
+                    kinds[kind_index],
+                    frame_index + frame_offset,
+                    field_draws,
+                    hold_mix,
+                    &mut source,
+                    &metrics,
+                    &fonts,
+                    &resources,
+                    &mut text,
+                    &mut compose,
+                ));
+            }
+            let sample = started.elapsed();
+            elapsed[kind_index] += sample;
+            cycles[kind_index] += read_cycles().saturating_sub(before_cycles);
+            allocated[kind_index].add(ALLOC.snapshot().delta(before_alloc));
+            samples_ns[kind_index].push((sample.as_nanos() / BOUNDARY_BATCH_FRAMES as u128) as u64);
+        }
+        frame_index += BOUNDARY_BATCH_FRAMES;
+    }
+
+    for samples in &mut samples_ns {
+        samples.sort_unstable();
+    }
+    std::array::from_fn(|index| BoundaryResult {
+        elapsed: elapsed[index],
+        cycles: cycles[index],
+        allocated: allocated[index],
+        samples_ns: std::mem::take(&mut samples_ns[index]),
+        checksum: checksum[index],
+    })
+}
+
 fn print_boundary_result(label: &str, result: &BoundaryResult) {
     let frames = (BOUNDARY_MEASURE_BATCHES * BOUNDARY_BATCH_FRAMES) as f64;
     let p99_index = (result.samples_ns.len() * 99)
@@ -838,12 +921,11 @@ fn print_boundary_result(label: &str, result: &BoundaryResult) {
     );
 }
 
-fn print_boundary_sweep(label: &str, hold_mix: bool) {
+fn print_boundary_sweep(label: &str, hold_mix: bool, draw_counts: &[usize]) {
     println!("\n{label} (draws/player)");
-    for field_draws in [8, 16, 32, 64] {
+    for &field_draws in draw_counts {
         println!("{field_draws} draws/player");
-        let wide = measure_boundary(BoundaryKind::WideActors, field_draws, hold_mix);
-        let flat = measure_boundary(BoundaryKind::FlatDraws, field_draws, hold_mix);
+        let [wide, flat] = measure_boundary_pair(field_draws, hold_mix);
         assert_eq!(wide.checksum, flat.checksum);
         for result in [&wide, &flat] {
             assert_zero_alloc(&BenchResult {
@@ -929,8 +1011,16 @@ fn main() {
     black_box(flat.checksum);
     print_boundary_result("flat draw path", &flat);
 
-    print_boundary_sweep("feedback-scale sprite boundary sweep", false);
-    print_boundary_sweep("hold-scale presentation boundary sweep", true);
+    print_boundary_sweep(
+        "feedback-scale sprite boundary sweep",
+        false,
+        &[2, 4, 8, 16, 32, 64],
+    );
+    print_boundary_sweep(
+        "hold-scale presentation boundary sweep",
+        true,
+        &[8, 16, 32, 64],
+    );
 }
 
 #[cfg(target_arch = "x86_64")]

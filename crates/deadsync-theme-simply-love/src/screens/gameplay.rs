@@ -49,7 +49,7 @@ use deadsync_assets::song_lua::{
 use deadsync_chart::{
     ChartData, GameplayChartData, SongBackgroundChange, SongBackgroundChangeTarget, SongData,
 };
-use deadsync_core::input::MAX_PLAYERS;
+use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::song_time::song_time_ns_to_seconds;
 use deadsync_gameplay::{
     AUTOSYNC_OFFSET_SAMPLE_COUNT, AutosyncMode, CourseDisplayCarry, CourseDisplayTiming,
@@ -1584,7 +1584,11 @@ const NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY: usize = 32;
 // Worst case: colorful and highlight each emit a background, twelve bands,
 // and ten ticks; monochrome emits a background, center, twelve bounds, and
 // fifteen ticks; average emits a center plus five ticks; long average adds one.
-const NOTEFIELD_HUD_FLAT_DRAW_SCRATCH_CAPACITY: usize = 82;
+const ERROR_BAR_HUD_FLAT_DRAW_CAPACITY: usize = 82;
+// Tap plus split overlay and one held-miss plus hold-result sprite per column.
+const JUDGMENT_HUD_FLAT_DRAW_CAPACITY: usize = 2 + MAX_COLS * 2;
+const NOTEFIELD_HUD_FLAT_DRAW_SCRATCH_CAPACITY: usize =
+    ERROR_BAR_HUD_FLAT_DRAW_CAPACITY + JUDGMENT_HUD_FLAT_DRAW_CAPACITY;
 const PLAYER_ACTOR_SCRATCH_CAPACITY: usize =
     NOTEFIELD_ACTOR_SCRATCH_CAPACITY + NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY;
 

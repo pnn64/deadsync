@@ -1,8 +1,8 @@
 use super::{
     JudgmentSpriteMetadata, ResolvedJudgmentAssets, combo_milestone_assets,
     error_bar_trim_max_window_ix, gameplay_notefield_plan, hold_explosion_enabled,
-    judgment_frame_size, prewarm_actor_resources, resolved_held_miss_texture,
-    resolved_hold_judgment_texture, resolved_judgment_texture,
+    judgment_frame_size, prewarm_actor_resources, resolve_sprite_metadata,
+    resolved_held_miss_texture, resolved_hold_judgment_texture, resolved_judgment_texture,
 };
 use crate::assets;
 use crate::notefield_style::notefield_style;
@@ -121,6 +121,16 @@ fn cached_judgment_assets_match_legacy_resolution() {
             }
         });
         assert_eq!(cached.judgment_sprite_metadata(), legacy_metadata);
+        assert_eq!(
+            cached.hold_judgment_sprite_metadata(),
+            resolved_hold_judgment_texture(&profile)
+                .map(|texture| resolve_sprite_metadata(texture, [0.0; 2]))
+        );
+        assert_eq!(
+            cached.held_miss_sprite_metadata(),
+            resolved_held_miss_texture(&profile)
+                .map(|texture| resolve_sprite_metadata(texture, [0.0; 2]))
+        );
 
         if let Some((texture, scale)) = cached.held_miss() {
             let expected = if assets::parse_texture_hints(texture.key.as_ref()).doubleres {

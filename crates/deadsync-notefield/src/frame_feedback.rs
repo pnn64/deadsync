@@ -809,7 +809,6 @@ mod tests {
                 column_flash: true,
                 error_bar: false,
                 error_bar_text: false,
-                held_miss_asset: false,
                 combo_visible: false,
             },
             notefield_offset: [0.0; 2],

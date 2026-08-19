@@ -492,7 +492,6 @@ mod tests {
             column_flash: true,
             error_bar: true,
             error_bar_text: true,
-            held_miss_asset: true,
             combo_visible: true,
         }
     }

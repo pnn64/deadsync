@@ -2,8 +2,8 @@ use crate::{
     NoteXParams, TornadoBounds, beat_factor, compute_active_note_geometry, fill_lane_col_offsets,
     held_miss_zoom, hold_indicator_column_x, player_metric_y,
 };
-use deadlib_present::actors::{Actor, SpriteSource};
-use deadlib_present::dsl::SpriteBuilder;
+use deadlib_present::actors::{FlatDraw, FlatSprite, SpriteSource};
+use deadlib_render_core::BlendMode;
 use deadsync_core::input::MAX_COLS;
 use deadsync_gameplay::{
     HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION, HeldMissRenderInfo,
@@ -17,11 +17,15 @@ pub struct TapJudgmentSprite {
     pub source: SpriteSource,
     pub frame_size: [f32; 2],
     pub frame_cols: usize,
+    pub frame_rows: usize,
 }
 
 #[derive(Clone, Debug)]
 pub struct IndicatorSprite {
     pub source: SpriteSource,
+    pub frame_size: [f32; 2],
+    pub frame_cols: usize,
+    pub frame_rows: usize,
     pub scale: f32,
 }
 
@@ -45,7 +49,7 @@ pub(crate) struct JudgmentFeedbackRequest<'a> {
     pub held_misses: &'a [Option<HeldMissRenderInfo>],
     pub held_miss_sprite: Option<IndicatorSprite>,
     pub hold_judgments: &'a [Option<HoldJudgmentRenderInfo>],
-    pub hold_sprite: Option<SpriteSource>,
+    pub hold_sprite: Option<IndicatorSprite>,
     pub current_beat: f32,
     pub arrow_effect_time: f32,
     pub mini: f32,
@@ -64,17 +68,17 @@ pub(crate) struct JudgmentFeedbackRequest<'a> {
 /// Compose tap judgments, held-miss indicators, and hold-result indicators
 /// from renderer-neutral sprite sources and gameplay snapshots.
 pub(crate) fn compose_judgment_feedback(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: JudgmentFeedbackRequest<'_>,
 ) {
     if request.blind {
         return;
     }
-    append_tap_judgment(actors, &request);
-    append_hold_indicators(actors, &request);
+    append_tap_judgment(draws, &request);
+    append_hold_indicators(draws, &request);
 }
 
-fn append_tap_judgment(actors: &mut Vec<Actor>, request: &JudgmentFeedbackRequest<'_>) {
+fn append_tap_judgment(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequest<'_>) {
     let (Some(feedback), Some(sprite)) = (request.tap, request.tap_sprite.as_ref()) else {
         return;
     };
@@ -91,7 +95,7 @@ fn append_tap_judgment(actors: &mut Vec<Actor>, request: &JudgmentFeedbackReques
         request.style.tap_front_z
     };
     append_tap_sprite(
-        actors,
+        draws,
         sprite,
         request.tap_xy,
         z,
@@ -102,7 +106,7 @@ fn append_tap_judgment(actors: &mut Vec<Actor>, request: &JudgmentFeedbackReques
     );
     if let Some(overlay_row) = feedback.overlay_row {
         append_tap_sprite(
-            actors,
+            draws,
             sprite,
             request.tap_xy,
             z,
@@ -141,7 +145,7 @@ fn tap_judgment_zoom(elapsed: f32, zoom_mod: f32) -> Option<f32> {
 
 #[allow(clippy::too_many_arguments)]
 fn append_tap_sprite(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     sprite: &TapJudgmentSprite,
     xy: [f32; 2],
     z: i16,
@@ -150,19 +154,19 @@ fn append_tap_sprite(
     zoom: f32,
     alpha: f32,
 ) {
-    let mut actor = SpriteBuilder::with_source(sprite.source.clone());
-    actor.align(0.5, 0.5);
-    actor.xy(xy[0], xy[1]);
-    actor.z(z);
-    actor.rotationz(rotation_deg);
-    actor.size(sprite.frame_size[0], sprite.frame_size[1]);
-    actor.setstate(frame_index);
-    actor.zoom(zoom);
-    actor.alpha(alpha);
-    actors.push(actor.build(0));
+    append_sprite(
+        draws,
+        sprite.source.clone(),
+        xy,
+        [sprite.frame_size[0] * zoom, sprite.frame_size[1] * zoom],
+        z,
+        rotation_deg,
+        frame_uv(frame_index, sprite.frame_cols, sprite.frame_rows),
+        [1.0, 1.0, 1.0, alpha],
+    );
 }
 
-fn append_hold_indicators(actors: &mut Vec<Actor>, request: &JudgmentFeedbackRequest<'_>) {
+fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequest<'_>) {
     if request.held_miss_sprite.is_none() && request.hold_sprite.is_none() {
         return;
     }
@@ -196,7 +200,7 @@ fn append_hold_indicators(actors: &mut Vec<Actor>, request: &JudgmentFeedbackReq
                 continue;
             }
             let (zoom_x, zoom_y) = held_miss_zoom(elapsed, request.mini);
-            let zoom = [zoom_x * sprite.scale, zoom_y * sprite.scale];
+            let zoom = [zoom_x, zoom_y];
             if zoom[0] <= f32::EPSILON || zoom[1] <= f32::EPSILON {
                 continue;
             }
@@ -210,18 +214,11 @@ fn append_hold_indicators(actors: &mut Vec<Actor>, request: &JudgmentFeedbackReq
                     request.style.held_miss_reverse_y,
                 ),
             ];
-            append_indicator_sprite(
-                actors,
-                sprite.source.clone(),
-                xy,
-                request.style.held_miss_z,
-                0,
-                zoom,
-            );
+            append_indicator_sprite(draws, sprite, xy, request.style.held_miss_z, 0, zoom);
         }
     }
 
-    if let Some(source) = request.hold_sprite.as_ref() {
+    if let Some(sprite) = request.hold_sprite.as_ref() {
         for (i, feedback) in request.hold_judgments.iter().take(num_cols).enumerate() {
             let Some(feedback) = feedback else { continue };
             let elapsed = (request.elapsed_screen - feedback.started_at_screen_s).max(0.0);
@@ -247,8 +244,8 @@ fn append_hold_indicators(actors: &mut Vec<Actor>, request: &JudgmentFeedbackReq
                 ),
             ];
             append_indicator_sprite(
-                actors,
-                source.clone(),
+                draws,
+                sprite,
                 xy,
                 request.style.hold_z,
                 frame_index,
@@ -288,28 +285,71 @@ fn indicator_x(
 }
 
 fn append_indicator_sprite(
-    actors: &mut Vec<Actor>,
-    source: SpriteSource,
+    draws: &mut Vec<FlatDraw>,
+    sprite: &IndicatorSprite,
     xy: [f32; 2],
     z: i16,
     frame_index: u32,
     zoom: [f32; 2],
 ) {
-    let mut actor = SpriteBuilder::with_source(source);
-    actor.align(0.5, 0.5);
-    actor.xy(xy[0], xy[1]);
-    actor.z(z);
-    actor.setstate(frame_index);
-    actor.zoomx(zoom[0]);
-    actor.zoomy(zoom[1]);
-    actor.alpha(1.0);
-    actors.push(actor.build(0));
+    append_sprite(
+        draws,
+        sprite.source.clone(),
+        xy,
+        [
+            sprite.frame_size[0] * zoom[0] * sprite.scale,
+            sprite.frame_size[1] * zoom[1] * sprite.scale,
+        ],
+        z,
+        0.0,
+        frame_uv(frame_index, sprite.frame_cols, sprite.frame_rows),
+        [1.0; 4],
+    );
+}
+
+fn append_sprite(
+    draws: &mut Vec<FlatDraw>,
+    source: SpriteSource,
+    center: [f32; 2],
+    size: [f32; 2],
+    z: i16,
+    rot_z_deg: f32,
+    uv_rect: [f32; 4],
+    tint: [f32; 4],
+) {
+    draws.push(FlatDraw::Sprite(FlatSprite {
+        center,
+        world_z: 0.0,
+        size,
+        source,
+        tint,
+        glow: [1.0, 1.0, 1.0, 0.0],
+        uv_rect,
+        flip_x: false,
+        flip_y: false,
+        fade: [0.0; 4],
+        blend: BlendMode::Alpha,
+        rot_y_deg: 0.0,
+        rot_z_deg,
+        z,
+    }));
+}
+
+fn frame_uv(frame_index: u32, frame_cols: usize, frame_rows: usize) -> [f32; 4] {
+    let cols = frame_cols.max(1) as u32;
+    let rows = frame_rows.max(1) as u32;
+    let col = frame_index % cols;
+    let row = (frame_index / cols).min(rows - 1);
+    let cell = [1.0 / cols as f32, 1.0 / rows as f32];
+    let left = col as f32 * cell[0];
+    let top = row as f32 * cell[1];
+    [left, top, left + cell[0], top + cell[1]]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadlib_present::actors::{SizeSpec, SpriteSource};
+    use deadlib_present::actors::SpriteSource;
     use deadsync_rules::judgment::{JudgeGrade, Judgment, TimingWindow};
     use std::sync::Arc;
 
@@ -346,6 +386,44 @@ mod tests {
         SpriteSource::Texture(Arc::from(name))
     }
 
+    fn assert_sprite(
+        draw: &FlatDraw,
+        key: &str,
+        center: [f32; 2],
+        size: [f32; 2],
+        tint: [f32; 4],
+        uv_rect: [f32; 4],
+        rot_z_deg: f32,
+        z: i16,
+    ) {
+        match draw {
+            FlatDraw::Sprite(sprite) => {
+                assert_eq!(sprite.center, center);
+                assert_eq!(sprite.world_z, 0.0);
+                for (actual, expected) in sprite.size.into_iter().zip(size) {
+                    assert!(
+                        (actual - expected).abs() <= 1e-5,
+                        "expected size component {expected}, got {actual}"
+                    );
+                }
+                assert_eq!(sprite.source.texture_key(), Some(key));
+                assert_eq!(sprite.tint, tint);
+                assert_eq!(sprite.glow, [1.0, 1.0, 1.0, 0.0]);
+                for (actual, expected) in sprite.uv_rect.into_iter().zip(uv_rect) {
+                    assert!((actual - expected).abs() <= 1e-6);
+                }
+                assert!(!sprite.flip_x);
+                assert!(!sprite.flip_y);
+                assert_eq!(sprite.fade, [0.0; 4]);
+                assert_eq!(sprite.blend, BlendMode::Alpha);
+                assert_eq!(sprite.rot_y_deg, 0.0);
+                assert_eq!(sprite.rot_z_deg, rot_z_deg);
+                assert_eq!(sprite.z, z);
+            }
+            other => panic!("expected direct judgment sprite, got {other:?}"),
+        }
+    }
+
     fn empty_request<'a>(
         held_misses: &'a [Option<HeldMissRenderInfo>],
         hold_judgments: &'a [Option<HoldJudgmentRenderInfo>],
@@ -380,7 +458,7 @@ mod tests {
     }
 
     #[test]
-    fn tap_judgment_actor_fingerprint_preserves_sheet_and_overlay() {
+    fn tap_judgment_draw_fingerprint_preserves_sheet_and_overlay() {
         let info = judgment_info(2.0);
         let mut request = empty_request(&[], &[]);
         request.tap = Some(TapJudgmentFeedback {
@@ -393,43 +471,33 @@ mod tests {
             source: source("judgment"),
             frame_size: [200.0, 28.0],
             frame_cols: 2,
+            frame_rows: 7,
         });
-        let mut actors = Vec::new();
+        let mut draws = Vec::new();
 
-        compose_judgment_feedback(&mut actors, request);
+        compose_judgment_feedback(&mut draws, request);
 
-        assert_eq!(actors.len(), 2);
-        for (actor, cell, alpha) in [(&actors[0], 6, 1.0), (&actors[1], 2, 0.5)] {
-            match actor {
-                Actor::Sprite {
-                    align,
-                    offset,
-                    size,
-                    source,
-                    tint,
-                    z,
-                    cell: actual_cell,
-                    rot_z_deg,
-                    scale,
-                    ..
-                } => {
-                    assert_eq!(*align, [0.5, 0.5]);
-                    assert_eq!(*offset, [320.0, 150.0]);
-                    assert!(matches!(
-                        size,
-                        [SizeSpec::Px(w), SizeSpec::Px(h)]
-                            if (*w - 150.0).abs() <= 1e-6 && (*h - 21.0).abs() <= 1e-6
-                    ));
-                    assert_eq!(source.texture_key(), Some("judgment"));
-                    assert_eq!(*tint, [1.0, 1.0, 1.0, alpha]);
-                    assert_eq!(*z, 200);
-                    assert_eq!(*actual_cell, Some((cell, u32::MAX)));
-                    assert_eq!(*rot_z_deg, -7.5);
-                    assert_eq!(*scale, [1.0, 1.0]);
-                }
-                other => panic!("expected tap judgment sprite, got {other:?}"),
-            }
-        }
+        assert_eq!(draws.len(), 2);
+        assert_sprite(
+            &draws[0],
+            "judgment",
+            [320.0, 150.0],
+            [150.0, 21.0],
+            [1.0; 4],
+            [0.0, 3.0 / 7.0, 0.5, 4.0 / 7.0],
+            -7.5,
+            200,
+        );
+        assert_sprite(
+            &draws[1],
+            "judgment",
+            [320.0, 150.0],
+            [150.0, 21.0],
+            [1.0, 1.0, 1.0, 0.5],
+            [0.0, 1.0 / 7.0, 0.5, 2.0 / 7.0],
+            -7.5,
+            200,
+        );
     }
 
     #[test]
@@ -442,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn hold_indicator_actor_fingerprint_preserves_lane_and_reverse_metrics() {
+    fn hold_indicator_draw_fingerprint_preserves_lane_and_reverse_metrics() {
         let held_misses = [
             Some(HeldMissRenderInfo {
                 started_at_screen_s: 2.0,
@@ -461,45 +529,94 @@ mod tests {
         let mut request = empty_request(&held_misses, &hold_judgments);
         request.held_miss_sprite = Some(IndicatorSprite {
             source: source("held-miss"),
+            frame_size: [100.0, 40.0],
+            frame_cols: 1,
+            frame_rows: 1,
             scale: 0.5,
         });
-        request.hold_sprite = Some(source("hold-judgment"));
-        let mut actors = Vec::new();
+        request.hold_sprite = Some(IndicatorSprite {
+            source: source("hold-judgment"),
+            frame_size: [120.0, 30.0],
+            frame_cols: 1,
+            frame_rows: 2,
+            scale: 1.0,
+        });
+        let mut draws = Vec::new();
 
-        compose_judgment_feedback(&mut actors, request);
+        compose_judgment_feedback(&mut draws, request);
 
-        assert_eq!(actors.len(), 3);
-        let expected = [
-            ("held-miss", [224.0, 195.0], 196, 0, [0.375, 0.375]),
-            ("held-miss", [288.0, 355.0], 196, 0, [0.375, 0.375]),
-            (
-                "hold-judgment",
-                [288.0, 335.0],
-                195,
-                1,
-                [(28.8 / 140.0), (28.8 / 140.0)],
-            ),
-        ];
-        for (actor, (key, offset, expected_z, cell, zoom)) in actors.iter().zip(expected) {
-            match actor {
-                Actor::Sprite {
-                    offset: actual_offset,
-                    source,
-                    z,
-                    cell: actual_cell,
-                    scale,
-                    ..
-                } => {
-                    assert_eq!(*actual_offset, offset);
-                    assert_eq!(source.texture_key(), Some(key));
-                    assert_eq!(*z, expected_z);
-                    assert_eq!(*actual_cell, Some((cell, u32::MAX)));
-                    assert!((scale[0] - zoom[0]).abs() <= 1e-6);
-                    assert!((scale[1] - zoom[1]).abs() <= 1e-6);
-                }
-                other => panic!("expected hold feedback sprite, got {other:?}"),
-            }
+        assert_eq!(draws.len(), 3);
+        for (draw, center) in draws[..2].iter().zip([[224.0, 195.0], [288.0, 355.0]]) {
+            assert_sprite(
+                draw,
+                "held-miss",
+                center,
+                [37.5, 15.0],
+                [1.0; 4],
+                [0.0, 0.0, 1.0, 1.0],
+                0.0,
+                196,
+            );
         }
+        let hold_zoom = 28.8 / 140.0;
+        assert_sprite(
+            &draws[2],
+            "hold-judgment",
+            [288.0, 335.0],
+            [120.0 * hold_zoom, 30.0 * hold_zoom],
+            [1.0; 4],
+            [0.0, 0.5, 1.0, 1.0],
+            0.0,
+            195,
+        );
+    }
+
+    #[test]
+    fn ten_column_graphical_maximum_is_twenty_two_draws() {
+        let held_misses = [Some(HeldMissRenderInfo {
+            started_at_screen_s: 2.0,
+        }); MAX_COLS];
+        let hold_judgments = [Some(HoldJudgmentRenderInfo {
+            result: HoldResult::Held,
+            started_at_screen_s: 2.0,
+        }); MAX_COLS];
+        let reverse = [0.0; MAX_COLS];
+        let info = judgment_info(2.0);
+        let mut request = empty_request(&held_misses, &hold_judgments);
+        request.tap = Some(TapJudgmentFeedback {
+            render: &info,
+            frame_row: 3,
+            overlay_row: Some(1),
+            rotation_deg: 0.0,
+        });
+        request.tap_sprite = Some(TapJudgmentSprite {
+            source: source("judgment"),
+            frame_size: [200.0, 28.0],
+            frame_cols: 2,
+            frame_rows: 7,
+        });
+        request.held_miss_sprite = Some(IndicatorSprite {
+            source: source("held-miss"),
+            frame_size: [100.0, 40.0],
+            frame_cols: 1,
+            frame_rows: 1,
+            scale: 0.5,
+        });
+        request.hold_sprite = Some(IndicatorSprite {
+            source: source("hold-judgment"),
+            frame_size: [120.0, 30.0],
+            frame_cols: 1,
+            frame_rows: 2,
+            scale: 1.0,
+        });
+        request.noteskin_column_xs = None;
+        request.num_cols = MAX_COLS;
+        request.column_reverse_percent = &reverse;
+        let mut draws = Vec::new();
+
+        compose_judgment_feedback(&mut draws, request);
+
+        assert_eq!(draws.len(), 2 + MAX_COLS * 2);
     }
 
     #[test]
@@ -511,11 +628,14 @@ mod tests {
         request.blind = true;
         request.held_miss_sprite = Some(IndicatorSprite {
             source: source("held-miss"),
+            frame_size: [100.0, 40.0],
+            frame_cols: 1,
+            frame_rows: 1,
             scale: 1.0,
         });
-        let mut actors = Vec::new();
-        compose_judgment_feedback(&mut actors, request);
-        assert!(actors.is_empty());
+        let mut draws = Vec::new();
+        compose_judgment_feedback(&mut draws, request);
+        assert!(draws.is_empty());
     }
 
     #[test]
