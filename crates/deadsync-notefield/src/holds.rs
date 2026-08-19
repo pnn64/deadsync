@@ -2150,6 +2150,7 @@ mod tests {
             FlatDraw::Sprite(sprite) => sprite.z,
             FlatDraw::TexturedMesh(mesh) => mesh.z,
             FlatDraw::PreparedU32(text) => text.z,
+            FlatDraw::PreparedInline(text) => text.z,
         }
     }
 

@@ -176,6 +176,7 @@ pub fn compose_notefield_hud<S>(
     if let (Some(options), Some(counter)) = (request.options.measure_counter, frame.counter) {
         compose_counter_hud(
             actors,
+            draws,
             CounterHudRequest {
                 style: request.style.counter_hud,
                 segments: counter.segments,
@@ -206,6 +207,7 @@ pub fn compose_notefield_hud<S>(
         let layout = prepared.field.hud_layout.zmod_layout;
         compose_mini_indicator(
             actors,
+            draws,
             MiniIndicatorRequest {
                 style: request.style.mini_indicator,
                 text: mini.text.clone(),

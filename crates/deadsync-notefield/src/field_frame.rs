@@ -17,7 +17,8 @@ use crate::{
     visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
 use deadlib_present::actors::{
-    Actor, FlatDraw, FlatMeshVertices, SizeSpec, SpriteSource, TextAttributes, TextContent,
+    Actor, FlatDraw, FlatMeshVertices, SizeSpec, SpriteSource, TextAlign, TextAttributes,
+    TextContent,
 };
 use deadlib_render_core::BlendMode;
 use deadsync_core::{input::MAX_COLS, note::NoteType};
@@ -1603,39 +1604,84 @@ pub(crate) fn flat_draw_actor(draw: FlatDraw) -> Actor {
                 },
             }
         }
-        FlatDraw::PreparedU32(text) => Actor::Text {
-            align: text.align,
-            offset: text.offset,
-            local_transform: Matrix4::IDENTITY,
-            color: text.color,
-            stroke_color: None,
-            glow: [1.0, 1.0, 1.0, 0.0],
-            font: text.font,
-            content: TextContent::PreparedU32 {
+        FlatDraw::PreparedU32(text) => prepared_text_actor(
+            text.align,
+            text.offset,
+            text.color,
+            text.font,
+            TextContent::PreparedU32 {
                 text: text.text,
                 slot: text.slot,
             },
-            attributes: TextAttributes::default(),
-            align_text: text.align_text,
-            z: text.z,
-            scale: text.scale,
-            fit_width: None,
-            fit_height: None,
-            line_spacing: None,
-            wrap_width_pixels: None,
-            max_width: None,
-            max_height: None,
-            max_w_pre_zoom: false,
-            max_h_pre_zoom: false,
-            jitter: false,
-            distortion: 0.0,
-            clip: None,
-            mask_dest: false,
-            blend: text.blend,
-            shadow_len: text.shadow_len,
-            shadow_color: text.shadow_color,
-            effect: Default::default(),
-        },
+            text.align_text,
+            text.z,
+            text.scale,
+            text.blend,
+            text.shadow_len,
+            text.shadow_color,
+        ),
+        FlatDraw::PreparedInline(text) => prepared_text_actor(
+            text.align,
+            text.offset,
+            text.color,
+            text.font,
+            TextContent::FrameInline {
+                text: text.text,
+                slot: text.slot,
+            },
+            text.align_text,
+            text.z,
+            text.scale,
+            text.blend,
+            text.shadow_len,
+            text.shadow_color,
+        ),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prepared_text_actor(
+    align: [f32; 2],
+    offset: [f32; 2],
+    color: [f32; 4],
+    font: &'static str,
+    content: TextContent,
+    align_text: TextAlign,
+    z: i16,
+    scale: [f32; 2],
+    blend: BlendMode,
+    shadow_len: [f32; 2],
+    shadow_color: [f32; 4],
+) -> Actor {
+    Actor::Text {
+        align,
+        offset,
+        local_transform: Matrix4::IDENTITY,
+        color,
+        stroke_color: None,
+        glow: [1.0, 1.0, 1.0, 0.0],
+        font,
+        content,
+        attributes: TextAttributes::default(),
+        align_text,
+        z,
+        scale,
+        fit_width: None,
+        fit_height: None,
+        line_spacing: None,
+        wrap_width_pixels: None,
+        max_width: None,
+        max_height: None,
+        max_w_pre_zoom: false,
+        max_h_pre_zoom: false,
+        jitter: false,
+        distortion: 0.0,
+        clip: None,
+        mask_dest: false,
+        blend,
+        shadow_len,
+        shadow_color,
+        effect: Default::default(),
     }
 }
 
@@ -1656,8 +1702,9 @@ fn finish_field_camera(
 mod camera_wrap_tests {
     use super::{finish_field_camera, flat_draw_actor, measure_cue_range_search_enabled};
     use deadlib_present::actors::{
-        Actor, FlatDraw, FlatMeshVertices, FlatPreparedU32, FlatSprite, FlatTexturedMesh,
-        InlineU32Text, SizeSpec, SpriteSource, TextAlign,
+        Actor, FlatDraw, FlatMeshVertices, FlatPreparedInline, FlatPreparedU32, FlatSprite,
+        FlatTexturedMesh, InlineText, InlineU32Text, SizeSpec, SpriteSource, TextAlign,
+        TextContent,
     };
     use deadlib_render_core::{BlendMode, TexturedMeshVertex};
     use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -1823,6 +1870,54 @@ mod camera_wrap_tests {
         assert_eq!(align_text, TextAlign::Center);
         assert_eq!(z, 90);
         assert_eq!(scale, [0.75, 0.75]);
+        assert_eq!(shadow_len, [1.0, -1.0]);
+    }
+
+    #[test]
+    fn capture_materializes_prepared_inline_text() {
+        let value = InlineText::copy_from("12/34").expect("test HUD value fits inline");
+        let actor = flat_draw_actor(FlatDraw::PreparedInline(FlatPreparedInline {
+            align: [0.0, 0.5],
+            offset: [317.0, 200.0],
+            color: [0.5, 0.5, 0.5, 0.8],
+            font: "hud-font",
+            text: value,
+            slot: 11,
+            align_text: TextAlign::Center,
+            z: 85,
+            scale: [0.4, 0.4],
+            blend: BlendMode::Alpha,
+            shadow_len: [1.0, -1.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
+        }));
+
+        let Actor::Text {
+            align,
+            offset,
+            color,
+            font,
+            content,
+            align_text,
+            z,
+            scale,
+            shadow_len,
+            ..
+        } = actor
+        else {
+            panic!("HUD capture should materialize prepared inline text");
+        };
+        assert_eq!(align, [0.0, 0.5]);
+        assert_eq!(offset, [317.0, 200.0]);
+        assert_eq!(color, [0.5, 0.5, 0.5, 0.8]);
+        assert_eq!(font, "hud-font");
+        assert!(matches!(
+            &content,
+            TextContent::FrameInline { slot: 11, .. }
+        ));
+        assert_eq!(content.as_str(), "12/34");
+        assert_eq!(align_text, TextAlign::Center);
+        assert_eq!(z, 85);
+        assert_eq!(scale, [0.4, 0.4]);
         assert_eq!(shadow_len, [1.0, -1.0]);
     }
 

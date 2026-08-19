@@ -1591,9 +1591,14 @@ const JUDGMENT_HUD_FLAT_DRAW_CAPACITY: usize = 2 + MAX_COLS * 2;
 // milestone emits two, and the visible combo contributes one prepared digit
 // run; gameplay retains at most one milestone of each kind.
 const COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 7;
+// Five lookahead/current counters, one broken-run counter, one run timer, and
+// one mini score indicator.
+const ZMOD_HUD_FLAT_DRAW_CAPACITY: usize =
+    deadsync_notefield::COUNTER_TEXT_SLOTS_PER_PLAYER as usize + 1;
 const NOTEFIELD_HUD_FLAT_DRAW_SCRATCH_CAPACITY: usize = ERROR_BAR_HUD_FLAT_DRAW_CAPACITY
     + JUDGMENT_HUD_FLAT_DRAW_CAPACITY
-    + COMBO_HUD_FLAT_DRAW_CAPACITY;
+    + COMBO_HUD_FLAT_DRAW_CAPACITY
+    + ZMOD_HUD_FLAT_DRAW_CAPACITY;
 const PLAYER_ACTOR_SCRATCH_CAPACITY: usize =
     NOTEFIELD_ACTOR_SCRATCH_CAPACITY + NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY;
 

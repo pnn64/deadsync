@@ -571,6 +571,27 @@ pub struct FlatPreparedU32 {
     pub shadow_color: [f32; 4],
 }
 
+/// Compact actor-free payload for one prewarmed bounded inline run.
+///
+/// The caller owns the fixed-capacity formatting contract and prepared slot.
+/// Unlike [`Actor::Text`], this payload has no owned strings, attributes,
+/// fitting, wrapping, clipping, effects, or custom stroke color.
+#[derive(Clone, Copy, Debug)]
+pub struct FlatPreparedInline {
+    pub align: [f32; 2],
+    pub offset: [f32; 2],
+    pub color: [f32; 4],
+    pub font: &'static str,
+    pub text: InlineText,
+    pub slot: u8,
+    pub align_text: TextAlign,
+    pub z: i16,
+    pub scale: [f32; 2],
+    pub blend: BlendMode,
+    pub shadow_len: [f32; 2],
+    pub shadow_color: [f32; 4],
+}
+
 /// Narrow dynamic presentation stream used when a screen has already resolved
 /// its high-volume draws. It deliberately supports only payloads that can
 /// bypass actor interpretation without losing presentation semantics.
@@ -579,6 +600,7 @@ pub enum FlatDraw {
     Sprite(FlatSprite),
     TexturedMesh(FlatTexturedMesh),
     PreparedU32(FlatPreparedU32),
+    PreparedInline(FlatPreparedInline),
 }
 
 /// Scene- or screen-owned reusable backing for an identity `SharedFrame`.

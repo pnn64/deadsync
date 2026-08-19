@@ -1,10 +1,12 @@
 use deadlib_present::actors::{
-    Actor, ActorResourceArena, FlatDraw, FlatMeshVertices, FlatPreparedU32, FlatSprite,
-    FlatTexturedMesh, InlineU32Text, SizeSpec, SpriteSource, TextAlign, TextContent,
+    Actor, ActorResourceArena, FlatDraw, FlatMeshVertices, FlatPreparedInline, FlatPreparedU32,
+    FlatSprite, FlatTexturedMesh, InlineText, InlineU32Text, SizeSpec, SpriteSource, TextAlign,
+    TextContent,
 };
 use deadlib_present::compose::{
     ActorSegment, ComposeScratch, NullTextureContext, TextLayoutCache,
     build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
+    prewarm_cached_prepared_inline_text_slot, prewarm_prepared_inline_text_slot,
     prewarm_u32_text_slot,
 };
 use deadlib_present::dsl::TextBuilder;
@@ -43,6 +45,7 @@ const BOUNDARY_HUD_ACTORS: usize = PEAK_HUD_ACTORS;
 const BOUNDARY_BATCH_FRAMES: usize = 32;
 const BOUNDARY_WARMUP_BATCHES: usize = 32;
 const BOUNDARY_MEASURE_BATCHES: usize = 400;
+const HUD_TEXT_RUNS: usize = 8;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -948,8 +951,8 @@ fn numeric_font() -> Font {
     let stroke = Arc::<str>::from("bench_numeric_stroke");
     let mut glyph_map = GlyphMap::default();
     let mut ascii = std::array::from_fn(|_| None);
-    for digit in 0..10 {
-        let ch = char::from(b'0' + digit);
+    for byte in b"0123456789-./%() " {
+        let ch = char::from(*byte);
         let glyph = Glyph {
             texture_key: Arc::clone(&fill),
             stroke_texture_key: Some(Arc::clone(&stroke)),
@@ -1187,7 +1190,331 @@ fn measure_numeric_pair() -> [BoundaryResult; 2] {
     })
 }
 
+fn hud_text_value(frame: usize, player: usize, run: usize) -> InlineText {
+    let value_frame = match run {
+        0..=5 => frame / 120,
+        6 => frame / 240,
+        7 => frame,
+        _ => unreachable!("ZMod HUD benchmark has eight bounded runs"),
+    };
+    let a = ((value_frame * (player + 3) + run * 7) % 99 + 1) as u32;
+    let b = ((value_frame * (run + 5) + player * 11) % 99 + 1) as u32;
+    let value = match run {
+        0 => InlineText::format(format_args!("{a}")),
+        1 => InlineText::format(format_args!("({a})")),
+        2..=3 => InlineText::format(format_args!("{a}/{b}")),
+        4 => InlineText::format(format_args!("{b}")),
+        5 => InlineText::format(format_args!("({b})")),
+        6 => InlineText::format(format_args!("{}.{:02} ", a / 10, b)),
+        7 => InlineText::format(format_args!("-{}.{:02}%", a / 10, b)),
+        _ => unreachable!("ZMod HUD benchmark has eight bounded runs"),
+    };
+    value.expect("benchmark HUD value fits inline")
+}
+
+fn hud_text_style(player: usize, run: usize) -> ([f32; 2], [f32; 2], TextAlign, f32, [f32; 4]) {
+    let mini = run == HUD_TEXT_RUNS - 1;
+    (
+        [if mini { 0.0 } else { 0.5 }, 0.5],
+        [
+            220.0 + player as f32 * 200.0 + run as f32 * 4.0,
+            180.0 + run as f32 * 14.0,
+        ],
+        if mini {
+            TextAlign::Left
+        } else {
+            TextAlign::Center
+        },
+        if mini { 0.4 } else { 0.35 },
+        [0.3 + run as f32 * 0.05, 0.8, 0.4, 0.9],
+    )
+}
+
+fn hud_text_actor(value: InlineText, player: usize, run: usize) -> Actor {
+    let (align, offset, align_text, zoom, color) = hud_text_style(player, run);
+    let mut text = TextBuilder::new();
+    text.font("bench-numeric");
+    text.settext(TextContent::frame_inline_slot(
+        value,
+        (player * HUD_TEXT_RUNS + run) as u8,
+    ));
+    text.align(align[0], align[1]);
+    text.xy(offset[0], offset[1]);
+    text.zoom(zoom);
+    text.horizalign(align_text);
+    text.shadowlength(1.0);
+    text.diffuse(color);
+    text.z(85);
+    text.build(0)
+}
+
+fn hud_text_draw(value: InlineText, player: usize, run: usize) -> FlatDraw {
+    let (align, offset, align_text, zoom, color) = hud_text_style(player, run);
+    FlatDraw::PreparedInline(FlatPreparedInline {
+        align,
+        offset,
+        color,
+        font: "bench-numeric",
+        text: value,
+        slot: (player * HUD_TEXT_RUNS + run) as u8,
+        align_text,
+        z: 85,
+        scale: [zoom, zoom],
+        blend: BlendMode::Alpha,
+        shadow_len: [1.0, -1.0],
+        shadow_color: [0.0, 0.0, 0.0, 0.5],
+    })
+}
+
+struct HudTextScratch {
+    actors: [Vec<Actor>; BOUNDARY_PLAYERS],
+    draws: [Vec<FlatDraw>; BOUNDARY_PLAYERS],
+}
+
+impl HudTextScratch {
+    fn new() -> Self {
+        Self {
+            actors: std::array::from_fn(|_| Vec::with_capacity(HUD_TEXT_RUNS)),
+            draws: std::array::from_fn(|_| Vec::with_capacity(HUD_TEXT_RUNS)),
+        }
+    }
+
+    fn prepare(&mut self, kind: BoundaryKind, frame: usize) {
+        for player in 0..BOUNDARY_PLAYERS {
+            match kind {
+                BoundaryKind::WideActors => {
+                    self.actors[player].clear();
+                    self.actors[player].extend((0..HUD_TEXT_RUNS).map(|run| {
+                        hud_text_actor(hud_text_value(frame, player, run), player, run)
+                    }));
+                }
+                BoundaryKind::FlatDraws => {
+                    self.draws[player].clear();
+                    self.draws[player].extend(
+                        (0..HUD_TEXT_RUNS).map(|run| {
+                            hud_text_draw(hud_text_value(frame, player, run), player, run)
+                        }),
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn hud_text_frame(
+    kind: BoundaryKind,
+    frame_index: usize,
+    source: &mut HudTextScratch,
+    metrics: &deadlib_present::space::Metrics,
+    fonts: &font::FontMap,
+    resources: &ActorResourceArena,
+    text: &mut TextLayoutCache,
+    compose: &mut ComposeScratch,
+) -> f32 {
+    source.prepare(kind, frame_index);
+    let root_camera = Mat4::from_rotation_z(0.11);
+    let tint = [0.8, 0.7, 0.6, 0.5];
+    let mut segments = [ActorSegment::new(&[]); BOUNDARY_PLAYERS];
+    for (player, segment) in segments.iter_mut().enumerate() {
+        *segment = match kind {
+            BoundaryKind::WideActors => ActorSegment::transformed(
+                &source.actors[player],
+                900,
+                tint,
+                Some(BlendMode::Add),
+                root_camera,
+                Mat4::IDENTITY,
+                None,
+            ),
+            BoundaryKind::FlatDraws => ActorSegment::transformed(
+                &[],
+                900,
+                tint,
+                Some(BlendMode::Add),
+                root_camera,
+                Mat4::IDENTITY,
+                None,
+            )
+            .with_flat_draws(&source.draws[player], Some(root_camera)),
+        };
+    }
+    let mut output =
+        build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+            &segments,
+            [0.0, 0.0, 0.0, 1.0],
+            metrics,
+            fonts,
+            0.0,
+            text,
+            compose,
+            &NullTextureContext,
+            resources,
+        );
+    let checksum =
+        (output.ops.len() + output.tmesh_instances.len() + output.tmesh_geometries.len()) as f32;
+    black_box(&output);
+    compose.recycle_frame(&mut output);
+    checksum
+}
+
+fn prewarm_hud_text(
+    text: &mut TextLayoutCache,
+    compose: &mut ComposeScratch,
+    fonts: &font::FontMap,
+) {
+    let counter = InlineText::copy_from("-/()0123456789").expect("counter domain fits inline");
+    let timer = InlineText::copy_from(" .0123456789").expect("timer domain fits inline");
+    let mini = InlineText::copy_from("+-.%0123456789").expect("mini domain fits inline");
+    let vertex_buffers = BOUNDARY_PLAYERS * HUD_TEXT_RUNS * 4;
+    for player in 0..BOUNDARY_PLAYERS {
+        for run in 0..HUD_TEXT_RUNS {
+            let slot = (player * HUD_TEXT_RUNS + run) as u8;
+            match run {
+                0..=5 => prewarm_cached_prepared_inline_text_slot(
+                    text,
+                    compose,
+                    fonts,
+                    "bench-numeric",
+                    counter,
+                    slot,
+                    TextAlign::Center,
+                    vertex_buffers,
+                ),
+                6 => prewarm_prepared_inline_text_slot(
+                    text,
+                    compose,
+                    fonts,
+                    "bench-numeric",
+                    timer,
+                    slot,
+                    TextAlign::Center,
+                    vertex_buffers,
+                ),
+                7 => prewarm_prepared_inline_text_slot(
+                    text,
+                    compose,
+                    fonts,
+                    "bench-numeric",
+                    mini,
+                    slot,
+                    TextAlign::Left,
+                    vertex_buffers,
+                ),
+                _ => unreachable!("ZMod HUD benchmark has eight bounded runs"),
+            }
+        }
+    }
+}
+
+fn measure_hud_text_pair() -> [BoundaryResult; 2] {
+    let metrics = deadlib_present::space::metrics_for_window(854, 480);
+    let fonts = font::FontMap::from_iter([("bench-numeric", numeric_font())]);
+    let resources = ActorResourceArena::new(0);
+    let mut text: [TextLayoutCache; 2] = std::array::from_fn(|_| TextLayoutCache::new(1));
+    let mut compose: [ComposeScratch; 2] = std::array::from_fn(|_| ComposeScratch::default());
+    for index in 0..2 {
+        prewarm_hud_text(&mut text[index], &mut compose[index], &fonts);
+        let draw_floor = BOUNDARY_PLAYERS * HUD_TEXT_RUNS * 4;
+        compose[index].retain_working_set_headroom(draw_floor, 0, draw_floor, draw_floor);
+    }
+    let mut source = HudTextScratch::new();
+    let kinds = [BoundaryKind::WideActors, BoundaryKind::FlatDraws];
+    let mut frame_index = 0usize;
+
+    for batch in 0..BOUNDARY_WARMUP_BATCHES {
+        for offset in 0..2 {
+            let kind_index = (batch + offset) % 2;
+            for frame_offset in 0..BOUNDARY_BATCH_FRAMES {
+                black_box(hud_text_frame(
+                    kinds[kind_index],
+                    frame_index + frame_offset,
+                    &mut source,
+                    &metrics,
+                    &fonts,
+                    &resources,
+                    &mut text[kind_index],
+                    &mut compose[kind_index],
+                ));
+            }
+        }
+        frame_index += BOUNDARY_BATCH_FRAMES;
+    }
+
+    let mut elapsed = [Duration::ZERO; 2];
+    let mut cycles = [0_u64; 2];
+    let mut allocated = [AllocSnapshot {
+        allocs: 0,
+        reallocs: 0,
+        bytes: 0,
+    }; 2];
+    let mut samples_ns: [Vec<u64>; 2] =
+        std::array::from_fn(|_| Vec::with_capacity(BOUNDARY_MEASURE_BATCHES));
+    let mut checksum = [0.0_f32; 2];
+
+    for batch in 0..BOUNDARY_MEASURE_BATCHES {
+        for offset in 0..2 {
+            let kind_index = (batch + offset) % 2;
+            let before_alloc = ALLOC.snapshot();
+            let before_cycles = read_cycles();
+            let started = Instant::now();
+            for frame_offset in 0..BOUNDARY_BATCH_FRAMES {
+                checksum[kind_index] += black_box(hud_text_frame(
+                    kinds[kind_index],
+                    frame_index + frame_offset,
+                    &mut source,
+                    &metrics,
+                    &fonts,
+                    &resources,
+                    &mut text[kind_index],
+                    &mut compose[kind_index],
+                ));
+            }
+            let sample = started.elapsed();
+            elapsed[kind_index] += sample;
+            cycles[kind_index] += read_cycles().saturating_sub(before_cycles);
+            allocated[kind_index].add(ALLOC.snapshot().delta(before_alloc));
+            samples_ns[kind_index].push((sample.as_nanos() / BOUNDARY_BATCH_FRAMES as u128) as u64);
+        }
+        frame_index += BOUNDARY_BATCH_FRAMES;
+    }
+
+    for samples in &mut samples_ns {
+        samples.sort_unstable();
+    }
+    std::array::from_fn(|index| BoundaryResult {
+        elapsed: elapsed[index],
+        cycles: cycles[index],
+        allocated: allocated[index],
+        samples_ns: std::mem::take(&mut samples_ns[index]),
+        checksum: checksum[index],
+    })
+}
+
+fn print_hud_text_benchmark() {
+    println!(
+        "\nprepared ZMod HUD boundary benchmark \
+         (2 players, {HUD_TEXT_RUNS} changing runs/player)"
+    );
+    let [wide, flat] = measure_hud_text_pair();
+    assert_eq!(wide.checksum, flat.checksum);
+    print_boundary_result("wide text actors", &wide);
+    print_boundary_result("prepared flat", &flat);
+    for result in [&wide, &flat] {
+        assert_zero_alloc(&BenchResult {
+            elapsed: result.elapsed,
+            cycles: result.cycles,
+            allocated: result.allocated,
+            checksum: result.checksum,
+        });
+    }
+}
+
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_ZMOD_HUD_ONLY").is_some() {
+        print_hud_text_benchmark();
+        return;
+    }
     deadlib_present::space::set_current_metrics(deadlib_present::space::metrics_for_window(
         854, 480,
     ));
@@ -1282,6 +1609,8 @@ fn main() {
     }
     print_boundary_result("wide text actor", &wide);
     print_boundary_result("prepared flat", &flat);
+
+    print_hud_text_benchmark();
 }
 
 #[cfg(target_arch = "x86_64")]

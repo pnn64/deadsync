@@ -116,13 +116,14 @@ pub fn prewarm_frame_text_scratch(
             );
         }
         if zmod_indicator_mode(profile) != MiniIndicatorMode::None {
-            deadlib_present::compose::prewarm_frame_inline_text_slot(
+            deadlib_present::compose::prewarm_prepared_inline_text_slot(
                 cache,
                 scratch,
                 fonts,
                 zmod_small_combo_font(profile.combo_font),
                 mini_glyphs,
                 FRAME_TEXT_MINI_BASE + player as u8,
+                TextAlign::Left,
                 FRAME_TEXT_VERTEX_BUFFERS,
             );
         }
