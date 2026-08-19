@@ -1581,6 +1581,10 @@ pub struct SmxSensorPadView {
 // not grow either buffer on the render thread.
 const NOTEFIELD_ACTOR_SCRATCH_CAPACITY: usize = 384;
 const NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY: usize = 32;
+// Worst case: colorful and highlight each emit a background, twelve bands,
+// and ten ticks; monochrome emits a background, center, twelve bounds, and
+// fifteen ticks; average emits a center plus five ticks; long average adds one.
+const NOTEFIELD_HUD_FLAT_DRAW_SCRATCH_CAPACITY: usize = 82;
 const PLAYER_ACTOR_SCRATCH_CAPACITY: usize =
     NOTEFIELD_ACTOR_SCRATCH_CAPACITY + NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY;
 
@@ -1605,6 +1609,16 @@ fn gameplay_flat_draw_scratch(active_players: usize) -> [Vec<FlatDraw>; MAX_PLAY
     std::array::from_fn(|player| {
         if player < active_players {
             Vec::with_capacity(NOTEFIELD_ACTOR_SCRATCH_CAPACITY)
+        } else {
+            Vec::new()
+        }
+    })
+}
+
+fn gameplay_hud_flat_draw_scratch(active_players: usize) -> [Vec<FlatDraw>; MAX_PLAYERS] {
+    std::array::from_fn(|player| {
+        if player < active_players {
+            Vec::with_capacity(NOTEFIELD_HUD_FLAT_DRAW_SCRATCH_CAPACITY)
         } else {
             Vec::new()
         }
@@ -1796,6 +1810,7 @@ struct GameplayFrameScratch {
     notefield_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
     notefield_flat_draw_scratch: [Vec<FlatDraw>; MAX_PLAYERS],
     notefield_hud_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
+    notefield_hud_flat_draw_scratch: [Vec<FlatDraw>; MAX_PLAYERS],
     presentation_skeleton: GameplayPresentationSkeleton,
 }
 
@@ -2361,6 +2376,7 @@ impl State {
         let notefield_flat_draw_scratch = gameplay_flat_draw_scratch(active_players);
         let notefield_hud_actor_scratch =
             gameplay_actor_scratch(active_players, NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY);
+        let notefield_hud_flat_draw_scratch = gameplay_hud_flat_draw_scratch(active_players);
         let step_stats_mode = gameplay_step_stats_mode(
             hud_snapshot.play_style,
             gameplay.num_cols(),
@@ -2410,6 +2426,7 @@ impl State {
             notefield_actor_scratch,
             notefield_flat_draw_scratch,
             notefield_hud_actor_scratch,
+            notefield_hud_flat_draw_scratch,
             presentation_skeleton: GameplayPresentationSkeleton::default(),
         };
         debug_assert_eq!(
@@ -14318,6 +14335,9 @@ impl GameplayActorSegments {
             match segment.assembly {
                 PlayerActorAssembly::Captured => {
                     debug_assert!(scratch.notefield_flat_draw_scratch[segment.player].is_empty());
+                    debug_assert!(
+                        scratch.notefield_hud_flat_draw_scratch[segment.player].is_empty()
+                    );
                     let source = scratch
                         .song_lua_proxy_actor_scratch
                         .as_ref()
@@ -14332,6 +14352,10 @@ impl GameplayActorSegments {
                     segments[first] = ActorSegment::shifted(
                         &scratch.notefield_hud_actor_scratch[segment.player],
                         z_shift,
+                    )
+                    .with_flat_draws(
+                        &scratch.notefield_hud_flat_draw_scratch[segment.player],
+                        None,
                     );
                     segments[first + 1] = ActorSegment::shifted(
                         &scratch.notefield_actor_scratch[segment.player],
@@ -14343,7 +14367,7 @@ impl GameplayActorSegments {
                     );
                 }
                 PlayerActorAssembly::DirectFold { z_shift, x_fold } => {
-                    segments[first] = if segment.manual_hud_draw {
+                    let hud = if segment.manual_hud_draw {
                         ActorSegment::shifted(
                             &scratch.notefield_hud_actor_scratch[segment.player],
                             z_shift,
@@ -14355,6 +14379,10 @@ impl GameplayActorSegments {
                             x_fold,
                         )
                     };
+                    segments[first] = hud.with_flat_draws(
+                        &scratch.notefield_hud_flat_draw_scratch[segment.player],
+                        None,
+                    );
                     segments[first + 1] = ActorSegment::folded(
                         &scratch.notefield_actor_scratch[segment.player],
                         z_shift,
@@ -14373,22 +14401,32 @@ impl GameplayActorSegments {
                     field_camera_suffix,
                     x_fold,
                 } => {
-                    segments[first] = if segment.manual_hud_draw {
-                        ActorSegment::shifted(
-                            &scratch.notefield_hud_actor_scratch[segment.player],
-                            z_shift,
+                    let (hud, hud_camera) = if segment.manual_hud_draw {
+                        (
+                            ActorSegment::shifted(
+                                &scratch.notefield_hud_actor_scratch[segment.player],
+                                z_shift,
+                            ),
+                            None,
                         )
                     } else {
-                        ActorSegment::transformed(
-                            &scratch.notefield_hud_actor_scratch[segment.player],
-                            z_shift,
-                            tint,
-                            blend,
-                            root_camera,
-                            Matrix4::IDENTITY,
-                            x_fold,
+                        (
+                            ActorSegment::transformed(
+                                &scratch.notefield_hud_actor_scratch[segment.player],
+                                z_shift,
+                                tint,
+                                blend,
+                                root_camera,
+                                Matrix4::IDENTITY,
+                                x_fold,
+                            ),
+                            Some(root_camera),
                         )
                     };
+                    segments[first] = hud.with_flat_draws(
+                        &scratch.notefield_hud_flat_draw_scratch[segment.player],
+                        hud_camera,
+                    );
                     segments[first + 1] = ActorSegment::transformed(
                         &scratch.notefield_actor_scratch[segment.player],
                         z_shift,
@@ -14480,10 +14518,12 @@ fn clear_player_actor_bundle(
     field_scratch: &mut Vec<Actor>,
     flat_draw_scratch: &mut Vec<FlatDraw>,
     hud_scratch: &mut Vec<Actor>,
+    hud_flat_draw_scratch: &mut Vec<FlatDraw>,
 ) {
     field_scratch.clear();
     flat_draw_scratch.clear();
     hud_scratch.clear();
+    hud_flat_draw_scratch.clear();
 }
 
 fn song_lua_player_target_x(
@@ -14756,6 +14796,7 @@ pub fn push_actors(
         notefield_actor_scratch,
         notefield_flat_draw_scratch,
         notefield_hud_actor_scratch,
+        notefield_hud_flat_draw_scratch,
         presentation_skeleton,
     } = frame_scratch.as_mut();
     presentation_skeleton.prepare();
@@ -15172,6 +15213,7 @@ pub fn push_actors(
             let field_scratch = &mut notefield_actor_scratch[player_idx];
             let flat_draw_scratch = &mut notefield_flat_draw_scratch[player_idx];
             let hud_scratch = &mut notefield_hud_actor_scratch[player_idx];
+            let hud_flat_draw_scratch = &mut notefield_hud_flat_draw_scratch[player_idx];
             let deadsync_notefield::BuiltNotefield {
                 layout_center_x,
                 field_camera,
@@ -15197,6 +15239,7 @@ pub fn push_actors(
                 play_style,
                 center_1player_notefield,
                 ProxyCaptureRequests {
+                    player: requests.player,
                     // Whole-player captures consume the same field source, so
                     // materialize compact notes into that cold actor capture.
                     note_field: requests.note_field || requests.player,
@@ -15209,6 +15252,7 @@ pub fn push_actors(
                 field_scratch,
                 flat_draw_scratch,
                 hud_scratch,
+                hud_flat_draw_scratch,
             );
             let player_actor = &song_lua_visuals.player_actors[player_idx];
             let player_state = song_lua_player_render_state(
@@ -15538,6 +15582,7 @@ pub fn push_actors(
                 &mut notefield_actor_scratch[1],
                 &mut notefield_flat_draw_scratch[1],
                 &mut notefield_hud_actor_scratch[1],
+                &mut notefield_hud_flat_draw_scratch[1],
             );
         }
     }
@@ -15553,6 +15598,7 @@ pub fn push_actors(
             &mut notefield_actor_scratch[0],
             &mut notefield_flat_draw_scratch[0],
             &mut notefield_hud_actor_scratch[0],
+            &mut notefield_hud_flat_draw_scratch[0],
         );
     }
     if !hide_gameplay_hud {

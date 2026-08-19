@@ -8,6 +8,7 @@ use crate::feedback::{
     JudgmentTiltParams, TapJudgmentRowsParams, judgment_actor_zoom, judgment_tilt_rotation_deg,
     tap_judgment_rows,
 };
+use crate::field_frame::flat_draw_actor;
 use crate::hud::{
     CounterHudRequest, MiniIndicatorRequest, compose_counter_hud, compose_mini_indicator,
 };
@@ -16,7 +17,7 @@ use crate::judgment_feedback::{
     compose_judgment_feedback,
 };
 use crate::mini_indicator::ZmodMeasureCounterText;
-use deadlib_present::actors::{Actor, SpriteSource, TextContent};
+use deadlib_present::actors::{Actor, FlatDraw, SpriteSource, TextContent};
 use deadsync_gameplay::{
     ActiveComboMilestone, ErrorBarText, ErrorBarTick, HeldMissRenderInfo, HoldJudgmentRenderInfo,
     JudgmentRenderInfo, OffsetIndicatorText,
@@ -151,6 +152,7 @@ pub struct NotefieldHudComposeResult {
 /// indicator, judgment feedback, then judgment capture.
 pub fn compose_notefield_hud<S>(
     actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
     frame: &NotefieldHudFrameView<'_>,
@@ -167,7 +169,7 @@ pub fn compose_notefield_hud<S>(
         .flatten();
 
     if let Some(error_bar) = frame.error_bar.as_ref() {
-        compose_error(actors, request, prepared, error_bar);
+        compose_error(actors, draws, request, prepared, error_bar);
     }
 
     if let (Some(options), Some(counter)) = (request.options.measure_counter, frame.counter) {
@@ -236,6 +238,10 @@ pub fn compose_notefield_hud<S>(
         })
         .flatten();
 
+    if request.capture_requests.player {
+        actors.extend(draws.drain(..).map(flat_draw_actor));
+    }
+
     NotefieldHudComposeResult {
         combo_actors,
         judgment_actors,
@@ -297,6 +303,7 @@ fn compose_combo<S>(
 
 fn compose_error<S>(
     actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
     frame: &ErrorBarHudFrame<'_>,
@@ -315,6 +322,7 @@ fn compose_error<S>(
     let show = request.options.frame_features.error_bar;
     compose_error_bar(
         actors,
+        draws,
         ErrorBarComposeRequest {
             style: request.style.error_bar,
             modes: request.options.error_bar_modes,

@@ -1,6 +1,7 @@
 use crate::{average_error_bar_mini_scale, smoothstep01};
-use deadlib_present::actors::{Actor, TextContent};
-use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
+use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SpriteSource, TextContent};
+use deadlib_present::dsl::TextBuilder;
+use deadlib_render_core::BlendMode;
 use deadsync_gameplay::{ErrorBarText, ErrorBarTick, OffsetIndicatorText};
 use deadsync_rules::judgment::TimingWindow;
 use deadsync_theme::{ErrorBarLayers, ErrorBarPalette, ErrorBarStyle};
@@ -58,12 +59,16 @@ pub(crate) struct ErrorBarComposeRequest<'a> {
     pub text_label: fn(bool, bool) -> TextContent,
 }
 
-/// Compose the complete canonical error-bar actor sequence: offset indicator,
+/// Compose the complete canonical error-bar sequence: offset indicator,
 /// graphical modes, long-average marker, then textual feedback.
-pub(crate) fn compose_error_bar(actors: &mut Vec<Actor>, request: ErrorBarComposeRequest<'_>) {
+pub(crate) fn compose_error_bar(
+    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
+    request: ErrorBarComposeRequest<'_>,
+) {
     append_offset_indicator(actors, &request);
-    compose_error_bar_modes(actors, request);
-    append_long_average(actors, &request);
+    compose_error_bar_modes(actors, draws, request);
+    append_long_average(draws, &request);
     append_text_feedback(actors, &request);
 }
 
@@ -80,26 +85,31 @@ pub(crate) fn offset_indicator_active(
 /// insertion order. Theme code supplies only resolved options and visual data.
 pub(crate) fn compose_error_bar_modes(
     actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: ErrorBarComposeRequest<'_>,
 ) {
     if !request.visible {
         return;
     }
     if request.modes.colorful {
-        append_colorful(actors, &request, false);
+        append_colorful(draws, &request, false);
     }
     if request.modes.monochrome {
-        append_monochrome(actors, &request);
+        append_monochrome(actors, draws, &request);
     }
     if request.modes.highlight {
-        append_colorful(actors, &request, true);
+        append_colorful(draws, &request, true);
     }
     if request.modes.average {
-        append_average(actors, &request);
+        append_average(draws, &request);
     }
 }
 
-fn append_monochrome(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'_>) {
+fn append_monochrome(
+    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
+    request: &ErrorBarComposeRequest<'_>,
+) {
     let style = request.style;
     let layers = layers(request);
     let wscale = width_scale(style.monochrome_width, request, 1.0);
@@ -107,7 +117,7 @@ fn append_monochrome(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'
 
     if request.monochrome_background && style.monochrome_background_alpha > 0.0 {
         append_quad(
-            actors,
+            draws,
             request.position,
             [
                 style.monochrome_width + style.monochrome_border_size,
@@ -118,7 +128,7 @@ fn append_monochrome(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'
         );
     }
     append_quad(
-        actors,
+        draws,
         request.position,
         [style.monochrome_center_width, request.max_height],
         style.monochrome_center_color,
@@ -134,7 +144,7 @@ fn append_monochrome(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'
             }
             for direction in [-1.0_f32, 1.0] {
                 append_quad(
-                    actors,
+                    draws,
                     [
                         request.position[0] + direction * offset,
                         request.position[1],
@@ -182,7 +192,7 @@ fn append_monochrome(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'
             continue;
         }
         append_quad(
-            actors,
+            draws,
             [request.position[0] + x, request.position[1]],
             [style.tick_width, request.max_height],
             with_alpha(
@@ -194,7 +204,11 @@ fn append_monochrome(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'
     }
 }
 
-fn append_colorful(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'_>, highlight: bool) {
+fn append_colorful(
+    draws: &mut Vec<FlatDraw>,
+    request: &ErrorBarComposeRequest<'_>,
+    highlight: bool,
+) {
     let style = request.style;
     let layers = layers(request);
     let wscale = width_scale(style.colorful_width, request, 1.0);
@@ -207,7 +221,7 @@ fn append_colorful(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'_>
 
     if bar_visible && wscale.is_finite() && wscale > 0.0 {
         append_quad(
-            actors,
+            draws,
             request.position,
             [
                 style.colorful_width + style.colorful_border_size,
@@ -217,7 +231,7 @@ fn append_colorful(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'_>
             layers.background,
         );
         append_color_bands(
-            actors,
+            draws,
             request,
             layers,
             wscale,
@@ -240,7 +254,7 @@ fn append_colorful(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'_>
             continue;
         }
         append_quad(
-            actors,
+            draws,
             [request.position[0] + x, request.position[1]],
             [
                 style.tick_width,
@@ -253,7 +267,7 @@ fn append_colorful(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'_>
 }
 
 fn append_color_bands(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: &ErrorBarComposeRequest<'_>,
     layers: ErrorBarLayers,
     wscale: f32,
@@ -300,7 +314,7 @@ fn append_color_bands(
             (0.5 * (last_x + x), late_alpha),
         ] {
             append_quad(
-                actors,
+                draws,
                 [request.position[0] + center_x, request.position[1]],
                 [width, style.colorful_height],
                 with_alpha(color, alpha),
@@ -311,7 +325,7 @@ fn append_color_bands(
     }
 }
 
-fn append_average(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'_>) {
+fn append_average(draws: &mut Vec<FlatDraw>, request: &ErrorBarComposeRequest<'_>) {
     let style = request.style;
     let mini_scale = average_error_bar_mini_scale(request.mini);
     let wscale = width_scale(style.average_width, request, mini_scale);
@@ -328,7 +342,7 @@ fn append_average(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'_>)
             * mini_scale;
     if request.center_tick {
         append_quad(
-            actors,
+            draws,
             [request.position[0], request.average_y],
             [style.center_tick_width, tick_height],
             style.average_center_tick_color,
@@ -348,7 +362,7 @@ fn append_average(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'_>)
             continue;
         }
         append_quad(
-            actors,
+            draws,
             [request.position[0] + x, request.average_y],
             [style.tick_width * mini_scale, tick_height],
             with_alpha(style.colorful_tick_color, alpha),
@@ -395,7 +409,7 @@ fn append_offset_indicator(actors: &mut Vec<Actor>, request: &ErrorBarComposeReq
     actors.push(text.build(0));
 }
 
-fn append_long_average(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest<'_>) {
+fn append_long_average(draws: &mut Vec<FlatDraw>, request: &ErrorBarComposeRequest<'_>) {
     let Some(tick) = request
         .long_average_visible
         .then_some(request.long_average_tick)
@@ -448,7 +462,7 @@ fn append_long_average(actors: &mut Vec<Actor>, request: &ErrorBarComposeRequest
         (style.average_height + style.average_tick_padding + style.long_average_tick_extra_height)
             * mini_scale;
     append_quad(
-        actors,
+        draws,
         [request.position[0] + x, y],
         [style.long_average_tick_width, height],
         with_alpha(style.long_average_tick_color, alpha),
@@ -548,20 +562,28 @@ fn monochrome_label_alpha(style: ErrorBarStyle, elapsed_s: f32) -> f32 {
 }
 
 fn append_quad(
-    actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     position: [f32; 2],
     size: [f32; 2],
     color: [f32; 4],
     z: i16,
 ) {
-    let mut quad = SpriteBuilder::solid();
-    quad.align(0.5, 0.5);
-    quad.xy(position[0], position[1]);
-    quad.zoomx(size[0]);
-    quad.zoomy(size[1]);
-    quad.diffuse(color);
-    quad.z(z);
-    actors.push(quad.build(0));
+    draws.push(FlatDraw::Sprite(FlatSprite {
+        center: position,
+        world_z: 0.0,
+        size,
+        source: SpriteSource::Solid,
+        tint: color,
+        glow: [1.0, 1.0, 1.0, 0.0],
+        uv_rect: [0.0, 0.0, 1.0, 1.0],
+        flip_x: false,
+        flip_y: false,
+        fade: [0.0; 4],
+        blend: BlendMode::Alpha,
+        rot_y_deg: 0.0,
+        rot_z_deg: 0.0,
+        z,
+    }));
 }
 
 fn append_label(
@@ -711,7 +733,6 @@ mod tests {
     #![allow(clippy::approx_constant)]
 
     use super::*;
-    use deadlib_present::actors::{SizeSpec, SpriteSource};
 
     const NO_TICKS: [Option<ErrorBarTick>; 0] = [];
     const NO_FLASHES: [Option<f32>; 6] = [None; 6];
@@ -869,28 +890,40 @@ mod tests {
         }
     }
 
-    fn assert_quad(actor: &Actor, position: [f32; 2], scale: [f32; 2], tint: [f32; 4], z: i16) {
-        match actor {
-            Actor::Sprite {
-                align,
-                offset,
-                size,
+    fn assert_quad(draw: &FlatDraw, position: [f32; 2], size: [f32; 2], tint: [f32; 4], z: i16) {
+        match draw {
+            FlatDraw::Sprite(FlatSprite {
+                center,
+                world_z,
+                size: actual_size,
                 source,
                 tint: actual_tint,
+                glow,
+                uv_rect,
+                flip_x,
+                flip_y,
+                fade,
+                blend,
+                rot_y_deg,
+                rot_z_deg,
                 z: actual_z,
-                scale: actual_scale,
-                ..
-            } => {
-                assert_eq!(*align, [0.5, 0.5]);
-                assert_eq!(*offset, position);
-                assert!(matches!(size, [SizeSpec::Px(0.0), SizeSpec::Px(0.0)]));
+            }) => {
+                assert_eq!(*center, position);
+                assert_eq!(*world_z, 0.0);
+                assert_eq!(*actual_size, size);
                 assert!(matches!(source, SpriteSource::Solid));
-                assert_close(actual_scale[0], scale[0]);
-                assert_close(actual_scale[1], scale[1]);
                 assert_color(*actual_tint, tint);
+                assert_eq!(*glow, [1.0, 1.0, 1.0, 0.0]);
+                assert_eq!(*uv_rect, [0.0, 0.0, 1.0, 1.0]);
+                assert!(!*flip_x);
+                assert!(!*flip_y);
+                assert_eq!(*fade, [0.0; 4]);
+                assert_eq!(*blend, BlendMode::Alpha);
+                assert_eq!(*rot_y_deg, 0.0);
+                assert_eq!(*rot_z_deg, 0.0);
                 assert_eq!(*actual_z, z);
             }
-            other => panic!("expected error-bar quad, got {other:?}"),
+            other => panic!("expected direct error-bar quad, got {other:?}"),
         }
     }
 
@@ -966,10 +999,12 @@ mod tests {
         let mut request = request(modes, empty_state());
         request.visible = false;
         let mut actors = Vec::new();
+        let mut draws = Vec::new();
 
-        compose_error_bar_modes(&mut actors, request);
+        compose_error_bar_modes(&mut actors, &mut draws, request);
 
         assert!(actors.is_empty());
+        assert!(draws.is_empty());
     }
 
     #[test]
@@ -992,42 +1027,44 @@ mod tests {
         );
         request.elapsed_s = 2.75;
         let mut actors = Vec::new();
+        let mut draws = Vec::new();
 
-        compose_error_bar_modes(&mut actors, request);
+        compose_error_bar_modes(&mut actors, &mut draws, request);
 
-        assert_eq!(actors.len(), 7);
+        assert_eq!(actors.len(), 2);
+        assert_eq!(draws.len(), 5);
         assert_quad(
-            &actors[0],
+            &draws[0],
             [100.0, 200.0],
             [242.0, 32.0],
             [0.0, 0.0, 0.0, 0.5],
             180,
         );
         assert_quad(
-            &actors[1],
+            &draws[1],
             [100.0, 200.0],
             [2.0, 30.0],
             [0.5, 0.5, 0.5, 1.0],
             181,
         );
         assert_quad(
-            &actors[2],
+            &draws[2],
             [-20.0, 200.0],
             [1.0, 30.0],
             [1.0, 1.0, 1.0, 0.15],
             182,
         );
         assert_quad(
-            &actors[3],
+            &draws[3],
             [220.0, 200.0],
             [1.0, 30.0],
             [1.0, 1.0, 1.0, 0.15],
             182,
         );
-        assert_label(&actors[4], "Early", [40.0, 200.0], 0.5, 184);
-        assert_label(&actors[5], "Late", [160.0, 200.0], 0.5, 184);
+        assert_label(&actors[0], "Early", [40.0, 200.0], 0.5, 184);
+        assert_label(&actors[1], "Late", [160.0, 200.0], 0.5, 184);
         assert_quad(
-            &actors[6],
+            &draws[4],
             [160.0, 200.0],
             [2.0, 30.0],
             [0.886, 0.612, 0.094, 1.0],
@@ -1048,9 +1085,11 @@ mod tests {
             ..empty_state()
         };
         let mut actors = Vec::new();
+        let mut draws = Vec::new();
 
         compose_error_bar_modes(
             &mut actors,
+            &mut draws,
             request(
                 ErrorBarModes {
                     colorful: true,
@@ -1060,30 +1099,31 @@ mod tests {
             ),
         );
 
-        assert_eq!(actors.len(), 4);
+        assert!(actors.is_empty());
+        assert_eq!(draws.len(), 4);
         assert_quad(
-            &actors[0],
+            &draws[0],
             [100.0, 200.0],
             [164.0, 14.0],
             [0.0, 0.0, 0.0, 1.0],
             180,
         );
         assert_quad(
-            &actors[1],
+            &draws[1],
             [60.0, 200.0],
             [80.0, 10.0],
             [0.129, 0.8, 0.91, 1.0],
             181,
         );
         assert_quad(
-            &actors[2],
+            &draws[2],
             [140.0, 200.0],
             [80.0, 10.0],
             [0.129, 0.8, 0.91, 1.0],
             181,
         );
         assert_quad(
-            &actors[3],
+            &draws[3],
             [140.0, 200.0],
             [2.0, 14.0],
             [0.698, 0.0, 0.0, 1.0],
@@ -1102,9 +1142,11 @@ mod tests {
             ..empty_state()
         };
         let mut actors = Vec::new();
+        let mut draws = Vec::new();
 
         compose_error_bar_modes(
             &mut actors,
+            &mut draws,
             request(
                 ErrorBarModes {
                     highlight: true,
@@ -1114,16 +1156,17 @@ mod tests {
             ),
         );
 
-        assert_eq!(actors.len(), 3);
+        assert!(actors.is_empty());
+        assert_eq!(draws.len(), 3);
         assert_quad(
-            &actors[1],
+            &draws[1],
             [60.0, 200.0],
             [80.0, 10.0],
             [0.129, 0.8, 0.91, 1.0],
             181,
         );
         assert_quad(
-            &actors[2],
+            &draws[2],
             [140.0, 200.0],
             [80.0, 10.0],
             [0.129, 0.8, 0.91, 0.65],
@@ -1144,9 +1187,11 @@ mod tests {
             ..empty_state()
         };
         let mut actors = Vec::new();
+        let mut draws = Vec::new();
 
         compose_error_bar_modes(
             &mut actors,
+            &mut draws,
             request(
                 ErrorBarModes {
                     average: true,
@@ -1156,16 +1201,17 @@ mod tests {
             ),
         );
 
-        assert_eq!(actors.len(), 2);
+        assert!(actors.is_empty());
+        assert_eq!(draws.len(), 2);
         assert_quad(
-            &actors[0],
+            &draws[0],
             [100.0, 150.0],
             [1.0, 94.6],
             [1.0, 1.0, 1.0, 0.3],
             88,
         );
         assert_quad(
-            &actors[1],
+            &draws[1],
             [189.375, 150.0],
             [2.2, 94.6],
             [0.698, 0.0, 0.0, 1.0],
@@ -1199,9 +1245,11 @@ mod tests {
             ..empty_state()
         };
         let mut actors = Vec::new();
+        let mut draws = Vec::new();
 
         compose_error_bar_modes(
             &mut actors,
+            &mut draws,
             request(
                 ErrorBarModes {
                     colorful: true,
@@ -1213,35 +1261,82 @@ mod tests {
             ),
         );
 
-        assert_eq!(actors.len(), 15);
+        assert_eq!(actors.len(), 2);
+        assert_eq!(draws.len(), 13);
         assert_quad(
-            &actors[0],
+            &draws[0],
             [100.0, 200.0],
             [164.0, 14.0],
             [0.0, 0.0, 0.0, 1.0],
             180,
         );
         assert_quad(
-            &actors[4],
+            &draws[4],
             [100.0, 200.0],
             [242.0, 32.0],
             [0.0, 0.0, 0.0, 0.5],
             180,
         );
         assert_quad(
-            &actors[9],
+            &draws[7],
             [100.0, 200.0],
             [164.0, 14.0],
             [0.0, 0.0, 0.0, 1.0],
             180,
         );
         assert_quad(
-            &actors[13],
+            &draws[11],
             [100.0, 150.0],
             [1.0, 94.6],
             [1.0, 1.0, 1.0, 0.3],
             88,
         );
+        assert_label(&actors[0], "Early", [40.0, 200.0], 1.0, 184);
+        assert_label(&actors[1], "Late", [160.0, 200.0], 1.0, 184);
+    }
+
+    #[test]
+    fn combined_graphical_maximum_is_eighty_two_draws() {
+        let tick = Some(ErrorBarTick {
+            started_at: 2.5,
+            offset_s: 0.01,
+            window: TimingWindow::W2,
+        });
+        let mono_ticks = [tick; 15];
+        let color_ticks = [tick; 10];
+        let average_ticks = [tick; 5];
+        let flashes = [Some(2.5); 6];
+        let state = ErrorBarState {
+            mono_ticks: &mono_ticks,
+            color_ticks: &color_ticks,
+            average_ticks: &average_ticks,
+            color_bar_started_at: Some(2.5),
+            average_bar_started_at: Some(2.5),
+            flash_early: &flashes,
+            flash_late: &flashes,
+        };
+        let mut request = request(
+            ErrorBarModes {
+                colorful: true,
+                monochrome: true,
+                highlight: true,
+                average: true,
+            },
+            state,
+        );
+        request.elapsed_s = 2.75;
+        request.show_fa_plus = true;
+        request.blue_fantastic_window_s = Some(0.01);
+        request.max_window_ix = 4;
+        request.long_average_tick = tick;
+        request.long_average_visible = true;
+        let mut actors = Vec::new();
+        let mut draws = Vec::new();
+
+        compose_error_bar(&mut actors, &mut draws, request);
+
+        assert_eq!(actors.len(), 2);
+        assert_eq!(draws.len(), 82);
     }
 
     #[test]
@@ -1258,10 +1353,12 @@ mod tests {
         request.offset_indicator_position = [100.0, 195.0];
         request.frame_text_slot = 7;
         let mut actors = Vec::new();
+        let mut draws = Vec::new();
 
-        compose_error_bar(&mut actors, request);
+        compose_error_bar(&mut actors, &mut draws, request);
 
         assert_eq!(actors.len(), 1);
+        assert!(draws.is_empty());
         assert_text_actor(
             &actors[0],
             "wendy",
@@ -1282,7 +1379,7 @@ mod tests {
 
         request.has_error_bar = false;
         actors.clear();
-        compose_error_bar(&mut actors, request);
+        compose_error_bar(&mut actors, &mut draws, request);
 
         assert_eq!(actors.len(), 1);
         assert_text_actor(
@@ -1343,11 +1440,13 @@ mod tests {
             request.long_average_visible = true;
             request.long_average_intensity = 2.0;
             let mut actors = Vec::new();
+            let mut draws = Vec::new();
 
-            compose_error_bar(&mut actors, request);
+            compose_error_bar(&mut actors, &mut draws, request);
 
-            assert_eq!(actors.len(), 1);
-            assert_quad(&actors[0], position, scale, [0.0, 0.0, 1.0, 1.0], z);
+            assert!(actors.is_empty());
+            assert_eq!(draws.len(), 1);
+            assert_quad(&draws[0], position, scale, [0.0, 0.0, 1.0, 1.0], z);
         }
     }
 
@@ -1400,10 +1499,12 @@ mod tests {
                 scale_start_ms: 10.0,
             });
             let mut actors = Vec::new();
+            let mut draws = Vec::new();
 
-            compose_error_bar(&mut actors, request);
+            compose_error_bar(&mut actors, &mut draws, request);
 
             assert_eq!(actors.len(), 1);
+            assert!(draws.is_empty());
             assert_text_actor(
                 &actors[0], "wendy", content, position, zoom, color, 1.0, 184,
             );
@@ -1441,10 +1542,12 @@ mod tests {
             scale_start_ms: 10.0,
         });
         let mut actors = Vec::new();
+        let mut draws = Vec::new();
 
-        compose_error_bar(&mut actors, request);
+        compose_error_bar(&mut actors, &mut draws, request);
 
-        assert_eq!(actors.len(), 7);
+        assert_eq!(actors.len(), 4);
+        assert_eq!(draws.len(), 3);
         assert_text_actor(
             &actors[0],
             "wendy",
@@ -1456,30 +1559,30 @@ mod tests {
             184,
         );
         assert_quad(
-            &actors[1],
+            &draws[0],
             [100.0, 200.0],
             [242.0, 32.0],
             [0.0, 0.0, 0.0, 0.5],
             180,
         );
         assert_quad(
-            &actors[2],
+            &draws[1],
             [100.0, 200.0],
             [2.0, 30.0],
             [0.5, 0.5, 0.5, 1.0],
             181,
         );
-        assert_label(&actors[3], "Early", [40.0, 200.0], 1.0, 184);
-        assert_label(&actors[4], "Late", [160.0, 200.0], 1.0, 184);
+        assert_label(&actors[1], "Early", [40.0, 200.0], 1.0, 184);
+        assert_label(&actors[2], "Late", [160.0, 200.0], 1.0, 184);
         assert_quad(
-            &actors[5],
+            &draws[2],
             [130.0, 200.0],
             [1.0, 76.0],
             [0.0, 0.0, 1.0, 1.0],
             182,
         );
         assert_text_actor(
-            &actors[6],
+            &actors[3],
             "wendy",
             "Slow",
             [140.0, 200.0],

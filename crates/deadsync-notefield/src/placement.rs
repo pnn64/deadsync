@@ -123,6 +123,7 @@ pub struct ViewOverride {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ProxyCaptureRequests {
+    pub player: bool,
     pub note_field: bool,
     pub judgment: bool,
     pub combo: bool,

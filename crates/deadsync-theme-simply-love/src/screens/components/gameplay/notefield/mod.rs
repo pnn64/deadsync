@@ -470,10 +470,12 @@ pub(crate) fn compose_frame(
     actors: &mut Vec<Actor>,
     flat_draws: &mut Vec<FlatDraw>,
     hud_actors: &mut Vec<Actor>,
+    hud_flat_draws: &mut Vec<FlatDraw>,
 ) -> BuiltNotefield {
     actors.clear();
     flat_draws.clear();
     hud_actors.clear();
+    hud_flat_draws.clear();
     let hold_judgment_texture = judgment_assets.hold_judgment();
     let held_miss_texture = judgment_assets.held_miss();
     let p = &state.players()[player_idx];
@@ -847,6 +849,7 @@ pub(crate) fn compose_frame(
     };
     let hud_result = compose_notefield_hud(
         hud_actors,
+        hud_flat_draws,
         &request,
         &prepared,
         &hud_frame,

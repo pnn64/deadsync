@@ -1516,7 +1516,7 @@ fn push_field_camera<S>(
 
 /// Cold SongLua proxy adapter. Ordinary gameplay keeps flat draws in their
 /// compact stream; only an explicit field/player capture reconstructs actors.
-fn flat_draw_actor(draw: FlatDraw) -> Actor {
+pub(crate) fn flat_draw_actor(draw: FlatDraw) -> Actor {
     match draw {
         FlatDraw::Sprite(sprite) => Actor::Sprite {
             align: [0.5, 0.5],
