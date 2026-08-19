@@ -1014,7 +1014,7 @@ fn main() {
     print_boundary_sweep(
         "feedback-scale sprite boundary sweep",
         false,
-        &[2, 4, 8, 16, 32, 64],
+        &[2, 4, 6, 8, 16, 32, 64],
     );
     print_boundary_sweep(
         "hold-scale presentation boundary sweep",

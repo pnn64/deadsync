@@ -27,7 +27,7 @@ pub use actor_builder::{
     BuiltNotefield, CapturedActorScratch, CapturedActorSource, NotefieldFrameFeatures,
     NotefieldFramePlan,
 };
-pub use combo_feedback::ComboMilestoneAssets;
+pub use combo_feedback::{ComboMilestoneAssets, ComboMilestoneSprite};
 pub use compose::{
     MeasureCounterOptions, NotefieldChartView, NotefieldComposeRequest, NotefieldGeometry,
     NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState,

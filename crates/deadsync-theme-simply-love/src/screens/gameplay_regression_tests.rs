@@ -1,11 +1,11 @@
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_gameplay::{
-    CourseDisplayCarry, CourseDisplayTiming, CourseDisplayTotals, GameplayConfig,
-    GameplayMiniIndicatorData, GameplayNoteskinData, GameplayNoteskinEffects,
-    GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior, GameplayRuntimeState,
-    GameplaySession, GameplayTween, GameplayViewport, LeadInTiming, MINE_EXPLOSION_DURATION,
-    RECEPTOR_STEP_WINDOWS, ReplayInputEdge, ReplayOffsetSnapshot, TAP_EXPLOSION_WINDOWS,
-    cached_hold_end_time_ns, refresh_active_attack_masks,
+    ActiveComboMilestone, ComboMilestoneKind, CourseDisplayCarry, CourseDisplayTiming,
+    CourseDisplayTotals, GameplayConfig, GameplayMiniIndicatorData, GameplayNoteskinData,
+    GameplayNoteskinEffects, GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior,
+    GameplayRuntimeState, GameplaySession, GameplayTween, GameplayViewport, LeadInTiming,
+    MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS, ReplayInputEdge, ReplayOffsetSnapshot,
+    TAP_EXPLOSION_WINDOWS, cached_hold_end_time_ns, refresh_active_attack_masks,
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
 
@@ -613,6 +613,12 @@ mod tests {
         state.players_runtime.players[player_idx].full_combo_grade = Some(JudgeGrade::Fantastic);
         state.players_runtime.players[player_idx].current_combo_grade = Some(JudgeGrade::Fantastic);
         state.players_runtime.players[player_idx].judgment_counts[0] = combo;
+        state.players_runtime.players[player_idx]
+            .combo_milestones
+            .push(ActiveComboMilestone {
+                kind: ComboMilestoneKind::Hundred,
+                elapsed: 0.2,
+            });
         state.set_last_judgment(player_idx, judgment);
         state.error_bar_register_tap(player_idx, &judgment, 2.5);
         state.trigger_tap_judgment_explosion(player_idx, column, &judgment);
@@ -2544,6 +2550,14 @@ return Def.ActorFrame{
             end,
         },
         Def.ActorProxy{
+            Name="FixtureComboProxy",
+            OnCommand=function(self)
+                local combo = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("Combo")
+                self:SetTarget(combo)
+                self:visible(true)
+            end,
+        },
+        Def.ActorProxy{
             Name="FixtureLocalProxy",
             OnCommand=function(self)
                 self:SetTarget(local_target)
@@ -2680,6 +2694,16 @@ return Def.ActorFrame{
                             matches!(
                                 &overlay.kind,
                                 deadsync_assets::song_lua::SongLuaOverlayKind::Quad
+                            )
+                        }));
+                        assert!(visuals.overlays.iter().any(|overlay| {
+                            matches!(
+                                &overlay.kind,
+                                deadsync_assets::song_lua::SongLuaOverlayKind::ActorProxy {
+                                    target: deadsync_assets::song_lua::SongLuaProxyTarget::Combo {
+                                        player_index: 0
+                                    }
+                                }
                             )
                         }));
                         assert!(visuals.overlays.iter().any(|overlay| {

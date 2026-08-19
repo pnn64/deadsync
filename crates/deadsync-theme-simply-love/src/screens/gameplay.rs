@@ -1587,8 +1587,12 @@ const NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY: usize = 32;
 const ERROR_BAR_HUD_FLAT_DRAW_CAPACITY: usize = 82;
 // Tap plus split overlay and one held-miss plus hold-result sprite per column.
 const JUDGMENT_HUD_FLAT_DRAW_CAPACITY: usize = 2 + MAX_COLS * 2;
-const NOTEFIELD_HUD_FLAT_DRAW_SCRATCH_CAPACITY: usize =
-    ERROR_BAR_HUD_FLAT_DRAW_CAPACITY + JUDGMENT_HUD_FLAT_DRAW_CAPACITY;
+// One unique active hundred milestone emits four sprites and one unique
+// thousand milestone emits two; gameplay retains at most one of each kind.
+const COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 6;
+const NOTEFIELD_HUD_FLAT_DRAW_SCRATCH_CAPACITY: usize = ERROR_BAR_HUD_FLAT_DRAW_CAPACITY
+    + JUDGMENT_HUD_FLAT_DRAW_CAPACITY
+    + COMBO_HUD_FLAT_DRAW_CAPACITY;
 const PLAYER_ACTOR_SCRATCH_CAPACITY: usize =
     NOTEFIELD_ACTOR_SCRATCH_CAPACITY + NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY;
 
@@ -1938,6 +1942,7 @@ pub struct State {
     /// a skipped transition causes at most one bounded font measurement miss.
     intro_text_width: Cell<Option<f32>>,
     notefield_judgment_assets: [notefield::ResolvedJudgmentAssets; MAX_PLAYERS],
+    notefield_combo_assets: notefield::ResolvedComboMilestoneAssets,
     notefield_plans: [notefield::GameplayNotefieldPlan; MAX_PLAYERS],
     sync_overlay_text_cache: RefCell<SyncOverlayTextCache>,
     pub background_path_dirty: bool,
@@ -2117,6 +2122,7 @@ impl State {
         let notefield_judgment_assets = std::array::from_fn(|player| {
             notefield::ResolvedJudgmentAssets::from_profile(&step_stats_profiles[player])
         });
+        let notefield_combo_assets = notefield::ResolvedComboMilestoneAssets::new();
         let notefield_plans = std::array::from_fn(|player| {
             notefield::gameplay_notefield_plan(
                 &step_stats_profiles[player],
@@ -2508,6 +2514,7 @@ impl State {
             life_percent_text,
             intro_text_width: Cell::new(None),
             notefield_judgment_assets,
+            notefield_combo_assets,
             notefield_plans,
             sync_overlay_text_cache: RefCell::new(SyncOverlayTextCache::default()),
             background_path_dirty: true,
@@ -5627,6 +5634,11 @@ pub fn in_transition(
     is_restart: bool,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) -> (Vec<Actor>, f32) {
+    if let Some(state) = state {
+        state
+            .notefield_combo_assets
+            .prewarm(&visual_policy.assets.effects);
+    }
     if is_restart {
         if let Some(gs) = state {
             let _ = intro_text_target_x(
@@ -15227,6 +15239,7 @@ pub fn push_actors(
             } = notefield::compose_frame(
                 state,
                 state.notefield_judgment_assets(player_idx),
+                &state.notefield_combo_assets,
                 state.notefield_plan(player_idx),
                 player_idx,
                 arrow_effect_time_s,

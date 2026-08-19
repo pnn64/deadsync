@@ -1,7 +1,7 @@
 use super::{
-    JudgmentSpriteMetadata, ResolvedJudgmentAssets, combo_milestone_assets,
-    error_bar_trim_max_window_ix, gameplay_notefield_plan, hold_explosion_enabled,
-    judgment_frame_size, prewarm_actor_resources, resolve_sprite_metadata,
+    JudgmentSpriteMetadata, ResolvedComboMilestoneAssets, ResolvedJudgmentAssets,
+    combo_milestone_assets, error_bar_trim_max_window_ix, gameplay_notefield_plan,
+    hold_explosion_enabled, judgment_frame_size, prewarm_actor_resources, resolve_sprite_metadata,
     resolved_held_miss_texture, resolved_hold_judgment_texture, resolved_judgment_texture,
 };
 use crate::assets;
@@ -61,12 +61,16 @@ fn song_plan_preserves_profile_derived_notefield_behavior() {
 #[test]
 fn combo_milestone_assets_keep_keys_and_use_static_sources() {
     let effects = &crate::visual_styles::ASSETS[0].effects;
-    let assets = combo_milestone_assets(effects);
+    let sizes = [[10.0, 20.0], [30.0, 40.0], [50.0, 60.0], [70.0, 80.0]];
+    let assets = combo_milestone_assets(effects, sizes);
     let sources = [
-        (&assets.burst, "combo_explosion.png"),
-        (&assets.hundred, effects.combo_100milestone_splode),
-        (&assets.hundred_mini, effects.combo_100milestone_minisplode),
-        (&assets.thousand, effects.combo_1000milestone_swoosh),
+        (&assets.burst.source, "combo_explosion.png"),
+        (&assets.hundred.source, effects.combo_100milestone_splode),
+        (
+            &assets.hundred_mini.source,
+            effects.combo_100milestone_minisplode,
+        ),
+        (&assets.thousand.source, effects.combo_1000milestone_swoosh),
     ];
 
     for (source, expected) in sources {
@@ -74,17 +78,38 @@ fn combo_milestone_assets_keep_keys_and_use_static_sources() {
         assert_eq!(source.texture_key(), Some(expected));
     }
     assert_eq!(
-        assets.hundred_zoom_scale,
+        assets.hundred.zoom_scale,
         crate::visual_styles::effect_zoom_scale(effects.combo_100milestone_splode)
     );
     assert_eq!(
-        assets.hundred_mini_zoom_scale,
+        assets.hundred_mini.zoom_scale,
         crate::visual_styles::effect_zoom_scale(effects.combo_100milestone_minisplode)
     );
     assert_eq!(
-        assets.thousand_zoom_scale,
+        assets.thousand.zoom_scale,
         crate::visual_styles::effect_zoom_scale(effects.combo_1000milestone_swoosh)
     );
+    assert_eq!(assets.burst.native_size, sizes[0]);
+    assert_eq!(assets.hundred.native_size, sizes[1]);
+    assert_eq!(assets.hundred_mini.native_size, sizes[2]);
+    assert_eq!(assets.thousand.native_size, sizes[3]);
+}
+
+#[test]
+fn combo_milestone_sizes_refresh_only_when_visual_sources_change() {
+    let resolved = ResolvedComboMilestoneAssets::new();
+    let first_keys = ["burst-a", "hundred-a", "mini-a", "thousand-a"];
+    let second_keys = ["burst-b", "hundred-b", "mini-b", "thousand-b"];
+    let first =
+        resolved.sizes_for_keys(first_keys, |key| [key.len() as f32, key.len() as f32 + 1.0]);
+    assert_eq!(
+        resolved.sizes_for_keys(first_keys, |_| {
+            panic!("stable visual sources must reuse native sizes")
+        }),
+        first
+    );
+    let refreshed = resolved.sizes_for_keys(second_keys, |_| [99.0, 101.0]);
+    assert_eq!(refreshed, [[99.0, 101.0]; 4]);
 }
 
 #[test]

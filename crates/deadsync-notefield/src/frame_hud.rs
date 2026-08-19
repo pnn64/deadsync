@@ -1,5 +1,7 @@
 use crate::actor_builder::{CapturedActorScratch, CapturedActorSource, share_actor_range};
-use crate::combo_feedback::{ComboFeedbackRequest, ComboMilestoneAssets, compose_combo_feedback};
+use crate::combo_feedback::{
+    ComboFeedbackRequest, ComboMilestoneAssets, compose_combo_milestones, compose_combo_number,
+};
 use crate::compose::{NotefieldComposeRequest, PreparedNotefield};
 use crate::error_bar::{
     ErrorBarComposeRequest, ErrorBarState, compose_error_bar, offset_indicator_active,
@@ -27,7 +29,7 @@ use deadsync_rules::stream::StreamSegment;
 /// Prepared combo values and renderer-neutral assets for one HUD frame.
 pub struct ComboHudFrame<'a> {
     pub milestones: &'a [ActiveComboMilestone],
-    pub milestone_assets: Option<ComboMilestoneAssets>,
+    pub milestone_assets: Option<&'a ComboMilestoneAssets>,
     pub combo: u32,
     pub miss_combo: u32,
     pub player_color: [f32; 4],
@@ -158,8 +160,9 @@ pub fn compose_notefield_hud<S>(
     capture_scratch: &mut CapturedActorScratch,
 ) -> NotefieldHudComposeResult {
     let combo_capture_start = actors.len();
+    let combo_draw_start = draws.len();
     if let Some(combo) = frame.combo.as_ref() {
-        compose_combo(actors, request, prepared, combo);
+        compose_combo(actors, draws, request, prepared, combo, combo_draw_start);
     }
     let combo_actors = request
         .capture_requests
@@ -253,9 +256,11 @@ pub fn compose_notefield_hud<S>(
 
 fn compose_combo<S>(
     actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
     frame: &ComboHudFrame<'_>,
+    draw_start: usize,
 ) {
     let show = NotefieldHudFrameView::combo_active(
         request.view.hide_combo,
@@ -264,7 +269,7 @@ fn compose_combo<S>(
     );
     let milestone_assets =
         (show && !request.options.hide_combo_explosions && !frame.milestones.is_empty())
-            .then_some(frame.milestone_assets.as_ref())
+            .then_some(frame.milestone_assets)
             .flatten();
     let player_color = if milestone_assets.is_some() {
         frame.player_color
@@ -280,28 +285,30 @@ fn compose_combo<S>(
         [1.0; 4]
     };
     let field = prepared.field;
-    compose_combo_feedback(
-        actors,
-        ComboFeedbackRequest {
-            style: request.style.combo_feedback,
-            show,
-            milestone_assets,
-            milestones: frame.milestones,
-            combo: frame.combo,
-            miss_combo: frame.miss_combo,
-            number_xy: [field.combo_x, field.hud_layout.zmod_layout.combo_y],
-            milestone_xy: [
-                field.playfield_center_x,
-                field.hud_layout.zmod_layout.combo_y,
-            ],
-            mini: prepared.mini,
-            player_color,
-            combo_color,
-            font: frame.font,
-            number_text: frame.number_text,
-            number_text_slot: frame.number_text_slot,
-        },
-    );
+    let feedback = ComboFeedbackRequest {
+        style: request.style.combo_feedback,
+        show,
+        milestone_assets,
+        milestones: frame.milestones,
+        combo: frame.combo,
+        miss_combo: frame.miss_combo,
+        number_xy: [field.combo_x, field.hud_layout.zmod_layout.combo_y],
+        milestone_xy: [
+            field.playfield_center_x,
+            field.hud_layout.zmod_layout.combo_y,
+        ],
+        mini: prepared.mini,
+        player_color,
+        combo_color,
+        font: frame.font,
+        number_text: frame.number_text,
+        number_text_slot: frame.number_text_slot,
+    };
+    compose_combo_milestones(draws, &feedback);
+    if request.capture_requests.combo {
+        actors.extend(draws.drain(draw_start..).map(flat_draw_actor));
+    }
+    compose_combo_number(actors, &feedback);
 }
 
 fn compose_error<S>(

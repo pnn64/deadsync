@@ -8987,7 +8987,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "zmod_run_timer_index",
         "fn visual_effect_params",
         "fn compose_column_feedback",
-        "fn compose_receptor_actors",
+        "fn compose_receptor_draws",
         "fn compose_counter_hud",
         "fn compose_mini_indicator",
         "fn compose_judgment_feedback",
@@ -9230,7 +9230,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     let mut previous = 0;
     for marker in [
         "compose_field_contents(",
-        "wrap_field_camera(",
+        "finish_field_camera(",
         "share_actor_range(",
     ] {
         let position = field_entry[previous..]
@@ -9251,12 +9251,12 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     let mut previous = 0;
     for marker in [
         "compose_combo(",
-        "share_actor_range(actors, combo_capture_start)",
+        "share_actor_range(actors, combo_capture_start,",
         "compose_error(",
         "compose_counter_hud(",
         "compose_mini_indicator(",
         "compose_judgment(",
-        "share_actor_range(actors, judgment_capture_start)",
+        "share_actor_range(\n                actors,\n                judgment_capture_start,",
     ] {
         let position = hud_entry[previous..]
             .find(marker)
@@ -9270,7 +9270,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     assert!(gameplay_rows.contains("pub fn hides_note("));
     assert!(gameplay_runtime.contains("pub fn completed_row_visibility("));
     assert!(field_frame.contains("pub completed_rows: CompletedRowVisibility"));
-    assert!(field_frame.contains("completed_rows.hides_note(note.row_index)"));
+    assert!(field_frame.contains("completed_rows.hides_note(note_index)"));
     assert!(source.contains("state.completed_row_visibility(player_idx)"));
     assert!(
         !source.contains("row_hides_completed_note("),
@@ -9278,7 +9278,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     );
 
     let field_call = source
-        .find("let field_result = compose_notefield_field(")
+        .find("compose_notefield_field(")
         .expect("Simply Love must compose the canonical field pass");
     let display_mods_call = source[field_call..]
         .find("display_mods::compose(")
@@ -9392,6 +9392,124 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         .expect("shell app should be readable");
     assert!(shell.contains("fn arrow_effect_time_seconds(at: Instant) -> f32"));
     assert!(shell.contains("host_time::instant_nanos(at)"));
+}
+
+#[test]
+fn measure_quads_stay_on_the_direct_field_path() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let actors = fs::read_to_string(root.join("crates/deadsync-notefield/src/measure_actors.rs"))
+        .expect("canonical measure actor helpers should be readable");
+    let lines = fs::read_to_string(root.join("crates/deadsync-notefield/src/measure_lines.rs"))
+        .expect("canonical measure-line composer should be readable");
+    let field = fs::read_to_string(root.join("crates/deadsync-notefield/src/field_frame.rs"))
+        .expect("canonical field-frame composer should be readable");
+
+    assert!(actors.contains("draws.push(FlatDraw::Sprite(FlatSprite {"));
+    assert!(actors.contains("let mut text = TextBuilder::new();"));
+    for removed in ["SpriteBuilder", "Actor::Sprite"] {
+        assert!(
+            !actors.contains(removed),
+            "measure quads must not return to the wide actor path through {removed}"
+        );
+    }
+    assert!(lines.contains("draws: &mut Vec<FlatDraw>"));
+    assert!(lines.contains("append_beat_bar(\n        draws,"));
+    assert!(lines.contains("append_cue_bar(\n                draws,"));
+    assert!(field.contains("compose_measure_lines(\n        actors,\n        flat_draws,"));
+
+    let measure = field
+        .rfind("compose_measure_lines(")
+        .expect("field must compose measure presentation");
+    let feedback = field
+        .rfind("compose_notefield_feedback(")
+        .expect("field must compose receptor-row feedback");
+    assert!(
+        measure < feedback,
+        "measure draws must remain before feedback"
+    );
+}
+
+#[test]
+fn error_bar_quads_stay_on_the_direct_hud_path() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let error_bar = fs::read_to_string(root.join("crates/deadsync-notefield/src/error_bar.rs"))
+        .expect("canonical error-bar composer should be readable");
+    let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
+        .expect("canonical HUD-frame composer should be readable");
+    let gameplay =
+        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+            .expect("Simply Love gameplay composer should be readable");
+
+    assert!(error_bar.contains("draws.push(FlatDraw::Sprite(FlatSprite {"));
+    assert!(error_bar.contains("let mut text = TextBuilder::new();"));
+    for removed in ["SpriteBuilder", "Actor::Sprite"] {
+        assert!(
+            !error_bar.contains(removed),
+            "error-bar quads must not return to the wide actor path through {removed}"
+        );
+    }
+    assert!(hud.contains("draws: &mut Vec<FlatDraw>"));
+    assert!(hud.contains("compose_error(actors, draws,"));
+    assert!(hud.contains("actors.extend(draws.drain(..).map(flat_draw_actor));"));
+    assert!(gameplay.contains("notefield_hud_flat_draw_scratch"));
+    assert!(gameplay.contains("ERROR_BAR_HUD_FLAT_DRAW_CAPACITY: usize = 82"));
+    assert!(gameplay.contains("hud.with_flat_draws("));
+}
+
+#[test]
+fn judgment_sprites_stay_on_the_direct_hud_path() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let judgment =
+        fs::read_to_string(root.join("crates/deadsync-notefield/src/judgment_feedback.rs"))
+            .expect("canonical judgment-feedback composer should be readable");
+    let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
+        .expect("canonical HUD-frame composer should be readable");
+    let gameplay =
+        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+            .expect("Simply Love gameplay composer should be readable");
+
+    assert!(judgment.contains("draws.push(FlatDraw::Sprite(FlatSprite {"));
+    for removed in ["SpriteBuilder", "Actor::Sprite"] {
+        assert!(
+            !judgment.contains(removed),
+            "judgment sprites must not return to the wide actor path through {removed}"
+        );
+    }
+    assert!(hud.contains("let judgment_draw_start = draws.len();"));
+    assert!(hud.contains("compose_judgment(draws,"));
+    assert!(hud.contains("draws.drain(judgment_draw_start..).map(flat_draw_actor)"));
+    assert!(gameplay.contains("JUDGMENT_HUD_FLAT_DRAW_CAPACITY: usize = 2 + MAX_COLS * 2"));
+}
+
+#[test]
+fn combo_milestone_sprites_stay_on_the_direct_hud_path() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let combo = fs::read_to_string(root.join("crates/deadsync-notefield/src/combo_feedback.rs"))
+        .expect("canonical combo-feedback composer should be readable");
+    let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
+        .expect("canonical HUD-frame composer should be readable");
+    let gameplay =
+        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+            .expect("Simply Love gameplay composer should be readable");
+    let adapter = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
+    ))
+    .expect("Simply Love notefield adapter should be readable");
+
+    assert!(combo.contains("draws.push(FlatDraw::Sprite(FlatSprite {"));
+    assert!(combo.contains("let mut text = TextBuilder::new();"));
+    for removed in ["SpriteBuilder", "Actor::Sprite"] {
+        assert!(
+            !combo.contains(removed),
+            "combo milestone sprites must not return through {removed}"
+        );
+    }
+    assert!(hud.contains("let combo_draw_start = draws.len();"));
+    assert!(hud.contains("compose_combo_milestones(draws, &feedback);"));
+    assert!(hud.contains("draws.drain(draw_start..).map(flat_draw_actor)"));
+    assert!(gameplay.contains("COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 6"));
+    assert!(adapter.contains("ResolvedComboMilestoneAssets"));
+    assert!(gameplay.contains("notefield_combo_assets"));
 }
 
 #[test]
@@ -9905,9 +10023,9 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
         ("notes.rs", "fn scroll_travel"),
         ("notes.rs", "const fn mine_hides_after_resolution"),
         ("receptors.rs", "fn hold_indicator_column_x"),
-        ("receptors.rs", "struct ReceptorActorsRequest"),
+        ("receptors.rs", "struct ReceptorDrawRequest"),
         ("receptors.rs", "struct ReceptorPress"),
-        ("receptors.rs", "fn compose_receptor_actors"),
+        ("receptors.rs", "fn compose_receptor_draws"),
         ("receptors.rs", "fn receptor_row_center"),
         ("feedback.rs", "struct ColumnFeedbackRequest"),
         ("feedback.rs", "struct JudgmentTiltParams"),
@@ -10272,9 +10390,9 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
         .expect("canonical notefield manifest should be readable");
 
     for token in [
-        "pub(crate) struct ReceptorActorsRequest",
+        "pub(crate) struct ReceptorDrawRequest",
         "pub(crate) struct ReceptorPress",
-        "pub(crate) fn compose_receptor_actors",
+        "pub(crate) fn compose_receptor_draws",
         "S: NoteskinSlot",
         "F: Fn(&S) -> SpriteSource",
         "P: FnOnce() -> Option<ReceptorPress",
@@ -10325,8 +10443,8 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
         "pub struct NotefieldFeedbackFrameView",
         "pub struct NotefieldLaneFeedback",
         "fn compose_notefield_feedback",
-        "compose_receptor_actors(",
-        "ReceptorActorsRequest {",
+        "compose_receptor_draws(",
+        "ReceptorDrawRequest {",
         "ReceptorPress {",
         "style: request.style.receptor",
     ] {
@@ -10344,9 +10462,9 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
     assert!(frame.contains("visual.tiny"));
     let ordered_markers = [
         "compose_column_feedback(",
-        "compose_receptor_actors(",
-        "for (local_col, active) in frame.tap_explosions",
-        "for (local_col, active) in frame.mine_explosions",
+        "compose_receptor_draws(",
+        "// Tap explosions are independent",
+        "if let (Some(explosion), Some(mine_explosions))",
     ];
     let mut previous = 0;
     for marker in ordered_markers {
@@ -10357,8 +10475,8 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
         previous = position + marker.len();
     }
     for low_level in [
-        "compose_receptor_actors(",
-        "ReceptorActorsRequest {",
+        "compose_receptor_draws(",
+        "ReceptorDrawRequest {",
         "ReceptorPress {",
         "compose_column_feedback(",
         "ColumnFeedbackRequest {",

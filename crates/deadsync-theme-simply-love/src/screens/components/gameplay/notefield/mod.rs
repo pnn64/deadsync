@@ -12,9 +12,9 @@ use deadsync_gameplay::{
 };
 use deadsync_notefield::{
     BrokenRunLookup, BuiltNotefield, CapturedActorScratch, ComboHudFrame, ComboMilestoneAssets,
-    CounterHudFrame, ErrorBarHudFrame, ErrorBarModes, HoldMeshScratch, IndicatorSprite,
-    JudgmentHudFrame, LayoutMiniIndicatorPosition, MeasureCounterOptions, MeasureLineMode,
-    MiniHudFrame, ModelMeshCache, NotefieldChartView, NotefieldComposeRequest,
+    ComboMilestoneSprite, CounterHudFrame, ErrorBarHudFrame, ErrorBarModes, HoldMeshScratch,
+    IndicatorSprite, JudgmentHudFrame, LayoutMiniIndicatorPosition, MeasureCounterOptions,
+    MeasureLineMode, MiniHudFrame, ModelMeshCache, NotefieldChartView, NotefieldComposeRequest,
     NotefieldFeedbackFrameView, NotefieldFieldFrameView, NotefieldFrameFeatures, NotefieldGeometry,
     NotefieldHudFrameView, NotefieldLaneFeedback, NotefieldNoteskinView, NotefieldOptions,
     NotefieldSongLuaView, NotefieldVisualState, StreamProgressLookup, TapJudgmentHudFrame,
@@ -285,6 +285,77 @@ fn cached_sprite_metadata(
     Some(metadata)
 }
 
+const COMBO_BURST_TEXTURE: &str = "combo_explosion.png";
+
+#[derive(Clone, Copy)]
+struct CachedComboMilestoneSizes {
+    keys: [&'static str; 4],
+    sizes: [[f32; 2]; 4],
+}
+
+/// Visual-style-stable combo milestone art plus screen-lifetime native sizes.
+///
+/// The gameplay screen owns this single-threaded four-entry set and warms it
+/// during the incoming transition. A steady frame performs one fixed key
+/// comparison with no lookup, allocation, lock, growth, or eviction. A visual
+/// style change replaces all four sizes through bounded texture-dimension
+/// lookups; skipped transition setup pays the same bounded work on first use.
+/// The set is dropped with the screen, and focused cache tests cover hits and
+/// replacement. Worst steady-frame cost is four static-string comparisons;
+/// worst miss cost is four registry dimension lookups outside normal play.
+pub(crate) struct ResolvedComboMilestoneAssets {
+    cached: Cell<Option<CachedComboMilestoneSizes>>,
+}
+
+impl ResolvedComboMilestoneAssets {
+    pub(crate) const fn new() -> Self {
+        Self {
+            cached: Cell::new(None),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn resolve(
+        &self,
+        effects: &'static crate::visual_styles::EffectAssets,
+    ) -> ComboMilestoneAssets {
+        let sizes = self.sizes_for_keys(combo_milestone_keys(effects), |key| {
+            assets::texture_dims(key).map_or([0.0; 2], |meta| [meta.w as f32, meta.h as f32])
+        });
+        combo_milestone_assets(effects, sizes)
+    }
+
+    fn sizes_for_keys(
+        &self,
+        keys: [&'static str; 4],
+        resolve: impl FnMut(&str) -> [f32; 2],
+    ) -> [[f32; 2]; 4] {
+        if let Some(cached) = self.cached.get()
+            && cached.keys == keys
+        {
+            return cached.sizes;
+        }
+        let sizes = keys.map(resolve);
+        self.cached
+            .set(Some(CachedComboMilestoneSizes { keys, sizes }));
+        sizes
+    }
+
+    pub(crate) fn prewarm(&self, effects: &'static crate::visual_styles::EffectAssets) {
+        let _ = self.resolve(effects);
+    }
+}
+
+#[inline(always)]
+fn combo_milestone_keys(effects: &'static crate::visual_styles::EffectAssets) -> [&'static str; 4] {
+    [
+        COMBO_BURST_TEXTURE,
+        effects.combo_100milestone_splode,
+        effects.combo_100milestone_minisplode,
+        effects.combo_1000milestone_swoosh,
+    ]
+}
+
 #[inline(always)]
 fn gameplay_error_bar_trim(trim: profile_data::ErrorBarTrim) -> GameplayErrorBarTrim {
     match trim {
@@ -494,29 +565,44 @@ pub(crate) fn gameplay_notefield_plan(
 }
 
 #[inline(always)]
-fn combo_milestone_assets(effects: &crate::visual_styles::EffectAssets) -> ComboMilestoneAssets {
-    let hundred = effects.combo_100milestone_splode;
-    let hundred_mini = effects.combo_100milestone_minisplode;
-    let thousand = effects.combo_1000milestone_swoosh;
+fn combo_milestone_assets(
+    effects: &'static crate::visual_styles::EffectAssets,
+    sizes: [[f32; 2]; 4],
+) -> ComboMilestoneAssets {
+    let keys = combo_milestone_keys(effects);
     ComboMilestoneAssets {
-        burst: SpriteSource::static_texture("combo_explosion.png"),
-        hundred: SpriteSource::static_texture(hundred),
-        hundred_mini: SpriteSource::static_texture(hundred_mini),
-        thousand: SpriteSource::static_texture(thousand),
-        hundred_zoom_scale: assets::visual_styles::effect_zoom_scale(hundred),
-        hundred_mini_zoom_scale: assets::visual_styles::effect_zoom_scale(hundred_mini),
-        thousand_zoom_scale: assets::visual_styles::effect_zoom_scale(thousand),
+        burst: ComboMilestoneSprite {
+            source: SpriteSource::static_texture(keys[0]),
+            native_size: sizes[0],
+            zoom_scale: 1.0,
+        },
+        hundred: ComboMilestoneSprite {
+            source: SpriteSource::static_texture(keys[1]),
+            native_size: sizes[1],
+            zoom_scale: assets::visual_styles::effect_zoom_scale(keys[1]),
+        },
+        hundred_mini: ComboMilestoneSprite {
+            source: SpriteSource::static_texture(keys[2]),
+            native_size: sizes[2],
+            zoom_scale: assets::visual_styles::effect_zoom_scale(keys[2]),
+        },
+        thousand: ComboMilestoneSprite {
+            source: SpriteSource::static_texture(keys[3]),
+            native_size: sizes[3],
+            zoom_scale: assets::visual_styles::effect_zoom_scale(keys[3]),
+        },
     }
 }
 
 pub(crate) fn compose_frame(
     state: &State,
     judgment_assets: &ResolvedJudgmentAssets,
+    resolved_combo_assets: &ResolvedComboMilestoneAssets,
     notefield_plan: &GameplayNotefieldPlan,
     player_idx: usize,
     arrow_effect_time_s: f32,
     noteskin_assets: &GameplayNoteskinAssets,
-    visual_effects: &crate::visual_styles::EffectAssets,
+    visual_effects: &'static crate::visual_styles::EffectAssets,
     actor_resources: &ActorResourceArena,
     model_caches: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
     hold_mesh_scratch: &[RefCell<HoldMeshScratch>; MAX_PLAYERS],
@@ -775,14 +861,16 @@ pub(crate) fn compose_frame(
         );
     }
 
-    let combo_frame = NotefieldHudFrameView::combo_active(
+    let combo_active = NotefieldHudFrameView::combo_active(
         request.view.hide_combo,
         blind_active,
         options.frame_features.combo_visible,
-    )
-    .then(|| {
-        let milestone_assets = (!options.hide_combo_explosions && !p.combo_milestones.is_empty())
-            .then(|| combo_milestone_assets(visual_effects));
+    );
+    let combo_milestone_assets =
+        (combo_active && !options.hide_combo_explosions && !p.combo_milestones.is_empty())
+            .then(|| resolved_combo_assets.resolve(visual_effects));
+    let combo_frame = combo_active.then(|| {
+        let milestone_assets = combo_milestone_assets.as_ref();
         let player_color = if milestone_assets.is_some() {
             color::decorative_rgba(state.player_color_index())
         } else {
