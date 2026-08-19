@@ -160,6 +160,106 @@ fn rage_frustum(l: f32, r: f32, b: f32, t: f32, zn: f32, zf: f32) -> Matrix4 {
     ])
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct NotefieldCameraKey {
+    screen_w: u32,
+    screen_h: u32,
+    playfield_center_x: u32,
+    center_y: u32,
+    tilt: u32,
+    skew: u32,
+    reverse: bool,
+}
+
+impl NotefieldCameraKey {
+    const fn new(
+        screen_w: f32,
+        screen_h: f32,
+        playfield_center_x: f32,
+        center_y: f32,
+        tilt: f32,
+        skew: f32,
+        reverse: bool,
+    ) -> Self {
+        Self {
+            screen_w: screen_w.to_bits(),
+            screen_h: screen_h.to_bits(),
+            playfield_center_x: playfield_center_x.to_bits(),
+            center_y: center_y.to_bits(),
+            tilt: tilt.to_bits(),
+            skew: skew.to_bits(),
+            reverse,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct NotefieldCameraCacheStats {
+    pub hits: u64,
+    pub rebuilds: u64,
+}
+
+/// Single-player notefield camera memo owned by one gameplay screen.
+///
+/// The gameplay/presentation thread owns this fixed per-player song-lifetime
+/// cache; it needs no synchronization, allocation, capacity policy, or eviction.
+/// Transition composition supplies the warmup request. Exact source-bit
+/// changes rebuild one bounded matrix synchronously, while stable frames copy
+/// the retained matrix. Screen destruction releases the two inline entries.
+/// Counters expose hits and rebuilds; worst-case miss work is one call to
+/// [`notefield_view_proj`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NotefieldCameraCache {
+    key: Option<NotefieldCameraKey>,
+    camera: Option<Matrix4>,
+    stats: NotefieldCameraCacheStats,
+}
+
+impl NotefieldCameraCache {
+    #[allow(clippy::too_many_arguments)]
+    pub fn resolve(
+        &mut self,
+        screen_w: f32,
+        screen_h: f32,
+        playfield_center_x: f32,
+        center_y: f32,
+        tilt: f32,
+        skew: f32,
+        reverse: bool,
+    ) -> Option<Matrix4> {
+        let key = NotefieldCameraKey::new(
+            screen_w,
+            screen_h,
+            playfield_center_x,
+            center_y,
+            tilt,
+            skew,
+            reverse,
+        );
+        if self.key == Some(key) {
+            self.stats.hits = self.stats.hits.saturating_add(1);
+            return self.camera;
+        }
+        let camera = notefield_view_proj(
+            screen_w,
+            screen_h,
+            playfield_center_x,
+            center_y,
+            tilt,
+            skew,
+            reverse,
+        );
+        self.key = Some(key);
+        self.camera = camera;
+        self.stats.rebuilds = self.stats.rebuilds.saturating_add(1);
+        camera
+    }
+
+    pub const fn stats(&self) -> NotefieldCameraCacheStats {
+        self.stats
+    }
+}
+
 pub(crate) fn notefield_view_proj(
     screen_w: f32,
     screen_h: f32,
@@ -552,7 +652,8 @@ mod tests {
 
     use super::{
         FieldLayoutRequest, FieldPlacement, HudLayoutOffsets, HudLayoutParams,
-        LayoutMiniIndicatorPosition, ZmodLayoutParams, field_layout,
+        LayoutMiniIndicatorPosition, NotefieldCameraCache, ZmodLayoutParams, field_layout,
+        notefield_view_proj,
     };
     use deadsync_core::input::MAX_COLS;
     use deadsync_theme::{
@@ -560,6 +661,73 @@ mod tests {
         CounterHudStyle, ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle,
         MiniIndicatorStyle, NotefieldActorStyle, NotefieldStyle, ReceptorStyle,
     };
+
+    fn matrix_bits(matrix: Option<glam::Mat4>) -> Option<[u32; 16]> {
+        matrix.map(|matrix| matrix.to_cols_array().map(f32::to_bits))
+    }
+
+    #[test]
+    fn field_camera_cache_reuses_exact_inputs() {
+        let mut cache = NotefieldCameraCache::default();
+        let expected = notefield_view_proj(640.0, 480.0, 213.5, 240.0, 0.35, -0.2, false);
+
+        let first = cache.resolve(640.0, 480.0, 213.5, 240.0, 0.35, -0.2, false);
+        let second = cache.resolve(640.0, 480.0, 213.5, 240.0, 0.35, -0.2, false);
+
+        assert_eq!(matrix_bits(first), matrix_bits(expected));
+        assert_eq!(matrix_bits(second), matrix_bits(expected));
+        assert_eq!(cache.stats().rebuilds, 1);
+        assert_eq!(cache.stats().hits, 1);
+    }
+
+    #[test]
+    fn field_camera_cache_rebuilds_for_every_source_change() {
+        let mut cache = NotefieldCameraCache::default();
+        let requests = [
+            (640.0, 480.0, 213.5, 240.0, 0.0, 0.0, false),
+            (854.0, 480.0, 213.5, 240.0, 0.0, 0.0, false),
+            (854.0, 720.0, 213.5, 240.0, 0.0, 0.0, false),
+            (854.0, 720.0, 425.5, 240.0, 0.0, 0.0, false),
+            (854.0, 720.0, 425.5, 300.0, 0.0, 0.0, false),
+            (854.0, 720.0, 425.5, 300.0, 0.5, 0.0, false),
+            (854.0, 720.0, 425.5, 300.0, 0.5, -0.4, false),
+            (854.0, 720.0, 425.5, 300.0, 0.5, -0.4, true),
+        ];
+
+        for (index, request) in requests.into_iter().enumerate() {
+            let (screen_w, screen_h, center_x, center_y, tilt, skew, reverse) = request;
+            let resolved =
+                cache.resolve(screen_w, screen_h, center_x, center_y, tilt, skew, reverse);
+            let expected =
+                notefield_view_proj(screen_w, screen_h, center_x, center_y, tilt, skew, reverse);
+            assert_eq!(matrix_bits(resolved), matrix_bits(expected));
+            assert_eq!(cache.stats().rebuilds, index as u64 + 1);
+            assert_eq!(cache.stats().hits, 0);
+        }
+    }
+
+    #[test]
+    fn field_camera_cache_retains_invalid_result_until_inputs_change() {
+        let mut cache = NotefieldCameraCache::default();
+
+        assert!(
+            cache
+                .resolve(0.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+                .is_none()
+        );
+        assert!(
+            cache
+                .resolve(0.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+                .is_none()
+        );
+        assert!(
+            cache
+                .resolve(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+                .is_some()
+        );
+        assert_eq!(cache.stats().rebuilds, 2);
+        assert_eq!(cache.stats().hits, 1);
+    }
 
     fn style() -> NotefieldStyle {
         NotefieldStyle {

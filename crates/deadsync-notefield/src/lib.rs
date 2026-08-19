@@ -66,8 +66,8 @@ pub use noteskin_model::{
     noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry,
 };
 pub use placement::{
-    FieldLayout, FieldPlacement, HudLayoutYs, LayoutMiniIndicatorPosition, ProxyCaptureRequests,
-    ViewOverride, ZmodLayoutParams, ZmodLayoutYs,
+    FieldLayout, FieldPlacement, HudLayoutYs, LayoutMiniIndicatorPosition, NotefieldCameraCache,
+    NotefieldCameraCacheStats, ProxyCaptureRequests, ViewOverride, ZmodLayoutParams, ZmodLayoutYs,
 };
 pub use song_lua::{
     SongLuaPlayerTransformRequest, song_lua_note_model_draw, song_lua_player_skew_x_matrix,
@@ -164,16 +164,36 @@ pub mod performance {
     pub use crate::notes::{
         find_first_displayed_beat, find_first_displayed_row, find_last_displayed_row,
     };
+    #[cfg(feature = "bench-support")]
+    #[allow(clippy::too_many_arguments)]
+    pub fn notefield_view_proj(
+        screen_w: f32,
+        screen_h: f32,
+        playfield_center_x: f32,
+        center_y: f32,
+        tilt: f32,
+        skew: f32,
+        reverse: bool,
+    ) -> Option<glam::Mat4> {
+        crate::placement::notefield_view_proj(
+            screen_w,
+            screen_h,
+            playfield_center_x,
+            center_y,
+            tilt,
+            skew,
+            reverse,
+        )
+    }
 }
 #[cfg(test)]
 use notes::{find_first_displayed_beat, find_last_displayed_beat, note_itg_row};
 pub(crate) use placement::{
     FieldLayoutRequest, HudLayoutOffsets, HudLayoutParams, average_error_bar_mini_scale,
-    combo_actor_zoom, effective_mini_value, field_layout, fill_lane_col_offsets,
-    notefield_view_proj, player_metric_y,
+    combo_actor_zoom, effective_mini_value, field_layout, fill_lane_col_offsets, player_metric_y,
 };
 #[cfg(test)]
-use placement::{default_column_x, hud_layout_ys, hud_y, zmod_layout_ys};
+use placement::{default_column_x, hud_layout_ys, hud_y, notefield_view_proj, zmod_layout_ys};
 pub(crate) use receptors::{
     ReceptorDrawRequest, ReceptorPress, compose_receptor_draws, hold_indicator_column_x,
     receptor_row_center,

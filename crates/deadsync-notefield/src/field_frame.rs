@@ -2,18 +2,18 @@ use crate::{
     CapturedActorScratch, CapturedActorSource, HoldBodyCapRequest, HoldComposeControl,
     HoldEntryPlanRequest, HoldMeshScratch, HoldPathSample, LaneNoteTransformCache,
     MeasureComposeRequest, MeasureLineMode, MineLayerRequest, ModelMeshCache, NoteAlphaParams,
-    NoteLayerRequest, NoteXParams, NotefieldComposeRequest, NotefieldFeedbackFrameView,
-    PreparedNotefield, PreparedNotefieldNotes, TornadoBounds, VisualEffectParams,
-    appearance_note_alpha_glow_cached, compose_flat_mine_layers, compose_flat_note_layer,
-    compose_hold_body_caps, compose_measure_lines, compose_notefield_feedback,
-    fill_gameplay_lane_effects, fill_static_note_x_offsets, for_each_lane_index,
-    hold_entry_head_beat, hold_entry_plan, hold_overlaps_visible_window, hold_parts_for_note_type,
-    lane_hold_window_bounds_by_note_row_from_cursor, lane_note_transform_cache,
-    lane_window_bounds_by_note_row_from_cursor, mine_hides_after_resolution, mine_part,
-    note_appearance_cache, note_world_z_for_bumpy, note_x_offset as canonical_note_x_offset,
-    notefield_view_proj, offset_center, scale_sprite_to_arrow, share_actor_range,
-    song_lua_note_model_draw, tap_part_for_note_type, tap_replacement_head, translated_uv_rect,
-    visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
+    NoteLayerRequest, NoteXParams, NotefieldCameraCache, NotefieldComposeRequest,
+    NotefieldFeedbackFrameView, PreparedNotefield, PreparedNotefieldNotes, TornadoBounds,
+    VisualEffectParams, appearance_note_alpha_glow_cached, compose_flat_mine_layers,
+    compose_flat_note_layer, compose_hold_body_caps, compose_measure_lines,
+    compose_notefield_feedback, fill_gameplay_lane_effects, fill_static_note_x_offsets,
+    for_each_lane_index, hold_entry_head_beat, hold_entry_plan, hold_overlaps_visible_window,
+    hold_parts_for_note_type, lane_hold_window_bounds_by_note_row_from_cursor,
+    lane_note_transform_cache, lane_window_bounds_by_note_row_from_cursor,
+    mine_hides_after_resolution, mine_part, note_appearance_cache, note_world_z_for_bumpy,
+    note_x_offset as canonical_note_x_offset, offset_center, scale_sprite_to_arrow,
+    share_actor_range, song_lua_note_model_draw, tap_part_for_note_type, tap_replacement_head,
+    translated_uv_rect, visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
     visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
 use deadlib_present::actors::{
@@ -67,6 +67,7 @@ pub fn compose_notefield_field<S, F>(
     model_cache: &mut ModelMeshCache,
     hold_mesh_scratch: &mut HoldMeshScratch,
     capture_scratch: &mut CapturedActorScratch,
+    camera_cache: &mut NotefieldCameraCache,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
     frame: &NotefieldFieldFrameView<'_>,
@@ -85,7 +86,7 @@ where
     let Some(notes) = prepared.notes.as_ref() else {
         return NotefieldFieldResult::default();
     };
-    let field_camera = resolve_field_camera(request, prepared);
+    let field_camera = resolve_field_camera(camera_cache, request, prepared);
     let actor_camera_scope = request.capture_requests.note_field || request.view.edit_beat_bars;
     if actor_camera_scope && let Some(view_proj) = field_camera {
         actors.push(Actor::CameraPush { view_proj });
@@ -1503,13 +1504,14 @@ fn calc_note_rotation_z(
 }
 
 fn resolve_field_camera<S>(
+    cache: &mut NotefieldCameraCache,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
 ) -> Option<glam::Mat4> {
     let field = prepared.field;
     let center_y = 0.5 * (field.receptor_y_normal + field.receptor_y_reverse);
     let perspective = request.visual.perspective;
-    notefield_view_proj(
+    cache.resolve(
         request.geometry.screen_width,
         request.geometry.screen_height,
         field.playfield_center_x,

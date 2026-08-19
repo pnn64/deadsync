@@ -12,6 +12,7 @@ use deadlib_present::compose::{
 use deadlib_present::dsl::TextBuilder;
 use deadlib_present::font::{self, Font, Glyph, GlyphMap};
 use deadlib_render_core::{BlendMode, MeshVertex, TexturedMeshVertex};
+use deadsync_notefield::{NotefieldCameraCache, performance::notefield_view_proj};
 use deadsync_theme_simply_love::screens::gameplay::{
     BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
     benchmark_present_identity_notefield, benchmark_present_transformed_notefield,
@@ -49,6 +50,9 @@ const ERROR_BAR_MEASURE_BATCHES: usize = 400;
 const CAMERA_HANDOFF_BATCH_FRAMES: usize = 4_096;
 const CAMERA_HANDOFF_WARMUP_BATCHES: usize = 16;
 const CAMERA_HANDOFF_MEASURE_BATCHES: usize = 400;
+const CAMERA_CACHE_BATCH_FRAMES: usize = 4_096;
+const CAMERA_CACHE_WARMUP_BATCHES: usize = 16;
+const CAMERA_CACHE_MEASURE_BATCHES: usize = 400;
 const HUD_TEXT_RUNS: usize = 8;
 const ERROR_BAR_TEXT_RUNS: usize = 4;
 const CUE_COUNTDOWN_RUNS: usize = 3;
@@ -1038,6 +1042,123 @@ fn print_camera_handoff_benchmark() {
     }
 }
 
+#[derive(Clone, Copy)]
+enum CameraResolveKind {
+    Rebuild,
+    Retained,
+}
+
+fn camera_resolve_frame(
+    kind: CameraResolveKind,
+    cache: &mut NotefieldCameraCache,
+    player: usize,
+) -> f32 {
+    let (center_x, tilt, skew, reverse) = if player == 0 {
+        (213.5, 0.35, -0.2, false)
+    } else {
+        (640.5, -0.25, 0.15, true)
+    };
+    let screen_w = black_box(854.0);
+    let screen_h = black_box(480.0);
+    let center_x = black_box(center_x);
+    let center_y = black_box(240.0);
+    let tilt = black_box(tilt);
+    let skew = black_box(skew);
+    let reverse = black_box(reverse);
+    let camera = match kind {
+        CameraResolveKind::Rebuild => {
+            notefield_view_proj(screen_w, screen_h, center_x, center_y, tilt, skew, reverse)
+        }
+        CameraResolveKind::Retained => {
+            cache.resolve(screen_w, screen_h, center_x, center_y, tilt, skew, reverse)
+        }
+    }
+    .expect("benchmark dimensions produce a field camera");
+    black_box(camera.x_axis.x + camera.y_axis.y + camera.w_axis.z)
+}
+
+fn measure_camera_cache_pair() -> [BoundaryResult; 2] {
+    let mut caches = [NotefieldCameraCache::default(); BOUNDARY_PLAYERS];
+    for (player, cache) in caches.iter_mut().enumerate() {
+        black_box(camera_resolve_frame(
+            CameraResolveKind::Retained,
+            cache,
+            player,
+        ));
+    }
+    let mut elapsed = [Duration::ZERO; 2];
+    let mut cycles = [0u64; 2];
+    let mut allocated = [AllocSnapshot {
+        allocs: 0,
+        reallocs: 0,
+        bytes: 0,
+    }; 2];
+    let mut samples_ns: [Vec<u64>; 2] =
+        std::array::from_fn(|_| Vec::with_capacity(CAMERA_CACHE_MEASURE_BATCHES));
+    let mut checksum = [0.0f32; 2];
+    for batch in 0..CAMERA_CACHE_WARMUP_BATCHES + CAMERA_CACHE_MEASURE_BATCHES {
+        let order = if batch % 2 == 0 { [0, 1] } else { [1, 0] };
+        for kind_index in order {
+            let kind = [CameraResolveKind::Rebuild, CameraResolveKind::Retained][kind_index];
+            let before_alloc = ALLOC.snapshot();
+            let before_cycles = read_cycles();
+            let started = Instant::now();
+            let mut batch_checksum = 0.0;
+            for _ in 0..CAMERA_CACHE_BATCH_FRAMES {
+                for player in 0..BOUNDARY_PLAYERS {
+                    batch_checksum += camera_resolve_frame(kind, &mut caches[player], player);
+                }
+            }
+            let sample = started.elapsed();
+            let sample_cycles = read_cycles().saturating_sub(before_cycles);
+            let sample_allocated = ALLOC.snapshot().delta(before_alloc);
+            black_box(batch_checksum);
+            if batch >= CAMERA_CACHE_WARMUP_BATCHES {
+                elapsed[kind_index] += sample;
+                cycles[kind_index] += sample_cycles;
+                allocated[kind_index].add(sample_allocated);
+                samples_ns[kind_index]
+                    .push((sample.as_nanos() / CAMERA_CACHE_BATCH_FRAMES as u128) as u64);
+                checksum[kind_index] += batch_checksum;
+            }
+        }
+    }
+    for cache in &caches {
+        assert_eq!(cache.stats().rebuilds, 1);
+        assert_eq!(
+            cache.stats().hits,
+            ((CAMERA_CACHE_WARMUP_BATCHES + CAMERA_CACHE_MEASURE_BATCHES)
+                * CAMERA_CACHE_BATCH_FRAMES) as u64
+        );
+    }
+    for samples in &mut samples_ns {
+        samples.sort_unstable();
+    }
+    std::array::from_fn(|index| BoundaryResult {
+        elapsed: elapsed[index],
+        cycles: cycles[index],
+        allocated: allocated[index],
+        samples_ns: std::mem::take(&mut samples_ns[index]),
+        checksum: checksum[index],
+    })
+}
+
+fn print_camera_cache_benchmark() {
+    println!("\nretained field-camera benchmark (2 players)");
+    let [rebuilt, retained] = measure_camera_cache_pair();
+    assert_eq!(rebuilt.checksum, retained.checksum);
+    print_sampled_result("rebuild matrices", &rebuilt, CAMERA_CACHE_BATCH_FRAMES);
+    print_sampled_result("retained matrices", &retained, CAMERA_CACHE_BATCH_FRAMES);
+    for result in [&rebuilt, &retained] {
+        assert_zero_alloc(&BenchResult {
+            elapsed: result.elapsed,
+            cycles: result.cycles,
+            allocated: result.allocated,
+            checksum: result.checksum,
+        });
+    }
+}
+
 fn print_boundary_sweep(label: &str, hold_mix: bool, draw_counts: &[usize]) {
     println!("\n{label} (draws/player)");
     for &field_draws in draw_counts {
@@ -1857,6 +1978,10 @@ fn print_cue_countdown_benchmark() {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_FIELD_CAMERA_CACHE_ONLY").is_some() {
+        print_camera_cache_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_FIELD_CAMERA_ONLY").is_some() {
         print_camera_handoff_benchmark();
         return;

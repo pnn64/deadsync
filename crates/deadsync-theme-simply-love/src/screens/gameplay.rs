@@ -67,10 +67,11 @@ use deadsync_gameplay::{
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::{
     BrokenRunLookup, CapturedActorScratch, CapturedActorSource, FieldPlacement, HoldMeshScratch,
-    ModelMeshCache, ModelMeshCacheStats, ProxyCaptureRequests, SongLuaPlayerTransformRequest,
-    StreamProgressLookup, ViewOverride, noteskin_model_actor_from_draw,
-    noteskin_model_actor_from_draw_cached, song_lua_player_skew_x_matrix,
-    song_lua_player_skew_y_matrix, song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
+    ModelMeshCache, ModelMeshCacheStats, NotefieldCameraCache, ProxyCaptureRequests,
+    SongLuaPlayerTransformRequest, StreamProgressLookup, ViewOverride,
+    noteskin_model_actor_from_draw, noteskin_model_actor_from_draw_cached,
+    song_lua_player_skew_x_matrix, song_lua_player_skew_y_matrix, song_lua_player_transform_matrix,
+    song_lua_player_y_fold_actor,
 };
 use deadsync_noteskin::{
     ModelDrawState, NoteskinSlot, ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType,
@@ -1830,6 +1831,7 @@ struct GameplayFrameScratch {
     notefield_flat_draw_scratch: [Vec<FlatDraw>; MAX_PLAYERS],
     notefield_hud_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
     notefield_hud_flat_draw_scratch: [Vec<FlatDraw>; MAX_PLAYERS],
+    notefield_camera_cache: [NotefieldCameraCache; MAX_PLAYERS],
     presentation_skeleton: GameplayPresentationSkeleton,
 }
 
@@ -2448,6 +2450,7 @@ impl State {
             notefield_flat_draw_scratch,
             notefield_hud_actor_scratch,
             notefield_hud_flat_draw_scratch,
+            notefield_camera_cache: [NotefieldCameraCache::default(); MAX_PLAYERS],
             presentation_skeleton: GameplayPresentationSkeleton::default(),
         };
         debug_assert_eq!(
@@ -14824,6 +14827,7 @@ pub fn push_actors(
         notefield_flat_draw_scratch,
         notefield_hud_actor_scratch,
         notefield_hud_flat_draw_scratch,
+        notefield_camera_cache,
         presentation_skeleton,
     } = frame_scratch.as_mut();
     presentation_skeleton.prepare();
@@ -15260,6 +15264,7 @@ pub fn push_actors(
                 &state.notefield_model_cache,
                 &state.notefield_hold_mesh_scratch,
                 &state.notefield_capture_scratch,
+                notefield_camera_cache,
                 &state.notefield_broken_run_lookup[player_idx],
                 &state.notefield_stream_progress_lookup[player_idx],
                 profile,
