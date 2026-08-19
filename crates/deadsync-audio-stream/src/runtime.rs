@@ -3,7 +3,7 @@ use deadlib_audio::LinuxAudioBackend;
 use deadlib_audio::{InitConfig, OutputPlan, prepare_output};
 use deadlib_audio_core::{
     OutputBackendReady, OutputDeviceInfo, OutputTimingSnapshot, PlayedMapReader, SfxSender,
-    StutterDiagAudioEvent, bump_music_map_generation, normalized_music_rate,
+    StutterDiagAudioEvent, normalized_music_rate,
 };
 use deadlib_platform::dirs;
 use deadsync_audio_replaygain as replaygain;
@@ -17,6 +17,7 @@ use crate::mix::{
     EFFECT_BUS, SCREEN_BUS, assist_tick_generation, init_controls, stop_assist_tick_bus,
     stop_screen_bus,
 };
+use crate::music_map::clear_music_pos_map;
 use crate::sfx_cache::SfxCache;
 use crate::{Cut, MusicClock, MusicStreamRuntime, OutputFormat, SfxId, StreamCommand};
 
@@ -189,7 +190,7 @@ impl AudioControl {
     pub fn set_preserve_pitch_enabled(&self, enabled: bool) {
         set_preserve_pitch_enabled(enabled);
         if let Some(engine) = self.engine.as_ref() {
-            let generation = bump_music_map_generation();
+            let generation = clear_music_pos_map();
             let _ = engine.command_sender.send(StreamCommand::SetPreservePitch {
                 enabled,
                 generation,
@@ -214,7 +215,7 @@ fn reset_music_stream_clock() -> u64 {
     // Invalidate any assist ticks scheduled against the previous timeline; their
     // absolute target frames no longer correspond to the music position.
     stop_assist_tick_bus();
-    bump_music_map_generation()
+    clear_music_pos_map()
 }
 
 fn play_music(engine: Option<&AudioEngine>, path: PathBuf, cut: Cut, looping: bool, rate: f32) {
@@ -273,7 +274,7 @@ fn stop_music(engine: Option<&AudioEngine>) {
 fn set_music_rate(engine: Option<&AudioEngine>, rate: f32) {
     let rate = normalized_music_rate(rate);
     deadlib_audio_core::set_music_clock_rate(rate);
-    let generation = bump_music_map_generation();
+    let generation = clear_music_pos_map();
     if let Some(engine) = engine {
         let _ = engine
             .command_sender

@@ -3052,14 +3052,16 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
 }
 
 #[test]
-fn music_clock_reader_is_application_owned() {
+fn music_clock_reader_uses_pre_v0_5_654_global_runtime() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let music_map = fs::read_to_string(root.join("crates/deadsync-audio-stream/src/music_map.rs"))
         .expect("music clock reader should be readable");
     assert!(music_map.contains("pub struct MusicClock"));
+    assert!(music_map.contains("static MUSIC_MAP_RUNTIME"));
+    assert!(music_map.contains("Mutex<MusicMapRuntime>"));
     assert!(music_map.contains("played: Option<PlayedMapReader>"));
-    assert!(!music_map.contains("static MUSIC_MAP_RUNTIME"));
-    assert!(!music_map.contains("Mutex<"));
+    assert!(music_map.contains("pub(crate) fn clear_music_pos_map"));
+    assert!(music_map.contains("and_then(PlayedMapReader::pop)"));
 
     let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -3067,7 +3069,7 @@ fn music_clock_reader_is_application_owned() {
 
     let runtime = fs::read_to_string(root.join("crates/deadsync-audio-stream/src/runtime.rs"))
         .expect("audio runtime should be readable");
-    assert!(!runtime.contains("clear_music_pos_map"));
+    assert!(runtime.contains("clear_music_pos_map"));
     assert!(!runtime.contains("get_music_stream_clock_snapshot"));
 }
 
