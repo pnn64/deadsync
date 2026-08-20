@@ -16100,6 +16100,22 @@ mod tests {
     }
 
     #[test]
+    fn pump_hold_event_layout_stays_compact() {
+        assert_eq!(std::mem::size_of::<PumpHoldEventKind>(), 1);
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(std::mem::size_of::<PumpHoldEvent>(), 24);
+    }
+
+    #[test]
+    fn compact_chart_indices_reject_out_of_field_columns() {
+        let mut note = test_note_at(NoteType::Tap, None, false, 0, 0.0);
+        assert!(compact_chart_indices_valid(std::slice::from_ref(&note)));
+
+        note.column = MAX_COLS;
+        assert!(!compact_chart_indices_valid(std::slice::from_ref(&note)));
+    }
+
+    #[test]
     fn mine_scan_state_initializes_cursor_data_and_clears() {
         let mut mine_note_ix: [Vec<ChartNoteIndex>; MAX_PLAYERS] =
             std::array::from_fn(|_| Vec::new());

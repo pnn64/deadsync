@@ -298,6 +298,12 @@ pub struct GameplayHoldRuntimeState {
     pub tap_miss_held_at_note: Vec<bool>,
     pub pending_missed_hold_resolution: Vec<bool>,
     pub pending_missed_hold_indices: Vec<usize>,
+    /// Song-lifetime, time-ordered Pump hold-resolution schedule.
+    ///
+    /// Setup builds the complete table before gameplay. Runtime only advances
+    /// `pump_event_cursor`; the table never grows, misses, prunes, or rebuilds.
+    /// Compact row/note/player/column domains keep each event at 24 bytes on
+    /// x64, and values widen only where they index gameplay arrays.
     pub pump_events: Vec<PumpHoldEvent>,
     pub pump_event_cursor: usize,
     pub pump_checkpoint_hits: Vec<u32>,

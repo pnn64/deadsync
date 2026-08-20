@@ -10,6 +10,7 @@ pub struct ActiveHold {
     pub last_update_time_ns: SongTimeNs,
 }
 
+#[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PumpHoldEventKind {
     Head,
@@ -17,15 +18,25 @@ pub enum PumpHoldEventKind {
     Tail,
 }
 
+const _: () = assert!(MAX_PLAYERS <= u8::MAX as usize);
+const _: () = assert!(MAX_COLS <= u8::MAX as usize);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PumpHoldEvent {
     pub time_ns: SongTimeNs,
-    pub row_index: usize,
-    pub player: usize,
-    pub note_index: usize,
-    pub column: usize,
+    pub row_index: ChartRowIndex,
+    pub note_index: ChartNoteIndex,
+    pub player: u8,
+    pub column: u8,
     pub kind: PumpHoldEventKind,
     pub has_tap: bool,
+}
+
+#[derive(Clone, Copy)]
+struct PumpHoldSource {
+    note_index: ChartNoteIndex,
+    player: u8,
+    column: u8,
 }
 
 fn pump_tap_rows_and_hold_count(
@@ -109,12 +120,11 @@ fn push_pump_checkpoints(
     events: &mut Vec<PumpHoldEvent>,
     notes: &[Note],
     tap_rows: &[usize],
-    note_index: usize,
-    player: usize,
+    source: PumpHoldSource,
     timing: &TimingData,
     segments: &TimingSegments,
 ) {
-    let note = &notes[note_index];
+    let note = &notes[source.note_index.get()];
     let Some(hold) = note.hold.as_ref() else {
         return;
     };
@@ -146,10 +156,10 @@ fn push_pump_checkpoints(
             let beat = note_row_to_beat(row as i32);
             events.push(PumpHoldEvent {
                 time_ns: timing.get_time_for_beat_ns(beat),
-                row_index: row,
-                player,
-                note_index,
-                column: note.column,
+                row_index: ChartRowIndex::from_validated(row),
+                note_index: source.note_index,
+                player: source.player,
+                column: source.column,
                 kind: PumpHoldEventKind::Checkpoint,
                 has_tap: tap_rows.binary_search(&row).is_ok(),
             });
@@ -192,6 +202,7 @@ fn build_pump_hold_events_core(
 ) -> (Vec<PumpHoldEvent>, [u32; MAX_PLAYERS]) {
     let mut events = Vec::new();
     for player in 0..num_players.min(MAX_PLAYERS) {
+        let compact_player = u8::try_from(player).expect("gameplay player index must fit u8");
         let note_range = note_ranges[player];
         let (tap_rows, hold_count) = pump_tap_rows_and_hold_count(notes, note_range);
         if reserve_events {
@@ -214,12 +225,23 @@ fn build_pump_hold_events_core(
             else {
                 continue;
             };
+            let compact_note_index = ChartNoteIndex::try_from_usize(note_index)
+                .expect("validated gameplay note index must fit u32");
+            let compact_column =
+                u8::try_from(note.column).expect("validated gameplay column must fit u8");
+            let source = PumpHoldSource {
+                note_index: compact_note_index,
+                player: compact_player,
+                column: compact_column,
+            };
             events.push(PumpHoldEvent {
                 time_ns: note_time_cache_ns[note_index],
-                row_index: beat_to_note_row(note.beat).max(0) as usize,
-                player,
-                note_index,
-                column: note.column,
+                row_index: ChartRowIndex::from_validated(
+                    beat_to_note_row(note.beat).max(0) as usize,
+                ),
+                note_index: source.note_index,
+                player: source.player,
+                column: source.column,
                 kind: PumpHoldEventKind::Head,
                 has_tap: true,
             });
@@ -227,20 +249,19 @@ fn build_pump_hold_events_core(
                 &mut events,
                 notes,
                 &tap_rows,
-                note_index,
-                player,
+                source,
                 &timing_players[player],
                 &gameplay_charts[player].timing_segments,
             );
             events.push(PumpHoldEvent {
                 time_ns: end_time_ns,
-                row_index: note.hold.as_ref().map_or_else(
+                row_index: ChartRowIndex::from_validated(note.hold.as_ref().map_or_else(
                     || beat_to_note_row(note.beat).max(0) as usize,
                     |hold| beat_to_note_row(hold.end_beat).max(0) as usize,
-                ),
-                player,
-                note_index,
-                column: note.column,
+                )),
+                note_index: source.note_index,
+                player: source.player,
+                column: source.column,
                 kind: PumpHoldEventKind::Tail,
                 has_tap: false,
             });
@@ -261,9 +282,10 @@ fn build_pump_hold_events_core(
         if event.kind != PumpHoldEventKind::Checkpoint || event.has_tap {
             continue;
         }
+        let player = usize::from(event.player);
         let key = (event.player, event.row_index);
         if previous != Some(key) {
-            score_rows[event.player] = score_rows[event.player].saturating_add(1);
+            score_rows[player] = score_rows[player].saturating_add(1);
             previous = Some(key);
         }
     }

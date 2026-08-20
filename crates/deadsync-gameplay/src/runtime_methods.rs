@@ -844,18 +844,20 @@ where
     }
 
     fn start_unstepped_pump_hold(&mut self, event: PumpHoldEvent, lane_pressed: bool) {
+        let note_index = event.note_index.get();
+        let column = usize::from(event.column);
         let Some(end_time_ns) = self
             .chart_runtime
             .hold_end_time_cache_ns
-            .get(event.note_index)
+            .get(note_index)
             .copied()
             .and_then(cached_hold_end_time_ns)
         else {
             return;
         };
         self.start_active_hold(
-            event.column,
-            event.note_index,
+            column,
+            note_index,
             event.time_ns,
             end_time_ns,
             event.time_ns,
@@ -865,14 +867,14 @@ where
         } else {
             PUMP_INITIAL_HOLD_LIFE
         };
-        if let Some(active) = self.hold_runtime.active_holds[event.column].as_mut()
-            && active.note_index == event.note_index
+        if let Some(active) = self.hold_runtime.active_holds[column].as_mut()
+            && active.note_index == note_index
         {
             active.life = initial_life;
             active.is_pressed = lane_pressed;
             active.last_update_time_ns = event.time_ns;
         }
-        if let Some(hold) = self.chart_runtime.notes[event.note_index].hold.as_mut() {
+        if let Some(hold) = self.chart_runtime.notes[note_index].hold.as_mut() {
             hold.life = initial_life;
             hold.let_go_started_at = None;
             hold.let_go_starting_life = 0.0;
@@ -890,20 +892,22 @@ where
                 continue;
             }
             has_tap |= event.has_tap;
-            let active_held = self.hold_runtime.active_holds[event.column]
+            let note_index = event.note_index.get();
+            let column = usize::from(event.column);
+            let active_held = self.hold_runtime.active_holds[column]
                 .as_ref()
                 .is_some_and(|active| {
-                    active.note_index == event.note_index && active.life > 0.0 && !active.let_go
+                    active.note_index == note_index && active.life > 0.0 && !active.let_go
                 });
             if active_held {
                 held = held.saturating_add(1);
-                held_columns |= 1 << event.column;
-                self.hold_runtime.pump_checkpoint_hits[event.note_index] =
-                    self.hold_runtime.pump_checkpoint_hits[event.note_index].saturating_add(1);
+                held_columns |= 1 << column;
+                self.hold_runtime.pump_checkpoint_hits[note_index] =
+                    self.hold_runtime.pump_checkpoint_hits[note_index].saturating_add(1);
             } else {
                 missed = missed.saturating_add(1);
-                self.hold_runtime.pump_checkpoint_misses[event.note_index] =
-                    self.hold_runtime.pump_checkpoint_misses[event.note_index].saturating_add(1);
+                self.hold_runtime.pump_checkpoint_misses[note_index] =
+                    self.hold_runtime.pump_checkpoint_misses[note_index].saturating_add(1);
             }
         }
         if held.saturating_add(missed) == 0 || has_tap {
@@ -923,8 +927,9 @@ where
             return;
         }
 
-        let checkpoint_beat =
-            note_row_to_beat(self.hold_runtime.pump_events[row_start].row_index as i32);
+        let checkpoint_beat = note_row_to_beat(
+            self.hold_runtime.pump_events[row_start].row_index.get() as i32,
+        );
         let (combo_multiplier, miss_combo_multiplier) = combo_multipliers_at_beat(
             &self.source.gameplay_charts[player].timing_segments.combos,
             checkpoint_beat,
@@ -1031,11 +1036,12 @@ where
     }
 
     fn resolve_pump_hold_tail(&mut self, event: PumpHoldEvent) {
-        if self.chart_runtime.notes[event.note_index].result.is_none() {
-            self.queue_pump_hold_tail(event.note_index);
+        let note_index = event.note_index.get();
+        if self.chart_runtime.notes[note_index].result.is_none() {
+            self.queue_pump_hold_tail(note_index);
             return;
         }
-        self.resolve_pump_hold_tail_ready(event.note_index, event.column);
+        self.resolve_pump_hold_tail_ready(note_index, usize::from(event.column));
     }
 
     fn resolve_pending_pump_hold_tails(&mut self) {
@@ -1081,28 +1087,34 @@ where
                 row_end += 1;
             }
             self.hold_runtime.pump_event_cursor = row_end;
-            self.advance_pump_holds_for_player(first.player, inputs, first.time_ns);
+            self.advance_pump_holds_for_player(
+                usize::from(first.player),
+                inputs,
+                first.time_ns,
+            );
 
             for event_ix in row_start..row_end {
                 let event = self.hold_runtime.pump_events[event_ix];
                 if event.kind != PumpHoldEventKind::Head {
                     continue;
                 }
-                let lane_pressed = self.live_autoplay_enabled() || inputs[event.column];
-                let active_matches = self.hold_runtime.active_holds[event.column]
+                let note_index = event.note_index.get();
+                let column = usize::from(event.column);
+                let lane_pressed = self.live_autoplay_enabled() || inputs[column];
+                let active_matches = self.hold_runtime.active_holds[column]
                     .as_ref()
-                    .is_some_and(|active| active.note_index == event.note_index);
-                if lane_pressed && self.chart_runtime.notes[event.note_index].result.is_none() {
-                    self.judge_a_tap(event.column, event.time_ns);
+                    .is_some_and(|active| active.note_index == note_index);
+                if lane_pressed && self.chart_runtime.notes[note_index].result.is_none() {
+                    self.judge_a_tap(column, event.time_ns);
                 }
-                let active_matches_after = self.hold_runtime.active_holds[event.column]
+                let active_matches_after = self.hold_runtime.active_holds[column]
                     .as_ref()
-                    .is_some_and(|active| active.note_index == event.note_index);
+                    .is_some_and(|active| active.note_index == note_index);
                 if !active_matches && !active_matches_after {
                     self.start_unstepped_pump_hold(event, lane_pressed);
                 }
             }
-            self.apply_pump_checkpoint(first.player, row_start, row_end);
+            self.apply_pump_checkpoint(usize::from(first.player), row_start, row_end);
             for event_ix in row_start..row_end {
                 let event = self.hold_runtime.pump_events[event_ix];
                 if event.kind == PumpHoldEventKind::Tail {

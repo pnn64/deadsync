@@ -621,8 +621,8 @@ fn pump_event_checksum(value: (Vec<deadsync_gameplay::PumpHoldEvent>, [u32; 2]))
             };
             sum.rotate_left(5)
                 ^ event.time_ns as u64
-                ^ (event.row_index as u64).rotate_left(11)
-                ^ (event.note_index as u64).rotate_left(19)
+                ^ (event.row_index.get() as u64).rotate_left(11)
+                ^ (event.note_index.get() as u64).rotate_left(19)
                 ^ (event.column as u64).rotate_left(27)
                 ^ kind
                 ^ u64::from(event.has_tap)

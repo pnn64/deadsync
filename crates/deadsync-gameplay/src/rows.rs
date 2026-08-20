@@ -69,7 +69,10 @@ fn compact_chart_indices_valid(notes: &[Note]) -> bool {
     notes.len() <= u32::MAX as usize
         && notes
             .iter()
-            .all(|note| ChartRowIndex::try_from_usize(note.row_index).is_some())
+            .all(|note| {
+                note.column < MAX_COLS
+                    && ChartRowIndex::try_from_usize(note.row_index).is_some()
+            })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
