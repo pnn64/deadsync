@@ -1294,6 +1294,210 @@ fn print_aft_proxy_benchmark() {
     });
 }
 
+struct PlayerProxyScratch {
+    hud_draws: Vec<FlatDraw>,
+    field_draws: Vec<FlatDraw>,
+    source_actors: Vec<Actor>,
+    actors: Vec<Actor>,
+    capture: [SharedActorFrameScratch; 2],
+    active_bank: usize,
+}
+
+impl PlayerProxyScratch {
+    fn new() -> Self {
+        let total = BOUNDARY_HUD_ACTORS + FIELD_PROXY_DRAWS + 4;
+        Self {
+            hud_draws: (0..BOUNDARY_HUD_ACTORS).map(boundary_flat_draw).collect(),
+            field_draws: (0..FIELD_PROXY_DRAWS)
+                .map(|index| boundary_flat_draw(BOUNDARY_HUD_ACTORS + index))
+                .collect(),
+            source_actors: Vec::with_capacity(total),
+            actors: Vec::with_capacity(1),
+            capture: std::array::from_fn(|_| SharedActorFrameScratch::with_capacity(total)),
+            active_bank: 1,
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn player_proxy_frame(
+    kind: FlatProxyKind,
+    source: &mut PlayerProxyScratch,
+    hud_camera: Mat4,
+    field_camera: Mat4,
+    metrics: &deadlib_present::space::Metrics,
+    fonts: &font::FontMap,
+    resources: &ActorResourceArena,
+    text: &mut TextLayoutCache,
+    compose: &mut ComposeScratch,
+) -> f32 {
+    let offset = [32.0, -18.0];
+    let tint = [0.75, 0.5, 1.0, 0.8];
+    let z = 42;
+    let segments = match kind {
+        FlatProxyKind::ActorCapture => {
+            source.active_bank = (source.active_bank + 1) % source.capture.len();
+            source.source_actors.clear();
+            source.source_actors.push(Actor::CameraPush {
+                view_proj: hud_camera,
+            });
+            source
+                .source_actors
+                .extend(source.hud_draws.iter().cloned().map(actor_from_flat_draw));
+            source.source_actors.push(Actor::CameraPop);
+            source.source_actors.push(Actor::CameraPush {
+                view_proj: field_camera,
+            });
+            source
+                .source_actors
+                .extend(source.field_draws.iter().cloned().map(actor_from_flat_draw));
+            source.source_actors.push(Actor::CameraPop);
+            let children = source.capture[source.active_bank]
+                .refill([0.0, 0.0], |out| {
+                    benchmark_normalize_proxy_actor_source(&source.source_actors, out);
+                })
+                .expect("whole-Player benchmark source is nonempty");
+            source.actors.clear();
+            source.actors.push(Actor::SharedFrame {
+                align: [0.0, 0.0],
+                offset,
+                size: [SizeSpec::Fill, SizeSpec::Fill],
+                children,
+                background: None,
+                z,
+                tint,
+                blend: Some(BlendMode::Add),
+            });
+            [
+                ActorSegment::new(source.actors.as_slice()),
+                ActorSegment::new(&[]),
+            ]
+        }
+        FlatProxyKind::DirectFragment => [
+            ActorSegment::flat_proxy_with_camera(
+                &source.hud_draws,
+                offset,
+                z,
+                tint,
+                BlendMode::Add,
+                Some(&hud_camera),
+            ),
+            ActorSegment::flat_proxy_with_camera(
+                &source.field_draws,
+                offset,
+                z,
+                tint,
+                BlendMode::Add,
+                Some(&field_camera),
+            ),
+        ],
+    };
+    let mut output =
+        build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+            &segments,
+            [0.0, 0.0, 0.0, 1.0],
+            metrics,
+            fonts,
+            0.0,
+            text,
+            compose,
+            &NullTextureContext,
+            resources,
+        );
+    let checksum = (output.ops.len() + output.sprite_instances.len()) as f32;
+    black_box(&output);
+    compose.recycle_frame(&mut output);
+    checksum
+}
+
+fn measure_player_proxy_pair() -> [BoundaryResult; 2] {
+    let metrics = deadlib_present::space::metrics_for_window(854, 480);
+    let fonts = font::FontMap::default();
+    let resources = ActorResourceArena::new(0);
+    let mut texts = [TextLayoutCache::default(), TextLayoutCache::default()];
+    let mut composers = [ComposeScratch::default(), ComposeScratch::default()];
+    let mut sources = [PlayerProxyScratch::new(), PlayerProxyScratch::new()];
+    let kinds = [FlatProxyKind::ActorCapture, FlatProxyKind::DirectFragment];
+    let hud_camera = Mat4::from_translation(Vec3::new(24.0, -12.0, 0.0));
+    let field_camera = notefield_view_proj(854.0, 480.0, 451.0, 228.0, 0.2, 0.1, false)
+        .expect("benchmark field camera is finite")
+        * hud_camera;
+    let mut elapsed = [Duration::ZERO; 2];
+    let mut cycles = [0u64; 2];
+    let mut allocated = [AllocSnapshot {
+        allocs: 0,
+        reallocs: 0,
+        bytes: 0,
+    }; 2];
+    let mut samples_ns: [Vec<u64>; 2] =
+        std::array::from_fn(|_| Vec::with_capacity(BOUNDARY_MEASURE_BATCHES));
+    let mut checksum = [0.0f32; 2];
+
+    for batch in 0..BOUNDARY_WARMUP_BATCHES + BOUNDARY_MEASURE_BATCHES {
+        let order = if batch % 2 == 0 { [0, 1] } else { [1, 0] };
+        for kind_index in order {
+            let before_alloc = ALLOC.snapshot();
+            let before_cycles = read_cycles();
+            let started = Instant::now();
+            let mut batch_checksum = 0.0;
+            for _ in 0..BOUNDARY_BATCH_FRAMES {
+                batch_checksum += player_proxy_frame(
+                    kinds[kind_index],
+                    &mut sources[kind_index],
+                    hud_camera,
+                    field_camera,
+                    &metrics,
+                    &fonts,
+                    &resources,
+                    &mut texts[kind_index],
+                    &mut composers[kind_index],
+                );
+            }
+            let sample = started.elapsed();
+            let sample_cycles = read_cycles().saturating_sub(before_cycles);
+            let sample_allocated = ALLOC.snapshot().delta(before_alloc);
+            black_box(batch_checksum);
+            if batch >= BOUNDARY_WARMUP_BATCHES {
+                elapsed[kind_index] += sample;
+                cycles[kind_index] += sample_cycles;
+                allocated[kind_index].add(sample_allocated);
+                samples_ns[kind_index]
+                    .push((sample.as_nanos() / BOUNDARY_BATCH_FRAMES as u128) as u64);
+                checksum[kind_index] += batch_checksum;
+            }
+        }
+    }
+    for samples in &mut samples_ns {
+        samples.sort_unstable();
+    }
+    std::array::from_fn(|index| BoundaryResult {
+        elapsed: elapsed[index],
+        cycles: cycles[index],
+        allocated: allocated[index],
+        samples_ns: std::mem::take(&mut samples_ns[index]),
+        checksum: checksum[index],
+    })
+}
+
+fn print_player_proxy_benchmark() {
+    println!(
+        "\ndirect SongLua whole-Player proxy benchmark ({} HUD + {} field draws)",
+        BOUNDARY_HUD_ACTORS, FIELD_PROXY_DRAWS
+    );
+    let [actor, direct] = measure_player_proxy_pair();
+    assert_eq!(actor.checksum, direct.checksum);
+    print_boundary_result("actor capture", &actor);
+    print_boundary_result("direct fragments", &direct);
+    for result in [&actor, &direct] {
+        assert_zero_alloc(&BenchResult {
+            elapsed: result.elapsed,
+            cycles: result.cycles,
+            allocated: result.allocated,
+            checksum: result.checksum,
+        });
+    }
+}
+
 fn print_sampled_result(label: &str, result: &BoundaryResult, batch_frames: usize) {
     let frames = (result.samples_ns.len() * batch_frames) as f64;
     let p95_index = (result.samples_ns.len() * 95)
@@ -3026,6 +3230,10 @@ fn print_cue_countdown_benchmark() {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_PLAYER_PROXY_ONLY").is_some() {
+        print_player_proxy_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_AFT_PROXY_ONLY").is_some() {
         print_aft_proxy_benchmark();
         return;
