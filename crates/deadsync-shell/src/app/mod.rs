@@ -891,6 +891,7 @@ fn prewarm_gameplay_text_layout_cache(
             &PRESENT_TEXTURE_CONTEXT,
             state.actor_resources(),
         );
+    drop(actor_segments);
     compose_scratch.recycle_frame(&mut render);
     actor_scratch.clear();
     gameplay::prewarm_text_layout(cache, compose_scratch, fonts, state);
@@ -3588,6 +3589,7 @@ impl App {
                 compose_scratch.frame_stats(),
             )
         };
+        drop(segmented_actors);
         let build_screen_us = elapsed_us_since(build_screen_started);
         let compose_us: u32 = actor_build_us.saturating_add(build_screen_us);
         let compose_breakdown: ComposeBreakdown = ComposeBreakdown {
