@@ -441,7 +441,7 @@ where
         self.chart_runtime
             .mine_scan
             .pending_mine_hit_indices
-            .push(note_index);
+            .push(ChartNoteIndex::from_validated(note_index));
         log::debug!(
             "JUDGE MINE HIT MARKED: row={}, col={}, beat={:.3}, note_time={:.4}s, hit_time={:.4}s, offset_ms={:.2}, rate={:.3}",
             mark.row_index,
@@ -482,7 +482,7 @@ where
             mine_window_music_ns,
             rate,
             |note_index, mark| {
-                pending_mine_hit_indices.push(note_index);
+                pending_mine_hit_indices.push(ChartNoteIndex::from_validated(note_index));
                 log::debug!(
                     "JUDGE MINE HIT MARKED: row={}, col={}, beat={:.3}, note_time={:.4}s, hit_time={:.4}s, offset_ms={:.2}, rate={:.3}",
                     mark.row_index,
@@ -1226,12 +1226,12 @@ where
     }
 
     #[inline(always)]
-    pub fn lane_hold_indices(&self, col: usize) -> &[usize] {
+    pub fn lane_hold_indices(&self, col: usize) -> &[ChartNoteIndex] {
         self.chart_runtime.lane_indices.hold_indices(col)
     }
 
     #[inline(always)]
-    pub fn lane_hold_index_lists(&self) -> &[Vec<usize>] {
+    pub fn lane_hold_index_lists(&self) -> &[Vec<ChartNoteIndex>] {
         &self.chart_runtime.lane_indices.hold_indices
     }
 
@@ -1268,12 +1268,12 @@ where
     }
 
     #[inline(always)]
-    pub fn lane_note_row_indices(&self, col: usize) -> &[usize] {
+    pub fn lane_note_row_indices(&self, col: usize) -> &[ChartNoteIndex] {
         self.chart_runtime.lane_indices.note_row_indices(col)
     }
 
     #[inline(always)]
-    pub fn lane_note_row_index_lists(&self) -> &[Vec<usize>] {
+    pub fn lane_note_row_index_lists(&self) -> &[Vec<ChartNoteIndex>] {
         &self.chart_runtime.lane_indices.note_indices
     }
 

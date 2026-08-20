@@ -1,9 +1,9 @@
 #[derive(Debug, PartialEq, Eq)]
 struct GameplaySetupIndices {
-    lane_note_indices: [Vec<usize>; MAX_COLS],
-    lane_hold_indices: [Vec<usize>; MAX_COLS],
+    lane_note_indices: [Vec<ChartNoteIndex>; MAX_COLS],
+    lane_hold_indices: [Vec<ChartNoteIndex>; MAX_COLS],
     note_itg_rows: Vec<i32>,
-    mine_note_ix: [Vec<usize>; MAX_PLAYERS],
+    mine_note_ix: [Vec<ChartNoteIndex>; MAX_PLAYERS],
     mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS],
     replay_cells: usize,
 }
@@ -44,9 +44,9 @@ fn count_gameplay_setup_notes(notes: &[Note], num_cols: usize) -> GameplaySetupC
 
 #[derive(Debug, PartialEq, Eq)]
 struct GameplayLaneMineIndices {
-    lane_note_indices: [Vec<usize>; MAX_COLS],
-    lane_hold_indices: [Vec<usize>; MAX_COLS],
-    mine_note_ix: [Vec<usize>; MAX_PLAYERS],
+    lane_note_indices: [Vec<ChartNoteIndex>; MAX_COLS],
+    lane_hold_indices: [Vec<ChartNoteIndex>; MAX_COLS],
+    mine_note_ix: [Vec<ChartNoteIndex>; MAX_PLAYERS],
     mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS],
 }
 
@@ -61,11 +61,11 @@ fn build_gameplay_lane_mine_indices(
     num_players: usize,
     num_cols: usize,
 ) -> GameplayLaneMineIndices {
-    let mut lane_note_indices: [Vec<usize>; MAX_COLS] =
+    let mut lane_note_indices: [Vec<ChartNoteIndex>; MAX_COLS] =
         std::array::from_fn(|col| Vec::with_capacity(lane_note_counts[col]));
-    let mut lane_hold_indices: [Vec<usize>; MAX_COLS] =
+    let mut lane_hold_indices: [Vec<ChartNoteIndex>; MAX_COLS] =
         std::array::from_fn(|col| Vec::with_capacity(lane_hold_counts[col]));
-    let mut mine_note_ix: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|player| {
+    let mut mine_note_ix: [Vec<ChartNoteIndex>; MAX_PLAYERS] = std::array::from_fn(|player| {
         Vec::with_capacity(mines_total.get(player).copied().unwrap_or(0) as usize)
     });
     let mut mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS] =
@@ -86,15 +86,16 @@ fn build_gameplay_lane_mine_indices(
         let (start, end) = note_ranges[player];
         for note_index in start..end {
             let note = &notes[note_index];
+            let compact_index = ChartNoteIndex::from_validated(note_index);
             let col = note.column;
             if col < num_cols && col < MAX_COLS {
-                lane_note_indices[col].push(note_index);
+                lane_note_indices[col].push(compact_index);
                 if note_has_displayable_hold(note) {
-                    lane_hold_indices[col].push(note_index);
+                    lane_hold_indices[col].push(compact_index);
                 }
             }
             if matches!(note.note_type, NoteType::Mine) {
-                mine_note_ix[player].push(note_index);
+                mine_note_ix[player].push(compact_index);
                 mine_note_time_ns[player].push(note_time_cache_ns[note_index]);
             }
         }
@@ -142,7 +143,9 @@ fn build_gameplay_setup_indices(
             .iter()
             .take(num_cols.min(MAX_COLS))
             .all(|indices| indices.windows(2).all(|pair| {
-                (note_itg_rows[pair[0]], pair[0]) <= (note_itg_rows[pair[1]], pair[1])
+                let first = pair[0].get();
+                let second = pair[1].get();
+                (note_itg_rows[first], first) <= (note_itg_rows[second], second)
             })),
         "gameplay notes must remain in canonical row order"
     );
@@ -201,21 +204,23 @@ fn build_gameplay_lane_mine_indices_reference(
     num_players: usize,
     num_cols: usize,
 ) -> GameplayLaneMineIndices {
-    let mut lane_note_indices: [Vec<usize>; MAX_COLS] =
+    let mut lane_note_indices: [Vec<ChartNoteIndex>; MAX_COLS] =
         std::array::from_fn(|col| Vec::with_capacity(lane_note_counts[col]));
-    let mut lane_hold_indices: [Vec<usize>; MAX_COLS] =
+    let mut lane_hold_indices: [Vec<ChartNoteIndex>; MAX_COLS] =
         std::array::from_fn(|col| Vec::with_capacity(lane_hold_counts[col]));
     for (note_index, note) in notes.iter().enumerate() {
+        let compact_index = ChartNoteIndex::from_validated(note_index);
         let col = note.column;
         if col < num_cols && col < MAX_COLS {
-            lane_note_indices[col].push(note_index);
+            lane_note_indices[col].push(compact_index);
             if note_has_displayable_hold(note) {
-                lane_hold_indices[col].push(note_index);
+                lane_hold_indices[col].push(compact_index);
             }
         }
     }
 
-    let mut mine_note_ix: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+    let mut mine_note_ix: [Vec<ChartNoteIndex>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
     let mut mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
     for player in 0..num_players.min(MAX_PLAYERS) {
@@ -224,7 +229,7 @@ fn build_gameplay_lane_mine_indices_reference(
         let mut mine_times_ns = Vec::with_capacity(mines_total[player] as usize);
         for note_index in start..end {
             if matches!(notes[note_index].note_type, NoteType::Mine) {
-                mine_ix.push(note_index);
+                mine_ix.push(ChartNoteIndex::from_validated(note_index));
                 mine_times_ns.push(note_time_cache_ns[note_index]);
             }
         }
@@ -240,17 +245,20 @@ fn build_gameplay_lane_mine_indices_reference(
 }
 
 #[cfg(any(test, feature = "bench-support"))]
-fn build_lane_note_row_indices_reference(
-    lane_note_indices: &[Vec<usize>; MAX_COLS],
+fn build_lane_note_row_indices_reference<I: Copy + Into<usize>>(
+    lane_note_indices: &[Vec<I>; MAX_COLS],
     note_itg_rows: &[i32],
     num_cols: usize,
-) -> [Vec<usize>; MAX_COLS] {
+) -> [Vec<I>; MAX_COLS] {
     let mut lane_note_row_indices = lane_note_indices.clone();
     for indices in lane_note_row_indices
         .iter_mut()
         .take(num_cols.min(MAX_COLS))
     {
-        indices.sort_unstable_by_key(|&note_index| (note_itg_rows[note_index], note_index));
+        indices.sort_unstable_by_key(|&note_index| {
+            let note_index = note_index.into();
+            (note_itg_rows[note_index], note_index)
+        });
     }
     lane_note_row_indices
 }
@@ -276,7 +284,7 @@ fn lane_mine_checksum(indices: &GameplayLaneMineIndices) -> u64 {
         .chain(&indices.lane_hold_indices)
         .chain(indices.mine_note_ix.iter())
         .flat_map(|indices| indices.iter().copied())
-        .map(|index| index as u64)
+        .map(|index| index.get() as u64)
         .chain(
             indices
                 .mine_note_time_ns
@@ -289,12 +297,12 @@ fn lane_mine_checksum(indices: &GameplayLaneMineIndices) -> u64 {
 }
 
 #[cfg(feature = "bench-support")]
-fn lane_rows_checksum(indices: &[Vec<usize>; MAX_COLS]) -> u64 {
+fn lane_rows_checksum<I: Copy + Into<usize>>(indices: &[Vec<I>; MAX_COLS]) -> u64 {
     indices
         .iter()
         .flat_map(|indices| indices.iter().copied())
         .fold(0u64, |checksum, index| {
-            checksum.rotate_left(7) ^ (index as u64).wrapping_mul(0x9E37_79B1)
+            checksum.rotate_left(7) ^ (index.into() as u64).wrapping_mul(0x9E37_79B1)
         })
 }
 
@@ -357,8 +365,8 @@ pub fn build_gameplay_lane_mine_indices_for_bench(
 }
 
 #[cfg(feature = "bench-support")]
-pub fn build_lane_note_row_indices_reference_for_bench(
-    lane_note_indices: &[Vec<usize>; MAX_COLS],
+pub fn build_lane_note_row_indices_reference_for_bench<I: Copy + Into<usize>>(
+    lane_note_indices: &[Vec<I>; MAX_COLS],
     note_itg_rows: &[i32],
     num_cols: usize,
 ) -> u64 {
@@ -370,8 +378,8 @@ pub fn build_lane_note_row_indices_reference_for_bench(
 }
 
 #[cfg(feature = "bench-support")]
-pub fn reuse_lane_note_indices_for_bench(
-    lane_note_indices: &[Vec<usize>; MAX_COLS],
+pub fn reuse_lane_note_indices_for_bench<I: Copy + Into<usize>>(
+    lane_note_indices: &[Vec<I>; MAX_COLS],
     note_itg_rows: &[i32],
     num_cols: usize,
 ) -> u64 {
@@ -380,7 +388,9 @@ pub fn reuse_lane_note_indices_for_bench(
             .iter()
             .take(num_cols.min(MAX_COLS))
             .all(|indices| indices.windows(2).all(|pair| {
-                (note_itg_rows[pair[0]], pair[0]) <= (note_itg_rows[pair[1]], pair[1])
+                let first = pair[0].into();
+                let second = pair[1].into();
+                (note_itg_rows[first], first) <= (note_itg_rows[second], second)
             }))
     );
     lane_rows_checksum(lane_note_indices)
@@ -738,6 +748,13 @@ where
     }
     let note_count_stats =
         build_note_count_stats_for_players(&notes, &note_ranges, num_players);
+    // Cached chart rows are u32 and gameplay transforms preserve that domain.
+    // Prove the compact note/row index space once before any retained index is
+    // constructed; live paths may then convert only at slice boundaries.
+    assert!(
+        compact_chart_indices_valid(&notes),
+        "gameplay chart indices exceed the compact u32 domain"
+    );
     let transform_ms = transform_started.elapsed().as_secs_f64() * 1000.0;
 
     let cache_build_started = Instant::now();

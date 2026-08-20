@@ -75,9 +75,9 @@ impl GameplayNoteRangeState {
 
 #[derive(Clone, Debug)]
 pub struct GameplayLaneIndexState {
-    pub note_indices: [Vec<usize>; MAX_COLS],
+    pub note_indices: [Vec<ChartNoteIndex>; MAX_COLS],
     pub note_search_cursors: [LaneNoteWindowCursor; MAX_COLS],
-    pub hold_indices: [Vec<usize>; MAX_COLS],
+    pub hold_indices: [Vec<ChartNoteIndex>; MAX_COLS],
     /// Song-lifetime `beat_to_note_row` values indexed by note index.
     ///
     /// Visible-window searches read this compact immutable cache instead of
@@ -99,8 +99,8 @@ impl Default for GameplayLaneIndexState {
 
 impl GameplayLaneIndexState {
     pub fn new(
-        note_indices: [Vec<usize>; MAX_COLS],
-        hold_indices: [Vec<usize>; MAX_COLS],
+        note_indices: [Vec<ChartNoteIndex>; MAX_COLS],
+        hold_indices: [Vec<ChartNoteIndex>; MAX_COLS],
         note_itg_rows: Vec<i32>,
     ) -> Self {
         Self {
@@ -112,17 +112,17 @@ impl GameplayLaneIndexState {
     }
 
     #[inline(always)]
-    pub fn note_indices(&self, col: usize) -> &[usize] {
+    pub fn note_indices(&self, col: usize) -> &[ChartNoteIndex] {
         self.note_indices.get(col).map_or(&[], Vec::as_slice)
     }
 
     #[inline(always)]
-    pub fn note_row_indices(&self, col: usize) -> &[usize] {
+    pub fn note_row_indices(&self, col: usize) -> &[ChartNoteIndex] {
         self.note_indices(col)
     }
 
     #[inline(always)]
-    pub fn hold_indices(&self, col: usize) -> &[usize] {
+    pub fn hold_indices(&self, col: usize) -> &[ChartNoteIndex] {
         self.hold_indices.get(col).map_or(&[], Vec::as_slice)
     }
 
@@ -199,11 +199,11 @@ impl GameplayRowIndexState {
 pub struct GameplayMineScanState {
     pub next_tap_miss_cursor: [usize; MAX_PLAYERS],
     pub next_mine_avoid_cursor: [usize; MAX_PLAYERS],
-    pub mine_note_ix: [Vec<usize>; MAX_PLAYERS],
+    pub mine_note_ix: [Vec<ChartNoteIndex>; MAX_PLAYERS],
     pub mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS],
     pub next_mine_ix_cursor: [usize; MAX_PLAYERS],
     /// Song-sized frame batch allocated during setup and cleared after each use.
-    pub pending_mine_hit_indices: Vec<usize>,
+    pub pending_mine_hit_indices: Vec<ChartNoteIndex>,
 }
 
 impl Default for GameplayMineScanState {
@@ -222,7 +222,7 @@ impl Default for GameplayMineScanState {
 impl GameplayMineScanState {
     pub fn new(
         note_range_start: [usize; MAX_PLAYERS],
-        mine_note_ix: [Vec<usize>; MAX_PLAYERS],
+        mine_note_ix: [Vec<ChartNoteIndex>; MAX_PLAYERS],
         mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS],
     ) -> Self {
         let mine_count = mine_note_ix.iter().map(Vec::len).sum();

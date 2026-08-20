@@ -95,7 +95,10 @@ pub fn collect_autosync_row_hit_offsets(
         if count >= offsets.len() {
             break;
         }
-        let Some(judgment) = notes.get(note_index).and_then(|note| note.result.as_ref()) else {
+        let Some(judgment) = notes
+            .get(note_index.get())
+            .and_then(|note| note.result.as_ref())
+        else {
             continue;
         };
         if matches!(
@@ -109,4 +112,3 @@ pub fn collect_autosync_row_hit_offsets(
     }
     count
 }
-

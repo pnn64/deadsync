@@ -20,6 +20,24 @@ mod tests {
         );
     }
 
+    fn compact_note_index(index: usize) -> ChartNoteIndex {
+        ChartNoteIndex::try_from_usize(index).expect("test chart index must fit u32")
+    }
+
+    fn compact_note_indices<const N: usize>(indices: [usize; N]) -> [ChartNoteIndex; N] {
+        indices.map(|index| {
+            if index == usize::MAX {
+                ChartNoteIndex::INVALID
+            } else {
+                compact_note_index(index)
+            }
+        })
+    }
+
+    fn compact_row_index(index: usize) -> ChartRowIndex {
+        ChartRowIndex::try_from_usize(index).expect("test chart row must fit u32")
+    }
+
     #[test]
     fn player_life_dead_policy_uses_failing_or_empty_life() {
         assert!(player_life_is_dead(1.0, true));
@@ -6266,9 +6284,9 @@ mod tests {
         note_indices[2] = 2;
         note_indices[3] = 3;
         let row_entry = RowEntry {
-            row_index: 48,
+            row_index: compact_row_index(48),
             time_ns: song_time_ns_from_seconds(1.0),
-            nonmine_note_indices: note_indices,
+            nonmine_note_indices: compact_note_indices(note_indices),
             nonmine_note_count: 4,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -15812,10 +15830,12 @@ mod tests {
 
     #[test]
     fn lane_index_state_returns_slices_and_clears() {
-        let mut note_indices: [Vec<usize>; MAX_COLS] = std::array::from_fn(|_| Vec::new());
-        let mut hold_indices: [Vec<usize>; MAX_COLS] = std::array::from_fn(|_| Vec::new());
-        note_indices[1].push(7);
-        hold_indices[1].push(9);
+        let mut note_indices: [Vec<ChartNoteIndex>; MAX_COLS] =
+            std::array::from_fn(|_| Vec::new());
+        let mut hold_indices: [Vec<ChartNoteIndex>; MAX_COLS] =
+            std::array::from_fn(|_| Vec::new());
+        note_indices[1].push(compact_note_index(7));
+        hold_indices[1].push(compact_note_index(9));
         let mut state = GameplayLaneIndexState::new(note_indices, hold_indices, vec![12, 24]);
 
         assert_eq!(state.note_indices(1), &[7]);
@@ -16056,11 +16076,36 @@ mod tests {
     }
 
     #[test]
+    fn row_entry_layout_stays_compact() {
+        assert_eq!(std::mem::size_of::<ChartNoteIndex>(), 4);
+        assert_eq!(std::mem::size_of::<ChartRowIndex>(), 4);
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(std::mem::size_of::<RowEntry>(), 64);
+    }
+
+    #[test]
+    fn compact_chart_indices_enforce_reserved_and_row_boundaries() {
+        let largest_note = u32::MAX as usize - 1;
+        assert_eq!(
+            ChartNoteIndex::try_from_usize(largest_note).map(ChartNoteIndex::get),
+            Some(largest_note)
+        );
+        assert!(ChartNoteIndex::try_from_usize(u32::MAX as usize).is_none());
+        assert_eq!(
+            ChartRowIndex::try_from_usize(u32::MAX as usize).map(ChartRowIndex::get),
+            Some(u32::MAX as usize)
+        );
+        #[cfg(target_pointer_width = "64")]
+        assert!(ChartRowIndex::try_from_usize(u32::MAX as usize + 1).is_none());
+    }
+
+    #[test]
     fn mine_scan_state_initializes_cursor_data_and_clears() {
-        let mut mine_note_ix: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+        let mut mine_note_ix: [Vec<ChartNoteIndex>; MAX_PLAYERS] =
+            std::array::from_fn(|_| Vec::new());
         let mut mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS] =
             std::array::from_fn(|_| Vec::new());
-        mine_note_ix[1].extend([4, 8]);
+        mine_note_ix[1].extend(compact_note_indices([4, 8]));
         mine_note_time_ns[1].extend([40, 80]);
         let mut state = GameplayMineScanState::new([2, 5], mine_note_ix, mine_note_time_ns);
 
@@ -16072,7 +16117,7 @@ mod tests {
         assert!(state.pending_mine_hit_indices.capacity() >= 2);
 
         state.set_next_tap_miss_cursor(1, 9);
-        state.pending_mine_hit_indices.push(4);
+        state.pending_mine_hit_indices.push(compact_note_index(4));
         state.clear_for_test();
 
         assert_eq!(state.next_tap_miss_cursor, [0; MAX_PLAYERS]);
@@ -16444,9 +16489,9 @@ mod tests {
     #[test]
     fn first_row_entry_lookup_uses_row_time_and_clamps_bounds() {
         let row = |time_ns| RowEntry {
-            row_index: 0,
+            row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [usize::MAX; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16472,9 +16517,9 @@ mod tests {
     #[test]
     fn score_rows_finalized_accepts_all_finalized_ranges() {
         let row = |finalized: bool| RowEntry {
-            row_index: 0,
+            row_index: compact_row_index(0),
             time_ns: 0,
-            nonmine_note_indices: [usize::MAX; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16493,9 +16538,9 @@ mod tests {
     #[test]
     fn score_rows_finalized_rejects_pending_row_in_active_range() {
         let row = |finalized: bool| RowEntry {
-            row_index: 0,
+            row_index: compact_row_index(0),
             time_ns: 0,
-            nonmine_note_indices: [usize::MAX; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16515,9 +16560,9 @@ mod tests {
     #[test]
     fn score_rows_finalized_ignores_inactive_player_ranges() {
         let row = |finalized: bool| RowEntry {
-            row_index: 0,
+            row_index: compact_row_index(0),
             time_ns: 0,
-            nonmine_note_indices: [usize::MAX; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16546,9 +16591,9 @@ mod tests {
     fn practice_player_cursors_seek_notes_rows_and_mines() {
         let note_times = [10, 20, 30, 40];
         let row = |time_ns| RowEntry {
-            row_index: 0,
+            row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [usize::MAX; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16558,7 +16603,7 @@ mod tests {
         };
         let rows = [row(10), row(30), row(50)];
         let mine_times = [15, 35];
-        let mine_ix = [7, 9];
+        let mine_ix = [7usize, 9];
 
         assert_eq!(
             practice_player_cursors(
@@ -16583,9 +16628,9 @@ mod tests {
     fn practice_player_cursors_fall_back_to_note_end_after_last_mine() {
         let note_times = [10, 20, 30, 40];
         let row = |time_ns| RowEntry {
-            row_index: 0,
+            row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [usize::MAX; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16595,7 +16640,7 @@ mod tests {
         };
         let rows = [row(10), row(30), row(50)];
         let mine_times = [15, 35];
-        let mine_ix = [7, 9];
+        let mine_ix = [7usize, 9];
 
         assert_eq!(
             practice_player_cursors(
@@ -16620,9 +16665,9 @@ mod tests {
     fn practice_cursors_for_players_keeps_player_ranges_separate() {
         let note_times = [10, 20, 30, 40, 50, 60];
         let row = |time_ns| RowEntry {
-            row_index: 0,
+            row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [usize::MAX; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16635,8 +16680,8 @@ mod tests {
         let row_ranges = [(0, 2), (2, 4)];
         let p1_mine_times = [15, 25];
         let p2_mine_times = [45, 55];
-        let p1_mine_ix = [1, 2];
-        let p2_mine_ix = [4, 5];
+        let p1_mine_ix = [1usize, 2];
+        let p2_mine_ix = [4usize, 5];
 
         let cursors = practice_cursors_for_players(
             &note_times,
@@ -16659,9 +16704,9 @@ mod tests {
     fn practice_cursors_for_players_leaves_inactive_players_default() {
         let note_times = [10, 20, 30, 40];
         let row = |time_ns| RowEntry {
-            row_index: 0,
+            row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [usize::MAX; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16671,7 +16716,7 @@ mod tests {
         };
         let rows = [row(10), row(30)];
         let mine_times = [15];
-        let mine_ix = [1];
+        let mine_ix = [1usize];
 
         let cursors = practice_cursors_for_players(
             &note_times,
@@ -17075,9 +17120,9 @@ mod tests {
         note_indices[0] = 0;
         note_indices[1] = 99;
         let row_entry = RowEntry {
-            row_index: 48,
+            row_index: compact_row_index(48),
             time_ns: song_time_ns_from_seconds(1.0),
-            nonmine_note_indices: note_indices,
+            nonmine_note_indices: compact_note_indices(note_indices),
             nonmine_note_count: 2,
             rescore_track_count: 2,
             unresolved_count: 0,
@@ -19014,7 +19059,7 @@ mod tests {
             song_time_ns_from_seconds(2.0),
             song_time_ns_from_seconds(2.5),
         ];
-        let note_indices = [0, 1, 2, 3];
+        let note_indices = [0usize, 1, 2, 3];
         let notes = [
             test_note_at(NoteType::Tap, None, false, 48, 1.0),
             test_note_at(NoteType::Tap, None, false, 96, 2.0),
@@ -19106,7 +19151,7 @@ mod tests {
             song_time_ns_from_seconds(1.5),
             song_time_ns_from_seconds(2.0),
         ];
-        let mine_ix = [0, 1, 2];
+        let mine_ix = [0usize, 1, 2];
         let mut notes = vec![
             test_note_at(NoteType::Mine, None, false, 48, 1.0),
             test_note_at(NoteType::Mine, None, false, 72, 1.5),
@@ -19146,7 +19191,7 @@ mod tests {
             song_time_ns_from_seconds(1.5),
             song_time_ns_from_seconds(2.0),
         ];
-        let mine_ix = [0, 99, 1, 2];
+        let mine_ix = [0usize, 99, 1, 2];
         let mut wrong_column = test_note_at(NoteType::Mine, None, false, 72, 1.5);
         wrong_column.column = 1;
         let mut already_hit = test_note_at(NoteType::Mine, None, false, 96, 2.0);
@@ -19179,7 +19224,7 @@ mod tests {
     #[test]
     fn crossed_held_mine_marking_rejects_invalid_ranges() {
         let mine_times = [song_time_ns_from_seconds(1.0)];
-        let mine_ix = [0];
+        let mine_ix = [0usize];
         let mut notes = vec![test_note_at(NoteType::Mine, None, false, 48, 1.0)];
         notes[0].column = 0;
 
@@ -19218,7 +19263,7 @@ mod tests {
             test_note_at(NoteType::Mine, None, false, 144, 3.0),
             test_note_at(NoteType::Mine, None, false, 192, 4.0),
         ];
-        let mine_ix = [0, 1, 2, 3];
+        let mine_ix = [0usize, 1, 2, 3];
 
         assert_eq!(mine_avoid_cursor_end(&notes, &mine_ix, 0, 144), 2);
         assert_eq!(mine_avoid_cursor_end(&notes, &mine_ix, 1, 144), 2);
@@ -19228,7 +19273,7 @@ mod tests {
     #[test]
     fn mine_avoid_cursor_end_clamps_cursor_to_mine_index_len() {
         let notes = vec![test_note_at(NoteType::Mine, None, false, 48, 1.0)];
-        let mine_ix = [0];
+        let mine_ix = [0usize];
 
         assert_eq!(mine_avoid_cursor_end(&notes, &mine_ix, 99, 96), 1);
     }
@@ -19381,7 +19426,7 @@ mod tests {
         notes[1].mine_result = Some(MineResult::Avoided);
         notes[2].mine_result = Some(MineResult::Hit);
         notes[2].column = 5;
-        let pending = [99, 0, 1, 2];
+        let pending = [99usize, 0, 1, 2];
         let mut events = [None; 4];
 
         let update = collect_pending_mine_hit_events(&notes, &pending, 0, 2, 4, &mut events);
@@ -19420,7 +19465,7 @@ mod tests {
         ];
         notes[0].mine_result = Some(MineResult::Hit);
         notes[1].mine_result = Some(MineResult::Hit);
-        let pending = [0, 1];
+        let pending = [0usize, 1];
         let mut events = [None; 1];
 
         let first = collect_pending_mine_hit_events(&notes, &pending, 0, 1, 4, &mut events);
@@ -19481,7 +19526,7 @@ mod tests {
             test_note_at(NoteType::Mine, None, false, 96, 2.0),
             test_note_at(NoteType::Mine, None, false, 144, 3.0),
         ];
-        let mine_ix = [0, 1, 2];
+        let mine_ix = [0usize, 1, 2];
 
         let update =
             apply_time_based_mine_avoidance_for_player(&mut notes, &mine_ix, 0, 144, (0, 3));
@@ -19514,7 +19559,7 @@ mod tests {
         notes[0].mine_result = Some(MineResult::Avoided);
         notes[1].mine_result = Some(MineResult::Hit);
         notes[2].can_be_judged = false;
-        let mine_ix = [0, 1, 2];
+        let mine_ix = [0usize, 1, 2];
 
         let update =
             apply_time_based_mine_avoidance_for_player(&mut notes, &mine_ix, 0, 192, (0, 3));
@@ -19536,7 +19581,7 @@ mod tests {
             test_note_at(NoteType::Mine, None, false, 144, 3.0),
             test_note_at(NoteType::Mine, None, false, 192, 4.0),
         ];
-        let mine_ix = vec![vec![0, 1], vec![2, 3]];
+        let mine_ix = vec![vec![0usize, 1], vec![2, 3]];
         assert!(
             !time_based_mine_avoidance_work_ready_for_players(
                 &notes,
@@ -19580,7 +19625,7 @@ mod tests {
         ];
         notes[2].column = 4;
         notes[3].column = 5;
-        let mine_ix = vec![vec![0, 1], vec![2, 3]];
+        let mine_ix = vec![vec![0usize, 1], vec![2, 3]];
 
         let update = apply_time_based_mine_avoidance_for_players(
             &mut notes,

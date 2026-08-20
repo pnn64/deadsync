@@ -1611,7 +1611,7 @@ where
                 if let Some(eligible) = self
                     .chart_runtime
                     .column_judgment_eligible
-                    .get_mut(note_index)
+                    .get_mut(note_index.get())
                 {
                     *eligible = true;
                 }

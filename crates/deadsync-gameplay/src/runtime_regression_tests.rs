@@ -395,6 +395,7 @@ mod runtime_regression_tests {
                     .all(|pair| pair[0] <= pair[1])
             );
             for &note_index in &state.chart_runtime.mine_scan.mine_note_ix[player] {
+                let note_index = note_index.get();
                 debug_assert!(note_index >= start && note_index < end);
                 debug_assert!(matches!(
                     state.chart_runtime.notes[note_index].note_type,
@@ -415,13 +416,14 @@ mod runtime_regression_tests {
             }
         }
         for (row_entry_index, row_entry) in state.chart_runtime.row_entries.iter().enumerate() {
-            let first_note_index = row_entry.note_indices()[0];
+            let first_note_index = row_entry.note_indices()[0].get();
             let player = state.player_for_col(state.chart_runtime.notes[first_note_index].column);
             debug_assert!(
                 row_entry_index >= state.chart_runtime.row_indices.row_entry_ranges[player].0
                     && row_entry_index < state.chart_runtime.row_indices.row_entry_ranges[player].1
             );
             for &note_index in row_entry.note_indices() {
+                let note_index = note_index.get();
                 debug_assert!(note_index < state.chart_runtime.notes.len());
                 debug_assert_eq!(
                     row_entry_index_for_note(
@@ -431,7 +433,7 @@ mod runtime_regression_tests {
                     Some(row_entry_index)
                 );
                 let note = &state.chart_runtime.notes[note_index];
-                debug_assert_eq!(note.row_index, row_entry.row_index);
+                debug_assert_eq!(note.row_index, row_entry.row_index.get());
                 debug_assert!(note.can_be_judged);
                 debug_assert!(!note.is_fake);
                 debug_assert!(!matches!(note.note_type, NoteType::Mine));
@@ -449,14 +451,15 @@ mod runtime_regression_tests {
                 state.chart_runtime.lane_indices.note_indices[col]
                     .windows(2)
                     .all(|pair| {
-                        let left = pair[0];
-                        let right = pair[1];
+                        let left = pair[0].get();
+                        let right = pair[1].get();
                         left < right
                             && state.chart_runtime.note_time_cache_ns[left]
                                 <= state.chart_runtime.note_time_cache_ns[right]
                     })
             );
             for &note_index in &state.chart_runtime.lane_indices.note_indices[col] {
+                let note_index = note_index.get();
                 debug_assert!(note_index < state.chart_runtime.notes.len());
                 debug_assert_eq!(state.chart_runtime.notes[note_index].column, col);
             }
@@ -468,8 +471,8 @@ mod runtime_regression_tests {
                 state.chart_runtime.lane_indices.note_row_indices(col)
                     .windows(2)
                     .all(|pair| {
-                        let left = pair[0];
-                        let right = pair[1];
+                        let left = pair[0].get();
+                        let right = pair[1].get();
                         (beat_to_note_row(state.chart_runtime.notes[left].beat), left)
                             <= (
                                 beat_to_note_row(state.chart_runtime.notes[right].beat),
@@ -478,6 +481,7 @@ mod runtime_regression_tests {
                     })
             );
             for &note_index in state.chart_runtime.lane_indices.note_row_indices(col) {
+                let note_index = note_index.get();
                 debug_assert!(note_index < state.chart_runtime.notes.len());
                 debug_assert_eq!(state.chart_runtime.notes[note_index].column, col);
             }
@@ -485,14 +489,15 @@ mod runtime_regression_tests {
                 state.chart_runtime.lane_indices.hold_indices[col]
                     .windows(2)
                     .all(|pair| {
-                        let left = pair[0];
-                        let right = pair[1];
+                        let left = pair[0].get();
+                        let right = pair[1].get();
                         left < right
                             && state.chart_runtime.note_time_cache_ns[left]
                                 <= state.chart_runtime.note_time_cache_ns[right]
                     })
             );
             for &note_index in &state.chart_runtime.lane_indices.hold_indices[col] {
+                let note_index = note_index.get();
                 debug_assert!(note_index < state.chart_runtime.notes.len());
                 debug_assert_eq!(state.chart_runtime.notes[note_index].column, col);
                 debug_assert!(matches!(
@@ -516,7 +521,7 @@ mod runtime_regression_tests {
                 state.chart_runtime.lane_indices.note_indices[note.column]
                     .get(lane_pos)
                     .copied(),
-                Some(note_index)
+                Some(ChartNoteIndex::from_validated(note_index))
             );
             lane_positions[note.column] += 1;
         }
@@ -1045,7 +1050,8 @@ mod runtime_regression_tests {
     ) {
         state.chart_runtime.notes[note_index] = test_note(column, row_index, NoteType::Mine);
         state.chart_runtime.note_time_cache_ns[note_index] = time_ns;
-        state.chart_runtime.mine_scan.mine_note_ix[0] = vec![note_index];
+        state.chart_runtime.mine_scan.mine_note_ix[0] =
+            vec![ChartNoteIndex::from_validated(note_index)];
         state.chart_runtime.mine_scan.mine_note_time_ns[0] = vec![time_ns];
         state.chart_runtime.mine_scan.next_mine_ix_cursor[0] = 0;
         state.chart_runtime.mine_scan.next_mine_avoid_cursor[0] = note_index;
@@ -3996,7 +4002,8 @@ mod runtime_regression_tests {
             state.chart_runtime.lane_indices.note_indices[col].clear();
             state.chart_runtime.lane_indices.hold_indices[col].clear();
         }
-        state.chart_runtime.lane_indices.note_indices[column].push(0);
+        state.chart_runtime.lane_indices.note_indices[column]
+            .push(ChartNoteIndex::from_validated(0));
         state.chart_runtime.row_indices.note_row_entry_indices = vec![0];
         state.chart_runtime.row_entries = vec![test_row_entry_with_times(
             &state.chart_runtime.notes,

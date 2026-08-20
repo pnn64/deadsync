@@ -8,7 +8,7 @@ use crate::{
 };
 use deadsync_core::{input::MAX_COLS, song_time::song_time_ns_invalid};
 use deadsync_gameplay::{
-    AccelEffects, AppearanceEffects, PerspectiveEffects, ScrollEffects,
+    AccelEffects, AppearanceEffects, ChartNoteIndex, PerspectiveEffects, ScrollEffects,
     SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindows, VisibilityEffects, VisualEffects,
     song_lua_column_offset_window_value,
 };
@@ -68,8 +68,8 @@ pub struct NotefieldChartView<'a> {
     pub timing: Option<&'a TimingData>,
     pub notes: &'a [Note],
     pub note_range: (usize, usize),
-    pub lane_note_row_indices: &'a [Vec<usize>],
-    pub lane_hold_indices: &'a [Vec<usize>],
+    pub lane_note_row_indices: &'a [Vec<ChartNoteIndex>],
+    pub lane_hold_indices: &'a [Vec<ChartNoteIndex>],
     pub note_itg_rows: &'a [i32],
     /// Song-load timing caches aligned one-to-one with `notes`. Empty or short
     /// slices are valid and fall back to canonical timing queries.
@@ -99,14 +99,14 @@ pub struct NotefieldChartView<'a> {
 
 impl NotefieldChartView<'_> {
     #[inline(always)]
-    pub(crate) fn lane_note_rows(&self, col: usize) -> &[usize] {
+    pub(crate) fn lane_note_rows(&self, col: usize) -> &[ChartNoteIndex] {
         self.lane_note_row_indices
             .get(col)
             .map_or(&[], Vec::as_slice)
     }
 
     #[inline(always)]
-    pub(crate) fn lane_holds(&self, col: usize) -> &[usize] {
+    pub(crate) fn lane_holds(&self, col: usize) -> &[ChartNoteIndex] {
         self.lane_hold_indices.get(col).map_or(&[], Vec::as_slice)
     }
 
@@ -499,8 +499,9 @@ mod tests {
 
     #[test]
     fn borrowed_lane_storage_preserves_lane_views() {
-        let note_rows = [vec![2, 9], vec![4], vec![]];
-        let holds = [vec![], vec![7, 11]];
+        let index = |value| ChartNoteIndex::try_from_usize(value).expect("test index fits u32");
+        let note_rows = [vec![index(2), index(9)], vec![index(4)], vec![]];
+        let holds = [vec![], vec![index(7), index(11)]];
         let view = NotefieldChartView {
             timing: None,
             notes: &[],

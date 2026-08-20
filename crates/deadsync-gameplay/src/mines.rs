@@ -1,7 +1,10 @@
 ﻿#[inline(always)]
 /// Return a processed frame batch to its song-lifetime slot so mine-hit bursts
 /// pay for vector growth once instead of once per hit frame.
-pub(crate) fn recycle_pending_mine_hit_batch(pending: &mut Vec<usize>, mut processed: Vec<usize>) {
+pub(crate) fn recycle_pending_mine_hit_batch(
+    pending: &mut Vec<ChartNoteIndex>,
+    mut processed: Vec<ChartNoteIndex>,
+) {
     processed.clear();
     *pending = processed;
 }
@@ -19,28 +22,28 @@ pub fn mine_window_bounds_ns(
 }
 
 #[inline(always)]
-pub fn lane_note_window_bounds_ns(
-    note_indices: &[usize],
+pub fn lane_note_window_bounds_ns<I: Copy + Into<usize>>(
+    note_indices: &[I],
     note_times_ns: &[SongTimeNs],
     start_t_ns: SongTimeNs,
     end_t_ns: SongTimeNs,
 ) -> (usize, usize) {
     (
-        note_indices.partition_point(|&note_index| note_times_ns[note_index] < start_t_ns),
-        note_indices.partition_point(|&note_index| note_times_ns[note_index] <= end_t_ns),
+        note_indices.partition_point(|&note_index| note_times_ns[note_index.into()] < start_t_ns),
+        note_indices.partition_point(|&note_index| note_times_ns[note_index.into()] <= end_t_ns),
     )
 }
 
 #[inline(always)]
-pub fn lane_note_window_bounds_rows(
-    note_indices: &[usize],
+pub fn lane_note_window_bounds_rows<I: Copy + Into<usize>>(
+    note_indices: &[I],
     notes: &[Note],
     start_row: usize,
     end_row: usize,
 ) -> (usize, usize) {
     (
-        note_indices.partition_point(|&note_index| notes[note_index].row_index < start_row),
-        note_indices.partition_point(|&note_index| notes[note_index].row_index < end_row),
+        note_indices.partition_point(|&note_index| notes[note_index.into()].row_index < start_row),
+        note_indices.partition_point(|&note_index| notes[note_index.into()].row_index < end_row),
     )
 }
 
@@ -51,18 +54,18 @@ pub struct LaneNoteWindowCursor {
 }
 
 #[inline(always)]
-pub fn lane_note_window_bounds_rows_from_cursor(
-    note_indices: &[usize],
+pub fn lane_note_window_bounds_rows_from_cursor<I: Copy + Into<usize>>(
+    note_indices: &[I],
     notes: &[Note],
     start_row: usize,
     end_row: usize,
     cursor: &mut LaneNoteWindowCursor,
 ) -> (usize, usize) {
     cursor.start = partition_point_from_hint(note_indices, cursor.start, |&note_index| {
-        notes[note_index].row_index < start_row
+        notes[note_index.into()].row_index < start_row
     });
     cursor.end = partition_point_from_hint(note_indices, cursor.end, |&note_index| {
-        notes[note_index].row_index < end_row
+        notes[note_index.into()].row_index < end_row
     });
     (cursor.start, cursor.end)
 }
@@ -102,8 +105,8 @@ pub struct LaneNoteSearch {
     pub candidate: Option<(usize, SongTimeNs)>,
 }
 
-pub fn closest_lane_note_search(
-    note_indices: &[usize],
+pub fn closest_lane_note_search<I: Copy + Into<usize>>(
+    note_indices: &[I],
     notes: &[Note],
     note_times_ns: &[SongTimeNs],
     timing: &TimingData,
@@ -120,8 +123,8 @@ pub fn closest_lane_note_search(
     )
 }
 
-fn closest_lane_note_search_with_rows(
-    note_indices: &[usize],
+fn closest_lane_note_search_with_rows<I: Copy + Into<usize>>(
+    note_indices: &[I],
     notes: &[Note],
     note_times_ns: &[SongTimeNs],
     timing: &TimingData,
@@ -154,8 +157,8 @@ fn closest_lane_note_search_with_rows(
     }
 }
 
-fn closest_lane_note_search_with_rows_from_cursor(
-    note_indices: &[usize],
+fn closest_lane_note_search_with_rows_from_cursor<I: Copy + Into<usize>>(
+    note_indices: &[I],
     notes: &[Note],
     note_times_ns: &[SongTimeNs],
     timing: &TimingData,
@@ -195,8 +198,8 @@ fn closest_lane_note_search_with_rows_from_cursor(
 }
 
 #[inline(always)]
-pub fn closest_lane_note_ns(
-    note_indices: &[usize],
+pub fn closest_lane_note_ns<I: Copy + Into<usize>>(
+    note_indices: &[I],
     notes: &[Note],
     note_times_ns: &[SongTimeNs],
     timing: &TimingData,
@@ -209,6 +212,7 @@ pub fn closest_lane_note_ns(
     let mut best_row_distance = usize::MAX;
     let mut best_row_index = 0usize;
     for &note_index in &note_indices[search_start_idx..search_end_idx] {
+        let note_index = note_index.into();
         let note = &notes[note_index];
         let mine_already_judged =
             matches!(note.note_type, NoteType::Mine) && note.mine_result.is_some();
@@ -354,9 +358,9 @@ pub struct PendingMineHitCollectionUpdate {
     pub stopped: bool,
 }
 
-pub fn collect_pending_mine_hit_events(
+pub fn collect_pending_mine_hit_events<I: Copy + Into<usize>>(
     notes: &[Note],
-    pending_indices: &[usize],
+    pending_indices: &[I],
     cursor: usize,
     num_players: usize,
     cols_per_player: usize,
@@ -372,7 +376,7 @@ pub fn collect_pending_mine_hit_events(
                 stopped: true,
             };
         }
-        let note_index = pending_indices[cursor];
+        let note_index = pending_indices[cursor].into();
         cursor += 1;
         let Some(event) = pending_mine_hit_event(notes, note_index, num_players, cols_per_player)
         else {
@@ -388,9 +392,9 @@ pub fn collect_pending_mine_hit_events(
     }
 }
 
-pub fn mark_crossed_held_mine_candidates(
+pub fn mark_crossed_held_mine_candidates<I: Copy + Into<usize>>(
     notes: &mut [Note],
-    mine_note_ix: &[usize],
+    mine_note_ix: &[I],
     mine_note_time_ns: &[SongTimeNs],
     column: usize,
     prev_time_ns: SongTimeNs,
@@ -413,6 +417,7 @@ pub fn mark_crossed_held_mine_candidates(
         let Some(&note_index) = mine_note_ix.get(i) else {
             continue;
         };
+        let note_index = note_index.into();
         let Some(note) = notes.get_mut(note_index) else {
             continue;
         };
@@ -434,15 +439,15 @@ pub fn mark_crossed_held_mine_candidates(
 }
 
 #[inline(always)]
-pub fn mine_avoid_cursor_end(
+pub fn mine_avoid_cursor_end<I: Copy + Into<usize>>(
     notes: &[Note],
-    mine_note_ix: &[usize],
+    mine_note_ix: &[I],
     mine_cursor: usize,
     cutoff_row: usize,
 ) -> usize {
     let mut mine_end = mine_cursor.min(mine_note_ix.len());
     while mine_end < mine_note_ix.len() {
-        if notes[mine_note_ix[mine_end]].row_index >= cutoff_row {
+        if notes[mine_note_ix[mine_end].into()].row_index >= cutoff_row {
             break;
         }
         mine_end += 1;
@@ -479,9 +484,9 @@ pub struct MineAvoidancePlayerUpdate {
     pub last_avoided: Option<MineAvoidedEvent>,
 }
 
-pub fn apply_time_based_mine_avoidance_for_player(
+pub fn apply_time_based_mine_avoidance_for_player<I: Copy + Into<usize>>(
     notes: &mut [Note],
-    mine_note_ix: &[usize],
+    mine_note_ix: &[I],
     mine_cursor: usize,
     cutoff_row: usize,
     note_range: (usize, usize),
@@ -490,6 +495,7 @@ pub fn apply_time_based_mine_avoidance_for_player(
     let mut avoided_count = 0u32;
     let mut last_avoided = None;
     for &note_idx in &mine_note_ix[mine_cursor.min(mine_note_ix.len())..mine_end] {
+        let note_idx = note_idx.into();
         let note = &mut notes[note_idx];
         if apply_mine_avoid_result(note) {
             avoided_count = avoided_count.saturating_add(1);
@@ -502,7 +508,7 @@ pub fn apply_time_based_mine_avoidance_for_player(
     }
 
     let next_mine_avoid_cursor = if mine_end < mine_note_ix.len() {
-        mine_note_ix[mine_end]
+        mine_note_ix[mine_end].into()
     } else {
         note_range.1.min(notes.len())
     };
@@ -522,9 +528,9 @@ pub struct MineAvoidancePlayersUpdate {
 }
 
 #[inline(always)]
-pub fn time_based_mine_avoidance_work_ready_for_players(
+pub fn time_based_mine_avoidance_work_ready_for_players<I: Copy + Into<usize>>(
     notes: &[Note],
-    mine_note_ix: &[Vec<usize>],
+    mine_note_ix: &[Vec<I>],
     mine_cursors: &[usize],
     cutoff_rows: &[usize],
     num_players: usize,
@@ -541,16 +547,16 @@ pub fn time_based_mine_avoidance_work_ready_for_players(
             .unwrap_or(0)
             .min(mine_ix.len());
         let cutoff_row = cutoff_rows.get(player).copied().unwrap_or(0);
-        if mine_end < mine_ix.len() && notes[mine_ix[mine_end]].row_index < cutoff_row {
+        if mine_end < mine_ix.len() && notes[mine_ix[mine_end].into()].row_index < cutoff_row {
             return true;
         }
     }
     false
 }
 
-pub fn apply_time_based_mine_avoidance_for_players(
+pub fn apply_time_based_mine_avoidance_for_players<I: Copy + Into<usize>>(
     notes: &mut [Note],
-    mine_note_ix: &[Vec<usize>],
+    mine_note_ix: &[Vec<I>],
     mine_cursors: &[usize],
     cutoff_rows: &[usize],
     note_ranges: &[(usize, usize)],

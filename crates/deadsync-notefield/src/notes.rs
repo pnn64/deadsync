@@ -17,6 +17,7 @@ use deadlib_present::dsl::SpriteBuilder;
 use deadlib_render_core::BlendMode;
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::beat_to_note_row;
+use deadsync_gameplay::ChartNoteIndex;
 use deadsync_noteskin::{ModelDrawState, NoteskinSlot};
 use deadsync_rules::note::{MineResult, Note, NoteCountStat};
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -906,9 +907,9 @@ pub(crate) fn note_itg_row(note: &Note) -> i32 {
 }
 
 #[cfg(test)]
-pub(crate) fn lane_window_bounds_by_note_row(
+pub(crate) fn lane_window_bounds_by_note_row<I: Copy + Into<usize>>(
     note_itg_rows: &[i32],
-    indices: &[usize],
+    indices: &[I],
     range: Option<(i32, i32)>,
 ) -> Option<(usize, usize)> {
     let (low, high) = range?;
@@ -917,8 +918,8 @@ pub(crate) fn lane_window_bounds_by_note_row(
     }
     let low = low.max(0);
     Some((
-        indices.partition_point(|&note_index| note_itg_rows[note_index] < low),
-        indices.partition_point(|&note_index| note_itg_rows[note_index] <= high),
+        indices.partition_point(|&note_index| note_itg_rows[note_index.into()] < low),
+        indices.partition_point(|&note_index| note_itg_rows[note_index.into()] <= high),
     ))
 }
 
@@ -928,9 +929,9 @@ pub(crate) struct LaneWindowCursor {
     pub end: usize,
 }
 
-pub(crate) fn lane_window_bounds_by_note_row_from_cursor(
+pub(crate) fn lane_window_bounds_by_note_row_from_cursor<I: Copy + Into<usize>>(
     note_itg_rows: &[i32],
-    indices: &[usize],
+    indices: &[I],
     range: Option<(i32, i32)>,
     cursor: &mut LaneWindowCursor,
 ) -> Option<(usize, usize)> {
@@ -942,10 +943,10 @@ pub(crate) fn lane_window_bounds_by_note_row_from_cursor(
     let low = low.max(0);
     cursor.start =
         deadsync_gameplay::partition_point_from_hint(indices, cursor.start, |&note_index| {
-            note_itg_rows[note_index] < low
+            note_itg_rows[note_index.into()] < low
         });
     cursor.end = deadsync_gameplay::partition_point_from_hint(indices, cursor.end, |&note_index| {
-        note_itg_rows[note_index] <= high
+        note_itg_rows[note_index.into()] <= high
     });
     Some((cursor.start, cursor.end))
 }
@@ -968,17 +969,17 @@ pub(crate) fn lane_window_bounds_by_note_row_legacy(
 }
 
 #[cfg(test)]
-pub(crate) fn lane_hold_window_bounds_by_note_row(
+pub(crate) fn lane_hold_window_bounds_by_note_row<I: Copy + Into<usize>>(
     notes: &[Note],
     note_itg_rows: &[i32],
-    indices: &[usize],
+    indices: &[I],
     range: Option<(i32, i32)>,
 ) -> Option<(usize, usize)> {
     let (low, _) = range?;
     let (mut start, end) = lane_window_bounds_by_note_row(note_itg_rows, indices, range)?;
     let low = low.max(0);
     while start > 0 {
-        let prev_note_index = indices[start - 1];
+        let prev_note_index = indices[start - 1].into();
         let prev_end_row = notes[prev_note_index]
             .hold
             .as_ref()
@@ -993,10 +994,10 @@ pub(crate) fn lane_hold_window_bounds_by_note_row(
     Some((start, end))
 }
 
-pub(crate) fn lane_hold_window_bounds_by_note_row_from_cursor(
+pub(crate) fn lane_hold_window_bounds_by_note_row_from_cursor<I: Copy + Into<usize>>(
     notes: &[Note],
     note_itg_rows: &[i32],
-    indices: &[usize],
+    indices: &[I],
     range: Option<(i32, i32)>,
     cursor: &mut LaneWindowCursor,
 ) -> Option<(usize, usize)> {
@@ -1005,7 +1006,7 @@ pub(crate) fn lane_hold_window_bounds_by_note_row_from_cursor(
         lane_window_bounds_by_note_row_from_cursor(note_itg_rows, indices, range, cursor)?;
     let low = low.max(0);
     while start > 0 {
-        let prev_note_index = indices[start - 1];
+        let prev_note_index = indices[start - 1].into();
         let prev_end_row = notes[prev_note_index]
             .hold
             .as_ref()
@@ -1022,14 +1023,14 @@ pub(crate) fn lane_hold_window_bounds_by_note_row_from_cursor(
 
 #[inline(always)]
 pub(crate) fn for_each_lane_index<F: FnMut(usize)>(
-    indices: &[usize],
+    indices: &[ChartNoteIndex],
     bounds: (usize, usize),
     mut f: F,
 ) {
     let start = bounds.0.min(indices.len());
     let end = bounds.1.min(indices.len()).max(start);
     for &index in &indices[start..end] {
-        f(index);
+        f(index.get());
     }
 }
 

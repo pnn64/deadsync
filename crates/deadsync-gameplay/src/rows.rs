@@ -1,3 +1,77 @@
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ChartNoteIndex(u32);
+
+impl ChartNoteIndex {
+    pub const INVALID: Self = Self(u32::MAX);
+
+    #[inline(always)]
+    pub const fn get(self) -> usize {
+        self.0 as usize
+    }
+
+    #[inline(always)]
+    const fn from_validated(index: usize) -> Self {
+        Self(index as u32)
+    }
+
+    #[inline(always)]
+    pub fn try_from_usize(index: usize) -> Option<Self> {
+        let index = u32::try_from(index).ok()?;
+        (index != u32::MAX).then_some(Self(index))
+    }
+}
+
+impl From<ChartNoteIndex> for usize {
+    #[inline(always)]
+    fn from(index: ChartNoteIndex) -> Self {
+        index.get()
+    }
+}
+
+impl PartialEq<usize> for ChartNoteIndex {
+    #[inline(always)]
+    fn eq(&self, other: &usize) -> bool {
+        self.get() == *other
+    }
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ChartRowIndex(u32);
+
+impl ChartRowIndex {
+    #[inline(always)]
+    pub const fn get(self) -> usize {
+        self.0 as usize
+    }
+
+    #[inline(always)]
+    const fn from_validated(index: usize) -> Self {
+        Self(index as u32)
+    }
+
+    #[inline(always)]
+    pub fn try_from_usize(index: usize) -> Option<Self> {
+        u32::try_from(index).ok().map(Self)
+    }
+}
+
+impl PartialEq<usize> for ChartRowIndex {
+    #[inline(always)]
+    fn eq(&self, other: &usize) -> bool {
+        self.get() == *other
+    }
+}
+
+#[inline]
+fn compact_chart_indices_valid(notes: &[Note]) -> bool {
+    notes.len() <= u32::MAX as usize
+        && notes
+            .iter()
+            .all(|note| ChartRowIndex::try_from_usize(note.row_index).is_some())
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FinalizedRowOutcome {
     pub final_grade: JudgeGrade,
@@ -5,10 +79,10 @@ pub struct FinalizedRowOutcome {
 
 #[derive(Clone, Debug)]
 pub struct RowEntry {
-    pub row_index: usize,
+    pub row_index: ChartRowIndex,
     pub time_ns: SongTimeNs,
     // Non-mine, non-fake, judgable notes on this row.
-    pub nonmine_note_indices: [usize; MAX_COLS],
+    pub nonmine_note_indices: [ChartNoteIndex; MAX_COLS],
     pub nonmine_note_count: u8,
     pub rescore_track_count: u8,
     pub unresolved_count: u8,
@@ -19,7 +93,7 @@ pub struct RowEntry {
 
 impl RowEntry {
     #[inline(always)]
-    pub fn note_indices(&self) -> &[usize] {
+    pub fn note_indices(&self) -> &[ChartNoteIndex] {
         &self.nonmine_note_indices[..usize::from(self.nonmine_note_count)]
     }
 }
@@ -146,13 +220,13 @@ pub struct PracticePlayerCursors {
     pub mine_avoid_cursor: usize,
 }
 
-pub fn practice_player_cursors(
+pub fn practice_player_cursors<I: Copy + Into<usize>>(
     note_time_cache_ns: &[SongTimeNs],
     note_range: (usize, usize),
     row_entries: &[RowEntry],
     row_range: (usize, usize),
     mine_note_time_ns: &[SongTimeNs],
-    mine_note_ix: &[usize],
+    mine_note_ix: &[I],
     judge_start_ns: SongTimeNs,
 ) -> PracticePlayerCursors {
     let note_cursor = first_time_index_at_or_after(note_time_cache_ns, note_range, judge_start_ns);
@@ -162,6 +236,7 @@ pub fn practice_player_cursors(
     let mine_avoid_cursor = mine_note_ix
         .get(mine_ix_cursor)
         .copied()
+        .map(Into::into)
         .unwrap_or(note_end);
 
     PracticePlayerCursors {
@@ -180,13 +255,13 @@ pub struct PracticePlaybackCursors {
     pub mine_avoid_cursor: [usize; MAX_PLAYERS],
 }
 
-pub fn practice_cursors_for_players(
+pub fn practice_cursors_for_players<I: Copy + Into<usize>>(
     note_time_cache_ns: &[SongTimeNs],
     note_ranges: &[(usize, usize)],
     row_entries: &[RowEntry],
     row_entry_ranges: &[(usize, usize)],
     mine_note_time_ns: [&[SongTimeNs]; MAX_PLAYERS],
-    mine_note_ix: [&[usize]; MAX_PLAYERS],
+    mine_note_ix: [&[I]; MAX_PLAYERS],
     num_players: usize,
     judge_start_ns: SongTimeNs,
 ) -> PracticePlaybackCursors {
@@ -215,21 +290,21 @@ pub fn count_rescore_tracks_on_row(row_entry: &RowEntry) -> usize {
     usize::from(row_entry.rescore_track_count)
 }
 
-pub fn build_row_entry(
-    row_index: usize,
-    nonmine_note_indices: [usize; MAX_COLS],
+fn build_row_entry_compact(
+    row_index: ChartRowIndex,
+    nonmine_note_indices: [ChartNoteIndex; MAX_COLS],
     nonmine_note_count: u8,
     notes: &[Note],
     note_time_cache_ns: &[SongTimeNs],
 ) -> RowEntry {
     debug_assert!(nonmine_note_count != 0);
-    let time_ns = note_time_cache_ns[nonmine_note_indices[0]];
+    let time_ns = note_time_cache_ns[nonmine_note_indices[0].get()];
     let mut rescore_track_count = 0u8;
     let mut unresolved_count = 0u8;
     let mut unresolved_nonlift_count = 0u8;
     let mut had_provisional_early_hit = false;
     for &note_index in &nonmine_note_indices[..usize::from(nonmine_note_count)] {
-        let note = &notes[note_index];
+        let note = &notes[note_index.get()];
         if counts_for_early_rescore(note.note_type) {
             rescore_track_count = rescore_track_count.saturating_add(1);
         }
@@ -252,6 +327,32 @@ pub fn build_row_entry(
         had_provisional_early_hit,
         final_outcome: None,
     }
+}
+
+pub fn build_row_entry(
+    row_index: usize,
+    nonmine_note_indices: [usize; MAX_COLS],
+    nonmine_note_count: u8,
+    notes: &[Note],
+    note_time_cache_ns: &[SongTimeNs],
+) -> RowEntry {
+    let row_index = ChartRowIndex::try_from_usize(row_index)
+        .expect("validated gameplay row index must fit u32");
+    let nonmine_note_indices = nonmine_note_indices.map(|index| {
+        if index == usize::MAX {
+            ChartNoteIndex::INVALID
+        } else {
+            ChartNoteIndex::try_from_usize(index)
+                .expect("validated gameplay note index must fit u32")
+        }
+    });
+    build_row_entry_compact(
+        row_index,
+        nonmine_note_indices,
+        nonmine_note_count,
+        notes,
+        note_time_cache_ns,
+    )
 }
 
 type GameplayRowIndexBuild = (
@@ -285,12 +386,12 @@ fn build_gameplay_row_indices(
         let (note_start, note_end) = note_ranges[player];
         let mut cursor = note_start;
         while cursor < note_end {
-            let row_index = notes[cursor].row_index;
+            let row_index = ChartRowIndex::from_validated(notes[cursor].row_index);
             let row_start = cursor;
             let mut row_flags = 0u8;
-            let mut nonmine_note_indices = [usize::MAX; MAX_COLS];
+            let mut nonmine_note_indices = [ChartNoteIndex::INVALID; MAX_COLS];
             let mut nonmine_note_count = 0u8;
-            while cursor < note_end && notes[cursor].row_index == row_index {
+            while cursor < note_end && notes[cursor].row_index == row_index.get() {
                 let note = &notes[cursor];
                 match note.note_type {
                     NoteType::Hold => row_flags |= 0b01,
@@ -300,7 +401,7 @@ fn build_gameplay_row_indices(
                 if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
                     let count = usize::from(nonmine_note_count);
                     debug_assert!(count < MAX_COLS);
-                    nonmine_note_indices[count] = cursor;
+                    nonmine_note_indices[count] = ChartNoteIndex::from_validated(cursor);
                     nonmine_note_count += 1;
                 }
                 cursor += 1;
@@ -313,11 +414,12 @@ fn build_gameplay_row_indices(
                 let row_entry_index = row_entries.len() as u32;
                 debug_assert!(row_entry_index < NOTE_ROW_ENTRY_INDEX_MASK);
                 for &note_index in &nonmine_note_indices[..usize::from(nonmine_note_count)] {
+                    let note_index = note_index.get();
                     note_row_entry_indices[note_index] =
                         (note_row_entry_indices[note_index] & !NOTE_ROW_ENTRY_INDEX_MASK)
                             | row_entry_index;
                 }
-                row_entries.push(build_row_entry(
+                row_entries.push(build_row_entry_compact(
                     row_index,
                     nonmine_note_indices,
                     nonmine_note_count,
@@ -356,12 +458,12 @@ fn build_gameplay_row_indices_reference(
         let (note_start, note_end) = note_ranges[player];
         let mut cursor = note_start;
         while cursor < note_end {
-            let row_index = notes[cursor].row_index;
+            let row_index = ChartRowIndex::from_validated(notes[cursor].row_index);
             let row_start = cursor;
             let mut row_flags = 0u8;
-            let mut nonmine_note_indices = [usize::MAX; MAX_COLS];
+            let mut nonmine_note_indices = [ChartNoteIndex::INVALID; MAX_COLS];
             let mut nonmine_note_count = 0u8;
-            while cursor < note_end && notes[cursor].row_index == row_index {
+            while cursor < note_end && notes[cursor].row_index == row_index.get() {
                 let note = &notes[cursor];
                 match note.note_type {
                     NoteType::Hold => row_flags |= 0b01,
@@ -371,7 +473,7 @@ fn build_gameplay_row_indices_reference(
                 if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
                     let count = usize::from(nonmine_note_count);
                     debug_assert!(count < MAX_COLS);
-                    nonmine_note_indices[count] = cursor;
+                    nonmine_note_indices[count] = ChartNoteIndex::from_validated(cursor);
                     nonmine_note_count += 1;
                 }
                 cursor += 1;
@@ -379,9 +481,9 @@ fn build_gameplay_row_indices_reference(
             if nonmine_note_count != 0 {
                 let row_entry_index = row_entries.len() as u32;
                 for &note_index in &nonmine_note_indices[..usize::from(nonmine_note_count)] {
-                    note_row_entry_indices[note_index] = row_entry_index;
+                    note_row_entry_indices[note_index.get()] = row_entry_index;
                 }
-                row_entries.push(build_row_entry(
+                row_entries.push(build_row_entry_compact(
                     row_index,
                     nonmine_note_indices,
                     nonmine_note_count,
@@ -407,8 +509,8 @@ fn row_entry_checksum(entries: &[RowEntry]) -> u64 {
         entry
             .note_indices()
             .iter()
-            .fold(checksum.rotate_left(7) ^ entry.row_index as u64, |sum, &index| {
-                sum.rotate_left(7) ^ index as u64
+            .fold(checksum.rotate_left(7) ^ entry.row_index.get() as u64, |sum, &index| {
+                sum.rotate_left(7) ^ index.get() as u64
             })
             ^ (entry.time_ns as u64).rotate_left(17)
             ^ u64::from(entry.rescore_track_count) << 40
@@ -499,7 +601,7 @@ pub fn reset_practice_notes_and_rows(
     }
 
     for row_entry in row_entries {
-        *row_entry = build_row_entry(
+        *row_entry = build_row_entry_compact(
             row_entry.row_index,
             row_entry.nonmine_note_indices,
             row_entry.nonmine_note_count,
@@ -509,7 +611,7 @@ pub fn reset_practice_notes_and_rows(
     }
 }
 
-pub fn refresh_timing_caches_for_offset_change(
+pub fn refresh_timing_caches_for_offset_change<I: Copy + Into<usize>>(
     notes: &[Note],
     timing_players: &[&TimingData; MAX_PLAYERS],
     num_players: usize,
@@ -517,7 +619,7 @@ pub fn refresh_timing_caches_for_offset_change(
     note_time_cache_ns: &mut [SongTimeNs],
     hold_end_time_cache_ns: &mut [SongTimeNs],
     row_entries: &mut [RowEntry],
-    mine_note_ix: &[Vec<usize>; MAX_PLAYERS],
+    mine_note_ix: &[Vec<I>; MAX_PLAYERS],
     mine_note_time_ns: &mut [Vec<SongTimeNs>; MAX_PLAYERS],
 ) {
     for (time_ns, note) in note_time_cache_ns.iter_mut().zip(notes) {
@@ -534,7 +636,7 @@ pub fn refresh_timing_caches_for_offset_change(
             });
     }
     for row_entry in row_entries {
-        row_entry.time_ns = note_time_cache_ns[row_entry.note_indices()[0]];
+        row_entry.time_ns = note_time_cache_ns[row_entry.note_indices()[0].get()];
     }
     for player in 0..num_players.min(MAX_PLAYERS) {
         let mine_note_time_ns = &mut mine_note_time_ns[player];
@@ -542,7 +644,7 @@ pub fn refresh_timing_caches_for_offset_change(
         mine_note_time_ns.extend(
             mine_note_ix[player]
                 .iter()
-                .map(|&note_index| note_time_cache_ns[note_index]),
+                .map(|&note_index| note_time_cache_ns[note_index.into()]),
         );
     }
 }
@@ -678,7 +780,7 @@ pub fn completed_row_final_judgment<'a>(
     let mut row_judgment_count = 0usize;
 
     for &note_index in row_entry.note_indices() {
-        let judgment = notes[note_index].result.as_ref()?;
+        let judgment = notes[note_index.get()].result.as_ref()?;
         debug_assert!(row_judgment_count < row_judgments.len());
         row_judgments[row_judgment_count] = Some(judgment);
         row_judgment_count += 1;
@@ -706,7 +808,7 @@ pub fn finalized_row_judgment_for_entry(
     let mut row_judgment_count = 0usize;
 
     for &note_index in row_entry.note_indices() {
-        let judgment = notes.get(note_index)?.result.as_ref()?;
+        let judgment = notes.get(note_index.get())?.result.as_ref()?;
         debug_assert!(row_judgment_count < row_judgments.len());
         row_judgments[row_judgment_count] = Some(judgment);
         row_judgment_count += 1;
@@ -739,7 +841,7 @@ pub fn completed_row_tap_feedback_plan(
     let mut len = 0usize;
     for &note_index in row_entry.note_indices() {
         debug_assert!(len < out.len());
-        out[len] = note_index;
+        out[len] = note_index.get();
         len += 1;
     }
     let judgment = *final_judgment;
@@ -966,7 +1068,7 @@ pub fn player_row_scan_state(
         return PlayerRowScanState::Pending;
     }
     PlayerRowScanState::Ready {
-        row_index: row_entry.row_index,
+        row_index: row_entry.row_index.get(),
         skip_life_change: row_entry.had_provisional_early_hit,
     }
 }

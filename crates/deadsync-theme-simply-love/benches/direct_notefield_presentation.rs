@@ -3460,7 +3460,26 @@ fn print_edit_measure_benchmark() {
     print_boundary_result("prepared flat", &flat);
 }
 
+fn print_f7_ordering_benchmark() {
+    println!(
+        "F7 ordered-frame audit (2 players, {BOUNDARY_FIELD_DRAWS} direct field draws + \
+         {BOUNDARY_HUD_ACTORS} HUD actors/player)"
+    );
+    let flat = measure_boundary(BoundaryKind::FlatDraws, BOUNDARY_FIELD_DRAWS, false);
+    assert_zero_alloc(&BenchResult {
+        elapsed: flat.elapsed,
+        cycles: flat.cycles,
+        allocated: flat.allocated,
+        checksum: flat.checksum,
+    });
+    print_boundary_result("hybrid compositor", &flat);
+}
+
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_F7_ORDERING_ONLY").is_some() {
+        print_f7_ordering_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_Y_FOLDED_PLAYER_PROXY_ONLY").is_some() {
         print_y_folded_player_proxy_benchmark();
         return;
