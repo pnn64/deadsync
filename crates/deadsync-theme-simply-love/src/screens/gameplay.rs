@@ -7812,6 +7812,7 @@ struct SongLuaDirectProxy {
     z: i16,
     tint: [f32; 4],
     blend: BlendMode,
+    enclosing_camera: Option<Matrix4>,
     camera: Option<Matrix4>,
 }
 
@@ -8901,44 +8902,26 @@ fn song_lua_proxy_requests_indexed(
     if index.proxy_indices.is_empty() {
         return SongLuaScreenProxyRequests::default();
     }
-    song_lua_proxy_request_analysis_indexed_active(
-        overlays,
-        overlay_states,
-        index,
-        screen_width(),
-        screen_height(),
-        visit_scratch,
-    )
-    .all
+    song_lua_proxy_request_analysis_indexed_active(overlays, overlay_states, index, visit_scratch)
+        .all
 }
 
 fn song_lua_proxy_request_analysis_indexed(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
     index: &SongLuaProxyRequestIndex,
-    overlay_space_width: f32,
-    overlay_space_height: f32,
     visit_scratch: &mut SongLuaCaptureVisitScratch,
 ) -> SongLuaProxyRequestAnalysis {
     if index.proxy_indices.is_empty() {
         return SongLuaProxyRequestAnalysis::default();
     }
-    song_lua_proxy_request_analysis_indexed_active(
-        overlays,
-        overlay_states,
-        index,
-        overlay_space_width,
-        overlay_space_height,
-        visit_scratch,
-    )
+    song_lua_proxy_request_analysis_indexed_active(overlays, overlay_states, index, visit_scratch)
 }
 
 fn song_lua_proxy_request_analysis_indexed_active(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
     index: &SongLuaProxyRequestIndex,
-    overlay_space_width: f32,
-    overlay_space_height: f32,
     visit_scratch: &mut SongLuaCaptureVisitScratch,
 ) -> SongLuaProxyRequestAnalysis {
     let mut analysis = SongLuaProxyRequestAnalysis::default();
@@ -8978,17 +8961,7 @@ fn song_lua_proxy_request_analysis_indexed_active(
                     .direct_aft_proxies
                     .get(overlay_index)
                     .copied()
-                    .flatten()
-                    .filter(|_| {
-                        song_lua_capture_placement(
-                            &overlays[overlay_index],
-                            overlay_state,
-                            overlay_space_width,
-                            overlay_space_height,
-                        )
-                        .1
-                        .is_none()
-                    });
+                    .flatten();
                 if let Some(plan) = direct_plan {
                     if overlay_states
                         .get(plan.proxy_index)
@@ -9176,6 +9149,7 @@ fn song_lua_direct_proxy(
         z,
         tint: state.diffuse,
         blend: song_lua_overlay_blend(state.blend),
+        enclosing_camera: None,
         camera: source.camera,
     })
 }
@@ -9202,8 +9176,11 @@ fn song_lua_fold_direct_aft_proxy(
     if state.blend != SongLuaOverlayBlendMode::Alpha {
         proxy.blend = song_lua_overlay_blend(state.blend);
     }
-    // A nested source camera replaces the enclosing AFT camera until its pop.
-    // This capture has one source, so that is the final camera for every draw.
+    // Preserve the enclosing registration before a nested source camera so
+    // camera-table order and downstream IDs remain identical to push/pop.
+    if proxy.camera.is_some() {
+        proxy.enclosing_camera = capture_camera;
+    }
     proxy.camera = proxy.camera.or(capture_camera);
     proxy
 }
@@ -9284,15 +9261,6 @@ fn song_lua_direct_aft_proxy(
     ) else {
         return SongLuaDirectAftResult::Handled(None);
     };
-    let (_, capture_camera) = song_lua_capture_placement(
-        overlay,
-        aft_state,
-        overlay_space_width,
-        overlay_space_height,
-    );
-    if proxy.camera.is_some() && capture_camera.is_some() {
-        return SongLuaDirectAftResult::Unsupported;
-    }
     SongLuaDirectAftResult::Handled(Some(song_lua_fold_direct_aft_proxy(
         overlay,
         aft_state,
@@ -15666,12 +15634,13 @@ impl<'a> Iterator for GameplayActorSegmentIter<'a> {
                         }
                     };
                     let draws = source.get(proxy.draw_start..proxy.draw_end).unwrap_or(&[]);
-                    return Some(ActorSegment::flat_proxy_with_camera(
+                    return Some(ActorSegment::flat_proxy_with_cameras(
                         draws,
                         proxy.offset,
                         proxy.z,
                         proxy.tint,
                         proxy.blend,
+                        proxy.enclosing_camera.as_ref(),
                         proxy.camera.as_ref(),
                     ));
                 }
@@ -16175,8 +16144,6 @@ pub fn push_actors(
         &song_lua_visuals.overlays,
         &song_lua_overlay_state_scratch,
         &song_lua_proxy_request_index,
-        song_lua_visuals.screen_width,
-        song_lua_visuals.screen_height,
         song_lua_capture_visit_scratch,
     );
     for &layer_idx in song_lua_foreground_active_layers {
@@ -16189,8 +16156,6 @@ pub fn push_actors(
                 &layer.overlays,
                 layer_states,
                 request_index,
-                layer.screen_width,
-                layer.screen_height,
                 song_lua_capture_visit_scratch,
             ),
         );
@@ -20634,8 +20599,6 @@ mod tests {
             &overlays,
             &overlay_states,
             &index,
-            screen_width(),
-            screen_height(),
             &mut visit_scratch,
         );
 
@@ -20679,8 +20642,6 @@ mod tests {
             &overlays,
             &overlay_states,
             &index,
-            screen_width(),
-            screen_height(),
             &mut visit_scratch,
         );
 
@@ -20717,8 +20678,6 @@ mod tests {
             &overlays,
             &overlay_states,
             &index,
-            screen_width(),
-            screen_height(),
             &mut visit_scratch,
         );
 
@@ -20729,7 +20688,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_direct_aft_keeps_transformed_capture_source() {
+    fn song_lua_direct_aft_classifies_transformed_capture() {
         let overlays = vec![
             test_capture_overlay("cap"),
             test_capture_proxy_child(0, SongLuaProxyTarget::NoteField { player_index: 0 }),
@@ -20745,14 +20704,12 @@ mod tests {
             &overlays,
             &overlay_states,
             &index,
-            screen_width(),
-            screen_height(),
             &mut visit_scratch,
         );
 
         assert!(index.topology.direct_aft_proxies[2].is_some());
-        assert!(analysis.captured.players[0].note_field);
-        assert!(!analysis.direct_aft.players[0].note_field);
+        assert!(!analysis.captured.players[0].note_field);
+        assert!(analysis.direct_aft.players[0].note_field);
     }
 
     #[test]
@@ -20795,8 +20752,6 @@ mod tests {
             &overlays,
             &overlay_states,
             &index,
-            screen_width(),
-            screen_height(),
             &mut visit_scratch,
         );
         assert_eq!(analysis.root_note_fields, [1, 0]);
@@ -22831,7 +22786,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_aft_proxy_matches_actor_capture_style_and_camera() {
+    fn direct_aft_proxy_matches_actor_capture_transform_and_cameras() {
         let metrics = deadlib_present::space::metrics_for_window(854, 480);
         deadlib_present::space::set_current_metrics(metrics);
         let draws = [FlatDraw::Sprite(deadlib_present::actors::FlatSprite {
@@ -22860,8 +22815,10 @@ mod tests {
         let mut aft_overlay = test_aft_overlay("cap", true);
         aft_overlay.name = Some("CaptureR".to_string());
         let aft_state = SongLuaOverlayState {
-            x: 0.5 * screen_width(),
-            y: 0.5 * screen_height(),
+            x: 0.5 * screen_width() + 24.0,
+            y: 0.5 * screen_height() - 12.0,
+            rot_z_deg: 8.0,
+            zoom: 1.1,
             diffuse: [0.5, 0.8, 0.6, 0.7],
             blend: SongLuaOverlayBlendMode::Add,
             ..SongLuaOverlayState::default()
@@ -22942,12 +22899,13 @@ mod tests {
             .expect("direct AFT proxy should render");
 
             let actor_frame = compose(ActorSegment::new(std::slice::from_ref(&capture_actor)));
-            let direct_frame = compose(ActorSegment::flat_proxy_with_camera(
+            let direct_frame = compose(ActorSegment::flat_proxy_with_cameras(
                 &draws,
                 direct.offset,
                 direct.z,
                 direct.tint,
                 direct.blend,
+                direct.enclosing_camera.as_ref(),
                 direct.camera.as_ref(),
             ));
             assert_eq!(

@@ -2715,8 +2715,9 @@ return Def.ActorFrame{
     Def.Sprite{
         OnCommand=function(self)
             self:SetTexture(capture:GetTexture())
-            self:x(SCREEN_CENTER_X)
-            self:y(SCREEN_CENTER_Y)
+            self:x(SCREEN_CENTER_X + 48)
+            self:y(SCREEN_CENTER_Y - 24)
+            self:zoom(0.9)
             self:diffuse(0.8, 0.6, 1.0, 0.75)
             self:blend("add")
         end,

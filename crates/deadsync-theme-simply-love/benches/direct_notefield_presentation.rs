@@ -991,7 +991,7 @@ impl FlatProxyScratch {
             capture: std::array::from_fn(|_| {
                 SharedActorFrameScratch::with_capacity(draw_count + 2)
             }),
-            aft_capture: std::array::from_fn(|_| SharedActorFrameScratch::with_capacity(1)),
+            aft_capture: std::array::from_fn(|_| SharedActorFrameScratch::with_capacity(3)),
             active_bank: 1,
         }
     }
@@ -1015,6 +1015,7 @@ fn flat_proxy_frame(
     let tint = [0.5, 0.75, 0.25, 0.8];
     let aft_tint = [0.8, 0.6, 1.0, 0.75];
     let aft_offset = [0.0, 0.0];
+    let aft_camera = Mat4::from_rotation_z(0.08) * Mat4::from_scale(Vec3::new(0.9, 0.9, 1.0));
     let segments: [ActorSegment<'_>; 4] = match kind {
         FlatProxyKind::ActorCapture => {
             source.active_bank = (source.active_bank + 1) % source.capture.len();
@@ -1055,7 +1056,13 @@ fn flat_proxy_frame(
                     .aft_capture
                     .get_mut(active_bank)
                     .expect("active AFT frame bank exists")
-                    .refill(aft_offset, |out| out.push(proxy))
+                    .refill(aft_offset, |out| {
+                        out.push(Actor::CameraPush {
+                            view_proj: aft_camera,
+                        });
+                        out.push(proxy);
+                        out.push(Actor::CameraPop);
+                    })
                     .expect("AFT capture is nonempty");
                 source.actors.push(Actor::SharedFrame {
                     align: [0.0, 0.0],
@@ -1074,7 +1081,7 @@ fn flat_proxy_frame(
         }
         FlatProxyKind::DirectFragment => std::array::from_fn(|destination| {
             let offset = [destination as f32 * 16.0, destination as f32 * 8.0];
-            ActorSegment::flat_proxy_with_camera(
+            ActorSegment::flat_proxy_with_cameras(
                 &source.draws,
                 if aft_capture {
                     [offset[0] + aft_offset[0], offset[1] + aft_offset[1]]
@@ -1088,6 +1095,7 @@ fn flat_proxy_frame(
                     tint
                 },
                 BlendMode::Add,
+                aft_capture.then_some(&aft_camera),
                 camera.as_ref(),
             )
         }),

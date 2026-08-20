@@ -652,6 +652,7 @@ where
 pub struct ActorSegment<'a> {
     actors: &'a [actors::Actor],
     flat_draws: &'a [actors::FlatDraw],
+    flat_enclosing_camera: Option<&'a Matrix4>,
     flat_camera: Option<&'a Matrix4>,
     z_shift: i16,
     tint: [f32; 4],
@@ -703,6 +704,7 @@ impl<'a> ActorSegment<'a> {
         Self {
             actors,
             flat_draws: &[],
+            flat_enclosing_camera: None,
             flat_camera: None,
             z_shift: 0,
             tint: [1.0; 4],
@@ -716,6 +718,7 @@ impl<'a> ActorSegment<'a> {
         Self {
             actors,
             flat_draws: &[],
+            flat_enclosing_camera: None,
             flat_camera: None,
             z_shift,
             tint: [1.0; 4],
@@ -729,6 +732,7 @@ impl<'a> ActorSegment<'a> {
         Self {
             actors,
             flat_draws: &[],
+            flat_enclosing_camera: None,
             flat_camera: None,
             z_shift,
             tint: [1.0; 4],
@@ -750,6 +754,7 @@ impl<'a> ActorSegment<'a> {
         Self {
             actors,
             flat_draws: &[],
+            flat_enclosing_camera: None,
             flat_camera: None,
             z_shift,
             tint,
@@ -801,10 +806,28 @@ impl<'a> ActorSegment<'a> {
         blend: BlendMode,
         camera: Option<&'a Matrix4>,
     ) -> Self {
+        Self::flat_proxy_with_cameras(draws, offset, z, tint, blend, None, camera)
+    }
+
+    /// Borrows an ActorProxy-compatible draw fragment while preserving an
+    /// enclosing camera registration before the optional source camera. The
+    /// source camera controls the draws when present; otherwise the enclosing
+    /// camera does. This matches a one-source nested camera scope without
+    /// rebuilding camera actors.
+    pub const fn flat_proxy_with_cameras(
+        draws: &'a [actors::FlatDraw],
+        offset: [f32; 2],
+        z: i16,
+        tint: [f32; 4],
+        blend: BlendMode,
+        enclosing_camera: Option<&'a Matrix4>,
+        source_camera: Option<&'a Matrix4>,
+    ) -> Self {
         Self {
             actors: &[],
             flat_draws: draws,
-            flat_camera: camera,
+            flat_enclosing_camera: enclosing_camera,
+            flat_camera: source_camera,
             z_shift: z,
             tint,
             blend: Some(blend),
@@ -5416,11 +5439,23 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
     if segment.flat_draws.is_empty() {
         return;
     }
-    let camera = segment
-        .flat_camera
-        .map_or(sequence.active_camera, |matrix| {
+    let enclosing_camera = segment.flat_enclosing_camera.map(|matrix| {
+        cameras.push(*matrix);
+        let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
+        sequence.last_root_camera = Some((*matrix, id));
+        id
+    });
+    let camera = match segment.flat_camera {
+        Some(matrix) => {
+            // A nested CameraPush always creates a distinct table entry, even
+            // when its matrix equals the enclosing scope.
+            if enclosing_camera.is_some() {
+                sequence.last_root_camera = None;
+            }
             sequence.camera_id(*matrix, cameras)
-        });
+        }
+        None => enclosing_camera.unwrap_or(sequence.active_camera),
+    };
     let style = ComposeStyle {
         tint: segment.tint,
         blend: segment.blend,
@@ -12479,6 +12514,93 @@ mod tests {
                 &TestDrawTextureContext,
                 &resources,
             );
+
+        assert_eq!(direct_render.ops, actor_render.ops);
+        assert_eq!(
+            direct_render.sprite_instances,
+            actor_render.sprite_instances
+        );
+        assert_eq!(direct_render.cameras, actor_render.cameras);
+    }
+
+    #[test]
+    fn flat_proxy_preserves_enclosing_and_source_camera_order() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let enclosing = Matrix4::from_rotation_z(0.2);
+        let source_camera = Matrix4::from_translation(glam::Vec3::new(0.125, -0.25, 0.0));
+        let source = SpriteSource::static_texture("nested-proxy-sprite");
+        let mut child = test_sprite(source.clone());
+        let Actor::Sprite { z, .. } = &mut child else {
+            unreachable!();
+        };
+        *z = 0;
+        let actor = [Actor::SharedFrame {
+            align: [0.0, 0.0],
+            offset: [10.0, -3.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children: Arc::from([
+                Actor::CameraPush {
+                    view_proj: enclosing,
+                },
+                Actor::CameraPush {
+                    view_proj: source_camera,
+                },
+                child,
+                Actor::CameraPop,
+                Actor::CameraPop,
+            ]),
+            background: None,
+            z: 42,
+            tint: [0.5, 0.75, 0.25, 0.8],
+            blend: Some(BlendMode::Add),
+        }];
+        let draws = [FlatDraw::Sprite(FlatSprite {
+            center: [12.0, 24.0],
+            world_z: 0.0,
+            size: [16.0, 32.0],
+            source,
+            tint: [0.8, 0.6, 0.4, 1.0],
+            glow: [0.0; 4],
+            uv_rect: [0.0, 0.0, 1.0, 1.0],
+            flip_x: false,
+            flip_y: false,
+            fade: [0.0; 4],
+            blend: BlendMode::Alpha,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            z: 17,
+        })];
+        let resources = ActorResourceArena::new(0);
+        let compose = |segment| {
+            let mut text = TextLayoutCache::default();
+            let mut scratch = ComposeScratch::default();
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[segment],
+                [0.0; 4],
+                &metrics,
+                &font::FontMap::default(),
+                0.0,
+                &mut text,
+                &mut scratch,
+                &TestDrawTextureContext,
+                &resources,
+            )
+        };
+        let actor_render = compose(ActorSegment::new(&actor));
+        let direct_render = compose(ActorSegment::flat_proxy_with_cameras(
+            &draws,
+            [10.0, -3.0],
+            42,
+            [0.5, 0.75, 0.25, 0.8],
+            BlendMode::Add,
+            Some(&enclosing),
+            Some(&source_camera),
+        ));
 
         assert_eq!(direct_render.ops, actor_render.ops);
         assert_eq!(
