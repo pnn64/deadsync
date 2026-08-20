@@ -2678,6 +2678,32 @@ return Def.ActorFrame{
         simfile
     }
 
+    fn write_direct_combo_proxy_fixture() -> PathBuf {
+        let simfile = write_fixture("f6-direct-combo", generated_pipeline_song_lua_simfile());
+        let lua_dir = simfile
+            .parent()
+            .expect("fixture simfile should have a song directory")
+            .join("lua");
+        fs::create_dir_all(&lua_dir).unwrap();
+        fs::write(
+            lua_dir.join("default.lua"),
+            r#"
+return Def.ActorFrame{
+    Def.ActorProxy{
+        OnCommand=function(self)
+            local combo = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("Combo")
+            self:SetTarget(combo)
+            self:x(SCREEN_CENTER_X)
+            self:y(SCREEN_CENTER_Y)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+        simfile
+    }
+
     #[test]
     fn root_note_field_proxy_uses_repeatable_direct_segment() {
         let simfile = write_direct_note_field_proxy_fixture();
@@ -2727,6 +2753,85 @@ return Def.ActorFrame{
                     crate::views::SimplyLoveVisualPolicyView::default(),
                 );
                 assert!(segments.has_direct_field_proxy());
+                let actor_segments = segments.segments(&state, &actors);
+                let mut text_cache = compose::TextLayoutCache::default();
+                let mut compose_scratch = compose::ComposeScratch::default();
+                let mut warm = compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                    &actor_segments,
+                    [0.0, 0.0, 0.0, 1.0],
+                    &metrics,
+                    assets.fonts(),
+                    10.0,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                    &FIXTURE_TEXTURES,
+                    state.actor_resources(),
+                );
+                assert!(warm.ops.iter().any(|op| matches!(op, DrawOp::Sprite(_))));
+                compose_scratch.recycle_frame(&mut warm);
+                drop(actor_segments);
+                let _ = assert_repeatable_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn root_combo_proxy_uses_repeatable_direct_segment() {
+        let simfile = write_direct_combo_proxy_fixture();
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::metrics_for_window(1280, 720);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(1280, 720);
+                space::set_overscan(0, 0, 0, 0);
+                let mut profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
+                profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+                profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(1280.0, 720.0),
+                    GameplaySession::default(),
+                    profiles,
+                );
+                set_fixture_time(&mut state, 2.5);
+                add_sprite_core_feedback(&mut state, 0, 0, 100);
+                let visuals = state.gameplay.song_lua_visuals();
+                assert!(visuals.overlays.iter().any(|overlay| {
+                    overlay.parent_index.is_none()
+                        && matches!(
+                            overlay.kind,
+                            deadsync_assets::song_lua::SongLuaOverlayKind::ActorProxy {
+                                target: deadsync_assets::song_lua::SongLuaProxyTarget::Combo {
+                                    player_index: 0
+                                }
+                            }
+                        )
+                }));
+                let assets = fixture_assets();
+                let mut actors = Vec::with_capacity(512);
+                let segments = screen_gameplay::push_actors(
+                    &mut actors,
+                    &mut state,
+                    &assets,
+                    screen_gameplay::ActorViewOverride::default(),
+                    123.0,
+                    crate::views::SimplyLoveVisualPolicyView::default(),
+                );
+                assert!(segments.has_direct_combo_proxy());
                 let actor_segments = segments.segments(&state, &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();

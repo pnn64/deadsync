@@ -963,20 +963,27 @@ struct FlatProxyScratch {
 }
 
 impl FlatProxyScratch {
-    fn new(draw_count: usize, zero_z: bool) -> Self {
+    fn new(draw_count: usize, zero_z: bool, combo: bool) -> Self {
         Self {
-            draws: (0..draw_count)
-                .map(|index| {
-                    let mut draw = boundary_flat_draw(index);
-                    if zero_z {
-                        let FlatDraw::Sprite(sprite) = &mut draw else {
-                            unreachable!();
-                        };
-                        sprite.z = 0;
-                    }
-                    draw
-                })
-                .collect(),
+            draws: if combo {
+                let mut draws = Vec::with_capacity(draw_count);
+                draws.extend((0..draw_count.saturating_sub(1)).map(boundary_flat_draw));
+                draws.push(numeric_draw(NumericCase::Combo, 12_345, 0, 0));
+                draws
+            } else {
+                (0..draw_count)
+                    .map(|index| {
+                        let mut draw = boundary_flat_draw(index);
+                        if zero_z {
+                            let FlatDraw::Sprite(sprite) = &mut draw else {
+                                unreachable!();
+                            };
+                            sprite.z = 0;
+                        }
+                        draw
+                    })
+                    .collect()
+            },
             source_actors: Vec::with_capacity(draw_count + 2),
             actors: Vec::with_capacity(1),
             capture: SharedActorFrameScratch::with_capacity(draw_count + 2),
@@ -1057,16 +1064,26 @@ fn measure_flat_proxy_pair(
     draw_count: usize,
     zero_z: bool,
     camera: Option<Mat4>,
+    combo: bool,
 ) -> [BoundaryResult; 2] {
     let metrics = deadlib_present::space::metrics_for_window(854, 480);
-    let fonts = font::FontMap::default();
+    let fonts = if combo {
+        font::FontMap::from_iter([("bench-numeric", numeric_font())])
+    } else {
+        font::FontMap::default()
+    };
     let resources = ActorResourceArena::new(0);
     let mut texts = [TextLayoutCache::default(), TextLayoutCache::default()];
     let mut composers = [ComposeScratch::default(), ComposeScratch::default()];
     let mut sources = [
-        FlatProxyScratch::new(draw_count, zero_z),
-        FlatProxyScratch::new(draw_count, zero_z),
+        FlatProxyScratch::new(draw_count, zero_z, combo),
+        FlatProxyScratch::new(draw_count, zero_z, combo),
     ];
+    if combo {
+        for text in &mut texts {
+            prewarm_u32_text_slot(text, &fonts, "bench-numeric", 0, TextAlign::Center);
+        }
+    }
     let kinds = [FlatProxyKind::ActorCapture, FlatProxyKind::DirectFragment];
     let mut elapsed = [Duration::ZERO; 2];
     let mut cycles = [0u64; 2];
@@ -1126,7 +1143,7 @@ fn measure_flat_proxy_pair(
 
 fn print_judgment_proxy_benchmark() {
     println!("\ndirect SongLua Judgment proxy benchmark ({JUDGMENT_PROXY_DRAWS} draws)");
-    let [actor, direct] = measure_flat_proxy_pair(JUDGMENT_PROXY_DRAWS, true, None);
+    let [actor, direct] = measure_flat_proxy_pair(JUDGMENT_PROXY_DRAWS, true, None, false);
     assert_eq!(actor.checksum, direct.checksum);
     print_boundary_result("actor capture", &actor);
     print_boundary_result("direct fragment", &direct);
@@ -1143,7 +1160,7 @@ fn print_judgment_proxy_benchmark() {
 fn print_notefield_proxy_benchmark() {
     println!("\ndirect SongLua NoteField proxy benchmark ({FIELD_PROXY_DRAWS} draws)");
     let camera = notefield_view_proj(854.0, 480.0, 427.0, 240.0, 0.2, 0.1, false);
-    let [actor, direct] = measure_flat_proxy_pair(FIELD_PROXY_DRAWS, false, camera);
+    let [actor, direct] = measure_flat_proxy_pair(FIELD_PROXY_DRAWS, false, camera, false);
     assert_eq!(actor.checksum, direct.checksum);
     print_boundary_result("actor capture", &actor);
     print_boundary_result("direct fragment", &direct);
@@ -1154,6 +1171,24 @@ fn print_notefield_proxy_benchmark() {
             allocated: result.allocated,
             checksum: result.checksum,
         });
+    }
+}
+
+fn print_combo_proxy_benchmark() {
+    for (label, draw_count) in [("number", 1), ("milestones + number", 7)] {
+        println!("\ndirect SongLua Combo proxy benchmark ({label}, {draw_count} draws)");
+        let [actor, direct] = measure_flat_proxy_pair(draw_count, false, None, true);
+        assert_eq!(actor.checksum, direct.checksum);
+        print_boundary_result("actor capture", &actor);
+        print_boundary_result("direct fragment", &direct);
+        for result in [&actor, &direct] {
+            assert_zero_alloc(&BenchResult {
+                elapsed: result.elapsed,
+                cycles: result.cycles,
+                allocated: result.allocated,
+                checksum: result.checksum,
+            });
+        }
     }
 }
 
@@ -2889,6 +2924,10 @@ fn print_cue_countdown_benchmark() {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_COMBO_PROXY_ONLY").is_some() {
+        print_combo_proxy_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_NOTEFIELD_PROXY_ONLY").is_some() {
         print_notefield_proxy_benchmark();
         return;

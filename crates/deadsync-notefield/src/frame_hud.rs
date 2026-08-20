@@ -144,6 +144,7 @@ impl NotefieldHudFrameView<'_> {
 /// Proxy captures produced while composing the canonical HUD sequence.
 pub struct NotefieldHudComposeResult {
     pub combo_actors: Option<CapturedActorSource>,
+    pub combo_draw_range: Option<Range<usize>>,
     pub judgment_actors: Option<CapturedActorSource>,
     pub judgment_draw_range: Option<Range<usize>>,
 }
@@ -165,6 +166,11 @@ pub fn compose_notefield_hud<S>(
             || (!request.capture_requests.judgment && !request.capture_requests.player),
         "direct Judgment capture requires a retained HUD draw range"
     );
+    debug_assert!(
+        !request.capture_requests.direct_combo
+            || (!request.capture_requests.combo && !request.capture_requests.player),
+        "direct Combo capture requires a retained HUD draw range"
+    );
     let combo_capture_start = actors.len();
     let combo_draw_start = draws.len();
     if let Some(combo) = frame.combo.as_ref() {
@@ -175,6 +181,11 @@ pub fn compose_notefield_hud<S>(
         .combo
         .then(|| share_actor_range(actors, combo_capture_start, &mut capture_scratch.combo))
         .flatten();
+    let combo_draw_range = request
+        .capture_requests
+        .direct_combo
+        .then_some(combo_draw_start..draws.len())
+        .filter(|range| !range.is_empty());
 
     if let Some(error_bar) = frame.error_bar.as_ref() {
         compose_error(draws, request, prepared, error_bar);
@@ -263,6 +274,7 @@ pub fn compose_notefield_hud<S>(
 
     NotefieldHudComposeResult {
         combo_actors,
+        combo_draw_range,
         judgment_actors,
         judgment_draw_range,
     }

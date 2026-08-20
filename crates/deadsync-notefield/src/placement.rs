@@ -129,6 +129,7 @@ pub struct ProxyCaptureRequests {
     pub judgment: bool,
     pub direct_judgment: bool,
     pub combo: bool,
+    pub direct_combo: bool,
 }
 
 pub(crate) fn player_metric_y(

@@ -95,6 +95,7 @@ pub struct BuiltNotefield {
     pub judgment_actors: Option<CapturedActorSource>,
     pub judgment_draw_range: Option<Range<usize>>,
     pub combo_actors: Option<CapturedActorSource>,
+    pub combo_draw_range: Option<Range<usize>>,
 }
 
 pub type CapturedActorSource = [Arc<[Actor]>; 1];
@@ -138,6 +139,7 @@ impl BuiltNotefield {
             judgment_actors: None,
             judgment_draw_range: None,
             combo_actors: None,
+            combo_draw_range: None,
         }
     }
 }

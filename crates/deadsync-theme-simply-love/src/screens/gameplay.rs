@@ -7416,10 +7416,11 @@ fn song_lua_proxy_target_has_source(
             .get(*player_index)
             .and_then(|sources| sources.judgment)
             .is_some_and(|source| !source.is_empty()),
-        SongLuaProxyTarget::Combo { player_index } => proxy_sources
-            .get(*player_index)
-            .and_then(|sources| sources.combo)
-            .is_some_and(|source| !source.is_empty()),
+        SongLuaProxyTarget::Combo { player_index } => {
+            proxy_sources.get(*player_index).is_some_and(|sources| {
+                sources.direct_combo || sources.combo.is_some_and(|source| !source.is_empty())
+            })
+        }
         SongLuaProxyTarget::Underlay { .. }
         | SongLuaProxyTarget::Overlay { .. }
         | SongLuaProxyTarget::Actor { .. } => false,
@@ -7688,6 +7689,7 @@ struct SongLuaPlayerProxySources<'a> {
     direct_note_field: bool,
     judgment: Option<SongLuaProxySource<'a>>,
     combo: Option<SongLuaProxySource<'a>>,
+    direct_combo: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -7702,7 +7704,8 @@ struct SongLuaDirectProxySource {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SongLuaDirectDraws {
     Field,
-    Hud,
+    Judgment,
+    Combo,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -7719,7 +7722,7 @@ struct SongLuaDirectProxy {
     camera: Option<Matrix4>,
 }
 
-const SONG_LUA_DIRECT_PROXY_CAPACITY: usize = MAX_PLAYERS * 2;
+const SONG_LUA_DIRECT_PROXY_CAPACITY: usize = MAX_PLAYERS * 3;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct SongLuaDirectProxies {
@@ -7755,6 +7758,7 @@ struct SongLuaScreenProxySources<'a> {
     players: [SongLuaPlayerProxySources<'a>; 2],
     direct_note_fields: [Option<SongLuaDirectProxySource>; 2],
     direct_judgments: [Option<SongLuaDirectProxySource>; 2],
+    direct_combos: [Option<SongLuaDirectProxySource>; 2],
     underlay: Option<&'a [Arc<[Actor]>]>,
     overlay: Option<&'a [Arc<[Actor]>]>,
 }
@@ -7774,6 +7778,7 @@ struct SongLuaProxyRequestAnalysis {
     captured: SongLuaScreenProxyRequests,
     root_note_fields: [u8; MAX_PLAYERS],
     root_judgments: [u8; MAX_PLAYERS],
+    root_combos: [u8; MAX_PLAYERS],
 }
 
 type SongLuaSingleSource = [Arc<[Actor]>; 1];
@@ -8829,6 +8834,11 @@ fn song_lua_proxy_request_analysis_indexed_active(
                             *count = count.saturating_add(1);
                         }
                     }
+                    SongLuaProxyTarget::Combo { player_index } => {
+                        if let Some(count) = analysis.root_combos.get_mut(*player_index) {
+                            *count = count.saturating_add(1);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -8883,6 +8893,9 @@ fn song_lua_merge_proxy_analysis(
         *count = count.saturating_add(add);
     }
     for (count, add) in into.root_judgments.iter_mut().zip(from.root_judgments) {
+        *count = count.saturating_add(add);
+    }
+    for (count, add) in into.root_combos.iter_mut().zip(from.root_combos) {
         *count = count.saturating_add(add);
     }
 }
@@ -14549,7 +14562,6 @@ fn song_lua_player_transform_is_direct_proxy(transform: SongLuaCaptureTransform)
 #[inline(always)]
 fn song_lua_player_transform_is_direct_hud_proxy(transform: SongLuaCaptureTransform) -> bool {
     song_lua_player_transform_is_direct_proxy(transform)
-        && song_lua_player_transform_has_identity_geometry(transform)
 }
 
 fn song_lua_direct_field_camera(
@@ -15076,11 +15088,18 @@ impl GameplayActorSegments {
             .any(|proxy| proxy.draws == SongLuaDirectDraws::Field)
     }
 
+    #[cfg(test)]
+    pub(crate) fn has_direct_combo_proxy(&self) -> bool {
+        self.direct_proxies.iter().any(|proxy| {
+            proxy.draws == SongLuaDirectDraws::Combo && proxy.draw_start < proxy.draw_end
+        })
+    }
+
     pub fn segments<'a>(
         &'a self,
         state: &'a State,
         actors: &'a [Actor],
-    ) -> SmallVec<[ActorSegment<'a>; 14]> {
+    ) -> SmallVec<[ActorSegment<'a>; 18]> {
         let insert = self.insert.min(actors.len());
         let mut segments = SmallVec::new();
         let scratch = state
@@ -15213,7 +15232,9 @@ impl GameplayActorSegments {
             let actor_insert = proxy.actor_insert.clamp(actor_start, actors.len());
             let source = match proxy.draws {
                 SongLuaDirectDraws::Field => &scratch.notefield_flat_draw_scratch[proxy.player],
-                SongLuaDirectDraws::Hud => &scratch.notefield_hud_flat_draw_scratch[proxy.player],
+                SongLuaDirectDraws::Judgment | SongLuaDirectDraws::Combo => {
+                    &scratch.notefield_hud_flat_draw_scratch[proxy.player]
+                }
             };
             let draws = source.get(proxy.draw_start..proxy.draw_end).unwrap_or(&[]);
             segments.push(ActorSegment::new(&actors[actor_start..actor_insert]));
@@ -15444,6 +15465,12 @@ fn push_song_lua_layer_actors(
                         .map(|source| (*player_index, source)),
                     SongLuaProxyTarget::Judgment { player_index } => proxy_sources
                         .direct_judgments
+                        .get(*player_index)
+                        .copied()
+                        .flatten()
+                        .map(|source| (*player_index, source)),
+                    SongLuaProxyTarget::Combo { player_index } => proxy_sources
+                        .direct_combos
                         .get(*player_index)
                         .copied()
                         .flatten()
@@ -15729,6 +15756,11 @@ pub fn push_actors(
     let direct_judgment_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
         proxy_analysis.root_judgments[player] == 1
             && !proxy_analysis.captured.players[player].judgment
+            && !proxy_requests.players[player].player
+    });
+    let direct_combo_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
+        proxy_analysis.root_combos[player] == 1
+            && !proxy_analysis.captured.players[player].combo
             && !proxy_requests.players[player].player
     });
     let mut underlay_proxy_source = proxy_requests
@@ -16061,6 +16093,7 @@ pub fn push_actors(
                 judgment_actors,
                 judgment_draw_range,
                 combo_actors,
+                combo_draw_range,
             } = notefield::compose_frame(
                 state,
                 state.notefield_judgment_assets(player_idx),
@@ -16091,7 +16124,8 @@ pub fn push_actors(
                         && direct_note_field_candidates[player_idx],
                     judgment: requests.judgment && !direct_judgment_candidates[player_idx],
                     direct_judgment: requests.judgment && direct_judgment_candidates[player_idx],
-                    combo: requests.combo,
+                    combo: requests.combo && !direct_combo_candidates[player_idx],
+                    direct_combo: requests.combo && direct_combo_candidates[player_idx],
                 },
                 state.itl_cmod_warning[player_idx],
                 state.display_mods_text(player_idx),
@@ -16230,11 +16264,11 @@ pub fn push_actors(
                 .then_some(judgment_draw_range.as_ref())
                 .flatten()
                 .map(|range| SongLuaDirectProxySource {
-                    draws: SongLuaDirectDraws::Hud,
+                    draws: SongLuaDirectDraws::Judgment,
                     draw_start: range.start,
                     draw_end: range.end,
                     target: [capture_transform.target_x, capture_transform.target_y],
-                    camera: None,
+                    camera: song_lua_direct_field_camera(None, capture_transform),
                 });
             let judgment_source = if direct_judgment_candidates[player_idx] {
                 (!direct_judgment)
@@ -16258,22 +16292,48 @@ pub fn push_actors(
                     prepare_proxy_source(source, ProxyCapturePart::Hud, capture_transform, scratch)
                 })
             };
-            let proxy_sources = [
-                note_field_source,
-                judgment_source,
+            let direct_combo = direct_combo_candidates[player_idx]
+                && song_lua_player_transform_is_direct_hud_proxy(capture_transform);
+            let direct_combo_source = direct_combo
+                .then_some(combo_draw_range.as_ref())
+                .flatten()
+                .map(|range| SongLuaDirectProxySource {
+                    draws: SongLuaDirectDraws::Combo,
+                    draw_start: range.start,
+                    draw_end: range.end,
+                    target: [capture_transform.target_x, capture_transform.target_y],
+                    camera: song_lua_direct_field_camera(None, capture_transform),
+                });
+            let combo_source = if direct_combo_candidates[player_idx] {
+                (!direct_combo)
+                    .then_some(combo_draw_range.as_ref())
+                    .flatten()
+                    .and_then(|range| {
+                        let scratch = song_lua_proxy_actor_scratch
+                            .as_mut()?
+                            .player(player_idx, SONG_LUA_COMBO_PROXY_SOURCE)?;
+                        prepare_flat_proxy_source(
+                            &hud_flat_draw_scratch[range.clone()],
+                            capture_transform,
+                            scratch,
+                        )
+                    })
+            } else {
                 combo_actors.and_then(|source| {
                     let scratch = song_lua_proxy_actor_scratch
                         .as_mut()?
                         .player(player_idx, SONG_LUA_COMBO_PROXY_SOURCE)?;
                     prepare_proxy_source(source, ProxyCapturePart::Hud, capture_transform, scratch)
-                }),
-            ];
+                })
+            };
+            let proxy_sources = [note_field_source, judgment_source, combo_source];
             (
                 layout_center_x,
                 player_source,
                 proxy_sources,
                 direct_note_field_source,
                 direct_judgment_source,
+                direct_combo_source,
                 assembly,
                 field_camera,
             )
@@ -16289,6 +16349,8 @@ pub fn push_actors(
         p2_direct_note_field,
         p1_direct_judgment,
         p2_direct_judgment,
+        p1_direct_combo,
+        p2_direct_combo,
         p1_actor_assembly,
         p2_actor_assembly,
         p1_field_camera,
@@ -16301,6 +16363,8 @@ pub fn push_actors(
         Option<PreparedProxySource>,
         [Option<PreparedProxySource>; 3],
         [Option<PreparedProxySource>; 3],
+        Option<SongLuaDirectProxySource>,
+        Option<SongLuaDirectProxySource>,
         Option<SongLuaDirectProxySource>,
         Option<SongLuaDirectProxySource>,
         Option<SongLuaDirectProxySource>,
@@ -16319,6 +16383,7 @@ pub fn push_actors(
                 p1_sources,
                 p1_direct_field,
                 p1_direct_judgment,
+                p1_direct_combo,
                 p1_assembly,
                 p1_camera,
             ) = build_player_bundle(
@@ -16333,6 +16398,7 @@ pub fn push_actors(
                 p2_sources,
                 p2_direct_field,
                 p2_direct_judgment,
+                p2_direct_combo,
                 p2_assembly,
                 p2_camera,
             ) = build_player_bundle(
@@ -16351,6 +16417,8 @@ pub fn push_actors(
                 p2_direct_field,
                 p1_direct_judgment,
                 p2_direct_judgment,
+                p1_direct_combo,
+                p2_direct_combo,
                 p1_assembly,
                 p2_assembly,
                 p1_camera,
@@ -16371,6 +16439,7 @@ pub fn push_actors(
                 nf_sources,
                 nf_direct_field,
                 nf_direct_judgment,
+                nf_direct_combo,
                 nf_assembly,
                 nf_camera,
             ) = build_player_bundle(
@@ -16388,6 +16457,8 @@ pub fn push_actors(
                 nf_direct_field,
                 None,
                 nf_direct_judgment,
+                None,
+                nf_direct_combo,
                 None,
                 nf_assembly,
                 PlayerActorAssembly::Hidden,
@@ -16407,6 +16478,7 @@ pub fn push_actors(
             direct_note_field: p1_direct_note_field.is_some(),
             judgment: p1_proxy_sources[1].as_ref().map(PreparedProxySource::view),
             combo: p1_proxy_sources[2].as_ref().map(PreparedProxySource::view),
+            direct_combo: p1_direct_combo.is_some(),
         },
         SongLuaPlayerProxySources {
             player: p2_player_proxy_source
@@ -16416,6 +16488,7 @@ pub fn push_actors(
             direct_note_field: p2_direct_note_field.is_some(),
             judgment: p2_proxy_sources[1].as_ref().map(PreparedProxySource::view),
             combo: p2_proxy_sources[2].as_ref().map(PreparedProxySource::view),
+            direct_combo: p2_direct_combo.is_some(),
         },
     ];
     let mut replacement_active_players = song_lua_replacement_active_players_indexed(
@@ -17513,6 +17586,7 @@ pub fn push_actors(
                 direct_note_field: p1_direct_note_field.is_some(),
                 judgment: p1_proxy_slices[1],
                 combo: p1_proxy_slices[2],
+                direct_combo: p1_direct_combo.is_some(),
             },
             SongLuaPlayerProxySources {
                 player: p2_player_proxy_slice,
@@ -17520,10 +17594,12 @@ pub fn push_actors(
                 direct_note_field: p2_direct_note_field.is_some(),
                 judgment: p2_proxy_slices[1],
                 combo: p2_proxy_slices[2],
+                direct_combo: p2_direct_combo.is_some(),
             },
         ],
         direct_note_fields: [p1_direct_note_field, p2_direct_note_field],
         direct_judgments: [p1_direct_judgment, p2_direct_judgment],
+        direct_combos: [p1_direct_combo, p2_direct_combo],
         underlay: underlay_proxy_slice,
         overlay: overlay_proxy_slice,
     };
@@ -20109,6 +20185,41 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_proxy_analysis_separates_root_combo_from_aft_capture() {
+        let root = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::Combo { player_index: 0 },
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let overlays = vec![
+            root,
+            test_capture_overlay("cap"),
+            test_capture_proxy_child(1, SongLuaProxyTarget::Combo { player_index: 0 }),
+            test_aft_overlay("cap", true),
+        ];
+        let overlay_states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let index = SongLuaProxyRequestIndex::new(&overlays);
+        let mut visit_scratch = SongLuaCaptureVisitScratch::with_capacity(overlays.len());
+        let analysis = song_lua_proxy_request_analysis_indexed(
+            &overlays,
+            &overlay_states,
+            &index,
+            &mut visit_scratch,
+        );
+
+        assert_eq!(analysis.root_combos, [1, 0]);
+        assert!(analysis.all.players[0].combo);
+        assert!(analysis.captured.players[0].combo);
+    }
+
+    #[test]
     fn song_lua_root_note_field_can_replace_player_from_direct_source() {
         let overlays = vec![SongLuaOverlayActor {
             kind: SongLuaOverlayKind::ActorProxy {
@@ -20190,7 +20301,28 @@ mod tests {
             },
             message_commands: Vec::new(),
         };
-        let overlays = vec![quad(), field_proxy, quad(), judgment_proxy, quad()];
+        let combo_proxy = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::Combo { player_index: 0 },
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState {
+                x: 320.0,
+                y: 120.0,
+                diffuse: [1.0, 0.5, 0.25, 0.75],
+                ..SongLuaOverlayState::default()
+            },
+            message_commands: Vec::new(),
+        };
+        let overlays = vec![
+            quad(),
+            field_proxy,
+            quad(),
+            judgment_proxy,
+            combo_proxy,
+            quad(),
+        ];
         let overlay_states = overlays
             .iter()
             .map(|overlay| overlay.initial_state)
@@ -20208,9 +20340,19 @@ mod tests {
             ],
             direct_judgments: [
                 Some(SongLuaDirectProxySource {
-                    draws: SongLuaDirectDraws::Hud,
+                    draws: SongLuaDirectDraws::Judgment,
                     draw_start: 2,
                     draw_end: 4,
+                    target: [213.0, 240.0],
+                    camera: None,
+                }),
+                None,
+            ],
+            direct_combos: [
+                Some(SongLuaDirectProxySource {
+                    draws: SongLuaDirectDraws::Combo,
+                    draw_start: 0,
+                    draw_end: 1,
                     target: [213.0, 240.0],
                     camera: None,
                 }),
@@ -20253,7 +20395,7 @@ mod tests {
         );
 
         assert_eq!(out.len(), 3);
-        assert_eq!(direct.len, 2);
+        assert_eq!(direct.len, 3);
         let field = direct.entries[0].expect("visible direct NoteField proxy should be recorded");
         assert_eq!(field.actor_insert, 1);
         assert_eq!(field.player, 0);
@@ -20261,14 +20403,21 @@ mod tests {
         assert_eq!((field.draw_start, field.draw_end), (5, 9));
         assert_eq!(field.offset, [-96.0, -192.0]);
         assert_eq!(field.camera, Some(Matrix4::IDENTITY));
-        let direct = direct.entries[1].expect("visible direct Judgment proxy should be recorded");
-        assert_eq!(direct.actor_insert, 2);
-        assert_eq!(direct.player, 0);
-        assert_eq!(direct.draws, SongLuaDirectDraws::Hud);
-        assert_eq!((direct.draw_start, direct.draw_end), (2, 4));
-        assert_eq!(direct.offset, [-113.0, -160.0]);
-        assert_eq!(direct.tint, [0.5, 0.75, 1.0, 0.8]);
-        assert_eq!(direct.blend, BlendMode::Add);
+        let judgment = direct.entries[1].expect("visible direct Judgment proxy should be recorded");
+        assert_eq!(judgment.actor_insert, 2);
+        assert_eq!(judgment.player, 0);
+        assert_eq!(judgment.draws, SongLuaDirectDraws::Judgment);
+        assert_eq!((judgment.draw_start, judgment.draw_end), (2, 4));
+        assert_eq!(judgment.offset, [-113.0, -160.0]);
+        assert_eq!(judgment.tint, [0.5, 0.75, 1.0, 0.8]);
+        assert_eq!(judgment.blend, BlendMode::Add);
+        let combo = direct.entries[2].expect("visible direct Combo proxy should be recorded");
+        assert_eq!(combo.actor_insert, 2);
+        assert_eq!(combo.player, 0);
+        assert_eq!(combo.draws, SongLuaDirectDraws::Combo);
+        assert_eq!((combo.draw_start, combo.draw_end), (0, 1));
+        assert_eq!(combo.offset, [107.0, -120.0]);
+        assert_eq!(combo.tint, [1.0, 0.5, 0.25, 0.75]);
     }
 
     #[test]
@@ -21987,6 +22136,103 @@ mod tests {
         let actor_frame = compose(ActorSegment::new(std::slice::from_ref(&actor)));
         let direct_camera = song_lua_direct_field_camera(Some(camera), transform)
             .expect("translation should resolve a field camera");
+        let direct_frame = compose(ActorSegment::flat_proxy_with_camera(
+            &draws,
+            [
+                proxy_state.x - transform.target_x,
+                proxy_state.y - transform.target_y,
+            ],
+            321,
+            proxy_state.diffuse,
+            song_lua_overlay_blend(proxy_state.blend),
+            Some(&direct_camera),
+        ));
+        assert_eq!(
+            compare_render_frames_semantic(&actor_frame, &direct_frame),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn direct_hud_proxy_cancels_player_translation_and_layer_z() {
+        let playfield_center_x = screen_center_x() - 100.0;
+        let transform = SongLuaCaptureTransform {
+            z_shift: SONG_LUA_PLAYER_LAYER_Z_BASE,
+            tint: [1.0; 4],
+            blend: None,
+            playfield_center_x,
+            target_x: screen_center_x() + 50.0,
+            target_y: screen_center_y() - 20.0,
+            rotation_x: 0.0,
+            rotation_z: 0.0,
+            rotation_y: 0.0,
+            skew_x: 0.0,
+            skew_y: 0.0,
+            zoom_x: 1.0,
+            zoom_y: 1.0,
+            zoom_z: 1.0,
+        };
+        assert!(song_lua_player_transform_is_direct_hud_proxy(transform));
+        assert!(!song_lua_player_transform_is_direct_identity(transform));
+        let draws = [FlatDraw::Sprite(deadlib_present::actors::FlatSprite {
+            center: [playfield_center_x + 24.0, screen_center_y() - 40.0],
+            world_z: 0.0,
+            size: [32.0, 32.0],
+            source: deadlib_present::actors::SpriteSource::Solid,
+            tint: [0.8, 0.6, 0.4, 1.0],
+            glow: [0.0; 4],
+            uv_rect: [0.0, 0.0, 1.0, 1.0],
+            flip_x: false,
+            flip_y: false,
+            fade: [0.0; 4],
+            blend: BlendMode::Alpha,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            z: 90,
+        })];
+        let mut hud_scratch = SharedActorFrameScratch::with_capacity(1);
+        let source = prepare_flat_proxy_source(&draws, transform, &mut hud_scratch)
+            .expect("translated HUD proxy source should render");
+        let proxy_state = SongLuaOverlayState {
+            x: screen_center_x() + 120.0,
+            y: screen_center_y() + 30.0,
+            ..SongLuaOverlayState::default()
+        };
+        let mut proxy_scratch = SongLuaProxyActorScratch::new(1);
+        proxy_scratch.begin_frame();
+        let actor = song_lua_build_proxy_actor_with_scratch(
+            proxy_state,
+            321,
+            source.view(),
+            screen_width(),
+            screen_height(),
+            Some(&mut proxy_scratch),
+        )
+        .expect("translated HUD proxy should render");
+        let metrics = deadlib_present::space::metrics_for_window(
+            screen_width() as u32,
+            screen_height() as u32,
+        );
+        let resources = ActorResourceArena::new(0);
+        let fonts = font::FontMap::default();
+        let compose = |segment: ActorSegment<'_>| {
+            let mut text = TextLayoutCache::default();
+            let mut scratch = ComposeScratch::default();
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[segment],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut text,
+                &mut scratch,
+                &NullTextureContext,
+                &resources,
+            )
+        };
+        let actor_frame = compose(ActorSegment::new(std::slice::from_ref(&actor)));
+        let direct_camera = song_lua_direct_field_camera(None, transform)
+            .expect("translation should resolve a HUD camera");
         let direct_frame = compose(ActorSegment::flat_proxy_with_camera(
             &draws,
             [
