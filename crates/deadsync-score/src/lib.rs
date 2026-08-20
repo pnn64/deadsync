@@ -5750,8 +5750,6 @@ pub struct GrooveStatsEvalInput<'a> {
     pub autoplay_used: bool,
     pub is_course_mode: bool,
     pub course_submit_allowed: bool,
-    pub custom_fantastic_window: bool,
-    pub custom_fantastic_window_ms: u8,
 }
 
 // Mirrors zmod's old-api submit path bit layout from gameplay.rs/player options.
@@ -5759,12 +5757,9 @@ pub const GS_INVALID_REMOVE_MASK: u8 =
     (1u8 << 0) | (1u8 << 2) | (1u8 << 3) | (1u8 << 4) | (1u8 << 5) | (1u8 << 6) | (1u8 << 7);
 pub const GS_INVALID_INSERT_MASK: u8 = u8::MAX;
 pub const GS_INVALID_HOLDS_MASK: u8 = 1u8 << 3;
-pub const GROOVESTATS_REASON_COUNT: usize = 13;
+pub const GROOVESTATS_REASON_COUNT: usize = 12;
 
-pub fn groovestats_reason_lines(
-    checks: &[bool; GROOVESTATS_REASON_COUNT],
-    bad: &[String],
-) -> Vec<String> {
+pub fn groovestats_reason_lines(checks: &[bool; GROOVESTATS_REASON_COUNT]) -> Vec<String> {
     let mut out = Vec::with_capacity(6);
     for (idx, passed) in checks.iter().enumerate() {
         if *passed {
@@ -5777,16 +5772,12 @@ pub fn groovestats_reason_lines(
             3 => out.push("GrooveStats requires ITG mode.".to_string()),
             4 => out.push("Timing windows must be at ITG or harder.".to_string()),
             5 => out.push("Life difficulty must be at ITG or harder.".to_string()),
-            6 => {
-                out.push("Metrics or preferences are incorrect.".to_string());
-                out.extend(bad.iter().cloned());
-            }
-            7 => out.push("Music rate must be between 1.0x and 3.0x.".to_string()),
-            8 => out.push("Note-removal modifiers are enabled.".to_string()),
-            9 => out.push("Note-insertion modifiers are enabled.".to_string()),
-            10 => out.push("Fail type must be Immediate or ImmediateContinue.".to_string()),
-            11 => out.push("Autoplay or replay is not allowed.".to_string()),
-            12 => out.push("MinTNSToScoreNotes cannot be W1 or W2.".to_string()),
+            6 => out.push("Music rate must be between 1.0x and 3.0x.".to_string()),
+            7 => out.push("Note-removal modifiers are enabled.".to_string()),
+            8 => out.push("Note-insertion modifiers are enabled.".to_string()),
+            9 => out.push("Fail type must be Immediate or ImmediateContinue.".to_string()),
+            10 => out.push("Autoplay or replay is not allowed.".to_string()),
+            11 => out.push("MinTNSToScoreNotes cannot be W1 or W2.".to_string()),
             _ => {}
         }
     }
@@ -5808,28 +5799,19 @@ pub fn groovestats_eval_state_from_parts(input: GrooveStatsEvalInput<'_>) -> Gro
     checks[3] = true;
     checks[4] = true;
     checks[5] = true;
-    checks[6] = !input.custom_fantastic_window;
-    checks[7] = (1.0..=3.0).contains(&rate);
-    checks[8] = (input.remove_mask & GS_INVALID_REMOVE_MASK) == 0;
-    checks[9] = (input.insert_mask & GS_INVALID_INSERT_MASK) == 0;
-    checks[10] = input.fail_type_ok;
-    checks[11] = !input.autoplay_used;
-    checks[12] = true;
+    checks[6] = (1.0..=3.0).contains(&rate);
+    checks[7] = (input.remove_mask & GS_INVALID_REMOVE_MASK) == 0;
+    checks[8] = (input.insert_mask & GS_INVALID_INSERT_MASK) == 0;
+    checks[9] = input.fail_type_ok;
+    checks[10] = !input.autoplay_used;
+    checks[11] = true;
     if (input.holds_mask & GS_INVALID_HOLDS_MASK) != 0 {
-        checks[8] = false;
-    }
-
-    let mut bad = Vec::with_capacity(1);
-    if input.custom_fantastic_window {
-        bad.push(format!(
-            "- Custom Fantastic window ({}ms)",
-            input.custom_fantastic_window_ms
-        ));
+        checks[7] = false;
     }
 
     GrooveStatsEvalState {
         valid: checks.iter().all(|passed| *passed),
-        reason_lines: groovestats_reason_lines(&checks, bad.as_slice()),
+        reason_lines: groovestats_reason_lines(&checks),
         manual_qr_url: None,
     }
 }
@@ -8424,20 +8406,16 @@ mod tests {
     }
 
     #[test]
-    fn groovestats_reason_lines_keep_legacy_order_and_details() {
+    fn groovestats_reason_lines_keep_policy_order() {
         let mut checks = [true; GROOVESTATS_REASON_COUNT];
         checks[1] = false;
         checks[6] = false;
-        checks[7] = false;
-        let reasons =
-            groovestats_reason_lines(&checks, &[String::from("- Custom Fantastic window (18ms)")]);
+        let reasons = groovestats_reason_lines(&checks);
 
         assert_eq!(
             reasons,
             vec![
                 "GrooveStats does not support dance-solo charts.",
-                "Metrics or preferences are incorrect.",
-                "- Custom Fantastic window (18ms)",
                 "Music rate must be between 1.0x and 3.0x.",
             ]
         );
@@ -8455,8 +8433,6 @@ mod tests {
             autoplay_used: false,
             is_course_mode: false,
             course_submit_allowed: false,
-            custom_fantastic_window: false,
-            custom_fantastic_window_ms: 10,
         });
 
         assert!(state.valid);
@@ -8476,8 +8452,6 @@ mod tests {
             autoplay_used: true,
             is_course_mode: true,
             course_submit_allowed: false,
-            custom_fantastic_window: true,
-            custom_fantastic_window_ms: 18,
         });
 
         assert!(!state.valid);
@@ -8486,8 +8460,6 @@ mod tests {
             vec![
                 "GrooveStats does not support dance-solo charts.",
                 "GrooveStats QR is unavailable in course mode.",
-                "Metrics or preferences are incorrect.",
-                "- Custom Fantastic window (18ms)",
                 "Music rate must be between 1.0x and 3.0x.",
                 "Fail type must be Immediate or ImmediateContinue.",
                 "Autoplay or replay is not allowed.",

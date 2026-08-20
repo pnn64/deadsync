@@ -946,8 +946,6 @@ pub fn groovestats_eval_state_from_profile(
         autoplay_used,
         is_course_mode,
         course_submit_allowed,
-        custom_fantastic_window: profile.custom_fantastic_window,
-        custom_fantastic_window_ms: profile.custom_fantastic_window_ms,
     })
 }
 

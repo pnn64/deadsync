@@ -988,11 +988,12 @@ pub struct GrooveStatsRescoreCounts {
 }
 
 pub fn add_rescore_target(counts: &mut GrooveStatsRescoreCounts, judgment: &judgment::Judgment) {
-    if matches!(judgment.window, Some(judgment::TimingWindow::W0)) {
-        counts.fantastic_plus = counts.fantastic_plus.saturating_add(1);
-        return;
-    }
     match judgment.grade {
+        judgment::JudgeGrade::Fantastic
+            if judgment.time_error_ms.abs() <= deadsync_rules::timing::FA_PLUS_W0_MS =>
+        {
+            counts.fantastic_plus = counts.fantastic_plus.saturating_add(1);
+        }
         judgment::JudgeGrade::Fantastic => counts.fantastic = counts.fantastic.saturating_add(1),
         judgment::JudgeGrade::Excellent => counts.excellent = counts.excellent.saturating_add(1),
         judgment::JudgeGrade::Great => counts.great = counts.great.saturating_add(1),
@@ -3727,6 +3728,31 @@ mod tests {
         assert_eq!(counts.fantastic_plus, 1);
         assert_eq!(counts.great, 1);
         assert_eq!(counts.way_off, 1);
+    }
+
+    #[test]
+    fn rescore_targets_use_canonical_fifteen_ms_split() {
+        let mut counts = GrooveStatsRescoreCounts::default();
+        let inside_canonical = judgment::Judgment {
+            time_error_ms: 9.0,
+            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(9.0, 1.0),
+            grade: judgment::JudgeGrade::Fantastic,
+            window: Some(judgment::TimingWindow::W1),
+            miss_because_held: false,
+        };
+        let outside_canonical = judgment::Judgment {
+            time_error_ms: 16.0,
+            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(16.0, 1.0),
+            grade: judgment::JudgeGrade::Fantastic,
+            window: Some(judgment::TimingWindow::W0),
+            miss_because_held: false,
+        };
+
+        add_rescore_target(&mut counts, &inside_canonical);
+        add_rescore_target(&mut counts, &outside_canonical);
+
+        assert_eq!(counts.fantastic_plus, 1);
+        assert_eq!(counts.fantastic, 1);
     }
 
     #[test]
