@@ -4,7 +4,7 @@ use deadlib_present::actors::{
     SpriteSource, TextAlign, TextContent,
 };
 use deadlib_present::compose::{
-    ActorSegment, ActorXFold, ComposeScratch, FlatTintStack, NullTextureContext, TextLayoutCache,
+    ActorSegment, ActorXFold, ComposeScratch, FlatProxyStyle, NullTextureContext, TextLayoutCache,
     build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
     prewarm_cached_prepared_inline_text_slot, prewarm_prepared_inline_text_slot,
     prewarm_u32_text_slot,
@@ -18,8 +18,8 @@ use deadsync_notefield::{
 use deadsync_theme_simply_love::screens::gameplay::{
     BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
     GameplayPlayerFieldCameraBenchmark, GameplayPlayerTransformBenchmark,
-    GameplayTransformedNotefieldBenchmark, benchmark_normalize_proxy_actor_source,
-    benchmark_normalize_styled_proxy_actor_source, benchmark_present_identity_notefield,
+    GameplayTransformedNotefieldBenchmark, benchmark_normalize_folded_styled_proxy_actor_source,
+    benchmark_normalize_proxy_actor_source, benchmark_present_identity_notefield,
     benchmark_present_transformed_notefield,
 };
 use glam::{Mat4, Vec3};
@@ -1328,6 +1328,7 @@ fn player_proxy_frame(
     field_camera: Mat4,
     aft_capture: bool,
     styled_source: bool,
+    rotation_y_deg: f32,
     metrics: &deadlib_present::space::Metrics,
     fonts: &font::FontMap,
     resources: &ActorResourceArena,
@@ -1339,9 +1340,11 @@ fn player_proxy_frame(
     let z = 42;
     let aft_tint = [0.8, 0.6, 1.0, 0.75];
     let aft_proxy_tint = std::array::from_fn(|channel| tint[channel] * aft_tint[channel]);
-    let source_tints = FlatTintStack::pair([0.7, 0.6, 0.9, 0.8], tint);
-    let mut aft_source_tints = source_tints;
-    aft_source_tints.push(aft_tint);
+    let x_fold = (rotation_y_deg.abs() > f32::EPSILON)
+        .then(|| ActorXFold::new(427.0, rotation_y_deg.to_radians().cos()));
+    let source_style = FlatProxyStyle::new([0.7, 0.6, 0.9, 0.8], tint, x_fold);
+    let mut aft_source_style = source_style;
+    aft_source_style.push_enclosing_tint(aft_tint);
     let aft_offset = [24.0, -12.0];
     let aft_camera = Mat4::from_rotation_z(0.08) * Mat4::from_scale(Vec3::new(0.9, 0.9, 1.0));
     let segments = match kind {
@@ -1365,7 +1368,12 @@ fn player_proxy_frame(
             let children = source.capture[source.active_bank]
                 .refill([0.0, 0.0], |out| {
                     if styled_source {
-                        benchmark_normalize_styled_proxy_actor_source(&source.source_actors, out);
+                        benchmark_normalize_folded_styled_proxy_actor_source(
+                            &source.source_actors,
+                            out,
+                            427.0,
+                            rotation_y_deg,
+                        );
                     } else {
                         benchmark_normalize_proxy_actor_source(&source.source_actors, out);
                     }
@@ -1418,7 +1426,7 @@ fn player_proxy_frame(
                 &source.field_draws,
                 [offset[0] + aft_offset[0], offset[1] + aft_offset[1]],
                 z,
-                &aft_source_tints,
+                &aft_source_style,
                 BlendMode::Add,
                 Some(&aft_camera),
                 [Some(&hud_camera), Some(&field_camera)],
@@ -1445,7 +1453,7 @@ fn player_proxy_frame(
                         &source.hud_draws,
                         offset,
                         z,
-                        &source_tints,
+                        &source_style,
                         BlendMode::Add,
                         None,
                         Some(&hud_camera),
@@ -1454,7 +1462,7 @@ fn player_proxy_frame(
                         &source.field_draws,
                         offset,
                         z,
-                        &source_tints,
+                        &source_style,
                         BlendMode::Add,
                         None,
                         Some(&field_camera),
@@ -1500,7 +1508,11 @@ fn player_proxy_frame(
     checksum
 }
 
-fn measure_player_proxy_pair(aft_capture: bool, styled_source: bool) -> [BoundaryResult; 2] {
+fn measure_player_proxy_pair(
+    aft_capture: bool,
+    styled_source: bool,
+    rotation_y_deg: f32,
+) -> [BoundaryResult; 2] {
     let metrics = deadlib_present::space::metrics_for_window(854, 480);
     let fonts = font::FontMap::default();
     let resources = ActorResourceArena::new(0);
@@ -1541,6 +1553,7 @@ fn measure_player_proxy_pair(aft_capture: bool, styled_source: bool) -> [Boundar
                     field_camera,
                     aft_capture,
                     styled_source,
+                    rotation_y_deg,
                     &metrics,
                     &fonts,
                     &resources,
@@ -1579,7 +1592,7 @@ fn print_player_proxy_benchmark() {
         "\ndirect SongLua whole-Player proxy benchmark ({} HUD + {} field draws)",
         BOUNDARY_HUD_ACTORS, FIELD_PROXY_DRAWS
     );
-    let [actor, direct] = measure_player_proxy_pair(false, false);
+    let [actor, direct] = measure_player_proxy_pair(false, false, 0.0);
     assert_eq!(actor.checksum, direct.checksum);
     print_boundary_result("actor capture", &actor);
     print_boundary_result("direct fragments", &direct);
@@ -1598,7 +1611,7 @@ fn print_aft_player_proxy_benchmark() {
         "\ndirect SongLua single-source AFT whole-Player proxy benchmark ({} HUD + {} field draws)",
         BOUNDARY_HUD_ACTORS, FIELD_PROXY_DRAWS
     );
-    let [actor, direct] = measure_player_proxy_pair(true, false);
+    let [actor, direct] = measure_player_proxy_pair(true, false, 0.0);
     assert_eq!(actor.checksum, direct.checksum);
     print_boundary_result("actor AFT capture", &actor);
     print_boundary_result("paired fragment", &direct);
@@ -1616,10 +1629,29 @@ fn print_transformed_player_proxy_benchmark() {
         "\ndirect SongLua camera-transformed whole-Player proxy benchmark ({} HUD + {} field draws)",
         BOUNDARY_HUD_ACTORS, FIELD_PROXY_DRAWS
     );
-    let [actor, direct] = measure_player_proxy_pair(false, true);
+    let [actor, direct] = measure_player_proxy_pair(false, true, 0.0);
     assert_eq!(actor.checksum, direct.checksum);
     print_boundary_result("actor capture", &actor);
     print_boundary_result("direct fragments", &direct);
+    for result in [&actor, &direct] {
+        assert_zero_alloc(&BenchResult {
+            elapsed: result.elapsed,
+            cycles: result.cycles,
+            allocated: result.allocated,
+            checksum: result.checksum,
+        });
+    }
+}
+
+fn print_y_folded_player_proxy_benchmark() {
+    println!(
+        "\ndirect SongLua Y-folded whole-Player proxy benchmark ({} HUD + {} field draws)",
+        BOUNDARY_HUD_ACTORS, FIELD_PROXY_DRAWS
+    );
+    let [actor, direct] = measure_player_proxy_pair(false, true, 27.0);
+    assert_eq!(actor.checksum, direct.checksum);
+    print_boundary_result("actor folded capture", &actor);
+    print_boundary_result("direct folded fragments", &direct);
     for result in [&actor, &direct] {
         assert_zero_alloc(&BenchResult {
             elapsed: result.elapsed,
@@ -3362,6 +3394,10 @@ fn print_cue_countdown_benchmark() {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_Y_FOLDED_PLAYER_PROXY_ONLY").is_some() {
+        print_y_folded_player_proxy_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_TRANSFORMED_PLAYER_PROXY_ONLY").is_some() {
         print_transformed_player_proxy_benchmark();
         return;

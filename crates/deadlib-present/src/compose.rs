@@ -652,7 +652,7 @@ where
 pub struct ActorSegment<'a> {
     source: ActorSegmentSource<'a>,
     cameras: [Option<&'a Matrix4>; 3],
-    flat_tints: Option<&'a FlatTintStack>,
+    flat_proxy_style: Option<&'a FlatProxyStyle>,
     z_shift: i16,
     tint: &'a [f32; 4],
     blend: Option<BlendMode>,
@@ -675,26 +675,21 @@ enum ActorSegmentSource<'a> {
     },
 }
 
-/// Fixed tint sequence for a direct flat proxy.
-///
-/// SongLua applies Player, ActorProxy, and optional AFT diffuse values in that
-/// order. Retaining the three bounded stages preserves the original f32
-/// rounding without rebuilding per-draw Actor values.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct FlatTintStack {
+struct FlatTintStack {
     stages: [[f32; 4]; 3],
     len: u8,
 }
 
 impl FlatTintStack {
-    pub const fn pair(source: [f32; 4], proxy: [f32; 4]) -> Self {
+    const fn pair(source: [f32; 4], proxy: [f32; 4]) -> Self {
         Self {
             stages: [source, proxy, [1.0; 4]],
             len: 2,
         }
     }
 
-    pub fn push(&mut self, tint: [f32; 4]) {
+    fn push(&mut self, tint: [f32; 4]) {
         let index = usize::from(self.len);
         assert!(index < self.stages.len(), "flat proxy tint stack overflow");
         self.stages[index] = tint;
@@ -736,6 +731,45 @@ pub struct ActorXFold {
     scale_x: f32,
 }
 
+/// Fixed presentation state for a direct flat proxy.
+///
+/// Source, proxy, and optional enclosing tints remain separate so composition
+/// preserves their original f32 order. The optional source X fold is applied
+/// before proxy placement. Both operations remain bounded without rebuilding
+/// per-draw Actor values.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FlatProxyStyle {
+    tints: FlatTintStack,
+    x_fold: Option<ActorXFold>,
+}
+
+impl FlatProxyStyle {
+    /// Creates the fixed source/proxy stages and optional source-space fold.
+    pub const fn new(
+        source_tint: [f32; 4],
+        proxy_tint: [f32; 4],
+        x_fold: Option<ActorXFold>,
+    ) -> Self {
+        Self {
+            tints: FlatTintStack::pair(source_tint, proxy_tint),
+            x_fold,
+        }
+    }
+
+    /// Appends the one supported enclosing tint stage.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an enclosing stage was already appended.
+    pub fn push_enclosing_tint(&mut self, tint: [f32; 4]) {
+        assert_eq!(
+            self.tints.len, 2,
+            "flat proxy already has an enclosing tint"
+        );
+        self.tints.push(tint);
+    }
+}
+
 impl ActorXFold {
     pub const fn new(pivot_x: f32, scale_x: f32) -> Self {
         Self { pivot_x, scale_x }
@@ -759,7 +793,7 @@ impl<'a> ActorSegment<'a> {
         Self {
             source: ActorSegmentSource::Actors(actors),
             cameras: [None; 3],
-            flat_tints: None,
+            flat_proxy_style: None,
             z_shift: 0,
             tint: &IDENTITY_TINT,
             blend: None,
@@ -771,7 +805,7 @@ impl<'a> ActorSegment<'a> {
         Self {
             source: ActorSegmentSource::Actors(actors),
             cameras: [None; 3],
-            flat_tints: None,
+            flat_proxy_style: None,
             z_shift,
             tint: &IDENTITY_TINT,
             blend: None,
@@ -783,7 +817,7 @@ impl<'a> ActorSegment<'a> {
         Self {
             source: ActorSegmentSource::Actors(actors),
             cameras: [None; 3],
-            flat_tints: None,
+            flat_proxy_style: None,
             z_shift,
             tint: &IDENTITY_TINT,
             blend: None,
@@ -803,7 +837,7 @@ impl<'a> ActorSegment<'a> {
         Self {
             source: ActorSegmentSource::Actors(actors),
             cameras: [Some(root_camera), Some(camera_suffix), None],
-            flat_tints: None,
+            flat_proxy_style: None,
             z_shift,
             tint,
             blend,
@@ -875,7 +909,7 @@ impl<'a> ActorSegment<'a> {
         Self {
             source: ActorSegmentSource::Flat(draws),
             cameras: [enclosing_camera, source_camera, None],
-            flat_tints: None,
+            flat_proxy_style: None,
             z_shift: z,
             tint,
             blend: Some(blend),
@@ -890,7 +924,7 @@ impl<'a> ActorSegment<'a> {
         draws: &'a [actors::FlatDraw],
         offset: [f32; 2],
         z: i16,
-        tints: &'a FlatTintStack,
+        proxy_style: &'a FlatProxyStyle,
         blend: BlendMode,
         enclosing_camera: Option<&'a Matrix4>,
         source_camera: Option<&'a Matrix4>,
@@ -898,7 +932,7 @@ impl<'a> ActorSegment<'a> {
         Self {
             source: ActorSegmentSource::Flat(draws),
             cameras: [enclosing_camera, source_camera, None],
-            flat_tints: Some(tints),
+            flat_proxy_style: Some(proxy_style),
             z_shift: z,
             tint: &IDENTITY_TINT,
             blend: Some(blend),
@@ -926,7 +960,7 @@ impl<'a> ActorSegment<'a> {
                 tail: tail_draws,
             },
             cameras: [enclosing_camera, cameras[0], cameras[1]],
-            flat_tints: None,
+            flat_proxy_style: None,
             z_shift: z,
             tint,
             blend: Some(blend),
@@ -942,7 +976,7 @@ impl<'a> ActorSegment<'a> {
         tail_draws: &'a [actors::FlatDraw],
         offset: [f32; 2],
         z: i16,
-        tints: &'a FlatTintStack,
+        proxy_style: &'a FlatProxyStyle,
         blend: BlendMode,
         enclosing_camera: Option<&'a Matrix4>,
         cameras: [Option<&'a Matrix4>; 2],
@@ -953,7 +987,7 @@ impl<'a> ActorSegment<'a> {
                 tail: tail_draws,
             },
             cameras: [enclosing_camera, cameras[0], cameras[1]],
-            flat_tints: Some(tints),
+            flat_proxy_style: Some(proxy_style),
             z_shift: z,
             tint: &IDENTITY_TINT,
             blend: Some(blend),
@@ -5616,10 +5650,14 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
         sequence.last_root_camera = Some((*matrix, id));
         id
     });
-    let tints = segment.flat_tints.copied().unwrap_or(FlatTintStack {
-        stages: [*segment.tint, [1.0; 4], [1.0; 4]],
-        len: 1,
-    });
+    let proxy_style = segment.flat_proxy_style.copied();
+    let tints = proxy_style.map_or(
+        FlatTintStack {
+            stages: [*segment.tint, [1.0; 4], [1.0; 4]],
+            len: 1,
+        },
+        |style| style.tints,
+    );
     let style = ComposeStyle {
         tint: [1.0; 4],
         blend: segment.blend,
@@ -5627,7 +5665,9 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
     let (flat_offset, fixed_z, x_fold) = match segment.placement {
         ActorSegmentPlacement::None => ([0.0, 0.0], false, None),
         ActorSegmentPlacement::XFold(x_fold) => ([0.0, 0.0], false, Some(x_fold)),
-        ActorSegmentPlacement::FlatOffset(offset) => (offset, true, None),
+        ActorSegmentPlacement::FlatOffset(offset) => {
+            (offset, true, proxy_style.and_then(|style| style.x_fold))
+        }
     };
     let parent = place_rect(
         parent,

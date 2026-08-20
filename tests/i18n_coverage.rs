@@ -173,9 +173,7 @@ fn print_translation_coverage_report() {
         "--------", "----------", "-----", "--------"
     );
 
-    let en_name = en
-        .get("Meta", "NativeName")
-        .unwrap_or_else(|| "English".to_string());
+    let en_name = en.get("Meta", "NativeName").unwrap_or("English");
     println!(
         "{:<16} {:>10} {:>6} {:>8.1}%",
         format!("en ({})", en_name),
@@ -202,9 +200,7 @@ fn print_translation_coverage_report() {
             .and_then(|s| s.to_str())
             .unwrap_or("?")
             .to_string();
-        let native = lang
-            .get("Meta", "NativeName")
-            .unwrap_or_else(|| stem.clone());
+        let native = lang.get("Meta", "NativeName").unwrap_or(stem.as_str());
 
         let missing: Vec<_> = en_keys.difference(&covered_keys).collect();
         let skip_note = if skipped > 0 {
