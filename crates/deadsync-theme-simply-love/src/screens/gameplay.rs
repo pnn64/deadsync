@@ -27,7 +27,8 @@ use deadlib_present::anim::EffectState;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
 use deadlib_present::compose::{
-    ActorSegment, ActorXFold, ComposeScratch, TextLayoutCache, prewarm_prepared_inline_text_slot,
+    ActorSegment, ActorXFold, ComposeScratch, FlatTintStack, TextLayoutCache,
+    prewarm_prepared_inline_text_slot,
 };
 use deadlib_present::density::{self, DensityHistCache};
 use deadlib_present::font;
@@ -7807,6 +7808,7 @@ struct SongLuaDirectProxySource {
     draw_start: usize,
     draw_end: usize,
     target: [f32; 2],
+    tint: [f32; 4],
     camera: Option<Matrix4>,
 }
 
@@ -7829,7 +7831,7 @@ struct SongLuaDirectProxy {
     draw_end: usize,
     offset: [f32; 2],
     z: i16,
-    tint: [f32; 4],
+    tints: FlatTintStack,
     blend: BlendMode,
     enclosing_camera: Option<Matrix4>,
     camera: Option<Matrix4>,
@@ -9223,7 +9225,7 @@ fn song_lua_direct_proxy(
             state.y * screen_height() / overlay_space_height.max(1.0) - source.target[1],
         ],
         z,
-        tint: state.diffuse,
+        tints: FlatTintStack::pair(source.tint, state.diffuse),
         blend: song_lua_overlay_blend(state.blend),
         enclosing_camera: None,
         camera: source.camera,
@@ -9249,7 +9251,7 @@ fn song_lua_fold_direct_aft_proxy(
     proxy.offset[0] += capture_offset[0];
     proxy.offset[1] += capture_offset[1];
     proxy.z = song_lua_add_z(z, proxy.z);
-    proxy.tint = song_lua_capture_tint(proxy.tint, state.diffuse);
+    proxy.tints.push(state.diffuse);
     if state.blend != SongLuaOverlayBlendMode::Alpha {
         proxy.blend = song_lua_overlay_blend(state.blend);
     }
@@ -9353,7 +9355,7 @@ fn song_lua_direct_aft_proxy(
         debug_assert_eq!(tail.player, proxy.player);
         debug_assert_eq!(tail.offset, proxy.offset);
         debug_assert_eq!(tail.z, proxy.z);
-        debug_assert_eq!(tail.tint, proxy.tint);
+        debug_assert_eq!(tail.tints, proxy.tints);
         debug_assert_eq!(tail.blend, proxy.blend);
         proxy.tail = Some(SongLuaDirectProxyPart {
             draws: tail.draws,
@@ -14926,27 +14928,19 @@ fn song_lua_player_transform_is_direct_identity(transform: SongLuaCaptureTransfo
 
 #[inline(always)]
 fn song_lua_player_transform_is_direct_proxy(transform: SongLuaCaptureTransform) -> bool {
-    transform.tint == [1.0; 4]
-        && transform.blend.is_none()
+    transform.tint.into_iter().all(f32::is_finite)
         && transform.playfield_center_x.is_finite()
         && transform.target_x.is_finite()
         && transform.target_y.is_finite()
         && transform.rotation_x.is_finite()
-        && transform.rotation_x.abs() <= f32::EPSILON
         && transform.rotation_z.is_finite()
-        && transform.rotation_z.abs() <= f32::EPSILON
         && transform.rotation_y.is_finite()
         && transform.rotation_y.abs() <= f32::EPSILON
         && transform.skew_x.is_finite()
-        && transform.skew_x.abs() <= f32::EPSILON
         && transform.skew_y.is_finite()
-        && transform.skew_y.abs() <= f32::EPSILON
         && transform.zoom_x.is_finite()
-        && (transform.zoom_x - 1.0).abs() <= f32::EPSILON
         && transform.zoom_y.is_finite()
-        && (transform.zoom_y - 1.0).abs() <= f32::EPSILON
         && transform.zoom_z.is_finite()
-        && (transform.zoom_z - 1.0).abs() <= f32::EPSILON
 }
 
 #[inline(always)]
@@ -14997,6 +14991,22 @@ pub fn benchmark_present_identity_notefield(
 #[doc(hidden)]
 pub fn benchmark_normalize_proxy_actor_source(source: &[Actor], out: &mut Vec<Actor>) {
     song_lua_proxy_local_children_into(source.iter().cloned(), out);
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_normalize_styled_proxy_actor_source(source: &[Actor], out: &mut Vec<Actor>) {
+    song_lua_proxy_local_children_into(
+        source.iter().cloned().map(|actor| {
+            song_lua_style_capture_actor(
+                actor,
+                [0.7, 0.6, 0.9, 0.8],
+                Some(BlendMode::Multiply),
+                SONG_LUA_PLAYER_LAYER_Z_BASE,
+            )
+        }),
+        out,
+    );
 }
 
 #[cfg(feature = "bench-support")]
@@ -15060,7 +15070,7 @@ pub fn benchmark_present_transformed_notefield<'a>(
         ActorSegment::transformed(
             hud_actors,
             *z_shift,
-            *tint,
+            tint,
             *blend,
             root_camera,
             &Matrix4::IDENTITY,
@@ -15069,7 +15079,7 @@ pub fn benchmark_present_transformed_notefield<'a>(
         ActorSegment::transformed(
             field_actors,
             *z_shift,
-            *tint,
+            tint,
             *blend,
             root_camera,
             field_camera_suffix,
@@ -15650,7 +15660,7 @@ impl<'a> GameplayActorSegmentIter<'a> {
                         ActorSegment::transformed(
                             &self.scratch.notefield_hud_actor_scratch[player],
                             *z_shift,
-                            *tint,
+                            tint,
                             *blend,
                             root_camera,
                             &Matrix4::IDENTITY,
@@ -15678,7 +15688,7 @@ impl<'a> GameplayActorSegmentIter<'a> {
                 ActorSegment::transformed(
                     &self.scratch.notefield_actor_scratch[player],
                     *z_shift,
-                    *tint,
+                    tint,
                     *blend,
                     root_camera,
                     field_camera_suffix,
@@ -15764,22 +15774,22 @@ impl<'a> Iterator for GameplayActorSegmentIter<'a> {
                             tail.draw_start,
                             tail.draw_end,
                         );
-                        return Some(ActorSegment::flat_proxy_pair(
+                        return Some(ActorSegment::flat_proxy_pair_styled(
                             draws,
                             tail_draws,
                             proxy.offset,
                             proxy.z,
-                            proxy.tint,
+                            &proxy.tints,
                             proxy.blend,
                             proxy.enclosing_camera.as_ref(),
                             [proxy.camera.as_ref(), tail.camera.as_ref()],
                         ));
                     }
-                    return Some(ActorSegment::flat_proxy_with_cameras(
+                    return Some(ActorSegment::flat_proxy_styled_with_cameras(
                         draws,
                         proxy.offset,
                         proxy.z,
-                        proxy.tint,
+                        &proxy.tints,
                         proxy.blend,
                         proxy.enclosing_camera.as_ref(),
                         proxy.camera.as_ref(),
@@ -16831,6 +16841,7 @@ pub fn push_actors(
                             draw_start: 0,
                             draw_end: hud_flat_draw_scratch.len(),
                             target,
+                            tint: capture_transform.tint,
                             camera: song_lua_direct_field_camera(None, capture_transform),
                         },
                         SongLuaDirectProxySource {
@@ -16838,6 +16849,7 @@ pub fn push_actors(
                             draw_start: 0,
                             draw_end: flat_draw_scratch.len(),
                             target,
+                            tint: capture_transform.tint,
                             camera: song_lua_direct_field_camera(
                                 proxy_field_camera,
                                 capture_transform,
@@ -16860,6 +16872,7 @@ pub fn push_actors(
                     draw_start: range.start,
                     draw_end: range.end,
                     target: [capture_transform.target_x, capture_transform.target_y],
+                    tint: capture_transform.tint,
                     camera: song_lua_direct_field_camera(proxy_field_camera, capture_transform),
                 });
             let note_field_source = if direct_note_field_candidates[player_idx] {
@@ -16900,6 +16913,7 @@ pub fn push_actors(
                     draw_start: range.start,
                     draw_end: range.end,
                     target: [capture_transform.target_x, capture_transform.target_y],
+                    tint: capture_transform.tint,
                     camera: song_lua_direct_field_camera(None, capture_transform),
                 });
             let judgment_source = if direct_judgment_candidates[player_idx] {
@@ -16934,6 +16948,7 @@ pub fn push_actors(
                     draw_start: range.start,
                     draw_end: range.end,
                     target: [capture_transform.target_x, capture_transform.target_y],
+                    tint: capture_transform.tint,
                     camera: song_lua_direct_field_camera(None, capture_transform),
                 });
             let combo_source = if direct_combo_candidates[player_idx] {
@@ -21136,6 +21151,7 @@ mod tests {
                     draw_start: 5,
                     draw_end: 9,
                     target: [160.0, 240.0],
+                    tint: [1.0; 4],
                     camera: Some(Matrix4::IDENTITY),
                 }),
                 None,
@@ -21146,6 +21162,7 @@ mod tests {
                     draw_start: 2,
                     draw_end: 4,
                     target: [213.0, 240.0],
+                    tint: [1.0; 4],
                     camera: None,
                 }),
                 None,
@@ -21156,6 +21173,7 @@ mod tests {
                     draw_start: 0,
                     draw_end: 1,
                     target: [213.0, 240.0],
+                    tint: [1.0; 4],
                     camera: None,
                 }),
                 None,
@@ -21211,7 +21229,10 @@ mod tests {
         assert_eq!(judgment.draws, SongLuaDirectDraws::Judgment);
         assert_eq!((judgment.draw_start, judgment.draw_end), (2, 4));
         assert_eq!(judgment.offset, [-113.0, -160.0]);
-        assert_eq!(judgment.tint, [0.5, 0.75, 1.0, 0.8]);
+        assert_eq!(
+            judgment.tints,
+            FlatTintStack::pair([1.0; 4], [0.5, 0.75, 1.0, 0.8])
+        );
         assert_eq!(judgment.blend, BlendMode::Add);
         let combo = direct.entries[2];
         assert_eq!(combo.actor_insert, 2);
@@ -21219,7 +21240,10 @@ mod tests {
         assert_eq!(combo.draws, SongLuaDirectDraws::Combo);
         assert_eq!((combo.draw_start, combo.draw_end), (0, 1));
         assert_eq!(combo.offset, [107.0, -120.0]);
-        assert_eq!(combo.tint, [1.0, 0.5, 0.25, 0.75]);
+        assert_eq!(
+            combo.tints,
+            FlatTintStack::pair([1.0; 4], [1.0, 0.5, 0.25, 0.75])
+        );
         let second_combo = direct.entries[3];
         assert_eq!(second_combo.actor_insert, 3);
         assert_eq!(second_combo.player, 0);
@@ -22867,19 +22891,19 @@ mod tests {
         let playfield_center_x = screen_center_x() - 100.0;
         let transform = SongLuaCaptureTransform {
             z_shift: SONG_LUA_PLAYER_LAYER_Z_BASE,
-            tint: [1.0; 4],
-            blend: None,
+            tint: [0.7, 0.6, 0.9, 0.8],
+            blend: Some(BlendMode::Multiply),
             playfield_center_x,
             target_x: screen_center_x() + 50.0,
             target_y: screen_center_y() - 20.0,
-            rotation_x: 0.0,
-            rotation_z: 0.0,
+            rotation_x: 7.0,
+            rotation_z: 11.0,
             rotation_y: 0.0,
-            skew_x: 0.0,
-            skew_y: 0.0,
-            zoom_x: 1.0,
-            zoom_y: 1.0,
-            zoom_z: 1.0,
+            skew_x: 0.125,
+            skew_y: -0.0625,
+            zoom_x: 0.875,
+            zoom_y: 1.125,
+            zoom_z: 0.75,
         };
         assert!(song_lua_player_transform_is_direct_proxy(transform));
         assert!(!song_lua_player_transform_is_direct_identity(transform));
@@ -22944,15 +22968,17 @@ mod tests {
         let actor_frame = compose(ActorSegment::new(std::slice::from_ref(&actor)));
         let direct_camera = song_lua_direct_field_camera(Some(camera), transform)
             .expect("translation should resolve a field camera");
-        let direct_frame = compose(ActorSegment::flat_proxy_with_camera(
+        let direct_tints = FlatTintStack::pair(transform.tint, proxy_state.diffuse);
+        let direct_frame = compose(ActorSegment::flat_proxy_styled_with_cameras(
             &draws,
             [
                 proxy_state.x - transform.target_x,
                 proxy_state.y - transform.target_y,
             ],
             321,
-            proxy_state.diffuse,
+            &direct_tints,
             song_lua_overlay_blend(proxy_state.blend),
+            None,
             Some(&direct_camera),
         ));
         assert_eq!(
@@ -22966,19 +22992,19 @@ mod tests {
         let playfield_center_x = screen_center_x() - 100.0;
         let transform = SongLuaCaptureTransform {
             z_shift: SONG_LUA_PLAYER_LAYER_Z_BASE,
-            tint: [1.0; 4],
-            blend: None,
+            tint: [0.7, 0.6, 0.9, 0.8],
+            blend: Some(BlendMode::Add),
             playfield_center_x,
             target_x: screen_center_x() + 50.0,
             target_y: screen_center_y() - 20.0,
-            rotation_x: 0.0,
-            rotation_z: 0.0,
+            rotation_x: 7.0,
+            rotation_z: 11.0,
             rotation_y: 0.0,
-            skew_x: 0.0,
-            skew_y: 0.0,
-            zoom_x: 1.0,
-            zoom_y: 1.0,
-            zoom_z: 1.0,
+            skew_x: 0.125,
+            skew_y: -0.0625,
+            zoom_x: 0.875,
+            zoom_y: 1.125,
+            zoom_z: 0.75,
         };
         assert!(song_lua_player_transform_is_direct_hud_proxy(transform));
         assert!(!song_lua_player_transform_is_direct_identity(transform));
@@ -23041,15 +23067,17 @@ mod tests {
         let actor_frame = compose(ActorSegment::new(std::slice::from_ref(&actor)));
         let direct_camera = song_lua_direct_field_camera(None, transform)
             .expect("translation should resolve a HUD camera");
-        let direct_frame = compose(ActorSegment::flat_proxy_with_camera(
+        let direct_tints = FlatTintStack::pair(transform.tint, proxy_state.diffuse);
+        let direct_frame = compose(ActorSegment::flat_proxy_styled_with_cameras(
             &draws,
             [
                 proxy_state.x - transform.target_x,
                 proxy_state.y - transform.target_y,
             ],
             321,
-            proxy_state.diffuse,
+            &direct_tints,
             song_lua_overlay_blend(proxy_state.blend),
+            None,
             Some(&direct_camera),
         ));
         assert_eq!(
@@ -23084,21 +23112,33 @@ mod tests {
         let field_draws = [draw([410.0, 180.0], 143), draw([430.0, 160.0], 140)];
         let transform = SongLuaCaptureTransform {
             z_shift: SONG_LUA_PLAYER_LAYER_Z_BASE,
-            tint: [1.0; 4],
-            blend: None,
+            tint: [0.7, 0.6, 0.9, 0.8],
+            blend: Some(BlendMode::Multiply),
             playfield_center_x: 427.0,
             target_x: 451.0,
             target_y: 228.0,
-            rotation_x: 0.0,
-            rotation_z: 0.0,
+            rotation_x: 7.0,
+            rotation_z: 11.0,
             rotation_y: 0.0,
-            skew_x: 0.0,
-            skew_y: 0.0,
-            zoom_x: 1.0,
-            zoom_y: 1.0,
-            zoom_z: 1.0,
+            skew_x: 0.125,
+            skew_y: -0.0625,
+            zoom_x: 0.875,
+            zoom_y: 1.125,
+            zoom_z: 0.75,
         };
         assert!(song_lua_player_transform_is_direct_proxy(transform));
+        assert!(!song_lua_player_transform_is_direct_proxy(
+            SongLuaCaptureTransform {
+                rotation_y: 1.0,
+                ..transform
+            }
+        ));
+        assert!(!song_lua_player_transform_is_direct_proxy(
+            SongLuaCaptureTransform {
+                tint: [f32::NAN, 1.0, 1.0, 1.0],
+                ..transform
+            }
+        ));
         let raw_field_camera = Matrix4::from_rotation_x(0.12);
         let mut field_actors = Vec::with_capacity(field_draws.len() + 2);
         let mut hud_actors = Vec::with_capacity(hud_draws.len());
@@ -23153,21 +23193,24 @@ mod tests {
             .expect("translated Player field should have a camera");
         let offset = [proxy_state.x, proxy_state.y];
         let blend = song_lua_overlay_blend(proxy_state.blend);
+        let tints = FlatTintStack::pair(transform.tint, proxy_state.diffuse);
         let direct_frame = compose(&[
-            ActorSegment::flat_proxy_with_camera(
+            ActorSegment::flat_proxy_styled_with_cameras(
                 &hud_draws,
                 offset,
                 321,
-                proxy_state.diffuse,
+                &tints,
                 blend,
+                None,
                 Some(&hud_camera),
             ),
-            ActorSegment::flat_proxy_with_camera(
+            ActorSegment::flat_proxy_styled_with_cameras(
                 &field_draws,
                 offset,
                 321,
-                proxy_state.diffuse,
+                &tints,
                 blend,
+                None,
                 Some(&field_camera),
             ),
         ]);
@@ -23215,6 +23258,7 @@ mod tests {
                 SongLuaDirectDraws::Judgment | SongLuaDirectDraws::Combo => 0,
             },
             target: [0.0, 0.0],
+            tint: transform.tint,
             camera,
         };
         let mut aft_direct = song_lua_direct_proxy(
@@ -23253,12 +23297,12 @@ mod tests {
         );
         let tail = aft_direct.tail.expect("whole-Player AFT retains field run");
         let aft_actor_frame = compose(&[ActorSegment::new(std::slice::from_ref(&aft_actor))]);
-        let aft_direct_frame = compose(&[ActorSegment::flat_proxy_pair(
+        let aft_direct_frame = compose(&[ActorSegment::flat_proxy_pair_styled(
             &hud_draws,
             &field_draws,
             aft_direct.offset,
             aft_direct.z,
-            aft_direct.tint,
+            &aft_direct.tints,
             aft_direct.blend,
             aft_direct.enclosing_camera.as_ref(),
             [aft_direct.camera.as_ref(), tail.camera.as_ref()],
@@ -23363,6 +23407,7 @@ mod tests {
                     draw_start: 0,
                     draw_end: draws.len(),
                     target: [0.0, 0.0],
+                    tint: [1.0; 4],
                     camera: source_camera,
                 },
                 0,
@@ -23383,11 +23428,11 @@ mod tests {
             .expect("direct AFT proxy should render");
 
             let actor_frame = compose(ActorSegment::new(std::slice::from_ref(&capture_actor)));
-            let direct_frame = compose(ActorSegment::flat_proxy_with_cameras(
+            let direct_frame = compose(ActorSegment::flat_proxy_styled_with_cameras(
                 &draws,
                 direct.offset,
                 direct.z,
-                direct.tint,
+                &direct.tints,
                 direct.blend,
                 direct.enclosing_camera.as_ref(),
                 direct.camera.as_ref(),

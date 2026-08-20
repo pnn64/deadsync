@@ -4935,6 +4935,7 @@ pub(super) mod tests {
     fn opening_search_clears_held_input_state() {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
+        super::super::prepare_presentation(&mut state, &asset_manager);
         // Simulate a direction held on the pad when the overlay opens.
         let active = state.active;
         handle_nav_event(

@@ -652,11 +652,14 @@ where
 pub struct ActorSegment<'a> {
     source: ActorSegmentSource<'a>,
     cameras: [Option<&'a Matrix4>; 3],
+    flat_tints: Option<&'a FlatTintStack>,
     z_shift: i16,
-    tint: [f32; 4],
+    tint: &'a [f32; 4],
     blend: Option<BlendMode>,
     placement: ActorSegmentPlacement,
 }
+
+const IDENTITY_TINT: [f32; 4] = [1.0; 4];
 
 #[derive(Clone, Copy, Debug)]
 enum ActorSegmentSource<'a> {
@@ -670,6 +673,47 @@ enum ActorSegmentSource<'a> {
         draws: &'a [actors::FlatDraw],
         tail: &'a [actors::FlatDraw],
     },
+}
+
+/// Fixed tint sequence for a direct flat proxy.
+///
+/// SongLua applies Player, ActorProxy, and optional AFT diffuse values in that
+/// order. Retaining the three bounded stages preserves the original f32
+/// rounding without rebuilding per-draw Actor values.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FlatTintStack {
+    stages: [[f32; 4]; 3],
+    len: u8,
+}
+
+impl FlatTintStack {
+    pub const fn pair(source: [f32; 4], proxy: [f32; 4]) -> Self {
+        Self {
+            stages: [source, proxy, [1.0; 4]],
+            len: 2,
+        }
+    }
+
+    pub fn push(&mut self, tint: [f32; 4]) {
+        let index = usize::from(self.len);
+        assert!(index < self.stages.len(), "flat proxy tint stack overflow");
+        self.stages[index] = tint;
+        self.len += 1;
+    }
+
+    #[inline(always)]
+    fn apply(self, color: [f32; 4]) -> [f32; 4] {
+        match self.len {
+            0 => color,
+            1 => mul_rgba(color, self.stages[0]),
+            2 => mul_rgba(mul_rgba(color, self.stages[0]), self.stages[1]),
+            3 => mul_rgba(
+                mul_rgba(mul_rgba(color, self.stages[0]), self.stages[1]),
+                self.stages[2],
+            ),
+            _ => unreachable!("fixed flat proxy tint domain"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -715,8 +759,9 @@ impl<'a> ActorSegment<'a> {
         Self {
             source: ActorSegmentSource::Actors(actors),
             cameras: [None; 3],
+            flat_tints: None,
             z_shift: 0,
-            tint: [1.0; 4],
+            tint: &IDENTITY_TINT,
             blend: None,
             placement: ActorSegmentPlacement::None,
         }
@@ -726,8 +771,9 @@ impl<'a> ActorSegment<'a> {
         Self {
             source: ActorSegmentSource::Actors(actors),
             cameras: [None; 3],
+            flat_tints: None,
             z_shift,
-            tint: [1.0; 4],
+            tint: &IDENTITY_TINT,
             blend: None,
             placement: ActorSegmentPlacement::None,
         }
@@ -737,8 +783,9 @@ impl<'a> ActorSegment<'a> {
         Self {
             source: ActorSegmentSource::Actors(actors),
             cameras: [None; 3],
+            flat_tints: None,
             z_shift,
-            tint: [1.0; 4],
+            tint: &IDENTITY_TINT,
             blend: None,
             placement: ActorSegmentPlacement::XFold(x_fold),
         }
@@ -747,7 +794,7 @@ impl<'a> ActorSegment<'a> {
     pub const fn transformed(
         actors: &'a [actors::Actor],
         z_shift: i16,
-        tint: [f32; 4],
+        tint: &'a [f32; 4],
         blend: Option<BlendMode>,
         root_camera: &'a Matrix4,
         camera_suffix: &'a Matrix4,
@@ -756,6 +803,7 @@ impl<'a> ActorSegment<'a> {
         Self {
             source: ActorSegmentSource::Actors(actors),
             cameras: [Some(root_camera), Some(camera_suffix), None],
+            flat_tints: None,
             z_shift,
             tint,
             blend,
@@ -791,7 +839,7 @@ impl<'a> ActorSegment<'a> {
         draws: &'a [actors::FlatDraw],
         offset: [f32; 2],
         z: i16,
-        tint: [f32; 4],
+        tint: &'a [f32; 4],
         blend: BlendMode,
     ) -> Self {
         Self::flat_proxy_with_camera(draws, offset, z, tint, blend, None)
@@ -803,7 +851,7 @@ impl<'a> ActorSegment<'a> {
         draws: &'a [actors::FlatDraw],
         offset: [f32; 2],
         z: i16,
-        tint: [f32; 4],
+        tint: &'a [f32; 4],
         blend: BlendMode,
         camera: Option<&'a Matrix4>,
     ) -> Self {
@@ -819,7 +867,7 @@ impl<'a> ActorSegment<'a> {
         draws: &'a [actors::FlatDraw],
         offset: [f32; 2],
         z: i16,
-        tint: [f32; 4],
+        tint: &'a [f32; 4],
         blend: BlendMode,
         enclosing_camera: Option<&'a Matrix4>,
         source_camera: Option<&'a Matrix4>,
@@ -827,8 +875,32 @@ impl<'a> ActorSegment<'a> {
         Self {
             source: ActorSegmentSource::Flat(draws),
             cameras: [enclosing_camera, source_camera, None],
+            flat_tints: None,
             z_shift: z,
             tint,
+            blend: Some(blend),
+            placement: ActorSegmentPlacement::FlatOffset(offset),
+        }
+    }
+
+    /// Borrows an ActorProxy-compatible fragment while applying retained
+    /// source/proxy/AFT tints in their original floating-point order.
+    #[allow(clippy::too_many_arguments)]
+    pub const fn flat_proxy_styled_with_cameras(
+        draws: &'a [actors::FlatDraw],
+        offset: [f32; 2],
+        z: i16,
+        tints: &'a FlatTintStack,
+        blend: BlendMode,
+        enclosing_camera: Option<&'a Matrix4>,
+        source_camera: Option<&'a Matrix4>,
+    ) -> Self {
+        Self {
+            source: ActorSegmentSource::Flat(draws),
+            cameras: [enclosing_camera, source_camera, None],
+            flat_tints: Some(tints),
+            z_shift: z,
+            tint: &IDENTITY_TINT,
             blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
         }
@@ -843,7 +915,7 @@ impl<'a> ActorSegment<'a> {
         tail_draws: &'a [actors::FlatDraw],
         offset: [f32; 2],
         z: i16,
-        tint: [f32; 4],
+        tint: &'a [f32; 4],
         blend: BlendMode,
         enclosing_camera: Option<&'a Matrix4>,
         cameras: [Option<&'a Matrix4>; 2],
@@ -854,8 +926,36 @@ impl<'a> ActorSegment<'a> {
                 tail: tail_draws,
             },
             cameras: [enclosing_camera, cameras[0], cameras[1]],
+            flat_tints: None,
             z_shift: z,
             tint,
+            blend: Some(blend),
+            placement: ActorSegmentPlacement::FlatOffset(offset),
+        }
+    }
+
+    /// Borrows two camera-delimited proxy runs while applying the same bounded
+    /// source/proxy/AFT tint sequence to both.
+    #[allow(clippy::too_many_arguments)]
+    pub const fn flat_proxy_pair_styled(
+        draws: &'a [actors::FlatDraw],
+        tail_draws: &'a [actors::FlatDraw],
+        offset: [f32; 2],
+        z: i16,
+        tints: &'a FlatTintStack,
+        blend: BlendMode,
+        enclosing_camera: Option<&'a Matrix4>,
+        cameras: [Option<&'a Matrix4>; 2],
+    ) -> Self {
+        Self {
+            source: ActorSegmentSource::FlatPair {
+                draws,
+                tail: tail_draws,
+            },
+            cameras: [enclosing_camera, cameras[0], cameras[1]],
+            flat_tints: Some(tints),
+            z_shift: z,
+            tint: &IDENTITY_TINT,
             blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
         }
@@ -1008,7 +1108,7 @@ where
             actors.iter().map(|actor| {
                 let base_z = segment.z_shift;
                 let style = ComposeStyle {
-                    tint: segment.tint,
+                    tint: *segment.tint,
                     blend: segment.blend,
                 };
                 let x_fold = match segment.placement {
@@ -5395,6 +5495,7 @@ fn resolved_sprite_source<'a>(
 #[allow(clippy::too_many_arguments)]
 fn build_flat_sprite<T: TextureContext + ?Sized>(
     sprite: &actors::FlatSprite,
+    tints: FlatTintStack,
     parent: SmRect,
     m: &Metrics,
     base_z: i16,
@@ -5434,7 +5535,7 @@ fn build_flat_sprite<T: TextureContext + ?Sized>(
             is_solid,
             texture_name,
             texture_key_ptr,
-            mul_rgba(tint, style.tint),
+            tints.apply(tint),
             Some(sprite.uv_rect),
             None,
             None,
@@ -5515,8 +5616,12 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
         sequence.last_root_camera = Some((*matrix, id));
         id
     });
+    let tints = segment.flat_tints.copied().unwrap_or(FlatTintStack {
+        stages: [*segment.tint, [1.0; 4], [1.0; 4]],
+        len: 1,
+    });
     let style = ComposeStyle {
-        tint: segment.tint,
+        tint: [1.0; 4],
         blend: segment.blend,
     };
     let (flat_offset, fixed_z, x_fold) = match segment.placement {
@@ -5553,6 +5658,7 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
             match draw {
                 actors::FlatDraw::Sprite(sprite) => build_flat_sprite(
                     sprite,
+                    tints,
                     parent,
                     m,
                     base_z,
@@ -5584,8 +5690,8 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                             local_transform: mesh.local_transform,
                             texture: &mesh.texture,
-                            tint: mesh.tint,
-                            glow: mesh.glow,
+                            tint: tints.apply(mesh.tint),
+                            glow: tints.apply(mesh.glow),
                             vertices,
                             geom_cache_key: mesh.geom_cache_key,
                             uv_scale: mesh.uv_scale,
@@ -5610,6 +5716,7 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                 }
                 actors::FlatDraw::PreparedU32(text) => build_flat_prepared_u32(
                     text,
+                    tints,
                     parent,
                     m,
                     fonts,
@@ -5627,6 +5734,7 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                 ),
                 actors::FlatDraw::PreparedInline(text) => build_flat_prepared_inline(
                     text,
+                    tints,
                     parent,
                     m,
                     fonts,
@@ -5678,6 +5786,7 @@ struct FlatPreparedTextView {
 #[allow(clippy::too_many_arguments)]
 fn build_flat_prepared_u32<T: TextureContext + ?Sized>(
     text: &actors::FlatPreparedU32,
+    tints: FlatTintStack,
     parent: SmRect,
     m: &Metrics,
     fonts: &font::FontMap,
@@ -5697,7 +5806,7 @@ fn build_flat_prepared_u32<T: TextureContext + ?Sized>(
         FlatPreparedTextView {
             align: text.align,
             offset: text.offset,
-            color: text.color,
+            color: tints.apply(text.color),
             font: text.font,
             content: actors::TextContent::PreparedU32 {
                 text: text.text,
@@ -5708,7 +5817,7 @@ fn build_flat_prepared_u32<T: TextureContext + ?Sized>(
             scale: text.scale,
             blend: text.blend,
             shadow_len: text.shadow_len,
-            shadow_color: text.shadow_color,
+            shadow_color: tints.apply(text.shadow_color),
         },
         parent,
         m,
@@ -5730,6 +5839,7 @@ fn build_flat_prepared_u32<T: TextureContext + ?Sized>(
 #[allow(clippy::too_many_arguments)]
 fn build_flat_prepared_inline<T: TextureContext + ?Sized>(
     text: &actors::FlatPreparedInline,
+    tints: FlatTintStack,
     parent: SmRect,
     m: &Metrics,
     fonts: &font::FontMap,
@@ -5749,7 +5859,7 @@ fn build_flat_prepared_inline<T: TextureContext + ?Sized>(
         FlatPreparedTextView {
             align: text.align,
             offset: text.offset,
-            color: text.color,
+            color: tints.apply(text.color),
             font: text.font,
             content: actors::TextContent::FrameInline {
                 text: text.text,
@@ -5760,7 +5870,7 @@ fn build_flat_prepared_inline<T: TextureContext + ?Sized>(
             scale: text.scale,
             blend: text.blend,
             shadow_len: text.shadow_len,
-            shadow_color: text.shadow_color,
+            shadow_color: tints.apply(text.shadow_color),
         },
         parent,
         m,
@@ -9536,7 +9646,8 @@ mod tests {
     fn actor_segment_keeps_camera_metadata_borrowed() {
         assert!(
             std::mem::size_of::<ActorSegment<'_>>() <= 96,
-            "actor segments must not embed retained 4x4 camera matrices"
+            "actor segments must not embed retained 4x4 camera matrices: {} bytes",
+            std::mem::size_of::<ActorSegment<'_>>()
         );
     }
 
@@ -9710,7 +9821,7 @@ mod tests {
                 &[ActorSegment::transformed(
                     &expected_actors,
                     100,
-                    tint,
+                    &tint,
                     Some(BlendMode::Add),
                     &root_camera,
                     &camera_suffix,
@@ -9732,7 +9843,7 @@ mod tests {
                 &[ActorSegment::transformed(
                     &camera_scope,
                     100,
-                    tint,
+                    &tint,
                     Some(BlendMode::Add),
                     &root_camera,
                     &camera_suffix,
@@ -9845,7 +9956,7 @@ mod tests {
                 &[ActorSegment::transformed(
                     &source,
                     100,
-                    segment_tint,
+                    &segment_tint,
                     Some(BlendMode::Add),
                     &root_camera,
                     &camera_suffix,
@@ -11565,7 +11676,7 @@ mod tests {
                 &[ActorSegment::transformed(
                     &actor,
                     100,
-                    tint,
+                    &tint,
                     Some(BlendMode::Add),
                     &root_camera,
                     &Matrix4::IDENTITY,
@@ -11589,7 +11700,7 @@ mod tests {
                 &[ActorSegment::transformed(
                     &[],
                     100,
-                    tint,
+                    &tint,
                     Some(BlendMode::Add),
                     &root_camera,
                     &Matrix4::IDENTITY,
@@ -11662,7 +11773,7 @@ mod tests {
                 &[ActorSegment::transformed(
                     &actor,
                     100,
-                    tint,
+                    &tint,
                     Some(BlendMode::Add),
                     &root_camera,
                     &Matrix4::IDENTITY,
@@ -11695,7 +11806,7 @@ mod tests {
                 &[ActorSegment::transformed(
                     &[],
                     100,
-                    tint,
+                    &tint,
                     Some(BlendMode::Add),
                     &root_camera,
                     &Matrix4::IDENTITY,
@@ -12577,7 +12688,7 @@ mod tests {
                     &draws,
                     [10.0, -3.0],
                     42,
-                    [0.5, 0.75, 0.25, 0.8],
+                    &[0.5, 0.75, 0.25, 0.8],
                     BlendMode::Add,
                 )],
                 [0.0; 4],
@@ -12671,7 +12782,7 @@ mod tests {
             &draws,
             [10.0, -3.0],
             42,
-            [0.5, 0.75, 0.25, 0.8],
+            &[0.5, 0.75, 0.25, 0.8],
             BlendMode::Add,
             Some(&enclosing),
             Some(&source_camera),
@@ -12783,7 +12894,7 @@ mod tests {
             &field_draws,
             [10.0, -3.0],
             42,
-            [0.5, 0.75, 0.25, 0.8],
+            &[0.5, 0.75, 0.25, 0.8],
             BlendMode::Add,
             Some(&enclosing),
             [Some(&hud_camera), Some(&field_camera)],
@@ -12870,7 +12981,7 @@ mod tests {
                     &draws,
                     [10.0, -3.0],
                     42,
-                    [0.5, 0.75, 0.25, 0.8],
+                    &[0.5, 0.75, 0.25, 0.8],
                     BlendMode::Add,
                     Some(&camera),
                 )],
