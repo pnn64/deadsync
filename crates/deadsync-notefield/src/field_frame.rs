@@ -31,6 +31,7 @@ use deadsync_rules::note::HoldResult;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingData;
 use glam::Mat4 as Matrix4;
+use std::ops::Range;
 use std::sync::Arc;
 
 /// Borrowed runtime state needed by the canonical field presentation pass.
@@ -47,6 +48,7 @@ pub struct NotefieldFieldFrameView<'a> {
 #[derive(Clone, Debug, Default)]
 pub struct NotefieldFieldResult {
     pub captured_actors: Option<CapturedActorSource>,
+    pub draw_range: Option<Range<usize>>,
     pub camera: Option<glam::Mat4>,
     pub camera_generation: u64,
 }
@@ -78,11 +80,19 @@ where
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
+    debug_assert!(
+        !request.capture_requests.direct_note_field
+            || (!request.capture_requests.note_field
+                && !request.capture_requests.player
+                && !request.view.edit_beat_bars),
+        "direct NoteField capture requires an actor-free retained field range"
+    );
     model_cache.begin_frame();
     hold_mesh_scratch.begin_frame();
     flat_draws.clear();
     flat_draws.reserve(prepared.frame_plan.field_actor_reserve);
     let field_start = actors.len();
+    let draw_start = flat_draws.len();
     actors.reserve(prepared.frame_plan.field_actor_reserve.saturating_add(2));
     let Some(notes) = prepared.notes.as_ref() else {
         return NotefieldFieldResult::default();
@@ -125,8 +135,14 @@ where
         .note_field
         .then(|| share_actor_range(actors, field_start, &mut capture_scratch.note_field))
         .flatten();
+    let draw_range = request
+        .capture_requests
+        .direct_note_field
+        .then_some(draw_start..flat_draws.len())
+        .filter(|range| !range.is_empty());
     NotefieldFieldResult {
         captured_actors,
+        draw_range,
         camera: field_camera,
         camera_generation: camera_cache.generation(),
     }

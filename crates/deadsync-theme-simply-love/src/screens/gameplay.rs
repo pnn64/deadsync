@@ -7406,10 +7406,12 @@ fn song_lua_proxy_target_has_source(
             .get(*player_index)
             .and_then(|sources| sources.player)
             .is_some_and(|source| !source.is_empty()),
-        SongLuaProxyTarget::NoteField { player_index } => proxy_sources
-            .get(*player_index)
-            .and_then(|sources| sources.note_field)
-            .is_some_and(|source| !source.is_empty()),
+        SongLuaProxyTarget::NoteField { player_index } => {
+            proxy_sources.get(*player_index).is_some_and(|sources| {
+                sources.direct_note_field
+                    || sources.note_field.is_some_and(|source| !source.is_empty())
+            })
+        }
         SongLuaProxyTarget::Judgment { player_index } => proxy_sources
             .get(*player_index)
             .and_then(|sources| sources.judgment)
@@ -7683,27 +7685,61 @@ impl<'a> SongLuaProxySource<'a> {
 struct SongLuaPlayerProxySources<'a> {
     player: Option<SongLuaProxySource<'a>>,
     note_field: Option<SongLuaProxySource<'a>>,
+    direct_note_field: bool,
     judgment: Option<SongLuaProxySource<'a>>,
     combo: Option<SongLuaProxySource<'a>>,
 }
 
 #[derive(Clone, Copy)]
-struct SongLuaDirectJudgmentSource {
+struct SongLuaDirectProxySource {
+    draws: SongLuaDirectDraws,
     draw_start: usize,
     draw_end: usize,
     target: [f32; 2],
+    camera: Option<Matrix4>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SongLuaDirectDraws {
+    Field,
+    Hud,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct SongLuaDirectJudgmentProxy {
+struct SongLuaDirectProxy {
     actor_insert: usize,
     player: usize,
+    draws: SongLuaDirectDraws,
     draw_start: usize,
     draw_end: usize,
     offset: [f32; 2],
     z: i16,
     tint: [f32; 4],
     blend: BlendMode,
+    camera: Option<Matrix4>,
+}
+
+const SONG_LUA_DIRECT_PROXY_CAPACITY: usize = MAX_PLAYERS * 2;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct SongLuaDirectProxies {
+    entries: [Option<SongLuaDirectProxy>; SONG_LUA_DIRECT_PROXY_CAPACITY],
+    len: u8,
+}
+
+impl SongLuaDirectProxies {
+    fn push(&mut self, proxy: SongLuaDirectProxy) {
+        let index = usize::from(self.len);
+        debug_assert!(index < self.entries.len(), "direct proxy plan overflow");
+        if let Some(slot) = self.entries.get_mut(index) {
+            *slot = Some(proxy);
+            self.len = self.len.saturating_add(1);
+        }
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &SongLuaDirectProxy> + '_ {
+        self.entries[..usize::from(self.len)].iter().flatten()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -7717,7 +7753,8 @@ struct SongLuaPlayerProxyRequests {
 #[derive(Clone, Copy, Default)]
 struct SongLuaScreenProxySources<'a> {
     players: [SongLuaPlayerProxySources<'a>; 2],
-    direct_judgments: [Option<SongLuaDirectJudgmentSource>; 2],
+    direct_note_fields: [Option<SongLuaDirectProxySource>; 2],
+    direct_judgments: [Option<SongLuaDirectProxySource>; 2],
     underlay: Option<&'a [Arc<[Actor]>]>,
     overlay: Option<&'a [Arc<[Actor]>]>,
 }
@@ -7735,6 +7772,7 @@ struct SongLuaScreenProxyRequests {
 struct SongLuaProxyRequestAnalysis {
     all: SongLuaScreenProxyRequests,
     captured: SongLuaScreenProxyRequests,
+    root_note_fields: [u8; MAX_PLAYERS],
     root_judgments: [u8; MAX_PLAYERS],
 }
 
@@ -8408,6 +8446,61 @@ fn prepare_flat_proxy_source(
     Some(PreparedProxySource::new(segments))
 }
 
+fn prepare_flat_field_proxy_source(
+    draws: &[FlatDraw],
+    camera: Option<Matrix4>,
+    transform: SongLuaCaptureTransform,
+    scratch: &mut SharedActorFrameScratch,
+) -> Option<PreparedProxySource> {
+    if draws.is_empty() {
+        return None;
+    }
+    let field_len = draws.len() + usize::from(camera.is_some()) * 2;
+    let field_actors = || {
+        camera
+            .map(|view_proj| Actor::CameraPush { view_proj })
+            .into_iter()
+            .chain(draws.iter().cloned().map(actor_from_flat_draw))
+            .chain(camera.map(|_| Actor::CameraPop))
+    };
+    if song_lua_player_transform_is_direct_identity(transform) {
+        let segments = scratch
+            .refill([0.0, 0.0], |out| out.extend(field_actors()))
+            .map(|source| [source])?;
+        return Some(PreparedProxySource {
+            segments,
+            offset: [-transform.target_x, -transform.target_y],
+        });
+    }
+    let segments = scratch
+        .refill([-transform.target_x, -transform.target_y], |out| {
+            append_song_lua_player_transform(
+                field_actors(),
+                std::iter::empty(),
+                field_len,
+                0,
+                camera.is_some(),
+                out,
+                transform.z_shift,
+                transform.tint,
+                transform.blend,
+                transform.playfield_center_x,
+                transform.target_x,
+                transform.target_y,
+                transform.rotation_x,
+                transform.rotation_z,
+                transform.rotation_y,
+                transform.skew_x,
+                transform.skew_y,
+                transform.zoom_x,
+                transform.zoom_y,
+                transform.zoom_z,
+            );
+        })
+        .map(|source| [source])?;
+    Some(PreparedProxySource::new(segments))
+}
+
 fn capture_player_source(
     field_actors: &mut Vec<Actor>,
     hud_actors: &mut Vec<Actor>,
@@ -8725,10 +8818,18 @@ fn song_lua_proxy_request_analysis_indexed_active(
         match &overlays[overlay_index].kind {
             SongLuaOverlayKind::ActorProxy { target } => {
                 song_lua_mark_proxy_target(&mut analysis.all, target);
-                if let SongLuaProxyTarget::Judgment { player_index } = target
-                    && let Some(count) = analysis.root_judgments.get_mut(*player_index)
-                {
-                    *count = count.saturating_add(1);
+                match target {
+                    SongLuaProxyTarget::NoteField { player_index } => {
+                        if let Some(count) = analysis.root_note_fields.get_mut(*player_index) {
+                            *count = count.saturating_add(1);
+                        }
+                    }
+                    SongLuaProxyTarget::Judgment { player_index } => {
+                        if let Some(count) = analysis.root_judgments.get_mut(*player_index) {
+                            *count = count.saturating_add(1);
+                        }
+                    }
+                    _ => {}
                 }
             }
             SongLuaOverlayKind::AftSprite { .. } => {
@@ -8778,6 +8879,9 @@ fn song_lua_merge_proxy_analysis(
 ) {
     song_lua_merge_proxy_requests(&mut into.all, from.all);
     song_lua_merge_proxy_requests(&mut into.captured, from.captured);
+    for (count, add) in into.root_note_fields.iter_mut().zip(from.root_note_fields) {
+        *count = count.saturating_add(add);
+    }
     for (count, add) in into.root_judgments.iter_mut().zip(from.root_judgments) {
         *count = count.saturating_add(add);
     }
@@ -8846,21 +8950,22 @@ fn song_lua_build_proxy_actor_with_scratch(
     )
 }
 
-fn song_lua_direct_judgment_proxy(
+fn song_lua_direct_proxy(
     state: SongLuaOverlayState,
     z: i16,
-    source: SongLuaDirectJudgmentSource,
+    source: SongLuaDirectProxySource,
     player: usize,
     actor_insert: usize,
     overlay_space_width: f32,
     overlay_space_height: f32,
-) -> Option<SongLuaDirectJudgmentProxy> {
+) -> Option<SongLuaDirectProxy> {
     if !song_lua_overlay_is_visible(state) || source.draw_start >= source.draw_end {
         return None;
     }
-    Some(SongLuaDirectJudgmentProxy {
+    Some(SongLuaDirectProxy {
         actor_insert,
         player,
+        draws: source.draws,
         draw_start: source.draw_start,
         draw_end: source.draw_end,
         offset: [
@@ -8870,6 +8975,7 @@ fn song_lua_direct_judgment_proxy(
         z,
         tint: state.diffuse,
         blend: song_lua_overlay_blend(state.blend),
+        camera: source.camera,
     })
 }
 
@@ -14415,6 +14521,63 @@ fn song_lua_player_transform_is_direct_identity(transform: SongLuaCaptureTransfo
         && song_lua_player_transform_has_identity_geometry(transform)
 }
 
+#[inline(always)]
+fn song_lua_player_transform_is_direct_proxy(transform: SongLuaCaptureTransform) -> bool {
+    transform.tint == [1.0; 4]
+        && transform.blend.is_none()
+        && transform.playfield_center_x.is_finite()
+        && transform.target_x.is_finite()
+        && transform.target_y.is_finite()
+        && transform.rotation_x.is_finite()
+        && transform.rotation_x.abs() <= f32::EPSILON
+        && transform.rotation_z.is_finite()
+        && transform.rotation_z.abs() <= f32::EPSILON
+        && transform.rotation_y.is_finite()
+        && transform.rotation_y.abs() <= f32::EPSILON
+        && transform.skew_x.is_finite()
+        && transform.skew_x.abs() <= f32::EPSILON
+        && transform.skew_y.is_finite()
+        && transform.skew_y.abs() <= f32::EPSILON
+        && transform.zoom_x.is_finite()
+        && (transform.zoom_x - 1.0).abs() <= f32::EPSILON
+        && transform.zoom_y.is_finite()
+        && (transform.zoom_y - 1.0).abs() <= f32::EPSILON
+        && transform.zoom_z.is_finite()
+        && (transform.zoom_z - 1.0).abs() <= f32::EPSILON
+}
+
+#[inline(always)]
+fn song_lua_player_transform_is_direct_hud_proxy(transform: SongLuaCaptureTransform) -> bool {
+    song_lua_player_transform_is_direct_proxy(transform)
+        && song_lua_player_transform_has_identity_geometry(transform)
+}
+
+fn song_lua_direct_field_camera(
+    field_camera: Option<Matrix4>,
+    transform: SongLuaCaptureTransform,
+) -> Option<Matrix4> {
+    let player_transform = song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
+        screen_width: screen_width(),
+        screen_height: screen_height(),
+        screen_center_y: screen_center_y(),
+        playfield_center_x: transform.playfield_center_x,
+        target_x: transform.target_x,
+        target_y: transform.target_y,
+        rotation_x_deg: transform.rotation_x,
+        rotation_z_deg: transform.rotation_z,
+        skew_x: transform.skew_x,
+        skew_y: transform.skew_y,
+        zoom_x: transform.zoom_x,
+        zoom_y: transform.zoom_y,
+        zoom_z: transform.zoom_z,
+    });
+    match (field_camera, player_transform) {
+        (Some(camera), Some(player_transform)) => Some(camera * player_transform),
+        (None, Some(player_transform)) => Some(song_lua_player_root_camera(player_transform)),
+        (camera, None) => camera,
+    }
+}
+
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub fn benchmark_present_identity_notefield(
@@ -14426,6 +14589,12 @@ pub fn benchmark_present_identity_notefield(
     out.reserve(field_actors.len().saturating_add(hud_actors.len()));
     out.append(hud_actors);
     out.append(field_actors);
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_normalize_proxy_actor_source(source: &[Actor], out: &mut Vec<Actor>) {
+    song_lua_proxy_local_children_into(source.iter().cloned(), out);
 }
 
 #[cfg(feature = "bench-support")]
@@ -14896,24 +15065,30 @@ struct PlayerActorSegment {
 pub struct GameplayActorSegments {
     insert: usize,
     players: [Option<PlayerActorSegment>; 2],
-    direct_judgment: Option<SongLuaDirectJudgmentProxy>,
+    direct_proxies: SongLuaDirectProxies,
 }
 
 impl GameplayActorSegments {
-    pub fn segments<'a>(&'a self, state: &'a State, actors: &'a [Actor]) -> [ActorSegment<'a>; 8] {
+    #[cfg(test)]
+    pub(crate) fn has_direct_field_proxy(&self) -> bool {
+        self.direct_proxies
+            .iter()
+            .any(|proxy| proxy.draws == SongLuaDirectDraws::Field)
+    }
+
+    pub fn segments<'a>(
+        &'a self,
+        state: &'a State,
+        actors: &'a [Actor],
+    ) -> SmallVec<[ActorSegment<'a>; 14]> {
         let insert = self.insert.min(actors.len());
-        let empty = &actors[0..0];
-        let mut segments = [ActorSegment::new(empty); 8];
+        let mut segments = SmallVec::new();
         let scratch = state
             .frame_scratch
             .as_deref()
             .expect("gameplay frame scratch is restored before segment access");
-        segments[0] = ActorSegment::new(&actors[..insert]);
-        for (slot, segment) in self.players.iter().enumerate() {
-            let Some(segment) = segment else {
-                continue;
-            };
-            let first = 1 + slot * 2;
+        segments.push(ActorSegment::new(&actors[..insert]));
+        for segment in self.players.iter().flatten() {
             match &segment.assembly {
                 PlayerActorAssembly::Captured => {
                     debug_assert!(scratch.notefield_flat_draw_scratch[segment.player].is_empty());
@@ -14927,25 +15102,29 @@ impl GameplayActorSegments {
                             scratch.player_source(segment.player, SONG_LUA_PLAYER_PROXY_SOURCE)
                         })
                         .expect("player proxy capture has song-lifetime backing");
-                    segments[first] = ActorSegment::new(source);
+                    segments.push(ActorSegment::new(source));
                 }
                 PlayerActorAssembly::Hidden => {}
                 PlayerActorAssembly::DirectZ { z_shift } => {
-                    segments[first] = ActorSegment::shifted(
-                        &scratch.notefield_hud_actor_scratch[segment.player],
-                        *z_shift,
-                    )
-                    .with_flat_draws(
-                        &scratch.notefield_hud_flat_draw_scratch[segment.player],
-                        None,
+                    segments.push(
+                        ActorSegment::shifted(
+                            &scratch.notefield_hud_actor_scratch[segment.player],
+                            *z_shift,
+                        )
+                        .with_flat_draws(
+                            &scratch.notefield_hud_flat_draw_scratch[segment.player],
+                            None,
+                        ),
                     );
-                    segments[first + 1] = ActorSegment::shifted(
-                        &scratch.notefield_actor_scratch[segment.player],
-                        *z_shift,
-                    )
-                    .with_flat_draws(
-                        &scratch.notefield_flat_draw_scratch[segment.player],
-                        segment.field_camera.as_ref(),
+                    segments.push(
+                        ActorSegment::shifted(
+                            &scratch.notefield_actor_scratch[segment.player],
+                            *z_shift,
+                        )
+                        .with_flat_draws(
+                            &scratch.notefield_flat_draw_scratch[segment.player],
+                            segment.field_camera.as_ref(),
+                        ),
                     );
                 }
                 PlayerActorAssembly::DirectFold { z_shift, x_fold } => {
@@ -14961,18 +15140,20 @@ impl GameplayActorSegments {
                             *x_fold,
                         )
                     };
-                    segments[first] = hud.with_flat_draws(
+                    segments.push(hud.with_flat_draws(
                         &scratch.notefield_hud_flat_draw_scratch[segment.player],
                         None,
-                    );
-                    segments[first + 1] = ActorSegment::folded(
-                        &scratch.notefield_actor_scratch[segment.player],
-                        *z_shift,
-                        *x_fold,
-                    )
-                    .with_flat_draws(
-                        &scratch.notefield_flat_draw_scratch[segment.player],
-                        segment.field_camera.as_ref(),
+                    ));
+                    segments.push(
+                        ActorSegment::folded(
+                            &scratch.notefield_actor_scratch[segment.player],
+                            *z_shift,
+                            *x_fold,
+                        )
+                        .with_flat_draws(
+                            &scratch.notefield_flat_draw_scratch[segment.player],
+                            segment.field_camera.as_ref(),
+                        ),
                     );
                 }
                 PlayerActorAssembly::DirectTransform {
@@ -15005,38 +15186,48 @@ impl GameplayActorSegments {
                             Some(root_camera),
                         )
                     };
-                    segments[first] = hud.with_flat_draws(
+                    segments.push(hud.with_flat_draws(
                         &scratch.notefield_hud_flat_draw_scratch[segment.player],
                         hud_camera,
-                    );
-                    segments[first + 1] = ActorSegment::transformed(
-                        &scratch.notefield_actor_scratch[segment.player],
-                        *z_shift,
-                        *tint,
-                        *blend,
-                        root_camera,
-                        field_camera_suffix,
-                        *x_fold,
-                    )
-                    .with_flat_draws(
-                        &scratch.notefield_flat_draw_scratch[segment.player],
-                        segment.field_camera.as_ref(),
+                    ));
+                    segments.push(
+                        ActorSegment::transformed(
+                            &scratch.notefield_actor_scratch[segment.player],
+                            *z_shift,
+                            *tint,
+                            *blend,
+                            root_camera,
+                            field_camera_suffix,
+                            *x_fold,
+                        )
+                        .with_flat_draws(
+                            &scratch.notefield_flat_draw_scratch[segment.player],
+                            segment.field_camera.as_ref(),
+                        ),
                     );
                 }
             }
         }
-        if let Some(proxy) = self.direct_judgment {
-            let actor_insert = proxy.actor_insert.clamp(insert, actors.len());
-            let draws = scratch.notefield_hud_flat_draw_scratch[proxy.player]
-                .get(proxy.draw_start..proxy.draw_end)
-                .unwrap_or(&[]);
-            segments[5] = ActorSegment::new(&actors[insert..actor_insert]);
-            segments[6] =
-                ActorSegment::flat_proxy(draws, proxy.offset, proxy.z, proxy.tint, proxy.blend);
-            segments[7] = ActorSegment::new(&actors[actor_insert..]);
-        } else {
-            segments[5] = ActorSegment::new(&actors[insert..]);
+        let mut actor_start = insert;
+        for proxy in self.direct_proxies.iter() {
+            let actor_insert = proxy.actor_insert.clamp(actor_start, actors.len());
+            let source = match proxy.draws {
+                SongLuaDirectDraws::Field => &scratch.notefield_flat_draw_scratch[proxy.player],
+                SongLuaDirectDraws::Hud => &scratch.notefield_hud_flat_draw_scratch[proxy.player],
+            };
+            let draws = source.get(proxy.draw_start..proxy.draw_end).unwrap_or(&[]);
+            segments.push(ActorSegment::new(&actors[actor_start..actor_insert]));
+            segments.push(ActorSegment::flat_proxy_with_camera(
+                draws,
+                proxy.offset,
+                proxy.z,
+                proxy.tint,
+                proxy.blend,
+                proxy.camera.as_ref(),
+            ));
+            actor_start = actor_insert;
         }
+        segments.push(ActorSegment::new(&actors[actor_start..]));
         segments
     }
 }
@@ -15195,7 +15386,7 @@ fn push_song_lua_layer_actors(
     overlay_states: &[SongLuaOverlayState],
     song_foreground_state: SongLuaOverlayState,
     proxy_sources: &SongLuaScreenProxySources<'_>,
-    mut direct_judgment_proxy: Option<&mut Option<SongLuaDirectJudgmentProxy>>,
+    mut direct_proxies: Option<&mut SongLuaDirectProxies>,
     mut proxy_actor_scratch: Option<&mut SongLuaProxyActorScratch>,
     asset_manager: &AssetManager,
     space_width: f32,
@@ -15244,25 +15435,33 @@ fn push_song_lua_layer_actors(
         );
         match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {
-                if let SongLuaProxyTarget::Judgment { player_index } = target
-                    && let Some(source) = proxy_sources
+                let direct_source = match target {
+                    SongLuaProxyTarget::NoteField { player_index } => proxy_sources
+                        .direct_note_fields
+                        .get(*player_index)
+                        .copied()
+                        .flatten()
+                        .map(|source| (*player_index, source)),
+                    SongLuaProxyTarget::Judgment { player_index } => proxy_sources
                         .direct_judgments
                         .get(*player_index)
                         .copied()
                         .flatten()
-                {
-                    if let Some(proxy) = song_lua_direct_judgment_proxy(
+                        .map(|source| (*player_index, source)),
+                    _ => None,
+                };
+                if let Some((player_index, source)) = direct_source {
+                    if let Some(proxy) = song_lua_direct_proxy(
                         overlay_state,
                         z,
                         source,
-                        *player_index,
+                        player_index,
                         out.len(),
                         space_width,
                         space_height,
-                    ) && let Some(dest) = direct_judgment_proxy.as_deref_mut()
+                    ) && let Some(dest) = direct_proxies.as_deref_mut()
                     {
-                        debug_assert!(dest.is_none(), "direct Judgment proxy must be unique");
-                        *dest = Some(proxy);
+                        dest.push(proxy);
                     }
                     continue;
                 }
@@ -15521,6 +15720,12 @@ pub fn push_actors(
         );
     }
     let proxy_requests = proxy_analysis.all;
+    let direct_note_field_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
+        proxy_analysis.root_note_fields[player] == 1
+            && !proxy_analysis.captured.players[player].note_field
+            && !proxy_requests.players[player].player
+            && !notefield_view.edit_beat_bars
+    });
     let direct_judgment_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
         proxy_analysis.root_judgments[player] == 1
             && !proxy_analysis.captured.players[player].judgment
@@ -15852,6 +16057,7 @@ pub fn push_actors(
                 field_camera,
                 field_camera_generation,
                 field_actors,
+                field_draw_range,
                 judgment_actors,
                 judgment_draw_range,
                 combo_actors,
@@ -15879,7 +16085,10 @@ pub fn push_actors(
                     player: requests.player,
                     // Whole-player captures consume the same field source, so
                     // materialize compact notes into that cold actor capture.
-                    note_field: requests.note_field || requests.player,
+                    note_field: (requests.note_field && !direct_note_field_candidates[player_idx])
+                        || requests.player,
+                    direct_note_field: requests.note_field
+                        && direct_note_field_candidates[player_idx],
                     judgment: requests.judgment && !direct_judgment_candidates[player_idx],
                     direct_judgment: requests.judgment && direct_judgment_candidates[player_idx],
                     combo: requests.combo,
@@ -15945,12 +16154,7 @@ pub fn push_actors(
                 zoom_y,
                 zoom_z,
             };
-            let note_field_source = field_actors.and_then(|source| {
-                let scratch = song_lua_proxy_actor_scratch
-                    .as_mut()?
-                    .player(player_idx, SONG_LUA_FIELD_PROXY_SOURCE)?;
-                prepare_proxy_source(source, ProxyCapturePart::Field, capture_transform, scratch)
-            });
+            let proxy_field_camera = field_camera;
             let assembly = player_actor_assembly_cache[player_idx].resolve(
                 requests.player,
                 player_state.visible,
@@ -15980,15 +16184,57 @@ pub fn push_actors(
                 None
             };
             let player_source = captured_player_source.map(PreparedProxySource::new);
-            let direct_judgment = direct_judgment_candidates[player_idx]
-                && song_lua_player_transform_is_direct_identity(capture_transform);
-            let direct_judgment_source = direct_judgment
-                .then_some(judgment_draw_range.as_ref())
+            let direct_note_field = direct_note_field_candidates[player_idx]
+                && song_lua_player_transform_is_direct_proxy(capture_transform);
+            let direct_note_field_source = direct_note_field
+                .then_some(field_draw_range.as_ref())
                 .flatten()
-                .map(|range| SongLuaDirectJudgmentSource {
+                .map(|range| SongLuaDirectProxySource {
+                    draws: SongLuaDirectDraws::Field,
                     draw_start: range.start,
                     draw_end: range.end,
                     target: [capture_transform.target_x, capture_transform.target_y],
+                    camera: song_lua_direct_field_camera(proxy_field_camera, capture_transform),
+                });
+            let note_field_source = if direct_note_field_candidates[player_idx] {
+                (!direct_note_field)
+                    .then_some(field_draw_range.as_ref())
+                    .flatten()
+                    .and_then(|range| {
+                        let scratch = song_lua_proxy_actor_scratch
+                            .as_mut()?
+                            .player(player_idx, SONG_LUA_FIELD_PROXY_SOURCE)?;
+                        prepare_flat_field_proxy_source(
+                            &flat_draw_scratch[range.clone()],
+                            proxy_field_camera,
+                            capture_transform,
+                            scratch,
+                        )
+                    })
+            } else {
+                field_actors.and_then(|source| {
+                    let scratch = song_lua_proxy_actor_scratch
+                        .as_mut()?
+                        .player(player_idx, SONG_LUA_FIELD_PROXY_SOURCE)?;
+                    prepare_proxy_source(
+                        source,
+                        ProxyCapturePart::Field,
+                        capture_transform,
+                        scratch,
+                    )
+                })
+            };
+            let direct_judgment = direct_judgment_candidates[player_idx]
+                && song_lua_player_transform_is_direct_hud_proxy(capture_transform);
+            let direct_judgment_source = direct_judgment
+                .then_some(judgment_draw_range.as_ref())
+                .flatten()
+                .map(|range| SongLuaDirectProxySource {
+                    draws: SongLuaDirectDraws::Hud,
+                    draw_start: range.start,
+                    draw_end: range.end,
+                    target: [capture_transform.target_x, capture_transform.target_y],
+                    camera: None,
                 });
             let judgment_source = if direct_judgment_candidates[player_idx] {
                 (!direct_judgment)
@@ -16026,6 +16272,7 @@ pub fn push_actors(
                 layout_center_x,
                 player_source,
                 proxy_sources,
+                direct_note_field_source,
                 direct_judgment_source,
                 assembly,
                 field_camera,
@@ -16038,6 +16285,8 @@ pub fn push_actors(
         p2_player_proxy_source,
         p1_proxy_sources,
         p2_proxy_sources,
+        p1_direct_note_field,
+        p2_direct_note_field,
         p1_direct_judgment,
         p2_direct_judgment,
         p1_actor_assembly,
@@ -16052,8 +16301,10 @@ pub fn push_actors(
         Option<PreparedProxySource>,
         [Option<PreparedProxySource>; 3],
         [Option<PreparedProxySource>; 3],
-        Option<SongLuaDirectJudgmentSource>,
-        Option<SongLuaDirectJudgmentSource>,
+        Option<SongLuaDirectProxySource>,
+        Option<SongLuaDirectProxySource>,
+        Option<SongLuaDirectProxySource>,
+        Option<SongLuaDirectProxySource>,
         PlayerActorAssembly,
         PlayerActorAssembly,
         Option<Matrix4>,
@@ -16062,28 +16313,44 @@ pub fn push_actors(
         [(usize, f32); 2],
     ) = match play_style {
         profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
-            let (p1_x, p1_player_source, p1_sources, p1_direct, p1_assembly, p1_camera) =
-                build_player_bundle(
-                    0,
-                    &state.profiles()[0],
-                    FieldPlacement::P1,
-                    proxy_requests.players[0],
-                );
-            let (p2_x, p2_player_source, p2_sources, p2_direct, p2_assembly, p2_camera) =
-                build_player_bundle(
-                    1,
-                    &state.profiles()[1],
-                    FieldPlacement::P2,
-                    proxy_requests.players[1],
-                );
+            let (
+                p1_x,
+                p1_player_source,
+                p1_sources,
+                p1_direct_field,
+                p1_direct_judgment,
+                p1_assembly,
+                p1_camera,
+            ) = build_player_bundle(
+                0,
+                &state.profiles()[0],
+                FieldPlacement::P1,
+                proxy_requests.players[0],
+            );
+            let (
+                p2_x,
+                p2_player_source,
+                p2_sources,
+                p2_direct_field,
+                p2_direct_judgment,
+                p2_assembly,
+                p2_camera,
+            ) = build_player_bundle(
+                1,
+                &state.profiles()[1],
+                FieldPlacement::P2,
+                proxy_requests.players[1],
+            );
             (
                 true,
                 p1_player_source,
                 p2_player_source,
                 p1_sources,
                 p2_sources,
-                p1_direct,
-                p2_direct,
+                p1_direct_field,
+                p2_direct_field,
+                p1_direct_judgment,
+                p2_direct_judgment,
                 p1_assembly,
                 p2_assembly,
                 p1_camera,
@@ -16098,20 +16365,29 @@ pub fn push_actors(
             } else {
                 FieldPlacement::P1
             };
-            let (nf_x, nf_player_source, nf_sources, nf_direct, nf_assembly, nf_camera) =
-                build_player_bundle(
-                    0,
-                    &state.profiles()[0],
-                    placement,
-                    proxy_requests.players[0],
-                );
+            let (
+                nf_x,
+                nf_player_source,
+                nf_sources,
+                nf_direct_field,
+                nf_direct_judgment,
+                nf_assembly,
+                nf_camera,
+            ) = build_player_bundle(
+                0,
+                &state.profiles()[0],
+                placement,
+                proxy_requests.players[0],
+            );
             (
                 false,
                 nf_player_source,
                 None,
                 nf_sources,
                 [None, None, None],
-                nf_direct,
+                nf_direct_field,
+                None,
+                nf_direct_judgment,
                 None,
                 nf_assembly,
                 PlayerActorAssembly::Hidden,
@@ -16128,6 +16404,7 @@ pub fn push_actors(
                 .as_ref()
                 .map(PreparedProxySource::view),
             note_field: p1_proxy_sources[0].as_ref().map(PreparedProxySource::view),
+            direct_note_field: p1_direct_note_field.is_some(),
             judgment: p1_proxy_sources[1].as_ref().map(PreparedProxySource::view),
             combo: p1_proxy_sources[2].as_ref().map(PreparedProxySource::view),
         },
@@ -16136,17 +16413,30 @@ pub fn push_actors(
                 .as_ref()
                 .map(PreparedProxySource::view),
             note_field: p2_proxy_sources[0].as_ref().map(PreparedProxySource::view),
+            direct_note_field: p2_direct_note_field.is_some(),
             judgment: p2_proxy_sources[1].as_ref().map(PreparedProxySource::view),
             combo: p2_proxy_sources[2].as_ref().map(PreparedProxySource::view),
         },
     ];
-    let replacement_active_players = song_lua_replacement_active_players_indexed(
+    let mut replacement_active_players = song_lua_replacement_active_players_indexed(
         &song_lua_visuals.overlays,
         &song_lua_overlay_state_scratch,
         &replacement_proxy_sources,
         &song_lua_proxy_request_index,
         song_lua_capture_visit_scratch,
     );
+    for &layer_idx in song_lua_foreground_active_layers {
+        let layer_active = song_lua_replacement_active_players_indexed(
+            &song_lua_visuals.foreground_visual_layers[layer_idx].overlays,
+            &song_lua_foreground_layer_state_scratch[layer_idx],
+            &replacement_proxy_sources,
+            &song_lua_foreground_proxy_request_indices[layer_idx],
+            song_lua_capture_visit_scratch,
+        );
+        for (active, layer_active) in replacement_active_players.iter_mut().zip(layer_active) {
+            *active |= layer_active;
+        }
+    }
 
     // Danger overlay (Simply Love parity): red flashing in danger + green recovery, optional HideDanger.
     if !hide_gameplay_hud {
@@ -16268,7 +16558,7 @@ pub fn push_actors(
                 field_camera: p2_field_camera,
                 manual_hud_draw: song_lua_visuals.player_actors[1].manual_hud_draw,
             });
-        } else {
+        } else if p2_direct_note_field.is_none() {
             clear_player_actor_bundle(
                 &mut notefield_actor_scratch[1],
                 &mut notefield_flat_draw_scratch[1],
@@ -16284,7 +16574,7 @@ pub fn push_actors(
             field_camera: p1_field_camera,
             manual_hud_draw: song_lua_visuals.player_actors[0].manual_hud_draw,
         });
-    } else {
+    } else if p1_direct_note_field.is_none() {
         clear_player_actor_bundle(
             &mut notefield_actor_scratch[0],
             &mut notefield_flat_draw_scratch[0],
@@ -17220,21 +17510,24 @@ pub fn push_actors(
             SongLuaPlayerProxySources {
                 player: p1_player_proxy_slice,
                 note_field: p1_proxy_slices[0],
+                direct_note_field: p1_direct_note_field.is_some(),
                 judgment: p1_proxy_slices[1],
                 combo: p1_proxy_slices[2],
             },
             SongLuaPlayerProxySources {
                 player: p2_player_proxy_slice,
                 note_field: p2_proxy_slices[0],
+                direct_note_field: p2_direct_note_field.is_some(),
                 judgment: p2_proxy_slices[1],
                 combo: p2_proxy_slices[2],
             },
         ],
+        direct_note_fields: [p1_direct_note_field, p2_direct_note_field],
         direct_judgments: [p1_direct_judgment, p2_direct_judgment],
         underlay: underlay_proxy_slice,
         overlay: overlay_proxy_slice,
     };
-    let mut direct_judgment_proxy = None;
+    let mut direct_proxies = SongLuaDirectProxies::default();
     push_song_lua_layer_actors(
         actors,
         &song_lua_visuals.overlays,
@@ -17244,7 +17537,7 @@ pub fn push_actors(
         &song_lua_overlay_state_scratch,
         song_foreground_state,
         &proxy_sources,
-        Some(&mut direct_judgment_proxy),
+        Some(&mut direct_proxies),
         song_lua_proxy_actor_scratch.as_mut(),
         asset_manager,
         song_lua_space_width,
@@ -17301,7 +17594,7 @@ pub fn push_actors(
             layer_states,
             song_foreground_state,
             &proxy_sources,
-            Some(&mut direct_judgment_proxy),
+            Some(&mut direct_proxies),
             song_lua_proxy_actor_scratch.as_mut(),
             asset_manager,
             layer.screen_width.max(1.0),
@@ -17320,7 +17613,7 @@ pub fn push_actors(
     GameplayActorSegments {
         insert: segment_insert,
         players: segment_players,
-        direct_judgment: direct_judgment_proxy,
+        direct_proxies,
     }
 }
 
@@ -19816,7 +20109,49 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_direct_judgment_records_exact_overlay_insertion() {
+    fn song_lua_root_note_field_can_replace_player_from_direct_source() {
+        let overlays = vec![SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::NoteField { player_index: 0 },
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        }];
+        let overlay_states = vec![SongLuaOverlayState::default()];
+        let index = SongLuaProxyRequestIndex::new(&overlays);
+        let mut visit_scratch = SongLuaCaptureVisitScratch::with_capacity(overlays.len());
+        let analysis = song_lua_proxy_request_analysis_indexed(
+            &overlays,
+            &overlay_states,
+            &index,
+            &mut visit_scratch,
+        );
+        assert_eq!(analysis.root_note_fields, [1, 0]);
+        assert!(!analysis.captured.players[0].note_field);
+
+        let sources = [
+            SongLuaPlayerProxySources {
+                direct_note_field: true,
+                ..SongLuaPlayerProxySources::default()
+            },
+            SongLuaPlayerProxySources::default(),
+        ];
+        assert_eq!(
+            song_lua_replacement_active_players_indexed(
+                &overlays,
+                &overlay_states,
+                &sources,
+                &index,
+                &mut visit_scratch,
+            ),
+            [true, false]
+        );
+    }
+
+    #[test]
+    fn song_lua_direct_proxies_record_exact_overlay_insertions() {
         let quad = || SongLuaOverlayActor {
             kind: SongLuaOverlayKind::Quad,
             name: None,
@@ -19827,7 +20162,7 @@ mod tests {
             },
             message_commands: Vec::new(),
         };
-        let proxy = SongLuaOverlayActor {
+        let judgment_proxy = SongLuaOverlayActor {
             kind: SongLuaOverlayKind::ActorProxy {
                 target: SongLuaProxyTarget::Judgment { player_index: 0 },
             },
@@ -19842,17 +20177,42 @@ mod tests {
             },
             message_commands: Vec::new(),
         };
-        let overlays = vec![quad(), proxy, quad()];
+        let field_proxy = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::NoteField { player_index: 0 },
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState {
+                x: 64.0,
+                y: 48.0,
+                ..SongLuaOverlayState::default()
+            },
+            message_commands: Vec::new(),
+        };
+        let overlays = vec![quad(), field_proxy, quad(), judgment_proxy, quad()];
         let overlay_states = overlays
             .iter()
             .map(|overlay| overlay.initial_state)
             .collect::<Vec<_>>();
         let proxy_sources = SongLuaScreenProxySources {
+            direct_note_fields: [
+                Some(SongLuaDirectProxySource {
+                    draws: SongLuaDirectDraws::Field,
+                    draw_start: 5,
+                    draw_end: 9,
+                    target: [160.0, 240.0],
+                    camera: Some(Matrix4::IDENTITY),
+                }),
+                None,
+            ],
             direct_judgments: [
-                Some(SongLuaDirectJudgmentSource {
+                Some(SongLuaDirectProxySource {
+                    draws: SongLuaDirectDraws::Hud,
                     draw_start: 2,
                     draw_end: 4,
                     target: [213.0, 240.0],
+                    camera: None,
                 }),
                 None,
             ],
@@ -19861,7 +20221,7 @@ mod tests {
         let mut order_cache = song_lua_overlay_order_cache_from(&overlays, &[]);
         let mut topology_index = SongLuaOverlayTopologyIndex::new(&overlays);
         let mut out = Vec::new();
-        let mut direct = None;
+        let mut direct = SongLuaDirectProxies::default();
         let mut order_scratch = Vec::new();
         let mut capture_states = Vec::new();
         let mut capture_order_scratch = Vec::new();
@@ -19892,10 +20252,19 @@ mod tests {
             &mut projected_mesh_scratch,
         );
 
-        assert_eq!(out.len(), 2);
-        let direct = direct.expect("visible direct Judgment proxy should be recorded");
-        assert_eq!(direct.actor_insert, 1);
+        assert_eq!(out.len(), 3);
+        assert_eq!(direct.len, 2);
+        let field = direct.entries[0].expect("visible direct NoteField proxy should be recorded");
+        assert_eq!(field.actor_insert, 1);
+        assert_eq!(field.player, 0);
+        assert_eq!(field.draws, SongLuaDirectDraws::Field);
+        assert_eq!((field.draw_start, field.draw_end), (5, 9));
+        assert_eq!(field.offset, [-96.0, -192.0]);
+        assert_eq!(field.camera, Some(Matrix4::IDENTITY));
+        let direct = direct.entries[1].expect("visible direct Judgment proxy should be recorded");
+        assert_eq!(direct.actor_insert, 2);
         assert_eq!(direct.player, 0);
+        assert_eq!(direct.draws, SongLuaDirectDraws::Hud);
         assert_eq!((direct.draw_start, direct.draw_end), (2, 4));
         assert_eq!(direct.offset, [-113.0, -160.0]);
         assert_eq!(direct.tint, [0.5, 0.75, 1.0, 0.8]);
@@ -21532,6 +21901,105 @@ mod tests {
         let direct_frame = compose(&direct_actor);
         assert_eq!(
             compare_render_frames_semantic(&legacy_frame, &direct_frame),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn direct_field_proxy_cancels_player_translation_and_layer_z() {
+        let playfield_center_x = screen_center_x() - 100.0;
+        let transform = SongLuaCaptureTransform {
+            z_shift: SONG_LUA_PLAYER_LAYER_Z_BASE,
+            tint: [1.0; 4],
+            blend: None,
+            playfield_center_x,
+            target_x: screen_center_x() + 50.0,
+            target_y: screen_center_y() - 20.0,
+            rotation_x: 0.0,
+            rotation_z: 0.0,
+            rotation_y: 0.0,
+            skew_x: 0.0,
+            skew_y: 0.0,
+            zoom_x: 1.0,
+            zoom_y: 1.0,
+            zoom_z: 1.0,
+        };
+        assert!(song_lua_player_transform_is_direct_proxy(transform));
+        assert!(!song_lua_player_transform_is_direct_identity(transform));
+        let draws = [FlatDraw::Sprite(deadlib_present::actors::FlatSprite {
+            center: [playfield_center_x + 24.0, screen_center_y() - 40.0],
+            world_z: 0.0,
+            size: [32.0, 32.0],
+            source: deadlib_present::actors::SpriteSource::Solid,
+            tint: [0.8, 0.6, 0.4, 1.0],
+            glow: [0.0; 4],
+            uv_rect: [0.0, 0.0, 1.0, 1.0],
+            flip_x: false,
+            flip_y: false,
+            fade: [0.0; 4],
+            blend: BlendMode::Alpha,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            z: 140,
+        })];
+        let camera = Matrix4::IDENTITY;
+        let mut field_scratch = SharedActorFrameScratch::with_capacity(3);
+        let source =
+            prepare_flat_field_proxy_source(&draws, Some(camera), transform, &mut field_scratch)
+                .expect("translated field proxy source should render");
+        let proxy_state = SongLuaOverlayState {
+            x: screen_center_x() + 120.0,
+            y: screen_center_y() + 30.0,
+            ..SongLuaOverlayState::default()
+        };
+        let mut proxy_scratch = SongLuaProxyActorScratch::new(1);
+        proxy_scratch.begin_frame();
+        let actor = song_lua_build_proxy_actor_with_scratch(
+            proxy_state,
+            321,
+            source.view(),
+            screen_width(),
+            screen_height(),
+            Some(&mut proxy_scratch),
+        )
+        .expect("translated field proxy should render");
+        let metrics = deadlib_present::space::metrics_for_window(
+            screen_width() as u32,
+            screen_height() as u32,
+        );
+        let resources = ActorResourceArena::new(0);
+        let fonts = font::FontMap::default();
+        let compose = |segment: ActorSegment<'_>| {
+            let mut text = TextLayoutCache::default();
+            let mut scratch = ComposeScratch::default();
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[segment],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut text,
+                &mut scratch,
+                &NullTextureContext,
+                &resources,
+            )
+        };
+        let actor_frame = compose(ActorSegment::new(std::slice::from_ref(&actor)));
+        let direct_camera = song_lua_direct_field_camera(Some(camera), transform)
+            .expect("translation should resolve a field camera");
+        let direct_frame = compose(ActorSegment::flat_proxy_with_camera(
+            &draws,
+            [
+                proxy_state.x - transform.target_x,
+                proxy_state.y - transform.target_y,
+            ],
+            321,
+            proxy_state.diffuse,
+            song_lua_overlay_blend(proxy_state.blend),
+            Some(&direct_camera),
+        ));
+        assert_eq!(
+            compare_render_frames_semantic(&actor_frame, &direct_frame),
             Ok(())
         );
     }

@@ -1026,6 +1026,7 @@ pub(crate) fn compose_frame(
         field_camera: field_result.camera,
         field_camera_generation: field_result.camera_generation,
         field_actors: field_result.captured_actors,
+        field_draw_range: field_result.draw_range,
         judgment_actors: hud_result.judgment_actors,
         judgment_draw_range: hud_result.judgment_draw_range,
         combo_actors: hud_result.combo_actors,

@@ -18,8 +18,8 @@ use deadsync_notefield::{
 use deadsync_theme_simply_love::screens::gameplay::{
     BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
     GameplayPlayerFieldCameraBenchmark, GameplayPlayerTransformBenchmark,
-    GameplayTransformedNotefieldBenchmark, benchmark_present_identity_notefield,
-    benchmark_present_transformed_notefield,
+    GameplayTransformedNotefieldBenchmark, benchmark_normalize_proxy_actor_source,
+    benchmark_present_identity_notefield, benchmark_present_transformed_notefield,
 };
 use glam::{Mat4, Vec3};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -76,6 +76,7 @@ const HUD_TEXT_RUNS: usize = 8;
 const ERROR_BAR_TEXT_RUNS: usize = 4;
 const CUE_COUNTDOWN_RUNS: usize = 3;
 const JUDGMENT_PROXY_DRAWS: usize = 8;
+const FIELD_PROXY_DRAWS: usize = BOUNDARY_FIELD_DRAWS;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -949,39 +950,44 @@ fn print_boundary_result(label: &str, result: &BoundaryResult) {
 }
 
 #[derive(Clone, Copy)]
-enum JudgmentProxyKind {
+enum FlatProxyKind {
     ActorCapture,
     DirectFragment,
 }
 
-struct JudgmentProxyScratch {
+struct FlatProxyScratch {
     draws: Vec<FlatDraw>,
+    source_actors: Vec<Actor>,
     actors: Vec<Actor>,
     capture: SharedActorFrameScratch,
 }
 
-impl JudgmentProxyScratch {
-    fn new() -> Self {
+impl FlatProxyScratch {
+    fn new(draw_count: usize, zero_z: bool) -> Self {
         Self {
-            draws: (0..JUDGMENT_PROXY_DRAWS)
+            draws: (0..draw_count)
                 .map(|index| {
                     let mut draw = boundary_flat_draw(index);
-                    let FlatDraw::Sprite(sprite) = &mut draw else {
-                        unreachable!();
-                    };
-                    sprite.z = 0;
+                    if zero_z {
+                        let FlatDraw::Sprite(sprite) = &mut draw else {
+                            unreachable!();
+                        };
+                        sprite.z = 0;
+                    }
                     draw
                 })
                 .collect(),
+            source_actors: Vec::with_capacity(draw_count + 2),
             actors: Vec::with_capacity(1),
-            capture: SharedActorFrameScratch::with_capacity(JUDGMENT_PROXY_DRAWS),
+            capture: SharedActorFrameScratch::with_capacity(draw_count + 2),
         }
     }
 }
 
-fn judgment_proxy_frame(
-    kind: JudgmentProxyKind,
-    source: &mut JudgmentProxyScratch,
+fn flat_proxy_frame(
+    kind: FlatProxyKind,
+    source: &mut FlatProxyScratch,
+    camera: Option<Mat4>,
     metrics: &deadlib_present::space::Metrics,
     fonts: &font::FontMap,
     resources: &ActorResourceArena,
@@ -991,13 +997,23 @@ fn judgment_proxy_frame(
     source.actors.clear();
     let tint = [0.5, 0.75, 0.25, 0.8];
     let segment = match kind {
-        JudgmentProxyKind::ActorCapture => {
+        FlatProxyKind::ActorCapture => {
+            source.source_actors.clear();
+            if let Some(view_proj) = camera {
+                source.source_actors.push(Actor::CameraPush { view_proj });
+            }
+            source
+                .source_actors
+                .extend(source.draws.iter().cloned().map(actor_from_flat_draw));
+            if camera.is_some() {
+                source.source_actors.push(Actor::CameraPop);
+            }
             let children = source
                 .capture
                 .refill([0.0, 0.0], |out| {
-                    out.extend(source.draws.iter().cloned().map(actor_from_flat_draw));
+                    benchmark_normalize_proxy_actor_source(&source.source_actors, out);
                 })
-                .expect("benchmark Judgment capture is nonempty");
+                .expect("benchmark proxy capture is nonempty");
             source.actors.push(Actor::SharedFrame {
                 align: [0.0, 0.0],
                 offset: [0.0, 0.0],
@@ -1010,9 +1026,14 @@ fn judgment_proxy_frame(
             });
             ActorSegment::new(&source.actors)
         }
-        JudgmentProxyKind::DirectFragment => {
-            ActorSegment::flat_proxy(&source.draws, [0.0, 0.0], 42, tint, BlendMode::Add)
-        }
+        FlatProxyKind::DirectFragment => ActorSegment::flat_proxy_with_camera(
+            &source.draws,
+            [0.0, 0.0],
+            42,
+            tint,
+            BlendMode::Add,
+            camera.as_ref(),
+        ),
     };
     let mut output =
         build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
@@ -1032,17 +1053,21 @@ fn judgment_proxy_frame(
     checksum
 }
 
-fn measure_judgment_proxy_pair() -> [BoundaryResult; 2] {
+fn measure_flat_proxy_pair(
+    draw_count: usize,
+    zero_z: bool,
+    camera: Option<Mat4>,
+) -> [BoundaryResult; 2] {
     let metrics = deadlib_present::space::metrics_for_window(854, 480);
     let fonts = font::FontMap::default();
     let resources = ActorResourceArena::new(0);
     let mut texts = [TextLayoutCache::default(), TextLayoutCache::default()];
     let mut composers = [ComposeScratch::default(), ComposeScratch::default()];
-    let mut sources = [JudgmentProxyScratch::new(), JudgmentProxyScratch::new()];
-    let kinds = [
-        JudgmentProxyKind::ActorCapture,
-        JudgmentProxyKind::DirectFragment,
+    let mut sources = [
+        FlatProxyScratch::new(draw_count, zero_z),
+        FlatProxyScratch::new(draw_count, zero_z),
     ];
+    let kinds = [FlatProxyKind::ActorCapture, FlatProxyKind::DirectFragment];
     let mut elapsed = [Duration::ZERO; 2];
     let mut cycles = [0u64; 2];
     let mut allocated = [AllocSnapshot {
@@ -1062,9 +1087,10 @@ fn measure_judgment_proxy_pair() -> [BoundaryResult; 2] {
             let started = Instant::now();
             let mut batch_checksum = 0.0;
             for _ in 0..BOUNDARY_BATCH_FRAMES {
-                batch_checksum += judgment_proxy_frame(
+                batch_checksum += flat_proxy_frame(
                     kinds[kind_index],
                     &mut sources[kind_index],
+                    camera,
                     &metrics,
                     &fonts,
                     &resources,
@@ -1100,7 +1126,24 @@ fn measure_judgment_proxy_pair() -> [BoundaryResult; 2] {
 
 fn print_judgment_proxy_benchmark() {
     println!("\ndirect SongLua Judgment proxy benchmark ({JUDGMENT_PROXY_DRAWS} draws)");
-    let [actor, direct] = measure_judgment_proxy_pair();
+    let [actor, direct] = measure_flat_proxy_pair(JUDGMENT_PROXY_DRAWS, true, None);
+    assert_eq!(actor.checksum, direct.checksum);
+    print_boundary_result("actor capture", &actor);
+    print_boundary_result("direct fragment", &direct);
+    for result in [&actor, &direct] {
+        assert_zero_alloc(&BenchResult {
+            elapsed: result.elapsed,
+            cycles: result.cycles,
+            allocated: result.allocated,
+            checksum: result.checksum,
+        });
+    }
+}
+
+fn print_notefield_proxy_benchmark() {
+    println!("\ndirect SongLua NoteField proxy benchmark ({FIELD_PROXY_DRAWS} draws)");
+    let camera = notefield_view_proj(854.0, 480.0, 427.0, 240.0, 0.2, 0.1, false);
+    let [actor, direct] = measure_flat_proxy_pair(FIELD_PROXY_DRAWS, false, camera);
     assert_eq!(actor.checksum, direct.checksum);
     print_boundary_result("actor capture", &actor);
     print_boundary_result("direct fragment", &direct);
@@ -2846,6 +2889,10 @@ fn print_cue_countdown_benchmark() {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_NOTEFIELD_PROXY_ONLY").is_some() {
+        print_notefield_proxy_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_JUDGMENT_PROXY_ONLY").is_some() {
         print_judgment_proxy_benchmark();
         return;

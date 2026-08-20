@@ -749,10 +749,23 @@ impl<'a> ActorSegment<'a> {
         tint: [f32; 4],
         blend: BlendMode,
     ) -> Self {
+        Self::flat_proxy_with_camera(draws, offset, z, tint, blend, None)
+    }
+
+    /// Borrows a source-ordered draw fragment through ActorProxy-compatible
+    /// frame placement and an optional already-resolved camera scope.
+    pub const fn flat_proxy_with_camera(
+        draws: &'a [actors::FlatDraw],
+        offset: [f32; 2],
+        z: i16,
+        tint: [f32; 4],
+        blend: BlendMode,
+        camera: Option<&'a Matrix4>,
+    ) -> Self {
         Self {
             actors: &[],
             flat_draws: draws,
-            flat_camera: None,
+            flat_camera: camera,
             z_shift: z,
             tint,
             blend: Some(blend),
@@ -5355,18 +5368,9 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
         flat_offset,
         [SizeSpec::Fill, SizeSpec::Fill],
     );
+    let proxy_start = out.len();
     for draw in segment.flat_draws {
-        let local_z = match draw {
-            actors::FlatDraw::Sprite(draw) => draw.z,
-            actors::FlatDraw::TexturedMesh(draw) => draw.z,
-            actors::FlatDraw::PreparedU32(draw) => draw.z,
-            actors::FlatDraw::PreparedInline(draw) => draw.z,
-        };
-        let base_z = if fixed_z {
-            segment.z_shift.saturating_sub(local_z)
-        } else {
-            segment.z_shift
-        };
+        let base_z = if fixed_z { 0 } else { segment.z_shift };
         match draw {
             actors::FlatDraw::Sprite(sprite) => build_flat_sprite(
                 sprite,
@@ -5459,6 +5463,22 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                 texture_cache,
                 texture_ctx,
             ),
+        }
+    }
+    if fixed_z {
+        // SharedFrame normalizes child actors by authored local Z before its
+        // own fixed layer replaces those values. Draw order is unique, so an
+        // unstable in-place sort of the compact draw records is stable with
+        // respect to the authored sequence and needs no temporary allocation.
+        out.items[proxy_start..].sort_unstable_by_key(|item| item.sort_key());
+        let first_order = out.items[proxy_start..]
+            .iter()
+            .map(|item| item.order)
+            .min()
+            .unwrap_or(*order_counter);
+        for (index, item) in out.items[proxy_start..].iter_mut().enumerate() {
+            item.z = segment.z_shift;
+            item.order = first_order.saturating_add(saturating_u32(index));
         }
     }
 }
@@ -12396,6 +12416,107 @@ mod tests {
         assert_eq!(
             direct_render.sprite_instances,
             actor_render.sprite_instances
+        );
+        assert_eq!(direct_render.cameras, actor_render.cameras);
+    }
+
+    #[test]
+    fn flat_proxy_camera_stably_normalizes_local_z_without_source_mutation() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let camera = Matrix4::from_translation(glam::Vec3::new(0.125, -0.25, 0.0));
+        let specs = [(0.0, 200), (1.0, 95), (2.0, 196), (3.0, 195), (4.0, 196)];
+        let draws = specs.map(|(x, z)| {
+            FlatDraw::Sprite(FlatSprite {
+                center: [x + 8.0, 24.0],
+                world_z: 0.0,
+                size: [16.0, 32.0],
+                source: SpriteSource::static_texture("proxy-z-sprite"),
+                tint: [0.8, 0.6, 0.4, 1.0],
+                glow: [0.0; 4],
+                uv_rect: [0.0, 0.0, 1.0, 1.0],
+                flip_x: false,
+                flip_y: false,
+                fade: [0.0; 4],
+                blend: BlendMode::Alpha,
+                rot_y_deg: 0.0,
+                rot_z_deg: 0.0,
+                z,
+            })
+        });
+        let mut children = Vec::with_capacity(7);
+        children.push(Actor::CameraPush { view_proj: camera });
+        for index in [1, 3, 2, 4, 0] {
+            let mut actor = test_sprite(SpriteSource::static_texture("proxy-z-sprite"));
+            let Actor::Sprite { offset, z, .. } = &mut actor else {
+                unreachable!();
+            };
+            *offset = [specs[index].0, 8.0];
+            *z = 0;
+            children.push(actor);
+        }
+        children.push(Actor::CameraPop);
+        let actor = [Actor::SharedFrame {
+            align: [0.0, 0.0],
+            offset: [10.0, -3.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children: Arc::from(children),
+            background: None,
+            z: 42,
+            tint: [0.5, 0.75, 0.25, 0.8],
+            blend: Some(BlendMode::Add),
+        }];
+        let resources = ActorResourceArena::new(0);
+        let mut actor_text = TextLayoutCache::default();
+        let mut actor_scratch = ComposeScratch::default();
+        let actor_render =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::new(&actor)],
+                [0.0; 4],
+                &metrics,
+                &font::FontMap::default(),
+                0.0,
+                &mut actor_text,
+                &mut actor_scratch,
+                &TestDrawTextureContext,
+                &resources,
+            );
+        let mut direct_text = TextLayoutCache::default();
+        let mut direct_scratch = ComposeScratch::default();
+        let direct_render =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::flat_proxy_with_camera(
+                    &draws,
+                    [10.0, -3.0],
+                    42,
+                    [0.5, 0.75, 0.25, 0.8],
+                    BlendMode::Add,
+                    Some(&camera),
+                )],
+                [0.0; 4],
+                &metrics,
+                &font::FontMap::default(),
+                0.0,
+                &mut direct_text,
+                &mut direct_scratch,
+                &TestDrawTextureContext,
+                &resources,
+            );
+
+        assert_eq!(
+            draws.map(|draw| match draw {
+                FlatDraw::Sprite(sprite) => sprite.z,
+                _ => unreachable!(),
+            }),
+            [200, 95, 196, 195, 196]
+        );
+        assert_eq!(
+            sprite_painter_stream(&direct_render),
+            sprite_painter_stream(&actor_render)
         );
         assert_eq!(direct_render.cameras, actor_render.cameras);
     }

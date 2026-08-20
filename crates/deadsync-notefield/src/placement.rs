@@ -125,6 +125,7 @@ pub struct ViewOverride {
 pub struct ProxyCaptureRequests {
     pub player: bool,
     pub note_field: bool,
+    pub direct_note_field: bool,
     pub judgment: bool,
     pub direct_judgment: bool,
     pub combo: bool,
