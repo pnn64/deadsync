@@ -82,10 +82,8 @@ where
 {
     debug_assert!(
         !request.capture_requests.direct_note_field
-            || (!request.capture_requests.note_field
-                && !request.capture_requests.player
-                && !request.view.edit_beat_bars),
-        "direct NoteField capture requires an actor-free retained field range"
+            || (!request.capture_requests.note_field && !request.capture_requests.player),
+        "direct NoteField capture cannot share an actor capture source"
     );
     model_cache.begin_frame();
     hold_mesh_scratch.begin_frame();
@@ -98,7 +96,7 @@ where
         return NotefieldFieldResult::default();
     };
     let field_camera = resolve_field_camera(camera_cache, request, prepared);
-    let actor_camera_scope = request.capture_requests.note_field || request.view.edit_beat_bars;
+    let actor_camera_scope = request.capture_requests.note_field;
     if actor_camera_scope && let Some(view_proj) = field_camera {
         actors.push(Actor::CameraPush { view_proj });
     }
@@ -119,15 +117,26 @@ where
     if request.capture_requests.note_field {
         actors.extend(flat_draws.drain(..).map(actor_from_flat_draw));
     }
-    debug_assert!(
-        actor_camera_scope || actors.len() == field_start,
-        "ordinary gameplay field presentation must stay on the direct draw stream"
-    );
     finish_field_camera(
         actors,
         field_start,
         field_content_start,
         actor_camera_scope && field_camera.is_some(),
+    );
+    if !actor_camera_scope
+        && !request.capture_requests.direct_note_field
+        && actors.len() > field_start
+        && let Some(view_proj) = field_camera
+    {
+        actors.insert(field_start, Actor::CameraPush { view_proj });
+        actors.push(Actor::CameraPop);
+    }
+    debug_assert!(
+        actors.len() == field_start
+            || actor_camera_scope
+            || request.view.edit_beat_bars
+            || request.capture_requests.direct_note_field,
+        "ordinary uncaptured gameplay fields must stay on the direct draw stream",
     );
 
     let captured_actors = request
@@ -323,6 +332,7 @@ fn compose_field_contents<S, F>(
             scrolls: request.chart.scrolls,
             displayed_beat_monotonic: request.chart.displayed_beat_monotonic,
             cue_visible_row_range,
+            edit_measure_text_slot_base: request.edit_measure_text_slot_base,
             travel,
         },
     );

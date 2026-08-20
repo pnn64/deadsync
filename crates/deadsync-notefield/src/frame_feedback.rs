@@ -947,6 +947,7 @@ mod tests {
             },
             options: options(),
             capture_requests: ProxyCaptureRequests::default(),
+            edit_measure_text_slot_base: 0,
             arrow_effect_time_s: 0.1,
         }
     }

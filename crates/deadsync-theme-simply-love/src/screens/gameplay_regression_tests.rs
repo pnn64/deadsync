@@ -2935,6 +2935,23 @@ return Def.ActorFrame{
                     &mut text_cache,
                     &mut compose_scratch,
                 );
+
+                let mut edit_actors = Vec::with_capacity(512);
+                let edit_segments = screen_gameplay::push_actors(
+                    &mut edit_actors,
+                    &mut state,
+                    &assets,
+                    screen_gameplay::ActorViewOverride {
+                        notefield: screen_gameplay::NotefieldViewOverride {
+                            edit_beat_bars: true,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                    123.0,
+                    crate::views::SimplyLoveVisualPolicyView::default(),
+                );
+                assert!(edit_segments.has_direct_field_proxy(&state));
             },
         );
     }

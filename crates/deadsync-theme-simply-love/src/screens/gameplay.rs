@@ -8599,20 +8599,22 @@ fn prepare_flat_proxy_source(
     Some(PreparedProxySource::new(segments))
 }
 
-fn prepare_flat_field_proxy_source(
+fn prepare_field_proxy_source(
+    actors: &[Actor],
     draws: &[FlatDraw],
     camera: Option<Matrix4>,
     transform: SongLuaCaptureTransform,
     scratch: &mut SharedActorFrameScratch,
 ) -> Option<PreparedProxySource> {
-    if draws.is_empty() {
+    if actors.is_empty() && draws.is_empty() {
         return None;
     }
-    let field_len = draws.len() + usize::from(camera.is_some()) * 2;
+    let field_len = actors.len() + draws.len() + usize::from(camera.is_some()) * 2;
     let field_actors = || {
         camera
             .map(|view_proj| Actor::CameraPush { view_proj })
             .into_iter()
+            .chain(actors.iter().cloned())
             .chain(draws.iter().cloned().map(actor_from_flat_draw))
             .chain(camera.map(|_| Actor::CameraPop))
     };
@@ -16354,7 +16356,6 @@ pub fn push_actors(
             || proxy_analysis.direct_aft.players[player].note_field)
             && !proxy_analysis.captured.players[player].note_field
             && (!proxy_requests.players[player].player || direct_player_candidates[player])
-            && !notefield_view.edit_beat_bars
     });
     let direct_judgment_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
         (proxy_analysis.root_judgments[player] != 0
@@ -16874,7 +16875,8 @@ pub fn push_actors(
                         .any(|source| source.draw_start < source.draw_end)
                 });
             let direct_note_field = direct_note_field_candidates[player_idx]
-                && song_lua_player_transform_is_direct_proxy(capture_transform);
+                && song_lua_player_transform_is_direct_proxy(capture_transform)
+                && field_scratch.is_empty();
             let direct_note_field_source = direct_note_field
                 .then_some(field_draw_range.as_ref())
                 .flatten()
@@ -16889,14 +16891,18 @@ pub fn push_actors(
                 });
             let note_field_source = if direct_note_field_candidates[player_idx] {
                 (!direct_note_field)
-                    .then_some(field_draw_range.as_ref())
-                    .flatten()
-                    .and_then(|range| {
+                    .then(|| {
+                        let range = field_draw_range.clone().unwrap_or(0..0);
+                        let draws = flat_draw_scratch.get(range).unwrap_or(&[]);
+                        (draws, field_scratch)
+                    })
+                    .and_then(|(draws, actors)| {
                         let scratch = song_lua_proxy_actor_scratch
                             .as_mut()?
                             .player(player_idx, SONG_LUA_FIELD_PROXY_SOURCE)?;
-                        prepare_flat_field_proxy_source(
-                            &flat_draw_scratch[range.clone()],
+                        prepare_field_proxy_source(
+                            actors,
+                            draws,
                             proxy_field_camera,
                             capture_transform,
                             scratch,
@@ -18939,6 +18945,7 @@ mod tests {
         NullTextureContext,
         build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
     };
+    use deadlib_present::dsl::TextBuilder;
     use deadlib_render_core::frame_compare::compare_render_frames_semantic;
 
     fn workspace_root() -> std::path::PathBuf {
@@ -22943,7 +22950,7 @@ mod tests {
         let camera = Matrix4::IDENTITY;
         let mut field_scratch = SharedActorFrameScratch::with_capacity(3);
         let source =
-            prepare_flat_field_proxy_source(&draws, Some(camera), transform, &mut field_scratch)
+            prepare_field_proxy_source(&[], &draws, Some(camera), transform, &mut field_scratch)
                 .expect("translated field proxy source should render");
         let proxy_state = SongLuaOverlayState {
             x: screen_center_x() + 120.0,
@@ -23006,6 +23013,57 @@ mod tests {
             compare_render_frames_semantic(&actor_frame, &direct_frame),
             Ok(())
         );
+    }
+
+    #[test]
+    fn field_proxy_overflow_keeps_actor_and_direct_draw_inside_camera() {
+        let camera = Matrix4::from_rotation_x(0.17);
+        let mut text = TextBuilder::new();
+        text.settext(TextContent::static_str("overflow"));
+        text.z(81);
+        let actors = [text.build(0)];
+        let draws = [FlatDraw::Sprite(deadlib_present::actors::FlatSprite {
+            center: [320.0, 240.0],
+            world_z: 0.0,
+            size: [32.0, 2.0],
+            source: deadlib_present::actors::SpriteSource::Solid,
+            tint: [1.0; 4],
+            glow: [0.0; 4],
+            uv_rect: [0.0, 0.0, 1.0, 1.0],
+            flip_x: false,
+            flip_y: false,
+            fade: [0.0; 4],
+            blend: BlendMode::Alpha,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            z: 80,
+        })];
+        let transform = SongLuaCaptureTransform {
+            z_shift: 0,
+            tint: [1.0; 4],
+            blend: None,
+            playfield_center_x: screen_center_x(),
+            target_x: screen_center_x(),
+            target_y: screen_center_y(),
+            rotation_x: 0.0,
+            rotation_z: 0.0,
+            rotation_y: 0.0,
+            skew_x: 0.0,
+            skew_y: 0.0,
+            zoom_x: 1.0,
+            zoom_y: 1.0,
+            zoom_z: 1.0,
+        };
+        let mut scratch = SharedActorFrameScratch::with_capacity(4);
+        let source =
+            prepare_field_proxy_source(&actors, &draws, Some(camera), transform, &mut scratch)
+                .expect("hybrid field proxy source should render");
+        let children = song_lua_captured_segment_actors(&source.segments[0]);
+
+        assert!(matches!(children[0], Actor::CameraPush { view_proj } if view_proj == camera));
+        assert!(matches!(children[1], Actor::Text { z: 81, .. }));
+        assert!(matches!(children[2], Actor::Sprite { z: 80, .. }));
+        assert!(matches!(children[3], Actor::CameraPop));
     }
 
     #[test]

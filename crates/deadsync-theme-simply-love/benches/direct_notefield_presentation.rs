@@ -76,6 +76,7 @@ const CAMERA_SLOT_MEASURE_BATCHES: usize = 400;
 const HUD_TEXT_RUNS: usize = 8;
 const ERROR_BAR_TEXT_RUNS: usize = 4;
 const CUE_COUNTDOWN_RUNS: usize = 3;
+const EDIT_MEASURE_RUNS: usize = 12;
 const JUDGMENT_PROXY_DRAWS: usize = 8;
 const FIELD_PROXY_DRAWS: usize = BOUNDARY_FIELD_DRAWS;
 
@@ -2634,12 +2635,14 @@ fn numeric_font() -> Font {
 enum NumericCase {
     Combo,
     CueCountdown,
+    EditMeasure,
 }
 
 const fn numeric_run_count(case: NumericCase) -> usize {
     match case {
         NumericCase::Combo => 1,
         NumericCase::CueCountdown => CUE_COUNTDOWN_RUNS,
+        NumericCase::EditMeasure => EDIT_MEASURE_RUNS,
     }
 }
 
@@ -2647,6 +2650,7 @@ fn numeric_value(case: NumericCase, frame: usize, player: usize, run: usize) -> 
     match case {
         NumericCase::Combo => ((frame + 1) * (player + 3)) as u32,
         NumericCase::CueCountdown => ((frame / 60 + player * 11 + run * 7) % 60 + 1) as u32,
+        NumericCase::EditMeasure => ((frame / 60 + player * 17 + run) % 60) as u32,
     }
 }
 
@@ -2657,6 +2661,7 @@ fn numeric_position(case: NumericCase, player: usize, run: usize) -> [f32; 2] {
             220.0 + player as f32 * 240.0 + run as f32 * 24.0,
             if run % 2 == 0 { 160.0 } else { 340.0 },
         ],
+        NumericCase::EditMeasure => [256.0 + player as f32 * 342.0, 20.0 + run as f32 * 40.0],
     }
 }
 
@@ -2672,40 +2677,79 @@ fn numeric_actor(
     text.settext(match case {
         NumericCase::Combo => TextContent::prepared_u32(value, player as u8),
         NumericCase::CueCountdown => TextContent::Shared(cached),
+        NumericCase::EditMeasure => TextContent::inline_u32(value),
     });
-    text.align(0.5, 0.5);
+    text.align(
+        if matches!(case, NumericCase::EditMeasure) {
+            1.0
+        } else {
+            0.5
+        },
+        0.5,
+    );
     let [x, y] = numeric_position(case, player, run);
     text.xy(x, y);
     text.zoom(match case {
         NumericCase::Combo => 0.75,
         NumericCase::CueCountdown => 0.5,
+        NumericCase::EditMeasure => 0.45,
     });
-    text.horizalign(TextAlign::Center);
-    if matches!(case, NumericCase::Combo) {
-        text.shadowlength(1.0);
+    text.horizalign(if matches!(case, NumericCase::EditMeasure) {
+        TextAlign::Right
+    } else {
+        TextAlign::Center
+    });
+    match case {
+        NumericCase::Combo => text.shadowlength(1.0),
+        NumericCase::EditMeasure => text.shadowlength(2.0),
+        NumericCase::CueCountdown => {}
     }
     text.diffuse([0.2, 0.8, 0.4, 0.9]);
     text.z(match case {
         NumericCase::Combo => 90,
         NumericCase::CueCountdown => 200,
+        NumericCase::EditMeasure => 81,
     });
     text.build(0)
 }
 
 fn numeric_draw(case: NumericCase, value: u32, player: usize, run: usize) -> FlatDraw {
     let combo = matches!(case, NumericCase::Combo);
+    let edit = matches!(case, NumericCase::EditMeasure);
     FlatDraw::PreparedU32(FlatPreparedU32 {
-        align: [0.5, 0.5],
+        align: [if edit { 1.0 } else { 0.5 }, 0.5],
         offset: numeric_position(case, player, run),
         color: [0.2, 0.8, 0.4, 0.9],
         font: "bench-numeric",
         text: InlineU32Text::new(value),
         slot: (player * numeric_run_count(case) + run) as u8,
-        align_text: TextAlign::Center,
-        z: if combo { 90 } else { 200 },
-        scale: [if combo { 0.75 } else { 0.5 }; 2],
+        align_text: if edit {
+            TextAlign::Right
+        } else {
+            TextAlign::Center
+        },
+        z: if combo {
+            90
+        } else if edit {
+            81
+        } else {
+            200
+        },
+        scale: [if combo {
+            0.75
+        } else if edit {
+            0.45
+        } else {
+            0.5
+        }; 2],
         blend: BlendMode::Alpha,
-        shadow_len: if combo { [1.0, -1.0] } else { [0.0; 2] },
+        shadow_len: if combo {
+            [1.0, -1.0]
+        } else if edit {
+            [2.0, -2.0]
+        } else {
+            [0.0; 2]
+        },
         shadow_color: [0.0, 0.0, 0.0, 0.5],
     })
 }
@@ -2735,7 +2779,7 @@ impl NumericScratch {
                         let value = numeric_value(case, frame, player, run);
                         let cached = match case {
                             NumericCase::Combo => Arc::clone(&self.cached_values[0]),
-                            NumericCase::CueCountdown => {
+                            NumericCase::CueCountdown | NumericCase::EditMeasure => {
                                 Arc::clone(&self.cached_values[value as usize])
                             }
                         };
@@ -2818,14 +2862,14 @@ fn measure_numeric_pair(case: NumericCase) -> [BoundaryResult; 2] {
     let resources = ActorResourceArena::new(0);
     let cache_entries = match case {
         NumericCase::Combo => 1,
-        NumericCase::CueCountdown => 256,
+        NumericCase::CueCountdown | NumericCase::EditMeasure => 256,
     };
     let mut text: [TextLayoutCache; 2] =
         std::array::from_fn(|_| TextLayoutCache::new(cache_entries));
     let mut compose: [ComposeScratch; 2] = std::array::from_fn(|_| ComposeScratch::default());
     let mut source = NumericScratch::new(case);
     for cache in &mut text {
-        if matches!(case, NumericCase::CueCountdown) {
+        if matches!(case, NumericCase::CueCountdown | NumericCase::EditMeasure) {
             for value in &source.cached_values {
                 cache.prewarm_text(&fonts, "bench-numeric", value, None);
             }
@@ -2837,14 +2881,18 @@ fn measure_numeric_pair(case: NumericCase) -> [BoundaryResult; 2] {
                 &fonts,
                 "bench-numeric",
                 slot as u8,
-                TextAlign::Center,
+                if matches!(case, NumericCase::EditMeasure) {
+                    TextAlign::Right
+                } else {
+                    TextAlign::Center
+                },
             );
         }
     }
     let kinds = [BoundaryKind::WideActors, BoundaryKind::FlatDraws];
     let mut frame_index = 0usize;
 
-    if matches!(case, NumericCase::CueCountdown) {
+    if matches!(case, NumericCase::CueCountdown | NumericCase::EditMeasure) {
         // Gameplay transition warmup prepares the complete bounded countdown
         // domain. Exercise every retained shared value here as well so the
         // actor control does not measure first-use alias or mesh construction.
@@ -3393,6 +3441,25 @@ fn print_cue_countdown_benchmark() {
     print_boundary_result("prepared flat", &flat);
 }
 
+fn print_edit_measure_benchmark() {
+    println!(
+        "\nedit measure-number boundary benchmark \
+         (2 players, {EDIT_MEASURE_RUNS} visible labels/player)"
+    );
+    let [wide, flat] = measure_numeric_pair(NumericCase::EditMeasure);
+    assert_eq!(wide.checksum, flat.checksum);
+    for result in [&wide, &flat] {
+        assert_zero_alloc(&BenchResult {
+            elapsed: result.elapsed,
+            cycles: result.cycles,
+            allocated: result.allocated,
+            checksum: result.checksum,
+        });
+    }
+    print_boundary_result("inline text actors", &wide);
+    print_boundary_result("prepared flat", &flat);
+}
+
 fn main() {
     if std::env::var_os("DEADSYNC_BENCH_Y_FOLDED_PLAYER_PROXY_ONLY").is_some() {
         print_y_folded_player_proxy_benchmark();
@@ -3460,6 +3527,10 @@ fn main() {
     }
     if std::env::var_os("DEADSYNC_BENCH_CUE_COUNTDOWN_ONLY").is_some() {
         print_cue_countdown_benchmark();
+        return;
+    }
+    if std::env::var_os("DEADSYNC_BENCH_EDIT_MEASURE_ONLY").is_some() {
+        print_edit_measure_benchmark();
         return;
     }
     if std::env::var_os("DEADSYNC_BENCH_ZMOD_HUD_ONLY").is_some() {
@@ -3567,6 +3638,7 @@ fn main() {
 
     print_hud_text_benchmark();
     print_cue_countdown_benchmark();
+    print_edit_measure_benchmark();
     print_error_bar_text_benchmark();
 }
 

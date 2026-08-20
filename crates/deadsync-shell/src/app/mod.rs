@@ -854,6 +854,7 @@ fn prewarm_gameplay_text_layout_cache(
     actor_scratch: &mut Vec<Actor>,
     state: &mut gameplay::State,
     config: &config::Config,
+    edit_measure_text: bool,
 ) {
     let started = Instant::now();
     // Gameplay prewarm owns the whole cache for the next song, so start from an
@@ -906,6 +907,7 @@ fn prewarm_gameplay_text_layout_cache(
         compose_scratch,
         fonts,
         state,
+        edit_measure_text,
     );
     gameplay::prewarm_compose_storage(compose_scratch, state);
     // Keep a bounded song-local allowance for genuinely dynamic values. Reserving
@@ -8049,6 +8051,7 @@ impl App {
                     &mut self.actor_scratch,
                     &mut gs,
                     &cfg,
+                    true,
                 );
                 let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let song = gs.song();
@@ -8487,6 +8490,7 @@ impl App {
                     &mut self.actor_scratch,
                     &mut gs,
                     &cfg,
+                    false,
                 );
                 let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let total_ms = gameplay_entry_started.elapsed().as_secs_f64() * 1000.0;

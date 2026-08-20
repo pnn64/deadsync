@@ -122,8 +122,11 @@ use holds::{
     maybe_mirror_uv_horiz_for_reverse_flipped, scale_cap_to_arrow, song_time_ns_delta_seconds,
     top_cap_rotation_deg,
 };
+pub use measure_actors::EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER;
 #[cfg(test)]
-use measure_actors::{append_beat_bar, append_cue_bar, append_edit_measure_number};
+use measure_actors::{
+    EditMeasureTextSlots, append_beat_bar, append_cue_bar, append_edit_measure_number,
+};
 pub(crate) use measure_lines::{MeasureComposeRequest, compose_measure_lines};
 #[cfg(test)]
 use measure_lines::{
@@ -232,8 +235,9 @@ mod tests {
 
     use super::{
         AccelYParams, BuiltNotefield, DISPLAY_TURN_MIRROR, DISPLAY_TURN_RANDOM,
-        DISPLAY_TURN_UD_MIRROR, GameplayModsAttackMode, GameplayModsTextParams, HudLayoutOffsets,
-        HudLayoutParams, JudgmentTiltParams, LayoutMiniIndicatorPosition, MiniIndicatorColorStyle,
+        DISPLAY_TURN_UD_MIRROR, EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER, EditMeasureTextSlots,
+        GameplayModsAttackMode, GameplayModsTextParams, HudLayoutOffsets, HudLayoutParams,
+        JudgmentTiltParams, LayoutMiniIndicatorPosition, MiniIndicatorColorStyle,
         MiniIndicatorMode, MiniIndicatorProgress, MiniIndicatorScoreType, MiniIndicatorSize,
         MiniIndicatorSubtractiveDisplay, NoteAlphaParams, NoteXParams, TapJudgmentRowsParams,
         TapReplacementHead, TornadoBounds, VisualEffectParams, ZmodComboColorParams,
@@ -561,10 +565,14 @@ mod tests {
     }
 
     #[test]
-    fn edit_measure_number_actor_respects_edit_mode_and_measure_index() {
+    fn edit_measure_number_uses_direct_numeric_draw_and_exact_overflow() {
         let mut actors = Vec::new();
+        let mut draws = Vec::new();
+        let mut slots = EditMeasureTextSlots::new(20);
         append_edit_measure_number(
             &mut actors,
+            &mut draws,
+            &mut slots,
             false,
             Some(4),
             12.0,
@@ -575,6 +583,8 @@ mod tests {
         );
         append_edit_measure_number(
             &mut actors,
+            &mut draws,
+            &mut slots,
             true,
             Some(-1),
             12.0,
@@ -583,10 +593,34 @@ mod tests {
             80,
             "edit-font",
         );
-        append_edit_measure_number(&mut actors, true, None, 12.0, 34.0, 1.0, 80, "edit-font");
-        append_edit_measure_number(&mut actors, true, Some(4), 12.0, 34.0, 0.5, 80, "edit-font");
         append_edit_measure_number(
             &mut actors,
+            &mut draws,
+            &mut slots,
+            true,
+            None,
+            12.0,
+            34.0,
+            1.0,
+            80,
+            "edit-font",
+        );
+        append_edit_measure_number(
+            &mut actors,
+            &mut draws,
+            &mut slots,
+            true,
+            Some(4),
+            12.0,
+            34.0,
+            0.5,
+            80,
+            "edit-font",
+        );
+        append_edit_measure_number(
+            &mut actors,
+            &mut draws,
+            &mut slots,
             true,
             Some(i64::MAX),
             12.0,
@@ -596,34 +630,57 @@ mod tests {
             "edit-font",
         );
 
-        assert_eq!(actors.len(), 2);
-        match &actors[0] {
-            Actor::Text {
-                align,
-                offset,
-                font,
-                content,
-                align_text,
-                z,
-                scale,
-                shadow_len,
-                ..
-            } => {
-                assert_eq!(*align, [1.0, 0.5]);
-                assert_eq!(*offset, [12.0, 34.0]);
-                assert_eq!(*font, "edit-font");
-                assert_eq!(content.as_str(), "4");
-                assert_eq!(*align_text, TextAlign::Right);
-                assert_eq!(*z, 81);
-                assert_eq!(*scale, [0.45, 0.45]);
-                assert_eq!(*shadow_len, [2.0, -2.0]);
-            }
-            actor => panic!("expected measure number text, got {actor:?}"),
-        }
-        let Actor::Text { content, .. } = &actors[1] else {
+        assert_eq!(draws.len(), 1);
+        let FlatDraw::PreparedU32(text) = &draws[0] else {
+            panic!("expected prepared measure number, got {:?}", draws[0]);
+        };
+        assert_eq!(text.align, [1.0, 0.5]);
+        assert_eq!(text.offset, [12.0, 34.0]);
+        assert_eq!(text.font, "edit-font");
+        assert_eq!(text.text.as_str(), "4");
+        assert_eq!(text.slot, 20);
+        assert_eq!(text.align_text, TextAlign::Right);
+        assert_eq!(text.z, 81);
+        assert_eq!(text.scale, [0.45, 0.45]);
+        assert_eq!(text.shadow_len, [2.0, -2.0]);
+
+        assert_eq!(actors.len(), 1);
+        let Actor::Text { content, .. } = &actors[0] else {
             panic!("expected large measure number text")
         };
         assert_eq!(content.as_str(), i64::MAX.to_string());
+    }
+
+    #[test]
+    fn edit_measure_number_slots_saturate_to_actor_fallback() {
+        let mut actors = Vec::new();
+        let mut draws = Vec::new();
+        let mut slots = EditMeasureTextSlots::new(0);
+        for value in 0..=u32::from(EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER) {
+            append_edit_measure_number(
+                &mut actors,
+                &mut draws,
+                &mut slots,
+                true,
+                Some(i64::from(value)),
+                12.0,
+                34.0,
+                1.0,
+                80,
+                "edit-font",
+            );
+        }
+
+        assert_eq!(draws.len(), usize::from(EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER));
+        assert!(draws.iter().enumerate().all(|(index, draw)| matches!(
+            draw,
+            FlatDraw::PreparedU32(text) if usize::from(text.slot) == index
+        )));
+        assert!(matches!(
+            actors.as_slice(),
+            [Actor::Text { content, .. }]
+                if content.as_str() == EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER.to_string()
+        ));
     }
 
     #[test]

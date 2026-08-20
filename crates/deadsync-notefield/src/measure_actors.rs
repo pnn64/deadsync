@@ -1,9 +1,49 @@
-use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SpriteSource, TextAlign, TextContent};
+use deadlib_present::actors::{
+    Actor, FlatDraw, FlatPreparedU32, FlatSprite, InlineU32Text, SpriteSource, TextAlign,
+    TextContent,
+};
 use deadlib_present::dsl::TextBuilder;
 use deadlib_render_core::BlendMode;
 
+/// Song-prewarmed decimal slots retained for visible edit measure labels.
+///
+/// The game thread owns this single-threaded, per-composition cursor; the
+/// prepared text layouts themselves live in the screen-lifetime presentation
+/// cache and are warmed when Practice starts. Capacity matches the edit-mode
+/// field reserve envelope: 72 entries per player, with no eviction or pruning
+/// on a live frame. A miss, oversized value, or saturation takes the exact
+/// Actor path without inserting into the prepared cache. Entries are destroyed
+/// with that presentation cache at screen teardown. Unit tests cover slot
+/// saturation and the benchmark reports time, cycles, and allocations. The
+/// per-frame cost is bounded by the existing visible-measure traversal.
+pub const EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER: u8 = 72;
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct EditMeasureTextSlots {
+    next: u16,
+    end: u16,
+}
+
+impl EditMeasureTextSlots {
+    pub(crate) fn new(base: u8) -> Self {
+        let next = u16::from(base);
+        Self {
+            next,
+            end: next + u16::from(EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER),
+        }
+    }
+
+    fn take(&mut self) -> Option<u8> {
+        let slot = (self.next < self.end).then(|| u8::try_from(self.next).ok())??;
+        self.next += 1;
+        Some(slot)
+    }
+}
+
 pub(crate) fn append_edit_measure_number(
     actors: &mut Vec<Actor>,
+    draws: &mut Vec<FlatDraw>,
+    slots: &mut EditMeasureTextSlots,
     edit_beat_bars: bool,
     measure_index: Option<i64>,
     x: f32,
@@ -19,13 +59,34 @@ pub(crate) fn append_edit_measure_number(
         return;
     }
 
+    let zoom = (field_zoom * 0.9).clamp(0.35, 0.75);
+    if let Ok(value) = u32::try_from(measure)
+        && let Some(slot) = slots.take()
+    {
+        draws.push(FlatDraw::PreparedU32(FlatPreparedU32 {
+            align: [1.0, 0.5],
+            offset: [x, y],
+            color: [1.0; 4],
+            font,
+            text: InlineU32Text::new(value),
+            slot,
+            align_text: TextAlign::Right,
+            z: z_measure_lines.saturating_add(1),
+            scale: [zoom; 2],
+            blend: BlendMode::Alpha,
+            shadow_len: [2.0, -2.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
+        }));
+        return;
+    }
+
     let mut text = TextBuilder::new();
     text.font(font);
     text.settext(edit_measure_text(measure as u64));
     text.align(1.0, 0.5);
     text.horizalign(TextAlign::Right);
     text.xy(x, y);
-    text.zoom((field_zoom * 0.9).clamp(0.35, 0.75));
+    text.zoom(zoom);
     text.shadowlength(2.0);
     text.diffuse([1.0, 1.0, 1.0, 1.0]);
     text.z(z_measure_lines.saturating_add(1));

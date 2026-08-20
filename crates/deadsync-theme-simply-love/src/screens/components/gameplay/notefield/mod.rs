@@ -752,6 +752,8 @@ pub(crate) fn compose_frame(
         },
         options: notefield_plan.options,
         capture_requests,
+        edit_measure_text_slot_base: super::FRAME_TEXT_EDIT_MEASURE_BASE
+            + player_idx as u8 * deadsync_notefield::EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER,
         arrow_effect_time_s,
     };
     let Some(prepared) = prepare_notefield(&request) else {

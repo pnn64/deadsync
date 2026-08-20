@@ -11,7 +11,8 @@ use deadsync_profile as profile_data;
 use super::super::display_mods::DISPLAY_MODS_WRAP_WIDTH_PX;
 use super::super::{
     FRAME_TEXT_COMBO_BASE, FRAME_TEXT_COUNTDOWN_BASE, FRAME_TEXT_COUNTER_BASE,
-    FRAME_TEXT_ERROR_BASE, FRAME_TEXT_MINI_BASE, FRAME_TEXT_VERTEX_BUFFERS,
+    FRAME_TEXT_EDIT_MEASURE_BASE, FRAME_TEXT_ERROR_BASE, FRAME_TEXT_MINI_BASE,
+    FRAME_TEXT_VERTEX_BUFFERS,
 };
 use super::text::{cached_int_i32, preferred_mods_text};
 use super::{
@@ -63,6 +64,7 @@ pub fn prewarm_frame_text_scratch(
     scratch: &mut ComposeScratch,
     fonts: &font::FontMap,
     state: &State,
+    edit_measure_text: bool,
 ) {
     let mini_glyphs = InlineText::copy_from("+-.%0123456789")
         .expect("the mini-indicator glyph domain fits inline");
@@ -106,6 +108,19 @@ pub fn prewarm_frame_text_scratch(
                     zmod_small_combo_font(profile.combo_font),
                     countdown_slot + offset,
                     TextAlign::Center,
+                );
+            }
+        }
+        if edit_measure_text {
+            let edit_measure_slot = FRAME_TEXT_EDIT_MEASURE_BASE
+                + player as u8 * deadsync_notefield::EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER;
+            for offset in 0..deadsync_notefield::EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER {
+                prewarm_u32_text_slot(
+                    cache,
+                    fonts,
+                    "miso",
+                    edit_measure_slot + offset,
+                    TextAlign::Right,
                 );
             }
         }

@@ -1,3 +1,4 @@
+use crate::measure_actors::EditMeasureTextSlots;
 use crate::measure_actors::{append_beat_bar, append_cue_bar, append_edit_measure_number};
 use crate::notes::ScrollTravel;
 use deadlib_present::actors::{Actor, FlatDraw};
@@ -42,6 +43,7 @@ pub(crate) struct MeasureComposeRequest<'a, 'travel> {
     pub scrolls: &'a [ScrollSegment],
     pub displayed_beat_monotonic: bool,
     pub cue_visible_row_range: Option<(i32, i32)>,
+    pub edit_measure_text_slot_base: u8,
     pub travel: &'a ScrollTravel<'travel>,
 }
 
@@ -452,6 +454,7 @@ fn append_line_candidate(
     y: f32,
     width: f32,
     info: Option<EditBeatBarInfo>,
+    edit_measure_slots: &mut EditMeasureTextSlots,
 ) {
     let alpha = line_alpha(unit, info, plan);
     if alpha <= 0.0 {
@@ -472,6 +475,8 @@ fn append_line_candidate(
     );
     append_edit_measure_number(
         actors,
+        draws,
+        edit_measure_slots,
         plan.edit,
         info.and_then(|info| info.measure_index),
         x_center - width * 0.5,
@@ -489,6 +494,7 @@ fn append_group_lines(
     plan: MeasureLinePlan,
     group: MeasureGroup,
     edit_cursor: Option<EditBeatBarCursor<'_>>,
+    edit_measure_slots: &mut EditMeasureTextSlots,
 ) {
     let Some((x_center, width)) = group_geometry(request, group) else {
         return;
@@ -517,7 +523,18 @@ fn append_group_lines(
         if (group.direction >= 0.0 && y < y_min) || (group.direction < 0.0 && y > y_max) {
             break;
         }
-        append_line_candidate(actors, draws, request, plan, unit, x_center, y, width, info);
+        append_line_candidate(
+            actors,
+            draws,
+            request,
+            plan,
+            unit,
+            x_center,
+            y,
+            width,
+            info,
+            edit_measure_slots,
+        );
         unit -= 1;
         iterations += 1;
     }
@@ -541,7 +558,18 @@ fn append_group_lines(
         if (group.direction >= 0.0 && y > y_max) || (group.direction < 0.0 && y < y_min) {
             break;
         }
-        append_line_candidate(actors, draws, request, plan, unit, x_center, y, width, info);
+        append_line_candidate(
+            actors,
+            draws,
+            request,
+            plan,
+            unit,
+            x_center,
+            y,
+            width,
+            info,
+            edit_measure_slots,
+        );
         unit += 1;
         iterations += 1;
     }
@@ -683,9 +711,18 @@ pub(crate) fn compose_measure_lines(
             .unwrap_or_default();
         EditBeatBarCursor::new(row, request.time_signatures)
     });
+    let mut edit_measure_slots = EditMeasureTextSlots::new(request.edit_measure_text_slot_base);
     if request.mode != MeasureLineMode::Off {
         for group in groups.into_iter().flatten() {
-            append_group_lines(actors, draws, &request, plan, group, edit_cursor);
+            append_group_lines(
+                actors,
+                draws,
+                &request,
+                plan,
+                group,
+                edit_cursor,
+                &mut edit_measure_slots,
+            );
         }
     }
     if request.show_cues {
@@ -709,7 +746,7 @@ mod tests {
 
     use super::*;
     use crate::{AccelYParams, ScrollTravelRequest, scroll_travel};
-    use deadlib_present::actors::{Actor, FlatDraw, FlatSprite};
+    use deadlib_present::actors::{FlatDraw, FlatSprite};
     use deadsync_rules::timing::{TimingData, TimingSegments};
     use deadsync_theme::{
         ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle,
@@ -1008,6 +1045,7 @@ mod tests {
             scrolls: &[],
             displayed_beat_monotonic: true,
             cue_visible_row_range: None,
+            edit_measure_text_slot_base: 0,
             travel,
         }
     }
@@ -1095,6 +1133,8 @@ mod tests {
                 let mut optimized = Vec::new();
                 let mut legacy_text = Vec::new();
                 let mut optimized_text = Vec::new();
+                let mut legacy_slots = EditMeasureTextSlots::new(0);
+                let mut optimized_slots = EditMeasureTextSlots::new(0);
                 append_group_lines(
                     &mut legacy_text,
                     &mut legacy,
@@ -1102,6 +1142,7 @@ mod tests {
                     legacy_plan,
                     group,
                     None,
+                    &mut legacy_slots,
                 );
                 append_group_lines(
                     &mut optimized_text,
@@ -1110,6 +1151,7 @@ mod tests {
                     optimized_plan,
                     group,
                     None,
+                    &mut optimized_slots,
                 );
                 assert!(legacy_text.is_empty());
                 assert!(optimized_text.is_empty());
@@ -1218,7 +1260,7 @@ mod tests {
     }
 
     #[test]
-    fn compose_edit_mode_emits_dashes_and_theme_font_measure_numbers() {
+    fn compose_edit_mode_emits_dashes_and_direct_measure_numbers() {
         let timing = timing();
         let travel = travel(&timing, ScrollSpeedSetting::XMod(3.0));
         let dirs = [1.0; 4];
@@ -1230,10 +1272,11 @@ mod tests {
         compose_measure_lines(&mut actors, &mut draws, request);
 
         assert!(draws.len() > 1, "edit subdivisions should emit dashed bars");
-        assert!(actors.iter().any(|actor| matches!(
-            actor,
-            Actor::Text { font, content, z, .. }
-                if *font == "edit-font" && content.as_str() == "0" && *z == 81
+        assert!(actors.is_empty());
+        assert!(draws.iter().any(|draw| matches!(
+            draw,
+            FlatDraw::PreparedU32(text)
+                if text.font == "edit-font" && text.text.as_str() == "0" && text.z == 81
         )));
     }
 

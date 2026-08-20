@@ -222,6 +222,7 @@ pub struct NotefieldComposeRequest<'a, S> {
     pub song_lua: NotefieldSongLuaView<'a>,
     pub options: NotefieldOptions,
     pub capture_requests: ProxyCaptureRequests,
+    pub edit_measure_text_slot_base: u8,
     pub arrow_effect_time_s: f32,
 }
 
