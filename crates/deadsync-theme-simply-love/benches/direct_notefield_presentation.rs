@@ -1300,6 +1300,7 @@ struct PlayerProxyScratch {
     source_actors: Vec<Actor>,
     actors: Vec<Actor>,
     capture: [SharedActorFrameScratch; 2],
+    aft_capture: [SharedActorFrameScratch; 2],
     active_bank: usize,
 }
 
@@ -1314,6 +1315,7 @@ impl PlayerProxyScratch {
             source_actors: Vec::with_capacity(total),
             actors: Vec::with_capacity(1),
             capture: std::array::from_fn(|_| SharedActorFrameScratch::with_capacity(total)),
+            aft_capture: std::array::from_fn(|_| SharedActorFrameScratch::with_capacity(3)),
             active_bank: 1,
         }
     }
@@ -1325,6 +1327,7 @@ fn player_proxy_frame(
     source: &mut PlayerProxyScratch,
     hud_camera: Mat4,
     field_camera: Mat4,
+    aft_capture: bool,
     metrics: &deadlib_present::space::Metrics,
     fonts: &font::FontMap,
     resources: &ActorResourceArena,
@@ -1334,6 +1337,9 @@ fn player_proxy_frame(
     let offset = [32.0, -18.0];
     let tint = [0.75, 0.5, 1.0, 0.8];
     let z = 42;
+    let aft_tint = [0.8, 0.6, 1.0, 0.75];
+    let aft_offset = [24.0, -12.0];
+    let aft_camera = Mat4::from_rotation_z(0.08) * Mat4::from_scale(Vec3::new(0.9, 0.9, 1.0));
     let segments = match kind {
         FlatProxyKind::ActorCapture => {
             source.active_bank = (source.active_bank + 1) % source.capture.len();
@@ -1368,11 +1374,49 @@ fn player_proxy_frame(
                 tint,
                 blend: Some(BlendMode::Add),
             });
+            if aft_capture {
+                let proxy = source
+                    .actors
+                    .pop()
+                    .expect("whole-Player AFT capture is nonempty");
+                let children = source.aft_capture[source.active_bank]
+                    .refill(aft_offset, |out| {
+                        out.push(Actor::CameraPush {
+                            view_proj: aft_camera,
+                        });
+                        out.push(proxy);
+                        out.push(Actor::CameraPop);
+                    })
+                    .expect("whole-Player AFT frame is nonempty");
+                source.actors.push(Actor::SharedFrame {
+                    align: [0.0, 0.0],
+                    offset: [0.0, 0.0],
+                    size: [SizeSpec::Fill, SizeSpec::Fill],
+                    children,
+                    background: None,
+                    z: 0,
+                    tint: aft_tint,
+                    blend: Some(BlendMode::Add),
+                });
+            }
             [
                 ActorSegment::new(source.actors.as_slice()),
                 ActorSegment::new(&[]),
             ]
         }
+        FlatProxyKind::DirectFragment if aft_capture => [
+            ActorSegment::flat_proxy_pair(
+                &source.hud_draws,
+                &source.field_draws,
+                [offset[0] + aft_offset[0], offset[1] + aft_offset[1]],
+                z,
+                std::array::from_fn(|channel| tint[channel] * aft_tint[channel]),
+                BlendMode::Add,
+                Some(&aft_camera),
+                [Some(&hud_camera), Some(&field_camera)],
+            ),
+            ActorSegment::new(&[]),
+        ],
         FlatProxyKind::DirectFragment => [
             ActorSegment::flat_proxy_with_camera(
                 &source.hud_draws,
@@ -1410,7 +1454,7 @@ fn player_proxy_frame(
     checksum
 }
 
-fn measure_player_proxy_pair() -> [BoundaryResult; 2] {
+fn measure_player_proxy_pair(aft_capture: bool) -> [BoundaryResult; 2] {
     let metrics = deadlib_present::space::metrics_for_window(854, 480);
     let fonts = font::FontMap::default();
     let resources = ActorResourceArena::new(0);
@@ -1446,6 +1490,7 @@ fn measure_player_proxy_pair() -> [BoundaryResult; 2] {
                     &mut sources[kind_index],
                     hud_camera,
                     field_camera,
+                    aft_capture,
                     &metrics,
                     &fonts,
                     &resources,
@@ -1484,7 +1529,7 @@ fn print_player_proxy_benchmark() {
         "\ndirect SongLua whole-Player proxy benchmark ({} HUD + {} field draws)",
         BOUNDARY_HUD_ACTORS, FIELD_PROXY_DRAWS
     );
-    let [actor, direct] = measure_player_proxy_pair();
+    let [actor, direct] = measure_player_proxy_pair(false);
     assert_eq!(actor.checksum, direct.checksum);
     print_boundary_result("actor capture", &actor);
     print_boundary_result("direct fragments", &direct);
@@ -1496,6 +1541,24 @@ fn print_player_proxy_benchmark() {
             checksum: result.checksum,
         });
     }
+}
+
+fn print_aft_player_proxy_benchmark() {
+    println!(
+        "\ndirect SongLua single-source AFT whole-Player proxy benchmark ({} HUD + {} field draws)",
+        BOUNDARY_HUD_ACTORS, FIELD_PROXY_DRAWS
+    );
+    let [actor, direct] = measure_player_proxy_pair(true);
+    assert_eq!(actor.checksum, direct.checksum);
+    print_boundary_result("actor AFT capture", &actor);
+    print_boundary_result("paired fragment", &direct);
+    assert!(actor.allocated.allocs > 0);
+    assert_zero_alloc(&BenchResult {
+        elapsed: direct.elapsed,
+        cycles: direct.cycles,
+        allocated: direct.allocated,
+        checksum: direct.checksum,
+    });
 }
 
 fn print_sampled_result(label: &str, result: &BoundaryResult, batch_frames: usize) {
@@ -3230,6 +3293,10 @@ fn print_cue_countdown_benchmark() {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_AFT_PLAYER_PROXY_ONLY").is_some() {
+        print_aft_player_proxy_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_PLAYER_PROXY_ONLY").is_some() {
         print_player_proxy_benchmark();
         return;

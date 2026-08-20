@@ -650,15 +650,26 @@ where
 /// stay with their retained owner and are borrowed for the composition call.
 #[derive(Clone, Copy, Debug)]
 pub struct ActorSegment<'a> {
-    actors: &'a [actors::Actor],
-    flat_draws: &'a [actors::FlatDraw],
-    flat_enclosing_camera: Option<&'a Matrix4>,
-    flat_camera: Option<&'a Matrix4>,
+    source: ActorSegmentSource<'a>,
+    cameras: [Option<&'a Matrix4>; 3],
     z_shift: i16,
     tint: [f32; 4],
     blend: Option<BlendMode>,
-    camera: Option<ActorSegmentCamera<'a>>,
     placement: ActorSegmentPlacement,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ActorSegmentSource<'a> {
+    Actors(&'a [actors::Actor]),
+    ActorsFlat {
+        actors: &'a [actors::Actor],
+        draws: &'a [actors::FlatDraw],
+    },
+    Flat(&'a [actors::FlatDraw]),
+    FlatPair {
+        draws: &'a [actors::FlatDraw],
+        tail: &'a [actors::FlatDraw],
+    },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -702,42 +713,33 @@ impl ActorXFold {
 impl<'a> ActorSegment<'a> {
     pub const fn new(actors: &'a [actors::Actor]) -> Self {
         Self {
-            actors,
-            flat_draws: &[],
-            flat_enclosing_camera: None,
-            flat_camera: None,
+            source: ActorSegmentSource::Actors(actors),
+            cameras: [None; 3],
             z_shift: 0,
             tint: [1.0; 4],
             blend: None,
-            camera: None,
             placement: ActorSegmentPlacement::None,
         }
     }
 
     pub const fn shifted(actors: &'a [actors::Actor], z_shift: i16) -> Self {
         Self {
-            actors,
-            flat_draws: &[],
-            flat_enclosing_camera: None,
-            flat_camera: None,
+            source: ActorSegmentSource::Actors(actors),
+            cameras: [None; 3],
             z_shift,
             tint: [1.0; 4],
             blend: None,
-            camera: None,
             placement: ActorSegmentPlacement::None,
         }
     }
 
     pub const fn folded(actors: &'a [actors::Actor], z_shift: i16, x_fold: ActorXFold) -> Self {
         Self {
-            actors,
-            flat_draws: &[],
-            flat_enclosing_camera: None,
-            flat_camera: None,
+            source: ActorSegmentSource::Actors(actors),
+            cameras: [None; 3],
             z_shift,
             tint: [1.0; 4],
             blend: None,
-            camera: None,
             placement: ActorSegmentPlacement::XFold(x_fold),
         }
     }
@@ -752,17 +754,11 @@ impl<'a> ActorSegment<'a> {
         x_fold: Option<ActorXFold>,
     ) -> Self {
         Self {
-            actors,
-            flat_draws: &[],
-            flat_enclosing_camera: None,
-            flat_camera: None,
+            source: ActorSegmentSource::Actors(actors),
+            cameras: [Some(root_camera), Some(camera_suffix), None],
             z_shift,
             tint,
             blend,
-            camera: Some(ActorSegmentCamera {
-                root: root_camera,
-                suffix: camera_suffix,
-            }),
             placement: match x_fold {
                 Some(x_fold) => ActorSegmentPlacement::XFold(x_fold),
                 None => ActorSegmentPlacement::None,
@@ -778,8 +774,13 @@ impl<'a> ActorSegment<'a> {
         draws: &'a [actors::FlatDraw],
         camera: Option<&'a Matrix4>,
     ) -> Self {
-        self.flat_draws = draws;
-        self.flat_camera = camera;
+        self.source = match self.source {
+            ActorSegmentSource::Actors(actors) | ActorSegmentSource::ActorsFlat { actors, .. } => {
+                ActorSegmentSource::ActorsFlat { actors, draws }
+            }
+            source @ (ActorSegmentSource::Flat(_) | ActorSegmentSource::FlatPair { .. }) => source,
+        };
+        self.cameras[2] = camera;
         self
     }
 
@@ -824,14 +825,38 @@ impl<'a> ActorSegment<'a> {
         source_camera: Option<&'a Matrix4>,
     ) -> Self {
         Self {
-            actors: &[],
-            flat_draws: draws,
-            flat_enclosing_camera: enclosing_camera,
-            flat_camera: source_camera,
+            source: ActorSegmentSource::Flat(draws),
+            cameras: [enclosing_camera, source_camera, None],
             z_shift: z,
             tint,
             blend: Some(blend),
-            camera: None,
+            placement: ActorSegmentPlacement::FlatOffset(offset),
+        }
+    }
+
+    /// Borrows two camera-delimited ActorProxy source runs through one shared
+    /// enclosing camera scope. Each run retains independent local-Z
+    /// normalization while the enclosing matrix is registered only once.
+    #[allow(clippy::too_many_arguments)]
+    pub const fn flat_proxy_pair(
+        draws: &'a [actors::FlatDraw],
+        tail_draws: &'a [actors::FlatDraw],
+        offset: [f32; 2],
+        z: i16,
+        tint: [f32; 4],
+        blend: BlendMode,
+        enclosing_camera: Option<&'a Matrix4>,
+        cameras: [Option<&'a Matrix4>; 2],
+    ) -> Self {
+        Self {
+            source: ActorSegmentSource::FlatPair {
+                draws,
+                tail: tail_draws,
+            },
+            cameras: [enclosing_camera, cameras[0], cameras[1]],
+            z_shift: z,
+            tint,
+            blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
         }
     }
@@ -910,11 +935,18 @@ where
     let actor_textures = actor_resources.map(actors::ActorResourceArena::texture_keys);
     let mut builder = std::mem::take(&mut scratch.frame_builder);
     builder.clear();
-    let actor_count = actor_segments.clone().fold(0usize, |count, segment| {
-        count
-            .saturating_add(segment.actors.len())
-            .saturating_add(segment.flat_draws.len())
-    });
+    let actor_count = actor_segments
+        .clone()
+        .fold(0usize, |count, segment| match segment.source {
+            ActorSegmentSource::Actors(actors) => count.saturating_add(actors.len()),
+            ActorSegmentSource::ActorsFlat { actors, draws } => count
+                .saturating_add(actors.len())
+                .saturating_add(draws.len()),
+            ActorSegmentSource::Flat(draws) => count.saturating_add(draws.len()),
+            ActorSegmentSource::FlatPair { draws, tail } => {
+                count.saturating_add(draws.len()).saturating_add(tail.len())
+            }
+        });
     let object_capacity = actor_count.saturating_mul(4).max(64);
     if builder.items.capacity() < object_capacity {
         builder.reserve(object_capacity);
@@ -955,8 +987,25 @@ where
 
     let mut sequence = ActorSequenceState::new(camera);
     for segment in actor_segments {
+        let actors = match segment.source {
+            ActorSegmentSource::Actors(actors) | ActorSegmentSource::ActorsFlat { actors, .. } => {
+                actors
+            }
+            ActorSegmentSource::Flat(_) | ActorSegmentSource::FlatPair { .. } => &[],
+        };
+        let segment_camera = match (segment.cameras[0], segment.cameras[1]) {
+            (Some(root), Some(suffix))
+                if matches!(
+                    segment.source,
+                    ActorSegmentSource::Actors(_) | ActorSegmentSource::ActorsFlat { .. }
+                ) =>
+            {
+                Some(ActorSegmentCamera { root, suffix })
+            }
+            _ => None,
+        };
         build_actor_sequence_with_state(
-            segment.actors.iter().map(|actor| {
+            actors.iter().map(|actor| {
                 let base_z = segment.z_shift;
                 let style = ComposeStyle {
                     tint: segment.tint,
@@ -973,7 +1022,7 @@ where
                     x_fold,
                 }
             }),
-            segment.camera.as_ref(),
+            segment_camera.as_ref(),
             root_rect,
             m,
             fonts,
@@ -990,8 +1039,15 @@ where
             actor_textures.as_deref(),
             total_elapsed,
         );
+        let has_flat_draws = match segment.source {
+            ActorSegmentSource::Actors(_) => false,
+            ActorSegmentSource::ActorsFlat { draws, .. } | ActorSegmentSource::Flat(draws) => {
+                !draws.is_empty()
+            }
+            ActorSegmentSource::FlatPair { draws, tail } => !draws.is_empty() || !tail.is_empty(),
+        };
         debug_assert!(
-            segment.flat_draws.is_empty() || sequence.camera_stack.is_empty(),
+            !has_flat_draws || sequence.camera_stack.is_empty(),
             "flat draws cannot begin inside an actor camera scope"
         );
         build_flat_draws(
@@ -5436,26 +5492,29 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
     actor_textures: Option<&[Arc<str>]>,
     total_elapsed: f32,
 ) {
-    if segment.flat_draws.is_empty() {
+    let (enclosing_matrix, fragments) = match segment.source {
+        ActorSegmentSource::Actors(_) => return,
+        ActorSegmentSource::ActorsFlat { draws, .. } => {
+            (None, [(draws, segment.cameras[2]), (&[][..], None)])
+        }
+        ActorSegmentSource::Flat(draws) => (
+            segment.cameras[0],
+            [(draws, segment.cameras[1]), (&[][..], None)],
+        ),
+        ActorSegmentSource::FlatPair { draws, tail } => (
+            segment.cameras[0],
+            [(draws, segment.cameras[1]), (tail, segment.cameras[2])],
+        ),
+    };
+    if fragments.iter().all(|(draws, _)| draws.is_empty()) {
         return;
     }
-    let enclosing_camera = segment.flat_enclosing_camera.map(|matrix| {
+    let enclosing_camera = enclosing_matrix.map(|matrix| {
         cameras.push(*matrix);
         let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
         sequence.last_root_camera = Some((*matrix, id));
         id
     });
-    let camera = match segment.flat_camera {
-        Some(matrix) => {
-            // A nested CameraPush always creates a distinct table entry, even
-            // when its matrix equals the enclosing scope.
-            if enclosing_camera.is_some() {
-                sequence.last_root_camera = None;
-            }
-            sequence.camera_id(*matrix, cameras)
-        }
-        None => enclosing_camera.unwrap_or(sequence.active_camera),
-    };
     let style = ComposeStyle {
         tint: segment.tint,
         blend: segment.blend,
@@ -5471,55 +5530,29 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
         flat_offset,
         [SizeSpec::Fill, SizeSpec::Fill],
     );
-    let proxy_start = out.len();
-    for draw in segment.flat_draws {
-        let base_z = if fixed_z { 0 } else { segment.z_shift };
-        match draw {
-            actors::FlatDraw::Sprite(sprite) => build_flat_sprite(
-                sprite,
-                parent,
-                m,
-                base_z,
-                camera,
-                style,
-                x_fold,
-                order_counter,
-                out,
-                sprite_instances,
-                texture_cache,
-                texture_ctx,
-                actor_textures,
-                total_elapsed,
-            ),
-            actors::FlatDraw::TexturedMesh(mesh) => {
-                let vertices = match &mesh.vertices {
-                    actors::FlatMeshVertices::Shared(vertices) => {
-                        TexturedMeshActorVertices::Shared(vertices)
-                    }
-                    actors::FlatMeshVertices::Reusable(vertices) => {
-                        TexturedMeshActorVertices::Reusable(vertices)
-                    }
-                };
-                build_textured_mesh_actor(
-                    TexturedMeshActorView {
-                        align: [0.0, 0.0],
-                        offset: mesh.offset,
-                        world_z: mesh.world_z,
-                        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-                        local_transform: mesh.local_transform,
-                        texture: &mesh.texture,
-                        tint: mesh.tint,
-                        glow: mesh.glow,
-                        vertices,
-                        geom_cache_key: mesh.geom_cache_key,
-                        uv_scale: mesh.uv_scale,
-                        uv_offset: mesh.uv_offset,
-                        uv_tex_shift: mesh.uv_tex_shift,
-                        depth_test: mesh.depth_test,
-                        visible: true,
-                        blend: mesh.blend,
-                        z: mesh.z,
-                    },
+    for (draws, source_camera) in fragments {
+        if draws.is_empty() {
+            continue;
+        }
+        let camera = match source_camera {
+            Some(matrix) if enclosing_camera.is_some() => {
+                // Each source run represents its own nested CameraPush and
+                // therefore keeps a distinct table entry even for equal
+                // matrices. The enclosing scope itself was registered once.
+                cameras.push(*matrix);
+                let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
+                sequence.last_root_camera = Some((*matrix, id));
+                id
+            }
+            Some(matrix) => sequence.camera_id(*matrix, cameras),
+            None => enclosing_camera.unwrap_or(sequence.active_camera),
+        };
+        let proxy_start = out.len();
+        for draw in draws {
+            let base_z = if fixed_z { 0 } else { segment.z_shift };
+            match draw {
+                actors::FlatDraw::Sprite(sprite) => build_flat_sprite(
+                    sprite,
                     parent,
                     m,
                     base_z,
@@ -5528,60 +5561,102 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                     x_fold,
                     order_counter,
                     out,
+                    sprite_instances,
                     texture_cache,
                     texture_ctx,
-                )
+                    actor_textures,
+                    total_elapsed,
+                ),
+                actors::FlatDraw::TexturedMesh(mesh) => {
+                    let vertices = match &mesh.vertices {
+                        actors::FlatMeshVertices::Shared(vertices) => {
+                            TexturedMeshActorVertices::Shared(vertices)
+                        }
+                        actors::FlatMeshVertices::Reusable(vertices) => {
+                            TexturedMeshActorVertices::Reusable(vertices)
+                        }
+                    };
+                    build_textured_mesh_actor(
+                        TexturedMeshActorView {
+                            align: [0.0, 0.0],
+                            offset: mesh.offset,
+                            world_z: mesh.world_z,
+                            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                            local_transform: mesh.local_transform,
+                            texture: &mesh.texture,
+                            tint: mesh.tint,
+                            glow: mesh.glow,
+                            vertices,
+                            geom_cache_key: mesh.geom_cache_key,
+                            uv_scale: mesh.uv_scale,
+                            uv_offset: mesh.uv_offset,
+                            uv_tex_shift: mesh.uv_tex_shift,
+                            depth_test: mesh.depth_test,
+                            visible: true,
+                            blend: mesh.blend,
+                            z: mesh.z,
+                        },
+                        parent,
+                        m,
+                        base_z,
+                        camera,
+                        style,
+                        x_fold,
+                        order_counter,
+                        out,
+                        texture_cache,
+                        texture_ctx,
+                    )
+                }
+                actors::FlatDraw::PreparedU32(text) => build_flat_prepared_u32(
+                    text,
+                    parent,
+                    m,
+                    fonts,
+                    scratch,
+                    base_z,
+                    camera,
+                    style,
+                    x_fold,
+                    order_counter,
+                    out,
+                    sprite_instances,
+                    text_cache,
+                    texture_cache,
+                    texture_ctx,
+                ),
+                actors::FlatDraw::PreparedInline(text) => build_flat_prepared_inline(
+                    text,
+                    parent,
+                    m,
+                    fonts,
+                    scratch,
+                    base_z,
+                    camera,
+                    style,
+                    x_fold,
+                    order_counter,
+                    out,
+                    sprite_instances,
+                    text_cache,
+                    texture_cache,
+                    texture_ctx,
+                ),
             }
-            actors::FlatDraw::PreparedU32(text) => build_flat_prepared_u32(
-                text,
-                parent,
-                m,
-                fonts,
-                scratch,
-                base_z,
-                camera,
-                style,
-                x_fold,
-                order_counter,
-                out,
-                sprite_instances,
-                text_cache,
-                texture_cache,
-                texture_ctx,
-            ),
-            actors::FlatDraw::PreparedInline(text) => build_flat_prepared_inline(
-                text,
-                parent,
-                m,
-                fonts,
-                scratch,
-                base_z,
-                camera,
-                style,
-                x_fold,
-                order_counter,
-                out,
-                sprite_instances,
-                text_cache,
-                texture_cache,
-                texture_ctx,
-            ),
         }
-    }
-    if fixed_z {
-        // SharedFrame normalizes child actors by authored local Z before its
-        // own fixed layer replaces those values. Draw order is unique, so an
-        // unstable in-place sort of the compact draw records is stable with
-        // respect to the authored sequence and needs no temporary allocation.
-        out.items[proxy_start..].sort_unstable_by_key(|item| item.sort_key());
-        let first_order = out.items[proxy_start..]
-            .iter()
-            .map(|item| item.order)
-            .min()
-            .unwrap_or(*order_counter);
-        for (index, item) in out.items[proxy_start..].iter_mut().enumerate() {
-            item.z = segment.z_shift;
-            item.order = first_order.saturating_add(saturating_u32(index));
+        if fixed_z {
+            // ActorProxy normalizes each camera-delimited source run by local
+            // Z before its own fixed layer replaces those values.
+            out.items[proxy_start..].sort_unstable_by_key(|item| item.sort_key());
+            let first_order = out.items[proxy_start..]
+                .iter()
+                .map(|item| item.order)
+                .min()
+                .unwrap_or(*order_counter);
+            for (index, item) in out.items[proxy_start..].iter_mut().enumerate() {
+                item.z = segment.z_shift;
+                item.order = first_order.saturating_add(saturating_u32(index));
+            }
         }
     }
 }
@@ -12600,6 +12675,118 @@ mod tests {
             BlendMode::Add,
             Some(&enclosing),
             Some(&source_camera),
+        ));
+
+        assert_eq!(direct_render.ops, actor_render.ops);
+        assert_eq!(
+            direct_render.sprite_instances,
+            actor_render.sprite_instances
+        );
+        assert_eq!(direct_render.cameras, actor_render.cameras);
+    }
+
+    #[test]
+    fn flat_proxy_pair_shares_enclosing_camera_across_source_runs() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let enclosing = Matrix4::from_rotation_z(0.2);
+        let hud_camera = Matrix4::from_translation(glam::Vec3::new(0.125, -0.25, 0.0));
+        let field_camera = Matrix4::from_rotation_x(0.15);
+        let source = SpriteSource::static_texture("paired-proxy-sprite");
+        let hud_actor = test_sprite(source.clone());
+        let mut field_actor = test_sprite(source.clone());
+        let Actor::Sprite { offset, z, .. } = &mut field_actor else {
+            unreachable!();
+        };
+        *offset = [20.0, 4.0];
+        *z = 9;
+        let proxy = Actor::SharedFrame {
+            align: [0.0, 0.0],
+            offset: [10.0, -3.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children: Arc::from([
+                Actor::CameraPush {
+                    view_proj: hud_camera,
+                },
+                hud_actor,
+                Actor::CameraPop,
+                Actor::CameraPush {
+                    view_proj: field_camera,
+                },
+                field_actor,
+                Actor::CameraPop,
+            ]),
+            background: None,
+            z: 0,
+            tint: [1.0; 4],
+            blend: None,
+        };
+        let actor = [Actor::SharedFrame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children: Arc::from([
+                Actor::CameraPush {
+                    view_proj: enclosing,
+                },
+                proxy,
+                Actor::CameraPop,
+            ]),
+            background: None,
+            z: 42,
+            tint: [0.5, 0.75, 0.25, 0.8],
+            blend: Some(BlendMode::Add),
+        }];
+        let draw = |center, z| {
+            FlatDraw::Sprite(FlatSprite {
+                center,
+                world_z: 0.0,
+                size: [16.0, 32.0],
+                source: source.clone(),
+                tint: [0.8, 0.6, 0.4, 1.0],
+                glow: [0.0; 4],
+                uv_rect: [0.0, 0.0, 1.0, 1.0],
+                flip_x: false,
+                flip_y: false,
+                fade: [0.0; 4],
+                blend: BlendMode::Alpha,
+                rot_y_deg: 0.0,
+                rot_z_deg: 0.0,
+                z,
+            })
+        };
+        let hud_draws = [draw([12.0, 24.0], 2)];
+        let field_draws = [draw([28.0, 20.0], 9)];
+        let resources = ActorResourceArena::new(0);
+        let compose = |segment| {
+            let mut text = TextLayoutCache::default();
+            let mut scratch = ComposeScratch::default();
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[segment],
+                [0.0; 4],
+                &metrics,
+                &font::FontMap::default(),
+                0.0,
+                &mut text,
+                &mut scratch,
+                &TestDrawTextureContext,
+                &resources,
+            )
+        };
+        let actor_render = compose(ActorSegment::new(&actor));
+        let direct_render = compose(ActorSegment::flat_proxy_pair(
+            &hud_draws,
+            &field_draws,
+            [10.0, -3.0],
+            42,
+            [0.5, 0.75, 0.25, 0.8],
+            BlendMode::Add,
+            Some(&enclosing),
+            [Some(&hud_camera), Some(&field_camera)],
         ));
 
         assert_eq!(direct_render.ops, actor_render.ops);

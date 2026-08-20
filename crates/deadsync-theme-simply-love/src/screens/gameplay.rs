@@ -789,7 +789,8 @@ impl SongLuaOverlayTopologyIndex {
                 SongLuaOverlayKind::ActorFrameTexture => return None,
                 SongLuaOverlayKind::ActorProxy {
                     target:
-                        SongLuaProxyTarget::NoteField { .. }
+                        SongLuaProxyTarget::Player { .. }
+                        | SongLuaProxyTarget::NoteField { .. }
                         | SongLuaProxyTarget::Judgment { .. }
                         | SongLuaProxyTarget::Combo { .. },
                 } if proxy_index.is_none() => proxy_index = Some(index),
@@ -7832,6 +7833,15 @@ struct SongLuaDirectProxy {
     blend: BlendMode,
     enclosing_camera: Option<Matrix4>,
     camera: Option<Matrix4>,
+    tail: Option<SongLuaDirectProxyPart>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct SongLuaDirectProxyPart {
+    draws: SongLuaDirectDraws,
+    draw_start: usize,
+    draw_end: usize,
+    camera: Option<Matrix4>,
 }
 
 /// Song-lifetime backing for direct root ActorProxy and exact AFT destinations.
@@ -7839,13 +7849,15 @@ struct SongLuaDirectProxy {
 /// Owner/thread model: gameplay frame scratch, used only by the game/render
 /// thread. Lifetime: one song. Capacity is the compiled maximum: one entry per
 /// NoteField, Judgment, Combo, or exact single-source AFT destination and two
-/// entries per whole-Player destination across the main and every foreground
-/// layer, reserved at screen entry. Each frame clears and refills the retained
-/// storage; exceeding the compiled bound is a topology invariant violation.
+/// entries per root whole-Player destination across the main and every
+/// foreground layer, reserved at screen entry. Exact AFT Player destinations
+/// retain both source runs in one entry. Each frame clears and refills the
+/// retained storage; exceeding the compiled bound is a topology invariant
+/// violation.
 /// There is no miss path, eviction, pruning, synchronization, or gameplay-time
 /// destruction. Focused proxy fixtures and warmed allocation tests cover the
 /// capacity contract. Worst-case frame work is one append per visible compiled
-/// direct destination, with two appends for a visible whole-Player source.
+/// direct destination, with two appends for a visible root whole-Player source.
 #[derive(Debug, Default, PartialEq)]
 struct SongLuaDirectProxies {
     entries: Vec<SongLuaDirectProxy>,
@@ -9215,6 +9227,7 @@ fn song_lua_direct_proxy(
         blend: song_lua_overlay_blend(state.blend),
         enclosing_camera: None,
         camera: source.camera,
+        tail: None,
     })
 }
 
@@ -9280,7 +9293,13 @@ fn song_lua_direct_aft_proxy(
     else {
         return SongLuaDirectAftResult::Unsupported;
     };
-    let Some((player, source)) = song_lua_direct_proxy_source(target, proxy_sources) else {
+    let (player, sources) = if let Some((player, [hud, field])) =
+        song_lua_direct_player_proxy_source(target, proxy_sources)
+    {
+        (player, [Some(hud), Some(field)])
+    } else if let Some((player, source)) = song_lua_direct_proxy_source(target, proxy_sources) {
+        (player, [Some(source), None])
+    } else {
         return if song_lua_proxy_source(target, proxy_sources).is_some() {
             SongLuaDirectAftResult::Unsupported
         } else {
@@ -9314,17 +9333,35 @@ fn song_lua_direct_aft_proxy(
         .get(plan.proxy_index)
         .copied()
         .unwrap_or_default();
-    let Some(proxy) = song_lua_direct_proxy(
-        proxy_state,
-        draw_index.min(i16::MAX as usize) as i16,
-        source,
-        player,
-        actor_insert,
-        overlay_space_width,
-        overlay_space_height,
-    ) else {
+    let proxy_z = draw_index.min(i16::MAX as usize) as i16;
+    let mut direct = sources.into_iter().flatten().filter_map(|source| {
+        song_lua_direct_proxy(
+            proxy_state,
+            proxy_z,
+            source,
+            player,
+            actor_insert,
+            overlay_space_width,
+            overlay_space_height,
+        )
+    });
+    let Some(mut proxy) = direct.next() else {
         return SongLuaDirectAftResult::Handled(None);
     };
+    if let Some(tail) = direct.next() {
+        debug_assert_eq!(tail.actor_insert, proxy.actor_insert);
+        debug_assert_eq!(tail.player, proxy.player);
+        debug_assert_eq!(tail.offset, proxy.offset);
+        debug_assert_eq!(tail.z, proxy.z);
+        debug_assert_eq!(tail.tint, proxy.tint);
+        debug_assert_eq!(tail.blend, proxy.blend);
+        proxy.tail = Some(SongLuaDirectProxyPart {
+            draws: tail.draws,
+            draw_start: tail.draw_start,
+            draw_end: tail.draw_end,
+            camera: tail.camera,
+        });
+    }
     SongLuaDirectAftResult::Handled(Some(song_lua_fold_direct_aft_proxy(
         overlay,
         aft_state,
@@ -15452,10 +15489,14 @@ impl GameplayActorSegments {
             .into_iter()
             .flat_map(|scratch| scratch.song_lua_direct_proxies.entries.iter())
             .take(self.direct_proxy_len)
-            .filter(|proxy| {
-                proxy.draws == SongLuaDirectDraws::Field && proxy.draw_start < proxy.draw_end
+            .map(|proxy| {
+                usize::from(
+                    proxy.draws == SongLuaDirectDraws::Field && proxy.draw_start < proxy.draw_end,
+                ) + usize::from(proxy.tail.is_some_and(|tail| {
+                    tail.draws == SongLuaDirectDraws::Field && tail.draw_start < tail.draw_end
+                }))
             })
-            .count()
+            .sum()
     }
 
     #[cfg(test)]
@@ -15509,6 +15550,22 @@ struct GameplayActorSegmentIter<'a> {
 }
 
 impl<'a> GameplayActorSegmentIter<'a> {
+    fn direct_draws(
+        &self,
+        player: usize,
+        draws: SongLuaDirectDraws,
+        start: usize,
+        end: usize,
+    ) -> &'a [FlatDraw] {
+        let source = match draws {
+            SongLuaDirectDraws::Field => &self.scratch.notefield_flat_draw_scratch[player],
+            SongLuaDirectDraws::Hud | SongLuaDirectDraws::Judgment | SongLuaDirectDraws::Combo => {
+                &self.scratch.notefield_hud_flat_draw_scratch[player]
+            }
+        };
+        source.get(start..end).unwrap_or(&[])
+    }
+
     fn player_segment(
         &self,
         segment: &'a PlayerActorSegment,
@@ -15694,17 +15751,30 @@ impl<'a> Iterator for GameplayActorSegmentIter<'a> {
                     self.proxy_draw = false;
                     self.proxy += 1;
                     self.actor_start = actor_insert;
-                    let source = match proxy.draws {
-                        SongLuaDirectDraws::Field => {
-                            &self.scratch.notefield_flat_draw_scratch[proxy.player]
-                        }
-                        SongLuaDirectDraws::Hud
-                        | SongLuaDirectDraws::Judgment
-                        | SongLuaDirectDraws::Combo => {
-                            &self.scratch.notefield_hud_flat_draw_scratch[proxy.player]
-                        }
-                    };
-                    let draws = source.get(proxy.draw_start..proxy.draw_end).unwrap_or(&[]);
+                    let draws = self.direct_draws(
+                        proxy.player,
+                        proxy.draws,
+                        proxy.draw_start,
+                        proxy.draw_end,
+                    );
+                    if let Some(tail) = proxy.tail.as_ref() {
+                        let tail_draws = self.direct_draws(
+                            proxy.player,
+                            tail.draws,
+                            tail.draw_start,
+                            tail.draw_end,
+                        );
+                        return Some(ActorSegment::flat_proxy_pair(
+                            draws,
+                            tail_draws,
+                            proxy.offset,
+                            proxy.z,
+                            proxy.tint,
+                            proxy.blend,
+                            proxy.enclosing_camera.as_ref(),
+                            [proxy.camera.as_ref(), tail.camera.as_ref()],
+                        ));
+                    }
                     return Some(ActorSegment::flat_proxy_with_cameras(
                         draws,
                         proxy.offset,
@@ -16253,7 +16323,8 @@ pub fn push_actors(
     }
     let proxy_requests = proxy_analysis.all;
     let direct_player_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
-        proxy_analysis.root_players[player] != 0
+        (proxy_analysis.root_players[player] != 0
+            || proxy_analysis.direct_aft.players[player].player)
             && !proxy_analysis.captured.players[player].player
             && !proxy_analysis.captured.players[player].note_field
             && !proxy_analysis.captured.players[player].judgment
@@ -20898,7 +20969,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_proxy_analysis_separates_root_and_captured_player() {
+    fn song_lua_proxy_analysis_separates_root_and_direct_aft_player() {
         let root_player = SongLuaOverlayActor {
             kind: SongLuaOverlayKind::ActorProxy {
                 target: SongLuaProxyTarget::Player { player_index: 0 },
@@ -20924,8 +20995,16 @@ mod tests {
             song_lua_proxy_request_analysis_indexed(&overlays, &states, &index, &mut visits);
 
         assert_eq!(analysis.root_players, [1, 0]);
-        assert!(analysis.captured.players[0].player);
-        assert_eq!(index.direct_proxy_capacity(&overlays), 2);
+        assert!(!analysis.captured.players[0].player);
+        assert!(analysis.direct_aft.players[0].player);
+        assert_eq!(
+            index.topology.direct_aft_proxies[3],
+            Some(SongLuaDirectAftProxy {
+                capture_index: 1,
+                proxy_index: 2,
+            })
+        );
+        assert_eq!(index.direct_proxy_capacity(&overlays), 3);
     }
 
     #[test]
@@ -23094,6 +23173,98 @@ mod tests {
         ]);
         assert_eq!(
             compare_render_frames_semantic(&actor_frame, &direct_frame),
+            Ok(())
+        );
+
+        let mut aft_overlay = test_aft_overlay("cap", true);
+        aft_overlay.name = Some("PlayerCapture".to_string());
+        let aft_state = SongLuaOverlayState {
+            x: 0.5 * screen_width() + 24.0,
+            y: 0.5 * screen_height() - 12.0,
+            rot_z_deg: 8.0,
+            zoom: 1.1,
+            diffuse: [0.5, 0.8, 0.6, 0.7],
+            blend: SongLuaOverlayBlendMode::Multiply,
+            ..SongLuaOverlayState::default()
+        };
+        let player_actor = song_lua_build_proxy_actor(
+            proxy_state,
+            0,
+            &player_source,
+            screen_width(),
+            screen_height(),
+        )
+        .expect("whole-Player AFT control proxy should render");
+        let mut aft_scratch = SharedActorFrameScratch::with_capacity(5);
+        let aft_actor = song_lua_build_shared_capture(
+            &aft_overlay,
+            aft_state,
+            321,
+            screen_width(),
+            screen_height(),
+            &mut aft_scratch,
+            |out| out.push(player_actor),
+        )
+        .expect("whole-Player AFT control should render");
+        let source = |draws, camera| SongLuaDirectProxySource {
+            draws,
+            draw_start: 0,
+            draw_end: match draws {
+                SongLuaDirectDraws::Hud => hud_draws.len(),
+                SongLuaDirectDraws::Field => field_draws.len(),
+                SongLuaDirectDraws::Judgment | SongLuaDirectDraws::Combo => 0,
+            },
+            target: [0.0, 0.0],
+            camera,
+        };
+        let mut aft_direct = song_lua_direct_proxy(
+            proxy_state,
+            0,
+            source(SongLuaDirectDraws::Hud, Some(hud_camera)),
+            0,
+            0,
+            screen_width(),
+            screen_height(),
+        )
+        .expect("whole-Player AFT HUD source should render");
+        let field_direct = song_lua_direct_proxy(
+            proxy_state,
+            0,
+            source(SongLuaDirectDraws::Field, Some(field_camera)),
+            0,
+            0,
+            screen_width(),
+            screen_height(),
+        )
+        .expect("whole-Player AFT field source should render");
+        aft_direct.tail = Some(SongLuaDirectProxyPart {
+            draws: field_direct.draws,
+            draw_start: field_direct.draw_start,
+            draw_end: field_direct.draw_end,
+            camera: field_direct.camera,
+        });
+        let aft_direct = song_lua_fold_direct_aft_proxy(
+            &aft_overlay,
+            aft_state,
+            321,
+            screen_width(),
+            screen_height(),
+            aft_direct,
+        );
+        let tail = aft_direct.tail.expect("whole-Player AFT retains field run");
+        let aft_actor_frame = compose(&[ActorSegment::new(std::slice::from_ref(&aft_actor))]);
+        let aft_direct_frame = compose(&[ActorSegment::flat_proxy_pair(
+            &hud_draws,
+            &field_draws,
+            aft_direct.offset,
+            aft_direct.z,
+            aft_direct.tint,
+            aft_direct.blend,
+            aft_direct.enclosing_camera.as_ref(),
+            [aft_direct.camera.as_ref(), tail.camera.as_ref()],
+        )]);
+        assert_eq!(
+            compare_render_frames_semantic(&aft_actor_frame, &aft_direct_frame),
             Ok(())
         );
     }
