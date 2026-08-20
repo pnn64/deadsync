@@ -1,4 +1,6 @@
-pub use crate::i18n_runtime::{LookupKey, current_locale, lookup_key, revision, tr, tr_fmt};
+pub use crate::i18n_runtime::{
+    LookupKey, current_locale, lookup_key, revision, tr, tr_fmt, tr_fmt_into,
+};
 
 pub use deadsync_assets::language::LanguageBundle;
 

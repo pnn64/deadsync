@@ -18,7 +18,8 @@ const DIAGNOSTIC_ITERS: usize = 2_000_000;
 const BATCH_ITERS: usize = 100_000;
 const UNLOCK_ITERS: usize = 100_000;
 const QUERY_COUNT: usize = 38;
-const PROFILE: &str = "score-cache-hot-path-benchmark";
+const PROFILE_P1: &str = "score-cache-hot-path-p1";
+const PROFILE_P2: &str = "score-cache-hot-path-p2";
 const UNLOCK_P1: &str = "score-cache-unlock-p1";
 const UNLOCK_P2: &str = "score-cache-unlock-p2";
 
@@ -166,6 +167,9 @@ fn measure(iterations: usize, mut op: impl FnMut() -> u64) -> BenchResult {
 
 fn print_pair(title: &str, iterations: usize, old: &BenchResult, new: &BenchResult) {
     assert_eq!(old.checksum, new.checksum, "{title} behavior diverged");
+    assert_eq!(new.allocated.allocs, 0, "{title} still allocates");
+    assert_eq!(new.allocated.reallocs, 0, "{title} still reallocates");
+    assert_eq!(new.allocated.deallocs, 0, "{title} still frees");
     println!("\n{title}");
     print_result("old", iterations, old);
     print_result("new", iterations, new);
@@ -283,11 +287,12 @@ fn score_paths(profile_id: &str) -> ScoreProfilePaths {
     )
 }
 
-fn legacy_batch<const N: usize>(queries: &[Option<(&str, &str)>; N]) -> [Option<CachedScore>; N] {
+fn repeated_profile_batch<const N: usize>(
+    queries: &[Option<(&str, &str)>; N],
+) -> [Option<CachedScore>; N] {
+    let caches = runtime_lock_score_caches();
     std::array::from_fn(|index| {
-        queries[index].and_then(|(profile_id, chart_hash)| {
-            runtime_lock_score_caches().merged(profile_id, chart_hash)
-        })
+        queries[index].and_then(|(profile_id, chart_hash)| caches.merged(profile_id, chart_hash))
     })
 }
 
@@ -360,12 +365,15 @@ fn main() {
             lamp_index: Some(2),
             lamp_judge_count: Some(3),
         };
-        let _ = runtime_seed_local_itg_score(PROFILE, hash, local, score_paths);
-        let _ = runtime_seed_gs_score(PROFILE, hash, gs, score_paths);
+        for profile_id in [PROFILE_P1, PROFILE_P2] {
+            let _ = runtime_seed_local_itg_score(profile_id, hash, local, score_paths);
+            let _ = runtime_seed_gs_score(profile_id, hash, gs, score_paths);
+        }
     }
-    let queries: [Option<(&str, &str)>; QUERY_COUNT] =
-        std::array::from_fn(|index| (index % 5 != 4).then_some((PROFILE, hashes[index].as_str())));
-    let legacy_expected = legacy_batch(&queries);
+    let queries: [Option<(&str, &str)>; QUERY_COUNT] = std::array::from_fn(|index| {
+        (index % 5 != 4).then_some(([PROFILE_P1, PROFILE_P2][index % 2], hashes[index].as_str()))
+    });
+    let legacy_expected = repeated_profile_batch(&queries);
     let new_expected = runtime_cached_best_itg_scores(&queries);
     assert_eq!(legacy_expected, new_expected);
     assert_eq!(
@@ -373,12 +381,14 @@ fn main() {
         Some(Grade::Tier02)
     );
 
-    let old_batch = measure(BATCH_ITERS, || score_checksum(&legacy_batch(&queries)));
+    let old_batch = measure(BATCH_ITERS, || {
+        score_checksum(&repeated_profile_batch(&queries))
+    });
     let new_batch = measure(BATCH_ITERS, || {
         score_checksum(&runtime_cached_best_itg_scores(&queries))
     });
     print_pair(
-        "fixed 38-query score-cache transaction",
+        "two-profile 38-query score-cache transaction",
         BATCH_ITERS,
         &old_batch,
         &new_batch,

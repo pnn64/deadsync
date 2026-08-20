@@ -2304,7 +2304,7 @@ pub fn push_actors(
         visual_policy,
     );
     actors.push(timers::build_session(
-        Arc::clone(state.session_timer.text()),
+        &state.session_timer,
         visual_policy.machine_font,
     ));
 
@@ -3243,15 +3243,15 @@ mod song_lookup_tests {
     fn session_elapsed_sync_retains_text_until_the_visible_second_changes() {
         let mut state = init(SelectCourseInitView::default());
         sync_session_elapsed(&mut state, 125.1);
-        let first = Arc::clone(state.session_timer.text());
+        let first = state.session_timer.text().to_owned();
 
-        assert_eq!(first.as_ref(), "02:05");
+        assert_eq!(first, "02:05");
         sync_session_elapsed(&mut state, 125.9);
-        assert!(Arc::ptr_eq(state.session_timer.text(), &first));
+        assert_eq!(state.session_timer.text(), first);
 
         sync_session_elapsed(&mut state, 126.0);
-        assert_eq!(state.session_timer.text().as_ref(), "02:06");
-        assert!(!Arc::ptr_eq(state.session_timer.text(), &first));
+        assert_eq!(state.session_timer.text(), "02:06");
+        assert_ne!(state.session_timer.text(), first);
     }
 
     #[test]

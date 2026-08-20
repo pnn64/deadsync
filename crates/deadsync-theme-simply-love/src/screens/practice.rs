@@ -2575,19 +2575,21 @@ fn practice_player_color(state: &State) -> [f32; 4] {
 fn build_edit_info_text(source: EditInfoSource, suffix: &str) -> String {
     let snap = SNAP_LABELS[source.snap_index];
     let mut status = String::new();
-    status.push_str(&i18n::tr_fmt(
+    i18n::tr_fmt_into(
+        &mut status,
         "Practice",
         "InfoCurrentBeat",
         &[("beat", &format!("{:.3}", source.cursor_beat))],
-    ));
+    );
     status.push('\n');
-    status.push_str(&i18n::tr_fmt(
+    i18n::tr_fmt_into(
+        &mut status,
         "Practice",
         "InfoCurrentSecond",
         &[("sec", &format!("{:.6}", source.current_second))],
-    ));
+    );
     status.push('\n');
-    status.push_str(&i18n::tr_fmt("Practice", "InfoSnapTo", &[("snap", snap)]));
+    i18n::tr_fmt_into(&mut status, "Practice", "InfoSnapTo", &[("snap", snap)]);
     status.push('\n');
     if let Some(selection) = selection_info_text(source.selection_anchor, source.selection_end) {
         status.push_str(&selection);
@@ -2602,14 +2604,15 @@ fn build_edit_info_suffix(gameplay: &gameplay_screen::State) -> String {
     let song = gameplay.song();
     let difficulty = color::difficulty_display_name_for_song(&chart.difficulty, &song.title, true);
     let mut status = String::new();
-    status.push_str(&i18n::tr_fmt(
+    i18n::tr_fmt_into(
+        &mut status,
         "Practice",
         "InfoDifficulty",
         &[
             ("difficulty", difficulty),
             ("meter", &chart.meter.to_string()),
         ],
-    ));
+    );
     status.push_str("\n\n");
     push_info_line(
         &mut status,
@@ -2657,7 +2660,7 @@ fn build_edit_info_suffix(gameplay: &gameplay_screen::State) -> String {
         if idx > 0 {
             status.push('\n');
         }
-        status.push_str(&i18n::tr_fmt("Practice", key, &[("count", count)]));
+        i18n::tr_fmt_into(&mut status, "Practice", key, &[("count", count)]);
     }
     status
 }
@@ -2667,33 +2670,39 @@ fn selection_info_text(
     selection_end: Option<f32>,
 ) -> Option<String> {
     match (selection_anchor, selection_end) {
-        (Some(start), Some(stop)) if stop > start => Some(
-            i18n::tr_fmt(
+        (Some(start), Some(stop)) if stop > start => {
+            let mut text = String::new();
+            i18n::tr_fmt_into(
+                &mut text,
                 "Practice",
                 "InfoSelectionBeatRange",
                 &[
                     ("start", &format!("{start:.3}")),
                     ("stop", &format!("{stop:.3}")),
                 ],
-            )
-            .to_string(),
-        ),
-        (Some(start), None) => Some(
-            i18n::tr_fmt(
+            );
+            Some(text)
+        }
+        (Some(start), None) => {
+            let mut text = String::new();
+            i18n::tr_fmt_into(
+                &mut text,
                 "Practice",
                 "InfoSelectionBeatStart",
                 &[("start", &format!("{start:.3}"))],
-            )
-            .to_string(),
-        ),
-        (None, Some(stop)) => Some(
-            i18n::tr_fmt(
+            );
+            Some(text)
+        }
+        (None, Some(stop)) => {
+            let mut text = String::new();
+            i18n::tr_fmt_into(
+                &mut text,
                 "Practice",
                 "InfoSelectionBeatEnd",
                 &[("stop", &format!("{stop:.3}"))],
-            )
-            .to_string(),
-        ),
+            );
+            Some(text)
+        }
         _ => None,
     }
 }

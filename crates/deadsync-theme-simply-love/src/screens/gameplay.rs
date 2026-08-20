@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::assets::i18n::{tr, tr_fmt};
+use crate::assets::i18n::{tr, tr_fmt, tr_fmt_into};
 use crate::assets::sprite_sheet_dims;
 use crate::assets::{FontRole, machine_font_key, visual_styles};
 use crate::screens::components::gameplay::score_counter::{
@@ -4375,15 +4375,18 @@ fn write_gameplay_lobby_hud_status(state: &State, text: &mut String) -> bool {
         let remaining = (state.runtime_view.lobby.disconnect_hold_seconds - elapsed)
             .ceil()
             .max(0.0) as i32;
-        let remaining_text = remaining.to_string();
-        text.push_str(&tr_fmt(
+        let mut remaining_text = InlineText::new();
+        let inserted = remaining_text.push_i32(remaining);
+        debug_assert!(inserted, "every i32 fits in InlineText");
+        tr_fmt_into(
+            text,
             "Lobby",
             "DisconnectHoldingFormat",
             &[
                 ("remaining", remaining_text.as_str()),
                 ("s", if remaining == 1 { "" } else { "s" }),
             ],
-        ));
+        );
     } else {
         text.push_str(&tr("Lobby", "DisconnectBasicPrompt"));
     }

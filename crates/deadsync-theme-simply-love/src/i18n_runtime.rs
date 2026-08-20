@@ -117,20 +117,35 @@ pub fn tr_fmt(section: &str, key: &str, args: &[(&str, &str)]) -> Arc<str> {
     format_translation_template(tr(section, key).as_ref(), args)
 }
 
+/// Append a localized string with named placeholder substitution.
+///
+/// Callers that retain and clear an output buffer can use this path without
+/// creating a temporary `String` and `Arc<str>` for every formatted value.
+pub fn tr_fmt_into(out: &mut String, section: &str, key: &str, args: &[(&str, &str)]) {
+    let template = tr(section, key);
+    append_translation_template(out, template.as_ref(), args);
+}
+
 fn format_translation_template(template: &str, args: &[(&str, &str)]) -> Arc<str> {
+    let mut text = String::new();
+    append_translation_template(&mut text, template, args);
+    Arc::from(text)
+}
+
+fn append_translation_template(out: &mut String, template: &str, args: &[(&str, &str)]) {
     let extra_capacity = args.iter().fold(0usize, |capacity, (name, value)| {
         capacity.saturating_add(value.len().saturating_sub(name.len().saturating_add(2)))
     });
-    let mut s = String::with_capacity(template.len().saturating_add(extra_capacity));
-    s.push_str(template);
+    out.reserve(template.len().saturating_add(extra_capacity));
+    let start = out.len();
+    out.push_str(template);
     for (name, value) in args {
-        replace_named_placeholder(&mut s, name, value);
+        replace_named_placeholder(out, start, name, value);
     }
-    Arc::from(s)
 }
 
-fn replace_named_placeholder(text: &mut String, name: &str, value: &str) {
-    let mut search_from = 0usize;
+fn replace_named_placeholder(text: &mut String, start: usize, name: &str, value: &str) {
+    let mut search_from = start;
     while let Some(relative_open) = text[search_from..].find('{') {
         let open = search_from + relative_open;
         let name_start = open + 1;
@@ -243,5 +258,29 @@ mod tests {
             .as_ref(),
             "After"
         );
+    }
+
+    #[test]
+    fn template_append_preserves_prefix_and_placeholder_semantics() {
+        let mut out = String::from("prefix: ");
+        append_translation_template(
+            &mut out,
+            "{player} has {count} steps; {player} is ready; {missing}",
+            &[("player", "P1"), ("count", "123")],
+        );
+
+        assert_eq!(out, "prefix: P1 has 123 steps; P1 is ready; {missing}");
+    }
+
+    #[test]
+    fn template_append_matches_sequential_replacement_behavior() {
+        let mut out = String::new();
+        append_translation_template(
+            &mut out,
+            "{first}/{second}",
+            &[("first", "{second}"), ("second", "done")],
+        );
+
+        assert_eq!(out, "done/done");
     }
 }

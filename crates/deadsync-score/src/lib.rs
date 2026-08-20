@@ -1863,8 +1863,19 @@ pub fn runtime_cached_best_itg_scores<const N: usize>(
         return [None; N];
     }
     let caches = runtime_lock_score_caches();
+    // Game-thread, call-local memo: two stack entries match the maximum active
+    // player profiles. The first query for each profile warms three borrowed
+    // maps; later queries hash only chart IDs. A third profile bypasses storage,
+    // so there is no eviction or allocation. Guards own synchronization, stack
+    // drop owns destruction, and `score_cache_hot_paths` measures the worst
+    // 38-query transaction. A miss costs at most three profile-map lookups.
+    let mut profiles = [None; 2];
     std::array::from_fn(|index| {
-        queries[index].and_then(|(profile_id, chart_hash)| caches.merged(profile_id, chart_hash))
+        queries[index].and_then(|(profile_id, chart_hash)| {
+            caches
+                .batch_profile(&mut profiles, profile_id)
+                .and_then(|profile| profile.merged(chart_hash))
+        })
     })
 }
 
@@ -1882,6 +1893,29 @@ pub struct HeldScoreCaches {
     ac: MutexGuard<'static, AcScoreCacheState>,
 }
 
+#[derive(Clone, Copy)]
+struct HeldProfileScores<'a> {
+    profile_id: &'a str,
+    local: Option<&'a LocalScoreIndex>,
+    gs: Option<&'a HashMap<String, CachedScore>>,
+    ac: Option<&'a HashMap<String, ArrowCloudScores>>,
+}
+
+impl HeldProfileScores<'_> {
+    fn merged(&self, chart_hash: &str) -> Option<CachedScore> {
+        let local = self
+            .local
+            .and_then(|index| index.best_itg.get(chart_hash).copied());
+        let gs = self.gs.and_then(|scores| scores.get(chart_hash).copied());
+        let ac = self
+            .ac
+            .and_then(|scores| scores.get(chart_hash).copied())
+            .and_then(|score| score.itg)
+            .map(|score| score.to_cached_score());
+        best_cached_itg_score([local, gs, ac])
+    }
+}
+
 impl HeldScoreCaches {
     pub fn new(
         local: MutexGuard<'static, LocalScoreCacheState>,
@@ -1893,27 +1927,45 @@ impl HeldScoreCaches {
 
     /// Resolve the merged "best ITG" score for `chart_hash` under `profile_id`.
     pub fn merged(&self, profile_id: &str, chart_hash: &str) -> Option<CachedScore> {
+        self.profile(profile_id)?.merged(chart_hash)
+    }
+
+    fn profile<'a>(&'a self, profile_id: &str) -> Option<HeldProfileScores<'a>> {
         if profile_id.trim().is_empty() {
             return None;
         }
-        let local = self
-            .local
-            .loaded_profiles
-            .get(profile_id)
-            .and_then(|idx| idx.best_itg.get(chart_hash).copied());
-        let gs = self
-            .gs
-            .loaded_profiles
-            .get(profile_id)
-            .and_then(|m| m.get(chart_hash).copied());
-        let ac = self
-            .ac
-            .loaded_profiles
-            .get(profile_id)
-            .and_then(|m| m.get(chart_hash).copied())
-            .and_then(|s| s.itg)
-            .map(|ac| ac.to_cached_score());
-        best_cached_itg_score([local, gs, ac])
+        let local = self.local.loaded_profiles.get_key_value(profile_id);
+        let gs = self.gs.loaded_profiles.get_key_value(profile_id);
+        let ac = self.ac.loaded_profiles.get_key_value(profile_id);
+        let canonical_id = local
+            .map(|(id, _)| id.as_str())
+            .or_else(|| gs.map(|(id, _)| id.as_str()))
+            .or_else(|| ac.map(|(id, _)| id.as_str()))?;
+        Some(HeldProfileScores {
+            profile_id: canonical_id,
+            local: local.map(|(_, index)| index.as_ref()),
+            gs: gs.map(|(_, scores)| scores.as_ref()),
+            ac: ac.map(|(_, scores)| scores.as_ref()),
+        })
+    }
+
+    fn batch_profile<'a>(
+        &'a self,
+        profiles: &mut [Option<HeldProfileScores<'a>>; 2],
+        profile_id: &str,
+    ) -> Option<HeldProfileScores<'a>> {
+        if let Some(profile) = profiles
+            .iter()
+            .flatten()
+            .find(|profile| profile.profile_id == profile_id)
+        {
+            return Some(*profile);
+        }
+        let profile = self.profile(profile_id)?;
+        if let Some(slot) = profiles.iter_mut().find(|slot| slot.is_none()) {
+            *slot = Some(profile);
+        }
+        Some(profile)
     }
 
     /// Snapshot every merged "best ITG" score for a loaded profile.
@@ -7104,6 +7156,38 @@ mod tests {
         assert_eq!(
             runtime_cached_best_itg_scores(&queries),
             [Some(gs_shared), None, Some(local_only), None, None]
+        );
+    }
+
+    #[test]
+    fn batched_score_reads_reuse_two_profiles_without_changing_slot_order() {
+        const P1: &str = "batch-two-profile-p1";
+        const P2: &str = "batch-two-profile-p2";
+        let p1 = cached_score(Grade::Tier03, 0.96, Some(3), Some(4));
+        let p2 = cached_score(Grade::Tier02, 0.98, Some(2), Some(3));
+        let mut p1_index = LocalScoreIndex::default();
+        p1_index.best_itg.insert("chart-a".to_string(), p1);
+        RUNTIME_LOCAL_SCORE_CACHE
+            .lock()
+            .unwrap()
+            .insert_loaded_profile(P1, p1_index);
+        RUNTIME_GS_SCORE_CACHE
+            .lock()
+            .unwrap()
+            .insert_loaded_profile(P2, HashMap::from([("chart-b".to_string(), p2)]));
+
+        let queries = [
+            Some((P1, "chart-a")),
+            Some((P2, "chart-b")),
+            Some((P1, "missing")),
+            Some((P2, "chart-b")),
+            None,
+            Some(("unknown-third-profile", "chart-a")),
+        ];
+
+        assert_eq!(
+            runtime_cached_best_itg_scores(&queries),
+            [Some(p1), Some(p2), None, Some(p2), None, None]
         );
     }
 

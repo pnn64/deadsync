@@ -1,7 +1,9 @@
 use deadsync_simfile::song_search::{SongSearchCandidate, song_search_difficulties_text};
+use deadsync_theme_simply_love::i18n;
 use deadsync_theme_simply_love::screens::components::select_music::select_music_menu::{
     SongSearchResultsState, benchmark_song_search_frame_text,
 };
+use deadsync_theme_simply_love::screens::components::shared::timers::TimerText;
 use deadsync_theme_simply_love::screens::evaluation_summary::{
     benchmark_eval_numeric_text, benchmark_profile_name_changed,
 };
@@ -19,6 +21,8 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 const PROFILE_OPS: usize = 500_000;
 const NUMERIC_OPS: usize = 500_000;
 const SEARCH_FRAME_OPS: usize = 100_000;
+const TIMER_OPS: usize = 500_000;
+const TRANSLATION_OPS: usize = 500_000;
 const SONG_SEARCH_WHEEL_SLOTS: usize = 12;
 const SONG_SEARCH_WHEEL_FOCUS_SLOT: usize = SONG_SEARCH_WHEEL_SLOTS / 2 - 1;
 const DETAIL_LABELS: [&str; 5] = ["Pack", "Song", "Subtitle", "BPMs", "Difficulties"];
@@ -301,7 +305,49 @@ fn song_search_fixture() -> SongSearchResultsState {
     }
 }
 
+struct LegacyTimerText {
+    second: u64,
+    text: Arc<str>,
+}
+
+impl LegacyTimerText {
+    fn new(second: u64) -> Self {
+        Self {
+            second,
+            text: legacy_elapsed_text(second),
+        }
+    }
+
+    fn sync(&mut self, second: u64) {
+        if second == self.second {
+            return;
+        }
+        self.second = second;
+        self.text = legacy_elapsed_text(second);
+    }
+}
+
+fn legacy_elapsed_text(second: u64) -> Arc<str> {
+    let hours = second / 3600;
+    let minutes = (second % 3600) / 60;
+    let seconds = second % 60;
+    if second < 3600 {
+        format!("{minutes:02}:{seconds:02}").into()
+    } else if second < 36000 {
+        format!("{hours}:{minutes:02}:{seconds:02}").into()
+    } else {
+        format!("{hours:02}:{minutes:02}:{seconds:02}").into()
+    }
+}
+
+fn text_checksum(text: &str) -> u64 {
+    text.bytes().fold(text.len() as u64, |checksum, byte| {
+        checksum.rotate_left(5) ^ u64::from(byte)
+    })
+}
+
 fn main() {
+    i18n::init_for_tests();
     let p1 = ["Player One"; 12];
     let p2 = ["Player Two"; 12];
     let sides = [&p1[..], &p2[..]];
@@ -346,5 +392,51 @@ fn main() {
         SEARCH_FRAME_OPS,
         &old_search,
         &new_search,
+    );
+
+    let mut old_second = 0_u64;
+    let mut old_timer = LegacyTimerText::new(old_second);
+    let old_timer_result = measure(TIMER_OPS, 500, || {
+        old_second = (old_second + 1) % 36_000;
+        old_timer.sync(old_second);
+        text_checksum(&old_timer.text)
+    });
+    let mut new_second = 0_u64;
+    let mut new_timer = TimerText::default();
+    let new_timer_result = measure(TIMER_OPS, 500, || {
+        new_second = (new_second + 1) % 36_000;
+        new_timer.sync(new_second as f32);
+        text_checksum(new_timer.text())
+    });
+    print_pair(
+        "4. retained elapsed timer text",
+        TIMER_OPS,
+        &old_timer_result,
+        &new_timer_result,
+    );
+
+    let args = [("remaining", "12"), ("s", "s")];
+    let mut old_translation = String::with_capacity(96);
+    let old_translation_result = measure(TRANSLATION_OPS, 500, || {
+        old_translation.clear();
+        old_translation.push_str(&i18n::tr_fmt("Lobby", "DisconnectHoldingFormat", &args));
+        text_checksum(&old_translation)
+    });
+    let mut new_translation = String::with_capacity(96);
+    let new_translation_result = measure(TRANSLATION_OPS, 500, || {
+        new_translation.clear();
+        i18n::tr_fmt_into(
+            &mut new_translation,
+            "Lobby",
+            "DisconnectHoldingFormat",
+            &args,
+        );
+        text_checksum(&new_translation)
+    });
+    print_pair(
+        "5. translation into retained buffer",
+        TRANSLATION_OPS,
+        &old_translation_result,
+        &new_translation_result,
     );
 }

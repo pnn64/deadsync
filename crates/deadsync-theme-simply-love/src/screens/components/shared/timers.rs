@@ -1,21 +1,27 @@
 use crate::act;
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
-use deadlib_present::actors::{Actor, TextContent};
+use deadlib_present::actors::{Actor, InlineText, TextContent};
 use deadlib_present::space::{screen_center_x, widescale};
 use std::sync::Arc;
 
+const SESSION_LAYOUT_SLOT: u8 = 0;
+const GAMEPLAY_LAYOUT_SLOT: u8 = 1;
+
 /// Retained elapsed-time text owned by one screen on the game thread.
 ///
-/// The fixed-capacity value is warmed at screen initialization and compares one
-/// integer on each synchronization. It allocates only when the visible second
-/// changes, never misses or evicts, performs no locking or background work, and
-/// is dropped with its screen. Focused key/format tests provide instrumentation;
-/// worst-case synchronization is one short format and allocation.
+/// Common elapsed values remain inline and use one of two reusable layout slots.
+/// The single-threaded value is warmed at screen initialization, compares one
+/// integer per sync, performs no locking or background work, and is dropped with
+/// its screen. A slot overwrites its prior layout when the visible second changes;
+/// there is no scan or eviction. Only values too large for 14 inline bytes fall
+/// back to shared heap text. Focused format tests and the screen allocation
+/// benchmark instrument the path; worst-case normal synchronization is fixed-size
+/// decimal formatting.
 #[derive(Clone, Debug)]
 pub struct TimerText {
     second: u64,
-    text: Arc<str>,
+    text: TextContent,
 }
 
 impl TimerText {
@@ -38,8 +44,13 @@ impl TimerText {
     }
 
     #[inline(always)]
-    pub const fn text(&self) -> &Arc<str> {
-        &self.text
+    pub fn text(&self) -> &str {
+        self.text.as_str()
+    }
+
+    #[inline(always)]
+    fn content(&self, slot: u8) -> TextContent {
+        self.text.clone().with_frame_inline_slot(slot)
     }
 }
 
@@ -58,26 +69,48 @@ fn elapsed_second(elapsed: f32) -> u64 {
     }
 }
 
-fn format_elapsed(second: u64) -> Arc<str> {
+fn format_elapsed(second: u64) -> TextContent {
     let hours = second / 3600;
     let minutes = (second % 3600) / 60;
     let seconds = second % 60;
-    if second < 3600 {
-        format!("{minutes:02}:{seconds:02}").into()
-    } else if second < 36000 {
-        format!("{hours}:{minutes:02}:{seconds:02}").into()
+    let mut text = InlineText::new();
+    let fits = if hours == 0 {
+        push_two_digits(&mut text, minutes)
     } else {
-        format!("{hours:02}:{minutes:02}:{seconds:02}").into()
+        u32::try_from(hours).is_ok_and(|hours| text.push_u32(hours))
+            && text.push_ascii(b':')
+            && push_two_digits(&mut text, minutes)
+    } && text.push_ascii(b':')
+        && push_two_digits(&mut text, seconds);
+    if fits {
+        return TextContent::Inline(text);
     }
+    TextContent::Shared(Arc::from(if second < 3600 {
+        format!("{minutes:02}:{seconds:02}")
+    } else if second < 36000 {
+        format!("{hours}:{minutes:02}:{seconds:02}")
+    } else {
+        format!("{hours:02}:{minutes:02}:{seconds:02}")
+    }))
 }
 
-pub fn build_session(text: impl Into<TextContent>, machine_font: MachineFont) -> Actor {
-    build_header_timer(text, screen_center_x(), machine_font)
+#[inline(always)]
+fn push_two_digits(text: &mut InlineText, value: u64) -> bool {
+    debug_assert!(value < 100);
+    text.push_ascii(b'0' + (value / 10) as u8) && text.push_ascii(b'0' + (value % 10) as u8)
 }
 
-pub fn build_gameplay(text: impl Into<TextContent>, machine_font: MachineFont) -> Actor {
+pub fn build_session(timer: &TimerText, machine_font: MachineFont) -> Actor {
     build_header_timer(
-        text,
+        timer.content(SESSION_LAYOUT_SLOT),
+        screen_center_x(),
+        machine_font,
+    )
+}
+
+pub fn build_gameplay(timer: &TimerText, machine_font: MachineFont) -> Actor {
+    build_header_timer(
+        timer.content(GAMEPLAY_LAYOUT_SLOT),
         screen_center_x() + widescale(150.0, 200.0),
         machine_font,
     )
@@ -104,22 +137,48 @@ mod tests {
     #[test]
     fn timer_text_updates_only_at_visible_second_boundaries() {
         let mut timer = TimerText::new(59.1);
-        let first = Arc::clone(timer.text());
 
-        assert_eq!(timer.text().as_ref(), "00:59");
+        assert_eq!(timer.text(), "00:59");
         assert!(!timer.sync(59.9));
-        assert!(Arc::ptr_eq(timer.text(), &first));
+        assert_eq!(timer.text(), "00:59");
         assert!(timer.sync(60.0));
-        assert_eq!(timer.text().as_ref(), "01:00");
-        assert!(!Arc::ptr_eq(timer.text(), &first));
+        assert_eq!(timer.text(), "01:00");
     }
 
     #[test]
     fn timer_text_formats_hours_and_sanitizes_invalid_values() {
-        assert_eq!(TimerText::new(3_600.0).text().as_ref(), "1:00:00");
-        assert_eq!(TimerText::new(36_000.0).text().as_ref(), "10:00:00");
+        assert_eq!(TimerText::new(3_600.0).text(), "1:00:00");
+        assert_eq!(TimerText::new(36_000.0).text(), "10:00:00");
         for elapsed in [-1.0, f32::NAN, f32::INFINITY] {
-            assert_eq!(TimerText::new(elapsed).text().as_ref(), "00:00");
+            assert_eq!(TimerText::new(elapsed).text(), "00:00");
         }
+    }
+
+    #[test]
+    fn timer_text_preserves_large_elapsed_format_with_heap_fallback() {
+        let text = format_elapsed(100_000_000_u64 * 3_600);
+
+        assert_eq!(text.as_str(), "100000000:00:00");
+        assert!(matches!(text, TextContent::Shared(_)));
+    }
+
+    #[test]
+    fn timer_actor_content_uses_independent_reusable_slots() {
+        let timer = TimerText::new(3_661.0);
+
+        assert!(matches!(
+            timer.content(SESSION_LAYOUT_SLOT),
+            TextContent::FrameInline {
+                slot: SESSION_LAYOUT_SLOT,
+                ..
+            }
+        ));
+        assert!(matches!(
+            timer.content(GAMEPLAY_LAYOUT_SLOT),
+            TextContent::FrameInline {
+                slot: GAMEPLAY_LAYOUT_SLOT,
+                ..
+            }
+        ));
     }
 }

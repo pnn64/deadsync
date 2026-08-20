@@ -13238,7 +13238,7 @@ pub fn push_actors(
 
     // Timer (zmod parity: optional gameplay timer to the right of session timer).
     actors.push(timers::build_session(
-        Arc::clone(state.session_timer.text()),
+        &state.session_timer,
         state.policy.machine_font,
     ));
     if presentation.show_stage_display {
@@ -13249,7 +13249,7 @@ pub fn push_actors(
     }
     if presentation.show_gameplay_timer {
         actors.push(timers::build_gameplay(
-            Arc::clone(state.gameplay_timer.text()),
+            &state.gameplay_timer,
             state.policy.machine_font,
         ));
     }
@@ -15221,18 +15221,18 @@ mod tests {
     fn elapsed_sync_retains_timer_text_until_the_visible_second_changes() {
         let mut state = init_placeholder();
         super::sync_elapsed(&mut state, 125.1, 3_600.0);
-        let session_text = Arc::clone(state.session_timer.text());
+        let session_text = state.session_timer.text().to_owned();
 
         assert_eq!(super::elapsed_times(&state), (125.1, 3_600.0));
-        assert_eq!(session_text.as_ref(), "02:05");
-        assert_eq!(state.gameplay_timer.text().as_ref(), "1:00:00");
+        assert_eq!(session_text, "02:05");
+        assert_eq!(state.gameplay_timer.text(), "1:00:00");
 
         super::sync_elapsed(&mut state, 125.9, 3_600.9);
-        assert!(Arc::ptr_eq(state.session_timer.text(), &session_text));
+        assert_eq!(state.session_timer.text(), session_text);
 
         super::sync_elapsed(&mut state, 126.0, 3_601.0);
-        assert_eq!(state.session_timer.text().as_ref(), "02:06");
-        assert!(!Arc::ptr_eq(state.session_timer.text(), &session_text));
+        assert_eq!(state.session_timer.text(), "02:06");
+        assert_ne!(state.session_timer.text(), session_text);
     }
 
     fn texture_offset(actor: &Actor, key: &str) -> Option<[f32; 2]> {
