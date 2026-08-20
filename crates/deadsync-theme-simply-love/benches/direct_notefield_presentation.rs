@@ -64,6 +64,9 @@ const PLAYER_FIELD_CAMERA_MEASURE_BATCHES: usize = 400;
 const SEGMENT_CAMERA_BATCH_FRAMES: usize = 4_096;
 const SEGMENT_CAMERA_WARMUP_BATCHES: usize = 16;
 const SEGMENT_CAMERA_MEASURE_BATCHES: usize = 400;
+const SEGMENT_ROOT_BATCH_FRAMES: usize = 1_024;
+const SEGMENT_ROOT_WARMUP_BATCHES: usize = 16;
+const SEGMENT_ROOT_MEASURE_BATCHES: usize = 400;
 const HUD_TEXT_RUNS: usize = 8;
 const ERROR_BAR_TEXT_RUNS: usize = 4;
 const CUE_COUNTDOWN_RUNS: usize = 3;
@@ -1563,6 +1566,165 @@ fn print_segment_camera_benchmark() {
     }
 }
 
+#[derive(Clone, Copy)]
+enum SegmentRootKind {
+    PerActor,
+    PerSegment,
+}
+
+struct CameraSequenceProbe {
+    active_camera: u8,
+    last_root_camera: Option<(Mat4, u8)>,
+}
+
+impl CameraSequenceProbe {
+    const fn new() -> Self {
+        Self {
+            active_camera: 0,
+            last_root_camera: None,
+        }
+    }
+
+    fn camera_id(&mut self, matrix: Mat4, cameras: &mut Vec<Mat4>) -> u8 {
+        if let Some((last, id)) = self.last_root_camera
+            && last == matrix
+        {
+            return id;
+        }
+        cameras.push(matrix);
+        let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
+        self.last_root_camera = Some((matrix, id));
+        id
+    }
+}
+
+fn segment_root_frame(
+    kind: SegmentRootKind,
+    actors_per_player: usize,
+    cameras: &mut Vec<Mat4>,
+    roots: &[Mat4; BOUNDARY_PLAYERS],
+    fields: &[Mat4; BOUNDARY_PLAYERS],
+) -> u64 {
+    cameras.clear();
+    cameras.push(Mat4::IDENTITY);
+    let mut sequence = CameraSequenceProbe::new();
+    let mut checksum = 0u64;
+    let hud_actors = actors_per_player.div_ceil(4);
+    let field_actors = actors_per_player.saturating_sub(hud_actors);
+    for player in 0..BOUNDARY_PLAYERS {
+        for (segment, actor_count) in [hud_actors, field_actors].into_iter().enumerate() {
+            match kind {
+                SegmentRootKind::PerActor => {
+                    for _ in 0..actor_count {
+                        sequence.active_camera = sequence.camera_id(roots[player], cameras);
+                        checksum += u64::from(sequence.active_camera);
+                    }
+                }
+                SegmentRootKind::PerSegment => {
+                    let root_id = (actor_count != 0)
+                        .then(|| sequence.camera_id(roots[player], cameras))
+                        .unwrap_or(sequence.active_camera);
+                    for _ in 0..actor_count {
+                        sequence.active_camera = root_id;
+                        checksum += u64::from(sequence.active_camera);
+                    }
+                }
+            }
+            let flat_camera = if segment == 0 {
+                roots[player]
+            } else {
+                fields[player]
+            };
+            sequence.active_camera = sequence.camera_id(flat_camera, cameras);
+            checksum += u64::from(sequence.active_camera);
+        }
+    }
+    black_box(cameras.as_slice());
+    checksum
+}
+
+fn measure_segment_root_pair(actors_per_player: usize) -> [BoundaryResult; 2] {
+    let roots = [
+        Mat4::from_rotation_x(0.07) * Mat4::from_rotation_z(0.11),
+        Mat4::from_rotation_x(-0.05) * Mat4::from_rotation_z(-0.09),
+    ];
+    let fields = [
+        Mat4::from_scale(Vec3::new(0.9, 1.1, 1.0)) * roots[0],
+        Mat4::from_scale(Vec3::new(1.05, 0.95, 1.0)) * roots[1],
+    ];
+    let mut cameras = Vec::with_capacity(5);
+    let mut elapsed = [Duration::ZERO; 2];
+    let mut cycles = [0u64; 2];
+    let mut allocated = [AllocSnapshot {
+        allocs: 0,
+        reallocs: 0,
+        bytes: 0,
+    }; 2];
+    let mut samples_ns: [Vec<u64>; 2] =
+        std::array::from_fn(|_| Vec::with_capacity(SEGMENT_ROOT_MEASURE_BATCHES));
+    let mut checksum = [0.0f32; 2];
+    for batch in 0..SEGMENT_ROOT_WARMUP_BATCHES + SEGMENT_ROOT_MEASURE_BATCHES {
+        let order = if batch % 2 == 0 { [0, 1] } else { [1, 0] };
+        for kind_index in order {
+            let kind = [SegmentRootKind::PerActor, SegmentRootKind::PerSegment][kind_index];
+            let before_alloc = ALLOC.snapshot();
+            let before_cycles = read_cycles();
+            let started = Instant::now();
+            let mut batch_checksum = 0u64;
+            for _ in 0..SEGMENT_ROOT_BATCH_FRAMES {
+                batch_checksum = batch_checksum.wrapping_add(segment_root_frame(
+                    kind,
+                    black_box(actors_per_player),
+                    &mut cameras,
+                    &roots,
+                    &fields,
+                ));
+            }
+            let sample = started.elapsed();
+            let sample_cycles = read_cycles().saturating_sub(before_cycles);
+            let sample_allocated = ALLOC.snapshot().delta(before_alloc);
+            black_box(batch_checksum);
+            if batch >= SEGMENT_ROOT_WARMUP_BATCHES {
+                elapsed[kind_index] += sample;
+                cycles[kind_index] += sample_cycles;
+                allocated[kind_index].add(sample_allocated);
+                samples_ns[kind_index]
+                    .push((sample.as_nanos() / SEGMENT_ROOT_BATCH_FRAMES as u128) as u64);
+                checksum[kind_index] += batch_checksum as f32;
+            }
+        }
+    }
+    for samples in &mut samples_ns {
+        samples.sort_unstable();
+    }
+    std::array::from_fn(|index| BoundaryResult {
+        elapsed: elapsed[index],
+        cycles: cycles[index],
+        allocated: allocated[index],
+        samples_ns: std::mem::take(&mut samples_ns[index]),
+        checksum: checksum[index],
+    })
+}
+
+fn print_segment_root_benchmark() {
+    println!("\ntransformed segment root-camera benchmark (2 players)");
+    for actors_per_player in [1, 2, 4, 8, 16, 64, 256] {
+        println!("{actors_per_player} ordinary actors/player");
+        let [per_actor, per_segment] = measure_segment_root_pair(actors_per_player);
+        assert_eq!(per_actor.checksum, per_segment.checksum);
+        print_sampled_result("per-actor lookup", &per_actor, SEGMENT_ROOT_BATCH_FRAMES);
+        print_sampled_result("segment root id", &per_segment, SEGMENT_ROOT_BATCH_FRAMES);
+        for result in [&per_actor, &per_segment] {
+            assert_zero_alloc(&BenchResult {
+                elapsed: result.elapsed,
+                cycles: result.cycles,
+                allocated: result.allocated,
+                checksum: result.checksum,
+            });
+        }
+    }
+}
+
 fn print_boundary_sweep(label: &str, hold_mix: bool, draw_counts: &[usize]) {
     println!("\n{label} (draws/player)");
     for &field_draws in draw_counts {
@@ -2382,6 +2544,10 @@ fn print_cue_countdown_benchmark() {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_SEGMENT_ROOT_ONLY").is_some() {
+        print_segment_root_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_SEGMENT_CAMERA_ONLY").is_some() {
         print_segment_camera_benchmark();
         return;

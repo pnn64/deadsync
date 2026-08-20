@@ -826,16 +826,15 @@ fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
                     tint: segment.tint,
                     blend: segment.blend,
                 };
-                let camera = segment.camera.as_ref();
                 let x_fold = segment.x_fold;
                 ActorBuild {
                     actor,
                     base_z,
                     style,
-                    camera,
                     x_fold,
                 }
             }),
+            segment.camera.as_ref(),
             root_rect,
             m,
             fonts,
@@ -4951,11 +4950,10 @@ struct ComposeStyle {
 }
 
 #[derive(Clone, Copy)]
-struct ActorBuild<'a, 'camera> {
+struct ActorBuild<'a> {
     actor: &'a actors::Actor,
     base_z: i16,
     style: ComposeStyle,
-    camera: Option<&'camera ActorSegmentCamera<'camera>>,
     x_fold: Option<ActorXFold>,
 }
 
@@ -5032,9 +5030,9 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
             actor,
             base_z,
             style,
-            camera: None,
             x_fold,
         }),
+        None,
         parent,
         m,
         fonts,
@@ -5054,8 +5052,9 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn build_actor_sequence_with_state<'a, 'camera, T, I>(
+fn build_actor_sequence_with_state<'a, T, I>(
     actor_builds: I,
+    segment_camera: Option<&ActorSegmentCamera<'_>>,
     parent: SmRect,
     m: &Metrics,
     fonts: &'a font::FontMap,
@@ -5073,13 +5072,13 @@ fn build_actor_sequence_with_state<'a, 'camera, T, I>(
     total_elapsed: f32,
 ) where
     T: TextureContext + ?Sized,
-    I: IntoIterator<Item = ActorBuild<'a, 'camera>>,
+    I: IntoIterator<Item = ActorBuild<'a>>,
 {
+    let mut root_camera_id = None;
     for ActorBuild {
         actor,
         base_z,
         style,
-        camera: segment_camera,
         x_fold,
     } in actor_builds
     {
@@ -5091,6 +5090,7 @@ fn build_actor_sequence_with_state<'a, 'camera, T, I>(
                 sequence.camera_stack.push(sequence.active_camera);
                 sequence.active_camera = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
                 sequence.last_root_camera = Some((matrix, sequence.active_camera));
+                root_camera_id = None;
             }
             actors::Actor::CameraPop => {
                 sequence.active_camera =
@@ -5129,7 +5129,8 @@ fn build_actor_sequence_with_state<'a, 'camera, T, I>(
                 if sequence.camera_stack.is_empty() {
                     sequence.active_camera =
                         if let Some(root_camera) = segment_camera.map(|camera| camera.root) {
-                            sequence.camera_id(*root_camera, cameras)
+                            *root_camera_id
+                                .get_or_insert_with(|| sequence.camera_id(*root_camera, cameras))
                         } else {
                             sequence.base_camera
                         };
@@ -9529,6 +9530,7 @@ mod tests {
             Actor::CameraPush { view_proj },
             mesh([0.25, 0.5, 0.8, 1.0], BlendMode::Multiply, 8),
             Actor::CameraPop,
+            mesh([0.6, 0.3, 0.2, 0.9], BlendMode::Subtract, 10),
             Actor::Camera {
                 view_proj,
                 children: vec![mesh([0.2, 0.4, 0.6, 0.8], BlendMode::Subtract, 9)],
@@ -9552,6 +9554,15 @@ mod tests {
                 mul_rgba([0.25, 0.5, 0.8, 1.0], segment_tint),
                 BlendMode::Add,
                 108,
+            ),
+            Actor::CameraPop,
+            Actor::CameraPush {
+                view_proj: root_camera,
+            },
+            mesh(
+                mul_rgba([0.6, 0.3, 0.2, 0.9], segment_tint),
+                BlendMode::Add,
+                110,
             ),
             Actor::CameraPop,
             Actor::Camera {
