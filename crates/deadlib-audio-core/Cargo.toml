@@ -9,7 +9,7 @@ name = "sfx_queue_hot_path"
 harness = false
 
 [dependencies]
-rtrb = "0.3.4"
+rtrb = "0.4.0"
 
 
 [lints.clippy]

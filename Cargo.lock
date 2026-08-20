@@ -1346,7 +1346,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.707"
+version = "0.5.708"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1784,7 +1784,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.707"
+version = "0.5.708"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1844,7 +1844,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.707"
+version = "0.5.708"
 dependencies = [
  "log",
  "semver",
@@ -2371,9 +2371,9 @@ dependencies = [
 
 [[package]]
 name = "glam"
-version = "0.33.4"
+version = "0.33.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8937e8f6ab8fdb18acb6df9fa05f71cb20f12c4a3e292ad3c54cd2399d67ee25"
+checksum = "c426daf70099baff33fac0ba85151c42424861c56828cef9ba02dacb78eb6b26"
 
 [[package]]
 name = "glow"
@@ -4627,9 +4627,9 @@ source = "git+https://github.com/pnn64/rssp?branch=main#80ed497d9b604aa36b528b94
 
 [[package]]
 name = "rtrb"
-version = "0.3.4"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ade083ccbb4bf536df69d1f6432cc23deb7acccff86b183f3923a6fd56a1153"
+checksum = "9278fb35b3e730abe136e9b395b5b81b96d06b9f5478a50f0c8430a2237b22de"
 
 [[package]]
 name = "rubato"
@@ -6608,9 +6608,9 @@ dependencies = [
 
 [[package]]
 name = "zerovec"
-version = "0.11.7"
+version = "0.11.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94b5c6b5976d66c1d703c4fd17d3f5e43c8cedaacf604961b171adc7130896d8"
+checksum = "bb0464e17806c1d976d5cba29399c7f08e516e279e2ba493f63123b5fca67dd8"
 dependencies = [
  "yoke",
  "zerofrom",

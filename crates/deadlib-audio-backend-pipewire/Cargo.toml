@@ -11,8 +11,8 @@ libloading = "0.9.0"
 log = "0.4.33"
 
 [build-dependencies]
-cc = "1.2.57"
-pkg-config = "0.3.32"
+cc = "1.4.3"
+pkg-config = "0.3.34"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
