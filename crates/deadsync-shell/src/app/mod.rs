@@ -879,9 +879,8 @@ fn prewarm_gameplay_text_layout_cache(
         simply_love_visual_policy(config),
     );
     let actor_segments = segments.segments(state, actor_scratch);
-    let mut render =
-        compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
-            &actor_segments,
+    let mut render = compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+            actor_segments,
             [0.0, 0.0, 0.0, 1.0],
             metrics,
             fonts,
@@ -891,7 +890,6 @@ fn prewarm_gameplay_text_layout_cache(
             &PRESENT_TEXTURE_CONTEXT,
             state.actor_resources(),
         );
-    drop(actor_segments);
     compose_scratch.recycle_frame(&mut render);
     actor_scratch.clear();
     gameplay::prewarm_text_layout(cache, compose_scratch, fonts, state);
@@ -3514,8 +3512,8 @@ impl App {
             let screen = if let (Some(actor_segments), Some(actor_resources)) =
                 (segmented_actors.as_ref(), actor_resources)
             {
-                compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
-                    actor_segments,
+                compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+                    (*actor_segments).clone(),
                     clear_color,
                     &self.state.shell.metrics,
                     fonts,

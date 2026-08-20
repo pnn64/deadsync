@@ -643,8 +643,8 @@ mod tests {
             crate::views::SimplyLoveVisualPolicyView::default(),
         );
         let actor_segments = segments.segments(state, actors);
-        compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
-            &actor_segments,
+        compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+            actor_segments,
             [0.0, 0.0, 0.0, 1.0],
             metrics,
             assets.fonts(),
@@ -692,8 +692,8 @@ mod tests {
             crate::views::SimplyLoveVisualPolicyView::default(),
         );
         let actor_segments = segments.segments(&state.gameplay, actors);
-        compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
-            &actor_segments,
+        compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+            actor_segments,
             [0.0, 0.0, 0.0, 1.0],
             metrics,
             assets.fonts(),
@@ -1384,8 +1384,8 @@ L000
 
         compose_scratch.begin_frame_stats(collect_sort_timing);
         let build_started = Instant::now();
-        let mut render = compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
-                &actor_segments,
+        let mut render = compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+                actor_segments,
                 [0.0, 0.0, 0.0, 1.0],
                 metrics,
                 assets.fonts(),
@@ -2697,6 +2697,14 @@ return Def.ActorFrame{
             self:y(SCREEN_CENTER_Y)
         end,
     },
+    Def.ActorProxy{
+        OnCommand=function(self)
+            local combo = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("Combo")
+            self:SetTarget(combo)
+            self:x(SCREEN_CENTER_X + 96)
+            self:y(SCREEN_CENTER_Y + 48)
+        end,
+    },
 }
 "#,
         )
@@ -2752,12 +2760,12 @@ return Def.ActorFrame{
                     123.0,
                     crate::views::SimplyLoveVisualPolicyView::default(),
                 );
-                assert!(segments.has_direct_field_proxy());
+                assert!(segments.has_direct_field_proxy(&state));
                 let actor_segments = segments.segments(&state, &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
-                let mut warm = compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
-                    &actor_segments,
+                let mut warm = compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+                    actor_segments,
                     [0.0, 0.0, 0.0, 1.0],
                     &metrics,
                     assets.fonts(),
@@ -2769,7 +2777,6 @@ return Def.ActorFrame{
                 );
                 assert!(warm.ops.iter().any(|op| matches!(op, DrawOp::Sprite(_))));
                 compose_scratch.recycle_frame(&mut warm);
-                drop(actor_segments);
                 let _ = assert_repeatable_frame(
                     &mut state,
                     &assets,
@@ -2783,7 +2790,7 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn root_combo_proxy_uses_repeatable_direct_segment() {
+    fn duplicate_root_combo_proxies_use_repeatable_direct_segments() {
         let simfile = write_direct_combo_proxy_fixture();
         with_session(
             profile_data::PlayStyle::Single,
@@ -2831,12 +2838,12 @@ return Def.ActorFrame{
                     123.0,
                     crate::views::SimplyLoveVisualPolicyView::default(),
                 );
-                assert!(segments.has_direct_combo_proxy());
+                assert_eq!(segments.direct_combo_proxy_count(&state), 2);
                 let actor_segments = segments.segments(&state, &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
-                let mut warm = compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
-                    &actor_segments,
+                let mut warm = compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+                    actor_segments,
                     [0.0, 0.0, 0.0, 1.0],
                     &metrics,
                     assets.fonts(),
@@ -2848,7 +2855,6 @@ return Def.ActorFrame{
                 );
                 assert!(warm.ops.iter().any(|op| matches!(op, DrawOp::Sprite(_))));
                 compose_scratch.recycle_frame(&mut warm);
-                drop(actor_segments);
                 let _ = assert_repeatable_frame(
                     &mut state,
                     &assets,

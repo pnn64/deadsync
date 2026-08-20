@@ -985,7 +985,7 @@ impl FlatProxyScratch {
                     .collect()
             },
             source_actors: Vec::with_capacity(draw_count + 2),
-            actors: Vec::with_capacity(1),
+            actors: Vec::with_capacity(4),
             capture: SharedActorFrameScratch::with_capacity(draw_count + 2),
         }
     }
@@ -995,15 +995,17 @@ fn flat_proxy_frame(
     kind: FlatProxyKind,
     source: &mut FlatProxyScratch,
     camera: Option<Mat4>,
+    proxy_count: usize,
     metrics: &deadlib_present::space::Metrics,
     fonts: &font::FontMap,
     resources: &ActorResourceArena,
     text: &mut TextLayoutCache,
     compose: &mut ComposeScratch,
 ) -> f32 {
+    assert!(proxy_count <= 4);
     source.actors.clear();
     let tint = [0.5, 0.75, 0.25, 0.8];
-    let segment = match kind {
+    let segments: [ActorSegment<'_>; 4] = match kind {
         FlatProxyKind::ActorCapture => {
             source.source_actors.clear();
             if let Some(view_proj) = camera {
@@ -1021,30 +1023,36 @@ fn flat_proxy_frame(
                     benchmark_normalize_proxy_actor_source(&source.source_actors, out);
                 })
                 .expect("benchmark proxy capture is nonempty");
-            source.actors.push(Actor::SharedFrame {
-                align: [0.0, 0.0],
-                offset: [0.0, 0.0],
-                size: [SizeSpec::Fill, SizeSpec::Fill],
-                children,
-                background: None,
-                z: 42,
-                tint,
-                blend: Some(BlendMode::Add),
-            });
-            ActorSegment::new(&source.actors)
+            for destination in 0..proxy_count {
+                source.actors.push(Actor::SharedFrame {
+                    align: [0.0, 0.0],
+                    offset: [destination as f32 * 16.0, destination as f32 * 8.0],
+                    size: [SizeSpec::Fill, SizeSpec::Fill],
+                    children: Arc::clone(&children),
+                    background: None,
+                    z: 42 + destination as i16,
+                    tint,
+                    blend: Some(BlendMode::Add),
+                });
+            }
+            std::array::from_fn(|destination| {
+                ActorSegment::new(source.actors.get(destination..=destination).unwrap_or(&[]))
+            })
         }
-        FlatProxyKind::DirectFragment => ActorSegment::flat_proxy_with_camera(
-            &source.draws,
-            [0.0, 0.0],
-            42,
-            tint,
-            BlendMode::Add,
-            camera.as_ref(),
-        ),
+        FlatProxyKind::DirectFragment => std::array::from_fn(|destination| {
+            ActorSegment::flat_proxy_with_camera(
+                &source.draws,
+                [destination as f32 * 16.0, destination as f32 * 8.0],
+                42 + destination as i16,
+                tint,
+                BlendMode::Add,
+                camera.as_ref(),
+            )
+        }),
     };
     let mut output =
         build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
-            &[segment],
+            &segments[..proxy_count],
             [0.0, 0.0, 0.0, 1.0],
             metrics,
             fonts,
@@ -1065,6 +1073,7 @@ fn measure_flat_proxy_pair(
     zero_z: bool,
     camera: Option<Mat4>,
     combo: bool,
+    proxy_count: usize,
 ) -> [BoundaryResult; 2] {
     let metrics = deadlib_present::space::metrics_for_window(854, 480);
     let fonts = if combo {
@@ -1108,6 +1117,7 @@ fn measure_flat_proxy_pair(
                     kinds[kind_index],
                     &mut sources[kind_index],
                     camera,
+                    proxy_count,
                     &metrics,
                     &fonts,
                     &resources,
@@ -1143,7 +1153,7 @@ fn measure_flat_proxy_pair(
 
 fn print_judgment_proxy_benchmark() {
     println!("\ndirect SongLua Judgment proxy benchmark ({JUDGMENT_PROXY_DRAWS} draws)");
-    let [actor, direct] = measure_flat_proxy_pair(JUDGMENT_PROXY_DRAWS, true, None, false);
+    let [actor, direct] = measure_flat_proxy_pair(JUDGMENT_PROXY_DRAWS, true, None, false, 1);
     assert_eq!(actor.checksum, direct.checksum);
     print_boundary_result("actor capture", &actor);
     print_boundary_result("direct fragment", &direct);
@@ -1160,7 +1170,7 @@ fn print_judgment_proxy_benchmark() {
 fn print_notefield_proxy_benchmark() {
     println!("\ndirect SongLua NoteField proxy benchmark ({FIELD_PROXY_DRAWS} draws)");
     let camera = notefield_view_proj(854.0, 480.0, 427.0, 240.0, 0.2, 0.1, false);
-    let [actor, direct] = measure_flat_proxy_pair(FIELD_PROXY_DRAWS, false, camera, false);
+    let [actor, direct] = measure_flat_proxy_pair(FIELD_PROXY_DRAWS, false, camera, false, 1);
     assert_eq!(actor.checksum, direct.checksum);
     print_boundary_result("actor capture", &actor);
     print_boundary_result("direct fragment", &direct);
@@ -1177,10 +1187,32 @@ fn print_notefield_proxy_benchmark() {
 fn print_combo_proxy_benchmark() {
     for (label, draw_count) in [("number", 1), ("milestones + number", 7)] {
         println!("\ndirect SongLua Combo proxy benchmark ({label}, {draw_count} draws)");
-        let [actor, direct] = measure_flat_proxy_pair(draw_count, false, None, true);
+        let [actor, direct] = measure_flat_proxy_pair(draw_count, false, None, true, 1);
         assert_eq!(actor.checksum, direct.checksum);
         print_boundary_result("actor capture", &actor);
         print_boundary_result("direct fragment", &direct);
+        for result in [&actor, &direct] {
+            assert_zero_alloc(&BenchResult {
+                elapsed: result.elapsed,
+                cycles: result.cycles,
+                allocated: result.allocated,
+                checksum: result.checksum,
+            });
+        }
+    }
+}
+
+fn print_proxy_fanout_benchmark() {
+    let camera = notefield_view_proj(854.0, 480.0, 427.0, 240.0, 0.2, 0.1, false);
+    for proxy_count in [2, 4] {
+        println!(
+            "\ndirect SongLua NoteField fanout benchmark ({FIELD_PROXY_DRAWS} draws, {proxy_count} destinations)"
+        );
+        let [actor, direct] =
+            measure_flat_proxy_pair(FIELD_PROXY_DRAWS, false, camera, false, proxy_count);
+        assert_eq!(actor.checksum, direct.checksum);
+        print_boundary_result("actor capture", &actor);
+        print_boundary_result("direct fragments", &direct);
         for result in [&actor, &direct] {
             assert_zero_alloc(&BenchResult {
                 elapsed: result.elapsed,
@@ -2924,6 +2956,10 @@ fn print_cue_countdown_benchmark() {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_PROXY_FANOUT_ONLY").is_some() {
+        print_proxy_fanout_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_COMBO_PROXY_ONLY").is_some() {
         print_combo_proxy_benchmark();
         return;

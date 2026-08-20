@@ -593,7 +593,46 @@ pub fn build_screen_segments_cached_with_scratch_and_texture_context_and_actor_r
     texture_ctx: &T,
     actor_resources: &actors::ActorResourceArena,
 ) -> RenderFrame {
-    build_screen_segments_cached_with_scratch_and_texture_context_impl(
+    build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+        actor_segments.iter().copied(),
+        clear_color,
+        m,
+        fonts,
+        total_elapsed,
+        text_cache,
+        scratch,
+        texture_ctx,
+        actor_resources,
+    )
+}
+
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+/// Composes a repeatable stream of ordered borrowed actor segments.
+///
+/// The iterator is cloned once to derive the exact working-set floor before
+/// the original stream is consumed. This avoids materializing a variable
+/// segment list when its owner can generate the ordered stream directly.
+pub fn build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources<
+    'a,
+    T,
+    I,
+>(
+    actor_segments: I,
+    clear_color: [f32; 4],
+    m: &Metrics,
+    fonts: &font::FontMap,
+    total_elapsed: f32,
+    text_cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    texture_ctx: &T,
+    actor_resources: &actors::ActorResourceArena,
+) -> RenderFrame
+where
+    T: TextureContext + ?Sized,
+    I: Clone + Iterator<Item = ActorSegment<'a>>,
+{
+    build_screen_segment_iter_cached_with_scratch_and_texture_context_impl(
         actor_segments,
         clear_color,
         m,
@@ -814,12 +853,41 @@ fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
     texture_ctx: &T,
     actor_resources: Option<&actors::ActorResourceArena>,
 ) -> RenderFrame {
+    build_screen_segment_iter_cached_with_scratch_and_texture_context_impl(
+        actor_segments.iter().copied(),
+        clear_color,
+        m,
+        fonts,
+        total_elapsed,
+        text_cache,
+        scratch,
+        texture_ctx,
+        actor_resources,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_screen_segment_iter_cached_with_scratch_and_texture_context_impl<'a, T, I>(
+    actor_segments: I,
+    clear_color: [f32; 4],
+    m: &Metrics,
+    fonts: &font::FontMap,
+    total_elapsed: f32,
+    text_cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    texture_ctx: &T,
+    actor_resources: Option<&actors::ActorResourceArena>,
+) -> RenderFrame
+where
+    T: TextureContext + ?Sized,
+    I: Clone + Iterator<Item = ActorSegment<'a>>,
+{
     // Hold one immutable arena borrow for the whole composition pass. Resolving
     // an actor ID is then a bounds-checked slice access, not a RefCell borrow.
     let actor_textures = actor_resources.map(actors::ActorResourceArena::texture_keys);
     let mut builder = std::mem::take(&mut scratch.frame_builder);
     builder.clear();
-    let actor_count = actor_segments.iter().fold(0usize, |count, segment| {
+    let actor_count = actor_segments.clone().fold(0usize, |count, segment| {
         count
             .saturating_add(segment.actors.len())
             .saturating_add(segment.flat_draws.len())
@@ -904,7 +972,7 @@ fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
             "flat draws cannot begin inside an actor camera scope"
         );
         build_flat_draws(
-            segment,
+            &segment,
             root_rect,
             m,
             fonts,
