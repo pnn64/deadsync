@@ -1,7 +1,7 @@
 use deadlib_present::actors::{
     Actor, ActorResourceArena, FlatDraw, FlatMeshVertices, FlatPreparedInline, FlatPreparedU32,
-    FlatSprite, FlatTexturedMesh, InlineText, InlineU32Text, SizeSpec, SpriteSource, TextAlign,
-    TextContent,
+    FlatSprite, FlatTexturedMesh, InlineText, InlineU32Text, SharedActorFrameScratch, SizeSpec,
+    SpriteSource, TextAlign, TextContent,
 };
 use deadlib_present::compose::{
     ActorSegment, ActorXFold, ComposeScratch, NullTextureContext, TextLayoutCache,
@@ -12,7 +12,9 @@ use deadlib_present::compose::{
 use deadlib_present::dsl::TextBuilder;
 use deadlib_present::font::{self, Font, Glyph, GlyphMap};
 use deadlib_render_core::{BlendMode, MeshVertex, TexturedMeshVertex};
-use deadsync_notefield::{NotefieldCameraCache, performance::notefield_view_proj};
+use deadsync_notefield::{
+    NotefieldCameraCache, actor_from_flat_draw, performance::notefield_view_proj,
+};
 use deadsync_theme_simply_love::screens::gameplay::{
     BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
     GameplayPlayerFieldCameraBenchmark, GameplayPlayerTransformBenchmark,
@@ -73,6 +75,7 @@ const CAMERA_SLOT_MEASURE_BATCHES: usize = 400;
 const HUD_TEXT_RUNS: usize = 8;
 const ERROR_BAR_TEXT_RUNS: usize = 4;
 const CUE_COUNTDOWN_RUNS: usize = 3;
+const JUDGMENT_PROXY_DRAWS: usize = 8;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -943,6 +946,172 @@ fn measure_boundary_pair(field_draws: usize, hold_mix: bool) -> [BoundaryResult;
 
 fn print_boundary_result(label: &str, result: &BoundaryResult) {
     print_sampled_result(label, result, BOUNDARY_BATCH_FRAMES);
+}
+
+#[derive(Clone, Copy)]
+enum JudgmentProxyKind {
+    ActorCapture,
+    DirectFragment,
+}
+
+struct JudgmentProxyScratch {
+    draws: Vec<FlatDraw>,
+    actors: Vec<Actor>,
+    capture: SharedActorFrameScratch,
+}
+
+impl JudgmentProxyScratch {
+    fn new() -> Self {
+        Self {
+            draws: (0..JUDGMENT_PROXY_DRAWS)
+                .map(|index| {
+                    let mut draw = boundary_flat_draw(index);
+                    let FlatDraw::Sprite(sprite) = &mut draw else {
+                        unreachable!();
+                    };
+                    sprite.z = 0;
+                    draw
+                })
+                .collect(),
+            actors: Vec::with_capacity(1),
+            capture: SharedActorFrameScratch::with_capacity(JUDGMENT_PROXY_DRAWS),
+        }
+    }
+}
+
+fn judgment_proxy_frame(
+    kind: JudgmentProxyKind,
+    source: &mut JudgmentProxyScratch,
+    metrics: &deadlib_present::space::Metrics,
+    fonts: &font::FontMap,
+    resources: &ActorResourceArena,
+    text: &mut TextLayoutCache,
+    compose: &mut ComposeScratch,
+) -> f32 {
+    source.actors.clear();
+    let tint = [0.5, 0.75, 0.25, 0.8];
+    let segment = match kind {
+        JudgmentProxyKind::ActorCapture => {
+            let children = source
+                .capture
+                .refill([0.0, 0.0], |out| {
+                    out.extend(source.draws.iter().cloned().map(actor_from_flat_draw));
+                })
+                .expect("benchmark Judgment capture is nonempty");
+            source.actors.push(Actor::SharedFrame {
+                align: [0.0, 0.0],
+                offset: [0.0, 0.0],
+                size: [SizeSpec::Fill, SizeSpec::Fill],
+                children,
+                background: None,
+                z: 42,
+                tint,
+                blend: Some(BlendMode::Add),
+            });
+            ActorSegment::new(&source.actors)
+        }
+        JudgmentProxyKind::DirectFragment => {
+            ActorSegment::flat_proxy(&source.draws, [0.0, 0.0], 42, tint, BlendMode::Add)
+        }
+    };
+    let mut output =
+        build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+            &[segment],
+            [0.0, 0.0, 0.0, 1.0],
+            metrics,
+            fonts,
+            0.0,
+            text,
+            compose,
+            &NullTextureContext,
+            resources,
+        );
+    let checksum = (output.ops.len() + output.sprite_instances.len()) as f32;
+    black_box(&output);
+    compose.recycle_frame(&mut output);
+    checksum
+}
+
+fn measure_judgment_proxy_pair() -> [BoundaryResult; 2] {
+    let metrics = deadlib_present::space::metrics_for_window(854, 480);
+    let fonts = font::FontMap::default();
+    let resources = ActorResourceArena::new(0);
+    let mut texts = [TextLayoutCache::default(), TextLayoutCache::default()];
+    let mut composers = [ComposeScratch::default(), ComposeScratch::default()];
+    let mut sources = [JudgmentProxyScratch::new(), JudgmentProxyScratch::new()];
+    let kinds = [
+        JudgmentProxyKind::ActorCapture,
+        JudgmentProxyKind::DirectFragment,
+    ];
+    let mut elapsed = [Duration::ZERO; 2];
+    let mut cycles = [0u64; 2];
+    let mut allocated = [AllocSnapshot {
+        allocs: 0,
+        reallocs: 0,
+        bytes: 0,
+    }; 2];
+    let mut samples_ns: [Vec<u64>; 2] =
+        std::array::from_fn(|_| Vec::with_capacity(BOUNDARY_MEASURE_BATCHES));
+    let mut checksum = [0.0f32; 2];
+
+    for batch in 0..BOUNDARY_WARMUP_BATCHES + BOUNDARY_MEASURE_BATCHES {
+        let order = if batch % 2 == 0 { [0, 1] } else { [1, 0] };
+        for kind_index in order {
+            let before_alloc = ALLOC.snapshot();
+            let before_cycles = read_cycles();
+            let started = Instant::now();
+            let mut batch_checksum = 0.0;
+            for _ in 0..BOUNDARY_BATCH_FRAMES {
+                batch_checksum += judgment_proxy_frame(
+                    kinds[kind_index],
+                    &mut sources[kind_index],
+                    &metrics,
+                    &fonts,
+                    &resources,
+                    &mut texts[kind_index],
+                    &mut composers[kind_index],
+                );
+            }
+            let sample = started.elapsed();
+            let sample_cycles = read_cycles().saturating_sub(before_cycles);
+            let sample_allocated = ALLOC.snapshot().delta(before_alloc);
+            black_box(batch_checksum);
+            if batch >= BOUNDARY_WARMUP_BATCHES {
+                elapsed[kind_index] += sample;
+                cycles[kind_index] += sample_cycles;
+                allocated[kind_index].add(sample_allocated);
+                samples_ns[kind_index]
+                    .push((sample.as_nanos() / BOUNDARY_BATCH_FRAMES as u128) as u64);
+                checksum[kind_index] += batch_checksum;
+            }
+        }
+    }
+    for samples in &mut samples_ns {
+        samples.sort_unstable();
+    }
+    std::array::from_fn(|index| BoundaryResult {
+        elapsed: elapsed[index],
+        cycles: cycles[index],
+        allocated: allocated[index],
+        samples_ns: std::mem::take(&mut samples_ns[index]),
+        checksum: checksum[index],
+    })
+}
+
+fn print_judgment_proxy_benchmark() {
+    println!("\ndirect SongLua Judgment proxy benchmark ({JUDGMENT_PROXY_DRAWS} draws)");
+    let [actor, direct] = measure_judgment_proxy_pair();
+    assert_eq!(actor.checksum, direct.checksum);
+    print_boundary_result("actor capture", &actor);
+    print_boundary_result("direct fragment", &direct);
+    for result in [&actor, &direct] {
+        assert_zero_alloc(&BenchResult {
+            elapsed: result.elapsed,
+            cycles: result.cycles,
+            allocated: result.allocated,
+            checksum: result.checksum,
+        });
+    }
 }
 
 fn print_sampled_result(label: &str, result: &BoundaryResult, batch_frames: usize) {
@@ -2677,6 +2846,10 @@ fn print_cue_countdown_benchmark() {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_JUDGMENT_PROXY_ONLY").is_some() {
+        print_judgment_proxy_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_CAMERA_SLOTS_ONLY").is_some() {
         print_camera_slot_benchmark();
         return;

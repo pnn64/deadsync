@@ -1027,6 +1027,7 @@ pub(crate) fn compose_frame(
         field_camera_generation: field_result.camera_generation,
         field_actors: field_result.captured_actors,
         judgment_actors: hud_result.judgment_actors,
+        judgment_draw_range: hud_result.judgment_draw_range,
         combo_actors: hud_result.combo_actors,
     }
 }

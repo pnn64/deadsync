@@ -618,13 +618,20 @@ pub struct ActorSegment<'a> {
     tint: [f32; 4],
     blend: Option<BlendMode>,
     camera: Option<ActorSegmentCamera<'a>>,
-    x_fold: Option<ActorXFold>,
+    placement: ActorSegmentPlacement,
 }
 
 #[derive(Clone, Copy, Debug)]
 struct ActorSegmentCamera<'a> {
     root: &'a Matrix4,
     suffix: &'a Matrix4,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ActorSegmentPlacement {
+    None,
+    XFold(ActorXFold),
+    FlatOffset([f32; 2]),
 }
 
 /// Folds actor X offsets around a fixed pivot during composition.
@@ -662,7 +669,7 @@ impl<'a> ActorSegment<'a> {
             tint: [1.0; 4],
             blend: None,
             camera: None,
-            x_fold: None,
+            placement: ActorSegmentPlacement::None,
         }
     }
 
@@ -675,7 +682,7 @@ impl<'a> ActorSegment<'a> {
             tint: [1.0; 4],
             blend: None,
             camera: None,
-            x_fold: None,
+            placement: ActorSegmentPlacement::None,
         }
     }
 
@@ -688,7 +695,7 @@ impl<'a> ActorSegment<'a> {
             tint: [1.0; 4],
             blend: None,
             camera: None,
-            x_fold: Some(x_fold),
+            placement: ActorSegmentPlacement::XFold(x_fold),
         }
     }
 
@@ -712,7 +719,10 @@ impl<'a> ActorSegment<'a> {
                 root: root_camera,
                 suffix: camera_suffix,
             }),
-            x_fold,
+            placement: match x_fold {
+                Some(x_fold) => ActorSegmentPlacement::XFold(x_fold),
+                None => ActorSegmentPlacement::None,
+            },
         }
     }
 
@@ -727,6 +737,28 @@ impl<'a> ActorSegment<'a> {
         self.flat_draws = draws;
         self.flat_camera = camera;
         self
+    }
+
+    /// Borrows a source-ordered draw fragment through ActorProxy-compatible
+    /// frame placement. Child Z values are replaced by the proxy layer,
+    /// matching a normalized SharedFrame without rebuilding wide Actor values.
+    pub const fn flat_proxy(
+        draws: &'a [actors::FlatDraw],
+        offset: [f32; 2],
+        z: i16,
+        tint: [f32; 4],
+        blend: BlendMode,
+    ) -> Self {
+        Self {
+            actors: &[],
+            flat_draws: draws,
+            flat_camera: None,
+            z_shift: z,
+            tint,
+            blend: Some(blend),
+            camera: None,
+            placement: ActorSegmentPlacement::FlatOffset(offset),
+        }
     }
 }
 
@@ -826,7 +858,10 @@ fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
                     tint: segment.tint,
                     blend: segment.blend,
                 };
-                let x_fold = segment.x_fold;
+                let x_fold = match segment.placement {
+                    ActorSegmentPlacement::XFold(x_fold) => Some(x_fold),
+                    ActorSegmentPlacement::None | ActorSegmentPlacement::FlatOffset(_) => None,
+                };
                 ActorBuild {
                     actor,
                     base_z,
@@ -5309,16 +5344,38 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
         tint: segment.tint,
         blend: segment.blend,
     };
+    let (flat_offset, fixed_z, x_fold) = match segment.placement {
+        ActorSegmentPlacement::None => ([0.0, 0.0], false, None),
+        ActorSegmentPlacement::XFold(x_fold) => ([0.0, 0.0], false, Some(x_fold)),
+        ActorSegmentPlacement::FlatOffset(offset) => (offset, true, None),
+    };
+    let parent = place_rect(
+        parent,
+        [0.0, 0.0],
+        flat_offset,
+        [SizeSpec::Fill, SizeSpec::Fill],
+    );
     for draw in segment.flat_draws {
+        let local_z = match draw {
+            actors::FlatDraw::Sprite(draw) => draw.z,
+            actors::FlatDraw::TexturedMesh(draw) => draw.z,
+            actors::FlatDraw::PreparedU32(draw) => draw.z,
+            actors::FlatDraw::PreparedInline(draw) => draw.z,
+        };
+        let base_z = if fixed_z {
+            segment.z_shift.saturating_sub(local_z)
+        } else {
+            segment.z_shift
+        };
         match draw {
             actors::FlatDraw::Sprite(sprite) => build_flat_sprite(
                 sprite,
                 parent,
                 m,
-                segment.z_shift,
+                base_z,
                 camera,
                 style,
-                segment.x_fold,
+                x_fold,
                 order_counter,
                 out,
                 sprite_instances,
@@ -5358,10 +5415,10 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                     },
                     parent,
                     m,
-                    segment.z_shift,
+                    base_z,
                     camera,
                     style,
-                    segment.x_fold,
+                    x_fold,
                     order_counter,
                     out,
                     texture_cache,
@@ -5374,10 +5431,10 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                 m,
                 fonts,
                 scratch,
-                segment.z_shift,
+                base_z,
                 camera,
                 style,
-                segment.x_fold,
+                x_fold,
                 order_counter,
                 out,
                 sprite_instances,
@@ -5391,10 +5448,10 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                 m,
                 fonts,
                 scratch,
-                segment.z_shift,
+                base_z,
                 camera,
                 style,
-                segment.x_fold,
+                x_fold,
                 order_counter,
                 out,
                 sprite_instances,
@@ -12257,6 +12314,90 @@ mod tests {
             panic!("flat draw should preserve reusable renderer storage");
         };
         assert!(Arc::ptr_eq(render_vertices, &vertices));
+    }
+
+    #[test]
+    fn flat_proxy_matches_normalized_shared_frame_sprite() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let source = SpriteSource::static_texture("proxy-sprite");
+        let mut child = test_sprite(source.clone());
+        let Actor::Sprite { z, .. } = &mut child else {
+            unreachable!();
+        };
+        *z = 0;
+        let actor = [Actor::SharedFrame {
+            align: [0.0, 0.0],
+            offset: [10.0, -3.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children: Arc::from([child]),
+            background: None,
+            z: 42,
+            tint: [0.5, 0.75, 0.25, 0.8],
+            blend: Some(BlendMode::Add),
+        }];
+        let draws = [FlatDraw::Sprite(FlatSprite {
+            center: [12.0, 24.0],
+            world_z: 0.0,
+            size: [16.0, 32.0],
+            source,
+            tint: [0.8, 0.6, 0.4, 1.0],
+            glow: [0.0; 4],
+            uv_rect: [0.0, 0.0, 1.0, 1.0],
+            flip_x: false,
+            flip_y: false,
+            fade: [0.0; 4],
+            blend: BlendMode::Alpha,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            z: 17,
+        })];
+        let resources = ActorResourceArena::new(0);
+        let mut actor_text = TextLayoutCache::default();
+        let mut actor_scratch = ComposeScratch::default();
+        let actor_render =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::new(&actor)],
+                [0.0; 4],
+                &metrics,
+                &font::FontMap::default(),
+                0.0,
+                &mut actor_text,
+                &mut actor_scratch,
+                &TestDrawTextureContext,
+                &resources,
+            );
+        let mut direct_text = TextLayoutCache::default();
+        let mut direct_scratch = ComposeScratch::default();
+        let direct_render =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::flat_proxy(
+                    &draws,
+                    [10.0, -3.0],
+                    42,
+                    [0.5, 0.75, 0.25, 0.8],
+                    BlendMode::Add,
+                )],
+                [0.0; 4],
+                &metrics,
+                &font::FontMap::default(),
+                0.0,
+                &mut direct_text,
+                &mut direct_scratch,
+                &TestDrawTextureContext,
+                &resources,
+            );
+
+        assert_eq!(direct_render.ops, actor_render.ops);
+        assert_eq!(
+            direct_render.sprite_instances,
+            actor_render.sprite_instances
+        );
+        assert_eq!(direct_render.cameras, actor_render.cameras);
     }
 
     #[test]

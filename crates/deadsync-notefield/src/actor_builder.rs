@@ -1,6 +1,7 @@
 use crate::{FieldPlacement, MeasureLineMode};
 use deadlib_present::actors::{Actor, SharedActorFrameScratch, SizeSpec};
 use deadsync_core::input::MAX_COLS;
+use std::ops::Range;
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,6 +92,7 @@ pub struct BuiltNotefield {
     pub field_camera_generation: u64,
     pub field_actors: Option<CapturedActorSource>,
     pub judgment_actors: Option<CapturedActorSource>,
+    pub judgment_draw_range: Option<Range<usize>>,
     pub combo_actors: Option<CapturedActorSource>,
 }
 
@@ -132,6 +134,7 @@ impl BuiltNotefield {
             field_camera_generation: 0,
             field_actors: None,
             judgment_actors: None,
+            judgment_draw_range: None,
             combo_actors: None,
         }
     }

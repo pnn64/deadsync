@@ -107,7 +107,7 @@ where
         sprite_source,
     );
     if request.capture_requests.note_field {
-        actors.extend(flat_draws.drain(..).map(flat_draw_actor));
+        actors.extend(flat_draws.drain(..).map(actor_from_flat_draw));
     }
     debug_assert!(
         actor_camera_scope || actors.len() == field_start,
@@ -1526,7 +1526,9 @@ fn resolve_field_camera<S>(
 
 /// Cold SongLua proxy adapter. Ordinary gameplay keeps flat draws in their
 /// compact stream; only an explicit field/player capture reconstructs actors.
-pub(crate) fn flat_draw_actor(draw: FlatDraw) -> Actor {
+/// Cold compatibility adapter for capture consumers that still require an
+/// Actor tree. Ordinary notefield presentation must borrow FlatDraws directly.
+pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
     match draw {
         FlatDraw::Sprite(sprite) => Actor::Sprite {
             align: [0.5, 0.5],
@@ -1706,7 +1708,7 @@ fn finish_field_camera(
 
 #[cfg(test)]
 mod camera_wrap_tests {
-    use super::{finish_field_camera, flat_draw_actor, measure_cue_range_search_enabled};
+    use super::{actor_from_flat_draw, finish_field_camera, measure_cue_range_search_enabled};
     use deadlib_present::actors::{
         Actor, FlatDraw, FlatMeshVertices, FlatPreparedInline, FlatPreparedU32, FlatSprite,
         FlatTexturedMesh, InlineText, InlineU32Text, SizeSpec, SpriteSource, TextAlign,
@@ -1744,7 +1746,7 @@ mod camera_wrap_tests {
         let mut actors = vec![Actor::CameraPush {
             view_proj: Mat4::IDENTITY,
         }];
-        actors.push(flat_draw_actor(FlatDraw::Sprite(FlatSprite {
+        actors.push(actor_from_flat_draw(FlatDraw::Sprite(FlatSprite {
             center: [12.0, 34.0],
             world_z: 5.0,
             size: [64.0, 48.0],
@@ -1807,7 +1809,7 @@ mod camera_wrap_tests {
     #[test]
     fn capture_preserves_reusable_hold_mesh_storage() {
         let vertices = Arc::new(vec![TexturedMeshVertex::default(); 6]);
-        let actor = flat_draw_actor(FlatDraw::TexturedMesh(FlatTexturedMesh {
+        let actor = actor_from_flat_draw(FlatDraw::TexturedMesh(FlatTexturedMesh {
             offset: [12.0, 34.0],
             world_z: 5.0,
             local_transform: Mat4::IDENTITY,
@@ -1838,7 +1840,7 @@ mod camera_wrap_tests {
 
     #[test]
     fn capture_materializes_prepared_numeric_text() {
-        let actor = flat_draw_actor(FlatDraw::PreparedU32(FlatPreparedU32 {
+        let actor = actor_from_flat_draw(FlatDraw::PreparedU32(FlatPreparedU32 {
             align: [0.5, 0.5],
             offset: [320.0, 265.0],
             color: [0.2, 0.4, 0.8, 0.9],
@@ -1882,7 +1884,7 @@ mod camera_wrap_tests {
     #[test]
     fn capture_materializes_prepared_inline_text() {
         let value = InlineText::copy_from("12/34").expect("test HUD value fits inline");
-        let actor = flat_draw_actor(FlatDraw::PreparedInline(FlatPreparedInline {
+        let actor = actor_from_flat_draw(FlatDraw::PreparedInline(FlatPreparedInline {
             align: [0.0, 0.5],
             offset: [317.0, 200.0],
             color: [0.5, 0.5, 0.5, 0.8],

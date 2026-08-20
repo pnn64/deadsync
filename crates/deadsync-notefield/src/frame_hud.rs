@@ -10,7 +10,7 @@ use crate::feedback::{
     JudgmentTiltParams, TapJudgmentRowsParams, judgment_actor_zoom, judgment_tilt_rotation_deg,
     tap_judgment_rows,
 };
-use crate::field_frame::flat_draw_actor;
+use crate::field_frame::actor_from_flat_draw;
 use crate::hud::{
     CounterHudRequest, MiniIndicatorRequest, compose_counter_hud, compose_mini_indicator,
 };
@@ -25,6 +25,7 @@ use deadsync_gameplay::{
     JudgmentRenderInfo, OffsetIndicatorText,
 };
 use deadsync_rules::stream::StreamSegment;
+use std::ops::Range;
 
 /// Prepared combo values and renderer-neutral assets for one HUD frame.
 pub struct ComboHudFrame<'a> {
@@ -144,6 +145,7 @@ impl NotefieldHudFrameView<'_> {
 pub struct NotefieldHudComposeResult {
     pub combo_actors: Option<CapturedActorSource>,
     pub judgment_actors: Option<CapturedActorSource>,
+    pub judgment_draw_range: Option<Range<usize>>,
 }
 
 /// Compose the complete canonical HUD sequence after concrete theme chrome.
@@ -158,6 +160,11 @@ pub fn compose_notefield_hud<S>(
     frame: &NotefieldHudFrameView<'_>,
     capture_scratch: &mut CapturedActorScratch,
 ) -> NotefieldHudComposeResult {
+    debug_assert!(
+        !request.capture_requests.direct_judgment
+            || (!request.capture_requests.judgment && !request.capture_requests.player),
+        "direct Judgment capture requires a retained HUD draw range"
+    );
     let combo_capture_start = actors.len();
     let combo_draw_start = draws.len();
     if let Some(combo) = frame.combo.as_ref() {
@@ -231,7 +238,7 @@ pub fn compose_notefield_hud<S>(
         compose_judgment(draws, request, prepared, judgment);
     }
     if request.capture_requests.judgment {
-        actors.extend(draws.drain(judgment_draw_start..).map(flat_draw_actor));
+        actors.extend(draws.drain(judgment_draw_start..).map(actor_from_flat_draw));
     }
     let judgment_actors = request
         .capture_requests
@@ -244,14 +251,44 @@ pub fn compose_notefield_hud<S>(
             )
         })
         .flatten();
+    let judgment_draw_range = request
+        .capture_requests
+        .direct_judgment
+        .then_some(judgment_draw_start..draws.len())
+        .filter(|range| !range.is_empty());
+    if let Some(range) = judgment_draw_range.as_ref() {
+        normalize_proxy_draws(&mut draws[range.clone()]);
+    }
 
     if request.capture_requests.player {
-        actors.extend(draws.drain(..).map(flat_draw_actor));
+        actors.extend(draws.drain(..).map(actor_from_flat_draw));
     }
 
     NotefieldHudComposeResult {
         combo_actors,
         judgment_actors,
+        judgment_draw_range,
+    }
+}
+
+#[inline(always)]
+fn flat_draw_z(draw: &FlatDraw) -> i16 {
+    match draw {
+        FlatDraw::Sprite(draw) => draw.z,
+        FlatDraw::TexturedMesh(draw) => draw.z,
+        FlatDraw::PreparedU32(draw) => draw.z,
+        FlatDraw::PreparedInline(draw) => draw.z,
+    }
+}
+
+fn normalize_proxy_draws(draws: &mut [FlatDraw]) {
+    for index in 1..draws.len() {
+        let z = flat_draw_z(&draws[index]);
+        let mut insert = index;
+        while insert > 0 && flat_draw_z(&draws[insert - 1]) > z {
+            draws.swap(insert - 1, insert);
+            insert -= 1;
+        }
     }
 }
 
@@ -307,7 +344,7 @@ fn compose_combo<S>(
     compose_combo_milestones(draws, &feedback);
     compose_combo_number(draws, &feedback);
     if request.capture_requests.combo {
-        actors.extend(draws.drain(draw_start..).map(flat_draw_actor));
+        actors.extend(draws.drain(draw_start..).map(actor_from_flat_draw));
     }
 }
 
@@ -475,6 +512,44 @@ fn compose_judgment<S>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn proxy_draw(id: f32, z: i16) -> FlatDraw {
+        FlatDraw::Sprite(deadlib_present::actors::FlatSprite {
+            center: [id, 0.0],
+            world_z: 0.0,
+            size: [1.0, 1.0],
+            source: deadlib_present::actors::SpriteSource::Solid,
+            tint: [1.0; 4],
+            glow: [0.0; 4],
+            uv_rect: [0.0, 0.0, 1.0, 1.0],
+            flip_x: false,
+            flip_y: false,
+            fade: [0.0; 4],
+            blend: deadlib_render_core::BlendMode::Alpha,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            z,
+        })
+    }
+
+    #[test]
+    fn direct_proxy_draw_order_matches_stable_actor_normalization() {
+        let mut draws = [
+            proxy_draw(0.0, 200),
+            proxy_draw(1.0, 95),
+            proxy_draw(2.0, 196),
+            proxy_draw(3.0, 195),
+            proxy_draw(4.0, 196),
+        ];
+
+        normalize_proxy_draws(&mut draws);
+
+        let order = draws.map(|draw| match draw {
+            FlatDraw::Sprite(sprite) => (sprite.center[0] as u8, sprite.z),
+            _ => unreachable!(),
+        });
+        assert_eq!(order, [(1, 95), (3, 195), (2, 196), (4, 196), (0, 200)]);
+    }
 
     #[test]
     fn combo_hud_gate_requires_every_visibility_input() {
