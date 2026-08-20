@@ -6,17 +6,12 @@ use deadlib_audio_core::{
     publish_output_timing, publish_output_timing_quality, report_audio_render_callback,
 };
 use deadlib_platform::host_time::now_nanos;
+use libloading::Library;
 use log::{info, warn};
-use pipewire as pw;
-use pw::{properties::properties, spa};
-use spa::param::format::{MediaSubtype, MediaType};
-use spa::param::format_utils;
-use spa::pod::Pod;
-use std::io::Cursor;
+use std::ffi::{CStr, c_char, c_void};
 use std::mem;
+use std::ptr::NonNull;
 use std::sync::OnceLock;
-use std::sync::mpsc::{Sender, channel};
-use std::thread::{self, JoinHandle};
 
 pub struct PipeWireOutputPrep {
     device_name: String,
@@ -24,18 +19,157 @@ pub struct PipeWireOutputPrep {
     channels: usize,
 }
 
+#[repr(C)]
+struct PipeWireApiRaw {
+    pw_init: usize,
+    pw_main_loop_new: usize,
+    pw_main_loop_get_loop: usize,
+    pw_main_loop_destroy: usize,
+    pw_context_new: usize,
+    pw_context_connect: usize,
+    pw_context_destroy: usize,
+    pw_core_disconnect: usize,
+    pw_thread_loop_new: usize,
+    pw_thread_loop_get_loop: usize,
+    pw_thread_loop_destroy: usize,
+    pw_thread_loop_start: usize,
+    pw_thread_loop_stop: usize,
+    pw_thread_loop_lock: usize,
+    pw_thread_loop_unlock: usize,
+    pw_thread_loop_timed_wait: usize,
+    pw_thread_loop_signal: usize,
+    pw_properties_new: usize,
+    pw_properties_set: usize,
+    pw_stream_new_simple: usize,
+    pw_stream_destroy: usize,
+    pw_stream_connect: usize,
+    pw_stream_dequeue_buffer: usize,
+    pw_stream_queue_buffer: usize,
+}
+
+struct PipeWireApi {
+    raw: PipeWireApiRaw,
+    _library: Library,
+}
+
+enum PipeWireStreamRaw {}
+
+type RenderCallback = unsafe extern "C" fn(
+    data: *mut c_void,
+    buffer: *mut u8,
+    capacity: u32,
+    sample_rate_hz: u32,
+    channels: u32,
+) -> u32;
+type ErrorCallback = unsafe extern "C" fn(data: *mut c_void, error: *const c_char);
+
+unsafe extern "C" {
+    fn ds_pipewire_init(api: *const PipeWireApiRaw);
+    fn ds_pipewire_probe(api: *const PipeWireApiRaw) -> bool;
+    fn ds_pipewire_stream_start(
+        api: *const PipeWireApiRaw,
+        sample_rate_hz: u32,
+        channels: u32,
+        render: RenderCallback,
+        report_error: ErrorCallback,
+        callback_data: *mut c_void,
+        error: *mut c_char,
+        error_capacity: usize,
+    ) -> *mut PipeWireStreamRaw;
+    fn ds_pipewire_stream_destroy(stream: *mut PipeWireStreamRaw);
+}
+
+static PIPEWIRE_API: OnceLock<Result<PipeWireApi, String>> = OnceLock::new();
 static PIPEWIRE_AVAILABLE: OnceLock<bool> = OnceLock::new();
 
 pub fn is_available() -> bool {
     *PIPEWIRE_AVAILABLE.get_or_init(|| {
-        let Ok(mainloop) = pw::main_loop::MainLoopRc::new(None) else {
+        let Ok(api) = pipewire_api() else {
             return false;
         };
-        let Ok(context) = pw::context::ContextRc::new(&mainloop, None) else {
-            return false;
-        };
-        context.connect_rc(None).is_ok()
+        // SAFETY: `api.raw` contains addresses resolved from the live PipeWire
+        // shared object retained by `api._library`.
+        unsafe { ds_pipewire_probe(&api.raw) }
     })
+}
+
+fn pipewire_api() -> Result<&'static PipeWireApi, String> {
+    match PIPEWIRE_API.get_or_init(load_pipewire_api) {
+        Ok(api) => Ok(api),
+        Err(err) => Err(err.clone()),
+    }
+}
+
+fn load_pipewire_api() -> Result<PipeWireApi, String> {
+    let library = load_library(&["libpipewire-0.3.so.0", "libpipewire-0.3.so"])?;
+    let raw = PipeWireApiRaw {
+        // SAFETY: each name is a PipeWire C API function. The C bridge casts
+        // these addresses back to the signatures declared by the same headers
+        // that were used to compile it.
+        pw_init: unsafe { load_symbol(&library, b"pw_init\0")? },
+        pw_main_loop_new: unsafe { load_symbol(&library, b"pw_main_loop_new\0")? },
+        pw_main_loop_get_loop: unsafe { load_symbol(&library, b"pw_main_loop_get_loop\0")? },
+        pw_main_loop_destroy: unsafe { load_symbol(&library, b"pw_main_loop_destroy\0")? },
+        pw_context_new: unsafe { load_symbol(&library, b"pw_context_new\0")? },
+        pw_context_connect: unsafe { load_symbol(&library, b"pw_context_connect\0")? },
+        pw_context_destroy: unsafe { load_symbol(&library, b"pw_context_destroy\0")? },
+        pw_core_disconnect: unsafe { load_symbol(&library, b"pw_core_disconnect\0")? },
+        pw_thread_loop_new: unsafe { load_symbol(&library, b"pw_thread_loop_new\0")? },
+        pw_thread_loop_get_loop: unsafe { load_symbol(&library, b"pw_thread_loop_get_loop\0")? },
+        pw_thread_loop_destroy: unsafe { load_symbol(&library, b"pw_thread_loop_destroy\0")? },
+        pw_thread_loop_start: unsafe { load_symbol(&library, b"pw_thread_loop_start\0")? },
+        pw_thread_loop_stop: unsafe { load_symbol(&library, b"pw_thread_loop_stop\0")? },
+        pw_thread_loop_lock: unsafe { load_symbol(&library, b"pw_thread_loop_lock\0")? },
+        pw_thread_loop_unlock: unsafe { load_symbol(&library, b"pw_thread_loop_unlock\0")? },
+        pw_thread_loop_timed_wait: unsafe {
+            load_symbol(&library, b"pw_thread_loop_timed_wait\0")?
+        },
+        pw_thread_loop_signal: unsafe { load_symbol(&library, b"pw_thread_loop_signal\0")? },
+        pw_properties_new: unsafe { load_symbol(&library, b"pw_properties_new\0")? },
+        pw_properties_set: unsafe { load_symbol(&library, b"pw_properties_set\0")? },
+        pw_stream_new_simple: unsafe { load_symbol(&library, b"pw_stream_new_simple\0")? },
+        pw_stream_destroy: unsafe { load_symbol(&library, b"pw_stream_destroy\0")? },
+        pw_stream_connect: unsafe { load_symbol(&library, b"pw_stream_connect\0")? },
+        pw_stream_dequeue_buffer: unsafe { load_symbol(&library, b"pw_stream_dequeue_buffer\0")? },
+        pw_stream_queue_buffer: unsafe { load_symbol(&library, b"pw_stream_queue_buffer\0")? },
+    };
+    let api = PipeWireApi {
+        raw,
+        _library: library,
+    };
+    // SAFETY: all required function addresses were resolved above, and the
+    // library is already stored in `api` so it cannot unload after init.
+    unsafe { ds_pipewire_init(&api.raw) };
+    Ok(api)
+}
+
+fn load_library(names: &[&str]) -> Result<Library, String> {
+    let mut last_err = None;
+    for name in names {
+        // SAFETY: the handle is retained in `PipeWireApi` for the process-long
+        // lifetime of every copied function address.
+        match unsafe { Library::new(*name) } {
+            Ok(library) => return Ok(library),
+            Err(err) => last_err = Some(format!("{name}: {err}")),
+        }
+    }
+    Err(last_err.unwrap_or_else(|| "no PipeWire library names were provided".to_string()))
+}
+
+// SAFETY: `name` must identify a function in `library`. The returned address
+// may only be called with that function's actual C signature while the library
+// remains loaded.
+unsafe fn load_symbol(library: &Library, name: &[u8]) -> Result<usize, String> {
+    // SAFETY: the caller supplies a PipeWire function name, and this generic
+    // no-argument type is used only to copy its address, never to call it.
+    unsafe { library.get::<unsafe extern "C" fn()>(name) }
+        .map(|symbol| *symbol as usize)
+        .map_err(|err| {
+            format!(
+                "{}: {err}",
+                String::from_utf8_lossy(name).trim_end_matches('\0')
+            )
+        })
 }
 
 impl PipeWireOutputPrep {
@@ -54,15 +188,20 @@ impl PipeWireOutputPrep {
 }
 
 pub struct PipeWireOutputStream {
-    stop_sender: pw::channel::Sender<()>,
-    thread: Option<JoinHandle<()>>,
+    raw: NonNull<PipeWireStreamRaw>,
+    callback_state: *mut CallbackState,
 }
 
 impl Drop for PipeWireOutputStream {
     fn drop(&mut self) {
-        let _ = self.stop_sender.send(());
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
+        // SAFETY: `raw` is owned by this stream and destruction stops all C
+        // callbacks before the Rust callback state is reclaimed.
+        unsafe { ds_pipewire_stream_destroy(self.raw.as_ptr()) };
+        if !self.callback_state.is_null() {
+            // SAFETY: this pointer came from `Box::into_raw` in `start` and the
+            // C bridge no longer retains it after stream destruction.
+            unsafe { drop(Box::from_raw(self.callback_state)) };
+            self.callback_state = std::ptr::null_mut();
         }
     }
 }
@@ -70,39 +209,12 @@ impl Drop for PipeWireOutputStream {
 struct CallbackState {
     render: RenderState,
     sfx_receiver: SfxReceiver,
-    format: spa::param::audio::AudioInfoRaw,
-    fallback_rate_hz: u32,
-    fallback_channels: usize,
 }
 
 impl CallbackState {
-    fn new(
-        render: RenderState,
-        sfx_receiver: SfxReceiver,
-        sample_rate_hz: u32,
-        channels: usize,
-    ) -> Self {
-        Self {
-            render,
-            sfx_receiver,
-            format: spa::param::audio::AudioInfoRaw::new(),
-            fallback_rate_hz: sample_rate_hz.max(1),
-            fallback_channels: channels.max(1),
-        }
-    }
-
-    #[inline(always)]
-    fn sample_rate_hz(&self) -> u32 {
-        self.format.rate().max(self.fallback_rate_hz)
-    }
-
-    #[inline(always)]
-    fn channels(&self) -> usize {
-        (self.format.channels() as usize).max(self.fallback_channels)
-    }
-
-    fn render_into(&mut self, data: &mut [u8]) -> usize {
-        let channels = self.channels();
+    fn render_into(&mut self, data: &mut [u8], sample_rate_hz: u32, channels: usize) -> usize {
+        let sample_rate_hz = sample_rate_hz.max(1);
+        let channels = channels.max(1);
         let stride = channels.saturating_mul(mem::size_of::<f32>());
         if stride == 0 {
             return 0;
@@ -116,8 +228,8 @@ impl CallbackState {
             return bytes;
         }
         // SAFETY: alignment was checked above, `samples` was derived from the
-        // available byte length, and PipeWire exclusively lends this writable
-        // mapped buffer for the duration of the process callback.
+        // available byte length, and PipeWire exclusively lends this mapped
+        // buffer for the duration of the process callback.
         let output =
             unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<f32>(), samples) };
         let anchor_nanos = now_nanos();
@@ -130,9 +242,9 @@ impl CallbackState {
             self.sfx_receiver.try_iter(),
         );
         report_audio_render_callback(result, now_nanos(), log::log_enabled!(log::Level::Trace));
-        let period_ns = frames_to_nanos(self.sample_rate_hz(), frames as u32);
+        let period_ns = frames_to_nanos(sample_rate_hz, frames as u32);
         publish_output_timing(
-            self.sample_rate_hz(),
+            sample_rate_hz,
             period_ns,
             period_ns,
             frames as u32,
@@ -145,11 +257,44 @@ impl CallbackState {
     }
 }
 
+unsafe extern "C" fn render_callback(
+    data: *mut c_void,
+    buffer: *mut u8,
+    capacity: u32,
+    sample_rate_hz: u32,
+    channels: u32,
+) -> u32 {
+    if data.is_null() || buffer.is_null() {
+        return 0;
+    }
+    // SAFETY: the bridge receives this pointer from `Box::into_raw` and only
+    // invokes callbacks while the box remains owned by the output stream.
+    let state = unsafe { &mut *data.cast::<CallbackState>() };
+    // SAFETY: PipeWire provides a writable mapped buffer of exactly `capacity`
+    // bytes for this process callback.
+    let output = unsafe { std::slice::from_raw_parts_mut(buffer, capacity as usize) };
+    state
+        .render_into(output, sample_rate_hz, channels as usize)
+        .min(u32::MAX as usize) as u32
+}
+
+unsafe extern "C" fn error_callback(_data: *mut c_void, error: *const c_char) {
+    if error.is_null() {
+        warn!("PipeWire stream entered an unknown error state.");
+        return;
+    }
+    // SAFETY: the bridge passes either PipeWire's callback-local error string or
+    // its own NUL-terminated error buffer for the duration of this call.
+    let error = unsafe { CStr::from_ptr(error) }.to_string_lossy();
+    warn!("PipeWire stream error: {error}");
+}
+
 pub fn prepare(
     requested_device_name: Option<String>,
     sample_rate_hz: u32,
     channels: usize,
 ) -> Result<PipeWireOutputPrep, String> {
+    pipewire_api().map_err(|err| format!("PipeWire backend unavailable: {err}"))?;
     let device_name = match requested_device_name {
         Some(name) if !name.is_empty() => {
             format!("PipeWire default sink (requested '{name}' unsupported)")
@@ -168,148 +313,40 @@ pub fn start(
     render: RenderState,
     sfx_receiver: SfxReceiver,
 ) -> Result<PipeWireOutputStream, String> {
-    let (ready_tx, ready_rx) = channel::<Result<(), String>>();
-    let (stop_sender, stop_receiver) = pw::channel::channel::<()>();
-    let thread = thread::Builder::new()
-        .name("pipewire_out".to_string())
-        .spawn(move || {
-            let _ = render_thread(prep, render, sfx_receiver, stop_receiver, ready_tx);
-        })
-        .map_err(|e| format!("failed to spawn PipeWire render thread: {e}"))?;
-    match ready_rx.recv() {
-        Ok(Ok(())) => Ok(PipeWireOutputStream {
-            stop_sender,
-            thread: Some(thread),
-        }),
-        Ok(Err(err)) => {
-            let _ = stop_sender.send(());
-            let _ = thread.join();
-            Err(err)
-        }
-        Err(_) => {
-            let _ = stop_sender.send(());
-            let _ = thread.join();
-            Err("PipeWire render thread exited during startup".to_string())
-        }
-    }
-}
-
-fn render_thread(
-    prep: PipeWireOutputPrep,
-    render: RenderState,
-    sfx_receiver: SfxReceiver,
-    stop_receiver: pw::channel::Receiver<()>,
-    ready_tx: Sender<Result<(), String>>,
-) -> Result<(), String> {
-    pw::init();
-    let mainloop = pw::main_loop::MainLoopRc::new(None)
-        .map_err(|e| format!("failed to create PipeWire main loop: {e}"))?;
-    let context = pw::context::ContextRc::new(&mainloop, None)
-        .map_err(|e| format!("failed to create PipeWire context: {e}"))?;
-    let core = context
-        .connect_rc(None)
-        .map_err(|e| format!("failed to connect to PipeWire core: {e}"))?;
-    let state = CallbackState::new(render, sfx_receiver, prep.sample_rate_hz, prep.channels);
-
-    let channels_prop = prep.channels.to_string();
-    let stream = pw::stream::StreamBox::new(
-        &core,
-        "audio-output",
-        properties! {
-            *pw::keys::MEDIA_TYPE => "Audio",
-            *pw::keys::MEDIA_CATEGORY => "Playback",
-            *pw::keys::MEDIA_ROLE => "Music",
-            *pw::keys::AUDIO_CHANNELS => channels_prop.as_str(),
-        },
-    )
-    .map_err(|e| format!("failed to create PipeWire stream: {e}"))?;
-
-    let _stop = stop_receiver.attach(mainloop.loop_(), {
-        let mainloop = mainloop.clone();
-        move |_| mainloop.quit()
-    });
-
-    let _listener = stream
-        .add_local_listener_with_user_data(state)
-        .state_changed(|_, _, old, new| {
-            if let pw::stream::StreamState::Error(err) = &new {
-                warn!("PipeWire stream state error after {old:?}: {err}");
-            }
-        })
-        .param_changed(|_, state, id, param| {
-            let Some(param) = param else {
-                return;
-            };
-            if id != pw::spa::param::ParamType::Format.as_raw() {
-                return;
-            }
-            let Ok((media_type, media_subtype)) = format_utils::parse_format(param) else {
-                return;
-            };
-            if media_type != MediaType::Audio || media_subtype != MediaSubtype::Raw {
-                return;
-            }
-            if let Err(err) = state.format.parse(param) {
-                warn!("PipeWire failed to parse negotiated audio format: {err}");
-            }
-        })
-        .process(|stream, state| {
-            let Some(mut buffer) = stream.dequeue_buffer() else {
-                return;
-            };
-            let datas = buffer.datas_mut();
-            if datas.is_empty() {
-                return;
-            }
-            let data = &mut datas[0];
-            let Some(slice) = data.data() else {
-                return;
-            };
-            let written = state.render_into(slice);
-            let chunk = data.chunk_mut();
-            *chunk.offset_mut() = 0;
-            *chunk.stride_mut() = (state.channels() * mem::size_of::<f32>()) as i32;
-            *chunk.size_mut() = written as u32;
-        })
-        .register()
-        .map_err(|e| format!("failed to register PipeWire stream listener: {e}"))?;
-
-    let mut audio_info = spa::param::audio::AudioInfoRaw::new();
-    audio_info.set_format(spa::param::audio::AudioFormat::F32LE);
-    audio_info.set_rate(prep.sample_rate_hz);
-    audio_info.set_channels(prep.channels as u32);
-    let mut position = [0u32; spa::param::audio::MAX_CHANNELS];
-    if prep.channels >= 2 {
-        position[0] = pw::spa::sys::SPA_AUDIO_CHANNEL_FL;
-        position[1] = pw::spa::sys::SPA_AUDIO_CHANNEL_FR;
-    }
-    audio_info.set_position(position);
-
-    let values: Vec<u8> = pw::spa::pod::serialize::PodSerializer::serialize(
-        Cursor::new(Vec::new()),
-        &pw::spa::pod::Value::Object(pw::spa::pod::Object {
-            type_: pw::spa::sys::SPA_TYPE_OBJECT_Format,
-            id: pw::spa::sys::SPA_PARAM_EnumFormat,
-            properties: audio_info.into(),
-        }),
-    )
-    .map_err(|e| format!("failed to serialize PipeWire audio format: {e}"))?
-    .0
-    .into_inner();
-
-    let pod = Pod::from_bytes(&values)
-        .ok_or_else(|| "failed to build PipeWire format pod".to_string())?;
-    let mut params = [pod];
-    stream
-        .connect(
-            spa::utils::Direction::Output,
-            None,
-            pw::stream::StreamFlags::AUTOCONNECT
-                | pw::stream::StreamFlags::MAP_BUFFERS
-                | pw::stream::StreamFlags::RT_PROCESS,
-            &mut params,
+    let api = pipewire_api().map_err(|err| format!("PipeWire backend unavailable: {err}"))?;
+    let callback_state = Box::into_raw(Box::new(CallbackState {
+        render,
+        sfx_receiver,
+    }));
+    let mut error = [0 as c_char; 512];
+    // SAFETY: the API table points into the live library, the callback state is
+    // heap-stable, and both callbacks obey the bridge's C ABI contracts.
+    let raw = unsafe {
+        ds_pipewire_stream_start(
+            &api.raw,
+            prep.sample_rate_hz,
+            prep.channels as u32,
+            render_callback,
+            error_callback,
+            callback_state.cast::<c_void>(),
+            error.as_mut_ptr(),
+            error.len(),
         )
-        .map_err(|e| format!("failed to connect PipeWire stream: {e}"))?;
+    };
+    let Some(raw) = NonNull::new(raw) else {
+        // SAFETY: stream creation failed, so the bridge cannot retain or call
+        // this callback state after returning.
+        unsafe { drop(Box::from_raw(callback_state)) };
+        // SAFETY: the bridge always leaves this fixed-size buffer NUL-terminated.
+        let message = unsafe { CStr::from_ptr(error.as_ptr()) }
+            .to_string_lossy()
+            .into_owned();
+        return Err(if message.is_empty() {
+            "failed to start PipeWire stream".to_string()
+        } else {
+            message
+        });
+    };
 
     info!(
         "PipeWire '{}' using {} Hz, {} ch shared output.",
@@ -317,11 +354,10 @@ fn render_thread(
     );
     publish_output_timing(prep.sample_rate_hz, 0, 0, 0, 0, 0, 0);
     publish_output_timing_quality(OutputTimingQuality::Trusted);
-    if ready_tx.send(Ok(())).is_err() {
-        return Ok(());
-    }
-    mainloop.run();
-    Ok(())
+    Ok(PipeWireOutputStream {
+        raw,
+        callback_state,
+    })
 }
 
 #[inline(always)]

@@ -37,10 +37,9 @@ if [ ! -x "${bin_path}" ]; then
   echo "missing executable: ${bin_path}" >&2
   exit 1
 fi
-runtime_lib_dir="target/linux-runtime/${arch}"
-pipewire_lib="${runtime_lib_dir}/libpipewire-0.3.so.0"
-if [ ! -f "${pipewire_lib}" ]; then
-  echo "missing PipeWire runtime library: ${pipewire_lib}" >&2
+if command -v readelf >/dev/null 2>&1 && \
+   readelf -d "${bin_path}" | grep -q 'Shared library: \[libpipewire-0\.3'; then
+  echo "release executable must not require libpipewire-0.3 at process startup" >&2
   exit 1
 fi
 if [ ! -d "assets" ]; then
@@ -83,8 +82,6 @@ rm -rf "${stage_dir}"
 mkdir -p "${stage_dir}"
 
 cp "${bin_path}" "${stage_dir}/deadsync"
-mkdir -p "${stage_dir}/lib"
-cp "${pipewire_lib}" "${stage_dir}/lib/"
 cp -r assets songs courses "${stage_dir}/"
 cp README.md LICENSE "${stage_dir}/"
 : > "${stage_dir}/portable.txt"

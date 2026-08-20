@@ -312,6 +312,18 @@ fn available_linux_backends_for(
 }
 
 #[cfg(target_os = "linux")]
+fn effective_linux_backend(
+    requested: LinuxAudioBackend,
+    pipewire_available: bool,
+) -> LinuxAudioBackend {
+    if matches!(requested, LinuxAudioBackend::PipeWire) && !pipewire_available {
+        LinuxAudioBackend::Auto
+    } else {
+        requested
+    }
+}
+
+#[cfg(target_os = "linux")]
 #[inline(always)]
 fn linux_default_output_device(
     devices: &[linux_alsa::AlsaOutputDevice],
@@ -953,6 +965,77 @@ fn start_output_backend(
         })
         .unwrap_or(AudioOutputMode::Auto);
     #[cfg(target_os = "linux")]
+    let requested_linux_backend = linux_backend;
+    #[cfg(target_os = "linux")]
+    let linux_backend = effective_linux_backend(
+        requested_linux_backend,
+        !matches!(requested_linux_backend, LinuxAudioBackend::PipeWire)
+            || linux_pipewire::is_available(),
+    );
+    #[cfg(target_os = "linux")]
+    if !matches!(linux_backend, LinuxAudioBackend::PipeWire)
+        && matches!(requested_linux_backend, LinuxAudioBackend::PipeWire)
+    {
+        warn!("Requested PipeWire backend is unavailable; falling back to Auto.");
+    }
+    #[cfg(target_os = "linux")]
+    let start_auto = |alsa: Option<AlsaBackendHint>,
+                      pulse: Option<PulseBackendHint>,
+                      jack: Option<JackBackendHint>| {
+        if matches!(requested_output_mode, AudioOutputMode::Exclusive) {
+            let Some(alsa) = alsa else {
+                return Err("Linux ALSA backend hint unavailable for exclusive output.".to_string());
+            };
+            return start_linux_alsa_backend(alsa, &controls);
+        }
+        if explicit_device_requested {
+            let Some(alsa) = alsa else {
+                return Err(
+                    "Linux ALSA backend hint unavailable for the selected Sound Device."
+                        .to_string(),
+                );
+            };
+            return start_linux_alsa_backend(alsa, &controls).map_err(|err| {
+                format!("failed to start native ALSA output for the selected Sound Device: {err}")
+            });
+        }
+        // Preserve the pre-PipeWire Auto policy. PipeWire remains available
+        // through the explicit backend selection arm below.
+        if linux_pulse::is_available()
+            && let Some(pulse) = pulse
+        {
+            match start_linux_pulse_backend(pulse, &controls) {
+                Ok(output) => return Ok(output),
+                Err(err) => {
+                    warn!(
+                        "Failed to start native PulseAudio output: {err}. Falling back to ALSA/JACK."
+                    );
+                }
+            }
+        }
+        if let Some(alsa) = alsa {
+            match start_linux_alsa_backend(alsa, &controls) {
+                Ok(output) => return Ok(output),
+                Err(err) => {
+                    if linux_jack::is_available()
+                        && let Some(jack) = jack
+                    {
+                        match start_linux_jack_backend(jack, &controls) {
+                            Ok(output) => return Ok(output),
+                            Err(jack_err) => {
+                                return Err(format!(
+                                    "failed to start native ALSA output: {err}; JACK fallback also failed: {jack_err}"
+                                ));
+                            }
+                        }
+                    }
+                    return Err(format!("failed to start native ALSA output: {err}"));
+                }
+            }
+        }
+        Err("no native Linux audio backend hint is available.".to_string())
+    };
+    #[cfg(target_os = "linux")]
     match linux_backend {
         LinuxAudioBackend::Alsa => {
             let Some(alsa) = alsa else {
@@ -977,7 +1060,15 @@ fn start_output_backend(
             let Some(pipewire) = pipewire else {
                 return Err("PipeWire backend hint unavailable.".to_string());
             };
-            start_linux_pipewire_backend(pipewire, &controls)
+            match start_linux_pipewire_backend(pipewire, &controls) {
+                Ok(output) => Ok(output),
+                Err(err) => {
+                    warn!(
+                        "Failed to start requested PipeWire output: {err}. Falling back to Auto."
+                    );
+                    start_auto(alsa, pulse, jack)
+                }
+            }
         }
         LinuxAudioBackend::PulseAudio => {
             #[cfg(target_os = "linux")]
@@ -994,66 +1085,7 @@ fn start_output_backend(
                 );
             }
         }
-        LinuxAudioBackend::Auto => {
-            if matches!(requested_output_mode, AudioOutputMode::Exclusive) {
-                let Some(alsa) = alsa else {
-                    return Err(
-                        "Linux ALSA backend hint unavailable for exclusive output.".to_string()
-                    );
-                };
-                return start_linux_alsa_backend(alsa, &controls);
-            }
-            if explicit_device_requested {
-                let Some(alsa) = alsa else {
-                    return Err(
-                        "Linux ALSA backend hint unavailable for the selected Sound Device."
-                            .to_string(),
-                    );
-                };
-                return start_linux_alsa_backend(alsa, &controls).map_err(|err| {
-                    format!(
-                        "failed to start native ALSA output for the selected Sound Device: {err}"
-                    )
-                });
-            }
-            // Preserve the pre-PipeWire Auto policy. PipeWire remains available
-            // through the explicit backend selection arm above.
-            #[cfg(target_os = "linux")]
-            if linux_pulse::is_available()
-                && let Some(pulse) = pulse
-            {
-                match start_linux_pulse_backend(pulse, &controls) {
-                    Ok(output) => return Ok(output),
-                    Err(err) => {
-                        warn!(
-                            "Failed to start native PulseAudio output: {err}. Falling back to ALSA/JACK."
-                        );
-                    }
-                }
-            }
-            if let Some(alsa) = alsa {
-                match start_linux_alsa_backend(alsa, &controls) {
-                    Ok(output) => return Ok(output),
-                    Err(err) => {
-                        #[cfg(target_os = "linux")]
-                        if linux_jack::is_available()
-                            && let Some(jack) = jack
-                        {
-                            match start_linux_jack_backend(jack, &controls) {
-                                Ok(output) => return Ok(output),
-                                Err(jack_err) => {
-                                    return Err(format!(
-                                        "failed to start native ALSA output: {err}; JACK fallback also failed: {jack_err}"
-                                    ));
-                                }
-                            }
-                        }
-                        return Err(format!("failed to start native ALSA output: {err}"));
-                    }
-                }
-            }
-            Err("no native Linux audio backend hint is available.".to_string())
-        }
+        LinuxAudioBackend::Auto => start_auto(alsa, pulse, jack),
     }
     #[cfg(target_os = "freebsd")]
     if let Some(pcm) = freebsd_pcm {
@@ -1134,7 +1166,7 @@ fn start_wasapi_backend(
 mod tests {
     use super::LinuxAudioBackend;
     #[cfg(target_os = "linux")]
-    use super::available_linux_backends_for;
+    use super::{available_linux_backends_for, effective_linux_backend};
     use std::str::FromStr;
 
     #[test]
@@ -1167,6 +1199,23 @@ mod tests {
         assert_eq!(
             available_linux_backends_for(false, false, false),
             [LinuxAudioBackend::Auto, LinuxAudioBackend::Alsa]
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn unavailable_explicit_pipewire_falls_back_to_auto() {
+        assert_eq!(
+            effective_linux_backend(LinuxAudioBackend::PipeWire, false),
+            LinuxAudioBackend::Auto
+        );
+        assert_eq!(
+            effective_linux_backend(LinuxAudioBackend::PipeWire, true),
+            LinuxAudioBackend::PipeWire
+        );
+        assert_eq!(
+            effective_linux_backend(LinuxAudioBackend::Alsa, false),
+            LinuxAudioBackend::Alsa
         );
     }
 }

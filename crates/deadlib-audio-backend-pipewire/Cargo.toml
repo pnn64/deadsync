@@ -7,8 +7,12 @@ license = "GPL-3.0"
 [target.'cfg(target_os = "linux")'.dependencies]
 deadlib-audio-core = { path = "../deadlib-audio-core" }
 deadlib-platform = { path = "../deadlib-platform" }
+libloading = "0.9.0"
 log = "0.4.33"
-pipewire = "0.10.0"
+
+[build-dependencies]
+cc = "1.2.57"
+pkg-config = "0.3.32"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
