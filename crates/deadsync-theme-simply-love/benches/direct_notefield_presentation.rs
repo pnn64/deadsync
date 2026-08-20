@@ -67,6 +67,9 @@ const SEGMENT_CAMERA_MEASURE_BATCHES: usize = 400;
 const SEGMENT_ROOT_BATCH_FRAMES: usize = 1_024;
 const SEGMENT_ROOT_WARMUP_BATCHES: usize = 16;
 const SEGMENT_ROOT_MEASURE_BATCHES: usize = 400;
+const CAMERA_SLOT_BATCH_FRAMES: usize = 4_096;
+const CAMERA_SLOT_WARMUP_BATCHES: usize = 16;
+const CAMERA_SLOT_MEASURE_BATCHES: usize = 400;
 const HUD_TEXT_RUNS: usize = 8;
 const ERROR_BAR_TEXT_RUNS: usize = 4;
 const CUE_COUNTDOWN_RUNS: usize = 3;
@@ -1725,6 +1728,136 @@ fn print_segment_root_benchmark() {
     }
 }
 
+#[derive(Clone, Copy)]
+enum CameraSlotKind {
+    Dynamic,
+    Fixed,
+}
+
+fn camera_slot_frame(
+    kind: CameraSlotKind,
+    players: usize,
+    cameras: &mut Vec<Mat4>,
+    base: Mat4,
+    roots: &[Mat4; BOUNDARY_PLAYERS],
+    fields: &[Mat4; BOUNDARY_PLAYERS],
+) -> u64 {
+    cameras.clear();
+    let mut checksum = 0u64;
+    match kind {
+        CameraSlotKind::Dynamic => {
+            cameras.push(base);
+            let mut sequence = CameraSequenceProbe::new();
+            for player in 0..players {
+                // One ordinary HUD run, its direct tail, one ordinary field
+                // run, and its direct tail match transformed gameplay.
+                for matrix in [roots[player], roots[player], roots[player], fields[player]] {
+                    sequence.active_camera = sequence.camera_id(matrix, cameras);
+                    checksum = checksum.wrapping_add(u64::from(sequence.active_camera));
+                }
+            }
+        }
+        CameraSlotKind::Fixed => {
+            cameras.push(base);
+            for player in 0..players {
+                cameras.extend_from_slice(&[roots[player], fields[player]]);
+                let root_id = (1 + player * 2) as u8;
+                let field_id = root_id + 1;
+                checksum = checksum
+                    .wrapping_add(u64::from(root_id) * 3)
+                    .wrapping_add(u64::from(field_id));
+            }
+        }
+    }
+    black_box(cameras.as_slice());
+    checksum.wrapping_add(cameras.len() as u64)
+}
+
+fn measure_camera_slot_pair(players: usize) -> [BoundaryResult; 2] {
+    let base =
+        glam::camera::rh::proj::opengl::orthographic(-427.0, 427.0, -240.0, 240.0, -1.0, 1.0);
+    let roots = [
+        Mat4::from_rotation_x(0.07) * Mat4::from_rotation_z(0.11),
+        Mat4::from_rotation_x(-0.05) * Mat4::from_rotation_z(-0.09),
+    ];
+    let fields = [
+        Mat4::from_scale(Vec3::new(0.9, 1.1, 1.0)) * roots[0],
+        Mat4::from_scale(Vec3::new(1.05, 0.95, 1.0)) * roots[1],
+    ];
+    let mut cameras = Vec::with_capacity(5);
+    let mut elapsed = [Duration::ZERO; 2];
+    let mut cycles = [0u64; 2];
+    let mut allocated = [AllocSnapshot {
+        allocs: 0,
+        reallocs: 0,
+        bytes: 0,
+    }; 2];
+    let mut samples_ns: [Vec<u64>; 2] =
+        std::array::from_fn(|_| Vec::with_capacity(CAMERA_SLOT_MEASURE_BATCHES));
+    let mut checksum = [0.0f32; 2];
+    for batch in 0..CAMERA_SLOT_WARMUP_BATCHES + CAMERA_SLOT_MEASURE_BATCHES {
+        let order = if batch % 2 == 0 { [0, 1] } else { [1, 0] };
+        for kind_index in order {
+            let kind = [CameraSlotKind::Dynamic, CameraSlotKind::Fixed][kind_index];
+            let before_alloc = ALLOC.snapshot();
+            let before_cycles = read_cycles();
+            let started = Instant::now();
+            let mut batch_checksum = 0u64;
+            for _ in 0..CAMERA_SLOT_BATCH_FRAMES {
+                batch_checksum = batch_checksum.wrapping_add(camera_slot_frame(
+                    kind,
+                    black_box(players),
+                    &mut cameras,
+                    base,
+                    &roots,
+                    &fields,
+                ));
+            }
+            let sample = started.elapsed();
+            let sample_cycles = read_cycles().saturating_sub(before_cycles);
+            let sample_allocated = ALLOC.snapshot().delta(before_alloc);
+            black_box(batch_checksum);
+            if batch >= CAMERA_SLOT_WARMUP_BATCHES {
+                elapsed[kind_index] += sample;
+                cycles[kind_index] += sample_cycles;
+                allocated[kind_index].add(sample_allocated);
+                samples_ns[kind_index]
+                    .push((sample.as_nanos() / CAMERA_SLOT_BATCH_FRAMES as u128) as u64);
+                checksum[kind_index] += batch_checksum as f32;
+            }
+        }
+    }
+    for samples in &mut samples_ns {
+        samples.sort_unstable();
+    }
+    std::array::from_fn(|index| BoundaryResult {
+        elapsed: elapsed[index],
+        cycles: cycles[index],
+        allocated: allocated[index],
+        samples_ns: std::mem::take(&mut samples_ns[index]),
+        checksum: checksum[index],
+    })
+}
+
+fn print_camera_slot_benchmark() {
+    println!("\nframe camera registration versus ideal fixed slots");
+    for players in 1..=BOUNDARY_PLAYERS {
+        println!("{players} active transformed player(s)");
+        let [dynamic, fixed] = measure_camera_slot_pair(players);
+        assert_eq!(dynamic.checksum, fixed.checksum);
+        print_sampled_result("dynamic registration", &dynamic, CAMERA_SLOT_BATCH_FRAMES);
+        print_sampled_result("ideal fixed slots", &fixed, CAMERA_SLOT_BATCH_FRAMES);
+        for result in [&dynamic, &fixed] {
+            assert_zero_alloc(&BenchResult {
+                elapsed: result.elapsed,
+                cycles: result.cycles,
+                allocated: result.allocated,
+                checksum: result.checksum,
+            });
+        }
+    }
+}
+
 fn print_boundary_sweep(label: &str, hold_mix: bool, draw_counts: &[usize]) {
     println!("\n{label} (draws/player)");
     for &field_draws in draw_counts {
@@ -2544,6 +2677,10 @@ fn print_cue_countdown_benchmark() {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_BENCH_CAMERA_SLOTS_ONLY").is_some() {
+        print_camera_slot_benchmark();
+        return;
+    }
     if std::env::var_os("DEADSYNC_BENCH_SEGMENT_ROOT_ONLY").is_some() {
         print_segment_root_benchmark();
         return;

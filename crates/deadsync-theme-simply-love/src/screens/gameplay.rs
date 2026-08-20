@@ -14530,6 +14530,7 @@ impl PlayerActorAssemblyCache {
         assembly
     }
 
+    #[cfg(any(test, feature = "bench-support"))]
     const fn stats(&self) -> PlayerActorAssemblyCacheStats {
         self.stats
     }
@@ -14604,6 +14605,7 @@ impl PlayerFieldCameraCache {
         camera
     }
 
+    #[cfg(any(test, feature = "bench-support"))]
     const fn stats(&self) -> PlayerFieldCameraCacheStats {
         self.stats
     }
@@ -14894,6 +14896,7 @@ impl GameplayActorSegments {
 }
 
 #[inline(always)]
+#[cfg(any(test, feature = "bench-support"))]
 fn player_actor_assembly_for_transform(
     requests_player_proxy: bool,
     visible: bool,
@@ -18841,6 +18844,74 @@ mod tests {
             ),
             PlayerActorAssembly::DirectFold { .. }
         ));
+    }
+
+    #[test]
+    fn dynamic_player_transforms_have_zero_legacy_fallbacks() {
+        let metrics = PlayerTransformMetrics {
+            screen_width: 854.0,
+            screen_height: 480.0,
+            screen_center_y: 240.0,
+        };
+        let identity = SongLuaCaptureTransform {
+            z_shift: 0,
+            tint: [1.0; 4],
+            blend: None,
+            playfield_center_x: 213.5,
+            target_x: 213.5,
+            target_y: 240.0,
+            rotation_x: 0.0,
+            rotation_z: 0.0,
+            rotation_y: 0.0,
+            skew_x: 0.0,
+            skew_y: 0.0,
+            zoom_x: 1.0,
+            zoom_y: 1.0,
+            zoom_z: 1.0,
+        };
+        let transforms: [SongLuaCaptureTransform; 14] = std::array::from_fn(|source| {
+            let mut transform = identity;
+            match source {
+                0 => transform.z_shift = 900,
+                1 => transform.tint = [0.8, 0.7, 0.6, 0.5],
+                2 => transform.blend = Some(BlendMode::Add),
+                3 => transform.playfield_center_x += 24.0,
+                4 => transform.target_x += 24.0,
+                5 => transform.target_y -= 12.0,
+                6 => transform.rotation_x = 4.0,
+                7 => transform.rotation_z = 8.0,
+                8 => transform.rotation_y = 13.0,
+                9 => transform.skew_x = 0.1,
+                10 => transform.skew_y = -0.05,
+                11 => transform.zoom_x = 0.9,
+                12 => transform.zoom_y = 1.1,
+                13 => transform.zoom_z = 0.9,
+                _ => unreachable!("fixed transform source domain"),
+            }
+            transform
+        });
+        let assemblies = transforms.map(|transform| {
+            player_actor_assembly_for_transform_with_metrics(false, true, transform, metrics)
+        });
+
+        assert_eq!(
+            assemblies
+                .iter()
+                .filter(|assembly| matches!(assembly, PlayerActorAssembly::Captured))
+                .count(),
+            0,
+        );
+        assert!(assemblies.into_iter().all(|assembly| matches!(
+            assembly,
+            PlayerActorAssembly::DirectZ { .. }
+                | PlayerActorAssembly::DirectFold { .. }
+                | PlayerActorAssembly::DirectTransform { .. }
+        )));
+        assert_eq!(
+            player_actor_assembly_for_transform_with_metrics(true, true, identity, metrics),
+            PlayerActorAssembly::Captured,
+            "whole-player capture is selected only by an explicit proxy request",
+        );
     }
 
     #[test]
