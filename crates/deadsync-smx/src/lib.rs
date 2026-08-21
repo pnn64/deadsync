@@ -26,6 +26,8 @@ pub mod panels;
 pub const PANEL_COUNT: usize = NUM_PANELS;
 /// Center panel index (the non-playable middle panel in the 3x3 grid).
 pub const CENTER_PANEL: usize = 4;
+const PLAYER_LIGHT_FRAME_BYTES: usize = 2 * BYTES_PER_PAD_25;
+const PLATFORM_LIGHT_FRAME_BYTES: usize = 2 * PLATFORM_STRIP_LEDS * 3;
 
 // ─── Pad-light brightness ────────────────────────────────────────────────────
 //
@@ -93,6 +95,87 @@ pub(crate) fn apply_brightness(frame: &mut [u8], pct: [u8; 2]) {
         let f = factor[usize::from(i >= half)];
         *b = (f32::from(*b) * f + 0.5) as u8;
     }
+}
+
+/// Worker-owned brightness lookup for the fixed 0..=255 channel domain.
+///
+/// Thread-safety: single-threaded inside the SMX light worker. Lifetime: one
+/// worker session. Capacity: two fixed 256-byte tables. Warmup: rebuilt on the
+/// first dimmed frame and only when a slot's configured percentage changes.
+/// Miss behavior: 256 bounded byte conversions on the worker, never the game
+/// thread. Eviction: direct replacement of one slot table. Destruction: worker
+/// shutdown. Instrumentation: the lighting benchmark checks allocations,
+/// cycles, throughput, and byte parity. Worst-case work is 512 conversions for
+/// a two-slot setting change; stable frames perform indexed byte loads only.
+struct BrightnessScale {
+    pct: [u8; 2],
+    table: [[u8; 256]; 2],
+}
+
+impl BrightnessScale {
+    const UNSET: u8 = u8::MAX;
+
+    const fn new() -> Self {
+        Self {
+            pct: [Self::UNSET; 2],
+            table: [[0; 256]; 2],
+        }
+    }
+
+    fn apply(&mut self, frame: &mut [u8], pct: [u8; 2]) {
+        let half = frame.len() / 2;
+        for slot in 0..2 {
+            let pct = pct[slot].min(100);
+            if self.pct[slot] != pct {
+                let factor = brightness_factor(pct);
+                for (value, scaled) in self.table[slot].iter_mut().enumerate() {
+                    *scaled = (value as f32 * factor + 0.5) as u8;
+                }
+                self.pct[slot] = pct;
+            }
+            let range = slot * half..(slot + 1) * half;
+            for value in &mut frame[range] {
+                *value = self.table[slot][usize::from(*value)];
+            }
+        }
+    }
+}
+
+fn player_light_frame(
+    colors: [Option<[u8; 3]>; 2],
+    brightness: [u8; 2],
+) -> [u8; PLAYER_LIGHT_FRAME_BYTES] {
+    let mut frame = [0; PLAYER_LIGHT_FRAME_BYTES];
+    for (pad, color) in colors.iter().enumerate() {
+        let Some(rgb) = color else { continue };
+        let base = pad * BYTES_PER_PAD_25;
+        for led in frame[base..base + BYTES_PER_PAD_25].as_chunks_mut::<3>().0 {
+            *led = *rgb;
+        }
+    }
+    if brightness != [100, 100] {
+        apply_brightness(&mut frame, brightness);
+    }
+    frame
+}
+
+fn platform_light_frame(
+    colors: [Option<[u8; 3]>; 2],
+    grb: bool,
+) -> [u8; PLATFORM_LIGHT_FRAME_BYTES] {
+    let mut frame = [0; PLATFORM_LIGHT_FRAME_BYTES];
+    for (pad, color) in colors.iter().enumerate() {
+        let Some([r, g, b]) = color else { continue };
+        let wire = if grb { [*g, *r, *b] } else { [*r, *g, *b] };
+        let base = pad * PLATFORM_STRIP_LEDS * 3;
+        for led in frame[base..base + PLATFORM_STRIP_LEDS * 3]
+            .as_chunks_mut::<3>()
+            .0
+        {
+            *led = wire;
+        }
+    }
+    frame
 }
 
 /// Shared state accessible by both the input backend and FSR monitor.
@@ -735,17 +818,7 @@ pub fn set_player_lights_with_brightness(colors: [Option<[u8; 3]>; 2], brightnes
     let Some(s) = SHARED.get() else { return };
     // A full 25-LED-per-pad frame (9 panels × 25 LEDs × 3); firmware on 16-LED
     // pads ignores the inner-ring bytes, so one buffer size covers both.
-    let mut buf = vec![0u8; 2 * BYTES_PER_PAD_25];
-    for (pad, color) in colors.iter().enumerate() {
-        let Some(rgb) = color else { continue };
-        let base = pad * BYTES_PER_PAD_25;
-        for led in buf[base..base + BYTES_PER_PAD_25].chunks_exact_mut(3) {
-            led.copy_from_slice(rgb);
-        }
-    }
-    if brightness != [100, 100] {
-        apply_brightness(&mut buf, brightness);
-    }
+    let buf = player_light_frame(colors, brightness);
     s.manager.set_lights(&buf);
 }
 
@@ -906,15 +979,7 @@ pub fn set_platform_lights_grb(grb: bool) {
 pub fn set_platform_lights_solid(colors: [Option<[u8; 3]>; 2]) {
     let Some(s) = SHARED.get() else { return };
     let grb = PLATFORM_LIGHTS_GRB.load(Ordering::Relaxed);
-    let mut buf = vec![0u8; PLATFORM_STRIP_LEDS * 3 * 2];
-    for (pad, color) in colors.iter().enumerate() {
-        let Some([r, g, b]) = color else { continue };
-        let wire = if grb { [*g, *r, *b] } else { [*r, *g, *b] };
-        let base = pad * PLATFORM_STRIP_LEDS * 3;
-        for led in buf[base..base + PLATFORM_STRIP_LEDS * 3].chunks_exact_mut(3) {
-            led.copy_from_slice(&wire);
-        }
-    }
+    let buf = platform_light_frame(colors, grb);
     s.manager.set_platform_lights(&buf);
 }
 
@@ -1142,12 +1207,131 @@ pub fn trigger_label(device: usize, code: u32) -> Option<String> {
     Some(format!("SMX P{player} {panel}"))
 }
 
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::{
+        BYTES_PER_PAD_25, BrightnessScale, PLATFORM_LIGHT_FRAME_BYTES, PLATFORM_STRIP_LEDS,
+        PLAYER_LIGHT_FRAME_BYTES, apply_brightness, panels, platform_light_frame,
+        player_light_frame,
+    };
+    use std::hint::black_box;
+
+    const COLORS: [Option<[u8; 3]>; 2] = [Some([241, 37, 109]), Some([13, 197, 83])];
+    const BRIGHTNESS: [u8; 2] = [37, 81];
+
+    fn preview_frames_old(events: usize) -> u64 {
+        let mut checksum = 0u64;
+        for _ in 0..events {
+            let colors = black_box(COLORS);
+            let brightness = black_box(BRIGHTNESS);
+            let mut player = vec![0; PLAYER_LIGHT_FRAME_BYTES];
+            for (pad, color) in colors.iter().enumerate() {
+                let Some(rgb) = color else { continue };
+                let base = pad * BYTES_PER_PAD_25;
+                for led in player[base..base + BYTES_PER_PAD_25].as_chunks_mut::<3>().0 {
+                    *led = *rgb;
+                }
+            }
+            apply_brightness(&mut player, brightness);
+
+            let mut platform = vec![0; PLATFORM_LIGHT_FRAME_BYTES];
+            for (pad, color) in colors.iter().enumerate() {
+                let Some([r, g, b]) = color else { continue };
+                let wire = [*g, *r, *b];
+                let base = pad * PLATFORM_STRIP_LEDS * 3;
+                for led in platform[base..base + PLATFORM_STRIP_LEDS * 3]
+                    .as_chunks_mut::<3>()
+                    .0
+                {
+                    *led = wire;
+                }
+            }
+            black_box((&player, &platform));
+            checksum = checksum
+                .wrapping_add(u64::from(player[0]))
+                .wrapping_add(u64::from(player[PLAYER_LIGHT_FRAME_BYTES - 1]) << 8)
+                .wrapping_add(u64::from(platform[0]) << 16)
+                .wrapping_add(u64::from(platform[PLATFORM_LIGHT_FRAME_BYTES - 1]) << 24);
+        }
+        checksum
+    }
+
+    fn preview_frames_new(events: usize) -> u64 {
+        let mut checksum = 0u64;
+        for _ in 0..events {
+            let colors = black_box(COLORS);
+            let player = player_light_frame(colors, black_box(BRIGHTNESS));
+            let platform = platform_light_frame(colors, true);
+            black_box((&player, &platform));
+            checksum = checksum
+                .wrapping_add(u64::from(player[0]))
+                .wrapping_add(u64::from(player[PLAYER_LIGHT_FRAME_BYTES - 1]) << 8)
+                .wrapping_add(u64::from(platform[0]) << 16)
+                .wrapping_add(u64::from(platform[PLATFORM_LIGHT_FRAME_BYTES - 1]) << 24);
+        }
+        checksum
+    }
+
+    fn brightness_old(events: usize) -> u64 {
+        let source: [u8; PLAYER_LIGHT_FRAME_BYTES] =
+            std::array::from_fn(|index| (index.wrapping_mul(73) & 0xff) as u8);
+        let mut checksum = 0u64;
+        for index in 0..events {
+            let mut frame = source;
+            apply_brightness(&mut frame, black_box(BRIGHTNESS));
+            black_box(&frame);
+            checksum = checksum.wrapping_add(u64::from(frame[index % frame.len()]));
+        }
+        checksum
+    }
+
+    fn brightness_new(events: usize) -> u64 {
+        let source: [u8; PLAYER_LIGHT_FRAME_BYTES] =
+            std::array::from_fn(|index| (index.wrapping_mul(73) & 0xff) as u8);
+        let mut scale = BrightnessScale::new();
+        let mut checksum = 0u64;
+        for index in 0..events {
+            let mut frame = source;
+            scale.apply(&mut frame, black_box(BRIGHTNESS));
+            black_box(&frame);
+            checksum = checksum.wrapping_add(u64::from(frame[index % frame.len()]));
+        }
+        checksum
+    }
+
+    pub fn preview_buffers_old(events: usize) -> u64 {
+        preview_frames_old(events)
+    }
+
+    pub fn preview_buffers_new(events: usize) -> u64 {
+        preview_frames_new(events)
+    }
+
+    pub fn brightness_scale_old(events: usize) -> u64 {
+        brightness_old(events)
+    }
+
+    pub fn brightness_scale_new(events: usize) -> u64 {
+        brightness_new(events)
+    }
+
+    pub fn panel_composite_old(events: usize) -> u64 {
+        panels::bench_support::composite_old(events)
+    }
+
+    pub fn panel_composite_new(events: usize) -> u64 {
+        panels::bench_support::composite_new(events)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
+        BrightnessScale, PLATFORM_LIGHT_FRAME_BYTES, PLAYER_LIGHT_FRAME_BYTES,
         PLAYER_UNCONFIGURED_LIGHT, PLAYER1_LIGHT, PLAYER2_LIGHT, PadConfigData, PanelThresholds,
         SmxPadPreset, apply_brightness, brightness_factor, conflict_unresolved, indicator_color,
-        jumper_derived_pair, jumpers_conflict, mock_spec_enabled, preset_thresholds,
+        jumper_derived_pair, jumpers_conflict, mock_spec_enabled, platform_light_frame,
+        player_light_frame, preset_thresholds,
     };
     use rustmaniax_sdk::SmxInfo;
 
@@ -1174,6 +1358,46 @@ mod tests {
             );
             prev = frame[0];
         }
+    }
+
+    #[test]
+    fn cached_brightness_matches_float_scaling_for_every_input_byte() {
+        let source: [u8; PLAYER_LIGHT_FRAME_BYTES] =
+            std::array::from_fn(|index| (index & 0xff) as u8);
+        let mut scale = BrightnessScale::new();
+        for pct in 0..=100u8 {
+            let brightness = [pct, 100 - pct];
+            let mut expected = source;
+            let mut actual = source;
+            apply_brightness(&mut expected, brightness);
+            scale.apply(&mut actual, brightness);
+            assert_eq!(actual, expected, "brightness={brightness:?}");
+        }
+    }
+
+    #[test]
+    fn fixed_preview_frames_match_golden_wire_bytes() {
+        let player = player_light_frame([Some([200, 100, 50]), None], [100, 100]);
+        assert_eq!(player.len(), PLAYER_LIGHT_FRAME_BYTES);
+        assert!(
+            player[..player.len() / 2]
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .all(|pixel| *pixel == [200, 100, 50])
+        );
+        assert!(player[player.len() / 2..].iter().all(|&byte| byte == 0));
+
+        let platform = platform_light_frame([None, Some([10, 20, 30])], true);
+        assert_eq!(platform.len(), PLATFORM_LIGHT_FRAME_BYTES);
+        assert!(platform[..platform.len() / 2].iter().all(|&byte| byte == 0));
+        assert!(
+            platform[platform.len() / 2..]
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .all(|pixel| *pixel == [20, 10, 30])
+        );
     }
 
     #[test]

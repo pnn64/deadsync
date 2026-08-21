@@ -318,23 +318,32 @@ impl PanelFx {
                 let p = &mut self.panels[pad][panel];
                 advance_overlay(&mut p.overlay, dt);
                 advance_overlay(&mut p.press_overlay, dt);
-                // Per-LED composite with black as transparent: the first
-                // non-black layer wins (see `composite_led`), so a partly lit
-                // gif lets the layers under it show through its black LEDs.
                 let p = &*p;
                 let base = pad * BYTES_PER_PAD + panel * (LEDS_PER_PANEL * 3);
-                // When blacked out, suppress the background so overlays (e.g.
-                // press feedback) still composite on top of black.
-                let bg = if self.blackout[pad] {
-                    &None
-                } else {
-                    &self.backgrounds[pad]
-                };
-                for led in 0..LEDS_PER_PANEL {
-                    let rgb = composite_led(p, bg, bg_frames[pad], panel, led);
-                    let o = base + led * 3;
-                    self.frame[o..o + 3].copy_from_slice(&rgb);
-                }
+                let top = p
+                    .overlay
+                    .as_ref()
+                    .map(|overlay| &overlay.anim.frames[overlay.frame])
+                    .or_else(|| {
+                        p.press_overlay
+                            .as_ref()
+                            .map(|overlay| &overlay.anim.frames[overlay.frame])
+                    });
+                // A blackout suppresses only the background; feedback still
+                // composites over black. Resolve each layer once per panel.
+                let background = (!self.blackout[pad])
+                    .then_some(bg_frames[pad])
+                    .flatten()
+                    .and_then(|frame| {
+                        self.backgrounds[pad]
+                            .as_ref()
+                            .map(|background| &background.anim.panels[panel][frame])
+                    });
+                compose_panel(
+                    &mut self.frame[base..base + LEDS_PER_PANEL * 3],
+                    top,
+                    background,
+                );
             }
         }
         &self.frame
@@ -532,49 +541,93 @@ fn advance_overlay(overlay: &mut Option<Overlay>, dt: f32) {
     }
 }
 
-/// One LED's RGB out of a packed panel frame.
-#[inline]
-fn led_rgb(frame: &PanelFrame, led: usize) -> Rgb {
-    let o = led * 3;
-    [frame[o], frame[o + 1], frame[o + 2]]
+/// Composite already-resolved packed panel frames. A single layer is a direct
+/// 75-byte copy; only the overlay-plus-background case needs per-LED selection.
+fn compose_panel(out: &mut [u8], top: Option<&PanelFrame>, background: Option<&PanelFrame>) {
+    match (top, background) {
+        (None, None) => out.fill(0),
+        (Some(frame), None) | (None, Some(frame)) => out.copy_from_slice(frame),
+        (Some(top), Some(background)) => {
+            for ((out, top), background) in out
+                .as_chunks_mut::<3>()
+                .0
+                .iter_mut()
+                .zip(top.as_chunks::<3>().0)
+                .zip(background.as_chunks::<3>().0)
+            {
+                *out = if *top == BLACK { *background } else { *top };
+            }
+        }
+    }
 }
 
-/// Resolve one LED's colour by compositing the panel's layers top to bottom,
-/// treating black as transparent: the first layer whose LED is non-black wins,
-/// else black. Order: GIF overlay (judgement/sustain), press-feedback overlay,
-/// the background.
-///
-/// The press-feedback layer is mutually exclusive with the game-event overlay:
-/// a judgement, freeze, or roll fully owns the panel, so press feedback never
-/// shows through its black LEDs; those fall straight through to the background.
-fn composite_led(
-    p: &PanelState,
-    background: &Option<Background>,
-    bg_frame: Option<usize>,
-    panel: usize,
-    led: usize,
-) -> Rgb {
-    if let Some(o) = &p.overlay {
-        let c = led_rgb(&o.anim.frames[o.frame], led);
-        if c != BLACK {
-            return c;
+#[cfg(feature = "bench-support")]
+pub(crate) mod bench_support {
+    use super::{BLACK, LEDS_PER_PANEL, PanelFrame, compose_panel};
+    use std::hint::black_box;
+
+    fn fixture(multiplier: usize) -> PanelFrame {
+        std::array::from_fn(|index| {
+            if (index / 3 + multiplier).is_multiple_of(5) {
+                0
+            } else {
+                ((index * multiplier + 17) & 0xff) as u8
+            }
+        })
+    }
+
+    fn compose_legacy(
+        out: &mut PanelFrame,
+        top: Option<&PanelFrame>,
+        background: Option<&PanelFrame>,
+    ) {
+        for led in 0..LEDS_PER_PANEL {
+            let offset = led * 3;
+            let mut rgb = BLACK;
+            if let Some(frame) = top {
+                rgb.copy_from_slice(&frame[offset..offset + 3]);
+            }
+            if rgb == BLACK
+                && let Some(frame) = background
+            {
+                rgb.copy_from_slice(&frame[offset..offset + 3]);
+            }
+            out[offset..offset + 3].copy_from_slice(&rgb);
         }
     }
-    if p.overlay.is_none()
-        && let Some(o) = &p.press_overlay
-    {
-        let c = led_rgb(&o.anim.frames[o.frame], led);
-        if c != BLACK {
-            return c;
+
+    fn run(events: usize, current: bool) -> u64 {
+        let top = fixture(7);
+        let background = fixture(11);
+        let mut out = [0; LEDS_PER_PANEL * 3];
+        let mut checksum = 0u64;
+        for index in 0..events {
+            let (top, background) = match black_box(index & 3) {
+                0 => (None, None),
+                1 => (None, Some(&background)),
+                2 => (Some(&top), None),
+                _ => (Some(&top), Some(&background)),
+            };
+            if current {
+                compose_panel(&mut out, top, background);
+            } else {
+                compose_legacy(&mut out, top, background);
+            }
+            black_box(&out);
+            checksum = checksum
+                .wrapping_mul(0x100_0000_01b3)
+                .wrapping_add(u64::from(out[(index * 17) % out.len()]));
         }
+        checksum
     }
-    if let (Some(bg), Some(f)) = (background, bg_frame) {
-        let c = led_rgb(&bg.anim.panels[panel][f], led);
-        if c != BLACK {
-            return c;
-        }
+
+    pub(crate) fn composite_old(events: usize) -> u64 {
+        run(events, false)
     }
-    BLACK
+
+    pub(crate) fn composite_new(events: usize) -> u64 {
+        run(events, true)
+    }
 }
 
 // 30Hz worker thread
@@ -615,6 +668,7 @@ struct LightsTx {
     last: [u8; FRAME_BYTES],
     have_last: [bool; PADS],
     sent_at: [Instant; PADS],
+    brightness: crate::BrightnessScale,
 }
 
 impl LightsTx {
@@ -623,6 +677,7 @@ impl LightsTx {
             last: [0u8; FRAME_BYTES],
             have_last: [false; PADS],
             sent_at: [Instant::now(); PADS],
+            brightness: crate::BrightnessScale::new(),
         }
     }
 
@@ -644,7 +699,7 @@ impl LightsTx {
         // exact identity, so skip the pass on the common full-brightness path.
         let brightness = crate::light_brightness();
         if brightness != [100, 100] {
-            crate::apply_brightness(&mut buf, brightness);
+            self.brightness.apply(&mut buf, brightness);
         }
         let now = Instant::now();
         // Decide per pad, then send once: both pads' commands ride the same
@@ -1159,6 +1214,42 @@ mod tests {
     /// First byte of an arbitrary LED in a panel.
     fn led_byte(frame: &[u8; FRAME_BYTES], pad: usize, panel: usize, led: usize) -> u8 {
         frame[panel_base(pad, panel) + led * 3]
+    }
+
+    #[test]
+    fn packed_panel_composition_matches_per_led_semantics() {
+        let top: PanelFrame = std::array::from_fn(|index| {
+            if (index / 3).is_multiple_of(3) {
+                0
+            } else {
+                (index * 7 + 3) as u8
+            }
+        });
+        let background: PanelFrame = std::array::from_fn(|index| (index * 11 + 1) as u8);
+        for (top, background) in [
+            (None, None),
+            (Some(&top), None),
+            (None, Some(&background)),
+            (Some(&top), Some(&background)),
+        ] {
+            let mut expected = [0; LEDS_PER_PANEL * 3];
+            for led in 0..LEDS_PER_PANEL {
+                let offset = led * 3;
+                let mut rgb = BLACK;
+                if let Some(frame) = top {
+                    rgb.copy_from_slice(&frame[offset..offset + 3]);
+                }
+                if rgb == BLACK
+                    && let Some(frame) = background
+                {
+                    rgb.copy_from_slice(&frame[offset..offset + 3]);
+                }
+                expected[offset..offset + 3].copy_from_slice(&rgb);
+            }
+            let mut actual = [0; LEDS_PER_PANEL * 3];
+            compose_panel(&mut actual, top, background);
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]
