@@ -1243,7 +1243,10 @@ const DANGER_FADE_IN_S: f32 = 0.3;
 const DANGER_HIDE_FADE_S: f32 = 0.3;
 const DANGER_FLASH_IN_S: f32 = 0.3;
 const DANGER_FLASH_OUT_S: f32 = 0.3;
-const DANGER_FLASH_ALPHA: f32 = 0.8;
+const DANGER_DEAD_START_ALPHA: f32 = 1.0;
+const DANGER_DEAD_MID_ALPHA: f32 = 0.8;
+const DANGER_RECOVER_START_ALPHA: f32 = 0.5;
+const DANGER_RECOVER_MID_ALPHA: f32 = 0.4;
 const DANGER_EFFECT_PERIOD_S: f32 = 1.0;
 const DANGER_EC1_RGBA: [f32; 4] = [1.0, 0.0, 0.24, 0.1];
 const DANGER_EC2_RGBA: [f32; 4] = [1.0, 0.0, 0.0, 0.35];
@@ -1271,6 +1274,8 @@ enum DangerAnim {
     Flash {
         started_at: f32,
         rgb: [f32; 3],
+        alpha_start: f32,
+        alpha_mid: f32,
     },
 }
 
@@ -1287,16 +1292,16 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
 }
 
 #[inline(always)]
-fn danger_flash_alpha(age: f32) -> f32 {
+fn danger_flash_alpha(age: f32, alpha_start: f32, alpha_mid: f32) -> f32 {
     if !age.is_finite() || age <= 0.0 {
-        return 0.0;
+        return alpha_start;
     }
     if age < DANGER_FLASH_IN_S {
-        return DANGER_FLASH_ALPHA * (age / DANGER_FLASH_IN_S).clamp(0.0, 1.0);
+        return lerp(alpha_start, alpha_mid, age / DANGER_FLASH_IN_S);
     }
     let t2 = age - DANGER_FLASH_IN_S;
     if t2 < DANGER_FLASH_OUT_S {
-        return DANGER_FLASH_ALPHA * (1.0 - (t2 / DANGER_FLASH_OUT_S).clamp(0.0, 1.0));
+        return lerp(alpha_mid, 0.0, t2 / DANGER_FLASH_OUT_S);
     }
     0.0
 }
@@ -1351,7 +1356,12 @@ fn danger_anim_base_alpha(anim: &DangerAnim, now: f32) -> f32 {
                 0.0
             }
         }
-        DangerAnim::Flash { started_at, .. } => danger_flash_alpha(now - started_at),
+        DangerAnim::Flash {
+            started_at,
+            alpha_start,
+            alpha_mid,
+            ..
+        } => danger_flash_alpha(now - started_at, alpha_start, alpha_mid),
     }
 }
 
@@ -1388,8 +1398,13 @@ fn danger_anim_rgba(anim: &DangerAnim, now: f32) -> [f32; 4] {
             };
             [rgba_start[0], rgba_start[1], rgba_start[2], a]
         }
-        DangerAnim::Flash { started_at, rgb } => {
-            let a = danger_flash_alpha(now - started_at);
+        DangerAnim::Flash {
+            started_at,
+            rgb,
+            alpha_start,
+            alpha_mid,
+        } => {
+            let a = danger_flash_alpha(now - started_at, alpha_start, alpha_mid);
             [rgb[0], rgb[1], rgb[2], a]
         }
     }
@@ -1467,6 +1482,8 @@ pub fn update_danger_fx_for_health(
             fx.anim = DangerAnim::Flash {
                 started_at: now,
                 rgb: [1.0, 0.0, 0.0],
+                alpha_start: DANGER_DEAD_START_ALPHA,
+                alpha_mid: DANGER_DEAD_MID_ALPHA,
             };
         }
         fx.last_health = health;
@@ -1485,6 +1502,8 @@ pub fn update_danger_fx_for_health(
             fx.anim = DangerAnim::Flash {
                 started_at: now,
                 rgb: [1.0, 0.0, 0.0],
+                alpha_start: DANGER_DEAD_START_ALPHA,
+                alpha_mid: DANGER_DEAD_MID_ALPHA,
             };
         }
         HealthState::Alive => {
@@ -1492,6 +1511,8 @@ pub fn update_danger_fx_for_health(
                 DangerAnim::Flash {
                     started_at: now,
                     rgb: [0.0, 1.0, 0.0],
+                    alpha_start: DANGER_RECOVER_START_ALPHA,
+                    alpha_mid: DANGER_RECOVER_MID_ALPHA,
                 }
             } else {
                 DangerAnim::FadeOut {

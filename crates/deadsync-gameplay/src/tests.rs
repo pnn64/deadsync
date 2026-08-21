@@ -5214,11 +5214,13 @@ mod tests {
         assert!(danger_fx_rgba(&fx, 10.3)[3] > 0.0);
 
         update_danger_fx_for_health(&mut fx, HealthState::Alive, 11.0, false);
+        assert_eq!(danger_fx_rgba(&fx, 11.0), [0.0, 1.0, 0.0, 0.5]);
         let flash = danger_fx_rgba(&fx, 11.15);
         assert_eq!(flash[0], 0.0);
         assert_eq!(flash[1], 1.0);
         assert_eq!(flash[2], 0.0);
-        assert!(flash[3] > 0.0);
+        assert!((flash[3] - 0.45).abs() <= 1e-6);
+        assert!(danger_fx_rgba(&fx, 11.6)[3] <= 1e-6);
     }
 
     #[test]
@@ -5228,11 +5230,13 @@ mod tests {
         assert_eq!(danger_fx_rgba(&fx, 1.2), [0.0, 0.0, 0.0, 0.0]);
 
         update_danger_fx_for_health(&mut fx, HealthState::Dead, 2.0, true);
+        assert_eq!(danger_fx_rgba(&fx, 2.0), [1.0, 0.0, 0.0, 1.0]);
         let flash = danger_fx_rgba(&fx, 2.15);
         assert_eq!(flash[0], 1.0);
         assert_eq!(flash[1], 0.0);
         assert_eq!(flash[2], 0.0);
-        assert!(flash[3] > 0.0);
+        assert!((flash[3] - 0.9).abs() <= 1e-6);
+        assert!(danger_fx_rgba(&fx, 2.6)[3] <= 1e-6);
     }
 
     #[test]
@@ -15624,12 +15628,12 @@ mod tests {
                         .get_beat_for_time_ns(visible_time_ns)
                         .to_bits(),
                 );
-                assert_eq!(
-                    cache
-                        .notefield_search_beat(player, timing_player, time_ns)
-                        .to_bits(),
-                    timing_player.get_beat_for_time_ns(time_ns).to_bits(),
-                );
+                let actual = cache.notefield_search_info(player, timing_player, time_ns);
+                let expected = timing_player.get_beat_info_from_time_ns(time_ns);
+                assert_eq!(actual.beat.to_bits(), expected.beat.to_bits());
+                assert_eq!(actual.bpm.to_bits(), expected.bpm.to_bits());
+                assert_eq!(actual.is_in_freeze, expected.is_in_freeze);
+                assert_eq!(actual.is_in_delay, expected.is_in_delay);
                 let expected_rows = lane_search_rows_for_timing(timing_player, time_ns);
                 assert_eq!(
                     cache.lane_search_rows(player, timing_player, time_ns),

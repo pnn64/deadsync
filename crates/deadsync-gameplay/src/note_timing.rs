@@ -530,15 +530,13 @@ impl GameplayTimeToBeatCaches {
     }
 
     #[inline(always)]
-    pub fn notefield_search_beat(
+    pub fn notefield_search_info(
         &mut self,
         player: usize,
         timing: &TimingData,
         time_ns: SongTimeNs,
-    ) -> f32 {
-        timing
-            .get_beat_info_from_time_ns_cached(time_ns, &mut self.notefield_search[player])
-            .beat
+    ) -> BeatInfo {
+        timing.get_beat_info_from_time_ns_cached(time_ns, &mut self.notefield_search[player])
     }
 
     pub fn missed_note_cutoff_rows(

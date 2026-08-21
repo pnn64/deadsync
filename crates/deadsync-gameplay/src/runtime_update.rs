@@ -887,10 +887,10 @@ where
         self.reset_time_to_beat_caches();
         let music_time_ns = self.clock.song_position.current_music_time_ns;
         for player in 0..self.setup.num_players {
-            self.clock.visible_timing.notefield_search_beat[player] = self
+            self.clock.visible_timing.notefield_song_position[player] = self
                 .timing_runtime
                 .time_to_beat_caches
-                .notefield_search_beat(
+                .notefield_search_info(
                     player,
                     &self.timing_runtime.timing_players[player],
                     music_time_ns,
@@ -2202,10 +2202,20 @@ where
     pub fn notefield_search_beat(&self, player: usize) -> f32 {
         self.clock
             .visible_timing
-            .notefield_search_beat
+            .notefield_song_position
+            .get(player)
+            .map(|info| info.beat)
+            .unwrap_or(0.0)
+    }
+
+    #[inline(always)]
+    pub fn notefield_song_position(&self, player: usize) -> BeatInfo {
+        self.clock
+            .visible_timing
+            .notefield_song_position
             .get(player)
             .copied()
-            .unwrap_or(0.0)
+            .unwrap_or_default()
     }
 
     #[inline(always)]
@@ -3140,12 +3150,12 @@ where
             let delay = self.clock.visible_timing.visual_delay_seconds(player);
             let visible_time_ns = visible_notefield_time_ns(visual_scroll_time_ns, delay);
             let visible_time_seconds = song_time_ns_to_seconds(visible_time_ns);
-            self.clock.visible_timing.notefield_search_beat[player] = if shares_song_timing {
-                beat_info.beat
+            self.clock.visible_timing.notefield_song_position[player] = if shares_song_timing {
+                beat_info
             } else {
                 self.timing_runtime
                     .time_to_beat_caches
-                    .notefield_search_beat(player, timing_player, music_time_ns)
+                    .notefield_search_info(player, timing_player, music_time_ns)
             };
             let visible_beat = if shares_song_timing && visible_time_ns == music_time_ns {
                 beat_info.beat

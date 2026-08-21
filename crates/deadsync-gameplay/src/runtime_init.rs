@@ -987,8 +987,8 @@ where
     let current_beat_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         timing_players[player].get_beat_for_time_ns(current_music_time_visible_ns[player])
     });
-    let notefield_search_beat: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
-        timing_players[player].get_beat_for_time_ns(init_music_time_ns)
+    let notefield_song_position: [BeatInfo; MAX_PLAYERS] = std::array::from_fn(|player| {
+        timing_players[player].get_beat_info_from_time_ns(init_music_time_ns)
     });
     let (song_lua_mask_windows, song_lua_ease_windows, song_lua_visuals) = build_song_lua_runtime
         .build_song_lua_runtime(build_song_lua_runtime_window_build(
@@ -1358,7 +1358,7 @@ where
                 current_music_time_ns: current_music_time_visible_ns,
                 current_music_time: current_music_time_visible,
                 current_beat: current_beat_visible,
-                notefield_search_beat,
+                notefield_song_position,
             },
         },
         hold_runtime: GameplayHoldRuntimeState::new_with_pump_events(

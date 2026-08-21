@@ -362,14 +362,38 @@ pub struct GameplayProgressRuntimeState {
     pub window_counts: GameplayWindowCountsState,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 pub struct GameplayVisibleTimingState {
     pub global_visual_delay_seconds: f32,
     pub player_visual_delay_seconds: [f32; MAX_PLAYERS],
     pub current_music_time_ns: [SongTimeNs; MAX_PLAYERS],
     pub current_music_time: [f32; MAX_PLAYERS],
     pub current_beat: [f32; MAX_PLAYERS],
-    pub notefield_search_beat: [f32; MAX_PLAYERS],
+    /// Fixed per-player song-position snapshots produced by the existing
+    /// song-lifetime timing caches. The game thread replaces each active slot
+    /// once per clock update; readers perform O(1) copies with no allocation,
+    /// synchronization, lookup miss, eviction, or independent timing walk.
+    pub notefield_song_position: [BeatInfo; MAX_PLAYERS],
+}
+
+impl PartialEq for GameplayVisibleTimingState {
+    fn eq(&self, other: &Self) -> bool {
+        self.global_visual_delay_seconds == other.global_visual_delay_seconds
+            && self.player_visual_delay_seconds == other.player_visual_delay_seconds
+            && self.current_music_time_ns == other.current_music_time_ns
+            && self.current_music_time == other.current_music_time
+            && self.current_beat == other.current_beat
+            && self
+                .notefield_song_position
+                .iter()
+                .zip(other.notefield_song_position.iter())
+                .all(|(a, b)| {
+                    a.beat == b.beat
+                        && a.bpm == b.bpm
+                        && a.is_in_freeze == b.is_in_freeze
+                        && a.is_in_delay == b.is_in_delay
+                })
+    }
 }
 
 impl Default for GameplayVisibleTimingState {
@@ -380,7 +404,7 @@ impl Default for GameplayVisibleTimingState {
             current_music_time_ns: [0; MAX_PLAYERS],
             current_music_time: [0.0; MAX_PLAYERS],
             current_beat: [0.0; MAX_PLAYERS],
-            notefield_search_beat: [0.0; MAX_PLAYERS],
+            notefield_song_position: [BeatInfo::default(); MAX_PLAYERS],
         }
     }
 }

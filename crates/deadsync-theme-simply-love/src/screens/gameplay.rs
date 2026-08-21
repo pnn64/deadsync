@@ -1973,6 +1973,129 @@ impl GameplayFrameOrchestrationBenchmark {
     }
 }
 
+const LIFE_BOUNCE_S: f32 = 0.1;
+const LIFE_SMOOTH_S: f32 = 0.2;
+const LIFE_PERCENT_FADE_S: f32 = 1.0;
+
+#[derive(Clone, Copy, Debug)]
+struct LifeMeterVisual {
+    from_life: f32,
+    target_life: f32,
+    tween_age: f32,
+    hot_age: f32,
+    is_hot: bool,
+    vertical_swoosh_alpha: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct LifePercentVisual {
+    outer_w: f32,
+    inner_w: f32,
+    alpha: f32,
+}
+
+impl LifeMeterVisual {
+    fn new(life: f32, dead: bool) -> Self {
+        let target_life = visible_life(life, dead);
+        let is_hot = !dead && target_life >= 1.0;
+        Self {
+            from_life: target_life,
+            target_life,
+            tween_age: LIFE_SMOOTH_S,
+            hot_age: 0.0,
+            is_hot,
+            vertical_swoosh_alpha: 0.2,
+        }
+    }
+
+    fn update(&mut self, life: f32, dead: bool, delta_time: f32) {
+        let target_life = visible_life(life, dead);
+        let is_hot = !dead && target_life >= 1.0;
+        let delta_time = finite_nonnegative(delta_time);
+
+        if target_life != self.target_life {
+            self.from_life = self.target_life;
+            self.vertical_swoosh_alpha = if target_life > self.target_life || target_life >= 1.0 {
+                1.0
+            } else {
+                0.2
+            };
+            self.target_life = target_life;
+            self.tween_age = 0.0;
+        } else {
+            self.tween_age += delta_time;
+        }
+
+        if is_hot != self.is_hot {
+            self.is_hot = is_hot;
+            self.hot_age = 0.0;
+        } else {
+            self.hot_age += delta_time;
+        }
+    }
+
+    fn rendered_life(self, lifemeter_type: profile_data::LifeMeterType) -> f32 {
+        let (duration, progress) = match lifemeter_type {
+            profile_data::LifeMeterType::Surround => {
+                (LIFE_SMOOTH_S, smooth_life_p(self.tween_age / LIFE_SMOOTH_S))
+            }
+            profile_data::LifeMeterType::Standard | profile_data::LifeMeterType::Vertical => (
+                LIFE_BOUNCE_S,
+                deadlib_present::anim::bouncebegin_p(self.tween_age / LIFE_BOUNCE_S),
+            ),
+        };
+        if self.tween_age >= duration {
+            self.target_life
+        } else {
+            (self.target_life - self.from_life).mul_add(progress, self.from_life)
+        }
+    }
+
+    fn percent_visual(self) -> LifePercentVisual {
+        if !self.is_hot {
+            return LifePercentVisual {
+                outer_w: 44.0,
+                inner_w: 42.0,
+                alpha: 1.0,
+            };
+        }
+        let t = (self.hot_age / LIFE_PERCENT_FADE_S).clamp(0.0, 1.0);
+        LifePercentVisual {
+            outer_w: 52.0,
+            inner_w: 50.0,
+            alpha: 1.0 - t * t,
+        }
+    }
+}
+
+#[inline]
+fn visible_life(life: f32, dead: bool) -> f32 {
+    if dead || !life.is_finite() {
+        0.0
+    } else {
+        life.clamp(0.0, 1.0)
+    }
+}
+
+#[inline]
+fn finite_nonnegative(value: f32) -> f32 {
+    if value.is_finite() {
+        value.max(0.0)
+    } else {
+        0.0
+    }
+}
+
+#[inline]
+fn smooth_life_p(value: f32) -> f32 {
+    let t = value.clamp(0.0, 1.0);
+    if t <= 0.5 {
+        2.0 * t * t
+    } else {
+        1.0 - 2.0 * (1.0 - t) * (1.0 - t)
+    }
+}
+
 pub struct State {
     pub gameplay: GameplayCoreState,
     /// Game-thread, song-lifetime identity for the fixed two HUD slots. Built
@@ -2042,6 +2165,11 @@ pub struct State {
     /// at screen transition. Text-layout counters and the numeric HUD benchmark
     /// cover activity; six byte writes are the worst-case live-frame work.
     life_percent_text: GameplayLifeTextPlan,
+    /// Fixed two-player, song-lifetime presentation state for Simply Love life
+    /// tweens. The gameplay thread advances it once per update and actor
+    /// construction reads it without allocation, synchronization, misses,
+    /// eviction, or maintenance beyond constant work per active player.
+    life_meter_visuals: [LifeMeterVisual; MAX_PLAYERS],
     /// One song-static logical width for the Stage/Event label. The game thread
     /// warms it during the transition, reads it without synchronization during
     /// gameplay, and drops it with the screen. There is no growth or eviction;
@@ -2290,6 +2418,10 @@ impl State {
             runtime_view.policy.show_bpm_decimal,
         );
         let life_percent_text = GameplayLifeTextPlan::new();
+        let life_meter_visuals = std::array::from_fn(|player| {
+            let player = &gameplay.players()[player];
+            LifeMeterVisual::new(player.life, player.is_failing || player.life <= 0.0)
+        });
         let actor_resources = ActorResourceArena::default();
         notefield::prewarm_actor_resources(
             &actor_resources,
@@ -2633,6 +2765,7 @@ impl State {
             display_mods_text,
             rate_text,
             life_percent_text,
+            life_meter_visuals,
             intro_text_width: Cell::new(None),
             notefield_judgment_assets,
             notefield_combo_assets,
@@ -4637,6 +4770,7 @@ pub fn update(
     effects: &mut Vec<ThemeEffect>,
 ) {
     let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);
+    update_life_meter_visuals(state, delta_time);
     match action {
         GameplayAction::None => {
             if let Some(effect) = missed_target_effect(state) {
@@ -4644,6 +4778,15 @@ pub fn update(
             }
         }
         action => effects.push(map_gameplay_action(action)),
+    }
+}
+
+fn update_life_meter_visuals(state: &mut State, delta_time: f32) {
+    for player in 0..state.gameplay.num_players().min(MAX_PLAYERS) {
+        let runtime = &state.gameplay.players()[player];
+        let life = runtime.life;
+        let dead = runtime.is_failing || life <= 0.0;
+        state.life_meter_visuals[player].update(life, dead, delta_time);
     }
 }
 
@@ -5178,10 +5321,18 @@ impl GameplayLifeTextPlan {
 
 #[inline]
 fn rainbow_life_color(elapsed: f32) -> [f32; 4] {
-    let phase = elapsed * 2.0;
-    let r = phase.sin() * 0.5 + 0.5;
-    let g = (phase + std::f32::consts::TAU / 3.0).sin() * 0.5 + 0.5;
-    let b = (phase + (2.0 * std::f32::consts::TAU) / 3.0).sin() * 0.5 + 0.5;
+    let through = (finite_nonnegative(elapsed) / 2.0).rem_euclid(1.0);
+    let between = ((through + 0.25) * std::f32::consts::TAU)
+        .sin()
+        .mul_add(0.5, 0.5);
+    let phase = between * std::f32::consts::TAU;
+    let r = phase.cos().mul_add(0.5, 0.5);
+    let g = (phase + std::f32::consts::TAU / 3.0)
+        .cos()
+        .mul_add(0.5, 0.5);
+    let b = (phase + 2.0 * std::f32::consts::TAU / 3.0)
+        .cos()
+        .mul_add(0.5, 0.5);
     [r, g, b, 1.0]
 }
 
@@ -5242,16 +5393,24 @@ fn visible_life_percent_text(
     lifemeter_type: profile_data::LifeMeterType,
     enabled: bool,
     standard_layout_visible: bool,
-    is_hot: bool,
 ) -> Option<TextContent> {
     let visible = enabled
-        && !is_hot
         && match lifemeter_type {
             profile_data::LifeMeterType::Standard => standard_layout_visible,
             profile_data::LifeMeterType::Vertical => true,
             profile_data::LifeMeterType::Surround => false,
         };
     visible.then(|| text_plan.resolve(life_percent, player))
+}
+
+#[inline]
+fn life_swoosh_velocity_x(state: &State, player: usize) -> f32 {
+    let song_position = state.notefield_song_position(player);
+    if song_position.is_in_freeze || song_position.is_in_delay {
+        0.0
+    } else {
+        -(song_position.bpm / 60.0 * 0.5)
+    }
 }
 
 fn prewarm_life_text_slots(
@@ -17772,21 +17931,26 @@ pub fn push_actors(
         // --- Life Meter ---
         {
             let player_life_color = |player_idx: usize| -> [f32; 4] {
-                match play_style {
+                let color_index = match play_style {
                     profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
                         if player_idx == 0 {
-                            color::decorative_rgba(state.active_color_index())
+                            state.active_color_index()
                         } else {
-                            color::decorative_rgba(state.active_color_index() - 2)
+                            state.active_color_index() - 2
                         }
                     }
                     _ => {
                         if runtime_player_is_p2 {
-                            color::decorative_rgba(state.active_color_index() - 2)
+                            state.active_color_index() - 2
                         } else {
-                            color::decorative_rgba(state.active_color_index())
+                            state.active_color_index()
                         }
                     }
+                };
+                if visual_policy.srpg10_tint {
+                    color::srpg10_rgba(color_index)
+                } else {
+                    color::decorative_rgba(color_index)
                 }
             };
             let show_standard_life_percent =
@@ -17817,41 +17981,29 @@ pub fn push_actors(
                 // Latch-to-zero for rendering the very frame we die.
                 let player = &state.players()[player_idx];
                 let dead = player.is_failing || player.life <= 0.0;
-                let life_for_render = if dead {
-                    0.0
-                } else {
-                    player.life.clamp(0.0, 1.0)
-                };
-                let is_hot = !dead && life_for_render >= 1.0;
+                let actual_life = visible_life(player.life, dead);
                 let profile = &state.profiles()[player_idx];
+                let life_visual = state.life_meter_visuals[player_idx];
+                let life_for_render = life_visual.rendered_life(profile.lifemeter_type);
+                let is_hot = life_visual.is_hot;
+                let percent_visual = life_visual.percent_visual();
                 let life_percent_text = visible_life_percent_text(
                     &state.life_percent_text,
                     player_idx,
-                    life_for_render * 100.0,
+                    actual_life * 100.0,
                     profile.lifemeter_type,
                     profile.show_life_percent,
                     show_standard_life_percent,
-                    is_hot,
                 );
-
-                let lifebar_center_shift = if centered_single_notefield {
-                    let clamped_width = screen_width().clamp(640.0, 854.0);
-                    match side {
-                        profile_data::PlayerSide::P1 => clamped_width * 0.25,
-                        profile_data::PlayerSide::P2 => -clamped_width * 0.25,
-                    }
-                } else {
-                    0.0
-                };
                 let static_life_slot = [STATIC_LIFE_P1, STATIC_LIFE_P2][player_idx.min(1)];
 
                 match profile.lifemeter_type {
                     profile_data::LifeMeterType::Standard => {
                         let life_color = life_fill_color(
                             profile,
-                            life_for_render,
+                            actual_life,
                             dead,
-                            state.total_elapsed_in_screen(),
+                            life_visual.hot_age,
                             || player_life_color(player_idx),
                         );
                         let w = 136.0;
@@ -17888,12 +18040,7 @@ pub fn push_actors(
                             // Logic Parity:
                             // velocity = -(songposition:GetCurBPS() * 0.5)
                             // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
-                            let bps = state.current_bpm_display() / 60.0;
-                            let velocity_x = if state.beat_phase_paused() {
-                                0.0
-                            } else {
-                                -(bps * 0.5)
-                            };
+                            let velocity_x = life_swoosh_velocity_x(state, player_idx);
 
                             let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
 
@@ -17927,21 +18074,21 @@ pub fn push_actors(
                                 };
                             actors.push(act!(quad:
                             align(align_x, 0.5): xy(outer_x, meter_cy):
-                            zoomto(44.0, 18.0):
-                            diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
+                            zoomto(percent_visual.outer_w, 18.0):
+                            diffuse(life_text_color[0], life_text_color[1], life_text_color[2], percent_visual.alpha):
                             z(94)
                         ));
                             actors.push(act!(quad:
                                 align(align_x, 0.5): xy(inner_x, meter_cy):
-                                zoomto(42.0, 16.0):
-                                diffuse(0.0, 0.0, 0.0, 1.0):
+                                zoomto(percent_visual.inner_w, 16.0):
+                                diffuse(0.0, 0.0, 0.0, percent_visual.alpha):
                                 z(95)
                             ));
                             actors.push(act!(text:
                             font("miso"): settext(life_percent_text):
                             align(align_x, 0.5): xy(text_x, meter_cy):
                             zoom(1.0):
-                            diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
+                            diffuse(life_text_color[0], life_text_color[1], life_text_color[2], percent_visual.alpha):
                             z(96)
                         ));
                         }
@@ -17976,17 +18123,14 @@ pub fn push_actors(
                             break;
                         }
 
-                        let surround_color = surround_life_color(
-                            profile,
-                            life_for_render,
-                            state.total_elapsed_in_screen(),
-                        );
+                        let surround_color =
+                            surround_life_color(profile, actual_life, life_visual.hot_age);
 
                         match side {
                             profile_data::PlayerSide::P1 => {
                                 actors.push(act!(quad:
                                 align(0.0, 0.0): xy(0.0, y):
-                                zoomto(w + lifebar_center_shift, h):
+                                zoomto(w, h):
                                 diffuse(surround_color[0], surround_color[1], surround_color[2], surround_color[3]):
                                 faderight(0.8):
                                 croptop(croptop):
@@ -17996,7 +18140,7 @@ pub fn push_actors(
                             profile_data::PlayerSide::P2 => {
                                 actors.push(act!(quad:
                                 align(1.0, 0.0): xy(sw, y):
-                                zoomto(w - lifebar_center_shift, h):
+                                zoomto(w, h):
                                 diffuse(surround_color[0], surround_color[1], surround_color[2], surround_color[3]):
                                 fadeleft(0.8):
                                 croptop(croptop):
@@ -18008,9 +18152,9 @@ pub fn push_actors(
                     profile_data::LifeMeterType::Vertical => {
                         let life_color = life_fill_color(
                             profile,
-                            life_for_render,
+                            actual_life,
                             dead,
-                            state.total_elapsed_in_screen(),
+                            life_visual.hot_age,
                             || player_life_color(player_idx),
                         );
                         let bar_w = 16.0;
@@ -18024,17 +18168,26 @@ pub fn push_actors(
                                     profile_data::PlayerSide::P2 => widescale(302.0, 400.0),
                                 };
 
-                            // SL: if double style, position next to notefield.
-                            if play_style.is_double() {
+                            // SL: Double and Center1Player sit next to the notefield.
+                            if play_style.is_double() || centered_single_notefield {
                                 let half_nf = state.notefield_width(player_idx) * 0.5;
                                 x = screen_center_x()
                                     + match side {
                                         profile_data::PlayerSide::P1 => -(half_nf + 10.0),
                                         profile_data::PlayerSide::P2 => half_nf + 10.0,
                                     };
+                            } else if screen_width() / screen_height().max(1.0) > (21.0 / 9.0)
+                                && state.num_players() > 1
+                                && !profile.step_statistics.is_empty()
+                            {
+                                x = screen_center_x()
+                                    + match side {
+                                        profile_data::PlayerSide::P1 => -60.0,
+                                        profile_data::PlayerSide::P2 => 60.0,
+                                    };
                             }
 
-                            x + lifebar_center_shift
+                            x
                         };
 
                         let cy = bar_h + 10.0;
@@ -18065,13 +18218,8 @@ pub fn push_actors(
 
                         // MeterSwoosh
                         if filled_h > 0.0 && !dead {
-                            let bps = state.current_bpm_display() / 60.0;
-                            let velocity_x = if state.beat_phase_paused() {
-                                0.0
-                            } else {
-                                -(bps * 0.5)
-                            };
-                            let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
+                            let velocity_x = life_swoosh_velocity_x(state, player_idx);
+                            let swoosh_alpha = life_visual.vertical_swoosh_alpha;
 
                             actors.push(act!(sprite("swoosh.png"):
                                 align(0.5, 0.5):
@@ -18095,21 +18243,21 @@ pub fn push_actors(
                                 };
                             actors.push(act!(quad:
                             align(align_x, 0.5): xy(outer_x, text_y):
-                            zoomto(44.0, 18.0):
-                            diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
+                            zoomto(percent_visual.outer_w, 18.0):
+                            diffuse(life_text_color[0], life_text_color[1], life_text_color[2], percent_visual.alpha):
                             z(94)
                         ));
                             actors.push(act!(quad:
                                 align(align_x, 0.5): xy(inner_x, text_y):
-                                zoomto(42.0, 16.0):
-                                diffuse(0.0, 0.0, 0.0, 1.0):
+                                zoomto(percent_visual.inner_w, 16.0):
+                                diffuse(0.0, 0.0, 0.0, percent_visual.alpha):
                                 z(95)
                             ));
                             actors.push(act!(text:
                             font("miso"): settext(life_percent_text):
                             align(align_x, 0.5): xy(text_x, text_y):
                             zoom(1.0):
-                            diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
+                            diffuse(life_text_color[0], life_text_color[1], life_text_color[2], percent_visual.alpha):
                             z(96)
                         ));
                         }
@@ -19600,7 +19748,7 @@ mod tests {
     }
 
     #[test]
-    fn life_percent_text_only_resolves_for_visible_meter_layouts() {
+    fn life_percent_text_resolves_for_enabled_meter_layouts() {
         let text_plan = GameplayLifeTextPlan::new();
         assert!(
             visible_life_percent_text(
@@ -19610,7 +19758,6 @@ mod tests {
                 profile_data::LifeMeterType::Standard,
                 false,
                 true,
-                false,
             )
             .is_none()
         );
@@ -19622,11 +19769,10 @@ mod tests {
                 profile_data::LifeMeterType::Surround,
                 true,
                 true,
-                false,
             )
             .is_none()
         );
-        assert!(
+        assert_eq!(
             visible_life_percent_text(
                 &text_plan,
                 0,
@@ -19634,9 +19780,10 @@ mod tests {
                 profile_data::LifeMeterType::Vertical,
                 true,
                 true,
-                true,
             )
-            .is_none()
+            .as_ref()
+            .map(TextContent::as_str),
+            Some("100.0%")
         );
         assert_eq!(
             visible_life_percent_text(
@@ -19645,7 +19792,6 @@ mod tests {
                 87.3,
                 profile_data::LifeMeterType::Vertical,
                 true,
-                false,
                 false,
             )
             .as_ref()
@@ -19660,10 +19806,69 @@ mod tests {
                 profile_data::LifeMeterType::Vertical,
                 true,
                 false,
-                false,
             ),
             Some(TextContent::FrameInline { slot, .. }) if slot == FRAME_TEXT_LIFE_BASE + 1
         ));
+    }
+
+    #[test]
+    fn life_meter_visual_matches_theme_tween_and_finish_semantics() {
+        let mut visual = LifeMeterVisual::new(0.5, false);
+        visual.update(0.25, false, 0.0);
+        assert_eq!(
+            visual.rendered_life(profile_data::LifeMeterType::Standard),
+            0.5
+        );
+
+        visual.update(0.25, false, LIFE_BOUNCE_S * 0.5);
+        let bounce = deadlib_present::anim::bouncebegin_p(0.5);
+        let expected = (0.25_f32 - 0.5).mul_add(bounce, 0.5);
+        assert!(
+            (visual.rendered_life(profile_data::LifeMeterType::Vertical) - expected).abs() <= 1e-6
+        );
+
+        visual.update(0.4, false, 0.0);
+        assert_eq!(
+            visual.rendered_life(profile_data::LifeMeterType::Standard),
+            0.25
+        );
+        visual.update(0.4, false, LIFE_SMOOTH_S * 0.5);
+        assert!(
+            (visual.rendered_life(profile_data::LifeMeterType::Surround) - 0.325).abs() <= 1e-6
+        );
+    }
+
+    #[test]
+    fn life_meter_visual_matches_hot_percent_and_vertical_swoosh_commands() {
+        let mut visual = LifeMeterVisual::new(0.9, false);
+        visual.update(1.0, false, 0.0);
+        assert_eq!(
+            visual.percent_visual(),
+            LifePercentVisual {
+                outer_w: 52.0,
+                inner_w: 50.0,
+                alpha: 1.0,
+            }
+        );
+        assert_eq!(visual.vertical_swoosh_alpha, 1.0);
+
+        visual.update(1.0, false, LIFE_PERCENT_FADE_S * 0.5);
+        assert_eq!(visual.percent_visual().alpha, 0.75);
+        visual.update(0.8, false, 0.0);
+        assert_eq!(visual.percent_visual().alpha, 1.0);
+        assert_eq!(visual.vertical_swoosh_alpha, 0.2);
+    }
+
+    #[test]
+    fn rainbow_life_color_matches_itgmania_actor_rainbow() {
+        let start = rainbow_life_color(0.0);
+        let quarter = rainbow_life_color(0.5);
+        for (actual, expected) in start.into_iter().zip([1.0, 0.25, 0.25, 1.0]) {
+            assert!((actual - expected).abs() <= 1e-6);
+        }
+        for (actual, expected) in quarter.into_iter().zip([0.0, 0.75, 0.75, 1.0]) {
+            assert!((actual - expected).abs() <= 1e-6);
+        }
     }
 
     #[test]
