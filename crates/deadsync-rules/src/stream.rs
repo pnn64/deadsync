@@ -12,6 +12,22 @@ pub fn measure_densities(data: &[u8], lanes: usize) -> Vec<usize> {
     }
 }
 
+/// Returns the measure's one-based position and total length within a stream run.
+///
+/// Note data is scanned only until the requested measure's run ends. The query
+/// does not materialize either the full density list or the segment list.
+pub fn stream_run_progress(
+    data: &[u8],
+    lanes: usize,
+    threshold: usize,
+    current_measure: usize,
+) -> Option<(usize, usize)> {
+    match lanes {
+        8 => stream_run_progress_impl::<8>(data, threshold, current_measure),
+        _ => stream_run_progress_impl::<4>(data, threshold, current_measure),
+    }
+}
+
 pub fn stream_sequences_threshold(measures: &[usize], threshold: usize) -> Vec<StreamSegment> {
     let mut segs = Vec::new();
     for_each_stream_segment(measures, threshold, |segment| segs.push(segment));
@@ -97,6 +113,13 @@ struct StreamDensityFold {
     multiplier: f32,
     total_stream: f32,
     total_measures: f32,
+    segment_count: usize,
+}
+
+#[derive(Clone, Copy)]
+struct StreamDensity {
+    ratio: f32,
+    segment_count: usize,
 }
 
 impl StreamDensityFold {
@@ -107,6 +130,7 @@ impl StreamDensityFold {
             multiplier,
             total_stream: 0.0,
             total_measures: 0.0,
+            segment_count: 0,
         }
     }
 
@@ -117,27 +141,60 @@ impl StreamDensityFold {
         let multiplier = self.multiplier;
         let total_stream = &mut self.total_stream;
         let total_measures = &mut self.total_measures;
+        let segment_count = &mut self.segment_count;
         self.runs.record(idx, |segment| {
+            *segment_count += 1;
             add_density_segment(segment, multiplier, total_stream, total_measures);
         });
     }
 
-    fn finish(self, measure_count: usize) -> f32 {
+    fn finish(self, measure_count: usize) -> StreamDensity {
         let Self {
             runs,
             multiplier,
             mut total_stream,
             mut total_measures,
+            mut segment_count,
             ..
         } = self;
         runs.finish(measure_count, |segment| {
+            segment_count += 1;
             add_density_segment(segment, multiplier, &mut total_stream, &mut total_measures);
         });
-        if total_measures <= 0.0 {
+        let ratio = if total_measures <= 0.0 {
             0.0
         } else {
             total_stream / total_measures
+        };
+        StreamDensity {
+            ratio,
+            segment_count,
         }
+    }
+}
+
+#[derive(Default)]
+struct StreamCountFold {
+    runs: StreamRuns,
+    segment_count: usize,
+}
+
+impl StreamCountFold {
+    fn record(&mut self, idx: usize, density: usize, threshold: usize) {
+        if density < threshold {
+            return;
+        }
+        let segment_count = &mut self.segment_count;
+        self.runs.record(idx, |_| *segment_count += 1);
+    }
+
+    fn finish(self, measure_count: usize) -> usize {
+        let Self {
+            runs,
+            mut segment_count,
+        } = self;
+        runs.finish(measure_count, |_| segment_count += 1);
+        segment_count
     }
 }
 
@@ -158,7 +215,7 @@ fn add_density_segment(
 }
 
 #[inline(always)]
-fn zmod_stream_density(measures: &[usize], threshold: usize, multiplier: f32) -> f32 {
+fn zmod_stream_density(measures: &[usize], threshold: usize, multiplier: f32) -> StreamDensity {
     let mut fold = StreamDensityFold::new(threshold, multiplier);
     for (idx, &density) in measures.iter().enumerate() {
         fold.record(idx, density);
@@ -166,15 +223,116 @@ fn zmod_stream_density(measures: &[usize], threshold: usize, multiplier: f32) ->
     fold.finish(measures.len())
 }
 
-fn zmod_stream_density_pair(measures: &[usize], configs: [(usize, f32); 2]) -> [f32; 2] {
+fn zmod_density_pair(
+    measures: &[usize],
+    configs: [(usize, f32); 2],
+    count_threshold: usize,
+) -> ([StreamDensity; 2], usize) {
     let mut folds =
         configs.map(|(threshold, multiplier)| StreamDensityFold::new(threshold, multiplier));
+    let mut count_fold = StreamCountFold::default();
     for (idx, &density) in measures.iter().enumerate() {
         folds[0].record(idx, density);
         folds[1].record(idx, density);
+        count_fold.record(idx, density, count_threshold);
     }
     let [first, second] = folds;
-    [first.finish(measures.len()), second.finish(measures.len())]
+    (
+        [first.finish(measures.len()), second.finish(measures.len())],
+        count_fold.finish(measures.len()),
+    )
+}
+
+fn zmod_params(measures: &[usize], constant_bpm: bool) -> (usize, f32, usize) {
+    let addition = 2usize;
+    if !constant_bpm {
+        return (14 + addition, 1.0, 0);
+    }
+
+    let d32 = zmod_stream_density(measures, 30 + addition, 2.0);
+    if d32.ratio >= 0.2 {
+        return (30 + addition, 2.0, d32.segment_count);
+    }
+
+    let ([d24, d20], count16) = zmod_density_pair(
+        measures,
+        [(22 + addition, 1.5), (18 + addition, 1.25)],
+        14 + addition,
+    );
+    if d24.ratio >= 0.2 {
+        (22 + addition, 1.5, d24.segment_count)
+    } else if d20.ratio >= 0.2 {
+        (18 + addition, 1.25, d20.segment_count)
+    } else {
+        (14 + addition, 1.0, count16)
+    }
+}
+
+#[derive(Default)]
+struct StreamTotals {
+    total_stream: f32,
+    total_break: f32,
+    edge_break: f32,
+    pending_break: f32,
+    saw_stream: bool,
+    last_stream: bool,
+}
+
+impl StreamTotals {
+    fn record(&mut self, segment: StreamSegment) {
+        let len = segment.end.saturating_sub(segment.start) as f32;
+        if len <= 0.0 {
+            return;
+        }
+        if segment.is_break {
+            if self.saw_stream {
+                self.pending_break = len;
+            } else {
+                self.edge_break += len;
+            }
+            self.last_stream = false;
+            return;
+        }
+
+        if self.pending_break > 0.0 {
+            self.total_break += self.pending_break;
+            self.pending_break = 0.0;
+        } else if self.last_stream {
+            self.total_break += 1.0;
+        }
+        self.total_stream += len;
+        self.saw_stream = true;
+        self.last_stream = true;
+    }
+
+    fn finish(mut self, multiplier: f32) -> (f32, f32) {
+        self.edge_break += self.pending_break;
+        if self.total_stream + self.total_break < 10.0
+            || self.total_stream + self.total_break < self.edge_break
+        {
+            self.total_break += self.edge_break;
+        }
+        (
+            self.total_stream * multiplier,
+            self.total_break * multiplier,
+        )
+    }
+}
+
+fn build_zmod_totals(
+    measures: &[usize],
+    threshold: usize,
+    multiplier: f32,
+    segment_capacity: usize,
+) -> (Vec<StreamSegment>, f32, f32) {
+    let mut segs = Vec::with_capacity(segment_capacity);
+    let mut totals = StreamTotals::default();
+    for_each_stream_segment(measures, threshold, |segment| {
+        totals.record(segment);
+        segs.push(segment);
+    });
+    let (total_stream, total_break) = totals.finish(multiplier);
+    (segs, total_stream, total_break)
 }
 
 #[inline(always)]
@@ -182,70 +340,82 @@ pub fn zmod_stream_totals_full_measures(
     measures: &[usize],
     constant_bpm: bool,
 ) -> (Vec<StreamSegment>, f32, f32) {
-    let addition = 2usize;
-
-    let mut threshold = 14 + addition;
-    let mut multiplier = 1.0_f32;
-    if constant_bpm {
-        threshold = 30 + addition;
-        multiplier = 2.0;
-
-        let d32 = zmod_stream_density(measures, threshold, multiplier);
-        if d32 < 0.2 {
-            threshold = 22 + addition;
-            multiplier = 1.5;
-            let [d24, d20] =
-                zmod_stream_density_pair(measures, [(22 + addition, 1.5), (18 + addition, 1.25)]);
-            if d24 < 0.2 {
-                threshold = 18 + addition;
-                multiplier = 1.25;
-                if d20 < 0.2 {
-                    threshold = 14 + addition;
-                    multiplier = 1.0;
-                }
-            }
-        }
-    }
-
-    let segs = stream_sequences_threshold(measures, threshold);
-    if segs.is_empty() {
-        return (segs, 0.0, 0.0);
-    }
-
-    let mut total_stream = 0.0_f32;
-    let mut total_break = 0.0_f32;
-    let mut edge_break = 0.0_f32;
-    let mut last_stream = false;
-    let len = segs.len();
-    for (i, seg) in segs.iter().enumerate() {
-        let seg_len = seg.end.saturating_sub(seg.start) as f32;
-        if seg_len <= 0.0 {
-            continue;
-        }
-        if seg.is_break && i > 0 && i + 1 < len {
-            total_break += seg_len;
-            last_stream = false;
-        } else if seg.is_break {
-            edge_break += seg_len;
-            last_stream = false;
-        } else {
-            if last_stream {
-                total_break += 1.0;
-            }
-            total_stream += seg_len;
-            last_stream = true;
-        }
-    }
-
-    if total_stream + total_break < 10.0 || total_stream + total_break < edge_break {
-        total_break += edge_break;
-    }
-
-    (segs, total_stream * multiplier, total_break * multiplier)
+    let (threshold, multiplier, segment_capacity) = zmod_params(measures, constant_bpm);
+    build_zmod_totals(measures, threshold, multiplier, segment_capacity)
 }
 
 fn measure_densities_impl<const LANES: usize>(data: &[u8]) -> Vec<usize> {
     let mut densities = Vec::with_capacity(data.len() / ((LANES + 1) * 4) + 1);
+    for_each_measure_density::<LANES>(data, |density| {
+        densities.push(density);
+        true
+    });
+    densities
+}
+
+fn stream_run_progress_impl<const LANES: usize>(
+    data: &[u8],
+    threshold: usize,
+    current_measure: usize,
+) -> Option<(usize, usize)> {
+    let mut progress = StreamProgress::new(threshold, current_measure);
+    for_each_measure_density::<LANES>(data, |density| progress.record(density));
+    progress.finish()
+}
+
+struct StreamProgress {
+    threshold: usize,
+    current: usize,
+    index: usize,
+    run_start: Option<usize>,
+    result: Option<(usize, usize)>,
+}
+
+impl StreamProgress {
+    fn new(threshold: usize, current: usize) -> Self {
+        Self {
+            threshold,
+            current,
+            index: 0,
+            run_start: None,
+            result: None,
+        }
+    }
+
+    fn record(&mut self, density: usize) -> bool {
+        let index = self.index;
+        self.index += 1;
+        if density >= self.threshold {
+            self.run_start.get_or_insert(index);
+            return true;
+        }
+
+        let run_start = self.run_start.take();
+        if index < self.current {
+            return true;
+        }
+        if index == self.current {
+            return false;
+        }
+        let Some(start) = run_start.filter(|start| self.current >= *start) else {
+            return false;
+        };
+        self.result = Some((self.current - start + 1, index - start));
+        false
+    }
+
+    fn finish(mut self) -> Option<(usize, usize)> {
+        if self.result.is_none()
+            && self.current < self.index
+            && let Some(start) = self.run_start.take().filter(|start| self.current >= *start)
+        {
+            self.result = Some((self.current - start + 1, self.index - start));
+        }
+        self.result
+    }
+}
+
+fn for_each_measure_density<const LANES: usize>(data: &[u8], mut visit: impl FnMut(usize) -> bool) {
     // Empty-subdivision reduction cannot remove a step: a nonzero off-grid row
     // prevents that reduction level. The reduced density is this direct count.
     let mut measure_steps = 0usize;
@@ -258,9 +428,13 @@ fn measure_densities_impl<const LANES: usize>(data: &[u8]) -> Vec<usize> {
         }
 
         match line[0] {
-            b',' => push_density_measure(&mut measure_steps, &mut densities),
+            b',' => {
+                if !visit(std::mem::take(&mut measure_steps)) {
+                    return;
+                }
+            }
             b';' => {
-                push_density_measure(&mut measure_steps, &mut densities);
+                visit(std::mem::take(&mut measure_steps));
                 done = true;
                 break;
             }
@@ -272,15 +446,21 @@ fn measure_densities_impl<const LANES: usize>(data: &[u8]) -> Vec<usize> {
     }
 
     if !done {
-        push_density_measure(&mut measure_steps, &mut densities);
+        visit(measure_steps);
     }
-
-    densities
 }
 
-fn push_density_measure(measure_steps: &mut usize, densities: &mut Vec<usize>) {
-    densities.push(*measure_steps);
-    *measure_steps = 0;
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::{StreamSegment, build_zmod_totals, zmod_params};
+
+    pub fn zmod_fused_growth(
+        measures: &[usize],
+        constant_bpm: bool,
+    ) -> (Vec<StreamSegment>, f32, f32) {
+        let (threshold, multiplier, _) = zmod_params(measures, constant_bpm);
+        build_zmod_totals(measures, threshold, multiplier, 0)
+    }
 }
 
 fn density_row_has_step<const LANES: usize>(line: &[u8]) -> bool {
@@ -384,6 +564,75 @@ mod tests {
         }
     }
 
+    fn zmod_totals_reference(
+        measures: &[usize],
+        constant_bpm: bool,
+    ) -> (Vec<StreamSegment>, f32, f32) {
+        let (mut threshold, mut multiplier) = (16, 1.0_f32);
+        if constant_bpm {
+            (threshold, multiplier) = (32, 2.0);
+            if materialized_stream_density(measures, threshold, multiplier) < 0.2 {
+                (threshold, multiplier) = (24, 1.5);
+                if materialized_stream_density(measures, threshold, multiplier) < 0.2 {
+                    (threshold, multiplier) = (20, 1.25);
+                    if materialized_stream_density(measures, threshold, multiplier) < 0.2 {
+                        (threshold, multiplier) = (16, 1.0);
+                    }
+                }
+            }
+        }
+
+        let segments = stream_sequences_reference(measures, threshold);
+        let mut total_stream = 0.0_f32;
+        let mut total_break = 0.0_f32;
+        let mut edge_break = 0.0_f32;
+        let mut last_stream = false;
+        for (index, segment) in segments.iter().enumerate() {
+            let len = segment.end.saturating_sub(segment.start) as f32;
+            if segment.is_break && index > 0 && index + 1 < segments.len() {
+                total_break += len;
+                last_stream = false;
+            } else if segment.is_break {
+                edge_break += len;
+                last_stream = false;
+            } else {
+                if last_stream {
+                    total_break += 1.0;
+                }
+                total_stream += len;
+                last_stream = true;
+            }
+        }
+        if total_stream + total_break < 10.0 || total_stream + total_break < edge_break {
+            total_break += edge_break;
+        }
+        (
+            segments,
+            total_stream * multiplier,
+            total_break * multiplier,
+        )
+    }
+
+    fn note_data_from_densities<const LANES: usize>(densities: &[usize]) -> Vec<u8> {
+        let mut data = Vec::new();
+        for (measure, &density) in densities.iter().enumerate() {
+            for row in 0..32 {
+                let mut cells = [b'0'; LANES];
+                if row < density {
+                    cells[row % LANES] = b'1';
+                }
+                data.extend_from_slice(&cells);
+                data.push(b'\n');
+            }
+            data.extend_from_slice(if measure + 1 == densities.len() {
+                b";\n"
+            } else {
+                b",\n"
+            });
+        }
+        data
+    }
+
     #[test]
     fn stream_sequences_build_streams_and_breaks() {
         let segs = stream_sequences_threshold(&[0, 0, 16, 17, 0, 0, 18], 16);
@@ -445,25 +694,82 @@ mod tests {
     }
 
     #[test]
+    fn stream_run_progress_matches_materialized_segments() {
+        let densities = [0, 16, 17, 32, 0, 20, 0, 16, 16];
+        let data = note_data_from_densities::<4>(&densities);
+        let expected = [
+            None,
+            Some((1, 3)),
+            Some((2, 3)),
+            Some((3, 3)),
+            None,
+            Some((1, 1)),
+            None,
+            Some((1, 2)),
+            Some((2, 2)),
+            None,
+        ];
+        for (current, expected) in expected.into_iter().enumerate() {
+            assert_eq!(stream_run_progress(&data, 4, 16, current), expected);
+        }
+
+        let eight_lane_data = note_data_from_densities::<8>(&densities);
+        assert_eq!(
+            stream_run_progress(&eight_lane_data, 8, 16, 2),
+            Some((2, 3))
+        );
+    }
+
+    #[test]
     fn streamed_density_matches_materialized_segments() {
         let measures: Vec<_> = (0..257).map(|idx| (idx * 37 + idx / 7) % 40).collect();
         for threshold in [1, 8, 16, 20, 24, 32, 40] {
             for multiplier in [1.0, 1.25, 1.5, 2.0] {
                 assert_eq!(
-                    zmod_stream_density(&measures, threshold, multiplier).to_bits(),
+                    zmod_stream_density(&measures, threshold, multiplier)
+                        .ratio
+                        .to_bits(),
                     materialized_stream_density(&measures, threshold, multiplier).to_bits(),
                     "threshold {threshold}, multiplier {multiplier}"
                 );
             }
         }
-        let pair = zmod_stream_density_pair(&measures, [(24, 1.5), (20, 1.25)]);
+        let (pair, count16) = zmod_density_pair(&measures, [(24, 1.5), (20, 1.25)], 16);
         assert_eq!(
-            pair.map(f32::to_bits),
+            pair.map(|density| density.ratio.to_bits()),
             [
                 materialized_stream_density(&measures, 24, 1.5).to_bits(),
                 materialized_stream_density(&measures, 20, 1.25).to_bits(),
             ]
         );
+        assert_eq!(count16, stream_sequences_reference(&measures, 16).len());
+    }
+
+    #[test]
+    fn fused_zmod_totals_match_materialized_reference() {
+        for len in 0..=12 {
+            for mask in 0usize..(1usize << len) {
+                let measures: Vec<_> = (0..len)
+                    .map(|idx| if mask & (1 << idx) == 0 { 0 } else { 32 })
+                    .collect();
+                for constant_bpm in [false, true] {
+                    let expected = zmod_totals_reference(&measures, constant_bpm);
+                    let actual = zmod_stream_totals_full_measures(&measures, constant_bpm);
+                    assert_eq!(actual.0, expected.0, "len {len}, mask {mask:#x}");
+                    assert_eq!(actual.1.to_bits(), expected.1.to_bits());
+                    assert_eq!(actual.2.to_bits(), expected.2.to_bits());
+                }
+            }
+        }
+
+        let measures: Vec<_> = (0..1_031)
+            .map(|idx| (idx * 37 + idx / 7 + idx / 31) % 40)
+            .collect();
+        let expected = zmod_totals_reference(&measures, true);
+        let actual = zmod_stream_totals_full_measures(&measures, true);
+        assert_eq!(actual.0, expected.0);
+        assert_eq!(actual.1.to_bits(), expected.1.to_bits());
+        assert_eq!(actual.2.to_bits(), expected.2.to_bits());
     }
 
     #[test]

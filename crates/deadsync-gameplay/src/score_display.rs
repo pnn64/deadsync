@@ -240,20 +240,7 @@ pub fn zmod_fail_stream_progress_for_note_data(
     }
 
     let current_measure = (fail_beat / 4.0).floor() as usize;
-    let densities = measure_densities(notes, lanes);
-    if densities.get(current_measure).copied().unwrap_or(0) < 16 {
-        return None;
-    }
-
-    let segment = stream_sequences_threshold(&densities, 16)
-        .into_iter()
-        .find(|segment| {
-            !segment.is_break
-                && current_measure >= segment.start
-                && current_measure < segment.end
-        })?;
-    let run = current_measure.saturating_sub(segment.start) + 1;
-    let total = segment.end.saturating_sub(segment.start);
+    let (run, total) = stream_run_progress(notes, lanes, 16, current_measure)?;
     Some((u32::try_from(run).ok()?, u32::try_from(total).ok()?))
 }
 

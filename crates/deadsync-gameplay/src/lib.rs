@@ -23,7 +23,8 @@ use deadsync_rules::note::{
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::{
-    StreamSegment, measure_densities, stream_sequences_threshold, zmod_stream_totals_full_measures,
+    StreamSegment, measure_densities, stream_run_progress, stream_sequences_threshold,
+    zmod_stream_totals_full_measures,
 };
 use deadsync_rules::timing::{
     BeatInfo, BeatInfoCache, FA_PLUS_W0_MS, FA_PLUS_W010_MS, TimingData, TimingProfile,
