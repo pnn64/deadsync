@@ -7,7 +7,10 @@ use deadsync_theme_simply_love::screens::components::shared::timers::TimerText;
 use deadsync_theme_simply_love::screens::evaluation_summary::{
     benchmark_eval_numeric_text, benchmark_profile_name_changed,
 };
-use deadsync_theme_simply_love::screens::select_music::benchmark_wheel_song_meta;
+use deadsync_theme_simply_love::screens::practice::benchmark_edit_info_text_into;
+use deadsync_theme_simply_love::screens::select_music::{
+    benchmark_info_text_front_cached, benchmark_info_text_hashed, benchmark_wheel_song_meta,
+};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashSet;
 use std::hint::black_box;
@@ -23,6 +26,8 @@ const NUMERIC_OPS: usize = 500_000;
 const SEARCH_FRAME_OPS: usize = 100_000;
 const TIMER_OPS: usize = 500_000;
 const TRANSLATION_OPS: usize = 500_000;
+const PRACTICE_OPS: usize = 300_000;
+const INFO_TEXT_OPS: usize = 1_000_000;
 const SONG_SEARCH_WHEEL_SLOTS: usize = 12;
 const SONG_SEARCH_WHEEL_FOCUS_SLOT: usize = SONG_SEARCH_WHEEL_SLOTS / 2 - 1;
 const DETAIL_LABELS: [&str; 5] = ["Pack", "Song", "Subtitle", "BPMs", "Difficulties"];
@@ -346,6 +351,62 @@ fn text_checksum(text: &str) -> u64 {
     })
 }
 
+fn texts_checksum(texts: [Arc<str>; 3]) -> u64 {
+    texts.into_iter().fold(0u64, |checksum, text| {
+        checksum.rotate_left(11) ^ text_checksum(&text)
+    })
+}
+
+fn legacy_edit_info_text_into(
+    out: &mut String,
+    cursor_beat: f32,
+    current_second: f32,
+    selection_anchor: Option<f32>,
+    selection_end: Option<f32>,
+    suffix: &str,
+) {
+    let mut status = String::new();
+    i18n::tr_fmt_into(
+        &mut status,
+        "Practice",
+        "InfoCurrentBeat",
+        &[("beat", &format!("{cursor_beat:.3}"))],
+    );
+    status.push('\n');
+    i18n::tr_fmt_into(
+        &mut status,
+        "Practice",
+        "InfoCurrentSecond",
+        &[("sec", &format!("{current_second:.6}"))],
+    );
+    status.push('\n');
+    i18n::tr_fmt_into(&mut status, "Practice", "InfoSnapTo", &[("snap", "16th")]);
+    status.push('\n');
+    let selection = match (selection_anchor, selection_end) {
+        (Some(start), Some(stop)) if stop > start => {
+            let mut text = String::new();
+            i18n::tr_fmt_into(
+                &mut text,
+                "Practice",
+                "InfoSelectionBeatRange",
+                &[
+                    ("start", &format!("{start:.3}")),
+                    ("stop", &format!("{stop:.3}")),
+                ],
+            );
+            Some(text)
+        }
+        _ => None,
+    };
+    if let Some(selection) = selection {
+        status.push_str(&selection);
+        status.push('\n');
+    }
+    status.push_str(suffix);
+    out.clear();
+    out.push_str(&status);
+}
+
 fn main() {
     i18n::init_for_tests();
     let p1 = ["Player One"; 12];
@@ -438,5 +499,73 @@ fn main() {
         TRANSLATION_OPS,
         &old_translation_result,
         &new_translation_result,
+    );
+
+    let suffix = "Difficulty: Hard 12\n\nSteps: 1,024\nHolds: 128";
+    let mut old_edit = String::new();
+    let mut new_edit = String::new();
+    legacy_edit_info_text_into(
+        &mut old_edit,
+        128.375,
+        63.125,
+        Some(96.0),
+        Some(144.5),
+        suffix,
+    );
+    benchmark_edit_info_text_into(
+        &mut new_edit,
+        128.375,
+        63.125,
+        Some(96.0),
+        Some(144.5),
+        3,
+        suffix,
+    );
+    assert_eq!(old_edit, new_edit);
+    let old_edit_result = measure(PRACTICE_OPS, 300, || {
+        legacy_edit_info_text_into(
+            &mut old_edit,
+            128.375,
+            63.125,
+            Some(96.0),
+            Some(144.5),
+            suffix,
+        );
+        text_checksum(&old_edit)
+    });
+    let new_edit_result = measure(PRACTICE_OPS, 300, || {
+        benchmark_edit_info_text_into(
+            &mut new_edit,
+            128.375,
+            63.125,
+            Some(96.0),
+            Some(144.5),
+            3,
+            suffix,
+        );
+        text_checksum(&new_edit)
+    });
+    print_pair(
+        "6. Practice edit-info rebuild",
+        PRACTICE_OPS,
+        &old_edit_result,
+        &new_edit_result,
+    );
+
+    assert_eq!(
+        benchmark_info_text_hashed(),
+        benchmark_info_text_front_cached()
+    );
+    let old_info = measure(INFO_TEXT_OPS, 1_000, || {
+        texts_checksum(benchmark_info_text_hashed())
+    });
+    let new_info = measure(INFO_TEXT_OPS, 1_000, || {
+        texts_checksum(benchmark_info_text_front_cached())
+    });
+    print_pair(
+        "7. Select Music stable info text",
+        INFO_TEXT_OPS,
+        &old_info,
+        &new_info,
     );
 }

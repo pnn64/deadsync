@@ -1,5 +1,5 @@
 use deadsync_score::{
-    CachedScore, Grade, ItlFileData, ScoreCacheAccess, ScoreCacheRuntimeKind,
+    CachedScore, Grade, ItlFileData, ItlScoreCacheState, ScoreCacheAccess, ScoreCacheRuntimeKind,
     ScoreCacheRuntimeResult, ScoreProfilePaths, runtime_cached_best_itg_scores,
     runtime_cached_itl_song_folder_unlocked, runtime_cached_itl_song_folders_unlocked,
     runtime_lock_score_caches, runtime_seed_gs_score, runtime_seed_local_itg_score,
@@ -323,6 +323,25 @@ fn legacy_unlocks<const N: usize>(folders: &[Option<&str>; N]) -> [[bool; 2]; N]
     })
 }
 
+fn repeated_profile_unlocks<const N: usize>(
+    cache: &ItlScoreCacheState,
+    folders: &[Option<&str>; N],
+    profile_ids: [Option<&str>; 2],
+) -> [[bool; 2]; N] {
+    let profile_ids = profile_ids.map(|profile_id| {
+        profile_id
+            .map(str::trim)
+            .filter(|profile_id| !profile_id.is_empty())
+    });
+    std::array::from_fn(|slot| {
+        std::array::from_fn(|side| {
+            folders[slot]
+                .zip(profile_ids[side])
+                .is_some_and(|(folder, profile_id)| cache.song_folder_unlocked(profile_id, folder))
+        })
+    })
+}
+
 fn unlock_checksum<const N: usize>(membership: &[[bool; 2]; N]) -> u64 {
     membership
         .iter()
@@ -433,5 +452,40 @@ fn main() {
         UNLOCK_ITERS,
         &old_unlock,
         &new_unlock,
+    );
+
+    let mut direct_cache = ItlScoreCacheState::default();
+    let mut direct_p1 = ItlFileData::default();
+    let mut direct_p2 = ItlFileData::default();
+    for (index, folder) in unlock_folders.iter().enumerate() {
+        if index % 2 == 0 {
+            direct_p1.unlock_folders.insert(folder.clone(), true);
+        }
+        if index % 3 == 0 {
+            direct_p2.unlock_folders.insert(folder.clone(), true);
+        }
+    }
+    direct_cache.set_profile_data(UNLOCK_P1, direct_p1);
+    direct_cache.set_profile_data(UNLOCK_P2, direct_p2);
+    let profile_ids = [Some(UNLOCK_P1), Some(UNLOCK_P2)];
+    assert_eq!(
+        repeated_profile_unlocks(&direct_cache, &unlock_queries, profile_ids),
+        direct_cache.song_folders_unlocked(&unlock_queries, profile_ids),
+    );
+    let old_prepared = measure(UNLOCK_ITERS, || {
+        unlock_checksum(&repeated_profile_unlocks(
+            &direct_cache,
+            &unlock_queries,
+            profile_ids,
+        ))
+    });
+    let new_prepared = measure(UNLOCK_ITERS, || {
+        unlock_checksum(&direct_cache.song_folders_unlocked(&unlock_queries, profile_ids))
+    });
+    print_pair(
+        "one-lock ITL transaction with two prepared profiles",
+        UNLOCK_ITERS,
+        &old_prepared,
+        &new_prepared,
     );
 }

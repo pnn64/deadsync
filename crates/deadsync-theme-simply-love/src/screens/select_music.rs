@@ -82,6 +82,7 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock};
+use std::thread::LocalKey;
 use std::time::{Duration, Instant};
 
 #[path = "select_music/pack_sync.rs"]
@@ -229,10 +230,24 @@ const AUTO_STAMINA_MAX_SIDESWITCHES: u32 = 9;
 const NUM_STANDARD_DIFFICULTIES: usize = STANDARD_DIFFICULTY_COUNT;
 const TEXT_CACHE_LIMIT: usize = 8192;
 
+/// One-entry front caches for stable Select Music info text.
+///
+/// The game thread owns these thread-local cells without synchronization. Each
+/// lives for the thread/session, holds exactly one shared string, and warms on
+/// first use. A miss probes the existing bounded hash cache and replaces the
+/// prior entry without scanning or pruning; replaced strings drop on the game
+/// thread. The benchmark pair below instruments hit cost. Worst-case work is
+/// one key comparison, one bounded-cache probe, and formatting on a double miss.
+type BpmTextKey = (u64, u64, u32);
+type LastTextCell<K> = RefCell<Option<(K, Arc<str>)>>;
+
 thread_local! {
     static PADDED_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(2048));
     static CHART_LENGTH_CACHE: RefCell<TextCache<i32>> = RefCell::new(text_cache_with_capacity(2048));
-    static BPM_TEXT_CACHE: RefCell<TextCache<(u64, u64, u32)>> = RefCell::new(text_cache_with_capacity(2048));
+    static BPM_TEXT_CACHE: RefCell<TextCache<BpmTextKey>> = RefCell::new(text_cache_with_capacity(2048));
+    static PADDED_TIME_LAST: LastTextCell<u32> = const { RefCell::new(None) };
+    static CHART_LENGTH_LAST: LastTextCell<i32> = const { RefCell::new(None) };
+    static BPM_TEXT_LAST: LastTextCell<BpmTextKey> = const { RefCell::new(None) };
     static UINT_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(4096));
     static MUSIC_RATE_FMT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(256));
     static MUSIC_RATE_BANNER_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(128));
@@ -246,6 +261,24 @@ thread_local! {
     static TOTAL_LABEL_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(512));
     static STR_REF_CACHE: RefCell<SharedStrCache> =
         RefCell::new(shared_str_cache_with_capacity(4096));
+}
+
+fn cached_last_text<K: Copy + Eq>(
+    last: &'static LocalKey<LastTextCell<K>>,
+    key: K,
+    load: impl FnOnce() -> Arc<str>,
+) -> Arc<str> {
+    if let Some(text) = last.with(|last| {
+        last.borrow()
+            .as_ref()
+            .filter(|(cached_key, _)| *cached_key == key)
+            .map(|(_, text)| Arc::clone(text))
+    }) {
+        return text;
+    }
+    let text = load();
+    last.with(|last| *last.borrow_mut() = Some((key, Arc::clone(&text))));
+    text
 }
 
 #[inline(always)]
@@ -2836,11 +2869,18 @@ fn format_bpm_with_rate(range: Option<(f64, f64)>, music_rate: f32) -> Arc<str> 
     } else {
         1.0
     };
+    let key = (lo.to_bits(), hi.to_bits(), rate_f32.to_bits());
+    cached_last_text(&BPM_TEXT_LAST, key, || {
+        format_bpm_with_rate_hashed(lo, hi, rate_f32)
+    })
+}
+
+fn format_bpm_with_rate_hashed(lo: f64, hi: f64, rate: f32) -> Arc<str> {
     cached_text(
         &BPM_TEXT_CACHE,
-        (lo.to_bits(), hi.to_bits(), rate_f32.to_bits()),
+        (lo.to_bits(), hi.to_bits(), rate.to_bits()),
         TEXT_CACHE_LIMIT,
-        || format_display_bpm_range(Some((lo, hi)), rate_f32),
+        || format_display_bpm_range(Some((lo, hi)), rate),
     )
 }
 
@@ -12298,7 +12338,12 @@ fn format_padded_time(seconds: f32) -> Arc<str> {
         seconds as u64
     };
     let key = s.min(u32::MAX as u64) as u32;
+    cached_last_text(&PADDED_TIME_LAST, key, || format_padded_time_hashed(key))
+}
+
+fn format_padded_time_hashed(key: u32) -> Arc<str> {
     cached_text(&PADDED_TIME_CACHE, key, TEXT_CACHE_LIMIT, || {
+        let s = u64::from(key);
         let (h, m, sec) = (s / 3600, (s % 3600) / 60, s % 60);
         if s < 3600 {
             format!("{m:02}:{sec:02}")
@@ -12312,6 +12357,10 @@ fn format_padded_time(seconds: f32) -> Arc<str> {
 
 fn format_chart_length(seconds: i32) -> Arc<str> {
     let key = seconds.max(0);
+    cached_last_text(&CHART_LENGTH_LAST, key, || format_chart_length_hashed(key))
+}
+
+fn format_chart_length_hashed(key: i32) -> Arc<str> {
     cached_text(&CHART_LENGTH_CACHE, key, TEXT_CACHE_LIMIT, || {
         let s = key as u64;
         let (h, m, s) = (s / 3600, (s % 3600) / 60, s % 60);
@@ -12321,6 +12370,26 @@ fn format_chart_length(seconds: i32) -> Arc<str> {
             format!("{m}:{s:02}")
         }
     })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_info_text_hashed() -> [Arc<str>; 3] {
+    [
+        format_bpm_with_rate_hashed(128.0, 184.0, 1.25),
+        format_chart_length_hashed(197),
+        format_padded_time_hashed(4_050),
+    ]
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_info_text_front_cached() -> [Arc<str>; 3] {
+    [
+        format_bpm_with_rate(Some((128.0, 184.0)), 1.25),
+        format_chart_length(197),
+        format_padded_time(4_050.0),
+    ]
 }
 
 #[inline(always)]
@@ -15599,6 +15668,26 @@ mod tests {
             Arc::from("2:00"),
         );
         assert!(!Arc::ptr_eq(&first, &changed));
+    }
+
+    #[test]
+    fn info_text_front_cache_preserves_hits_changes_and_normalization() {
+        let first = super::format_chart_length(197);
+        let repeated = super::format_chart_length(197);
+        assert!(Arc::ptr_eq(&first, &repeated));
+        assert_eq!(first, super::format_chart_length_hashed(197));
+
+        let changed = super::format_chart_length(198);
+        assert_ne!(first, changed);
+        assert_eq!(changed, super::format_chart_length_hashed(198));
+        assert_eq!(
+            super::format_bpm_with_rate(Some((128.0, 184.0)), f32::NAN),
+            super::format_bpm_with_rate_hashed(128.0, 184.0, 1.0),
+        );
+        assert_eq!(
+            super::format_padded_time(-10.0),
+            super::format_padded_time_hashed(0),
+        );
     }
 
     #[test]

@@ -4,7 +4,7 @@ use crate::assets::{AssetManager, FontRole, machine_font_key};
 use crate::screens::gameplay as gameplay_screen;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::PracticeRuntimeView;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, InlineText};
 use deadlib_present::color;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
@@ -191,13 +191,16 @@ struct PracticeEditLabels {
 /// Localized actor-ready Practice sidebar text owned by the game thread.
 ///
 /// Static labels rebuild only on locale revision. The larger chart/status
-/// payload rebuilds on locale, cursor, selection, or snap changes. Capacity is
-/// one fixed label set and one shared status string; there is no eviction,
-/// pruning, synchronization, or background work. Stable actor frames perform
-/// one revision load, one compact key comparison, and shared-reference clones.
+/// payload rebuilds on locale, cursor, selection, or snap changes into one
+/// retained scratch buffer, then publishes one shared status string. Capacity
+/// is one fixed label set, one scratch buffer, and one shared string; there is
+/// no eviction, pruning, synchronization, or background work. Stable actor
+/// frames perform one revision load, one compact key comparison, and
+/// shared-reference clones.
 struct PracticeEditText {
     labels: Option<PracticeEditLabels>,
     info: Option<(EditInfoKey, Arc<str>)>,
+    info_scratch: String,
     i18n_revision: u64,
 }
 
@@ -206,6 +209,7 @@ impl PracticeEditText {
         Self {
             labels: None,
             info: None,
+            info_scratch: String::new(),
             i18n_revision: u64::MAX,
         }
     }
@@ -240,7 +244,9 @@ impl PracticeEditText {
                 .as_ref()
                 .expect("Practice edit labels sync before info")
                 .info_suffix;
-            self.info = Some((key, Arc::from(build_edit_info_text(source, suffix))));
+            self.info_scratch.clear();
+            build_edit_info_text_into(&mut self.info_scratch, source, suffix);
+            self.info = Some((key, Arc::from(self.info_scratch.as_str())));
         }
     }
 }
@@ -2572,31 +2578,50 @@ fn practice_player_color(state: &State) -> [f32; 4] {
     color::simply_love_rgba(state.gameplay.active_color_index())
 }
 
-fn build_edit_info_text(source: EditInfoSource, suffix: &str) -> String {
+enum PracticeNumber {
+    Inline(InlineText),
+    Heap(String),
+}
+
+impl PracticeNumber {
+    fn format(args: std::fmt::Arguments<'_>) -> Self {
+        InlineText::format(args)
+            .map(Self::Inline)
+            .unwrap_or_else(|| Self::Heap(args.to_string()))
+    }
+
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Inline(text) => text.as_str(),
+            Self::Heap(text) => text,
+        }
+    }
+}
+
+fn build_edit_info_text_into(out: &mut String, source: EditInfoSource, suffix: &str) {
     let snap = SNAP_LABELS[source.snap_index];
-    let mut status = String::new();
+    let cursor_beat = PracticeNumber::format(format_args!("{:.3}", source.cursor_beat));
+    let current_second = PracticeNumber::format(format_args!("{:.6}", source.current_second));
     i18n::tr_fmt_into(
-        &mut status,
+        out,
         "Practice",
         "InfoCurrentBeat",
-        &[("beat", &format!("{:.3}", source.cursor_beat))],
+        &[("beat", cursor_beat.as_str())],
     );
-    status.push('\n');
+    out.push('\n');
     i18n::tr_fmt_into(
-        &mut status,
+        out,
         "Practice",
         "InfoCurrentSecond",
-        &[("sec", &format!("{:.6}", source.current_second))],
+        &[("sec", current_second.as_str())],
     );
-    status.push('\n');
-    i18n::tr_fmt_into(&mut status, "Practice", "InfoSnapTo", &[("snap", snap)]);
-    status.push('\n');
-    if let Some(selection) = selection_info_text(source.selection_anchor, source.selection_end) {
-        status.push_str(&selection);
-        status.push('\n');
+    out.push('\n');
+    i18n::tr_fmt_into(out, "Practice", "InfoSnapTo", &[("snap", snap)]);
+    out.push('\n');
+    if push_selection_info(out, source.selection_anchor, source.selection_end) {
+        out.push('\n');
     }
-    status.push_str(suffix);
-    status
+    out.push_str(suffix);
 }
 
 fn build_edit_info_suffix(gameplay: &gameplay_screen::State) -> String {
@@ -2610,7 +2635,10 @@ fn build_edit_info_suffix(gameplay: &gameplay_screen::State) -> String {
         "InfoDifficulty",
         &[
             ("difficulty", difficulty),
-            ("meter", &chart.meter.to_string()),
+            (
+                "meter",
+                PracticeNumber::format(format_args!("{}", chart.meter)).as_str(),
+            ),
         ],
     );
     status.push_str("\n\n");
@@ -2646,65 +2674,113 @@ fn build_edit_info_suffix(gameplay: &gameplay_screen::State) -> String {
     );
     status.push('\n');
     let totals = gameplay.display_totals_for_player(0);
-    let stat_lines: [(&str, String); 8] = [
-        ("InfoNumSteps", chart.stats.total_steps.to_string()),
-        ("InfoNumJumps", chart.stats.jumps.to_string()),
-        ("InfoNumHands", chart.stats.hands.to_string()),
-        ("InfoNumHolds", totals.holds_total.to_string()),
-        ("InfoNumMines", totals.mines_total.to_string()),
-        ("InfoNumRolls", totals.rolls_total.to_string()),
-        ("InfoNumLifts", chart.stats.lifts.to_string()),
-        ("InfoNumFakes", chart.stats.fakes.to_string()),
+    let stat_lines: [(&str, PracticeNumber); 8] = [
+        (
+            "InfoNumSteps",
+            PracticeNumber::format(format_args!("{}", chart.stats.total_steps)),
+        ),
+        (
+            "InfoNumJumps",
+            PracticeNumber::format(format_args!("{}", chart.stats.jumps)),
+        ),
+        (
+            "InfoNumHands",
+            PracticeNumber::format(format_args!("{}", chart.stats.hands)),
+        ),
+        (
+            "InfoNumHolds",
+            PracticeNumber::format(format_args!("{}", totals.holds_total)),
+        ),
+        (
+            "InfoNumMines",
+            PracticeNumber::format(format_args!("{}", totals.mines_total)),
+        ),
+        (
+            "InfoNumRolls",
+            PracticeNumber::format(format_args!("{}", totals.rolls_total)),
+        ),
+        (
+            "InfoNumLifts",
+            PracticeNumber::format(format_args!("{}", chart.stats.lifts)),
+        ),
+        (
+            "InfoNumFakes",
+            PracticeNumber::format(format_args!("{}", chart.stats.fakes)),
+        ),
     ];
     for (idx, (key, count)) in stat_lines.iter().enumerate() {
         if idx > 0 {
             status.push('\n');
         }
-        i18n::tr_fmt_into(&mut status, "Practice", key, &[("count", count)]);
+        i18n::tr_fmt_into(&mut status, "Practice", key, &[("count", count.as_str())]);
     }
     status
 }
 
-fn selection_info_text(
+fn push_selection_info(
+    out: &mut String,
     selection_anchor: Option<f32>,
     selection_end: Option<f32>,
-) -> Option<String> {
+) -> bool {
     match (selection_anchor, selection_end) {
         (Some(start), Some(stop)) if stop > start => {
-            let mut text = String::new();
+            let start = PracticeNumber::format(format_args!("{start:.3}"));
+            let stop = PracticeNumber::format(format_args!("{stop:.3}"));
             i18n::tr_fmt_into(
-                &mut text,
+                out,
                 "Practice",
                 "InfoSelectionBeatRange",
-                &[
-                    ("start", &format!("{start:.3}")),
-                    ("stop", &format!("{stop:.3}")),
-                ],
+                &[("start", start.as_str()), ("stop", stop.as_str())],
             );
-            Some(text)
+            true
         }
         (Some(start), None) => {
-            let mut text = String::new();
+            let start = PracticeNumber::format(format_args!("{start:.3}"));
             i18n::tr_fmt_into(
-                &mut text,
+                out,
                 "Practice",
                 "InfoSelectionBeatStart",
-                &[("start", &format!("{start:.3}"))],
+                &[("start", start.as_str())],
             );
-            Some(text)
+            true
         }
         (None, Some(stop)) => {
-            let mut text = String::new();
+            let stop = PracticeNumber::format(format_args!("{stop:.3}"));
             i18n::tr_fmt_into(
-                &mut text,
+                out,
                 "Practice",
                 "InfoSelectionBeatEnd",
-                &[("stop", &format!("{stop:.3}"))],
+                &[("stop", stop.as_str())],
             );
-            Some(text)
+            true
         }
-        _ => None,
+        _ => false,
     }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_edit_info_text_into(
+    out: &mut String,
+    cursor_beat: f32,
+    current_second: f32,
+    selection_anchor: Option<f32>,
+    selection_end: Option<f32>,
+    snap_index: usize,
+    suffix: &str,
+) {
+    out.clear();
+    build_edit_info_text_into(
+        out,
+        EditInfoSource {
+            cursor_beat,
+            current_second,
+            selection_anchor,
+            selection_end,
+            snap_index,
+        },
+        suffix,
+    );
 }
 
 fn push_info_line(status: &mut String, label: &str, value: &str) {
@@ -2839,14 +2915,15 @@ mod tests {
         BPM_LABEL_STYLE, CursorHoldDir, DISPLAY_SCROLL_MAX_SMOOTH_BEATS,
         DISPLAY_SCROLL_SNAP_EPSILON, EditInfoSource, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX,
         MUSIC_RATE_HOTKEY_MIN, MUSIC_RATE_HOTKEY_STEP, MenuDef, MusicRateHoldDir, PageHoldDir,
-        PracticeMenuText, PracticeNavMode, SPEED_LABEL_STYLE, TAB_FAST_MULTIPLIER,
-        append_pending_effects, clamp_selection, compile_timing_labels,
+        PracticeMenuText, PracticeNavMode, PracticeNumber, SPEED_LABEL_STYLE, TAB_FAST_MULTIPLIER,
+        append_pending_effects, build_edit_info_text_into, clamp_selection, compile_timing_labels,
         edit_cursor_hold_dir_for_action_in_mode, edit_scroll_hold_rate,
         edit_snap_delta_for_action_in_mode, fmt_itg_float, fmt_music_rate, gameplay_hotkey_input,
         menu_step_delta_for_action_in_mode, music_rate_delta_for_dir,
         music_rate_hold_dir_for_event, next_display_beat, normalize_flash_text,
         page_hold_dir_for_key, practice_edit_beat_travel, practice_nav_mode_from_config,
-        quantized_music_rate, timing_label_glow_alpha, timing_label_x, timing_speed_label,
+        push_selection_info, quantized_music_rate, timing_label_glow_alpha, timing_label_x,
+        timing_speed_label,
     };
     use crate::SimplyLoveRuntimeRequest;
     use crate::assets::i18n;
@@ -2951,6 +3028,37 @@ mod tests {
         ] {
             assert_ne!(key, changed.key());
         }
+    }
+
+    #[test]
+    fn edit_info_text_preserves_numeric_and_selection_formatting() {
+        i18n::init_for_tests();
+        let mut text = String::new();
+        build_edit_info_text_into(
+            &mut text,
+            EditInfoSource {
+                cursor_beat: 128.375,
+                current_second: 63.125,
+                selection_anchor: Some(96.0),
+                selection_end: Some(144.5),
+                snap_index: 3,
+            },
+            "suffix",
+        );
+        for expected in ["128.375", "63.125000", "96.000", "144.500", "16th"] {
+            assert!(text.contains(expected), "missing {expected:?} in {text:?}");
+        }
+        assert!(text.ends_with("suffix"));
+        assert!(!text.contains('{') && !text.contains('}'));
+
+        let huge = f32::MAX;
+        let expected = format!("{huge:.3}");
+        let formatted = PracticeNumber::format(format_args!("{huge:.3}"));
+        assert_eq!(formatted.as_str(), expected);
+
+        let mut invalid = String::new();
+        assert!(!push_selection_info(&mut invalid, Some(12.0), Some(8.0)));
+        assert!(invalid.is_empty());
     }
 
     #[test]

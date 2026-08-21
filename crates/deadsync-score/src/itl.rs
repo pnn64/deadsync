@@ -821,6 +821,28 @@ impl ItlScoreCacheState {
             .unwrap_or(false)
     }
 
+    /// Resolve one fixed wheel transaction after hashing each profile at most
+    /// once. Missing folders and guest/blank profiles stay locked.
+    pub fn song_folders_unlocked<const N: usize>(
+        &self,
+        song_folders: &[Option<&str>; N],
+        profile_ids: [Option<&str>; 2],
+    ) -> [[bool; 2]; N] {
+        let profiles = profile_ids.map(|profile_id| {
+            profile_id
+                .map(str::trim)
+                .filter(|profile_id| !profile_id.is_empty())
+                .and_then(|profile_id| self.loaded_profiles.get(profile_id))
+        });
+        std::array::from_fn(|slot| {
+            std::array::from_fn(|side| {
+                song_folders[slot]
+                    .zip(profiles[side])
+                    .is_some_and(|(folder, data)| itl_song_folder_unlocked(data, folder))
+            })
+        })
+    }
+
     pub fn chart_no_cmod_for_song(
         &self,
         profile_id: &str,
@@ -996,19 +1018,10 @@ pub fn cached_itl_song_folders_unlocked<const N: usize>(
     song_folders: &[Option<&str>; N],
     profile_ids: [Option<&str>; 2],
 ) -> [[bool; 2]; N] {
-    let profile_ids = profile_ids.map(|profile_id| {
-        profile_id
-            .map(str::trim)
-            .filter(|profile_id| !profile_id.is_empty())
-    });
-    let cache = ITL_SCORE_CACHE.lock().unwrap();
-    std::array::from_fn(|slot| {
-        std::array::from_fn(|side| {
-            song_folders[slot]
-                .zip(profile_ids[side])
-                .is_some_and(|(folder, profile_id)| cache.song_folder_unlocked(profile_id, folder))
-        })
-    })
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .song_folders_unlocked(song_folders, profile_ids)
 }
 
 pub fn runtime_cached_itl_song_folder_unlocked<L>(
@@ -2886,6 +2899,24 @@ mod tests {
         );
         assert_eq!(none, [[false; 2]; SLOTS]);
         assert_eq!(unexpected_loads, 0);
+    }
+
+    #[test]
+    fn prepared_itl_profiles_preserve_blank_trimmed_and_missing_behavior() {
+        let mut cache = ItlScoreCacheState::default();
+        let mut data = ItlFileData::default();
+        data.unlock_folders.insert("Unlocked".to_string(), true);
+        cache.set_profile_data("prepared-itl-profile", data);
+        let folders = [Some("Unlocked"), Some("Locked"), None];
+
+        assert_eq!(
+            cache.song_folders_unlocked(&folders, [Some(" prepared-itl-profile "), Some("  ")],),
+            [[true, false], [false, false], [false, false]],
+        );
+        assert_eq!(
+            cache.song_folders_unlocked(&folders, [Some("missing"), None]),
+            [[false; 2]; 3],
+        );
     }
 
     #[test]
