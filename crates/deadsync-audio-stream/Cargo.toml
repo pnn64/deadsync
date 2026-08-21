@@ -13,11 +13,17 @@ name = "sfx_control_handoff"
 harness = false
 
 [[bench]]
+name = "sola_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "music_backpressure"
 harness = false
 required-features = ["test-support"]
 
 [features]
+bench-support = []
 test-support = []
 
 [dependencies]

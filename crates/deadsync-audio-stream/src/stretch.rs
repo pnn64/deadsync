@@ -35,6 +35,33 @@
 //!   relying on reads into over-allocated buffer capacity the way the C++ does.
 
 const WINDOW_SIZE_MS: u32 = 30;
+const I16_SCALE: f32 = 1.0 / 32768.0;
+
+#[inline]
+fn append_mono_i16(data: &mut Vec<f32>, interleaved: &[i16]) {
+    data.extend(
+        interleaved
+            .iter()
+            .map(|sample| f32::from(*sample) * I16_SCALE),
+    );
+}
+
+#[inline]
+fn append_stereo_i16(left: &mut Vec<f32>, right: &mut Vec<f32>, interleaved: &[i16]) {
+    let frames = interleaved.as_chunks::<2>().0;
+    left.extend(frames.iter().map(|frame| f32::from(frame[0]) * I16_SCALE));
+    right.extend(frames.iter().map(|frame| f32::from(frame[1]) * I16_SCALE));
+}
+
+#[inline]
+fn append_crossfade(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Vec<f32>) {
+    debug_assert_eq!(prev.len(), current.len());
+    debug_assert_eq!(prev.len(), weights.len());
+    out.reserve(prev.len());
+    for ((&a, &b), &t) in prev.iter().zip(current).zip(weights) {
+        out.push(a + (b - a) * t);
+    }
+}
 
 struct ChannelState {
     data: Vec<f32>,
@@ -47,6 +74,14 @@ pub(super) struct SolaStretcher {
     sample_rate: u32,
     window_frames: usize,
     tolerance_frames: usize,
+    /// Decoder-worker-owned crossfade table for this stretcher's lifetime.
+    /// It is single-threaded, contains exactly `window_frames` entries, and is
+    /// fully warmed by `new` before streaming. Indexed reads cannot miss or
+    /// grow it; there is no eviction, pruning, or gameplay-thread work, and it
+    /// is freed with the stretcher on the decoder worker. Per emitted sample,
+    /// the worst-case table cost is one bounded load. `sola_hot_paths` records
+    /// its throughput and reports the one startup allocation separately.
+    fade_weights: Box<[f32]>,
 
     state: Vec<ChannelState>,
     data_avail_frames: usize,
@@ -79,6 +114,9 @@ impl SolaStretcher {
         debug_assert!(sample_rate > 0);
         let window_frames = ((WINDOW_SIZE_MS as usize) * (sample_rate as usize) / 1000).max(64);
         let tolerance_frames = window_frames / 4;
+        let fade_weights = (0..window_frames)
+            .map(|frame| frame as f32 / window_frames as f32)
+            .collect();
         // Reclaim the erased prefix only after it grows to several windows, so
         // the compaction memmove is amortized across many `erase_front` calls
         // instead of moving the live region every single window like `drain`.
@@ -96,6 +134,7 @@ impl SolaStretcher {
             sample_rate,
             window_frames,
             tolerance_frames,
+            fade_weights,
             state,
             data_avail_frames: 0,
             data_start: 0,
@@ -191,9 +230,18 @@ impl SolaStretcher {
         for ch in &mut self.state {
             ch.data.reserve(frames);
         }
-        for frame in interleaved.chunks_exact(self.channels) {
-            for (ch, sample) in self.state.iter_mut().zip(frame.iter()) {
-                ch.data.push(f32::from(*sample) * (1.0 / 32768.0));
+        match self.channels {
+            1 => append_mono_i16(&mut self.state[0].data, interleaved),
+            2 => {
+                let (left, right) = self.state.split_at_mut(1);
+                append_stereo_i16(&mut left[0].data, &mut right[0].data, interleaved);
+            }
+            _ => {
+                for frame in interleaved.chunks_exact(self.channels) {
+                    for (ch, sample) in self.state.iter_mut().zip(frame) {
+                        ch.data.push(f32::from(*sample) * I16_SCALE);
+                    }
+                }
             }
         }
         self.data_avail_frames += frames;
@@ -253,20 +301,14 @@ impl SolaStretcher {
     }
 
     fn emit(&mut self, output: &mut [Vec<f32>], frames: usize) {
-        let denom = self.window_frames as f32;
         let base = self.data_start;
+        let weights = &self.fade_weights[self.pos..self.pos + frames];
         for (ch, out) in self.state.iter().zip(output.iter_mut()) {
             let cur = base + ch.correlated_pos + self.pos;
             let prev = base + ch.last_correlated_pos + self.pos;
             let cur_slice = &ch.data[cur..cur + frames];
             let prev_slice = &ch.data[prev..prev + frames];
-            out.reserve(frames);
-            for i in 0..frames {
-                let t = (self.pos + i) as f32 / denom;
-                let a = prev_slice[i];
-                let b = cur_slice[i];
-                out.push(a + (b - a) * t);
-            }
+            append_crossfade(prev_slice, cur_slice, weights, out);
         }
         self.pos += frames;
     }
@@ -438,37 +480,155 @@ fn find_closest_match(buffer: &[f32], correlate: &[f32]) -> usize {
     }
     let distance = buffer.len() - correlate.len();
     let mut best_offset = 0usize;
-    let mut best_score = f32::INFINITY;
-    for i in 0..=distance {
-        let mut score = 0.0f32;
+    // Silence produces a perfect first candidate. Peel it so the mathematical
+    // lower bound exits immediately without adding a condition to every
+    // ordinary, nonmatching candidate.
+    let first_score = correlation_score(&buffer[..correlate.len()], correlate, f32::INFINITY);
+    if first_score == 0.0 {
+        return 0;
+    }
+    let mut best_score = if first_score.is_nan() {
+        f32::INFINITY
+    } else {
+        first_score
+    };
+    for i in 1..=distance {
         let frames = &buffer[i..i + correlate.len()];
-        let mut j = 0usize;
-        while j + 8 <= correlate.len() {
-            score += (frames[j] - correlate[j]).abs();
-            score += (frames[j + 1] - correlate[j + 1]).abs();
-            score += (frames[j + 2] - correlate[j + 2]).abs();
-            score += (frames[j + 3] - correlate[j + 3]).abs();
-            score += (frames[j + 4] - correlate[j + 4]).abs();
-            score += (frames[j + 5] - correlate[j + 5]).abs();
-            score += (frames[j + 6] - correlate[j + 6]).abs();
-            score += (frames[j + 7] - correlate[j + 7]).abs();
-            j += 8;
-            if score >= best_score {
-                break;
-            }
-        }
-        if score < best_score {
-            while j < correlate.len() {
-                score += (frames[j] - correlate[j]).abs();
-                j += 1;
-            }
-        }
+        let score = correlation_score(frames, correlate, best_score);
         if score < best_score {
             best_score = score;
             best_offset = i;
         }
     }
     best_offset
+}
+
+#[inline(always)]
+fn correlation_score(frames: &[f32], correlate: &[f32], best_score: f32) -> f32 {
+    let mut score = 0.0f32;
+    let mut j = 0usize;
+    while j + 8 <= correlate.len() {
+        score += (frames[j] - correlate[j]).abs();
+        score += (frames[j + 1] - correlate[j + 1]).abs();
+        score += (frames[j + 2] - correlate[j + 2]).abs();
+        score += (frames[j + 3] - correlate[j + 3]).abs();
+        score += (frames[j + 4] - correlate[j + 4]).abs();
+        score += (frames[j + 5] - correlate[j + 5]).abs();
+        score += (frames[j + 6] - correlate[j + 6]).abs();
+        score += (frames[j + 7] - correlate[j + 7]).abs();
+        j += 8;
+        if score >= best_score {
+            return score;
+        }
+    }
+    while j < correlate.len() {
+        score += (frames[j] - correlate[j]).abs();
+        j += 1;
+    }
+    score
+}
+
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::*;
+
+    pub fn deinterleave_old(interleaved: &[i16], output: &mut [Vec<f32>]) {
+        let channels = output.len();
+        let frames = interleaved.len() / channels;
+        for channel in output.iter_mut() {
+            channel.clear();
+            channel.reserve(frames);
+        }
+        for frame in interleaved.chunks_exact(channels) {
+            for (channel, sample) in output.iter_mut().zip(frame) {
+                channel.push(f32::from(*sample) * I16_SCALE);
+            }
+        }
+    }
+
+    pub fn deinterleave_new(interleaved: &[i16], output: &mut [Vec<f32>]) {
+        let channels = output.len();
+        let frames = interleaved.len() / channels;
+        for channel in output.iter_mut() {
+            channel.clear();
+            channel.reserve(frames);
+        }
+        match output {
+            [mono] => append_mono_i16(mono, interleaved),
+            [left, right] => append_stereo_i16(left, right, interleaved),
+            _ => {
+                for frame in interleaved.chunks_exact(channels) {
+                    for (channel, sample) in output.iter_mut().zip(frame) {
+                        channel.push(f32::from(*sample) * I16_SCALE);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn crossfade_old(
+        prev: &[f32],
+        current: &[f32],
+        start: usize,
+        window_frames: usize,
+        out: &mut Vec<f32>,
+    ) {
+        out.clear();
+        out.reserve(prev.len());
+        let denom = window_frames as f32;
+        for index in 0..prev.len() {
+            let t = (start + index) as f32 / denom;
+            out.push(prev[index] + (current[index] - prev[index]) * t);
+        }
+    }
+
+    pub fn crossfade_new(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Vec<f32>) {
+        out.clear();
+        append_crossfade(prev, current, weights, out);
+    }
+
+    pub fn closest_match_old(buffer: &[f32], correlate: &[f32]) -> usize {
+        if buffer.len() <= correlate.len() {
+            return 0;
+        }
+        let distance = buffer.len() - correlate.len();
+        let mut best_offset = 0usize;
+        let mut best_score = f32::INFINITY;
+        for i in 0..=distance {
+            let frames = &buffer[i..i + correlate.len()];
+            let mut score = 0.0f32;
+            let mut j = 0usize;
+            while j + 8 <= correlate.len() {
+                score += (frames[j] - correlate[j]).abs();
+                score += (frames[j + 1] - correlate[j + 1]).abs();
+                score += (frames[j + 2] - correlate[j + 2]).abs();
+                score += (frames[j + 3] - correlate[j + 3]).abs();
+                score += (frames[j + 4] - correlate[j + 4]).abs();
+                score += (frames[j + 5] - correlate[j + 5]).abs();
+                score += (frames[j + 6] - correlate[j + 6]).abs();
+                score += (frames[j + 7] - correlate[j + 7]).abs();
+                j += 8;
+                if score >= best_score {
+                    break;
+                }
+            }
+            if score < best_score {
+                while j < correlate.len() {
+                    score += (frames[j] - correlate[j]).abs();
+                    j += 1;
+                }
+            }
+            if score < best_score {
+                best_score = score;
+                best_offset = i;
+            }
+        }
+        best_offset
+    }
+
+    pub fn closest_match_new(buffer: &[f32], correlate: &[f32]) -> usize {
+        find_closest_match(buffer, correlate)
+    }
 }
 
 #[cfg(test)]
@@ -537,6 +697,80 @@ mod tests {
                 "correlate_len={correlate_len}"
             );
         }
+    }
+
+    #[test]
+    fn specialized_deinterleave_matches_generic_channels() {
+        for channels in [1usize, 2, 6] {
+            let input = (0..257 * channels)
+                .map(|index| index.wrapping_mul(25_173) as i16)
+                .collect::<Vec<_>>();
+            let mut expected = (0..channels)
+                .map(|_| Vec::with_capacity(257))
+                .collect::<Vec<_>>();
+            for frame in input.chunks_exact(channels) {
+                for (channel, sample) in expected.iter_mut().zip(frame) {
+                    channel.push(f32::from(*sample) * I16_SCALE);
+                }
+            }
+
+            let mut stretcher = SolaStretcher::new(channels, 48_000);
+            stretcher.push_interleaved_i16(&input);
+
+            assert_eq!(
+                stretcher
+                    .state
+                    .iter()
+                    .map(|channel| channel.data.as_slice())
+                    .collect::<Vec<_>>(),
+                expected.iter().map(Vec::as_slice).collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn cached_crossfade_weights_match_per_sample_formula() {
+        let stretcher = SolaStretcher::new(2, 48_000);
+        let start = 137;
+        let frames = 911;
+        let prev = (0..frames)
+            .map(|index| (index as f32 * 0.017).sin())
+            .collect::<Vec<_>>();
+        let current = (0..frames)
+            .map(|index| (index as f32 * 0.029).cos())
+            .collect::<Vec<_>>();
+        let expected = prev
+            .iter()
+            .zip(&current)
+            .enumerate()
+            .map(|(index, (&a, &b))| {
+                let t = (start + index) as f32 / stretcher.window_frames as f32;
+                a + (b - a) * t
+            })
+            .collect::<Vec<_>>();
+        let mut actual = Vec::new();
+
+        append_crossfade(
+            &prev,
+            &current,
+            &stretcher.fade_weights[start..start + frames],
+            &mut actual,
+        );
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn correlation_returns_earliest_exact_match() {
+        let pattern = [1.0, -2.0, 3.0, -4.0];
+        let buffer = [0.0, 0.5, 1.0, -2.0, 3.0, -4.0, 1.0, -2.0, 3.0, -4.0];
+
+        assert_eq!(find_closest_match(&buffer, &pattern), 2);
+        assert_eq!(
+            find_closest_match(&[0.0; 32], &[0.0; 8]),
+            0,
+            "silence has a perfect match at the first candidate"
+        );
     }
 
     fn fft_peak_bin(samples: &[f32]) -> usize {

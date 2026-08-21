@@ -45,6 +45,10 @@ pub use sfx_cache::SfxId;
 pub use stream_runtime::{MusicStreamRuntime, StreamCommand};
 use stretch::SolaStretcher;
 
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use stretch::bench_support as sola_bench_support;
+
 #[derive(Clone, Copy, Debug)]
 pub struct Cut {
     pub start_sec: f64,
