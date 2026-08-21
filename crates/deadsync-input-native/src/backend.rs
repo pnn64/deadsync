@@ -8,7 +8,7 @@ mod deferred_sample;
 pub mod devd;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 pub mod evdev;
-#[cfg(any(target_os = "freebsd", test))]
+#[cfg(any(target_os = "freebsd", test, feature = "bench-support"))]
 mod hid_report_cache;
 #[cfg(target_os = "freebsd")]
 pub mod hidraw;
@@ -25,6 +25,9 @@ pub mod w32_raw_input;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 pub mod wgi;
 
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use hid_report_cache::HidReportRoute;
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub use iohid_filter::{AxisCache, HostInstantMap, PadValueKind, classify_pad_value};

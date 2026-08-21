@@ -1,5 +1,7 @@
 use super::devd::{DevdEvent, DevdWatch};
-use super::hid_report_cache::{HidReportCache, HidReportTime, required_report_buffer_len};
+use super::hid_report_cache::{
+    HidReportCache, HidReportRoute, HidReportTime, required_report_buffer_len,
+};
 use super::poll_registration;
 use super::{BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, uuid_from_bytes};
 use deadsync_input::{PadCode, PadDir, PadEvent, PadId};
@@ -110,6 +112,7 @@ struct Dev {
     file: std::fs::File,
     max_report_len: usize,
     reports: Vec<ReportSpec>,
+    report_route: HidReportRoute,
 }
 
 /// A validated controller node that has been opened and identified but not yet
@@ -123,6 +126,7 @@ struct PendingDev {
     file: std::fs::File,
     max_report_len: usize,
     reports: Vec<ReportSpec>,
+    report_route: HidReportRoute,
 }
 
 struct ReportSpec {
@@ -501,6 +505,7 @@ fn probe_dev(path: &str) -> Option<PendingDev> {
     if max_report_len == 0 {
         return None;
     }
+    let report_route = HidReportRoute::new(reports.iter().map(|report| report.report_id));
     let (vendor_id, product_id) = raw_device_info(&file);
     let raw_name = raw_device_name(&file).unwrap_or_else(|| path.to_owned());
     let uuid = stable_uuid(&file, vendor_id, product_id, &raw_name, path);
@@ -513,6 +518,7 @@ fn probe_dev(path: &str) -> Option<PendingDev> {
         file,
         max_report_len,
         reports,
+        report_route,
     })
 }
 
@@ -565,6 +571,7 @@ fn add_dev_if_new(
         file: pending.file,
         max_report_len: pending.max_report_len,
         reports: pending.reports,
+        report_route: pending.report_route,
     });
 }
 
@@ -591,6 +598,12 @@ fn report_payload<'a>(report: &ReportSpec, buf: &'a [u8], len: usize) -> Option<
         }
         None => (len >= report.payload_bytes).then_some(&buf[..report.payload_bytes]),
     }
+}
+
+#[inline(always)]
+fn known_report_payload<'a>(report: &ReportSpec, buf: &'a [u8], len: usize) -> Option<&'a [u8]> {
+    let offset = usize::from(report.report_id.is_some());
+    (len >= report.payload_bytes + offset).then_some(&buf[offset..offset + report.payload_bytes])
 }
 
 fn process_report(
@@ -708,6 +721,47 @@ fn process_report(
     }
 }
 
+fn accept_report_payload(
+    event: (PadId, [u8; 16], BackendHost),
+    payload: &[u8],
+    emit_pad: &mut impl FnMut(PadEvent),
+    report: &mut ReportSpec,
+) {
+    let (id, uuid, host) = event;
+    if !report.cache.is_duplicate(payload) {
+        process_report(id, uuid, payload, host, emit_pad, &mut report.fields);
+        report.cache.remember(payload);
+    }
+}
+
+fn process_matching_report(
+    event: (PadId, [u8; 16], BackendHost),
+    message: (&[u8], usize),
+    emit_pad: &mut impl FnMut(PadEvent),
+    report: &mut ReportSpec,
+) -> bool {
+    let (buf, len) = message;
+    let Some(payload) = report_payload(report, buf, len) else {
+        return false;
+    };
+    accept_report_payload(event, payload, emit_pad, report);
+    true
+}
+
+fn process_known_report(
+    event: (PadId, [u8; 16], BackendHost),
+    message: (&[u8], usize),
+    emit_pad: &mut impl FnMut(PadEvent),
+    report: &mut ReportSpec,
+) -> bool {
+    let (buf, len) = message;
+    let Some(payload) = known_report_payload(report, buf, len) else {
+        return false;
+    };
+    accept_report_payload(event, payload, emit_pad, report);
+    true
+}
+
 pub fn run(
     emit_pad: &mut impl FnMut(PadEvent),
     emit_sys: &mut impl FnMut(GpSystemEvent),
@@ -804,21 +858,24 @@ pub fn run(
                 continue;
             }
             let len = n as usize;
-            let mut handled = false;
             let id = dev.id;
             let uuid = dev.uuid;
-            for report in &mut dev.reports {
-                let Some(payload) = report_payload(report, &buf, len) else {
-                    continue;
-                };
-                handled = true;
-                if report.cache.is_duplicate(payload) {
-                    break;
-                }
-                process_report(id, uuid, payload, host, emit_pad, &mut report.fields);
-                report.cache.remember(payload);
-                break;
-            }
+            let handled = if dev.report_route.needs_fallback() {
+                dev.reports.iter_mut().any(|report| {
+                    process_matching_report((id, uuid, host), (&buf, len), emit_pad, report)
+                })
+            } else {
+                dev.report_route
+                    .direct_index(buf.first().copied())
+                    .is_some_and(|index| {
+                        process_known_report(
+                            (id, uuid, host),
+                            (&buf, len),
+                            emit_pad,
+                            &mut dev.reports[index],
+                        )
+                    })
+            };
             if !handled {
                 debug!(
                     "freebsd hidraw '{}' received unsupported report size/id",

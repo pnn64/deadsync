@@ -1,6 +1,6 @@
 use super::{
     BackendHost, DevdEvent, DevdWatch, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId,
-    PadOrderBackend, ReceiptTime, emit_dir_edges, uuid_from_bytes,
+    PadOrderBackend, ReceiptTime, emit_hat_axis_edges, uuid_from_bytes,
 };
 use crate::backend::poll_registration;
 use deadsync_input::RawKeyboardEvent;
@@ -104,8 +104,6 @@ struct Dev {
     name: String,
     path: String,
     file: std::fs::File,
-    hat_x: i32,
-    hat_y: i32,
     dir: [bool; 4],
 }
 
@@ -555,8 +553,6 @@ fn open_dev(
         name: spec.name,
         path: spec.path,
         file,
-        hat_x: 0,
-        hat_y: 0,
         dir: [false; 4],
     })
 }
@@ -849,22 +845,21 @@ fn run_inner(
                     value: ev.value as f32,
                 });
 
-                if ev.code == ABS_HAT0X {
-                    dev.hat_x = ev.value;
+                let horizontal = if ev.code == ABS_HAT0X {
+                    true
                 } else if ev.code == ABS_HAT0Y {
-                    dev.hat_y = ev.value;
+                    false
                 } else {
                     continue;
-                }
-
-                let want = [dev.hat_y < 0, dev.hat_y > 0, dev.hat_x < 0, dev.hat_x > 0];
-                emit_dir_edges(
+                };
+                emit_hat_axis_edges(
                     &mut emit_pad,
                     dev.id,
                     &mut dev.dir,
                     event_timestamp,
                     event_host_nanos,
-                    want,
+                    horizontal,
+                    ev.value,
                 );
             }
         }

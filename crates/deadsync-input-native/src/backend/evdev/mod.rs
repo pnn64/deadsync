@@ -1,9 +1,7 @@
 use super::deferred_sample::DeferredSample;
 #[cfg(target_os = "freebsd")]
 pub(super) use super::devd::{DevdEvent, DevdWatch};
-#[cfg(target_os = "freebsd")]
-pub(super) use super::emit_dir_edges;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "freebsd", target_os = "linux"))]
 pub(super) use super::emit_hat_axis_edges;
 use super::unix_time::{self, EventTimeCache, EventTimeSample};
 pub(super) use super::{BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, uuid_from_bytes};
