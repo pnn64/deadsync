@@ -30,7 +30,6 @@ struct Spec {
     channels: usize,
     sample_rate_hz: u32,
     block_align: usize,
-    bytes_per_sample: usize,
     encoding: Encoding,
     data_offset: u64,
     frames_total: u64,
@@ -38,8 +37,24 @@ struct Spec {
 
 #[derive(Clone, Copy)]
 enum Encoding {
-    Pcm,
-    Float,
+    Pcm8,
+    Pcm16,
+    Pcm24,
+    Pcm32,
+    Float32,
+    Float64,
+}
+
+impl Encoding {
+    const fn sample_bytes(self) -> usize {
+        match self {
+            Self::Pcm8 => 1,
+            Self::Pcm16 => 2,
+            Self::Pcm24 => 3,
+            Self::Pcm32 | Self::Float32 => 4,
+            Self::Float64 => 8,
+        }
+    }
 }
 
 #[inline(always)]
@@ -137,7 +152,7 @@ impl Reader {
         let bytes = frames.saturating_mul(self.spec.block_align);
         self.packet_buf.resize(bytes, 0);
         self.reader.read_exact(&mut self.packet_buf)?;
-        decode_packet_into(&self.packet_buf, self.spec, out)?;
+        decode_packet_into(&self.packet_buf, self.spec.encoding, out)?;
         Ok(true)
     }
 }
@@ -238,7 +253,6 @@ fn parse_format_chunk(
         channels,
         sample_rate_hz,
         block_align,
-        bytes_per_sample,
         encoding,
         data_offset: 0,
         frames_total: 0,
@@ -249,7 +263,10 @@ fn parse_pcm_format(
     bytes_per_sample: usize,
 ) -> Result<Encoding, Box<dyn std::error::Error + Send + Sync>> {
     match bytes_per_sample {
-        1..=4 => Ok(Encoding::Pcm),
+        1 => Ok(Encoding::Pcm8),
+        2 => Ok(Encoding::Pcm16),
+        3 => Ok(Encoding::Pcm24),
+        4 => Ok(Encoding::Pcm32),
         _ => Err(format!("unsupported WAV PCM sample width ({bytes_per_sample} bytes)").into()),
     }
 }
@@ -258,7 +275,8 @@ fn parse_float_format(
     bytes_per_sample: usize,
 ) -> Result<Encoding, Box<dyn std::error::Error + Send + Sync>> {
     match bytes_per_sample {
-        4 | 8 => Ok(Encoding::Float),
+        4 => Ok(Encoding::Float32),
+        8 => Ok(Encoding::Float64),
         _ => Err(format!("unsupported WAV float sample width ({bytes_per_sample} bytes)").into()),
     }
 }
@@ -288,56 +306,103 @@ fn parse_extensible_encoding(
 
 fn decode_packet_into(
     bytes: &[u8],
-    spec: Spec,
+    encoding: Encoding,
     out: &mut Vec<i16>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    if !bytes.len().is_multiple_of(spec.bytes_per_sample) {
-        return Err("WAV packet ended mid-sample".into());
+) -> Result<(), &'static str> {
+    if !bytes.len().is_multiple_of(encoding.sample_bytes()) {
+        return Err("WAV packet ended mid-sample");
     }
-    out.clear();
-    out.reserve(bytes.len() / spec.bytes_per_sample);
-    for sample in bytes.chunks_exact(spec.bytes_per_sample) {
-        out.push(match spec.encoding {
-            Encoding::Pcm => pcm_to_i16(sample)?,
-            Encoding::Float => float_to_i16(sample)?,
-        });
+    let samples = bytes.len() / encoding.sample_bytes();
+    if matches!(encoding, Encoding::Float32 | Encoding::Float64) {
+        resize_output(out, samples);
+    } else {
+        out.clear();
+        out.reserve(samples);
+    }
+    match encoding {
+        Encoding::Pcm8 => out.extend(bytes.iter().map(|sample| (i16::from(*sample) - 128) << 8)),
+        Encoding::Pcm16 => out.extend(
+            bytes
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|sample| i16::from_le_bytes(*sample)),
+        ),
+        Encoding::Pcm24 => out.extend(bytes.as_chunks::<3>().0.iter().map(pcm24_to_i16)),
+        Encoding::Pcm32 => out.extend(
+            bytes
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|sample| (i32::from_le_bytes(*sample) >> 16) as i16),
+        ),
+        Encoding::Float32 => {
+            for (output, sample) in out.iter_mut().zip(bytes.as_chunks::<4>().0) {
+                *output = float_to_i16(f64::from(f32::from_le_bytes(*sample)));
+            }
+        }
+        Encoding::Float64 => {
+            for (output, sample) in out.iter_mut().zip(bytes.as_chunks::<8>().0) {
+                *output = float_to_i16(f64::from_le_bytes(*sample));
+            }
+        }
     }
     Ok(())
 }
 
-fn pcm_to_i16(sample: &[u8]) -> Result<i16, Box<dyn std::error::Error + Send + Sync>> {
-    Ok(match sample.len() {
-        1 => (i16::from(sample[0]) - 128) << 8,
-        2 => i16::from_le_bytes([sample[0], sample[1]]),
-        3 => {
-            let signed = i32::from_le_bytes([
-                sample[0],
-                sample[1],
-                sample[2],
-                if sample[2] & 0x80 != 0 { 0xff } else { 0x00 },
-            ]);
-            (signed >> 8).clamp(i16::MIN as i32, i16::MAX as i32) as i16
-        }
-        4 => {
-            let signed = i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
-            (signed >> 16).clamp(i16::MIN as i32, i16::MAX as i32) as i16
-        }
-        n => return Err(format!("unsupported WAV PCM sample width ({n} bytes)").into()),
-    })
+#[inline(always)]
+fn pcm24_to_i16(sample: &[u8; 3]) -> i16 {
+    let signed = i32::from_le_bytes([
+        sample[0],
+        sample[1],
+        sample[2],
+        if sample[2] & 0x80 != 0 { 0xff } else { 0x00 },
+    ]);
+    (signed >> 8) as i16
 }
 
-fn float_to_i16(sample: &[u8]) -> Result<i16, Box<dyn std::error::Error + Send + Sync>> {
-    let value = match sample.len() {
-        4 => f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) as f64,
-        8 => f64::from_le_bytes([
-            sample[0], sample[1], sample[2], sample[3], sample[4], sample[5], sample[6], sample[7],
-        ]),
-        n => return Err(format!("unsupported WAV float sample width ({n} bytes)").into()),
-    };
+#[inline(always)]
+fn float_to_i16(value: f64) -> i16 {
     if !value.is_finite() {
-        return Ok(0);
+        return 0;
     }
-    Ok((value * 32767.0).round().clamp(-32768.0, 32767.0) as i16)
+    (value * 32767.0).round().clamp(-32768.0, 32767.0) as i16
+}
+
+#[inline(always)]
+fn resize_output(out: &mut Vec<i16>, samples: usize) {
+    if out.len() < samples {
+        out.resize(samples, 0);
+    } else {
+        out.truncate(samples);
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod bench_support {
+    use super::{Encoding, decode_packet_into};
+
+    #[derive(Clone, Copy)]
+    pub enum SampleFormat {
+        Pcm16,
+        Pcm24,
+        Float32,
+    }
+
+    #[inline]
+    pub fn decode_new(
+        bytes: &[u8],
+        format: SampleFormat,
+        out: &mut Vec<i16>,
+    ) -> Result<(), &'static str> {
+        let encoding = match format {
+            SampleFormat::Pcm16 => Encoding::Pcm16,
+            SampleFormat::Pcm24 => Encoding::Pcm24,
+            SampleFormat::Float32 => Encoding::Float32,
+        };
+        decode_packet_into(bytes, encoding, out)
+    }
 }
 
 fn le_u16(data: &[u8], offset: usize) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
@@ -352,4 +417,212 @@ fn le_u32(data: &[u8], offset: usize) -> Result<u32, Box<dyn std::error::Error +
         .get(offset..offset + 4)
         .ok_or("WAV chunk ended unexpectedly")?;
     Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Encoding, decode_packet_into};
+
+    fn decode_legacy(bytes: &[u8], encoding: Encoding, out: &mut Vec<i16>) -> Result<(), String> {
+        let sample_bytes = encoding.sample_bytes();
+        if !bytes.len().is_multiple_of(sample_bytes) {
+            return Err("WAV packet ended mid-sample".to_string());
+        }
+        out.clear();
+        out.reserve(bytes.len() / sample_bytes);
+        for sample in bytes.chunks_exact(sample_bytes) {
+            out.push(match encoding {
+                Encoding::Pcm8 => (i16::from(sample[0]) - 128) << 8,
+                Encoding::Pcm16 => i16::from_le_bytes([sample[0], sample[1]]),
+                Encoding::Pcm24 => {
+                    let signed = i32::from_le_bytes([
+                        sample[0],
+                        sample[1],
+                        sample[2],
+                        if sample[2] & 0x80 != 0 { 0xff } else { 0x00 },
+                    ]);
+                    (signed >> 8).clamp(i16::MIN as i32, i16::MAX as i32) as i16
+                }
+                Encoding::Pcm32 => {
+                    let signed = i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
+                    (signed >> 16).clamp(i16::MIN as i32, i16::MAX as i32) as i16
+                }
+                Encoding::Float32 => {
+                    legacy_float(
+                        f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) as f64,
+                    )
+                }
+                Encoding::Float64 => legacy_float(f64::from_le_bytes([
+                    sample[0], sample[1], sample[2], sample[3], sample[4], sample[5], sample[6],
+                    sample[7],
+                ])),
+            });
+        }
+        Ok(())
+    }
+
+    fn legacy_float(value: f64) -> i16 {
+        if !value.is_finite() {
+            return 0;
+        }
+        (value * 32767.0).round().clamp(-32768.0, 32767.0) as i16
+    }
+
+    fn pcm_bytes(width: usize) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(513 * width);
+        for index in 0..513u32 {
+            let value = index
+                .wrapping_mul(747_796_405)
+                .wrapping_add(2_891_336_453)
+                .to_le_bytes();
+            bytes.extend_from_slice(&value[..width]);
+        }
+        bytes
+    }
+
+    fn float32_bytes() -> Vec<u8> {
+        let edges = [
+            f32::NEG_INFINITY,
+            -2.0,
+            -1.0,
+            -0.0,
+            0.0,
+            0.5,
+            1.0,
+            2.0,
+            f32::INFINITY,
+            f32::NAN,
+        ];
+        edges
+            .into_iter()
+            .chain((0..513u32).map(|index| {
+                f32::from_bits(index.wrapping_mul(747_796_405).wrapping_add(2_891_336_453))
+            }))
+            .flat_map(f32::to_le_bytes)
+            .collect()
+    }
+
+    fn float64_bytes() -> Vec<u8> {
+        let edges = [
+            f64::NEG_INFINITY,
+            -2.0,
+            -1.0,
+            -0.0,
+            0.0,
+            0.5,
+            1.0,
+            2.0,
+            f64::INFINITY,
+            f64::NAN,
+        ];
+        edges
+            .into_iter()
+            .chain((0..513u64).map(|index| {
+                f64::from_bits(
+                    index
+                        .wrapping_mul(6_364_136_223_846_793_005)
+                        .wrapping_add(1_442_695_040_888_963_407),
+                )
+            }))
+            .flat_map(f64::to_le_bytes)
+            .collect()
+    }
+
+    #[test]
+    fn fixed_width_decode_matches_per_sample_dispatch() {
+        let cases = [
+            (Encoding::Pcm8, pcm_bytes(1)),
+            (Encoding::Pcm16, pcm_bytes(2)),
+            (Encoding::Pcm24, pcm_bytes(3)),
+            (Encoding::Pcm32, pcm_bytes(4)),
+            (Encoding::Float32, float32_bytes()),
+            (Encoding::Float64, float64_bytes()),
+        ];
+        for (encoding, bytes) in cases {
+            let mut expected = vec![123; 1024];
+            let mut actual = expected.clone();
+
+            decode_legacy(&bytes, encoding, &mut expected).expect("test packet is aligned");
+            decode_packet_into(&bytes, encoding, &mut actual).expect("test packet is aligned");
+
+            assert_eq!(actual, expected, "sample_bytes={}", encoding.sample_bytes());
+        }
+    }
+
+    #[test]
+    fn fixed_width_decode_rejects_partial_samples() {
+        for encoding in [
+            Encoding::Pcm16,
+            Encoding::Pcm24,
+            Encoding::Pcm32,
+            Encoding::Float32,
+            Encoding::Float64,
+        ] {
+            let bytes = vec![0; encoding.sample_bytes() + 1];
+            let mut out = vec![123];
+
+            assert_eq!(
+                decode_packet_into(&bytes, encoding, &mut out),
+                Err("WAV packet ended mid-sample")
+            );
+            assert_eq!(out, [123]);
+        }
+    }
+
+    #[test]
+    fn fixed_width_decode_preserves_known_edges() {
+        let cases = [
+            (Encoding::Pcm8, vec![0, 128, 255], vec![i16::MIN, 0, 32_512]),
+            (
+                Encoding::Pcm16,
+                [i16::MIN, -1, 0, i16::MAX]
+                    .into_iter()
+                    .flat_map(i16::to_le_bytes)
+                    .collect(),
+                vec![i16::MIN, -1, 0, i16::MAX],
+            ),
+            (
+                Encoding::Pcm24,
+                vec![
+                    0x00, 0x00, 0x80, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0x7f,
+                ],
+                vec![i16::MIN, -1, 0, i16::MAX],
+            ),
+            (
+                Encoding::Pcm32,
+                [i32::MIN, -65_536, 0, i32::MAX]
+                    .into_iter()
+                    .flat_map(i32::to_le_bytes)
+                    .collect(),
+                vec![i16::MIN, -1, 0, i16::MAX],
+            ),
+        ];
+        for (encoding, bytes, expected) in cases {
+            let mut actual = Vec::new();
+            decode_packet_into(&bytes, encoding, &mut actual).expect("test packet is aligned");
+            assert_eq!(actual, expected);
+        }
+
+        let float_edges = [
+            f32::NEG_INFINITY,
+            -2.0,
+            -1.0,
+            0.0,
+            0.5,
+            1.0,
+            2.0,
+            f32::INFINITY,
+            f32::NAN,
+        ]
+        .into_iter()
+        .flat_map(f32::to_le_bytes)
+        .collect::<Vec<_>>();
+        let mut actual = Vec::new();
+        decode_packet_into(&float_edges, Encoding::Float32, &mut actual)
+            .expect("test packet is aligned");
+        assert_eq!(
+            actual,
+            [0, i16::MIN, -32_767, 0, 16_384, i16::MAX, i16::MAX, 0, 0]
+        );
+    }
 }

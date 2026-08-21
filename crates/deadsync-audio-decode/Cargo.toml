@@ -8,6 +8,14 @@ license = "GPL-3.0"
 name = "sample_layout_hot_paths"
 harness = false
 
+[[bench]]
+name = "wav_decode_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
+[features]
+bench-support = []
+
 [dependencies]
 ogg = "0.9.2"
 opusic-c = "1.6.1"
