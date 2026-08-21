@@ -410,6 +410,31 @@ pub enum SimplyLoveSyncOwner {
     OptionsPack,
 }
 
+/// Song-search work run off the render thread by the shell's `song_search`
+/// service, which owns the index: the screen hands over its catalog once, then
+/// only sends queries. `generation` lets it discard stale rankings.
+#[derive(Clone, Debug)]
+pub enum SimplyLoveSongSearchRequest {
+    /// Re-index; sent when Select Music is built or reloaded.
+    BuildIndex {
+        entries: Arc<[crate::screens::select_music::MusicWheelEntry]>,
+    },
+    /// Rank a query against the service's index.
+    Rank {
+        generation: u64,
+        query: String,
+        scope: crate::screens::components::select_music::select_music_menu::SongSearchScope,
+        chart_type: &'static str,
+    },
+}
+
+/// A ranking, applied only while its `generation` is still current.
+#[derive(Clone, Debug)]
+pub struct SimplyLoveSongSearchResult {
+    pub generation: u64,
+    pub matches: Vec<crate::screens::components::select_music::select_music_menu::SongSearchMatch>,
+}
+
 #[derive(Clone, Debug)]
 pub struct SimplyLoveSyncTarget {
     pub song: Arc<deadsync_chart::SongData>,
@@ -860,6 +885,8 @@ pub enum SimplyLoveRuntimeRequest {
     Hardware(SimplyLoveHardwareRequest),
     Debug(SimplyLoveDebugRequest),
     Updater(SimplyLoveUpdaterRequest),
+    /// Rank the song search off the render thread.
+    SongSearch(SimplyLoveSongSearchRequest),
 }
 
 pub type SimplyLoveEffect = deadsync_theme::ThemeEffect<SimplyLoveScreen, SimplyLoveRuntimeRequest>;

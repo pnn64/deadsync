@@ -4027,7 +4027,8 @@ fn selection_screen_chrome_and_search_use_prepared_player_state() {
         assert!(screen_bars.contains(prepared_field));
     }
     assert!(song_search.contains("pub chart_type: &'static str"));
-    assert!(song_search.contains("results.chart_type"));
+    // Ranking takes the prepared chart type as an input, not from runtime state.
+    assert!(song_search.contains("chart_type: &str"));
 
     let select_music = fs::read_to_string(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),

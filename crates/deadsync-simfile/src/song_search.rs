@@ -114,6 +114,73 @@ fn parse_song_search_filter(input: &str) -> SongSearchFilter {
     filter
 }
 
+/// Free text with `[###]` tokens stripped, plus the filters they produced.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SongSearchLiveQuery {
+    pub text: String,
+    pub difficulty: Option<u8>,
+    pub bpm_tier: Option<i32>,
+}
+
+/// Parse a typeahead query, splitting `[###]` filters from the free text.
+///
+/// The `pack/song` split is deliberately not applied: packs have their own scope.
+pub fn parse_song_search_live(input: &str) -> SongSearchLiveQuery {
+    let filter = parse_song_search_filter(input);
+    SongSearchLiveQuery {
+        text: filter.terms.trim().to_string(),
+        difficulty: filter.difficulty,
+        bpm_tier: filter.bpm_tier,
+    }
+}
+
+/// Whether `song` has the chart type and passes the `[###]` filters. Title
+/// matching is the ranker's job, not this predicate's.
+pub fn song_passes_search_filters(
+    song: &SongData,
+    chart_type: &str,
+    difficulty: Option<u8>,
+    bpm_tier: Option<i32>,
+) -> bool {
+    if !song
+        .charts
+        .iter()
+        .any(|c| c.chart_type.eq_ignore_ascii_case(chart_type))
+    {
+        return false;
+    }
+
+    if let Some(diff) = difficulty
+        && !song.charts.iter().any(|c| {
+            c.chart_type.eq_ignore_ascii_case(chart_type)
+                && !c.difficulty.eq_ignore_ascii_case("edit")
+                && c.meter == diff as u32
+        })
+    {
+        return false;
+    }
+
+    if let Some(want_tier) = bpm_tier {
+        let Some((bpm_lo, bpm_hi)) = song.display_bpm_range() else {
+            return false;
+        };
+        let mut lo = song_search_bpm_tier(bpm_lo);
+        let mut hi = song_search_bpm_tier(bpm_hi);
+        if lo > hi {
+            std::mem::swap(&mut lo, &mut hi);
+        }
+        if lo == hi {
+            if want_tier != lo {
+                return false;
+            }
+        } else if want_tier < lo || want_tier > hi {
+            return false;
+        }
+    }
+
+    true
+}
+
 #[inline]
 fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
     let needle = needle.as_bytes();

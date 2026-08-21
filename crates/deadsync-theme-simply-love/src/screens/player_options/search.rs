@@ -5,8 +5,8 @@
 //! jumps the cursor to the chosen row. Only visible rows are indexed, so hidden
 //! sub-options never appear as dead-end results.
 
-use super::fuzzy;
 use super::*;
+use crate::screens::components::shared::fuzzy;
 use deadlib_present::space::screen_width;
 
 /// Maximum number of ranked results shown in the overlay list.
@@ -128,7 +128,7 @@ fn row_aliases(id: RowId) -> &'static [&'static str] {
 
 /// Build the ranked match list for `query` from the currently-visible rows.
 pub(super) fn rebuild_matches(state: &State, query: &str) -> Vec<SettingMatch> {
-    let q = fuzzy::query_chars(query);
+    let q = fuzzy::prepare_query(query);
     let active = state.active;
     let mut seen = [false; RowId::COUNT];
     let mut matches: Vec<SettingMatch> = Vec::new();
@@ -152,7 +152,9 @@ pub(super) fn rebuild_matches(state: &State, query: &str) -> Vec<SettingMatch> {
             let label = clean_label(&row.name.get());
             if q.is_empty() {
                 matches.push(SettingMatch::new(id, pane, label, 0));
-            } else if let Some(score) = fuzzy::best_match_score(&q, &label, row_aliases(id)) {
+            } else if let Some(score) =
+                fuzzy::best_match_score(&q, &fuzzy::fold_diacritics(&label), row_aliases(id))
+            {
                 matches.push(SettingMatch::new(id, pane, label, score));
             }
         }

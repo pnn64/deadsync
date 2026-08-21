@@ -28,12 +28,18 @@ pub use effects::{
     SimplyLoveQrLoginService, SimplyLoveQrLoginSlot, SimplyLoveQrLoginSlotAvailability,
     SimplyLoveRuntimeRequest, SimplyLoveScoreImportEvent, SimplyLoveScoreImportProfile,
     SimplyLoveScoreImportProgress, SimplyLoveScoreImportRequest, SimplyLoveScoreImportSummary,
-    SimplyLoveSelectMusicConfigRequest, SimplyLoveSrpgShopFolder, SimplyLoveSyncEvent,
-    SimplyLoveSyncKernel, SimplyLoveSyncKernelTarget, SimplyLoveSyncOwner, SimplyLoveSyncPlotView,
-    SimplyLoveSyncRequest, SimplyLoveSyncResult, SimplyLoveSyncSongResult,
-    SimplyLoveSyncStreamEvent, SimplyLoveSyncTarget, SimplyLoveUpdaterRequest,
-    resolve_effect_route,
+    SimplyLoveSelectMusicConfigRequest, SimplyLoveSongSearchRequest, SimplyLoveSongSearchResult,
+    SimplyLoveSrpgShopFolder, SimplyLoveSyncEvent, SimplyLoveSyncKernel,
+    SimplyLoveSyncKernelTarget, SimplyLoveSyncOwner, SimplyLoveSyncPlotView, SimplyLoveSyncRequest,
+    SimplyLoveSyncResult, SimplyLoveSyncSongResult, SimplyLoveSyncStreamEvent,
+    SimplyLoveSyncTarget, SimplyLoveUpdaterRequest, resolve_effect_route,
 };
+
+pub use screens::components::select_music::select_music_menu::{
+    SongSearchIndex, SongSearchMatch, SongSearchScope, build_pack_matches, build_song_matches,
+    build_song_search_index,
+};
+pub use screens::select_music::MusicWheelEntry;
 
 pub struct SimplyLoveTheme;
 

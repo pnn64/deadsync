@@ -1604,6 +1604,7 @@ pub struct App {
     qr_login: crate::qr_login::Service,
     score_import: crate::score_import::Service,
     sync_analysis: crate::sync_analysis::Service,
+    song_search: crate::song_search::Service,
     ui_text_layout_cache: compose::TextLayoutCache,
     gameplay_text_layout_cache: compose::TextLayoutCache,
     ui_compose_scratch: compose::ComposeScratch,
@@ -1746,6 +1747,10 @@ impl App {
                     profile::get_session_play_style(),
                 );
                 apply_music_preferences(&mut state, preferred, p2_preferred);
+                select_music::adopt_song_search_generation(
+                    &mut state,
+                    &self.state.screens.select_music_state,
+                );
                 self.state.screens.select_music_state = *state;
             }
             crate::profile_load::PreparedState::Course(mut state) => {
@@ -1820,6 +1825,18 @@ impl App {
             screens::groovestats_login::apply_events(
                 &mut self.state.screens.groovestats_login_state,
                 groovestats,
+            );
+        }
+    }
+
+    fn poll_song_search(&mut self) {
+        if self.state.screens.current_screen != CurrentScreen::SelectMusic {
+            return;
+        }
+        if let Some(result) = self.song_search.poll() {
+            select_music::apply_song_search_result(
+                &mut self.state.screens.select_music_state,
+                result,
             );
         }
     }
@@ -3102,6 +3119,7 @@ impl App {
             self.poll_qr_login();
             self.poll_score_import();
             self.poll_sync_analysis();
+            self.poll_song_search();
             self.poll_apply_replaygain();
         }
         if work_caps & frame_work::HEART_RATE_CONFIG != 0 {
@@ -3902,6 +3920,7 @@ impl App {
             qr_login: crate::qr_login::Service::default(),
             score_import: crate::score_import::Service::default(),
             sync_analysis: crate::sync_analysis::Service::default(),
+            song_search: crate::song_search::Service::default(),
             // Screen transitions clear the UI cache, so misses stop inserting
             // once the cache reaches its fixed footprint.
             ui_text_layout_cache: compose::TextLayoutCache::new(UI_TEXT_LAYOUT_CACHE_LIMIT),
@@ -4396,6 +4415,10 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::Audio(request) => {
                     audio_requests::execute(&mut self.audio, request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::SongSearch(request) => {
+                    self.song_search.submit(request);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Content(request) => {
@@ -6803,11 +6826,22 @@ impl App {
                 return;
             }
             RawKeyTextRoute::SelectMusic => {
+                let controls = self.state.shell.interaction.controls();
+                let (ctrl, shift, alt, logo) = (
+                    controls.ctrl(),
+                    controls.shift(),
+                    controls.alt(),
+                    controls.logo(),
+                );
                 debug_assert!(self.theme_effect_scratch.is_empty());
-                screens::select_music::handle_raw_key_event(
+                screens::select_music::handle_raw_key_event_with_modifiers(
                     &mut self.state.screens.select_music_state,
                     None,
                     Some(text),
+                    ctrl,
+                    shift,
+                    alt,
+                    logo,
                     &mut self.theme_effect_scratch,
                 );
                 if let Err(e) = self.drain_theme_effects(event_loop) {
@@ -6883,6 +6917,7 @@ impl App {
         let ctrl_held = self.state.shell.interaction.controls().ctrl();
         let shift_held = self.state.shell.interaction.controls().shift();
         let alt_held = self.state.shell.interaction.controls().alt();
+        let logo_held = self.state.shell.interaction.controls().logo();
 
         if raw_key_alt_f4_quit(raw_key.pressed, raw_key.code, alt_held) {
             info!("Alt+F4 quit shortcut pressed. Shutting down.");
@@ -6987,6 +7022,8 @@ impl App {
                     None,
                     ctrl_held,
                     shift_held,
+                    alt_held,
+                    logo_held,
                     &mut self.theme_effect_scratch,
                 );
                 let has_effect = !self.theme_effect_scratch.is_empty();
@@ -8806,8 +8843,13 @@ impl App {
                 _ => {
                     let current_color_index =
                         self.state.screens.select_music_state.active_color_index;
-                    self.state.screens.select_music_state =
+                    let mut refreshed =
                         select_music::init(crate::select_music::prepared_init_view());
+                    select_music::adopt_song_search_generation(
+                        &mut refreshed,
+                        &self.state.screens.select_music_state,
+                    );
+                    self.state.screens.select_music_state = refreshed;
                     self.state.screens.select_music_state.active_color_index = current_color_index;
                     let preferred = self.state.session.preferred_difficulty_index;
                     self.state.screens.select_music_state.selected_steps_index = preferred;
