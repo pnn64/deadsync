@@ -203,25 +203,66 @@ pub fn write_channel_mapped_i16(
     let frames = input.len() / in_ch;
     let produced_samples = frames * out_ch;
     resize_output(out_tmp, produced_samples);
+    map_channels_i16(input, in_ch, out_ch, out_tmp);
+    frames
+}
+
+/// Append channel-mapped frames directly to an existing output allocation.
+///
+/// This is the collection-oriented counterpart to [`write_channel_mapped_i16`]:
+/// callers building a complete clip can avoid a temporary packet buffer and a
+/// second copy into the final collection.
+#[inline]
+pub fn append_channel_mapped_i16(
+    input: &[i16],
+    in_ch: usize,
+    out_ch: usize,
+    out: &mut Vec<i16>,
+) -> usize {
+    if input.is_empty() || in_ch == 0 || out_ch == 0 {
+        return 0;
+    }
+    let frames = input.len() / in_ch;
+    let produced_samples = frames * out_ch;
+    out.reserve(produced_samples);
     if in_ch == out_ch {
-        out_tmp.copy_from_slice(&input[..produced_samples]);
+        out.extend_from_slice(&input[..produced_samples]);
         return frames;
     }
     if in_ch == 1 && out_ch == 2 {
-        for (frame, sample) in out_tmp
-            .as_mut_slice()
-            .as_chunks_mut::<2>()
-            .0
-            .iter_mut()
-            .zip(&input[..frames])
-        {
-            *frame = [*sample, *sample];
-        }
+        out.extend(input[..frames].iter().flat_map(|&sample| [sample, sample]));
         return frames;
     }
     if out_ch == 2 {
-        for (output, input) in out_tmp
-            .as_mut_slice()
+        out.extend(
+            input
+                .chunks_exact(in_ch)
+                .flat_map(|frame| [frame[0], frame[1]]),
+        );
+        return frames;
+    }
+    for frame in input.chunks_exact(in_ch) {
+        for channel in 0..out_ch {
+            out.push(frame[channel % in_ch]);
+        }
+    }
+    frames
+}
+
+#[inline]
+fn map_channels_i16(input: &[i16], in_ch: usize, out_ch: usize, output: &mut [i16]) {
+    if in_ch == out_ch {
+        output.copy_from_slice(&input[..output.len()]);
+        return;
+    }
+    if in_ch == 1 && out_ch == 2 {
+        for (frame, sample) in output.as_chunks_mut::<2>().0.iter_mut().zip(input) {
+            *frame = [*sample, *sample];
+        }
+        return;
+    }
+    if out_ch == 2 {
+        for (output, input) in output
             .as_chunks_mut::<2>()
             .0
             .iter_mut()
@@ -229,16 +270,16 @@ pub fn write_channel_mapped_i16(
         {
             *output = [input[0], input[1]];
         }
-        return frames;
+        return;
     }
+    let frames = input.len() / in_ch;
     for frame in 0..frames {
         let in_base = frame * in_ch;
         let out_base = frame * out_ch;
         for channel in 0..out_ch {
-            out_tmp[out_base + channel] = input[in_base + channel % in_ch];
+            output[out_base + channel] = input[in_base + channel % in_ch];
         }
     }
-    frames
 }
 
 #[inline(always)]
@@ -253,6 +294,22 @@ pub fn drop_front_samples(samples: &mut Vec<i16>, drop_samples: usize) {
     let remaining = samples.len() - drop_samples;
     samples.copy_within(drop_samples.., 0);
     samples.truncate(remaining);
+}
+
+#[inline]
+pub(crate) fn take_cleared_i16(slot: &mut Option<Vec<i16>>) -> Vec<i16> {
+    let mut buffer = slot.take().unwrap_or_default();
+    buffer.clear();
+    buffer
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod bench_support {
+    #[inline]
+    pub fn take_seek_buffer(slot: &mut Option<Vec<i16>>) -> Vec<i16> {
+        super::take_cleared_i16(slot)
+    }
 }
 
 pub fn apply_fade_envelope(
@@ -279,15 +336,16 @@ pub fn apply_fade_envelope(
     let frames_f = frames as f32;
     for frame in 0..frames {
         let t = frame as f32 / frames_f;
-        let mut volume = (end_volume - start_volume).mul_add(t, start_volume);
-        volume = volume.clamp(0.0, 1.0);
+        let volume = (end_volume - start_volume)
+            .mul_add(t, start_volume)
+            .clamp(0.0, 1.0);
         if (volume - 1.0).abs() < 0.0001 {
             continue;
         }
-        for c in 0..channels {
-            let idx = frame * channels + c;
-            let scaled = f32::from(samples[idx]) * volume;
-            samples[idx] = scaled.round().clamp(-32768.0, 32767.0) as i16;
+        for channel in 0..channels {
+            let index = frame * channels + channel;
+            let scaled = f32::from(samples[index]) * volume;
+            samples[index] = scaled.round().clamp(-32768.0, 32767.0) as i16;
         }
     }
 }
@@ -331,8 +389,8 @@ fn sample_to_i16(sample: f32) -> i16 {
 #[cfg(test)]
 mod tests {
     use super::{
-        PlanarAccum, apply_fade_envelope, drop_front_samples, volume_for_frame,
-        write_channel_mapped_i16, write_resampler_output,
+        PlanarAccum, append_channel_mapped_i16, apply_fade_envelope, drop_front_samples,
+        take_cleared_i16, volume_for_frame, write_channel_mapped_i16, write_resampler_output,
     };
 
     fn push_i16_legacy(planar: &mut PlanarAccum, interleaved: &[i16], channels: usize) {
@@ -571,6 +629,25 @@ mod tests {
     }
 
     #[test]
+    fn appended_channel_map_matches_packet_then_copy() {
+        for (in_ch, out_ch) in [(1usize, 2usize), (2, 2), (2, 4), (3, 2), (6, 2), (2, 1)] {
+            let input = (0..257 * in_ch + in_ch - 1)
+                .map(|index| index.wrapping_mul(25_173) as i16)
+                .collect::<Vec<_>>();
+            let mut packet = Vec::new();
+            let frames = write_channel_mapped_i16(&input, in_ch, out_ch, &mut packet);
+            let mut expected = vec![91, -73, 45];
+            expected.extend_from_slice(&packet);
+            let mut actual = vec![91, -73, 45];
+
+            let actual_frames = append_channel_mapped_i16(&input, in_ch, out_ch, &mut actual);
+
+            assert_eq!(actual_frames, frames, "{in_ch} -> {out_ch}");
+            assert_eq!(actual, expected, "{in_ch} -> {out_ch}");
+        }
+    }
+
+    #[test]
     fn drop_front_samples_trims_in_place() {
         let mut samples = vec![1, 2, 3, 4, 5];
 
@@ -590,6 +667,20 @@ mod tests {
 
             assert_eq!(actual, expected);
         }
+    }
+
+    #[test]
+    fn seek_scratch_take_preserves_allocation_and_clears_samples() {
+        let mut slot = Some(vec![7i16; 4_096]);
+        let ptr = slot.as_ref().unwrap().as_ptr();
+        let capacity = slot.as_ref().unwrap().capacity();
+
+        let scratch = take_cleared_i16(&mut slot);
+
+        assert!(slot.is_none());
+        assert!(scratch.is_empty());
+        assert_eq!(scratch.capacity(), capacity);
+        assert_eq!(scratch.as_ptr(), ptr);
     }
 
     #[test]

@@ -15,9 +15,9 @@ pub use deadlib_audio_core::{MusicStreamClockSnapshot, OutputDeviceInfo, OutputT
 use deadlib_platform::windows_rt::{ThreadRole, boost_current_thread};
 use deadsync_audio_decode as decode;
 use deadsync_audio_decode::resample::{
-    OUT_FRAMES_PER_CALL, PLANAR_INPUT_CAP_FRAMES, PlanarAccum, apply_fade_envelope,
-    drop_front_samples, resampler_params, saturating_i64_from_u64, write_channel_mapped_i16,
-    write_resampler_output,
+    OUT_FRAMES_PER_CALL, PLANAR_INPUT_CAP_FRAMES, PlanarAccum, append_channel_mapped_i16,
+    apply_fade_envelope, drop_front_samples, resampler_params, saturating_i64_from_u64,
+    write_channel_mapped_i16, write_resampler_output,
 };
 use log::{debug, error, warn};
 use rubato::audioadapter::Adapter;
@@ -73,6 +73,9 @@ const MIN_MUSIC_RATE: f32 = 0.05;
 const MAX_MUSIC_RATE: f32 = 8.0;
 const MAX_PACKET_START_SNAP_SEC: f64 = 0.25;
 const RESAMPLE_MAX_RELATIVE_RATIO: f64 = 64.0;
+// Mono through 7.1 layouts keep the resampler's borrowed channel views on the
+// decoder worker stack. Unusual wider layouts retain SmallVec's heap fallback.
+const INLINE_RESAMPLE_CHANNELS: usize = 8;
 // Ignore implausibly large untrusted metadata instead of making one enormous
 // speculative allocation. Eight million i16 samples cover more than a minute
 // of stereo SFX at 48 kHz while keeping preload spikes bounded.
@@ -110,6 +113,37 @@ fn process_resampler(
     let mut output = SequentialSliceOfVecs::new_mut(output, channels, output_frames)
         .expect("resampler output allocation matches its channel and frame counts");
     resampler.process_into_buffer(input, &mut output, None)
+}
+
+type ResampleSlices<'a> = SmallVec<[&'a [f32]; INLINE_RESAMPLE_CHANNELS]>;
+
+#[inline]
+fn planar_window(planar: &PlanarAccum, frames: usize) -> ResampleSlices<'_> {
+    debug_assert!(planar.available_frames() >= frames);
+    let start = planar.start_frame;
+    let end = start + frames;
+    let mut slices = ResampleSlices::with_capacity(planar.channels.len());
+    slices.extend(planar.channels.iter().map(|channel| &channel[start..end]));
+    slices
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod decode_bench_support {
+    use super::{PlanarAccum, planar_window};
+
+    #[inline]
+    pub fn planar_window_checksum(planar: &PlanarAccum, frames: usize) -> u64 {
+        planar_window(planar, frames).iter().enumerate().fold(
+            0u64,
+            |checksum, (channel, samples)| {
+                checksum
+                    .rotate_left(5)
+                    .wrapping_add(u64::from(samples[channel % samples.len()].to_bits()))
+                    .wrapping_add(u64::from(samples[samples.len() - 1].to_bits()))
+            },
+        )
+    }
 }
 
 fn compat_lead_frames(ratio: f64) -> usize {
@@ -1197,13 +1231,7 @@ fn music_decoder_thread_loop(
                     break;
                 }
                 let produced_frames = {
-                    let mut input_slices =
-                        SmallVec::<[&[f32]; 2]>::with_capacity(in_planar.channels.len());
-                    let start = in_planar.start_frame;
-                    let end = start + need;
-                    for channel in &in_planar.channels {
-                        input_slices.push(&channel[start..end]);
-                    }
+                    let input_slices = planar_window(in_planar, need);
                     let input = SequentialSliceOfSlices::new(input_slices.as_slice(), in_ch, need)
                         .expect("planar accumulator exposes every requested input frame");
                     process_resampler(resampler, &input, resample_out)?.1
@@ -1412,14 +1440,12 @@ pub fn load_and_resample_sfx(
     if in_hz == out_hz {
         let mut pkt_buf = Vec::new();
         let mut decoded_data = Vec::with_capacity(output_capacity);
-        let mut out_tmp = Vec::new();
         while reader.read_dec_packet_into(&mut pkt_buf)? {
             if !pkt_buf.is_empty() {
                 if in_ch == out_ch {
                     decoded_data.extend_from_slice(&pkt_buf);
                 } else {
-                    write_channel_mapped_i16(&pkt_buf, in_ch, out_ch, &mut out_tmp);
-                    decoded_data.extend_from_slice(&out_tmp);
+                    append_channel_mapped_i16(&pkt_buf, in_ch, out_ch, &mut decoded_data);
                 }
             }
         }
@@ -1448,13 +1474,7 @@ pub fn load_and_resample_sfx(
                 break;
             }
             let produced_frames = {
-                let mut input_slices =
-                    SmallVec::<[&[f32]; 2]>::with_capacity(in_planar.channels.len());
-                let start = in_planar.start_frame;
-                let end = start + need;
-                for channel in &in_planar.channels {
-                    input_slices.push(&channel[start..end]);
-                }
+                let input_slices = planar_window(&in_planar, need);
                 let input = SequentialSliceOfSlices::new(input_slices.as_slice(), in_ch, need)
                     .expect("planar accumulator exposes every requested input frame");
                 process_resampler(&mut resampler, &input, &mut resample_out)?.1
@@ -1509,10 +1529,11 @@ pub fn load_and_resample_sfx(
 mod tests {
     use super::{
         BackpressureMode, DecoderWake, MAX_SFX_PREALLOC_SAMPLES, MusicBackpressure, MusicControl,
-        OutputFormat, lead_in_silence_timing, music_output_start_sec, push_music_block,
-        seek_preroll_in_frames, sfx_output_capacity,
+        OutputFormat, lead_in_silence_timing, music_output_start_sec, planar_window,
+        push_music_block, seek_preroll_in_frames, sfx_output_capacity,
     };
     use deadlib_audio_core::{MusicBlockTiming, music_transport};
+    use deadsync_audio_decode::resample::PlanarAccum;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
     use std::time::{Duration, Instant};
@@ -1526,6 +1547,31 @@ mod tests {
             preserve_pitch: AtomicBool::new(false),
             generation: AtomicU64::new(generation),
             wake: DecoderWake::new(),
+        }
+    }
+
+    #[test]
+    fn surround_resampler_views_stay_inline_and_keep_window_bounds() {
+        let planar = PlanarAccum {
+            channels: (0..8)
+                .map(|channel| (0..7).map(|frame| (channel * 100 + frame) as f32).collect())
+                .collect(),
+            start_frame: 2,
+        };
+
+        let slices = planar_window(&planar, 3);
+
+        assert!(!slices.spilled());
+        assert_eq!(slices.len(), 8);
+        for (channel, slice) in slices.iter().enumerate() {
+            assert_eq!(
+                *slice,
+                [
+                    channel as f32 * 100.0 + 2.0,
+                    channel as f32 * 100.0 + 3.0,
+                    channel as f32 * 100.0 + 4.0
+                ]
+            );
         }
     }
 

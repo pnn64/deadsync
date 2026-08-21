@@ -317,9 +317,7 @@ impl Reader {
             )
             .map_err(|e| format!("OGG seek error: {e}"))?;
         self.decoder.reset();
-        self.pending = None;
-
-        let mut scratch = Vec::new();
+        let mut scratch = crate::resample::take_cleared_i16(&mut self.pending);
         loop {
             let ts = match self.next_audio_packet(&mut scratch)? {
                 Some(ts) => ts,
