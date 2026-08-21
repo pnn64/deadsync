@@ -9,6 +9,10 @@ name = "timing_summary_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "stream_analysis_hot_paths"
+harness = false
+
 [features]
 bench-support = []
 
