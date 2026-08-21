@@ -61,7 +61,7 @@ fn collect_foot_parity<const LANES: usize>(
     timing_segments: &deadsync_rules::timing::TimingSegments,
     col_start: usize,
 ) -> (
-    HashMap<usize, timing_stats::ScatterFoot>,
+    Vec<(usize, timing_stats::ScatterFoot)>,
     HashMap<(usize, usize), timing_stats::ScatterFoot>,
 ) {
     use timing_stats::ScatterFoot;
@@ -73,8 +73,14 @@ fn collect_foot_parity<const LANES: usize>(
         &row_to_beat,
         timing_segments,
     );
-    let mut row_feet = HashMap::with_capacity(annotations.len());
-    let mut note_feet = HashMap::with_capacity(annotations.len());
+    let note_count = annotations
+        .iter()
+        .map(|annotation| {
+            (annotation.left_foot_mask | annotation.right_foot_mask).count_ones() as usize
+        })
+        .sum();
+    let mut row_feet = Vec::with_capacity(annotations.len());
+    let mut note_feet = HashMap::with_capacity(note_count);
     for (annotation, row_index) in annotations.iter().zip(row_indices) {
         let row_foot = match (
             annotation.left_foot_mask != 0,
@@ -86,7 +92,7 @@ fn collect_foot_parity<const LANES: usize>(
             (false, false) => ScatterFoot::Unknown,
         };
         if row_foot != ScatterFoot::Unknown {
-            row_feet.insert(row_index, row_foot);
+            row_feet.push((row_index, row_foot));
         }
         for lane in 0..LANES {
             let bit = 1u8 << lane;
@@ -107,7 +113,7 @@ fn foot_parity_for_results(
     gs: &gameplay::State,
     player_idx: usize,
 ) -> (
-    HashMap<usize, timing_stats::ScatterFoot>,
+    Vec<(usize, timing_stats::ScatterFoot)>,
     HashMap<(usize, usize), timing_stats::ScatterFoot>,
 ) {
     if player_idx >= gs.num_players() {
@@ -2761,13 +2767,13 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                 (!foot_by_note.is_empty()).then_some(&foot_by_note),
             );
             // Prepare scatter points and histogram bins
-            let mut scatter =
-                timing_stats::build_scatter_points(notes, note_times, col_offset, cols_per_player);
-            for point in &mut scatter {
-                if let Some(&foot) = foot_by_row.get(&point.row_index) {
-                    point.parity_foot = foot;
-                }
-            }
+            let scatter = timing_stats::build_scatter_points(
+                notes,
+                note_times,
+                col_offset,
+                cols_per_player,
+                (!foot_by_row.is_empty()).then_some(foot_by_row.as_slice()),
+            );
             let histogram = timing_stats::build_histogram_ms(notes);
             let scatter_worst_window_ms = {
                 let tw = timing_stats::effective_windows_ms();

@@ -2,9 +2,12 @@ use deadsync_core::note::NoteType;
 use deadsync_rules::{
     judgment::{JudgeGrade, Judgment, TimingWindow, judgment_time_error_music_ns_from_ms},
     note::Note,
-    timing::{HistogramMs, TimingStats, bench_support},
+    timing::{
+        ArrowTimingStats, HistogramMs, ScatterFoot, ScatterPoint, TimingStats, bench_support,
+    },
 };
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::collections::HashMap;
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
@@ -16,6 +19,9 @@ const ROWS: usize = 8_192;
 const STATS_OPS: usize = 5_000;
 const HISTOGRAM_OPS: usize = 1_500;
 const MERGE_OPS: usize = 3_000;
+const ARROW_OPS: usize = 3_000;
+const LANE_BUCKET_OPS: usize = 500_000;
+const SCATTER_OPS: usize = 1_000;
 const SAMPLE_BATCHES: usize = 100;
 
 struct CountingAlloc {
@@ -336,6 +342,75 @@ fn histogram_checksum(histogram: &HistogramMs) -> u64 {
         ^ u64::from(histogram.max_count)
 }
 
+fn arrow_checksum(stats: &ArrowTimingStats) -> u64 {
+    stats
+        .per_column
+        .iter()
+        .chain([&stats.left_foot, &stats.right_foot])
+        .fold(0u64, |checksum, bucket| {
+            checksum
+                .rotate_left(7)
+                .wrapping_add(u64::from(bucket.count))
+                ^ u64::from(bucket.stats.mean_ms.to_bits()).rotate_left(13)
+                ^ u64::from(bucket.stats.mean_abs_ms.to_bits()).rotate_left(29)
+                ^ u64::from(bucket.stats.stddev_ms.to_bits()).rotate_left(43)
+                ^ u64::from(bucket.stats.max_abs_ms.to_bits()).rotate_left(57)
+        })
+}
+
+fn assert_arrow_eq(old: &ArrowTimingStats, new: &ArrowTimingStats) {
+    assert_eq!(arrow_checksum(old), arrow_checksum(new));
+    assert_eq!(old.per_column.len(), new.per_column.len());
+    for (old, new) in old.per_column.iter().zip(&new.per_column) {
+        assert_eq!(old.count, new.count);
+        assert_eq!(old.stats.mean_ms.to_bits(), new.stats.mean_ms.to_bits());
+        assert_eq!(
+            old.stats.mean_abs_ms.to_bits(),
+            new.stats.mean_abs_ms.to_bits()
+        );
+        assert_eq!(old.stats.stddev_ms.to_bits(), new.stats.stddev_ms.to_bits());
+        assert_eq!(
+            old.stats.max_abs_ms.to_bits(),
+            new.stats.max_abs_ms.to_bits()
+        );
+    }
+}
+
+fn scatter_checksum(scatter: &[ScatterPoint]) -> u64 {
+    scatter.iter().fold(0u64, |checksum, point| {
+        let foot = match point.parity_foot {
+            ScatterFoot::Unknown => 0,
+            ScatterFoot::Left => 1,
+            ScatterFoot::Right => 2,
+            ScatterFoot::Both => 3,
+        };
+        checksum.rotate_left(5)
+            ^ u64::from(point.time_sec.to_bits())
+            ^ u64::from(point.offset_ms.unwrap_or_default().to_bits()).rotate_left(11)
+            ^ u64::from(point.direction_code).rotate_left(23)
+            ^ (point.row_index as u64).rotate_left(37)
+            ^ u64::from(point.quantization_idx).rotate_left(49)
+            ^ (foot << 61)
+            ^ u64::from(point.miss_because_held)
+    })
+}
+
+fn assert_scatter_eq(old: &[ScatterPoint], new: &[ScatterPoint]) {
+    assert_eq!(old.len(), new.len());
+    for (old, new) in old.iter().zip(new) {
+        assert_eq!(old.time_sec.to_bits(), new.time_sec.to_bits());
+        assert_eq!(
+            old.offset_ms.map(f32::to_bits),
+            new.offset_ms.map(f32::to_bits)
+        );
+        assert_eq!(old.direction_code, new.direction_code);
+        assert_eq!(old.miss_because_held, new.miss_because_held);
+        assert_eq!(old.row_index, new.row_index);
+        assert_eq!(old.quantization_idx, new.quantization_idx);
+        assert_eq!(old.parity_foot, new.parity_foot);
+    }
+}
+
 fn main() {
     let notes_a = summary_notes(0);
     let notes_b = summary_notes(1);
@@ -404,5 +479,96 @@ fn main() {
         MERGE_OPS,
         &old_merge,
         &new_merge,
+    );
+
+    let evaluation_notes = summary_notes(2);
+    let old_arrow_value = bench_support::arrow_stats_old(&evaluation_notes, 0, 4, None);
+    let new_arrow_value = bench_support::arrow_stats_new(&evaluation_notes, 0, 4, None);
+    assert_arrow_eq(&old_arrow_value, &new_arrow_value);
+    let old_arrow = measure(ARROW_OPS, evaluation_notes.len(), || {
+        let stats = bench_support::arrow_stats_old(black_box(&evaluation_notes), 0, 4, None);
+        arrow_checksum(black_box(&stats))
+    });
+    let new_arrow = measure(ARROW_OPS, evaluation_notes.len(), || {
+        let stats = bench_support::arrow_stats_new(black_box(&evaluation_notes), 0, 4, None);
+        arrow_checksum(black_box(&stats))
+    });
+    print_pair(
+        "fused row-selection arrow summary",
+        ARROW_OPS,
+        &old_arrow,
+        &new_arrow,
+    );
+
+    let empty_notes: [Note; 0] = [];
+    let old_empty = bench_support::arrow_stats_old(&empty_notes, 0, 4, None);
+    let new_empty = bench_support::arrow_stats_new(&empty_notes, 0, 4, None);
+    assert_arrow_eq(&old_empty, &new_empty);
+    let old_lane_buckets = measure(LANE_BUCKET_OPS, 4, || {
+        let stats = bench_support::arrow_stats_old(black_box(&empty_notes), 0, 4, None);
+        arrow_checksum(black_box(&stats))
+    });
+    let new_lane_buckets = measure(LANE_BUCKET_OPS, 4, || {
+        let stats = bench_support::arrow_stats_new(black_box(&empty_notes), 0, 4, None);
+        arrow_checksum(black_box(&stats))
+    });
+    print_pair(
+        "stack-backed lane accumulators",
+        LANE_BUCKET_OPS,
+        &old_lane_buckets,
+        &new_lane_buckets,
+    );
+
+    let note_times: Vec<i64> = evaluation_notes
+        .iter()
+        .map(|note| note.row_index as i64 * 10_000_000)
+        .collect();
+    let row_feet: Vec<(usize, ScatterFoot)> = (0..ROWS)
+        .map(|row| {
+            let foot = if row.is_multiple_of(3) {
+                ScatterFoot::Both
+            } else if row.is_multiple_of(2) {
+                ScatterFoot::Left
+            } else {
+                ScatterFoot::Right
+            };
+            (row, foot)
+        })
+        .collect();
+    let row_foot_map: HashMap<_, _> = row_feet.iter().copied().collect();
+    let old_scatter_value =
+        bench_support::scatter_old(&evaluation_notes, &note_times, 0, 4, Some(&row_foot_map));
+    let new_scatter_value =
+        bench_support::scatter_new(&evaluation_notes, &note_times, 0, 4, Some(&row_feet));
+    assert_scatter_eq(&old_scatter_value, &new_scatter_value);
+    let old_scatter = measure(SCATTER_OPS, evaluation_notes.len(), || {
+        let mut parity = HashMap::with_capacity(row_feet.len());
+        parity.extend(black_box(row_feet.iter().copied()));
+        let scatter = bench_support::scatter_old(
+            black_box(&evaluation_notes),
+            black_box(&note_times),
+            0,
+            4,
+            Some(&parity),
+        );
+        scatter_checksum(black_box(&scatter))
+    });
+    let new_scatter = measure(SCATTER_OPS, evaluation_notes.len(), || {
+        let mut parity = Vec::with_capacity(row_feet.len());
+        parity.extend(black_box(row_feet.iter().copied()));
+        let scatter = bench_support::scatter_new(
+            black_box(&evaluation_notes),
+            black_box(&note_times),
+            0,
+            4,
+            Some(&parity),
+        );
+        scatter_checksum(black_box(&scatter))
+    });
+    print_pair(
+        "fused scatter and compact row parity",
+        SCATTER_OPS,
+        &old_scatter,
+        &new_scatter,
     );
 }

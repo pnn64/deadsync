@@ -1,5 +1,6 @@
 use crate::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::note::Note;
+use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
 use log::debug;
@@ -1495,7 +1496,17 @@ pub fn compute_arrow_timing_stats(
     cols_per_player: usize,
     foot_by_note: Option<&std::collections::HashMap<(usize, usize), ScatterFoot>>,
 ) -> ArrowTimingStats {
-    let mut per_column: Vec<StatsAccum> = vec![StatsAccum::default(); cols_per_player];
+    // Gameplay's lane domain is fixed, so keep the temporary accumulators on
+    // the stack and allocate only the returned buckets. The heap fallback
+    // preserves this public helper's behavior for out-of-domain callers.
+    let mut stack_columns = [StatsAccum::default(); MAX_COLS];
+    let mut heap_columns = Vec::new();
+    let per_column: &mut [StatsAccum] = if cols_per_player <= MAX_COLS {
+        &mut stack_columns[..cols_per_player]
+    } else {
+        heap_columns.resize(cols_per_player, StatsAccum::default());
+        &mut heap_columns
+    };
     let mut left = StatsAccum::default();
     let mut right = StatsAccum::default();
 
@@ -1507,16 +1518,19 @@ pub fn compute_arrow_timing_stats(
         let row_start = idx;
 
         // Direction code: 1 = leftmost column, `cols_per_player` = rightmost
-        // column, anything else is a chord.
+        // column, anything else is a chord. Select the row judgment during the
+        // same scan, then attribute its offset to each arrow in one final pass.
         let mut direction_code: u32 = 0;
+        let mut row_judgment = None;
         while idx < len && notes[idx].row_index == row_index {
             let note = &notes[idx];
-            if !note.is_fake
-                && note.can_be_judged
-                && !matches!(note.note_type, NoteType::Mine)
-                && let Some(code) = local_direction_code(note, col_offset, cols_per_player)
-            {
-                direction_code = direction_code.saturating_add(code as u32);
+            if !note.is_fake && note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+                if let Some(judgment) = note.result.as_ref() {
+                    judgment::select_row_final_judgment(&mut row_judgment, judgment);
+                }
+                if let Some(code) = local_direction_code(note, col_offset, cols_per_player) {
+                    direction_code = direction_code.saturating_add(code as u32);
+                }
             }
             idx += 1;
         }
@@ -1533,9 +1547,7 @@ pub fn compute_arrow_timing_stats(
             foot_left = !foot_left;
         }
 
-        let Some(j) = judgment::aggregate_row_final_judgment(
-            notes[row_start..idx].iter().filter_map(judgeable_result),
-        ) else {
+        let Some(j) = row_judgment else {
             continue;
         };
         if j.grade == JudgeGrade::Miss {
@@ -1548,24 +1560,21 @@ pub fn compute_arrow_timing_stats(
         // to its own column, but they all share the row's aggregated offset,
         // so chord arrows count once per arrow. Each arrow's foot comes from
         // real parity when available, else the row's alternated foot.
-        for n in &notes[row_start..idx] {
-            if n.is_fake
-                || !n.can_be_judged
-                || matches!(n.note_type, NoteType::Mine)
-                || n.result.is_none()
-            {
+        for note in &notes[row_start..idx] {
+            if judgeable_result(note).is_none() {
                 continue;
             }
-            if let Some(code) = local_direction_code(n, col_offset, cols_per_player) {
+            if let Some(code) = local_direction_code(note, col_offset, cols_per_player) {
                 let col = (code as usize).saturating_sub(1);
                 if col < cols_per_player {
                     per_column[col].add(e);
-                    let use_left =
-                        match foot_by_note.and_then(|map| map.get(&(n.row_index, n.column))) {
-                            Some(ScatterFoot::Left) => true,
-                            Some(ScatterFoot::Right) => false,
-                            _ => foot_left,
-                        };
+                    let use_left = match foot_by_note
+                        .and_then(|map| map.get(&(note.row_index, note.column)))
+                    {
+                        Some(ScatterFoot::Left) => true,
+                        Some(ScatterFoot::Right) => false,
+                        _ => foot_left,
+                    };
                     if use_left {
                         left.add(e);
                     } else {
@@ -1576,8 +1585,10 @@ pub fn compute_arrow_timing_stats(
         }
     }
 
+    let mut buckets = Vec::with_capacity(cols_per_player);
+    buckets.extend(per_column.iter().copied().map(StatsAccum::finish));
     ArrowTimingStats {
-        per_column: per_column.into_iter().map(StatsAccum::finish).collect(),
+        per_column: buckets,
         left_foot: left.finish(),
         right_foot: right.finish(),
     }
@@ -1637,15 +1648,20 @@ fn local_direction_code(note: &Note, col_offset: usize, cols_per_player: usize) 
     Some(code)
 }
 
+/// Builds one point per judged row. `foot_by_row`, when supplied, must be
+/// sorted by ascending row index so parity joins remain a single linear pass.
 #[inline(always)]
 pub fn build_scatter_points(
     notes: &[Note],
     note_time_cache_ns: &[i64],
     col_offset: usize,
     cols_per_player: usize,
+    foot_by_row: Option<&[(usize, ScatterFoot)]>,
 ) -> Vec<ScatterPoint> {
+    debug_assert!(foot_by_row.is_none_or(|rows| rows.windows(2).all(|pair| pair[0].0 < pair[1].0)));
     let mut out = Vec::with_capacity(notes.len());
     let mut row_start = 0usize;
+    let mut foot_row_idx = 0usize;
 
     while row_start < notes.len() {
         let row = notes[row_start].row_index;
@@ -1653,21 +1669,19 @@ pub fn build_scatter_points(
         while row_end < notes.len() && notes[row_end].row_index == row {
             row_end += 1;
         }
-
-        let row_notes = &notes[row_start..row_end];
-        let row_judgment =
-            judgment::aggregate_row_final_judgment(row_notes.iter().filter_map(|n| {
-                if n.is_fake || !n.can_be_judged || matches!(n.note_type, NoteType::Mine) {
-                    None
-                } else {
-                    n.result.as_ref()
-                }
-            }));
-        let Some(judgment) = row_judgment else {
-            row_start = row_end;
-            continue;
+        let parity_foot = if let Some(rows) = foot_by_row {
+            while foot_row_idx < rows.len() && rows[foot_row_idx].0 < row {
+                foot_row_idx += 1;
+            }
+            rows.get(foot_row_idx)
+                .filter(|(foot_row, _)| *foot_row == row)
+                .map(|(_, foot)| *foot)
+                .unwrap_or_default()
+        } else {
+            ScatterFoot::Unknown
         };
 
+        let mut row_judgment = None;
         let mut representative_ix: Option<usize> = None;
         let mut direction_code = 0u8;
         for (offset, n) in notes[row_start..row_end].iter().enumerate() {
@@ -1675,14 +1689,19 @@ pub fn build_scatter_points(
             if n.is_fake || !n.can_be_judged || matches!(n.note_type, NoteType::Mine) {
                 continue;
             }
-            if representative_ix.is_none() && n.result.is_some() {
-                representative_ix = Some(i);
+            if let Some(judgment) = n.result.as_ref() {
+                judgment::select_row_final_judgment(&mut row_judgment, judgment);
+                representative_ix.get_or_insert(i);
             }
             if let Some(code) = local_direction_code(n, col_offset, cols_per_player) {
                 direction_code = direction_code.saturating_add(code);
             }
         }
 
+        let Some(judgment) = row_judgment else {
+            row_start = row_end;
+            continue;
+        };
         let Some(idx) = representative_ix else {
             row_start = row_end;
             continue;
@@ -1705,7 +1724,7 @@ pub fn build_scatter_points(
             miss_because_held: judgment.grade == JudgeGrade::Miss && judgment.miss_because_held,
             row_index: row,
             quantization_idx: notes[idx].quantization_idx,
-            parity_foot: ScatterFoot::Unknown,
+            parity_foot,
         });
 
         row_start = row_end;
@@ -2189,6 +2208,151 @@ mod timing_summary_reference {
             worst_window_ms,
         }
     }
+
+    pub(super) fn arrow_stats(
+        notes: &[Note],
+        col_offset: usize,
+        cols_per_player: usize,
+        foot_by_note: Option<&std::collections::HashMap<(usize, usize), ScatterFoot>>,
+    ) -> ArrowTimingStats {
+        let mut per_column = vec![StatsAccum::default(); cols_per_player];
+        let mut left = StatsAccum::default();
+        let mut right = StatsAccum::default();
+        let mut foot_left = false;
+        let mut idx = 0usize;
+
+        while idx < notes.len() {
+            let row_index = notes[idx].row_index;
+            let row_start = idx;
+            let mut direction_code = 0u32;
+            while idx < notes.len() && notes[idx].row_index == row_index {
+                let note = &notes[idx];
+                if !note.is_fake
+                    && note.can_be_judged
+                    && !matches!(note.note_type, NoteType::Mine)
+                    && let Some(code) = local_direction_code(note, col_offset, cols_per_player)
+                {
+                    direction_code = direction_code.saturating_add(code as u32);
+                }
+                idx += 1;
+            }
+
+            if direction_code == 1 {
+                foot_left = true;
+            } else if direction_code == cols_per_player as u32 {
+                foot_left = false;
+            } else if direction_code > 0 {
+                foot_left = !foot_left;
+            }
+
+            let Some(judgment) = judgment::aggregate_row_final_judgment(
+                notes[row_start..idx].iter().filter_map(judgeable_result),
+            ) else {
+                continue;
+            };
+            if judgment.grade == JudgeGrade::Miss {
+                continue;
+            }
+            let error_ms = judgment.time_error_ms;
+
+            for note in &notes[row_start..idx] {
+                if judgeable_result(note).is_none() {
+                    continue;
+                }
+                if let Some(code) = local_direction_code(note, col_offset, cols_per_player) {
+                    let col = (code as usize).saturating_sub(1);
+                    if col < cols_per_player {
+                        per_column[col].add(error_ms);
+                        let use_left = match foot_by_note
+                            .and_then(|map| map.get(&(note.row_index, note.column)))
+                        {
+                            Some(ScatterFoot::Left) => true,
+                            Some(ScatterFoot::Right) => false,
+                            _ => foot_left,
+                        };
+                        if use_left {
+                            left.add(error_ms);
+                        } else {
+                            right.add(error_ms);
+                        }
+                    }
+                }
+            }
+        }
+
+        ArrowTimingStats {
+            per_column: per_column.into_iter().map(StatsAccum::finish).collect(),
+            left_foot: left.finish(),
+            right_foot: right.finish(),
+        }
+    }
+
+    pub(super) fn scatter(
+        notes: &[Note],
+        note_time_cache_ns: &[i64],
+        col_offset: usize,
+        cols_per_player: usize,
+        foot_by_row: Option<&std::collections::HashMap<usize, ScatterFoot>>,
+    ) -> Vec<ScatterPoint> {
+        let mut out = Vec::with_capacity(notes.len());
+        let mut row_start = 0usize;
+        while row_start < notes.len() {
+            let row = notes[row_start].row_index;
+            let mut row_end = row_start + 1;
+            while row_end < notes.len() && notes[row_end].row_index == row {
+                row_end += 1;
+            }
+            let row_notes = &notes[row_start..row_end];
+            let Some(judgment) = judgment::aggregate_row_final_judgment(
+                row_notes.iter().filter_map(judgeable_result),
+            ) else {
+                row_start = row_end;
+                continue;
+            };
+
+            let mut representative_ix = None;
+            let mut direction_code = 0u8;
+            for (offset, note) in row_notes.iter().enumerate() {
+                if note.is_fake || !note.can_be_judged || matches!(note.note_type, NoteType::Mine) {
+                    continue;
+                }
+                if representative_ix.is_none() && note.result.is_some() {
+                    representative_ix = Some(row_start + offset);
+                }
+                if let Some(code) = local_direction_code(note, col_offset, cols_per_player) {
+                    direction_code = direction_code.saturating_add(code);
+                }
+            }
+
+            if let Some(idx) = representative_ix {
+                let time_sec = note_time_cache_ns
+                    .get(idx)
+                    .copied()
+                    .map(|time_ns| (time_ns as f64 * 1.0e-9) as f32)
+                    .unwrap_or(0.0);
+                out.push(ScatterPoint {
+                    time_sec,
+                    offset_ms: (judgment.grade != JudgeGrade::Miss)
+                        .then_some(judgment.time_error_ms),
+                    direction_code,
+                    miss_because_held: judgment.grade == JudgeGrade::Miss
+                        && judgment.miss_because_held,
+                    row_index: row,
+                    quantization_idx: notes[idx].quantization_idx,
+                    parity_foot: ScatterFoot::Unknown,
+                });
+            }
+            row_start = row_end;
+        }
+        if let Some(foot_by_row) = foot_by_row {
+            for point in &mut out {
+                if let Some(&foot) = foot_by_row.get(&point.row_index) {
+                    point.parity_foot = foot;
+                }
+            }
+        }
+        out
+    }
 }
 
 #[cfg(feature = "bench-support")]
@@ -2217,6 +2381,56 @@ pub mod bench_support {
 
     pub fn merge_new(histograms: &[HistogramMs]) -> HistogramMs {
         merge_histograms_ms(histograms)
+    }
+
+    pub fn arrow_stats_old(
+        notes: &[Note],
+        col_offset: usize,
+        cols_per_player: usize,
+        foot_by_note: Option<&std::collections::HashMap<(usize, usize), ScatterFoot>>,
+    ) -> ArrowTimingStats {
+        timing_summary_reference::arrow_stats(notes, col_offset, cols_per_player, foot_by_note)
+    }
+
+    pub fn arrow_stats_new(
+        notes: &[Note],
+        col_offset: usize,
+        cols_per_player: usize,
+        foot_by_note: Option<&std::collections::HashMap<(usize, usize), ScatterFoot>>,
+    ) -> ArrowTimingStats {
+        compute_arrow_timing_stats(notes, col_offset, cols_per_player, foot_by_note)
+    }
+
+    pub fn scatter_old(
+        notes: &[Note],
+        note_time_cache_ns: &[i64],
+        col_offset: usize,
+        cols_per_player: usize,
+        foot_by_row: Option<&std::collections::HashMap<usize, ScatterFoot>>,
+    ) -> Vec<ScatterPoint> {
+        timing_summary_reference::scatter(
+            notes,
+            note_time_cache_ns,
+            col_offset,
+            cols_per_player,
+            foot_by_row,
+        )
+    }
+
+    pub fn scatter_new(
+        notes: &[Note],
+        note_time_cache_ns: &[i64],
+        col_offset: usize,
+        cols_per_player: usize,
+        foot_by_row: Option<&[(usize, ScatterFoot)]>,
+    ) -> Vec<ScatterPoint> {
+        build_scatter_points(
+            notes,
+            note_time_cache_ns,
+            col_offset,
+            cols_per_player,
+            foot_by_row,
+        )
     }
 }
 
@@ -2556,6 +2770,62 @@ mod tests {
         assert_eq!(stats.right_foot.count, 1);
     }
 
+    fn assert_timing_stats_eq(actual: TimingStats, expected: TimingStats) {
+        assert_eq!(actual.mean_abs_ms.to_bits(), expected.mean_abs_ms.to_bits());
+        assert_eq!(actual.mean_ms.to_bits(), expected.mean_ms.to_bits());
+        assert_eq!(actual.stddev_ms.to_bits(), expected.stddev_ms.to_bits());
+        assert_eq!(actual.max_abs_ms.to_bits(), expected.max_abs_ms.to_bits());
+    }
+
+    fn assert_arrow_stats_eq(actual: &ArrowTimingStats, expected: &ArrowTimingStats) {
+        assert_eq!(actual.per_column.len(), expected.per_column.len());
+        for (actual, expected) in actual.per_column.iter().zip(&expected.per_column) {
+            assert_eq!(actual.count, expected.count);
+            assert_timing_stats_eq(actual.stats, expected.stats);
+        }
+        assert_eq!(actual.left_foot.count, expected.left_foot.count);
+        assert_timing_stats_eq(actual.left_foot.stats, expected.left_foot.stats);
+        assert_eq!(actual.right_foot.count, expected.right_foot.count);
+        assert_timing_stats_eq(actual.right_foot.stats, expected.right_foot.stats);
+    }
+
+    #[test]
+    fn fused_arrow_rows_match_three_scan_reference_and_wide_fallback() {
+        use std::collections::HashMap;
+
+        for cols in [4, MAX_COLS + 2] {
+            let mut notes = Vec::new();
+            let mut parity = HashMap::new();
+            for row in 0usize..64 {
+                for column in 0..cols {
+                    let grade = if row.is_multiple_of(13) && column == 0 {
+                        JudgeGrade::Miss
+                    } else {
+                        JudgeGrade::Fantastic
+                    };
+                    notes.push(test_note(
+                        row,
+                        column,
+                        grade,
+                        column as f32 - row as f32 * 0.25,
+                    ));
+                    parity.insert(
+                        (row, column),
+                        if column.is_multiple_of(2) {
+                            ScatterFoot::Left
+                        } else {
+                            ScatterFoot::Right
+                        },
+                    );
+                }
+            }
+
+            let expected = timing_summary_reference::arrow_stats(&notes, 0, cols, Some(&parity));
+            let actual = compute_arrow_timing_stats(&notes, 0, cols, Some(&parity));
+            assert_arrow_stats_eq(&actual, &expected);
+        }
+    }
+
     #[test]
     fn live_timing_stats_keep_recent_64_and_all_samples() {
         let mut stats = LiveTimingStats::default();
@@ -2640,12 +2910,53 @@ mod tests {
         ];
         let note_time_cache_ns = vec![1_000_000_000, 1_000_000_000];
 
-        let scatter = build_scatter_points(&notes, &note_time_cache_ns, 0, 4);
+        let scatter = build_scatter_points(&notes, &note_time_cache_ns, 0, 4, None);
 
         assert_eq!(scatter.len(), 1);
         assert_eq!(scatter[0].offset_ms, Some(12.0));
-        assert_eq!(scatter[0].row_index, 0);
+        assert_eq!(scatter[0].row_index, 10);
         assert_eq!(scatter[0].quantization_idx, notes[0].quantization_idx);
+    }
+
+    #[test]
+    fn fused_scatter_rows_match_reference_and_derive_row_parity() {
+        use std::collections::HashMap;
+
+        let mut notes = vec![
+            test_note(10, 0, JudgeGrade::Decent, -45.0),
+            test_note(10, 1, JudgeGrade::Great, 12.0),
+            test_note(11, 2, JudgeGrade::Fantastic, -3.0),
+            test_note(12, 3, JudgeGrade::Miss, 0.0),
+        ];
+        notes[3]
+            .result
+            .as_mut()
+            .expect("test note has a result")
+            .miss_because_held = true;
+        let note_times = [1_000_000_000, 1_000_000_000, 2_000_000_000, 3_000_000_000];
+        let row_parity = [
+            (10, ScatterFoot::Both),
+            (11, ScatterFoot::Left),
+            (12, ScatterFoot::Right),
+        ];
+        let row_parity_map = HashMap::from(row_parity);
+
+        let expected =
+            timing_summary_reference::scatter(&notes, &note_times, 0, 4, Some(&row_parity_map));
+        let actual = build_scatter_points(&notes, &note_times, 0, 4, Some(&row_parity));
+        assert_eq!(actual.len(), expected.len());
+        for (actual, expected) in actual.iter().zip(&expected) {
+            assert_eq!(actual.time_sec.to_bits(), expected.time_sec.to_bits());
+            assert_eq!(
+                actual.offset_ms.map(f32::to_bits),
+                expected.offset_ms.map(f32::to_bits)
+            );
+            assert_eq!(actual.direction_code, expected.direction_code);
+            assert_eq!(actual.miss_because_held, expected.miss_because_held);
+            assert_eq!(actual.row_index, expected.row_index);
+            assert_eq!(actual.quantization_idx, expected.quantization_idx);
+            assert_eq!(actual.parity_foot, expected.parity_foot);
+        }
     }
 
     #[test]

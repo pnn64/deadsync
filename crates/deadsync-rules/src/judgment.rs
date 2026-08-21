@@ -97,33 +97,25 @@ pub fn aggregate_row_final_judgment<'a, I>(judgments: I) -> Option<&'a Judgment>
 where
     I: IntoIterator<Item = &'a Judgment>,
 {
-    let mut has_miss = false;
     let mut chosen: Option<&'a Judgment> = None;
-
     for j in judgments {
-        if j.grade == JudgeGrade::Miss {
-            if !has_miss {
-                has_miss = true;
-                chosen = Some(j);
-            }
-            continue;
-        }
-
-        if has_miss {
-            continue;
-        }
-
-        match chosen {
-            None => chosen = Some(j),
-            Some(current) => {
-                if j.time_error_music_ns >= current.time_error_music_ns {
-                    chosen = Some(j);
-                }
-            }
-        }
+        select_row_final_judgment(&mut chosen, j);
     }
-
     chosen
+}
+
+/// Incrementally applies [`aggregate_row_final_judgment`] semantics.
+///
+/// This lets row scanners collect other derived data in the same traversal
+/// without duplicating the scoring rule or materializing row judgments.
+#[inline(always)]
+pub fn select_row_final_judgment<'a>(chosen: &mut Option<&'a Judgment>, candidate: &'a Judgment) {
+    match *chosen {
+        Some(current) if current.grade == JudgeGrade::Miss => {}
+        _ if candidate.grade == JudgeGrade::Miss => *chosen = Some(candidate),
+        Some(current) if candidate.time_error_music_ns < current.time_error_music_ns => {}
+        _ => *chosen = Some(candidate),
+    }
 }
 
 #[inline(always)]

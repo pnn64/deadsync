@@ -2191,6 +2191,7 @@ pub fn payload_from_gameplay_input(input: ArrowCloudGameplayPayloadInput<'_>) ->
         input.note_times,
         input.col_offset,
         input.cols_per_player,
+        None,
     );
     let fail_time_s = input.fail_time_ns.map(song_time_ns_to_seconds);
 
