@@ -27,6 +27,7 @@ harness = false
 required-features = ["bench-support"]
 
 [dependencies]
+arrayvec = "0.7.8"
 deadsync-core = { path = "../deadsync-core" }
 log = "0.4.33"
 rustc-hash = "2.1.3"

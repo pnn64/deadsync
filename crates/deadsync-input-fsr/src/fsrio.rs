@@ -5,9 +5,10 @@
     target_os = "macos"
 ))]
 mod imp {
+    use arrayvec::ArrayVec;
     use deadsync_input::fsr::{
         BackendKind, ButtonView, PAD_BUTTON_COUNT, PAD_BUTTON_LABELS, PadDeviceId, PadView,
-        SensorView,
+        SensorView, SensorViews,
     };
     use hidapi::{DeviceInfo, HidApi, HidDevice};
     use std::cmp::min;
@@ -24,9 +25,26 @@ mod imp {
     const SENSOR_COUNT: usize = 12;
     const MAX_NAME_SIZE: usize = 50;
     const MAX_SENSOR_VALUE: u16 = 850;
+    #[cfg(any(test, feature = "bench-support"))]
     const LINEARIZATION_POWER: u32 = 4;
     const NTH_DEGREE_COEFFICIENT: f32 = 0.9;
     const FIRST_DEGREE_COEFFICIENT: f32 = 0.1;
+    const SENSOR_NORMALIZED: [f32; MAX_SENSOR_VALUE as usize + 1] = {
+        let mut values = [0.0; MAX_SENSOR_VALUE as usize + 1];
+        let max = MAX_SENSOR_VALUE as f32;
+        let max_squared = max * max;
+        let linearized_max = (max_squared * max_squared) / max;
+        let mut raw = 0usize;
+        while raw <= MAX_SENSOR_VALUE as usize {
+            let raw_value = raw as f32;
+            let squared = raw_value * raw_value;
+            let nth = (squared * squared) / linearized_max;
+            values[raw] =
+                (nth * NTH_DEGREE_COEFFICIENT + raw_value * FIRST_DEGREE_COEFFICIENT) / max;
+            raw += 1;
+        }
+        values
+    };
     const REOPEN_INTERVAL: Duration = Duration::from_millis(1500);
     const FEATURE_PROBE_IDS: [u8; 16] = [
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
@@ -76,7 +94,7 @@ mod imp {
                 return Vec::new();
             }
             let buttons = std::array::from_fn(|b| {
-                let sensors: Vec<SensorView> = self
+                let sensors: SensorViews = self
                     .button_sensor_indices(b)
                     .into_iter()
                     .enumerate()
@@ -147,21 +165,24 @@ mod imp {
             }
             self.ensure_device();
             let indices = self.button_sensor_indices(button);
-            let targets: Vec<usize> = match sensor {
-                Some(k) => match indices.get(k) {
-                    Some(&i) => vec![i],
-                    None => return false,
-                },
-                None => indices,
-            };
-            if targets.is_empty() {
+            if indices.is_empty() {
                 return false;
             }
             let Some(device) = self.device.as_ref() else {
                 return false;
             };
-            for i in &targets {
-                self.config.sensor_thresholds[*i] = value;
+            match sensor {
+                Some(k) => {
+                    let Some(&index) = indices.get(k) else {
+                        return false;
+                    };
+                    self.config.sensor_thresholds[index] = value;
+                }
+                None => {
+                    for index in indices {
+                        self.config.sensor_thresholds[index] = value;
+                    }
+                }
             }
             if write_config(device, &self.config).is_ok() {
                 return true;
@@ -192,13 +213,8 @@ mod imp {
         }
 
         /// Hardware sensor indices mapped to button `b`, in ascending order.
-        fn button_sensor_indices(&self, b: usize) -> Vec<usize> {
-            (0..SENSOR_COUNT)
-                .filter(|&i| {
-                    let m = self.config.sensor_to_button_mapping[i];
-                    m >= 0 && m as usize == b
-                })
-                .collect()
+        fn button_sensor_indices(&self, b: usize) -> ArrayVec<usize, SENSOR_COUNT> {
+            sensor_indices(&self.config.sensor_to_button_mapping, b)
         }
 
         pub fn debug_dump(&mut self) -> String {
@@ -627,17 +643,134 @@ mod imp {
         Some(String::from_utf8_lossy(&bytes[2..2 + size]).into_owned())
     }
 
-    fn linearize_value(raw: u16) -> f32 {
+    #[cfg(any(test, feature = "bench-support"))]
+    fn normalize_sensor_value_reference(raw: u16) -> f32 {
         let raw = min(raw, MAX_SENSOR_VALUE) as f32;
         let max = MAX_SENSOR_VALUE as f32;
         let linearized_max = max.powi(LINEARIZATION_POWER as i32) / max;
         let nth = raw.powi(LINEARIZATION_POWER as i32) / linearized_max;
-        nth * NTH_DEGREE_COEFFICIENT + raw * FIRST_DEGREE_COEFFICIENT
+        (nth * NTH_DEGREE_COEFFICIENT + raw * FIRST_DEGREE_COEFFICIENT) / max
     }
 
     fn normalize_sensor_value(raw: u16) -> f32 {
-        linearize_value(raw) / MAX_SENSOR_VALUE as f32
+        SENSOR_NORMALIZED[min(raw, MAX_SENSOR_VALUE) as usize]
+    }
+
+    fn sensor_indices(
+        mapping: &[i8; SENSOR_COUNT],
+        button: usize,
+    ) -> ArrayVec<usize, SENSOR_COUNT> {
+        mapping
+            .iter()
+            .enumerate()
+            .filter_map(|(index, &mapped)| {
+                (mapped >= 0 && mapped as usize == button).then_some(index)
+            })
+            .collect()
+    }
+
+    #[cfg(feature = "bench-support")]
+    pub(crate) mod bench_support {
+        use super::*;
+        use std::hint::black_box;
+
+        const MAPPING: [i8; SENSOR_COUNT] = [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3];
+
+        pub fn sensor_groups_old(events: usize) -> u64 {
+            let mut checksum = 0u64;
+            for event in 0..events {
+                for button in 0..PAD_BUTTON_COUNT {
+                    let indices: Vec<_> = (0..SENSOR_COUNT)
+                        .filter(|&index| {
+                            let mapped = MAPPING[index];
+                            mapped >= 0 && mapped as usize == button
+                        })
+                        .collect();
+                    checksum = checksum
+                        .wrapping_add(indices.len() as u64)
+                        .wrapping_add(indices[(event + button) % indices.len()] as u64);
+                    black_box(&indices);
+                }
+            }
+            checksum
+        }
+
+        pub fn sensor_groups_new(events: usize) -> u64 {
+            let mut checksum = 0u64;
+            for event in 0..events {
+                for button in 0..PAD_BUTTON_COUNT {
+                    let indices = sensor_indices(&MAPPING, button);
+                    checksum = checksum
+                        .wrapping_add(indices.len() as u64)
+                        .wrapping_add(indices[(event + button) % indices.len()] as u64);
+                    black_box(&indices);
+                }
+            }
+            checksum
+        }
+
+        pub fn normalization_old(events: usize) -> u64 {
+            let mut checksum = 0u64;
+            for event in 0..events {
+                let raw = (event % (u16::MAX as usize + 1)) as u16;
+                checksum = checksum.wrapping_add(u64::from(
+                    black_box(normalize_sensor_value_reference(raw)).to_bits(),
+                ));
+            }
+            checksum
+        }
+
+        pub fn normalization_new(events: usize) -> u64 {
+            let mut checksum = 0u64;
+            for event in 0..events {
+                let raw = (event % (u16::MAX as usize + 1)) as u16;
+                checksum = checksum
+                    .wrapping_add(u64::from(black_box(normalize_sensor_value(raw)).to_bits()));
+            }
+            checksum
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn stack_sensor_groups_match_allocating_reference() {
+            let mappings = [
+                [-1; SENSOR_COUNT],
+                [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3],
+                [3; SENSOR_COUNT],
+                [0, -1, 0, -1, 2, -1, 2, -1, 1, 1, 3, 3],
+            ];
+            for mapping in mappings {
+                for button in 0..PAD_BUTTON_COUNT {
+                    let expected: Vec<_> = mapping
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, &mapped)| {
+                            (mapped >= 0 && mapped as usize == button).then_some(index)
+                        })
+                        .collect();
+                    assert_eq!(sensor_indices(&mapping, button).as_slice(), expected);
+                }
+            }
+        }
+
+        #[test]
+        fn normalization_table_matches_original_formula() {
+            for raw in 0..=u16::MAX {
+                assert_eq!(
+                    normalize_sensor_value(raw).to_bits(),
+                    normalize_sensor_value_reference(raw).to_bits(),
+                    "raw value {raw}"
+                );
+            }
+        }
     }
 }
 
 pub use imp::Monitor;
+
+#[cfg(feature = "bench-support")]
+pub(crate) use imp::bench_support;

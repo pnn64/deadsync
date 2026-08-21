@@ -1,7 +1,7 @@
 //! StepManiaX FSR sensor monitor using the shared SmxManager.
 
 use deadsync_input::fsr::{
-    BackendKind, ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView,
+    BackendKind, ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView, SensorViews,
 };
 use deadsync_smx::{self as smx, SensorTestData, SensorTestMode, SmxConfig};
 use std::fmt::Write as _;
@@ -425,7 +425,7 @@ pub(super) fn fsr_button_view(
     readings: [SensorReading; PANEL_SENSOR_COUNT],
     panel_active: bool,
 ) -> ButtonView {
-    let sensors: Vec<SensorView> = readings
+    let sensors: SensorViews = readings
         .iter()
         .map(|r| SensorView {
             firmware_index: r.firmware_index,
@@ -463,7 +463,7 @@ pub(super) fn load_cell_button_view(
     release: u16,
     panel_active: bool,
 ) -> ButtonView {
-    let sensors: Vec<SensorView> = values
+    let sensors: SensorViews = values
         .iter()
         .enumerate()
         .map(|(s, &raw_value)| SensorView {
@@ -569,7 +569,7 @@ fn normalize(value: u16, max: u16) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::hysteresis_active;
+    use super::*;
 
     #[test]
     fn hysteresis_holds_between_release_and_press() {
@@ -583,5 +583,62 @@ mod tests {
         assert!(!hysteresis_active(true, 69, 70, 80));
         // An unset press threshold never reads as pressed.
         assert!(!hysteresis_active(true, 100, 0, 0));
+    }
+
+    #[test]
+    fn inline_sensor_views_preserve_order_state_and_aggregates() {
+        let readings = [
+            SensorReading {
+                firmware_index: 0,
+                label: Some("L"),
+                value: 40,
+                threshold: 50,
+                enabled: true,
+            },
+            SensorReading {
+                firmware_index: 3,
+                label: Some("D"),
+                value: 90,
+                threshold: 80,
+                enabled: false,
+            },
+            SensorReading {
+                firmware_index: 2,
+                label: Some("U"),
+                value: 70,
+                threshold: 100,
+                enabled: true,
+            },
+            SensorReading {
+                firmware_index: 1,
+                label: Some("R"),
+                value: 20,
+                threshold: 30,
+                enabled: true,
+            },
+        ];
+        let view = fsr_button_view("L", readings, true);
+
+        assert_eq!(view.sensors.len(), PANEL_SENSOR_COUNT);
+        assert_eq!(
+            view.sensors
+                .iter()
+                .map(|sensor| sensor.firmware_index)
+                .collect::<Vec<_>>(),
+            [0, 3, 2, 1]
+        );
+        assert_eq!(view.aggregate_value, 90);
+        assert_eq!(view.aggregate_threshold, 100);
+        assert!(view.active);
+        assert!(!view.sensors[0].active);
+        assert!(view.sensors[1].active);
+        assert!(!view.sensors[1].enabled);
+
+        let load_cell = load_cell_button_view("D", [10, 120, 80, 30], 90, 70, false);
+        assert_eq!(load_cell.sensors.len(), PANEL_SENSOR_COUNT);
+        assert_eq!(load_cell.aggregate_value, 120);
+        assert_eq!(load_cell.aggregate_threshold, 90);
+        assert_eq!(load_cell.release_threshold, Some(70));
+        assert!(load_cell.sensors.iter().all(|sensor| !sensor.active));
     }
 }

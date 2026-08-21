@@ -4,7 +4,16 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+bench-support = []
+
+[[bench]]
+name = "fsr_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
+arrayvec = "0.7.8"
 deadsync-input = { path = "../deadsync-input" }
 deadsync-smx = { path = "../deadsync-smx" }
 log = "0.4.33"

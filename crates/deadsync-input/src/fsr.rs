@@ -1,7 +1,12 @@
+use arrayvec::ArrayVec;
+
 /// Number of playable buttons deadsync configures per FSR pad (L/D/U/R).
 pub const PAD_BUTTON_COUNT: usize = 4;
 /// Button labels in fixed order, shared by every FSR backend.
 pub const PAD_BUTTON_LABELS: [&str; PAD_BUTTON_COUNT] = ["L", "D", "U", "R"];
+/// Maximum hardware sensors exposed by one button. FSRIO owns twelve sensors
+/// total and may legally map all of them to one button.
+pub const MAX_BUTTON_SENSORS: usize = 12;
 
 /// Which FSR backend owns a given pad, so edits can be routed back to it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,6 +44,10 @@ pub struct SensorView {
     pub enabled: bool,
 }
 
+/// Bounded inline sensor storage. SMX always uses four entries; FSRIO uses at
+/// most twelve, so live pad snapshots never need a per-button heap allocation.
+pub type SensorViews = ArrayVec<SensorView, MAX_BUTTON_SENSORS>;
+
 /// One playable button (L/D/U/R) and the sensors that drive it.
 ///
 /// `sensors` may be empty for a button with no mapped sensors. `aggregate_*`
@@ -47,7 +56,7 @@ pub struct SensorView {
 #[derive(Clone, Debug)]
 pub struct ButtonView {
     pub label: &'static str,
-    pub sensors: Vec<SensorView>,
+    pub sensors: SensorViews,
     pub min_raw_threshold: u16,
     pub max_raw_threshold: u16,
     pub aggregate_value: u16,

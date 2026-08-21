@@ -265,3 +265,71 @@ fn write_dump_file(path: &Path, content: String) -> Result<(), String> {
     }
     std::fs::write(path, content).map_err(|e| format!("failed to write '{}': {e}", path.display()))
 }
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod bench_support {
+    use deadsync_input::fsr::{SensorView, SensorViews};
+    use std::hint::black_box;
+
+    fn sensor(index: usize) -> SensorView {
+        let raw_value = (index as u16 + 1) * 37;
+        let raw_threshold = (index as u16 + 1) * 29;
+        SensorView {
+            firmware_index: index,
+            label: None,
+            raw_value,
+            value_norm: f32::from(raw_value) / 250.0,
+            raw_threshold,
+            threshold_norm: f32::from(raw_threshold) / 250.0,
+            active: raw_value >= raw_threshold,
+            enabled: true,
+        }
+    }
+
+    fn sensor_checksum(sensor: &SensorView) -> u64 {
+        sensor.firmware_index as u64
+            ^ u64::from(sensor.raw_value).rotate_left(7)
+            ^ u64::from(sensor.value_norm.to_bits()).rotate_left(13)
+            ^ u64::from(sensor.raw_threshold).rotate_left(23)
+            ^ u64::from(sensor.threshold_norm.to_bits()).rotate_left(31)
+            ^ (u64::from(sensor.active) << 61)
+            ^ (u64::from(sensor.enabled) << 62)
+    }
+
+    pub fn inline_sensors_old(events: usize) -> u64 {
+        let mut checksum = 0u64;
+        for event in 0..events {
+            let sensors: Vec<_> = (0..4).map(sensor).collect();
+            checksum = checksum.wrapping_add(sensor_checksum(&sensors[event % sensors.len()]));
+            black_box(&sensors);
+        }
+        checksum
+    }
+
+    pub fn inline_sensors_new(events: usize) -> u64 {
+        let mut checksum = 0u64;
+        for event in 0..events {
+            let sensors: SensorViews = (0..4).map(sensor).collect();
+            checksum = checksum.wrapping_add(sensor_checksum(&sensors[event % sensors.len()]));
+            black_box(&sensors);
+        }
+        checksum
+    }
+
+    pub fn sensor_groups_old(events: usize) -> u64 {
+        crate::fsrio::bench_support::sensor_groups_old(events)
+    }
+
+    pub fn sensor_groups_new(events: usize) -> u64 {
+        crate::fsrio::bench_support::sensor_groups_new(events)
+    }
+
+    pub fn normalization_old(events: usize) -> u64 {
+        crate::fsrio::bench_support::normalization_old(events)
+    }
+
+    pub fn normalization_new(events: usize) -> u64 {
+        crate::fsrio::bench_support::normalization_new(events)
+    }
+}

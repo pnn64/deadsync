@@ -2681,12 +2681,14 @@ mod tests {
     fn mk_button(label: &'static str, threshold: u16) -> ButtonView {
         ButtonView {
             label,
-            sensors: vec![
+            sensors: [
                 mk_sensor(0, threshold),
                 mk_sensor(1, threshold),
                 mk_sensor(2, threshold),
                 mk_sensor(3, threshold),
-            ],
+            ]
+            .into_iter()
+            .collect(),
             min_raw_threshold: 5,
             max_raw_threshold: 250,
             aggregate_value: 0,
@@ -2701,12 +2703,14 @@ mod tests {
     fn mk_loadcell_button(label: &'static str, press: u16, release: u16) -> ButtonView {
         ButtonView {
             label,
-            sensors: vec![
+            sensors: [
                 mk_sensor(0, press),
                 mk_sensor(1, press),
                 mk_sensor(2, press),
                 mk_sensor(3, press),
-            ],
+            ]
+            .into_iter()
+            .collect(),
             min_raw_threshold: 20,
             max_raw_threshold: 200,
             aggregate_value: 0,
