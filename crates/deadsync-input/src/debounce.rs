@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use super::InputSource;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct DebounceState {
     action_mask: u32,
     source: InputSource,
@@ -18,7 +18,7 @@ struct DebounceState {
 
 const NOT_SCHEDULED: u32 = u32::MAX;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct SlotState {
     state: Option<DebounceState>,
     due_at: Option<Instant>,
@@ -423,6 +423,47 @@ fn debounce_due_at(state: DebounceState, windows: DebounceWindows) -> Option<Ins
     None
 }
 
+#[inline(always)]
+fn resolve_due_slot(
+    slot_state: &mut SlotState,
+    input_slot: u32,
+    now: Instant,
+    windows: DebounceWindows,
+) -> (Option<DebouncedEdge>, bool, Option<Instant>) {
+    let Some(mut state) = slot_state.state else {
+        return (None, false, None);
+    };
+    if state.held_raw && state.held_reported {
+        return (None, false, None);
+    }
+    if now.duration_since(state.last_report_time) < windows.window {
+        return (
+            None,
+            false,
+            state.last_report_time.checked_add(windows.window),
+        );
+    }
+    if !state.held_raw && !state.held_reported {
+        slot_state.state = None;
+        return (None, true, None);
+    }
+
+    state.last_report_time = now;
+    state.held_reported = state.held_raw;
+    let edge = debounced_edge(state, input_slot, state.held_reported, now);
+    if !state.held_raw && windows.window.is_zero() {
+        slot_state.state = None;
+        return (Some(edge), true, None);
+    }
+    let new_due_at = if state.held_raw {
+        None
+    } else {
+        now.checked_add(windows.prune_window())
+    };
+    slot_state.state = Some(state);
+    (Some(edge), false, new_due_at)
+}
+
 #[cfg(test)]
 fn debounce_input_edge_in_store(
     states: &Mutex<DebounceStore>,
@@ -467,9 +508,21 @@ pub fn debounce_input_edge_in_store_mut(
     {
         return DebounceEdges::default();
     }
-    let now = Instant::now();
+    let pending_now = states.slots[slot].state.and_then(|state| {
+        (state.held_raw == pressed && state.held_reported != pressed).then(Instant::now)
+    });
+    if pending_now.is_some_and(|now| {
+        let state = states.slots[slot].state.expect("pending state exists");
+        now.duration_since(state.last_report_time) < windows.window
+    }) {
+        return DebounceEdges::default();
+    }
     let input_slot = slot.min(u32::MAX as usize) as u32;
     let debug_log = log::log_enabled!(log::Level::Debug);
+    if states.slots[slot].state.is_none() && !pressed && !debug_log {
+        return DebounceEdges::default();
+    }
+    let now = pending_now.unwrap_or_else(Instant::now);
     let was_empty = states.slots[slot].state.is_none();
     let old_due_at = states.slots[slot].due_at;
     let before_state = if debug_log {
@@ -561,19 +614,8 @@ pub fn emit_due_debounce_edges_from_mut(
     while let Some(next_slot) = states.take_next_due_slot(now) {
         let (edge, remove, new_due_at, after_state) = {
             let slot_state = &mut states.slots[next_slot];
-            let Some(mut state) = slot_state.state else {
-                continue;
-            };
             let input_slot = next_slot.min(u32::MAX as usize) as u32;
-            let edge = debounce_emit_if_due(&mut state, input_slot, now, windows);
-            let remove = should_prune_debounce_state(state, now, windows);
-            let new_due_at = if remove {
-                slot_state.state = None;
-                None
-            } else {
-                slot_state.state = Some(state);
-                debounce_due_at(state, windows)
-            };
+            let (edge, remove, new_due_at) = resolve_due_slot(slot_state, input_slot, now, windows);
             (edge, remove, new_due_at, slot_state.state)
         };
 
@@ -601,6 +643,253 @@ pub fn emit_due_debounce_edges_from_mut(
     flushed
 }
 
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod bench_support {
+    use super::*;
+
+    const MASK: u32 = 1 << 3;
+
+    #[inline(always)]
+    fn edge_checksum(edge: Option<DebouncedEdge>) -> u64 {
+        edge.map_or(0, |edge| {
+            u64::from(edge.action_mask)
+                ^ u64::from(edge.input_slot).rotate_left(7)
+                ^ edge.timestamp_host_nanos.rotate_left(13)
+                ^ (u64::from(edge.pressed) << 63)
+        })
+    }
+
+    #[inline(always)]
+    fn state_checksum(slot_state: SlotState) -> u64 {
+        slot_state.state.map_or(0, |state| {
+            u64::from(state.held_raw)
+                | (u64::from(state.held_reported) << 1)
+                | (u64::from(slot_state.due_at.is_some()) << 2)
+        })
+    }
+
+    pub fn first_release_old(store: &mut DebounceStore, events: usize) -> u64 {
+        let timestamp = Instant::now();
+        let windows = DebounceWindows::uniform(Duration::from_millis(20));
+        let mut checksum = 0u64;
+        for index in 0..events {
+            let slot = 0;
+            store.ensure_slot(slot);
+            let now = Instant::now();
+            let input_slot = slot as u32;
+            let old_due_at = store.slots[slot].due_at;
+            let mut state = store.slots[slot].state.unwrap_or(DebounceState {
+                action_mask: MASK,
+                source: InputSource::Keyboard,
+                held_raw: false,
+                held_reported: false,
+                last_raw_change_time: timestamp,
+                last_raw_change_host_nanos: index as u64,
+                last_raw_store_time: now,
+                last_report_time: now.checked_sub(windows.prune_window()).unwrap_or(now),
+            });
+            let edges = debounce_step(
+                &mut state,
+                MASK,
+                InputSource::Keyboard,
+                false,
+                timestamp,
+                index as u64,
+                now,
+                input_slot,
+                windows,
+            );
+            let prune = should_prune_debounce_state(state, now, windows);
+            let new_due_at = if prune {
+                store.slots[slot].state = None;
+                None
+            } else {
+                store.slots[slot].state = Some(state);
+                debounce_due_at(state, windows)
+            };
+            store.refresh_due_slot(slot, old_due_at, new_due_at);
+            checksum = checksum
+                .wrapping_add(edge_checksum(edges.first))
+                .wrapping_add(edge_checksum(edges.second));
+        }
+        checksum
+    }
+
+    pub fn first_release_new(store: &mut DebounceStore, events: usize) -> u64 {
+        let timestamp = Instant::now();
+        let windows = DebounceWindows::uniform(Duration::from_millis(20));
+        let mut checksum = 0u64;
+        for index in 0..events {
+            let edges = debounce_input_edge_in_store_mut(
+                store,
+                0,
+                MASK,
+                InputSource::Keyboard,
+                false,
+                timestamp,
+                index as u64,
+                windows,
+            );
+            checksum = checksum
+                .wrapping_add(edge_checksum(edges.first))
+                .wrapping_add(edge_checksum(edges.second));
+        }
+        checksum
+    }
+
+    fn pending_release(now: Instant, window: Duration) -> SlotState {
+        let raw_at = now.checked_sub(window).unwrap_or(now);
+        SlotState {
+            state: Some(DebounceState {
+                action_mask: MASK,
+                source: InputSource::Gamepad,
+                held_raw: false,
+                held_reported: true,
+                last_raw_change_time: raw_at,
+                last_raw_change_host_nanos: 77,
+                last_raw_store_time: raw_at,
+                last_report_time: raw_at,
+            }),
+            due_at: Some(now),
+            scheduled_ix: 0,
+            epoch: 1,
+        }
+    }
+
+    pub fn due_release_old(events: usize) -> u64 {
+        let window = Duration::from_millis(20);
+        let windows = DebounceWindows::uniform(window);
+        let now = Instant::now();
+        let template = pending_release(now, window);
+        let mut checksum = 0u64;
+        for _ in 0..events {
+            let mut slot_state = template;
+            let mut state = slot_state.state.expect("benchmark state initialized");
+            let edge = debounce_emit_if_due(&mut state, 7, now, windows);
+            let remove = should_prune_debounce_state(state, now, windows);
+            let new_due_at = if remove {
+                slot_state.state = None;
+                None
+            } else {
+                slot_state.state = Some(state);
+                debounce_due_at(state, windows)
+            };
+            checksum = checksum
+                .wrapping_add(edge_checksum(edge))
+                .wrapping_add(u64::from(remove))
+                .wrapping_add(u64::from(new_due_at.is_some()))
+                .wrapping_add(state_checksum(slot_state));
+        }
+        checksum
+    }
+
+    pub fn due_release_new(events: usize) -> u64 {
+        let window = Duration::from_millis(20);
+        let windows = DebounceWindows::uniform(window);
+        let now = Instant::now();
+        let template = pending_release(now, window);
+        let mut checksum = 0u64;
+        for _ in 0..events {
+            let mut slot_state = template;
+            let (edge, remove, new_due_at) = resolve_due_slot(&mut slot_state, 7, now, windows);
+            checksum = checksum
+                .wrapping_add(edge_checksum(edge))
+                .wrapping_add(u64::from(remove))
+                .wrapping_add(u64::from(new_due_at.is_some()))
+                .wrapping_add(state_checksum(slot_state));
+        }
+        checksum
+    }
+
+    pub fn pending_store(_: usize) -> DebounceStore {
+        let window = Duration::from_millis(200);
+        let now = Instant::now();
+        let mut store = DebounceStore::new();
+        store.prepare_slots(1);
+        store.slots[0] = SlotState {
+            state: Some(DebounceState {
+                action_mask: MASK,
+                source: InputSource::Keyboard,
+                held_raw: false,
+                held_reported: true,
+                last_raw_change_time: now,
+                last_raw_change_host_nanos: 88,
+                last_raw_store_time: now,
+                last_report_time: now,
+            }),
+            due_at: now.checked_add(window),
+            scheduled_ix: 0,
+            epoch: store.epoch,
+        };
+        store.due_slots.push(0);
+        store
+    }
+
+    pub fn pending_duplicate_old(store: &mut DebounceStore, events: usize) -> u64 {
+        let timestamp = Instant::now();
+        let windows = DebounceWindows::uniform(Duration::from_millis(200));
+        let mut checksum = 0u64;
+        for index in 0..events {
+            let slot = 0;
+            store.ensure_slot(slot);
+            let now = Instant::now();
+            let old_due_at = store.slots[slot].due_at;
+            let mut state = store.slots[slot]
+                .state
+                .expect("pending benchmark state initialized");
+            let edges = debounce_step(
+                &mut state,
+                MASK,
+                InputSource::Keyboard,
+                false,
+                timestamp,
+                index as u64,
+                now,
+                slot as u32,
+                windows,
+            );
+            let prune = should_prune_debounce_state(state, now, windows);
+            let new_due_at = if prune {
+                store.slots[slot].state = None;
+                None
+            } else {
+                store.slots[slot].state = Some(state);
+                debounce_due_at(state, windows)
+            };
+            store.refresh_due_slot(slot, old_due_at, new_due_at);
+            checksum = checksum
+                .wrapping_add(edge_checksum(edges.first))
+                .wrapping_add(edge_checksum(edges.second))
+                .wrapping_add(state_checksum(store.slots[slot]));
+        }
+        checksum
+    }
+
+    pub fn pending_duplicate_new(store: &mut DebounceStore, events: usize) -> u64 {
+        let timestamp = Instant::now();
+        let windows = DebounceWindows::uniform(Duration::from_millis(200));
+        let mut checksum = 0u64;
+        for index in 0..events {
+            let edges = debounce_input_edge_in_store_mut(
+                store,
+                0,
+                MASK,
+                InputSource::Keyboard,
+                false,
+                timestamp,
+                index as u64,
+                windows,
+            );
+            checksum = checksum
+                .wrapping_add(edge_checksum(edges.first))
+                .wrapping_add(edge_checksum(edges.second))
+                .wrapping_add(state_checksum(store.slots[0]));
+        }
+        checksum
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -619,6 +908,27 @@ mod tests {
             last_raw_store_time: now,
             last_report_time: now.checked_sub(window).unwrap_or(now),
         }
+    }
+
+    fn resolve_due_reference(
+        slot_state: &mut SlotState,
+        input_slot: u32,
+        now: Instant,
+        windows: DebounceWindows,
+    ) -> (Option<DebouncedEdge>, bool, Option<Instant>) {
+        let Some(mut state) = slot_state.state else {
+            return (None, false, None);
+        };
+        let edge = debounce_emit_if_due(&mut state, input_slot, now, windows);
+        let remove = should_prune_debounce_state(state, now, windows);
+        let new_due_at = if remove {
+            slot_state.state = None;
+            None
+        } else {
+            slot_state.state = Some(state);
+            debounce_due_at(state, windows)
+        };
+        (edge, remove, new_due_at)
     }
 
     fn assert_edge(
@@ -652,6 +962,92 @@ mod tests {
         store.clear_and_reserve(16);
         assert!(store.slots.capacity() >= 16);
         assert!(store.due_slots.capacity() >= 16);
+    }
+
+    #[test]
+    fn first_released_value_keeps_slot_empty_and_next_press_exact() {
+        let windows = DebounceWindows::uniform(Duration::from_millis(20));
+        let timestamp = Instant::now();
+        let mut store = DebounceStore::new();
+        store.prepare_slots(1);
+
+        let released = debounce_input_edge_in_store_mut(
+            &mut store,
+            0,
+            TEST_MASK,
+            InputSource::Keyboard,
+            false,
+            timestamp,
+            10,
+            windows,
+        );
+        assert!(released.first.is_none());
+        assert!(released.second.is_none());
+        assert!(store.slots[0].state.is_none());
+        assert!(store.slots[0].due_at.is_none());
+        assert!(store.due_slots.is_empty());
+        assert_eq!(store.active_len, 0);
+
+        let pressed = debounce_input_edge_in_store_mut(
+            &mut store,
+            0,
+            TEST_MASK,
+            InputSource::Keyboard,
+            true,
+            timestamp,
+            11,
+            windows,
+        );
+        let edge = pressed.second.expect("first press emits immediately");
+        assert!(pressed.first.is_none());
+        assert!(edge.pressed);
+        assert_eq!(edge.timestamp, timestamp);
+        assert_eq!(edge.timestamp_host_nanos, 11);
+        assert_eq!(store.active_len, 1);
+    }
+
+    #[test]
+    fn due_resolution_matches_generic_state_machine() {
+        let original_window = Duration::from_millis(20);
+        let original_now = Instant::now();
+        let last_report_time = original_now
+            .checked_sub(original_window)
+            .unwrap_or(original_now);
+
+        for (held_raw, held_reported, window, advance) in [
+            (false, true, original_window, Duration::ZERO),
+            (true, false, original_window, Duration::ZERO),
+            (false, false, original_window, Duration::ZERO),
+            (true, true, original_window, Duration::ZERO),
+            (false, true, Duration::from_millis(40), Duration::ZERO),
+            (false, true, Duration::ZERO, Duration::ZERO),
+            (false, false, original_window, Duration::from_millis(5)),
+        ] {
+            let now = original_now + advance;
+            let state = DebounceState {
+                action_mask: TEST_MASK,
+                source: InputSource::Keyboard,
+                held_raw,
+                held_reported,
+                last_raw_change_time: last_report_time,
+                last_raw_change_host_nanos: 456,
+                last_raw_store_time: last_report_time,
+                last_report_time,
+            };
+            let mut old_slot = SlotState {
+                state: Some(state),
+                due_at: Some(original_now),
+                scheduled_ix: 0,
+                epoch: 1,
+            };
+            let mut new_slot = old_slot;
+            let windows = DebounceWindows::uniform(window);
+
+            let old = resolve_due_reference(&mut old_slot, TEST_SLOT, now, windows);
+            let new = resolve_due_slot(&mut new_slot, TEST_SLOT, now, windows);
+            assert_eq!(new, old);
+            assert_eq!(new_slot.state, old_slot.state);
+        }
     }
 
     #[test]
@@ -824,6 +1220,70 @@ mod tests {
         );
         assert_eq!(after.last_raw_store_time, before.last_raw_store_time);
         assert_eq!(after.last_report_time, before.last_report_time);
+    }
+
+    #[test]
+    fn pending_duplicate_preserves_state_until_current_window_is_due() {
+        let long_window = Duration::from_millis(200);
+        let timestamp = Instant::now();
+        let mut store = DebounceStore::new();
+        store.prepare_slots(1);
+
+        let press = debounce_input_edge_in_store_mut(
+            &mut store,
+            0,
+            TEST_MASK,
+            InputSource::Keyboard,
+            true,
+            timestamp,
+            100,
+            DebounceWindows::uniform(long_window),
+        );
+        assert!(press.second.is_some());
+        let release = debounce_input_edge_in_store_mut(
+            &mut store,
+            0,
+            TEST_MASK,
+            InputSource::Keyboard,
+            false,
+            timestamp,
+            101,
+            DebounceWindows::uniform(long_window),
+        );
+        assert!(release.first.is_none());
+        assert!(release.second.is_none());
+        let before = store.slots[0];
+
+        let duplicate = debounce_input_edge_in_store_mut(
+            &mut store,
+            0,
+            TEST_MASK,
+            InputSource::Keyboard,
+            false,
+            timestamp + Duration::from_secs(1),
+            999,
+            DebounceWindows::uniform(long_window),
+        );
+        assert!(duplicate.first.is_none());
+        assert!(duplicate.second.is_none());
+        assert_eq!(store.slots[0], before);
+
+        let state = store.slots[0].state.as_mut().expect("pending release");
+        state.last_report_time = Instant::now()
+            .checked_sub(Duration::from_millis(20))
+            .expect("test time supports subtraction");
+        let shortened = debounce_input_edge_in_store_mut(
+            &mut store,
+            0,
+            TEST_MASK,
+            InputSource::Keyboard,
+            false,
+            timestamp + Duration::from_secs(2),
+            1_000,
+            DebounceWindows::uniform(Duration::from_millis(10)),
+        );
+        assert!(shortened.first.is_some_and(|edge| !edge.pressed));
+        assert!(shortened.second.is_none());
     }
 
     #[test]
