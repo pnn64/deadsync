@@ -8,6 +8,14 @@ license = "GPL-3.0"
 name = "sfx_queue_hot_path"
 harness = false
 
+[[bench]]
+name = "mixer_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
+[features]
+bench-support = []
+
 [dependencies]
 rtrb = "0.4.0"
 

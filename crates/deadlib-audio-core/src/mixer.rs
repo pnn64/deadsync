@@ -170,14 +170,26 @@ pub fn mix_active_sfx(
         let n = (sfx.data.len().saturating_sub(sfx.cursor)).min(buf_len - start_sample);
         mixed_sfx |= n > 0;
         let bus_gain = controls.bus_gain(sfx.bus);
-        for i in 0..n {
-            let sfx_sample_f32 = i16_to_f32(sfx.data[sfx.cursor + i]) * bus_gain;
-            mix_f32[start_sample + i] += sfx_sample_f32;
-        }
+        let src = &sfx.data[sfx.cursor..sfx.cursor + n];
+        let dst = &mut mix_f32[start_sample..start_sample + n];
+        mix_sfx_samples(src, dst, bus_gain);
         sfx.cursor += n;
         sfx.cursor < sfx.data.len()
     });
     mixed_sfx
+}
+
+#[inline]
+fn mix_sfx_samples(src: &[i16], dst: &mut [f32], gain: f32) {
+    if gain == 1.0 {
+        for (dst, &src) in dst.iter_mut().zip(src) {
+            *dst += i16_to_f32(src);
+        }
+        return;
+    }
+    for (dst, &src) in dst.iter_mut().zip(src) {
+        *dst += i16_to_f32(src) * gain;
+    }
 }
 
 /// Where a scheduled SFX onset lands relative to the buffer currently being
@@ -229,11 +241,26 @@ pub fn i16_to_f32(sample: i16) -> f32 {
     sample as f32 / (i16::MAX as f32 + 1.0)
 }
 
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::{i16_to_f32, mix_sfx_samples};
+
+    pub fn mix_sfx_old(src: &[i16], dst: &mut [f32], gain: f32) {
+        for i in 0..src.len() {
+            dst[i] += i16_to_f32(src[i]) * gain;
+        }
+    }
+
+    pub fn mix_sfx_new(src: &[i16], dst: &mut [f32], gain: f32) {
+        mix_sfx_samples(src, dst, gain);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         MAX_SCHEDULE_AHEAD_FRAMES, MixBus, MixControls, ScheduledOnset, f32_to_i16, i16_to_f32,
-        scheduled_onset_decision,
+        mix_sfx_samples, scheduled_onset_decision,
     };
 
     #[test]
@@ -242,6 +269,20 @@ mod tests {
             scheduled_onset_decision(0, 10_000, 2, 1_024),
             ScheduledOnset::StartAt(0)
         );
+    }
+
+    #[test]
+    fn contiguous_sfx_mix_matches_indexed_samples_bit_for_bit() {
+        let src = [i16::MIN, -20_001, -1, 0, 1, 12_345, i16::MAX];
+        for gain in [0.0, 0.125, 0.75, 1.0, 1.5] {
+            let mut expected = [0.25f32; 7];
+            for i in 0..src.len() {
+                expected[i] += i16_to_f32(src[i]) * gain;
+            }
+            let mut actual = [0.25f32; 7];
+            mix_sfx_samples(&src, &mut actual, gain);
+            assert_eq!(actual.map(f32::to_bits), expected.map(f32::to_bits));
+        }
     }
 
     #[test]

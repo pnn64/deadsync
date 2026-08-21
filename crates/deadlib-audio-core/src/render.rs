@@ -89,6 +89,17 @@ fn convert_music_samples(
     }
 }
 
+#[inline]
+fn write_i16_samples(src: &[f32], dst: &mut [i16], has_audio: bool) {
+    if !has_audio {
+        dst.fill(0);
+        return;
+    }
+    for (dst, &src) in dst.iter_mut().zip(src) {
+        *dst = f32_to_i16(src);
+    }
+}
+
 impl RenderState {
     pub fn new(
         transport: AudioRenderHandle,
@@ -203,7 +214,8 @@ impl RenderState {
         }
     }
 
-    fn mix_music(&mut self, total_before: u64, len: usize, music_vol: f32) -> usize {
+    fn mix_music(&mut self, mix_f32: &mut [f32], total_before: u64, music_vol: f32) -> usize {
+        let len = mix_f32.len();
         let channels = self.device_channels.max(1);
         let frames = len / channels;
         let target_gain = music_target_gain();
@@ -229,7 +241,7 @@ impl RenderState {
                     break;
                 };
                 let src = &active.samples()[self.active_sample..self.active_sample + consumed];
-                let dst = &mut self.mix_f32[dst_start..dst_start + consumed];
+                let dst = &mut mix_f32[dst_start..dst_start + consumed];
                 convert_music_samples(
                     src,
                     dst,
@@ -265,8 +277,8 @@ impl RenderState {
                 advance_gain(&mut self.music_gain_current, target_gain);
             }
         }
-        self.mix_f32[frame * channels..frames * channels].fill(0.0);
-        self.mix_f32[frames * channels..len].fill(0.0);
+        mix_f32[frame * channels..frames * channels].fill(0.0);
+        mix_f32[frames * channels..len].fill(0.0);
         popped_samples
     }
 
@@ -281,17 +293,24 @@ impl RenderState {
 
     fn mix_f32_buffer(&mut self, total_before: u64, len: usize) -> (usize, bool) {
         debug_assert!(len <= self.mix_f32.len());
+        let mut mix_f32 = std::mem::take(&mut self.mix_f32);
+        let result = self.mix_f32_buffer_into(total_before, &mut mix_f32[..len]);
+        self.mix_f32 = mix_f32;
+        result
+    }
+
+    fn mix_f32_buffer_into(&mut self, total_before: u64, mix_f32: &mut [f32]) -> (usize, bool) {
         let stream_gain = self.controls.stream_gain();
         let snap_gen = music_gain_snap_generation();
         if snap_gen != self.music_gain_snap_seen {
             self.music_gain_current = music_target_gain();
             self.music_gain_snap_seen = snap_gen;
         }
-        let popped = self.mix_music(total_before, len, stream_gain);
+        let popped = self.mix_music(mix_f32, total_before, stream_gain);
 
         let mixed_sfx = mix_active_sfx(
             &mut self.active_sfx,
-            &mut self.mix_f32[..len],
+            mix_f32,
             total_before,
             self.device_channels.max(1),
             &self.controls,
@@ -312,9 +331,7 @@ impl RenderState {
         let mut mixed_sfx = false;
         for out_chunk in out.chunks_mut(chunk_samples) {
             let chunk_total = total_before + (emitted_samples / channels) as u64;
-            let (popped, chunk_mixed_sfx) = self.mix_f32_buffer(chunk_total, out_chunk.len());
-            let mixed = &self.mix_f32[..out_chunk.len()];
-            out_chunk.copy_from_slice(mixed);
+            let (popped, chunk_mixed_sfx) = self.mix_f32_buffer_into(chunk_total, out_chunk);
             mixed_sfx |= chunk_mixed_sfx;
             emitted_samples += out_chunk.len();
             popped_samples += popped;
@@ -339,10 +356,12 @@ impl RenderState {
         for out_chunk in out.chunks_mut(chunk_samples) {
             let chunk_total = total_before + (emitted_samples / channels) as u64;
             let chunk_len = out_chunk.len();
-            let (popped, _) = self.mix_f32_buffer(chunk_total, chunk_len);
-            for (dst, src) in out_chunk.iter_mut().zip(&self.mix_f32[..chunk_len]) {
-                *dst = f32_to_i16(*src);
-            }
+            let (popped, mixed_sfx) = self.mix_f32_buffer(chunk_total, chunk_len);
+            write_i16_samples(
+                &self.mix_f32[..chunk_len],
+                out_chunk,
+                popped > 0 || mixed_sfx,
+            );
             emitted_samples += out_chunk.len();
             popped_samples += popped;
         }
@@ -398,6 +417,32 @@ impl RenderState {
     }
 }
 
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::{convert_music_samples, f32_to_i16, write_i16_samples};
+
+    pub fn music_copy_old(src: &[i16], scratch: &mut [f32], dst: &mut [f32], gain: f32) {
+        let mut current_gain = gain;
+        convert_music_samples(src, scratch, 2, 1.0, gain, &mut current_gain);
+        dst.copy_from_slice(scratch);
+    }
+
+    pub fn music_direct_new(src: &[i16], dst: &mut [f32], gain: f32) {
+        let mut current_gain = gain;
+        convert_music_samples(src, dst, 2, 1.0, gain, &mut current_gain);
+    }
+
+    pub fn silent_i16_old(src: &[f32], dst: &mut [i16]) {
+        for (dst, &src) in dst.iter_mut().zip(src) {
+            *dst = f32_to_i16(src);
+        }
+    }
+
+    pub fn silent_i16_new(src: &[f32], dst: &mut [i16]) {
+        write_i16_samples(src, dst, false);
+    }
+}
+
 impl Drop for RenderState {
     fn drop(&mut self) {
         let _ = self.recycle_active();
@@ -406,7 +451,7 @@ impl Drop for RenderState {
 
 #[cfg(test)]
 mod tests {
-    use super::{MIX_CHUNK_FRAMES, MUSIC_GAIN_MAX_STEP, RenderState};
+    use super::{MIX_CHUNK_FRAMES, MUSIC_GAIN_MAX_STEP, RenderState, write_i16_samples};
     use crate::ring::{
         AudioRenderHandle, MusicBlockTiming, MusicBlockWriter, PlayedMapReader, music_transport,
     };
@@ -424,6 +469,36 @@ mod tests {
     const EFFECT_BUS: MixBus = MixBus::new(0);
     const SEC_PER_FRAME: f64 = 1.0 / 48_000.0;
     static GLOBAL_AUDIO_STATE_BUSY: AtomicBool = AtomicBool::new(false);
+
+    #[test]
+    fn silent_i16_fast_path_matches_sample_conversion() {
+        let src = [0.0f32; 33];
+        let mut expected = [i16::MIN; 33];
+        for (dst, &src) in expected.iter_mut().zip(&src) {
+            *dst = crate::f32_to_i16(src);
+        }
+        let mut actual = [i16::MAX; 33];
+        write_i16_samples(&src, &mut actual, false);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn silent_i16_callback_overwrites_the_whole_device_buffer() {
+        let _guard = GlobalAudioGuard::acquire();
+        reset_levels();
+        let (_stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
+        let mut render = test_render(render_handle);
+        let mut output = vec![i16::MAX; MIX_CHUNK_FRAMES * CHANNELS + 17];
+
+        let popped = render.render_i16_chunks(
+            &mut output,
+            music_track_start_frame(),
+            std::iter::empty::<QueuedSfx>(),
+        );
+
+        assert_eq!(popped, 0);
+        assert!(output.iter().all(|&sample| sample == 0));
+    }
 
     struct GlobalAudioGuard;
 
