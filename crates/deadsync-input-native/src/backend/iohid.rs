@@ -1,15 +1,15 @@
-use super::iohid_filter::{AxisState, PadValueKind, classify_pad_value};
+use super::iohid_filter::{AxisCache, HostInstantMap, PadValueKind, classify_pad_value};
 use super::{
     BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, emit_dir_edges, uuid_from_bytes,
 };
 use deadsync_input::{PadCode, PadEvent, PadId, RawKeyboardEvent};
 use log::debug;
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
+use rustc_hash::FxHashMap;
 use std::collections::{HashMap, hash_map::Entry};
 use std::ffi::{c_char, c_void};
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
 use std::time::Instant;
 use winit::keyboard::KeyCode;
 
@@ -147,14 +147,19 @@ fn cfstring_value(v: CFTypeRef) -> Option<String> {
 }
 
 struct PadDev {
+    device_key: usize,
     id: PadId,
     name: String,
     uuid: [u8; 16],
-    last_axis: Vec<AxisState>,
+    last_axis: AxisCache,
     dir: [bool; 4],
 }
 
-struct KeyDev;
+#[derive(Clone, Copy)]
+enum InputDev {
+    Pad(usize),
+    Keyboard,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DevClass {
@@ -167,6 +172,7 @@ struct HostClock {
     numer: u32,
     denom: u32,
     offset_nanos: i128,
+    instant_map: HostInstantMap,
 }
 
 impl HostClock {
@@ -186,10 +192,12 @@ impl HostClock {
         let host_mid =
             host_before / 2 + host_after / 2 + ((host_before & 1) + (host_after & 1)) / 2;
         let mach_nanos = scale_mach_time(mach_now, info.numer, info.denom);
+        let anchor = Instant::now();
         Some(Self {
             numer: info.numer,
             denom: info.denom,
             offset_nanos: i128::from(mach_nanos) - i128::from(host_mid),
+            instant_map: HostInstantMap::new(anchor, host.instant_nanos(anchor)),
         })
     }
 
@@ -201,6 +209,12 @@ impl HostClock {
         let mach_nanos = scale_mach_time(mach_time, self.numer, self.denom);
         Some((i128::from(mach_nanos) - self.offset_nanos).clamp(0, i128::from(u64::MAX)) as u64)
     }
+
+    #[inline(always)]
+    fn event_time(self, mach_time: u64) -> Option<(Instant, u64)> {
+        let host_nanos = self.host_nanos(mach_time)?;
+        Some((self.instant_map.instant(host_nanos), host_nanos))
+    }
 }
 
 struct Ctx {
@@ -209,8 +223,8 @@ struct Ctx {
     emit_sys: Box<dyn FnMut(GpSystemEvent) + Send>,
     emit_key: Box<dyn FnMut(RawKeyboardEvent) + Send>,
     id_by_uuid: HashMap<[u8; 16], PadId>,
-    pad_devs: HashMap<usize, PadDev>,
-    key_devs: HashMap<usize, KeyDev>,
+    devices: FxHashMap<usize, InputDev>,
+    pads: Vec<PadDev>,
     host_clock: Option<HostClock>,
     startup_complete_sent: bool,
 
@@ -243,45 +257,19 @@ fn keyboard_capture_active() -> bool {
 }
 
 #[inline(always)]
-fn timestamp_from_host_sample(
-    target_host_nanos: u64,
-    sample_host_nanos: u64,
-    sample: Instant,
-) -> Instant {
-    if target_host_nanos >= sample_host_nanos {
-        sample
-            .checked_add(Duration::from_nanos(
-                target_host_nanos.saturating_sub(sample_host_nanos),
-            ))
-            .unwrap_or(sample)
-    } else {
-        sample
-            .checked_sub(Duration::from_nanos(
-                sample_host_nanos.saturating_sub(target_host_nanos),
-            ))
-            .unwrap_or(sample)
-    }
-}
-
-#[inline(always)]
 fn event_time(
     host: BackendHost,
     host_clock: Option<HostClock>,
     value: IOHIDValueRef,
 ) -> (Instant, u64) {
+    // SAFETY: `value` is the live IOHID value delivered by the callback for this
+    // call frame, so querying its timestamp is valid here.
+    let mach_time = unsafe { IOHIDValueGetTimeStamp(value) };
+    if let Some(mapped) = host_clock.and_then(|clock| clock.event_time(mach_time)) {
+        return mapped;
+    }
     let sample = Instant::now();
-    let sample_host_nanos = host.now_nanos();
-    let host_nanos = host_clock
-        .and_then(|clock| {
-            // SAFETY: `value` is the live IOHID value delivered by the callback for
-            // this call frame, so querying its timestamp is valid here.
-            clock.host_nanos(unsafe { IOHIDValueGetTimeStamp(value) })
-        })
-        .unwrap_or(sample_host_nanos);
-    (
-        timestamp_from_host_sample(host_nanos, sample_host_nanos, sample),
-        host_nanos,
-    )
+    (sample, host.instant_nanos(sample))
 }
 
 #[inline(always)]
@@ -464,7 +452,7 @@ extern "C" fn on_match(
     unsafe {
         let ctx = &mut *(_ctx as *mut Ctx);
         let key = device as usize;
-        if ctx.pad_devs.contains_key(&key) || ctx.key_devs.contains_key(&key) {
+        if ctx.devices.contains_key(&key) {
             return;
         }
 
@@ -483,7 +471,7 @@ extern "C" fn on_match(
         };
 
         if class == DevClass::Keyboard {
-            ctx.key_devs.insert(key, KeyDev);
+            ctx.devices.insert(key, InputDev::Keyboard);
             return;
         }
 
@@ -525,7 +513,7 @@ extern "C" fn on_match(
                 // another currently-connected pad already resolved to this serial
                 // uuid, fall back to the port-bound identity so the two pads stay
                 // distinct instead of merging onto a single PadId.
-                if ctx.pad_devs.values().any(|dev| dev.uuid == serial_uuid) {
+                if ctx.pads.iter().any(|pad| pad.uuid == serial_uuid) {
                     uuid_from_bytes(name.as_bytes())
                 } else {
                     serial_uuid
@@ -543,12 +531,13 @@ extern "C" fn on_match(
         };
 
         let dev = PadDev {
+            device_key: key,
             id,
             name: name.clone(),
             uuid,
-            // Pads usually expose only a handful of analog elements, so a tiny
-            // linear cache is cheaper here than hashing in the input callback.
-            last_axis: Vec::with_capacity(8),
+            // Standard desktop axes use fixed slots; unusual axes retain a
+            // small inline fallback without allocating for typical pads.
+            last_axis: AxisCache::default(),
             dir: [false; 4],
         };
 
@@ -561,7 +550,9 @@ extern "C" fn on_match(
             initial: !ctx.startup_complete_sent,
         });
 
-        ctx.pad_devs.insert(key, dev);
+        let pad_index = ctx.pads.len();
+        ctx.pads.push(dev);
+        ctx.devices.insert(key, InputDev::Pad(pad_index));
     }
 }
 
@@ -577,12 +568,19 @@ extern "C" fn on_remove(
     unsafe {
         let ctx = &mut *(_ctx as *mut Ctx);
         let key = device as usize;
-        if ctx.key_devs.remove(&key).is_some() {
-            return;
-        }
-        let Some(dev) = ctx.pad_devs.remove(&key) else {
+        let Some(input_dev) = ctx.devices.remove(&key) else {
             return;
         };
+        let InputDev::Pad(pad_index) = input_dev else {
+            return;
+        };
+        let dev = ctx.pads.swap_remove(pad_index);
+        // `swap_remove` can move the last pad, so repair its stable dispatch
+        // index before the next input callback.
+        if let Some(moved) = ctx.pads.get(pad_index) {
+            ctx.devices
+                .insert(moved.device_key, InputDev::Pad(pad_index));
+        }
         (ctx.emit_sys)(GpSystemEvent::Disconnected {
             name: dev.name,
             id: dev.id,
@@ -617,7 +615,13 @@ extern "C" fn on_input(
         let code = ((usage_page as u32) << 16) | (usage as u32);
         let v = IOHIDValueGetIntegerValue(value) as i64;
 
-        if let Some(dev) = ctx.pad_devs.get_mut(&key) {
+        let Some(input_dev) = ctx.devices.get(&key).copied() else {
+            return;
+        };
+        if let InputDev::Pad(pad_index) = input_dev {
+            let Some(dev) = ctx.pads.get_mut(pad_index) else {
+                return;
+            };
             let Some(kind) = classify_pad_value(&mut dev.last_axis, usage_page, usage, code, v)
             else {
                 return;
@@ -665,9 +669,6 @@ extern "C" fn on_input(
             return;
         }
 
-        let Some(_dev) = ctx.key_devs.get(&key) else {
-            return;
-        };
         let capture_active = keyboard_capture_active();
         let key_code = if usage_page == 0x07 && capture_active {
             hid_key_code(usage)
@@ -718,8 +719,8 @@ pub fn run(
             emit_sys: Box::new(emit_sys),
             emit_key: Box::new(emit_key),
             id_by_uuid: HashMap::new(),
-            pad_devs: HashMap::new(),
-            key_devs: HashMap::new(),
+            devices: FxHashMap::default(),
+            pads: Vec::new(),
             host_clock: HostClock::calibrate(host),
             startup_complete_sent: false,
             key_primary_usage_page: cfstr("PrimaryUsagePage"),

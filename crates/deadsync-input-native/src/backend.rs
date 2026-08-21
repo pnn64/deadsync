@@ -14,7 +14,7 @@ mod hid_report_cache;
 pub mod hidraw;
 #[cfg(target_os = "macos")]
 pub mod iohid;
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", test, feature = "bench-support"))]
 mod iohid_filter;
 #[cfg(any(target_os = "linux", target_os = "freebsd", test))]
 mod poll_registration;
@@ -24,6 +24,10 @@ pub mod unix_time;
 pub mod w32_raw_input;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 pub mod wgi;
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use iohid_filter::{AxisCache, HostInstantMap, PadValueKind, classify_pad_value};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PadBackend {
