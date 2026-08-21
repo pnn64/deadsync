@@ -16,11 +16,12 @@ pub(super) fn sync_i18n_cache(state: &mut State) {
     let new_groups_lc: HashSet<String> = state
         .score_import_pack_options
         .iter()
-        .map(|opt| opt.group.to_ascii_lowercase())
+        .map(|opt| opt.group_key.to_string())
         .collect();
     state
         .score_import_pack_selected
-        .retain(|key| new_groups_lc.contains(&key.to_ascii_lowercase()));
+        .retain(|key| new_groups_lc.contains(key));
+    sync_pack_picker_summary(state);
     let (sp_packs, sp_filters) = sync_pack_options(state);
     state.sync_pack_choices = sp_packs;
     state.sync_pack_filters = sp_filters;

@@ -17,10 +17,15 @@ use deadsync_theme_simply_love::screens::evaluation_summary::{
     benchmark_eval_numeric_text, benchmark_profile_name_changed,
 };
 use deadsync_theme_simply_love::screens::mappings::MappingTextBenchmark;
+use deadsync_theme_simply_love::screens::options::ScoreImportPickerBenchmark;
+use deadsync_theme_simply_love::screens::pad_config::{
+    benchmark_pad_text_current, benchmark_pad_text_legacy,
+};
 use deadsync_theme_simply_love::screens::practice::benchmark_edit_info_text_into;
 use deadsync_theme_simply_love::screens::select_color::{
     benchmark_wheel_current, benchmark_wheel_legacy,
 };
+use deadsync_theme_simply_love::screens::select_mode::SelectModeTextBenchmark;
 use deadsync_theme_simply_love::screens::select_music::{
     benchmark_info_text_front_cached, benchmark_info_text_hashed, benchmark_wheel_song_meta,
 };
@@ -51,6 +56,9 @@ const OVERLAY_ACTOR_OPS: usize = 200_000;
 const SELECT_COLOR_WHEEL_OPS: usize = 200_000;
 const STUTTER_FILTER_OPS: usize = 500_000;
 const FRAME_STATS_OVERLAY_OPS: usize = 5_000;
+const PAD_TEXT_OPS: usize = 100_000;
+const SELECT_MODE_TEXT_OPS: usize = 500_000;
+const SCORE_PICKER_OPS: usize = 50_000;
 const SONG_SEARCH_WHEEL_SLOTS: usize = 12;
 const SONG_SEARCH_WHEEL_FOCUS_SLOT: usize = SONG_SEARCH_WHEEL_SLOTS / 2 - 1;
 const DETAIL_LABELS: [&str; 5] = ["Pack", "Song", "Subtitle", "BPMs", "Difficulties"];
@@ -857,5 +865,51 @@ fn main() {
         FRAME_STATS_OVERLAY_OPS,
         &old_frame_overlay,
         &new_frame_overlay,
+    );
+
+    let mut old_pad_text = Vec::with_capacity(40);
+    let old_pad = measure(PAD_TEXT_OPS, 100, || {
+        benchmark_pad_text_legacy(&mut old_pad_text)
+    });
+    let mut new_pad_text = Vec::with_capacity(40);
+    let new_pad = measure(PAD_TEXT_OPS, 100, || {
+        benchmark_pad_text_current(&mut new_pad_text)
+    });
+    print_pair(
+        "14. stack/inline pad frame data",
+        PAD_TEXT_OPS,
+        &old_pad,
+        &new_pad,
+    );
+
+    let old_select_mode_text = SelectModeTextBenchmark::new();
+    let old_select_mode = measure(SELECT_MODE_TEXT_OPS, 500, || {
+        old_select_mode_text.legacy_frame(1)
+    });
+    let mut new_select_mode_text = SelectModeTextBenchmark::new();
+    let new_select_mode = measure(SELECT_MODE_TEXT_OPS, 500, || {
+        new_select_mode_text.current_frame(1)
+    });
+    print_pair(
+        "15. retained Select Mode text",
+        SELECT_MODE_TEXT_OPS,
+        &old_select_mode,
+        &new_select_mode,
+    );
+
+    let picker = ScoreImportPickerBenchmark::new();
+    let mut old_picker_actors = Vec::with_capacity(20);
+    let old_picker = measure(SCORE_PICKER_OPS, 50, || {
+        picker.legacy_frame(&mut old_picker_actors, 7)
+    });
+    let mut new_picker_actors = Vec::with_capacity(20);
+    let new_picker = measure(SCORE_PICKER_OPS, 50, || {
+        picker.current_frame(&mut new_picker_actors, 7)
+    });
+    print_pair(
+        "16. retained/direct score-pack rows",
+        SCORE_PICKER_OPS,
+        &old_picker,
+        &new_picker,
     );
 }

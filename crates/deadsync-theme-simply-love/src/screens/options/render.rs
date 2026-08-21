@@ -1449,11 +1449,12 @@ pub fn push_actors(
         }
     }
     if state.score_import_pack_picker.is_some() {
-        actors.extend(build_score_import_pack_picker_actors(
+        push_score_import_pack_picker_actors(
+            actors,
             state,
             state.active_color_index,
             visual_policy.machine_font,
-        ));
+        );
     }
     if let Some(confirm) = &state.score_import_confirm {
         let endpoint = confirm.selection.endpoint;

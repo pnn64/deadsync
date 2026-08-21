@@ -2641,6 +2641,44 @@ fn score_import_profile_debug_redacts_api_keys() {
 }
 
 #[test]
+fn retained_score_pack_rows_match_legacy_text_and_geometry() {
+    let benchmark = ScoreImportPickerBenchmark::new();
+    let mut legacy = Vec::with_capacity(20);
+    let mut current = Vec::with_capacity(20);
+
+    assert_eq!(
+        benchmark.legacy_frame(&mut legacy, 7),
+        benchmark.current_frame(&mut current, 7)
+    );
+    assert_eq!(legacy.len(), current.len());
+    for (legacy, current) in legacy.iter().zip(&current) {
+        let (
+            Actor::Text {
+                content: legacy_text,
+                align: legacy_align,
+                offset: legacy_offset,
+                z: legacy_z,
+                ..
+            },
+            Actor::Text {
+                content: current_text,
+                align: current_align,
+                offset: current_offset,
+                z: current_z,
+                ..
+            },
+        ) = (legacy, current)
+        else {
+            panic!("picker benchmark emitted a non-text actor");
+        };
+        assert_eq!(legacy_text.as_str(), current_text.as_str());
+        assert_eq!(legacy_align, current_align);
+        assert_eq!(legacy_offset, current_offset);
+        assert_eq!(legacy_z, current_z);
+    }
+}
+
+#[test]
 fn update_drain_emits_a_queued_sound_without_follow_up_work() {
     let mut state = init();
     queue_sfx(&mut state, "assets/sounds/change.ogg");

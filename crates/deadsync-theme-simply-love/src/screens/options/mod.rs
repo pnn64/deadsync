@@ -84,6 +84,8 @@ mod reload;
 pub use reload::sync_reload_events;
 use reload::*;
 mod score_import;
+#[cfg(any(test, feature = "bench-support"))]
+pub use score_import::ScoreImportPickerBenchmark;
 use score_import::*;
 mod apply_replaygain;
 use apply_replaygain::*;

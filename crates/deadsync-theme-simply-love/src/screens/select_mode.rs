@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::assets::i18n::tr;
+use crate::assets::i18n::{self, tr};
 use crate::assets::{FontRole, machine_font_key};
 use crate::screens::ThemeEffect;
 use crate::screens::components::shared::screen_bar::{
@@ -16,6 +16,8 @@ use deadlib_present::space::{screen_center_x, screen_center_y};
 use deadsync_config::prelude::GameFlag;
 use deadsync_input::InputEvent;
 use deadsync_theme::AudioRequest;
+use std::cell::RefCell;
+use std::sync::Arc;
 
 /* ------------------------------ layout ------------------------------- */
 const ROOT_X_OFF: f32 = 90.0;
@@ -30,19 +32,74 @@ const ARROW_H: f32 = 20.0;
 const ARROW_PAD_Y: f32 = 5.0;
 const ARROW_SPRITE_SZ: f32 = 150.0;
 
-fn choice_labels() -> [String; 2] {
+#[cfg(any(test, feature = "bench-support"))]
+fn choice_labels_legacy() -> [String; 2] {
     [
         tr("SelectMode", "Regular").to_string(),
         tr("SelectMode", "Marathon").to_string(),
     ]
 }
 
-fn choice_description(choice: Choice) -> String {
+#[cfg(any(test, feature = "bench-support"))]
+fn choice_description_legacy(choice: Choice) -> String {
     let key = match choice {
         Choice::Regular => "RegularDescription",
         Choice::Marathon => "MarathonDescription",
     };
     tr("SelectMode", key).replace("\\n", "\n")
+}
+
+fn choice_description(choice: Choice) -> Arc<str> {
+    let key = match choice {
+        Choice::Regular => "RegularDescription",
+        Choice::Marathon => "MarathonDescription",
+    };
+    let text = tr("SelectMode", key);
+    if text.contains("\\n") {
+        Arc::from(text.replace("\\n", "\n"))
+    } else {
+        text
+    }
+}
+
+/// Screen-lifetime localized text retained by the game thread.
+///
+/// Owner/thread model: the Select Mode state on the single game thread, using
+/// `RefCell` only because actor construction receives `&State`. Lifetime and
+/// capacity: exactly five `Arc<str>` values for one screen instance. Warmup:
+/// screen initialization. Miss behavior: a language revision change rebuilds
+/// all five values on that menu frame; this path never runs during gameplay.
+/// Eviction/destruction: replacement on revision change and normal screen
+/// teardown, both on the game thread. The fixed domain needs no counters or
+/// pruning; worst-case refresh work is five translation lookups and at most two
+/// escaped-newline replacements.
+struct SelectModeText {
+    i18n_revision: u64,
+    title: Arc<str>,
+    labels: [Arc<str>; 2],
+    descriptions: [Arc<str>; 2],
+}
+
+impl SelectModeText {
+    fn build(i18n_revision: u64) -> Self {
+        Self {
+            i18n_revision,
+            title: tr("ScreenTitles", "SelectMode"),
+            labels: [tr("SelectMode", "Regular"), tr("SelectMode", "Marathon")],
+            descriptions: [
+                choice_description(Choice::Regular),
+                choice_description(Choice::Marathon),
+            ],
+        }
+    }
+
+    #[inline]
+    fn sync(&mut self) {
+        let revision = i18n::revision();
+        if self.i18n_revision != revision {
+            *self = Self::build(revision);
+        }
+    }
 }
 
 const DANCE_PATTERN: [&str; 24] = [
@@ -140,6 +197,7 @@ pub struct State {
     flow: ModeFlow,
     bg: visual_style_bg::State,
     runtime: SelectFlowRuntimeView,
+    text: RefCell<SelectModeText>,
 }
 
 pub fn init(runtime: SelectFlowRuntimeView) -> State {
@@ -150,6 +208,7 @@ pub fn init(runtime: SelectFlowRuntimeView) -> State {
         flow,
         bg: visual_style_bg::State::new(),
         runtime,
+        text: RefCell::new(SelectModeText::build(i18n::revision())),
     }
 }
 
@@ -296,10 +355,11 @@ pub fn push_actors(
         },
     );
 
-    let select_mode = tr("ScreenTitles", "SelectMode");
+    let mut text = state.text.borrow_mut();
+    text.sync();
     actors.push(screen_bar::build(ScreenBarParams {
         visual_policy,
-        title: &select_mode,
+        title: &text.title,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
         transparent: false,
@@ -355,7 +415,7 @@ pub fn push_actors(
     let choice = Choice::from_index(selected_index);
     actors.push(act!(text:
         font("miso"):
-        settext(choice_description(choice)):
+        settext(Arc::clone(&text.descriptions[selected_index])):
         align(0.0, 0.0):
         xy(dx, dy):
         zoom(0.825 * ROOT_ZOOM):
@@ -366,7 +426,7 @@ pub fn push_actors(
     // Cursor highlight.
     let cursor_crop = cropleft_after(exit_t, 0.4, 0.2);
     let cursor_alpha = 1.0;
-    let labels = choice_labels();
+    let labels = &text.labels;
     let label = &labels[selected_index];
     let measured_w = asset_manager.with_fonts(|all_fonts| {
         asset_manager
@@ -418,7 +478,7 @@ pub fn push_actors(
 
         actors.push(act!(text:
             font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
-            settext(label.clone()):
+            settext(Arc::clone(label)):
             align(1.0, 0.5):
             xy(x, y):
             zoom(zoom):
@@ -608,6 +668,63 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     actors
 }
 
+#[cfg(any(test, feature = "bench-support"))]
+fn select_mode_text_checksum(values: [&str; 4]) -> u64 {
+    values.iter().fold(0u64, |checksum, value| {
+        value
+            .bytes()
+            .fold(checksum ^ value.len() as u64, |hash, byte| {
+                hash.rotate_left(5) ^ u64::from(byte)
+            })
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub struct SelectModeTextBenchmark {
+    text: SelectModeText,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl SelectModeTextBenchmark {
+    pub fn new() -> Self {
+        Self {
+            text: SelectModeText::build(i18n::revision()),
+        }
+    }
+
+    pub fn legacy_frame(&self, selected_index: usize) -> u64 {
+        let title = tr("ScreenTitles", "SelectMode");
+        let labels = choice_labels_legacy();
+        let description = choice_description_legacy(Choice::from_index(selected_index));
+        select_mode_text_checksum([
+            title.as_ref(),
+            labels[0].as_str(),
+            labels[1].as_str(),
+            description.as_str(),
+        ])
+    }
+
+    pub fn current_frame(&mut self, selected_index: usize) -> u64 {
+        self.text.sync();
+        let title = Arc::clone(&self.text.title);
+        let labels = self.text.labels.each_ref().map(Arc::clone);
+        let description = Arc::clone(&self.text.descriptions[selected_index]);
+        select_mode_text_checksum([
+            title.as_ref(),
+            labels[0].as_ref(),
+            labels[1].as_ref(),
+            description.as_ref(),
+        ])
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for SelectModeTextBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -624,6 +741,17 @@ mod tests {
         assert_eq!(demo.field_zoom, 0.9);
         assert_eq!(column_zoom(GameFlag::Pump, "center"), 0.165);
         assert_eq!(column_zoom(GameFlag::Pump, "upleft"), 0.2);
+    }
+
+    #[test]
+    fn retained_select_mode_text_matches_live_translation() {
+        let mut benchmark = SelectModeTextBenchmark::new();
+        for selected in 0..2 {
+            assert_eq!(
+                benchmark.legacy_frame(selected),
+                benchmark.current_frame(selected)
+            );
+        }
     }
 
     #[test]

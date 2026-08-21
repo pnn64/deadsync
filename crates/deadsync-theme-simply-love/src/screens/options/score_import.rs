@@ -2,14 +2,60 @@ use super::*;
 use deadsync_profile::favorites_view::ascii_case_insensitive_cmp;
 
 #[derive(Clone, Debug)]
+/// Actor-ready text retained by the game-thread-owned options screen.
+///
+/// The two fixed row variants and ASCII-folded lookup key are built when the
+/// pack list is refreshed, outside gameplay, and live for that options-screen
+/// list. Capacity is exactly two text variants and one key per installed pack;
+/// refresh replaces the whole bounded-by-library list and screen teardown
+/// drops it. Rendering only clones an `Arc` and probes the existing selection
+/// set: there are no gameplay misses, eviction, background access, or per-row
+/// instrumentation. Worst-case refresh/destruction work is linear in packs and
+/// occurs at a screen transition or explicit refresh, never on a song frame.
 pub(super) struct ScoreImportPackOption {
-    pub(super) label: String,
+    unchecked_label: Arc<str>,
+    checked_label: Arc<str>,
     pub(super) group: String,
+    pub(super) group_key: Box<str>,
+}
+
+impl ScoreImportPackOption {
+    fn new(label: String, group: String) -> Self {
+        Self {
+            unchecked_label: Arc::from(format!("[ ] {label}")),
+            checked_label: Arc::from(format!("[x] {label}")),
+            group_key: group.to_ascii_lowercase().into_boxed_str(),
+            group,
+        }
+    }
+
+    fn label(&self) -> &str {
+        self.unchecked_label
+            .strip_prefix("[ ] ")
+            .expect("unchecked pack labels keep their fixed prefix")
+    }
+
+    fn row_label(&self, checked: bool) -> Arc<str> {
+        Arc::clone(if checked {
+            &self.checked_label
+        } else {
+            &self.unchecked_label
+        })
+    }
 }
 
 #[derive(Clone, Debug)]
+/// Open-picker state and its actor-ready selection summary.
+///
+/// The game-thread options state owns one entry from picker open until close.
+/// Open warms it; selection, pack-list, and locale mutations replace it before
+/// the next render. A frame therefore has no miss behavior or synchronization.
+/// There is no eviction or instrumentation for a single fixed entry, and close
+/// destroys it on the game thread. Refresh is at worst a linear pack scan on an
+/// input/refresh boundary outside gameplay; render cost is one `Arc` clone.
 pub(super) struct ScoreImportPackPicker {
     pub(super) cursor: usize,
+    summary: Arc<str>,
 }
 
 #[derive(Clone, Debug)]
@@ -351,7 +397,7 @@ fn installed_pack_entries(state: &State) -> Vec<(String, String)> {
 pub(super) fn score_import_pack_options(state: &State) -> Vec<ScoreImportPackOption> {
     installed_pack_entries(state)
         .into_iter()
-        .map(|(label, group)| ScoreImportPackOption { label, group })
+        .map(|(label, group)| ScoreImportPackOption::new(label, group))
         .collect()
 }
 
@@ -435,11 +481,11 @@ pub(super) fn refresh_score_import_pack_options(state: &mut State) {
     let valid_groups: HashSet<String> = state
         .score_import_pack_options
         .iter()
-        .map(|opt| opt.group.to_ascii_lowercase())
+        .map(|opt| opt.group_key.to_string())
         .collect();
     state
         .score_import_pack_selected
-        .retain(|group| selected_pack_group_contains(&valid_groups, group));
+        .retain(|group| valid_groups.contains(group));
     if score_import_selected_pack_count(state) >= state.score_import_pack_options.len() {
         state.score_import_pack_selected.clear();
     }
@@ -459,6 +505,7 @@ pub(super) fn refresh_score_import_pack_options(state: &mut State) {
     {
         *slot = 0;
     }
+    sync_pack_picker_summary(state);
 }
 
 pub(super) fn refresh_sync_pack_options(state: &mut State) {
@@ -489,41 +536,14 @@ pub(super) fn refresh_null_or_die_options(state: &mut State) {
     refresh_sync_pack_options(state);
 }
 
-fn selected_pack_group_keys(state: &State) -> HashSet<String> {
-    state
-        .score_import_pack_selected
-        .iter()
-        .map(|group| group.to_ascii_lowercase())
-        .collect()
-}
-
-const GROUP_KEY_STACK_CAPACITY: usize = 128;
-
-#[inline(always)]
-fn selected_pack_group_contains(selected: &HashSet<String>, group: &str) -> bool {
-    if !group.bytes().any(|byte| byte.is_ascii_uppercase()) {
-        return selected.contains(group);
-    }
-    if group.len() <= GROUP_KEY_STACK_CAPACITY {
-        let mut lowered = [0u8; GROUP_KEY_STACK_CAPACITY];
-        lowered[..group.len()].copy_from_slice(group.as_bytes());
-        lowered[..group.len()].make_ascii_lowercase();
-        let lowered = std::str::from_utf8(&lowered[..group.len()])
-            .expect("ASCII case folding preserves valid UTF-8");
-        return selected.contains(lowered);
-    }
-    selected.contains(group.to_ascii_lowercase().as_str())
-}
-
 fn score_import_selected_pack_count(state: &State) -> usize {
     if state.score_import_pack_selected.is_empty() {
         return state.score_import_pack_options.len();
     }
-    let selected = selected_pack_group_keys(state);
     state
         .score_import_pack_options
         .iter()
-        .filter(|opt| selected_pack_group_contains(&selected, &opt.group))
+        .filter(|opt| state.score_import_pack_selected.contains(&*opt.group_key))
         .count()
 }
 
@@ -537,11 +557,10 @@ pub(super) fn selected_score_import_pack_groups(state: &State) -> Vec<String> {
     if all_score_import_packs_selected(state) {
         return Vec::new();
     }
-    let selected = selected_pack_group_keys(state);
     state
         .score_import_pack_options
         .iter()
-        .filter(|opt| selected_pack_group_contains(&selected, &opt.group))
+        .filter(|opt| state.score_import_pack_selected.contains(&*opt.group_key))
         .map(|opt| opt.group.clone())
         .collect()
 }
@@ -550,12 +569,11 @@ pub(super) fn score_import_pack_summary(state: &State) -> String {
     if all_score_import_packs_selected(state) {
         return tr("OptionsScoreImport", "AllPacks").to_string();
     }
-    let selected = selected_pack_group_keys(state);
     let mut labels = state
         .score_import_pack_options
         .iter()
-        .filter(|opt| selected_pack_group_contains(&selected, &opt.group))
-        .map(|opt| opt.label.as_str());
+        .filter(|opt| state.score_import_pack_selected.contains(&*opt.group_key))
+        .map(ScoreImportPackOption::label);
     let Some(first) = labels.next() else {
         return tr("OptionsScoreImport", "AllPacks").to_string();
     };
@@ -566,6 +584,18 @@ pub(super) fn score_import_pack_summary(state: &State) -> String {
     }
 }
 
+pub(super) fn sync_pack_picker_summary(state: &mut State) {
+    if state.score_import_pack_picker.is_none() {
+        return;
+    }
+    let summary = Arc::<str>::from(score_import_pack_summary(state));
+    state
+        .score_import_pack_picker
+        .as_mut()
+        .expect("picker presence checked above")
+        .summary = summary;
+}
+
 pub(super) fn open_score_import_pack_picker(state: &mut State) {
     refresh_score_import_pack_options(state);
     let max_idx = state.score_import_pack_options.len().saturating_sub(1);
@@ -573,7 +603,8 @@ pub(super) fn open_score_import_pack_picker(state: &mut State) {
         .score_import_pack_picker
         .as_ref()
         .map_or(0, |picker| picker.cursor.min(max_idx));
-    state.score_import_pack_picker = Some(ScoreImportPackPicker { cursor });
+    let summary = Arc::<str>::from(score_import_pack_summary(state));
+    state.score_import_pack_picker = Some(ScoreImportPackPicker { cursor, summary });
     clear_navigation_holds(state);
     clear_render_cache(state);
 }
@@ -608,15 +639,16 @@ pub(super) fn pack_picker_toggle_current(state: &mut State) -> bool {
     let Some(option) = state.score_import_pack_options.get(picker.cursor) else {
         return false;
     };
-    let group = option.group.clone();
-    if state.score_import_pack_selected.is_empty() {
-        state.score_import_pack_selected.insert(group);
-    } else if !state.score_import_pack_selected.remove(&group) {
+    let group = option.group_key.to_string();
+    if state.score_import_pack_selected.is_empty()
+        || !state.score_import_pack_selected.remove(&group)
+    {
         state.score_import_pack_selected.insert(group);
     }
     if score_import_selected_pack_count(state) >= state.score_import_pack_options.len() {
         state.score_import_pack_selected.clear();
     }
+    sync_pack_picker_summary(state);
     clear_render_cache(state);
     true
 }
@@ -628,19 +660,26 @@ pub(super) fn toggle_all_score_import_packs(state: &mut State) {
         state.score_import_pack_selected = state
             .score_import_pack_options
             .iter()
-            .map(|opt| opt.group.clone())
+            .map(|opt| opt.group_key.to_string())
             .collect();
     }
+    sync_pack_picker_summary(state);
     clear_render_cache(state);
 }
 
-pub(super) fn build_score_import_pack_picker_actors(
+fn picker_position_text(cursor: usize, len: usize) -> actors::TextContent {
+    actors::TextContent::inline_format(format_args!("{}/{len}", cursor + 1))
+        .unwrap_or_else(|| actors::TextContent::Owned(format!("{}/{len}", cursor + 1)))
+}
+
+pub(super) fn push_score_import_pack_picker_actors(
+    out: &mut Vec<Actor>,
     state: &State,
     active_color_index: i32,
     machine_font: crate::config::MachineFont,
-) -> Vec<Actor> {
+) {
     let Some(picker) = state.score_import_pack_picker.as_ref() else {
-        return Vec::new();
+        return;
     };
 
     let w = screen_width();
@@ -671,10 +710,9 @@ pub(super) fn build_score_import_pack_picker_actors(
     } else {
         0
     };
-    let selected = selected_pack_group_keys(state);
     let all_selected = all_score_import_packs_selected(state);
 
-    let mut out = Vec::with_capacity(5 + visible_rows * 3);
+    out.reserve(5 + visible_rows * 2);
     out.push(act!(quad:
         align(0.0, 0.0):
         xy(0.0, 0.0):
@@ -695,7 +733,7 @@ pub(super) fn build_score_import_pack_picker_actors(
         font(machine_font_key(machine_font, FontRole::Header)):
         zoom(0.72):
         maxwidth(panel_w - 52.0):
-        settext(score_import_pack_summary(state)):
+        settext(Arc::clone(&picker.summary)):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(692):
         horizalign(center)
@@ -713,7 +751,7 @@ pub(super) fn build_score_import_pack_picker_actors(
             z(692):
             horizalign(center)
         ));
-        return out;
+        return;
     }
 
     for row in 0..visible_rows {
@@ -731,15 +769,17 @@ pub(super) fn build_score_import_pack_picker_actors(
                 z(692)
             ));
         }
-        let checked = all_selected || selected_pack_group_contains(&selected, &option.group);
-        let mark = if checked { "[x]" } else { "[ ]" };
+        let checked = all_selected
+            || state
+                .score_import_pack_selected
+                .contains(&*option.group_key);
         out.push(act!(text:
             align(0.0, 0.5):
             xy(list_left, y):
             font("miso"):
             zoom(0.88):
             maxwidth(list_w):
-            settext(format!("{mark} {}", option.label)):
+            settext(option.row_label(checked)):
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(693):
             horizalign(left)
@@ -751,12 +791,124 @@ pub(super) fn build_score_import_pack_picker_actors(
         xy(cx, panel_top + panel_h - 22.0):
         font("miso"):
         zoom(0.78):
-        settext(format!("{}/{}", picker.cursor + 1, len)):
+        settext(picker_position_text(picker.cursor, len)):
         diffuse(1.0, 1.0, 1.0, 0.7):
         z(692):
         horizalign(center)
     ));
-    out
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn push_picker_bench_actor(out: &mut Vec<Actor>, content: actors::TextContent, row: usize) {
+    out.push(act!(text:
+        align(0.0, 0.5):
+        xy(34.0, 74.0 + 27.0 * row as f32):
+        font("miso"):
+        zoom(0.88):
+        maxwidth(632.0):
+        settext(content):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(693):
+        horizalign(left)
+    ));
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn picker_bench_checksum(actors: &[Actor]) -> u64 {
+    actors
+        .iter()
+        .fold(actors.len() as u64, |checksum, actor| match actor {
+            Actor::Text {
+                content, offset, z, ..
+            } => content.as_str().bytes().fold(
+                checksum.rotate_left(7)
+                    ^ u64::from(offset[0].to_bits())
+                    ^ u64::from(offset[1].to_bits()).rotate_left(17)
+                    ^ (*z as u16 as u64),
+                |hash, byte| hash.rotate_left(5) ^ u64::from(byte),
+            ),
+            _ => checksum,
+        })
+}
+
+/// Isolated model of the 14 visible pack rows in the picker frame builder.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct ScoreImportPickerBenchmark {
+    options: Vec<ScoreImportPackOption>,
+    selected: HashSet<String>,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ScoreImportPickerBenchmark {
+    pub fn new() -> Self {
+        let options = (0..14)
+            .map(|index| {
+                ScoreImportPackOption::new(
+                    format!("Benchmark Pack {index:02}"),
+                    format!("Benchmark Group {index:02}"),
+                )
+            })
+            .collect::<Vec<_>>();
+        let selected = options
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| index % 3 == 0)
+            .map(|(_, option)| option.group_key.to_string())
+            .collect();
+        Self { options, selected }
+    }
+
+    /// Immediate pre-optimization row formatting and temporary actor vector.
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>, cursor: usize) -> u64 {
+        out.clear();
+        let mut rows = Vec::with_capacity(5 + self.options.len() * 3);
+        for (row, option) in self.options.iter().enumerate() {
+            let checked = self
+                .selected
+                .iter()
+                .any(|group| group.eq_ignore_ascii_case(&option.group));
+            let mark = if checked { "[x]" } else { "[ ]" };
+            push_picker_bench_actor(
+                &mut rows,
+                actors::TextContent::Owned(format!("{mark} {}", option.label())),
+                row,
+            );
+        }
+        push_picker_bench_actor(
+            &mut rows,
+            actors::TextContent::Owned(format!("{}/{}", cursor + 1, self.options.len())),
+            self.options.len(),
+        );
+        out.extend(rows);
+        picker_bench_checksum(out)
+    }
+
+    /// Retained labels, canonical keys, inline counter, and direct actor append.
+    pub fn current_frame(&self, out: &mut Vec<Actor>, cursor: usize) -> u64 {
+        out.clear();
+        out.reserve(self.options.len() + 1);
+        for (row, option) in self.options.iter().enumerate() {
+            let checked = self.selected.contains(&*option.group_key);
+            push_picker_bench_actor(
+                out,
+                actors::TextContent::Shared(option.row_label(checked)),
+                row,
+            );
+        }
+        push_picker_bench_actor(
+            out,
+            picker_position_text(cursor, self.options.len()),
+            self.options.len(),
+        );
+        picker_bench_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for ScoreImportPickerBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub(super) fn selected_score_import_profile(

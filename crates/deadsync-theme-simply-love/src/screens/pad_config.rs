@@ -16,12 +16,13 @@
 use crate::act;
 use crate::screens::components::shared::visual_style_bg;
 use crate::screens::{Screen, ThemeEffect};
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
 use deadsync_core::input::InputSource;
 use deadsync_input::fsr::{ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView};
 use deadsync_input::{InputEvent, VirtualAction};
+use smallvec::SmallVec;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PadCommand {
@@ -839,13 +840,13 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
         // center — orange text right-anchored, gray "&BACK; to cancel" left-anchored.
         let y = bottom - 70.0;
         actors.push(act!(text:
-            font("miso"): settext("Press DELETE again to confirm   ".to_owned()):
+            font("miso"): settext("Press DELETE again to confirm   "):
             align(1.0, 0.5): xy(cx, y): zoom(0.7): horizalign(right):
             diffuse(CAUTION_TEXT[0], CAUTION_TEXT[1], CAUTION_TEXT[2], CAUTION_TEXT[3]):
             z(20.0 + zb)
         ));
         actors.push(act!(text:
-            font("miso"): settext("&BACK; to cancel".to_owned()):
+            font("miso"): settext("&BACK; to cancel"):
             align(0.0, 0.5): xy(cx, y): zoom(0.7): horizalign(left):
             diffuse(1.0, 1.0, 1.0, 0.85): z(20.0 + zb)
         ));
@@ -917,17 +918,17 @@ fn push_save_box(actors: &mut Vec<Actor>, state: &State, draft: &SaveDraft, zb: 
         ("Set as default: off", OFF_TEXT)
     };
     actors.push(act!(text:
-        font("miso"): settext(def_label.to_owned()): align(0.5, 0.5):
+        font("miso"): settext(def_label): align(0.5, 0.5):
         xy(cx, cy): zoom(0.7): horizalign(center):
         diffuse(def_color[0], def_color[1], def_color[2], def_color[3]): z(z + 1.0)
     ));
     actors.push(act!(text:
-        font("miso"): settext("Up/Down - toggle default".to_owned()): align(0.5, 0.5):
+        font("miso"): settext("Up/Down - toggle default"): align(0.5, 0.5):
         xy(cx, cy + 28.0): zoom(0.62): horizalign(center):
         diffuse(1.0, 1.0, 1.0, 0.8): z(z + 1.0)
     ));
     actors.push(act!(text:
-        font("miso"): settext("Press &START; to save, &BACK; to cancel".to_owned()): align(0.5, 0.5):
+        font("miso"): settext("Press &START; to save, &BACK; to cancel"): align(0.5, 0.5):
         xy(cx, cy + 50.0): zoom(0.62): horizalign(center):
         diffuse(1.0, 1.0, 1.0, 0.8): z(z + 1.0)
     ));
@@ -991,9 +992,12 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     &button.sensors,
                     scale,
                     ClusterThresholds {
-                        press_label: press.to_string(),
+                        press_label: TextContent::inline_u16(press),
                         press_norm: normalize(press, scale),
-                        release: Some((release.to_string(), normalize(release, scale))),
+                        release: Some((
+                            TextContent::inline_u16(release),
+                            normalize(release, scale),
+                        )),
                         focused: focused_kind,
                         lock_off: state.threshold_lock_off,
                     },
@@ -1007,20 +1011,17 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
             // value; otherwise show the live per-sensor range ("200-230") so
             // Advanced edits are visible here, with faded ghost lines at the
             // divergent per-sensor thresholds.
-            let mut ghost_norms: Vec<f32> = Vec::new();
+            let mut ghost_norms = SmallVec::<[f32; 4]>::new();
             let (threshold_label, threshold_norm) =
                 if let Some(v) = pending_simple_threshold(state, pad.device_id, btn_idx) {
-                    (v.to_string(), normalize(v, scale))
+                    (TextContent::inline_u16(v), normalize(v, scale))
                 } else {
                     let (mn, mx) = sensor_threshold_range(button);
                     let label = if mn == mx {
-                        mx.to_string()
+                        TextContent::inline_u16(mx)
                     } else {
-                        ghost_norms = divergent_sensor_thresholds(button)
-                            .into_iter()
-                            .map(|v| normalize(v, scale))
-                            .collect();
-                        format!("{mn}-{mx}")
+                        ghost_norms = divergent_sensor_threshold_norms(button, scale);
+                        threshold_text(mn, mx)
                     };
                     (label, normalize(mx, scale))
                 };
@@ -1107,11 +1108,9 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
     ));
 
     // Total width across the (variable-width) button groups.
-    let group_widths: Vec<f32> = pad
-        .buttons
-        .iter()
-        .map(|b| group_width(b.sensors.len()))
-        .collect();
+    let group_widths = std::array::from_fn::<_, PAD_BUTTON_COUNT, _>(|index| {
+        group_width(pad.buttons[index].sensors.len())
+    });
     let total_w: f32 =
         group_widths.iter().sum::<f32>() + ADV_GROUP_GAP * (PAD_BUTTON_COUNT - 1) as f32;
     let mut group_left = screen_center_x() - total_w * 0.5;
@@ -1123,7 +1122,7 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
         // Button label above its sensor group.
         actors.push(act!(text:
             font("miso"):
-            settext(button.label.to_string()):
+            settext(button.label):
             align(0.5, 1.0):
             xy(group_cx, top_y - 22.0):
             zoom(0.95):
@@ -1145,7 +1144,7 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
                 });
             let bar_label = sensor
                 .label
-                .map_or_else(|| (s + 1).to_string(), str::to_owned);
+                .map_or_else(|| sensor_index_text(s), TextContent::Static);
             push_sensor_bar(
                 actors,
                 x,
@@ -1187,8 +1186,8 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
         let focused_here = focused == Some(AdvTarget::AutoRecal);
         push_setting_row(
             actors,
-            "Auto-recalibration",
-            if on { "ON" } else { "OFF" },
+            "Auto-recalibration:",
+            TextContent::Static(if on { "ON" } else { "OFF" }),
             on,
             focused_here,
             ey,
@@ -1205,8 +1204,8 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
         let focused_here = focused == Some(AdvTarget::Debounce);
         push_setting_row(
             actors,
-            "Debounce",
-            &format_ms(us),
+            "Debounce:",
+            format_ms_text(us),
             true,
             focused_here,
             ey,
@@ -1229,7 +1228,7 @@ fn push_sensor_bar(
     actors: &mut Vec<Actor>,
     x: f32,
     y: f32,
-    sensor_label: String,
+    sensor_label: TextContent,
     raw_value: u16,
     value_norm: f32,
     active: bool,
@@ -1299,7 +1298,7 @@ fn push_sensor_bar(
     };
     // Current pressure value above the bar (the threshold sits by its line).
     actors.push(act!(text:
-        font("miso"): settext(raw_value.to_string()): align(0.5, 1.0):
+        font("miso"): settext(TextContent::inline_u16(raw_value)): align(0.5, 1.0):
         xy(x, y - 2.0): zoom(0.5): horizalign(center):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
@@ -1311,7 +1310,7 @@ fn push_sensor_bar(
         (1.0, threshold_y - 1.0)
     };
     actors.push(act!(text:
-        font("miso"): settext(raw_threshold.to_string()): align(0.5, v_align):
+        font("miso"): settext(TextContent::inline_u16(raw_threshold)): align(0.5, v_align):
         xy(x, label_y): zoom(0.45): horizalign(center):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
@@ -1329,7 +1328,7 @@ fn push_sensor_bar(
             ("off", OFF_TEXT)
         };
         actors.push(act!(text:
-            font("miso"): settext(label.to_string()): align(0.5, 0.0):
+            font("miso"): settext(label): align(0.5, 0.0):
             xy(x, y + ADV_BAR_HEIGHT + 17.0): zoom(0.46): horizalign(center):
             diffuse(c[0], c[1], c[2], c[3]): z(z + 3.0)
         ));
@@ -1338,8 +1337,8 @@ fn push_sensor_bar(
 
 fn push_setting_row(
     actors: &mut Vec<Actor>,
-    label: &str,
-    value: &str,
+    label: &'static str,
+    value: TextContent,
     value_on: bool,
     selected: bool,
     y: f32,
@@ -1352,7 +1351,7 @@ fn push_setting_row(
         [1.0, 1.0, 1.0, 0.92]
     };
     actors.push(act!(text:
-        font("miso"): settext(format!("{label}:")): align(1.0, 0.5):
+        font("miso"): settext(label): align(1.0, 0.5):
         xy(cx - 8.0, y): zoom(0.75): horizalign(right):
         diffuse(label_color[0], label_color[1], label_color[2], label_color[3]): z(22.0 + zb)
     ));
@@ -1364,7 +1363,7 @@ fn push_setting_row(
         ON_TEXT
     };
     actors.push(act!(text:
-        font("miso"): settext(value.to_string()): align(0.0, 0.5):
+        font("miso"): settext(value): align(0.0, 0.5):
         xy(cx + 8.0, y): zoom(0.75): horizalign(left):
         diffuse(vc[0], vc[1], vc[2], vc[3]): z(22.0 + zb)
     ));
@@ -1404,15 +1403,15 @@ fn enter_advanced(state: &mut State) {
 
 /// Build the Advanced focus list (column-major: a button's sensors, then the
 /// next button, then the pad-level Extra Advanced controls).
-fn advanced_targets(state: &State) -> Vec<AdvTarget> {
+fn advanced_targets(state: &State) -> SmallVec<[AdvTarget; 18]> {
     let Some(dev) = state.advanced else {
-        return Vec::new();
+        return SmallVec::new();
     };
     let Some(idx) = pad_index(state, dev) else {
-        return Vec::new();
+        return SmallVec::new();
     };
     let pad = &state.pads[idx];
-    let mut targets = Vec::with_capacity(18);
+    let mut targets = SmallVec::new();
     for (b, button) in pad.buttons.iter().enumerate() {
         for s in 0..button.sensors.len() {
             targets.push(AdvTarget::Sensor {
@@ -1919,15 +1918,18 @@ fn sensor_threshold_range(button: &ButtonView) -> (u16, u16) {
 /// Distinct enabled-sensor thresholds that diverge from a button's displayed
 /// (max) threshold, for the Simple view's faded ghost lines after per-sensor
 /// Advanced edits. Empty when every enabled sensor agrees.
-fn divergent_sensor_thresholds(button: &ButtonView) -> Vec<u16> {
+fn divergent_sensor_threshold_norms(button: &ButtonView, scale: u16) -> SmallVec<[f32; 4]> {
     let (_, mx) = sensor_threshold_range(button);
-    let mut out: Vec<u16> = Vec::new();
+    let mut thresholds = SmallVec::<[u16; 4]>::new();
     for s in button.sensors.iter().filter(|s| s.enabled) {
-        if s.raw_threshold != mx && !out.contains(&s.raw_threshold) {
-            out.push(s.raw_threshold);
+        if s.raw_threshold != mx && !thresholds.contains(&s.raw_threshold) {
+            thresholds.push(s.raw_threshold);
         }
     }
-    out
+    thresholds
+        .into_iter()
+        .map(|value| normalize(value, scale))
+        .collect()
 }
 
 fn group_width(sensors: usize) -> f32 {
@@ -1937,8 +1939,23 @@ fn group_width(sensors: usize) -> f32 {
     sensors as f32 * ADV_BAR_W + (sensors - 1) as f32 * ADV_BAR_GAP
 }
 
-fn format_ms(micros: u16) -> String {
-    format!("{:.1} ms", micros as f32 / 1000.0)
+fn format_ms_text(micros: u16) -> TextContent {
+    TextContent::inline_format(format_args!("{:.1} ms", micros as f32 / 1000.0))
+        .expect("a u16 microsecond value fits inline milliseconds text")
+}
+
+fn threshold_text(min: u16, max: u16) -> TextContent {
+    if min == max {
+        TextContent::inline_u16(max)
+    } else {
+        TextContent::inline_format(format_args!("{min}-{max}"))
+            .expect("two u16 values and a separator fit inline text")
+    }
+}
+
+fn sensor_index_text(index: usize) -> TextContent {
+    TextContent::inline_format(format_args!("{}", index + 1))
+        .expect("sensor index fits inline text")
 }
 
 fn normalize(value: u16, max: u16) -> f32 {
@@ -2024,7 +2041,7 @@ enum Footer {
 fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
     let cx = screen_center_x();
     let bottom = screen_height();
-    let line = |actors: &mut Vec<Actor>, text: String, y: f32| {
+    let line = |actors: &mut Vec<Actor>, text: &'static str, y: f32| {
         actors.push(act!(text:
             font("miso"):
             settext(text):
@@ -2043,31 +2060,33 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             save_available,
             threshold_lock,
         } => {
+            line(actors, "Left/Right - Select Panel", bottom - 94.0);
+            // Kept static for the frame path; the regression test below binds
+            // the embedded numbers to the edit constants.
             line(
                 actors,
-                "Left/Right - Select Panel".to_owned(),
-                bottom - 94.0,
-            );
-            line(
-                actors,
-                format!("Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)"),
+                "Up/Down - Threshold +/- 5 (Shift +/- 1)",
                 bottom - 70.0,
             );
             // Combine the Start action (Advanced, or the press/release lock on
             // load-cell pads) + Save on one line; Save only when the cursor pad
             // has a profile to save to (in-session, local profile).
-            let start_hint = threshold_lock.map(|on| {
-                format!(
-                    "&START; Press/Release lock: {} (keeps them {LOCKED_THRESHOLD_GAP} apart)",
-                    if on { "ON" } else { "OFF" }
-                )
-            });
-            let action_line = match (start_hint, advanced_available, save_available) {
-                (Some(hint), _, true) => Some(format!("{hint}    &SELECT; Profiles")),
-                (Some(hint), _, false) => Some(hint),
-                (None, true, true) => Some("&START; Advanced    &SELECT; Profiles".to_owned()),
-                (None, false, true) => Some("Press &SELECT; for pad profiles".to_owned()),
-                (None, true, false) => Some("Press &START; for Advanced (per-sensor)".to_owned()),
+            let action_line = match (threshold_lock, advanced_available, save_available) {
+                (Some(true), _, true) => Some(
+                    "&START; Press/Release lock: ON (keeps them 10 apart)    &SELECT; Profiles",
+                ),
+                (Some(false), _, true) => Some(
+                    "&START; Press/Release lock: OFF (keeps them 10 apart)    &SELECT; Profiles",
+                ),
+                (Some(true), _, false) => {
+                    Some("&START; Press/Release lock: ON (keeps them 10 apart)")
+                }
+                (Some(false), _, false) => {
+                    Some("&START; Press/Release lock: OFF (keeps them 10 apart)")
+                }
+                (None, true, true) => Some("&START; Advanced    &SELECT; Profiles"),
+                (None, false, true) => Some("Press &SELECT; for pad profiles"),
+                (None, true, false) => Some("Press &START; for Advanced (per-sensor)"),
                 (None, false, false) => None,
             };
             if let Some(action_line) = action_line {
@@ -2078,7 +2097,7 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             } else {
                 "Press &BACK; to return to Options"
             };
-            line(actors, back.to_owned(), bottom - 22.0);
+            line(actors, back, bottom - 22.0);
         }
         Footer::Advanced {
             supports_toggle,
@@ -2086,15 +2105,13 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
         } => {
             line(
                 actors,
-                "Left/Right - Select   Up/Down - Adjust (Shift = fine)".to_owned(),
+                "Left/Right - Select   Up/Down - Adjust (Shift = fine)",
                 bottom - 70.0,
             );
             let action_line = match (supports_toggle, save_available) {
-                (true, true) => Some("&START; toggle sensor    &SELECT; Profiles".to_owned()),
-                (true, false) => {
-                    Some("Press &START; to toggle the selected sensor on/off".to_owned())
-                }
-                (false, true) => Some("Press &SELECT; for pad profiles".to_owned()),
+                (true, true) => Some("&START; toggle sensor    &SELECT; Profiles"),
+                (true, false) => Some("Press &START; to toggle the selected sensor on/off"),
+                (false, true) => Some("Press &SELECT; for pad profiles"),
                 (false, false) => None,
             };
             if let Some(action_line) = action_line {
@@ -2102,7 +2119,7 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             }
             line(
                 actors,
-                "Press &BACK; to return to the simple view".to_owned(),
+                "Press &BACK; to return to the simple view",
                 bottom - 22.0,
             );
         }
@@ -2187,10 +2204,10 @@ fn push_frame(
 /// dual-threshold (load-cell) buttons, and the cursor/lock state that decides
 /// which line is highlighted and in what color.
 struct ClusterThresholds {
-    press_label: String,
+    press_label: TextContent,
     press_norm: f32,
     /// Release label + normalized line position (load-cell buttons only).
-    release: Option<(String, f32)>,
+    release: Option<(TextContent, f32)>,
     /// Which of the pair the cursor is on, when this cluster is selected.
     focused: Option<ThresholdKind>,
     lock_off: bool,
@@ -2204,7 +2221,7 @@ fn push_value_cluster(
     actors: &mut Vec<Actor>,
     x_center: f32,
     y: f32,
-    label: &str,
+    label: &'static str,
     sensors: &[SensorView],
     value_scale: u16,
     thresholds: ClusterThresholds,
@@ -2260,7 +2277,7 @@ fn push_value_cluster(
         // Sensor number (1-based) below its bar.
         let nc = if selected { sel } else { [1.0, 1.0, 1.0, 0.9] };
         actors.push(act!(text:
-            font("miso"): settext((i + 1).to_string()): align(0.5, 0.0):
+            font("miso"): settext(sensor_index_text(i)): align(0.5, 0.0):
             xy(bx, y + BAR_HEIGHT + 6.0): zoom(0.5): horizalign(center):
             diffuse(nc[0], nc[1], nc[2], nc[3]): z(z + 3.0)
         ));
@@ -2319,7 +2336,7 @@ fn push_value_cluster(
     // view; smaller, leaving room for the Press/Release caption above it.
     let peak = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
     actors.push(act!(text:
-        font("miso"): settext(peak.to_string()): align(0.5, 1.0):
+        font("miso"): settext(TextContent::inline_u16(peak)): align(0.5, 1.0):
         xy(x_center, y - 6.0): zoom(0.68): horizalign(center):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
@@ -2346,7 +2363,7 @@ fn push_value_cluster(
                 ThresholdKind::Release => "Release",
             };
             actors.push(act!(text:
-                font("miso"): settext(caption.to_owned()): align(0.5, 1.0):
+                font("miso"): settext(caption): align(0.5, 1.0):
                 xy(x_center, y - 28.0): zoom(0.5): horizalign(center):
                 diffuse(sel[0], sel[1], sel[2], sel[3]): z(z + 3.0)
             ));
@@ -2366,7 +2383,7 @@ fn push_value_cluster(
         text_color
     };
     actors.push(act!(text:
-        font("miso"): settext(label.to_string()): align(0.5, 0.0):
+        font("miso"): settext(label): align(0.5, 0.0):
         xy(x_center, y + BAR_HEIGHT + 20.0): zoom(1.0): horizalign(center):
         diffuse(label_color[0], label_color[1], label_color[2], label_color[3]): z(z + 3.0)
     ));
@@ -2375,10 +2392,10 @@ fn push_value_cluster(
 #[allow(clippy::too_many_arguments)]
 fn push_bar(
     actors: &mut Vec<Actor>,
-    label: &str,
+    label: &'static str,
     raw_value: u16,
     value_norm: f32,
-    threshold_label: String,
+    threshold_label: TextContent,
     threshold_norm: f32,
     ghost_norms: &[f32],
     active: bool,
@@ -2432,7 +2449,7 @@ fn push_bar(
             diffuse(off[0], off[1], off[2], off[3]): z(z + 3.0)
         ));
         actors.push(act!(text:
-            font("miso"): settext(label.to_string()): align(0.5, 0.0):
+            font("miso"): settext(label): align(0.5, 0.0):
             xy(x, y + BAR_HEIGHT + 8.0): zoom(1.0): horizalign(center):
             diffuse(0.6, 0.6, 0.65, 0.9): z(z + 3.0)
         ));
@@ -2486,7 +2503,7 @@ fn push_bar(
     // Current pressure value, kept high above the bar so a near-max threshold
     // number doesn't clip into it.
     actors.push(act!(text:
-        font("miso"): settext(raw_value.to_string()): align(0.5, 1.0):
+        font("miso"): settext(TextContent::inline_u16(raw_value)): align(0.5, 1.0):
         xy(x, y - 20.0): zoom(0.92): horizalign(center):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
@@ -2507,10 +2524,119 @@ fn push_bar(
     }
     let label_color = if active { ACTIVE_FILL } else { text_color };
     actors.push(act!(text:
-        font("miso"): settext(label.to_string()): align(0.5, 0.0):
+        font("miso"): settext(label): align(0.5, 0.0):
         xy(x, y + BAR_HEIGHT + 8.0): zoom(1.0): horizalign(center):
         diffuse(label_color[0], label_color[1], label_color[2], label_color[3]): z(z + 3.0)
     ));
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+const PAD_TEXT_BENCH_ROWS: [(u16, u16, u16, &str); 4] = [
+    (187, 25, 40, "Left"),
+    (203, 35, 35, "Down"),
+    (149, 20, 45, "Up"),
+    (221, 30, 30, "Right"),
+];
+
+#[cfg(any(test, feature = "bench-support"))]
+fn pad_text_checksum(text: &[TextContent], geometry: &[f32], targets: &[u8]) -> u64 {
+    text.iter()
+        .flat_map(|value| value.as_str().bytes())
+        .fold(text.len() as u64, |checksum, byte| {
+            checksum.rotate_left(5) ^ u64::from(byte)
+        })
+        ^ geometry
+            .iter()
+            .fold(geometry.len() as u64, |checksum, value| {
+                checksum.rotate_left(7) ^ u64::from(value.to_bits())
+            })
+        ^ targets
+            .iter()
+            .fold(targets.len() as u64, |checksum, value| {
+                checksum.rotate_left(3) ^ u64::from(*value)
+            })
+}
+
+/// Immediate pre-optimization pad text and scratch preparation.
+#[cfg(any(test, feature = "bench-support"))]
+pub fn benchmark_pad_text_legacy(out: &mut Vec<TextContent>) -> u64 {
+    out.clear();
+    let group_widths = [4usize; PAD_BUTTON_COUNT]
+        .into_iter()
+        .map(group_width)
+        .collect::<Vec<_>>();
+    let thresholds = PAD_TEXT_BENCH_ROWS
+        .iter()
+        .flat_map(|(_, min, max, _)| [*min, *max])
+        .filter(|value| *value != 35 && *value != 30)
+        .collect::<Vec<_>>();
+    let geometry = thresholds
+        .into_iter()
+        .map(|value| normalize(value, 250))
+        .chain(group_widths)
+        .collect::<Vec<_>>();
+    let targets = (0..18u8).collect::<Vec<_>>();
+
+    for (raw, min, max, label) in PAD_TEXT_BENCH_ROWS {
+        out.push(TextContent::Owned(raw.to_string()));
+        out.push(TextContent::Owned(if min == max {
+            max.to_string()
+        } else {
+            format!("{min}-{max}")
+        }));
+        out.push(TextContent::Owned(label.to_string()));
+        for sensor in 0..4 {
+            out.push(TextContent::Owned((sensor + 1).to_string()));
+        }
+        out.push(TextContent::Owned("ON".to_string()));
+    }
+    out.push(TextContent::Owned("Left/Right - Select Panel".to_owned()));
+    out.push(TextContent::Owned(format!(
+        "Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)"
+    )));
+    out.push(TextContent::Owned(
+        "&START; Advanced    &SELECT; Profiles".to_owned(),
+    ));
+    out.push(TextContent::Owned(
+        "Press &BACK; to return to Options".to_owned(),
+    ));
+    pad_text_checksum(out, &geometry, &targets)
+}
+
+/// Stack/inline pad text and scratch preparation used by the live renderer.
+#[cfg(any(test, feature = "bench-support"))]
+pub fn benchmark_pad_text_current(out: &mut Vec<TextContent>) -> u64 {
+    out.clear();
+    let group_widths = std::array::from_fn::<_, PAD_BUTTON_COUNT, _>(|_| group_width(4));
+    let mut geometry = SmallVec::<[f32; 12]>::new();
+    let targets = (0..18u8).collect::<SmallVec<[u8; 18]>>();
+    for (_, min, max, _) in PAD_TEXT_BENCH_ROWS {
+        for value in [min, max] {
+            if value != 35 && value != 30 {
+                geometry.push(normalize(value, 250));
+            }
+        }
+    }
+    geometry.extend(group_widths);
+
+    for (raw, min, max, label) in PAD_TEXT_BENCH_ROWS {
+        out.push(TextContent::inline_u16(raw));
+        out.push(threshold_text(min, max));
+        out.push(TextContent::Static(label));
+        for sensor in 0..4 {
+            out.push(sensor_index_text(sensor));
+        }
+        out.push(TextContent::Static("ON"));
+    }
+    for footer in [
+        "Left/Right - Select Panel",
+        "Up/Down - Threshold +/- 5 (Shift +/- 1)",
+        "&START; Advanced    &SELECT; Profiles",
+        "Press &BACK; to return to Options",
+    ] {
+        out.push(TextContent::Static(footer));
+    }
+    pad_text_checksum(out, &geometry, &targets)
 }
 
 #[cfg(test)]
@@ -2901,17 +3027,53 @@ mod tests {
     fn divergent_sensor_thresholds_lists_distinct_enabled_non_max_values() {
         let mut b = mk_button("L", 50);
         // Uniform sensors: nothing diverges, no ghost lines.
-        assert!(divergent_sensor_thresholds(&b).is_empty());
+        assert!(divergent_sensor_threshold_norms(&b, 250).is_empty());
         b.sensors[0].raw_threshold = 30;
         b.sensors[1].raw_threshold = 40;
         b.sensors[2].raw_threshold = 40;
         // sensors[3] stays at 50: the max, drawn as the main line.
-        assert_eq!(divergent_sensor_thresholds(&b), vec![30, 40]);
+        assert_eq!(
+            divergent_sensor_threshold_norms(&b, 250).as_slice(),
+            [normalize(30, 250), normalize(40, 250)]
+        );
         // A disabled sensor's stale threshold never fires, so it draws no
         // ghost line and stops widening the range label.
         b.sensors[0].enabled = false;
-        assert_eq!(divergent_sensor_thresholds(&b), vec![40]);
+        assert_eq!(
+            divergent_sensor_threshold_norms(&b, 250).as_slice(),
+            [normalize(40, 250)]
+        );
         assert_eq!(sensor_threshold_range(&b), (40, 50));
+    }
+
+    #[test]
+    fn inline_pad_text_matches_legacy_preparation() {
+        let mut legacy = Vec::with_capacity(40);
+        let mut current = Vec::with_capacity(40);
+        assert_eq!(
+            benchmark_pad_text_legacy(&mut legacy),
+            benchmark_pad_text_current(&mut current)
+        );
+        assert_eq!(
+            legacy.iter().map(TextContent::as_str).collect::<Vec<_>>(),
+            current.iter().map(TextContent::as_str).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn static_footer_numbers_match_edit_constants() {
+        assert_eq!(
+            "Up/Down - Threshold +/- 5 (Shift +/- 1)",
+            format!("Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)")
+        );
+        assert_eq!(
+            "&START; Press/Release lock: ON (keeps them 10 apart)",
+            format!("&START; Press/Release lock: ON (keeps them {LOCKED_THRESHOLD_GAP} apart)")
+        );
+        assert_eq!(
+            "&START; Press/Release lock: OFF (keeps them 10 apart)",
+            format!("&START; Press/Release lock: OFF (keeps them {LOCKED_THRESHOLD_GAP} apart)")
+        );
     }
 
     #[test]
