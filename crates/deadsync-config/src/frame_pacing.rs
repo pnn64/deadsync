@@ -405,13 +405,54 @@ impl StutterSample {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VisibleStutterSample {
     pub timestamp_seconds: f32,
     pub frame_ms: f32,
     pub frame_multiple: f32,
     pub severity: u8,
     pub age_seconds: f32,
+}
+
+const EMPTY_VISIBLE_STUTTER: VisibleStutterSample = VisibleStutterSample {
+    timestamp_seconds: 0.0,
+    frame_ms: 0.0,
+    frame_multiple: 0.0,
+    severity: 0,
+    age_seconds: 0.0,
+};
+
+/// Fixed-capacity visible view of the five-entry stutter ring.
+#[derive(Clone, Copy, Debug)]
+pub struct VisibleStutterSamples {
+    samples: [VisibleStutterSample; STUTTER_SAMPLE_COUNT],
+    len: u8,
+}
+
+impl VisibleStutterSamples {
+    #[inline(always)]
+    const fn new() -> Self {
+        Self {
+            samples: [EMPTY_VISIBLE_STUTTER; STUTTER_SAMPLE_COUNT],
+            len: 0,
+        }
+    }
+
+    #[inline(always)]
+    fn push(&mut self, sample: VisibleStutterSample) {
+        debug_assert!((self.len as usize) < STUTTER_SAMPLE_COUNT);
+        self.samples[self.len as usize] = sample;
+        self.len += 1;
+    }
+}
+
+impl std::ops::Deref for VisibleStutterSamples {
+    type Target = [VisibleStutterSample];
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.samples[..self.len as usize]
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -457,7 +498,35 @@ impl StutterSampleRing {
         self.cursor = (self.cursor + 1) % STUTTER_SAMPLE_COUNT;
     }
 
-    pub fn visible(self, now_seconds: f32) -> Vec<VisibleStutterSample> {
+    pub fn visible(self, now_seconds: f32) -> VisibleStutterSamples {
+        let mut out = VisibleStutterSamples::new();
+        for i in 0..STUTTER_SAMPLE_COUNT {
+            let sample = self.samples[(self.cursor + i) % STUTTER_SAMPLE_COUNT];
+            if sample.severity == 0 {
+                continue;
+            }
+            let age_seconds = now_seconds - sample.at_seconds;
+            if !(0.0..=STUTTER_SAMPLE_LIFETIME).contains(&age_seconds) {
+                continue;
+            }
+            let frame_multiple = if sample.expected_seconds > 0.0 {
+                sample.frame_seconds / sample.expected_seconds
+            } else {
+                0.0
+            };
+            out.push(VisibleStutterSample {
+                timestamp_seconds: sample.at_seconds,
+                frame_ms: sample.frame_seconds * 1000.0,
+                frame_multiple,
+                severity: sample.severity,
+                age_seconds,
+            });
+        }
+        out
+    }
+
+    #[cfg(any(test, feature = "bench-support"))]
+    pub fn visible_legacy(self, now_seconds: f32) -> Vec<VisibleStutterSample> {
         let mut out = Vec::with_capacity(STUTTER_SAMPLE_COUNT);
         for i in 0..STUTTER_SAMPLE_COUNT {
             let sample = self.samples[(self.cursor + i) % STUTTER_SAMPLE_COUNT];
@@ -800,6 +869,19 @@ mod tests {
         assert!((visible[0].frame_multiple - (0.050 / 0.016)).abs() < EPS);
         assert_eq!(visible[0].severity, 2);
         assert!((visible[0].age_seconds - 2.0).abs() < EPS);
+    }
+
+    #[test]
+    fn stack_visible_samples_match_legacy_filtering() {
+        let mut ring = StutterSampleRing::new();
+        ring.push(1.0, 0.050, 0.016, 2);
+        ring.push(2.0, 0.010, 0.016, 0);
+        ring.push(2.5, 0.032, 0.016, 1);
+        ring.push(-10.0, 0.100, 0.016, 3);
+
+        let current = ring.visible(3.0);
+        let legacy = ring.visible_legacy(3.0);
+        assert_eq!(&*current, legacy.as_slice());
     }
 
     #[test]

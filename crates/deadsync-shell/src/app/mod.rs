@@ -6624,15 +6624,15 @@ impl App {
         // Always render the full overlay, including 2 players — the panel is narrow enough
         // (~half-screen) to sit in a corner or the bottom-center seam without covering either
         // notefield, so there's no need to drop to the stripped compact layout.
-        actors.extend(frame_stats_overlay::build(
+        frame_stats_overlay::push(
+            actors,
             view.samples,
             summary,
             view.anchor,
             false,
             view.style,
-            screen_w,
-            screen_h,
-        ));
+            [screen_w, screen_h],
+        );
     }
 
     #[inline(always)]

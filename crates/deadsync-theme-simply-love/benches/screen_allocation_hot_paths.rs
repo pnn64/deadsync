@@ -1,12 +1,16 @@
 use deadlib_render_core::{BackendType, ClockDomainTrace, PresentModeTrace};
+use deadsync_config::frame_pacing::StutterSampleRing;
 use deadsync_simfile::song_search::{SongSearchCandidate, song_search_difficulties_text};
 use deadsync_theme_simply_love::i18n;
 use deadsync_theme_simply_love::screens::components::select_music::select_music_menu::{
     SongSearchResultsState, benchmark_song_search_frame_text,
 };
+use deadsync_theme_simply_love::screens::components::shared::frame_stats_overlay::{
+    benchmark_build_legacy as benchmark_frame_stats_build_legacy, push as push_frame_stats,
+};
 use deadsync_theme_simply_love::screens::components::shared::stats_overlay::{
-    benchmark_build_legacy, benchmark_build_stutter_legacy, benchmark_timing_text_current,
-    benchmark_timing_text_legacy, push as push_stats, push_stutter,
+    benchmark_build_legacy as benchmark_stats_build_legacy, benchmark_build_stutter_legacy,
+    benchmark_timing_text_current, benchmark_timing_text_legacy, push as push_stats, push_stutter,
 };
 use deadsync_theme_simply_love::screens::components::shared::timers::TimerText;
 use deadsync_theme_simply_love::screens::evaluation_summary::{
@@ -14,10 +18,16 @@ use deadsync_theme_simply_love::screens::evaluation_summary::{
 };
 use deadsync_theme_simply_love::screens::mappings::MappingTextBenchmark;
 use deadsync_theme_simply_love::screens::practice::benchmark_edit_info_text_into;
+use deadsync_theme_simply_love::screens::select_color::{
+    benchmark_wheel_current, benchmark_wheel_legacy,
+};
 use deadsync_theme_simply_love::screens::select_music::{
     benchmark_info_text_front_cached, benchmark_info_text_hashed, benchmark_wheel_song_meta,
 };
-use deadsync_theme_simply_love::views::{AudioTimingView, TimingHealth, VisibleStutterSample};
+use deadsync_theme_simply_love::views::{
+    AudioTimingView, FrameStatsSample, FrameStatsSummary, OverlayAnchor, OverlayStyle,
+    TimingHealth, VisibleStutterSample,
+};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashSet;
 use std::hint::black_box;
@@ -38,6 +48,9 @@ const INFO_TEXT_OPS: usize = 1_000_000;
 const MAPPING_TEXT_OPS: usize = 100_000;
 const TIMING_TEXT_OPS: usize = 200_000;
 const OVERLAY_ACTOR_OPS: usize = 200_000;
+const SELECT_COLOR_WHEEL_OPS: usize = 200_000;
+const STUTTER_FILTER_OPS: usize = 500_000;
+const FRAME_STATS_OVERLAY_OPS: usize = 5_000;
 const SONG_SEARCH_WHEEL_SLOTS: usize = 12;
 const SONG_SEARCH_WHEEL_FOCUS_SLOT: usize = SONG_SEARCH_WHEEL_SLOTS / 2 - 1;
 const DETAIL_LABELS: [&str; 5] = ["Pack", "Song", "Subtitle", "BPMs", "Difficulties"];
@@ -298,6 +311,73 @@ fn stutter_fixture() -> [VisibleStutterSample; 5] {
         severity: 1 + (index % 3) as u8,
         age_seconds: index as f32 * 0.4,
     })
+}
+
+fn stutter_ring_fixture() -> StutterSampleRing {
+    let mut ring = StutterSampleRing::new();
+    for index in 0..5 {
+        ring.push(
+            10.0 + index as f32 * 0.25,
+            0.025 + index as f32 * 0.003,
+            1.0 / 120.0,
+            1 + (index % 3) as u8,
+        );
+    }
+    ring
+}
+
+fn visible_stutter_checksum(samples: &[VisibleStutterSample]) -> u64 {
+    samples
+        .iter()
+        .fold(samples.len() as u64, |checksum, sample| {
+            checksum.rotate_left(7)
+                ^ u64::from(sample.timestamp_seconds.to_bits())
+                ^ u64::from(sample.frame_ms.to_bits()).rotate_left(13)
+                ^ u64::from(sample.frame_multiple.to_bits()).rotate_left(23)
+                ^ u64::from(sample.severity)
+                ^ u64::from(sample.age_seconds.to_bits()).rotate_left(31)
+        })
+}
+
+fn frame_stats_fixture() -> (Vec<FrameStatsSample>, FrameStatsSummary) {
+    let samples = (0..128)
+        .map(|index| FrameStatsSample {
+            host_nanos: index + 1,
+            frame_us: 8_000 + (index as u32 % 9) * 700,
+            maintenance_us: 250,
+            input_us: 200,
+            update_us: 1_200,
+            compose_us: 1_600,
+            upload_us: 300,
+            draw_us: 1_800,
+            gpu_wait_us: 800,
+            display_error_us: index as i32 * 10 - 600,
+            catching_up: index % 31 == 0,
+        })
+        .collect();
+    let summary = FrameStatsSummary {
+        avg_frame_us: 8_333,
+        p99_frame_us: 13_600,
+        max_frame_us: 13_600,
+        fps: 120.0,
+        display_error_ms: -0.42,
+        display_error_p99_ms: 1.2,
+        display_catching_up: false,
+        in_gameplay: true,
+        audio_callback_gap_ms: 2.1,
+        audio_underruns: 1,
+        audio_output_delay_ms: 8.0,
+        audio_queued_frames: 384,
+        frame_jitter_us: 350,
+        display_error_jitter_us: 220,
+        spike_hold_us: 13_600,
+        target_frame_us: 8_333,
+        cpu_work_us: 5_350,
+        gpu_wait_us: 800,
+        over_budget_count: 0,
+        catch_up_count: 4,
+    };
+    (samples, summary)
 }
 
 fn legacy_profile_name_changed(sides: [&[&str]; 2]) -> bool {
@@ -679,7 +759,12 @@ fn main() {
     let mut old_actors = Vec::with_capacity(8);
     let old_overlay = measure(OVERLAY_ACTOR_OPS, 200, || {
         old_actors.clear();
-        old_actors.extend(benchmark_build_legacy(BackendType::OpenGL, 120.0, 42, None));
+        old_actors.extend(benchmark_stats_build_legacy(
+            BackendType::OpenGL,
+            120.0,
+            42,
+            None,
+        ));
         old_actors.extend(benchmark_build_stutter_legacy(black_box(&stutters)));
         black_box(&old_actors);
         old_actors.len() as u64
@@ -697,5 +782,80 @@ fn main() {
         OVERLAY_ACTOR_OPS,
         &old_overlay,
         &new_overlay,
+    );
+
+    let mut old_wheel_actors = Vec::with_capacity(16);
+    let old_wheel = measure(SELECT_COLOR_WHEEL_OPS, 200, || {
+        let checksum = benchmark_wheel_legacy(&mut old_wheel_actors, true, 3.25);
+        black_box(&old_wheel_actors);
+        checksum
+    });
+    let mut new_wheel_actors = Vec::with_capacity(16);
+    let new_wheel = measure(SELECT_COLOR_WHEEL_OPS, 200, || {
+        let checksum = benchmark_wheel_current(&mut new_wheel_actors, true, 3.25);
+        black_box(&new_wheel_actors);
+        checksum
+    });
+    print_pair(
+        "11. stack/direct Select Color wheel",
+        SELECT_COLOR_WHEEL_OPS,
+        &old_wheel,
+        &new_wheel,
+    );
+
+    let stutter_ring = stutter_ring_fixture();
+    assert_eq!(
+        stutter_ring.visible_legacy(11.25).as_slice(),
+        &*stutter_ring.visible(11.25)
+    );
+    let old_stutter_filter = measure(STUTTER_FILTER_OPS, 500, || {
+        visible_stutter_checksum(&stutter_ring.visible_legacy(black_box(11.25)))
+    });
+    let new_stutter_filter = measure(STUTTER_FILTER_OPS, 500, || {
+        visible_stutter_checksum(&stutter_ring.visible(black_box(11.25)))
+    });
+    print_pair(
+        "12. fixed stutter filtering",
+        STUTTER_FILTER_OPS,
+        &old_stutter_filter,
+        &new_stutter_filter,
+    );
+
+    let (frame_samples, frame_summary) = frame_stats_fixture();
+    let frame_capacity = frame_samples.len() * 7 + 48;
+    let mut old_frame_actors = Vec::with_capacity(frame_capacity);
+    let old_frame_overlay = measure(FRAME_STATS_OVERLAY_OPS, 10, || {
+        old_frame_actors.clear();
+        old_frame_actors.extend(benchmark_frame_stats_build_legacy(
+            black_box(&frame_samples),
+            black_box(frame_summary),
+            OverlayAnchor::TopLeft,
+            false,
+            OverlayStyle::Detailed,
+            [1280.0, 720.0],
+        ));
+        black_box(&old_frame_actors);
+        old_frame_actors.len() as u64
+    });
+    let mut new_frame_actors = Vec::with_capacity(frame_capacity);
+    let new_frame_overlay = measure(FRAME_STATS_OVERLAY_OPS, 10, || {
+        new_frame_actors.clear();
+        push_frame_stats(
+            &mut new_frame_actors,
+            black_box(&frame_samples),
+            black_box(frame_summary),
+            OverlayAnchor::TopLeft,
+            false,
+            OverlayStyle::Detailed,
+            [1280.0, 720.0],
+        );
+        black_box(&new_frame_actors);
+        new_frame_actors.len() as u64
+    });
+    print_reduced_pair(
+        "13. direct frame-stats actor append",
+        FRAME_STATS_OVERLAY_OPS,
+        &old_frame_overlay,
+        &new_frame_overlay,
     );
 }

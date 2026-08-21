@@ -262,13 +262,13 @@ fn segment(
     baseline: f32,
     drawn: &mut f32,
     seg_us: u32,
-    px_per_us: f32,
-    col_w: f32,
+    geometry: [f32; 2],
     rgb: [f32; 3],
 ) {
     if seg_us == 0 {
         return;
     }
+    let [px_per_us, col_w] = geometry;
     let h = seg_us as f32 * px_per_us;
     if h < 0.25 {
         return;
@@ -290,11 +290,9 @@ fn build_graph(
     samples: &[FrameStatsSample],
     scale_us: u32,
     target_frame_us: u32,
-    gx: f32,
-    gy: f32,
-    gw: f32,
-    gh: f32,
+    bounds: [f32; 4],
 ) {
+    let [gx, gy, gw, gh] = bounds;
     let baseline = gy + gh;
     let n = samples.len().max(1);
     let col_w = gw / n as f32;
@@ -313,8 +311,7 @@ fn build_graph(
             baseline,
             &mut drawn,
             s.idle_us(),
-            px_per_us,
-            col_w,
+            [px_per_us, col_w],
             COLOR_IDLE,
         );
         segment(
@@ -323,8 +320,7 @@ fn build_graph(
             baseline,
             &mut drawn,
             s.maintenance_us,
-            px_per_us,
-            col_w,
+            [px_per_us, col_w],
             COLOR_MAINTENANCE,
         );
         segment(
@@ -333,8 +329,7 @@ fn build_graph(
             baseline,
             &mut drawn,
             s.input_us,
-            px_per_us,
-            col_w,
+            [px_per_us, col_w],
             COLOR_INPUT,
         );
         segment(
@@ -343,8 +338,7 @@ fn build_graph(
             baseline,
             &mut drawn,
             s.update_us,
-            px_per_us,
-            col_w,
+            [px_per_us, col_w],
             COLOR_UPDATE,
         );
         segment(
@@ -353,8 +347,7 @@ fn build_graph(
             baseline,
             &mut drawn,
             s.compose_us,
-            px_per_us,
-            col_w,
+            [px_per_us, col_w],
             COLOR_COMPOSE,
         );
         segment(
@@ -363,12 +356,17 @@ fn build_graph(
             baseline,
             &mut drawn,
             s.upload_us,
-            px_per_us,
-            col_w,
+            [px_per_us, col_w],
             COLOR_UPLOAD,
         );
         segment(
-            actors, x, baseline, &mut drawn, s.draw_us, px_per_us, col_w, COLOR_DRAW,
+            actors,
+            x,
+            baseline,
+            &mut drawn,
+            s.draw_us,
+            [px_per_us, col_w],
+            COLOR_DRAW,
         );
         segment(
             actors,
@@ -376,8 +374,7 @@ fn build_graph(
             baseline,
             &mut drawn,
             s.gpu_wait_us,
-            px_per_us,
-            col_w,
+            [px_per_us, col_w],
             COLOR_GPU_WAIT,
         );
 
@@ -410,20 +407,14 @@ fn build_graph(
         actors,
         target_frame_us,
         scale_us,
-        gx,
-        baseline,
-        gw,
-        gh,
+        [gx, baseline, gw, gh],
         COLOR_REF_TARGET,
     );
     ref_line(
         actors,
         target_frame_us.saturating_mul(2),
         scale_us,
-        gx,
-        baseline,
-        gw,
-        gh,
+        [gx, baseline, gw, gh],
         COLOR_REF_DOUBLE,
     );
 }
@@ -434,15 +425,13 @@ fn ref_line(
     actors: &mut Vec<Actor>,
     value_us: u32,
     scale_us: u32,
-    gx: f32,
-    baseline: f32,
-    gw: f32,
-    gh: f32,
+    bounds: [f32; 4],
     color: [f32; 4],
 ) {
     if value_us == 0 || value_us >= scale_us {
         return;
     }
+    let [gx, baseline, gw, gh] = bounds;
     let px_per_us = gh / scale_us.max(1) as f32;
     let y = baseline - value_us as f32 * px_per_us;
     actors.push(quad(gx, y - 0.5, gw, 1.0, color, DEBUG_OVERLAY_Z + 3));
@@ -653,22 +642,23 @@ fn compact_readout_text(summary: &FrameStatsSummary, show_p99: bool) -> String {
     text
 }
 
-/// Build the frame-statistics overlay actors anchored at `anchor`. Full mode draws a
+/// Append frame-statistics overlay actors anchored at `anchor`. Full mode draws a
 /// rolling per-phase stacked column graph (with idle, await-GPU and event-marker overlays),
 /// a jitter histogram, and a multi-line sync-health readout. Compact mode (2 players) drops
 /// the histogram for a small graph plus a two-line inline readout so it covers less of
 /// either notefield. `style` selects the presentation: `Detailed` shows the histogram and
-/// p99 readouts; `Minimal` drops both (the graph is the jitter display). Allocation-light:
-/// one pre-sized `Vec`, no per-sample heap.
-pub fn build(
+/// p99 readouts; `Minimal` drops both (the graph is the jitter display). The caller-owned
+/// actor buffer retains its allocation across frames; there is no per-sample heap work.
+pub fn push(
+    actors: &mut Vec<Actor>,
     samples: &[FrameStatsSample],
     summary: FrameStatsSummary,
     anchor: OverlayAnchor,
     compact: bool,
     style: OverlayStyle,
-    screen_w: f32,
-    screen_h: f32,
-) -> Vec<Actor> {
+    screen_size: [f32; 2],
+) {
+    let [screen_w, screen_h] = screen_size;
     let show_p99 = style.show_p99();
     // The histogram is a full-mode-only panel; minimal style drops it entirely.
     let show_histogram = !compact && style.show_histogram();
@@ -720,7 +710,7 @@ pub fn build(
         screen_w,
         screen_h,
     );
-    let mut actors = Vec::with_capacity(samples.len() * 7 + HISTOGRAM_BINS + 16);
+    actors.reserve(samples.len() * 7 + HISTOGRAM_BINS + 16);
 
     // Panel background behind the graph.
     actors.push(quad(
@@ -743,18 +733,20 @@ pub fn build(
     }
 
     build_graph(
-        &mut actors,
+        actors,
         samples,
         scale_us,
         summary.target_frame_us,
-        layout.graph_x,
-        layout.graph_y,
-        layout.graph_w,
-        layout.graph_h,
+        [
+            layout.graph_x,
+            layout.graph_y,
+            layout.graph_w,
+            layout.graph_h,
+        ],
     );
     if layout.hist_h > 0.0 {
         build_histogram(
-            &mut actors,
+            actors,
             samples,
             bin_width_us,
             layout.hist_x,
@@ -780,7 +772,7 @@ pub fn build(
                 z(DEBUG_OVERLAY_Z + 1)
             ));
         } else {
-            push_text_block(&mut actors, layout.text_x, text_y, 0.5, text);
+            push_text_block(actors, layout.text_x, text_y, 0.5, text);
         }
     } else {
         // Full: a single row of content-sized data cells stacked under the graph (and optional
@@ -795,13 +787,33 @@ pub fn build(
             DEBUG_OVERLAY_Z,
         ));
         let [c0, c1, c2, c3, c4] = data_cells.expect("full mode builds data_cells");
-        push_text_block(&mut actors, layout.data_cols[0], layout.data_y, 0.5, c0);
-        push_text_block(&mut actors, layout.data_cols[1], layout.data_y, 0.5, c1);
-        push_text_block(&mut actors, layout.data_cols[2], layout.data_y, 0.5, c2);
-        push_text_block(&mut actors, layout.data_cols[3], layout.data_y, 0.5, c3);
-        push_text_block(&mut actors, layout.data_cols[4], layout.data_y, 0.5, c4);
+        push_text_block(actors, layout.data_cols[0], layout.data_y, 0.5, c0);
+        push_text_block(actors, layout.data_cols[1], layout.data_y, 0.5, c1);
+        push_text_block(actors, layout.data_cols[2], layout.data_y, 0.5, c2);
+        push_text_block(actors, layout.data_cols[3], layout.data_y, 0.5, c3);
+        push_text_block(actors, layout.data_cols[4], layout.data_y, 0.5, c4);
     }
+}
 
+#[cfg(any(test, feature = "bench-support"))]
+pub fn benchmark_build_legacy(
+    samples: &[FrameStatsSample],
+    summary: FrameStatsSummary,
+    anchor: OverlayAnchor,
+    compact: bool,
+    style: OverlayStyle,
+    screen_size: [f32; 2],
+) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(samples.len() * 7 + HISTOGRAM_BINS + 16);
+    push(
+        &mut actors,
+        samples,
+        summary,
+        anchor,
+        compact,
+        style,
+        screen_size,
+    );
     actors
 }
 
@@ -842,10 +854,7 @@ mod tests {
             &mut actors,
             40_000,
             20_000,
-            0.0,
-            100.0,
-            200.0,
-            100.0,
+            [0.0, 100.0, 200.0, 100.0],
             COLOR_REF_TARGET,
         );
         assert!(
@@ -856,10 +865,7 @@ mod tests {
             &mut actors,
             16_700,
             33_400,
-            0.0,
-            100.0,
-            200.0,
-            100.0,
+            [0.0, 100.0, 200.0, 100.0],
             COLOR_REF_TARGET,
         );
         assert_eq!(
@@ -1073,5 +1079,41 @@ mod tests {
         // Averages and spike-hold max survive in both styles.
         assert!(summary_text(&s, false).contains("avg"));
         assert!(summary_text(&s, false).contains("max"));
+    }
+
+    #[test]
+    fn direct_append_matches_owned_overlay_output() {
+        let samples = [FrameStatsSample {
+            host_nanos: 1,
+            frame_us: 16_667,
+            maintenance_us: 500,
+            input_us: 400,
+            update_us: 1_500,
+            compose_us: 2_000,
+            upload_us: 350,
+            draw_us: 2_500,
+            gpu_wait_us: 1_000,
+            catching_up: true,
+            ..FrameStatsSample::empty()
+        }];
+        let expected = benchmark_build_legacy(
+            &samples,
+            sample_summary(),
+            OverlayAnchor::TopRight,
+            false,
+            OverlayStyle::Detailed,
+            [854.0, 480.0],
+        );
+        let mut actual = Vec::new();
+        push(
+            &mut actual,
+            &samples,
+            sample_summary(),
+            OverlayAnchor::TopRight,
+            false,
+            OverlayStyle::Detailed,
+            [854.0, 480.0],
+        );
+        assert_eq!(format!("{actual:#?}"), format!("{expected:#?}"));
     }
 }

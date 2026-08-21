@@ -30,6 +30,8 @@ const ROT_PER_SLOT_DEG: f32 = 15.0; // inward tilt amount (± per slot)
 const ZOOM_CENTER: f32 = 1.05; // center heart size
 const EDGE_MIN_RATIO: f32 = 0.17; // edge zoom = ZOOM_CENTER * EDGE_MIN_RATIO
 const WHEEL_Z_BASE: i16 = 105; // above BG, below bars
+const MAX_WHEEL_SIDE_SLOTS: usize = 5;
+const WHEEL_SAMPLE_CAPACITY: usize = MAX_WHEEL_SIDE_SLOTS + 1;
 
 // Background cross-fade (to mimic Simply Love's slight delay)
 pub const BG_FADE_DURATION: f32 = 0.20; // seconds, linear fade
@@ -39,6 +41,44 @@ pub const BG_FADE_DURATION: f32 = 0.20; // seconds, linear fade
 // -----------------------------------------------------------------------------
 
 const ZOOM_MULT_OVERRIDES: &[(usize, f32)] = &[(1, 1.25), (2, 1.45), (3, 1.50), (4, 1.15)];
+
+struct WheelSamples {
+    x: [f32; WHEEL_SAMPLE_CAPACITY],
+    zoom_logs: [f32; WHEEL_SAMPLE_CAPACITY],
+    len: usize,
+    max_off_visible: f32,
+}
+
+fn wheel_samples(num_slots: i32, screen_w: f32) -> WheelSamples {
+    let side_slots = (num_slots / 2) as usize;
+    debug_assert!(side_slots <= MAX_WHEEL_SIDE_SLOTS);
+    let len = side_slots + 1;
+    let x_spacing = screen_w / (num_slots as f32 - 1.0);
+    let mut x = [0.0; WHEEL_SAMPLE_CAPACITY];
+    for (k, sample) in x[..len].iter_mut().enumerate() {
+        *sample = k as f32 * x_spacing;
+    }
+
+    let max_off_all = 0.5 * (num_slots as f32 - 1.0);
+    let max_off_visible = (max_off_all - 1.0).max(1.0);
+    let ln_zc = ZOOM_CENTER.ln();
+    let ln_r = EDGE_MIN_RATIO.powf(1.0 / max_off_visible).ln();
+    let mut zoom_logs = [0.0; WHEEL_SAMPLE_CAPACITY];
+    for (k, sample) in zoom_logs[..len].iter_mut().enumerate() {
+        *sample = ln_zc + (k as f32).min(max_off_visible) * ln_r;
+    }
+    for &(k, mult) in ZOOM_MULT_OVERRIDES {
+        if k <= side_slots && mult > 0.0 {
+            zoom_logs[k] += mult.ln();
+        }
+    }
+    WheelSamples {
+        x,
+        zoom_logs,
+        len,
+        max_off_visible,
+    }
+}
 
 #[inline(always)]
 fn is_wide() -> bool {
@@ -180,8 +220,6 @@ pub fn push_actors(
 
     select_flow_footer::push(actors, &state.runtime.players, visual_policy);
 
-    let mut wheel_actors = Vec::new();
-
     // 3) The bow of hearts (wheel) — smooth + inward tilt, no refade
     let wide = is_wide();
     let num_slots: i32 = if wide { 11 } else { 7 };
@@ -252,36 +290,9 @@ pub fn push_actors(
     let [select_color_w, select_color_h] = visual_policy.assets.select_color_size;
     let select_color_aspect = select_color_w as f32 / select_color_h.max(1) as f32;
 
-    let x_spacing = w_screen / (num_slots as f32 - 1.0);
-
-    let side_slots: usize = center_slot as usize;
-
-    // (A) X-distance samples
-    let mut x_samples: Vec<f32> = Vec::with_capacity(side_slots + 1);
-    for k in 0..=side_slots {
-        x_samples.push(k as f32 * x_spacing);
-    }
-
-    // (B) Zoom samples in log-space
+    // Fixed stack samples cover the maximum 11-slot widescreen wheel.
+    let samples = wheel_samples(num_slots, w_screen);
     let max_off_all = 0.5 * (num_slots as f32 - 1.0);
-    let max_off_visible = (max_off_all - 1.0).max(1.0);
-    let r = EDGE_MIN_RATIO.powf(1.0 / max_off_visible);
-    let ln_zc = ZOOM_CENTER.ln();
-    let ln_r = r.ln();
-
-    let mut zoom_logs: Vec<f32> = Vec::with_capacity(side_slots + 1);
-    for k in 0..=side_slots {
-        let a = (k as f32).min(max_off_visible);
-        zoom_logs.push(ln_zc + a * ln_r); // log(Z_k)
-    }
-
-    // --- Apply user overrides (symmetric for left/right) -----------------
-    for &(k, mult) in ZOOM_MULT_OVERRIDES {
-        if k <= side_slots && mult > 0.0 {
-            zoom_logs[k] += mult.ln();
-        }
-    }
-    // ---------------------------------------------------------------------
 
     // split scroll into integer + fractional parts (stable left/right motion)
     let base_i = state.scroll.floor() as i32;
@@ -298,7 +309,7 @@ pub fn push_actors(
         let tint = select_color_tint(base_i + offset_i, visual_policy.srpg10_tint);
 
         // X centered via distance samples (sign from side)
-        let x_off = super::select_color::sample_linear(&x_samples, a);
+        let x_off = sample_linear(&samples.x[..samples.len], a);
         let x_final = cx + if o >= 0.0 { x_off } else { -x_off };
 
         // Y forms a gentle bow
@@ -308,8 +319,8 @@ pub fn push_actors(
         let rot_deg_final = -o * ROT_PER_SLOT_DEG;
 
         // Zoom via exponential sampling in log space
-        let a_clamped = a.min(max_off_visible);
-        let zoom_final = super::select_color::sample_exp_from_logs(&zoom_logs, a_clamped);
+        let a_clamped = a.min(samples.max_off_visible);
+        let zoom_final = sample_exp_from_logs(&samples.zoom_logs[..samples.len], a_clamped);
 
         // depth so near-center draws on top
         let z_layer = WHEEL_Z_BASE - (a.round() as i16);
@@ -342,7 +353,7 @@ pub fn push_actors(
         let rot_deg = lerp(0.0, rot_deg_final, form_p);
         let zoom = lerp(1.0, zoom_final, form_p);
 
-        wheel_actors.push(act!(sprite(select_color_texture):
+        let mut actor = act!(sprite(select_color_texture):
             align(0.5, 0.5):
             xy(x, y):
             rotationz(rot_deg):
@@ -350,13 +361,10 @@ pub fn push_actors(
             setsize(base_w, base_h):
             zoom(zoom):
             diffuse(tint[0], tint[1], tint[2], alpha)
-        ));
-    }
-
-    for actor in &mut wheel_actors {
+        );
         actor.mul_alpha(alpha_multiplier);
+        actors.push(actor);
     }
-    actors.extend(wheel_actors);
     push_srpg10_faction_label(
         actors,
         state.active_color_index,
@@ -445,6 +453,102 @@ fn sample_exp_from_logs(logs: &[f32], x: f32) -> f32 {
     let i0 = x.floor() as usize;
     let t = x - i0 as f32;
     (lerp(logs[i0], logs[i0 + 1], t)).exp()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn legacy_wheel_samples(num_slots: i32, screen_w: f32) -> (Vec<f32>, Vec<f32>, f32) {
+    let x_spacing = screen_w / (num_slots as f32 - 1.0);
+    let side_slots = (num_slots / 2) as usize;
+    let mut x = Vec::with_capacity(side_slots + 1);
+    for k in 0..=side_slots {
+        x.push(k as f32 * x_spacing);
+    }
+
+    let max_off_all = 0.5 * (num_slots as f32 - 1.0);
+    let max_off_visible = (max_off_all - 1.0).max(1.0);
+    let r = EDGE_MIN_RATIO.powf(1.0 / max_off_visible);
+    let ln_zc = ZOOM_CENTER.ln();
+    let ln_r = r.ln();
+    let mut zoom_logs = Vec::with_capacity(side_slots + 1);
+    for k in 0..=side_slots {
+        let a = (k as f32).min(max_off_visible);
+        zoom_logs.push(ln_zc + a * ln_r);
+    }
+    for &(k, mult) in ZOOM_MULT_OVERRIDES {
+        if k <= side_slots && mult > 0.0 {
+            zoom_logs[k] += mult.ln();
+        }
+    }
+    (x, zoom_logs, max_off_visible)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[inline]
+fn benchmark_wheel_actor(x: f32, zoom: f32, slot: i32) -> Actor {
+    act!(quad:
+        xy(x, 200.0):
+        zoom(zoom):
+        z(WHEEL_Z_BASE - slot as i16)
+    )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[inline(always)]
+fn mix_wheel_value(checksum: u64, value: f32) -> u64 {
+    checksum.rotate_left(9) ^ u64::from(value.to_bits())
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn benchmark_wheel_legacy(out: &mut Vec<Actor>, wide: bool, scroll: f32) -> u64 {
+    out.clear();
+    let num_slots = if wide { 11 } else { 7 };
+    let center_slot = num_slots / 2;
+    let (x, zoom_logs, max_off_visible) = legacy_wheel_samples(num_slots, 1280.0);
+    let base = scroll.floor() as i32;
+    let frac = scroll - base as f32;
+    let mut checksum = u64::from(base as u32);
+    let mut wheel = Vec::new();
+    for slot in 0..num_slots {
+        let offset = slot - center_slot;
+        let relative = offset as f32 - frac;
+        let distance = relative.abs();
+        let x_off = sample_linear(&x, distance);
+        let zoom = sample_exp_from_logs(&zoom_logs, distance.min(max_off_visible));
+        checksum = mix_wheel_value(mix_wheel_value(checksum, x_off), zoom);
+        wheel.push(benchmark_wheel_actor(x_off, zoom, slot));
+    }
+    for actor in &mut wheel {
+        actor.mul_alpha(0.75);
+    }
+    out.extend(wheel);
+    checksum ^ out.len() as u64
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn benchmark_wheel_current(out: &mut Vec<Actor>, wide: bool, scroll: f32) -> u64 {
+    out.clear();
+    let num_slots = if wide { 11 } else { 7 };
+    let center_slot = num_slots / 2;
+    let samples = wheel_samples(num_slots, 1280.0);
+    let base = scroll.floor() as i32;
+    let frac = scroll - base as f32;
+    let mut checksum = u64::from(base as u32);
+    out.reserve(num_slots as usize);
+    for slot in 0..num_slots {
+        let offset = slot - center_slot;
+        let relative = offset as f32 - frac;
+        let distance = relative.abs();
+        let x_off = sample_linear(&samples.x[..samples.len], distance);
+        let zoom = sample_exp_from_logs(
+            &samples.zoom_logs[..samples.len],
+            distance.min(samples.max_off_visible),
+        );
+        checksum = mix_wheel_value(mix_wheel_value(checksum, x_off), zoom);
+        let mut actor = benchmark_wheel_actor(x_off, zoom, slot);
+        actor.mul_alpha(0.75);
+        out.push(actor);
+    }
+    checksum ^ out.len() as u64
 }
 
 /* ------------------------------- update ------------------------------- */
@@ -624,5 +728,20 @@ mod tests {
             effects[1],
             ThemeEffect::Navigate(Screen::SelectStyle)
         ));
+    }
+
+    #[test]
+    fn stack_wheel_geometry_matches_legacy_vectors_and_append_order() {
+        for wide in [false, true] {
+            for scroll in [-2.75, 0.0, 3.25, 12.9] {
+                let mut legacy = Vec::with_capacity(16);
+                let mut current = Vec::with_capacity(16);
+                assert_eq!(
+                    benchmark_wheel_legacy(&mut legacy, wide, scroll),
+                    benchmark_wheel_current(&mut current, wide, scroll)
+                );
+                assert_eq!(format!("{legacy:#?}"), format!("{current:#?}"));
+            }
+        }
     }
 }
