@@ -25,7 +25,6 @@ pub struct Reader {
     stream_serial: u32,
     channels: usize,
     pre_skip_frames: usize,
-    decode_buf: Vec<u16>,
     pending: Option<Vec<i16>>,
     skip_frames: usize,
     cursor_frames: u64,
@@ -59,7 +58,6 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
         stream_serial: header.stream_serial,
         channels: header.channels,
         pre_skip_frames: header.pre_skip_frames,
-        decode_buf: vec![0; OPUS_MAX_PACKET_FRAMES * header.channels],
         pending: None,
         skip_frames: header.pre_skip_frames,
         cursor_frames: 0,
@@ -165,12 +163,12 @@ impl Reader {
             .saturating_sub(first_packet_granule as usize);
         self.cursor_frames = first_packet_granule.saturating_sub(self.pre_skip_frames as u64);
 
+        let mut decoded = Vec::new();
         for packet in packets {
-            let mut decoded = Vec::new();
             if !self.decode_packet_into(packet, &mut decoded)? {
                 continue;
             }
-            if self.finish_seek_packet(decoded, target_frame) {
+            if self.finish_seek_packet(&mut decoded, target_frame) {
                 return Ok(());
             }
         }
@@ -214,24 +212,20 @@ impl Reader {
         if target_frame <= self.cursor_frames {
             return Ok(());
         }
+        let mut decoded = self.pending.take().unwrap_or_default();
         while self.cursor_frames < target_frame {
-            let packet = if let Some(packet) = self.pending.take() {
-                packet
-            } else {
-                let mut packet = Vec::new();
-                if !self.decode_next_packet_into(&mut packet)? {
-                    return Ok(());
-                }
-                packet
-            };
-            if self.finish_seek_packet(packet, target_frame) {
+            if decoded.is_empty() && !self.decode_next_packet_into(&mut decoded)? {
                 return Ok(());
             }
+            if self.finish_seek_packet(&mut decoded, target_frame) {
+                return Ok(());
+            }
+            decoded.clear();
         }
         Ok(())
     }
 
-    fn finish_seek_packet(&mut self, packet: Vec<i16>, target_frame: u64) -> bool {
+    fn finish_seek_packet(&mut self, packet: &mut Vec<i16>, target_frame: u64) -> bool {
         let packet_frames = packet.len() / self.channels;
         let remaining = target_frame.saturating_sub(self.cursor_frames) as usize;
         if remaining >= packet_frames {
@@ -239,7 +233,8 @@ impl Reader {
             return false;
         }
         let drop_samples = remaining * self.channels;
-        self.pending = Some(packet[drop_samples..].to_vec());
+        crate::resample::drop_front_samples(packet, drop_samples);
+        self.pending = Some(std::mem::take(packet));
         self.cursor_frames = target_frame;
         true
     }
@@ -297,13 +292,11 @@ impl Reader {
             .get_nb_samples(&packet.data)
             .map_err(opus_error)?;
         let needed_samples = wanted_frames.saturating_mul(self.channels);
-        if self.decode_buf.len() < needed_samples {
-            self.decode_buf.resize(needed_samples, 0);
-        }
+        resize_output(out, needed_samples);
         let decoded_before = self.decoded_frames;
         let decoded_frames = self
             .decoder
-            .decode_to_slice(&packet.data, &mut self.decode_buf[..needed_samples], false)
+            .decode_to_slice(&packet.data, signed_as_u16(out), false)
             .map_err(opus_error)?;
         self.decoded_frames = self.decoded_frames.saturating_add(decoded_frames as u64);
         let mut valid_frames = decoded_frames;
@@ -324,14 +317,39 @@ impl Reader {
         }
         let start = skip * self.channels;
         let end = valid_frames * self.channels;
-        out.clear();
-        out.reserve(end - start);
-        out.extend(
-            self.decode_buf[start..end]
-                .iter()
-                .map(|&sample| sample as i16),
-        );
+        out.truncate(end);
+        crate::resample::drop_front_samples(out, start);
         Ok(true)
+    }
+}
+
+#[inline(always)]
+fn resize_output(out: &mut Vec<i16>, samples: usize) {
+    if out.len() < samples {
+        out.resize(samples, 0);
+    } else {
+        out.truncate(samples);
+    }
+}
+
+#[inline(always)]
+fn signed_as_u16(samples: &mut [i16]) -> &mut [u16] {
+    // SAFETY: `i16` and `u16` have identical size and alignment, every bit
+    // pattern is valid for both, and the returned slice keeps the input's
+    // length and exclusive lifetime. opusic-c immediately reinterprets its
+    // `u16` slice as signed PCM before passing it to libopus.
+    unsafe { std::slice::from_raw_parts_mut(samples.as_mut_ptr().cast(), samples.len()) }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod bench_support {
+    use super::{resize_output, signed_as_u16};
+
+    #[inline]
+    pub fn direct_target(out: &mut Vec<i16>, samples: usize) -> &mut [u16] {
+        resize_output(out, samples);
+        signed_as_u16(out)
     }
 }
 
@@ -410,4 +428,71 @@ fn validate_tags_data(data: &[u8]) -> Result<(), String> {
         return Err("missing OpusTags packet".to_string());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{OPUS_DECODE_RATE_HZ, signed_as_u16};
+    use opusic_c::{Application, Channels, Decoder, Encoder, SampleRate};
+
+    #[test]
+    fn signed_output_view_preserves_every_sample_bit() {
+        let mut signed = [i16::MIN, -1, 0, 1, i16::MAX];
+        let expected = signed.map(|sample| sample as u16);
+
+        assert_eq!(signed_as_u16(&mut signed), expected);
+
+        signed_as_u16(&mut signed).copy_from_slice(&[0, 1, 32_767, 32_768, 65_535]);
+        assert_eq!(signed, [0, 1, i16::MAX, i16::MIN, -1]);
+    }
+
+    #[test]
+    fn direct_signed_decode_matches_unsigned_handoff() {
+        const FRAMES: usize = 960;
+        let input = (0..FRAMES * 2)
+            .map(|index| index.wrapping_mul(25_173) as u16)
+            .collect::<Vec<_>>();
+        let mut encoded = vec![0; 4_000];
+        let mut encoder = Encoder::new(Channels::Stereo, SampleRate::Hz48000, Application::Audio)
+            .expect("test encoder should initialize");
+        let encoded_len = encoder
+            .encode_to_slice(&input, &mut encoded)
+            .expect("test frame should encode");
+
+        let mut old_decoder = Decoder::new(Channels::Stereo, SampleRate::Hz48000)
+            .expect("test decoder should initialize");
+        let mut new_decoder = Decoder::new(Channels::Stereo, SampleRate::Hz48000)
+            .expect("test decoder should initialize");
+        let mut old = vec![0u16; input.len()];
+        let mut new = vec![0i16; input.len()];
+        let old_frames = old_decoder
+            .decode_to_slice(&encoded[..encoded_len], &mut old, false)
+            .expect("test packet should decode");
+        let new_frames = new_decoder
+            .decode_to_slice(&encoded[..encoded_len], signed_as_u16(&mut new), false)
+            .expect("test packet should decode");
+
+        assert_eq!(OPUS_DECODE_RATE_HZ, 48_000);
+        assert_eq!(new_frames, old_frames);
+        assert_eq!(
+            &new[..new_frames * 2],
+            old[..old_frames * 2]
+                .iter()
+                .map(|sample| *sample as i16)
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn in_place_seek_tail_matches_allocated_tail() {
+        let original = (0..257).map(|sample| sample as i16).collect::<Vec<_>>();
+        for drop_samples in [0, 1, 128, 256, 257] {
+            let expected = original[drop_samples..].to_vec();
+            let mut actual = original.clone();
+
+            crate::resample::drop_front_samples(&mut actual, drop_samples);
+
+            assert_eq!(actual, expected);
+        }
+    }
 }
