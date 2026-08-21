@@ -1,8 +1,8 @@
 use deadsync_input::{
-    GamepadCodeBinding, InputBinding, KeyCode, Keymap, PAD_ID_COUNT_CAP, PadCode, PadEvent, PadId,
-    RawKeyboardEvent, VirtualAction, clear_debounce_state, drain_debounced_input_events_with,
-    map_keycode_event_with, map_pad_event_with, map_raw_key_event_with, set_input_debounce_seconds,
-    set_keymap,
+    GamepadCodeBinding, InputBinding, KeyCode, Keymap, PAD_ID_COUNT_CAP, PadCode, PadDir, PadEvent,
+    PadId, RawKeyboardEvent, VirtualAction, clear_debounce_state,
+    drain_debounced_input_events_with, map_keycode_event_with, map_pad_event_with,
+    map_raw_key_event_with, set_input_debounce_seconds, set_keymap,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -96,6 +96,29 @@ fn configured_input_pipeline_is_allocation_free() {
             uuid: None,
         })],
     );
+    keymap.bind(
+        VirtualAction::p1_up,
+        &[InputBinding::GamepadCode(GamepadCodeBinding {
+            code_u32: 77,
+            device: Some(PAD_ID_COUNT_CAP - 1),
+            uuid: None,
+        })],
+    );
+    keymap.bind(
+        VirtualAction::p1_right,
+        &[InputBinding::GamepadCode(GamepadCodeBinding {
+            code_u32: 77,
+            device: None,
+            uuid: Some([7; 16]),
+        })],
+    );
+    keymap.bind(
+        VirtualAction::p2_up,
+        &[InputBinding::PadDirOn {
+            device: PAD_ID_COUNT_CAP - 1,
+            dir: PadDir::Up,
+        }],
+    );
     set_input_debounce_seconds(0.2);
     set_keymap(keymap);
 
@@ -156,22 +179,40 @@ fn configured_input_pipeline_is_allocation_free() {
         value: 1.0,
         pressed: true,
     };
+    let dir_press = PadEvent::Dir {
+        id: pad_id,
+        timestamp,
+        host_nanos: 7,
+        dir: PadDir::Up,
+        pressed: true,
+    };
+    let dir_release = PadEvent::Dir {
+        id: pad_id,
+        timestamp,
+        pressed: false,
+        host_nanos: 8,
+        dir: PadDir::Up,
+    };
 
     let before = ALLOC.begin();
     let mut emitted = 0u64;
     map_keycode_event_with(KeyCode::ArrowLeft, true, timestamp, |_| emitted += 1);
     map_raw_key_event_with(&key_press, |_| emitted += 1);
     map_pad_event_with(&pad_press, |_| emitted += 1);
+    map_pad_event_with(&dir_press, |_| emitted += 1);
     for _ in 0..10_000 {
         map_raw_key_event_with(black_box(&key_release), |_| emitted += 1);
         map_raw_key_event_with(black_box(&key_press), |_| emitted += 1);
         map_pad_event_with(black_box(&pad_release), |_| emitted += 1);
         map_pad_event_with(black_box(&pad_press), |_| emitted += 1);
+        map_pad_event_with(black_box(&dir_release), |_| emitted += 1);
+        map_pad_event_with(black_box(&dir_press), |_| emitted += 1);
     }
     map_raw_key_event_with(&key_release, |_| emitted += 1);
     map_raw_key_event_with(&key_unmapped, |_| emitted += 1);
     map_raw_key_event_with(&key_repeat, |_| emitted += 1);
     map_pad_event_with(&pad_release, |_| emitted += 1);
+    map_pad_event_with(&dir_release, |_| emitted += 1);
     map_pad_event_with(&pad_unmapped, |_| emitted += 1);
     map_pad_event_with(&pad_axis, |_| emitted += 1);
     drain_debounced_input_events_with(|_| emitted += 1);

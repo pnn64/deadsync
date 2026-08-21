@@ -16,6 +16,11 @@ name = "input_config_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "input_mapping_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-core = { path = "../deadsync-core" }
 log = "0.4.33"

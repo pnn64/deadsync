@@ -96,15 +96,33 @@ struct CompiledPadCodeRev {
 struct CompiledPadCodeMap {
     slot: u32,
     wildcard_mask: u32,
-    entries: Vec<CompiledPadCodeRev>,
+    device_masks: Box<[u32]>,
+    entries: Box<[CompiledPadCodeRev]>,
 }
 
 #[inline]
 fn compile_pad_code_map(entries: &[PadCodeRev], slot: u32) -> CompiledPadCodeMap {
     let mut wildcard_mask = 0;
+    let device_mask_len = entries
+        .iter()
+        .filter(|entry| {
+            !entry.act.is_system()
+                && entry.uuid.is_none()
+                && entry.device.is_some_and(|device| device < PAD_ID_COUNT_CAP)
+        })
+        .filter_map(|entry| entry.device)
+        .max()
+        .map_or(0, |device| device + 1);
+    let mut device_masks = vec![0; device_mask_len].into_boxed_slice();
     let specific_capacity = entries
         .iter()
-        .filter(|entry| !entry.act.is_system() && (entry.device.is_some() || entry.uuid.is_some()))
+        .filter(|entry| {
+            !entry.act.is_system()
+                && (entry.uuid.is_some()
+                    || entry
+                        .device
+                        .is_some_and(|device| device >= PAD_ID_COUNT_CAP))
+        })
         .count();
     let mut compiled_entries = Vec::with_capacity(specific_capacity);
     for entry in entries {
@@ -113,6 +131,12 @@ fn compile_pad_code_map(entries: &[PadCodeRev], slot: u32) -> CompiledPadCodeMap
         }
         if entry.device.is_none() && entry.uuid.is_none() {
             wildcard_mask |= entry.act.bit();
+            continue;
+        }
+        if entry.uuid.is_none()
+            && let Some(mask) = entry.device.and_then(|device| device_masks.get_mut(device))
+        {
+            *mask |= entry.act.bit();
             continue;
         }
         if let Some(existing) =
@@ -134,17 +158,31 @@ fn compile_pad_code_map(entries: &[PadCodeRev], slot: u32) -> CompiledPadCodeMap
     CompiledPadCodeMap {
         slot,
         wildcard_mask,
-        entries: compiled_entries,
+        device_masks,
+        entries: compiled_entries.into_boxed_slice(),
     }
 }
+
+const PAD_DIR_ON_CAP: usize = PAD_ID_COUNT_CAP * 4;
+// Pad codes preserve backend identity in their high bits. Projecting the low
+// byte covers normal button/usage ranges across backends; validation plus
+// binary-search fallback makes collisions and uncommon codes exact.
+const PAD_CODE_LOOKUP_CAP: usize = 256;
+const PAD_CODE_LOOKUP_MASK: usize = PAD_CODE_LOOKUP_CAP - 1;
+const COLLIDING_PAD_CODE_INDEX: u16 = u16::MAX - 1;
+const UNMAPPED_PAD_CODE_INDEX: u16 = u16::MAX;
+
+const _: () = assert!(PAD_CODE_LOOKUP_CAP.is_power_of_two());
 
 #[derive(Clone, Debug)]
 struct CompiledKeymap {
     key_rev: Box<[CompiledBindingRev]>,
     key_rev_extra: HashMap<KeyCode, CompiledBindingRev>,
     pad_dir_rev: [u32; 4],
-    pad_dir_on_rev: FxHashMap<(usize, PadDir), u32>,
+    pad_dir_on_rev: [u32; PAD_DIR_ON_CAP],
+    pad_dir_on_extra: FxHashMap<(usize, PadDir), u32>,
     pad_code_rev: Box<[(u32, CompiledPadCodeMap)]>,
+    pad_code_lookup: [u16; PAD_CODE_LOOKUP_CAP],
     key_slot_count: usize,
     pad_stride: usize,
     pad_slot_count: usize,
@@ -157,8 +195,10 @@ impl Default for CompiledKeymap {
             key_rev: new_compiled_key_rev(),
             key_rev_extra: HashMap::new(),
             pad_dir_rev: [0; 4],
-            pad_dir_on_rev: FxHashMap::default(),
+            pad_dir_on_rev: [0; PAD_DIR_ON_CAP],
+            pad_dir_on_extra: FxHashMap::default(),
             pad_code_rev: Box::new([]),
+            pad_code_lookup: [UNMAPPED_PAD_CODE_INDEX; PAD_CODE_LOOKUP_CAP],
             key_slot_count: 0,
             pad_stride: 4,
             pad_slot_count: 0,
@@ -217,8 +257,14 @@ impl CompiledKeymap {
             }
             pad_dir_rev[ix] = mask & !SYSTEM_ACTION_MASK;
         }
-        let mut pad_dir_on_rev =
-            FxHashMap::with_capacity_and_hasher(km.pad_dir_on_rev.len(), Default::default());
+        let mut pad_dir_on_rev = [0; PAD_DIR_ON_CAP];
+        let extra_dir_count = km
+            .pad_dir_on_rev
+            .keys()
+            .filter(|(device, _)| *device >= PAD_ID_COUNT_CAP)
+            .count();
+        let mut pad_dir_on_extra =
+            FxHashMap::with_capacity_and_hasher(extra_dir_count, Default::default());
         let mut max_pad_device: Option<usize> = None;
         for (&key, actions) in &km.pad_dir_on_rev {
             let mut mask = 0;
@@ -230,14 +276,20 @@ impl CompiledKeymap {
                 continue;
             }
             max_pad_device = Some(max_pad_device.map_or(key.0, |max| max.max(key.0)));
-            pad_dir_on_rev.insert(key, mask);
+            if key.0 < PAD_ID_COUNT_CAP {
+                pad_dir_on_rev[key.0 * 4 + key.1.ix()] = mask;
+            } else {
+                pad_dir_on_extra.insert(key, mask);
+            }
         }
         let mut pad_code_rev = Vec::with_capacity(km.pad_code_rev.len());
         let mut next_pad_button_slot = 0u32;
         for (&code, entries) in &km.pad_code_rev {
             let compiled = compile_pad_code_map(entries, next_pad_button_slot);
-            for entry in &compiled.entries {
-                if let Some(device) = entry.device {
+            for entry in entries {
+                if !entry.act.is_system()
+                    && let Some(device) = entry.device
+                {
                     max_pad_device = Some(max_pad_device.map_or(device, |max| max.max(device)));
                 }
             }
@@ -246,9 +298,23 @@ impl CompiledKeymap {
         }
         pad_code_rev.sort_unstable_by_key(|&(code, _)| code);
         let pad_code_rev = pad_code_rev.into_boxed_slice();
+        let mut pad_code_lookup = [UNMAPPED_PAD_CODE_INDEX; PAD_CODE_LOOKUP_CAP];
+        for (index, &(code, _)) in pad_code_rev
+            .iter()
+            .take(COLLIDING_PAD_CODE_INDEX as usize)
+            .enumerate()
+        {
+            let projected = code as usize & PAD_CODE_LOOKUP_MASK;
+            match pad_code_lookup[projected] {
+                UNMAPPED_PAD_CODE_INDEX => pad_code_lookup[projected] = index as u16,
+                COLLIDING_PAD_CODE_INDEX => {}
+                _ => pad_code_lookup[projected] = COLLIDING_PAD_CODE_INDEX,
+            }
+        }
         let pad_stride = 4 + next_pad_button_slot as usize;
         let has_pad_bindings = pad_dir_rev.iter().any(|&mask| mask != 0)
-            || !pad_dir_on_rev.is_empty()
+            || pad_dir_on_rev.iter().any(|&mask| mask != 0)
+            || !pad_dir_on_extra.is_empty()
             || !pad_code_rev.is_empty();
         let pad_slot_count = if has_pad_bindings {
             pad_stride.saturating_mul(max_pad_device.map_or(1, |max| max.saturating_add(1)))
@@ -267,7 +333,9 @@ impl CompiledKeymap {
             key_rev_extra,
             pad_dir_rev,
             pad_dir_on_rev,
+            pad_dir_on_extra,
             pad_code_rev,
+            pad_code_lookup,
             key_slot_count: next_key_slot as usize,
             pad_stride,
             pad_slot_count,
@@ -650,6 +718,170 @@ impl Keymap {
 
 // INI parsing and default emission moved to config.rs
 
+#[cfg(any(test, feature = "bench-support"))]
+#[derive(Clone, Debug)]
+struct ReferencePadCodeMap {
+    slot: u32,
+    wildcard_mask: u32,
+    entries: Vec<CompiledPadCodeRev>,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn compile_pad_code_reference(entries: &[PadCodeRev], slot: u32) -> ReferencePadCodeMap {
+    let mut wildcard_mask = 0;
+    let specific_capacity = entries
+        .iter()
+        .filter(|entry| !entry.act.is_system() && (entry.device.is_some() || entry.uuid.is_some()))
+        .count();
+    let mut compiled_entries = Vec::with_capacity(specific_capacity);
+    for entry in entries {
+        if entry.act.is_system() {
+            continue;
+        }
+        if entry.device.is_none() && entry.uuid.is_none() {
+            wildcard_mask |= entry.act.bit();
+            continue;
+        }
+        if let Some(existing) =
+            compiled_entries
+                .iter_mut()
+                .find(|item: &&mut CompiledPadCodeRev| {
+                    item.device == entry.device && item.uuid == entry.uuid
+                })
+        {
+            existing.mask |= entry.act.bit();
+            continue;
+        }
+        compiled_entries.push(CompiledPadCodeRev {
+            mask: entry.act.bit(),
+            device: entry.device,
+            uuid: entry.uuid,
+        });
+    }
+    ReferencePadCodeMap {
+        slot,
+        wildcard_mask,
+        entries: compiled_entries,
+    }
+}
+
+/// Old and current compiled pad lookups retained only for parity tests and
+/// release benchmarks. Production input mapping never constructs this type.
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct PadLookupBench {
+    current: CompiledKeymap,
+    old_dir_on: FxHashMap<(usize, PadDir), u32>,
+    old_codes: Box<[(u32, ReferencePadCodeMap)]>,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl PadLookupBench {
+    pub fn new(keymap: &Keymap) -> Self {
+        let current = CompiledKeymap::from_keymap(keymap);
+        let mut old_dir_on =
+            FxHashMap::with_capacity_and_hasher(keymap.pad_dir_on_rev.len(), Default::default());
+        for (&key, actions) in &keymap.pad_dir_on_rev {
+            let mask =
+                actions.iter().fold(0, |mask, action| mask | action.bit()) & !SYSTEM_ACTION_MASK;
+            if mask != 0 {
+                old_dir_on.insert(key, mask);
+            }
+        }
+        let mut old_codes = Vec::with_capacity(keymap.pad_code_rev.len());
+        for (&code, entries) in &keymap.pad_code_rev {
+            old_codes.push((
+                code,
+                compile_pad_code_reference(entries, old_codes.len() as u32),
+            ));
+        }
+        old_codes.sort_unstable_by_key(|&(code, _)| code);
+        Self {
+            current,
+            old_dir_on,
+            old_codes: old_codes.into_boxed_slice(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn dir_new(&self, id: PadId, dir: PadDir) -> u32 {
+        collect_pad_dir_mask_from_compiled(&self.current, id, dir)
+    }
+
+    #[inline(always)]
+    pub fn dir_old(&self, id: PadId, dir: PadDir) -> u32 {
+        let dev = usize::from(id);
+        self.current.pad_dir_rev[dir.ix()] | self.old_dir_on.get(&(dev, dir)).copied().unwrap_or(0)
+    }
+
+    #[inline(always)]
+    pub fn code_new(&self, code: PadCode) -> Option<u32> {
+        find_pad_code_map(&self.current, code.into_u32()).map(|code_map| code_map.slot)
+    }
+
+    #[inline(always)]
+    pub fn code_old(&self, code: PadCode) -> Option<u32> {
+        let code = code.into_u32();
+        let index = self
+            .old_codes
+            .binary_search_by_key(&code, |&(candidate, _)| candidate)
+            .ok()?;
+        Some(self.old_codes[index].1.slot)
+    }
+
+    #[inline(always)]
+    pub fn filter_new(&self, code_index: usize, id: PadId, uuid: [u8; 16]) -> u32 {
+        let Some((_, code_map)) = self.current.pad_code_rev.get(code_index) else {
+            return 0;
+        };
+        collect_pad_code_mask(code_map, usize::from(id), uuid)
+    }
+
+    #[inline(always)]
+    pub fn filter_old(&self, code_index: usize, id: PadId, uuid: [u8; 16]) -> u32 {
+        let Some((_, code_map)) = self.old_codes.get(code_index) else {
+            return 0;
+        };
+        let dev = usize::from(id);
+        let mut mask = code_map.wildcard_mask;
+        for entry in &code_map.entries {
+            if let Some(d_expected) = entry.device
+                && d_expected != dev
+            {
+                continue;
+            }
+            if let Some(u_expected) = entry.uuid
+                && u_expected != uuid
+            {
+                continue;
+            }
+            mask |= entry.mask;
+        }
+        mask
+    }
+
+    pub fn binding_new(&self, id: PadId, code: PadCode, uuid: [u8; 16]) -> Option<(u32, u32)> {
+        let code_map = find_pad_code_map(&self.current, code.into_u32())?;
+        let mask = collect_pad_code_mask(code_map, usize::from(id), uuid);
+        (mask != 0).then_some((code_map.slot, mask))
+    }
+
+    pub fn binding_old(&self, id: PadId, code: PadCode, uuid: [u8; 16]) -> Option<(u32, u32)> {
+        let code = code.into_u32();
+        let index = self
+            .old_codes
+            .binary_search_by_key(&code, |&(candidate, _)| candidate)
+            .ok()?;
+        let code_map = &self.old_codes[index].1;
+        let mask = self.filter_old(index, id, uuid);
+        (mask != 0).then_some((code_map.slot, mask))
+    }
+
+    pub fn code_count(&self) -> usize {
+        self.old_codes.len()
+    }
+}
+
 #[inline(always)]
 fn collect_key_binding_from_compiled(
     km: &CompiledKeymap,
@@ -669,26 +901,34 @@ fn collect_key_binding_from_compiled(
 #[inline(always)]
 fn collect_pad_dir_mask_from_compiled(km: &CompiledKeymap, id: PadId, dir: PadDir) -> u32 {
     let dev = usize::from(id);
-    km.pad_dir_rev[dir.ix()] | km.pad_dir_on_rev.get(&(dev, dir)).copied().unwrap_or(0)
+    let device_mask = if dev < PAD_ID_COUNT_CAP {
+        km.pad_dir_on_rev[dev * 4 + dir.ix()]
+    } else {
+        km.pad_dir_on_extra.get(&(dev, dir)).copied().unwrap_or(0)
+    };
+    km.pad_dir_rev[dir.ix()] | device_mask
 }
 
 #[inline(always)]
-fn collect_pad_button_binding_from_compiled(
-    km: &CompiledKeymap,
-    id: PadId,
-    code: PadCode,
-    uuid: [u8; 16],
-) -> Option<CompiledBindingRev> {
-    let code = code.into_u32();
-    let Ok(index) = km
+fn find_pad_code_map(km: &CompiledKeymap, code: u32) -> Option<&CompiledPadCodeMap> {
+    let candidate = km.pad_code_lookup[code as usize & PAD_CODE_LOOKUP_MASK];
+    if candidate == UNMAPPED_PAD_CODE_INDEX {
+        return None;
+    }
+    if candidate != COLLIDING_PAD_CODE_INDEX {
+        let (candidate_code, code_map) = &km.pad_code_rev[candidate as usize];
+        return (*candidate_code == code).then_some(code_map);
+    }
+    let index = km
         .pad_code_rev
         .binary_search_by_key(&code, |&(candidate, _)| candidate)
-    else {
-        return None;
-    };
-    let code_map = &km.pad_code_rev[index].1;
-    let dev = usize::from(id);
-    let mut mask = code_map.wildcard_mask;
+        .ok()?;
+    Some(&km.pad_code_rev[index].1)
+}
+
+#[inline(always)]
+fn collect_pad_code_mask(code_map: &CompiledPadCodeMap, dev: usize, uuid: [u8; 16]) -> u32 {
+    let mut mask = code_map.wildcard_mask | code_map.device_masks.get(dev).copied().unwrap_or(0);
     for entry in &code_map.entries {
         if let Some(d_expected) = entry.device
             && d_expected != dev
@@ -702,6 +942,20 @@ fn collect_pad_button_binding_from_compiled(
         }
         mask |= entry.mask;
     }
+    mask
+}
+
+#[inline(always)]
+fn collect_pad_button_binding_from_compiled(
+    km: &CompiledKeymap,
+    id: PadId,
+    code: PadCode,
+    uuid: [u8; 16],
+) -> Option<CompiledBindingRev> {
+    let code = code.into_u32();
+    let code_map = find_pad_code_map(km, code)?;
+    let dev = usize::from(id);
+    let mask = collect_pad_code_mask(code_map, dev, uuid);
     if mask == 0 {
         return None;
     }
@@ -1020,6 +1274,47 @@ mod tests {
     }
 
     #[test]
+    fn map_pad_event_with_emits_only_matching_device_direction() {
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_down,
+            &[
+                InputBinding::PadDirOn {
+                    device: 2,
+                    dir: PadDir::Down,
+                },
+                InputBinding::PadDirOn {
+                    device: 70,
+                    dir: PadDir::Down,
+                },
+            ],
+        );
+        set_keymap(km);
+        let timestamp = Instant::now();
+        let event = |id| PadEvent::Dir {
+            id: PadId(id),
+            timestamp,
+            host_nanos: 42,
+            dir: PadDir::Down,
+            pressed: true,
+        };
+
+        let mut actual = Vec::new();
+        map_pad_event_with(&event(1), |input| actual.push(input));
+        assert!(actual.is_empty());
+        map_pad_event_with(&event(2), |input| actual.push(input));
+        assert_eq!(actual.len(), 1);
+        assert_eq!(actual[0].action, VirtualAction::p1_down);
+        assert_eq!(actual[0].input_slot, 9);
+        map_pad_event_with(&event(70), |input| actual.push(input));
+        assert_eq!(actual.len(), 2);
+        assert_eq!(actual[1].action, VirtualAction::p1_down);
+        assert_eq!(actual[1].input_slot, 281);
+    }
+
+    #[test]
     fn map_keycode_event_with_suppresses_pressed_alias_when_primary_is_bound() {
         let _guard = lock_test_guard();
         let _reset = TestReset::capture();
@@ -1272,6 +1567,172 @@ mod tests {
     }
 
     #[test]
+    fn compiled_pad_lookups_match_hash_search_and_filter_references() {
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_left,
+            &[
+                InputBinding::PadDir(PadDir::Up),
+                InputBinding::GamepadCode(GamepadCodeBinding {
+                    code_u32: 77,
+                    device: None,
+                    uuid: None,
+                }),
+            ],
+        );
+        km.bind(
+            VirtualAction::p1_down,
+            &[
+                InputBinding::PadDirOn {
+                    device: 2,
+                    dir: PadDir::Up,
+                },
+                InputBinding::GamepadCode(GamepadCodeBinding {
+                    code_u32: 77,
+                    device: Some(2),
+                    uuid: None,
+                }),
+            ],
+        );
+        km.bind(
+            VirtualAction::p1_up,
+            &[
+                InputBinding::PadDirOn {
+                    device: 70,
+                    dir: PadDir::Up,
+                },
+                InputBinding::GamepadCode(GamepadCodeBinding {
+                    code_u32: 77,
+                    device: None,
+                    uuid: Some([7; 16]),
+                }),
+            ],
+        );
+        km.bind(
+            VirtualAction::p1_right,
+            &[InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 77,
+                device: Some(2),
+                uuid: Some([7; 16]),
+            })],
+        );
+        km.bind(
+            VirtualAction::p1_start,
+            &[InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 1,
+                device: None,
+                uuid: None,
+            })],
+        );
+        km.bind(
+            VirtualAction::p1_back,
+            &[InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 0x0009_0001,
+                device: None,
+                uuid: None,
+            })],
+        );
+        km.bind(
+            VirtualAction::p2_start,
+            &[InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 77,
+                device: Some(70),
+                uuid: None,
+            })],
+        );
+        km.bind(
+            VirtualAction::system_fast_forward,
+            &[InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 77,
+                device: Some(1),
+                uuid: None,
+            })],
+        );
+
+        let fixture = PadLookupBench::new(&km);
+        for id in [PadId(0), PadId(1), PadId(2), PadId(64), PadId(70)] {
+            for dir in [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right] {
+                assert_eq!(fixture.dir_new(id, dir), fixture.dir_old(id, dir));
+            }
+        }
+        for code in [PadCode(0), PadCode(1), PadCode(77), PadCode(0x0009_0001)] {
+            assert_eq!(fixture.code_new(code), fixture.code_old(code));
+        }
+        for code_index in 0..fixture.code_count() {
+            for id in [PadId(0), PadId(1), PadId(2), PadId(64), PadId(70)] {
+                for uuid in [[0; 16], [7; 16], [9; 16]] {
+                    assert_eq!(
+                        fixture.filter_new(code_index, id, uuid),
+                        fixture.filter_old(code_index, id, uuid)
+                    );
+                }
+            }
+        }
+        for code in [PadCode(0), PadCode(1), PadCode(77), PadCode(0x0009_0001)] {
+            for id in [PadId(0), PadId(1), PadId(2), PadId(64), PadId(70)] {
+                for uuid in [[0; 16], [7; 16], [9; 16]] {
+                    assert_eq!(
+                        fixture.binding_new(id, code, uuid),
+                        fixture.binding_old(id, code, uuid)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn optimized_pad_mapping_preserves_combined_filter_event_order() {
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
+        let mut km = Keymap::default();
+        for (action, device, uuid) in [
+            (VirtualAction::p1_up, None, None),
+            (VirtualAction::p1_down, Some(2), None),
+            (VirtualAction::p1_left, None, Some([7; 16])),
+            (VirtualAction::p1_right, Some(2), Some([7; 16])),
+        ] {
+            km.bind(
+                action,
+                &[InputBinding::GamepadCode(GamepadCodeBinding {
+                    code_u32: 77,
+                    device,
+                    uuid,
+                })],
+            );
+        }
+        set_keymap(km);
+        let timestamp = Instant::now();
+        let event = PadEvent::RawButton {
+            id: PadId(2),
+            timestamp,
+            host_nanos: 73,
+            code: PadCode(77),
+            uuid: [7; 16],
+            value: 1.0,
+            pressed: true,
+        };
+        let mut actual = Vec::new();
+        map_pad_event_with(&event, |input| actual.push(input));
+
+        assert_eq!(
+            actual.iter().map(|input| input.action).collect::<Vec<_>>(),
+            [
+                VirtualAction::p1_up,
+                VirtualAction::p1_down,
+                VirtualAction::p1_left,
+                VirtualAction::p1_right,
+            ]
+        );
+        assert!(actual.iter().all(|input| {
+            input.pressed
+                && input.source == InputSource::Gamepad
+                && input.timestamp == timestamp
+                && input.timestamp_host_nanos == 73
+                && input.input_slot == actual[0].input_slot
+        }));
+    }
+
+    #[test]
     fn map_pad_event_with_ignores_raw_axis_events() {
         let _guard = lock_test_guard();
         let _reset = TestReset::capture();
@@ -1506,5 +1967,27 @@ mod tests {
         assert_eq!(key_slot_count, 2);
         assert_eq!(pad_stride, 5);
         assert_eq!(pad_slot_count, 15);
+    }
+
+    #[test]
+    fn device_specific_button_contributes_to_compiled_pad_slot_count() {
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_start,
+            &[InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 77,
+                device: Some(5),
+                uuid: None,
+            })],
+        );
+
+        set_keymap(km);
+        let (pad_stride, pad_slot_count) =
+            with_compiled_keymap(|compiled| (compiled.pad_stride, compiled.pad_slot_count));
+
+        assert_eq!(pad_stride, 5);
+        assert_eq!(pad_slot_count, 30);
     }
 }
