@@ -33,6 +33,12 @@ pub use platform::{
     player_readings_generation,
 };
 
+#[cfg(all(
+    feature = "bench-support",
+    any(target_os = "windows", target_os = "linux", target_os = "macos")
+))]
+pub use platform::bench_support;
+
 #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
 pub fn configure(_enabled: bool, _discover: bool, _device_ids: [Option<&str>; 2]) {}
 

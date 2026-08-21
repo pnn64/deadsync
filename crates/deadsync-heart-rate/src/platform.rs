@@ -25,7 +25,7 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 struct Desired {
     enabled: bool,
     discover: bool,
-    device_ids: [Option<String>; 2],
+    device_ids: [Option<Arc<str>>; 2],
 }
 
 #[derive(Debug)]
@@ -112,7 +112,7 @@ pub fn configure(enabled: bool, discover: bool, device_ids: [Option<&str>; 2]) {
     let next = Desired {
         enabled,
         discover,
-        device_ids: device_ids.map(|id| id.map(str::to_owned)),
+        device_ids: device_ids.map(|id| id.map(Arc::from)),
     };
     *desired = next.clone();
     drop(desired);
@@ -189,15 +189,15 @@ fn start_worker() -> Runtime {
 
 #[derive(Debug)]
 enum MonitorEvent {
-    Connected(String, Option<String>),
-    Bpm(String, u16),
-    Disconnected(String),
+    Connected(Arc<str>, Option<String>),
+    Bpm(Arc<str>, u16),
+    Disconnected(Arc<str>),
 }
 
 async fn worker_loop(desired: Arc<Mutex<Desired>>, shared: Arc<RwLock<Shared>>) {
     loop {
-        let current = desired.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        if !current.enabled {
+        let enabled = desired.lock().unwrap_or_else(|e| e.into_inner()).enabled;
+        if !enabled {
             set_disabled(&shared);
             tokio::time::sleep(SCAN_POLL_INTERVAL).await;
             continue;
@@ -245,9 +245,9 @@ async fn run_enabled(
         disconnect_devices(&stopped, &devices).await;
         while let Ok(event) = event_rx.try_recv() {
             let (id, label) = apply_monitor_event(&current, event);
-            connecting.remove(&id);
+            connecting.remove(id.as_ref());
             let label_changed = if let Some(label) = label
-                && let Some((current_label, _)) = devices.get_mut(&id)
+                && let Some((current_label, _)) = devices.get_mut(id.as_ref())
                 && *current_label != label
             {
                 *current_label = label;
@@ -260,13 +260,11 @@ async fn run_enabled(
             }
         }
 
-        let selected: HashSet<&str> = current
+        let missing_device = current
             .device_ids
             .iter()
             .flatten()
-            .map(String::as_str)
-            .collect();
-        let missing_device = selected.iter().any(|id| !devices.contains_key(*id));
+            .any(|id| !devices.contains_key(id.as_ref()));
         let should_scan = scan_needed(
             !connecting.is_empty(),
             current.discover,
@@ -372,6 +370,28 @@ fn device_name(properties: &PeripheralProperties) -> Option<String> {
 }
 
 fn publish_devices(shared: &Arc<RwLock<Shared>>, devices: &HashMap<String, (String, Peripheral)>) {
+    let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
+    if device_snapshot_matches(&shared.discovery.devices, devices) {
+        if shared.discovery.error.take().is_some() {
+            mark_discovery_changed();
+        }
+        return;
+    }
+    shared.discovery.devices = build_device_snapshot(devices);
+    shared.discovery.error = None;
+    mark_discovery_changed();
+}
+
+fn device_snapshot_matches<T>(snapshot: &[Device], devices: &HashMap<String, (String, T)>) -> bool {
+    snapshot.len() == devices.len()
+        && snapshot.iter().all(|device| {
+            devices
+                .get(device.id.as_str())
+                .is_some_and(|(label, _)| *label == device.label)
+        })
+}
+
+fn build_device_snapshot<T>(devices: &HashMap<String, (String, T)>) -> Vec<Device> {
     let mut snapshot: Vec<Device> = devices
         .iter()
         .map(|(id, (label, _))| Device {
@@ -380,12 +400,24 @@ fn publish_devices(shared: &Arc<RwLock<Shared>>, devices: &HashMap<String, (Stri
         })
         .collect();
     snapshot.sort_unstable_by(|a, b| a.label.cmp(&b.label).then_with(|| a.id.cmp(&b.id)));
-    let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
-    if shared.discovery.devices != snapshot || shared.discovery.error.is_some() {
-        shared.discovery.devices = snapshot;
-        shared.discovery.error = None;
-        mark_discovery_changed();
-    }
+    snapshot
+}
+
+#[inline(always)]
+fn device_selected(desired: &Desired, id: &str) -> bool {
+    desired
+        .device_ids
+        .iter()
+        .flatten()
+        .any(|selected| selected.as_ref() == id)
+}
+
+#[inline(always)]
+fn selected_earlier(desired: &Desired, player: usize, id: &str) -> bool {
+    desired.device_ids[..player]
+        .iter()
+        .flatten()
+        .any(|selected| selected.as_ref() == id)
 }
 
 fn prune_monitors(
@@ -394,15 +426,9 @@ fn prune_monitors(
     connecting: &mut HashSet<String>,
     last_attempt: &mut HashMap<String, Instant>,
 ) -> Vec<String> {
-    let selected: HashSet<&str> = desired
-        .device_ids
-        .iter()
-        .flatten()
-        .map(String::as_str)
-        .collect();
     let mut stopped = Vec::new();
     monitors.retain(|id, task| {
-        let keep = selected.contains(id.as_str()) && !task.is_finished();
+        let keep = device_selected(desired, id) && !task.is_finished();
         if !keep {
             task.abort();
             connecting.remove(id);
@@ -410,8 +436,8 @@ fn prune_monitors(
         }
         keep
     });
-    connecting.retain(|id| selected.contains(id.as_str()) && monitors.contains_key(id));
-    last_attempt.retain(|id, _| selected.contains(id.as_str()));
+    connecting.retain(|id| device_selected(desired, id) && monitors.contains_key(id));
+    last_attempt.retain(|id, _| device_selected(desired, id));
     stopped
 }
 
@@ -420,21 +446,21 @@ fn ready_monitors(
     devices: &HashMap<String, (String, Peripheral)>,
     monitors: &HashMap<String, JoinHandle<()>>,
     last_attempt: &HashMap<String, Instant>,
-) -> Vec<(String, Peripheral)> {
+) -> Vec<(Arc<str>, Peripheral)> {
     let now = Instant::now();
-    let mut seen = HashSet::new();
     let mut ready = Vec::new();
-    for id in desired.device_ids.iter().flatten() {
-        if !seen.insert(id.as_str())
-            || monitors.contains_key(id)
+    for (player, id) in desired.device_ids.iter().enumerate() {
+        let Some(id) = id else { continue };
+        if selected_earlier(desired, player, id.as_ref())
+            || monitors.contains_key(id.as_ref())
             || last_attempt
-                .get(id)
+                .get(id.as_ref())
                 .is_some_and(|last| now.duration_since(*last) < RETRY_INTERVAL)
         {
             continue;
         }
-        if let Some((_, peripheral)) = devices.get(id) {
-            ready.push((id.clone(), peripheral.clone()));
+        if let Some((_, peripheral)) = devices.get(id.as_ref()) {
+            ready.push((Arc::clone(id), peripheral.clone()));
         }
     }
     ready
@@ -442,7 +468,7 @@ fn ready_monitors(
 
 #[allow(clippy::too_many_arguments)]
 fn spawn_monitors(
-    ready: Vec<(String, Peripheral)>,
+    ready: Vec<(Arc<str>, Peripheral)>,
     desired: &Desired,
     event_tx: &mpsc::UnboundedSender<MonitorEvent>,
     monitors: &mut HashMap<String, JoinHandle<()>>,
@@ -453,11 +479,11 @@ fn spawn_monitors(
     // less reliable when discovery or another connection races service setup.
     for (id, peripheral) in ready.into_iter().take(1) {
         let events = event_tx.clone();
-        set_connecting(desired, &id);
-        connecting.insert(id.clone());
-        last_attempt.insert(id.clone(), Instant::now());
+        set_connecting(desired, id.as_ref());
+        connecting.insert(id.to_string());
+        last_attempt.insert(id.to_string(), Instant::now());
         monitors.insert(
-            id.clone(),
+            id.to_string(),
             tokio::spawn(async move {
                 if monitor_device(&peripheral, &id, &events).await.is_err() {
                     let _ = tokio::time::timeout(CONNECT_TIMEOUT, peripheral.disconnect()).await;
@@ -470,7 +496,7 @@ fn spawn_monitors(
 
 async fn monitor_device(
     peripheral: &Peripheral,
-    id: &str,
+    id: &Arc<str>,
     events: &mpsc::UnboundedSender<MonitorEvent>,
 ) -> Result<(), String> {
     let connected = tokio::time::timeout(CONNECT_TIMEOUT, peripheral.is_connected())
@@ -505,25 +531,25 @@ async fn monitor_device(
         .await
         .map_err(|_| "Timed out subscribing to heart-rate notifications".to_owned())?
         .map_err(|e| e.to_string())?;
-    let _ = events.send(MonitorEvent::Connected(id.to_owned(), label));
+    let _ = events.send(MonitorEvent::Connected(Arc::clone(id), label));
     while let Some(notification) = notifications.next().await {
         if notification.uuid == measurement_uuid
             && let Ok(bpm) = parse_heart_rate_measurement(&notification.value)
         {
-            let _ = events.send(MonitorEvent::Bpm(id.to_owned(), bpm));
+            let _ = events.send(MonitorEvent::Bpm(Arc::clone(id), bpm));
         }
     }
     Err("Heart-rate notification stream ended".to_owned())
 }
 
-fn apply_monitor_event(desired: &Desired, event: MonitorEvent) -> (String, Option<String>) {
+fn apply_monitor_event(desired: &Desired, event: MonitorEvent) -> (Arc<str>, Option<String>) {
     let (id, connected, bpm, label) = match event {
         MonitorEvent::Connected(id, label) => (id, true, None, label),
         MonitorEvent::Bpm(id, bpm) => (id, true, Some(bpm), None),
         MonitorEvent::Disconnected(id) => (id, false, None, None),
     };
     for (player, selected) in desired.device_ids.iter().enumerate() {
-        if selected.as_deref() == Some(id.as_str()) {
+        if selected.as_deref() == Some(id.as_ref()) {
             let current = decode_reading(PLAYER_READINGS[player].load(Ordering::Acquire));
             publish_reading(
                 player,
@@ -583,8 +609,8 @@ fn set_error(shared: &Arc<RwLock<Shared>>, error: String) {
         mark_discovery_changed();
     }
     drop(shared);
-    for player in 0..2 {
-        let mut reading = decode_reading(PLAYER_READINGS[player].load(Ordering::Acquire));
+    for (player, reading) in PLAYER_READINGS.iter().enumerate() {
+        let mut reading = decode_reading(reading.load(Ordering::Acquire));
         reading.connected = false;
         reading.bpm = None;
         publish_reading(player, reading);
@@ -601,6 +627,184 @@ fn parse_heart_rate_measurement(data: &[u8]) -> Result<u16, &'static str> {
     } else {
         let bytes = rest.get(..2).ok_or("missing 16-bit heart-rate value")?;
         Ok(u16::from_le_bytes([bytes[0], bytes[1]]))
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::*;
+    use std::hint::black_box;
+
+    #[derive(Clone)]
+    struct LegacyDesired {
+        device_ids: [Option<String>; 2],
+    }
+
+    struct DiscoveryFixture {
+        devices: HashMap<String, (String, ())>,
+        snapshot: Vec<Device>,
+    }
+
+    fn legacy_desired() -> &'static LegacyDesired {
+        static DESIRED: OnceLock<LegacyDesired> = OnceLock::new();
+        DESIRED.get_or_init(|| LegacyDesired {
+            device_ids: [Some("polar-h10".to_owned()), Some("garmin-hrm".to_owned())],
+        })
+    }
+
+    fn shared_desired() -> &'static Desired {
+        static DESIRED: OnceLock<Desired> = OnceLock::new();
+        DESIRED.get_or_init(|| Desired {
+            enabled: true,
+            discover: true,
+            device_ids: [Some(Arc::from("polar-h10")), Some(Arc::from("garmin-hrm"))],
+        })
+    }
+
+    fn discovery_fixture() -> &'static DiscoveryFixture {
+        static FIXTURE: OnceLock<DiscoveryFixture> = OnceLock::new();
+        FIXTURE.get_or_init(|| {
+            let devices = (0..16)
+                .map(|index| {
+                    (
+                        format!("bluetooth-device-{index:02}"),
+                        (format!("Heart Rate Monitor {index:02}"), ()),
+                    )
+                })
+                .collect();
+            let snapshot = build_device_snapshot(&devices);
+            DiscoveryFixture { devices, snapshot }
+        })
+    }
+
+    pub fn stable_ids_old(events: usize) -> u64 {
+        let mut checksum = 0u64;
+        for event_index in 0..events {
+            let current = black_box(legacy_desired()).clone();
+            let bpm = 55 + event_index as u16 % 100;
+            let id = current.device_ids[event_index & 1]
+                .as_deref()
+                .expect("benchmark device ID is configured")
+                .to_owned();
+            checksum = checksum
+                .rotate_left(5)
+                .wrapping_add((u64::from(bpm) << 32) | id.len() as u64);
+            black_box((id, bpm));
+        }
+        checksum
+    }
+
+    pub fn stable_ids_new(events: usize) -> u64 {
+        let mut checksum = 0u64;
+        for event_index in 0..events {
+            let current = black_box(shared_desired()).clone();
+            let bpm = 55 + event_index as u16 % 100;
+            let event = MonitorEvent::Bpm(
+                Arc::clone(
+                    current.device_ids[event_index & 1]
+                        .as_ref()
+                        .expect("benchmark device ID is configured"),
+                ),
+                bpm,
+            );
+            let MonitorEvent::Bpm(id, bpm) = &event else {
+                unreachable!("benchmark constructs a BPM event")
+            };
+            checksum = checksum
+                .rotate_left(5)
+                .wrapping_add((u64::from(*bpm) << 32) | id.len() as u64);
+            black_box(event);
+        }
+        checksum
+    }
+
+    pub fn fixed_selection_old(iterations: usize) -> u64 {
+        let desired = legacy_desired();
+        let mut checksum = 0u64;
+        for _ in 0..iterations {
+            let selected: HashSet<&str> = black_box(&desired.device_ids)
+                .iter()
+                .filter_map(Option::as_deref)
+                .collect();
+            let missing = selected.iter().any(|id| *id != "polar-h10");
+
+            let selected: HashSet<&str> = desired
+                .device_ids
+                .iter()
+                .filter_map(Option::as_deref)
+                .collect();
+            let kept = ["polar-h10", "unused"]
+                .into_iter()
+                .filter(|id| selected.contains(id))
+                .count();
+
+            let mut seen = HashSet::new();
+            let ready_bytes: usize = desired
+                .device_ids
+                .iter()
+                .filter_map(Option::as_deref)
+                .filter(|id| seen.insert(*id))
+                .map(str::len)
+                .sum();
+            checksum = checksum.wrapping_add(
+                ((missing as u64) << 32) | ((kept as u64) << 16) | ready_bytes as u64,
+            );
+        }
+        checksum
+    }
+
+    pub fn fixed_selection_new(iterations: usize) -> u64 {
+        let desired = shared_desired();
+        let mut checksum = 0u64;
+        for _ in 0..iterations {
+            let desired = black_box(desired);
+            let missing = desired
+                .device_ids
+                .iter()
+                .flatten()
+                .any(|id| id.as_ref() != "polar-h10");
+            let kept = ["polar-h10", "unused"]
+                .into_iter()
+                .filter(|id| device_selected(desired, id))
+                .count();
+            let ready_bytes = desired
+                .device_ids
+                .iter()
+                .enumerate()
+                .filter_map(|(player, id)| id.as_ref().map(|id| (player, id)))
+                .filter(|(player, id)| !selected_earlier(desired, *player, id.as_ref()))
+                .map(|(_, id)| id.len())
+                .sum::<usize>();
+            checksum = checksum.wrapping_add(
+                ((missing as u64) << 32) | ((kept as u64) << 16) | ready_bytes as u64,
+            );
+        }
+        checksum
+    }
+
+    pub fn unchanged_discovery_old(iterations: usize) -> u64 {
+        let fixture = discovery_fixture();
+        let mut checksum = 0u64;
+        for _ in 0..iterations {
+            let snapshot = build_device_snapshot(black_box(&fixture.devices));
+            let same = snapshot == fixture.snapshot;
+            checksum = checksum.wrapping_add(((same as u64) << 32) | snapshot.len() as u64);
+            black_box(snapshot);
+        }
+        checksum
+    }
+
+    pub fn unchanged_discovery_new(iterations: usize) -> u64 {
+        let fixture = discovery_fixture();
+        let mut checksum = 0u64;
+        for _ in 0..iterations {
+            let same = device_snapshot_matches(
+                black_box(fixture.snapshot.as_slice()),
+                black_box(&fixture.devices),
+            );
+            checksum = checksum.wrapping_add(((same as u64) << 32) | fixture.snapshot.len() as u64);
+        }
+        checksum
     }
 }
 
@@ -701,5 +905,83 @@ mod tests {
             ..PeripheralProperties::default()
         };
         assert_eq!(device_name(&both).as_deref(), Some("Polar H10"));
+    }
+
+    #[test]
+    fn desired_clones_share_configured_device_ids() {
+        let desired = Desired {
+            enabled: true,
+            discover: false,
+            device_ids: [Some(Arc::from("polar-h10")), Some(Arc::from("garmin-hrm"))],
+        };
+        let cloned = desired.clone();
+
+        for player in 0..2 {
+            assert!(Arc::ptr_eq(
+                desired.device_ids[player].as_ref().unwrap(),
+                cloned.device_ids[player].as_ref().unwrap()
+            ));
+        }
+
+        let event_id = Arc::clone(cloned.device_ids[0].as_ref().unwrap());
+        let MonitorEvent::Bpm(event_id, 72) = MonitorEvent::Bpm(event_id, 72) else {
+            unreachable!()
+        };
+        assert!(Arc::ptr_eq(
+            desired.device_ids[0].as_ref().unwrap(),
+            &event_id
+        ));
+    }
+
+    #[test]
+    fn fixed_selection_matches_hash_set_reference() {
+        let cases = [
+            [None, None],
+            [Some("polar-h10"), None],
+            [Some("polar-h10"), Some("garmin-hrm")],
+            [Some("polar-h10"), Some("polar-h10")],
+        ];
+
+        for ids in cases {
+            let desired = Desired {
+                enabled: true,
+                discover: false,
+                device_ids: ids.map(|id| id.map(Arc::from)),
+            };
+            let selected: HashSet<&str> = desired
+                .device_ids
+                .iter()
+                .filter_map(|id| id.as_deref())
+                .collect();
+            for probe in ["polar-h10", "garmin-hrm", "missing"] {
+                assert_eq!(device_selected(&desired, probe), selected.contains(probe));
+            }
+
+            let mut seen = HashSet::new();
+            for (player, id) in desired.device_ids.iter().enumerate() {
+                let Some(id) = id else { continue };
+                assert_eq!(
+                    selected_earlier(&desired, player, id.as_ref()),
+                    !seen.insert(id.as_ref())
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn device_snapshot_match_detects_visible_changes() {
+        let mut devices = HashMap::from([
+            ("b".to_owned(), ("Beta".to_owned(), ())),
+            ("a".to_owned(), ("Alpha".to_owned(), ())),
+        ]);
+        let snapshot = build_device_snapshot(&devices);
+
+        assert_eq!(snapshot[0].id, "a");
+        assert!(device_snapshot_matches(&snapshot, &devices));
+
+        devices.get_mut("a").unwrap().0 = "Changed".to_owned();
+        assert!(!device_snapshot_matches(&snapshot, &devices));
+        devices.remove("b");
+        assert!(!device_snapshot_matches(&snapshot, &devices));
     }
 }
