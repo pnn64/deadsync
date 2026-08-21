@@ -34,6 +34,7 @@ impl PlanarAccum {
         self.available_frames() == 0
     }
 
+    #[inline]
     pub fn push_i16_interleaved(&mut self, interleaved: &[i16], channels: usize) {
         if interleaved.is_empty() || channels == 0 {
             return;
@@ -58,10 +59,9 @@ impl PlanarAccum {
         } else if channels == 2
             && let [left, right] = self.channels.as_mut_slice()
         {
-            for frame in interleaved.chunks_exact(2) {
-                left.push(f32::from(frame[0]) / 32768.0);
-                right.push(f32::from(frame[1]) / 32768.0);
-            }
+            let frames = interleaved.as_chunks::<2>().0;
+            left.extend(frames.iter().map(|frame| f32::from(frame[0]) / 32768.0));
+            right.extend(frames.iter().map(|frame| f32::from(frame[1]) / 32768.0));
             return;
         }
         for frame in interleaved.chunks_exact(channels) {
@@ -117,6 +117,7 @@ pub fn resampler_params() -> SincInterpolationParameters {
     }
 }
 
+#[inline]
 pub fn write_resampler_output(
     out: &[Vec<f32>],
     produced_frames: usize,
@@ -131,10 +132,29 @@ pub fn write_resampler_output(
         let produced_frames = produced_frames.min(out[0].len()).min(out[1].len());
         let produced_samples = produced_frames * 2;
         resize_output(out_tmp, produced_samples);
-        for frame in 0..produced_frames {
-            let base = frame * 2;
-            out_tmp[base] = sample_to_i16(out[0][frame]);
-            out_tmp[base + 1] = sample_to_i16(out[1][frame]);
+        let (output_chunks, output_tail) = out_tmp.as_mut_slice().as_chunks_mut::<8>();
+        let (left_chunks, left_tail) = out[0][..produced_frames].as_chunks::<4>();
+        let (right_chunks, right_tail) = out[1][..produced_frames].as_chunks::<4>();
+        for ((output, left), right) in output_chunks.iter_mut().zip(left_chunks).zip(right_chunks) {
+            *output = [
+                sample_to_i16(left[0]),
+                sample_to_i16(right[0]),
+                sample_to_i16(left[1]),
+                sample_to_i16(right[1]),
+                sample_to_i16(left[2]),
+                sample_to_i16(right[2]),
+                sample_to_i16(left[3]),
+                sample_to_i16(right[3]),
+            ];
+        }
+        for ((output, left), right) in output_tail
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(left_tail)
+            .zip(right_tail)
+        {
+            *output = [sample_to_i16(*left), sample_to_i16(*right)];
         }
         return produced_frames;
     }
@@ -142,11 +162,15 @@ pub fn write_resampler_output(
         let produced_frames = produced_frames.min(out[0].len());
         let produced_samples = produced_frames * 2;
         resize_output(out_tmp, produced_samples);
-        for frame in 0..produced_frames {
-            let sample = sample_to_i16(out[0][frame]);
-            let base = frame * 2;
-            out_tmp[base] = sample;
-            out_tmp[base + 1] = sample;
+        for (frame, sample) in out_tmp
+            .as_mut_slice()
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(&out[0][..produced_frames])
+        {
+            let sample = sample_to_i16(*sample);
+            *frame = [sample, sample];
         }
         return produced_frames;
     }
@@ -165,6 +189,7 @@ pub fn write_resampler_output(
     produced_frames
 }
 
+#[inline]
 pub fn write_channel_mapped_i16(
     input: &[i16],
     in_ch: usize,
@@ -183,11 +208,26 @@ pub fn write_channel_mapped_i16(
         return frames;
     }
     if in_ch == 1 && out_ch == 2 {
-        for frame in 0..frames {
-            let sample = input[frame];
-            let base = frame * 2;
-            out_tmp[base] = sample;
-            out_tmp[base + 1] = sample;
+        for (frame, sample) in out_tmp
+            .as_mut_slice()
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(&input[..frames])
+        {
+            *frame = [*sample, *sample];
+        }
+        return frames;
+    }
+    if out_ch == 2 {
+        for (output, input) in out_tmp
+            .as_mut_slice()
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(input.chunks_exact(in_ch))
+        {
+            *output = [input[0], input[1]];
         }
         return frames;
     }
@@ -295,6 +335,69 @@ mod tests {
         write_channel_mapped_i16, write_resampler_output,
     };
 
+    fn push_i16_legacy(planar: &mut PlanarAccum, interleaved: &[i16], channels: usize) {
+        if interleaved.is_empty() || channels == 0 {
+            return;
+        }
+        let frames = interleaved.len() / channels;
+        for channel in &mut planar.channels {
+            channel.reserve(frames);
+        }
+        for frame in interleaved.chunks_exact(channels) {
+            for (channel, sample) in planar.channels.iter_mut().zip(frame) {
+                channel.push(f32::from(*sample) / 32768.0);
+            }
+        }
+    }
+
+    fn write_resampler_legacy(
+        out: &[Vec<f32>],
+        produced_frames: usize,
+        out_ch: usize,
+        out_tmp: &mut Vec<i16>,
+    ) -> usize {
+        if out.is_empty() || produced_frames == 0 || out_ch == 0 {
+            out_tmp.clear();
+            return 0;
+        }
+        let produced_frames = produced_frames
+            .min(out[0].len())
+            .min(out.iter().map(Vec::len).min().unwrap_or(0));
+        out_tmp.resize(produced_frames.saturating_mul(out_ch), 0);
+        let mut frame = 0;
+        while frame < produced_frames {
+            let base = frame * out_ch;
+            for channel in 0..out_ch {
+                let sample = out[channel % out.len()][frame];
+                out_tmp[base + channel] = super::sample_to_i16(sample);
+            }
+            frame += 1;
+        }
+        produced_frames
+    }
+
+    fn write_channel_map_legacy(
+        input: &[i16],
+        in_ch: usize,
+        out_ch: usize,
+        out_tmp: &mut Vec<i16>,
+    ) -> usize {
+        if input.is_empty() || in_ch == 0 || out_ch == 0 {
+            out_tmp.clear();
+            return 0;
+        }
+        let frames = input.len() / in_ch;
+        out_tmp.resize(frames * out_ch, 0);
+        for frame in 0..frames {
+            let in_base = frame * in_ch;
+            let out_base = frame * out_ch;
+            for channel in 0..out_ch {
+                out_tmp[out_base + channel] = input[in_base + channel % in_ch];
+            }
+        }
+        frames
+    }
+
     #[test]
     fn planar_accum_keeps_channel_order() {
         let mut planar = PlanarAccum::new(2, 4);
@@ -306,6 +409,23 @@ mod tests {
         assert_eq!(planar.channels[0][1], 0.0);
         assert_eq!(planar.channels[1][0], -1.0);
         assert_eq!(planar.channels[1][1], 0.5);
+    }
+
+    #[test]
+    fn specialized_planar_append_matches_generic_layouts() {
+        for channels in [1usize, 2, 6] {
+            let input = (0..257 * channels + channels - 1)
+                .map(|index| index.wrapping_mul(25_173) as i16)
+                .collect::<Vec<_>>();
+            let mut expected = PlanarAccum::new(channels, 257);
+            let mut actual = PlanarAccum::new(channels, 257);
+
+            push_i16_legacy(&mut expected, &input, channels);
+            actual.push_i16_interleaved(&input, channels);
+
+            assert_eq!(actual.channels, expected.channels, "channels={channels}");
+            assert_eq!(actual.available_frames(), 257);
+        }
     }
 
     #[test]
@@ -338,6 +458,40 @@ mod tests {
 
         assert_eq!(frames, 2);
         assert_eq!(out_tmp, [0, -32767, 0, -32767, 32767, 16384, 32767, 16384]);
+    }
+
+    #[test]
+    fn specialized_resampler_output_matches_generic_layouts() {
+        let sample_edges = vec![
+            f32::NEG_INFINITY,
+            -1.5,
+            -1.0,
+            -0.0,
+            0.0,
+            0.5,
+            1.0,
+            1.5,
+            f32::INFINITY,
+            f32::NAN,
+        ];
+        for (out, requested, out_ch) in [
+            (vec![sample_edges.clone()], 14, 2),
+            (vec![sample_edges.clone(), sample_edges.clone()], 14, 2),
+            (
+                vec![sample_edges.clone(), sample_edges[..7].to_vec()],
+                14,
+                4,
+            ),
+        ] {
+            let mut expected = vec![123; 64];
+            let mut actual = expected.clone();
+
+            let expected_frames = write_resampler_legacy(&out, requested, out_ch, &mut expected);
+            let actual_frames = write_resampler_output(&out, requested, out_ch, &mut actual);
+
+            assert_eq!(actual_frames, expected_frames);
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]
@@ -397,6 +551,23 @@ mod tests {
 
         assert_eq!(frames, 2);
         assert_eq!(out_tmp, [1, 2, 1, 2, 3, 4, 3, 4]);
+    }
+
+    #[test]
+    fn specialized_channel_map_matches_generic_layouts() {
+        for (in_ch, out_ch) in [(1usize, 2usize), (2, 2), (2, 4), (3, 2), (6, 2), (2, 1)] {
+            let input = (0..257 * in_ch + in_ch - 1)
+                .map(|index| index.wrapping_mul(25_173) as i16)
+                .collect::<Vec<_>>();
+            let mut expected = vec![123; 1024];
+            let mut actual = expected.clone();
+
+            let expected_frames = write_channel_map_legacy(&input, in_ch, out_ch, &mut expected);
+            let actual_frames = write_channel_mapped_i16(&input, in_ch, out_ch, &mut actual);
+
+            assert_eq!(actual_frames, expected_frames, "{in_ch} -> {out_ch}");
+            assert_eq!(actual, expected, "{in_ch} -> {out_ch}");
+        }
     }
 
     #[test]

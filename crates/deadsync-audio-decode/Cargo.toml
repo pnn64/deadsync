@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[[bench]]
+name = "sample_layout_hot_paths"
+harness = false
+
 [dependencies]
 ogg = "0.9.2"
 opusic-c = "1.6.1"
