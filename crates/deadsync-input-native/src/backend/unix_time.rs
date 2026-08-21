@@ -10,6 +10,46 @@ pub struct EventTimeSample {
     pub clock_nanos: Option<u64>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct EventTimeCache {
+    sec: i64,
+    usec: i64,
+    mapped: Option<(Instant, u64)>,
+}
+
+impl EventTimeCache {
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self {
+            sec: 0,
+            usec: 0,
+            mapped: None,
+        }
+    }
+
+    #[inline(always)]
+    pub fn event_time(&mut self, sample: EventTimeSample, sec: i64, usec: i64) -> (Instant, u64) {
+        if self.sec == sec
+            && self.usec == usec
+            && let Some(mapped) = self.mapped
+        {
+            return mapped;
+        }
+        let mapped = event_time(sample, sec, usec);
+        self.sec = sec;
+        self.usec = usec;
+        self.mapped = Some(mapped);
+        mapped
+    }
+}
+
+impl Default for EventTimeCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(unix)]
 #[inline(always)]
 fn monotonic_nanos_now() -> Option<u64> {
     let mut ts = libc::timespec {
@@ -25,6 +65,7 @@ fn monotonic_nanos_now() -> Option<u64> {
     Some((ts.tv_sec as u64).saturating_mul(1_000_000_000) + ts.tv_nsec as u64)
 }
 
+#[cfg(unix)]
 #[inline(always)]
 pub fn receipt_time(instant_nanos: impl FnOnce(Instant) -> u64) -> EventTimeSample {
     let instant = Instant::now();
@@ -121,5 +162,32 @@ mod tests {
         let (timestamp, host_nanos) = event_time(sample, 15, 0);
         assert_eq!(host_nanos, 100);
         assert_eq!(timestamp, base);
+    }
+
+    #[test]
+    fn event_time_cache_matches_uncached_mapping() {
+        let base = Instant::now();
+        let sample = EventTimeSample {
+            instant: base,
+            host_nanos: 9_000_000_000,
+            clock_nanos: Some(42_000_000_000),
+        };
+        let mut cache = EventTimeCache::new();
+
+        for (sec, usec) in [
+            (41, 997_500),
+            (41, 997_500),
+            (42, 1_000),
+            (42, 1_000),
+            (-1, 0),
+            (-1, 0),
+            (42, 1_000_000),
+            (42, 1_000_000),
+        ] {
+            assert_eq!(
+                cache.event_time(sample, sec, usec),
+                event_time(sample, sec, usec)
+            );
+        }
     }
 }

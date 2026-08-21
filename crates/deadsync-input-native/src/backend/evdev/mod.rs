@@ -1,14 +1,17 @@
 use super::deferred_sample::DeferredSample;
 #[cfg(target_os = "freebsd")]
 pub(super) use super::devd::{DevdEvent, DevdWatch};
-use super::unix_time::{self, EventTimeSample};
-pub(super) use super::{
-    BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, emit_dir_edges, uuid_from_bytes,
-};
+#[cfg(target_os = "freebsd")]
+pub(super) use super::emit_dir_edges;
+#[cfg(target_os = "linux")]
+pub(super) use super::emit_hat_axis_edges;
+use super::unix_time::{self, EventTimeCache, EventTimeSample};
+pub(super) use super::{BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, uuid_from_bytes};
 pub(super) use deadsync_input::{PadCode, PadEvent, PadId};
 
 pub(super) struct ReceiptTime {
     sample: DeferredSample<EventTimeSample>,
+    cache: EventTimeCache,
 }
 
 impl ReceiptTime {
@@ -16,6 +19,7 @@ impl ReceiptTime {
     pub(super) const fn new() -> Self {
         Self {
             sample: DeferredSample::new(),
+            cache: EventTimeCache::new(),
         }
     }
 
@@ -29,7 +33,7 @@ impl ReceiptTime {
         let sample = self
             .sample
             .get_or_init(|| unix_time::receipt_time(|instant| host.instant_nanos(instant)));
-        unix_time::event_time(sample, sec, usec)
+        self.cache.event_time(sample, sec, usec)
     }
 }
 

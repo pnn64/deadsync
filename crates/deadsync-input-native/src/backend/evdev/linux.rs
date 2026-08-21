@@ -1,6 +1,6 @@
 use super::{
     BackendHost, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, PadOrderBackend, ReceiptTime,
-    emit_dir_edges, uuid_from_bytes,
+    emit_hat_axis_edges, uuid_from_bytes,
 };
 use crate::backend::poll_registration;
 use deadsync_input::RawKeyboardEvent;
@@ -11,7 +11,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::mem::{MaybeUninit, size_of};
 use std::os::unix::io::AsRawFd;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::platform::scancode::PhysicalKeyExtScancode;
 
@@ -218,8 +218,10 @@ enum HotplugEvent {
     Remove(String),
 }
 
-static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(false);
-static KEYBOARD_CAPTURE_ENABLED: AtomicBool = AtomicBool::new(true);
+const CAPTURE_ENABLED: u8 = 1 << 0;
+const WINDOW_FOCUSED: u8 = 1 << 1;
+const CAPTURE_ACTIVE: u8 = CAPTURE_ENABLED | WINDOW_FOCUSED;
+static KEYBOARD_CAPTURE_STATE: AtomicU8 = AtomicU8::new(CAPTURE_ENABLED);
 static KEYBOARD_BACKEND_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 #[derive(Default)]
@@ -232,12 +234,12 @@ struct KeyboardStartupStats {
 
 #[inline(always)]
 pub fn set_keyboard_window_focused(focused: bool) {
-    KEYBOARD_WINDOW_FOCUSED.store(focused, Ordering::Relaxed);
+    set_keyboard_capture_flag(WINDOW_FOCUSED, focused);
 }
 
 #[inline(always)]
 pub fn set_keyboard_capture_enabled(enabled: bool) {
-    KEYBOARD_CAPTURE_ENABLED.store(enabled, Ordering::Relaxed);
+    set_keyboard_capture_flag(CAPTURE_ENABLED, enabled);
 }
 
 #[inline(always)]
@@ -247,8 +249,16 @@ pub fn keyboard_backend_active() -> bool {
 
 #[inline(always)]
 fn keyboard_capture_active() -> bool {
-    KEYBOARD_WINDOW_FOCUSED.load(Ordering::Relaxed)
-        && KEYBOARD_CAPTURE_ENABLED.load(Ordering::Relaxed)
+    KEYBOARD_CAPTURE_STATE.load(Ordering::Relaxed) == CAPTURE_ACTIVE
+}
+
+#[inline(always)]
+fn set_keyboard_capture_flag(flag: u8, enabled: bool) {
+    if enabled {
+        KEYBOARD_CAPTURE_STATE.fetch_or(flag, Ordering::Relaxed);
+    } else {
+        KEYBOARD_CAPTURE_STATE.fetch_and(!flag, Ordering::Relaxed);
+    }
 }
 
 #[inline(always)]
@@ -1232,22 +1242,24 @@ fn run_inner(
                     value: ev.value as f32,
                 });
 
-                if ev.code == ABS_HAT0X {
+                let horizontal = if ev.code == ABS_HAT0X {
                     dev.hat_x = ev.value;
+                    true
                 } else if ev.code == ABS_HAT0Y {
                     dev.hat_y = ev.value;
+                    false
                 } else {
                     continue;
-                }
+                };
 
-                let want = [dev.hat_y < 0, dev.hat_y > 0, dev.hat_x < 0, dev.hat_x > 0];
-                emit_dir_edges(
+                emit_hat_axis_edges(
                     &mut emit_pad,
                     dev.id,
                     &mut dev.dir,
                     event_timestamp,
                     event_host_nanos,
-                    want,
+                    horizontal,
+                    ev.value,
                 );
             }
         }
@@ -1286,12 +1298,12 @@ fn run_inner(
                 if ev.type_ != EV_KEY {
                     continue;
                 }
-                let Some(code) = linux_key_code(ev.code) else {
-                    continue;
-                };
                 if !keyboard_capture_active() {
                     continue;
                 }
+                let Some(code) = linux_key_code(ev.code) else {
+                    continue;
+                };
                 let repeat = ev.value == 2;
                 let pressed = ev.value != 0;
                 let (event_timestamp, event_host_nanos) =
@@ -1354,7 +1366,6 @@ fn run_inner(
                 host,
             );
         }
-        publish_keyboard_backend_state(&key_devs);
         if topology_changed {
             (dev_offset, key_offset) = poll_registration::rebuild(
                 discovery_pollfd,
@@ -1374,6 +1385,22 @@ fn run_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keyboard_capture_requires_enabled_and_focused_flags() {
+        set_keyboard_capture_enabled(false);
+        set_keyboard_window_focused(false);
+        assert!(!keyboard_capture_active());
+        set_keyboard_window_focused(true);
+        assert!(!keyboard_capture_active());
+        set_keyboard_capture_enabled(true);
+        assert!(keyboard_capture_active());
+        set_keyboard_window_focused(false);
+        assert!(!keyboard_capture_active());
+
+        // Restore the process default for other backend tests.
+        set_keyboard_capture_enabled(true);
+    }
 
     fn caps(bits: &[u16]) -> CapabilityBits {
         let words_len = bits

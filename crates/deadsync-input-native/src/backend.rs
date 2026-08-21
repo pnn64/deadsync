@@ -18,7 +18,7 @@ pub mod iohid;
 mod iohid_filter;
 #[cfg(any(target_os = "linux", target_os = "freebsd", test))]
 mod poll_registration;
-#[cfg(unix)]
+#[cfg(any(unix, test, feature = "bench-support"))]
 pub mod unix_time;
 #[cfg(windows)]
 pub mod w32_raw_input;
@@ -330,6 +330,34 @@ pub fn emit_dir_edges(
     }
 }
 
+#[inline(always)]
+pub fn emit_hat_axis_edges(
+    emit_pad: &mut impl FnMut(PadEvent),
+    id: PadId,
+    dir_state: &mut [bool; 4],
+    timestamp: Instant,
+    host_nanos: u64,
+    horizontal: bool,
+    value: i32,
+) {
+    let first = [0, 2][horizontal as usize];
+    let want = [value < 0, value > 0];
+    for (offset, &pressed) in want.iter().enumerate() {
+        let index = first + offset;
+        if dir_state[index] == pressed {
+            continue;
+        }
+        dir_state[index] = pressed;
+        emit_pad(PadEvent::Dir {
+            id,
+            timestamp,
+            host_nanos,
+            dir: DIRS[index],
+            pressed,
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -381,5 +409,77 @@ mod tests {
             [true, false, true, false],
         );
         assert!(events.is_empty());
+    }
+
+    #[test]
+    fn hat_axis_edges_match_full_direction_scan() {
+        let timestamp = Instant::now();
+        let mut full_state = [false; 4];
+        let mut axis_state = [false; 4];
+        let mut full_events = Vec::new();
+        let mut axis_events = Vec::new();
+        let mut x = 0;
+        let mut y = 0;
+
+        for (horizontal, value) in [
+            (true, -1),
+            (false, -1),
+            (true, 1),
+            (false, 1),
+            (true, 0),
+            (false, 0),
+            (false, 0),
+            (true, 0),
+        ] {
+            if horizontal {
+                x = value;
+            } else {
+                y = value;
+            }
+            emit_dir_edges(
+                &mut |event| {
+                    let PadEvent::Dir {
+                        id,
+                        timestamp,
+                        host_nanos,
+                        dir,
+                        pressed,
+                    } = event
+                    else {
+                        panic!("direction helper emitted a non-direction event");
+                    };
+                    full_events.push((id, timestamp, host_nanos, dir, pressed));
+                },
+                PadId(9),
+                &mut full_state,
+                timestamp,
+                77,
+                [y < 0, y > 0, x < 0, x > 0],
+            );
+            emit_hat_axis_edges(
+                &mut |event| {
+                    let PadEvent::Dir {
+                        id,
+                        timestamp,
+                        host_nanos,
+                        dir,
+                        pressed,
+                    } = event
+                    else {
+                        panic!("hat helper emitted a non-direction event");
+                    };
+                    axis_events.push((id, timestamp, host_nanos, dir, pressed));
+                },
+                PadId(9),
+                &mut axis_state,
+                timestamp,
+                77,
+                horizontal,
+                value,
+            );
+        }
+
+        assert_eq!(axis_state, full_state);
+        assert_eq!(axis_events, full_events);
     }
 }
