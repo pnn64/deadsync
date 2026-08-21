@@ -17,6 +17,7 @@ use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_profile as profile_data;
+use smallvec::SmallVec;
 
 const ALL_SIDES: [profile_data::PlayerSide; 2] =
     [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2];
@@ -79,13 +80,13 @@ pub(crate) enum SlotState {
     Starting,
     /// Worker has the short code + verification URL and is polling.
     Pending {
-        short_code: String,
-        verification_url: String,
+        short_code: Arc<str>,
+        verification_url: Arc<str>,
     },
     /// Shell persisted the credential and reported completion.
     Success,
     /// Terminal failure for this side (network, expired, cancelled, etc.).
-    Failed { reason: String },
+    Failed { reason: Arc<str> },
 }
 
 impl SlotState {
@@ -154,14 +155,16 @@ pub(crate) fn apply_events(
                 verification_url,
                 ..
             } => SlotState::Pending {
-                short_code,
-                verification_url,
+                short_code: short_code.into(),
+                verification_url: verification_url.into(),
             },
             crate::SimplyLoveQrLoginEvent::Succeeded { display_name, .. } => {
                 slot.display_name = display_name;
                 SlotState::Success
             }
-            crate::SimplyLoveQrLoginEvent::Failed { reason, .. } => SlotState::Failed { reason },
+            crate::SimplyLoveQrLoginEvent::Failed { reason, .. } => SlotState::Failed {
+                reason: reason.into(),
+            },
         };
     }
 }
@@ -173,11 +176,21 @@ pub(crate) fn login_overlay_is_terminal(ui: &QrLoginUiState) -> bool {
     ui.slots.iter().all(|s| s.state.is_workless())
 }
 
-pub(crate) fn build_qr_login_overlay_actors(
+pub(crate) fn push_qr_login_overlay_actors(
+    out: &mut Vec<Actor>,
     ui: &QrLoginUiState,
     active_color_index: i32,
-) -> Vec<Actor> {
-    let mut out: Vec<Actor> = Vec::with_capacity(24);
+    alpha_multiplier: f32,
+) {
+    let start = out.len();
+    push_qr_login_overlay(out, ui, active_color_index);
+    for actor in &mut out[start..] {
+        actor.mul_alpha(alpha_multiplier);
+    }
+}
+
+fn push_qr_login_overlay(out: &mut Vec<Actor>, ui: &QrLoginUiState, active_color_index: i32) {
+    out.reserve(24);
 
     out.push(act!(quad:
         align(0.0, 0.0):
@@ -189,7 +202,7 @@ pub(crate) fn build_qr_login_overlay_actors(
 
     let cx = screen_center_x();
     let cy = screen_center_y();
-    let visible_sides: Vec<profile_data::PlayerSide> = ALL_SIDES
+    let visible_sides: SmallVec<[profile_data::PlayerSide; 2]> = ALL_SIDES
         .iter()
         .copied()
         .filter(|s| {
@@ -202,7 +215,7 @@ pub(crate) fn build_qr_login_overlay_actors(
 
     out.push(act!(text:
         font("miso"):
-        settext(tr(section, "Title").to_string()):
+        settext(tr(section, "Title")):
         align(0.5, 0.5):
         xy(cx, cy - 200.0):
         zoom(1.05):
@@ -213,14 +226,14 @@ pub(crate) fn build_qr_login_overlay_actors(
     if visible_sides.is_empty() {
         out.push(act!(text:
             font("miso"):
-            settext(tr(section, "NoPlayerJoined").to_string()):
+            settext(tr(section, "NoPlayerJoined")):
             align(0.5, 0.5):
             xy(cx, cy):
             zoom(0.95):
             horizalign(center):
             z(301)
         ));
-        return out;
+        return;
     }
 
     let two_up = visible_sides.len() > 1;
@@ -235,7 +248,7 @@ pub(crate) fn build_qr_login_overlay_actors(
         } else {
             0.0
         };
-        push_slot_panel(&mut out, slot, cx + dx, cy, qr_size, active_color_index);
+        push_slot_panel(out, slot, cx + dx, cy, qr_size, active_color_index);
     }
 
     let footer_key = if login_overlay_is_terminal(ui) {
@@ -245,15 +258,13 @@ pub(crate) fn build_qr_login_overlay_actors(
     };
     out.push(act!(text:
         font("miso"):
-        settext(tr(section, footer_key).to_string()):
+        settext(tr(section, footer_key)):
         align(0.5, 0.5):
         xy(cx, cy + 200.0):
         zoom(0.9):
         horizalign(center):
         z(301)
     ));
-
-    out
 }
 
 fn push_slot_panel(
@@ -272,7 +283,7 @@ fn push_slot_panel(
     // which side the panel is for and exactly which profile's
     // <service>.ini will receive the new key, on a single line.
     let header_text = if slot.display_name.is_empty() {
-        side_label_str.to_string()
+        Arc::clone(&side_label_str)
     } else {
         tr_fmt(
             section,
@@ -282,7 +293,6 @@ fn push_slot_panel(
                 ("name", &slot.display_name),
             ],
         )
-        .to_string()
     };
     out.push(act!(text:
         font("miso"):
@@ -305,7 +315,7 @@ fn push_slot_panel(
                     section,
                     "GuestHint",
                     &[("side", side_label_str.as_ref())],
-                ).to_string()):
+                )):
                 align(0.5, 0.5):
                 xy(panel_cx, panel_cy):
                 zoom(0.9):
@@ -318,7 +328,7 @@ fn push_slot_panel(
         SlotState::Starting => {
             out.push(act!(text:
                 font("miso"):
-                settext(tr(section, "Contacting").to_string()):
+                settext(tr(section, "Contacting")):
                 align(0.5, 0.5):
                 xy(panel_cx, panel_cy):
                 zoom(0.95):
@@ -344,7 +354,7 @@ fn push_slot_panel(
             ) {
                 out.push(act!(text:
                     font("miso"):
-                    settext(tr(section, "QrUnavailable").to_string()):
+                    settext(tr(section, "QrUnavailable")):
                     align(0.5, 0.5):
                     xy(panel_cx, panel_cy):
                     zoom(0.95):
@@ -366,8 +376,8 @@ fn push_slot_panel(
                     settext(tr_fmt(
                         section,
                         "Code",
-                        &[("code", short_code.as_str())],
-                    ).to_string()):
+                        &[("code", short_code.as_ref())],
+                    )):
                     align(0.5, 0.5):
                     xy(panel_cx, below_qr + 20.0):
                     zoom(0.95):
@@ -384,7 +394,7 @@ fn push_slot_panel(
             };
             out.push(act!(text:
                 font("miso"):
-                settext(verification_url.clone()):
+                settext(Arc::clone(verification_url)):
                 align(0.5, 0.5):
                 xy(panel_cx, url_y):
                 zoom(0.7):
@@ -399,7 +409,7 @@ fn push_slot_panel(
         SlotState::Success => {
             out.push(act!(text:
                 font("miso"):
-                settext(tr(section, "SignInComplete").to_string()):
+                settext(tr(section, "SignInComplete")):
                 align(0.5, 0.5):
                 xy(panel_cx, panel_cy):
                 zoom(1.0):
@@ -410,7 +420,7 @@ fn push_slot_panel(
             ));
             out.push(act!(text:
                 font("miso"):
-                settext(tr(section, "KeySaved").to_string()):
+                settext(tr(section, "KeySaved")):
                 align(0.5, 0.5):
                 xy(panel_cx, panel_cy + 26.0):
                 zoom(0.8):
@@ -426,8 +436,8 @@ fn push_slot_panel(
                 settext(tr_fmt(
                     section,
                     "SignInFailed",
-                    &[("reason", reason.as_str())],
-                ).to_string()):
+                    &[("reason", reason.as_ref())],
+                )):
                 align(0.5, 0.5):
                 xy(panel_cx, panel_cy):
                 zoom(0.85):
@@ -449,7 +459,7 @@ fn push_status_badge(out: &mut Vec<Actor>, slot: &LoginSlot, panel_cx: f32, badg
     }
     out.push(act!(text:
         font("miso"):
-        settext(tr(i18n_section(slot.kind), "AlreadySignedInBadge").to_string()):
+        settext(tr(i18n_section(slot.kind), "AlreadySignedInBadge")):
         align(0.5, 0.5):
         xy(panel_cx, badge_y - 18.0):
         zoom(0.65):
@@ -458,6 +468,102 @@ fn push_status_badge(out: &mut Vec<Actor>, slot: &LoginSlot, panel_cx: f32, badg
         z(301):
         diffuse(1.0, 0.85, 0.4, 1.0)
     ));
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn qr_text_checksum(text: &str) -> u64 {
+    text.bytes().fold(text.len() as u64, |checksum, byte| {
+        checksum.rotate_left(5) ^ u64::from(byte)
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn qr_actor_checksum(actors: &[Actor]) -> u64 {
+    actors.iter().fold(actors.len() as u64, |checksum, actor| {
+        let value = match actor {
+            Actor::Text { content, .. } => qr_text_checksum(content),
+            Actor::Frame { children, .. } => qr_actor_checksum(children),
+            _ => 1,
+        };
+        checksum.rotate_left(11) ^ value
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn legacy_own_actor_text(actors: &[Actor]) {
+    for actor in actors {
+        match actor {
+            Actor::Text { content, .. } => {
+                let owned = content.to_string();
+                std::hint::black_box(qr_text_checksum(std::hint::black_box(&owned)));
+            }
+            Actor::Frame { children, .. } => legacy_own_actor_text(children),
+            _ => {}
+        }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub struct QrOverlayBenchmark {
+    ui: QrLoginUiState,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl QrOverlayBenchmark {
+    pub fn new() -> Self {
+        let benchmark = Self {
+            ui: QrLoginUiState {
+                slots: [
+                    LoginSlot {
+                        side: profile_data::PlayerSide::P1,
+                        state: SlotState::Pending {
+                            short_code: Arc::from("ABCD-EFGH"),
+                            verification_url: Arc::from("https://example.com/device/benchmark"),
+                        },
+                        kind: BackendKind::ArrowCloud,
+                        display_name: "Benchmark Player One".into(),
+                        had_existing_key: true,
+                    },
+                    LoginSlot {
+                        side: profile_data::PlayerSide::P2,
+                        state: SlotState::Failed {
+                            reason: Arc::from("benchmark network failure"),
+                        },
+                        kind: BackendKind::ArrowCloud,
+                        display_name: "Benchmark Player Two".into(),
+                        had_existing_key: false,
+                    },
+                ],
+            },
+        };
+        let mut warm = Vec::with_capacity(24);
+        push_qr_login_overlay_actors(&mut warm, &benchmark.ui, 2, 0.75);
+        benchmark
+    }
+
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let mut batch = Vec::with_capacity(24);
+        push_qr_login_overlay_actors(&mut batch, &self.ui, 2, 0.75);
+        // The immediate implementation moved owned copies of every translated
+        // or event-provided string into the temporary actor batch.
+        legacy_own_actor_text(&batch);
+        out.extend(batch);
+        qr_actor_checksum(out)
+    }
+
+    pub fn current_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_qr_login_overlay_actors(out, &self.ui, 2, 0.75);
+        qr_actor_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for QrOverlayBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -535,7 +641,7 @@ mod tests {
         );
         assert!(matches!(
             ui.slots[0].state,
-            SlotState::Pending { ref short_code, .. } if short_code == "XYZ"
+            SlotState::Pending { ref short_code, .. } if short_code.as_ref() == "XYZ"
         ));
 
         apply_events(
@@ -563,7 +669,7 @@ mod tests {
         );
         assert!(matches!(
             ui.slots[0].state,
-            SlotState::Failed { ref reason } if reason == "boom"
+            SlotState::Failed { ref reason } if reason.as_ref() == "boom"
         ));
     }
 
@@ -581,5 +687,17 @@ mod tests {
             }
             .is_workless()
         );
+    }
+
+    #[test]
+    fn direct_overlay_append_matches_temporary_owned_batch() {
+        let benchmark = QrOverlayBenchmark::new();
+        let mut legacy = Vec::with_capacity(24);
+        let mut current = Vec::with_capacity(24);
+        assert_eq!(
+            benchmark.legacy_frame(&mut legacy),
+            benchmark.current_frame(&mut current)
+        );
+        assert_eq!(format!("{legacy:#?}"), format!("{current:#?}"));
     }
 }

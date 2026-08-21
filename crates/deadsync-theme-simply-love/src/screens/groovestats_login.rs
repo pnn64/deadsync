@@ -17,8 +17,8 @@
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::options::qr_login::{
-    QrLoginUiState, append_dismiss_effects, apply_events as apply_qr_events,
-    build_qr_login_overlay_actors, create_login_ui,
+    QrLoginUiState, append_dismiss_effects, apply_events as apply_qr_events, create_login_ui,
+    push_qr_login_overlay_actors,
 };
 use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
@@ -202,11 +202,7 @@ pub fn push_actors(
     );
 
     if let Some(ui) = state.ui.as_ref() {
-        let mut ui_actors = build_qr_login_overlay_actors(ui, state.active_color_index);
-        for actor in &mut ui_actors {
-            actor.mul_alpha(alpha_multiplier);
-        }
-        actors.extend(ui_actors);
+        push_qr_login_overlay_actors(actors, ui, state.active_color_index, alpha_multiplier);
     }
 }
 

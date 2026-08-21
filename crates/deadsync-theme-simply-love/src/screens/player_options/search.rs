@@ -23,8 +23,29 @@ const Z_TEXT: i16 = 1453;
 pub(super) struct SettingMatch {
     pub row_id: RowId,
     pub pane: OptionsPane,
-    pub label: String,
+    pub label: Arc<str>,
     pub score: i32,
+    /// Actor-ready labels prepared at the query-change boundary. Index zero is
+    /// the ordinary row and index one is the focused row.
+    row_text: [Arc<str>; 2],
+    pane_text: Arc<str>,
+}
+
+impl SettingMatch {
+    fn new(row_id: RowId, pane: OptionsPane, label: String, score: i32) -> Self {
+        let label: Arc<str> = label.into();
+        Self {
+            row_id,
+            pane,
+            score,
+            row_text: [
+                Arc::from(format!("  {label}")),
+                Arc::from(format!("▸ {label}")),
+            ],
+            pane_text: pane_label(pane),
+            label,
+        }
+    }
 }
 
 /// Live state of the search overlay.
@@ -130,19 +151,9 @@ pub(super) fn rebuild_matches(state: &State, query: &str) -> Vec<SettingMatch> {
 
             let label = clean_label(&row.name.get());
             if q.is_empty() {
-                matches.push(SettingMatch {
-                    row_id: id,
-                    pane,
-                    label,
-                    score: 0,
-                });
+                matches.push(SettingMatch::new(id, pane, label, 0));
             } else if let Some(score) = fuzzy::best_match_score(&q, &label, row_aliases(id)) {
-                matches.push(SettingMatch {
-                    row_id: id,
-                    pane,
-                    label,
-                    score,
-                });
+                matches.push(SettingMatch::new(id, pane, label, score));
             }
         }
     }
@@ -265,7 +276,7 @@ pub(super) fn completion(open: &SettingSearchOpen) -> Option<(String, String)> {
     let consumed = fuzzy::folded_prefix_len(&open.query, &m.label)?;
     (m.label.chars().count() > consumed).then(|| {
         let prefix: String = m.label.chars().take(consumed).collect();
-        (m.label.clone(), prefix)
+        (m.label.to_string(), prefix)
     })
 }
 
@@ -310,7 +321,7 @@ pub(super) fn help_text(state: &State, m: &SettingMatch) -> Option<String> {
     if text.is_empty() { None } else { Some(text) }
 }
 
-fn pane_label(pane: OptionsPane) -> String {
+fn pane_label(pane: OptionsPane) -> Arc<str> {
     // Reuse existing translated pane names instead of English-only new keys.
     let key = match pane {
         OptionsPane::Main => "WhatComesNextMainModifiers",
@@ -318,13 +329,13 @@ fn pane_label(pane: OptionsPane) -> String {
         OptionsPane::Advanced => "WhatComesNextAdvancedModifiers",
         OptionsPane::Uncommon => "WhatComesNextUncommonModifiers",
     };
-    tr("PlayerOptions", key).to_string()
+    tr("PlayerOptions", key)
 }
 
-/// Build the overlay actors, or `None` when the search is hidden.
-pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
+/// Append overlay actors when the search is visible.
+pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
     let SettingSearchState::Open(open) = &state.search else {
-        return None;
+        return;
     };
 
     let cx = screen_center_x();
@@ -340,7 +351,7 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
     const GRAY: [f32; 4] = color::rgba_hex("#808080");
     const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
-    let mut actors = Vec::with_capacity(32);
+    actors.reserve(32);
 
     actors.push(act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
@@ -358,7 +369,7 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
         diffuse(PANEL_BG[0], PANEL_BG[1], PANEL_BG[2], 1.0): z(Z_PANEL)
     ));
 
-    let title = tr("PlayerOptions", "SettingSearchTitle").to_string();
+    let title = tr("PlayerOptions", "SettingSearchTitle");
     actors.push(act!(text:
         font("wendy"): settext(title):
         align(0.5, 0.5): xy(cx, top + 20.0): zoom(0.4):
@@ -379,7 +390,7 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
         diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
     ));
     if open.query.is_empty() {
-        let placeholder = tr("PlayerOptions", "SettingSearchPlaceholder").to_string();
+        let placeholder = tr("PlayerOptions", "SettingSearchPlaceholder");
         actors.push(act!(text:
             font("miso"): settext(placeholder):
             align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
@@ -427,7 +438,7 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
     let list_x = cx - panel_w * 0.5 + 16.0;
     let pane_x = cx + panel_w * 0.5 - 16.0;
     if open.matches.is_empty() {
-        let no_matches = tr("PlayerOptions", "SettingSearchNoMatches").to_string();
+        let no_matches = tr("PlayerOptions", "SettingSearchNoMatches");
         actors.push(act!(text:
             font("miso"): settext(no_matches):
             align(0.0, 0.5): xy(list_x, list_top): zoom(0.8):
@@ -455,15 +466,14 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
         } else {
             ([GRAY[0], GRAY[1], GRAY[2]], [GRAY[0], GRAY[1], GRAY[2]])
         };
-        let prefix = if focused { "▸ " } else { "  " };
         actors.push(act!(text:
-            font("miso"): settext(format!("{prefix}{}", m.label)):
+            font("miso"): settext(Arc::clone(&m.row_text[usize::from(focused)])):
             align(0.0, 0.5): xy(list_x, y): zoom(0.85):
             maxwidth(panel_w * 0.62):
             diffuse(text_rgb[0], text_rgb[1], text_rgb[2], 1.0): z(Z_TEXT + 1): horizalign(left)
         ));
         actors.push(act!(text:
-            font("miso"): settext(pane_label(m.pane)):
+            font("miso"): settext(Arc::clone(&m.pane_text)):
             align(1.0, 0.5): xy(pane_x, y): zoom(0.7):
             maxwidth(panel_w * 0.34):
             diffuse(pane_rgb[0], pane_rgb[1], pane_rgb[2], 1.0): z(Z_TEXT + 1): horizalign(right)
@@ -478,8 +488,7 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
                 "PlayerOptions",
                 "SettingSearchCurrent",
                 &[("value", &value)],
-            )
-            .to_string();
+            );
             actors.push(act!(text:
                 font("miso"): settext(current):
                 align(0.0, 0.5): xy(list_x, value_y): zoom(0.75):
@@ -497,13 +506,101 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
         }
     }
 
-    let footer = tr("PlayerOptions", "SettingSearchFooter").to_string();
+    let footer = tr("PlayerOptions", "SettingSearchFooter");
     actors.push(act!(text:
         font("miso"): settext(footer):
         align(0.5, 0.5): xy(cx, cy + panel_h * 0.5 - 14.0): zoom(0.7):
         maxwidth(panel_w - 24.0):
         diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(center)
     ));
+}
 
+#[cfg(any(test, feature = "bench-support"))]
+fn search_text_checksum(text: &str) -> u64 {
+    text.bytes().fold(text.len() as u64, |checksum, byte| {
+        checksum.rotate_left(5) ^ u64::from(byte)
+    })
+}
+
+/// Stable-frame workload for the eight visible search rows.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct PlayerOptionsSearchBenchmark {
+    matches: Vec<SettingMatch>,
+    focused: usize,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl PlayerOptionsSearchBenchmark {
+    pub fn new() -> Self {
+        const LABELS: [&str; SEARCH_MAX_RESULTS] = [
+            "Speed Mod",
+            "NoteSkin",
+            "Background Filter",
+            "Perspective",
+            "Music Rate",
+            "Visual Delay",
+            "Error Bar",
+            "Judgment Font",
+        ];
+        let matches = LABELS
+            .into_iter()
+            .enumerate()
+            .map(|(index, label)| {
+                SettingMatch::new(
+                    RowId::SpeedMod,
+                    SEARCH_PANE_ORDER[index % SEARCH_PANE_ORDER.len()],
+                    label.to_owned(),
+                    index as i32,
+                )
+            })
+            .collect();
+        Self {
+            matches,
+            focused: 3,
+        }
+    }
+
+    pub fn legacy_frame(&self) -> u64 {
+        self.matches
+            .iter()
+            .enumerate()
+            .fold(0, |checksum, (index, item)| {
+                let prefix = if index == self.focused { "▸ " } else { "  " };
+                let row = format!("{prefix}{}", item.label);
+                let pane = pane_label(item.pane).to_string();
+                checksum.rotate_left(11)
+                    ^ search_text_checksum(&row)
+                    ^ search_text_checksum(&pane).rotate_left(23)
+            })
+    }
+
+    pub fn current_frame(&self) -> u64 {
+        self.matches
+            .iter()
+            .enumerate()
+            .fold(0, |checksum, (index, item)| {
+                let row = Arc::clone(&item.row_text[usize::from(index == self.focused)]);
+                let pane = Arc::clone(&item.pane_text);
+                checksum.rotate_left(11)
+                    ^ search_text_checksum(&row)
+                    ^ search_text_checksum(&pane).rotate_left(23)
+            })
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for PlayerOptionsSearchBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+pub(super) fn build_overlay_legacy(state: &State) -> Option<Vec<Actor>> {
+    if !state.search.is_open() {
+        return None;
+    }
+    let mut actors = Vec::with_capacity(32);
+    push_overlay(&mut actors, state);
     Some(actors)
 }

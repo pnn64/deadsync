@@ -17,10 +17,12 @@ use deadsync_theme_simply_love::screens::evaluation_summary::{
     benchmark_eval_numeric_text, benchmark_profile_name_changed,
 };
 use deadsync_theme_simply_love::screens::mappings::MappingTextBenchmark;
+use deadsync_theme_simply_love::screens::options::QrOverlayBenchmark;
 use deadsync_theme_simply_love::screens::options::ScoreImportPickerBenchmark;
 use deadsync_theme_simply_love::screens::pad_config::{
     benchmark_pad_text_current, benchmark_pad_text_legacy,
 };
+use deadsync_theme_simply_love::screens::player_options::PlayerOptionsSearchBenchmark;
 use deadsync_theme_simply_love::screens::practice::benchmark_edit_info_text_into;
 use deadsync_theme_simply_love::screens::select_color::{
     benchmark_wheel_current, benchmark_wheel_legacy,
@@ -29,6 +31,7 @@ use deadsync_theme_simply_love::screens::select_mode::SelectModeTextBenchmark;
 use deadsync_theme_simply_love::screens::select_music::{
     benchmark_info_text_front_cached, benchmark_info_text_hashed, benchmark_wheel_song_meta,
 };
+use deadsync_theme_simply_love::screens::test_lights::LightsTextBenchmark;
 use deadsync_theme_simply_love::views::{
     AudioTimingView, FrameStatsSample, FrameStatsSummary, OverlayAnchor, OverlayStyle,
     TimingHealth, VisibleStutterSample,
@@ -59,6 +62,9 @@ const FRAME_STATS_OVERLAY_OPS: usize = 5_000;
 const PAD_TEXT_OPS: usize = 100_000;
 const SELECT_MODE_TEXT_OPS: usize = 500_000;
 const SCORE_PICKER_OPS: usize = 50_000;
+const LIGHTS_TEXT_OPS: usize = 300_000;
+const OPTIONS_SEARCH_OPS: usize = 200_000;
+const QR_OVERLAY_OPS: usize = 25_000;
 const SONG_SEARCH_WHEEL_SLOTS: usize = 12;
 const SONG_SEARCH_WHEEL_FOCUS_SLOT: usize = SONG_SEARCH_WHEEL_SLOTS / 2 - 1;
 const DETAIL_LABELS: [&str; 5] = ["Pack", "Song", "Subtitle", "BPMs", "Difficulties"];
@@ -911,5 +917,38 @@ fn main() {
         SCORE_PICKER_OPS,
         &old_picker,
         &new_picker,
+    );
+
+    let old_lights_text = LightsTextBenchmark::new();
+    let old_lights = measure(LIGHTS_TEXT_OPS, 300, || old_lights_text.legacy_frame());
+    let mut new_lights_text = LightsTextBenchmark::new();
+    let new_lights = measure(LIGHTS_TEXT_OPS, 300, || new_lights_text.current_frame());
+    print_pair(
+        "17. retained Test Lights text",
+        LIGHTS_TEXT_OPS,
+        &old_lights,
+        &new_lights,
+    );
+
+    let search = PlayerOptionsSearchBenchmark::new();
+    let old_options_search = measure(OPTIONS_SEARCH_OPS, 200, || search.legacy_frame());
+    let new_options_search = measure(OPTIONS_SEARCH_OPS, 200, || search.current_frame());
+    print_pair(
+        "18. prepared options-search rows",
+        OPTIONS_SEARCH_OPS,
+        &old_options_search,
+        &new_options_search,
+    );
+
+    let qr = QrOverlayBenchmark::new();
+    let mut old_qr_actors = Vec::with_capacity(24);
+    let old_qr = measure(QR_OVERLAY_OPS, 25, || qr.legacy_frame(&mut old_qr_actors));
+    let mut new_qr_actors = Vec::with_capacity(24);
+    let new_qr = measure(QR_OVERLAY_OPS, 25, || qr.current_frame(&mut new_qr_actors));
+    print_reduced_pair(
+        "19. shared/direct QR-login overlay",
+        QR_OVERLAY_OPS,
+        &old_qr,
+        &new_qr,
     );
 }

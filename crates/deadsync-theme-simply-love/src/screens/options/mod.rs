@@ -92,6 +92,8 @@ use apply_replaygain::*;
 mod pack_sync;
 pub(crate) mod qr_login;
 use pack_sync::*;
+#[cfg(any(test, feature = "bench-support"))]
+pub use qr_login::QrOverlayBenchmark;
 mod download_packs;
 use download_packs::*;
 mod layout;

@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
+use crate::assets::i18n::{self, tr, tr_fmt};
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
@@ -7,6 +7,8 @@ use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_theme::views::LightsTestView;
+use std::cell::RefCell;
+use std::sync::Arc;
 
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
@@ -173,6 +175,7 @@ pub struct State {
     bg: visual_style_bg::State,
     manual_elapsed: f32,
     manual_active: bool,
+    text: RefCell<LightsText>,
 }
 
 pub fn init() -> State {
@@ -181,6 +184,7 @@ pub fn init() -> State {
         bg: visual_style_bg::State::new(),
         manual_elapsed: 0.0,
         manual_active: false,
+        text: RefCell::new(LightsText::build(LightsTestView::default())),
     }
 }
 
@@ -299,7 +303,9 @@ pub fn push_actors(
 
     push_pad(actors, lights, LightPlayer::P1, root_x, root_y, alpha_mul);
     push_pad(actors, lights, LightPlayer::P2, root_x, root_y, alpha_mul);
-    push_labels(actors, lights, state.active_color_index, alpha_mul);
+    let mut text = state.text.borrow_mut();
+    text.sync(lights);
+    push_labels(actors, &text, state.active_color_index, alpha_mul);
 
     actors.push(act!(quad:
         align(0.0, 1.0):
@@ -310,7 +316,7 @@ pub fn push_actors(
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(tr("ScreenTestLights", "Controls")):
+        settext(Arc::clone(&text.controls)):
         align(0.5, 0.5):
         xy(screen_center_x(), screen_h - 20.0):
         zoom(0.62):
@@ -393,37 +399,18 @@ fn push_pad(
 
 fn push_labels(
     actors: &mut Vec<Actor>,
-    lights: LightsTestView,
+    text: &LightsText,
     active_color_index: i32,
     alpha_mul: f32,
 ) {
     let screen_w = screen_width();
     let accent = color::DECORATIVE_RGBA
         [active_color_index.rem_euclid(color::DECORATIVE_RGBA.len() as i32) as usize];
-    let mode_text = if lights.manual_cycle {
-        tr("ScreenTestLights", "ManualCycle")
-    } else {
-        tr("ScreenTestLights", "AutoCycle")
-    };
-    let cabinet = tr("ScreenTestLights", cabinet_name(lights).unwrap_or("None"));
-    let pad = active_button_text(lights);
     let info_x = (screen_center_x() + 245.0).min(screen_w - 210.0);
-    let title = tr("ScreenTestLights", "HeaderText");
-    let mode_line = tr_fmt(
-        "ScreenTestLights",
-        "ModeLine",
-        &[("mode", mode_text.as_ref())],
-    );
-    let cabinet_line = tr_fmt(
-        "ScreenTestLights",
-        "CabinetLine",
-        &[("cabinet", cabinet.as_ref())],
-    );
-    let pad_line = tr_fmt("ScreenTestLights", "PadLine", &[("pad", pad.as_str())]);
 
     actors.push(act!(text:
         font("miso"):
-        settext(title):
+        settext(Arc::clone(&text.title)):
         align(0.5, 0.5):
         xy(screen_center_x(), 28.0):
         zoom(1.0):
@@ -435,11 +422,10 @@ fn push_labels(
         z(85)
     ));
 
-    let rows = [mode_line, cabinet_line, pad_line];
-    for (idx, text) in rows.into_iter().enumerate() {
+    for (idx, row) in text.rows.iter().enumerate() {
         actors.push(act!(text:
             font("miso"):
-            settext(text):
+            settext(Arc::clone(row)):
             align(0.5, 0.5):
             xy(info_x, 92.0 + idx as f32 * 28.0):
             zoom(0.66):
@@ -476,7 +462,7 @@ fn cabinet_name(lights: LightsTestView) -> Option<&'static str> {
     None
 }
 
-fn active_button_text(lights: LightsTestView) -> String {
+fn active_button_text(lights: LightsTestView) -> Arc<str> {
     for player in [LightPlayer::P1, LightPlayer::P2] {
         for button in [
             ButtonLight::Left,
@@ -487,11 +473,133 @@ fn active_button_text(lights: LightsTestView) -> String {
             ButtonLight::Select,
         ] {
             if lights.buttons[player.ix()][button.ix()] {
-                return format!("{} {}", player_name(player), button_name(button));
+                return Arc::from(format!("{} {}", player_name(player), button_name(button)));
             }
         }
     }
-    tr("ScreenTestLights", "None").to_string()
+    tr("ScreenTestLights", "None")
+}
+
+/// Screen-lifetime actor-ready text retained by the game thread.
+///
+/// Owner/thread model: the Test Lights state on the single game thread, with
+/// `RefCell` only because actor construction receives `&State`. Lifetime and
+/// capacity: one fixed five-string entry for the screen. Warmup: screen
+/// initialization. Miss behavior: a hardware-light state or language revision
+/// change rebuilds the entry on that diagnostic-screen frame; gameplay never
+/// touches this screen. Eviction/destruction: whole-entry replacement and
+/// normal screen teardown. The fixed domain needs no pruning or counters;
+/// worst-case refresh work is a bounded 6-by-12 scan and three formats.
+struct LightsText {
+    i18n_revision: u64,
+    lights: LightsTestView,
+    title: Arc<str>,
+    rows: [Arc<str>; 3],
+    controls: Arc<str>,
+}
+
+impl LightsText {
+    fn build(lights: LightsTestView) -> Self {
+        let mode = if lights.manual_cycle {
+            tr("ScreenTestLights", "ManualCycle")
+        } else {
+            tr("ScreenTestLights", "AutoCycle")
+        };
+        let cabinet = tr("ScreenTestLights", cabinet_name(lights).unwrap_or("None"));
+        let pad = active_button_text(lights);
+        Self {
+            i18n_revision: i18n::revision(),
+            lights,
+            title: tr("ScreenTestLights", "HeaderText"),
+            rows: [
+                tr_fmt("ScreenTestLights", "ModeLine", &[("mode", mode.as_ref())]),
+                tr_fmt(
+                    "ScreenTestLights",
+                    "CabinetLine",
+                    &[("cabinet", cabinet.as_ref())],
+                ),
+                tr_fmt("ScreenTestLights", "PadLine", &[("pad", pad.as_ref())]),
+            ],
+            controls: tr("ScreenTestLights", "Controls"),
+        }
+    }
+
+    #[inline]
+    fn sync(&mut self, lights: LightsTestView) {
+        if self.lights != lights || self.i18n_revision != i18n::revision() {
+            *self = Self::build(lights);
+        }
+    }
+
+    #[cfg(any(test, feature = "bench-support"))]
+    fn checksum(&self) -> u64 {
+        [
+            &self.title,
+            &self.rows[0],
+            &self.rows[1],
+            &self.rows[2],
+            &self.controls,
+        ]
+        .into_iter()
+        .fold(0, |checksum, text| {
+            text.bytes()
+                .fold(checksum ^ text.len() as u64, |hash, byte| {
+                    hash.rotate_left(5) ^ u64::from(byte)
+                })
+        })
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub struct LightsTextBenchmark {
+    lights: LightsTestView,
+    text: LightsText,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl LightsTextBenchmark {
+    pub fn new() -> Self {
+        let lights = LightsTestView {
+            cabinet: [false, true, false, false, false, false],
+            buttons: [
+                [false, false, false, false, false, false],
+                [false, false, true, false, false, false],
+            ],
+            manual_cycle: true,
+        };
+        Self {
+            lights,
+            text: LightsText::build(lights),
+        }
+    }
+
+    pub fn legacy_frame(&self) -> u64 {
+        LightsText::build(self.lights).checksum()
+    }
+
+    pub fn current_frame(&mut self) -> u64 {
+        self.text.sync(self.lights);
+        let values = [
+            Arc::clone(&self.text.title),
+            Arc::clone(&self.text.rows[0]),
+            Arc::clone(&self.text.rows[1]),
+            Arc::clone(&self.text.rows[2]),
+            Arc::clone(&self.text.controls),
+        ];
+        values.into_iter().fold(0, |checksum, text| {
+            text.bytes()
+                .fold(checksum ^ text.len() as u64, |hash, byte| {
+                    hash.rotate_left(5) ^ u64::from(byte)
+                })
+        })
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for LightsTextBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 const fn player_name(player: LightPlayer) -> &'static str {
@@ -509,5 +617,41 @@ const fn button_name(button: ButtonLight) -> &'static str {
         ButtonLight::Right => "Right",
         ButtonLight::Start => "Start",
         ButtonLight::Select => "Select",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retained_lights_text_matches_immediate_text_for_all_inputs() {
+        let mut retained = LightsText::build(LightsTestView::default());
+        let mut cases = vec![LightsTestView::default()];
+        for cabinet in 0..6 {
+            let mut lights = LightsTestView::default();
+            lights.cabinet[cabinet] = true;
+            lights.manual_cycle = cabinet % 2 == 0;
+            cases.push(lights);
+        }
+        for player in 0..2 {
+            for button in 0..6 {
+                let mut lights = LightsTestView::default();
+                lights.buttons[player][button] = true;
+                lights.manual_cycle = button % 2 == 1;
+                cases.push(lights);
+            }
+        }
+
+        for lights in cases {
+            retained.sync(lights);
+            assert_eq!(retained.checksum(), LightsText::build(lights).checksum());
+        }
+    }
+
+    #[test]
+    fn stable_lights_benchmark_matches_immediate_builder() {
+        let mut benchmark = LightsTextBenchmark::new();
+        assert_eq!(benchmark.legacy_frame(), benchmark.current_frame());
     }
 }

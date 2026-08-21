@@ -42,6 +42,8 @@ mod profile;
 mod render;
 mod row;
 mod search;
+#[cfg(any(test, feature = "bench-support"))]
+pub use search::PlayerOptionsSearchBenchmark;
 mod state;
 mod visibility;
 

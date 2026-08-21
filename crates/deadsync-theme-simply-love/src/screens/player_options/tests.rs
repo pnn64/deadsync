@@ -4856,7 +4856,7 @@ pub(super) mod tests {
             .find(|m| m.row_id == RowId::MusicRate)
             .expect("Music Rate row should be indexed");
         // i18n name is "Music Rate\nbpm: {bpm}"; only the first line should show.
-        assert_eq!(music_rate.label, "Music Rate");
+        assert_eq!(music_rate.label.as_ref(), "Music Rate");
         assert!(!music_rate.label.contains('{'));
     }
 
@@ -5123,5 +5123,26 @@ pub(super) mod tests {
         } else {
             panic!("search should still be open after Tab");
         }
+    }
+
+    #[test]
+    fn prepared_search_rows_match_immediate_frame_text() {
+        ensure_i18n();
+        let benchmark = super::PlayerOptionsSearchBenchmark::new();
+        assert_eq!(benchmark.legacy_frame(), benchmark.current_frame());
+    }
+
+    #[test]
+    fn direct_search_overlay_append_matches_temporary_batch() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        open_search(&mut state);
+        search_key(&mut state, None, Some("speed"), false);
+
+        let legacy = super::search::build_overlay_legacy(&state)
+            .expect("open search should produce an overlay");
+        let mut direct = Vec::with_capacity(legacy.len());
+        super::search::push_overlay(&mut direct, &state);
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
     }
 }
