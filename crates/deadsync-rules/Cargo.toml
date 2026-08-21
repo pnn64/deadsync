@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[[bench]]
+name = "timing_summary_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
+[features]
+bench-support = []
+
 [dependencies]
 deadsync-core = { path = "../deadsync-core" }
 log = "0.4.33"

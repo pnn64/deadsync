@@ -1375,84 +1375,40 @@ fn for_each_row_final_judgment<F>(notes: &[Note], mut f: F)
 where
     F: FnMut(&Judgment),
 {
-    if notes.is_empty() {
-        return;
-    }
-
     let mut idx: usize = 0;
-    let len = notes.len();
-    let mut row_judgments: Vec<&Judgment> = Vec::with_capacity(8);
-
-    while idx < len {
+    while idx < notes.len() {
+        let row_start = idx;
         let row_index = notes[idx].row_index;
-        row_judgments.clear();
-
-        while idx < len && notes[idx].row_index == row_index {
-            let note = &notes[idx];
-            if !note.is_fake
-                && note.can_be_judged
-                && !matches!(note.note_type, NoteType::Mine)
-                && let Some(j) = note.result.as_ref()
-            {
-                row_judgments.push(j);
-            }
+        while idx < notes.len() && notes[idx].row_index == row_index {
             idx += 1;
         }
 
-        if let Some(j) = judgment::aggregate_row_final_judgment(row_judgments.iter().copied()) {
+        if let Some(j) = judgment::aggregate_row_final_judgment(
+            notes[row_start..idx].iter().filter_map(judgeable_result),
+        ) {
             f(j);
         }
     }
 }
 
 #[inline(always)]
+fn judgeable_result(note: &Note) -> Option<&Judgment> {
+    if note.is_fake || !note.can_be_judged || matches!(note.note_type, NoteType::Mine) {
+        None
+    } else {
+        note.result.as_ref()
+    }
+}
+
+#[inline(always)]
 pub fn compute_note_timing_stats(notes: &[Note]) -> TimingStats {
-    // First pass: aggregate one final judgment per row, mirroring Simply Love's
-    // JudgmentMessage-driven sequential_offsets behavior.
-    let mut sum_abs = 0.0_f32;
-    let mut sum_signed = 0.0_f32;
-    let mut max_abs = 0.0_f32;
-    let mut count: usize = 0;
-
+    let mut stats = StatsAccum::default();
     for_each_row_final_judgment(notes, |j| {
-        if j.grade == JudgeGrade::Miss {
-            return;
+        if j.grade != JudgeGrade::Miss {
+            stats.add(j.time_error_ms);
         }
-        let e = j.time_error_ms;
-        let a = e.abs();
-        sum_abs += a;
-        sum_signed += e;
-        if a > max_abs {
-            max_abs = a;
-        }
-        count += 1;
     });
-
-    if count == 0 {
-        return TimingStats::default();
-    }
-
-    let mean_ms = sum_signed / (count as f32);
-    let mean_abs_ms = sum_abs / (count as f32);
-
-    // Second pass: population standard deviation of signed offsets.
-    // This matches ArrowCloud's current website/share-service calculation.
-    let mut sum_diff_sq = 0.0_f32;
-    for_each_row_final_judgment(notes, |j| {
-        if j.grade == JudgeGrade::Miss {
-            return;
-        }
-        let d = j.time_error_ms - mean_ms;
-        sum_diff_sq += d * d;
-    });
-    let stddev_ms = (sum_diff_sq / (count as f32)).sqrt();
-
-    TimingStats {
-        mean_abs_ms,
-        mean_ms,
-        stddev_ms,
-        max_abs_ms: max_abs,
-    }
+    stats.finish_stats()
 }
 
 /// Per-column / per-foot breakdown of timing offsets, used by the
@@ -1507,22 +1463,27 @@ impl StatsAccum {
     }
 
     #[inline(always)]
-    fn finish(self) -> ArrowTimingBucket {
+    fn finish_stats(self) -> TimingStats {
         if self.count == 0 {
-            return ArrowTimingBucket::default();
+            return TimingStats::default();
         }
         let n = self.count as f32;
         let mean_ms = self.sum_ms / n;
         let mean_abs_ms = self.sum_abs_ms / n;
         let variance = (self.sum_sq_diff_ms / n).max(0.0);
+        TimingStats {
+            mean_abs_ms,
+            mean_ms,
+            stddev_ms: variance.sqrt(),
+            max_abs_ms: self.max_abs_ms,
+        }
+    }
+
+    #[inline(always)]
+    fn finish(self) -> ArrowTimingBucket {
         ArrowTimingBucket {
             count: self.count,
-            stats: TimingStats {
-                mean_abs_ms,
-                mean_ms,
-                stddev_ms: variance.sqrt(),
-                max_abs_ms: self.max_abs_ms,
-            },
+            stats: self.finish_stats(),
         }
     }
 }
@@ -1541,25 +1502,21 @@ pub fn compute_arrow_timing_stats(
     let mut foot_left = false;
     let mut idx = 0usize;
     let len = notes.len();
-    let mut row_judgments: Vec<&Judgment> = Vec::with_capacity(8);
-
     while idx < len {
         let row_index = notes[idx].row_index;
         let row_start = idx;
-        row_judgments.clear();
 
         // Direction code: 1 = leftmost column, `cols_per_player` = rightmost
         // column, anything else is a chord.
         let mut direction_code: u32 = 0;
         while idx < len && notes[idx].row_index == row_index {
             let note = &notes[idx];
-            if !note.is_fake && note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
-                if let Some(j) = note.result.as_ref() {
-                    row_judgments.push(j);
-                }
-                if let Some(code) = local_direction_code(note, col_offset, cols_per_player) {
-                    direction_code = direction_code.saturating_add(code as u32);
-                }
+            if !note.is_fake
+                && note.can_be_judged
+                && !matches!(note.note_type, NoteType::Mine)
+                && let Some(code) = local_direction_code(note, col_offset, cols_per_player)
+            {
+                direction_code = direction_code.saturating_add(code as u32);
             }
             idx += 1;
         }
@@ -1576,7 +1533,9 @@ pub fn compute_arrow_timing_stats(
             foot_left = !foot_left;
         }
 
-        let Some(j) = judgment::aggregate_row_final_judgment(row_judgments.iter().copied()) else {
+        let Some(j) = judgment::aggregate_row_final_judgment(
+            notes[row_start..idx].iter().filter_map(judgeable_result),
+        ) else {
             continue;
         };
         if j.grade == JudgeGrade::Miss {
@@ -1768,6 +1727,15 @@ struct HistMeta {
     worst_observed_bin_abs: i32,
 }
 
+#[derive(Copy, Clone, Debug)]
+struct HistScan {
+    meta: HistMeta,
+    min_bin: i32,
+    max_bin: i32,
+    count: usize,
+    all_fast: bool,
+}
+
 #[derive(Clone, Debug, Default)]
 struct HistCounts {
     bins: Vec<(i32, u32)>,
@@ -1777,6 +1745,8 @@ struct HistCounts {
 }
 
 const MAX_DENSE_HIST_SPAN: i32 = 4096;
+const FAST_HIST_MIN_BIN: i32 = -512;
+const FAST_HIST_BINS: usize = 1024;
 
 #[inline(always)]
 const fn hist_window_ix(grade: JudgeGrade) -> usize {
@@ -1790,25 +1760,42 @@ const fn hist_window_ix(grade: JudgeGrade) -> usize {
     }
 }
 
-fn collect_hist_bins(notes: &[Note]) -> (Vec<i32>, HistMeta) {
-    let mut bins = Vec::with_capacity(notes.len());
-    let mut meta = HistMeta {
-        max_abs: 0.0,
-        worst_window_ix: hist_window_ix(JudgeGrade::Great),
-        worst_observed_bin_abs: 0,
+fn scan_hist_bins(notes: &[Note], fast_counts: &mut [u32; FAST_HIST_BINS]) -> HistScan {
+    let mut scan = HistScan {
+        meta: HistMeta {
+            max_abs: 0.0,
+            worst_window_ix: hist_window_ix(JudgeGrade::Great),
+            worst_observed_bin_abs: 0,
+        },
+        min_bin: i32::MAX,
+        max_bin: i32::MIN,
+        count: 0,
+        all_fast: true,
     };
 
     for_each_row_final_judgment(notes, |judgment| {
         if judgment.grade != JudgeGrade::Miss {
             let bin = bin_index_ms(judgment.time_error_ms);
-            bins.push(bin);
-            meta.max_abs = meta.max_abs.max(judgment.time_error_ms.abs());
-            meta.worst_window_ix = meta.worst_window_ix.max(hist_window_ix(judgment.grade));
-            meta.worst_observed_bin_abs = meta.worst_observed_bin_abs.max(bin.abs());
+            scan.min_bin = scan.min_bin.min(bin);
+            scan.max_bin = scan.max_bin.max(bin);
+            scan.count += 1;
+            let fast_index = i64::from(bin) - i64::from(FAST_HIST_MIN_BIN);
+            if fast_index >= 0 && fast_index < FAST_HIST_BINS as i64 {
+                fast_counts[fast_index as usize] += 1;
+            } else {
+                scan.all_fast = false;
+            }
+            scan.meta.max_abs = scan.meta.max_abs.max(judgment.time_error_ms.abs());
+            scan.meta.worst_window_ix = scan
+                .meta
+                .worst_window_ix
+                .max(hist_window_ix(judgment.grade));
+            scan.meta.worst_observed_bin_abs =
+                scan.meta.worst_observed_bin_abs.max(bin.saturating_abs());
         }
     });
 
-    (bins, meta)
+    scan
 }
 
 fn pack_hist_counts(mut seen_bins: Vec<i32>) -> HistCounts {
@@ -1852,6 +1839,108 @@ fn pack_hist_counts(mut seen_bins: Vec<i32>) -> HistCounts {
     counts
 }
 
+fn pack_dense_hist_counts(dense: Vec<u32>, min_bin: i32, bin_capacity: usize) -> HistCounts {
+    let mut bins = Vec::with_capacity(bin_capacity.min(dense.len()));
+    let mut max_count = 0;
+    for (offset, &count) in dense.iter().enumerate() {
+        if count == 0 {
+            continue;
+        }
+        max_count = max_count.max(count);
+        bins.push((min_bin.saturating_add(offset as i32), count));
+    }
+    HistCounts {
+        bins,
+        dense,
+        min_bin,
+        max_count,
+    }
+}
+
+fn count_hist_bins(
+    notes: &[Note],
+    scan: HistScan,
+    fast_counts: &[u32; FAST_HIST_BINS],
+) -> HistCounts {
+    if scan.count == 0 {
+        return HistCounts::default();
+    }
+    if scan.all_fast {
+        let start = (scan.min_bin - FAST_HIST_MIN_BIN) as usize;
+        let end = (scan.max_bin - FAST_HIST_MIN_BIN) as usize + 1;
+        return pack_dense_hist_counts(fast_counts[start..end].to_vec(), scan.min_bin, scan.count);
+    }
+    let span = i64::from(scan.max_bin) - i64::from(scan.min_bin) + 1;
+    if span > i64::from(MAX_DENSE_HIST_SPAN) {
+        let mut bins = Vec::with_capacity(scan.count);
+        for_each_row_final_judgment(notes, |judgment| {
+            if judgment.grade != JudgeGrade::Miss {
+                bins.push(bin_index_ms(judgment.time_error_ms));
+            }
+        });
+        return pack_hist_counts(bins);
+    }
+
+    let mut dense = vec![0u32; span as usize];
+    for_each_row_final_judgment(notes, |judgment| {
+        if judgment.grade != JudgeGrade::Miss {
+            let bin = bin_index_ms(judgment.time_error_ms);
+            dense[(i64::from(bin) - i64::from(scan.min_bin)) as usize] += 1;
+        }
+    });
+    pack_dense_hist_counts(dense, scan.min_bin, scan.count)
+}
+
+fn merge_hist_counts(histograms: &[HistogramMs]) -> Option<HistCounts> {
+    let bin_capacity = histograms.iter().map(|hist| hist.bins.len()).sum();
+    if bin_capacity == 0 {
+        return None;
+    }
+    let min_bin = histograms
+        .iter()
+        .flat_map(|hist| hist.bins.iter().map(|&(bin, _)| bin))
+        .min()
+        .unwrap_or(0);
+    let max_bin = histograms
+        .iter()
+        .flat_map(|hist| hist.bins.iter().map(|&(bin, _)| bin))
+        .max()
+        .unwrap_or(min_bin);
+    let span = i64::from(max_bin) - i64::from(min_bin) + 1;
+    if span <= i64::from(MAX_DENSE_HIST_SPAN) {
+        let mut dense = vec![0u32; span as usize];
+        for histogram in histograms {
+            for &(bin, count) in &histogram.bins {
+                dense[(i64::from(bin) - i64::from(min_bin)) as usize] += count;
+            }
+        }
+        return Some(pack_dense_hist_counts(dense, min_bin, bin_capacity));
+    }
+
+    let mut pairs = Vec::with_capacity(bin_capacity);
+    for histogram in histograms {
+        pairs.extend_from_slice(&histogram.bins);
+    }
+    pairs.sort_unstable_by_key(|&(bin, _)| bin);
+    let mut bins: Vec<(i32, u32)> = Vec::with_capacity(bin_capacity);
+    for (bin, count) in pairs {
+        if let Some((last_bin, last_count)) = bins.last_mut()
+            && *last_bin == bin
+        {
+            *last_count += count;
+        } else {
+            bins.push((bin, count));
+        }
+    }
+    let max_count = bins.iter().map(|&(_, count)| count).max().unwrap_or(0);
+    Some(HistCounts {
+        bins,
+        dense: Vec::new(),
+        min_bin,
+        max_count,
+    })
+}
+
 #[inline(always)]
 fn hist_count_at(counts: &HistCounts, bin: i32) -> u32 {
     if !counts.dense.is_empty() {
@@ -1883,9 +1972,10 @@ fn smooth_hist_counts(counts: &HistCounts, worst_window_bin: i32) -> Vec<(i32, f
 
 #[inline(always)]
 pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
-    let (seen_bins, meta) = collect_hist_bins(notes);
-    let counts = pack_hist_counts(seen_bins);
-    let worst_window_ms = effective_windows_ms()[meta.worst_window_ix];
+    let mut fast_counts = [0u32; FAST_HIST_BINS];
+    let scan = scan_hist_bins(notes, &mut fast_counts);
+    let counts = count_hist_bins(notes, scan, &fast_counts);
+    let worst_window_ms = effective_windows_ms()[scan.meta.worst_window_ix];
     let worst_window_bin = (worst_window_ms / HIST_BIN_MS).round() as i32;
     let smoothed = smooth_hist_counts(&counts, worst_window_bin);
 
@@ -1893,36 +1983,23 @@ pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
         bins: counts.bins,
         smoothed,
         max_count: counts.max_count,
-        worst_observed_ms: (meta.worst_observed_bin_abs as f32) * HIST_BIN_MS,
-        worst_window_ms: worst_window_ms.max(meta.max_abs),
+        worst_observed_ms: (scan.meta.worst_observed_bin_abs as f32) * HIST_BIN_MS,
+        worst_window_ms: worst_window_ms.max(scan.meta.max_abs),
     }
 }
 
 pub fn merge_histograms_ms(histograms: &[HistogramMs]) -> HistogramMs {
-    let bin_count = histograms
-        .iter()
-        .flat_map(|hist| hist.bins.iter())
-        .fold(0usize, |sum, (_, count)| {
-            sum.saturating_add(*count as usize)
-        });
-    if bin_count == 0 {
+    let Some(counts) = merge_hist_counts(histograms) else {
         return HistogramMs::default();
-    }
+    };
 
-    let mut seen_bins = Vec::with_capacity(bin_count);
     let mut worst_observed_ms = 0.0_f32;
     let mut worst_window_ms = 0.0_f32;
     for hist in histograms {
         worst_observed_ms = worst_observed_ms.max(hist.worst_observed_ms);
         worst_window_ms = worst_window_ms.max(hist.worst_window_ms);
-        for &(bin, count) in &hist.bins {
-            for _ in 0..count {
-                seen_bins.push(bin);
-            }
-        }
     }
 
-    let counts = pack_hist_counts(seen_bins);
     let worst_window_ms = worst_window_ms
         .max(worst_observed_ms)
         .max(effective_windows_ms()[1]);
@@ -1986,6 +2063,161 @@ pub fn compute_window_counts_blue_ms(notes: &[Note], blue_window_ms: f32) -> Win
     });
 
     out
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+mod timing_summary_reference {
+    use super::*;
+
+    fn for_each_row(notes: &[Note], mut f: impl FnMut(&Judgment)) {
+        let mut idx = 0;
+        let mut row_judgments: Vec<&Judgment> = Vec::with_capacity(8);
+        while idx < notes.len() {
+            let row_index = notes[idx].row_index;
+            row_judgments.clear();
+            while idx < notes.len() && notes[idx].row_index == row_index {
+                let note = &notes[idx];
+                if let Some(judgment) = judgeable_result(note) {
+                    row_judgments.push(judgment);
+                }
+                idx += 1;
+            }
+            if let Some(judgment) =
+                judgment::aggregate_row_final_judgment(row_judgments.iter().copied())
+            {
+                f(judgment);
+            }
+        }
+    }
+
+    pub(super) fn stats(notes: &[Note]) -> TimingStats {
+        let mut sum_abs = 0.0_f32;
+        let mut sum_signed = 0.0_f32;
+        let mut max_abs = 0.0_f32;
+        let mut count = 0usize;
+        for_each_row(notes, |judgment| {
+            if judgment.grade != JudgeGrade::Miss {
+                let error = judgment.time_error_ms;
+                let abs = error.abs();
+                sum_abs += abs;
+                sum_signed += error;
+                max_abs = max_abs.max(abs);
+                count += 1;
+            }
+        });
+        if count == 0 {
+            return TimingStats::default();
+        }
+        let mean_ms = sum_signed / count as f32;
+        let mut sum_diff_sq = 0.0_f32;
+        for_each_row(notes, |judgment| {
+            if judgment.grade != JudgeGrade::Miss {
+                let diff = judgment.time_error_ms - mean_ms;
+                sum_diff_sq += diff * diff;
+            }
+        });
+        TimingStats {
+            mean_abs_ms: sum_abs / count as f32,
+            mean_ms,
+            stddev_ms: (sum_diff_sq / count as f32).sqrt(),
+            max_abs_ms: max_abs,
+        }
+    }
+
+    pub(super) fn histogram(notes: &[Note]) -> HistogramMs {
+        let mut seen_bins = Vec::with_capacity(notes.len());
+        let mut meta = HistMeta {
+            max_abs: 0.0,
+            worst_window_ix: hist_window_ix(JudgeGrade::Great),
+            worst_observed_bin_abs: 0,
+        };
+        for_each_row(notes, |judgment| {
+            if judgment.grade != JudgeGrade::Miss {
+                let bin = bin_index_ms(judgment.time_error_ms);
+                seen_bins.push(bin);
+                meta.max_abs = meta.max_abs.max(judgment.time_error_ms.abs());
+                meta.worst_window_ix = meta.worst_window_ix.max(hist_window_ix(judgment.grade));
+                meta.worst_observed_bin_abs = meta.worst_observed_bin_abs.max(bin.abs());
+            }
+        });
+        let counts = pack_hist_counts(seen_bins);
+        let worst_window_ms = effective_windows_ms()[meta.worst_window_ix];
+        let worst_window_bin = (worst_window_ms / HIST_BIN_MS).round() as i32;
+        let smoothed = smooth_hist_counts(&counts, worst_window_bin);
+        HistogramMs {
+            bins: counts.bins,
+            smoothed,
+            max_count: counts.max_count,
+            worst_observed_ms: meta.worst_observed_bin_abs as f32 * HIST_BIN_MS,
+            worst_window_ms: worst_window_ms.max(meta.max_abs),
+        }
+    }
+
+    pub(super) fn merge(histograms: &[HistogramMs]) -> HistogramMs {
+        let bin_count = histograms
+            .iter()
+            .flat_map(|histogram| histogram.bins.iter())
+            .fold(0usize, |sum, (_, count)| {
+                sum.saturating_add(*count as usize)
+            });
+        if bin_count == 0 {
+            return HistogramMs::default();
+        }
+        let mut seen_bins = Vec::with_capacity(bin_count);
+        let mut worst_observed_ms = 0.0_f32;
+        let mut worst_window_ms = 0.0_f32;
+        for histogram in histograms {
+            worst_observed_ms = worst_observed_ms.max(histogram.worst_observed_ms);
+            worst_window_ms = worst_window_ms.max(histogram.worst_window_ms);
+            for &(bin, count) in &histogram.bins {
+                for _ in 0..count {
+                    seen_bins.push(bin);
+                }
+            }
+        }
+        let counts = pack_hist_counts(seen_bins);
+        let worst_window_ms = worst_window_ms
+            .max(worst_observed_ms)
+            .max(effective_windows_ms()[1]);
+        let worst_window_bin = (worst_window_ms / HIST_BIN_MS).round().max(1.0) as i32;
+        let smoothed = smooth_hist_counts(&counts, worst_window_bin);
+        HistogramMs {
+            bins: counts.bins,
+            smoothed,
+            max_count: counts.max_count,
+            worst_observed_ms,
+            worst_window_ms,
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::*;
+
+    pub fn timing_stats_old(notes: &[Note]) -> TimingStats {
+        timing_summary_reference::stats(notes)
+    }
+
+    pub fn timing_stats_new(notes: &[Note]) -> TimingStats {
+        compute_note_timing_stats(notes)
+    }
+
+    pub fn histogram_old(notes: &[Note]) -> HistogramMs {
+        timing_summary_reference::histogram(notes)
+    }
+
+    pub fn histogram_new(notes: &[Note]) -> HistogramMs {
+        build_histogram_ms(notes)
+    }
+
+    pub fn merge_old(histograms: &[HistogramMs]) -> HistogramMs {
+        timing_summary_reference::merge(histograms)
+    }
+
+    pub fn merge_new(histograms: &[HistogramMs]) -> HistogramMs {
+        merge_histograms_ms(histograms)
+    }
 }
 
 #[cfg(test)]
@@ -2080,6 +2312,120 @@ mod tests {
             },
             &[],
         )
+    }
+
+    fn assert_histogram_eq(actual: &HistogramMs, expected: &HistogramMs) {
+        assert_eq!(actual.bins, expected.bins);
+        assert_eq!(actual.max_count, expected.max_count);
+        assert_eq!(
+            actual.worst_observed_ms.to_bits(),
+            expected.worst_observed_ms.to_bits()
+        );
+        assert_eq!(
+            actual.worst_window_ms.to_bits(),
+            expected.worst_window_ms.to_bits()
+        );
+        assert_eq!(actual.smoothed.len(), expected.smoothed.len());
+        for (&(actual_bin, actual_value), &(expected_bin, expected_value)) in
+            actual.smoothed.iter().zip(&expected.smoothed)
+        {
+            assert_eq!(actual_bin, expected_bin);
+            assert_eq!(actual_value.to_bits(), expected_value.to_bits());
+        }
+    }
+
+    fn summary_notes(rows: usize) -> Vec<Note> {
+        let mut notes = Vec::with_capacity(rows + rows / 4);
+        for row in 0..rows {
+            let error = (row.wrapping_mul(37) % 361) as f32 - 180.25;
+            let grade = if row.is_multiple_of(97) {
+                JudgeGrade::Miss
+            } else {
+                [
+                    JudgeGrade::Fantastic,
+                    JudgeGrade::Excellent,
+                    JudgeGrade::Great,
+                    JudgeGrade::Decent,
+                    JudgeGrade::WayOff,
+                ][row % 5]
+            };
+            notes.push(test_note(row, row % 4, grade, error));
+            if row.is_multiple_of(4) {
+                notes.push(test_note(row, (row + 1) % 4, grade, error * 0.5));
+            }
+        }
+        notes
+    }
+
+    #[test]
+    fn one_pass_timing_stats_match_two_pass_reference() {
+        let notes = summary_notes(4_096);
+        let actual = compute_note_timing_stats(&notes);
+        let expected = timing_summary_reference::stats(&notes);
+
+        assert_eq!(actual.mean_ms.to_bits(), expected.mean_ms.to_bits());
+        assert_eq!(actual.mean_abs_ms.to_bits(), expected.mean_abs_ms.to_bits());
+        assert_eq!(actual.max_abs_ms.to_bits(), expected.max_abs_ms.to_bits());
+        assert!((actual.stddev_ms - expected.stddev_ms).abs() <= 0.000_2);
+    }
+
+    #[test]
+    fn direct_histogram_counting_matches_sorted_reference() {
+        let notes = summary_notes(4_096);
+        assert_histogram_eq(
+            &build_histogram_ms(&notes),
+            &timing_summary_reference::histogram(&notes),
+        );
+
+        let wide = vec![
+            test_note(0, 0, JudgeGrade::WayOff, -5_000.0),
+            test_note(1, 1, JudgeGrade::WayOff, 5_000.0),
+        ];
+        assert_histogram_eq(
+            &build_histogram_ms(&wide),
+            &timing_summary_reference::histogram(&wide),
+        );
+    }
+
+    #[test]
+    fn direct_histogram_merge_matches_expanded_reference() {
+        let dense = [
+            HistogramMs {
+                bins: vec![(30, 2_000), (-20, 3_000)],
+                worst_observed_ms: 30.0,
+                worst_window_ms: 180.0,
+                ..HistogramMs::default()
+            },
+            HistogramMs {
+                bins: vec![(30, 4_000), (-20, 1_000)],
+                worst_observed_ms: 30.0,
+                worst_window_ms: 180.0,
+                ..HistogramMs::default()
+            },
+        ];
+        assert_histogram_eq(
+            &merge_histograms_ms(&dense),
+            &timing_summary_reference::merge(&dense),
+        );
+
+        let wide = [
+            HistogramMs {
+                bins: vec![(30, 2_000), (-20, 3_000), (5_000, 7)],
+                worst_observed_ms: 180.0,
+                worst_window_ms: 180.0,
+                ..HistogramMs::default()
+            },
+            HistogramMs {
+                bins: vec![(30, 4_000), (-5_000, 5), (-20, 1_000)],
+                worst_observed_ms: 170.0,
+                worst_window_ms: 180.0,
+                ..HistogramMs::default()
+            },
+        ];
+        assert_histogram_eq(
+            &merge_histograms_ms(&wide),
+            &timing_summary_reference::merge(&wide),
+        );
     }
 
     #[test]
