@@ -6497,21 +6497,19 @@ impl App {
         };
 
         if self.state.shell.overlay_mode.shows_fps() {
-            let overlay = screens::components::shared::stats_overlay::build(
+            screens::components::shared::stats_overlay::push(
+                &mut actors,
                 self.backend_type,
                 self.state.shell.last_fps,
                 self.state.shell.last_vpf,
                 self.stats_overlay_timing(),
             );
-            actors.extend(overlay);
             if self.state.shell.overlay_mode.shows_stutter() {
                 let now_seconds = Instant::now()
                     .duration_since(self.state.shell.start_time)
                     .as_secs_f32();
                 let stutters = self.state.shell.stutter_samples.visible(now_seconds);
-                actors.extend(screens::components::shared::stats_overlay::build_stutter(
-                    &stutters,
-                ));
+                screens::components::shared::stats_overlay::push_stutter(&mut actors, &stutters);
             }
         }
 

@@ -1,16 +1,23 @@
+use deadlib_render_core::{BackendType, ClockDomainTrace, PresentModeTrace};
 use deadsync_simfile::song_search::{SongSearchCandidate, song_search_difficulties_text};
 use deadsync_theme_simply_love::i18n;
 use deadsync_theme_simply_love::screens::components::select_music::select_music_menu::{
     SongSearchResultsState, benchmark_song_search_frame_text,
 };
+use deadsync_theme_simply_love::screens::components::shared::stats_overlay::{
+    benchmark_build_legacy, benchmark_build_stutter_legacy, benchmark_timing_text_current,
+    benchmark_timing_text_legacy, push as push_stats, push_stutter,
+};
 use deadsync_theme_simply_love::screens::components::shared::timers::TimerText;
 use deadsync_theme_simply_love::screens::evaluation_summary::{
     benchmark_eval_numeric_text, benchmark_profile_name_changed,
 };
+use deadsync_theme_simply_love::screens::mappings::MappingTextBenchmark;
 use deadsync_theme_simply_love::screens::practice::benchmark_edit_info_text_into;
 use deadsync_theme_simply_love::screens::select_music::{
     benchmark_info_text_front_cached, benchmark_info_text_hashed, benchmark_wheel_song_meta,
 };
+use deadsync_theme_simply_love::views::{AudioTimingView, TimingHealth, VisibleStutterSample};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashSet;
 use std::hint::black_box;
@@ -28,6 +35,9 @@ const TIMER_OPS: usize = 500_000;
 const TRANSLATION_OPS: usize = 500_000;
 const PRACTICE_OPS: usize = 300_000;
 const INFO_TEXT_OPS: usize = 1_000_000;
+const MAPPING_TEXT_OPS: usize = 100_000;
+const TIMING_TEXT_OPS: usize = 200_000;
+const OVERLAY_ACTOR_OPS: usize = 200_000;
 const SONG_SEARCH_WHEEL_SLOTS: usize = 12;
 const SONG_SEARCH_WHEEL_FOCUS_SLOT: usize = SONG_SEARCH_WHEEL_SLOTS / 2 - 1;
 const DETAIL_LABELS: [&str; 5] = ["Pack", "Song", "Subtitle", "BPMs", "Difficulties"];
@@ -221,6 +231,73 @@ fn print_pair(title: &str, iterations: usize, old: &BenchResult, new: &BenchResu
         old.ns_per_op / new.ns_per_op,
         100.0 * (1.0 - new.allocated.bytes as f64 / old.allocated.bytes as f64),
     );
+}
+
+fn print_reduced_pair(title: &str, iterations: usize, old: &BenchResult, new: &BenchResult) {
+    assert_eq!(old.checksum, new.checksum, "{title} behavior diverged");
+    println!("\n{title}");
+    print_result("old", iterations, old);
+    print_result("new", iterations, new);
+    println!(
+        "improvement  {:>8.2}x throughput  {:>8.2}% fewer allocated bytes",
+        old.ns_per_op / new.ns_per_op,
+        100.0 * (1.0 - new.allocated.bytes as f64 / old.allocated.bytes as f64),
+    );
+    assert!(
+        new.allocated.allocs < old.allocated.allocs,
+        "{title} did not reduce allocations"
+    );
+    assert!(
+        new.allocated.bytes < old.allocated.bytes,
+        "{title} did not reduce allocated bytes"
+    );
+}
+
+fn timing_fixture() -> TimingHealth {
+    TimingHealth {
+        interval_ns: 16_666_667,
+        display_error_ms: -0.42,
+        display_catching_up: true,
+        present_mode: PresentModeTrace::Fifo,
+        display_clock: ClockDomainTrace::Device,
+        host_clock: ClockDomainTrace::Monotonic,
+        in_flight_images: 2,
+        waited_for_image: true,
+        applied_back_pressure: false,
+        queue_idle_waited: false,
+        suboptimal: false,
+        submitted_present_id: 12_345,
+        completed_present_id: 12_344,
+        calibration_error_ns: 83_000,
+        host_mapped: true,
+        audio: Some(AudioTimingView {
+            backend: "WASAPI",
+            requested_output_mode: "exclusive",
+            fallback_from_native: false,
+            timing_clock: "device",
+            timing_quality: "precise",
+            sample_rate_hz: 48_000,
+            device_period_ns: 2_666_667,
+            stream_latency_ns: 5_333_334,
+            buffer_frames: 256,
+            padding_frames: 128,
+            queued_frames: 384,
+            estimated_output_delay_ns: 8_000_000,
+            clock_fallback_count: 1,
+            timing_sanity_failure_count: 2,
+            underrun_count: 3,
+        }),
+    }
+}
+
+fn stutter_fixture() -> [VisibleStutterSample; 5] {
+    std::array::from_fn(|index| VisibleStutterSample {
+        timestamp_seconds: 61.25 + index as f32,
+        frame_ms: 33.3 + index as f32,
+        frame_multiple: 2.0 + index as f32 * 0.25,
+        severity: 1 + (index % 3) as u8,
+        age_seconds: index as f32 * 0.4,
+    })
 }
 
 fn legacy_profile_name_changed(sides: [&[&str]; 2]) -> bool {
@@ -567,5 +644,58 @@ fn main() {
         INFO_TEXT_OPS,
         &old_info,
         &new_info,
+    );
+
+    let mappings = MappingTextBenchmark::new();
+    assert_eq!(mappings.legacy_checksum(), mappings.retained_checksum());
+    let old_mappings = measure(MAPPING_TEXT_OPS, 100, || mappings.legacy_checksum());
+    let new_mappings = measure(MAPPING_TEXT_OPS, 100, || mappings.retained_checksum());
+    print_pair(
+        "8. retained mappings labels",
+        MAPPING_TEXT_OPS,
+        &old_mappings,
+        &new_mappings,
+    );
+
+    let timing = timing_fixture();
+    assert_eq!(
+        benchmark_timing_text_legacy(timing),
+        benchmark_timing_text_current(timing)
+    );
+    let old_timing = measure(TIMING_TEXT_OPS, 200, || {
+        text_checksum(&benchmark_timing_text_legacy(black_box(timing)))
+    });
+    let new_timing = measure(TIMING_TEXT_OPS, 200, || {
+        text_checksum(&benchmark_timing_text_current(black_box(timing)))
+    });
+    print_reduced_pair(
+        "9. one-pass timing telemetry",
+        TIMING_TEXT_OPS,
+        &old_timing,
+        &new_timing,
+    );
+
+    let stutters = stutter_fixture();
+    let mut old_actors = Vec::with_capacity(8);
+    let old_overlay = measure(OVERLAY_ACTOR_OPS, 200, || {
+        old_actors.clear();
+        old_actors.extend(benchmark_build_legacy(BackendType::OpenGL, 120.0, 42, None));
+        old_actors.extend(benchmark_build_stutter_legacy(black_box(&stutters)));
+        black_box(&old_actors);
+        old_actors.len() as u64
+    });
+    let mut new_actors = Vec::with_capacity(8);
+    let new_overlay = measure(OVERLAY_ACTOR_OPS, 200, || {
+        new_actors.clear();
+        push_stats(&mut new_actors, BackendType::OpenGL, 120.0, 42, None);
+        push_stutter(&mut new_actors, black_box(&stutters));
+        black_box(&new_actors);
+        new_actors.len() as u64
+    });
+    print_pair(
+        "10. direct overlay actor append",
+        OVERLAY_ACTOR_OPS,
+        &old_overlay,
+        &new_overlay,
     );
 }

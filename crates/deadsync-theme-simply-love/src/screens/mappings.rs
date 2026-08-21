@@ -9,7 +9,7 @@ use crate::screens::components::shared::{screen_bar, transitions, visual_style_b
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::MappingsRuntimeView;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::color;
 use deadlib_present::font;
 use deadlib_present::space::{screen_height, screen_width, widescale};
@@ -23,6 +23,7 @@ use deadsync_input::{
     protected_default_key_for_action, updated_keymap_unique_gamepad,
     updated_keymap_unique_keyboard,
 };
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /* ---------------------------- transitions ---------------------------- */
@@ -244,9 +245,56 @@ enum ThreeKeyFocus {
     Slot,
 }
 
+struct MappingRowText {
+    p1_primary: TextContent,
+    p1_secondary: TextContent,
+    p2_primary: TextContent,
+    p2_secondary: TextContent,
+    p1_default: TextContent,
+    p2_default: TextContent,
+}
+
+/// Retained binding labels owned by the mappings screen on the game thread.
+///
+/// The cache lives for one screen, has exactly one entry per mapping row, and
+/// is fully warmed at init. A keymap edit rebuilds all 17-18 bounded entries;
+/// stable frames cannot miss or evict. Destruction happens with the screen,
+/// instrumentation is covered by the allocation benchmark, and the worst-case
+/// frame cost is cloning six inline/shared text handles per visible row.
+struct MappingText {
+    rows: Box<[MappingRowText]>,
+}
+
+impl MappingText {
+    fn new(game: GameFlag, keymap: &Keymap) -> Self {
+        let rows = (0..mapping_row_count(game))
+            .map(|row_idx| {
+                let [
+                    p1_primary,
+                    p1_secondary,
+                    p2_primary,
+                    p2_secondary,
+                    p1_default,
+                    p2_default,
+                ] = mapping_row_strings(game, keymap, row_idx);
+                MappingRowText {
+                    p1_primary: retained_text(p1_primary),
+                    p1_secondary: retained_text(p1_secondary),
+                    p2_primary: retained_text(p2_primary),
+                    p2_secondary: retained_text(p2_secondary),
+                    p1_default: retained_text(p1_default),
+                    p2_default: retained_text(p2_default),
+                }
+            })
+            .collect();
+        Self { rows }
+    }
+}
+
 pub struct State {
     pub active_color_index: i32,
     runtime: MappingsRuntimeView,
+    mapping_text: MappingText,
     bg: visual_style_bg::State,
     /// Mapping rows followed by the Exit row.
     selected_row: usize,
@@ -278,9 +326,11 @@ pub struct State {
 }
 
 pub fn init(runtime: MappingsRuntimeView) -> State {
+    let mapping_text = MappingText::new(runtime.game, &runtime.keymap);
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         runtime,
+        mapping_text,
         bg: visual_style_bg::State::new(),
         selected_row: 0,
         prev_selected_row: 0,
@@ -469,6 +519,7 @@ fn supports_three_key_nav(keymap: &Keymap) -> bool {
 
 fn apply_keymap(state: &mut State, keymap: Keymap) {
     state.runtime.keymap = keymap;
+    state.mapping_text = MappingText::new(state.runtime.game, &state.runtime.keymap);
     if state.runtime.dedicated_three_key_nav && !supports_three_key_nav(&state.runtime.keymap) {
         state.runtime.dedicated_three_key_nav = false;
     }
@@ -1149,6 +1200,99 @@ fn format_binding_for_display(binding: InputBinding) -> String {
     }
 }
 
+#[inline]
+fn mapping_row_strings(game: GameFlag, keymap: &Keymap, row_idx: usize) -> [String; 6] {
+    let (p1_action, p2_action) = row_actions(game, row_idx);
+    let p1_slots = p1_action.map(|action| editable_slot_indices_for_action(keymap, action));
+    let p2_slots = p2_action.map(|action| editable_slot_indices_for_action(keymap, action));
+    let binding = |action: Option<VirtualAction>, index: usize| {
+        action
+            .and_then(|action| keymap.binding_at(action, index))
+            .map_or_else(|| "------".to_string(), format_binding_for_display)
+    };
+    let default = |action: Option<VirtualAction>| {
+        action
+            .and_then(|action| protected_default_key_for_action(keymap, action))
+            .map_or_else(|| "------".to_string(), |code| format!("{code:?}"))
+    };
+    [
+        binding(p1_action, p1_slots.map_or(1, |slots| slots.0)),
+        binding(p1_action, p1_slots.map_or(2, |slots| slots.1)),
+        binding(p2_action, p2_slots.map_or(1, |slots| slots.0)),
+        binding(p2_action, p2_slots.map_or(2, |slots| slots.1)),
+        default(p1_action),
+        default(p2_action),
+    ]
+}
+
+#[inline]
+fn retained_text(text: String) -> TextContent {
+    TextContent::inline_str(&text).unwrap_or_else(|| TextContent::Shared(Arc::from(text)))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn mapping_text_checksum(text: &str) -> u64 {
+    text.bytes().fold(text.len() as u64, |checksum, byte| {
+        checksum.rotate_left(5) ^ u64::from(byte)
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub struct MappingTextBenchmark {
+    game: GameFlag,
+    keymap: Keymap,
+    retained: MappingText,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl MappingTextBenchmark {
+    pub fn new() -> Self {
+        let runtime = MappingsRuntimeView::default();
+        let retained = MappingText::new(runtime.game, &runtime.keymap);
+        Self {
+            game: runtime.game,
+            keymap: runtime.keymap,
+            retained,
+        }
+    }
+
+    pub fn legacy_checksum(&self) -> u64 {
+        (0..VISIBLE_ROWS).fold(0, |checksum, row_idx| {
+            mapping_row_strings(self.game, &self.keymap, row_idx)
+                .iter()
+                .fold(checksum, |checksum, text| {
+                    checksum.rotate_left(11) ^ mapping_text_checksum(text)
+                })
+        })
+    }
+
+    pub fn retained_checksum(&self) -> u64 {
+        self.retained.rows[..VISIBLE_ROWS]
+            .iter()
+            .fold(0, |checksum, row| {
+                [
+                    &row.p1_primary,
+                    &row.p1_secondary,
+                    &row.p2_primary,
+                    &row.p2_secondary,
+                    &row.p1_default,
+                    &row.p2_default,
+                ]
+                .into_iter()
+                .fold(checksum, |checksum, text| {
+                    checksum.rotate_left(11) ^ mapping_text_checksum(text.as_str())
+                })
+            })
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for MappingTextBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[inline(always)]
 fn editable_slot_indices_for_action(keymap: &Keymap, action: VirtualAction) -> (usize, usize) {
     editable_key_binding_slot_indices(keymap, action)
@@ -1473,52 +1617,7 @@ pub fn push_actors(
                 diffuse(default_bg_color[0], default_bg_color[1], default_bg_color[2], default_bg_color[3])
             ));
 
-            let (p1_act_opt, p2_act_opt) = row_actions(state.runtime.game, row_idx);
-            let (
-                p1_primary_text,
-                p1_secondary_text,
-                p2_primary_text,
-                p2_secondary_text,
-                p1_default_text,
-                p2_default_text,
-            ) = {
-                let keymap = &state.runtime.keymap;
-                // Actions whose protected default is still present use
-                // [default, primary, secondary]. Others use
-                // [primary, secondary].
-                let p1_slots = p1_act_opt.map(|act| editable_slot_indices_for_action(keymap, act));
-                let p2_slots = p2_act_opt.map(|act| editable_slot_indices_for_action(keymap, act));
-                let p1_primary_text = p1_act_opt
-                    .and_then(|act| keymap.binding_at(act, p1_slots.map_or(1, |s| s.0)))
-                    .map_or_else(|| "------".to_string(), format_binding_for_display);
-                let p1_secondary_text = p1_act_opt
-                    .and_then(|act| keymap.binding_at(act, p1_slots.map_or(2, |s| s.1)))
-                    .map_or_else(|| "------".to_string(), format_binding_for_display);
-                let p2_primary_text = p2_act_opt
-                    .and_then(|act| keymap.binding_at(act, p2_slots.map_or(1, |s| s.0)))
-                    .map_or_else(|| "------".to_string(), format_binding_for_display);
-                let p2_secondary_text = p2_act_opt
-                    .and_then(|act| keymap.binding_at(act, p2_slots.map_or(2, |s| s.1)))
-                    .map_or_else(|| "------".to_string(), format_binding_for_display);
-
-                let p1_default_text = p1_act_opt
-                    .and_then(|act| protected_default_key_for_action(keymap, act))
-                    .map(|code| format!("{code:?}"))
-                    .unwrap_or_else(|| "------".to_string());
-                let p2_default_text = p2_act_opt
-                    .and_then(|act| protected_default_key_for_action(keymap, act))
-                    .map(|code| format!("{code:?}"))
-                    .unwrap_or_else(|| "------".to_string());
-
-                (
-                    p1_primary_text,
-                    p1_secondary_text,
-                    p2_primary_text,
-                    p2_secondary_text,
-                    p1_default_text,
-                    p2_default_text,
-                )
-            };
+            let row_text = &state.mapping_text.rows[row_idx];
             let active_value_color = if is_active { col_white } else { col_gray };
 
             // Heartbeat-style pulse for the slot currently being captured.
@@ -1570,7 +1669,7 @@ pub fn push_actors(
                 zoom(p1_primary_zoom):
                 diffuse(p1_primary_color[0], p1_primary_color[1], p1_primary_color[2], p1_primary_color[3]):
                 font("miso"):
-                settext(p1_primary_text.clone()):
+                settext(row_text.p1_primary.clone()):
                 maxwidth(col_w * 0.8):
                 horizalign(center)
             ));
@@ -1580,7 +1679,7 @@ pub fn push_actors(
                 zoom(p1_secondary_zoom):
                 diffuse(p1_secondary_color[0], p1_secondary_color[1], p1_secondary_color[2], p1_secondary_color[3]):
                 font("miso"):
-                settext(p1_secondary_text.clone()):
+                settext(row_text.p1_secondary.clone()):
                 maxwidth(col_w * 0.8):
                 horizalign(center)
             ));
@@ -1592,7 +1691,7 @@ pub fn push_actors(
                 zoom(value_zoom):
                 diffuse(col_white[0], col_white[1], col_white[2], col_white[3]):
                 font("miso"):
-                settext(p1_default_text):
+                settext(row_text.p1_default.clone()):
                 maxwidth(col_w * 0.8):
                 horizalign(center)
             ));
@@ -1604,7 +1703,7 @@ pub fn push_actors(
                 zoom(p2_primary_zoom):
                 diffuse(p2_primary_color[0], p2_primary_color[1], p2_primary_color[2], p2_primary_color[3]):
                 font("miso"):
-                settext(p2_primary_text.clone()):
+                settext(row_text.p2_primary.clone()):
                 maxwidth(col_w * 0.8):
                 horizalign(center)
             ));
@@ -1614,7 +1713,7 @@ pub fn push_actors(
                 zoom(p2_secondary_zoom):
                 diffuse(p2_secondary_color[0], p2_secondary_color[1], p2_secondary_color[2], p2_secondary_color[3]):
                 font("miso"):
-                settext(p2_secondary_text.clone()):
+                settext(row_text.p2_secondary.clone()):
                 maxwidth(col_w * 0.8):
                 horizalign(center)
             ));
@@ -1626,7 +1725,7 @@ pub fn push_actors(
                 zoom(value_zoom):
                 diffuse(col_white[0], col_white[1], col_white[2], col_white[3]):
                 font("miso"):
-                settext(p2_default_text):
+                settext(row_text.p2_default.clone()):
                 maxwidth(col_w * 0.8):
                 horizalign(center)
             ));
@@ -1645,10 +1744,10 @@ pub fn push_actors(
                 // Measure the active slot's text and adapt the ring size to it,
                 // clamped so it never exceeds the base size.
                 let (active_text, active_zoom) = match state.active_slot {
-                    ActiveSlot::P1Primary => (&p1_primary_text, p1_primary_zoom),
-                    ActiveSlot::P1Secondary => (&p1_secondary_text, p1_secondary_zoom),
-                    ActiveSlot::P2Primary => (&p2_primary_text, p2_primary_zoom),
-                    ActiveSlot::P2Secondary => (&p2_secondary_text, p2_secondary_zoom),
+                    ActiveSlot::P1Primary => (row_text.p1_primary.as_str(), p1_primary_zoom),
+                    ActiveSlot::P1Secondary => (row_text.p1_secondary.as_str(), p1_secondary_zoom),
+                    ActiveSlot::P2Primary => (row_text.p2_primary.as_str(), p2_primary_zoom),
+                    ActiveSlot::P2Secondary => (row_text.p2_secondary.as_str(), p2_secondary_zoom),
                 };
                 let ring_text_zoom = if state.capture_active {
                     value_zoom
@@ -1987,6 +2086,43 @@ mod tests {
             let (p1, p2) = row_actions(GameFlag::Pump, row);
             p1.is_some() && p2.is_some()
         }));
+    }
+
+    #[test]
+    fn retained_mapping_text_matches_formatter_and_tracks_edits() {
+        let mut state = init();
+
+        let assert_matches = |state: &super::State| {
+            for row_idx in 0..mapping_row_count(state.runtime.game) {
+                let expected =
+                    super::mapping_row_strings(state.runtime.game, &state.runtime.keymap, row_idx);
+                let retained = &state.mapping_text.rows[row_idx];
+                let actual = [
+                    retained.p1_primary.as_str(),
+                    retained.p1_secondary.as_str(),
+                    retained.p2_primary.as_str(),
+                    retained.p2_secondary.as_str(),
+                    retained.p1_default.as_str(),
+                    retained.p2_default.as_str(),
+                ];
+                assert_eq!(actual, expected.each_ref().map(String::as_str));
+            }
+        };
+
+        assert_matches(&state);
+        let mut keymap = state.runtime.keymap.clone();
+        keymap.bind(
+            VirtualAction::p1_menu_left,
+            &[InputBinding::Key(KeyCode::KeyQ)],
+        );
+        super::apply_keymap(&mut state, keymap);
+        assert_matches(&state);
+        assert!(
+            state.mapping_text.rows[0]
+                .p1_primary
+                .as_str()
+                .contains("KeyQ")
+        );
     }
 
     #[test]
