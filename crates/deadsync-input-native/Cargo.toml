@@ -17,6 +17,11 @@ name = "macos_iohid_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "windows_input_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-platform = { path = "../deadlib-platform" }
 deadsync-input = { path = "../deadsync-input" }

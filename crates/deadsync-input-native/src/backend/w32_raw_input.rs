@@ -2,6 +2,7 @@ use super::{
     BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, emit_dir_edges, uuid_from_bytes,
 };
 use deadsync_input::{PadCode, PadEvent, PadId, RawKeyboardEvent};
+use rustc_hash::FxHashMap;
 use std::collections::{HashMap, hash_map::Entry};
 use std::ffi::c_void;
 use std::mem::size_of;
@@ -85,7 +86,7 @@ struct Ctx {
     emit_pad: Box<dyn FnMut(PadEvent) + Send>,
     emit_sys: Box<dyn FnMut(GpSystemEvent) + Send>,
     emit_key: Box<dyn FnMut(RawKeyboardEvent) + Send>,
-    devices: HashMap<isize, Dev>,
+    devices: FxHashMap<isize, Dev>,
     id_by_uuid: HashMap<[u8; 16], PadId>,
     refs_by_uuid: HashMap<[u8; 16], u32>,
     buf: Vec<u8>,
@@ -728,10 +729,7 @@ fn process_hid_reports<F>(
         if report_is_duplicate(&dev.last_report, report) {
             continue;
         }
-        let (timestamp, host_nanos) = *event_time.get_or_insert_with(|| {
-            let timestamp = Instant::now();
-            (timestamp, host.now_nanos())
-        });
+        let (timestamp, host_nanos) = *event_time.get_or_insert_with(|| host.sample_time());
         let parsed = process_hid_report(emit_pad, dev, timestamp, host_nanos, report);
         if parsed {
             remember_report(&mut dev.last_report, report);
@@ -1010,8 +1008,7 @@ fn handle_keyboard_input(ctx: &mut Ctx) {
         if !update_held_state(&mut ctx.held, slot, pressed) {
             return;
         }
-        let timestamp = Instant::now();
-        let host_nanos = ctx.host.now_nanos();
+        let (timestamp, host_nanos) = ctx.host.sample_time();
         (ctx.emit_key)(RawKeyboardEvent {
             code,
             pressed,
@@ -1079,8 +1076,7 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
         // Preserve the original first-report timestamp across device discovery,
         // which may query several Win32/HID properties before the device exists
         // in `ctx.devices`.
-        let timestamp = Instant::now();
-        let host_nanos = ctx.host.now_nanos();
+        let (timestamp, host_nanos) = ctx.host.sample_time();
         add_device(ctx, dev_handle, false);
         let host = ctx.host;
         let (emit_pad, buf, devices) = (&mut ctx.emit_pad, &mut ctx.buf, &mut ctx.devices);
@@ -1247,7 +1243,7 @@ pub fn run(
         emit_pad: Box::new(emit_pad),
         emit_sys: Box::new(emit_sys),
         emit_key: Box::new(emit_key),
-        devices: HashMap::new(),
+        devices: FxHashMap::default(),
         id_by_uuid: HashMap::new(),
         refs_by_uuid: HashMap::new(),
         buf: Vec::with_capacity(1024),
@@ -1266,7 +1262,7 @@ pub fn run_keyboard_only(
         emit_pad: Box::new(|_| {}),
         emit_sys: Box::new(|_| {}),
         emit_key: Box::new(emit_key),
-        devices: HashMap::new(),
+        devices: FxHashMap::default(),
         id_by_uuid: HashMap::new(),
         refs_by_uuid: HashMap::new(),
         buf: Vec::with_capacity(1024),

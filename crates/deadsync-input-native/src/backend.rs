@@ -169,6 +169,12 @@ impl BackendHost {
     }
 
     #[inline(always)]
+    pub fn sample_time(self) -> (Instant, u64) {
+        let timestamp = Instant::now();
+        (timestamp, self.instant_nanos(timestamp))
+    }
+
+    #[inline(always)]
     pub fn qpc_ticks_to_nanos(self, ticks: u64) -> Option<u64> {
         (self.qpc_ticks_to_nanos)(ticks)
     }
@@ -365,6 +371,36 @@ pub fn emit_hat_axis_edges(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::OnceLock;
+
+    #[test]
+    fn host_time_sample_uses_one_instant_for_both_domains() {
+        static EPOCH: OnceLock<Instant> = OnceLock::new();
+        fn pad_idx(_: PadOrderBackend, _: [u8; 16]) -> u32 {
+            0
+        }
+        fn smx_owns(_: Option<u16>, _: Option<u16>) -> bool {
+            false
+        }
+        fn now() -> u64 {
+            0
+        }
+        fn instant_nanos(at: Instant) -> u64 {
+            at.duration_since(*EPOCH.get_or_init(Instant::now))
+                .as_nanos() as u64
+        }
+        fn qpc(_: u64) -> Option<u64> {
+            None
+        }
+        fn boost() -> InputThreadPolicy {
+            InputThreadPolicy::none()
+        }
+
+        EPOCH.get_or_init(Instant::now);
+        let host = BackendHost::new(pad_idx, smx_owns, now, instant_nanos, qpc, boost);
+        let (timestamp, host_nanos) = host.sample_time();
+        assert_eq!(host_nanos, instant_nanos(timestamp));
+    }
 
     #[test]
     fn emit_dir_edges_updates_only_changed_dirs() {

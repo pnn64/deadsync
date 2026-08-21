@@ -322,6 +322,46 @@ fn pressed(btns: GamepadButtons, m: GamepadButtons) -> bool {
 }
 
 #[inline(always)]
+fn gamepad_dirs(buttons: GamepadButtons, axes: [i16; 6]) -> [bool; 4] {
+    let dpad = [
+        pressed(buttons, GamepadButtons::DPadUp),
+        pressed(buttons, GamepadButtons::DPadDown),
+        pressed(buttons, GamepadButtons::DPadLeft),
+        pressed(buttons, GamepadButtons::DPadRight),
+    ];
+    let stick = [
+        axes[3] >= STICK_DIGITAL_THRESH,
+        axes[3] <= -STICK_DIGITAL_THRESH,
+        axes[2] <= -STICK_DIGITAL_THRESH,
+        axes[2] >= STICK_DIGITAL_THRESH,
+    ];
+    [
+        dpad[0] || stick[0],
+        dpad[1] || stick[1],
+        dpad[2] || stick[2],
+        dpad[3] || stick[3],
+    ]
+}
+
+#[inline(always)]
+fn gamepad_button_edges(
+    previous: GamepadButtons,
+    current: GamepadButtons,
+    mut emit: impl FnMut(u32, bool),
+) {
+    let changed = previous.0 ^ current.0;
+    if changed == 0 {
+        return;
+    }
+    for (mask, code) in BTN_MAP {
+        if changed & mask.0 == 0 {
+            continue;
+        }
+        emit(code, pressed(current, mask));
+    }
+}
+
+#[inline(always)]
 fn scale_axis(v: f64) -> i16 {
     let v = if v.is_finite() { v } else { 0.0 };
     let v = v.clamp(-1.0, 1.0);
@@ -509,24 +549,7 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
                     scale_axis(reading.RightThumbstickX),
                     scale_axis(reading.RightThumbstickY),
                 ];
-                let dpad = [
-                    pressed(buttons_prev, GamepadButtons::DPadUp),
-                    pressed(buttons_prev, GamepadButtons::DPadDown),
-                    pressed(buttons_prev, GamepadButtons::DPadLeft),
-                    pressed(buttons_prev, GamepadButtons::DPadRight),
-                ];
-                let stick = [
-                    axes_prev[3] >= STICK_DIGITAL_THRESH,
-                    axes_prev[3] <= -STICK_DIGITAL_THRESH,
-                    axes_prev[2] <= -STICK_DIGITAL_THRESH,
-                    axes_prev[2] >= STICK_DIGITAL_THRESH,
-                ];
-                let want = [
-                    dpad[0] || stick[0],
-                    dpad[1] || stick[1],
-                    dpad[2] || stick[2],
-                    dpad[3] || stick[3],
-                ];
+                let want = gamepad_dirs(buttons_prev, axes_prev);
                 (reading.Timestamp, buttons_prev, axes_prev, want)
             } else {
                 (0, GamepadButtons::None, [0i16; 6], [false; 4])
@@ -643,26 +666,8 @@ fn pump_gamepad<F>(
     let rx = scale_axis(reading.RightThumbstickX);
     let ry = scale_axis(reading.RightThumbstickY);
 
-    let dpad = [
-        pressed(reading.Buttons, GamepadButtons::DPadUp),
-        pressed(reading.Buttons, GamepadButtons::DPadDown),
-        pressed(reading.Buttons, GamepadButtons::DPadLeft),
-        pressed(reading.Buttons, GamepadButtons::DPadRight),
-    ];
-    let stick = [
-        ly >= STICK_DIGITAL_THRESH,
-        ly <= -STICK_DIGITAL_THRESH,
-        lx <= -STICK_DIGITAL_THRESH,
-        lx >= STICK_DIGITAL_THRESH,
-    ];
-    let want = [
-        dpad[0] || stick[0],
-        dpad[1] || stick[1],
-        dpad[2] || stick[2],
-        dpad[3] || stick[3],
-    ];
-
     let axis_values = [lt, rt, lx, ly, rx, ry];
+    let want = gamepad_dirs(reading.Buttons, axis_values);
     if !gamepad_reading_changed(
         st.buttons_prev,
         reading.Buttons,
@@ -678,20 +683,14 @@ fn pump_gamepad<F>(
         return;
     }
 
-    let polled_at = Instant::now();
-    let poll_host_nanos = host.now_nanos();
+    let (polled_at, poll_host_nanos) = host.sample_time();
     let (timestamp, host_nanos) =
         st.clock
             .sample_time(reading.Timestamp, polled_at, poll_host_nanos, host);
 
     emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, host_nanos, want);
 
-    for (mask, code_u32) in BTN_MAP {
-        let new_pressed = pressed(reading.Buttons, mask);
-        let old_pressed = pressed(st.buttons_prev, mask);
-        if new_pressed == old_pressed {
-            continue;
-        }
+    gamepad_button_edges(st.buttons_prev, reading.Buttons, |code_u32, new_pressed| {
         (emit_pad)(PadEvent::RawButton {
             id,
             timestamp,
@@ -701,7 +700,7 @@ fn pump_gamepad<F>(
             value: if new_pressed { 1.0 } else { 0.0 },
             pressed: new_pressed,
         });
-    }
+    });
     st.buttons_prev = reading.Buttons;
 
     let axis_codes = [
@@ -795,8 +794,7 @@ fn pump_raw<F>(
         return;
     }
 
-    let polled_at = Instant::now();
-    let poll_host_nanos = host.now_nanos();
+    let (polled_at, poll_host_nanos) = host.sample_time();
     let (timestamp, host_nanos) = st.clock.sample_time(time, polled_at, poll_host_nanos, host);
 
     for i in 0..n {
@@ -1181,5 +1179,34 @@ mod reading_clock_tests {
             dirs,
             [false, true, false, false],
         ));
+    }
+
+    #[test]
+    fn changed_button_gate_preserves_order_and_edges() {
+        let cases = [
+            (GamepadButtons::None, GamepadButtons::None),
+            (GamepadButtons::None, GamepadButtons::A),
+            (GamepadButtons::A, GamepadButtons::None),
+            (
+                GamepadButtons::A | GamepadButtons::Menu,
+                GamepadButtons::B | GamepadButtons::View,
+            ),
+            (GamepadButtons::None, GamepadButtons::DPadUp),
+        ];
+
+        for (previous, current) in cases {
+            let mut old = Vec::new();
+            for (mask, code) in BTN_MAP {
+                let now_pressed = pressed(current, mask);
+                if now_pressed != pressed(previous, mask) {
+                    old.push((code, now_pressed));
+                }
+            }
+            let mut new = Vec::new();
+            gamepad_button_edges(previous, current, |code, pressed| {
+                new.push((code, pressed));
+            });
+            assert_eq!(new, old);
+        }
     }
 }
