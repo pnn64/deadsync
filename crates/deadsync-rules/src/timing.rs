@@ -1296,25 +1296,47 @@ pub fn timing_stats_from_offsets<I>(offsets_ms: I) -> TimingStats
 where
     I: IntoIterator<Item = f32>,
 {
-    let mut count = 0u32;
-    let mut sum_ms = 0.0_f32;
-    let mut sum_abs_ms = 0.0_f32;
-    let mut sum_sq_ms = 0.0_f32;
-    let mut max_abs_ms = 0.0_f32;
-
+    let mut stats = TimingStatsAccum::default();
     for offset_ms in offsets_ms {
+        stats.record(offset_ms);
+    }
+    stats.finish()
+}
+
+/// Incremental timing statistics for callers already traversing their data.
+#[derive(Copy, Clone, Debug, Default)]
+pub struct TimingStatsAccum {
+    count: u32,
+    sum_ms: f32,
+    sum_abs_ms: f32,
+    sum_sq_ms: f32,
+    max_abs_ms: f32,
+}
+
+impl TimingStatsAccum {
+    #[inline(always)]
+    pub fn record(&mut self, offset_ms: f32) {
         if !offset_ms.is_finite() {
-            continue;
+            return;
         }
         let abs = offset_ms.abs();
-        count = count.saturating_add(1);
-        sum_ms += offset_ms;
-        sum_abs_ms += abs;
-        sum_sq_ms += offset_ms * offset_ms;
-        max_abs_ms = max_abs_ms.max(abs);
+        self.count = self.count.saturating_add(1);
+        self.sum_ms += offset_ms;
+        self.sum_abs_ms += abs;
+        self.sum_sq_ms += offset_ms * offset_ms;
+        self.max_abs_ms = self.max_abs_ms.max(abs);
     }
 
-    stats_from_sums(count, sum_ms, sum_abs_ms, sum_sq_ms, max_abs_ms)
+    #[inline(always)]
+    pub fn finish(self) -> TimingStats {
+        stats_from_sums(
+            self.count,
+            self.sum_ms,
+            self.sum_abs_ms,
+            self.sum_sq_ms,
+            self.max_abs_ms,
+        )
+    }
 }
 
 #[inline(always)]
@@ -1910,18 +1932,21 @@ fn count_hist_bins(
     pack_dense_hist_counts(dense, scan.min_bin, scan.count)
 }
 
-fn merge_hist_counts(histograms: &[HistogramMs]) -> Option<HistCounts> {
-    let bin_capacity = histograms.iter().map(|hist| hist.bins.len()).sum();
+fn merge_hist_counts<'a, I>(histograms: I) -> Option<HistCounts>
+where
+    I: Clone + Iterator<Item = &'a HistogramMs>,
+{
+    let bin_capacity = histograms.clone().map(|hist| hist.bins.len()).sum();
     if bin_capacity == 0 {
         return None;
     }
     let min_bin = histograms
-        .iter()
+        .clone()
         .flat_map(|hist| hist.bins.iter().map(|&(bin, _)| bin))
         .min()
         .unwrap_or(0);
     let max_bin = histograms
-        .iter()
+        .clone()
         .flat_map(|hist| hist.bins.iter().map(|&(bin, _)| bin))
         .max()
         .unwrap_or(min_bin);
@@ -2008,7 +2033,14 @@ pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
 }
 
 pub fn merge_histograms_ms(histograms: &[HistogramMs]) -> HistogramMs {
-    let Some(counts) = merge_hist_counts(histograms) else {
+    merge_histograms_ms_iter(histograms.iter())
+}
+
+pub fn merge_histograms_ms_iter<'a, I>(histograms: I) -> HistogramMs
+where
+    I: Clone + Iterator<Item = &'a HistogramMs>,
+{
+    let Some(counts) = merge_hist_counts(histograms.clone()) else {
         return HistogramMs::default();
     };
 
@@ -2584,6 +2616,22 @@ mod tests {
     }
 
     #[test]
+    fn incremental_timing_stats_match_owned_offset_iteration() {
+        let offsets = [-180.25, -45.0, f32::NAN, -0.0, 12.5, 179.75, f32::INFINITY];
+        let expected = timing_stats_from_offsets(offsets);
+        let mut accum = TimingStatsAccum::default();
+        for offset in offsets {
+            accum.record(offset);
+        }
+        let actual = accum.finish();
+
+        assert_eq!(actual.mean_abs_ms.to_bits(), expected.mean_abs_ms.to_bits());
+        assert_eq!(actual.mean_ms.to_bits(), expected.mean_ms.to_bits());
+        assert_eq!(actual.stddev_ms.to_bits(), expected.stddev_ms.to_bits());
+        assert_eq!(actual.max_abs_ms.to_bits(), expected.max_abs_ms.to_bits());
+    }
+
+    #[test]
     fn direct_histogram_counting_matches_sorted_reference() {
         let notes = summary_notes(4_096);
         assert_histogram_eq(
@@ -2640,6 +2688,19 @@ mod tests {
             &merge_histograms_ms(&wide),
             &timing_summary_reference::merge(&wide),
         );
+    }
+
+    #[test]
+    fn borrowed_histogram_merge_matches_owned_slice_entrypoint() {
+        let notes_a = summary_notes(512);
+        let mut notes_b = summary_notes(512);
+        notes_b.rotate_left(4);
+        notes_b.sort_by_key(|note| note.row_index);
+        let histograms = [build_histogram_ms(&notes_a), build_histogram_ms(&notes_b)];
+        let expected = merge_histograms_ms(&histograms);
+        let actual = merge_histograms_ms_iter(histograms.iter());
+
+        assert_histogram_eq(&actual, &expected);
     }
 
     #[test]

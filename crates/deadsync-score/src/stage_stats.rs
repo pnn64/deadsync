@@ -4,7 +4,7 @@ use deadsync_chart::{ChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_rules::judgment;
 use deadsync_rules::timing::{
-    ArrowTimingStats, HistogramMs, ScatterPoint, TimingStats, WindowCounts,
+    ArrowTimingStats, HistogramMs, ScatterPoint, TimingStats, TimingStatsAccum, WindowCounts,
 };
 
 use crate::{Grade, GrooveStatsEvalState, ItlEvalState, promote_quint_grade, score_to_grade};
@@ -162,13 +162,22 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
         let mut mines_hit_for_score = 0u32;
         let mut mines_avoided = 0u32;
         let mut played_mines_total = 0u32;
-        let mut timing_offsets_ms = Vec::new();
-        let mut scatter = Vec::new();
+        let (scatter_capacity, life_capacity) = input
+            .stage_summaries
+            .iter()
+            .filter_map(|stage| stage.players[idx].as_ref())
+            .fold((0usize, 0usize), |(scatter, life), player| {
+                (
+                    scatter.saturating_add(player.scatter.len()),
+                    life.saturating_add(player.life_history.len()),
+                )
+            });
+        let mut timing_stats = TimingStatsAccum::default();
+        let mut scatter = Vec::with_capacity(scatter_capacity);
         let mut scatter_worst_window_ms = 0.0_f32;
-        let mut histograms = Vec::new();
         let mut graph_first_second = 0.0_f32;
         let mut graph_last_second = duration_seconds.max(0.001);
-        let mut life_history = Vec::new();
+        let mut life_history = Vec::with_capacity(life_capacity);
         let mut fail_time = None;
         let mut elapsed = 0.0_f32;
         let mut first_player: Option<&PlayerStageSummary> = None;
@@ -209,20 +218,17 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             mines_hit_for_score = mines_hit_for_score.saturating_add(player.mines_hit_for_score);
             mines_avoided = mines_avoided.saturating_add(player.mines_avoided);
             played_mines_total = played_mines_total.saturating_add(player.mines_total);
-            scatter.reserve(player.scatter.len());
             for point in &player.scatter {
                 let mut shifted = *point;
                 shifted.time_sec += stage_offset;
                 if let Some(offset_ms) = shifted.offset_ms {
-                    timing_offsets_ms.push(offset_ms);
+                    timing_stats.record(offset_ms);
                 }
                 scatter.push(shifted);
             }
             scatter_worst_window_ms = scatter_worst_window_ms.max(player.scatter_worst_window_ms);
-            histograms.push(player.histogram.clone());
             graph_first_second = graph_first_second.min(player.graph_first_second + stage_offset);
             graph_last_second = graph_last_second.max(player.graph_last_second + stage_offset);
-            life_history.reserve(player.life_history.len());
             for &(time, life) in &player.life_history {
                 life_history.push((time + stage_offset, life));
             }
@@ -323,11 +329,15 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             calories_burned,
             window_counts: counts,
             window_counts_10ms: counts_10ms,
-            timing: deadsync_rules::timing::timing_stats_from_offsets(timing_offsets_ms),
+            timing: timing_stats.finish(),
             arrow_timing: ArrowTimingStats::default(),
             scatter,
             scatter_worst_window_ms: scatter_worst_window_ms.max(45.0),
-            histogram: deadsync_rules::timing::merge_histograms_ms(histograms.as_slice()),
+            histogram: deadsync_rules::timing::merge_histograms_ms_iter(
+                input.stage_summaries.iter().filter_map(|stage| {
+                    stage.players[idx].as_ref().map(|player| &player.histogram)
+                }),
+            ),
             graph_first_second,
             graph_last_second,
             life_history,
@@ -602,6 +612,90 @@ mod tests {
         assert_eq!(player.scatter.len(), 1);
         assert!(!player.histogram.bins.is_empty());
         assert!((player.timing.mean_ms - 10.0).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn course_summary_streams_offsets_and_borrows_stage_histograms() {
+        let song = test_song("Songs/Test/a.ssc", "a", 60.0);
+        let mut first = test_player_summary(test_chart("stage-a"), Grade::Tier01, 500, 500);
+        first.life_history.push((30.0, 0.75));
+        let mut second = test_player_summary(test_chart("stage-b"), Grade::Tier02, 400, 500);
+        second.scatter[0].offset_ms = Some(-20.0);
+        second.histogram.bins = vec![(-20, 1)];
+        second.histogram.worst_observed_ms = 20.0;
+        second.life_history = vec![(2.0, 0.5), (45.0, 0.25)];
+        let expected_timing = deadsync_rules::timing::timing_stats_from_offsets([10.0, -20.0]);
+        let expected_histogram = deadsync_rules::timing::merge_histograms_ms(&[
+            first.histogram.clone(),
+            second.histogram.clone(),
+        ]);
+
+        let mut first_players: [Option<PlayerStageSummary>; MAX_PLAYERS] =
+            std::array::from_fn(|_| None);
+        first_players[0] = Some(first);
+        let mut second_players: [Option<PlayerStageSummary>; MAX_PLAYERS] =
+            std::array::from_fn(|_| None);
+        second_players[0] = Some(second);
+        let stages = [
+            StageSummary {
+                song: song.clone(),
+                music_rate: 1.0,
+                duration_seconds: 60.0,
+                players: first_players,
+            },
+            StageSummary {
+                song: song.clone(),
+                music_rate: 1.0,
+                duration_seconds: 60.0,
+                players: second_players,
+            },
+        ];
+
+        let summary = build_course_summary_stage(CourseSummaryInput {
+            path: Path::new("Courses/Test.crs"),
+            name: "Test Course",
+            banner_path: None,
+            score_hash: "course-hash",
+            difficulty_name: "Hard",
+            meter: Some(12),
+            song_stub: song.as_ref(),
+            course_total_seconds: 120.0,
+            totals: [CourseSummaryTotals::default(); MAX_PLAYERS],
+            stage_summaries: &stages,
+        })
+        .expect("course summary");
+        let player = summary.players[0].as_ref().expect("P1 summary");
+
+        assert_eq!(player.scatter.len(), 2);
+        assert_eq!(player.scatter[0].time_sec.to_bits(), 5.0_f32.to_bits());
+        assert_eq!(player.scatter[1].time_sec.to_bits(), 65.0_f32.to_bits());
+        assert_eq!(
+            player.life_history,
+            vec![(1.0, 1.0), (30.0, 0.75), (62.0, 0.5), (105.0, 0.25)]
+        );
+        assert_eq!(
+            player.timing.mean_abs_ms.to_bits(),
+            expected_timing.mean_abs_ms.to_bits()
+        );
+        assert_eq!(
+            player.timing.mean_ms.to_bits(),
+            expected_timing.mean_ms.to_bits()
+        );
+        assert_eq!(
+            player.timing.stddev_ms.to_bits(),
+            expected_timing.stddev_ms.to_bits()
+        );
+        assert_eq!(player.histogram.bins, expected_histogram.bins);
+        assert_eq!(player.histogram.max_count, expected_histogram.max_count);
+        assert!(
+            player
+                .histogram
+                .smoothed
+                .iter()
+                .zip(&expected_histogram.smoothed)
+                .all(|(actual, expected)| actual.0 == expected.0
+                    && actual.1.to_bits() == expected.1.to_bits())
+        );
     }
 
     #[test]
