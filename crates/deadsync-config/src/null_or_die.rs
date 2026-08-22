@@ -137,6 +137,15 @@ fn quantize_tenths(value: f64) -> f64 {
 }
 
 #[inline(always)]
+fn quantize_hundredths(value: f64) -> f64 {
+    let scaled = value * 100.0;
+    // Nudge decimal half-steps across the IEEE-754 error margin so values like
+    // 10.05 round to 10.1 instead of falling back to 10.0.
+    let nudge = scaled.signum() * scaled.abs().max(1.0) * f64::EPSILON * 16.0;
+    (scaled + nudge).round() / 100.0
+}
+
+#[inline(always)]
 pub fn clamp_null_or_die_positive_ms(value: f64) -> f64 {
     if !value.is_finite() {
         return NULL_OR_DIE_POSITIVE_MS_MIN;
@@ -149,7 +158,7 @@ pub fn clamp_null_or_die_magic_offset_ms(value: f64) -> f64 {
     if !value.is_finite() {
         return 0.0;
     }
-    quantize_tenths(value.clamp(
+    quantize_hundredths(value.clamp(
         NULL_OR_DIE_MAGIC_OFFSET_MS_MIN,
         NULL_OR_DIE_MAGIC_OFFSET_MS_MAX,
     ))
@@ -319,7 +328,7 @@ pub fn push_null_or_die_option_lines(content: &mut String, options: NullOrDieOpt
         content,
         "NullOrDieMagicOffsetMs",
         format!(
-            "{:.1}",
+            "{:.2}",
             clamp_null_or_die_magic_offset_ms(options.magic_offset_ms)
         ),
     );
