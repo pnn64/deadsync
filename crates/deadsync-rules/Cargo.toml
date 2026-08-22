@@ -28,6 +28,11 @@ name = "stream_compact_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "timing_storage_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [features]
 bench-support = []
 

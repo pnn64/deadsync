@@ -368,14 +368,17 @@ pub struct TimingData {
     row_to_beat: Arc<Vec<f32>>,
     /// A pre-calculated mapping from a beat to its precise time in seconds.
     beat_to_time: Arc<Vec<BeatTimePoint>>,
-    stops: Vec<StopSegment>,
-    delays: Vec<DelaySegment>,
-    warps: Vec<WarpSegment>,
-    speeds: Vec<SpeedSegment>,
-    scrolls: Vec<ScrollSegment>,
-    fakes: Vec<FakeSegment>,
-    speed_runtime: Vec<SpeedRuntime>,
-    scroll_prefix: Vec<ScrollPrefix>,
+    // Song-lifetime, exact-size tables built at chart load. They are immutable
+    // during play, shared by TimingData clones, and freed with the last clone.
+    // Reads never allocate, miss, evict, prune, or require synchronization.
+    stops: Arc<[StopSegment]>,
+    delays: Arc<[DelaySegment]>,
+    warps: Arc<[WarpSegment]>,
+    speeds: Arc<[SpeedSegment]>,
+    scrolls: Arc<[ScrollSegment]>,
+    fakes: Arc<[FakeSegment]>,
+    speed_runtime: Arc<[SpeedRuntime]>,
+    scroll_prefix: Arc<[ScrollPrefix]>,
     global_offset_sec: f32,
     global_offset_ns: TimingNs,
     max_bpm: f32,
@@ -492,6 +495,27 @@ pub struct FakeSegment {
     pub length: f32,
 }
 
+fn sorted_timing_table<T: Clone>(values: &[T], beat: impl Fn(&T) -> f32) -> Arc<[T]> {
+    let mut output: Arc<[T]> = Arc::from(values);
+    Arc::make_mut(&mut output)
+        .sort_by(|a, b| beat(a).partial_cmp(&beat(b)).unwrap_or(Ordering::Less));
+    output
+}
+
+fn exact_arc<T: Copy>(len: usize, mut value_at: impl FnMut(usize) -> T) -> Arc<[T]> {
+    if len == 0 {
+        return Arc::default();
+    }
+    let mut output = Arc::<[T]>::new_uninit_slice(len);
+    let slots = Arc::get_mut(&mut output).expect("new Arc slice must be uniquely owned");
+    for (index, slot) in slots.iter_mut().enumerate() {
+        slot.write(value_at(index));
+    }
+    // SAFETY: the loop writes every one of the `len` slots exactly once before
+    // conversion. `T: Copy` also means an initializer panic cannot leak drops.
+    unsafe { output.assume_init() }
+}
+
 impl TimingData {
     pub fn from_segments(
         song_offset_sec: f32,
@@ -505,19 +529,12 @@ impl TimingData {
         }
         parsed_bpms.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Less));
 
-        let mut stops = segments.stops.clone();
-        let mut delays = segments.delays.clone();
-        let mut warps = segments.warps.clone();
-        let mut speeds = segments.speeds.clone();
-        let mut scrolls = segments.scrolls.clone();
-        let mut fakes = segments.fakes.clone();
-
-        stops.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
-        delays.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
-        warps.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
-        speeds.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
-        scrolls.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
-        fakes.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
+        let stops = sorted_timing_table(&segments.stops, |segment| segment.beat);
+        let delays = sorted_timing_table(&segments.delays, |segment| segment.beat);
+        let warps = sorted_timing_table(&segments.warps, |segment| segment.beat);
+        let speeds = sorted_timing_table(&segments.speeds, |segment| segment.beat);
+        let scrolls = sorted_timing_table(&segments.scrolls, |segment| segment.beat);
+        let fakes = sorted_timing_table(&segments.fakes, |segment| segment.beat);
 
         let song_offset_sec = song_offset_sec + segments.beat0_offset_adjust;
         let song_offset_ns = timing_ns_from_seconds(song_offset_sec);
@@ -554,8 +571,8 @@ impl TimingData {
             speeds,
             scrolls,
             fakes,
-            speed_runtime: Vec::new(),
-            scroll_prefix: Vec::new(),
+            speed_runtime: Arc::default(),
+            scroll_prefix: Arc::default(),
             global_offset_sec,
             global_offset_ns,
             max_bpm,
@@ -575,21 +592,21 @@ impl TimingData {
         timing_with_stops.rebuild_speed_runtime();
 
         if !timing_with_stops.scrolls.is_empty() {
-            let mut prefixes = Vec::with_capacity(timing_with_stops.scrolls.len());
             let mut cum_displayed = 0.0_f32;
             let mut last_real_beat = 0.0_f32;
             let mut last_ratio = 1.0_f32;
-            for seg in &timing_with_stops.scrolls {
+            timing_with_stops.scroll_prefix = exact_arc(timing_with_stops.scrolls.len(), |index| {
+                let seg = timing_with_stops.scrolls[index];
                 cum_displayed += (seg.beat - last_real_beat) * last_ratio;
-                prefixes.push(ScrollPrefix {
+                let prefix = ScrollPrefix {
                     beat: seg.beat,
                     cum_displayed,
                     ratio: seg.ratio,
-                });
+                };
                 last_real_beat = seg.beat;
                 last_ratio = seg.ratio;
-            }
-            timing_with_stops.scroll_prefix = prefixes;
+                prefix
+            });
         }
 
         let row_to_beat = row_to_beat.to_vec();
@@ -856,13 +873,13 @@ impl TimingData {
 
     fn rebuild_speed_runtime(&mut self) {
         if self.speeds.is_empty() {
-            self.speed_runtime.clear();
+            self.speed_runtime = Arc::default();
             return;
         }
 
-        let mut runtime = Vec::with_capacity(self.speeds.len());
         let mut prev_ratio = 1.0_f32;
-        for seg in &self.speeds {
+        let runtime = exact_arc(self.speeds.len(), |index| {
+            let seg = self.speeds[index];
             let start_time_ns = self.get_time_for_beat_ns(seg.beat);
             let end_time_ns = if seg.delay <= 0.0 {
                 start_time_ns
@@ -871,13 +888,14 @@ impl TimingData {
             } else {
                 self.get_time_for_beat_ns(seg.beat + seg.delay)
             };
-            runtime.push(SpeedRuntime {
+            let value = SpeedRuntime {
                 start_time_ns,
                 end_time_ns,
                 prev_ratio,
-            });
+            };
             prev_ratio = seg.ratio;
-        }
+            value
+        });
         self.speed_runtime = runtime;
     }
 
@@ -2391,6 +2409,181 @@ mod timing_summary_reference {
 pub mod bench_support {
     use super::*;
 
+    #[derive(Clone)]
+    struct OldTimelineTables {
+        stops: Vec<StopSegment>,
+        delays: Vec<DelaySegment>,
+        warps: Vec<WarpSegment>,
+    }
+
+    #[derive(Clone)]
+    struct SharedTimelineTables {
+        stops: Arc<[StopSegment]>,
+        delays: Arc<[DelaySegment]>,
+        warps: Arc<[WarpSegment]>,
+    }
+
+    #[derive(Clone)]
+    struct OldModifierTables {
+        speeds: Vec<SpeedSegment>,
+        scrolls: Vec<ScrollSegment>,
+        fakes: Vec<FakeSegment>,
+    }
+
+    #[derive(Clone)]
+    struct SharedModifierTables {
+        speeds: Arc<[SpeedSegment]>,
+        scrolls: Arc<[ScrollSegment]>,
+        fakes: Arc<[FakeSegment]>,
+    }
+
+    #[derive(Clone)]
+    struct OldRuntimeTables {
+        speed_runtime: Vec<SpeedRuntime>,
+        scroll_prefix: Vec<ScrollPrefix>,
+    }
+
+    #[derive(Clone)]
+    struct SharedRuntimeTables {
+        speed_runtime: Arc<[SpeedRuntime]>,
+        scroll_prefix: Arc<[ScrollPrefix]>,
+    }
+
+    pub struct TimingStorageFixture {
+        old_timeline: OldTimelineTables,
+        shared_timeline: SharedTimelineTables,
+        old_modifiers: OldModifierTables,
+        shared_modifiers: SharedModifierTables,
+        old_runtime: OldRuntimeTables,
+        shared_runtime: SharedRuntimeTables,
+    }
+
+    pub fn timing_storage_fixture(timing: &TimingData) -> TimingStorageFixture {
+        TimingStorageFixture {
+            old_timeline: OldTimelineTables {
+                stops: timing.stops.to_vec(),
+                delays: timing.delays.to_vec(),
+                warps: timing.warps.to_vec(),
+            },
+            shared_timeline: SharedTimelineTables {
+                stops: Arc::clone(&timing.stops),
+                delays: Arc::clone(&timing.delays),
+                warps: Arc::clone(&timing.warps),
+            },
+            old_modifiers: OldModifierTables {
+                speeds: timing.speeds.to_vec(),
+                scrolls: timing.scrolls.to_vec(),
+                fakes: timing.fakes.to_vec(),
+            },
+            shared_modifiers: SharedModifierTables {
+                speeds: Arc::clone(&timing.speeds),
+                scrolls: Arc::clone(&timing.scrolls),
+                fakes: Arc::clone(&timing.fakes),
+            },
+            old_runtime: OldRuntimeTables {
+                speed_runtime: timing.speed_runtime.to_vec(),
+                scroll_prefix: timing.scroll_prefix.to_vec(),
+            },
+            shared_runtime: SharedRuntimeTables {
+                speed_runtime: Arc::clone(&timing.speed_runtime),
+                scroll_prefix: Arc::clone(&timing.scroll_prefix),
+            },
+        }
+    }
+
+    fn mix(checksum: u64, value: u64) -> u64 {
+        checksum.rotate_left(9) ^ value
+    }
+
+    fn timeline_checksum(
+        stops: &[StopSegment],
+        delays: &[DelaySegment],
+        warps: &[WarpSegment],
+    ) -> u64 {
+        let mut checksum = 0;
+        for segment in stops {
+            checksum = mix(checksum, u64::from(segment.beat.to_bits()));
+            checksum = mix(checksum, u64::from(segment.duration.to_bits()));
+        }
+        for segment in delays {
+            checksum = mix(checksum, u64::from(segment.beat.to_bits()));
+            checksum = mix(checksum, u64::from(segment.duration.to_bits()));
+        }
+        for segment in warps {
+            checksum = mix(checksum, u64::from(segment.beat.to_bits()));
+            checksum = mix(checksum, u64::from(segment.length.to_bits()));
+        }
+        checksum
+    }
+
+    fn modifier_checksum(
+        speeds: &[SpeedSegment],
+        scrolls: &[ScrollSegment],
+        fakes: &[FakeSegment],
+    ) -> u64 {
+        let mut checksum = 0;
+        for segment in speeds {
+            checksum = mix(checksum, u64::from(segment.beat.to_bits()));
+            checksum = mix(checksum, u64::from(segment.ratio.to_bits()));
+            checksum = mix(checksum, u64::from(segment.delay.to_bits()));
+            checksum = mix(checksum, u64::from(segment.unit == SpeedUnit::Seconds));
+        }
+        for segment in scrolls {
+            checksum = mix(checksum, u64::from(segment.beat.to_bits()));
+            checksum = mix(checksum, u64::from(segment.ratio.to_bits()));
+        }
+        for segment in fakes {
+            checksum = mix(checksum, u64::from(segment.beat.to_bits()));
+            checksum = mix(checksum, u64::from(segment.length.to_bits()));
+        }
+        checksum
+    }
+
+    fn runtime_checksum(speed_runtime: &[SpeedRuntime], scroll_prefix: &[ScrollPrefix]) -> u64 {
+        let mut checksum = 0;
+        for runtime in speed_runtime {
+            checksum = mix(checksum, runtime.start_time_ns as u64);
+            checksum = mix(checksum, runtime.end_time_ns as u64);
+            checksum = mix(checksum, u64::from(runtime.prev_ratio.to_bits()));
+        }
+        for prefix in scroll_prefix {
+            checksum = mix(checksum, u64::from(prefix.beat.to_bits()));
+            checksum = mix(checksum, u64::from(prefix.cum_displayed.to_bits()));
+            checksum = mix(checksum, u64::from(prefix.ratio.to_bits()));
+        }
+        checksum
+    }
+
+    pub fn old_timeline_clone_probe(fixture: &TimingStorageFixture) -> u64 {
+        let tables = fixture.old_timeline.clone();
+        timeline_checksum(&tables.stops, &tables.delays, &tables.warps)
+    }
+
+    pub fn shared_timeline_clone_probe(fixture: &TimingStorageFixture) -> u64 {
+        let tables = fixture.shared_timeline.clone();
+        timeline_checksum(&tables.stops, &tables.delays, &tables.warps)
+    }
+
+    pub fn old_modifier_clone_probe(fixture: &TimingStorageFixture) -> u64 {
+        let tables = fixture.old_modifiers.clone();
+        modifier_checksum(&tables.speeds, &tables.scrolls, &tables.fakes)
+    }
+
+    pub fn shared_modifier_clone_probe(fixture: &TimingStorageFixture) -> u64 {
+        let tables = fixture.shared_modifiers.clone();
+        modifier_checksum(&tables.speeds, &tables.scrolls, &tables.fakes)
+    }
+
+    pub fn old_runtime_clone_probe(fixture: &TimingStorageFixture) -> u64 {
+        let tables = fixture.old_runtime.clone();
+        runtime_checksum(&tables.speed_runtime, &tables.scroll_prefix)
+    }
+
+    pub fn shared_runtime_clone_probe(fixture: &TimingStorageFixture) -> u64 {
+        let tables = fixture.shared_runtime.clone();
+        runtime_checksum(&tables.speed_runtime, &tables.scroll_prefix)
+    }
+
     pub fn timing_stats_old(notes: &[Note]) -> TimingStats {
         timing_summary_reference::stats(notes)
     }
@@ -2524,6 +2717,113 @@ mod tests {
             },
             &[],
         )
+    }
+
+    #[test]
+    fn timing_clones_share_sorted_timeline_tables() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                stops: vec![
+                    StopSegment {
+                        beat: 8.0,
+                        duration: 0.2,
+                    },
+                    StopSegment {
+                        beat: 4.0,
+                        duration: 0.1,
+                    },
+                ],
+                delays: vec![DelaySegment {
+                    beat: 12.0,
+                    duration: 0.1,
+                }],
+                warps: vec![WarpSegment {
+                    beat: 16.0,
+                    length: 1.0,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let cloned = timing.clone();
+
+        assert_eq!(
+            timing
+                .stops
+                .iter()
+                .map(|segment| segment.beat)
+                .collect::<Vec<_>>(),
+            [4.0, 8.0]
+        );
+        assert!(Arc::ptr_eq(&timing.stops, &cloned.stops));
+        assert!(Arc::ptr_eq(&timing.delays, &cloned.delays));
+        assert!(Arc::ptr_eq(&timing.warps, &cloned.warps));
+    }
+
+    #[test]
+    fn timing_clones_share_sorted_modifier_tables() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                speeds: vec![speed_segment(20.0, 1.5, 1.0)],
+                scrolls: vec![ScrollSegment {
+                    beat: 24.0,
+                    ratio: 0.5,
+                }],
+                fakes: vec![FakeSegment {
+                    beat: 28.0,
+                    length: 1.0,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let cloned = timing.clone();
+
+        assert!(Arc::ptr_eq(&timing.speeds, &cloned.speeds));
+        assert!(Arc::ptr_eq(&timing.scrolls, &cloned.scrolls));
+        assert!(Arc::ptr_eq(&timing.fakes, &cloned.fakes));
+    }
+
+    #[test]
+    fn offset_mutation_rebuilds_only_time_dependent_shared_tables() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                speeds: vec![speed_segment(0.0, 1.5, 1.0), speed_segment(8.0, 0.75, 2.0)],
+                scrolls: vec![
+                    ScrollSegment {
+                        beat: 0.0,
+                        ratio: 1.0,
+                    },
+                    ScrollSegment {
+                        beat: 8.0,
+                        ratio: 0.5,
+                    },
+                ],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let mut shifted = timing.clone();
+
+        assert!(Arc::ptr_eq(&timing.speed_runtime, &shifted.speed_runtime));
+        assert!(Arc::ptr_eq(&timing.scroll_prefix, &shifted.scroll_prefix));
+        shifted.set_global_offset_seconds(0.125);
+        assert!(!Arc::ptr_eq(&timing.speed_runtime, &shifted.speed_runtime));
+        assert!(Arc::ptr_eq(&timing.scroll_prefix, &shifted.scroll_prefix));
+        assert!(Arc::ptr_eq(&timing.speeds, &shifted.speeds));
+        assert_eq!(
+            timing.get_displayed_beat(12.0),
+            shifted.get_displayed_beat(12.0)
+        );
     }
 
     #[test]
