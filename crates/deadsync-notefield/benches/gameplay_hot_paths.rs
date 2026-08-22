@@ -685,15 +685,15 @@ impl BinaryProgressLookup {
         let entries = segments
             .iter()
             .map(|segment| {
-                let start = segment.start as f32;
-                let end = segment.end as f32;
+                let start = segment.start() as f32;
+                let end = segment.end() as f32;
                 let entry = ProgressEntry {
                     start,
                     end,
                     stream_before,
-                    is_break: segment.is_break,
+                    is_break: segment.is_break(),
                 };
-                if !segment.is_break {
+                if !segment.is_break() {
                     stream_before += f64::from(end - start);
                 }
                 entry
@@ -738,16 +738,12 @@ impl BinaryProgressLookup {
 
 fn stream_progress_benchmark() {
     let segments = (0..HUD_SEGMENTS)
-        .map(|index| StreamSegment {
-            start: (index * 4) as u32,
-            end: (index * 4 + 4) as u32,
-            is_break: index % 5 == 4,
-        })
+        .map(|index| StreamSegment::new((index * 4) as u32, (index * 4 + 4) as u32, index % 5 == 4))
         .collect::<Vec<_>>();
     let total = segments
         .iter()
-        .filter(|segment| !segment.is_break)
-        .map(|segment| (segment.end - segment.start) as f64)
+        .filter(|segment| !segment.is_break())
+        .map(|segment| (segment.end() - segment.start()) as f64)
         .sum::<f64>();
     let old_lookup = BinaryProgressLookup::new(&segments);
     let new_lookup = StreamProgressLookup::new(&segments);
@@ -803,18 +799,14 @@ fn legacy_segment_indices(segments: &[StreamSegment], current_measure: f32) -> (
         return (segments.len(), segments.len());
     }
     (
-        segments.partition_point(|segment| current_measure >= segment.end as f32),
-        segments.partition_point(|segment| current_measure > segment.end as f32),
+        segments.partition_point(|segment| current_measure >= segment.end() as f32),
+        segments.partition_point(|segment| current_measure > segment.end() as f32),
     )
 }
 
 fn counter_hud_lookup_benchmark() {
     let segments = (0..HUD_SEGMENTS)
-        .map(|index| StreamSegment {
-            start: (index * 4) as u32,
-            end: (index * 4 + 4) as u32,
-            is_break: index % 5 == 4,
-        })
+        .map(|index| StreamSegment::new((index * 4) as u32, (index * 4 + 4) as u32, index % 5 == 4))
         .collect::<Vec<_>>();
     let lookup = BrokenRunLookup::new(&segments);
     let cycle_measures = HUD_SEGMENTS as f32 * 4.0;

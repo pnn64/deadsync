@@ -363,11 +363,7 @@ fn stream_sequences_old(measures: &[u8], threshold: usize) -> Vec<StreamSegment>
     let mut segments = Vec::new();
     let first_break = streams[0].saturating_sub(1);
     if first_break >= 2 {
-        segments.push(StreamSegment {
-            start: 0,
-            end: first_break as u32,
-            is_break: true,
-        });
+        segments.push(StreamSegment::new(0, first_break as u32, true));
     }
     let (mut count, mut end) = (1usize, None);
     for (idx, &current) in streams.iter().enumerate() {
@@ -378,22 +374,18 @@ fn stream_sequences_old(measures: &[u8], threshold: usize) -> Vec<StreamSegment>
             continue;
         }
         let stream_end = end.unwrap_or(current);
-        segments.push(StreamSegment {
-            start: (stream_end - count) as u32,
-            end: stream_end as u32,
-            is_break: false,
-        });
+        segments.push(StreamSegment::new(
+            (stream_end - count) as u32,
+            stream_end as u32,
+            false,
+        ));
         let break_end = if next == usize::MAX {
             measures.len()
         } else {
             next - 1
         };
         if break_end >= current + 2 {
-            segments.push(StreamSegment {
-                start: current as u32,
-                end: break_end as u32,
-                is_break: true,
-            });
+            segments.push(StreamSegment::new(current as u32, break_end as u32, true));
         }
         count = 1;
         end = None;
@@ -427,11 +419,11 @@ fn materialized_density(measures: &[u8], threshold: usize, multiplier: f32) -> f
     let mut total_stream = 0.0_f32;
     let mut total_measures = 0.0_f32;
     for segment in segments {
-        let len = ((segment.end.saturating_sub(segment.start)) as f32 * multiplier).floor();
+        let len = ((segment.end().saturating_sub(segment.start())) as f32 * multiplier).floor();
         if len <= 0.0 {
             continue;
         }
-        if !segment.is_break {
+        if !segment.is_break() {
             total_stream += len;
         }
         total_measures += len;
@@ -469,14 +461,14 @@ fn stream_break_totals(segments: &[StreamSegment]) -> (f32, f32) {
     let mut edge_break = 0.0_f32;
     let mut last_stream = false;
     for (idx, segment) in segments.iter().enumerate() {
-        let len = segment.end.saturating_sub(segment.start) as f32;
+        let len = segment.end().saturating_sub(segment.start()) as f32;
         if len <= 0.0 {
             continue;
         }
-        if segment.is_break && idx > 0 && idx + 1 < segments.len() {
+        if segment.is_break() && idx > 0 && idx + 1 < segments.len() {
             total_break += len;
             last_stream = false;
-        } else if segment.is_break {
+        } else if segment.is_break() {
             edge_break += len;
             last_stream = false;
         } else {
@@ -505,9 +497,9 @@ fn usize_checksum(values: &[usize]) -> u64 {
 fn segment_checksum(segments: &[StreamSegment]) -> u64 {
     segments.iter().fold(0u64, |checksum, segment| {
         checksum.rotate_left(9)
-            ^ (segment.start as u64)
-            ^ (segment.end as u64).rotate_left(23)
-            ^ u64::from(segment.is_break).rotate_left(47)
+            ^ (segment.start() as u64)
+            ^ (segment.end() as u64).rotate_left(23)
+            ^ u64::from(segment.is_break()).rotate_left(47)
     })
 }
 

@@ -11598,11 +11598,7 @@ mod tests {
     #[test]
     fn mini_indicator_runtime_state_returns_values_and_clears_segments() {
         let mut segments: [Vec<StreamSegment>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
-        segments[1].push(StreamSegment {
-            start: 2,
-            end: 5,
-            is_break: false,
-        });
+        segments[1].push(StreamSegment::new(2, 5, false));
         let mut state = GameplayMiniIndicatorRuntimeState::new(
             segments,
             [0.0, 3.5],
@@ -11912,9 +11908,9 @@ mod tests {
         let (segments, total_stream, total_break) = stream_segments_for_note_data(&data, 4, true);
 
         assert_eq!(segments.len(), 1);
-        assert_eq!(segments[0].start, 0);
-        assert_eq!(segments[0].end, 8);
-        assert!(!segments[0].is_break);
+        assert_eq!(segments[0].start(), 0);
+        assert_eq!(segments[0].end(), 8);
+        assert!(!segments[0].is_break());
         assert_eq!(total_stream, 16.0);
         assert_eq!(total_break, 0.0);
     }
@@ -11925,9 +11921,9 @@ mod tests {
         let (segments, total_stream, total_break) = stream_segments_for_note_data(&data, 8, false);
 
         assert_eq!(segments.len(), 1);
-        assert_eq!(segments[0].start, 0);
-        assert_eq!(segments[0].end, 3);
-        assert!(!segments[0].is_break);
+        assert_eq!(segments[0].start(), 0);
+        assert_eq!(segments[0].end(), 3);
+        assert!(!segments[0].is_break());
         assert_eq!(total_stream, 3.0);
         assert_eq!(total_break, 0.0);
     }
@@ -11967,12 +11963,12 @@ mod tests {
             stream_outputs_full_measures(&densities, Some(12), false, false).counter_segments;
 
         assert_eq!(segments.len(), 2);
-        assert_eq!(segments[0].start, 0);
-        assert_eq!(segments[0].end, 2);
-        assert!(!segments[0].is_break);
-        assert_eq!(segments[1].start, 3);
-        assert_eq!(segments[1].end, 4);
-        assert!(!segments[1].is_break);
+        assert_eq!(segments[0].start(), 0);
+        assert_eq!(segments[0].end(), 2);
+        assert!(!segments[0].is_break());
+        assert_eq!(segments[1].start(), 3);
+        assert_eq!(segments[1].end(), 4);
+        assert!(!segments[1].is_break());
     }
 
     #[test]
@@ -11982,8 +11978,8 @@ mod tests {
             zmod_stream_totals_for_densities(&densities, true);
 
         assert_eq!(segments.len(), 1);
-        assert_eq!(segments[0].start, 0);
-        assert_eq!(segments[0].end, 8);
+        assert_eq!(segments[0].start(), 0);
+        assert_eq!(segments[0].end(), 8);
         assert_eq!(total_stream, 16.0);
         assert_eq!(total_break, 0.0);
     }
@@ -16190,11 +16186,7 @@ mod tests {
             std::array::from_fn(|_| Vec::new());
         let mut column_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
         let mut crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
-        measure_counter_segments[0].push(StreamSegment {
-            start: 1,
-            end: 3,
-            is_break: false,
-        });
+        measure_counter_segments[0].push(StreamSegment::new(1, 3, false));
         column_cues[0].push(ColumnCue {
             start_time: 1.0,
             duration: 2.0,
@@ -16216,7 +16208,7 @@ mod tests {
         let mut state =
             GameplayCueRuntimeState::new(measure_counter_segments, column_cues, crossover_cues);
 
-        assert_eq!(state.measure_counter_segments(0)[0].start, 1);
+        assert_eq!(state.measure_counter_segments(0)[0].start(), 1);
         assert_eq!(
             state.column_cues(0)[0]
                 .columns

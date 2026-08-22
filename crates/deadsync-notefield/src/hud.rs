@@ -137,7 +137,7 @@ fn append_measure_counters(
             continue;
         };
         let is_ratio = matches!(text_kind, ZmodMeasureCounterText::Ratio { .. });
-        let color = if segment.is_break {
+        let color = if segment.is_break() {
             if is_lookahead {
                 request.style.break_lookahead_color
             } else {
@@ -193,7 +193,7 @@ fn append_broken_counter(
     else {
         return;
     };
-    if request.segments[segment_index].is_break || !is_broken {
+    if request.segments[segment_index].is_break() || !is_broken {
         return;
     }
     let Some(text_kind @ ZmodMeasureCounterText::Ratio { .. }) =
@@ -237,7 +237,7 @@ fn append_run_timer(
     let Some(segment) = request.segments.get(segment_index).copied() else {
         return;
     };
-    if segment.is_break {
+    if segment.is_break() {
         return;
     }
     let current_bps = request.current_bpm / 60.0;
@@ -251,9 +251,9 @@ fn append_run_timer(
 
     let measure_seconds = 4.0 / (current_bps * request.music_rate);
     let current_time = request.current_display_beat / (current_bps * request.music_rate);
-    let segment_len = (((segment.end - segment.start) as f32) * measure_seconds).ceil() as i32;
+    let segment_len = (((segment.end() - segment.start()) as f32) * measure_seconds).ceil() as i32;
     let total = (request.timer_text)(segment_len, 60, false);
-    let remaining = (((segment.end as f32) * measure_seconds) - current_time)
+    let remaining = (((segment.end() as f32) * measure_seconds) - current_time)
         .ceil()
         .max(0.0) as i32;
     let text = if remaining > segment_len {
@@ -588,16 +588,8 @@ mod tests {
     #[test]
     fn measure_counter_direct_fingerprint_preserves_order_and_lookahead() {
         let segments = [
-            StreamSegment {
-                start: 0,
-                end: 8,
-                is_break: false,
-            },
-            StreamSegment {
-                start: 8,
-                end: 12,
-                is_break: true,
-            },
+            StreamSegment::new(0, 8, false),
+            StreamSegment::new(8, 12, true),
         ];
         let broken_run_lookup = BrokenRunLookup::new(&segments);
         let mut actors = Vec::new();
@@ -656,11 +648,7 @@ mod tests {
 
     #[test]
     fn run_timer_direct_fingerprint_uses_display_beat_and_active_color() {
-        let segments = [StreamSegment {
-            start: 0,
-            end: 8,
-            is_break: false,
-        }];
+        let segments = [StreamSegment::new(0, 8, false)];
         let broken_run_lookup = BrokenRunLookup::new(&segments);
         let mut actors = Vec::new();
         let mut draws = Vec::new();
@@ -709,16 +697,8 @@ mod tests {
     #[test]
     fn shared_ratio_keeps_the_complete_counter_group_on_actors() {
         let segments = [
-            StreamSegment {
-                start: 0,
-                end: 8,
-                is_break: false,
-            },
-            StreamSegment {
-                start: 8,
-                end: 12,
-                is_break: true,
-            },
+            StreamSegment::new(0, 8, false),
+            StreamSegment::new(8, 12, true),
         ];
         let broken_run_lookup = BrokenRunLookup::new(&segments);
         let mut actors = Vec::new();

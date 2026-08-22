@@ -162,7 +162,7 @@ pub(crate) fn stream_segment_index_exclusive_end(
     if curr_measure.is_nan() {
         return segs.len();
     }
-    segs.partition_point(|s| curr_measure >= s.end as f32)
+    segs.partition_point(|s| curr_measure >= s.end() as f32)
 }
 
 #[cfg(test)]
@@ -173,15 +173,33 @@ pub(crate) fn stream_segment_index_inclusive_end(
     if curr_measure.is_nan() {
         return segs.len();
     }
-    segs.partition_point(|s| curr_measure > s.end as f32)
+    segs.partition_point(|s| curr_measure > s.end() as f32)
 }
 
 #[derive(Clone, Copy, Debug)]
 struct BrokenRunSpan {
-    end: f32,
-    segment_index: usize,
     broken_end: i32,
-    broken: bool,
+    segment_and_broken: u32,
+}
+
+impl BrokenRunSpan {
+    const BROKEN_FLAG: u32 = 1 << 31;
+
+    fn new(segment_index: u32, broken_end: i32, broken: bool) -> Self {
+        debug_assert!(segment_index < Self::BROKEN_FLAG);
+        Self {
+            broken_end,
+            segment_and_broken: segment_index | if broken { Self::BROKEN_FLAG } else { 0 },
+        }
+    }
+
+    fn segment_index(self) -> usize {
+        (self.segment_and_broken & !Self::BROKEN_FLAG) as usize
+    }
+
+    fn broken(self) -> bool {
+        self.segment_and_broken & Self::BROKEN_FLAG != 0
+    }
 }
 
 /// Song-lifetime prefix totals for the StreamProg mini indicator.
@@ -202,10 +220,8 @@ pub struct StreamProgressLookup {
 
 #[derive(Clone, Copy, Debug)]
 struct StreamProgressEntry {
-    start: f32,
-    end: f32,
     stream_before: f64,
-    is_break: bool,
+    segment: StreamSegment,
 }
 
 impl StreamProgressLookup {
@@ -214,16 +230,12 @@ impl StreamProgressLookup {
         let entries = segments
             .iter()
             .map(|segment| {
-                let start = segment.start as f32;
-                let end = segment.end as f32;
                 let entry = StreamProgressEntry {
-                    start,
-                    end,
                     stream_before,
-                    is_break: segment.is_break,
+                    segment: *segment,
                 };
-                if !segment.is_break {
-                    stream_before += f64::from(end - start);
+                if !segment.is_break() {
+                    stream_before += f64::from(segment.end() - segment.start());
                 }
                 entry
             })
@@ -252,24 +264,26 @@ impl StreamProgressLookup {
             0.0
         };
         let index = partition_point_from_hint(&self.segments, self.cursor.get(), |segment| {
-            current >= segment.end
+            current >= segment.segment.end() as f32
         });
         self.cursor.set(index);
         let Some(segment) = self.segments.get(index) else {
             let completed = self.segments.last().map_or(0.0, |last| {
                 last.stream_before
-                    + if last.is_break {
+                    + if last.segment.is_break() {
                         0.0
                     } else {
-                        f64::from(last.end - last.start)
+                        f64::from(last.segment.end() - last.segment.start())
                     }
             });
             return Some((completed / total_stream_measures).clamp(0.0, 1.0));
         };
-        let partial = if segment.is_break || current <= segment.start {
+        let start = segment.segment.start() as f32;
+        let end = segment.segment.end() as f32;
+        let partial = if segment.segment.is_break() || current <= start {
             0.0
         } else {
-            f64::from(current.min(segment.end) - segment.start)
+            f64::from(current.min(end) - start)
         };
         Some(((segment.stream_before + partial) / total_stream_measures).clamp(0.0, 1.0))
     }
@@ -295,26 +309,24 @@ pub struct BrokenRunLookup {
 
 impl BrokenRunLookup {
     pub fn new(segments: &[StreamSegment]) -> Self {
+        assert!(
+            segments.len() <= BrokenRunSpan::BROKEN_FLAG as usize,
+            "broken-run lookup exceeds 31-bit segment indices"
+        );
         let mut spans = Vec::with_capacity(segments.len());
         let mut index = 0;
         while let Some(segment) = segments.get(index).copied() {
-            if segment.is_break {
-                spans.push(BrokenRunSpan {
-                    end: segment.end as f32,
-                    segment_index: index,
-                    broken_end: segment.end as i32,
-                    broken: false,
-                });
+            if segment.is_break() {
+                spans.push(BrokenRunSpan::new(
+                    index as u32,
+                    segment.end() as i32,
+                    false,
+                ));
                 index += 1;
                 continue;
             }
             let (broken_end, broken, next_index) = broken_run_end_and_next(segments, index);
-            spans.push(BrokenRunSpan {
-                end: broken_end as f32,
-                segment_index: index,
-                broken_end,
-                broken,
-            });
+            spans.push(BrokenRunSpan::new(index as u32, broken_end, broken));
             index = next_index.max(index + 1);
         }
         Self {
@@ -335,13 +347,20 @@ impl BrokenRunLookup {
         if current_measure.is_nan() {
             return None;
         }
+        let completed_end = if current_measure < 0.0 {
+            -1
+        } else {
+            current_measure as i32
+        };
         let index = partition_point_from_hint(&self.spans, self.broken_cursor.get(), |span| {
-            current_measure >= span.end
+            debug_assert!(span.broken_end >= 0);
+            span.broken_end <= completed_end
         });
         self.broken_cursor.set(index);
         self.spans
             .get(index)
-            .map(|span| (span.segment_index, span.broken_end, span.broken))
+            .copied()
+            .map(|span| (span.segment_index(), span.broken_end, span.broken()))
     }
 
     /// Returns the exclusive-end counter boundary and inclusive-end timer
@@ -356,11 +375,11 @@ impl BrokenRunLookup {
             return (segments.len(), segments.len());
         }
         let exclusive = partition_point_from_hint(segments, self.segment_cursor.get(), |segment| {
-            current_measure >= segment.end as f32
+            current_measure >= segment.end() as f32
         });
         self.segment_cursor.set(exclusive);
         let inclusive = partition_point_from_hint(segments, exclusive, |segment| {
-            current_measure > segment.end as f32
+            current_measure > segment.end() as f32
         });
         (exclusive, inclusive)
     }
@@ -370,18 +389,18 @@ fn broken_run_end_and_next(segments: &[StreamSegment], start_index: usize) -> (i
     let Some(first) = segments.get(start_index).copied() else {
         return (0, false, segments.len());
     };
-    if first.is_break {
-        return (first.end as i32, false, start_index.saturating_add(1));
+    if first.is_break() {
+        return (first.end() as i32, false, start_index.saturating_add(1));
     }
 
     let last_index = segments.len().saturating_sub(1);
-    let mut end = first.end;
+    let mut end = first.end();
     let mut broken = false;
     let mut index = start_index + 1;
     while index < segments.len() {
         let segment = segments[index];
-        let len = segment.end - segment.start;
-        if segment.is_break {
+        let len = segment.end() - segment.start();
+        if segment.is_break() {
             if len < 4 && index != last_index {
                 end += len;
                 broken = true;
@@ -392,7 +411,7 @@ fn broken_run_end_and_next(segments: &[StreamSegment], start_index: usize) -> (i
         }
         broken = true;
         end += len;
-        if !segments[index - 1].is_break {
+        if !segments[index - 1].is_break() {
             end += 1;
         }
         index += 1;
@@ -411,9 +430,9 @@ pub(crate) fn zmod_broken_run_segment(
     curr_measure: f32,
 ) -> Option<(usize, i32, bool)> {
     for (i, seg) in segs.iter().copied().enumerate() {
-        if seg.is_break {
-            if curr_measure < seg.end as f32 {
-                return Some((i, seg.end as i32, false));
+        if seg.is_break() {
+            if curr_measure < seg.end() as f32 {
+                return Some((i, seg.end() as i32, false));
             }
             continue;
         }
@@ -454,16 +473,16 @@ pub(crate) fn zmod_measure_counter_text(
     if curr_measure < 0.0 {
         if !is_lookahead {
             let first = segs[0];
-            if !first.is_break {
+            if !first.is_break() {
                 let value = ((-beat_div4) + (1.0 * multiplier)).floor() as i32;
                 return Some(ZmodMeasureCounterText::Break(value));
             }
-            let len = (first.end - first.start) as i32;
+            let len = (first.end() - first.start()) as i32;
             let value_unscaled = (-beat_div4).floor() as i32 + 1 + len;
             let value = ((value_unscaled as f32) * multiplier).floor() as i32;
             return Some(ZmodMeasureCounterText::Break(value));
         }
-        if !segs[0].is_break {
+        if !segs[0].is_break() {
             stream_index -= 1;
         }
     }
@@ -473,12 +492,12 @@ pub(crate) fn zmod_measure_counter_text(
         .ok()
         .and_then(|i: usize| segs.get(i).copied())?;
 
-    let segment_start = seg.start as f32;
-    let segment_end = seg.end as f32;
+    let segment_start = seg.start() as f32;
+    let segment_end = seg.end() as f32;
     let seg_len = ((segment_end - segment_start) * multiplier).floor() as i32;
     let curr_count = (((beat_div4 - segment_start) * multiplier).floor() as i32) + 1;
 
-    if seg.is_break {
+    if seg.is_break() {
         if lookahead == 0 {
             return None;
         }
@@ -504,13 +523,13 @@ pub(crate) fn zmod_broken_run_counter_text(
     end: i32,
 ) -> Option<ZmodMeasureCounterText> {
     let seg = *segs.get(start_index)?;
-    if seg.is_break {
+    if seg.is_break() {
         return None;
     }
     if curr_measure < 0.0 {
         let first = segs[0];
-        if first.is_break {
-            let first_len = (first.end - first.start) as i32;
+        if first.is_break() {
+            let first_len = (first.end() - first.start()) as i32;
             let value = (-curr_measure).floor() as i32 + 1 + first_len;
             return Some(ZmodMeasureCounterText::Break(value));
         }
@@ -518,8 +537,8 @@ pub(crate) fn zmod_broken_run_counter_text(
         return Some(ZmodMeasureCounterText::Break(value));
     }
 
-    let curr_count = (curr_measure - seg.start as f32).floor() as i32 + 1;
-    let len = end - seg.start as i32;
+    let curr_count = (curr_measure - seg.start() as f32).floor() as i32 + 1;
+    let len = end - seg.start() as i32;
     if curr_count != 0 {
         Some(ZmodMeasureCounterText::Ratio {
             current: curr_count,
@@ -911,11 +930,11 @@ pub fn zmod_stream_prog_completion_for_beat(
     };
     let mut done = 0.0;
     for seg in segs {
-        if seg.is_break {
+        if seg.is_break() {
             continue;
         }
-        let start = seg.start as f32;
-        let end = seg.end as f32;
+        let start = seg.start() as f32;
+        let end = seg.end() as f32;
         if curr >= end {
             done += (end - start) as f64;
         } else if curr > start {
@@ -931,31 +950,11 @@ mod lookup_tests {
 
     fn segments() -> Vec<StreamSegment> {
         vec![
-            StreamSegment {
-                start: 0,
-                end: 4,
-                is_break: false,
-            },
-            StreamSegment {
-                start: 4,
-                end: 6,
-                is_break: true,
-            },
-            StreamSegment {
-                start: 6,
-                end: 10,
-                is_break: false,
-            },
-            StreamSegment {
-                start: 10,
-                end: 15,
-                is_break: true,
-            },
-            StreamSegment {
-                start: 15,
-                end: 20,
-                is_break: false,
-            },
+            StreamSegment::new(0, 4, false),
+            StreamSegment::new(4, 6, true),
+            StreamSegment::new(6, 10, false),
+            StreamSegment::new(10, 15, true),
+            StreamSegment::new(15, 20, false),
         ]
     }
 
@@ -1035,5 +1034,15 @@ mod lookup_tests {
                 "measure={measure}",
             );
         }
+    }
+
+    #[test]
+    fn stream_lookups_keep_compact_song_lifetime_entries() {
+        let segments = segments();
+
+        assert_eq!(std::mem::size_of::<StreamProgressEntry>(), 16);
+        assert_eq!(std::mem::size_of::<BrokenRunSpan>(), 8);
+        assert_eq!(StreamProgressLookup::new(&segments).storage_bytes(), 80);
+        assert_eq!(BrokenRunLookup::new(&segments).storage_bytes(), 24);
     }
 }

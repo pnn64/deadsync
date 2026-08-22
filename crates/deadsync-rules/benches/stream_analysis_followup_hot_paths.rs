@@ -289,13 +289,13 @@ fn fail_progress_old(notes: &[u8], current_measure: usize) -> Option<(usize, usi
     let segment = stream_sequences_threshold(&densities, 16)
         .into_iter()
         .find(|segment| {
-            !segment.is_break
-                && current_measure >= segment.start as usize
-                && current_measure < segment.end as usize
+            !segment.is_break()
+                && current_measure >= segment.start() as usize
+                && current_measure < segment.end() as usize
         })?;
     Some((
-        current_measure - segment.start as usize + 1,
-        (segment.end - segment.start) as usize,
+        current_measure - segment.start() as usize + 1,
+        (segment.end() - segment.start()) as usize,
     ))
 }
 
@@ -310,11 +310,11 @@ fn zmod_scan_reference(
     let mut edge_break = 0.0_f32;
     let mut last_stream = false;
     for (index, segment) in segments.iter().enumerate() {
-        let len = segment.end.saturating_sub(segment.start) as f32;
-        if segment.is_break && index > 0 && index + 1 < segments.len() {
+        let len = segment.end().saturating_sub(segment.start()) as f32;
+        if segment.is_break() && index > 0 && index + 1 < segments.len() {
             total_break += len;
             last_stream = false;
-        } else if segment.is_break {
+        } else if segment.is_break() {
             edge_break += len;
             last_stream = false;
         } else {
@@ -344,9 +344,9 @@ fn option_checksum(value: Option<(usize, usize)>) -> u64 {
 fn totals_checksum(value: &(Vec<StreamSegment>, f32, f32)) -> u64 {
     value.0.iter().fold(0u64, |checksum, segment| {
         checksum.rotate_left(9)
-            ^ (segment.start as u64)
-            ^ (segment.end as u64).rotate_left(23)
-            ^ u64::from(segment.is_break).rotate_left(47)
+            ^ (segment.start() as u64)
+            ^ (segment.end() as u64).rotate_left(23)
+            ^ u64::from(segment.is_break()).rotate_left(47)
     }) ^ u64::from(value.1.to_bits()).rotate_left(17)
         ^ u64::from(value.2.to_bits()).rotate_left(41)
 }

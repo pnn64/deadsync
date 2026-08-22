@@ -1,8 +1,34 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StreamSegment {
-    pub start: u32,
-    pub end: u32,
-    pub is_break: bool,
+    start_and_break: u32,
+    end: u32,
+}
+
+impl StreamSegment {
+    const BREAK_FLAG: u32 = 1 << 31;
+
+    pub const fn new(start: u32, end: u32, is_break: bool) -> Self {
+        assert!(
+            start < Self::BREAK_FLAG,
+            "stream segment start exceeds 31 bits"
+        );
+        Self {
+            start_and_break: start | if is_break { Self::BREAK_FLAG } else { 0 },
+            end,
+        }
+    }
+
+    pub const fn start(self) -> u32 {
+        self.start_and_break & !Self::BREAK_FLAG
+    }
+
+    pub const fn end(self) -> u32 {
+        self.end
+    }
+
+    pub const fn is_break(self) -> bool {
+        self.start_and_break & Self::BREAK_FLAG != 0
+    }
 }
 
 /// Owned stream data prepared for gameplay counters and ZMod progress.
@@ -46,7 +72,7 @@ pub fn stream_run_progress(
 }
 
 pub fn stream_sequences_threshold(measures: &[u8], threshold: usize) -> Vec<StreamSegment> {
-    let mut segs = Vec::new();
+    let mut segs = Vec::with_capacity(measures.len().min(64));
     for_each_stream_segment(measures, threshold, |segment| segs.push(segment));
     segs
 }
@@ -88,6 +114,10 @@ fn for_each_stream_segment(
     threshold: usize,
     mut visit: impl FnMut(StreamSegment),
 ) {
+    assert!(
+        measures.len() < StreamSegment::BREAK_FLAG as usize,
+        "stream chart exceeds 31-bit measure indices"
+    );
     let mut runs = StreamRuns::default();
     for (idx, &density) in measures.iter().enumerate() {
         if usize::from(density) >= threshold {
@@ -137,10 +167,16 @@ impl StreamRuns {
 }
 
 fn stream_segment(start: usize, end: usize, is_break: bool) -> StreamSegment {
+    debug_assert!(start < StreamSegment::BREAK_FLAG as usize);
+    debug_assert!(end < StreamSegment::BREAK_FLAG as usize);
     StreamSegment {
-        start: u32::try_from(start).expect("stream segment start exceeds u32"),
-        end: u32::try_from(end).expect("stream segment end exceeds u32"),
-        is_break,
+        start_and_break: start as u32
+            | if is_break {
+                StreamSegment::BREAK_FLAG
+            } else {
+                0
+            },
+        end: end as u32,
     }
 }
 
@@ -249,11 +285,11 @@ fn add_density_segment(
     total_stream: &mut f32,
     total_measures: &mut f32,
 ) {
-    let len = ((segment.end.saturating_sub(segment.start)) as f32 * multiplier).floor();
+    let len = ((segment.end().saturating_sub(segment.start())) as f32 * multiplier).floor();
     if len <= 0.0 {
         return;
     }
-    if !segment.is_break {
+    if !segment.is_break() {
         *total_stream += len;
     }
     *total_measures += len;
@@ -364,11 +400,11 @@ struct StreamTotals {
 
 impl StreamTotals {
     fn record(&mut self, segment: StreamSegment) {
-        let len = segment.end.saturating_sub(segment.start) as f32;
+        let len = segment.end().saturating_sub(segment.start()) as f32;
         if len <= 0.0 {
             return;
         }
-        if segment.is_break {
+        if segment.is_break() {
             if self.saw_stream {
                 self.pending_break = len;
             } else {
@@ -736,7 +772,7 @@ mod tests {
     use super::*;
 
     fn seg_tuple(seg: &StreamSegment) -> (usize, usize, bool) {
-        (seg.start as usize, seg.end as usize, seg.is_break)
+        (seg.start() as usize, seg.end() as usize, seg.is_break())
     }
 
     fn stream_sequences_reference(measures: &[u8], threshold: usize) -> Vec<StreamSegment> {
@@ -784,11 +820,11 @@ mod tests {
         let mut total_stream = 0.0_f32;
         let mut total_measures = 0.0_f32;
         for segment in segments {
-            let len = ((segment.end.saturating_sub(segment.start)) as f32 * multiplier).floor();
+            let len = ((segment.end().saturating_sub(segment.start())) as f32 * multiplier).floor();
             if len <= 0.0 {
                 continue;
             }
-            if !segment.is_break {
+            if !segment.is_break() {
                 total_stream += len;
             }
             total_measures += len;
@@ -824,11 +860,11 @@ mod tests {
         let mut edge_break = 0.0_f32;
         let mut last_stream = false;
         for (index, segment) in segments.iter().enumerate() {
-            let len = segment.end.saturating_sub(segment.start) as f32;
-            if segment.is_break && index > 0 && index + 1 < segments.len() {
+            let len = segment.end().saturating_sub(segment.start()) as f32;
+            if segment.is_break() && index > 0 && index + 1 < segments.len() {
                 total_break += len;
                 last_stream = false;
-            } else if segment.is_break {
+            } else if segment.is_break() {
                 edge_break += len;
                 last_stream = false;
             } else {
@@ -943,8 +979,16 @@ mod tests {
     }
 
     #[test]
-    fn stream_segments_use_compact_measure_indices() {
-        assert_eq!(std::mem::size_of::<StreamSegment>(), 12);
+    fn stream_segments_pack_break_state_into_start_index() {
+        let stream = StreamSegment::new(7, 12, false);
+        let gap = StreamSegment::new(12, 16, true);
+
+        assert_eq!(std::mem::size_of::<StreamSegment>(), 8);
+        assert_eq!(
+            (stream.start(), stream.end(), stream.is_break()),
+            (7, 12, false)
+        );
+        assert_eq!((gap.start(), gap.end(), gap.is_break()), (12, 16, true));
     }
 
     #[test]

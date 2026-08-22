@@ -40,13 +40,13 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
         let segs = state.measure_counter_segments(player);
         let multiplier = profile.measure_counter.multiplier();
         for (seg_ix, seg) in segs.iter().copied().enumerate() {
-            let scaled_len = (((seg.end - seg.start) as f32) * multiplier)
+            let scaled_len = (((seg.end() - seg.start()) as f32) * multiplier)
                 .floor()
                 .max(0.0) as i32;
             max_measure_len = max_measure_len.max(scaled_len);
-            if !seg.is_break {
+            if !seg.is_break() {
                 let (broken_end, _) = zmod_broken_run_end(segs, seg_ix);
-                max_measure_len = max_measure_len.max(broken_end - seg.start as i32);
+                max_measure_len = max_measure_len.max(broken_end - seg.start() as i32);
             }
         }
         if profile.measure_counter != profile_data::MeasureCounter::None {

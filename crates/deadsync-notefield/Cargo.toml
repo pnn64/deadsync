@@ -8,6 +8,10 @@ license = "GPL-3.0"
 name = "gameplay_hot_paths"
 harness = false
 
+[[bench]]
+name = "stream_storage_hot_paths"
+harness = false
+
 [features]
 bench-support = []
 

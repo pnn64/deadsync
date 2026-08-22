@@ -2103,16 +2103,8 @@ mod tests {
     #[test]
     fn stream_segment_indices_handle_boundaries_and_nan() {
         let segs = [
-            StreamSegment {
-                start: 0,
-                end: 4,
-                is_break: false,
-            },
-            StreamSegment {
-                start: 4,
-                end: 8,
-                is_break: true,
-            },
+            StreamSegment::new(0, 4, false),
+            StreamSegment::new(4, 8, true),
         ];
 
         assert_eq!(stream_segment_index_exclusive_end(&segs, 4.0), 1);
@@ -2151,26 +2143,10 @@ mod tests {
     #[test]
     fn zmod_broken_run_merges_short_breaks_and_adjacent_streams() {
         let segs = [
-            StreamSegment {
-                start: 0,
-                end: 8,
-                is_break: false,
-            },
-            StreamSegment {
-                start: 8,
-                end: 10,
-                is_break: true,
-            },
-            StreamSegment {
-                start: 10,
-                end: 14,
-                is_break: false,
-            },
-            StreamSegment {
-                start: 14,
-                end: 20,
-                is_break: true,
-            },
+            StreamSegment::new(0, 8, false),
+            StreamSegment::new(8, 10, true),
+            StreamSegment::new(10, 14, false),
+            StreamSegment::new(14, 20, true),
         ];
 
         assert_eq!(zmod_broken_run_end(&segs, 0), (14, true));
@@ -2179,21 +2155,9 @@ mod tests {
         assert_eq!(zmod_broken_run_segment(&segs, 21.0), None);
 
         let three_measure_break = [
-            StreamSegment {
-                start: 0,
-                end: 8,
-                is_break: false,
-            },
-            StreamSegment {
-                start: 8,
-                end: 11,
-                is_break: true,
-            },
-            StreamSegment {
-                start: 11,
-                end: 15,
-                is_break: false,
-            },
+            StreamSegment::new(0, 8, false),
+            StreamSegment::new(8, 11, true),
+            StreamSegment::new(11, 15, false),
         ];
 
         assert_eq!(zmod_broken_run_end(&three_measure_break, 0), (15, true));
@@ -2210,21 +2174,9 @@ mod tests {
     #[test]
     fn zmod_measure_counter_text_describes_current_and_lookahead_segments() {
         let segs = [
-            StreamSegment {
-                start: 0,
-                end: 8,
-                is_break: false,
-            },
-            StreamSegment {
-                start: 8,
-                end: 12,
-                is_break: true,
-            },
-            StreamSegment {
-                start: 12,
-                end: 20,
-                is_break: false,
-            },
+            StreamSegment::new(0, 8, false),
+            StreamSegment::new(8, 12, true),
+            StreamSegment::new(12, 20, false),
         ];
 
         assert_eq!(
@@ -2279,22 +2231,10 @@ mod tests {
 
     #[test]
     fn zmod_measure_counter_text_handles_negative_song_time() {
-        let stream_first = [StreamSegment {
-            start: 0,
-            end: 8,
-            is_break: false,
-        }];
+        let stream_first = [StreamSegment::new(0, 8, false)];
         let break_first = [
-            StreamSegment {
-                start: 0,
-                end: 2,
-                is_break: true,
-            },
-            StreamSegment {
-                start: 2,
-                end: 8,
-                is_break: false,
-            },
+            StreamSegment::new(0, 2, true),
+            StreamSegment::new(2, 8, false),
         ];
 
         assert_eq!(
@@ -2310,21 +2250,9 @@ mod tests {
     #[test]
     fn zmod_broken_run_counter_text_uses_merged_stream_length() {
         let segs = [
-            StreamSegment {
-                start: 0,
-                end: 8,
-                is_break: false,
-            },
-            StreamSegment {
-                start: 8,
-                end: 10,
-                is_break: true,
-            },
-            StreamSegment {
-                start: 10,
-                end: 14,
-                is_break: false,
-            },
+            StreamSegment::new(0, 8, false),
+            StreamSegment::new(8, 10, true),
+            StreamSegment::new(10, 14, false),
         ];
 
         assert_eq!(
@@ -2345,16 +2273,8 @@ mod tests {
         assert_eq!(zmod_broken_run_counter_text(9.0, &segs, 1, 10), None);
 
         let future_stream = [
-            StreamSegment {
-                start: 0,
-                end: 8,
-                is_break: true,
-            },
-            StreamSegment {
-                start: 8,
-                end: 12,
-                is_break: false,
-            },
+            StreamSegment::new(0, 8, true),
+            StreamSegment::new(8, 12, false),
         ];
         assert_eq!(
             zmod_broken_run_counter_text(7.5, &future_stream, 1, 12),
@@ -3105,21 +3025,9 @@ mod tests {
     #[test]
     fn zmod_stream_prog_completion_counts_stream_beats_only() {
         let segs = [
-            StreamSegment {
-                start: 0,
-                end: 2,
-                is_break: false,
-            },
-            StreamSegment {
-                start: 2,
-                end: 4,
-                is_break: true,
-            },
-            StreamSegment {
-                start: 4,
-                end: 6,
-                is_break: false,
-            },
+            StreamSegment::new(0, 2, false),
+            StreamSegment::new(2, 4, true),
+            StreamSegment::new(4, 6, false),
         ];
 
         assert_eq!(

@@ -386,9 +386,9 @@ fn wide_segment_checksum(segments: &[WideSegment]) -> u64 {
 fn compact_segment_checksum(segments: &[StreamSegment]) -> u64 {
     segments.iter().fold(0u64, |checksum, segment| {
         checksum.rotate_left(9)
-            ^ u64::from(segment.start)
-            ^ u64::from(segment.end).rotate_left(23)
-            ^ u64::from(segment.is_break).rotate_left(47)
+            ^ u64::from(segment.start())
+            ^ u64::from(segment.end()).rotate_left(23)
+            ^ u64::from(segment.is_break()).rotate_left(47)
     })
 }
 
@@ -425,7 +425,7 @@ fn main() {
         compact_segment_checksum(&new_segment_value)
     );
     assert_eq!(std::mem::size_of::<WideSegment>(), 24);
-    assert_eq!(std::mem::size_of::<StreamSegment>(), 12);
+    assert_eq!(std::mem::size_of::<StreamSegment>(), 8);
     let old_segments = measure(SEGMENT_OPS, STREAM_MEASURES, || {
         wide_segment_checksum(&wide_stream_segments(black_box(&measures), 20))
     });
