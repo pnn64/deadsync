@@ -305,6 +305,17 @@ mod runtime_regression_tests {
             state.chart_runtime.notes.len(),
             state.chart_runtime.note_displayed_beat_cache.len()
         );
+        debug_assert!(state.chart_runtime.notes.iter().enumerate().all(
+            |(note_index, note)| {
+                let timing = &state.timing_runtime.timing_players[state.player_for_col(note.column)];
+                state.chart_runtime.note_time_cache_ns[note_index]
+                    == timing.get_time_for_beat_ns(note.beat)
+                    && state.chart_runtime.hold_end_time_cache_ns[note_index]
+                        == note.hold.as_ref().map_or(INVALID_SONG_TIME_NS, |hold| {
+                            timing.get_time_for_beat_ns(hold.end_beat)
+                        })
+            }
+        ));
         debug_assert_eq!(
             state.chart_runtime.notes.len(),
             state.chart_runtime.column_judgment_eligible.len()

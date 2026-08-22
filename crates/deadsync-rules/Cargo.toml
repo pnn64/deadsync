@@ -33,6 +33,10 @@ name = "timing_storage_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "timing_query_hot_paths"
+harness = false
+
 [features]
 bench-support = []
 

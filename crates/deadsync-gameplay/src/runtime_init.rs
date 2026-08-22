@@ -761,16 +761,30 @@ where
     let mut note_time_cache_ns = Vec::with_capacity(notes.len());
     let mut hold_end_time_cache_ns = Vec::with_capacity(notes.len());
     let mut note_displayed_beat_cache = Vec::with_capacity(notes.len());
+    let mut head_time_caches: [BeatTimeCache; MAX_PLAYERS] =
+        std::array::from_fn(|player| BeatTimeCache::new(&timing_players[player]));
+    let mut tail_time_caches: [BeatTimeCache; MAX_PLAYERS] =
+        std::array::from_fn(|player| BeatTimeCache::new(&timing_players[player]));
+    let mut head_display_caches = [DisplayedBeatCache::new(); MAX_PLAYERS];
+    let mut tail_display_caches = [DisplayedBeatCache::new(); MAX_PLAYERS];
     for note in &notes {
         let player = player_index_for_column(num_players, cols_per_player, note.column);
         let timing_player = &timing_players[player];
-        note_time_cache_ns.push(timing_player.get_time_for_beat_ns(note.beat));
-        let displayed_head = timing_player.get_displayed_beat(note.beat);
+        note_time_cache_ns.push(timing_player.get_time_for_beat_ns_cached(
+            note.beat,
+            &mut head_time_caches[player],
+        ));
+        let displayed_head = timing_player
+            .get_displayed_beat_cached(note.beat, &mut head_display_caches[player]);
         if let Some(hold) = note.hold.as_ref() {
-            hold_end_time_cache_ns.push(timing_player.get_time_for_beat_ns(hold.end_beat));
+            hold_end_time_cache_ns.push(timing_player.get_time_for_beat_ns_cached(
+                hold.end_beat,
+                &mut tail_time_caches[player],
+            ));
             note_displayed_beat_cache.push([
                 displayed_head,
-                timing_player.get_displayed_beat(hold.end_beat),
+                timing_player
+                    .get_displayed_beat_cached(hold.end_beat, &mut tail_display_caches[player]),
             ]);
         } else {
             hold_end_time_cache_ns.push(INVALID_SONG_TIME_NS);

@@ -444,6 +444,71 @@ impl BeatInfoCache {
     }
 }
 
+/// Game-thread cursor for a nondecreasing batch of beat-to-time queries.
+///
+/// The caller owns it for one load or rebuild pass. It contains no heap storage,
+/// performs no synchronization, and resets to the timing origin on a rewind or
+/// offset change. There is no capacity, miss, eviction, or destruction work.
+#[derive(Debug, Clone)]
+pub struct BeatTimeCache {
+    start: GetBeatStarts,
+    last_row: i32,
+    beat_start_time_ns: TimingNs,
+    global_offset_ns: TimingNs,
+}
+
+impl BeatTimeCache {
+    pub fn new(timing: &TimingData) -> Self {
+        let beat_start_time_ns = timing.beat_start_time_ns();
+        let start = GetBeatStarts {
+            last_time_ns: beat_start_time_ns,
+            ..GetBeatStarts::default()
+        };
+        Self {
+            start,
+            last_row: i32::MIN,
+            beat_start_time_ns,
+            global_offset_ns: timing.global_offset_ns,
+        }
+    }
+
+    pub fn reset(&mut self, timing: &TimingData) {
+        self.start = GetBeatStarts::default();
+        self.beat_start_time_ns = timing.beat_start_time_ns();
+        self.start.last_time_ns = self.beat_start_time_ns;
+        self.last_row = i32::MIN;
+        self.global_offset_ns = timing.global_offset_ns;
+    }
+}
+
+/// Game-thread cursor for nondecreasing displayed-beat queries.
+///
+/// The cursor borrows no storage and allocates nothing. Rewinds restart its
+/// linear scroll-prefix scan; ordinary chart-order queries advance each prefix
+/// at most once during the load-time batch.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DisplayedBeatCache {
+    next_prefix: usize,
+    last_beat: f32,
+    initialized: bool,
+}
+
+impl DisplayedBeatCache {
+    pub const fn new() -> Self {
+        Self {
+            next_prefix: 0,
+            last_beat: 0.0,
+            initialized: false,
+        }
+    }
+
+    pub const fn reset(&mut self) {
+        self.next_prefix = 0;
+        self.last_beat = 0.0;
+        self.initialized = false;
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 struct GetBeatArgs {
     elapsed_time_ns: TimingNs,
@@ -578,12 +643,14 @@ impl TimingData {
             max_bpm,
         };
 
+        let mut beat_time_cache = BeatTimeCache::new(&timing_with_stops);
         let re_beat_to_time: Vec<_> = timing_with_stops
             .beat_to_time
             .iter()
             .map(|point| {
                 let mut new_point = *point;
-                new_point.time_ns = timing_with_stops.get_time_for_beat_internal_ns(point.beat);
+                new_point.time_ns = timing_with_stops
+                    .get_time_for_beat_internal_ns_cached(point.beat, &mut beat_time_cache);
                 new_point
             })
             .collect();
@@ -807,6 +874,12 @@ impl TimingData {
             .saturating_sub(self.global_offset_ns)
     }
 
+    #[inline]
+    pub fn get_time_for_beat_ns_cached(&self, target_beat: f32, cache: &mut BeatTimeCache) -> i64 {
+        self.get_time_for_beat_internal_ns_cached(target_beat, cache)
+            .saturating_sub(self.global_offset_ns)
+    }
+
     /// Returns the internal (pre-global-offset) time for a beat. This lives in
     /// the same space as the audio stream's music position, so it is the value
     /// to use when scheduling assist ticks against the playback stream.
@@ -814,10 +887,41 @@ impl TimingData {
         self.get_time_for_beat_internal_ns(target_beat)
     }
 
+    #[inline]
+    pub fn get_time_for_beat_no_offset_ns_cached(
+        &self,
+        target_beat: f32,
+        cache: &mut BeatTimeCache,
+    ) -> i64 {
+        self.get_time_for_beat_internal_ns_cached(target_beat, cache)
+    }
+
     fn get_time_for_beat_internal_ns(&self, target_beat: f32) -> TimingNs {
         let mut starts = GetBeatStarts::default();
         starts.last_time_ns = self.beat_start_time_ns();
         self.get_elapsed_time_internal(&mut starts, target_beat)
+    }
+
+    fn get_time_for_beat_internal_ns_cached(
+        &self,
+        target_beat: f32,
+        cache: &mut BeatTimeCache,
+    ) -> TimingNs {
+        if !target_beat.is_finite() || target_beat == f32::MAX {
+            return self.get_time_for_beat_internal_ns(target_beat);
+        }
+        let target_row = beat_to_note_row(target_beat);
+        let beat_start_time_ns = self.beat_start_time_ns();
+        if cache.global_offset_ns != self.global_offset_ns
+            || cache.beat_start_time_ns != beat_start_time_ns
+            || target_row < cache.last_row
+        {
+            cache.reset(self);
+        }
+        let time_ns =
+            self.get_elapsed_time_internal_mut(&mut cache.start, target_beat, u32::MAX as usize);
+        cache.last_row = target_row;
+        time_ns
     }
 
     pub fn get_bpm_for_beat(&self, target_beat: f32) -> f32 {
@@ -878,15 +982,17 @@ impl TimingData {
         }
 
         let mut prev_ratio = 1.0_f32;
+        let mut start_cache = BeatTimeCache::new(self);
+        let mut end_cache = BeatTimeCache::new(self);
         let runtime = exact_arc(self.speeds.len(), |index| {
             let seg = self.speeds[index];
-            let start_time_ns = self.get_time_for_beat_ns(seg.beat);
+            let start_time_ns = self.get_time_for_beat_ns_cached(seg.beat, &mut start_cache);
             let end_time_ns = if seg.delay <= 0.0 {
                 start_time_ns
             } else if seg.unit == SpeedUnit::Seconds {
                 timing_ns_add_seconds(start_time_ns, seg.delay)
             } else {
-                self.get_time_for_beat_ns(seg.beat + seg.delay)
+                self.get_time_for_beat_ns_cached(seg.beat + seg.delay, &mut end_cache)
             };
             let value = SpeedRuntime {
                 start_time_ns,
@@ -936,8 +1042,7 @@ impl TimingData {
 
     fn get_elapsed_time_internal(&self, starts: &mut GetBeatStarts, beat: f32) -> TimingNs {
         let mut start = *starts;
-        self.get_elapsed_time_internal_mut(&mut start, beat, u32::MAX as usize);
-        start.last_time_ns
+        self.get_elapsed_time_internal_mut(&mut start, beat, u32::MAX as usize)
     }
 
     fn get_beat_internal(
@@ -1055,7 +1160,7 @@ impl TimingData {
         start: &mut GetBeatStarts,
         beat: f32,
         max_segment: usize,
-    ) {
+    ) -> TimingNs {
         let bpms = &self.beat_to_time;
         let warps = &self.warps;
         let stops = &self.stops;
@@ -1087,6 +1192,9 @@ impl TimingData {
             } else {
                 timing_ns_from_seconds(note_row_to_beat(event_row - start.last_row) / bps)
             };
+            if event_type == TimingEvent::Marker {
+                return start.last_time_ns.saturating_add(time_to_next_event_ns);
+            }
             start.last_time_ns = start.last_time_ns.saturating_add(time_to_next_event_ns);
 
             match event_type {
@@ -1110,7 +1218,6 @@ impl TimingData {
                     start.delay_idx += 1;
                     curr_segment += 1;
                 }
-                TimingEvent::Marker => return,
                 TimingEvent::Warp => {
                     start.is_warping = true;
                     let warp = warps[start.warp_idx];
@@ -1125,6 +1232,7 @@ impl TimingData {
             }
             start.last_row = event_row;
         }
+        start.last_time_ns
     }
 
     pub fn get_displayed_beat(&self, beat: f32) -> f32 {
@@ -1139,6 +1247,35 @@ impl TimingData {
         let i = idx.saturating_sub(1);
         let p = self.scroll_prefix[i];
         (beat - p.beat).mul_add(p.ratio, p.cum_displayed)
+    }
+
+    #[inline]
+    pub fn get_displayed_beat_cached(&self, beat: f32, cache: &mut DisplayedBeatCache) -> f32 {
+        if self.scroll_prefix.is_empty() {
+            return beat;
+        }
+        if !beat.is_finite() {
+            return self.get_displayed_beat(beat);
+        }
+        if cache.next_prefix > self.scroll_prefix.len()
+            || (cache.initialized && beat < cache.last_beat)
+        {
+            cache.reset();
+        }
+        while cache.next_prefix < self.scroll_prefix.len()
+            && self.scroll_prefix[cache.next_prefix].beat <= beat
+        {
+            cache.next_prefix += 1;
+        }
+        cache.last_beat = beat;
+        cache.initialized = true;
+
+        let prefix = if cache.next_prefix == 0 {
+            self.scroll_prefix[0]
+        } else {
+            self.scroll_prefix[cache.next_prefix - 1]
+        };
+        (beat - prefix.beat).mul_add(prefix.ratio, prefix.cum_displayed)
     }
 
     pub fn get_speed_multiplier(&self, beat: f32, time: f32) -> f32 {
@@ -3364,6 +3501,68 @@ mod tests {
     }
 
     #[test]
+    fn beat_time_cache_matches_complex_timing_across_rewinds_and_offsets() {
+        let mut timing = TimingData::from_segments(
+            0.037,
+            -0.011,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0), (4.0, 173.0), (9.0, 91.0), (16.0, 240.0)],
+                stops: vec![
+                    StopSegment {
+                        beat: 5.0,
+                        duration: 0.125,
+                    },
+                    StopSegment {
+                        beat: 16.0,
+                        duration: 0.050,
+                    },
+                ],
+                delays: vec![DelaySegment {
+                    beat: 7.0,
+                    duration: 0.075,
+                }],
+                warps: vec![WarpSegment {
+                    beat: 10.0,
+                    length: 2.0,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let batches = [
+            &[-2.0, 0.0, 1.0, 4.0, 5.0, 5.0, 7.0, 10.0, 10.5, 12.0, 18.0][..],
+            &[18.0, 2.0, 6.0, 11.0, 3.0, 20.0][..],
+        ];
+
+        let mut cache = BeatTimeCache::new(&timing);
+        for beats in batches {
+            for &beat in beats {
+                assert_eq!(
+                    timing.get_time_for_beat_ns_cached(beat, &mut cache),
+                    timing.get_time_for_beat_ns(beat),
+                    "beat {beat}",
+                );
+            }
+        }
+
+        timing.set_global_offset_seconds(0.023);
+        timing.shift_song_offset_seconds(-0.041);
+        for beat in [0.0, 4.0, 10.5, 12.0, 20.0] {
+            assert_eq!(
+                timing.get_time_for_beat_ns_cached(beat, &mut cache),
+                timing.get_time_for_beat_ns(beat),
+                "shifted beat {beat}",
+            );
+        }
+        for beat in [f32::NEG_INFINITY, f32::NAN, f32::INFINITY, f32::MAX] {
+            assert_eq!(
+                timing.get_time_for_beat_ns_cached(beat, &mut cache),
+                timing.get_time_for_beat_ns(beat),
+            );
+        }
+    }
+
+    #[test]
     fn time_for_beat_no_offset_excludes_global_offset() {
         let global_offset = 0.020;
         let timing = TimingData::from_segments(
@@ -3453,6 +3652,51 @@ mod tests {
         assert!((timing.get_displayed_beat(-1.0) - 0.0).abs() < 0.0001);
         assert!((timing.get_displayed_beat(2.0) - 0.0).abs() < 0.0001);
         assert!((timing.get_displayed_beat(5.0) - 1.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn displayed_beat_cache_matches_scroll_queries_and_rewinds() {
+        let timing = timing_with_scrolls(vec![
+            ScrollSegment {
+                beat: 0.0,
+                ratio: 0.0,
+            },
+            ScrollSegment {
+                beat: 4.0,
+                ratio: -0.5,
+            },
+            ScrollSegment {
+                beat: 8.0,
+                ratio: 1.75,
+            },
+            ScrollSegment {
+                beat: 16.0,
+                ratio: 0.25,
+            },
+        ]);
+        let mut cache = DisplayedBeatCache::new();
+        for beat in [
+            -12.0,
+            0.0,
+            3.5,
+            4.0,
+            7.0,
+            8.0,
+            20.0,
+            20.0,
+            2.0,
+            9.0,
+            -1.0,
+            17.0,
+            f32::NAN,
+            f32::INFINITY,
+        ] {
+            assert_eq!(
+                timing.get_displayed_beat_cached(beat, &mut cache).to_bits(),
+                timing.get_displayed_beat(beat).to_bits(),
+                "beat {beat}",
+            );
+        }
     }
 
     #[test]

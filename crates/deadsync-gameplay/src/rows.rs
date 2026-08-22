@@ -625,17 +625,23 @@ pub fn refresh_timing_caches_for_offset_change<I: Copy + Into<usize>>(
     mine_note_ix: &[Vec<I>; MAX_PLAYERS],
     mine_note_time_ns: &mut [Vec<SongTimeNs>; MAX_PLAYERS],
 ) {
+    let mut head_caches: [BeatTimeCache; MAX_PLAYERS] =
+        std::array::from_fn(|player| BeatTimeCache::new(timing_players[player]));
     for (time_ns, note) in note_time_cache_ns.iter_mut().zip(notes) {
         let player = player_index_for_column(num_players, cols_per_player, note.column);
-        *time_ns = timing_players[player].get_time_for_beat_ns(note.beat);
+        *time_ns = timing_players[player]
+            .get_time_for_beat_ns_cached(note.beat, &mut head_caches[player]);
     }
+    let mut tail_caches: [BeatTimeCache; MAX_PLAYERS] =
+        std::array::from_fn(|player| BeatTimeCache::new(timing_players[player]));
     for (time_ns, note) in hold_end_time_cache_ns.iter_mut().zip(notes) {
         let player = player_index_for_column(num_players, cols_per_player, note.column);
         *time_ns = note
             .hold
             .as_ref()
             .map_or(INVALID_SONG_TIME_NS, |hold| {
-                timing_players[player].get_time_for_beat_ns(hold.end_beat)
+                timing_players[player]
+                    .get_time_for_beat_ns_cached(hold.end_beat, &mut tail_caches[player])
             });
     }
     for row_entry in row_entries {
