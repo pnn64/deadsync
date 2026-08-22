@@ -1,5 +1,6 @@
 use std::fs::File;
-use std::path::Path;
+use std::io::{Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
 use symphonia::core::codecs::audio::{
     AudioCodecParameters, AudioDecoder, AudioDecoderOptions, well_known::CODEC_ID_VORBIS,
 };
@@ -15,6 +16,8 @@ use symphonia::core::units::{Duration, Timestamp};
 // are at most 8192 frames, so one block of preroll is sufficient; we still retry
 // with a larger window (and finally from the stream start) for safety.
 const SEEK_PREROLL_FRAMES: u64 = 1 << 14;
+const OGG_PAGE_HEADER_LEN: usize = 27;
+const OGG_CAPTURE_PATTERN: &[u8; 4] = b"OggS";
 
 pub(crate) struct OpenFile {
     pub reader: Reader,
@@ -24,6 +27,7 @@ pub(crate) struct OpenFile {
 }
 
 pub struct Reader {
+    path: PathBuf,
     format: Box<dyn FormatReader>,
     decoder: Box<dyn AudioDecoder>,
     track_id: u32,
@@ -37,6 +41,7 @@ pub struct Reader {
     base_ts: Timestamp,
     pending: Option<Vec<i16>>,
     cursor_frames: u64,
+    legacy_missing_granules: bool,
 }
 
 enum SeekOutcome {
@@ -68,6 +73,38 @@ fn probe_format(
         .map_err(|e| format!("Cannot probe OGG '{}': {e}", path.display()).into())
 }
 
+// Ogg requires a granule position of u64::MAX only when a page completes no
+// packets. Some old encoders also used it on pages that complete ordinary
+// audio packets. Symphonia maps that value to timestamp -1 and trims every
+// packet completed on the page to zero frames when gapless decoding is on.
+fn has_legacy_missing_granules(path: &Path) -> std::io::Result<bool> {
+    let mut file = File::open(path)?;
+    let mut header = [0_u8; OGG_PAGE_HEADER_LEN];
+    let mut lacing = [0_u8; u8::MAX as usize];
+
+    loop {
+        match file.read_exact(&mut header) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(false),
+            Err(e) => return Err(e),
+        }
+        if &header[..4] != OGG_CAPTURE_PATTERN || header[4] != 0 {
+            return Ok(false);
+        }
+
+        let segment_count = usize::from(header[26]);
+        let segments = &mut lacing[..segment_count];
+        file.read_exact(segments)?;
+        let missing_granule = header[6..14].iter().all(|&byte| byte == u8::MAX);
+        if missing_granule && segments.iter().any(|&length| length < u8::MAX) {
+            return Ok(true);
+        }
+
+        let body_len = segments.iter().map(|&length| i64::from(length)).sum();
+        file.seek(SeekFrom::Current(body_len))?;
+    }
+}
+
 fn vorbis_track(tracks: &[Track]) -> Option<(&Track, &AudioCodecParameters)> {
     tracks.iter().find_map(|track| {
         let params = track.codec_params.as_ref()?.audio()?;
@@ -76,6 +113,7 @@ fn vorbis_track(tracks: &[Track]) -> Option<(&Track, &AudioCodecParameters)> {
 }
 
 pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
+    let legacy_missing_granules = has_legacy_missing_granules(path)?;
     let format = probe_format(path)?;
 
     let (track_id, channels, sample_rate_hz, frames_total_hint, start_ts, decoder) = {
@@ -102,6 +140,7 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
     };
 
     let mut reader = Reader {
+        path: path.to_owned(),
         format,
         decoder,
         track_id,
@@ -110,6 +149,7 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
         base_ts: start_ts,
         pending: None,
         cursor_frames: 0,
+        legacy_missing_granules,
     };
 
     // Prime the first audio packet so linear reads start at the true first
@@ -182,6 +222,11 @@ pub(crate) fn snap_start_forward_to_packet(
     start_sec: f64,
 ) -> Result<Option<f64>, String> {
     if !start_sec.is_finite() || start_sec <= 0.0 {
+        return Ok(None);
+    }
+    if has_legacy_missing_granules(path).map_err(|e| format!("Cannot inspect OGG file: {e}"))? {
+        // Packet timestamps are unreliable in these streams. The reader uses
+        // a frame-counted seek path instead, which does not need snapping.
         return Ok(None);
     }
 
@@ -276,6 +321,10 @@ impl Reader {
         &mut self,
         target_frame: u64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if self.legacy_missing_granules {
+            return self.seek_from_start_by_frame(target_frame);
+        }
+
         let target_ts = self.base_ts.saturating_add(Duration::new(target_frame));
 
         // Try progressively larger prerolls; a larger window guarantees we land
@@ -299,6 +348,45 @@ impl Reader {
     #[inline(always)]
     pub(crate) const fn current_frame(&self) -> u64 {
         self.cursor_frames
+    }
+
+    fn seek_from_start_by_frame(
+        &mut self,
+        target_frame: u64,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let reopened = open_file(&self.path)?;
+        *self = reopened.reader;
+        let mut scratch = Vec::new();
+        let mut decoded_frames = 0_u64;
+
+        loop {
+            let has_packet = if let Some(mut pending) = self.pending.take() {
+                std::mem::swap(&mut scratch, &mut pending);
+                true
+            } else {
+                self.next_audio_packet(&mut scratch)?.is_some()
+            };
+            if !has_packet {
+                self.pending = None;
+                self.cursor_frames = target_frame;
+                return Ok(());
+            }
+            let frames = (scratch.len() / self.channels) as u64;
+            let packet_end = decoded_frames.saturating_add(frames);
+            if packet_end <= target_frame {
+                decoded_frames = packet_end;
+                continue;
+            }
+
+            let skip_frames = target_frame.saturating_sub(decoded_frames) as usize;
+            crate::resample::drop_front_samples(
+                &mut scratch,
+                skip_frames.saturating_mul(self.channels),
+            );
+            self.pending = Some(scratch);
+            self.cursor_frames = target_frame;
+            return Ok(());
+        }
     }
 
     fn seek_and_collect(
@@ -354,7 +442,7 @@ impl Reader {
         out: &mut Vec<i16>,
     ) -> Result<Option<Timestamp>, Box<dyn std::error::Error + Send + Sync>> {
         loop {
-            let packet = match self.format.next_packet() {
+            let mut packet = match self.format.next_packet() {
                 Ok(Some(packet)) => packet,
                 Ok(None) => return Ok(None),
                 Err(SymphoniaError::IoError(e))
@@ -370,6 +458,16 @@ impl Reader {
             };
             if packet.track_id != self.track_id {
                 continue;
+            }
+            if self.legacy_missing_granules
+                && packet.dur == Duration::ZERO
+                && packet.trim_end > Duration::ZERO
+            {
+                // A completed packet on a legacy -1-granule page is valid
+                // audio, not end padding. Restore the duration Symphonia moved
+                // wholesale into trim_end so gapless decode keeps the frames.
+                packet.dur = packet.trim_end;
+                packet.trim_end = Duration::ZERO;
             }
             let ts = packet.pts;
             let audio = match self.decoder.decode(&packet) {
@@ -392,10 +490,32 @@ impl Reader {
 
 #[cfg(test)]
 mod tests {
-    use super::{Reader, open_file, snap_start_forward_to_packet};
-    use std::path::PathBuf;
+    use super::{
+        OGG_CAPTURE_PATTERN, OGG_PAGE_HEADER_LEN, Reader, has_legacy_missing_granules, open_file,
+        snap_start_forward_to_packet,
+    };
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use symphonia::core::checksum::Crc32;
+    use symphonia::core::io::Monitor;
 
     const SEEK_COMPARE_FRAMES: usize = 4096;
+    static TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
+
+    struct TempFixture(PathBuf);
+
+    impl TempFixture {
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempFixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.0);
+        }
+    }
 
     fn fixture_path() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/music/credits.ogg")
@@ -416,6 +536,62 @@ mod tests {
         }
         out.truncate(frames * channels);
         out
+    }
+
+    fn read_all_samples(reader: &mut Reader) -> Vec<i16> {
+        let mut packet = Vec::new();
+        let mut out = Vec::new();
+        while reader
+            .read_dec_packet_into(&mut packet)
+            .expect("decode packet")
+        {
+            out.extend_from_slice(&packet);
+        }
+        out
+    }
+
+    fn missing_granule_fixture() -> TempFixture {
+        let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/sounds/boom.ogg");
+        let mut bytes = fs::read(&source).expect("read OGG fixture");
+        let mut offset = 0_usize;
+        let mut modified = false;
+
+        while offset + OGG_PAGE_HEADER_LEN <= bytes.len() {
+            assert_eq!(&bytes[offset..offset + 4], OGG_CAPTURE_PATTERN);
+            let segment_count = usize::from(bytes[offset + 26]);
+            let segment_start = offset + OGG_PAGE_HEADER_LEN;
+            let segment_end = segment_start + segment_count;
+            let body_len = bytes[segment_start..segment_end]
+                .iter()
+                .map(|&length| usize::from(length))
+                .sum::<usize>();
+            let page_end = segment_end + body_len;
+            assert!(page_end <= bytes.len());
+
+            let sequence = u32::from_le_bytes(
+                bytes[offset + 18..offset + 22]
+                    .try_into()
+                    .expect("page sequence"),
+            );
+            if sequence == 2 {
+                bytes[offset + 6..offset + 14].fill(u8::MAX);
+                bytes[offset + 22..offset + 26].fill(0);
+                let mut crc = Crc32::new(0);
+                crc.process_buf_bytes(&bytes[offset..page_end]);
+                bytes[offset + 22..offset + 26].copy_from_slice(&crc.crc().to_le_bytes());
+                modified = true;
+            }
+            offset = page_end;
+        }
+
+        assert!(modified, "fixture has no target audio page");
+        let id = TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "deadsync-missing-ogg-granule-{}-{id}.ogg",
+            std::process::id()
+        ));
+        fs::write(&path, bytes).expect("write malformed OGG fixture");
+        TempFixture(path)
     }
 
     #[test]
@@ -473,5 +649,38 @@ mod tests {
                 "target={target} snapped={snapped}"
             );
         }
+    }
+
+    #[test]
+    fn completed_packets_with_missing_granules_keep_audio_and_seek_exactly() {
+        let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/sounds/boom.ogg");
+        assert!(!has_legacy_missing_granules(&source).expect("inspect source fixture"));
+
+        let mut opened = open_file(&source).expect("open source fixture");
+        let channels = opened.channels;
+        let expected = read_all_samples(&mut opened.reader);
+
+        let malformed = missing_granule_fixture();
+        assert!(has_legacy_missing_granules(malformed.path()).expect("inspect malformed fixture"));
+        assert_eq!(
+            snap_start_forward_to_packet(malformed.path(), 0.1).expect("snap malformed fixture"),
+            None
+        );
+
+        let mut opened = open_file(malformed.path()).expect("open malformed fixture");
+        let actual = read_all_samples(&mut opened.reader);
+        assert_eq!(actual, expected);
+
+        let target = 8_000_usize;
+        let frames = 512_usize;
+        let mut seeked = open_file(malformed.path())
+            .expect("open seek fixture")
+            .reader;
+        seeked.seek_frame(target as u64).expect("seek fixture");
+        let actual = read_frames(&mut seeked, frames);
+        assert_eq!(
+            actual,
+            expected[target * channels..(target + frames) * channels]
+        );
     }
 }
