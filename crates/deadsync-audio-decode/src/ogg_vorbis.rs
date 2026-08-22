@@ -340,10 +340,6 @@ impl Reader {
         &mut self,
         target_frame: u64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if self.legacy_missing_granules {
-            return self.seek_from_start_by_frame(target_frame);
-        }
-
         let target_ts = self.base_ts.saturating_add(Duration::new(target_frame));
 
         // Try progressively larger prerolls; a larger window guarantees we land
@@ -358,8 +354,15 @@ impl Reader {
             }
         }
 
-        // Final fallback: decode from the very start of the stream. The target
-        // is always >= base_ts, so decoding from start_ts can never overshoot.
+        // Legacy streams can still seek quickly when Symphonia lands on a page
+        // with a valid granule. If both attempts overshoot, their timestamps are
+        // unreliable in this region, so retain the exact frame-counted fallback.
+        if self.legacy_missing_granules {
+            return self.seek_from_start_by_frame(target_frame);
+        }
+
+        // Final fallback for ordinary streams: decode from the stream start.
+        // The target is always >= base_ts, so this cannot overshoot.
         self.seek_and_collect(self.start_ts, target_ts, target_frame)?;
         Ok(())
     }
@@ -698,6 +701,10 @@ mod tests {
         let mut seeked = open_file(malformed.path())
             .expect("open seek fixture")
             .reader;
+        // This target lands through a valid-granule page. Make reopening
+        // impossible so the test also guards the fast legacy seek path.
+        seeked.path = malformed.path().with_extension("unavailable");
+        assert!(!seeked.path.is_file());
         seeked.seek_frame(target as u64).expect("seek fixture");
         let actual = read_frames(&mut seeked, frames);
         assert_eq!(
