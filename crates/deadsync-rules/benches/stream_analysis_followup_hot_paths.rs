@@ -1,6 +1,6 @@
 use deadsync_rules::stream::bench_support::zmod_fused_growth;
 use deadsync_rules::stream::{
-    StreamSegment, measure_densities, stream_run_progress, stream_sequences_threshold,
+    StreamSegment, stream_measure_densities, stream_run_progress, stream_sequences_threshold,
     zmod_stream_totals_full_measures,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -266,39 +266,41 @@ fn note_data() -> Vec<u8> {
     data
 }
 
-fn folded_measures() -> Vec<usize> {
+fn folded_measures() -> Vec<u8> {
     (0..MEASURE_COUNT)
         .map(|idx| match idx % 11 {
-            0..=2 | 5 | 8..=9 => 16 + idx % 7,
-            _ => idx % 13,
+            0..=2 | 5 | 8..=9 => (16 + idx % 7) as u8,
+            _ => (idx % 13) as u8,
         })
         .collect()
 }
 
-fn sized_measures() -> Vec<usize> {
+fn sized_measures() -> Vec<u8> {
     (0..MEASURE_COUNT)
         .map(|idx| if idx % 2 == 0 { 32 } else { 0 })
         .collect()
 }
 
 fn fail_progress_old(notes: &[u8], current_measure: usize) -> Option<(usize, usize)> {
-    let densities = measure_densities(notes, 4);
+    let densities = stream_measure_densities(notes, 4);
     if densities.get(current_measure).copied().unwrap_or(0) < 16 {
         return None;
     }
     let segment = stream_sequences_threshold(&densities, 16)
         .into_iter()
         .find(|segment| {
-            !segment.is_break && current_measure >= segment.start && current_measure < segment.end
+            !segment.is_break
+                && current_measure >= segment.start as usize
+                && current_measure < segment.end as usize
         })?;
     Some((
-        current_measure - segment.start + 1,
-        segment.end - segment.start,
+        current_measure - segment.start as usize + 1,
+        (segment.end - segment.start) as usize,
     ))
 }
 
 fn zmod_scan_reference(
-    measures: &[usize],
+    measures: &[u8],
     threshold: usize,
     multiplier: f32,
 ) -> (Vec<StreamSegment>, f32, f32) {

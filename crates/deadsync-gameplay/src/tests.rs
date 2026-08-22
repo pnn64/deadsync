@@ -11955,7 +11955,7 @@ mod tests {
 
     #[test]
     fn stream_outputs_use_optional_counter_threshold() {
-        let densities = [12usize, 12, 0, 16];
+        let densities = [12u8, 12, 0, 16];
 
         assert!(
             stream_outputs_full_measures(&densities, None, false, false)
@@ -11977,7 +11977,7 @@ mod tests {
 
     #[test]
     fn zmod_stream_totals_for_densities_uses_constant_bpm_policy() {
-        let densities = [32usize; 8];
+        let densities = [32u8; 8];
         let (segments, total_stream, total_break) =
             zmod_stream_totals_for_densities(&densities, true);
 

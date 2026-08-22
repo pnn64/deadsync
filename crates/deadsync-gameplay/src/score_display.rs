@@ -221,7 +221,7 @@ pub fn stream_segments_for_note_data(
     lanes: usize,
     constant_bpm: bool,
 ) -> (Vec<StreamSegment>, f32, f32) {
-    let densities = measure_densities(notes, lanes);
+    let densities = stream_measure_densities(notes, lanes);
     zmod_stream_totals_for_densities(&densities, constant_bpm)
 }
 
@@ -246,7 +246,7 @@ pub fn zmod_fail_stream_progress_for_note_data(
 
 #[inline(always)]
 pub fn zmod_stream_totals_for_densities(
-    densities: &[usize],
+    densities: &[u8],
     constant_bpm: bool,
 ) -> (Vec<StreamSegment>, f32, f32) {
     zmod_stream_totals_full_measures(densities, constant_bpm)

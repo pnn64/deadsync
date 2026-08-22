@@ -1,7 +1,7 @@
-use deadsync_rules::stream::bench_support::{
-    measure_densities_overreserved, stream_outputs_counter_growth, stream_outputs_separate,
+use deadsync_rules::stream::bench_support::{zmod_fallback_probe, zmod_fallback_probe_independent};
+use deadsync_rules::stream::{
+    StreamSegment, measure_densities, stream_measure_densities, stream_sequences_threshold,
 };
-use deadsync_rules::stream::{StreamOutputs, measure_densities, stream_outputs_full_measures};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -14,8 +14,8 @@ const NOTE_MEASURES: usize = 1_024;
 const ROWS_PER_MEASURE: usize = 64;
 const STREAM_MEASURES: usize = 16_384;
 const DENSITY_OPS: usize = 1_000;
-const COUNTER_OPS: usize = 1_000;
-const FUSED_OPS: usize = 2_000;
+const SEGMENT_OPS: usize = 1_500;
+const PROBE_OPS: usize = 3_000;
 const SAMPLE_BATCHES: usize = 100;
 
 struct CountingAlloc {
@@ -244,9 +244,7 @@ fn note_data() -> Vec<u8> {
     for measure in 0..NOTE_MEASURES {
         for row in 0..ROWS_PER_MEASURE {
             let mut cells = [b'0'; 4];
-            if row % 4 == 0 || row % 19 == 0 {
-                cells[(row + measure) % 4] = b'1';
-            }
+            cells[(row + measure) % 4] = b'1';
             data.extend_from_slice(&cells);
             data.push(b'\n');
         }
@@ -261,109 +259,200 @@ fn note_data() -> Vec<u8> {
 
 fn stream_measures() -> Vec<u8> {
     (0..STREAM_MEASURES)
-        .map(|idx| match idx % 11 {
-            0..=2 => (32 + idx % 5) as u8,
-            4..=5 | 8 => (20 + idx % 7) as u8,
-            _ => (idx % 12) as u8,
+        .map(|idx| match idx % 12 {
+            0..=2 => 24,
+            6..=8 => 20,
+            _ => 4,
         })
         .collect()
 }
 
-fn dense_measures() -> Vec<u8> {
-    vec![32; STREAM_MEASURES]
+fn fallback_measures() -> Vec<u8> {
+    (0..STREAM_MEASURES)
+        .map(|idx| match idx % 17 {
+            0..=2 => 27,
+            4..=7 => 22,
+            9..=13 => 17,
+            _ => 5,
+        })
+        .collect()
 }
 
-fn usize_checksum(values: &[usize]) -> u64 {
+#[derive(Clone, Copy)]
+struct WideSegment {
+    start: usize,
+    end: usize,
+    is_break: bool,
+}
+
+#[derive(Default)]
+struct WideRuns {
+    start: Option<usize>,
+    end: usize,
+}
+
+impl WideRuns {
+    fn record(&mut self, idx: usize, out: &mut Vec<WideSegment>) {
+        match self.start {
+            None => {
+                if idx >= 2 {
+                    out.push(WideSegment {
+                        start: 0,
+                        end: idx,
+                        is_break: true,
+                    });
+                }
+                self.start = Some(idx);
+                self.end = idx + 1;
+            }
+            Some(_) if idx == self.end => self.end += 1,
+            Some(start) => {
+                out.push(WideSegment {
+                    start,
+                    end: self.end,
+                    is_break: false,
+                });
+                if idx >= self.end + 2 {
+                    out.push(WideSegment {
+                        start: self.end,
+                        end: idx,
+                        is_break: true,
+                    });
+                }
+                self.start = Some(idx);
+                self.end = idx + 1;
+            }
+        }
+    }
+
+    fn finish(self, measure_count: usize, out: &mut Vec<WideSegment>) {
+        let Some(start) = self.start else {
+            return;
+        };
+        out.push(WideSegment {
+            start,
+            end: self.end,
+            is_break: false,
+        });
+        if measure_count >= self.end + 2 {
+            out.push(WideSegment {
+                start: self.end,
+                end: measure_count,
+                is_break: true,
+            });
+        }
+    }
+}
+
+fn wide_stream_segments(measures: &[u8], threshold: u8) -> Vec<WideSegment> {
+    let mut out = Vec::new();
+    let mut runs = WideRuns::default();
+    for (idx, &density) in measures.iter().enumerate() {
+        if density >= threshold {
+            runs.record(idx, &mut out);
+        }
+    }
+    runs.finish(measures.len(), &mut out);
+    out
+}
+
+fn wide_density_checksum(values: &[usize]) -> u64 {
     values
         .iter()
         .enumerate()
         .fold(0u64, |checksum, (idx, value)| {
-            checksum.rotate_left(7) ^ (*value as u64).rotate_left(idx as u32)
+            checksum.rotate_left(7) ^ ((*value).min(32) as u64).rotate_left(idx as u32)
         })
 }
 
-fn outputs_checksum(value: &StreamOutputs) -> u64 {
-    value
-        .counter_segments
+fn compact_density_checksum(values: &[u8]) -> u64 {
+    values
         .iter()
-        .chain(&value.zmod_segments)
-        .fold(0u64, |checksum, segment| {
-            checksum.rotate_left(9)
-                ^ (segment.start as u64)
-                ^ (segment.end as u64).rotate_left(23)
-                ^ u64::from(segment.is_break).rotate_left(47)
+        .enumerate()
+        .fold(0u64, |checksum, (idx, value)| {
+            checksum.rotate_left(7) ^ u64::from(*value).rotate_left(idx as u32)
         })
-        ^ u64::from(value.total_stream.to_bits()).rotate_left(17)
-        ^ u64::from(value.total_break.to_bits()).rotate_left(41)
+}
+
+fn wide_segment_checksum(segments: &[WideSegment]) -> u64 {
+    segments.iter().fold(0u64, |checksum, segment| {
+        checksum.rotate_left(9)
+            ^ segment.start as u64
+            ^ (segment.end as u64).rotate_left(23)
+            ^ u64::from(segment.is_break).rotate_left(47)
+    })
+}
+
+fn compact_segment_checksum(segments: &[StreamSegment]) -> u64 {
+    segments.iter().fold(0u64, |checksum, segment| {
+        checksum.rotate_left(9)
+            ^ u64::from(segment.start)
+            ^ u64::from(segment.end).rotate_left(23)
+            ^ u64::from(segment.is_break).rotate_left(47)
+    })
+}
+
+fn probe_checksum(([d24, d20], count16): ([u32; 2], usize)) -> u64 {
+    u64::from(d24) ^ u64::from(d20).rotate_left(21) ^ (count16 as u64).rotate_left(43)
 }
 
 fn main() {
     let notes = note_data();
-    let old_density_value = measure_densities_overreserved(&notes, 4);
-    let new_density_value = measure_densities(&notes, 4);
-    assert_eq!(old_density_value, new_density_value);
+    let old_density_value = measure_densities(&notes, 4);
+    let new_density_value = stream_measure_densities(&notes, 4);
+    assert_eq!(
+        wide_density_checksum(&old_density_value),
+        compact_density_checksum(&new_density_value)
+    );
     let old_density = measure(DENSITY_OPS, NOTE_MEASURES * ROWS_PER_MEASURE, || {
-        usize_checksum(&measure_densities_overreserved(black_box(&notes), 4))
+        wide_density_checksum(&measure_densities(black_box(&notes), 4))
     });
     let new_density = measure(DENSITY_OPS, NOTE_MEASURES * ROWS_PER_MEASURE, || {
-        usize_checksum(&measure_densities(black_box(&notes), 4))
+        compact_density_checksum(&stream_measure_densities(black_box(&notes), 4))
     });
     print_pair(
-        "sixteenth-row density reservation",
+        "byte-sized measure densities",
         DENSITY_OPS,
         &old_density,
         &new_density,
     );
 
     let measures = stream_measures();
-    let old_counter_value = stream_outputs_counter_growth(&measures, 20, true);
-    let new_counter_value = stream_outputs_full_measures(&measures, Some(20), true, true);
-    assert_eq!(old_counter_value, new_counter_value);
-    let old_counter = measure(COUNTER_OPS, STREAM_MEASURES, || {
-        outputs_checksum(&stream_outputs_counter_growth(
-            black_box(&measures),
-            20,
-            true,
-        ))
+    let old_segment_value = wide_stream_segments(&measures, 20);
+    let new_segment_value = stream_sequences_threshold(&measures, 20);
+    assert_eq!(
+        wide_segment_checksum(&old_segment_value),
+        compact_segment_checksum(&new_segment_value)
+    );
+    assert_eq!(std::mem::size_of::<WideSegment>(), 24);
+    assert_eq!(std::mem::size_of::<StreamSegment>(), 12);
+    let old_segments = measure(SEGMENT_OPS, STREAM_MEASURES, || {
+        wide_segment_checksum(&wide_stream_segments(black_box(&measures), 20))
     });
-    let new_counter = measure(COUNTER_OPS, STREAM_MEASURES, || {
-        outputs_checksum(&stream_outputs_full_measures(
-            black_box(&measures),
-            Some(20),
-            true,
-            true,
-        ))
+    let new_segments = measure(SEGMENT_OPS, STREAM_MEASURES, || {
+        compact_segment_checksum(&stream_sequences_threshold(black_box(&measures), 20))
     });
     print_pair(
-        "probe-sized measure counter",
-        COUNTER_OPS,
-        &old_counter,
-        &new_counter,
+        "u32 stream segment indices",
+        SEGMENT_OPS,
+        &old_segments,
+        &new_segments,
     );
 
-    let dense_measures = dense_measures();
-    let old_fused_value = stream_outputs_separate(&dense_measures, 32, true);
-    let new_fused_value = stream_outputs_full_measures(&dense_measures, Some(32), true, true);
-    assert_eq!(old_fused_value, new_fused_value);
-    let old_fused = measure(FUSED_OPS, STREAM_MEASURES, || {
-        outputs_checksum(&stream_outputs_separate(
-            black_box(&dense_measures),
-            32,
-            true,
-        ))
+    let measures = fallback_measures();
+    let old_probe_value = zmod_fallback_probe_independent(&measures);
+    let new_probe_value = zmod_fallback_probe(&measures);
+    assert_eq!(old_probe_value, new_probe_value);
+    let old_probe = measure(PROBE_OPS, STREAM_MEASURES, || {
+        probe_checksum(zmod_fallback_probe_independent(black_box(&measures)))
     });
-    let new_fused = measure(FUSED_OPS, STREAM_MEASURES, || {
-        outputs_checksum(&stream_outputs_full_measures(
-            black_box(&dense_measures),
-            Some(32),
-            true,
-            true,
-        ))
+    let new_probe = measure(PROBE_OPS, STREAM_MEASURES, || {
+        probe_checksum(zmod_fallback_probe(black_box(&measures)))
     });
     print_pair(
-        "fused counter and ZMod construction",
-        FUSED_OPS,
-        &old_fused,
-        &new_fused,
+        "partitioned ZMod fallback probes",
+        PROBE_OPS,
+        &old_probe,
+        &new_probe,
     );
 }

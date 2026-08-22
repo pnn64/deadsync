@@ -739,8 +739,8 @@ impl BinaryProgressLookup {
 fn stream_progress_benchmark() {
     let segments = (0..HUD_SEGMENTS)
         .map(|index| StreamSegment {
-            start: index * 4,
-            end: index * 4 + 4,
+            start: (index * 4) as u32,
+            end: (index * 4 + 4) as u32,
             is_break: index % 5 == 4,
         })
         .collect::<Vec<_>>();
@@ -811,8 +811,8 @@ fn legacy_segment_indices(segments: &[StreamSegment], current_measure: f32) -> (
 fn counter_hud_lookup_benchmark() {
     let segments = (0..HUD_SEGMENTS)
         .map(|index| StreamSegment {
-            start: index * 4,
-            end: index * 4 + 4,
+            start: (index * 4) as u32,
+            end: (index * 4 + 4) as u32,
             is_break: index % 5 == 4,
         })
         .collect::<Vec<_>>();

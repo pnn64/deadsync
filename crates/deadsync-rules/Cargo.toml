@@ -23,6 +23,11 @@ name = "stream_initialization_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "stream_compact_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [features]
 bench-support = []
 

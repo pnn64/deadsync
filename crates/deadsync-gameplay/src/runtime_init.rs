@@ -1079,11 +1079,11 @@ where
         second[0].clone_from(&first[0]);
     }
 
-    let measure_densities: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|p| {
+    let measure_densities: [Vec<u8>; MAX_PLAYERS] = std::array::from_fn(|p| {
         if p >= num_players || !needs_stream_data(&player_profiles[p]) {
             return Vec::new();
         }
-        measure_densities(&gameplay_charts[p].notes, cols_per_player)
+        stream_measure_densities(&gameplay_charts[p].notes, cols_per_player)
     });
 
     let mut measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] =

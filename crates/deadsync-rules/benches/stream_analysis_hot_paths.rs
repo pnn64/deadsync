@@ -349,11 +349,11 @@ fn push_density_old(measure: &mut Vec<u8>, measure_steps: &mut usize, densities:
     *measure_steps = 0;
 }
 
-fn stream_sequences_old(measures: &[usize], threshold: usize) -> Vec<StreamSegment> {
+fn stream_sequences_old(measures: &[u8], threshold: usize) -> Vec<StreamSegment> {
     let streams: Vec<_> = measures
         .iter()
         .enumerate()
-        .filter(|(_, density)| **density >= threshold)
+        .filter(|(_, density)| usize::from(**density) >= threshold)
         .map(|(idx, _)| idx + 1)
         .collect();
     if streams.is_empty() {
@@ -365,7 +365,7 @@ fn stream_sequences_old(measures: &[usize], threshold: usize) -> Vec<StreamSegme
     if first_break >= 2 {
         segments.push(StreamSegment {
             start: 0,
-            end: first_break,
+            end: first_break as u32,
             is_break: true,
         });
     }
@@ -379,8 +379,8 @@ fn stream_sequences_old(measures: &[usize], threshold: usize) -> Vec<StreamSegme
         }
         let stream_end = end.unwrap_or(current);
         segments.push(StreamSegment {
-            start: stream_end - count,
-            end: stream_end,
+            start: (stream_end - count) as u32,
+            end: stream_end as u32,
             is_break: false,
         });
         let break_end = if next == usize::MAX {
@@ -390,8 +390,8 @@ fn stream_sequences_old(measures: &[usize], threshold: usize) -> Vec<StreamSegme
         };
         if break_end >= current + 2 {
             segments.push(StreamSegment {
-                start: current,
-                end: break_end,
+                start: current as u32,
+                end: break_end as u32,
                 is_break: true,
             });
         }
@@ -401,13 +401,13 @@ fn stream_sequences_old(measures: &[usize], threshold: usize) -> Vec<StreamSegme
     segments
 }
 
-fn stream_measures() -> Vec<usize> {
+fn stream_measures() -> Vec<u8> {
     (0..STREAM_MEASURES)
         .map(|idx| if idx % 32 < 20 { 16 } else { 4 })
         .collect()
 }
 
-fn zmod_measures() -> Vec<usize> {
+fn zmod_measures() -> Vec<u8> {
     (0..STREAM_MEASURES)
         .map(|idx| match idx % 64 {
             0..=3 => 32,
@@ -419,7 +419,7 @@ fn zmod_measures() -> Vec<usize> {
         .collect()
 }
 
-fn materialized_density(measures: &[usize], threshold: usize, multiplier: f32) -> f32 {
+fn materialized_density(measures: &[u8], threshold: usize, multiplier: f32) -> f32 {
     let segments = stream_sequences_threshold(measures, threshold);
     if segments.is_empty() {
         return 0.0;
@@ -443,7 +443,7 @@ fn materialized_density(measures: &[usize], threshold: usize, multiplier: f32) -
     }
 }
 
-fn zmod_old_probes(measures: &[usize]) -> (Vec<StreamSegment>, f32, f32) {
+fn zmod_old_probes(measures: &[u8]) -> (Vec<StreamSegment>, f32, f32) {
     let mut threshold = 32usize;
     let mut multiplier = 2.0_f32;
     if materialized_density(measures, threshold, multiplier) < 0.2 {
