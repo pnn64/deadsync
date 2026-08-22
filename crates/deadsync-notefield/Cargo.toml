@@ -12,6 +12,10 @@ harness = false
 name = "stream_storage_hot_paths"
 harness = false
 
+[[bench]]
+name = "hold_mesh_pool_hot_paths"
+harness = false
+
 [features]
 bench-support = []
 

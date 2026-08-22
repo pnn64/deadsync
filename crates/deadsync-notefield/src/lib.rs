@@ -162,6 +162,8 @@ pub(crate) use noteskin_model::noteskin_model_flat_draw_cached;
 pub mod performance {
     pub use crate::field_frame::measure_cue_range_search_enabled;
     #[cfg(feature = "bench-support")]
+    pub use crate::holds::{HoldMeshPoolBench, ReferenceHoldMeshPoolBench};
+    #[cfg(feature = "bench-support")]
     pub use crate::measure_lines::edit_beat_bar_info_for_row;
     pub use crate::measure_lines::{
         CueSegmentRanges, EditBeatBarCursor, EditBeatBarInfo, cue_segment_ranges,

@@ -143,6 +143,9 @@ struct RenderedHoldBody {
 const HOLD_BODY_BUFFER_VERTICES: usize = 2048;
 const HOLD_CAP_BUFFER_VERTICES: usize = 6;
 const HOLD_MESH_PAIRS_PER_FRAME: usize = MAX_COLS * 2;
+type HoldMeshBuffer = Arc<Vec<TexturedMeshVertex>>;
+type HoldMeshPair = [HoldMeshBuffer; 2];
+type SharedHoldMeshPair = (Option<HoldMeshBuffer>, Option<HoldMeshBuffer>);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HoldMeshScratchStats {
@@ -154,9 +157,8 @@ pub struct HoldMeshScratchStats {
 }
 
 struct HoldMeshBufferPool {
-    buffers: Vec<Arc<Vec<TexturedMeshVertex>>>,
-    available_pairs: u64,
-    availability_ready: bool,
+    pairs: Vec<HoldMeshPair>,
+    next_pair: usize,
     current_pairs: usize,
     max_pairs: usize,
     stats: HoldMeshScratchStats,
@@ -166,11 +168,15 @@ impl HoldMeshBufferPool {
     fn new(enabled: bool, max_pairs: usize, initial_capacity: usize) -> Self {
         let max_pairs = usize::from(enabled) * max_pairs.min(u64::BITS as usize);
         Self {
-            buffers: (0..max_pairs.saturating_mul(2))
-                .map(|_| Arc::new(Vec::with_capacity(initial_capacity)))
+            pairs: (0..max_pairs)
+                .map(|_| {
+                    [
+                        Arc::new(Vec::with_capacity(initial_capacity)),
+                        Arc::new(Vec::with_capacity(initial_capacity)),
+                    ]
+                })
                 .collect(),
-            available_pairs: 0,
-            availability_ready: false,
+            next_pair: 0,
             current_pairs: 0,
             max_pairs,
             stats: HoldMeshScratchStats::default(),
@@ -179,39 +185,100 @@ impl HoldMeshBufferPool {
 
     #[inline(always)]
     fn begin_frame(&mut self) {
-        self.availability_ready = false;
+        self.next_pair = 0;
         self.current_pairs = 0;
+    }
+
+    fn with_pair<R>(
+        &mut self,
+        fill: impl FnOnce(&mut Vec<TexturedMeshVertex>, &mut Vec<TexturedMeshVertex>) -> R,
+    ) -> Option<(usize, R)> {
+        while self.next_pair < self.max_pairs {
+            let pair = self.next_pair;
+            self.next_pair += 1;
+            let [first, second] = &mut self.pairs[pair];
+            let Some(first) = Arc::get_mut(first) else {
+                continue;
+            };
+            let Some(second) = Arc::get_mut(second) else {
+                continue;
+            };
+            first.clear();
+            second.clear();
+            self.current_pairs += 1;
+            self.stats.high_water_pairs = self.stats.high_water_pairs.max(self.current_pairs);
+            return Some((pair * 2, fill(first, second)));
+        }
+        self.stats.saturated_pairs = self.stats.saturated_pairs.saturating_add(1);
+        None
+    }
+
+    fn shared_nonempty_pair(&self, start: usize) -> SharedHoldMeshPair {
+        let [first, second] = &self.pairs[start / 2];
+        (
+            (!first.is_empty()).then(|| Arc::clone(first)),
+            (!second.is_empty()).then(|| Arc::clone(second)),
+        )
+    }
+
+    #[cfg(test)]
+    fn shared_pair(
+        &self,
+        start: usize,
+    ) -> (Arc<Vec<TexturedMeshVertex>>, Arc<Vec<TexturedMeshVertex>>) {
+        let [first, second] = &self.pairs[start / 2];
+        (Arc::clone(first), Arc::clone(second))
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+struct ReferenceHoldMeshBufferPool {
+    buffers: Vec<Arc<Vec<TexturedMeshVertex>>>,
+    available_pairs: u64,
+    availability_ready: bool,
+    max_pairs: usize,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ReferenceHoldMeshBufferPool {
+    fn new(max_pairs: usize, initial_capacity: usize) -> Self {
+        let max_pairs = max_pairs.min(u64::BITS as usize);
+        Self {
+            buffers: (0..max_pairs.saturating_mul(2))
+                .map(|_| Arc::new(Vec::with_capacity(initial_capacity)))
+                .collect(),
+            available_pairs: 0,
+            availability_ready: false,
+            max_pairs,
+        }
+    }
+
+    fn begin_frame(&mut self) {
+        self.availability_ready = false;
     }
 
     fn acquire_pair(&mut self) -> Option<usize> {
         if !self.availability_ready {
-            self.available_pairs = self.reusable_pair_mask();
+            self.available_pairs = (0..self.max_pairs).fold(0_u64, |mask, pair| {
+                let start = pair * 2;
+                let reusable = Arc::strong_count(&self.buffers[start]) == 1
+                    && Arc::strong_count(&self.buffers[start + 1]) == 1;
+                mask | (u64::from(reusable) << pair)
+            });
             self.availability_ready = true;
         }
         if self.available_pairs == 0 {
-            self.stats.saturated_pairs = self.stats.saturated_pairs.saturating_add(1);
             return None;
         }
         let pair = self.available_pairs.trailing_zeros() as usize;
         let start = pair * 2;
         self.available_pairs &= !(1_u64 << pair);
-        self.current_pairs += 1;
-        self.stats.high_water_pairs = self.stats.high_water_pairs.max(self.current_pairs);
         for buffer in &mut self.buffers[start..start + 2] {
             Arc::get_mut(buffer)
-                .expect("selected hold buffer must be uniquely owned")
+                .expect("selected reference hold buffer must be uniquely owned")
                 .clear();
         }
         Some(start)
-    }
-
-    fn reusable_pair_mask(&self) -> u64 {
-        (0..self.max_pairs).fold(0_u64, |mask, pair| {
-            let start = pair * 2;
-            let reusable = Arc::strong_count(&self.buffers[start]) == 1
-                && Arc::strong_count(&self.buffers[start + 1]) == 1;
-            mask | (u64::from(reusable) << pair)
-        })
     }
 
     fn pair_mut(
@@ -219,9 +286,10 @@ impl HoldMeshBufferPool {
         start: usize,
     ) -> (&mut Vec<TexturedMeshVertex>, &mut Vec<TexturedMeshVertex>) {
         let (before_second, from_second) = self.buffers.split_at_mut(start + 1);
-        let first =
-            Arc::get_mut(&mut before_second[start]).expect("acquired buffer must be unique");
-        let second = Arc::get_mut(&mut from_second[0]).expect("acquired buffer must be unique");
+        let first = Arc::get_mut(&mut before_second[start])
+            .expect("acquired reference buffer must be unique");
+        let second =
+            Arc::get_mut(&mut from_second[0]).expect("acquired reference buffer must be unique");
         (first, second)
     }
 
@@ -246,12 +314,13 @@ impl HoldMeshBufferPool {
 /// renderer. Up to twice the engine lane bound of simultaneous visible holds
 /// covers dense and malformed overlap without live allocation; larger combined
 /// composition/render ownership saturates to the allocation-backed compatibility path.
-/// There is no per-hold scan, eviction, or destruction on a frame. Buffers are
-/// freed with gameplay state. Counters expose saturation and unexpected
-/// references. The first visible hold triggers one bounded availability scan;
-/// later holds use constant-time bit selection, while hold-free frames do no
-/// pool work. Normal frame work is bounded to that scan plus clearing six
-/// vectors per visible hold; retained capacity is not initialized.
+/// There is no repeated full-pool scan, eviction, or destruction on a frame.
+/// Buffers are freed with gameplay state. Counters expose saturation and unexpected
+/// references. Visible holds advance one bounded availability scan only as far
+/// as demand requires, while hold-free frames do no pool work. Normal frame
+/// work is bounded to one monotonic pass over the pool plus clearing two vectors
+/// per visible hold; empty diffuse/glow buffers are not shared with the renderer
+/// and retained capacity is not initialized.
 pub struct HoldMeshScratch {
     bodies: HoldMeshBufferPool,
     caps: HoldMeshBufferPool,
@@ -298,6 +367,116 @@ impl HoldMeshScratch {
     pub fn reset_stats(&mut self) {
         self.bodies.stats = HoldMeshScratchStats::default();
         self.caps.stats = HoldMeshScratchStats::default();
+    }
+}
+
+#[cfg(feature = "bench-support")]
+type RetainedHoldBuffers = Vec<Vec<Arc<Vec<TexturedMeshVertex>>>>;
+
+#[cfg(feature = "bench-support")]
+fn retained_hold_buffers(frames: usize, pairs: usize) -> RetainedHoldBuffers {
+    (0..frames + 1)
+        .map(|_| Vec::with_capacity(pairs * 2))
+        .collect()
+}
+
+#[cfg(feature = "bench-support")]
+fn fill_bench_pair(
+    diffuse: &mut Vec<TexturedMeshVertex>,
+    glow: &mut Vec<TexturedMeshVertex>,
+    diffuse_vertices: usize,
+    glow_vertices: usize,
+) -> u64 {
+    diffuse.resize(diffuse_vertices, TexturedMeshVertex::default());
+    glow.resize(glow_vertices, TexturedMeshVertex::default());
+    (diffuse.len() as u64).rotate_left(7) ^ glow.len() as u64
+}
+
+/// Benchmark-only driver for the live hold-mesh pool.
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct HoldMeshPoolBench {
+    pool: HoldMeshBufferPool,
+    retained: RetainedHoldBuffers,
+    frame_slot: usize,
+}
+
+#[cfg(feature = "bench-support")]
+impl HoldMeshPoolBench {
+    pub fn new(max_pairs: usize, vertices: usize, retained_frames: usize) -> Self {
+        Self {
+            pool: HoldMeshBufferPool::new(true, max_pairs, vertices),
+            retained: retained_hold_buffers(retained_frames, max_pairs),
+            frame_slot: 0,
+        }
+    }
+
+    pub fn frame(&mut self, pairs: usize, diffuse_vertices: usize, glow_vertices: usize) -> u64 {
+        let frame = &mut self.retained[self.frame_slot];
+        frame.clear();
+        self.pool.begin_frame();
+        let mut checksum = 0_u64;
+        for _ in 0..pairs {
+            let Some((start, value)) = self.pool.with_pair(|diffuse, glow| {
+                fill_bench_pair(diffuse, glow, diffuse_vertices, glow_vertices)
+            }) else {
+                checksum = checksum.wrapping_add(u64::MAX);
+                continue;
+            };
+            checksum = checksum.wrapping_add((start as u64).rotate_left(13) ^ value);
+            let (diffuse, glow) = self.pool.shared_nonempty_pair(start);
+            frame.extend(diffuse);
+            frame.extend(glow);
+        }
+        self.frame_slot = (self.frame_slot + 1) % self.retained.len();
+        checksum
+    }
+}
+
+/// Benchmark-only driver retaining the replaced eager-scan implementation.
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct ReferenceHoldMeshPoolBench {
+    pool: ReferenceHoldMeshBufferPool,
+    retained: RetainedHoldBuffers,
+    frame_slot: usize,
+}
+
+#[cfg(feature = "bench-support")]
+impl ReferenceHoldMeshPoolBench {
+    pub fn new(max_pairs: usize, vertices: usize, retained_frames: usize) -> Self {
+        Self {
+            pool: ReferenceHoldMeshBufferPool::new(max_pairs, vertices),
+            retained: retained_hold_buffers(retained_frames, max_pairs),
+            frame_slot: 0,
+        }
+    }
+
+    pub fn frame(&mut self, pairs: usize, diffuse_vertices: usize, glow_vertices: usize) -> u64 {
+        let frame = &mut self.retained[self.frame_slot];
+        frame.clear();
+        self.pool.begin_frame();
+        let mut checksum = 0_u64;
+        for _ in 0..pairs {
+            let Some(start) = self.pool.acquire_pair() else {
+                checksum = checksum.wrapping_add(u64::MAX);
+                continue;
+            };
+            let value = {
+                let (diffuse, glow) = self.pool.pair_mut(start);
+                fill_bench_pair(diffuse, glow, diffuse_vertices, glow_vertices)
+            };
+            checksum = checksum.wrapping_add((start as u64).rotate_left(13) ^ value);
+            let (diffuse, glow) = self.pool.shared_pair(start);
+            if !diffuse.is_empty() {
+                frame.push(diffuse);
+            }
+            if !glow.is_empty() {
+                frame.push(glow);
+            }
+        }
+        self.frame_slot = (self.frame_slot + 1) % self.retained.len();
+        checksum
     }
 }
 
@@ -826,30 +1005,50 @@ where
     P: Fn(f32) -> HoldPathSample,
 {
     let use_mesh = slot.model().is_none() && request.rotation_y_deg.abs() <= f32::EPSILON;
-    let pooled_pair = use_mesh
-        .then(|| mesh_scratch.bodies.acquire_pair())
-        .flatten();
+    let mut pooled_pair = None;
     let mut owned_diffuse = Vec::new();
     let mut owned_glow = Vec::new();
-    let rendered = if let Some(start) = pooled_pair {
-        let (diffuse, glow) = mesh_scratch.bodies.pair_mut(start);
-        compose_sliced_hold_body_into(
-            draws,
-            request,
-            slot,
-            body_top,
-            body_bottom,
-            segment_height,
-            phase,
-            phase_end,
-            max_segments,
-            uv,
-            phase_offset,
-            sample_path,
-            sprite_source,
-            diffuse,
-            glow,
-        )
+    let rendered = if use_mesh {
+        if let Some((start, rendered)) = mesh_scratch.bodies.with_pair(|diffuse, glow| {
+            compose_sliced_hold_body_into(
+                draws,
+                request,
+                slot,
+                body_top,
+                body_bottom,
+                segment_height,
+                phase,
+                phase_end,
+                max_segments,
+                uv,
+                phase_offset,
+                sample_path,
+                sprite_source,
+                diffuse,
+                glow,
+            )
+        }) {
+            pooled_pair = Some(start);
+            rendered
+        } else {
+            compose_sliced_hold_body_into(
+                draws,
+                request,
+                slot,
+                body_top,
+                body_bottom,
+                segment_height,
+                phase,
+                phase_end,
+                max_segments,
+                uv,
+                phase_offset,
+                sample_path,
+                sprite_source,
+                &mut owned_diffuse,
+                &mut owned_glow,
+            )
+        }
     } else {
         compose_sliced_hold_body_into(
             draws,
@@ -871,8 +1070,8 @@ where
     };
 
     if let Some(start) = pooled_pair {
-        let (diffuse, glow) = mesh_scratch.bodies.shared_pair(start);
-        if !diffuse.is_empty() {
+        let (diffuse, glow) = mesh_scratch.bodies.shared_nonempty_pair(start);
+        if let Some(diffuse) = diffuse {
             draws.push(hold_reusable_strip_draw(
                 slot.texture_key_shared(),
                 diffuse,
@@ -881,7 +1080,7 @@ where
                 request.body_z,
             ));
         }
-        if !glow.is_empty() {
+        if let Some(glow) = glow {
             draws.push(hold_reusable_strip_glow_draw(
                 slot.texture_key_shared(),
                 glow,
@@ -1347,18 +1546,16 @@ fn compose_cap_mesh<S>(
         return;
     }
 
-    if let Some(start) = mesh_scratch.caps.acquire_pair() {
-        {
-            let (diffuse, glow) = mesh_scratch.caps.pair_mut(start);
-            if let Some(vertices) = diffuse_quad {
-                diffuse.extend_from_slice(&vertices);
-            }
-            if let Some(vertices) = glow_quad {
-                glow.extend_from_slice(&vertices);
-            }
+    if let Some((start, ())) = mesh_scratch.caps.with_pair(|diffuse, glow| {
+        if let Some(vertices) = diffuse_quad {
+            diffuse.extend_from_slice(&vertices);
         }
-        let (diffuse, glow) = mesh_scratch.caps.shared_pair(start);
-        if !diffuse.is_empty() {
+        if let Some(vertices) = glow_quad {
+            glow.extend_from_slice(&vertices);
+        }
+    }) {
+        let (diffuse, glow) = mesh_scratch.caps.shared_nonempty_pair(start);
+        if let Some(diffuse) = diffuse {
             draws.push(hold_reusable_strip_draw(
                 slot.texture_key_shared(),
                 diffuse,
@@ -1367,7 +1564,7 @@ fn compose_cap_mesh<S>(
                 request.cap_z,
             ));
         }
-        if !glow.is_empty() {
+        if let Some(glow) = glow {
             draws.push(hold_reusable_strip_glow_draw(
                 slot.texture_key_shared(),
                 glow,
@@ -2303,14 +2500,19 @@ mod tests {
     fn hold_mesh_scratch_rotates_while_prior_frame_is_retained() {
         let mut scratch = HoldMeshScratch::with_columns(1);
         scratch.begin_frame();
-        let first = scratch.bodies.acquire_pair().expect("prewarmed body pair");
+        let first = scratch
+            .bodies
+            .with_pair(|_, _| ())
+            .expect("prewarmed body pair")
+            .0;
         let (held_diffuse, held_glow) = scratch.bodies.shared_pair(first);
 
         scratch.begin_frame();
         let second = scratch
             .bodies
-            .acquire_pair()
-            .expect("second frame body pair");
+            .with_pair(|_, _| ())
+            .expect("second frame body pair")
+            .0;
         assert_eq!(first, 0);
         assert_eq!(second, 2);
         let (next_diffuse, next_glow) = scratch.bodies.shared_pair(second);
@@ -2321,14 +2523,96 @@ mod tests {
     }
 
     #[test]
+    fn hold_mesh_pool_does_not_share_empty_pass_buffers() {
+        let mut pool = HoldMeshBufferPool::new(true, 1, 6);
+        pool.begin_frame();
+        let start = pool
+            .with_pair(|diffuse, _| diffuse.push(TexturedMeshVertex::default()))
+            .expect("prewarmed pair")
+            .0;
+        let (diffuse, glow) = pool.shared_nonempty_pair(start);
+
+        assert!(diffuse.is_some());
+        assert!(glow.is_none());
+        assert_eq!(Arc::strong_count(&pool.pairs[start / 2][0]), 2);
+        assert_eq!(Arc::strong_count(&pool.pairs[start / 2][1]), 1);
+    }
+
+    #[test]
+    fn hold_mesh_pool_matches_eager_scan_with_retained_and_saturated_frames() {
+        const PAIRS: usize = 8;
+        let mut optimized = HoldMeshBufferPool::new(true, PAIRS, 12);
+        let mut reference = ReferenceHoldMeshBufferPool::new(PAIRS, 12);
+        let mut optimized_retained = (0..3)
+            .map(|_| Vec::with_capacity(PAIRS))
+            .collect::<Vec<_>>();
+        let mut reference_retained = (0..3)
+            .map(|_| Vec::with_capacity(PAIRS))
+            .collect::<Vec<_>>();
+        let mut expected_saturations = 0_u64;
+        let mut expected_high_water = 0_usize;
+
+        for (frame_index, demand) in [1, 3, 5, 8, 2, 9, 0, 4, 8, 1].into_iter().enumerate() {
+            let slot = frame_index % optimized_retained.len();
+            optimized_retained[slot].clear();
+            reference_retained[slot].clear();
+            optimized.begin_frame();
+            reference.begin_frame();
+            let mut acquired = 0_usize;
+
+            for pair_index in 0..demand {
+                let vertex_count = 1 + (frame_index + pair_index) % 11;
+                let optimized_pair = optimized.with_pair(|diffuse, glow| {
+                    diffuse.resize(vertex_count, TexturedMeshVertex::default());
+                    glow.resize(vertex_count / 2, TexturedMeshVertex::default());
+                    (diffuse.len(), glow.len())
+                });
+                let reference_start = reference.acquire_pair();
+                let reference_lengths = reference_start.map(|start| {
+                    let (diffuse, glow) = reference.pair_mut(start);
+                    diffuse.resize(vertex_count, TexturedMeshVertex::default());
+                    glow.resize(vertex_count / 2, TexturedMeshVertex::default());
+                    (diffuse.len(), glow.len())
+                });
+
+                assert_eq!(
+                    optimized_pair.as_ref().map(|(start, _)| *start),
+                    reference_start
+                );
+                assert_eq!(
+                    optimized_pair.as_ref().map(|(_, lengths)| *lengths),
+                    reference_lengths
+                );
+                match (optimized_pair, reference_start) {
+                    (Some((optimized_start, _)), Some(reference_start)) => {
+                        acquired += 1;
+                        let optimized_shared = optimized.shared_pair(optimized_start);
+                        let reference_shared = reference.shared_pair(reference_start);
+                        assert_eq!(optimized_shared.0.as_slice(), reference_shared.0.as_slice());
+                        assert_eq!(optimized_shared.1.as_slice(), reference_shared.1.as_slice());
+                        optimized_retained[slot].push(optimized_shared);
+                        reference_retained[slot].push(reference_shared);
+                    }
+                    (None, None) => expected_saturations += 1,
+                    _ => unreachable!("pair availability already compared"),
+                }
+            }
+            expected_high_water = expected_high_water.max(acquired);
+        }
+
+        assert_eq!(optimized.stats.saturated_pairs, expected_saturations);
+        assert_eq!(optimized.stats.high_water_pairs, expected_high_water);
+    }
+
+    #[test]
     fn hold_mesh_scratch_saturates_without_growing_past_overlap_bound() {
         let mut scratch = HoldMeshScratch::with_columns(MAX_COLS);
         scratch.begin_frame();
         for _ in 0..HOLD_MESH_PAIRS_PER_FRAME {
-            assert!(scratch.bodies.acquire_pair().is_some());
+            assert!(scratch.bodies.with_pair(|_, _| ()).is_some());
         }
-        assert!(scratch.bodies.acquire_pair().is_none());
-        assert_eq!(scratch.bodies.buffers.len(), HOLD_MESH_PAIRS_PER_FRAME * 2);
+        assert!(scratch.bodies.with_pair(|_, _| ()).is_none());
+        assert_eq!(scratch.bodies.pairs.len(), HOLD_MESH_PAIRS_PER_FRAME);
         assert_eq!(
             scratch.stats(),
             HoldMeshScratchStats {
