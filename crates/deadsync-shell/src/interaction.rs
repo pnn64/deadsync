@@ -40,6 +40,8 @@ pub struct HeldControls {
     shift: bool,
     ctrl: bool,
     alt: bool,
+    /// The Super / Meta key (Windows key on PC, Command on macOS).
+    logo: bool,
     fast_forward: bool,
     slow_down: bool,
     tab_acceleration_enabled: bool,
@@ -51,6 +53,7 @@ impl HeldControls {
             shift: false,
             ctrl: false,
             alt: false,
+            logo: false,
             fast_forward: false,
             slow_down: false,
             tab_acceleration_enabled,
@@ -62,6 +65,7 @@ impl HeldControls {
             KeyCode::ShiftLeft | KeyCode::ShiftRight => self.shift = pressed,
             KeyCode::ControlLeft | KeyCode::ControlRight => self.ctrl = pressed,
             KeyCode::AltLeft | KeyCode::AltRight => self.alt = pressed,
+            KeyCode::SuperLeft | KeyCode::SuperRight => self.logo = pressed,
             _ => {}
         }
     }
@@ -70,6 +74,7 @@ impl HeldControls {
         self.shift = false;
         self.ctrl = false;
         self.alt = false;
+        self.logo = false;
         self.fast_forward = false;
         self.slow_down = false;
     }
@@ -87,6 +92,12 @@ impl HeldControls {
     #[inline(always)]
     pub const fn alt(&self) -> bool {
         self.alt
+    }
+
+    /// The Super / Meta key (Windows key on PC, Command on macOS).
+    #[inline(always)]
+    pub const fn logo(&self) -> bool {
+        self.logo
     }
 
     #[inline(always)]

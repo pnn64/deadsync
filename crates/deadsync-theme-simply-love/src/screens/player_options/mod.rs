@@ -31,7 +31,6 @@ use std::time::Duration;
 // --- Submodules ---
 mod choice;
 mod constants;
-mod fuzzy;
 mod inline_nav;
 mod input;
 mod layout;

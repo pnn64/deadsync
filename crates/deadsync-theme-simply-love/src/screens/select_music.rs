@@ -1667,6 +1667,10 @@ pub struct State {
     song_delete_prompt: Option<SongDeletePromptState>,
     reload_ui: Option<ReloadUiState>,
     song_search: select_music_menu::SongSearchState,
+    /// Monotonic request id; results not matching it are stale and dropped.
+    song_search_generation: u64,
+    /// Ranking requests queued for the shell's background search worker.
+    pending_search: Vec<crate::SimplyLoveSongSearchRequest>,
     song_search_ignore_next_back_select: bool,
     song_search_ignore_next_text: bool,
     replay_overlay: select_music_menu::ReplayOverlayState,
@@ -3885,6 +3889,8 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         song_delete_prompt: None,
         reload_ui: None,
         song_search: select_music_menu::SongSearchState::Hidden,
+        song_search_generation: 0,
+        pending_search: Vec::new(),
         song_search_ignore_next_back_select: false,
         song_search_ignore_next_text: false,
         replay_overlay: select_music_menu::ReplayOverlayState::Hidden,
@@ -4029,6 +4035,14 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         new_pack_names,
     };
 
+    // Index on the worker: cleaning every title is the part of setup that grows
+    // with the library, and this runs on the render thread. Drained on `update`.
+    state
+        .pending_search
+        .push(crate::SimplyLoveSongSearchRequest::BuildIndex {
+            entries: Arc::clone(&state.group_entries),
+        });
+
     let built_entries_len = state.all_entries.len();
     let rebuild_started = Instant::now();
     rebuild_displayed_entries(&mut state);
@@ -4130,6 +4144,8 @@ pub fn init_placeholder() -> State {
         song_delete_prompt: None,
         reload_ui: None,
         song_search: select_music_menu::SongSearchState::Hidden,
+        song_search_generation: 0,
+        pending_search: Vec::new(),
         song_search_ignore_next_back_select: false,
         song_search_ignore_next_text: false,
         replay_overlay: select_music_menu::ReplayOverlayState::Hidden,
@@ -4498,6 +4514,11 @@ fn append_pending_runtime(state: &mut State, effect: ThemeEffect, effects: &mut 
             .drain(..)
             .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(request))),
     );
+    effects.extend(
+        state.pending_search.drain(..).map(|request| {
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SongSearch(request))
+        }),
+    );
     effect.append_to(effects);
 }
 
@@ -4812,6 +4833,22 @@ const fn overlay_ud_dir(action: VirtualAction) -> Option<NavDirection> {
         | VirtualAction::p2_menu_down => Some(NavDirection::Right),
         _ => None,
     }
+}
+
+/// True for a horizontal menu action; the song search uses it to flip scope.
+#[inline(always)]
+const fn overlay_horizontal(action: VirtualAction) -> bool {
+    matches!(
+        action,
+        VirtualAction::p1_left
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p2_left
+            | VirtualAction::p2_menu_left
+            | VirtualAction::p1_right
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_right
+            | VirtualAction::p2_menu_right
+    )
 }
 
 #[inline(always)]
@@ -5305,7 +5342,7 @@ fn show_lobby_overlay(state: &mut State) {
     clear_preview(state);
 }
 
-fn start_song_search_prompt(state: &mut State) {
+fn open_song_search(state: &mut State) {
     clear_preview(state);
     state.select_music_menu = select_music_menu::State::Hidden;
     state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
@@ -5320,8 +5357,112 @@ fn start_song_search_prompt(state: &mut State) {
     clear_menu_chord(state);
     clear_overlay_nav_hold(state);
     clear_nav_hold(state);
-    state.song_search = select_music_menu::begin_song_search_prompt();
+    state.song_search = select_music_menu::begin_song_search();
+    if let select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+        open.chart_type = state.session.play_style.chart_type();
+    }
+    rebuild_song_search_matches(state);
     state.song_search_ignore_next_text = false;
+}
+
+/// Queue an off-thread re-rank. The overlay keeps its previous matches until
+/// [`apply_song_search_result`] lands, but the highlight resets now so it can
+/// never point at a stale row.
+fn rebuild_song_search_matches(state: &mut State) {
+    let select_music_menu::SongSearchState::Open(open) = &state.song_search else {
+        return;
+    };
+    let query = open.query.clone();
+    let scope = open.scope;
+    let chart_type = open.chart_type;
+
+    state.song_search_generation = state.song_search_generation.wrapping_add(1);
+    let generation = state.song_search_generation;
+
+    if let select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+        open.request_generation = generation;
+        open.selected_index = 0;
+    }
+
+    state
+        .pending_search
+        .push(crate::SimplyLoveSongSearchRequest::Rank {
+            generation,
+            query,
+            scope,
+            chart_type,
+        });
+}
+
+/// Apply a ranking result, discarding it if a newer request superseded it.
+pub fn apply_song_search_result(state: &mut State, result: crate::SimplyLoveSongSearchResult) {
+    if let select_music_menu::SongSearchState::Open(open) = &mut state.song_search
+        && result.generation == open.request_generation
+    {
+        open.matches = result.matches;
+        open.matches_generation = result.generation;
+        open.has_result = true;
+        let shown = select_music_menu::song_search_shown(open);
+        open.selected_index = open.selected_index.min(shown.saturating_sub(1));
+    }
+}
+
+/// Toggle the search scope (Songs ⇄ Packs) and re-rank, keeping the typed query.
+fn toggle_song_search_scope(state: &mut State) {
+    if let select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+        open.scope = open.scope.toggled();
+    }
+    rebuild_song_search_matches(state);
+}
+
+/// Accept the ghost completion (Tab / →). No-op when none is offered.
+fn accept_song_search_ghost(state: &mut State) {
+    let accepted = match &state.song_search {
+        select_music_menu::SongSearchState::Open(open) => {
+            select_music_menu::song_search_completion(open).map(|c| c.accepted)
+        }
+        _ => None,
+    };
+    let Some(accepted) = accepted else {
+        return;
+    };
+    if let select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+        open.query = accepted;
+    }
+    rebuild_song_search_matches(state);
+}
+
+/// Jump the wheel to the focused result and close the overlay.
+fn commit_song_search(state: &mut State) {
+    let pick = match &state.song_search {
+        select_music_menu::SongSearchState::Open(open) => {
+            // While a re-rank is in flight the list still belongs to the older
+            // query. Committing it would jump somewhere the user never saw for
+            // what they typed, and the reload it triggers is not undoable, so
+            // wait for the result instead. An empty list has nothing to
+            // mis-commit, so Enter still just closes.
+            if open.matches_generation != open.request_generation && !open.matches.is_empty() {
+                return;
+            }
+            select_music_menu::song_search_focused_match(open).cloned()
+        }
+        _ => None,
+    };
+    close_song_search(state);
+    match pick {
+        Some(select_music_menu::SongSearchMatch::Song { candidate, .. }) => {
+            let song = candidate.song.clone();
+            focus_song_from_search(state, &song);
+            let song_packs = std::mem::take(&mut state.song_packs);
+            refresh_after_reload(state, song_packs);
+        }
+        Some(select_music_menu::SongSearchMatch::Pack { name, .. }) => {
+            focus_pack_from_search(state, &name);
+            let song_packs = std::mem::take(&mut state.song_packs);
+            refresh_after_reload(state, song_packs);
+        }
+        None => {}
+    }
 }
 
 fn active_profile_choices(state: &State) -> [profile_data::ActiveProfile; 2] {
@@ -5432,14 +5573,32 @@ fn cancel_song_search(state: &mut State) {
     state.song_search_ignore_next_back_select = true;
 }
 
-fn start_song_search_results(state: &mut State, search_text: String) {
-    clear_overlay_nav_hold(state);
-    state.song_search_ignore_next_text = false;
-    state.song_search = select_music_menu::begin_song_search_results(
-        &state.group_entries,
-        search_text,
-        state.session.play_style.chart_type(),
-    );
+fn focus_pack_from_search(state: &mut State, pack_name: &Arc<str>) {
+    if state.sort_mode != WheelSortMode::Group {
+        apply_wheel_sort(state, WheelSortMode::Group);
+    }
+    state.expanded_series_name = None;
+    state.expanded_pack_name = Some(Arc::clone(pack_name));
+    rebuild_displayed_entries(state);
+    if let Some(index) = state.entries.iter().position(|entry| {
+        matches!(entry, MusicWheelEntry::PackHeader { name, pack_key: Some(_), .. } if name.as_ref() == pack_name.as_ref())
+    }) {
+        state.selected_index = index;
+    } else {
+        state.selected_index = state
+            .selected_index
+            .min(state.entries.len().saturating_sub(1));
+    }
+    state.time_since_selection_change = 0.0;
+    state.wheel_offset_from_selection = 0.0;
+    state.last_requested_banner_source = None;
+    state.last_requested_cdtitle_source = None;
+    state.last_requested_folder_stats_banner_source = None;
+    clear_wheel_item_bg(state);
+    state.cdtitle_spin_elapsed = 0.0;
+    state.cdtitle_anim_elapsed = 0.0;
+    state.last_requested_chart_hash = None;
+    state.last_requested_chart_hash_p2 = None;
 }
 
 fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
@@ -6884,6 +7043,16 @@ fn build_manual_sync_overlay(
     Some(actors)
 }
 
+/// Carry the song-search request counter over from the screen being replaced.
+///
+/// The worker and its result queue are shell-owned and outlive this screen, so
+/// the counter has to outlive it too. Restarting at 0 on re-entry would let a
+/// result still queued from a previous visit match the new screen's generation
+/// and be applied as if it were current.
+pub fn adopt_song_search_generation(state: &mut State, previous: &State) {
+    state.song_search_generation = previous.song_search_generation;
+}
+
 fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
     let selected_song = selected_song_arc(state);
     let selected_simfile_path = selected_song.as_ref().map(|song| song.simfile_path.clone());
@@ -6928,6 +7097,10 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
     let scorebox_presentation = state.scorebox_presentation.clone();
     let unlock_downloads_available = state.unlock_downloads_available;
     let ready_song_reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
+    // The worker and its channels outlive this rebuild, so the request counter
+    // has to as well; restarting it at 0 would make in-flight results look
+    // current again.
+    let song_search_generation = state.song_search_generation;
     let init_view = SelectMusicInitView {
         songs_root: state.songs_root.clone(),
         song_scan_roots: state.song_scan_roots.clone(),
@@ -6958,6 +7131,7 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
     refreshed.scorebox_presentation = scorebox_presentation;
     refreshed.unlock_downloads_available = unlock_downloads_available;
     refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
+    refreshed.song_search_generation = song_search_generation;
 
     if sort_mode != refreshed.sort_mode {
         apply_wheel_sort(&mut refreshed, sort_mode);
@@ -7116,6 +7290,10 @@ fn refresh_after_style_switch(state: &mut State) {
     let scorebox_presentation = state.scorebox_presentation.clone();
     let unlock_downloads_available = state.unlock_downloads_available;
     let ready_song_reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
+    // The worker and its channels outlive this rebuild, so the request counter
+    // has to as well; restarting it at 0 would make in-flight results look
+    // current again.
+    let song_search_generation = state.song_search_generation;
     let song_packs = std::mem::take(&mut state.song_packs);
     let init_view = SelectMusicInitView {
         songs_root: state.songs_root.clone(),
@@ -7146,6 +7324,7 @@ fn refresh_after_style_switch(state: &mut State) {
     refreshed.scorebox_presentation = scorebox_presentation;
     refreshed.unlock_downloads_available = unlock_downloads_available;
     refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
+    refreshed.song_search_generation = song_search_generation;
 
     if sort_mode != refreshed.sort_mode {
         apply_wheel_sort(&mut refreshed, sort_mode);
@@ -7202,10 +7381,7 @@ fn update_overlay_nav_hold(state: &mut State) {
 
     let overlay_active = state.select_music_menu.is_visible()
         || srpg_shop_overlay_visible(state)
-        || matches!(
-            state.song_search,
-            select_music_menu::SongSearchState::Results(_)
-        );
+        || state.song_search.is_open();
     if !overlay_active {
         clear_overlay_nav_hold(state);
         return;
@@ -7230,12 +7406,8 @@ fn update_overlay_nav_hold(state: &mut State) {
 
     let moved = if srpg_shop_overlay_visible(state) {
         srpg_shop_move(state, overlay_nav_delta(dir))
-    } else if let select_music_menu::SongSearchState::Results(results) = &mut state.song_search {
-        if results.input_lock > 0.0 {
-            false
-        } else {
-            select_music_menu::song_search_move(results, overlay_nav_delta(dir))
-        }
+    } else if let select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+        select_music_menu::song_search_move(open, overlay_nav_delta(dir))
     } else {
         select_music_menu_move(state, overlay_nav_delta(dir))
     };
@@ -10219,7 +10391,7 @@ fn dispatch_menu_action(
         }
         select_music_menu::Action::SongSearch => {
             hide_select_music_menu(state);
-            start_song_search_prompt(state);
+            open_song_search(state);
             ThemeEffect::None
         }
         select_music_menu::Action::SwitchProfile => {
@@ -10282,69 +10454,26 @@ fn dispatch_menu_action(
 }
 
 fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    if matches!(
-        state.song_search,
-        select_music_menu::SongSearchState::Hidden
-    ) {
+    if state.song_search.is_hidden() {
+        return ThemeEffect::None;
+    }
+    // Keyboard goes through the raw key path; only pad actions drive it here.
+    if ev.source == InputSource::Keyboard {
         return ThemeEffect::None;
     }
     if modal_blocks_arrow(state, ev.action) {
         return ThemeEffect::None;
     }
 
-    if matches!(
-        state.song_search,
-        select_music_menu::SongSearchState::TextEntry(_)
-    ) {
-        if ev.source == InputSource::Keyboard {
-            return ThemeEffect::None;
-        }
-        if !ev.pressed {
-            return ThemeEffect::None;
-        }
-
-        let mut prompt_start = None;
-        let mut prompt_close = false;
-        if let select_music_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
-            match ev.action {
-                VirtualAction::p1_start | VirtualAction::p2_start => {
-                    prompt_start = Some(entry.query.clone());
-                }
-                VirtualAction::p1_back
-                | VirtualAction::p2_back
-                | VirtualAction::p1_select
-                | VirtualAction::p2_select => {
-                    prompt_close = true;
-                }
-                _ => {}
-            }
-        }
-
-        if let Some(search_text) = prompt_start {
-            start_song_search_results(state, search_text);
-        } else if prompt_close {
-            cancel_song_search(state);
-        }
-        return ThemeEffect::None;
-    }
-
-    if let Some(dir) = overlay_nav_dir(ev.action) {
+    // Vertical: move the highlight (with hold-to-repeat).
+    if let Some(dir) = overlay_ud_dir(ev.action) {
         if !ev.pressed {
             release_overlay_nav_hold(state, dir);
             return ThemeEffect::None;
         }
-
-        if let select_music_menu::SongSearchState::Results(results) = &state.song_search
-            && results.input_lock > 0.0
-        {
-            return ThemeEffect::None;
-        }
-
         start_overlay_nav_hold(state, dir);
-        if let select_music_menu::SongSearchState::Results(results) = &mut state.song_search
-            && results.input_lock <= 0.0
-        {
-            let _ = select_music_menu::song_search_move(results, overlay_nav_delta(dir));
+        if let select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+            let _ = select_music_menu::song_search_move(open, overlay_nav_delta(dir));
         }
         return ThemeEffect::None;
     }
@@ -10353,28 +10482,17 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         return ThemeEffect::None;
     }
 
-    if let select_music_menu::SongSearchState::Results(results) = &state.song_search
-        && results.input_lock > 0.0
-    {
+    // Horizontal: toggle the search scope (Songs <-> Packs).
+    if overlay_horizontal(ev.action) {
+        clear_overlay_nav_hold(state);
+        toggle_song_search_scope(state);
         return ThemeEffect::None;
     }
 
     clear_overlay_nav_hold(state);
     match ev.action {
         VirtualAction::p1_start | VirtualAction::p2_start => {
-            let picked = if let select_music_menu::SongSearchState::Results(results) =
-                &state.song_search
-            {
-                select_music_menu::song_search_focused_candidate(results).map(|c| c.song.clone())
-            } else {
-                None
-            };
-            close_song_search(state);
-            if let Some(song) = picked {
-                focus_song_from_search(state, &song);
-                let song_packs = std::mem::take(&mut state.song_packs);
-                refresh_after_reload(state, song_packs);
-            }
+            commit_song_search(state);
         }
         VirtualAction::p1_back
         | VirtualAction::p2_back
@@ -10993,13 +11111,121 @@ fn take_song_search_ignored_text(state: &mut State) -> bool {
     true
 }
 
+/// Keyboard input for the open overlay, which owns every key while visible.
+/// Control keys arrive via `key`, typed characters via `text`.
+fn handle_song_search_raw_key(
+    state: &mut State,
+    key: Option<&RawKeyboardEvent>,
+    text: Option<&str>,
+    ctrl_held: bool,
+    shift_held: bool,
+    alt_held: bool,
+    logo_held: bool,
+) -> ThemeInputResult {
+    if let Some(key) = key {
+        // The opening shortcut is spent once a key reaches the open overlay. If
+        // that key emitted no text the latch would otherwise survive and eat the
+        // first character the user actually types.
+        if key.pressed {
+            state.song_search_ignore_next_text = false;
+        }
+        // Word delete, handled before the chord guard below claims the modifier.
+        if key.pressed && key.code == KeyCode::Backspace && (ctrl_held || alt_held) {
+            let mut changed = false;
+            if let select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+                changed = select_music_menu::song_search_delete_word(open);
+            }
+            if changed {
+                rebuild_song_search_matches(state);
+            }
+            return ThemeInputResult::consumed(ThemeEffect::None);
+        }
+        // Leave chords such as Cmd+Tab to the OS: don't read them, don't consume
+        // them. Shift is exempt because Shift+Tab is ours.
+        if ctrl_held || alt_held || logo_held {
+            return ThemeInputResult::ignored();
+        }
+        if key.pressed {
+            match key.code {
+                KeyCode::Escape => {
+                    cancel_song_search(state);
+                    return ThemeInputResult::consumed(ThemeEffect::None);
+                }
+                KeyCode::Backspace => {
+                    let mut changed = false;
+                    if let select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+                        changed = select_music_menu::song_search_backspace(open);
+                    }
+                    if changed {
+                        rebuild_song_search_matches(state);
+                    }
+                    return ThemeInputResult::consumed(ThemeEffect::None);
+                }
+                // Tab completes; Shift+Tab switches scope.
+                KeyCode::Tab => {
+                    if shift_held {
+                        toggle_song_search_scope(state);
+                    } else {
+                        accept_song_search_ghost(state);
+                    }
+                    return ThemeInputResult::consumed(ThemeEffect::None);
+                }
+                KeyCode::ArrowRight => {
+                    accept_song_search_ghost(state);
+                    return ThemeInputResult::consumed(ThemeEffect::None);
+                }
+                KeyCode::ArrowUp => {
+                    if let select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+                        let _ = select_music_menu::song_search_move(open, -1);
+                    }
+                    return ThemeInputResult::consumed(ThemeEffect::None);
+                }
+                KeyCode::ArrowDown => {
+                    if let select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+                        let _ = select_music_menu::song_search_move(open, 1);
+                    }
+                    return ThemeInputResult::consumed(ThemeEffect::None);
+                }
+                KeyCode::Enter | KeyCode::NumpadEnter => {
+                    commit_song_search(state);
+                    return ThemeInputResult::consumed(ThemeEffect::None);
+                }
+                _ => {}
+            }
+        }
+        // Consume every other key so nothing leaks to virtual actions while open.
+        return ThemeInputResult::consumed(ThemeEffect::None);
+    }
+
+    if let Some(text) = text {
+        // Never type Ctrl-modified text, such as the redelivered chord that
+        // opened this, nor the text a configurable shortcut emits as it opens.
+        // Take the latch either way so a Ctrl chord cannot leave it set for a
+        // later keystroke.
+        let ignored = take_song_search_ignored_text(state);
+        if ctrl_held || ignored {
+            return ThemeInputResult::ignored();
+        }
+        if let select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+            // Named keys carry text too (Enter is "\r"), and those add nothing.
+            // Re-ranking anyway would reset the highlight the user just moved.
+            if select_music_menu::song_search_add_text(open, text) {
+                rebuild_song_search_matches(state);
+            }
+        }
+        return ThemeInputResult::ignored();
+    }
+
+    ThemeInputResult::consumed(ThemeEffect::None)
+}
+
 pub fn handle_raw_key_event(
     state: &mut State,
     key: Option<&RawKeyboardEvent>,
     text: Option<&str>,
     effects: &mut Vec<ThemeEffect>,
 ) -> bool {
-    let result = handle_raw_key_event_impl(state, key, text, false, false);
+    let result = handle_raw_key_event_impl(state, key, text, false, false, false, false);
     finish_raw_key_result(state, result, effects)
 }
 
@@ -11009,9 +11235,12 @@ pub fn handle_raw_key_event_with_modifiers(
     text: Option<&str>,
     ctrl_held: bool,
     shift_held: bool,
+    alt_held: bool,
+    logo_held: bool,
     effects: &mut Vec<ThemeEffect>,
 ) -> bool {
-    let result = handle_raw_key_event_impl(state, key, text, ctrl_held, shift_held);
+    let result =
+        handle_raw_key_event_impl(state, key, text, ctrl_held, shift_held, alt_held, logo_held);
     finish_raw_key_result(state, result, effects)
 }
 
@@ -11055,6 +11284,8 @@ fn handle_raw_key_event_impl(
     text: Option<&str>,
     ctrl_held: bool,
     shift_held: bool,
+    alt_held: bool,
+    logo_held: bool,
 ) -> ThemeInputResult {
     if handle_srpg_shop_raw_key(state, key) {
         return ThemeInputResult::consumed(ThemeEffect::None);
@@ -11193,67 +11424,26 @@ fn handle_raw_key_event_impl(
         return ThemeInputResult::ignored();
     }
 
-    if key.is_some_and(|key| key.pressed) {
-        if matches!(
-            state.song_search,
-            select_music_menu::SongSearchState::Results(_)
-        ) && key.is_some_and(|key| key.code == KeyCode::Escape)
-        {
-            cancel_song_search(state);
-            return ThemeInputResult::consumed(ThemeEffect::None);
-        }
-        let mut prompt_start: Option<String> = None;
-        let mut prompt_close = false;
-        let ignore_text = text.is_some() && state.song_search_ignore_next_text;
-        if key.is_some() && state.song_search_ignore_next_text {
-            state.song_search_ignore_next_text = false;
-        }
-        if let select_music_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
-            if let Some(key) = key {
-                let code = key.code;
-                match code {
-                    KeyCode::Backspace => {
-                        select_music_menu::song_search_backspace(entry);
-                        return ThemeInputResult::consumed(ThemeEffect::None);
-                    }
-                    KeyCode::Escape => {
-                        prompt_close = true;
-                    }
-                    KeyCode::Enter | KeyCode::NumpadEnter => {
-                        prompt_start = Some(entry.query.clone());
-                    }
-                    _ => {}
-                }
-            }
+    // While the live search overlay is open it owns keyboard input.
+    if state.song_search.is_open() {
+        return handle_song_search_raw_key(
+            state, key, text, ctrl_held, shift_held, alt_held, logo_held,
+        );
+    }
 
-            if !prompt_close
-                && prompt_start.is_none()
-                && !ignore_text
-                && let Some(text) = text
-            {
-                select_music_menu::song_search_add_text(entry, text);
-            }
+    // Swallow the text emitted by the shortcut key that just opened the overlay.
+    if key.is_none() && text.is_some() && take_song_search_ignored_text(state) {
+        return ThemeInputResult::ignored();
+    }
 
-            if let Some(search_text) = prompt_start {
-                start_song_search_results(state, search_text);
-                return ThemeInputResult::consumed(ThemeEffect::None);
-            }
-            if prompt_close {
-                cancel_song_search(state);
-                return ThemeInputResult::consumed(ThemeEffect::None);
-            }
-            return ThemeInputResult::ignored();
-        }
-    } else if key.is_none()
-        && let Some(text) = text
+    // Matches the Player Options setting search. Gated on `keyboard_features`
+    // so keyboard-less cabinets never reach it.
+    if state.policy.keyboard_features
+        && ctrl_held
+        && key.is_some_and(|k| k.pressed && !k.repeat && k.code == KeyCode::KeyF)
     {
-        if take_song_search_ignored_text(state) {
-            return ThemeInputResult::ignored();
-        }
-        if let select_music_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
-            select_music_menu::song_search_add_text(entry, text);
-            return ThemeInputResult::ignored();
-        }
+        open_song_search(state);
+        return ThemeInputResult::consumed(ThemeEffect::None);
     }
 
     if !key.is_some_and(|key| key.pressed) {
@@ -11273,12 +11463,7 @@ fn handle_raw_key_event_impl(
         // so a successful raw shortcut stays single-action.
         let side = state.session.player_side;
         let effect = dispatch_menu_action(state, action, side);
-        if ignore_open_text
-            && matches!(
-                state.song_search,
-                select_music_menu::SongSearchState::TextEntry(_)
-            )
-        {
+        if ignore_open_text && state.song_search.is_open() {
             state.song_search_ignore_next_text = true;
         }
         return ThemeInputResult::consumed(effect);
@@ -14553,6 +14738,7 @@ pub fn push_actors(
         &state.song_search,
         state.active_color_index,
         state.policy.machine_font,
+        asset_manager,
     ) {
         actors.extend(song_search_overlay);
         return;
@@ -15270,6 +15456,8 @@ mod tests {
         text: Option<&str>,
         ctrl_held: bool,
         shift_held: bool,
+        alt_held: bool,
+        logo_held: bool,
     ) -> ThemeInputResult {
         let mut effects = Vec::new();
         let consumed = super::handle_raw_key_event_with_modifiers(
@@ -15278,6 +15466,8 @@ mod tests {
             text,
             ctrl_held,
             shift_held,
+            alt_held,
+            logo_held,
             &mut effects,
         );
         ThemeInputResult {
@@ -15523,16 +15713,16 @@ mod tests {
 
     fn song_search_query(state: &super::State) -> Option<&str> {
         match &state.song_search {
-            super::select_music_menu::SongSearchState::TextEntry(entry) => Some(&entry.query),
+            super::select_music_menu::SongSearchState::Open(open) => Some(open.query.as_str()),
             _ => None,
         }
     }
 
-    fn song_search_results_text(state: &super::State) -> Option<&str> {
+    fn song_search_scope(
+        state: &super::State,
+    ) -> Option<super::select_music_menu::SongSearchScope> {
         match &state.song_search {
-            super::select_music_menu::SongSearchState::Results(results) => {
-                results.query_label.strip_prefix('"')?.strip_suffix('"')
-            }
+            super::select_music_menu::SongSearchState::Open(open) => Some(open.scope),
             _ => None,
         }
     }
@@ -15855,6 +16045,67 @@ mod tests {
     fn assert_ignored(result: ThemeInputResult) {
         assert!(!result.consumed);
         assert!(matches!(result.effect, ThemeEffect::None));
+    }
+
+    /// The key was swallowed without scheduling any work, which is how the open
+    /// song search overlay reports that it owns the keyboard.
+    fn assert_consumed_quiet(result: ThemeInputResult) {
+        assert!(result.consumed);
+        assert!(matches!(result.effect, ThemeEffect::None));
+    }
+
+    /// Opening the song-search overlay also queues an off-thread ranking request,
+    /// so the consumed result carries stop-music followed by the search request.
+    fn assert_stop_search_consume(result: ThemeInputResult) {
+        assert!(result.consumed);
+        let ThemeEffect::Batch(effects) = result.effect else {
+            panic!("expected stop-music + search request on the consumed input");
+        };
+        assert!(
+            matches!(
+                effects.as_slice(),
+                [
+                    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                        deadsync_theme::AudioRequest::StopMusic
+                    )),
+                    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SongSearch(_)),
+                ]
+            ),
+            "unexpected open-search effect batch: {effects:?}"
+        );
+    }
+
+    /// A rebuild-triggering search edit (typing) queues an off-thread ranking
+    /// request, so the returned effect is either that request or `None` when the
+    /// edit changed nothing. Typed text is only reported as consumed when it
+    /// scheduled that request.
+    fn assert_search_request_or_none(result: ThemeInputResult) {
+        match result.effect {
+            ThemeEffect::None => assert!(
+                !result.consumed,
+                "typed text that changed nothing must not be consumed"
+            ),
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SongSearch(_)) => {
+                assert!(result.consumed, "a queued search request counts as work")
+            }
+            other => panic!("expected a search request or none, got {other:?}"),
+        }
+    }
+
+    /// A rebuild-triggering action that also consumes input (Tab complete,
+    /// Shift+Tab scope toggle, Backspace) consumes the key and carries the
+    /// search request, or no effect at all when nothing rebuilt.
+    fn assert_search_then_consume(result: ThemeInputResult) {
+        assert!(result.consumed);
+        assert!(
+            matches!(
+                result.effect,
+                ThemeEffect::None
+                    | ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SongSearch(_))
+            ),
+            "expected consume (with optional search), got {:?}",
+            result.effect
+        );
     }
 
     #[test]
@@ -17876,7 +18127,7 @@ mod tests {
     #[test]
     fn delayed_selection_updates_stay_blocked_for_song_search_and_downloads() {
         let mut state = init_placeholder();
-        state.song_search = super::select_music_menu::begin_song_search_prompt();
+        state.song_search = super::select_music_menu::begin_song_search();
         assert!(delayed_selection_updates_blocked(&state));
 
         state.song_search = super::select_music_menu::SongSearchState::Hidden;
@@ -18334,10 +18585,10 @@ mod tests {
         assert_ignored(action);
         assert!(!state.preview_music_muted);
 
-        state.song_search = super::select_music_menu::begin_song_search_prompt();
+        state.song_search = super::select_music_menu::begin_song_search();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
-        assert_ignored(action);
+        assert_consumed_quiet(action);
         assert!(!state.preview_music_muted);
 
         let mut state = init_placeholder();
@@ -18366,7 +18617,7 @@ mod tests {
 
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyQ, true, false)), None);
-        assert_stop_then_consume(action);
+        assert_stop_search_consume(action);
         assert!(!matches!(
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
@@ -18374,30 +18625,94 @@ mod tests {
     }
 
     #[test]
+    fn ctrl_f_opens_song_search_and_bare_f_does_not() {
+        // Bare F is an ordinary key; it must not open the overlay.
+        let mut state = init_placeholder();
+        state.policy.keyboard_features = true;
+        let bare =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyF, true, false)), None);
+        assert_ignored(bare);
+        assert!(state.song_search.is_hidden());
+
+        // Ctrl+F opens it, matching the Player Options setting search.
+        let action = handle_raw_key_event_with_modifiers(
+            &mut state,
+            Some(&raw_key(KeyCode::KeyF, true, false)),
+            None,
+            true,
+            false,
+            false,
+            false,
+        );
+        assert_stop_search_consume(action);
+        assert!(state.song_search.is_open());
+
+        // Platforms deliver Ctrl+F as a plain "f" text event beside the keycode,
+        // so text arriving while Ctrl is held must be rejected.
+        for opener_text in ["f", "\u{6}"] {
+            let typed = handle_raw_key_event_with_modifiers(
+                &mut state,
+                None,
+                Some(opener_text),
+                true,
+                false,
+                false,
+                false,
+            );
+            assert_ignored(typed);
+            assert_eq!(song_search_query(&state), Some(""));
+        }
+
+        // Released Ctrl types normally.
+        let typed = handle_raw_key_event(&mut state, None, Some("f"));
+        assert_search_request_or_none(typed);
+        assert_eq!(song_search_query(&state), Some("f"));
+    }
+
+    #[test]
+    fn ctrl_f_is_ignored_without_keyboard_features() {
+        let mut state = init_placeholder();
+        state.policy.keyboard_features = false;
+        let action = handle_raw_key_event_with_modifiers(
+            &mut state,
+            Some(&raw_key(KeyCode::KeyF, true, false)),
+            None,
+            true,
+            false,
+            false,
+            false,
+        );
+        assert_ignored(action);
+        assert!(state.song_search.is_hidden());
+    }
+
+    #[test]
     fn song_search_shortcut_ignores_opening_text_event() {
         let mut state = init_placeholder();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyS, true, false)), None);
-        assert_stop_then_consume(action);
+        assert_stop_search_consume(action);
 
         let action = handle_raw_key_event(&mut state, None, Some("s"));
         assert_ignored(action);
         assert_eq!(song_search_query(&state), Some(""));
 
         let action = handle_raw_key_event(&mut state, None, Some("abc"));
-        assert_ignored(action);
+        assert_search_request_or_none(action);
         assert_eq!(song_search_query(&state), Some("abc"));
     }
 
     #[test]
-    fn song_search_text_entry_ignores_keyboard_start_action() {
+    fn song_search_live_ignores_keyboard_start_action() {
         let mut state = init_placeholder();
-        state.song_search = super::select_music_menu::begin_song_search_prompt();
+        state.song_search = super::select_music_menu::begin_song_search();
 
         let action = handle_raw_key_event(&mut state, None, Some("n"));
-        assert_ignored(action);
+        assert_search_request_or_none(action);
         assert_eq!(song_search_query(&state), Some("n"));
 
+        // Keyboard-sourced virtual actions are handled through the raw key path,
+        // so a keyboard Start here is ignored and the overlay stays open.
         let action = handle_input(
             &mut state,
             &input_event(VirtualAction::p2_start, InputSource::Keyboard, true),
@@ -18408,12 +18723,12 @@ mod tests {
     }
 
     #[test]
-    fn song_search_text_entry_ignores_keyboard_back_select_actions() {
+    fn song_search_live_ignores_keyboard_back_select_actions() {
         let mut state = init_placeholder();
-        state.song_search = super::select_music_menu::begin_song_search_prompt();
+        state.song_search = super::select_music_menu::begin_song_search();
 
         let action = handle_raw_key_event(&mut state, None, Some("abc"));
-        assert_ignored(action);
+        assert_search_request_or_none(action);
 
         for action in [VirtualAction::p1_back, VirtualAction::p2_select] {
             let screen_action = handle_input(
@@ -18427,98 +18742,367 @@ mod tests {
     }
 
     #[test]
-    fn song_search_text_entry_keeps_gamepad_prompt_actions() {
+    fn song_search_gamepad_start_commits_and_back_cancels() {
+        // With an empty catalog there is nothing to jump to, so Start simply
+        // closes the overlay.
         let mut state = init_placeholder();
-        state.song_search = super::select_music_menu::begin_song_search_prompt();
-
+        state.song_search = super::select_music_menu::begin_song_search();
         let action = handle_raw_key_event(&mut state, None, Some("song"));
-        assert_ignored(action);
-        let action = handle_input(
+        assert_search_request_or_none(action);
+        let _ = handle_input(
             &mut state,
             &input_event(VirtualAction::p1_start, InputSource::Gamepad, true),
             false,
         );
-        assert!(matches!(action, ThemeEffect::None));
-        assert_eq!(song_search_results_text(&state), Some("song"));
+        assert!(state.song_search.is_hidden());
 
         let mut state = init_placeholder();
-        state.song_search = super::select_music_menu::begin_song_search_prompt();
-        let action = handle_raw_key_event(&mut state, None, Some("song"));
-        assert!(!action.consumed);
-        assert!(matches!(action.effect, ThemeEffect::None));
-        let action = handle_input(
+        state.song_search = super::select_music_menu::begin_song_search();
+        let _ = handle_input(
             &mut state,
             &input_event(VirtualAction::p2_back, InputSource::Gamepad, true),
             false,
         );
-        assert!(matches!(action, ThemeEffect::None));
-        assert!(matches!(
-            state.song_search,
-            super::select_music_menu::SongSearchState::Hidden
-        ));
+        assert!(state.song_search.is_hidden());
     }
 
     #[test]
-    fn song_search_raw_prompt_keys_consume_keyboard_input() {
+    fn song_search_gamepad_horizontal_toggles_scope() {
         let mut state = init_placeholder();
-        state.song_search = super::select_music_menu::begin_song_search_prompt();
+        state.song_search = super::select_music_menu::begin_song_search();
+        assert_eq!(
+            song_search_scope(&state),
+            Some(super::select_music_menu::SongSearchScope::Song)
+        );
+        let _ = handle_input(
+            &mut state,
+            &input_event(VirtualAction::p1_menu_right, InputSource::Gamepad, true),
+            false,
+        );
+        assert_eq!(
+            song_search_scope(&state),
+            Some(super::select_music_menu::SongSearchScope::Pack)
+        );
+    }
+
+    #[test]
+    fn song_search_raw_keys_consume_keyboard_input() {
+        // Enter commits (closes the overlay).
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search();
         let action = handle_raw_key_event(&mut state, None, Some("song"));
-        assert!(!action.consumed);
-        assert!(matches!(action.effect, ThemeEffect::None));
+        assert_search_request_or_none(action);
         let action = handle_raw_key_event(
             &mut state,
             Some(&raw_key(KeyCode::Enter, true, false)),
             None,
         );
-        assert!(action.consumed);
-        assert!(matches!(action.effect, ThemeEffect::None));
-        assert_eq!(song_search_results_text(&state), Some("song"));
+        assert_consumed_quiet(action);
+        assert!(state.song_search.is_hidden());
 
+        // Escape cancels.
         let mut state = init_placeholder();
-        state.song_search = super::select_music_menu::begin_song_search_prompt();
+        state.song_search = super::select_music_menu::begin_song_search();
         let action = handle_raw_key_event(&mut state, None, Some("song"));
-        assert!(!action.consumed);
-        assert!(matches!(action.effect, ThemeEffect::None));
+        assert_search_request_or_none(action);
         let action = handle_raw_key_event(
             &mut state,
             Some(&raw_key(KeyCode::Escape, true, false)),
             None,
         );
-        assert!(action.consumed);
-        assert!(matches!(action.effect, ThemeEffect::None));
-        assert!(matches!(
-            state.song_search,
-            super::select_music_menu::SongSearchState::Hidden
-        ));
+        assert_consumed_quiet(action);
+        assert!(state.song_search.is_hidden());
 
+        // Tab accepts the ghost completion; it does NOT change scope.
         let mut state = init_placeholder();
-        state.song_search =
-            super::select_music_menu::begin_song_search_results(&[], "song".into(), "dance-single");
-        let action = handle_raw_key_event(
-            &mut state,
-            Some(&raw_key(KeyCode::Escape, true, false)),
-            None,
+        state.song_search = super::select_music_menu::begin_song_search();
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::Tab, true, false)), None);
+        assert_search_then_consume(action);
+        assert_eq!(
+            song_search_scope(&state),
+            Some(super::select_music_menu::SongSearchScope::Song)
         );
-        assert!(action.consumed);
-        assert!(matches!(action.effect, ThemeEffect::None));
-        assert!(matches!(
-            state.song_search,
-            super::select_music_menu::SongSearchState::Hidden
-        ));
 
+        // Shift+Tab switches the search scope.
+        let action = handle_raw_key_event_with_modifiers(
+            &mut state,
+            Some(&raw_key(KeyCode::Tab, true, false)),
+            None,
+            false,
+            true,
+            false,
+            false,
+        );
+        assert_search_then_consume(action);
+        assert_eq!(
+            song_search_scope(&state),
+            Some(super::select_music_menu::SongSearchScope::Pack)
+        );
+
+        // Alt+Tab passes through (not consumed) and leaves the overlay untouched
+        // so the OS can switch windows.
+        let action = handle_raw_key_event_with_modifiers(
+            &mut state,
+            Some(&raw_key(KeyCode::Tab, true, false)),
+            None,
+            false,
+            false,
+            true,
+            false,
+        );
+        assert_ignored(action);
+        assert_eq!(
+            song_search_scope(&state),
+            Some(super::select_music_menu::SongSearchScope::Pack)
+        );
+
+        // Cmd/Super+Tab (macOS app switcher) also passes through untouched.
+        let action = handle_raw_key_event_with_modifiers(
+            &mut state,
+            Some(&raw_key(KeyCode::Tab, true, false)),
+            None,
+            false,
+            false,
+            false,
+            true,
+        );
+        assert_ignored(action);
+        assert_eq!(
+            song_search_scope(&state),
+            Some(super::select_music_menu::SongSearchScope::Pack)
+        );
+
+        // Backspace edits the query.
         let mut state = init_placeholder();
-        state.song_search = super::select_music_menu::begin_song_search_prompt();
+        state.song_search = super::select_music_menu::begin_song_search();
         let action = handle_raw_key_event(&mut state, None, Some("ab"));
-        assert!(!action.consumed);
-        assert!(matches!(action.effect, ThemeEffect::None));
+        assert_search_request_or_none(action);
         let action = handle_raw_key_event(
             &mut state,
             Some(&raw_key(KeyCode::Backspace, true, false)),
             None,
         );
-        assert!(action.consumed);
-        assert!(matches!(action.effect, ThemeEffect::None));
+        assert_search_then_consume(action);
         assert_eq!(song_search_query(&state), Some("a"));
+    }
+
+    #[test]
+    fn song_search_ctrl_backspace_deletes_word() {
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search();
+        let action = handle_raw_key_event(&mut state, None, Some("hello world"));
+        assert_search_request_or_none(action);
+
+        // Ctrl+Backspace removes the last word (and its trailing space).
+        let action = handle_raw_key_event_with_modifiers(
+            &mut state,
+            Some(&raw_key(KeyCode::Backspace, true, false)),
+            None,
+            true,
+            false,
+            false,
+            false,
+        );
+        assert_search_then_consume(action);
+        assert_eq!(song_search_query(&state), Some("hello "));
+
+        // Alt+Backspace (mac word-delete) removes the remaining word too.
+        let action = handle_raw_key_event_with_modifiers(
+            &mut state,
+            Some(&raw_key(KeyCode::Backspace, true, false)),
+            None,
+            false,
+            false,
+            true,
+            false,
+        );
+        assert_search_then_consume(action);
+        assert_eq!(song_search_query(&state), Some(""));
+    }
+
+    #[test]
+    fn song_search_named_key_text_does_not_reset_the_highlight() {
+        // Named keys are delivered as text too (Enter is "\r"). Re-ranking on
+        // those would snap the highlight back to the top match.
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search();
+        let _ = handle_raw_key_event(&mut state, None, Some("ab"));
+        if let super::select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+            open.selected_index = 2;
+        }
+        let before = state.song_search_generation;
+
+        for named in ["\r", "\t", "\u{8}", "\u{1b}"] {
+            let _ = handle_raw_key_event(&mut state, None, Some(named));
+        }
+
+        assert_eq!(song_search_query(&state), Some("ab"));
+        assert_eq!(
+            state.song_search_generation, before,
+            "control-only text must not queue a re-rank"
+        );
+        assert!(matches!(
+            &state.song_search,
+            super::select_music_menu::SongSearchState::Open(open) if open.selected_index == 2
+        ));
+    }
+
+    #[test]
+    fn song_search_keeps_the_difficulty_filter_when_completing() {
+        // Tab replaces the free text only; dropping "[12]" would silently widen
+        // the search to every difficulty.
+        let completed =
+            super::select_music_menu::song_search_query_completed_with("[12] butt", "Butterfly");
+        assert_eq!(completed, "[12] Butterfly");
+
+        // A BPM token is kept verbatim, since the parsed tier cannot rebuild it.
+        let completed =
+            super::select_music_menu::song_search_query_completed_with("[180] sun", "Sunlight");
+        assert_eq!(completed, "[180] Sunlight");
+    }
+
+    #[test]
+    fn song_search_tab_is_a_noop_without_a_ghost() {
+        // No matches means nothing was offered, so Tab must not rewrite the query.
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search();
+        let _ = handle_raw_key_event(&mut state, None, Some("abc"));
+        let before = state.song_search_generation;
+
+        super::accept_song_search_ghost(&mut state);
+
+        assert_eq!(song_search_query(&state), Some("abc"));
+        assert_eq!(state.song_search_generation, before);
+    }
+
+    #[test]
+    fn song_search_shortcut_latch_is_cleared_by_a_key_event() {
+        // A shortcut key with no text representation would otherwise leave the
+        // latch set and swallow the first character the user types.
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search();
+        state.song_search_ignore_next_text = true;
+
+        let _ = handle_raw_key_event_with_modifiers(
+            &mut state,
+            Some(&raw_key(KeyCode::F3, true, false)),
+            None,
+            false,
+            false,
+            false,
+            false,
+        );
+        let _ = handle_raw_key_event(&mut state, None, Some("a"));
+
+        assert_eq!(song_search_query(&state), Some("a"));
+    }
+
+    #[test]
+    fn song_search_generation_survives_a_catalog_reload() {
+        // The worker and its channels outlive the reload, so a restarted
+        // counter would make in-flight results look current again.
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search();
+        let _ = handle_raw_key_event(&mut state, None, Some("abc"));
+        let before = state.song_search_generation;
+        assert!(before > 0);
+
+        let song_packs = std::mem::take(&mut state.song_packs);
+        super::refresh_after_reload(&mut state, song_packs);
+
+        assert!(
+            state.song_search_generation >= before,
+            "generation must not restart at 0 across a reload"
+        );
+    }
+
+    #[test]
+    fn song_search_generation_survives_screen_reentry() {
+        // Leaving and re-entering Select Music builds a fresh State, but the
+        // worker and its result queue are shell-owned and persist, so a result
+        // queued on the previous visit could still be sitting in the channel.
+        // The counter has to carry over or that stale result matches the new
+        // screen's generation and gets applied as current.
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search();
+        let _ = handle_raw_key_event(&mut state, None, Some("abc"));
+        let before = state.song_search_generation;
+        assert!(before > 0);
+
+        let mut reentered = init_placeholder();
+        assert_eq!(
+            reentered.song_search_generation, 0,
+            "a fresh screen starts at 0"
+        );
+        super::adopt_song_search_generation(&mut reentered, &state);
+
+        assert_eq!(
+            reentered.song_search_generation, before,
+            "generation must not restart at 0 across screen re-entry"
+        );
+    }
+
+    #[test]
+    fn song_search_stale_matches_are_not_committed() {
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search();
+        if let super::select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+            open.matches = vec![super::select_music_menu::SongSearchMatch::Pack {
+                name: "Pack".into(),
+                song_count: 1,
+                score: 0,
+            }];
+            open.matches_generation = 1;
+            open.request_generation = 2;
+        }
+
+        super::commit_song_search(&mut state);
+        assert!(
+            state.song_search.is_open(),
+            "a commit against an outdated list must wait for the new ranking"
+        );
+
+        if let super::select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+            open.matches_generation = 2;
+        }
+        super::commit_song_search(&mut state);
+        assert!(state.song_search.is_hidden());
+    }
+
+    #[test]
+    fn song_search_applies_only_matching_generation() {
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search();
+        if let super::select_music_menu::SongSearchState::Open(open) = &mut state.song_search {
+            open.request_generation = 7;
+        }
+
+        // A stale result (older generation) is discarded.
+        super::apply_song_search_result(
+            &mut state,
+            crate::SimplyLoveSongSearchResult {
+                generation: 6,
+                matches: Vec::new(),
+            },
+        );
+        assert!(matches!(
+            &state.song_search,
+            super::select_music_menu::SongSearchState::Open(open) if !open.has_result
+        ));
+
+        // The matching generation is applied and marks that a result arrived.
+        super::apply_song_search_result(
+            &mut state,
+            crate::SimplyLoveSongSearchResult {
+                generation: 7,
+                matches: Vec::new(),
+            },
+        );
+        assert!(matches!(
+            &state.song_search,
+            super::select_music_menu::SongSearchState::Open(open) if open.has_result
+        ));
     }
 
     #[test]
@@ -18652,19 +19236,42 @@ mod tests {
         let mut state = init_placeholder();
         state.entries = vec![super::MusicWheelEntry::Song(test_song("Delete Me"))];
 
-        let disabled =
-            handle_raw_key_event_with_modifiers(&mut state, Some(&key), None, true, false);
+        let disabled = handle_raw_key_event_with_modifiers(
+            &mut state,
+            Some(&key),
+            None,
+            true,
+            false,
+            false,
+            false,
+        );
         assert_ignored(disabled);
         assert!(state.song_delete_prompt.is_none());
 
         state.policy.allow_song_deletion = true;
         state.wheel_offset_from_selection = 0.25;
-        let moving = handle_raw_key_event_with_modifiers(&mut state, Some(&key), None, true, false);
+        let moving = handle_raw_key_event_with_modifiers(
+            &mut state,
+            Some(&key),
+            None,
+            true,
+            false,
+            false,
+            false,
+        );
         assert_ignored(moving);
         assert!(state.song_delete_prompt.is_none());
 
         state.wheel_offset_from_selection = 0.0;
-        let opened = handle_raw_key_event_with_modifiers(&mut state, Some(&key), None, true, false);
+        let opened = handle_raw_key_event_with_modifiers(
+            &mut state,
+            Some(&key),
+            None,
+            true,
+            false,
+            false,
+            false,
+        );
         assert_stop_then_consume(opened);
         assert!(
             state

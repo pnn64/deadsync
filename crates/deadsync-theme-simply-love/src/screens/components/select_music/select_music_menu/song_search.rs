@@ -1,501 +1,922 @@
+//! Fuzzy "search for a song" overlay for Select Music.
+//!
+//! A live typeahead: each keystroke re-ranks the catalog, offers a ghost
+//! completion, and Enter jumps to the pick. Tab accepts the completion and
+//! Shift+Tab switches songs/packs. Song mode still honors the `[###]`
+//! BPM/difficulty filter; the old `pack/song` split is gone.
+//!
+//! The opening shortcut is deliberately not named here: it is configurable, and
+//! a second built-in chord opens it too. Both live with the key handling in
+//! `select_music`, which is the one place that should spell them out.
+
 use crate::act;
-use crate::assets::{FontRole, machine_font_key};
+use crate::assets::i18n::{tr, tr_fmt};
+use crate::assets::{AssetManager, FontRole, machine_font_key};
 use crate::config::MachineFont;
+use crate::screens::components::shared::fuzzy;
 use crate::screens::select_music::MusicWheelEntry;
-use deadlib_present::actors::{Actor, TextContent};
+use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadsync_chart::SongData;
 use deadsync_simfile::song_search::{
-    SongSearchCandidate, SongSearchCatalogEntry, build_song_search_candidates,
+    SongSearchCandidate, parse_song_search_live, song_passes_search_filters,
+    song_search_difficulties_text,
 };
 use std::sync::Arc;
 
-use super::scroll_anim_dir;
+pub const SONG_SEARCH_MAX_LEN: usize = 80;
+pub const SONG_SEARCH_MAX_RESULTS: usize = 9;
+const CURSOR_BLINK_PERIOD: f32 = 1.0;
 
-pub const SONG_SEARCH_FOCUS_TWEEN_SECONDS: f32 = 0.1;
-pub const SONG_SEARCH_INPUT_LOCK_SECONDS: f32 = 0.25;
+const Z_DIM: i16 = 1450;
+const Z_PANEL_BORDER: i16 = 1451;
+const Z_PANEL: i16 = 1452;
+const Z_TEXT: i16 = 1453;
 
-const SONG_SEARCH_PROMPT_TITLE: &str = "Song Search";
-const SONG_SEARCH_PROMPT_HINT: &str = "'pack/song' format will search for songs in specific packs\n'[###]' format will search for BPMs/Difficulties";
-const SONG_SEARCH_PROMPT_MAX_LEN: usize = 30;
-const SONG_SEARCH_TEXT_ENTRY_W: f32 = 620.0;
-const SONG_SEARCH_TEXT_ENTRY_H: f32 = 190.0;
-const SONG_SEARCH_TEXT_ENTRY_CURSOR_PERIOD: f32 = 1.0;
-const SONG_SEARCH_TEXT_ENTRY_FOOTER: &str = "ENTER: SEARCH    ESC: CANCEL";
-const SONG_SEARCH_PANE_W: f32 = 319.0;
-const SONG_SEARCH_PANE_H: f32 = 319.0;
-const SONG_SEARCH_PANE_BORDER: f32 = 2.0;
-const SONG_SEARCH_TEXT_H: f32 = 15.0;
-const SONG_SEARCH_ROW_SPACING: f32 = 30.0;
-const SONG_SEARCH_RESULT_TITLE_W: f32 = 155.0;
-const SONG_SEARCH_DETAIL_LABEL_W: f32 = 145.0;
-const SONG_SEARCH_DETAIL_VALUE_W: f32 = 115.0;
-const SONG_SEARCH_WHEEL_SLOTS: usize = 12;
-const SONG_SEARCH_WHEEL_FOCUS_SLOT: usize = SONG_SEARCH_WHEEL_SLOTS / 2 - 1;
-const SONG_SEARCH_DETAIL_LABELS: [&str; 5] =
-    ["Pack:", "Song:", "Subtitle:", "BPMs:", "Difficulties:"];
-
-#[derive(Clone, Debug)]
-pub struct SongSearchResultsState {
-    pub query_label: Arc<str>,
-    pub result_count_label: Arc<str>,
-    pub candidates: Vec<SongSearchCandidate>,
-    pub selected_index: usize,
-    pub prev_selected_index: usize,
-    pub last_move_dir: isize,
-    pub focus_anim_elapsed: f32,
-    pub input_lock: f32,
+/// Which catalog the overlay is ranking against. Toggled with `Tab`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SongSearchScope {
+    Song,
+    Pack,
 }
 
+impl SongSearchScope {
+    #[inline(always)]
+    pub fn toggled(self) -> Self {
+        match self {
+            SongSearchScope::Song => SongSearchScope::Pack,
+            SongSearchScope::Pack => SongSearchScope::Song,
+        }
+    }
+
+    /// Localized scope badge text.
+    fn label(self) -> Arc<str> {
+        match self {
+            SongSearchScope::Song => tr("SelectMusic", "SongSearchScopeSongs"),
+            SongSearchScope::Pack => tr("SelectMusic", "SongSearchScopePacks"),
+        }
+    }
+}
+
+/// Difficulty words dropped when they stand alone in parentheses, e.g. `(Easy)`.
+const DIFFICULTY_WORDS: [&str; 8] = [
+    "beginner",
+    "easy",
+    "medium",
+    "hard",
+    "challenge",
+    "edit",
+    "expert",
+    "basic",
+];
+
+/// Zero-width space / BOM, which some packs prepend to `#TITLE`.
+#[inline]
+fn is_title_pad(c: char) -> bool {
+    c.is_whitespace() || c == '\u{200b}' || c == '\u{feff}'
+}
+
+/// Non-numeric bracket tags ITL packs prepend to titles.
+const STRIPPABLE_BRACKET_TAGS: [&str; 1] = ["mix"];
+
+/// Whether a leading `[...]` group is an annotation: all digits, or a known tag.
+#[inline]
+fn is_strippable_bracket(inner: &str) -> bool {
+    let inner = inner.trim();
+    if inner.is_empty() {
+        return false;
+    }
+    inner.bytes().all(|b| b.is_ascii_digit())
+        || STRIPPABLE_BRACKET_TAGS
+            .iter()
+            .any(|tag| inner.eq_ignore_ascii_case(tag))
+}
+
+/// Strip search-irrelevant annotations from a raw `#TITLE`.
+///
+/// ITL packs prefix titles with a points bucket and level, so
+/// `[6998] [12] automate` must search as `automate`. Stripping is deliberately
+/// conservative: anything that is not a leading annotation is part of the real
+/// title. Falls back to the original if cleaning would empty it.
+pub fn clean_search_title(title: &str) -> String {
+    let mut rest = title.trim_matches(is_title_pad);
+
+    loop {
+        let trimmed = rest.trim_start_matches(is_title_pad);
+        let Some(inner_start) = trimmed.strip_prefix('[') else {
+            rest = trimmed;
+            break;
+        };
+        let Some(close) = inner_start.find(']') else {
+            rest = trimmed;
+            break;
+        };
+        if !is_strippable_bracket(&inner_start[..close]) {
+            rest = trimmed;
+            break;
+        }
+        rest = &inner_start[close + 1..];
+    }
+
+    let without_diff = strip_difficulty_parens(rest.trim());
+    if without_diff.is_empty() {
+        title.trim_matches(is_title_pad).to_string()
+    } else {
+        without_diff
+    }
+}
+
+/// Remove `(...)` groups that are exactly a difficulty word.
+fn strip_difficulty_parens(input: &str) -> String {
+    if !input.contains('(') {
+        return input.to_string();
+    }
+    let mut out = String::with_capacity(input.len());
+    let mut rest = input;
+    while let Some(open) = rest.find('(') {
+        let Some(close_rel) = rest[open + 1..].find(')') else {
+            break;
+        };
+        let close = open + 1 + close_rel;
+        let inner = rest[open + 1..close].trim();
+        if DIFFICULTY_WORDS
+            .iter()
+            .any(|word| inner.eq_ignore_ascii_case(word))
+        {
+            out.push_str(&rest[..open]);
+        } else {
+            out.push_str(&rest[..=close]);
+        }
+        rest = &rest[close + 1..];
+    }
+    out.push_str(rest);
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// A single ranked result.
 #[derive(Clone, Debug)]
-pub struct SongSearchTextEntryState {
+pub enum SongSearchMatch {
+    Song {
+        candidate: SongSearchCandidate,
+        score: i32,
+    },
+    Pack {
+        name: Arc<str>,
+        song_count: usize,
+        score: i32,
+    },
+}
+
+impl SongSearchMatch {
+    /// The completion / list label for this match.
+    pub fn label(&self) -> String {
+        match self {
+            SongSearchMatch::Song { candidate, .. } => {
+                clean_search_title(candidate.song.display_title(false))
+            }
+            SongSearchMatch::Pack { name, .. } => name.to_string(),
+        }
+    }
+}
+
+/// Live state of the open search overlay.
+#[derive(Clone, Debug)]
+pub struct SongSearchOpen {
     pub query: String,
+    pub scope: SongSearchScope,
+    pub matches: Vec<SongSearchMatch>,
+    pub selected_index: usize,
     pub blink_t: f32,
+    pub chart_type: &'static str,
+    /// Generation of the latest ranking request; a result is applied only when
+    /// its generation matches, so stale off-thread results are discarded.
+    pub request_generation: u64,
+    /// Generation the current `matches` were ranked for. While this trails
+    /// `request_generation` the list belongs to an older query, so acting on it
+    /// would pick a row the user never saw for what they typed.
+    pub matches_generation: u64,
+    /// Set once the first ranking result has been applied, so the overlay only
+    /// shows "No matches" after a real result (not during the initial frame).
+    pub has_result: bool,
 }
 
 #[derive(Clone, Debug)]
 pub enum SongSearchState {
     Hidden,
-    TextEntry(SongSearchTextEntryState),
-    Results(SongSearchResultsState),
+    Open(SongSearchOpen),
 }
 
-pub fn begin_song_search_prompt() -> SongSearchState {
-    SongSearchState::TextEntry(SongSearchTextEntryState {
-        query: String::new(),
-        blink_t: 0.0,
-    })
-}
-
-pub fn begin_song_search_results(
-    group_entries: &[MusicWheelEntry],
-    search_text: String,
-    chart_type: &'static str,
-) -> SongSearchState {
-    let trimmed = search_text.trim().to_string();
-    if trimmed.is_empty() {
-        return SongSearchState::Hidden;
+impl SongSearchState {
+    #[inline(always)]
+    pub fn is_open(&self) -> bool {
+        matches!(self, SongSearchState::Open(_))
     }
-    let candidates = build_song_search_candidates(
-        group_entries.iter().map(|entry| match entry {
-            MusicWheelEntry::PackHeader { name, .. } => {
-                SongSearchCatalogEntry::PackHeader(name.as_ref())
-            }
-            MusicWheelEntry::Song(song) => SongSearchCatalogEntry::Song(song),
-        }),
-        &trimmed,
-        chart_type,
-    );
-    let query_label = Arc::from(format!("\"{trimmed}\""));
-    let result_count_label = Arc::from(format!("{} Results Found", candidates.len()));
-    SongSearchState::Results(SongSearchResultsState {
-        query_label,
-        result_count_label,
-        candidates,
+
+    #[inline(always)]
+    pub fn is_hidden(&self) -> bool {
+        matches!(self, SongSearchState::Hidden)
+    }
+}
+
+/// Open a fresh overlay; the caller populates `matches`.
+pub fn begin_song_search() -> SongSearchState {
+    SongSearchState::Open(SongSearchOpen {
+        query: String::new(),
+        scope: SongSearchScope::Song,
+        matches: Vec::new(),
         selected_index: 0,
-        prev_selected_index: 0,
-        last_move_dir: 0,
-        focus_anim_elapsed: SONG_SEARCH_FOCUS_TWEEN_SECONDS,
-        input_lock: SONG_SEARCH_INPUT_LOCK_SECONDS,
+        blink_t: 0.0,
+        chart_type: "dance-single",
+        request_generation: 0,
+        matches_generation: 0,
+        has_result: false,
     })
 }
 
+/// Advance the caret-blink clock; returns whether a redraw is warranted.
 pub fn update_song_search(state: &mut SongSearchState, dt: f32) -> bool {
-    let dt = dt.max(0.0);
     match state {
         SongSearchState::Hidden => false,
-        SongSearchState::TextEntry(entry) => {
-            entry.blink_t = (entry.blink_t + dt) % SONG_SEARCH_TEXT_ENTRY_CURSOR_PERIOD;
-            true
-        }
-        SongSearchState::Results(results) => {
-            results.input_lock = (results.input_lock - dt).max(0.0);
-            if results.focus_anim_elapsed < SONG_SEARCH_FOCUS_TWEEN_SECONDS {
-                results.focus_anim_elapsed =
-                    (results.focus_anim_elapsed + dt).min(SONG_SEARCH_FOCUS_TWEEN_SECONDS);
-            }
+        SongSearchState::Open(open) => {
+            open.blink_t = (open.blink_t + dt.max(0.0)) % CURSOR_BLINK_PERIOD;
             true
         }
     }
 }
 
-pub fn song_search_add_text(entry: &mut SongSearchTextEntryState, text: &str) {
-    let mut len = entry.query.chars().count();
+/// Append typed text, filtering control chars and capping the length. Returns
+/// whether the query changed: named keys arrive here with a textual form too
+/// (Enter is `\r`), and re-ranking on those would reset the highlight.
+pub fn song_search_add_text(open: &mut SongSearchOpen, text: &str) -> bool {
+    let mut len = open.query.chars().count();
+    let mut changed = false;
     for ch in text.chars() {
         if ch.is_control() {
             continue;
         }
-        if len >= SONG_SEARCH_PROMPT_MAX_LEN {
+        if len >= SONG_SEARCH_MAX_LEN {
             break;
         }
-        entry.query.push(ch);
+        open.query.push(ch);
         len += 1;
+        changed = true;
     }
+    changed
 }
 
+/// Delete the last query char. Returns whether anything changed.
 #[inline(always)]
-pub fn song_search_backspace(entry: &mut SongSearchTextEntryState) {
-    let _ = entry.query.pop();
+pub fn song_search_backspace(open: &mut SongSearchOpen) -> bool {
+    open.query.pop().is_some()
 }
 
-#[inline(always)]
-pub fn song_search_total_items(results: &SongSearchResultsState) -> usize {
-    results.candidates.len() + 1
-}
-
-pub fn song_search_move(results: &mut SongSearchResultsState, delta: isize) -> bool {
-    let len = song_search_total_items(results);
-    if len == 0 || delta == 0 {
+/// Delete trailing whitespace then the word before it. Returns whether it changed.
+pub fn song_search_delete_word(open: &mut SongSearchOpen) -> bool {
+    let mut chars: Vec<char> = open.query.chars().collect();
+    let before = chars.len();
+    while chars.last().is_some_and(|c| c.is_whitespace()) {
+        chars.pop();
+    }
+    while chars.last().is_some_and(|c| !c.is_whitespace()) {
+        chars.pop();
+    }
+    if chars.len() == before {
         return false;
     }
-    let old = results.selected_index.min(len - 1);
-    let next = ((old as isize + delta).rem_euclid(len as isize)) as usize;
-    if next == old {
-        return false;
-    }
-    results.prev_selected_index = old;
-    results.last_move_dir = delta.signum();
-    results.selected_index = next;
-    results.focus_anim_elapsed = 0.0;
+    open.query = chars.into_iter().collect();
     true
 }
 
 #[inline(always)]
-pub fn song_search_focused_candidate(
-    results: &SongSearchResultsState,
-) -> Option<&SongSearchCandidate> {
-    results.candidates.get(results.selected_index)
+pub fn song_search_shown(open: &SongSearchOpen) -> usize {
+    open.matches.len().min(SONG_SEARCH_MAX_RESULTS)
 }
 
+/// Move the highlight within the visible window, wrapping around.
+pub fn song_search_move(open: &mut SongSearchOpen, delta: isize) -> bool {
+    let shown = song_search_shown(open);
+    if shown == 0 || delta == 0 {
+        return false;
+    }
+    let cur = open.selected_index.min(shown - 1) as isize;
+    let next = (cur + delta).rem_euclid(shown as isize) as usize;
+    if next == cur as usize {
+        return false;
+    }
+    open.selected_index = next;
+    true
+}
+
+#[inline(always)]
+pub fn song_search_focused_match(open: &SongSearchOpen) -> Option<&SongSearchMatch> {
+    open.matches.get(open.selected_index)
+}
+
+/// A ghost completion offered for the focused match.
+pub struct SongSearchCompletion {
+    /// Gray text drawn under the query; always starts with `typed`.
+    pub display: String,
+    /// The typed text, drawn over `display` in theme color.
+    pub typed: String,
+    /// The query to install when the completion is accepted.
+    pub accepted: String,
+}
+
+/// The ghost completion, or `None` when none is offered.
+///
+/// Single source of truth for the renderer and Tab, so Tab can only complete to
+/// something visibly offered. The ghost is only offered when the query Tab would
+/// install literally extends what the user typed, so completing a title never
+/// silently widens the search and never renders text Tab would not produce.
+pub fn song_search_completion(open: &SongSearchOpen) -> Option<SongSearchCompletion> {
+    if open.query.is_empty() {
+        return None;
+    }
+    let text = parse_song_search_live(&open.query).text;
+    if text.is_empty() {
+        return None;
+    }
+    let label = song_search_focused_match(open)?.label();
+    // The ghost is drawn as gray text *under* the typed text, so it can only be
+    // offered when it literally extends what is on screen. Testing the raw query
+    // against the query Tab would install keeps the two honest: a trailing space
+    // or a trailing `[###]` token means the accepted query reorders what the user
+    // typed, and no ghost can truthfully be drawn over that.
+    let accepted = song_search_query_completed_with(&open.query, &label);
+    let consumed = fuzzy::folded_prefix_len(&open.query, &accepted)?;
+    let remainder: String = accepted.chars().skip(consumed).collect();
+    if remainder.is_empty() {
+        return None;
+    }
+    Some(SongSearchCompletion {
+        display: format!("{}{remainder}", open.query),
+        typed: open.query.clone(),
+        accepted,
+    })
+}
+
+/// Rebuild `query` so its free text becomes `label`, keeping the `[###]` filter
+/// tokens verbatim (a BPM token cannot be rebuilt from the parsed tier).
+pub fn song_search_query_completed_with(query: &str, label: &str) -> String {
+    let mut out = String::new();
+    let mut chars = query.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '[' {
+            continue;
+        }
+        let mut tail = chars.clone();
+        let mut token = String::from('[');
+        let mut has_digit = false;
+        while let Some(&d) = tail.peek() {
+            if !d.is_ascii_digit() {
+                break;
+            }
+            has_digit = true;
+            token.push(d);
+            tail.next();
+        }
+        if has_digit && tail.peek() == Some(&']') {
+            tail.next();
+            token.push(']');
+            out.push_str(&token);
+            out.push(' ');
+            chars = tail;
+        }
+    }
+    out.push_str(label);
+    out.chars().take(SONG_SEARCH_MAX_LEN).collect()
+}
+
+/// Longest prefix of `text` that fits `max_w`, so overlaid ghost actors can be
+/// drawn without `maxwidth` and therefore never scale away from each other.
+fn song_search_fit(asset_manager: &AssetManager, text: &str, max_w: f32, zoom: f32) -> String {
+    let width = |s: &str| -> f32 {
+        let mut out = 0.0_f32;
+        asset_manager.with_fonts(|all_fonts| {
+            asset_manager.with_font("miso", |font| {
+                out = deadlib_present::font::measure_line_width_logical(font, s, all_fonts) as f32
+                    * zoom;
+            });
+        });
+        out
+    };
+    if !width(text).is_finite() || width(text) <= max_w {
+        return text.to_string();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let (mut lo, mut hi) = (0usize, chars.len());
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        let candidate: String = chars[..mid].iter().collect();
+        if width(&candidate) <= max_w {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    chars[..lo].iter().collect()
+}
+
+/// Titles cleaned once from the wheel catalog, so keystrokes only score.
+///
+/// Titles keep their original case for word-boundary scoring, and pack names
+/// live in a side table so a large library does not duplicate them per song.
+#[derive(Clone, Debug, Default)]
+pub struct SongSearchIndex {
+    packs: Vec<PackIndexEntry>,
+    songs: Vec<SongIndexEntry>,
+}
+
+#[derive(Clone, Debug)]
+struct PackIndexEntry {
+    name: Arc<str>,
+    /// Diacritic-folded `name`, for scoring. Shares the same allocation when the
+    /// name is already unaccented.
+    search_name: Arc<str>,
+    song_count: usize,
+}
+
+#[derive(Clone, Debug)]
+struct SongIndexEntry {
+    /// Index into [`SongSearchIndex::packs`], or `usize::MAX` when the song has
+    /// no owning pack header yet.
+    pack: usize,
+    /// Cleaned native title (original case, for word-boundary scoring).
+    title: Arc<str>,
+    /// Diacritic-folded `title`, and the folded transliterated title when it
+    /// differs. Folding per keystroke across the whole catalog would be far too
+    /// expensive. Shares the title's allocation when it is already unaccented.
+    search_title: Arc<str>,
+    search_translit: Option<Arc<str>>,
+    song: Arc<SongData>,
+}
+
+impl SongSearchIndex {
+    #[inline(always)]
+    pub fn song_count(&self) -> usize {
+        self.songs.len()
+    }
+
+    #[inline(always)]
+    pub fn pack_count(&self) -> usize {
+        self.packs.len()
+    }
+
+    fn pack_name(&self, idx: usize) -> Arc<str> {
+        self.packs
+            .get(idx)
+            .map_or_else(|| Arc::from(""), |p| Arc::clone(&p.name))
+    }
+}
+
+/// Build the search index from the grouped wheel catalog. Runs once at catalog
+/// load (and on reload), not per keystroke.
+pub fn build_song_search_index(entries: &[MusicWheelEntry]) -> SongSearchIndex {
+    let mut index = SongSearchIndex::default();
+    let mut current_pack = usize::MAX;
+
+    for entry in entries {
+        match entry {
+            MusicWheelEntry::PackHeader {
+                name, song_count, ..
+            } => {
+                if entry.is_series_header() {
+                    continue;
+                }
+                current_pack = index.packs.len();
+                index.packs.push(PackIndexEntry {
+                    search_name: folded_key(name),
+                    name: Arc::clone(name),
+                    song_count: *song_count,
+                });
+            }
+            MusicWheelEntry::Song(song) => {
+                let native_raw = song.display_title(false);
+                let title: Arc<str> = Arc::from(clean_search_title(native_raw));
+                let translit_raw = song.display_title(true);
+                let search_translit = (translit_raw != native_raw)
+                    .then(|| folded_key(&clean_search_title(translit_raw)));
+                index.songs.push(SongIndexEntry {
+                    pack: current_pack,
+                    search_title: folded_key(&title),
+                    search_translit,
+                    title,
+                    song: Arc::clone(song),
+                });
+            }
+        }
+    }
+
+    index
+}
+
+/// The diacritic-folded form used for scoring, reusing the original allocation
+/// when folding changes nothing (the common all-ASCII case).
+fn folded_key(text: &str) -> Arc<str> {
+    match fuzzy::fold_diacritics(text) {
+        std::borrow::Cow::Borrowed(_) => Arc::from(text),
+        std::borrow::Cow::Owned(folded) => Arc::from(folded),
+    }
+}
+
+/// Filter by `[###]`, then fuzzy-rank the cleaned titles.
+///
+/// Only the rows that can be shown are materialized, so a large catalog does
+/// not build candidates it will discard.
+pub fn build_song_matches(
+    index: &SongSearchIndex,
+    query: &str,
+    chart_type: &str,
+) -> Vec<SongSearchMatch> {
+    let parsed = parse_song_search_live(query);
+    let q = fuzzy::prepare_query(&parsed.text);
+    let empty_query = q.is_empty();
+    // (score, index into `index.songs`)
+    let mut ranked: Vec<(i32, usize)> = Vec::new();
+
+    for (i, entry) in index.songs.iter().enumerate() {
+        if !song_passes_search_filters(&entry.song, chart_type, parsed.difficulty, parsed.bpm_tier)
+        {
+            continue;
+        }
+
+        if empty_query {
+            // Nothing typed: only the first window of rows is ever visible.
+            ranked.push((0, i));
+            if ranked.len() >= SONG_SEARCH_MAX_RESULTS {
+                break;
+            }
+            continue;
+        }
+
+        let mut score = fuzzy::best_match_score(&q, &entry.search_title, &[]);
+        if let Some(translit) = &entry.search_translit
+            && let Some(t) = fuzzy::best_match_score(&q, translit, &[])
+        {
+            score = Some(score.map_or(t, |s| s.max(t)));
+        }
+        let Some(score) = score else {
+            continue;
+        };
+        ranked.push((score, i));
+    }
+
+    if !empty_query {
+        // Higher score first; ties broken by case-insensitive title order.
+        ranked.sort_by(|a, b| {
+            b.0.cmp(&a.0)
+                .then_with(|| cmp_ascii_ci(&index.songs[a.1].title, &index.songs[b.1].title))
+        });
+        ranked.truncate(SONG_SEARCH_MAX_RESULTS);
+    }
+
+    ranked
+        .into_iter()
+        .map(|(score, i)| {
+            let entry = &index.songs[i];
+            let song = &entry.song;
+            // Only shown rows reach here, so building detail strings is cheap.
+            SongSearchMatch::Song {
+                candidate: SongSearchCandidate {
+                    pack_name: index.pack_name(entry.pack),
+                    title: Arc::clone(&entry.title),
+                    subtitle: Arc::from(song.display_subtitle(false)),
+                    bpm: Arc::from(song.formatted_chart_display_bpm(None)),
+                    difficulties: Arc::from(song_search_difficulties_text(song, chart_type)),
+                    song: Arc::clone(song),
+                },
+                score,
+            }
+        })
+        .collect()
+}
+
+/// Rank packs for `query` by fuzzy-matching their display names.
+pub fn build_pack_matches(index: &SongSearchIndex, query: &str) -> Vec<SongSearchMatch> {
+    let q = fuzzy::prepare_query(query);
+    let mut ranked: Vec<(i32, usize)> = Vec::new();
+
+    for (i, pack) in index.packs.iter().enumerate() {
+        let score = if q.is_empty() {
+            Some(0)
+        } else {
+            fuzzy::best_match_score(&q, &pack.search_name, &[])
+        };
+        let Some(score) = score else {
+            continue;
+        };
+        ranked.push((score, i));
+    }
+
+    ranked.sort_by(|a, b| {
+        b.0.cmp(&a.0)
+            .then_with(|| cmp_ascii_ci(&index.packs[a.1].name, &index.packs[b.1].name))
+    });
+    ranked.truncate(SONG_SEARCH_MAX_RESULTS);
+    ranked
+        .into_iter()
+        .map(|(score, i)| SongSearchMatch::Pack {
+            name: Arc::clone(&index.packs[i].name),
+            song_count: index.packs[i].song_count,
+            score,
+        })
+        .collect()
+}
+
+/// Allocation-free case-insensitive ordering, for tie-breaks.
+fn cmp_ascii_ci(a: &str, b: &str) -> std::cmp::Ordering {
+    a.bytes()
+        .map(|c| c.to_ascii_lowercase())
+        .cmp(b.bytes().map(|c| c.to_ascii_lowercase()))
+}
+
+/// Build the overlay actors, or `None` when the search is hidden.
 pub fn build_song_search_overlay(
     state: &SongSearchState,
     active_color_index: i32,
     machine_font: MachineFont,
+    asset_manager: &AssetManager,
 ) -> Option<Vec<Actor>> {
-    if matches!(state, SongSearchState::Hidden) {
+    let SongSearchState::Open(open) = state else {
         return None;
-    }
-    let capacity = match state {
-        SongSearchState::Hidden => 0,
-        SongSearchState::TextEntry(_) => 7,
-        SongSearchState::Results(results) => {
-            19 + 10 * usize::from(song_search_focused_candidate(results).is_some())
-        }
     };
-    let mut actors = Vec::with_capacity(capacity);
 
+    let cx = screen_center_x();
+    let cy = screen_center_y();
+    let panel_w = 380.0_f32.min(screen_width() * 0.92);
+    let panel_h = 404.0_f32;
+    let top = cy - panel_h * 0.5;
+
+    let theme = color::simply_love_rgba(active_color_index);
+    const PANEL_BG: [f32; 4] = color::rgba_hex("#071016");
+    const FOCUS_BG: [f32; 4] = color::rgba_hex("#333333");
+    const GRAY: [f32; 4] = color::rgba_hex("#808080");
+    const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+
+    let mut actors = Vec::with_capacity(48);
+
+    // Dim behind the modal.
     actors.push(act!(quad:
-        align(0.0, 0.0):
-        xy(0.0, 0.0):
+        align(0.0, 0.0): xy(0.0, 0.0):
         zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 0.8):
-        z(1450)
+        diffuse(0.0, 0.0, 0.0, 0.8): z(Z_DIM)
+    ));
+    // Panel border + fill.
+    actors.push(act!(quad:
+        align(0.5, 0.5): xy(cx, cy):
+        zoomto(panel_w + 2.0, panel_h + 2.0):
+        diffuse(WHITE[0], WHITE[1], WHITE[2], 1.0): z(Z_PANEL_BORDER)
+    ));
+    actors.push(act!(quad:
+        align(0.5, 0.5): xy(cx, cy):
+        zoomto(panel_w, panel_h):
+        diffuse(PANEL_BG[0], PANEL_BG[1], PANEL_BG[2], 1.0): z(Z_PANEL)
     ));
 
-    match state {
-        SongSearchState::Hidden => {}
-        SongSearchState::TextEntry(entry) => {
-            let cx = screen_center_x();
-            let cy = screen_center_y();
-            let panel_w = SONG_SEARCH_TEXT_ENTRY_W.min(screen_width() * 0.9);
-            let panel_h = SONG_SEARCH_TEXT_ENTRY_H;
-            let cursor = if entry.blink_t < SONG_SEARCH_TEXT_ENTRY_CURSOR_PERIOD * 0.5 {
-                "▮"
-            } else {
-                " "
-            };
-            let mut value = entry.query.clone();
-            if value.chars().count() < SONG_SEARCH_PROMPT_MAX_LEN {
-                value.push_str(cursor);
-            }
-            let query_text = format!("> {value}");
+    // Title + scope badge.
+    actors.push(act!(text:
+        font(machine_font_key(machine_font, FontRole::Header)):
+        settext(tr("SelectMusic", "SongSearchTitle")):
+        align(0.0, 0.5): xy(cx - panel_w * 0.5 + 14.0, top + 20.0): zoom(0.42):
+        diffuse(WHITE[0], WHITE[1], WHITE[2], 1.0): z(Z_TEXT): horizalign(left)
+    ));
+    actors.push(act!(text:
+        font("miso"): settext(format!("[ {} ]", open.scope.label())):
+        align(1.0, 0.5): xy(cx + panel_w * 0.5 - 14.0, top + 20.0): zoom(0.85):
+        diffuse(theme[0], theme[1], theme[2], 1.0): z(Z_TEXT): horizalign(right)
+    ));
 
+    // Query line: prompt + typed text with an inline ghost completion. The ghost
+    // is drawn by laying the completed title underneath (gray) and the typed
+    // text on top (theme color), so the untyped remainder shows through.
+    let caret_on = open.blink_t < CURSOR_BLINK_PERIOD * 0.5;
+    let query_y = top + 48.0;
+    let query_x = cx - panel_w * 0.5 + 14.0;
+    let text_x = query_x + 14.0;
+    actors.push(act!(text:
+        font("miso"): settext("> "):
+        align(0.0, 0.5): xy(query_x, query_y): zoom(0.9):
+        diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
+    ));
+    if open.query.is_empty() {
+        let placeholder = match open.scope {
+            SongSearchScope::Song => tr("SelectMusic", "SongSearchPlaceholderSongs"),
+            SongSearchScope::Pack => tr("SelectMusic", "SongSearchPlaceholderPacks"),
+        };
+        actors.push(act!(text:
+            font("miso"): settext(placeholder):
+            align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
+            maxwidth(panel_w - 44.0):
+            diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
+        ));
+    } else {
+        match song_search_completion(open) {
+            Some(completion) => {
+                // `maxwidth` scales each actor by its own measured width, so a
+                // ghost wider than the box would shrink out from under the
+                // typed text. Trim both to what fits instead.
+                let budget = panel_w - 44.0;
+                let display = song_search_fit(asset_manager, &completion.display, budget, 0.9);
+                let typed: String = completion
+                    .typed
+                    .chars()
+                    .take(display.chars().count())
+                    .collect();
+                actors.push(act!(text:
+                    font("miso"): settext(display):
+                    align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
+                    diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
+                ));
+                actors.push(act!(text:
+                    font("miso"): settext(typed):
+                    align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
+                    diffuse(theme[0], theme[1], theme[2], 1.0): z(Z_TEXT + 1): horizalign(left)
+                ));
+            }
+            None => {
+                let caret = if caret_on { "▮" } else { "" };
+                actors.push(act!(text:
+                    font("miso"): settext(format!("{}{caret}", open.query)):
+                    align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
+                    maxwidth(panel_w - 44.0):
+                    diffuse(theme[0], theme[1], theme[2], 1.0): z(Z_TEXT): horizalign(left)
+                ));
+            }
+        }
+    }
+
+    // Divider.
+    actors.push(act!(quad:
+        align(0.5, 0.5): xy(cx, top + 68.0):
+        zoomto(panel_w - 20.0, 1.0):
+        diffuse(GRAY[0], GRAY[1], GRAY[2], 0.5): z(Z_TEXT)
+    ));
+
+    // Results list.
+    let list_top = top + 86.0;
+    let row_step = 20.0;
+    let list_x = cx - panel_w * 0.5 + 16.0;
+    let count_x = cx + panel_w * 0.5 - 16.0;
+    if open.matches.is_empty() && open.has_result {
+        actors.push(act!(text:
+            font("miso"): settext(tr("SelectMusic", "SongSearchNoMatches")):
+            align(0.0, 0.5): xy(list_x, list_top): zoom(0.8):
+            diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
+        ));
+    }
+    let shown = song_search_shown(open);
+    for i in 0..shown {
+        let m = &open.matches[i];
+        let y = list_top + i as f32 * row_step;
+        let focused = i == open.selected_index;
+        if focused {
             actors.push(act!(quad:
-                align(0.5, 0.5):
-                xy(cx, cy):
-                zoomto(panel_w + 2.0, panel_h + 2.0):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                z(1451)
-            ));
-            actors.push(act!(quad:
-                align(0.5, 0.5):
-                xy(cx, cy):
-                zoomto(panel_w, panel_h):
-                diffuse(0.12, 0.12, 0.12, 1.0):
-                z(1452)
-            ));
-            actors.push(act!(text:
-                font(machine_font_key(machine_font, FontRole::Header)):
-                settext(SONG_SEARCH_PROMPT_TITLE):
-                align(0.5, 0.5):
-                xy(cx, cy - panel_h * 0.5 + 22.0):
-                zoom(0.42):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                z(1453):
-                horizalign(center)
-            ));
-            actors.push(act!(text:
-                font("miso"):
-                settext(SONG_SEARCH_PROMPT_HINT):
-                align(0.5, 0.5):
-                xy(cx, cy - 28.0):
-                zoom(0.78):
-                maxwidth(panel_w - 40.0):
-                diffuse(0.8, 0.8, 0.8, 1.0):
-                z(1453):
-                horizalign(center)
-            ));
-            actors.push(act!(text:
-                font("miso"):
-                settext(query_text):
-                align(0.5, 0.5):
-                xy(cx, cy + 30.0):
-                zoom(1.05):
-                maxwidth(panel_w - 36.0):
-                diffuse(0.4, 1.0, 0.4, 1.0):
-                z(1453):
-                horizalign(center)
-            ));
-            actors.push(act!(text:
-                font("miso"):
-                settext(SONG_SEARCH_TEXT_ENTRY_FOOTER):
-                align(0.5, 0.5):
-                xy(cx, cy + panel_h * 0.5 - 16.0):
-                zoom(0.78):
-                diffuse(0.75, 0.75, 0.75, 1.0):
-                z(1453):
-                horizalign(center)
+                align(0.0, 0.5): xy(cx - panel_w * 0.5 + 8.0, y):
+                zoomto(panel_w - 16.0, row_step - 2.0):
+                diffuse(FOCUS_BG[0], FOCUS_BG[1], FOCUS_BG[2], 1.0): z(Z_TEXT)
             ));
         }
-        SongSearchState::Results(results) => {
-            let pane_cx = screen_center_x();
-            let pane_cy = screen_center_y() + 40.0;
-            let list_base_y = pane_cy - SONG_SEARCH_PANE_H * 0.5 - SONG_SEARCH_TEXT_H * 2.5;
-            let list_x = pane_cx - SONG_SEARCH_PANE_W * 0.25;
-            let list_clip = [
-                pane_cx - SONG_SEARCH_PANE_W * 0.5,
-                pane_cy - SONG_SEARCH_PANE_H * 0.5,
-                SONG_SEARCH_PANE_W * 0.5,
-                SONG_SEARCH_PANE_H,
-            ];
-            let selected_color = color::simply_love_rgba(active_color_index);
-            let total_items = song_search_total_items(results).max(1);
-            let focus_t = (results.focus_anim_elapsed / SONG_SEARCH_FOCUS_TWEEN_SECONDS.max(1e-6))
-                .clamp(0.0, 1.0);
-            let scroll_dir = scroll_anim_dir(
-                total_items,
-                results.prev_selected_index,
-                results.selected_index,
-                results.last_move_dir,
-            ) as f32;
-            let scroll_shift = scroll_dir
-                * [1.0 - focus_t, 0.0]
-                    [(results.focus_anim_elapsed >= SONG_SEARCH_FOCUS_TWEEN_SECONDS) as usize];
-
-            actors.push(act!(quad:
-                align(0.5, 0.5):
-                xy(pane_cx, pane_cy):
-                zoomto(SONG_SEARCH_PANE_W + SONG_SEARCH_PANE_BORDER, SONG_SEARCH_PANE_H + SONG_SEARCH_PANE_BORDER):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                z(1451)
-            ));
-            actors.push(act!(quad:
-                align(0.5, 0.5):
-                xy(pane_cx, pane_cy):
-                zoomto(SONG_SEARCH_PANE_W, SONG_SEARCH_PANE_H):
-                diffuse(0.0, 0.0, 0.0, 1.0):
-                z(1452)
-            ));
-            actors.push(act!(quad:
-                align(0.5, 0.5):
-                xy(pane_cx, pane_cy):
-                zoomto(SONG_SEARCH_PANE_BORDER, SONG_SEARCH_PANE_H - 10.0):
-                diffuse(0.2, 0.2, 0.2, 1.0):
-                z(1453)
-            ));
+        let rgb = if focused {
+            [theme[0], theme[1], theme[2]]
+        } else {
+            [GRAY[0], GRAY[1], GRAY[2]]
+        };
+        let prefix = if focused { "▸ " } else { "  " };
+        actors.push(act!(text:
+            font("miso"): settext(format!("{prefix}{}", m.label())):
+            align(0.0, 0.5): xy(list_x, y): zoom(0.85):
+            maxwidth(panel_w * 0.66):
+            diffuse(rgb[0], rgb[1], rgb[2], 1.0): z(Z_TEXT + 1): horizalign(left)
+        ));
+        if let SongSearchMatch::Pack { song_count, .. } = m {
             actors.push(act!(text:
-                font("miso"):
-                settext("Search Results For:"):
-                align(0.5, 0.5):
-                xy(pane_cx, pane_cy - SONG_SEARCH_PANE_H * 0.5 - SONG_SEARCH_TEXT_H * 5.0):
-                zoom(0.8):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                z(1454):
-                horizalign(center)
+                font("miso"): settext(format!("{song_count}")):
+                align(1.0, 0.5): xy(count_x, y): zoom(0.75):
+                diffuse(rgb[0], rgb[1], rgb[2], 1.0): z(Z_TEXT + 1): horizalign(right)
             ));
-            actors.push(act!(text:
-                font("miso"):
-                settext(Arc::clone(&results.query_label)):
-                align(0.5, 0.5):
-                xy(pane_cx, pane_cy - SONG_SEARCH_PANE_H * 0.5 - SONG_SEARCH_TEXT_H * 3.0):
-                zoom(0.8):
-                maxwidth(SONG_SEARCH_PANE_W):
-                diffuse(0.4, 1.0, 0.4, 1.0):
-                z(1454):
-                horizalign(center)
-            ));
-            actors.push(act!(text:
-                font("miso"):
-                settext(Arc::clone(&results.result_count_label)):
-                align(0.5, 0.5):
-                xy(pane_cx, pane_cy - SONG_SEARCH_PANE_H * 0.5 - SONG_SEARCH_TEXT_H):
-                zoom(0.8):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                z(1454):
-                horizalign(center)
-            ));
+        }
+    }
 
-            for slot_idx in 0..SONG_SEARCH_WHEEL_SLOTS {
-                let offset = slot_idx as isize - SONG_SEARCH_WHEEL_FOCUS_SLOT as isize;
-                let row_idx = ((results.selected_index as isize + offset)
-                    .rem_euclid(total_items as isize)) as usize;
-                let slot_pos = offset as f32 + scroll_shift;
-                let y = (slot_pos + SONG_SEARCH_WHEEL_FOCUS_SLOT as f32 + 1.0)
-                    .mul_add(SONG_SEARCH_ROW_SPACING, list_base_y);
-                let focused = slot_pos.abs() < 0.5;
-                let (text, base_rgb) = song_search_row_text(results, row_idx);
-                let focus_tint = if focused {
-                    [selected_color[0], selected_color[1], selected_color[2]]
-                } else {
-                    [0.533, 0.533, 0.533]
-                };
-                let mut color_rgba = [
-                    base_rgb[0] * focus_tint[0],
-                    base_rgb[1] * focus_tint[1],
-                    base_rgb[2] * focus_tint[2],
-                    1.0,
-                ];
-                let alpha =
-                    [0.0, 1.0][(slot_idx > 0 && slot_idx + 1 < SONG_SEARCH_WHEEL_SLOTS) as usize];
-                color_rgba[3] *= alpha;
-                let mut row = act!(text:
-                    font("miso"):
-                    settext(text):
-                    align(0.5, 0.5):
-                    xy(list_x, y):
-                    maxwidth(SONG_SEARCH_RESULT_TITLE_W):
-                    zoom(1.0):
-                    diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3]):
-                    z(1454):
-                    horizalign(center)
-                );
-                super::set_text_clip_rect(&mut row, list_clip);
-                actors.push(row);
-            }
-
-            if let Some(candidate) = song_search_focused_candidate(results) {
-                let values = song_search_detail_values(candidate);
-                for (i, (label, value)) in SONG_SEARCH_DETAIL_LABELS
-                    .into_iter()
-                    .zip(values)
-                    .enumerate()
-                {
-                    let zoom = 0.8;
-                    // Matches Simply Love's visible cap from `zoom(0.8):maxwidth(width / zoom)`.
-                    let row_i = i as f32;
-                    let label_row = row_i * 2.0 + 1.0;
-                    let value_row = row_i * 2.0 + 2.0;
-                    let label_y = pane_cy - SONG_SEARCH_PANE_H * 0.5
-                        + SONG_SEARCH_TEXT_H * zoom * label_row
-                        + 8.0 * label_row;
-                    let value_y = pane_cy - SONG_SEARCH_PANE_H * 0.5
-                        + SONG_SEARCH_TEXT_H * zoom * value_row
-                        + 8.0 * value_row;
-                    actors.push(act!(text:
-                        font("miso"):
-                        settext(label):
-                        align(0.0, 0.5):
-                        xy(pane_cx + 10.0, label_y):
-                        maxwidth(SONG_SEARCH_DETAIL_LABEL_W / zoom):
-                        zoom(zoom):
-                        diffuse(0.67, 0.67, 1.0, 1.0):
-                        z(1454):
-                        horizalign(left)
-                    ));
-                    actors.push(act!(text:
-                        font("miso"):
-                        settext(Arc::clone(value)):
-                        align(0.0, 0.5):
-                        xy(pane_cx + 40.0, value_y):
-                        maxwidth(SONG_SEARCH_DETAIL_VALUE_W / zoom):
-                        zoom(zoom):
-                        diffuse(1.0, 1.0, 1.0, 1.0):
-                        z(1454):
-                        horizalign(left)
+    // Detail block for the focused match; values are precomputed when ranked.
+    if let Some(m) = song_search_focused_match(open) {
+        let detail_top = cy + panel_h * 0.5 - 96.0;
+        let details: Vec<(Arc<str>, Arc<str>)> = match m {
+            SongSearchMatch::Song { candidate, .. } => {
+                let mut rows = vec![(
+                    tr("SelectMusic", "SongSearchLabelPack"),
+                    Arc::clone(&candidate.pack_name),
+                )];
+                if !candidate.subtitle.trim().is_empty() {
+                    rows.push((
+                        tr("SelectMusic", "SongSearchLabelSubtitle"),
+                        Arc::clone(&candidate.subtitle),
                     ));
                 }
+                rows.push((
+                    tr("SelectMusic", "SongSearchLabelBpms"),
+                    Arc::clone(&candidate.bpm),
+                ));
+                rows.push((
+                    tr("SelectMusic", "SongSearchLabelDifficulties"),
+                    Arc::clone(&candidate.difficulties),
+                ));
+                rows
             }
+            SongSearchMatch::Pack {
+                name, song_count, ..
+            } => vec![
+                (tr("SelectMusic", "SongSearchLabelPack"), Arc::clone(name)),
+                (
+                    tr("SelectMusic", "SongSearchLabelSongs"),
+                    Arc::from(song_count.to_string()),
+                ),
+            ],
+        };
+        for (i, (label, value)) in details.iter().enumerate() {
+            let y = detail_top + i as f32 * 16.0;
+            actors.push(act!(text:
+                font("miso"): settext(format!("{label}:")):
+                align(0.0, 0.5): xy(list_x, y): zoom(0.75):
+                maxwidth(70.0 / 0.75):
+                diffuse(0.67, 0.67, 1.0, 1.0): z(Z_TEXT): horizalign(left)
+            ));
+            actors.push(act!(text:
+                font("miso"): settext(value.clone()):
+                align(0.0, 0.5): xy(list_x + 74.0, y): zoom(0.75):
+                maxwidth((panel_w - 108.0) / 0.75):
+                diffuse(WHITE[0], WHITE[1], WHITE[2], 1.0): z(Z_TEXT): horizalign(left)
+            ));
         }
     }
+
+    // Footer hints.
+    let scope_hint = match open.scope {
+        SongSearchScope::Song => tr("SelectMusic", "SongSearchToggleToPacks"),
+        SongSearchScope::Pack => tr("SelectMusic", "SongSearchToggleToSongs"),
+    };
+    actors.push(act!(text:
+        font("miso"):
+        settext(tr_fmt("SelectMusic", "SongSearchFooter", &[("scope", &scope_hint)])):
+        align(0.5, 0.5): xy(cx, cy + panel_h * 0.5 - 14.0): zoom(0.62):
+        maxwidth(panel_w - 20.0):
+        diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(center)
+    ));
 
     Some(actors)
-}
-
-#[inline]
-fn song_search_row_text(
-    results: &SongSearchResultsState,
-    row_idx: usize,
-) -> (TextContent, [f32; 3]) {
-    results.candidates.get(row_idx).map_or(
-        (TextContent::Static("Exit"), [1.0, 0.2, 0.2]),
-        |candidate| {
-            (
-                TextContent::Shared(Arc::clone(&candidate.title)),
-                [1.0, 1.0, 1.0],
-            )
-        },
-    )
-}
-
-#[inline]
-fn song_search_detail_values(candidate: &SongSearchCandidate) -> [&Arc<str>; 5] {
-    [
-        &candidate.pack_name,
-        &candidate.title,
-        &candidate.subtitle,
-        &candidate.bpm,
-        &candidate.difficulties,
-    ]
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_song_search_frame_text(results: &SongSearchResultsState) -> usize {
-    let total_items = song_search_total_items(results).max(1);
-    let query = TextContent::Shared(Arc::clone(&results.query_label));
-    let result_count = TextContent::Shared(Arc::clone(&results.result_count_label));
-    let mut bytes = query.as_str().len() + result_count.as_str().len();
-    for slot_idx in 0..SONG_SEARCH_WHEEL_SLOTS {
-        let offset = slot_idx as isize - SONG_SEARCH_WHEEL_FOCUS_SLOT as isize;
-        let row_idx =
-            ((results.selected_index as isize + offset).rem_euclid(total_items as isize)) as usize;
-        let (text, _) = song_search_row_text(results, row_idx);
-        bytes += text.as_str().len();
-    }
-    if let Some(candidate) = song_search_focused_candidate(results) {
-        for (label, value) in SONG_SEARCH_DETAIL_LABELS
-            .into_iter()
-            .zip(song_search_detail_values(candidate))
-        {
-            let value = TextContent::Shared(Arc::clone(value));
-            bytes += label.len() + value.as_str().len();
-        }
-    }
-    bytes
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_chart::SongData;
+    use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
     use std::path::PathBuf;
-    use std::sync::Arc;
 
-    fn test_song(title: &str, subtitle: &str) -> Arc<SongData> {
+    fn test_chart(meter: u32) -> ChartData {
+        ChartData {
+            chart_type: "dance-single".to_string(),
+            difficulty: "hard".to_string(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter,
+            step_artist: String::new(),
+            music_path: None,
+            short_hash: String::new(),
+            stats: ArrowStats::default(),
+            tech_counts: TechCounts::default(),
+            mines_nonfake: 0,
+            stamina_counts: StaminaCounts::default(),
+            total_streams: 0,
+            matrix_rating: 0.0,
+            matrix_profile: Default::default(),
+            max_nps: 0.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            measure_seconds_vec: Vec::new(),
+            first_second: 0.0,
+            has_note_data: false,
+            has_chart_attacks: false,
+            possible_grade_points: 0,
+            holds_total: 0,
+            rolls_total: 0,
+            mines_total: 0,
+            display_bpm: None,
+            min_bpm: 0.0,
+            max_bpm: 0.0,
+        }
+    }
+
+    fn test_song(title: &str, bpm: f64) -> Arc<SongData> {
         Arc::new(SongData {
             simfile_path: PathBuf::from("test.sm"),
             title: title.to_string(),
-            subtitle: subtitle.to_string(),
+            subtitle: String::new(),
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: String::new(),
@@ -511,84 +932,280 @@ mod tests {
             has_lua: false,
             cdtitle_path: None,
             music_path: None,
-            display_bpm: "128".to_string(),
+            display_bpm: format!("{bpm}"),
             offset: 0.0,
             sample_start: None,
             sample_length: None,
-            min_bpm: 128.0,
-            max_bpm: 128.0,
-            normalized_bpms: "128".to_string(),
+            min_bpm: bpm,
+            max_bpm: bpm,
+            normalized_bpms: format!("{bpm}"),
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
-            charts: Vec::new(),
+            charts: vec![test_chart(10)],
         })
     }
 
-    fn assert_close(actual: f32, expected: f32) {
-        assert!(
-            (actual - expected).abs() < 1e-6,
-            "expected {expected}, got {actual}"
+    fn index_from<'a>(songs: &'a [(&'a str, Arc<SongData>)]) -> SongSearchIndex {
+        let mut wheel: Vec<MusicWheelEntry> = Vec::new();
+        let mut current: Option<&str> = None;
+        for (pack, song) in songs {
+            if current != Some(pack) {
+                wheel.push(MusicWheelEntry::PackHeader {
+                    name: Arc::from(*pack),
+                    original_index: 0,
+                    banner_path: None,
+                    song_count: songs.iter().filter(|(p, _)| p == pack).count(),
+                    pack_key: Some(Arc::from(*pack)),
+                    parent_series: None,
+                });
+                current = Some(pack);
+            }
+            wheel.push(MusicWheelEntry::Song(song.clone()));
+        }
+        build_song_search_index(&wheel)
+    }
+
+    #[test]
+    fn fuzzy_ranks_prefix_first() {
+        let songs = vec![
+            ("Pack A", test_song("Butterfly", 128.0)),
+            ("Pack A", test_song("Boaty McBoatface", 140.0)),
+        ];
+        let index = index_from(&songs);
+        let matches = build_song_matches(&index, "butter", "dance-single");
+        assert!(!matches.is_empty());
+        assert_eq!(matches[0].label(), "Butterfly");
+    }
+
+    #[test]
+    fn bpm_filter_narrows_songs() {
+        let songs = vec![
+            ("Pack A", test_song("Slow One", 90.0)),
+            ("Pack A", test_song("Fast One", 200.0)),
+        ];
+        let index = index_from(&songs);
+        let matches = build_song_matches(&index, "[200]", "dance-single");
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].label(), "Fast One");
+    }
+
+    #[test]
+    fn pack_matches_rank_by_name() {
+        let songs = vec![
+            ("Tsunamix", test_song("Song A", 120.0)),
+            ("Tsunamix", test_song("Song B", 120.0)),
+            ("Otaku's Dream", test_song("Song C", 120.0)),
+        ];
+        let index = index_from(&songs);
+        let matches = build_pack_matches(&index, "tsun");
+        assert_eq!(matches.len(), 1);
+        match &matches[0] {
+            SongSearchMatch::Pack {
+                name, song_count, ..
+            } => {
+                assert_eq!(name.as_ref(), "Tsunamix");
+                assert_eq!(*song_count, 2);
+            }
+            _ => panic!("expected a pack match"),
+        }
+    }
+
+    #[test]
+    fn empty_query_lists_everything() {
+        let songs = vec![
+            ("Pack A", test_song("Alpha", 120.0)),
+            ("Pack A", test_song("Beta", 120.0)),
+        ];
+        let index = index_from(&songs);
+        let matches = build_song_matches(&index, "", "dance-single");
+        assert_eq!(matches.len(), 2);
+    }
+
+    #[test]
+    fn clean_title_strips_itl_point_level_and_mix_prefixes() {
+        assert_eq!(clean_search_title("[6998] [12] automate"), "automate");
+        assert_eq!(
+            clean_search_title("[4599] [10] Somebody Set Up Us the Bob-omb"),
+            "Somebody Set Up Us the Bob-omb"
+        );
+        // Leading zero-width space + points/level + [Mix] annotation all stripped.
+        assert_eq!(
+            clean_search_title("\u{200b}[10000] [15] [Mix] TECHCORE ESSENCE 2685"),
+            "TECHCORE ESSENCE 2685"
         );
     }
 
     #[test]
-    fn detail_text_uses_itgmania_visible_widths_after_zoom() {
-        let pack = "Pack Name Long Enough To Need Horizontal Compression";
-        let title = "Song Title Long Enough To Need Horizontal Compression";
-        let subtitle = "Subtitle Long Enough To Need Horizontal Compression";
-        let song = test_song(title, subtitle);
-        let state = SongSearchState::Results(SongSearchResultsState {
-            query_label: Arc::from("\"long\""),
-            result_count_label: Arc::from("1 Results Found"),
-            candidates: vec![SongSearchCandidate {
-                pack_name: Arc::from(pack),
-                title: Arc::from(title),
-                subtitle: Arc::from(subtitle),
-                bpm: Arc::from("128"),
-                difficulties: Arc::from("-"),
-                song,
-            }],
-            selected_index: 0,
-            prev_selected_index: 0,
-            last_move_dir: 0,
-            focus_anim_elapsed: SONG_SEARCH_FOCUS_TWEEN_SECONDS,
-            input_lock: 0.0,
-        });
+    fn clean_title_keeps_non_annotation_brackets_and_real_parens() {
+        // A non-numeric, non-Mix bracket is part of the real title and kept.
+        assert_eq!(
+            clean_search_title("[Boss] Final Battle"),
+            "[Boss] Final Battle"
+        );
+        assert_eq!(
+            clean_search_title("Slow Down (short cut)"),
+            "Slow Down (short cut)"
+        );
+        assert_eq!(
+            clean_search_title("Sippin Yak' (DENNETT Remix)"),
+            "Sippin Yak' (DENNETT Remix)"
+        );
+    }
 
-        let actors = build_song_search_overlay(&state, 0, MachineFont::Wendy)
-            .expect("song search should render");
-        let detail_x = screen_center_x() + 40.0;
-        let mut found = 0;
+    #[test]
+    fn clean_title_drops_difficulty_parenthetical() {
+        assert_eq!(clean_search_title("[12] Karma (Easy)"), "Karma");
+        assert_eq!(clean_search_title("Some Song (Challenge)"), "Some Song");
+    }
 
-        for actor in &actors {
-            let Actor::Text {
-                content,
-                offset,
-                scale,
-                max_width,
-                max_w_pre_zoom,
-                ..
-            } = actor
-            else {
-                continue;
-            };
-            if ![pack, title, subtitle].contains(&content.as_str())
-                || (offset[0] - detail_x).abs() > 1e-6
-            {
-                continue;
-            }
+    #[test]
+    fn clean_title_falls_back_when_only_annotations() {
+        // Nothing but a numeric bracket -> keep the original so the row isn't blank.
+        assert_eq!(clean_search_title("[123]"), "[123]");
+    }
 
-            found += 1;
-            assert_close(scale[0], 0.8);
-            assert_close(
-                max_width.expect("detail value should cap width"),
-                115.0 / 0.8,
+    #[test]
+    fn annotated_title_autocompletes_to_clean_name() {
+        let songs = vec![("ITL Online 2026", test_song("[6998] [12] automate", 175.0))];
+        let index = index_from(&songs);
+        let matches = build_song_matches(&index, "auto", "dance-single");
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].label(), "automate");
+    }
+
+    #[test]
+    fn delete_word_removes_trailing_word_and_whitespace() {
+        let mut open = match begin_song_search() {
+            SongSearchState::Open(open) => open,
+            _ => unreachable!(),
+        };
+        open.query = "hello world".to_string();
+        assert!(song_search_delete_word(&mut open));
+        assert_eq!(open.query, "hello ");
+        // Second delete clears the remaining word.
+        assert!(song_search_delete_word(&mut open));
+        assert_eq!(open.query, "");
+        assert!(!song_search_delete_word(&mut open));
+    }
+
+    #[test]
+    fn accented_titles_are_reachable_from_an_ascii_query() {
+        let songs = vec![
+            ("Pack", test_song("Déjà Vu", 175.0)),
+            ("Pack", test_song("Señorita", 150.0)),
+            ("Pack", test_song("Über Alles", 160.0)),
+        ];
+        let index = index_from(&songs);
+
+        // Every prefix has to match, or a live typeahead shows an empty list
+        // partway through a word the user is spelling correctly.
+        for query in ["d", "de", "dej", "deja", "dejav", "deja v", "deja vu"] {
+            let matches = build_song_matches(&index, query, "dance-single");
+            assert!(
+                matches.iter().any(|m| m.label() == "Déjà Vu"),
+                "{query:?} did not reach the accented title"
             );
-            assert!(*max_w_pre_zoom);
+        }
+        for (query, want) in [("senor", "Señorita"), ("uber", "Über Alles")] {
+            let matches = build_song_matches(&index, query, "dance-single");
+            assert!(
+                matches.iter().any(|m| m.label() == want),
+                "{query:?} did not reach {want:?}"
+            );
         }
 
-        assert_eq!(found, 3);
+        // Typing the accent works too, and the shown label keeps it.
+        let matches = build_song_matches(&index, "déjà", "dance-single");
+        assert_eq!(matches[0].label(), "Déjà Vu");
+    }
+
+    #[test]
+    fn decomposed_and_precomposed_titles_search_alike() {
+        // macOS-authored simfiles commonly carry NFD text; without folding, the
+        // two spellings behave as different songs.
+        let precomposed = "caf\u{e9}";
+        let decomposed = "cafe\u{301}";
+        assert_ne!(precomposed, decomposed);
+
+        for title in [precomposed, decomposed] {
+            let songs = vec![("Pack", test_song(title, 150.0))];
+            let index = index_from(&songs);
+            for query in ["cafe", "caf\u{e9}", "cafe\u{301}"] {
+                assert_eq!(
+                    build_song_matches(&index, query, "dance-single").len(),
+                    1,
+                    "query {query:?} against title {title:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn completion_folds_accents_and_splits_the_original_title() {
+        let songs = vec![("Pack", test_song("Déjà Vu", 175.0))];
+        let index = index_from(&songs);
+        let mut open = match begin_song_search() {
+            SongSearchState::Open(open) => open,
+            _ => unreachable!(),
+        };
+        open.query = "deja".to_string();
+        open.matches = build_song_matches(&index, "deja", "dance-single");
+        open.selected_index = 0;
+
+        let completion = song_search_completion(&open).expect("ghost for an accented title");
+        // The split must land on the original title's chars, not the folded
+        // ones, or the ghost duplicates or drops a letter.
+        assert_eq!(completion.display, "deja Vu");
+        assert_eq!(completion.accepted, "Déjà Vu");
+        assert!(completion.display.starts_with(&completion.typed));
+    }
+
+    /// The ghost is drawn under the typed text, so `display` must literally begin
+    /// with what the user typed and must agree with what Tab installs. A trailing
+    /// space or a trailing `[###]` token makes the accepted query reorder the
+    /// input, and the ghost has to decline rather than render a phantom title.
+    #[test]
+    fn completion_display_always_extends_the_typed_query() {
+        let songs = vec![("ITL Online 2026", test_song("automate", 175.0))];
+        let index = index_from(&songs);
+        let mut open = match begin_song_search() {
+            SongSearchState::Open(open) => open,
+            _ => unreachable!(),
+        };
+
+        for (query, expected) in [
+            ("auto", Some(("automate", "automate"))),
+            ("[10] auto", Some(("[10] automate", "[10] automate"))),
+            // Reordered by acceptance, so no honest ghost exists.
+            ("auto ", None),
+            ("auto [10]", None),
+        ] {
+            open.query = query.to_string();
+            open.matches = build_song_matches(&index, query, "dance-single");
+            open.selected_index = 0;
+            match (song_search_completion(&open), expected) {
+                (Some(completion), Some((display, accepted))) => {
+                    assert_eq!(completion.display, display, "display for {query:?}");
+                    assert_eq!(completion.accepted, accepted, "accepted for {query:?}");
+                    assert_eq!(completion.typed, query, "typed for {query:?}");
+                    assert!(
+                        completion.display.starts_with(&completion.typed),
+                        "ghost for {query:?} does not extend the typed text"
+                    );
+                }
+                (None, None) => {}
+                (Some(completion), None) => {
+                    panic!(
+                        "expected no ghost for {query:?}, got {:?}",
+                        completion.display
+                    )
+                }
+                (None, Some((display, _))) => {
+                    panic!("expected ghost {display:?} for {query:?}, got none")
+                }
+            }
+        }
     }
 }
