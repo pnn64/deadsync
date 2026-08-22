@@ -4325,7 +4325,6 @@ pub struct LocalScoreGameplayEntryInput<'a> {
 pub fn local_score_entry_from_gameplay_input(
     input: LocalScoreGameplayEntryInput<'_>,
 ) -> LocalScoreEntry {
-    let mines_disabled = false;
     let mut grade = if gameplay_run_passed(
         input.song_completed_naturally,
         input.is_failing,
@@ -4337,28 +4336,19 @@ pub fn local_score_entry_from_gameplay_input(
         Grade::Failed
     };
 
-    let ex_score_percent = judgment::calculate_ex_score_from_notes(
-        input.notes,
-        input.note_times,
-        input.hold_end_times,
-        input.total_steps,
-        input.holds_total,
-        input.rolls_total,
-        input.mines_total,
-        input.fail_time.map(song_time_ns_from_seconds),
-        mines_disabled,
-    );
-    let hard_ex_score_percent = judgment::calculate_hard_ex_score_from_notes(
-        input.notes,
-        input.note_times,
-        input.hold_end_times,
-        input.total_steps,
-        input.holds_total,
-        input.rolls_total,
-        input.mines_total,
-        input.fail_time.map(song_time_ns_from_seconds),
-        mines_disabled,
-    );
+    let (ex_score_percent, hard_ex_score_percent) =
+        judgment::calculate_ex_score_percents_from_notes(
+            input.notes,
+            input.note_times,
+            input.hold_end_times,
+            judgment::ExScoreTotals {
+                total_steps: input.total_steps,
+                holds_total: input.holds_total,
+                rolls_total: input.rolls_total,
+                mines_total: input.mines_total,
+            },
+            input.fail_time.map(song_time_ns_from_seconds),
+        );
 
     grade = promote_quint_grade(grade, ex_score_percent);
     let (lamp_index, lamp_judge_count) =

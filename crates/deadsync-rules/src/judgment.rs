@@ -397,6 +397,16 @@ pub struct ExScoreData {
     pub mines_total: u32,
 }
 
+/// Immutable chart totals shared by EX and Hard EX reconstruction.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ExScoreTotals {
+    pub total_steps: u32,
+    pub holds_total: u32,
+    pub rolls_total: u32,
+    pub mines_total: u32,
+}
+
+#[derive(Default)]
 struct ExScoreCounts {
     windows: WindowCounts,
     w010: u32,
@@ -405,29 +415,77 @@ struct ExScoreCounts {
     mines_hit: u32,
 }
 
+#[inline(always)]
+fn resolved_before_fail(
+    note: &Note,
+    index: usize,
+    note_times_ns: &[i64],
+    hold_end_times_ns: &[i64],
+    fail_time_ns: Option<i64>,
+) -> bool {
+    let Some(fail_time_ns) = fail_time_ns else {
+        return true;
+    };
+    let relevant_time_ns = if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+        hold_end_times_ns
+            .get(index)
+            .copied()
+            .filter(|&time_ns| !song_time_ns_invalid(time_ns))
+            .unwrap_or(0)
+    } else {
+        note_times_ns.get(index).copied().unwrap_or(0)
+    };
+    relevant_time_ns <= fail_time_ns
+}
+
+#[inline(always)]
+fn add_resolved_note(counts: &mut ExScoreCounts, note: &Note) {
+    match note.note_type {
+        NoteType::Hold
+            if note
+                .hold
+                .as_ref()
+                .is_some_and(|h| h.result == Some(HoldResult::Held)) =>
+        {
+            counts.holds_held = counts.holds_held.saturating_add(1);
+        }
+        NoteType::Roll
+            if note
+                .hold
+                .as_ref()
+                .is_some_and(|h| h.result == Some(HoldResult::Held)) =>
+        {
+            counts.rolls_held = counts.rolls_held.saturating_add(1);
+        }
+        NoteType::Mine if note.mine_result == Some(MineResult::Hit) => {
+            counts.mines_hit = counts.mines_hit.saturating_add(1);
+        }
+        _ => {}
+    }
+}
+
+#[inline(always)]
+fn add_ex_row(counts: &mut ExScoreCounts, judgment: &Judgment) {
+    add_judgment_to_window_counts(&mut counts.windows, judgment, FA_PLUS_W0_MS);
+    if judgment.grade == JudgeGrade::Fantastic && judgment.time_error_ms.abs() <= FA_PLUS_W010_MS {
+        counts.w010 = counts.w010.saturating_add(1);
+    }
+}
+
 fn compute_ex_score_counts(
     notes: &[Note],
     note_times_ns: &[i64],
     hold_end_times_ns: &[i64],
     fail_time_ns: Option<i64>,
 ) -> ExScoreCounts {
-    let mut windows = WindowCounts::default();
-    let mut w010: u32 = 0;
-
+    let mut counts = ExScoreCounts::default();
     let mut idx: usize = 0;
-    let len = notes.len();
-    let mut row_judgments: Vec<&Judgment> = Vec::with_capacity(8);
-    while idx < len {
+    while idx < notes.len() {
         let row_index = notes[idx].row_index;
-        row_judgments.clear();
-
         let row_time_ns = note_times_ns.get(idx).copied().unwrap_or(0);
-        let row_is_playable = match fail_time_ns {
-            Some(t) => row_time_ns <= t,
-            None => true,
-        };
-
-        while idx < len && notes[idx].row_index == row_index {
+        let row_is_playable = fail_time_ns.is_none_or(|time_ns| row_time_ns <= time_ns);
+        let mut row_judgment = None;
+        while idx < notes.len() && notes[idx].row_index == row_index {
             let note = &notes[idx];
             if row_is_playable
                 && !note.is_fake
@@ -435,91 +493,25 @@ fn compute_ex_score_counts(
                 && !matches!(note.note_type, NoteType::Mine)
                 && let Some(j) = note.result.as_ref()
             {
-                row_judgments.push(j);
+                select_row_final_judgment(&mut row_judgment, j);
+            }
+            if !note.is_fake
+                && note.can_be_judged
+                && matches!(
+                    note.note_type,
+                    NoteType::Hold | NoteType::Roll | NoteType::Mine
+                )
+                && resolved_before_fail(note, idx, note_times_ns, hold_end_times_ns, fail_time_ns)
+            {
+                add_resolved_note(&mut counts, note);
             }
             idx += 1;
         }
-
-        if row_judgments.is_empty() {
-            continue;
-        }
-
-        if let Some(j) = aggregate_row_final_judgment(row_judgments.iter().copied()) {
-            match j.grade {
-                JudgeGrade::Fantastic => {
-                    if j.time_error_ms.abs() <= FA_PLUS_W0_MS {
-                        windows.w0 = windows.w0.saturating_add(1);
-                    } else {
-                        windows.w1 = windows.w1.saturating_add(1);
-                    }
-                    if j.time_error_ms.abs() <= FA_PLUS_W010_MS {
-                        w010 = w010.saturating_add(1);
-                    }
-                }
-                JudgeGrade::Excellent => windows.w2 = windows.w2.saturating_add(1),
-                JudgeGrade::Great => windows.w3 = windows.w3.saturating_add(1),
-                JudgeGrade::Decent => windows.w4 = windows.w4.saturating_add(1),
-                JudgeGrade::WayOff => windows.w5 = windows.w5.saturating_add(1),
-                JudgeGrade::Miss => windows.miss = windows.miss.saturating_add(1),
-            }
+        if let Some(judgment) = row_judgment {
+            add_ex_row(&mut counts, judgment);
         }
     }
-
-    let mut holds_held: u32 = 0;
-    let mut rolls_held: u32 = 0;
-    let mut mines_hit: u32 = 0;
-
-    for (i, note) in notes.iter().enumerate() {
-        if note.is_fake || !note.can_be_judged {
-            continue;
-        }
-
-        if let Some(ft) = fail_time_ns {
-            let relevant_time = if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
-                hold_end_times_ns
-                    .get(i)
-                    .copied()
-                    .filter(|&time_ns| !song_time_ns_invalid(time_ns))
-                    .unwrap_or(0)
-            } else {
-                note_times_ns.get(i).copied().unwrap_or(0)
-            };
-            if relevant_time > ft {
-                continue;
-            }
-        }
-
-        match note.note_type {
-            NoteType::Hold => {
-                if let Some(h) = note.hold.as_ref()
-                    && h.result == Some(HoldResult::Held)
-                {
-                    holds_held = holds_held.saturating_add(1);
-                }
-            }
-            NoteType::Roll => {
-                if let Some(h) = note.hold.as_ref()
-                    && h.result == Some(HoldResult::Held)
-                {
-                    rolls_held = rolls_held.saturating_add(1);
-                }
-            }
-            NoteType::Mine => {
-                if note.mine_result == Some(MineResult::Hit) {
-                    mines_hit = mines_hit.saturating_add(1);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    ExScoreCounts {
-        windows,
-        w010,
-        holds_held,
-        rolls_held,
-        mines_hit,
-    }
+    counts
 }
 
 #[inline(always)]
@@ -643,6 +635,41 @@ pub fn predictive_hard_ex_score_percents(data: &ExScoreData) -> (f64, f64, f64) 
     )
 }
 
+#[inline(always)]
+fn ex_score_data(counts: ExScoreCounts, totals: ExScoreTotals) -> ExScoreData {
+    ExScoreData {
+        counts: counts.windows,
+        counts_10ms: WindowCounts {
+            w0: counts.w010,
+            ..WindowCounts::default()
+        },
+        holds_held: counts.holds_held,
+        holds_resolved: counts.holds_held,
+        rolls_held: counts.rolls_held,
+        rolls_resolved: counts.rolls_held,
+        mines_hit: counts.mines_hit,
+        total_steps: totals.total_steps,
+        holds_total: totals.holds_total,
+        rolls_total: totals.rolls_total,
+        mines_total: totals.mines_total,
+    }
+}
+
+/// Reconstructs EX and Hard EX together in one allocation-free note scan.
+pub fn calculate_ex_score_percents_from_notes(
+    notes: &[Note],
+    note_times_ns: &[i64],
+    hold_end_times_ns: &[i64],
+    totals: ExScoreTotals,
+    fail_time_ns: Option<i64>,
+) -> (f64, f64) {
+    let data = ex_score_data(
+        compute_ex_score_counts(notes, note_times_ns, hold_end_times_ns, fail_time_ns),
+        totals,
+    );
+    (ex_score_percent(&data), hard_ex_score_percent(&data))
+}
+
 /// Calculates FA+ EX score using the same algebra as SL:
 ///
 ///   `total_possible` = `total_steps` * 3.5 + (`total_holds` + `total_rolls`)
@@ -666,20 +693,19 @@ pub fn calculate_ex_score_from_notes(
     fail_time_ns: Option<i64>,
     _mines_disabled: bool,
 ) -> f64 {
-    let counts = compute_ex_score_counts(notes, note_times_ns, hold_end_times_ns, fail_time_ns);
-    ex_score_percent(&ExScoreData {
-        counts: counts.windows,
-        counts_10ms: WindowCounts::default(),
-        holds_held: counts.holds_held,
-        holds_resolved: counts.holds_held,
-        rolls_held: counts.rolls_held,
-        rolls_resolved: counts.rolls_held,
-        mines_hit: counts.mines_hit,
-        total_steps,
-        holds_total,
-        rolls_total,
-        mines_total,
-    })
+    calculate_ex_score_percents_from_notes(
+        notes,
+        note_times_ns,
+        hold_end_times_ns,
+        ExScoreTotals {
+            total_steps,
+            holds_total,
+            rolls_total,
+            mines_total,
+        },
+        fail_time_ns,
+    )
+    .0
 }
 
 pub fn calculate_hard_ex_score_from_notes(
@@ -693,23 +719,117 @@ pub fn calculate_hard_ex_score_from_notes(
     fail_time_ns: Option<i64>,
     _mines_disabled: bool,
 ) -> f64 {
-    let counts = compute_ex_score_counts(notes, note_times_ns, hold_end_times_ns, fail_time_ns);
-    hard_ex_score_percent(&ExScoreData {
-        counts: counts.windows,
-        counts_10ms: WindowCounts {
-            w0: counts.w010,
-            ..WindowCounts::default()
+    calculate_ex_score_percents_from_notes(
+        notes,
+        note_times_ns,
+        hold_end_times_ns,
+        ExScoreTotals {
+            total_steps,
+            holds_total,
+            rolls_total,
+            mines_total,
         },
-        holds_held: counts.holds_held,
-        holds_resolved: counts.holds_held,
-        rolls_held: counts.rolls_held,
-        rolls_resolved: counts.rolls_held,
-        mines_hit: counts.mines_hit,
-        total_steps,
-        holds_total,
-        rolls_total,
-        mines_total,
-    })
+        fail_time_ns,
+    )
+    .1
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub mod bench_support {
+    use super::*;
+
+    fn old_compute_ex_score_counts(
+        notes: &[Note],
+        note_times_ns: &[i64],
+        hold_end_times_ns: &[i64],
+        fail_time_ns: Option<i64>,
+    ) -> ExScoreCounts {
+        let mut counts = ExScoreCounts::default();
+        let mut idx = 0usize;
+        let mut row_judgments: Vec<&Judgment> = Vec::with_capacity(8);
+        while idx < notes.len() {
+            let row_index = notes[idx].row_index;
+            row_judgments.clear();
+            let row_time_ns = note_times_ns.get(idx).copied().unwrap_or(0);
+            let row_is_playable = fail_time_ns.is_none_or(|time_ns| row_time_ns <= time_ns);
+            while idx < notes.len() && notes[idx].row_index == row_index {
+                let note = &notes[idx];
+                if row_is_playable
+                    && !note.is_fake
+                    && note.can_be_judged
+                    && !matches!(note.note_type, NoteType::Mine)
+                    && let Some(judgment) = note.result.as_ref()
+                {
+                    row_judgments.push(judgment);
+                }
+                idx += 1;
+            }
+            if let Some(judgment) = aggregate_row_final_judgment(row_judgments.iter().copied()) {
+                add_ex_row(&mut counts, judgment);
+            }
+        }
+
+        for (index, note) in notes.iter().enumerate() {
+            if !note.is_fake
+                && note.can_be_judged
+                && resolved_before_fail(note, index, note_times_ns, hold_end_times_ns, fail_time_ns)
+            {
+                add_resolved_note(&mut counts, note);
+            }
+        }
+        counts
+    }
+
+    pub fn ex_score_percent_from_notes(
+        notes: &[Note],
+        note_times_ns: &[i64],
+        hold_end_times_ns: &[i64],
+        totals: ExScoreTotals,
+        fail_time_ns: Option<i64>,
+    ) -> f64 {
+        ex_score_percent(&ex_score_data(
+            old_compute_ex_score_counts(notes, note_times_ns, hold_end_times_ns, fail_time_ns),
+            totals,
+        ))
+    }
+
+    pub fn hard_ex_score_percent_from_notes(
+        notes: &[Note],
+        note_times_ns: &[i64],
+        hold_end_times_ns: &[i64],
+        totals: ExScoreTotals,
+        fail_time_ns: Option<i64>,
+    ) -> f64 {
+        hard_ex_score_percent(&ex_score_data(
+            old_compute_ex_score_counts(notes, note_times_ns, hold_end_times_ns, fail_time_ns),
+            totals,
+        ))
+    }
+
+    pub fn ex_score_percents_from_notes(
+        notes: &[Note],
+        note_times_ns: &[i64],
+        hold_end_times_ns: &[i64],
+        totals: ExScoreTotals,
+        fail_time_ns: Option<i64>,
+    ) -> (f64, f64) {
+        (
+            ex_score_percent_from_notes(
+                notes,
+                note_times_ns,
+                hold_end_times_ns,
+                totals,
+                fail_time_ns,
+            ),
+            hard_ex_score_percent_from_notes(
+                notes,
+                note_times_ns,
+                hold_end_times_ns,
+                totals,
+                fail_time_ns,
+            ),
+        )
+    }
 }
 
 #[cfg(test)]
@@ -964,6 +1084,119 @@ mod tests {
             .expect("row with judgments should aggregate");
 
         assert_eq!(chosen.grade, JudgeGrade::Miss);
+    }
+
+    #[test]
+    fn fused_ex_scan_matches_materialized_two_pass_reference() {
+        let mut notes = vec![
+            make_tap(0, JudgeGrade::Fantastic, -5.0),
+            make_tap(0, JudgeGrade::Fantastic, 15.0),
+            make_tap(1, JudgeGrade::Miss, 180.0),
+            make_tap(1, JudgeGrade::Excellent, 12.0),
+            make_hold(2, true),
+            make_roll(3, true),
+            make_mine(4),
+            make_tap(5, JudgeGrade::Great, 20.0),
+            make_tap(6, JudgeGrade::Decent, 40.0),
+        ];
+        notes[7].is_fake = true;
+        notes[8].can_be_judged = false;
+        let note_times_ns = [
+            0,
+            0,
+            100_000_000,
+            100_000_000,
+            200_000_000,
+            300_000_000,
+            400_000_000,
+            500_000_000,
+            600_000_000,
+        ];
+        let hold_end_times_ns = [
+            i64::MIN,
+            i64::MIN,
+            i64::MIN,
+            i64::MIN,
+            800_000_000,
+            i64::MIN,
+            i64::MIN,
+            i64::MIN,
+            i64::MIN,
+        ];
+        let totals = ExScoreTotals {
+            total_steps: 4,
+            holds_total: 1,
+            rolls_total: 1,
+            mines_total: 1,
+        };
+
+        for fail_time_ns in [
+            None,
+            Some(-1),
+            Some(150_000_000),
+            Some(350_000_000),
+            Some(i64::MAX),
+        ] {
+            let expected = bench_support::ex_score_percents_from_notes(
+                &notes,
+                &note_times_ns,
+                &hold_end_times_ns,
+                totals,
+                fail_time_ns,
+            );
+            let actual = calculate_ex_score_percents_from_notes(
+                &notes,
+                &note_times_ns,
+                &hold_end_times_ns,
+                totals,
+                fail_time_ns,
+            );
+            assert_eq!(actual.0.to_bits(), expected.0.to_bits());
+            assert_eq!(actual.1.to_bits(), expected.1.to_bits());
+        }
+    }
+
+    #[test]
+    fn fused_ex_scan_preserves_unbounded_row_aggregation() {
+        let notes: Vec<_> = (0..32)
+            .map(|column| {
+                let mut note = make_tap(
+                    0,
+                    if column == 17 {
+                        JudgeGrade::Miss
+                    } else {
+                        JudgeGrade::Fantastic
+                    },
+                    column as f32 - 16.0,
+                );
+                note.column = column;
+                note
+            })
+            .collect();
+        let note_times_ns = vec![0; notes.len()];
+        let hold_end_times_ns = vec![i64::MIN; notes.len()];
+        let totals = ExScoreTotals {
+            total_steps: 1,
+            ..ExScoreTotals::default()
+        };
+
+        let expected = bench_support::ex_score_percents_from_notes(
+            &notes,
+            &note_times_ns,
+            &hold_end_times_ns,
+            totals,
+            None,
+        );
+        let actual = calculate_ex_score_percents_from_notes(
+            &notes,
+            &note_times_ns,
+            &hold_end_times_ns,
+            totals,
+            None,
+        );
+
+        assert_eq!(actual.0.to_bits(), expected.0.to_bits());
+        assert_eq!(actual.1.to_bits(), expected.1.to_bits());
     }
 
     #[test]
