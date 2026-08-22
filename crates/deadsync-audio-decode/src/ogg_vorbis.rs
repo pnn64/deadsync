@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use symphonia::core::codecs::audio::{
     AudioCodecParameters, AudioDecoder, AudioDecoderOptions, well_known::CODEC_ID_VORBIS,
@@ -18,6 +18,10 @@ use symphonia::core::units::{Duration, Timestamp};
 const SEEK_PREROLL_FRAMES: u64 = 1 << 14;
 const OGG_PAGE_HEADER_LEN: usize = 27;
 const OGG_CAPTURE_PATTERN: &[u8; 4] = b"OggS";
+// The affected legacy encoder exposes its missing-granule layout immediately
+// (Pandemonium's first bad page is sequence 3). Keep this compatibility probe
+// bounded so opening an ordinary preview never reads the whole song first.
+const LEGACY_GRANULE_PROBE_LEN: usize = 64 * 1024;
 
 pub(crate) struct OpenFile {
     pub reader: Reader,
@@ -77,31 +81,44 @@ fn probe_format(
 // packets. Some old encoders also used it on pages that complete ordinary
 // audio packets. Symphonia maps that value to timestamp -1 and trims every
 // packet completed on the page to zero frames when gapless decoding is on.
-fn has_legacy_missing_granules(path: &Path) -> std::io::Result<bool> {
-    let mut file = File::open(path)?;
-    let mut header = [0_u8; OGG_PAGE_HEADER_LEN];
-    let mut lacing = [0_u8; u8::MAX as usize];
+fn has_legacy_missing_granules_in_prefix(path: &Path) -> std::io::Result<bool> {
+    let mut prefix = Vec::with_capacity(LEGACY_GRANULE_PROBE_LEN);
+    File::open(path)?
+        .take(LEGACY_GRANULE_PROBE_LEN as u64)
+        .read_to_end(&mut prefix)?;
 
+    let mut page_start = 0_usize;
     loop {
-        match file.read_exact(&mut header) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(false),
-            Err(e) => return Err(e),
-        }
+        let Some(header_end) = page_start.checked_add(OGG_PAGE_HEADER_LEN) else {
+            return Ok(false);
+        };
+        let Some(header) = prefix.get(page_start..header_end) else {
+            return Ok(false);
+        };
         if &header[..4] != OGG_CAPTURE_PATTERN || header[4] != 0 {
             return Ok(false);
         }
 
         let segment_count = usize::from(header[26]);
-        let segments = &mut lacing[..segment_count];
-        file.read_exact(segments)?;
+        let Some(segment_end) = header_end.checked_add(segment_count) else {
+            return Ok(false);
+        };
+        let Some(segments) = prefix.get(header_end..segment_end) else {
+            return Ok(false);
+        };
         let missing_granule = header[6..14].iter().all(|&byte| byte == u8::MAX);
         if missing_granule && segments.iter().any(|&length| length < u8::MAX) {
             return Ok(true);
         }
 
-        let body_len = segments.iter().map(|&length| i64::from(length)).sum();
-        file.seek(SeekFrom::Current(body_len))?;
+        let body_len = segments.iter().map(|&length| usize::from(length)).sum();
+        let Some(next_page) = segment_end.checked_add(body_len) else {
+            return Ok(false);
+        };
+        if next_page > prefix.len() {
+            return Ok(false);
+        }
+        page_start = next_page;
     }
 }
 
@@ -113,7 +130,7 @@ fn vorbis_track(tracks: &[Track]) -> Option<(&Track, &AudioCodecParameters)> {
 }
 
 pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
-    let legacy_missing_granules = has_legacy_missing_granules(path)?;
+    let legacy_missing_granules = has_legacy_missing_granules_in_prefix(path)?;
     let format = probe_format(path)?;
 
     let (track_id, channels, sample_rate_hz, frames_total_hint, start_ts, decoder) = {
@@ -224,7 +241,9 @@ pub(crate) fn snap_start_forward_to_packet(
     if !start_sec.is_finite() || start_sec <= 0.0 {
         return Ok(None);
     }
-    if has_legacy_missing_granules(path).map_err(|e| format!("Cannot inspect OGG file: {e}"))? {
+    if has_legacy_missing_granules_in_prefix(path)
+        .map_err(|e| format!("Cannot inspect OGG file: {e}"))?
+    {
         // Packet timestamps are unreliable in these streams. The reader uses
         // a frame-counted seek path instead, which does not need snapping.
         return Ok(None);
@@ -491,8 +510,8 @@ impl Reader {
 #[cfg(test)]
 mod tests {
     use super::{
-        OGG_CAPTURE_PATTERN, OGG_PAGE_HEADER_LEN, Reader, has_legacy_missing_granules, open_file,
-        snap_start_forward_to_packet,
+        OGG_CAPTURE_PATTERN, OGG_PAGE_HEADER_LEN, Reader, has_legacy_missing_granules_in_prefix,
+        open_file, snap_start_forward_to_packet,
     };
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -654,14 +673,17 @@ mod tests {
     #[test]
     fn completed_packets_with_missing_granules_keep_audio_and_seek_exactly() {
         let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/sounds/boom.ogg");
-        assert!(!has_legacy_missing_granules(&source).expect("inspect source fixture"));
+        assert!(!has_legacy_missing_granules_in_prefix(&source).expect("inspect source fixture"));
 
         let mut opened = open_file(&source).expect("open source fixture");
         let channels = opened.channels;
         let expected = read_all_samples(&mut opened.reader);
 
         let malformed = missing_granule_fixture();
-        assert!(has_legacy_missing_granules(malformed.path()).expect("inspect malformed fixture"));
+        assert!(
+            has_legacy_missing_granules_in_prefix(malformed.path())
+                .expect("inspect malformed fixture")
+        );
         assert_eq!(
             snap_start_forward_to_packet(malformed.path(), 0.1).expect("snap malformed fixture"),
             None
