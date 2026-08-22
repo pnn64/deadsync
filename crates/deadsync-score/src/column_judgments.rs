@@ -1,8 +1,10 @@
+use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::Note;
+use smallvec::SmallVec;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ColumnJudgments {
     pub w0: u32,
     pub w1: u32,
@@ -24,6 +26,10 @@ pub struct ColumnJudgments {
     pub early_total_w5: u32,
     pub held_miss: u32,
 }
+
+/// Per-lane evaluation totals. Gameplay styles remain inline through
+/// [`MAX_COLS`]; wider imported/test domains retain a heap-backed fallback.
+pub type ColumnJudgmentList = SmallVec<[ColumnJudgments; MAX_COLS]>;
 
 #[inline(always)]
 fn add_early_total(slot: &mut ColumnJudgments, judgment: &Judgment, include_bad: bool) {
@@ -102,6 +108,89 @@ fn add_column_judgment(slot: &mut ColumnJudgments, judgment: &Judgment, show_fa_
 }
 
 pub fn compute_column_judgments(
+    notes: &[Note],
+    eligible: &[bool],
+    cols_per_player: usize,
+    col_offset: usize,
+    show_fa_plus_window: bool,
+) -> ColumnJudgmentList {
+    assert_eq!(
+        notes.len(),
+        eligible.len(),
+        "column-judgment eligibility must align with notes"
+    );
+    let cols = cols_per_player;
+    let mut out = ColumnJudgmentList::with_capacity(cols);
+    out.resize(cols, ColumnJudgments::default());
+    if cols == 0 {
+        return out;
+    }
+
+    let mut row_start = 0;
+    while row_start < notes.len() {
+        let row_index = notes[row_start].row_index;
+        let mut row_has_unjudged_note = false;
+        let mut row_judgment = None;
+        let mut row_early_judgment = None;
+        let mut row_end = row_start;
+        while row_end < notes.len() && notes[row_end].row_index == row_index {
+            let note = &notes[row_end];
+            if eligible[row_end]
+                && note_counts_for_column_judgments(note)
+                && column_judgment_col(note, col_offset, cols).is_some()
+            {
+                if let Some(candidate) = note.result.as_ref() {
+                    judgment::select_row_final_judgment(&mut row_judgment, candidate);
+                    if row_judgment.is_some_and(|chosen| std::ptr::eq(chosen, candidate)) {
+                        row_early_judgment = note.early_result.as_ref();
+                    }
+                } else {
+                    row_has_unjudged_note = true;
+                }
+            }
+            row_end += 1;
+        }
+        if row_has_unjudged_note {
+            row_start = row_end;
+            continue;
+        }
+        let Some(row_judgment) = row_judgment else {
+            row_start = row_end;
+            continue;
+        };
+
+        for (note, &eligible) in notes[row_start..row_end]
+            .iter()
+            .zip(&eligible[row_start..row_end])
+        {
+            if !eligible || !note_counts_for_column_judgments(note) {
+                continue;
+            }
+            let Some(col) = column_judgment_col(note, col_offset, cols) else {
+                continue;
+            };
+            let slot = &mut out[col];
+            add_column_judgment(slot, row_judgment, show_fa_plus_window);
+            if row_judgment.grade == JudgeGrade::Miss
+                && !matches!(note.note_type, NoteType::Lift)
+                && note.result.as_ref().is_some_and(|j| j.miss_because_held)
+            {
+                slot.held_miss = slot.held_miss.saturating_add(1);
+            }
+            if let Some(early) = row_early_judgment {
+                add_early_total(slot, row_judgment, false);
+                add_early_total(slot, early, true);
+            }
+        }
+
+        row_start = row_end;
+    }
+
+    out
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn compute_column_judgments_reference(
     notes: &[Note],
     eligible: &[bool],
     cols_per_player: usize,
@@ -357,5 +446,119 @@ mod tests {
         assert_eq!(out[0].w1, 1);
         assert_eq!(out[0].miss, 1);
         assert_eq!(out[0].w2, 0);
+    }
+
+    #[test]
+    fn fused_scan_matches_reference_across_mixed_rows_and_players() {
+        let mut notes = Vec::new();
+        let mut eligible = Vec::new();
+        for row in 0usize..64 {
+            let width = 1 + row % 8;
+            for col in 0..width {
+                let grade = match (row + col) % 7 {
+                    0 => JudgeGrade::Fantastic,
+                    1 => JudgeGrade::Excellent,
+                    2 => JudgeGrade::Great,
+                    3 => JudgeGrade::Decent,
+                    4 => JudgeGrade::WayOff,
+                    5 => JudgeGrade::Miss,
+                    _ => JudgeGrade::Fantastic,
+                };
+                let window = match grade {
+                    JudgeGrade::Fantastic if (row + col).is_multiple_of(2) => {
+                        Some(TimingWindow::W0)
+                    }
+                    JudgeGrade::Fantastic => Some(TimingWindow::W1),
+                    JudgeGrade::Excellent => Some(TimingWindow::W2),
+                    JudgeGrade::Great => Some(TimingWindow::W3),
+                    JudgeGrade::Decent => Some(TimingWindow::W4),
+                    JudgeGrade::WayOff => Some(TimingWindow::W5),
+                    JudgeGrade::Miss => None,
+                };
+                let offset = (row * 13 + col * 29) as f32 % 281.0 - 140.0;
+                let mut result = judgment(grade, window, offset);
+                result.miss_because_held = grade == JudgeGrade::Miss && col.is_multiple_of(2);
+                let mut note = tap_note(
+                    col,
+                    result,
+                    (row + col)
+                        .is_multiple_of(3)
+                        .then(|| judgment(JudgeGrade::WayOff, Some(TimingWindow::W5), -96.0)),
+                );
+                note.row_index = row * 48;
+                note.note_type = if (row + col).is_multiple_of(11) {
+                    NoteType::Lift
+                } else if (row + col).is_multiple_of(13) {
+                    NoteType::Mine
+                } else {
+                    NoteType::Tap
+                };
+                note.is_fake = (row + col).is_multiple_of(17);
+                note.can_be_judged = !(row + col).is_multiple_of(19);
+                if row == 37 && col == 0 {
+                    note.result = None;
+                }
+                notes.push(note);
+                eligible.push(!(row + col).is_multiple_of(23));
+            }
+        }
+
+        for (cols, offset) in [(4, 0), (4, 4), (8, 0)] {
+            for show_fa_plus_window in [false, true] {
+                let expected = compute_column_judgments_reference(
+                    &notes,
+                    &eligible,
+                    cols,
+                    offset,
+                    show_fa_plus_window,
+                );
+                let actual =
+                    compute_column_judgments(&notes, &eligible, cols, offset, show_fa_plus_window);
+                assert_eq!(actual.as_slice(), expected.as_slice());
+                assert!(!actual.spilled());
+            }
+        }
+    }
+
+    #[test]
+    fn wide_output_preserves_reference_behavior_with_heap_fallback() {
+        let notes = (0..16)
+            .map(|column| {
+                tap_note(
+                    column,
+                    judgment(JudgeGrade::Fantastic, Some(TimingWindow::W1), column as f32),
+                    None,
+                )
+            })
+            .collect::<Vec<_>>();
+        let expected = compute_column_judgments_reference(&notes, &[true; 16], 16, 0, true);
+        let actual = compute_column_judgments(&notes, &[true; 16], 16, 0, true);
+
+        assert_eq!(actual.as_slice(), expected.as_slice());
+        assert!(actual.spilled());
+    }
+
+    #[test]
+    fn selected_tie_keeps_later_notes_early_rescore() {
+        let notes = [
+            tap_note(
+                0,
+                judgment(JudgeGrade::Excellent, Some(TimingWindow::W2), 12.0),
+                Some(judgment(JudgeGrade::Decent, Some(TimingWindow::W4), -80.0)),
+            ),
+            tap_note(
+                1,
+                judgment(JudgeGrade::Great, Some(TimingWindow::W3), 12.0),
+                Some(judgment(JudgeGrade::WayOff, Some(TimingWindow::W5), -96.0)),
+            ),
+        ];
+
+        let actual = compute_column_judgments(&notes, &[true; 2], 2, 0, true);
+
+        assert_eq!(actual[0].w3, 1);
+        assert_eq!(actual[1].w3, 1);
+        assert_eq!(actual[0].early_total_w3, 1);
+        assert_eq!(actual[0].early_total_w5, 1);
+        assert_eq!(actual[0].early_total_w4, 0);
     }
 }

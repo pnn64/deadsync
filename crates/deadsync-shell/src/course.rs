@@ -7,7 +7,7 @@ use deadsync_gameplay::{
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
 use deadsync_profile::{self as profile_data, PlayStyle, PlayerSide};
-use deadsync_score::{self as score_data, ColumnJudgments, stage_stats};
+use deadsync_score::{self as score_data, ColumnJudgmentList, ColumnJudgments, stage_stats};
 use deadsync_theme_simply_love::views::{
     CourseGraphStage, CourseStagePlan, CourseTypeView, ScoreInfo, SelectedCoursePlan,
 };
@@ -340,7 +340,7 @@ pub fn score_info_from_stage(
         ex_score_percent: player.ex_score_percent,
         hard_ex_score_percent: player.hard_ex_score_percent,
         calories_burned: player.calories_burned,
-        column_judgments: Vec::new(),
+        column_judgments: ColumnJudgmentList::new(),
         noteskin: None,
         show_fa_plus_window: player.show_w0,
         show_ex_score: player.show_ex_score,
@@ -434,7 +434,7 @@ fn add_column_judgments(dst: &mut ColumnJudgments, src: ColumnJudgments) {
     dst.held_miss = dst.held_miss.saturating_add(src.held_miss);
 }
 
-fn merge_column_judgments(dst: &mut Vec<ColumnJudgments>, src: &[ColumnJudgments]) {
+fn merge_column_judgments(dst: &mut ColumnJudgmentList, src: &[ColumnJudgments]) {
     if dst.len() < src.len() {
         dst.resize(src.len(), ColumnJudgments::default());
     }
@@ -447,7 +447,7 @@ pub fn merge_course_score_columns<'a>(
     summary: &mut ScoreInfo,
     song_scores: impl IntoIterator<Item = &'a ScoreInfo>,
 ) {
-    let mut columns = Vec::new();
+    let mut columns = ColumnJudgmentList::new();
     let mut noteskin = None;
     for song in song_scores {
         if song.side != summary.side {
@@ -470,11 +470,12 @@ mod tests {
 
     #[test]
     fn column_judgments_resize_and_saturate() {
-        let mut columns = vec![ColumnJudgments {
+        let mut columns: ColumnJudgmentList = vec![ColumnJudgments {
             w0: u32::MAX,
             held_miss: 1,
             ..Default::default()
-        }];
+        }]
+        .into();
         merge_column_judgments(
             &mut columns,
             &[

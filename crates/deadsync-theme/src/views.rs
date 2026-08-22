@@ -8,7 +8,7 @@ use deadsync_rules::timing::{
     ArrowTimingStats, HistogramMs, ScatterPoint, TimingStats, WindowCounts,
 };
 use deadsync_score::{
-    ColumnJudgments, Grade, GrooveStatsEvalState, ItlEvalState, LeaderboardEntry,
+    ColumnJudgmentList, Grade, GrooveStatsEvalState, ItlEvalState, LeaderboardEntry,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -301,7 +301,7 @@ pub struct EvaluationView<N, S> {
     pub ex_score_percent: f64,
     pub hard_ex_score_percent: f64,
     pub calories_burned: f32,
-    pub column_judgments: Vec<ColumnJudgments>,
+    pub column_judgments: ColumnJudgmentList,
     pub noteskin: Option<N>,
     pub show_fa_plus_window: bool,
     pub show_ex_score: bool,

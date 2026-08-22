@@ -9807,7 +9807,7 @@ mod tests {
             ex_score_percent: 0.0,
             hard_ex_score_percent: 0.0,
             calories_burned: 0.0,
-            column_judgments: Vec::new(),
+            column_judgments: Default::default(),
             noteskin: None,
             show_fa_plus_window: false,
             show_ex_score: false,
@@ -10049,7 +10049,8 @@ mod tests {
                 early_total_w2: 2,
                 ..Default::default()
             },
-        ];
+        ]
+        .into();
         first[0] = Some(first_p2);
         let mut ignored_p1 = test_score_info(
             song.clone(),
@@ -10061,7 +10062,8 @@ mod tests {
         ignored_p1.column_judgments = vec![evaluation::ColumnJudgments {
             w4: 1000,
             ..Default::default()
-        }];
+        }]
+        .into();
         first[1] = Some(ignored_p1);
         let first_page =
             evaluation::init_from_score_info(first, 60.0, test_evaluation_context(&config));
@@ -10090,7 +10092,8 @@ mod tests {
                 early_total_w5: 4,
                 ..Default::default()
             },
-        ];
+        ]
+        .into();
         second[0] = Some(second_p2);
         let second_page =
             evaluation::init_from_score_info(second, 60.0, test_evaluation_context(&config));
