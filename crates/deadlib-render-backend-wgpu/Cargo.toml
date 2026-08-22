@@ -16,22 +16,22 @@ raw-window-handle = "0.6.2"
 winit = "0.30.13"
 
 [target.'cfg(all(not(target_pointer_width = "32"), target_os = "windows", target_vendor = "win7"))'.dependencies]
-wgpu = { version = "30.0.0", default-features = false, features = ["std", "parking_lot", "wgsl", "dx12", "gles"] }
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "wgsl", "dx12", "gles"] }
 
 [target.'cfg(all(not(target_pointer_width = "32"), target_os = "windows", not(target_vendor = "win7")))'.dependencies]
-wgpu = { version = "30.0.0", default-features = false, features = ["std", "parking_lot", "wgsl", "dx12", "vulkan", "gles"] }
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "wgsl", "dx12", "vulkan", "gles"] }
 
 [target.'cfg(all(not(target_pointer_width = "32"), target_os = "macos"))'.dependencies]
-wgpu = { version = "30.0.0", default-features = false, features = ["std", "parking_lot", "wgsl", "metal", "vulkan", "gles"] }
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "wgsl", "metal", "vulkan", "gles"] }
 
 [target.'cfg(all(not(target_pointer_width = "32"), not(any(target_os = "windows", target_os = "macos"))))'.dependencies]
-wgpu = { version = "30.0.0", default-features = false, features = ["std", "parking_lot", "wgsl", "vulkan", "gles"] }
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "wgsl", "vulkan", "gles"] }
 
 [target.'cfg(all(target_pointer_width = "32", target_os = "windows"))'.dependencies]
-wgpu = { version = "30.0.0", default-features = false, features = ["std", "parking_lot", "wgsl", "dx12", "gles"] }
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "wgsl", "dx12", "gles"] }
 
 [target.'cfg(all(target_pointer_width = "32", not(target_os = "windows")))'.dependencies]
-wgpu = { version = "30.0.0", default-features = false, features = ["std", "parking_lot", "wgsl", "gles"] }
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "wgsl", "gles"] }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
