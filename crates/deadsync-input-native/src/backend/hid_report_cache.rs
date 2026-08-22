@@ -209,11 +209,11 @@ mod tests {
             false
         }
         fn now() -> u64 {
-            0
-        }
-        fn instant_nanos(_: Instant) -> u64 {
             CLOCK_CALLS.fetch_add(1, Ordering::Relaxed);
             42
+        }
+        fn instant_nanos(_: Instant) -> u64 {
+            7
         }
         fn qpc(_: u64) -> Option<u64> {
             None

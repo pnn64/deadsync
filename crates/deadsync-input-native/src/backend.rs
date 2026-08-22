@@ -174,7 +174,9 @@ impl BackendHost {
     #[inline(always)]
     pub fn sample_time(self) -> (Instant, u64) {
         let timestamp = Instant::now();
-        (timestamp, self.instant_nanos(timestamp))
+        // Audio snapshots use the authoritative host clock; `instant_nanos` may
+        // have a different epoch (notably process-relative `Instant` vs QPC on Windows).
+        (timestamp, self.now_nanos())
     }
 
     #[inline(always)]
@@ -374,11 +376,9 @@ pub fn emit_hat_axis_edges(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::OnceLock;
 
     #[test]
-    fn host_time_sample_uses_one_instant_for_both_domains() {
-        static EPOCH: OnceLock<Instant> = OnceLock::new();
+    fn host_time_sample_uses_authoritative_host_clock() {
         fn pad_idx(_: PadOrderBackend, _: [u8; 16]) -> u32 {
             0
         }
@@ -386,11 +386,10 @@ mod tests {
             false
         }
         fn now() -> u64 {
-            0
+            9_876_543_210
         }
-        fn instant_nanos(at: Instant) -> u64 {
-            at.duration_since(*EPOCH.get_or_init(Instant::now))
-                .as_nanos() as u64
+        fn instant_nanos(_: Instant) -> u64 {
+            123
         }
         fn qpc(_: u64) -> Option<u64> {
             None
@@ -399,10 +398,14 @@ mod tests {
             InputThreadPolicy::none()
         }
 
-        EPOCH.get_or_init(Instant::now);
         let host = BackendHost::new(pad_idx, smx_owns, now, instant_nanos, qpc, boost);
+        let before = Instant::now();
         let (timestamp, host_nanos) = host.sample_time();
-        assert_eq!(host_nanos, instant_nanos(timestamp));
+        let after = Instant::now();
+
+        assert!((before..=after).contains(&timestamp));
+        assert_eq!(host_nanos, now());
+        assert_ne!(host_nanos, instant_nanos(timestamp));
     }
 
     #[test]

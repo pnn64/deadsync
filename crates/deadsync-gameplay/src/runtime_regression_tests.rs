@@ -2116,6 +2116,42 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn live_input_uses_windows_host_clock_for_note_judgment() {
+        let mut state = regression_state();
+        let event_time_ns = state.chart_runtime.note_time_cache_ns[0];
+        let event_host_nanos = 90_000_000_000;
+        let clock_delay_ns = 4_000_000;
+        let mut edge = test_input_edge_at(Lane::Left, true, INVALID_SONG_TIME_NS);
+        edge.captured_host_nanos = event_host_nanos;
+        let captured_at = edge.captured_at;
+        state.pending_input.edges.push(edge);
+
+        let clock = SongClockSnapshot {
+            song_time_ns: event_time_ns.saturating_add(clock_delay_ns),
+            seconds_per_second: 1.0,
+            mapped_audio: true,
+            // Model the unrelated epochs exposed by Windows `Instant` and QPC clocks.
+            valid_at: captured_at + std::time::Duration::from_secs(10),
+            valid_at_host_nanos: event_host_nanos + clock_delay_ns as u64,
+            timing_diag_enabled: false,
+            timing_diag_callback_gap_ns: 0,
+        };
+        let mut phase_timings = GameplayUpdatePhaseTimings::default();
+        process_input_edges(&mut state, false, &mut phase_timings, clock);
+
+        let judgment = state.chart_runtime.notes[0]
+            .result
+            .as_ref()
+            .expect("host-clocked input should judge the note");
+        assert_eq!(judgment.grade, JudgeGrade::Fantastic);
+        assert_eq!(judgment.time_error_music_ns, 0);
+        assert_eq!(
+            state.control.input_state.lane_pressed_since_ns[0],
+            Some(event_time_ns)
+        );
+    }
+
+    #[test]
     fn queued_input_batch_preserves_edge_order_and_drains_fully() {
         let mut state = regression_state();
         let press_time_ns = song_time_ns_from_seconds(12.0);
