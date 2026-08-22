@@ -11954,12 +11954,17 @@ mod tests {
     }
 
     #[test]
-    fn measure_counter_segments_use_optional_threshold() {
+    fn stream_outputs_use_optional_counter_threshold() {
         let densities = [12usize, 12, 0, 16];
 
-        assert!(measure_counter_segments_for_densities(&densities, None).is_empty());
+        assert!(
+            stream_outputs_full_measures(&densities, None, false, false)
+                .counter_segments
+                .is_empty()
+        );
 
-        let segments = measure_counter_segments_for_densities(&densities, Some(12));
+        let segments =
+            stream_outputs_full_measures(&densities, Some(12), false, false).counter_segments;
 
         assert_eq!(segments.len(), 2);
         assert_eq!(segments[0].start, 0);

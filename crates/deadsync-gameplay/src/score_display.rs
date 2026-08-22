@@ -244,15 +244,6 @@ pub fn zmod_fail_stream_progress_for_note_data(
     Some((u32::try_from(run).ok()?, u32::try_from(total).ok()?))
 }
 
-pub fn measure_counter_segments_for_densities(
-    densities: &[usize],
-    notes_threshold: Option<usize>,
-) -> Vec<StreamSegment> {
-    notes_threshold.map_or_else(Vec::new, |threshold| {
-        stream_sequences_threshold(densities, threshold)
-    })
-}
-
 #[inline(always)]
 pub fn zmod_stream_totals_for_densities(
     densities: &[usize],

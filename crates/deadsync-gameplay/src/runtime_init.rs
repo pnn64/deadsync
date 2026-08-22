@@ -1086,16 +1086,8 @@ where
         measure_densities(&gameplay_charts[p].notes, cols_per_player)
     });
 
-    let measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] = std::array::from_fn(|p| {
-        if p >= num_players {
-            return Vec::new();
-        }
-        measure_counter_segments_for_densities(
-            &measure_densities[p],
-            player_profiles[p].measure_counter_threshold(),
-        )
-    });
-
+    let mut measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
     let mut mini_indicator_stream_segments: [Vec<StreamSegment>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
     let mut mini_indicator_total_stream_measures = [0.0_f32; MAX_PLAYERS];
@@ -1104,15 +1096,17 @@ where
 
     for p in 0..num_players {
         let indicator_mode = mini_indicator_mode(&player_profiles[p]);
+        let outputs = stream_outputs_full_measures(
+            &measure_densities[p],
+            player_profiles[p].measure_counter_threshold(),
+            !timing_players[p].has_bpm_changes(),
+            indicator_mode == GameplayMiniIndicatorMode::StreamProg,
+        );
+        measure_counter_segments[p] = outputs.counter_segments;
+        mini_indicator_total_stream_measures[p] = outputs.total_stream.max(0.0);
+        mini_indicator_stream_segments[p] = outputs.zmod_segments;
         if indicator_mode == GameplayMiniIndicatorMode::None {
             continue;
-        }
-        if indicator_mode == GameplayMiniIndicatorMode::StreamProg {
-            let constant_bpm = !timing_players[p].has_bpm_changes();
-            let (stream_segments, total_stream, _total_break) =
-                zmod_stream_totals_for_densities(&measure_densities[p], constant_bpm);
-            mini_indicator_total_stream_measures[p] = total_stream.max(0.0);
-            mini_indicator_stream_segments[p] = stream_segments;
         }
 
         let personal_best = mini_indicator_data.personal_best_percent[p];

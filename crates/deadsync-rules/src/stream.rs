@@ -5,6 +5,15 @@ pub struct StreamSegment {
     pub is_break: bool,
 }
 
+/// Owned stream data prepared for gameplay counters and ZMod progress.
+#[derive(Debug, Default, PartialEq)]
+pub struct StreamOutputs {
+    pub counter_segments: Vec<StreamSegment>,
+    pub zmod_segments: Vec<StreamSegment>,
+    pub total_stream: f32,
+    pub total_break: f32,
+}
+
 pub fn measure_densities(data: &[u8], lanes: usize) -> Vec<usize> {
     match lanes {
         8 => measure_densities_impl::<8>(data),
@@ -32,6 +41,38 @@ pub fn stream_sequences_threshold(measures: &[usize], threshold: usize) -> Vec<S
     let mut segs = Vec::new();
     for_each_stream_segment(measures, threshold, |segment| segs.push(segment));
     segs
+}
+
+/// Builds optional measure-counter and ZMod output in one density traversal.
+pub fn stream_outputs_full_measures(
+    measures: &[usize],
+    counter_threshold: Option<usize>,
+    constant_bpm: bool,
+    include_zmod: bool,
+) -> StreamOutputs {
+    if !include_zmod {
+        return StreamOutputs {
+            counter_segments: counter_threshold.map_or_else(Vec::new, |threshold| {
+                stream_sequences_threshold(measures, threshold)
+            }),
+            ..StreamOutputs::default()
+        };
+    }
+
+    let Some(counter_threshold) = counter_threshold else {
+        let (zmod_segments, total_stream, total_break) =
+            zmod_stream_totals_full_measures(measures, constant_bpm);
+        return StreamOutputs {
+            zmod_segments,
+            total_stream,
+            total_break,
+            ..StreamOutputs::default()
+        };
+    };
+
+    let (zmod_params, counter_capacity) =
+        zmod_params_with_count(measures, constant_bpm, counter_threshold);
+    build_stream_outputs(measures, counter_threshold, counter_capacity, zmod_params)
 }
 
 fn for_each_stream_segment(
@@ -268,6 +309,44 @@ fn zmod_params(measures: &[usize], constant_bpm: bool) -> (usize, f32, usize) {
     }
 }
 
+fn zmod_params_with_count(
+    measures: &[usize],
+    constant_bpm: bool,
+    count_threshold: usize,
+) -> ((usize, f32, usize), usize) {
+    if !constant_bpm {
+        return ((16, 1.0, 0), 0);
+    }
+
+    let mut d32 = StreamDensityFold::new(32, 2.0);
+    let mut count_fold = StreamCountFold::default();
+    for (idx, &density) in measures.iter().enumerate() {
+        d32.record(idx, density);
+        if count_threshold != 32 {
+            count_fold.record(idx, density, count_threshold);
+        }
+    }
+    let d32 = d32.finish(measures.len());
+    let counter_capacity = if count_threshold == 32 {
+        d32.segment_count
+    } else {
+        count_fold.finish(measures.len())
+    };
+    if d32.ratio >= 0.2 {
+        return ((32, 2.0, d32.segment_count), counter_capacity);
+    }
+
+    let ([d24, d20], count16) = zmod_density_pair(measures, [(24, 1.5), (20, 1.25)], 16);
+    let params = if d24.ratio >= 0.2 {
+        (24, 1.5, d24.segment_count)
+    } else if d20.ratio >= 0.2 {
+        (20, 1.25, d20.segment_count)
+    } else {
+        (16, 1.0, count16)
+    };
+    (params, counter_capacity)
+}
+
 #[derive(Default)]
 struct StreamTotals {
     total_stream: f32,
@@ -335,6 +414,52 @@ fn build_zmod_totals(
     (segs, total_stream, total_break)
 }
 
+fn build_stream_outputs(
+    measures: &[usize],
+    counter_threshold: usize,
+    counter_capacity: usize,
+    (zmod_threshold, multiplier, zmod_capacity): (usize, f32, usize),
+) -> StreamOutputs {
+    let mut counter_segments = Vec::with_capacity(counter_capacity);
+    let mut zmod_segments = Vec::with_capacity(zmod_capacity);
+    let mut totals = StreamTotals::default();
+
+    if counter_threshold == zmod_threshold {
+        for_each_stream_segment(measures, zmod_threshold, |segment| {
+            counter_segments.push(segment);
+            zmod_segments.push(segment);
+            totals.record(segment);
+        });
+    } else {
+        let mut counter_runs = StreamRuns::default();
+        let mut zmod_runs = StreamRuns::default();
+        for (idx, &density) in measures.iter().enumerate() {
+            if density >= counter_threshold {
+                counter_runs.record(idx, |segment| counter_segments.push(segment));
+            }
+            if density >= zmod_threshold {
+                zmod_runs.record(idx, |segment| {
+                    totals.record(segment);
+                    zmod_segments.push(segment);
+                });
+            }
+        }
+        counter_runs.finish(measures.len(), |segment| counter_segments.push(segment));
+        zmod_runs.finish(measures.len(), |segment| {
+            totals.record(segment);
+            zmod_segments.push(segment);
+        });
+    }
+
+    let (total_stream, total_break) = totals.finish(multiplier);
+    StreamOutputs {
+        counter_segments,
+        zmod_segments,
+        total_stream,
+        total_break,
+    }
+}
+
 #[inline(always)]
 pub fn zmod_stream_totals_full_measures(
     measures: &[usize],
@@ -345,7 +470,8 @@ pub fn zmod_stream_totals_full_measures(
 }
 
 fn measure_densities_impl<const LANES: usize>(data: &[u8]) -> Vec<usize> {
-    let mut densities = Vec::with_capacity(data.len() / ((LANES + 1) * 4) + 1);
+    const ROWS_PER_MEASURE_HINT: usize = 16;
+    let mut densities = Vec::with_capacity(data.len() / ((LANES + 1) * ROWS_PER_MEASURE_HINT) + 1);
     for_each_measure_density::<LANES>(data, |density| {
         densities.push(density);
         true
@@ -452,7 +578,49 @@ fn for_each_measure_density<const LANES: usize>(data: &[u8], mut visit: impl FnM
 
 #[cfg(feature = "bench-support")]
 pub mod bench_support {
-    use super::{StreamSegment, build_zmod_totals, zmod_params};
+    use super::{
+        StreamOutputs, StreamSegment, build_stream_outputs, build_zmod_totals,
+        for_each_stream_segment, skip_ws, trim_cr, zmod_params, zmod_params_with_count,
+    };
+
+    pub fn measure_densities_overreserved(data: &[u8], lanes: usize) -> Vec<usize> {
+        match lanes {
+            8 => measure_densities_overreserved_impl::<8>(data),
+            _ => measure_densities_overreserved_impl::<4>(data),
+        }
+    }
+
+    fn measure_densities_overreserved_impl<const LANES: usize>(data: &[u8]) -> Vec<usize> {
+        let mut densities = Vec::with_capacity(data.len() / ((LANES + 1) * 4) + 1);
+        let mut measure_steps = 0usize;
+        let mut done = false;
+        for raw in data.split(|&byte| byte == b'\n') {
+            let line = skip_ws(trim_cr(raw));
+            if line.is_empty() || line[0] == b'/' {
+                continue;
+            }
+            match line[0] {
+                b',' => densities.push(std::mem::take(&mut measure_steps)),
+                b';' => {
+                    densities.push(std::mem::take(&mut measure_steps));
+                    done = true;
+                    break;
+                }
+                _ if line.len() >= LANES => {
+                    measure_steps += usize::from(
+                        line[..LANES]
+                            .iter()
+                            .any(|byte| matches!(byte, b'1' | b'2' | b'4')),
+                    );
+                }
+                _ => {}
+            }
+        }
+        if !done {
+            densities.push(measure_steps);
+        }
+        densities
+    }
 
     pub fn zmod_fused_growth(
         measures: &[usize],
@@ -461,12 +629,50 @@ pub mod bench_support {
         let (threshold, multiplier, _) = zmod_params(measures, constant_bpm);
         build_zmod_totals(measures, threshold, multiplier, 0)
     }
+
+    pub fn stream_outputs_counter_growth(
+        measures: &[usize],
+        counter_threshold: usize,
+        constant_bpm: bool,
+    ) -> StreamOutputs {
+        let (params, _) = zmod_params_with_count(measures, constant_bpm, counter_threshold);
+        build_stream_outputs(measures, counter_threshold, 0, params)
+    }
+
+    pub fn stream_outputs_separate(
+        measures: &[usize],
+        counter_threshold: usize,
+        constant_bpm: bool,
+    ) -> StreamOutputs {
+        let (params, counter_capacity) =
+            zmod_params_with_count(measures, constant_bpm, counter_threshold);
+        let counter_segments = {
+            let mut segments = Vec::with_capacity(counter_capacity);
+            for_each_stream_segment(measures, counter_threshold, |segment| {
+                segments.push(segment);
+            });
+            segments
+        };
+        let (zmod_segments, total_stream, total_break) =
+            build_zmod_totals(measures, params.0, params.1, params.2);
+        StreamOutputs {
+            counter_segments,
+            zmod_segments,
+            total_stream,
+            total_break,
+        }
+    }
 }
 
 fn density_row_has_step<const LANES: usize>(line: &[u8]) -> bool {
-    line[..LANES]
-        .iter()
-        .any(|byte| matches!(byte, b'1' | b'2' | b'4'))
+    const IS_STEP: [bool; 256] = {
+        let mut table = [false; 256];
+        table[b'1' as usize] = true;
+        table[b'2' as usize] = true;
+        table[b'4' as usize] = true;
+        table
+    };
+    line[..LANES].iter().any(|&byte| IS_STEP[byte as usize])
 }
 
 fn trim_cr(line: &[u8]) -> &[u8] {
@@ -770,6 +976,40 @@ mod tests {
         assert_eq!(actual.0, expected.0);
         assert_eq!(actual.1.to_bits(), expected.1.to_bits());
         assert_eq!(actual.2.to_bits(), expected.2.to_bits());
+    }
+
+    #[test]
+    fn combined_stream_outputs_match_independent_builders() {
+        for len in 0..=10 {
+            for mask in 0usize..(1usize << len) {
+                let measures: Vec<_> = (0..len)
+                    .map(|idx| {
+                        if mask & (1 << idx) == 0 {
+                            idx % 12
+                        } else {
+                            16 + (idx * 7) % 24
+                        }
+                    })
+                    .collect();
+                for counter_threshold in [12, 16, 24, 32] {
+                    for constant_bpm in [false, true] {
+                        let expected_counter =
+                            stream_sequences_reference(&measures, counter_threshold);
+                        let expected_zmod = zmod_totals_reference(&measures, constant_bpm);
+                        let actual = stream_outputs_full_measures(
+                            &measures,
+                            Some(counter_threshold),
+                            constant_bpm,
+                            true,
+                        );
+                        assert_eq!(actual.counter_segments, expected_counter);
+                        assert_eq!(actual.zmod_segments, expected_zmod.0);
+                        assert_eq!(actual.total_stream.to_bits(), expected_zmod.1.to_bits());
+                        assert_eq!(actual.total_break.to_bits(), expected_zmod.2.to_bits());
+                    }
+                }
+            }
+        }
     }
 
     #[test]
