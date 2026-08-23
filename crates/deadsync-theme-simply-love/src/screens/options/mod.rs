@@ -130,6 +130,9 @@ fn queue_sfx(state: &mut State, path: &'static str) {
     state.pending_sfx.push(path);
 }
 
+const NEXT_ROW_SFX: &str = "assets/sounds/next_row.ogg";
+const PREV_ROW_SFX: &str = "assets/sounds/prev_row.ogg";
+
 const MAX_PENDING_AUDIO_REQUESTS: usize = 2;
 
 fn queue_audio(state: &mut State, request: AudioRequest) {

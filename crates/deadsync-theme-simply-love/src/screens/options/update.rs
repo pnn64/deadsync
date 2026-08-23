@@ -628,13 +628,17 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
         }
     }
 
+    let row_sfx = match state.nav_key_held_direction {
+        Some(NavDirection::Up) => PREV_ROW_SFX,
+        _ => NEXT_ROW_SFX,
+    };
     match state.view {
         OptionsView::Main => {
             if state.selected != state.prev_selected {
                 state.prev_selected = state.selected;
                 pending_action = Some(match pending_action.take() {
-                    Some(next) => crate::effects::sfx_then("assets/sounds/change.ogg", next),
-                    None => crate::effects::sfx("assets/sounds/change.ogg"),
+                    Some(next) => crate::effects::sfx_then(row_sfx, next),
+                    None => crate::effects::sfx(row_sfx),
                 });
             }
         }
@@ -642,8 +646,8 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
             if state.sub_selected != state.sub_prev_selected {
                 state.sub_prev_selected = state.sub_selected;
                 pending_action = Some(match pending_action.take() {
-                    Some(next) => crate::effects::sfx_then("assets/sounds/change.ogg", next),
-                    None => crate::effects::sfx("assets/sounds/change.ogg"),
+                    Some(next) => crate::effects::sfx_then(row_sfx, next),
+                    None => crate::effects::sfx(row_sfx),
                 });
             }
         }

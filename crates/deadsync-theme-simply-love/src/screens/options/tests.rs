@@ -126,6 +126,58 @@ fn restoring_main_selection_preserves_child_rows_clamps_and_does_not_arm_change_
 }
 
 #[test]
+fn main_row_navigation_uses_directional_simply_love_sounds() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.restore_main_selection(1);
+
+    assert!(
+        press(&mut state, &asset_manager, VirtualAction::p1_up).is_empty(),
+        "row sounds are emitted by the frame update"
+    );
+    let mut effects = Vec::new();
+    update(
+        &mut state,
+        0.0,
+        &asset_manager,
+        &SmxAssignmentView::default(),
+        &mut effects,
+    );
+    assert!(matches!(
+        effects.as_slice(),
+        [ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(PREV_ROW_SFX))
+        )]
+    ));
+
+    handle_input(
+        &mut state,
+        &asset_manager,
+        &updater_view(),
+        &input_event(VirtualAction::p1_up, false),
+        &mut Vec::new(),
+    );
+    assert!(
+        press(&mut state, &asset_manager, VirtualAction::p1_down).is_empty(),
+        "row sounds are emitted by the frame update"
+    );
+    effects.clear();
+    update(
+        &mut state,
+        0.0,
+        &asset_manager,
+        &SmxAssignmentView::default(),
+        &mut effects,
+    );
+    assert!(matches!(
+        effects.as_slice(),
+        [ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(NEXT_ROW_SFX))
+        )]
+    ));
+}
+
+#[test]
 fn options_select_color_actors_keep_static_texture_sources() {
     let state = init();
     let asset_manager = AssetManager::new();
