@@ -583,7 +583,9 @@ pub(super) fn scaled_block_origin_with_margins() -> (f32, f32, f32) {
 
 #[inline(always)]
 pub(super) fn scroll_offset(selected: usize, total_rows: usize) -> usize {
-    let anchor_row: usize = 4; // keep cursor near middle (5th visible row)
+    // ITGmania ScreenOptions::PositionRows uses NumRowsShown / 2, leaving the
+    // cursor in the sixth slot of Simply Love's ten-row window while scrolling.
+    let anchor_row = VISIBLE_ROWS / 2;
     let max_offset = total_rows.saturating_sub(VISIBLE_ROWS);
     if total_rows <= VISIBLE_ROWS {
         0

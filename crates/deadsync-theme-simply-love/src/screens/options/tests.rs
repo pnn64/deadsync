@@ -2459,6 +2459,32 @@ fn row_tween_destinations_retarget_only_when_layout_changes() {
 }
 
 #[test]
+fn row_window_and_edge_tweens_match_screen_options_position_rows() {
+    assert_eq!(ROW_TWEEN_SECONDS, 0.2);
+    assert_eq!(scroll_offset(5, 12), 0);
+    assert_eq!(scroll_offset(6, 12), 1);
+    assert_eq!(scroll_offset(11, 12), 2);
+
+    let mut row_tweens = Vec::new();
+    let mut key = None;
+    update_row_tweens(&mut row_tweens, &mut key, 12, 5, 1.0, 20.0, 0.0);
+    let first_visible_y = row_tweens[0].y();
+    let bottom_hidden_y = row_tweens[10].y();
+    assert_eq!((row_tweens[0].a(), row_tweens[10].a()), (1.0, 0.0));
+
+    update_row_tweens(&mut row_tweens, &mut key, 12, 6, 1.0, 20.0, 0.0);
+    let row_step = ROW_H + ROW_GAP;
+    assert_eq!(row_tweens[0].to_y, first_visible_y - 0.5 * row_step);
+    assert_eq!(row_tweens[10].to_y, bottom_hidden_y - 0.5 * row_step);
+    assert_eq!((row_tweens[0].from_a, row_tweens[0].to_a), (1.0, 0.0));
+    assert_eq!((row_tweens[10].from_a, row_tweens[10].to_a), (0.0, 1.0));
+
+    update_row_tweens(&mut row_tweens, &mut key, 12, 6, 1.0, 20.0, 0.1);
+    assert_eq!((row_tweens[0].t, row_tweens[0].a()), (0.5, 0.5));
+    assert_eq!((row_tweens[10].t, row_tweens[10].a()), (0.5, 0.5));
+}
+
+#[test]
 fn borrowed_row_layout_does_not_clone_shared_geometry() {
     let state = init();
     let asset_manager = AssetManager::new();

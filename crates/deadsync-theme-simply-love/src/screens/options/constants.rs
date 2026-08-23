@@ -27,11 +27,10 @@ pub(super) const fn nav_repeat_interval(view: OptionsView) -> Duration {
 }
 
 /* ----------------------------- cursor tweening ----------------------------- */
-// Simply Love metrics.ini uses 0.1 for both [ScreenOptions] TweenSeconds and CursorTweenSeconds.
-// ScreenOptionsService rows inherit OptionRow tween behavior, so keep both aligned at 0.1.
-pub(super) const SL_OPTION_ROW_TWEEN_SECONDS: f32 = 0.1;
-pub(super) const CURSOR_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
-pub(super) const ROW_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
+// ScreenOptions sets CursorTweenSeconds=0.1, while its OptionRow types inherit
+// the _fallback OptionRow TweenSeconds=0.2 used by PositionRows().
+pub(super) const CURSOR_TWEEN_SECONDS: f32 = 0.1;
+pub(super) const ROW_TWEEN_SECONDS: f32 = 0.2;
 // Spacing between inline items in OptionRows (pixels at current zoom)
 pub(super) const INLINE_SPACING: f32 = 15.75;
 pub(super) const SUBMENU_VALUE_ZOOM: f32 = 0.835;
