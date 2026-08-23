@@ -24,12 +24,19 @@ use deadlib_present::space::{screen_center_x, screen_height, screen_width};
 const TRANSITION_IN_DURATION: f32 = 0.5;
 const TRANSITION_OUT_DURATION: f32 = 1.0;
 const BRAND_EXIT_DURATION: f32 = 0.65;
-const ROW_EXIT_DELAY: f32 = 0.075;
+// Graphics/ScreenTitleMenu scroll.lua staggers each row's OnCommand by 75 ms.
+const ROW_STAGGER: f32 = 0.075;
+const ROW_ENTRY_DURATION: f32 = 0.2;
 const ROW_EXIT_DURATION: f32 = 0.18;
+// GainFocusCommand queues a glow-in, then changes color during the glow-out.
+const FOCUS_GLOW_IN: f32 = 0.1;
+const FOCUS_GLOW_OUT: f32 = 0.05;
+const FOCUS_GLOW_ALPHA: f32 = 0.5;
 
 const NORMAL_COLOR_HEX: &str = "#888888";
 
 pub const OPTION_COUNT: usize = 3;
+const MAX_OPTION_COUNT: usize = OPTION_COUNT + 1;
 
 #[inline]
 fn option_count(state: &State) -> usize {
@@ -111,6 +118,39 @@ struct MenuChromeText {
     smx_warnings: [Arc<str>; 2],
 }
 
+#[derive(Clone, Copy)]
+enum FocusTween {
+    Idle,
+    Gain {
+        elapsed: f32,
+        focus_from: f32,
+        glow_from: f32,
+    },
+    Lose {
+        elapsed: f32,
+        focus_from: f32,
+        glow_from: f32,
+    },
+}
+
+#[derive(Clone, Copy)]
+struct RowAnim {
+    focus: f32,
+    glow_alpha: f32,
+    tween: FocusTween,
+}
+
+const ROW_FOCUSED: RowAnim = RowAnim {
+    focus: 1.0,
+    glow_alpha: 0.0,
+    tween: FocusTween::Idle,
+};
+const ROW_UNFOCUSED: RowAnim = RowAnim {
+    focus: 0.0,
+    glow_alpha: 0.0,
+    tween: FocusTween::Idle,
+};
+
 fn build_chrome_text(i18n_revision: u64) -> MenuChromeText {
     MenuChromeText {
         i18n_revision,
@@ -143,6 +183,7 @@ pub struct State {
     arrowcloud_text_cache: RefCell<Option<StatusTextCache<MainMenuArrowCloudStatus, 1>>>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; 2],
+    row_anims: [RowAnim; MAX_OPTION_COUNT],
 }
 
 pub fn init() -> State {
@@ -161,6 +202,7 @@ pub fn init() -> State {
         arrowcloud_text_cache: RefCell::new(None),
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; 2],
+        row_anims: [ROW_FOCUSED, ROW_UNFOCUSED, ROW_UNFOCUSED, ROW_UNFOCUSED],
     }
 }
 
@@ -172,9 +214,97 @@ pub fn reset_for_entry(state: &mut State) {
 
 pub fn sync_runtime_view(state: &mut State, view: MainMenuRuntimeView) {
     state.runtime_view = view;
-    state.selected_index = state
+    let selected_index = state
         .selected_index
         .min(option_count(state).saturating_sub(1));
+    set_selected(state, selected_index);
+}
+
+#[inline(always)]
+fn accelerate(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t
+}
+
+#[inline(always)]
+fn decelerate(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    1.0 - (1.0 - t) * (1.0 - t)
+}
+
+#[inline(always)]
+fn mix(from: f32, to: f32, amount: f32) -> f32 {
+    (to - from).mul_add(amount, from)
+}
+
+fn update_gain(row: &mut RowAnim, elapsed: f32, focus_from: f32, glow_from: f32) {
+    if elapsed < FOCUS_GLOW_IN {
+        row.focus = focus_from;
+        row.glow_alpha = mix(
+            glow_from,
+            FOCUS_GLOW_ALPHA,
+            accelerate(elapsed / FOCUS_GLOW_IN),
+        );
+        row.tween = FocusTween::Gain {
+            elapsed,
+            focus_from,
+            glow_from,
+        };
+        return;
+    }
+
+    let progress = decelerate((elapsed - FOCUS_GLOW_IN) / FOCUS_GLOW_OUT);
+    row.focus = mix(focus_from, 1.0, progress);
+    row.glow_alpha = mix(FOCUS_GLOW_ALPHA, 0.0, progress);
+    row.tween = if elapsed < FOCUS_GLOW_IN + FOCUS_GLOW_OUT {
+        FocusTween::Gain {
+            elapsed,
+            focus_from,
+            glow_from,
+        }
+    } else {
+        FocusTween::Idle
+    };
+}
+
+fn update_lose(row: &mut RowAnim, elapsed: f32, focus_from: f32, glow_from: f32) {
+    let progress = accelerate(elapsed / FOCUS_GLOW_IN);
+    row.focus = mix(focus_from, 0.0, progress);
+    row.glow_alpha = mix(glow_from, 0.0, progress);
+    row.tween = if elapsed < FOCUS_GLOW_IN {
+        FocusTween::Lose {
+            elapsed,
+            focus_from,
+            glow_from,
+        }
+    } else {
+        FocusTween::Idle
+    };
+}
+
+fn update_row_anim(row: &mut RowAnim, dt: f32) {
+    match row.tween {
+        FocusTween::Idle => {}
+        FocusTween::Gain {
+            elapsed,
+            focus_from,
+            glow_from,
+        } => update_gain(row, elapsed + dt, focus_from, glow_from),
+        FocusTween::Lose {
+            elapsed,
+            focus_from,
+            glow_from,
+        } => update_lose(row, elapsed + dt, focus_from, glow_from),
+    }
+}
+
+pub fn update(state: &mut State, dt: f32) {
+    if !dt.is_finite() || dt <= 0.0 {
+        return;
+    }
+    for row in &mut state.row_anims {
+        update_row_anim(row, dt);
+    }
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app
@@ -227,9 +357,25 @@ fn brand_exit_alpha(elapsed: Option<f32>) -> f32 {
 
 fn row_exit_alpha(index: usize, elapsed: Option<f32>) -> f32 {
     elapsed.map_or(1.0, |t| {
-        let fade_t = (t - ROW_EXIT_DELAY * index as f32) / ROW_EXIT_DURATION;
+        let fade_t = (t - ROW_STAGGER * index as f32) / ROW_EXIT_DURATION;
         1.0 - fade_t.clamp(0.0, 1.0)
     })
+}
+
+fn row_entry_alpha(index: usize, elapsed: Option<f32>) -> f32 {
+    elapsed.map_or(1.0, |t| {
+        ((t - ROW_STAGGER * index as f32) / ROW_ENTRY_DURATION).clamp(0.0, 1.0)
+    })
+}
+
+#[inline(always)]
+fn mix_rgba(from: [f32; 4], to: [f32; 4], amount: f32) -> [f32; 4] {
+    [
+        mix(from[0], to[0], amount),
+        mix(from[1], to[1], amount),
+        mix(from[2], to[2], amount),
+        mix(from[3], to[3], amount),
+    ]
 }
 
 pub fn clear_render_cache(state: &State) {
@@ -450,6 +596,7 @@ pub fn push_actors(
     state: &State,
     update_banner_tag: Option<&str>,
     alpha_multiplier: f32,
+    entry_elapsed: Option<f32>,
     exit_elapsed: Option<f32>,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
@@ -508,10 +655,8 @@ pub fn push_actors(
 
     // 3) menu list
     let base_y = lp.top_margin + lp.target_h + MENU_BELOW_LOGO;
-    let mut selected = color::menu_selected_rgba(state.active_color_index);
-    let mut normal = color::rgba_hex(NORMAL_COLOR_HEX);
-    selected[3] *= alpha_multiplier;
-    normal[3] *= alpha_multiplier;
+    let selected = color::menu_selected_rgba(state.active_color_index);
+    let normal = color::rgba_hex(NORMAL_COLOR_HEX);
 
     let menu_font = machine_font_key(visual_policy.machine_font, FontRole::Bold);
     let menu_center_x = screen_center_x();
@@ -525,14 +670,20 @@ pub fn push_actors(
         } else {
             MENU_UNFOCUSED_ZOOM
         };
-        let mut row_color = if is_selected { selected } else { normal };
-        row_color[3] *= row_exit_alpha(index, exit_elapsed);
+        let row_anim = state.row_anims[index];
+        let mut row_color = mix_rgba(normal, selected, row_anim.focus);
+        let row_alpha = alpha_multiplier
+            * row_entry_alpha(index, entry_elapsed)
+            * row_exit_alpha(index, exit_elapsed);
+        row_color[3] *= row_alpha;
+        let glow_alpha = row_anim.glow_alpha * row_alpha;
         let center_y = (index as f32).mul_add(MENU_ROW_SPACING, base_y);
         actors.push(act!(text:
             align(0.5, 0.5):
             xy(menu_center_x, center_y):
             zoomtoheight(MENU_BASE_PX * zoom):
             diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
+            glow(1.0, 1.0, 1.0, glow_alpha):
             shadowlength(0.8):
             font(menu_font):
             settext(Arc::clone(label)):
@@ -663,6 +814,7 @@ pub fn get_actors(
         update_banner_tag,
         alpha_multiplier,
         None,
+        None,
         Default::default(),
     );
     actors
@@ -672,7 +824,28 @@ pub fn get_actors(
 fn move_selection(state: &mut State, delta: isize) {
     let n = option_count(state) as isize;
     let cur = state.selected_index as isize;
-    state.selected_index = (cur + delta).rem_euclid(n) as usize;
+    set_selected(state, (cur + delta).rem_euclid(n) as usize);
+}
+
+fn set_selected(state: &mut State, selected_index: usize) {
+    let old_index = state.selected_index;
+    if old_index == selected_index {
+        return;
+    }
+
+    let old = state.row_anims[old_index];
+    state.row_anims[old_index].tween = FocusTween::Lose {
+        elapsed: 0.0,
+        focus_from: old.focus,
+        glow_from: old.glow_alpha,
+    };
+    let new = state.row_anims[selected_index];
+    state.row_anims[selected_index].tween = FocusTween::Gain {
+        elapsed: 0.0,
+        focus_from: new.focus,
+        glow_from: new.glow_alpha,
+    };
+    state.selected_index = selected_index;
 }
 
 #[inline(always)]
@@ -814,15 +987,57 @@ mod tests {
         approx(row_exit_alpha(0, Some(ROW_EXIT_DURATION * 0.5)), 0.5);
         approx(row_exit_alpha(0, Some(ROW_EXIT_DURATION)), 0.0);
 
-        approx(row_exit_alpha(3, Some(ROW_EXIT_DELAY * 3.0)), 1.0);
+        approx(row_exit_alpha(3, Some(ROW_STAGGER * 3.0)), 1.0);
         approx(
-            row_exit_alpha(3, Some(ROW_EXIT_DELAY * 3.0 + ROW_EXIT_DURATION * 0.5)),
+            row_exit_alpha(3, Some(ROW_STAGGER * 3.0 + ROW_EXIT_DURATION * 0.5)),
             0.5,
         );
         approx(
-            row_exit_alpha(3, Some(ROW_EXIT_DELAY * 3.0 + ROW_EXIT_DURATION)),
+            row_exit_alpha(3, Some(ROW_STAGGER * 3.0 + ROW_EXIT_DURATION)),
             0.0,
         );
+    }
+
+    #[test]
+    fn title_rows_stagger_in_downward_like_simply_love() {
+        approx(row_entry_alpha(0, Some(0.0)), 0.0);
+        approx(row_entry_alpha(0, Some(ROW_ENTRY_DURATION * 0.5)), 0.5);
+        approx(row_entry_alpha(0, Some(ROW_ENTRY_DURATION)), 1.0);
+
+        approx(row_entry_alpha(3, Some(ROW_STAGGER * 3.0)), 0.0);
+        approx(
+            row_entry_alpha(3, Some(ROW_STAGGER * 3.0 + ROW_ENTRY_DURATION * 0.5)),
+            0.5,
+        );
+        approx(
+            row_entry_alpha(3, Some(ROW_STAGGER * 3.0 + ROW_ENTRY_DURATION)),
+            1.0,
+        );
+        approx(row_entry_alpha(3, None), 1.0);
+    }
+
+    #[test]
+    fn focus_color_waits_for_glow_in_before_changing() {
+        let mut state = init();
+        move_selection(&mut state, 1);
+
+        update(&mut state, FOCUS_GLOW_IN * 0.5);
+        approx(state.row_anims[0].focus, 0.75);
+        approx(state.row_anims[1].focus, 0.0);
+        approx(state.row_anims[1].glow_alpha, 0.125);
+
+        update(&mut state, FOCUS_GLOW_IN * 0.5);
+        approx(state.row_anims[0].focus, 0.0);
+        approx(state.row_anims[1].focus, 0.0);
+        approx(state.row_anims[1].glow_alpha, FOCUS_GLOW_ALPHA);
+
+        update(&mut state, FOCUS_GLOW_OUT * 0.5);
+        approx(state.row_anims[1].focus, 0.75);
+        approx(state.row_anims[1].glow_alpha, 0.125);
+
+        update(&mut state, FOCUS_GLOW_OUT * 0.5);
+        approx(state.row_anims[1].focus, 1.0);
+        approx(state.row_anims[1].glow_alpha, 0.0);
     }
 
     #[test]

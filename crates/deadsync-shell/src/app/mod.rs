@@ -1357,7 +1357,10 @@ impl ScreensState {
                 select_course::update(&mut self.select_course_state, delta_time, effects);
                 (None, false)
             }
-            CurrentScreen::Menu => (None, false),
+            CurrentScreen::Menu => {
+                menu::update(&mut self.menu_state, delta_time);
+                (None, false)
+            }
         };
         if let Some(effect) = effect {
             effect.append_to(effects);
@@ -6216,6 +6219,7 @@ impl App {
     ) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
+        let mut menu_entry_elapsed = None;
         let mut menu_exit_elapsed = None;
         let menu_canceling = self.state.screens.current_screen == CurrentScreen::Menu
             && matches!(
@@ -6228,7 +6232,17 @@ impl App {
         if is_actor_fade_screen {
             match self.state.shell.transition {
                 TransitionState::ActorsFadeIn { elapsed } => {
-                    screen_alpha_multiplier = (elapsed / MENU_ACTORS_FADE_DURATION).clamp(0.0, 1.0);
+                    if self.state.screens.current_screen == CurrentScreen::Menu {
+                        menu_entry_elapsed = Some(elapsed);
+                    } else {
+                        screen_alpha_multiplier =
+                            (elapsed / MENU_ACTORS_FADE_DURATION).clamp(0.0, 1.0);
+                    }
+                }
+                TransitionState::FadingIn { elapsed, .. }
+                    if self.state.screens.current_screen == CurrentScreen::Menu =>
+                {
+                    menu_entry_elapsed = Some(elapsed);
                 }
                 TransitionState::ActorsFadeOut {
                     elapsed, duration, ..
@@ -6263,6 +6277,7 @@ impl App {
                     &self.state.screens.menu_state,
                     update_tag.as_deref(),
                     screen_alpha_multiplier,
+                    menu_entry_elapsed,
                     menu_exit_elapsed,
                     visual_policy,
                 );
