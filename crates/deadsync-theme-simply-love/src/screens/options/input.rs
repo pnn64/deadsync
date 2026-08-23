@@ -4,20 +4,22 @@ use deadsync_profile as profile_data;
 // Small helpers to let the app dispatcher manage hold-to-scroll without exposing fields
 pub fn on_nav_press(state: &mut State, dir: NavDirection) {
     state.nav_key_held_direction = Some(dir);
+    let repeat_delay = nav_repeat_delay(state.view);
     screen_input::reset_hold_repeat(
         &mut state.nav_key_held_for,
         &mut state.nav_key_next_repeat_at,
-        NAV_INITIAL_HOLD_DELAY,
+        repeat_delay,
     );
 }
 
 pub fn on_nav_release(state: &mut State, dir: NavDirection) {
     if state.nav_key_held_direction == Some(dir) {
         state.nav_key_held_direction = None;
+        let repeat_delay = nav_repeat_delay(state.view);
         screen_input::reset_hold_repeat(
             &mut state.nav_key_held_for,
             &mut state.nav_key_next_repeat_at,
-            NAV_INITIAL_HOLD_DELAY,
+            repeat_delay,
         );
     }
 }

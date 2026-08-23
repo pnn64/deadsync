@@ -548,10 +548,11 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
     }
 
     if let Some(direction) = state.nav_key_held_direction {
+        let repeat_interval = nav_repeat_interval(state.view);
         let repeat_due = screen_input::advance_hold_repeat(
             &mut state.nav_key_held_for,
             &mut state.nav_key_next_repeat_at,
-            NAV_REPEAT_SCROLL_INTERVAL,
+            repeat_interval,
             dt,
         );
         if repeat_due {

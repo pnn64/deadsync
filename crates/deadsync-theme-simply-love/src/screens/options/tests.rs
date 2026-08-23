@@ -178,6 +178,53 @@ fn main_row_navigation_uses_directional_simply_love_sounds() {
 }
 
 #[test]
+fn main_row_hold_repeat_matches_screen_options_service_metrics() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+
+    assert_eq!(MAIN_NAV_REPEAT_DELAY, Duration::from_millis(250));
+    assert_eq!(MAIN_NAV_REPEAT_INTERVAL, Duration::from_nanos(83_333_333));
+
+    press(&mut state, &asset_manager, VirtualAction::p1_down);
+    let after_press = state.selected;
+    update(
+        &mut state,
+        0.249,
+        &asset_manager,
+        &SmxAssignmentView::default(),
+        &mut Vec::new(),
+    );
+    assert_eq!(state.selected, after_press);
+
+    update(
+        &mut state,
+        0.002,
+        &asset_manager,
+        &SmxAssignmentView::default(),
+        &mut Vec::new(),
+    );
+    assert_eq!(state.selected, after_press + 1);
+    let after_first_repeat = state.selected;
+
+    update(
+        &mut state,
+        0.081,
+        &asset_manager,
+        &SmxAssignmentView::default(),
+        &mut Vec::new(),
+    );
+    assert_eq!(state.selected, after_first_repeat);
+    update(
+        &mut state,
+        0.003,
+        &asset_manager,
+        &SmxAssignmentView::default(),
+        &mut Vec::new(),
+    );
+    assert_eq!(state.selected, after_first_repeat + 1);
+}
+
+#[test]
 fn options_select_color_actors_keep_static_texture_sources() {
     let state = init();
     let asset_manager = AssetManager::new();

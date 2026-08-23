@@ -8,6 +8,23 @@ pub(super) const RELOAD_BAR_H: f32 = 30.0;
 /* -------------------------- hold-to-scroll timing ------------------------- */
 pub(super) const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(300);
 pub(super) const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
+// ScreenOptionsService inherits these from _fallback's ScreenOptions metrics.
+pub(super) const MAIN_NAV_REPEAT_DELAY: Duration = Duration::from_millis(250);
+pub(super) const MAIN_NAV_REPEAT_INTERVAL: Duration = Duration::from_nanos(83_333_333);
+
+pub(super) const fn nav_repeat_delay(view: OptionsView) -> Duration {
+    match view {
+        OptionsView::Main => MAIN_NAV_REPEAT_DELAY,
+        OptionsView::Submenu(_) => NAV_INITIAL_HOLD_DELAY,
+    }
+}
+
+pub(super) const fn nav_repeat_interval(view: OptionsView) -> Duration {
+    match view {
+        OptionsView::Main => MAIN_NAV_REPEAT_INTERVAL,
+        OptionsView::Submenu(_) => NAV_REPEAT_SCROLL_INTERVAL,
+    }
+}
 
 /* ----------------------------- cursor tweening ----------------------------- */
 // Simply Love metrics.ini uses 0.1 for both [ScreenOptions] TweenSeconds and CursorTweenSeconds.
