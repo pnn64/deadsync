@@ -1792,22 +1792,145 @@ const fn gameplay_step_stats_mode(
 
 /// Song-lifetime activation index for one visual-layer list.
 ///
-/// The gameplay thread owns both buffers. Screen entry stores every start once
-/// and reserves the complete active-index capacity. Steady frames compare only
-/// the adjacent start boundary; a single crossing shifts at most the bounded
-/// active list, while a multi-layer seek rebuilds it once in O(n log n), always
-/// preserving source draw order. There are no gameplay allocations, misses,
-/// eviction, pruning, synchronization, or destruction before screen exit. The
-/// layer-activity benchmark records steady and worst-sample cost; storage drops
-/// with the screen.
-#[derive(Default)]
+/// The gameplay thread owns three fixed-capacity buffers. Screen entry separates
+/// source-order starts from their sorted index order and reserves the complete
+/// active capacity. Two scalar deadlines make unchanged frames O(1) without
+/// touching either boxed table. Chronological sources extend or truncate the
+/// active prefix directly; unsorted sources retain the bounded binary
+/// insert/remove and O(n log n) seek fallback, preserving source draw order.
+/// There are no gameplay allocations, misses, eviction, pruning,
+/// synchronization, or destruction before screen exit. The layer-activity
+/// benchmark records steady and boundary cost, allocator activity, and retained
+/// bytes; all storage drops with the screen.
 struct SongLuaLayerActivity {
+    start_seconds: Box<[f32]>,
+    start_order: Box<[usize]>,
+    active: Vec<usize>,
+    next_start: usize,
+    next_start_second: f32,
+    previous_start_second: f32,
+    source_ordered: bool,
+}
+
+impl Default for SongLuaLayerActivity {
+    fn default() -> Self {
+        Self {
+            start_seconds: Box::default(),
+            start_order: Box::default(),
+            active: Vec::new(),
+            next_start: 0,
+            next_start_second: f32::INFINITY,
+            previous_start_second: f32::NEG_INFINITY,
+            source_ordered: true,
+        }
+    }
+}
+
+impl SongLuaLayerActivity {
+    fn new(starts: impl IntoIterator<Item = f32>, now: f32) -> Self {
+        let start_seconds = starts.into_iter().collect::<Box<[_]>>();
+        let mut start_order = (0..start_seconds.len()).collect::<Vec<_>>();
+        start_order.sort_by(|&left, &right| {
+            start_seconds[left]
+                .total_cmp(&start_seconds[right])
+                .then_with(|| left.cmp(&right))
+        });
+        let source_ordered = start_order
+            .iter()
+            .enumerate()
+            .all(|(position, &source_index)| position == source_index);
+        let next_start_second = start_order
+            .first()
+            .map_or(f32::INFINITY, |&index| start_seconds[index]);
+        let mut activity = Self {
+            active: Vec::with_capacity(start_seconds.len()),
+            start_seconds,
+            start_order: start_order.into_boxed_slice(),
+            next_start: 0,
+            next_start_second,
+            previous_start_second: f32::NEG_INFINITY,
+            source_ordered,
+        };
+        activity.sync(now);
+        activity
+    }
+
+    #[inline]
+    fn sync(&mut self, now: f32) -> &[usize] {
+        let old_next_start = self.next_start;
+        while self.next_start < self.start_order.len()
+            && now.partial_cmp(&self.next_start_second) != Some(std::cmp::Ordering::Less)
+        {
+            self.previous_start_second = self.next_start_second;
+            self.next_start += 1;
+            self.next_start_second = self
+                .start_order
+                .get(self.next_start)
+                .map_or(f32::INFINITY, |&index| self.start_seconds[index]);
+        }
+        while self.next_start > 0 && now < self.previous_start_second {
+            self.next_start_second = self.previous_start_second;
+            self.next_start -= 1;
+            self.previous_start_second = self
+                .next_start
+                .checked_sub(1)
+                .map_or(f32::NEG_INFINITY, |position| {
+                    self.start_seconds[self.start_order[position]]
+                });
+        }
+        if self.next_start == old_next_start {
+            return &self.active;
+        }
+        if self.source_ordered {
+            if self.next_start > old_next_start {
+                self.active.extend(old_next_start..self.next_start);
+            } else {
+                self.active.truncate(self.next_start);
+            }
+            return &self.active;
+        }
+        match self.next_start.abs_diff(old_next_start) {
+            0 => {}
+            1 if self.next_start > old_next_start => {
+                let index = self.start_order[old_next_start];
+                let insert_at = self.active.binary_search(&index).unwrap_or_else(|at| at);
+                self.active.insert(insert_at, index);
+            }
+            1 => {
+                let index = self.start_order[self.next_start];
+                if let Ok(remove_at) = self.active.binary_search(&index) {
+                    self.active.remove(remove_at);
+                }
+            }
+            _ => {
+                self.active.clear();
+                self.active
+                    .extend_from_slice(&self.start_order[..self.next_start]);
+                self.active.sort_unstable();
+            }
+        }
+        &self.active
+    }
+
+    #[cfg(any(test, feature = "bench-support"))]
+    fn retained_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + std::mem::size_of_val(self.start_seconds.as_ref())
+            + std::mem::size_of_val(self.start_order.as_ref())
+            + self.active.capacity() * std::mem::size_of::<usize>()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[derive(Default)]
+struct ReferenceSongLuaLayerActivity {
     starts: Box<[(f32, usize)]>,
     active: Vec<usize>,
     next_start: usize,
 }
 
-impl SongLuaLayerActivity {
+#[cfg(any(test, feature = "bench-support"))]
+impl ReferenceSongLuaLayerActivity {
     fn new(starts: impl IntoIterator<Item = f32>, now: f32) -> Self {
         let mut starts = starts
             .into_iter()
@@ -1832,8 +1955,6 @@ impl SongLuaLayerActivity {
     fn sync(&mut self, now: f32) -> &[usize] {
         let old_next_start = self.next_start;
         while let Some(&(start, _)) = self.starts.get(self.next_start) {
-            // Match the old `if now < start { continue; }` behavior, including
-            // its treatment of NaN as active.
             if now < start {
                 break;
             }
@@ -1866,6 +1987,52 @@ impl SongLuaLayerActivity {
             }
         }
         &self.active
+    }
+
+    fn retained_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + std::mem::size_of_val(self.starts.as_ref())
+            + self.active.capacity() * std::mem::size_of::<usize>()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct ReferenceSongLuaLayerActivityBenchmark(ReferenceSongLuaLayerActivity);
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ReferenceSongLuaLayerActivityBenchmark {
+    pub fn new(starts: Vec<f32>, now: f32) -> Self {
+        Self(ReferenceSongLuaLayerActivity::new(starts, now))
+    }
+
+    #[inline(always)]
+    pub fn sync(&mut self, now: f32) -> &[usize] {
+        self.0.sync(now)
+    }
+
+    pub fn retained_bytes(&self) -> usize {
+        self.0.retained_bytes()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct SongLuaLayerActivityBenchmark(SongLuaLayerActivity);
+
+#[cfg(any(test, feature = "bench-support"))]
+impl SongLuaLayerActivityBenchmark {
+    pub fn new(starts: Vec<f32>, now: f32) -> Self {
+        Self(SongLuaLayerActivity::new(starts, now))
+    }
+
+    #[inline(always)]
+    pub fn sync(&mut self, now: f32) -> &[usize] {
+        self.0.sync(now)
+    }
+
+    pub fn retained_bytes(&self) -> usize {
+        self.0.retained_bytes()
     }
 }
 
@@ -19403,15 +19570,64 @@ mod tests {
     #[test]
     fn song_lua_layer_activity_matches_full_scan_across_boundaries_and_seeks() {
         let starts = [5.0, 1.0, 9.0, 3.0, 3.0];
+        let mut reference = ReferenceSongLuaLayerActivity::new(starts, f32::NEG_INFINITY);
         let mut activity = SongLuaLayerActivity::new(starts, f32::NEG_INFINITY);
-        for now in [-1.0, 1.0, 3.0, 8.0, 12.0, 2.0, f32::NAN, 0.0, 9.0] {
+        for now in [
+            -1.0,
+            1.0,
+            3.0,
+            8.0,
+            12.0,
+            2.0,
+            f32::NAN,
+            0.0,
+            9.0,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+        ] {
+            let expected_reference = reference.sync(now);
+            assert_eq!(
+                activity.sync(now),
+                expected_reference,
+                "reference now={now}"
+            );
             let expected = starts
                 .iter()
                 .enumerate()
                 .filter_map(|(index, start)| (!(now < *start)).then_some(index))
                 .collect::<Vec<_>>();
-            assert_eq!(activity.sync(now), expected, "now={now}");
+            assert_eq!(activity.sync(now), expected, "full scan now={now}");
         }
+
+        for frame in 0..4_000 {
+            let now = frame as f32 / 120.0;
+            assert_eq!(activity.sync(now), reference.sync(now), "frame={frame}");
+        }
+
+        let malformed = [5.0, f32::NAN, 1.0, f32::NEG_INFINITY];
+        let mut reference = ReferenceSongLuaLayerActivity::new(malformed, f32::NEG_INFINITY);
+        let mut activity = SongLuaLayerActivity::new(malformed, f32::NEG_INFINITY);
+        for now in [-1.0, 2.0, f32::NAN, 0.0, f32::INFINITY] {
+            assert_eq!(
+                activity.sync(now),
+                reference.sync(now),
+                "NaN start now={now}"
+            );
+        }
+    }
+
+    #[test]
+    fn ordered_song_lua_layer_activity_matches_reference_through_bursts_and_rewinds() {
+        let starts = (0..1_024)
+            .map(|index| (index / 16) as f32 * 0.5)
+            .collect::<Vec<_>>();
+        let mut reference = ReferenceSongLuaLayerActivity::new(starts.clone(), f32::NEG_INFINITY);
+        let mut activity = SongLuaLayerActivity::new(starts, f32::NEG_INFINITY);
+        for frame in (0..4_000).chain((0..4_000).rev()).chain(0..4_000) {
+            let now = frame as f32 / 120.0;
+            assert_eq!(activity.sync(now), reference.sync(now), "frame={frame}");
+        }
+        assert!(activity.retained_bytes() < reference.retained_bytes());
     }
 
     #[test]

@@ -14,6 +14,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "song_lua_layer_activity_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "gameplay_boundary_prewarm"
 harness = false
 required-features = ["bench-support"]
