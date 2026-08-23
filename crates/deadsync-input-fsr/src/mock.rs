@@ -12,9 +12,10 @@
 use super::smx::{
     LOADCELL_RAW_MAX, MAX_DEBOUNCE_US, MAX_FSR_THRESHOLD, MAX_LOADCELL_THRESHOLD, MIN_DEBOUNCE_US,
     MIN_FSR_THRESHOLD, MIN_LOADCELL_THRESHOLD, PANEL_SENSOR_COUNT, SENSOR_DISPLAY_ORDER,
-    SENSOR_EDGE_LABELS, SensorReading, fsr_button_view, hysteresis_active, load_cell_button_view,
+    SENSOR_EDGE_LABELS, SMX_BUTTON_COUNT, SMX_BUTTON_LABELS, SensorReading, fsr_button_view,
+    hysteresis_active, load_cell_button_view,
 };
-use deadsync_input::fsr::{BackendKind, PAD_BUTTON_COUNT, PAD_BUTTON_LABELS, PadDeviceId, PadView};
+use deadsync_input::fsr::{BackendKind, ButtonViews, PadDeviceId, PadView};
 use std::fmt::Write as _;
 use std::time::Instant;
 
@@ -34,13 +35,13 @@ struct MockPad {
     kind: MockKind,
     /// Per-button per-sensor press (high) thresholds. Load-cell buttons keep
     /// all four in lockstep (one threshold per panel).
-    press: [[u16; PANEL_SENSOR_COUNT]; PAD_BUTTON_COUNT],
+    press: [[u16; PANEL_SENSOR_COUNT]; SMX_BUTTON_COUNT],
     /// Per-button release (low) thresholds (load cell only).
-    release: [u16; PAD_BUTTON_COUNT],
+    release: [u16; SMX_BUTTON_COUNT],
     /// Per-sensor enable flags (FSR only).
-    enabled: [[bool; PANEL_SENSOR_COUNT]; PAD_BUTTON_COUNT],
+    enabled: [[bool; PANEL_SENSOR_COUNT]; SMX_BUTTON_COUNT],
     /// Sticky per-sensor pressed state (load cell press/release hysteresis).
-    held: [[bool; PANEL_SENSOR_COUNT]; PAD_BUTTON_COUNT],
+    held: [[bool; PANEL_SENSOR_COUNT]; SMX_BUTTON_COUNT],
     auto_recal: bool,
     debounce_us: u16,
 }
@@ -53,10 +54,10 @@ impl MockPad {
         };
         Self {
             kind,
-            press: [[press; PANEL_SENSOR_COUNT]; PAD_BUTTON_COUNT],
-            release: [INIT_LOADCELL_RELEASE; PAD_BUTTON_COUNT],
-            enabled: [[true; PANEL_SENSOR_COUNT]; PAD_BUTTON_COUNT],
-            held: [[false; PANEL_SENSOR_COUNT]; PAD_BUTTON_COUNT],
+            press: [[press; PANEL_SENSOR_COUNT]; SMX_BUTTON_COUNT],
+            release: [INIT_LOADCELL_RELEASE; SMX_BUTTON_COUNT],
+            enabled: [[true; PANEL_SENSOR_COUNT]; SMX_BUTTON_COUNT],
+            held: [[false; PANEL_SENSOR_COUNT]; SMX_BUTTON_COUNT],
             auto_recal: true,
             debounce_us: INIT_DEBOUNCE_US,
         }
@@ -101,10 +102,12 @@ impl Monitor {
             .iter_mut()
             .enumerate()
             .map(|(i, pad)| {
-                let buttons = std::array::from_fn(|b| match pad.kind {
-                    MockKind::LoadCell => load_cell_button(pad, i, b, t),
-                    MockKind::Fsr => fsr_button(pad, i, b, t),
-                });
+                let buttons: ButtonViews = (0..SMX_BUTTON_COUNT)
+                    .map(|b| match pad.kind {
+                        MockKind::LoadCell => load_cell_button(pad, i, b, t),
+                        MockKind::Fsr => fsr_button(pad, i, b, t),
+                    })
+                    .collect();
                 let fsr = pad.kind == MockKind::Fsr;
                 PadView {
                     device_id: PadDeviceId {
@@ -217,20 +220,20 @@ impl Monitor {
         let _ = writeln!(out, "DeadSync StepManiaX mock pads (DEADSYNC_MOCK_PADS)");
         for (i, pad) in self.pads.iter().enumerate() {
             let _ = writeln!(out, "Pad {i}: {:?}", pad.kind);
-            for b in 0..PAD_BUTTON_COUNT {
+            for (b, label) in SMX_BUTTON_LABELS.iter().enumerate() {
                 match pad.kind {
                     MockKind::LoadCell => {
                         let _ = writeln!(
                             out,
                             "  {} press: {} release: {}",
-                            PAD_BUTTON_LABELS[b], pad.press[b][0], pad.release[b]
+                            label, pad.press[b][0], pad.release[b]
                         );
                     }
                     MockKind::Fsr => {
                         let _ = writeln!(
                             out,
                             "  {} thresholds: {:?} enabled: {:?}",
-                            PAD_BUTTON_LABELS[b], pad.press[b], pad.enabled[b]
+                            label, pad.press[b], pad.enabled[b]
                         );
                     }
                 }
@@ -240,7 +243,7 @@ impl Monitor {
     }
 
     fn pad_mut(&mut self, device: PadDeviceId, button: usize) -> Option<&mut MockPad> {
-        if device.backend != BackendKind::Smx || button >= PAD_BUTTON_COUNT {
+        if device.backend != BackendKind::Smx || button >= SMX_BUTTON_COUNT {
             return None;
         }
         self.pads.get_mut(device.index)
@@ -273,7 +276,7 @@ fn load_cell_button(
     }
     // The panel reads as pressed while any sensor is held (hysteresis).
     let panel_active = pad.held[b].iter().any(|&h| h);
-    load_cell_button_view(PAD_BUTTON_LABELS[b], values, press, release, panel_active)
+    load_cell_button_view(SMX_BUTTON_LABELS[b], values, press, release, panel_active)
 }
 
 fn fsr_button(pad: &MockPad, pad_idx: usize, b: usize, t: f32) -> deadsync_input::fsr::ButtonView {
@@ -289,7 +292,7 @@ fn fsr_button(pad: &MockPad, pad_idx: usize, b: usize, t: f32) -> deadsync_input
     let panel_active = readings
         .iter()
         .any(|r| r.enabled && r.threshold > 0 && r.value >= r.threshold);
-    fsr_button_view(PAD_BUTTON_LABELS[b], readings, panel_active)
+    fsr_button_view(SMX_BUTTON_LABELS[b], readings, panel_active)
 }
 
 #[cfg(test)]

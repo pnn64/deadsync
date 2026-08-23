@@ -7,11 +7,12 @@
 mod imp {
     use arrayvec::ArrayVec;
     use deadsync_input::fsr::{
-        BackendKind, ButtonView, PAD_BUTTON_COUNT, PAD_BUTTON_LABELS, PadDeviceId, PadView,
-        SensorView, SensorViews,
+        BackendKind, ButtonLabel, ButtonView, ButtonViews, PadDeviceId, PadView, SensorView,
+        SensorViews,
     };
     use hidapi::{DeviceInfo, HidApi, HidDevice};
     use std::cmp::min;
+    use std::ffi::CString;
     use std::fmt::Write as _;
     use std::time::{Duration, Instant, SystemTime};
 
@@ -23,6 +24,7 @@ mod imp {
     const REPORT_ID_NAME: u8 = 0x05;
 
     const SENSOR_COUNT: usize = 12;
+    const BUTTON_COUNT: usize = 16;
     const MAX_NAME_SIZE: usize = 50;
     const MAX_SENSOR_VALUE: u16 = 850;
     #[cfg(any(test, feature = "bench-support"))]
@@ -66,14 +68,21 @@ mod imp {
         sensor_values: [u16; SENSOR_COUNT],
     }
 
+    struct Device {
+        id: usize,
+        path: CString,
+        handle: HidDevice,
+        name: String,
+        config: ConfigReport,
+        input: InputReport,
+    }
+
     #[derive(Default)]
     pub struct Monitor {
         api: Option<HidApi>,
-        device: Option<HidDevice>,
-        device_name: Option<String>,
-        config: ConfigReport,
-        input: InputReport,
-        last_open_attempt: Option<Instant>,
+        devices: Vec<Device>,
+        next_device_id: usize,
+        last_scan_attempt: Option<Instant>,
     }
 
     impl Monitor {
@@ -85,68 +94,12 @@ mod imp {
         /// toggle; live reads happen in `poll_pads`.
         pub fn set_active(&mut self, _active: bool) {}
 
-        /// Expose the connected FSRIO board as a single `PadView`, grouping
-        /// sensors into L/D/U/R by the board's sensor→button mapping.
+        /// Expose every connected FSRIO board, grouping sensors by the board's
+        /// sensor-to-button mapping.
         pub fn poll_pads(&mut self) -> Vec<PadView> {
-            self.ensure_device();
+            self.ensure_devices();
             self.read_pending_reports();
-            if self.device.is_none() {
-                return Vec::new();
-            }
-            let buttons = std::array::from_fn(|b| {
-                let sensors: SensorViews = self
-                    .button_sensor_indices(b)
-                    .into_iter()
-                    .enumerate()
-                    .map(|(k, i)| {
-                        let raw_value = self.input.sensor_values[i];
-                        let raw_threshold = self.config.sensor_thresholds[i];
-                        SensorView {
-                            // `set_threshold` addresses FSRIO sensors by their
-                            // position within the button, not the HID index.
-                            firmware_index: k,
-                            label: None,
-                            raw_value,
-                            value_norm: normalize_sensor_value(raw_value),
-                            raw_threshold,
-                            threshold_norm: normalize_sensor_value(raw_threshold),
-                            active: raw_value >= raw_threshold && raw_threshold > 0,
-                            enabled: true,
-                        }
-                    })
-                    .collect();
-                let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
-                let aggregate_threshold =
-                    sensors.iter().map(|s| s.raw_threshold).max().unwrap_or(0);
-                ButtonView {
-                    label: PAD_BUTTON_LABELS[b],
-                    sensors,
-                    min_raw_threshold: 0,
-                    max_raw_threshold: MAX_SENSOR_VALUE,
-                    aggregate_value,
-                    aggregate_threshold,
-                    active: aggregate_value >= aggregate_threshold && aggregate_threshold > 0,
-                    value_scale: MAX_SENSOR_VALUE,
-                    release_threshold: None,
-                }
-            });
-            vec![PadView {
-                device_id: PadDeviceId {
-                    backend: BackendKind::Fsrio,
-                    index: 0,
-                },
-                device_name: self
-                    .device_name
-                    .clone()
-                    .unwrap_or_else(|| "FSR Pad".to_owned()),
-                is_p2_side: false,
-                buttons,
-                supports_advanced: true,
-                simple_per_sensor_bars: false,
-                supports_sensor_toggle: false,
-                auto_recalibration: None,
-                debounce_micros: None,
-            }]
+            self.devices.iter().map(pad_view).collect()
         }
 
         /// Set the threshold for one or all hardware sensors mapped to a button.
@@ -157,37 +110,35 @@ mod imp {
             sensor: Option<usize>,
             value: u16,
         ) -> bool {
-            if device.backend != BackendKind::Fsrio
-                || button >= PAD_BUTTON_COUNT
-                || value > MAX_SENSOR_VALUE
-            {
+            if device.backend != BackendKind::Fsrio || value > MAX_SENSOR_VALUE {
                 return false;
             }
-            self.ensure_device();
-            let indices = self.button_sensor_indices(button);
+            self.ensure_devices();
+            let Some(device_index) = self.devices.iter().position(|d| d.id == device.index) else {
+                return false;
+            };
+            let device = &mut self.devices[device_index];
+            let indices = group_sensor_indices(&device.config.sensor_to_button_mapping, button);
             if indices.is_empty() {
                 return false;
             }
-            let Some(device) = self.device.as_ref() else {
-                return false;
-            };
             match sensor {
-                Some(k) => {
-                    let Some(&index) = indices.get(k) else {
+                Some(index) => {
+                    if !indices.contains(&index) {
                         return false;
-                    };
-                    self.config.sensor_thresholds[index] = value;
+                    }
+                    device.config.sensor_thresholds[index] = value;
                 }
                 None => {
                     for index in indices {
-                        self.config.sensor_thresholds[index] = value;
+                        device.config.sensor_thresholds[index] = value;
                     }
                 }
             }
-            if write_config(device, &self.config).is_ok() {
+            if write_config(&device.handle, &device.config).is_ok() {
                 return true;
             }
-            self.drop_device();
+            self.devices.remove(device_index);
             false
         }
 
@@ -212,29 +163,21 @@ mod imp {
             false
         }
 
-        /// Hardware sensor indices mapped to button `b`, in ascending order.
-        fn button_sensor_indices(&self, b: usize) -> ArrayVec<usize, SENSOR_COUNT> {
-            sensor_indices(&self.config.sensor_to_button_mapping, b)
-        }
-
         pub fn debug_dump(&mut self) -> String {
-            self.ensure_device();
+            self.ensure_devices();
             self.read_pending_reports();
             build_debug_dump(self)
         }
 
-        fn ensure_device(&mut self) {
-            if self.device.is_some() {
-                return;
-            }
+        fn ensure_devices(&mut self) {
             let now = Instant::now();
             if self
-                .last_open_attempt
+                .last_scan_attempt
                 .is_some_and(|last| now.duration_since(last) < REOPEN_INTERVAL)
             {
                 return;
             }
-            self.last_open_attempt = Some(now);
+            self.last_scan_attempt = Some(now);
             if self.api.is_none() {
                 self.api = HidApi::new().ok();
             }
@@ -242,56 +185,128 @@ mod imp {
                 return;
             };
             if api.refresh_devices().is_err() {
-                self.api = None;
                 return;
             }
-            let Some(info) = api.device_list().find(|info| {
-                info.vendor_id() == ADP_VENDOR_ID && info.product_id() == ADP_PRODUCT_ID
-            }) else {
-                return;
-            };
-            let Ok(device) = info.open_device(api) else {
-                return;
-            };
-            let device_name = read_name_from_device(&device).ok();
-            let Ok(config) = read_config(&device) else {
-                return;
-            };
-            self.device_name = device_name;
-            self.config = config;
-            self.input = InputReport::default();
-            self.device = Some(device);
-        }
+            let mut infos: Vec<_> = api
+                .device_list()
+                .filter(|info| is_known_adp(info))
+                .cloned()
+                .collect();
+            infos.sort_unstable_by(|a, b| a.path().to_bytes().cmp(b.path().to_bytes()));
+            self.devices.retain(|device| {
+                infos
+                    .iter()
+                    .any(|info| info.path() == device.path.as_c_str())
+            });
 
-        fn drop_device(&mut self) {
-            self.device = None;
-            self.device_name = None;
-            self.config = ConfigReport::default();
-            self.input = InputReport::default();
+            for info in infos {
+                if self
+                    .devices
+                    .iter()
+                    .any(|device| device.path.as_c_str() == info.path())
+                {
+                    continue;
+                }
+                let Ok(handle) = info.open_device(api) else {
+                    continue;
+                };
+                let name = read_name_from_device(&handle).unwrap_or_else(|()| "FSR Pad".to_owned());
+                let Ok(config) = read_config(&handle) else {
+                    continue;
+                };
+                let id = self.next_device_id;
+                self.next_device_id = self.next_device_id.wrapping_add(1);
+                self.devices.push(Device {
+                    id,
+                    path: info.path().to_owned(),
+                    handle,
+                    name,
+                    config,
+                    input: InputReport::default(),
+                });
+            }
         }
 
         fn read_pending_reports(&mut self) {
-            let Some(device) = self.device.as_ref() else {
-                return;
-            };
-            let mut buf = [0u8; 64];
-            let mut lost_device = false;
-            loop {
-                match device.read_timeout(&mut buf, 0) {
-                    Ok(0) => break,
-                    Ok(len) => {
-                        if let Some(report) = parse_input_report(&buf[..len]) {
-                            self.input = report;
-                        }
-                    }
-                    Err(_) => {
-                        lost_device = true;
-                        break;
-                    }
+            let mut index = 0;
+            while index < self.devices.len() {
+                if read_pending(&mut self.devices[index]) {
+                    index += 1;
+                } else {
+                    self.devices.remove(index);
                 }
             }
-            if lost_device {
-                self.drop_device();
+        }
+    }
+
+    fn pad_view(device: &Device) -> PadView {
+        PadView {
+            device_id: PadDeviceId {
+                backend: BackendKind::Fsrio,
+                index: device.id,
+            },
+            device_name: device.name.clone(),
+            is_p2_side: false,
+            buttons: button_views(&device.config, &device.input),
+            supports_advanced: true,
+            simple_per_sensor_bars: false,
+            supports_sensor_toggle: false,
+            auto_recalibration: None,
+            debounce_micros: None,
+        }
+    }
+
+    fn button_views(config: &ConfigReport, input: &InputReport) -> ButtonViews {
+        mapped_buttons(&config.sensor_to_button_mapping)
+            .into_iter()
+            .map(|button| button_view(config, input, button))
+            .collect()
+    }
+
+    fn button_view(config: &ConfigReport, input: &InputReport, button: usize) -> ButtonView {
+        let sensors: SensorViews = sensor_indices(&config.sensor_to_button_mapping, button)
+            .into_iter()
+            .map(|index| {
+                let raw_value = input.sensor_values[index];
+                let raw_threshold = config.sensor_thresholds[index];
+                SensorView {
+                    firmware_index: index,
+                    label: None,
+                    raw_value,
+                    value_norm: normalize_sensor_value(raw_value),
+                    raw_threshold,
+                    threshold_norm: normalize_sensor_value(raw_threshold),
+                    active: raw_value >= raw_threshold && raw_threshold > 0,
+                    enabled: true,
+                }
+            })
+            .collect();
+        let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
+        let aggregate_threshold = sensors.iter().map(|s| s.raw_threshold).max().unwrap_or(0);
+        ButtonView {
+            label: ButtonLabel::Hid((button + 1) as u8),
+            sensors,
+            min_raw_threshold: 0,
+            max_raw_threshold: MAX_SENSOR_VALUE,
+            aggregate_value,
+            aggregate_threshold,
+            active: aggregate_value >= aggregate_threshold && aggregate_threshold > 0,
+            value_scale: MAX_SENSOR_VALUE,
+            release_threshold: None,
+        }
+    }
+
+    fn read_pending(device: &mut Device) -> bool {
+        let mut buf = [0u8; 64];
+        loop {
+            match device.handle.read_timeout(&mut buf, 0) {
+                Ok(0) => return true,
+                Ok(len) => {
+                    if let Some(report) = parse_input_report(&buf[..len]) {
+                        device.input = report;
+                    }
+                }
+                Err(_) => return false,
             }
         }
     }
@@ -313,31 +328,28 @@ mod imp {
 
     fn dump_current_monitor(out: &mut String, monitor: &Monitor) {
         let _ = writeln!(out, "[current supported FSR monitor]");
-        let _ = writeln!(out, "open: {}", monitor.device.is_some());
-        let _ = writeln!(
-            out,
-            "device_name: {}",
-            monitor.device_name.as_deref().unwrap_or("<none>")
-        );
-        if monitor.device.is_none() {
-            return;
+        let _ = writeln!(out, "open_count: {}", monitor.devices.len());
+        for device in &monitor.devices {
+            let _ = writeln!(out, "device {}:", device.id);
+            let _ = writeln!(out, "  path: {}", device.path.to_string_lossy());
+            let _ = writeln!(out, "  name: {}", device.name);
+            let _ = writeln!(out, "  thresholds: {:?}", device.config.sensor_thresholds);
+            let _ = writeln!(
+                out,
+                "  release_threshold: {:.6}",
+                device.config.release_threshold
+            );
+            let _ = writeln!(
+                out,
+                "  sensor_to_button_mapping: {:?}",
+                device.config.sensor_to_button_mapping
+            );
+            let _ = writeln!(
+                out,
+                "  latest_sensor_values: {:?}",
+                device.input.sensor_values
+            );
         }
-        let _ = writeln!(out, "thresholds: {:?}", monitor.config.sensor_thresholds);
-        let _ = writeln!(
-            out,
-            "release_threshold: {:.6}",
-            monitor.config.release_threshold
-        );
-        let _ = writeln!(
-            out,
-            "sensor_to_button_mapping: {:?}",
-            monitor.config.sensor_to_button_mapping
-        );
-        let _ = writeln!(
-            out,
-            "latest_sensor_values: {:?}",
-            monitor.input.sensor_values
-        );
     }
 
     fn dump_hid_devices(out: &mut String) {
@@ -656,6 +668,29 @@ mod imp {
         SENSOR_NORMALIZED[min(raw, MAX_SENSOR_VALUE) as usize]
     }
 
+    fn mapped_buttons(mapping: &[i8; SENSOR_COUNT]) -> ArrayVec<usize, SENSOR_COUNT> {
+        let mut buttons = ArrayVec::new();
+        for &mapped in mapping {
+            if mapped >= 0 {
+                let button = mapped as usize;
+                if button < BUTTON_COUNT && !buttons.contains(&button) {
+                    buttons.push(button);
+                }
+            }
+        }
+        buttons.sort_unstable();
+        buttons
+    }
+
+    fn group_sensor_indices(
+        mapping: &[i8; SENSOR_COUNT],
+        group: usize,
+    ) -> ArrayVec<usize, SENSOR_COUNT> {
+        mapped_buttons(mapping)
+            .get(group)
+            .map_or_else(ArrayVec::new, |&button| sensor_indices(mapping, button))
+    }
+
     fn sensor_indices(
         mapping: &[i8; SENSOR_COUNT],
         button: usize,
@@ -674,12 +709,13 @@ mod imp {
         use super::*;
         use std::hint::black_box;
 
+        const BENCH_BUTTON_COUNT: usize = 4;
         const MAPPING: [i8; SENSOR_COUNT] = [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3];
 
         pub fn sensor_groups_old(events: usize) -> u64 {
             let mut checksum = 0u64;
             for event in 0..events {
-                for button in 0..PAD_BUTTON_COUNT {
+                for button in 0..BENCH_BUTTON_COUNT {
                     let indices: Vec<_> = (0..SENSOR_COUNT)
                         .filter(|&index| {
                             let mapped = MAPPING[index];
@@ -698,7 +734,7 @@ mod imp {
         pub fn sensor_groups_new(events: usize) -> u64 {
             let mut checksum = 0u64;
             for event in 0..events {
-                for button in 0..PAD_BUTTON_COUNT {
+                for button in 0..BENCH_BUTTON_COUNT {
                     let indices = sensor_indices(&MAPPING, button);
                     checksum = checksum
                         .wrapping_add(indices.len() as u64)
@@ -744,7 +780,7 @@ mod imp {
                 [0, -1, 0, -1, 2, -1, 2, -1, 1, 1, 3, 3],
             ];
             for mapping in mappings {
-                for button in 0..PAD_BUTTON_COUNT {
+                for button in mapped_buttons(&mapping) {
                     let expected: Vec<_> = mapping
                         .iter()
                         .enumerate()
@@ -755,6 +791,50 @@ mod imp {
                     assert_eq!(sensor_indices(&mapping, button).as_slice(), expected);
                 }
             }
+        }
+
+        #[test]
+        fn mapped_button_views_follow_firmware_mapping() {
+            let mut config = ConfigReport {
+                sensor_to_button_mapping: [0, 2, 4, 5, -1, -1, -1, -1, -1, -1, -1, -1],
+                ..ConfigReport::default()
+            };
+            config.sensor_thresholds[..4].copy_from_slice(&[100, 200, 300, 400]);
+            let mut input = InputReport::default();
+            input.sensor_values[..4].copy_from_slice(&[90, 250, 350, 390]);
+
+            let buttons = button_views(&config, &input);
+            assert_eq!(buttons.len(), 4);
+            assert_eq!(
+                buttons
+                    .iter()
+                    .map(|button| button.label)
+                    .collect::<Vec<_>>(),
+                [
+                    ButtonLabel::Hid(1),
+                    ButtonLabel::Hid(3),
+                    ButtonLabel::Hid(5),
+                    ButtonLabel::Hid(6),
+                ]
+            );
+            assert_eq!(buttons[2].sensors[0].firmware_index, 2);
+            assert_eq!(buttons[2].aggregate_threshold, 300);
+            assert!(buttons[2].active);
+            assert!(!buttons[3].active);
+        }
+
+        #[test]
+        fn stock_fsrio_mapping_exposes_all_eight_buttons() {
+            let mut mapping = [-1; SENSOR_COUNT];
+            for (index, mapped) in mapping[..8].iter_mut().enumerate() {
+                *mapped = index as i8;
+            }
+            assert_eq!(
+                mapped_buttons(&mapping).as_slice(),
+                [0, 1, 2, 3, 4, 5, 6, 7]
+            );
+            assert_eq!(group_sensor_indices(&mapping, 7).as_slice(), [7]);
+            assert!(group_sensor_indices(&mapping, 8).is_empty());
         }
 
         #[test]

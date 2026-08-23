@@ -1,14 +1,14 @@
 //! Generic FSR pad configuration screen.
 //!
-//! Shows every connected FSR pad (SMX, FSRIO, …) side by side as groups of
-//! L/D/U/R bars with live sensor values and an editable threshold. Navigation
-//! is keyboard / dedicated-menu-button only (Left/Right moves the cursor across
-//! all bars, Up/Down adjusts the focused threshold) so stepping on the pad to
-//! test a sensor never moves the selection.
+//! Shows every connected FSR controller side by side as groups of live sensor
+//! values and editable thresholds. SMX supplies named L/D/U/R panels; Analog
+//! Dance Pad controllers supply every HID button group mapped in firmware.
+//! Navigation is keyboard / dedicated-menu-button only, so stepping on the pad
+//! to test a sensor never moves the selection.
 //!
 //! Two views:
-//! * **Simple** — one bar per button (L/D/U/R) editing every sensor in that
-//!   button to a single threshold. This is what you land on.
+//! * **Simple** — one bar per button group, editing every sensor in that group
+//!   to a single threshold. This is what you land on.
 //! * **Advanced** — press Start on the pad under the cursor to drill into it:
 //!   per-sensor thresholds, per-sensor enable/disable, and the "Extra Advanced"
 //!   pad-level controls (auto-recalibration, panel debounce).
@@ -18,9 +18,9 @@ use crate::screens::components::shared::visual_style_bg;
 use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::color;
-use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
+use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_core::input::InputSource;
-use deadsync_input::fsr::{ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView};
+use deadsync_input::fsr::{ButtonLabel, ButtonView, PadDeviceId, PadView, SensorView};
 use deadsync_input::{InputEvent, VirtualAction};
 use smallvec::SmallVec;
 
@@ -127,6 +127,10 @@ const BAR_WIDTH: f32 = 48.0;
 const BAR_GAP: f32 = 24.0;
 const BAR_HEIGHT: f32 = 140.0;
 const PAD_GAP: f32 = 70.0;
+const PANEL_PAD_X: f32 = 17.0;
+const SCREEN_PAD_X: f32 = 20.0;
+#[cfg(any(test, feature = "bench-support"))]
+const FIXTURE_BUTTON_COUNT: usize = 4;
 
 // ── Advanced-view geometry ──
 const ADV_BAR_W: f32 = 20.0;
@@ -936,17 +940,51 @@ fn push_save_box(actors: &mut Vec<Actor>, state: &State, draft: &SaveDraft, zb: 
 
 // ─── Simple view ─────────────────────────────────────────────────────────────
 
+fn button_label_text(label: ButtonLabel) -> TextContent {
+    match label {
+        ButtonLabel::Named(name) => TextContent::Static(name),
+        ButtonLabel::Hid(number) => TextContent::inline_format(format_args!("Button {number}"))
+            .expect("a u8 HID button label fits inline text"),
+    }
+}
+
+fn simple_group_width(buttons: usize, bar_w: f32, gap: f32) -> f32 {
+    if buttons == 0 {
+        return 0.0;
+    }
+    bar_w * buttons as f32 + gap * buttons.saturating_sub(1) as f32
+}
+
 fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overlay: bool, zb: f32) {
     let selected_cursor = selected_slot(state);
-    let group_w = BAR_WIDTH * PAD_BUTTON_COUNT as f32 + BAR_GAP * (PAD_BUTTON_COUNT - 1) as f32;
-    let panel_w = group_w + 34.0;
-    let total_w = panel_w * state.pads.len() as f32 + PAD_GAP * (state.pads.len() - 1) as f32;
+    let natural_panel_widths: SmallVec<[f32; 4]> = state
+        .pads
+        .iter()
+        .map(|pad| simple_group_width(pad.buttons.len(), BAR_WIDTH, BAR_GAP) + PANEL_PAD_X * 2.0)
+        .collect();
+    let natural_w = natural_panel_widths.iter().sum::<f32>()
+        + PAD_GAP * state.pads.len().saturating_sub(1) as f32;
+    let scale = ((screen_width() - SCREEN_PAD_X * 2.0) / natural_w.max(1.0)).min(1.0);
+    let bar_w = BAR_WIDTH * scale;
+    let bar_gap = BAR_GAP * scale;
+    let pad_gap = PAD_GAP * scale;
+    let panel_pad = PANEL_PAD_X * scale;
+    let label_zoom = scale.clamp(0.45, 1.0);
+    let panel_widths: SmallVec<[f32; 4]> = state
+        .pads
+        .iter()
+        .map(|pad| simple_group_width(pad.buttons.len(), bar_w, bar_gap) + panel_pad * 2.0)
+        .collect();
+    let total_w =
+        panel_widths.iter().sum::<f32>() + pad_gap * state.pads.len().saturating_sub(1) as f32;
     let panel_h = BAR_HEIGHT + 140.0;
     // Nudge up so the 4-line footer ("...Select Panel") never clips the boxes.
     let top_y = screen_center_y() - panel_h * 0.5 - 14.0;
-    let mut panel_cx = screen_center_x() - total_w * 0.5 + panel_w * 0.5;
+    let mut panel_left = screen_center_x() - total_w * 0.5;
 
     for (pad_idx, pad) in state.pads.iter().enumerate() {
+        let panel_w = panel_widths[pad_idx];
+        let panel_cx = panel_left + panel_w * 0.5;
         push_frame(
             actors,
             panel_cx,
@@ -968,9 +1006,10 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
         ));
 
         let track_y = top_y + 84.0;
-        let left = panel_cx - group_w * 0.5 + BAR_WIDTH * 0.5;
+        let group_w = simple_group_width(pad.buttons.len(), bar_w, bar_gap);
+        let left = panel_cx - group_w * 0.5 + bar_w * 0.5;
         for (btn_idx, button) in pad.buttons.iter().enumerate() {
-            let x = left + btn_idx as f32 * (BAR_WIDTH + BAR_GAP);
+            let x = left + btn_idx as f32 * (bar_w + bar_gap);
             // The focused threshold of this button, if the cursor is on it
             // (dual-threshold buttons hold two cursor stops).
             let focused_kind = selected_cursor
@@ -988,7 +1027,9 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     actors,
                     x,
                     track_y,
-                    button.label,
+                    bar_w,
+                    label_zoom,
+                    button_label_text(button.label),
                     &button.sensors,
                     scale,
                     ClusterThresholds {
@@ -1031,7 +1072,9 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     actors,
                     x,
                     track_y,
-                    button.label,
+                    bar_w,
+                    label_zoom,
+                    button_label_text(button.label),
                     &button.sensors,
                     scale,
                     ClusterThresholds {
@@ -1051,7 +1094,9 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     !button.sensors.is_empty() && button.sensors.iter().all(|s| !s.enabled);
                 push_bar(
                     actors,
-                    button.label,
+                    button_label_text(button.label),
+                    bar_w,
+                    label_zoom,
                     button.aggregate_value,
                     normalize(button.aggregate_value, scale),
                     threshold_label,
@@ -1067,7 +1112,7 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                 );
             }
         }
-        panel_cx += panel_w + PAD_GAP;
+        panel_left += panel_w + pad_gap;
     }
 
     let selected_pad = selected_cursor.and_then(|s| state.pads.get(s.pad));
@@ -1108,11 +1153,19 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
     ));
 
     // Total width across the (variable-width) button groups.
-    let group_widths = std::array::from_fn::<_, PAD_BUTTON_COUNT, _>(|index| {
-        group_width(pad.buttons[index].sensors.len())
-    });
-    let total_w: f32 =
-        group_widths.iter().sum::<f32>() + ADV_GROUP_GAP * (PAD_BUTTON_COUNT - 1) as f32;
+    let group_widths: SmallVec<[f32; 16]> = pad
+        .buttons
+        .iter()
+        .map(|button| group_width(button.sensors.len()))
+        .collect();
+    let gaps = pad.buttons.len().saturating_sub(1);
+    let bars_w = group_widths.iter().sum::<f32>();
+    let group_gap = if gaps == 0 {
+        0.0
+    } else {
+        ADV_GROUP_GAP.min(((screen_width() - SCREEN_PAD_X * 2.0 - bars_w) / gaps as f32).max(8.0))
+    };
+    let total_w = bars_w + group_gap * gaps as f32;
     let mut group_left = screen_center_x() - total_w * 0.5;
     let top_y = ADV_TOP_Y;
 
@@ -1122,7 +1175,7 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
         // Button label above its sensor group.
         actors.push(act!(text:
             font("miso"):
-            settext(button.label):
+            settext(button_label_text(button.label)):
             align(0.5, 1.0):
             xy(group_cx, top_y - 22.0):
             zoom(0.95):
@@ -1142,9 +1195,10 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
                     button: btn_idx,
                     sensor: s,
                 });
-            let bar_label = sensor
-                .label
-                .map_or_else(|| sensor_index_text(s), TextContent::Static);
+            let bar_label = sensor.label.map_or_else(
+                || sensor_index_text(sensor.firmware_index),
+                TextContent::Static,
+            );
             push_sensor_bar(
                 actors,
                 x,
@@ -1162,7 +1216,7 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
                 23.0 + zb,
             );
         }
-        group_left += gw + ADV_GROUP_GAP;
+        group_left += gw + group_gap;
     }
 
     // Extra Advanced section (pad-level), anchored just above the footer so it
@@ -2221,7 +2275,9 @@ fn push_value_cluster(
     actors: &mut Vec<Actor>,
     x_center: f32,
     y: f32,
-    label: &'static str,
+    slot_width: f32,
+    label_zoom: f32,
+    label: TextContent,
     sensors: &[SensorView],
     value_scale: u16,
     thresholds: ClusterThresholds,
@@ -2246,8 +2302,9 @@ fn push_value_cluster(
     };
     let threshold_norm = threshold_norm.clamp(0.0, 1.0);
     let n = sensors.len().max(1);
-    let thin_w = 9.0_f32;
-    let gap = 3.0_f32;
+    let slot_scale = slot_width / BAR_WIDTH;
+    let thin_w = 9.0 * slot_scale;
+    let gap = 3.0 * slot_scale;
     let total = n as f32 * thin_w + (n - 1) as f32 * gap;
     let start_left = x_center - total * 0.5;
 
@@ -2295,7 +2352,7 @@ fn push_value_cluster(
         actors,
         x_center,
         threshold_y,
-        BAR_WIDTH,
+        slot_width,
         threshold_h,
         press_line,
         z + if press_focused { 2.1 } else { 2.0 },
@@ -2307,7 +2364,7 @@ fn push_value_cluster(
             actors,
             x_center,
             release_y,
-            BAR_WIDTH,
+            slot_width,
             threshold_h,
             release_line,
             z + if release_focused { 2.1 } else { 2.0 },
@@ -2315,9 +2372,9 @@ fn push_value_cluster(
     }
 
     if selected {
-        let ox = x_center - (BAR_WIDTH + 12.0) * 0.5;
+        let ox = x_center - (slot_width + 12.0 * slot_scale) * 0.5;
         let oy = y - 46.0;
-        let ow = BAR_WIDTH + 12.0;
+        let ow = slot_width + 12.0 * slot_scale;
         let oh = BAR_HEIGHT + 82.0;
         let t = 2.0_f32;
         let o = [1.0, 1.0, 1.0, 1.0];
@@ -2384,7 +2441,7 @@ fn push_value_cluster(
     };
     actors.push(act!(text:
         font("miso"): settext(label): align(0.5, 0.0):
-        xy(x_center, y + BAR_HEIGHT + 20.0): zoom(1.0): horizalign(center):
+        xy(x_center, y + BAR_HEIGHT + 20.0): zoom(label_zoom): horizalign(center):
         diffuse(label_color[0], label_color[1], label_color[2], label_color[3]): z(z + 3.0)
     ));
 }
@@ -2392,7 +2449,9 @@ fn push_value_cluster(
 #[allow(clippy::too_many_arguments)]
 fn push_bar(
     actors: &mut Vec<Actor>,
-    label: &'static str,
+    label: TextContent,
+    slot_width: f32,
+    label_zoom: f32,
     raw_value: u16,
     value_norm: f32,
     threshold_label: TextContent,
@@ -2415,12 +2474,13 @@ fn push_bar(
     };
 
     // Single muted track background.
-    push_quad(actors, x, y, BAR_WIDTH, BAR_HEIGHT, TRACK_COLOR, z);
+    push_quad(actors, x, y, slot_width, BAR_HEIGHT, TRACK_COLOR, z);
 
     if selected {
-        let ox = x - (BAR_WIDTH + 12.0) * 0.5;
+        let slot_scale = slot_width / BAR_WIDTH;
+        let ox = x - (slot_width + 12.0 * slot_scale) * 0.5;
         let oy = y - 42.0;
-        let ow = BAR_WIDTH + 12.0;
+        let ow = slot_width + 12.0 * slot_scale;
         let oh = BAR_HEIGHT + 78.0;
         let t = 2.0_f32;
         let outline = [1.0, 1.0, 1.0, 1.0];
@@ -2450,7 +2510,7 @@ fn push_bar(
         ));
         actors.push(act!(text:
             font("miso"): settext(label): align(0.5, 0.0):
-            xy(x, y + BAR_HEIGHT + 8.0): zoom(1.0): horizalign(center):
+            xy(x, y + BAR_HEIGHT + 8.0): zoom(label_zoom): horizalign(center):
             diffuse(0.6, 0.6, 0.65, 0.9): z(z + 3.0)
         ));
         return;
@@ -2466,7 +2526,7 @@ fn push_bar(
             actors,
             x,
             y + BAR_HEIGHT - fill_h,
-            BAR_WIDTH,
+            slot_width,
             fill_h,
             fill_color,
             z + 1.0,
@@ -2480,7 +2540,7 @@ fn push_bar(
         actors,
         x,
         threshold_y,
-        BAR_WIDTH,
+        slot_width,
         threshold_h,
         THRESHOLD_COLOR,
         z + 2.0,
@@ -2493,7 +2553,7 @@ fn push_bar(
             actors,
             x,
             gy,
-            BAR_WIDTH,
+            slot_width,
             2.0,
             with_alpha(THRESHOLD_COLOR, 0.35),
             z + 1.9,
@@ -2525,7 +2585,7 @@ fn push_bar(
     let label_color = if active { ACTIVE_FILL } else { text_color };
     actors.push(act!(text:
         font("miso"): settext(label): align(0.5, 0.0):
-        xy(x, y + BAR_HEIGHT + 8.0): zoom(1.0): horizalign(center):
+        xy(x, y + BAR_HEIGHT + 8.0): zoom(label_zoom): horizalign(center):
         diffuse(label_color[0], label_color[1], label_color[2], label_color[3]): z(z + 3.0)
     ));
 }
@@ -2561,7 +2621,7 @@ fn pad_text_checksum(text: &[TextContent], geometry: &[f32], targets: &[u8]) -> 
 #[cfg(any(test, feature = "bench-support"))]
 pub fn benchmark_pad_text_legacy(out: &mut Vec<TextContent>) -> u64 {
     out.clear();
-    let group_widths = [4usize; PAD_BUTTON_COUNT]
+    let group_widths = [4usize; FIXTURE_BUTTON_COUNT]
         .into_iter()
         .map(group_width)
         .collect::<Vec<_>>();
@@ -2607,7 +2667,7 @@ pub fn benchmark_pad_text_legacy(out: &mut Vec<TextContent>) -> u64 {
 #[cfg(any(test, feature = "bench-support"))]
 pub fn benchmark_pad_text_current(out: &mut Vec<TextContent>) -> u64 {
     out.clear();
-    let group_widths = std::array::from_fn::<_, PAD_BUTTON_COUNT, _>(|_| group_width(4));
+    let group_widths = std::array::from_fn::<_, FIXTURE_BUTTON_COUNT, _>(|_| group_width(4));
     let mut geometry = SmallVec::<[f32; 12]>::new();
     let targets = (0..18u8).collect::<SmallVec<[u8; 18]>>();
     for (_, min, max, _) in PAD_TEXT_BENCH_ROWS {
@@ -2680,7 +2740,7 @@ mod tests {
 
     fn mk_button(label: &'static str, threshold: u16) -> ButtonView {
         ButtonView {
-            label,
+            label: ButtonLabel::Named(label),
             sensors: [
                 mk_sensor(0, threshold),
                 mk_sensor(1, threshold),
@@ -2702,7 +2762,7 @@ mod tests {
     /// A load-cell button: separate press/release thresholds over 20-200.
     fn mk_loadcell_button(label: &'static str, press: u16, release: u16) -> ButtonView {
         ButtonView {
-            label,
+            label: ButtonLabel::Named(label),
             sensors: [
                 mk_sensor(0, press),
                 mk_sensor(1, press),
@@ -2735,7 +2795,9 @@ mod tests {
                 mk_button("D", 30),
                 mk_button("U", 30),
                 mk_button("R", 30),
-            ],
+            ]
+            .into_iter()
+            .collect(),
             supports_advanced: true,
             simple_per_sensor_bars: false,
             supports_sensor_toggle: true,
@@ -2753,13 +2815,42 @@ mod tests {
             mk_loadcell_button("D", 80, 70),
             mk_loadcell_button("U", 80, 70),
             mk_loadcell_button("R", 80, 70),
-        ];
+        ]
+        .into_iter()
+        .collect();
         p.supports_advanced = false;
         p.simple_per_sensor_bars = true;
         p.supports_sensor_toggle = false;
         p.auto_recalibration = None;
         p.debounce_micros = None;
         p
+    }
+
+    fn fsrio_pad(buttons: &[u8]) -> PadView {
+        PadView {
+            device_id: PadDeviceId {
+                backend: BackendKind::Fsrio,
+                index: 0,
+            },
+            device_name: "FSRIO".to_owned(),
+            is_p2_side: false,
+            buttons: buttons
+                .iter()
+                .enumerate()
+                .map(|(sensor, &button)| {
+                    let mut view = mk_button("", 30);
+                    view.label = ButtonLabel::Hid(button);
+                    view.sensors.clear();
+                    view.sensors.push(mk_sensor(sensor, 30));
+                    view
+                })
+                .collect(),
+            supports_advanced: true,
+            simple_per_sensor_bars: false,
+            supports_sensor_toggle: false,
+            auto_recalibration: None,
+            debounce_micros: None,
+        }
     }
 
     fn with_pad() -> State {
@@ -2794,6 +2885,32 @@ mod tests {
             let cmds = take_commands(&mut s);
             assert!(matches!(cmds[0], PadCommand::Threshold { button, .. } if button == expect));
         }
+    }
+
+    #[test]
+    fn dynamic_fsrio_buttons_share_simple_and_advanced_navigation() {
+        let mut s = init();
+        set_pads(&mut s, vec![fsrio_pad(&[1, 3, 5, 6, 9, 10, 12, 16])]);
+        assert_eq!(total_bars(&s), 8);
+        assert!(!build_content(&s, false).is_empty());
+        assert_eq!(
+            button_label_text(s.pads[0].buttons[7].label).as_str(),
+            "Button 16"
+        );
+
+        for _ in 0..7 {
+            apply_edit(&mut s, &ev(VirtualAction::p1_right), false);
+        }
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        assert!(matches!(
+            take_commands(&mut s)[0],
+            PadCommand::Threshold { button: 7, .. }
+        ));
+
+        apply_edit(&mut s, &ev(VirtualAction::p1_start), false);
+        assert_eq!(advanced_targets(&s).len(), 8);
+        assert!(!build_content(&s, false).is_empty());
+        assert_eq!(sensor_index_text(7).as_str(), "8");
     }
 
     #[test]
@@ -2907,7 +3024,7 @@ mod tests {
             },
         );
         set_pads(&mut s, vec![smx_pad(0, false), smx_pad(1, true)]);
-        assert_eq!(total_bars(&s), PAD_BUTTON_COUNT); // only the P1 pad survives
+        assert_eq!(total_bars(&s), FIXTURE_BUTTON_COUNT); // only the P1 pad survives
         assert_eq!(selected_device(&s).map(|d| d.index), Some(0));
     }
 
@@ -2916,7 +3033,7 @@ mod tests {
         let mut s = init();
         set_pads(&mut s, vec![smx_pad(0, false), smx_pad(1, true)]);
         assert_eq!(selected_device(&s).map(|d| d.index), Some(0));
-        for _ in 0..PAD_BUTTON_COUNT {
+        for _ in 0..FIXTURE_BUTTON_COUNT {
             apply_edit(&mut s, &ev(VirtualAction::p1_right), false); // step onto pad 1
         }
         assert_eq!(selected_device(&s).map(|d| d.index), Some(1));
@@ -2957,7 +3074,7 @@ mod tests {
             }
         ));
         // Step past the 16 sensors to the AutoRecal target; Start toggles it off.
-        for _ in 0..(PAD_BUTTON_COUNT * 4) {
+        for _ in 0..(FIXTURE_BUTTON_COUNT * 4) {
             apply_edit(&mut s, &ev(VirtualAction::p1_right), false);
         }
         apply_edit(&mut s, &ev(VirtualAction::p1_start), false);
@@ -2988,7 +3105,7 @@ mod tests {
     fn load_cell_buttons_step_release_then_press() {
         let mut s = init();
         set_pads(&mut s, vec![load_cell_pad(0)]);
-        assert_eq!(total_bars(&s), 2 * PAD_BUTTON_COUNT);
+        assert_eq!(total_bars(&s), 2 * FIXTURE_BUTTON_COUNT);
         // The landing slot is L's release (low) threshold: raising it (with
         // the lock on, 80/70) drags press along in the same pair command…
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
@@ -3223,8 +3340,8 @@ mod tests {
     fn cursor_spans_mixed_single_and_dual_threshold_pads() {
         let mut s = init();
         set_pads(&mut s, vec![smx_pad(0, false), load_cell_pad(1)]);
-        assert_eq!(total_bars(&s), 3 * PAD_BUTTON_COUNT); // 4 FSR bars + 8 load-cell slots
-        for _ in 0..PAD_BUTTON_COUNT {
+        assert_eq!(total_bars(&s), 3 * FIXTURE_BUTTON_COUNT); // 4 FSR bars + 8 load-cell slots
+        for _ in 0..FIXTURE_BUTTON_COUNT {
             apply_edit(&mut s, &ev(VirtualAction::p1_right), false); // step onto the load-cell pad
         }
         assert_eq!(selected_device(&s).map(|d| d.index), Some(1));

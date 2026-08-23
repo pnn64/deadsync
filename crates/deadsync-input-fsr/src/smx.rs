@@ -1,13 +1,16 @@
 //! StepManiaX FSR sensor monitor using the shared SmxManager.
 
 use deadsync_input::fsr::{
-    BackendKind, ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView, SensorViews,
+    BackendKind, ButtonLabel, ButtonView, ButtonViews, PadDeviceId, PadView, SensorView,
+    SensorViews,
 };
 use deadsync_smx::{self as smx, SensorTestData, SensorTestMode, SmxConfig};
 use std::fmt::Write as _;
 use std::time::SystemTime;
 
 pub(super) const PANEL_SENSOR_COUNT: usize = 4;
+pub(super) const SMX_BUTTON_COUNT: usize = 4;
+pub(super) const SMX_BUTTON_LABELS: [&str; SMX_BUTTON_COUNT] = ["L", "D", "U", "R"];
 
 pub(super) const MIN_FSR_THRESHOLD: u16 = 5;
 pub(super) const MAX_FSR_THRESHOLD: u16 = 250;
@@ -29,7 +32,7 @@ pub(super) const LOADCELL_VALUE_SCALE: u16 = 250;
 pub(super) const LOADCELL_RAW_MAX: u16 = 500;
 
 /// Panels exposed for config: (panel_index, label), in L/D/U/R order.
-const VIEW_PANELS: [(usize, &str); PAD_BUTTON_COUNT] = [(3, "L"), (7, "D"), (1, "U"), (5, "R")];
+const VIEW_PANELS: [(usize, &str); SMX_BUTTON_COUNT] = [(3, "L"), (7, "D"), (1, "U"), (5, "R")];
 
 /// Edge label for each of a panel's four FSR sensors, by firmware index.
 pub(super) const SENSOR_EDGE_LABELS: [&str; PANEL_SENSOR_COUNT] = ["L", "R", "U", "D"];
@@ -91,14 +94,16 @@ impl Monitor {
                 smx::serial_prefix(&info.serial),
             );
 
-            let buttons = std::array::from_fn(|i| {
-                let (panel, label) = VIEW_PANELS[i];
-                if fsr {
-                    fsr_button(&config, panel, label, test_data.as_ref(), input_state)
-                } else {
-                    load_cell_button(&config, panel, label, test_data.as_ref(), input_state)
-                }
-            });
+            let buttons: ButtonViews = VIEW_PANELS
+                .iter()
+                .map(|&(panel, label)| {
+                    if fsr {
+                        fsr_button(&config, panel, label, test_data.as_ref(), input_state)
+                    } else {
+                        load_cell_button(&config, panel, label, test_data.as_ref(), input_state)
+                    }
+                })
+                .collect();
 
             // Read packed u16 fields by copy (no references into a packed struct).
             let max_tare = config.auto_calibration_max_tare;
@@ -134,7 +139,7 @@ impl Monitor {
         sensor: Option<usize>,
         value: u16,
     ) -> bool {
-        if device.backend != BackendKind::Smx || button >= PAD_BUTTON_COUNT {
+        if device.backend != BackendKind::Smx || button >= SMX_BUTTON_COUNT {
             return false;
         }
         let pad = device.index;
@@ -194,7 +199,7 @@ impl Monitor {
         press: u16,
         release: u16,
     ) -> bool {
-        if device.backend != BackendKind::Smx || button >= PAD_BUTTON_COUNT {
+        if device.backend != BackendKind::Smx || button >= SMX_BUTTON_COUNT {
             return false;
         }
         let pad = device.index;
@@ -237,7 +242,7 @@ impl Monitor {
         enabled: bool,
     ) -> bool {
         if device.backend != BackendKind::Smx
-            || button >= PAD_BUTTON_COUNT
+            || button >= SMX_BUTTON_COUNT
             || sensor >= PANEL_SENSOR_COUNT
         {
             return false;
@@ -441,7 +446,7 @@ pub(super) fn fsr_button_view(
     let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
     let aggregate_threshold = sensors.iter().map(|s| s.raw_threshold).max().unwrap_or(0);
     ButtonView {
-        label,
+        label: ButtonLabel::Named(label),
         sensors,
         min_raw_threshold: MIN_FSR_THRESHOLD,
         max_raw_threshold: MAX_FSR_THRESHOLD,
@@ -479,7 +484,7 @@ pub(super) fn load_cell_button_view(
         .collect();
     let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
     ButtonView {
-        label,
+        label: ButtonLabel::Named(label),
         sensors,
         min_raw_threshold: MIN_LOADCELL_THRESHOLD,
         max_raw_threshold: MAX_LOADCELL_THRESHOLD,

@@ -1,9 +1,8 @@
 use arrayvec::ArrayVec;
 
-/// Number of playable buttons deadsync configures per FSR pad (L/D/U/R).
-pub const PAD_BUTTON_COUNT: usize = 4;
-/// Button labels in fixed order, shared by every FSR backend.
-pub const PAD_BUTTON_LABELS: [&str; PAD_BUTTON_COUNT] = ["L", "D", "U", "R"];
+/// Maximum logical button groups exposed by one controller. Analog Dance Pad
+/// firmware reports up to sixteen HID buttons; SMX uses four named panels.
+pub const MAX_PAD_BUTTONS: usize = 16;
 /// Maximum hardware sensors exposed by one button. FSRIO owns twelve sensors
 /// total and may legally map all of them to one button.
 pub const MAX_BUTTON_SENSORS: usize = 12;
@@ -48,14 +47,23 @@ pub struct SensorView {
 /// most twelve, so live pad snapshots never need a per-button heap allocation.
 pub type SensorViews = ArrayVec<SensorView, MAX_BUTTON_SENSORS>;
 
-/// One playable button (L/D/U/R) and the sensors that drive it.
+/// Label shown for a logical controller button group.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ButtonLabel {
+    /// A backend-defined semantic panel name, such as SMX L/D/U/R.
+    Named(&'static str),
+    /// A one-based HID button number from Analog Dance Pad firmware.
+    Hid(u8),
+}
+
+/// One logical controller button and the sensors that drive it.
 ///
 /// `sensors` may be empty for a button with no mapped sensors. `aggregate_*`
 /// summarize the button for Simple mode (peak value / representative
 /// threshold); `min/max_raw_threshold` bound the editable range.
 #[derive(Clone, Debug)]
 pub struct ButtonView {
-    pub label: &'static str,
+    pub label: ButtonLabel,
     pub sensors: SensorViews,
     pub min_raw_threshold: u16,
     pub max_raw_threshold: u16,
@@ -72,6 +80,10 @@ pub struct ButtonView {
     pub release_threshold: Option<u16>,
 }
 
+/// Bounded inline button storage. SMX uses four entries; Analog Dance Pad
+/// firmware can expose up to sixteen logical HID button groups.
+pub type ButtonViews = ArrayVec<ButtonView, MAX_PAD_BUTTONS>;
+
 /// A single connected FSR pad, exposed to the config screen.
 #[derive(Clone, Debug)]
 pub struct PadView {
@@ -80,7 +92,7 @@ pub struct PadView {
     /// Player side the pad maps to (P2 vs P1), used to filter by play style. Taken
     /// from the device slot (slot 1 = P2 for SMX), not the hardware jumper.
     pub is_p2_side: bool,
-    pub buttons: [ButtonView; PAD_BUTTON_COUNT],
+    pub buttons: ButtonViews,
     /// Whether the Advanced view is available for this pad. Load-cell pads are
     /// Simple-only (per-sensor config isn't possible on them).
     pub supports_advanced: bool,
