@@ -32,6 +32,7 @@ const ROW_EXIT_DURATION: f32 = 0.18;
 const FOCUS_GLOW_IN: f32 = 0.1;
 const FOCUS_GLOW_OUT: f32 = 0.05;
 const FOCUS_GLOW_ALPHA: f32 = 0.5;
+const ATTRACT_TIMEOUT: f32 = 30.0;
 
 const NORMAL_COLOR_HEX: &str = "#888888";
 
@@ -184,6 +185,7 @@ pub struct State {
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; 2],
     row_anims: [RowAnim; MAX_OPTION_COUNT],
+    idle_elapsed: f32,
 }
 
 pub fn init() -> State {
@@ -203,6 +205,7 @@ pub fn init() -> State {
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; 2],
         row_anims: [ROW_FOCUSED, ROW_UNFOCUSED, ROW_UNFOCUSED, ROW_UNFOCUSED],
+        idle_elapsed: 0.0,
     }
 }
 
@@ -298,18 +301,37 @@ fn update_row_anim(row: &mut RowAnim, dt: f32) {
     }
 }
 
-pub fn update(state: &mut State, dt: f32) {
+pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     if !dt.is_finite() || dt <= 0.0 {
-        return;
+        return ThemeEffect::None;
     }
     for row in &mut state.row_anims {
         update_row_anim(row, dt);
     }
+    update_attract(state, dt)
+}
+
+pub fn update_attract(state: &mut State, dt: f32) -> ThemeEffect {
+    if !dt.is_finite() || dt <= 0.0 || state.idle_elapsed >= ATTRACT_TIMEOUT {
+        return ThemeEffect::None;
+    }
+    state.idle_elapsed = (state.idle_elapsed + dt).min(ATTRACT_TIMEOUT);
+    if state.idle_elapsed >= ATTRACT_TIMEOUT {
+        ThemeEffect::Navigate(Screen::Init)
+    } else {
+        ThemeEffect::None
+    }
+}
+
+#[inline(always)]
+fn reset_idle(state: &mut State) {
+    state.idle_elapsed = 0.0;
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app
 // Screen-specific raw keyboard handling for Menu (e.g., F4 to Sandbox)
-pub fn handle_raw_key_event(_state: &mut State, key: &RawKeyboardEvent) -> ThemeEffect {
+pub fn handle_raw_key_event(state: &mut State, key: &RawKeyboardEvent) -> ThemeEffect {
+    reset_idle(state);
     if !key.pressed {
         return ThemeEffect::None;
     }
@@ -889,6 +911,7 @@ const fn menu_nav_delta(action: VirtualAction) -> Option<isize> {
 
 // Event-driven virtual input handler
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+    reset_idle(state);
     if let Some(side) = screen_input::menu_lr_side(ev.action)
         && !ev.pressed
     {
@@ -1014,6 +1037,35 @@ mod tests {
             1.0,
         );
         approx(row_entry_alpha(3, None), 1.0);
+    }
+
+    #[test]
+    fn title_menu_returns_to_init_after_thirty_idle_seconds() {
+        let mut state = init();
+
+        assert!(matches!(
+            update_attract(&mut state, ATTRACT_TIMEOUT - 1.0),
+            ThemeEffect::None
+        ));
+        assert!(matches!(
+            update_attract(&mut state, 1.0),
+            ThemeEffect::Navigate(Screen::Init)
+        ));
+        assert!(matches!(update_attract(&mut state, 1.0), ThemeEffect::None));
+    }
+
+    #[test]
+    fn title_menu_input_restarts_attract_timeout() {
+        let mut state = init();
+        assert!(matches!(
+            update_attract(&mut state, ATTRACT_TIMEOUT - 1.0),
+            ThemeEffect::None
+        ));
+
+        let _ = handle_input(&mut state, &input(VirtualAction::p1_right));
+
+        assert!(matches!(update_attract(&mut state, 1.0), ThemeEffect::None));
+        approx(state.idle_elapsed, 1.0);
     }
 
     #[test]
@@ -1240,11 +1292,13 @@ mod tests {
         state.selected_index = 2;
         state.active_color_index = 7;
         state.rainbow_mode = true;
+        state.idle_elapsed = ATTRACT_TIMEOUT - 1.0;
 
         reset_for_entry(&mut state);
 
         assert_eq!(state.selected_index, 0);
         assert_eq!(state.active_color_index, 7);
         assert!(!state.rainbow_mode);
+        approx(state.idle_elapsed, 0.0);
     }
 }

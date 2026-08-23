@@ -1357,10 +1357,7 @@ impl ScreensState {
                 select_course::update(&mut self.select_course_state, delta_time, effects);
                 (None, false)
             }
-            CurrentScreen::Menu => {
-                menu::update(&mut self.menu_state, delta_time);
-                (None, false)
-            }
+            CurrentScreen::Menu => (Some(menu::update(&mut self.menu_state, delta_time)), false),
         };
         if let Some(effect) = effect {
             effect.append_to(effects);
@@ -3170,6 +3167,11 @@ impl App {
         if work_caps & frame_work::SELECT_COURSE_VIEW != 0 {
             self.sync_select_course_runtime_view(self.select_course_policy);
         }
+        let tick_menu_attract = self.state.screens.current_screen == CurrentScreen::Menu
+            && matches!(
+                self.state.shell.transition,
+                TransitionState::ActorsFadeIn { .. } | TransitionState::FadingIn { .. }
+            );
         let transition_plan = self.state.shell.transition.advance_frame(
             logic_dt,
             self.state.screens.current_screen,
@@ -3195,6 +3197,10 @@ impl App {
                 &mut self.theme_effect_scratch,
             );
             retain_lobby_effects(&mut self.theme_effect_scratch);
+        }
+        if tick_menu_attract {
+            menu::update_attract(&mut self.state.screens.menu_state, logic_dt)
+                .append_to(&mut self.theme_effect_scratch);
         }
         if !self.theme_effect_scratch.is_empty() {
             let _ = self.drain_theme_effects(event_loop);
