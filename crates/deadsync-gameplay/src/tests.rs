@@ -6004,6 +6004,137 @@ mod tests {
     }
 
     #[test]
+    fn packed_input_slots_match_reference_through_aliases_churn_and_overflow() {
+        fn apply_edge(
+            slots: &mut [ActiveInputSlot; MAX_ACTIVE_INPUT_SLOTS],
+            slot_count: &mut usize,
+            lane_counts: &mut [u16; MAX_COLS],
+            state: &mut GameplayInputState,
+            edge: (usize, InputSource, u32, bool),
+        ) {
+            let (lane_idx, source, input_slot, pressed) = edge;
+            let old_was_down = active_input_slot_lane_is_down(
+                slots,
+                *slot_count,
+                lane_idx,
+                source,
+                input_slot,
+            );
+            let prepared = state.prepare_slot_update(lane_idx, source, input_slot);
+            assert_eq!(prepared.slot_was_down(), old_was_down);
+
+            let old_update = update_active_input_slot(
+                slots,
+                slot_count,
+                lane_counts,
+                lane_idx,
+                source,
+                input_slot,
+                pressed,
+            );
+            let new_update = state.update_prepared_slot(prepared, pressed);
+            assert_eq!(new_update, old_update);
+            assert_eq!(state.lane_counts(), lane_counts);
+
+            let expected_mask = lane_counts
+                .iter()
+                .enumerate()
+                .fold(0, |mask, (lane, &count)| {
+                    mask | if count == 0 { 0 } else { input_lane_bit(lane) }
+                });
+            assert_eq!(state.pressed_lane_mask(), expected_mask);
+            assert_eq!(
+                state.slot_lane_is_down(lane_idx, source, input_slot),
+                active_input_slot_lane_is_down(
+                    slots,
+                    *slot_count,
+                    lane_idx,
+                    source,
+                    input_slot,
+                )
+            );
+        }
+
+        let mut slots = [EMPTY_ACTIVE_INPUT_SLOT; MAX_ACTIVE_INPUT_SLOTS];
+        let mut slot_count = 0;
+        let mut lane_counts = [0_u16; MAX_COLS];
+        let mut state = GameplayInputState::default();
+
+        for (lane, source, slot, pressed) in [
+            (0, InputSource::Keyboard, 4, true),
+            (1, InputSource::Keyboard, 4, true),
+            (0, InputSource::Gamepad, 4, true),
+            (0, InputSource::Keyboard, 4, true),
+            (0, InputSource::Keyboard, 5, true),
+            (0, InputSource::Keyboard, 4, false),
+            (1, InputSource::Keyboard, 4, false),
+            (0, InputSource::Gamepad, 4, false),
+            (0, InputSource::Keyboard, 5, false),
+            (0, InputSource::Keyboard, 5, false),
+        ] {
+            apply_edge(
+                &mut slots,
+                &mut slot_count,
+                &mut lane_counts,
+                &mut state,
+                (lane, source, slot, pressed),
+            );
+        }
+        assert_eq!(slot_count, 0);
+
+        for index in 0..MAX_ACTIVE_INPUT_SLOTS {
+            apply_edge(
+                &mut slots,
+                &mut slot_count,
+                &mut lane_counts,
+                &mut state,
+                (
+                    index % MAX_COLS,
+                    if index % 2 == 0 {
+                        InputSource::Keyboard
+                    } else {
+                        InputSource::Gamepad
+                    },
+                    (index / 2) as u32,
+                    true,
+                ),
+            );
+        }
+        assert_eq!(slot_count, MAX_ACTIVE_INPUT_SLOTS);
+        apply_edge(
+            &mut slots,
+            &mut slot_count,
+            &mut lane_counts,
+            &mut state,
+            (3, InputSource::Keyboard, 9_999, true),
+        );
+        assert_eq!(slot_count, MAX_ACTIVE_INPUT_SLOTS);
+
+        for parity in 0..2 {
+            for index in (parity..MAX_ACTIVE_INPUT_SLOTS).step_by(2) {
+                apply_edge(
+                    &mut slots,
+                    &mut slot_count,
+                    &mut lane_counts,
+                    &mut state,
+                    (
+                        index % MAX_COLS,
+                        if index % 2 == 0 {
+                            InputSource::Keyboard
+                        } else {
+                            InputSource::Gamepad
+                        },
+                        (index / 2) as u32,
+                        false,
+                    ),
+                );
+            }
+        }
+        assert_eq!(slot_count, 0);
+        assert_eq!(state.pressed_lane_mask(), 0);
+    }
+
+    #[test]
     fn gameplay_input_state_tracks_lanes_slots_and_reset() {
         let mut state = GameplayInputState::default();
 

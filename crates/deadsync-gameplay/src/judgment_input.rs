@@ -478,12 +478,15 @@ pub fn process_input_edges<Profile, OverlayActor, CapturedActor, StateDelta>(
             continue;
         }
         let lane_was_down = state.lane_is_pressed(lane_idx);
-        let slot_was_down = state.input_slot_lane_is_down_normalized(
-            lane_idx,
+        let prepared_slot = state.prepare_lane_input_slot(
+            edge.lane,
             edge.source,
             edge.input_slot,
             INPUT_SLOT_INVALID,
         );
+        // Hold integration below must observe the pre-edge state. Carry this
+        // lookup to the original mutation point; nothing between may update slots.
+        let slot_was_down = prepared_slot.slot_was_down();
         let edge_judges_tap = lane_edge_judges_tap(edge.pressed, slot_was_down);
         let edge_judges_lift = lane_edge_judges_lift(edge.pressed, slot_was_down);
         if resolved_from_song_clock
@@ -600,13 +603,7 @@ pub fn process_input_edges<Profile, OverlayActor, CapturedActor, StateDelta>(
         } else {
             None
         };
-        let lane_update = state.update_lane_input_slot(
-            edge.lane,
-            edge.source,
-            edge.input_slot,
-            edge.pressed,
-            INPUT_SLOT_INVALID,
-        );
+        let lane_update = state.update_prepared_lane_input_slot(prepared_slot, edge.pressed);
         debug_assert_eq!(lane_update.slot_was_down, slot_was_down);
         if let Some(started) = state_started {
             add_elapsed_us(&mut phase_timings.input_state_us, started);

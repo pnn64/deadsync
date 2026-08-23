@@ -4,6 +4,332 @@
     lane_mask: 0,
 };
 
+#[derive(Clone, Copy, Debug)]
+/// A lookup result that stays valid until the matching edge mutates the table.
+/// No active-slot update may occur between `prepare` and `update_prepared`.
+pub(crate) struct PreparedInputSlotUpdate {
+    key: u64,
+    lane_idx: u8,
+    index: u8,
+    slot_was_down: bool,
+}
+
+const PREPARED_INPUT_SLOT_NONE: u8 = u8::MAX;
+const PREPARED_INPUT_LANE_NONE: u8 = 0x0f;
+const _: () = assert!(MAX_ACTIVE_INPUT_SLOTS < PREPARED_INPUT_SLOT_NONE as usize);
+const _: () = assert!(MAX_COLS < PREPARED_INPUT_LANE_NONE as usize);
+
+impl PreparedInputSlotUpdate {
+    #[inline(always)]
+    pub(crate) const fn slot_was_down(self) -> bool {
+        self.slot_was_down
+    }
+
+    #[inline(always)]
+    pub(crate) const fn lane_idx(self) -> usize {
+        self.lane_idx as usize
+    }
+
+    #[inline(always)]
+    const fn index(self) -> Option<usize> {
+        if self.index == PREPARED_INPUT_SLOT_NONE {
+            None
+        } else {
+            Some(self.index as usize)
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) const fn source(self) -> InputSource {
+        if self.key & (1 << ACTIVE_INPUT_SOURCE_SHIFT) == 0 {
+            InputSource::Keyboard
+        } else {
+            InputSource::Gamepad
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) const fn input_slot(self) -> u32 {
+        self.key as u32
+    }
+}
+
+/// Game-thread active input bindings in fixed song-lifetime storage.
+///
+/// Each record packs the full slot id, source, and ten-lane mask into one word.
+/// `slot_count` bounds every scan and removal swap-fills holes. The table never
+/// allocates, grows, or hashes.
+#[derive(Clone, Debug)]
+struct ActiveInputSlots {
+    entries: [u64; MAX_ACTIVE_INPUT_SLOTS],
+    slot_count: usize,
+}
+
+const ACTIVE_INPUT_SOURCE_SHIFT: u32 = 32;
+const ACTIVE_INPUT_LANE_SHIFT: u32 = 33;
+const ACTIVE_INPUT_ID_MASK: u64 = (1_u64 << ACTIVE_INPUT_LANE_SHIFT) - 1;
+const ACTIVE_INPUT_LANE_MASK: u64 =
+    ((1_u64 << MAX_COLS) - 1) << ACTIVE_INPUT_LANE_SHIFT;
+const _: () = assert!(ACTIVE_INPUT_LANE_SHIFT + MAX_COLS as u32 <= u64::BITS);
+
+impl Default for ActiveInputSlots {
+    fn default() -> Self {
+        Self {
+            entries: [0; MAX_ACTIVE_INPUT_SLOTS],
+            slot_count: 0,
+        }
+    }
+}
+
+impl ActiveInputSlots {
+    #[inline(always)]
+    fn find(&self, key: u64) -> Option<usize> {
+        if self.slot_count == 0 {
+            return None;
+        }
+        self.entries[..self.slot_count]
+            .iter()
+            .position(|&entry| entry & ACTIVE_INPUT_ID_MASK == key)
+    }
+
+    #[inline(always)]
+    fn prepare(
+        &self,
+        lane_idx: usize,
+        source: InputSource,
+        input_slot: u32,
+    ) -> PreparedInputSlotUpdate {
+        let key = active_input_key(source, input_slot);
+        let index = self.find(key);
+        let slot_was_down = index.is_some_and(|index| {
+            lane_idx < MAX_COLS && self.entries[index] & active_input_lane_bit(lane_idx) != 0
+        });
+        let lane_idx = if lane_idx < MAX_COLS {
+            lane_idx as u8
+        } else {
+            PREPARED_INPUT_LANE_NONE
+        };
+        let index = index.map_or(PREPARED_INPUT_SLOT_NONE, |index| index as u8);
+        PreparedInputSlotUpdate {
+            key,
+            lane_idx,
+            index,
+            slot_was_down,
+        }
+    }
+
+    #[inline(always)]
+    fn slot_lane_is_down(
+        &self,
+        lane_idx: usize,
+        source: InputSource,
+        input_slot: u32,
+    ) -> bool {
+        self.prepare(lane_idx, source, input_slot).slot_was_down()
+    }
+
+    #[inline(always)]
+    fn update_prepared(
+        &mut self,
+        lane_counts: &mut [u16; MAX_COLS],
+        prepared: PreparedInputSlotUpdate,
+        pressed: bool,
+    ) -> LaneInputUpdate {
+        let lane_idx = prepared.lane_idx();
+        if lane_idx >= MAX_COLS {
+            return LaneInputUpdate::default();
+        }
+        let prepared_index = prepared.index();
+        debug_assert!(prepared_index.is_none_or(|index| {
+            index < self.slot_count
+                && self.entries[index] & ACTIVE_INPUT_ID_MASK == prepared.key
+        }));
+        let bit = active_input_lane_bit(lane_idx);
+        let was_down = lane_counts[lane_idx] != 0;
+        let mut slot_table_full = false;
+
+        if pressed {
+            let index = match prepared_index {
+                Some(index) => Some(index),
+                None if self.slot_count < MAX_ACTIVE_INPUT_SLOTS => {
+                    let index = self.slot_count;
+                    self.slot_count += 1;
+                    self.entries[index] = prepared.key;
+                    Some(index)
+                }
+                None => {
+                    slot_table_full = true;
+                    None
+                }
+            };
+            if let Some(index) = index
+                && !prepared.slot_was_down()
+            {
+                self.entries[index] |= bit;
+                lane_counts[lane_idx] = lane_counts[lane_idx].saturating_add(1);
+            }
+        } else if let Some(index) = prepared_index
+            && prepared.slot_was_down()
+        {
+            self.entries[index] &= !bit;
+            lane_counts[lane_idx] = lane_counts[lane_idx].saturating_sub(1);
+            if self.entries[index] & ACTIVE_INPUT_LANE_MASK == 0 {
+                self.slot_count -= 1;
+                if index < self.slot_count {
+                    self.entries[index] = self.entries[self.slot_count];
+                }
+            }
+        }
+
+        LaneInputUpdate {
+            was_down,
+            is_down: lane_counts[lane_idx] != 0,
+            slot_was_down: prepared.slot_was_down(),
+            slot_table_full,
+        }
+    }
+
+    #[inline(always)]
+    fn clear(&mut self) {
+        self.slot_count = 0;
+    }
+}
+
+#[inline(always)]
+const fn active_input_key(source: InputSource, input_slot: u32) -> u64 {
+    input_slot as u64 | (matches!(source, InputSource::Gamepad) as u64) << ACTIVE_INPUT_SOURCE_SHIFT
+}
+
+#[inline(always)]
+const fn active_input_lane_bit(lane_idx: usize) -> u64 {
+    (input_lane_bit(lane_idx) as u64) << ACTIVE_INPUT_LANE_SHIFT
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayInputState {
+    #[doc(hidden)]
+    #[inline(always)]
+    pub fn benchmark_input_edge(
+        &mut self,
+        lane_idx: usize,
+        source: InputSource,
+        input_slot: u32,
+        pressed: bool,
+    ) -> (bool, LaneInputUpdate) {
+        let prepared = self.prepare_slot_update(lane_idx, source, input_slot);
+        let slot_was_down = prepared.slot_was_down();
+        (
+            slot_was_down,
+            self.update_prepared_slot(prepared, pressed),
+        )
+    }
+
+    #[doc(hidden)]
+    pub const fn active_slot_storage_bytes() -> usize {
+        std::mem::size_of::<ActiveInputSlots>()
+    }
+
+    #[doc(hidden)]
+    #[inline(always)]
+    pub fn benchmark_reset_live_state(&mut self) {
+        self.reset_live_state();
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct ReferenceGameplayInputState {
+    prev_inputs: [bool; MAX_COLS],
+    lane_pressed_since_ns: [Option<SongTimeNs>; MAX_COLS],
+    slots: [ActiveInputSlot; MAX_ACTIVE_INPUT_SLOTS],
+    slot_count: usize,
+    lane_counts: [u16; MAX_COLS],
+    pressed_lane_mask: LaneMask,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for ReferenceGameplayInputState {
+    fn default() -> Self {
+        Self {
+            prev_inputs: [false; MAX_COLS],
+            lane_pressed_since_ns: [None; MAX_COLS],
+            slots: [EMPTY_ACTIVE_INPUT_SLOT; MAX_ACTIVE_INPUT_SLOTS],
+            slot_count: 0,
+            lane_counts: [0; MAX_COLS],
+            pressed_lane_mask: 0,
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl ReferenceGameplayInputState {
+    #[doc(hidden)]
+    #[inline(always)]
+    pub fn benchmark_input_edge(
+        &mut self,
+        lane_idx: usize,
+        source: InputSource,
+        input_slot: u32,
+        pressed: bool,
+    ) -> (bool, LaneInputUpdate) {
+        let slot_was_down = active_input_slot_lane_is_down(
+            &self.slots,
+            self.slot_count,
+            lane_idx,
+            source,
+            input_slot,
+        );
+        let update = update_active_input_slot(
+            &mut self.slots,
+            &mut self.slot_count,
+            &mut self.lane_counts,
+            lane_idx,
+            source,
+            input_slot,
+            pressed,
+        );
+        if lane_idx < MAX_COLS {
+            let bit = input_lane_bit(lane_idx);
+            if update.is_down {
+                self.pressed_lane_mask |= bit;
+            } else {
+                self.pressed_lane_mask &= !bit;
+            }
+        }
+        (slot_was_down, update)
+    }
+
+    #[doc(hidden)]
+    #[inline(always)]
+    pub const fn lane_counts(&self) -> &[u16; MAX_COLS] {
+        &self.lane_counts
+    }
+
+    #[doc(hidden)]
+    #[inline(always)]
+    pub const fn pressed_lane_mask(&self) -> LaneMask {
+        self.pressed_lane_mask
+    }
+
+    #[doc(hidden)]
+    pub const fn active_slot_storage_bytes() -> usize {
+        std::mem::size_of::<[ActiveInputSlot; MAX_ACTIVE_INPUT_SLOTS]>()
+            + std::mem::size_of::<usize>()
+    }
+
+
+    #[doc(hidden)]
+    #[inline(always)]
+    pub fn benchmark_reset_live_state(&mut self) {
+        self.prev_inputs.fill(false);
+        self.lane_pressed_since_ns.fill(None);
+        self.slots.fill(EMPTY_ACTIVE_INPUT_SLOT);
+        self.slot_count = 0;
+        self.lane_counts.fill(0);
+        self.pressed_lane_mask = 0;
+    }
+}
+
 #[inline(always)]
 pub const fn remap_live_input_lane(
     play_style: GameplayInputPlayStyle,
@@ -149,6 +475,7 @@ pub fn record_unmapped_input_clock_warning(song_time_ns: SongTimeNs) -> bool {
     should_warn
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 pub fn active_input_slot_lane_is_down(
     slots: &[ActiveInputSlot],
     slot_count: usize,
@@ -163,6 +490,7 @@ pub fn active_input_slot_lane_is_down(
 }
 
 #[inline(always)]
+#[cfg(any(test, feature = "bench-support"))]
 fn find_active_input_slot(
     slots: &[ActiveInputSlot],
     slot_count: usize,
@@ -175,6 +503,7 @@ fn find_active_input_slot(
 }
 
 #[inline(always)]
+#[cfg(any(test, feature = "bench-support"))]
 fn insert_active_input_slot(
     slots: &mut [ActiveInputSlot],
     slot_count: &mut usize,
@@ -198,6 +527,7 @@ fn insert_active_input_slot(
 }
 
 #[inline(always)]
+#[cfg(any(test, feature = "bench-support"))]
 fn remove_active_input_slot_if_empty(
     slots: &mut [ActiveInputSlot],
     slot_count: &mut usize,
@@ -212,6 +542,7 @@ fn remove_active_input_slot_if_empty(
     }
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 pub fn update_active_input_slot(
     slots: &mut [ActiveInputSlot],
     slot_count: &mut usize,

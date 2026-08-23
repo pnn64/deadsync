@@ -2821,18 +2821,6 @@ where
     }
 
     #[inline(always)]
-    pub fn input_slot_lane_is_down(
-        &self,
-        lane_idx: usize,
-        source: InputSource,
-        input_slot: u32,
-    ) -> bool {
-        self.control
-            .input_state
-            .slot_lane_is_down(lane_idx, source, input_slot)
-    }
-
-    #[inline(always)]
     pub fn normalized_input_slot_for_lane(
         &self,
         lane_idx: usize,
@@ -2843,55 +2831,32 @@ where
     }
 
     #[inline(always)]
-    pub fn input_slot_lane_is_down_normalized(
+    pub(crate) fn prepare_lane_input_slot(
         &self,
-        lane_idx: usize,
-        source: InputSource,
-        input_slot: u32,
-        invalid_slot: u32,
-    ) -> bool {
-        let input_slot = self.normalized_input_slot_for_lane(lane_idx, input_slot, invalid_slot);
-        self.input_slot_lane_is_down(lane_idx, source, input_slot)
-    }
-
-    #[inline(always)]
-    pub fn update_input_slot(
-        &mut self,
-        lane_idx: usize,
-        source: InputSource,
-        input_slot: u32,
-        pressed: bool,
-    ) -> LaneInputUpdate {
-        self.control
-            .input_state
-            .update_slot(lane_idx, source, input_slot, pressed)
-    }
-
-    #[inline(always)]
-    pub fn update_input_slot_normalized(
-        &mut self,
-        lane_idx: usize,
-        source: InputSource,
-        input_slot: u32,
-        pressed: bool,
-        invalid_slot: u32,
-    ) -> LaneInputUpdate {
-        let input_slot = self.normalized_input_slot_for_lane(lane_idx, input_slot, invalid_slot);
-        self.update_input_slot(lane_idx, source, input_slot, pressed)
-    }
-
-    #[inline(always)]
-    pub fn update_lane_input_slot(
-        &mut self,
         lane: Lane,
         source: InputSource,
         input_slot: u32,
-        pressed: bool,
         invalid_slot: u32,
-    ) -> LaneInputUpdate {
+    ) -> PreparedInputSlotUpdate {
         let lane_idx = lane.index();
         let input_slot = self.normalized_input_slot_for_lane(lane_idx, input_slot, invalid_slot);
-        let update = self.update_input_slot(lane_idx, source, input_slot, pressed);
+        self.control
+            .input_state
+            .prepare_slot_update(lane_idx, source, input_slot)
+    }
+
+    #[inline(always)]
+    pub(crate) fn update_prepared_lane_input_slot(
+        &mut self,
+        prepared: PreparedInputSlotUpdate,
+        pressed: bool,
+    ) -> LaneInputUpdate {
+        let source = prepared.source();
+        let input_slot = prepared.input_slot();
+        let update = self
+            .control
+            .input_state
+            .update_prepared_slot(prepared, pressed);
         if update.slot_table_full {
             log::debug!(
                 "Gameplay active input slot table full; dropping held-state edge for {:?} slot {}",

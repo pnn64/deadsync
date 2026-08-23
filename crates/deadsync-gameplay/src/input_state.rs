@@ -17,8 +17,7 @@ pub struct LaneInputUpdate {
 pub struct GameplayInputState {
     pub prev_inputs: [bool; MAX_COLS],
     pub lane_pressed_since_ns: [Option<SongTimeNs>; MAX_COLS],
-    slots: [ActiveInputSlot; MAX_ACTIVE_INPUT_SLOTS],
-    slot_count: usize,
+    active_slots: ActiveInputSlots,
     lane_counts: [u16; MAX_COLS],
     // Bit `i` is set exactly when `lane_counts[i] != 0`; `update_slot` owns both.
     pressed_lane_mask: LaneMask,
@@ -29,8 +28,7 @@ impl Default for GameplayInputState {
         Self {
             prev_inputs: [false; MAX_COLS],
             lane_pressed_since_ns: [None; MAX_COLS],
-            slots: [EMPTY_ACTIVE_INPUT_SLOT; MAX_ACTIVE_INPUT_SLOTS],
-            slot_count: 0,
+            active_slots: ActiveInputSlots::default(),
             lane_counts: [0; MAX_COLS],
             pressed_lane_mask: 0,
         }
@@ -55,7 +53,32 @@ impl GameplayInputState {
 
     #[inline(always)]
     pub fn slot_lane_is_down(&self, lane_idx: usize, source: InputSource, input_slot: u32) -> bool {
-        active_input_slot_lane_is_down(&self.slots, self.slot_count, lane_idx, source, input_slot)
+        self.active_slots
+            .slot_lane_is_down(lane_idx, source, input_slot)
+    }
+
+    #[inline(always)]
+    pub(crate) fn prepare_slot_update(
+        &self,
+        lane_idx: usize,
+        source: InputSource,
+        input_slot: u32,
+    ) -> PreparedInputSlotUpdate {
+        self.active_slots.prepare(lane_idx, source, input_slot)
+    }
+
+    #[inline(always)]
+    pub(crate) fn update_prepared_slot(
+        &mut self,
+        prepared: PreparedInputSlotUpdate,
+        pressed: bool,
+    ) -> LaneInputUpdate {
+        let lane_idx = prepared.lane_idx();
+        let update = self
+            .active_slots
+            .update_prepared(&mut self.lane_counts, prepared, pressed);
+        self.update_pressed_lane_mask(lane_idx, update.is_down);
+        update
     }
 
     #[inline(always)]
@@ -66,24 +89,20 @@ impl GameplayInputState {
         input_slot: u32,
         pressed: bool,
     ) -> LaneInputUpdate {
-        let update = update_active_input_slot(
-            &mut self.slots,
-            &mut self.slot_count,
-            &mut self.lane_counts,
-            lane_idx,
-            source,
-            input_slot,
-            pressed,
-        );
+        let prepared = self.prepare_slot_update(lane_idx, source, input_slot);
+        self.update_prepared_slot(prepared, pressed)
+    }
+
+    #[inline(always)]
+    fn update_pressed_lane_mask(&mut self, lane_idx: usize, is_down: bool) {
         if lane_idx < MAX_COLS {
             let bit = input_lane_bit(lane_idx);
-            if update.is_down {
+            if is_down {
                 self.pressed_lane_mask |= bit;
             } else {
                 self.pressed_lane_mask &= !bit;
             }
         }
-        update
     }
 
     #[inline(always)]
@@ -104,9 +123,8 @@ impl GameplayInputState {
     pub fn reset_live_state(&mut self) {
         self.prev_inputs.fill(false);
         self.lane_pressed_since_ns.fill(None);
-        self.slot_count = 0;
+        self.active_slots.clear();
         self.lane_counts.fill(0);
         self.pressed_lane_mask = 0;
-        self.slots = [EMPTY_ACTIVE_INPUT_SLOT; MAX_ACTIVE_INPUT_SLOTS];
     }
 }
