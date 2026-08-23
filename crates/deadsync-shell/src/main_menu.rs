@@ -9,6 +9,19 @@ use deadsync_theme_simply_love::views::{
     MainMenuRuntimeView, MainMenuSmxConflictView,
 };
 
+fn arrowcloud_status(status: ArrowCloudStatus) -> MainMenuArrowCloudStatus {
+    match status {
+        ArrowCloudStatus::Pending => MainMenuArrowCloudStatus::Pending,
+        ArrowCloudStatus::Connected => MainMenuArrowCloudStatus::Connected,
+        ArrowCloudStatus::Error(kind) => MainMenuArrowCloudStatus::Error(match kind {
+            ArrowCloudError::Disabled => MainMenuArrowCloudError::Disabled,
+            ArrowCloudError::TimedOut => MainMenuArrowCloudError::TimedOut,
+            ArrowCloudError::HostBlocked => MainMenuArrowCloudError::HostBlocked,
+            ArrowCloudError::CannotConnect => MainMenuArrowCloudError::CannotConnect,
+        }),
+    }
+}
+
 fn groove_status(boogie: bool, status: GrooveStatus) -> MainMenuGrooveStatus {
     match status {
         GrooveStatus::Pending => MainMenuGrooveStatus::Pending { boogie },
@@ -28,19 +41,6 @@ fn groove_status(boogie: bool, status: GrooveStatus) -> MainMenuGrooveStatus {
             leaderboard: services.leaderboard,
             auto_submit: services.auto_submit,
         },
-    }
-}
-
-fn arrowcloud_status(status: ArrowCloudStatus) -> MainMenuArrowCloudStatus {
-    match status {
-        ArrowCloudStatus::Pending => MainMenuArrowCloudStatus::Pending,
-        ArrowCloudStatus::Connected => MainMenuArrowCloudStatus::Connected,
-        ArrowCloudStatus::Error(kind) => MainMenuArrowCloudStatus::Error(match kind {
-            ArrowCloudError::Disabled => MainMenuArrowCloudError::Disabled,
-            ArrowCloudError::TimedOut => MainMenuArrowCloudError::TimedOut,
-            ArrowCloudError::HostBlocked => MainMenuArrowCloudError::HostBlocked,
-            ArrowCloudError::CannotConnect => MainMenuArrowCloudError::CannotConnect,
-        }),
     }
 }
 
@@ -118,7 +118,11 @@ mod tests {
     }
 
     #[test]
-    fn arrowcloud_status_preserves_error_kind() {
+    fn arrowcloud_status_preserves_connection_state() {
+        assert_eq!(
+            arrowcloud_status(ArrowCloudStatus::Connected),
+            MainMenuArrowCloudStatus::Connected
+        );
         assert_eq!(
             arrowcloud_status(ArrowCloudStatus::Error(ArrowCloudError::HostBlocked)),
             MainMenuArrowCloudStatus::Error(MainMenuArrowCloudError::HostBlocked)

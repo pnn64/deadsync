@@ -24,6 +24,7 @@ use deadlib_present::space::{screen_center_x, screen_height, screen_width};
 const TRANSITION_IN_DURATION: f32 = 0.5;
 const TRANSITION_OUT_DURATION: f32 = 1.0;
 const BRAND_EXIT_DURATION: f32 = 0.65;
+const LOGO_SHADOW_EXIT_DURATION: f32 = 0.5;
 const SECONDARY_ENTRY_DELAY: f32 = 0.2;
 const SECONDARY_ENTRY_DURATION: f32 = 0.4;
 // Graphics/ScreenTitleMenu scroll.lua staggers each row's OnCommand by 75 ms.
@@ -35,6 +36,8 @@ const FOCUS_GLOW_IN: f32 = 0.1;
 const FOCUS_GLOW_OUT: f32 = 0.05;
 const FOCUS_GLOW_ALPHA: f32 = 0.5;
 const ATTRACT_TIMEOUT: f32 = 30.0;
+const MENU_TEXT_SHADOW: f32 = 0.5;
+const SRPG10_TEXT_SHADOW: f32 = 0.4;
 
 const NORMAL_COLOR_HEX: &str = "#888888";
 
@@ -85,23 +88,23 @@ struct StatusTextCache<K, const N: usize> {
     line_count: usize,
 }
 
-fn groove_error_text(kind: MainMenuGrooveError) -> Arc<str> {
-    match kind {
-        MainMenuGrooveError::Disabled => tr("Menu", "Disabled"),
+fn groove_error_text(kind: MainMenuGrooveError) -> Option<Arc<str>> {
+    Some(match kind {
+        MainMenuGrooveError::Disabled => return None,
         MainMenuGrooveError::MachineOffline => tr("Menu", "MachineOffline"),
         MainMenuGrooveError::CannotConnect => tr("Menu", "CannotConnect"),
         MainMenuGrooveError::TimedOut => tr("Menu", "TimedOut"),
         MainMenuGrooveError::InvalidResponse => tr("Menu", "FailedToLoad"),
-    }
+    })
 }
 
-fn arrowcloud_error_text(kind: MainMenuArrowCloudError) -> Arc<str> {
-    match kind {
-        MainMenuArrowCloudError::Disabled => tr("Menu", "Disabled"),
+fn arrowcloud_error_text(kind: MainMenuArrowCloudError) -> Option<Arc<str>> {
+    Some(match kind {
+        MainMenuArrowCloudError::Disabled => return None,
         MainMenuArrowCloudError::TimedOut => tr("Menu", "TimedOut"),
         MainMenuArrowCloudError::HostBlocked => tr("Menu", "HostBlocked"),
         MainMenuArrowCloudError::CannotConnect => tr("Menu", "CannotConnect"),
-    }
+    })
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -379,6 +382,12 @@ fn brand_exit_alpha(elapsed: Option<f32>) -> f32 {
     elapsed.map_or(1.0, |t| 1.0 - smooth_p(t / BRAND_EXIT_DURATION))
 }
 
+fn logo_shadow_exit_scale(elapsed: Option<f32>) -> f32 {
+    elapsed.map_or(1.0, |t| {
+        1.0 - (t / LOGO_SHADOW_EXIT_DURATION).clamp(0.0, 1.0)
+    })
+}
+
 fn secondary_entry_alpha(elapsed: Option<f32>) -> f32 {
     elapsed.map_or(1.0, |t| {
         ((t - SECONDARY_ENTRY_DELAY) / SECONDARY_ENTRY_DURATION).clamp(0.0, 1.0)
@@ -467,7 +476,9 @@ fn groove_service_name(boogie: bool) -> Arc<str> {
     }
 }
 
-fn build_groovestats_text(key: MainMenuGrooveStatus) -> StatusTextCache<MainMenuGrooveStatus, 3> {
+fn build_groovestats_text(
+    key: MainMenuGrooveStatus,
+) -> Option<StatusTextCache<MainMenuGrooveStatus, 3>> {
     let mut lines = [None, None, None];
     let (main, line_count) = match key {
         MainMenuGrooveStatus::Pending { boogie } => {
@@ -478,20 +489,16 @@ fn build_groovestats_text(key: MainMenuGrooveStatus) -> StatusTextCache<MainMenu
             )
         }
         MainMenuGrooveStatus::Error { boogie, kind } => {
-            lines[0] = Some(groove_error_text(kind));
-            if kind == MainMenuGrooveError::Disabled {
-                (tr("Menu", "GrooveStatsDisabled"), 1)
-            } else {
-                let service = groove_service_name(boogie);
-                (
-                    tr_fmt(
-                        "Menu",
-                        "ServiceNotConnected",
-                        &[("service", service.as_ref())],
-                    ),
-                    1,
-                )
-            }
+            lines[0] = Some(groove_error_text(kind)?);
+            let service = groove_service_name(boogie);
+            (
+                tr_fmt(
+                    "Menu",
+                    "ServiceNotConnected",
+                    &[("service", service.as_ref())],
+                ),
+                1,
+            )
         }
         MainMenuGrooveStatus::Connected {
             boogie,
@@ -527,56 +534,56 @@ fn build_groovestats_text(key: MainMenuGrooveStatus) -> StatusTextCache<MainMenu
             }
         }
     };
-    StatusTextCache {
+    Some(StatusTextCache {
         key,
         main,
         lines,
         line_count,
-    }
+    })
 }
 
-fn groovestats_text(state: &State) -> StatusTextCache<MainMenuGrooveStatus, 3> {
+fn groovestats_text(state: &State) -> Option<StatusTextCache<MainMenuGrooveStatus, 3>> {
     let key = state.runtime_view.groovestats;
     if let Some(cache) = state.groovestats_text_cache.borrow().as_ref()
         && cache.key == key
     {
-        return cache.clone();
+        return Some(cache.clone());
     }
-    let cache = build_groovestats_text(key);
+    let cache = build_groovestats_text(key)?;
     *state.groovestats_text_cache.borrow_mut() = Some(cache.clone());
-    cache
+    Some(cache)
 }
 
 fn build_arrowcloud_text(
     key: MainMenuArrowCloudStatus,
-) -> StatusTextCache<MainMenuArrowCloudStatus, 1> {
+) -> Option<StatusTextCache<MainMenuArrowCloudStatus, 1>> {
     let mut lines = [None];
     let (main, line_count) = match key {
         MainMenuArrowCloudStatus::Pending => (tr("Menu", "ArrowCloudPending"), 0),
         MainMenuArrowCloudStatus::Connected => (tr("Menu", "ArrowCloudConnected"), 0),
         MainMenuArrowCloudStatus::Error(kind) => {
-            lines[0] = Some(arrowcloud_error_text(kind));
+            lines[0] = Some(arrowcloud_error_text(kind)?);
             (tr("Menu", "ArrowCloudDisabled"), 1)
         }
     };
-    StatusTextCache {
+    Some(StatusTextCache {
         key,
         main,
         lines,
         line_count,
-    }
+    })
 }
 
-fn arrowcloud_text(state: &State) -> StatusTextCache<MainMenuArrowCloudStatus, 1> {
+fn arrowcloud_text(state: &State) -> Option<StatusTextCache<MainMenuArrowCloudStatus, 1>> {
     let key = state.runtime_view.arrowcloud;
     if let Some(cache) = state.arrowcloud_text_cache.borrow().as_ref()
         && cache.key == key
     {
-        return cache.clone();
+        return Some(cache.clone());
     }
-    let cache = build_arrowcloud_text(key);
+    let cache = build_arrowcloud_text(key)?;
     *state.arrowcloud_text_cache.borrow_mut() = Some(cache.clone());
-    cache
+    Some(cache)
 }
 
 fn local_ip_text(state: &State) -> Option<Arc<str>> {
@@ -599,6 +606,7 @@ fn status_text_actor(
     y: f32,
     zoom: f32,
     alpha: f32,
+    shadow: f32,
     align_text: TextAlign,
 ) -> Actor {
     let mut actor = act!(text:
@@ -607,6 +615,7 @@ fn status_text_actor(
         align(align_x, 0.0):
         xy(x, y):
         zoom(zoom):
+        shadowlength(shadow):
         z(200)
     );
     if let Actor::Text {
@@ -663,14 +672,25 @@ pub fn push_actors(
     let info1_y_tl = info2_y_tl - INFO_PX - INFO_GAP;
 
     let brand_alpha = alpha_multiplier * brand_exit_alpha(exit_elapsed);
+    let logo_shadow_scale = logo_shadow_exit_scale(exit_elapsed);
     let secondary_alpha = secondary_entry_alpha(entry_elapsed);
+    let secondary_shadow = if visual_policy.srpg10_tint {
+        SRPG10_TEXT_SHADOW
+    } else {
+        0.0
+    };
     let logo_actors = logo::build_logo_default(
         visual_policy.title_logo_texture_key,
         state.runtime_view.game,
     );
     for mut actor in logo_actors {
-        if let Actor::Sprite { tint, .. } = &mut actor {
+        if let Actor::Sprite {
+            tint, shadow_len, ..
+        } = &mut actor
+        {
             tint[3] *= brand_alpha;
+            shadow_len[0] *= logo_shadow_scale;
+            shadow_len[1] *= logo_shadow_scale;
         }
         actors.push(actor);
     }
@@ -681,13 +701,23 @@ pub fn push_actors(
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), info1_y_tl): zoom(0.8):
         font("miso"): settext(menu_info_text(state, update_banner_tag)): horizalign(center):
+        shadowlength(secondary_shadow):
         diffuse(info_color[0], info_color[1], info_color[2], info_color[3])
     ));
 
     // 3) menu list
     let base_y = lp.top_margin + lp.target_h + MENU_BELOW_LOGO;
-    let selected = color::menu_selected_rgba(state.active_color_index);
-    let normal = color::rgba_hex(NORMAL_COLOR_HEX);
+    let (selected, normal) = if visual_policy.srpg10_tint {
+        (
+            color::srpg10_rgba(state.active_color_index),
+            [1.0, 1.0, 1.0, 1.0],
+        )
+    } else {
+        (
+            color::menu_selected_rgba(state.active_color_index),
+            color::rgba_hex(NORMAL_COLOR_HEX),
+        )
+    };
 
     let menu_font = machine_font_key(visual_policy.machine_font, FontRole::Bold);
     let menu_center_x = screen_center_x();
@@ -715,7 +745,7 @@ pub fn push_actors(
             zoomtoheight(MENU_BASE_PX * zoom):
             diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
             glow(1.0, 1.0, 1.0, glow_alpha):
-            shadowlength(0.8):
+            shadowlength(MENU_TEXT_SHADOW):
             font(menu_font):
             settext(Arc::clone(label)):
             horizalign(center)
@@ -739,82 +769,92 @@ pub fn push_actors(
         fg_color: footer_fg,
     }));
 
-    // --- Local IP (optional, top-left) ---
     let status_alpha = alpha_multiplier * secondary_alpha;
-    let mut gs_base_y = STATUS_BASE_Y;
+    let mut status_next_y = STATUS_BASE_Y;
+
+    // --- Local IP (optional, top-left) ---
     if let Some(text) = local_ip_text(state) {
         actors.push(status_text_actor(
             text,
             0.0,
             STATUS_BASE_X,
-            STATUS_BASE_Y,
+            status_next_y,
             STATUS_ZOOM,
             status_alpha,
+            secondary_shadow,
             TextAlign::Left,
         ));
-        gs_base_y += STATUS_LINE_HEIGHT.mul_add(STATUS_ZOOM, STATUS_BLOCK_GAP);
+        status_next_y += STATUS_LINE_HEIGHT.mul_add(STATUS_ZOOM, STATUS_BLOCK_GAP);
     }
 
-    // --- GrooveStats Info Pane (below the optional local IP) ---
-    let gs_text = groovestats_text(state);
-    actors.push(status_text_actor(
-        gs_text.main.clone(),
-        0.0,
-        STATUS_BASE_X,
-        gs_base_y,
-        STATUS_ZOOM,
-        status_alpha,
-        TextAlign::Left,
-    ));
-    for line_idx in 0..gs_text.line_count {
-        if let Some(text) = gs_text.lines[line_idx].as_ref() {
-            actors.push(status_text_actor(
-                text.clone(),
-                0.0,
-                STATUS_BASE_X,
-                (STATUS_LINE_HEIGHT * (line_idx as f32 + 1.0)).mul_add(STATUS_ZOOM, gs_base_y),
-                STATUS_ZOOM,
-                status_alpha,
-                TextAlign::Left,
-            ));
+    // --- GrooveStats Info Pane ---
+    if let Some(gs_text) = groovestats_text(state) {
+        actors.push(status_text_actor(
+            gs_text.main.clone(),
+            0.0,
+            STATUS_BASE_X,
+            status_next_y,
+            STATUS_ZOOM,
+            status_alpha,
+            secondary_shadow,
+            TextAlign::Left,
+        ));
+        for line_idx in 0..gs_text.line_count {
+            if let Some(text) = gs_text.lines[line_idx].as_ref() {
+                actors.push(status_text_actor(
+                    text.clone(),
+                    0.0,
+                    STATUS_BASE_X,
+                    (STATUS_LINE_HEIGHT * (line_idx as f32 + 1.0))
+                        .mul_add(STATUS_ZOOM, status_next_y),
+                    STATUS_ZOOM,
+                    status_alpha,
+                    secondary_shadow,
+                    TextAlign::Left,
+                ));
+            }
         }
+        status_next_y = (STATUS_LINE_HEIGHT * (gs_text.line_count as f32 + 1.0))
+            .mul_add(STATUS_ZOOM, status_next_y + STATUS_BLOCK_GAP);
     }
 
-    // --- Arrow Cloud Info Pane (below GrooveStats/BoogieStats) ---
-    let ac_base_y = (STATUS_LINE_HEIGHT * (gs_text.line_count as f32 + 1.0))
-        .mul_add(STATUS_ZOOM, gs_base_y + STATUS_BLOCK_GAP);
-    let ac_text = arrowcloud_text(state);
-    actors.push(status_text_actor(
-        ac_text.main.clone(),
-        0.0,
-        STATUS_BASE_X,
-        ac_base_y,
-        STATUS_ZOOM,
-        status_alpha,
-        TextAlign::Left,
-    ));
-    for line_idx in 0..ac_text.line_count {
-        if let Some(text) = ac_text.lines[line_idx].as_ref() {
-            actors.push(status_text_actor(
-                text.clone(),
-                0.0,
-                STATUS_BASE_X,
-                (STATUS_LINE_HEIGHT * (line_idx as f32 + 1.0)).mul_add(STATUS_ZOOM, ac_base_y),
-                STATUS_ZOOM,
-                status_alpha,
-                TextAlign::Left,
-            ));
+    // --- ArrowCloud Info Pane ---
+    if let Some(ac_text) = arrowcloud_text(state) {
+        actors.push(status_text_actor(
+            ac_text.main.clone(),
+            0.0,
+            STATUS_BASE_X,
+            status_next_y,
+            STATUS_ZOOM,
+            status_alpha,
+            secondary_shadow,
+            TextAlign::Left,
+        ));
+        for line_idx in 0..ac_text.line_count {
+            if let Some(text) = ac_text.lines[line_idx].as_ref() {
+                actors.push(status_text_actor(
+                    text.clone(),
+                    0.0,
+                    STATUS_BASE_X,
+                    (STATUS_LINE_HEIGHT * (line_idx as f32 + 1.0))
+                        .mul_add(STATUS_ZOOM, status_next_y),
+                    STATUS_ZOOM,
+                    status_alpha,
+                    secondary_shadow,
+                    TextAlign::Left,
+                ));
+            }
         }
+        status_next_y = (STATUS_LINE_HEIGHT * (ac_text.line_count as f32 + 1.0))
+            .mul_add(STATUS_ZOOM, status_next_y + STATUS_BLOCK_GAP);
     }
 
     // --- StepManiaX pad warning (only when two pads share a P1/P2 jumper and no
     // assignment resolves them, so the user knows to assign their pads). ---
     if let Some(conflict) = state.runtime_view.smx_conflict {
-        let smx_base_y = (STATUS_LINE_HEIGHT * (ac_text.line_count as f32 + 1.0))
-            .mul_add(STATUS_ZOOM, ac_base_y + STATUS_BLOCK_GAP);
         // Two short lines (kept compact for the main screen).
         for (i, text) in chrome_text.smx_warnings.iter().enumerate() {
-            let y = (STATUS_LINE_HEIGHT * i as f32).mul_add(STATUS_ZOOM, smx_base_y);
+            let y = (STATUS_LINE_HEIGHT * i as f32).mul_add(STATUS_ZOOM, status_next_y);
             let mut actor = status_text_actor(
                 Arc::clone(text),
                 0.0,
@@ -822,6 +862,7 @@ pub fn push_actors(
                 y,
                 STATUS_ZOOM,
                 status_alpha,
+                secondary_shadow,
                 TextAlign::Left,
             );
             if let Actor::Text { color, .. } = &mut actor {
@@ -1015,6 +1056,82 @@ mod tests {
     }
 
     #[test]
+    fn title_logo_shadow_collapses_linearly_during_exit() {
+        approx(logo_shadow_exit_scale(None), 1.0);
+        approx(logo_shadow_exit_scale(Some(0.0)), 1.0);
+        approx(
+            logo_shadow_exit_scale(Some(LOGO_SHADOW_EXIT_DURATION * 0.5)),
+            0.5,
+        );
+        approx(logo_shadow_exit_scale(Some(LOGO_SHADOW_EXIT_DURATION)), 0.0);
+
+        let state = init();
+        let mut actors = Vec::new();
+        push_actors(
+            &mut actors,
+            &state,
+            None,
+            1.0,
+            None,
+            Some(LOGO_SHADOW_EXIT_DURATION * 0.5),
+            Default::default(),
+        );
+        let shadow_len = actors
+            .iter()
+            .find_map(|actor| match actor {
+                Actor::Sprite {
+                    source, shadow_len, ..
+                } if source.texture_key() == Some("logo.png") => Some(*shadow_len),
+                _ => None,
+            })
+            .expect("expected ordinary title logo");
+        approx(shadow_len[0], 0.375);
+        approx(shadow_len[1], -0.375);
+    }
+
+    #[test]
+    fn srpg10_title_rows_use_event_palette_and_reference_shadows() {
+        let state = init();
+        let visual_policy = crate::views::SimplyLoveVisualPolicyView {
+            srpg10_tint: true,
+            ..Default::default()
+        };
+        let mut actors = Vec::new();
+        push_actors(&mut actors, &state, None, 1.0, None, None, visual_policy);
+
+        let chrome = state.chrome_text.borrow();
+        let text_style = |expected: &str| {
+            actors
+                .iter()
+                .find_map(|actor| match actor {
+                    Actor::Text {
+                        content,
+                        color,
+                        shadow_len,
+                        ..
+                    } if content.as_ref() == expected => Some((*color, *shadow_len)),
+                    _ => None,
+                })
+                .expect("expected title text actor")
+        };
+        let (focused, focused_shadow) = text_style(chrome.options[0].as_ref());
+        let (unfocused, unfocused_shadow) = text_style(chrome.options[1].as_ref());
+        for (actual, expected) in focused
+            .into_iter()
+            .zip(color::srpg10_rgba(state.active_color_index))
+        {
+            approx(actual, expected);
+        }
+        assert_eq!(unfocused, [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(focused_shadow, [MENU_TEXT_SHADOW, -MENU_TEXT_SHADOW]);
+        assert_eq!(unfocused_shadow, focused_shadow);
+
+        let info = menu_info_text(&state, None);
+        let (_, info_shadow) = text_style(info.as_ref());
+        assert_eq!(info_shadow, [SRPG10_TEXT_SHADOW, -SRPG10_TEXT_SHADOW]);
+    }
+
+    #[test]
     fn title_secondary_text_waits_then_fades_in_linearly() {
         approx(secondary_entry_alpha(None), 1.0);
         approx(secondary_entry_alpha(Some(0.0)), 0.0);
@@ -1030,7 +1147,9 @@ mod tests {
 
         let state = init();
         let info = menu_info_text(&state, None);
-        let groove = build_groovestats_text(MainMenuGrooveStatus::default()).main;
+        let groove = build_groovestats_text(MainMenuGrooveStatus::default())
+            .expect("default GrooveStats pane")
+            .main;
         let mut actors = Vec::new();
         push_actors(
             &mut actors,
@@ -1261,10 +1380,87 @@ mod tests {
     }
 
     #[test]
-    fn local_ip_renders_before_online_services_when_present() {
+    fn disabled_groovestats_pane_is_hidden() {
+        fn has_text(actors: &[Actor], expected: &str) -> bool {
+            actors.iter().any(|actor| {
+                matches!(actor, Actor::Text { content, .. } if content.as_ref() == expected)
+            })
+        }
+
+        let mut state = init();
+        let disabled = MainMenuGrooveStatus::Error {
+            boogie: false,
+            kind: MainMenuGrooveError::Disabled,
+        };
+        assert!(build_groovestats_text(disabled).is_none());
+        sync_runtime_view(
+            &mut state,
+            MainMenuRuntimeView {
+                groovestats: disabled,
+                ..MainMenuRuntimeView::default()
+            },
+        );
+        let actors = get_actors(&state, None, 1.0);
+        assert!(groovestats_text(&state).is_none());
+        assert!(!has_text(
+            &actors,
+            tr("Menu", "GrooveStatsDisabled").as_ref()
+        ));
+        assert!(!has_text(&actors, tr("Menu", "Disabled").as_ref()));
+    }
+
+    #[test]
+    fn disabled_arrowcloud_pane_is_hidden_but_live_statuses_remain() {
+        fn has_text(actors: &[Actor], expected: &str) -> bool {
+            actors.iter().any(|actor| {
+                matches!(actor, Actor::Text { content, .. } if content.as_ref() == expected)
+            })
+        }
+
+        let disabled = MainMenuArrowCloudStatus::Error(MainMenuArrowCloudError::Disabled);
+        assert!(build_arrowcloud_text(disabled).is_none());
+
+        let mut state = init();
+        sync_runtime_view(
+            &mut state,
+            MainMenuRuntimeView {
+                arrowcloud: disabled,
+                ..MainMenuRuntimeView::default()
+            },
+        );
+        let actors = get_actors(&state, None, 1.0);
+        assert!(arrowcloud_text(&state).is_none());
+        assert!(!has_text(
+            &actors,
+            tr("Menu", "ArrowCloudDisabled").as_ref()
+        ));
+
+        sync_runtime_view(
+            &mut state,
+            MainMenuRuntimeView {
+                arrowcloud: MainMenuArrowCloudStatus::Connected,
+                ..MainMenuRuntimeView::default()
+            },
+        );
+        let actors = get_actors(&state, None, 1.0);
+        assert!(has_text(
+            &actors,
+            tr("Menu", "ArrowCloudConnected").as_ref()
+        ));
+
+        let blocked = build_arrowcloud_text(MainMenuArrowCloudStatus::Error(
+            MainMenuArrowCloudError::HostBlocked,
+        ))
+        .expect("ArrowCloud connection errors remain visible");
+        assert_eq!(blocked.main, tr("Menu", "ArrowCloudDisabled"));
+        assert_eq!(blocked.lines[0], Some(tr("Menu", "HostBlocked")));
+    }
+
+    #[test]
+    fn local_ip_feature_renders_before_groovestats_when_enabled() {
         fn text_index(actors: &[Actor], expected: &str) -> Option<usize> {
             actors.iter().position(|actor| {
-                matches!(actor, Actor::Text { content, .. } if content.as_str() == expected)
+                matches!(actor, Actor::Text { content, .. } if content.as_ref() == expected)
             })
         }
 
@@ -1278,15 +1474,13 @@ mod tests {
         );
         let actors = get_actors(&state, None, 1.0);
         let ip_text = tr_fmt("Menu", "LocalIpAddress", &[("address", "192.168.1.42")]);
-        let gs_text = build_groovestats_text(MainMenuGrooveStatus::default()).main;
+        let groove = build_groovestats_text(MainMenuGrooveStatus::default())
+            .expect("default GrooveStats pane")
+            .main;
 
-        let ip_index = text_index(&actors, &ip_text).expect("local IP text");
-        let gs_index = text_index(&actors, &gs_text).expect("GrooveStats text");
-        assert!(ip_index < gs_index);
-
-        sync_runtime_view(&mut state, MainMenuRuntimeView::default());
-        let actors = get_actors(&state, None, 1.0);
-        assert_eq!(text_index(&actors, &ip_text), None);
+        let ip_index = text_index(&actors, ip_text.as_ref()).expect("local IP text");
+        let groove_index = text_index(&actors, groove.as_ref()).expect("GrooveStats text");
+        assert!(ip_index < groove_index);
     }
 
     #[test]

@@ -1378,12 +1378,17 @@ pub enum MainMenuArrowCloudError {
     CannotConnect,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MainMenuArrowCloudStatus {
-    #[default]
     Pending,
     Connected,
     Error(MainMenuArrowCloudError),
+}
+
+impl Default for MainMenuArrowCloudStatus {
+    fn default() -> Self {
+        Self::Pending
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

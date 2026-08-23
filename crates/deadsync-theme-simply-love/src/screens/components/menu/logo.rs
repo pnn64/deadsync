@@ -82,6 +82,7 @@ pub fn build_logo(
         act!(sprite("logo.png"):
             align(0.5, 0.0):
             xy(center_x, logo_top_y):
+            shadowlength(0.75):
             zoomtoheight(logo_h)
         ),
     ]
@@ -112,5 +113,20 @@ mod tests {
             panic!("expected decorative logo sprite");
         };
         assert_eq!(source.texture_key(), Some("dance.png"));
+    }
+
+    #[test]
+    fn ordinary_title_logo_has_simply_love_shadow() {
+        let logo = build_logo_default(None, GameFlag::Dance);
+        let Actor::Sprite { shadow_len, .. } = &logo[1] else {
+            panic!("expected title logo sprite");
+        };
+        assert_eq!(*shadow_len, [0.75, -0.75]);
+
+        let custom = build_logo_default(Some("srpg10_logo_main.png"), GameFlag::Dance);
+        let Actor::Sprite { shadow_len, .. } = &custom[0] else {
+            panic!("expected custom title logo sprite");
+        };
+        assert_eq!(*shadow_len, [0.0, 0.0]);
     }
 }

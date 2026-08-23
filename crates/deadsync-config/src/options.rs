@@ -2692,7 +2692,6 @@ mod tests {
             GrooveStatsQrLoginWhen::Disabled
         );
         assert!(loaded.separate_unlocks_by_player);
-        assert!(loaded.show_local_ip);
         assert!(!loaded.mine_hit_sound);
         assert_eq!(loaded.show_stats_mode, SHOW_STATS_MODE_MAX);
         assert_eq!(loaded.frame_stats_overlay_anchor, "bottom-center");
@@ -2715,6 +2714,7 @@ mod tests {
         assert!(loaded.high_dpi);
         assert!(!loaded.hide_mouse_cursor);
         assert!(loaded.allow_shutdown_host);
+        assert!(loaded.show_local_ip);
         assert!(loaded.smx_input);
         assert!(loaded.smx_manages_pad_config);
         assert!(loaded.smx_panel_lights);
