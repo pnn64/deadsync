@@ -69,7 +69,7 @@ impl Driver {
         }
         self.last_open_attempt = Some(now);
         let port_path = platform_port_path(&self.port);
-        match OpenOptions::new().write(true).open(port_path.as_ref()) {
+        match serial_open_options().open(port_path.as_ref()) {
             Ok(file) => {
                 if let Err(e) = configure_serial(&file) {
                     if !self.warned_missing {
@@ -97,6 +97,20 @@ impl Driver {
     fn drop_file(&mut self) {
         self.file = None;
     }
+}
+
+fn serial_open_options() -> OpenOptions {
+    let mut options = OpenOptions::new();
+    options.write(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        // Windows communications resources require exclusive access, matching
+        // ITGmania's CreateFile call with dwShareMode = 0.
+        options.share_mode(0);
+    }
+    options
 }
 
 #[cfg(windows)]
@@ -248,6 +262,32 @@ fn configure_serial(_file: &File) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_serial_open_is_exclusive() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after the Unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "deadsync-lights-serial-open-{}-{nonce}.tmp",
+            std::process::id()
+        ));
+        let mut first_options = serial_open_options();
+        let first = first_options
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .expect("exclusive test file should open");
+
+        assert!(OpenOptions::new().read(true).open(&path).is_err());
+
+        drop(first);
+        std::fs::remove_file(path).expect("exclusive test file should be removable after close");
+    }
 
     #[test]
     fn report_uses_sextet_stream_order() {
