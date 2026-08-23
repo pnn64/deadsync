@@ -10313,18 +10313,30 @@ mod tests {
     }
 
     #[test]
-    fn collect_active_autoplay_roll_columns_filters_live_rolls() {
+    fn active_roll_mask_tracks_hold_slot_mutations() {
+        let mut state = GameplayHoldRuntimeState::new(4, 4);
+        state.set_active_hold(2, Some(active_roll_for_autoplay(2_000)));
+        state.set_active_hold(1, Some(active_hold_for_autoplay(2_000)));
         let mut let_go_roll = active_roll_for_autoplay(2_000);
         let_go_roll.let_go = true;
-        let active_holds = vec![
-            Some(active_roll_for_autoplay(2_000)),
-            Some(active_hold_for_autoplay(2_000)),
-            Some(let_go_roll),
-            Some(active_roll_for_autoplay(2_000)),
-        ];
+        state.set_active_hold(3, Some(let_go_roll));
+
+        assert_eq!(state.active_hold_mask(), 0b1110);
+        assert_eq!(state.active_roll_mask(), 0b0100);
+
+        state.set_active_hold_mask(0b1010);
+        assert_eq!(state.active_roll_mask(), 0);
+        state.set_active_hold(0, Some(active_roll_for_autoplay(2_000)));
+        state.clear_active_holds();
+        assert_eq!(state.active_hold_mask(), 0);
+        assert_eq!(state.active_roll_mask(), 0);
+    }
+
+    #[test]
+    fn collect_active_autoplay_roll_columns_filters_live_rolls() {
         let mut columns = [usize::MAX; MAX_COLS];
 
-        let count = collect_active_autoplay_roll_columns(&active_holds, 4, &mut columns);
+        let count = collect_active_autoplay_roll_columns_indexed(0b1001, 4, &mut columns);
 
         assert_eq!(count, 2);
         assert_eq!(&columns[..count], &[0, 3]);
@@ -10332,23 +10344,70 @@ mod tests {
 
     #[test]
     fn collect_active_autoplay_roll_columns_respects_bounds() {
-        let active_holds = vec![
-            Some(active_roll_for_autoplay(2_000)),
-            Some(active_roll_for_autoplay(2_000)),
-            Some(active_roll_for_autoplay(2_000)),
-        ];
-        let mut columns = [usize::MAX; 1];
+        let mut columns = [usize::MAX; MAX_COLS];
 
-        let count = collect_active_autoplay_roll_columns(&active_holds, 3, &mut columns);
+        let count = collect_active_autoplay_roll_columns_indexed(0b111, 3, &mut columns);
 
-        assert_eq!(count, 1);
-        assert_eq!(columns, [0]);
+        assert_eq!(count, 3);
+        assert_eq!(&columns[..count], &[0, 1, 2]);
 
         let mut columns = [usize::MAX; MAX_COLS];
-        let count = collect_active_autoplay_roll_columns(&active_holds, 2, &mut columns);
+        let count = collect_active_autoplay_roll_columns_indexed(0b111, 2, &mut columns);
 
         assert_eq!(count, 2);
         assert_eq!(&columns[..count], &[0, 1]);
+    }
+
+    #[test]
+    fn indexed_autoplay_roll_columns_match_full_scan_for_every_lane_set() {
+        for present in 0..=input_lane_mask(MAX_COLS) {
+            let active_holds: [Option<ActiveHold>; MAX_COLS] =
+                std::array::from_fn(|column| {
+                    if present & input_lane_bit(column) == 0 {
+                        return None;
+                    }
+                    let mut active = if column % 3 == 0 {
+                        active_hold_for_autoplay(2_000)
+                    } else {
+                        active_roll_for_autoplay(2_000)
+                    };
+                    active.let_go = column % 4 == 0;
+                    Some(active)
+                });
+            let active_roll_mask =
+                active_holds
+                    .iter()
+                    .enumerate()
+                    .fold(0, |mask, (column, active)| {
+                        if active.as_ref().is_some_and(|active| {
+                            matches!(active.note_type, NoteType::Roll) && !active.let_go
+                        }) {
+                            mask | input_lane_bit(column)
+                        } else {
+                            mask
+                        }
+                    });
+            for num_cols in [0, 1, 4, MAX_COLS, MAX_COLS + 1] {
+                let mut expected = [usize::MAX; MAX_COLS];
+                let mut actual = [usize::MAX; MAX_COLS];
+                let expected_count = collect_active_autoplay_roll_columns_reference(
+                    &active_holds,
+                    num_cols,
+                    &mut expected,
+                );
+                let actual_count = collect_active_autoplay_roll_columns_indexed(
+                    active_roll_mask,
+                    num_cols,
+                    &mut actual,
+                );
+                assert_eq!(actual_count, expected_count);
+                assert_eq!(
+                    &actual[..actual_count],
+                    &expected[..expected_count],
+                    "present={present:#05x}, cols={num_cols}"
+                );
+            }
+        }
     }
 
     #[test]

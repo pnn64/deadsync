@@ -293,6 +293,12 @@ pub struct GameplayChartRuntimeState {
 pub struct GameplayHoldRuntimeState {
     active_holds: [Option<ActiveHold>; MAX_COLS],
     active_hold_mask: LaneMask,
+    /// Game-thread-only, song-lifetime exact index of live roll slots.
+    ///
+    /// Hold mutation points update this fixed ten-bit value synchronously. It
+    /// has no misses, growth, eviction, pruning, heap storage, or destruction;
+    /// frame work is bounded to one mask operation plus at most ten lanes.
+    active_roll_mask: LaneMask,
     pub decaying_hold_indices: Vec<usize>,
     pub hold_decay_active: Vec<bool>,
     pub tap_miss_held_at_note: Vec<bool>,
@@ -325,6 +331,7 @@ impl GameplayHoldRuntimeState {
         Self {
             active_holds: std::array::from_fn(|_| None),
             active_hold_mask: 0,
+            active_roll_mask: 0,
             decaying_hold_indices: Vec::with_capacity(decaying_hold_capacity),
             hold_decay_active: vec![false; notes_len],
             tap_miss_held_at_note: vec![false; notes_len],
@@ -343,6 +350,7 @@ impl GameplayHoldRuntimeState {
     pub fn reset_live_state(&mut self) {
         self.active_holds.fill(None);
         self.active_hold_mask = 0;
+        self.active_roll_mask = 0;
         self.decaying_hold_indices.clear();
         self.hold_decay_active.fill(false);
         self.tap_miss_held_at_note.fill(false);
@@ -359,6 +367,7 @@ impl GameplayHoldRuntimeState {
     pub fn clear_for_test(&mut self) {
         self.active_holds.fill(None);
         self.active_hold_mask = 0;
+        self.active_roll_mask = 0;
         self.decaying_hold_indices.clear();
         self.hold_decay_active.clear();
         self.tap_miss_held_at_note.clear();
@@ -385,8 +394,14 @@ impl GameplayHoldRuntimeState {
     }
 
     #[inline(always)]
+    pub fn active_roll_mask(&self) -> LaneMask {
+        self.active_roll_mask
+    }
+
+    #[inline(always)]
     pub fn set_active_hold_mask(&mut self, mask: LaneMask) {
         self.active_hold_mask = mask;
+        self.active_roll_mask &= mask;
     }
 
     #[inline(always)]
@@ -395,20 +410,31 @@ impl GameplayHoldRuntimeState {
             return;
         };
         let present = active.is_some();
+        let active_roll = active
+            .as_ref()
+            .is_some_and(|active| matches!(active.note_type, NoteType::Roll) && !active.let_go);
         *slot = active;
         set_feedback_bit(&mut self.active_hold_mask, col, present);
+        set_feedback_bit(&mut self.active_roll_mask, col, active_roll);
     }
 
     #[inline(always)]
     pub fn sync_active_hold_col(&mut self, col: usize) {
         let present = self.active_holds.get(col).is_some_and(Option::is_some);
+        let active_roll = self.active_holds.get(col).is_some_and(|active| {
+            active
+                .as_ref()
+                .is_some_and(|active| matches!(active.note_type, NoteType::Roll) && !active.let_go)
+        });
         set_feedback_bit(&mut self.active_hold_mask, col, present);
+        set_feedback_bit(&mut self.active_roll_mask, col, active_roll);
     }
 
     #[inline(always)]
     pub fn clear_active_holds(&mut self) {
         self.active_holds.fill(None);
         self.active_hold_mask = 0;
+        self.active_roll_mask = 0;
     }
 }
 

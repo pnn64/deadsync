@@ -1153,7 +1153,6 @@ pub fn advance_pump_active_hold_to_time(
     if final_time_ns <= from_time_ns || active.let_go {
         return;
     }
-
     let body_from_ns = from_time_ns.max(active.start_time_ns);
     let body_to_ns = final_time_ns.max(active.start_time_ns);
     if body_to_ns > body_from_ns {
@@ -1773,7 +1772,9 @@ pub fn collect_next_autoplay_row_events(
     }
 }
 
-pub fn collect_active_autoplay_roll_columns(
+#[cfg(any(test, feature = "bench-support"))]
+#[inline(always)]
+fn collect_active_autoplay_roll_columns_full(
     active_holds: &[Option<ActiveHold>],
     num_cols: usize,
     columns: &mut [usize],
@@ -1793,6 +1794,50 @@ pub fn collect_active_autoplay_roll_columns(
         }
     }
     count
+}
+
+/// Collects active autoplay rolls into caller-owned fixed storage.
+///
+/// The game thread maintains the exact roll mask at hold mutation points, so
+/// this frame path touches only live rolls in ascending column order. The mask
+/// and output are fixed inline storage; there is no allocation,
+/// synchronization, pruning, or destruction.
+#[inline]
+pub fn collect_active_autoplay_roll_columns_indexed(
+    active_roll_mask: LaneMask,
+    num_cols: usize,
+    columns: &mut [usize; MAX_COLS],
+) -> usize {
+    let cols = num_cols.min(MAX_COLS);
+    let mut pending = active_roll_mask & input_lane_mask(cols);
+    let mut count = 0usize;
+    if pending.count_ones() as usize > cols / 2 {
+        for column in 0..cols {
+            if pending & input_lane_bit(column) != 0 {
+                columns[count] = column;
+                count += 1;
+            }
+        }
+        return count;
+    }
+    while pending != 0 {
+        let column = pending.trailing_zeros() as usize;
+        columns[count] = column;
+        count += 1;
+        pending &= pending - 1;
+    }
+    count
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[inline]
+pub fn collect_active_autoplay_roll_columns_reference(
+    active_holds: &[Option<ActiveHold>],
+    num_cols: usize,
+    columns: &mut [usize],
+) -> usize {
+    collect_active_autoplay_roll_columns_full(active_holds, num_cols, columns)
 }
 
 #[inline(always)]

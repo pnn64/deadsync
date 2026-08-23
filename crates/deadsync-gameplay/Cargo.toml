@@ -81,6 +81,11 @@ name = "receptor_feedback_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "active_hold_lane_index_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }

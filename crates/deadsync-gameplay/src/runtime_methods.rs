@@ -775,7 +775,9 @@ where
             return;
         }
         if self.setup.session.play_style.is_pump() {
-            self.update_pump_active_holds(inputs, current_time_ns);
+            for column in 0..self.setup.num_cols.min(MAX_COLS) {
+                self.update_pump_active_hold(column, inputs[column], current_time_ns);
+            }
             return;
         }
         let timing_players: [&_; MAX_PLAYERS] =
@@ -804,42 +806,50 @@ where
         }
     }
 
+    fn update_pump_active_hold(
+        &mut self,
+        column: usize,
+        lane_pressed: bool,
+        target_time_ns: SongTimeNs,
+    ) {
+        let live_autoplay = self.live_autoplay_enabled();
+        let rate = self.music_rate();
+        let Some(active) = self.hold_runtime.active_holds[column].as_mut() else {
+            return;
+        };
+        active.is_pressed = active_hold_counts_as_pressed(live_autoplay, lane_pressed);
+        let note_index = active.note_index;
+        let Some(note) = self.chart_runtime.notes.get_mut(note_index) else {
+            return;
+        };
+        let Some(hold) = note.hold.as_mut() else {
+            return;
+        };
+        let player = player_index_for_column(
+            self.setup.num_players,
+            self.setup.cols_per_player,
+            column,
+        );
+        advance_pump_active_hold_to_time(
+            active,
+            hold,
+            &self.timing_runtime.timing_players[player],
+            note.row_index,
+            note.beat,
+            target_time_ns,
+            rate,
+        );
+    }
+
     fn advance_pump_holds_for_player(
         &mut self,
         player: usize,
         inputs: &[bool; MAX_COLS],
         target_time_ns: SongTimeNs,
     ) {
-        let live_autoplay = self.live_autoplay_enabled();
-        let rate = self.music_rate();
         let (col_start, col_end) = self.player_col_range(player);
         for column in col_start..col_end.min(MAX_COLS) {
-            let Some(active) = self.hold_runtime.active_holds[column].as_mut() else {
-                continue;
-            };
-            active.is_pressed = active_hold_counts_as_pressed(live_autoplay, inputs[column]);
-            let note_index = active.note_index;
-            let Some(note) = self.chart_runtime.notes.get_mut(note_index) else {
-                continue;
-            };
-            let Some(hold) = note.hold.as_mut() else {
-                continue;
-            };
-            advance_pump_active_hold_to_time(
-                active,
-                hold,
-                &self.timing_runtime.timing_players[player],
-                note.row_index,
-                note.beat,
-                target_time_ns,
-                rate,
-            );
-        }
-    }
-
-    fn update_pump_active_holds(&mut self, inputs: &[bool; MAX_COLS], current_time_ns: SongTimeNs) {
-        for player in 0..self.setup.num_players {
-            self.advance_pump_holds_for_player(player, inputs, current_time_ns);
+            self.update_pump_active_hold(column, inputs[column], target_time_ns);
         }
     }
 
@@ -1811,8 +1821,8 @@ where
         }
 
         let mut roll_cols = [usize::MAX; MAX_COLS];
-        let roll_count = collect_active_autoplay_roll_columns(
-            &self.hold_runtime.active_holds,
+        let roll_count = collect_active_autoplay_roll_columns_indexed(
+            self.hold_runtime.active_roll_mask(),
             self.setup.num_cols,
             &mut roll_cols,
         );
