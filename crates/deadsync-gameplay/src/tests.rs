@@ -2499,6 +2499,74 @@ mod tests {
     }
 
     #[test]
+    fn deadline_window_index_matches_reference_across_boundaries_and_seeks() {
+        let mut persisted = attack_mask_window(2.0, 3.0, parse_attack_mods("40% drunk"));
+        persisted.persist_after_end = true;
+        persisted.sustain_end_second = 8.0;
+        let mut invalid_end = attack_mask_window(1.5, 2.5, parse_attack_mods("25% tipsy"));
+        invalid_end.end_second = f32::NAN;
+        let mut zero_length = attack_mask_window(2.0, 2.5, parse_attack_mods("50% tipsy"));
+        zero_length.end_second = 2.0;
+        zero_length.sustain_end_second = 2.0;
+        let windows = vec![
+            attack_mask_window(5.0, 7.0, parse_attack_mods("stealth")),
+            attack_mask_window(0.0, 4.0, parse_attack_mods("25% reverse")),
+            persisted,
+            attack_mask_window(2.0, 6.0, parse_attack_mods("20% mini")),
+            invalid_end,
+            zero_length,
+            attack_mask_window(9.0, 12.0, parse_attack_mods("dark")),
+        ];
+        let mut reference = ReferenceAttackWindowIndexBench::new(windows.clone());
+        let mut deadline = AttackWindowIndexBench::new(windows.clone());
+
+        for now in [
+            -1.0,
+            0.0,
+            1.5,
+            1.999,
+            2.0,
+            2.5,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            10.0,
+            4.5,
+            2.0,
+            f32::NAN,
+            6.5,
+            f32::INFINITY,
+            0.25,
+        ] {
+            reference.update(now);
+            deadline.update(now);
+            assert_eq!(deadline.active(), reference.active(), "now={now:?}");
+            assert_eq!(deadline.stats(), reference.stats(), "stats now={now:?}");
+            if now.is_finite() {
+                let expected = windows
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, window)| {
+                        attack_window_active(window, now).then_some(index)
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(deadline.active(), expected, "full scan now={now:?}");
+            }
+        }
+
+        for frame in 0..2_000 {
+            let now = frame as f32 / 120.0;
+            reference.update(now);
+            deadline.update(now);
+            assert_eq!(deadline.active(), reference.active(), "frame={frame}");
+            assert_eq!(deadline.stats(), reference.stats(), "stats frame={frame}");
+        }
+    }
+
+    #[test]
     fn indexed_attack_idle_fast_path_preserves_settled_and_residual_state() {
         let masks = [attack_mask_window(
             10.0,

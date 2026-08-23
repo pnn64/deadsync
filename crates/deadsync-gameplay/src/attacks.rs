@@ -4263,16 +4263,185 @@ pub struct GameplayWindowIndexStats {
 
 /// Song-lifetime active-window index for one immutable window sequence.
 ///
-/// The game thread owns and updates it. Setup reserves two index vectors to
-/// the source length, and ordinary forward playback only activates newly
-/// started windows and prunes expired active entries. A backwards seek or a
-/// test-time source replacement rebuilds in O(n), without exceeding reserved
-/// capacity; there are no misses, eviction, synchronization, or gameplay-time
-/// destruction. Storage is released with gameplay state. Stats expose rebuild,
-/// activation, pruning, and high-water counts. Forward-frame work is bounded by
-/// newly crossed windows plus the number of concurrently active windows.
-#[derive(Clone, Debug, Default)]
+/// The game thread owns and updates it. Song setup reserves two index vectors to
+/// the source length; two scalar deadlines then skip activation and expiry work
+/// until a boundary is crossed. Expiry maintenance scans only the bounded active
+/// set. A backwards seek or test-time source replacement rebuilds in O(n),
+/// without exceeding reserved capacity; there are no misses, eviction,
+/// synchronization, or gameplay-time allocation or destruction. Storage is
+/// released with gameplay state. Stats expose rebuild, activation, pruning, and
+/// high-water counts. Forward-frame work is bounded by newly crossed windows
+/// plus the active set on expiry frames, and otherwise remains O(1).
+#[derive(Clone, Debug)]
 struct ActiveWindowIndex {
+    source_ptr: usize,
+    source_len: usize,
+    start_order: Vec<usize>,
+    active: Vec<usize>,
+    next_start: usize,
+    next_start_second: f32,
+    next_expiry_second: f32,
+    last_now: Option<f32>,
+    stats: GameplayWindowIndexStats,
+}
+
+impl Default for ActiveWindowIndex {
+    fn default() -> Self {
+        Self {
+            source_ptr: 0,
+            source_len: 0,
+            start_order: Vec::new(),
+            active: Vec::new(),
+            next_start: 0,
+            next_start_second: f32::INFINITY,
+            next_expiry_second: f32::INFINITY,
+            last_now: None,
+            stats: GameplayWindowIndexStats::default(),
+        }
+    }
+}
+
+impl ActiveWindowIndex {
+    fn new<T>(windows: &[T], start_second: impl Fn(&T) -> f32 + Copy) -> Self {
+        let mut index = Self::default();
+        index.rebuild_source(windows, start_second);
+        index.stats = GameplayWindowIndexStats::default();
+        index
+    }
+
+    fn rebuild_source<T>(&mut self, windows: &[T], start_second: impl Fn(&T) -> f32 + Copy) {
+        self.source_ptr = windows.as_ptr() as usize;
+        self.source_len = windows.len();
+        self.start_order.clear();
+        self.start_order.reserve(windows.len());
+        self.active.clear();
+        self.active.reserve(windows.len());
+        self.start_order.extend(
+            windows
+                .iter()
+                .enumerate()
+                .filter_map(|(index, window)| start_second(window).is_finite().then_some(index)),
+        );
+        self.start_order.sort_unstable_by(|&left, &right| {
+            start_second(&windows[left])
+                .total_cmp(&start_second(&windows[right]))
+                .then(left.cmp(&right))
+        });
+        self.next_start = 0;
+        self.next_start_second = self
+            .start_order
+            .first()
+            .map_or(f32::INFINITY, |&index| start_second(&windows[index]));
+        self.next_expiry_second = f32::INFINITY;
+        self.last_now = None;
+        self.stats.source_rebuilds = self.stats.source_rebuilds.saturating_add(1);
+    }
+
+    fn ensure_source<T>(&mut self, windows: &[T], start_second: impl Fn(&T) -> f32 + Copy) {
+        if self.source_ptr != windows.as_ptr() as usize || self.source_len != windows.len() {
+            self.rebuild_source(windows, start_second);
+        }
+    }
+
+    fn rebuild_time<T>(
+        &mut self,
+        windows: &[T],
+        now: f32,
+        start_second: impl Fn(&T) -> f32 + Copy,
+        expiry_second: impl Fn(&T) -> f32 + Copy,
+        is_active: impl Fn(&T, f32) -> bool + Copy,
+    ) {
+        self.active.clear();
+        if !now.is_finite() {
+            self.next_start = 0;
+        } else {
+            self.next_start = self
+                .start_order
+                .partition_point(|&index| start_second(&windows[index]) <= now);
+            self.active.extend(
+                windows
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, window)| is_active(window, now).then_some(index)),
+            );
+        }
+        self.next_start_second = self.start_order.get(self.next_start).map_or(
+            f32::INFINITY,
+            |&index| start_second(&windows[index]),
+        );
+        self.next_expiry_second = self
+            .active
+            .iter()
+            .map(|&index| expiry_second(&windows[index]))
+            .fold(f32::INFINITY, f32::min);
+        self.last_now = Some(now);
+        self.stats.time_rebuilds = self.stats.time_rebuilds.saturating_add(1);
+        self.stats.max_active = self.stats.max_active.max(self.active.len());
+    }
+
+    fn update<T>(
+        &mut self,
+        windows: &[T],
+        now: f32,
+        start_second: impl Fn(&T) -> f32 + Copy,
+        expiry_second: impl Fn(&T) -> f32 + Copy,
+        is_active: impl Fn(&T, f32) -> bool + Copy,
+    ) {
+        self.ensure_source(windows, start_second);
+        if !now.is_finite()
+            || self
+                .last_now
+                .is_none_or(|last| !last.is_finite() || now < last)
+        {
+            self.rebuild_time(windows, now, start_second, expiry_second, is_active);
+            return;
+        }
+
+        while self.next_start_second <= now {
+            let index = self.start_order[self.next_start];
+            self.next_start += 1;
+            self.next_start_second = self.start_order.get(self.next_start).map_or(
+                f32::INFINITY,
+                |&index| start_second(&windows[index]),
+            );
+            if is_active(&windows[index], now) {
+                if self.active.last().is_none_or(|&last| last < index) {
+                    self.active.push(index);
+                } else {
+                    let insert_at = self.active.binary_search(&index).unwrap_or_else(|at| at);
+                    self.active.insert(insert_at, index);
+                }
+                self.next_expiry_second = self
+                    .next_expiry_second
+                    .min(expiry_second(&windows[index]));
+                self.stats.activations = self.stats.activations.saturating_add(1);
+            }
+        }
+        if self.next_expiry_second <= now {
+            let previous_len = self.active.len();
+            let mut next_expiry_second = f32::INFINITY;
+            self.active.retain(|&index| {
+                let active = is_active(&windows[index], now);
+                if active {
+                    next_expiry_second =
+                        next_expiry_second.min(expiry_second(&windows[index]));
+                }
+                active
+            });
+            self.next_expiry_second = next_expiry_second;
+            self.stats.pruned = self
+                .stats
+                .pruned
+                .saturating_add(previous_len.saturating_sub(self.active.len()) as u64);
+        }
+        self.stats.max_active = self.stats.max_active.max(self.active.len());
+        self.last_now = Some(now);
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[derive(Clone, Debug, Default)]
+struct ReferenceActiveWindowIndex {
     source_ptr: usize,
     source_len: usize,
     start_order: Vec<usize>,
@@ -4282,7 +4451,8 @@ struct ActiveWindowIndex {
     stats: GameplayWindowIndexStats,
 }
 
-impl ActiveWindowIndex {
+#[cfg(any(test, feature = "bench-support"))]
+impl ReferenceActiveWindowIndex {
     fn new<T>(windows: &[T], start_second: impl Fn(&T) -> f32 + Copy) -> Self {
         let mut index = Self::default();
         index.rebuild_source(windows, start_second);
@@ -4384,6 +4554,85 @@ impl ActiveWindowIndex {
     }
 }
 
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct ReferenceAttackWindowIndexBench {
+    windows: Vec<AttackMaskWindow>,
+    index: ReferenceActiveWindowIndex,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ReferenceAttackWindowIndexBench {
+    pub fn new(windows: Vec<AttackMaskWindow>) -> Self {
+        let index = ReferenceActiveWindowIndex::new(&windows, |window| window.start_second);
+        Self { windows, index }
+    }
+
+    #[inline(always)]
+    pub fn update(&mut self, now: f32) {
+        self.index.update(
+            &self.windows,
+            now,
+            |window| window.start_second,
+            attack_window_active,
+        );
+    }
+
+    #[inline(always)]
+    pub fn active(&self) -> &[usize] {
+        &self.index.active
+    }
+
+    #[inline(always)]
+    pub const fn stats(&self) -> GameplayWindowIndexStats {
+        self.index.stats
+    }
+
+    pub const fn index_storage_bytes() -> usize {
+        std::mem::size_of::<ReferenceActiveWindowIndex>()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct AttackWindowIndexBench {
+    windows: Vec<AttackMaskWindow>,
+    index: ActiveWindowIndex,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl AttackWindowIndexBench {
+    pub fn new(windows: Vec<AttackMaskWindow>) -> Self {
+        let index = ActiveWindowIndex::new(&windows, |window| window.start_second);
+        Self { windows, index }
+    }
+
+    #[inline(always)]
+    pub fn update(&mut self, now: f32) {
+        self.index.update(
+            &self.windows,
+            now,
+            |window| window.start_second,
+            attack_window_expiry,
+            attack_window_active,
+        );
+    }
+
+    #[inline(always)]
+    pub fn active(&self) -> &[usize] {
+        &self.index.active
+    }
+
+    #[inline(always)]
+    pub const fn stats(&self) -> GameplayWindowIndexStats {
+        self.index.stats
+    }
+
+    pub const fn index_storage_bytes() -> usize {
+        std::mem::size_of::<ActiveWindowIndex>()
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 struct GameplayPlayerWindowIndex {
     masks: ActiveWindowIndex,
@@ -4398,8 +4647,22 @@ fn attack_window_active(window: &AttackMaskWindow, now: f32) -> bool {
 }
 
 #[inline(always)]
+fn attack_window_expiry(window: &AttackMaskWindow) -> f32 {
+    if window.persist_after_end {
+        window.sustain_end_second
+    } else {
+        window.sustain_end_second.min(window.end_second)
+    }
+}
+
+#[inline(always)]
 fn ease_window_active(window: &SongLuaEaseMaskWindow, now: f32) -> bool {
     now >= window.start_second && now < window.sustain_end_second
+}
+
+#[inline(always)]
+fn ease_window_expiry(window: &SongLuaEaseMaskWindow) -> f32 {
+    window.sustain_end_second
 }
 
 impl Default for GameplayAttackRuntimeState {
@@ -4454,12 +4717,14 @@ impl GameplayAttackRuntimeState {
             &self.mask_windows[player],
             now,
             |window| window.start_second,
+            attack_window_expiry,
             attack_window_active,
         );
         indices.eases.update(
             &self.song_lua_ease_windows[player],
             now,
             |window| window.start_second,
+            ease_window_expiry,
             ease_window_active,
         );
     }
