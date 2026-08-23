@@ -2365,12 +2365,7 @@ where
 
     #[inline(always)]
     pub fn receptor_glow_press_timer(&self, col: usize) -> f32 {
-        self.display
-            .receptor_feedback
-            .glow_press_timers
-            .get(col)
-            .copied()
-            .unwrap_or(0.0)
+        self.display.receptor_feedback.glow_press_timer(col)
     }
 
     #[inline(always)]

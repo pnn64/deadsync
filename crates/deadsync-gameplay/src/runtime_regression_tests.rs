@@ -4002,9 +4002,7 @@ mod runtime_regression_tests {
         state.trigger_receptor_step_pulse(0);
         let supports_press_tween =
             state.display.receptor_feedback.glow_press_timers[0] > f32::EPSILON;
-        state.display.receptor_feedback.glow_press_timers.fill(0.0);
-        state.display.receptor_feedback.glow_lift_timers.fill(0.0);
-        state.display.receptor_feedback.bop_timers.fill(0.0);
+        state.display.receptor_feedback.clear_timers_for_test();
         set_single_judged_tap(&mut state, column, row_index, JudgeGrade::Great, 0.0);
         state.mods.song_lua_visuals.note_hides[0] = SongLuaNoteHideWindows::new(vec![
             SongLuaNoteHideWindowRuntime {

@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameplayTween {
     Linear,
     Accelerate,
@@ -527,15 +527,33 @@ pub struct GameplayReceptorGlowTimers {
     pub lift_start_zoom: f32,
 }
 
+/// Game-thread receptor animation timers with bounded active-lane indexes.
+///
+/// The gameplay state owns this song-lifetime storage without synchronization.
+/// Timer arrays are fixed at `MAX_COLS`; setters maintain two inline lane masks,
+/// so an idle frame performs no array traversal and a sparse active frame visits
+/// the union of glow and bop lanes once. Above half occupancy, a packed 63-frame
+/// cleanup countdown selects sequential scans because they benchmark faster than
+/// bit iteration; cleanup then rebuilds the masks and returns sparse state to the
+/// indexed path. There is no allocation, growth, miss, eviction, pruning, or
+/// destruction path during gameplay. Work is bounded to two `MAX_COLS` scans.
 #[derive(Clone, Debug)]
 pub struct GameplayReceptorFeedbackState {
-    pub glow_lift_timers: [f32; MAX_COLS],
-    pub glow_press_timers: [f32; MAX_COLS],
-    pub glow_lift_start_alpha: [f32; MAX_COLS],
-    pub glow_lift_start_zoom: [f32; MAX_COLS],
-    pub bop_timers: [f32; MAX_COLS],
-    pub bop_behaviors: [GameplayReceptorStepBehavior; MAX_COLS],
+    glow_lift_timers: [f32; MAX_COLS],
+    glow_press_timers: [f32; MAX_COLS],
+    glow_lift_start_alpha: [f32; MAX_COLS],
+    glow_lift_start_zoom: [f32; MAX_COLS],
+    bop_timers: [f32; MAX_COLS],
+    bop_behaviors: [GameplayReceptorStepBehavior; MAX_COLS],
+    glow_active: LaneMask,
+    bop_active: LaneMask,
 }
+
+const RECEPTOR_FEEDBACK_LANES: LaneMask = input_lane_mask(MAX_COLS);
+const RECEPTOR_DENSE_CLEANUP_FRAMES: LaneMask = 63;
+const RECEPTOR_DENSE_CLEANUP_MASK: LaneMask =
+    RECEPTOR_DENSE_CLEANUP_FRAMES << MAX_COLS;
+const RECEPTOR_DENSE_CLEANUP_STEP: LaneMask = 1 << MAX_COLS;
 
 impl Default for GameplayReceptorFeedbackState {
     fn default() -> Self {
@@ -546,17 +564,63 @@ impl Default for GameplayReceptorFeedbackState {
             glow_lift_start_zoom: [1.0; MAX_COLS],
             bop_timers: [0.0; MAX_COLS],
             bop_behaviors: [GameplayReceptorStepBehavior::identity(); MAX_COLS],
+            glow_active: 0,
+            bop_active: 0,
         }
     }
 }
 
 impl GameplayReceptorFeedbackState {
     #[inline(always)]
+    const fn glow_active_lanes(&self) -> LaneMask {
+        self.glow_active & RECEPTOR_FEEDBACK_LANES
+    }
+
+    #[inline(always)]
+    fn set_dense_cleanup_frames(&mut self, frames: LaneMask) {
+        self.glow_active = (self.glow_active & !RECEPTOR_DENSE_CLEANUP_MASK)
+            | ((frames << MAX_COLS) & RECEPTOR_DENSE_CLEANUP_MASK);
+    }
+
+    #[inline(always)]
+    const fn dense_mode(&self) -> bool {
+        self.glow_active & RECEPTOR_DENSE_CLEANUP_MASK != 0
+    }
+
+    #[inline(always)]
+    fn enter_dense_mode(&mut self) {
+        if (self.glow_active_lanes() | self.bop_active).count_ones() as usize > MAX_COLS / 2 {
+            self.set_dense_cleanup_frames(RECEPTOR_DENSE_CLEANUP_FRAMES);
+        }
+    }
+
+    fn rebuild_active_lanes(&mut self) {
+        self.glow_active = 0;
+        self.bop_active = 0;
+        for col in 0..MAX_COLS {
+            set_feedback_bit(
+                &mut self.glow_active,
+                col,
+                glow_timers_active(self.glow_press_timers[col], self.glow_lift_timers[col]),
+            );
+            set_feedback_bit(
+                &mut self.bop_active,
+                col,
+                self.bop_timers[col] > 0.0,
+            );
+        }
+        if (self.glow_active_lanes() | self.bop_active).count_ones() as usize > MAX_COLS / 2 {
+            self.set_dense_cleanup_frames(RECEPTOR_DENSE_CLEANUP_FRAMES);
+        }
+    }
+
+    #[inline(always)]
     pub fn reset_for_autoplay(&mut self) {
         self.glow_lift_timers.fill(0.0);
         self.glow_press_timers.fill(0.0);
         self.glow_lift_start_alpha.fill(0.0);
         self.glow_lift_start_zoom.fill(1.0);
+        self.glow_active = 0;
     }
 
     #[inline(always)]
@@ -568,6 +632,8 @@ impl GameplayReceptorFeedbackState {
         self.bop_timers.fill(0.0);
         self.bop_behaviors
             .fill(GameplayReceptorStepBehavior::identity());
+        self.glow_active = 0;
+        self.bop_active = 0;
     }
 
     #[inline(always)]
@@ -579,6 +645,12 @@ impl GameplayReceptorFeedbackState {
         self.glow_lift_timers[col] = timers.lift_timer;
         self.glow_lift_start_alpha[col] = timers.lift_start_alpha;
         self.glow_lift_start_zoom[col] = timers.lift_start_zoom;
+        set_feedback_bit(
+            &mut self.glow_active,
+            col,
+            glow_timers_active(timers.press_timer, timers.lift_timer),
+        );
+        self.enter_dense_mode();
     }
 
     #[inline(always)]
@@ -586,6 +658,8 @@ impl GameplayReceptorFeedbackState {
         if col < MAX_COLS && (behavior.duration > f32::EPSILON || behavior.interrupts) {
             self.bop_behaviors[col] = behavior;
             self.bop_timers[col] = behavior.duration.max(0.0);
+            set_feedback_bit(&mut self.bop_active, col, self.bop_timers[col] > 0.0);
+            self.enter_dense_mode();
         }
     }
 
@@ -593,7 +667,17 @@ impl GameplayReceptorFeedbackState {
     pub fn clear_lift_glow(&mut self, col: usize) {
         if let Some(timer) = self.glow_lift_timers.get_mut(col) {
             *timer = 0.0;
+            set_feedback_bit(
+                &mut self.glow_active,
+                col,
+                glow_timers_active(self.glow_press_timers[col], *timer),
+            );
         }
+    }
+
+    #[inline(always)]
+    pub fn glow_press_timer(&self, col: usize) -> f32 {
+        self.glow_press_timers.get(col).copied().unwrap_or(0.0)
     }
 
     #[inline(always)]
@@ -629,10 +713,187 @@ impl GameplayReceptorFeedbackState {
     pub fn set_bop_timer_for_test(&mut self, col: usize, timer: f32) {
         if let Some(slot) = self.bop_timers.get_mut(col) {
             *slot = timer;
+            set_feedback_bit(&mut self.bop_active, col, timer > 0.0);
+            self.enter_dense_mode();
         }
     }
 
+    #[cfg(test)]
+    fn clear_timers_for_test(&mut self) {
+        self.glow_lift_timers.fill(0.0);
+        self.glow_press_timers.fill(0.0);
+        self.bop_timers.fill(0.0);
+        self.glow_active = 0;
+        self.bop_active = 0;
+    }
+
+    #[inline]
     pub fn tick(
+        &mut self,
+        noteskin_effects: &GameplayNoteskinEffects,
+        num_cols: usize,
+        num_players: usize,
+        cols_per_player: usize,
+        input_lane_counts: &[u16; MAX_COLS],
+        delta_time: f32,
+    ) {
+        if self.dense_mode() {
+            if num_cols >= MAX_COLS {
+                tick_full_receptor_glow_columns(
+                    noteskin_effects,
+                    num_players,
+                    cols_per_player,
+                    input_lane_counts,
+                    &mut self.glow_press_timers,
+                    &mut self.glow_lift_timers,
+                    &mut self.glow_lift_start_alpha,
+                    &mut self.glow_lift_start_zoom,
+                    delta_time,
+                );
+            } else {
+                tick_receptor_glow_columns(
+                    noteskin_effects,
+                    num_cols,
+                    num_players,
+                    cols_per_player,
+                    input_lane_counts,
+                    &mut self.glow_press_timers,
+                    &mut self.glow_lift_timers,
+                    &mut self.glow_lift_start_alpha,
+                    &mut self.glow_lift_start_zoom,
+                    delta_time,
+                );
+            }
+            for timer in &mut self.bop_timers {
+                tick_positive_timer(timer, delta_time);
+            }
+            self.glow_active -= RECEPTOR_DENSE_CLEANUP_STEP;
+            if !self.dense_mode() {
+                self.rebuild_active_lanes();
+            }
+            return;
+        }
+        let glow_col_count = num_cols.min(MAX_COLS);
+        let mut active =
+            (self.glow_active_lanes() & input_lane_mask(glow_col_count)) | self.bop_active;
+        while active != 0 {
+            let col = active.trailing_zeros() as usize;
+            let bit = input_lane_bit(col);
+            if self.glow_active_lanes() & bit != 0 && col < glow_col_count {
+                let player = player_index_for_column(num_players, cols_per_player, col);
+                let timers = tick_receptor_glow_timers(
+                    noteskin_effects.receptor_glow_behavior_for_player(player),
+                    GameplayReceptorGlowTimers {
+                        press_timer: self.glow_press_timers[col],
+                        lift_timer: self.glow_lift_timers[col],
+                        lift_start_alpha: self.glow_lift_start_alpha[col],
+                        lift_start_zoom: self.glow_lift_start_zoom[col],
+                    },
+                    input_lane_counts[col] != 0,
+                    delta_time,
+                );
+                self.glow_press_timers[col] = timers.press_timer;
+                self.glow_lift_timers[col] = timers.lift_timer;
+                self.glow_lift_start_alpha[col] = timers.lift_start_alpha;
+                self.glow_lift_start_zoom[col] = timers.lift_start_zoom;
+                if !glow_timers_active(timers.press_timer, timers.lift_timer) {
+                    self.glow_active &= !bit;
+                }
+            }
+            if self.bop_active & bit != 0 {
+                tick_positive_timer(&mut self.bop_timers[col], delta_time);
+                if self.bop_timers[col] <= 0.0 {
+                    self.bop_active &= !bit;
+                }
+            }
+            active &= active - 1;
+        }
+    }
+}
+
+#[inline(always)]
+const fn glow_timers_active(press_timer: f32, lift_timer: f32) -> bool {
+    press_timer.to_bits() != 0 || lift_timer.to_bits() != 0
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[derive(Clone, Debug)]
+struct ReferenceGameplayReceptorFeedbackState {
+    glow_lift_timers: [f32; MAX_COLS],
+    glow_press_timers: [f32; MAX_COLS],
+    glow_lift_start_alpha: [f32; MAX_COLS],
+    glow_lift_start_zoom: [f32; MAX_COLS],
+    bop_timers: [f32; MAX_COLS],
+    bop_behaviors: [GameplayReceptorStepBehavior; MAX_COLS],
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for ReferenceGameplayReceptorFeedbackState {
+    fn default() -> Self {
+        Self {
+            glow_lift_timers: [0.0; MAX_COLS],
+            glow_press_timers: [0.0; MAX_COLS],
+            glow_lift_start_alpha: [0.0; MAX_COLS],
+            glow_lift_start_zoom: [1.0; MAX_COLS],
+            bop_timers: [0.0; MAX_COLS],
+            bop_behaviors: [GameplayReceptorStepBehavior::identity(); MAX_COLS],
+        }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ReferenceGameplayReceptorFeedbackState {
+    #[cfg(test)]
+    fn reset_for_autoplay(&mut self) {
+        self.glow_lift_timers.fill(0.0);
+        self.glow_press_timers.fill(0.0);
+        self.glow_lift_start_alpha.fill(0.0);
+        self.glow_lift_start_zoom.fill(1.0);
+    }
+
+    #[cfg(test)]
+    fn reset_for_practice(&mut self) {
+        self.glow_lift_timers.fill(0.0);
+        self.glow_press_timers.fill(0.0);
+        self.glow_lift_start_alpha.fill(0.0);
+        self.glow_lift_start_zoom.fill(0.0);
+        self.bop_timers.fill(0.0);
+        self.bop_behaviors
+            .fill(GameplayReceptorStepBehavior::identity());
+    }
+
+    fn set_glow_timers(&mut self, col: usize, timers: GameplayReceptorGlowTimers) {
+        if col >= MAX_COLS {
+            return;
+        }
+        self.glow_press_timers[col] = timers.press_timer;
+        self.glow_lift_timers[col] = timers.lift_timer;
+        self.glow_lift_start_alpha[col] = timers.lift_start_alpha;
+        self.glow_lift_start_zoom[col] = timers.lift_start_zoom;
+    }
+
+    fn start_bop(&mut self, col: usize, behavior: GameplayReceptorStepBehavior) {
+        if col < MAX_COLS && (behavior.duration > f32::EPSILON || behavior.interrupts) {
+            self.bop_behaviors[col] = behavior;
+            self.bop_timers[col] = behavior.duration.max(0.0);
+        }
+    }
+
+    #[cfg(test)]
+    fn clear_lift_glow(&mut self, col: usize) {
+        if let Some(timer) = self.glow_lift_timers.get_mut(col) {
+            *timer = 0.0;
+        }
+    }
+
+    #[cfg(test)]
+    fn set_bop_timer_for_test(&mut self, col: usize, timer: f32) {
+        if let Some(slot) = self.bop_timers.get_mut(col) {
+            *slot = timer;
+        }
+    }
+
+    fn tick(
         &mut self,
         noteskin_effects: &GameplayNoteskinEffects,
         num_cols: usize,
@@ -656,6 +917,214 @@ impl GameplayReceptorFeedbackState {
         for timer in &mut self.bop_timers {
             tick_positive_timer(timer, delta_time);
         }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn receptor_feedback_checksum(
+    press: &[f32; MAX_COLS],
+    lift: &[f32; MAX_COLS],
+    lift_alpha: &[f32; MAX_COLS],
+    lift_zoom: &[f32; MAX_COLS],
+    bop: &[f32; MAX_COLS],
+    behaviors: &[GameplayReceptorStepBehavior; MAX_COLS],
+) -> u64 {
+    let mut checksum = 0x9E37_79B9_7F4A_7C15_u64;
+    for col in 0..MAX_COLS {
+        for bits in [
+            press[col].to_bits(),
+            lift[col].to_bits(),
+            lift_alpha[col].to_bits(),
+            lift_zoom[col].to_bits(),
+            bop[col].to_bits(),
+            behaviors[col].duration.to_bits(),
+            behaviors[col].zoom_start.to_bits(),
+            behaviors[col].zoom_end.to_bits(),
+        ] {
+            checksum ^= u64::from(bits);
+            checksum = checksum.rotate_left(11).wrapping_mul(0x9E37_79B1);
+        }
+    }
+    checksum
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct ReferenceReceptorFeedbackBenchmark {
+    state: ReferenceGameplayReceptorFeedbackState,
+    effects: GameplayNoteskinEffects,
+    input_lane_counts: [u16; MAX_COLS],
+    num_cols: usize,
+    num_players: usize,
+    cols_per_player: usize,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ReferenceReceptorFeedbackBenchmark {
+    pub fn new(num_cols: usize, num_players: usize, cols_per_player: usize) -> Self {
+        Self {
+            state: ReferenceGameplayReceptorFeedbackState::default(),
+            effects: GameplayNoteskinEffects::default(),
+            input_lane_counts: [0; MAX_COLS],
+            num_cols,
+            num_players,
+            cols_per_player,
+        }
+    }
+
+    #[inline(always)]
+    pub fn pulse(&mut self, col: usize, press: f32, lift: f32, bop: f32) {
+        self.state.set_glow_timers(
+            col,
+            GameplayReceptorGlowTimers {
+                press_timer: press,
+                lift_timer: lift,
+                lift_start_alpha: 0.75,
+                lift_start_zoom: 1.25,
+            },
+        );
+        self.state.start_bop(
+            col,
+            GameplayReceptorStepBehavior {
+                duration: bop,
+                zoom_start: 0.75,
+                zoom_end: 1.0,
+                tween: GameplayTween::Decelerate,
+                interrupts: true,
+            },
+        );
+    }
+
+    #[inline(always)]
+    pub fn set_pressed(&mut self, col: usize, pressed: bool) {
+        if let Some(count) = self.input_lane_counts.get_mut(col) {
+            *count = u16::from(pressed);
+        }
+    }
+
+    #[inline(never)]
+    pub fn tick(&mut self, delta_time: f32) {
+        self.state.tick(
+            &self.effects,
+            self.num_cols,
+            self.num_players,
+            self.cols_per_player,
+            &self.input_lane_counts,
+            delta_time,
+        );
+    }
+
+    #[inline(always)]
+    pub fn checksum(&self) -> u64 {
+        receptor_feedback_checksum(
+            &self.state.glow_press_timers,
+            &self.state.glow_lift_timers,
+            &self.state.glow_lift_start_alpha,
+            &self.state.glow_lift_start_zoom,
+            &self.state.bop_timers,
+            &self.state.bop_behaviors,
+        )
+    }
+
+    #[inline(always)]
+    pub fn probe(&self) -> u64 {
+        u64::from(self.state.glow_press_timers[0].to_bits())
+            ^ u64::from(self.state.glow_lift_timers[MAX_COLS / 2].to_bits()).rotate_left(21)
+            ^ u64::from(self.state.bop_timers[MAX_COLS - 1].to_bits()).rotate_left(43)
+    }
+
+    pub const fn state_bytes() -> usize {
+        std::mem::size_of::<ReferenceGameplayReceptorFeedbackState>()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct ReceptorFeedbackBenchmark {
+    state: GameplayReceptorFeedbackState,
+    effects: GameplayNoteskinEffects,
+    input_lane_counts: [u16; MAX_COLS],
+    num_cols: usize,
+    num_players: usize,
+    cols_per_player: usize,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ReceptorFeedbackBenchmark {
+    pub fn new(num_cols: usize, num_players: usize, cols_per_player: usize) -> Self {
+        Self {
+            state: GameplayReceptorFeedbackState::default(),
+            effects: GameplayNoteskinEffects::default(),
+            input_lane_counts: [0; MAX_COLS],
+            num_cols,
+            num_players,
+            cols_per_player,
+        }
+    }
+
+    #[inline(always)]
+    pub fn pulse(&mut self, col: usize, press: f32, lift: f32, bop: f32) {
+        self.state.set_glow_timers(
+            col,
+            GameplayReceptorGlowTimers {
+                press_timer: press,
+                lift_timer: lift,
+                lift_start_alpha: 0.75,
+                lift_start_zoom: 1.25,
+            },
+        );
+        self.state.start_bop(
+            col,
+            GameplayReceptorStepBehavior {
+                duration: bop,
+                zoom_start: 0.75,
+                zoom_end: 1.0,
+                tween: GameplayTween::Decelerate,
+                interrupts: true,
+            },
+        );
+    }
+
+    #[inline(always)]
+    pub fn set_pressed(&mut self, col: usize, pressed: bool) {
+        if let Some(count) = self.input_lane_counts.get_mut(col) {
+            *count = u16::from(pressed);
+        }
+    }
+
+    #[inline(never)]
+    pub fn tick(&mut self, delta_time: f32) {
+        self.state.tick(
+            &self.effects,
+            self.num_cols,
+            self.num_players,
+            self.cols_per_player,
+            &self.input_lane_counts,
+            delta_time,
+        );
+    }
+
+    #[inline(always)]
+    pub fn checksum(&self) -> u64 {
+        receptor_feedback_checksum(
+            &self.state.glow_press_timers,
+            &self.state.glow_lift_timers,
+            &self.state.glow_lift_start_alpha,
+            &self.state.glow_lift_start_zoom,
+            &self.state.bop_timers,
+            &self.state.bop_behaviors,
+        )
+    }
+
+    #[inline(always)]
+    pub fn probe(&self) -> u64 {
+        u64::from(self.state.glow_press_timers[0].to_bits())
+            ^ u64::from(self.state.glow_lift_timers[MAX_COLS / 2].to_bits()).rotate_left(21)
+            ^ u64::from(self.state.bop_timers[MAX_COLS - 1].to_bits()).rotate_left(43)
+    }
+
+    pub const fn state_bytes() -> usize {
+        std::mem::size_of::<GameplayReceptorFeedbackState>()
     }
 }
 
@@ -768,6 +1237,7 @@ pub fn tick_receptor_glow_timers(
     }
 }
 
+#[inline]
 pub fn tick_receptor_glow_columns(
     noteskin_effects: &GameplayNoteskinEffects,
     num_cols: usize,
@@ -809,7 +1279,45 @@ pub fn tick_receptor_glow_columns(
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn tick_full_receptor_glow_columns(
+    noteskin_effects: &GameplayNoteskinEffects,
+    num_players: usize,
+    cols_per_player: usize,
+    input_lane_counts: &[u16; MAX_COLS],
+    press_timers: &mut [f32; MAX_COLS],
+    lift_timers: &mut [f32; MAX_COLS],
+    lift_start_alpha: &mut [f32; MAX_COLS],
+    lift_start_zoom: &mut [f32; MAX_COLS],
+    delta_time: f32,
+) {
+    // Keep the fixed-array loop explicit: delegating to the slice kernel erased
+    // its constant trip count and regressed the measured dense workload.
+    for col in 0..MAX_COLS {
+        if press_timers[col].to_bits() == 0 && lift_timers[col].to_bits() == 0 {
+            continue;
+        }
+        let player = player_index_for_column(num_players, cols_per_player, col);
+        let timers = tick_receptor_glow_timers(
+            noteskin_effects.receptor_glow_behavior_for_player(player),
+            GameplayReceptorGlowTimers {
+                press_timer: press_timers[col],
+                lift_timer: lift_timers[col],
+                lift_start_alpha: lift_start_alpha[col],
+                lift_start_zoom: lift_start_zoom[col],
+            },
+            input_lane_counts[col] != 0,
+            delta_time,
+        );
+        press_timers[col] = timers.press_timer;
+        lift_timers[col] = timers.lift_timer;
+        lift_start_alpha[col] = timers.lift_start_alpha;
+        lift_start_zoom[col] = timers.lift_start_zoom;
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GameplayReceptorStepBehavior {
     pub duration: f32,
     pub zoom_start: f32,

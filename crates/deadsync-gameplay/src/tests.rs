@@ -9840,7 +9840,9 @@ mod tests {
                 ..GameplayReceptorGlowBehavior::default()
             },
         );
-        state.tick(&effects, 1, 1, 4, &[1], 0.2);
+        let mut lane_counts = [0; MAX_COLS];
+        lane_counts[0] = 1;
+        state.tick(&effects, 1, 1, 4, &lane_counts, 0.2);
 
         assert_near(state.glow_press_timers[0], 0.2);
         assert_near(state.glow_lift_timers[0], 0.0);
@@ -9858,6 +9860,245 @@ mod tests {
         state.glow_lift_start_zoom[0] = 0.0;
         state.reset_for_autoplay();
         assert_near(state.glow_lift_start_zoom[0], 1.0);
+    }
+
+    #[test]
+    fn receptor_feedback_active_lanes_match_full_scans_across_timer_lifecycles() {
+        let mut effects = GameplayNoteskinEffects::default();
+        effects.set_receptor_glow_behavior(
+            0,
+            GameplayReceptorGlowBehavior {
+                press_duration: 0.18,
+                duration: 0.24,
+                ..GameplayReceptorGlowBehavior::default()
+            },
+        );
+        effects.set_receptor_glow_behavior(
+            1,
+            GameplayReceptorGlowBehavior {
+                press_duration: 0.31,
+                duration: 0.42,
+                ..GameplayReceptorGlowBehavior::default()
+            },
+        );
+        let mut reference = ReferenceGameplayReceptorFeedbackState::default();
+        let mut active = GameplayReceptorFeedbackState::default();
+        let mut lane_counts = [0_u16; MAX_COLS];
+
+        for frame in 0..4_000usize {
+            lane_counts.fill(0);
+            if frame % 17 == 0 {
+                let col = (frame / 17 * 7) % MAX_COLS;
+                let timers = GameplayReceptorGlowTimers {
+                    press_timer: 0.08 + (col % 4) as f32 * 0.03,
+                    lift_timer: 0.2 + (col % 3) as f32 * 0.04,
+                    lift_start_alpha: 0.25 + col as f32 * 0.02,
+                    lift_start_zoom: 1.0 + col as f32 * 0.03,
+                };
+                let behavior = GameplayReceptorStepBehavior {
+                    duration: 0.06 + (col % 5) as f32 * 0.02,
+                    zoom_start: 0.7,
+                    zoom_end: 1.0,
+                    tween: GameplayTween::Decelerate,
+                    interrupts: true,
+                };
+                reference.set_glow_timers(col, timers);
+                active.set_glow_timers(col, timers);
+                reference.start_bop(col, behavior);
+                active.start_bop(col, behavior);
+            }
+            if frame % 29 < 3 {
+                lane_counts[(frame / 29 * 3) % MAX_COLS] = 1;
+            }
+            if frame % 113 == 0 {
+                let col = (frame / 113) % MAX_COLS;
+                reference.clear_lift_glow(col);
+                active.clear_lift_glow(col);
+            }
+            if frame == 777 {
+                let timers = GameplayReceptorGlowTimers {
+                    press_timer: -0.0,
+                    lift_timer: f32::NAN,
+                    lift_start_alpha: 0.5,
+                    lift_start_zoom: 1.5,
+                };
+                reference.set_glow_timers(MAX_COLS - 1, timers);
+                active.set_glow_timers(MAX_COLS - 1, timers);
+                reference.set_bop_timer_for_test(MAX_COLS - 2, f32::NAN);
+                active.set_bop_timer_for_test(MAX_COLS - 2, f32::NAN);
+            }
+            if frame == 1_333 {
+                reference.reset_for_autoplay();
+                active.reset_for_autoplay();
+            }
+            if frame == 2_777 {
+                reference.reset_for_practice();
+                active.reset_for_practice();
+            }
+
+            let num_cols = if frame % 251 < 37 { 4 } else { MAX_COLS };
+            let delta_time = if frame % 97 == 0 { 0.025 } else { 1.0 / 120.0 };
+            reference.tick(
+                &effects,
+                num_cols,
+                MAX_PLAYERS,
+                MAX_COLS / MAX_PLAYERS,
+                &lane_counts,
+                delta_time,
+            );
+            active.tick(
+                &effects,
+                num_cols,
+                MAX_PLAYERS,
+                MAX_COLS / MAX_PLAYERS,
+                &lane_counts,
+                delta_time,
+            );
+
+            assert_eq!(
+                active.glow_press_timers.map(f32::to_bits),
+                reference.glow_press_timers.map(f32::to_bits),
+                "press frame={frame}"
+            );
+            assert_eq!(
+                active.glow_lift_timers.map(f32::to_bits),
+                reference.glow_lift_timers.map(f32::to_bits),
+                "lift frame={frame}"
+            );
+            assert_eq!(
+                active.glow_lift_start_alpha.map(f32::to_bits),
+                reference.glow_lift_start_alpha.map(f32::to_bits),
+                "alpha frame={frame}"
+            );
+            assert_eq!(
+                active.glow_lift_start_zoom.map(f32::to_bits),
+                reference.glow_lift_start_zoom.map(f32::to_bits),
+                "zoom frame={frame}"
+            );
+            assert_eq!(
+                active.bop_timers.map(f32::to_bits),
+                reference.bop_timers.map(f32::to_bits),
+                "bop frame={frame}"
+            );
+            assert_eq!(active.bop_behaviors, reference.bop_behaviors);
+            let expected_glow = (0..MAX_COLS).fold(0, |mask, col| {
+                mask | (LaneMask::from(glow_timers_active(
+                    active.glow_press_timers[col],
+                    active.glow_lift_timers[col],
+                )) << col)
+            });
+            let expected_bop = (0..MAX_COLS).fold(0, |mask, col| {
+                mask | (LaneMask::from(active.bop_timers[col] > 0.0) << col)
+            });
+            assert_eq!(active.glow_active_lanes(), expected_glow);
+            assert_eq!(active.bop_active, expected_bop);
+        }
+    }
+
+    #[test]
+    fn receptor_feedback_dense_scan_matches_reference_and_returns_to_sparse() {
+        let mut effects = GameplayNoteskinEffects::default();
+        effects.set_receptor_glow_behavior(
+            0,
+            GameplayReceptorGlowBehavior {
+                press_duration: 0.18,
+                duration: 0.24,
+                ..GameplayReceptorGlowBehavior::default()
+            },
+        );
+        effects.set_receptor_glow_behavior(
+            1,
+            GameplayReceptorGlowBehavior {
+                press_duration: 0.31,
+                duration: 0.42,
+                ..GameplayReceptorGlowBehavior::default()
+            },
+        );
+        let mut reference = ReferenceGameplayReceptorFeedbackState::default();
+        let mut active = GameplayReceptorFeedbackState::default();
+        let mut lane_counts = [0_u16; MAX_COLS];
+
+        for col in 0..MAX_COLS {
+            let timers = GameplayReceptorGlowTimers {
+                press_timer: 0.12 + col as f32 * 0.01,
+                lift_timer: 0.22 + col as f32 * 0.01,
+                lift_start_alpha: 0.35 + col as f32 * 0.02,
+                lift_start_zoom: 1.0 + col as f32 * 0.03,
+            };
+            let behavior = GameplayReceptorStepBehavior {
+                duration: 0.25 + col as f32 * 0.01,
+                zoom_start: 0.7,
+                zoom_end: 1.0,
+                tween: GameplayTween::Decelerate,
+                interrupts: true,
+            };
+            reference.set_glow_timers(col, timers);
+            active.set_glow_timers(col, timers);
+            reference.start_bop(col, behavior);
+            active.start_bop(col, behavior);
+        }
+        assert!(active.dense_mode());
+
+        for frame in 0..160usize {
+            lane_counts.fill(0);
+            if frame < 6 {
+                lane_counts[frame] = 1;
+                lane_counts[MAX_COLS - 1 - frame] = 1;
+            }
+            let num_cols = if (24..48).contains(&frame) {
+                MAX_COLS / 2
+            } else {
+                MAX_COLS
+            };
+            let delta_time = if frame % 23 == 0 { 0.025 } else { 1.0 / 120.0 };
+            reference.tick(
+                &effects,
+                num_cols,
+                MAX_PLAYERS,
+                MAX_COLS / MAX_PLAYERS,
+                &lane_counts,
+                delta_time,
+            );
+            active.tick(
+                &effects,
+                num_cols,
+                MAX_PLAYERS,
+                MAX_COLS / MAX_PLAYERS,
+                &lane_counts,
+                delta_time,
+            );
+
+            assert_eq!(
+                active.glow_press_timers.map(f32::to_bits),
+                reference.glow_press_timers.map(f32::to_bits),
+                "press frame={frame}"
+            );
+            assert_eq!(
+                active.glow_lift_timers.map(f32::to_bits),
+                reference.glow_lift_timers.map(f32::to_bits),
+                "lift frame={frame}"
+            );
+            assert_eq!(
+                active.glow_lift_start_alpha.map(f32::to_bits),
+                reference.glow_lift_start_alpha.map(f32::to_bits),
+                "alpha frame={frame}"
+            );
+            assert_eq!(
+                active.glow_lift_start_zoom.map(f32::to_bits),
+                reference.glow_lift_start_zoom.map(f32::to_bits),
+                "zoom frame={frame}"
+            );
+            assert_eq!(
+                active.bop_timers.map(f32::to_bits),
+                reference.bop_timers.map(f32::to_bits),
+                "bop frame={frame}"
+            );
+            assert_eq!(active.bop_behaviors, reference.bop_behaviors);
+        }
+
+        assert!(!active.dense_mode());
+        assert_eq!(active.glow_active_lanes(), 0);
+        assert_eq!(active.bop_active, 0);
     }
 
     #[test]

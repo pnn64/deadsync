@@ -76,6 +76,11 @@ name = "attack_index_deadline_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "receptor_feedback_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
