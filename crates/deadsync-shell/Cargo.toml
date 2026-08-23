@@ -73,7 +73,7 @@ deadsync-theme = { path = "../deadsync-theme" }
 deadsync-theme-simply-love = { path = "../deadsync-theme-simply-love" }
 deadsync-updater = { path = "../deadsync-updater" }
 image = "0.25.10"
-log = "0.4.33"
+log = "0.4.34"
 null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
 rfd = "0.17.2"
 serde = { version = "1.0.229", features = ["derive"] }

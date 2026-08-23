@@ -6,7 +6,7 @@ license = "GPL-3.0"
 
 [dependencies]
 deadlib-audio-core = { path = "../deadlib-audio-core" }
-log = "0.4.33"
+log = "0.4.34"
 
 [target.'cfg(windows)'.dependencies]
 deadlib-audio-backend-wasapi = { path = "../deadlib-audio-backend-wasapi" }

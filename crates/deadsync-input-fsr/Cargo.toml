@@ -16,7 +16,7 @@ required-features = ["bench-support"]
 arrayvec = "0.7.8"
 deadsync-input = { path = "../deadsync-input" }
 deadsync-smx = { path = "../deadsync-smx" }
-log = "0.4.33"
+log = "0.4.34"
 
 [target.'cfg(windows)'.dependencies]
 hidapi = { version = "2.6.6", default-features = false, features = ["windows-native"] }

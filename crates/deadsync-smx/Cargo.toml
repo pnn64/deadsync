@@ -22,7 +22,7 @@ deadsync-score = { path = "../deadsync-score" }
 deadlib-platform = { path = "../deadlib-platform" }
 hashbrown = "0.17.1"
 image = { version = "0.25.10", default-features = false, features = ["gif"] }
-log = "0.4.33"
+log = "0.4.34"
 rustmaniax-sdk = "2.1.1"
 
 [lints.clippy]

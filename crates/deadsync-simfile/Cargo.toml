@@ -25,7 +25,7 @@ deadsync-config = { path = "../deadsync-config" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-rules = { path = "../deadsync-rules" }
 image = "0.25.10"
-log = "0.4.33"
+log = "0.4.34"
 rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
 serde = { version = "1.0.229", features = ["derive"] }
 twox-hash = "2.1.3"
