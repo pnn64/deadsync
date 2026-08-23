@@ -140,7 +140,7 @@ fn quantize_tenths(value: f64) -> f64 {
 fn quantize_hundredths(value: f64) -> f64 {
     let scaled = value * 100.0;
     // Nudge decimal half-steps across the IEEE-754 error margin so values like
-    // 10.05 round to 10.1 instead of falling back to 10.0.
+    // 10.005 round to 10.01 instead of falling back to 10.00.
     let nudge = scaled.signum() * scaled.abs().max(1.0) * f64::EPSILON * 16.0;
     (scaled + nudge).round() / 100.0
 }
@@ -162,6 +162,16 @@ pub fn clamp_null_or_die_magic_offset_ms(value: f64) -> f64 {
         NULL_OR_DIE_MAGIC_OFFSET_MS_MIN,
         NULL_OR_DIE_MAGIC_OFFSET_MS_MAX,
     ))
+}
+
+fn format_null_or_die_magic_offset_ms(value: f64) -> String {
+    let value = clamp_null_or_die_magic_offset_ms(value);
+    let hundredths = (value * 100.0).round() as i32;
+    if hundredths % 10 == 0 {
+        format!("{value:.1}")
+    } else {
+        format!("{value:.2}")
+    }
 }
 
 #[inline(always)]
@@ -327,10 +337,7 @@ pub fn push_null_or_die_option_lines(content: &mut String, options: NullOrDieOpt
     push_line(
         content,
         "NullOrDieMagicOffsetMs",
-        format!(
-            "{:.2}",
-            clamp_null_or_die_magic_offset_ms(options.magic_offset_ms)
-        ),
+        format_null_or_die_magic_offset_ms(options.magic_offset_ms),
     );
     push_line(
         content,
@@ -403,6 +410,10 @@ mod tests {
         assert_eq!((value * 10.0).round() as i32, tenths);
     }
 
+    fn assert_hundredths_eq(value: f64, hundredths: i32) {
+        assert_eq!((value * 100.0).round() as i32, hundredths);
+    }
+
     #[test]
     fn vertical_graph_origin_defaults_to_bottom() {
         assert_eq!(
@@ -427,11 +438,11 @@ mod tests {
     }
 
     #[test]
-    fn magic_offset_uses_tenths() {
-        assert_tenths_eq(clamp_null_or_die_magic_offset_ms(-200.0), -1000);
-        assert_tenths_eq(clamp_null_or_die_magic_offset_ms(0.04), 0);
-        assert_tenths_eq(clamp_null_or_die_magic_offset_ms(0.05), 1);
-        assert_tenths_eq(clamp_null_or_die_magic_offset_ms(200.0), 1000);
+    fn magic_offset_uses_hundredths() {
+        assert_hundredths_eq(clamp_null_or_die_magic_offset_ms(-200.0), -10_000);
+        assert_hundredths_eq(clamp_null_or_die_magic_offset_ms(0.004), 0);
+        assert_hundredths_eq(clamp_null_or_die_magic_offset_ms(0.005), 1);
+        assert_hundredths_eq(clamp_null_or_die_magic_offset_ms(200.0), 10_000);
     }
 
     #[test]
@@ -546,6 +557,19 @@ mod tests {
         );
 
         assert_eq!(load_null_or_die_options(&conf, default), default);
+    }
+
+    #[test]
+    fn preserves_ini_only_magic_offset_hundredths() {
+        let mut conf = SimpleIni::new();
+        conf.load_str("[Options]\nNullOrDieMagicOffsetMs=0.27\n");
+
+        let loaded = load_null_or_die_options(&conf, default_options());
+        assert_hundredths_eq(loaded.magic_offset_ms, 27);
+
+        let mut content = String::new();
+        push_null_or_die_option_lines(&mut content, loaded);
+        assert!(content.contains("NullOrDieMagicOffsetMs=0.27\n"));
     }
 
     #[test]
