@@ -465,6 +465,9 @@ pub const fn app_raw_key_shortcut(
 
 #[inline(always)]
 pub fn screen_accepts_queued_input(screen: Screen, transition: &TransitionState) -> bool {
+    if screen == Screen::Menu && transition.menu_input_open() {
+        return true;
+    }
     deadsync_config::frame_pacing::queued_input_allowed(
         screen == Screen::Gameplay,
         matches!(transition, TransitionState::Idle),
@@ -783,6 +786,33 @@ mod tests {
         assert!(!screen_accepts_queued_input(
             Screen::SelectMusic,
             &transition
+        ));
+    }
+
+    #[test]
+    fn queued_input_routes_during_title_menu_arrival() {
+        assert!(screen_accepts_queued_input(
+            Screen::Menu,
+            &TransitionState::ActorsFadeIn { elapsed: 0.0 },
+        ));
+        assert!(screen_accepts_queued_input(
+            Screen::Menu,
+            &TransitionState::FadingIn {
+                elapsed: 0.0,
+                duration: 0.4,
+            },
+        ));
+        assert!(!screen_accepts_queued_input(
+            Screen::Options,
+            &TransitionState::ActorsFadeIn { elapsed: 0.0 },
+        ));
+        assert!(!screen_accepts_queued_input(
+            Screen::Menu,
+            &TransitionState::ActorsFadeOut {
+                elapsed: 0.0,
+                duration: 1.0,
+                target: Screen::Options,
+            },
         ));
     }
 

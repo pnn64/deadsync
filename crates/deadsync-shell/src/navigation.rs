@@ -141,6 +141,14 @@ impl ProcessExitNavigationLog {
 }
 
 impl TransitionState {
+    #[inline(always)]
+    pub const fn menu_input_open(&self) -> bool {
+        matches!(
+            self,
+            Self::Idle | Self::FadingIn { .. } | Self::ActorsFadeIn { .. }
+        )
+    }
+
     pub fn advance_frame(
         &mut self,
         delta_time: f32,
@@ -430,7 +438,7 @@ pub fn apply_global_entry_transition(
 }
 
 pub fn menu_exit_uses_fade(screen: Screen, transition: &TransitionState) -> bool {
-    screen == Screen::Menu && matches!(transition, TransitionState::Idle)
+    screen == Screen::Menu && transition.menu_input_open()
 }
 
 pub fn navigation_transition_start(
@@ -441,7 +449,9 @@ pub fn navigation_transition_start(
     if from == Screen::Init && target == Screen::Menu {
         return NavigationTransitionStart::DirectEntry { target };
     }
-    if !matches!(transition, TransitionState::Idle) {
+    if !matches!(transition, TransitionState::Idle)
+        && !(from == Screen::Menu && transition.menu_input_open())
+    {
         return NavigationTransitionStart::Busy;
     }
     if is_actor_only_transition(from, target) {
@@ -700,6 +710,25 @@ mod tests {
             TransitionState::Idle
         ));
         assert!(menu_exit_uses_fade(Screen::Menu, &TransitionState::Idle));
+        assert!(menu_exit_uses_fade(
+            Screen::Menu,
+            &TransitionState::ActorsFadeIn { elapsed: 0.0 }
+        ));
+        assert!(menu_exit_uses_fade(
+            Screen::Menu,
+            &TransitionState::FadingIn {
+                elapsed: 0.0,
+                duration: 0.4,
+            }
+        ));
+        assert!(!menu_exit_uses_fade(
+            Screen::Menu,
+            &TransitionState::ActorsFadeOut {
+                elapsed: 0.0,
+                duration: 1.0,
+                target: Screen::Options,
+            }
+        ));
         assert!(!menu_exit_uses_fade(
             Screen::Gameplay,
             &TransitionState::Idle
@@ -802,6 +831,31 @@ mod tests {
                     duration: 0.4,
                 },
             ),
+            NavigationTransitionStart::ActorFade {
+                from: Screen::Menu,
+                target: Screen::Options,
+            }
+        );
+        assert_eq!(
+            navigation_transition_start(
+                Screen::Menu,
+                Screen::Options,
+                &TransitionState::ActorsFadeIn { elapsed: 0.0 },
+            ),
+            NavigationTransitionStart::ActorFade {
+                from: Screen::Menu,
+                target: Screen::Options,
+            }
+        );
+        assert_eq!(
+            navigation_transition_start(
+                Screen::SelectMusic,
+                Screen::Menu,
+                &TransitionState::FadingIn {
+                    elapsed: 0.0,
+                    duration: 0.4,
+                },
+            ),
             NavigationTransitionStart::Busy
         );
         assert_eq!(
@@ -857,9 +911,28 @@ mod tests {
             }
         );
 
-        let busy = navigation_transition_effect_plan(
+        let arriving_menu = navigation_transition_effect_plan(
             Screen::Menu,
             Screen::Options,
+            &TransitionState::FadingIn {
+                elapsed: 0.0,
+                duration: 0.4,
+            },
+        );
+        assert_eq!(
+            arriving_menu,
+            NavigationTransitionEffectPlan {
+                start: NavigationTransitionStart::ActorFade {
+                    from: Screen::Menu,
+                    target: Screen::Options,
+                },
+                clear_exit_intent: true,
+            }
+        );
+
+        let busy = navigation_transition_effect_plan(
+            Screen::SelectMusic,
+            Screen::Menu,
             &TransitionState::FadingIn {
                 elapsed: 0.0,
                 duration: 0.4,

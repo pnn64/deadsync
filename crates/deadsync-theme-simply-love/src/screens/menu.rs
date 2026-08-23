@@ -24,6 +24,8 @@ use deadlib_present::space::{screen_center_x, screen_height, screen_width};
 const TRANSITION_IN_DURATION: f32 = 0.5;
 const TRANSITION_OUT_DURATION: f32 = 1.0;
 const BRAND_EXIT_DURATION: f32 = 0.65;
+const SECONDARY_ENTRY_DELAY: f32 = 0.2;
+const SECONDARY_ENTRY_DURATION: f32 = 0.4;
 // Graphics/ScreenTitleMenu scroll.lua staggers each row's OnCommand by 75 ms.
 const ROW_STAGGER: f32 = 0.075;
 const ROW_ENTRY_DURATION: f32 = 0.2;
@@ -377,6 +379,12 @@ fn brand_exit_alpha(elapsed: Option<f32>) -> f32 {
     elapsed.map_or(1.0, |t| 1.0 - smooth_p(t / BRAND_EXIT_DURATION))
 }
 
+fn secondary_entry_alpha(elapsed: Option<f32>) -> f32 {
+    elapsed.map_or(1.0, |t| {
+        ((t - SECONDARY_ENTRY_DELAY) / SECONDARY_ENTRY_DURATION).clamp(0.0, 1.0)
+    })
+}
+
 fn row_exit_alpha(index: usize, elapsed: Option<f32>) -> f32 {
     elapsed.map_or(1.0, |t| {
         let fade_t = (t - ROW_STAGGER * index as f32) / ROW_EXIT_DURATION;
@@ -655,6 +663,7 @@ pub fn push_actors(
     let info1_y_tl = info2_y_tl - INFO_PX - INFO_GAP;
 
     let brand_alpha = alpha_multiplier * brand_exit_alpha(exit_elapsed);
+    let secondary_alpha = secondary_entry_alpha(entry_elapsed);
     let logo_actors = logo::build_logo_default(
         visual_policy.title_logo_texture_key,
         state.runtime_view.game,
@@ -667,7 +676,7 @@ pub fn push_actors(
     }
 
     let mut info_color = [1.0, 1.0, 1.0, 1.0];
-    info_color[3] *= brand_alpha;
+    info_color[3] *= brand_alpha * secondary_alpha;
 
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), info1_y_tl): zoom(0.8):
@@ -731,6 +740,7 @@ pub fn push_actors(
     }));
 
     // --- Local IP (optional, top-left) ---
+    let status_alpha = alpha_multiplier * secondary_alpha;
     let mut gs_base_y = STATUS_BASE_Y;
     if let Some(text) = local_ip_text(state) {
         actors.push(status_text_actor(
@@ -739,7 +749,7 @@ pub fn push_actors(
             STATUS_BASE_X,
             STATUS_BASE_Y,
             STATUS_ZOOM,
-            alpha_multiplier,
+            status_alpha,
             TextAlign::Left,
         ));
         gs_base_y += STATUS_LINE_HEIGHT.mul_add(STATUS_ZOOM, STATUS_BLOCK_GAP);
@@ -753,7 +763,7 @@ pub fn push_actors(
         STATUS_BASE_X,
         gs_base_y,
         STATUS_ZOOM,
-        alpha_multiplier,
+        status_alpha,
         TextAlign::Left,
     ));
     for line_idx in 0..gs_text.line_count {
@@ -764,7 +774,7 @@ pub fn push_actors(
                 STATUS_BASE_X,
                 (STATUS_LINE_HEIGHT * (line_idx as f32 + 1.0)).mul_add(STATUS_ZOOM, gs_base_y),
                 STATUS_ZOOM,
-                alpha_multiplier,
+                status_alpha,
                 TextAlign::Left,
             ));
         }
@@ -780,7 +790,7 @@ pub fn push_actors(
         STATUS_BASE_X,
         ac_base_y,
         STATUS_ZOOM,
-        alpha_multiplier,
+        status_alpha,
         TextAlign::Left,
     ));
     for line_idx in 0..ac_text.line_count {
@@ -791,7 +801,7 @@ pub fn push_actors(
                 STATUS_BASE_X,
                 (STATUS_LINE_HEIGHT * (line_idx as f32 + 1.0)).mul_add(STATUS_ZOOM, ac_base_y),
                 STATUS_ZOOM,
-                alpha_multiplier,
+                status_alpha,
                 TextAlign::Left,
             ));
         }
@@ -811,7 +821,7 @@ pub fn push_actors(
                 STATUS_BASE_X,
                 y,
                 STATUS_ZOOM,
-                alpha_multiplier,
+                status_alpha,
                 TextAlign::Left,
             );
             if let Actor::Text { color, .. } = &mut actor {
@@ -1002,6 +1012,48 @@ mod tests {
         approx(brand_exit_alpha(Some(0.0)), 1.0);
         approx(brand_exit_alpha(Some(BRAND_EXIT_DURATION * 0.5)), 0.5);
         approx(brand_exit_alpha(Some(BRAND_EXIT_DURATION)), 0.0);
+    }
+
+    #[test]
+    fn title_secondary_text_waits_then_fades_in_linearly() {
+        approx(secondary_entry_alpha(None), 1.0);
+        approx(secondary_entry_alpha(Some(0.0)), 0.0);
+        approx(secondary_entry_alpha(Some(SECONDARY_ENTRY_DELAY)), 0.0);
+        approx(
+            secondary_entry_alpha(Some(SECONDARY_ENTRY_DELAY + SECONDARY_ENTRY_DURATION * 0.5)),
+            0.5,
+        );
+        approx(
+            secondary_entry_alpha(Some(SECONDARY_ENTRY_DELAY + SECONDARY_ENTRY_DURATION)),
+            1.0,
+        );
+
+        let state = init();
+        let info = menu_info_text(&state, None);
+        let groove = build_groovestats_text(MainMenuGrooveStatus::default()).main;
+        let mut actors = Vec::new();
+        push_actors(
+            &mut actors,
+            &state,
+            None,
+            1.0,
+            Some(SECONDARY_ENTRY_DELAY + SECONDARY_ENTRY_DURATION * 0.5),
+            None,
+            Default::default(),
+        );
+        let text_alpha = |expected: &str| {
+            actors
+                .iter()
+                .find_map(|actor| match actor {
+                    Actor::Text { content, color, .. } if content.as_ref() == expected => {
+                        Some(color[3])
+                    }
+                    _ => None,
+                })
+                .expect("expected title secondary text actor")
+        };
+        approx(text_alpha(info.as_ref()), 0.5);
+        approx(text_alpha(groove.as_ref()), 0.5);
     }
 
     #[test]

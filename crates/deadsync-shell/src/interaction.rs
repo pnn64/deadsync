@@ -236,7 +236,7 @@ mod tests {
         let plan = state.plan_process_exit(
             ProcessExitRequest::Shutdown,
             Screen::Menu,
-            &TransitionState::Idle,
+            &TransitionState::ActorsFadeIn { elapsed: 0.1 },
         );
         assert!(matches!(plan, ProcessExitPlan::BeginFade));
         assert_eq!(state.exit_intent(), ExitIntent::Shutdown);
@@ -256,7 +256,7 @@ mod tests {
 
         let shutdown = state.plan_process_exit(
             ProcessExitRequest::Shutdown,
-            Screen::Menu,
+            Screen::Options,
             &TransitionState::FadingIn {
                 elapsed: 0.0,
                 duration: 0.5,
