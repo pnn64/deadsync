@@ -15,6 +15,7 @@ pub const MEASURE_COUNTER_LOOKAHEAD_MAX: u8 = 4;
 pub const COUNTER_TEXT_SLOTS_PER_PLAYER: u8 = MEASURE_COUNTER_LOOKAHEAD_MAX + 3;
 const BROKEN_COUNTER_TEXT_SLOT: u8 = MEASURE_COUNTER_LOOKAHEAD_MAX + 1;
 const RUN_TIMER_TEXT_SLOT: u8 = MEASURE_COUNTER_LOOKAHEAD_MAX + 2;
+const HORIZONTAL_COUNTER_GAP: f32 = 2.0;
 
 #[derive(Clone, Copy)]
 pub(crate) struct CounterHudRequest<'a> {
@@ -88,6 +89,7 @@ struct HudTextRun {
     align: [f32; 2],
     align_text: TextAlign,
     zoom: f32,
+    max_width: Option<f32>,
     color: [f32; 4],
 }
 
@@ -119,6 +121,13 @@ fn append_measure_counters(
     counter_y: f32,
 ) {
     let lookahead = request.lookahead.min(MEASURE_COUNTER_LOOKAHEAD_MAX);
+    let horizontal_step = if lookahead == 0 {
+        0.0
+    } else {
+        (column_width / f32::from(lookahead)) * request.style.horizontal_span
+    };
+    let max_width = (!request.vertical && lookahead > 0)
+        .then_some((horizontal_step - HORIZONTAL_COUNTER_GAP).max(1.0));
     for j in (0..=lookahead).rev() {
         let segment_index = base_index + j as usize;
         let Some(segment) = request.segments.get(segment_index).copied() else {
@@ -156,12 +165,7 @@ fn append_measure_counters(
         if request.vertical {
             y += request.style.vertical_step_y * f32::from(j);
         } else {
-            let denominator = if lookahead == 0 {
-                1.0
-            } else {
-                f32::from(lookahead)
-            };
-            x += (column_width / denominator) * request.style.horizontal_span * f32::from(j);
+            x += horizontal_step * f32::from(j);
         }
         if request.left {
             x -= column_width;
@@ -173,6 +177,7 @@ fn append_measure_counters(
             [x, y],
             [0.5, 0.5],
             zoom,
+            max_width,
             color,
         );
     }
@@ -221,6 +226,7 @@ fn append_broken_counter(
         [x, y],
         [0.5, 0.5],
         request.style.base_zoom,
+        None,
         request.style.broken_color,
     );
 }
@@ -278,6 +284,7 @@ fn append_run_timer(
         [x, request.subtractive_scoring_y],
         [0.5, 0.5],
         request.style.base_zoom,
+        None,
         color,
     );
 }
@@ -288,6 +295,7 @@ fn append_hud_text(
     offset: [f32; 2],
     align: [f32; 2],
     zoom: f32,
+    max_width: Option<f32>,
     color: [f32; 4],
 ) {
     plan.push(HudTextRun {
@@ -296,6 +304,7 @@ fn append_hud_text(
         align,
         align_text: TextAlign::Center,
         zoom,
+        max_width,
         color,
     });
 }
@@ -353,6 +362,7 @@ fn append_flat_hud_text(
         align_text: run.align_text,
         z: text_z,
         scale: [run.zoom, run.zoom],
+        max_width: run.max_width,
         blend: BlendMode::Alpha,
         shadow_len: [shadow_len, -shadow_len],
         shadow_color: [0.0, 0.0, 0.0, 0.5],
@@ -367,6 +377,9 @@ fn hud_text_actor(style: CounterHudStyle, font: &'static str, run: HudTextRun) -
     text.horizalign(run.align_text);
     text.xy(run.offset[0], run.offset[1]);
     text.zoom(run.zoom);
+    if let Some(max_width) = run.max_width {
+        text.maxwidth(max_width);
+    }
     text.shadowlength(style.shadow_len);
     text.diffuse(run.color);
     text.z(style.text_z);
@@ -422,6 +435,7 @@ pub(crate) fn compose_mini_indicator(
         align: [align_x, 0.5],
         align_text: TextAlign::Left,
         zoom: request.zoom,
+        max_width: None,
         color,
     };
     if let TextContent::FrameInline { text, slot } = &run.content {
@@ -644,6 +658,66 @@ mod tests {
             TextAlign::Center,
             20,
         );
+    }
+
+    #[test]
+    fn horizontal_measure_counters_fit_inside_their_lookahead_slots() {
+        let segments = [
+            StreamSegment::new(0, 24, false),
+            StreamSegment::new(24, 28, true),
+            StreamSegment::new(28, 52, false),
+            StreamSegment::new(52, 56, true),
+            StreamSegment::new(56, 80, false),
+        ];
+        let broken_run_lookup = BrokenRunLookup::new(&segments);
+        let style = counter_style();
+        let mut actors = Vec::new();
+        let mut draws = Vec::new();
+        compose_counter_hud(
+            &mut actors,
+            &mut draws,
+            CounterHudRequest {
+                style,
+                segments: &segments,
+                broken_run_lookup: &broken_run_lookup,
+                current_beat: 12.0,
+                current_display_beat: 12.0,
+                current_bpm: 120.0,
+                music_rate: 1.0,
+                lookahead: 4,
+                multiplier: 1.0,
+                vertical: false,
+                left: false,
+                broken_run: false,
+                run_timer: false,
+                measure_counter_y: Some(100.0),
+                subtractive_scoring_y: 200.0,
+                playfield_center_x: 320.0,
+                field_zoom: 1.0,
+                font: "hud-font",
+                frame_text_slot: 20,
+                counter_text,
+                timer_text,
+            },
+        );
+
+        assert!(actors.is_empty());
+        assert_eq!(draws.len(), 5);
+        let center_spacing = ScrollSpeedSetting::ARROW_SPACING / 4.0 * style.horizontal_span;
+        let slot_width = center_spacing - HORIZONTAL_COUNTER_GAP;
+        let runs = draws
+            .iter()
+            .map(|draw| match draw {
+                FlatDraw::PreparedInline(text) => text,
+                other => panic!("expected direct counter text, got {other:?}"),
+            })
+            .collect::<Vec<_>>();
+        for run in &runs {
+            assert_eq!(run.max_width, Some(slot_width));
+        }
+        for pair in runs.windows(2) {
+            assert!((pair[0].offset[0] - pair[1].offset[0] - center_spacing).abs() <= 1e-6);
+        }
     }
 
     #[test]

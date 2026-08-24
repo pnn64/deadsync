@@ -1650,6 +1650,7 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
             text.align_text,
             text.z,
             text.scale,
+            None,
             text.blend,
             text.shadow_len,
             text.shadow_color,
@@ -1666,6 +1667,7 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
             text.align_text,
             text.z,
             text.scale,
+            text.max_width,
             text.blend,
             text.shadow_len,
             text.shadow_color,
@@ -1683,6 +1685,7 @@ fn prepared_text_actor(
     align_text: TextAlign,
     z: i16,
     scale: [f32; 2],
+    max_width: Option<f32>,
     blend: BlendMode,
     shadow_len: [f32; 2],
     shadow_color: [f32; 4],
@@ -1704,7 +1707,7 @@ fn prepared_text_actor(
         fit_height: None,
         line_spacing: None,
         wrap_width_pixels: None,
-        max_width: None,
+        max_width,
         max_height: None,
         max_w_pre_zoom: false,
         max_h_pre_zoom: false,
@@ -1920,6 +1923,7 @@ mod camera_wrap_tests {
             align_text: TextAlign::Center,
             z: 85,
             scale: [0.4, 0.4],
+            max_width: Some(30.0),
             blend: BlendMode::Alpha,
             shadow_len: [1.0, -1.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
@@ -1934,6 +1938,7 @@ mod camera_wrap_tests {
             align_text,
             z,
             scale,
+            max_width,
             shadow_len,
             ..
         } = actor
@@ -1952,6 +1957,7 @@ mod camera_wrap_tests {
         assert_eq!(align_text, TextAlign::Center);
         assert_eq!(z, 85);
         assert_eq!(scale, [0.4, 0.4]);
+        assert_eq!(max_width, Some(30.0));
         assert_eq!(shadow_len, [1.0, -1.0]);
     }
 

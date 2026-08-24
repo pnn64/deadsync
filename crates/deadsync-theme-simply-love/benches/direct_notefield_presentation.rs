@@ -3107,6 +3107,7 @@ fn inline_text_draw(case: InlineCase, value: InlineText, player: usize, run: usi
         align_text,
         z: 85,
         scale: [zoom, zoom],
+        max_width: None,
         blend: BlendMode::Alpha,
         shadow_len: [shadow, -shadow],
         shadow_color: [0.0, 0.0, 0.0, 0.5],
