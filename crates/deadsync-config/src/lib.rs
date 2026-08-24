@@ -4,6 +4,7 @@ pub mod audio;
 pub mod backfill;
 pub mod bools;
 pub mod cache;
+pub mod coin;
 pub mod defaults;
 pub mod folders;
 pub mod frame_pacing;

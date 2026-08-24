@@ -5,6 +5,35 @@ use super::*;
 /// that should be conditionally locked based on runtime state.
 pub(super) fn is_submenu_row_disabled(state: &State, kind: SubmenuKind, id: SubRowId) -> bool {
     match (kind, id) {
+        (SubmenuKind::Bookkeeping, _) => true,
+        (SubmenuKind::Coin, SubRowId::EventMode) => {
+            get_choice_by_id(
+                &state.sub[SubmenuKind::Coin].choice_indices,
+                COIN_OPTIONS_ROWS,
+                SubRowId::CoinMode,
+            ) != Some(2)
+        }
+        (SubmenuKind::Coin, SubRowId::CoinsPerCredit) => {
+            get_choice_by_id(
+                &state.sub[SubmenuKind::Coin].choice_indices,
+                COIN_OPTIONS_ROWS,
+                SubRowId::CoinMode,
+            ) != Some(1)
+        }
+        (SubmenuKind::Coin, SubRowId::PremiumFree | SubRowId::PremiumGrace) => {
+            let mode = get_choice_by_id(
+                &state.sub[SubmenuKind::Coin].choice_indices,
+                COIN_OPTIONS_ROWS,
+                SubRowId::CoinMode,
+            );
+            let event = get_choice_by_id(
+                &state.sub[SubmenuKind::Coin].choice_indices,
+                COIN_OPTIONS_ROWS,
+                SubRowId::EventMode,
+            )
+            .is_some_and(yes_no_from_choice);
+            mode == Some(0) || mode == Some(2) && event
+        }
         (SubmenuKind::InputBackend, SubRowId::MenuButtons) => {
             let three_key_navigation = get_choice_by_id(
                 &state.sub[SubmenuKind::InputBackend].choice_indices,
@@ -19,6 +48,8 @@ pub(super) fn is_submenu_row_disabled(state: &State, kind: SubmenuKind, id: SubR
 
 pub(super) const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow] {
     match kind {
+        SubmenuKind::Coin => COIN_OPTIONS_ROWS,
+        SubmenuKind::Bookkeeping => BOOKKEEPING_ROWS,
         SubmenuKind::System => SYSTEM_OPTIONS_ROWS,
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ROWS,
         SubmenuKind::Input => INPUT_OPTIONS_ROWS,
@@ -44,6 +75,8 @@ pub(super) const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow] {
 
 pub(super) const fn submenu_items(kind: SubmenuKind) -> &'static [Item] {
     match kind {
+        SubmenuKind::Coin => COIN_OPTIONS_ITEMS,
+        SubmenuKind::Bookkeeping => BOOKKEEPING_ITEMS,
         SubmenuKind::System => SYSTEM_OPTIONS_ITEMS,
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ITEMS,
         SubmenuKind::Input => INPUT_OPTIONS_ITEMS,
@@ -69,6 +102,8 @@ pub(super) const fn submenu_items(kind: SubmenuKind) -> &'static [Item] {
 
 pub(super) const fn submenu_title(kind: SubmenuKind) -> &'static str {
     match kind {
+        SubmenuKind::Coin => "ARCADE OPTIONS",
+        SubmenuKind::Bookkeeping => "BOOKKEEPING",
         SubmenuKind::System => "SYSTEM OPTIONS",
         SubmenuKind::Graphics => "GRAPHICS OPTIONS",
         SubmenuKind::Input => "INPUT OPTIONS",

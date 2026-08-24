@@ -321,7 +321,40 @@ pub(super) fn apply_submenu_choice_delta(
     }
     queue_sfx(state, "assets/sounds/change_value.ogg");
 
-    if matches!(kind, SubmenuKind::System) {
+    if matches!(kind, SubmenuKind::Coin) {
+        let request = match rows[row_index].id {
+            SubRowId::CoinMode => crate::SimplyLoveCoinConfigRequest::Mode(
+                COIN_MODE_VALUES.get(new_index).copied().unwrap_or_default(),
+            ),
+            SubRowId::EventMode => {
+                crate::SimplyLoveCoinConfigRequest::EventMode(yes_no_from_choice(new_index))
+            }
+            SubRowId::CoinsPerCredit => {
+                crate::SimplyLoveCoinConfigRequest::CoinsPerCredit(new_index as u8 + 1)
+            }
+            SubRowId::SongsPerPlay => {
+                crate::SimplyLoveCoinConfigRequest::SongsPerPlay(new_index as u8 + 1)
+            }
+            SubRowId::PremiumFree => crate::SimplyLoveCoinConfigRequest::PremiumFreeMinutes(
+                PREMIUM_MINUTE_VALUES.get(new_index).copied().unwrap_or(0),
+            ),
+            SubRowId::PremiumGrace => crate::SimplyLoveCoinConfigRequest::PremiumFreeGraceSeconds(
+                PREMIUM_GRACE_VALUES.get(new_index).copied().unwrap_or(0),
+            ),
+            SubRowId::ContinueOnGiveUp => {
+                crate::SimplyLoveCoinConfigRequest::ContinueOnGiveUp(yes_no_from_choice(new_index))
+            }
+            SubRowId::LongSongTime => crate::SimplyLoveCoinConfigRequest::LongSongSeconds(
+                LONG_SONG_VALUES.get(new_index).copied().unwrap_or(150),
+            ),
+            SubRowId::MarathonSongTime => crate::SimplyLoveCoinConfigRequest::MarathonSongSeconds(
+                MARATHON_SONG_VALUES.get(new_index).copied().unwrap_or(300),
+            ),
+            _ => return None,
+        };
+        clear_submenu_visible_rows_cache(state);
+        action = Some(coin_config_effect(request));
+    } else if matches!(kind, SubmenuKind::System) {
         let row = &rows[row_index];
         match row.id {
             SubRowId::Game => {
@@ -1558,6 +1591,18 @@ pub(super) fn activate_current_selection(
             state.pending_submenu_parent_kind = None;
 
             match item.id {
+                ItemId::ArcadeOptions => {
+                    queue_sfx(state, "assets/sounds/start.ogg");
+                    state.pending_submenu_kind = Some(SubmenuKind::Coin);
+                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                    state.submenu_fade_t = 0.0;
+                }
+                ItemId::Bookkeeping => {
+                    queue_sfx(state, "assets/sounds/start.ogg");
+                    state.pending_submenu_kind = Some(SubmenuKind::Bookkeeping);
+                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                    state.submenu_fade_t = 0.0;
+                }
                 ItemId::SystemOptions => {
                     queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::System);

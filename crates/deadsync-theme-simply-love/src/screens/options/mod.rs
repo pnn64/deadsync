@@ -163,6 +163,12 @@ fn machine_config_effect(request: crate::SimplyLoveMachineConfigRequest) -> Them
     ))
 }
 
+fn coin_config_effect(request: crate::SimplyLoveCoinConfigRequest) -> ThemeEffect {
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+        crate::SimplyLoveConfigRequest::Coin(request),
+    ))
+}
+
 fn advanced_config_effect(request: crate::SimplyLoveAdvancedConfigRequest) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
         crate::SimplyLoveConfigRequest::Advanced(request),

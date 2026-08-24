@@ -1,4 +1,5 @@
 use crate::bools::{parse_bool_str, parse_loose_bool_str, parse_u8_bool_or_default};
+use crate::coin::{CoinOptions, load_coin_options};
 use crate::defaults::{
     DEFAULT_ALLOW_SHUTDOWN_HOST, DEFAULT_ALLOW_SONG_DELETION, DEFAULT_ARCADE_OPTIONS_NAVIGATION,
     DEFAULT_AUTO_DOWNLOAD_UNLOCKS, DEFAULT_AUTO_POPULATE_GS_SCORES, DEFAULT_AUTO_SCREENSHOT_EVAL,
@@ -221,6 +222,7 @@ impl SmxPackName {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SystemOptions {
+    pub coin: CoinOptions,
     pub game_flag: GameFlag,
     pub auto_download_unlocks: bool,
     pub auto_populate_gs_scores: bool,
@@ -285,6 +287,7 @@ pub struct SystemOptions {
 impl Default for SystemOptions {
     fn default() -> Self {
         Self {
+            coin: CoinOptions::default(),
             game_flag: GameFlag::Dance,
             auto_download_unlocks: DEFAULT_AUTO_DOWNLOAD_UNLOCKS,
             auto_populate_gs_scores: DEFAULT_AUTO_POPULATE_GS_SCORES,
@@ -558,6 +561,7 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
     let show_stats_legacy = conf.get("Options", "ShowStats");
 
     SystemOptions {
+        coin: load_coin_options(conf, default.coin),
         game_flag: conf
             .get("Options", "Game")
             .and_then(|value| GameFlag::from_str(value).ok())
@@ -2373,6 +2377,7 @@ mod tests {
 
     fn default_system_options() -> SystemOptions {
         SystemOptions {
+            coin: CoinOptions::default(),
             game_flag: GameFlag::Dance,
             auto_download_unlocks: false,
             auto_populate_gs_scores: false,

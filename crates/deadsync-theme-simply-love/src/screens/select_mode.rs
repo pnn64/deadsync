@@ -33,10 +33,11 @@ const ARROW_PAD_Y: f32 = 5.0;
 const ARROW_SPRITE_SZ: f32 = 150.0;
 
 #[cfg(any(test, feature = "bench-support"))]
-fn choice_labels_legacy() -> [String; 2] {
+fn choice_labels_legacy() -> [String; 3] {
     [
         tr("SelectMode", "Regular").to_string(),
         tr("SelectMode", "Marathon").to_string(),
+        tr("SelectMode", "PremiumFree").to_string(),
     ]
 }
 
@@ -45,6 +46,7 @@ fn choice_description_legacy(choice: Choice) -> String {
     let key = match choice {
         Choice::Regular => "RegularDescription",
         Choice::Marathon => "MarathonDescription",
+        Choice::PremiumFree => "PremiumFreeDescription",
     };
     tr("SelectMode", key).replace("\\n", "\n")
 }
@@ -53,6 +55,7 @@ fn choice_description(choice: Choice) -> Arc<str> {
     let key = match choice {
         Choice::Regular => "RegularDescription",
         Choice::Marathon => "MarathonDescription",
+        Choice::PremiumFree => "PremiumFreeDescription",
     };
     let text = tr("SelectMode", key);
     if text.contains("\\n") {
@@ -76,8 +79,8 @@ fn choice_description(choice: Choice) -> Arc<str> {
 struct SelectModeText {
     i18n_revision: u64,
     title: Arc<str>,
-    labels: [Arc<str>; 2],
-    descriptions: [Arc<str>; 2],
+    labels: [Arc<str>; 3],
+    descriptions: [Arc<str>; 3],
 }
 
 impl SelectModeText {
@@ -85,10 +88,15 @@ impl SelectModeText {
         Self {
             i18n_revision,
             title: tr("ScreenTitles", "SelectMode"),
-            labels: [tr("SelectMode", "Regular"), tr("SelectMode", "Marathon")],
+            labels: [
+                tr("SelectMode", "Regular"),
+                tr("SelectMode", "Marathon"),
+                tr("SelectMode", "PremiumFree"),
+            ],
             descriptions: [
                 choice_description(Choice::Regular),
                 choice_description(Choice::Marathon),
+                choice_description(Choice::PremiumFree),
             ],
         }
     }
@@ -189,6 +197,7 @@ const fn choice_cursor_label_width(choice: Choice) -> f32 {
     match choice {
         Choice::Regular => 140.0,
         Choice::Marathon => 168.0,
+        Choice::PremiumFree => 210.0,
     }
 }
 
@@ -202,7 +211,7 @@ pub struct State {
 
 pub fn init(runtime: SelectFlowRuntimeView) -> State {
     let mut flow = ModeFlow::default();
-    flow.reset(runtime.play_mode);
+    flow.reset(runtime.play_mode, runtime.premium_free_available);
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         flow,
@@ -213,11 +222,20 @@ pub fn init(runtime: SelectFlowRuntimeView) -> State {
 }
 
 pub fn on_enter(state: &mut State) {
-    state.flow.reset(state.runtime.play_mode);
+    state.flow.reset(
+        state.runtime.play_mode,
+        state.runtime.premium_free_available,
+    );
 }
 
 pub fn sync_runtime_view(state: &mut State, runtime: SelectFlowRuntimeView) {
     state.runtime = runtime;
+    if state.flow.selected_index() >= state.flow.choice_count() {
+        state.flow.reset(
+            state.runtime.play_mode,
+            state.runtime.premium_free_available,
+        );
+    }
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -465,7 +483,7 @@ pub fn push_actors(
     let label_unselected = color::rgba_hex("#888888");
     let zoom_den =
         (mode_flow::CHOICE_ZOOM_FOCUSED - mode_flow::CHOICE_ZOOM_UNFOCUSED).max(f32::EPSILON);
-    for (i, label) in labels.iter().enumerate() {
+    for (i, label) in labels.iter().take(state.flow.choice_count()).enumerate() {
         let (x, y) = root_pt(-160.0, mode_flow::CURSOR_HEIGHT.mul_add(i as f32, -60.0));
         let zoom = state.flow.choice_zoom(i);
         let t = ((zoom - mode_flow::CHOICE_ZOOM_UNFOCUSED) / zoom_den).clamp(0.0, 1.0);
@@ -669,7 +687,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 }
 
 #[cfg(any(test, feature = "bench-support"))]
-fn select_mode_text_checksum(values: [&str; 4]) -> u64 {
+fn select_mode_text_checksum(values: [&str; 5]) -> u64 {
     values.iter().fold(0u64, |checksum, value| {
         value
             .bytes()
@@ -700,6 +718,7 @@ impl SelectModeTextBenchmark {
             title.as_ref(),
             labels[0].as_str(),
             labels[1].as_str(),
+            labels[2].as_str(),
             description.as_str(),
         ])
     }
@@ -713,6 +732,7 @@ impl SelectModeTextBenchmark {
             title.as_ref(),
             labels[0].as_ref(),
             labels[1].as_ref(),
+            labels[2].as_ref(),
             description.as_ref(),
         ])
     }

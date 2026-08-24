@@ -59,12 +59,13 @@ pub fn default_keymap() -> Keymap {
     km.bind(A::p2_start, &[InputBinding::Key(KeyCode::NumpadEnter)]);
     km.bind(A::p2_back, &[InputBinding::Key(KeyCode::Numpad0)]);
     km.bind(A::p1_operator, &[InputBinding::Key(KeyCode::ScrollLock)]);
+    km.bind(A::p1_coin, &[InputBinding::Key(KeyCode::F1)]);
     km.bind(A::system_fast_forward, &[InputBinding::Key(KeyCode::Tab)]);
     km.bind(
         A::system_slow_down,
         &[InputBinding::Key(KeyCode::Backquote)],
     );
-    // Leave dedicated menu buttons, P2 operator, and restart unbound by default for now.
+    // Leave dedicated menu buttons, P2 operator/coin, and restart unbound by default for now.
     km
 }
 
@@ -162,7 +163,7 @@ where
     km
 }
 
-pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 30] = [
+pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 32] = [
     ("P1_Back", "KeyCode::Escape"),
     ("P1_Down", "KeyCode::ArrowDown,KeyCode::KeyQ"),
     ("P1_Left", "KeyCode::ArrowLeft,KeyCode::KeyZ"),
@@ -193,6 +194,8 @@ pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 30] = [
     ("System_SlowDown", "KeyCode::Backquote"),
     ("P1_Center", "KeyCode::Space,KeyCode::KeyS"),
     ("P2_Center", "KeyCode::Numpad5"),
+    ("P1_Coin", "KeyCode::F1"),
+    ("P2_Coin", ""),
 ];
 
 pub fn keymap_ini_lines(keymap: &Keymap) -> Vec<(&'static str, String)> {
@@ -239,6 +242,7 @@ pub const fn default_key_for_action(action: VirtualAction) -> Option<KeyCode> {
         A::p1_start => Some(KeyCode::Enter),
         A::p1_back => Some(KeyCode::Escape),
         A::p1_operator => Some(KeyCode::ScrollLock),
+        A::p1_coin => Some(KeyCode::F1),
         A::p2_up => Some(KeyCode::Numpad8),
         A::p2_down => Some(KeyCode::Numpad2),
         A::p2_left => Some(KeyCode::Numpad4),

@@ -14,6 +14,8 @@ pub enum NavWrap {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SubmenuKind {
+    Coin,
+    Bookkeeping,
     System,
     Graphics,
     Input,
@@ -37,7 +39,9 @@ pub enum SubmenuKind {
 }
 
 impl SubmenuKind {
-    pub(super) const ALL: [Self; 20] = [
+    pub(super) const ALL: [Self; 22] = [
+        Self::Coin,
+        Self::Bookkeeping,
         Self::System,
         Self::Graphics,
         Self::Input,
@@ -171,6 +175,7 @@ pub struct State {
     pub(super) audio_options: AudioOptionsView,
     pub(super) song_packs: Vec<OptionsSongPackView>,
     pub(super) pack_sync: OptionsPackSyncView,
+    pub(super) bookkeeping: crate::views::BookkeepingView,
     pub(super) scorebox_cycle_mask: u8,
     pub(super) auto_screenshot_mask: u8,
     pub(super) chart_info_mask: u8,
@@ -312,6 +317,22 @@ impl State {
     }
 }
 
+fn nearest_u8_index(values: &[u8], target: u8) -> usize {
+    values
+        .iter()
+        .enumerate()
+        .min_by_key(|(_, value)| value.abs_diff(target))
+        .map_or(0, |(index, _)| index)
+}
+
+fn nearest_u16_index(values: &[u16], target: u16) -> usize {
+    values
+        .iter()
+        .enumerate()
+        .min_by_key(|(_, value)| value.abs_diff(target))
+        .map_or(0, |(index, _)| index)
+}
+
 pub fn init(view: OptionsInitView) -> State {
     let OptionsInitView {
         config: cfg,
@@ -327,6 +348,7 @@ pub fn init(view: OptionsInitView) -> State {
         smx_assignment,
         smx_gifs: smx_gif_catalog,
         score_import_profiles,
+        bookkeeping,
     } = view;
     let display_aspect_ratio =
         if graphics_options.aspect_ratio.is_finite() && graphics_options.aspect_ratio > 0.0 {
@@ -386,6 +408,7 @@ pub fn init(view: OptionsInitView) -> State {
         audio_options,
         song_packs,
         pack_sync,
+        bookkeeping,
         scorebox_cycle_mask: scorebox_cycle_mask_from_config(&cfg),
         auto_screenshot_mask: cfg.auto_screenshot_eval,
         chart_info_mask: select_music_chart_info_mask_from_config(&cfg),
@@ -546,6 +569,64 @@ pub fn init(view: OptionsInitView) -> State {
     );
     sync_display_aspect_ratio(&mut state, display_aspect_ratio);
     sync_display_resolution(&mut state, graphics_options.width, graphics_options.height);
+
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Coin].choice_indices,
+        COIN_OPTIONS_ROWS,
+        SubRowId::CoinMode,
+        COIN_MODE_VALUES
+            .iter()
+            .position(|mode| *mode == cfg.coin.mode)
+            .unwrap_or(0),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Coin].choice_indices,
+        COIN_OPTIONS_ROWS,
+        SubRowId::EventMode,
+        yes_no_choice_index(cfg.coin.event_mode),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Coin].choice_indices,
+        COIN_OPTIONS_ROWS,
+        SubRowId::CoinsPerCredit,
+        usize::from(cfg.coin.coins_per_credit.saturating_sub(1)),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Coin].choice_indices,
+        COIN_OPTIONS_ROWS,
+        SubRowId::SongsPerPlay,
+        usize::from(cfg.coin.songs_per_play.saturating_sub(1)),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Coin].choice_indices,
+        COIN_OPTIONS_ROWS,
+        SubRowId::PremiumFree,
+        nearest_u8_index(&PREMIUM_MINUTE_VALUES, cfg.coin.premium_free_minutes),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Coin].choice_indices,
+        COIN_OPTIONS_ROWS,
+        SubRowId::PremiumGrace,
+        nearest_u16_index(&PREMIUM_GRACE_VALUES, cfg.coin.premium_free_grace_seconds),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Coin].choice_indices,
+        COIN_OPTIONS_ROWS,
+        SubRowId::ContinueOnGiveUp,
+        yes_no_choice_index(cfg.coin.continue_on_give_up),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Coin].choice_indices,
+        COIN_OPTIONS_ROWS,
+        SubRowId::LongSongTime,
+        nearest_u16_index(&LONG_SONG_VALUES, cfg.coin.long_song_seconds),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Coin].choice_indices,
+        COIN_OPTIONS_ROWS,
+        SubRowId::MarathonSongTime,
+        nearest_u16_index(&MARATHON_SONG_VALUES, cfg.coin.marathon_song_seconds),
+    );
 
     set_choice_by_id(
         &mut state.sub[SubmenuKind::System].choice_indices,

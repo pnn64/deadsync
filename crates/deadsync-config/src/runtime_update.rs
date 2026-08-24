@@ -1,6 +1,7 @@
 use crate::app_config::{Config, DisplayMode};
 use crate::app_update as config_update;
 use crate::audio::NoteScrollClock;
+use crate::coin::CoinMode;
 use crate::null_or_die::GraphOrigin;
 use crate::runtime::{RUNTIME_CONFIG, get, save_without_keymaps};
 use crate::theme::{
@@ -110,6 +111,15 @@ update_config_fn!(pub fn update_fastload(enabled: bool) => set_fastload);
 update_config_fn!(pub fn update_allow_song_deletion(enabled: bool) => set_allow_song_deletion);
 
 update_config_fn!(pub fn update_arcade_options_navigation(enabled: bool) => set_arcade_options_navigation);
+update_config_fn!(pub fn update_coin_mode(mode: CoinMode) => set_coin_mode);
+update_config_fn!(pub fn update_coins_per_credit(coins: u8) => set_coins_per_credit);
+update_config_fn!(pub fn update_songs_per_play(songs: u8) => set_songs_per_play);
+update_config_fn!(pub fn update_event_mode(enabled: bool) => set_event_mode);
+update_config_fn!(pub fn update_premium_free_minutes(minutes: u8) => set_premium_free_minutes);
+update_config_fn!(pub fn update_premium_free_grace_seconds(seconds: u16) => set_premium_free_grace_seconds);
+update_config_fn!(pub fn update_continue_on_give_up(enabled: bool) => set_continue_on_give_up);
+update_config_fn!(pub fn update_long_song_seconds(seconds: u16) => set_long_song_seconds);
+update_config_fn!(pub fn update_marathon_song_seconds(seconds: u16) => set_marathon_song_seconds);
 update_config_fn!(pub fn update_delayed_back(enabled: bool) => set_delayed_back);
 update_config_fn!(pub fn update_use_fsrs(enabled: bool) => set_use_fsrs);
 runtime_config_fn!(pub fn update_smx_input(enabled: bool) => update_smx_input);

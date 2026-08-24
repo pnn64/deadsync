@@ -1,4 +1,5 @@
 use crate::audio::{AudioOptions, NoteScrollClock};
+use crate::coin::CoinOptions;
 use crate::defaults::*;
 use crate::null_or_die::{GraphOrigin, NullOrDieOptions};
 use crate::options::{RuntimeOptions, SelectMusicOptions, SmxPackName, SystemOptions};
@@ -33,6 +34,7 @@ pub enum DisplayMode {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
+    pub coin: CoinOptions,
     pub vsync: bool,
     /// Stored MaxFPS cap value. `0` means "off".
     pub max_fps: u16,
@@ -379,6 +381,7 @@ impl Default for Config {
         let runtime = RuntimeOptions::default();
 
         Self {
+            coin: system.coin,
             vsync: DEFAULT_VSYNC,
             max_fps: DEFAULT_MAX_FPS,
             present_mode_policy: PresentModePolicy::Mailbox,

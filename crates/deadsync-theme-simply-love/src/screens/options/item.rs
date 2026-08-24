@@ -5,6 +5,8 @@ use super::*;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ItemId {
     // Top-level Options menu
+    ArcadeOptions,
+    Bookkeeping,
     SystemOptions,
     GraphicsOptions,
     SoundOptions,
@@ -26,6 +28,23 @@ pub enum ItemId {
     DownloadVideoSupport,
     Credits,
     Exit,
+
+    // Arcade Options submenu
+    CoinMode,
+    CoinEventMode,
+    CoinCoinsPerCredit,
+    CoinSongsPerPlay,
+    CoinPremiumFree,
+    CoinPremiumGrace,
+    CoinContinueOnGiveUp,
+    CoinLongSongTime,
+    CoinMarathonSongTime,
+
+    // Bookkeeping submenu
+    BookkeepingCoins,
+    BookkeepingCredits,
+    BookkeepingPlays,
+    BookkeepingStages,
 
     // System Options submenu
     SysGame,
@@ -468,6 +487,22 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowStageDisplay")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowGSBox")),
         ],
+    },
+    Item {
+        id: ItemId::ArcadeOptions,
+        name: lookup_key("Options", "ArcadeOptions"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ArcadeOptionsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::Bookkeeping,
+        name: lookup_key("Options", "Bookkeeping"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "BookkeepingHelp",
+        ))],
     },
     Item {
         id: ItemId::AdvancedOptions,

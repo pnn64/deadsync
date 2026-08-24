@@ -3601,6 +3601,20 @@ pub fn sync_elapsed(state: &mut State, session_elapsed: f32, gameplay_elapsed: f
     state.gameplay_timer.sync(gameplay_elapsed);
 }
 
+/// Premium Free replaces the normal elapsed session clock with its countdown.
+pub fn sync_premium_free_countdown(state: &mut State, seconds_left: Option<u32>) {
+    if let Some(seconds_left) = seconds_left {
+        state.session_timer.sync(seconds_left as f32);
+    }
+}
+
+pub fn has_selectable_songs(state: &State) -> bool {
+    state
+        .entries
+        .iter()
+        .any(|entry| matches!(entry, MusicWheelEntry::Song(_)))
+}
+
 #[inline(always)]
 pub const fn elapsed_times(state: &State) -> (f32, f32) {
     (state.session_elapsed, state.gameplay_elapsed)
@@ -4891,7 +4905,10 @@ const fn input_side(action: VirtualAction) -> Option<profile_data::PlayerSide> {
         | VirtualAction::p2_operator
         | VirtualAction::p2_restart
         | VirtualAction::p2_center => Some(profile_data::PlayerSide::P2),
-        VirtualAction::system_fast_forward | VirtualAction::system_slow_down => None,
+        VirtualAction::p1_coin
+        | VirtualAction::p2_coin
+        | VirtualAction::system_fast_forward
+        | VirtualAction::system_slow_down => None,
     }
 }
 

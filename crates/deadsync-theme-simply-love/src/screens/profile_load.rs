@@ -34,7 +34,9 @@ pub fn on_enter(state: &mut State, play_mode: profile_data::PlayMode) {
     state.ready = false;
     state.next_screen = match play_mode {
         profile_data::PlayMode::Marathon => Screen::SelectCourse,
-        profile_data::PlayMode::Regular => Screen::SelectMusic,
+        profile_data::PlayMode::Regular | profile_data::PlayMode::PremiumFree => {
+            Screen::SelectMusic
+        }
     };
 }
 

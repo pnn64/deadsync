@@ -1,5 +1,9 @@
 use crate::app_config::{Config, DisplayMode};
 use crate::audio::{NoteScrollClock, clamp_audio_volume_percent, clamp_music_wheel_switch_speed};
+use crate::coin::{
+    CoinMode, MAX_COINS_PER_CREDIT, MAX_PREMIUM_FREE_MINUTES, MAX_SONG_CUTOFF_SECONDS,
+    MAX_SONGS_PER_PLAY, MIN_COINS_PER_CREDIT, MIN_SONGS_PER_PLAY,
+};
 use crate::machine::clamp_smx_light_brightness_percent;
 use crate::null_or_die::{
     GraphOrigin, clamp_null_or_die_confidence_percent, clamp_null_or_die_magic_offset_ms,
@@ -130,6 +134,59 @@ pub fn set_input_debounce_seconds(cfg: &mut Config, seconds: f32) -> bool {
 
 pub fn set_arcade_options_navigation(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.arcade_options_navigation, enabled)
+}
+
+pub fn set_coin_mode(cfg: &mut Config, mode: CoinMode) -> bool {
+    set_if_changed(&mut cfg.coin.mode, mode)
+}
+
+pub fn set_coins_per_credit(cfg: &mut Config, coins: u8) -> bool {
+    set_if_changed(
+        &mut cfg.coin.coins_per_credit,
+        coins.clamp(MIN_COINS_PER_CREDIT, MAX_COINS_PER_CREDIT),
+    )
+}
+
+pub fn set_songs_per_play(cfg: &mut Config, songs: u8) -> bool {
+    set_if_changed(
+        &mut cfg.coin.songs_per_play,
+        songs.clamp(MIN_SONGS_PER_PLAY, MAX_SONGS_PER_PLAY),
+    )
+}
+
+pub fn set_event_mode(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.coin.event_mode, enabled)
+}
+
+pub fn set_premium_free_minutes(cfg: &mut Config, minutes: u8) -> bool {
+    set_if_changed(
+        &mut cfg.coin.premium_free_minutes,
+        minutes.min(MAX_PREMIUM_FREE_MINUTES),
+    )
+}
+
+pub fn set_premium_free_grace_seconds(cfg: &mut Config, seconds: u16) -> bool {
+    set_if_changed(
+        &mut cfg.coin.premium_free_grace_seconds,
+        seconds.min(MAX_SONG_CUTOFF_SECONDS),
+    )
+}
+
+pub fn set_continue_on_give_up(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.coin.continue_on_give_up, enabled)
+}
+
+pub fn set_long_song_seconds(cfg: &mut Config, seconds: u16) -> bool {
+    let seconds = seconds.clamp(1, cfg.coin.marathon_song_seconds.saturating_sub(1));
+    set_if_changed(&mut cfg.coin.long_song_seconds, seconds)
+}
+
+pub fn set_marathon_song_seconds(cfg: &mut Config, seconds: u16) -> bool {
+    let seconds = seconds.clamp(
+        cfg.coin.long_song_seconds.saturating_add(1),
+        MAX_SONG_CUTOFF_SECONDS,
+    );
+    set_if_changed(&mut cfg.coin.marathon_song_seconds, seconds)
 }
 
 pub fn set_delayed_back(cfg: &mut Config, enabled: bool) -> bool {

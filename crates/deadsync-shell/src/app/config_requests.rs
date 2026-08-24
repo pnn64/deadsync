@@ -1,7 +1,7 @@
 use deadsync_config::prelude as config;
 use deadsync_profile::compat as profile;
 use deadsync_theme_simply_love::{
-    SimplyLoveAdvancedConfigRequest, SimplyLoveCourseConfigRequest,
+    SimplyLoveAdvancedConfigRequest, SimplyLoveCoinConfigRequest, SimplyLoveCourseConfigRequest,
     SimplyLoveGameplayConfigRequest, SimplyLoveGameplayPadLights, SimplyLoveGraphOrientation,
     SimplyLoveGraphOrigin, SimplyLoveLightsConfigRequest, SimplyLoveLightsDriver,
     SimplyLoveMachineConfigRequest, SimplyLoveNullOrDieConfigRequest, SimplyLoveNullOrDieGraph,
@@ -51,6 +51,24 @@ pub(super) fn execute_options(request: SimplyLoveOptionsConfigRequest) {
         Request::InputDebounceMillis(millis) => {
             config::update_input_debounce_seconds(millis as f32 / 1000.0)
         }
+    }
+}
+
+pub(super) fn execute_coin(request: SimplyLoveCoinConfigRequest) {
+    use SimplyLoveCoinConfigRequest as Request;
+
+    match request {
+        Request::Mode(mode) => config::update_coin_mode(mode),
+        Request::CoinsPerCredit(coins) => config::update_coins_per_credit(coins),
+        Request::SongsPerPlay(songs) => config::update_songs_per_play(songs),
+        Request::EventMode(enabled) => config::update_event_mode(enabled),
+        Request::PremiumFreeMinutes(minutes) => config::update_premium_free_minutes(minutes),
+        Request::PremiumFreeGraceSeconds(seconds) => {
+            config::update_premium_free_grace_seconds(seconds)
+        }
+        Request::ContinueOnGiveUp(enabled) => config::update_continue_on_give_up(enabled),
+        Request::LongSongSeconds(seconds) => config::update_long_song_seconds(seconds),
+        Request::MarathonSongSeconds(seconds) => config::update_marathon_song_seconds(seconds),
     }
 }
 

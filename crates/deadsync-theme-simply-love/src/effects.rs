@@ -4,13 +4,13 @@ use deadlib_present::color::DifficultyColorScheme;
 #[cfg(target_os = "windows")]
 use deadsync_config::prelude::WindowsPadBackend;
 use deadsync_config::prelude::{
-    BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag, GameplayBannerMode, LanguageFlag,
-    LogLevel, MachineBarColor, MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode,
-    MachinePreferredPlayStyle, NewPackMode, NoteScrollClock, RandomBackgroundMode,
-    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
-    SelectMusicScoreboxPlacement, SelectMusicSeriesSource, SelectMusicSongSelectBgMode,
-    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SmxPackName, SmxPadPreset, SrpgVariant,
-    VersionOverlaySide, VisualStyle,
+    BreakdownStyle, CoinMode, DefaultFailType, DefaultSyncOffset, GameFlag, GameplayBannerMode,
+    LanguageFlag, LogLevel, MachineBarColor, MachineEvaluationStyle, MachineFont,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, NoteScrollClock,
+    RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
+    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSeriesSource,
+    SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SmxPackName,
+    SmxPadPreset, SrpgVariant, VersionOverlaySide, VisualStyle,
 };
 use deadsync_input::{InputBinding, KeyCode, VirtualAction};
 use deadsync_profile::{ActiveProfile, PlayMode, PlayStyle, PlayerSide};
@@ -618,6 +618,20 @@ pub enum SimplyLoveMachineConfigRequest {
     WriteCurrentScreen(bool),
 }
 
+/// Coin, stage, and timed-session preferences chosen in Arcade Options.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveCoinConfigRequest {
+    Mode(CoinMode),
+    CoinsPerCredit(u8),
+    SongsPerPlay(u8),
+    EventMode(bool),
+    PremiumFreeMinutes(u8),
+    PremiumFreeGraceSeconds(u16),
+    ContinueOnGiveUp(bool),
+    LongSongSeconds(u16),
+    MarathonSongSeconds(u16),
+}
+
 /// Advanced loading preferences chosen by Simply Love and persisted by shell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimplyLoveAdvancedConfigRequest {
@@ -789,6 +803,7 @@ pub enum SimplyLoveConfigRequest {
         add_height: i32,
     },
     Advanced(SimplyLoveAdvancedConfigRequest),
+    Coin(SimplyLoveCoinConfigRequest),
     Course(SimplyLoveCourseConfigRequest),
     Gameplay(SimplyLoveGameplayConfigRequest),
     Lights(SimplyLoveLightsConfigRequest),

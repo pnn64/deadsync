@@ -2,6 +2,21 @@ use super::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SubRowId {
+    // Arcade Options
+    CoinMode,
+    EventMode,
+    CoinsPerCredit,
+    SongsPerPlay,
+    PremiumFree,
+    PremiumGrace,
+    ContinueOnGiveUp,
+    LongSongTime,
+    MarathonSongTime,
+    // Bookkeeping
+    CoinsInserted,
+    CreditsSpent,
+    PlaysStarted,
+    StagesPlayed,
     // System Options
     Game,
     Theme,

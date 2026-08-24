@@ -239,6 +239,7 @@ fn apply_display_opts(
 }
 
 fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
+    cfg.coin = loaded.coin;
     cfg.game_flag = loaded.game_flag;
     cfg.auto_download_unlocks = loaded.auto_download_unlocks;
     cfg.auto_populate_gs_scores = loaded.auto_populate_gs_scores;

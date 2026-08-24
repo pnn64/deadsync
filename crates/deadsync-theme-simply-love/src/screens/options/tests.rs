@@ -63,6 +63,7 @@ fn init_with_config_and_audio(config: config::Config, audio_options: AudioOption
         smx_assignment: deadsync_theme::views::SmxAssignmentView::default(),
         smx_gifs: deadsync_theme::views::SmxGifCatalogView::default(),
         score_import_profiles: Vec::new(),
+        bookkeeping: Default::default(),
     })
 }
 
@@ -377,6 +378,7 @@ fn smx_gif_choices_come_from_shell_catalog() {
             judgment_packs: vec!["Judgment Pack".to_owned()],
         },
         score_import_profiles: Vec::new(),
+        bookkeeping: Default::default(),
     });
 
     assert_eq!(state.smx_bg_pack_choices, ["Background Pack"]);
@@ -633,6 +635,92 @@ fn machine_choice_emits_shell_config_request() {
 }
 
 #[test]
+fn coin_options_initialize_and_follow_mode_locks() {
+    let mut state = init_with_config(config::Config {
+        coin: config::CoinOptions {
+            mode: config::CoinMode::Pay,
+            coins_per_credit: 3,
+            songs_per_play: 5,
+            event_mode: true,
+            premium_free_minutes: 12,
+            ..config::CoinOptions::default()
+        },
+        ..config::Config::default()
+    });
+    state.view = OptionsView::Submenu(SubmenuKind::Coin);
+
+    assert_eq!(
+        get_choice_by_id(
+            &state.sub[SubmenuKind::Coin].choice_indices,
+            COIN_OPTIONS_ROWS,
+            SubRowId::CoinMode,
+        ),
+        Some(1)
+    );
+    assert_eq!(
+        get_choice_by_id(
+            &state.sub[SubmenuKind::Coin].choice_indices,
+            COIN_OPTIONS_ROWS,
+            SubRowId::CoinsPerCredit,
+        ),
+        Some(2)
+    );
+    assert!(is_submenu_row_disabled(
+        &state,
+        SubmenuKind::Coin,
+        SubRowId::EventMode
+    ));
+    assert!(!is_submenu_row_disabled(
+        &state,
+        SubmenuKind::Coin,
+        SubRowId::PremiumFree
+    ));
+}
+
+#[test]
+fn coin_choice_emits_typed_shell_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Coin);
+    select_visible_row(&mut state, SubmenuKind::Coin, SubRowId::SongsPerPlay);
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("coin choice should emit shell config work");
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Coin(crate::SimplyLoveCoinConfigRequest::SongsPerPlay(
+                4
+            ))
+        ))
+    ));
+}
+
+#[test]
+fn bookkeeping_rows_show_shell_counters_and_are_read_only() {
+    let mut state = init();
+    state.bookkeeping = crate::views::BookkeepingView {
+        coins_inserted: 12,
+        credits_spent: 8,
+        plays_started: 5,
+        stages_played: 17,
+    };
+    let row = row_position(BOOKKEEPING_ROWS, SubRowId::StagesPlayed)
+        .expect("bookkeeping must contain the stages-played row");
+
+    assert_eq!(
+        row_choices(&state, SubmenuKind::Bookkeeping, BOOKKEEPING_ROWS, row)[0],
+        "17"
+    );
+    assert!(is_submenu_row_disabled(
+        &state,
+        SubmenuKind::Bookkeeping,
+        SubRowId::StagesPlayed
+    ));
+}
+
+#[test]
 fn advanced_choice_emits_shell_config_request() {
     let asset_manager = AssetManager::new();
     let mut state = init();
@@ -770,6 +858,7 @@ fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
         smx_assignment: SmxAssignmentView::default(),
         smx_gifs: SmxGifCatalogView::default(),
         score_import_profiles: Vec::new(),
+        bookkeeping: Default::default(),
     };
     let mut state = super::init(view.clone());
     state.view = OptionsView::Submenu(SubmenuKind::Gameplay);

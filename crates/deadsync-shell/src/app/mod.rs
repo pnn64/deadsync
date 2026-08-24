@@ -117,7 +117,8 @@ use deadsync_profile_gameplay::{
 };
 use deadsync_simfile::{app_runtime as song_loading, sync_offset};
 use deadsync_theme_simply_love::views::{
-    OptionsInitView, OptionsPackSyncView, OptionsSongPackView, TimingHealth,
+    BookkeepingView, OptionsInitView, OptionsPackSyncView, OptionsSongPackView,
+    SelectMusicInitView, TimingHealth,
 };
 use deadsync_theme_simply_love::{
     screens::{
@@ -638,6 +639,7 @@ pub struct AppState {
     shell: ShellState,
     screens: ScreensState,
     session: SessionState,
+    coin: crate::coin::State,
     gameplay_offset_save_prompt: Option<GameplayOffsetSavePrompt>,
     play_input_policy: InputRoutePolicy,
 }
@@ -1012,7 +1014,19 @@ fn noteskin_catalog_view() -> NoteskinCatalogView {
     }
 }
 
-fn options_init_view(audio: AudioOptionsView) -> OptionsInitView {
+fn bookkeeping_view(bookkeeping: crate::coin::Bookkeeping) -> BookkeepingView {
+    BookkeepingView {
+        coins_inserted: bookkeeping.coins_inserted,
+        credits_spent: bookkeeping.credits_spent,
+        plays_started: bookkeeping.plays_started,
+        stages_played: bookkeeping.stages_played,
+    }
+}
+
+fn options_init_view(
+    audio: AudioOptionsView,
+    bookkeeping: crate::coin::Bookkeeping,
+) -> OptionsInitView {
     OptionsInitView {
         config: config::get(),
         judgment_palettes: (*deadsync_config::judgment_palettes::runtime_catalog()).clone(),
@@ -1027,6 +1041,7 @@ fn options_init_view(audio: AudioOptionsView) -> OptionsInitView {
         smx_assignment: crate::smx_config::smx_assignment_view(),
         smx_gifs: crate::smx_config::smx_gif_catalog_view(),
         score_import_profiles: crate::options_runtime::score_import_profiles(),
+        bookkeeping: bookkeeping_view(bookkeeping),
     }
 }
 
@@ -1036,6 +1051,7 @@ impl ScreensState {
         preferred_difficulty_index: usize,
         dedicated_three_key_nav: bool,
         audio_options: AudioOptionsView,
+        bookkeeping: crate::coin::Bookkeeping,
     ) -> Self {
         let mut menu_state = menu::init();
         menu_state.active_color_index = color_index;
@@ -1077,7 +1093,7 @@ impl ScreensState {
         let app_paths = app_paths_view();
         let init_songs_root = app_paths.songs.path.clone();
         let init_courses_root = app_paths.courses.path.clone();
-        let mut options_state = options::init(options_init_view(audio_options));
+        let mut options_state = options::init(options_init_view(audio_options, bookkeeping));
         options_state.active_color_index = color_index;
 
         let mut credits_state = credits::init();
@@ -1163,6 +1179,7 @@ impl ScreensState {
         delta_time: f32,
         now: Instant,
         session: &SessionState,
+        premium_seconds_left: Option<u32>,
         asset_manager: &AssetManager,
         audio: &mut deadsync_audio_stream::AudioControl,
         gameplay_sfx: &GameplaySfx,
@@ -1349,13 +1366,23 @@ impl ScreensState {
                     session_elapsed,
                     gameplay_elapsed,
                 );
-                select_music::update(
+                select_music::sync_premium_free_countdown(
                     &mut self.select_music_state,
-                    delta_time,
-                    smx_assignment.expect("Select Music requires the live SMX assignment view"),
-                    effects,
+                    premium_seconds_left,
                 );
-                (None, false)
+                if premium_seconds_left.is_some()
+                    && !select_music::has_selectable_songs(&self.select_music_state)
+                {
+                    (Some(ThemeEffect::Navigate(CurrentScreen::Menu)), false)
+                } else {
+                    select_music::update(
+                        &mut self.select_music_state,
+                        delta_time,
+                        smx_assignment.expect("Select Music requires the live SMX assignment view"),
+                        effects,
+                    );
+                    (None, false)
+                }
             }
             CurrentScreen::SelectCourse => {
                 if let Some(start) = session.session_start_time {
@@ -1388,17 +1415,25 @@ impl AppState {
 
         let shell = ShellState::new(&cfg, overlay_mode);
         let session = SessionState::new(preferred, profile::combo_carry());
+        let coin = crate::coin::State::load(
+            deadlib_platform::dirs::app_dirs()
+                .data_dir
+                .join("save")
+                .join("bookkeeping.json"),
+        );
         let screens = ScreensState::new(
             color_index,
             preferred,
             cfg.three_key_navigation && cfg.only_dedicated_menu_buttons,
             audio_options,
+            coin.bookkeeping(),
         );
 
         Self {
             shell,
             screens,
             session,
+            coin,
             gameplay_offset_save_prompt: None,
             play_input_policy: InputRoutePolicy::from_config(&cfg),
         }
@@ -2565,8 +2600,34 @@ impl App {
     }
 
     fn sync_main_menu_runtime_view(&mut self) {
-        let view = crate::main_menu::runtime_view();
+        let coin = config::get().coin;
+        let view = crate::main_menu::runtime_view(self.state.coin.credits(coin));
         menu::sync_runtime_view(&mut self.state.screens.menu_state, view);
+    }
+
+    fn coin_select_music_init_view(&self, mut view: SelectMusicInitView) -> SelectMusicInitView {
+        let options = config::get().coin;
+        let session = profile::get_session_snapshot();
+        let premium_free = matches!(session.play_mode, profile_data::PlayMode::PremiumFree);
+        let now = Instant::now();
+        for pack in &mut view.song_packs {
+            pack.songs.retain(|song| {
+                if premium_free {
+                    self.state
+                        .coin
+                        .premium_song_allowed(options, song.music_length_seconds, now)
+                } else {
+                    self.state.coin.song_allowed(
+                        options,
+                        song.precise_last_second(),
+                        session.music_rate,
+                        now,
+                    )
+                }
+            });
+        }
+        view.song_packs.retain(|pack| !pack.songs.is_empty());
+        view
     }
 
     fn sync_light_input(&mut self, ev: &InputEvent) {
@@ -3243,11 +3304,23 @@ impl App {
                         | CurrentScreen::SelectMusic
                 )
                 .then(crate::smx_config::smx_assignment_view);
+                let coin_options = config::get().coin;
+                let premium_seconds_left = matches!(
+                    profile::get_session_play_mode(),
+                    profile_data::PlayMode::PremiumFree
+                )
+                .then(|| {
+                    self.state
+                        .coin
+                        .premium_seconds_left(coin_options, redraw_started)
+                        .unwrap_or(coin_options.premium_free_seconds())
+                });
                 debug_assert!(self.theme_effect_scratch.is_empty());
                 self.state.screens.step_idle(
                     logic_dt,
                     redraw_started,
                     &self.state.session,
+                    premium_seconds_left,
                     &self.asset_manager,
                     &mut self.audio,
                     &self.gameplay_sfx,
@@ -3817,8 +3890,10 @@ impl App {
         let main_selection = options_entry_restores_main_selection(from)
             .then_some(self.state.screens.options_state.selected);
         let current_color_index = self.state.screens.options_state.active_color_index;
-        self.state.screens.options_state =
-            options::init(options_init_view(audio_requests::options_view(&self.audio)));
+        self.state.screens.options_state = options::init(options_init_view(
+            audio_requests::options_view(&self.audio),
+            self.state.coin.bookkeeping(),
+        ));
         self.state.screens.options_state.active_color_index = current_color_index;
         if let Some(selected) = main_selection {
             self.state
@@ -4584,6 +4659,10 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Advanced(request)) => {
                     config_requests::execute_advanced(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Coin(request)) => {
+                    config_requests::execute_coin(request);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Course(request)) => {
@@ -5640,7 +5719,26 @@ impl App {
 
         let color_idx = self.state.screens.evaluation_state.active_color_index;
         let eval_snapshot = self.state.screens.evaluation_state.clone();
-        let _ = self.append_stage_results_from_eval(&eval_snapshot);
+        let in_course_run = self.state.session.course_run.is_some();
+        let stage = self.append_stage_results_from_eval(&eval_snapshot);
+        if let Some(stage) = stage {
+            if in_course_run {
+                self.state.coin.record_course_stage();
+            } else {
+                let gave_up = !screens::evaluation::all_joined_players_failed(&eval_snapshot)
+                    && eval_snapshot
+                        .score_info
+                        .iter()
+                        .flatten()
+                        .any(|score| !score.score_valid && !score.disqualified);
+                self.state.coin.record_stage(
+                    config.coin,
+                    stage.song.precise_last_second(),
+                    stage.music_rate,
+                    gave_up,
+                );
+            }
+        }
         self.state.screens.evaluation_state.return_to_course =
             self.state.session.course_run.is_some();
         self.state.screens.evaluation_state.auto_advance_seconds = None;
@@ -5872,6 +5970,15 @@ impl App {
         ) else {
             return false;
         };
+
+        let coin = config::get().coin;
+        if !self.state.coin.join_player(coin) {
+            self.state
+                .shell
+                .interaction
+                .show_message("INSERT COIN".to_string(), Instant::now());
+            return true;
+        }
 
         debug_assert!(self.theme_effect_scratch.is_empty());
 
@@ -7582,6 +7689,10 @@ impl App {
         if !self.state.session.begin_play_session(Instant::now()) {
             return;
         }
+        let coin = config::get().coin;
+        if matches!(coin.mode, config::CoinMode::Home) {
+            let _ = self.state.coin.begin_play(coin);
+        }
         self.pad_config_sync.reset_signatures();
         debug!("Session timer started.");
     }
@@ -7751,8 +7862,8 @@ impl App {
             self.sync_profile_load_state(&profiles);
             let play_mode = profile::get_session_play_mode();
             profile_load::on_enter(&mut self.state.screens.profile_load_state, play_mode);
-            self.profile_load
-                .start(play_mode, crate::select_music::init_view());
+            let select_music = self.coin_select_music_init_view(crate::select_music::init_view());
+            self.profile_load.start(play_mode, select_music);
         } else if target == CurrentScreen::PlayerOptions {
             if prev == CurrentScreen::SelectCourse {
                 if !self.start_course_run_from_selected() {
@@ -8812,6 +8923,13 @@ impl App {
             self.state.session.clear_course_runtime();
             self.begin_play_session();
             let profile_session = profile::get_session_snapshot();
+            if matches!(
+                profile_session.play_mode,
+                profile_data::PlayMode::PremiumFree
+            ) && !self.state.coin.premium_free_active()
+            {
+                self.state.coin.start_premium_free(Instant::now());
+            }
 
             match prev {
                 CurrentScreen::PlayerOptions => {
@@ -8896,7 +9014,15 @@ impl App {
                         &mut self.state.screens.select_music_state,
                     );
                 }
-                CurrentScreen::Gameplay | CurrentScreen::Practice | CurrentScreen::Evaluation => {
+                CurrentScreen::Evaluation => {
+                    let color_index = self.state.screens.select_music_state.active_color_index;
+                    let init_view =
+                        self.coin_select_music_init_view(crate::select_music::prepared_init_view());
+                    let mut refreshed = select_music::init(init_view);
+                    refreshed.active_color_index = color_index;
+                    self.state.screens.select_music_state = refreshed;
+                }
+                CurrentScreen::Gameplay | CurrentScreen::Practice => {
                     select_music::reset_preview_after_gameplay(
                         &mut self.state.screens.select_music_state,
                         crate::select_music::history_view(),
@@ -8915,8 +9041,9 @@ impl App {
                 _ => {
                     let current_color_index =
                         self.state.screens.select_music_state.active_color_index;
-                    let mut refreshed =
-                        select_music::init(crate::select_music::prepared_init_view());
+                    let init_view =
+                        self.coin_select_music_init_view(crate::select_music::prepared_init_view());
+                    let mut refreshed = select_music::init(init_view);
                     select_music::adopt_song_search_generation(
                         &mut refreshed,
                         &self.state.screens.select_music_state,
@@ -8958,6 +9085,21 @@ impl App {
                 &mut self.state.screens.select_music_state,
                 session_elapsed,
                 gameplay_elapsed,
+            );
+            let coin_options = config::get().coin;
+            let premium_seconds_left = matches!(
+                profile::get_session_play_mode(),
+                profile_data::PlayMode::PremiumFree
+            )
+            .then(|| {
+                self.state
+                    .coin
+                    .premium_seconds_left(coin_options, Instant::now())
+                    .unwrap_or(coin_options.premium_free_seconds())
+            });
+            select_music::sync_premium_free_countdown(
+                &mut self.state.screens.select_music_state,
+                premium_seconds_left,
             );
 
             // Prime the delayed panes (tech counts, breakdown, etc.) for the selected chart so they

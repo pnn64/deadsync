@@ -4016,6 +4016,7 @@ pub enum PlayMode {
     #[default]
     Regular,
     Marathon,
+    PremiumFree,
 }
 
 pub const fn play_style_from_machine_preference(

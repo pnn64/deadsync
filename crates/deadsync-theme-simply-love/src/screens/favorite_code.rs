@@ -87,7 +87,10 @@ impl FavoriteCodeTracker {
             | VirtualAction::p2_operator
             | VirtualAction::p2_restart
             | VirtualAction::p2_center => Some(PlayerSide::P2),
-            VirtualAction::system_fast_forward | VirtualAction::system_slow_down => None,
+            VirtualAction::p1_coin
+            | VirtualAction::p2_coin
+            | VirtualAction::system_fast_forward
+            | VirtualAction::system_slow_down => None,
         }
     }
 

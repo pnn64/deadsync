@@ -46,6 +46,12 @@ const MAX_OPTION_COUNT: usize = OPTION_COUNT + 1;
 
 #[inline]
 fn option_count(state: &State) -> usize {
+    if !matches!(
+        state.runtime_view.coin_mode,
+        deadsync_config::prelude::CoinMode::Home
+    ) {
+        return 1;
+    }
     if state.runtime_view.allow_shutdown_host {
         OPTION_COUNT + 1
     } else {
@@ -55,6 +61,12 @@ fn option_count(state: &State) -> usize {
 
 #[inline]
 fn shutdown_index(state: &State) -> Option<usize> {
+    if !matches!(
+        state.runtime_view.coin_mode,
+        deadsync_config::prelude::CoinMode::Home
+    ) {
+        return None;
+    }
     state
         .runtime_view
         .allow_shutdown_host
@@ -187,6 +199,7 @@ pub struct State {
     local_ip_text_cache: RefCell<Option<(Arc<str>, Arc<str>)>>,
     groovestats_text_cache: RefCell<Option<StatusTextCache<MainMenuGrooveStatus, 3>>>,
     arrowcloud_text_cache: RefCell<Option<StatusTextCache<MainMenuArrowCloudStatus, 1>>>,
+    credit_text_cache: RefCell<Option<(u32, Arc<str>)>>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; 2],
     row_anims: [RowAnim; MAX_OPTION_COUNT],
@@ -207,6 +220,7 @@ pub fn init() -> State {
         local_ip_text_cache: RefCell::new(None),
         groovestats_text_cache: RefCell::new(None),
         arrowcloud_text_cache: RefCell::new(None),
+        credit_text_cache: RefCell::new(None),
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; 2],
         row_anims: [ROW_FOCUSED, ROW_UNFOCUSED, ROW_UNFOCUSED, ROW_UNFOCUSED],
@@ -221,11 +235,25 @@ pub fn reset_for_entry(state: &mut State) {
 }
 
 pub fn sync_runtime_view(state: &mut State, view: MainMenuRuntimeView) {
+    if state.runtime_view.credits != view.credits {
+        state.credit_text_cache.get_mut().take();
+    }
     state.runtime_view = view;
     let selected_index = state
         .selected_index
         .min(option_count(state).saturating_sub(1));
     set_selected(state, selected_index);
+}
+
+fn credit_text(state: &State) -> Arc<str> {
+    if let Some((credits, text)) = state.credit_text_cache.borrow().as_ref()
+        && *credits == state.runtime_view.credits
+    {
+        return Arc::clone(text);
+    }
+    let text: Arc<str> = Arc::from(format!("CREDITS {}", state.runtime_view.credits));
+    *state.credit_text_cache.borrow_mut() = Some((state.runtime_view.credits, Arc::clone(&text)));
+    text
 }
 
 #[inline(always)]
@@ -755,15 +783,29 @@ pub fn push_actors(
     // --- footer bar ---
     let mut footer_fg = [1.0, 1.0, 1.0, 1.0];
     footer_fg[3] *= alpha_multiplier;
+    let credit_text = credit_text(state);
+    let footer_title = match state.runtime_view.coin_mode {
+        deadsync_config::prelude::CoinMode::Home => chrome_text.event_mode.as_ref(),
+        deadsync_config::prelude::CoinMode::Free if state.runtime_view.event_mode => {
+            chrome_text.event_mode.as_ref()
+        }
+        deadsync_config::prelude::CoinMode::Free => "FREE PLAY",
+        deadsync_config::prelude::CoinMode::Pay => credit_text.as_ref(),
+    };
+    let footer_prompt = if state.runtime_view.can_start {
+        chrome_text.press_start.as_ref()
+    } else {
+        "INSERT COIN"
+    };
     actors.push(screen_bar::build_title_menu(screen_bar::ScreenBarParams {
         visual_policy,
-        title: chrome_text.event_mode.as_ref(),
+        title: footer_title,
         title_placement: screen_bar::ScreenBarTitlePlacement::Center,
         position: screen_bar::ScreenBarPosition::Bottom,
         transparent: true,
-        left_text: Some(chrome_text.press_start.as_ref()),
+        left_text: Some(footer_prompt),
         center_text: None,
-        right_text: Some(chrome_text.press_start.as_ref()),
+        right_text: Some(footer_prompt),
         left_avatar: None,
         right_avatar: None,
         fg_color: footer_fg,

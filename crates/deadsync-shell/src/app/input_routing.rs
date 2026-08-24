@@ -136,6 +136,41 @@ impl App {
         ev: InputEvent,
     ) -> Result<(), Box<dyn Error>> {
         self.sync_light_input(&ev);
+        if ev.pressed
+            && matches!(
+                ev.action,
+                logical_input::VirtualAction::p1_coin | logical_input::VirtualAction::p2_coin
+            )
+        {
+            let coin = config::get().coin;
+            if matches!(coin.mode, config::CoinMode::Pay) {
+                self.state.coin.insert_coin();
+                self.sync_main_menu_runtime_view();
+                let credits = self.state.coin.credits(coin);
+                let session = deadsync_profile::compat::get_session_snapshot();
+                let joined_players = [
+                    deadsync_profile::PlayerSide::P1,
+                    deadsync_profile::PlayerSide::P2,
+                ]
+                .into_iter()
+                .filter(|side| session.side_joined(*side))
+                .count()
+                .max(1) as u32;
+                let message = if self.state.screens.current_screen == CurrentScreen::Evaluation
+                    && self.state.coin.set_over(coin, std::time::Instant::now())
+                    && credits >= joined_players
+                {
+                    "PRESS START TO CONTINUE".to_string()
+                } else {
+                    format!("CREDITS {credits}")
+                };
+                self.state
+                    .shell
+                    .interaction
+                    .show_message(message, std::time::Instant::now());
+            }
+            return Ok(());
+        }
         if self.route_operator_menu_button(&ev) {
             return Ok(());
         }
@@ -143,6 +178,72 @@ impl App {
             return Ok(());
         }
         let current_screen = self.state.screens.current_screen;
+        if current_screen == CurrentScreen::Evaluation
+            && ev.pressed
+            && matches!(
+                ev.action,
+                logical_input::VirtualAction::p1_start
+                    | logical_input::VirtualAction::p2_start
+                    | logical_input::VirtualAction::p1_back
+                    | logical_input::VirtualAction::p2_back
+            )
+        {
+            let coin = config::get().coin;
+            if self.state.coin.set_over(coin, std::time::Instant::now()) {
+                let is_start = matches!(
+                    ev.action,
+                    logical_input::VirtualAction::p1_start | logical_input::VirtualAction::p2_start
+                );
+                if is_start
+                    && matches!(coin.mode, config::CoinMode::Pay)
+                    && !self.state.coin.premium_free_active()
+                {
+                    let session = deadsync_profile::compat::get_session_snapshot();
+                    let joined_players = [
+                        deadsync_profile::PlayerSide::P1,
+                        deadsync_profile::PlayerSide::P2,
+                    ]
+                    .into_iter()
+                    .filter(|side| session.side_joined(*side))
+                    .count()
+                    .max(1) as u8;
+                    if self.state.coin.continue_play(coin, joined_players) {
+                        // The evaluation handler performs the normal transition back to the wheel.
+                    } else {
+                        self.state
+                            .shell
+                            .interaction
+                            .show_message("INSERT COIN".to_string(), std::time::Instant::now());
+                        return Ok(());
+                    }
+                } else {
+                    return self
+                        .handle_action(ThemeEffect::Navigate(CurrentScreen::Menu), event_loop);
+                }
+            }
+        }
+        if current_screen == CurrentScreen::Menu
+            && ev.pressed
+            && matches!(
+                ev.action,
+                logical_input::VirtualAction::p1_start | logical_input::VirtualAction::p2_start
+            )
+        {
+            let coin = config::get().coin;
+            if !matches!(coin.mode, config::CoinMode::Home)
+                && self.state.session.session_start_time.is_none()
+            {
+                if !self.state.coin.begin_play(coin) {
+                    self.state
+                        .shell
+                        .interaction
+                        .show_message("INSERT COIN".to_string(), std::time::Instant::now());
+                    self.sync_main_menu_runtime_view();
+                    return Ok(());
+                }
+                self.begin_play_session();
+            }
+        }
         let input_policy = self.input_route_policy(current_screen);
         let mut menu_ev = ev;
         menu_ev.action = screens::input::menu_action(

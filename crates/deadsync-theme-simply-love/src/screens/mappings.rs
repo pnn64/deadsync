@@ -145,10 +145,10 @@ const fn row_actions(
     row_idx: usize,
 ) -> (Option<VirtualAction>, Option<VirtualAction>) {
     use VirtualAction::{
-        p1_back, p1_center, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right,
+        p1_back, p1_center, p1_coin, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right,
         p1_menu_up, p1_operator, p1_restart, p1_right, p1_select, p1_start, p1_up, p2_back,
-        p2_center, p2_down, p2_left, p2_menu_down, p2_menu_left, p2_menu_right, p2_menu_up,
-        p2_operator, p2_restart, p2_right, p2_select, p2_start, p2_up,
+        p2_center, p2_coin, p2_down, p2_left, p2_menu_down, p2_menu_left, p2_menu_right,
+        p2_menu_up, p2_operator, p2_restart, p2_right, p2_select, p2_start, p2_up,
     };
     match row_idx {
         // Menu navigation
@@ -161,8 +161,7 @@ const fn row_actions(
         5 => (Some(p1_select), Some(p2_select)),
         6 => (Some(p1_back), Some(p2_back)),
         7 => (Some(p1_restart), Some(p2_restart)),
-        // Insert Coin currently global-only; no per-player virtual action yet.
-        8 => (None, None),
+        8 => (Some(p1_coin), Some(p2_coin)),
         // Operator
         9 => (Some(p1_operator), Some(p2_operator)),
         // EffectUp/EffectDown are reserved for future expansion.

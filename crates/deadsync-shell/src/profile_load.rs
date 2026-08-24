@@ -32,7 +32,9 @@ pub(crate) struct Service {
 impl Service {
     pub(crate) fn start(&mut self, play_mode: PlayMode, select_music: SelectMusicInitView) {
         let request = match play_mode {
-            PlayMode::Regular => PrepareRequest::Music(Box::new(select_music)),
+            PlayMode::Regular | PlayMode::PremiumFree => {
+                PrepareRequest::Music(Box::new(select_music))
+            }
             PlayMode::Marathon => PrepareRequest::Course,
         };
         let (tx, rx) = mpsc::sync_channel(1);

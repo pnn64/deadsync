@@ -23,6 +23,7 @@ pub(crate) fn runtime_view() -> SelectFlowRuntimeView {
         game: cfg.game_flag,
         play_style: profile::get_session_play_style(),
         play_mode: profile::get_session_play_mode(),
+        premium_free_available: cfg.coin.premium_free_available(),
         color_index: cfg.simply_love_color,
     }
 }

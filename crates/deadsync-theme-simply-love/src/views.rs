@@ -375,6 +375,7 @@ pub struct SelectFlowRuntimeView {
     pub game: deadsync_config::prelude::GameFlag,
     pub play_style: PlayStyle,
     pub play_mode: PlayMode,
+    pub premium_free_available: bool,
     pub color_index: i32,
 }
 
@@ -1192,6 +1193,15 @@ pub struct OptionsInitView {
     pub smx_assignment: deadsync_theme::views::SmxAssignmentView,
     pub smx_gifs: deadsync_theme::views::SmxGifCatalogView,
     pub score_import_profiles: Vec<crate::SimplyLoveScoreImportProfile>,
+    pub bookkeeping: BookkeepingView,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BookkeepingView {
+    pub coins_inserted: u64,
+    pub credits_spent: u64,
+    pub plays_started: u64,
+    pub stages_played: u64,
 }
 
 /// Shell-prepared saved values edited by the Overscan Adjustment screen.
@@ -1426,9 +1436,13 @@ pub struct MainMenuSmxConflictView {
 }
 
 /// Shell-prepared runtime data consumed by Simply Love's concrete main menu.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MainMenuRuntimeView {
     pub game: deadsync_config::prelude::GameFlag,
+    pub coin_mode: deadsync_config::prelude::CoinMode,
+    pub event_mode: bool,
+    pub credits: u32,
+    pub can_start: bool,
     pub allow_shutdown_host: bool,
     pub dedicated_three_key_nav: bool,
     pub song_count: usize,
@@ -1438,6 +1452,27 @@ pub struct MainMenuRuntimeView {
     pub groovestats: MainMenuGrooveStatus,
     pub arrowcloud: MainMenuArrowCloudStatus,
     pub smx_conflict: Option<MainMenuSmxConflictView>,
+}
+
+impl Default for MainMenuRuntimeView {
+    fn default() -> Self {
+        Self {
+            game: deadsync_config::prelude::GameFlag::default(),
+            coin_mode: deadsync_config::prelude::CoinMode::Home,
+            event_mode: true,
+            credits: 0,
+            can_start: true,
+            allow_shutdown_host: false,
+            dedicated_three_key_nav: false,
+            song_count: 0,
+            pack_count: 0,
+            course_count: 0,
+            local_ip: None,
+            groovestats: MainMenuGrooveStatus::default(),
+            arrowcloud: MainMenuArrowCloudStatus::default(),
+            smx_conflict: None,
+        }
+    }
 }
 
 /// Coarse updater failure category used by Simply Love's localized overlays.

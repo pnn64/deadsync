@@ -1,4 +1,5 @@
 mod advanced;
+mod coin;
 mod course;
 mod folders;
 mod gameplay;
@@ -16,6 +17,8 @@ mod system;
 
 #[allow(unused_imports)]
 pub(super) use advanced::*;
+#[allow(unused_imports)]
+pub(super) use coin::*;
 #[allow(unused_imports)]
 pub(super) use course::*;
 #[allow(unused_imports)]

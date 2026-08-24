@@ -44,11 +44,12 @@ fn groove_status(boogie: bool, status: GrooveStatus) -> MainMenuGrooveStatus {
     }
 }
 
-pub(crate) fn runtime_view() -> MainMenuRuntimeView {
-    let (game, allow_shutdown_host, dedicated_three_key_nav, smx_input, show_local_ip) = {
+pub(crate) fn runtime_view(credits: u32) -> MainMenuRuntimeView {
+    let (game, coin, allow_shutdown_host, dedicated_three_key_nav, smx_input, show_local_ip) = {
         let config = deadsync_config::prelude::get();
         (
             config.game_flag,
+            config.coin,
             config.allow_shutdown_host,
             config.three_key_navigation && config.only_dedicated_menu_buttons,
             config.smx_input,
@@ -71,6 +72,10 @@ pub(crate) fn runtime_view() -> MainMenuRuntimeView {
 
     MainMenuRuntimeView {
         game,
+        coin_mode: coin.mode,
+        event_mode: coin.event_mode(),
+        credits,
+        can_start: !matches!(coin.mode, deadsync_config::prelude::CoinMode::Pay) || credits > 0,
         allow_shutdown_host,
         dedicated_three_key_nav,
         song_count,

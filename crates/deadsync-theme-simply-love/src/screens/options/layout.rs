@@ -263,6 +263,18 @@ pub(super) fn row_choices(
             .map(Cow::Owned)
             .collect();
     }
+    if let Some(row) = rows.get(row_idx)
+        && matches!(kind, SubmenuKind::Bookkeeping)
+    {
+        let value = match row.id {
+            SubRowId::CoinsInserted => state.bookkeeping.coins_inserted,
+            SubRowId::CreditsSpent => state.bookkeeping.credits_spent,
+            SubRowId::PlaysStarted => state.bookkeeping.plays_started,
+            SubRowId::StagesPlayed => state.bookkeeping.stages_played,
+            _ => 0,
+        };
+        return vec![Cow::Owned(value.to_string())];
+    }
     rows.get(row_idx)
         .map(|row| {
             row.choices

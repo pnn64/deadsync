@@ -2,7 +2,7 @@ use crate::screens::Screen;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile::PlayMode;
 
-pub const CHOICE_COUNT: usize = 2;
+pub const CHOICE_COUNT: usize = 3;
 pub const CHOICE_ZOOM_FOCUSED: f32 = 0.75;
 pub const CHOICE_ZOOM_UNFOCUSED: f32 = 0.3;
 pub const CURSOR_HEIGHT: f32 = 40.0;
@@ -16,6 +16,7 @@ const CURSOR_START_Y: f32 = -60.0;
 pub enum Choice {
     Regular,
     Marathon,
+    PremiumFree,
 }
 
 impl Choice {
@@ -23,7 +24,8 @@ impl Choice {
     pub const fn from_index(index: usize) -> Self {
         match index {
             0 => Self::Regular,
-            _ => Self::Marathon,
+            1 => Self::Marathon,
+            _ => Self::PremiumFree,
         }
     }
 
@@ -32,6 +34,7 @@ impl Choice {
         match self {
             Self::Regular => PlayMode::Regular,
             Self::Marathon => PlayMode::Marathon,
+            Self::PremiumFree => PlayMode::PremiumFree,
         }
     }
 }
@@ -49,6 +52,7 @@ pub struct State {
     selected_index: usize,
     cursor_y: f32,
     choice_zooms: [f32; CHOICE_COUNT],
+    choice_count: usize,
     demo_time: f32,
     exit_requested: bool,
     exit_target: Option<Screen>,
@@ -60,6 +64,7 @@ impl Default for State {
             selected_index: 0,
             cursor_y: CURSOR_START_Y,
             choice_zooms: [CHOICE_ZOOM_UNFOCUSED; CHOICE_COUNT],
+            choice_count: 2,
             demo_time: 0.0,
             exit_requested: false,
             exit_target: None,
@@ -68,10 +73,13 @@ impl Default for State {
 }
 
 impl State {
-    pub fn reset(&mut self, play_mode: PlayMode) {
+    pub fn reset(&mut self, play_mode: PlayMode, premium_free_available: bool) {
+        self.choice_count = if premium_free_available { 3 } else { 2 };
         self.selected_index = match play_mode {
             PlayMode::Regular => 0,
             PlayMode::Marathon => 1,
+            PlayMode::PremiumFree if premium_free_available => 2,
+            PlayMode::PremiumFree => 0,
         };
         self.demo_time = 0.0;
         self.cursor_y = cursor_target_y(self.selected_index);
@@ -89,6 +97,11 @@ impl State {
     #[inline(always)]
     pub const fn selected_index(&self) -> usize {
         self.selected_index
+    }
+
+    #[inline(always)]
+    pub const fn choice_count(&self) -> usize {
+        self.choice_count
     }
 
     #[inline(always)]
@@ -172,7 +185,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> InputEffect {
         | VirtualAction::p2_menu_left
         | VirtualAction::p2_up
         | VirtualAction::p2_menu_up => {
-            state.selected_index = (state.selected_index + CHOICE_COUNT - 1) % CHOICE_COUNT;
+            state.selected_index =
+                (state.selected_index + state.choice_count - 1) % state.choice_count;
             state.demo_time = 0.0;
             InputEffect::Move
         }
@@ -184,7 +198,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> InputEffect {
         | VirtualAction::p2_menu_right
         | VirtualAction::p2_down
         | VirtualAction::p2_menu_down => {
-            state.selected_index = (state.selected_index + 1) % CHOICE_COUNT;
+            state.selected_index = (state.selected_index + 1) % state.choice_count;
             state.demo_time = 0.0;
             InputEffect::Move
         }

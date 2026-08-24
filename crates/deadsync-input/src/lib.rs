@@ -376,10 +376,12 @@ pub enum VirtualAction {
     system_slow_down,
     p1_center,
     p2_center,
+    p1_coin,
+    p2_coin,
 }
 
 impl VirtualAction {
-    pub const COUNT: usize = Self::p2_center as usize + 1;
+    pub const COUNT: usize = Self::p2_coin as usize + 1;
 
     #[inline(always)]
     pub const fn from_ix(ix: usize) -> Option<Self> {
@@ -414,6 +416,8 @@ impl VirtualAction {
             27 => Some(Self::system_slow_down),
             28 => Some(Self::p1_center),
             29 => Some(Self::p2_center),
+            30 => Some(Self::p1_coin),
+            31 => Some(Self::p2_coin),
             _ => None,
         }
     }
@@ -516,6 +520,8 @@ pub const ALL_VIRTUAL_ACTIONS: [VirtualAction; VirtualAction::COUNT] = [
     VirtualAction::system_slow_down,
     VirtualAction::p1_center,
     VirtualAction::p2_center,
+    VirtualAction::p1_coin,
+    VirtualAction::p2_coin,
 ];
 
 /// Bitmask of all `System`-tier actions. Used to strip system actions from the
@@ -561,6 +567,8 @@ pub fn action_from_ini_key_lower(key: &str) -> Option<VirtualAction> {
         "p2_restart" => Some(p2_restart),
         "p1_center" => Some(VirtualAction::p1_center),
         "p2_center" => Some(VirtualAction::p2_center),
+        "p1_coin" => Some(VirtualAction::p1_coin),
+        "p2_coin" => Some(VirtualAction::p2_coin),
         "system_fastforward" => Some(VirtualAction::system_fast_forward),
         "system_slowdown" => Some(VirtualAction::system_slow_down),
         _ => None,
@@ -621,6 +629,8 @@ pub const fn action_to_ini_key(action: VirtualAction) -> &'static str {
         VirtualAction::system_slow_down => "System_SlowDown",
         VirtualAction::p1_center => "P1_Center",
         VirtualAction::p2_center => "P2_Center",
+        VirtualAction::p1_coin => "P1_Coin",
+        VirtualAction::p2_coin => "P2_Coin",
     }
 }
 
@@ -1041,7 +1051,10 @@ mod tests {
             assert_eq!(action_from_ini_key_lower(&key), Some(action));
         }
         assert_eq!(action_from_ini_key_lower("p1_menu_up"), None);
-        assert_eq!(action_from_ini_key_lower("p1_coin"), None);
+        assert_eq!(
+            action_from_ini_key_lower("p1_coin"),
+            Some(VirtualAction::p1_coin)
+        );
     }
 
     #[test]

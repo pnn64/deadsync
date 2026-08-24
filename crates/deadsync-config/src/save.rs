@@ -5,6 +5,7 @@ use crate::audio::{
     push_audio_write_current_screen_option_lines,
 };
 use crate::cache::push_never_cache_list_option_line;
+use crate::coin::push_coin_option_lines;
 use crate::folders::{AdditionalSongFolder, push_additional_song_folder_option_lines};
 use crate::machine::push_default_noteskin_option_line;
 use crate::null_or_die::{NullOrDieOptions, push_null_or_die_option_lines};
@@ -129,6 +130,7 @@ where
     V: Display,
 {
     push_section(content, "[Options]");
+    push_coin_option_lines(content, options.system.coin);
     push_audio_device_option_lines(content, options.audio_device);
     push_additional_song_folder_option_lines(content, options.additional_song_folders);
     push_system_download_option_lines(content, options.system);
@@ -178,6 +180,7 @@ where
     V: Display,
 {
     push_section(content, "[Options]");
+    push_coin_option_lines(content, options.system.coin);
     push_audio_device_option_lines(content, options.audio_device);
     push_additional_song_folder_option_lines(content, options.additional_song_folders);
     push_system_download_option_lines(content, options.system);
@@ -442,6 +445,7 @@ fn runtime_io_options<'a>(
 
 fn system_options(cfg: &Config) -> SystemOptions {
     SystemOptions {
+        coin: cfg.coin,
         game_flag: cfg.game_flag,
         auto_download_unlocks: cfg.auto_download_unlocks,
         auto_populate_gs_scores: cfg.auto_populate_gs_scores,
