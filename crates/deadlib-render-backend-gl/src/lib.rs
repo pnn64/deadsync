@@ -1,5 +1,5 @@
 use deadlib_render_core::{
-    BlendMode, CameraUploadCache, DrawOp, DrawStats, FastU64Map, RenderFrame, SamplerDesc,
+    BlendMode, CameraUploadCache, DenseSlotMap, DrawOp, DrawStats, RenderFrame, SamplerDesc,
     SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, TextureHandle,
     TexturedMeshBufferCache, TexturedMeshInstanceRaw, TexturedMeshUploads, TexturedMeshVertex,
     draw_storage_stats, resolve_textured_meshes,
@@ -257,7 +257,7 @@ pub struct State {
     tmesh_vbo: glow::Buffer,
     tmesh_instance_vbo: Option<glow::Buffer>,
     uploads: TexturedMeshUploads,
-    cached_tmesh: FastU64Map<CachedTMeshGeom>,
+    cached_tmesh: DenseSlotMap<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     vsync_enabled: bool,
     screenshot_requested: bool,
@@ -668,7 +668,7 @@ pub fn init(
         tmesh_vbo,
         tmesh_instance_vbo,
         uploads: TexturedMeshUploads::with_capacity(1024, 64),
-        cached_tmesh: FastU64Map::default(),
+        cached_tmesh: DenseSlotMap::with_capacity(256),
         cached_tmesh_bytes: 0,
         vsync_enabled,
         screenshot_requested: false,
@@ -882,27 +882,27 @@ pub fn delete_texture(state: &State, texture: &Texture) {
 
 fn ensure_cached_tmesh(
     gl: &glow::Context,
-    cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
+    cached_tmesh: &mut DenseSlotMap<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
     cache_key: TMeshCacheKey,
     vertices: &[deadlib_render_core::TexturedMeshVertex],
-) -> bool {
-    if let Some(entry) = cached_tmesh.get(&cache_key) {
-        return entry.vertex_count == vertices.len() as u32;
+) -> Option<u64> {
+    if let Some((buffer_key, entry)) = cached_tmesh.get(cache_key) {
+        return (entry.vertex_count == vertices.len() as u32).then_some(buffer_key);
     }
 
     let bytes = std::mem::size_of_val(vertices);
     if bytes > OPENGL_TMESH_CACHE_MAX_BYTES
         || cached_tmesh_bytes.saturating_add(bytes) > OPENGL_TMESH_CACHE_MAX_BYTES
     {
-        return false;
+        return None;
     }
 
     // SAFETY: the OpenGL context is current on this thread while draw prep runs,
     // and the uploaded slice remains alive for the duration of the call.
     let vbo = unsafe {
         let Ok(vbo) = gl.create_buffer() else {
-            return false;
+            return None;
         };
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
         gl.buffer_data_u8_slice(
@@ -914,7 +914,7 @@ fn ensure_cached_tmesh(
         vbo
     };
 
-    cached_tmesh.insert(
+    let buffer_key = cached_tmesh.insert(
         cache_key,
         CachedTMeshGeom {
             vbo,
@@ -922,7 +922,7 @@ fn ensure_cached_tmesh(
         },
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
-    true
+    Some(buffer_key)
 }
 
 #[inline(always)]
@@ -1010,7 +1010,6 @@ pub fn draw(
         let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
         resolve_textured_meshes(frame, uploads, |cache_key, vertices| {
             ensure_cached_tmesh(gl, cached_tmesh, cached_tmesh_bytes, cache_key, vertices)
-                .then_some(cache_key)
         });
     }
     let mut stats = DrawStats {
@@ -1321,8 +1320,11 @@ pub fn draw(
 
                         if tmesh_buffer_cache.update_required(source) {
                             let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
-                            let vertex_buffer = if let Some(cache_key) = source.buffer_key() {
-                                state.cached_tmesh.get(&cache_key).map(|entry| entry.vbo)
+                            let vertex_buffer = if let Some(buffer_key) = source.buffer_key() {
+                                state
+                                    .cached_tmesh
+                                    .get_slot(buffer_key)
+                                    .map(|entry| entry.vbo)
                             } else {
                                 Some(state.tmesh_vbo)
                             };
@@ -1694,8 +1696,11 @@ pub fn draw(
 
                         if tmesh_buffer_cache.update_required(source) {
                             let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
-                            let vertex_buffer = if let Some(cache_key) = source.buffer_key() {
-                                state.cached_tmesh.get(&cache_key).map(|entry| entry.vbo)
+                            let vertex_buffer = if let Some(buffer_key) = source.buffer_key() {
+                                state
+                                    .cached_tmesh
+                                    .get_slot(buffer_key)
+                                    .map(|entry| entry.vbo)
                             } else {
                                 Some(state.tmesh_vbo)
                             };
@@ -1958,7 +1963,7 @@ pub fn cleanup(state: &mut State) {
         if let Some(vao) = state.tmesh_vao {
             state.gl.delete_vertex_array(vao);
         }
-        for geom in state.cached_tmesh.drain().map(|(_, geom)| geom) {
+        for geom in state.cached_tmesh.drain() {
             state.gl.delete_buffer(geom.vbo);
         }
         state.cached_tmesh_bytes = 0;

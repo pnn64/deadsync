@@ -146,14 +146,25 @@ impl TexturedMeshBufferCache {
 /// Backend-owned resolution storage for retained textured geometry.
 ///
 /// Owner: one GPU backend on the render thread. Lifetime: session. Capacity is
-/// warmed by ordinary frames and retained between frames. Each frame clears the
-/// lengths, resolves every distinct geometry once, and uploads only entries not
-/// already present in the backend's bounded retained cache. There is no
-/// eviction or destruction here; those policies remain backend-owned.
+/// warmed by ordinary frames and retained between frames. A frame whose entire
+/// retained geometry signature is unchanged reuses its resolved sources;
+/// changed or transient frames resolve every geometry and upload only cache
+/// misses. There is no eviction or destruction here; those policies remain
+/// backend-owned.
 #[derive(Debug, Default)]
 pub struct TexturedMeshUploads {
     pub vertices: Vec<TexturedMeshVertex>,
     pub sources: Vec<TexturedMeshSource>,
+    cache_keys: Vec<TMeshCacheKey>,
+    all_cached: bool,
+    uncached: Option<UncachedGeometry>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct UncachedGeometry {
+    index: usize,
+    cache_key: TMeshCacheKey,
+    vertex_count: u32,
 }
 
 impl TexturedMeshUploads {
@@ -161,6 +172,9 @@ impl TexturedMeshUploads {
         Self {
             vertices: Vec::with_capacity(vertices),
             sources: Vec::with_capacity(geometries),
+            cache_keys: Vec::with_capacity(geometries),
+            all_cached: false,
+            uncached: None,
         }
     }
 
@@ -182,31 +196,125 @@ pub fn resolve_textured_meshes<EnsureCached>(
 ) where
     EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> Option<u64>,
 {
-    uploads.vertices.clear();
-    uploads.sources.clear();
-    if uploads.sources.capacity() < frame.tmesh_geometries.len() {
-        uploads.sources.reserve(frame.tmesh_geometries.len());
+    let geometry_count = frame.tmesh_geometries.len();
+    if let Some(uncached) = uploads.uncached
+        && frame
+            .tmesh_geometries
+            .get(uncached.index)
+            .is_some_and(|geometry| {
+                geometry.cache_key == uncached.cache_key
+                    && saturating_u32(geometry.vertices.len()) == uncached.vertex_count
+            })
+    {
+        resolve_all_textured_meshes(
+            frame,
+            &mut uploads.vertices,
+            &mut uploads.sources,
+            &mut ensure_cached,
+            |_, _, _| {},
+        );
+        return;
+    }
+    uploads.uncached = None;
+    if uploads.all_cached
+        && uploads.sources.len() == geometry_count
+        && uploads.cache_keys.len() == geometry_count
+        && frame
+            .tmesh_geometries
+            .iter()
+            .zip(&uploads.cache_keys)
+            .zip(&uploads.sources)
+            .all(|((geometry, cache_key), source)| {
+                geometry.cache_key != INVALID_TMESH_CACHE_KEY
+                    && geometry.cache_key == *cache_key
+                    && source.buffer_key().is_some()
+                    && source.vertex_count() == saturating_u32(geometry.vertices.len())
+            })
+    {
+        uploads.vertices.clear();
+        return;
     }
 
-    for geometry in &frame.tmesh_geometries {
+    uploads.cache_keys.clear();
+    let mut all_cached = true;
+    let mut uncached = None;
+    resolve_all_textured_meshes(
+        frame,
+        &mut uploads.vertices,
+        &mut uploads.sources,
+        &mut ensure_cached,
+        |index, cache_key, source| {
+            uploads.cache_keys.push(cache_key);
+            if source.buffer_key().is_none() && uncached.is_none() {
+                uncached = Some(UncachedGeometry {
+                    index,
+                    cache_key,
+                    vertex_count: source.vertex_count(),
+                });
+            }
+            if source.buffer_key().is_none() {
+                all_cached = false;
+            }
+        },
+    );
+    uploads.all_cached = all_cached;
+    uploads.uncached = uncached;
+    if !all_cached {
+        uploads.cache_keys.clear();
+    }
+}
+
+fn resolve_all_textured_meshes<EnsureCached, Observe>(
+    frame: &RenderFrame,
+    vertices_out: &mut Vec<TexturedMeshVertex>,
+    sources: &mut Vec<TexturedMeshSource>,
+    ensure_cached: &mut EnsureCached,
+    mut observe: Observe,
+) where
+    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> Option<u64>,
+    Observe: FnMut(usize, TMeshCacheKey, TexturedMeshSource),
+{
+    vertices_out.clear();
+    sources.clear();
+    if sources.capacity() < frame.tmesh_geometries.len() {
+        sources.reserve(frame.tmesh_geometries.len());
+    }
+    for (index, geometry) in frame.tmesh_geometries.iter().enumerate() {
         let vertices = geometry.vertices.as_ref();
-        if geometry.cache_key != INVALID_TMESH_CACHE_KEY
+        let vertex_count = saturating_u32(vertices.len());
+        let source = if geometry.cache_key != INVALID_TMESH_CACHE_KEY
             && let Some(buffer_key) = ensure_cached(geometry.cache_key, vertices)
         {
-            uploads.sources.push(TexturedMeshSource::cached(
-                buffer_key,
-                saturating_u32(vertices.len()),
-            ));
-            continue;
-        }
-
-        let vertex_start = saturating_u32(uploads.vertices.len());
-        uploads.vertices.extend_from_slice(vertices);
-        uploads.sources.push(TexturedMeshSource::transient(
-            vertex_start,
-            saturating_u32(vertices.len()),
-        ));
+            TexturedMeshSource::cached(buffer_key, vertex_count)
+        } else {
+            let vertex_start = saturating_u32(vertices_out.len());
+            vertices_out.extend_from_slice(vertices);
+            TexturedMeshSource::transient(vertex_start, vertex_count)
+        };
+        sources.push(source);
+        observe(index, geometry.cache_key, source);
     }
+}
+
+/// Exact pre-memoization resolver retained for differential tests and benches.
+#[cfg(any(test, feature = "bench-support"))]
+pub fn resolve_textured_meshes_legacy<EnsureCached>(
+    frame: &RenderFrame,
+    uploads: &mut TexturedMeshUploads,
+    mut ensure_cached: EnsureCached,
+) where
+    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> Option<u64>,
+{
+    uploads.cache_keys.clear();
+    uploads.all_cached = false;
+    uploads.uncached = None;
+    resolve_all_textured_meshes(
+        frame,
+        &mut uploads.vertices,
+        &mut uploads.sources,
+        &mut ensure_cached,
+        |_, _, _| {},
+    );
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -369,5 +477,82 @@ mod tests {
         assert!(uploads.sources.is_empty());
         assert_eq!(uploads.vertices.capacity(), vertex_capacity);
         assert_eq!(uploads.sources.capacity(), source_capacity);
+    }
+
+    #[test]
+    fn stable_cached_geometry_reuses_resolution_without_cache_lookup() {
+        let stable = frame(vec![TexturedMeshGeometry {
+            vertices: TexturedMeshVertices::Shared(Arc::from([vertex(1.0), vertex(2.0)])),
+            cache_key: 7,
+        }]);
+        let mut uploads = TexturedMeshUploads::default();
+        let mut lookups = 0;
+
+        resolve_textured_meshes(&stable, &mut uploads, |_, _| {
+            lookups += 1;
+            Some(11)
+        });
+        resolve_textured_meshes(&stable, &mut uploads, |_, _| {
+            lookups += 1;
+            Some(11)
+        });
+
+        assert_eq!(lookups, 1);
+        assert_eq!(
+            uploads.source(0).and_then(TexturedMeshSource::buffer_key),
+            Some(11)
+        );
+        assert!(uploads.vertices.is_empty());
+    }
+
+    #[test]
+    fn memoized_resolution_matches_legacy_across_changes_and_misses() {
+        fn assert_parity(
+            frame: &RenderFrame,
+            old: &mut TexturedMeshUploads,
+            new: &mut TexturedMeshUploads,
+        ) {
+            resolve_textured_meshes_legacy(frame, old, |key, _| (key == 7).then_some(3));
+            resolve_textured_meshes(frame, new, |key, _| (key == 7).then_some(3));
+            assert_eq!(old.vertices, new.vertices);
+            assert_eq!(old.sources, new.sources);
+        }
+
+        let mut old = TexturedMeshUploads::default();
+        let mut new = TexturedMeshUploads::default();
+        let shared = Arc::from([vertex(1.0), vertex(2.0)]);
+        assert_parity(
+            &frame(vec![
+                TexturedMeshGeometry {
+                    vertices: TexturedMeshVertices::Shared(Arc::clone(&shared)),
+                    cache_key: 7,
+                },
+                TexturedMeshGeometry {
+                    vertices: TexturedMeshVertices::Transient(vec![vertex(3.0)]),
+                    cache_key: INVALID_TMESH_CACHE_KEY,
+                },
+                TexturedMeshGeometry {
+                    vertices: TexturedMeshVertices::Shared(Arc::clone(&shared)),
+                    cache_key: 9,
+                },
+            ]),
+            &mut old,
+            &mut new,
+        );
+        assert_parity(
+            &frame(vec![
+                TexturedMeshGeometry {
+                    vertices: TexturedMeshVertices::Shared(Arc::clone(&shared)),
+                    cache_key: 9,
+                },
+                TexturedMeshGeometry {
+                    vertices: TexturedMeshVertices::Shared(shared),
+                    cache_key: 7,
+                },
+            ]),
+            &mut old,
+            &mut new,
+        );
+        assert_parity(&frame(Vec::new()), &mut old, &mut new);
     }
 }

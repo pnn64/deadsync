@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [features]
+bench-support = []
 test-util = []
 
 [[test]]
@@ -14,6 +15,11 @@ required-features = ["test-util"]
 [[bench]]
 name = "texture_retirement_storage"
 harness = false
+
+[[bench]]
+name = "graphics_hot_paths"
+harness = false
+required-features = ["bench-support"]
 
 [dependencies]
 bytemuck = { version = "1.25.2", features = ["derive"] }

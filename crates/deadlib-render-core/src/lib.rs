@@ -16,6 +16,81 @@ pub type FastU64Map<V> = HashMap<u64, V, rustc_hash::FxBuildHasher>;
 pub type TMeshCacheKey = u64;
 pub const INVALID_TMESH_CACHE_KEY: TMeshCacheKey = 0;
 
+/// Maps stable `u64` identities to compact, non-zero backend-local slots.
+///
+/// GPU backends own this on the render thread for the session lifetime. The
+/// map is used when a resource is admitted; recording resolves the returned
+/// slot through contiguous storage without hashing again. Capacity and
+/// eviction remain the owning backend's policy.
+#[derive(Debug)]
+pub struct DenseSlotMap<V> {
+    slots: FastU64Map<u32>,
+    values: Vec<V>,
+}
+
+impl<V> Default for DenseSlotMap<V> {
+    fn default() -> Self {
+        Self {
+            slots: FastU64Map::default(),
+            values: Vec::new(),
+        }
+    }
+}
+
+impl<V> DenseSlotMap<V> {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            slots: FastU64Map::with_capacity_and_hasher(capacity, Default::default()),
+            values: Vec::with_capacity(capacity),
+        }
+    }
+
+    #[inline(always)]
+    pub fn get(&self, key: u64) -> Option<(u64, &V)> {
+        let slot = *self.slots.get(&key)?;
+        Some((u64::from(slot) + 1, self.values.get(slot as usize)?))
+    }
+
+    #[inline(always)]
+    pub fn get_slot(&self, buffer_key: u64) -> Option<&V> {
+        self.values
+            .get(usize::try_from(buffer_key.checked_sub(1)?).ok()?)
+    }
+
+    pub fn insert(&mut self, key: u64, value: V) -> u64 {
+        assert!(key != 0, "dense slot identity zero is reserved");
+        if let Some(&slot) = self.slots.get(&key) {
+            self.values[slot as usize] = value;
+            return u64::from(slot) + 1;
+        }
+
+        let slot = u32::try_from(self.values.len()).expect("dense slot count exceeds u32");
+        self.values.push(value);
+        self.slots.insert(key, slot);
+        u64::from(slot) + 1
+    }
+
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
+    pub fn drain(&mut self) -> impl Iterator<Item = V> + '_ {
+        self.slots.clear();
+        self.values.drain(..)
+    }
+
+    pub fn clear(&mut self) {
+        self.slots.clear();
+        self.values.clear();
+    }
+}
+
 pub struct TextureHandleMap<V> {
     slots: Vec<Option<V>>,
 }
@@ -629,6 +704,29 @@ mod tests {
         assert_eq!(textures.remove(&1), Some(11));
         assert_eq!(textures.get(&1), None);
         assert_eq!(textures.values().copied().collect::<Vec<_>>(), vec![30]);
+    }
+
+    #[test]
+    fn dense_slots_resolve_keys_without_hashing_the_slot() {
+        let mut values = DenseSlotMap::with_capacity(3);
+
+        let first = values.insert(41, "first");
+        let second = values.insert(99, "second");
+        assert_eq!(first, 1);
+        assert_eq!(second, 2);
+        assert_eq!(values.get(41), Some((first, &"first")));
+        assert_eq!(values.get_slot(second), Some(&"second"));
+        assert_eq!(values.get_slot(0), None);
+        assert_eq!(values.get_slot(3), None);
+
+        assert_eq!(values.insert(41, "replacement"), first);
+        assert_eq!(values.len(), 2);
+        assert_eq!(values.get_slot(first), Some(&"replacement"));
+        assert_eq!(
+            values.drain().collect::<Vec<_>>(),
+            vec!["replacement", "second"]
+        );
+        assert!(values.is_empty());
     }
 
     #[test]

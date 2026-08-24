@@ -5,7 +5,7 @@ use ash::{
     vk,
 };
 use deadlib_render_core::{
-    BlendMode, CameraUploadCache, ClockDomainTrace, DrawOp, DrawStats, FastU64Map, MeshVertex,
+    BlendMode, CameraUploadCache, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, MeshVertex,
     PresentModePolicy, PresentModeTrace, PresentStats, RenderFrame, SamplerDesc, SamplerFilter,
     SamplerWrap, SpriteInstanceRaw as InstanceData, TMeshCacheKey, TextureHandle,
     TexturedMeshBufferCache, TexturedMeshInstanceRaw as TexturedMeshInstanceGpu,
@@ -228,7 +228,7 @@ pub struct State {
     tmesh_capacity_instances: usize,       // total textured mesh instances across ring
     per_frame_stride_tmesh_instances: usize, // textured mesh instances reserved per frame
     uploads: TexturedMeshUploads,
-    cached_tmesh: FastU64Map<CachedTMeshGeom>,
+    cached_tmesh: DenseSlotMap<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
     pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
@@ -377,7 +377,7 @@ pub fn init(
         tmesh_capacity_instances: 0,
         per_frame_stride_tmesh_instances: 0,
         uploads: TexturedMeshUploads::with_capacity(1024, 64),
-        cached_tmesh: FastU64Map::default(),
+        cached_tmesh: DenseSlotMap::with_capacity(256),
         cached_tmesh_bytes: 0,
         pending_tex_upload_cmd: None,
         pending_tex_staging: Vec::new(),
@@ -1134,25 +1134,38 @@ fn begin_pending_texture_upload_cmd(
 }
 
 fn retire_submitted_texture_uploads(state: &mut State, frame: usize) {
+    let completed = completed_present_id(state);
     let device = state.device.as_ref().unwrap();
     let command_pool = state.command_pool;
-    let mut pending = Vec::with_capacity(state.submitted_tex_uploads.len());
-    let mut upload_completed_textures = Vec::new();
-    for mut batch in mem::take(&mut state.submitted_tex_uploads) {
-        if batch.frame != frame {
-            pending.push(batch);
-            continue;
-        }
+    let retired_textures = &mut state.retired_textures;
+    retire_frame_batches(&mut state.submitted_tex_uploads, frame, |batch| {
         unsafe {
             device.free_command_buffers(command_pool, &[batch.cmd]);
         }
         for staging in batch.staging.drain(..) {
             destroy_buffer(device, &staging);
         }
-        upload_completed_textures.append(&mut batch.retired_textures);
-    }
-    state.submitted_tex_uploads = pending;
-    queue_present_retirement(state, upload_completed_textures);
+        retired_textures.extend(
+            batch
+                .retired_textures
+                .drain(..)
+                .filter(|retired| retirement_pending(retired.retire_after_present_id, completed)),
+        );
+    });
+}
+
+fn retire_frame_batches(
+    batches: &mut Vec<SubmittedTextureUpload>,
+    frame: usize,
+    mut retire: impl FnMut(&mut SubmittedTextureUpload),
+) {
+    batches.retain_mut(|batch| {
+        if batch.frame != frame {
+            return true;
+        }
+        retire(batch);
+        false
+    });
 }
 
 fn retire_all_submitted_texture_uploads(state: &mut State) {
@@ -1215,21 +1228,14 @@ fn retire_completed_textures(state: &mut State) {
         return;
     }
 
-    state.retired_textures.retain(|retired| {
-        retired.retire_after_present_id != 0 && retired.retire_after_present_id > completed
-    });
-}
-
-fn queue_present_retirement(state: &mut State, textures: Vec<RetiredTexture>) {
-    if textures.is_empty() {
-        return;
-    }
-    let completed = completed_present_id(state);
     state
         .retired_textures
-        .extend(textures.into_iter().filter(|retired| {
-            retired.retire_after_present_id != 0 && retired.retire_after_present_id > completed
-        }));
+        .retain(|retired| retirement_pending(retired.retire_after_present_id, completed));
+}
+
+#[inline(always)]
+const fn retirement_pending(retire_after_present_id: u32, completed_present_id: u32) -> bool {
+    retire_after_present_id != 0 && retire_after_present_id > completed_present_id
 }
 
 pub fn retire_texture(state: &mut State, texture: Texture) {
@@ -1248,7 +1254,7 @@ pub fn retire_texture(state: &mut State, texture: Texture) {
     }
 
     let completed = completed_present_id(state);
-    if retired.retire_after_present_id != 0 && retired.retire_after_present_id > completed {
+    if retirement_pending(retired.retire_after_present_id, completed) {
         state.retired_textures.push(retired);
     }
 }
@@ -1507,7 +1513,7 @@ pub fn draw(
                 cache_key,
                 vertices,
             ) {
-                Ok(cached) => cached.then_some(cache_key),
+                Ok(buffer_key) => buffer_key,
                 Err(e) => {
                     warn!("Failed to cache Vulkan textured mesh {cache_key:#x}: {e}");
                     None
@@ -1825,8 +1831,8 @@ pub fn draw(
                     }
 
                     if tmesh_buffer_cache.update_required(source) {
-                        let vb = if let Some(cache_key) = source.buffer_key() {
-                            let Some(entry) = state.cached_tmesh.get(&cache_key) else {
+                        let vb = if let Some(buffer_key) = source.buffer_key() {
+                            let Some(entry) = state.cached_tmesh.get_slot(buffer_key) else {
                                 tmesh_buffer_cache.reset();
                                 continue;
                             };
@@ -2195,7 +2201,7 @@ pub fn cleanup(state: &mut State) {
             }
             destroy_buffer(state.device.as_ref().unwrap(), &ring);
         }
-        for geom in state.cached_tmesh.drain().map(|(_, geom)| geom) {
+        for geom in state.cached_tmesh.drain() {
             destroy_buffer(state.device.as_ref().unwrap(), &geom.buffer);
         }
         state.cached_tmesh_bytes = 0;
@@ -2891,20 +2897,20 @@ fn ensure_cached_tmesh(
     instance: &Instance,
     device: &Device,
     pdevice: vk::PhysicalDevice,
-    cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
+    cached_tmesh: &mut DenseSlotMap<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
     cache_key: TMeshCacheKey,
     vertices: &[deadlib_render_core::TexturedMeshVertex],
-) -> Result<bool, Box<dyn Error>> {
-    if let Some(entry) = cached_tmesh.get(&cache_key) {
-        return Ok(entry.vertex_count == vertices.len() as u32);
+) -> Result<Option<u64>, Box<dyn Error>> {
+    if let Some((buffer_key, entry)) = cached_tmesh.get(cache_key) {
+        return Ok((entry.vertex_count == vertices.len() as u32).then_some(buffer_key));
     }
 
     let bytes = std::mem::size_of_val(vertices);
     if bytes > VULKAN_TMESH_CACHE_MAX_BYTES
         || cached_tmesh_bytes.saturating_add(bytes) > VULKAN_TMESH_CACHE_MAX_BYTES
     {
-        return Ok(false);
+        return Ok(None);
     }
 
     let size = bytes as vk::DeviceSize;
@@ -2926,7 +2932,7 @@ fn ensure_cached_tmesh(
         device.unmap_memory(memory);
     }
 
-    cached_tmesh.insert(
+    let buffer_key = cached_tmesh.insert(
         cache_key,
         CachedTMeshGeom {
             buffer: BufferResource { buffer, memory },
@@ -2934,7 +2940,7 @@ fn ensure_cached_tmesh(
         },
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
-    Ok(true)
+    Ok(Some(buffer_key))
 }
 
 fn find_memory_type(
@@ -4104,4 +4110,46 @@ fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
     let half_w = 0.5 * w;
     let half_h = 0.5 * h;
     glam::camera::rh::proj::opengl::orthographic(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn upload_batch(frame: usize) -> SubmittedTextureUpload {
+        SubmittedTextureUpload {
+            frame,
+            cmd: vk::CommandBuffer::null(),
+            staging: Vec::new(),
+            retired_textures: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn frame_batch_retirement_preserves_pending_order() {
+        let mut batches = vec![
+            upload_batch(2),
+            upload_batch(1),
+            upload_batch(2),
+            upload_batch(0),
+        ];
+        let mut retired = Vec::new();
+
+        retire_frame_batches(&mut batches, 2, |batch| retired.push(batch.frame));
+
+        assert_eq!(retired, vec![2, 2]);
+        assert_eq!(
+            batches.iter().map(|batch| batch.frame).collect::<Vec<_>>(),
+            vec![1, 0]
+        );
+    }
+
+    #[test]
+    fn retirement_waits_for_a_nonzero_incomplete_present() {
+        assert!(!retirement_pending(0, 0));
+        assert!(retirement_pending(5, 0));
+        assert!(retirement_pending(5, 4));
+        assert!(!retirement_pending(5, 5));
+        assert!(!retirement_pending(5, 6));
+    }
 }

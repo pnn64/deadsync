@@ -1,5 +1,5 @@
 use deadlib_render_core::{
-    BlendMode, ClockDomainTrace, DrawOp, DrawStats, FastU64Map, PresentModePolicy,
+    BlendMode, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, PresentModePolicy,
     PresentModeTrace, PresentStats, RenderFrame, SamplerDesc, SamplerFilter, SamplerWrap,
     TMeshCacheKey, TextureHandle, TexturedMeshBufferCache, TexturedMeshUploads, TexturedMeshVertex,
     draw_storage_stats, resolve_textured_meshes,
@@ -229,7 +229,7 @@ pub struct State {
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
     uploads: TexturedMeshUploads,
-    cached_tmesh: FastU64Map<CachedTMeshGeom>,
+    cached_tmesh: DenseSlotMap<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     mesh_vertex_buffer: wgpu::Buffer,
     mesh_vertex_capacity: usize,
@@ -545,7 +545,7 @@ fn init(
         instance_buffer,
         instance_capacity,
         uploads: TexturedMeshUploads::with_capacity(tmesh_vertex_capacity, 64),
-        cached_tmesh: FastU64Map::default(),
+        cached_tmesh: DenseSlotMap::with_capacity(256),
         cached_tmesh_bytes: 0,
         mesh_vertex_buffer,
         mesh_vertex_capacity,
@@ -900,20 +900,20 @@ pub fn update_texture(
 
 fn ensure_cached_tmesh(
     device: &wgpu::Device,
-    cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
+    cached_tmesh: &mut DenseSlotMap<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
     cache_key: TMeshCacheKey,
     vertices: &[deadlib_render_core::TexturedMeshVertex],
-) -> bool {
-    if let Some(entry) = cached_tmesh.get(&cache_key) {
-        return entry.vertex_count == vertices.len() as u32;
+) -> Option<u64> {
+    if let Some((buffer_key, entry)) = cached_tmesh.get(cache_key) {
+        return (entry.vertex_count == vertices.len() as u32).then_some(buffer_key);
     }
 
     let bytes = std::mem::size_of_val(vertices);
     if bytes > WGPU_TMESH_CACHE_MAX_BYTES
         || cached_tmesh_bytes.saturating_add(bytes) > WGPU_TMESH_CACHE_MAX_BYTES
     {
-        return false;
+        return None;
     }
 
     let buffer = Arc::new(
@@ -923,7 +923,7 @@ fn ensure_cached_tmesh(
             usage: wgpu::BufferUsages::VERTEX,
         }),
     );
-    cached_tmesh.insert(
+    let buffer_key = cached_tmesh.insert(
         cache_key,
         CachedTMeshGeom {
             buffer,
@@ -931,7 +931,7 @@ fn ensure_cached_tmesh(
         },
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
-    true
+    Some(buffer_key)
 }
 
 #[inline(always)]
@@ -982,7 +982,6 @@ pub fn draw(
                 cache_key,
                 vertices,
             )
-            .then_some(cache_key)
         });
         stats.storage = draw_storage_stats(frame, Some(uploads));
     }
@@ -1234,8 +1233,8 @@ pub fn draw(
                         last_bind = Some(bind_key);
                     }
                     if tmesh_buffer_cache.update_required(source) {
-                        if let Some(cache_key) = source.buffer_key() {
-                            let Some(entry) = state.cached_tmesh.get(&cache_key) else {
+                        if let Some(buffer_key) = source.buffer_key() {
+                            let Some(entry) = state.cached_tmesh.get_slot(buffer_key) else {
                                 tmesh_buffer_cache.reset();
                                 continue;
                             };
