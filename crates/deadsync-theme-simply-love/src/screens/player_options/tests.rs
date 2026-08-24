@@ -1778,6 +1778,12 @@ pub(super) mod tests {
                 palette: deadlib_present::color::JudgmentPalette::default(),
             });
         let (mut state, _) = setup_state_with(view);
+        assert!(
+            state.pane().row_map.get(RowId::JudgmentColors).is_none(),
+            "Judgment Colors should not be present on the Main pane"
+        );
+
+        super::super::apply_pane(&mut state, OptionsPane::Display);
         let row_index = state
             .pane()
             .row_map
@@ -1804,7 +1810,6 @@ pub(super) mod tests {
             )) if id == "warm-colors"
         )));
 
-        super::super::apply_pane(&mut state, OptionsPane::Display);
         let display_row = state
             .pane()
             .row_map
@@ -3527,6 +3532,7 @@ pub(super) mod tests {
             RowId::ReceptorSkin,
             RowId::TapExplosionSkin,
             RowId::TapExplosionOptions,
+            RowId::JudgmentColors,
             RowId::JudgmentOffsetX,
             RowId::JudgmentOffsetY,
             RowId::ComboOffsetX,

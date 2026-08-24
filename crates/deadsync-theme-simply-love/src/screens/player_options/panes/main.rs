@@ -1099,7 +1099,6 @@ pub(super) fn build_main_rows(
     push_perspective_row(&mut b);
     push_noteskin_row(&mut b, noteskin_names);
     push_judgment_font_row(&mut b);
-    push_judgment_colors_row(&mut b);
     push_combo_font_row(&mut b);
     push_hold_judgment_row(&mut b);
     push_held_graphic_row(&mut b);

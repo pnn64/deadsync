@@ -375,12 +375,6 @@ fn init_with_noteskin_prewarm(
         policy.scorebox_available,
     );
     apply_judgment_palette_choices(
-        &mut main_row_map,
-        &judgment_palette_choices,
-        &judgment_palette_choice_ids,
-        &judgment_palette_ids,
-    );
-    apply_judgment_palette_choices(
         &mut display_row_map,
         &judgment_palette_choices,
         &judgment_palette_choice_ids,
