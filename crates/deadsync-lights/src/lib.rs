@@ -144,6 +144,39 @@ impl FromStr for DriverKind {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PacDriveLightOrdering {
+    #[default]
+    OpenItg,
+    Sm5,
+}
+
+impl PacDriveLightOrdering {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::OpenItg => "openitg",
+            Self::Sm5 => "sm5",
+        }
+    }
+
+    /// Match ITGmania's `PacDriveLightOrdering` preference behavior.
+    /// `openitg` and the historical `lumenar` name select the OpenITG layout;
+    /// every other explicit value selects the legacy SM5 layout.
+    pub fn from_preference(raw: &str) -> Self {
+        if raw.eq_ignore_ascii_case("openitg") || raw.eq_ignore_ascii_case("lumenar") {
+            Self::OpenItg
+        } else {
+            Self::Sm5
+        }
+    }
+}
+
+impl std::fmt::Display for PacDriveLightOrdering {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GameplayPadLightMode {
     #[default]
     Input,
@@ -489,6 +522,7 @@ pub struct Manager {
     worker: Option<Worker>,
     driver_kind: DriverKind,
     litboard_port: String,
+    pac_drive_light_ordering: PacDriveLightOrdering,
     gameplay_pad_lights: GameplayPadLightMode,
     mode: Mode,
     joined: [bool; PLAYER_COUNT],
@@ -504,11 +538,16 @@ pub struct Manager {
 }
 
 impl Manager {
-    pub fn new(kind: DriverKind, litboard_port: &str) -> Self {
+    pub fn new(
+        kind: DriverKind,
+        litboard_port: &str,
+        pac_drive_light_ordering: PacDriveLightOrdering,
+    ) -> Self {
         Self {
-            worker: Worker::new(kind, litboard_port),
+            worker: Worker::new(kind, litboard_port, pac_drive_light_ordering),
             driver_kind: kind,
             litboard_port: litboard_port.to_owned(),
+            pac_drive_light_ordering,
             gameplay_pad_lights: GameplayPadLightMode::Input,
             mode: Mode::Attract,
             joined: [false; PLAYER_COUNT],
@@ -524,17 +563,26 @@ impl Manager {
         }
     }
 
-    pub fn set_driver(&mut self, kind: DriverKind, litboard_port: &str) {
-        if self.driver_kind == kind && self.litboard_port == litboard_port {
+    pub fn set_driver(
+        &mut self,
+        kind: DriverKind,
+        litboard_port: &str,
+        pac_drive_light_ordering: PacDriveLightOrdering,
+    ) {
+        if self.driver_kind == kind
+            && self.litboard_port == litboard_port
+            && self.pac_drive_light_ordering == pac_drive_light_ordering
+        {
             return;
         }
         if let Some(worker) = self.worker.take() {
             worker.shutdown();
         }
-        self.worker = Worker::new(kind, litboard_port);
+        self.worker = Worker::new(kind, litboard_port, pac_drive_light_ordering);
         self.driver_kind = kind;
         self.litboard_port.clear();
         self.litboard_port.push_str(litboard_port);
+        self.pac_drive_light_ordering = pac_drive_light_ordering;
         self.last_sent = None;
     }
 
@@ -787,7 +835,11 @@ struct Worker {
 }
 
 impl Worker {
-    fn new(kind: DriverKind, litboard_port: &str) -> Option<Self> {
+    fn new(
+        kind: DriverKind,
+        litboard_port: &str,
+        pac_drive_light_ordering: PacDriveLightOrdering,
+    ) -> Option<Self> {
         if kind == DriverKind::Off {
             return None;
         }
@@ -795,7 +847,7 @@ impl Worker {
         let litboard_port = litboard_port.to_owned();
         let join = thread::Builder::new()
             .name("deadsync-lights".to_owned())
-            .spawn(move || run_worker(kind, litboard_port, rx))
+            .spawn(move || run_worker(kind, litboard_port, pac_drive_light_ordering, rx))
             .ok()?;
         Some(Self { tx, join })
     }
@@ -817,8 +869,13 @@ enum Command {
     Shutdown,
 }
 
-fn run_worker(kind: DriverKind, litboard_port: String, rx: Receiver<Command>) {
-    let Some(mut driver) = Driver::new(kind, litboard_port) else {
+fn run_worker(
+    kind: DriverKind,
+    litboard_port: String,
+    pac_drive_light_ordering: PacDriveLightOrdering,
+    rx: Receiver<Command>,
+) {
+    let Some(mut driver) = Driver::new(kind, litboard_port, pac_drive_light_ordering) else {
         return;
     };
     while let Ok(cmd) = rx.recv() {
@@ -855,7 +912,11 @@ enum Driver {
 }
 
 impl Driver {
-    fn new(kind: DriverKind, litboard_port: String) -> Option<Self> {
+    fn new(
+        kind: DriverKind,
+        litboard_port: String,
+        pac_drive_light_ordering: PacDriveLightOrdering,
+    ) -> Option<Self> {
         match kind {
             DriverKind::Off => None,
             DriverKind::Snek => Some(Self::Snek(snek::Driver::new())),
@@ -865,7 +926,9 @@ impl Driver {
             ))),
             DriverKind::Fusion => Some(Self::Fusion(fusion::Driver::new())),
             DriverKind::Gpb => Some(Self::Gpb(gpb::Driver::new())),
-            DriverKind::PacDrive => Some(Self::PacDrive(pac_drive::Driver::new())),
+            DriverKind::PacDrive => Some(Self::PacDrive(pac_drive::Driver::new(
+                pac_drive_light_ordering,
+            ))),
             DriverKind::PiuioLeds => Some(Self::PiuioLeds(linux_leds::Driver::piuio())),
             DriverKind::Itgio => Some(Self::Itgio(linux_leds::Driver::itgio())),
             DriverKind::HidBlueDot => Some(Self::HidBlueDot(hid_blue_dot::Driver::new())),
@@ -965,6 +1028,30 @@ mod tests {
         assert_eq!(
             GameplayPadLightMode::from_str("Chart").unwrap(),
             GameplayPadLightMode::Chart
+        );
+    }
+
+    #[test]
+    fn pacdrive_ordering_matches_itgmania_preference_semantics() {
+        assert_eq!(
+            PacDriveLightOrdering::default(),
+            PacDriveLightOrdering::OpenItg
+        );
+        assert_eq!(
+            PacDriveLightOrdering::from_preference("OpEnItG"),
+            PacDriveLightOrdering::OpenItg
+        );
+        assert_eq!(
+            PacDriveLightOrdering::from_preference("lumenar"),
+            PacDriveLightOrdering::OpenItg
+        );
+        assert_eq!(
+            PacDriveLightOrdering::from_preference(""),
+            PacDriveLightOrdering::Sm5
+        );
+        assert_eq!(
+            PacDriveLightOrdering::from_preference("sm5"),
+            PacDriveLightOrdering::Sm5
         );
     }
 
@@ -1079,7 +1166,11 @@ mod tests {
 
     #[test]
     fn hide_flags_apply_only_to_joined_players() {
-        let mut lights = Manager::new(DriverKind::Off, DEFAULT_LITBOARD_PORT);
+        let mut lights = Manager::new(
+            DriverKind::Off,
+            DEFAULT_LITBOARD_PORT,
+            PacDriveLightOrdering::default(),
+        );
         lights.set_mode(Mode::Gameplay);
         lights.blink_cabinet(CabinetLight::MarqueeUpperLeft);
         lights.set_hide_flags([
@@ -1099,7 +1190,11 @@ mod tests {
 
     #[test]
     fn gameplay_pad_lights_use_selected_source() {
-        let mut lights = Manager::new(DriverKind::Off, DEFAULT_LITBOARD_PORT);
+        let mut lights = Manager::new(
+            DriverKind::Off,
+            DEFAULT_LITBOARD_PORT,
+            PacDriveLightOrdering::default(),
+        );
         lights.set_mode(Mode::Gameplay);
         lights.set_button_pressed(Player::P1, ButtonLight::Left, true);
         lights.blink_button(Player::P1, ButtonLight::Right);
@@ -1116,7 +1211,11 @@ mod tests {
 
     #[test]
     fn clearing_blinks_cancels_disabled_output_transients() {
-        let mut lights = Manager::new(DriverKind::Off, DEFAULT_LITBOARD_PORT);
+        let mut lights = Manager::new(
+            DriverKind::Off,
+            DEFAULT_LITBOARD_PORT,
+            PacDriveLightOrdering::default(),
+        );
         lights.set_mode(Mode::Gameplay);
         lights.set_gameplay_pad_lights(GameplayPadLightMode::Chart);
         lights.blink_cabinet(CabinetLight::MarqueeUpperLeft);
@@ -1140,7 +1239,11 @@ mod tests {
 
     #[test]
     fn menu_lights_do_not_drive_pad_outputs() {
-        let mut lights = Manager::new(DriverKind::Off, DEFAULT_LITBOARD_PORT);
+        let mut lights = Manager::new(
+            DriverKind::Off,
+            DEFAULT_LITBOARD_PORT,
+            PacDriveLightOrdering::default(),
+        );
         lights.set_mode(Mode::MenuStartAndDirections);
         lights.set_joined([true, false]);
 
@@ -1159,7 +1262,11 @@ mod tests {
 
     #[test]
     fn physical_pad_presses_light_pads_in_menu() {
-        let mut lights = Manager::new(DriverKind::Off, DEFAULT_LITBOARD_PORT);
+        let mut lights = Manager::new(
+            DriverKind::Off,
+            DEFAULT_LITBOARD_PORT,
+            PacDriveLightOrdering::default(),
+        );
         lights.set_mode(Mode::MenuStartAndDirections);
         lights.set_button_pressed(Player::P1, ButtonLight::Left, true);
 
@@ -1170,7 +1277,11 @@ mod tests {
 
     #[test]
     fn test_auto_cycle_lights_fixed_outputs() {
-        let mut lights = Manager::new(DriverKind::Off, DEFAULT_LITBOARD_PORT);
+        let mut lights = Manager::new(
+            DriverKind::Off,
+            DEFAULT_LITBOARD_PORT,
+            PacDriveLightOrdering::default(),
+        );
         lights.set_test_auto_cycle();
         lights.set_button_pressed(Player::P2, ButtonLight::Start, true);
 
@@ -1187,7 +1298,11 @@ mod tests {
 
     #[test]
     fn test_manual_cycle_steps_outputs() {
-        let mut lights = Manager::new(DriverKind::Off, DEFAULT_LITBOARD_PORT);
+        let mut lights = Manager::new(
+            DriverKind::Off,
+            DEFAULT_LITBOARD_PORT,
+            PacDriveLightOrdering::default(),
+        );
         lights.step_test_cabinet(1);
         lights.step_test_button(4);
 

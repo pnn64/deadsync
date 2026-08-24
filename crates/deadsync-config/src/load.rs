@@ -396,6 +396,7 @@ fn apply_runtime_opts(
     cfg.delayed_back = loaded.delayed_back;
     cfg.three_key_navigation = loaded.three_key_navigation;
     cfg.use_fsrs = loaded.use_fsrs;
+    cfg.pac_drive_light_ordering = loaded.pac_drive_light_ordering;
     cfg.lights_simplify_bass = loaded.lights_simplify_bass;
     cfg.only_dedicated_menu_buttons = loaded.only_dedicated_menu_buttons;
     cfg.theme_flag = loaded.theme_flag;

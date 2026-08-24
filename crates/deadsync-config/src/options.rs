@@ -51,7 +51,9 @@ use crate::theme::{
 use crate::writer::{push_bool, push_line};
 #[cfg(windows)]
 use deadsync_input_native::WindowsPadBackend;
-use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
+use deadsync_lights::{
+    DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering,
+};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -1418,6 +1420,7 @@ pub struct RuntimeOptions {
     pub delayed_back: bool,
     pub three_key_navigation: bool,
     pub use_fsrs: bool,
+    pub pac_drive_light_ordering: PacDriveLightOrdering,
     pub lights_simplify_bass: bool,
     pub only_dedicated_menu_buttons: bool,
     pub theme_flag: ThemeFlag,
@@ -1437,6 +1440,7 @@ impl Default for RuntimeOptions {
             delayed_back: DEFAULT_DELAYED_BACK,
             three_key_navigation: DEFAULT_THREE_KEY_NAVIGATION,
             use_fsrs: DEFAULT_USE_FSRS,
+            pac_drive_light_ordering: PacDriveLightOrdering::default(),
             lights_simplify_bass: DEFAULT_LIGHTS_SIMPLIFY_BASS,
             only_dedicated_menu_buttons: DEFAULT_ONLY_DEDICATED_MENU_BUTTONS,
             theme_flag: ThemeFlag::SimplyLove,
@@ -1481,6 +1485,10 @@ pub fn load_runtime_options(conf: &SimpleIni, default: RuntimeOptions) -> Runtim
             .get("Options", "UseFSRs")
             .and_then(parse_loose_bool_str)
             .unwrap_or(default.use_fsrs),
+        pac_drive_light_ordering: conf
+            .get("Options", "PacDriveLightOrdering")
+            .map(PacDriveLightOrdering::from_preference)
+            .unwrap_or(default.pac_drive_light_ordering),
         lights_simplify_bass: conf
             .get("Options", "LightsSimplifyBass")
             .and_then(parse_loose_bool_str)
@@ -1554,6 +1562,11 @@ pub fn push_runtime_navigation_option_lines(content: &mut String, options: Runti
 }
 
 pub fn push_runtime_lights_option_lines(content: &mut String, options: RuntimeOptions) {
+    push_line(
+        content,
+        "PacDriveLightOrdering",
+        options.pac_drive_light_ordering.as_str(),
+    );
     push_bool(content, "LightsSimplifyBass", options.lights_simplify_bass);
 }
 
@@ -2394,6 +2407,7 @@ mod tests {
             delayed_back: true,
             three_key_navigation: false,
             use_fsrs: false,
+            pac_drive_light_ordering: PacDriveLightOrdering::OpenItg,
             lights_simplify_bass: false,
             only_dedicated_menu_buttons: false,
             theme_flag: ThemeFlag::SimplyLove,
@@ -3028,6 +3042,7 @@ mod tests {
             DelayedBack=0
             ThreeKeyNavigation=1
             UseFSRs=1
+            PacDriveLightOrdering=lumenar
             LightsSimplifyBass=1
             OnlyDedicatedMenuButtons=1
             Theme=Simply Love
@@ -3047,6 +3062,10 @@ mod tests {
         assert!(!loaded.delayed_back);
         assert!(loaded.three_key_navigation);
         assert!(loaded.use_fsrs);
+        assert_eq!(
+            loaded.pac_drive_light_ordering,
+            PacDriveLightOrdering::OpenItg
+        );
         assert!(loaded.lights_simplify_bass);
         assert!(loaded.only_dedicated_menu_buttons);
         assert_eq!(loaded.theme_flag, ThemeFlag::SimplyLove);
@@ -3378,6 +3397,7 @@ mod tests {
             delayed_back: false,
             three_key_navigation: true,
             use_fsrs: false,
+            pac_drive_light_ordering: PacDriveLightOrdering::Sm5,
             lights_simplify_bass: true,
             only_dedicated_menu_buttons: false,
             theme_flag: ThemeFlag::SimplyLove,
@@ -3402,6 +3422,7 @@ mod tests {
                 "DelayedBack=0\n",
                 "ThreeKeyNavigation=1\n",
                 "UseFSRs=0\n",
+                "PacDriveLightOrdering=sm5\n",
                 "LightsSimplifyBass=1\n",
                 "OnlyDedicatedMenuButtons=0\n",
                 "SongParsingThreads=6\n",

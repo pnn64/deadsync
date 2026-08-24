@@ -521,6 +521,7 @@ fn runtime_options(cfg: &Config) -> RuntimeOptions {
         delayed_back: cfg.delayed_back,
         three_key_navigation: cfg.three_key_navigation,
         use_fsrs: cfg.use_fsrs,
+        pac_drive_light_ordering: cfg.pac_drive_light_ordering,
         lights_simplify_bass: cfg.lights_simplify_bass,
         only_dedicated_menu_buttons: cfg.only_dedicated_menu_buttons,
         theme_flag: cfg.theme_flag,

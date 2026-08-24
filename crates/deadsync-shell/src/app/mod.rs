@@ -3078,8 +3078,11 @@ impl App {
         if let Some((generation, config)) =
             config::snapshot_if_changed(self.frame_config_generation)
         {
-            self.lights
-                .set_driver(config.lights_driver, config.lights_com_port.as_str());
+            self.lights.set_driver(
+                config.lights_driver,
+                config.lights_com_port.as_str(),
+                config.pac_drive_light_ordering,
+            );
             self.frame_config = config;
             self.frame_config_generation = generation;
             self.frame_policy = FramePolicy::from_config(&config);
@@ -3850,7 +3853,11 @@ impl App {
             fsr_monitor: fsr_input::Monitor::new(),
             fsr_pads_active: false,
             pad_config_sync: pad_config_sync::PadConfigSync::default(),
-            lights: lights::Manager::new(config.lights_driver, config.lights_com_port.as_str()),
+            lights: lights::Manager::new(
+                config.lights_driver,
+                config.lights_com_port.as_str(),
+                config.pac_drive_light_ordering,
+            ),
             gameplay_lights: lights::gameplay::GameplayLightTracker::default(),
             lighting_active: lighting_frame_active(
                 state.screens.current_screen,

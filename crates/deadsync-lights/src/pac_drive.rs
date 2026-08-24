@@ -1,4 +1,4 @@
-use super::{ButtonLight, CabinetLight, Player, State};
+use super::{ButtonLight, CabinetLight, PacDriveLightOrdering, Player, State};
 use hidapi::{HidApi, HidDevice};
 use log::{debug, warn};
 use std::time::{Duration, Instant};
@@ -34,16 +34,18 @@ const LED16: u8 = 16;
 pub struct Driver {
     api: Option<HidApi>,
     device: Option<HidDevice>,
+    ordering: PacDriveLightOrdering,
     last_open_attempt: Option<Instant>,
     last_report: [u8; REPORT_SIZE],
     warned_missing: bool,
 }
 
 impl Driver {
-    pub fn new() -> Self {
+    pub fn new(ordering: PacDriveLightOrdering) -> Self {
         Self {
             api: None,
             device: None,
+            ordering,
             last_open_attempt: None,
             last_report: [u8::MAX; REPORT_SIZE],
             warned_missing: false,
@@ -51,7 +53,7 @@ impl Driver {
     }
 
     pub fn set(&mut self, state: &State) {
-        let report = build_report(state);
+        let report = build_report(state, self.ordering);
         if report == self.last_report {
             return;
         }
@@ -157,86 +159,88 @@ const fn product_range_text() -> &'static str {
     "1500-1507"
 }
 
-fn build_report(state: &State) -> [u8; REPORT_SIZE] {
+fn build_report(state: &State, ordering: PacDriveLightOrdering) -> [u8; REPORT_SIZE] {
     let mut report = [0u8; REPORT_SIZE];
     report[0] = REPORT_ID;
 
+    match ordering {
+        PacDriveLightOrdering::OpenItg => build_openitg_report(state, &mut report),
+        PacDriveLightOrdering::Sm5 => build_sm5_report(state, &mut report),
+    }
+    report
+}
+
+fn build_openitg_report(state: &State, report: &mut [u8; REPORT_SIZE]) {
+    set_led(report, LED01, state.button(Player::P1, ButtonLight::Left));
+    set_led(report, LED02, state.button(Player::P1, ButtonLight::Right));
+    set_led(report, LED03, state.button(Player::P1, ButtonLight::Up));
+    set_led(report, LED04, state.button(Player::P1, ButtonLight::Down));
+    set_led(report, LED05, state.button(Player::P2, ButtonLight::Left));
+    set_led(report, LED06, state.button(Player::P2, ButtonLight::Right));
+    set_led(report, LED07, state.button(Player::P2, ButtonLight::Up));
+    set_led(report, LED08, state.button(Player::P2, ButtonLight::Down));
+    set_led(report, LED09, state.cabinet(CabinetLight::MarqueeUpperLeft));
     set_led(
-        &mut report,
-        LED01,
-        state.cabinet(CabinetLight::MarqueeUpperLeft),
+        report,
+        LED10,
+        state.cabinet(CabinetLight::MarqueeUpperRight),
+    );
+    set_led(report, LED11, state.cabinet(CabinetLight::MarqueeLowerLeft));
+    set_led(
+        report,
+        LED12,
+        state.cabinet(CabinetLight::MarqueeLowerRight),
     );
     set_led(
-        &mut report,
+        report,
+        LED13,
+        state.menu_button(Player::P1, ButtonLight::Start),
+    );
+    set_led(
+        report,
+        LED14,
+        state.menu_button(Player::P2, ButtonLight::Start),
+    );
+    let bass = state.cabinet(CabinetLight::BassLeft) || state.cabinet(CabinetLight::BassRight);
+    set_led(report, LED15, bass);
+    set_led(report, LED16, bass);
+}
+
+fn build_sm5_report(state: &State, report: &mut [u8; REPORT_SIZE]) {
+    set_led(report, LED01, state.cabinet(CabinetLight::MarqueeUpperLeft));
+    set_led(
+        report,
         LED02,
         state.cabinet(CabinetLight::MarqueeUpperRight),
     );
+    set_led(report, LED03, state.cabinet(CabinetLight::MarqueeLowerLeft));
     set_led(
-        &mut report,
-        LED03,
-        state.cabinet(CabinetLight::MarqueeLowerLeft),
-    );
-    set_led(
-        &mut report,
+        report,
         LED04,
         state.cabinet(CabinetLight::MarqueeLowerRight),
     );
     let bass = state.cabinet(CabinetLight::BassLeft) || state.cabinet(CabinetLight::BassRight);
-    set_led(&mut report, LED05, bass);
+    set_led(report, LED05, bass);
 
+    set_led(report, LED06, state.button(Player::P1, ButtonLight::Left));
+    set_led(report, LED07, state.button(Player::P1, ButtonLight::Right));
+    set_led(report, LED08, state.button(Player::P1, ButtonLight::Up));
+    set_led(report, LED09, state.button(Player::P1, ButtonLight::Down));
     set_led(
-        &mut report,
-        LED06,
-        state.button(Player::P1, ButtonLight::Left),
-    );
-    set_led(
-        &mut report,
-        LED07,
-        state.button(Player::P1, ButtonLight::Right),
-    );
-    set_led(
-        &mut report,
-        LED08,
-        state.button(Player::P1, ButtonLight::Up),
-    );
-    set_led(
-        &mut report,
-        LED09,
-        state.button(Player::P1, ButtonLight::Down),
-    );
-    set_led(
-        &mut report,
+        report,
         LED10,
         state.menu_button(Player::P1, ButtonLight::Start),
     );
 
+    set_led(report, LED11, state.button(Player::P2, ButtonLight::Left));
+    set_led(report, LED12, state.button(Player::P2, ButtonLight::Right));
+    set_led(report, LED13, state.button(Player::P2, ButtonLight::Up));
+    set_led(report, LED14, state.button(Player::P2, ButtonLight::Down));
     set_led(
-        &mut report,
-        LED11,
-        state.button(Player::P2, ButtonLight::Left),
-    );
-    set_led(
-        &mut report,
-        LED12,
-        state.button(Player::P2, ButtonLight::Right),
-    );
-    set_led(
-        &mut report,
-        LED13,
-        state.button(Player::P2, ButtonLight::Up),
-    );
-    set_led(
-        &mut report,
-        LED14,
-        state.button(Player::P2, ButtonLight::Down),
-    );
-    set_led(
-        &mut report,
+        report,
         LED15,
         state.menu_button(Player::P2, ButtonLight::Start),
     );
-    set_led(&mut report, LED16, false);
-    report
 }
 
 fn set_led(report: &mut [u8; REPORT_SIZE], led: u8, on: bool) {
@@ -254,34 +258,220 @@ fn set_led(report: &mut [u8; REPORT_SIZE], led: u8, on: bool) {
 mod tests {
     use super::*;
 
-    #[test]
-    fn report_uses_sm5_pacdrive_order() {
-        let mut state = State::default();
-        state.set_button(Player::P1, ButtonLight::Left, true);
-        state.set_button(Player::P1, ButtonLight::Up, true);
-        state.set_menu_button(Player::P1, ButtonLight::Start, true);
-        state.set_button(Player::P2, ButtonLight::Right, true);
-        state.set_button(Player::P2, ButtonLight::Down, true);
-        state.set_cabinet(CabinetLight::MarqueeUpperLeft, true);
-        state.set_cabinet(CabinetLight::MarqueeLowerRight, true);
-        state.set_cabinet(CabinetLight::BassRight, true);
+    fn expected_report(leds: &[u8]) -> [u8; REPORT_SIZE] {
+        let mut report = [0; REPORT_SIZE];
+        for led in leds {
+            set_led(&mut report, *led, true);
+        }
+        report
+    }
 
-        let report = build_report(&state);
-        assert_eq!(report[0], REPORT_ID);
-        assert_eq!(report[1], 0);
-        assert_eq!(report[2], 0);
-        assert_eq!(
-            report[LED_HIGH_BYTE],
-            (1u8 << (LED01 - LED01))
-                | (1u8 << (LED04 - LED01))
-                | (1u8 << (LED05 - LED01))
-                | (1u8 << (LED06 - LED01))
-                | (1u8 << (LED08 - LED01))
+    fn assert_light_led(
+        ordering: PacDriveLightOrdering,
+        configure: impl FnOnce(&mut State),
+        leds: &[u8],
+    ) {
+        let mut state = State::default();
+        configure(&mut state);
+        assert_eq!(build_report(&state, ordering), expected_report(leds));
+    }
+
+    #[test]
+    fn report_uses_openitg_pacdrive_order() {
+        let ordering = PacDriveLightOrdering::OpenItg;
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P1, ButtonLight::Left, true),
+            &[LED01],
         );
-        assert_eq!(
-            report[LED_LOW_BYTE],
-            (1u8 << (LED10 - LED09)) | (1u8 << (LED12 - LED09)) | (1u8 << (LED14 - LED09))
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P1, ButtonLight::Right, true),
+            &[LED02],
         );
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P1, ButtonLight::Up, true),
+            &[LED03],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P1, ButtonLight::Down, true),
+            &[LED04],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P2, ButtonLight::Left, true),
+            &[LED05],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P2, ButtonLight::Right, true),
+            &[LED06],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P2, ButtonLight::Up, true),
+            &[LED07],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P2, ButtonLight::Down, true),
+            &[LED08],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_cabinet(CabinetLight::MarqueeUpperLeft, true),
+            &[LED09],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_cabinet(CabinetLight::MarqueeUpperRight, true),
+            &[LED10],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_cabinet(CabinetLight::MarqueeLowerLeft, true),
+            &[LED11],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_cabinet(CabinetLight::MarqueeLowerRight, true),
+            &[LED12],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_menu_button(Player::P1, ButtonLight::Start, true),
+            &[LED13],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_menu_button(Player::P2, ButtonLight::Start, true),
+            &[LED14],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_cabinet(CabinetLight::BassLeft, true),
+            &[LED15, LED16],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_cabinet(CabinetLight::BassRight, true),
+            &[LED15, LED16],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_any_button(Player::P1, ButtonLight::Select, true),
+            &[],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_any_button(Player::P2, ButtonLight::Select, true),
+            &[],
+        );
+    }
+
+    #[test]
+    fn report_retains_sm5_pacdrive_order() {
+        let ordering = PacDriveLightOrdering::Sm5;
+        assert_light_led(
+            ordering,
+            |s| s.set_cabinet(CabinetLight::MarqueeUpperLeft, true),
+            &[LED01],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_cabinet(CabinetLight::MarqueeUpperRight, true),
+            &[LED02],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_cabinet(CabinetLight::MarqueeLowerLeft, true),
+            &[LED03],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_cabinet(CabinetLight::MarqueeLowerRight, true),
+            &[LED04],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_cabinet(CabinetLight::BassLeft, true),
+            &[LED05],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_cabinet(CabinetLight::BassRight, true),
+            &[LED05],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P1, ButtonLight::Left, true),
+            &[LED06],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P1, ButtonLight::Right, true),
+            &[LED07],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P1, ButtonLight::Up, true),
+            &[LED08],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P1, ButtonLight::Down, true),
+            &[LED09],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_menu_button(Player::P1, ButtonLight::Start, true),
+            &[LED10],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P2, ButtonLight::Left, true),
+            &[LED11],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P2, ButtonLight::Right, true),
+            &[LED12],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P2, ButtonLight::Up, true),
+            &[LED13],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_button(Player::P2, ButtonLight::Down, true),
+            &[LED14],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_menu_button(Player::P2, ButtonLight::Start, true),
+            &[LED15],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_any_button(Player::P1, ButtonLight::Select, true),
+            &[],
+        );
+        assert_light_led(
+            ordering,
+            |s| s.set_any_button(Player::P2, ButtonLight::Select, true),
+            &[],
+        );
+    }
+
+    #[test]
+    fn report_byte_swaps_physical_led_halves_like_itgmania() {
+        assert_eq!(expected_report(&[LED01]), [0, 0, 0, 0, 0b0000_0001]);
+        assert_eq!(expected_report(&[LED08]), [0, 0, 0, 0, 0b1000_0000]);
+        assert_eq!(expected_report(&[LED09]), [0, 0, 0, 0b0000_0001, 0]);
+        assert_eq!(expected_report(&[LED16]), [0, 0, 0, 0b1000_0000, 0]);
     }
 
     #[test]

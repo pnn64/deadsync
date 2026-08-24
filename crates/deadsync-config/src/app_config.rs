@@ -18,7 +18,9 @@ use deadlib_present::color::Color;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_audio_stream::LinuxAudioBackend;
 use deadsync_input_native::WindowsPadBackend;
-use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode, SerialPortName};
+use deadsync_lights::{
+    DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering, SerialPortName,
+};
 use deadsync_smx::SmxPadPreset;
 use null_or_die::{BiasKernel, GraphOrientation, KernelTarget};
 use winit::keyboard::KeyCode;
@@ -351,6 +353,8 @@ pub struct Config {
     pub use_fsrs: bool,
     /// Native cabinet/pad light output driver.
     pub lights_driver: LightsDriverKind,
+    /// PacDrive output pin layout. Mirrors ITGmania's `PacDriveLightOrdering` preference.
+    pub pac_drive_light_ordering: PacDriveLightOrdering,
     /// Source for gameplay arrow pad lights.
     pub lights_gameplay_pad_lights: GameplayPadLightMode,
     /// ITGmania parity: bass lights use quarter-note chart rows only.
@@ -551,6 +555,7 @@ impl Default for Config {
             three_key_navigation: runtime.three_key_navigation,
             use_fsrs: runtime.use_fsrs,
             lights_driver: LightsDriverKind::Off,
+            pac_drive_light_ordering: runtime.pac_drive_light_ordering,
             lights_gameplay_pad_lights: GameplayPadLightMode::Input,
             lights_simplify_bass: runtime.lights_simplify_bass,
             lights_com_port: SerialPortName::default(),

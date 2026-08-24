@@ -6,7 +6,9 @@ pub use deadsync_audio_stream::LinuxAudioBackend;
 pub use deadsync_input_native::PadOrderBackend;
 #[cfg(windows)]
 pub use deadsync_input_native::WindowsPadBackend;
-pub use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
+pub use deadsync_lights::{
+    DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering,
+};
 pub use deadsync_smx::SmxPadPreset;
 
 pub use crate::app_config::{Config, DisplayMode};
