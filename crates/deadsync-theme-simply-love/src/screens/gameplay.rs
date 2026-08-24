@@ -17866,8 +17866,11 @@ pub fn push_actors(
                     diff_x,
                 );
                 let chart = &state.charts()[player_idx];
-                let difficulty_color =
-                    color::difficulty_rgba(&chart.difficulty, state.active_color_index());
+                let difficulty_color = color::difficulty_rgba_with_scheme(
+                    &chart.difficulty,
+                    state.active_color_index(),
+                    policy.difficulty_color_scheme,
+                );
                 let meter_text = cached_meter_text(chart.meter);
                 let meter_detail_text = color::difficulty_display_name_for_song(
                     &chart.difficulty,

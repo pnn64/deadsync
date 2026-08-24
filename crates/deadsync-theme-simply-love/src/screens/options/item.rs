@@ -161,6 +161,7 @@ pub enum ItemId {
     SmNativeLanguage,
     SmWheelSpeed,
     SmWheelStyle,
+    SmDifficultyColors,
     SmHideInactiveSeries,
     SmSeriesSort,
     SmSeriesSource,

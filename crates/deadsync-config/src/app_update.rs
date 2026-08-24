@@ -17,6 +17,7 @@ use crate::theme::{
     VersionOverlaySide, VisualStyle,
 };
 use deadlib_audio_core::AudioOutputMode;
+use deadlib_present::color::DifficultyColorScheme;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_audio_stream::LinuxAudioBackend;
 use deadsync_input::clamp_input_debounce_seconds;
@@ -205,6 +206,10 @@ pub fn set_select_music_itl_wheel_mode(cfg: &mut Config, mode: SelectMusicItlWhe
 
 pub fn set_select_music_wheel_style(cfg: &mut Config, style: SelectMusicWheelStyle) -> bool {
     set_if_changed(&mut cfg.select_music_wheel_style, style)
+}
+
+pub fn set_difficulty_color_scheme(cfg: &mut Config, scheme: DifficultyColorScheme) -> bool {
+    set_if_changed(&mut cfg.difficulty_color_scheme, scheme)
 }
 
 pub fn set_select_music_song_select_bg_mode(

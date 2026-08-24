@@ -1,5 +1,6 @@
 use crate::screens::SimplyLoveScreen;
 use crate::views::{DensityGraphView, ManageLocalProfilesView, SimplyLoveDensityGraphSlot};
+use deadlib_present::color::DifficultyColorScheme;
 #[cfg(target_os = "windows")]
 use deadsync_config::prelude::WindowsPadBackend;
 use deadsync_config::prelude::{
@@ -536,6 +537,7 @@ pub enum SimplyLoveSelectMusicConfigRequest {
     TranslatedTitles(bool),
     WheelSwitchSpeed(u8),
     WheelStyle(SelectMusicWheelStyle),
+    DifficultyColors(DifficultyColorScheme),
     HideInactiveSeries(bool),
     SortBySeries(bool),
     SeriesSource(SelectMusicSeriesSource),

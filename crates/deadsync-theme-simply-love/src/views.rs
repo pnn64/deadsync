@@ -105,6 +105,7 @@ pub struct GameplayPolicyView {
     pub background_color: deadsync_config::prelude::Color,
     pub smx_input: bool,
     pub zmod_rating_box_text: bool,
+    pub difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
     pub show_bpm_decimal: bool,
     pub bpm_position: deadsync_config::prelude::GameplayBpmPosition,
     pub machine_font: deadsync_config::prelude::MachineFont,
@@ -122,6 +123,7 @@ impl Default for GameplayPolicyView {
             background_color: config.gameplay_bg_color,
             smx_input: config.smx_input,
             zmod_rating_box_text: config.zmod_rating_box_text,
+            difficulty_color_scheme: config.difficulty_color_scheme,
             show_bpm_decimal: config.show_bpm_decimal,
             bpm_position: config.gameplay_bpm_position,
             machine_font: config.machine_font,
@@ -380,6 +382,7 @@ pub struct PostSongRuntimeView {
     pub machine_font: deadsync_config::prelude::MachineFont,
     pub translated_titles: bool,
     pub zmod_rating_box_text: bool,
+    pub difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
     pub three_key_navigation: bool,
     pub srpg10_visuals: bool,
     pub machine_leaderboards:
@@ -416,6 +419,7 @@ pub struct EvaluationPolicyView {
     pub srpg10_visuals: bool,
     pub machine_font: deadsync_config::prelude::MachineFont,
     pub zmod_rating_box_text: bool,
+    pub difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
     pub breakdown_style: deadsync_config::prelude::BreakdownStyle,
 }
 
@@ -446,6 +450,7 @@ impl Default for EvaluationPolicyView {
                 ),
             machine_font: config.machine_font,
             zmod_rating_box_text: config.zmod_rating_box_text,
+            difficulty_color_scheme: config.difficulty_color_scheme,
             breakdown_style: config.select_music_breakdown_style,
         }
     }
@@ -687,6 +692,7 @@ pub struct SelectCoursePolicyView {
     pub music_wheel_switch_speed: u8,
     pub global_offset_seconds: f32,
     pub dedicated_three_key_nav: bool,
+    pub difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
 }
 
 impl Default for SelectCoursePolicyView {
@@ -699,6 +705,7 @@ impl Default for SelectCoursePolicyView {
             global_offset_seconds: config.global_offset_seconds,
             dedicated_three_key_nav: config.three_key_navigation
                 && config.only_dedicated_menu_buttons,
+            difficulty_color_scheme: config.difficulty_color_scheme,
         }
     }
 }
@@ -1274,6 +1281,7 @@ pub struct SelectMusicPresentationPolicyView {
     pub show_breakdown: bool,
     pub pack_ini_offsets: bool,
     pub default_sync_offset: deadsync_config::prelude::DefaultSyncOffset,
+    pub difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
 }
 
 impl Default for SelectMusicPresentationPolicyView {
@@ -1299,6 +1307,7 @@ impl Default for SelectMusicPresentationPolicyView {
             show_breakdown: deadsync_config::prelude::DEFAULT_SHOW_SELECT_MUSIC_BREAKDOWN,
             pack_ini_offsets: deadsync_config::prelude::DEFAULT_MACHINE_PACK_INI_OFFSETS,
             default_sync_offset: deadsync_config::prelude::DefaultSyncOffset::Null,
+            difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme::SimplyLove,
         }
     }
 }

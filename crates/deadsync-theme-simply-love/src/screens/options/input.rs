@@ -938,6 +938,11 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::MusicWheelStyle => crate::SimplyLoveSelectMusicConfigRequest::WheelStyle(
                 select_music_wheel_style_from_choice(new_index),
             ),
+            SubRowId::DifficultyColors => {
+                crate::SimplyLoveSelectMusicConfigRequest::DifficultyColors(
+                    select_music_difficulty_color_scheme_from_choice(new_index),
+                )
+            }
             SubRowId::HideInactiveSeries => {
                 crate::SimplyLoveSelectMusicConfigRequest::HideInactiveSeries(yes_no_from_choice(
                     new_index,

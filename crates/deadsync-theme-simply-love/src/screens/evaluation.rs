@@ -5457,8 +5457,11 @@ pub fn push_actors(
 
             // Difficulty Text and Meter Block
             {
-                let difficulty_color =
-                    color::difficulty_rgba(&si.chart.difficulty, state.active_color_index);
+                let difficulty_color = color::difficulty_rgba_with_scheme(
+                    &si.chart.difficulty,
+                    state.active_color_index,
+                    policy.difficulty_color_scheme,
+                );
                 if policy.zmod_rating_box_text {
                     let difficulty_display_name = color::difficulty_display_name_for_song(
                         &si.chart.difficulty,

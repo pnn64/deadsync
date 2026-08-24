@@ -276,6 +276,7 @@ pub(crate) fn policy_view(config: &config::Config) -> SelectMusicPolicyView {
             show_breakdown: config.show_select_music_breakdown,
             pack_ini_offsets: config.machine_pack_ini_offsets,
             default_sync_offset: config.machine_default_sync_offset,
+            difficulty_color_scheme: config.difficulty_color_scheme,
         },
     }
 }
@@ -341,6 +342,7 @@ mod tests {
             select_music_itl_wheel_mode: config::SelectMusicItlWheelMode::PointsAndScore,
             music_wheel_switch_speed: 22,
             select_music_wheel_style: config::SelectMusicWheelStyle::Iidx,
+            difficulty_color_scheme: config::DifficultyColorScheme::Ddr,
             hide_inactive_series: true,
             sort_music_wheel_by_series: true,
             select_music_new_pack_mode: config::NewPackMode::OpenPack,
@@ -373,6 +375,10 @@ mod tests {
         let view = policy_view(&config);
 
         assert_eq!(view.machine_font, config::MachineFont::Mega);
+        assert_eq!(
+            view.presentation.difficulty_color_scheme,
+            config::DifficultyColorScheme::Ddr
+        );
         assert!(view.media.show_banners);
         assert!(view.media.show_previews);
         assert!(view.media.replay_gain);

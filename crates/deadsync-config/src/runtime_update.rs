@@ -14,6 +14,7 @@ use crate::theme::{
 };
 use deadlib_audio_core::AudioOutputMode;
 use deadlib_platform::logging;
+use deadlib_present::color::DifficultyColorScheme;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 #[cfg(target_os = "linux")]
 use deadsync_audio_stream::LinuxAudioBackend;
@@ -178,6 +179,7 @@ update_config_fn!(pub fn update_hide_inactive_series(enabled: bool) => set_hide_
 update_config_fn!(pub fn update_select_music_itl_rank_mode(mode: SelectMusicItlRankMode) => set_select_music_itl_rank_mode);
 update_config_fn!(pub fn update_select_music_itl_wheel_mode(mode: SelectMusicItlWheelMode) => set_select_music_itl_wheel_mode);
 update_config_fn!(pub fn update_select_music_wheel_style(style: SelectMusicWheelStyle) => set_select_music_wheel_style);
+update_config_fn!(pub fn update_difficulty_color_scheme(scheme: DifficultyColorScheme) => set_difficulty_color_scheme);
 update_config_fn!(pub fn update_select_music_song_select_bg_mode(mode: SelectMusicSongSelectBgMode) => set_select_music_song_select_bg_mode);
 update_config_fn!(pub fn update_select_music_new_pack_mode(mode: NewPackMode) => set_select_music_new_pack_mode);
 update_config_fn!(pub fn update_show_select_music_folder_stats(enabled: bool) => set_show_select_music_folder_stats);

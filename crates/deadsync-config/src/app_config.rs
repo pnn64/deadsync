@@ -14,7 +14,7 @@ use crate::theme::{
 };
 use deadlib_audio_core::AudioOutputMode;
 use deadlib_platform::display::FullscreenType;
-use deadlib_present::color::Color;
+use deadlib_present::color::{Color, DifficultyColorScheme};
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_audio_stream::LinuxAudioBackend;
 use deadsync_input_native::WindowsPadBackend;
@@ -163,6 +163,8 @@ pub struct Config {
     pub select_music_itl_wheel_mode: SelectMusicItlWheelMode,
     /// Simply Love MusicWheelStyle parity: IIDX only shows the active pack when expanded.
     pub select_music_wheel_style: SelectMusicWheelStyle,
+    /// zmod difficulty colors: theme-relative Simply Love, fixed ITG, or fixed DDR.
+    pub difficulty_color_scheme: DifficultyColorScheme,
     /// Arrow Cloud SongSelectBG parity: show song/pack art behind wheel rows.
     pub select_music_song_select_bg_mode: SelectMusicSongSelectBgMode,
     pub select_music_new_pack_mode: NewPackMode,
@@ -442,6 +444,7 @@ impl Default for Config {
             select_music_itl_rank_mode: select_music.itl_rank_mode,
             select_music_itl_wheel_mode: select_music.itl_wheel_mode,
             select_music_wheel_style: select_music.wheel_style,
+            difficulty_color_scheme: select_music.difficulty_color_scheme,
             select_music_song_select_bg_mode: select_music.song_select_bg_mode,
             select_music_new_pack_mode: select_music.new_pack_mode,
             show_select_music_folder_stats: select_music.show_folder_stats,

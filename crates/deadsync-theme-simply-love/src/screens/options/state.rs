@@ -1237,6 +1237,12 @@ pub fn init(view: OptionsInitView) -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::DifficultyColors,
+        select_music_difficulty_color_scheme_choice_index(cfg.difficulty_color_scheme),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::HideInactiveSeries,
         yes_no_choice_index(cfg.hide_inactive_series),
     );

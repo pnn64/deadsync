@@ -1441,13 +1441,17 @@ pub struct App {
     /// a rescan, so the scoped cache is dropped (files may have changed).
     smx_scoped_bg_generation: u64,
     /// Cache of `MatchColorToDifficulty`-tinted backgrounds, keyed by (pack,
-    /// role, difficulty). Holds the theme color index the tint was computed
-    /// against alongside the `Arc`, so a stale entry (the player changed their
-    /// theme color) is detected and recomputed on next use rather than pruned
-    /// eagerly; at most one entry lives per (pack, role, difficulty) at a time.
+    /// role, difficulty). Holds the theme color index and difficulty color
+    /// scheme the tint was computed against alongside the `Arc`, so a stale
+    /// entry is detected and recomputed on next use rather than pruned eagerly;
+    /// at most one entry lives per (pack, role, difficulty) at a time.
     smx_difficulty_tint_cache: std::collections::HashMap<
         (String, &'static str, &'static str),
-        (i32, std::sync::Arc<deadsync_smx::gifs::FullPadAnim>),
+        (
+            i32,
+            config::DifficultyColorScheme,
+            std::sync::Arc<deadsync_smx::gifs::FullPadAnim>,
+        ),
     >,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
@@ -2902,12 +2906,10 @@ impl App {
     /// Recolor a resolved background to the played chart's difficulty color if
     /// `pack` declares `role` under `MatchColorToDifficulty` in its
     /// `gifpack.ini`; otherwise returns `anim` unchanged. Reuses the same
-    /// theme-relative color the rest of the UI uses for difficulty (see
-    /// `deadlib_present::color::difficulty_rgba`), so `Challenge` always tints
-    /// to the player's current theme color and easier difficulties step back
-    /// around the same hue wheel. Cheap: a cache keyed by (pack, role,
-    /// difficulty) holds one tinted `Arc` per combination, recomputed only
-    /// when the player's theme color changes (never per frame).
+    /// configured color scheme the rest of the UI uses for difficulty. Cheap:
+    /// a cache keyed by (pack, role, difficulty) holds one tinted `Arc` per
+    /// combination, recomputed only when the theme color or color scheme
+    /// changes (never per frame).
     fn maybe_tint_smx_background(
         &mut self,
         pack_str: Option<&str>,
@@ -2932,20 +2934,29 @@ impl App {
             role,
             difficulty,
         );
-        if let Some((cached_theme, cached_anim)) = self.smx_difficulty_tint_cache.get(&cache_key)
+        let difficulty_color_scheme = config::get().difficulty_color_scheme;
+        if let Some((cached_theme, cached_scheme, cached_anim)) =
+            self.smx_difficulty_tint_cache.get(&cache_key)
             && *cached_theme == theme_index
+            && *cached_scheme == difficulty_color_scheme
         {
             return cached_anim.clone();
         }
-        let target_rgba = deadlib_present::color::difficulty_rgba(difficulty, theme_index)
-            .map(|c| (c * 255.0).round() as u8);
+        let target_rgba = deadlib_present::color::difficulty_rgba_with_scheme(
+            difficulty,
+            theme_index,
+            difficulty_color_scheme,
+        )
+        .map(|c| (c * 255.0).round() as u8);
         // The palette is sRGB for screen use; the pad LEDs are linear, so the
         // pastel difficulty colors read as off-white without this correction.
         let target_rgb =
             deadsync_smx::gifs::saturate_for_leds([target_rgba[0], target_rgba[1], target_rgba[2]]);
         let tinted = std::sync::Arc::new(deadsync_smx::gifs::tint_full_pad(&anim, target_rgb));
-        self.smx_difficulty_tint_cache
-            .insert(cache_key, (theme_index, tinted.clone()));
+        self.smx_difficulty_tint_cache.insert(
+            cache_key,
+            (theme_index, difficulty_color_scheme, tinted.clone()),
+        );
         tinted
     }
 

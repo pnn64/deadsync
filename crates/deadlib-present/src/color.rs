@@ -347,9 +347,81 @@ pub const HARD_EX_SCORE_RGBA: [f32; 4] = rgba_hex("#FF00CC");
 
 pub const EDIT_DIFFICULTY_RGBA: [f32; 4] = rgba_hex("#B4B7BA");
 
+/// zmod's selectable difficulty-color rules. `SimplyLove` keeps difficulty
+/// colors relative to the active theme color; `Itg` and `Ddr` use fixed
+/// arcade-game palettes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DifficultyColorScheme {
+    #[default]
+    SimplyLove,
+    Itg,
+    Ddr,
+}
+
+impl DifficultyColorScheme {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SimplyLove => "Simply Love",
+            Self::Itg => "ITG",
+            Self::Ddr => "DDR",
+        }
+    }
+}
+
+impl std::str::FromStr for DifficultyColorScheme {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(value.len());
+        for ch in value.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "simplylove" | "sl" | "default" => Ok(Self::SimplyLove),
+            "itg" => Ok(Self::Itg),
+            "ddr" => Ok(Self::Ddr),
+            _ => Err(()),
+        }
+    }
+}
+
+/// Fixed zmod/ITG difficulty palette, ordered Beginner through Challenge.
+pub const ITG_DIFFICULTY_RGBA: [[f32; 4]; 5] = [
+    rgba_hex("#a355b8"),
+    rgba_hex("#1ec51d"),
+    rgba_hex("#d6db41"),
+    rgba_hex("#ba3049"),
+    rgba_hex("#2691c5"),
+];
+
+/// Fixed zmod/DDR difficulty palette, ordered Beginner through Challenge.
+pub const DDR_DIFFICULTY_RGBA: [[f32; 4]; 5] = [
+    rgba_hex("#2dccef"),
+    rgba_hex("#eaa910"),
+    rgba_hex("#ff344d"),
+    rgba_hex("#30d81e"),
+    rgba_hex("#e900ff"),
+];
+
 /// Returns the Simply Love color for a given difficulty, based on an active theme color index.
 #[inline(always)]
 pub fn difficulty_rgba(difficulty_name: &str, active_color_index: i32) -> [f32; 4] {
+    difficulty_rgba_with_scheme(
+        difficulty_name,
+        active_color_index,
+        DifficultyColorScheme::SimplyLove,
+    )
+}
+
+/// Returns the selected zmod difficulty color for a file difficulty name.
+#[inline(always)]
+pub fn difficulty_rgba_with_scheme(
+    difficulty_name: &str,
+    active_color_index: i32,
+    scheme: DifficultyColorScheme,
+) -> [f32; 4] {
     if difficulty_name.eq_ignore_ascii_case("edit") {
         return EDIT_DIFFICULTY_RGBA;
     }
@@ -358,8 +430,15 @@ pub fn difficulty_rgba(difficulty_name: &str, active_color_index: i32) -> [f32; 
         .position(|&name| name.eq_ignore_ascii_case(difficulty_name))
         .unwrap_or(2); // Default to Medium if not found
 
-    let color_index = active_color_index - (4 - difficulty_index) as i32;
-    simply_love_rgba(color_index)
+    match scheme {
+        DifficultyColorScheme::SimplyLove => {
+            let color_index = active_color_index - (4 - difficulty_index) as i32;
+            simply_love_rgba(color_index)
+        }
+        // zmod lightens ITG's fixed palette by 25% for non-decorative uses.
+        DifficultyColorScheme::Itg => lighten_rgba(ITG_DIFFICULTY_RGBA[difficulty_index]),
+        DifficultyColorScheme::Ddr => DDR_DIFFICULTY_RGBA[difficulty_index],
+    }
 }
 
 #[inline(always)]
@@ -478,5 +557,44 @@ mod tests {
         assert_eq!(difficulty_gif_tag("Challenge"), "challenge");
         // Unrecognized values fall back to "medium".
         assert_eq!(difficulty_gif_tag("Bogus"), "medium");
+    }
+
+    #[test]
+    fn zmod_difficulty_color_schemes_match_reference_palettes() {
+        assert_eq!(
+            difficulty_rgba_with_scheme("Beginner", 4, DifficultyColorScheme::Itg),
+            lighten_rgba(rgba_hex("#a355b8"))
+        );
+        assert_eq!(
+            difficulty_rgba_with_scheme("Challenge", 0, DifficultyColorScheme::Ddr),
+            rgba_hex("#e900ff")
+        );
+        assert_eq!(
+            difficulty_rgba_with_scheme("Edit", 0, DifficultyColorScheme::Ddr),
+            EDIT_DIFFICULTY_RGBA
+        );
+        assert_eq!(
+            difficulty_rgba_with_scheme("Unknown", 4, DifficultyColorScheme::Itg),
+            lighten_rgba(rgba_hex("#d6db41"))
+        );
+    }
+
+    #[test]
+    fn difficulty_color_scheme_parses_zmod_values() {
+        use std::str::FromStr;
+
+        assert_eq!(
+            DifficultyColorScheme::from_str("Simply Love"),
+            Ok(DifficultyColorScheme::SimplyLove)
+        );
+        assert_eq!(
+            DifficultyColorScheme::from_str("ITG"),
+            Ok(DifficultyColorScheme::Itg)
+        );
+        assert_eq!(
+            DifficultyColorScheme::from_str("ddr"),
+            Ok(DifficultyColorScheme::Ddr)
+        );
+        assert!(DifficultyColorScheme::from_str("unknown").is_err());
     }
 }

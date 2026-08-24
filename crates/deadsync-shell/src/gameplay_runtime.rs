@@ -81,6 +81,7 @@ fn policy_view(config: &config::Config) -> GameplayPolicyView {
         background_color: config.gameplay_bg_color,
         smx_input: config.smx_input,
         zmod_rating_box_text: config.zmod_rating_box_text,
+        difficulty_color_scheme: config.difficulty_color_scheme,
         show_bpm_decimal: config.show_bpm_decimal,
         bpm_position: config.gameplay_bpm_position,
         machine_font: config.machine_font,

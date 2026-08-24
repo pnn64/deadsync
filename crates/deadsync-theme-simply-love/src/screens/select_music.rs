@@ -13471,23 +13471,33 @@ pub fn push_actors(
     let preferred_idx_p1 = state
         .preferred_difficulty_index
         .min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
-    let mut sel_col_p1 = color::difficulty_rgba(
+    let mut sel_col_p1 = color::difficulty_rgba_with_scheme(
         STANDARD_DIFFICULTY_NAMES[preferred_idx_p1],
         state.active_color_index,
+        presentation.difficulty_color_scheme,
     );
 
     let preferred_idx_p2 = state
         .p2_preferred_difficulty_index
         .min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
-    let mut sel_col_p2 = color::difficulty_rgba(
+    let mut sel_col_p2 = color::difficulty_rgba_with_scheme(
         STANDARD_DIFFICULTY_NAMES[preferred_idx_p2],
         state.active_color_index,
+        presentation.difficulty_color_scheme,
     );
     if let Some(chart) = immediate_chart_p1 {
-        sel_col_p1 = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
+        sel_col_p1 = color::difficulty_rgba_with_scheme(
+            &chart.difficulty,
+            state.active_color_index,
+            presentation.difficulty_color_scheme,
+        );
     }
     if let Some(chart) = immediate_chart_p2 {
-        sel_col_p2 = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
+        sel_col_p2 = color::difficulty_rgba_with_scheme(
+            &chart.difficulty,
+            state.active_color_index,
+            presentation.difficulty_color_scheme,
+        );
     }
 
     // Timer (zmod parity: optional gameplay timer to the right of session timer).
@@ -14494,7 +14504,11 @@ pub fn push_actors(
             None
         };
         if let Some(chart) = chart {
-            let c = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
+            let c = color::difficulty_rgba_with_scheme(
+                &chart.difficulty,
+                state.active_color_index,
+                presentation.difficulty_color_scheme,
+            );
             actors.push(act!(text: font(machine_font_key(state.policy.machine_font, FontRole::Header)): settext(cached_u32_text(chart.meter)): align(0.5, 0.5): xy(lst_cx, lst_cy + y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
         }
     }

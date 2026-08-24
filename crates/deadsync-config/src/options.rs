@@ -49,6 +49,7 @@ use crate::theme::{
     auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 use crate::writer::{push_bool, push_line};
+use deadlib_present::color::DifficultyColorScheme;
 #[cfg(windows)]
 use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{
@@ -1044,6 +1045,7 @@ pub struct SelectMusicOptions {
     pub itl_rank_mode: SelectMusicItlRankMode,
     pub itl_wheel_mode: SelectMusicItlWheelMode,
     pub wheel_style: SelectMusicWheelStyle,
+    pub difficulty_color_scheme: DifficultyColorScheme,
     pub song_select_bg_mode: SelectMusicSongSelectBgMode,
     pub new_pack_mode: NewPackMode,
     pub show_folder_stats: bool,
@@ -1084,6 +1086,7 @@ impl Default for SelectMusicOptions {
             itl_rank_mode: SelectMusicItlRankMode::None,
             itl_wheel_mode: SelectMusicItlWheelMode::Score,
             wheel_style: SelectMusicWheelStyle::Itg,
+            difficulty_color_scheme: DifficultyColorScheme::SimplyLove,
             song_select_bg_mode: SelectMusicSongSelectBgMode::Off,
             new_pack_mode: NewPackMode::Disabled,
             show_folder_stats: DEFAULT_SHOW_SELECT_MUSIC_FOLDER_STATS,
@@ -1182,6 +1185,10 @@ pub fn load_select_music_options(
             .get("Options", "SelectMusicWheelStyle")
             .and_then(|value| SelectMusicWheelStyle::from_str(value).ok())
             .unwrap_or(default.wheel_style),
+        difficulty_color_scheme: conf
+            .get("Options", "ITGDiffColors")
+            .and_then(|value| DifficultyColorScheme::from_str(value).ok())
+            .unwrap_or(default.difficulty_color_scheme),
         song_select_bg_mode: parse_select_music_song_select_bg_mode(
             song_select_bg,
             legacy_song_select_bg,
@@ -1325,6 +1332,11 @@ pub fn push_select_music_option_lines(content: &mut String, options: SelectMusic
         content,
         "SelectMusicWheelStyle",
         select.wheel_style.as_str(),
+    );
+    push_line(
+        content,
+        "ITGDiffColors",
+        select.difficulty_color_scheme.as_str(),
     );
     push_line(content, "SongSelectBG", select.song_select_bg_mode.as_str());
     push_line(
@@ -1903,6 +1915,24 @@ pub const fn select_music_wheel_style_from_choice(idx: usize) -> SelectMusicWhee
     }
 }
 
+pub const fn select_music_difficulty_color_scheme_choice_index(
+    scheme: DifficultyColorScheme,
+) -> usize {
+    match scheme {
+        DifficultyColorScheme::SimplyLove => 0,
+        DifficultyColorScheme::Itg => 1,
+        DifficultyColorScheme::Ddr => 2,
+    }
+}
+
+pub const fn select_music_difficulty_color_scheme_from_choice(idx: usize) -> DifficultyColorScheme {
+    match idx {
+        1 => DifficultyColorScheme::Itg,
+        2 => DifficultyColorScheme::Ddr,
+        _ => DifficultyColorScheme::SimplyLove,
+    }
+}
+
 pub const fn select_music_series_source_choice_index(source: SelectMusicSeriesSource) -> usize {
     match source {
         SelectMusicSeriesSource::PackIni => 0,
@@ -2318,6 +2348,7 @@ mod tests {
             itl_rank_mode: SelectMusicItlRankMode::None,
             itl_wheel_mode: SelectMusicItlWheelMode::Off,
             wheel_style: SelectMusicWheelStyle::Itg,
+            difficulty_color_scheme: DifficultyColorScheme::SimplyLove,
             song_select_bg_mode: SelectMusicSongSelectBgMode::Off,
             new_pack_mode: NewPackMode::Disabled,
             show_folder_stats: false,
@@ -3175,6 +3206,7 @@ mod tests {
             SelectMusicWheelITLRank=Overall
             SelectMusicWheelITL=Points
             SelectMusicWheelStyle=IIDX
+            ITGDiffColors=DDR
             SongSelectBG=BG
             SelectMusicNewPackMode=OpenPack
             SelectMusicFolderStats=1
@@ -3218,6 +3250,7 @@ mod tests {
             SelectMusicItlWheelMode::PointsAndScore
         );
         assert_eq!(loaded.wheel_style, SelectMusicWheelStyle::Iidx);
+        assert_eq!(loaded.difficulty_color_scheme, DifficultyColorScheme::Ddr);
         assert_eq!(loaded.song_select_bg_mode, SelectMusicSongSelectBgMode::Bg);
         assert_eq!(loaded.new_pack_mode, NewPackMode::OpenPack);
         assert!(loaded.show_folder_stats);
@@ -3280,6 +3313,7 @@ mod tests {
                 "SelectMusicWheelITLRank=None\n",
                 "SelectMusicWheelITL=Off\n",
                 "SelectMusicWheelStyle=ITG\n",
+                "ITGDiffColors=Simply Love\n",
                 "SongSelectBG=Off\n",
                 "SelectMusicNewPackMode=Disabled\n",
                 "SelectMusicFolderStats=0\n",
@@ -3613,6 +3647,19 @@ mod tests {
         assert_eq!(
             select_music_wheel_style_from_choice(99),
             SelectMusicWheelStyle::Itg
+        );
+
+        assert_eq!(
+            select_music_difficulty_color_scheme_choice_index(DifficultyColorScheme::Itg),
+            1
+        );
+        assert_eq!(
+            select_music_difficulty_color_scheme_from_choice(2),
+            DifficultyColorScheme::Ddr
+        );
+        assert_eq!(
+            select_music_difficulty_color_scheme_from_choice(99),
+            DifficultyColorScheme::SimplyLove
         );
 
         assert_eq!(

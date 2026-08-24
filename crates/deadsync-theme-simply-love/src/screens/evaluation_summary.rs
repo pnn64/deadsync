@@ -466,6 +466,7 @@ fn build_player_stats(
     p: &stage_stats::PlayerStageSummary,
     text: &SummaryPlayerText,
     active_color_index: i32,
+    difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
     elapsed: f32,
     machine_font: deadsync_config::prelude::MachineFont,
 ) -> Vec<Actor> {
@@ -583,7 +584,11 @@ fn build_player_stats(
 
     // Difficulty meter
     {
-        let diff_color = color::difficulty_rgba(&p.chart.difficulty, active_color_index);
+        let diff_color = color::difficulty_rgba_with_scheme(
+            &p.chart.difficulty,
+            active_color_index,
+            difficulty_color_scheme,
+        );
         let (meter_zoom, meter_y) = if show_w0 { (0.3, 5.0) } else { (0.4, -1.0) };
         let mut a = act!(text:
             font(machine_font_key(machine_font, FontRole::Header)):
@@ -682,6 +687,7 @@ fn build_row(
     stage: &stage_stats::StageSummary,
     text: &SummaryRowText,
     active_color_index: i32,
+    difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
     elapsed: f32,
     machine_font: deadsync_config::prelude::MachineFont,
 ) -> Actor {
@@ -753,6 +759,7 @@ fn build_row(
             player,
             player_text,
             active_color_index,
+            difficulty_color_scheme,
             elapsed,
             machine_font,
         ));
@@ -860,6 +867,7 @@ pub fn push_actors(
             stage,
             text,
             state.active_color_index,
+            state.runtime.difficulty_color_scheme,
             state.elapsed,
             state.runtime.machine_font,
         ));

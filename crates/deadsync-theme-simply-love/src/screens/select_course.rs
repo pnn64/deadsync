@@ -2276,9 +2276,10 @@ pub fn push_actors(
     let selected_rating_index = selected_course_rating_index(state);
     let selection_animation_beat = course_selection_anim_beat(state);
     let selected_diff_col = selected_rating.map(|rating| {
-        color::difficulty_rgba(
+        color::difficulty_rgba_with_scheme(
             rating.course_difficulty_name.as_str(),
             state.active_color_index,
+            state.context.policy.difficulty_color_scheme,
         )
     });
 
@@ -2491,7 +2492,11 @@ pub fn push_actors(
             if y > panel_bottom + row_spacing {
                 break;
             }
-            let diff_color = color::difficulty_rgba(&entry.difficulty, state.active_color_index);
+            let diff_color = color::difficulty_rgba_with_scheme(
+                &entry.difficulty,
+                state.active_color_index,
+                state.context.policy.difficulty_color_scheme,
+            );
             let mut meter_actor = act!(text:
                 font("miso"):
                 settext(Arc::clone(&entry.meter_text)):
@@ -2569,9 +2574,10 @@ pub fn push_actors(
                 continue;
             }
             if let Some(rating) = meta.ratings[idx].as_ref() {
-                let color = color::difficulty_rgba(
+                let color = color::difficulty_rgba_with_scheme(
                     rating.course_difficulty_name.as_str(),
                     state.active_color_index,
+                    state.context.policy.difficulty_color_scheme,
                 );
                 actors.push(act!(text:
                     font(machine_font_key(visual_policy.machine_font, FontRole::Header)):

@@ -128,6 +128,7 @@ pub enum SubRowId {
     ShowNativeLanguage,
     MusicWheelSpeed,
     MusicWheelStyle,
+    DifficultyColors,
     HideInactiveSeries,
     SeriesSort,
     SeriesSource,

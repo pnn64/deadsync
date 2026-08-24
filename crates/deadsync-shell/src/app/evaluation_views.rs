@@ -45,6 +45,7 @@ impl EvaluationFramePolicy {
                     && matches!(config.srpg_variant, config::SrpgVariant::Srpg10),
                 machine_font: config.machine_font,
                 zmod_rating_box_text: config.zmod_rating_box_text,
+                difficulty_color_scheme: config.difficulty_color_scheme,
                 breakdown_style: config.select_music_breakdown_style,
             },
             pane_filter: scorebox_pane_filter(config),

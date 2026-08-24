@@ -73,6 +73,16 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::DifficultyColors,
+        label: lookup_key("OptionsSelectMusic", "DifficultyColors"),
+        choices: &[
+            literal_choice("Simply Love"),
+            literal_choice("ITG"),
+            literal_choice("DDR"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::HideInactiveSeries,
         label: lookup_key("OptionsSelectMusic", "HideInactiveSeries"),
         choices: &[
@@ -354,6 +364,14 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
             "MusicWheelStyleHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SmDifficultyColors,
+        name: lookup_key("OptionsSelectMusic", "DifficultyColors"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "DifficultyColorsHelp",
         ))],
     },
     Item {

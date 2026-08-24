@@ -619,6 +619,7 @@ fn select_music_options(cfg: &Config) -> SelectMusicOptions {
         itl_rank_mode: cfg.select_music_itl_rank_mode,
         itl_wheel_mode: cfg.select_music_itl_wheel_mode,
         wheel_style: cfg.select_music_wheel_style,
+        difficulty_color_scheme: cfg.difficulty_color_scheme,
         song_select_bg_mode: cfg.select_music_song_select_bg_mode,
         new_pack_mode: cfg.select_music_new_pack_mode,
         show_folder_stats: cfg.show_select_music_folder_stats,

@@ -69,6 +69,7 @@ pub(crate) fn select_course_policy_view(config: &config::Config) -> SelectCourse
         music_wheel_switch_speed: config.music_wheel_switch_speed,
         global_offset_seconds: config.global_offset_seconds,
         dedicated_three_key_nav: config.three_key_navigation && config.only_dedicated_menu_buttons,
+        difficulty_color_scheme: config.difficulty_color_scheme,
     }
 }
 

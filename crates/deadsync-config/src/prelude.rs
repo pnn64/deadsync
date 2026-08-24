@@ -1,6 +1,6 @@
 pub use deadlib_audio_core::AudioOutputMode;
 pub use deadlib_platform::display::FullscreenType;
-pub use deadlib_present::color::Color;
+pub use deadlib_present::color::{Color, DifficultyColorScheme};
 pub use deadsync_audio_stream::AudioMixLevels;
 pub use deadsync_audio_stream::LinuxAudioBackend;
 pub use deadsync_input_native::PadOrderBackend;
@@ -69,7 +69,8 @@ pub use crate::options::{
     random_background_mode_from_choice, scorebox_cycle_bit_from_choice,
     scorebox_cycle_cursor_index, scorebox_cycle_mask, select_music_chart_info_bit_from_choice,
     select_music_chart_info_cursor_index, select_music_chart_info_enabled_mask,
-    select_music_chart_info_mask, select_music_itl_rank_mode_choice_index,
+    select_music_chart_info_mask, select_music_difficulty_color_scheme_choice_index,
+    select_music_difficulty_color_scheme_from_choice, select_music_itl_rank_mode_choice_index,
     select_music_itl_rank_mode_from_choice, select_music_itl_wheel_mode_choice_index,
     select_music_itl_wheel_mode_from_choice, select_music_new_pack_mode_choice_index,
     select_music_new_pack_mode_from_choice, select_music_pattern_info_mode_choice_index,

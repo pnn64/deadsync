@@ -277,6 +277,7 @@ pub(super) fn execute_select_music(request: SimplyLoveSelectMusicConfigRequest) 
         Request::TranslatedTitles(enabled) => config::update_translated_titles(enabled),
         Request::WheelSwitchSpeed(speed) => config::update_music_wheel_switch_speed(speed),
         Request::WheelStyle(style) => config::update_select_music_wheel_style(style),
+        Request::DifficultyColors(scheme) => config::update_difficulty_color_scheme(scheme),
         Request::HideInactiveSeries(enabled) => config::update_hide_inactive_series(enabled),
         Request::SortBySeries(enabled) => config::update_sort_music_wheel_by_series(enabled),
         Request::SeriesSource(source) => config::update_select_music_series_source(source),

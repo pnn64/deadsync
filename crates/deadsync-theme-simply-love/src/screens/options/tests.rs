@@ -537,6 +537,32 @@ fn select_music_choice_emits_shell_config_request() {
 }
 
 #[test]
+fn difficulty_colors_choice_emits_zmod_scheme_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::SelectMusic);
+    select_visible_row(
+        &mut state,
+        SubmenuKind::SelectMusic,
+        SubRowId::DifficultyColors,
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("difficulty colors should emit shell config work");
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::SelectMusic(
+                crate::SimplyLoveSelectMusicConfigRequest::DifficultyColors(
+                    config::DifficultyColorScheme::Itg
+                )
+            )
+        ))
+    ));
+}
+
+#[test]
 fn hide_inactive_series_is_visible_for_both_wheel_styles() {
     let mut state = init();
     let rows = submenu_rows(SubmenuKind::SelectMusic);

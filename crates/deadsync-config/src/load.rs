@@ -356,6 +356,7 @@ fn apply_select_music_opts(loaded: SelectMusicOptions, cfg: &mut Config) {
     cfg.select_music_itl_rank_mode = loaded.itl_rank_mode;
     cfg.select_music_itl_wheel_mode = loaded.itl_wheel_mode;
     cfg.select_music_wheel_style = loaded.wheel_style;
+    cfg.difficulty_color_scheme = loaded.difficulty_color_scheme;
     cfg.select_music_song_select_bg_mode = loaded.song_select_bg_mode;
     cfg.select_music_new_pack_mode = loaded.new_pack_mode;
     cfg.show_select_music_folder_stats = loaded.show_folder_stats;
