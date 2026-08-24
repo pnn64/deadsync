@@ -5818,7 +5818,6 @@ struct FlatPreparedTextView {
     align_text: actors::TextAlign,
     z: i16,
     scale: [f32; 2],
-    max_width: Option<f32>,
     blend: BlendMode,
     shadow_len: [f32; 2],
     shadow_color: [f32; 4],
@@ -5856,7 +5855,6 @@ fn build_flat_prepared_u32<T: TextureContext + ?Sized>(
             align_text: text.align_text,
             z: text.z,
             scale: text.scale,
-            max_width: None,
             blend: text.blend,
             shadow_len: text.shadow_len,
             shadow_color: tints.apply(text.shadow_color),
@@ -5910,7 +5908,6 @@ fn build_flat_prepared_inline<T: TextureContext + ?Sized>(
             align_text: text.align_text,
             z: text.z,
             scale: text.scale,
-            max_width: text.max_width,
             blend: text.blend,
             shadow_len: text.shadow_len,
             shadow_color: tints.apply(text.shadow_color),
@@ -5963,7 +5960,7 @@ fn build_flat_prepared_text<T: TextureContext + ?Sized>(
         x_fold.map_or(text.scale, |fold| fold.text_scale(text.scale)),
         None,
         None,
-        text.max_width,
+        None,
         None,
         false,
         false,
@@ -11776,16 +11773,10 @@ mod tests {
             InlineText::copy_from("-/()0123456789").expect("test glyph domain fits inline");
         let value = InlineText::copy_from("12/34").expect("test value fits inline");
         let mut actor = test_numeric_actor(TextContent::frame_inline_slot(value, 7));
-        let Actor::Text {
-            stroke_color,
-            max_width,
-            ..
-        } = &mut actor
-        else {
+        let Actor::Text { stroke_color, .. } = &mut actor else {
             unreachable!("numeric actor remains text");
         };
         *stroke_color = None;
-        *max_width = Some(24.0);
         let actor = [actor];
         let draws = [FlatDraw::PreparedInline(FlatPreparedInline {
             align: [0.0, 0.0],
@@ -11797,7 +11788,6 @@ mod tests {
             align_text: TextAlign::Center,
             z: 0,
             scale: [1.0, 1.0],
-            max_width: Some(24.0),
             blend: BlendMode::Alpha,
             shadow_len: [2.0, 2.0],
             shadow_color: [0.25, 0.5, 0.75, 0.8],

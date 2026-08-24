@@ -635,7 +635,6 @@ fn append_prepared_text(
         align_text: TextAlign::Center,
         z,
         scale: [zoom, zoom],
-        max_width: None,
         blend: BlendMode::Alpha,
         shadow_len: [shadow_len, -shadow_len],
         shadow_color: [0.0, 0.0, 0.0, 0.5],
@@ -1007,7 +1006,6 @@ mod tests {
                 align_text,
                 z: actual_z,
                 scale,
-                max_width,
                 shadow_len,
                 blend,
                 shadow_color,
@@ -1022,7 +1020,6 @@ mod tests {
                 assert_eq!(*actual_z, z);
                 assert_close(scale[0], zoom);
                 assert_close(scale[1], zoom);
-                assert_eq!(*max_width, None);
                 assert_close(shadow_len[0], shadow);
                 assert_close(shadow_len[1], -shadow);
                 assert_eq!(*blend, BlendMode::Alpha);

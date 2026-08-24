@@ -575,8 +575,7 @@ pub struct FlatPreparedU32 {
 ///
 /// The caller owns the fixed-capacity formatting contract and prepared slot.
 /// Unlike [`Actor::Text`], this payload has no owned strings, attributes,
-/// wrapping, clipping, effects, or custom stroke color.  It supports a single
-/// horizontal fit bound so dense prepared HUD rows can avoid collisions.
+/// fitting, wrapping, clipping, effects, or custom stroke color.
 #[derive(Clone, Copy, Debug)]
 pub struct FlatPreparedInline {
     pub align: [f32; 2],
@@ -588,7 +587,6 @@ pub struct FlatPreparedInline {
     pub align_text: TextAlign,
     pub z: i16,
     pub scale: [f32; 2],
-    pub max_width: Option<f32>,
     pub blend: BlendMode,
     pub shadow_len: [f32; 2],
     pub shadow_color: [f32; 4],

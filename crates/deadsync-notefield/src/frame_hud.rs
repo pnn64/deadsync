@@ -13,6 +13,7 @@ use crate::feedback::{
 use crate::field_frame::actor_from_flat_draw;
 use crate::hud::{
     CounterHudRequest, MiniIndicatorRequest, compose_counter_hud, compose_mini_indicator,
+    zmod_hud_column_width,
 };
 use crate::judgment_feedback::{
     IndicatorSprite, JudgmentFeedbackRequest, TapJudgmentFeedback, TapJudgmentSprite,
@@ -212,7 +213,7 @@ pub fn compose_notefield_hud<S>(
                 measure_counter_y: prepared.field.hud_layout.zmod_layout.measure_counter_y,
                 subtractive_scoring_y: prepared.field.hud_layout.zmod_layout.subtractive_scoring_y,
                 playfield_center_x: prepared.field.playfield_center_x,
-                field_zoom: prepared.field_zoom,
+                column_width: zmod_hud_column_width(prepared.frame_plan.num_cols),
                 font: counter.font,
                 frame_text_slot: counter.frame_text_slot,
                 counter_text: counter.counter_text,

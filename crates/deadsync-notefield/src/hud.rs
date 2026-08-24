@@ -15,7 +15,15 @@ pub const MEASURE_COUNTER_LOOKAHEAD_MAX: u8 = 4;
 pub const COUNTER_TEXT_SLOTS_PER_PLAYER: u8 = MEASURE_COUNTER_LOOKAHEAD_MAX + 3;
 const BROKEN_COUNTER_TEXT_SLOT: u8 = MEASURE_COUNTER_LOOKAHEAD_MAX + 1;
 const RUN_TIMER_TEXT_SLOT: u8 = MEASURE_COUNTER_LOOKAHEAD_MAX + 2;
-const HORIZONTAL_COUNTER_GAP: f32 = 2.0;
+
+/// ZMod derives HUD placement from its fixed style notefield width rather than
+/// the live Player `Mini` zoom. DeadSync currently supports dance and Pump.
+pub(crate) const fn zmod_hud_column_width(num_cols: usize) -> f32 {
+    match num_cols {
+        5 | 10 => 50.0,
+        _ => 64.0,
+    }
+}
 
 #[derive(Clone, Copy)]
 pub(crate) struct CounterHudRequest<'a> {
@@ -35,7 +43,7 @@ pub(crate) struct CounterHudRequest<'a> {
     pub measure_counter_y: Option<f32>,
     pub subtractive_scoring_y: f32,
     pub playfield_center_x: f32,
-    pub field_zoom: f32,
+    pub column_width: f32,
     pub font: &'static str,
     pub frame_text_slot: u8,
     pub counter_text: fn(ZmodMeasureCounterText) -> TextContent,
@@ -62,7 +70,7 @@ pub(crate) fn compose_counter_hud(
     let (base_index, run_timer_index) = request
         .broken_run_lookup
         .segment_indices(segments, current_measure);
-    let mut column_width = ScrollSpeedSetting::ARROW_SPACING * request.field_zoom;
+    let mut column_width = request.column_width;
     if request.left {
         column_width *= request.style.left_column_scale;
     }
@@ -89,7 +97,6 @@ struct HudTextRun {
     align: [f32; 2],
     align_text: TextAlign,
     zoom: f32,
-    max_width: Option<f32>,
     color: [f32; 4],
 }
 
@@ -121,13 +128,6 @@ fn append_measure_counters(
     counter_y: f32,
 ) {
     let lookahead = request.lookahead.min(MEASURE_COUNTER_LOOKAHEAD_MAX);
-    let horizontal_step = if lookahead == 0 {
-        0.0
-    } else {
-        (column_width / f32::from(lookahead)) * request.style.horizontal_span
-    };
-    let max_width = (!request.vertical && lookahead > 0)
-        .then_some((horizontal_step - HORIZONTAL_COUNTER_GAP).max(1.0));
     for j in (0..=lookahead).rev() {
         let segment_index = base_index + j as usize;
         let Some(segment) = request.segments.get(segment_index).copied() else {
@@ -165,7 +165,12 @@ fn append_measure_counters(
         if request.vertical {
             y += request.style.vertical_step_y * f32::from(j);
         } else {
-            x += horizontal_step * f32::from(j);
+            let denominator = if lookahead == 0 {
+                1.0
+            } else {
+                f32::from(lookahead)
+            };
+            x += (column_width / denominator) * request.style.horizontal_span * f32::from(j);
         }
         if request.left {
             x -= column_width;
@@ -177,7 +182,6 @@ fn append_measure_counters(
             [x, y],
             [0.5, 0.5],
             zoom,
-            max_width,
             color,
         );
     }
@@ -226,7 +230,6 @@ fn append_broken_counter(
         [x, y],
         [0.5, 0.5],
         request.style.base_zoom,
-        None,
         request.style.broken_color,
     );
 }
@@ -284,7 +287,6 @@ fn append_run_timer(
         [x, request.subtractive_scoring_y],
         [0.5, 0.5],
         request.style.base_zoom,
-        None,
         color,
     );
 }
@@ -295,7 +297,6 @@ fn append_hud_text(
     offset: [f32; 2],
     align: [f32; 2],
     zoom: f32,
-    max_width: Option<f32>,
     color: [f32; 4],
 ) {
     plan.push(HudTextRun {
@@ -304,7 +305,6 @@ fn append_hud_text(
         align,
         align_text: TextAlign::Center,
         zoom,
-        max_width,
         color,
     });
 }
@@ -362,7 +362,6 @@ fn append_flat_hud_text(
         align_text: run.align_text,
         z: text_z,
         scale: [run.zoom, run.zoom],
-        max_width: run.max_width,
         blend: BlendMode::Alpha,
         shadow_len: [shadow_len, -shadow_len],
         shadow_color: [0.0, 0.0, 0.0, 0.5],
@@ -377,9 +376,6 @@ fn hud_text_actor(style: CounterHudStyle, font: &'static str, run: HudTextRun) -
     text.horizalign(run.align_text);
     text.xy(run.offset[0], run.offset[1]);
     text.zoom(run.zoom);
-    if let Some(max_width) = run.max_width {
-        text.maxwidth(max_width);
-    }
     text.shadowlength(style.shadow_len);
     text.diffuse(run.color);
     text.z(style.text_z);
@@ -435,7 +431,6 @@ pub(crate) fn compose_mini_indicator(
         align: [align_x, 0.5],
         align_text: TextAlign::Left,
         zoom: request.zoom,
-        max_width: None,
         color,
     };
     if let TextContent::FrameInline { text, slot } = &run.content {
@@ -628,7 +623,7 @@ mod tests {
                 measure_counter_y: Some(100.0),
                 subtractive_scoring_y: 200.0,
                 playfield_center_x: 320.0,
-                field_zoom: 1.0,
+                column_width: 64.0,
                 font: "hud-font",
                 frame_text_slot: 20,
                 counter_text,
@@ -661,7 +656,12 @@ mod tests {
     }
 
     #[test]
-    fn horizontal_measure_counters_fit_inside_their_lookahead_slots() {
+    fn horizontal_measure_counter_spacing_matches_zmod_fixed_style_widths() {
+        assert_eq!(zmod_hud_column_width(4), 64.0);
+        assert_eq!(zmod_hud_column_width(8), 64.0);
+        assert_eq!(zmod_hud_column_width(5), 50.0);
+        assert_eq!(zmod_hud_column_width(10), 50.0);
+
         let segments = [
             StreamSegment::new(0, 24, false),
             StreamSegment::new(24, 28, true),
@@ -693,7 +693,7 @@ mod tests {
                 measure_counter_y: Some(100.0),
                 subtractive_scoring_y: 200.0,
                 playfield_center_x: 320.0,
-                field_zoom: 1.0,
+                column_width: zmod_hud_column_width(4),
                 font: "hud-font",
                 frame_text_slot: 20,
                 counter_text,
@@ -703,8 +703,7 @@ mod tests {
 
         assert!(actors.is_empty());
         assert_eq!(draws.len(), 5);
-        let center_spacing = ScrollSpeedSetting::ARROW_SPACING / 4.0 * style.horizontal_span;
-        let slot_width = center_spacing - HORIZONTAL_COUNTER_GAP;
+        let center_spacing = zmod_hud_column_width(4) / 4.0 * style.horizontal_span;
         let runs = draws
             .iter()
             .map(|draw| match draw {
@@ -712,12 +711,58 @@ mod tests {
                 other => panic!("expected direct counter text, got {other:?}"),
             })
             .collect::<Vec<_>>();
-        for run in &runs {
-            assert_eq!(run.max_width, Some(slot_width));
-        }
         for pair in runs.windows(2) {
             assert!((pair[0].offset[0] - pair[1].offset[0] - center_spacing).abs() <= 1e-6);
         }
+    }
+
+    #[test]
+    fn primary_measure_ratio_keeps_its_authored_zoom() {
+        let segments = [
+            StreamSegment::new(0, 89, false),
+            StreamSegment::new(89, 113, false),
+        ];
+        let broken_run_lookup = BrokenRunLookup::new(&segments);
+        let style = counter_style();
+        let mut actors = Vec::new();
+        let mut draws = Vec::new();
+        compose_counter_hud(
+            &mut actors,
+            &mut draws,
+            CounterHudRequest {
+                style,
+                segments: &segments,
+                broken_run_lookup: &broken_run_lookup,
+                current_beat: 55.0 * 4.0,
+                current_display_beat: 55.0 * 4.0,
+                current_bpm: 120.0,
+                music_rate: 1.0,
+                lookahead: 4,
+                multiplier: 1.0,
+                vertical: false,
+                left: false,
+                broken_run: false,
+                run_timer: false,
+                measure_counter_y: Some(100.0),
+                subtractive_scoring_y: 200.0,
+                playfield_center_x: 320.0,
+                column_width: 64.0,
+                font: "hud-font",
+                frame_text_slot: 20,
+                counter_text,
+                timer_text,
+            },
+        );
+
+        assert!(actors.is_empty());
+        let main = draws
+            .iter()
+            .find_map(|draw| match draw {
+                FlatDraw::PreparedInline(text) if text.text.as_str() == "56/89" => Some(text),
+                _ => None,
+            })
+            .expect("primary ratio should be emitted");
+        assert_eq!(main.scale, [style.base_zoom, style.base_zoom]);
     }
 
     #[test]
@@ -746,7 +791,7 @@ mod tests {
                 measure_counter_y: None,
                 subtractive_scoring_y: 200.0,
                 playfield_center_x: 320.0,
-                field_zoom: 1.0,
+                column_width: 64.0,
                 font: "hud-font",
                 frame_text_slot: 20,
                 counter_text,
@@ -797,7 +842,7 @@ mod tests {
                 measure_counter_y: Some(100.0),
                 subtractive_scoring_y: 200.0,
                 playfield_center_x: 320.0,
-                field_zoom: 1.0,
+                column_width: 64.0,
                 font: "hud-font",
                 frame_text_slot: 20,
                 counter_text: shared_ratio_text,
