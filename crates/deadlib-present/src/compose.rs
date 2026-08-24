@@ -6,7 +6,7 @@ use glam::{Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
 use space::Metrics;
 use std::cell::{Cell, OnceCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 use std::hash::{BuildHasher, DefaultHasher, Hash, Hasher};
 use std::num::NonZeroU32;
 use std::ops::Deref;
@@ -1829,21 +1829,27 @@ fn push_tmesh_geometry(
     geometries: &mut Vec<renderer::TexturedMeshGeometry>,
     geom_map: &mut HashMap<TMeshGeomKey, u32, rustc_hash::FxBuildHasher>,
 ) -> u32 {
-    if let Some(identity) = identity
-        && let Some(&geometry) = geom_map.get(&identity)
-    {
-        return geometry;
+    if let Some(identity) = identity {
+        let admit = geom_map.len() < FRAME_TMESH_GEOMS_MAX;
+        match geom_map.entry(identity) {
+            Entry::Occupied(entry) => return *entry.get(),
+            Entry::Vacant(entry) if admit => {
+                let geometry = saturating_u32(geometries.len());
+                geometries.push(renderer::TexturedMeshGeometry {
+                    vertices,
+                    cache_key,
+                });
+                entry.insert(geometry);
+                return geometry;
+            }
+            Entry::Vacant(_) => {}
+        }
     }
     let geometry = saturating_u32(geometries.len());
     geometries.push(renderer::TexturedMeshGeometry {
         vertices,
         cache_key,
     });
-    if let Some(identity) = identity
-        && geom_map.len() < FRAME_TMESH_GEOMS_MAX
-    {
-        geom_map.insert(identity, geometry);
-    }
     geometry
 }
 
@@ -9526,6 +9532,67 @@ mod tests {
         assert_eq!(geometries.len(), 2);
         assert!(matches!(ops[0], DrawOp::TexturedMesh(run) if run.geometry == 0));
         assert!(matches!(ops[1], DrawOp::TexturedMesh(run) if run.geometry == 1));
+    }
+
+    #[test]
+    fn textured_geometry_entry_dedupes_and_preserves_saturation() {
+        let vertices = || {
+            deadlib_render_core::TexturedMeshVertices::Shared(Arc::from([
+                TexturedMeshVertex::default(),
+            ]))
+        };
+        let mut geometries = Vec::new();
+        let mut map = HashMap::<super::TMeshGeomKey, u32, rustc_hash::FxBuildHasher>::default();
+
+        for key in 1..=super::FRAME_TMESH_GEOMS_MAX as u64 {
+            let identity = super::TMeshGeomKey::Cached(key);
+            assert_eq!(
+                super::push_tmesh_geometry(
+                    vertices(),
+                    key,
+                    Some(identity),
+                    &mut geometries,
+                    &mut map,
+                ),
+                key as u32 - 1,
+            );
+            assert_eq!(
+                super::push_tmesh_geometry(
+                    vertices(),
+                    key,
+                    Some(identity),
+                    &mut geometries,
+                    &mut map,
+                ),
+                key as u32 - 1,
+            );
+        }
+
+        assert_eq!(geometries.len(), super::FRAME_TMESH_GEOMS_MAX);
+        assert_eq!(map.len(), super::FRAME_TMESH_GEOMS_MAX);
+        let saturated_key = super::FRAME_TMESH_GEOMS_MAX as u64 + 1;
+        let saturated_identity = super::TMeshGeomKey::Cached(saturated_key);
+        assert_eq!(
+            super::push_tmesh_geometry(
+                vertices(),
+                saturated_key,
+                Some(saturated_identity),
+                &mut geometries,
+                &mut map,
+            ),
+            super::FRAME_TMESH_GEOMS_MAX as u32,
+        );
+        assert_eq!(
+            super::push_tmesh_geometry(
+                vertices(),
+                saturated_key,
+                Some(saturated_identity),
+                &mut geometries,
+                &mut map,
+            ),
+            super::FRAME_TMESH_GEOMS_MAX as u32 + 1,
+        );
+        assert_eq!(map.len(), super::FRAME_TMESH_GEOMS_MAX);
     }
 
     #[test]

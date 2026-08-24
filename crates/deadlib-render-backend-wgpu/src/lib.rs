@@ -1,8 +1,8 @@
 use deadlib_render_core::{
     BlendMode, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, PresentModePolicy,
-    PresentModeTrace, PresentStats, RenderFrame, SamplerDesc, SamplerFilter, SamplerWrap,
-    TMeshCacheKey, TextureHandle, TexturedMeshBufferCache, TexturedMeshUploads, TexturedMeshVertex,
-    draw_storage_stats, resolve_textured_meshes,
+    PresentModeTrace, PresentStats, RenderFrame, SamplerCache, SamplerDesc, SamplerFilter,
+    SamplerWrap, TMeshCacheKey, TextureHandle, TexturedMeshBufferCache, TexturedMeshUploads,
+    TexturedMeshVertex, draw_storage_stats, resolve_textured_meshes,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -12,7 +12,6 @@ use raw_window_handle::{
 };
 use std::{
     borrow::Cow,
-    collections::HashMap,
     error::Error,
     mem,
     sync::{Arc, mpsc},
@@ -210,7 +209,7 @@ pub struct State {
     projection_upload: Vec<u8>,
     projection_keys: Vec<[u32; 16]>,
     bind_layout: wgpu::BindGroupLayout,
-    samplers: HashMap<SamplerDesc, wgpu::Sampler>,
+    samplers: SamplerCache<wgpu::Sampler>,
     shader: wgpu::ShaderModule,
     pipeline_layout: wgpu::PipelineLayout,
     pipelines: PipelineSet,
@@ -526,7 +525,7 @@ fn init(
         projection_upload: Vec::with_capacity(projection_upload_capacity),
         projection_keys: Vec::with_capacity(projection_key_capacity),
         bind_layout,
-        samplers: HashMap::new(),
+        samplers: SamplerCache::default(),
         shader,
         pipeline_layout,
         pipelines,
@@ -2373,7 +2372,7 @@ fn sampler_descriptor(desc: SamplerDesc) -> wgpu::SamplerDescriptor<'static> {
 }
 
 fn get_sampler(state: &mut State, desc: SamplerDesc) -> wgpu::Sampler {
-    if let Some(existing) = state.samplers.get(&desc) {
+    if let Some(existing) = state.samplers.get(desc) {
         return existing.clone();
     }
     let sampler = state.device.create_sampler(&sampler_descriptor(desc));

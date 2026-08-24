@@ -186,7 +186,7 @@ impl TexturedMeshUploads {
 
 /// Resolves frame geometry to retained or frame-local upload storage.
 ///
-/// `ensure_cached` returns a non-zero backend-local buffer identity when the
+/// `ensure_cached` returns a non-zero backend-local buffer slot when the
 /// geometry is retained. The same identity must always refer to the same GPU
 /// buffer for the lifetime of `uploads`' consumer.
 pub fn resolve_textured_meshes<EnsureCached>(

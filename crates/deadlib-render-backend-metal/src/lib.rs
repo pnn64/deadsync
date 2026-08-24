@@ -5,8 +5,8 @@ mod encoder_cache;
 use core_graphics_types::geometry::CGSize;
 use deadlib_render_core::{
     BlendMode, ClockDomainTrace, DrawOp, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
-    PresentModeTrace, PresentStats, RenderFrame, SamplerDesc, SamplerFilter, SamplerWrap,
-    SpriteInstanceRaw, TMeshCacheKey, TextureHandle, TexturedMeshBufferCache,
+    PresentModeTrace, PresentStats, RenderFrame, SamplerCache, SamplerDesc, SamplerFilter,
+    SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, TextureHandle, TexturedMeshBufferCache,
     TexturedMeshInstanceRaw, TexturedMeshUploads, TexturedMeshVertex, draw_storage_stats,
     resolve_textured_meshes,
 };
@@ -174,6 +174,7 @@ pub struct State {
     cached_tmeshes: Vec<CachedTMesh>,
     cached_tmesh_bytes: usize,
     cache_stats: CacheStats,
+    samplers: SamplerCache<SamplerState>,
     next_texture_id: u64,
     next_present_id: u32,
     completed_present_id: u32,
@@ -253,6 +254,7 @@ pub fn init(
         cached_tmeshes: Vec::with_capacity(256),
         cached_tmesh_bytes: 0,
         cache_stats: CacheStats::default(),
+        samplers: SamplerCache::default(),
         next_texture_id: 1,
         next_present_id: 1,
         completed_present_id: 0,
@@ -280,9 +282,10 @@ pub fn create_texture(
     desc.set_usage(MTLTextureUsage::ShaderRead);
     let raw = state.device.new_texture(&desc);
     upload_texture(&state.queue, &raw, image, sampler_desc.mipmaps);
-    let sampler = create_sampler(&state.device, sampler_desc);
-    let repeat_sampler = create_sampler(
+    let sampler = get_sampler(&state.device, &mut state.samplers, sampler_desc);
+    let repeat_sampler = get_sampler(
         &state.device,
+        &mut state.samplers,
         SamplerDesc {
             wrap: SamplerWrap::Repeat,
             ..sampler_desc
@@ -701,6 +704,7 @@ pub fn cleanup(state: &mut State) {
     state.cached_tmesh_slots.clear();
     state.cached_tmeshes.clear();
     state.cached_tmesh_bytes = 0;
+    state.samplers.clear();
     if let Err(error) = detach_layer(&state.window) {
         warn!("Failed to detach native Metal layer: {error}");
     }
@@ -923,6 +927,19 @@ fn create_sampler(device: &DeviceRef, sampler: SamplerDesc) -> SamplerState {
     desc.set_address_mode_s(address);
     desc.set_address_mode_t(address);
     device.new_sampler(&desc)
+}
+
+fn get_sampler(
+    device: &DeviceRef,
+    samplers: &mut SamplerCache<SamplerState>,
+    desc: SamplerDesc,
+) -> SamplerState {
+    if let Some(sampler) = samplers.get(desc) {
+        return sampler.clone();
+    }
+    let sampler = create_sampler(device, desc);
+    samplers.insert(desc, sampler.clone());
+    sampler
 }
 
 fn validate_image(image: &RgbaImage) -> Result<(), Box<dyn Error>> {

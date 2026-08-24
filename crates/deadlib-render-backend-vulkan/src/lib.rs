@@ -6,15 +6,15 @@ use ash::{
 };
 use deadlib_render_core::{
     BlendMode, CameraUploadCache, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, MeshVertex,
-    PresentModePolicy, PresentModeTrace, PresentStats, RenderFrame, SamplerDesc, SamplerFilter,
-    SamplerWrap, SpriteInstanceRaw as InstanceData, TMeshCacheKey, TextureHandle,
+    PresentModePolicy, PresentModeTrace, PresentStats, RenderFrame, SamplerCache, SamplerDesc,
+    SamplerFilter, SamplerWrap, SpriteInstanceRaw as InstanceData, TMeshCacheKey, TextureHandle,
     TexturedMeshBufferCache, TexturedMeshInstanceRaw as TexturedMeshInstanceGpu,
     TexturedMeshUploads, TexturedMeshVertex, draw_storage_stats, resolve_textured_meshes,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
 use log::{debug, error, info, warn};
-use std::{collections::HashMap, error::Error, ffi, mem, sync::Arc, time::Instant};
+use std::{error::Error, ffi, mem, sync::Arc, time::Instant};
 #[cfg(windows)]
 use windows::Win32::System::Performance;
 use winit::{
@@ -199,7 +199,7 @@ pub struct State {
     index_buffer: Option<BufferResource>,
     descriptor_set_layout: vk::DescriptorSetLayout,
     descriptor_pools: Vec<vk::DescriptorPool>,
-    sampler_cache: HashMap<SamplerDesc, vk::Sampler>,
+    sampler_cache: SamplerCache<vk::Sampler>,
     command_buffers: Vec<vk::CommandBuffer>,
     image_available_semaphores: Vec<vk::Semaphore>,
     render_finished_semaphores: Vec<vk::Semaphore>,
@@ -230,9 +230,15 @@ pub struct State {
     uploads: TexturedMeshUploads,
     cached_tmesh: DenseSlotMap<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
+    // Render-thread-only, renderer-lifetime upload storage. Completed batches
+    // retain the largest staging/retirement capacities for the next submission.
+    // It warms over the frames-in-flight window, never grows on retirement,
+    // never evicts live resources, and is dropped only during backend teardown.
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
     pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
     pending_tex_retired: Vec<RetiredTexture>, // keep replaced images alive through upload completion
+    recycled_tex_staging: Vec<BufferResource>, // largest completed batch allocation for reuse
+    recycled_tex_retired: Vec<RetiredTexture>, // largest completed retirement allocation for reuse
     submitted_tex_uploads: Vec<SubmittedTextureUpload>, // retired when the tagged frame slot completes
     retired_textures: Vec<RetiredTexture>,
     last_submitted_present_id: u32,
@@ -348,7 +354,7 @@ pub fn init(
         index_buffer: None,
         descriptor_set_layout,
         descriptor_pools,
-        sampler_cache: HashMap::new(),
+        sampler_cache: SamplerCache::default(),
         command_buffers,
         image_available_semaphores,
         render_finished_semaphores,
@@ -382,6 +388,8 @@ pub fn init(
         pending_tex_upload_cmd: None,
         pending_tex_staging: Vec::new(),
         pending_tex_retired: Vec::new(),
+        recycled_tex_staging: Vec::new(),
+        recycled_tex_retired: Vec::new(),
         submitted_tex_uploads: Vec::new(),
         retired_textures: Vec::new(),
         last_submitted_present_id: 0,
@@ -460,7 +468,7 @@ fn create_sampler(device: &Device, desc: SamplerDesc) -> Result<vk::Sampler, vk:
 }
 
 fn get_sampler(state: &mut State, desc: SamplerDesc) -> Result<vk::Sampler, vk::Result> {
-    if let Some(&sampler) = state.sampler_cache.get(&desc) {
+    if let Some(&sampler) = state.sampler_cache.get(desc) {
         return Ok(sampler);
     }
     let device = state.device.as_ref().unwrap();
@@ -1138,6 +1146,8 @@ fn retire_submitted_texture_uploads(state: &mut State, frame: usize) {
     let device = state.device.as_ref().unwrap();
     let command_pool = state.command_pool;
     let retired_textures = &mut state.retired_textures;
+    let recycled_staging = &mut state.recycled_tex_staging;
+    let recycled_retired = &mut state.recycled_tex_retired;
     retire_frame_batches(&mut state.submitted_tex_uploads, frame, |batch| {
         unsafe {
             device.free_command_buffers(command_pool, &[batch.cmd]);
@@ -1151,7 +1161,22 @@ fn retire_submitted_texture_uploads(state: &mut State, frame: usize) {
                 .drain(..)
                 .filter(|retired| retirement_pending(retired.retire_after_present_id, completed)),
         );
+        recycle_empty_vec(recycled_staging, &mut batch.staging);
+        recycle_empty_vec(recycled_retired, &mut batch.retired_textures);
     });
+}
+
+fn recycle_empty_vec<T>(recycled: &mut Vec<T>, candidate: &mut Vec<T>) {
+    debug_assert!(recycled.is_empty());
+    debug_assert!(candidate.is_empty());
+    if candidate.capacity() > recycled.capacity() {
+        mem::swap(recycled, candidate);
+    }
+}
+
+fn take_with_recycled<T>(active: &mut Vec<T>, recycled: &mut Vec<T>) -> Vec<T> {
+    debug_assert!(recycled.is_empty());
+    mem::replace(active, mem::take(recycled))
 }
 
 fn retire_frame_batches(
@@ -1186,7 +1211,10 @@ fn submit_pending_texture_uploads(state: &mut State, frame: usize) -> Result<(),
     };
 
     let device = state.device.as_ref().unwrap();
-    let staging = mem::take(&mut state.pending_tex_staging);
+    let staging = take_with_recycled(
+        &mut state.pending_tex_staging,
+        &mut state.recycled_tex_staging,
+    );
     // SAFETY: `cmd` is a primary command buffer allocated from `state.command_pool`, the upload
     // queue is the same graphics queue used for frame submissions, and the staged buffers are kept
     // alive in `submitted_tex_uploads` until the tagged frame slot is known complete.
@@ -1195,7 +1223,10 @@ fn submit_pending_texture_uploads(state: &mut State, frame: usize) -> Result<(),
         let submit = vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&cmd));
         device.queue_submit(state.queue, &[submit], vk::Fence::null())?;
     }
-    let retired_textures = mem::take(&mut state.pending_tex_retired);
+    let retired_textures = take_with_recycled(
+        &mut state.pending_tex_retired,
+        &mut state.recycled_tex_retired,
+    );
     state.submitted_tex_uploads.push(SubmittedTextureUpload {
         frame,
         cmd,
@@ -4151,5 +4182,26 @@ mod tests {
         assert!(retirement_pending(5, 4));
         assert!(!retirement_pending(5, 5));
         assert!(!retirement_pending(5, 6));
+    }
+
+    #[test]
+    fn completed_batch_capacity_becomes_the_next_pending_allocation() {
+        let mut pending = Vec::with_capacity(4);
+        pending.extend([10, 20]);
+        let mut recycled = Vec::with_capacity(16);
+
+        let mut submitted = take_with_recycled(&mut pending, &mut recycled);
+        assert_eq!(submitted, vec![10, 20]);
+        assert!(pending.capacity() >= 16);
+        assert_eq!(recycled.capacity(), 0);
+
+        submitted.clear();
+        recycle_empty_vec(&mut recycled, &mut submitted);
+        assert!(recycled.capacity() >= 4);
+        let retained_capacity = recycled.capacity();
+
+        let mut smaller = Vec::<u32>::with_capacity(2);
+        recycle_empty_vec(&mut recycled, &mut smaller);
+        assert_eq!(recycled.capacity(), retained_capacity);
     }
 }

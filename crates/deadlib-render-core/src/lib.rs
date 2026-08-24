@@ -399,6 +399,66 @@ impl Default for SamplerDesc {
         }
     }
 }
+
+pub const SAMPLER_DESC_COUNT: usize = 8;
+
+impl SamplerDesc {
+    #[inline(always)]
+    pub const fn slot(self) -> usize {
+        let filter = match self.filter {
+            SamplerFilter::Linear => 0,
+            SamplerFilter::Nearest => 1,
+        };
+        let wrap = match self.wrap {
+            SamplerWrap::Clamp => 0,
+            SamplerWrap::Repeat => 2,
+        };
+        filter | wrap | ((self.mipmaps as usize) << 2)
+    }
+}
+
+/// Fixed storage for the complete sampler-description domain.
+///
+/// GPU backends own this on the render thread for the renderer lifetime. It
+/// warms on first texture creation, has no misses after all eight descriptions
+/// are populated, and requires no hashing, heap allocation, eviction, or
+/// pruning. On a miss the owning backend creates exactly one sampler; lookup is
+/// one bounded array index. Values are released when the backend clears or
+/// drops the table. The complete eight-slot domain is its capacity telemetry,
+/// so runtime counters would add work without exposing unbounded behavior.
+#[derive(Debug)]
+pub struct SamplerCache<V> {
+    slots: [Option<V>; SAMPLER_DESC_COUNT],
+}
+
+impl<V> Default for SamplerCache<V> {
+    fn default() -> Self {
+        Self {
+            slots: std::array::from_fn(|_| None),
+        }
+    }
+}
+
+impl<V> SamplerCache<V> {
+    #[inline(always)]
+    pub fn get(&self, desc: SamplerDesc) -> Option<&V> {
+        self.slots[desc.slot()].as_ref()
+    }
+
+    #[inline(always)]
+    pub fn insert(&mut self, desc: SamplerDesc, value: V) -> Option<V> {
+        self.slots[desc.slot()].replace(value)
+    }
+
+    #[inline(always)]
+    pub fn values(&self) -> impl Iterator<Item = &V> {
+        self.slots.iter().filter_map(Option::as_ref)
+    }
+
+    pub fn clear(&mut self) {
+        self.slots.fill_with(|| None);
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BlendMode {
     Alpha,
@@ -727,6 +787,34 @@ mod tests {
             vec!["replacement", "second"]
         );
         assert!(values.is_empty());
+    }
+
+    #[test]
+    fn sampler_cache_maps_the_complete_domain_without_heap_storage() {
+        let mut cache = SamplerCache::default();
+        let mut seen = [false; SAMPLER_DESC_COUNT];
+
+        for filter in [SamplerFilter::Linear, SamplerFilter::Nearest] {
+            for wrap in [SamplerWrap::Clamp, SamplerWrap::Repeat] {
+                for mipmaps in [false, true] {
+                    let desc = SamplerDesc {
+                        filter,
+                        wrap,
+                        mipmaps,
+                    };
+                    let slot = desc.slot();
+                    assert!(!seen[slot]);
+                    seen[slot] = true;
+                    assert_eq!(cache.insert(desc, slot as u8), None);
+                    assert_eq!(cache.get(desc), Some(&(slot as u8)));
+                }
+            }
+        }
+
+        assert!(seen.into_iter().all(|occupied| occupied));
+        assert_eq!(cache.values().count(), SAMPLER_DESC_COUNT);
+        cache.clear();
+        assert_eq!(cache.values().count(), 0);
     }
 
     #[test]
