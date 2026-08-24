@@ -876,11 +876,49 @@ fn judgment_palette_overlay_copies_builtin_and_edits_rgb_from_pad_input() {
         .palette
         .color(deadlib_present::color::JudgmentColorRole::FantasticBlue);
 
-    assert_ne!(before, after);
+    let before_red = (before[0] * 255.0).round() as u8;
+    let after_red = (after[0] * 255.0).round() as u8;
+    assert_eq!(after_red, before_red + 1);
     assert!(edit_effects.iter().any(|effect| matches!(
         effect,
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::JudgmentPalettes(_))
     )));
+
+    let mut repeat_effects = Vec::new();
+    update(
+        &mut state,
+        (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
+        &asset_manager,
+        &SmxAssignmentView::default(),
+        &mut repeat_effects,
+    );
+    let repeated = state.judgment_palettes.palettes[1]
+        .palette
+        .color(deadlib_present::color::JudgmentColorRole::FantasticBlue);
+    assert_eq!((repeated[0] * 255.0).round() as u8, after_red + 1);
+    assert!(repeat_effects.iter().any(|effect| matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::JudgmentPalettes(_))
+    )));
+
+    handle_input(
+        &mut state,
+        &asset_manager,
+        &updater_view(),
+        &input_event(VirtualAction::p1_right, false),
+        &mut Vec::new(),
+    );
+    update(
+        &mut state,
+        NAV_REPEAT_SCROLL_INTERVAL.as_secs_f32(),
+        &asset_manager,
+        &SmxAssignmentView::default(),
+        &mut Vec::new(),
+    );
+    let released = state.judgment_palettes.palettes[1]
+        .palette
+        .color(deadlib_present::color::JudgmentColorRole::FantasticBlue);
+    assert_eq!((released[0] * 255.0).round() as u8, after_red + 1);
 }
 
 #[test]

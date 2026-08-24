@@ -285,8 +285,8 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
     if update_browser(state, dt) {
         return None;
     }
-    if update_judgment_palette_overlay(state, dt) {
-        return None;
+    if let Some(effect) = update_judgment_palette_overlay(state, dt) {
+        return Some(effect);
     }
     if let Some(score_import) = state.score_import_ui.as_mut() {
         update_score_import_ui(score_import, dt);

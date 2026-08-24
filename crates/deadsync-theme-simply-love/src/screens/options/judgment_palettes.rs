@@ -57,16 +57,58 @@ pub(super) fn show_judgment_palette_overlay(state: &mut State) {
     };
 }
 
-pub(super) fn update_judgment_palette_overlay(state: &mut State, dt: f32) -> bool {
+pub(super) fn update_judgment_palette_overlay(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     match &mut state.judgment_palette_overlay {
-        JudgmentPaletteOverlayState::Hidden => false,
+        JudgmentPaletteOverlayState::Hidden => return None,
         JudgmentPaletteOverlayState::Browser { blink_t, .. }
         | JudgmentPaletteOverlayState::Editor { blink_t, .. } => {
             *blink_t = (*blink_t + dt.max(0.0)) % CURSOR_PERIOD;
-            true
         }
-        JudgmentPaletteOverlayState::ConfirmDelete { .. } => true,
+        JudgmentPaletteOverlayState::ConfirmDelete { .. } => {}
     }
+
+    let effect = if palette_channel_adjustment_active(state) {
+        let Some(delta) = state.nav_lr_held_direction else {
+            return Some(ThemeEffect::None);
+        };
+        if screen_input::advance_hold_repeat(
+            &mut state.nav_lr_held_for,
+            &mut state.nav_lr_next_repeat_at,
+            NAV_REPEAT_SCROLL_INTERVAL,
+            dt,
+        ) {
+            palette_overlay_horizontal(state, delta)
+        } else {
+            ThemeEffect::None
+        }
+    } else {
+        if let Some(delta) = state.nav_lr_held_direction {
+            on_lr_release(state, delta);
+        }
+        ThemeEffect::None
+    };
+    Some(effect)
+}
+
+fn palette_channel_adjustment_active(state: &State) -> bool {
+    matches!(
+        state.judgment_palette_overlay,
+        JudgmentPaletteOverlayState::Editor {
+            selected: 1..=7,
+            channel_focus: Some(_),
+            editing_name: false,
+            ..
+        }
+    )
+}
+
+fn palette_horizontal_input(state: &mut State, delta: isize) -> ThemeEffect {
+    let adjusting_channel = palette_channel_adjustment_active(state);
+    let effect = palette_overlay_horizontal(state, delta);
+    if adjusting_channel {
+        on_lr_press(state, delta);
+    }
+    effect
 }
 
 pub(super) fn judgment_palettes_effect(state: &State) -> ThemeEffect {
@@ -83,6 +125,17 @@ pub(super) fn handle_judgment_palette_input(
         return None;
     }
     if !event.pressed {
+        match event.action {
+            VirtualAction::p1_left
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p2_left
+            | VirtualAction::p2_menu_left => on_lr_release(state, -1),
+            VirtualAction::p1_right
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_right
+            | VirtualAction::p2_menu_right => on_lr_release(state, 1),
+            _ => {}
+        }
         return Some(ThemeEffect::None);
     }
 
@@ -98,11 +151,11 @@ pub(super) fn handle_judgment_palette_input(
         VirtualAction::p1_left
         | VirtualAction::p1_menu_left
         | VirtualAction::p2_left
-        | VirtualAction::p2_menu_left => palette_overlay_horizontal(state, -1),
+        | VirtualAction::p2_menu_left => palette_horizontal_input(state, -1),
         VirtualAction::p1_right
         | VirtualAction::p1_menu_right
         | VirtualAction::p2_right
-        | VirtualAction::p2_menu_right => palette_overlay_horizontal(state, 1),
+        | VirtualAction::p2_menu_right => palette_horizontal_input(state, 1),
         VirtualAction::p1_start | VirtualAction::p2_start => palette_overlay_activate(state),
         VirtualAction::p1_select | VirtualAction::p2_select => palette_overlay_select(state),
         VirtualAction::p1_back | VirtualAction::p2_back => palette_overlay_back(state),
@@ -174,7 +227,11 @@ fn palette_overlay_horizontal(state: &mut State, delta: isize) -> ThemeEffect {
                 _ => &mut color.b,
             };
             let byte = (*value * 255.0).round() as i16;
-            *value = (byte + delta as i16 * 5).clamp(0, 255) as f32 / 255.0;
+            let next_byte = (byte + delta as i16).clamp(0, 255);
+            if next_byte == byte {
+                return ThemeEffect::None;
+            }
+            *value = next_byte as f32 / 255.0;
             match state.judgment_palettes.set_color(&palette_id, role, color) {
                 Ok(()) => {
                     set_overlay_message(state, None);
@@ -335,6 +392,7 @@ fn palette_overlay_back(state: &mut State) -> ThemeEffect {
         JudgmentPaletteOverlayState::Editor { .. }
         | JudgmentPaletteOverlayState::ConfirmDelete { .. } => return_to_browser(state, None),
     }
+    clear_navigation_holds(state);
     queue_sfx(state, "assets/sounds/change.ogg");
     ThemeEffect::None
 }
