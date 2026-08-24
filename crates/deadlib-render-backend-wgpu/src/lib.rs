@@ -174,6 +174,65 @@ struct CachedTMeshGeom {
     vertex_count: u32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum InstanceBinding {
+    Sprite,
+    TexturedMesh,
+}
+
+/// Frame-local record of bindings that survive compatible pipeline changes.
+///
+/// The render thread owns this fixed scalar state for one render pass. It starts
+/// cold, emits a bind on an exact-key miss, and is dropped after recording; it
+/// has no heap capacity, eviction, pruning, or deferred destruction. Immediate
+/// projection storage is explicitly invalidated when a pipeline layout changes,
+/// while uniform groups remain compatible. Each query is constant time. The
+/// fixed fields and backend command benchmark provide its instrumentation.
+#[derive(Debug, Default)]
+struct DrawBindingCache {
+    camera: Option<u8>,
+    texture: Option<(u64, bool)>,
+    instance: Option<InstanceBinding>,
+    index_bound: bool,
+}
+
+impl DrawBindingCache {
+    #[inline(always)]
+    fn camera_required(&mut self, camera: u8) -> bool {
+        update_binding(&mut self.camera, camera)
+    }
+
+    #[inline(always)]
+    fn reset_camera(&mut self) {
+        self.camera = None;
+    }
+
+    #[inline(always)]
+    fn texture_required(&mut self, texture: u64, repeat: bool) -> bool {
+        update_binding(&mut self.texture, (texture, repeat))
+    }
+
+    #[inline(always)]
+    fn instance_required(&mut self, instance: InstanceBinding) -> bool {
+        update_binding(&mut self.instance, instance)
+    }
+
+    #[inline(always)]
+    fn index_required(&mut self) -> bool {
+        !mem::replace(&mut self.index_bound, true)
+    }
+}
+
+#[inline(always)]
+fn update_binding<T: Copy + PartialEq>(current: &mut Option<T>, next: T) -> bool {
+    if *current == Some(next) {
+        false
+    } else {
+        *current = Some(next);
+        true
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct PresentCompletion {
     present_id: u32,
@@ -1176,8 +1235,7 @@ pub fn draw(
 
         let mut last_kind: Option<u8> = None; // 0=sprite, 1=mesh, 2=textured mesh
         let mut last_blend: Option<BlendMode> = None;
-        let mut last_bind: Option<u64> = None;
-        let mut last_camera: Option<u8> = None;
+        let mut bindings = DrawBindingCache::default();
         let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
         let mut last_tmesh_depth_test: Option<bool> = None;
         for op in &frame.ops {
@@ -1188,24 +1246,30 @@ pub fn draw(
                     };
                     if last_kind != Some(0) {
                         pass.set_vertex_buffer(0, state.vertex_buffer.slice(..));
-                        pass.set_vertex_buffer(1, state.instance_buffer.slice(..));
-                        pass.set_index_buffer(
-                            state.index_buffer.slice(..),
-                            wgpu::IndexFormat::Uint16,
-                        );
+                        if bindings.instance_required(InstanceBinding::Sprite) {
+                            pass.set_vertex_buffer(1, state.instance_buffer.slice(..));
+                        }
+                        if bindings.index_required() {
+                            pass.set_index_buffer(
+                                state.index_buffer.slice(..),
+                                wgpu::IndexFormat::Uint16,
+                            );
+                        }
                         last_kind = Some(0);
                         last_blend = None;
-                        last_bind = None;
-                        last_camera = None;
+                        if matches!(state.proj, ProjState::Immediates) {
+                            // wgpu clears immediate storage when the pipeline
+                            // layout changes; uniform bind groups remain valid.
+                            bindings.reset_camera();
+                        }
                         tmesh_buffer_cache.reset();
                         last_tmesh_depth_test = None;
                     }
                     if last_blend != Some(run.blend) {
                         pass.set_pipeline(state.pipelines.get(run.blend));
                         last_blend = Some(run.blend);
-                        last_bind = None;
                     }
-                    if last_camera != Some(run.camera) {
+                    if bindings.camera_required(run.camera) {
                         set_camera(
                             &mut pass,
                             &state.proj,
@@ -1214,11 +1278,9 @@ pub fn draw(
                             &frame.cameras,
                             state.projection,
                         );
-                        last_camera = Some(run.camera);
                     }
-                    if last_bind != Some(tex.id) {
+                    if bindings.texture_required(tex.id, false) {
                         pass.set_bind_group(texture_group, Some(tex.bind_group.as_ref()), &[]);
-                        last_bind = Some(tex.id);
                     }
                     pass.draw_indexed(
                         0..state.index_count,
@@ -1235,8 +1297,9 @@ pub fn draw(
                         pass.set_vertex_buffer(0, state.mesh_vertex_buffer.slice(..));
                         last_kind = Some(1);
                         last_blend = None;
-                        last_bind = None;
-                        last_camera = None;
+                        if matches!(state.proj, ProjState::Immediates) {
+                            bindings.reset_camera();
+                        }
                         tmesh_buffer_cache.reset();
                         last_tmesh_depth_test = None;
                     }
@@ -1244,7 +1307,7 @@ pub fn draw(
                         pass.set_pipeline(state.mesh_pipelines.get(run.blend));
                         last_blend = Some(run.blend);
                     }
-                    if last_camera != Some(run.camera) {
+                    if bindings.camera_required(run.camera) {
                         set_camera(
                             &mut pass,
                             &state.proj,
@@ -1253,7 +1316,6 @@ pub fn draw(
                             &frame.cameras,
                             state.projection,
                         );
-                        last_camera = Some(run.camera);
                     }
                     pass.draw(
                         run.vertex_start..(run.vertex_start + run.vertex_count),
@@ -1272,11 +1334,14 @@ pub fn draw(
                         continue;
                     };
                     if last_kind != Some(2) {
-                        pass.set_vertex_buffer(1, state.tmesh_instance_buffer.slice(..));
+                        if bindings.instance_required(InstanceBinding::TexturedMesh) {
+                            pass.set_vertex_buffer(1, state.tmesh_instance_buffer.slice(..));
+                        }
                         last_kind = Some(2);
                         last_blend = None;
-                        last_bind = None;
-                        last_camera = None;
+                        if matches!(state.proj, ProjState::Immediates) {
+                            bindings.reset_camera();
+                        }
                         tmesh_buffer_cache.reset();
                         last_tmesh_depth_test = None;
                     }
@@ -1290,9 +1355,8 @@ pub fn draw(
                         });
                         last_blend = Some(run.blend);
                         last_tmesh_depth_test = Some(run.depth_test);
-                        last_bind = None;
                     }
-                    if last_camera != Some(run.camera) {
+                    if bindings.camera_required(run.camera) {
                         set_camera(
                             &mut pass,
                             &state.proj,
@@ -1301,16 +1365,13 @@ pub fn draw(
                             &frame.cameras,
                             state.projection,
                         );
-                        last_camera = Some(run.camera);
                     }
-                    let bind_key = tex.id.wrapping_shl(1) | 1;
-                    if last_bind != Some(bind_key) {
+                    if bindings.texture_required(tex.id, true) {
                         pass.set_bind_group(
                             texture_group,
                             Some(tex.bind_group_repeat.as_ref()),
                             &[],
                         );
-                        last_bind = Some(bind_key);
                     }
                     if tmesh_buffer_cache.update_required(source) {
                         if let Some(buffer_key) = source.buffer_key() {
@@ -2467,13 +2528,45 @@ const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
 
 #[cfg(test)]
 mod tests {
-    use super::{Matrix4, PresentCompletion, PresentCompletionCell, stage_projection_upload};
+    use super::{
+        DrawBindingCache, InstanceBinding, Matrix4, PresentCompletion, PresentCompletionCell,
+        stage_projection_upload,
+    };
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     };
 
     const STRIDE: usize = 256;
+
+    #[test]
+    fn draw_binding_cache_keeps_exact_camera_and_texture_bindings() {
+        let mut cache = DrawBindingCache::default();
+
+        assert!(cache.camera_required(2));
+        assert!(!cache.camera_required(2));
+        cache.reset_camera();
+        assert!(cache.camera_required(2));
+
+        assert!(cache.texture_required(7, false));
+        assert!(!cache.texture_required(7, false));
+        assert!(cache.texture_required(7, true));
+        assert!(cache.texture_required(8, true));
+        assert!(!cache.texture_required(8, true));
+    }
+
+    #[test]
+    fn draw_binding_cache_retains_index_and_tracks_instance_slot_kind() {
+        let mut cache = DrawBindingCache::default();
+
+        assert!(cache.index_required());
+        assert!(!cache.index_required());
+        assert!(cache.instance_required(InstanceBinding::Sprite));
+        assert!(!cache.instance_required(InstanceBinding::Sprite));
+        assert!(cache.instance_required(InstanceBinding::TexturedMesh));
+        assert!(!cache.instance_required(InstanceBinding::TexturedMesh));
+        assert!(cache.instance_required(InstanceBinding::Sprite));
+    }
 
     #[test]
     fn projection_cache_compares_float_bits() {

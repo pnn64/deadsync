@@ -1069,7 +1069,7 @@ where
     let actor_textures = actor_resources.map(actors::ActorResourceArena::texture_keys);
     let mut builder = std::mem::take(&mut scratch.frame_builder);
     builder.clear();
-    let actor_count = actor_segments
+    let object_capacity = actor_segments
         .clone()
         .fold(0usize, |count, segment| match segment.source {
             ActorSegmentSource::Actors(actors) => count.saturating_add(actors.len()),
@@ -1080,8 +1080,9 @@ where
             ActorSegmentSource::FlatPair { draws, tail } => {
                 count.saturating_add(draws.len()).saturating_add(tail.len())
             }
-        });
-    let object_capacity = actor_count.saturating_mul(4).max(64);
+        })
+        .saturating_mul(4)
+        .max(64);
     if builder.items.capacity() < object_capacity {
         builder.reserve(object_capacity);
     }

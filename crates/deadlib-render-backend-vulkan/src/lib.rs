@@ -117,6 +117,42 @@ struct CachedTMeshGeom {
     vertex_count: u32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum InstanceBinding {
+    Sprite,
+    TexturedMesh,
+}
+
+/// Render-pass-local record of Vulkan vertex bindings that pipelines preserve.
+///
+/// The render thread owns this fixed scalar state. It starts cold for each
+/// command buffer, emits a command on a slot-kind miss, and is dropped after
+/// recording. It has no heap capacity, eviction, pruning, or deferred
+/// destruction; every query is constant time. The fixed fields and backend
+/// command benchmark provide its instrumentation.
+#[derive(Debug, Default)]
+struct VertexBindingCache {
+    instance: Option<InstanceBinding>,
+    index_bound: bool,
+}
+
+impl VertexBindingCache {
+    #[inline(always)]
+    fn instance_required(&mut self, instance: InstanceBinding) -> bool {
+        if self.instance == Some(instance) {
+            false
+        } else {
+            self.instance = Some(instance);
+            true
+        }
+    }
+
+    #[inline(always)]
+    fn index_required(&mut self) -> bool {
+        !mem::replace(&mut self.index_bound, true)
+    }
+}
+
 struct SwapchainResources {
     swapchain_loader: swapchain::Device,
     swapchain: vk::SwapchainKHR,
@@ -1838,6 +1874,7 @@ pub fn draw(
             TexturedMesh,
         }
         let mut bound = Bound::None;
+        let mut bindings = VertexBindingCache::default();
         let mut last_set = vk::DescriptorSet::null();
         // These pipelines declare the same vertex push-constant range, so the
         // projection remains compatible when only the pipeline kind changes.
@@ -1861,9 +1898,15 @@ pub fn draw(
                         );
                         let vb0 = state.vertex_buffer.as_ref().unwrap().buffer;
                         let inst_buf = state.instance_ring.as_ref().unwrap().buffer;
-                        device.cmd_bind_vertex_buffers(cmd, 0, &[vb0, inst_buf], &[0, 0]);
-                        let ib = state.index_buffer.as_ref().unwrap().buffer;
-                        device.cmd_bind_index_buffer(cmd, ib, 0, vk::IndexType::UINT16);
+                        if bindings.instance_required(InstanceBinding::Sprite) {
+                            device.cmd_bind_vertex_buffers(cmd, 0, &[vb0, inst_buf], &[0, 0]);
+                        } else {
+                            device.cmd_bind_vertex_buffers(cmd, 0, &[vb0], &[0]);
+                        }
+                        if bindings.index_required() {
+                            let ib = state.index_buffer.as_ref().unwrap().buffer;
+                            device.cmd_bind_index_buffer(cmd, ib, 0, vk::IndexType::UINT16);
+                        }
                         bound = Bound::Sprite;
                         last_set = vk::DescriptorSet::null();
                         tmesh_buffer_cache.reset();
@@ -1954,8 +1997,10 @@ pub fn draw(
                             vk::PipelineBindPoint::GRAPHICS,
                             state.textured_mesh_pipeline,
                         );
-                        let inst = state.tmesh_instance_ring.as_ref().unwrap().buffer;
-                        device.cmd_bind_vertex_buffers(cmd, 1, &[inst], &[0]);
+                        if bindings.instance_required(InstanceBinding::TexturedMesh) {
+                            let inst = state.tmesh_instance_ring.as_ref().unwrap().buffer;
+                            device.cmd_bind_vertex_buffers(cmd, 1, &[inst], &[0]);
+                        }
                         bound = Bound::TexturedMesh;
                         last_set = vk::DescriptorSet::null();
                         tmesh_buffer_cache.reset();
@@ -4276,6 +4321,19 @@ mod tests {
             },
             capacity,
         }
+    }
+
+    #[test]
+    fn vertex_binding_cache_retains_index_and_tracks_instance_slot_kind() {
+        let mut cache = VertexBindingCache::default();
+
+        assert!(cache.index_required());
+        assert!(!cache.index_required());
+        assert!(cache.instance_required(InstanceBinding::Sprite));
+        assert!(!cache.instance_required(InstanceBinding::Sprite));
+        assert!(cache.instance_required(InstanceBinding::TexturedMesh));
+        assert!(!cache.instance_required(InstanceBinding::TexturedMesh));
+        assert!(cache.instance_required(InstanceBinding::Sprite));
     }
 
     #[test]

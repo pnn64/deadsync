@@ -36,6 +36,11 @@ name = "graphics_command_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "graphics_pipeline_fifth_pass"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 bytemuck = { version = "1.25.2", features = ["derive"] }
 glam = "0.33.5"
