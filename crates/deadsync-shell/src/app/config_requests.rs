@@ -7,7 +7,7 @@ use deadsync_theme_simply_love::{
     SimplyLoveMachineConfigRequest, SimplyLoveNullOrDieConfigRequest, SimplyLoveNullOrDieGraph,
     SimplyLoveOnlineConfigRequest, SimplyLoveOptionsConfigRequest, SimplyLoveQrLoginPolicy,
     SimplyLoveSelectMusicConfigRequest, SimplyLoveSrpgShopFolder, SimplyLoveSyncKernel,
-    SimplyLoveSyncKernelTarget,
+    SimplyLoveSyncKernelTarget, SimplyLoveTournamentConfigRequest,
 };
 use null_or_die::{BiasKernel, KernelTarget};
 
@@ -154,6 +154,19 @@ pub(super) fn execute_gameplay(request: SimplyLoveGameplayConfigRequest) {
         }
         Request::DelayedBack(enabled) => config::update_delayed_back(enabled),
         Request::AutoScreenshotMask(mask) => config::update_auto_screenshot_eval(mask),
+    }
+}
+
+pub(super) fn execute_tournament(request: SimplyLoveTournamentConfigRequest) {
+    use SimplyLoveTournamentConfigRequest as Request;
+
+    match request {
+        Request::Enabled(enabled) => config::update_tournament_mode_enabled(enabled),
+        Request::ScoringSystem(scoring_system) => {
+            config::update_tournament_scoring_system(scoring_system)
+        }
+        Request::StepStats(show) => config::update_tournament_step_stats(show),
+        Request::EnforceNoCmod(enabled) => config::update_tournament_enforce_no_cmod(enabled),
     }
 }
 

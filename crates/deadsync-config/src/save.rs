@@ -560,6 +560,7 @@ fn theme_presentation_options(cfg: &Config) -> ThemePresentationOptions {
         show_bpm_decimal: cfg.show_bpm_decimal,
         gameplay_bpm_position: cfg.gameplay_bpm_position,
         gameplay_banner_mode: cfg.gameplay_banner_mode,
+        tournament: cfg.tournament,
     }
 }
 

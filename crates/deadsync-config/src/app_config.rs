@@ -11,7 +11,7 @@ use crate::theme::{
     SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
     SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
     SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag,
-    ThemePresentationOptions, VersionOverlaySide, VisualStyle,
+    ThemePresentationOptions, TournamentModeOptions, VersionOverlaySide, VisualStyle,
 };
 use deadlib_audio_core::AudioOutputMode;
 use deadlib_platform::display::FullscreenType;
@@ -194,6 +194,8 @@ pub struct Config {
     pub show_video_backgrounds: bool,
     /// ITGmania RandomBackgroundMode. DeadSync currently implements RandomMovies.
     pub random_background_mode: RandomBackgroundMode,
+    /// Simply Love tournament policy. Applied to per-song gameplay copies of player profiles.
+    pub tournament: TournamentModeOptions,
     /// Startup flow: show Select Profile before continuing.
     pub machine_show_select_profile: bool,
     /// Whether "Switch Profile" appears in the select music sort menu.
@@ -462,6 +464,7 @@ impl Default for Config {
             srpg_variant: theme.srpg_variant,
             show_video_backgrounds: theme.show_video_backgrounds,
             random_background_mode: theme.random_background_mode,
+            tournament: theme.tournament,
             machine_show_select_profile: machine.machine_show_select_profile,
             allow_switch_profile_in_menu: machine.allow_switch_profile_in_menu,
             music_select_shortcut_practice: KeyCode::KeyP,

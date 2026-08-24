@@ -1727,6 +1727,40 @@ pub(super) mod tests {
         setup_state_with(test_init_view())
     }
 
+    #[test]
+    fn tournament_mode_hides_step_stats_and_limits_fa_plus_choices() {
+        ensure_i18n();
+        let mut view = test_init_view();
+        view.policy.tournament_mode = true;
+        let (mut state, _) = setup_state_with(view);
+        super::super::apply_pane(&mut state, OptionsPane::Advanced);
+
+        let pane = state.pane();
+        let stats_row_idx = pane
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::DataVisualizations)
+            .expect("Step Statistics row present in the advanced row map");
+        let visibility = super::super::row_visibility(
+            &pane.row_map,
+            state.active,
+            state.option_masks,
+            state.policy,
+        );
+        assert!(!is_row_visible(&pane.row_map, stats_row_idx, visibility));
+
+        let fa_plus = pane
+            .row_map
+            .get(RowId::FAPlusOptions)
+            .expect("FA+ Options row present");
+        assert_eq!(fa_plus.choices.len(), 1);
+        assert_eq!(
+            fa_plus.choices[0].as_ref(),
+            crate::assets::i18n::tr("PlayerOptions", "FAPlusOptionsDisplayFAPlusWindow").as_ref()
+        );
+    }
+
     fn setup_state_with(
         init_view: crate::views::PlayerOptionsInitView,
     ) -> (super::State, AssetManager) {

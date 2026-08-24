@@ -14,6 +14,7 @@ pub enum ItemId {
     LightsOptions,
     MachineOptions,
     GameplayOptions,
+    TournamentModeOptions,
     SelectMusicOptions,
     AdvancedOptions,
     CourseOptions,
@@ -155,6 +156,12 @@ pub enum ItemId {
     GpAutoScreenshot,
     GpDefaultJudgmentPalette,
     GpManageJudgmentPalettes,
+
+    // Tournament Mode Options submenu
+    TmEnable,
+    TmScoring,
+    TmStepStats,
+    TmEnforceNoCmod,
 
     // Sound Options submenu
     SndDevice,
@@ -457,6 +464,17 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "ZmodRatingBox")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "BpmDecimal")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "BpmPosition")),
+        ],
+    },
+    Item {
+        id: ItemId::TournamentModeOptions,
+        name: lookup_key("Options", "TournamentModeOptions"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "TournamentModeOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsTournament", "EnableTournamentMode")),
+            HelpEntry::Bullet(lookup_key("OptionsTournament", "ScoringSystem")),
+            HelpEntry::Bullet(lookup_key("OptionsTournament", "StepStats")),
+            HelpEntry::Bullet(lookup_key("OptionsTournament", "EnforceNoCmod")),
         ],
     },
     Item {

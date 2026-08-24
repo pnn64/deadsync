@@ -18,7 +18,7 @@ use crate::theme::{
     SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
     SelectMusicSeriesSource, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
     SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag,
-    VersionOverlaySide, VisualStyle,
+    TournamentScoringSystem, VersionOverlaySide, VisualStyle,
 };
 use deadlib_audio_core::AudioOutputMode;
 use deadlib_present::color::DifficultyColorScheme;
@@ -307,6 +307,25 @@ pub fn set_gameplay_bpm_position(cfg: &mut Config, position: GameplayBpmPosition
 
 pub fn set_gameplay_banner_mode(cfg: &mut Config, mode: GameplayBannerMode) -> bool {
     set_if_changed(&mut cfg.gameplay_banner_mode, mode)
+}
+
+pub fn set_tournament_mode_enabled(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.tournament.enabled, enabled)
+}
+
+pub fn set_tournament_scoring_system(
+    cfg: &mut Config,
+    scoring_system: TournamentScoringSystem,
+) -> bool {
+    set_if_changed(&mut cfg.tournament.scoring_system, scoring_system)
+}
+
+pub fn set_tournament_step_stats(cfg: &mut Config, show: bool) -> bool {
+    set_if_changed(&mut cfg.tournament.show_step_stats, show)
+}
+
+pub fn set_tournament_enforce_no_cmod(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.tournament.enforce_no_cmod, enabled)
 }
 
 pub fn set_default_fail_type(cfg: &mut Config, fail_type: DefaultFailType) -> bool {

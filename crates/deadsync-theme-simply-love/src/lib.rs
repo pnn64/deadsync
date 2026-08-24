@@ -32,8 +32,8 @@ pub use effects::{
     SimplyLoveSongSearchResult, SimplyLoveSrpgShopFolder, SimplyLoveSyncEvent,
     SimplyLoveSyncKernel, SimplyLoveSyncKernelTarget, SimplyLoveSyncOwner, SimplyLoveSyncPlotView,
     SimplyLoveSyncRequest, SimplyLoveSyncResult, SimplyLoveSyncSongResult,
-    SimplyLoveSyncStreamEvent, SimplyLoveSyncTarget, SimplyLoveUpdaterRequest,
-    resolve_effect_route,
+    SimplyLoveSyncStreamEvent, SimplyLoveSyncTarget, SimplyLoveTournamentConfigRequest,
+    SimplyLoveUpdaterRequest, resolve_effect_route,
 };
 
 pub use screens::components::select_music::select_music_menu::{

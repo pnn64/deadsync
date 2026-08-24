@@ -187,6 +187,12 @@ fn gameplay_config_effect(request: crate::SimplyLoveGameplayConfigRequest) -> Th
     ))
 }
 
+fn tournament_config_effect(request: crate::SimplyLoveTournamentConfigRequest) -> ThemeEffect {
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+        crate::SimplyLoveConfigRequest::Tournament(request),
+    ))
+}
+
 fn lights_config_effect(request: crate::SimplyLoveLightsConfigRequest) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
         crate::SimplyLoveConfigRequest::Lights(request),

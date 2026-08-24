@@ -260,6 +260,7 @@ pub struct PlayerOptionsPolicyView {
     pub smx_panel_lights: bool,
     pub scorebox_available: bool,
     pub keyboard_features: bool,
+    pub tournament_mode: bool,
 }
 
 impl Default for PlayerOptionsPolicyView {
@@ -274,6 +275,7 @@ impl Default for PlayerOptionsPolicyView {
             smx_panel_lights: config.smx_panel_lights,
             scorebox_available: false,
             keyboard_features: config.keyboard_features,
+            tournament_mode: config.tournament.enabled,
         }
     }
 }

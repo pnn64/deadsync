@@ -397,6 +397,13 @@ fn init_with_noteskin_prewarm(
         persisted_player_idx,
         policy.scorebox_available,
     );
+    if policy.tournament_mode
+        && let Some(row) = advanced_row_map.get_mut(RowId::FAPlusOptions)
+    {
+        row.replace_choices(vec![
+            tr("PlayerOptions", "FAPlusOptionsDisplayFAPlusWindow").to_string(),
+        ]);
+    }
     let mut uncommon_row_map = build_rows(
         &song,
         &speed_mod_p1,

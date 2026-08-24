@@ -10,7 +10,7 @@ use deadsync_config::prelude::{
     RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSeriesSource,
     SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SmxPackName,
-    SmxPadPreset, SrpgVariant, VersionOverlaySide, VisualStyle,
+    SmxPadPreset, SrpgVariant, TournamentScoringSystem, VersionOverlaySide, VisualStyle,
 };
 use deadsync_input::{InputBinding, KeyCode, VirtualAction};
 use deadsync_profile::{ActiveProfile, PlayMode, PlayStyle, PlayerSide};
@@ -668,6 +668,15 @@ pub enum SimplyLoveGameplayConfigRequest {
     AutoScreenshotMask(u8),
 }
 
+/// Simply Love tournament policy chosen by the operator and persisted by shell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveTournamentConfigRequest {
+    Enabled(bool),
+    ScoringSystem(TournamentScoringSystem),
+    StepStats(bool),
+    EnforceNoCmod(bool),
+}
+
 /// System, input, and SMX preferences chosen in Options and persisted by shell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimplyLoveOptionsConfigRequest {
@@ -813,6 +822,7 @@ pub enum SimplyLoveConfigRequest {
     Online(SimplyLoveOnlineConfigRequest),
     Options(SimplyLoveOptionsConfigRequest),
     SelectMusic(SimplyLoveSelectMusicConfigRequest),
+    Tournament(SimplyLoveTournamentConfigRequest),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

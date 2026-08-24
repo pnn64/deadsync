@@ -107,8 +107,8 @@ pub use crate::theme::{
     RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSeriesSource,
     SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle,
-    SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
-    auto_screenshot_bit, auto_screenshot_eval_matches, auto_screenshot_mask_from_str,
-    auto_screenshot_mask_to_str,
+    SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag, TournamentModeOptions,
+    TournamentScoringSystem, VersionOverlaySide, VisualStyle, auto_screenshot_bit,
+    auto_screenshot_eval_matches, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use null_or_die::GraphOrientation;

@@ -147,17 +147,20 @@ pub(super) fn sync_profile_scroll_speed(
 
 /// Resolve the scroll speed each player will actually use for the upcoming
 /// play, applying the "No CMod alternative" substitution for charts tagged
-/// "no cmod".
+/// "no cmod". Tournament policy can force the alternative to MMod.
 ///
 /// For any player who is on CMod, is about to play a no-cmod chart, and has a
-/// non-`None` alternative configured, their CMod speed is converted (preserving
+/// non-`None` effective alternative, their CMod speed is converted (preserving
 /// on-screen speed) to the chosen X/M type. The substitution is written into
 /// the (non-persisted) `player_options[..].scroll_speed` snapshot as well as
 /// returned, so both the arrow-scroll path (which reads the returned array) and
 /// the score-validity path (which reads `player_options`) observe the same
 /// effective speed. The persisted profile is never touched, so returning to
 /// song select restores the player's real mod automatically.
-pub fn apply_no_cmod_alternative(state: &mut State) -> [ScrollSpeedSetting; PLAYER_SLOTS] {
+pub fn apply_no_cmod_alternative(
+    state: &mut State,
+    enforce_tournament_mmod: bool,
+) -> [ScrollSpeedSetting; PLAYER_SLOTS] {
     let is_no_cmod = state.song.is_no_cmod();
     let reference_bpm = reference_bpm_for_song(
         &state.song,
@@ -171,7 +174,11 @@ pub fn apply_no_cmod_alternative(state: &mut State) -> [ScrollSpeedSetting; PLAY
     std::array::from_fn(|player_idx| {
         let effective = effective_scroll_speed_with_alt(
             &state.speed_mod[player_idx],
-            state.player_options[player_idx].no_cmod_alternative,
+            if enforce_tournament_mmod {
+                NoCmodAlternative::MMod
+            } else {
+                state.player_options[player_idx].no_cmod_alternative
+            },
             is_no_cmod,
             reference_bpm,
             rate,

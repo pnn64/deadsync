@@ -418,6 +418,7 @@ fn apply_theme_presentation(loaded: ThemePresentationOptions, cfg: &mut Config) 
     cfg.srpg_variant = loaded.srpg_variant;
     cfg.show_video_backgrounds = loaded.show_video_backgrounds;
     cfg.random_background_mode = loaded.random_background_mode;
+    cfg.tournament = loaded.tournament;
     cfg.zmod_rating_box_text = loaded.zmod_rating_box_text;
     cfg.show_bpm_decimal = loaded.show_bpm_decimal;
     cfg.gameplay_bpm_position = loaded.gameplay_bpm_position;

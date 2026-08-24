@@ -11,7 +11,8 @@ use crate::theme::{
     NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSeriesSource,
     SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle,
-    SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
+    SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag, TournamentScoringSystem,
+    VersionOverlaySide, VisualStyle,
 };
 use deadlib_audio_core::AudioOutputMode;
 use deadlib_platform::logging;
@@ -220,6 +221,10 @@ update_config_fn!(pub fn update_zmod_rating_box_text(enabled: bool) => set_zmod_
 update_config_fn!(pub fn update_show_bpm_decimal(enabled: bool) => set_show_bpm_decimal);
 update_config_fn!(pub fn update_gameplay_bpm_position(position: GameplayBpmPosition) => set_gameplay_bpm_position);
 update_config_fn!(pub fn update_gameplay_banner_mode(mode: GameplayBannerMode) => set_gameplay_banner_mode);
+update_config_fn!(pub fn update_tournament_mode_enabled(enabled: bool) => set_tournament_mode_enabled);
+update_config_fn!(pub fn update_tournament_scoring_system(scoring_system: TournamentScoringSystem) => set_tournament_scoring_system);
+update_config_fn!(pub fn update_tournament_step_stats(show: bool) => set_tournament_step_stats);
+update_config_fn!(pub fn update_tournament_enforce_no_cmod(enabled: bool) => set_tournament_enforce_no_cmod);
 update_config_fn!(pub fn update_default_fail_type(fail_type: DefaultFailType) => set_default_fail_type);
 
 update_config_fn!(pub fn update_null_or_die_sync_graph(mode: SyncGraphMode) => set_null_or_die_sync_graph);

@@ -4701,6 +4701,10 @@ impl App {
                     config_requests::execute_select_music(request);
                     Vec::new()
                 }
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Tournament(request)) => {
+                    config_requests::execute_tournament(request);
+                    Vec::new()
+                }
                 SimplyLoveRuntimeRequest::JudgmentPalettes(catalog) => {
                     if let Err(error) =
                         deadsync_config::judgment_palettes::update_runtime_catalog(|current| {
@@ -8157,11 +8161,16 @@ impl App {
                 // Auto-switch CMod → the player's configured alternative for
                 // no-cmod charts (this play only; the persisted profile is
                 // untouched, so song select restores CMod).
-                let scroll_speeds = player_options::apply_no_cmod_alternative(&mut po_state);
+                let scroll_speeds = player_options::apply_no_cmod_alternative(
+                    &mut po_state,
+                    cfg.tournament.enabled && cfg.tournament.enforce_no_cmod,
+                );
                 let player_profiles = crate::player_options::gameplay_profiles(
                     &po_state.player_options,
                     &po_state.judgment_palette_ids,
                     &po_state.heart_rate_device_ids,
+                    cfg.tournament,
+                    play_style,
                 );
 
                 let gameplay_session = gameplay_session();
@@ -8548,7 +8557,10 @@ impl App {
                 // reproduce the recorded scroll speed, so skip the swap there.
                 commands.extend(last_played_commands);
                 let scroll_speeds = if replay_pending.is_none() {
-                    player_options::apply_no_cmod_alternative(&mut po_state)
+                    player_options::apply_no_cmod_alternative(
+                        &mut po_state,
+                        cfg.tournament.enabled && cfg.tournament.enforce_no_cmod,
+                    )
                 } else {
                     let to_scroll_speed = |m: &player_options::SpeedMod| match m.mod_type {
                         player_options::SpeedModType::X => ScrollSpeedSetting::XMod(m.value),
@@ -8606,6 +8618,8 @@ impl App {
                     &po_state.player_options,
                     &po_state.judgment_palette_ids,
                     &po_state.heart_rate_device_ids,
+                    cfg.tournament,
+                    play_style,
                 );
                 let gameplay_session = gameplay_session();
                 let gameplay_init_view = crate::gameplay_runtime::init_view(

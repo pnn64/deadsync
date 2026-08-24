@@ -30,6 +30,7 @@ pub enum SubmenuKind {
     Advanced,
     Course,
     Gameplay,
+    Tournament,
     Sound,
     SelectMusic,
     GrooveStats,
@@ -39,7 +40,7 @@ pub enum SubmenuKind {
 }
 
 impl SubmenuKind {
-    pub(super) const ALL: [Self; 22] = [
+    pub(super) const ALL: [Self; 23] = [
         Self::Coin,
         Self::Bookkeeping,
         Self::System,
@@ -56,6 +57,7 @@ impl SubmenuKind {
         Self::Advanced,
         Self::Course,
         Self::Gameplay,
+        Self::Tournament,
         Self::Sound,
         Self::SelectMusic,
         Self::GrooveStats,
@@ -1246,6 +1248,30 @@ pub fn init(view: OptionsInitView) -> State {
         GAMEPLAY_OPTIONS_ROWS,
         SubRowId::DefaultJudgmentPalette,
         default_judgment_palette_index,
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Tournament].choice_indices,
+        TOURNAMENT_OPTIONS_ROWS,
+        SubRowId::TournamentMode,
+        usize::from(cfg.tournament.enabled),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Tournament].choice_indices,
+        TOURNAMENT_OPTIONS_ROWS,
+        SubRowId::TournamentScoring,
+        usize::from(cfg.tournament.scoring_system == config::TournamentScoringSystem::Itg),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Tournament].choice_indices,
+        TOURNAMENT_OPTIONS_ROWS,
+        SubRowId::TournamentStepStats,
+        usize::from(cfg.tournament.show_step_stats),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Tournament].choice_indices,
+        TOURNAMENT_OPTIONS_ROWS,
+        SubRowId::TournamentEnforceNoCmod,
+        usize::from(cfg.tournament.enforce_no_cmod),
     );
 
     let sound_device_idx = sound_device_choice_index(

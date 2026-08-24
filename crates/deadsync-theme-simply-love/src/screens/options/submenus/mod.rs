@@ -14,6 +14,7 @@ mod score_import;
 mod select_music;
 mod sound;
 mod system;
+mod tournament;
 
 #[allow(unused_imports)]
 pub(super) use advanced::*;
@@ -48,3 +49,5 @@ pub(super) use select_music::*;
 pub(super) use sound::*;
 #[allow(unused_imports)]
 pub(super) use system::*;
+#[allow(unused_imports)]
+pub(super) use tournament::*;

@@ -878,6 +878,27 @@ pub(super) fn apply_submenu_choice_delta(
             _ => return None,
         };
         action = Some(gameplay_config_effect(request));
+    } else if matches!(kind, SubmenuKind::Tournament) {
+        let request = match rows[row_index].id {
+            SubRowId::TournamentMode => {
+                crate::SimplyLoveTournamentConfigRequest::Enabled(new_index == 1)
+            }
+            SubRowId::TournamentScoring => {
+                crate::SimplyLoveTournamentConfigRequest::ScoringSystem(if new_index == 1 {
+                    config::TournamentScoringSystem::Itg
+                } else {
+                    config::TournamentScoringSystem::Ex
+                })
+            }
+            SubRowId::TournamentStepStats => {
+                crate::SimplyLoveTournamentConfigRequest::StepStats(new_index == 1)
+            }
+            SubRowId::TournamentEnforceNoCmod => {
+                crate::SimplyLoveTournamentConfigRequest::EnforceNoCmod(new_index == 1)
+            }
+            _ => return None,
+        };
+        action = Some(tournament_config_effect(request));
     } else if matches!(kind, SubmenuKind::Sound) {
         let row = &rows[row_index];
         match row.id {
@@ -1648,6 +1669,12 @@ pub(super) fn activate_current_selection(
                 ItemId::GameplayOptions => {
                     queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::Gameplay);
+                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                    state.submenu_fade_t = 0.0;
+                }
+                ItemId::TournamentModeOptions => {
+                    queue_sfx(state, "assets/sounds/start.ogg");
+                    state.pending_submenu_kind = Some(SubmenuKind::Tournament);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }

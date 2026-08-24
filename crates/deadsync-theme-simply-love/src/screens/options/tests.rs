@@ -839,6 +839,52 @@ fn gameplay_choice_emits_shell_config_request() {
 }
 
 #[test]
+fn tournament_options_initialize_and_emit_typed_requests() {
+    let asset_manager = AssetManager::new();
+    let mut config = config::Config::default();
+    config.tournament = config::TournamentModeOptions {
+        enabled: true,
+        scoring_system: config::TournamentScoringSystem::Itg,
+        show_step_stats: false,
+        enforce_no_cmod: true,
+    };
+    let mut state = init_with_config(config);
+    state.view = OptionsView::Submenu(SubmenuKind::Tournament);
+
+    for (id, expected) in [
+        (SubRowId::TournamentMode, 1),
+        (SubRowId::TournamentScoring, 1),
+        (SubRowId::TournamentStepStats, 0),
+        (SubRowId::TournamentEnforceNoCmod, 1),
+    ] {
+        let row = row_position(TOURNAMENT_OPTIONS_ROWS, id).expect("tournament row");
+        assert_eq!(
+            state.sub[SubmenuKind::Tournament].choice_indices[row],
+            expected
+        );
+    }
+
+    select_visible_row(
+        &mut state,
+        SubmenuKind::Tournament,
+        SubRowId::TournamentScoring,
+    );
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("tournament scoring should emit shell config work");
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Tournament(
+                crate::SimplyLoveTournamentConfigRequest::ScoringSystem(
+                    config::TournamentScoringSystem::Ex
+                )
+            )
+        ))
+    ));
+}
+
+#[test]
 fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
     let asset_manager = AssetManager::new();
     let mut view = OptionsInitView {

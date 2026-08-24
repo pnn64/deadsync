@@ -137,6 +137,11 @@ pub enum SubRowId {
     AutoScreenshot,
     DefaultJudgmentPalette,
     ManageJudgmentPalettes,
+    // Tournament Mode Options
+    TournamentMode,
+    TournamentScoring,
+    TournamentStepStats,
+    TournamentEnforceNoCmod,
     // Select Music Options
     ShowBanners,
     ShowVideoBanners,

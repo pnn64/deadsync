@@ -3,6 +3,7 @@ use deadsync_profile::{ErrorBarMask, MiniIndicator, StepStatisticsMask, TargetSc
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct RowVisibility {
+    pub(super) show_data_visualizations: bool,
     pub(super) show_measure_counter_children: bool,
     pub(super) show_judgment_offsets: bool,
     pub(super) show_judgment_tilt_options: bool,
@@ -41,6 +42,9 @@ pub(super) struct RowVisibility {
 
 #[inline(always)]
 pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bool {
+    if id == RowId::DataVisualizations {
+        return visibility.show_data_visualizations;
+    }
     if id == RowId::MeasureCounterLookahead || id == RowId::MeasureCounterOptions {
         return visibility.show_measure_counter_children;
     }
@@ -739,6 +743,7 @@ pub(super) fn row_visibility(
     policy: PlayerOptionsPolicyView,
 ) -> RowVisibility {
     RowVisibility {
+        show_data_visualizations: !policy.tournament_mode,
         show_measure_counter_children: measure_counter_children_visible(row_map, active),
         show_judgment_offsets: judgment_offsets_visible(row_map, active),
         show_judgment_tilt_options: judgment_tilt_options_visible(row_map, active),
@@ -749,12 +754,10 @@ pub(super) fn row_visibility(
         show_average_error_bar_children: average_error_bar_children_visible(active, option_masks),
         show_long_error_bar_children: long_error_bar_children_visible(row_map, active),
         show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(row_map, active),
-        show_density_graph_background: density_graph_background_visible(
-            row_map,
-            active,
-            option_masks,
-        ),
-        show_step_stats_extra: step_stats_extra_visible(row_map, active, option_masks),
+        show_density_graph_background: !policy.tournament_mode
+            && density_graph_background_visible(row_map, active, option_masks),
+        show_step_stats_extra: !policy.tournament_mode
+            && step_stats_extra_visible(row_map, active, option_masks),
         show_target_score: target_score_visible(row_map, active),
         show_target_score_percent: target_score_percent_visible(row_map, active),
         show_early_dw_options: early_dw_options_visible(row_map, active),

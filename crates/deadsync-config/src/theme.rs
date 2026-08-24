@@ -1409,6 +1409,58 @@ pub fn parse_machine_font(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TournamentScoringSystem {
+    Ex,
+    Itg,
+}
+
+impl TournamentScoringSystem {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ex => "EX",
+            Self::Itg => "ITG",
+        }
+    }
+}
+
+impl Default for TournamentScoringSystem {
+    fn default() -> Self {
+        Self::Ex
+    }
+}
+
+impl FromStr for TournamentScoringSystem {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "ex" => Ok(Self::Ex),
+            "itg" => Ok(Self::Itg),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TournamentModeOptions {
+    pub enabled: bool,
+    pub scoring_system: TournamentScoringSystem,
+    pub show_step_stats: bool,
+    pub enforce_no_cmod: bool,
+}
+
+impl Default for TournamentModeOptions {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            scoring_system: TournamentScoringSystem::Ex,
+            show_step_stats: true,
+            enforce_no_cmod: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThemePresentationOptions {
     pub simply_love_color: i32,
     pub show_select_music_gameplay_timer: bool,
@@ -1421,6 +1473,7 @@ pub struct ThemePresentationOptions {
     pub show_bpm_decimal: bool,
     pub gameplay_bpm_position: GameplayBpmPosition,
     pub gameplay_banner_mode: GameplayBannerMode,
+    pub tournament: TournamentModeOptions,
 }
 
 impl Default for ThemePresentationOptions {
@@ -1437,6 +1490,7 @@ impl Default for ThemePresentationOptions {
             show_bpm_decimal: DEFAULT_SHOW_BPM_DECIMAL,
             gameplay_bpm_position: GameplayBpmPosition::TopCenter,
             gameplay_banner_mode: GameplayBannerMode::Loop,
+            tournament: TournamentModeOptions::default(),
         }
     }
 }
@@ -1496,6 +1550,28 @@ pub fn load_theme_presentation_options(
             .or_else(|| conf.get("Theme", "AnimateBanners"))
             .and_then(|value| GameplayBannerMode::from_str(value).ok())
             .unwrap_or(default.gameplay_banner_mode),
+        tournament: TournamentModeOptions {
+            enabled: conf
+                .get("Theme", "EnableTournamentMode")
+                .and_then(parse_loose_bool_str)
+                .unwrap_or(default.tournament.enabled),
+            scoring_system: conf
+                .get("Theme", "ScoringSystem")
+                .and_then(|value| TournamentScoringSystem::from_str(value).ok())
+                .unwrap_or(default.tournament.scoring_system),
+            show_step_stats: conf
+                .get("Theme", "StepStats")
+                .and_then(|value| match value.trim().to_ascii_lowercase().as_str() {
+                    "show" => Some(true),
+                    "hide" => Some(false),
+                    _ => parse_loose_bool_str(value),
+                })
+                .unwrap_or(default.tournament.show_step_stats),
+            enforce_no_cmod: conf
+                .get("Theme", "EnforceNoCmod")
+                .and_then(parse_loose_bool_str)
+                .unwrap_or(default.tournament.enforce_no_cmod),
+        },
     }
 }
 
@@ -1707,6 +1783,30 @@ pub fn push_theme_option_lines(
     );
     push_bool(
         content,
+        "EnableTournamentMode",
+        presentation.tournament.enabled,
+    );
+    push_line(
+        content,
+        "ScoringSystem",
+        presentation.tournament.scoring_system.as_str(),
+    );
+    push_line(
+        content,
+        "StepStats",
+        if presentation.tournament.show_step_stats {
+            "Show"
+        } else {
+            "Hide"
+        },
+    );
+    push_bool(
+        content,
+        "EnforceNoCmod",
+        presentation.tournament.enforce_no_cmod,
+    );
+    push_bool(
+        content,
         "MachineShowEvalSummary",
         machine.machine_show_eval_summary,
     );
@@ -1873,6 +1973,12 @@ mod tests {
             show_bpm_decimal: false,
             gameplay_bpm_position: GameplayBpmPosition::TopCenter,
             gameplay_banner_mode: GameplayBannerMode::Loop,
+            tournament: TournamentModeOptions {
+                enabled: true,
+                scoring_system: TournamentScoringSystem::Itg,
+                show_step_stats: false,
+                enforce_no_cmod: false,
+            },
         }
     }
 
@@ -1924,6 +2030,10 @@ VisualStyle=Hearts\n\
 SrpgVariant=SRPG9\n\
 VideoBackgrounds=1\n\
 RandomBackgroundMode=Off\n\
+EnableTournamentMode=1\n\
+ScoringSystem=ITG\n\
+StepStats=Hide\n\
+EnforceNoCmod=0\n\
 MachineShowEvalSummary=1\n\
 MachineEasterEggs=1\n\
 MachineNiceSound=0\n\
@@ -1989,6 +2099,32 @@ MachineEvaluationStyle=Default\n\
                 load_songs: 'l',
                 test_input: 't',
             },
+        );
+    }
+
+    #[test]
+    fn tournament_mode_options_load_simply_love_values() {
+        let mut conf = SimpleIni::new();
+        conf.load_str(
+            r#"
+            [Theme]
+            EnableTournamentMode=1
+            ScoringSystem=ITG
+            StepStats=Hide
+            EnforceNoCmod=0
+            "#,
+        );
+
+        let loaded = load_theme_presentation_options(&conf, ThemePresentationOptions::default());
+
+        assert_eq!(
+            loaded.tournament,
+            TournamentModeOptions {
+                enabled: true,
+                scoring_system: TournamentScoringSystem::Itg,
+                show_step_stats: false,
+                enforce_no_cmod: false,
+            }
         );
     }
 
