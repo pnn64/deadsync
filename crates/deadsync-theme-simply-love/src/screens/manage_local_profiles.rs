@@ -61,10 +61,13 @@ const DESC_TITLE_ZOOM: f32 = 1.0;
 const DESC_BODY_ZOOM: f32 = 1.0;
 
 const NAME_MAX_LEN: usize = 32;
-const PROFILE_MENU_W: f32 = 450.0;
-const PROFILE_MENU_HEADER_H: f32 = 56.0;
-const PROFILE_MENU_ITEM_H: f32 = 44.0;
-const PROFILE_MENU_BORDER: f32 = 3.0;
+/// Simply Love's ScreenMiniMenuContext uses a 240 px container, 28 px row
+/// spacing, and 236x24 px row frames.
+const PROFILE_MENU_W: f32 = 240.0;
+const PROFILE_MENU_HEADER_H: f32 = 28.0;
+const PROFILE_MENU_ITEM_H: f32 = 28.0;
+const PROFILE_MENU_ROW_H: f32 = 24.0;
+const PROFILE_MENU_BORDER: f32 = 2.0;
 
 #[derive(Clone, Debug)]
 enum RowKind {
@@ -126,6 +129,7 @@ enum ProfileMenuAction {
     LinkGrooveStats,
     Rename,
     Delete,
+    GoBack,
 }
 
 fn profile_menu_action_label(action: ProfileMenuAction) -> Arc<str> {
@@ -136,16 +140,18 @@ fn profile_menu_action_label(action: ProfileMenuAction) -> Arc<str> {
         ProfileMenuAction::LinkGrooveStats => tr("Profiles", "LinkGrooveStats"),
         ProfileMenuAction::Rename => tr("Profiles", "Rename"),
         ProfileMenuAction::Delete => tr("Profiles", "Delete"),
+        ProfileMenuAction::GoBack => tr("Profiles", "GoBack"),
     }
 }
 
-const PROFILE_MENU_ACTIONS: [ProfileMenuAction; 6] = [
+const PROFILE_MENU_ACTIONS: [ProfileMenuAction; 7] = [
     ProfileMenuAction::SetP1,
     ProfileMenuAction::SetP2,
     ProfileMenuAction::LinkArrowCloud,
     ProfileMenuAction::LinkGrooveStats,
     ProfileMenuAction::Rename,
     ProfileMenuAction::Delete,
+    ProfileMenuAction::GoBack,
 ];
 
 #[derive(Clone, Debug)]
@@ -666,6 +672,10 @@ fn confirm_profile_menu(state: &mut State) -> ThemeEffect {
         ProfileMenuAction::Delete => {
             state.profile_menu = None;
             begin_delete_confirm(state, &menu.id, &menu.display_name);
+            crate::effects::sfx("assets/sounds/start.ogg")
+        }
+        ProfileMenuAction::GoBack => {
+            cancel_profile_menu(state);
             crate::effects::sfx("assets/sounds/start.ogg")
         }
     }
@@ -1755,34 +1765,44 @@ fn push_name_entry_overlay(ui: &mut Vec<Actor>, state: &State) {
     let w = screen_width();
     let h = screen_height();
     let accent = color::simply_love_rgba(state.active_color_index);
-    let border = 4.0;
-    let box_w = (w * 0.75).clamp(560.0, 1200.0);
-    let top_h = 210.0;
-    let bottom_h = 72.0;
-    let box_h = top_h + bottom_h + 2.0 * border;
+    // ScreenTextEntry parity: a quarter-screen instruction panel centered
+    // 40 px above mid-screen, with a separate 40 px answer field at +16.
+    let border = 2.0;
+    let box_w = w * 0.75;
+    let top_h = h * 0.25;
+    let answer_h = 40.0;
     let cx = w * 0.5;
     let cy = h * 0.5;
-    let top_cy = cy - box_h * 0.5 + border + top_h * 0.5;
-    let bottom_cy = cy + box_h * 0.5 - border - bottom_h * 0.5;
+    let top_cy = cy - 40.0;
+    let answer_cy = cy + 16.0;
+
+    push_overlay_backdrop(ui, w, h, 0.5);
 
     ui.push(act!(quad:
         align(0.5, 0.5):
-        xy(cx, cy):
-        zoomto(box_w, box_h):
+        xy(cx, top_cy):
+        zoomto(box_w, top_h):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(1001)
     ));
     ui.push(act!(quad:
         align(0.5, 0.5):
         xy(cx, top_cy):
-        zoomto(box_w - 2.0 * border, top_h):
+        zoomto(box_w - 2.0 * border, top_h - 2.0 * border):
         diffuse(accent[0], accent[1], accent[2], 1.0):
         z(1002)
     ));
     ui.push(act!(quad:
         align(0.5, 0.5):
-        xy(cx, bottom_cy):
-        zoomto(box_w - 2.0 * border, bottom_h):
+        xy(cx, answer_cy):
+        zoomto(box_w, answer_h):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1001)
+    ));
+    ui.push(act!(quad:
+        align(0.5, 0.5):
+        xy(cx, answer_cy):
+        zoomto(box_w - 2.0 * border, answer_h - 2.0 * border):
         diffuse(0.0, 0.0, 0.0, 1.0):
         z(1002)
     ));
@@ -1790,9 +1810,10 @@ fn push_name_entry_overlay(ui: &mut Vec<Actor>, state: &State) {
     let name_prompt = tr("Profiles", "EnterProfileNamePrompt");
     ui.push(act!(text:
         align(0.5, 0.5):
-        xy(cx, top_cy):
+        xy(cx, cy - 64.0):
         font("miso"):
         zoom(1.0):
+        maxwidth((box_w - 40.0).min(600.0)):
         settext(name_prompt):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(1003):
@@ -1806,9 +1827,9 @@ fn push_name_entry_overlay(ui: &mut Vec<Actor>, state: &State) {
     }
     ui.push(act!(text:
         align(0.5, 0.5):
-        xy(cx, bottom_cy):
+        xy(cx, answer_cy):
         font("miso"):
-        zoom(1.55):
+        zoom(1.0):
         maxwidth(box_w - 40.0):
         settext(value):
         diffuse(1.0, 1.0, 1.0, 1.0):
@@ -1821,7 +1842,7 @@ fn push_name_entry_overlay(ui: &mut Vec<Actor>, state: &State) {
     };
     ui.push(act!(text:
         align(0.5, 0.0):
-        xy(cx, cy + box_h * 0.5 + 8.0):
+        xy(cx, answer_cy + answer_h * 0.5 + 8.0):
         font("miso"):
         zoom(0.9):
         maxwidth(box_w - 40.0):
@@ -1844,7 +1865,7 @@ fn push_delete_confirm_overlay(ui: &mut Vec<Actor>, state: &State) {
     let cx = w * 0.5;
     let cy = h * 0.5;
 
-    push_overlay_backdrop(ui, w, h);
+    push_overlay_backdrop(ui, w, h, 0.65);
     push_overlay_box(ui, cx, cy, box_w, box_h);
 
     let prompt = tr_fmt(
@@ -1889,12 +1910,12 @@ fn push_delete_confirm_overlay(ui: &mut Vec<Actor>, state: &State) {
     push_overlay_error(ui, confirm.error.as_ref(), cx, cy, box_w, box_h);
 }
 
-fn push_overlay_backdrop(ui: &mut Vec<Actor>, w: f32, h: f32) {
+fn push_overlay_backdrop(ui: &mut Vec<Actor>, w: f32, h: f32, alpha: f32) {
     ui.push(act!(quad:
         align(0.0, 0.0):
         xy(0.0, 0.0):
         zoomto(w, h):
-        diffuse(0.0, 0.0, 0.0, 0.65):
+        diffuse(0.0, 0.0, 0.0, alpha):
         z(1000)
     ));
 }
@@ -2690,10 +2711,14 @@ fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x:
         return;
     };
 
+    // ScreenMiniMenuContext dims the Manage Profiles screen to 25% brightness.
+    push_overlay_backdrop(ui, screen_width(), screen_height(), 0.75);
+
     let row_top = selected_row_top_y(state, s, list_y);
     let menu_w = PROFILE_MENU_W * s;
     let header_h = PROFILE_MENU_HEADER_H * s;
     let item_h = PROFILE_MENU_ITEM_H * s;
+    let row_h = PROFILE_MENU_ROW_H * s;
     let border = PROFILE_MENU_BORDER * s;
     let body_h = item_h * PROFILE_MENU_ACTIONS.len() as f32;
     let menu_h = header_h + body_h + 2.0 * border;
@@ -2722,21 +2747,22 @@ fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x:
         align(0.0, 0.0):
         xy(inner_x, inner_y):
         zoomto(inner_w, header_h):
-        diffuse(0.92, 0.92, 0.92, 1.0):
+        diffuse(1.0, 1.0, 1.0, 1.0):
         z(1005)
     ));
     ui.push(act!(quad:
         align(0.0, 0.0):
         xy(inner_x, inner_y + header_h):
         zoomto(inner_w, body_h):
-        diffuse(0.0, 0.06, 0.10, 0.96):
+        diffuse(1.0, 1.0, 1.0, 1.0):
         z(1005)
     ));
     ui.push(act!(text:
         align(0.0, 0.5):
         xy(14.0_f32.mul_add(s, inner_x), inner_y + header_h * 0.5):
         font("miso"):
-        zoom(1.20):
+        zoom(1.0):
+        maxwidth(inner_w - 28.0 * s):
         settext(menu.display_name.clone()):
         diffuse(0.0, 0.0, 0.0, 1.0):
         z(1006):
@@ -2746,15 +2772,18 @@ fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x:
     for (i, action) in PROFILE_MENU_ACTIONS.iter().enumerate() {
         let row_y = (i as f32).mul_add(item_h, inner_y + header_h);
         let selected = i == menu.selected_action;
-        if selected {
-            ui.push(act!(quad:
-                align(0.0, 0.0):
-                xy(inner_x, row_y):
-                zoomto(inner_w, item_h):
-                diffuse(0.17, 0.23, 0.28, 0.95):
-                z(1005)
-            ));
-        }
+        let row_bg = if selected {
+            color::rgba_hex("#293238")
+        } else {
+            color::rgba_hex("#071016")
+        };
+        ui.push(act!(quad:
+            align(0.0, 0.5):
+            xy(inner_x, row_y + item_h * 0.5):
+            zoomto(inner_w, row_h):
+            diffuse(row_bg[0], row_bg[1], row_bg[2], 0.95):
+            z(1005)
+        ));
         let text_col = if selected {
             [accent[0], accent[1], accent[2], 1.0]
         } else {
@@ -2764,7 +2793,8 @@ fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x:
             align(0.0, 0.5):
             xy(14.0_f32.mul_add(s, inner_x), row_y + item_h * 0.5):
             font("miso"):
-            zoom(1.0):
+            zoom(0.8):
+            maxwidth(inner_w - 28.0 * s):
             settext(profile_menu_action_label(*action)):
             diffuse(text_col[0], text_col[1], text_col[2], text_col[3]):
             z(1006):
@@ -3218,6 +3248,29 @@ mod tests {
         );
 
         press(&mut state, VirtualAction::p2_back);
+        assert!(state.profile_menu.is_none());
+    }
+
+    #[test]
+    fn profile_action_menu_ends_with_working_go_back_row() {
+        let mut state = state_with_profile_row();
+        begin_profile_menu(&mut state, "test-profile", "Test Profile");
+        state
+            .profile_menu
+            .as_mut()
+            .expect("profile menu should be open")
+            .selected_action = PROFILE_MENU_ACTIONS.len() - 1;
+
+        assert_eq!(
+            PROFILE_MENU_ACTIONS.last(),
+            Some(&ProfileMenuAction::GoBack)
+        );
+        assert!(matches!(
+            confirm_profile_menu(&mut state),
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx("assets/sounds/start.ogg")
+            ))
+        ));
         assert!(state.profile_menu.is_none());
     }
 
