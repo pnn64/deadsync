@@ -101,6 +101,7 @@ pub(super) fn dispatch_behavior_delta(
     };
     let before = (
         state.player_options[player_idx].clone(),
+        state.judgment_palette_ids[player_idx].clone(),
         state.heart_rate_device_ids[player_idx].clone(),
         state.max_heart_rate[player_idx],
     );
@@ -133,6 +134,7 @@ pub(super) fn dispatch_behavior_delta(
     if outcome.persisted {
         if (
             state.player_options[player_idx].clone(),
+            state.judgment_palette_ids[player_idx].clone(),
             state.heart_rate_device_ids[player_idx].clone(),
             state.max_heart_rate[player_idx],
         ) != before
@@ -337,6 +339,11 @@ fn refresh_pane_defaults(state: &mut State) {
             &mut state.option_masks[player_idx],
         );
     }
+    apply_judgment_palette_selection(
+        &mut state.panes[pane_idx].row_map,
+        &state.judgment_palette_choice_ids,
+        &state.judgment_palette_ids,
+    );
 }
 
 fn reset_what_comes_next(state: &mut State) {

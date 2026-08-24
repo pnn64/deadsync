@@ -44,6 +44,10 @@ impl AppDirs {
             .join("default_player_options.ini")
     }
 
+    pub fn judgment_palettes_path(&self) -> PathBuf {
+        self.data_dir.join("save").join("judgment_palettes.ini")
+    }
+
     pub fn songs_dir(&self) -> PathBuf {
         self.data_dir.join("songs")
     }

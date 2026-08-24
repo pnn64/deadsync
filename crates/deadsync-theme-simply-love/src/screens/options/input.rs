@@ -799,6 +799,17 @@ pub(super) fn apply_submenu_choice_delta(
         action = Some(course_config_effect(request));
     } else if matches!(kind, SubmenuKind::Gameplay) {
         let row = &rows[row_index];
+        if row.id == SubRowId::DefaultJudgmentPalette {
+            let id = state
+                .judgment_palettes
+                .palettes
+                .get(new_index)
+                .map(|entry| entry.id.clone())?;
+            state.judgment_palettes.set_default_palette(&id).ok()?;
+            action = Some(judgment_palettes_effect(state));
+            clear_render_cache(state);
+            return action;
+        }
         let request = match row.id {
             SubRowId::BgBrightness => {
                 crate::SimplyLoveGameplayConfigRequest::BackgroundBrightnessTenths(
@@ -1708,7 +1719,13 @@ pub(super) fn activate_current_selection(
                 && let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row)
             {
                 let rows = submenu_rows(kind);
-                if rows.get(row_idx).map(|row| row.id) == Some(SubRowId::AutoScreenshot) {
+                let row_id = rows.get(row_idx).map(|row| row.id);
+                if row_id == Some(SubRowId::ManageJudgmentPalettes) {
+                    queue_sfx(state, "assets/sounds/start.ogg");
+                    show_judgment_palette_overlay(state);
+                    return ThemeEffect::None;
+                }
+                if row_id == Some(SubRowId::AutoScreenshot) {
                     let choice_idx = submenu_cursor_indices(state, kind)
                         .get(row_idx)
                         .copied()
@@ -2027,6 +2044,9 @@ fn handle_input_impl(
     }
     if state.reload_ui.is_some() {
         return ThemeEffect::None;
+    }
+    if let Some(effect) = handle_judgment_palette_input(state, ev) {
+        return effect;
     }
     if let Some(effect) = handle_browser_input(state, ev) {
         return effect;

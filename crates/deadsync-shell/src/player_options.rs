@@ -2,12 +2,14 @@ use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_theme_simply_love::views::{
-    PlayerOptionsInitView, PlayerOptionsPlayerView, PlayerOptionsPolicyView,
+    JudgmentPaletteChoiceView, PlayerOptionsInitView, PlayerOptionsPlayerView,
+    PlayerOptionsPolicyView,
 };
 
 pub(crate) fn init_view() -> PlayerOptionsInitView {
     let config = deadsync_config::prelude::get();
     let session = profile::get_session_snapshot();
+    let palette_catalog = deadsync_config::judgment_palettes::runtime_catalog();
     PlayerOptionsInitView {
         policy: PlayerOptionsPolicyView {
             allow_per_player_global_offsets: config.machine_allow_per_player_global_offsets,
@@ -29,21 +31,33 @@ pub(crate) fn init_view() -> PlayerOptionsInitView {
             let profile = profile::get_for_side(profile_data::player_side_for_index(idx));
             PlayerOptionsPlayerView {
                 options: profile.current_player_options(),
+                judgment_palette_id: profile.judgment_palette_id,
                 heart_rate_device_id: profile.heart_rate_device_id,
                 max_heart_rate: profile.max_heart_rate,
             }
         }),
+        judgment_palettes: palette_catalog
+            .palettes
+            .iter()
+            .map(|entry| JudgmentPaletteChoiceView {
+                id: entry.id.clone(),
+                name: entry.name.clone(),
+                palette: entry.palette,
+            })
+            .collect(),
     }
 }
 
 pub(crate) fn gameplay_profiles(
     options: &[profile_data::PlayerOptionsData; MAX_PLAYERS],
+    judgment_palette_ids: &[Option<String>; MAX_PLAYERS],
     heart_rate_device_ids: &[Option<String>; MAX_PLAYERS],
 ) -> [profile_data::Profile; MAX_PLAYERS] {
     std::array::from_fn(|idx| {
         gameplay_profile(
             profile::get_for_side(profile_data::player_side_for_index(idx)),
             options[idx].clone(),
+            judgment_palette_ids[idx].clone(),
             heart_rate_device_ids[idx].clone(),
         )
     })
@@ -52,9 +66,11 @@ pub(crate) fn gameplay_profiles(
 fn gameplay_profile(
     mut profile: profile_data::Profile,
     options: profile_data::PlayerOptionsData,
+    judgment_palette_id: Option<String>,
     heart_rate_device_id: Option<String>,
 ) -> profile_data::Profile {
     profile.set_current_player_options(options);
+    profile.judgment_palette_id = judgment_palette_id;
     profile.heart_rate_device_id = heart_rate_device_id;
     profile
 }
@@ -76,11 +92,17 @@ mod tests {
             ..Default::default()
         };
 
-        let merged = gameplay_profile(profile, options.clone(), Some("hrm-1".to_owned()));
+        let merged = gameplay_profile(
+            profile,
+            options.clone(),
+            Some("palette-1".to_owned()),
+            Some("hrm-1".to_owned()),
+        );
 
         assert_eq!(merged.display_name, "Alice");
         assert_eq!(merged.current_combo, 42);
         assert_eq!(merged.current_player_options(), options);
+        assert_eq!(merged.judgment_palette_id.as_deref(), Some("palette-1"));
         assert_eq!(merged.heart_rate_device_id.as_deref(), Some("hrm-1"));
     }
 }

@@ -1,4 +1,5 @@
 use deadlib_present::color;
+use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadlib_render_core::MeshVertex;
 use deadsync_rules::timing::{self, HistogramMs, ScatterFoot, ScatterPoint};
 
@@ -42,6 +43,7 @@ fn color_for_abs_ms(
     abs_ms: f32,
     timing_windows_ms: [f32; 5],
     scale: TimingHistogramScale,
+    palette: JudgmentPalette,
 ) -> [f32; 4] {
     let w1 = timing_windows_ms[0];
     let w2 = timing_windows_ms[1];
@@ -53,47 +55,47 @@ fn color_for_abs_ms(
     match scale {
         TimingHistogramScale::Itg => {
             if abs_ms <= w1 {
-                color::JUDGMENT_RGBA[0]
+                palette.color(Role::FantasticBlue)
             } else if abs_ms <= w2 {
-                color::JUDGMENT_RGBA[1]
+                palette.color(Role::Excellent)
             } else if abs_ms <= w3 {
-                color::JUDGMENT_RGBA[2]
+                palette.color(Role::Great)
             } else if abs_ms <= w4 {
-                color::JUDGMENT_RGBA[3]
+                palette.color(Role::Decent)
             } else {
-                color::JUDGMENT_RGBA[4]
+                palette.color(Role::WayOff)
             }
         }
         TimingHistogramScale::Ex => {
             if abs_ms <= w0 {
-                color::JUDGMENT_RGBA[0]
+                palette.color(Role::FantasticBlue)
             } else if abs_ms <= w1 {
-                color::JUDGMENT_FA_PLUS_WHITE_RGBA
+                palette.color(Role::FantasticWhite)
             } else if abs_ms <= w2 {
-                color::JUDGMENT_RGBA[1]
+                palette.color(Role::Excellent)
             } else if abs_ms <= w3 {
-                color::JUDGMENT_RGBA[2]
+                palette.color(Role::Great)
             } else if abs_ms <= w4 {
-                color::JUDGMENT_RGBA[3]
+                palette.color(Role::Decent)
             } else {
-                color::JUDGMENT_RGBA[4]
+                palette.color(Role::WayOff)
             }
         }
         TimingHistogramScale::HardEx => {
             if abs_ms <= w010 {
                 color::HARD_EX_SCORE_RGBA
             } else if abs_ms <= w0 {
-                color::JUDGMENT_RGBA[0]
+                palette.color(Role::FantasticBlue)
             } else if abs_ms <= w1 {
-                color::JUDGMENT_FA_PLUS_WHITE_RGBA
+                palette.color(Role::FantasticWhite)
             } else if abs_ms <= w2 {
-                color::JUDGMENT_RGBA[1]
+                palette.color(Role::Excellent)
             } else if abs_ms <= w3 {
-                color::JUDGMENT_RGBA[2]
+                palette.color(Role::Great)
             } else if abs_ms <= w4 {
-                color::JUDGMENT_RGBA[3]
+                palette.color(Role::Decent)
             } else {
-                color::JUDGMENT_RGBA[4]
+                palette.color(Role::WayOff)
             }
         }
     }
@@ -129,17 +131,24 @@ fn color_for_scatter(
     abs_ms: f32,
     timing_windows_ms: [f32; 5],
     scale: ScatterPlotScale,
+    palette: JudgmentPalette,
 ) -> [f32; 4] {
     match scale {
-        ScatterPlotScale::Itg => {
-            color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::Itg)
-        }
+        ScatterPlotScale::Itg => color_for_abs_ms(
+            abs_ms,
+            timing_windows_ms,
+            TimingHistogramScale::Itg,
+            palette,
+        ),
         ScatterPlotScale::Ex => {
-            color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::Ex)
+            color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::Ex, palette)
         }
-        ScatterPlotScale::HardEx => {
-            color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::HardEx)
-        }
+        ScatterPlotScale::HardEx => color_for_abs_ms(
+            abs_ms,
+            timing_windows_ms,
+            TimingHistogramScale::HardEx,
+            palette,
+        ),
         ScatterPlotScale::Arrow => arrow_code_rgba(sp.direction_code),
         ScatterPlotScale::Quant => color_for_quant(sp.quantization_idx),
         ScatterPlotScale::FootParity => color_for_foot(sp.parity_foot),
@@ -147,10 +156,14 @@ fn color_for_scatter(
 }
 
 #[inline(always)]
-fn miss_color_for_scatter(sp: &ScatterPoint, scale: ScatterPlotScale) -> [f32; 4] {
+fn miss_color_for_scatter(
+    sp: &ScatterPoint,
+    scale: ScatterPlotScale,
+    palette: JudgmentPalette,
+) -> [f32; 4] {
     match scale {
         ScatterPlotScale::Itg | ScatterPlotScale::Ex | ScatterPlotScale::HardEx => {
-            [1.0, 0.0, 0.0, 1.0]
+            palette.color(Role::Miss)
         }
         ScatterPlotScale::Arrow => arrow_code_rgba(sp.direction_code),
         ScatterPlotScale::Quant => color_for_quant(sp.quantization_idx),
@@ -207,6 +220,22 @@ pub fn build_scatter_background_mesh(
     worst_window_ms: f32,
     scale: ScatterPlotScale,
 ) -> Vec<MeshVertex> {
+    build_scatter_background_mesh_with_palette(
+        graph_width,
+        graph_height,
+        worst_window_ms,
+        scale,
+        JudgmentPalette::default(),
+    )
+}
+
+pub fn build_scatter_background_mesh_with_palette(
+    graph_width: f32,
+    graph_height: f32,
+    worst_window_ms: f32,
+    scale: ScatterPlotScale,
+    palette: JudgmentPalette,
+) -> Vec<MeshVertex> {
     let w = graph_width.max(0.0);
     let h = graph_height.max(0.0);
     if w <= 0.0 || h <= 0.0 {
@@ -227,30 +256,30 @@ pub fn build_scatter_background_mesh(
 
     // (outer_ms, color) ordered innermost to outermost. The inner edge of
     // each band is the outer edge of the previous band (0 for the first).
-    let bands: &[(f32, [f32; 4])] = match scale {
-        ScatterPlotScale::Itg => &[
-            (timing_windows_ms[0], color::JUDGMENT_RGBA[0]),
-            (timing_windows_ms[1], color::JUDGMENT_RGBA[1]),
-            (timing_windows_ms[2], color::JUDGMENT_RGBA[2]),
-            (timing_windows_ms[3], color::JUDGMENT_RGBA[3]),
-            (timing_windows_ms[4], color::JUDGMENT_RGBA[4]),
+    let bands: Vec<(f32, [f32; 4])> = match scale {
+        ScatterPlotScale::Itg => vec![
+            (timing_windows_ms[0], palette.color(Role::FantasticBlue)),
+            (timing_windows_ms[1], palette.color(Role::Excellent)),
+            (timing_windows_ms[2], palette.color(Role::Great)),
+            (timing_windows_ms[3], palette.color(Role::Decent)),
+            (timing_windows_ms[4], palette.color(Role::WayOff)),
         ],
-        ScatterPlotScale::Ex => &[
-            (w0, color::JUDGMENT_RGBA[0]),
-            (timing_windows_ms[0], color::JUDGMENT_FA_PLUS_WHITE_RGBA),
-            (timing_windows_ms[1], color::JUDGMENT_RGBA[1]),
-            (timing_windows_ms[2], color::JUDGMENT_RGBA[2]),
-            (timing_windows_ms[3], color::JUDGMENT_RGBA[3]),
-            (timing_windows_ms[4], color::JUDGMENT_RGBA[4]),
+        ScatterPlotScale::Ex => vec![
+            (w0, palette.color(Role::FantasticBlue)),
+            (timing_windows_ms[0], palette.color(Role::FantasticWhite)),
+            (timing_windows_ms[1], palette.color(Role::Excellent)),
+            (timing_windows_ms[2], palette.color(Role::Great)),
+            (timing_windows_ms[3], palette.color(Role::Decent)),
+            (timing_windows_ms[4], palette.color(Role::WayOff)),
         ],
-        ScatterPlotScale::HardEx => &[
+        ScatterPlotScale::HardEx => vec![
             (w010, color::HARD_EX_SCORE_RGBA),
-            (w0, color::JUDGMENT_RGBA[0]),
-            (timing_windows_ms[0], color::JUDGMENT_FA_PLUS_WHITE_RGBA),
-            (timing_windows_ms[1], color::JUDGMENT_RGBA[1]),
-            (timing_windows_ms[2], color::JUDGMENT_RGBA[2]),
-            (timing_windows_ms[3], color::JUDGMENT_RGBA[3]),
-            (timing_windows_ms[4], color::JUDGMENT_RGBA[4]),
+            (w0, palette.color(Role::FantasticBlue)),
+            (timing_windows_ms[0], palette.color(Role::FantasticWhite)),
+            (timing_windows_ms[1], palette.color(Role::Excellent)),
+            (timing_windows_ms[2], palette.color(Role::Great)),
+            (timing_windows_ms[3], palette.color(Role::Decent)),
+            (timing_windows_ms[4], palette.color(Role::WayOff)),
         ],
         ScatterPlotScale::Arrow | ScatterPlotScale::Quant | ScatterPlotScale::FootParity => {
             return Vec::new();
@@ -263,7 +292,7 @@ pub fn build_scatter_background_mesh(
     let mut out: Vec<MeshVertex> = Vec::with_capacity(bands.len() * 12);
     let half = h * 0.5;
     let mut inner_ms: f32 = 0.0;
-    for &(outer_ms, c) in bands {
+    for &(outer_ms, c) in &bands {
         let outer = outer_ms.min(worst);
         if outer <= inner_ms {
             continue;
@@ -295,6 +324,33 @@ pub fn build_scatter_mesh(
     graph_height: f32,
     worst_window_ms: f32,
     scale: ScatterPlotScale,
+) -> Vec<MeshVertex> {
+    build_scatter_mesh_with_palette(
+        scatter,
+        first_second,
+        last_second,
+        fail_time,
+        dim_post_fail_scatter,
+        graph_width,
+        graph_height,
+        worst_window_ms,
+        scale,
+        JudgmentPalette::default(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_scatter_mesh_with_palette(
+    scatter: &[ScatterPoint],
+    first_second: f32,
+    last_second: f32,
+    fail_time: Option<f32>,
+    dim_post_fail_scatter: bool,
+    graph_width: f32,
+    graph_height: f32,
+    worst_window_ms: f32,
+    scale: ScatterPlotScale,
+    palette: JudgmentPalette,
 ) -> Vec<MeshVertex> {
     let w = graph_width.max(0.0);
     let h = graph_height.max(0.0);
@@ -334,7 +390,7 @@ pub fn build_scatter_mesh(
                 let t = ((worst - off_ms) / (2.0 * worst)).clamp(0.0, 1.0);
                 let x = x.clamp(0.0, (w - POINT_W).max(0.0));
                 let y = (t * (h - POINT_H).max(0.0)).clamp(0.0, (h - POINT_H).max(0.0));
-                let base = color_for_scatter(sp, off_ms.abs(), timing_windows_ms, scale);
+                let base = color_for_scatter(sp, off_ms.abs(), timing_windows_ms, scale, palette);
                 let alpha = if post_fail {
                     0.333
                 } else {
@@ -345,7 +401,7 @@ pub fn build_scatter_mesh(
             }
             None => {
                 let x = x.clamp(0.0, (w - MISS_W).max(0.0));
-                let base = miss_color_for_scatter(sp, scale);
+                let base = miss_color_for_scatter(sp, scale, palette);
                 let miss_alpha = if post_fail { 0.08 } else { 0.3 };
                 let c = [base[0], base[1], base[2], miss_alpha];
                 let h1 = if sp.miss_because_held { h * 0.5 } else { 0.0 };
@@ -429,6 +485,26 @@ pub fn build_offset_histogram_mesh(
     scale: TimingHistogramScale,
     use_smoothing: bool,
 ) -> Vec<MeshVertex> {
+    build_offset_histogram_mesh_with_palette(
+        histogram,
+        pane_width,
+        graph_height,
+        pane_height,
+        scale,
+        use_smoothing,
+        JudgmentPalette::default(),
+    )
+}
+
+pub fn build_offset_histogram_mesh_with_palette(
+    histogram: &HistogramMs,
+    pane_width: f32,
+    graph_height: f32,
+    pane_height: f32,
+    scale: TimingHistogramScale,
+    use_smoothing: bool,
+    palette: JudgmentPalette,
+) -> Vec<MeshVertex> {
     let pw = pane_width.max(0.0);
     let gh = graph_height.max(0.0);
     let ph = pane_height.max(0.0);
@@ -461,7 +537,12 @@ pub fn build_offset_histogram_mesh(
         let smoothed_zero = (histogram.smoothed.len() / 2) as i32;
         let mut prev_x = x_for(first_bin);
         let mut prev_top = top_y_for(histogram.smoothed[(first_bin + smoothed_zero) as usize].1);
-        let mut prev_color = color_for_abs_ms(hist_bin_abs_ms(first_bin), timing_windows_ms, scale);
+        let mut prev_color = color_for_abs_ms(
+            hist_bin_abs_ms(first_bin),
+            timing_windows_ms,
+            scale,
+            palette,
+        );
 
         for bin in (first_bin + 1)..=worst_observed {
             let x = x_for(bin);
@@ -469,7 +550,7 @@ pub fn build_offset_histogram_mesh(
             push_hist_segment(&mut out, prev_x, prev_top, x, top, bottom_y, prev_color);
             prev_x = x;
             prev_top = top;
-            prev_color = color_for_abs_ms(hist_bin_abs_ms(bin), timing_windows_ms, scale);
+            prev_color = color_for_abs_ms(hist_bin_abs_ms(bin), timing_windows_ms, scale, palette);
         }
     } else {
         let mut raw_ix = 0usize;
@@ -479,7 +560,12 @@ pub fn build_offset_histogram_mesh(
 
         let mut prev_x = x_for(first_bin);
         let mut prev_top = top_y_for(hist_raw_y(&histogram.bins, &mut raw_ix, first_bin));
-        let mut prev_color = color_for_abs_ms(hist_bin_abs_ms(first_bin), timing_windows_ms, scale);
+        let mut prev_color = color_for_abs_ms(
+            hist_bin_abs_ms(first_bin),
+            timing_windows_ms,
+            scale,
+            palette,
+        );
 
         for bin in (first_bin + 1)..=worst_observed {
             let x = x_for(bin);
@@ -487,7 +573,7 @@ pub fn build_offset_histogram_mesh(
             push_hist_segment(&mut out, prev_x, prev_top, x, top, bottom_y, prev_color);
             prev_x = x;
             prev_top = top;
-            prev_color = color_for_abs_ms(hist_bin_abs_ms(bin), timing_windows_ms, scale);
+            prev_color = color_for_abs_ms(hist_bin_abs_ms(bin), timing_windows_ms, scale, palette);
         }
     }
 
@@ -539,6 +625,33 @@ mod tests {
                 color::JUDGMENT_RGBA[3][2],
                 1.0,
             ]));
+    }
+
+    #[test]
+    fn judgment_scatter_uses_the_selected_custom_palette() {
+        let custom = JudgmentPalette::default().with_color(
+            Role::Decent,
+            deadlib_present::color::Color::rgb(0.1, 0.2, 0.3).to_rgba(),
+        );
+        let verts = build_scatter_mesh_with_palette(
+            &[scatter_point(120.0)],
+            0.0,
+            2.0,
+            None,
+            false,
+            100.0,
+            50.0,
+            180.0,
+            ScatterPlotScale::Itg,
+            custom,
+        );
+
+        assert_eq!(verts.len(), 6);
+        assert!(
+            verts
+                .iter()
+                .all(|vertex| vertex.color == [0.1, 0.2, 0.3, 1.0])
+        );
     }
 
     #[test]

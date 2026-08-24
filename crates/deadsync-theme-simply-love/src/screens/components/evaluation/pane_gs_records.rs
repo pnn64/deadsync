@@ -5,6 +5,7 @@ use crate::screens::components::shared::gs_scorebox::{
 use crate::views::ScoreboxSideView;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::color;
+use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadsync_config::prelude::SrpgVariant;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
@@ -161,7 +162,11 @@ impl RecordsRow {
         }
     }
 
-    fn entry(entry: &score_data::LeaderboardEntry, pane: &score_data::LeaderboardPane) -> Self {
+    fn entry(
+        entry: &score_data::LeaderboardEntry,
+        pane: &score_data::LeaderboardPane,
+        palette: JudgmentPalette,
+    ) -> Self {
         let row_color = if entry.is_rival {
             GS_RIVAL_COLOR
         } else if entry.is_self {
@@ -172,7 +177,7 @@ impl RecordsRow {
         let score_color = if entry.is_fail {
             [1.0, 0.0, 0.0, 1.0]
         } else if pane.is_ex {
-            color::JUDGMENT_RGBA[0]
+            palette.color(Role::FantasticBlue)
         } else if pane.is_hard_ex() {
             color::HARD_EX_SCORE_RGBA
         } else {
@@ -197,7 +202,7 @@ struct RecordsPanePresentation {
 }
 
 impl RecordsPanePresentation {
-    fn new(runtime: &ScoreboxSideView, kind: RecordsPaneKind) -> Self {
+    fn new(runtime: &ScoreboxSideView, kind: RecordsPaneKind, palette: JudgmentPalette) -> Self {
         let mut presentation = Self {
             kind,
             rows: std::array::from_fn(|_| RecordsRow::placeholder()),
@@ -232,7 +237,7 @@ impl RecordsPanePresentation {
             return presentation;
         }
         for (row, entry) in presentation.rows.iter_mut().zip(display) {
-            *row = RecordsRow::entry(entry, pane);
+            *row = RecordsRow::entry(entry, pane, palette);
         }
         presentation
     }
@@ -246,8 +251,13 @@ pub(crate) struct OnlineRecordsPresentation {
 
 impl OnlineRecordsPresentation {
     pub(crate) fn new(runtime: &ScoreboxSideView) -> Self {
+        Self::new_with_palette(runtime, JudgmentPalette::default())
+    }
+
+    pub(crate) fn new_with_palette(runtime: &ScoreboxSideView, palette: JudgmentPalette) -> Self {
         Self {
-            panes: RecordsPaneKind::ALL.map(|kind| RecordsPanePresentation::new(runtime, kind)),
+            panes: RecordsPaneKind::ALL
+                .map(|kind| RecordsPanePresentation::new(runtime, kind, palette)),
         }
     }
 

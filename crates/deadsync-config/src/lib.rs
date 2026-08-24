@@ -8,6 +8,7 @@ pub mod defaults;
 pub mod folders;
 pub mod frame_pacing;
 pub mod ini;
+pub mod judgment_palettes;
 pub mod keybinds;
 pub mod load;
 pub mod machine;

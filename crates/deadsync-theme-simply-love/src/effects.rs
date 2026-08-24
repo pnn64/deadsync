@@ -87,6 +87,7 @@ pub enum SimplyLoveProfileRequest {
     UpdatePlayerOptions {
         side: PlayerSide,
         options: Box<deadsync_profile::PlayerOptionsData>,
+        judgment_palette_id: Option<String>,
         heart_rate_device_id: Option<String>,
         max_heart_rate: u16,
     },
@@ -884,6 +885,7 @@ pub enum SimplyLoveRuntimeRequest {
     Platform(PlatformRequest),
     Sync(SimplyLoveSyncRequest),
     Config(SimplyLoveConfigRequest),
+    JudgmentPalettes(deadsync_config::judgment_palettes::JudgmentPaletteCatalog),
     Hardware(SimplyLoveHardwareRequest),
     Debug(SimplyLoveDebugRequest),
     Updater(SimplyLoveUpdaterRequest),

@@ -3147,6 +3147,10 @@ pub fn apply_loaded_profile_data(
             .map(|initials| sanitize_player_initials(&initials))
             .filter(|initials| !initials.is_empty())
             .unwrap_or_else(|| default_profile.player_initials.clone());
+        profile.judgment_palette_id = profile_get("userprofile", "JudgmentPalette")
+            .map(|id| id.trim().to_owned())
+            .filter(|id| !id.is_empty())
+            .or_else(|| default_profile.judgment_palette_id.clone());
         profile.heart_rate_device_id = profile_get("userprofile", "HeartRateDeviceId")
             .map(|id| id.trim().to_owned())
             .filter(|id| !id.is_empty())
@@ -8554,6 +8558,9 @@ pub fn append_userprofile_section(content: &mut String, guid: &str, profile: &Pr
     push_profile_guid_line(content, guid);
     content.push_str(&format!("DisplayName={}\n", profile.display_name));
     content.push_str(&format!("PlayerInitials={}\n", profile.player_initials));
+    if let Some(id) = profile.judgment_palette_id.as_deref() {
+        content.push_str(&format!("JudgmentPalette={id}\n"));
+    }
     if let Some(id) = profile.heart_rate_device_id.as_deref() {
         content.push_str(&format!("HeartRateDeviceId={id}\n"));
     }
@@ -8770,6 +8777,9 @@ pub fn api_key_from_ini_text(text: &str) -> Option<String> {
 pub struct Profile {
     pub display_name: String,
     pub player_initials: String,
+    /// Stable palette ID selected by this profile. `None` inherits the
+    /// machine-wide default judgment palette.
+    pub judgment_palette_id: Option<String>,
     /// Platform-stable BLE peripheral identifier selected for this player.
     pub heart_rate_device_id: Option<String>,
     /// Per-player maximum heart rate in bpm. Clamped to
@@ -8998,6 +9008,7 @@ impl Default for Profile {
         Self {
             display_name: "Player 1".to_string(),
             player_initials: "P1".to_string(),
+            judgment_palette_id: None,
             heart_rate_device_id: None,
             max_heart_rate: MAX_HEART_RATE_DEFAULT,
             weight_pounds: 0,
@@ -9244,6 +9255,17 @@ impl Profile {
             return false;
         }
         self.player_initials = initials;
+        true
+    }
+
+    pub fn set_judgment_palette_id(&mut self, palette_id: Option<String>) -> bool {
+        let palette_id = palette_id
+            .map(|id| id.trim().to_owned())
+            .filter(|id| !id.is_empty());
+        if self.judgment_palette_id == palette_id {
+            return false;
+        }
+        self.judgment_palette_id = palette_id;
         true
     }
 
@@ -12980,6 +13002,7 @@ mod tests {
         let mut profile = Profile {
             display_name: "Test Player".to_string(),
             player_initials: "TEST".to_string(),
+            judgment_palette_id: Some("warm-colors".to_string()),
             heart_rate_device_id: Some("AA:BB:CC:DD:EE:FF".to_string()),
             max_heart_rate: 205,
             weight_pounds: 165,
@@ -13006,6 +13029,7 @@ mod tests {
         assert!(profile_ini.contains("[userprofile]\nGuid=profile-guid\n"));
         assert!(profile_ini.contains("DisplayName=Test Player\n"));
         assert!(profile_ini.contains("PlayerInitials=TEST\n"));
+        assert!(profile_ini.contains("JudgmentPalette=warm-colors\n"));
         assert!(profile_ini.contains("HeartRateDeviceId=AA:BB:CC:DD:EE:FF\n"));
         assert!(profile_ini.contains("MaxHeartRate=205\n"));
         assert!(profile_ini.contains("[Editable]\nWeightPounds=165\nBirthYear=2000\n"));
@@ -13169,6 +13193,7 @@ mod tests {
 [userprofile]
 DisplayName = Alice
 PlayerInitials=ALC
+JudgmentPalette=warm-colors
 
 [Empty]
 
@@ -13188,6 +13213,10 @@ ApiKey = gs-key
         assert_eq!(
             ini.get("userprofile", "PlayerInitials").as_deref(),
             Some("ALC")
+        );
+        assert_eq!(
+            ini.get("userprofile", "JudgmentPalette").as_deref(),
+            Some("warm-colors")
         );
         assert_eq!(ini.get("GrooveStats", "ApiKey").as_deref(), Some("gs-key"));
         assert_eq!(ini.get("Empty", "LooseKey").as_deref(), Some("loose"));
@@ -13326,6 +13355,10 @@ ApiKey = gs-key
             (("userprofile", "DisplayName"), "Alice".to_string()),
             (("userprofile", "PlayerInitials"), " a-b_c ".to_string()),
             (
+                ("userprofile", "JudgmentPalette"),
+                " warm-colors ".to_string(),
+            ),
+            (
                 ("userprofile", "HeartRateDeviceId"),
                 " AA:BB:CC:DD:EE:FF ".to_string(),
             ),
@@ -13368,6 +13401,7 @@ ApiKey = gs-key
 
         assert_eq!(profile.display_name, "Alice");
         assert_eq!(profile.player_initials, "ABC");
+        assert_eq!(profile.judgment_palette_id.as_deref(), Some("warm-colors"));
         assert_eq!(
             profile.heart_rate_device_id.as_deref(),
             Some("AA:BB:CC:DD:EE:FF")

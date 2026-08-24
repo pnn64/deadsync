@@ -81,6 +81,16 @@ impl Color {
         Self { a: 1.0, r, g, b }
     }
 
+    /// Build a color from render-order `[r, g, b, a]` channels.
+    pub const fn from_rgba(rgba: [f32; 4]) -> Self {
+        Self {
+            a: rgba[3],
+            r: rgba[0],
+            g: rgba[1],
+            b: rgba[2],
+        }
+    }
+
     /// Channels as an `[r, g, b, a]` array for render tint/diffuse values.
     pub const fn to_rgba(self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
@@ -341,6 +351,158 @@ pub const JUDGMENT_DIM_EVAL_RGBA: [[f32; 4]; 6] = [
 pub const JUDGMENT_FA_PLUS_WHITE_RGBA: [f32; 4] = rgba_hex("#FFFFFF");
 pub const JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA: [f32; 4] = rgba_hex("#444444");
 pub const JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_RGBA: [f32; 4] = rgba_hex("#595959");
+
+/// User-configurable judgment color roles. Fantastic is split into blue and
+/// white because FA+ gameplay may show either variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum JudgmentColorRole {
+    FantasticBlue,
+    FantasticWhite,
+    Excellent,
+    Great,
+    Decent,
+    WayOff,
+    Miss,
+}
+
+impl JudgmentColorRole {
+    pub const ALL: [Self; 7] = [
+        Self::FantasticBlue,
+        Self::FantasticWhite,
+        Self::Excellent,
+        Self::Great,
+        Self::Decent,
+        Self::WayOff,
+        Self::Miss,
+    ];
+
+    pub const fn index(self) -> usize {
+        match self {
+            Self::FantasticBlue => 0,
+            Self::FantasticWhite => 1,
+            Self::Excellent => 2,
+            Self::Great => 3,
+            Self::Decent => 4,
+            Self::WayOff => 5,
+            Self::Miss => 6,
+        }
+    }
+
+    pub const fn config_key(self) -> &'static str {
+        match self {
+            Self::FantasticBlue => "FantasticBlue",
+            Self::FantasticWhite => "FantasticWhite",
+            Self::Excellent => "Excellent",
+            Self::Great => "Great",
+            Self::Decent => "Decent",
+            Self::WayOff => "WayOff",
+            Self::Miss => "Miss",
+        }
+    }
+}
+
+/// Full and context-dimmed colors for every judgment role.
+///
+/// Keeping the dim variants in the resolved palette preserves Simply Love's
+/// hand-tuned defaults while allowing custom base colors to derive readable
+/// gameplay and evaluation variants.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct JudgmentPalette {
+    pub colors: [[f32; 4]; 7],
+    pub gameplay_dim: [[f32; 4]; 7],
+    pub evaluation_dim: [[f32; 4]; 7],
+}
+
+impl Default for JudgmentPalette {
+    fn default() -> Self {
+        SIMPLY_LOVE_JUDGMENT_PALETTE
+    }
+}
+
+impl JudgmentPalette {
+    pub const fn new(
+        colors: [[f32; 4]; 7],
+        gameplay_dim: [[f32; 4]; 7],
+        evaluation_dim: [[f32; 4]; 7],
+    ) -> Self {
+        Self {
+            colors,
+            gameplay_dim,
+            evaluation_dim,
+        }
+    }
+
+    pub fn from_base_colors(colors: [[f32; 4]; 7]) -> Self {
+        Self {
+            colors,
+            gameplay_dim: colors.map(|color| dim_judgment_color(color, 0x59)),
+            evaluation_dim: colors.map(|color| dim_judgment_color(color, 0x44)),
+        }
+    }
+
+    pub const fn color(self, role: JudgmentColorRole) -> [f32; 4] {
+        self.colors[role.index()]
+    }
+
+    pub const fn gameplay_dim_color(self, role: JudgmentColorRole) -> [f32; 4] {
+        self.gameplay_dim[role.index()]
+    }
+
+    pub const fn evaluation_dim_color(self, role: JudgmentColorRole) -> [f32; 4] {
+        self.evaluation_dim[role.index()]
+    }
+
+    pub fn with_color(mut self, role: JudgmentColorRole, color: [f32; 4]) -> Self {
+        self.colors[role.index()] = color;
+        Self::from_base_colors(self.colors)
+    }
+}
+
+fn dim_judgment_color(color: [f32; 4], brightest_channel: u8) -> [f32; 4] {
+    let max = color[0].max(color[1]).max(color[2]);
+    if max <= f32::EPSILON {
+        return [0.0, 0.0, 0.0, color[3]];
+    }
+    let scale = (brightest_channel as f32 / 255.0) / max;
+    [
+        color[0] * scale,
+        color[1] * scale,
+        color[2] * scale,
+        color[3],
+    ]
+}
+
+/// The immutable built-in palette, exactly matching the theme's historical
+/// colors (including its hand-tuned dim variants).
+pub const SIMPLY_LOVE_JUDGMENT_PALETTE: JudgmentPalette = JudgmentPalette::new(
+    [
+        JUDGMENT_RGBA[0],
+        JUDGMENT_FA_PLUS_WHITE_RGBA,
+        JUDGMENT_RGBA[1],
+        JUDGMENT_RGBA[2],
+        JUDGMENT_RGBA[3],
+        JUDGMENT_RGBA[4],
+        JUDGMENT_RGBA[5],
+    ],
+    [
+        JUDGMENT_DIM_RGBA[0],
+        JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_RGBA,
+        JUDGMENT_DIM_RGBA[1],
+        JUDGMENT_DIM_RGBA[2],
+        JUDGMENT_DIM_RGBA[3],
+        JUDGMENT_DIM_RGBA[4],
+        JUDGMENT_DIM_RGBA[5],
+    ],
+    [
+        JUDGMENT_DIM_EVAL_RGBA[0],
+        JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA,
+        JUDGMENT_DIM_EVAL_RGBA[1],
+        JUDGMENT_DIM_EVAL_RGBA[2],
+        JUDGMENT_DIM_EVAL_RGBA[3],
+        JUDGMENT_DIM_EVAL_RGBA[4],
+        JUDGMENT_DIM_EVAL_RGBA[5],
+    ],
+);
 
 // Arrow Cloud "H.EX" score color.
 pub const HARD_EX_SCORE_RGBA: [f32; 4] = rgba_hex("#FF00CC");

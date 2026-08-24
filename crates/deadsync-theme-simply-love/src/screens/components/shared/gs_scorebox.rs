@@ -9,6 +9,7 @@ use crate::views::ScoreboxSideView;
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
+use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadsync_config::prelude::SrpgVariant;
 use deadsync_score as score_data;
 use std::borrow::Cow;
@@ -85,17 +86,18 @@ pub(crate) struct GameplayScoreboxPlan {
 }
 
 impl GameplayScoreboxPlan {
-    pub(crate) fn new(
+    pub(crate) fn new_with_palette(
         snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
         profile: &score_data::GameplayScoreboxProfileSnapshot,
         filter: score_data::SelectMusicScoreboxFilter,
+        palette: JudgmentPalette,
     ) -> Self {
         if !profile.display_scorebox || !profile.gs_active {
             return Self::default();
         }
         Self {
             panes: snapshot.map_or_else(Vec::new, |snapshot| {
-                gameplay_panes_from_snapshot(snapshot, profile, filter)
+                gameplay_panes_from_snapshot(snapshot, profile, filter, palette)
             }),
         }
     }
@@ -527,6 +529,7 @@ fn gameplay_status_pane(show_ex_score: bool, text: &str) -> GameplayScoreboxPane
 fn gameplay_row_from_entry(
     entry: &score_data::LeaderboardEntry,
     kind: PaneKind,
+    palette: JudgmentPalette,
 ) -> GameplayScoreboxRow {
     let mut rank_color = [1.0; 4];
     let mut name_color = [1.0; 4];
@@ -541,7 +544,7 @@ fn gameplay_row_from_entry(
     let score_color = if entry.is_fail {
         [1.0, 0.0, 0.0, 1.0]
     } else if matches!(kind, PaneKind::Ex | PaneKind::Itl) {
-        color::JUDGMENT_RGBA[0]
+        palette.color(Role::FantasticBlue)
     } else if matches!(kind, PaneKind::HardEx) {
         color::HARD_EX_SCORE_RGBA
     } else if entry.is_self {
@@ -570,6 +573,7 @@ fn gameplay_row_from_entry(
 fn scorebox_rows_for_kind(
     entries: &[score_data::LeaderboardEntry],
     kind: PaneKind,
+    palette: JudgmentPalette,
 ) -> [GameplayScoreboxRow; SCOREBOX_NUM_ENTRIES] {
     let mut rows = empty_rows();
     if entries.is_empty() {
@@ -579,7 +583,7 @@ fn scorebox_rows_for_kind(
 
     let selected = score_data::neighboring_leaderboard_entry_refs(entries, SCOREBOX_NUM_ENTRIES);
     for (slot, entry) in rows.iter_mut().zip(selected) {
-        *slot = gameplay_row_from_entry(entry, kind);
+        *slot = gameplay_row_from_entry(entry, kind, palette);
     }
     rows
 }
@@ -587,6 +591,7 @@ fn scorebox_rows_for_kind(
 fn gameplay_pane_from_leaderboard(
     pane: &score_data::LeaderboardPane,
     entries: &[score_data::LeaderboardEntry],
+    palette: JudgmentPalette,
 ) -> GameplayScoreboxPane {
     let kind = score_data::scorebox_pane_kind(pane);
     GameplayScoreboxPane {
@@ -594,7 +599,7 @@ fn gameplay_pane_from_leaderboard(
         is_arrowcloud: pane.is_arrowcloud(),
         mode_text: owned_text(score_data::scorebox_pane_mode_text(kind, pane)),
         border_color: pane_color(kind),
-        rows: scorebox_rows_for_kind(entries, kind),
+        rows: scorebox_rows_for_kind(entries, kind, palette),
     }
 }
 
@@ -602,6 +607,7 @@ fn gameplay_panes_from_snapshot(
     snapshot: &score_data::CachedPlayerLeaderboardData,
     profile_snapshot: &score_data::GameplayScoreboxProfileSnapshot,
     filter: score_data::SelectMusicScoreboxFilter,
+    palette: JudgmentPalette,
 ) -> Vec<GameplayScoreboxPane> {
     if snapshot.loading {
         return vec![gameplay_status_pane(
@@ -643,6 +649,7 @@ fn gameplay_panes_from_snapshot(
         panes.push(gameplay_pane_from_leaderboard(
             pane,
             pane.entries.as_slice(),
+            palette,
         ));
     }
     panes
@@ -674,7 +681,11 @@ fn select_music_panes_from_snapshot(
     let mut panes = Vec::with_capacity(filtered.len());
     for pane in filtered {
         let entries = entries_with_local_self_state(runtime, pane);
-        panes.push(gameplay_pane_from_leaderboard(pane, entries.as_ref()));
+        panes.push(gameplay_pane_from_leaderboard(
+            pane,
+            entries.as_ref(),
+            JudgmentPalette::default(),
+        ));
     }
     panes
 }
@@ -1268,7 +1279,12 @@ impl GameplayScoreboxBenchmark {
             hard_ex: true,
             tournaments: true,
         };
-        let plan = GameplayScoreboxPlan::new(Some(&snapshot), &profile, filter);
+        let plan = GameplayScoreboxPlan::new_with_palette(
+            Some(&snapshot),
+            &profile,
+            filter,
+            JudgmentPalette::default(),
+        );
         let mut scratch = Vec::new();
         plan.push_actors(&mut scratch, 320.0, 160.0, 1.0, 4.25);
         scratch.clear();
@@ -1341,7 +1357,11 @@ mod tests {
             entry(473, "self", true, false),
         ];
 
-        let rows = scorebox_rows_for_kind(entries.as_slice(), PaneKind::Itl);
+        let rows = scorebox_rows_for_kind(
+            entries.as_slice(),
+            PaneKind::Itl,
+            JudgmentPalette::default(),
+        );
         let ranks = rows
             .iter()
             .filter_map(|row| row.rank.strip_suffix('.'))
@@ -1369,7 +1389,11 @@ mod tests {
             entry(72, "self", true, false),
         ];
 
-        let rows = scorebox_rows_for_kind(entries.as_slice(), PaneKind::Itl);
+        let rows = scorebox_rows_for_kind(
+            entries.as_slice(),
+            PaneKind::Itl,
+            JudgmentPalette::default(),
+        );
         let ranks = rows
             .iter()
             .filter_map(|row| row.rank.strip_suffix('.'))
@@ -1387,7 +1411,11 @@ mod tests {
             entry(3, "rival", false, true),
         ];
 
-        let rows = scorebox_rows_for_kind(entries.as_slice(), PaneKind::Itl);
+        let rows = scorebox_rows_for_kind(
+            entries.as_slice(),
+            PaneKind::Itl,
+            JudgmentPalette::default(),
+        );
 
         for row in rows.iter().take(3) {
             assert_eq!(row.score_color, color::JUDGMENT_RGBA[0]);
@@ -1527,6 +1555,7 @@ mod tests {
                 hard_ex: true,
                 tournaments: false,
             },
+            JudgmentPalette::default(),
         );
 
         assert_eq!(panes.len(), 1);

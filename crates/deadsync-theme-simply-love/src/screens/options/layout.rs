@@ -72,6 +72,17 @@ pub(super) fn row_choices(
     row_idx: usize,
 ) -> Vec<Cow<'static, str>> {
     if let Some(row) = rows.get(row_idx)
+        && matches!(kind, SubmenuKind::Gameplay)
+        && row.id == SubRowId::DefaultJudgmentPalette
+    {
+        return state
+            .judgment_palettes
+            .palettes
+            .iter()
+            .map(|entry| Cow::Owned(entry.name.clone()))
+            .collect();
+    }
+    if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::System)
     {
         match row.id {

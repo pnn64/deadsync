@@ -237,9 +237,38 @@ pub const fn notefield_style() -> NotefieldStyle {
     SIMPLY_LOVE_NOTEFIELD_STYLE
 }
 
+pub fn notefield_style_with_palette(
+    palette: deadlib_present::color::JudgmentPalette,
+) -> NotefieldStyle {
+    use deadlib_present::color::JudgmentColorRole as Role;
+
+    if palette == deadlib_present::color::SIMPLY_LOVE_JUDGMENT_PALETTE {
+        return SIMPLY_LOVE_NOTEFIELD_STYLE;
+    }
+    let mut style = SIMPLY_LOVE_NOTEFIELD_STYLE;
+    let rgb = |color: [f32; 4]| [color[0], color[1], color[2]];
+    style.column_flash.fantastic_blue_color = rgb(palette.color(Role::FantasticBlue));
+    style.column_flash.fantastic_color = rgb(palette.color(Role::FantasticWhite));
+    style.column_flash.excellent_color = rgb(palette.color(Role::Excellent));
+    style.column_flash.great_color = rgb(palette.color(Role::Great));
+    style.column_flash.decent_color = rgb(palette.color(Role::Decent));
+    style.column_flash.way_off_color = rgb(palette.color(Role::WayOff));
+    style.column_flash.miss_color = rgb(palette.color(Role::Miss));
+    style.error_bar.palette = ErrorBarPalette {
+        fantastic_blue: palette.color(Role::FantasticBlue),
+        fa_plus_white: palette.color(Role::FantasticWhite),
+        excellent: palette.color(Role::Excellent),
+        great: palette.color(Role::Great),
+        decent: palette.color(Role::Decent),
+        way_off: palette.color(Role::WayOff),
+    };
+    style
+}
+
 #[cfg(test)]
 mod tests {
-    use super::notefield_style;
+    use super::{notefield_style, notefield_style_with_palette};
+    use deadlib_present::color::{Color, JudgmentColorRole, JudgmentPalette};
 
     #[test]
     fn factory_keeps_simply_love_gameplay_metrics() {
@@ -302,5 +331,16 @@ mod tests {
         assert_eq!(style.error_bar.front_layers.text, 184);
         assert_eq!(style.error_bar.back_layers.text, 90);
         assert_eq!(style.error_bar.average_z, 88);
+    }
+
+    #[test]
+    fn custom_palette_recolors_judgment_feedback_without_changing_geometry() {
+        let baseline = notefield_style();
+        let custom = JudgmentPalette::default()
+            .with_color(JudgmentColorRole::Miss, Color::rgb(0.2, 0.4, 0.6).to_rgba());
+        let styled = notefield_style_with_palette(custom);
+
+        assert_eq!(styled.receptor_normal_y, baseline.receptor_normal_y);
+        assert_eq!(styled.column_flash.miss_color, [0.2, 0.4, 0.6]);
     }
 }

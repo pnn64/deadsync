@@ -14,6 +14,7 @@ use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PostSelectStageView, PostSongRuntimeView};
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::color;
+use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadlib_present::space::{screen_center_x, screen_height, screen_width, widescale};
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
@@ -469,6 +470,7 @@ fn build_player_stats(
     difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
     elapsed: f32,
     machine_font: deadsync_config::prelude::MachineFont,
+    judgment_palette: JudgmentPalette,
 ) -> Vec<Actor> {
     let (col1x, col2x, grade_x, align1_x, align2_x, align1_text, align2_text, col1_eps) = match side
     {
@@ -547,7 +549,7 @@ fn build_player_stats(
 
     // EX score (only if W0 is enabled)
     if show_w0 {
-        let ex_color = color::JUDGMENT_RGBA[0];
+        let ex_color = judgment_palette.color(Role::FantasticBlue);
         let ex_text = fixed_2_text(p.ex_score_percent.max(0.0));
         let (ex_zoom, ex_y) = if showex { (0.48, -32.0) } else { (0.38, -12.0) };
         let mut ex_actor = act!(text:
@@ -649,19 +651,19 @@ fn build_player_stats(
         }
         let y = ((i as f32) + 1.0).mul_add(13.0, y_base);
         let rgba = match i {
-            0 => color::JUDGMENT_RGBA[0], // W0
+            0 => judgment_palette.color(Role::FantasticBlue), // W0
             1 => {
                 if show_w0 {
-                    color::JUDGMENT_FA_PLUS_WHITE_RGBA
+                    judgment_palette.color(Role::FantasticWhite)
                 } else {
-                    color::JUDGMENT_RGBA[0]
+                    judgment_palette.color(Role::FantasticBlue)
                 }
             }
-            2 => color::JUDGMENT_RGBA[1],
-            3 => color::JUDGMENT_RGBA[2],
-            4 => color::JUDGMENT_RGBA[3],
-            5 => color::JUDGMENT_RGBA[4],
-            _ => color::JUDGMENT_RGBA[5],
+            2 => judgment_palette.color(Role::Excellent),
+            3 => judgment_palette.color(Role::Great),
+            4 => judgment_palette.color(Role::Decent),
+            5 => judgment_palette.color(Role::WayOff),
+            _ => judgment_palette.color(Role::Miss),
         };
 
         let mut a = act!(text:
@@ -690,6 +692,7 @@ fn build_row(
     difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
     elapsed: f32,
     machine_font: deadsync_config::prelude::MachineFont,
+    judgment_palettes: [JudgmentPalette; 2],
 ) -> Actor {
     let cx = screen_center_x();
     let y = (screen_height() / 4.75) * (row_pos as f32);
@@ -762,6 +765,7 @@ fn build_row(
             difficulty_color_scheme,
             elapsed,
             machine_font,
+            judgment_palettes[idx],
         ));
     }
 
@@ -870,6 +874,10 @@ pub fn push_actors(
             state.runtime.difficulty_color_scheme,
             state.elapsed,
             state.runtime.machine_font,
+            [
+                state.runtime.players[0].judgment_palette,
+                state.runtime.players[1].judgment_palette,
+            ],
         ));
     }
 

@@ -1,5 +1,4 @@
 use crate::assets;
-use crate::notefield_style::notefield_style;
 use crate::screens::gameplay::{GameplayCoreState as State, GameplayNoteskinAssets};
 use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw, SpriteSource};
 use deadlib_present::color;
@@ -431,8 +430,9 @@ pub(crate) fn gameplay_notefield_plan(
     profile: &profile_data::Profile,
     judgment_assets: &ResolvedJudgmentAssets,
     blue_fantastic_window_s: f32,
+    judgment_palette: deadlib_present::color::JudgmentPalette,
 ) -> GameplayNotefieldPlan {
-    let style = notefield_style();
+    let style = crate::notefield_style::notefield_style_with_palette(judgment_palette);
     let measure_line_mode = match profile.measure_lines {
         profile_data::MeasureLines::Off => MeasureLineMode::Off,
         profile_data::MeasureLines::Measure => MeasureLineMode::Measure,

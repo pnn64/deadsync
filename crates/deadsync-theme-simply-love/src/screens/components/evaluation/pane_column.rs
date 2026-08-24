@@ -3,6 +3,7 @@ use crate::assets::{self, AssetManager};
 use crate::screens::evaluation::{ColumnJudgments, ScoreInfo};
 use deadlib_present::actors::{Actor, InlineU32Text, TextContent};
 use deadlib_present::color;
+use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadlib_present::font;
 use deadlib_present::space::screen_center_y;
 use deadlib_render_core::{BlendMode, SamplerDesc};
@@ -100,7 +101,7 @@ enum RowKind {
 struct RowInfo {
     kind: RowKind,
     label: &'static str,
-    color: [f32; 4],
+    role: Role,
     show_early: bool,
 }
 
@@ -108,43 +109,43 @@ const FA_PLUS_ROWS: [RowInfo; 7] = [
     RowInfo {
         kind: RowKind::FanW0,
         label: "FANTASTIC",
-        color: color::JUDGMENT_RGBA[0],
+        role: Role::FantasticBlue,
         show_early: false,
     },
     RowInfo {
         kind: RowKind::FanW1,
         label: "FANTASTIC",
-        color: color::JUDGMENT_FA_PLUS_WHITE_RGBA,
+        role: Role::FantasticWhite,
         show_early: true,
     },
     RowInfo {
         kind: RowKind::Ex,
         label: "EXCELLENT",
-        color: color::JUDGMENT_RGBA[1],
+        role: Role::Excellent,
         show_early: true,
     },
     RowInfo {
         kind: RowKind::Gr,
         label: "GREAT",
-        color: color::JUDGMENT_RGBA[2],
+        role: Role::Great,
         show_early: true,
     },
     RowInfo {
         kind: RowKind::Dec,
         label: "DECENT",
-        color: color::JUDGMENT_RGBA[3],
+        role: Role::Decent,
         show_early: true,
     },
     RowInfo {
         kind: RowKind::Wo,
         label: "WAY OFF",
-        color: color::JUDGMENT_RGBA[4],
+        role: Role::WayOff,
         show_early: true,
     },
     RowInfo {
         kind: RowKind::Miss,
         label: "MISS",
-        color: color::JUDGMENT_RGBA[5],
+        role: Role::Miss,
         show_early: false,
     },
 ];
@@ -153,37 +154,37 @@ const STANDARD_ROWS: [RowInfo; 6] = [
     RowInfo {
         kind: RowKind::FanCombined,
         label: "FANTASTIC",
-        color: color::JUDGMENT_RGBA[0],
+        role: Role::FantasticBlue,
         show_early: false,
     },
     RowInfo {
         kind: RowKind::Ex,
         label: "EXCELLENT",
-        color: color::JUDGMENT_RGBA[1],
+        role: Role::Excellent,
         show_early: true,
     },
     RowInfo {
         kind: RowKind::Gr,
         label: "GREAT",
-        color: color::JUDGMENT_RGBA[2],
+        role: Role::Great,
         show_early: true,
     },
     RowInfo {
         kind: RowKind::Dec,
         label: "DECENT",
-        color: color::JUDGMENT_RGBA[3],
+        role: Role::Decent,
         show_early: true,
     },
     RowInfo {
         kind: RowKind::Wo,
         label: "WAY OFF",
-        color: color::JUDGMENT_RGBA[4],
+        role: Role::WayOff,
         show_early: true,
     },
     RowInfo {
         kind: RowKind::Miss,
         label: "MISS",
-        color: color::JUDGMENT_RGBA[5],
+        role: Role::Miss,
         show_early: false,
     },
 ];
@@ -261,6 +262,27 @@ pub fn build_column_judgments_pane(
     preview_elapsed: f32,
     arrow_glow_active: bool,
 ) -> Vec<Actor> {
+    build_column_judgments_pane_with_palette(
+        score_info,
+        controller,
+        player_side,
+        asset_manager,
+        preview_elapsed,
+        arrow_glow_active,
+        JudgmentPalette::default(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_column_judgments_pane_with_palette(
+    score_info: &ScoreInfo,
+    controller: profile_data::PlayerSide,
+    player_side: profile_data::PlayerSide,
+    asset_manager: &AssetManager,
+    preview_elapsed: f32,
+    arrow_glow_active: bool,
+    palette: JudgmentPalette,
+) -> Vec<Actor> {
     let num_cols = score_info.column_judgments.len();
     if num_cols == 0 {
         return vec![];
@@ -320,7 +342,7 @@ pub fn build_column_judgments_pane(
                 let row_color = if row_disabled(score_info.disabled_timing_windows, row.kind) {
                     DISABLED_WINDOW_RGBA
                 } else {
-                    row.color
+                    palette.color(row.role)
                 };
                 actors.push(act!(text: font("miso"): settext(row.label):
                     align(1.0, 0.5):
@@ -368,7 +390,7 @@ pub fn build_column_judgments_pane(
                 font::measure_line_width_logical(miso_font, "MISS", all_fonts) as f32 * label_zoom;
             let held_label_x = labels_right_x - miss_label_width - 4.0;
             let held_y = base_y + 144.0;
-            let miss_color = color::JUDGMENT_RGBA[5];
+            let miss_color = palette.color(Role::Miss);
             actors.push(act!(text: font("miso"): settext("HELD"):
                 align(1.0, 0.5):
                 xy(held_label_x, held_y):

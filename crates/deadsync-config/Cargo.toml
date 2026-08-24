@@ -22,6 +22,7 @@ log = "0.4.34"
 null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
 rustc-hash = "2.1.3"
 winit = "0.30.13"
+uuid = { version = "1.25.0", features = ["v4"] }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

@@ -33,15 +33,15 @@ pub(crate) use utils::{eval_style_alpha, pane_origin_x as test_input_pane_origin
 
 pub use event_progress::build_event_overlay;
 pub use event_progress::build_event_progress_boxes;
-pub use pane_column::build_column_judgments_pane;
+pub use pane_column::{build_column_judgments_pane, build_column_judgments_pane_with_palette};
 pub(crate) use pane_gs_records::{
     OnlineRecordsPresentation, build_arrowcloud_records_pane, build_gs_ex_records_pane,
     build_gs_records_pane, build_itl_records_pane, build_srpg_records_pane,
 };
 pub(crate) use pane_machine_records::{MachineRecordsPaneText, build_machine_records_pane};
 pub use pane_modifiers::build_modifiers_pane;
-pub(crate) use pane_percentage::{PercentageText, build_pane_percentage_display};
+pub(crate) use pane_percentage::{PercentageText, build_pane_percentage_display_with_palette};
 pub(crate) use pane_qr::{QrPanePresentation, build_gs_qr_pane};
-pub(crate) use pane_stats::build_stats_pane;
-pub(crate) use pane_timing::{TimingPaneText, build_timing_pane};
+pub(crate) use pane_stats::build_stats_pane_with_palette;
+pub(crate) use pane_timing::{TimingPaneText, build_timing_pane_with_palette};
 pub(crate) use pane_timing_arrows::{TimingArrowsText, build_timing_arrows_pane};

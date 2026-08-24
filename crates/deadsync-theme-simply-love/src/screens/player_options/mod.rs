@@ -158,6 +158,7 @@ fn queue_profile_update(state: &mut State, player_idx: usize) {
             crate::SimplyLoveProfileRequest::UpdatePlayerOptions {
                 side,
                 options: Box::new(state.player_options[idx].clone()),
+                judgment_palette_id: state.judgment_palette_ids[idx].clone(),
                 heart_rate_device_id: state.heart_rate_device_ids[idx].clone(),
                 max_heart_rate: state.max_heart_rate[idx],
             },
@@ -170,6 +171,35 @@ fn active_player_indices(active: [bool; PLAYER_SLOTS]) -> impl Iterator<Item = u
     [P1, P2]
         .into_iter()
         .filter(move |&player_idx| active[player_idx])
+}
+
+fn apply_judgment_palette_choices(
+    row_map: &mut RowMap,
+    choices: &[String],
+    choice_ids: &[Option<String>],
+    selected_ids: &[Option<String>; PLAYER_SLOTS],
+) {
+    let Some(row) = row_map.get_mut(RowId::JudgmentColors) else {
+        return;
+    };
+    row.replace_choices(choices.to_vec());
+    apply_judgment_palette_selection(row_map, choice_ids, selected_ids);
+}
+
+fn apply_judgment_palette_selection(
+    row_map: &mut RowMap,
+    choice_ids: &[Option<String>],
+    selected_ids: &[Option<String>; PLAYER_SLOTS],
+) {
+    let Some(row) = row_map.get_mut(RowId::JudgmentColors) else {
+        return;
+    };
+    for player_idx in 0..PLAYER_SLOTS {
+        row.selected_choice_index[player_idx] = choice_ids
+            .iter()
+            .position(|id| id == &selected_ids[player_idx])
+            .unwrap_or(0);
+    }
 }
 
 pub fn init(
@@ -265,8 +295,15 @@ fn init_with_noteskin_prewarm(
         joined,
         music_rate: session_music_rate,
         players,
+        judgment_palettes,
     } = init_view;
     let [p1, p2] = players;
+    let judgment_palette_ids = [p1.judgment_palette_id, p2.judgment_palette_id];
+    let mut judgment_palette_choices = vec![tr("PlayerOptions", "MachineDefault").to_string()];
+    judgment_palette_choices.extend(judgment_palettes.iter().map(|entry| entry.name.clone()));
+    let mut judgment_palette_choice_ids = vec![None];
+    judgment_palette_choice_ids
+        .extend(judgment_palettes.iter().map(|entry| Some(entry.id.clone())));
     let heart_rate_device_ids = [p1.heart_rate_device_id, p2.heart_rate_device_id];
     let max_heart_rate = [
         p1.max_heart_rate.clamp(
@@ -336,6 +373,18 @@ fn init_with_noteskin_prewarm(
         play_style,
         persisted_player_idx,
         policy.scorebox_available,
+    );
+    apply_judgment_palette_choices(
+        &mut main_row_map,
+        &judgment_palette_choices,
+        &judgment_palette_choice_ids,
+        &judgment_palette_ids,
+    );
+    apply_judgment_palette_choices(
+        &mut display_row_map,
+        &judgment_palette_choices,
+        &judgment_palette_choice_ids,
+        &judgment_palette_ids,
     );
     let mut advanced_row_map = build_rows(
         &song,
@@ -455,6 +504,8 @@ fn init_with_noteskin_prewarm(
         persisted_player_idx,
         cols_per_player,
         player_options,
+        judgment_palette_ids,
+        judgment_palette_choice_ids,
         heart_rate_device_ids,
         max_heart_rate,
         heart_rate_choice_ids,

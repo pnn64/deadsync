@@ -15,6 +15,7 @@ use crate::step_stats::{
 };
 use deadlib_present::actors::{Actor, InlineText, SizeSpec, TextAlign, TextContent};
 use deadlib_present::color;
+use deadlib_present::color::{JudgmentColorRole, JudgmentPalette};
 use deadlib_present::compose::{
     ComposeScratch, TextLayoutCache, prewarm_prepared_inline_text_slot,
 };
@@ -172,32 +173,34 @@ struct LabeledColor {
     color: [f32; 4],
 }
 
-const JUDGMENT_INFO: [LabeledColor; 6] = [
-    LabeledColor {
-        label: lookup_key("Gameplay", "JudgmentFantastic"),
-        color: color::JUDGMENT_RGBA[0],
-    },
-    LabeledColor {
-        label: lookup_key("Gameplay", "JudgmentExcellent"),
-        color: color::JUDGMENT_RGBA[1],
-    },
-    LabeledColor {
-        label: lookup_key("Gameplay", "JudgmentGreat"),
-        color: color::JUDGMENT_RGBA[2],
-    },
-    LabeledColor {
-        label: lookup_key("Gameplay", "JudgmentDecent"),
-        color: color::JUDGMENT_RGBA[3],
-    },
-    LabeledColor {
-        label: lookup_key("Gameplay", "JudgmentWayOff"),
-        color: color::JUDGMENT_RGBA[4],
-    },
-    LabeledColor {
-        label: lookup_key("Gameplay", "JudgmentMiss"),
-        color: color::JUDGMENT_RGBA[5],
-    },
+const JUDGMENT_LABELS: [LookupKey; 6] = [
+    lookup_key("Gameplay", "JudgmentFantastic"),
+    lookup_key("Gameplay", "JudgmentExcellent"),
+    lookup_key("Gameplay", "JudgmentGreat"),
+    lookup_key("Gameplay", "JudgmentDecent"),
+    lookup_key("Gameplay", "JudgmentWayOff"),
+    lookup_key("Gameplay", "JudgmentMiss"),
 ];
+
+const STANDARD_JUDGMENT_ROLES: [JudgmentColorRole; 6] = [
+    JudgmentColorRole::FantasticBlue,
+    JudgmentColorRole::Excellent,
+    JudgmentColorRole::Great,
+    JudgmentColorRole::Decent,
+    JudgmentColorRole::WayOff,
+    JudgmentColorRole::Miss,
+];
+
+#[inline(always)]
+fn standard_judgment_color(palette: JudgmentPalette, index: usize) -> [f32; 4] {
+    palette.color(STANDARD_JUDGMENT_ROLES[index.min(STANDARD_JUDGMENT_ROLES.len() - 1)])
+}
+
+#[inline(always)]
+fn standard_judgment_dim_color(palette: JudgmentPalette, index: usize) -> [f32; 4] {
+    palette
+        .gameplay_dim_color(STANDARD_JUDGMENT_ROLES[index.min(STANDARD_JUDGMENT_ROLES.len() - 1)])
+}
 
 const STEP_INFO_LABELS: [LookupKey; 4] = [
     lookup_key("Gameplay", "SongInfoSong"),
@@ -302,7 +305,7 @@ impl GameplayStatsTextPlan {
         Self {
             step_info: std::array::from_fn(|index| labels[index].get()),
             holds_mines_rolls: std::array::from_fn(|index| HOLDS_MINES_ROLLS_LABELS[index].get()),
-            judgments: std::array::from_fn(|index| JUDGMENT_INFO[index].label.get()),
+            judgments: std::array::from_fn(|index| JUDGMENT_LABELS[index].get()),
             time_remaining: tr("Gameplay", "TimeRemaining"),
             time_total: tr("Gameplay", ["TimeSong", "TimeCourse"][usize::from(course)]),
             song_artist: Arc::from(song_artist),
@@ -452,10 +455,7 @@ mod gameplay_stats_text_plan_tests {
             plan.holds_mines_rolls(1).as_ref(),
             tr("Gameplay", "MinesLabel").as_ref()
         );
-        assert_eq!(
-            plan.judgment(0).as_ref(),
-            JUDGMENT_INFO[0].label.get().as_ref()
-        );
+        assert_eq!(plan.judgment(0).as_ref(), JUDGMENT_LABELS[0].get().as_ref());
         assert_eq!(
             plan.time_total.as_ref(),
             tr("Gameplay", "TimeCourse").as_ref()
@@ -2100,24 +2100,9 @@ pub fn push_versus_step_stats(
                             blue_window_ms,
                         );
                         let counts = [wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss];
-                        let bright_colors = [
-                            color::JUDGMENT_RGBA[0],
-                            color::JUDGMENT_FA_PLUS_WHITE_RGBA,
-                            color::JUDGMENT_RGBA[1],
-                            color::JUDGMENT_RGBA[2],
-                            color::JUDGMENT_RGBA[3],
-                            color::JUDGMENT_RGBA[4],
-                            color::JUDGMENT_RGBA[5],
-                        ];
-                        let dim_colors = [
-                            color::JUDGMENT_DIM_RGBA[0],
-                            color::JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_RGBA,
-                            color::JUDGMENT_DIM_RGBA[1],
-                            color::JUDGMENT_DIM_RGBA[2],
-                            color::JUDGMENT_DIM_RGBA[3],
-                            color::JUDGMENT_DIM_RGBA[4],
-                            color::JUDGMENT_DIM_RGBA[5],
-                        ];
+                        let palette = state.judgment_palette(player_idx);
+                        let bright_colors = palette.colors;
+                        let dim_colors = palette.gameplay_dim;
                         for (row_i, count) in counts.iter().copied().enumerate() {
                             let disabled = split_row_disabled(disabled_windows, row_i);
                             let y = group_origin_y
@@ -2170,12 +2155,15 @@ pub fn push_versus_step_stats(
                             let dim_color = if disabled {
                                 DISABLED_WINDOW_RGBA
                             } else {
-                                color::JUDGMENT_DIM_RGBA[row_i]
+                                standard_judgment_dim_color(
+                                    state.judgment_palette(player_idx),
+                                    row_i,
+                                )
                             };
                             let bright_color = if disabled {
                                 DISABLED_WINDOW_RGBA
                             } else {
-                                color::JUDGMENT_RGBA[row_i]
+                                standard_judgment_color(state.judgment_palette(player_idx), row_i)
                             };
                             push_versus_count_texts(
                                 actors,
@@ -2219,7 +2207,9 @@ pub fn push_versus_step_stats(
                         blue_window_ms,
                     )
                     .max(0.0),
-                color::JUDGMENT_RGBA[0],
+                state
+                    .judgment_palette(player_idx)
+                    .color(JudgmentColorRole::FantasticBlue),
             )
         } else {
             let score_percent = state.display_gameplay_itg_score_percent(
@@ -2451,12 +2441,12 @@ pub fn push_double_step_stats(
                         let bright = if disabled {
                             DISABLED_WINDOW_RGBA
                         } else {
-                            color::JUDGMENT_RGBA[row_i]
+                            standard_judgment_color(state.judgment_palette(0), row_i)
                         };
                         let dim = if disabled {
                             DISABLED_WINDOW_RGBA
                         } else {
-                            color::JUDGMENT_DIM_RGBA[row_i]
+                            standard_judgment_dim_color(state.judgment_palette(0), row_i)
                         };
                         let slot = count_text_slot(0, row_i, false);
                         let (dim_text, bright_text) =
@@ -2510,24 +2500,9 @@ pub fn push_double_step_stats(
                 } else {
                     let wc = state.display_window_counts(0, Some(blue_window_ms), blue_window_ms);
                     let counts = [wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss];
-                    let bright_colors = [
-                        color::JUDGMENT_RGBA[0],
-                        color::JUDGMENT_FA_PLUS_WHITE_RGBA,
-                        color::JUDGMENT_RGBA[1],
-                        color::JUDGMENT_RGBA[2],
-                        color::JUDGMENT_RGBA[3],
-                        color::JUDGMENT_RGBA[4],
-                        color::JUDGMENT_RGBA[5],
-                    ];
-                    let dim_colors = [
-                        color::JUDGMENT_DIM_RGBA[0],
-                        color::JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_RGBA,
-                        color::JUDGMENT_DIM_RGBA[1],
-                        color::JUDGMENT_DIM_RGBA[2],
-                        color::JUDGMENT_DIM_RGBA[3],
-                        color::JUDGMENT_DIM_RGBA[4],
-                        color::JUDGMENT_DIM_RGBA[5],
-                    ];
+                    let palette = state.judgment_palette(0);
+                    let bright_colors = palette.colors;
+                    let dim_colors = palette.gameplay_dim;
 
                     let fa_label = state.gameplay_stats_text.judgment(0);
                     let labels = [
@@ -2763,8 +2738,12 @@ static JUDGMENT_ORDER: [JudgeGrade; 6] = [
     JudgeGrade::Miss,
 ];
 
-fn judgment_info(grade: JudgeGrade) -> &'static LabeledColor {
-    &JUDGMENT_INFO[judgment::judge_grade_ix(grade)]
+fn judgment_info(state: &State, player: usize, grade: JudgeGrade) -> LabeledColor {
+    let index = judgment::judge_grade_ix(grade);
+    LabeledColor {
+        label: JUDGMENT_LABELS[index],
+        color: standard_judgment_color(state.judgment_palette(player), index),
+    }
 }
 
 fn build_banner(
@@ -3330,7 +3309,7 @@ fn build_side_pane(
         if show_judgments && show_standard_judgments {
             // Standard ITG-style rows: Fantastic..Miss using aggregate grade counts.
             for (index, grade) in JUDGMENT_ORDER.iter().enumerate() {
-                let info = judgment_info(*grade);
+                let info = judgment_info(state, player_idx, *grade);
                 let count = state.display_judgment_count(player_idx, *grade);
                 let disabled = standard_row_disabled(disabled_windows, index);
 
@@ -3345,7 +3324,7 @@ fn build_side_pane(
                 let dim = if disabled {
                     DISABLED_WINDOW_RGBA
                 } else {
-                    color::JUDGMENT_DIM_RGBA[index]
+                    standard_judgment_dim_color(state.judgment_palette(player_idx), index)
                 };
                 let slot = count_text_slot(player_idx, index, false);
                 let (dim_text, bright_text) =
@@ -3415,24 +3394,25 @@ fn build_side_pane(
             // FA+ mode: split Fantastic into W0 (blue) and W1 (white) using per-note windows,
             // matching Simply Love's FA+ Step Statistics semantics.
             let wc = state.display_window_counts(player_idx, Some(blue_window_ms), blue_window_ms);
-            let fantastic_color = judgment_info(JudgeGrade::Fantastic).color;
-            let excellent_color = judgment_info(JudgeGrade::Excellent).color;
-            let great_color = judgment_info(JudgeGrade::Great).color;
-            let decent_color = judgment_info(JudgeGrade::Decent).color;
-            let wayoff_color = judgment_info(JudgeGrade::WayOff).color;
-            let miss_color = judgment_info(JudgeGrade::Miss).color;
+            let fantastic_color = judgment_info(state, player_idx, JudgeGrade::Fantastic).color;
+            let excellent_color = judgment_info(state, player_idx, JudgeGrade::Excellent).color;
+            let great_color = judgment_info(state, player_idx, JudgeGrade::Great).color;
+            let decent_color = judgment_info(state, player_idx, JudgeGrade::Decent).color;
+            let wayoff_color = judgment_info(state, player_idx, JudgeGrade::WayOff).color;
+            let miss_color = judgment_info(state, player_idx, JudgeGrade::Miss).color;
 
             // Dim palette for FA+ side pane: reuse gameplay dim colors for Fantastic..Miss,
             // and a dedicated dim color for the white FA+ row.
-            let dim_fantastic = color::JUDGMENT_DIM_RGBA[0];
-            let dim_excellent = color::JUDGMENT_DIM_RGBA[1];
-            let dim_great = color::JUDGMENT_DIM_RGBA[2];
-            let dim_decent = color::JUDGMENT_DIM_RGBA[3];
-            let dim_wayoff = color::JUDGMENT_DIM_RGBA[4];
-            let dim_miss = color::JUDGMENT_DIM_RGBA[5];
-            let dim_white_fa = color::JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_RGBA;
+            let palette = state.judgment_palette(player_idx);
+            let dim_fantastic = palette.gameplay_dim_color(JudgmentColorRole::FantasticBlue);
+            let dim_excellent = palette.gameplay_dim_color(JudgmentColorRole::Excellent);
+            let dim_great = palette.gameplay_dim_color(JudgmentColorRole::Great);
+            let dim_decent = palette.gameplay_dim_color(JudgmentColorRole::Decent);
+            let dim_wayoff = palette.gameplay_dim_color(JudgmentColorRole::WayOff);
+            let dim_miss = palette.gameplay_dim_color(JudgmentColorRole::Miss);
+            let dim_white_fa = palette.gameplay_dim_color(JudgmentColorRole::FantasticWhite);
 
-            let white_fa_color = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
+            let white_fa_color = palette.color(JudgmentColorRole::FantasticWhite);
 
             let rows: [(usize, [f32; 4], [f32; 4], u32); 7] = [
                 (0, fantastic_color, dim_fantastic, wc.w0),

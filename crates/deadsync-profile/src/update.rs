@@ -97,16 +97,19 @@ pub fn update_heart_rate_device_id_for_side(side: PlayerSide, device_id: Option<
 pub fn update_player_options_for_side(
     side: PlayerSide,
     options: crate::PlayerOptionsData,
+    judgment_palette_id: Option<String>,
     heart_rate_device_id: Option<String>,
     max_heart_rate: u16,
 ) {
+    let mut judgment_palette_changed = false;
     let mut heart_rate_changed = false;
     let mut max_heart_rate_changed = false;
     let changed = runtime_update_profile_for_side(side, |profile| {
         let options_changed = profile.set_current_player_options(options);
+        judgment_palette_changed = profile.set_judgment_palette_id(judgment_palette_id);
         heart_rate_changed = profile.set_heart_rate_device_id(heart_rate_device_id);
         max_heart_rate_changed = profile.set_max_heart_rate(max_heart_rate);
-        options_changed || heart_rate_changed || max_heart_rate_changed
+        options_changed || judgment_palette_changed || heart_rate_changed || max_heart_rate_changed
     });
     if changed {
         save_profile_ini_for_side(side);

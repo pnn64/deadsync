@@ -134,6 +134,8 @@ pub enum ItemId {
     GpBpmPosition,
     GpDelayedBack,
     GpAutoScreenshot,
+    GpDefaultJudgmentPalette,
+    GpManageJudgmentPalettes,
 
     // Sound Options submenu
     SndDevice,

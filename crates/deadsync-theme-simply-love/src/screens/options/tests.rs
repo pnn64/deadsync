@@ -43,6 +43,7 @@ fn init_with_config(config: config::Config) -> State {
 fn init_with_config_and_audio(config: config::Config, audio_options: AudioOptionsView) -> State {
     super::init(OptionsInitView {
         config,
+        judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::default(),
         updater_capabilities: SimplyLoveUpdaterCapabilities {
             app_update: true,
             ffmpeg_install: true,
@@ -361,6 +362,7 @@ fn pack_sync_policy_comes_from_prepared_profile_and_current_options() {
 fn smx_gif_choices_come_from_shell_catalog() {
     let state = super::init(OptionsInitView {
         config: config::Config::default(),
+        judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::default(),
         updater_capabilities: SimplyLoveUpdaterCapabilities::default(),
         app_paths: test_app_paths(),
         audio: AudioOptionsView::default(),
@@ -756,6 +758,7 @@ fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
             note_scroll_clock: config::NoteScrollClock::FrameStable,
             ..config::Config::default()
         },
+        judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::default(),
         updater_capabilities: SimplyLoveUpdaterCapabilities::default(),
         app_paths: test_app_paths(),
         audio: AudioOptionsView::default(),
@@ -799,6 +802,85 @@ fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
         raw_state.sub[SubmenuKind::Gameplay].cursor_indices[raw_row],
         config::NoteScrollClock::RawAudio.choice_index()
     );
+}
+
+#[test]
+fn judgment_palette_default_row_uses_catalog_and_emits_full_catalog_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    let custom_id = state
+        .judgment_palettes
+        .create_palette(
+            "Warm",
+            deadsync_config::judgment_palettes::SIMPLY_LOVE_PALETTE_ID,
+        )
+        .unwrap();
+    state.view = OptionsView::Submenu(SubmenuKind::Gameplay);
+    let row = select_visible_row(
+        &mut state,
+        SubmenuKind::Gameplay,
+        SubRowId::DefaultJudgmentPalette,
+    );
+
+    assert_eq!(
+        row_choices(&state, SubmenuKind::Gameplay, GAMEPLAY_OPTIONS_ROWS, row)
+            .iter()
+            .map(|choice| choice.as_ref())
+            .collect::<Vec<_>>(),
+        ["Simply Love", "Warm"]
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("palette choice should emit persistence work");
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::JudgmentPalettes(catalog))
+            if catalog.default_palette_id == custom_id
+    ));
+}
+
+#[test]
+fn judgment_palette_overlay_copies_builtin_and_edits_rgb_from_pad_input() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Gameplay);
+    select_visible_row(
+        &mut state,
+        SubmenuKind::Gameplay,
+        SubRowId::ManageJudgmentPalettes,
+    );
+
+    press(&mut state, &asset_manager, VirtualAction::p1_start);
+    assert!(judgment_palette_overlay_visible(
+        &state.judgment_palette_overlay
+    ));
+
+    let create_effects = press(&mut state, &asset_manager, VirtualAction::p1_start);
+    assert_eq!(state.judgment_palettes.palettes.len(), 2);
+    assert!(matches!(
+        state.judgment_palette_overlay,
+        JudgmentPaletteOverlayState::Editor { .. }
+    ));
+    assert!(create_effects.iter().any(|effect| matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::JudgmentPalettes(_))
+    )));
+
+    press(&mut state, &asset_manager, VirtualAction::p1_down);
+    press(&mut state, &asset_manager, VirtualAction::p1_start);
+    let before = state.judgment_palettes.palettes[1]
+        .palette
+        .color(deadlib_present::color::JudgmentColorRole::FantasticBlue);
+    let edit_effects = press(&mut state, &asset_manager, VirtualAction::p1_right);
+    let after = state.judgment_palettes.palettes[1]
+        .palette
+        .color(deadlib_present::color::JudgmentColorRole::FantasticBlue);
+
+    assert_ne!(before, after);
+    assert!(edit_effects.iter().any(|effect| matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::JudgmentPalettes(_))
+    )));
 }
 
 #[test]

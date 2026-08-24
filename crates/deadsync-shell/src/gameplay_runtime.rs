@@ -320,6 +320,12 @@ pub(crate) fn init_view(
     GameplayInitView {
         runtime: runtime_view(config, lobby),
         hud: profile::gameplay_hud_snapshot(),
+        judgment_palettes: {
+            let catalog = deadsync_config::judgment_palettes::runtime_catalog();
+            std::array::from_fn(|player| {
+                catalog.resolve(profiles[player].judgment_palette_id.as_deref())
+            })
+        },
         scores: score_init_view(charts, profiles, session),
         background_changes: background_changes(config, song, gameplay_charts, session),
     }

@@ -267,6 +267,7 @@ pub(super) fn sync_smx_assignment(state: &mut State, view: &SmxAssignmentView) {
 
 fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ThemeEffect> {
     if !overlay_visible(&state.download_packs_overlay)
+        && !judgment_palette_overlay_visible(&state.judgment_palette_overlay)
         && state.reload_ui.is_none()
         && !state.pending_pack_reload_dirs.is_empty()
     {
@@ -282,6 +283,9 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
         return None;
     }
     if update_browser(state, dt) {
+        return None;
+    }
+    if update_judgment_palette_overlay(state, dt) {
         return None;
     }
     if let Some(score_import) = state.score_import_ui.as_mut() {

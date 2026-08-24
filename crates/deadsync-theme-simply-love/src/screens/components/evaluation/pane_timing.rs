@@ -7,6 +7,7 @@ use crate::screens::components::evaluation::eval_graphs::TimingHistogramScale;
 use crate::screens::evaluation::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::color;
+use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
@@ -61,12 +62,15 @@ const fn band(label: &'static str, start_ms: f32, end_ms: f32, color: [f32; 4]) 
 }
 
 #[inline(always)]
-fn timing_bands_itg(timing_windows: [f32; 5]) -> ([TimingBand; 7], usize) {
-    let blue = color::JUDGMENT_RGBA[0];
-    let excellent = color::JUDGMENT_RGBA[1];
-    let great = color::JUDGMENT_RGBA[2];
-    let decent = color::JUDGMENT_RGBA[3];
-    let wayoff = color::JUDGMENT_RGBA[4];
+fn timing_bands_itg(
+    timing_windows: [f32; 5],
+    palette: JudgmentPalette,
+) -> ([TimingBand; 7], usize) {
+    let blue = palette.color(Role::FantasticBlue);
+    let excellent = palette.color(Role::Excellent);
+    let great = palette.color(Role::Great);
+    let decent = palette.color(Role::Decent);
+    let wayoff = palette.color(Role::WayOff);
     let w1 = timing_windows[0];
     let w2 = timing_windows[1];
     let w3 = timing_windows[2];
@@ -88,13 +92,13 @@ fn timing_bands_itg(timing_windows: [f32; 5]) -> ([TimingBand; 7], usize) {
 }
 
 #[inline(always)]
-fn timing_bands_ex(timing_windows: [f32; 5]) -> ([TimingBand; 7], usize) {
-    let blue = color::JUDGMENT_RGBA[0];
-    let excellent = color::JUDGMENT_RGBA[1];
-    let great = color::JUDGMENT_RGBA[2];
-    let decent = color::JUDGMENT_RGBA[3];
-    let wayoff = color::JUDGMENT_RGBA[4];
-    let white = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
+fn timing_bands_ex(timing_windows: [f32; 5], palette: JudgmentPalette) -> ([TimingBand; 7], usize) {
+    let blue = palette.color(Role::FantasticBlue);
+    let excellent = palette.color(Role::Excellent);
+    let great = palette.color(Role::Great);
+    let decent = palette.color(Role::Decent);
+    let wayoff = palette.color(Role::WayOff);
+    let white = palette.color(Role::FantasticWhite);
     let w0 = timing::FA_PLUS_W0_MS;
     let w1 = timing_windows[0];
     let w2 = timing_windows[1];
@@ -117,14 +121,17 @@ fn timing_bands_ex(timing_windows: [f32; 5]) -> ([TimingBand; 7], usize) {
 }
 
 #[inline(always)]
-fn timing_bands_hard_ex(timing_windows: [f32; 5]) -> ([TimingBand; 7], usize) {
+fn timing_bands_hard_ex(
+    timing_windows: [f32; 5],
+    palette: JudgmentPalette,
+) -> ([TimingBand; 7], usize) {
     let pink = color::HARD_EX_SCORE_RGBA;
-    let blue = color::JUDGMENT_RGBA[0];
-    let excellent = color::JUDGMENT_RGBA[1];
-    let great = color::JUDGMENT_RGBA[2];
-    let decent = color::JUDGMENT_RGBA[3];
-    let wayoff = color::JUDGMENT_RGBA[4];
-    let white = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
+    let blue = palette.color(Role::FantasticBlue);
+    let excellent = palette.color(Role::Excellent);
+    let great = palette.color(Role::Great);
+    let decent = palette.color(Role::Decent);
+    let wayoff = palette.color(Role::WayOff);
+    let white = palette.color(Role::FantasticWhite);
     let w010 = timing::FA_PLUS_W010_MS;
     let w0 = timing::FA_PLUS_W0_MS;
     let w1 = timing_windows[0];
@@ -151,16 +158,17 @@ fn timing_bands_hard_ex(timing_windows: [f32; 5]) -> ([TimingBand; 7], usize) {
 fn timing_bands_ms(
     scale: TimingHistogramScale,
     timing_windows: [f32; 5],
+    palette: JudgmentPalette,
 ) -> ([TimingBand; 7], usize) {
     match scale {
-        TimingHistogramScale::Itg => timing_bands_itg(timing_windows),
-        TimingHistogramScale::Ex => timing_bands_ex(timing_windows),
-        TimingHistogramScale::HardEx => timing_bands_hard_ex(timing_windows),
+        TimingHistogramScale::Itg => timing_bands_itg(timing_windows, palette),
+        TimingHistogramScale::Ex => timing_bands_ex(timing_windows, palette),
+        TimingHistogramScale::HardEx => timing_bands_hard_ex(timing_windows, palette),
     }
 }
 
-/// Builds the timing statistics pane (Simply Love Pane5), shown inside a 300px evaluation pane.
-pub(crate) fn build_timing_pane(
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_timing_pane_with_palette(
     score_info: &ScoreInfo,
     text: &TimingPaneText,
     timing_hist_mesh: Option<&Arc<[MeshVertex]>>,
@@ -168,6 +176,7 @@ pub(crate) fn build_timing_pane(
     scale: TimingHistogramScale,
     transparent: bool,
     machine_font: MachineFont,
+    palette: JudgmentPalette,
 ) -> Vec<Actor> {
     let pane_width: f32 = 300.0;
     let pane_height: f32 = 180.0;
@@ -217,7 +226,7 @@ pub(crate) fn build_timing_pane(
     // Bottom bar judgment labels
     let bottom_bar_center_y = pane_height - (bottombar_height / 2.0_f32);
     let timing_windows: [f32; 5] = timing::effective_windows_ms(); // ms, with +1.5ms
-    let (judgment_bands, band_count) = timing_bands_ms(scale, timing_windows);
+    let (judgment_bands, band_count) = timing_bands_ms(scale, timing_windows, palette);
     let legend_span_ms =
         super::eval_graphs::timing_display_window_ms(score_info.histogram.worst_window_ms, scale);
 

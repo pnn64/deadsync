@@ -2265,6 +2265,7 @@ fn smooth_life_p(value: f32) -> f32 {
 
 pub struct State {
     pub gameplay: GameplayCoreState,
+    judgment_palettes: [deadlib_present::color::JudgmentPalette; MAX_PLAYERS],
     /// Game-thread, song-lifetime identity for the fixed two HUD slots. Built
     /// during gameplay setup, read immutably thereafter, and dropped with the
     /// screen; there are no misses, eviction, synchronization, allocations, or
@@ -2459,6 +2460,11 @@ impl State {
         self.runtime_view.policy.machine_font
     }
 
+    #[inline(always)]
+    pub fn judgment_palette(&self, player: usize) -> deadlib_present::color::JudgmentPalette {
+        self.judgment_palettes[player.min(MAX_PLAYERS - 1)]
+    }
+
     /// Song-lifetime ITL warning state prepared by the shell on gameplay entry.
     /// Live score polling reuses this snapshot instead of re-reading profile or
     /// song-catalog runtime state every frame.
@@ -2474,6 +2480,7 @@ impl State {
         let GameplayInitView {
             runtime,
             hud,
+            judgment_palettes,
             scores,
             background_changes,
         } = GameplayInitView::default();
@@ -2492,6 +2499,7 @@ impl State {
             scores.rival_score_types,
             runtime,
             hud,
+            judgment_palettes,
         )
     }
 
@@ -2510,6 +2518,7 @@ impl State {
         rival_score_types: [Option<profile_data::MiniIndicatorScoreType>; MAX_PLAYERS],
         runtime_view: GameplayRuntimeView,
         hud_snapshot: profile_data::GameplayHudSnapshot,
+        judgment_palettes: [deadlib_present::color::JudgmentPalette; MAX_PLAYERS],
     ) -> Self {
         let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
         let step_stats_profiles =
@@ -2529,13 +2538,15 @@ impl State {
                 &step_stats_profiles[player],
                 &notefield_judgment_assets[player],
                 gameplay.player_blue_window_ms(player) / 1000.0,
+                judgment_palettes[player],
             )
         });
         let scorebox_plans = std::array::from_fn(|side| {
-            gs_scorebox::GameplayScoreboxPlan::new(
+            gs_scorebox::GameplayScoreboxPlan::new_with_palette(
                 scorebox_side_snapshot[side].as_ref(),
                 &scorebox_profile_snapshot[side],
                 runtime_view.policy.scorebox_pane_filter,
+                judgment_palettes[side],
             )
         });
         let scorebox_refresh_pending = scorebox_refresh_pending_from(
@@ -2893,6 +2904,7 @@ impl State {
         );
         let mut state = Self {
             gameplay,
+            judgment_palettes,
             hud_snapshot,
             noteskin_assets,
             density_graph,
@@ -4045,6 +4057,7 @@ pub fn init(
     let GameplayInitView {
         runtime,
         hud,
+        judgment_palettes,
         scores,
         background_changes,
     } = init_view;
@@ -4116,6 +4129,7 @@ pub fn init(
         scores.rival_score_types,
         runtime,
         hud,
+        judgment_palettes,
     )
 }
 
@@ -4746,10 +4760,11 @@ pub fn on_exit(state: &mut State) {
 pub fn sync_runtime_view(state: &mut State, view: GameplayRuntimeView) {
     if state.runtime_view.policy.scorebox_pane_filter != view.policy.scorebox_pane_filter {
         state.scorebox_plans = std::array::from_fn(|side| {
-            gs_scorebox::GameplayScoreboxPlan::new(
+            gs_scorebox::GameplayScoreboxPlan::new_with_palette(
                 state.scorebox_side_snapshot[side].as_ref(),
                 &state.scorebox_profile_snapshot[side],
                 view.policy.scorebox_pane_filter,
+                state.judgment_palettes[side],
             )
         });
     }
@@ -4863,10 +4878,11 @@ pub fn sync_score_runtime_view(state: &mut State, view: GameplayScoreRuntimeView
     for (side, update) in view.scorebox_updates.into_iter().enumerate() {
         if update.is_some() {
             state.scorebox_side_snapshot[side] = update;
-            state.scorebox_plans[side] = gs_scorebox::GameplayScoreboxPlan::new(
+            state.scorebox_plans[side] = gs_scorebox::GameplayScoreboxPlan::new_with_palette(
                 state.scorebox_side_snapshot[side].as_ref(),
                 &state.scorebox_profile_snapshot[side],
                 state.runtime_view.policy.scorebox_pane_filter,
+                state.judgment_palettes[side],
             );
         }
     }
@@ -17952,7 +17968,12 @@ pub fn push_actors(
                         score_display_mode_from_profile(profile.score_display_mode),
                         blue_window_ms,
                     );
-                    (ex_percent.max(0.0), color::JUDGMENT_RGBA[0])
+                    (
+                        ex_percent.max(0.0),
+                        state
+                            .judgment_palette(player_idx)
+                            .color(deadlib_present::color::JudgmentColorRole::FantasticBlue),
+                    )
                 } else {
                     let score_percent = state.display_gameplay_itg_score_percent(
                         player_idx,

@@ -1768,6 +1768,54 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn judgment_colors_row_selects_a_profile_palette_and_persists_its_id() {
+        ensure_i18n();
+        let mut view = test_init_view();
+        view.judgment_palettes
+            .push(crate::views::JudgmentPaletteChoiceView {
+                id: "warm-colors".to_owned(),
+                name: "Warm Colors".to_owned(),
+                palette: deadlib_present::color::JudgmentPalette::default(),
+            });
+        let (mut state, _) = setup_state_with(view);
+        let row_index = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::JudgmentColors)
+            .expect("Judgment Colors row present");
+        state.pane_mut().selected_row[P1] = row_index;
+
+        super::change_choice_for_player(&mut state, P1, 2, super::NavWrap::Wrap);
+
+        assert_eq!(
+            state.judgment_palette_ids[P1].as_deref(),
+            Some("warm-colors")
+        );
+        assert!(state.pending_effects.iter().any(|effect| matches!(
+            effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::UpdatePlayerOptions {
+                    side: PlayerSide::P1,
+                    judgment_palette_id: Some(id),
+                    ..
+                }
+            )) if id == "warm-colors"
+        )));
+
+        super::super::apply_pane(&mut state, OptionsPane::Display);
+        let display_row = state
+            .pane()
+            .row_map
+            .get(RowId::JudgmentColors)
+            .expect("Judgment Colors row present on Display pane");
+        assert_eq!(display_row.choices.len(), 3);
+        assert_eq!(display_row.choices[2].as_ref(), "Warm Colors");
+        assert_eq!(display_row.selected_choice_index[P1], 2);
+    }
+
+    #[test]
     fn prepared_choice_layout_drives_inline_cursor_geometry() {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
@@ -2433,6 +2481,7 @@ pub(super) mod tests {
                 options,
                 heart_rate_device_id,
                 max_heart_rate: requested_max_heart_rate,
+                ..
             },
         )) = &effects[0]
         else {

@@ -193,6 +193,8 @@ pub struct State {
     pub(super) content_alpha: f32,
     pub(super) reload_ui: Option<ReloadUiState>,
     pub(super) download_packs_overlay: DownloadPacksOverlayState,
+    pub(super) judgment_palette_overlay: JudgmentPaletteOverlayState,
+    pub(super) judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog,
     pub(super) stepmaniaonline_snapshot: Arc<deadsync_online::stepmaniaonline::Snapshot>,
     pub(super) pending_pack_reload_dirs: Vec<PathBuf>,
     pub(super) score_import_ui: Option<ScoreImportUiState>,
@@ -313,6 +315,7 @@ impl State {
 pub fn init(view: OptionsInitView) -> State {
     let OptionsInitView {
         config: cfg,
+        judgment_palettes,
         updater_capabilities,
         app_paths,
         audio: audio_options,
@@ -405,6 +408,8 @@ pub fn init(view: OptionsInitView) -> State {
         content_alpha: 1.0,
         reload_ui: None,
         download_packs_overlay: DownloadPacksOverlayState::Hidden,
+        judgment_palette_overlay: JudgmentPaletteOverlayState::Hidden,
+        judgment_palettes,
         stepmaniaonline_snapshot: Arc::new(deadsync_online::stepmaniaonline::Snapshot::default()),
         pending_pack_reload_dirs: Vec::new(),
         score_import_ui: None,
@@ -1148,6 +1153,18 @@ pub fn init(view: OptionsInitView) -> State {
         GAMEPLAY_OPTIONS_ROWS,
         SubRowId::AutoScreenshot,
         auto_screenshot_cursor_index(cfg.auto_screenshot_eval),
+    );
+    let default_judgment_palette_index = state
+        .judgment_palettes
+        .palettes
+        .iter()
+        .position(|entry| entry.id == state.judgment_palettes.resolved_default_id())
+        .unwrap_or(0);
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Gameplay].choice_indices,
+        GAMEPLAY_OPTIONS_ROWS,
+        SubRowId::DefaultJudgmentPalette,
+        default_judgment_palette_index,
     );
 
     let sound_device_idx = sound_device_choice_index(

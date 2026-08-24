@@ -6,6 +6,7 @@ use crate::config::MachineFont;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
+use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadlib_present::font;
 use deadlib_present::space::screen_center_y;
 use deadsync_profile as profile_data;
@@ -33,37 +34,22 @@ static JUDGMENT_ORDER: [JudgeGrade; 6] = [
     JudgeGrade::Miss,
 ];
 
-#[derive(Clone, Copy)]
-struct LabeledColor {
-    label: LookupKey,
-    color: [f32; 4],
-}
+const JUDGMENT_LABELS: [LookupKey; 6] = [
+    lookup_key("Gameplay", "JudgmentFantastic"),
+    lookup_key("Gameplay", "JudgmentExcellent"),
+    lookup_key("Gameplay", "JudgmentGreat"),
+    lookup_key("Gameplay", "JudgmentDecent"),
+    lookup_key("Gameplay", "JudgmentWayOff"),
+    lookup_key("Gameplay", "JudgmentMiss"),
+];
 
-const JUDGMENT_INFO: [LabeledColor; 6] = [
-    LabeledColor {
-        label: lookup_key("Gameplay", "JudgmentFantastic"),
-        color: color::JUDGMENT_RGBA[0],
-    },
-    LabeledColor {
-        label: lookup_key("Gameplay", "JudgmentExcellent"),
-        color: color::JUDGMENT_RGBA[1],
-    },
-    LabeledColor {
-        label: lookup_key("Gameplay", "JudgmentGreat"),
-        color: color::JUDGMENT_RGBA[2],
-    },
-    LabeledColor {
-        label: lookup_key("Gameplay", "JudgmentDecent"),
-        color: color::JUDGMENT_RGBA[3],
-    },
-    LabeledColor {
-        label: lookup_key("Gameplay", "JudgmentWayOff"),
-        color: color::JUDGMENT_RGBA[4],
-    },
-    LabeledColor {
-        label: lookup_key("Gameplay", "JudgmentMiss"),
-        color: color::JUDGMENT_RGBA[5],
-    },
+const STANDARD_ROLES: [Role; 6] = [
+    Role::FantasticBlue,
+    Role::Excellent,
+    Role::Great,
+    Role::Decent,
+    Role::WayOff,
+    Role::Miss,
 ];
 
 const RADAR_LABELS: [LookupKey; 4] = [
@@ -99,9 +85,9 @@ fn digit_text(digit: u8) -> Arc<str> {
 
 #[inline(always)]
 fn judgment_label_text(index: usize) -> Arc<str> {
-    JUDGMENT_INFO
+    JUDGMENT_LABELS
         .get(index)
-        .map(|info| info.label.get())
+        .map(LookupKey::get)
         .unwrap_or_else(|| Arc::from(""))
 }
 
@@ -215,14 +201,14 @@ const fn radar_row_offset(show_hands_row: bool) -> f32 {
     if show_hands_row { 0.0 } else { 1.0 }
 }
 
-/// Builds a 300px evaluation pane for a given controller side, including judgment and radar counts.
-pub(crate) fn build_stats_pane(
+pub(crate) fn build_stats_pane_with_palette(
     score_info: &ScoreInfo,
     pane: EvalPane,
     controller: profile_data::PlayerSide,
     asset_manager: &AssetManager,
     elapsed_s: f32,
     machine_font: MachineFont,
+    palette: JudgmentPalette,
 ) -> Vec<Actor> {
     let cy = screen_center_y();
 
@@ -293,19 +279,19 @@ pub(crate) fn build_stats_pane(
         let mut digits = [0u8; 10];
 
         if show_standard_judgments {
-            for (i, info) in JUDGMENT_INFO.iter().enumerate() {
+            for (i, role) in STANDARD_ROLES.iter().copied().enumerate() {
                 let target_count = judgment_counts[i];
                 let count = rolling_number_value(target_count, elapsed_s);
                 let disabled = standard_row_disabled(score_info.disabled_timing_windows, i);
                 let bright_color = if disabled {
                     DISABLED_WINDOW_RGBA
                 } else {
-                    info.color
+                    palette.color(role)
                 };
                 let dim_color = if disabled {
                     DISABLED_WINDOW_RGBA
                 } else {
-                    color::JUDGMENT_DIM_EVAL_RGBA[i]
+                    palette.evaluation_dim_color(role)
                 };
 
                 // Label
@@ -338,17 +324,17 @@ pub(crate) fn build_stats_pane(
             // Dim colors: reuse the standard evaluation dim palette for blue Fantastic
             // through Miss, and use a dedicated dim color for the white FA+ row.
             // White Fantastic (FA+ outer window) bright/dim colors.
-            let white_fa_color = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
-            let dim_white_fa = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
+            let white_fa_color = palette.color(Role::FantasticWhite);
+            let dim_white_fa = palette.evaluation_dim_color(Role::FantasticWhite);
 
             let rows: [(usize, [f32; 4], [f32; 4], u32); 7] = [
-                (0, JUDGMENT_INFO[0].color, color::JUDGMENT_DIM_EVAL_RGBA[0], wc.w0),
+                (0, palette.color(Role::FantasticBlue), palette.evaluation_dim_color(Role::FantasticBlue), wc.w0),
                 (0, white_fa_color, dim_white_fa, wc.w1),
-                (1, JUDGMENT_INFO[1].color, color::JUDGMENT_DIM_EVAL_RGBA[1], wc.w2),
-                (2, JUDGMENT_INFO[2].color, color::JUDGMENT_DIM_EVAL_RGBA[2], wc.w3),
-                (3, JUDGMENT_INFO[3].color, color::JUDGMENT_DIM_EVAL_RGBA[3], wc.w4),
-                (4, JUDGMENT_INFO[4].color, color::JUDGMENT_DIM_EVAL_RGBA[4], wc.w5),
-                (5, JUDGMENT_INFO[5].color, color::JUDGMENT_DIM_EVAL_RGBA[5], wc.miss),
+                (1, palette.color(Role::Excellent), palette.evaluation_dim_color(Role::Excellent), wc.w2),
+                (2, palette.color(Role::Great), palette.evaluation_dim_color(Role::Great), wc.w3),
+                (3, palette.color(Role::Decent), palette.evaluation_dim_color(Role::Decent), wc.w4),
+                (4, palette.color(Role::WayOff), palette.evaluation_dim_color(Role::WayOff), wc.w5),
+                (5, palette.color(Role::Miss), palette.evaluation_dim_color(Role::Miss), wc.miss),
             ];
 
             for (i, (label_idx, bright_color, dim_color, count)) in rows.iter().enumerate() {

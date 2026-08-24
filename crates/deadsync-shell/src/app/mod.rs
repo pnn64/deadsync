@@ -661,12 +661,19 @@ fn evaluation_context_view(
     profile: &profile_data::MusicProfileSnapshot,
 ) -> EvaluationContextView {
     let profiles = &profile.scorebox;
+    let judgment_palettes = deadsync_config::judgment_palettes::runtime_catalog();
     EvaluationContextView {
         policy,
         play_style: profiles.play_style,
         player_side: profiles.player_side,
         players: std::array::from_fn(|player_idx| {
             let player = &profiles.sides[player_idx];
+            let side = if profiles.play_style.player_count() >= 2 {
+                profile_data::player_side_for_index(player_idx)
+            } else {
+                profiles.player_side
+            };
+            let runtime_profile = profile_data::compat::get_for_side(side);
             EvaluationPlayerView {
                 joined: player.joined,
                 guest: player.guest,
@@ -676,6 +683,8 @@ fn evaluation_context_view(
                 display_name: player.display_name.to_string(),
                 groovestats_linked: !player.leaderboard.api_key().trim().is_empty(),
                 arrowcloud_linked: !player.leaderboard.arrowcloud_api_key().trim().is_empty(),
+                judgment_palette: judgment_palettes
+                    .resolve(runtime_profile.judgment_palette_id.as_deref()),
             }
         }),
     }
@@ -1006,6 +1015,7 @@ fn noteskin_catalog_view() -> NoteskinCatalogView {
 fn options_init_view(audio: AudioOptionsView) -> OptionsInitView {
     OptionsInitView {
         config: config::get(),
+        judgment_palettes: (*deadsync_config::judgment_palettes::runtime_catalog()).clone(),
         updater_capabilities: updater::capabilities(),
         app_paths: app_paths_view(),
         audio,
@@ -4274,6 +4284,7 @@ impl App {
                     SimplyLoveProfileRequest::UpdatePlayerOptions {
                         side,
                         options,
+                        judgment_palette_id,
                         heart_rate_device_id,
                         max_heart_rate,
                     },
@@ -4281,6 +4292,7 @@ impl App {
                     profile::update_player_options_for_side(
                         side,
                         *options,
+                        judgment_palette_id,
                         heart_rate_device_id,
                         max_heart_rate,
                     );
@@ -4606,6 +4618,17 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::SelectMusic(request)) => {
                     config_requests::execute_select_music(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::JudgmentPalettes(catalog) => {
+                    if let Err(error) =
+                        deadsync_config::judgment_palettes::update_runtime_catalog(|current| {
+                            *current = catalog;
+                            Ok(())
+                        })
+                    {
+                        warn!("Failed to save judgment palettes: {error}");
+                    }
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::TestLightsAuto) => {
@@ -8018,6 +8041,7 @@ impl App {
                 let scroll_speeds = player_options::apply_no_cmod_alternative(&mut po_state);
                 let player_profiles = crate::player_options::gameplay_profiles(
                     &po_state.player_options,
+                    &po_state.judgment_palette_ids,
                     &po_state.heart_rate_device_ids,
                 );
 
@@ -8461,6 +8485,7 @@ impl App {
                 let combo_carry = self.state.session.combo_carry;
                 let player_profiles = crate::player_options::gameplay_profiles(
                     &po_state.player_options,
+                    &po_state.judgment_palette_ids,
                     &po_state.heart_rate_device_ids,
                 );
                 let gameplay_session = gameplay_session();

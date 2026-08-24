@@ -120,6 +120,8 @@ pub enum SubRowId {
     BpmPosition,
     DelayedBack,
     AutoScreenshot,
+    DefaultJudgmentPalette,
+    ManageJudgmentPalettes,
     // Select Music Options
     ShowBanners,
     ShowVideoBanners,

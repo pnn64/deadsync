@@ -6,6 +6,8 @@ use deadsync_theme_simply_love::views::{PostSongPlayerView, PostSongRuntimeView}
 
 fn player_view(side: PlayerSide) -> PostSongPlayerView {
     let player = profile::get_for_side(side);
+    let judgment_palette = deadsync_config::judgment_palettes::runtime_catalog()
+        .resolve(player.judgment_palette_id.as_deref());
     PostSongPlayerView {
         joined: profile::is_session_side_joined(side),
         guest: profile::is_session_side_guest(side),
@@ -15,6 +17,7 @@ fn player_view(side: PlayerSide) -> PostSongPlayerView {
         calories_burned_today: player.calories_burned_today,
         ignore_step_count_calories: player.ignore_step_count_calories,
         total_songs_played: 0,
+        judgment_palette,
     }
 }
 

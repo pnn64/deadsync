@@ -97,6 +97,8 @@ use pack_sync::*;
 pub use qr_login::QrOverlayBenchmark;
 mod download_packs;
 use download_packs::*;
+mod judgment_palettes;
+use judgment_palettes::*;
 mod layout;
 mod transitions;
 use layout::*;
@@ -108,7 +110,7 @@ mod render;
 use render::*;
 
 // Public API re-exports
-pub use download_packs::{handle_raw_key_event, sync_stepmaniaonline};
+pub use download_packs::sync_stepmaniaonline;
 pub use input::handle_input;
 pub use layout::clear_submenu_row_layout_cache;
 pub use render::{
@@ -257,6 +259,18 @@ pub fn apply_score_import_events(
     for event in events {
         apply_score_import_event(state, event);
     }
+}
+
+pub fn handle_raw_key_event(
+    state: &mut State,
+    key: Option<&RawKeyboardEvent>,
+    text: Option<&str>,
+    effects: &mut Vec<ThemeEffect>,
+) -> bool {
+    if judgment_palettes::handle_raw_key_event(state, key, text, effects) {
+        return true;
+    }
+    download_packs::handle_raw_key_event(state, key, text, effects)
 }
 
 pub fn apply_apply_replaygain_events(

@@ -203,6 +203,7 @@ impl Default for GameplayRuntimeView {
 pub struct GameplayInitView {
     pub runtime: GameplayRuntimeView,
     pub hud: deadsync_profile::GameplayHudSnapshot,
+    pub judgment_palettes: [deadlib_present::color::JudgmentPalette; 2],
     pub scores: GameplayScoreInitView,
     pub background_changes: Vec<deadsync_chart::SongBackgroundChange>,
 }
@@ -221,6 +222,7 @@ impl Default for GameplayInitView {
                 },
                 p2: deadsync_profile::GameplayHudPlayerSnapshot::default(),
             },
+            judgment_palettes: [deadlib_present::color::SIMPLY_LOVE_JUDGMENT_PALETTE; 2],
             scores: GameplayScoreInitView::default(),
             background_changes: Vec::new(),
         }
@@ -280,6 +282,7 @@ impl Default for PlayerOptionsPolicyView {
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerOptionsPlayerView {
     pub options: deadsync_profile::PlayerOptionsData,
+    pub judgment_palette_id: Option<String>,
     pub heart_rate_device_id: Option<String>,
     pub max_heart_rate: u16,
 }
@@ -288,6 +291,7 @@ impl Default for PlayerOptionsPlayerView {
     fn default() -> Self {
         Self {
             options: deadsync_profile::PlayerOptionsData::default(),
+            judgment_palette_id: None,
             heart_rate_device_id: None,
             max_heart_rate: deadsync_profile::MAX_HEART_RATE_DEFAULT,
         }
@@ -305,6 +309,14 @@ pub struct PlayerOptionsInitView {
     pub joined: [bool; 2],
     pub music_rate: f32,
     pub players: [PlayerOptionsPlayerView; 2],
+    pub judgment_palettes: Vec<JudgmentPaletteChoiceView>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct JudgmentPaletteChoiceView {
+    pub id: String,
+    pub name: String,
+    pub palette: deadlib_present::color::JudgmentPalette,
 }
 
 impl Default for PlayerOptionsInitView {
@@ -316,6 +328,11 @@ impl Default for PlayerOptionsInitView {
             joined: [true, false],
             music_rate: 1.0,
             players: std::array::from_fn(|_| PlayerOptionsPlayerView::default()),
+            judgment_palettes: vec![JudgmentPaletteChoiceView {
+                id: deadsync_config::judgment_palettes::SIMPLY_LOVE_PALETTE_ID.to_owned(),
+                name: deadsync_config::judgment_palettes::SIMPLY_LOVE_PALETTE_NAME.to_owned(),
+                palette: deadlib_present::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
+            }],
         }
     }
 }
@@ -372,6 +389,7 @@ pub struct PostSongPlayerView {
     pub calories_burned_today: f32,
     pub ignore_step_count_calories: bool,
     pub total_songs_played: u32,
+    pub judgment_palette: deadlib_present::color::JudgmentPalette,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -465,6 +483,7 @@ pub struct EvaluationPlayerView {
     pub display_name: String,
     pub groovestats_linked: bool,
     pub arrowcloud_linked: bool,
+    pub judgment_palette: deadlib_present::color::JudgmentPalette,
 }
 
 /// Session and machine context needed by Evaluation's pure screen logic.
@@ -1161,6 +1180,7 @@ pub struct OptionsPackSyncView {
 #[derive(Clone, Debug)]
 pub struct OptionsInitView {
     pub config: deadsync_config::prelude::Config,
+    pub judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog,
     pub updater_capabilities: SimplyLoveUpdaterCapabilities,
     pub app_paths: deadsync_theme::views::AppPathsView,
     pub audio: deadsync_theme::views::AudioOptionsView,

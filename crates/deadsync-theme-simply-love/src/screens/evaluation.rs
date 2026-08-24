@@ -984,9 +984,10 @@ fn build_eval_scatter_mesh(
     si: &ScoreInfo,
     graph_width: f32,
     scale: eval_graphs::ScatterPlotScale,
+    palette: deadlib_present::color::JudgmentPalette,
 ) -> Option<Arc<[MeshVertex]>> {
     const GRAPH_H: f32 = 64.0;
-    let verts = eval_graphs::build_scatter_mesh(
+    let verts = eval_graphs::build_scatter_mesh_with_palette(
         &si.scatter,
         si.graph_first_second,
         si.graph_last_second,
@@ -996,6 +997,7 @@ fn build_eval_scatter_mesh(
         GRAPH_H,
         si.scatter_worst_window_ms,
         scale,
+        palette,
     );
     (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
 }
@@ -1004,8 +1006,9 @@ fn build_eval_scatter_bg_mesh(
     si: &ScoreInfo,
     graph_width: f32,
     pane: EvalGraphPane,
+    palette: deadlib_present::color::JudgmentPalette,
 ) -> Option<Arc<[MeshVertex]>> {
-    use eval_graphs::{ScatterPlotScale, build_scatter_background_mesh};
+    use eval_graphs::{ScatterPlotScale, build_scatter_background_mesh_with_palette};
     let scale = match pane {
         EvalGraphPane::Itg => ScatterPlotScale::Itg,
         EvalGraphPane::Ex => ScatterPlotScale::Ex,
@@ -1013,8 +1016,13 @@ fn build_eval_scatter_bg_mesh(
         EvalGraphPane::Arrow | EvalGraphPane::Quant | EvalGraphPane::FootParity => return None,
     };
     const GRAPH_H: f32 = 64.0;
-    let verts =
-        build_scatter_background_mesh(graph_width, GRAPH_H, si.scatter_worst_window_ms, scale);
+    let verts = build_scatter_background_mesh_with_palette(
+        graph_width,
+        GRAPH_H,
+        si.scatter_worst_window_ms,
+        scale,
+        palette,
+    );
     (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
 }
 
@@ -1022,6 +1030,7 @@ fn build_eval_timing_hist_mesh(
     si: &ScoreInfo,
     scale: eval_graphs::TimingHistogramScale,
     smooth: bool,
+    palette: deadlib_present::color::JudgmentPalette,
 ) -> Option<Arc<[MeshVertex]>> {
     const PANE_W: f32 = 300.0;
     const PANE_H: f32 = 180.0;
@@ -1029,13 +1038,14 @@ fn build_eval_timing_hist_mesh(
     const BOT_H: f32 = 13.0;
 
     let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-    let verts = eval_graphs::build_offset_histogram_mesh(
+    let verts = eval_graphs::build_offset_histogram_mesh_with_palette(
         &si.histogram,
         PANE_W,
         graph_h,
         PANE_H,
         scale,
         smooth,
+        palette,
     );
     (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
 }
@@ -3028,6 +3038,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
             let Some(si) = score_info[player_idx].as_ref() else {
                 continue;
             };
+            let judgment_palette = context.players[player_idx].judgment_palette;
 
             density_graph_mesh[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
@@ -3041,7 +3052,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
             if scoring_scatter == EvalGraphPane::Itg {
                 scatter_mesh_itg[player_idx] = {
                     const GRAPH_H: f32 = 64.0;
-                    let verts = eval_graphs::build_scatter_mesh(
+                    let verts = eval_graphs::build_scatter_mesh_with_palette(
                         &si.scatter,
                         si.graph_first_second,
                         si.graph_last_second,
@@ -3051,17 +3062,22 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                         GRAPH_H,
                         si.scatter_worst_window_ms,
                         eval_graphs::ScatterPlotScale::Itg,
+                        judgment_palette,
                     );
                     (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
                 };
-                scatter_bg_mesh_itg[player_idx] =
-                    build_eval_scatter_bg_mesh(si, graph_width, EvalGraphPane::Itg);
+                scatter_bg_mesh_itg[player_idx] = build_eval_scatter_bg_mesh(
+                    si,
+                    graph_width,
+                    EvalGraphPane::Itg,
+                    judgment_palette,
+                );
             }
 
             if scoring_scatter == EvalGraphPane::Ex {
                 scatter_mesh_ex[player_idx] = {
                     const GRAPH_H: f32 = 64.0;
-                    let verts = eval_graphs::build_scatter_mesh(
+                    let verts = eval_graphs::build_scatter_mesh_with_palette(
                         &si.scatter,
                         si.graph_first_second,
                         si.graph_last_second,
@@ -3071,17 +3087,22 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                         GRAPH_H,
                         si.scatter_worst_window_ms,
                         eval_graphs::ScatterPlotScale::Ex,
+                        judgment_palette,
                     );
                     (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
                 };
-                scatter_bg_mesh_ex[player_idx] =
-                    build_eval_scatter_bg_mesh(si, graph_width, EvalGraphPane::Ex);
+                scatter_bg_mesh_ex[player_idx] = build_eval_scatter_bg_mesh(
+                    si,
+                    graph_width,
+                    EvalGraphPane::Ex,
+                    judgment_palette,
+                );
             }
 
             if scoring_scatter == EvalGraphPane::HardEx {
                 scatter_mesh_hard_ex[player_idx] = {
                     const GRAPH_H: f32 = 64.0;
-                    let verts = eval_graphs::build_scatter_mesh(
+                    let verts = eval_graphs::build_scatter_mesh_with_palette(
                         &si.scatter,
                         si.graph_first_second,
                         si.graph_last_second,
@@ -3091,16 +3112,21 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                         GRAPH_H,
                         si.scatter_worst_window_ms,
                         eval_graphs::ScatterPlotScale::HardEx,
+                        judgment_palette,
                     );
                     (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
                 };
-                scatter_bg_mesh_hard_ex[player_idx] =
-                    build_eval_scatter_bg_mesh(si, graph_width, EvalGraphPane::HardEx);
+                scatter_bg_mesh_hard_ex[player_idx] = build_eval_scatter_bg_mesh(
+                    si,
+                    graph_width,
+                    EvalGraphPane::HardEx,
+                    judgment_palette,
+                );
             }
 
             scatter_mesh_arrow[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = eval_graphs::build_scatter_mesh(
+                let verts = eval_graphs::build_scatter_mesh_with_palette(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
@@ -3110,13 +3136,14 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                     GRAPH_H,
                     si.scatter_worst_window_ms,
                     eval_graphs::ScatterPlotScale::Arrow,
+                    judgment_palette,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_quant[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = eval_graphs::build_scatter_mesh(
+                let verts = eval_graphs::build_scatter_mesh_with_palette(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
@@ -3126,13 +3153,14 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                     GRAPH_H,
                     si.scatter_worst_window_ms,
                     eval_graphs::ScatterPlotScale::Quant,
+                    judgment_palette,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_foot_parity[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = eval_graphs::build_scatter_mesh(
+                let verts = eval_graphs::build_scatter_mesh_with_palette(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
@@ -3142,6 +3170,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                     GRAPH_H,
                     si.scatter_worst_window_ms,
                     eval_graphs::ScatterPlotScale::FootParity,
+                    judgment_palette,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
@@ -3153,13 +3182,14 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                 const BOT_H: f32 = 13.0;
 
                 let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-                let verts = eval_graphs::build_offset_histogram_mesh(
+                let verts = eval_graphs::build_offset_histogram_mesh_with_palette(
                     &si.histogram,
                     PANE_W,
                     graph_h,
                     PANE_H,
                     eval_graphs::TimingHistogramScale::Itg,
                     policy.smooth_histogram,
+                    judgment_palette,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
@@ -3171,13 +3201,14 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                 const BOT_H: f32 = 13.0;
 
                 let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-                let verts = eval_graphs::build_offset_histogram_mesh(
+                let verts = eval_graphs::build_offset_histogram_mesh_with_palette(
                     &si.histogram,
                     PANE_W,
                     graph_h,
                     PANE_H,
                     eval_graphs::TimingHistogramScale::Ex,
                     policy.smooth_histogram,
+                    judgment_palette,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
@@ -3189,13 +3220,14 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                 const BOT_H: f32 = 13.0;
 
                 let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-                let verts = eval_graphs::build_offset_histogram_mesh(
+                let verts = eval_graphs::build_offset_histogram_mesh_with_palette(
                     &si.histogram,
                     PANE_W,
                     graph_h,
                     PANE_H,
                     eval_graphs::TimingHistogramScale::HardEx,
                     policy.smooth_histogram,
+                    judgment_palette,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
@@ -3417,47 +3449,92 @@ pub fn init_from_score_info(
     let scatter_mesh_itg: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::Itg)
+            build_eval_scatter_mesh(
+                si,
+                graph_width,
+                eval_graphs::ScatterPlotScale::Itg,
+                context.players[player_idx].judgment_palette,
+            )
         });
     let scatter_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::Ex)
+            build_eval_scatter_mesh(
+                si,
+                graph_width,
+                eval_graphs::ScatterPlotScale::Ex,
+                context.players[player_idx].judgment_palette,
+            )
         });
     let scatter_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::HardEx)
+            build_eval_scatter_mesh(
+                si,
+                graph_width,
+                eval_graphs::ScatterPlotScale::HardEx,
+                context.players[player_idx].judgment_palette,
+            )
         });
     let scatter_bg_mesh_itg: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_bg_mesh(si, graph_width, EvalGraphPane::Itg)
+            build_eval_scatter_bg_mesh(
+                si,
+                graph_width,
+                EvalGraphPane::Itg,
+                context.players[player_idx].judgment_palette,
+            )
         });
     let scatter_bg_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_bg_mesh(si, graph_width, EvalGraphPane::Ex)
+            build_eval_scatter_bg_mesh(
+                si,
+                graph_width,
+                EvalGraphPane::Ex,
+                context.players[player_idx].judgment_palette,
+            )
         });
     let scatter_bg_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_bg_mesh(si, graph_width, EvalGraphPane::HardEx)
+            build_eval_scatter_bg_mesh(
+                si,
+                graph_width,
+                EvalGraphPane::HardEx,
+                context.players[player_idx].judgment_palette,
+            )
         });
     let scatter_mesh_arrow: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::Arrow)
+            build_eval_scatter_mesh(
+                si,
+                graph_width,
+                eval_graphs::ScatterPlotScale::Arrow,
+                context.players[player_idx].judgment_palette,
+            )
         });
     let scatter_mesh_quant: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::Quant)
+            build_eval_scatter_mesh(
+                si,
+                graph_width,
+                eval_graphs::ScatterPlotScale::Quant,
+                context.players[player_idx].judgment_palette,
+            )
         });
     let scatter_mesh_foot_parity: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::FootParity)
+            build_eval_scatter_mesh(
+                si,
+                graph_width,
+                eval_graphs::ScatterPlotScale::FootParity,
+                context.players[player_idx].judgment_palette,
+            )
         });
     let timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
@@ -3466,6 +3543,7 @@ pub fn init_from_score_info(
                 si,
                 eval_graphs::TimingHistogramScale::Itg,
                 context.policy.smooth_histogram,
+                context.players[player_idx].judgment_palette,
             )
         });
     let timing_hist_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
@@ -3475,6 +3553,7 @@ pub fn init_from_score_info(
                 si,
                 eval_graphs::TimingHistogramScale::Ex,
                 context.policy.smooth_histogram,
+                context.players[player_idx].judgment_palette,
             )
         });
     let timing_hist_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
@@ -3484,6 +3563,7 @@ pub fn init_from_score_info(
                 si,
                 eval_graphs::TimingHistogramScale::HardEx,
                 context.policy.smooth_histogram,
+                context.players[player_idx].judgment_palette,
             )
         });
 
@@ -3887,9 +3967,12 @@ pub fn sync_runtime_view(state: &mut State, view: EvaluationRuntimeView) {
         state.submissions = submissions;
     }
     if let Some(scoreboxes) = view.scoreboxes {
-        state.online_records = scoreboxes
-            .each_ref()
-            .map(eval_panes::OnlineRecordsPresentation::new);
+        state.online_records = std::array::from_fn(|player_idx| {
+            eval_panes::OnlineRecordsPresentation::new_with_palette(
+                &scoreboxes[player_idx],
+                state.context.players[player_idx].judgment_palette,
+            )
+        });
     }
     if let Some(favorites) = view.favorites {
         state.favorites = favorites;
@@ -5852,18 +5935,19 @@ pub fn push_actors(
             };
 
             if let Some(text) = state.percentage_text[player_idx].as_ref() {
-                actors.extend(eval_panes::build_pane_percentage_display(
+                actors.extend(eval_panes::build_pane_percentage_display_with_palette(
                     si,
                     text,
                     pane,
                     controller,
                     policy.transparent_panels,
                     policy.machine_font,
+                    state.context.players[player_idx].judgment_palette,
                 ));
             }
 
             match pane {
-                EvalPane::Timing => actors.extend(eval_panes::build_timing_pane(
+                EvalPane::Timing => actors.extend(eval_panes::build_timing_pane_with_palette(
                     si,
                     timing_text,
                     state.timing_hist_mesh[player_idx].as_ref(),
@@ -5871,8 +5955,9 @@ pub fn push_actors(
                     eval_graphs::TimingHistogramScale::Itg,
                     policy.transparent_panels,
                     policy.machine_font,
+                    state.context.players[player_idx].judgment_palette,
                 )),
-                EvalPane::TimingEx => actors.extend(eval_panes::build_timing_pane(
+                EvalPane::TimingEx => actors.extend(eval_panes::build_timing_pane_with_palette(
                     si,
                     timing_text,
                     state.timing_hist_mesh_ex[player_idx].as_ref(),
@@ -5880,16 +5965,20 @@ pub fn push_actors(
                     eval_graphs::TimingHistogramScale::Ex,
                     policy.transparent_panels,
                     policy.machine_font,
+                    state.context.players[player_idx].judgment_palette,
                 )),
-                EvalPane::TimingHardEx => actors.extend(eval_panes::build_timing_pane(
-                    si,
-                    timing_text,
-                    state.timing_hist_mesh_hard_ex[player_idx].as_ref(),
-                    controller,
-                    eval_graphs::TimingHistogramScale::HardEx,
-                    policy.transparent_panels,
-                    policy.machine_font,
-                )),
+                EvalPane::TimingHardEx => {
+                    actors.extend(eval_panes::build_timing_pane_with_palette(
+                        si,
+                        timing_text,
+                        state.timing_hist_mesh_hard_ex[player_idx].as_ref(),
+                        controller,
+                        eval_graphs::TimingHistogramScale::HardEx,
+                        policy.transparent_panels,
+                        policy.machine_font,
+                        state.context.players[player_idx].judgment_palette,
+                    ))
+                }
                 EvalPane::TimingArrows => {
                     if let Some(text) = state.timing_arrows_text[player_idx].as_ref() {
                         actors.extend(eval_panes::build_timing_arrows_pane(
@@ -5946,23 +6035,25 @@ pub fn push_actors(
                     } else {
                         player_side
                     };
-                    actors.extend(eval_panes::build_column_judgments_pane(
+                    actors.extend(eval_panes::build_column_judgments_pane_with_palette(
                         si,
                         controller,
                         pane3_player_side,
                         asset_manager,
                         state.screen_elapsed,
                         state.active_graph[controller_idx] == EvalGraphPane::Arrow,
+                        state.context.players[player_idx].judgment_palette,
                     ));
                 }
                 EvalPane::Standard | EvalPane::FaPlus | EvalPane::HardEx => {
-                    actors.extend(eval_panes::build_stats_pane(
+                    actors.extend(eval_panes::build_stats_pane_with_palette(
                         si,
                         pane,
                         controller,
                         asset_manager,
                         state.screen_elapsed,
                         policy.machine_font,
+                        state.context.players[player_idx].judgment_palette,
                     ));
                 }
                 EvalPane::TestInput => {

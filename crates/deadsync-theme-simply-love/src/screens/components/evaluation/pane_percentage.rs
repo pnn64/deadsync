@@ -4,6 +4,7 @@ use crate::config::MachineFont;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::color;
+use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadsync_profile as profile_data;
 
 use super::utils::{eval_style_alpha, pane_origin_x, pane3_origin_x};
@@ -48,13 +49,14 @@ const fn choose_score_zoom(machine_font: MachineFont, wendy: f32, mega: f32) -> 
     }
 }
 
-pub(crate) fn build_pane_percentage_display(
+pub(crate) fn build_pane_percentage_display_with_palette(
     score_info: &ScoreInfo,
     text: &PercentageText,
     pane: EvalPane,
     controller: profile_data::PlayerSide,
     transparent: bool,
     machine_font: MachineFont,
+    palette: JudgmentPalette,
 ) -> Vec<Actor> {
     if matches!(
         pane,
@@ -134,7 +136,7 @@ pub(crate) fn build_pane_percentage_display(
             ));
         }
         EvalPane::FaPlus => {
-            let ex_color = color::JUDGMENT_RGBA[0];
+            let ex_color = palette.color(Role::FantasticBlue);
             let white = [1.0, 1.0, 1.0, 1.0];
             let (main_text, main_color, bottom_label, bottom_text, bottom_color) =
                 if score_info.show_ex_score {
@@ -194,7 +196,7 @@ pub(crate) fn build_pane_percentage_display(
                 diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], score_bg_alpha)
             ));
 
-            let ex_color = color::JUDGMENT_RGBA[0];
+            let ex_color = palette.color(Role::FantasticBlue);
             let hex_color = color::HARD_EX_SCORE_RGBA;
             children.push(act!(text:
                 font(machine_font_key(machine_font, FontRole::Headline)):

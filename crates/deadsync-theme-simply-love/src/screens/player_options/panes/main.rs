@@ -509,6 +509,21 @@ const JUDGMENT_FONT: CustomBinding = CustomBinding {
     },
 };
 
+const JUDGMENT_COLORS: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
+            return Outcome::NONE;
+        };
+        state.judgment_palette_ids[player_idx] = state
+            .judgment_palette_choice_ids
+            .get(new_index)
+            .cloned()
+            .unwrap_or(None);
+        Outcome::persisted()
+    },
+};
+
 const HOLD_JUDGMENT: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
@@ -678,6 +693,16 @@ fn push_judgment_font_row(b: &mut RowBuilder) {
             .iter()
             .map(|choice| choice.label.clone())
             .collect(),
+    ));
+}
+
+fn push_judgment_colors_row(b: &mut RowBuilder) {
+    b.push(Row::custom(
+        RowId::JudgmentColors,
+        lookup_key("PlayerOptions", "JudgmentColors"),
+        lookup_key("PlayerOptionsHelp", "JudgmentColorsHelp"),
+        JUDGMENT_COLORS,
+        vec![tr("PlayerOptions", "MachineDefault").to_string()],
     ));
 }
 
@@ -930,6 +955,7 @@ pub(super) fn push_display_modifier_rows(
     push_tap_explosion_skin_row(b, noteskin_names);
     push_tap_explosion_options_row(b);
     push_judgment_font_row(b);
+    push_judgment_colors_row(b);
     push_judgment_offset_rows(b);
     push_combo_font_row(b);
     push_combo_offset_rows(b);
@@ -1073,6 +1099,7 @@ pub(super) fn build_main_rows(
     push_perspective_row(&mut b);
     push_noteskin_row(&mut b, noteskin_names);
     push_judgment_font_row(&mut b);
+    push_judgment_colors_row(&mut b);
     push_combo_font_row(&mut b);
     push_hold_judgment_row(&mut b);
     push_held_graphic_row(&mut b);

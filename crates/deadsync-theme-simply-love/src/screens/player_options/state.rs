@@ -353,6 +353,9 @@ pub struct State {
     pub(super) persisted_player_idx: usize,
     pub(super) cols_per_player: usize,
     pub player_options: [deadsync_profile::PlayerOptionsData; PLAYER_SLOTS],
+    /// `None` inherits the machine default; `Some` pins a stable catalog ID.
+    pub judgment_palette_ids: [Option<String>; PLAYER_SLOTS],
+    pub(super) judgment_palette_choice_ids: Vec<Option<String>>,
     pub heart_rate_device_ids: [Option<String>; PLAYER_SLOTS],
     /// Per-player maximum heart rate (bpm). Persisted alongside the HRM device
     /// selection; edited via the Max Heart Rate row when a monitor is selected.

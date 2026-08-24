@@ -99,6 +99,18 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
         ],
         inline: true,
     },
+    SubRow {
+        id: SubRowId::DefaultJudgmentPalette,
+        label: lookup_key("OptionsGameplay", "DefaultJudgmentPalette"),
+        choices: &[],
+        inline: false,
+    },
+    SubRow {
+        id: SubRowId::ManageJudgmentPalettes,
+        label: lookup_key("OptionsGameplay", "ManageJudgmentPalettes"),
+        choices: &[localized_choice("Common", "Open")],
+        inline: false,
+    },
 ];
 
 pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
@@ -172,6 +184,22 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGameplayHelp",
             "AutoScreenshotHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::GpDefaultJudgmentPalette,
+        name: lookup_key("OptionsGameplay", "DefaultJudgmentPalette"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGameplayHelp",
+            "DefaultJudgmentPaletteHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::GpManageJudgmentPalettes,
+        name: lookup_key("OptionsGameplay", "ManageJudgmentPalettes"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGameplayHelp",
+            "ManageJudgmentPalettesHelp",
         ))],
     },
     Item {

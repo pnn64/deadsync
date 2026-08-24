@@ -18,6 +18,7 @@ pub enum RowId {
     TapExplosionSkin,
     TapExplosionOptions,
     JudgmentFont,
+    JudgmentColors,
     JudgmentOffsetX,
     JudgmentOffsetY,
     ComboFont,

@@ -30,7 +30,12 @@ fn song_plan_preserves_profile_derived_notefield_behavior() {
     profile.error_bar_active_mask =
         profile_data::ErrorBarMask::COLORFUL | profile_data::ErrorBarMask::TEXT;
     let judgment_assets = ResolvedJudgmentAssets::from_profile(&profile);
-    let plan = gameplay_notefield_plan(&profile, &judgment_assets, 0.012_345);
+    let plan = gameplay_notefield_plan(
+        &profile,
+        &judgment_assets,
+        0.012_345,
+        deadlib_present::color::JudgmentPalette::default(),
+    );
 
     assert_eq!(plan.style, notefield_style());
     assert_eq!(plan.options.notefield_offset, [50.0, -50.0]);
