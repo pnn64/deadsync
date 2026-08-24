@@ -14,7 +14,11 @@ use std::{
     borrow::Cow,
     error::Error,
     mem,
-    sync::{Arc, mpsc},
+    sync::{
+        Arc,
+        atomic::{AtomicU32, AtomicU64, Ordering},
+        mpsc,
+    },
     time::Instant,
 };
 use wgpu::util::DeviceExt;
@@ -170,11 +174,96 @@ struct CachedTMeshGeom {
     vertex_count: u32,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct PresentCompletion {
     present_id: u32,
     host_ns: u64,
     interval_ns: u64,
+    refresh_ns: u64,
+}
+
+/// Fixed-size atomic latest-completion cell shared by wgpu callbacks and the render thread.
+///
+/// Writers serialize through the odd sequence value, publish one coherent snapshot,
+/// and release it by advancing to the next even value. The render thread retries if
+/// publication overlaps its read. The cell is renderer-lifetime fixed storage with
+/// no queue growth, allocation, pruning, or missed-completion backlog.
+struct PresentCompletionCell {
+    version: AtomicU32,
+    present_id: AtomicU32,
+    host_ns: AtomicU64,
+    interval_ns: AtomicU64,
+    refresh_ns: AtomicU64,
+}
+
+impl PresentCompletionCell {
+    fn new() -> Self {
+        Self {
+            version: AtomicU32::new(0),
+            present_id: AtomicU32::new(0),
+            host_ns: AtomicU64::new(0),
+            interval_ns: AtomicU64::new(0),
+            refresh_ns: AtomicU64::new(0),
+        }
+    }
+
+    fn publish(&self, present_id: u32, host_ns: u64) {
+        let version = loop {
+            let version = self.version.load(Ordering::Relaxed);
+            if version & 1 != 0 {
+                std::hint::spin_loop();
+                continue;
+            }
+            if self
+                .version
+                .compare_exchange_weak(
+                    version,
+                    version.wrapping_add(1),
+                    Ordering::Acquire,
+                    Ordering::Relaxed,
+                )
+                .is_ok()
+            {
+                break version;
+            }
+        };
+
+        let previous_host = self.host_ns.load(Ordering::Relaxed);
+        let previous_refresh = self.refresh_ns.load(Ordering::Relaxed);
+        let interval_ns = if host_ns == 0 || previous_host == 0 {
+            0
+        } else {
+            host_ns.saturating_sub(previous_host)
+        };
+        let refresh_ns = smooth_present_interval(previous_refresh, interval_ns);
+        self.present_id.store(present_id, Ordering::Relaxed);
+        if host_ns != 0 {
+            self.host_ns.store(host_ns, Ordering::Relaxed);
+        }
+        self.interval_ns.store(interval_ns, Ordering::Relaxed);
+        self.refresh_ns.store(refresh_ns, Ordering::Relaxed);
+        self.version
+            .store(version.wrapping_add(2), Ordering::Release);
+    }
+
+    fn load(&self) -> PresentCompletion {
+        loop {
+            let before = self.version.load(Ordering::Acquire);
+            if before & 1 != 0 {
+                std::hint::spin_loop();
+                continue;
+            }
+            let completion = PresentCompletion {
+                present_id: self.present_id.load(Ordering::Relaxed),
+                host_ns: self.host_ns.load(Ordering::Relaxed),
+                interval_ns: self.interval_ns.load(Ordering::Relaxed),
+                refresh_ns: self.refresh_ns.load(Ordering::Relaxed),
+            };
+            if self.version.load(Ordering::Acquire) == before {
+                return completion;
+            }
+        }
+    }
 }
 
 struct OwnedWindowHandle(pub Arc<Window>);
@@ -242,8 +331,7 @@ pub struct State {
     present_mode_policy: PresentModePolicy,
     next_texture_id: u64,
     next_present_id: u32,
-    present_done_tx: mpsc::Sender<PresentCompletion>,
-    present_done_rx: mpsc::Receiver<PresentCompletion>,
+    present_done: Arc<PresentCompletionCell>,
     last_completed_present_id: u32,
     last_host_present_ns: u64,
     last_present_interval_ns: u64,
@@ -509,7 +597,7 @@ fn init(
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    let (present_done_tx, present_done_rx) = mpsc::channel();
+    let present_done = Arc::new(PresentCompletionCell::new());
 
     info!("{} (wgpu) backend initialized.", api.name());
 
@@ -557,8 +645,7 @@ fn init(
         present_mode_policy,
         next_texture_id: 1,
         next_present_id: 1,
-        present_done_tx,
-        present_done_rx,
+        present_done,
         last_completed_present_id: 0,
         last_host_present_ns: 0,
         last_present_interval_ns: 0,
@@ -619,34 +706,28 @@ fn drain_present_completions(state: &mut State) -> PresentCompletion {
         present_id: state.last_completed_present_id,
         host_ns: state.last_host_present_ns,
         interval_ns: 0,
+        refresh_ns: state.last_present_interval_ns,
     };
-    while let Ok(done) = state.present_done_rx.try_recv() {
-        if done.present_id == 0 {
-            continue;
-        }
-        if done.host_ns != 0
-            && state.last_host_present_ns != 0
-            && done.present_id != state.last_completed_present_id
-        {
-            let interval_ns = done.host_ns.saturating_sub(state.last_host_present_ns);
-            latest.interval_ns = interval_ns;
-            if interval_ns != 0 {
-                state.last_present_interval_ns = if state.last_present_interval_ns == 0 {
-                    interval_ns
-                } else {
-                    ((state.last_present_interval_ns.saturating_mul(3)).saturating_add(interval_ns))
-                        / 4
-                };
-            }
-        }
-        state.last_completed_present_id = done.present_id;
-        if done.host_ns != 0 {
-            state.last_host_present_ns = done.host_ns;
-        }
-        latest.present_id = state.last_completed_present_id;
-        latest.host_ns = state.last_host_present_ns;
+    let done = state.present_done.load();
+    if done.present_id == 0 || done.present_id == state.last_completed_present_id {
+        return latest;
     }
+    state.last_completed_present_id = done.present_id;
+    state.last_host_present_ns = done.host_ns;
+    state.last_present_interval_ns = done.refresh_ns;
+    latest = done;
     latest
+}
+
+#[inline(always)]
+const fn smooth_present_interval(previous: u64, interval: u64) -> u64 {
+    if interval == 0 {
+        previous
+    } else if previous == 0 {
+        interval
+    } else {
+        previous.saturating_mul(3).saturating_add(interval) / 4
+    }
 }
 
 #[inline(always)]
@@ -1322,13 +1403,9 @@ pub fn draw(
     let submit_started = Instant::now();
     let submission_index = state.queue.submit(Some(encoder.finish()));
     stats.submit_us = elapsed_us_since(submit_started);
-    let present_done_tx = state.present_done_tx.clone();
+    let present_done = Arc::clone(&state.present_done);
     state.queue.on_submitted_work_done(move || {
-        let _ = present_done_tx.send(PresentCompletion {
-            present_id: submitted_present_id,
-            host_ns: current_host_nanos(),
-            interval_ns: 0,
-        });
+        present_done.publish(submitted_present_id, current_host_nanos());
     });
     let present_started = Instant::now();
     state.queue.present(surface_frame);
@@ -2390,7 +2467,11 @@ const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
 
 #[cfg(test)]
 mod tests {
-    use super::{Matrix4, stage_projection_upload};
+    use super::{Matrix4, PresentCompletion, PresentCompletionCell, stage_projection_upload};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
 
     const STRIDE: usize = 256;
 
@@ -2445,5 +2526,86 @@ mod tests {
         );
         assert!(upload[64..STRIDE].iter().all(|byte| *byte == 0));
         assert!(upload[STRIDE + 64..].iter().all(|byte| *byte == 0));
+    }
+
+    #[test]
+    fn completion_cell_publishes_coherent_intervals_and_smoothing() {
+        let cell = PresentCompletionCell::new();
+        assert_eq!(cell.load().present_id, 0);
+
+        cell.publish(1, 100);
+        assert_eq!(
+            cell.load(),
+            PresentCompletion {
+                present_id: 1,
+                host_ns: 100,
+                interval_ns: 0,
+                refresh_ns: 0,
+            }
+        );
+
+        cell.publish(2, 116);
+        assert_eq!(
+            cell.load(),
+            PresentCompletion {
+                present_id: 2,
+                host_ns: 116,
+                interval_ns: 16,
+                refresh_ns: 16,
+            }
+        );
+
+        cell.publish(3, 136);
+        assert_eq!(
+            cell.load(),
+            PresentCompletion {
+                present_id: 3,
+                host_ns: 136,
+                interval_ns: 20,
+                refresh_ns: 17,
+            }
+        );
+
+        cell.publish(4, 0);
+        assert_eq!(
+            cell.load(),
+            PresentCompletion {
+                present_id: 4,
+                host_ns: 136,
+                interval_ns: 0,
+                refresh_ns: 17,
+            }
+        );
+    }
+
+    #[test]
+    fn completion_cell_never_exposes_a_torn_snapshot() {
+        let cell = Arc::new(PresentCompletionCell::new());
+        let done = Arc::new(AtomicBool::new(false));
+        let writer_cell = Arc::clone(&cell);
+        let writer_done = Arc::clone(&done);
+        let writer = std::thread::spawn(move || {
+            for present_id in 1..=10_000 {
+                writer_cell.publish(present_id, u64::from(present_id) * 10);
+            }
+            writer_done.store(true, Ordering::Release);
+        });
+
+        while !done.load(Ordering::Acquire) {
+            let snapshot = cell.load();
+            if snapshot.present_id == 0 {
+                continue;
+            }
+            assert_eq!(snapshot.host_ns, u64::from(snapshot.present_id) * 10);
+            if snapshot.present_id == 1 {
+                assert_eq!(snapshot.interval_ns, 0);
+                assert_eq!(snapshot.refresh_ns, 0);
+            } else {
+                assert_eq!(snapshot.interval_ns, 10);
+                assert_eq!(snapshot.refresh_ns, 10);
+            }
+        }
+        writer.join().expect("completion writer");
+        assert_eq!(cell.load().present_id, 10_000);
     }
 }

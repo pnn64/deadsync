@@ -113,6 +113,25 @@ struct FrameBuffers {
     submitted_id: u32,
 }
 
+#[derive(Default)]
+struct TextureUploadState {
+    scratch: Vec<u8>,
+    command: Option<CommandBuffer>,
+    blit: Option<BlitCommandEncoder>,
+    staging: Vec<Buffer>,
+    uploads: u64,
+    batches: u64,
+}
+
+impl TextureUploadState {
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            staging: Vec::with_capacity(capacity),
+            ..Self::default()
+        }
+    }
+}
+
 impl FrameBuffers {
     fn new(device: &DeviceRef) -> Self {
         Self {
@@ -149,9 +168,10 @@ struct CacheStats {
 /// Retained textured geometry is warmed on first draw, stored in dense slots
 /// behind a fast key map, capped at 16 MiB, and saturates instead of pruning. A
 /// saturated miss falls back to the current frame's bounded upload buffer.
-/// Non-aligned texture rows use one render-thread-owned scratch buffer that
-/// grows to the largest upload, is reused for the renderer session, and is
-/// released with `State`; aligned rows borrow their source without touching it.
+/// Texture uploads share one render-thread-owned blit command per draw batch.
+/// Its 16-entry staging owner is cleared after commit without losing capacity.
+/// Non-aligned rows use one scratch buffer that grows to the largest upload and
+/// is reused for the renderer session; aligned rows borrow their source.
 /// Cache entries are freed by the render thread during cleanup;
 /// hit/miss/saturation counters are logged then. Per-frame maintenance is O(draw
 /// ops + visible geometry), and the only unbounded GPU wait is explicit back
@@ -173,7 +193,7 @@ pub struct State {
     window_size: (u32, u32),
     projection: Matrix4,
     uploads: TexturedMeshUploads,
-    texture_upload_scratch: Vec<u8>,
+    texture_uploads: TextureUploadState,
     cached_tmesh_slots: FastU64Map<u32>,
     cached_tmeshes: Vec<CachedTMesh>,
     cached_tmesh_bytes: usize,
@@ -254,7 +274,7 @@ pub fn init(
         window_size,
         projection: ortho_for_window(size.width, size.height),
         uploads: TexturedMeshUploads::with_capacity(1024, 64),
-        texture_upload_scratch: Vec::new(),
+        texture_uploads: TextureUploadState::with_capacity(16),
         cached_tmesh_slots: FastU64Map::with_capacity_and_hasher(256, Default::default()),
         cached_tmeshes: Vec::with_capacity(256),
         cached_tmesh_bytes: 0,
@@ -288,10 +308,10 @@ pub fn create_texture(
     let raw = state.device.new_texture(&desc);
     upload_texture(
         &state.queue,
+        &mut state.texture_uploads,
         &raw,
         image,
         sampler_desc.mipmaps,
-        &mut state.texture_upload_scratch,
     );
     let sampler = get_sampler(&state.device, &mut state.samplers, sampler_desc);
     let repeat_sampler = get_sampler(
@@ -325,10 +345,10 @@ pub fn update_texture(
     }
     upload_texture(
         &state.queue,
+        &mut state.texture_uploads,
         &texture.raw,
         image,
         texture.mipmaps,
-        &mut state.texture_upload_scratch,
     );
     Ok(())
 }
@@ -360,6 +380,7 @@ fn draw_inner(
     textures: &impl TextureLookup,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
+    flush_texture_uploads(&mut state.texture_uploads);
     let mut stats = DrawStats::default();
     let (width, height) = state.window_size;
     if width == 0 || height == 0 {
@@ -701,6 +722,9 @@ pub fn set_present_config(
 }
 
 pub fn wait_for_idle(state: &mut State) {
+    if let Some(command) = flush_texture_uploads(&mut state.texture_uploads) {
+        command.wait_until_completed();
+    }
     for index in 0..FRAMES_IN_FLIGHT {
         if let Some(command) = state.frames[index].command.take() {
             command.wait_until_completed();
@@ -717,6 +741,10 @@ pub fn cleanup(state: &mut State) {
         state.cache_stats.misses,
         state.cache_stats.saturated,
         state.cached_tmesh_bytes,
+    );
+    debug!(
+        "Native Metal texture uploads: {} uploads in {} batches",
+        state.texture_uploads.uploads, state.texture_uploads.batches,
     );
     state.cached_tmesh_slots.clear();
     state.cached_tmeshes.clear();
@@ -976,10 +1004,10 @@ fn mip_level_count(image: &RgbaImage, mipmaps: bool) -> u64 {
 
 fn upload_texture(
     queue: &CommandQueueRef,
+    uploads: &mut TextureUploadState,
     texture: &TextureRef,
     image: &RgbaImage,
     mipmaps: bool,
-    scratch: &mut Vec<u8>,
 ) {
     let packed_row_bytes = image.width() as usize * 4;
     let row_bytes = packed_row_bytes.next_multiple_of(256);
@@ -988,34 +1016,57 @@ fn upload_texture(
         packed_row_bytes,
         image.height() as usize,
         row_bytes,
-        scratch,
+        &mut uploads.scratch,
     );
-    autoreleasepool(|| {
-        let staging = queue.device().new_buffer_with_data(
+    let staging = autoreleasepool(|| {
+        queue.device().new_buffer_with_data(
             staging_bytes.as_ptr().cast(),
             staging_bytes.len() as u64,
             MTLResourceOptions::StorageModeShared,
-        );
-        let command = queue.new_command_buffer();
-        let blit = command.new_blit_command_encoder();
-        blit.copy_from_buffer_to_texture(
-            &staging,
-            0,
-            row_bytes as u64,
-            staging_bytes.len() as u64,
-            MTLSize::new(image.width() as u64, image.height() as u64, 1),
-            texture,
-            0,
-            0,
-            MTLOrigin::default(),
-            MTLBlitOption::None,
-        );
-        if mipmaps {
-            blit.generate_mipmaps(texture);
-        }
-        blit.end_encoding();
-        command.commit();
+        )
     });
+    if uploads.command.is_none() {
+        let command = queue.new_command_buffer();
+        command.set_label("DeadSync native Metal texture uploads");
+        uploads.blit = Some(command.new_blit_command_encoder().to_owned());
+        uploads.command = Some(command.to_owned());
+    }
+    let blit = uploads
+        .blit
+        .as_ref()
+        .expect("texture upload command always has a blit encoder");
+    blit.copy_from_buffer_to_texture(
+        &staging,
+        0,
+        row_bytes as u64,
+        staging.length(),
+        MTLSize::new(image.width() as u64, image.height() as u64, 1),
+        texture,
+        0,
+        0,
+        MTLOrigin::default(),
+        MTLBlitOption::None,
+    );
+    if mipmaps {
+        blit.generate_mipmaps(texture);
+    }
+    uploads.staging.push(staging);
+    uploads.uploads = uploads.uploads.saturating_add(1);
+}
+
+fn flush_texture_uploads(uploads: &mut TextureUploadState) -> Option<CommandBuffer> {
+    let blit = uploads.blit.take()?;
+    blit.end_encoding();
+    let command = uploads
+        .command
+        .take()
+        .expect("texture upload blit encoder always has a command buffer");
+    command.commit();
+    // `new_command_buffer` retains referenced resources after commit. Clearing
+    // releases Rust's extra ownership while preserving this vector's capacity.
+    uploads.staging.clear();
+    uploads.batches = uploads.batches.saturating_add(1);
+    Some(command)
 }
 
 fn stage_texture_rows<'a>(
@@ -1290,6 +1341,46 @@ mod tests {
 
         assert_eq!(staged.as_ptr(), source.as_ptr());
         assert_eq!(scratch.capacity(), capacity);
+    }
+
+    #[test]
+    fn texture_uploads_share_one_pending_blit_batch() {
+        autoreleasepool(|| {
+            let device = Device::system_default().expect("Metal device");
+            let queue = device.new_command_queue();
+            let desc = TextureDescriptor::new();
+            desc.set_texture_type(MTLTextureType::D2);
+            desc.set_pixel_format(MTLPixelFormat::RGBA8Unorm);
+            desc.set_width(2);
+            desc.set_height(2);
+            desc.set_storage_mode(MTLStorageMode::Private);
+            desc.set_usage(MTLTextureUsage::ShaderRead);
+            let first = device.new_texture(&desc);
+            let second = device.new_texture(&desc);
+            let image = RgbaImage::from_raw(2, 2, vec![0x7f; 16]).expect("2x2 RGBA image");
+            let mut uploads = TextureUploadState::default();
+
+            upload_texture(&queue, &mut uploads, &first, &image, false);
+            let command = uploads
+                .command
+                .as_ref()
+                .expect("first upload creates a batch")
+                .as_ptr();
+            upload_texture(&queue, &mut uploads, &second, &image, false);
+
+            assert_eq!(uploads.command.as_ref().unwrap().as_ptr(), command);
+            assert_eq!(uploads.staging.len(), 2);
+            assert_eq!(uploads.uploads, 2);
+            let staging_capacity = uploads.staging.capacity();
+            let command = flush_texture_uploads(&mut uploads).expect("pending batch");
+            command.wait_until_completed();
+            assert!(uploads.command.is_none());
+            assert!(uploads.blit.is_none());
+            assert!(uploads.staging.is_empty());
+            assert_eq!(uploads.staging.capacity(), staging_capacity);
+            assert_eq!(uploads.batches, 1);
+            assert!(flush_texture_uploads(&mut uploads).is_none());
+        });
     }
 
     #[test]

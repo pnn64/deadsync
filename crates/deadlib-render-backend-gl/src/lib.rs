@@ -633,6 +633,13 @@ pub fn init(
     // below were created successfully in this function.
     unsafe {
         gl.viewport(0, 0, initial_width as i32, initial_height as i32);
+        // This backend is the sole owner of the context. All texture uploads use
+        // tightly packed RGBA slices, so establish their invariant unpack state
+        // once instead of issuing four driver calls for every create/update.
+        gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
+        gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, 0);
+        gl.pixel_store_i32(glow::UNPACK_SKIP_ROWS, 0);
+        gl.pixel_store_i32(glow::UNPACK_SKIP_PIXELS, 0);
         gl.use_program(Some(program));
         gl.active_texture(glow::TEXTURE0);
         gl.uniform_1_i32(Some(&texture_location), 0);
@@ -800,11 +807,6 @@ pub fn create_texture(
         let t = gl.create_texture()?;
         gl.bind_texture(glow::TEXTURE_2D, Some(t));
 
-        gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
-        gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, 0);
-        gl.pixel_store_i32(glow::UNPACK_SKIP_ROWS, 0);
-        gl.pixel_store_i32(glow::UNPACK_SKIP_PIXELS, 0);
-
         gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, wrap_mode as i32);
         gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, wrap_mode as i32);
         gl.tex_parameter_i32(
@@ -836,8 +838,6 @@ pub fn create_texture(
             glow::UNSIGNED_BYTE,
             PixelUnpackData::Slice(Some(raw)),
         );
-
-        gl.bind_texture(glow::TEXTURE_2D, None);
         Ok(Texture(t))
     }
 }
@@ -852,10 +852,6 @@ pub fn update_texture(state: &State, texture: &Texture, image: &RgbaImage) -> Re
     // the update call.
     unsafe {
         gl.bind_texture(glow::TEXTURE_2D, Some(texture.0));
-        gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
-        gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, 0);
-        gl.pixel_store_i32(glow::UNPACK_SKIP_ROWS, 0);
-        gl.pixel_store_i32(glow::UNPACK_SKIP_PIXELS, 0);
         gl.tex_sub_image_2d(
             glow::TEXTURE_2D,
             0,
@@ -867,7 +863,6 @@ pub fn update_texture(state: &State, texture: &Texture, image: &RgbaImage) -> Re
             glow::UNSIGNED_BYTE,
             PixelUnpackData::Slice(Some(raw)),
         );
-        gl.bind_texture(glow::TEXTURE_2D, None);
     }
     Ok(())
 }
