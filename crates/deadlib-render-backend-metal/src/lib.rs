@@ -21,7 +21,7 @@ use objc::{
     runtime::{Object, YES},
     sel, sel_impl,
 };
-use std::{borrow::Cow, error::Error, mem, ptr, sync::Arc, time::Instant};
+use std::{error::Error, mem, ptr, sync::Arc, time::Instant};
 use winit::{
     raw_window_handle::{HasWindowHandle, RawWindowHandle},
     window::Window,
@@ -149,6 +149,9 @@ struct CacheStats {
 /// Retained textured geometry is warmed on first draw, stored in dense slots
 /// behind a fast key map, capped at 16 MiB, and saturates instead of pruning. A
 /// saturated miss falls back to the current frame's bounded upload buffer.
+/// Non-aligned texture rows use one render-thread-owned scratch buffer that
+/// grows to the largest upload, is reused for the renderer session, and is
+/// released with `State`; aligned rows borrow their source without touching it.
 /// Cache entries are freed by the render thread during cleanup;
 /// hit/miss/saturation counters are logged then. Per-frame maintenance is O(draw
 /// ops + visible geometry), and the only unbounded GPU wait is explicit back
@@ -170,6 +173,7 @@ pub struct State {
     window_size: (u32, u32),
     projection: Matrix4,
     uploads: TexturedMeshUploads,
+    texture_upload_scratch: Vec<u8>,
     cached_tmesh_slots: FastU64Map<u32>,
     cached_tmeshes: Vec<CachedTMesh>,
     cached_tmesh_bytes: usize,
@@ -250,6 +254,7 @@ pub fn init(
         window_size,
         projection: ortho_for_window(size.width, size.height),
         uploads: TexturedMeshUploads::with_capacity(1024, 64),
+        texture_upload_scratch: Vec::new(),
         cached_tmesh_slots: FastU64Map::with_capacity_and_hasher(256, Default::default()),
         cached_tmeshes: Vec::with_capacity(256),
         cached_tmesh_bytes: 0,
@@ -281,7 +286,13 @@ pub fn create_texture(
     desc.set_storage_mode(MTLStorageMode::Private);
     desc.set_usage(MTLTextureUsage::ShaderRead);
     let raw = state.device.new_texture(&desc);
-    upload_texture(&state.queue, &raw, image, sampler_desc.mipmaps);
+    upload_texture(
+        &state.queue,
+        &raw,
+        image,
+        sampler_desc.mipmaps,
+        &mut state.texture_upload_scratch,
+    );
     let sampler = get_sampler(&state.device, &mut state.samplers, sampler_desc);
     let repeat_sampler = get_sampler(
         &state.device,
@@ -312,7 +323,13 @@ pub fn update_texture(
     {
         return Err(std::io::Error::other("Metal texture update dimensions do not match").into());
     }
-    upload_texture(&state.queue, &texture.raw, image, texture.mipmaps);
+    upload_texture(
+        &state.queue,
+        &texture.raw,
+        image,
+        texture.mipmaps,
+        &mut state.texture_upload_scratch,
+    );
     Ok(())
 }
 
@@ -957,22 +974,22 @@ fn mip_level_count(image: &RgbaImage, mipmaps: bool) -> u64 {
     u64::from(u32::BITS - image.width().max(image.height()).leading_zeros())
 }
 
-fn upload_texture(queue: &CommandQueueRef, texture: &TextureRef, image: &RgbaImage, mipmaps: bool) {
+fn upload_texture(
+    queue: &CommandQueueRef,
+    texture: &TextureRef,
+    image: &RgbaImage,
+    mipmaps: bool,
+    scratch: &mut Vec<u8>,
+) {
     let packed_row_bytes = image.width() as usize * 4;
     let row_bytes = packed_row_bytes.next_multiple_of(256);
-    let staging_bytes = if row_bytes == packed_row_bytes {
-        Cow::Borrowed(image.as_raw().as_slice())
-    } else {
-        let mut padded = vec![0; row_bytes * image.height() as usize];
-        for (source, destination) in image
-            .as_raw()
-            .chunks_exact(packed_row_bytes)
-            .zip(padded.chunks_exact_mut(row_bytes))
-        {
-            destination[..packed_row_bytes].copy_from_slice(source);
-        }
-        Cow::Owned(padded)
-    };
+    let staging_bytes = stage_texture_rows(
+        image.as_raw(),
+        packed_row_bytes,
+        image.height() as usize,
+        row_bytes,
+        scratch,
+    );
     autoreleasepool(|| {
         let staging = queue.device().new_buffer_with_data(
             staging_bytes.as_ptr().cast(),
@@ -999,6 +1016,30 @@ fn upload_texture(queue: &CommandQueueRef, texture: &TextureRef, image: &RgbaIma
         blit.end_encoding();
         command.commit();
     });
+}
+
+fn stage_texture_rows<'a>(
+    source: &'a [u8],
+    packed_row_bytes: usize,
+    rows: usize,
+    row_bytes: usize,
+    scratch: &'a mut Vec<u8>,
+) -> &'a [u8] {
+    debug_assert_eq!(source.len(), packed_row_bytes * rows);
+    debug_assert!(row_bytes >= packed_row_bytes);
+    if row_bytes == packed_row_bytes {
+        return source;
+    }
+
+    scratch.resize(row_bytes * rows, 0);
+    for (source_row, destination) in source
+        .chunks_exact(packed_row_bytes)
+        .zip(scratch.chunks_exact_mut(row_bytes))
+    {
+        destination[..packed_row_bytes].copy_from_slice(source_row);
+        destination[packed_row_bytes..].fill(0);
+    }
+    scratch
 }
 
 fn ensure_cached_tmesh(
@@ -1217,6 +1258,39 @@ fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn texture_row_staging_preserves_pixels_and_zeroes_padding() {
+        let source = (0..24).collect::<Vec<u8>>();
+        let mut scratch = vec![0xff; 40];
+
+        let staged = stage_texture_rows(&source, 8, 3, 16, &mut scratch);
+
+        assert_eq!(staged.len(), 48);
+        for row in 0..3 {
+            assert_eq!(
+                &staged[row * 16..row * 16 + 8],
+                &source[row * 8..row * 8 + 8]
+            );
+            assert!(
+                staged[row * 16 + 8..(row + 1) * 16]
+                    .iter()
+                    .all(|byte| *byte == 0)
+            );
+        }
+    }
+
+    #[test]
+    fn aligned_texture_rows_borrow_source_without_growing_scratch() {
+        let source = [1u8; 32];
+        let mut scratch = Vec::with_capacity(7);
+        let capacity = scratch.capacity();
+
+        let staged = stage_texture_rows(&source, 16, 2, 16, &mut scratch);
+
+        assert_eq!(staged.as_ptr(), source.as_ptr());
+        assert_eq!(scratch.capacity(), capacity);
+    }
 
     #[test]
     fn retained_render_pass_keeps_identity_when_reconfigured() {

@@ -26,6 +26,8 @@ use winit::{
 // --- Constants ---
 const MAX_FRAMES_IN_FLIGHT: usize = 3;
 const DESCRIPTOR_POOL_SET_CAPACITY: u32 = 1024;
+const TEXTURE_STAGING_POOL_MAX_ENTRIES: usize = 32;
+const TEXTURE_STAGING_POOL_MAX_BYTES: usize = 64 * 1024 * 1024;
 const VULKAN_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const VULKAN_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
 const VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY: bool = false;
@@ -93,10 +95,15 @@ struct BufferResource {
     memory: vk::DeviceMemory,
 }
 
+struct TextureStagingBuffer {
+    resource: BufferResource,
+    capacity: vk::DeviceSize,
+}
+
 struct SubmittedTextureUpload {
     frame: usize,
     cmd: vk::CommandBuffer,
-    staging: Vec<BufferResource>,
+    staging: Vec<TextureStagingBuffer>,
     retired_textures: Vec<RetiredTexture>,
 }
 
@@ -230,15 +237,25 @@ pub struct State {
     uploads: TexturedMeshUploads,
     cached_tmesh: DenseSlotMap<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
-    // Render-thread-only, renderer-lifetime upload storage. Completed batches
-    // retain the largest staging/retirement capacities for the next submission.
-    // It warms over the frames-in-flight window, never grows on retirement,
-    // never evicts live resources, and is dropped only during backend teardown.
+    // Render-thread-only, renderer-lifetime upload storage, warmed by texture
+    // creation/update. Completed batches retain the largest vector capacities.
+    // Fence-retired host-visible buffers enter a best-fit pool capped at 32
+    // entries and 64 MiB of logical buffer bytes. A miss allocates at the
+    // existing upload boundary; there is no eviction, and saturation destroys
+    // only the completed candidate. Hits/misses/saturation are logged during
+    // cleanup, where every retained buffer is destroyed. Acquisition scans at
+    // most 32 entries; retirement performs one bounded decision per completed
+    // upload and never touches a resource before its frame fence completes.
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
-    pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
+    pending_tex_staging: Vec<TextureStagingBuffer>,    // keep staging alive until upload completion
     pending_tex_retired: Vec<RetiredTexture>, // keep replaced images alive through upload completion
-    recycled_tex_staging: Vec<BufferResource>, // largest completed batch allocation for reuse
+    recycled_tex_staging: Vec<TextureStagingBuffer>, // largest completed batch vector for reuse
     recycled_tex_retired: Vec<RetiredTexture>, // largest completed retirement allocation for reuse
+    texture_staging_pool: Vec<TextureStagingBuffer>, // fence-safe reusable GPU allocations
+    texture_staging_pool_bytes: usize,
+    texture_staging_hits: u64,
+    texture_staging_misses: u64,
+    texture_staging_saturated: u64,
     submitted_tex_uploads: Vec<SubmittedTextureUpload>, // retired when the tagged frame slot completes
     retired_textures: Vec<RetiredTexture>,
     last_submitted_present_id: u32,
@@ -390,6 +407,11 @@ pub fn init(
         pending_tex_retired: Vec::new(),
         recycled_tex_staging: Vec::new(),
         recycled_tex_retired: Vec::new(),
+        texture_staging_pool: Vec::with_capacity(TEXTURE_STAGING_POOL_MAX_ENTRIES),
+        texture_staging_pool_bytes: 0,
+        texture_staging_hits: 0,
+        texture_staging_misses: 0,
+        texture_staging_saturated: 0,
         submitted_tex_uploads: Vec::new(),
         retired_textures: Vec::new(),
         last_submitted_present_id: 0,
@@ -1148,12 +1170,21 @@ fn retire_submitted_texture_uploads(state: &mut State, frame: usize) {
     let retired_textures = &mut state.retired_textures;
     let recycled_staging = &mut state.recycled_tex_staging;
     let recycled_retired = &mut state.recycled_tex_retired;
+    let staging_pool = &mut state.texture_staging_pool;
+    let staging_pool_bytes = &mut state.texture_staging_pool_bytes;
+    let staging_saturated = &mut state.texture_staging_saturated;
     retire_frame_batches(&mut state.submitted_tex_uploads, frame, |batch| {
         unsafe {
             device.free_command_buffers(command_pool, &[batch.cmd]);
         }
         for staging in batch.staging.drain(..) {
-            destroy_buffer(device, &staging);
+            recycle_texture_staging(
+                device,
+                staging_pool,
+                staging_pool_bytes,
+                staging_saturated,
+                staging,
+            );
         }
         retired_textures.extend(
             batch
@@ -1164,6 +1195,75 @@ fn retire_submitted_texture_uploads(state: &mut State, frame: usize) {
         recycle_empty_vec(recycled_staging, &mut batch.staging);
         recycle_empty_vec(recycled_retired, &mut batch.retired_textures);
     });
+}
+
+fn best_fit_staging_index(pool: &[TextureStagingBuffer], needed: vk::DeviceSize) -> Option<usize> {
+    pool.iter()
+        .enumerate()
+        .filter(|(_, staging)| staging.capacity >= needed)
+        .min_by_key(|(_, staging)| staging.capacity)
+        .map(|(index, _)| index)
+}
+
+fn take_texture_staging(
+    state: &mut State,
+    needed: vk::DeviceSize,
+) -> Result<TextureStagingBuffer, Box<dyn Error>> {
+    if let Some(staging) = take_pooled_texture_staging(
+        &mut state.texture_staging_pool,
+        &mut state.texture_staging_pool_bytes,
+        needed,
+    ) {
+        state.texture_staging_hits = state.texture_staging_hits.saturating_add(1);
+        return Ok(staging);
+    }
+
+    state.texture_staging_misses = state.texture_staging_misses.saturating_add(1);
+    let (buffer, memory) = create_gpu_buffer(
+        &state.instance,
+        state.device.as_ref().unwrap(),
+        state.pdevice,
+        needed,
+        vk::BufferUsageFlags::TRANSFER_SRC,
+        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+    )?;
+    Ok(TextureStagingBuffer {
+        resource: BufferResource { buffer, memory },
+        capacity: needed,
+    })
+}
+
+fn take_pooled_texture_staging(
+    pool: &mut Vec<TextureStagingBuffer>,
+    pool_bytes: &mut usize,
+    needed: vk::DeviceSize,
+) -> Option<TextureStagingBuffer> {
+    let staging = pool.swap_remove(best_fit_staging_index(pool, needed)?);
+    *pool_bytes = pool_bytes.saturating_sub(staging.capacity as usize);
+    Some(staging)
+}
+
+fn recycle_texture_staging(
+    device: &Device,
+    pool: &mut Vec<TextureStagingBuffer>,
+    pool_bytes: &mut usize,
+    saturated: &mut u64,
+    staging: TextureStagingBuffer,
+) {
+    let capacity = staging.capacity as usize;
+    if staging_pool_accepts(pool.len(), *pool_bytes, capacity) {
+        *pool_bytes += capacity;
+        pool.push(staging);
+    } else {
+        *saturated = saturated.saturating_add(1);
+        destroy_buffer(device, &staging.resource);
+    }
+}
+
+#[inline(always)]
+const fn staging_pool_accepts(entries: usize, bytes: usize, capacity: usize) -> bool {
+    entries < TEXTURE_STAGING_POOL_MAX_ENTRIES
+        && bytes.saturating_add(capacity) <= TEXTURE_STAGING_POOL_MAX_BYTES
 }
 
 fn recycle_empty_vec<T>(recycled: &mut Vec<T>, candidate: &mut Vec<T>) {
@@ -1200,7 +1300,7 @@ fn retire_all_submitted_texture_uploads(state: &mut State) {
             device.free_command_buffers(state.command_pool, &[batch.cmd]);
         }
         for staging in batch.staging {
-            destroy_buffer(device, &staging);
+            destroy_buffer(device, &staging.resource);
         }
     }
 }
@@ -1318,26 +1418,25 @@ pub fn create_texture(
     let (width, height) = image.dimensions();
     let image_data = image.as_raw();
     let staging_size = image_data.len() as vk::DeviceSize;
-    let (staging_buffer, staging_memory) = create_gpu_buffer(
-        &state.instance,
-        device,
-        state.pdevice,
-        staging_size,
-        vk::BufferUsageFlags::TRANSFER_SRC,
-        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-    )?;
+    let staging = take_texture_staging(state, staging_size)?;
     // SAFETY: The staging allocation is HOST_VISIBLE | HOST_COHERENT, `image_data` points to
     // initialized RGBA bytes, and we unmap the range before handing the buffer to Vulkan.
     unsafe {
-        let mapped =
-            device.map_memory(staging_memory, 0, staging_size, vk::MemoryMapFlags::empty())?;
+        let mapped = match device.map_memory(
+            staging.resource.memory,
+            0,
+            staging_size,
+            vk::MemoryMapFlags::empty(),
+        ) {
+            Ok(mapped) => mapped,
+            Err(error) => {
+                destroy_buffer(device, &staging.resource);
+                return Err(error.into());
+            }
+        };
         std::ptr::copy_nonoverlapping(image_data.as_ptr(), mapped.cast::<u8>(), image_data.len());
-        device.unmap_memory(staging_memory);
+        device.unmap_memory(staging.resource.memory);
     }
-    let staging = BufferResource {
-        buffer: staging_buffer,
-        memory: staging_memory,
-    };
 
     let fmt = vk::Format::R8G8B8A8_UNORM;
     let (tex_image, tex_mem) = create_image(
@@ -1378,7 +1477,7 @@ pub fn create_texture(
     unsafe {
         device.cmd_copy_buffer_to_image(
             cmd,
-            staging.buffer,
+            staging.resource.buffer,
             tex_image,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             &[region],
@@ -1426,26 +1525,27 @@ pub fn update_texture(
     let (width, height) = image.dimensions();
     let image_data = image.as_raw();
     let staging_size = image_data.len() as vk::DeviceSize;
-    let (staging_buffer, staging_memory) = create_gpu_buffer(
-        &state.instance,
-        device,
-        state.pdevice,
-        staging_size,
-        vk::BufferUsageFlags::TRANSFER_SRC,
-        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-    )?;
+    let staging = take_texture_staging(state, staging_size)?;
     // SAFETY: The staging allocation is HOST_VISIBLE | HOST_COHERENT, `image_data` points to
     // initialized RGBA bytes, and we unmap the range before handing the buffer to Vulkan.
     unsafe {
-        let mapped =
-            device.map_memory(staging_memory, 0, staging_size, vk::MemoryMapFlags::empty())?;
+        let mapped = match device.map_memory(
+            staging.resource.memory,
+            0,
+            staging_size,
+            vk::MemoryMapFlags::empty(),
+        ) {
+            Ok(mapped) => mapped,
+            Err(error) => {
+                destroy_buffer(device, &staging.resource);
+                return Err(error.into());
+            }
+        };
         std::ptr::copy_nonoverlapping(image_data.as_ptr(), mapped.cast::<u8>(), image_data.len());
-        device.unmap_memory(staging_memory);
+        device.unmap_memory(staging.resource.memory);
     }
-    state.pending_tex_staging.push(BufferResource {
-        buffer: staging_buffer,
-        memory: staging_memory,
-    });
+    let staging_buffer = staging.resource.buffer;
+    state.pending_tex_staging.push(staging);
 
     let cmd = begin_pending_texture_upload_cmd(state)?;
     transition_image_layout_cmd(
@@ -2169,6 +2269,14 @@ pub fn cleanup(state: &mut State) {
     }
     retire_all_submitted_texture_uploads(state);
     retire_all_textures(state);
+    info!(
+        "Vulkan texture staging pool: hits={} misses={} saturated={} retained={} retained_bytes={}",
+        state.texture_staging_hits,
+        state.texture_staging_misses,
+        state.texture_staging_saturated,
+        state.texture_staging_pool.len(),
+        state.texture_staging_pool_bytes,
+    );
 
     // SAFETY: The device is idle, so it is valid to tear down swapchain resources, mapped rings,
     // pipelines, descriptor pools/layouts, the device, and finally the instance-owned objects.
@@ -2236,6 +2344,10 @@ pub fn cleanup(state: &mut State) {
             destroy_buffer(state.device.as_ref().unwrap(), &geom.buffer);
         }
         state.cached_tmesh_bytes = 0;
+        for staging in state.texture_staging_pool.drain(..) {
+            destroy_buffer(state.device.as_ref().unwrap(), &staging.resource);
+        }
+        state.texture_staging_pool_bytes = 0;
         for sampler in state.sampler_cache.values() {
             state
                 .device
@@ -4156,6 +4268,16 @@ mod tests {
         }
     }
 
+    fn staging(capacity: vk::DeviceSize) -> TextureStagingBuffer {
+        TextureStagingBuffer {
+            resource: BufferResource {
+                buffer: vk::Buffer::null(),
+                memory: vk::DeviceMemory::null(),
+            },
+            capacity,
+        }
+    }
+
     #[test]
     fn frame_batch_retirement_preserves_pending_order() {
         let mut batches = vec![
@@ -4203,5 +4325,38 @@ mod tests {
         let mut smaller = Vec::<u32>::with_capacity(2);
         recycle_empty_vec(&mut recycled, &mut smaller);
         assert_eq!(recycled.capacity(), retained_capacity);
+    }
+
+    #[test]
+    fn texture_staging_pool_selects_the_smallest_sufficient_buffer() {
+        let mut pool = vec![staging(4096), staging(1024), staging(2048)];
+
+        assert_eq!(best_fit_staging_index(&pool, 512), Some(1));
+        assert_eq!(best_fit_staging_index(&pool, 1500), Some(2));
+        assert_eq!(best_fit_staging_index(&pool, 4096), Some(0));
+        assert_eq!(best_fit_staging_index(&pool, 4097), None);
+
+        let mut bytes = 4096 + 1024 + 2048;
+        let selected =
+            take_pooled_texture_staging(&mut pool, &mut bytes, 1500).expect("2 KiB staging buffer");
+        assert_eq!(selected.capacity, 2048);
+        assert_eq!(bytes, 4096 + 1024);
+        assert_eq!(pool.len(), 2);
+    }
+
+    #[test]
+    fn texture_staging_pool_enforces_entry_and_byte_caps() {
+        assert!(staging_pool_accepts(0, 0, 1));
+        assert!(staging_pool_accepts(
+            TEXTURE_STAGING_POOL_MAX_ENTRIES - 1,
+            TEXTURE_STAGING_POOL_MAX_BYTES - 1,
+            1,
+        ));
+        assert!(!staging_pool_accepts(
+            TEXTURE_STAGING_POOL_MAX_ENTRIES,
+            0,
+            1,
+        ));
+        assert!(!staging_pool_accepts(0, TEXTURE_STAGING_POOL_MAX_BYTES, 1,));
     }
 }

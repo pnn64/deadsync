@@ -206,8 +206,9 @@ pub struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     projection: Matrix4,
+    // Render-thread-only uniform bytes double as the exact bitwise camera
+    // cache. Capacity warms at initialization/growth and lives for the session.
     projection_upload: Vec<u8>,
-    projection_keys: Vec<[u32; 16]>,
     bind_layout: wgpu::BindGroupLayout,
     samplers: SamplerCache<wgpu::Sampler>,
     shader: wgpu::ShaderModule,
@@ -412,11 +413,11 @@ fn init(
     } else {
         init_uniform_proj(&device, &queue, projection)
     };
-    let (projection_upload_capacity, projection_key_capacity) = match &proj {
-        ProjState::Immediates => (0, 0),
+    let projection_upload_capacity = match &proj {
+        ProjState::Immediates => 0,
         ProjState::Uniform {
             stride, capacity, ..
-        } => ((*stride as usize) * *capacity, *capacity),
+        } => (*stride as usize) * *capacity,
     };
 
     let bind_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -523,7 +524,6 @@ fn init(
         config,
         projection,
         projection_upload: Vec::with_capacity(projection_upload_capacity),
-        projection_keys: Vec::with_capacity(projection_key_capacity),
         bind_layout,
         samplers: SamplerCache::default(),
         shader,
@@ -1461,7 +1461,6 @@ fn upload_projections(state: &mut State, cameras: &[Matrix4]) {
     debug_assert!(stride >= PROJ_BYTES as usize);
     let changed = stage_projection_upload(
         &mut state.projection_upload,
-        &mut state.projection_keys,
         cameras,
         state.projection,
         stride,
@@ -1478,42 +1477,26 @@ fn upload_projections(state: &mut State, cameras: &[Matrix4]) {
         .write_buffer(buffer, 0, &state.projection_upload);
 }
 
-#[inline(always)]
-fn projection_key(matrix: Matrix4) -> [u32; 16] {
-    matrix.to_cols_array().map(f32::to_bits)
-}
-
 fn stage_projection_upload(
     upload: &mut Vec<u8>,
-    keys: &mut Vec<[u32; 16]>,
     cameras: &[Matrix4],
     fallback: Matrix4,
     stride: usize,
 ) -> bool {
     let needed = cameras.len().saturating_add(1).max(1);
-    let mut changed = keys.len() != needed;
-    keys.resize(needed, [0; 16]);
-    for (slot, matrix) in keys
-        .iter_mut()
-        .zip(cameras.iter().copied().chain(std::iter::once(fallback)))
-    {
-        let key = projection_key(matrix);
-        if *slot != key {
-            *slot = key;
+    let mut changed = upload.len() != needed * stride;
+    upload.resize(needed * stride, 0);
+    for (index, matrix) in cameras.iter().chain(std::iter::once(&fallback)).enumerate() {
+        let columns = matrix.to_cols_array();
+        let bytes = cast_slice(std::slice::from_ref(&columns));
+        let offset = index * stride;
+        let slot = &mut upload[offset..offset + bytes.len()];
+        if slot != bytes {
+            slot.copy_from_slice(bytes);
             changed = true;
         }
     }
-    if !changed {
-        return false;
-    }
-
-    upload.resize(needed * stride, 0);
-    for (index, key) in keys.iter().enumerate() {
-        let bytes = cast_slice(std::slice::from_ref(key));
-        let offset = index * stride;
-        upload[offset..offset + bytes.len()].copy_from_slice(bytes);
-    }
-    true
+    changed
 }
 
 fn set_camera(
@@ -2414,7 +2397,6 @@ mod tests {
     #[test]
     fn projection_cache_compares_float_bits() {
         let mut upload = Vec::new();
-        let mut keys = Vec::new();
         let positive_zero = Matrix4::from_cols_array(&[0.0; 16]);
         let mut negative_zero_bits = [0.0; 16];
         negative_zero_bits[12] = -0.0;
@@ -2422,24 +2404,46 @@ mod tests {
 
         assert!(stage_projection_upload(
             &mut upload,
-            &mut keys,
             &[],
             positive_zero,
             STRIDE,
         ));
         assert!(stage_projection_upload(
             &mut upload,
-            &mut keys,
             &[],
             negative_zero,
             STRIDE,
         ));
         assert!(!stage_projection_upload(
             &mut upload,
-            &mut keys,
             &[],
             negative_zero,
             STRIDE,
         ));
+    }
+
+    #[test]
+    fn projection_cache_stages_cameras_then_fallback_with_zero_padding() {
+        let mut upload = Vec::new();
+        let cameras = [Matrix4::from_scale([2.0, 3.0, 4.0].into())];
+        let fallback = Matrix4::from_translation([5.0, 6.0, 7.0].into());
+
+        assert!(stage_projection_upload(
+            &mut upload,
+            &cameras,
+            fallback,
+            STRIDE,
+        ));
+        assert_eq!(upload.len(), STRIDE * 2);
+        assert_eq!(
+            &upload[..64],
+            bytemuck::cast_slice(&cameras[0].to_cols_array())
+        );
+        assert_eq!(
+            &upload[STRIDE..STRIDE + 64],
+            bytemuck::cast_slice(&fallback.to_cols_array())
+        );
+        assert!(upload[64..STRIDE].iter().all(|byte| *byte == 0));
+        assert!(upload[STRIDE + 64..].iter().all(|byte| *byte == 0));
     }
 }
