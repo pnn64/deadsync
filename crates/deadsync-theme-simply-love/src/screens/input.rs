@@ -265,7 +265,9 @@ pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
     test_input: test_input::State,
-    back_hold_active: bool,
+    dedicated_three_key_nav: bool,
+    raw_back_hold_active: bool,
+    select_back_held: [bool; 2],
     back_hold_secs: f32,
 }
 
@@ -274,15 +276,29 @@ pub fn init() -> State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: visual_style_bg::State::new(),
         test_input: test_input::State::default(),
-        back_hold_active: false,
+        dedicated_three_key_nav: false,
+        raw_back_hold_active: false,
+        select_back_held: [false; 2],
         back_hold_secs: 0.0,
     }
+}
+
+pub fn on_enter(state: &mut State, dedicated_three_key_nav: bool) {
+    state.dedicated_three_key_nav = dedicated_three_key_nav;
+    state.raw_back_hold_active = false;
+    state.select_back_held = [false; 2];
+    state.back_hold_secs = 0.0;
+}
+
+#[inline(always)]
+fn return_hold_active(state: &State) -> bool {
+    state.raw_back_hold_active || state.select_back_held.into_iter().any(|held| held)
 }
 
 /* ------------------------------- update ------------------------------- */
 
 pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
-    if !state.back_hold_active {
+    if !return_hold_active(state) {
         state.back_hold_secs = 0.0;
         return None;
     }
@@ -290,7 +306,8 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     if state.back_hold_secs < BACK_HOLD_SECONDS {
         return None;
     }
-    state.back_hold_active = false;
+    state.raw_back_hold_active = false;
+    state.select_back_held = [false; 2];
     state.back_hold_secs = 0.0;
     Some(ThemeEffect::Navigate(Screen::Options))
 }
@@ -315,6 +332,22 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         return ThemeEffect::Navigate(Screen::Options);
     }
     test_input::apply_virtual_input(&mut state.test_input, ev);
+    let select_side = match ev.action {
+        VirtualAction::p1_select => Some(0),
+        VirtualAction::p2_select => Some(1),
+        _ => None,
+    };
+    if state.dedicated_three_key_nav
+        && let Some(player_idx) = select_side
+    {
+        let was_active = return_hold_active(state);
+        state.select_back_held[player_idx] = ev.pressed;
+        if ev.pressed && !was_active {
+            state.back_hold_secs = 0.0;
+        } else if !return_hold_active(state) {
+            state.back_hold_secs = 0.0;
+        }
+    }
     ThemeEffect::None
 }
 
@@ -332,13 +365,15 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         return ThemeEffect::None;
     }
     if key_event.pressed {
-        if !state.back_hold_active {
-            state.back_hold_active = true;
+        if !return_hold_active(state) {
             state.back_hold_secs = 0.0;
         }
+        state.raw_back_hold_active = true;
     } else {
-        state.back_hold_active = false;
-        state.back_hold_secs = 0.0;
+        state.raw_back_hold_active = false;
+        if !return_hold_active(state) {
+            state.back_hold_secs = 0.0;
+        }
     }
     ThemeEffect::None
 }
@@ -373,6 +408,7 @@ pub fn push_actors(
         game,
         state.active_color_index,
         visual_policy.machine_font,
+        state.dedicated_three_key_nav,
     ));
 }
 
@@ -385,6 +421,22 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_core::input::InputSource;
+    use std::time::Instant;
+
+    fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
+        let now = Instant::now();
+        InputEvent {
+            action,
+            input_slot: 0,
+            pressed,
+            source: InputSource::Gamepad,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+        }
+    }
 
     #[test]
     fn pump_panels_use_itgmania_menu_mapping() {
@@ -420,5 +472,43 @@ mod tests {
             menu_action(VirtualAction::p1_center, GameFlag::Dance, false),
             VirtualAction::p1_center,
         );
+    }
+
+    #[test]
+    fn dedicated_three_key_select_hold_returns_to_options() {
+        let mut state = init();
+        on_enter(&mut state, true);
+
+        assert!(matches!(
+            handle_input(&mut state, &input_event(VirtualAction::p1_select, true)),
+            ThemeEffect::None
+        ));
+        assert!(update(&mut state, BACK_HOLD_SECONDS - 0.01).is_none());
+        assert!(matches!(
+            update(&mut state, 0.02),
+            Some(ThemeEffect::Navigate(Screen::Options))
+        ));
+    }
+
+    #[test]
+    fn releasing_three_key_select_cancels_the_return_hold() {
+        let mut state = init();
+        on_enter(&mut state, true);
+
+        handle_input(&mut state, &input_event(VirtualAction::p1_select, true));
+        assert!(update(&mut state, BACK_HOLD_SECONDS - 0.01).is_none());
+        handle_input(&mut state, &input_event(VirtualAction::p1_select, false));
+
+        assert!(update(&mut state, BACK_HOLD_SECONDS + 0.1).is_none());
+    }
+
+    #[test]
+    fn select_does_not_leave_test_input_outside_dedicated_three_key_mode() {
+        let mut state = init();
+        on_enter(&mut state, false);
+
+        handle_input(&mut state, &input_event(VirtualAction::p1_select, true));
+
+        assert!(update(&mut state, BACK_HOLD_SECONDS + 0.1).is_none());
     }
 }

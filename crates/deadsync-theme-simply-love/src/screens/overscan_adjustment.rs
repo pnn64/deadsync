@@ -367,4 +367,17 @@ mod tests {
             [ThemeEffect::Navigate(Screen::Options)]
         ));
     }
+
+    #[test]
+    fn select_cycles_to_the_previous_field_for_front_panel_navigation() {
+        let mut state = init();
+        let mut effects = Vec::new();
+
+        handle_input(&mut state, &press(VirtualAction::p1_select), &mut effects);
+        handle_input(&mut state, &press(VirtualAction::p1_right), &mut effects);
+
+        assert_eq!(state.edit.selected(), Field::TranslateY);
+        assert_eq!(state.edit.values().translate_y, 1);
+        assert!(effects.is_empty());
+    }
 }

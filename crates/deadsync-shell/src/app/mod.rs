@@ -3835,6 +3835,8 @@ impl App {
             options::open_input_submenu(&mut self.state.screens.options_state);
         } else if from == CurrentScreen::TestLights {
             options::open_lights_submenu(&mut self.state.screens.options_state);
+        } else if from == CurrentScreen::OverscanAdjustment {
+            options::open_graphics_submenu(&mut self.state.screens.options_state);
         } else if from == CurrentScreen::SmxAssignPads {
             options::open_smx_config_submenu(&mut self.state.screens.options_state);
         }
@@ -7651,6 +7653,12 @@ impl App {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.mappings_state = mappings::init(crate::mappings::runtime_view());
             self.state.screens.mappings_state.active_color_index = color_index;
+        } else if target == CurrentScreen::Input {
+            let config = config::get();
+            screens::input::on_enter(
+                &mut self.state.screens.input_state,
+                config.three_key_navigation && config.only_dedicated_menu_buttons,
+            );
         } else if target == CurrentScreen::TestLights {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.test_lights_state = test_lights::init();

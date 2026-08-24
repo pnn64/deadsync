@@ -135,8 +135,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> Action {
         }
         VirtualAction::p1_up
         | VirtualAction::p1_menu_up
+        | VirtualAction::p1_select
         | VirtualAction::p2_up
-        | VirtualAction::p2_menu_up => {
+        | VirtualAction::p2_menu_up
+        | VirtualAction::p2_select => {
             let selected = (state.selected.index() + FIELD_COUNT - 1) % FIELD_COUNT;
             state.selected = Field::from_index(selected);
             Action::None

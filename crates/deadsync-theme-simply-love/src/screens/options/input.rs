@@ -1242,6 +1242,8 @@ fn dedicated_three_key_options_event(action: VirtualAction) -> bool {
             | VirtualAction::p2_menu_right
             | VirtualAction::p1_start
             | VirtualAction::p2_start
+            | VirtualAction::p1_select
+            | VirtualAction::p2_select
     )
 }
 
@@ -1250,12 +1252,6 @@ fn dedicated_three_key_menu_nav(view: OptionsView) -> bool {
         view,
         OptionsView::Main | OptionsView::Submenu(SubmenuKind::Input)
     )
-}
-
-fn selected_submenu_row_has_choices(state: &State, kind: SubmenuKind) -> Option<bool> {
-    let rows = submenu_rows(kind);
-    let row_idx = submenu_visible_row_to_actual(state, kind, state.sub_selected)?;
-    Some(!row_choices(state, kind, rows, row_idx).is_empty())
 }
 
 /// Whether Left/Right on the focused submenu row should fall through to
@@ -1299,14 +1295,7 @@ fn handle_dedicated_three_key_start_nav(
         );
         return ThemeEffect::None;
     }
-    if submenu_visible_row_to_actual(state, kind, state.sub_selected).is_none() {
-        if repeated {
-            return ThemeEffect::None;
-        }
-        clear_navigation_holds(state);
-        return activate_current_selection(state, asset_manager);
-    }
-    if selected_submenu_row_has_choices(state, kind) == Some(false) {
+    if selected_row_lr_navigates(state) {
         if repeated {
             return ThemeEffect::None;
         }
@@ -1379,6 +1368,9 @@ pub(super) fn handle_dedicated_three_key_options_input(
             }
             VirtualAction::p1_start => clear_start_hold(state, profile_data::PlayerSide::P1),
             VirtualAction::p2_start => clear_start_hold(state, profile_data::PlayerSide::P2),
+            VirtualAction::p1_select | VirtualAction::p2_select => {
+                on_nav_release(state, NavDirection::Up);
+            }
             _ => {}
         }
         return ThemeEffect::None;
@@ -1405,6 +1397,11 @@ pub(super) fn handle_dedicated_three_key_options_input(
             VirtualAction::p1_start | VirtualAction::p2_start => {
                 clear_navigation_holds(state);
                 activate_current_selection(state, asset_manager)
+            }
+            VirtualAction::p1_select | VirtualAction::p2_select => {
+                move_options_selection_vertical(state, asset_manager, NavDirection::Up);
+                on_nav_press(state, NavDirection::Up);
+                ThemeEffect::None
             }
             _ => ThemeEffect::None,
         };
@@ -1454,6 +1451,11 @@ pub(super) fn handle_dedicated_three_key_options_input(
                 };
                 on_start_press(state, side);
                 handle_dedicated_three_key_start_nav(state, asset_manager, kind, side, false)
+            }
+            VirtualAction::p1_select | VirtualAction::p2_select => {
+                move_options_selection_vertical(state, asset_manager, NavDirection::Up);
+                on_nav_press(state, NavDirection::Up);
+                ThemeEffect::None
             }
             _ => ThemeEffect::None,
         },

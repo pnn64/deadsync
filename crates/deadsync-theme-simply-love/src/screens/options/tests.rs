@@ -1345,6 +1345,15 @@ fn dedicated_press(
     handle_dedicated_three_key_options_input(state, asset_manager, &input_event(action, true))
 }
 
+fn dedicated_three_key_arcade_state() -> State {
+    init_with_config(config::Config {
+        three_key_navigation: true,
+        only_dedicated_menu_buttons: true,
+        arcade_options_navigation: true,
+        ..config::Config::default()
+    })
+}
+
 #[test]
 fn audio_options_view_builds_and_rebuilds_localized_device_labels() {
     let audio_options = AudioOptionsView {
@@ -2228,6 +2237,83 @@ fn service_child_three_key_start_moves_down_one_row() {
     dedicated_press(&mut state, &asset_manager, VirtualAction::p1_start);
 
     assert_eq!(state.sub_selected, 1);
+}
+
+#[test]
+fn service_child_three_key_select_moves_up_one_row() {
+    let asset_manager = AssetManager::new();
+    let mut state = dedicated_three_key_arcade_state();
+    state.view = OptionsView::Submenu(SubmenuKind::Graphics);
+    state.sub_selected = 2;
+
+    press(&mut state, &asset_manager, VirtualAction::p1_select);
+
+    assert_eq!(state.sub_selected, 1);
+    assert_eq!(state.nav_key_held_direction, Some(NavDirection::Up));
+    handle_input(
+        &mut state,
+        &asset_manager,
+        &updater_view(),
+        &input_event(VirtualAction::p1_select, false),
+        &mut Vec::new(),
+    );
+    assert_eq!(state.nav_key_held_direction, None);
+}
+
+#[test]
+fn input_launcher_three_key_start_opens_test_input() {
+    let asset_manager = AssetManager::new();
+    let mut state = dedicated_three_key_arcade_state();
+    state.view = OptionsView::Submenu(SubmenuKind::Input);
+    select_visible_row(&mut state, SubmenuKind::Input, SubRowId::TestInput);
+
+    let effects = press(&mut state, &asset_manager, VirtualAction::p1_start);
+
+    assert!(
+        effects
+            .iter()
+            .any(|effect| matches!(effect, ThemeEffect::Navigate(Screen::Input)))
+    );
+}
+
+#[test]
+fn service_child_three_key_start_opens_test_lights() {
+    let asset_manager = AssetManager::new();
+    let mut state = dedicated_three_key_arcade_state();
+    state.view = OptionsView::Submenu(SubmenuKind::Lights);
+    select_visible_row(&mut state, SubmenuKind::Lights, SubRowId::TestLights);
+
+    let effects = press(&mut state, &asset_manager, VirtualAction::p1_start);
+
+    assert!(
+        effects
+            .iter()
+            .any(|effect| matches!(effect, ThemeEffect::Navigate(Screen::TestLights)))
+    );
+}
+
+#[test]
+fn service_child_three_key_start_opens_overscan_adjustment() {
+    let asset_manager = AssetManager::new();
+    let mut state = dedicated_three_key_arcade_state();
+    state.view = OptionsView::Submenu(SubmenuKind::Graphics);
+    select_visible_row(
+        &mut state,
+        SubmenuKind::Graphics,
+        SubRowId::OverscanAdjustment,
+    );
+
+    let effects = press(&mut state, &asset_manager, VirtualAction::p1_start);
+
+    assert!(matches!(
+        effects.as_slice(),
+        [
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlaySfx("assets/sounds/start.ogg")
+            )),
+            ThemeEffect::Navigate(Screen::OverscanAdjustment)
+        ]
+    ));
 }
 
 #[test]

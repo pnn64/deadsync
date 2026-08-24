@@ -596,6 +596,7 @@ pub fn build_test_input_screen_content(
     game: GameFlag,
     _active_color_index: i32,
     machine_font: MachineFont,
+    select_returns: bool,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(96);
     let cx = screen_center_x();
@@ -645,9 +646,14 @@ pub fn build_test_input_screen_content(
         }
     }
 
+    let return_hint = if select_returns {
+        "Hold &SELECT; to return to Options."
+    } else {
+        "Hold &BACK; to return to Options."
+    };
     actors.push(act!(text:
         font("miso"):
-        settext("Hold &BACK; to return to Options."):
+        settext(return_hint):
         align(0.5, 0.0):
         xy(cx, screen_height() - 40.0):
         zoom(0.8):
