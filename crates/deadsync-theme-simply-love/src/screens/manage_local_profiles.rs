@@ -1212,15 +1212,23 @@ fn handle_import_picker_input(state: &mut State, ev: &InputEvent) -> ThemeEffect
         }
         VirtualAction::p1_up
         | VirtualAction::p1_menu_up
+        | VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
         | VirtualAction::p2_up
-        | VirtualAction::p2_menu_up => {
+        | VirtualAction::p2_menu_up
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => {
             move_import_picker_selected(state, NavDirection::Up);
             crate::effects::sfx("assets/sounds/change.ogg")
         }
         VirtualAction::p1_down
         | VirtualAction::p1_menu_down
+        | VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
         | VirtualAction::p2_down
-        | VirtualAction::p2_menu_down => {
+        | VirtualAction::p2_menu_down
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => {
             move_import_picker_selected(state, NavDirection::Down);
             crate::effects::sfx("assets/sounds/change.ogg")
         }
@@ -1454,8 +1462,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             }
             VirtualAction::p1_up
             | VirtualAction::p1_menu_up
+            | VirtualAction::p1_left
+            | VirtualAction::p1_menu_left
             | VirtualAction::p2_up
             | VirtualAction::p2_menu_up
+            | VirtualAction::p2_left
+            | VirtualAction::p2_menu_left
                 if ev.pressed =>
             {
                 move_profile_menu_selected(state, NavDirection::Up);
@@ -1463,8 +1475,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             }
             VirtualAction::p1_down
             | VirtualAction::p1_menu_down
+            | VirtualAction::p1_right
+            | VirtualAction::p1_menu_right
             | VirtualAction::p2_down
             | VirtualAction::p2_menu_down
+            | VirtualAction::p2_right
+            | VirtualAction::p2_menu_right
                 if ev.pressed =>
             {
                 move_profile_menu_selected(state, NavDirection::Down);
@@ -1483,8 +1499,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         }
         VirtualAction::p1_up
         | VirtualAction::p1_menu_up
+        | VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
         | VirtualAction::p2_up
-        | VirtualAction::p2_menu_up => {
+        | VirtualAction::p2_menu_up
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => {
             if ev.pressed {
                 move_selected(state, NavDirection::Up, NavWrap::Wrap);
                 on_nav_press(state, NavDirection::Up);
@@ -1494,8 +1514,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         }
         VirtualAction::p1_down
         | VirtualAction::p1_menu_down
+        | VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
         | VirtualAction::p2_down
-        | VirtualAction::p2_menu_down => {
+        | VirtualAction::p2_menu_down
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => {
             if ev.pressed {
                 move_selected(state, NavDirection::Down, NavWrap::Wrap);
                 on_nav_press(state, NavDirection::Down);
@@ -3148,6 +3172,35 @@ mod tests {
     }
 
     #[test]
+    fn profile_list_accepts_left_right_navigation_aliases() {
+        for action in [
+            VirtualAction::p1_left,
+            VirtualAction::p1_menu_left,
+            VirtualAction::p2_left,
+            VirtualAction::p2_menu_left,
+        ] {
+            let mut state = state_with_profile_row();
+            state.selected = 1;
+            state.prev_selected = 1;
+            press(&mut state, action);
+            assert_eq!(state.selected, 0, "{action:?} should move up");
+        }
+
+        for action in [
+            VirtualAction::p1_right,
+            VirtualAction::p1_menu_right,
+            VirtualAction::p2_right,
+            VirtualAction::p2_menu_right,
+        ] {
+            let mut state = state_with_profile_row();
+            state.selected = 1;
+            state.prev_selected = 1;
+            press(&mut state, action);
+            assert_eq!(state.selected, 2, "{action:?} should move down");
+        }
+    }
+
+    #[test]
     fn p2_can_navigate_profile_action_menu() {
         let mut state = state_with_profile_row();
 
@@ -3166,6 +3219,45 @@ mod tests {
 
         press(&mut state, VirtualAction::p2_back);
         assert!(state.profile_menu.is_none());
+    }
+
+    #[test]
+    fn vertical_profile_submenus_accept_left_right_navigation_aliases() {
+        let mut state = state_with_profile_row();
+        begin_profile_menu(&mut state, "test-profile", "Test Profile");
+
+        press(&mut state, VirtualAction::p1_menu_right);
+        assert_eq!(
+            state.profile_menu.as_ref().map(|menu| menu.selected_action),
+            Some(1)
+        );
+        press(&mut state, VirtualAction::p2_left);
+        assert_eq!(
+            state.profile_menu.as_ref().map(|menu| menu.selected_action),
+            Some(0)
+        );
+
+        state.profile_menu = None;
+        state.import_picker = Some(ImportPickerState {
+            candidates: vec![crate::SimplyLoveItgProfileCandidate {
+                dir: std::path::PathBuf::from("itg-profile"),
+                display_name: "ITG Profile".to_owned(),
+                imported_as: None,
+            }],
+            selected: 0,
+            info: None,
+        });
+
+        press(&mut state, VirtualAction::p2_menu_right);
+        assert_eq!(
+            state.import_picker.as_ref().map(|picker| picker.selected),
+            Some(1)
+        );
+        press(&mut state, VirtualAction::p1_left);
+        assert_eq!(
+            state.import_picker.as_ref().map(|picker| picker.selected),
+            Some(0)
+        );
     }
 
     #[test]
