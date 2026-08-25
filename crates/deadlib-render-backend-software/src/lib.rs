@@ -688,8 +688,9 @@ fn prepare_objects(
                         continue;
                     };
                     let mvp = projection * instance.transform();
+                    // One source triangle can become two after near-plane clipping.
                     if !stage_meshes
-                        || geometry.vertices.len().div_ceil(3)
+                        || geometry.vertices.len().div_ceil(3).saturating_mul(2)
                             > tmesh_triangles
                                 .capacity()
                                 .saturating_sub(tmesh_triangles.len())
@@ -1123,6 +1124,14 @@ struct ScreenVertexTexColor {
 }
 
 #[derive(Clone, Copy)]
+struct ClipVertexTexColor {
+    clip: Vector4,
+    u: f32,
+    v: f32,
+    color: [f32; 4],
+}
+
+#[derive(Clone, Copy)]
 struct RasterSetup {
     min_x: i32,
     max_x: i32,
@@ -1337,6 +1346,119 @@ fn prepare_mesh_triangles(
     ))
 }
 
+/// Clips one triangle against OpenGL's homogeneous near plane (`z >= -w`).
+/// A single plane produces at most four vertices, all kept on the stack.
+#[inline]
+fn clip_tmesh_near(triangle: [ClipVertexTexColor; 3]) -> ([ClipVertexTexColor; 4], usize) {
+    let distances = triangle.map(|vertex| vertex.clip.z + vertex.clip.w);
+    if distances.iter().all(|distance| *distance >= 0.0) {
+        return ([triangle[0], triangle[1], triangle[2], triangle[0]], 3);
+    }
+    if distances.iter().all(|distance| *distance < 0.0) {
+        return ([triangle[0]; 4], 0);
+    }
+
+    let mut out = [triangle[0]; 4];
+    let mut len = 0usize;
+    let mut previous = triangle[2];
+    let mut previous_distance = distances[2];
+    let mut previous_inside = previous_distance >= 0.0;
+
+    for (current, current_distance) in triangle.into_iter().zip(distances) {
+        let current_inside = current_distance >= 0.0;
+        if current_inside != previous_inside {
+            let t = previous_distance / (previous_distance - current_distance);
+            out[len] = ClipVertexTexColor {
+                clip: previous.clip + (current.clip - previous.clip) * t,
+                u: (current.u - previous.u).mul_add(t, previous.u),
+                v: (current.v - previous.v).mul_add(t, previous.v),
+                color: std::array::from_fn(|channel| {
+                    (current.color[channel] - previous.color[channel])
+                        .mul_add(t, previous.color[channel])
+                }),
+            };
+            len += 1;
+        }
+        if current_inside {
+            out[len] = current;
+            len += 1;
+        }
+        previous = current;
+        previous_distance = current_distance;
+        previous_inside = current_inside;
+    }
+    (out, len)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn project_tmesh_polygon(
+    mvp: &Matrix4,
+    tint: [f32; 4],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+    vertices: &[deadlib_render_core::TexturedMeshVertex],
+    width: usize,
+    height: usize,
+) -> Option<([ScreenVertexTexColor; 4], usize)> {
+    debug_assert_eq!(vertices.len(), 3);
+    let mut triangle = [ClipVertexTexColor {
+        clip: Vector4::ZERO,
+        u: 0.0,
+        v: 0.0,
+        color: [0.0; 4],
+    }; 3];
+    for i in 0..3 {
+        let vertex = vertices[i];
+        let p = vertex.pos;
+        let clip = *mvp * Vector4::new(p[0], p[1], p[2], 1.0);
+        if !clip.is_finite() {
+            return None;
+        }
+        triangle[i] = ClipVertexTexColor {
+            clip,
+            u: vertex.uv[0].mul_add(uv_scale[0], uv_offset[0])
+                + uv_tex_shift[0] * (vertex.tex_matrix_scale[0] - 1.0),
+            v: vertex.uv[1].mul_add(uv_scale[1], uv_offset[1])
+                + uv_tex_shift[1] * (vertex.tex_matrix_scale[1] - 1.0),
+            color: [
+                vertex.color[0] * tint[0],
+                vertex.color[1] * tint[1],
+                vertex.color[2] * tint[2],
+                vertex.color[3] * tint[3],
+            ],
+        };
+    }
+
+    let (clipped, len) = clip_tmesh_near(triangle);
+    let mut projected = [ScreenVertexTexColor {
+        x: 0.0,
+        y: 0.0,
+        u: 0.0,
+        v: 0.0,
+        color: [0.0; 4],
+    }; 4];
+    for i in 0..len {
+        let vertex = clipped[i];
+        if vertex.clip.w == 0.0 {
+            return None;
+        }
+        let ndc_x = vertex.clip.x / vertex.clip.w;
+        let ndc_y = vertex.clip.y / vertex.clip.w;
+        if !ndc_x.is_finite() || !ndc_y.is_finite() {
+            return None;
+        }
+        projected[i] = ScreenVertexTexColor {
+            x: ((ndc_x + 1.0) * 0.5) * width as f32,
+            y: ((1.0 - ndc_y) * 0.5) * height as f32,
+            u: vertex.u,
+            v: vertex.v,
+            color: vertex.color,
+        };
+    }
+    Some((projected, len))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn prepare_tmesh_triangles(
     out: &mut Vec<PreparedTriangle<ScreenVertexTexColor>>,
@@ -1357,56 +1479,38 @@ fn prepare_tmesh_triangles(
     let mut projected_count = 0u32;
     let mut min_y = i32::MAX;
     let mut max_y = i32::MIN;
-    'tri: for chunk in vertices.chunks_exact(3) {
-        let mut tri = [ScreenVertexTexColor {
-            x: 0.0,
-            y: 0.0,
-            u: 0.0,
-            v: 0.0,
-            color: [0.0; 4],
-        }; 3];
-        for i in 0..3 {
-            let p = chunk[i].pos;
-            let clip = *mvp * Vector4::new(p[0], p[1], p[2], 1.0);
-            if clip.w == 0.0 {
-                continue 'tri;
-            }
-            let ndc_x = clip.x / clip.w;
-            let ndc_y = clip.y / clip.w;
-            if !ndc_x.is_finite() || !ndc_y.is_finite() {
-                continue 'tri;
-            }
-            tri[i] = ScreenVertexTexColor {
-                x: ((ndc_x + 1.0) * 0.5) * width as f32,
-                y: ((1.0 - ndc_y) * 0.5) * height as f32,
-                u: chunk[i].uv[0].mul_add(uv_scale[0], uv_offset[0])
-                    + uv_tex_shift[0] * (chunk[i].tex_matrix_scale[0] - 1.0),
-                v: chunk[i].uv[1].mul_add(uv_scale[1], uv_offset[1])
-                    + uv_tex_shift[1] * (chunk[i].tex_matrix_scale[1] - 1.0),
-                color: [
-                    chunk[i].color[0] * tint[0],
-                    chunk[i].color[1] * tint[1],
-                    chunk[i].color[2] * tint[2],
-                    chunk[i].color[3] * tint[3],
-                ],
-            };
-        }
-        projected_count = projected_count.saturating_add(3);
-        let Some(setup) = triangle_setup(
-            [tri[0].x, tri[1].x, tri[2].x],
-            [tri[0].y, tri[1].y, tri[2].y],
+    for chunk in vertices.chunks_exact(3) {
+        let Some((polygon, polygon_len)) = project_tmesh_polygon(
+            mvp,
+            tint,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            chunk,
             width,
             height,
         ) else {
             continue;
         };
-        min_y = min_y.min(setup.min_y);
-        max_y = max_y.max(setup.max_y);
-        out.push(PreparedTriangle {
-            object,
-            vertices: tri,
-            setup,
-        });
+        projected_count = projected_count.saturating_add(3);
+        for index in 1..polygon_len.saturating_sub(1) {
+            let tri = [polygon[0], polygon[index], polygon[index + 1]];
+            let Some(setup) = triangle_setup(
+                [tri[0].x, tri[1].x, tri[2].x],
+                [tri[0].y, tri[1].y, tri[2].y],
+                width,
+                height,
+            ) else {
+                continue;
+            };
+            min_y = min_y.min(setup.min_y);
+            max_y = max_y.max(setup.max_y);
+            out.push(PreparedTriangle {
+                object,
+                vertices: tri,
+                setup,
+            });
+        }
     }
     let rows = if min_y > max_y {
         ScreenRows { start: 0, end: 0 }
@@ -1630,64 +1734,43 @@ fn rasterize_textured_mesh_triangles(
         return 0;
     }
 
-    let mut tri: [ScreenVertexTexColor; 3] = [ScreenVertexTexColor {
-        x: 0.0,
-        y: 0.0,
-        u: 0.0,
-        v: 0.0,
-        color: [0.0; 4],
-    }; 3];
     let sampler = SamplerDesc {
         wrap: SamplerWrap::Repeat,
         ..sampler
     };
 
     let mut verts_drawn = 0u32;
-    'tri: for chunk in vertices.chunks_exact(3) {
-        for i in 0..3 {
-            let p = chunk[i].pos;
-            let clip = *mvp * Vector4::new(p[0], p[1], p[2], 1.0);
-            if clip.w == 0.0 {
-                continue 'tri;
-            }
-            let ndc_x = clip.x / clip.w;
-            let ndc_y = clip.y / clip.w;
-            if !ndc_x.is_finite() || !ndc_y.is_finite() {
-                continue 'tri;
-            }
-
-            tri[i] = ScreenVertexTexColor {
-                x: ((ndc_x + 1.0) * 0.5) * width as f32,
-                y: ((1.0 - ndc_y) * 0.5) * height as f32,
-                u: chunk[i].uv[0].mul_add(uv_scale[0], uv_offset[0])
-                    + uv_tex_shift[0] * (chunk[i].tex_matrix_scale[0] - 1.0),
-                v: chunk[i].uv[1].mul_add(uv_scale[1], uv_offset[1])
-                    + uv_tex_shift[1] * (chunk[i].tex_matrix_scale[1] - 1.0),
-                color: [
-                    chunk[i].color[0] * tint[0],
-                    chunk[i].color[1] * tint[1],
-                    chunk[i].color[2] * tint[2],
-                    chunk[i].color[3] * tint[3],
-                ],
-            };
-        }
-
-        rasterize_triangle_tex_color(
-            &tri[0],
-            &tri[1],
-            &tri[2],
-            blend,
-            texture_mask,
-            image,
-            sampler,
-            opaque,
+    for chunk in vertices.chunks_exact(3) {
+        let Some((polygon, polygon_len)) = project_tmesh_polygon(
+            mvp,
+            tint,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            chunk,
             width,
             height,
-            stripe_y_start,
-            stripe_y_end,
-            buffer,
-        );
+        ) else {
+            continue;
+        };
         verts_drawn = verts_drawn.saturating_add(3);
+        for index in 1..polygon_len.saturating_sub(1) {
+            rasterize_triangle_tex_color(
+                &polygon[0],
+                &polygon[index],
+                &polygon[index + 1],
+                blend,
+                texture_mask,
+                image,
+                sampler,
+                opaque,
+                width,
+                height,
+                stripe_y_start,
+                stripe_y_end,
+                buffer,
+            );
+        }
     }
 
     verts_drawn
@@ -2817,6 +2900,113 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn textured_mesh_near_clip_interpolates_edges_without_heap_storage() {
+        let vertex = |clip: [f32; 4], u: f32, color: [f32; 4]| ClipVertexTexColor {
+            clip: Vector4::from_array(clip),
+            u,
+            v: u * 2.0,
+            color,
+        };
+        let a = vertex([-0.5, -0.5, 0.0, 1.0], 0.0, [0.0, 0.2, 0.4, 0.6]);
+        let b = vertex([0.5, -0.5, 0.0, 1.0], 1.0, [1.0, 0.8, 0.6, 0.4]);
+        let outside = vertex([0.0, 0.5, -2.0, 1.0], 0.5, [0.5; 4]);
+
+        let (clipped, len) = clip_tmesh_near([a, b, outside]);
+        assert_eq!(len, 4);
+        assert_eq!(clipped[0].clip.to_array(), [-0.25, 0.0, -1.0, 1.0]);
+        assert_eq!(clipped[1].clip.to_array(), a.clip.to_array());
+        assert_eq!(clipped[2].clip.to_array(), b.clip.to_array());
+        assert_eq!(clipped[3].clip.to_array(), [0.25, 0.0, -1.0, 1.0]);
+        assert_eq!(clipped[0].u, 0.25);
+        assert_eq!(clipped[3].u, 0.75);
+        assert_eq!(clipped[0].v, 0.5);
+        assert_eq!(clipped[3].v, 1.5);
+        assert_eq!(clipped[0].color, [0.25, 0.35, 0.45, 0.55]);
+        assert_eq!(clipped[3].color, [0.75, 0.65, 0.55, 0.45]);
+    }
+
+    #[test]
+    fn near_clipped_background_model_matches_retained_and_direct_paths() {
+        let textures = test_textures();
+        let vertices = [
+            textured_vertex([-0.5, -0.5, 0.0], [0.0, 1.0]),
+            textured_vertex([0.5, -0.5, 0.0], [1.0, 1.0]),
+            textured_vertex([0.0, 0.5, -2.0], [0.5, 0.0]),
+        ];
+        let mut prepared = Vec::with_capacity(2);
+        let (start, triangle_count, projected_count, rows) = prepare_tmesh_triangles(
+            &mut prepared,
+            0,
+            &Matrix4::IDENTITY,
+            [1.0; 4],
+            [1.0; 2],
+            [0.0; 2],
+            [0.0; 2],
+            &vertices,
+            WIDTH,
+            HEIGHT,
+        )
+        .expect("crossing triangle projects after clipping");
+        assert_eq!(start, 0);
+        assert_eq!(triangle_count, 2);
+        assert_eq!(projected_count, 3);
+        assert_eq!(rows, ScreenRows { start: 40, end: 61 });
+        assert_eq!(prepared.len(), 2);
+        assert_eq!(prepared.capacity(), 2);
+
+        let clear = pack_rgba([0.02, 0.03, 0.04, 1.0]);
+        let mut retained = vec![clear; WIDTH * HEIGHT];
+        let mut direct = retained.clone();
+        rasterize_prepared_tmesh(
+            &prepared,
+            false,
+            BlendMode::Alpha,
+            &textures.texture.image,
+            textures.texture.sampler,
+            textures.texture.opaque,
+            0,
+            HEIGHT,
+            &mut retained,
+            WIDTH,
+        );
+        assert_eq!(
+            rasterize_textured_mesh_triangles(
+                &Matrix4::IDENTITY,
+                &vertices,
+                [1.0; 4],
+                [1.0; 2],
+                [0.0; 2],
+                [0.0; 2],
+                false,
+                BlendMode::Alpha,
+                &textures.texture.image,
+                textures.texture.sampler,
+                textures.texture.opaque,
+                WIDTH,
+                HEIGHT,
+                0,
+                HEIGHT,
+                &mut direct,
+            ),
+            3
+        );
+        assert_eq!(retained, direct);
+
+        let mut changed = 0usize;
+        for (index, pixel) in retained.into_iter().enumerate() {
+            if pixel == clear {
+                continue;
+            }
+            changed += 1;
+            let x = index % WIDTH;
+            let y = index / WIDTH;
+            assert!((24..=72).contains(&x), "clipped pixel escaped in x: {x}");
+            assert!((40..=60).contains(&y), "clipped pixel escaped in y: {y}");
+        }
+        assert!(changed > 100);
     }
 
     #[test]
