@@ -1143,6 +1143,7 @@ impl DynamicMedia {
             }
             match prepare_song_lua_video(path, !assets.has_texture_key(key.as_ref())) {
                 SongLuaVideoPrepResult::Ready(prepared) => {
+                    let prepared = *prepared;
                     match prepared.poster {
                         Ok(Some(poster)) => {
                             assets.queue_texture_upload(prepared.key.clone(), poster)
@@ -1447,6 +1448,7 @@ impl DynamicMedia {
             };
             match result {
                 BannerVideoPrepResult::Ready(prepared) => {
+                    let prepared = *prepared;
                     self.clear_pending_banner_video_prep(&prepared.path, prepared.looped);
                     if Some(prepared.path.as_path()) != desired_path || prepared.looped != looped {
                         retire_video_player(prepared.player);
@@ -1496,6 +1498,7 @@ impl DynamicMedia {
             };
             match result {
                 BannerVideoPrepResult::Ready(prepared) => {
+                    let prepared = *prepared;
                     self.clear_pending_banner_video_prep(&prepared.path, prepared.looped);
                     if !desired_paths.iter().any(|path| {
                         dynamic::is_dynamic_video_path(path) && *path == prepared.path.as_path()

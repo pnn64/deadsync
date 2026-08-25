@@ -396,6 +396,101 @@ impl Backend {
         }
     }
 
+    pub fn create_yuv420_texture(
+        &mut self,
+        upload: Yuv420Upload<'_>,
+        sampler: SamplerDesc,
+    ) -> Result<Texture, Box<dyn Error>> {
+        match &mut self.0 {
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            BackendImpl::Vulkan(state) => {
+                vulkan::create_yuv420_texture(state, upload, sampler).map(Texture::Vulkan)
+            }
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            BackendImpl::VulkanWgpu(state) => {
+                wgpu_core::create_yuv420_texture(state, upload, sampler).map(Texture::VulkanWgpu)
+            }
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(state) => {
+                metal::create_yuv420_texture(state, upload, sampler).map(Texture::Metal)
+            }
+            #[cfg(target_os = "macos")]
+            BackendImpl::MetalWgpu(state) => {
+                wgpu_core::create_yuv420_texture(state, upload, sampler).map(Texture::MetalWgpu)
+            }
+            BackendImpl::OpenGL(state) => opengl::create_yuv420_texture(state, upload, sampler)
+                .map(Texture::OpenGL)
+                .map_err(Into::into),
+            BackendImpl::OpenGLWgpu(state) => {
+                wgpu_core::create_yuv420_texture(state, upload, sampler).map(Texture::OpenGLWgpu)
+            }
+            BackendImpl::Software(_) => {
+                software::create_yuv420_texture(upload, sampler).map(Texture::Software)
+            }
+            #[cfg(target_os = "windows")]
+            BackendImpl::DirectX(state) => {
+                wgpu_core::create_yuv420_texture(state, upload, sampler).map(Texture::DirectX)
+            }
+        }
+    }
+
+    pub fn update_yuv420_texture(
+        &mut self,
+        texture: &mut Texture,
+        upload: Yuv420Upload<'_>,
+    ) -> Result<(), Box<dyn Error>> {
+        match (&mut self.0, texture) {
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            (BackendImpl::Vulkan(state), Texture::Vulkan(texture)) => {
+                vulkan::update_yuv420_texture(state, texture, upload)
+            }
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            (BackendImpl::VulkanWgpu(state), Texture::VulkanWgpu(texture)) => {
+                wgpu_core::update_yuv420_texture(state, texture, upload)
+            }
+            #[cfg(target_os = "macos")]
+            (BackendImpl::Metal(state), Texture::Metal(texture)) => {
+                metal::update_yuv420_texture(state, texture, upload)
+            }
+            #[cfg(target_os = "macos")]
+            (BackendImpl::MetalWgpu(state), Texture::MetalWgpu(texture)) => {
+                wgpu_core::update_yuv420_texture(state, texture, upload)
+            }
+            (BackendImpl::OpenGL(state), Texture::OpenGL(texture)) => {
+                opengl::update_yuv420_texture(state, texture, upload).map_err(Into::into)
+            }
+            (BackendImpl::OpenGLWgpu(state), Texture::OpenGLWgpu(texture)) => {
+                wgpu_core::update_yuv420_texture(state, texture, upload)
+            }
+            (BackendImpl::Software(_), Texture::Software(texture)) => {
+                software::update_yuv420_texture(texture, upload)
+            }
+            #[cfg(target_os = "windows")]
+            (BackendImpl::DirectX(state), Texture::DirectX(texture)) => {
+                wgpu_core::update_yuv420_texture(state, texture, upload)
+            }
+            _ => Err(std::io::Error::other("texture/backend mismatch").into()),
+        }
+    }
+
+    pub fn texture_is_yuv420(texture: &Texture) -> bool {
+        match texture {
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            Texture::Vulkan(texture) => vulkan::texture_is_yuv420(texture),
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            Texture::VulkanWgpu(texture) => wgpu_core::texture_is_yuv420(texture),
+            #[cfg(target_os = "macos")]
+            Texture::Metal(texture) => metal::texture_is_yuv420(texture),
+            #[cfg(target_os = "macos")]
+            Texture::MetalWgpu(texture) => wgpu_core::texture_is_yuv420(texture),
+            Texture::OpenGL(texture) => opengl::texture_is_yuv420(texture),
+            Texture::OpenGLWgpu(texture) => wgpu_core::texture_is_yuv420(texture),
+            Texture::Software(texture) => software::texture_is_yuv420(texture),
+            #[cfg(target_os = "windows")]
+            Texture::DirectX(texture) => wgpu_core::texture_is_yuv420(texture),
+        }
+    }
+
     pub fn retire_texture(&mut self, texture: Texture) {
         match (&mut self.0, texture) {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]

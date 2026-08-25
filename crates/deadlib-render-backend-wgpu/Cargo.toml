@@ -33,6 +33,9 @@ wgpu = { version = "30.0.1", default-features = false, features = ["std", "parki
 [target.'cfg(all(target_pointer_width = "32", not(target_os = "windows")))'.dependencies]
 wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "wgsl", "gles"] }
 
+[dev-dependencies]
+naga = { version = "30.0.1", features = ["wgsl-in"] }
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 

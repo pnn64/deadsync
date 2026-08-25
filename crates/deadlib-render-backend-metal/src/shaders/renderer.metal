@@ -82,6 +82,33 @@ fragment float4 sprite_fragment(
     return color;
 }
 
+fragment float4 sprite_yuv_fragment(
+    SpriteOut in [[stage_in]],
+    texture2d<float> y_tex [[texture(0)]],
+    texture2d<float> u_tex [[texture(1)]],
+    texture2d<float> v_tex [[texture(2)]],
+    sampler tex_sampler [[sampler(0)]],
+    constant float4 &levels [[buffer(0)]],
+    constant float4 &coeffs [[buffer(1)]])
+{
+    float y = y_tex.sample(tex_sampler, in.uv).r * levels.x + levels.y;
+    float u = u_tex.sample(tex_sampler, in.uv).r * levels.z + levels.w;
+    float v = v_tex.sample(tex_sampler, in.uv).r * levels.z + levels.w;
+    float4 texel = float4(
+        y + coeffs.x * v,
+        y + coeffs.y * u + coeffs.z * v,
+        y + coeffs.w * u,
+        1.0);
+    float fade_x = edge_factor(in.uv.x, in.edge_fade.x, in.edge_fade.y);
+    float fade_y = edge_factor(in.uv.y, in.edge_fade.z, in.edge_fade.w);
+    float4 color = texel * in.tint;
+    if (in.texture_mask > 0.5) {
+        color = float4(in.tint.rgb, in.tint.a);
+    }
+    color.a *= min(fade_x, fade_y);
+    return color;
+}
+
 struct MeshVertex {
     packed_float2 pos;
     packed_float4 color;

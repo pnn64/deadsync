@@ -1,7 +1,7 @@
 use deadlib_render_core::{
     BlendMode, DrawOp, DrawStats, RenderFrame, SOFTWARE_MESH_STORAGE_SLOT,
     SOFTWARE_OBJECTS_STORAGE_SLOT, SOFTWARE_TMESH_STORAGE_SLOT, SamplerDesc, SamplerFilter,
-    SamplerWrap, TextureHandle, draw_storage_stats,
+    SamplerWrap, TextureHandle, Yuv420Upload, draw_storage_stats,
 };
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use image::RgbaImage;
@@ -25,6 +25,7 @@ pub struct Texture {
     pub image: RgbaImage,
     sampler: SamplerDesc,
     opaque: bool,
+    yuv420: bool,
 }
 
 pub trait TextureLookup {
@@ -381,13 +382,73 @@ pub fn create_texture(image: &RgbaImage, sampler: SamplerDesc) -> Result<Texture
         image: image.clone(),
         sampler,
         opaque: texture_is_opaque(image),
+        yuv420: false,
     })
 }
 
 pub fn update_texture(texture: &mut Texture, image: &RgbaImage) -> Result<(), Box<dyn Error>> {
     texture.image.clone_from(image);
     texture.opaque = texture_is_opaque(image);
+    texture.yuv420 = false;
     Ok(())
+}
+
+pub fn create_yuv420_texture(
+    upload: Yuv420Upload<'_>,
+    sampler: SamplerDesc,
+) -> Result<Texture, Box<dyn Error>> {
+    let image = yuv420_to_rgba(upload)?;
+    Ok(Texture {
+        image,
+        sampler,
+        opaque: true,
+        yuv420: true,
+    })
+}
+
+pub fn update_yuv420_texture(
+    texture: &mut Texture,
+    upload: Yuv420Upload<'_>,
+) -> Result<(), Box<dyn Error>> {
+    texture.image = yuv420_to_rgba(upload)?;
+    texture.opaque = true;
+    texture.yuv420 = true;
+    Ok(())
+}
+
+#[inline(always)]
+pub const fn texture_is_yuv420(texture: &Texture) -> bool {
+    texture.yuv420
+}
+
+fn yuv420_to_rgba(upload: Yuv420Upload<'_>) -> Result<RgbaImage, Box<dyn Error>> {
+    if !upload.is_valid() {
+        return Err(std::io::Error::other("invalid YUV420 planes").into());
+    }
+
+    let width = upload.width as usize;
+    let height = upload.height as usize;
+    let luma_len = width * height;
+
+    let mut rgba = vec![0; luma_len * 4];
+    for row in 0..height {
+        let chroma_row = row / 2 * (width / 2);
+        for col in 0..width {
+            let pixel = row * width + col;
+            let chroma = chroma_row + col / 2;
+            let y = f32::from(upload.y[pixel]) / 255.0 * upload.levels[0] + upload.levels[1];
+            let u = f32::from(upload.u[chroma]) / 255.0 * upload.levels[2] + upload.levels[3];
+            let v = f32::from(upload.v[chroma]) / 255.0 * upload.levels[2] + upload.levels[3];
+            let out = &mut rgba[pixel * 4..pixel * 4 + 4];
+            out[0] = ((y + upload.coeffs[0] * v).clamp(0.0, 1.0) * 255.0).round() as u8;
+            out[1] = ((y + upload.coeffs[1] * u + upload.coeffs[2] * v).clamp(0.0, 1.0) * 255.0)
+                .round() as u8;
+            out[2] = ((y + upload.coeffs[3] * u).clamp(0.0, 1.0) * 255.0).round() as u8;
+            out[3] = 255;
+        }
+    }
+    RgbaImage::from_raw(upload.width, upload.height, rgba)
+        .ok_or_else(|| std::io::Error::other("invalid converted YUV420 image").into())
 }
 
 #[inline]
@@ -2960,6 +3021,48 @@ mod tests {
     }
 
     #[test]
+    fn bt709_limited_video_conversion_hits_reference_neutrals() {
+        let sampler = SamplerDesc::default();
+        let levels = [255.0 / 219.0, -16.0 / 219.0, 255.0 / 224.0, -128.0 / 224.0];
+        let coeffs = [1.5748, -0.187_324, -0.468_124, 1.8556];
+        let black = create_yuv420_texture(
+            Yuv420Upload {
+                width: 2,
+                height: 2,
+                y: &[16; 4],
+                u: &[128],
+                v: &[128],
+                levels,
+                coeffs,
+            },
+            sampler,
+        )
+        .unwrap();
+        assert!(black.image.pixels().all(|pixel| pixel.0 == [0, 0, 0, 255]));
+        assert!(texture_is_yuv420(&black));
+
+        let white = create_yuv420_texture(
+            Yuv420Upload {
+                width: 2,
+                height: 2,
+                y: &[235; 4],
+                u: &[128],
+                v: &[128],
+                levels,
+                coeffs,
+            },
+            sampler,
+        )
+        .unwrap();
+        assert!(
+            white
+                .image
+                .pixels()
+                .all(|pixel| pixel.0 == [255, 255, 255, 255])
+        );
+    }
+
+    #[test]
     fn specialized_texture_samples_preserve_visible_results_exactly() {
         let opaque = RgbaImage::from_fn(8, 8, |x, y| {
             Rgba([
@@ -3723,6 +3826,7 @@ mod tests {
                     mipmaps: false,
                 },
                 opaque: false,
+                yuv420: false,
             },
             lookups: AtomicUsize::new(0),
         }

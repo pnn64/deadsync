@@ -51,6 +51,7 @@ pub use registry::{
     texture_handle, texture_registry_generation,
 };
 pub use texture_store::TextureStore;
+pub use upload::TextureUploadImage;
 
 use deadlib_render_core::{SamplerDesc, SamplerFilter, SamplerWrap};
 use image::{ImageFormat, ImageReader, RgbaImage};

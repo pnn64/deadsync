@@ -28,14 +28,16 @@ fn instance_buffers_bind_on_transitions_and_use_offsets_within_runs() {
 fn independent_encoder_state_survives_pipeline_changes() {
     let mut cache = EncoderCache::default();
 
-    assert!(cache.pipeline_changed(DrawKind::Sprite, 0));
-    assert!(!cache.pipeline_changed(DrawKind::Sprite, 0));
+    assert!(cache.pipeline_changed(DrawKind::Sprite, 0, false));
+    assert!(!cache.pipeline_changed(DrawKind::Sprite, 0, false));
+    assert!(cache.pipeline_changed(DrawKind::Sprite, 0, true));
+    assert!(!cache.pipeline_changed(DrawKind::Sprite, 0, true));
     assert!(cache.texture_changed(41));
     assert!(cache.sampler_changed(41, false));
     assert!(cache.depth_changed(false));
     assert!(cache.cull_changed(CullMode::Back));
 
-    assert!(cache.pipeline_changed(DrawKind::Mesh, 0));
+    assert!(cache.pipeline_changed(DrawKind::Mesh, 0, false));
     assert!(!cache.texture_changed(41));
     assert!(!cache.sampler_changed(41, false));
     assert!(!cache.depth_changed(false));
@@ -70,7 +72,7 @@ fn mixed_draw_trace_preserves_effective_state() {
     let mut cache = EncoderCache::default();
 
     assert_eq!(cache.instance_buffer(DrawKind::Sprite), BufferUpdate::Bind);
-    assert!(cache.pipeline_changed(DrawKind::Sprite, 1));
+    assert!(cache.pipeline_changed(DrawKind::Sprite, 1, false));
     assert!(cache.camera_changed(0, 7));
     assert!(cache.texture_changed(11));
     assert!(cache.sampler_changed(11, false));
@@ -78,7 +80,7 @@ fn mixed_draw_trace_preserves_effective_state() {
     assert!(cache.cull_changed(CullMode::Back));
 
     assert!(cache.kind_changed(DrawKind::Mesh));
-    assert!(cache.pipeline_changed(DrawKind::Mesh, 1));
+    assert!(cache.pipeline_changed(DrawKind::Mesh, 1, false));
     assert!(!cache.camera_changed(0, 7));
     assert!(!cache.depth_changed(false));
     assert!(cache.cull_changed(CullMode::None));
@@ -87,7 +89,7 @@ fn mixed_draw_trace_preserves_effective_state() {
         cache.instance_buffer(DrawKind::TexturedMesh),
         BufferUpdate::Bind
     );
-    assert!(cache.pipeline_changed(DrawKind::TexturedMesh, 1));
+    assert!(cache.pipeline_changed(DrawKind::TexturedMesh, 1, false));
     assert!(cache.camera_changed(1, 7));
     assert!(cache.depth_changed(true));
     assert!(cache.cull_changed(CullMode::Back));

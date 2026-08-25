@@ -1325,6 +1325,7 @@ dependencies = [
  "glam",
  "image",
  "log",
+ "naga",
  "pollster 1.0.1",
  "raw-window-handle",
  "wgpu",
@@ -1353,7 +1354,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.795"
+version = "0.5.796"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1796,7 +1797,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.795"
+version = "0.5.796"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1857,7 +1858,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.795"
+version = "0.5.796"
 dependencies = [
  "log",
  "semver",

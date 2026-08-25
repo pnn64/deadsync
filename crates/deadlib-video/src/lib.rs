@@ -24,6 +24,31 @@ pub struct Info {
     pub fps: f32,
     pub duration_sec: Option<f32>,
     pub looped: bool,
+    pub conversion: YuvConversion,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct YuvConversion {
+    pub levels: [f32; 4],
+    pub coeffs: [f32; 4],
+}
+
+impl YuvConversion {
+    pub const BT709_LIMITED: Self = Self::limited([1.5748, -0.187_324, -0.468_124, 1.8556]);
+
+    const fn limited(coeffs: [f32; 4]) -> Self {
+        Self {
+            levels: [255.0 / 219.0, -16.0 / 219.0, 255.0 / 224.0, -128.0 / 224.0],
+            coeffs,
+        }
+    }
+
+    const fn full(coeffs: [f32; 4]) -> Self {
+        Self {
+            levels: [1.0, 0.0, 1.0, -128.0 / 255.0],
+            coeffs,
+        }
+    }
 }
 
 pub struct LoadedVideo {
@@ -34,16 +59,16 @@ pub struct LoadedVideo {
 
 struct QueuedFrame {
     pts_sec: f32,
-    image: RgbaImage,
+    image: Yuv420Image,
 }
 
 pub struct VideoFrame {
-    image: Option<RgbaImage>,
+    image: Option<Yuv420Image>,
     recycle_tx: Option<SyncSender<Vec<u8>>>,
 }
 
 impl VideoFrame {
-    pub fn into_upload_parts(mut self) -> (RgbaImage, SyncSender<Vec<u8>>) {
+    pub fn into_upload_parts(mut self) -> (Yuv420Image, SyncSender<Vec<u8>>) {
         let image = self
             .image
             .take()
@@ -53,6 +78,77 @@ impl VideoFrame {
             .take()
             .expect("video frame recycler must be present");
         (image, recycle_tx)
+    }
+}
+
+/// One opaque planar YUV420 frame backed by one reusable buffer.
+///
+/// Planes are tightly packed in Y, U, V order. Dimensions are always non-zero
+/// and even, allowing every graphics backend to upload the planes directly to
+/// ordinary 8-bit textures without repacking rows. The source color-space and
+/// range conversion travels with the pixels for the renderer shader.
+pub struct Yuv420Image {
+    width: u32,
+    height: u32,
+    raw: Vec<u8>,
+    conversion: YuvConversion,
+}
+
+impl Yuv420Image {
+    pub fn from_raw(width: u32, height: u32, raw: Vec<u8>) -> Option<Self> {
+        Self::from_raw_with_conversion(width, height, raw, YuvConversion::BT709_LIMITED)
+    }
+
+    fn from_raw_with_conversion(
+        width: u32,
+        height: u32,
+        raw: Vec<u8>,
+        conversion: YuvConversion,
+    ) -> Option<Self> {
+        (width > 0
+            && height > 0
+            && width.is_multiple_of(2)
+            && height.is_multiple_of(2)
+            && raw.len() == yuv420_bytes(width, height))
+        .then_some(Self {
+            width,
+            height,
+            raw,
+            conversion,
+        })
+    }
+
+    #[inline(always)]
+    pub const fn width(&self) -> u32 {
+        self.width
+    }
+
+    #[inline(always)]
+    pub const fn height(&self) -> u32 {
+        self.height
+    }
+
+    #[inline(always)]
+    pub fn as_raw(&self) -> &[u8] {
+        &self.raw
+    }
+
+    pub fn planes(&self) -> (&[u8], &[u8], &[u8]) {
+        let y_len = self.width as usize * self.height as usize;
+        let chroma_len = y_len / 4;
+        let (y, chroma) = self.raw.split_at(y_len);
+        let (u, v) = chroma.split_at(chroma_len);
+        (y, u, v)
+    }
+
+    #[inline(always)]
+    pub const fn conversion(&self) -> YuvConversion {
+        self.conversion
+    }
+
+    #[inline(always)]
+    pub fn into_raw(self) -> Vec<u8> {
+        self.raw
     }
 }
 
@@ -194,7 +290,7 @@ fn open_player_with_info(path: &Path, info: Info) -> Result<Player, String> {
     // can be held by the worker while it blocks on a full decoded-frame queue.
     let buffer_count = max_frames.saturating_add(2);
     let (recycle_tx, recycle_rx) = sync_channel(buffer_count);
-    let frame_bytes = rgba_frame_bytes(info);
+    let frame_bytes = yuv420_frame_bytes(info);
     for _ in 0..buffer_count {
         recycle_tx
             .try_send(vec![0; frame_bytes])
@@ -259,7 +355,7 @@ fn decode_loop(mut stdout: ChildStdout, info: Info, worker: DecoderWorker) {
         stop,
         child: child_slot,
     } = worker;
-    let frame_bytes = rgba_frame_bytes(info);
+    let frame_bytes = yuv420_frame_bytes(info);
     let frame_step = 1.0 / info.fps.max(1.0);
     let mut frame_index = 0u64;
 
@@ -276,8 +372,10 @@ fn decode_loop(mut stdout: ChildStdout, info: Info, worker: DecoderWorker) {
                 break;
             }
         }
-        let Some(image) = RgbaImage::from_raw(info.width, info.height, raw) else {
-            warn!("Video decoder produced an invalid RGBA frame");
+        let Some(image) =
+            Yuv420Image::from_raw_with_conversion(info.width, info.height, raw, info.conversion)
+        else {
+            warn!("Video decoder produced an invalid YUV420 frame");
             break;
         };
         let pts_sec = frame_index as f32 * frame_step;
@@ -316,13 +414,13 @@ fn take_frame_buffer(
     }
 }
 
-fn recycle_frame_buffer(recycle_tx: &SyncSender<Vec<u8>>, image: RgbaImage) {
+fn recycle_frame_buffer(recycle_tx: &SyncSender<Vec<u8>>, image: Yuv420Image) {
     let _ = recycle_tx.try_send(image.into_raw());
 }
 
 fn load_poster_with_info(path: &Path, info: Info) -> Result<RgbaImage, String> {
     let frame_bytes = rgba_frame_bytes(info);
-    let mut child = poster_command(path).spawn().map_err(|e| {
+    let mut child = poster_command(path, info).spawn().map_err(|e| {
         format!(
             "failed to start ffmpeg poster decode for '{}': {e}",
             path.display()
@@ -370,7 +468,7 @@ fn probe(path: &Path, looped: bool) -> Result<Info, String> {
         .arg("-select_streams")
         .arg("v:0")
         .arg("-show_entries")
-        .arg("stream=width,height,avg_frame_rate,r_frame_rate,duration:format=duration")
+        .arg("stream=width,height,avg_frame_rate,r_frame_rate,duration,color_space,color_range:format=duration")
         .arg("-of")
         .arg("json")
         .arg(path)
@@ -392,6 +490,10 @@ fn probe(path: &Path, looped: bool) -> Result<Info, String> {
     let height = stream
         .height
         .ok_or_else(|| format!("ffprobe did not report height for '{}'", path.display()))?;
+    let width = even_dimension(width)
+        .ok_or_else(|| format!("video width is invalid for '{}'", path.display()))?;
+    let height = even_dimension(height)
+        .ok_or_else(|| format!("video height is invalid for '{}'", path.display()))?;
     let fps = parse_rate(stream.avg_frame_rate.as_deref())
         .or_else(|| parse_rate(stream.r_frame_rate.as_deref()))
         .unwrap_or(DEFAULT_FPS)
@@ -404,6 +506,7 @@ fn probe(path: &Path, looped: bool) -> Result<Info, String> {
                 .and_then(|fmt| fmt.duration.as_deref()),
         )
     });
+    let conversion = probe_conversion(stream, width, height);
 
     Ok(Info {
         width,
@@ -411,6 +514,7 @@ fn probe(path: &Path, looped: bool) -> Result<Info, String> {
         fps,
         duration_sec,
         looped,
+        conversion,
     })
 }
 
@@ -425,11 +529,14 @@ fn decode_command(path: &Path, info: Info) -> Command {
         .arg("-an")
         .arg("-sn")
         .arg("-vf")
-        .arg(format!("fps={:.6},format=rgba", info.fps))
+        .arg(format!(
+            "fps={:.6},pad=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p",
+            info.fps
+        ))
         .arg("-f")
         .arg("rawvideo")
         .arg("-pix_fmt")
-        .arg("rgba")
+        .arg("yuv420p")
         .arg("-")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -437,7 +544,7 @@ fn decode_command(path: &Path, info: Info) -> Command {
     cmd
 }
 
-fn poster_command(path: &Path) -> Command {
+fn poster_command(path: &Path, _info: Info) -> Command {
     let mut cmd = tool_command("ffmpeg");
     cmd.arg("-v")
         .arg("error")
@@ -448,7 +555,7 @@ fn poster_command(path: &Path) -> Command {
         .arg("-frames:v")
         .arg("1")
         .arg("-vf")
-        .arg("format=rgba")
+        .arg("pad=ceil(iw/2)*2:ceil(ih/2)*2,format=rgba")
         .arg("-f")
         .arg("rawvideo")
         .arg("-pix_fmt")
@@ -578,8 +685,29 @@ fn rgba_frame_bytes(info: Info) -> usize {
 }
 
 #[inline(always)]
+fn yuv420_frame_bytes(info: Info) -> usize {
+    yuv420_bytes(info.width, info.height)
+}
+
+#[inline(always)]
+fn yuv420_bytes(width: u32, height: u32) -> usize {
+    usize::try_from(width)
+        .ok()
+        .and_then(|w| usize::try_from(height).ok().and_then(|h| w.checked_mul(h)))
+        .and_then(|luma| luma.checked_add(luma / 2))
+        .unwrap_or(0)
+}
+
+#[inline(always)]
+fn even_dimension(value: u32) -> Option<u32> {
+    (value > 0)
+        .then_some(value)
+        .and_then(|value| value.checked_add(value % 2))
+}
+
+#[inline(always)]
 fn queue_capacity(info: Info) -> usize {
-    let frame_bytes = rgba_frame_bytes(info).max(1);
+    let frame_bytes = yuv420_frame_bytes(info).max(1);
     (FRAME_QUEUE_BYTES / frame_bytes).clamp(2, 24)
 }
 
@@ -603,6 +731,22 @@ fn parse_duration(raw: Option<&str>) -> Option<f32> {
     (duration.is_finite() && duration > 0.0).then_some(duration)
 }
 
+fn probe_conversion(stream: &ProbeStream, _width: u32, _height: u32) -> YuvConversion {
+    let coeffs = match stream.color_space.as_deref() {
+        Some("bt709" | "smpte240m") => [1.5748, -0.187_324, -0.468_124, 1.8556],
+        Some("bt2020nc" | "bt2020c") => [1.4746, -0.164_553, -0.571_353, 1.8814],
+        Some("fcc" | "bt470bg" | "smpte170m" | "smpte428") => {
+            [1.402, -0.344_136, -0.714_136, 1.772]
+        }
+        _ => [1.402, -0.344_136, -0.714_136, 1.772],
+    };
+    if matches!(stream.color_range.as_deref(), Some("pc" | "jpeg")) {
+        YuvConversion::full(coeffs)
+    } else {
+        YuvConversion::limited(coeffs)
+    }
+}
+
 #[derive(Deserialize)]
 struct ProbeOutput {
     streams: Vec<ProbeStream>,
@@ -616,6 +760,8 @@ struct ProbeStream {
     avg_frame_rate: Option<String>,
     r_frame_rate: Option<String>,
     duration: Option<String>,
+    color_space: Option<String>,
+    color_range: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -626,10 +772,10 @@ struct ProbeFormat {
 #[cfg(test)]
 mod tests {
     use super::{
-        Info, Player, QueuedFrame, bundled_tool_candidates, clamp_play_time, decode_command,
-        parse_duration, parse_rate, resolve_tool_path_in_dirs, take_frame_buffer,
+        Info, Player, ProbeStream, QueuedFrame, Yuv420Image, YuvConversion,
+        bundled_tool_candidates, clamp_play_time, decode_command, parse_duration, parse_rate,
+        probe_conversion, resolve_tool_path_in_dirs, take_frame_buffer,
     };
-    use image::RgbaImage;
     use std::{
         fs,
         path::{Path, PathBuf},
@@ -719,7 +865,7 @@ mod tests {
             frame_tx
                 .try_send(QueuedFrame {
                     pts_sec: 0.0,
-                    image: RgbaImage::from_raw(1, 1, vec![1, 1, 1, 1]).unwrap(),
+                    image: Yuv420Image::from_raw(2, 2, vec![1; 6]).unwrap(),
                 })
                 .is_ok()
         );
@@ -727,17 +873,18 @@ mod tests {
             frame_tx
                 .try_send(QueuedFrame {
                     pts_sec: 1.0,
-                    image: RgbaImage::from_raw(1, 1, vec![2, 2, 2, 2]).unwrap(),
+                    image: Yuv420Image::from_raw(2, 2, vec![2; 6]).unwrap(),
                 })
                 .is_ok()
         );
         let mut player = Player {
             info: Info {
-                width: 1,
-                height: 1,
+                width: 2,
+                height: 2,
                 fps: 30.0,
                 duration_sec: None,
                 looped: false,
+                conversion: YuvConversion::BT709_LIMITED,
             },
             frame_rx: Some(frame_rx),
             next_frame: None,
@@ -751,9 +898,9 @@ mod tests {
         let frame = player.take_due_frame(1.0).unwrap();
 
         assert!(player.frame_rx.as_ref().unwrap().try_recv().is_err());
-        assert_eq!(recycle_rx.try_recv().unwrap(), vec![1, 1, 1, 1]);
+        assert_eq!(recycle_rx.try_recv().unwrap(), vec![1; 6]);
         drop(frame);
-        assert_eq!(recycle_rx.try_recv().unwrap(), vec![2, 2, 2, 2]);
+        assert_eq!(recycle_rx.try_recv().unwrap(), vec![2; 6]);
     }
 
     #[test]
@@ -783,11 +930,12 @@ mod tests {
     #[test]
     fn looped_decode_restarts_ffmpeg_while_once_holds_the_final_time() {
         let info = |looped| Info {
-            width: 1,
-            height: 1,
+            width: 2,
+            height: 2,
             fps: 30.0,
             duration_sec: Some(2.0),
             looped,
+            conversion: YuvConversion::BT709_LIMITED,
         };
         let args = |looped| {
             decode_command(Path::new("banner.mp4"), info(looped))
@@ -804,5 +952,52 @@ mod tests {
         );
         assert_eq!(clamp_play_time(3.0, info(false)), 2.0);
         assert_eq!(clamp_play_time(3.0, info(true)), 3.0);
+    }
+
+    #[test]
+    fn decode_outputs_planar_yuv420_without_matrix_conversion() {
+        let info = Info {
+            width: 640,
+            height: 480,
+            fps: 30.0,
+            duration_sec: None,
+            looped: false,
+            conversion: YuvConversion::BT709_LIMITED,
+        };
+        let args = decode_command(Path::new("banner.mp4"), info)
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert!(args.iter().any(|arg| arg.contains("format=yuv420p")));
+        assert!(!args.iter().any(|arg| arg.contains("out_color_matrix")));
+        assert!(args.windows(2).any(|args| args == ["-pix_fmt", "yuv420p"]));
+    }
+
+    #[test]
+    fn yuv420_image_exposes_tightly_packed_planes() {
+        let image = Yuv420Image::from_raw(4, 2, (0..12).collect()).unwrap();
+        let (y, u, v) = image.planes();
+        assert_eq!(y, &[0, 1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(u, &[8, 9]);
+        assert_eq!(v, &[10, 11]);
+    }
+
+    #[test]
+    fn probe_conversion_uses_metadata_then_bt601_fallback() {
+        let stream = |space: Option<&str>, range: Option<&str>| ProbeStream {
+            width: None,
+            height: None,
+            avg_frame_rate: None,
+            r_frame_rate: None,
+            duration: None,
+            color_space: space.map(str::to_string),
+            color_range: range.map(str::to_string),
+        };
+        let bt601 = probe_conversion(&stream(Some("smpte170m"), Some("tv")), 1920, 1080);
+        assert_eq!(bt601.coeffs[0], 1.402);
+        let fallback = probe_conversion(&stream(None, None), 1920, 1080);
+        assert_eq!(fallback.coeffs[0], 1.402);
+        let full = probe_conversion(&stream(Some("bt709"), Some("pc")), 640, 480);
+        assert_eq!(full.levels, [1.0, 0.0, 1.0, -128.0 / 255.0]);
     }
 }

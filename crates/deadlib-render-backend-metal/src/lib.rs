@@ -7,8 +7,8 @@ use deadlib_render_core::{
     BlendMode, ClockDomainTrace, DrawOp, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
     PresentModeTrace, PresentStats, RenderFrame, SamplerCache, SamplerDesc, SamplerFilter,
     SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, TextureHandle, TexturedMeshBufferCache,
-    TexturedMeshInstanceRaw, TexturedMeshUploads, TexturedMeshVertex, draw_storage_stats,
-    resolve_textured_meshes,
+    TexturedMeshInstanceRaw, TexturedMeshUploads, TexturedMeshVertex, Yuv420Upload,
+    draw_storage_stats, resolve_textured_meshes,
 };
 use foreign_types::ForeignType;
 use glam::Mat4 as Matrix4;
@@ -46,10 +46,34 @@ const _: () = assert!(mem::size_of::<TexturedMeshInstanceRaw>() == 108);
 
 pub struct Texture {
     id: u64,
-    raw: metal::Texture,
+    images: TextureImages,
     sampler: SamplerState,
     repeat_sampler: SamplerState,
     mipmaps: bool,
+}
+
+enum TextureImages {
+    Rgba(metal::Texture),
+    Yuv420 {
+        planes: [metal::Texture; 3],
+        levels: [f32; 4],
+        coeffs: [f32; 4],
+    },
+}
+
+impl TextureImages {
+    #[inline(always)]
+    const fn is_yuv420(&self) -> bool {
+        matches!(self, Self::Yuv420 { .. })
+    }
+
+    #[inline(always)]
+    fn primary(&self) -> &TextureRef {
+        match self {
+            Self::Rgba(texture) => texture,
+            Self::Yuv420 { planes, .. } => &planes[0],
+        }
+    }
 }
 
 pub trait TextureLookup {
@@ -182,6 +206,7 @@ pub struct State {
     queue: CommandQueue,
     layer: MetalLayer,
     sprite_pipelines: PipelineSet,
+    yuv_pipelines: PipelineSet,
     mesh_pipelines: PipelineSet,
     tmesh_pipelines: PipelineSet,
     depth_disabled: DepthStencilState,
@@ -243,6 +268,8 @@ pub fn init(
         .map_err(std::io::Error::other)?;
     let sprite_pipelines =
         build_pipeline_set(&device, &library, "sprite_vertex", "sprite_fragment")?;
+    let yuv_pipelines =
+        build_pipeline_set(&device, &library, "sprite_vertex", "sprite_yuv_fragment")?;
     let mesh_pipelines = build_pipeline_set(&device, &library, "mesh_vertex", "mesh_fragment")?;
     let tmesh_pipelines = build_pipeline_set(
         &device,
@@ -263,6 +290,7 @@ pub fn init(
         queue,
         layer,
         sprite_pipelines,
+        yuv_pipelines,
         mesh_pipelines,
         tmesh_pipelines,
         depth_disabled,
@@ -326,7 +354,7 @@ pub fn create_texture(
     state.next_texture_id = state.next_texture_id.wrapping_add(1).max(1);
     Ok(Texture {
         id,
-        raw,
+        images: TextureImages::Rgba(raw),
         sampler,
         repeat_sampler,
         mipmaps: sampler_desc.mipmaps,
@@ -339,18 +367,122 @@ pub fn update_texture(
     image: &RgbaImage,
 ) -> Result<(), Box<dyn Error>> {
     validate_image(image)?;
-    if texture.raw.width() != image.width() as u64 || texture.raw.height() != image.height() as u64
-    {
+    let TextureImages::Rgba(raw) = &texture.images else {
+        return Err(std::io::Error::other("cannot upload RGBA into YUV420 texture").into());
+    };
+    if raw.width() != image.width() as u64 || raw.height() != image.height() as u64 {
         return Err(std::io::Error::other("Metal texture update dimensions do not match").into());
     }
     upload_texture(
         &state.queue,
         &mut state.texture_uploads,
-        &texture.raw,
+        raw,
         image,
         texture.mipmaps,
     );
     Ok(())
+}
+
+pub fn create_yuv420_texture(
+    state: &mut State,
+    upload: Yuv420Upload<'_>,
+    sampler_desc: SamplerDesc,
+) -> Result<Texture, Box<dyn Error>> {
+    if !upload.is_valid() {
+        return Err(std::io::Error::other("invalid YUV420 planes").into());
+    }
+    let make = |width: u32, height: u32| {
+        let desc = TextureDescriptor::new();
+        desc.set_texture_type(MTLTextureType::D2);
+        desc.set_pixel_format(MTLPixelFormat::R8Unorm);
+        desc.set_width(width as u64);
+        desc.set_height(height as u64);
+        desc.set_mipmap_level_count(1);
+        desc.set_storage_mode(MTLStorageMode::Private);
+        desc.set_usage(MTLTextureUsage::ShaderRead);
+        state.device.new_texture(&desc)
+    };
+    let images = [
+        make(upload.width, upload.height),
+        make(upload.width / 2, upload.height / 2),
+        make(upload.width / 2, upload.height / 2),
+    ];
+    for (texture, pixels, plane_width, plane_height) in [
+        (&images[0], upload.y, upload.width, upload.height),
+        (&images[1], upload.u, upload.width / 2, upload.height / 2),
+        (&images[2], upload.v, upload.width / 2, upload.height / 2),
+    ] {
+        upload_plane(
+            &state.queue,
+            &mut state.texture_uploads,
+            texture,
+            pixels,
+            plane_width,
+            plane_height,
+        );
+    }
+    let sampler = get_sampler(&state.device, &mut state.samplers, sampler_desc);
+    let repeat_sampler = get_sampler(
+        &state.device,
+        &mut state.samplers,
+        SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..sampler_desc
+        },
+    );
+    let id = state.next_texture_id;
+    state.next_texture_id = state.next_texture_id.wrapping_add(1).max(1);
+    Ok(Texture {
+        id,
+        images: TextureImages::Yuv420 {
+            planes: images,
+            levels: upload.levels,
+            coeffs: upload.coeffs,
+        },
+        sampler,
+        repeat_sampler,
+        mipmaps: false,
+    })
+}
+
+pub fn update_yuv420_texture(
+    state: &mut State,
+    texture: &mut Texture,
+    upload: Yuv420Upload<'_>,
+) -> Result<(), Box<dyn Error>> {
+    if !upload.is_valid() {
+        return Err(std::io::Error::other("invalid YUV420 planes").into());
+    }
+    let TextureImages::Yuv420 {
+        planes: images,
+        levels: texture_levels,
+        coeffs: texture_coeffs,
+    } = &mut texture.images
+    else {
+        return Err(std::io::Error::other("cannot upload YUV420 into RGBA texture").into());
+    };
+    for (texture, pixels, plane_width, plane_height) in [
+        (&images[0], upload.y, upload.width, upload.height),
+        (&images[1], upload.u, upload.width / 2, upload.height / 2),
+        (&images[2], upload.v, upload.width / 2, upload.height / 2),
+    ] {
+        upload_plane(
+            &state.queue,
+            &mut state.texture_uploads,
+            texture,
+            pixels,
+            plane_width,
+            plane_height,
+        );
+    }
+    *texture_levels = upload.levels;
+    *texture_coeffs = upload.coeffs;
+    Ok(())
+}
+
+#[inline(always)]
+pub const fn texture_is_yuv420(texture: &Texture) -> bool {
+    texture.images.is_yuv420()
 }
 
 #[inline(always)]
@@ -482,8 +614,13 @@ fn draw_inner(
                 if cache.depth_changed(false) {
                     encoder.set_depth_stencil_state(&state.depth_disabled);
                 }
-                if cache.pipeline_changed(DrawKind::Sprite, blend_key(run.blend)) {
-                    encoder.set_render_pipeline_state(state.sprite_pipelines.get(run.blend));
+                let yuv420 = texture.images.is_yuv420();
+                if cache.pipeline_changed(DrawKind::Sprite, blend_key(run.blend), yuv420) {
+                    encoder.set_render_pipeline_state(if yuv420 {
+                        state.yuv_pipelines.get(run.blend)
+                    } else {
+                        state.sprite_pipelines.get(run.blend)
+                    });
                 }
                 set_camera(
                     encoder,
@@ -495,7 +632,32 @@ fn draw_inner(
                     &mut cache,
                 );
                 if cache.texture_changed(texture.id) {
-                    encoder.set_fragment_texture(0, Some(&texture.raw));
+                    match &texture.images {
+                        TextureImages::Rgba(raw) => {
+                            encoder.set_fragment_texture(0, Some(raw));
+                            encoder.set_fragment_texture(1, None);
+                            encoder.set_fragment_texture(2, None);
+                        }
+                        TextureImages::Yuv420 {
+                            planes: [y, u, v],
+                            levels,
+                            coeffs,
+                        } => {
+                            encoder.set_fragment_texture(0, Some(y));
+                            encoder.set_fragment_texture(1, Some(u));
+                            encoder.set_fragment_texture(2, Some(v));
+                            encoder.set_fragment_bytes(
+                                0,
+                                mem::size_of_val(levels) as u64,
+                                levels.as_ptr().cast(),
+                            );
+                            encoder.set_fragment_bytes(
+                                1,
+                                mem::size_of_val(coeffs) as u64,
+                                coeffs.as_ptr().cast(),
+                            );
+                        }
+                    }
                 }
                 if cache.sampler_changed(texture.id, false) {
                     encoder.set_fragment_sampler_state(0, Some(&texture.sampler));
@@ -522,7 +684,7 @@ fn draw_inner(
                 if cache.depth_changed(false) {
                     encoder.set_depth_stencil_state(&state.depth_disabled);
                 }
-                if cache.pipeline_changed(DrawKind::Mesh, blend_key(run.blend)) {
+                if cache.pipeline_changed(DrawKind::Mesh, blend_key(run.blend), false) {
                     encoder.set_render_pipeline_state(state.mesh_pipelines.get(run.blend));
                 }
                 set_camera(
@@ -566,7 +728,7 @@ fn draw_inner(
                         encoder.set_vertex_buffer_offset(1, instance_offset);
                     }
                 }
-                if cache.pipeline_changed(DrawKind::TexturedMesh, blend_key(run.blend)) {
+                if cache.pipeline_changed(DrawKind::TexturedMesh, blend_key(run.blend), false) {
                     encoder.set_render_pipeline_state(state.tmesh_pipelines.get(run.blend));
                 }
                 if cache.depth_changed(run.depth_test) {
@@ -598,7 +760,7 @@ fn draw_inner(
                     &mut cache,
                 );
                 if cache.texture_changed(texture.id) {
-                    encoder.set_fragment_texture(0, Some(&texture.raw));
+                    encoder.set_fragment_texture(0, Some(texture.images.primary()));
                 }
                 if cache.sampler_changed(texture.id, true) {
                     encoder.set_fragment_sampler_state(0, Some(&texture.repeat_sampler));
@@ -1050,6 +1212,56 @@ fn upload_texture(
     if mipmaps {
         blit.generate_mipmaps(texture);
     }
+    uploads.staging.push(staging);
+    uploads.uploads = uploads.uploads.saturating_add(1);
+}
+
+fn upload_plane(
+    queue: &CommandQueueRef,
+    uploads: &mut TextureUploadState,
+    texture: &TextureRef,
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+) {
+    let packed_row_bytes = width as usize;
+    let row_bytes = packed_row_bytes.next_multiple_of(256);
+    let staging_bytes = stage_texture_rows(
+        pixels,
+        packed_row_bytes,
+        height as usize,
+        row_bytes,
+        &mut uploads.scratch,
+    );
+    let staging = autoreleasepool(|| {
+        queue.device().new_buffer_with_data(
+            staging_bytes.as_ptr().cast(),
+            staging_bytes.len() as u64,
+            MTLResourceOptions::StorageModeShared,
+        )
+    });
+    if uploads.command.is_none() {
+        let command = queue.new_command_buffer();
+        command.set_label("DeadSync native Metal texture uploads");
+        uploads.blit = Some(command.new_blit_command_encoder().to_owned());
+        uploads.command = Some(command.to_owned());
+    }
+    let blit = uploads
+        .blit
+        .as_ref()
+        .expect("texture upload command always has a blit encoder");
+    blit.copy_from_buffer_to_texture(
+        &staging,
+        0,
+        row_bytes as u64,
+        staging.length(),
+        MTLSize::new(width as u64, height as u64, 1),
+        texture,
+        0,
+        0,
+        MTLOrigin::default(),
+        MTLBlitOption::None,
+    );
     uploads.staging.push(staging);
     uploads.uploads = uploads.uploads.saturating_add(1);
 }

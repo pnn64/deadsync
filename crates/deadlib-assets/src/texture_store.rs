@@ -4,6 +4,7 @@ use crate::{
     upload::{PendingTextureUpload, TextureUploadBudget, TextureUploadQueue},
 };
 use deadlib_render_core::{SamplerDesc, TextureHandle, TextureHandleMap};
+use deadlib_video::Yuv420Image;
 use image::RgbaImage;
 use rustc_hash::FxHashMap;
 use std::sync::{Arc, mpsc::SyncSender};
@@ -198,6 +199,27 @@ impl<T> TextureStore<T> {
             register_texture_dims(self.texture_key(handle), image.width(), image.height());
         }
         self.pending_texture_uploads.push_recyclable(
+            handle,
+            image,
+            SamplerDesc::default(),
+            recycle_tx,
+        );
+    }
+
+    pub fn queue_recyclable_yuv420_upload(
+        &mut self,
+        handle: TextureHandle,
+        image: Yuv420Image,
+        recycle_tx: SyncSender<Vec<u8>>,
+    ) {
+        let dimensions_match = self
+            .uploaded_texture_dims
+            .get(&handle)
+            .is_some_and(|meta| meta.w == image.width() && meta.h == image.height());
+        if !dimensions_match {
+            register_texture_dims(self.texture_key(handle), image.width(), image.height());
+        }
+        self.pending_texture_uploads.push_recyclable_yuv420(
             handle,
             image,
             SamplerDesc::default(),

@@ -1,20 +1,22 @@
 use crate::{
     FontStore, TextureDecodeJob, TextureKeyLoad, TextureStore, prepare_initial_texture_images,
     prepare_texture_key_load, register_texture_dims,
-    upload::{PendingTextureUpload, TextureUploadBudget},
+    upload::{PendingTextureUpload, TextureUploadBudget, TextureUploadImage},
 };
 use deadlib_present::font::{Font, FontMap};
 use deadlib_render_core::{SamplerDesc, TextureHandle, TextureHandleMap};
+use deadlib_video::Yuv420Image;
 use image::RgbaImage;
 use std::{path::PathBuf, sync::mpsc::SyncSender};
 
 pub enum TextureUploadAction<'a, T> {
     Update {
         texture: &'a mut T,
-        image: &'a RgbaImage,
+        image: TextureUploadImage<'a>,
+        sampler: SamplerDesc,
     },
     Create {
-        image: &'a RgbaImage,
+        image: TextureUploadImage<'a>,
         sampler: SamplerDesc,
     },
 }
@@ -155,6 +157,16 @@ impl<T> AssetStore<T> {
             .queue_recyclable_texture_upload(handle, image, recycle_tx);
     }
 
+    pub fn queue_recyclable_yuv420_upload(
+        &mut self,
+        handle: TextureHandle,
+        image: Yuv420Image,
+        recycle_tx: SyncSender<Vec<u8>>,
+    ) {
+        self.texture_store
+            .queue_recyclable_yuv420_upload(handle, image, recycle_tx);
+    }
+
     pub fn queue_pending_generated_textures(&mut self) {
         self.texture_store.queue_pending_generated_textures();
     }
@@ -184,17 +196,31 @@ impl<T> AssetStore<T> {
             drained_uploads = drained_uploads.saturating_add(1);
             drained_bytes = drained_bytes.saturating_add(upload.bytes);
 
+            let image = upload.image();
             let mut updated = false;
-            if let Some(texture) = self.texture_store.apply_upload_update(
-                handle,
-                upload.image().width(),
-                upload.image().height(),
-            ) {
+            if let Some(texture) =
+                self.texture_store
+                    .apply_upload_update(handle, image.width(), image.height())
+            {
                 match apply(TextureUploadAction::Update {
                     texture,
-                    image: upload.image(),
+                    image,
+                    sampler: upload.sampler,
                 }) {
-                    Ok(_) => updated = true,
+                    Ok(replacement) => {
+                        updated = true;
+                        if let Some(replacement) = replacement {
+                            let old = self.texture_store.set_texture_for_handle(
+                                handle,
+                                replacement,
+                                image.width(),
+                                image.height(),
+                            );
+                            if let Some(old) = old {
+                                retired.push(old);
+                            }
+                        }
+                    }
                     Err(error) => errors.push(TextureUploadDrainError::Update {
                         key: self.texture_store.texture_key(handle).to_owned(),
                         error,
@@ -206,15 +232,15 @@ impl<T> AssetStore<T> {
             }
 
             match apply(TextureUploadAction::Create {
-                image: upload.image(),
+                image,
                 sampler: upload.sampler,
             }) {
                 Ok(Some(texture)) => {
                     let old = self.texture_store.set_texture_for_handle(
                         handle,
                         texture,
-                        upload.image().width(),
-                        upload.image().height(),
+                        image.width(),
+                        image.height(),
                     );
                     if let Some(old) = old {
                         retired.push(old);
@@ -418,6 +444,36 @@ mod tests {
         assert_eq!(retired, vec![7]);
         assert!(errors.is_empty());
         assert_eq!(recycle_rx.try_iter().count(), 2);
+    }
+
+    #[test]
+    fn same_size_upload_can_replace_a_texture_kind() {
+        let mut store = AssetStore::<u32>::new();
+        store.insert_texture("video".to_string(), 7, 2, 2);
+        let handle = store.reserve_texture_handle("video".to_string());
+        let (recycle_tx, recycle_rx) = sync_channel(1);
+        let image = Yuv420Image::from_raw(2, 2, vec![16, 16, 16, 16, 128, 128]).unwrap();
+        store.queue_recyclable_yuv420_upload(handle, image, recycle_tx);
+
+        let (retired, errors): (_, Vec<TextureUploadDrainError<()>>) = store
+            .drain_texture_uploads_with(
+                TextureUploadBudget {
+                    max_uploads: 1,
+                    max_bytes: 6,
+                },
+                |action| match action {
+                    TextureUploadAction::Update { texture, image, .. } => {
+                        assert_eq!(*texture, 7);
+                        assert!(matches!(image, TextureUploadImage::Yuv420(_)));
+                        Ok(Some(11))
+                    }
+                    TextureUploadAction::Create { .. } => panic!("same-size upload is an update"),
+                },
+            );
+
+        assert_eq!(retired, vec![7]);
+        assert!(errors.is_empty());
+        assert_eq!(recycle_rx.try_recv().unwrap().len(), 6);
     }
 
     #[test]

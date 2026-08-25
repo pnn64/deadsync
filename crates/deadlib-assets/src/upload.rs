@@ -1,5 +1,6 @@
 use deadlib_render_core::SamplerDesc;
 use deadlib_render_core::TextureHandle;
+use deadlib_video::Yuv420Image;
 use image::RgbaImage;
 use rustc_hash::FxHashMap;
 use std::{
@@ -23,20 +24,54 @@ pub struct PendingTextureUpload {
 enum UploadImage {
     Shared(Arc<RgbaImage>),
     Recyclable(RgbaImage),
+    RecyclableYuv420(Yuv420Image),
 }
 
 impl UploadImage {
-    fn as_image(&self) -> &RgbaImage {
+    fn as_image(&self) -> TextureUploadImage<'_> {
         match self {
-            Self::Shared(image) => image,
-            Self::Recyclable(image) => image,
+            Self::Shared(image) => TextureUploadImage::Rgba(image),
+            Self::Recyclable(image) => TextureUploadImage::Rgba(image),
+            Self::RecyclableYuv420(image) => TextureUploadImage::Yuv420(image),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum TextureUploadImage<'a> {
+    Rgba(&'a RgbaImage),
+    Yuv420(&'a Yuv420Image),
+}
+
+impl TextureUploadImage<'_> {
+    #[inline(always)]
+    pub fn width(self) -> u32 {
+        match self {
+            Self::Rgba(image) => image.width(),
+            Self::Yuv420(image) => image.width(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn height(self) -> u32 {
+        match self {
+            Self::Rgba(image) => image.height(),
+            Self::Yuv420(image) => image.height(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn byte_len(self) -> usize {
+        match self {
+            Self::Rgba(image) => image.as_raw().len(),
+            Self::Yuv420(image) => image.as_raw().len(),
         }
     }
 }
 
 impl PendingTextureUpload {
     #[inline(always)]
-    pub fn image(&self) -> &RgbaImage {
+    pub fn image(&self) -> TextureUploadImage<'_> {
         self.image
             .as_ref()
             .map(UploadImage::as_image)
@@ -46,12 +81,15 @@ impl PendingTextureUpload {
 
 impl Drop for PendingTextureUpload {
     fn drop(&mut self) {
-        let (Some(UploadImage::Recyclable(image)), Some(recycle_tx)) =
-            (self.image.take(), self.recycle_tx.take())
-        else {
+        let (Some(image), Some(recycle_tx)) = (self.image.take(), self.recycle_tx.take()) else {
             return;
         };
-        let _ = recycle_tx.try_send(image.into_raw());
+        let raw = match image {
+            UploadImage::Recyclable(image) => image.into_raw(),
+            UploadImage::RecyclableYuv420(image) => image.into_raw(),
+            UploadImage::Shared(_) => return,
+        };
+        let _ = recycle_tx.try_send(raw);
     }
 }
 
@@ -87,6 +125,21 @@ impl TextureUploadQueue {
         );
     }
 
+    pub fn push_recyclable_yuv420(
+        &mut self,
+        handle: TextureHandle,
+        image: Yuv420Image,
+        sampler: SamplerDesc,
+        recycle_tx: SyncSender<Vec<u8>>,
+    ) {
+        self.push_inner(
+            handle,
+            UploadImage::RecyclableYuv420(image),
+            sampler,
+            Some(recycle_tx),
+        );
+    }
+
     fn push_inner(
         &mut self,
         handle: TextureHandle,
@@ -94,7 +147,7 @@ impl TextureUploadQueue {
         sampler: SamplerDesc,
         recycle_tx: Option<SyncSender<Vec<u8>>>,
     ) {
-        let bytes = image.as_image().as_raw().len();
+        let bytes = image.as_image().byte_len();
         let upload = PendingTextureUpload {
             image: Some(image),
             recycle_tx,

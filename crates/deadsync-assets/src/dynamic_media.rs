@@ -27,7 +27,7 @@ pub struct PreparedBannerVideo {
 }
 
 pub enum BannerVideoPrepResult {
-    Ready(PreparedBannerVideo),
+    Ready(Box<PreparedBannerVideo>),
     Failed {
         path: PathBuf,
         looped: bool,
@@ -57,7 +57,7 @@ pub struct PreparedSongLuaVideo {
 }
 
 pub enum SongLuaVideoPrepResult {
-    Ready(PreparedSongLuaVideo),
+    Ready(Box<PreparedSongLuaVideo>),
     FailedOpen { key: String, msg: String },
 }
 
@@ -402,13 +402,13 @@ impl DynamicBackgroundState {
 pub fn prepare_banner_video(key: String, path: PathBuf, looped: bool) -> BannerVideoPrepResult {
     if !media_cache::banner_cache_options().enabled {
         return match video::open(&path, looped) {
-            Ok(video) => BannerVideoPrepResult::Ready(PreparedBannerVideo {
+            Ok(video) => BannerVideoPrepResult::Ready(Box::new(PreparedBannerVideo {
                 key,
                 path,
                 poster: video.poster,
                 player: video.player,
                 looped,
-            }),
+            })),
             Err(msg) => BannerVideoPrepResult::Failed { path, looped, msg },
         };
     }
@@ -425,13 +425,13 @@ pub fn prepare_banner_video(key: String, path: PathBuf, looped: bool) -> BannerV
             return BannerVideoPrepResult::Failed { path, looped, msg };
         }
     };
-    BannerVideoPrepResult::Ready(PreparedBannerVideo {
+    BannerVideoPrepResult::Ready(Box::new(PreparedBannerVideo {
         key,
         path,
         poster,
         player,
         looped,
-    })
+    }))
 }
 
 pub fn prepare_gameplay_background(key: String, path: PathBuf) -> GameplayBackgroundPrepResult {
@@ -454,11 +454,11 @@ pub fn prepare_song_lua_video(path: &Path, load_poster: bool) -> SongLuaVideoPre
     } else {
         Ok(None)
     };
-    SongLuaVideoPrepResult::Ready(PreparedSongLuaVideo {
+    SongLuaVideoPrepResult::Ready(Box::new(PreparedSongLuaVideo {
         key,
         player,
         poster,
-    })
+    }))
 }
 
 pub fn retire_video_player(player: video::Player) {

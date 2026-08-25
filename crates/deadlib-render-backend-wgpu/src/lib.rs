@@ -2,7 +2,7 @@ use deadlib_render_core::{
     BlendMode, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, PresentModePolicy,
     PresentModeTrace, PresentStats, RenderFrame, SamplerCache, SamplerDesc, SamplerFilter,
     SamplerWrap, TMeshCacheKey, TextureHandle, TexturedMeshBufferCache, TexturedMeshUploads,
-    TexturedMeshVertex, draw_storage_stats, resolve_textured_meshes,
+    TexturedMeshVertex, Yuv420Upload, draw_storage_stats, resolve_textured_meshes,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -159,10 +159,33 @@ enum ProjState {
 // A handle to a wgpu texture and its bind group.
 pub struct Texture {
     id: u64,
-    _texture: wgpu::Texture,
-    _view: wgpu::TextureView,
+    images: TextureImages,
     bind_group: Arc<wgpu::BindGroup>,
     bind_group_repeat: Arc<wgpu::BindGroup>,
+}
+
+enum TextureImages {
+    Rgba {
+        texture: wgpu::Texture,
+        _view: wgpu::TextureView,
+    },
+    Yuv420 {
+        planes: Box<[YuvPlane; 3]>,
+        conversion: wgpu::Buffer,
+        params: [[f32; 4]; 2],
+    },
+}
+
+struct YuvPlane {
+    texture: wgpu::Texture,
+    _view: wgpu::TextureView,
+}
+
+impl TextureImages {
+    #[inline(always)]
+    const fn is_yuv420(&self) -> bool {
+        matches!(self, Self::Yuv420 { .. })
+    }
 }
 
 pub trait TextureLookup {
@@ -358,10 +381,14 @@ pub struct State {
     // cache. Capacity warms at initialization/growth and lives for the session.
     projection_upload: Vec<u8>,
     bind_layout: wgpu::BindGroupLayout,
+    rgba_conversion: wgpu::Buffer,
     samplers: SamplerCache<wgpu::Sampler>,
     shader: wgpu::ShaderModule,
     pipeline_layout: wgpu::PipelineLayout,
     pipelines: PipelineSet,
+    yuv_shader: wgpu::ShaderModule,
+    yuv_pipeline_layout: wgpu::PipelineLayout,
+    yuv_pipelines: PipelineSet,
     mesh_shader: wgpu::ShaderModule,
     mesh_pipeline_layout: wgpu::PipelineLayout,
     mesh_pipelines: MeshPipelineSet,
@@ -586,11 +613,48 @@ fn init(
                 },
                 count: None,
             },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: wgpu::BufferSize::new(32),
+                },
+                count: None,
+            },
         ],
+    });
+    let rgba_conversion = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("wgpu unused RGBA conversion"),
+        contents: &[0; 32],
+        usage: wgpu::BufferUsages::UNIFORM,
     });
 
     let (shader, pipeline_layout, pipelines) =
-        build_pipeline_set(&device, &proj, &bind_layout, format);
+        build_pipeline_set(&device, &proj, &bind_layout, format, false);
+    let (yuv_shader, yuv_pipeline_layout, yuv_pipelines) =
+        build_pipeline_set(&device, &proj, &bind_layout, format, true);
     let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
         build_mesh_pipeline_set(&device, &proj, format);
     let (tmesh_shader, tmesh_pipeline_layout, tmesh_pipelines, tmesh_depth_pipelines) =
@@ -672,10 +736,14 @@ fn init(
         projection,
         projection_upload: Vec::with_capacity(projection_upload_capacity),
         bind_layout,
+        rgba_conversion,
         samplers: SamplerCache::default(),
         shader,
         pipeline_layout,
         pipelines,
+        yuv_shader,
+        yuv_pipeline_layout,
+        yuv_pipelines,
         mesh_shader,
         mesh_pipeline_layout,
         mesh_pipelines,
@@ -937,7 +1005,36 @@ pub fn create_texture(
     );
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let (bind_group, bind_group_repeat) =
+        create_texture_groups(state, sampler_desc, [&view, &view, &view], None);
+    let id = next_texture_id(state);
+
+    Ok(Texture {
+        id,
+        images: TextureImages::Rgba {
+            texture,
+            _view: view,
+        },
+        bind_group,
+        bind_group_repeat,
+    })
+}
+
+fn create_texture_groups(
+    state: &mut State,
+    sampler_desc: SamplerDesc,
+    views: [&wgpu::TextureView; 3],
+    conversion: Option<&wgpu::Buffer>,
+) -> (Arc<wgpu::BindGroup>, Arc<wgpu::BindGroup>) {
     let sampler = get_sampler(state, sampler_desc);
+    let sampler_repeat = get_sampler(
+        state,
+        SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..sampler_desc
+        },
+    );
+    let conversion = conversion.unwrap_or(&state.rgba_conversion);
     let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("wgpu texture bind group"),
         layout: &state.bind_layout,
@@ -948,17 +1045,22 @@ pub fn create_texture(
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::TextureView(&view),
+                resource: wgpu::BindingResource::TextureView(views[0]),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::TextureView(views[1]),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::TextureView(views[2]),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: conversion.as_entire_binding(),
             },
         ],
     });
-    let sampler_repeat = get_sampler(
-        state,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler_desc
-        },
-    );
     let bind_group_repeat = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("wgpu texture bind group repeat"),
         layout: &state.bind_layout,
@@ -969,20 +1071,151 @@ pub fn create_texture(
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::TextureView(&view),
+                resource: wgpu::BindingResource::TextureView(views[0]),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::TextureView(views[1]),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::TextureView(views[2]),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: conversion.as_entire_binding(),
             },
         ],
     });
+    (Arc::new(bind_group), Arc::new(bind_group_repeat))
+}
 
+#[inline(always)]
+fn next_texture_id(state: &mut State) -> u64 {
     let id = state.next_texture_id;
     state.next_texture_id = state.next_texture_id.wrapping_add(1);
+    id
+}
 
+fn create_plane_texture(
+    state: &State,
+    width: u32,
+    height: u32,
+    label: &'static str,
+    pixels: &[u8],
+) -> Result<(wgpu::Texture, wgpu::TextureView), Box<dyn Error>> {
+    if width == 0 || height == 0 || pixels.len() != width as usize * height as usize {
+        return Err(std::io::Error::other("invalid YUV420 plane").into());
+    }
+    let size = wgpu::Extent3d {
+        width,
+        height,
+        depth_or_array_layers: 1,
+    };
+    let texture = state.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some(label),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    write_plane(&state.queue, &texture, width, height, pixels);
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    Ok((texture, view))
+}
+
+#[inline(always)]
+fn write_plane(
+    queue: &wgpu::Queue,
+    texture: &wgpu::Texture,
+    width: u32,
+    height: u32,
+    pixels: &[u8],
+) {
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        pixels,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(width),
+            rows_per_image: Some(height),
+        },
+        wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+}
+
+pub fn create_yuv420_texture(
+    state: &mut State,
+    upload: Yuv420Upload<'_>,
+    sampler_desc: SamplerDesc,
+) -> Result<Texture, Box<dyn Error>> {
+    if !upload.is_valid() {
+        return Err(std::io::Error::other("invalid YUV420 planes").into());
+    }
+    let (y_texture, y_view) =
+        create_plane_texture(state, upload.width, upload.height, "wgpu video Y", upload.y)?;
+    let (u_texture, u_view) = create_plane_texture(
+        state,
+        upload.width / 2,
+        upload.height / 2,
+        "wgpu video U",
+        upload.u,
+    )?;
+    let (v_texture, v_view) = create_plane_texture(
+        state,
+        upload.width / 2,
+        upload.height / 2,
+        "wgpu video V",
+        upload.v,
+    )?;
+    let params = [upload.levels, upload.coeffs];
+    let conversion = state
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("wgpu video conversion"),
+            contents: cast_slice(&params),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+    let (bind_group, bind_group_repeat) = create_texture_groups(
+        state,
+        sampler_desc,
+        [&y_view, &u_view, &v_view],
+        Some(&conversion),
+    );
     Ok(Texture {
-        id,
-        _texture: texture,
-        _view: view,
-        bind_group: Arc::new(bind_group),
-        bind_group_repeat: Arc::new(bind_group_repeat),
+        id: next_texture_id(state),
+        images: TextureImages::Yuv420 {
+            planes: Box::new([
+                YuvPlane {
+                    texture: y_texture,
+                    _view: y_view,
+                },
+                YuvPlane {
+                    texture: u_texture,
+                    _view: u_view,
+                },
+                YuvPlane {
+                    texture: v_texture,
+                    _view: v_view,
+                },
+            ]),
+            conversion,
+            params,
+        },
+        bind_group,
+        bind_group_repeat,
     })
 }
 
@@ -1021,7 +1254,14 @@ pub fn update_texture(
     };
     state.queue.write_texture(
         wgpu::TexelCopyTextureInfo {
-            texture: &texture._texture,
+            texture: match &texture.images {
+                TextureImages::Rgba { texture, .. } => texture,
+                TextureImages::Yuv420 { .. } => {
+                    return Err(
+                        std::io::Error::other("cannot upload RGBA into YUV420 texture").into(),
+                    );
+                }
+            },
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
             aspect: wgpu::TextureAspect::All,
@@ -1035,6 +1275,59 @@ pub fn update_texture(
         size,
     );
     Ok(())
+}
+
+pub fn update_yuv420_texture(
+    state: &mut State,
+    texture: &mut Texture,
+    upload: Yuv420Upload<'_>,
+) -> Result<(), Box<dyn Error>> {
+    let TextureImages::Yuv420 {
+        planes,
+        conversion,
+        params,
+        ..
+    } = &mut texture.images
+    else {
+        return Err(std::io::Error::other("cannot upload YUV420 into RGBA texture").into());
+    };
+    if !upload.is_valid() {
+        return Err(std::io::Error::other("invalid YUV420 planes").into());
+    }
+    write_plane(
+        &state.queue,
+        &planes[0].texture,
+        upload.width,
+        upload.height,
+        upload.y,
+    );
+    write_plane(
+        &state.queue,
+        &planes[1].texture,
+        upload.width / 2,
+        upload.height / 2,
+        upload.u,
+    );
+    write_plane(
+        &state.queue,
+        &planes[2].texture,
+        upload.width / 2,
+        upload.height / 2,
+        upload.v,
+    );
+    let next_params = [upload.levels, upload.coeffs];
+    if *params != next_params {
+        state
+            .queue
+            .write_buffer(conversion, 0, cast_slice(&next_params));
+        *params = next_params;
+    }
+    Ok(())
+}
+
+#[inline(always)]
+pub const fn texture_is_yuv420(texture: &Texture) -> bool {
+    texture.images.is_yuv420()
 }
 
 fn ensure_cached_tmesh(
@@ -1235,6 +1528,7 @@ pub fn draw(
 
         let mut last_kind: Option<u8> = None; // 0=sprite, 1=mesh, 2=textured mesh
         let mut last_blend: Option<BlendMode> = None;
+        let mut last_sprite_yuv = None;
         let mut bindings = DrawBindingCache::default();
         let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
         let mut last_tmesh_depth_test: Option<bool> = None;
@@ -1265,9 +1559,20 @@ pub fn draw(
                         tmesh_buffer_cache.reset();
                         last_tmesh_depth_test = None;
                     }
-                    if last_blend != Some(run.blend) {
-                        pass.set_pipeline(state.pipelines.get(run.blend));
+                    let yuv = tex.images.is_yuv420();
+                    if last_blend != Some(run.blend) || last_sprite_yuv != Some(yuv) {
+                        pass.set_pipeline(if yuv {
+                            state.yuv_pipelines.get(run.blend)
+                        } else {
+                            state.pipelines.get(run.blend)
+                        });
+                        if last_sprite_yuv.is_some_and(|last| last != yuv)
+                            && matches!(state.proj, ProjState::Immediates)
+                        {
+                            bindings.reset_camera();
+                        }
                         last_blend = Some(run.blend);
+                        last_sprite_yuv = Some(yuv);
                     }
                     if bindings.camera_required(run.camera) {
                         set_camera(
@@ -1297,6 +1602,7 @@ pub fn draw(
                         pass.set_vertex_buffer(0, state.mesh_vertex_buffer.slice(..));
                         last_kind = Some(1);
                         last_blend = None;
+                        last_sprite_yuv = None;
                         if matches!(state.proj, ProjState::Immediates) {
                             bindings.reset_camera();
                         }
@@ -1339,6 +1645,7 @@ pub fn draw(
                         }
                         last_kind = Some(2);
                         last_blend = None;
+                        last_sprite_yuv = None;
                         if matches!(state.proj, ProjState::Immediates) {
                             bindings.reset_camera();
                         }
@@ -1813,6 +2120,14 @@ fn reconfigure_surface(state: &mut State) {
             &state.proj,
             &state.bind_layout,
             state.config.format,
+            false,
+        );
+        let (yuv_shader, yuv_pipeline_layout, yuv_pipelines) = build_pipeline_set(
+            &state.device,
+            &state.proj,
+            &state.bind_layout,
+            state.config.format,
+            true,
         );
         let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
             build_mesh_pipeline_set(&state.device, &state.proj, state.config.format);
@@ -1826,6 +2141,9 @@ fn reconfigure_surface(state: &mut State) {
         state.shader = shader;
         state.pipeline_layout = pipeline_layout;
         state.pipelines = pipelines;
+        state.yuv_shader = yuv_shader;
+        state.yuv_pipeline_layout = yuv_pipeline_layout;
+        state.yuv_pipelines = yuv_pipelines;
         state.mesh_shader = mesh_shader;
         state.mesh_pipeline_layout = mesh_pipeline_layout;
         state.mesh_pipelines = mesh_pipelines;
@@ -1997,10 +2315,13 @@ fn build_pipeline_set(
     proj: &ProjState,
     bind_layout: &wgpu::BindGroupLayout,
     format: wgpu::TextureFormat,
+    yuv420: bool,
 ) -> (wgpu::ShaderModule, wgpu::PipelineLayout, PipelineSet) {
-    let shader_src = match proj {
-        ProjState::Immediates => SHADER_IMM,
-        ProjState::Uniform { .. } => SHADER_UBO,
+    let shader_src = match (proj, yuv420) {
+        (ProjState::Immediates, false) => SHADER_IMM,
+        (ProjState::Uniform { .. }, false) => SHADER_UBO,
+        (ProjState::Immediates, true) => YUV_SHADER_IMM,
+        (ProjState::Uniform { .. }, true) => YUV_SHADER_UBO,
     };
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("wgpu shader module"),
@@ -2520,9 +2841,11 @@ fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
 }
 
 const SHADER_IMM: &str = include_str!("shaders/wgpu_sprite.wgsl");
+const YUV_SHADER_IMM: &str = include_str!("shaders/wgpu_sprite_yuv.wgsl");
 const MESH_SHADER_IMM: &str = include_str!("shaders/wgpu_mesh.wgsl");
 const TMESH_SHADER_IMM: &str = include_str!("shaders/wgpu_tmesh.wgsl");
 const SHADER_UBO: &str = include_str!("shaders/wgpu_sprite_ubo.wgsl");
+const YUV_SHADER_UBO: &str = include_str!("shaders/wgpu_sprite_yuv_ubo.wgsl");
 const MESH_SHADER_UBO: &str = include_str!("shaders/wgpu_mesh_ubo.wgsl");
 const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
 
@@ -2530,7 +2853,7 @@ const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
 mod tests {
     use super::{
         DrawBindingCache, InstanceBinding, Matrix4, PresentCompletion, PresentCompletionCell,
-        stage_projection_upload,
+        YUV_SHADER_IMM, YUV_SHADER_UBO, stage_projection_upload,
     };
     use std::sync::{
         Arc,
@@ -2538,6 +2861,19 @@ mod tests {
     };
 
     const STRIDE: usize = 256;
+
+    #[test]
+    fn planar_video_shaders_validate() {
+        for source in [YUV_SHADER_IMM, YUV_SHADER_UBO] {
+            let module = naga::front::wgsl::parse_str(source).expect("YUV shader parses");
+            naga::valid::Validator::new(
+                naga::valid::ValidationFlags::all(),
+                naga::valid::Capabilities::all(),
+            )
+            .validate(&module)
+            .expect("YUV shader validates");
+        }
+    }
 
     #[test]
     fn draw_binding_cache_keeps_exact_camera_and_texture_bindings() {

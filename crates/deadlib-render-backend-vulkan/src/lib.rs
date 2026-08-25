@@ -9,7 +9,8 @@ use deadlib_render_core::{
     PresentModePolicy, PresentModeTrace, PresentStats, RenderFrame, SamplerCache, SamplerDesc,
     SamplerFilter, SamplerWrap, SpriteInstanceRaw as InstanceData, TMeshCacheKey, TextureHandle,
     TexturedMeshBufferCache, TexturedMeshInstanceRaw as TexturedMeshInstanceGpu,
-    TexturedMeshUploads, TexturedMeshVertex, draw_storage_stats, resolve_textured_meshes,
+    TexturedMeshUploads, TexturedMeshVertex, Yuv420Upload, draw_storage_stats,
+    resolve_textured_meshes,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -47,11 +48,25 @@ struct ProjPush {
     proj: [[f32; 4]; 4],
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct YuvPush {
+    levels: [f32; 4],
+    coeffs: [f32; 4],
+}
+
 fn projection_push_constant_range() -> vk::PushConstantRange {
     vk::PushConstantRange::default()
         .stage_flags(vk::ShaderStageFlags::VERTEX)
         .offset(0)
         .size(std::mem::size_of::<ProjPush>() as u32)
+}
+
+fn yuv_push_constant_range() -> vk::PushConstantRange {
+    vk::PushConstantRange::default()
+        .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+        .offset(std::mem::size_of::<ProjPush>() as u32)
+        .size(std::mem::size_of::<YuvPush>() as u32)
 }
 
 struct PipelinePair {
@@ -62,12 +77,33 @@ struct PipelinePair {
 // A handle to a Vulkan texture on the GPU.
 pub struct Texture {
     device: Arc<Device>,
-    image: vk::Image,
-    memory: vk::DeviceMemory,
-    view: vk::ImageView,
+    images: TextureImages,
     descriptor_set: vk::DescriptorSet,
     descriptor_set_repeat: vk::DescriptorSet,
     pool: vk::DescriptorPool,
+}
+
+#[derive(Debug)]
+struct TextureImage {
+    image: vk::Image,
+    memory: vk::DeviceMemory,
+    view: vk::ImageView,
+}
+
+enum TextureImages {
+    Rgba(TextureImage),
+    Yuv420 {
+        images: [TextureImage; 3],
+        levels: [f32; 4],
+        coeffs: [f32; 4],
+    },
+}
+
+impl TextureImages {
+    #[inline(always)]
+    const fn is_yuv420(&self) -> bool {
+        matches!(self, Self::Yuv420 { .. })
+    }
 }
 
 pub trait TextureLookup {
@@ -83,9 +119,15 @@ impl Drop for Texture {
                 self.pool,
                 &[self.descriptor_set, self.descriptor_set_repeat],
             );
-            self.device.destroy_image_view(self.view, None);
-            self.device.destroy_image(self.image, None);
-            self.device.free_memory(self.memory, None);
+            let mut destroy = |image: &TextureImage| {
+                self.device.destroy_image_view(image.view, None);
+                self.device.destroy_image(image.image, None);
+                self.device.free_memory(image.memory, None);
+            };
+            match &self.images {
+                TextureImages::Rgba(image) => destroy(image),
+                TextureImages::Yuv420 { images, .. } => images.iter().for_each(&mut destroy),
+            }
         }
     }
 }
@@ -234,6 +276,8 @@ pub struct State {
     render_pass: vk::RenderPass,
     sprite_pipeline_layout: vk::PipelineLayout,
     sprite_pipeline: vk::Pipeline,
+    yuv_pipeline_layout: vk::PipelineLayout,
+    yuv_pipeline: vk::Pipeline,
     mesh_pipeline_layout: vk::PipelineLayout,
     mesh_pipeline: vk::Pipeline,
     textured_mesh_pipeline_layout: vk::PipelineLayout,
@@ -352,6 +396,17 @@ pub fn init(
         render_pass,
         descriptor_set_layout,
         BlendMode::Alpha,
+        false,
+    )?;
+    let PipelinePair {
+        layout: yuv_pipeline_layout,
+        pipe: yuv_pipeline,
+    } = create_sprite_pipeline(
+        device.as_ref().unwrap(),
+        render_pass,
+        descriptor_set_layout,
+        BlendMode::Alpha,
+        true,
     )?;
 
     let PipelinePair {
@@ -399,6 +454,8 @@ pub fn init(
         render_pass,
         sprite_pipeline_layout,
         sprite_pipeline,
+        yuv_pipeline_layout,
+        yuv_pipeline,
         mesh_pipeline_layout,
         mesh_pipeline,
         textured_mesh_pipeline_layout,
@@ -539,7 +596,7 @@ fn create_descriptor_set_layout(device: &Device) -> Result<vk::DescriptorSetLayo
     let sampler_layout_binding = vk::DescriptorSetLayoutBinding::default()
         .binding(0)
         .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        .descriptor_count(1)
+        .descriptor_count(3)
         .stage_flags(vk::ShaderStageFlags::FRAGMENT);
 
     let layout_info = vk::DescriptorSetLayoutCreateInfo::default()
@@ -553,7 +610,7 @@ fn create_descriptor_set_layout(device: &Device) -> Result<vk::DescriptorSetLayo
 fn create_descriptor_pool(device: &Device) -> Result<vk::DescriptorPool, vk::Result> {
     let pool_size = vk::DescriptorPoolSize::default()
         .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        .descriptor_count(DESCRIPTOR_POOL_SET_CAPACITY);
+        .descriptor_count(DESCRIPTOR_POOL_SET_CAPACITY * 3);
 
     let pool_info = vk::DescriptorPoolCreateInfo::default()
         .pool_sizes(std::slice::from_ref(&pool_size))
@@ -580,10 +637,15 @@ fn create_sprite_pipeline(
     render_pass: vk::RenderPass,
     set_layout: vk::DescriptorSetLayout,
     mode: BlendMode,
+    yuv420: bool,
 ) -> Result<PipelinePair, Box<dyn Error>> {
     // Shaders (recompiled SPIR-V with compact instance layout)
     let vert_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_shader.vert.spv"));
-    let frag_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_shader.frag.spv"));
+    let frag_shader_code = if yuv420 {
+        include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_yuv.frag.spv")).as_slice()
+    } else {
+        include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_shader.frag.spv")).as_slice()
+    };
     let vert_module = create_shader_module(device, vert_shader_code)?;
     let frag_module = create_shader_module(device, frag_shader_code)?;
     let main_name = c"main";
@@ -630,11 +692,12 @@ fn create_sprite_pipeline(
     let dynamic_state =
         vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
-    let push_constant_range = projection_push_constant_range();
+    let push_constant_ranges = [projection_push_constant_range(), yuv_push_constant_range()];
+    let push_constant_ranges = &push_constant_ranges[..if yuv420 { 2 } else { 1 }];
 
     let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
         .set_layouts(std::slice::from_ref(&set_layout))
-        .push_constant_ranges(std::slice::from_ref(&push_constant_range));
+        .push_constant_ranges(push_constant_ranges);
 
     // SAFETY: The descriptor set layout and push-constant range are valid for this pipeline, and
     // the create info borrows only stack data for the duration of the call.
@@ -1539,13 +1602,15 @@ pub fn create_texture(
         },
     )?;
     let (set, set_repeat, pool) =
-        create_texture_descriptor_sets(state, view, sampler_default, sampler_repeat)?;
+        create_texture_descriptor_sets(state, [view, view, view], sampler_default, sampler_repeat)?;
 
     Ok(Texture {
         device: device_arc.clone(),
-        image: tex_image,
-        memory: tex_mem,
-        view,
+        images: TextureImages::Rgba(TextureImage {
+            image: tex_image,
+            memory: tex_mem,
+            view,
+        }),
         descriptor_set: set,
         descriptor_set_repeat: set_repeat,
         pool,
@@ -1558,6 +1623,9 @@ pub fn update_texture(
     image: &RgbaImage,
 ) -> Result<(), Box<dyn Error>> {
     let device = texture.device.as_ref();
+    let TextureImages::Rgba(texture_image) = &texture.images else {
+        return Err(std::io::Error::other("cannot upload RGBA into YUV420 texture").into());
+    };
     let (width, height) = image.dimensions();
     let image_data = image.as_raw();
     let staging_size = image_data.len() as vk::DeviceSize;
@@ -1587,7 +1655,7 @@ pub fn update_texture(
     transition_image_layout_cmd(
         device,
         cmd,
-        texture.image,
+        texture_image.image,
         vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
         vk::ImageLayout::TRANSFER_DST_OPTIMAL,
     );
@@ -1609,7 +1677,7 @@ pub fn update_texture(
         device.cmd_copy_buffer_to_image(
             cmd,
             staging_buffer,
-            texture.image,
+            texture_image.image,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             &[region],
         );
@@ -1617,11 +1685,276 @@ pub fn update_texture(
     transition_image_layout_cmd(
         device,
         cmd,
-        texture.image,
+        texture_image.image,
         vk::ImageLayout::TRANSFER_DST_OPTIMAL,
         vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
     );
     Ok(())
+}
+
+pub fn create_yuv420_texture(
+    state: &mut State,
+    upload: Yuv420Upload<'_>,
+    sampler: SamplerDesc,
+) -> Result<Texture, Box<dyn Error>> {
+    if !upload.is_valid() {
+        return Err(std::io::Error::other("invalid YUV420 planes").into());
+    }
+    let device_arc = state.device.as_ref().unwrap().clone();
+    let device = device_arc.as_ref();
+    let (staging, offsets) = stage_yuv420(state, device, upload.y, upload.u, upload.v)?;
+    let mut images = Vec::with_capacity(3);
+    for (plane_width, plane_height) in [
+        (upload.width, upload.height),
+        (upload.width / 2, upload.height / 2),
+        (upload.width / 2, upload.height / 2),
+    ] {
+        let (image, memory) = match create_image(
+            state,
+            plane_width,
+            plane_height,
+            vk::Format::R8_UNORM,
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        ) {
+            Ok(resource) => resource,
+            Err(error) => {
+                destroy_texture_images(device, &images);
+                destroy_buffer(device, &staging.resource);
+                return Err(error.into());
+            }
+        };
+        let view = match create_image_view(device, image, vk::Format::R8_UNORM) {
+            Ok(view) => view,
+            Err(error) => {
+                // SAFETY: this resource has not been submitted or published.
+                unsafe {
+                    device.destroy_image(image, None);
+                    device.free_memory(memory, None);
+                }
+                destroy_texture_images(device, &images);
+                destroy_buffer(device, &staging.resource);
+                return Err(error.into());
+            }
+        };
+        images.push(TextureImage {
+            image,
+            memory,
+            view,
+        });
+    }
+    let images: [TextureImage; 3] = images
+        .try_into()
+        .expect("three YUV plane resources were created");
+
+    let sampler_default = match get_sampler(state, sampler) {
+        Ok(sampler) => sampler,
+        Err(error) => {
+            destroy_texture_images(device, &images);
+            destroy_buffer(device, &staging.resource);
+            return Err(error.into());
+        }
+    };
+    let sampler_repeat = match get_sampler(
+        state,
+        SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..sampler
+        },
+    ) {
+        Ok(sampler) => sampler,
+        Err(error) => {
+            destroy_texture_images(device, &images);
+            destroy_buffer(device, &staging.resource);
+            return Err(error.into());
+        }
+    };
+    let views = [images[0].view, images[1].view, images[2].view];
+    let descriptors = create_texture_descriptor_sets(state, views, sampler_default, sampler_repeat);
+    let (descriptor_set, descriptor_set_repeat, pool) = match descriptors {
+        Ok(descriptors) => descriptors,
+        Err(error) => {
+            destroy_texture_images(device, &images);
+            destroy_buffer(device, &staging.resource);
+            return Err(error);
+        }
+    };
+    let cmd = match begin_pending_texture_upload_cmd(state) {
+        Ok(cmd) => cmd,
+        Err(error) => {
+            // SAFETY: neither descriptor set nor any image has been submitted.
+            unsafe {
+                let _ = device.free_descriptor_sets(pool, &[descriptor_set, descriptor_set_repeat]);
+            }
+            destroy_texture_images(device, &images);
+            destroy_buffer(device, &staging.resource);
+            return Err(error);
+        }
+    };
+    record_yuv420_upload(
+        device,
+        cmd,
+        staging.resource.buffer,
+        &images,
+        offsets,
+        [upload.width, upload.height],
+        vk::ImageLayout::UNDEFINED,
+    );
+    state.pending_tex_staging.push(staging);
+    Ok(Texture {
+        device: device_arc,
+        images: TextureImages::Yuv420 {
+            images,
+            levels: upload.levels,
+            coeffs: upload.coeffs,
+        },
+        descriptor_set,
+        descriptor_set_repeat,
+        pool,
+    })
+}
+
+pub fn update_yuv420_texture(
+    state: &mut State,
+    texture: &mut Texture,
+    upload: Yuv420Upload<'_>,
+) -> Result<(), Box<dyn Error>> {
+    if !upload.is_valid() {
+        return Err(std::io::Error::other("invalid YUV420 planes").into());
+    }
+    let TextureImages::Yuv420 {
+        images,
+        levels: texture_levels,
+        coeffs: texture_coeffs,
+    } = &mut texture.images
+    else {
+        return Err(std::io::Error::other("cannot upload YUV420 into RGBA texture").into());
+    };
+    let device = texture.device.clone();
+    let (staging, offsets) = stage_yuv420(state, &device, upload.y, upload.u, upload.v)?;
+    let cmd = match begin_pending_texture_upload_cmd(state) {
+        Ok(cmd) => cmd,
+        Err(error) => {
+            destroy_buffer(&device, &staging.resource);
+            return Err(error);
+        }
+    };
+    record_yuv420_upload(
+        &device,
+        cmd,
+        staging.resource.buffer,
+        images,
+        offsets,
+        [upload.width, upload.height],
+        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+    );
+    state.pending_tex_staging.push(staging);
+    *texture_levels = upload.levels;
+    *texture_coeffs = upload.coeffs;
+    Ok(())
+}
+
+fn stage_yuv420(
+    state: &mut State,
+    device: &Device,
+    y: &[u8],
+    u: &[u8],
+    v: &[u8],
+) -> Result<(TextureStagingBuffer, [vk::DeviceSize; 3]), Box<dyn Error>> {
+    let u_offset = (y.len() as vk::DeviceSize).next_multiple_of(4);
+    let v_offset = (u_offset + u.len() as vk::DeviceSize).next_multiple_of(4);
+    let offsets = [0, u_offset, v_offset];
+    let staging_size = v_offset + v.len() as vk::DeviceSize;
+    let staging = take_texture_staging(state, staging_size)?;
+    // SAFETY: the coherent mapping spans the allocation and the three copies
+    // exactly fill non-overlapping ranges within it.
+    unsafe {
+        let mapped = device.map_memory(
+            staging.resource.memory,
+            0,
+            staging_size,
+            vk::MemoryMapFlags::empty(),
+        )?;
+        let mapped = mapped.cast::<u8>();
+        std::ptr::copy_nonoverlapping(y.as_ptr(), mapped, y.len());
+        std::ptr::copy_nonoverlapping(u.as_ptr(), mapped.add(u_offset as usize), u.len());
+        std::ptr::copy_nonoverlapping(v.as_ptr(), mapped.add(v_offset as usize), v.len());
+        device.unmap_memory(staging.resource.memory);
+    }
+    Ok((staging, offsets))
+}
+
+fn record_yuv420_upload(
+    device: &Device,
+    cmd: vk::CommandBuffer,
+    staging: vk::Buffer,
+    images: &[TextureImage; 3],
+    offsets: [vk::DeviceSize; 3],
+    extent: [u32; 2],
+    old_layout: vk::ImageLayout,
+) {
+    for (index, image) in images.iter().enumerate() {
+        let (plane_width, plane_height) = if index == 0 {
+            (extent[0], extent[1])
+        } else {
+            (extent[0] / 2, extent[1] / 2)
+        };
+        transition_image_layout_cmd(
+            device,
+            cmd,
+            image.image,
+            old_layout,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+        );
+        let region = vk::BufferImageCopy::default()
+            .buffer_offset(offsets[index])
+            .image_subresource(vk::ImageSubresourceLayers {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                mip_level: 0,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .image_extent(vk::Extent3D {
+                width: plane_width,
+                height: plane_height,
+                depth: 1,
+            });
+        // SAFETY: the command is recording, each image is transfer-compatible,
+        // and its source range lies within the live staging buffer.
+        unsafe {
+            device.cmd_copy_buffer_to_image(
+                cmd,
+                staging,
+                image.image,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                &[region],
+            );
+        }
+        transition_image_layout_cmd(
+            device,
+            cmd,
+            image.image,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        );
+    }
+}
+
+fn destroy_texture_images(device: &Device, images: &[TextureImage]) {
+    // SAFETY: callers only pass unpublished resources created on this device.
+    unsafe {
+        for image in images {
+            device.destroy_image_view(image.view, None);
+            device.destroy_image(image.image, None);
+            device.free_memory(image.memory, None);
+        }
+    }
+}
+
+#[inline(always)]
+pub const fn texture_is_yuv420(texture: &Texture) -> bool {
+    texture.images.is_yuv420()
 }
 
 #[inline(always)]
@@ -1870,6 +2203,7 @@ pub fn draw(
         enum Bound {
             None,
             Sprite,
+            YuvSprite,
             Mesh,
             TexturedMesh,
         }
@@ -1884,17 +2218,22 @@ pub fn draw(
         for op in &frame.ops {
             match op {
                 DrawOp::Sprite(run) => {
-                    let Some(set) = textures
-                        .vulkan_texture(run.texture_handle)
-                        .map(|texture| texture.descriptor_set)
-                    else {
+                    let Some(texture) = textures.vulkan_texture(run.texture_handle) else {
                         continue;
                     };
-                    if !matches!(bound, Bound::Sprite) {
+                    let set = texture.descriptor_set;
+                    let yuv420 = texture.images.is_yuv420();
+                    let pipeline_bound = matches!(bound, Bound::YuvSprite) == yuv420
+                        && matches!(bound, Bound::Sprite | Bound::YuvSprite);
+                    if !pipeline_bound {
                         device.cmd_bind_pipeline(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
-                            state.sprite_pipeline,
+                            if yuv420 {
+                                state.yuv_pipeline
+                            } else {
+                                state.sprite_pipeline
+                            },
                         );
                         let vb0 = state.vertex_buffer.as_ref().unwrap().buffer;
                         let inst_buf = state.instance_ring.as_ref().unwrap().buffer;
@@ -1907,7 +2246,12 @@ pub fn draw(
                             let ib = state.index_buffer.as_ref().unwrap().buffer;
                             device.cmd_bind_index_buffer(cmd, ib, 0, vk::IndexType::UINT16);
                         }
-                        bound = Bound::Sprite;
+                        bound = if yuv420 {
+                            Bound::YuvSprite
+                        } else {
+                            Bound::Sprite
+                        };
+                        last_camera = CameraUploadCache::default();
                         last_set = vk::DescriptorSet::null();
                         tmesh_buffer_cache.reset();
                     }
@@ -1923,7 +2267,11 @@ pub fn draw(
                         };
                         device.cmd_push_constants(
                             cmd,
-                            state.sprite_pipeline_layout,
+                            if yuv420 {
+                                state.yuv_pipeline_layout
+                            } else {
+                                state.sprite_pipeline_layout
+                            },
                             vk::ShaderStageFlags::VERTEX,
                             0,
                             bytemuck::bytes_of(&pc),
@@ -1931,10 +2279,27 @@ pub fn draw(
                     }
 
                     if last_set != set {
+                        if let TextureImages::Yuv420 { levels, coeffs, .. } = &texture.images {
+                            let conversion = YuvPush {
+                                levels: *levels,
+                                coeffs: *coeffs,
+                            };
+                            device.cmd_push_constants(
+                                cmd,
+                                state.yuv_pipeline_layout,
+                                vk::ShaderStageFlags::FRAGMENT,
+                                std::mem::size_of::<ProjPush>() as u32,
+                                bytemuck::bytes_of(&conversion),
+                            );
+                        }
                         device.cmd_bind_descriptor_sets(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
-                            state.sprite_pipeline_layout,
+                            if yuv420 {
+                                state.yuv_pipeline_layout
+                            } else {
+                                state.sprite_pipeline_layout
+                            },
                             0,
                             &[set],
                             &[],
@@ -2427,6 +2792,16 @@ pub fn cleanup(state: &mut State) {
             .device
             .as_ref()
             .unwrap()
+            .destroy_pipeline(state.yuv_pipeline, None);
+        state
+            .device
+            .as_ref()
+            .unwrap()
+            .destroy_pipeline_layout(state.yuv_pipeline_layout, None);
+        state
+            .device
+            .as_ref()
+            .unwrap()
             .destroy_pipeline(state.mesh_pipeline, None);
         state
             .device
@@ -2632,7 +3007,7 @@ fn create_texture_descriptor_set_pair(
 
 fn create_texture_descriptor_sets(
     state: &mut State,
-    texture_image_view: vk::ImageView,
+    texture_image_views: [vk::ImageView; 3],
     sampler_default: vk::Sampler,
     sampler_repeat: vk::Sampler,
 ) -> Result<(vk::DescriptorSet, vk::DescriptorSet, vk::DescriptorPool), Box<dyn Error>> {
@@ -2650,27 +3025,31 @@ fn create_texture_descriptor_sets(
         }
     };
 
-    let image_info = vk::DescriptorImageInfo::default()
-        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-        .image_view(texture_image_view)
-        .sampler(sampler_default);
-    let image_info_repeat = vk::DescriptorImageInfo::default()
-        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-        .image_view(texture_image_view)
-        .sampler(sampler_repeat);
+    let image_info = texture_image_views.map(|image_view| {
+        vk::DescriptorImageInfo::default()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(image_view)
+            .sampler(sampler_default)
+    });
+    let image_info_repeat = texture_image_views.map(|image_view| {
+        vk::DescriptorImageInfo::default()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(image_view)
+            .sampler(sampler_repeat)
+    });
 
     let descriptor_write = vk::WriteDescriptorSet::default()
         .dst_set(descriptor_set)
         .dst_binding(0)
         .dst_array_element(0)
         .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        .image_info(std::slice::from_ref(&image_info));
+        .image_info(&image_info);
     let descriptor_write_repeat = vk::WriteDescriptorSet::default()
         .dst_set(descriptor_set_repeat)
         .dst_binding(0)
         .dst_array_element(0)
         .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        .image_info(std::slice::from_ref(&image_info_repeat));
+        .image_info(&image_info_repeat);
 
     // SAFETY: Both descriptor sets were allocated from `pool`, and the image view/samplers remain
     // live for at least as long as those descriptor sets do.

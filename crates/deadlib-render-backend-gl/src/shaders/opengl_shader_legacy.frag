@@ -3,9 +3,26 @@ varying vec2 v_tex_coord;
 varying vec2 v_quad;
 
 uniform sampler2D u_texture;
+uniform sampler2D u_texture_u;
+uniform sampler2D u_texture_v;
+uniform int u_yuv420;
+uniform vec4 u_yuv_levels;
+uniform vec4 u_yuv_coeffs;
 uniform vec4 u_tint;
 uniform vec4 u_edge_fade;
 uniform float u_texture_mask;
+
+vec4 sample_texture(vec2 uv) {
+    if (u_yuv420 == 0) return texture2D(u_texture, uv);
+    float y = texture2D(u_texture, uv).r * u_yuv_levels.x + u_yuv_levels.y;
+    float u = texture2D(u_texture_u, uv).r * u_yuv_levels.z + u_yuv_levels.w;
+    float v = texture2D(u_texture_v, uv).r * u_yuv_levels.z + u_yuv_levels.w;
+    return vec4(
+        y + u_yuv_coeffs.x * v,
+        y + u_yuv_coeffs.y * u + u_yuv_coeffs.z * v,
+        y + u_yuv_coeffs.w * u,
+        1.0);
+}
 
 float edge_fade_factor(vec2 q, vec4 e) {
     float f = 1.0;
@@ -17,7 +34,7 @@ float edge_fade_factor(vec2 q, vec4 e) {
 }
 
 void main() {
-    vec4 s = texture2D(u_texture, v_tex_coord);
+    vec4 s = sample_texture(v_tex_coord);
     float f = edge_fade_factor(v_quad, u_edge_fade);
     vec4 color = s * u_tint;
     if (u_texture_mask > 0.5) {

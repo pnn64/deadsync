@@ -463,7 +463,7 @@ fn cached_encode(ops: &[DesiredState]) -> EncodeResult {
                 }
             }
         }
-        if cache.pipeline_changed(op.kind, op.blend) {
+        if cache.pipeline_changed(op.kind, op.blend, false) {
             emit(&mut out, 1);
         }
         if cache.depth_changed(op.depth) {

@@ -417,6 +417,34 @@ impl SamplerDesc {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct Yuv420Upload<'a> {
+    pub width: u32,
+    pub height: u32,
+    pub y: &'a [u8],
+    pub u: &'a [u8],
+    pub v: &'a [u8],
+    pub levels: [f32; 4],
+    pub coeffs: [f32; 4],
+}
+
+impl Yuv420Upload<'_> {
+    #[inline]
+    pub fn is_valid(self) -> bool {
+        let Some(luma_len) = (self.width as usize).checked_mul(self.height as usize) else {
+            return false;
+        };
+        let chroma_len = luma_len / 4;
+        self.width != 0
+            && self.height != 0
+            && self.width.is_multiple_of(2)
+            && self.height.is_multiple_of(2)
+            && self.y.len() == luma_len
+            && self.u.len() == chroma_len
+            && self.v.len() == chroma_len
+    }
+}
+
 /// Fixed storage for the complete sampler-description domain.
 ///
 /// GPU backends own this on the render thread for the renderer lifetime. It
@@ -815,6 +843,22 @@ mod tests {
         assert_eq!(cache.values().count(), SAMPLER_DESC_COUNT);
         cache.clear();
         assert_eq!(cache.values().count(), 0);
+    }
+
+    #[test]
+    fn yuv420_upload_validates_even_dimensions_and_plane_lengths() {
+        let valid = Yuv420Upload {
+            width: 4,
+            height: 2,
+            y: &[0; 8],
+            u: &[0; 2],
+            v: &[0; 2],
+            levels: [0.0; 4],
+            coeffs: [0.0; 4],
+        };
+        assert!(valid.is_valid());
+        assert!(!Yuv420Upload { width: 3, ..valid }.is_valid());
+        assert!(!Yuv420Upload { u: &[0], ..valid }.is_valid());
     }
 
     #[test]

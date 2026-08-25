@@ -21,7 +21,7 @@ pub(crate) enum BufferUpdate {
 #[derive(Debug, Default)]
 pub(crate) struct EncoderCache {
     kind: Option<DrawKind>,
-    pipeline: Option<(DrawKind, u8)>,
+    pipeline: Option<(DrawKind, u8, bool)>,
     cameras: [Option<u8>; 2],
     texture: Option<u64>,
     sampler: Option<(u64, bool)>,
@@ -50,8 +50,8 @@ impl EncoderCache {
     }
 
     #[inline(always)]
-    pub(crate) fn pipeline_changed(&mut self, kind: DrawKind, blend: u8) -> bool {
-        update(&mut self.pipeline, (kind, blend))
+    pub(crate) fn pipeline_changed(&mut self, kind: DrawKind, blend: u8, yuv420: bool) -> bool {
+        update(&mut self.pipeline, (kind, blend, yuv420))
     }
 
     #[inline(always)]

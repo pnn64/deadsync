@@ -2,7 +2,7 @@ use deadlib_render_core::{
     BlendMode, CameraUploadCache, DenseSlotMap, DrawOp, DrawStats, RenderFrame, SamplerDesc,
     SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, TextureHandle,
     TexturedMeshBufferCache, TexturedMeshInstanceRaw, TexturedMeshUploads, TexturedMeshVertex,
-    draw_storage_stats, resolve_textured_meshes,
+    Yuv420Upload, draw_storage_stats, resolve_textured_meshes,
 };
 use glam::Mat4 as Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
@@ -190,9 +190,34 @@ const TMESH_ATTRIBS: [(u32, &str); 13] = [
     (12, "i_texture_mask"),
 ];
 
-// A handle to an OpenGL texture on the GPU.
-#[derive(Debug, Clone, Copy)]
-pub struct Texture(pub glow::Texture);
+// A handle to one RGBA texture or three planar video textures on the GPU.
+#[derive(Debug)]
+pub struct Texture(TextureImages);
+
+#[derive(Debug)]
+enum TextureImages {
+    Rgba(glow::Texture),
+    Yuv420 {
+        planes: [glow::Texture; 3],
+        levels: [f32; 4],
+        coeffs: [f32; 4],
+    },
+}
+
+impl Texture {
+    #[inline(always)]
+    const fn primary(&self) -> glow::Texture {
+        match &self.0 {
+            TextureImages::Rgba(texture) => *texture,
+            TextureImages::Yuv420 { planes, .. } => planes[0],
+        }
+    }
+
+    #[inline(always)]
+    const fn is_yuv420(&self) -> bool {
+        matches!(self.0, TextureImages::Yuv420 { .. })
+    }
+}
 
 pub trait TextureLookup {
     fn opengl_texture(&self, handle: TextureHandle) -> Option<&Texture>;
@@ -241,6 +266,9 @@ pub struct State {
     tmesh_mvp_location: UniformLocation,
     tmesh_texture_location: UniformLocation,
     texture_location: UniformLocation,
+    texture_yuv_location: UniformLocation,
+    yuv_levels_location: UniformLocation,
+    yuv_coeffs_location: UniformLocation,
     legacy_sprite_uniforms: Option<LegacySpriteUniforms>,
     legacy_tmesh_uniforms: Option<LegacyTMeshUniforms>,
     projection: Matrix4,
@@ -291,6 +319,11 @@ pub fn init(
     let shaders = api.shaders(path);
     let (program, mvp_location, texture_location) =
         create_graphics_program(&gl, shaders.sprite_vert, shaders.sprite_frag)?;
+    let texture_u_location = uniform_location(&gl, program, "u_texture_u")?;
+    let texture_v_location = uniform_location(&gl, program, "u_texture_v")?;
+    let texture_yuv_location = uniform_location(&gl, program, "u_yuv420")?;
+    let yuv_levels_location = uniform_location(&gl, program, "u_yuv_levels")?;
+    let yuv_coeffs_location = uniform_location(&gl, program, "u_yuv_coeffs")?;
     let (mesh_program, mesh_mvp_location) =
         create_mesh_program(&gl, shaders.mesh_vert, shaders.mesh_frag)?;
     let (tmesh_program, tmesh_mvp_location, tmesh_texture_location) =
@@ -634,8 +667,9 @@ pub fn init(
     unsafe {
         gl.viewport(0, 0, initial_width as i32, initial_height as i32);
         // This backend is the sole owner of the context. All texture uploads use
-        // tightly packed RGBA slices, so establish their invariant unpack state
-        // once instead of issuing four driver calls for every create/update.
+        // tightly packed RGBA or single-channel plane slices, so establish their
+        // invariant unpack state once instead of issuing four driver calls for
+        // every create/update.
         gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
         gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, 0);
         gl.pixel_store_i32(glow::UNPACK_SKIP_ROWS, 0);
@@ -643,6 +677,9 @@ pub fn init(
         gl.use_program(Some(program));
         gl.active_texture(glow::TEXTURE0);
         gl.uniform_1_i32(Some(&texture_location), 0);
+        gl.uniform_1_i32(Some(&texture_u_location), 1);
+        gl.uniform_1_i32(Some(&texture_v_location), 2);
+        gl.uniform_1_i32(Some(&texture_yuv_location), 0);
         gl.use_program(None);
     }
 
@@ -660,6 +697,9 @@ pub fn init(
         tmesh_mvp_location,
         tmesh_texture_location,
         texture_location,
+        texture_yuv_location,
+        yuv_levels_location,
+        yuv_coeffs_location,
         legacy_sprite_uniforms,
         legacy_tmesh_uniforms,
         projection,
@@ -791,7 +831,30 @@ pub fn create_texture(
     image: &RgbaImage,
     sampler: SamplerDesc,
 ) -> Result<Texture, String> {
-    let gl = &state.gl;
+    create_gl_texture(
+        &state.gl,
+        image.width(),
+        image.height(),
+        glow::RGBA8,
+        glow::RGBA,
+        image.as_raw(),
+        sampler,
+    )
+    .map(|texture| Texture(TextureImages::Rgba(texture)))
+}
+
+fn create_gl_texture(
+    gl: &glow::Context,
+    width: u32,
+    height: u32,
+    internal: u32,
+    format: u32,
+    raw: &[u8],
+    sampler: SamplerDesc,
+) -> Result<glow::Texture, String> {
+    if width == 0 || height == 0 {
+        return Err("OpenGL textures must have non-zero dimensions".to_string());
+    }
     let wrap_mode = match sampler.wrap {
         SamplerWrap::Clamp => glow::CLAMP_TO_EDGE,
         SamplerWrap::Repeat => glow::REPEAT,
@@ -822,10 +885,8 @@ pub fn create_texture(
         gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_BASE_LEVEL, 0);
         gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAX_LEVEL, 0);
 
-        let internal = glow::RGBA8;
-        let w = image.width() as i32;
-        let h = image.height() as i32;
-        let raw = image.as_raw();
+        let w = width as i32;
+        let h = height as i32;
 
         gl.tex_image_2d(
             glow::TEXTURE_2D,
@@ -834,11 +895,11 @@ pub fn create_texture(
             w,
             h,
             0,
-            glow::RGBA,
+            format,
             glow::UNSIGNED_BYTE,
             PixelUnpackData::Slice(Some(raw)),
         );
-        Ok(Texture(t))
+        Ok(t)
     }
 }
 
@@ -851,7 +912,10 @@ pub fn update_texture(state: &State, texture: &Texture, image: &RgbaImage) -> Re
     // and `raw` exposes initialized RGBA bytes that stay alive for the duration of
     // the update call.
     unsafe {
-        gl.bind_texture(glow::TEXTURE_2D, Some(texture.0));
+        let TextureImages::Rgba(raw_texture) = &texture.0 else {
+            return Err("cannot upload RGBA into YUV420 texture".to_string());
+        };
+        gl.bind_texture(glow::TEXTURE_2D, Some(*raw_texture));
         gl.tex_sub_image_2d(
             glow::TEXTURE_2D,
             0,
@@ -867,11 +931,150 @@ pub fn update_texture(state: &State, texture: &Texture, image: &RgbaImage) -> Re
     Ok(())
 }
 
+pub fn create_yuv420_texture(
+    state: &State,
+    upload: Yuv420Upload<'_>,
+    sampler: SamplerDesc,
+) -> Result<Texture, String> {
+    if !upload.is_valid() {
+        return Err("invalid YUV420 planes".to_string());
+    }
+    let (internal, format) = if state.path == GlPath::Legacy {
+        (glow::LUMINANCE, glow::LUMINANCE)
+    } else {
+        (glow::R8, glow::RED)
+    };
+    let create = |width, height, pixels| {
+        create_gl_texture(&state.gl, width, height, internal, format, pixels, sampler)
+    };
+    let y_texture = create(upload.width, upload.height, upload.y)?;
+    let u_texture = match create(upload.width / 2, upload.height / 2, upload.u) {
+        Ok(texture) => texture,
+        Err(error) => {
+            // SAFETY: the first plane was created by this live context and has
+            // not been published to another owner.
+            unsafe { state.gl.delete_texture(y_texture) };
+            return Err(error);
+        }
+    };
+    let v_texture = match create(upload.width / 2, upload.height / 2, upload.v) {
+        Ok(texture) => texture,
+        Err(error) => {
+            // SAFETY: both planes were created by this live context and have
+            // not been published to another owner.
+            unsafe {
+                state.gl.delete_texture(y_texture);
+                state.gl.delete_texture(u_texture);
+            }
+            return Err(error);
+        }
+    };
+    Ok(Texture(TextureImages::Yuv420 {
+        planes: [y_texture, u_texture, v_texture],
+        levels: upload.levels,
+        coeffs: upload.coeffs,
+    }))
+}
+
+pub fn update_yuv420_texture(
+    state: &State,
+    texture: &mut Texture,
+    upload: Yuv420Upload<'_>,
+) -> Result<(), String> {
+    if !upload.is_valid() {
+        return Err("invalid YUV420 planes".to_string());
+    }
+    let TextureImages::Yuv420 {
+        planes,
+        levels: texture_levels,
+        coeffs: texture_coeffs,
+    } = &mut texture.0
+    else {
+        return Err("cannot upload YUV420 into RGBA texture".to_string());
+    };
+    let format = if state.path == GlPath::Legacy {
+        glow::LUMINANCE
+    } else {
+        glow::RED
+    };
+    // SAFETY: all three handles are live R8 textures owned by this backend, and
+    // each source slice remains valid for the duration of its upload call.
+    unsafe {
+        for (texture, plane, plane_width, plane_height) in [
+            (planes[0], upload.y, upload.width, upload.height),
+            (planes[1], upload.u, upload.width / 2, upload.height / 2),
+            (planes[2], upload.v, upload.width / 2, upload.height / 2),
+        ] {
+            state.gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+            state.gl.tex_sub_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                0,
+                0,
+                plane_width as i32,
+                plane_height as i32,
+                format,
+                glow::UNSIGNED_BYTE,
+                PixelUnpackData::Slice(Some(plane)),
+            );
+        }
+    }
+    *texture_levels = upload.levels;
+    *texture_coeffs = upload.coeffs;
+    Ok(())
+}
+
+#[inline(always)]
+pub const fn texture_is_yuv420(texture: &Texture) -> bool {
+    texture.is_yuv420()
+}
+
 pub fn delete_texture(state: &State, texture: &Texture) {
     // SAFETY: `texture.0` was created by this OpenGL backend, and the caller
     // only asks the live owning backend state to delete it.
     unsafe {
-        state.gl.delete_texture(texture.0);
+        match &texture.0 {
+            TextureImages::Rgba(texture) => state.gl.delete_texture(*texture),
+            TextureImages::Yuv420 { planes, .. } => {
+                for texture in planes {
+                    state.gl.delete_texture(*texture);
+                }
+            }
+        }
+    }
+}
+
+fn bind_sprite_texture(state: &State, texture: &Texture) {
+    // SAFETY: every handle belongs to the current context and the sprite
+    // program is active at both call sites. Texture units are restored to zero
+    // so the mesh paths retain their existing binding contract.
+    unsafe {
+        state.gl.active_texture(glow::TEXTURE0);
+        match &texture.0 {
+            TextureImages::Rgba(raw) => {
+                state.gl.bind_texture(glow::TEXTURE_2D, Some(*raw));
+                state.gl.uniform_1_i32(Some(&state.texture_yuv_location), 0);
+            }
+            TextureImages::Yuv420 {
+                planes: [y, u, v],
+                levels,
+                coeffs,
+            } => {
+                state.gl.bind_texture(glow::TEXTURE_2D, Some(*y));
+                state.gl.active_texture(glow::TEXTURE1);
+                state.gl.bind_texture(glow::TEXTURE_2D, Some(*u));
+                state.gl.active_texture(glow::TEXTURE2);
+                state.gl.bind_texture(glow::TEXTURE_2D, Some(*v));
+                state.gl.active_texture(glow::TEXTURE0);
+                state.gl.uniform_1_i32(Some(&state.texture_yuv_location), 1);
+                state
+                    .gl
+                    .uniform_4_f32_slice(Some(&state.yuv_levels_location), levels);
+                state
+                    .gl
+                    .uniform_4_f32_slice(Some(&state.yuv_coeffs_location), coeffs);
+            }
+        }
     }
 }
 
@@ -1228,16 +1431,13 @@ pub fn draw(
                             );
                         }
 
-                        let Some(texture) = textures
-                            .opengl_texture(run.texture_handle)
-                            .map(|texture| texture.0)
-                        else {
+                        let Some(texture) = textures.opengl_texture(run.texture_handle) else {
                             continue;
                         };
 
-                        if last_bound_tex != Some(texture) {
-                            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                            last_bound_tex = Some(texture);
+                        if last_bound_tex != Some(texture.primary()) {
+                            bind_sprite_texture(state, texture);
+                            last_bound_tex = Some(texture.primary());
                         }
 
                         if state.base_instance {
@@ -1454,7 +1654,7 @@ pub fn draw(
 
                         let Some(texture) = textures
                             .opengl_texture(run.texture_handle)
-                            .map(|texture| texture.0)
+                            .map(Texture::primary)
                         else {
                             continue;
                         };
@@ -1539,16 +1739,13 @@ pub fn draw(
                             );
                         }
 
-                        let Some(texture) = textures
-                            .opengl_texture(run.texture_handle)
-                            .map(|texture| texture.0)
-                        else {
+                        let Some(texture) = textures.opengl_texture(run.texture_handle) else {
                             continue;
                         };
 
-                        if last_bound_tex != Some(texture) {
-                            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                            last_bound_tex = Some(texture);
+                        if last_bound_tex != Some(texture.primary()) {
+                            bind_sprite_texture(state, texture);
+                            last_bound_tex = Some(texture.primary());
                         }
 
                         let end = run.instance_start.saturating_add(run.instance_count);
@@ -1747,7 +1944,7 @@ pub fn draw(
 
                         let Some(texture) = textures
                             .opengl_texture(run.texture_handle)
-                            .map(|texture| texture.0)
+                            .map(Texture::primary)
                         else {
                             continue;
                         };

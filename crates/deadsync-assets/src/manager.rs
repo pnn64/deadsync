@@ -1,12 +1,12 @@
 use deadlib_assets::{
     AssetStore, PreparedFontTexture, TextureUploadAction, TextureUploadDrainError,
-    font_texture_asset_roots, parse_font_asset_specs, parse_font_with_asset_dirs,
-    prepare_required_font_textures, register_texture_dims,
+    TextureUploadImage, font_texture_asset_roots, parse_font_asset_specs,
+    parse_font_with_asset_dirs, prepare_required_font_textures, register_texture_dims,
 };
 use deadlib_platform::dirs;
 use deadlib_present::font::{Font, FontMap};
 use deadlib_render::{Backend, Texture as RendererTexture};
-use deadlib_render_core::{SamplerDesc, TextureHandle, TextureHandleMap};
+use deadlib_render_core::{SamplerDesc, TextureHandle, TextureHandleMap, Yuv420Upload};
 use deadsync_theme::ThemeAssetManifest;
 use image::RgbaImage;
 use log::{debug, warn};
@@ -207,7 +207,7 @@ impl AssetManager {
     ) {
         let (image, recycle_tx) = frame.into_upload_parts();
         self.store
-            .queue_recyclable_texture_upload(handle, image, recycle_tx);
+            .queue_recyclable_yuv420_upload(handle, image, recycle_tx);
     }
 
     pub fn queue_pending_generated_textures(&mut self) {
@@ -223,12 +223,20 @@ impl AssetManager {
             budget,
             |action| -> Result<Option<RendererTexture>, Box<dyn std::error::Error>> {
                 match action {
-                    TextureUploadAction::Update { texture, image } => {
-                        backend.update_texture(texture, image)?;
+                    TextureUploadAction::Update {
+                        texture,
+                        image,
+                        sampler,
+                    } => {
+                        let yuv420 = matches!(image, TextureUploadImage::Yuv420(_));
+                        if Backend::texture_is_yuv420(texture) != yuv420 {
+                            return create_upload_texture(backend, image, sampler).map(Some);
+                        }
+                        update_upload_texture(backend, texture, image)?;
                         Ok(None)
                     }
                     TextureUploadAction::Create { image, sampler } => {
-                        backend.create_texture(image, sampler).map(Some)
+                        create_upload_texture(backend, image, sampler).map(Some)
                     }
                 }
             },
@@ -287,6 +295,58 @@ impl AssetManager {
         self.load_initial_textures(backend, textures)?;
         self.load_initial_fonts(backend, fonts)?;
         Ok(())
+    }
+}
+
+fn create_upload_texture(
+    backend: &mut Backend,
+    image: TextureUploadImage<'_>,
+    sampler: SamplerDesc,
+) -> Result<RendererTexture, Box<dyn std::error::Error>> {
+    match image {
+        TextureUploadImage::Rgba(image) => backend.create_texture(image, sampler),
+        TextureUploadImage::Yuv420(image) => {
+            let (y, u, v) = image.planes();
+            let conversion = image.conversion();
+            backend.create_yuv420_texture(
+                Yuv420Upload {
+                    width: image.width(),
+                    height: image.height(),
+                    y,
+                    u,
+                    v,
+                    levels: conversion.levels,
+                    coeffs: conversion.coeffs,
+                },
+                sampler,
+            )
+        }
+    }
+}
+
+fn update_upload_texture(
+    backend: &mut Backend,
+    texture: &mut RendererTexture,
+    image: TextureUploadImage<'_>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match image {
+        TextureUploadImage::Rgba(image) => backend.update_texture(texture, image),
+        TextureUploadImage::Yuv420(image) => {
+            let (y, u, v) = image.planes();
+            let conversion = image.conversion();
+            backend.update_yuv420_texture(
+                texture,
+                Yuv420Upload {
+                    width: image.width(),
+                    height: image.height(),
+                    y,
+                    u,
+                    v,
+                    levels: conversion.levels,
+                    coeffs: conversion.coeffs,
+                },
+            )
+        }
     }
 }
 
