@@ -4486,14 +4486,22 @@ impl App {
                     simfile_path,
                     delta_seconds,
                 }) => {
-                    if let Err(e) =
-                        self.save_gameplay_song_offset(simfile_path.as_path(), delta_seconds)
-                    {
-                        warn!("Failed to save song offset sync changes: {e}");
-                        self.state.shell.interaction.show_message(
-                            format!("Song sync save incomplete: {e}"),
-                            Instant::now(),
-                        );
+                    match self.save_gameplay_song_offset(simfile_path.as_path(), delta_seconds) {
+                        Ok(()) => {
+                            self.sync_analysis.refresh_applied(&[
+                                sync_offset::SongOffsetSyncChange {
+                                    simfile_path,
+                                    delta_seconds,
+                                },
+                            ]);
+                        }
+                        Err(e) => {
+                            warn!("Failed to save song offset sync changes: {e}");
+                            self.state.shell.interaction.show_message(
+                                format!("Song sync save incomplete: {e}"),
+                                Instant::now(),
+                            );
+                        }
                     }
                     Vec::new()
                 }
@@ -4514,6 +4522,7 @@ impl App {
                 }) => {
                     match self.save_song_offset_changes(&changes) {
                         Ok(summary) => {
+                            self.sync_analysis.refresh_applied(&changes);
                             self.state.shell.interaction.show_message(
                                 format!("Saved {} pack sync change(s).", summary.saved_files),
                                 Instant::now(),

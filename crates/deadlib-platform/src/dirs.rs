@@ -79,6 +79,10 @@ impl AppDirs {
         self.cache_dir.join("replaygain.bin")
     }
 
+    pub fn null_or_die_cache_file(&self) -> PathBuf {
+        self.cache_dir.join("null-or-die-sync.json")
+    }
+
     pub fn downloads_dir(&self) -> PathBuf {
         self.cache_dir.join("downloads")
     }
@@ -431,6 +435,10 @@ mod tests {
         assert_eq!(
             dirs.song_cache_dir(),
             Path::new("/tmp/deadsync-portable/cache/songs")
+        );
+        assert_eq!(
+            dirs.null_or_die_cache_file(),
+            Path::new("/tmp/deadsync-portable/cache/null-or-die-sync.json")
         );
     }
 

@@ -48,6 +48,7 @@ mod smx_config;
 mod song_search;
 mod stutter_diag;
 mod sync_analysis;
+mod sync_analysis_cache;
 mod transition_effects;
 mod window;
 mod window_state;

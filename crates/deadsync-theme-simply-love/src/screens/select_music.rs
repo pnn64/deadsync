@@ -1131,6 +1131,7 @@ struct NullOrDieOverlayData {
     preview_bias_ms: Option<f64>,
     final_bias_ms: Option<f64>,
     final_confidence: Option<f64>,
+    result_cached: bool,
     phase: NullOrDieOverlayPhase,
     phase_changed_at: Instant,
     error_text: Option<String>,
@@ -6541,6 +6542,8 @@ fn build_null_or_die_overlay(
         NullOrDieOverlayPhase::Ready => {
             if in_confirm_mode {
                 tr("SelectMusic", "SyncApplyTitle")
+            } else if overlay.result_cached {
+                tr("SelectMusic", "SyncCachedTitle")
             } else {
                 tr("SelectMusic", "SyncCompleteTitle")
             }
@@ -6693,6 +6696,9 @@ fn build_null_or_die_overlay(
         let placeholder_text = match overlay.phase {
             NullOrDieOverlayPhase::AnalysisUnavailable => {
                 tr("SelectMusic", "SyncAnalysisUnavailable")
+            }
+            NullOrDieOverlayPhase::Ready if overlay.result_cached => {
+                tr("SelectMusic", "SyncResultCached")
             }
             _ => tr("SelectMusic", "WaitingForAnalysis"),
         };
@@ -9195,6 +9201,7 @@ fn sync_overlay_apply_result(
 ) {
     match result {
         Ok(result) => {
+            overlay.result_cached = result.cached;
             if overlay.times_ms.is_empty() {
                 overlay.times_ms.clone_from(&result.plot.times_ms);
                 overlay.cols = result.plot.cols;
@@ -9248,6 +9255,7 @@ fn apply_song_sync_events(
             crate::SimplyLoveSyncEvent::RowStarted { .. }
             | crate::SimplyLoveSyncEvent::RowInit { .. }
             | crate::SimplyLoveSyncEvent::RowBeat { .. }
+            | crate::SimplyLoveSyncEvent::RowCached { .. }
             | crate::SimplyLoveSyncEvent::RowFinished { .. }
             | crate::SimplyLoveSyncEvent::Finished => {}
             crate::SimplyLoveSyncEvent::Disconnected => {
@@ -9347,6 +9355,7 @@ fn show_sync_song_overlay(state: &mut State) {
         preview_bias_ms: None,
         final_bias_ms: None,
         final_confidence: None,
+        result_cached: false,
         phase,
         phase_changed_at: Instant::now(),
         error_text: None,
@@ -16501,6 +16510,7 @@ mod tests {
             preview_bias_ms: Some(0.0),
             final_bias_ms: None,
             final_confidence: None,
+            result_cached: false,
             phase: super::NullOrDieOverlayPhase::Running,
             phase_changed_at: Instant::now(),
             error_text: None,
@@ -19445,6 +19455,40 @@ mod tests {
         });
 
         assert_eq!(heat_alpha, Some(super::SYNC_HEAT_ALPHA));
+    }
+
+    #[test]
+    fn sync_overlay_accepts_cached_single_chart_result() {
+        let mut overlay = test_running_sync_overlay();
+        super::apply_song_sync_events(
+            &mut overlay,
+            vec![crate::SimplyLoveSyncEvent::SongFinished(Ok(
+                crate::SimplyLoveSyncSongResult {
+                    estimate: crate::SimplyLoveSyncResult {
+                        bias_ms: -4.0,
+                        confidence: 0.93,
+                    },
+                    plot: crate::SimplyLoveSyncPlotView {
+                        freq_rows: 0,
+                        digest_rows: 0,
+                        cols: 3,
+                        post_rows: 0,
+                        freq_domain: Vec::new(),
+                        beat_digest: Vec::new(),
+                        post_kernel: Vec::new(),
+                        convolution: vec![0.1, 0.9, 0.2],
+                        times_ms: vec![-1.0, 0.0, 1.0],
+                        edge_discard: 0,
+                    },
+                    cached: true,
+                },
+            ))],
+        );
+
+        assert_eq!(overlay.phase, super::NullOrDieOverlayPhase::Ready);
+        assert!(overlay.result_cached);
+        assert_eq!(overlay.final_bias_ms, Some(-4.0));
+        assert!(overlay.curve_mesh.is_some());
     }
 
     #[test]

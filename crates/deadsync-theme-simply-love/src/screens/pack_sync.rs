@@ -43,6 +43,7 @@ impl NavigationPolicy {
 enum RowPhase {
     Pending,
     Running,
+    Cached,
     Ready,
     Failed,
 }
@@ -51,6 +52,7 @@ enum RowPhase {
 enum RowDisposition {
     Pending,
     Running,
+    Cached,
     Eligible,
     BelowThreshold,
     NoChange,
@@ -118,6 +120,7 @@ pub(crate) enum OverlayState {
 struct Summary {
     analyzed: usize,
     total: usize,
+    cached: usize,
     eligible: usize,
     below_threshold: usize,
     no_change: usize,
@@ -169,15 +172,25 @@ fn overlay_title(phase: OverlayPhase, can_save: bool) -> TextContent {
 }
 
 fn counts_text(summary: Summary, min_confidence: f64) -> TextContent {
-    retained_text(format_args!(
-        "{}/{} chart(s) analyzed - {} ready, {} below {}%, {} no change, {} failed",
-        summary.analyzed,
-        summary.total,
-        summary.eligible,
-        summary.below_threshold,
-        confidence_threshold_percent(min_confidence),
-        summary.no_change,
-        summary.failed
+    retained_arc(tr_fmt(
+        "PackSync",
+        "CountsFormat",
+        &[
+            (
+                "processed",
+                &(summary.analyzed + summary.cached).to_string(),
+            ),
+            ("total", &summary.total.to_string()),
+            ("cached", &summary.cached.to_string()),
+            ("ready", &summary.eligible.to_string()),
+            ("below", &summary.below_threshold.to_string()),
+            (
+                "threshold",
+                &confidence_threshold_percent(min_confidence).to_string(),
+            ),
+            ("nochange", &summary.no_change.to_string()),
+            ("failed", &summary.failed.to_string()),
+        ],
     ))
 }
 
@@ -426,6 +439,7 @@ pub(crate) fn build_overlay(
         }
 
         let result_rgba = match disposition {
+            RowDisposition::Cached => [0.62, 0.82, 0.62, 1.0],
             RowDisposition::BelowThreshold => [1.0, 0.82, 0.32, 1.0],
             RowDisposition::NoChange => [0.72, 0.72, 0.72, 1.0],
             RowDisposition::Failed => [1.0, 0.35, 0.35, 1.0],
@@ -893,6 +907,7 @@ fn row_disposition(row: &RowState, min_confidence: f64) -> RowDisposition {
     match row.phase {
         RowPhase::Pending => RowDisposition::Pending,
         RowPhase::Running => RowDisposition::Running,
+        RowPhase::Cached => RowDisposition::Cached,
         RowPhase::Failed => RowDisposition::Failed,
         RowPhase::Ready => {
             let Some(delta_seconds) = row_delta_seconds(row) else {
@@ -913,6 +928,10 @@ fn row_disposition(row: &RowState, min_confidence: f64) -> RowDisposition {
 fn add_disposition(summary: &mut Summary, disposition: RowDisposition) {
     let counter = match disposition {
         RowDisposition::Pending | RowDisposition::Running => return,
+        RowDisposition::Cached => {
+            summary.cached += 1;
+            return;
+        }
         RowDisposition::Eligible => &mut summary.eligible,
         RowDisposition::BelowThreshold => &mut summary.below_threshold,
         RowDisposition::NoChange => &mut summary.no_change,
@@ -925,6 +944,10 @@ fn add_disposition(summary: &mut Summary, disposition: RowDisposition) {
 fn remove_disposition(summary: &mut Summary, disposition: RowDisposition) {
     let counter = match disposition {
         RowDisposition::Pending | RowDisposition::Running => return,
+        RowDisposition::Cached => {
+            summary.cached = summary.cached.saturating_sub(1);
+            return;
+        }
         RowDisposition::Eligible => &mut summary.eligible,
         RowDisposition::BelowThreshold => &mut summary.below_threshold,
         RowDisposition::NoChange => &mut summary.no_change,
@@ -1028,7 +1051,7 @@ fn progress(row: &RowState) -> f32 {
                 (row.beats_processed as f32 / row.total_beats as f32).clamp(0.0, 1.0)
             }
         }
-        RowPhase::Ready | RowPhase::Failed => 1.0,
+        RowPhase::Cached | RowPhase::Ready | RowPhase::Failed => 1.0,
     }
 }
 
@@ -1046,6 +1069,7 @@ fn bar_text(row: &RowState, min_confidence: f64) -> TextContent {
                 ],
             ),
         },
+        RowDisposition::Cached => tr("PackSync", "StatusCached"),
         RowDisposition::Eligible => tr("PackSync", "StatusReady"),
         RowDisposition::BelowThreshold => tr_fmt(
             "PackSync",
@@ -1072,6 +1096,7 @@ fn result_text(row: &RowState, min_confidence: f64) -> TextContent {
                 retained_arc(tr("PackSync", "StatusWorking"))
             }
         }
+        RowDisposition::Cached => retained_arc(tr("PackSync", "StatusCached")),
         RowDisposition::Eligible | RowDisposition::BelowThreshold => retained_arc(tr_fmt(
             "PackSync",
             "ResultConfidenceFormat",
@@ -1180,6 +1205,20 @@ pub(crate) fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSync
                 }
             }
         }
+        crate::SimplyLoveSyncEvent::RowCached { index } => {
+            if let Some(row) = overlay.rows.get_mut(index) {
+                let previous = row_disposition(row, overlay.min_confidence);
+                row.phase = RowPhase::Cached;
+                row.total_beats = 0;
+                row.beats_processed = 0;
+                row.final_bias_ms = None;
+                row.final_confidence = None;
+                row.error_text = None;
+                refresh_row_text(row, overlay.min_confidence);
+                let current = row_disposition(row, overlay.min_confidence);
+                summary_changed |= replace_disposition(&mut overlay.summary, previous, current);
+            }
+        }
         crate::SimplyLoveSyncEvent::RowFinished { index, result } => {
             if let Some(row) = overlay.rows.get_mut(index) {
                 let previous = row_disposition(row, overlay.min_confidence);
@@ -1240,7 +1279,7 @@ pub(crate) fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSync
 mod tests {
     use super::{
         NavigationPolicy, OverlayPhase, OverlayState, OverlayStateData, RowDisposition, RowPhase,
-        RowState, RowText, Summary, build_overlay_text, confidence_threshold_percent,
+        RowState, RowText, Summary, build_overlay_text, can_save, confidence_threshold_percent,
         refresh_row_text, result_text, review_choice_delta, row_disposition,
     };
     use crate::screens::ThemeEffect;
@@ -1386,6 +1425,27 @@ mod tests {
         assert!(overlay.text.counts.as_str().starts_with("1/1"));
         assert!(overlay.text.prompt.as_str().contains('1'));
         assert!(overlay.text.help.as_str().contains("ACCEPT"));
+    }
+
+    #[test]
+    fn pack_sync_cached_row_is_processed_but_not_saveable() {
+        let mut state = overlay(OverlayPhase::Running);
+
+        super::apply_event(
+            &mut state,
+            crate::SimplyLoveSyncEvent::RowCached { index: 0 },
+        );
+        super::apply_event(&mut state, crate::SimplyLoveSyncEvent::Finished);
+
+        let OverlayState::Visible(overlay) = &state else {
+            panic!("pack sync overlay should remain visible");
+        };
+        assert_eq!(overlay.summary.analyzed, 0);
+        assert_eq!(overlay.summary.cached, 1);
+        assert_eq!(overlay.summary.eligible, 0);
+        assert_eq!(overlay.rows[0].text.result.as_str(), "Cached");
+        assert!(overlay.text.counts.as_str().starts_with("1/1"));
+        assert!(!can_save(overlay));
     }
 
     #[test]

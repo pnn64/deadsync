@@ -498,6 +498,7 @@ pub struct SimplyLoveSyncPlotView {
 pub struct SimplyLoveSyncSongResult {
     pub estimate: SimplyLoveSyncResult,
     pub plot: SimplyLoveSyncPlotView,
+    pub cached: bool,
 }
 
 pub enum SimplyLoveSyncEvent {
@@ -514,6 +515,9 @@ pub enum SimplyLoveSyncEvent {
         index: usize,
         beats_processed: usize,
         total_beats: usize,
+    },
+    RowCached {
+        index: usize,
     },
     RowFinished {
         index: usize,

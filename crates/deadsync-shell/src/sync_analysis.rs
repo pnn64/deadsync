@@ -1,3 +1,6 @@
+use crate::sync_analysis_cache::{
+    AnalysisOptions, Cache as AnalysisCache, CachedAnalysis, CachedCurve, CompletedTarget,
+};
 use deadsync_audio_decode as decode;
 use deadsync_chart::SongData;
 use deadsync_config::prelude as config;
@@ -37,9 +40,20 @@ struct Job {
 ///
 /// The shell owns all worker lifetime and polling. Theme screens only emit
 /// requests and consume the prepared events returned by [`Service::poll`].
-#[derive(Default)]
 pub(crate) struct Service {
     jobs: Vec<Job>,
+    cache: Arc<AnalysisCache>,
+}
+
+impl Default for Service {
+    fn default() -> Self {
+        Self {
+            jobs: Vec::new(),
+            cache: Arc::new(AnalysisCache::load(
+                deadlib_platform::dirs::app_dirs().null_or_die_cache_file(),
+            )),
+        }
+    }
 }
 
 impl Service {
@@ -54,14 +68,30 @@ impl Service {
         let thread_cancel = Arc::clone(&cancel);
         let rx = if owner == SimplyLoveSyncOwner::SelectMusicSong {
             let (tx, rx) = mpsc::sync_channel(SONG_PENDING_EVENTS);
-            std::thread::spawn(move || run_song(targets, emit_freq_delta, thread_cancel, tx));
+            let cache = Arc::clone(&self.cache);
+            std::thread::spawn(move || {
+                run_song(targets, emit_freq_delta, thread_cancel, tx, cache);
+            });
             rx
         } else {
             let (tx, rx) = mpsc::channel();
-            std::thread::spawn(move || run_pack(targets, thread_cancel, tx));
+            let cache = Arc::clone(&self.cache);
+            std::thread::spawn(move || run_pack(targets, thread_cancel, tx, cache));
             rx
         };
         self.jobs.push(Job { owner, cancel, rx });
+    }
+
+    pub(crate) fn refresh_applied(
+        &self,
+        changes: &[deadsync_simfile::sync_offset::SongOffsetSyncChange],
+    ) {
+        self.cache.refresh_applied(
+            changes
+                .iter()
+                .map(|change| (change.simfile_path.as_path(), change.delta_seconds)),
+        );
+        self.cache.flush();
     }
 
     pub(crate) fn cancel(&mut self, owner: SimplyLoveSyncOwner) {
@@ -122,6 +152,7 @@ fn run_song(
     emit_freq_delta: bool,
     cancel: Arc<AtomicBool>,
     tx: mpsc::SyncSender<SimplyLoveSyncEvent>,
+    cache: Arc<AnalysisCache>,
 ) {
     let Some(target) = targets.pop() else {
         let _ = tx.send(SimplyLoveSyncEvent::SongFinished(Err(
@@ -130,6 +161,29 @@ fn run_song(
         return;
     };
     let cfg = config::null_or_die_bias_cfg();
+    let options = AnalysisOptions::new(&cfg, config::get().null_or_die_confidence_percent);
+    let prepared = sync_music_path(target.song.as_ref(), target.chart_ix)
+        .ok()
+        .map(|music_path| {
+            cache.prepare(
+                &target.song.simfile_path,
+                &music_path,
+                target.chart_ix,
+                options,
+            )
+        });
+    if let Some(cached) = prepared
+        .as_ref()
+        .and_then(|prepared| prepared.cached_analysis())
+    {
+        if !cancel.load(Ordering::Relaxed) {
+            let _ = tx.send(SimplyLoveSyncEvent::SongFinished(Ok(cached_song_result(
+                cached,
+            ))));
+        }
+        return;
+    }
+    let prepared = prepared.and_then(|prepared| prepared.into_prepared());
     let stream_cfg = BiasStreamCfg {
         emit_freq_delta,
         orientation: config::get().null_or_die_graph_orientation,
@@ -149,7 +203,55 @@ fn run_song(
     )
     .map(sync_song_result);
     if !cancel.load(Ordering::Relaxed) {
+        if let (Ok(result), Some(prepared)) = (&result, prepared) {
+            cache.record_completed(vec![CompletedTarget::with_curve(
+                prepared,
+                result.estimate.bias_ms,
+                result.estimate.confidence,
+                CachedCurve {
+                    times_ms: result.plot.times_ms.clone(),
+                    convolution: result.plot.convolution.clone(),
+                    edge_discard: result.plot.edge_discard,
+                },
+            )]);
+            cache.flush();
+        }
         let _ = tx.send(SimplyLoveSyncEvent::SongFinished(result));
+    }
+}
+
+fn cached_song_result(cached: &CachedAnalysis) -> SimplyLoveSyncSongResult {
+    let bias_ms = if cached.applied { 0.0 } else { cached.bias_ms };
+    let (times_ms, convolution, edge_discard) = cached
+        .curve
+        .as_ref()
+        .map(|curve| {
+            (
+                curve.times_ms.clone(),
+                curve.convolution.clone(),
+                curve.edge_discard,
+            )
+        })
+        .unwrap_or_default();
+    let cols = times_ms.len();
+    SimplyLoveSyncSongResult {
+        estimate: SimplyLoveSyncResult {
+            bias_ms,
+            confidence: cached.confidence,
+        },
+        plot: SimplyLoveSyncPlotView {
+            freq_rows: 0,
+            digest_rows: 0,
+            cols,
+            post_rows: 0,
+            freq_domain: Vec::new(),
+            beat_digest: Vec::new(),
+            post_kernel: Vec::new(),
+            convolution,
+            times_ms,
+            edge_discard,
+        },
+        cached: true,
     }
 }
 
@@ -215,6 +317,7 @@ fn sync_song_result(result: BiasEstimateWithPlot) -> SimplyLoveSyncSongResult {
             times_ms: result.plot.times_ms,
             edge_discard: result.plot.edge_discard,
         },
+        cached: false,
     }
 }
 
@@ -222,15 +325,18 @@ fn run_pack(
     targets: Vec<SimplyLoveSyncTarget>,
     cancel: Arc<AtomicBool>,
     tx: mpsc::Sender<SimplyLoveSyncEvent>,
+    cache: Arc<AnalysisCache>,
 ) {
     let worker_count = pack_worker_count(targets.len());
     let cfg = Arc::new(config::null_or_die_bias_cfg());
+    let options = AnalysisOptions::new(&cfg, config::get().null_or_die_confidence_percent);
     let stream_cfg = BiasStreamCfg {
         emit_freq_delta: false,
         orientation: config::get().null_or_die_graph_orientation,
     };
     let (job_tx, job_rx) = mpsc::channel::<(usize, SimplyLoveSyncTarget)>();
     let job_rx = Arc::new(Mutex::new(job_rx));
+    let completed = Arc::new(Mutex::new(Vec::new()));
     let mut workers = Vec::with_capacity(worker_count);
 
     for _ in 0..worker_count {
@@ -238,6 +344,8 @@ fn run_pack(
         let cfg = Arc::clone(&cfg);
         let job_rx = Arc::clone(&job_rx);
         let tx = tx.clone();
+        let cache = Arc::clone(&cache);
+        let completed = Arc::clone(&completed);
         workers.push(std::thread::spawn(move || {
             loop {
                 if cancel.load(Ordering::Relaxed) {
@@ -251,6 +359,25 @@ fn run_pack(
                 if cancel.load(Ordering::Relaxed) {
                     return;
                 }
+
+                let prepared = sync_music_path(target.song.as_ref(), target.chart_ix)
+                    .ok()
+                    .map(|music_path| {
+                        cache.prepare(
+                            &target.song.simfile_path,
+                            &music_path,
+                            target.chart_ix,
+                            options,
+                        )
+                    });
+                if prepared
+                    .as_ref()
+                    .is_some_and(|prepared| prepared.is_cached())
+                {
+                    let _ = tx.send(SimplyLoveSyncEvent::RowCached { index });
+                    continue;
+                }
+                let prepared = prepared.and_then(|prepared| prepared.into_prepared());
 
                 let _ = tx.send(SimplyLoveSyncEvent::RowStarted { index });
                 let mut total_beats = 0usize;
@@ -287,6 +414,15 @@ fn run_pack(
                     bias_ms: result.estimate.bias_ms,
                     confidence: result.estimate.confidence,
                 });
+                if let (Ok(result), Some(prepared)) = (&result, prepared)
+                    && let Ok(mut completed) = completed.lock()
+                {
+                    completed.push(CompletedTarget::new(
+                        prepared,
+                        result.bias_ms,
+                        result.confidence,
+                    ));
+                }
                 let _ = tx.send(SimplyLoveSyncEvent::RowFinished { index, result });
             }
         }));
@@ -301,6 +437,12 @@ fn run_pack(
     for worker in workers {
         let _ = worker.join();
     }
+    if !cancel.load(Ordering::Relaxed)
+        && let Ok(mut completed) = completed.lock()
+    {
+        cache.record_completed(std::mem::take(&mut *completed));
+    }
+    cache.flush();
     let _ = tx.send(SimplyLoveSyncEvent::Finished);
 }
 
@@ -347,6 +489,40 @@ mod tests {
             )]
         ));
         assert!(service.poll().is_none());
+    }
+
+    #[test]
+    fn cached_song_result_restores_estimate_and_curve() {
+        let result = cached_song_result(&CachedAnalysis {
+            bias_ms: -4.0,
+            confidence: 0.93,
+            applied: false,
+            curve: Some(CachedCurve {
+                times_ms: vec![-1.0, 0.0, 1.0],
+                convolution: vec![0.1, 0.9, 0.2],
+                edge_discard: 1,
+            }),
+        });
+
+        assert!(result.cached);
+        assert_eq!(result.estimate.bias_ms, -4.0);
+        assert_eq!(result.estimate.confidence, 0.93);
+        assert_eq!(result.plot.cols, 3);
+        assert_eq!(result.plot.convolution, [0.1, 0.9, 0.2]);
+    }
+
+    #[test]
+    fn cached_applied_result_cannot_apply_the_same_delta_twice() {
+        let result = cached_song_result(&CachedAnalysis {
+            bias_ms: -4.0,
+            confidence: 0.93,
+            applied: true,
+            curve: None,
+        });
+
+        assert!(result.cached);
+        assert_eq!(result.estimate.bias_ms, 0.0);
+        assert!(result.plot.convolution.is_empty());
     }
 }
 
