@@ -8394,6 +8394,69 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_loadactor_autowildcards_sprite_hints() {
+        let song_dir = test_dir("loadactor-autowildcard-sprite-hints");
+        let lua_dir = song_dir.join("lua");
+        fs::create_dir_all(&lua_dir).unwrap();
+        let image_path = lua_dir.join("overlay 3x4.png");
+        image::RgbaImage::new(12, 8).save(&image_path).unwrap();
+        let entry = lua_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    LoadActor("overlay")..{
+        OnCommand=function(self)
+            mod_actions = {
+                {1, tostring(self:GetNumStates()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "LoadActor Autowildcard"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "12");
+        assert!(matches!(
+            compiled.overlays[0].kind,
+            SongLuaOverlayKind::Sprite { ref texture_path, .. }
+                if texture_path.ends_with("overlay 3x4.png")
+        ));
+    }
+
+    #[test]
+    fn compile_song_lua_loadactor_rejects_ambiguous_autowildcards() {
+        let song_dir = test_dir("loadactor-ambiguous-autowildcard");
+        let lua_dir = song_dir.join("lua");
+        fs::create_dir_all(&lua_dir).unwrap();
+        image::RgbaImage::new(1, 1)
+            .save(lua_dir.join("overlay 2x2.png"))
+            .unwrap();
+        image::RgbaImage::new(1, 1)
+            .save(lua_dir.join("overlay 3x4.png"))
+            .unwrap();
+        let entry = lua_dir.join("default.lua");
+        fs::write(&entry, "return LoadActor(\"overlay\")").unwrap();
+
+        let error = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "LoadActor Ambiguous Autowildcard"),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("multiple matches"), "{error}");
+        assert!(error.contains("overlay 2x2.png"), "{error}");
+        assert!(error.contains("overlay 3x4.png"), "{error}");
+    }
+
+    #[test]
     fn compile_song_lua_loadactor_resolves_extensionless_script() {
         let song_dir = test_dir("loadactor-script-no-ext");
         let lua_dir = song_dir.join("lua");

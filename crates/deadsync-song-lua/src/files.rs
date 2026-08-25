@@ -101,7 +101,7 @@ pub fn resolve_load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::
             return Ok(resolved);
         }
     }
-    resolve_load_actor_with_extensions(lua, song_dir, path)
+    resolve_load_actor_autowildcard(lua, song_dir, path)
 }
 
 fn resolve_load_actor_directory(dir: &Path, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
@@ -117,37 +117,59 @@ fn resolve_load_actor_directory(dir: &Path, song_dir: &Path, path: &str) -> mlua
     )))
 }
 
-fn resolve_load_actor_with_extensions(
+fn resolve_load_actor_autowildcard(
     lua: &Lua,
     song_dir: &Path,
     path: &str,
 ) -> mlua::Result<PathBuf> {
-    let raw = Path::new(path.trim());
-    if raw.extension().is_some() {
-        return Err(mlua::Error::external(format!(
-            "script '{}' not found relative to '{}'",
-            path,
-            song_dir.display()
-        )));
-    }
-
-    const LOAD_ACTOR_EXTENSIONS: &[&str] = &[
-        "lua", "xml", "png", "jpg", "jpeg", "gif", "bmp", "webp", "apng", "mp4", "avi", "m4v",
-        "mov", "webm", "mkv", "mpg", "mpeg", "ogg", "mp3", "wav", "flac", "opus", "m4a", "aac",
-    ];
-
+    // ITGmania's ActorUtil::ResolvePath appends "*" after an exact miss, so
+    // LoadActor("overlay") can resolve a hinted name such as "overlay 3x4.png".
     for base_dir in load_actor_search_dirs(lua, song_dir)? {
         let base = base_dir.join(path);
-        if base.is_dir()
-            && let Ok(resolved) = resolve_load_actor_directory(&base, song_dir, path)
-        {
-            return Ok(resolved);
+        let Some(parent) = base.parent().filter(|parent| parent.is_dir()) else {
+            continue;
+        };
+        let Some(prefix) = base.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let mut matches = fs::read_dir(parent)
+            .map_err(mlua::Error::external)?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|candidate| {
+                candidate
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| {
+                        name.get(..prefix.len())
+                            .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
+                    })
+            })
+            .collect::<Vec<_>>();
+        matches.sort_unstable_by_key(|candidate| {
+            candidate
+                .file_name()
+                .map(|name| name.to_string_lossy().to_ascii_lowercase())
+                .unwrap_or_default()
+        });
+        if matches.len() > 1 {
+            return Err(mlua::Error::external(format!(
+                "script '{}' has multiple matches relative to '{}':\n{}",
+                path,
+                base_dir.display(),
+                matches
+                    .iter()
+                    .map(|candidate| candidate.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )));
         }
-        for ext in LOAD_ACTOR_EXTENSIONS {
-            let candidate = base.with_extension(ext);
-            if candidate.is_file() {
-                return Ok(candidate);
-            }
+        if let Some(resolved) = matches.pop() {
+            return if resolved.is_dir() {
+                resolve_load_actor_directory(&resolved, song_dir, path)
+            } else {
+                Ok(resolved)
+            };
         }
     }
 
