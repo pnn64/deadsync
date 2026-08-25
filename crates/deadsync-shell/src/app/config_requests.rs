@@ -310,7 +310,8 @@ pub(super) fn execute_select_music(request: SimplyLoveSelectMusicConfigRequest) 
         Request::WheelStyle(style) => config::update_select_music_wheel_style(style),
         Request::DifficultyColors(scheme) => config::update_difficulty_color_scheme(scheme),
         Request::HideInactiveSeries(enabled) => config::update_hide_inactive_series(enabled),
-        Request::SortBySeries(enabled) => config::update_sort_music_wheel_by_series(enabled),
+        Request::DefaultSort(sort) => config::update_select_music_default_sort(sort),
+        Request::LastSort(sort) => config::update_select_music_last_sort(sort),
         Request::SeriesSource(source) => config::update_select_music_series_source(source),
         Request::SongSelectBackground(mode) => {
             config::update_select_music_song_select_bg_mode(mode)

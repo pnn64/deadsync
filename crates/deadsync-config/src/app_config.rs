@@ -8,10 +8,11 @@ use crate::theme::{
     GameplayBannerMode, GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel,
     MachineBarColor, MachineEvaluationStyle, MachineFlowOptions, MachineFont,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode,
-    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
-    SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
-    SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag,
-    ThemePresentationOptions, TournamentModeOptions, VersionOverlaySide, VisualStyle,
+    SelectMusicDefaultSort, SelectMusicItlRankMode, SelectMusicItlWheelMode,
+    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
+    SelectMusicSort, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgShopFolder,
+    SrpgVariant, SyncGraphMode, ThemeFlag, ThemePresentationOptions, TournamentModeOptions,
+    VersionOverlaySide, VisualStyle,
 };
 use deadlib_audio_core::AudioOutputMode;
 use deadlib_platform::display::FullscreenType;
@@ -155,8 +156,10 @@ pub struct Config {
     pub show_select_music_cdtitles: bool,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
-    /// Start Select Music in the nested Series sort instead of Group sort.
-    pub sort_music_wheel_by_series: bool,
+    /// Machine-wide initial sort, matching Simply Love's Default Sort preference.
+    pub select_music_default_sort: SelectMusicDefaultSort,
+    /// Last stable global sort selected while Default Sort is Last Used.
+    pub select_music_last_sort: SelectMusicSort,
     /// Choose whether Series names come from Pack.ini or one folder above each pack.
     pub select_music_series_source: crate::theme::SelectMusicSeriesSource,
     /// Hide inactive parent-series folders while browsing an open section.
@@ -443,7 +446,8 @@ impl Default for Config {
             show_select_music_cdtitles: select_music.show_cdtitles,
             show_music_wheel_grades: select_music.show_wheel_grades,
             show_music_wheel_lamps: select_music.show_wheel_lamps,
-            sort_music_wheel_by_series: select_music.sort_wheel_by_series,
+            select_music_default_sort: select_music.default_sort,
+            select_music_last_sort: select_music.last_sort,
             select_music_series_source: select_music.series_source,
             hide_inactive_series: select_music.hide_inactive_series,
             select_music_itl_rank_mode: select_music.itl_rank_mode,

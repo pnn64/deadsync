@@ -1013,8 +1013,8 @@ pub(super) fn apply_submenu_choice_delta(
                     new_index,
                 ))
             }
-            SubRowId::SeriesSort => crate::SimplyLoveSelectMusicConfigRequest::SortBySeries(
-                yes_no_from_choice(new_index),
+            SubRowId::DefaultSort => crate::SimplyLoveSelectMusicConfigRequest::DefaultSort(
+                select_music_default_sort_from_choice(new_index),
             ),
             SubRowId::SeriesSource => crate::SimplyLoveSelectMusicConfigRequest::SeriesSource(
                 select_music_series_source_from_choice(new_index),

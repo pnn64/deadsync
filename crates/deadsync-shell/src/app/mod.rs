@@ -9030,10 +9030,12 @@ impl App {
                 }
                 CurrentScreen::Evaluation => {
                     let color_index = self.state.screens.select_music_state.active_color_index;
+                    let sort = select_music::sort_snapshot(&self.state.screens.select_music_state);
                     let init_view =
                         self.coin_select_music_init_view(crate::select_music::prepared_init_view());
                     let mut refreshed = select_music::init(init_view);
                     refreshed.active_color_index = color_index;
+                    select_music::restore_sort(&mut refreshed, sort);
                     self.state.screens.select_music_state = refreshed;
                 }
                 CurrentScreen::Gameplay | CurrentScreen::Practice => {

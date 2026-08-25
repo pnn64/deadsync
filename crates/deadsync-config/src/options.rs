@@ -27,9 +27,8 @@ use crate::defaults::{
     DEFAULT_SHOW_VERSION_OVERLAY, DEFAULT_SMOOTH_HISTOGRAM, DEFAULT_SMX_IDLE_LIGHTS_BLACK,
     DEFAULT_SMX_INPUT, DEFAULT_SMX_MANAGES_PAD_CONFIG, DEFAULT_SMX_PANEL_LIGHTS,
     DEFAULT_SMX_UNDERGLOW_GRB, DEFAULT_SMX_UNDERGLOW_THEME, DEFAULT_SOFTWARE_RENDERER_THREADS,
-    DEFAULT_SONG_PARSING_THREADS, DEFAULT_SORT_MUSIC_WHEEL_BY_SERIES,
-    DEFAULT_SUBMIT_ARROWCLOUD_FAILS, DEFAULT_THREE_KEY_NAVIGATION, DEFAULT_TRANSLATED_TITLES,
-    DEFAULT_UPDATER_INSTALL_ENABLED, DEFAULT_USE_FSRS,
+    DEFAULT_SONG_PARSING_THREADS, DEFAULT_SUBMIT_ARROWCLOUD_FAILS, DEFAULT_THREE_KEY_NAVIGATION,
+    DEFAULT_TRANSLATED_TITLES, DEFAULT_UPDATER_INSTALL_ENABLED, DEFAULT_USE_FSRS,
 };
 use crate::ini::SimpleIni;
 use crate::machine::{
@@ -43,11 +42,12 @@ use crate::theme::{
     ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
     GrooveStatsQrLoginWhen, LanguageFlag, LogLevel, MachineBarColor, MachineEvaluationStyle,
     MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
-    RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
+    RandomBackgroundMode, SelectMusicDefaultSort, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSeriesSource,
-    SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle,
-    SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
-    auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
+    SelectMusicSongSelectBgMode, SelectMusicSort, SelectMusicStepArtistBoxMode,
+    SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag,
+    VersionOverlaySide, VisualStyle, auto_screenshot_bit, auto_screenshot_mask_from_str,
+    auto_screenshot_mask_to_str,
 };
 use crate::writer::{push_bool, push_line};
 use deadlib_present::color::DifficultyColorScheme;
@@ -1031,6 +1031,23 @@ pub fn parse_select_music_song_select_bg_mode(
         .unwrap_or(default)
 }
 
+pub fn parse_select_music_default_sort(
+    raw: Option<&str>,
+    legacy_series: Option<&str>,
+    default: SelectMusicDefaultSort,
+) -> SelectMusicDefaultSort {
+    if let Some(value) = raw {
+        return SelectMusicDefaultSort::from_str(value).unwrap_or(default);
+    }
+    legacy_series.map_or(default, |value| {
+        if parse_u8_bool_or_default(Some(value), true) {
+            SelectMusicDefaultSort::Series
+        } else {
+            SelectMusicDefaultSort::Group
+        }
+    })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SelectMusicOptions {
     pub breakdown_style: BreakdownStyle,
@@ -1043,7 +1060,8 @@ pub struct SelectMusicOptions {
     pub show_cdtitles: bool,
     pub show_wheel_grades: bool,
     pub show_wheel_lamps: bool,
-    pub sort_wheel_by_series: bool,
+    pub default_sort: SelectMusicDefaultSort,
+    pub last_sort: SelectMusicSort,
     pub series_source: SelectMusicSeriesSource,
     pub hide_inactive_series: bool,
     pub itl_rank_mode: SelectMusicItlRankMode,
@@ -1084,7 +1102,8 @@ impl Default for SelectMusicOptions {
             show_cdtitles: DEFAULT_SHOW_SELECT_MUSIC_CDTITLES,
             show_wheel_grades: DEFAULT_SHOW_MUSIC_WHEEL_GRADES,
             show_wheel_lamps: DEFAULT_SHOW_MUSIC_WHEEL_LAMPS,
-            sort_wheel_by_series: DEFAULT_SORT_MUSIC_WHEEL_BY_SERIES,
+            default_sort: SelectMusicDefaultSort::Series,
+            last_sort: SelectMusicSort::Series,
             series_source: SelectMusicSeriesSource::PackIni,
             hide_inactive_series: DEFAULT_HIDE_INACTIVE_SERIES,
             itl_rank_mode: SelectMusicItlRankMode::None,
@@ -1164,10 +1183,15 @@ pub fn load_select_music_options(
             conf.get("Options", "SelectMusicWheelLamps"),
             default.show_wheel_lamps,
         ),
-        sort_wheel_by_series: parse_u8_bool_or_default(
+        default_sort: parse_select_music_default_sort(
+            conf.get("Options", "SelectMusicDefaultSort"),
             conf.get("Options", "SelectMusicSortBySeries"),
-            default.sort_wheel_by_series,
+            default.default_sort,
         ),
+        last_sort: conf
+            .get("Options", "SelectMusicLastSort")
+            .and_then(|value| SelectMusicSort::from_str(value).ok())
+            .unwrap_or(default.last_sort),
         series_source: conf
             .get("Options", "SelectMusicSeriesSource")
             .and_then(|value| SelectMusicSeriesSource::from_str(value).ok())
@@ -1307,11 +1331,12 @@ pub fn push_select_music_option_lines(content: &mut String, options: SelectMusic
     push_bool(content, "SelectMusicShowCDTitles", select.show_cdtitles);
     push_bool(content, "SelectMusicWheelGrades", select.show_wheel_grades);
     push_bool(content, "SelectMusicWheelLamps", select.show_wheel_lamps);
-    push_bool(
+    push_line(
         content,
-        "SelectMusicSortBySeries",
-        select.sort_wheel_by_series,
+        "SelectMusicDefaultSort",
+        select.default_sort.as_str(),
     );
+    push_line(content, "SelectMusicLastSort", select.last_sort.as_str());
     push_line(
         content,
         "SelectMusicSeriesSource",
@@ -1835,6 +1860,30 @@ pub const fn breakdown_style_from_choice(idx: usize) -> BreakdownStyle {
     }
 }
 
+pub const fn select_music_default_sort_choice_index(sort: SelectMusicDefaultSort) -> usize {
+    match sort {
+        SelectMusicDefaultSort::Series => 0,
+        SelectMusicDefaultSort::Group => 1,
+        SelectMusicDefaultSort::Title => 2,
+        SelectMusicDefaultSort::Meter => 3,
+        SelectMusicDefaultSort::Popularity => 4,
+        SelectMusicDefaultSort::Recent => 5,
+        SelectMusicDefaultSort::LastUsed => 6,
+    }
+}
+
+pub const fn select_music_default_sort_from_choice(idx: usize) -> SelectMusicDefaultSort {
+    match idx {
+        1 => SelectMusicDefaultSort::Group,
+        2 => SelectMusicDefaultSort::Title,
+        3 => SelectMusicDefaultSort::Meter,
+        4 => SelectMusicDefaultSort::Popularity,
+        5 => SelectMusicDefaultSort::Recent,
+        6 => SelectMusicDefaultSort::LastUsed,
+        _ => SelectMusicDefaultSort::Series,
+    }
+}
+
 pub const fn select_music_pattern_info_mode_choice_index(
     mode: SelectMusicPatternInfoMode,
 ) -> usize {
@@ -2346,7 +2395,8 @@ mod tests {
             show_cdtitles: true,
             show_wheel_grades: true,
             show_wheel_lamps: false,
-            sort_wheel_by_series: true,
+            default_sort: SelectMusicDefaultSort::Series,
+            last_sort: SelectMusicSort::Series,
             series_source: SelectMusicSeriesSource::PackIni,
             hide_inactive_series: false,
             itl_rank_mode: SelectMusicItlRankMode::None,
@@ -3190,6 +3240,43 @@ mod tests {
     }
 
     #[test]
+    fn select_music_default_sort_choices_match_options_order() {
+        let choices = [
+            SelectMusicDefaultSort::Series,
+            SelectMusicDefaultSort::Group,
+            SelectMusicDefaultSort::Title,
+            SelectMusicDefaultSort::Meter,
+            SelectMusicDefaultSort::Popularity,
+            SelectMusicDefaultSort::Recent,
+            SelectMusicDefaultSort::LastUsed,
+        ];
+        for (index, sort) in choices.into_iter().enumerate() {
+            assert_eq!(select_music_default_sort_choice_index(sort), index);
+            assert_eq!(select_music_default_sort_from_choice(index), sort);
+        }
+    }
+
+    #[test]
+    fn legacy_series_sort_migrates_when_default_sort_is_absent() {
+        let group = load_select_music_options(
+            &ini("[Options]\nSelectMusicSortBySeries=0\n"),
+            default_select_music_options(),
+        );
+        let series = load_select_music_options(
+            &ini("[Options]\nSelectMusicSortBySeries=1\n"),
+            default_select_music_options(),
+        );
+        let new_key_wins = load_select_music_options(
+            &ini("[Options]\nSelectMusicDefaultSort=Title\nSelectMusicSortBySeries=1\n"),
+            default_select_music_options(),
+        );
+
+        assert_eq!(group.default_sort, SelectMusicDefaultSort::Group);
+        assert_eq!(series.default_sort, SelectMusicDefaultSort::Series);
+        assert_eq!(new_key_wins.default_sort, SelectMusicDefaultSort::Title);
+    }
+
+    #[test]
     fn loads_select_music_options_from_ini() {
         let mut conf = SimpleIni::new();
         conf.load_str(
@@ -3205,7 +3292,8 @@ mod tests {
             SelectMusicShowCDTitles=0
             SelectMusicWheelGrades=0
             SelectMusicWheelLamps=1
-            SelectMusicSortBySeries=0
+            SelectMusicDefaultSort=Recent
+            SelectMusicLastSort=Artist
             SelectMusicSeriesSource=Folder
             SelectMusicHideInactiveSeries=1
             SelectMusicWheelITLRank=Overall
@@ -3246,7 +3334,8 @@ mod tests {
         assert!(!loaded.show_cdtitles);
         assert!(!loaded.show_wheel_grades);
         assert!(loaded.show_wheel_lamps);
-        assert!(!loaded.sort_wheel_by_series);
+        assert_eq!(loaded.default_sort, SelectMusicDefaultSort::Recent);
+        assert_eq!(loaded.last_sort, SelectMusicSort::Artist);
         assert_eq!(loaded.series_source, SelectMusicSeriesSource::Folder);
         assert!(loaded.hide_inactive_series);
         assert_eq!(loaded.itl_rank_mode, SelectMusicItlRankMode::Overall);
@@ -3312,7 +3401,8 @@ mod tests {
                 "SelectMusicShowCDTitles=1\n",
                 "SelectMusicWheelGrades=1\n",
                 "SelectMusicWheelLamps=0\n",
-                "SelectMusicSortBySeries=1\n",
+                "SelectMusicDefaultSort=Series\n",
+                "SelectMusicLastSort=Series\n",
                 "SelectMusicSeriesSource=PackIni\n",
                 "SelectMusicHideInactiveSeries=0\n",
                 "SelectMusicWheelITLRank=None\n",

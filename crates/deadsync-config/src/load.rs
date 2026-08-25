@@ -351,7 +351,8 @@ fn apply_select_music_opts(loaded: SelectMusicOptions, cfg: &mut Config) {
     cfg.show_select_music_cdtitles = loaded.show_cdtitles;
     cfg.show_music_wheel_grades = loaded.show_wheel_grades;
     cfg.show_music_wheel_lamps = loaded.show_wheel_lamps;
-    cfg.sort_music_wheel_by_series = loaded.sort_wheel_by_series;
+    cfg.select_music_default_sort = loaded.default_sort;
+    cfg.select_music_last_sort = loaded.last_sort;
     cfg.select_music_series_source = loaded.series_source;
     cfg.hide_inactive_series = loaded.hide_inactive_series;
     cfg.select_music_itl_rank_mode = loaded.itl_rank_mode;

@@ -92,11 +92,16 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        id: SubRowId::SeriesSort,
-        label: lookup_key("OptionsSelectMusic", "SeriesSort"),
+        id: SubRowId::DefaultSort,
+        label: lookup_key("OptionsSelectMusic", "DefaultSort"),
         choices: &[
-            localized_choice("Common", "No"),
-            localized_choice("Common", "Yes"),
+            localized_choice("OptionsSelectMusic", "DefaultSortSeries"),
+            localized_choice("OptionsSelectMusic", "DefaultSortGroup"),
+            localized_choice("OptionsSelectMusic", "DefaultSortTitle"),
+            localized_choice("OptionsSelectMusic", "DefaultSortMeter"),
+            localized_choice("OptionsSelectMusic", "DefaultSortPopularity"),
+            localized_choice("OptionsSelectMusic", "DefaultSortRecent"),
+            localized_choice("OptionsSelectMusic", "DefaultSortLastUsed"),
         ],
         inline: true,
     },
@@ -383,11 +388,11 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
-        id: ItemId::SmSeriesSort,
-        name: lookup_key("OptionsSelectMusic", "SeriesSort"),
+        id: ItemId::SmDefaultSort,
+        name: lookup_key("OptionsSelectMusic", "DefaultSort"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
-            "SeriesSortHelp",
+            "DefaultSortHelp",
         ))],
     },
     Item {

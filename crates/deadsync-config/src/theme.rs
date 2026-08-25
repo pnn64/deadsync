@@ -42,6 +42,131 @@ impl FromStr for BreakdownStyle {
     }
 }
 
+/// Stable song-wheel sorts that can be restored across application launches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SelectMusicSort {
+    #[default]
+    Series,
+    Group,
+    Title,
+    Artist,
+    Genre,
+    Bpm,
+    Length,
+    Meter,
+    Popularity,
+    Recent,
+    TopGrades,
+}
+
+impl SelectMusicSort {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Series => "Series",
+            Self::Group => "Group",
+            Self::Title => "Title",
+            Self::Artist => "Artist",
+            Self::Genre => "Genre",
+            Self::Bpm => "BPM",
+            Self::Length => "Length",
+            Self::Meter => "Meter",
+            Self::Popularity => "Popularity",
+            Self::Recent => "Recent",
+            Self::TopGrades => "TopGrades",
+        }
+    }
+}
+
+impl FromStr for SelectMusicSort {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(value.len());
+        for ch in value.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "series" => Ok(Self::Series),
+            "group" => Ok(Self::Group),
+            "title" => Ok(Self::Title),
+            "artist" => Ok(Self::Artist),
+            "genre" => Ok(Self::Genre),
+            "bpm" => Ok(Self::Bpm),
+            "length" => Ok(Self::Length),
+            "meter" => Ok(Self::Meter),
+            "popularity" | "popular" | "mostpopular" => Ok(Self::Popularity),
+            "recent" | "recentlyplayed" => Ok(Self::Recent),
+            "topgrades" | "grades" | "machinetopscores" => Ok(Self::TopGrades),
+            _ => Err(()),
+        }
+    }
+}
+
+/// Simply Love's machine-wide Default Sort preference plus DeadSync's
+/// opt-in extension for restoring the last stable sort.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SelectMusicDefaultSort {
+    #[default]
+    Series,
+    Group,
+    Title,
+    Meter,
+    Popularity,
+    Recent,
+    LastUsed,
+}
+
+impl SelectMusicDefaultSort {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Series => "Series",
+            Self::Group => "Group",
+            Self::Title => "Title",
+            Self::Meter => "Meter",
+            Self::Popularity => "Popularity",
+            Self::Recent => "Recent",
+            Self::LastUsed => "LastUsed",
+        }
+    }
+
+    pub const fn resolve(self, last_used: SelectMusicSort) -> SelectMusicSort {
+        match self {
+            Self::Series => SelectMusicSort::Series,
+            Self::Group => SelectMusicSort::Group,
+            Self::Title => SelectMusicSort::Title,
+            Self::Meter => SelectMusicSort::Meter,
+            Self::Popularity => SelectMusicSort::Popularity,
+            Self::Recent => SelectMusicSort::Recent,
+            Self::LastUsed => last_used,
+        }
+    }
+}
+
+impl FromStr for SelectMusicDefaultSort {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(value.len());
+        for ch in value.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "series" => Ok(Self::Series),
+            "group" => Ok(Self::Group),
+            "title" => Ok(Self::Title),
+            "meter" => Ok(Self::Meter),
+            "popularity" | "popular" | "mostpopular" => Ok(Self::Popularity),
+            "recent" | "recentlyplayed" => Ok(Self::Recent),
+            "lastused" | "last" | "remember" => Ok(Self::LastUsed),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DefaultFailType {
     Immediate,

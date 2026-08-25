@@ -14,11 +14,12 @@ use crate::theme::{
     ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
     GameplayBannerMode, GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel,
     MachineBarColor, MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode,
-    MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode,
-    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicSeriesSource, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
-    SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag,
-    TournamentScoringSystem, VersionOverlaySide, VisualStyle,
+    MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode, SelectMusicDefaultSort,
+    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
+    SelectMusicScoreboxPlacement, SelectMusicSeriesSource, SelectMusicSongSelectBgMode,
+    SelectMusicSort, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgShopFolder,
+    SrpgVariant, SyncGraphMode, ThemeFlag, TournamentScoringSystem, VersionOverlaySide,
+    VisualStyle,
 };
 use deadlib_audio_core::AudioOutputMode;
 use deadlib_present::color::DifficultyColorScheme;
@@ -652,8 +653,15 @@ pub fn set_show_music_wheel_lamps(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.show_music_wheel_lamps, enabled)
 }
 
-pub fn set_sort_music_wheel_by_series(cfg: &mut Config, enabled: bool) -> bool {
-    set_if_changed(&mut cfg.sort_music_wheel_by_series, enabled)
+pub fn set_select_music_default_sort(cfg: &mut Config, sort: SelectMusicDefaultSort) -> bool {
+    set_if_changed(&mut cfg.select_music_default_sort, sort)
+}
+
+pub fn set_select_music_last_sort(cfg: &mut Config, sort: SelectMusicSort) -> bool {
+    if cfg.select_music_default_sort != SelectMusicDefaultSort::LastUsed {
+        return false;
+    }
+    set_if_changed(&mut cfg.select_music_last_sort, sort)
 }
 
 pub fn set_select_music_series_source(cfg: &mut Config, source: SelectMusicSeriesSource) -> bool {
@@ -875,5 +883,24 @@ pub fn set_f64_if_changed(slot: &mut f64, value: f64) -> bool {
     } else {
         *slot = value;
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn last_sort_changes_only_when_last_used_is_enabled() {
+        let mut cfg = Config::default();
+        assert!(!set_select_music_last_sort(
+            &mut cfg,
+            SelectMusicSort::Title
+        ));
+        assert_eq!(cfg.select_music_last_sort, SelectMusicSort::Series);
+
+        cfg.select_music_default_sort = SelectMusicDefaultSort::LastUsed;
+        assert!(set_select_music_last_sort(&mut cfg, SelectMusicSort::Title));
+        assert_eq!(cfg.select_music_last_sort, SelectMusicSort::Title);
     }
 }

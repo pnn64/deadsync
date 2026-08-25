@@ -4,7 +4,7 @@ use crate::assets::{self, AssetManager};
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::{
     BreakdownStyle, GraphOrientation, GraphOrigin, NewPackMode, SelectMusicPatternInfoMode,
-    SelectMusicSeriesSource, SyncGraphMode,
+    SelectMusicSeriesSource, SelectMusicSort, SyncGraphMode,
 };
 
 use crate::rgba_const;
@@ -1182,6 +1182,67 @@ enum WheelSortMode {
     TopGradesP2,
     Favorites(profile_data::PlayerSide),
     Playlist,
+}
+
+/// Session-only sort state retained while the shell rebuilds Select Music.
+#[derive(Clone, Debug)]
+pub struct SelectMusicSortSnapshot {
+    mode: WheelSortMode,
+    active_playlist_id: Option<String>,
+}
+
+pub fn sort_snapshot(state: &State) -> SelectMusicSortSnapshot {
+    SelectMusicSortSnapshot {
+        mode: state.sort_mode,
+        active_playlist_id: state.active_playlist_id.clone(),
+    }
+}
+
+pub fn restore_sort(state: &mut State, snapshot: SelectMusicSortSnapshot) {
+    state.active_playlist_id = snapshot.active_playlist_id;
+    apply_wheel_sort(state, snapshot.mode);
+}
+
+impl From<SelectMusicSort> for WheelSortMode {
+    fn from(sort: SelectMusicSort) -> Self {
+        match sort {
+            SelectMusicSort::Series => Self::Series,
+            SelectMusicSort::Group => Self::Group,
+            SelectMusicSort::Title => Self::Title,
+            SelectMusicSort::Artist => Self::Artist,
+            SelectMusicSort::Genre => Self::Genre,
+            SelectMusicSort::Bpm => Self::Bpm,
+            SelectMusicSort::Length => Self::Length,
+            SelectMusicSort::Meter => Self::Meter,
+            SelectMusicSort::Popularity => Self::Popularity,
+            SelectMusicSort::Recent => Self::Recent,
+            SelectMusicSort::TopGrades => Self::TopGrades,
+        }
+    }
+}
+
+fn saved_sort(sort: WheelSortMode) -> Option<SelectMusicSort> {
+    Some(match sort {
+        WheelSortMode::Series => SelectMusicSort::Series,
+        WheelSortMode::Group => SelectMusicSort::Group,
+        WheelSortMode::Title => SelectMusicSort::Title,
+        WheelSortMode::Artist => SelectMusicSort::Artist,
+        WheelSortMode::Genre => SelectMusicSort::Genre,
+        WheelSortMode::Bpm => SelectMusicSort::Bpm,
+        WheelSortMode::Length => SelectMusicSort::Length,
+        WheelSortMode::Meter => SelectMusicSort::Meter,
+        WheelSortMode::Popularity => SelectMusicSort::Popularity,
+        WheelSortMode::Recent => SelectMusicSort::Recent,
+        WheelSortMode::TopGrades => SelectMusicSort::TopGrades,
+        WheelSortMode::PopularityP1
+        | WheelSortMode::PopularityP2
+        | WheelSortMode::RecentP1
+        | WheelSortMode::RecentP2
+        | WheelSortMode::TopGradesP1
+        | WheelSortMode::TopGradesP2
+        | WheelSortMode::Favorites(_)
+        | WheelSortMode::Playlist => return None,
+    })
 }
 
 #[derive(Clone, Debug)]
@@ -3821,15 +3882,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     );
     // ITGmania falls back to the first selectable song and opens its group.
     let initial_expanded_pack_name = last_pack_key.or_else(|| first_header_name(&all_entries));
-    let use_series_sort = interaction.sort_by_series;
-    let initial_expanded_series_name = use_series_sort
-        .then(|| {
-            initial_expanded_pack_name
-                .as_deref()
-                .and_then(|pack| series_name_for_pack(&series_entries, pack))
-                .map(Arc::clone)
-        })
-        .flatten();
+    let initial_sort = WheelSortMode::from(interaction.initial_sort);
     let group_entries: Arc<[MusicWheelEntry]> = all_entries.into();
     let cached_sort_capacity = [
         &group_entries,
@@ -3855,15 +3908,10 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     .map(|entries| entries.len())
     .max()
     .unwrap_or(0);
-    let initial_entries = if use_series_sort {
-        Arc::clone(&series_entries)
-    } else {
-        Arc::clone(&group_entries)
-    };
     let folder_stats = FolderStatsCache::new(&group_entries);
 
     let mut state = State {
-        all_entries: initial_entries,
+        all_entries: Arc::clone(&group_entries),
         series_entries,
         group_entries,
         folder_stats,
@@ -3928,12 +3976,8 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         leaderboard: select_music_menu::LeaderboardOverlayState::Hidden,
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
         srpg_shop_overlay: select_music_menu::SrpgShopOverlayState::Hidden,
-        sort_mode: if use_series_sort {
-            WheelSortMode::Series
-        } else {
-            WheelSortMode::Group
-        },
-        expanded_series_name: initial_expanded_series_name,
+        sort_mode: WheelSortMode::Group,
+        expanded_series_name: None,
         expanded_pack_name: initial_expanded_pack_name,
         last_replaygain_prewarmed_pack: None,
         pending_audio: Vec::new(),
@@ -4057,11 +4101,8 @@ pub fn init(init_view: SelectMusicInitView) -> State {
             entries: Arc::clone(&state.group_entries),
         });
 
-    let built_entries_len = state.all_entries.len();
     let rebuild_started = Instant::now();
     rebuild_displayed_entries(&mut state);
-    let rebuild_dur = rebuild_started.elapsed();
-    let displayed_entries_len = state.entries.len();
 
     // Restore selection
     let restored_last_song = if let Some(last_song) = last_song_arc {
@@ -4078,6 +4119,11 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     if !restored_last_song && let Some(idx) = first_song_entry_index(&state.entries) {
         state.selected_index = idx;
     }
+
+    apply_wheel_sort(&mut state, initial_sort);
+    let rebuild_dur = rebuild_started.elapsed();
+    let built_entries_len = state.all_entries.len();
+    let displayed_entries_len = state.entries.len();
 
     if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index).cloned() {
         let chart_hash = if restored_last_song {
@@ -10277,60 +10323,20 @@ fn dispatch_menu_action(
             hide_select_music_menu(state);
             ThemeEffect::None
         }
-        select_music_menu::Action::SortBySeries => {
-            apply_wheel_sort(state, WheelSortMode::Series);
-            hide_select_music_menu(state);
-            ThemeEffect::None
-        }
-        select_music_menu::Action::SortByGroup => {
-            apply_wheel_sort(state, WheelSortMode::Group);
-            hide_select_music_menu(state);
-            ThemeEffect::None
-        }
-        select_music_menu::Action::SortByTitle => {
-            apply_wheel_sort(state, WheelSortMode::Title);
-            hide_select_music_menu(state);
-            ThemeEffect::None
-        }
-        select_music_menu::Action::SortByArtist => {
-            apply_wheel_sort(state, WheelSortMode::Artist);
-            hide_select_music_menu(state);
-            ThemeEffect::None
-        }
-        select_music_menu::Action::SortByBpm => {
-            apply_wheel_sort(state, WheelSortMode::Bpm);
-            hide_select_music_menu(state);
-            ThemeEffect::None
-        }
-        select_music_menu::Action::SortByLength => {
-            apply_wheel_sort(state, WheelSortMode::Length);
-            hide_select_music_menu(state);
-            ThemeEffect::None
-        }
-        select_music_menu::Action::SortByMeter => {
-            apply_wheel_sort(state, WheelSortMode::Meter);
-            hide_select_music_menu(state);
-            ThemeEffect::None
-        }
+        select_music_menu::Action::SortBySeries => apply_menu_sort(state, WheelSortMode::Series),
+        select_music_menu::Action::SortByGroup => apply_menu_sort(state, WheelSortMode::Group),
+        select_music_menu::Action::SortByTitle => apply_menu_sort(state, WheelSortMode::Title),
+        select_music_menu::Action::SortByArtist => apply_menu_sort(state, WheelSortMode::Artist),
+        select_music_menu::Action::SortByBpm => apply_menu_sort(state, WheelSortMode::Bpm),
+        select_music_menu::Action::SortByLength => apply_menu_sort(state, WheelSortMode::Length),
+        select_music_menu::Action::SortByMeter => apply_menu_sort(state, WheelSortMode::Meter),
         select_music_menu::Action::SortByPopularity => {
-            apply_wheel_sort(state, WheelSortMode::Popularity);
-            hide_select_music_menu(state);
-            ThemeEffect::None
+            apply_menu_sort(state, WheelSortMode::Popularity)
         }
-        select_music_menu::Action::SortByRecent => {
-            apply_wheel_sort(state, WheelSortMode::Recent);
-            hide_select_music_menu(state);
-            ThemeEffect::None
-        }
-        select_music_menu::Action::SortByGenre => {
-            apply_wheel_sort(state, WheelSortMode::Genre);
-            hide_select_music_menu(state);
-            ThemeEffect::None
-        }
+        select_music_menu::Action::SortByRecent => apply_menu_sort(state, WheelSortMode::Recent),
+        select_music_menu::Action::SortByGenre => apply_menu_sort(state, WheelSortMode::Genre),
         select_music_menu::Action::SortByTopGrades => {
-            apply_wheel_sort(state, WheelSortMode::TopGrades);
-            hide_select_music_menu(state);
-            ThemeEffect::None
+            apply_menu_sort(state, WheelSortMode::TopGrades)
         }
         select_music_menu::Action::SortByPopularityP1 => {
             apply_wheel_sort(state, WheelSortMode::PopularityP1);
@@ -10468,6 +10474,22 @@ fn dispatch_menu_action(
             ThemeEffect::Navigate(crate::screens::Screen::EvaluationSummary)
         }
     }
+}
+
+fn apply_menu_sort(state: &mut State, sort: WheelSortMode) -> ThemeEffect {
+    apply_wheel_sort(state, sort);
+    hide_select_music_menu(state);
+    if !state.policy.interaction.remember_last_sort {
+        return ThemeEffect::None;
+    }
+    let Some(sort) = saved_sort(sort) else {
+        return ThemeEffect::None;
+    };
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+        crate::SimplyLoveConfigRequest::SelectMusic(
+            crate::SimplyLoveSelectMusicConfigRequest::LastSort(sort),
+        ),
+    ))
 }
 
 fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
@@ -15360,18 +15382,19 @@ mod tests {
         PREVIEW_DELAY_SECONDS, SyncGraphCols, WheelSortMode, append_pending_runtime,
         banner_texture_key, build_displayed_entries, build_local_lobby_song_info,
         build_playlist_entries_from_text, build_playlist_song_lookup, build_sync_heat_image,
-        current_preview_path, delayed_selection_updates_blocked, first_song_entry_index,
-        handle_downloads_overlay_raw_key, handle_profile_switch_overlay_input, init_placeholder,
-        keymap_has_player_input, maybe_prewarm_replaygain_for_pack,
-        maybe_refresh_select_music_leaderboard, prepend_pending_effect, profile_boxes,
-        reset_preview_after_gameplay, select_music_lobby_lock_text,
-        select_music_lobby_lock_text_for, solo_runtime_side, steps_index_for_side,
-        sync_beat_axis_rows, sync_beat_marker_rows, sync_beat_row_y, sync_bias_axis_pos,
-        sync_graph_cols, sync_lobby_select_music, sync_low_confidence_warning,
-        sync_overlay_graph_size,
+        current_preview_path, delayed_selection_updates_blocked, dispatch_menu_action,
+        first_song_entry_index, handle_downloads_overlay_raw_key,
+        handle_profile_switch_overlay_input, init_placeholder, keymap_has_player_input,
+        maybe_prewarm_replaygain_for_pack, maybe_refresh_select_music_leaderboard,
+        prepend_pending_effect, profile_boxes, reset_preview_after_gameplay, restore_sort,
+        select_music_lobby_lock_text, select_music_lobby_lock_text_for, solo_runtime_side,
+        sort_snapshot, steps_index_for_side, sync_beat_axis_rows, sync_beat_marker_rows,
+        sync_beat_row_y, sync_bias_axis_pos, sync_graph_cols, sync_lobby_select_music,
+        sync_low_confidence_warning, sync_overlay_graph_size,
     };
     use crate::config::{
-        GraphOrientation, GraphOrigin, SelectMusicSeriesSource, SelectMusicWheelStyle,
+        GraphOrientation, GraphOrigin, SelectMusicSeriesSource, SelectMusicSort,
+        SelectMusicWheelStyle,
     };
     use crate::screens::components::select_music::music_wheel;
     use crate::screens::{ThemeEffect, ThemeInputResult};
@@ -18133,11 +18156,64 @@ mod tests {
     #[test]
     fn reset_preview_after_gameplay_preserves_non_group_sort_modes() {
         let mut state = init_placeholder();
-        state.sort_mode = WheelSortMode::Group;
+        state.sort_mode = WheelSortMode::Title;
 
         reset_preview_after_gameplay(&mut state, crate::views::SelectMusicHistoryView::default());
 
-        assert_eq!(state.sort_mode, WheelSortMode::Group);
+        assert_eq!(state.sort_mode, WheelSortMode::Title);
+    }
+
+    #[test]
+    fn last_used_policy_persists_standard_menu_sorts() {
+        let mut state = init_placeholder();
+        state.policy.interaction.remember_last_sort = true;
+
+        let effect = dispatch_menu_action(
+            &mut state,
+            super::select_music_menu::Action::SortByTitle,
+            profile_data::PlayerSide::P1,
+        );
+
+        assert_eq!(state.sort_mode, WheelSortMode::Title);
+        assert!(matches!(
+            effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+                crate::SimplyLoveConfigRequest::SelectMusic(
+                    crate::SimplyLoveSelectMusicConfigRequest::LastSort(SelectMusicSort::Title)
+                )
+            ))
+        ));
+    }
+
+    #[test]
+    fn fixed_default_policy_keeps_menu_sorts_session_only() {
+        let mut state = init_placeholder();
+
+        let effect = dispatch_menu_action(
+            &mut state,
+            super::select_music_menu::Action::SortByRecent,
+            profile_data::PlayerSide::P1,
+        );
+
+        assert_eq!(state.sort_mode, WheelSortMode::Recent);
+        assert!(matches!(effect, ThemeEffect::None));
+    }
+
+    #[test]
+    fn sort_snapshot_restores_transient_mode_after_rebuild() {
+        let mut original = init_placeholder();
+        original.sort_mode = WheelSortMode::Artist;
+        original.active_playlist_id = Some("session-playlist".to_string());
+        let snapshot = sort_snapshot(&original);
+        let mut rebuilt = init_placeholder();
+
+        restore_sort(&mut rebuilt, snapshot);
+
+        assert_eq!(rebuilt.sort_mode, WheelSortMode::Artist);
+        assert_eq!(
+            rebuilt.active_playlist_id.as_deref(),
+            Some("session-playlist")
+        );
     }
 
     #[test]
@@ -20101,7 +20177,7 @@ mod tests {
             song_packs: vec![upper, lower],
             ..Default::default()
         };
-        init_view.policy.interaction.sort_by_series = true;
+        init_view.policy.interaction.initial_sort = SelectMusicSort::Series;
         init_view.policy.interaction.wheel_style = SelectMusicWheelStyle::Iidx;
         init_view.policy.interaction.hide_inactive_series = true;
         let mut state = super::init(init_view);

@@ -244,7 +244,13 @@ pub(crate) fn policy_view(config: &config::Config) -> SelectMusicPolicyView {
             wheel_switch_speed: config.music_wheel_switch_speed,
             wheel_style: config.select_music_wheel_style,
             hide_inactive_series: config.hide_inactive_series,
-            sort_by_series: config.sort_music_wheel_by_series,
+            initial_sort: config
+                .select_music_default_sort
+                .resolve(config.select_music_last_sort),
+            remember_last_sort: matches!(
+                config.select_music_default_sort,
+                config::SelectMusicDefaultSort::LastUsed
+            ),
             series_source: config.select_music_series_source,
             new_pack_mode: config.select_music_new_pack_mode,
             show_srpg_shop: config.show_srpg_shop,
@@ -344,7 +350,8 @@ mod tests {
             select_music_wheel_style: config::SelectMusicWheelStyle::Iidx,
             difficulty_color_scheme: config::DifficultyColorScheme::Ddr,
             hide_inactive_series: true,
-            sort_music_wheel_by_series: true,
+            select_music_default_sort: config::SelectMusicDefaultSort::LastUsed,
+            select_music_last_sort: config::SelectMusicSort::Title,
             select_music_new_pack_mode: config::NewPackMode::OpenPack,
             show_srpg_shop: false,
             music_select_shortcut_practice: deadsync_input::KeyCode::KeyQ,
@@ -399,7 +406,11 @@ mod tests {
             config::SelectMusicWheelStyle::Iidx
         );
         assert!(view.interaction.hide_inactive_series);
-        assert!(view.interaction.sort_by_series);
+        assert_eq!(
+            view.interaction.initial_sort,
+            config::SelectMusicSort::Title
+        );
+        assert!(view.interaction.remember_last_sort);
         assert_eq!(
             view.interaction.new_pack_mode,
             config::NewPackMode::OpenPack

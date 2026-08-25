@@ -7,10 +7,11 @@ use deadsync_config::prelude::{
     BreakdownStyle, CoinMode, DefaultFailType, DefaultSyncOffset, GameFlag, GameplayBannerMode,
     LanguageFlag, LogLevel, MachineBarColor, MachineEvaluationStyle, MachineFont,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, NoteScrollClock,
-    RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
+    RandomBackgroundMode, SelectMusicDefaultSort, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSeriesSource,
-    SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SmxPackName,
-    SmxPadPreset, SrpgVariant, TournamentScoringSystem, VersionOverlaySide, VisualStyle,
+    SelectMusicSongSelectBgMode, SelectMusicSort, SelectMusicStepArtistBoxMode,
+    SelectMusicWheelStyle, SmxPackName, SmxPadPreset, SrpgVariant, TournamentScoringSystem,
+    VersionOverlaySide, VisualStyle,
 };
 use deadsync_input::{InputBinding, KeyCode, VirtualAction};
 use deadsync_profile::{ActiveProfile, PlayMode, PlayStyle, PlayerSide};
@@ -540,7 +541,8 @@ pub enum SimplyLoveSelectMusicConfigRequest {
     WheelStyle(SelectMusicWheelStyle),
     DifficultyColors(DifficultyColorScheme),
     HideInactiveSeries(bool),
-    SortBySeries(bool),
+    DefaultSort(SelectMusicDefaultSort),
+    LastSort(SelectMusicSort),
     SeriesSource(SelectMusicSeriesSource),
     SongSelectBackground(SelectMusicSongSelectBgMode),
     AllowProfileSwitch(bool),
