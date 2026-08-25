@@ -19469,13 +19469,13 @@ mod tests {
                         confidence: 0.93,
                     },
                     plot: crate::SimplyLoveSyncPlotView {
-                        freq_rows: 0,
-                        digest_rows: 0,
+                        freq_rows: 1,
+                        digest_rows: 1,
                         cols: 3,
-                        post_rows: 0,
-                        freq_domain: Vec::new(),
-                        beat_digest: Vec::new(),
-                        post_kernel: Vec::new(),
+                        post_rows: 1,
+                        freq_domain: vec![0.2, 0.4, 0.6],
+                        beat_digest: vec![0.3, 0.5, 0.7],
+                        post_kernel: vec![0.4, 0.6, 0.8],
                         convolution: vec![0.1, 0.9, 0.2],
                         times_ms: vec![-1.0, 0.0, 1.0],
                         edge_discard: 0,
@@ -19488,6 +19488,9 @@ mod tests {
         assert_eq!(overlay.phase, super::NullOrDieOverlayPhase::Ready);
         assert!(overlay.result_cached);
         assert_eq!(overlay.final_bias_ms, Some(-4.0));
+        assert_eq!(overlay.freq_domain, [0.2, 0.4, 0.6]);
+        assert_eq!(overlay.beat_digest, [0.3, 0.5, 0.7]);
+        assert_eq!(overlay.post_kernel, [0.4, 0.6, 0.8]);
         assert!(overlay.curve_mesh.is_some());
     }
 

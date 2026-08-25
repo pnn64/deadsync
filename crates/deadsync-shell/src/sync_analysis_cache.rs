@@ -7,7 +7,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::UNIX_EPOCH;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const CACHE_VERSION: u32 = 1;
 /// Bump whenever a null-or-die update can change bias estimates without an
@@ -15,6 +15,8 @@ const CACHE_VERSION: u32 = 1;
 const ANALYSIS_REVISION: u32 = 1;
 const MAX_CACHE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_CACHE_ENTRIES: usize = 100_000;
+const MAX_CACHED_PLOTS: usize = 8;
+const MAX_PLOT_BYTES: usize = 48 * 1024 * 1024;
 static TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -68,18 +70,60 @@ struct CachedResult {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub(crate) struct CachedCurve {
+pub(crate) struct CachedPlot {
+    #[serde(default)]
+    pub(crate) freq_rows: usize,
+    #[serde(default)]
+    pub(crate) digest_rows: usize,
+    #[serde(default)]
+    pub(crate) cols: usize,
+    #[serde(default)]
+    pub(crate) post_rows: usize,
+    #[serde(default)]
+    pub(crate) freq_domain: Vec<f64>,
+    #[serde(default)]
+    pub(crate) beat_digest: Vec<f64>,
+    #[serde(default)]
+    pub(crate) post_kernel: Vec<f64>,
     pub(crate) times_ms: Vec<f64>,
     pub(crate) convolution: Vec<f64>,
     pub(crate) edge_discard: usize,
 }
 
+impl CachedPlot {
+    fn is_complete(&self) -> bool {
+        self.cols > 0
+            && self.times_ms.len() == self.cols
+            && self.convolution.len() == self.cols
+            && self.freq_rows.checked_mul(self.cols) == Some(self.freq_domain.len())
+            && self.digest_rows.checked_mul(self.cols) == Some(self.beat_digest.len())
+            && self.post_rows.checked_mul(self.cols) == Some(self.post_kernel.len())
+    }
+
+    fn byte_len(&self) -> usize {
+        [
+            self.freq_domain.len(),
+            self.beat_digest.len(),
+            self.post_kernel.len(),
+            self.convolution.len(),
+            self.times_ms.len(),
+        ]
+        .into_iter()
+        .fold(0usize, |total, len| {
+            total.saturating_add(len.saturating_mul(std::mem::size_of::<f64>()))
+        })
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-struct CachedCurveEntry {
+struct CachedPlotEntry {
     simfile_path: PathBuf,
     chart_ix: usize,
     options: AnalysisOptions,
-    curve: CachedCurve,
+    #[serde(default)]
+    last_used_ns: u64,
+    #[serde(alias = "curve")]
+    plot: CachedPlot,
 }
 
 #[derive(Clone, Debug)]
@@ -87,7 +131,7 @@ pub(crate) struct CachedAnalysis {
     pub(crate) bias_ms: f64,
     pub(crate) confidence: f64,
     pub(crate) applied: bool,
-    pub(crate) curve: Option<CachedCurve>,
+    pub(crate) plot: Option<CachedPlot>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -99,18 +143,20 @@ struct CacheEntry {
     result: CachedResult,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct CacheFile {
     version: u32,
     entries: Vec<CacheEntry>,
     #[serde(default)]
-    curve: Option<CachedCurveEntry>,
+    plots: Vec<CachedPlotEntry>,
+    #[serde(default, alias = "plot", alias = "curve", skip_serializing)]
+    legacy_plot: Option<CachedPlotEntry>,
 }
 
 #[derive(Default)]
 struct CacheState {
     entries: HashMap<PathBuf, CacheEntry>,
-    curve: Option<CachedCurveEntry>,
+    plots: HashMap<PathBuf, CachedPlotEntry>,
     generation: u64,
     persisted_generation: u64,
     warned_full: bool,
@@ -128,8 +174,11 @@ struct CacheState {
 /// Destruction occurs with the service at shutdown. Logs expose loads,
 /// saturation, and write failures; per-target worst-case work is two streamed
 /// source hashes on a menu worker, never on a gameplay frame. Only the most
-/// recently completed single-chart analysis retains its compact convolution
-/// curve; all other entries retain just the estimate and validation stamps.
+/// recently used single-chart analyses retain up to eight complete visual
+/// plots within a 48 MiB raw-data budget; all other entries retain just the
+/// estimate and validation stamps. Least-recently-used plots are evicted on a
+/// menu worker. The disk snapshot is capped at 64 MiB and drops oldest plots
+/// before the estimate index rather than making the whole cache unreadable.
 pub(crate) struct Cache {
     path: PathBuf,
     state: Mutex<CacheState>,
@@ -163,7 +212,7 @@ pub(crate) struct CompletedTarget {
     prepared: PreparedTarget,
     bias_ms: f64,
     confidence: f64,
-    curve: Option<CachedCurve>,
+    plot: Option<CachedPlot>,
 }
 
 impl CompletedTarget {
@@ -172,28 +221,28 @@ impl CompletedTarget {
             prepared,
             bias_ms,
             confidence,
-            curve: None,
+            plot: None,
         }
     }
 
-    pub(crate) fn with_curve(
+    pub(crate) fn with_plot(
         prepared: PreparedTarget,
         bias_ms: f64,
         confidence: f64,
-        curve: CachedCurve,
+        plot: CachedPlot,
     ) -> Self {
         Self {
             prepared,
             bias_ms,
             confidence,
-            curve: Some(curve),
+            plot: Some(plot),
         }
     }
 }
 
 impl Cache {
     pub(crate) fn load(path: PathBuf) -> Self {
-        let (entries, curve) = load_entries(&path).unwrap_or_default();
+        let (entries, plots) = load_entries(&path).unwrap_or_default();
         if !entries.is_empty() {
             log::info!("Loaded {} null-or-die sync cache entries.", entries.len());
         }
@@ -201,7 +250,7 @@ impl Cache {
             path,
             state: Mutex::new(CacheState {
                 entries,
-                curve,
+                plots,
                 ..CacheState::default()
             }),
             flush_lock: Mutex::new(()),
@@ -214,6 +263,7 @@ impl Cache {
         music_path: &Path,
         chart_ix: usize,
         options: AnalysisOptions,
+        require_plot: bool,
     ) -> TargetPreparation {
         let Ok(simfile_path) = canonical_path(simfile_path) else {
             return analyze_target(None);
@@ -223,23 +273,24 @@ impl Cache {
         };
         let cached = self.state.lock().ok().and_then(|state| {
             state.entries.get(&simfile_path).cloned().map(|entry| {
-                let curve = state
-                    .curve
-                    .as_ref()
-                    .filter(|curve| {
-                        curve.simfile_path == simfile_path
-                            && curve.chart_ix == chart_ix
-                            && curve.options == options
+                let plot = state
+                    .plots
+                    .get(&simfile_path)
+                    .filter(|plot| {
+                        plot.simfile_path == simfile_path
+                            && plot.chart_ix == chart_ix
+                            && plot.options == options
                     })
-                    .map(|curve| curve.curve.clone());
-                (entry, curve)
+                    .map(|plot| plot.plot.clone());
+                (entry, plot)
             })
         });
 
-        if let Some((mut entry, curve)) = cached
+        if let Some((mut entry, plot)) = cached
             && entry.chart_ix == chart_ix
             && entry.options == options
             && entry.music.path == music_path
+            && (!require_plot || plot.as_ref().is_some_and(CachedPlot::is_complete))
         {
             // Simfiles are small and define chart timing, so always hash them.
             // Audio uses metadata as its steady-state fast path and hashes only
@@ -254,10 +305,13 @@ impl Cache {
                     bias_ms: entry.result.bias_ms,
                     confidence: entry.result.confidence,
                     applied: entry.result.applied,
-                    curve,
+                    plot,
                 };
                 if changed {
-                    self.replace_entry(simfile_path, entry);
+                    self.replace_entry(&simfile_path, entry);
+                }
+                if require_plot {
+                    self.touch_plot(&simfile_path);
                 }
                 return TargetPreparation {
                     cached: Some(cached),
@@ -293,7 +347,7 @@ impl Cache {
                 mut prepared,
                 bias_ms,
                 confidence,
-                curve,
+                plot,
             } = completed;
             if !bias_ms.is_finite()
                 || !confidence.is_finite()
@@ -309,21 +363,23 @@ impl Cache {
             let path = prepared.entry.simfile.path.clone();
             let chart_ix = prepared.entry.chart_ix;
             let options = prepared.entry.options;
-            insert_entry(&mut state, prepared.entry);
-            if let Some(curve) = curve {
-                state.curve = Some(CachedCurveEntry {
-                    simfile_path: path,
-                    chart_ix,
-                    options,
-                    curve,
-                });
+            if !insert_entry(&mut state, prepared.entry) {
+                continue;
+            }
+            if let Some(plot) = plot {
+                state.plots.insert(
+                    path.clone(),
+                    CachedPlotEntry {
+                        simfile_path: path,
+                        chart_ix,
+                        options,
+                        last_used_ns: now_ns(),
+                        plot,
+                    },
+                );
+                trim_plots(&mut state.plots);
                 mark_changed(&mut state);
-            } else if state
-                .curve
-                .as_ref()
-                .is_some_and(|curve| curve.simfile_path == path)
-            {
-                state.curve = None;
+            } else if state.plots.remove(&path).is_some() {
                 mark_changed(&mut state);
             }
         }
@@ -342,20 +398,20 @@ impl Cache {
             };
             if (quantized_delta(entry.result.bias_ms) - delta_seconds).abs() > 0.000_1 {
                 state.entries.remove(&path);
-                clear_curve(&mut state, &path);
+                clear_plot(&mut state, &path);
                 mark_changed(&mut state);
                 continue;
             }
             let Some(stamp) = SourceStamp::capture(&path) else {
                 state.entries.remove(&path);
-                clear_curve(&mut state, &path);
+                clear_plot(&mut state, &path);
                 mark_changed(&mut state);
                 continue;
             };
             entry.simfile = stamp;
             entry.result.applied = true;
             state.entries.insert(path.clone(), entry);
-            clear_curve(&mut state, &path);
+            clear_plot(&mut state, &path);
             mark_changed(&mut state);
         }
     }
@@ -364,7 +420,7 @@ impl Cache {
         let Ok(_flush) = self.flush_lock.lock() else {
             return;
         };
-        let (generation, entries, curve) = {
+        let (generation, entries, plots) = {
             let Ok(state) = self.state.lock() else {
                 return;
             };
@@ -373,12 +429,15 @@ impl Cache {
             }
             let mut entries = state.entries.values().cloned().collect::<Vec<_>>();
             entries.sort_by(|a, b| a.simfile.path.cmp(&b.simfile.path));
-            (state.generation, entries, state.curve.clone())
+            let mut plots = state.plots.values().cloned().collect::<Vec<_>>();
+            plots.sort_by_key(|plot| std::cmp::Reverse(plot.last_used_ns));
+            (state.generation, entries, plots)
         };
         let payload = CacheFile {
             version: CACHE_VERSION,
             entries,
-            curve,
+            plots,
+            legacy_plot: None,
         };
         if let Err(error) = write_cache_file(&self.path, &payload) {
             log::warn!(
@@ -394,11 +453,22 @@ impl Cache {
         }
     }
 
-    fn replace_entry(&self, path: PathBuf, entry: CacheEntry) {
+    fn replace_entry(&self, path: &Path, entry: CacheEntry) {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
-        state.entries.insert(path, entry);
+        state.entries.insert(path.to_path_buf(), entry);
+        mark_changed(&mut state);
+    }
+
+    fn touch_plot(&self, path: &Path) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        let Some(plot) = state.plots.get_mut(path) else {
+            return;
+        };
+        plot.last_used_ns = now_ns();
         mark_changed(&mut state);
     }
 }
@@ -422,7 +492,7 @@ impl SourceStamp {
     }
 }
 
-fn insert_entry(state: &mut CacheState, entry: CacheEntry) {
+fn insert_entry(state: &mut CacheState, entry: CacheEntry) -> bool {
     let path = entry.simfile.path.clone();
     if !state.entries.contains_key(&path) && state.entries.len() >= MAX_CACHE_ENTRIES {
         if !state.warned_full {
@@ -432,10 +502,11 @@ fn insert_entry(state: &mut CacheState, entry: CacheEntry) {
             );
             state.warned_full = true;
         }
-        return;
+        return false;
     }
     state.entries.insert(path, entry);
     mark_changed(state);
+    true
 }
 
 const fn analyze_target(prepared: Option<PreparedTarget>) -> TargetPreparation {
@@ -445,13 +516,28 @@ const fn analyze_target(prepared: Option<PreparedTarget>) -> TargetPreparation {
     }
 }
 
-fn clear_curve(state: &mut CacheState, path: &Path) {
-    if state
-        .curve
-        .as_ref()
-        .is_some_and(|curve| curve.simfile_path == path)
+fn clear_plot(state: &mut CacheState, path: &Path) {
+    state.plots.remove(path);
+}
+
+fn trim_plots(plots: &mut HashMap<PathBuf, CachedPlotEntry>) {
+    while plots.len() > MAX_CACHED_PLOTS
+        || plots
+            .values()
+            .map(|entry| entry.plot.byte_len())
+            .fold(0usize, usize::saturating_add)
+            > MAX_PLOT_BYTES
     {
-        state.curve = None;
+        let Some(path) = plots
+            .iter()
+            .min_by(|(path_a, a), (path_b, b)| {
+                (a.last_used_ns, path_a.as_path()).cmp(&(b.last_used_ns, path_b.as_path()))
+            })
+            .map(|(path, _)| path.clone())
+        else {
+            break;
+        };
+        plots.remove(&path);
     }
 }
 
@@ -511,7 +597,12 @@ fn quantized_delta(bias_ms: f64) -> f32 {
     (delta / 0.001).round() * 0.001
 }
 
-fn load_entries(path: &Path) -> Option<(HashMap<PathBuf, CacheEntry>, Option<CachedCurveEntry>)> {
+fn load_entries(
+    path: &Path,
+) -> Option<(
+    HashMap<PathBuf, CacheEntry>,
+    HashMap<PathBuf, CachedPlotEntry>,
+)> {
     if fs::metadata(path).ok()?.len() > MAX_CACHE_BYTES {
         log::warn!(
             "Ignoring oversized null-or-die sync cache '{}'.",
@@ -520,7 +611,7 @@ fn load_entries(path: &Path) -> Option<(HashMap<PathBuf, CacheEntry>, Option<Cac
         return None;
     }
     let bytes = fs::read(path).ok()?;
-    let file: CacheFile = serde_json::from_slice(&bytes).ok()?;
+    let mut file: CacheFile = serde_json::from_slice(&bytes).ok()?;
     if file.version != CACHE_VERSION || file.entries.len() > MAX_CACHE_ENTRIES {
         return None;
     }
@@ -528,7 +619,17 @@ fn load_entries(path: &Path) -> Option<(HashMap<PathBuf, CacheEntry>, Option<Cac
     for entry in file.entries {
         entries.insert(entry.simfile.path.clone(), entry);
     }
-    Some((entries, file.curve))
+    if let Some(plot) = file.legacy_plot.take() {
+        file.plots.push(plot);
+    }
+    let mut plots = HashMap::with_capacity(file.plots.len());
+    for plot in file.plots {
+        if entries.contains_key(&plot.simfile_path) {
+            plots.insert(plot.simfile_path.clone(), plot);
+        }
+    }
+    trim_plots(&mut plots);
+    Some((entries, plots))
 }
 
 fn write_cache_file(path: &Path, payload: &CacheFile) -> Result<(), String> {
@@ -536,7 +637,22 @@ fn write_cache_file(path: &Path, payload: &CacheFile) -> Result<(), String> {
         .parent()
         .ok_or_else(|| "cache path has no parent directory".to_owned())?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    let bytes = serde_json::to_vec(payload).map_err(|error| error.to_string())?;
+    let mut payload = payload.clone();
+    let mut bytes = serde_json::to_vec(&payload).map_err(|error| error.to_string())?;
+    while bytes.len() as u64 > MAX_CACHE_BYTES && !payload.plots.is_empty() {
+        payload.plots.pop();
+        log::warn!(
+            "Null-or-die cached visuals exceeded {} MiB; dropping the oldest plot.",
+            MAX_CACHE_BYTES / (1024 * 1024)
+        );
+        bytes = serde_json::to_vec(&payload).map_err(|error| error.to_string())?;
+    }
+    if bytes.len() as u64 > MAX_CACHE_BYTES {
+        return Err(format!(
+            "serialized cache exceeds the {} MiB limit",
+            MAX_CACHE_BYTES / (1024 * 1024)
+        ));
+    }
     let id = TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
     let temp = parent.join(format!(".null-or-die-sync-{}-{id}.tmp", std::process::id()));
     fs::write(&temp, bytes).map_err(|error| error.to_string())?;
@@ -548,6 +664,16 @@ fn write_cache_file(path: &Path, payload: &CacheFile) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn now_ns() -> u64 {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    duration
+        .as_secs()
+        .saturating_mul(1_000_000_000)
+        .saturating_add(u64::from(duration.subsec_nanos()))
 }
 
 #[cfg(test)]
@@ -580,23 +706,34 @@ mod tests {
     }
 
     fn complete(cache: &Cache, simfile: &Path, music: &Path) {
-        let prepared = cache.prepare(simfile, music, 2, options()).into_prepared();
+        let prepared = cache
+            .prepare(simfile, music, 2, options(), false)
+            .into_prepared();
         let Some(prepared) = prepared else {
             panic!("uncached target should be prepared");
         };
         cache.record_completed(vec![CompletedTarget::new(prepared, -3.0, 0.91)]);
     }
 
-    fn complete_with_curve(cache: &Cache, simfile: &Path, music: &Path) {
-        let prepared = cache.prepare(simfile, music, 2, options()).into_prepared();
+    fn complete_with_plot(cache: &Cache, simfile: &Path, music: &Path) {
+        let prepared = cache
+            .prepare(simfile, music, 2, options(), true)
+            .into_prepared();
         let Some(prepared) = prepared else {
             panic!("uncached target should be prepared");
         };
-        cache.record_completed(vec![CompletedTarget::with_curve(
+        cache.record_completed(vec![CompletedTarget::with_plot(
             prepared,
             -3.0,
             0.91,
-            CachedCurve {
+            CachedPlot {
+                freq_rows: 1,
+                digest_rows: 1,
+                cols: 3,
+                post_rows: 1,
+                freq_domain: vec![0.2, 0.4, 0.6],
+                beat_digest: vec![0.3, 0.5, 0.7],
+                post_kernel: vec![0.4, 0.6, 0.8],
                 times_ms: vec![-1.0, 0.0, 1.0],
                 convolution: vec![0.1, 0.8, 0.2],
                 edge_discard: 1,
@@ -619,7 +756,14 @@ mod tests {
         cache.flush();
 
         let loaded = Cache::load(cache_path);
-        assert!(loaded.prepare(&simfile, &music, 2, options()).is_cached());
+        assert!(
+            loaded
+                .prepare(&simfile, &music, 2, options(), false)
+                .is_cached()
+        );
+        let visual = loaded.prepare(&simfile, &music, 2, options(), true);
+        assert!(!visual.is_cached());
+        assert!(visual.into_prepared().is_some());
         let _ = fs::remove_dir_all(root);
     }
 
@@ -638,17 +782,21 @@ mod tests {
         changed_options.confidence_percent = 90;
         assert!(
             !cache
-                .prepare(&simfile, &music, 2, changed_options)
+                .prepare(&simfile, &music, 2, changed_options, false)
                 .is_cached()
         );
 
         fs::write(&simfile, b"#OFFSET:0.125; changed").expect("change simfile");
-        assert!(!cache.prepare(&simfile, &music, 2, options()).is_cached());
+        assert!(
+            !cache
+                .prepare(&simfile, &music, 2, options(), false)
+                .is_cached()
+        );
         let _ = fs::remove_dir_all(root);
     }
 
     #[test]
-    fn single_chart_result_round_trips_with_compact_curve() {
+    fn single_chart_result_round_trips_with_complete_visuals() {
         let root = temp_dir("single-chart");
         fs::create_dir_all(&root).expect("create temp dir");
         let simfile = root.join("song.ssc");
@@ -658,20 +806,58 @@ mod tests {
         fs::write(&music, b"audio").expect("write music");
 
         let cache = Cache::load(cache_path.clone());
-        complete_with_curve(&cache, &simfile, &music);
+        complete_with_plot(&cache, &simfile, &music);
         cache.flush();
 
         let loaded = Cache::load(cache_path);
-        let prepared = loaded.prepare(&simfile, &music, 2, options());
+        let prepared = loaded.prepare(&simfile, &music, 2, options(), true);
         let cached = prepared
             .cached_analysis()
             .expect("completed single-chart result should be cached");
         assert_eq!(cached.bias_ms, -3.0);
         assert_eq!(cached.confidence, 0.91);
         assert!(!cached.applied);
-        assert_eq!(
-            cached.curve.as_ref().map(|curve| curve.edge_discard),
-            Some(1)
+        let plot = cached
+            .plot
+            .as_ref()
+            .expect("cached visuals should be present");
+        assert_eq!(plot.freq_domain, [0.2, 0.4, 0.6]);
+        assert_eq!(plot.beat_digest, [0.3, 0.5, 0.7]);
+        assert_eq!(plot.post_kernel, [0.4, 0.6, 0.8]);
+        assert_eq!(plot.convolution, [0.1, 0.8, 0.2]);
+        assert_eq!(plot.edge_discard, 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn complete_visuals_are_retained_for_multiple_single_charts() {
+        let root = temp_dir("multiple-visuals");
+        fs::create_dir_all(&root).expect("create temp dir");
+        let cache_path = root.join("cache.json");
+        let simfile_a = root.join("a.ssc");
+        let music_a = root.join("a.ogg");
+        let simfile_b = root.join("b.ssc");
+        let music_b = root.join("b.ogg");
+        fs::write(&simfile_a, b"#OFFSET:0.000;").expect("write first simfile");
+        fs::write(&music_a, b"audio a").expect("write first music");
+        fs::write(&simfile_b, b"#OFFSET:0.000;").expect("write second simfile");
+        fs::write(&music_b, b"audio b").expect("write second music");
+
+        let cache = Cache::load(cache_path.clone());
+        complete_with_plot(&cache, &simfile_a, &music_a);
+        complete_with_plot(&cache, &simfile_b, &music_b);
+        cache.flush();
+
+        let loaded = Cache::load(cache_path);
+        assert!(
+            loaded
+                .prepare(&simfile_a, &music_a, 2, options(), true)
+                .is_cached()
+        );
+        assert!(
+            loaded
+                .prepare(&simfile_b, &music_b, 2, options(), true)
+                .is_cached()
         );
         let _ = fs::remove_dir_all(root);
     }
@@ -693,7 +879,7 @@ mod tests {
         cache.flush();
 
         let cache = Cache::load(cache_path);
-        let prepared = cache.prepare(&simfile, &music, 2, options());
+        let prepared = cache.prepare(&simfile, &music, 2, options(), false);
         assert!(prepared.is_cached());
         assert!(
             prepared

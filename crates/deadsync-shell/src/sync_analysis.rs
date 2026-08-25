@@ -1,5 +1,5 @@
 use crate::sync_analysis_cache::{
-    AnalysisOptions, Cache as AnalysisCache, CachedAnalysis, CachedCurve, CompletedTarget,
+    AnalysisOptions, Cache as AnalysisCache, CachedAnalysis, CachedPlot, CompletedTarget,
 };
 use deadsync_audio_decode as decode;
 use deadsync_chart::SongData;
@@ -170,6 +170,7 @@ fn run_song(
                 &music_path,
                 target.chart_ix,
                 options,
+                true,
             )
         });
     if let Some(cached) = prepared
@@ -177,6 +178,7 @@ fn run_song(
         .and_then(|prepared| prepared.cached_analysis())
     {
         if !cancel.load(Ordering::Relaxed) {
+            cache.flush();
             let _ = tx.send(SimplyLoveSyncEvent::SongFinished(Ok(cached_song_result(
                 cached,
             ))));
@@ -204,11 +206,18 @@ fn run_song(
     .map(sync_song_result);
     if !cancel.load(Ordering::Relaxed) {
         if let (Ok(result), Some(prepared)) = (&result, prepared) {
-            cache.record_completed(vec![CompletedTarget::with_curve(
+            cache.record_completed(vec![CompletedTarget::with_plot(
                 prepared,
                 result.estimate.bias_ms,
                 result.estimate.confidence,
-                CachedCurve {
+                CachedPlot {
+                    freq_rows: result.plot.freq_rows,
+                    digest_rows: result.plot.digest_rows,
+                    cols: result.plot.cols,
+                    post_rows: result.plot.post_rows,
+                    freq_domain: result.plot.freq_domain.clone(),
+                    beat_digest: result.plot.beat_digest.clone(),
+                    post_kernel: result.plot.post_kernel.clone(),
                     times_ms: result.plot.times_ms.clone(),
                     convolution: result.plot.convolution.clone(),
                     edge_discard: result.plot.edge_discard,
@@ -222,34 +231,23 @@ fn run_song(
 
 fn cached_song_result(cached: &CachedAnalysis) -> SimplyLoveSyncSongResult {
     let bias_ms = if cached.applied { 0.0 } else { cached.bias_ms };
-    let (times_ms, convolution, edge_discard) = cached
-        .curve
-        .as_ref()
-        .map(|curve| {
-            (
-                curve.times_ms.clone(),
-                curve.convolution.clone(),
-                curve.edge_discard,
-            )
-        })
-        .unwrap_or_default();
-    let cols = times_ms.len();
+    let plot = cached.plot.as_ref().filter(|_| !cached.applied);
     SimplyLoveSyncSongResult {
         estimate: SimplyLoveSyncResult {
             bias_ms,
             confidence: cached.confidence,
         },
         plot: SimplyLoveSyncPlotView {
-            freq_rows: 0,
-            digest_rows: 0,
-            cols,
-            post_rows: 0,
-            freq_domain: Vec::new(),
-            beat_digest: Vec::new(),
-            post_kernel: Vec::new(),
-            convolution,
-            times_ms,
-            edge_discard,
+            freq_rows: plot.map_or(0, |plot| plot.freq_rows),
+            digest_rows: plot.map_or(0, |plot| plot.digest_rows),
+            cols: plot.map_or(0, |plot| plot.cols.max(plot.times_ms.len())),
+            post_rows: plot.map_or(0, |plot| plot.post_rows),
+            freq_domain: plot.map_or_else(Vec::new, |plot| plot.freq_domain.clone()),
+            beat_digest: plot.map_or_else(Vec::new, |plot| plot.beat_digest.clone()),
+            post_kernel: plot.map_or_else(Vec::new, |plot| plot.post_kernel.clone()),
+            convolution: plot.map_or_else(Vec::new, |plot| plot.convolution.clone()),
+            times_ms: plot.map_or_else(Vec::new, |plot| plot.times_ms.clone()),
+            edge_discard: plot.map_or(0, |plot| plot.edge_discard),
         },
         cached: true,
     }
@@ -368,6 +366,7 @@ fn run_pack(
                             &music_path,
                             target.chart_ix,
                             options,
+                            false,
                         )
                     });
                 if prepared
@@ -492,12 +491,19 @@ mod tests {
     }
 
     #[test]
-    fn cached_song_result_restores_estimate_and_curve() {
+    fn cached_song_result_restores_estimate_and_visuals() {
         let result = cached_song_result(&CachedAnalysis {
             bias_ms: -4.0,
             confidence: 0.93,
             applied: false,
-            curve: Some(CachedCurve {
+            plot: Some(CachedPlot {
+                freq_rows: 1,
+                digest_rows: 1,
+                cols: 3,
+                post_rows: 1,
+                freq_domain: vec![0.2, 0.4, 0.6],
+                beat_digest: vec![0.3, 0.5, 0.7],
+                post_kernel: vec![0.4, 0.6, 0.8],
                 times_ms: vec![-1.0, 0.0, 1.0],
                 convolution: vec![0.1, 0.9, 0.2],
                 edge_discard: 1,
@@ -508,6 +514,9 @@ mod tests {
         assert_eq!(result.estimate.bias_ms, -4.0);
         assert_eq!(result.estimate.confidence, 0.93);
         assert_eq!(result.plot.cols, 3);
+        assert_eq!(result.plot.freq_domain, [0.2, 0.4, 0.6]);
+        assert_eq!(result.plot.beat_digest, [0.3, 0.5, 0.7]);
+        assert_eq!(result.plot.post_kernel, [0.4, 0.6, 0.8]);
         assert_eq!(result.plot.convolution, [0.1, 0.9, 0.2]);
     }
 
@@ -517,7 +526,7 @@ mod tests {
             bias_ms: -4.0,
             confidence: 0.93,
             applied: true,
-            curve: None,
+            plot: None,
         });
 
         assert!(result.cached);
