@@ -112,36 +112,35 @@ pub use lua_util::{
     crop_actor_to_source_size, current_gamestate_player_value, current_gamestate_value,
     current_song_lua_style_name, current_song_value, current_steps_value,
     default_message_command_params, drain_actor_command_queue, execute_script_file,
-    finish_actor_tweening, flush_actor_capture, function_ease_actor_indices,
-    function_named_upvalue_tables, hurry_actor_tweening, inherit_actor_dirs,
-    install_actor_basic_getter_methods, install_actor_child_command_methods,
-    install_actor_child_query_methods, install_actor_command_methods,
-    install_actor_crop_shadow_methods, install_actor_display_state_methods,
-    install_actor_effect_methods, install_actor_effect_time_getter_methods,
-    install_actor_extra_transform_methods, install_actor_image_coord_methods,
-    install_actor_metatable, install_actor_methods, install_actor_parent_methods,
-    install_actor_path_child_methods, install_actor_render_compat_methods,
-    install_actor_runtime_child_methods, install_actor_scale_size_methods,
-    install_actor_size_getter_methods, install_actor_sprite_animation_methods,
-    install_actor_tap_note_methods, install_actor_texture_load_methods,
-    install_actor_texture_proxy_getter_methods, install_actor_transform_getter_methods,
-    install_actor_transform_methods, install_actor_visual_text_methods,
-    install_actor_wrapper_query_methods, install_course_contents_list_children,
-    install_def_globals, install_file_loader_globals, install_song_meter_display_children,
-    install_texture_proxy_methods, install_top_screen_theme_children,
-    install_underlay_theme_children, load_actor_path, load_script_file, lua_format_text,
-    lua_text_value, make_actor_add_f32_method, make_actor_capture_f32_method,
-    make_actor_chain_method, make_actor_finish_tweening_method, make_actor_set_size_method,
-    make_actor_stop_tweening_method, make_actor_tween_method, make_actor_wrap_width_method,
-    make_color_table, make_vertex_color_table, method_arg, method_arg_offset,
-    nested_function_named_upvalue_tables, normalize_broadcast_params, note_column_pos_offset_y,
-    note_field_column_actors, note_field_tables, note_zoom_point_hides, offset_actor_texture_rect,
-    overlay_compile_actor_tables_for_indices, overlay_model_layers_from_slots,
-    populate_course_contents_display, position_scroller_items, prepare_capture_scope_actor,
-    probe_actor_pointers, probe_call_names, probe_function_ease_target, probe_target_kind,
-    push_note_hide_window, push_sequence_child_once, push_unique_actor_child,
-    read_actor_capture_blocks, read_actor_color_field, read_actor_model_layers,
-    read_actor_multi_vertex_mesh, read_actor_multi_vertex_texture_path,
+    finish_actor_tweening, flush_actor_capture, function_named_upvalue_tables,
+    hurry_actor_tweening, inherit_actor_dirs, install_actor_basic_getter_methods,
+    install_actor_child_command_methods, install_actor_child_query_methods,
+    install_actor_command_methods, install_actor_crop_shadow_methods,
+    install_actor_display_state_methods, install_actor_effect_methods,
+    install_actor_effect_time_getter_methods, install_actor_extra_transform_methods,
+    install_actor_image_coord_methods, install_actor_metatable, install_actor_methods,
+    install_actor_parent_methods, install_actor_path_child_methods,
+    install_actor_render_compat_methods, install_actor_runtime_child_methods,
+    install_actor_scale_size_methods, install_actor_size_getter_methods,
+    install_actor_sprite_animation_methods, install_actor_tap_note_methods,
+    install_actor_texture_load_methods, install_actor_texture_proxy_getter_methods,
+    install_actor_transform_getter_methods, install_actor_transform_methods,
+    install_actor_visual_text_methods, install_actor_wrapper_query_methods,
+    install_course_contents_list_children, install_def_globals, install_file_loader_globals,
+    install_song_meter_display_children, install_texture_proxy_methods,
+    install_top_screen_theme_children, install_underlay_theme_children, load_actor_path,
+    load_script_file, lua_format_text, lua_text_value, make_actor_add_f32_method,
+    make_actor_capture_f32_method, make_actor_chain_method, make_actor_finish_tweening_method,
+    make_actor_set_size_method, make_actor_stop_tweening_method, make_actor_tween_method,
+    make_actor_wrap_width_method, make_color_table, make_vertex_color_table, method_arg,
+    method_arg_offset, nested_function_named_upvalue_tables, normalize_broadcast_params,
+    note_column_pos_offset_y, note_field_column_actors, note_field_tables, note_zoom_point_hides,
+    offset_actor_texture_rect, overlay_compile_actor_tables_for_indices,
+    overlay_model_layers_from_slots, populate_course_contents_display, position_scroller_items,
+    prepare_capture_scope_actor, probe_actor_pointers, probe_call_names,
+    probe_function_ease_target, probe_target_kind, push_note_hide_window, push_sequence_child_once,
+    push_unique_actor_child, read_actor_capture_blocks, read_actor_color_field,
+    read_actor_model_layers, read_actor_multi_vertex_mesh, read_actor_multi_vertex_texture_path,
     read_actor_semantic_state_table, read_bitmap_font, read_bitmap_text_attributes,
     read_child_index, read_color_args, read_color_call, read_color_value,
     read_global_function_nested_tables, read_graph_display_body_state,
@@ -198,7 +197,7 @@ pub use option_rows::{
 };
 pub use perframe::{
     SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES, SongLuaPerframeEntry, SongLuaPerframePlayerState,
-    SongLuaPerframeSample, SongLuaUpdateModState, active_perframe_entries,
+    SongLuaPerframeSample, SongLuaUpdateModState, UPDATE_STATE_SAMPLE_CAP, active_perframe_entries,
     actor_perframe_player_state, call_perframe_entry, call_update_functions_at, compile_perframes,
     compile_update_functions, current_overlay_compile_actor_states, current_perframe_player_states,
     current_update_mod_states, perframe_boundaries, perframe_delta_seconds, perframe_samples,
@@ -207,7 +206,7 @@ pub use perframe::{
     push_sampled_perframe_targets, push_update_mod_targets, read_perframe_entries,
     relative_player_target, tracked_player_tables, unsupported_perframe_info,
     update_function_end_beat, update_function_overlay_eases, update_function_sample_step,
-    update_function_samples, update_player_option_tables,
+    update_function_samples, update_player_option_tables, update_state_sample_step,
 };
 pub use player_options::{
     SONG_LUA_PLAYER_OPTION_CAPABILITIES, SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES,
@@ -3961,21 +3960,20 @@ mod tests {
         SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaPlayerContext, SongLuaProxyTarget,
         SongLuaSpanMode, SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit,
         THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, TOP_SCREEN_THEME_CHILD_NAMES,
-        UNDERLAY_THEME_CHILD_NAMES, actor_indices_for_pointers, actor_overlay_initial_state,
-        actor_pointers_touch_actor, add_actor_child_from_path as add_lua_actor_child_from_path,
-        capture_actor_message_commands, capture_block_set_bool, capture_block_set_f32,
-        capture_function_action_blocks, capture_indexed_actor_function_blocks,
-        capture_overlay_function_eases, collect_indexed_actor_capture_blocks,
-        column_offset_windows_from_samples, compile_song_lua_with_actors,
-        compile_song_runtime_values, compiled_song_lua_sound_paths, create_debug_table,
-        create_dummy_actor as create_lua_dummy_actor,
+        UNDERLAY_THEME_CHILD_NAMES, UPDATE_STATE_SAMPLE_CAP, actor_indices_for_pointers,
+        actor_overlay_initial_state, actor_pointers_touch_actor,
+        add_actor_child_from_path as add_lua_actor_child_from_path, capture_actor_message_commands,
+        capture_block_set_bool, capture_block_set_f32, capture_function_action_blocks,
+        capture_indexed_actor_function_blocks, capture_overlay_function_eases,
+        collect_indexed_actor_capture_blocks, column_offset_windows_from_samples,
+        compile_song_lua_with_actors, compile_song_runtime_values, compiled_song_lua_sound_paths,
+        create_debug_table, create_dummy_actor as create_lua_dummy_actor,
         create_named_child_actor as create_lua_named_child_actor, create_song_runtime_table,
         custom_multi_modifier_key, easiest_steps_difficulty, ensure_overlay_arrow_visual,
-        file_path_string, function_ease_actor_indices, function_named_upvalue_tables,
-        graph_display_body_size, install_actor_methods as install_lua_actor_methods,
-        message_command_lists_have_listener, multitap_deco_state,
-        nested_function_named_upvalue_tables, note_column_pos_offset_y_from_points,
-        note_column_zoom_hide_beats_per_t,
+        file_path_string, function_named_upvalue_tables, graph_display_body_size,
+        install_actor_methods as install_lua_actor_methods, message_command_lists_have_listener,
+        multitap_deco_state, nested_function_named_upvalue_tables,
+        note_column_pos_offset_y_from_points, note_column_zoom_hide_beats_per_t,
         note_field_column_actors as create_note_field_column_actors, note_hide_window_from_indices,
         note_hide_windows_from_flags, note_song_lua_side_effect, offset_texture_rect,
         overlay_eases_from_captures, overlay_state_axis_scale, overlay_state_z_scale,
@@ -3993,7 +3991,7 @@ mod tests {
         sprite_frame_count, sprite_image_frame_size, sprite_texture_rect,
         sprite_texture_rect_with_offset, texture_pixel_offset_rect, theme_has_string,
         theme_metric_number, theme_metric_number_for_screen, theme_pref_default, theme_string,
-        theme_string_names,
+        theme_string_names, update_state_sample_step,
     };
     use std::collections::HashSet;
     use std::fs;
@@ -6200,6 +6198,44 @@ return Def.ActorFrame{
         assert!(compiled.overlay_eases.iter().any(|ease| {
             ease.overlay_index == 0 && ease.from.visible.is_some() && ease.to.visible.is_some()
         }));
+    }
+
+    #[test]
+    fn compile_song_lua_bounds_dense_update_overlay_sampling() {
+        let song_dir = test_dir("dense-update-overlay-sampling");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local targets = {}
+local root = Def.ActorFrame{
+    InitCommand=function(self)
+        self:SetUpdateFunction(function()
+            local beat = GAMESTATE:GetSongBeat()
+            for index, target in ipairs(targets) do
+                target:x(beat + index)
+            end
+        end)
+    end,
+}
+for index = 1, 256 do
+    root[#root + 1] = Def.Quad{
+        InitCommand=function(self)
+            targets[#targets + 1] = self
+        end,
+    }
+end
+return root
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Dense Update Overlays");
+        context.music_length_seconds = 240.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.overlays.len(), 256);
+        assert!(!compiled.overlay_eases.is_empty());
+        assert!(compiled.overlay_eases.len() <= UPDATE_STATE_SAMPLE_CAP + compiled.overlays.len());
     }
 
     #[test]
@@ -14019,6 +14055,45 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_scopes_unprobed_overlay_function_eases() {
+        let song_dir = test_dir("unprobed-overlay-function-ease");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target = nil
+
+mods_ease = {
+    {4, 2, 0, 2, function(amount)
+        if amount ~= 1 and target then
+            target:x(10 + amount * 5)
+        end
+    end, "len", ease.outQuad},
+}
+
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            target = self
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Unprobed Overlay Function Ease"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_eases, 0);
+        assert_eq!(compiled.overlay_eases.len(), 1);
+        assert_eq!(compiled.overlay_eases[0].from.x, Some(10.0));
+        assert_eq!(compiled.overlay_eases[0].to.x, Some(20.0));
+    }
+
+    #[test]
     fn compile_song_lua_keeps_overlay_rotation_eases_out_of_player_transforms() {
         let song_dir = test_dir("overlay-rotation-ease");
         let entry = song_dir.join("default.lua");
@@ -16038,19 +16113,14 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn function_ease_actor_indices_falls_back_to_all_when_unprobed() {
-        assert_eq!(
-            function_ease_actor_indices(3, |index| (index + 1) * 10, &[]),
-            vec![0, 1, 2]
-        );
-        assert_eq!(
-            function_ease_actor_indices(3, |index| (index + 1) * 10, &[999]),
-            vec![0, 1, 2]
-        );
-        assert_eq!(
-            function_ease_actor_indices(3, |index| (index + 1) * 10, &[30]),
-            vec![2]
-        );
+    fn update_state_sample_step_caps_dense_actor_trees() {
+        let len = 512.0;
+        let overlay_count = 512;
+        let step = update_state_sample_step(len, overlay_count);
+        let samples = (len / step).ceil() as usize;
+
+        assert_eq!(samples * overlay_count, UPDATE_STATE_SAMPLE_CAP);
+        assert_eq!(update_state_sample_step(0.0, overlay_count), 0.0);
     }
 
     #[test]

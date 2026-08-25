@@ -8638,6 +8638,43 @@ pub fn capture_indexed_actor_function_blocks(
     Ok(blocks)
 }
 
+fn capture_touched_blocks(
+    lua: &Lua,
+    actors: &[(usize, Table)],
+    function: &Function,
+    arg: Option<f32>,
+    song_beat: Option<f32>,
+) -> Result<Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>, String> {
+    let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
+    if let Some(song_beat) = song_beat {
+        set_compile_song_runtime_beat(lua, song_beat).map_err(|err| err.to_string())?;
+    }
+    let capture_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
+    let result = match arg {
+        Some(value) => function.call::<Value>(value),
+        None => function.call::<Value>(()),
+    };
+    let touched_actors =
+        capture_scope_actor_tables(&capture_scope.actors).map_err(|err| err.to_string())?;
+    let actor_ptrs =
+        capture_scope_actor_pointers(&capture_scope.actors).map_err(|err| err.to_string())?;
+    let state_snapshot =
+        capture_scope_snapshots(&capture_scope.snapshots).map_err(|err| err.to_string())?;
+    restore_action_capture_scope(lua, capture_scope).map_err(|err| err.to_string())?;
+    let touched = actors
+        .iter()
+        .filter(|(_, actor)| actor_ptrs.contains(&(actor.to_pointer() as usize)))
+        .cloned()
+        .collect::<Vec<_>>();
+    let blocks = collect_indexed_actor_capture_blocks(&touched);
+    reset_actor_capture_tables(lua, &touched_actors)?;
+    restore_actors_semantic_state(state_snapshot).map_err(|err| err.to_string())?;
+    set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
+    let blocks = blocks?;
+    result.map_err(|err| err.to_string())?;
+    Ok(blocks)
+}
+
 pub fn capture_overlay_function_eases(
     lua: &Lua,
     overlays: &[(usize, Table)],
@@ -8656,33 +8693,43 @@ pub fn capture_overlay_function_eases(
 ) -> Result<Vec<SongLuaOverlayEase>, String> {
     let start_beat = start;
     let end_beat = song_lua_span_end(start, limit, span_mode).max(start_beat);
-    let overlay_positions = function_ease_actor_indices(
+    let probe_actor_ptrs = probe_actor_ptrs.iter().copied().collect::<HashSet<_>>();
+    let overlay_positions = actor_indices_for_pointers(
         overlays.len(),
         |index| overlays[index].1.to_pointer() as usize,
-        probe_actor_ptrs,
+        &probe_actor_ptrs,
     );
-    let overlay_tables: Vec<_> = overlay_positions
-        .into_iter()
-        .filter_map(|index| {
-            overlays
-                .get(index)
-                .map(|(index, actor)| (*index, actor.clone()))
-        })
-        .collect();
-    let from_blocks = capture_indexed_actor_function_blocks(
-        lua,
-        &overlay_tables,
-        function,
-        Some(from),
-        Some(start_beat),
-    )?;
-    let to_blocks = capture_indexed_actor_function_blocks(
-        lua,
-        &overlay_tables,
-        function,
-        Some(to),
-        Some(end_beat),
-    )?;
+    let (from_blocks, to_blocks) = if overlay_positions.is_empty() {
+        (
+            capture_touched_blocks(lua, overlays, function, Some(from), Some(start_beat))?,
+            capture_touched_blocks(lua, overlays, function, Some(to), Some(end_beat))?,
+        )
+    } else {
+        let overlay_tables = overlay_positions
+            .into_iter()
+            .filter_map(|index| {
+                overlays
+                    .get(index)
+                    .map(|(index, actor)| (*index, actor.clone()))
+            })
+            .collect::<Vec<_>>();
+        (
+            capture_indexed_actor_function_blocks(
+                lua,
+                &overlay_tables,
+                function,
+                Some(from),
+                Some(start_beat),
+            )?,
+            capture_indexed_actor_function_blocks(
+                lua,
+                &overlay_tables,
+                function,
+                Some(to),
+                Some(end_beat),
+            )?,
+        )
+    };
     if from_blocks.is_empty() && to_blocks.is_empty() {
         return Ok(Vec::new());
     }
@@ -9075,24 +9122,6 @@ pub fn actor_pointers_touch_actor(
     actor_ptrs: &[usize],
 ) -> bool {
     !actor_ptrs.is_empty() && (0..len).any(|index| actor_ptrs.contains(&pointer_at(index)))
-}
-
-pub fn function_ease_actor_indices(
-    len: usize,
-    pointer_at: impl FnMut(usize) -> usize,
-    probe_actor_ptrs: &[usize],
-) -> Vec<usize> {
-    if probe_actor_ptrs.is_empty() {
-        return (0..len).collect();
-    }
-
-    let probe_actor_ptrs: HashSet<_> = probe_actor_ptrs.iter().copied().collect();
-    let out = actor_indices_for_pointers(len, pointer_at, &probe_actor_ptrs);
-    if out.is_empty() {
-        (0..len).collect()
-    } else {
-        out
-    }
 }
 
 pub fn read_color_args(args: &MultiValue) -> Option<[f32; 4]> {

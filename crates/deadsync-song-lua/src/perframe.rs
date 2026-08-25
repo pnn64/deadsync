@@ -15,6 +15,9 @@ use crate::{
 };
 
 pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 4096;
+// Dense AFT trees trade temporal resolution for a bounded compile-time and
+// memory cost instead of multiplying thousands of samples by every overlay.
+pub const UPDATE_STATE_SAMPLE_CAP: usize = 16 * 1024;
 const SONG_LUA_PLAYER_TRANSFORM_SAMPLE_DIVISOR: f32 = 4.0;
 const PLAYER_TRANSFORM_CAPTURE_KEYS: [&str; 11] = [
     "x",
@@ -404,6 +407,14 @@ pub fn update_function_sample_step(len: f32) -> f32 {
     }
     let capped = len / SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES as f32;
     perframe_segment_step(len).max(capped)
+}
+
+pub fn update_state_sample_step(len: f32, overlay_count: usize) -> f32 {
+    if len <= 0.0 {
+        return 0.0;
+    }
+    let max_samples = (UPDATE_STATE_SAMPLE_CAP / overlay_count.max(1)).max(1);
+    len / max_samples as f32
 }
 
 pub fn update_function_samples(start: f32, end: f32) -> Vec<SongLuaPerframeSample> {
@@ -891,8 +902,9 @@ pub fn compile_update_functions<Kind>(
     let mut mod_samples = vec![baseline_mods.clone()];
     let mut overlay_samples = vec![baseline_overlays.clone()];
 
-    let coarse_step = update_function_sample_step(end - start);
-    let fine_step = coarse_step / SONG_LUA_PLAYER_TRANSFORM_SAMPLE_DIVISOR;
+    let state_step = update_state_sample_step(end - start, overlays.len());
+    let coarse_step = update_function_sample_step(end - start).max(state_step);
+    let fine_step = (coarse_step / SONG_LUA_PLAYER_TRANSFORM_SAMPLE_DIVISOR).max(state_step);
     let mut beat = start;
     let mut transform_masks = player_transform_masks(&player_tables)?;
     while beat < end - f32::EPSILON {
