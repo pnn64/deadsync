@@ -21,3 +21,7 @@ inline_always = "allow"
 [[bench]]
 name = "graphics_pipeline_eighth_pass"
 harness = false
+
+[[bench]]
+name = "graphics_pipeline_ninth_pass"
+harness = false
