@@ -288,12 +288,20 @@ pub struct State {
     offscreen_targets: Vec<OffscreenTarget>,
     sprite_pipeline_layout: vk::PipelineLayout,
     sprite_pipeline: vk::Pipeline,
+    opaque_sprite_pipeline_layout: vk::PipelineLayout,
+    opaque_sprite_pipeline: vk::Pipeline,
     yuv_pipeline_layout: vk::PipelineLayout,
     yuv_pipeline: vk::Pipeline,
+    opaque_yuv_pipeline_layout: vk::PipelineLayout,
+    opaque_yuv_pipeline: vk::Pipeline,
     mesh_pipeline_layout: vk::PipelineLayout,
     mesh_pipeline: vk::Pipeline,
+    opaque_mesh_pipeline_layout: vk::PipelineLayout,
+    opaque_mesh_pipeline: vk::Pipeline,
     textured_mesh_pipeline_layout: vk::PipelineLayout,
     textured_mesh_pipeline: vk::Pipeline,
+    opaque_textured_mesh_pipeline_layout: vk::PipelineLayout,
+    opaque_textured_mesh_pipeline: vk::Pipeline,
     vertex_buffer: Option<BufferResource>,
     index_buffer: Option<BufferResource>,
     descriptor_set_layout: vk::DescriptorSetLayout,
@@ -420,6 +428,18 @@ pub fn init(
         descriptor_set_layout,
         BlendMode::Alpha,
         false,
+        true,
+    )?;
+    let PipelinePair {
+        layout: opaque_sprite_pipeline_layout,
+        pipe: opaque_sprite_pipeline,
+    } = create_sprite_pipeline(
+        device.as_ref().unwrap(),
+        render_pass,
+        descriptor_set_layout,
+        BlendMode::Alpha,
+        false,
+        false,
     )?;
     let PipelinePair {
         layout: yuv_pipeline_layout,
@@ -430,12 +450,38 @@ pub fn init(
         descriptor_set_layout,
         BlendMode::Alpha,
         true,
+        true,
+    )?;
+    let PipelinePair {
+        layout: opaque_yuv_pipeline_layout,
+        pipe: opaque_yuv_pipeline,
+    } = create_sprite_pipeline(
+        device.as_ref().unwrap(),
+        render_pass,
+        descriptor_set_layout,
+        BlendMode::Alpha,
+        true,
+        false,
     )?;
 
     let PipelinePair {
         layout: mesh_pipeline_layout,
         pipe: mesh_pipeline,
-    } = create_mesh_pipeline(device.as_ref().unwrap(), render_pass, BlendMode::Alpha)?;
+    } = create_mesh_pipeline(
+        device.as_ref().unwrap(),
+        render_pass,
+        BlendMode::Alpha,
+        true,
+    )?;
+    let PipelinePair {
+        layout: opaque_mesh_pipeline_layout,
+        pipe: opaque_mesh_pipeline,
+    } = create_mesh_pipeline(
+        device.as_ref().unwrap(),
+        render_pass,
+        BlendMode::Alpha,
+        false,
+    )?;
     let PipelinePair {
         layout: textured_mesh_pipeline_layout,
         pipe: textured_mesh_pipeline,
@@ -444,6 +490,17 @@ pub fn init(
         render_pass,
         descriptor_set_layout,
         BlendMode::Alpha,
+        true,
+    )?;
+    let PipelinePair {
+        layout: opaque_textured_mesh_pipeline_layout,
+        pipe: opaque_textured_mesh_pipeline,
+    } = create_textured_mesh_pipeline(
+        device.as_ref().unwrap(),
+        render_pass,
+        descriptor_set_layout,
+        BlendMode::Alpha,
+        false,
     )?;
 
     let command_buffers =
@@ -480,12 +537,20 @@ pub fn init(
         offscreen_targets: Vec::new(),
         sprite_pipeline_layout,
         sprite_pipeline,
+        opaque_sprite_pipeline_layout,
+        opaque_sprite_pipeline,
         yuv_pipeline_layout,
         yuv_pipeline,
+        opaque_yuv_pipeline_layout,
+        opaque_yuv_pipeline,
         mesh_pipeline_layout,
         mesh_pipeline,
+        opaque_mesh_pipeline_layout,
+        opaque_mesh_pipeline,
         textured_mesh_pipeline_layout,
         textured_mesh_pipeline,
+        opaque_textured_mesh_pipeline_layout,
+        opaque_textured_mesh_pipeline,
         vertex_buffer: None,
         index_buffer: None,
         descriptor_set_layout,
@@ -665,6 +730,7 @@ fn create_sprite_pipeline(
     set_layout: vk::DescriptorSetLayout,
     mode: BlendMode,
     yuv420: bool,
+    write_alpha: bool,
 ) -> Result<PipelinePair, Box<dyn Error>> {
     // Shaders (recompiled SPIR-V with compact instance layout)
     let vert_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_shader.vert.spv"));
@@ -711,7 +777,7 @@ fn create_sprite_pipeline(
     let multisampling = vk::PipelineMultisampleStateCreateInfo::default()
         .rasterization_samples(vk::SampleCountFlags::TYPE_1);
 
-    let color_blend_attachment = color_blend_for(mode);
+    let color_blend_attachment = color_blend_for(mode, write_alpha);
     let color_blending = vk::PipelineColorBlendStateCreateInfo::default()
         .attachments(std::slice::from_ref(&color_blend_attachment));
 
@@ -765,6 +831,7 @@ fn create_mesh_pipeline(
     device: &Device,
     render_pass: vk::RenderPass,
     mode: BlendMode,
+    write_alpha: bool,
 ) -> Result<PipelinePair, Box<dyn Error>> {
     // Shaders (recompiled SPIR-V)
     let vert_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_mesh.vert.spv"));
@@ -805,7 +872,7 @@ fn create_mesh_pipeline(
     let multisampling = vk::PipelineMultisampleStateCreateInfo::default()
         .rasterization_samples(vk::SampleCountFlags::TYPE_1);
 
-    let color_blend_attachment = color_blend_for(mode);
+    let color_blend_attachment = color_blend_for(mode, write_alpha);
     let color_blending = vk::PipelineColorBlendStateCreateInfo::default()
         .attachments(std::slice::from_ref(&color_blend_attachment));
 
@@ -858,6 +925,7 @@ fn create_textured_mesh_pipeline(
     render_pass: vk::RenderPass,
     set_layout: vk::DescriptorSetLayout,
     mode: BlendMode,
+    write_alpha: bool,
 ) -> Result<PipelinePair, Box<dyn Error>> {
     let vert_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_tmesh.vert.spv"));
     let frag_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_tmesh.frag.spv"));
@@ -897,7 +965,7 @@ fn create_textured_mesh_pipeline(
     let multisampling = vk::PipelineMultisampleStateCreateInfo::default()
         .rasterization_samples(vk::SampleCountFlags::TYPE_1);
 
-    let color_blend_attachment = color_blend_for(mode);
+    let color_blend_attachment = color_blend_for(mode, write_alpha);
     let color_blending = vk::PipelineColorBlendStateCreateInfo::default()
         .attachments(std::slice::from_ref(&color_blend_attachment));
 
@@ -2064,8 +2132,41 @@ fn record_render_pass(
     extent: vk::Extent2D,
     clear_color: [f32; 4],
     offsets: VulkanPassOffsets,
+    write_alpha: bool,
 ) -> u32 {
     let device = state.device.as_ref().unwrap();
+    let (sprite_pipeline, sprite_pipeline_layout) = if write_alpha {
+        (state.sprite_pipeline, state.sprite_pipeline_layout)
+    } else {
+        (
+            state.opaque_sprite_pipeline,
+            state.opaque_sprite_pipeline_layout,
+        )
+    };
+    let (yuv_pipeline, yuv_pipeline_layout) = if write_alpha {
+        (state.yuv_pipeline, state.yuv_pipeline_layout)
+    } else {
+        (state.opaque_yuv_pipeline, state.opaque_yuv_pipeline_layout)
+    };
+    let (mesh_pipeline, mesh_pipeline_layout) = if write_alpha {
+        (state.mesh_pipeline, state.mesh_pipeline_layout)
+    } else {
+        (
+            state.opaque_mesh_pipeline,
+            state.opaque_mesh_pipeline_layout,
+        )
+    };
+    let (textured_mesh_pipeline, textured_mesh_pipeline_layout) = if write_alpha {
+        (
+            state.textured_mesh_pipeline,
+            state.textured_mesh_pipeline_layout,
+        )
+    } else {
+        (
+            state.opaque_textured_mesh_pipeline,
+            state.opaque_textured_mesh_pipeline_layout,
+        )
+    };
     let clear_value = vk::ClearValue {
         color: vk::ClearColorValue {
             float32: clear_color,
@@ -2133,9 +2234,9 @@ fn record_render_pass(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
                             if yuv420 {
-                                state.yuv_pipeline
+                                yuv_pipeline
                             } else {
-                                state.sprite_pipeline
+                                sprite_pipeline
                             },
                         );
                         let vertex = state.vertex_buffer.as_ref().unwrap().buffer;
@@ -2174,9 +2275,9 @@ fn record_render_pass(
                         device.cmd_push_constants(
                             cmd,
                             if yuv420 {
-                                state.yuv_pipeline_layout
+                                yuv_pipeline_layout
                             } else {
-                                state.sprite_pipeline_layout
+                                sprite_pipeline_layout
                             },
                             vk::ShaderStageFlags::VERTEX,
                             0,
@@ -2191,7 +2292,7 @@ fn record_render_pass(
                             };
                             device.cmd_push_constants(
                                 cmd,
-                                state.yuv_pipeline_layout,
+                                yuv_pipeline_layout,
                                 vk::ShaderStageFlags::FRAGMENT,
                                 std::mem::size_of::<ProjPush>() as u32,
                                 bytemuck::bytes_of(&conversion),
@@ -2201,9 +2302,9 @@ fn record_render_pass(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
                             if yuv420 {
-                                state.yuv_pipeline_layout
+                                yuv_pipeline_layout
                             } else {
-                                state.sprite_pipeline_layout
+                                sprite_pipeline_layout
                             },
                             0,
                             &[set],
@@ -2226,7 +2327,7 @@ fn record_render_pass(
                         device.cmd_bind_pipeline(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
-                            state.mesh_pipeline,
+                            mesh_pipeline,
                         );
                         device.cmd_bind_vertex_buffers(
                             cmd,
@@ -2248,7 +2349,7 @@ fn record_render_pass(
                         };
                         device.cmd_push_constants(
                             cmd,
-                            state.mesh_pipeline_layout,
+                            mesh_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
                             bytemuck::bytes_of(&push),
@@ -2270,7 +2371,7 @@ fn record_render_pass(
                         device.cmd_bind_pipeline(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
-                            state.textured_mesh_pipeline,
+                            textured_mesh_pipeline,
                         );
                         if bindings.instance_required(InstanceBinding::TexturedMesh) {
                             device.cmd_bind_vertex_buffers(
@@ -2311,7 +2412,7 @@ fn record_render_pass(
                         };
                         device.cmd_push_constants(
                             cmd,
-                            state.textured_mesh_pipeline_layout,
+                            textured_mesh_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
                             bytemuck::bytes_of(&push),
@@ -2321,7 +2422,7 @@ fn record_render_pass(
                         device.cmd_bind_descriptor_sets(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
-                            state.textured_mesh_pipeline_layout,
+                            textured_mesh_pipeline_layout,
                             0,
                             &[set],
                             &[],
@@ -2674,8 +2775,9 @@ pub fn draw(
                     width: target.width,
                     height: target.height,
                 },
-                [0.0; 4],
+                [0.0, 0.0, 0.0, if target_frame.alpha { 0.0 } else { 1.0 }],
                 offsets,
+                target_frame.alpha,
             ));
             state.offscreen_targets[index].initialized = true;
             target_cursor.sprite += target_frame.sprite_instances.len() as u32;
@@ -3307,12 +3409,32 @@ pub fn cleanup(state: &mut State) {
             .device
             .as_ref()
             .unwrap()
+            .destroy_pipeline(state.opaque_sprite_pipeline, None);
+        state
+            .device
+            .as_ref()
+            .unwrap()
+            .destroy_pipeline_layout(state.opaque_sprite_pipeline_layout, None);
+        state
+            .device
+            .as_ref()
+            .unwrap()
             .destroy_pipeline(state.yuv_pipeline, None);
         state
             .device
             .as_ref()
             .unwrap()
             .destroy_pipeline_layout(state.yuv_pipeline_layout, None);
+        state
+            .device
+            .as_ref()
+            .unwrap()
+            .destroy_pipeline(state.opaque_yuv_pipeline, None);
+        state
+            .device
+            .as_ref()
+            .unwrap()
+            .destroy_pipeline_layout(state.opaque_yuv_pipeline_layout, None);
         state
             .device
             .as_ref()
@@ -3327,12 +3449,32 @@ pub fn cleanup(state: &mut State) {
             .device
             .as_ref()
             .unwrap()
+            .destroy_pipeline(state.opaque_mesh_pipeline, None);
+        state
+            .device
+            .as_ref()
+            .unwrap()
+            .destroy_pipeline_layout(state.opaque_mesh_pipeline_layout, None);
+        state
+            .device
+            .as_ref()
+            .unwrap()
             .destroy_pipeline(state.textured_mesh_pipeline, None);
         state
             .device
             .as_ref()
             .unwrap()
             .destroy_pipeline_layout(state.textured_mesh_pipeline_layout, None);
+        state
+            .device
+            .as_ref()
+            .unwrap()
+            .destroy_pipeline(state.opaque_textured_mesh_pipeline, None);
+        state
+            .device
+            .as_ref()
+            .unwrap()
+            .destroy_pipeline_layout(state.opaque_textured_mesh_pipeline_layout, None);
         state
             .device
             .as_ref()
@@ -3469,10 +3611,15 @@ fn create_image(
     }
 }
 
-fn color_blend_for(mode: BlendMode) -> vk::PipelineColorBlendAttachmentState {
+fn color_blend_for(mode: BlendMode, write_alpha: bool) -> vk::PipelineColorBlendAttachmentState {
+    let write_mask = if write_alpha {
+        vk::ColorComponentFlags::RGBA
+    } else {
+        vk::ColorComponentFlags::R | vk::ColorComponentFlags::G | vk::ColorComponentFlags::B
+    };
     match mode {
         BlendMode::Alpha => vk::PipelineColorBlendAttachmentState::default()
-            .color_write_mask(vk::ColorComponentFlags::RGBA)
+            .color_write_mask(write_mask)
             .blend_enable(true)
             .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
             .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
@@ -3481,7 +3628,7 @@ fn color_blend_for(mode: BlendMode) -> vk::PipelineColorBlendAttachmentState {
             .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
             .alpha_blend_op(vk::BlendOp::ADD),
         BlendMode::Add => vk::PipelineColorBlendAttachmentState::default()
-            .color_write_mask(vk::ColorComponentFlags::RGBA)
+            .color_write_mask(write_mask)
             .blend_enable(true)
             .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
             .dst_color_blend_factor(vk::BlendFactor::ONE)
@@ -3490,7 +3637,7 @@ fn color_blend_for(mode: BlendMode) -> vk::PipelineColorBlendAttachmentState {
             .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
             .alpha_blend_op(vk::BlendOp::ADD),
         BlendMode::Multiply => vk::PipelineColorBlendAttachmentState::default()
-            .color_write_mask(vk::ColorComponentFlags::RGBA)
+            .color_write_mask(write_mask)
             .blend_enable(true)
             .src_color_blend_factor(vk::BlendFactor::DST_COLOR)
             .dst_color_blend_factor(vk::BlendFactor::ZERO)
@@ -3499,7 +3646,7 @@ fn color_blend_for(mode: BlendMode) -> vk::PipelineColorBlendAttachmentState {
             .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
             .alpha_blend_op(vk::BlendOp::ADD),
         BlendMode::Subtract => vk::PipelineColorBlendAttachmentState::default()
-            .color_write_mask(vk::ColorComponentFlags::RGBA)
+            .color_write_mask(write_mask)
             .blend_enable(true)
             .src_color_blend_factor(vk::BlendFactor::ONE)
             .dst_color_blend_factor(vk::BlendFactor::ONE)

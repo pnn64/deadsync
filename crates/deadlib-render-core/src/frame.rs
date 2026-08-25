@@ -37,6 +37,8 @@ pub struct RenderTargetFrame {
     pub texture_handle: TextureHandle,
     pub width: u32,
     pub height: u32,
+    /// Whether the target stores child alpha. RGB targets sample as opaque.
+    pub alpha: bool,
     pub depth: bool,
     pub preserve: bool,
     pub cameras: Vec<Mat4>,

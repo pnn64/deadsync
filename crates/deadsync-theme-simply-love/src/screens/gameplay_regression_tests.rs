@@ -3364,12 +3364,16 @@ return Def.ActorFrame{
                                 }
                             )
                         }));
-                        assert!(visuals.overlays.iter().any(|overlay| {
-                            matches!(
+                        assert!(
+                            visuals.overlays.iter().any(|overlay| {
+                                matches!(
                                 &overlay.kind,
-                                deadsync_assets::song_lua::SongLuaOverlayKind::ActorFrameTexture
+                                deadsync_assets::song_lua::SongLuaOverlayKind::ActorFrameTexture {
+                                    ..
+                                }
                             )
-                        }));
+                            })
+                        );
                         assert!(visuals.overlays.iter().any(|overlay| {
                             matches!(
                                 &overlay.kind,
@@ -3391,12 +3395,16 @@ return Def.ActorFrame{
                             })
                             .expect("anonymous AFT sprite should compile");
                         assert!(capture_name.starts_with("ActorFrameTexture "));
-                        assert!(visuals.overlays.iter().any(|overlay| {
-                            matches!(
+                        assert!(
+                            visuals.overlays.iter().any(|overlay| {
+                                matches!(
                                 overlay.kind,
-                                deadsync_assets::song_lua::SongLuaOverlayKind::ActorFrameTexture
+                                deadsync_assets::song_lua::SongLuaOverlayKind::ActorFrameTexture {
+                                    ..
+                                }
                             ) && overlay.name.as_deref() == Some(capture_name)
-                        }));
+                            })
+                        );
 
                         let assets = fixture_assets();
                         let mut actors = Vec::with_capacity(512);

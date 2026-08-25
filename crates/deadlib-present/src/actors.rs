@@ -490,7 +490,11 @@ pub enum Actor {
     /// StepMania/ITGmania ActorFrameTexture semantics.
     RenderTarget {
         texture_handle: TextureHandle,
+        /// Backing texture dimensions in render pixels.
         size: [u32; 2],
+        /// Coordinate-space dimensions used while composing the children.
+        logical_size: [f32; 2],
+        alpha: bool,
         depth: bool,
         preserve: bool,
         children: Arc<[Self]>,

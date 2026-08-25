@@ -5424,10 +5424,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
 pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     for name in [
         "clearzbuffer",
-        "EnableAlphaBuffer",
-        "EnableDepthBuffer",
         "EnableFloat",
-        "EnablePreserveTexture",
         "Create",
         "SetAmbientLightColor",
         "SetDiffuseLightColor",
@@ -5442,6 +5439,22 @@ pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "cullmode",
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
+    }
+    for (name, key) in [
+        ("EnableAlphaBuffer", "__songlua_aft_alpha_buffer"),
+        ("EnableDepthBuffer", "__songlua_aft_depth_buffer"),
+        ("EnablePreserveTexture", "__songlua_aft_preserve_texture"),
+    ] {
+        actor.set(
+            name,
+            lua.create_function({
+                let actor = actor.clone();
+                move |_, args: MultiValue| {
+                    actor.set(key, method_arg(&args, 0).is_none_or(truthy))?;
+                    Ok(actor.clone())
+                }
+            })?,
+        )?;
     }
     actor.set(
         "Draw",
@@ -10574,7 +10587,20 @@ where
         SongLuaOverlayKind::ActorFrame
     } else if actor_type.eq_ignore_ascii_case("ActorFrameTexture") {
         name = actor_aft_capture_name(actor).map_err(|err| err.to_string())?;
-        SongLuaOverlayKind::ActorFrameTexture
+        SongLuaOverlayKind::ActorFrameTexture {
+            alpha_buffer: actor
+                .get::<Option<bool>>("__songlua_aft_alpha_buffer")
+                .map_err(|err| err.to_string())?
+                .unwrap_or(false),
+            depth_buffer: actor
+                .get::<Option<bool>>("__songlua_aft_depth_buffer")
+                .map_err(|err| err.to_string())?
+                .unwrap_or(false),
+            preserve_texture: actor
+                .get::<Option<bool>>("__songlua_aft_preserve_texture")
+                .map_err(|err| err.to_string())?
+                .unwrap_or(false),
+        }
     } else if actor_type.eq_ignore_ascii_case("ActorProxy") {
         let Some(target) = read_proxy_target_kind(actor)? else {
             return Ok(None);

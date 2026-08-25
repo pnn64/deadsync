@@ -219,9 +219,13 @@ pub struct State {
     queue: CommandQueue,
     layer: MetalLayer,
     sprite_pipelines: PipelineSet,
+    opaque_sprite_pipelines: PipelineSet,
     yuv_pipelines: PipelineSet,
+    opaque_yuv_pipelines: PipelineSet,
     mesh_pipelines: PipelineSet,
+    opaque_mesh_pipelines: PipelineSet,
     tmesh_pipelines: PipelineSet,
+    opaque_tmesh_pipelines: PipelineSet,
     depth_disabled: DepthStencilState,
     depth_enabled: DepthStencilState,
     depth: metal::Texture,
@@ -281,15 +285,40 @@ pub fn init(
         .new_library_with_source(SHADER, &options)
         .map_err(std::io::Error::other)?;
     let sprite_pipelines =
-        build_pipeline_set(&device, &library, "sprite_vertex", "sprite_fragment")?;
-    let yuv_pipelines =
-        build_pipeline_set(&device, &library, "sprite_vertex", "sprite_yuv_fragment")?;
-    let mesh_pipelines = build_pipeline_set(&device, &library, "mesh_vertex", "mesh_fragment")?;
+        build_pipeline_set(&device, &library, "sprite_vertex", "sprite_fragment", true)?;
+    let opaque_sprite_pipelines =
+        build_pipeline_set(&device, &library, "sprite_vertex", "sprite_fragment", false)?;
+    let yuv_pipelines = build_pipeline_set(
+        &device,
+        &library,
+        "sprite_vertex",
+        "sprite_yuv_fragment",
+        true,
+    )?;
+    let opaque_yuv_pipelines = build_pipeline_set(
+        &device,
+        &library,
+        "sprite_vertex",
+        "sprite_yuv_fragment",
+        false,
+    )?;
+    let mesh_pipelines =
+        build_pipeline_set(&device, &library, "mesh_vertex", "mesh_fragment", true)?;
+    let opaque_mesh_pipelines =
+        build_pipeline_set(&device, &library, "mesh_vertex", "mesh_fragment", false)?;
     let tmesh_pipelines = build_pipeline_set(
         &device,
         &library,
         "textured_mesh_vertex",
         "textured_mesh_fragment",
+        true,
+    )?;
+    let opaque_tmesh_pipelines = build_pipeline_set(
+        &device,
+        &library,
+        "textured_mesh_vertex",
+        "textured_mesh_fragment",
+        false,
     )?;
     let (depth_disabled, depth_enabled) = build_depth_states(&device);
     let depth = create_depth_target(&device, size.width, size.height);
@@ -304,9 +333,13 @@ pub fn init(
         queue,
         layer,
         sprite_pipelines,
+        opaque_sprite_pipelines,
         yuv_pipelines,
+        opaque_yuv_pipelines,
         mesh_pipelines,
+        opaque_mesh_pipelines,
         tmesh_pipelines,
+        opaque_tmesh_pipelines,
         depth_disabled,
         depth_enabled,
         depth,
@@ -638,7 +671,7 @@ fn draw_inner(
         configure_render_pass(
             &target.pass.color,
             target.texture.images.primary(),
-            [0.0; 4],
+            [0.0, 0.0, 0.0, if target_frame.alpha { 0.0 } else { 1.0 }],
         );
         let target_encoder = command.new_render_command_encoder(&target.pass.descriptor);
         clear_render_target(&target.pass.color);
@@ -1052,6 +1085,7 @@ fn build_pipeline_set(
     library: &LibraryRef,
     vertex_name: &str,
     fragment_name: &str,
+    write_alpha: bool,
 ) -> Result<PipelineSet, Box<dyn Error>> {
     let vertex = library
         .get_function(vertex_name, None)
@@ -1060,10 +1094,10 @@ fn build_pipeline_set(
         .get_function(fragment_name, None)
         .map_err(std::io::Error::other)?;
     Ok(PipelineSet {
-        alpha: build_pipeline(device, &vertex, &fragment, BlendMode::Alpha)?,
-        add: build_pipeline(device, &vertex, &fragment, BlendMode::Add)?,
-        multiply: build_pipeline(device, &vertex, &fragment, BlendMode::Multiply)?,
-        subtract: build_pipeline(device, &vertex, &fragment, BlendMode::Subtract)?,
+        alpha: build_pipeline(device, &vertex, &fragment, BlendMode::Alpha, write_alpha)?,
+        add: build_pipeline(device, &vertex, &fragment, BlendMode::Add, write_alpha)?,
+        multiply: build_pipeline(device, &vertex, &fragment, BlendMode::Multiply, write_alpha)?,
+        subtract: build_pipeline(device, &vertex, &fragment, BlendMode::Subtract, write_alpha)?,
     })
 }
 
@@ -1072,6 +1106,7 @@ fn build_pipeline(
     vertex: &FunctionRef,
     fragment: &FunctionRef,
     blend: BlendMode,
+    write_alpha: bool,
 ) -> Result<RenderPipelineState, Box<dyn Error>> {
     let desc = RenderPipelineDescriptor::new();
     desc.set_vertex_function(Some(vertex));
@@ -1082,12 +1117,15 @@ fn build_pipeline(
         .object_at(0)
         .ok_or_else(|| std::io::Error::other("Metal pipeline has no color attachment"))?;
     attachment.set_pixel_format(COLOR_FORMAT);
-    attachment.set_write_mask(
-        MTLColorWriteMask::Red
-            | MTLColorWriteMask::Green
-            | MTLColorWriteMask::Blue
-            | MTLColorWriteMask::Alpha,
-    );
+    let write_mask = MTLColorWriteMask::Red
+        | MTLColorWriteMask::Green
+        | MTLColorWriteMask::Blue
+        | if write_alpha {
+            MTLColorWriteMask::Alpha
+        } else {
+            MTLColorWriteMask::empty()
+        };
+    attachment.set_write_mask(write_mask);
     configure_blend(attachment, blend);
     device
         .new_render_pipeline_state(&desc)
@@ -1309,6 +1347,26 @@ fn record_offscreen_pass(
     let mut vertices_drawn = 0u32;
     let mut cache = EncoderCache::default();
     let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
+    let sprite_pipelines = if frame.alpha {
+        &state.sprite_pipelines
+    } else {
+        &state.opaque_sprite_pipelines
+    };
+    let yuv_pipelines = if frame.alpha {
+        &state.yuv_pipelines
+    } else {
+        &state.opaque_yuv_pipelines
+    };
+    let mesh_pipelines = if frame.alpha {
+        &state.mesh_pipelines
+    } else {
+        &state.opaque_mesh_pipelines
+    };
+    let tmesh_pipelines = if frame.alpha {
+        &state.tmesh_pipelines
+    } else {
+        &state.opaque_tmesh_pipelines
+    };
     for op in &frame.ops {
         match *op {
             DrawOp::Sprite(run) => {
@@ -1332,9 +1390,9 @@ fn record_offscreen_pass(
                 let yuv420 = texture.images.is_yuv420();
                 if cache.pipeline_changed(DrawKind::Sprite, blend_key(run.blend), yuv420) {
                     encoder.set_render_pipeline_state(if yuv420 {
-                        state.yuv_pipelines.get(run.blend)
+                        yuv_pipelines.get(run.blend)
                     } else {
-                        state.sprite_pipelines.get(run.blend)
+                        sprite_pipelines.get(run.blend)
                     });
                 }
                 set_camera(
@@ -1400,7 +1458,7 @@ fn record_offscreen_pass(
                     encoder.set_depth_stencil_state(&state.depth_disabled);
                 }
                 if cache.pipeline_changed(DrawKind::Mesh, blend_key(run.blend), false) {
-                    encoder.set_render_pipeline_state(state.mesh_pipelines.get(run.blend));
+                    encoder.set_render_pipeline_state(mesh_pipelines.get(run.blend));
                 }
                 set_camera(
                     encoder,
@@ -1442,7 +1500,7 @@ fn record_offscreen_pass(
                     BufferUpdate::Offset => encoder.set_vertex_buffer_offset(1, instance_offset),
                 }
                 if cache.pipeline_changed(DrawKind::TexturedMesh, blend_key(run.blend), false) {
-                    encoder.set_render_pipeline_state(state.tmesh_pipelines.get(run.blend));
+                    encoder.set_render_pipeline_state(tmesh_pipelines.get(run.blend));
                 }
                 if cache.depth_changed(run.depth_test) {
                     encoder.set_depth_stencil_state(if run.depth_test {

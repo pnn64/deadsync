@@ -2064,10 +2064,13 @@ pub fn draw(
             state.gl.depth_mask(true);
             let mut clear = glow::DEPTH_BUFFER_BIT;
             if !target_frame.preserve || !target.initialized {
-                state.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+                state
+                    .gl
+                    .clear_color(0.0, 0.0, 0.0, if target_frame.alpha { 0.0 } else { 1.0 });
                 clear |= glow::COLOR_BUFFER_BIT;
             }
             state.gl.clear(clear);
+            state.gl.color_mask(true, true, true, target_frame.alpha);
             state.gl.depth_mask(false);
             if state.path == GlPath::Modern {
                 offscreen_vertices = offscreen_vertices.saturating_add(draw_modern_offscreen_pass(

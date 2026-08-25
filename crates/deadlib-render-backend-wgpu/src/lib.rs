@@ -410,16 +410,21 @@ pub struct State {
     shader: wgpu::ShaderModule,
     pipeline_layout: wgpu::PipelineLayout,
     pipelines: PipelineSet,
+    alpha_pipelines: PipelineSet,
     yuv_shader: wgpu::ShaderModule,
     yuv_pipeline_layout: wgpu::PipelineLayout,
     yuv_pipelines: PipelineSet,
+    alpha_yuv_pipelines: PipelineSet,
     mesh_shader: wgpu::ShaderModule,
     mesh_pipeline_layout: wgpu::PipelineLayout,
     mesh_pipelines: MeshPipelineSet,
+    alpha_mesh_pipelines: MeshPipelineSet,
     tmesh_shader: wgpu::ShaderModule,
     tmesh_pipeline_layout: wgpu::PipelineLayout,
     tmesh_pipelines: PipelineSet,
     tmesh_depth_pipelines: PipelineSet,
+    alpha_tmesh_pipelines: PipelineSet,
+    alpha_tmesh_depth_pipelines: PipelineSet,
     depth_texture: wgpu::Texture,
     depth_view: wgpu::TextureView,
     vertex_buffer: wgpu::Buffer,
@@ -676,14 +681,20 @@ fn init(
         usage: wgpu::BufferUsages::UNIFORM,
     });
 
-    let (shader, pipeline_layout, pipelines) =
+    let (shader, pipeline_layout, pipelines, alpha_pipelines) =
         build_pipeline_set(&device, &proj, &bind_layout, format, false);
-    let (yuv_shader, yuv_pipeline_layout, yuv_pipelines) =
+    let (yuv_shader, yuv_pipeline_layout, yuv_pipelines, alpha_yuv_pipelines) =
         build_pipeline_set(&device, &proj, &bind_layout, format, true);
-    let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
+    let (mesh_shader, mesh_pipeline_layout, mesh_pipelines, alpha_mesh_pipelines) =
         build_mesh_pipeline_set(&device, &proj, format);
-    let (tmesh_shader, tmesh_pipeline_layout, tmesh_pipelines, tmesh_depth_pipelines) =
-        build_textured_mesh_pipeline_set(&device, &proj, &bind_layout, format);
+    let (
+        tmesh_shader,
+        tmesh_pipeline_layout,
+        tmesh_pipelines,
+        tmesh_depth_pipelines,
+        alpha_tmesh_pipelines,
+        alpha_tmesh_depth_pipelines,
+    ) = build_textured_mesh_pipeline_set(&device, &proj, &bind_layout, format);
 
     let vertex_data = [
         Vertex {
@@ -766,16 +777,21 @@ fn init(
         shader,
         pipeline_layout,
         pipelines,
+        alpha_pipelines,
         yuv_shader,
         yuv_pipeline_layout,
         yuv_pipelines,
+        alpha_yuv_pipelines,
         mesh_shader,
         mesh_pipeline_layout,
         mesh_pipelines,
+        alpha_mesh_pipelines,
         tmesh_shader,
         tmesh_pipeline_layout,
         tmesh_pipelines,
         tmesh_depth_pipelines,
+        alpha_tmesh_pipelines,
+        alpha_tmesh_depth_pipelines,
         depth_texture,
         depth_view,
         vertex_buffer,
@@ -1367,6 +1383,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
     data: PassDrawData<'pass>,
     uploads: &'pass TexturedMeshUploads,
     textures: &'pass T,
+    write_alpha: bool,
 ) -> u32 {
     let camera_count = data.cameras.len();
     let texture_group = match state.proj {
@@ -1380,6 +1397,31 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
     let mut bindings = DrawBindingCache::default();
     let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
     let mut last_tmesh_depth_test = None;
+    let pipelines = if write_alpha {
+        &state.alpha_pipelines
+    } else {
+        &state.pipelines
+    };
+    let yuv_pipelines = if write_alpha {
+        &state.alpha_yuv_pipelines
+    } else {
+        &state.yuv_pipelines
+    };
+    let mesh_pipelines = if write_alpha {
+        &state.alpha_mesh_pipelines
+    } else {
+        &state.mesh_pipelines
+    };
+    let tmesh_pipelines = if write_alpha {
+        &state.alpha_tmesh_pipelines
+    } else {
+        &state.tmesh_pipelines
+    };
+    let tmesh_depth_pipelines = if write_alpha {
+        &state.alpha_tmesh_depth_pipelines
+    } else {
+        &state.tmesh_depth_pipelines
+    };
     for op in data.ops {
         match op {
             DrawOp::Sprite(run) => {
@@ -1408,9 +1450,9 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                 let yuv = tex.images.is_yuv420();
                 if last_blend != Some(run.blend) || last_sprite_yuv != Some(yuv) {
                     pass.set_pipeline(if yuv {
-                        state.yuv_pipelines.get(run.blend)
+                        yuv_pipelines.get(run.blend)
                     } else {
-                        state.pipelines.get(run.blend)
+                        pipelines.get(run.blend)
                     });
                     if last_sprite_yuv.is_some_and(|last| last != yuv)
                         && matches!(state.proj, ProjState::Immediates)
@@ -1456,7 +1498,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                     last_tmesh_depth_test = None;
                 }
                 if last_blend != Some(run.blend) {
-                    pass.set_pipeline(state.mesh_pipelines.get(run.blend));
+                    pass.set_pipeline(mesh_pipelines.get(run.blend));
                     last_blend = Some(run.blend);
                 }
                 if bindings.camera_required(run.camera) {
@@ -1500,9 +1542,9 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                 }
                 if last_blend != Some(run.blend) || last_tmesh_depth_test != Some(run.depth_test) {
                     pass.set_pipeline(if run.depth_test {
-                        state.tmesh_depth_pipelines.get(run.blend)
+                        tmesh_depth_pipelines.get(run.blend)
                     } else {
-                        state.tmesh_pipelines.get(run.blend)
+                        tmesh_pipelines.get(run.blend)
                     });
                     last_blend = Some(run.blend);
                     last_tmesh_depth_test = Some(run.depth_test);
@@ -2308,7 +2350,12 @@ fn draw_offscreen_targets(
             let color_load = if target_frame.preserve && target.initialized {
                 wgpu::LoadOp::Load
             } else {
-                wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
+                wgpu::LoadOp::Clear(wgpu::Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: if target_frame.alpha { 0.0 } else { 1.0 },
+                })
             };
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("wgpu actor-frame texture pass"),
@@ -2342,6 +2389,7 @@ fn draw_offscreen_targets(
                 },
                 &state.uploads,
                 textures,
+                target_frame.alpha,
             ));
         }
         stats.backend_record_us = stats
@@ -2586,42 +2634,54 @@ fn reconfigure_surface(state: &mut State) {
     }
 
     if format_changed {
-        let (shader, pipeline_layout, pipelines) = build_pipeline_set(
+        let (shader, pipeline_layout, pipelines, alpha_pipelines) = build_pipeline_set(
             &state.device,
             &state.proj,
             &state.bind_layout,
             state.config.format,
             false,
         );
-        let (yuv_shader, yuv_pipeline_layout, yuv_pipelines) = build_pipeline_set(
-            &state.device,
-            &state.proj,
-            &state.bind_layout,
-            state.config.format,
-            true,
-        );
-        let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
-            build_mesh_pipeline_set(&state.device, &state.proj, state.config.format);
-        let (tmesh_shader, tmesh_pipeline_layout, tmesh_pipelines, tmesh_depth_pipelines) =
-            build_textured_mesh_pipeline_set(
+        let (yuv_shader, yuv_pipeline_layout, yuv_pipelines, alpha_yuv_pipelines) =
+            build_pipeline_set(
                 &state.device,
                 &state.proj,
                 &state.bind_layout,
                 state.config.format,
+                true,
             );
+        let (mesh_shader, mesh_pipeline_layout, mesh_pipelines, alpha_mesh_pipelines) =
+            build_mesh_pipeline_set(&state.device, &state.proj, state.config.format);
+        let (
+            tmesh_shader,
+            tmesh_pipeline_layout,
+            tmesh_pipelines,
+            tmesh_depth_pipelines,
+            alpha_tmesh_pipelines,
+            alpha_tmesh_depth_pipelines,
+        ) = build_textured_mesh_pipeline_set(
+            &state.device,
+            &state.proj,
+            &state.bind_layout,
+            state.config.format,
+        );
         state.shader = shader;
         state.pipeline_layout = pipeline_layout;
         state.pipelines = pipelines;
+        state.alpha_pipelines = alpha_pipelines;
         state.yuv_shader = yuv_shader;
         state.yuv_pipeline_layout = yuv_pipeline_layout;
         state.yuv_pipelines = yuv_pipelines;
+        state.alpha_yuv_pipelines = alpha_yuv_pipelines;
         state.mesh_shader = mesh_shader;
         state.mesh_pipeline_layout = mesh_pipeline_layout;
         state.mesh_pipelines = mesh_pipelines;
+        state.alpha_mesh_pipelines = alpha_mesh_pipelines;
         state.tmesh_shader = tmesh_shader;
         state.tmesh_pipeline_layout = tmesh_pipeline_layout;
         state.tmesh_pipelines = tmesh_pipelines;
         state.tmesh_depth_pipelines = tmesh_depth_pipelines;
+        state.alpha_tmesh_pipelines = alpha_tmesh_pipelines;
+        state.alpha_tmesh_depth_pipelines = alpha_tmesh_depth_pipelines;
     }
 }
 
@@ -2787,7 +2847,12 @@ fn build_pipeline_set(
     bind_layout: &wgpu::BindGroupLayout,
     format: wgpu::TextureFormat,
     yuv420: bool,
-) -> (wgpu::ShaderModule, wgpu::PipelineLayout, PipelineSet) {
+) -> (
+    wgpu::ShaderModule,
+    wgpu::PipelineLayout,
+    PipelineSet,
+    PipelineSet,
+) {
     let shader_src = match (proj, yuv420) {
         (ProjState::Immediates, false) => SHADER_IMM,
         (ProjState::Uniform { .. }, false) => SHADER_UBO,
@@ -2818,33 +2883,63 @@ fn build_pipeline_set(
         }
     };
 
-    let pipelines = PipelineSet {
-        alpha: build_pipeline(device, &pipeline_layout, format, BlendMode::Alpha, &shader),
-        add: build_pipeline(device, &pipeline_layout, format, BlendMode::Add, &shader),
+    let pipelines = build_pipelines(
+        device,
+        &pipeline_layout,
+        format,
+        &shader,
+        surface_write_mask(),
+    );
+    let alpha_pipelines = build_pipelines(
+        device,
+        &pipeline_layout,
+        format,
+        &shader,
+        wgpu::ColorWrites::ALL,
+    );
+
+    (shader, pipeline_layout, pipelines, alpha_pipelines)
+}
+
+fn build_pipelines(
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    format: wgpu::TextureFormat,
+    shader: &wgpu::ShaderModule,
+    write_mask: wgpu::ColorWrites,
+) -> PipelineSet {
+    PipelineSet {
+        alpha: build_pipeline(device, layout, format, BlendMode::Alpha, shader, write_mask),
+        add: build_pipeline(device, layout, format, BlendMode::Add, shader, write_mask),
         multiply: build_pipeline(
             device,
-            &pipeline_layout,
+            layout,
             format,
             BlendMode::Multiply,
-            &shader,
+            shader,
+            write_mask,
         ),
         subtract: build_pipeline(
             device,
-            &pipeline_layout,
+            layout,
             format,
             BlendMode::Subtract,
-            &shader,
+            shader,
+            write_mask,
         ),
-    };
-
-    (shader, pipeline_layout, pipelines)
+    }
 }
 
 fn build_mesh_pipeline_set(
     device: &wgpu::Device,
     proj: &ProjState,
     format: wgpu::TextureFormat,
-) -> (wgpu::ShaderModule, wgpu::PipelineLayout, MeshPipelineSet) {
+) -> (
+    wgpu::ShaderModule,
+    wgpu::PipelineLayout,
+    MeshPipelineSet,
+    MeshPipelineSet,
+) {
     let shader_src = match proj {
         ProjState::Immediates => MESH_SHADER_IMM,
         ProjState::Uniform { .. } => MESH_SHADER_UBO,
@@ -2870,26 +2965,51 @@ fn build_mesh_pipeline_set(
         }
     };
 
-    let pipelines = MeshPipelineSet {
-        alpha: build_mesh_pipeline(device, &pipeline_layout, format, BlendMode::Alpha, &shader),
-        add: build_mesh_pipeline(device, &pipeline_layout, format, BlendMode::Add, &shader),
+    let pipelines = build_mesh_pipelines(
+        device,
+        &pipeline_layout,
+        format,
+        &shader,
+        surface_write_mask(),
+    );
+    let alpha_pipelines = build_mesh_pipelines(
+        device,
+        &pipeline_layout,
+        format,
+        &shader,
+        wgpu::ColorWrites::ALL,
+    );
+
+    (shader, pipeline_layout, pipelines, alpha_pipelines)
+}
+
+fn build_mesh_pipelines(
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    format: wgpu::TextureFormat,
+    shader: &wgpu::ShaderModule,
+    write_mask: wgpu::ColorWrites,
+) -> MeshPipelineSet {
+    MeshPipelineSet {
+        alpha: build_mesh_pipeline(device, layout, format, BlendMode::Alpha, shader, write_mask),
+        add: build_mesh_pipeline(device, layout, format, BlendMode::Add, shader, write_mask),
         multiply: build_mesh_pipeline(
             device,
-            &pipeline_layout,
+            layout,
             format,
             BlendMode::Multiply,
-            &shader,
+            shader,
+            write_mask,
         ),
         subtract: build_mesh_pipeline(
             device,
-            &pipeline_layout,
+            layout,
             format,
             BlendMode::Subtract,
-            &shader,
+            shader,
+            write_mask,
         ),
-    };
-
-    (shader, pipeline_layout, pipelines)
+    }
 }
 
 fn build_textured_mesh_pipeline_set(
@@ -2900,6 +3020,8 @@ fn build_textured_mesh_pipeline_set(
 ) -> (
     wgpu::ShaderModule,
     wgpu::PipelineLayout,
+    PipelineSet,
+    PipelineSet,
     PipelineSet,
     PipelineSet,
 ) {
@@ -2931,76 +3053,95 @@ fn build_textured_mesh_pipeline_set(
         }
     };
 
-    let pipelines = PipelineSet {
-        alpha: build_tmesh_pipeline(
-            device,
-            &pipeline_layout,
-            format,
-            BlendMode::Alpha,
-            &shader,
-            false,
-        ),
-        add: build_tmesh_pipeline(
-            device,
-            &pipeline_layout,
-            format,
-            BlendMode::Add,
-            &shader,
-            false,
-        ),
-        multiply: build_tmesh_pipeline(
-            device,
-            &pipeline_layout,
-            format,
-            BlendMode::Multiply,
-            &shader,
-            false,
-        ),
-        subtract: build_tmesh_pipeline(
-            device,
-            &pipeline_layout,
-            format,
-            BlendMode::Subtract,
-            &shader,
-            false,
-        ),
-    };
-    let depth_pipelines = PipelineSet {
-        alpha: build_tmesh_pipeline(
-            device,
-            &pipeline_layout,
-            format,
-            BlendMode::Alpha,
-            &shader,
-            true,
-        ),
-        add: build_tmesh_pipeline(
-            device,
-            &pipeline_layout,
-            format,
-            BlendMode::Add,
-            &shader,
-            true,
-        ),
-        multiply: build_tmesh_pipeline(
-            device,
-            &pipeline_layout,
-            format,
-            BlendMode::Multiply,
-            &shader,
-            true,
-        ),
-        subtract: build_tmesh_pipeline(
-            device,
-            &pipeline_layout,
-            format,
-            BlendMode::Subtract,
-            &shader,
-            true,
-        ),
-    };
+    let pipelines = build_tmesh_pipelines(
+        device,
+        &pipeline_layout,
+        format,
+        &shader,
+        false,
+        surface_write_mask(),
+    );
+    let depth_pipelines = build_tmesh_pipelines(
+        device,
+        &pipeline_layout,
+        format,
+        &shader,
+        true,
+        surface_write_mask(),
+    );
+    let alpha_pipelines = build_tmesh_pipelines(
+        device,
+        &pipeline_layout,
+        format,
+        &shader,
+        false,
+        wgpu::ColorWrites::ALL,
+    );
+    let alpha_depth_pipelines = build_tmesh_pipelines(
+        device,
+        &pipeline_layout,
+        format,
+        &shader,
+        true,
+        wgpu::ColorWrites::ALL,
+    );
 
-    (shader, pipeline_layout, pipelines, depth_pipelines)
+    (
+        shader,
+        pipeline_layout,
+        pipelines,
+        depth_pipelines,
+        alpha_pipelines,
+        alpha_depth_pipelines,
+    )
+}
+
+fn build_tmesh_pipelines(
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    format: wgpu::TextureFormat,
+    shader: &wgpu::ShaderModule,
+    use_depth: bool,
+    write_mask: wgpu::ColorWrites,
+) -> PipelineSet {
+    PipelineSet {
+        alpha: build_tmesh_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::Alpha,
+            shader,
+            use_depth,
+            write_mask,
+        ),
+        add: build_tmesh_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::Add,
+            shader,
+            use_depth,
+            write_mask,
+        ),
+        multiply: build_tmesh_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::Multiply,
+            shader,
+            use_depth,
+            write_mask,
+        ),
+        subtract: build_tmesh_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::Subtract,
+            shader,
+            use_depth,
+            write_mask,
+        ),
+    }
 }
 
 fn build_pipeline(
@@ -3009,6 +3150,7 @@ fn build_pipeline(
     format: wgpu::TextureFormat,
     mode: BlendMode,
     shader: &wgpu::ShaderModule,
+    write_mask: wgpu::ColorWrites,
 ) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("wgpu pipeline"),
@@ -3025,7 +3167,7 @@ fn build_pipeline(
             targets: &[Some(wgpu::ColorTargetState {
                 format,
                 blend: blend_state(mode),
-                write_mask: surface_write_mask(),
+                write_mask,
             })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
@@ -3057,6 +3199,7 @@ fn build_mesh_pipeline(
     format: wgpu::TextureFormat,
     mode: BlendMode,
     shader: &wgpu::ShaderModule,
+    write_mask: wgpu::ColorWrites,
 ) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("wgpu mesh pipeline"),
@@ -3073,7 +3216,7 @@ fn build_mesh_pipeline(
             targets: &[Some(wgpu::ColorTargetState {
                 format,
                 blend: blend_state(mode),
-                write_mask: surface_write_mask(),
+                write_mask,
             })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
@@ -3106,6 +3249,7 @@ fn build_tmesh_pipeline(
     mode: BlendMode,
     shader: &wgpu::ShaderModule,
     use_depth: bool,
+    write_mask: wgpu::ColorWrites,
 ) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("wgpu textured-mesh pipeline"),
@@ -3125,7 +3269,7 @@ fn build_tmesh_pipeline(
             targets: &[Some(wgpu::ColorTargetState {
                 format,
                 blend: blend_state(mode),
-                write_mask: surface_write_mask(),
+                write_mask,
             })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),

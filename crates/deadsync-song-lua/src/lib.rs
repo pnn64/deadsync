@@ -1663,7 +1663,11 @@ impl<Vertex> SongLuaOverlayModelLayer<Vertex> {
 pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
     Actor,
     ActorFrame,
-    ActorFrameTexture,
+    ActorFrameTexture {
+        alpha_buffer: bool,
+        depth_buffer: bool,
+        preserve_texture: bool,
+    },
     ActorProxy {
         target: SongLuaProxyTarget,
     },
@@ -7951,7 +7955,7 @@ return root
             compiled
                 .overlays
                 .iter()
-                .any(|overlay| matches!(overlay.kind, TestOverlayKind::ActorFrameTexture))
+                .any(|overlay| matches!(overlay.kind, TestOverlayKind::ActorFrameTexture { .. }))
         );
     }
 
@@ -13662,6 +13666,9 @@ return Def.ActorFrame{
         Name="CaptureAFT",
         InitCommand=function(self)
             capture = self
+            self:EnableAlphaBuffer(true)
+            self:EnableDepthBuffer(true)
+            self:EnablePreserveTexture(true)
         end,
         Def.ActorProxy{
             Name="ProxyP1",
@@ -13704,7 +13711,11 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 3);
         assert!(matches!(
             compiled.overlays[0].kind,
-            SongLuaOverlayKind::ActorFrameTexture
+            SongLuaOverlayKind::ActorFrameTexture {
+                alpha_buffer: true,
+                depth_buffer: true,
+                preserve_texture: true,
+            }
         ));
         assert!(matches!(
             compiled.overlays[1].kind,
@@ -13778,7 +13789,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 3);
         assert!(matches!(
             compiled.overlays[0].kind,
-            SongLuaOverlayKind::ActorFrameTexture
+            SongLuaOverlayKind::ActorFrameTexture { .. }
         ));
         assert!(matches!(
             compiled.overlays[1].kind,
@@ -13929,7 +13940,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 2);
         assert!(matches!(
             compiled.overlays[0].kind,
-            SongLuaOverlayKind::ActorFrameTexture
+            SongLuaOverlayKind::ActorFrameTexture { .. }
         ));
         assert!(matches!(
             compiled.overlays[1].kind,
@@ -13967,7 +13978,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 1);
         assert!(matches!(
             compiled.overlays[0].kind,
-            SongLuaOverlayKind::ActorFrameTexture
+            SongLuaOverlayKind::ActorFrameTexture { .. }
         ));
         assert!(compiled.overlays[0].initial_state.visible);
     }

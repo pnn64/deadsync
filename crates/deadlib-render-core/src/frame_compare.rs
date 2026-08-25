@@ -66,6 +66,13 @@ fn compare_render_targets(
         compare_value(
             "render_target",
             index,
+            "alpha",
+            expected.alpha,
+            actual.alpha,
+        )?;
+        compare_value(
+            "render_target",
+            index,
             "depth",
             expected.depth,
             actual.depth,

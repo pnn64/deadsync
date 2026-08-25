@@ -34,7 +34,7 @@ use deadlib_present::density::{self, DensityHistCache};
 use deadlib_present::font;
 use deadlib_present::space::widescale;
 use deadlib_present::space::{
-    is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
+    current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
 use deadlib_render_core::{
     BackendType, BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TMeshCacheKey, TextureHandle,
@@ -677,7 +677,7 @@ impl SongLuaOverlayTopologyIndex {
         let aft_texture_handles = overlays
             .iter()
             .map(|overlay| {
-                matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture)
+                matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture { .. })
                     .then(|| {
                         render_target_texture_handle(
                             NEXT_SONG_LUA_AFT_ID.fetch_add(1, AtomicOrdering::Relaxed),
@@ -704,7 +704,7 @@ impl SongLuaOverlayTopologyIndex {
         let dynamic_camera_scope = overlays.iter().any(|overlay| {
             matches!(
                 overlay.kind,
-                SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+                SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
             ) && overlay
                 .message_commands
                 .iter()
@@ -735,7 +735,7 @@ impl SongLuaOverlayTopologyIndex {
                 }
                 if matches!(
                     parent.kind,
-                    SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+                    SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
                 ) && parent_state.fov.is_some()
                 {
                     Some(parent_index)
@@ -756,7 +756,7 @@ impl SongLuaOverlayTopologyIndex {
             overlays.get(ease.overlay_index).is_some_and(|overlay| {
                 matches!(
                     overlay.kind,
-                    SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+                    SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
                 ) && (ease.from.delta.fov.is_some() || ease.to.delta.fov.is_some())
             })
         });
@@ -7339,7 +7339,7 @@ fn song_lua_overlay_parent_uses_center_origin(
         parent_kind,
         SongLuaOverlayKind::Actor
             | SongLuaOverlayKind::ActorFrame
-            | SongLuaOverlayKind::ActorFrameTexture
+            | SongLuaOverlayKind::ActorFrameTexture { .. }
     ) && (parent_axis - 0.5 * overlay_space_axis).abs() <= 0.01
 }
 
@@ -7357,7 +7357,7 @@ fn song_lua_overlay_compose_state(
         parent_kind,
         SongLuaOverlayKind::Actor
             | SongLuaOverlayKind::ActorFrame
-            | SongLuaOverlayKind::ActorFrameTexture
+            | SongLuaOverlayKind::ActorFrameTexture { .. }
     ) && song_lua_overlay_parent_uses_center_origin(
         parent_kind,
         parent.x,
@@ -7372,7 +7372,7 @@ fn song_lua_overlay_compose_state(
         parent_kind,
         SongLuaOverlayKind::Actor
             | SongLuaOverlayKind::ActorFrame
-            | SongLuaOverlayKind::ActorFrameTexture
+            | SongLuaOverlayKind::ActorFrameTexture { .. }
     ) && song_lua_overlay_parent_uses_center_origin(
         parent_kind,
         parent.y,
@@ -7912,7 +7912,7 @@ fn song_lua_overlay_aft_ancestor(
 ) -> Option<usize> {
     while let Some(parent_index) = overlays.get(index).and_then(|overlay| overlay.parent_index) {
         match overlays.get(parent_index).map(|overlay| &overlay.kind) {
-            Some(SongLuaOverlayKind::ActorFrameTexture) => return Some(parent_index),
+            Some(SongLuaOverlayKind::ActorFrameTexture { .. }) => return Some(parent_index),
             Some(_) => index = parent_index,
             None => return None,
         }
@@ -7928,7 +7928,7 @@ fn song_lua_overlay_camera_ancestor(
         let overlay = overlays.get(current)?;
         if matches!(
             overlay.kind,
-            SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+            SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
         ) {
             return Some(current);
         }
@@ -7942,7 +7942,7 @@ fn song_lua_overlay_capture_index_by_name(
     capture_name: &str,
 ) -> Option<usize> {
     overlays.iter().position(|overlay| {
-        matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture)
+        matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture { .. })
             && overlay
                 .name
                 .as_deref()
@@ -8518,7 +8518,7 @@ impl SongLuaAftCaptureScratch {
             .iter()
             .enumerate()
             .map(|(index, overlay)| {
-                matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture).then(|| {
+                matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture { .. }).then(|| {
                     let capacity = song_lua_aft_capture_capacity(overlays, topology, index);
                     std::array::from_fn(|_| SharedActorFrameScratch::with_capacity(capacity))
                 })
@@ -8546,7 +8546,7 @@ fn song_lua_aft_actor_capacity(kind: &SongLuaOverlayKind) -> usize {
     match kind {
         SongLuaOverlayKind::Actor
         | SongLuaOverlayKind::ActorFrame
-        | SongLuaOverlayKind::ActorFrameTexture
+        | SongLuaOverlayKind::ActorFrameTexture { .. }
         | SongLuaOverlayKind::Sound { .. } => 0,
         SongLuaOverlayKind::AftSprite { .. } => 2,
         SongLuaOverlayKind::ActorProxy { .. } => 1,
@@ -9888,7 +9888,7 @@ fn song_lua_capture_overlay_child_states(
             overlay_space_width,
             overlay_space_height,
         );
-        if !matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture) {
+        if !matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture { .. }) {
             song_lua_capture_overlay_child_states(
                 overlays,
                 local_overlay_states,
@@ -9963,7 +9963,7 @@ fn song_lua_append_local_proxy_target(
                 );
             }
         }
-        SongLuaOverlayKind::ActorFrameTexture
+        SongLuaOverlayKind::ActorFrameTexture { .. }
         | SongLuaOverlayKind::ActorProxy { .. }
         | SongLuaOverlayKind::AftSprite { .. }
         | SongLuaOverlayKind::Sound { .. } => {}
@@ -10139,7 +10139,7 @@ fn song_lua_capture_children_into(
             overlay.kind,
             SongLuaOverlayKind::Actor
                 | SongLuaOverlayKind::ActorFrame
-                | SongLuaOverlayKind::ActorFrameTexture
+                | SongLuaOverlayKind::ActorFrameTexture { .. }
         ) {
             continue;
         }
@@ -11676,7 +11676,7 @@ fn song_lua_overlay_camera_state(
         let state = overlay_states.get(current).copied()?;
         if matches!(
             overlay.kind,
-            SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+            SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
         ) && state.fov.is_some()
         {
             return Some(state);
@@ -13521,7 +13521,7 @@ fn build_song_lua_overlay_actor_with_scratch(
     match &overlay.kind {
         SongLuaOverlayKind::Actor => None,
         SongLuaOverlayKind::ActorFrame => None,
-        SongLuaOverlayKind::ActorFrameTexture => None,
+        SongLuaOverlayKind::ActorFrameTexture { .. } => None,
         SongLuaOverlayKind::ActorProxy { .. } => None,
         SongLuaOverlayKind::AftSprite { .. } => None,
         SongLuaOverlayKind::Sound { .. } => None,
@@ -16172,7 +16172,11 @@ fn push_song_lua_layer_actors(
                     out.push(actor);
                 }
             }
-            SongLuaOverlayKind::ActorFrameTexture => {
+            SongLuaOverlayKind::ActorFrameTexture {
+                alpha_buffer,
+                depth_buffer,
+                preserve_texture,
+            } => {
                 if !overlay_state.visible {
                     continue;
                 }
@@ -16180,9 +16184,14 @@ fn push_song_lua_layer_actors(
                     continue;
                 };
                 let size = overlay_state.size.unwrap_or([space_width, space_height]);
+                let (window_width, window_height) = current_window_px();
                 let target_size = [
-                    size[0].round().clamp(1.0, u32::MAX as f32) as u32,
-                    size[1].round().clamp(1.0, u32::MAX as f32) as u32,
+                    (size[0] * window_width as f32 / space_width.max(1.0))
+                        .round()
+                        .clamp(1.0, u32::MAX as f32) as u32,
+                    (size[1] * window_height as f32 / space_height.max(1.0))
+                        .round()
+                        .clamp(1.0, u32::MAX as f32) as u32,
                 ];
                 let Some(capture_scratch) = aft_capture_scratch.overlay(idx) else {
                     continue;
@@ -16214,8 +16223,10 @@ fn push_song_lua_layer_actors(
                 out.push(Actor::RenderTarget {
                     texture_handle,
                     size: target_size,
-                    depth: false,
-                    preserve: false,
+                    logical_size: size,
+                    alpha: *alpha_buffer,
+                    depth: *depth_buffer,
+                    preserve: *preserve_texture,
                     children,
                 });
             }
@@ -20742,7 +20753,11 @@ mod tests {
 
     fn test_capture_overlay(name: &str) -> SongLuaOverlayActor {
         SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::ActorFrameTexture,
+            kind: SongLuaOverlayKind::ActorFrameTexture {
+                alpha_buffer: false,
+                depth_buffer: false,
+                preserve_texture: false,
+            },
             name: Some(name.to_string()),
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
@@ -22636,6 +22651,7 @@ mod tests {
 
     #[test]
     fn song_lua_coincident_rgb_aft_renders_once_then_samples_three_times() {
+        deadlib_present::space::set_current_window_px(1600, 900);
         let overlays = vec![
             test_capture_overlay("CaptureAFT"),
             test_capture_proxy_child(0, SongLuaProxyTarget::Player { player_index: 0 }),
@@ -22694,12 +22710,18 @@ mod tests {
         assert_eq!(out.len(), 4);
         let Actor::RenderTarget {
             texture_handle,
+            size,
+            logical_size,
+            alpha,
             children,
             ..
         } = &out[0]
         else {
             panic!("expected one offscreen AFT capture");
         };
+        assert_eq!(*size, [1600, 900]);
+        assert_eq!(*logical_size, [854.0, 480.0]);
+        assert!(!alpha);
         let [Actor::Frame { children, .. }] = children.as_ref() else {
             panic!("expected reusable capture frame");
         };

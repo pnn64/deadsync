@@ -609,7 +609,7 @@ fn draw_offscreen_targets(
         let initialized = targets[index].initialized;
         let mut pixels = std::mem::take(&mut targets[index].pixels);
         if !pass.preserve || !initialized {
-            pixels.fill(0);
+            pixels.fill(if pass.alpha { 0 } else { 0xff00_0000 });
         }
         let resolved = ResolvedTextures {
             external: textures,
@@ -647,6 +647,11 @@ fn draw_offscreen_targets(
             &mut pixels,
             fixed_vertices,
         ));
+        if !pass.alpha {
+            for pixel in &mut pixels {
+                *pixel |= 0xff00_0000;
+            }
+        }
         targets[index].pixels = pixels;
         targets[index].initialized = true;
         copy_target_pixels(&mut targets[index]);

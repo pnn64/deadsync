@@ -292,10 +292,9 @@ fn compile_song_lua_supports_rgb_aft_fixture() {
         .expect("fixture should compile the black AFT backing quad");
     assert_eq!(bg_quad.initial_state.diffuse, [0.0, 0.0, 0.0, 1.0]);
     assert!(
-        compiled
-            .overlays
-            .iter()
-            .any(|overlay| matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture))
+        compiled.overlays.iter().any(|overlay| {
+            matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture { .. })
+        })
     );
     assert!(
         compiled

@@ -1100,10 +1100,10 @@ where
         let width = target.size[0].max(1);
         let height = target.size[1].max(1);
         let metrics = Metrics {
-            left: -0.5 * width as f32,
-            right: 0.5 * width as f32,
-            bottom: -0.5 * height as f32,
-            top: 0.5 * height as f32,
+            left: -0.5 * target.logical_size[0],
+            right: 0.5 * target.logical_size[0],
+            bottom: -0.5 * target.logical_size[1],
+            top: 0.5 * target.logical_size[1],
         };
         let target_scratch = scratch.render_target_scratches[index].as_mut();
         let target_render = build_single_pass_cached_with_scratch_and_texture_context_impl(
@@ -1123,6 +1123,7 @@ where
             texture_handle: target.texture_handle,
             width,
             height,
+            alpha: target.alpha,
             depth: target.depth,
             preserve: target.preserve,
             cameras: target_render.cameras,
@@ -1141,6 +1142,8 @@ where
 struct RenderTargetSpec<'a> {
     texture_handle: renderer::TextureHandle,
     size: [u32; 2],
+    logical_size: [f32; 2],
+    alpha: bool,
     depth: bool,
     preserve: bool,
     children: &'a [actors::Actor],
@@ -1155,6 +1158,8 @@ fn collect_render_targets<'a>(
             actors::Actor::RenderTarget {
                 texture_handle,
                 size,
+                logical_size,
+                alpha,
                 depth,
                 preserve,
                 children,
@@ -1163,6 +1168,8 @@ fn collect_render_targets<'a>(
                 out.push(RenderTargetSpec {
                     texture_handle: *texture_handle,
                     size: *size,
+                    logical_size: *logical_size,
+                    alpha: *alpha,
                     depth: *depth,
                     preserve: *preserve,
                     children,
@@ -9612,14 +9619,18 @@ mod tests {
         let actors = vec![
             Actor::RenderTarget {
                 texture_handle: screen,
-                size: [64, 32],
+                size: [128, 64],
+                logical_size: [64.0, 32.0],
+                alpha: false,
                 depth: false,
                 preserve: false,
                 children: Arc::from([test_sprite(SpriteSource::Solid)]),
             },
             Actor::RenderTarget {
                 texture_handle: strips,
-                size: [64, 32],
+                size: [128, 64],
+                logical_size: [64.0, 32.0],
+                alpha: true,
                 depth: false,
                 preserve: false,
                 children: Arc::from([target_sprite(screen)]),
@@ -9644,6 +9655,15 @@ mod tests {
         assert_eq!(frame.render_targets.len(), 2);
         assert_eq!(frame.render_targets[0].texture_handle, screen);
         assert_eq!(frame.render_targets[1].texture_handle, strips);
+        assert_eq!(
+            (
+                frame.render_targets[0].width,
+                frame.render_targets[0].height
+            ),
+            (128, 64)
+        );
+        assert!(!frame.render_targets[0].alpha);
+        assert!(frame.render_targets[1].alpha);
         let DrawOp::Sprite(strips_input) = frame.render_targets[1].ops[0] else {
             panic!("second render target must sample the first");
         };
