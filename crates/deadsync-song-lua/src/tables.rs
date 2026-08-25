@@ -1698,9 +1698,12 @@ pub fn create_prefsmgr_table(
     display_aspect_ratio: f32,
     display_width: i32,
     display_height: i32,
+    video_renderers: &str,
 ) -> mlua::Result<Table> {
     let prefsmgr = lua.create_table()?;
     let pref_store = lua.create_table()?;
+    let video_renderers = video_renderers.to_string();
+    let get_video_renderers = video_renderers.clone();
     let get_pref_store = pref_store.clone();
     prefsmgr.set(
         "GetPreference",
@@ -1719,11 +1722,13 @@ pub fn create_prefsmgr_table(
                 display_aspect_ratio,
                 display_width,
                 display_height,
+                &get_video_renderers,
             )
         })?,
     )?;
     let set_pref_store = pref_store.clone();
     let prefsmgr_for_set = prefsmgr.clone();
+    let set_video_renderers = video_renderers.clone();
     prefsmgr.set(
         "SetPreference",
         lua.create_function(move |lua, args: MultiValue| {
@@ -1739,6 +1744,7 @@ pub fn create_prefsmgr_table(
                     display_aspect_ratio,
                     display_width,
                     display_height,
+                    &set_video_renderers,
                 )?,
                 Value::Nil
             ) {
@@ -1748,8 +1754,8 @@ pub fn create_prefsmgr_table(
             Ok(prefsmgr_for_set.clone())
         })?,
     )?;
-    prefsmgr.set(
-        "PreferenceExists",
+    prefsmgr.set("PreferenceExists", {
+        let exists_video_renderers = video_renderers.clone();
         lua.create_function(move |lua, args: MultiValue| {
             let Some(key) = method_arg(&args, 0).cloned().and_then(read_string) else {
                 return Ok(false);
@@ -1762,11 +1768,12 @@ pub fn create_prefsmgr_table(
                     display_aspect_ratio,
                     display_width,
                     display_height,
+                    &exists_video_renderers,
                 )?,
                 Value::Nil
             ))
-        })?,
-    )?;
+        })?
+    })?;
     let prefsmgr_for_save = prefsmgr.clone();
     prefsmgr.set(
         "SavePreferences",
@@ -1797,6 +1804,7 @@ pub fn prefsmgr_default_value(
     display_aspect_ratio: f32,
     display_width: i32,
     display_height: i32,
+    video_renderers: &str,
 ) -> mlua::Result<Value> {
     with_ascii_lowercase(key, |lower| {
         prefsmgr_default_value_normalized(
@@ -1806,6 +1814,7 @@ pub fn prefsmgr_default_value(
             display_aspect_ratio,
             display_width,
             display_height,
+            video_renderers,
         )
     })
 }
@@ -1834,6 +1843,7 @@ fn prefsmgr_default_value_normalized(
     display_aspect_ratio: f32,
     display_width: i32,
     display_height: i32,
+    video_renderers: &str,
 ) -> mlua::Result<Value> {
     if lower == "globaloffsetseconds" {
         Ok(Value::Number(global_offset_seconds as f64))
@@ -1844,7 +1854,7 @@ fn prefsmgr_default_value_normalized(
     } else if lower == "displayheight" {
         Ok(Value::Integer(display_height as i64))
     } else if lower == "videorenderers" {
-        Ok(Value::String(lua.create_string("opengl")?))
+        Ok(Value::String(lua.create_string(video_renderers)?))
     } else if lower == "visualdelayseconds" {
         Ok(Value::Number(0.0))
     } else if lower == "bgbrightness" {

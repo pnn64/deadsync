@@ -1,7 +1,8 @@
 use deadlib_render_core::{
-    BlendMode, DrawOp, DrawStats, RenderFrame, SOFTWARE_MESH_STORAGE_SLOT,
+    BlendMode, DrawOp, DrawStats, RenderFrame, RenderTargetFrame, SOFTWARE_MESH_STORAGE_SLOT,
     SOFTWARE_OBJECTS_STORAGE_SLOT, SOFTWARE_TMESH_STORAGE_SLOT, SamplerDesc, SamplerFilter,
-    SamplerWrap, TextureHandle, Yuv420Upload, draw_storage_stats,
+    SamplerWrap, TextureHandle, TexturedMeshGeometry, TexturedMeshInstanceRaw, Yuv420Upload,
+    draw_storage_stats, is_render_target_texture,
 };
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use image::RgbaImage;
@@ -45,6 +46,59 @@ pub struct State {
     prepared_mesh_triangles: Vec<PreparedTriangle<ScreenVertexColor>>,
     prepared_tmesh_triangles: Vec<PreparedTriangle<ScreenVertexTexColor>>,
     stripe_bins: StripeBins,
+    offscreen_targets: Vec<OffscreenTarget>,
+}
+
+/// Render-thread-owned, song-reused software ActorFrameTexture storage.
+/// Slots are bounded by the largest active graph, allocated at graph warmup,
+/// and replaced only when its handle or dimensions change. Gameplay redraws
+/// reuse the pixel buffers without lookup, eviction, pruning, I/O, or
+/// destruction; the renderer owns and frees them at shutdown. A pass miss is a
+/// transparent texture, and per-frame work is bounded by target pixels plus its
+/// draw list.
+struct OffscreenTarget {
+    handle: TextureHandle,
+    width: u32,
+    height: u32,
+    texture: Texture,
+    pixels: Vec<u32>,
+    initialized: bool,
+}
+
+#[derive(Clone, Copy)]
+struct SoftwarePass<'a> {
+    cameras: &'a [Matrix4],
+    sprite_instances: &'a [deadlib_render_core::SpriteInstanceRaw],
+    mesh_vertices: &'a [deadlib_render_core::MeshVertex],
+    tmesh_instances: &'a [TexturedMeshInstanceRaw],
+    tmesh_geometries: &'a [TexturedMeshGeometry],
+    ops: &'a [DrawOp],
+}
+
+impl<'a> From<&'a RenderFrame> for SoftwarePass<'a> {
+    fn from(frame: &'a RenderFrame) -> Self {
+        Self {
+            cameras: &frame.cameras,
+            sprite_instances: &frame.sprite_instances,
+            mesh_vertices: &frame.mesh_vertices,
+            tmesh_instances: &frame.tmesh_instances,
+            tmesh_geometries: &frame.tmesh_geometries,
+            ops: &frame.ops,
+        }
+    }
+}
+
+impl<'a> From<&'a RenderTargetFrame> for SoftwarePass<'a> {
+    fn from(frame: &'a RenderTargetFrame) -> Self {
+        Self {
+            cameras: &frame.cameras,
+            sprite_instances: &frame.sprite_instances,
+            mesh_vertices: &frame.mesh_vertices,
+            tmesh_instances: &frame.tmesh_instances,
+            tmesh_geometries: &frame.tmesh_geometries,
+            ops: &frame.ops,
+        }
+    }
 }
 
 struct WorkerPool {
@@ -345,6 +399,7 @@ pub fn init(window: Arc<Window>, _vsync_enabled: bool) -> Result<State, Box<dyn 
         prepared_mesh_triangles: Vec::with_capacity(MESH_STAGE_VERTEX_CAP / 3),
         prepared_tmesh_triangles: Vec::with_capacity(MESH_STAGE_VERTEX_CAP / 3),
         stripe_bins: StripeBins::warmed(),
+        offscreen_targets: Vec::with_capacity(4),
     })
 }
 
@@ -463,6 +518,143 @@ fn texture_is_opaque(image: &RgbaImage) -> bool {
             .all(|pixel| pixel[3] == 255)
 }
 
+struct ResolvedTextures<'a, T: TextureLookup + Sync> {
+    external: &'a T,
+    targets: &'a [OffscreenTarget],
+}
+
+impl<T: TextureLookup + Sync> TextureLookup for ResolvedTextures<'_, T> {
+    fn software_texture(&self, handle: TextureHandle) -> Option<&Texture> {
+        if is_render_target_texture(handle) {
+            return self
+                .targets
+                .iter()
+                .find(|target| target.handle == handle)
+                .map(|target| &target.texture);
+        }
+        self.external.software_texture(handle)
+    }
+}
+
+fn create_offscreen_target(handle: TextureHandle, width: u32, height: u32) -> OffscreenTarget {
+    let width = width.max(1);
+    let height = height.max(1);
+    let len = width as usize * height as usize;
+    OffscreenTarget {
+        handle,
+        width,
+        height,
+        texture: Texture {
+            image: RgbaImage::new(width, height),
+            sampler: SamplerDesc {
+                filter: SamplerFilter::Linear,
+                wrap: SamplerWrap::Clamp,
+                mipmaps: false,
+            },
+            opaque: false,
+            yuv420: false,
+        },
+        pixels: vec![0; len],
+        initialized: false,
+    }
+}
+
+fn ensure_offscreen_targets(targets: &mut Vec<OffscreenTarget>, frame: &RenderFrame) {
+    for (index, pass) in frame.render_targets.iter().enumerate() {
+        let matches = targets.get(index).is_some_and(|target| {
+            target.handle == pass.texture_handle
+                && target.width == pass.width.max(1)
+                && target.height == pass.height.max(1)
+        });
+        if matches {
+            continue;
+        }
+        let target = create_offscreen_target(pass.texture_handle, pass.width, pass.height);
+        if index < targets.len() {
+            targets[index] = target;
+        } else {
+            targets.push(target);
+        }
+    }
+}
+
+fn copy_target_pixels(target: &mut OffscreenTarget) {
+    for (rgba, pixel) in target
+        .texture
+        .image
+        .as_mut()
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(target.pixels.iter().copied())
+    {
+        rgba[0] = (pixel >> 16) as u8;
+        rgba[1] = (pixel >> 8) as u8;
+        rgba[2] = pixel as u8;
+        rgba[3] = (pixel >> 24) as u8;
+    }
+}
+
+fn draw_offscreen_targets(
+    state: &mut State,
+    frame: &RenderFrame,
+    textures: &(impl TextureLookup + Sync),
+) -> u32 {
+    let mut targets = std::mem::take(&mut state.offscreen_targets);
+    ensure_offscreen_targets(&mut targets, frame);
+    let mut vertices = 0u32;
+    for (index, pass) in frame.render_targets.iter().enumerate() {
+        let width = pass.width.max(1) as usize;
+        let height = pass.height.max(1) as usize;
+        let initialized = targets[index].initialized;
+        let mut pixels = std::mem::take(&mut targets[index].pixels);
+        if !pass.preserve || !initialized {
+            pixels.fill(0);
+        }
+        let resolved = ResolvedTextures {
+            external: textures,
+            targets: &targets,
+        };
+        let software_pass = SoftwarePass::from(pass);
+        prepare_objects(
+            software_pass,
+            pass.cameras
+                .first()
+                .copied()
+                .unwrap_or_else(|| ortho_for_window(pass.width.max(1), pass.height.max(1))),
+            &resolved,
+            width,
+            height,
+            &mut state.prepared_objects,
+            &mut state.prepared_mesh_triangles,
+            &mut state.prepared_tmesh_triangles,
+            false,
+        );
+        let fixed_vertices = state.prepared_objects.iter().fold(0u32, |sum, object| {
+            sum.saturating_add(object.fixed_vertices())
+        });
+        vertices = vertices.saturating_add(draw_rows(
+            software_pass,
+            &state.prepared_objects,
+            None,
+            &state.prepared_mesh_triangles,
+            &state.prepared_tmesh_triangles,
+            &resolved,
+            width,
+            height,
+            0,
+            height,
+            &mut pixels,
+            fixed_vertices,
+        ));
+        targets[index].pixels = pixels;
+        targets[index].initialized = true;
+        copy_target_pixels(&mut targets[index]);
+    }
+    state.offscreen_targets = targets;
+    vertices
+}
+
 pub fn draw(
     state: &mut State,
     frame: &RenderFrame,
@@ -491,6 +683,9 @@ pub fn draw(
     }
 
     let default_proj = state.projection;
+    let offscreen_started = Instant::now();
+    let offscreen_vertices = draw_offscreen_targets(state, frame, textures);
+    let offscreen_us = elapsed_us_since(offscreen_started);
     let threads = match state.thread_hint {
         Some(threads) if threads >= 1 => threads.min(state.available_threads),
         _ => state.available_threads,
@@ -499,10 +694,15 @@ pub fn draw(
     let stage_meshes = use_parallel && h.div_ceil(SOFTWARE_ROW_CHUNK) >= MIN_STAGE_MESH_STRIPES;
     let backend_prepare_started = Instant::now();
     ensure_worker_pool(state, threads)?;
+    let resolved_textures = ResolvedTextures {
+        external: textures,
+        targets: &state.offscreen_targets,
+    };
+    let software_frame = SoftwarePass::from(frame);
     prepare_objects(
-        frame,
+        software_frame,
         default_proj,
-        textures,
+        &resolved_textures,
         w,
         h,
         &mut state.prepared_objects,
@@ -521,7 +721,7 @@ pub fn draw(
     let fixed_vertices = state.prepared_objects.iter().fold(0u32, |sum, object| {
         sum.saturating_add(object.fixed_vertices())
     });
-    let backend_prepare_us = elapsed_us_since(backend_prepare_started);
+    let backend_prepare_us = elapsed_us_since(backend_prepare_started).saturating_add(offscreen_us);
 
     let backend_setup_started = Instant::now();
     if state.surface_resize_pending {
@@ -556,12 +756,12 @@ pub fn draw(
                     let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
                     let y_end = y_start + stripe.len() / w;
                     draw_rows(
-                        frame,
+                        software_frame,
                         prepared_objects,
                         Some(stripe_bins.stripe(chunk_index)),
                         prepared_mesh_triangles,
                         prepared_tmesh_triangles,
-                        textures,
+                        &resolved_textures,
                         w,
                         h,
                         y_start,
@@ -575,12 +775,12 @@ pub fn draw(
     } else {
         buffer.fill(clear);
         draw_rows(
-            frame,
+            software_frame,
             prepared_objects,
             None,
             prepared_mesh_triangles,
             prepared_tmesh_triangles,
-            textures,
+            &resolved_textures,
             w,
             h,
             0,
@@ -609,7 +809,7 @@ pub fn draw(
         .saturating_mul(3)
         .min(u32::MAX as usize) as u32;
     Ok(DrawStats {
-        vertices,
+        vertices: vertices.saturating_add(offscreen_vertices),
         present_us: elapsed_us_since(present_started),
         backend_setup_us,
         backend_prepare_us,
@@ -621,7 +821,7 @@ pub fn draw(
 
 #[allow(clippy::too_many_arguments)]
 fn prepare_objects(
-    frame: &RenderFrame,
+    frame: SoftwarePass<'_>,
     default_proj: Matrix4,
     textures: &(impl TextureLookup + Sync),
     width: usize,
@@ -641,7 +841,7 @@ fn prepare_objects(
     mesh_triangles.clear();
     tmesh_triangles.clear();
 
-    for op in &frame.ops {
+    for op in frame.ops {
         match *op {
             DrawOp::Sprite(run) => {
                 if textures.software_texture(run.texture_handle).is_none() {
@@ -797,7 +997,7 @@ fn prepare_objects(
 }
 
 fn draw_rows(
-    frame: &RenderFrame,
+    frame: SoftwarePass<'_>,
     prepared_objects: &[PreparedObject],
     stripe_items: Option<&[StripeItem]>,
     mesh_triangles: &[PreparedTriangle<ScreenVertexColor>],
@@ -880,7 +1080,7 @@ fn draw_rows(
 fn draw_prepared<'a>(
     prepared: &PreparedObject,
     rows_known_visible: bool,
-    frame: &RenderFrame,
+    frame: SoftwarePass<'_>,
     mesh_triangles: &[PreparedTriangle<ScreenVertexColor>],
     tmesh_triangles: &[PreparedTriangle<ScreenVertexTexColor>],
     textures: &'a (impl TextureLookup + Sync),
@@ -3424,7 +3624,7 @@ mod tests {
         let mut prepared_mesh = Vec::with_capacity(MESH_STAGE_VERTEX_CAP);
         let mut prepared_tmesh = Vec::with_capacity(MESH_STAGE_VERTEX_CAP);
         prepare_objects(
-            &frame,
+            (&frame).into(),
             fallback,
             &textures,
             WIDTH,
@@ -3445,7 +3645,7 @@ mod tests {
             &mut staged_pixels,
         );
         prepare_objects(
-            &frame,
+            (&frame).into(),
             fallback,
             &textures,
             WIDTH,
@@ -3491,7 +3691,7 @@ mod tests {
         let mut prepared_mesh = Vec::with_capacity(MESH_STAGE_VERTEX_CAP / 3);
         let mut prepared_tmesh = Vec::with_capacity(MESH_STAGE_VERTEX_CAP / 3);
         prepare_objects(
-            &frame,
+            (&frame).into(),
             Matrix4::IDENTITY,
             &textures,
             WIDTH,
@@ -3565,7 +3765,7 @@ mod tests {
         let tmesh_capacity = prepared_tmesh.capacity();
 
         prepare_objects(
-            &frame,
+            (&frame).into(),
             Matrix4::IDENTITY,
             &textures,
             WIDTH,
@@ -3610,7 +3810,7 @@ mod tests {
                 let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
                 let y_end = y_start + stripe.len() / WIDTH;
                 draw_rows(
-                    frame,
+                    frame.into(),
                     prepared,
                     None,
                     mesh_triangles,
@@ -3649,7 +3849,7 @@ mod tests {
                 let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
                 let y_end = y_start + stripe.len() / WIDTH;
                 draw_rows(
-                    frame,
+                    frame.into(),
                     prepared,
                     Some(bins.stripe(chunk_index)),
                     mesh_triangles,
@@ -3704,6 +3904,7 @@ mod tests {
         .into();
         RenderFrame {
             clear_color: [0.025, 0.05, 0.075, 1.0],
+            render_targets: Vec::new(),
             cameras: vec![ortho_for_window(WIDTH as u32, HEIGHT as u32)],
             sprite_instances: vec![
                 sprite([-30.0, 15.0], 0.17, 0.92),

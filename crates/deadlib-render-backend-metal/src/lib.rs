@@ -5,10 +5,11 @@ mod encoder_cache;
 use core_graphics_types::geometry::CGSize;
 use deadlib_render_core::{
     BlendMode, ClockDomainTrace, DrawOp, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
-    PresentModeTrace, PresentStats, RenderFrame, SamplerCache, SamplerDesc, SamplerFilter,
-    SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, TextureHandle, TexturedMeshBufferCache,
-    TexturedMeshInstanceRaw, TexturedMeshUploads, TexturedMeshVertex, Yuv420Upload,
-    draw_storage_stats, resolve_textured_meshes,
+    PresentModeTrace, PresentStats, RenderFrame, RenderTargetFrame, SamplerCache, SamplerDesc,
+    SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, TextureHandle,
+    TexturedMeshBufferCache, TexturedMeshInstanceRaw, TexturedMeshUploads, TexturedMeshVertex,
+    Yuv420Upload, draw_storage_stats, is_render_target_texture, resolve_textured_mesh_geometries,
+    resolve_textured_meshes,
 };
 use foreign_types::ForeignType;
 use glam::Mat4 as Matrix4;
@@ -177,6 +178,18 @@ struct CachedTMesh {
     vertex_count: u32,
 }
 
+struct OffscreenTarget {
+    handle: TextureHandle,
+    width: u32,
+    height: u32,
+    texture: Texture,
+    _depth: metal::Texture,
+    pass: FramePass,
+    frames: [FrameBuffers; FRAMES_IN_FLIGHT],
+    uploads: TexturedMeshUploads,
+    initialized: bool,
+}
+
 #[derive(Default)]
 struct CacheStats {
     hits: u64,
@@ -213,6 +226,7 @@ pub struct State {
     depth_enabled: DepthStencilState,
     depth: metal::Texture,
     render_pass: FramePass,
+    offscreen_targets: Vec<OffscreenTarget>,
     frames: [FrameBuffers; FRAMES_IN_FLIGHT],
     frame_index: usize,
     window_size: (u32, u32),
@@ -297,6 +311,7 @@ pub fn init(
         depth_enabled,
         depth,
         render_pass,
+        offscreen_targets: Vec::new(),
         frames,
         frame_index: 0,
         window_size,
@@ -520,6 +535,33 @@ fn draw_inner(
     }
 
     let prepare_started = Instant::now();
+    ensure_offscreen_targets(state, &frame.render_targets);
+    for (index, target_frame) in frame.render_targets.iter().enumerate() {
+        let State {
+            device,
+            cached_tmesh_slots,
+            cached_tmeshes,
+            cached_tmesh_bytes,
+            cache_stats,
+            offscreen_targets,
+            ..
+        } = state;
+        resolve_textured_mesh_geometries(
+            &target_frame.tmesh_geometries,
+            &mut offscreen_targets[index].uploads,
+            |key, vertices| {
+                ensure_cached_tmesh(
+                    device,
+                    cached_tmesh_slots,
+                    cached_tmeshes,
+                    cached_tmesh_bytes,
+                    cache_stats,
+                    key,
+                    vertices,
+                )
+            },
+        );
+    }
     {
         let device = &state.device;
         let slots = &mut state.cached_tmesh_slots;
@@ -552,6 +594,17 @@ fn draw_inner(
         slot.tmesh_instances
             .upload(&state.device, &frame.tmesh_instances);
     }
+    for (index, target_frame) in frame.render_targets.iter().enumerate() {
+        let target = &mut state.offscreen_targets[index];
+        let slot = &mut target.frames[slot_index];
+        slot.sprites
+            .upload(&state.device, &target_frame.sprite_instances);
+        slot.meshes
+            .upload(&state.device, &target_frame.mesh_vertices);
+        slot.tmeshes.upload(&state.device, &target.uploads.vertices);
+        slot.tmesh_instances
+            .upload(&state.device, &target_frame.tmesh_instances);
+    }
     stats.backend_upload_us = elapsed_us(upload_started);
 
     let acquire_started = Instant::now();
@@ -571,6 +624,45 @@ fn draw_inner(
     );
     let command = state.queue.new_command_buffer();
     command.set_label("DeadSync native Metal frame");
+    let mut offscreen_vertices = 0u32;
+    for (index, target_frame) in frame.render_targets.iter().enumerate() {
+        let target = &state.offscreen_targets[index];
+        target
+            .pass
+            .color
+            .set_load_action(if target_frame.preserve && target.initialized {
+                MTLLoadAction::Load
+            } else {
+                MTLLoadAction::Clear
+            });
+        configure_render_pass(
+            &target.pass.color,
+            target.texture.images.primary(),
+            [0.0; 4],
+        );
+        let target_encoder = command.new_render_command_encoder(&target.pass.descriptor);
+        clear_render_target(&target.pass.color);
+        target_encoder.set_label("DeadSync native Metal offscreen pass");
+        target_encoder.set_viewport(MTLViewport {
+            originX: 0.0,
+            originY: 0.0,
+            width: f64::from(target.width),
+            height: f64::from(target.height),
+            znear: 0.0,
+            zfar: 1.0,
+        });
+        target_encoder.set_front_facing_winding(MTLWinding::CounterClockwise);
+        offscreen_vertices = offscreen_vertices.saturating_add(record_offscreen_pass(
+            state,
+            target_encoder,
+            target_frame,
+            &target.frames[slot_index],
+            &target.uploads,
+            textures,
+        ));
+        target_encoder.end_encoding();
+        state.offscreen_targets[index].initialized = true;
+    }
     let encoder = command.new_render_command_encoder(&state.render_pass.descriptor);
     clear_render_target(&state.render_pass.color);
     encoder.set_label("DeadSync native Metal render pass");
@@ -592,7 +684,7 @@ fn draw_inner(
     for op in &frame.ops {
         match op {
             DrawOp::Sprite(run) => {
-                let Some(texture) = textures.metal_texture(run.texture_handle) else {
+                let Some(texture) = resolved_texture(state, textures, run.texture_handle) else {
                     continue;
                 };
                 let sprite_offset =
@@ -710,7 +802,7 @@ fn draw_inner(
                 if source.vertex_count() == 0 || run.instance_count == 0 {
                     continue;
                 }
-                let Some(texture) = textures.metal_texture(run.texture_handle) else {
+                let Some(texture) = resolved_texture(state, textures, run.texture_handle) else {
                     continue;
                 };
                 let instance_offset =
@@ -856,7 +948,7 @@ fn draw_inner(
         host_present_ns: state.completed_host_ns,
         calibration_error_ns: 0,
     };
-    stats.vertices = vertices_drawn;
+    stats.vertices = vertices_drawn.saturating_add(offscreen_vertices);
     Ok(stats)
 }
 
@@ -991,7 +1083,10 @@ fn build_pipeline(
         .ok_or_else(|| std::io::Error::other("Metal pipeline has no color attachment"))?;
     attachment.set_pixel_format(COLOR_FORMAT);
     attachment.set_write_mask(
-        MTLColorWriteMask::Red | MTLColorWriteMask::Green | MTLColorWriteMask::Blue,
+        MTLColorWriteMask::Red
+            | MTLColorWriteMask::Green
+            | MTLColorWriteMask::Blue
+            | MTLColorWriteMask::Alpha,
     );
     configure_blend(attachment, blend);
     device
@@ -1099,7 +1194,7 @@ fn configure_render_pass(
         f64::from(clear[0]),
         f64::from(clear[1]),
         f64::from(clear[2]),
-        1.0,
+        f64::from(clear[3]),
     ));
 }
 
@@ -1112,6 +1207,304 @@ fn set_depth_target(pass: &RenderPassDescriptorRef, depth: &TextureRef) {
     pass.depth_attachment()
         .expect("depth attachment")
         .set_texture(Some(depth));
+}
+
+fn create_offscreen_target(state: &mut State, pass: &RenderTargetFrame) -> OffscreenTarget {
+    let width = pass.width.max(1);
+    let height = pass.height.max(1);
+    let desc = TextureDescriptor::new();
+    desc.set_texture_type(MTLTextureType::D2);
+    desc.set_pixel_format(COLOR_FORMAT);
+    desc.set_width(u64::from(width));
+    desc.set_height(u64::from(height));
+    desc.set_storage_mode(MTLStorageMode::Private);
+    desc.set_usage(MTLTextureUsage::RenderTarget | MTLTextureUsage::ShaderRead);
+    let raw = state.device.new_texture(&desc);
+    let sampler_desc = SamplerDesc {
+        filter: SamplerFilter::Linear,
+        wrap: SamplerWrap::Clamp,
+        mipmaps: false,
+    };
+    let sampler = get_sampler(&state.device, &mut state.samplers, sampler_desc);
+    let repeat_sampler = get_sampler(
+        &state.device,
+        &mut state.samplers,
+        SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..sampler_desc
+        },
+    );
+    let id = state.next_texture_id;
+    state.next_texture_id = state.next_texture_id.wrapping_add(1).max(1);
+    let depth = create_depth_target(&state.device, width, height);
+    let target_pass = create_render_pass(&depth);
+    OffscreenTarget {
+        handle: pass.texture_handle,
+        width,
+        height,
+        texture: Texture {
+            id,
+            images: TextureImages::Rgba(raw),
+            sampler,
+            repeat_sampler,
+            mipmaps: false,
+        },
+        _depth: depth,
+        pass: target_pass,
+        frames: std::array::from_fn(|_| FrameBuffers::new(&state.device)),
+        uploads: TexturedMeshUploads::with_capacity(1024, 64),
+        initialized: false,
+    }
+}
+
+fn ensure_offscreen_targets(state: &mut State, passes: &[RenderTargetFrame]) {
+    let matches = state.offscreen_targets.len() == passes.len()
+        && state
+            .offscreen_targets
+            .iter()
+            .zip(passes)
+            .all(|(target, pass)| {
+                target.handle == pass.texture_handle
+                    && target.width == pass.width.max(1)
+                    && target.height == pass.height.max(1)
+            });
+    if matches {
+        return;
+    }
+    if !state.offscreen_targets.is_empty() {
+        wait_for_idle(state);
+    }
+    state.offscreen_targets.clear();
+    state.offscreen_targets.reserve(passes.len());
+    for pass in passes {
+        let target = create_offscreen_target(state, pass);
+        state.offscreen_targets.push(target);
+    }
+}
+
+fn resolved_texture<'a>(
+    state: &'a State,
+    textures: &'a impl TextureLookup,
+    handle: TextureHandle,
+) -> Option<&'a Texture> {
+    if is_render_target_texture(handle) {
+        state
+            .offscreen_targets
+            .iter()
+            .find(|target| target.handle == handle)
+            .map(|target| &target.texture)
+    } else {
+        textures.metal_texture(handle)
+    }
+}
+
+fn record_offscreen_pass(
+    state: &State,
+    encoder: &RenderCommandEncoderRef,
+    frame: &RenderTargetFrame,
+    buffers: &FrameBuffers,
+    uploads: &TexturedMeshUploads,
+    textures: &impl TextureLookup,
+) -> u32 {
+    let mut vertices_drawn = 0u32;
+    let mut cache = EncoderCache::default();
+    let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
+    for op in &frame.ops {
+        match *op {
+            DrawOp::Sprite(run) => {
+                let Some(texture) = resolved_texture(state, textures, run.texture_handle) else {
+                    continue;
+                };
+                let offset = run.instance_start as u64 * mem::size_of::<SpriteInstanceRaw>() as u64;
+                match cache.instance_buffer(DrawKind::Sprite) {
+                    BufferUpdate::Bind => {
+                        tmesh_buffer_cache.reset();
+                        encoder.set_vertex_buffer(0, Some(&buffers.sprites.raw), offset);
+                    }
+                    BufferUpdate::Offset => encoder.set_vertex_buffer_offset(0, offset),
+                }
+                if cache.cull_changed(CullMode::Back) {
+                    encoder.set_cull_mode(MTLCullMode::Back);
+                }
+                if cache.depth_changed(false) {
+                    encoder.set_depth_stencil_state(&state.depth_disabled);
+                }
+                let yuv420 = texture.images.is_yuv420();
+                if cache.pipeline_changed(DrawKind::Sprite, blend_key(run.blend), yuv420) {
+                    encoder.set_render_pipeline_state(if yuv420 {
+                        state.yuv_pipelines.get(run.blend)
+                    } else {
+                        state.sprite_pipelines.get(run.blend)
+                    });
+                }
+                set_camera(
+                    encoder,
+                    1,
+                    0,
+                    run.camera,
+                    &frame.cameras,
+                    state.projection,
+                    &mut cache,
+                );
+                if cache.texture_changed(texture.id) {
+                    match &texture.images {
+                        TextureImages::Rgba(raw) => {
+                            encoder.set_fragment_texture(0, Some(raw));
+                            encoder.set_fragment_texture(1, None);
+                            encoder.set_fragment_texture(2, None);
+                        }
+                        TextureImages::Yuv420 {
+                            planes: [y, u, v],
+                            levels,
+                            coeffs,
+                        } => {
+                            encoder.set_fragment_texture(0, Some(y));
+                            encoder.set_fragment_texture(1, Some(u));
+                            encoder.set_fragment_texture(2, Some(v));
+                            encoder.set_fragment_bytes(
+                                0,
+                                mem::size_of_val(levels) as u64,
+                                levels.as_ptr().cast(),
+                            );
+                            encoder.set_fragment_bytes(
+                                1,
+                                mem::size_of_val(coeffs) as u64,
+                                coeffs.as_ptr().cast(),
+                            );
+                        }
+                    }
+                }
+                if cache.sampler_changed(texture.id, false) {
+                    encoder.set_fragment_sampler_state(0, Some(&texture.sampler));
+                }
+                encoder.draw_primitives_instanced(
+                    MTLPrimitiveType::Triangle,
+                    0,
+                    6,
+                    run.instance_count as u64,
+                );
+                vertices_drawn = vertices_drawn.saturating_add(4 * run.instance_count);
+            }
+            DrawOp::Mesh(run) => {
+                if run.vertex_count == 0 {
+                    continue;
+                }
+                if cache.kind_changed(DrawKind::Mesh) {
+                    tmesh_buffer_cache.reset();
+                    encoder.set_vertex_buffer(0, Some(&buffers.meshes.raw), 0);
+                }
+                if cache.cull_changed(CullMode::None) {
+                    encoder.set_cull_mode(MTLCullMode::None);
+                }
+                if cache.depth_changed(false) {
+                    encoder.set_depth_stencil_state(&state.depth_disabled);
+                }
+                if cache.pipeline_changed(DrawKind::Mesh, blend_key(run.blend), false) {
+                    encoder.set_render_pipeline_state(state.mesh_pipelines.get(run.blend));
+                }
+                set_camera(
+                    encoder,
+                    1,
+                    0,
+                    run.camera,
+                    &frame.cameras,
+                    state.projection,
+                    &mut cache,
+                );
+                encoder.draw_primitives(
+                    MTLPrimitiveType::Triangle,
+                    run.vertex_start as u64,
+                    run.vertex_count as u64,
+                );
+                vertices_drawn = vertices_drawn.saturating_add(run.vertex_count);
+            }
+            DrawOp::TexturedMesh(run) => {
+                let Some(source) = uploads.source(run.geometry) else {
+                    continue;
+                };
+                if source.vertex_count() == 0 || run.instance_count == 0 {
+                    continue;
+                }
+                let Some(texture) = resolved_texture(state, textures, run.texture_handle) else {
+                    continue;
+                };
+                let instance_offset =
+                    run.instance_start as u64 * mem::size_of::<TexturedMeshInstanceRaw>() as u64;
+                match cache.instance_buffer(DrawKind::TexturedMesh) {
+                    BufferUpdate::Bind => {
+                        tmesh_buffer_cache.reset();
+                        encoder.set_vertex_buffer(
+                            1,
+                            Some(&buffers.tmesh_instances.raw),
+                            instance_offset,
+                        );
+                    }
+                    BufferUpdate::Offset => encoder.set_vertex_buffer_offset(1, instance_offset),
+                }
+                if cache.pipeline_changed(DrawKind::TexturedMesh, blend_key(run.blend), false) {
+                    encoder.set_render_pipeline_state(state.tmesh_pipelines.get(run.blend));
+                }
+                if cache.depth_changed(run.depth_test) {
+                    encoder.set_depth_stencil_state(if run.depth_test {
+                        &state.depth_enabled
+                    } else {
+                        &state.depth_disabled
+                    });
+                }
+                let cull = if run.depth_test {
+                    CullMode::Back
+                } else {
+                    CullMode::None
+                };
+                if cache.cull_changed(cull) {
+                    encoder.set_cull_mode(if run.depth_test {
+                        MTLCullMode::Back
+                    } else {
+                        MTLCullMode::None
+                    });
+                }
+                set_camera(
+                    encoder,
+                    2,
+                    1,
+                    run.camera,
+                    &frame.cameras,
+                    state.projection,
+                    &mut cache,
+                );
+                if cache.texture_changed(texture.id) {
+                    encoder.set_fragment_texture(0, Some(texture.images.primary()));
+                }
+                if cache.sampler_changed(texture.id, true) {
+                    encoder.set_fragment_sampler_state(0, Some(&texture.repeat_sampler));
+                }
+                if tmesh_buffer_cache.update_required(source) {
+                    if let Some(buffer_key) = source.buffer_key() {
+                        let Some(index) = cached_tmesh_index(buffer_key) else {
+                            tmesh_buffer_cache.reset();
+                            continue;
+                        };
+                        let Some(cached) = state.cached_tmeshes.get(index) else {
+                            tmesh_buffer_cache.reset();
+                            continue;
+                        };
+                        encoder.set_vertex_buffer(0, Some(&cached.buffer), 0);
+                    } else {
+                        encoder.set_vertex_buffer(0, Some(&buffers.tmeshes.raw), 0);
+                    }
+                }
+                encoder.draw_primitives_instanced(
+                    MTLPrimitiveType::Triangle,
+                    source.vertex_start() as u64,
+                    source.vertex_count() as u64,
+                    run.instance_count as u64,
+                );
+                vertices_drawn = vertices_drawn
+                    .saturating_add((source.vertex_count() / 3).saturating_mul(run.instance_count));
+            }
+        }
+    }
+    vertices_drawn
 }
 
 fn create_sampler(device: &DeviceRef, sampler: SamplerDesc) -> SamplerState {

@@ -11,6 +11,7 @@ fn render_fixture() -> RenderFrame {
     let geometry: Arc<[TexturedMeshVertex]> = Arc::from([TexturedMeshVertex::default(); 3]);
     RenderFrame {
         clear_color: [0.1, 0.2, 0.3, 1.0],
+        render_targets: Vec::new(),
         cameras: vec![Mat4::IDENTITY],
         sprite_instances: vec![sprite_instance()],
         mesh_vertices: vec![MeshVertex::default(); 3],

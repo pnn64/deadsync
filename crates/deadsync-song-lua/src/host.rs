@@ -665,6 +665,7 @@ pub fn install_manager_globals(lua: &Lua, context: &SongLuaCompileContext) -> ml
             display_aspect_ratio,
             display_width,
             display_height,
+            context.video_renderers.as_str(),
         )?,
     )?;
     globals.set("DISPLAY", create_display_table(lua, context)?)?;

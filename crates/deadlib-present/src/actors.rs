@@ -208,6 +208,10 @@ pub enum SpriteSource {
         handle: TextureHandle,
         generation: u64,
     },
+    RenderTarget {
+        handle: TextureHandle,
+        size: [f32; 2],
+    },
     Texture(Arc<str>),
     Solid,
 }
@@ -225,6 +229,7 @@ impl SpriteSource {
             Self::TextureStaticHandle { key, .. } => Some(key),
             Self::TextureHandle { key, .. } => Some(key.as_ref()),
             Self::ArenaTextureHandle { .. } => None,
+            Self::RenderTarget { .. } => None,
             Self::Texture(key) => Some(key.as_ref()),
             Self::Solid => None,
         }
@@ -478,6 +483,17 @@ pub enum Actor {
         tint: [f32; 4],
         blend: Option<BlendMode>,
         visible: bool,
+    },
+
+    /// Draws `children` into a texture before the main presentation pass.
+    /// Placement transforms do not cross this boundary, matching
+    /// StepMania/ITGmania ActorFrameTexture semantics.
+    RenderTarget {
+        texture_handle: TextureHandle,
+        size: [u32; 2],
+        depth: bool,
+        preserve: bool,
+        children: Arc<[Self]>,
     },
 
     /// Camera wrapper: renders all child actors using the provided view-projection matrix.
@@ -738,6 +754,7 @@ impl Actor {
                 children.iter().all(Self::retained_static)
             }
             Self::SharedFrame { children, .. } => children.iter().all(Self::retained_static),
+            Self::RenderTarget { .. } => false,
             Self::Shadow { child, .. } => child.retained_static(),
             Self::Mesh { .. }
             | Self::ReusableMesh { .. }
@@ -797,6 +814,7 @@ impl Actor {
                 tint[3] *= alpha;
             }
             Self::RetainedFrame { tint, .. } => tint[3] *= alpha,
+            Self::RenderTarget { .. } => {}
             Self::Camera { children, .. } => {
                 for child in children {
                     child.mul_alpha(alpha);
@@ -867,6 +885,12 @@ pub fn actor_tree_stats(actors: &[Actor]) -> ActorTreeStats {
             Actor::RetainedFrame { frame, .. } => {
                 stats.frames = stats.frames.saturating_add(1);
                 for child in frame.children() {
+                    visit(stats, child);
+                }
+            }
+            Actor::RenderTarget { children, .. } => {
+                stats.frames = stats.frames.saturating_add(1);
+                for child in children.iter() {
                     visit(stats, child);
                 }
             }

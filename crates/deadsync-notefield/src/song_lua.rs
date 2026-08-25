@@ -388,6 +388,7 @@ pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: 
                 visible,
             }
         }
+        actor @ Actor::RenderTarget { .. } => actor,
         Actor::Camera {
             view_proj,
             children,

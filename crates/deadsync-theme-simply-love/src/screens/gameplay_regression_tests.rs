@@ -720,7 +720,21 @@ mod tests {
             .len()
             .wrapping_add(render.sprite_instances.len())
             .wrapping_add(render.mesh_vertices.len())
-            .wrapping_add(render.tmesh_instances.len());
+            .wrapping_add(render.tmesh_instances.len())
+            .wrapping_add(
+                render
+                    .render_targets
+                    .iter()
+                    .map(|target| {
+                        target
+                            .ops
+                            .len()
+                            .wrapping_add(target.sprite_instances.len())
+                            .wrapping_add(target.mesh_vertices.len())
+                            .wrapping_add(target.tmesh_instances.len())
+                    })
+                    .sum::<usize>(),
+            );
         compose_scratch.recycle_frame(&mut render);
         actors.clear();
         checksum
@@ -762,6 +776,12 @@ mod tests {
                 .ops
                 .iter()
                 .any(|op| matches!(op, DrawOp::TexturedMesh(_)))
+                || expected.render_targets.iter().any(|target| {
+                    target
+                        .ops
+                        .iter()
+                        .any(|op| matches!(op, DrawOp::TexturedMesh(_)))
+                })
         );
         assert_eq!(compare_render_frames(&expected, &actual), Ok(()));
         compose_scratch.recycle_frame(&mut actual);
@@ -3024,7 +3044,7 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn single_source_aft_note_field_uses_repeatable_direct_segment() {
+    fn single_source_aft_note_field_uses_repeatable_target_pass() {
         let simfile = write_direct_aft_note_field_proxy_fixture();
         with_session(
             profile_data::PlayStyle::Single,
@@ -3059,7 +3079,7 @@ return Def.ActorFrame{
                     123.0,
                     crate::views::SimplyLoveVisualPolicyView::default(),
                 );
-                assert_eq!(segments.direct_field_proxy_count(&state), 1);
+                assert_eq!(segments.direct_field_proxy_count(&state), 0);
                 let actor_segments = segments.segments(&state, &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
@@ -3075,6 +3095,13 @@ return Def.ActorFrame{
                     state.actor_resources(),
                 );
                 assert!(warm.ops.iter().any(|op| matches!(op, DrawOp::Sprite(_))));
+                assert_eq!(warm.render_targets.len(), 1);
+                assert!(
+                    warm.render_targets[0]
+                        .ops
+                        .iter()
+                        .any(|op| matches!(op, DrawOp::Sprite(_)))
+                );
                 compose_scratch.recycle_frame(&mut warm);
                 let _ = assert_repeatable_frame(
                     &mut state,
@@ -3089,7 +3116,7 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn single_source_aft_player_uses_repeatable_paired_segment() {
+    fn single_source_aft_player_uses_repeatable_target_pass() {
         let simfile = write_direct_aft_player_proxy_fixture();
         with_session(
             profile_data::PlayStyle::Single,
@@ -3125,8 +3152,8 @@ return Def.ActorFrame{
                     123.0,
                     crate::views::SimplyLoveVisualPolicyView::default(),
                 );
-                assert_eq!(segments.direct_proxy_count(), 1);
-                assert_eq!(segments.direct_field_proxy_count(&state), 1);
+                assert_eq!(segments.direct_proxy_count(), 0);
+                assert_eq!(segments.direct_field_proxy_count(&state), 0);
                 let actor_segments = segments.segments(&state, &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
@@ -3142,6 +3169,8 @@ return Def.ActorFrame{
                     state.actor_resources(),
                 );
                 assert!(warm.ops.iter().any(|op| matches!(op, DrawOp::Sprite(_))));
+                assert_eq!(warm.render_targets.len(), 1);
+                assert!(!warm.render_targets[0].ops.is_empty());
                 compose_scratch.recycle_frame(&mut warm);
                 let _ = assert_repeatable_frame(
                     &mut state,

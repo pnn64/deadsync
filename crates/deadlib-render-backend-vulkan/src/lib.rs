@@ -6,11 +6,11 @@ use ash::{
 };
 use deadlib_render_core::{
     BlendMode, CameraUploadCache, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, MeshVertex,
-    PresentModePolicy, PresentModeTrace, PresentStats, RenderFrame, SamplerCache, SamplerDesc,
-    SamplerFilter, SamplerWrap, SpriteInstanceRaw as InstanceData, TMeshCacheKey, TextureHandle,
-    TexturedMeshBufferCache, TexturedMeshInstanceRaw as TexturedMeshInstanceGpu,
-    TexturedMeshUploads, TexturedMeshVertex, Yuv420Upload, draw_storage_stats,
-    resolve_textured_meshes,
+    PresentModePolicy, PresentModeTrace, PresentStats, RenderFrame, RenderTargetFrame,
+    SamplerCache, SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw as InstanceData,
+    TMeshCacheKey, TextureHandle, TexturedMeshBufferCache,
+    TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshUploads, TexturedMeshVertex,
+    Yuv420Upload, draw_storage_stats, is_render_target_texture, resolve_textured_mesh_geometries,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -159,6 +159,15 @@ struct CachedTMeshGeom {
     vertex_count: u32,
 }
 
+struct OffscreenTarget {
+    handle: TextureHandle,
+    width: u32,
+    height: u32,
+    texture: Texture,
+    framebuffer: vk::Framebuffer,
+    initialized: bool,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum InstanceBinding {
     Sprite,
@@ -274,6 +283,9 @@ pub struct State {
     command_pool: vk::CommandPool,
     swapchain_resources: SwapchainResources,
     render_pass: vk::RenderPass,
+    offscreen_clear_pass: vk::RenderPass,
+    offscreen_preserve_pass: vk::RenderPass,
+    offscreen_targets: Vec<OffscreenTarget>,
     sprite_pipeline_layout: vk::PipelineLayout,
     sprite_pipeline: vk::Pipeline,
     yuv_pipeline_layout: vk::PipelineLayout,
@@ -315,6 +327,7 @@ pub struct State {
     tmesh_capacity_instances: usize,       // total textured mesh instances across ring
     per_frame_stride_tmesh_instances: usize, // textured mesh instances reserved per frame
     uploads: TexturedMeshUploads,
+    target_uploads: Vec<TexturedMeshUploads>,
     cached_tmesh: DenseSlotMap<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     // Render-thread-only, renderer-lifetime upload storage, warmed by texture
@@ -379,6 +392,16 @@ pub fn init(
     )?;
     let render_pass =
         create_render_pass(device.as_ref().unwrap(), swapchain_resources.format.format)?;
+    let offscreen_clear_pass = create_offscreen_render_pass(
+        device.as_ref().unwrap(),
+        swapchain_resources.format.format,
+        false,
+    )?;
+    let offscreen_preserve_pass = create_offscreen_render_pass(
+        device.as_ref().unwrap(),
+        swapchain_resources.format.format,
+        true,
+    )?;
     recreate_framebuffers(
         device.as_ref().unwrap(),
         &mut swapchain_resources,
@@ -452,6 +475,9 @@ pub fn init(
         command_pool,
         swapchain_resources,
         render_pass,
+        offscreen_clear_pass,
+        offscreen_preserve_pass,
+        offscreen_targets: Vec::new(),
         sprite_pipeline_layout,
         sprite_pipeline,
         yuv_pipeline_layout,
@@ -493,6 +519,7 @@ pub fn init(
         tmesh_capacity_instances: 0,
         per_frame_stride_tmesh_instances: 0,
         uploads: TexturedMeshUploads::with_capacity(1024, 64),
+        target_uploads: Vec::new(),
         cached_tmesh: DenseSlotMap::with_capacity(256),
         cached_tmesh_bytes: 0,
         pending_tex_upload_cmd: None,
@@ -1969,6 +1996,431 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
         .ok_or_else(|| std::io::Error::other("No captured screenshot frame available").into())
 }
 
+#[derive(Clone, Copy)]
+struct VulkanPass<'a> {
+    cameras: &'a [Matrix4],
+    sprite_instances: &'a [InstanceData],
+    mesh_vertices: &'a [MeshVertex],
+    tmesh_instances: &'a [TexturedMeshInstanceGpu],
+    ops: &'a [DrawOp],
+}
+
+impl<'a> From<&'a RenderFrame> for VulkanPass<'a> {
+    fn from(frame: &'a RenderFrame) -> Self {
+        Self {
+            cameras: &frame.cameras,
+            sprite_instances: &frame.sprite_instances,
+            mesh_vertices: &frame.mesh_vertices,
+            tmesh_instances: &frame.tmesh_instances,
+            ops: &frame.ops,
+        }
+    }
+}
+
+impl<'a> From<&'a RenderTargetFrame> for VulkanPass<'a> {
+    fn from(frame: &'a RenderTargetFrame) -> Self {
+        Self {
+            cameras: &frame.cameras,
+            sprite_instances: &frame.sprite_instances,
+            mesh_vertices: &frame.mesh_vertices,
+            tmesh_instances: &frame.tmesh_instances,
+            ops: &frame.ops,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+struct VulkanPassOffsets {
+    sprite: u32,
+    mesh: u32,
+    tmesh: u32,
+    tmesh_instance: u32,
+}
+
+fn resolved_texture<'a>(
+    state: &'a State,
+    textures: &'a impl TextureLookup,
+    handle: TextureHandle,
+) -> Option<&'a Texture> {
+    if is_render_target_texture(handle) {
+        state
+            .offscreen_targets
+            .iter()
+            .find(|target| target.handle == handle)
+            .map(|target| &target.texture)
+    } else {
+        textures.vulkan_texture(handle)
+    }
+}
+
+fn record_render_pass(
+    state: &State,
+    cmd: vk::CommandBuffer,
+    pass: VulkanPass<'_>,
+    uploads: &TexturedMeshUploads,
+    textures: &impl TextureLookup,
+    render_pass: vk::RenderPass,
+    framebuffer: vk::Framebuffer,
+    extent: vk::Extent2D,
+    clear_color: [f32; 4],
+    offsets: VulkanPassOffsets,
+) -> u32 {
+    let device = state.device.as_ref().unwrap();
+    let clear_value = vk::ClearValue {
+        color: vk::ClearColorValue {
+            float32: clear_color,
+        },
+    };
+    let rp_info = vk::RenderPassBeginInfo::default()
+        .render_pass(render_pass)
+        .framebuffer(framebuffer)
+        .render_area(vk::Rect2D {
+            offset: vk::Offset2D::default(),
+            extent,
+        })
+        .clear_values(std::slice::from_ref(&clear_value));
+    // SAFETY: the command buffer is recording; all render resources and ring
+    // slices referenced here stay live through queue submission and its fence.
+    unsafe {
+        device.cmd_begin_render_pass(cmd, &rp_info, vk::SubpassContents::INLINE);
+        device.cmd_set_viewport(
+            cmd,
+            0,
+            &[vk::Viewport {
+                x: 0.0,
+                y: extent.height as f32,
+                width: extent.width as f32,
+                height: -(extent.height as f32),
+                min_depth: 0.0,
+                max_depth: 1.0,
+            }],
+        );
+        device.cmd_set_scissor(
+            cmd,
+            0,
+            &[vk::Rect2D {
+                offset: vk::Offset2D::default(),
+                extent,
+            }],
+        );
+
+        enum Bound {
+            None,
+            Sprite,
+            YuvSprite,
+            Mesh,
+            TexturedMesh,
+        }
+        let mut bound = Bound::None;
+        let mut bindings = VertexBindingCache::default();
+        let mut last_set = vk::DescriptorSet::null();
+        let mut last_camera = CameraUploadCache::default();
+        let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
+        let mut vertices_drawn = 0u32;
+        for op in pass.ops {
+            match *op {
+                DrawOp::Sprite(run) => {
+                    let Some(texture) = resolved_texture(state, textures, run.texture_handle)
+                    else {
+                        continue;
+                    };
+                    let set = texture.descriptor_set;
+                    let yuv420 = texture.images.is_yuv420();
+                    let pipeline_bound = matches!(bound, Bound::YuvSprite) == yuv420
+                        && matches!(bound, Bound::Sprite | Bound::YuvSprite);
+                    if !pipeline_bound {
+                        device.cmd_bind_pipeline(
+                            cmd,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            if yuv420 {
+                                state.yuv_pipeline
+                            } else {
+                                state.sprite_pipeline
+                            },
+                        );
+                        let vertex = state.vertex_buffer.as_ref().unwrap().buffer;
+                        let instances = state.instance_ring.as_ref().unwrap().buffer;
+                        if bindings.instance_required(InstanceBinding::Sprite) {
+                            device.cmd_bind_vertex_buffers(cmd, 0, &[vertex, instances], &[0, 0]);
+                        } else {
+                            device.cmd_bind_vertex_buffers(cmd, 0, &[vertex], &[0]);
+                        }
+                        if bindings.index_required() {
+                            device.cmd_bind_index_buffer(
+                                cmd,
+                                state.index_buffer.as_ref().unwrap().buffer,
+                                0,
+                                vk::IndexType::UINT16,
+                            );
+                        }
+                        bound = if yuv420 {
+                            Bound::YuvSprite
+                        } else {
+                            Bound::Sprite
+                        };
+                        last_camera = CameraUploadCache::default();
+                        last_set = vk::DescriptorSet::null();
+                        tmesh_buffer_cache.reset();
+                    }
+                    if last_camera.update_required(run.camera) {
+                        let projection = pass
+                            .cameras
+                            .get(run.camera as usize)
+                            .copied()
+                            .unwrap_or(state.projection);
+                        let push = ProjPush {
+                            proj: projection.to_cols_array_2d(),
+                        };
+                        device.cmd_push_constants(
+                            cmd,
+                            if yuv420 {
+                                state.yuv_pipeline_layout
+                            } else {
+                                state.sprite_pipeline_layout
+                            },
+                            vk::ShaderStageFlags::VERTEX,
+                            0,
+                            bytemuck::bytes_of(&push),
+                        );
+                    }
+                    if last_set != set {
+                        if let TextureImages::Yuv420 { levels, coeffs, .. } = &texture.images {
+                            let conversion = YuvPush {
+                                levels: *levels,
+                                coeffs: *coeffs,
+                            };
+                            device.cmd_push_constants(
+                                cmd,
+                                state.yuv_pipeline_layout,
+                                vk::ShaderStageFlags::FRAGMENT,
+                                std::mem::size_of::<ProjPush>() as u32,
+                                bytemuck::bytes_of(&conversion),
+                            );
+                        }
+                        device.cmd_bind_descriptor_sets(
+                            cmd,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            if yuv420 {
+                                state.yuv_pipeline_layout
+                            } else {
+                                state.sprite_pipeline_layout
+                            },
+                            0,
+                            &[set],
+                            &[],
+                        );
+                        last_set = set;
+                    }
+                    device.cmd_draw_indexed(
+                        cmd,
+                        6,
+                        run.instance_count,
+                        0,
+                        0,
+                        offsets.sprite + run.instance_start,
+                    );
+                    vertices_drawn = vertices_drawn.saturating_add(4 * run.instance_count);
+                }
+                DrawOp::Mesh(run) => {
+                    if !matches!(bound, Bound::Mesh) {
+                        device.cmd_bind_pipeline(
+                            cmd,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            state.mesh_pipeline,
+                        );
+                        device.cmd_bind_vertex_buffers(
+                            cmd,
+                            0,
+                            &[state.mesh_ring.as_ref().unwrap().buffer],
+                            &[0],
+                        );
+                        bound = Bound::Mesh;
+                        tmesh_buffer_cache.reset();
+                    }
+                    if last_camera.update_required(run.camera) {
+                        let projection = pass
+                            .cameras
+                            .get(run.camera as usize)
+                            .copied()
+                            .unwrap_or(state.projection);
+                        let push = ProjPush {
+                            proj: projection.to_cols_array_2d(),
+                        };
+                        device.cmd_push_constants(
+                            cmd,
+                            state.mesh_pipeline_layout,
+                            vk::ShaderStageFlags::VERTEX,
+                            0,
+                            bytemuck::bytes_of(&push),
+                        );
+                    }
+                    device.cmd_draw(cmd, run.vertex_count, 1, offsets.mesh + run.vertex_start, 0);
+                    vertices_drawn = vertices_drawn.saturating_add(run.vertex_count);
+                }
+                DrawOp::TexturedMesh(run) => {
+                    let Some(source) = uploads.source(run.geometry) else {
+                        continue;
+                    };
+                    let Some(set) = resolved_texture(state, textures, run.texture_handle)
+                        .map(|texture| texture.descriptor_set_repeat)
+                    else {
+                        continue;
+                    };
+                    if !matches!(bound, Bound::TexturedMesh) {
+                        device.cmd_bind_pipeline(
+                            cmd,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            state.textured_mesh_pipeline,
+                        );
+                        if bindings.instance_required(InstanceBinding::TexturedMesh) {
+                            device.cmd_bind_vertex_buffers(
+                                cmd,
+                                1,
+                                &[state.tmesh_instance_ring.as_ref().unwrap().buffer],
+                                &[0],
+                            );
+                        }
+                        bound = Bound::TexturedMesh;
+                        last_set = vk::DescriptorSet::null();
+                        tmesh_buffer_cache.reset();
+                    }
+                    if tmesh_buffer_cache.update_required(source) {
+                        let buffer = if let Some(buffer_key) = source.buffer_key() {
+                            let Some(entry) = state.cached_tmesh.get_slot(buffer_key) else {
+                                tmesh_buffer_cache.reset();
+                                continue;
+                            };
+                            entry.buffer.buffer
+                        } else {
+                            let Some(buffer) = state.tmesh_ring.as_ref().map(|ring| ring.buffer)
+                            else {
+                                continue;
+                            };
+                            buffer
+                        };
+                        device.cmd_bind_vertex_buffers(cmd, 0, &[buffer], &[0]);
+                    }
+                    if last_camera.update_required(run.camera) {
+                        let projection = pass
+                            .cameras
+                            .get(run.camera as usize)
+                            .copied()
+                            .unwrap_or(state.projection);
+                        let push = ProjPush {
+                            proj: projection.to_cols_array_2d(),
+                        };
+                        device.cmd_push_constants(
+                            cmd,
+                            state.textured_mesh_pipeline_layout,
+                            vk::ShaderStageFlags::VERTEX,
+                            0,
+                            bytemuck::bytes_of(&push),
+                        );
+                    }
+                    if last_set != set {
+                        device.cmd_bind_descriptor_sets(
+                            cmd,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            state.textured_mesh_pipeline_layout,
+                            0,
+                            &[set],
+                            &[],
+                        );
+                        last_set = set;
+                    }
+                    let first_vertex = if source.buffer_key().is_some() {
+                        0
+                    } else {
+                        offsets.tmesh + source.vertex_start()
+                    };
+                    device.cmd_draw(
+                        cmd,
+                        source.vertex_count(),
+                        run.instance_count,
+                        first_vertex,
+                        offsets.tmesh_instance + run.instance_start,
+                    );
+                    vertices_drawn = vertices_drawn.saturating_add(
+                        (source.vertex_count() / 3).saturating_mul(run.instance_count),
+                    );
+                }
+            }
+        }
+        device.cmd_end_render_pass(cmd);
+        vertices_drawn
+    }
+}
+
+fn resolve_vulkan_geometries(
+    instance: &Instance,
+    device: &Device,
+    pdevice: vk::PhysicalDevice,
+    cached_tmesh: &mut DenseSlotMap<CachedTMeshGeom>,
+    cached_tmesh_bytes: &mut usize,
+    geometries: &[deadlib_render_core::TexturedMeshGeometry],
+    uploads: &mut TexturedMeshUploads,
+) {
+    resolve_textured_mesh_geometries(geometries, uploads, |cache_key, vertices| {
+        match ensure_cached_tmesh(
+            instance,
+            device,
+            pdevice,
+            cached_tmesh,
+            cached_tmesh_bytes,
+            cache_key,
+            vertices,
+        ) {
+            Ok(buffer_key) => buffer_key,
+            Err(error) => {
+                warn!("Failed to cache Vulkan textured mesh {cache_key:#x}: {error}");
+                None
+            }
+        }
+    });
+}
+
+fn upload_vulkan_pass(
+    state: &State,
+    pass: VulkanPass<'_>,
+    uploads: &TexturedMeshUploads,
+    offsets: VulkanPassOffsets,
+) {
+    // SAFETY: capacity checks reserve the sum of every pass before this runs;
+    // each offset identifies a disjoint slice in the current fenced frame.
+    unsafe {
+        if !pass.sprite_instances.is_empty() {
+            std::ptr::copy_nonoverlapping(
+                pass.sprite_instances.as_ptr(),
+                state.instance_ring_ptr.add(offsets.sprite as usize),
+                pass.sprite_instances.len(),
+            );
+        }
+        if !pass.mesh_vertices.is_empty() {
+            std::ptr::copy_nonoverlapping(
+                pass.mesh_vertices.as_ptr(),
+                state.mesh_ring_ptr.add(offsets.mesh as usize),
+                pass.mesh_vertices.len(),
+            );
+        }
+        if !uploads.vertices.is_empty() {
+            std::ptr::copy_nonoverlapping(
+                uploads.vertices.as_ptr(),
+                state.tmesh_ring_ptr.add(offsets.tmesh as usize),
+                uploads.vertices.len(),
+            );
+        }
+        if !pass.tmesh_instances.is_empty() {
+            std::ptr::copy_nonoverlapping(
+                pass.tmesh_instances.as_ptr(),
+                state
+                    .tmesh_instance_ring_ptr
+                    .add(offsets.tmesh_instance as usize),
+                pass.tmesh_instances.len(),
+            );
+        }
+    }
+}
+
 pub fn draw(
     state: &mut State,
     frame: &RenderFrame,
@@ -1994,58 +2446,92 @@ pub fn draw(
     stats.present_stats.refresh_ns = state.present_telemetry.refresh_ns;
 
     let backend_prepare_started = Instant::now();
-    {
-        let uploads = &mut state.uploads;
-        let instance = &state.instance;
+    ensure_offscreen_targets(state, &frame.render_targets)?;
+    for (index, target) in frame.render_targets.iter().enumerate() {
         let device = Arc::clone(state.device.as_ref().unwrap());
-        let pdevice = state.pdevice;
-        let cached_tmesh = &mut state.cached_tmesh;
-        let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
-        resolve_textured_meshes(
-            frame,
+        let State {
+            instance,
+            pdevice,
+            cached_tmesh,
+            cached_tmesh_bytes,
+            target_uploads,
+            ..
+        } = state;
+        resolve_vulkan_geometries(
+            instance,
+            &device,
+            *pdevice,
+            cached_tmesh,
+            cached_tmesh_bytes,
+            &target.tmesh_geometries,
+            &mut target_uploads[index],
+        );
+    }
+    {
+        let device = Arc::clone(state.device.as_ref().unwrap());
+        let State {
+            instance,
+            pdevice,
+            cached_tmesh,
+            cached_tmesh_bytes,
             uploads,
-            |cache_key, vertices| match ensure_cached_tmesh(
-                instance,
-                device.as_ref(),
-                pdevice,
-                cached_tmesh,
-                cached_tmesh_bytes,
-                cache_key,
-                vertices,
-            ) {
-                Ok(buffer_key) => buffer_key,
-                Err(e) => {
-                    warn!("Failed to cache Vulkan textured mesh {cache_key:#x}: {e}");
-                    None
-                }
-            },
+            ..
+        } = state;
+        resolve_vulkan_geometries(
+            instance,
+            &device,
+            *pdevice,
+            cached_tmesh,
+            cached_tmesh_bytes,
+            &frame.tmesh_geometries,
+            uploads,
         );
         stats.storage = draw_storage_stats(frame, Some(uploads));
     }
     stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
 
-    let needed_instances = frame.sprite_instances.len();
-    let needed_mesh_vertices = frame.mesh_vertices.len();
-    let needed_tmesh_vertices = state.uploads.vertices.len();
-    let needed_tmesh_instances = frame.tmesh_instances.len();
+    let needed_instances = frame.sprite_instances.len()
+        + frame
+            .render_targets
+            .iter()
+            .map(|target| target.sprite_instances.len())
+            .sum::<usize>();
+    let needed_mesh_vertices = frame.mesh_vertices.len()
+        + frame
+            .render_targets
+            .iter()
+            .map(|target| target.mesh_vertices.len())
+            .sum::<usize>();
+    let needed_tmesh_vertices = state.uploads.vertices.len()
+        + state
+            .target_uploads
+            .iter()
+            .map(|uploads| uploads.vertices.len())
+            .sum::<usize>();
+    let needed_tmesh_instances = frame.tmesh_instances.len()
+        + frame
+            .render_targets
+            .iter()
+            .map(|target| target.tmesh_instances.len())
+            .sum::<usize>();
 
     let backend_upload_started = Instant::now();
-    let base_first_instance = if needed_instances > 0 {
+    let ring_first_instance = if needed_instances > 0 {
         Some(ensure_instance_ring_capacity(state, needed_instances)?)
     } else {
         None
     };
-    let base_first_vertex = if needed_mesh_vertices > 0 {
+    let ring_first_vertex = if needed_mesh_vertices > 0 {
         Some(ensure_mesh_ring_capacity(state, needed_mesh_vertices)?)
     } else {
         None
     };
-    let base_first_tmesh_vertex = if needed_tmesh_vertices > 0 {
+    let ring_first_tmesh_vertex = if needed_tmesh_vertices > 0 {
         Some(ensure_tmesh_ring_capacity(state, needed_tmesh_vertices)?)
     } else {
         None
     };
-    let base_first_tmesh_instance = if needed_tmesh_instances > 0 {
+    let ring_first_tmesh_instance = if needed_tmesh_instances > 0 {
         Some(ensure_tmesh_instance_ring_capacity(
             state,
             needed_tmesh_instances,
@@ -2117,58 +2603,86 @@ pub fn draw(
         stats.backend_setup_us = elapsed_us_since(backend_setup_started);
 
         let backend_upload_started = Instant::now();
-        let inst_base_ptr = base_first_instance.map_or(std::ptr::null_mut(), |b| {
-            state.instance_ring_ptr.add(b as usize)
-        });
-        let mesh_base_ptr = base_first_vertex.map_or(std::ptr::null_mut(), |b| {
-            state.mesh_ring_ptr.add(b as usize)
-        });
-        let tmesh_base_ptr = base_first_tmesh_vertex.map_or(std::ptr::null_mut(), |b| {
-            state.tmesh_ring_ptr.add(b as usize)
-        });
-        let tmesh_instance_base_ptr = base_first_tmesh_instance.map_or(std::ptr::null_mut(), |b| {
-            state.tmesh_instance_ring_ptr.add(b as usize)
-        });
-        if needed_instances > 0 {
-            debug_assert!(!inst_base_ptr.is_null(), "instance ring missing");
-            std::ptr::copy_nonoverlapping(
-                frame.sprite_instances.as_ptr(),
-                inst_base_ptr,
-                needed_instances,
+        let target_base = VulkanPassOffsets {
+            sprite: ring_first_instance.unwrap_or(0),
+            mesh: ring_first_vertex.unwrap_or(0),
+            tmesh: ring_first_tmesh_vertex.unwrap_or(0),
+            tmesh_instance: ring_first_tmesh_instance.unwrap_or(0),
+        };
+        let mut target_cursor = VulkanPassOffsets::default();
+        for (index, target) in frame.render_targets.iter().enumerate() {
+            let offsets = VulkanPassOffsets {
+                sprite: target_base.sprite + target_cursor.sprite,
+                mesh: target_base.mesh + target_cursor.mesh,
+                tmesh: target_base.tmesh + target_cursor.tmesh,
+                tmesh_instance: target_base.tmesh_instance + target_cursor.tmesh_instance,
+            };
+            upload_vulkan_pass(
+                state,
+                VulkanPass::from(target),
+                &state.target_uploads[index],
+                offsets,
             );
+            target_cursor.sprite += target.sprite_instances.len() as u32;
+            target_cursor.mesh += target.mesh_vertices.len() as u32;
+            target_cursor.tmesh += state.target_uploads[index].vertices.len() as u32;
+            target_cursor.tmesh_instance += target.tmesh_instances.len() as u32;
         }
-        if needed_mesh_vertices > 0 {
-            debug_assert!(!mesh_base_ptr.is_null(), "mesh ring missing");
-            std::ptr::copy_nonoverlapping(
-                frame.mesh_vertices.as_ptr(),
-                mesh_base_ptr,
-                needed_mesh_vertices,
-            );
-        }
-        if needed_tmesh_vertices > 0 {
-            debug_assert!(!tmesh_base_ptr.is_null(), "textured mesh ring missing");
-            std::ptr::copy_nonoverlapping(
-                state.uploads.vertices.as_ptr(),
-                tmesh_base_ptr,
-                needed_tmesh_vertices,
-            );
-        }
-        if needed_tmesh_instances > 0 {
-            debug_assert!(
-                !tmesh_instance_base_ptr.is_null(),
-                "textured mesh instance ring missing"
-            );
-            std::ptr::copy_nonoverlapping(
-                frame.tmesh_instances.as_ptr(),
-                tmesh_instance_base_ptr,
-                needed_tmesh_instances,
-            );
-        }
+        let main_offsets = VulkanPassOffsets {
+            sprite: target_base.sprite + target_cursor.sprite,
+            mesh: target_base.mesh + target_cursor.mesh,
+            tmesh: target_base.tmesh + target_cursor.tmesh,
+            tmesh_instance: target_base.tmesh_instance + target_cursor.tmesh_instance,
+        };
+        upload_vulkan_pass(state, VulkanPass::from(frame), &state.uploads, main_offsets);
+        let base_first_instance =
+            (!frame.sprite_instances.is_empty()).then_some(main_offsets.sprite);
+        let base_first_vertex = (!frame.mesh_vertices.is_empty()).then_some(main_offsets.mesh);
+        let base_first_tmesh_vertex =
+            (!state.uploads.vertices.is_empty()).then_some(main_offsets.tmesh);
+        let base_first_tmesh_instance =
+            (!frame.tmesh_instances.is_empty()).then_some(main_offsets.tmesh_instance);
         stats.backend_upload_us = stats
             .backend_upload_us
             .saturating_add(elapsed_us_since(backend_upload_started));
 
         let backend_record_started = Instant::now();
+        let mut offscreen_vertices = 0u32;
+        target_cursor = VulkanPassOffsets::default();
+        for (index, target_frame) in frame.render_targets.iter().enumerate() {
+            let offsets = VulkanPassOffsets {
+                sprite: target_base.sprite + target_cursor.sprite,
+                mesh: target_base.mesh + target_cursor.mesh,
+                tmesh: target_base.tmesh + target_cursor.tmesh,
+                tmesh_instance: target_base.tmesh_instance + target_cursor.tmesh_instance,
+            };
+            let target = &state.offscreen_targets[index];
+            let preserve = target_frame.preserve && target.initialized;
+            offscreen_vertices = offscreen_vertices.saturating_add(record_render_pass(
+                state,
+                cmd,
+                VulkanPass::from(target_frame),
+                &state.target_uploads[index],
+                textures,
+                if preserve {
+                    state.offscreen_preserve_pass
+                } else {
+                    state.offscreen_clear_pass
+                },
+                target.framebuffer,
+                vk::Extent2D {
+                    width: target.width,
+                    height: target.height,
+                },
+                [0.0; 4],
+                offsets,
+            ));
+            state.offscreen_targets[index].initialized = true;
+            target_cursor.sprite += target_frame.sprite_instances.len() as u32;
+            target_cursor.mesh += target_frame.mesh_vertices.len() as u32;
+            target_cursor.tmesh += state.target_uploads[index].vertices.len() as u32;
+            target_cursor.tmesh_instance += target_frame.tmesh_instances.len() as u32;
+        }
         let c = frame.clear_color;
         let clear_value = vk::ClearValue {
             color: vk::ClearColorValue {
@@ -2218,7 +2732,8 @@ pub fn draw(
         for op in &frame.ops {
             match op {
                 DrawOp::Sprite(run) => {
-                    let Some(texture) = textures.vulkan_texture(run.texture_handle) else {
+                    let Some(texture) = resolved_texture(state, textures, run.texture_handle)
+                    else {
                         continue;
                     };
                     let set = texture.descriptor_set;
@@ -2350,8 +2865,7 @@ pub fn draw(
                     let Some(source) = state.uploads.source(draw.geometry) else {
                         continue;
                     };
-                    let Some(set) = textures
-                        .vulkan_texture(draw.texture_handle)
+                    let Some(set) = resolved_texture(state, textures, draw.texture_handle)
                         .map(|texture| texture.descriptor_set_repeat)
                     else {
                         continue;
@@ -2660,7 +3174,7 @@ pub fn draw(
         stats.present_stats.applied_back_pressure = back_pressure_waited;
         stats.present_stats.queue_idle_waited = queue_idle_waited;
         state.current_frame = (state.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
-        stats.vertices = vertices_drawn;
+        stats.vertices = vertices_drawn.saturating_add(offscreen_vertices);
         Ok(stats)
     }
 }
@@ -2754,6 +3268,7 @@ pub fn cleanup(state: &mut State) {
             destroy_buffer(state.device.as_ref().unwrap(), &geom.buffer);
         }
         state.cached_tmesh_bytes = 0;
+        destroy_offscreen_targets(state);
         for staging in state.texture_staging_pool.drain(..) {
             destroy_buffer(state.device.as_ref().unwrap(), &staging.resource);
         }
@@ -2823,6 +3338,16 @@ pub fn cleanup(state: &mut State) {
             .as_ref()
             .unwrap()
             .destroy_render_pass(state.render_pass, None);
+        state
+            .device
+            .as_ref()
+            .unwrap()
+            .destroy_render_pass(state.offscreen_clear_pass, None);
+        state
+            .device
+            .as_ref()
+            .unwrap()
+            .destroy_render_pass(state.offscreen_preserve_pass, None);
         state
             .device
             .as_ref()
@@ -4484,6 +5009,175 @@ fn create_render_pass(device: &Device, format: vk::Format) -> Result<vk::RenderP
     // SAFETY: The render-pass create info references only stack data for the duration of the
     // call and describes a single-color-attachment pass compatible with the swapchain format.
     unsafe { device.create_render_pass(&create_info, None) }
+}
+
+fn create_offscreen_render_pass(
+    device: &Device,
+    format: vk::Format,
+    preserve: bool,
+) -> Result<vk::RenderPass, vk::Result> {
+    let color_attachment = vk::AttachmentDescription::default()
+        .format(format)
+        .samples(vk::SampleCountFlags::TYPE_1)
+        .load_op(if preserve {
+            vk::AttachmentLoadOp::LOAD
+        } else {
+            vk::AttachmentLoadOp::CLEAR
+        })
+        .store_op(vk::AttachmentStoreOp::STORE)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(if preserve {
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
+        } else {
+            vk::ImageLayout::UNDEFINED
+        })
+        .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+    let color_attachment_ref = vk::AttachmentReference::default()
+        .attachment(0)
+        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+    let subpass = vk::SubpassDescription::default()
+        .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+        .color_attachments(std::slice::from_ref(&color_attachment_ref));
+    let dependencies = [
+        vk::SubpassDependency::default()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
+            .src_access_mask(vk::AccessFlags::SHADER_READ)
+            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE),
+        vk::SubpassDependency::default()
+            .src_subpass(0)
+            .dst_subpass(vk::SUBPASS_EXTERNAL)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+            .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ),
+    ];
+    let create_info = vk::RenderPassCreateInfo::default()
+        .attachments(std::slice::from_ref(&color_attachment))
+        .subpasses(std::slice::from_ref(&subpass))
+        .dependencies(&dependencies);
+    // SAFETY: the create info contains one attachment and one subpass and all
+    // borrowed arrays remain alive for the duration of the driver call.
+    unsafe { device.create_render_pass(&create_info, None) }
+}
+
+fn create_offscreen_target(
+    state: &mut State,
+    pass: &RenderTargetFrame,
+) -> Result<OffscreenTarget, Box<dyn Error>> {
+    let width = pass.width.max(1);
+    let height = pass.height.max(1);
+    let format = state.swapchain_resources.format.format;
+    let (image, memory) = create_image(
+        state,
+        width,
+        height,
+        format,
+        vk::ImageTiling::OPTIMAL,
+        vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+        vk::MemoryPropertyFlags::DEVICE_LOCAL,
+    )?;
+    let device = Arc::clone(state.device.as_ref().unwrap());
+    let view = create_image_view(&device, image, format)?;
+    let sampler_desc = SamplerDesc {
+        filter: SamplerFilter::Linear,
+        wrap: SamplerWrap::Clamp,
+        mipmaps: false,
+    };
+    let sampler = get_sampler(state, sampler_desc)?;
+    let sampler_repeat = get_sampler(
+        state,
+        SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..sampler_desc
+        },
+    )?;
+    let (descriptor_set, descriptor_set_repeat, pool) =
+        create_texture_descriptor_sets(state, [view; 3], sampler, sampler_repeat)?;
+    let texture = Texture {
+        device: Arc::clone(&device),
+        images: TextureImages::Rgba(TextureImage {
+            image,
+            memory,
+            view,
+        }),
+        descriptor_set,
+        descriptor_set_repeat,
+        pool,
+    };
+    let attachments = [view];
+    let framebuffer_info = vk::FramebufferCreateInfo::default()
+        .render_pass(state.offscreen_clear_pass)
+        .attachments(&attachments)
+        .width(width)
+        .height(height)
+        .layers(1);
+    // SAFETY: the image view and compatible render pass are live on `device`;
+    // the attachment slice remains alive through the call.
+    let framebuffer = unsafe { device.create_framebuffer(&framebuffer_info, None)? };
+    Ok(OffscreenTarget {
+        handle: pass.texture_handle,
+        width,
+        height,
+        texture,
+        framebuffer,
+        initialized: false,
+    })
+}
+
+fn destroy_offscreen_targets(state: &mut State) {
+    let Some(device) = state.device.as_ref() else {
+        state.offscreen_targets.clear();
+        return;
+    };
+    // SAFETY: callers wait for the device to become idle before teardown, and
+    // each framebuffer is owned exclusively by its target slot.
+    unsafe {
+        for target in state.offscreen_targets.drain(..) {
+            device.destroy_framebuffer(target.framebuffer, None);
+            drop(target);
+        }
+    }
+    state.target_uploads.clear();
+}
+
+fn ensure_offscreen_targets(
+    state: &mut State,
+    passes: &[RenderTargetFrame],
+) -> Result<(), Box<dyn Error>> {
+    let matches = state.offscreen_targets.len() == passes.len()
+        && state
+            .offscreen_targets
+            .iter()
+            .zip(passes)
+            .all(|(target, pass)| {
+                target.handle == pass.texture_handle
+                    && target.width == pass.width.max(1)
+                    && target.height == pass.height.max(1)
+            });
+    if matches {
+        return Ok(());
+    }
+    if !state.offscreen_targets.is_empty() {
+        // SAFETY: graph changes occur at screen boundaries. Waiting once makes
+        // replacing images and descriptor sets safe; steady-state frames never
+        // enter this branch.
+        unsafe { state.device.as_ref().unwrap().device_wait_idle()? };
+    }
+    destroy_offscreen_targets(state);
+    state.offscreen_targets.reserve(passes.len());
+    state.target_uploads.reserve(passes.len());
+    for pass in passes {
+        let target = create_offscreen_target(state, pass)?;
+        state.offscreen_targets.push(target);
+        state
+            .target_uploads
+            .push(TexturedMeshUploads::with_capacity(1024, 64));
+    }
+    Ok(())
 }
 
 fn create_command_pool(

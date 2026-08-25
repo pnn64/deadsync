@@ -12,6 +12,33 @@ use glam::Mat4;
 #[derive(Clone)]
 pub struct RenderFrame {
     pub clear_color: [f32; 4],
+    /// Offscreen passes are complete independent draw streams. They execute in
+    /// list order before the main frame, so later targets may sample earlier
+    /// ones without backend-specific scene reconstruction.
+    pub render_targets: Vec<RenderTargetFrame>,
+    pub cameras: Vec<Mat4>,
+    pub sprite_instances: Vec<SpriteInstanceRaw>,
+    pub mesh_vertices: Vec<MeshVertex>,
+    pub tmesh_instances: Vec<TexturedMeshInstanceRaw>,
+    pub tmesh_geometries: Vec<TexturedMeshGeometry>,
+    pub ops: Vec<DrawOp>,
+}
+
+/// One backend-neutral offscreen render pass.
+///
+/// The render thread owns backend resources for `texture_handle`; the screen
+/// owns the logical target for its lifetime. Capacity is bounded by the actor
+/// tree's render-target count and warmed during screen composition. A backend
+/// miss creates or resizes one target, while steady-state frames reuse it.
+/// Targets are never scan-pruned during gameplay and are destroyed with the
+/// backend/session cache.
+#[derive(Clone)]
+pub struct RenderTargetFrame {
+    pub texture_handle: TextureHandle,
+    pub width: u32,
+    pub height: u32,
+    pub depth: bool,
+    pub preserve: bool,
     pub cameras: Vec<Mat4>,
     pub sprite_instances: Vec<SpriteInstanceRaw>,
     pub mesh_vertices: Vec<MeshVertex>,
@@ -192,22 +219,29 @@ impl TexturedMeshUploads {
 pub fn resolve_textured_meshes<EnsureCached>(
     frame: &RenderFrame,
     uploads: &mut TexturedMeshUploads,
+    ensure_cached: EnsureCached,
+) where
+    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> Option<u64>,
+{
+    resolve_textured_mesh_geometries(&frame.tmesh_geometries, uploads, ensure_cached);
+}
+
+pub fn resolve_textured_mesh_geometries<EnsureCached>(
+    geometries: &[TexturedMeshGeometry],
+    uploads: &mut TexturedMeshUploads,
     mut ensure_cached: EnsureCached,
 ) where
     EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> Option<u64>,
 {
-    let geometry_count = frame.tmesh_geometries.len();
+    let geometry_count = geometries.len();
     if let Some(uncached) = uploads.uncached
-        && frame
-            .tmesh_geometries
-            .get(uncached.index)
-            .is_some_and(|geometry| {
-                geometry.cache_key == uncached.cache_key
-                    && saturating_u32(geometry.vertices.len()) == uncached.vertex_count
-            })
+        && geometries.get(uncached.index).is_some_and(|geometry| {
+            geometry.cache_key == uncached.cache_key
+                && saturating_u32(geometry.vertices.len()) == uncached.vertex_count
+        })
     {
         resolve_all_textured_meshes(
-            frame,
+            geometries,
             &mut uploads.vertices,
             &mut uploads.sources,
             &mut ensure_cached,
@@ -219,8 +253,7 @@ pub fn resolve_textured_meshes<EnsureCached>(
     if uploads.all_cached
         && uploads.sources.len() == geometry_count
         && uploads.cache_keys.len() == geometry_count
-        && frame
-            .tmesh_geometries
+        && geometries
             .iter()
             .zip(&uploads.cache_keys)
             .zip(&uploads.sources)
@@ -239,7 +272,7 @@ pub fn resolve_textured_meshes<EnsureCached>(
     let mut all_cached = true;
     let mut uncached = None;
     resolve_all_textured_meshes(
-        frame,
+        geometries,
         &mut uploads.vertices,
         &mut uploads.sources,
         &mut ensure_cached,
@@ -265,7 +298,7 @@ pub fn resolve_textured_meshes<EnsureCached>(
 }
 
 fn resolve_all_textured_meshes<EnsureCached, Observe>(
-    frame: &RenderFrame,
+    geometries: &[TexturedMeshGeometry],
     vertices_out: &mut Vec<TexturedMeshVertex>,
     sources: &mut Vec<TexturedMeshSource>,
     ensure_cached: &mut EnsureCached,
@@ -276,10 +309,10 @@ fn resolve_all_textured_meshes<EnsureCached, Observe>(
 {
     vertices_out.clear();
     sources.clear();
-    if sources.capacity() < frame.tmesh_geometries.len() {
-        sources.reserve(frame.tmesh_geometries.len());
+    if sources.capacity() < geometries.len() {
+        sources.reserve(geometries.len());
     }
-    for (index, geometry) in frame.tmesh_geometries.iter().enumerate() {
+    for (index, geometry) in geometries.iter().enumerate() {
         let vertices = geometry.vertices.as_ref();
         let vertex_count = saturating_u32(vertices.len());
         let source = if geometry.cache_key != INVALID_TMESH_CACHE_KEY
@@ -309,7 +342,7 @@ pub fn resolve_textured_meshes_legacy<EnsureCached>(
     uploads.all_cached = false;
     uploads.uncached = None;
     resolve_all_textured_meshes(
-        frame,
+        &frame.tmesh_geometries,
         &mut uploads.vertices,
         &mut uploads.sources,
         &mut ensure_cached,
@@ -394,6 +427,7 @@ mod tests {
     fn frame(geometries: Vec<TexturedMeshGeometry>) -> RenderFrame {
         RenderFrame {
             clear_color: [0.0; 4],
+            render_targets: Vec::new(),
             cameras: Vec::new(),
             sprite_instances: Vec::new(),
             mesh_vertices: Vec::new(),

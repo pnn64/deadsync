@@ -2,7 +2,8 @@ use deadlib_render_core::{
     BlendMode, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, PresentModePolicy,
     PresentModeTrace, PresentStats, RenderFrame, SamplerCache, SamplerDesc, SamplerFilter,
     SamplerWrap, TMeshCacheKey, TextureHandle, TexturedMeshBufferCache, TexturedMeshUploads,
-    TexturedMeshVertex, Yuv420Upload, draw_storage_stats, resolve_textured_meshes,
+    TexturedMeshVertex, Yuv420Upload, draw_storage_stats, is_render_target_texture,
+    resolve_textured_mesh_geometries, resolve_textured_meshes,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -164,6 +165,15 @@ pub struct Texture {
     bind_group_repeat: Arc<wgpu::BindGroup>,
 }
 
+impl Texture {
+    fn rgba_view(&self) -> Option<&wgpu::TextureView> {
+        match &self.images {
+            TextureImages::Rgba { _view, .. } => Some(_view),
+            TextureImages::Yuv420 { .. } => None,
+        }
+    }
+}
+
 enum TextureImages {
     Rgba {
         texture: wgpu::Texture,
@@ -195,6 +205,20 @@ pub trait TextureLookup {
 struct CachedTMeshGeom {
     buffer: Arc<wgpu::Buffer>,
     vertex_count: u32,
+}
+
+/// Render-thread-owned, session-retained AFT storage. Slots are bounded by the
+/// largest render-target graph seen in one frame and are reused by list
+/// position. Screen-entry changes may replace a slot; gameplay hits do no
+/// allocation, pruning, scanning beyond the small active graph, or I/O.
+struct OffscreenTarget {
+    handle: TextureHandle,
+    width: u32,
+    height: u32,
+    texture: Texture,
+    _depth_texture: wgpu::Texture,
+    depth_view: wgpu::TextureView,
+    initialized: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -404,6 +428,7 @@ pub struct State {
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
     uploads: TexturedMeshUploads,
+    offscreen_targets: Vec<OffscreenTarget>,
     cached_tmesh: DenseSlotMap<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     mesh_vertex_buffer: wgpu::Buffer,
@@ -759,6 +784,7 @@ fn init(
         instance_buffer,
         instance_capacity,
         uploads: TexturedMeshUploads::with_capacity(tmesh_vertex_capacity, 64),
+        offscreen_targets: Vec::with_capacity(4),
         cached_tmesh: DenseSlotMap::with_capacity(256),
         cached_tmesh_bytes: 0,
         mesh_vertex_buffer,
@@ -1242,6 +1268,283 @@ fn create_depth_target(
     (texture, view)
 }
 
+fn create_offscreen_target(
+    state: &mut State,
+    handle: TextureHandle,
+    width: u32,
+    height: u32,
+) -> OffscreenTarget {
+    let width = width.max(1);
+    let height = height.max(1);
+    let raw = state.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("wgpu actor-frame texture"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: state.config.format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    });
+    let view = raw.create_view(&wgpu::TextureViewDescriptor::default());
+    let (bind_group, bind_group_repeat) = create_texture_groups(
+        state,
+        SamplerDesc {
+            filter: SamplerFilter::Linear,
+            wrap: SamplerWrap::Clamp,
+            mipmaps: false,
+        },
+        [&view, &view, &view],
+        None,
+    );
+    let texture = Texture {
+        id: next_texture_id(state),
+        images: TextureImages::Rgba {
+            texture: raw,
+            _view: view,
+        },
+        bind_group,
+        bind_group_repeat,
+    };
+    let (depth_texture, depth_view) = create_depth_target(&state.device, width, height);
+    OffscreenTarget {
+        handle,
+        width,
+        height,
+        texture,
+        _depth_texture: depth_texture,
+        depth_view,
+        initialized: false,
+    }
+}
+
+fn ensure_offscreen_targets(state: &mut State, frame: &RenderFrame) {
+    for (index, pass) in frame.render_targets.iter().enumerate() {
+        let matches = state.offscreen_targets.get(index).is_some_and(|target| {
+            target.handle == pass.texture_handle
+                && target.width == pass.width.max(1)
+                && target.height == pass.height.max(1)
+        });
+        if matches {
+            continue;
+        }
+        let target = create_offscreen_target(state, pass.texture_handle, pass.width, pass.height);
+        if index < state.offscreen_targets.len() {
+            state.offscreen_targets[index] = target;
+        } else {
+            state.offscreen_targets.push(target);
+        }
+    }
+}
+
+fn resolved_texture<'a, T: TextureLookup + ?Sized>(
+    state: &'a State,
+    textures: &'a T,
+    handle: TextureHandle,
+) -> Option<&'a Texture> {
+    if is_render_target_texture(handle) {
+        return state
+            .offscreen_targets
+            .iter()
+            .find(|target| target.handle == handle)
+            .map(|target| &target.texture);
+    }
+    textures.wgpu_texture(handle)
+}
+
+struct PassDrawData<'a> {
+    cameras: &'a [Matrix4],
+    ops: &'a [DrawOp],
+}
+
+fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
+    pass: &mut wgpu::RenderPass<'pass>,
+    state: &'pass State,
+    data: PassDrawData<'pass>,
+    uploads: &'pass TexturedMeshUploads,
+    textures: &'pass T,
+) -> u32 {
+    let camera_count = data.cameras.len();
+    let texture_group = match state.proj {
+        ProjState::Immediates => 0,
+        ProjState::Uniform { .. } => 1,
+    };
+    let mut vertices_drawn = 0u32;
+    let mut last_kind = None;
+    let mut last_blend = None;
+    let mut last_sprite_yuv = None;
+    let mut bindings = DrawBindingCache::default();
+    let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
+    let mut last_tmesh_depth_test = None;
+    for op in data.ops {
+        match op {
+            DrawOp::Sprite(run) => {
+                let Some(tex) = resolved_texture(state, textures, run.texture_handle) else {
+                    continue;
+                };
+                if last_kind != Some(0) {
+                    pass.set_vertex_buffer(0, state.vertex_buffer.slice(..));
+                    if bindings.instance_required(InstanceBinding::Sprite) {
+                        pass.set_vertex_buffer(1, state.instance_buffer.slice(..));
+                    }
+                    if bindings.index_required() {
+                        pass.set_index_buffer(
+                            state.index_buffer.slice(..),
+                            wgpu::IndexFormat::Uint16,
+                        );
+                    }
+                    last_kind = Some(0);
+                    last_blend = None;
+                    if matches!(state.proj, ProjState::Immediates) {
+                        bindings.reset_camera();
+                    }
+                    tmesh_buffer_cache.reset();
+                    last_tmesh_depth_test = None;
+                }
+                let yuv = tex.images.is_yuv420();
+                if last_blend != Some(run.blend) || last_sprite_yuv != Some(yuv) {
+                    pass.set_pipeline(if yuv {
+                        state.yuv_pipelines.get(run.blend)
+                    } else {
+                        state.pipelines.get(run.blend)
+                    });
+                    if last_sprite_yuv.is_some_and(|last| last != yuv)
+                        && matches!(state.proj, ProjState::Immediates)
+                    {
+                        bindings.reset_camera();
+                    }
+                    last_blend = Some(run.blend);
+                    last_sprite_yuv = Some(yuv);
+                }
+                if bindings.camera_required(run.camera) {
+                    set_camera(
+                        pass,
+                        &state.proj,
+                        run.camera,
+                        camera_count,
+                        data.cameras,
+                        state.projection,
+                    );
+                }
+                if bindings.texture_required(tex.id, false) {
+                    pass.set_bind_group(texture_group, Some(tex.bind_group.as_ref()), &[]);
+                }
+                pass.draw_indexed(
+                    0..state.index_count,
+                    0,
+                    run.instance_start..(run.instance_start + run.instance_count),
+                );
+                vertices_drawn = vertices_drawn.saturating_add(4 * run.instance_count);
+            }
+            DrawOp::Mesh(run) => {
+                if run.vertex_count == 0 {
+                    continue;
+                }
+                if last_kind != Some(1) {
+                    pass.set_vertex_buffer(0, state.mesh_vertex_buffer.slice(..));
+                    last_kind = Some(1);
+                    last_blend = None;
+                    last_sprite_yuv = None;
+                    if matches!(state.proj, ProjState::Immediates) {
+                        bindings.reset_camera();
+                    }
+                    tmesh_buffer_cache.reset();
+                    last_tmesh_depth_test = None;
+                }
+                if last_blend != Some(run.blend) {
+                    pass.set_pipeline(state.mesh_pipelines.get(run.blend));
+                    last_blend = Some(run.blend);
+                }
+                if bindings.camera_required(run.camera) {
+                    set_camera(
+                        pass,
+                        &state.proj,
+                        run.camera,
+                        camera_count,
+                        data.cameras,
+                        state.projection,
+                    );
+                }
+                pass.draw(
+                    run.vertex_start..(run.vertex_start + run.vertex_count),
+                    0..1,
+                );
+                vertices_drawn = vertices_drawn.saturating_add(run.vertex_count);
+            }
+            DrawOp::TexturedMesh(run) => {
+                let Some(source) = uploads.source(run.geometry) else {
+                    continue;
+                };
+                if source.vertex_count() == 0 || run.instance_count == 0 {
+                    continue;
+                }
+                let Some(tex) = resolved_texture(state, textures, run.texture_handle) else {
+                    continue;
+                };
+                if last_kind != Some(2) {
+                    if bindings.instance_required(InstanceBinding::TexturedMesh) {
+                        pass.set_vertex_buffer(1, state.tmesh_instance_buffer.slice(..));
+                    }
+                    last_kind = Some(2);
+                    last_blend = None;
+                    last_sprite_yuv = None;
+                    if matches!(state.proj, ProjState::Immediates) {
+                        bindings.reset_camera();
+                    }
+                    tmesh_buffer_cache.reset();
+                    last_tmesh_depth_test = None;
+                }
+                if last_blend != Some(run.blend) || last_tmesh_depth_test != Some(run.depth_test) {
+                    pass.set_pipeline(if run.depth_test {
+                        state.tmesh_depth_pipelines.get(run.blend)
+                    } else {
+                        state.tmesh_pipelines.get(run.blend)
+                    });
+                    last_blend = Some(run.blend);
+                    last_tmesh_depth_test = Some(run.depth_test);
+                }
+                if bindings.camera_required(run.camera) {
+                    set_camera(
+                        pass,
+                        &state.proj,
+                        run.camera,
+                        camera_count,
+                        data.cameras,
+                        state.projection,
+                    );
+                }
+                if bindings.texture_required(tex.id, true) {
+                    pass.set_bind_group(texture_group, Some(tex.bind_group_repeat.as_ref()), &[]);
+                }
+                if tmesh_buffer_cache.update_required(source) {
+                    if let Some(buffer_key) = source.buffer_key() {
+                        let Some(entry) = state.cached_tmesh.get_slot(buffer_key) else {
+                            tmesh_buffer_cache.reset();
+                            continue;
+                        };
+                        pass.set_vertex_buffer(0, entry.buffer.slice(..));
+                    } else {
+                        pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
+                    }
+                }
+                let draw_start = source.vertex_start();
+                pass.draw(
+                    draw_start..draw_start + source.vertex_count(),
+                    run.instance_start..(run.instance_start + run.instance_count),
+                );
+                let tri_count = source.vertex_count() / 3;
+                vertices_drawn =
+                    vertices_drawn.saturating_add(tri_count.saturating_mul(run.instance_count));
+            }
+        }
+    }
+    vertices_drawn
+}
+
 pub fn update_texture(
     state: &mut State,
     texture: &mut Texture,
@@ -1400,6 +1703,9 @@ pub fn draw(
         return Ok(stats);
     }
 
+    ensure_offscreen_targets(state, frame);
+    stats.vertices = draw_offscreen_targets(state, frame, textures, &mut stats);
+
     let backend_prepare_started = Instant::now();
     {
         let uploads = &mut state.uploads;
@@ -1417,7 +1723,9 @@ pub fn draw(
         });
         stats.storage = draw_storage_stats(frame, Some(uploads));
     }
-    stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
+    stats.backend_prepare_us = stats
+        .backend_prepare_us
+        .saturating_add(elapsed_us_since(backend_prepare_started));
 
     let backend_upload_started = Instant::now();
     let instance_len = frame.sprite_instances.len();
@@ -1457,7 +1765,9 @@ pub fn draw(
         );
     }
     upload_projections(state, &frame.cameras);
-    stats.backend_upload_us = elapsed_us_since(backend_upload_started);
+    stats.backend_upload_us = stats
+        .backend_upload_us
+        .saturating_add(elapsed_us_since(backend_upload_started));
 
     let acquire_started = Instant::now();
     let (surface_frame, suboptimal) = match state.surface.get_current_texture() {
@@ -1486,7 +1796,9 @@ pub fn draw(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("wgpu encoder"),
         });
-    stats.backend_setup_us = elapsed_us_since(backend_setup_started);
+    stats.backend_setup_us = stats
+        .backend_setup_us
+        .saturating_add(elapsed_us_since(backend_setup_started));
 
     let backend_record_started = Instant::now();
     let mut vertices_drawn = 0u32;
@@ -1535,7 +1847,7 @@ pub fn draw(
         for op in &frame.ops {
             match op {
                 DrawOp::Sprite(run) => {
-                    let Some(tex) = textures.wgpu_texture(run.texture_handle) else {
+                    let Some(tex) = resolved_texture(state, textures, run.texture_handle) else {
                         continue;
                     };
                     if last_kind != Some(0) {
@@ -1636,7 +1948,7 @@ pub fn draw(
                     if source.vertex_count() == 0 || run.instance_count == 0 {
                         continue;
                     }
-                    let Some(tex) = textures.wgpu_texture(run.texture_handle) else {
+                    let Some(tex) = resolved_texture(state, textures, run.texture_handle) else {
                         continue;
                     };
                     if last_kind != Some(2) {
@@ -1765,12 +2077,16 @@ pub fn draw(
     } else {
         None
     };
-    stats.backend_record_us = elapsed_us_since(backend_record_started);
+    stats.backend_record_us = stats
+        .backend_record_us
+        .saturating_add(elapsed_us_since(backend_record_started));
 
     let submitted_present_id = next_present_id(state);
     let submit_started = Instant::now();
     let submission_index = state.queue.submit(Some(encoder.finish()));
-    stats.submit_us = elapsed_us_since(submit_started);
+    stats.submit_us = stats
+        .submit_us
+        .saturating_add(elapsed_us_since(submit_started));
     let present_done = Arc::clone(&state.present_done);
     state.queue.on_submitted_work_done(move || {
         present_done.publish(submitted_present_id, current_host_nanos());
@@ -1887,8 +2203,163 @@ pub fn draw(
         reconfigure_surface(state);
     }
 
-    stats.vertices = vertices_drawn;
+    stats.vertices = stats.vertices.saturating_add(vertices_drawn);
     Ok(stats)
+}
+
+fn upload_pass_data(
+    state: &mut State,
+    cameras: &[Matrix4],
+    sprite_instances: &[deadlib_render_core::SpriteInstanceRaw],
+    mesh_vertices: &[deadlib_render_core::MeshVertex],
+    tmesh_instances: &[deadlib_render_core::TexturedMeshInstanceRaw],
+) {
+    ensure_instance_capacity(state, sprite_instances.len());
+    if !sprite_instances.is_empty() {
+        state
+            .queue
+            .write_buffer(&state.instance_buffer, 0, cast_slice(sprite_instances));
+    }
+    ensure_mesh_vertex_capacity(state, mesh_vertices.len());
+    if !mesh_vertices.is_empty() {
+        state
+            .queue
+            .write_buffer(&state.mesh_vertex_buffer, 0, cast_slice(mesh_vertices));
+    }
+    let tmesh_len = state.uploads.vertices.len();
+    ensure_tmesh_vertex_capacity(state, tmesh_len);
+    if tmesh_len > 0 {
+        state.queue.write_buffer(
+            &state.tmesh_vertex_buffer,
+            0,
+            cast_slice(state.uploads.vertices.as_slice()),
+        );
+    }
+    ensure_tmesh_instance_capacity(state, tmesh_instances.len());
+    if !tmesh_instances.is_empty() {
+        state
+            .queue
+            .write_buffer(&state.tmesh_instance_buffer, 0, cast_slice(tmesh_instances));
+    }
+    upload_projections(state, cameras);
+}
+
+fn draw_offscreen_targets(
+    state: &mut State,
+    frame: &RenderFrame,
+    textures: &impl TextureLookup,
+    stats: &mut DrawStats,
+) -> u32 {
+    let mut vertices = 0u32;
+    for (index, target_frame) in frame.render_targets.iter().enumerate() {
+        let prepare_started = Instant::now();
+        {
+            let uploads = &mut state.uploads;
+            let device = &state.device;
+            let cached_tmesh = &mut state.cached_tmesh;
+            let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
+            resolve_textured_mesh_geometries(
+                &target_frame.tmesh_geometries,
+                uploads,
+                |cache_key, geometry| {
+                    ensure_cached_tmesh(
+                        device,
+                        cached_tmesh,
+                        cached_tmesh_bytes,
+                        cache_key,
+                        geometry,
+                    )
+                },
+            );
+        }
+        stats.backend_prepare_us = stats
+            .backend_prepare_us
+            .saturating_add(elapsed_us(prepare_started.elapsed()));
+
+        let upload_started = Instant::now();
+        upload_pass_data(
+            state,
+            &target_frame.cameras,
+            &target_frame.sprite_instances,
+            &target_frame.mesh_vertices,
+            &target_frame.tmesh_instances,
+        );
+        stats.backend_upload_us = stats
+            .backend_upload_us
+            .saturating_add(elapsed_us(upload_started.elapsed()));
+
+        let setup_started = Instant::now();
+        let mut encoder = state
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("wgpu actor-frame texture encoder"),
+            });
+        stats.backend_setup_us = stats
+            .backend_setup_us
+            .saturating_add(elapsed_us(setup_started.elapsed()));
+
+        let record_started = Instant::now();
+        {
+            let target = &state.offscreen_targets[index];
+            let color_view = target
+                .texture
+                .rgba_view()
+                .expect("offscreen targets are RGBA textures");
+            let color_load = if target_frame.preserve && target.initialized {
+                wgpu::LoadOp::Load
+            } else {
+                wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
+            };
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("wgpu actor-frame texture pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: color_view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: color_load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &target.depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Discard,
+                    }),
+                    stencil_ops: None,
+                }),
+                occlusion_query_set: None,
+                timestamp_writes: None,
+                multiview_mask: None,
+            });
+            vertices = vertices.saturating_add(record_draw_ops(
+                &mut pass,
+                state,
+                PassDrawData {
+                    cameras: &target_frame.cameras,
+                    ops: &target_frame.ops,
+                },
+                &state.uploads,
+                textures,
+            ));
+        }
+        stats.backend_record_us = stats
+            .backend_record_us
+            .saturating_add(elapsed_us(record_started.elapsed()));
+        let submit_started = Instant::now();
+        state.queue.submit(Some(encoder.finish()));
+        stats.submit_us = stats
+            .submit_us
+            .saturating_add(elapsed_us(submit_started.elapsed()));
+        state.offscreen_targets[index].initialized = true;
+    }
+    vertices
+}
+
+#[inline(always)]
+fn elapsed_us(elapsed: std::time::Duration) -> u32 {
+    elapsed.as_micros().min(u128::from(u32::MAX)) as u32
 }
 
 #[inline(always)]

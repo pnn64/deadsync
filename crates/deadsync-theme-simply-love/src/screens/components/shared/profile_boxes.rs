@@ -1099,7 +1099,7 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                 apply_zoom_to_actor(child, pivot, zoom);
             }
         }
-        Actor::CameraPush { .. } | Actor::CameraPop => {}
+        Actor::RenderTarget { .. } | Actor::CameraPush { .. } | Actor::CameraPop => {}
         Actor::Shadow { len, child, .. } => {
             len[0] *= zoom;
             len[1] *= zoom;
@@ -1145,7 +1145,7 @@ fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
                 apply_offset_to_actor(child, dx, dy);
             }
         }
-        Actor::CameraPush { .. } | Actor::CameraPop => {}
+        Actor::RenderTarget { .. } | Actor::CameraPush { .. } | Actor::CameraPop => {}
         Actor::Shadow { child, .. } => apply_offset_to_actor(child, dx, dy),
     }
 }
@@ -1162,6 +1162,7 @@ fn apply_z_offset(actor: &mut Actor, dz: i16) {
         | Actor::SharedFrame { z, .. }
         | Actor::RetainedFrame { z, .. } => *z = z.saturating_add(dz),
         Actor::Camera { .. }
+        | Actor::RenderTarget { .. }
         | Actor::CameraPush { .. }
         | Actor::CameraPop
         | Actor::Shadow { .. } => {}
@@ -1212,6 +1213,7 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
         | Actor::TexturedMesh { .. }
         | Actor::ReusableTexturedMesh { .. }
         | Actor::RetainedFrame { .. }
+        | Actor::RenderTarget { .. }
         | Actor::CameraPush { .. }
         | Actor::CameraPop => {}
     }

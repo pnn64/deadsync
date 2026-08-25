@@ -1064,6 +1064,142 @@ where
     T: TextureContext + ?Sized,
     I: Clone + Iterator<Item = ActorSegment<'a>>,
 {
+    let mut target_specs = SmallVec::<[RenderTargetSpec<'a>; 4]>::new();
+    for segment in actor_segments.clone() {
+        let actors = match segment.source {
+            ActorSegmentSource::Actors(actors) | ActorSegmentSource::ActorsFlat { actors, .. } => {
+                actors
+            }
+            ActorSegmentSource::Flat(_) | ActorSegmentSource::FlatPair { .. } => &[],
+        };
+        collect_render_targets(actors, &mut target_specs);
+    }
+
+    let mut render = build_single_pass_cached_with_scratch_and_texture_context_impl(
+        actor_segments,
+        clear_color,
+        m,
+        fonts,
+        total_elapsed,
+        text_cache,
+        scratch,
+        texture_ctx,
+        actor_resources,
+        true,
+    );
+
+    let mut target_frames = std::mem::take(&mut scratch.render_target_frames);
+    target_frames.clear();
+    target_frames.reserve(target_specs.len().saturating_sub(target_frames.capacity()));
+    while scratch.render_target_scratches.len() < target_specs.len() {
+        scratch
+            .render_target_scratches
+            .push(Box::<ComposeScratch>::default());
+    }
+    for (index, target) in target_specs.into_iter().enumerate() {
+        let width = target.size[0].max(1);
+        let height = target.size[1].max(1);
+        let metrics = Metrics {
+            left: -0.5 * width as f32,
+            right: 0.5 * width as f32,
+            bottom: -0.5 * height as f32,
+            top: 0.5 * height as f32,
+        };
+        let target_scratch = scratch.render_target_scratches[index].as_mut();
+        let target_render = build_single_pass_cached_with_scratch_and_texture_context_impl(
+            std::iter::once(ActorSegment::new(target.children)),
+            [0.0, 0.0, 0.0, 0.0],
+            &metrics,
+            fonts,
+            total_elapsed,
+            text_cache,
+            target_scratch,
+            texture_ctx,
+            actor_resources,
+            false,
+        );
+        debug_assert!(target_render.render_targets.is_empty());
+        target_frames.push(renderer::RenderTargetFrame {
+            texture_handle: target.texture_handle,
+            width,
+            height,
+            depth: target.depth,
+            preserve: target.preserve,
+            cameras: target_render.cameras,
+            sprite_instances: target_render.sprite_instances,
+            mesh_vertices: target_render.mesh_vertices,
+            tmesh_instances: target_render.tmesh_instances,
+            tmesh_geometries: target_render.tmesh_geometries,
+            ops: target_render.ops,
+        });
+    }
+    render.render_targets = target_frames;
+    render
+}
+
+#[derive(Clone, Copy)]
+struct RenderTargetSpec<'a> {
+    texture_handle: renderer::TextureHandle,
+    size: [u32; 2],
+    depth: bool,
+    preserve: bool,
+    children: &'a [actors::Actor],
+}
+
+fn collect_render_targets<'a>(
+    actors: &'a [actors::Actor],
+    out: &mut SmallVec<[RenderTargetSpec<'a>; 4]>,
+) {
+    for actor in actors {
+        match actor {
+            actors::Actor::RenderTarget {
+                texture_handle,
+                size,
+                depth,
+                preserve,
+                children,
+            } => {
+                collect_render_targets(children, out);
+                out.push(RenderTargetSpec {
+                    texture_handle: *texture_handle,
+                    size: *size,
+                    depth: *depth,
+                    preserve: *preserve,
+                    children,
+                });
+            }
+            actors::Actor::Frame { children, .. } | actors::Actor::Camera { children, .. } => {
+                collect_render_targets(children, out);
+            }
+            actors::Actor::SharedFrame { children, .. } => collect_render_targets(children, out),
+            actors::Actor::RetainedFrame { frame, .. } => {
+                collect_render_targets(frame.children(), out);
+            }
+            actors::Actor::Shadow { child, .. } => {
+                collect_render_targets(std::slice::from_ref(child.as_ref()), out);
+            }
+            _ => {}
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_single_pass_cached_with_scratch_and_texture_context_impl<'a, T, I>(
+    actor_segments: I,
+    clear_color: [f32; 4],
+    m: &Metrics,
+    fonts: &font::FontMap,
+    total_elapsed: f32,
+    text_cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    texture_ctx: &T,
+    actor_resources: Option<&actors::ActorResourceArena>,
+    apply_centering: bool,
+) -> RenderFrame
+where
+    T: TextureContext + ?Sized,
+    I: Clone + Iterator<Item = ActorSegment<'a>>,
+{
     // Hold one immutable arena borrow for the whole composition pass. Resolving
     // an actor ID is then a bounds-checked slice access, not a RefCell borrow.
     let actor_textures = actor_resources.map(actors::ActorResourceArena::texture_keys);
@@ -1223,7 +1359,7 @@ where
     // every camera in clip space. This single global point
     // covers the base camera, any custom pushed cameras, and screenshots, and is
     // applied live without rebuilding projections.
-    if let Some(centering) = space::current_centering_matrix() {
+    if apply_centering && let Some(centering) = space::current_centering_matrix() {
         for cam in &mut cameras {
             *cam = centering * *cam;
         }
@@ -1289,6 +1425,7 @@ where
 
     RenderFrame {
         clear_color,
+        render_targets: Vec::new(),
         cameras,
         sprite_instances,
         mesh_vertices,
@@ -1307,6 +1444,8 @@ pub struct ComposeScratch {
     tmesh_instances: Vec<renderer::TexturedMeshInstanceRaw>,
     tmesh_geometries: Vec<renderer::TexturedMeshGeometry>,
     ops: Vec<renderer::DrawOp>,
+    render_target_frames: Vec<renderer::RenderTargetFrame>,
+    render_target_scratches: Vec<Box<ComposeScratch>>,
     tmesh_geom_map: HashMap<TMeshGeomKey, u32, rustc_hash::FxBuildHasher>,
     cameras: Vec<Matrix4>,
     masks: Vec<WorldRect>,
@@ -1413,6 +1552,14 @@ impl ComposeScratch {
     }
 
     pub fn recycle_frame(&mut self, render: &mut RenderFrame) {
+        let mut targets = std::mem::take(&mut render.render_targets);
+        for (index, target) in targets.drain(..).enumerate() {
+            let Some(target_scratch) = self.render_target_scratches.get_mut(index) else {
+                continue;
+            };
+            target_scratch.recycle_target_frame(target);
+        }
+        self.render_target_frames = targets;
         let mut geometries = std::mem::take(&mut render.tmesh_geometries);
         for geometry in geometries.drain(..) {
             let renderer::TexturedMeshVertices::Transient(mut vertices) = geometry.vertices else {
@@ -1440,6 +1587,30 @@ impl ComposeScratch {
         let mut cameras = std::mem::take(&mut render.cameras);
         cameras.clear();
         self.cameras = cameras;
+    }
+
+    fn recycle_target_frame(&mut self, mut target: renderer::RenderTargetFrame) {
+        let mut geometries = std::mem::take(&mut target.tmesh_geometries);
+        for geometry in geometries.drain(..) {
+            let renderer::TexturedMeshVertices::Transient(mut vertices) = geometry.vertices else {
+                continue;
+            };
+            if self.recycled_text_mesh_vertices.len() < MAX_RECYCLED_TEXT_MESH_VERTEX_BUFFERS {
+                vertices.clear();
+                self.recycled_text_mesh_vertices.push(vertices);
+            }
+        }
+        self.tmesh_geometries = geometries;
+        target.sprite_instances.clear();
+        self.sprite_instances = target.sprite_instances;
+        target.mesh_vertices.clear();
+        self.mesh_vertices = target.mesh_vertices;
+        target.tmesh_instances.clear();
+        self.tmesh_instances = target.tmesh_instances;
+        target.ops.clear();
+        self.ops = target.ops;
+        target.cameras.clear();
+        self.cameras = target.cameras;
     }
 
     /// Starts a new song-lifetime retained presentation working set.
@@ -5176,6 +5347,7 @@ fn sprite_source_handle(
         } if *handle != renderer::INVALID_TEXTURE_HANDLE && *handle_generation == generation => {
             Some(*handle)
         }
+        actors::SpriteSource::RenderTarget { handle, .. } => Some(*handle),
         _ => None,
     }
 }
@@ -5528,6 +5700,9 @@ fn resolved_sprite_source<'a>(
         actors::SpriteSource::ArenaTextureHandle { .. } => {
             let name = arena_texture_key.expect("arena texture key resolved above");
             (false, name, str_ptr(name))
+        }
+        actors::SpriteSource::RenderTarget { .. } => {
+            (false, "__render_target", str_ptr("__render_target"))
         }
         actors::SpriteSource::Solid => (true, "__white", str_ptr("__white")),
     })
@@ -6427,7 +6602,11 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             let mut chosen_cell = *cell;
             let mut chosen_grid = *grid;
 
-            if !is_solid && uv_rect.is_none() {
+            let render_target_size = match source {
+                actors::SpriteSource::RenderTarget { size, .. } => Some(*size),
+                _ => None,
+            };
+            if !is_solid && render_target_size.is_none() && uv_rect.is_none() {
                 let (cols, rows) = grid.unwrap_or_else(|| {
                     texture_cache.sprite_sheet_dims(texture_ctx, texture_key_ptr, texture_name)
                 });
@@ -6478,6 +6657,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 effect_scale,
                 texture_cache,
                 texture_ctx,
+                render_target_size,
             );
 
             let offset = x_fold.map_or(*offset, |fold| fold.offset(*offset));
@@ -6772,6 +6952,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
         }
 
         actors::Actor::CameraPush { .. } | actors::Actor::CameraPop => {}
+
+        actors::Actor::RenderTarget { .. } => {}
 
         actors::Actor::Text {
             align,
@@ -7434,6 +7616,7 @@ fn resolve_sprite_size_like_sm<T: TextureContext + ?Sized>(
     scale: [f32; 2],
     texture_cache: &mut TextureLookupCache,
     texture_ctx: &T,
+    native_size: Option<[f32; 2]>,
 ) -> [SizeSpec; 2] {
     use SizeSpec::Px;
 
@@ -7474,14 +7657,19 @@ fn resolve_sprite_size_like_sm<T: TextureContext + ?Sized>(
         _ => return size,
     };
 
-    let (nw, nh) = native_dims(
-        is_solid,
-        texture_name,
-        texture_key_ptr,
-        cell,
-        grid,
-        texture_cache,
-        texture_ctx,
+    let (nw, nh) = native_size.map_or_else(
+        || {
+            native_dims(
+                is_solid,
+                texture_name,
+                texture_key_ptr,
+                cell,
+                grid,
+                texture_cache,
+                texture_ctx,
+            )
+        },
+        |size| (size[0], size[1]),
     );
     let aspect = if nw > 0.0 && nh > 0.0 { nh / nw } else { 1.0 };
 
@@ -8992,7 +9180,7 @@ mod tests {
     use deadlib_render_core::{
         BlendMode, DrawOp, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshRun, MeshVertex,
         RenderFrame, SpriteInstanceRaw, SpriteRun, TMeshCacheKey, TexturedMeshGeometry,
-        TexturedMeshInstanceRaw, TexturedMeshRun, TexturedMeshVertex,
+        TexturedMeshInstanceRaw, TexturedMeshRun, TexturedMeshVertex, render_target_texture_handle,
     };
     use glam::{Mat4 as Matrix4, Vec3 as Vector3};
     use std::cell::Cell;
@@ -9105,6 +9293,7 @@ mod tests {
         (
             RenderFrame {
                 clear_color: [0.0; 4],
+                render_targets: Vec::new(),
                 cameras: vec![Matrix4::IDENTITY],
                 sprite_instances,
                 mesh_vertices,
@@ -9118,6 +9307,7 @@ mod tests {
 
     fn assert_test_frames_equal(expected: &RenderFrame, actual: &RenderFrame) {
         assert_eq!(expected.clear_color, actual.clear_color);
+        assert_eq!(expected.render_targets.len(), actual.render_targets.len());
         assert_eq!(expected.cameras, actual.cameras);
         assert_eq!(expected.sprite_instances, actual.sprite_instances);
         assert_eq!(expected.mesh_vertices, actual.mesh_vertices);
@@ -9407,6 +9597,62 @@ mod tests {
             shadow_color: [0.0; 4],
             effect: Default::default(),
         }
+    }
+
+    #[test]
+    fn render_targets_compose_dependency_order_without_replaying_onscreen() {
+        let screen = render_target_texture_handle(1);
+        let strips = render_target_texture_handle(2);
+        let target_sprite = |handle| {
+            test_sprite(SpriteSource::RenderTarget {
+                handle,
+                size: [64.0, 32.0],
+            })
+        };
+        let actors = vec![
+            Actor::RenderTarget {
+                texture_handle: screen,
+                size: [64, 32],
+                depth: false,
+                preserve: false,
+                children: Arc::from([test_sprite(SpriteSource::Solid)]),
+            },
+            Actor::RenderTarget {
+                texture_handle: strips,
+                size: [64, 32],
+                depth: false,
+                preserve: false,
+                children: Arc::from([target_sprite(screen)]),
+            },
+            target_sprite(strips),
+        ];
+        let metrics = Metrics {
+            left: -32.0,
+            right: 32.0,
+            top: 16.0,
+            bottom: -16.0,
+        };
+
+        let frame = build_screen(
+            &actors,
+            [0.0, 0.0, 0.0, 1.0],
+            &metrics,
+            &font::FontMap::default(),
+            0.0,
+        );
+
+        assert_eq!(frame.render_targets.len(), 2);
+        assert_eq!(frame.render_targets[0].texture_handle, screen);
+        assert_eq!(frame.render_targets[1].texture_handle, strips);
+        let DrawOp::Sprite(strips_input) = frame.render_targets[1].ops[0] else {
+            panic!("second render target must sample the first");
+        };
+        assert_eq!(strips_input.texture_handle, screen);
+        let DrawOp::Sprite(main) = frame.ops[0] else {
+            panic!("main pass must draw only the final target sprite");
+        };
+        assert_eq!(main.texture_handle, strips);
+        assert_eq!(frame.sprite_instances.len(), 1);
     }
 
     #[test]
@@ -11240,6 +11486,7 @@ mod tests {
             [1.0, 1.0],
             &mut cache,
             &texture_ctx,
+            None,
         );
         let repeated = resolve_sprite_size_like_sm(
             [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -11252,6 +11499,7 @@ mod tests {
             [1.0, 1.0],
             &mut cache,
             &texture_ctx,
+            None,
         );
         let zoomed = resolve_sprite_size_like_sm(
             [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -11264,6 +11512,7 @@ mod tests {
             [20.0, 20.0],
             &mut cache,
             &texture_ctx,
+            None,
         );
 
         fn assert_px_size(size: [SizeSpec; 2], want: [f32; 2]) {
@@ -12137,6 +12386,7 @@ mod tests {
         let mut scratch = ComposeScratch::default();
         let mut render = deadlib_render_core::RenderFrame {
             clear_color: [0.0, 0.0, 0.0, 1.0],
+            render_targets: Vec::new(),
             cameras: Vec::new(),
             sprite_instances: Vec::new(),
             mesh_vertices: Vec::new(),

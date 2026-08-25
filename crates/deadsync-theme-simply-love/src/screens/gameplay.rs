@@ -37,7 +37,8 @@ use deadlib_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
 use deadlib_render_core::{
-    BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TMeshCacheKey, TexturedMeshVertex,
+    BackendType, BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TMeshCacheKey, TextureHandle,
+    TexturedMeshVertex, render_target_texture_handle,
 };
 use deadsync_assets::noteskin::{self, Noteskin, SpriteSlot};
 use deadsync_assets::song_lua::{
@@ -97,6 +98,7 @@ use std::hash::Hasher;
 use std::num::NonZeroUsize;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
@@ -108,6 +110,7 @@ pub type GameplayCoreState = deadsync_gameplay::GameplayRuntimeState<
 >;
 
 const TEXT_CACHE_LIMIT: usize = 8192;
+static NEXT_SONG_LUA_AFT_ID: AtomicU64 = AtomicU64::new(1);
 type SongLuaOverlayEaseWindowRuntime =
     deadsync_gameplay::SongLuaOverlayEaseWindowRuntime<SongLuaRuntimeOverlayStateDelta>;
 
@@ -637,41 +640,24 @@ impl SongLuaOverlayIndex {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct SongLuaDirectAftProxy {
-    capture_index: usize,
-    proxy_index: usize,
-}
-
 /// Song-lifetime topology lookup for Song Lua overlay rendering.
 ///
 /// The gameplay screen owns one immutable index for the root overlays and one
 /// per visual layer. Construction runs during screen entry, groups AFT sprites
-/// by capture name, stores each peer index once, and pre-sizes an inverse draw
-/// position and resolved-group buffers. Static camera scopes are resolved at
-/// screen entry; trees whose camera FOV can change retain the indexed ancestor
-/// fallback. Exact root AFTs with one supported proxy source also retain their
-/// capture/proxy pair here; mixed and nested captures have no direct plan. The
-/// game/render thread updates RGB buffers linearly before
-/// rendering a layer; canonical three-channel groups are resolved once rather
-/// than once per channel. There is no synchronization, gameplay allocation,
-/// miss, eviction, or pruning path. Storage is bounded by the compiled overlay
-/// count and is released with the gameplay screen.
+/// by capture name and allocates a stable render-target handle for each AFT.
+/// Static camera scopes are resolved at screen entry; trees whose camera FOV can
+/// change retain the indexed ancestor fallback. There is no synchronization,
+/// gameplay allocation, miss, eviction, or pruning path. Storage is bounded by
+/// the compiled overlay count and is released with the gameplay screen.
 /// `storage_bytes` exposes the retained index footprint for benchmarks.
 #[derive(Default)]
 struct SongLuaOverlayTopologyIndex {
     aft_ancestors: Vec<SongLuaOverlayIndex>,
     aft_sprite_targets: Vec<SongLuaOverlayIndex>,
-    // ITG renders nested AFTs as texture passes. When a pass only slices one
-    // upstream texture, render that upstream capture instead of dropping it.
-    aft_render_targets: Vec<SongLuaOverlayIndex>,
-    direct_aft_proxies: Vec<Option<SongLuaDirectAftProxy>>,
+    aft_texture_handles: Vec<TextureHandle>,
     camera_ancestors: Vec<SongLuaOverlayIndex>,
     camera_states: Vec<SongLuaOverlayIndex>,
     dynamic_camera_scope: bool,
-    aft_peer_groups: Box<[Box<[usize]>]>,
-    draw_positions: Vec<usize>,
-    rgb_aft_groups: Vec<Option<(usize, [usize; 3])>>,
 }
 
 impl SongLuaOverlayTopologyIndex {
@@ -688,21 +674,18 @@ impl SongLuaOverlayTopologyIndex {
                 _ => SongLuaOverlayIndex::default(),
             })
             .collect::<Vec<_>>();
-        let aft_render_targets = (0..overlays.len())
-            .map(|index| {
-                SongLuaOverlayIndex::new(Self::aft_render_target(
-                    overlays,
-                    &aft_ancestors,
-                    &aft_sprite_targets,
-                    index,
-                ))
+        let aft_texture_handles = overlays
+            .iter()
+            .map(|overlay| {
+                matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture)
+                    .then(|| {
+                        render_target_texture_handle(
+                            NEXT_SONG_LUA_AFT_ID.fetch_add(1, AtomicOrdering::Relaxed),
+                        )
+                    })
+                    .unwrap_or_default()
             })
             .collect::<Vec<_>>();
-        let direct_aft_proxies = (0..overlays.len())
-            .map(|index| {
-                Self::direct_aft_proxy(overlays, &aft_ancestors, &aft_sprite_targets, index)
-            })
-            .collect();
         let camera_ancestors = overlays
             .iter()
             .map(|overlay| {
@@ -727,141 +710,14 @@ impl SongLuaOverlayTopologyIndex {
                 .iter()
                 .any(|command| command.blocks.iter().any(|block| block.delta.fov.is_some()))
         });
-        let mut aft_sprite_groups = vec![SongLuaOverlayIndex::default(); overlays.len()];
-        let mut aft_peer_groups: Vec<Vec<usize>> = Vec::new();
-        for (index, overlay) in overlays.iter().enumerate() {
-            let SongLuaOverlayKind::AftSprite { capture_name } = &overlay.kind else {
-                continue;
-            };
-            let group = overlays[..index]
-                .iter()
-                .enumerate()
-                .find_map(|(candidate_index, candidate)| {
-                    let SongLuaOverlayKind::AftSprite {
-                        capture_name: candidate_capture,
-                    } = &candidate.kind
-                    else {
-                        return None;
-                    };
-                    candidate_capture
-                        .eq_ignore_ascii_case(capture_name)
-                        .then(|| aft_sprite_groups[candidate_index].get())
-                        .flatten()
-                })
-                .unwrap_or_else(|| {
-                    aft_peer_groups.push(Vec::new());
-                    aft_peer_groups.len() - 1
-                });
-            aft_sprite_groups[index] = SongLuaOverlayIndex::new(Some(group));
-            aft_peer_groups[group].push(index);
-        }
         Self {
             aft_ancestors,
             aft_sprite_targets,
-            aft_render_targets,
-            direct_aft_proxies,
+            aft_texture_handles,
             camera_ancestors,
             camera_states,
             dynamic_camera_scope,
-            aft_peer_groups: aft_peer_groups
-                .into_iter()
-                .map(Vec::into_boxed_slice)
-                .collect(),
-            draw_positions: vec![usize::MAX; overlays.len()],
-            rgb_aft_groups: vec![None; overlays.len()],
         }
-    }
-
-    fn aft_render_target(
-        overlays: &[SongLuaOverlayActor],
-        aft_ancestors: &[SongLuaOverlayIndex],
-        aft_sprite_targets: &[SongLuaOverlayIndex],
-        aft_sprite_index: usize,
-    ) -> Option<usize> {
-        let original = aft_sprite_targets.get(aft_sprite_index)?.get()?;
-        let mut capture_index = original;
-        for _ in 0..overlays.len() {
-            let mut nested_target = None;
-            let mut has_direct_output = false;
-            for (index, overlay) in overlays.iter().enumerate() {
-                if aft_ancestors.get(index)?.get() != Some(capture_index) {
-                    continue;
-                }
-                match &overlay.kind {
-                    SongLuaOverlayKind::Actor
-                    | SongLuaOverlayKind::ActorFrame
-                    | SongLuaOverlayKind::ActorFrameTexture
-                    | SongLuaOverlayKind::Sound { .. } => {}
-                    SongLuaOverlayKind::AftSprite { .. } => {
-                        let Some(target) = aft_sprite_targets.get(index)?.get() else {
-                            return Some(capture_index);
-                        };
-                        if nested_target.is_some_and(|current| current != target) {
-                            return Some(capture_index);
-                        }
-                        nested_target = Some(target);
-                    }
-                    _ => has_direct_output = true,
-                }
-            }
-            if has_direct_output {
-                return Some(capture_index);
-            }
-            let Some(next_capture) = nested_target else {
-                return Some(capture_index);
-            };
-            if next_capture == capture_index {
-                return Some(original);
-            }
-            capture_index = next_capture;
-        }
-        Some(original)
-    }
-
-    fn direct_aft_proxy(
-        overlays: &[SongLuaOverlayActor],
-        aft_ancestors: &[SongLuaOverlayIndex],
-        aft_sprite_targets: &[SongLuaOverlayIndex],
-        aft_index: usize,
-    ) -> Option<SongLuaDirectAftProxy> {
-        if aft_ancestors.get(aft_index)?.get().is_some()
-            || !matches!(
-                overlays.get(aft_index)?.kind,
-                SongLuaOverlayKind::AftSprite { .. }
-            )
-        {
-            return None;
-        }
-        let capture_index = aft_sprite_targets.get(aft_index)?.get()?;
-        let mut proxy_index = None;
-        for (index, overlay) in overlays.iter().enumerate().filter(|(index, _)| {
-            aft_ancestors
-                .get(*index)
-                .copied()
-                .and_then(SongLuaOverlayIndex::get)
-                == Some(capture_index)
-        }) {
-            match &overlay.kind {
-                SongLuaOverlayKind::Actor
-                | SongLuaOverlayKind::ActorFrame
-                | SongLuaOverlayKind::Sound { .. } => {}
-                // A nested capture is a separate render boundary even when it
-                // does not currently contribute a visible sibling.
-                SongLuaOverlayKind::ActorFrameTexture => return None,
-                SongLuaOverlayKind::ActorProxy {
-                    target:
-                        SongLuaProxyTarget::Player { .. }
-                        | SongLuaProxyTarget::NoteField { .. }
-                        | SongLuaProxyTarget::Judgment { .. }
-                        | SongLuaProxyTarget::Combo { .. },
-                } if proxy_index.is_none() => proxy_index = Some(index),
-                _ => return None,
-            }
-        }
-        Some(SongLuaDirectAftProxy {
-            capture_index,
-            proxy_index: proxy_index?,
-        })
     }
 
     fn fill_camera_states(
@@ -950,64 +806,6 @@ impl SongLuaOverlayTopologyIndex {
             .and_then(SongLuaOverlayIndex::get)
             .and_then(|camera_index| overlay_states.get(camera_index))
             .copied()
-    }
-
-    fn prepare_rgb_draw_positions(&mut self, draw_order: &[usize]) {
-        if self.aft_peer_groups.iter().all(|group| group.len() < 3) {
-            return;
-        }
-        self.draw_positions.fill(usize::MAX);
-        for (position, index) in draw_order.iter().copied().enumerate() {
-            if let Some(slot) = self.draw_positions.get_mut(index) {
-                *slot = position;
-            }
-        }
-    }
-
-    fn prepare_rgb_aft_groups(
-        &mut self,
-        overlay_states: &[SongLuaOverlayState],
-        draw_order: &[usize],
-    ) {
-        self.prepare_rgb_draw_positions(draw_order);
-        self.rgb_aft_groups.fill(None);
-        let peer_groups = &self.aft_peer_groups;
-        let draw_positions = &self.draw_positions;
-        let resolved = &mut self.rgb_aft_groups;
-        for peers in peer_groups {
-            if peers.len() < 3 {
-                continue;
-            }
-            if peers.len() == 3 {
-                let Some(first) = peers.first().copied() else {
-                    continue;
-                };
-                if let Some(group) = song_lua_rgb_aft_group_from_peers(
-                    overlay_states,
-                    first,
-                    peers.iter().copied(),
-                    draw_positions,
-                ) {
-                    for &index in peers.iter() {
-                        resolved[index] = Some(group);
-                    }
-                }
-                continue;
-            }
-            for &index in peers.iter() {
-                resolved[index] = song_lua_rgb_aft_group_from_peers(
-                    overlay_states,
-                    index,
-                    peers.iter().copied(),
-                    draw_positions,
-                );
-            }
-        }
-    }
-
-    #[inline(always)]
-    fn rgb_aft_group(&self, index: usize) -> Option<(usize, [usize; 3])> {
-        self.rgb_aft_groups.get(index).copied().flatten()
     }
 }
 
@@ -1510,14 +1308,6 @@ impl SongLuaProxyRequestIndex {
                             | SongLuaProxyTarget::Judgment { .. }
                             | SongLuaProxyTarget::Combo { .. },
                     }) => 1,
-                    _ if self
-                        .topology
-                        .direct_aft_proxies
-                        .get(index)
-                        .is_some_and(Option::is_some) =>
-                    {
-                        1
-                    }
                     _ => 0,
                 },
             )
@@ -2539,6 +2329,7 @@ impl State {
     ) -> Self {
         let GameplayInitView {
             runtime,
+            video_renderer: _,
             hud,
             judgment_palettes,
             scores,
@@ -3408,6 +3199,7 @@ fn gameplay_song_lua_data(
     viewport: GameplayViewport,
     session: &GameplaySession,
     config: &GameplayConfig,
+    video_renderer: BackendType,
 ) -> GameplaySongLuaData {
     let primary_ix = song
         .foreground_lua_changes
@@ -3429,7 +3221,7 @@ fn gameplay_song_lua_data(
         runtime_scroll_speed[0] = runtime_scroll_speed[1];
     }
 
-    let context = song_lua_compile_context(
+    let mut context = song_lua_compile_context(
         song,
         &runtime_charts,
         session.play_style.player_count(),
@@ -3441,6 +3233,11 @@ fn gameplay_song_lua_data(
         session,
         config.center_1player_notefield,
     );
+    // `VideoRenderers` is a legacy capability preference used by mod charts to
+    // gate OpenGL-era ActorFrameTexture effects. DeadSync implements those
+    // semantics above every physical backend, so advertise the compatibility
+    // renderer first while retaining the actual backend for diagnostics.
+    context.video_renderers = format!("opengl,{video_renderer}");
     let primary = primary_ix.and_then(|ix| {
         compile_primary_song_lua(
             song.title.as_str(),
@@ -4116,6 +3913,7 @@ pub fn init(
 ) -> State {
     let GameplayInitView {
         runtime,
+        video_renderer,
         hud,
         judgment_palettes,
         scores,
@@ -4137,6 +3935,7 @@ pub fn init(
         viewport,
         &session,
         &config,
+        video_renderer,
     );
     let player_profiles = player_profiles.map(GameplayProfile::from);
     let song_lua_sound_paths = song_lua_sound_paths(&song_lua_data);
@@ -8327,7 +8126,6 @@ struct SongLuaScreenProxyRequests {
 struct SongLuaProxyRequestAnalysis {
     all: SongLuaScreenProxyRequests,
     captured: SongLuaScreenProxyRequests,
-    direct_aft: SongLuaScreenProxyRequests,
     root_players: [u8; MAX_PLAYERS],
     root_note_fields: [u8; MAX_PLAYERS],
     root_judgments: [u8; MAX_PLAYERS],
@@ -8700,7 +8498,7 @@ fn song_lua_normalize_proxy_segment(
 ///
 /// Owner/thread model: gameplay `State`, exclusively mutated during actor
 /// composition on the game/render frame thread. Lifetime: one song. Capacity:
-/// each AFT sprite has two frame banks sized at screen entry from its compiled
+/// each AFT has two frame banks sized at screen entry from its compiled
 /// capture descendants, including the maximum two actors emitted by glow and
 /// model layers. Warmup occurs during screen initialization. Gameplay misses
 /// grow only the affected slot and retain that high-water mark; there is no
@@ -8720,7 +8518,7 @@ impl SongLuaAftCaptureScratch {
             .iter()
             .enumerate()
             .map(|(index, overlay)| {
-                matches!(overlay.kind, SongLuaOverlayKind::AftSprite { .. }).then(|| {
+                matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture).then(|| {
                     let capacity = song_lua_aft_capture_capacity(overlays, topology, index);
                     std::array::from_fn(|_| SharedActorFrameScratch::with_capacity(capacity))
                 })
@@ -8749,8 +8547,8 @@ fn song_lua_aft_actor_capacity(kind: &SongLuaOverlayKind) -> usize {
         SongLuaOverlayKind::Actor
         | SongLuaOverlayKind::ActorFrame
         | SongLuaOverlayKind::ActorFrameTexture
-        | SongLuaOverlayKind::AftSprite { .. }
         | SongLuaOverlayKind::Sound { .. } => 0,
+        SongLuaOverlayKind::AftSprite { .. } => 2,
         SongLuaOverlayKind::ActorProxy { .. } => 1,
         SongLuaOverlayKind::Model { layers } => layers.len().saturating_mul(2),
         SongLuaOverlayKind::NoteskinActor { slots } => slots.len().saturating_mul(2),
@@ -8761,16 +8559,8 @@ fn song_lua_aft_actor_capacity(kind: &SongLuaOverlayKind) -> usize {
 fn song_lua_aft_capture_capacity(
     overlays: &[SongLuaOverlayActor],
     topology: &SongLuaOverlayTopologyIndex,
-    aft_sprite_index: usize,
+    capture_index: usize,
 ) -> usize {
-    let Some(capture_index) = topology
-        .aft_render_targets
-        .get(aft_sprite_index)
-        .copied()
-        .and_then(SongLuaOverlayIndex::get)
-    else {
-        return 0;
-    };
     overlays
         .iter()
         .enumerate()
@@ -9424,23 +9214,7 @@ fn song_lua_proxy_request_analysis_indexed_active(
                 }
             }
             SongLuaOverlayKind::AftSprite { .. } => {
-                let direct_plan = index
-                    .topology
-                    .direct_aft_proxies
-                    .get(overlay_index)
-                    .copied()
-                    .flatten();
-                if let Some(plan) = direct_plan {
-                    if overlay_states
-                        .get(plan.proxy_index)
-                        .copied()
-                        .is_some_and(song_lua_overlay_is_visible)
-                        && let SongLuaOverlayKind::ActorProxy { target } =
-                            &overlays[plan.proxy_index].kind
-                    {
-                        song_lua_mark_proxy_target(&mut analysis.direct_aft, target);
-                    }
-                } else if let Some(capture_index) = index
+                if let Some(capture_index) = index
                     .topology
                     .aft_sprite_targets
                     .get(overlay_index)
@@ -9460,7 +9234,6 @@ fn song_lua_proxy_request_analysis_indexed_active(
             _ => {}
         }
     }
-    song_lua_merge_proxy_requests(&mut analysis.all, analysis.direct_aft);
     song_lua_merge_proxy_requests(&mut analysis.all, analysis.captured);
     analysis
 }
@@ -9487,7 +9260,6 @@ fn song_lua_merge_proxy_analysis(
 ) {
     song_lua_merge_proxy_requests(&mut into.all, from.all);
     song_lua_merge_proxy_requests(&mut into.captured, from.captured);
-    song_lua_merge_proxy_requests(&mut into.direct_aft, from.direct_aft);
     for (count, add) in into.root_players.iter_mut().zip(from.root_players) {
         *count = count.saturating_add(add);
     }
@@ -9641,11 +9413,7 @@ fn song_lua_direct_proxy(
     })
 }
 
-enum SongLuaDirectAftResult {
-    Unsupported,
-    Handled(Option<SongLuaDirectProxy>),
-}
-
+#[cfg(test)]
 fn song_lua_fold_direct_aft_proxy(
     overlay: &SongLuaOverlayActor,
     state: SongLuaOverlayState,
@@ -9663,123 +9431,11 @@ fn song_lua_fold_direct_aft_proxy(
     if state.blend != SongLuaOverlayBlendMode::Alpha {
         proxy.blend = song_lua_overlay_blend(state.blend);
     }
-    // Preserve the enclosing registration before a nested source camera so
-    // camera-table order and downstream IDs remain identical to push/pop.
     if proxy.camera.is_some() {
         proxy.enclosing_camera = capture_camera;
     }
     proxy.camera = proxy.camera.or(capture_camera);
     proxy
-}
-
-#[allow(clippy::too_many_arguments)]
-fn song_lua_direct_aft_proxy(
-    aft_index: usize,
-    overlay: &SongLuaOverlayActor,
-    aft_state: SongLuaOverlayState,
-    z: i16,
-    actor_insert: usize,
-    overlays: &[SongLuaOverlayActor],
-    overlay_states: &[SongLuaOverlayState],
-    local_overlay_states: &[SongLuaOverlayState],
-    order_cache: &mut SongLuaOverlayOrderCache,
-    topology_index: &SongLuaOverlayTopologyIndex,
-    proxy_sources: &SongLuaScreenProxySources<'_>,
-    overlay_space_width: f32,
-    overlay_space_height: f32,
-    capture_states: &mut Vec<SongLuaOverlayState>,
-    order_scratch: &mut Vec<usize>,
-) -> SongLuaDirectAftResult {
-    let Some(plan) = topology_index
-        .direct_aft_proxies
-        .get(aft_index)
-        .copied()
-        .flatten()
-    else {
-        return SongLuaDirectAftResult::Unsupported;
-    };
-    let Some(SongLuaOverlayKind::ActorProxy { target }) =
-        overlays.get(plan.proxy_index).map(|overlay| &overlay.kind)
-    else {
-        return SongLuaDirectAftResult::Unsupported;
-    };
-    let (player, sources) = if let Some((player, [hud, field])) =
-        song_lua_direct_player_proxy_source(target, proxy_sources)
-    {
-        (player, [Some(hud), Some(field)])
-    } else if let Some((player, source)) = song_lua_direct_proxy_source(target, proxy_sources) {
-        (player, [Some(source), None])
-    } else {
-        return if song_lua_proxy_source(target, proxy_sources).is_some() {
-            SongLuaDirectAftResult::Unsupported
-        } else {
-            SongLuaDirectAftResult::Handled(None)
-        };
-    };
-    song_lua_capture_overlay_states_into_scratch(
-        overlays,
-        overlay_states,
-        local_overlay_states,
-        order_cache,
-        plan.capture_index,
-        overlay_space_width,
-        overlay_space_height,
-        capture_states,
-    );
-    song_lua_overlay_order_into(
-        overlays,
-        capture_states,
-        order_cache,
-        Some(plan.capture_index),
-        order_scratch,
-    );
-    let Some(draw_index) = order_scratch
-        .iter()
-        .position(|&index| index == plan.proxy_index)
-    else {
-        return SongLuaDirectAftResult::Handled(None);
-    };
-    let proxy_state = capture_states
-        .get(plan.proxy_index)
-        .copied()
-        .unwrap_or_default();
-    let proxy_z = draw_index.min(i16::MAX as usize) as i16;
-    let mut direct = sources.into_iter().flatten().filter_map(|source| {
-        song_lua_direct_proxy(
-            proxy_state,
-            proxy_z,
-            source,
-            player,
-            actor_insert,
-            overlay_space_width,
-            overlay_space_height,
-        )
-    });
-    let Some(mut proxy) = direct.next() else {
-        return SongLuaDirectAftResult::Handled(None);
-    };
-    if let Some(tail) = direct.next() {
-        debug_assert_eq!(tail.actor_insert, proxy.actor_insert);
-        debug_assert_eq!(tail.player, proxy.player);
-        debug_assert_eq!(tail.offset, proxy.offset);
-        debug_assert_eq!(tail.z, proxy.z);
-        debug_assert_eq!(tail.style, proxy.style);
-        debug_assert_eq!(tail.blend, proxy.blend);
-        proxy.tail = Some(SongLuaDirectProxyPart {
-            draws: tail.draws,
-            draw_start: tail.draw_start,
-            draw_end: tail.draw_end,
-            camera: tail.camera,
-        });
-    }
-    SongLuaDirectAftResult::Handled(Some(song_lua_fold_direct_aft_proxy(
-        overlay,
-        aft_state,
-        z,
-        overlay_space_width,
-        overlay_space_height,
-        proxy,
-    )))
 }
 
 fn song_lua_build_proxy_frame_actor_with_scratch(
@@ -9907,7 +9563,7 @@ fn song_lua_proxy_actor_has_z(actor: &Actor) -> bool {
         }
         Actor::Camera { children, .. } => children.iter().any(song_lua_proxy_actor_has_z),
         Actor::Shadow { child, .. } => song_lua_proxy_actor_has_z(child),
-        Actor::CameraPush { .. } | Actor::CameraPop => false,
+        Actor::RenderTarget { .. } | Actor::CameraPush { .. } | Actor::CameraPop => false,
     }
 }
 
@@ -9923,7 +9579,10 @@ fn song_lua_proxy_actor_z(actor: &Actor) -> i16 {
         | Actor::SharedFrame { z, .. }
         | Actor::RetainedFrame { z, .. } => *z,
         Actor::Shadow { child, .. } => song_lua_proxy_actor_z(child),
-        Actor::Camera { .. } | Actor::CameraPush { .. } | Actor::CameraPop => 0,
+        Actor::RenderTarget { .. }
+        | Actor::Camera { .. }
+        | Actor::CameraPush { .. }
+        | Actor::CameraPop => 0,
     }
 }
 
@@ -10036,7 +9695,7 @@ fn song_lua_proxy_zero_local_z(actor: &mut Actor) {
         }
         Actor::Camera { children, .. } => song_lua_proxy_local_children_in_place(children),
         Actor::Shadow { child, .. } => song_lua_proxy_zero_local_z(child),
-        Actor::CameraPush { .. } | Actor::CameraPop => {}
+        Actor::RenderTarget { .. } | Actor::CameraPush { .. } | Actor::CameraPop => {}
     }
 }
 
@@ -10522,6 +10181,39 @@ fn song_lua_capture_children_into(
                 };
                 if let Some(actor) = actor {
                     out.push(actor);
+                }
+            }
+            SongLuaOverlayKind::AftSprite { .. } => {
+                let Some(target_index) = topology_index
+                    .aft_sprite_targets
+                    .get(idx)
+                    .copied()
+                    .and_then(SongLuaOverlayIndex::get)
+                else {
+                    continue;
+                };
+                let Some(&texture_handle) = topology_index.aft_texture_handles.get(target_index)
+                else {
+                    continue;
+                };
+                let texture_size = overlay_states
+                    .get(target_index)
+                    .and_then(|state| state.size)
+                    .unwrap_or([overlay_space_width, overlay_space_height]);
+                let z = draw_idx.min(i16::MAX as usize) as i16;
+                if let Some(actors) = build_song_lua_aft_sprite_actor(
+                    overlay_state,
+                    texture_handle,
+                    texture_size,
+                    z,
+                    overlay_space_width,
+                    overlay_space_height,
+                    effect_time,
+                    effect_beat,
+                    total_elapsed,
+                    projected_mesh_scratch.get_mut(idx),
+                ) {
+                    out.extend(actors);
                 }
             }
             _ => {
@@ -11398,6 +11090,7 @@ fn song_lua_style_capture_actor(
             blend: blend.or(actor_blend),
             visible,
         },
+        actor @ Actor::RenderTarget { .. } => actor,
         Actor::Camera {
             view_proj,
             children,
@@ -11426,6 +11119,7 @@ fn song_lua_style_capture_actor(
     }
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 fn song_lua_capture_transform_matrix(
     state: SongLuaOverlayState,
     extra_offset: [f32; 2],
@@ -11454,6 +11148,7 @@ fn song_lua_capture_transform_matrix(
     )
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 fn song_lua_capture_channel_offset(
     name: Option<&str>,
     state: SongLuaOverlayState,
@@ -11473,122 +11168,7 @@ fn song_lua_capture_channel_offset(
     }
 }
 
-fn song_lua_rgb_aft_channel(state: SongLuaOverlayState) -> Option<usize> {
-    const EPS: f32 = 0.0001;
-    if !state.visible
-        || state.diffuse[3] <= f32::EPSILON
-        || state.blend != SongLuaOverlayBlendMode::Add
-        || (state.vibrate && state.effect_magnitude.iter().any(|value| value.abs() > EPS))
-    {
-        return None;
-    }
-    let [r, g, b, _] = state.diffuse;
-    if r >= 1.0 - EPS && g.abs() <= EPS && b.abs() <= EPS {
-        Some(0)
-    } else if g >= 1.0 - EPS && r.abs() <= EPS && b.abs() <= EPS {
-        Some(1)
-    } else if b >= 1.0 - EPS && r.abs() <= EPS && g.abs() <= EPS {
-        Some(2)
-    } else {
-        None
-    }
-}
-
-fn song_lua_rgb_aft_norm_state(mut state: SongLuaOverlayState) -> SongLuaOverlayState {
-    state.diffuse = [1.0, 1.0, 1.0, state.diffuse[3]];
-    state
-}
-
-#[cfg(test)]
-fn song_lua_rgb_aft_group_for(
-    overlays: &[SongLuaOverlayActor],
-    overlay_states: &[SongLuaOverlayState],
-    draw_order: &[usize],
-    index: usize,
-) -> Option<(usize, [usize; 3])> {
-    let overlay = overlays.get(index)?;
-    let SongLuaOverlayKind::AftSprite { capture_name } = &overlay.kind else {
-        return None;
-    };
-    let peers = overlays
-        .iter()
-        .enumerate()
-        .filter_map(|(candidate_index, candidate)| {
-            let SongLuaOverlayKind::AftSprite {
-                capture_name: candidate_capture,
-            } = &candidate.kind
-            else {
-                return None;
-            };
-            candidate_capture
-                .eq_ignore_ascii_case(capture_name)
-                .then_some(candidate_index)
-        });
-    let group = song_lua_rgb_aft_channels_from_peers(overlay_states, index, peers)?;
-    let leader = draw_order
-        .iter()
-        .copied()
-        .find(|idx| group.contains(idx))
-        .unwrap_or(index);
-    Some((leader, group))
-}
-
-fn song_lua_rgb_aft_group_from_peers(
-    overlay_states: &[SongLuaOverlayState],
-    index: usize,
-    peers: impl IntoIterator<Item = usize>,
-    draw_positions: &[usize],
-) -> Option<(usize, [usize; 3])> {
-    let group = song_lua_rgb_aft_channels_from_peers(overlay_states, index, peers)?;
-    let leader = group
-        .iter()
-        .copied()
-        .min_by_key(|index| draw_positions.get(*index).copied().unwrap_or(usize::MAX))
-        .unwrap_or(index);
-    Some((leader, group))
-}
-
-fn song_lua_rgb_aft_channels_from_peers(
-    overlay_states: &[SongLuaOverlayState],
-    index: usize,
-    peers: impl IntoIterator<Item = usize>,
-) -> Option<[usize; 3]> {
-    let state = overlay_states.get(index).copied().unwrap_or_default();
-    let channel = song_lua_rgb_aft_channel(state)?;
-    let norm = song_lua_rgb_aft_norm_state(state);
-    let mut group = [usize::MAX; 3];
-    group[channel] = index;
-    for idx in peers {
-        if idx == index {
-            continue;
-        }
-        let candidate_state = overlay_states.get(idx).copied().unwrap_or_default();
-        let Some(candidate_channel) = song_lua_rgb_aft_channel(candidate_state) else {
-            continue;
-        };
-        if song_lua_rgb_aft_norm_state(candidate_state) != norm {
-            continue;
-        }
-        if group[candidate_channel] != usize::MAX {
-            return None;
-        }
-        group[candidate_channel] = idx;
-    }
-    if group.contains(&usize::MAX) {
-        return None;
-    }
-    Some(group)
-}
-
-fn song_lua_combined_rgb_aft_state(mut state: SongLuaOverlayState) -> SongLuaOverlayState {
-    // ITGmania blends the finished AFT texture, not each captured actor.
-    // Three aligned R/G/B additive sprites reconstruct that texture exactly,
-    // so the render-target approximation should keep child blend modes intact.
-    state.diffuse = [1.0, 1.0, 1.0, state.diffuse[3]];
-    state.blend = SongLuaOverlayBlendMode::Alpha;
-    state
-}
-
+#[cfg(any(test, feature = "bench-support"))]
 fn song_lua_shift_capture_z(actor: &mut Actor, z_shift: i16) {
     match actor {
         Actor::Sprite { z, .. }
@@ -11611,10 +11191,11 @@ fn song_lua_shift_capture_z(actor: &mut Actor, z_shift: i16) {
             }
         }
         Actor::Shadow { child, .. } => song_lua_shift_capture_z(child, z_shift),
-        Actor::CameraPush { .. } | Actor::CameraPop => {}
+        Actor::RenderTarget { .. } | Actor::CameraPush { .. } | Actor::CameraPop => {}
     }
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 fn song_lua_capture_placement(
     overlay: &SongLuaOverlayActor,
     state: SongLuaOverlayState,
@@ -11646,6 +11227,7 @@ fn song_lua_capture_placement(
     (view_proj.map_or(extra_offset, |_| [0.0, 0.0]), view_proj)
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 fn song_lua_build_shared_capture(
     overlay: &SongLuaOverlayActor,
     state: SongLuaOverlayState,
@@ -13675,6 +13257,127 @@ fn song_lua_projected_overlay_actor(
 }
 
 type SongLuaActorList = SmallVec<[Actor; 2]>;
+
+#[allow(clippy::too_many_arguments)]
+fn build_song_lua_aft_sprite_actor(
+    state: SongLuaOverlayState,
+    texture_handle: TextureHandle,
+    texture_size: [f32; 2],
+    z: i16,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+    effect_time: f32,
+    effect_beat: f32,
+    total_elapsed: f32,
+    projected_mesh_scratch: Option<&mut SongLuaProjectedMeshScratch>,
+) -> Option<SongLuaActorList> {
+    if !state.visible || !song_lua_overlay_has_visible_output(state) {
+        return None;
+    }
+    let x_scale = screen_width() / overlay_space_width.max(1.0);
+    let y_scale = screen_height() / overlay_space_height.max(1.0);
+    let axis_scale = song_lua_overlay_axis_scale(state);
+    let (size_scale_x, flip_x) = if axis_scale[0] < 0.0 {
+        (-axis_scale[0], true)
+    } else {
+        (axis_scale[0], false)
+    };
+    let (size_scale_y, flip_y) = if axis_scale[1] < 0.0 {
+        (-axis_scale[1], true)
+    } else {
+        (axis_scale[1], false)
+    };
+    let (align, mut offset, size) = if let Some([left, top, right, bottom]) = state.stretch_rect {
+        (
+            [0.0, 0.0],
+            [left * x_scale, top * y_scale],
+            [
+                (right - left).abs() * x_scale * size_scale_x,
+                (bottom - top).abs() * y_scale * size_scale_y,
+            ],
+        )
+    } else {
+        (
+            [state.halign, state.valign],
+            [state.x * x_scale, state.y * y_scale],
+            [
+                texture_size[0] * x_scale * size_scale_x,
+                texture_size[1] * y_scale * size_scale_y,
+            ],
+        )
+    };
+    if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
+        return None;
+    }
+    let mut tint = state.diffuse;
+    let mut glow = state.glow;
+    let mut effect_offset = [0.0, 0.0, 0.0];
+    let mut effect_scale = [1.0, 1.0, 1.0];
+    let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
+    song_lua_apply_overlay_effect(
+        song_lua_overlay_effect_state(state),
+        state.rainbow,
+        effect_time,
+        effect_beat,
+        &mut tint,
+        &mut glow,
+        &mut effect_offset,
+        &mut effect_scale,
+        &mut effect_rot,
+    );
+    offset[0] += effect_offset[0] * x_scale;
+    offset[1] += effect_offset[1] * y_scale;
+    let actor = Actor::Sprite {
+        align,
+        offset,
+        world_z: song_lua_biased_world_z(state, effect_offset[2]),
+        size: [SizeSpec::Px(size[0]), SizeSpec::Px(size[1])],
+        source: SpriteSource::RenderTarget {
+            handle: texture_handle,
+            size: texture_size,
+        },
+        tint,
+        glow,
+        z,
+        cell: None,
+        grid: None,
+        uv_rect: song_lua_overlay_uv_rect(state, None, total_elapsed),
+        visible: state.visible,
+        flip_x,
+        flip_y,
+        cropleft: state.cropleft.clamp(0.0, 1.0),
+        cropright: state.cropright.clamp(0.0, 1.0),
+        croptop: state.croptop.clamp(0.0, 1.0),
+        cropbottom: state.cropbottom.clamp(0.0, 1.0),
+        fadeleft: state.fadeleft.clamp(0.0, 1.0),
+        faderight: state.faderight.clamp(0.0, 1.0),
+        fadetop: state.fadetop.clamp(0.0, 1.0),
+        fadebottom: state.fadebottom.clamp(0.0, 1.0),
+        blend: song_lua_overlay_blend(state.blend),
+        mask_source: state.mask_source,
+        mask_dest: state.mask_dest,
+        rot_x_deg: effect_rot[0],
+        rot_y_deg: effect_rot[1],
+        rot_z_deg: effect_rot[2],
+        local_offset: [0.0, 0.0],
+        local_offset_rot_sin_cos: [0.0, 1.0],
+        texcoordvelocity: state.texcoord_velocity,
+        animate: false,
+        state_delay: 0.0,
+        scale: [effect_scale[0], effect_scale[1]],
+        shadow_len: state.shadow_len,
+        shadow_color: state.shadow_color,
+        effect: EffectState::default(),
+    };
+    Some(song_lua_finalize_overlay_actor(
+        state,
+        actor,
+        glow,
+        x_scale,
+        y_scale,
+        projected_mesh_scratch,
+    ))
+}
 
 /// Emits compiled multi-output overlays directly into the caller's reused
 /// frame buffer. Returning `None` means the overlay is a single-output kind and
@@ -16324,7 +16027,6 @@ fn prepare_song_lua_layer(
     overlay_states: &[SongLuaOverlayState],
     song_foreground_state: SongLuaOverlayState,
     order_cache: &mut SongLuaOverlayOrderCache,
-    topology_index: &mut SongLuaOverlayTopologyIndex,
     order_scratch: &mut Vec<usize>,
     aft_capture_scratch: &mut SongLuaAftCaptureScratch,
 ) -> Option<i16> {
@@ -16338,7 +16040,6 @@ fn prepare_song_lua_layer(
         overlay_states,
         song_foreground_state,
         order_cache,
-        topology_index,
         order_scratch,
         aft_capture_scratch,
     ))
@@ -16350,7 +16051,6 @@ fn prepare_active_song_lua_layer(
     overlay_states: &[SongLuaOverlayState],
     song_foreground_state: SongLuaOverlayState,
     order_cache: &mut SongLuaOverlayOrderCache,
-    topology_index: &mut SongLuaOverlayTopologyIndex,
     order_scratch: &mut Vec<usize>,
     aft_capture_scratch: &mut SongLuaAftCaptureScratch,
 ) -> i16 {
@@ -16361,7 +16061,6 @@ fn prepare_active_song_lua_layer(
     );
     out.reserve(overlays.len());
     song_lua_overlay_order_into(overlays, overlay_states, order_cache, None, order_scratch);
-    topology_index.prepare_rgb_aft_groups(overlay_states, order_scratch);
     base_z
 }
 
@@ -16394,7 +16093,6 @@ fn push_song_lua_layer_actors(
         overlay_states,
         song_foreground_state,
         order_cache,
-        topology_index,
         order_scratch,
         aft_capture_scratch,
     ) else {
@@ -16474,86 +16172,83 @@ fn push_song_lua_layer_actors(
                     out.push(actor);
                 }
             }
-            SongLuaOverlayKind::AftSprite { .. } => {
-                let overlay_state = if let Some((leader, _)) = topology_index.rgb_aft_group(idx) {
-                    if leader != idx {
-                        continue;
-                    }
-                    song_lua_combined_rgb_aft_state(overlay_state)
-                } else {
-                    overlay_state
-                };
-                let direct_aft =
-                    direct_proxies
-                        .as_ref()
-                        .map_or(SongLuaDirectAftResult::Unsupported, |_| {
-                            song_lua_direct_aft_proxy(
-                                idx,
-                                overlay,
-                                overlay_state,
-                                z,
-                                out.len(),
-                                overlays,
-                                overlay_states,
-                                local_overlay_states,
-                                order_cache,
-                                topology_index,
-                                proxy_sources,
-                                space_width,
-                                space_height,
-                                capture_states,
-                                capture_order_scratch,
-                            )
-                        });
-                match direct_aft {
-                    SongLuaDirectAftResult::Handled(proxy) => {
-                        if let (Some(proxy), Some(dest)) = (proxy, direct_proxies.as_deref_mut()) {
-                            dest.push(proxy);
-                        }
-                        continue;
-                    }
-                    SongLuaDirectAftResult::Unsupported => {}
+            SongLuaOverlayKind::ActorFrameTexture => {
+                if !overlay_state.visible {
+                    continue;
                 }
-                let capture_index = topology_index
-                    .aft_render_targets
-                    .get(idx)
-                    .copied()
-                    .and_then(SongLuaOverlayIndex::get);
-                if let (Some(capture_index), Some(capture_scratch)) =
-                    (capture_index, aft_capture_scratch.overlay(idx))
-                {
-                    if let Some(actor) = song_lua_build_shared_capture(
-                        overlay,
-                        overlay_state,
-                        z,
+                let Some(&texture_handle) = topology_index.aft_texture_handles.get(idx) else {
+                    continue;
+                };
+                let size = overlay_state.size.unwrap_or([space_width, space_height]);
+                let target_size = [
+                    size[0].round().clamp(1.0, u32::MAX as f32) as u32,
+                    size[1].round().clamp(1.0, u32::MAX as f32) as u32,
+                ];
+                let Some(capture_scratch) = aft_capture_scratch.overlay(idx) else {
+                    continue;
+                };
+                let Some(children) = capture_scratch.refill([0.0, 0.0], |source| {
+                    song_lua_capture_children_into(
+                        source,
+                        overlays,
+                        overlay_states,
+                        local_overlay_states,
+                        order_cache,
+                        topology_index,
+                        asset_manager,
+                        idx,
+                        proxy_sources,
+                        proxy_actor_scratch.as_deref_mut(),
                         space_width,
                         space_height,
-                        capture_scratch,
-                        |source| {
-                            song_lua_capture_children_into(
-                                source,
-                                overlays,
-                                overlay_states,
-                                local_overlay_states,
-                                order_cache,
-                                topology_index,
-                                asset_manager,
-                                capture_index,
-                                proxy_sources,
-                                proxy_actor_scratch.as_deref_mut(),
-                                space_width,
-                                space_height,
-                                effect_time,
-                                effect_beat,
-                                total_elapsed,
-                                capture_states,
-                                capture_order_scratch,
-                                projected_mesh_scratch,
-                            );
-                        },
-                    ) {
-                        out.push(actor);
-                    }
+                        effect_time,
+                        effect_beat,
+                        total_elapsed,
+                        capture_states,
+                        capture_order_scratch,
+                        projected_mesh_scratch,
+                    );
+                }) else {
+                    continue;
+                };
+                out.push(Actor::RenderTarget {
+                    texture_handle,
+                    size: target_size,
+                    depth: false,
+                    preserve: false,
+                    children,
+                });
+            }
+            SongLuaOverlayKind::AftSprite { .. } => {
+                let Some(capture_index) = topology_index
+                    .aft_sprite_targets
+                    .get(idx)
+                    .copied()
+                    .and_then(SongLuaOverlayIndex::get)
+                else {
+                    continue;
+                };
+                let Some(&texture_handle) = topology_index.aft_texture_handles.get(capture_index)
+                else {
+                    continue;
+                };
+                let texture_size = overlay_states
+                    .get(capture_index)
+                    .and_then(|state| state.size)
+                    .unwrap_or([space_width, space_height]);
+                if let Some(actors) = build_song_lua_aft_sprite_actor(
+                    overlay_state,
+                    texture_handle,
+                    texture_size,
+                    z,
+                    space_width,
+                    space_height,
+                    effect_time,
+                    effect_beat,
+                    total_elapsed,
+                    projected_mesh_scratch.get_mut(idx),
+                ) {
+                    out.extend(actors);
                 }
             }
             _ => {
@@ -16748,8 +16443,7 @@ pub fn push_actors(
     }
     let proxy_requests = proxy_analysis.all;
     let direct_player_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
-        (proxy_analysis.root_players[player] != 0
-            || proxy_analysis.direct_aft.players[player].player)
+        proxy_analysis.root_players[player] != 0
             && !proxy_analysis.captured.players[player].player
             && !proxy_analysis.captured.players[player].note_field
             && !proxy_analysis.captured.players[player].judgment
@@ -16757,19 +16451,17 @@ pub fn push_actors(
             && !notefield_view.edit_beat_bars
     });
     let direct_note_field_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
-        (proxy_analysis.root_note_fields[player] != 0
-            || proxy_analysis.direct_aft.players[player].note_field)
+        proxy_analysis.root_note_fields[player] != 0
             && !proxy_analysis.captured.players[player].note_field
             && (!proxy_requests.players[player].player || direct_player_candidates[player])
     });
     let direct_judgment_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
-        (proxy_analysis.root_judgments[player] != 0
-            || proxy_analysis.direct_aft.players[player].judgment)
+        proxy_analysis.root_judgments[player] != 0
             && !proxy_analysis.captured.players[player].judgment
             && (!proxy_requests.players[player].player || direct_player_candidates[player])
     });
     let direct_combo_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
-        (proxy_analysis.root_combos[player] != 0 || proxy_analysis.direct_aft.players[player].combo)
+        proxy_analysis.root_combos[player] != 0
             && !proxy_analysis.captured.players[player].combo
             && (!proxy_requests.players[player].player || direct_player_candidates[player])
     });
@@ -19720,8 +19412,6 @@ mod tests {
         let mut fast_actors = legacy_actors.clone();
         let mut legacy_order_cache = SongLuaOverlayOrderCache::default();
         let mut fast_order_cache = SongLuaOverlayOrderCache::default();
-        let mut legacy_topology = SongLuaOverlayTopologyIndex::default();
-        let mut fast_topology = SongLuaOverlayTopologyIndex::default();
         let mut legacy_order = vec![7];
         let mut fast_order = legacy_order.clone();
         let mut legacy_aft = SongLuaAftCaptureScratch::default();
@@ -19733,7 +19423,6 @@ mod tests {
             &[],
             SongLuaOverlayState::default(),
             &mut legacy_order_cache,
-            &mut legacy_topology,
             &mut legacy_order,
             &mut legacy_aft,
         );
@@ -19744,7 +19433,6 @@ mod tests {
                 &[],
                 SongLuaOverlayState::default(),
                 &mut fast_order_cache,
-                &mut fast_topology,
                 &mut fast_order,
                 &mut fast_aft,
             ),
@@ -21350,7 +21038,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_proxy_analysis_separates_root_and_direct_aft_judgment() {
+    fn song_lua_proxy_analysis_separates_root_and_captured_judgment() {
         let root = SongLuaOverlayActor {
             kind: SongLuaOverlayKind::ActorProxy {
                 target: SongLuaProxyTarget::Judgment { player_index: 0 },
@@ -21381,19 +21069,11 @@ mod tests {
 
         assert_eq!(analysis.root_judgments, [1, 0]);
         assert!(analysis.all.players[0].judgment);
-        assert!(!analysis.captured.players[0].judgment);
-        assert!(analysis.direct_aft.players[0].judgment);
-        assert_eq!(
-            index.topology.direct_aft_proxies[3],
-            Some(SongLuaDirectAftProxy {
-                capture_index: 1,
-                proxy_index: 2,
-            })
-        );
+        assert!(analysis.captured.players[0].judgment);
     }
 
     #[test]
-    fn song_lua_proxy_analysis_separates_root_and_direct_aft_combo() {
+    fn song_lua_proxy_analysis_separates_root_and_captured_combo() {
         let root = SongLuaOverlayActor {
             kind: SongLuaOverlayKind::ActorProxy {
                 target: SongLuaProxyTarget::Combo { player_index: 0 },
@@ -21424,12 +21104,11 @@ mod tests {
 
         assert_eq!(analysis.root_combos, [1, 0]);
         assert!(analysis.all.players[0].combo);
-        assert!(!analysis.captured.players[0].combo);
-        assert!(analysis.direct_aft.players[0].combo);
+        assert!(analysis.captured.players[0].combo);
     }
 
     #[test]
-    fn song_lua_direct_aft_rejects_mixed_visual_capture() {
+    fn song_lua_aft_collects_mixed_visual_capture_requests() {
         let overlays = vec![
             test_capture_overlay("cap"),
             test_capture_proxy_child(0, SongLuaProxyTarget::NoteField { player_index: 0 }),
@@ -21458,14 +21137,12 @@ mod tests {
             &mut visit_scratch,
         );
 
-        assert_eq!(index.topology.direct_aft_proxies[3], None);
         assert!(analysis.captured.players[0].note_field);
-        assert!(!analysis.direct_aft.players[0].note_field);
         assert_eq!(index.direct_proxy_capacity(&overlays), 0);
     }
 
     #[test]
-    fn song_lua_direct_aft_classifies_transformed_capture() {
+    fn song_lua_aft_collects_transformed_capture_requests() {
         let overlays = vec![
             test_capture_overlay("cap"),
             test_capture_proxy_child(0, SongLuaProxyTarget::NoteField { player_index: 0 }),
@@ -21484,9 +21161,7 @@ mod tests {
             &mut visit_scratch,
         );
 
-        assert!(index.topology.direct_aft_proxies[2].is_some());
-        assert!(!analysis.captured.players[0].note_field);
-        assert!(analysis.direct_aft.players[0].note_field);
+        assert!(analysis.captured.players[0].note_field);
     }
 
     #[test]
@@ -21509,11 +21184,11 @@ mod tests {
         ];
         let index = SongLuaProxyRequestIndex::new(&overlays);
 
-        assert_eq!(index.direct_proxy_capacity(&overlays), 6);
+        assert_eq!(index.direct_proxy_capacity(&overlays), 5);
     }
 
     #[test]
-    fn song_lua_proxy_analysis_separates_root_and_direct_aft_player() {
+    fn song_lua_proxy_analysis_separates_root_and_captured_player() {
         let root_player = SongLuaOverlayActor {
             kind: SongLuaOverlayKind::ActorProxy {
                 target: SongLuaProxyTarget::Player { player_index: 0 },
@@ -21539,16 +21214,8 @@ mod tests {
             song_lua_proxy_request_analysis_indexed(&overlays, &states, &index, &mut visits);
 
         assert_eq!(analysis.root_players, [1, 0]);
-        assert!(!analysis.captured.players[0].player);
-        assert!(analysis.direct_aft.players[0].player);
-        assert_eq!(
-            index.topology.direct_aft_proxies[3],
-            Some(SongLuaDirectAftProxy {
-                capture_index: 1,
-                proxy_index: 2,
-            })
-        );
-        assert_eq!(index.direct_proxy_capacity(&overlays), 3);
+        assert!(analysis.captured.players[0].player);
+        assert_eq!(index.direct_proxy_capacity(&overlays), 2);
     }
 
     #[test]
@@ -22960,83 +22627,15 @@ mod tests {
         ];
         let topology = SongLuaOverlayTopologyIndex::new(&overlays);
         let scratch = SongLuaAftCaptureScratch::new(&overlays, &topology);
-        let banks = scratch.slots[2].as_ref().expect("AFT scratch banks");
+        let banks = scratch.slots[0].as_ref().expect("AFT scratch banks");
 
-        assert_eq!(song_lua_aft_capture_capacity(&overlays, &topology, 2), 3);
+        assert_eq!(song_lua_aft_capture_capacity(&overlays, &topology, 0), 3);
         assert!(banks.iter().all(|bank| bank.capacity() >= 3));
         assert!(banks.iter().all(|bank| bank.stats().growths == 0));
     }
 
     #[test]
-    fn nested_aft_slice_passes_render_upstream_capture() {
-        let mut v_strip_a = test_aft_overlay("ScreenTex", true);
-        v_strip_a.parent_index = Some(2);
-        let v_strip_b = v_strip_a.clone();
-        let mut h_strip_a = test_aft_overlay("VStripsTex", true);
-        h_strip_a.parent_index = Some(5);
-        let h_strip_b = h_strip_a.clone();
-        let overlays = vec![
-            test_capture_overlay("ScreenTex"),
-            test_order_overlay(SongLuaOverlayKind::Quad, Some(0), 0),
-            test_capture_overlay("VStripsTex"),
-            v_strip_a,
-            v_strip_b,
-            test_capture_overlay("HStripsTex"),
-            h_strip_a,
-            h_strip_b,
-            test_aft_overlay("HStripsTex", true),
-        ];
-        let overlay_states = overlays
-            .iter()
-            .map(|overlay| overlay.initial_state)
-            .collect::<Vec<_>>();
-        let mut order_cache = song_lua_overlay_order_cache_from(&overlays, &[]);
-        let mut topology = SongLuaOverlayTopologyIndex::new(&overlays);
-        assert_eq!(topology.aft_sprite_targets[8].get(), Some(5));
-        assert_eq!(topology.aft_render_targets[8].get(), Some(0));
-
-        let mut out = Vec::new();
-        let mut order_scratch = Vec::new();
-        let mut capture_states = Vec::new();
-        let mut capture_order_scratch = Vec::new();
-        let mut aft_scratch = SongLuaAftCaptureScratch::new(&overlays, &topology);
-        let mut mesh_scratch = song_lua_projected_mesh_scratch_for(&overlays);
-        push_song_lua_layer_actors(
-            &mut out,
-            &overlays,
-            &mut order_cache,
-            &mut topology,
-            &overlay_states,
-            &overlay_states,
-            SongLuaOverlayState::default(),
-            &SongLuaScreenProxySources::default(),
-            None,
-            None,
-            &AssetManager::new(),
-            screen_width(),
-            screen_height(),
-            0.0,
-            0.0,
-            0.0,
-            &mut order_scratch,
-            &mut capture_states,
-            &mut capture_order_scratch,
-            &mut aft_scratch,
-            &mut mesh_scratch,
-        );
-
-        assert_eq!(out.len(), 1);
-        let Actor::SharedFrame { children, .. } = &out[0] else {
-            panic!("expected nested AFT pass-through frame");
-        };
-        let [Actor::Frame { children, .. }] = children.as_ref() else {
-            panic!("expected reusable nested AFT capture frame");
-        };
-        assert!(!children.is_empty());
-    }
-
-    #[test]
-    fn song_lua_coincident_rgb_aft_uses_one_internal_blend_capture() {
+    fn song_lua_coincident_rgb_aft_renders_once_then_samples_three_times() {
         let overlays = vec![
             test_capture_overlay("CaptureAFT"),
             test_capture_proxy_child(0, SongLuaProxyTarget::Player { player_index: 0 }),
@@ -23092,9 +22691,14 @@ mod tests {
             &mut projected_mesh_scratch,
         );
 
-        assert_eq!(out.len(), 1);
-        let Actor::SharedFrame { children, .. } = &out[0] else {
-            panic!("expected shared combined AFT frame");
+        assert_eq!(out.len(), 4);
+        let Actor::RenderTarget {
+            texture_handle,
+            children,
+            ..
+        } = &out[0]
+        else {
+            panic!("expected one offscreen AFT capture");
         };
         let [Actor::Frame { children, .. }] = children.as_ref() else {
             panic!("expected reusable capture frame");
@@ -23104,179 +22708,15 @@ mod tests {
         };
         assert_eq!(*blend, Some(BlendMode::Alpha));
         assert_eq!(*tint, [1.0; 4]);
-    }
-
-    #[test]
-    fn song_lua_rgb_aft_keeps_split_channels_when_vibrating() {
-        let mut red = test_rgb_aft_overlay("AFTSpriteR", "CaptureAFT", [1.0, 0.0, 0.0, 1.0]);
-        red.initial_state.vibrate = true;
-        red.initial_state.effect_magnitude = [10.0, 10.0, 10.0];
-        let overlays = vec![
-            test_capture_overlay("CaptureAFT"),
-            test_capture_proxy_child(0, SongLuaProxyTarget::Player { player_index: 0 }),
-            red,
-            test_rgb_aft_overlay("AFTSpriteG", "CaptureAFT", [0.0, 1.0, 0.0, 1.0]),
-            test_rgb_aft_overlay("AFTSpriteB", "CaptureAFT", [0.0, 0.0, 1.0, 1.0]),
-        ];
-        let overlay_states = overlays
-            .iter()
-            .map(|overlay| overlay.initial_state)
-            .collect::<Vec<_>>();
-        let source = vec![Arc::<[Actor]>::from(vec![test_source_actor()])];
-        let proxy_sources = SongLuaScreenProxySources {
-            players: [
-                SongLuaPlayerProxySources {
-                    player: Some(SongLuaProxySource::new(source.as_slice())),
-                    ..SongLuaPlayerProxySources::default()
-                },
-                SongLuaPlayerProxySources::default(),
-            ],
-            ..SongLuaScreenProxySources::default()
-        };
-        let mut order_cache = song_lua_overlay_order_cache_from(&overlays, &[]);
-        let mut topology_index = SongLuaOverlayTopologyIndex::new(&overlays);
-        let mut out = Vec::new();
-        let mut order_scratch = Vec::new();
-        let mut capture_states = Vec::new();
-        let mut capture_order_scratch = Vec::new();
-        let mut aft_capture_scratch = SongLuaAftCaptureScratch::new(&overlays, &topology_index);
-        let mut projected_mesh_scratch = song_lua_projected_mesh_scratch_for(&overlays);
-
-        push_song_lua_layer_actors(
-            &mut out,
-            &overlays,
-            &mut order_cache,
-            &mut topology_index,
-            &overlay_states,
-            &overlay_states,
-            SongLuaOverlayState::default(),
-            &proxy_sources,
-            None,
-            None,
-            &AssetManager::new(),
-            screen_width(),
-            screen_height(),
-            0.0,
-            0.0,
-            0.0,
-            &mut order_scratch,
-            &mut capture_states,
-            &mut capture_order_scratch,
-            &mut aft_capture_scratch,
-            &mut projected_mesh_scratch,
-        );
-
-        assert_eq!(out.len(), 3);
-    }
-
-    #[test]
-    fn song_lua_rgb_aft_keeps_zero_magnitude_vibrate_combined() {
-        let mut red = test_rgb_aft_overlay("AFTSpriteR", "CaptureAFT", [1.0, 0.0, 0.0, 1.0]);
-        red.initial_state.vibrate = true;
-        let mut green = test_rgb_aft_overlay("AFTSpriteG", "CaptureAFT", [0.0, 1.0, 0.0, 1.0]);
-        green.initial_state.vibrate = true;
-        let mut blue = test_rgb_aft_overlay("AFTSpriteB", "CaptureAFT", [0.0, 0.0, 1.0, 1.0]);
-        blue.initial_state.vibrate = true;
-        let overlays = vec![
-            test_capture_overlay("CaptureAFT"),
-            test_capture_proxy_child(0, SongLuaProxyTarget::Player { player_index: 0 }),
-            red,
-            green,
-            blue,
-        ];
-        let overlay_states = overlays
-            .iter()
-            .map(|overlay| overlay.initial_state)
-            .collect::<Vec<_>>();
-        let source = vec![Arc::<[Actor]>::from(vec![test_source_actor()])];
-        let proxy_sources = SongLuaScreenProxySources {
-            players: [
-                SongLuaPlayerProxySources {
-                    player: Some(SongLuaProxySource::new(source.as_slice())),
-                    ..SongLuaPlayerProxySources::default()
-                },
-                SongLuaPlayerProxySources::default(),
-            ],
-            ..SongLuaScreenProxySources::default()
-        };
-        let mut order_cache = song_lua_overlay_order_cache_from(&overlays, &[]);
-        let mut topology_index = SongLuaOverlayTopologyIndex::new(&overlays);
-        let mut out = Vec::new();
-        let mut order_scratch = Vec::new();
-        let mut capture_states = Vec::new();
-        let mut capture_order_scratch = Vec::new();
-        let mut aft_capture_scratch = SongLuaAftCaptureScratch::new(&overlays, &topology_index);
-        let mut projected_mesh_scratch = song_lua_projected_mesh_scratch_for(&overlays);
-
-        push_song_lua_layer_actors(
-            &mut out,
-            &overlays,
-            &mut order_cache,
-            &mut topology_index,
-            &overlay_states,
-            &overlay_states,
-            SongLuaOverlayState::default(),
-            &proxy_sources,
-            None,
-            None,
-            &AssetManager::new(),
-            screen_width(),
-            screen_height(),
-            0.0,
-            0.0,
-            0.0,
-            &mut order_scratch,
-            &mut capture_states,
-            &mut capture_order_scratch,
-            &mut aft_capture_scratch,
-            &mut projected_mesh_scratch,
-        );
-
-        assert_eq!(out.len(), 1);
-    }
-
-    #[test]
-    fn song_lua_rgb_aft_fixture_initial_state_combines() {
-        let manifest = workspace_root();
-        let root = manifest.join("tests/fixtures/song_lua");
-        let entry = root.join("aft.lua");
-        assert!(entry.is_file(), "missing fixture: {}", entry.display());
-        let mut context =
-            deadsync_assets::song_lua::SongLuaCompileContext::new(&root, "RGB AFT Fixture");
-        context.style_name = "double".to_string();
-        let compiled = deadsync_assets::song_lua::compile_song_lua(&entry, &context).unwrap();
-        let states = compiled
-            .overlays
-            .iter()
-            .map(|overlay| overlay.initial_state)
-            .collect::<Vec<_>>();
-        let mut order_cache = song_lua_overlay_order_cache_from(&compiled.overlays, &[]);
-        let mut order = Vec::new();
-        song_lua_overlay_order_into(
-            &compiled.overlays,
-            &states,
-            &mut order_cache,
-            None,
-            &mut order,
-        );
-        let red_index = compiled
-            .overlays
-            .iter()
-            .position(|overlay| overlay.name.as_deref() == Some("AFTSpriteR"))
-            .expect("fixture should compile AFTSpriteR");
-
-        let legacy = song_lua_rgb_aft_group_for(&compiled.overlays, &states, &order, red_index);
-        let mut topology = SongLuaOverlayTopologyIndex::new(&compiled.overlays);
-        topology.prepare_rgb_aft_groups(&states, &order);
-        let prepared = topology.rgb_aft_group(red_index);
-        assert_eq!(prepared, legacy);
-        let Some((leader, group)) = legacy else {
-            panic!("fixture RGB AFT state should combine before rgbsplit");
-        };
-
-        assert!(group.contains(&leader));
-        for index in group {
-            assert_eq!(topology.rgb_aft_group(index), prepared);
+        for actor in &out[1..] {
+            let Actor::Sprite {
+                source: SpriteSource::RenderTarget { handle, .. },
+                ..
+            } = actor
+            else {
+                panic!("expected an AFT texture consumer");
+            };
+            assert_eq!(handle, texture_handle);
         }
     }
 

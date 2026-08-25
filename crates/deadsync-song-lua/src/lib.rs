@@ -1238,6 +1238,7 @@ pub struct SongLuaCompileContext {
     pub global_offset_seconds: f32,
     pub screen_width: f32,
     pub screen_height: f32,
+    pub video_renderers: String,
     pub players: [SongLuaPlayerContext; LUA_PLAYERS],
     pub confusion_offset_available: bool,
     pub confusion_available: bool,
@@ -1256,6 +1257,7 @@ impl SongLuaCompileContext {
             global_offset_seconds: 0.0,
             screen_width: 640.0,
             screen_height: 480.0,
+            video_renderers: "software".to_string(),
             players: std::array::from_fn(|_| SongLuaPlayerContext::default()),
             confusion_offset_available: true,
             confusion_available: true,
@@ -7915,7 +7917,41 @@ return Def.ActorFrame{}
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "1.7778:1280:720:true:1.00:0.02"
+            "1.7778:1280:720:false:1.00:0.02"
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_respects_video_renderer_aft_guard() {
+        let song_dir = test_dir("video-renderer-aft-guard");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local renderers = string.lower(PREFSMAN:GetPreference("VideoRenderers"))
+local show_afts = string.find(renderers, "opengl") ~= nil
+local root = Def.ActorFrame{}
+if show_afts then
+    root[#root + 1] = Def.ActorFrameTexture{Name="ScreenTex"}
+    root[#root + 1] = Def.Quad{}
+end
+return root
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "AFT Guard");
+        context.video_renderers = "Vulkan (wgpu)".to_string();
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert!(compiled.overlays.is_empty());
+
+        context.video_renderers = "opengl".to_string();
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert!(
+            compiled
+                .overlays
+                .iter()
+                .any(|overlay| matches!(overlay.kind, TestOverlayKind::ActorFrameTexture))
         );
     }
 

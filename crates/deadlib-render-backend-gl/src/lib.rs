@@ -1,8 +1,9 @@
 use deadlib_render_core::{
-    BlendMode, CameraUploadCache, DenseSlotMap, DrawOp, DrawStats, RenderFrame, SamplerDesc,
-    SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, TextureHandle,
+    BlendMode, CameraUploadCache, DenseSlotMap, DrawOp, DrawStats, RenderFrame, RenderTargetFrame,
+    SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, TextureHandle,
     TexturedMeshBufferCache, TexturedMeshInstanceRaw, TexturedMeshUploads, TexturedMeshVertex,
-    Yuv420Upload, draw_storage_stats, resolve_textured_meshes,
+    Yuv420Upload, draw_storage_stats, is_render_target_texture, resolve_textured_mesh_geometries,
+    resolve_textured_meshes,
 };
 use glam::Mat4 as Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
@@ -228,6 +229,20 @@ struct CachedTMeshGeom {
     vertex_count: u32,
 }
 
+/// Render-thread-owned ActorFrameTexture storage. Slots are bounded by the
+/// largest active graph and reused by position; steady-state gameplay only
+/// binds and redraws them. Screen-content changes may replace a slot, while
+/// cache pressure never prunes or destroys targets mid-song.
+struct OffscreenTarget {
+    handle: TextureHandle,
+    width: u32,
+    height: u32,
+    texture: Texture,
+    framebuffer: glow::Framebuffer,
+    depth: glow::Renderbuffer,
+    initialized: bool,
+}
+
 #[derive(Clone, Copy)]
 struct LegacySpriteUniforms {
     center: UniformLocation,
@@ -285,6 +300,7 @@ pub struct State {
     tmesh_vbo: glow::Buffer,
     tmesh_instance_vbo: Option<glow::Buffer>,
     uploads: TexturedMeshUploads,
+    offscreen_targets: Vec<OffscreenTarget>,
     cached_tmesh: DenseSlotMap<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     vsync_enabled: bool,
@@ -715,6 +731,7 @@ pub fn init(
         tmesh_vbo,
         tmesh_instance_vbo,
         uploads: TexturedMeshUploads::with_capacity(1024, 64),
+        offscreen_targets: Vec::with_capacity(4),
         cached_tmesh: DenseSlotMap::with_capacity(256),
         cached_tmesh_bytes: 0,
         vsync_enabled,
@@ -1044,6 +1061,140 @@ pub fn delete_texture(state: &State, texture: &Texture) {
     }
 }
 
+fn create_offscreen_target(
+    gl: &glow::Context,
+    handle: TextureHandle,
+    width: u32,
+    height: u32,
+) -> Result<OffscreenTarget, String> {
+    let width = width.max(1);
+    let height = height.max(1);
+    // SAFETY: all resources are created and attached on the current context;
+    // no Rust pointers survive these calls.
+    unsafe {
+        let raw = gl.create_texture()?;
+        gl.bind_texture(glow::TEXTURE_2D, Some(raw));
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_WRAP_S,
+            glow::CLAMP_TO_EDGE as i32,
+        );
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_WRAP_T,
+            glow::CLAMP_TO_EDGE as i32,
+        );
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_MIN_FILTER,
+            glow::LINEAR as i32,
+        );
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_MAG_FILTER,
+            glow::LINEAR as i32,
+        );
+        gl.tex_image_2d(
+            glow::TEXTURE_2D,
+            0,
+            glow::RGBA8 as i32,
+            width as i32,
+            height as i32,
+            0,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            PixelUnpackData::Slice(None),
+        );
+        let framebuffer = gl.create_framebuffer()?;
+        gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
+        gl.framebuffer_texture_2d(
+            glow::FRAMEBUFFER,
+            glow::COLOR_ATTACHMENT0,
+            glow::TEXTURE_2D,
+            Some(raw),
+            0,
+        );
+        let depth = gl.create_renderbuffer()?;
+        gl.bind_renderbuffer(glow::RENDERBUFFER, Some(depth));
+        gl.renderbuffer_storage(
+            glow::RENDERBUFFER,
+            glow::DEPTH_COMPONENT24,
+            width as i32,
+            height as i32,
+        );
+        gl.framebuffer_renderbuffer(
+            glow::FRAMEBUFFER,
+            glow::DEPTH_ATTACHMENT,
+            glow::RENDERBUFFER,
+            Some(depth),
+        );
+        if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
+            gl.delete_renderbuffer(depth);
+            gl.delete_framebuffer(framebuffer);
+            gl.delete_texture(raw);
+            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+            return Err("OpenGL ActorFrameTexture framebuffer is incomplete".to_string());
+        }
+        gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+        Ok(OffscreenTarget {
+            handle,
+            width,
+            height,
+            texture: Texture(TextureImages::Rgba(raw)),
+            framebuffer,
+            depth,
+            initialized: false,
+        })
+    }
+}
+
+fn destroy_offscreen_target(gl: &glow::Context, target: OffscreenTarget) {
+    // SAFETY: these resources were created by this context and remain uniquely
+    // owned by the target slot.
+    unsafe {
+        gl.delete_texture(target.texture.primary());
+        gl.delete_framebuffer(target.framebuffer);
+        gl.delete_renderbuffer(target.depth);
+    }
+}
+
+fn ensure_offscreen_targets(state: &mut State, frame: &RenderFrame) -> Result<(), String> {
+    for (index, pass) in frame.render_targets.iter().enumerate() {
+        let matches = state.offscreen_targets.get(index).is_some_and(|target| {
+            target.handle == pass.texture_handle
+                && target.width == pass.width.max(1)
+                && target.height == pass.height.max(1)
+        });
+        if matches {
+            continue;
+        }
+        let target =
+            create_offscreen_target(&state.gl, pass.texture_handle, pass.width, pass.height)?;
+        if index < state.offscreen_targets.len() {
+            let old = std::mem::replace(&mut state.offscreen_targets[index], target);
+            destroy_offscreen_target(&state.gl, old);
+        } else {
+            state.offscreen_targets.push(target);
+        }
+    }
+    Ok(())
+}
+
+fn resolved_texture<'a, T: TextureLookup + ?Sized>(
+    state: &'a State,
+    textures: &'a T,
+    handle: TextureHandle,
+) -> Option<&'a Texture> {
+    if is_render_target_texture(handle) {
+        return state
+            .offscreen_targets
+            .iter()
+            .find(|target| target.handle == handle)
+            .map(|target| &target.texture);
+    }
+    textures.opengl_texture(handle)
+}
+
 fn bind_sprite_texture(state: &State, texture: &Texture) {
     // SAFETY: every handle belongs to the current context and the sprite
     // program is active at both call sites. Texture units are restored to zero
@@ -1128,6 +1279,687 @@ pub fn request_screenshot(state: &mut State) {
     state.screenshot_requested = true;
 }
 
+fn draw_modern_offscreen_pass(
+    state: &State,
+    frame: &deadlib_render_core::RenderTargetFrame,
+    textures: &impl TextureLookup,
+) -> u32 {
+    // SAFETY: the backend owns a current context for the whole draw call; every
+    // GL handle below belongs to it and all uploaded slices remain borrowed
+    // until their immediate driver call returns.
+    unsafe {
+        let gl = &state.gl;
+        let shared_vao = state
+            .shared_vao
+            .expect("modern OpenGL creates a sprite VAO");
+        let shared_instance_vbo = state
+            .shared_instance_vbo
+            .expect("modern OpenGL creates a sprite instance VBO");
+        let mesh_vao = state.mesh_vao.expect("modern OpenGL creates a mesh VAO");
+        let tmesh_vao = state
+            .tmesh_vao
+            .expect("modern OpenGL creates a textured mesh VAO");
+        let tmesh_instance_vbo = state
+            .tmesh_instance_vbo
+            .expect("modern OpenGL creates a textured mesh instance VBO");
+
+        if !frame.sprite_instances.is_empty() {
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(shared_instance_vbo));
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                bytemuck::cast_slice(&frame.sprite_instances),
+                glow::DYNAMIC_DRAW,
+            );
+        }
+        if !frame.mesh_vertices.is_empty() {
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.mesh_vbo));
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                bytemuck::cast_slice(&frame.mesh_vertices),
+                glow::DYNAMIC_DRAW,
+            );
+        }
+        if !state.uploads.vertices.is_empty() {
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_vbo));
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                bytemuck::cast_slice(&state.uploads.vertices),
+                glow::DYNAMIC_DRAW,
+            );
+        }
+        if !frame.tmesh_instances.is_empty() {
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(tmesh_instance_vbo));
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                bytemuck::cast_slice(&frame.tmesh_instances),
+                glow::DYNAMIC_DRAW,
+            );
+        }
+
+        let apply_blend = |want: BlendMode, last: &mut Option<BlendMode>| {
+            if *last == Some(want) {
+                return;
+            }
+            gl.enable(glow::BLEND);
+            match want {
+                BlendMode::Alpha => {
+                    gl.blend_equation(glow::FUNC_ADD);
+                    gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+                }
+                BlendMode::Add => {
+                    gl.blend_equation(glow::FUNC_ADD);
+                    gl.blend_func(glow::SRC_ALPHA, glow::ONE);
+                }
+                BlendMode::Multiply => {
+                    gl.blend_equation(glow::FUNC_ADD);
+                    gl.blend_func(glow::DST_COLOR, glow::ZERO);
+                }
+                BlendMode::Subtract => {
+                    gl.blend_equation(glow::FUNC_REVERSE_SUBTRACT);
+                    gl.blend_func(glow::ONE, glow::ONE);
+                }
+            }
+            *last = Some(want);
+        };
+        let apply_depth = |want: bool, last: &mut Option<bool>| {
+            if *last == Some(want) {
+                return;
+            }
+            if want {
+                gl.enable(glow::DEPTH_TEST);
+                gl.depth_func(glow::LEQUAL);
+                gl.depth_mask(true);
+            } else {
+                gl.depth_mask(false);
+                gl.disable(glow::DEPTH_TEST);
+            }
+            *last = Some(want);
+        };
+        let flipped_camera = |camera: u8| {
+            Matrix4::from_scale(glam::Vec3::new(1.0, -1.0, 1.0))
+                * frame
+                    .cameras
+                    .get(camera as usize)
+                    .copied()
+                    .unwrap_or(state.projection)
+        };
+
+        let mut vertices = 0u32;
+        let mut last_bound_tex = None;
+        let mut last_blend = None;
+        let mut last_prog = None;
+        let mut last_cameras = [CameraUploadCache::default(); 3];
+        let mut last_sprite_instance_start = None;
+        let mut last_tmesh_instance_start = None;
+        let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
+        let mut last_depth = None;
+        gl.active_texture(glow::TEXTURE0);
+
+        for op in frame.ops.iter().copied() {
+            match op {
+                DrawOp::Sprite(run) => {
+                    apply_blend(run.blend, &mut last_blend);
+                    apply_depth(false, &mut last_depth);
+                    if last_prog != Some(0) {
+                        gl.use_program(Some(state.program));
+                        gl.bind_vertex_array(Some(shared_vao));
+                        gl.uniform_1_i32(Some(&state.texture_location), 0);
+                        last_prog = Some(0);
+                        last_sprite_instance_start = None;
+                        tmesh_buffer_cache.reset();
+                    }
+                    if !state.base_instance
+                        && last_sprite_instance_start != Some(run.instance_start)
+                    {
+                        let stride = mem::size_of::<SpriteInstanceRaw>() as i32;
+                        let v2 = (2 * mem::size_of::<f32>()) as i32;
+                        let v4 = (4 * mem::size_of::<f32>()) as i32;
+                        let base = run.instance_start as i32 * stride;
+                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(shared_instance_vbo));
+                        for (location, size, offset) in [
+                            (2, 4, 0),
+                            (3, 2, v4),
+                            (4, 2, v4 + v2),
+                            (5, 4, v4 + 2 * v2),
+                            (6, 2, 2 * v4 + 2 * v2),
+                            (7, 2, 2 * v4 + 3 * v2),
+                            (8, 2, 2 * v4 + 4 * v2),
+                            (9, 2, 2 * v4 + 5 * v2),
+                            (10, 4, 2 * v4 + 6 * v2),
+                            (11, 1, 3 * v4 + 6 * v2),
+                        ] {
+                            gl.vertex_attrib_pointer_f32(
+                                location,
+                                size,
+                                glow::FLOAT,
+                                false,
+                                stride,
+                                base + offset,
+                            );
+                        }
+                        last_sprite_instance_start = Some(run.instance_start);
+                    }
+                    if last_cameras[0].update_required(run.camera) {
+                        let matrix = flipped_camera(run.camera).to_cols_array_2d();
+                        gl.uniform_matrix_4_f32_slice(
+                            Some(&state.mvp_location),
+                            false,
+                            bytemuck::cast_slice(&matrix),
+                        );
+                    }
+                    let Some(texture) = resolved_texture(state, textures, run.texture_handle)
+                    else {
+                        continue;
+                    };
+                    if last_bound_tex != Some(texture.primary()) {
+                        bind_sprite_texture(state, texture);
+                        last_bound_tex = Some(texture.primary());
+                    }
+                    if state.base_instance {
+                        gl.draw_elements_instanced_base_vertex_base_instance(
+                            glow::TRIANGLES,
+                            state.index_count,
+                            glow::UNSIGNED_SHORT,
+                            0,
+                            run.instance_count as i32,
+                            0,
+                            run.instance_start,
+                        );
+                    } else {
+                        gl.draw_elements_instanced(
+                            glow::TRIANGLES,
+                            state.index_count,
+                            glow::UNSIGNED_SHORT,
+                            0,
+                            run.instance_count as i32,
+                        );
+                    }
+                    vertices = vertices.saturating_add(4 * run.instance_count);
+                }
+                DrawOp::Mesh(run) => {
+                    if run.vertex_count == 0 {
+                        continue;
+                    }
+                    apply_blend(run.blend, &mut last_blend);
+                    apply_depth(false, &mut last_depth);
+                    if last_prog != Some(1) {
+                        gl.use_program(Some(state.mesh_program));
+                        gl.bind_vertex_array(Some(mesh_vao));
+                        last_prog = Some(1);
+                        tmesh_buffer_cache.reset();
+                    }
+                    if last_cameras[1].update_required(run.camera) {
+                        let matrix = flipped_camera(run.camera).to_cols_array_2d();
+                        gl.uniform_matrix_4_f32_slice(
+                            Some(&state.mesh_mvp_location),
+                            false,
+                            bytemuck::cast_slice(&matrix),
+                        );
+                    }
+                    gl.draw_arrays(
+                        glow::TRIANGLES,
+                        run.vertex_start as i32,
+                        run.vertex_count as i32,
+                    );
+                    vertices = vertices.saturating_add(run.vertex_count);
+                }
+                DrawOp::TexturedMesh(run) => {
+                    let Some(source) = state.uploads.source(run.geometry) else {
+                        continue;
+                    };
+                    apply_blend(run.blend, &mut last_blend);
+                    apply_depth(run.depth_test, &mut last_depth);
+                    if last_prog != Some(2) {
+                        gl.use_program(Some(state.tmesh_program));
+                        gl.bind_vertex_array(Some(tmesh_vao));
+                        gl.uniform_1_i32(Some(&state.tmesh_texture_location), 0);
+                        last_prog = Some(2);
+                        last_tmesh_instance_start = None;
+                        tmesh_buffer_cache.reset();
+                    }
+                    if tmesh_buffer_cache.update_required(source) {
+                        let stride = mem::size_of::<TexturedMeshVertex>() as i32;
+                        let vbo = source.buffer_key().and_then(|key| {
+                            state.cached_tmesh.get_slot(key).map(|entry| entry.vbo)
+                        });
+                        let Some(vbo) = vbo
+                            .or_else(|| source.buffer_key().is_none().then_some(state.tmesh_vbo))
+                        else {
+                            tmesh_buffer_cache.reset();
+                            continue;
+                        };
+                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+                        for (location, size, offset) in [
+                            (0, 3, 0),
+                            (1, 2, 3 * mem::size_of::<f32>() as i32),
+                            (2, 4, 5 * mem::size_of::<f32>() as i32),
+                            (3, 2, 9 * mem::size_of::<f32>() as i32),
+                        ] {
+                            gl.vertex_attrib_pointer_f32(
+                                location,
+                                size,
+                                glow::FLOAT,
+                                false,
+                                stride,
+                                offset,
+                            );
+                        }
+                    }
+                    if !state.base_instance && last_tmesh_instance_start != Some(run.instance_start)
+                    {
+                        let stride = mem::size_of::<TexturedMeshInstanceRaw>() as i32;
+                        let col = (4 * mem::size_of::<f32>()) as i32;
+                        let uv = (2 * mem::size_of::<f32>()) as i32;
+                        let base = run.instance_start as i32 * stride;
+                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(tmesh_instance_vbo));
+                        for (location, size, offset) in [
+                            (4, 4, 0),
+                            (5, 4, col),
+                            (6, 4, 2 * col),
+                            (7, 4, 3 * col),
+                            (8, 4, 4 * col),
+                            (9, 2, 5 * col),
+                            (10, 2, 5 * col + uv),
+                            (11, 2, 5 * col + 2 * uv),
+                            (12, 1, 5 * col + 3 * uv),
+                        ] {
+                            gl.vertex_attrib_pointer_f32(
+                                location,
+                                size,
+                                glow::FLOAT,
+                                false,
+                                stride,
+                                base + offset,
+                            );
+                        }
+                        last_tmesh_instance_start = Some(run.instance_start);
+                    }
+                    if last_cameras[2].update_required(run.camera) {
+                        let matrix = flipped_camera(run.camera).to_cols_array_2d();
+                        gl.uniform_matrix_4_f32_slice(
+                            Some(&state.tmesh_mvp_location),
+                            false,
+                            bytemuck::cast_slice(&matrix),
+                        );
+                    }
+                    let Some(texture) =
+                        resolved_texture(state, textures, run.texture_handle).map(Texture::primary)
+                    else {
+                        continue;
+                    };
+                    if last_bound_tex != Some(texture) {
+                        gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                        last_bound_tex = Some(texture);
+                    }
+                    let start = source.vertex_start() as i32;
+                    let count = source.vertex_count() as i32;
+                    if state.base_instance {
+                        gl.draw_arrays_instanced_base_instance(
+                            glow::TRIANGLES,
+                            start,
+                            count,
+                            run.instance_count as i32,
+                            run.instance_start,
+                        );
+                    } else {
+                        gl.draw_arrays_instanced(
+                            glow::TRIANGLES,
+                            start,
+                            count,
+                            run.instance_count as i32,
+                        );
+                    }
+                    vertices = vertices.saturating_add(
+                        (source.vertex_count() / 3).saturating_mul(run.instance_count),
+                    );
+                }
+            }
+        }
+        apply_depth(false, &mut last_depth);
+        gl.bind_vertex_array(None);
+        gl.use_program(None);
+        vertices
+    }
+}
+
+fn draw_legacy_offscreen_pass(
+    state: &State,
+    frame: &RenderTargetFrame,
+    textures: &impl TextureLookup,
+) -> u32 {
+    let gl = &state.gl;
+    let sprite_uniforms = state
+        .legacy_sprite_uniforms
+        .expect("legacy OpenGL path creates sprite uniforms");
+    let tmesh_uniforms = state
+        .legacy_tmesh_uniforms
+        .expect("legacy OpenGL path creates textured mesh uniforms");
+    let camera = |index: u8| {
+        Matrix4::from_scale(glam::Vec3::new(1.0, -1.0, 1.0))
+            * frame
+                .cameras
+                .get(index as usize)
+                .copied()
+                .unwrap_or(state.projection)
+    };
+    let apply_blend = |mode: BlendMode| {
+        // SAFETY: these calls only mutate state on the current context.
+        unsafe {
+            gl.enable(glow::BLEND);
+            match mode {
+                BlendMode::Alpha => {
+                    gl.blend_equation(glow::FUNC_ADD);
+                    gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+                }
+                BlendMode::Add => {
+                    gl.blend_equation(glow::FUNC_ADD);
+                    gl.blend_func(glow::SRC_ALPHA, glow::ONE);
+                }
+                BlendMode::Multiply => {
+                    gl.blend_equation(glow::FUNC_ADD);
+                    gl.blend_func(glow::DST_COLOR, glow::ZERO);
+                }
+                BlendMode::Subtract => {
+                    gl.blend_equation(glow::FUNC_REVERSE_SUBTRACT);
+                    gl.blend_func(glow::ONE, glow::ONE);
+                }
+            }
+        }
+    };
+    let apply_depth = |enabled: bool| {
+        // SAFETY: these calls only mutate state on the current context.
+        unsafe {
+            if enabled {
+                gl.enable(glow::DEPTH_TEST);
+                gl.depth_func(glow::LEQUAL);
+                gl.depth_mask(true);
+            } else {
+                gl.depth_mask(false);
+                gl.disable(glow::DEPTH_TEST);
+            }
+        }
+    };
+
+    // SAFETY: all buffers, programs, textures, and uniform locations belong to
+    // the current context and borrowed slices live through their upload calls.
+    unsafe {
+        if !frame.mesh_vertices.is_empty() {
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.mesh_vbo));
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                bytemuck::cast_slice(&frame.mesh_vertices),
+                glow::DYNAMIC_DRAW,
+            );
+        }
+        if !state.uploads.vertices.is_empty() {
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_vbo));
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                bytemuck::cast_slice(&state.uploads.vertices),
+                glow::DYNAMIC_DRAW,
+            );
+        }
+        gl.active_texture(glow::TEXTURE0);
+        let mut vertices = 0u32;
+        for op in frame.ops.iter().copied() {
+            match op {
+                DrawOp::Sprite(run) => {
+                    let Some(texture) = resolved_texture(state, textures, run.texture_handle)
+                    else {
+                        continue;
+                    };
+                    apply_blend(run.blend);
+                    apply_depth(false);
+                    gl.use_program(Some(state.program));
+                    gl.uniform_1_i32(Some(&state.texture_location), 0);
+                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_vbo));
+                    gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(state.shared_ibo));
+                    let stride = (4 * mem::size_of::<f32>()) as i32;
+                    gl.enable_vertex_attrib_array(0);
+                    gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
+                    gl.enable_vertex_attrib_array(1);
+                    gl.vertex_attrib_pointer_f32(
+                        1,
+                        2,
+                        glow::FLOAT,
+                        false,
+                        stride,
+                        (2 * mem::size_of::<f32>()) as i32,
+                    );
+                    gl.disable_vertex_attrib_array(2);
+                    gl.disable_vertex_attrib_array(3);
+                    let projection = camera(run.camera).to_cols_array_2d();
+                    gl.uniform_matrix_4_f32_slice(
+                        Some(&state.mvp_location),
+                        false,
+                        bytemuck::cast_slice(&projection),
+                    );
+                    bind_sprite_texture(state, texture);
+                    let end = run.instance_start.saturating_add(run.instance_count);
+                    for index in run.instance_start..end {
+                        let Some(instance) = frame.sprite_instances.get(index as usize) else {
+                            continue;
+                        };
+                        gl.uniform_4_f32(
+                            Some(&sprite_uniforms.center),
+                            instance.center[0],
+                            instance.center[1],
+                            instance.center[2],
+                            instance.center[3],
+                        );
+                        gl.uniform_2_f32(
+                            Some(&sprite_uniforms.size),
+                            instance.size[0],
+                            instance.size[1],
+                        );
+                        gl.uniform_2_f32(
+                            Some(&sprite_uniforms.rot_sin_cos),
+                            instance.rot_sin_cos[0],
+                            instance.rot_sin_cos[1],
+                        );
+                        gl.uniform_4_f32(
+                            Some(&sprite_uniforms.tint),
+                            instance.tint[0],
+                            instance.tint[1],
+                            instance.tint[2],
+                            instance.tint[3],
+                        );
+                        gl.uniform_2_f32(
+                            Some(&sprite_uniforms.uv_scale),
+                            instance.uv_scale[0],
+                            instance.uv_scale[1],
+                        );
+                        gl.uniform_2_f32(
+                            Some(&sprite_uniforms.uv_offset),
+                            instance.uv_offset[0],
+                            instance.uv_offset[1],
+                        );
+                        gl.uniform_2_f32(
+                            Some(&sprite_uniforms.local_offset),
+                            instance.local_offset[0],
+                            instance.local_offset[1],
+                        );
+                        gl.uniform_2_f32(
+                            Some(&sprite_uniforms.local_offset_rot_sin_cos),
+                            instance.local_offset_rot_sin_cos[0],
+                            instance.local_offset_rot_sin_cos[1],
+                        );
+                        gl.uniform_4_f32(
+                            Some(&sprite_uniforms.edge_fade),
+                            instance.edge_fade[0],
+                            instance.edge_fade[1],
+                            instance.edge_fade[2],
+                            instance.edge_fade[3],
+                        );
+                        gl.uniform_1_f32(
+                            Some(&sprite_uniforms.texture_mask),
+                            instance.texture_mask,
+                        );
+                        gl.draw_elements(
+                            glow::TRIANGLES,
+                            state.index_count,
+                            glow::UNSIGNED_SHORT,
+                            0,
+                        );
+                        vertices = vertices.saturating_add(4);
+                    }
+                }
+                DrawOp::Mesh(run) => {
+                    if run.vertex_count == 0 {
+                        continue;
+                    }
+                    apply_blend(run.blend);
+                    apply_depth(false);
+                    gl.use_program(Some(state.mesh_program));
+                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.mesh_vbo));
+                    let stride = mem::size_of::<deadlib_render_core::MeshVertex>() as i32;
+                    gl.enable_vertex_attrib_array(0);
+                    gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
+                    gl.enable_vertex_attrib_array(1);
+                    gl.vertex_attrib_pointer_f32(
+                        1,
+                        4,
+                        glow::FLOAT,
+                        false,
+                        stride,
+                        (2 * mem::size_of::<f32>()) as i32,
+                    );
+                    gl.disable_vertex_attrib_array(2);
+                    gl.disable_vertex_attrib_array(3);
+                    let projection = camera(run.camera).to_cols_array_2d();
+                    gl.uniform_matrix_4_f32_slice(
+                        Some(&state.mesh_mvp_location),
+                        false,
+                        bytemuck::cast_slice(&projection),
+                    );
+                    gl.draw_arrays(
+                        glow::TRIANGLES,
+                        run.vertex_start as i32,
+                        run.vertex_count as i32,
+                    );
+                    vertices = vertices.saturating_add(run.vertex_count);
+                }
+                DrawOp::TexturedMesh(run) => {
+                    let Some(source) = state.uploads.source(run.geometry) else {
+                        continue;
+                    };
+                    let Some(texture) =
+                        resolved_texture(state, textures, run.texture_handle).map(Texture::primary)
+                    else {
+                        continue;
+                    };
+                    apply_blend(run.blend);
+                    apply_depth(run.depth_test);
+                    gl.use_program(Some(state.tmesh_program));
+                    gl.uniform_1_i32(Some(&state.tmesh_texture_location), 0);
+                    gl.enable_vertex_attrib_array(0);
+                    gl.enable_vertex_attrib_array(1);
+                    gl.enable_vertex_attrib_array(2);
+                    gl.enable_vertex_attrib_array(3);
+                    let stride = mem::size_of::<TexturedMeshVertex>() as i32;
+                    let buffer = if let Some(key) = source.buffer_key() {
+                        state.cached_tmesh.get_slot(key).map(|entry| entry.vbo)
+                    } else {
+                        Some(state.tmesh_vbo)
+                    };
+                    let Some(buffer) = buffer else {
+                        continue;
+                    };
+                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
+                    gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
+                    gl.vertex_attrib_pointer_f32(
+                        1,
+                        2,
+                        glow::FLOAT,
+                        false,
+                        stride,
+                        (3 * mem::size_of::<f32>()) as i32,
+                    );
+                    gl.vertex_attrib_pointer_f32(
+                        2,
+                        4,
+                        glow::FLOAT,
+                        false,
+                        stride,
+                        (5 * mem::size_of::<f32>()) as i32,
+                    );
+                    gl.vertex_attrib_pointer_f32(
+                        3,
+                        2,
+                        glow::FLOAT,
+                        false,
+                        stride,
+                        (9 * mem::size_of::<f32>()) as i32,
+                    );
+                    let projection = camera(run.camera).to_cols_array_2d();
+                    gl.uniform_matrix_4_f32_slice(
+                        Some(&state.tmesh_mvp_location),
+                        false,
+                        bytemuck::cast_slice(&projection),
+                    );
+                    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                    let start = source.vertex_start() as i32;
+                    let count = source.vertex_count() as i32;
+                    let triangles = source.vertex_count() / 3;
+                    let end = run.instance_start.saturating_add(run.instance_count);
+                    for index in run.instance_start..end {
+                        let Some(instance) = frame.tmesh_instances.get(index as usize) else {
+                            continue;
+                        };
+                        let model = [
+                            instance.model_col0[0],
+                            instance.model_col0[1],
+                            instance.model_col0[2],
+                            instance.model_col0[3],
+                            instance.model_col1[0],
+                            instance.model_col1[1],
+                            instance.model_col1[2],
+                            instance.model_col1[3],
+                            instance.model_col2[0],
+                            instance.model_col2[1],
+                            instance.model_col2[2],
+                            instance.model_col2[3],
+                            instance.model_col3[0],
+                            instance.model_col3[1],
+                            instance.model_col3[2],
+                            instance.model_col3[3],
+                        ];
+                        gl.uniform_matrix_4_f32_slice(Some(&tmesh_uniforms.model), false, &model);
+                        gl.uniform_4_f32(
+                            Some(&tmesh_uniforms.tint),
+                            instance.tint[0],
+                            instance.tint[1],
+                            instance.tint[2],
+                            instance.tint[3],
+                        );
+                        gl.uniform_2_f32(
+                            Some(&tmesh_uniforms.uv_scale),
+                            instance.uv_scale[0],
+                            instance.uv_scale[1],
+                        );
+                        gl.uniform_2_f32(
+                            Some(&tmesh_uniforms.uv_offset),
+                            instance.uv_offset[0],
+                            instance.uv_offset[1],
+                        );
+                        gl.uniform_2_f32(
+                            Some(&tmesh_uniforms.uv_tex_shift),
+                            instance.uv_tex_shift[0],
+                            instance.uv_tex_shift[1],
+                        );
+                        gl.uniform_1_f32(Some(&tmesh_uniforms.texture_mask), instance.texture_mask);
+                        gl.draw_arrays(glow::TRIANGLES, start, count);
+                        vertices = vertices.saturating_add(triangles);
+                    }
+                }
+            }
+        }
+        apply_depth(false);
+        gl.use_program(None);
+        vertices
+    }
+}
+
 pub fn draw(
     state: &mut State,
     frame: &RenderFrame,
@@ -1200,6 +2032,67 @@ pub fn draw(
         *last = Some(want);
     }
 
+    ensure_offscreen_targets(state, frame).map_err(std::io::Error::other)?;
+    let offscreen_started = Instant::now();
+    let mut offscreen_vertices = 0u32;
+    for (index, target_frame) in frame.render_targets.iter().enumerate() {
+        {
+            let uploads = &mut state.uploads;
+            let gl = &state.gl;
+            let cached_tmesh = &mut state.cached_tmesh;
+            let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
+            resolve_textured_mesh_geometries(
+                &target_frame.tmesh_geometries,
+                uploads,
+                |cache_key, vertices| {
+                    ensure_cached_tmesh(gl, cached_tmesh, cached_tmesh_bytes, cache_key, vertices)
+                },
+            );
+        }
+        let target = &state.offscreen_targets[index];
+        // SAFETY: this framebuffer belongs to the current context and remains
+        // alive for the whole pass.
+        unsafe {
+            state
+                .gl
+                .bind_framebuffer(glow::FRAMEBUFFER, Some(target.framebuffer));
+            state
+                .gl
+                .viewport(0, 0, target.width as i32, target.height as i32);
+            state.gl.color_mask(true, true, true, true);
+            state.gl.clear_depth(1.0);
+            state.gl.depth_mask(true);
+            let mut clear = glow::DEPTH_BUFFER_BIT;
+            if !target_frame.preserve || !target.initialized {
+                state.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+                clear |= glow::COLOR_BUFFER_BIT;
+            }
+            state.gl.clear(clear);
+            state.gl.depth_mask(false);
+            if state.path == GlPath::Modern {
+                offscreen_vertices = offscreen_vertices.saturating_add(draw_modern_offscreen_pass(
+                    state,
+                    target_frame,
+                    textures,
+                ));
+            } else {
+                offscreen_vertices = offscreen_vertices.saturating_add(draw_legacy_offscreen_pass(
+                    state,
+                    target_frame,
+                    textures,
+                ));
+            }
+        }
+        state.offscreen_targets[index].initialized = true;
+    }
+    // SAFETY: restore the window framebuffer and viewport before the ordinary
+    // main pass executes.
+    unsafe {
+        state.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+        state.gl.viewport(0, 0, width as i32, height as i32);
+    }
+    let offscreen_us = elapsed_us_since(offscreen_started);
+
     let backend_prepare_started = Instant::now();
     {
         let uploads = &mut state.uploads;
@@ -1211,7 +2104,7 @@ pub fn draw(
         });
     }
     let mut stats = DrawStats {
-        backend_prepare_us: elapsed_us_since(backend_prepare_started),
+        backend_prepare_us: elapsed_us_since(backend_prepare_started).saturating_add(offscreen_us),
         storage: draw_storage_stats(frame, Some(&state.uploads)),
         ..DrawStats::default()
     };
@@ -1431,7 +2324,8 @@ pub fn draw(
                             );
                         }
 
-                        let Some(texture) = textures.opengl_texture(run.texture_handle) else {
+                        let Some(texture) = resolved_texture(state, textures, run.texture_handle)
+                        else {
                             continue;
                         };
 
@@ -1652,8 +2546,7 @@ pub fn draw(
                             );
                         }
 
-                        let Some(texture) = textures
-                            .opengl_texture(run.texture_handle)
+                        let Some(texture) = resolved_texture(state, textures, run.texture_handle)
                             .map(Texture::primary)
                         else {
                             continue;
@@ -1739,7 +2632,8 @@ pub fn draw(
                             );
                         }
 
-                        let Some(texture) = textures.opengl_texture(run.texture_handle) else {
+                        let Some(texture) = resolved_texture(state, textures, run.texture_handle)
+                        else {
                             continue;
                         };
 
@@ -1942,8 +2836,7 @@ pub fn draw(
                             );
                         }
 
-                        let Some(texture) = textures
-                            .opengl_texture(run.texture_handle)
+                        let Some(texture) = resolved_texture(state, textures, run.texture_handle)
                             .map(Texture::primary)
                         else {
                             continue;
@@ -2080,7 +2973,7 @@ pub fn draw(
             height
         );
     }
-    stats.vertices = vertices;
+    stats.vertices = vertices.saturating_add(offscreen_vertices);
     Ok(stats)
 }
 
@@ -2137,6 +3030,11 @@ pub fn cleanup(state: &mut State) {
     // SAFETY: all GL object handles below were created by this backend and are
     // still owned by `state`, so deleting them once during cleanup is valid.
     unsafe {
+        for target in state.offscreen_targets.drain(..) {
+            state.gl.delete_texture(target.texture.primary());
+            state.gl.delete_framebuffer(target.framebuffer);
+            state.gl.delete_renderbuffer(target.depth);
+        }
         state.gl.delete_program(state.program);
         state.gl.delete_program(state.mesh_program);
         state.gl.delete_program(state.tmesh_program);

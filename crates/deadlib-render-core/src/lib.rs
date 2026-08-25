@@ -12,6 +12,21 @@ use std::{collections::HashMap, sync::Arc};
 pub type TextureHandle = u64;
 pub type ProjectionMatrix = Matrix4;
 pub const INVALID_TEXTURE_HANDLE: TextureHandle = 0;
+/// Render-target handles occupy a namespace that can never overlap asset-store
+/// handles. Backends resolve these from their render-thread-owned offscreen
+/// target cache instead of the asset texture registry.
+pub const RENDER_TARGET_TEXTURE_BIT: TextureHandle = 1 << 63;
+
+#[inline(always)]
+pub const fn render_target_texture_handle(id: u64) -> TextureHandle {
+    let id = id & !RENDER_TARGET_TEXTURE_BIT;
+    RENDER_TARGET_TEXTURE_BIT | if id == 0 { 1 } else { id }
+}
+
+#[inline(always)]
+pub const fn is_render_target_texture(handle: TextureHandle) -> bool {
+    handle & RENDER_TARGET_TEXTURE_BIT != 0
+}
 pub type FastU64Map<V> = HashMap<u64, V, rustc_hash::FxBuildHasher>;
 pub type TMeshCacheKey = u64;
 pub const INVALID_TMESH_CACHE_KEY: TMeshCacheKey = 0;

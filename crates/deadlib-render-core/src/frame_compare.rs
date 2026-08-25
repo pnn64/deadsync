@@ -1,6 +1,8 @@
 //! Exact structural comparisons for renderer parity tests.
 
-use crate::{DrawOp, RenderFrame, SpriteInstanceRaw, SpriteRun, TexturedMeshVertices};
+use crate::{
+    DrawOp, RenderFrame, RenderTargetFrame, SpriteInstanceRaw, SpriteRun, TexturedMeshVertices,
+};
 use bytemuck::Pod;
 use glam::Mat4;
 use std::sync::Arc;
@@ -37,31 +39,112 @@ pub fn compare_render_frames(expected: &RenderFrame, actual: &RenderFrame) -> Co
         &expected.clear_color,
         &actual.clear_color,
     )?;
-    compare_mat_slices("camera", &expected.cameras, &actual.cameras)?;
+    compare_render_targets(&expected.render_targets, &actual.render_targets)?;
+    compare_render_pass(expected, actual)
+}
+
+fn compare_render_targets(
+    expected: &[RenderTargetFrame],
+    actual: &[RenderTargetFrame],
+) -> CompareResult {
+    compare_count("render_target", expected.len(), actual.len())?;
+    for (index, (expected, actual)) in expected.iter().zip(actual).enumerate() {
+        compare_value(
+            "render_target",
+            index,
+            "texture_handle",
+            expected.texture_handle,
+            actual.texture_handle,
+        )?;
+        compare_value(
+            "render_target",
+            index,
+            "size",
+            (expected.width, expected.height),
+            (actual.width, actual.height),
+        )?;
+        compare_value(
+            "render_target",
+            index,
+            "depth",
+            expected.depth,
+            actual.depth,
+        )?;
+        compare_value(
+            "render_target",
+            index,
+            "preserve",
+            expected.preserve,
+            actual.preserve,
+        )?;
+        compare_render_pass(expected, actual)?;
+    }
+    Ok(())
+}
+
+trait RenderPass {
+    fn cameras(&self) -> &[Mat4];
+    fn sprite_instances(&self) -> &[SpriteInstanceRaw];
+    fn mesh_vertices(&self) -> &[crate::MeshVertex];
+    fn tmesh_instances(&self) -> &[crate::TexturedMeshInstanceRaw];
+    fn tmesh_geometries(&self) -> &[crate::TexturedMeshGeometry];
+    fn ops(&self) -> &[DrawOp];
+}
+
+macro_rules! impl_render_pass {
+    ($type:ty) => {
+        impl RenderPass for $type {
+            fn cameras(&self) -> &[Mat4] {
+                &self.cameras
+            }
+            fn sprite_instances(&self) -> &[SpriteInstanceRaw] {
+                &self.sprite_instances
+            }
+            fn mesh_vertices(&self) -> &[crate::MeshVertex] {
+                &self.mesh_vertices
+            }
+            fn tmesh_instances(&self) -> &[crate::TexturedMeshInstanceRaw] {
+                &self.tmesh_instances
+            }
+            fn tmesh_geometries(&self) -> &[crate::TexturedMeshGeometry] {
+                &self.tmesh_geometries
+            }
+            fn ops(&self) -> &[DrawOp] {
+                &self.ops
+            }
+        }
+    };
+}
+
+impl_render_pass!(RenderFrame);
+impl_render_pass!(RenderTargetFrame);
+
+fn compare_render_pass(expected: &impl RenderPass, actual: &impl RenderPass) -> CompareResult {
+    compare_mat_slices("camera", expected.cameras(), actual.cameras())?;
     compare_pod_slices(
         "sprite_instance",
-        &expected.sprite_instances,
-        &actual.sprite_instances,
+        expected.sprite_instances(),
+        actual.sprite_instances(),
     )?;
     compare_pod_slices(
         "mesh_vertex",
-        &expected.mesh_vertices,
-        &actual.mesh_vertices,
+        expected.mesh_vertices(),
+        actual.mesh_vertices(),
     )?;
     compare_pod_slices(
         "tmesh_instance",
-        &expected.tmesh_instances,
-        &actual.tmesh_instances,
+        expected.tmesh_instances(),
+        actual.tmesh_instances(),
     )?;
     compare_count(
         "tmesh_geometry",
-        expected.tmesh_geometries.len(),
-        actual.tmesh_geometries.len(),
+        expected.tmesh_geometries().len(),
+        actual.tmesh_geometries().len(),
     )?;
     for (index, (expected, actual)) in expected
-        .tmesh_geometries
+        .tmesh_geometries()
         .iter()
-        .zip(&actual.tmesh_geometries)
+        .zip(actual.tmesh_geometries())
         .enumerate()
     {
         compare_value(
@@ -73,7 +156,7 @@ pub fn compare_render_frames(expected: &RenderFrame, actual: &RenderFrame) -> Co
         )?;
         compare_tmesh_vertices(index, &expected.vertices, &actual.vertices)?;
     }
-    compare_values("draw_op", &expected.ops, &actual.ops)
+    compare_values("draw_op", expected.ops(), actual.ops())
 }
 
 /// Compares backend-visible painter output while allowing sprite instances to
@@ -93,6 +176,7 @@ pub fn compare_render_frames_semantic(
         &expected.clear_color,
         &actual.clear_color,
     )?;
+    compare_render_targets(&expected.render_targets, &actual.render_targets)?;
     compare_mat_slices("camera", &expected.cameras, &actual.cameras)?;
     compare_pod_slices(
         "mesh_vertex",

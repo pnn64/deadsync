@@ -319,6 +319,7 @@ pub(crate) fn init_view(
     score_cursor.begin_song();
     GameplayInitView {
         runtime: runtime_view(config, lobby),
+        video_renderer: config.video_renderer,
         hud: profile::gameplay_hud_snapshot(),
         judgment_palettes: {
             let catalog = deadsync_config::judgment_palettes::runtime_catalog();
