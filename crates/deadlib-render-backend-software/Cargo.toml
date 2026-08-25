@@ -25,3 +25,7 @@ harness = false
 [[bench]]
 name = "graphics_pipeline_ninth_pass"
 harness = false
+
+[[bench]]
+name = "graphics_pipeline_tenth_pass"
+harness = false

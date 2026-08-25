@@ -1430,7 +1430,17 @@ fn project_tmesh_polygon(
         };
     }
 
-    let (clipped, len) = clip_tmesh_near(triangle);
+    let clipped;
+    let polygon: &[ClipVertexTexColor] = if triangle
+        .iter()
+        .all(|vertex| vertex.clip.z + vertex.clip.w >= 0.0)
+    {
+        &triangle
+    } else {
+        let result = clip_tmesh_near(triangle);
+        clipped = result.0;
+        &clipped[..result.1]
+    };
     let mut projected = [ScreenVertexTexColor {
         x: 0.0,
         y: 0.0,
@@ -1438,8 +1448,7 @@ fn project_tmesh_polygon(
         v: 0.0,
         color: [0.0; 4],
     }; 4];
-    for i in 0..len {
-        let vertex = clipped[i];
+    for (i, vertex) in polygon.iter().copied().enumerate() {
         if vertex.clip.w == 0.0 {
             return None;
         }
@@ -1456,7 +1465,7 @@ fn project_tmesh_polygon(
             color: vertex.color,
         };
     }
-    Some((projected, len))
+    Some((projected, polygon.len()))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1794,65 +1803,138 @@ fn rasterize_triangle_with_inv(
     stripe_y_end: usize,
     buffer: &mut [u32],
 ) {
+    match (texture_mask, opaque) {
+        (false, false) => rasterize_triangle_mode::<false, false>(
+            v0,
+            v1,
+            v2,
+            inv_denom,
+            tint,
+            blend,
+            image,
+            sampler,
+            width,
+            height,
+            stripe_y_start,
+            stripe_y_end,
+            buffer,
+        ),
+        (false, true) => rasterize_triangle_mode::<false, true>(
+            v0,
+            v1,
+            v2,
+            inv_denom,
+            tint,
+            blend,
+            image,
+            sampler,
+            width,
+            height,
+            stripe_y_start,
+            stripe_y_end,
+            buffer,
+        ),
+        (true, false) => rasterize_triangle_mode::<true, false>(
+            v0,
+            v1,
+            v2,
+            inv_denom,
+            tint,
+            blend,
+            image,
+            sampler,
+            width,
+            height,
+            stripe_y_start,
+            stripe_y_end,
+            buffer,
+        ),
+        (true, true) => rasterize_triangle_mode::<true, true>(
+            v0,
+            v1,
+            v2,
+            inv_denom,
+            tint,
+            blend,
+            image,
+            sampler,
+            width,
+            height,
+            stripe_y_start,
+            stripe_y_end,
+            buffer,
+        ),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn rasterize_triangle_mode<const MASK: bool, const OPAQUE: bool>(
+    v0: &ScreenVertex,
+    v1: &ScreenVertex,
+    v2: &ScreenVertex,
+    inv_denom: f32,
+    tint: [f32; 4],
+    blend: BlendMode,
+    image: &RgbaImage,
+    sampler: SamplerDesc,
+    width: usize,
+    height: usize,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
+    buffer: &mut [u32],
+) {
     match (sampler.filter, matches!(blend, BlendMode::Add)) {
-        (SamplerFilter::Nearest, true) => rasterize_triangle_impl::<false, true>(
+        (SamplerFilter::Nearest, true) => rasterize_triangle_impl::<false, true, MASK, OPAQUE>(
             v0,
             v1,
             v2,
             inv_denom,
             tint,
-            texture_mask,
             image,
             sampler,
-            opaque,
             width,
             height,
             stripe_y_start,
             stripe_y_end,
             buffer,
         ),
-        (SamplerFilter::Nearest, false) => rasterize_triangle_impl::<false, false>(
+        (SamplerFilter::Nearest, false) => rasterize_triangle_impl::<false, false, MASK, OPAQUE>(
             v0,
             v1,
             v2,
             inv_denom,
             tint,
-            texture_mask,
             image,
             sampler,
-            opaque,
             width,
             height,
             stripe_y_start,
             stripe_y_end,
             buffer,
         ),
-        (SamplerFilter::Linear, true) => rasterize_triangle_impl::<true, true>(
+        (SamplerFilter::Linear, true) => rasterize_triangle_impl::<true, true, MASK, OPAQUE>(
             v0,
             v1,
             v2,
             inv_denom,
             tint,
-            texture_mask,
             image,
             sampler,
-            opaque,
             width,
             height,
             stripe_y_start,
             stripe_y_end,
             buffer,
         ),
-        (SamplerFilter::Linear, false) => rasterize_triangle_impl::<true, false>(
+        (SamplerFilter::Linear, false) => rasterize_triangle_impl::<true, false, MASK, OPAQUE>(
             v0,
             v1,
             v2,
             inv_denom,
             tint,
-            texture_mask,
             image,
             sampler,
-            opaque,
             width,
             height,
             stripe_y_start,
@@ -1919,63 +2001,134 @@ fn rasterize_triangle_tex_color_prepared(
     width: usize,
 ) {
     let [v0, v1, v2] = vertices;
+    match (texture_mask, opaque) {
+        (false, false) => rasterize_triangle_tex_color_mode::<false, false>(
+            v0,
+            v1,
+            v2,
+            setup,
+            blend,
+            image,
+            sampler,
+            stripe_y_start,
+            stripe_y_end,
+            buffer,
+            width,
+        ),
+        (false, true) => rasterize_triangle_tex_color_mode::<false, true>(
+            v0,
+            v1,
+            v2,
+            setup,
+            blend,
+            image,
+            sampler,
+            stripe_y_start,
+            stripe_y_end,
+            buffer,
+            width,
+        ),
+        (true, false) => rasterize_triangle_tex_color_mode::<true, false>(
+            v0,
+            v1,
+            v2,
+            setup,
+            blend,
+            image,
+            sampler,
+            stripe_y_start,
+            stripe_y_end,
+            buffer,
+            width,
+        ),
+        (true, true) => rasterize_triangle_tex_color_mode::<true, true>(
+            v0,
+            v1,
+            v2,
+            setup,
+            blend,
+            image,
+            sampler,
+            stripe_y_start,
+            stripe_y_end,
+            buffer,
+            width,
+        ),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn rasterize_triangle_tex_color_mode<const MASK: bool, const OPAQUE: bool>(
+    v0: &ScreenVertexTexColor,
+    v1: &ScreenVertexTexColor,
+    v2: &ScreenVertexTexColor,
+    setup: RasterSetup,
+    blend: BlendMode,
+    image: &RgbaImage,
+    sampler: SamplerDesc,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
+    buffer: &mut [u32],
+    width: usize,
+) {
     match (sampler.filter, matches!(blend, BlendMode::Add)) {
-        (SamplerFilter::Nearest, true) => rasterize_triangle_tex_color_impl::<false, true>(
-            v0,
-            v1,
-            v2,
-            setup,
-            texture_mask,
-            image,
-            sampler,
-            opaque,
-            width,
-            stripe_y_start,
-            stripe_y_end,
-            buffer,
-        ),
-        (SamplerFilter::Nearest, false) => rasterize_triangle_tex_color_impl::<false, false>(
-            v0,
-            v1,
-            v2,
-            setup,
-            texture_mask,
-            image,
-            sampler,
-            opaque,
-            width,
-            stripe_y_start,
-            stripe_y_end,
-            buffer,
-        ),
-        (SamplerFilter::Linear, true) => rasterize_triangle_tex_color_impl::<true, true>(
-            v0,
-            v1,
-            v2,
-            setup,
-            texture_mask,
-            image,
-            sampler,
-            opaque,
-            width,
-            stripe_y_start,
-            stripe_y_end,
-            buffer,
-        ),
-        (SamplerFilter::Linear, false) => rasterize_triangle_tex_color_impl::<true, false>(
-            v0,
-            v1,
-            v2,
-            setup,
-            texture_mask,
-            image,
-            sampler,
-            opaque,
-            width,
-            stripe_y_start,
-            stripe_y_end,
-            buffer,
-        ),
+        (SamplerFilter::Nearest, true) => {
+            rasterize_triangle_tex_color_impl::<false, true, MASK, OPAQUE>(
+                v0,
+                v1,
+                v2,
+                setup,
+                image,
+                sampler,
+                width,
+                stripe_y_start,
+                stripe_y_end,
+                buffer,
+            )
+        }
+        (SamplerFilter::Nearest, false) => {
+            rasterize_triangle_tex_color_impl::<false, false, MASK, OPAQUE>(
+                v0,
+                v1,
+                v2,
+                setup,
+                image,
+                sampler,
+                width,
+                stripe_y_start,
+                stripe_y_end,
+                buffer,
+            )
+        }
+        (SamplerFilter::Linear, true) => {
+            rasterize_triangle_tex_color_impl::<true, true, MASK, OPAQUE>(
+                v0,
+                v1,
+                v2,
+                setup,
+                image,
+                sampler,
+                width,
+                stripe_y_start,
+                stripe_y_end,
+                buffer,
+            )
+        }
+        (SamplerFilter::Linear, false) => {
+            rasterize_triangle_tex_color_impl::<true, false, MASK, OPAQUE>(
+                v0,
+                v1,
+                v2,
+                setup,
+                image,
+                sampler,
+                width,
+                stripe_y_start,
+                stripe_y_end,
+                buffer,
+            )
+        }
     }
 }
 
@@ -2085,14 +2238,13 @@ fn wrap_index(i: i32, max: usize, wrap: SamplerWrap) -> usize {
 }
 
 #[inline(always)]
-fn sample_tex_nearest(
+fn sample_tex_nearest<const OPAQUE: bool>(
     tex_data: &[u8],
     tex_w: usize,
     tex_h: usize,
     u: f32,
     v: f32,
     sampler: SamplerDesc,
-    opaque: bool,
 ) -> Option<[f32; 4]> {
     let tx = wrap_index(
         (wrap_uv(u, sampler.wrap) * tex_w as f32).floor() as i32,
@@ -2112,7 +2264,7 @@ fn sample_tex_nearest(
         f32::from(tex_data[idx]) * U8_TO_F32,
         f32::from(tex_data[idx + 1]) * U8_TO_F32,
         f32::from(tex_data[idx + 2]) * U8_TO_F32,
-        if opaque {
+        if OPAQUE {
             1.0
         } else {
             f32::from(tex_data[idx + 3]) * U8_TO_F32
@@ -2145,14 +2297,13 @@ fn sample_alpha_nearest(
 }
 
 #[inline(always)]
-fn sample_tex_linear(
+fn sample_tex_linear<const OPAQUE: bool>(
     tex_data: &[u8],
     tex_w: usize,
     tex_h: usize,
     u: f32,
     v: f32,
     sampler: SamplerDesc,
-    opaque: bool,
 ) -> Option<[f32; 4]> {
     let x = wrap_uv(u, sampler.wrap) * tex_w as f32 - 0.5;
     let y = wrap_uv(v, sampler.wrap) * tex_h as f32 - 0.5;
@@ -2175,7 +2326,7 @@ fn sample_tex_linear(
     if idx11 + 3 >= tex_data.len() {
         return None;
     }
-    if !opaque
+    if !OPAQUE
         && tex_data[idx00 + 3] == 0
         && tex_data[idx10 + 3] == 0
         && tex_data[idx01 + 3] == 0
@@ -2189,7 +2340,7 @@ fn sample_tex_linear(
         f32::from(tex_data[idx00]) * U8_TO_F32,
         f32::from(tex_data[idx00 + 1]) * U8_TO_F32,
         f32::from(tex_data[idx00 + 2]) * U8_TO_F32,
-        if opaque {
+        if OPAQUE {
             1.0
         } else {
             f32::from(tex_data[idx00 + 3]) * U8_TO_F32
@@ -2199,7 +2350,7 @@ fn sample_tex_linear(
         f32::from(tex_data[idx10]) * U8_TO_F32,
         f32::from(tex_data[idx10 + 1]) * U8_TO_F32,
         f32::from(tex_data[idx10 + 2]) * U8_TO_F32,
-        if opaque {
+        if OPAQUE {
             1.0
         } else {
             f32::from(tex_data[idx10 + 3]) * U8_TO_F32
@@ -2209,7 +2360,7 @@ fn sample_tex_linear(
         f32::from(tex_data[idx01]) * U8_TO_F32,
         f32::from(tex_data[idx01 + 1]) * U8_TO_F32,
         f32::from(tex_data[idx01 + 2]) * U8_TO_F32,
-        if opaque {
+        if OPAQUE {
             1.0
         } else {
             f32::from(tex_data[idx01 + 3]) * U8_TO_F32
@@ -2219,7 +2370,7 @@ fn sample_tex_linear(
         f32::from(tex_data[idx11]) * U8_TO_F32,
         f32::from(tex_data[idx11 + 1]) * U8_TO_F32,
         f32::from(tex_data[idx11 + 2]) * U8_TO_F32,
-        if opaque {
+        if OPAQUE {
             1.0
         } else {
             f32::from(tex_data[idx11 + 3]) * U8_TO_F32
@@ -2410,16 +2561,19 @@ impl RasterSetup {
 }
 
 #[inline(always)]
-fn rasterize_triangle_impl<const LINEAR: bool, const ADD: bool>(
+fn rasterize_triangle_impl<
+    const LINEAR: bool,
+    const ADD: bool,
+    const MASK: bool,
+    const OPAQUE: bool,
+>(
     v0: &ScreenVertex,
     v1: &ScreenVertex,
     v2: &ScreenVertex,
     inv_denom: f32,
     tint: [f32; 4],
-    texture_mask: bool,
     image: &RgbaImage,
     sampler: SamplerDesc,
-    opaque: bool,
     width: usize,
     height: usize,
     stripe_y_start: usize,
@@ -2455,12 +2609,12 @@ fn rasterize_triangle_impl<const LINEAR: bool, const ADD: bool>(
                 continue;
             }
 
-            let sampled = if texture_mask && opaque {
+            let sampled = if MASK && OPAQUE {
                 Some([0.0, 0.0, 0.0, 1.0])
             } else {
                 let u = v0.u.mul_add(w0, v1.u * w1) + v2.u * w2;
                 let v = v0.v.mul_add(w0, v1.v * w1) + v2.v * w2;
-                if texture_mask {
+                if MASK {
                     let alpha = if LINEAR {
                         sample_alpha_linear(tex_data, tex_w, tex_h, u, v, sampler)
                     } else {
@@ -2468,9 +2622,9 @@ fn rasterize_triangle_impl<const LINEAR: bool, const ADD: bool>(
                     };
                     alpha.map(|alpha| [0.0, 0.0, 0.0, alpha])
                 } else if LINEAR {
-                    sample_tex_linear(tex_data, tex_w, tex_h, u, v, sampler, opaque)
+                    sample_tex_linear::<OPAQUE>(tex_data, tex_w, tex_h, u, v, sampler)
                 } else {
-                    sample_tex_nearest(tex_data, tex_w, tex_h, u, v, sampler, opaque)
+                    sample_tex_nearest::<OPAQUE>(tex_data, tex_w, tex_h, u, v, sampler)
                 }
             };
             let Some(sampled) = sampled else {
@@ -2480,21 +2634,9 @@ fn rasterize_triangle_impl<const LINEAR: bool, const ADD: bool>(
                 continue;
             }
 
-            let sr = clamp01(if texture_mask {
-                tint[0]
-            } else {
-                sampled[0] * tint[0]
-            });
-            let sg = clamp01(if texture_mask {
-                tint[1]
-            } else {
-                sampled[1] * tint[1]
-            });
-            let sb = clamp01(if texture_mask {
-                tint[2]
-            } else {
-                sampled[2] * tint[2]
-            });
+            let sr = clamp01(if MASK { tint[0] } else { sampled[0] * tint[0] });
+            let sg = clamp01(if MASK { tint[1] } else { sampled[1] * tint[1] });
+            let sb = clamp01(if MASK { tint[2] } else { sampled[2] * tint[2] });
             let sa = clamp01(sampled[3] * tint[3]);
             if sa <= 0.0 {
                 continue;
@@ -2511,15 +2653,18 @@ fn rasterize_triangle_impl<const LINEAR: bool, const ADD: bool>(
 }
 
 #[inline(always)]
-fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const ADD: bool>(
+fn rasterize_triangle_tex_color_impl<
+    const LINEAR: bool,
+    const ADD: bool,
+    const MASK: bool,
+    const OPAQUE: bool,
+>(
     v0: &ScreenVertexTexColor,
     v1: &ScreenVertexTexColor,
     v2: &ScreenVertexTexColor,
     setup: RasterSetup,
-    texture_mask: bool,
     image: &RgbaImage,
     sampler: SamplerDesc,
-    opaque: bool,
     width: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
@@ -2547,12 +2692,12 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const ADD: bool>(
                 continue;
             }
 
-            let sampled = if texture_mask && opaque {
+            let sampled = if MASK && OPAQUE {
                 Some([0.0, 0.0, 0.0, 1.0])
             } else {
                 let u = v0.u.mul_add(w0, v1.u * w1) + v2.u * w2;
                 let v = v0.v.mul_add(w0, v1.v * w1) + v2.v * w2;
-                if texture_mask {
+                if MASK {
                     let alpha = if LINEAR {
                         sample_alpha_linear(tex_data, tex_w, tex_h, u, v, sampler)
                     } else {
@@ -2560,9 +2705,9 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const ADD: bool>(
                     };
                     alpha.map(|alpha| [0.0, 0.0, 0.0, alpha])
                 } else if LINEAR {
-                    sample_tex_linear(tex_data, tex_w, tex_h, u, v, sampler, opaque)
+                    sample_tex_linear::<OPAQUE>(tex_data, tex_w, tex_h, u, v, sampler)
                 } else {
-                    sample_tex_nearest(tex_data, tex_w, tex_h, u, v, sampler, opaque)
+                    sample_tex_nearest::<OPAQUE>(tex_data, tex_w, tex_h, u, v, sampler)
                 }
             };
             let Some(sampled) = sampled else {
@@ -2577,9 +2722,9 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const ADD: bool>(
             let cb = clamp01(v0.color[2].mul_add(w0, v1.color[2] * w1) + v2.color[2] * w2);
             let ca = clamp01(v0.color[3].mul_add(w0, v1.color[3] * w1) + v2.color[3] * w2);
 
-            let sr = clamp01(if texture_mask { cr } else { sampled[0] * cr });
-            let sg = clamp01(if texture_mask { cg } else { sampled[1] * cg });
-            let sb = clamp01(if texture_mask { cb } else { sampled[2] * cb });
+            let sr = clamp01(if MASK { cr } else { sampled[0] * cr });
+            let sg = clamp01(if MASK { cg } else { sampled[1] * cg });
+            let sb = clamp01(if MASK { cb } else { sampled[2] * cb });
             let sa = clamp01(sampled[3] * ca);
             if sa <= 0.0 {
                 continue;
@@ -2854,15 +2999,15 @@ mod tests {
             };
             for [u, v] in coordinates {
                 assert_eq!(
-                    sample_tex_nearest(opaque.as_raw(), 8, 8, u, v, sampler, true),
-                    sample_tex_nearest(opaque.as_raw(), 8, 8, u, v, sampler, false),
+                    sample_tex_nearest::<true>(opaque.as_raw(), 8, 8, u, v, sampler),
+                    sample_tex_nearest::<false>(opaque.as_raw(), 8, 8, u, v, sampler),
                 );
                 assert_eq!(
-                    sample_tex_linear(opaque.as_raw(), 8, 8, u, v, sampler, true),
-                    sample_tex_linear(opaque.as_raw(), 8, 8, u, v, sampler, false),
+                    sample_tex_linear::<true>(opaque.as_raw(), 8, 8, u, v, sampler),
+                    sample_tex_linear::<false>(opaque.as_raw(), 8, 8, u, v, sampler),
                 );
 
-                let nearest = sample_tex_nearest(mixed.as_raw(), 8, 8, u, v, sampler, false)
+                let nearest = sample_tex_nearest::<false>(mixed.as_raw(), 8, 8, u, v, sampler)
                     .expect("nonempty image samples");
                 assert_eq!(
                     sample_alpha_nearest(mixed.as_raw(), 8, 8, u, v, sampler),
@@ -2870,9 +3015,120 @@ mod tests {
                 );
                 let alpha = sample_alpha_linear(mixed.as_raw(), 8, 8, u, v, sampler)
                     .expect("nonempty image samples");
-                match sample_tex_linear(mixed.as_raw(), 8, 8, u, v, sampler, false) {
+                match sample_tex_linear::<false>(mixed.as_raw(), 8, 8, u, v, sampler) {
                     Some(sample) => assert_eq!(alpha, sample[3]),
                     None => assert_eq!(alpha, 0.0),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn raster_modes_preserve_mask_and_opaque_pixels() {
+        let opaque_a = RgbaImage::from_fn(8, 8, |x, y| {
+            Rgba([
+                (x * 29 + y * 7) as u8,
+                (x * 11 + y * 31) as u8,
+                (x * 19 + y * 17) as u8,
+                255,
+            ])
+        });
+        let opaque_b = RgbaImage::from_fn(8, 8, |x, y| {
+            Rgba([
+                255u8.wrapping_sub((x * 13 + y * 37) as u8),
+                (x * 43 + y * 3) as u8,
+                (x * 5 + y * 47) as u8,
+                255,
+            ])
+        });
+        let alpha_a = RgbaImage::from_fn(8, 8, |x, y| {
+            Rgba([
+                (x * 17 + y * 41) as u8,
+                (x * 23 + y * 5) as u8,
+                (x * 31 + y * 11) as u8,
+                (31 + x * 19 + y * 13) as u8,
+            ])
+        });
+        let alpha_b = RgbaImage::from_fn(8, 8, |x, y| {
+            let alpha = (31 + x * 19 + y * 13) as u8;
+            Rgba([255, 17, 203, alpha])
+        });
+        let vertices = [
+            ScreenVertex {
+                x: 8.0,
+                y: 7.0,
+                u: -0.2,
+                v: 0.1,
+            },
+            ScreenVertex {
+                x: 9.0,
+                y: 70.0,
+                u: 0.15,
+                v: 1.3,
+            },
+            ScreenVertex {
+                x: 87.0,
+                y: 12.0,
+                u: 1.2,
+                v: -0.15,
+            },
+        ];
+        let inv_denom = triangle_inv_denom(&vertices[0], &vertices[1], &vertices[2])
+            .expect("test triangle is not degenerate");
+        let render = |image: &RgbaImage,
+                      sampler: SamplerDesc,
+                      texture_mask: bool,
+                      opaque: bool,
+                      blend: BlendMode| {
+            let mut pixels = vec![pack_rgba([0.03, 0.05, 0.07, 1.0]); WIDTH * HEIGHT];
+            rasterize_triangle_with_inv(
+                &vertices[0],
+                &vertices[1],
+                &vertices[2],
+                inv_denom,
+                [0.63, 0.72, 0.81, 0.68],
+                texture_mask,
+                blend,
+                image,
+                sampler,
+                opaque,
+                WIDTH,
+                HEIGHT,
+                0,
+                HEIGHT,
+                &mut pixels,
+            );
+            pixels
+        };
+
+        for filter in [SamplerFilter::Nearest, SamplerFilter::Linear] {
+            for wrap in [SamplerWrap::Clamp, SamplerWrap::Repeat] {
+                let sampler = SamplerDesc {
+                    filter,
+                    wrap,
+                    mipmaps: false,
+                };
+                for blend in [BlendMode::Alpha, BlendMode::Add] {
+                    assert_eq!(
+                        render(&opaque_a, sampler, false, true, blend),
+                        render(&opaque_a, sampler, false, false, blend),
+                        "opaque color specialization changed pixels"
+                    );
+                    assert_eq!(
+                        render(&opaque_a, sampler, true, true, blend),
+                        render(&opaque_b, sampler, true, true, blend),
+                        "opaque masks must ignore every texture channel"
+                    );
+                    assert_eq!(
+                        render(&alpha_a, sampler, true, false, blend),
+                        render(&alpha_b, sampler, true, false, blend),
+                        "alpha masks must ignore texture RGB"
+                    );
+                    assert_ne!(
+                        render(&alpha_a, sampler, false, false, blend),
+                        render(&alpha_b, sampler, false, false, blend),
+                        "the fixture must expose non-mask RGB sampling"
+                    );
                 }
             }
         }
@@ -2891,7 +3147,7 @@ mod tests {
             };
             for [u, v] in [[0.0, 0.0], [0.5, 0.5], [1.0, 1.0], [-1.25, 2.75]] {
                 assert_eq!(
-                    sample_tex_linear(image.as_raw(), 2, 2, u, v, sampler, false),
+                    sample_tex_linear::<false>(image.as_raw(), 2, 2, u, v, sampler),
                     None,
                 );
                 assert_eq!(
@@ -2926,6 +3182,45 @@ mod tests {
         assert_eq!(clipped[3].v, 1.5);
         assert_eq!(clipped[0].color, [0.25, 0.35, 0.45, 0.55]);
         assert_eq!(clipped[3].color, [0.75, 0.65, 0.55, 0.45]);
+    }
+
+    #[test]
+    fn visible_textured_mesh_projects_without_changing_vertices() {
+        let vertices = [
+            textured_vertex([-0.5, -0.5, 0.0], [0.0, 1.0]),
+            textured_vertex([0.5, -0.5, 0.0], [1.0, 1.0]),
+            textured_vertex([0.0, 0.5, 0.0], [0.5, 0.0]),
+        ];
+        let (projected, len) = project_tmesh_polygon(
+            &Matrix4::IDENTITY,
+            [1.0; 4],
+            [1.0; 2],
+            [0.0; 2],
+            [0.0; 2],
+            &vertices,
+            WIDTH,
+            HEIGHT,
+        )
+        .expect("fully visible triangle projects");
+
+        assert_eq!(len, 3);
+        assert_eq!(
+            projected.map(|vertex| [vertex.x, vertex.y]),
+            [[24.0, 60.0], [72.0, 60.0], [48.0, 20.0], [0.0, 0.0]]
+        );
+        assert_eq!(
+            projected.map(|vertex| [vertex.u, vertex.v]),
+            [[0.0, 1.0], [1.0, 1.0], [0.5, 0.0], [0.0, 0.0]]
+        );
+        assert_eq!(
+            projected.map(|vertex| vertex.color),
+            [
+                [0.9, 0.8, 0.7, 0.85],
+                [0.9, 0.8, 0.7, 0.85],
+                [0.9, 0.8, 0.7, 0.85],
+                [0.0; 4],
+            ]
+        );
     }
 
     #[test]
