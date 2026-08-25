@@ -40,8 +40,9 @@ pub struct State {
     available_threads: usize,
     worker_pool: Option<WorkerPool>,
     prepared_objects: Vec<PreparedObject>,
-    prepared_mesh_vertices: Vec<ScreenVertexColor>,
-    prepared_tmesh_vertices: Vec<ScreenVertexTexColor>,
+    prepared_mesh_triangles: Vec<PreparedTriangle<ScreenVertexColor>>,
+    prepared_tmesh_triangles: Vec<PreparedTriangle<ScreenVertexTexColor>>,
+    stripe_bins: StripeBins,
 }
 
 struct WorkerPool {
@@ -66,7 +67,8 @@ enum PreparedObject {
         texture_handle: TextureHandle,
     },
     Mesh {
-        vertex_start: u32,
+        triangle_start: u32,
+        triangle_count: u32,
         projected_count: u32,
         rows: ScreenRows,
         blend: BlendMode,
@@ -78,7 +80,8 @@ enum PreparedObject {
         blend: BlendMode,
     },
     TexturedMesh {
-        vertex_start: u32,
+        triangle_start: u32,
+        triangle_count: u32,
         projected_count: u32,
         rows: ScreenRows,
         texture_mask: bool,
@@ -92,6 +95,106 @@ enum PreparedObject {
         blend: BlendMode,
         texture_handle: TextureHandle,
     },
+}
+
+impl PreparedObject {
+    #[inline(always)]
+    const fn rows(&self, height: usize) -> ScreenRows {
+        match self {
+            Self::Sprite { rows, .. }
+            | Self::Mesh { rows, .. }
+            | Self::TexturedMesh { rows, .. } => *rows,
+            Self::DirectMesh { .. } | Self::DirectTexturedMesh { .. } => ScreenRows {
+                start: 0,
+                end: height as u32,
+            },
+        }
+    }
+
+    #[inline(always)]
+    const fn fixed_vertices(&self) -> u32 {
+        match self {
+            Self::Sprite { .. } => 4,
+            Self::Mesh {
+                projected_count, ..
+            }
+            | Self::TexturedMesh {
+                projected_count, ..
+            } => *projected_count,
+            Self::DirectMesh { .. } | Self::DirectTexturedMesh { .. } => 0,
+        }
+    }
+}
+
+/// Frame-local painter-order membership for the software worker stripes.
+///
+/// The render thread owns and rebuilds it after frame preparation; Rayon
+/// workers only read it. Its lifetime is one frame, while the three vectors
+/// retain a session high-water capacity (64 stripes and 4,096 memberships are
+/// prewarmed). A larger frame may grow them during preparation, never during
+/// parallel drawing. There are no misses, eviction, pruning, synchronization,
+/// or deferred destruction: overflow grows at the frame boundary and cleanup
+/// occurs with renderer state. The lengths and capacities are observable in
+/// tests, and build work is bounded by objects plus their covered stripes.
+#[derive(Default)]
+struct StripeBins {
+    offsets: Vec<u32>,
+    cursors: Vec<u32>,
+    indices: Vec<u32>,
+}
+
+impl StripeBins {
+    fn warmed() -> Self {
+        Self {
+            offsets: Vec::with_capacity(65),
+            cursors: Vec::with_capacity(64),
+            indices: Vec::with_capacity(4_096),
+        }
+    }
+
+    fn build(&mut self, objects: &[PreparedObject], height: usize) {
+        let stripe_count = height.div_ceil(SOFTWARE_ROW_CHUNK);
+        self.offsets.clear();
+        self.offsets.resize(stripe_count + 1, 0);
+        for object in objects {
+            let rows = object.rows(height);
+            let first = rows.start as usize / SOFTWARE_ROW_CHUNK;
+            let end = (rows.end as usize)
+                .div_ceil(SOFTWARE_ROW_CHUNK)
+                .min(stripe_count);
+            for stripe in first.min(stripe_count)..end {
+                self.offsets[stripe + 1] += 1;
+            }
+        }
+        for stripe in 0..stripe_count {
+            self.offsets[stripe + 1] += self.offsets[stripe];
+        }
+
+        self.indices.clear();
+        self.indices.resize(self.offsets[stripe_count] as usize, 0);
+        self.cursors.clear();
+        self.cursors
+            .extend_from_slice(&self.offsets[..stripe_count]);
+        for (index, object) in objects.iter().enumerate() {
+            let rows = object.rows(height);
+            let first = rows.start as usize / SOFTWARE_ROW_CHUNK;
+            let end = (rows.end as usize)
+                .div_ceil(SOFTWARE_ROW_CHUNK)
+                .min(stripe_count);
+            for stripe in first.min(stripe_count)..end {
+                let slot = self.cursors[stripe] as usize;
+                self.indices[slot] = index as u32;
+                self.cursors[stripe] += 1;
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn stripe(&self, index: usize) -> &[u32] {
+        let start = self.offsets[index] as usize;
+        let end = self.offsets[index + 1] as usize;
+        &self.indices[start..end]
+    }
 }
 
 pub fn init(window: Arc<Window>, _vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
@@ -117,8 +220,9 @@ pub fn init(window: Arc<Window>, _vsync_enabled: bool) -> Result<State, Box<dyn 
         available_threads,
         worker_pool: None,
         prepared_objects: Vec::with_capacity(1024),
-        prepared_mesh_vertices: Vec::with_capacity(MESH_STAGE_VERTEX_CAP),
-        prepared_tmesh_vertices: Vec::with_capacity(MESH_STAGE_VERTEX_CAP),
+        prepared_mesh_triangles: Vec::with_capacity(MESH_STAGE_VERTEX_CAP / 3),
+        prepared_tmesh_triangles: Vec::with_capacity(MESH_STAGE_VERTEX_CAP / 3),
+        stripe_bins: StripeBins::warmed(),
     })
 }
 
@@ -206,10 +310,16 @@ pub fn draw(
         w,
         h,
         &mut state.prepared_objects,
-        &mut state.prepared_mesh_vertices,
-        &mut state.prepared_tmesh_vertices,
+        &mut state.prepared_mesh_triangles,
+        &mut state.prepared_tmesh_triangles,
         stage_meshes,
     );
+    if use_parallel {
+        state.stripe_bins.build(&state.prepared_objects, h);
+    }
+    let fixed_vertices = state.prepared_objects.iter().fold(0u32, |sum, object| {
+        sum.saturating_add(object.fixed_vertices())
+    });
     let backend_prepare_us = elapsed_us_since(backend_prepare_started);
 
     let backend_setup_started = Instant::now();
@@ -234,8 +344,9 @@ pub fn draw(
     }
 
     let prepared_objects = state.prepared_objects.as_slice();
-    let prepared_mesh_vertices = state.prepared_mesh_vertices.as_slice();
-    let prepared_tmesh_vertices = state.prepared_tmesh_vertices.as_slice();
+    let prepared_mesh_triangles = state.prepared_mesh_triangles.as_slice();
+    let prepared_tmesh_triangles = state.prepared_tmesh_triangles.as_slice();
+    let stripe_bins = &state.stripe_bins;
     let vertices = if let Some(worker_pool) = worker_pool {
         let pixels: &mut [u32] = &mut buffer;
         worker_pool.install(|| {
@@ -248,14 +359,16 @@ pub fn draw(
                     draw_rows(
                         frame,
                         prepared_objects,
-                        prepared_mesh_vertices,
-                        prepared_tmesh_vertices,
+                        Some(stripe_bins.stripe(chunk_index)),
+                        prepared_mesh_triangles,
+                        prepared_tmesh_triangles,
                         textures,
                         w,
                         h,
                         y_start,
                         y_end,
                         stripe,
+                        fixed_vertices,
                     )
                 })
                 .reduce(|| 0, u32::saturating_add)
@@ -264,14 +377,16 @@ pub fn draw(
         draw_rows(
             frame,
             prepared_objects,
-            prepared_mesh_vertices,
-            prepared_tmesh_vertices,
+            None,
+            prepared_mesh_triangles,
+            prepared_tmesh_triangles,
             textures,
             w,
             h,
             0,
             h,
             &mut buffer,
+            fixed_vertices,
         )
     };
     let backend_record_us = elapsed_us_since(backend_record_started);
@@ -284,12 +399,14 @@ pub fn draw(
     storage.capacities[SOFTWARE_OBJECTS_STORAGE_SLOT] =
         state.prepared_objects.capacity().min(u32::MAX as usize) as u32;
     storage.capacities[SOFTWARE_MESH_STORAGE_SLOT] = state
-        .prepared_mesh_vertices
+        .prepared_mesh_triangles
         .capacity()
+        .saturating_mul(3)
         .min(u32::MAX as usize) as u32;
     storage.capacities[SOFTWARE_TMESH_STORAGE_SLOT] = state
-        .prepared_tmesh_vertices
+        .prepared_tmesh_triangles
         .capacity()
+        .saturating_mul(3)
         .min(u32::MAX as usize) as u32;
     Ok(DrawStats {
         vertices,
@@ -310,8 +427,8 @@ fn prepare_objects(
     width: usize,
     height: usize,
     prepared: &mut Vec<PreparedObject>,
-    mesh_vertices: &mut Vec<ScreenVertexColor>,
-    tmesh_vertices: &mut Vec<ScreenVertexTexColor>,
+    mesh_triangles: &mut Vec<PreparedTriangle<ScreenVertexColor>>,
+    tmesh_triangles: &mut Vec<PreparedTriangle<ScreenVertexTexColor>>,
     stage_meshes: bool,
 ) {
     prepared.clear();
@@ -321,12 +438,15 @@ fn prepare_objects(
             .len()
             .saturating_add(frame.tmesh_instances.len()),
     );
-    mesh_vertices.clear();
-    tmesh_vertices.clear();
+    mesh_triangles.clear();
+    tmesh_triangles.clear();
 
     for op in &frame.ops {
         match *op {
             DrawOp::Sprite(run) => {
+                if textures.software_texture(run.texture_handle).is_none() {
+                    continue;
+                }
                 let projection = frame
                     .cameras
                     .get(run.camera as usize)
@@ -377,7 +497,10 @@ fn prepare_objects(
                     continue;
                 };
                 if !stage_meshes
-                    || vertices.len() > mesh_vertices.capacity().saturating_sub(mesh_vertices.len())
+                    || vertices.len().div_ceil(3)
+                        > mesh_triangles
+                            .capacity()
+                            .saturating_sub(mesh_triangles.len())
                 {
                     prepared.push(PreparedObject::DirectMesh {
                         vertex_start: run.vertex_start,
@@ -387,18 +510,21 @@ fn prepare_objects(
                     });
                     continue;
                 }
-                let Some((vertex_start, projected_count, rows)) = prepare_mesh_vertices(
-                    mesh_vertices,
-                    &projection,
-                    [1.0; 4],
-                    vertices,
-                    width,
-                    height,
-                ) else {
+                let Some((triangle_start, triangle_count, projected_count, rows)) =
+                    prepare_mesh_triangles(
+                        mesh_triangles,
+                        &projection,
+                        [1.0; 4],
+                        vertices,
+                        width,
+                        height,
+                    )
+                else {
                     continue;
                 };
                 prepared.push(PreparedObject::Mesh {
-                    vertex_start,
+                    triangle_start,
+                    triangle_count,
                     projected_count,
                     rows,
                     blend: run.blend,
@@ -423,10 +549,10 @@ fn prepare_objects(
                     };
                     let mvp = projection * instance.transform();
                     if !stage_meshes
-                        || geometry.vertices.len()
-                            > tmesh_vertices
+                        || geometry.vertices.len().div_ceil(3)
+                            > tmesh_triangles
                                 .capacity()
-                                .saturating_sub(tmesh_vertices.len())
+                                .saturating_sub(tmesh_triangles.len())
                     {
                         prepared.push(PreparedObject::DirectTexturedMesh {
                             geometry: run.geometry,
@@ -437,21 +563,24 @@ fn prepare_objects(
                         });
                         continue;
                     }
-                    let Some((vertex_start, projected_count, rows)) = prepare_tmesh_vertices(
-                        tmesh_vertices,
-                        &mvp,
-                        instance.tint,
-                        instance.uv_scale,
-                        instance.uv_offset,
-                        instance.uv_tex_shift,
-                        geometry.vertices.as_ref(),
-                        width,
-                        height,
-                    ) else {
+                    let Some((triangle_start, triangle_count, projected_count, rows)) =
+                        prepare_tmesh_triangles(
+                            tmesh_triangles,
+                            &mvp,
+                            instance.tint,
+                            instance.uv_scale,
+                            instance.uv_offset,
+                            instance.uv_tex_shift,
+                            geometry.vertices.as_ref(),
+                            width,
+                            height,
+                        )
+                    else {
                         continue;
                     };
                     prepared.push(PreparedObject::TexturedMesh {
-                        vertex_start,
+                        triangle_start,
+                        triangle_count,
                         projected_count,
                         rows,
                         texture_mask: instance.texture_mask != 0.0,
@@ -467,146 +596,91 @@ fn prepare_objects(
 fn draw_rows(
     frame: &RenderFrame,
     prepared_objects: &[PreparedObject],
-    mesh_vertices: &[ScreenVertexColor],
-    tmesh_vertices: &[ScreenVertexTexColor],
+    object_indices: Option<&[u32]>,
+    mesh_triangles: &[PreparedTriangle<ScreenVertexColor>],
+    tmesh_triangles: &[PreparedTriangle<ScreenVertexTexColor>],
     textures: &(impl TextureLookup + Sync),
     width: usize,
     height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
     buffer: &mut [u32],
+    fixed_vertices: u32,
 ) -> u32 {
-    let mut vertices_drawn = 0u32;
+    let mut vertices_drawn = fixed_vertices;
+    let mut texture_cache = None;
+    if let Some(indices) = object_indices {
+        for &index in indices {
+            vertices_drawn = vertices_drawn.saturating_add(draw_prepared(
+                &prepared_objects[index as usize],
+                true,
+                frame,
+                mesh_triangles,
+                tmesh_triangles,
+                textures,
+                &mut texture_cache,
+                width,
+                height,
+                stripe_y_start,
+                stripe_y_end,
+                buffer,
+            ));
+        }
+    } else {
+        for prepared in prepared_objects {
+            vertices_drawn = vertices_drawn.saturating_add(draw_prepared(
+                prepared,
+                false,
+                frame,
+                mesh_triangles,
+                tmesh_triangles,
+                textures,
+                &mut texture_cache,
+                width,
+                height,
+                stripe_y_start,
+                stripe_y_end,
+                buffer,
+            ));
+        }
+    }
+    vertices_drawn
+}
 
-    for prepared in prepared_objects {
-        let drawn = match prepared {
-            PreparedObject::Sprite {
-                vertices,
-                rows,
-                inv_denom,
-                tint,
-                texture_mask,
-                blend,
-                texture_handle,
-            } => {
-                let Some(tex) = textures.software_texture(*texture_handle) else {
-                    continue;
-                };
-                if rows.overlaps(stripe_y_start, stripe_y_end) {
-                    rasterize_prepared_sprite(
-                        vertices,
-                        *inv_denom,
-                        *tint,
-                        *texture_mask,
-                        *blend,
-                        &tex.image,
-                        tex.sampler,
-                        width,
-                        height,
-                        stripe_y_start,
-                        stripe_y_end,
-                        buffer,
-                    );
-                }
-                4
-            }
-            PreparedObject::Mesh {
-                vertex_start,
-                projected_count,
-                rows,
-                blend,
-            } => {
-                if rows.overlaps(stripe_y_start, stripe_y_end) {
-                    let start = *vertex_start as usize;
-                    let end = start + *projected_count as usize;
-                    rasterize_prepared_mesh(
-                        &mesh_vertices[start..end],
-                        *blend,
-                        width,
-                        height,
-                        stripe_y_start,
-                        stripe_y_end,
-                        buffer,
-                    );
-                }
-                *projected_count
-            }
-            PreparedObject::DirectMesh {
-                vertex_start,
-                vertex_count,
-                projection,
-                blend,
-            } => {
-                let start = *vertex_start as usize;
-                let end = start.saturating_add(*vertex_count as usize);
-                let Some(vertices) = frame.mesh_vertices.get(start..end) else {
-                    continue;
-                };
-                rasterize_mesh_triangles(
-                    projection,
-                    [1.0; 4],
+#[allow(clippy::too_many_arguments)]
+fn draw_prepared<'a>(
+    prepared: &PreparedObject,
+    rows_known_visible: bool,
+    frame: &RenderFrame,
+    mesh_triangles: &[PreparedTriangle<ScreenVertexColor>],
+    tmesh_triangles: &[PreparedTriangle<ScreenVertexTexColor>],
+    textures: &'a (impl TextureLookup + Sync),
+    texture_cache: &mut Option<(TextureHandle, Option<&'a Texture>)>,
+    width: usize,
+    height: usize,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
+    buffer: &mut [u32],
+) -> u32 {
+    match prepared {
+        PreparedObject::Sprite {
+            vertices,
+            rows,
+            inv_denom,
+            tint,
+            texture_mask,
+            blend,
+            texture_handle,
+        } => {
+            let Some(tex) = resolve_texture(textures, texture_cache, *texture_handle) else {
+                return 0;
+            };
+            if rows_known_visible || rows.overlaps(stripe_y_start, stripe_y_end) {
+                rasterize_prepared_sprite(
                     vertices,
-                    *blend,
-                    width,
-                    height,
-                    stripe_y_start,
-                    stripe_y_end,
-                    buffer,
-                )
-            }
-            PreparedObject::TexturedMesh {
-                vertex_start,
-                projected_count,
-                rows,
-                texture_mask,
-                blend,
-                texture_handle,
-            } => {
-                let Some(tex) = textures.software_texture(*texture_handle) else {
-                    continue;
-                };
-                if rows.overlaps(stripe_y_start, stripe_y_end) {
-                    let start = *vertex_start as usize;
-                    let end = start + *projected_count as usize;
-                    rasterize_prepared_tmesh(
-                        &tmesh_vertices[start..end],
-                        *texture_mask,
-                        *blend,
-                        &tex.image,
-                        tex.sampler,
-                        width,
-                        height,
-                        stripe_y_start,
-                        stripe_y_end,
-                        buffer,
-                    );
-                }
-                *projected_count
-            }
-            PreparedObject::DirectTexturedMesh {
-                geometry,
-                instance,
-                mvp,
-                blend,
-                texture_handle,
-            } => {
-                let Some(geometry) = frame.tmesh_geometries.get(*geometry as usize) else {
-                    continue;
-                };
-                let Some(instance) = frame.tmesh_instances.get(*instance as usize) else {
-                    continue;
-                };
-                let Some(tex) = textures.software_texture(*texture_handle) else {
-                    continue;
-                };
-                rasterize_textured_mesh_triangles(
-                    mvp,
-                    geometry.vertices.as_ref(),
-                    instance.tint,
-                    instance.uv_scale,
-                    instance.uv_offset,
-                    instance.uv_tex_shift,
-                    instance.texture_mask != 0.0,
+                    *inv_denom,
+                    *tint,
+                    *texture_mask,
                     *blend,
                     &tex.image,
                     tex.sampler,
@@ -615,13 +689,134 @@ fn draw_rows(
                     stripe_y_start,
                     stripe_y_end,
                     buffer,
-                )
+                );
             }
-        };
-        vertices_drawn = vertices_drawn.saturating_add(drawn);
+            0
+        }
+        PreparedObject::Mesh {
+            triangle_start,
+            triangle_count,
+            rows,
+            blend,
+            ..
+        } => {
+            if rows_known_visible || rows.overlaps(stripe_y_start, stripe_y_end) {
+                let start = *triangle_start as usize;
+                let end = start + *triangle_count as usize;
+                rasterize_prepared_mesh(
+                    &mesh_triangles[start..end],
+                    *blend,
+                    stripe_y_start,
+                    stripe_y_end,
+                    buffer,
+                    width,
+                );
+            }
+            0
+        }
+        PreparedObject::DirectMesh {
+            vertex_start,
+            vertex_count,
+            projection,
+            blend,
+        } => {
+            let start = *vertex_start as usize;
+            let end = start.saturating_add(*vertex_count as usize);
+            let Some(vertices) = frame.mesh_vertices.get(start..end) else {
+                return 0;
+            };
+            rasterize_mesh_triangles(
+                projection,
+                [1.0; 4],
+                vertices,
+                *blend,
+                width,
+                height,
+                stripe_y_start,
+                stripe_y_end,
+                buffer,
+            )
+        }
+        PreparedObject::TexturedMesh {
+            triangle_start,
+            triangle_count,
+            rows,
+            texture_mask,
+            blend,
+            texture_handle,
+            ..
+        } => {
+            let Some(tex) = resolve_texture(textures, texture_cache, *texture_handle) else {
+                return 0;
+            };
+            if rows_known_visible || rows.overlaps(stripe_y_start, stripe_y_end) {
+                let start = *triangle_start as usize;
+                let end = start + *triangle_count as usize;
+                rasterize_prepared_tmesh(
+                    &tmesh_triangles[start..end],
+                    *texture_mask,
+                    *blend,
+                    &tex.image,
+                    tex.sampler,
+                    stripe_y_start,
+                    stripe_y_end,
+                    buffer,
+                    width,
+                );
+            }
+            0
+        }
+        PreparedObject::DirectTexturedMesh {
+            geometry,
+            instance,
+            mvp,
+            blend,
+            texture_handle,
+        } => {
+            let Some(geometry) = frame.tmesh_geometries.get(*geometry as usize) else {
+                return 0;
+            };
+            let Some(instance) = frame.tmesh_instances.get(*instance as usize) else {
+                return 0;
+            };
+            let Some(tex) = resolve_texture(textures, texture_cache, *texture_handle) else {
+                return 0;
+            };
+            rasterize_textured_mesh_triangles(
+                mvp,
+                geometry.vertices.as_ref(),
+                instance.tint,
+                instance.uv_scale,
+                instance.uv_offset,
+                instance.uv_tex_shift,
+                instance.texture_mask != 0.0,
+                *blend,
+                &tex.image,
+                tex.sampler,
+                width,
+                height,
+                stripe_y_start,
+                stripe_y_end,
+                buffer,
+            )
+        }
     }
+}
 
-    vertices_drawn
+#[inline(always)]
+fn resolve_texture<'a>(
+    textures: &'a (impl TextureLookup + Sync),
+    cache: &mut Option<(TextureHandle, Option<&'a Texture>)>,
+    handle: TextureHandle,
+) -> Option<&'a Texture> {
+    if let Some((cached_handle, texture)) = *cache
+        && cached_handle == handle
+    {
+        return texture;
+    }
+    let texture = textures.software_texture(handle);
+    *cache = Some((handle, texture));
+    texture
 }
 
 pub fn resize(state: &mut State, width: u32, height: u32) {
@@ -697,6 +892,21 @@ struct ScreenVertexTexColor {
     u: f32,
     v: f32,
     color: [f32; 4],
+}
+
+#[derive(Clone, Copy)]
+struct RasterSetup {
+    min_x: i32,
+    max_x: i32,
+    min_y: i32,
+    max_y: i32,
+    inv_denom: f32,
+}
+
+#[derive(Clone, Copy)]
+struct PreparedTriangle<V> {
+    vertices: [V; 3],
+    setup: RasterSetup,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -821,21 +1031,21 @@ fn prepare_sprite_vertices(
     Some(v)
 }
 
-fn prepare_mesh_vertices(
-    out: &mut Vec<ScreenVertexColor>,
+fn prepare_mesh_triangles(
+    out: &mut Vec<PreparedTriangle<ScreenVertexColor>>,
     mvp: &Matrix4,
     tint: [f32; 4],
     vertices: &[deadlib_render_core::MeshVertex],
     width: usize,
     height: usize,
-) -> Option<(u32, u32, ScreenRows)> {
+) -> Option<(u32, u32, u32, ScreenRows)> {
     if vertices.is_empty() || width == 0 || height == 0 {
         return None;
     }
     let start = out.len();
-    let mut min_y = f32::INFINITY;
-    let mut max_y = f32::NEG_INFINITY;
-    out.reserve(vertices.len());
+    let mut projected_count = 0u32;
+    let mut min_y = i32::MAX;
+    let mut max_y = i32::MIN;
     'tri: for chunk in vertices.chunks_exact(3) {
         let mut tri = [ScreenVertexColor {
             x: 0.0,
@@ -864,23 +1074,41 @@ fn prepare_mesh_vertices(
                 ],
             };
         }
-        for vertex in &tri {
-            min_y = min_y.min(vertex.y);
-            max_y = max_y.max(vertex.y);
-        }
-        out.extend_from_slice(&tri);
+        projected_count = projected_count.saturating_add(3);
+        let Some(setup) = triangle_setup(
+            [tri[0].x, tri[1].x, tri[2].x],
+            [tri[0].y, tri[1].y, tri[2].y],
+            width,
+            height,
+        ) else {
+            continue;
+        };
+        min_y = min_y.min(setup.min_y);
+        max_y = max_y.max(setup.max_y);
+        out.push(PreparedTriangle {
+            vertices: tri,
+            setup,
+        });
     }
-    let count = out.len() - start;
+    let rows = if min_y > max_y {
+        ScreenRows { start: 0, end: 0 }
+    } else {
+        ScreenRows {
+            start: min_y as u32,
+            end: max_y as u32 + 1,
+        }
+    };
     Some((
         start as u32,
-        count as u32,
-        ScreenRows::from_bounds(min_y, max_y, height),
+        (out.len() - start) as u32,
+        projected_count,
+        rows,
     ))
 }
 
 #[allow(clippy::too_many_arguments)]
-fn prepare_tmesh_vertices(
-    out: &mut Vec<ScreenVertexTexColor>,
+fn prepare_tmesh_triangles(
+    out: &mut Vec<PreparedTriangle<ScreenVertexTexColor>>,
     mvp: &Matrix4,
     tint: [f32; 4],
     uv_scale: [f32; 2],
@@ -889,14 +1117,14 @@ fn prepare_tmesh_vertices(
     vertices: &[deadlib_render_core::TexturedMeshVertex],
     width: usize,
     height: usize,
-) -> Option<(u32, u32, ScreenRows)> {
+) -> Option<(u32, u32, u32, ScreenRows)> {
     if vertices.is_empty() || width == 0 || height == 0 {
         return None;
     }
     let start = out.len();
-    let mut min_y = f32::INFINITY;
-    let mut max_y = f32::NEG_INFINITY;
-    out.reserve(vertices.len());
+    let mut projected_count = 0u32;
+    let mut min_y = i32::MAX;
+    let mut max_y = i32::MIN;
     'tri: for chunk in vertices.chunks_exact(3) {
         let mut tri = [ScreenVertexTexColor {
             x: 0.0,
@@ -931,17 +1159,35 @@ fn prepare_tmesh_vertices(
                 ],
             };
         }
-        for vertex in &tri {
-            min_y = min_y.min(vertex.y);
-            max_y = max_y.max(vertex.y);
-        }
-        out.extend_from_slice(&tri);
+        projected_count = projected_count.saturating_add(3);
+        let Some(setup) = triangle_setup(
+            [tri[0].x, tri[1].x, tri[2].x],
+            [tri[0].y, tri[1].y, tri[2].y],
+            width,
+            height,
+        ) else {
+            continue;
+        };
+        min_y = min_y.min(setup.min_y);
+        max_y = max_y.max(setup.max_y);
+        out.push(PreparedTriangle {
+            vertices: tri,
+            setup,
+        });
     }
-    let count = out.len() - start;
+    let rows = if min_y > max_y {
+        ScreenRows { start: 0, end: 0 }
+    } else {
+        ScreenRows {
+            start: min_y as u32,
+            end: max_y as u32 + 1,
+        }
+    };
     Some((
         start as u32,
-        count as u32,
-        ScreenRows::from_bounds(min_y, max_y, height),
+        (out.len() - start) as u32,
+        projected_count,
+        rows,
     ))
 }
 
@@ -1006,60 +1252,54 @@ fn rasterize_prepared_sprite(
 }
 
 fn rasterize_prepared_mesh(
-    vertices: &[ScreenVertexColor],
+    triangles: &[PreparedTriangle<ScreenVertexColor>],
     blend: BlendMode,
-    width: usize,
-    height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
     buffer: &mut [u32],
+    width: usize,
 ) {
-    for tri in vertices.chunks_exact(3) {
-        rasterize_triangle_color(
-            &tri[0],
-            &tri[1],
-            &tri[2],
+    for triangle in triangles {
+        rasterize_triangle_color_prepared(
+            &triangle.vertices,
+            triangle.setup,
             blend,
-            width,
-            height,
             stripe_y_start,
             stripe_y_end,
             buffer,
+            width,
         );
     }
 }
 
 #[allow(clippy::too_many_arguments)]
 fn rasterize_prepared_tmesh(
-    vertices: &[ScreenVertexTexColor],
+    triangles: &[PreparedTriangle<ScreenVertexTexColor>],
     texture_mask: bool,
     blend: BlendMode,
     image: &RgbaImage,
     sampler: SamplerDesc,
-    width: usize,
-    height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
     buffer: &mut [u32],
+    width: usize,
 ) {
     let sampler = SamplerDesc {
         wrap: SamplerWrap::Repeat,
         ..sampler
     };
-    for tri in vertices.chunks_exact(3) {
-        rasterize_triangle_tex_color(
-            &tri[0],
-            &tri[1],
-            &tri[2],
+    for triangle in triangles {
+        rasterize_triangle_tex_color_prepared(
+            &triangle.vertices,
+            triangle.setup,
             blend,
             texture_mask,
             image,
             sampler,
-            width,
-            height,
             stripe_y_start,
             stripe_y_end,
             buffer,
+            width,
         );
     }
 }
@@ -1309,16 +1549,55 @@ fn rasterize_triangle_tex_color(
     stripe_y_end: usize,
     buffer: &mut [u32],
 ) {
+    let Some(setup) = triangle_setup_in_rows(
+        [v0.x, v1.x, v2.x],
+        [v0.y, v1.y, v2.y],
+        width,
+        height,
+        stripe_y_start,
+        stripe_y_end,
+    ) else {
+        return;
+    };
+    rasterize_triangle_tex_color_prepared(
+        &[*v0, *v1, *v2],
+        setup,
+        blend,
+        texture_mask,
+        image,
+        sampler,
+        stripe_y_start,
+        stripe_y_end,
+        buffer,
+        width,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn rasterize_triangle_tex_color_prepared(
+    vertices: &[ScreenVertexTexColor; 3],
+    setup: RasterSetup,
+    blend: BlendMode,
+    texture_mask: bool,
+    image: &RgbaImage,
+    sampler: SamplerDesc,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
+    buffer: &mut [u32],
+    width: usize,
+) {
+    let [v0, v1, v2] = vertices;
     match (sampler.filter, matches!(blend, BlendMode::Add)) {
         (SamplerFilter::Nearest, true) => rasterize_triangle_tex_color_impl::<false, true>(
             v0,
             v1,
             v2,
+            setup,
             texture_mask,
             image,
             sampler,
             width,
-            height,
             stripe_y_start,
             stripe_y_end,
             buffer,
@@ -1327,11 +1606,11 @@ fn rasterize_triangle_tex_color(
             v0,
             v1,
             v2,
+            setup,
             texture_mask,
             image,
             sampler,
             width,
-            height,
             stripe_y_start,
             stripe_y_end,
             buffer,
@@ -1340,11 +1619,11 @@ fn rasterize_triangle_tex_color(
             v0,
             v1,
             v2,
+            setup,
             texture_mask,
             image,
             sampler,
             width,
-            height,
             stripe_y_start,
             stripe_y_end,
             buffer,
@@ -1353,11 +1632,11 @@ fn rasterize_triangle_tex_color(
             v0,
             v1,
             v2,
+            setup,
             texture_mask,
             image,
             sampler,
             width,
-            height,
             stripe_y_start,
             stripe_y_end,
             buffer,
@@ -1377,13 +1656,45 @@ fn rasterize_triangle_color(
     stripe_y_end: usize,
     buffer: &mut [u32],
 ) {
+    let Some(setup) = triangle_setup_in_rows(
+        [v0.x, v1.x, v2.x],
+        [v0.y, v1.y, v2.y],
+        width,
+        height,
+        stripe_y_start,
+        stripe_y_end,
+    ) else {
+        return;
+    };
+    rasterize_triangle_color_prepared(
+        &[*v0, *v1, *v2],
+        setup,
+        blend,
+        stripe_y_start,
+        stripe_y_end,
+        buffer,
+        width,
+    );
+}
+
+#[inline(always)]
+fn rasterize_triangle_color_prepared(
+    vertices: &[ScreenVertexColor; 3],
+    setup: RasterSetup,
+    blend: BlendMode,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
+    buffer: &mut [u32],
+    width: usize,
+) {
+    let [v0, v1, v2] = vertices;
     if matches!(blend, BlendMode::Add) {
         rasterize_triangle_color_impl::<true>(
             v0,
             v1,
             v2,
+            setup,
             width,
-            height,
             stripe_y_start,
             stripe_y_end,
             buffer,
@@ -1393,8 +1704,8 @@ fn rasterize_triangle_color(
             v0,
             v1,
             v2,
+            setup,
             width,
-            height,
             stripe_y_start,
             stripe_y_end,
             buffer,
@@ -1606,6 +1917,65 @@ fn raster_bounds(
 }
 
 #[inline(always)]
+fn triangle_setup(x: [f32; 3], y: [f32; 3], width: usize, height: usize) -> Option<RasterSetup> {
+    triangle_setup_in_rows(x, y, width, height, 0, height)
+}
+
+#[inline(always)]
+fn triangle_setup_in_rows(
+    x: [f32; 3],
+    y: [f32; 3],
+    width: usize,
+    height: usize,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
+) -> Option<RasterSetup> {
+    let (min_x, max_x, min_y, max_y, _) = raster_bounds(
+        x[0].min(x[1]).min(x[2]),
+        x[0].max(x[1]).max(x[2]),
+        y[0].min(y[1]).min(y[2]),
+        y[0].max(y[1]).max(y[2]),
+        width,
+        height,
+        stripe_y_start,
+        stripe_y_end,
+    )?;
+    let denom = edge_function(x[0], y[0], x[1], y[1], x[2], y[2]);
+    if denom == 0.0 {
+        return None;
+    }
+    Some(RasterSetup {
+        min_x,
+        max_x,
+        min_y,
+        max_y,
+        inv_denom: 1.0 / denom,
+    })
+}
+
+impl RasterSetup {
+    #[inline(always)]
+    fn stripe_bounds(
+        self,
+        stripe_y_start: usize,
+        stripe_y_end: usize,
+    ) -> Option<(i32, i32, i32, i32, i32)> {
+        let stripe_start = stripe_y_start as i32;
+        let stripe_end = stripe_y_end as i32 - 1;
+        if stripe_start > stripe_end || self.max_y < stripe_start || self.min_y > stripe_end {
+            return None;
+        }
+        Some((
+            self.min_x,
+            self.max_x,
+            self.min_y.max(stripe_start),
+            self.max_y.min(stripe_end),
+            stripe_start,
+        ))
+    }
+}
+
+#[inline(always)]
 fn rasterize_triangle_impl<const LINEAR: bool, const ADD: bool>(
     v0: &ScreenVertex,
     v1: &ScreenVertex,
@@ -1699,33 +2069,21 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const ADD: bool>(
     v0: &ScreenVertexTexColor,
     v1: &ScreenVertexTexColor,
     v2: &ScreenVertexTexColor,
+    setup: RasterSetup,
     texture_mask: bool,
     image: &RgbaImage,
     sampler: SamplerDesc,
     width: usize,
-    height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
     buffer: &mut [u32],
 ) {
-    let Some((min_x, max_x, min_y, max_y, stripe_start)) = raster_bounds(
-        v0.x.min(v1.x).min(v2.x),
-        v0.x.max(v1.x).max(v2.x),
-        v0.y.min(v1.y).min(v2.y),
-        v0.y.max(v1.y).max(v2.y),
-        width,
-        height,
-        stripe_y_start,
-        stripe_y_end,
-    ) else {
+    let Some((min_x, max_x, min_y, max_y, stripe_start)) =
+        setup.stripe_bounds(stripe_y_start, stripe_y_end)
+    else {
         return;
     };
-
-    let denom = edge_function(v0.x, v0.y, v1.x, v1.y, v2.x, v2.y);
-    if denom == 0.0 {
-        return;
-    }
-    let inv_denom = 1.0 / denom;
+    let inv_denom = setup.inv_denom;
     let tex_w = image.width().max(1) as usize;
     let tex_h = image.height().max(1) as usize;
     let tex_data = image.as_raw();
@@ -1784,30 +2142,18 @@ fn rasterize_triangle_color_impl<const ADD: bool>(
     v0: &ScreenVertexColor,
     v1: &ScreenVertexColor,
     v2: &ScreenVertexColor,
+    setup: RasterSetup,
     width: usize,
-    height: usize,
     stripe_y_start: usize,
     stripe_y_end: usize,
     buffer: &mut [u32],
 ) {
-    let Some((min_x, max_x, min_y, max_y, stripe_start)) = raster_bounds(
-        v0.x.min(v1.x).min(v2.x),
-        v0.x.max(v1.x).max(v2.x),
-        v0.y.min(v1.y).min(v2.y),
-        v0.y.max(v1.y).max(v2.y),
-        width,
-        height,
-        stripe_y_start,
-        stripe_y_end,
-    ) else {
+    let Some((min_x, max_x, min_y, max_y, stripe_start)) =
+        setup.stripe_bounds(stripe_y_start, stripe_y_end)
+    else {
         return;
     };
-
-    let denom = edge_function(v0.x, v0.y, v1.x, v1.y, v2.x, v2.y);
-    if denom == 0.0 {
-        return;
-    }
-    let inv_denom = 1.0 / denom;
+    let inv_denom = setup.inv_denom;
 
     for y in min_y..=max_y {
         let py = y as f32 + 0.5;
@@ -1860,6 +2206,7 @@ mod tests {
     };
     use glam::Vec3;
     use image::Rgba;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     const WIDTH: usize = 96;
     const HEIGHT: usize = 80;
@@ -1868,10 +2215,12 @@ mod tests {
 
     struct TestTextures {
         texture: Texture,
+        lookups: AtomicUsize,
     }
 
     impl TextureLookup for TestTextures {
         fn software_texture(&self, handle: TextureHandle) -> Option<&Texture> {
+            self.lookups.fetch_add(1, Ordering::Relaxed);
             (handle == TEXTURE_HANDLE).then_some(&self.texture)
         }
     }
@@ -1998,7 +2347,7 @@ mod tests {
             true,
         );
         assert!(!prepared_mesh.is_empty());
-        assert_eq!(prepared_tmesh.len(), 3);
+        assert_eq!(prepared_tmesh.len(), 1);
         let staged_vertices = render_prepared_stripes(
             &frame,
             &prepared,
@@ -2046,12 +2395,68 @@ mod tests {
     }
 
     #[test]
+    fn stripe_bins_preserve_pixels_counts_and_painter_order() {
+        let textures = test_textures();
+        let frame = mixed_frame();
+        let clear = pack_rgba(frame.clear_color);
+        let mut prepared = Vec::new();
+        let mut prepared_mesh = Vec::with_capacity(MESH_STAGE_VERTEX_CAP / 3);
+        let mut prepared_tmesh = Vec::with_capacity(MESH_STAGE_VERTEX_CAP / 3);
+        prepare_objects(
+            &frame,
+            Matrix4::IDENTITY,
+            &textures,
+            WIDTH,
+            HEIGHT,
+            &mut prepared,
+            &mut prepared_mesh,
+            &mut prepared_tmesh,
+            true,
+        );
+
+        let mut bins = StripeBins::warmed();
+        bins.build(&prepared, HEIGHT);
+        let stripe_count = HEIGHT.div_ceil(SOFTWARE_ROW_CHUNK);
+        assert!(bins.indices.len() < prepared.len() * stripe_count);
+        for stripe in 0..stripe_count {
+            assert!(bins.stripe(stripe).windows(2).all(|pair| pair[0] < pair[1]));
+        }
+
+        let mut scanned = vec![clear; WIDTH * HEIGHT];
+        let scanned_vertices = render_prepared_stripes(
+            &frame,
+            &prepared,
+            &prepared_mesh,
+            &prepared_tmesh,
+            &textures,
+            &mut scanned,
+        );
+        textures.lookups.store(0, Ordering::Relaxed);
+        let mut indexed = vec![clear; WIDTH * HEIGHT];
+        let indexed_vertices = render_indexed_stripes(
+            &frame,
+            &prepared,
+            &prepared_mesh,
+            &prepared_tmesh,
+            &bins,
+            &textures,
+            &mut indexed,
+        );
+
+        assert_eq!(indexed_vertices, scanned_vertices);
+        assert_eq!(indexed, scanned);
+        let lookups = textures.lookups.load(Ordering::Relaxed);
+        assert!(lookups > 0);
+        assert!(lookups <= stripe_count);
+    }
+
+    #[test]
     fn mesh_staging_saturates_without_growing_buffers() {
         let textures = test_textures();
         let frame = mixed_frame();
         let mut prepared = Vec::new();
-        let mut prepared_mesh = Vec::with_capacity(2);
-        let mut prepared_tmesh = Vec::with_capacity(2);
+        let mut prepared_mesh = Vec::with_capacity(1);
+        let mut prepared_tmesh = Vec::with_capacity(1);
         let mesh_capacity = prepared_mesh.capacity();
         let tmesh_capacity = prepared_tmesh.capacity();
 
@@ -2086,11 +2491,14 @@ mod tests {
     fn render_prepared_stripes(
         frame: &RenderFrame,
         prepared: &[PreparedObject],
-        mesh_vertices: &[ScreenVertexColor],
-        tmesh_vertices: &[ScreenVertexTexColor],
+        mesh_triangles: &[PreparedTriangle<ScreenVertexColor>],
+        tmesh_triangles: &[PreparedTriangle<ScreenVertexTexColor>],
         textures: &TestTextures,
         pixels: &mut [u32],
     ) -> u32 {
+        let fixed_vertices = prepared.iter().fold(0u32, |sum, object| {
+            sum.saturating_add(object.fixed_vertices())
+        });
         pixels
             .chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK)
             .enumerate()
@@ -2100,14 +2508,52 @@ mod tests {
                 draw_rows(
                     frame,
                     prepared,
-                    mesh_vertices,
-                    tmesh_vertices,
+                    None,
+                    mesh_triangles,
+                    tmesh_triangles,
                     textures,
                     WIDTH,
                     HEIGHT,
                     y_start,
                     y_end,
                     stripe,
+                    fixed_vertices,
+                )
+            })
+            .sum()
+    }
+
+    fn render_indexed_stripes(
+        frame: &RenderFrame,
+        prepared: &[PreparedObject],
+        mesh_triangles: &[PreparedTriangle<ScreenVertexColor>],
+        tmesh_triangles: &[PreparedTriangle<ScreenVertexTexColor>],
+        bins: &StripeBins,
+        textures: &TestTextures,
+        pixels: &mut [u32],
+    ) -> u32 {
+        let fixed_vertices = prepared.iter().fold(0u32, |sum, object| {
+            sum.saturating_add(object.fixed_vertices())
+        });
+        pixels
+            .chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK)
+            .enumerate()
+            .map(|(chunk_index, stripe)| {
+                let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
+                let y_end = y_start + stripe.len() / WIDTH;
+                draw_rows(
+                    frame,
+                    prepared,
+                    Some(bins.stripe(chunk_index)),
+                    mesh_triangles,
+                    tmesh_triangles,
+                    textures,
+                    WIDTH,
+                    HEIGHT,
+                    y_start,
+                    y_end,
+                    stripe,
+                    fixed_vertices,
                 )
             })
             .sum()
@@ -2273,6 +2719,7 @@ mod tests {
                     mipmaps: false,
                 },
             },
+            lookups: AtomicUsize::new(0),
         }
     }
 }
