@@ -245,10 +245,6 @@ fn record_overlay_update_capture(
         .is_some_and(|mut capture| capture.record(actor, target, value))
 }
 
-fn overlay_update_capture_active(lua: &Lua) -> bool {
-    lua.app_data_ref::<SongLuaOverlayUpdateCapture>().is_some()
-}
-
 pub fn overlay_compile_actor_tables_for_indices<Kind>(
     overlays: &[SongLuaOverlayCompileActor<Kind>],
     indices: &[usize],
@@ -6324,12 +6320,6 @@ pub fn install_actor_runtime_child_methods(
         lua.create_function({
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
-                // Update-function compilation emits player transforms, modifiers,
-                // and overlay property tracks, but not mutable column spline state.
-                // Avoid replaying spline writes that cannot affect its output.
-                if overlay_update_capture_active(lua) {
-                    return Ok(Value::Table(lua.create_table()?));
-                }
                 let is_note_field = actor
                     .get::<Option<String>>("__songlua_player_child_name")?
                     .as_deref()
@@ -8309,6 +8299,99 @@ pub fn note_field_tables(lua: &Lua) -> mlua::Result<Vec<Table>> {
             continue;
         };
         out.push(note_field);
+    }
+    Ok(out)
+}
+
+fn note_column_position_is_reverse(column: &Table) -> Result<Option<bool>, String> {
+    let Some(handler) = column
+        .get::<Option<Table>>("__songlua_pos_handler")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(None);
+    };
+    let mode = handler
+        .get::<Option<String>>("__songlua_spline_mode")
+        .map_err(|err| err.to_string())?
+        .unwrap_or_default();
+    if !mode.eq_ignore_ascii_case("NoteColumnSplineMode_Position") {
+        return Ok(None);
+    }
+    let Some(spline) = handler
+        .get::<Option<Table>>("__songlua_spline")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(None);
+    };
+    if spline
+        .get::<Option<i64>>("__songlua_spline_size")
+        .map_err(|err| err.to_string())?
+        .unwrap_or(0)
+        < 2
+    {
+        return Ok(None);
+    }
+    let points = spline
+        .get::<Table>("__songlua_spline_points")
+        .map_err(|err| err.to_string())?;
+    let read_y = |index| -> Result<Option<f32>, String> {
+        let Some(point) = points
+            .raw_get::<Option<Table>>(index)
+            .map_err(|err| err.to_string())?
+        else {
+            return Ok(None);
+        };
+        Ok(point.raw_get::<Value>(2).ok().and_then(read_f32))
+    };
+    let (Some(first), Some(second)) = (read_y(1)?, read_y(2)?) else {
+        return Ok(None);
+    };
+    let direction = second - first;
+    Ok((direction.is_finite() && direction.abs() > 0.001).then_some(direction < 0.0))
+}
+
+pub fn read_note_column_position_reverse_percents(
+    lua: &Lua,
+) -> Result<[Option<f32>; LUA_PLAYERS], String> {
+    const PLAYER_KEYS: [&str; LUA_PLAYERS] = [
+        "__songlua_top_screen_player_1",
+        "__songlua_top_screen_player_2",
+    ];
+    let globals = lua.globals();
+    let mut out = [None; LUA_PLAYERS];
+    for (player, target) in out.iter_mut().enumerate() {
+        let Some(player_actor) = globals
+            .get::<Option<Table>>(PLAYER_KEYS[player])
+            .map_err(|err| err.to_string())?
+        else {
+            continue;
+        };
+        let Some(note_field) = actor_named_children(lua, &player_actor)
+            .map_err(|err| err.to_string())?
+            .get::<Option<Table>>("NoteField")
+            .map_err(|err| err.to_string())?
+        else {
+            continue;
+        };
+        let Some(columns) = note_field
+            .get::<Option<Table>>("__songlua_note_columns")
+            .map_err(|err| err.to_string())?
+        else {
+            continue;
+        };
+        let mut reverse = 0usize;
+        let mut active = 0usize;
+        for column in columns.sequence_values::<Table>() {
+            if let Some(is_reverse) =
+                note_column_position_is_reverse(&column.map_err(|err| err.to_string())?)?
+            {
+                reverse += usize::from(is_reverse);
+                active += 1;
+            }
+        }
+        if active > 0 {
+            *target = Some(reverse as f32 / active as f32);
+        }
     }
     Ok(out)
 }

@@ -1,5 +1,5 @@
 use mlua::{Function, Lua, Table, Value};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use crate::{
     LUA_PLAYERS, SONG_LUA_PLAYER_OPTIONS_KEYS, SongLuaCompileContext, SongLuaCompileInfo,
@@ -12,7 +12,7 @@ use crate::{
     run_actor_update_functions_with_delta, runtime_player_option_ease_target,
     set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
     set_compile_song_runtime_values, song_display_bps, song_elapsed_seconds_for_beat,
-    song_lua_side_effect_count, song_music_rate,
+    song_lua_side_effect_count, song_lua_span_end, song_music_rate,
 };
 
 pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 8192;
@@ -20,6 +20,7 @@ pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 8192;
 // interpolated at render rate. Ten source samples per second preserve the
 // chart's continuous screen motion while keeping gameplay transitions bounded.
 const SONG_LUA_UPDATE_TARGET_FPS: f32 = 10.0;
+const SONG_LUA_UPDATE_REFERENCE_FPS: f32 = 60.0;
 const PLAYER_TRANSFORM_CAPTURE_KEYS: [&str; 11] = [
     "x",
     "y",
@@ -338,6 +339,22 @@ pub fn current_update_mod_states(
     ])
 }
 
+fn current_update_mod_states_with_note_columns(
+    lua: &Lua,
+    tables: &[Table; LUA_PLAYERS],
+) -> Result<[SongLuaUpdateModState; LUA_PLAYERS], String> {
+    let mut states = current_update_mod_states(tables)?;
+    for (state, reverse) in states
+        .iter_mut()
+        .zip(crate::read_note_column_position_reverse_percents(lua)?)
+    {
+        if let Some(reverse) = reverse {
+            state.insert("reverse".to_string(), reverse);
+        }
+    }
+    Ok(states)
+}
+
 pub fn active_perframe_entries(
     entries: &[SongLuaPerframeEntry],
     start: f32,
@@ -412,6 +429,128 @@ pub fn update_function_sample_step(len: f32) -> f32 {
 fn update_function_frame_step(context: &SongLuaCompileContext, len: f32) -> f32 {
     let frame_step = song_display_bps(context) / SONG_LUA_UPDATE_TARGET_FPS;
     frame_step.max(len / SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES as f32)
+}
+
+fn update_function_named_tables(lua: &Lua, root: &Value, name: &str) -> Result<Vec<Table>, String> {
+    let mut tables = Vec::new();
+    if let Some(table) = lua
+        .globals()
+        .get::<Option<Table>>(name)
+        .map_err(|err| err.to_string())?
+    {
+        tables.push(table);
+    }
+    tables.extend(crate::read_update_function_tables(lua, root, &[name])?);
+    let mut seen = BTreeSet::new();
+    tables.retain(|table| seen.insert(table.to_pointer() as usize));
+    Ok(tables)
+}
+
+#[derive(Default)]
+struct SongLuaUpdateBoundaries {
+    beats: Vec<f32>,
+    zero_ends: Vec<f32>,
+}
+
+fn update_function_boundary_beats(
+    lua: &Lua,
+    root: &Value,
+) -> Result<SongLuaUpdateBoundaries, String> {
+    let mut out = SongLuaUpdateBoundaries::default();
+    for table in update_function_named_tables(lua, root, "mods_ease")? {
+        for entry in table.sequence_values::<Table>() {
+            let entry = entry.map_err(|err| err.to_string())?;
+            if !matches!(
+                entry.raw_get::<Value>(5).map_err(|err| err.to_string())?,
+                Value::Function(_)
+            ) {
+                continue;
+            }
+            let Some(start) = read_f32(entry.raw_get::<Value>(1).map_err(|err| err.to_string())?)
+            else {
+                continue;
+            };
+            let Some(limit) = read_f32(entry.raw_get::<Value>(2).map_err(|err| err.to_string())?)
+            else {
+                continue;
+            };
+            let span_mode = entry
+                .raw_get::<Option<String>>(6)
+                .map_err(|err| err.to_string())?
+                .filter(|mode| mode.eq_ignore_ascii_case("end"))
+                .map_or(SongLuaSpanMode::Len, |_| SongLuaSpanMode::End);
+            let end = song_lua_span_end(start, limit, span_mode);
+            out.beats.extend([start, end]);
+            if read_f32(entry.raw_get::<Value>(4).map_err(|err| err.to_string())?)
+                .is_some_and(|value| value.abs() <= f32::EPSILON)
+            {
+                out.zero_ends.push(end);
+            }
+        }
+    }
+    for table in update_function_named_tables(lua, root, "mod_actions")? {
+        for entry in table.sequence_values::<Table>() {
+            let entry = entry.map_err(|err| err.to_string())?;
+            if let Some(beat) = read_f32(entry.raw_get::<Value>(1).map_err(|err| err.to_string())?)
+            {
+                out.beats.push(beat);
+            }
+        }
+    }
+    Ok(out)
+}
+
+struct SongLuaUpdateReplay {
+    beats: Vec<f32>,
+    reset_beats: HashSet<u32>,
+}
+
+fn update_function_replay_beats(
+    lua: &Lua,
+    root: &Value,
+    context: &SongLuaCompileContext,
+    start: f32,
+    end: f32,
+) -> Result<SongLuaUpdateReplay, String> {
+    let step = update_function_frame_step(context, end - start);
+    let mut out = vec![start];
+    let mut beat = start;
+    while beat < end - f32::EPSILON {
+        beat = (beat + step).min(end);
+        out.push(beat);
+    }
+    let boundaries = update_function_boundary_beats(lua, root)?;
+    out.extend(
+        boundaries
+            .beats
+            .into_iter()
+            .filter(|beat| beat.is_finite() && *beat > start && *beat < end),
+    );
+    let reference_step =
+        song_display_bps(context) * song_music_rate(context) / SONG_LUA_UPDATE_REFERENCE_FPS;
+    // ITGmania reaches the frames immediately around a zero-ending callback.
+    // Capture both so properties abandoned by the next Update can close cleanly.
+    out.extend(boundaries.zero_ends.iter().filter_map(|end_beat| {
+        let beat = *end_beat - reference_step;
+        (beat.is_finite() && beat > start && beat < end).then_some(beat)
+    }));
+    out.extend(boundaries.zero_ends.iter().filter_map(|end_beat| {
+        let beat = *end_beat + reference_step;
+        (beat.is_finite() && beat > start && beat < end).then_some(beat)
+    }));
+    out.sort_by(|left, right| left.total_cmp(right));
+    out.dedup_by(|left, right| left.to_bits() == right.to_bits());
+    let reset_beats = boundaries
+        .zero_ends
+        .into_iter()
+        .flat_map(|beat| [beat, beat + reference_step])
+        .filter(|beat| beat.is_finite() && *beat > start && *beat <= end)
+        .map(f32::to_bits)
+        .collect();
+    Ok(SongLuaUpdateReplay {
+        beats: out,
+        reset_beats,
+    })
 }
 
 pub fn update_function_samples(start: f32, end: f32) -> Vec<SongLuaPerframeSample> {
@@ -979,13 +1118,16 @@ fn capture_update_overlay_samples<Kind>(
     >,
     beat: f32,
     next_beat: f32,
-) -> Result<(), String> {
+    reset_missing_from: Option<&HashSet<(usize, crate::SongLuaOverlayUpdateTarget)>>,
+) -> Result<HashSet<(usize, crate::SongLuaOverlayUpdateTarget)>, String> {
+    let mut touched = HashSet::new();
     crate::lua_util::drain_overlay_update_capture(lua, |overlay_index, values| {
         let Some(baseline) = baseline.get(overlay_index) else {
             return Ok(());
         };
         debug_assert!(overlay_index < overlays.len());
         for (target, next) in values {
+            touched.insert((overlay_index, *target));
             let current = track_indices
                 .get(&(overlay_index, *target))
                 .and_then(|index| tracks[*index].samples.last())
@@ -1003,7 +1145,31 @@ fn capture_update_overlay_samples<Kind>(
             );
         }
         Ok(())
-    })
+    })?;
+    if let Some(previous) = reset_missing_from {
+        for &(overlay_index, target) in previous.difference(&touched) {
+            let Some(baseline) = baseline.get(overlay_index) else {
+                continue;
+            };
+            let next = overlay_state_update_value(baseline, target);
+            let current = track_indices
+                .get(&(overlay_index, target))
+                .and_then(|index| tracks[*index].samples.last())
+                .map(|sample| sample.value.clone())
+                .unwrap_or_else(|| next.clone());
+            push_update_overlay_value(
+                tracks,
+                track_indices,
+                overlay_index,
+                target,
+                beat,
+                current,
+                next_beat,
+                next,
+            );
+        }
+    }
+    Ok(touched)
 }
 
 pub fn call_update_functions_at(
@@ -1062,13 +1228,13 @@ pub fn compile_update_functions<Kind>(
     crate::lua_util::begin_overlay_update_capture(lua, overlay_indices_by_pointer);
     call_update_functions_at(lua, root, start, 0.0, 0.0)?;
     let baseline_players = current_perframe_player_states(&player_tables)?;
-    let baseline_mods = current_update_mod_states(&option_tables)?;
+    let baseline_mods = current_update_mod_states_with_note_columns(lua, &option_tables)?;
     let mut sample_beats = vec![start];
     let mut player_samples = vec![baseline_players];
     let mut mod_samples = vec![baseline_mods.clone()];
     let mut overlay_tracks = Vec::new();
     let mut overlay_track_indices = std::collections::HashMap::new();
-    capture_update_overlay_samples(
+    let mut prior_overlay_touches = capture_update_overlay_samples(
         lua,
         overlays,
         &baseline_overlays,
@@ -1076,13 +1242,13 @@ pub fn compile_update_functions<Kind>(
         &mut overlay_track_indices,
         start,
         start,
+        None,
     )?;
 
-    let sample_step = update_function_frame_step(context, end - start);
+    let replay = update_function_replay_beats(lua, root, context, start, end)?;
     let mut beat = start;
     let mut transform_masks = player_transform_masks(&player_tables)?;
-    while beat < end - f32::EPSILON {
-        let next_beat = (beat + sample_step).min(end);
+    for next_beat in replay.beats.into_iter().skip(1) {
         let delta_beats = next_beat - beat;
         let delta_seconds = perframe_delta_seconds(context, delta_beats);
         reset_tracked_capture_tables(lua, tracked_actors)?;
@@ -1111,8 +1277,12 @@ pub fn compile_update_functions<Kind>(
         transform_masks = next_masks;
         sample_beats.push(next_beat);
         player_samples.push(next_players);
-        mod_samples.push(current_update_mod_states(&option_tables)?);
-        capture_update_overlay_samples(
+        mod_samples.push(current_update_mod_states_with_note_columns(
+            lua,
+            &option_tables,
+        )?);
+        let reset_missing = replay.reset_beats.contains(&next_beat.to_bits());
+        let next_overlay_touches = capture_update_overlay_samples(
             lua,
             overlays,
             &baseline_overlays,
@@ -1120,7 +1290,9 @@ pub fn compile_update_functions<Kind>(
             &mut overlay_track_indices,
             beat,
             next_beat,
+            reset_missing.then_some(&prior_overlay_touches),
         )?;
+        prior_overlay_touches = next_overlay_touches;
         beat = next_beat;
     }
 

@@ -146,21 +146,22 @@ pub use lua_util::{
     read_global_function_nested_tables, read_graph_display_body_state,
     read_graph_display_line_state, read_graph_display_size, read_graph_display_values,
     read_model_path, read_note_column_pos_samples, read_note_column_pos_samples_for_fields,
-    read_note_column_zoom_hides, read_note_column_zoom_hides_for_actor,
-    read_noteskin_tap_actor_model, read_noteskin_tap_actor_slots,
-    read_overlay_compile_actor_actions, read_overlay_compile_actors, read_proxy_target_kind,
-    read_song_lua_sound_paths, read_song_meter_display_state, read_tracked_compile_actors,
-    read_update_function_nested_tables, read_update_function_overlay_compile_actor_actions,
-    read_update_function_tables, read_vertex_colors_value, record_probe_method_call,
-    register_song_lua_actor, remove_actor_child, remove_all_actor_children, reset_actor_capture,
-    reset_actor_capture_tables, reset_indexed_actor_capture_tables,
-    reset_overlay_compile_actor_capture_tables, reset_tracked_capture_tables,
-    resolve_actor_asset_path, restore_action_capture_scope, restore_actor_mutable_state,
-    restore_actors_semantic_state, restore_note_column_handlers, restore_note_field_columns,
-    rolling_numbers_text, run_actor_draw_functions, run_actor_draw_functions_for_table,
-    run_actor_init_commands, run_actor_init_commands_for_table, run_actor_named_command,
-    run_actor_named_command_with_drain, run_actor_named_command_with_drain_and_params,
-    run_actor_startup_commands, run_actor_startup_commands_for_table, run_actor_update_functions,
+    read_note_column_position_reverse_percents, read_note_column_zoom_hides,
+    read_note_column_zoom_hides_for_actor, read_noteskin_tap_actor_model,
+    read_noteskin_tap_actor_slots, read_overlay_compile_actor_actions, read_overlay_compile_actors,
+    read_proxy_target_kind, read_song_lua_sound_paths, read_song_meter_display_state,
+    read_tracked_compile_actors, read_update_function_nested_tables,
+    read_update_function_overlay_compile_actor_actions, read_update_function_tables,
+    read_vertex_colors_value, record_probe_method_call, register_song_lua_actor,
+    remove_actor_child, remove_all_actor_children, reset_actor_capture, reset_actor_capture_tables,
+    reset_indexed_actor_capture_tables, reset_overlay_compile_actor_capture_tables,
+    reset_tracked_capture_tables, resolve_actor_asset_path, restore_action_capture_scope,
+    restore_actor_mutable_state, restore_actors_semantic_state, restore_note_column_handlers,
+    restore_note_field_columns, rolling_numbers_text, run_actor_draw_functions,
+    run_actor_draw_functions_for_table, run_actor_init_commands, run_actor_init_commands_for_table,
+    run_actor_named_command, run_actor_named_command_with_drain,
+    run_actor_named_command_with_drain_and_params, run_actor_startup_commands,
+    run_actor_startup_commands_for_table, run_actor_update_functions,
     run_actor_update_functions_for_table, run_actor_update_functions_with_delta,
     run_added_actor_child_commands, run_command_on_leaves,
     run_named_command_on_children_recursively, run_named_command_on_leaves,
@@ -4095,17 +4096,17 @@ mod tests {
         SongLuaOverlayCommandBlock, SongLuaOverlayCompileActor, SongLuaOverlayEase,
         SongLuaOverlayEaseBuildParams, SongLuaOverlayKind, SongLuaOverlayMessageCommand,
         SongLuaOverlayModelDraw, SongLuaOverlayModelLayer, SongLuaOverlayState,
-        SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget, SongLuaPlayerContext,
-        SongLuaProxyTarget, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit,
-        THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, TOP_SCREEN_THEME_CHILD_NAMES,
-        UNDERLAY_THEME_CHILD_NAMES, actor_indices_for_pointers, actor_overlay_initial_state,
-        actor_pointers_touch_actor, add_actor_child_from_path as add_lua_actor_child_from_path,
-        capture_actor_message_commands, capture_block_set_bool, capture_block_set_f32,
-        capture_function_action_blocks, capture_indexed_actor_function_blocks,
-        capture_overlay_function_eases, collect_indexed_actor_capture_blocks,
-        column_offset_windows_from_samples, compile_song_lua_with_actors,
-        compile_song_runtime_values, compiled_song_lua_sound_paths, create_debug_table,
-        create_dummy_actor as create_lua_dummy_actor,
+        SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue,
+        SongLuaPlayerContext, SongLuaProxyTarget, SongLuaSpanMode, SongLuaSpeedMod,
+        SongLuaTextGlowMode, SongLuaTimeUnit, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
+        TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES, actor_indices_for_pointers,
+        actor_overlay_initial_state, actor_pointers_touch_actor,
+        add_actor_child_from_path as add_lua_actor_child_from_path, capture_actor_message_commands,
+        capture_block_set_bool, capture_block_set_f32, capture_function_action_blocks,
+        capture_indexed_actor_function_blocks, capture_overlay_function_eases,
+        collect_indexed_actor_capture_blocks, column_offset_windows_from_samples,
+        compile_song_lua_with_actors, compile_song_runtime_values, compiled_song_lua_sound_paths,
+        create_debug_table, create_dummy_actor as create_lua_dummy_actor,
         create_named_child_actor as create_lua_named_child_actor, create_song_runtime_table,
         custom_multi_modifier_key, easiest_steps_difficulty, ensure_overlay_arrow_visual,
         file_path_string, function_named_upvalue_tables, graph_display_body_size,
@@ -6383,6 +6384,202 @@ return root
                 .iter()
                 .all(|track| track.samples.len() <= 64)
         );
+    }
+
+    #[test]
+    fn compile_song_lua_samples_function_ease_endpoints_exactly() {
+        let song_dir = test_dir("update-function-ease-boundaries");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local actor = Def.Quad{}
+local level = 0
+mods_ease = {
+    {0.13, 0.37, 1, 0, function(value) level = value end, "len",
+        function(t, b, c, d) return b + c * t / d end},
+}
+local function Update()
+    local beat = GAMESTATE:GetSongBeat()
+    for _, ease in ipairs(mods_ease) do
+        if beat >= ease[1] and beat <= ease[1] + ease[2] then
+            ease[5](ease[7](beat - ease[1], ease[3], ease[4] - ease[3], ease[2]))
+        end
+    end
+    actor:x(level)
+end
+return Def.ActorFrame{
+    InitCommand=function(self) self:SetUpdateFunction(Update) end,
+    actor,
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Update Ease Boundary");
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let x = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| track.target == SongLuaOverlayUpdateTarget::X)
+            .unwrap();
+        assert!(x.samples.iter().any(|sample| {
+            (sample.beat - 0.5).abs() <= f32::EPSILON
+                && sample.value == SongLuaOverlayUpdateValue::F32(0.0)
+        }));
+        assert_eq!(
+            x.samples.last().map(|sample| &sample.value),
+            Some(&SongLuaOverlayUpdateValue::F32(0.0))
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_resets_targets_abandoned_at_zero_ease_end() {
+        let song_dir = test_dir("update-function-zero-end-reset");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local actor = Def.Quad{}
+local level = 0
+mods_ease = {
+    {0.13, 0.37, 1, 0, function(value) level = value end, "len",
+        function(t, b, c, d) return b + c * t / d end},
+}
+local function Update()
+    local beat = GAMESTATE:GetSongBeat()
+    for _, ease in ipairs(mods_ease) do
+        if beat >= ease[1] and beat <= ease[1] + ease[2] then
+            ease[5](ease[7](beat - ease[1], ease[3], ease[4] - ease[3], ease[2]))
+        end
+    end
+    if level ~= 0 then
+        actor:x(level * 80):skewx(level)
+    end
+end
+return Def.ActorFrame{
+    InitCommand=function(self) self:SetUpdateFunction(Update) end,
+    actor,
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Update Zero End Reset");
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        for target in [
+            SongLuaOverlayUpdateTarget::X,
+            SongLuaOverlayUpdateTarget::SkewX,
+        ] {
+            let track = compiled
+                .overlay_updates
+                .iter()
+                .find(|track| track.target == target)
+                .unwrap();
+            assert!(track.samples.iter().any(|sample| {
+                (sample.beat - 0.5).abs() <= f32::EPSILON
+                    && sample.value == SongLuaOverlayUpdateValue::F32(0.0)
+            }));
+            assert_eq!(
+                track.samples.last().map(|sample| &sample.value),
+                Some(&SongLuaOverlayUpdateValue::F32(0.0))
+            );
+        }
+    }
+
+    #[test]
+    fn compile_song_lua_resets_targets_one_frame_after_zero_ease_end() {
+        let song_dir = test_dir("update-function-post-end-reset");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local actor = Def.Quad{}
+mods_ease = {
+    {0.13, 0.37, 1, 0, function() end, "len",
+        function(t, b, c, d) return b + c * t / d end},
+}
+local function Update()
+    local beat = GAMESTATE:GetSongBeat()
+    for _, ease in ipairs(mods_ease) do
+        if beat >= ease[1] and beat <= ease[1] + ease[2] then
+            ease[5](ease[7](beat - ease[1], ease[3], ease[4] - ease[3], ease[2]))
+        end
+    end
+    if beat >= 0.13 and beat <= 0.5 then
+        actor:x(80)
+    end
+end
+return Def.ActorFrame{
+    InitCommand=function(self) self:SetUpdateFunction(Update) end,
+    actor,
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Update Post End Reset");
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let track = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| track.target == SongLuaOverlayUpdateTarget::X)
+            .unwrap();
+        assert!(track.samples.iter().any(|sample| {
+            sample.beat > 0.5
+                && sample.beat <= 0.5 + 1.0 / 60.0 + f32::EPSILON
+                && sample.value == SongLuaOverlayUpdateValue::F32(0.0)
+        }));
+        assert_eq!(
+            track.samples.last().map(|sample| &sample.value),
+            Some(&SongLuaOverlayUpdateValue::F32(0.0))
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_maps_position_spline_direction_to_reverse() {
+        let song_dir = test_dir("update-position-spline-reverse");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    InitCommand=function(self)
+        self:SetUpdateFunction(function()
+            local beat = GAMESTATE:GetSongBeat()
+            local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
+            for _, column in ipairs(nf:GetColumnActors()) do
+                local handler = column:GetPosHandler()
+                if beat >= 1 and beat <= 3 then
+                    handler:SetSplineMode("NoteColumnSplineMode_Position")
+                    local spline = handler:GetSpline()
+                    spline:SetSize(2)
+                    spline:SetPoint(1, {0, 100, 0})
+                    spline:SetPoint(2, {0, 0, 0})
+                    spline:Solve()
+                else
+                    handler:SetSplineMode("NoteColumnSplineMode_Disabled")
+                end
+            end
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Position Spline Reverse");
+        context.music_length_seconds = 2.5;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert!(compiled.eases.iter().any(|ease| {
+            ease.player == Some(1)
+                && ease.target == SongLuaEaseTarget::Mod("reverse".to_string())
+                && (ease.from - 100.0).abs() <= f32::EPSILON
+                && (ease.to - 100.0).abs() <= f32::EPSILON
+        }));
     }
 
     #[test]
