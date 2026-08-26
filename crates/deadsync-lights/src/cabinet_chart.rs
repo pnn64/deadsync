@@ -451,6 +451,51 @@ mod tests {
     }
 
     #[test]
+    fn challenge_only_chart_drives_simplified_bass() {
+        let mut song = test_song("Songs/Test/song.ssc", 0.0, ["challenge", "unused"]);
+        song.charts.truncate(1);
+        song.charts[0] = test_chart_with("dance-single", "Challenge", "challenge");
+
+        let plan = cabinet_light_plan(&song, 0).expect("light plan");
+        match &plan {
+            CabinetLightPlan::Generated {
+                marquee_ix,
+                marquee_hash,
+                bass_ix,
+                bass_hash,
+            } => {
+                assert_eq!(*marquee_ix, 0);
+                assert_eq!(marquee_hash, "challenge");
+                assert_eq!(*bass_ix, 0);
+                assert_eq!(bass_hash, "challenge");
+            }
+            CabinetLightPlan::Explicit { .. } => panic!("expected generated lights"),
+        }
+        assert_eq!(plan.request_chart_ixs(), [0]);
+
+        let quarter_row = LIGHTS_QUARTER_ROWS;
+        let eighth_row = quarter_row + LIGHTS_QUARTER_ROWS / 2;
+        let chart = test_gameplay_chart(vec![
+            parsed_note(quarter_row, 0, NoteType::Tap),
+            parsed_note(eighth_row, 1, NoteType::Tap),
+        ]);
+        let events = build_cabinet_light_events(&plan, &[chart], 0.0);
+        let bass_events = events
+            .iter()
+            .copied()
+            .filter(|event| event.light.is_bass())
+            .collect::<Vec<_>>();
+
+        assert_eq!(bass_events.len(), 4);
+        assert!(bass_events.iter().any(|event| {
+            event.row_index == quarter_row && cabinet_light_event_enabled(*event, true)
+        }));
+        assert!(bass_events.iter().any(|event| {
+            event.row_index == eighth_row && !cabinet_light_event_enabled(*event, true)
+        }));
+    }
+
+    #[test]
     fn generated_cabinet_events_take_bass_from_second_chart() {
         let plan = CabinetLightPlan::Generated {
             marquee_ix: 0,
