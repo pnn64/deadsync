@@ -338,7 +338,7 @@ where
     compile_timer.push_stage("perframes");
     out.note_hides = read_note_column_zoom_hides(&lua)?;
     compile_timer.push_stage("note_hides");
-    let (update_eases, update_overlay_eases, update_overlay_tracks) =
+    let (update_eases, update_overlay_eases, update_overlay_tracks, update_column_transforms) =
         match compile_multitap_update_overlays_for_actors(
             &lua,
             context,
@@ -356,12 +356,13 @@ where
                 )
             },
         )? {
-            Some(eases) => (Vec::new(), eases, Vec::new()),
+            Some(eases) => (Vec::new(), eases, Vec::new(), Vec::new()),
             None => compile_update_functions(&lua, &root, context, &mut overlays, &tracked_actors)?,
         };
     out.eases.extend(update_eases);
     out.overlay_eases.extend(update_overlay_eases);
     out.overlay_updates.extend(update_overlay_tracks);
+    out.column_offsets.extend(update_column_transforms);
     compile_timer.push_stage("update_overlays");
     push_startup_message_if_listened(
         &mut out.messages,

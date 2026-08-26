@@ -2,18 +2,20 @@ use mlua::{Function, Lua, Table, Value};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use crate::{
-    LUA_PLAYERS, SONG_LUA_PLAYER_OPTIONS_KEYS, SongLuaCompileContext, SongLuaCompileInfo,
-    SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaOverlayCompileActor,
-    SongLuaOverlayEase, SongLuaOverlayState, SongLuaOverlayUpdateSample, SongLuaOverlayUpdateTrack,
-    SongLuaSpanMode, SongLuaTimeUnit, SongLuaTrackedActor, SongLuaTrackedActorTarget,
-    actor_overlay_initial_state, actor_tree_has_update_functions,
+    LUA_PLAYERS, SONG_LUA_PLAYER_OPTIONS_KEYS, SongLuaColumnOffsetBuildParams,
+    SongLuaColumnOffsetWindow, SongLuaCompileContext, SongLuaCompileInfo, SongLuaEaseTarget,
+    SongLuaEaseWindow, SongLuaMessageEvent, SongLuaOverlayCompileActor, SongLuaOverlayEase,
+    SongLuaOverlayState, SongLuaOverlayUpdateSample, SongLuaOverlayUpdateTrack, SongLuaSpanMode,
+    SongLuaTimeUnit, SongLuaTrackedActor, SongLuaTrackedActorTarget, actor_overlay_initial_state,
+    actor_tree_has_update_functions, column_transform_windows_from_samples,
     compile_song_runtime_delta_values, compile_song_runtime_values, overlay_delta_pair_from_states,
     overlay_state_after_blocks, push_unique_compile_detail, read_f32,
-    reset_overlay_compile_actor_capture_tables, reset_tracked_capture_tables,
-    run_actor_update_functions_with_delta, runtime_player_option_ease_target,
-    set_actor_overlay_getter_state, set_compile_song_runtime_beat,
-    set_compile_song_runtime_delta_values, set_compile_song_runtime_values, song_display_bps,
-    song_elapsed_seconds_for_beat, song_lua_side_effect_count, song_lua_span_end, song_music_rate,
+    read_note_column_transform_samples, reset_overlay_compile_actor_capture_tables,
+    reset_tracked_capture_tables, run_actor_update_functions_with_delta,
+    runtime_player_option_ease_target, set_actor_overlay_getter_state,
+    set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
+    set_compile_song_runtime_values, song_display_bps, song_elapsed_seconds_for_beat,
+    song_lua_side_effect_count, song_lua_span_end, song_music_rate,
 };
 
 pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 8192;
@@ -1204,16 +1206,17 @@ pub fn compile_update_functions<Kind>(
         Vec<SongLuaEaseWindow>,
         Vec<SongLuaOverlayEase>,
         Vec<SongLuaOverlayUpdateTrack>,
+        Vec<SongLuaColumnOffsetWindow>,
     ),
     String,
 > {
     if !actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())? {
-        return Ok((Vec::new(), Vec::new(), Vec::new()));
+        return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new()));
     }
     let start = 0.0;
     let end = update_function_end_beat(context);
     if end <= start {
-        return Ok((Vec::new(), Vec::new(), Vec::new()));
+        return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new()));
     }
 
     let player_tables = tracked_player_tables(tracked_actors);
@@ -1230,9 +1233,11 @@ pub fn compile_update_functions<Kind>(
     call_update_functions_at(lua, root, start, 0.0, 0.0)?;
     let baseline_players = current_perframe_player_states(&player_tables)?;
     let baseline_mods = current_update_mod_states_with_note_columns(lua, &option_tables)?;
+    let baseline_columns = read_note_column_transform_samples(lua)?;
     let mut sample_beats = vec![start];
     let mut player_samples = vec![baseline_players];
     let mut mod_samples = vec![baseline_mods.clone()];
+    let mut column_samples = vec![baseline_columns];
     let mut overlay_tracks = Vec::new();
     let mut overlay_track_indices = std::collections::HashMap::new();
     let mut prior_overlay_touches = capture_update_overlay_samples(
@@ -1282,6 +1287,7 @@ pub fn compile_update_functions<Kind>(
             lua,
             &option_tables,
         )?);
+        column_samples.push(read_note_column_transform_samples(lua)?);
         let reset_missing = replay.reset_beats.contains(&next_beat.to_bits());
         let next_overlay_touches = capture_update_overlay_samples(
             lua,
@@ -1298,6 +1304,7 @@ pub fn compile_update_functions<Kind>(
     }
 
     let mut eases = Vec::new();
+    let mut column_transforms = Vec::new();
     for index in 0..sample_beats.len() {
         let seg_start = sample_beats[index];
         let seg_end = sample_beats.get(index + 1).copied().unwrap_or(end);
@@ -1327,9 +1334,25 @@ pub fn compile_update_functions<Kind>(
             to_mods,
             &baseline_mods,
         );
+        let from_columns = &column_samples[index];
+        let to_columns = column_samples.get(index + 1).unwrap_or(from_columns);
+        column_transforms.extend(column_transform_windows_from_samples(
+            from_columns,
+            to_columns,
+            SongLuaColumnOffsetBuildParams {
+                unit: SongLuaTimeUnit::Beat,
+                start: seg_start,
+                limit: seg_end - seg_start,
+                span_mode: SongLuaSpanMode::Len,
+                easing: None,
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            },
+        ));
     }
     crate::lua_util::end_overlay_update_capture(lua);
-    Ok((eases, Vec::new(), overlay_tracks))
+    Ok((eases, Vec::new(), overlay_tracks, column_transforms))
 }
 
 #[derive(Clone, Copy)]

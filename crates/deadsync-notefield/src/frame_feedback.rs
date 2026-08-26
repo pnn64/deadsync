@@ -181,8 +181,9 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         }
         let effect = gameplay_visual_effect_params(&visual, local_col);
         lane_effects[local_col] = effect;
-        let confusion_rotation_deg = visual_confusion_rotation_deg(current_beat, effect);
-        let center = receptor_row_center(
+        let confusion_rotation_deg = visual_confusion_rotation_deg(current_beat, effect)
+            + prepared.column_rotations_deg[local_col];
+        let mut center = receptor_row_center(
             field.playfield_center_x,
             local_col,
             receptor_y,
@@ -204,8 +205,9 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             visual.tiny,
             visual.tipsy,
         );
+        center[0] += prepared.column_x_offsets[local_col];
         lane_centers[local_col] = center;
-        let effect_zoom = visual_arrow_effect_zoom(0.0, effect);
+        let effect_zoom = visual_arrow_effect_zoom(0.0, effect) * prepared.column_zooms[local_col];
         let hold_slot = if hidden || !options.hold_explosion_enabled {
             None
         } else {
@@ -329,10 +331,12 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     uv_elapsed_s: elapsed_screen,
                     center,
                     field_zoom,
-                    effect_zoom: visual_arrow_effect_zoom(0.0, effect),
+                    effect_zoom: visual_arrow_effect_zoom(0.0, effect)
+                        * prepared.column_zooms[local_col],
                     rotation: ExplosionRotation::Tap {
                         rotation_y_deg: 0.0,
-                        extra_z_deg: visual_confusion_rotation_deg(current_beat, effect),
+                        extra_z_deg: visual_confusion_rotation_deg(current_beat, effect)
+                            + prepared.column_rotations_deg[local_col],
                     },
                     z: request.style.actors.tap_explosion_z,
                 },

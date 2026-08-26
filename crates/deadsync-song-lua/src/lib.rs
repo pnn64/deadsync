@@ -146,7 +146,8 @@ pub use lua_util::{
     read_global_function_nested_tables, read_graph_display_body_state,
     read_graph_display_line_state, read_graph_display_size, read_graph_display_values,
     read_model_path, read_note_column_pos_samples, read_note_column_pos_samples_for_fields,
-    read_note_column_position_reverse_percents, read_note_column_zoom_hides,
+    read_note_column_position_reverse_percents, read_note_column_transform_samples,
+    read_note_column_transform_samples_for_fields, read_note_column_zoom_hides,
     read_note_column_zoom_hides_for_actor, read_noteskin_tap_actor_model,
     read_noteskin_tap_actor_slots, read_overlay_compile_actor_actions, read_overlay_compile_actors,
     read_proxy_target_kind, read_song_lua_sound_paths, read_song_meter_display_state,
@@ -4028,6 +4029,7 @@ pub struct SongLuaColumnOffsetWindow {
     pub span_mode: SongLuaSpanMode,
     pub player: usize,
     pub column: usize,
+    pub target: SongLuaColumnTransformTarget,
     pub from_y: f32,
     pub to_y: f32,
     pub easing: Option<String>,
@@ -4036,11 +4038,37 @@ pub struct SongLuaColumnOffsetWindow {
     pub opt2: Option<f32>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SongLuaColumnTransformTarget {
+    OffsetX,
+    OffsetY,
+    Zoom,
+    RotationZ,
+}
+
+impl SongLuaColumnTransformTarget {
+    #[inline(always)]
+    pub const fn baseline(self) -> f32 {
+        match self {
+            Self::OffsetX | Self::OffsetY | Self::RotationZ => 0.0,
+            Self::Zoom => 1.0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SongLuaColumnOffsetSample {
     pub player: usize,
     pub column: usize,
     pub y: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SongLuaColumnTransformSample {
+    pub player: usize,
+    pub column: usize,
+    pub target: SongLuaColumnTransformTarget,
+    pub value: f32,
 }
 
 pub fn note_column_pos_offset_y_from_points(mode: &str, points: &[[f32; 2]]) -> Option<f32> {
@@ -4110,6 +4138,7 @@ pub fn column_offset_windows_from_samples(
             span_mode: params.span_mode,
             player,
             column,
+            target: SongLuaColumnTransformTarget::OffsetY,
             from_y,
             to_y,
             easing: params.easing.clone(),
@@ -4119,6 +4148,61 @@ pub fn column_offset_windows_from_samples(
         });
     }
     out
+}
+
+pub fn column_transform_windows_from_samples(
+    from_samples: &[SongLuaColumnTransformSample],
+    to_samples: &[SongLuaColumnTransformSample],
+    params: SongLuaColumnOffsetBuildParams,
+) -> Vec<SongLuaColumnOffsetWindow> {
+    let mut keys = Vec::<(usize, usize, SongLuaColumnTransformTarget)>::new();
+    for sample in from_samples.iter().chain(to_samples.iter()) {
+        let key = (sample.player, sample.column, sample.target);
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
+    keys.sort_unstable();
+
+    let mut out = Vec::new();
+    for (player, column, target) in keys {
+        let from_y = column_transform_sample_value(from_samples, player, column, target);
+        let to_y = column_transform_sample_value(to_samples, player, column, target);
+        let baseline = target.baseline();
+        if (from_y - baseline).abs() <= f32::EPSILON && (to_y - baseline).abs() <= f32::EPSILON {
+            continue;
+        }
+        out.push(SongLuaColumnOffsetWindow {
+            unit: params.unit,
+            start: params.start,
+            limit: params.limit,
+            span_mode: params.span_mode,
+            player,
+            column,
+            target,
+            from_y,
+            to_y,
+            easing: params.easing.clone(),
+            sustain: params.sustain,
+            opt1: params.opt1,
+            opt2: params.opt2,
+        });
+    }
+    out
+}
+
+fn column_transform_sample_value(
+    samples: &[SongLuaColumnTransformSample],
+    player: usize,
+    column: usize,
+    target: SongLuaColumnTransformTarget,
+) -> f32 {
+    samples
+        .iter()
+        .find(|sample| {
+            sample.player == player && sample.column == column && sample.target == target
+        })
+        .map_or_else(|| target.baseline(), |sample| sample.value)
 }
 
 fn column_offset_sample_y(
@@ -4143,17 +4227,17 @@ mod tests {
         CompiledSongLua, GRAPH_DISPLAY_VALUE_RESOLUTION, MultitapPhase, SONG_LUA_INITIAL_LIFE,
         SONG_LUA_RUNTIME_KEY, SONG_LUA_SPRITE_STATE_CLEAR, SONG_LUA_STARTUP_MESSAGE,
         SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES, SongLuaColumnOffsetBuildParams,
-        SongLuaColumnOffsetSample, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
-        SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow, SongLuaNoteHideWindow,
-        SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayBlendMode,
-        SongLuaOverlayCommandBlock, SongLuaOverlayCompileActor, SongLuaOverlayEase,
-        SongLuaOverlayEaseBuildParams, SongLuaOverlayKind, SongLuaOverlayMessageCommand,
-        SongLuaOverlayModelDraw, SongLuaOverlayModelLayer, SongLuaOverlayState,
-        SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue,
-        SongLuaPlayerContext, SongLuaProxyTarget, SongLuaSpanMode, SongLuaSpeedMod,
-        SongLuaTextGlowMode, SongLuaTimeUnit, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
-        TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES, actor_indices_for_pointers,
-        actor_overlay_initial_state, actor_pointers_touch_actor,
+        SongLuaColumnOffsetSample, SongLuaColumnTransformTarget, SongLuaCompileContext,
+        SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent,
+        SongLuaModWindow, SongLuaNoteHideWindow, SongLuaNoteskinResolver, SongLuaOverlayActor,
+        SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayCompileActor,
+        SongLuaOverlayEase, SongLuaOverlayEaseBuildParams, SongLuaOverlayKind,
+        SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw, SongLuaOverlayModelLayer,
+        SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget,
+        SongLuaOverlayUpdateValue, SongLuaPlayerContext, SongLuaProxyTarget, SongLuaSpanMode,
+        SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit, THEME_RECEPTOR_Y_REV,
+        THEME_RECEPTOR_Y_STD, TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES,
+        actor_indices_for_pointers, actor_overlay_initial_state, actor_pointers_touch_actor,
         add_actor_child_from_path as add_lua_actor_child_from_path, capture_actor_message_commands,
         capture_block_set_bool, capture_block_set_f32, capture_function_action_blocks,
         capture_indexed_actor_function_blocks, capture_overlay_function_eases,
@@ -6606,6 +6690,7 @@ return Def.ActorFrame{
             local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
             for _, column in ipairs(nf:GetColumnActors()) do
                 local handler = column:GetPosHandler()
+                local zoom_handler = column:GetZoomHandler()
                 if beat >= 1 and beat <= 3 then
                     handler:SetSplineMode("NoteColumnSplineMode_Position")
                     local spline = handler:GetSpline()
@@ -6613,8 +6698,16 @@ return Def.ActorFrame{
                     spline:SetPoint(1, {0, 100, 0})
                     spline:SetPoint(2, {0, 0, 0})
                     spline:Solve()
+                    zoom_handler:SetSplineMode("NoteColumnSplineMode_Position")
+                    local zoom = zoom_handler:GetSpline()
+                    local amount = math.abs(beat - 2)
+                    zoom:SetSize(2)
+                    zoom:SetPoint(1, {amount, amount, amount})
+                    zoom:SetPoint(2, {amount, amount, amount})
+                    zoom:Solve()
                 else
                     handler:SetSplineMode("NoteColumnSplineMode_Disabled")
+                    zoom_handler:SetSplineMode("NoteColumnSplineMode_Disabled")
                 end
             end
         end)
@@ -6632,6 +6725,16 @@ return Def.ActorFrame{
                 && ease.target == SongLuaEaseTarget::Mod("reverse".to_string())
                 && (ease.from - 100.0).abs() <= f32::EPSILON
                 && (ease.to - 100.0).abs() <= f32::EPSILON
+        }));
+        assert!(compiled.column_offsets.iter().any(|window| {
+            window.target == SongLuaColumnTransformTarget::Zoom
+                && window.player == 0
+                && (window.from_y < 0.99 || window.to_y < 0.99)
+        }));
+        assert!(compiled.column_offsets.iter().any(|window| {
+            window.target == SongLuaColumnTransformTarget::OffsetX
+                && window.player == 0
+                && (window.from_y.abs() > f32::EPSILON || window.to_y.abs() > f32::EPSILON)
         }));
     }
 
@@ -12055,6 +12158,51 @@ return Def.ActorFrame{}
         assert!((window.from_y - 33.75).abs() <= 0.001);
         assert!(window.to_y.abs() <= 0.001);
         assert_eq!(window.easing.as_deref(), Some("outSine"));
+    }
+
+    #[test]
+    fn compile_song_lua_captures_column_rotation_function_eases() {
+        let song_dir = test_dir("column-rotation-function-eases");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local function spin_col(v)
+    local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
+    for _, column in ipairs(nf:GetColumnActors()) do
+        local handler = column:GetRotHandler()
+        handler:SetSplineMode("NoteColumnSplineMode_Offset")
+        local spline = handler:GetSpline()
+        spline:SetSize(1)
+        spline:SetPoint(1, {0, 0, v})
+        spline:Solve()
+    end
+end
+
+mods_ease = {
+    {104, 3, 0, math.pi, spin_col, "len", ease.inCubic},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Column Rotation Function Eases"),
+        )
+        .unwrap();
+
+        assert_eq!(compiled.info.unsupported_function_eases, 0);
+        assert_eq!(compiled.column_offsets.len(), 4);
+        assert!(compiled.column_offsets.iter().all(|window| {
+            window.target == SongLuaColumnTransformTarget::RotationZ
+                && window.player == 0
+                && window.from_y.abs() <= 0.001
+                && (window.to_y - std::f32::consts::PI).abs() <= 0.001
+                && window.easing.as_deref() == Some("inCubic")
+        }));
     }
 
     #[test]

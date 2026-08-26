@@ -16,17 +16,17 @@ use crate::{
     SONG_LUA_SPRITE_STATE_CLEAR, SONG_LUA_STARTUP_MESSAGE, SONG_LUA_THEME_PATH_PREFIX,
     SONG_LUA_TOP_SCREEN_OPTION_ROWS, SongLuaActorMultiVertexPoint, SongLuaCapturedActor,
     SongLuaColumnOffsetBuildParams, SongLuaColumnOffsetSample, SongLuaColumnOffsetWindow,
-    SongLuaCompileContext, SongLuaCompileInfo, SongLuaDifficulty, SongLuaEaseTarget,
-    SongLuaMessageEvent, SongLuaNoteHideWindow, SongLuaOverlayBlendMode,
-    SongLuaOverlayCommandBlock, SongLuaOverlayEase, SongLuaOverlayEaseBuildParams,
-    SongLuaOverlayKind, SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand,
-    SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta,
-    SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue, SongLuaPlayerContext,
-    SongLuaProxyTarget, SongLuaSpanMode, SongLuaTimeUnit, SongLuaTrackedActor,
-    SongLuaTrackedActorTarget, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
+    SongLuaColumnTransformSample, SongLuaColumnTransformTarget, SongLuaCompileContext,
+    SongLuaCompileInfo, SongLuaDifficulty, SongLuaEaseTarget, SongLuaMessageEvent,
+    SongLuaNoteHideWindow, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayEase,
+    SongLuaOverlayEaseBuildParams, SongLuaOverlayKind, SongLuaOverlayMeshVertex,
+    SongLuaOverlayMessageCommand, SongLuaOverlayModelLayer, SongLuaOverlayState,
+    SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue,
+    SongLuaPlayerContext, SongLuaProxyTarget, SongLuaSpanMode, SongLuaTimeUnit,
+    SongLuaTrackedActor, SongLuaTrackedActorTarget, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
     TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES, call_with_chunk_env,
     call_with_script_dir, call_with_script_path, clone_lua_value,
-    column_offset_windows_from_samples, compile_song_runtime_delta_values,
+    column_transform_windows_from_samples, compile_song_runtime_delta_values,
     compile_song_runtime_values, create_chunk_env_proxy, create_life_record_table,
     crop_texture_rect, display_bpms_text, effect_clock_label, file_path_string,
     format_rolling_number, graph_display_body_size, initial_chunk_environment,
@@ -8400,6 +8400,14 @@ pub fn read_note_column_pos_samples(lua: &Lua) -> Result<Vec<SongLuaColumnOffset
     read_note_column_pos_samples_for_fields(note_field_tables(lua).map_err(|err| err.to_string())?)
 }
 
+pub fn read_note_column_transform_samples(
+    lua: &Lua,
+) -> Result<Vec<SongLuaColumnTransformSample>, String> {
+    read_note_column_transform_samples_for_fields(
+        note_field_tables(lua).map_err(|err| err.to_string())?,
+    )
+}
+
 pub fn compile_note_column_pos_function_ease(
     lua: &Lua,
     function: &Function,
@@ -8416,12 +8424,12 @@ pub fn compile_note_column_pos_function_ease(
 ) -> Result<Vec<SongLuaColumnOffsetWindow>, String> {
     let start_beat = start;
     let end_beat = song_lua_span_end(start, limit, span_mode).max(start_beat);
-    let from_samples = capture_note_column_pos_samples(lua, function, from, start_beat)?;
-    let to_samples = capture_note_column_pos_samples(lua, function, to, end_beat)?;
+    let from_samples = capture_note_column_transform_samples(lua, function, from, start_beat)?;
+    let to_samples = capture_note_column_transform_samples(lua, function, to, end_beat)?;
     if from_samples.is_empty() && to_samples.is_empty() {
         return Ok(Vec::new());
     }
-    Ok(column_offset_windows_from_samples(
+    Ok(column_transform_windows_from_samples(
         &from_samples,
         &to_samples,
         SongLuaColumnOffsetBuildParams {
@@ -8437,21 +8445,181 @@ pub fn compile_note_column_pos_function_ease(
     ))
 }
 
-fn capture_note_column_pos_samples(
+fn capture_note_column_transform_samples(
     lua: &Lua,
     function: &Function,
     value: f32,
     song_beat: f32,
-) -> Result<Vec<SongLuaColumnOffsetSample>, String> {
+) -> Result<Vec<SongLuaColumnTransformSample>, String> {
     let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
     set_compile_song_runtime_beat(lua, song_beat).map_err(|err| err.to_string())?;
     let snapshot = snapshot_note_field_columns(lua).map_err(|err| err.to_string())?;
     let result = function.call::<Value>(value);
-    let samples = read_note_column_pos_samples(lua);
+    let samples = read_note_column_transform_samples(lua);
     restore_note_field_columns(lua, snapshot).map_err(|err| err.to_string())?;
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
     result.map_err(|err| err.to_string())?;
     samples
+}
+
+fn note_column_handler_uniform_component(
+    column: &Table,
+    handler_key: &str,
+    component: i64,
+    baseline: f32,
+) -> Result<Option<f32>, String> {
+    const EPS: f32 = 0.001;
+    let Some(handler) = column
+        .get::<Option<Table>>(handler_key)
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(None);
+    };
+    let mode = handler
+        .get::<Option<String>>("__songlua_spline_mode")
+        .map_err(|err| err.to_string())?
+        .unwrap_or_default();
+    if mode.eq_ignore_ascii_case("NoteColumnSplineMode_Disabled") {
+        return Ok(Some(baseline));
+    }
+    let offset_mode = mode.eq_ignore_ascii_case("NoteColumnSplineMode_Offset");
+    if !offset_mode && !mode.eq_ignore_ascii_case("NoteColumnSplineMode_Position") {
+        return Ok(None);
+    }
+    let Some(spline) = handler
+        .get::<Option<Table>>("__songlua_spline")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(None);
+    };
+    let size = spline
+        .get::<Option<i64>>("__songlua_spline_size")
+        .map_err(|err| err.to_string())?
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or(0);
+    if size == 0 {
+        return Ok(Some(baseline));
+    }
+    let points = spline
+        .get::<Table>("__songlua_spline_points")
+        .map_err(|err| err.to_string())?;
+    if !offset_mode {
+        let Some(point) = points
+            .raw_get::<Option<Table>>(1)
+            .map_err(|err| err.to_string())?
+        else {
+            return Ok(None);
+        };
+        return Ok(point.raw_get::<Value>(component).ok().and_then(read_f32));
+    }
+    let mut uniform = None::<f32>;
+    for index in 1..=size {
+        let Some(point) = points
+            .raw_get::<Option<Table>>(index)
+            .map_err(|err| err.to_string())?
+        else {
+            return Ok(None);
+        };
+        let Some(value) = point.raw_get::<Value>(component).ok().and_then(read_f32) else {
+            return Ok(None);
+        };
+        if let Some(prior) = uniform {
+            if (value - prior).abs() > EPS {
+                return Ok(None);
+            }
+        } else {
+            uniform = Some(value);
+        }
+    }
+    let value = uniform.unwrap_or_default();
+    Ok(Some(if offset_mode { baseline + value } else { value }))
+}
+
+fn note_column_position_x_offset(column: &Table) -> Result<Option<f32>, String> {
+    let Some(handler) = column
+        .get::<Option<Table>>("__songlua_pos_handler")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(None);
+    };
+    let mode = handler
+        .get::<Option<String>>("__songlua_spline_mode")
+        .map_err(|err| err.to_string())?
+        .unwrap_or_default();
+    if mode.eq_ignore_ascii_case("NoteColumnSplineMode_Disabled") {
+        return Ok(Some(0.0));
+    }
+    if !mode.eq_ignore_ascii_case("NoteColumnSplineMode_Position") {
+        return Ok(None);
+    }
+    let Some(position_x) =
+        note_column_handler_uniform_component(column, "__songlua_pos_handler", 1, 0.0)?
+    else {
+        return Ok(None);
+    };
+    let base_x = column
+        .get::<Option<f32>>("__songlua_state_x")
+        .map_err(|err| err.to_string())?
+        .unwrap_or_default();
+    Ok(Some(position_x - base_x))
+}
+
+pub fn read_note_column_transform_samples_for_fields(
+    note_fields: Vec<Table>,
+) -> Result<Vec<SongLuaColumnTransformSample>, String> {
+    let mut out = Vec::new();
+    for note_field in note_fields {
+        let Some(columns) = note_field
+            .get::<Option<Table>>("__songlua_note_columns")
+            .map_err(|err| err.to_string())?
+        else {
+            continue;
+        };
+        for column in columns.sequence_values::<Table>() {
+            let column = column.map_err(|err| err.to_string())?;
+            let Some(player) = column
+                .get::<Option<i64>>("__songlua_player_index")
+                .map_err(|err| err.to_string())?
+                .and_then(|value| usize::try_from(value).ok())
+            else {
+                continue;
+            };
+            let Some(local_col) = column
+                .get::<Option<i64>>("__songlua_column_index")
+                .map_err(|err| err.to_string())?
+                .and_then(|value| usize::try_from(value).ok())
+            else {
+                continue;
+            };
+            let mut push = |target, value: Option<f32>| {
+                if let Some(value) = value.filter(|value| value.is_finite()) {
+                    out.push(SongLuaColumnTransformSample {
+                        player,
+                        column: local_col,
+                        target,
+                        value,
+                    });
+                }
+            };
+            push(
+                SongLuaColumnTransformTarget::OffsetX,
+                note_column_position_x_offset(&column)?,
+            );
+            push(
+                SongLuaColumnTransformTarget::OffsetY,
+                note_column_pos_offset_y(&column)?,
+            );
+            push(
+                SongLuaColumnTransformTarget::Zoom,
+                note_column_handler_uniform_component(&column, "__songlua_zoom_handler", 1, 1.0)?,
+            );
+            push(
+                SongLuaColumnTransformTarget::RotationZ,
+                note_column_handler_uniform_component(&column, "__songlua_rot_handler", 3, 0.0)?,
+            );
+        }
+    }
+    Ok(out)
 }
 
 pub fn read_note_column_pos_samples_for_fields(

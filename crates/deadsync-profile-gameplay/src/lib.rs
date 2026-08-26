@@ -526,6 +526,20 @@ pub fn song_lua_runtime_column_offset_windows(
                 limit: window.limit,
                 span_mode: song_lua_runtime_span_mode(window.span_mode),
                 column: window.column,
+                target: match window.target {
+                    deadsync_song_lua::SongLuaColumnTransformTarget::OffsetX => {
+                        deadsync_gameplay::SongLuaColumnTransformTarget::OffsetX
+                    }
+                    deadsync_song_lua::SongLuaColumnTransformTarget::OffsetY => {
+                        deadsync_gameplay::SongLuaColumnTransformTarget::OffsetY
+                    }
+                    deadsync_song_lua::SongLuaColumnTransformTarget::Zoom => {
+                        deadsync_gameplay::SongLuaColumnTransformTarget::Zoom
+                    }
+                    deadsync_song_lua::SongLuaColumnTransformTarget::RotationZ => {
+                        deadsync_gameplay::SongLuaColumnTransformTarget::RotationZ
+                    }
+                },
                 from_y: window.from_y,
                 to_y: window.to_y,
                 easing: window.easing.clone(),

@@ -337,6 +337,9 @@ pub enum Actor {
         rot_x_deg: f32,
         rot_y_deg: f32,
         rot_z_deg: f32,
+        /// StepMania actor-local shear amounts. Applied after rotation and
+        /// before the sprite geometry scale.
+        skew: [f32; 2],
         local_offset: [f32; 2],
         local_offset_rot_sin_cos: [f32; 2],
         texcoordvelocity: Option<[f32; 2]>,

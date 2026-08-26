@@ -1427,6 +1427,7 @@ impl SpriteBuilder {
             rot_x_deg: self.rot_x,
             rot_y_deg: self.rot_y,
             rot_z_deg: self.rot_z,
+            skew: [0.0, 0.0],
             local_offset: [0.0, 0.0],
             local_offset_rot_sin_cos: [0.0, 1.0],
             texcoordvelocity: self.texv,

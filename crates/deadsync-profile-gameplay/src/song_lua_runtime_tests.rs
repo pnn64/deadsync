@@ -1,12 +1,12 @@
 use deadsync_gameplay::{SongLuaEaseMaskTarget, song_lua_ease_window_value};
 use deadsync_rules::timing::{TimingData, TimingSegments};
 use deadsync_song_lua::{
-    CompiledSongLua, SongLuaColumnOffsetWindow, SongLuaCompileContext, SongLuaDifficulty,
-    SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow,
-    SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayCommandBlock, SongLuaOverlayEase,
-    SongLuaOverlayMessageCommand, SongLuaOverlayModelLayer, SongLuaOverlayState,
-    SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
-    compile_song_lua_with_default_host,
+    CompiledSongLua, SongLuaColumnOffsetWindow, SongLuaColumnTransformTarget,
+    SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow,
+    SongLuaMessageEvent, SongLuaModWindow, SongLuaNoteskinResolver, SongLuaOverlayActor,
+    SongLuaOverlayCommandBlock, SongLuaOverlayEase, SongLuaOverlayMessageCommand,
+    SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaPlayerContext, SongLuaSpanMode,
+    SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua_with_default_host,
 };
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -375,6 +375,7 @@ fn song_lua_column_offsets_persist_until_next_column_offset() {
             SongLuaColumnOffsetWindow {
                 player: 0,
                 column: 2,
+                target: SongLuaColumnTransformTarget::OffsetY,
                 unit: SongLuaTimeUnit::Beat,
                 start: 0.0,
                 limit: 0.5,
@@ -389,6 +390,7 @@ fn song_lua_column_offsets_persist_until_next_column_offset() {
             SongLuaColumnOffsetWindow {
                 player: 0,
                 column: 2,
+                target: SongLuaColumnTransformTarget::OffsetY,
                 unit: SongLuaTimeUnit::Beat,
                 start: 2.0,
                 limit: 0.5,

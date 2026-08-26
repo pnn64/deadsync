@@ -893,6 +893,7 @@ mod tests {
     ) -> SongLuaColumnOffsetWindowRuntime {
         SongLuaColumnOffsetWindowRuntime {
             column,
+            target: SongLuaColumnTransformTarget::OffsetY,
             start_second,
             end_second,
             sustain_end_second,
@@ -7492,6 +7493,7 @@ mod tests {
                 limit: 2.0,
                 span_mode: SongLuaRuntimeSpanMode::Len,
                 column: 1,
+                target: SongLuaColumnTransformTarget::OffsetY,
                 from_y: -32.0,
                 to_y: 16.0,
                 easing: Some("outQuad".to_owned()),
@@ -7506,6 +7508,7 @@ mod tests {
                 limit: 4.0,
                 span_mode: SongLuaRuntimeSpanMode::End,
                 column: 2,
+                target: SongLuaColumnTransformTarget::OffsetY,
                 from_y: 4.0,
                 to_y: 8.0,
                 easing: None,
@@ -7520,6 +7523,7 @@ mod tests {
                 limit: 4.0,
                 span_mode: SongLuaRuntimeSpanMode::End,
                 column: 3,
+                target: SongLuaColumnTransformTarget::OffsetY,
                 from_y: 1.0,
                 to_y: 2.0,
                 easing: Some("linear".to_owned()),
@@ -7534,6 +7538,7 @@ mod tests {
                 limit: 9.0,
                 span_mode: SongLuaRuntimeSpanMode::End,
                 column: 1,
+                target: SongLuaColumnTransformTarget::OffsetY,
                 from_y: 16.0,
                 to_y: 0.0,
                 easing: Some("inOutSine".to_owned()),
@@ -8144,6 +8149,7 @@ mod tests {
     fn song_lua_column_offsets_hold_after_ease_until_cutoff() {
         let windows = [SongLuaColumnOffsetWindowRuntime {
             column: 2,
+            target: SongLuaColumnTransformTarget::OffsetY,
             start_second: 1.0,
             end_second: 1.5,
             sustain_end_second: 3.0,
@@ -8321,6 +8327,7 @@ mod tests {
     fn song_lua_column_offset_window_runtime_copies_fields() {
         let window = build_song_lua_column_offset_window_runtime(
             3,
+            SongLuaColumnTransformTarget::OffsetY,
             1.25,
             2.5,
             4.0,
@@ -8332,6 +8339,7 @@ mod tests {
         );
 
         assert_eq!(window.column, 3);
+        assert_eq!(window.target, SongLuaColumnTransformTarget::OffsetY);
         assert_near(window.start_second, 1.25);
         assert_near(window.end_second, 2.5);
         assert_near(window.sustain_end_second, 4.0);

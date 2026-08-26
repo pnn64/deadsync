@@ -3801,6 +3801,7 @@ mod tests {
                 rot_x_deg: 0.0,
                 rot_y_deg: 0.0,
                 rot_z_deg: 0.0,
+                skew: [0.0, 0.0],
                 local_offset: [0.0; 2],
                 local_offset_rot_sin_cos: [0.0, 1.0],
                 texcoordvelocity: None,

@@ -10,7 +10,7 @@ use std::collections::{HashMap, hash_map::Entry};
 use std::hash::{BuildHasher, DefaultHasher, Hash, Hasher};
 use std::num::NonZeroU32;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 /* ======================= RENDERER SCREEN BUILDER ======================= */
@@ -5785,6 +5785,7 @@ fn build_flat_sprite<T: TextureContext + ?Sized>(
             0.0,
             sprite.rot_y_deg,
             sprite.rot_z_deg,
+            [0.0, 0.0],
             sprite.world_z,
             [0.0, 0.0],
             [0.0, 1.0],
@@ -6596,6 +6597,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             rot_z_deg,
             rot_x_deg,
             rot_y_deg,
+            skew,
             local_offset,
             local_offset_rot_sin_cos,
             texcoordvelocity,
@@ -6719,6 +6721,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 effect_rot[0],
                 effect_rot[1],
                 effect_rot[2],
+                *skew,
                 *world_z,
                 *local_offset,
                 *local_offset_rot_sin_cos,
@@ -6791,6 +6794,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     effect_rot[0],
                     effect_rot[1],
                     effect_rot[2],
+                    *skew,
                     *world_z,
                     *local_offset,
                     *local_offset_rot_sin_cos,
@@ -7356,6 +7360,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             0.0,
                             0.0,
                             0.0,
+                            [0.0, 0.0],
                             0.0,
                             [0.0, 0.0],
                             [0.0, 1.0],
@@ -7404,6 +7409,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             0.0,
                             0.0,
                             0.0,
+                            [0.0, 0.0],
                             0.0,
                             [0.0, 0.0],
                             [0.0, 1.0],
@@ -7495,6 +7501,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             0.0,
                             0.0,
                             0.0,
+                            [0.0, 0.0],
                             0.0,
                             [0.0, 0.0],
                             [0.0, 1.0],
@@ -7543,6 +7550,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             0.0,
                             0.0,
                             0.0,
+                            [0.0, 0.0],
                             0.0,
                             [0.0, 0.0],
                             [0.0, 1.0],
@@ -7893,6 +7901,7 @@ fn push_sprite<T: TextureContext + ?Sized>(
     rot_x_deg: f32,
     rot_y_deg: f32,
     rot_z_deg: f32,
+    skew: [f32; 2],
     world_z: f32,
     local_offset: [f32; 2],
     local_offset_rot_sin_cos: [f32; 2],
@@ -8004,6 +8013,54 @@ fn push_sprite<T: TextureContext + ?Sized>(
         }
     };
 
+    if skew[0].abs() > f32::EPSILON || skew[1].abs() > f32::EPSILON {
+        let offset_sin = local_offset_rot_sin_cos[0];
+        let offset_cos = local_offset_rot_sin_cos[1];
+        let offset_world = Vector2::new(
+            offset_cos.mul_add(local_offset[0], -offset_sin * local_offset[1]),
+            offset_sin.mul_add(local_offset[0], offset_cos * local_offset[1]),
+        );
+        let crop_offset = Vector2::new(center_x - base_center.x, center_y - base_center.y);
+        let skew_x = Matrix4::from_cols_array(&[
+            1.0, 0.0, 0.0, 0.0, skew[0], 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+        ]);
+        let skew_y = Matrix4::from_cols_array(&[
+            1.0, skew[1], 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+        ]);
+        let transform = Matrix4::from_translation(Vector3::new(
+            base_center.x + offset_world.x,
+            base_center.y + offset_world.y,
+            world_z,
+        )) * Matrix4::from_rotation_z(rot_z_deg.to_radians())
+            * skew_x
+            * skew_y
+            * Matrix4::from_translation(Vector3::new(crop_offset.x, crop_offset.y, 0.0))
+            * Matrix4::from_scale(Vector3::new(size_x, size_y, 1.0));
+        out.push_textured_mesh(
+            texture_handle,
+            0,
+            0,
+            blend,
+            camera,
+            TexturedMeshPayload {
+                instance: renderer::TexturedMeshInstanceRaw::new(
+                    transform,
+                    tint,
+                    uv_scale,
+                    uv_offset,
+                    [0.0, 0.0],
+                    texture_mask,
+                ),
+                vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(
+                    skewed_sprite_vertices(),
+                )),
+                geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
+                depth_test: false,
+            },
+        );
+        return;
+    }
+
     let sprite_index = sprite_instances.len() as u32;
     sprite_instances.push(renderer::SpriteInstanceRaw {
         center: [center_x, center_y, world_z, 0.0],
@@ -8019,6 +8076,55 @@ fn push_sprite<T: TextureContext + ?Sized>(
     });
 
     out.push_sprite(texture_handle, 0, 0, blend, camera, sprite_index);
+}
+
+fn skewed_sprite_vertices() -> &'static Arc<[renderer::TexturedMeshVertex]> {
+    static VERTICES: OnceLock<Arc<[renderer::TexturedMeshVertex]>> = OnceLock::new();
+    VERTICES.get_or_init(|| {
+        let white = [1.0; 4];
+        let tex_matrix_scale = [1.0, 1.0];
+        Arc::from(
+            [
+                renderer::TexturedMeshVertex {
+                    pos: [-0.5, 0.5, 0.0],
+                    uv: [0.0, 0.0],
+                    color: white,
+                    tex_matrix_scale,
+                },
+                renderer::TexturedMeshVertex {
+                    pos: [0.5, 0.5, 0.0],
+                    uv: [1.0, 0.0],
+                    color: white,
+                    tex_matrix_scale,
+                },
+                renderer::TexturedMeshVertex {
+                    pos: [0.5, -0.5, 0.0],
+                    uv: [1.0, 1.0],
+                    color: white,
+                    tex_matrix_scale,
+                },
+                renderer::TexturedMeshVertex {
+                    pos: [-0.5, 0.5, 0.0],
+                    uv: [0.0, 0.0],
+                    color: white,
+                    tex_matrix_scale,
+                },
+                renderer::TexturedMeshVertex {
+                    pos: [0.5, -0.5, 0.0],
+                    uv: [1.0, 1.0],
+                    color: white,
+                    tex_matrix_scale,
+                },
+                renderer::TexturedMeshVertex {
+                    pos: [-0.5, -0.5, 0.0],
+                    uv: [0.0, 1.0],
+                    color: white,
+                    tex_matrix_scale,
+                },
+            ]
+            .as_slice(),
+        )
+    })
 }
 
 #[inline(always)]
@@ -9629,6 +9735,7 @@ mod tests {
             source,
             tint: [0.8, 0.6, 0.4, 1.0],
             glow: [0.0; 4],
+            skew: [0.0; 2],
             z: 2,
             cell: None,
             grid: None,
@@ -10206,6 +10313,7 @@ mod tests {
             source,
             tint: sprite.tint,
             glow: sprite.glow,
+            skew: [0.0; 2],
             z: sprite.z,
             cell: None,
             grid: None,
@@ -12889,6 +12997,7 @@ mod tests {
             source: SpriteSource::Solid,
             tint: [0.8, 0.6, 0.4, 0.5],
             glow: [0.0; 4],
+            skew: [0.0; 2],
             z: 7,
             cell: None,
             grid: None,
@@ -13568,6 +13677,7 @@ mod tests {
             source: SpriteSource::Solid,
             tint: [0.8, 0.6, 0.4, 0.5],
             glow: [0.5, 0.25, 1.0, 0.4],
+            skew: [0.0; 2],
             z: 0,
             cell: None,
             grid: None,

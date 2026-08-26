@@ -11679,6 +11679,7 @@ fn song_lua_style_capture_actor(
             rot_x_deg,
             rot_y_deg,
             rot_z_deg,
+            skew,
             local_offset,
             local_offset_rot_sin_cos,
             texcoordvelocity,
@@ -11717,6 +11718,7 @@ fn song_lua_style_capture_actor(
             rot_x_deg,
             rot_y_deg,
             rot_z_deg,
+            skew,
             local_offset,
             local_offset_rot_sin_cos,
             texcoordvelocity,
@@ -13113,6 +13115,7 @@ fn song_lua_noteskin_sprite_actor(
         rot_x_deg: draw.rot[0],
         rot_y_deg: draw.rot[1],
         rot_z_deg: draw.rot[2] - slot.def.rotation_deg as f32 - rotation_z,
+        skew: [0.0, 0.0],
         local_offset: [0.0, 0.0],
         local_offset_rot_sin_cos: [0.0, 1.0],
         texcoordvelocity: None,
@@ -14239,6 +14242,7 @@ fn build_song_lua_aft_sprite_actor(
         rot_x_deg: effect_rot[0],
         rot_y_deg: effect_rot[1],
         rot_z_deg: effect_rot[2],
+        skew: [state.skew_x, state.skew_y],
         local_offset: [0.0, 0.0],
         local_offset_rot_sin_cos: [0.0, 1.0],
         texcoordvelocity: state.texcoord_velocity,
@@ -15344,6 +15348,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
             rot_x_deg,
             rot_y_deg,
             rot_z_deg,
+            skew,
             local_offset,
             local_offset_rot_sin_cos,
             texcoordvelocity,
@@ -15388,6 +15393,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 rot_x_deg: *rot_x_deg,
                 rot_y_deg: *rot_y_deg,
                 rot_z_deg: *rot_z_deg,
+                skew: *skew,
                 local_offset: *local_offset,
                 local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
                 texcoordvelocity: *texcoordvelocity,
@@ -19838,6 +19844,38 @@ mod tests {
     }
 
     #[test]
+    fn aft_sprite_preserves_song_lua_skew_for_strip_composition() {
+        let state = SongLuaOverlayState {
+            x: 0.5 * screen_width(),
+            y: 0.5 * screen_height(),
+            skew_x: 0.375,
+            skew_y: -0.25,
+            ..SongLuaOverlayState::default()
+        };
+        let actors = build_song_lua_aft_sprite_actor(
+            state,
+            render_target_texture_handle(17),
+            [screen_width(), screen_height()],
+            0,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+            None,
+        )
+        .expect("visible AFT sprite should render");
+
+        assert!(matches!(
+            actors.first(),
+            Some(Actor::Sprite {
+                skew: [0.375, -0.25],
+                ..
+            })
+        ));
+    }
+
+    #[test]
     fn frame_scratch_pointer_transfer_preserves_storage() {
         let mut scratch = GameplayFrameScratch::default();
         scratch.lobby_hud_status_scratch = String::with_capacity(128);
@@ -23413,6 +23451,7 @@ mod tests {
             rot_x_deg: 0.0,
             rot_y_deg: 0.0,
             rot_z_deg: 0.0,
+            skew: [0.0, 0.0],
             local_offset: [0.0, 0.0],
             local_offset_rot_sin_cos: [0.0, 1.0],
             texcoordvelocity: None,

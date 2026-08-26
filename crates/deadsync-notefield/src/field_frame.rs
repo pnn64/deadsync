@@ -210,6 +210,9 @@ fn compose_field_contents<S, F>(
     let appearance_cache = note_appearance_cache(alpha_params);
     let ns = note_inputs.base;
     let target_arrow_px = note_inputs.target_arrow_px;
+    let column_x_offsets = prepared.column_x_offsets;
+    let column_zooms = prepared.column_zooms;
+    let column_rotations_deg = prepared.column_rotations_deg;
     let scale_sprite =
         |size: [i32; 2]| -> [f32; 2] { scale_sprite_to_arrow(size, target_arrow_px) };
     let scale_mine_slot = |slot: &S| -> [f32; 2] {
@@ -268,6 +271,7 @@ fn compose_field_contents<S, F>(
     let (note_start, note_end) = request.chart.note_range;
     let lane_center_x_from_adjusted_travel = |local_col: usize, adjusted_travel: f32| -> f32 {
         playfield_center_x
+            + column_x_offsets[local_col]
             + if note_x_is_static {
                 static_note_x_offsets[local_col]
             } else {
@@ -396,6 +400,7 @@ fn compose_field_contents<S, F>(
             return;
         }
         let local_col = note.column - col_start;
+        let column_zoom = column_zooms[local_col];
         if !matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
             return;
         }
@@ -427,7 +432,7 @@ fn compose_field_contents<S, F>(
                 local_col,
                 lane_receptor_y,
                 lane_center_x_from_adjusted_travel(local_col, 0.0),
-                target_arrow_px,
+                target_arrow_px * column_zoom,
                 travel.arrow_effect_time_s(),
                 visual,
                 lane_effect_params[local_col],
@@ -521,6 +526,7 @@ fn compose_field_contents<S, F>(
         let transform_cache = lane_transform_caches[local_col];
         let hold_arrow_px_for_adjusted_travel = |travel_offset: f32| -> f32 {
             target_arrow_px
+                * column_zoom
                 * visual_arrow_effect_zoom_cached(
                     travel_offset,
                     lane_effect_params[local_col],
@@ -528,11 +534,12 @@ fn compose_field_contents<S, F>(
                 )
         };
         let hold_target_arrow_px = lane_frame.target_arrow_px;
-        let hold_head_zoom = visual_arrow_effect_zoom_cached(
-            head_anchor_adjusted_travel,
-            lane_effect_params[local_col],
-            transform_cache,
-        );
+        let hold_head_zoom = column_zoom
+            * visual_arrow_effect_zoom_cached(
+                head_anchor_adjusted_travel,
+                lane_effect_params[local_col],
+                transform_cache,
+            );
         let hold_head_target_arrow_px = target_arrow_px * hold_head_zoom;
         let hold_note_scale = field_zoom * hold_head_zoom;
         let use_legacy_hold_sprites = lane_frame.use_legacy_sprites;
@@ -607,13 +614,14 @@ fn compose_field_contents<S, F>(
         if head_alpha <= f32::EPSILON && head_glow <= f32::EPSILON {
             return;
         }
-        let hold_head_rot = calc_note_rotation_z(
-            note.beat,
-            current_beat,
-            true,
-            lane_effect_params[local_col],
-            transform_cache,
-        );
+        let hold_head_rot = column_rotations_deg[local_col]
+            + calc_note_rotation_z(
+                note.beat,
+                current_beat,
+                true,
+                lane_effect_params[local_col],
+                transform_cache,
+            );
         let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
         let head_center_x = if (head_draw_y - receptor_draw_y).abs() <= 0.5 {
             receptor_center_x
@@ -939,6 +947,7 @@ fn compose_visible_notes<S, F>(
                     return;
                 }
                 let column_center_x = prepared.field.playfield_center_x
+                    + prepared.column_x_offsets[local_col]
                     + if note_x_is_static {
                         static_note_x_offsets[local_col]
                     } else {
@@ -962,24 +971,26 @@ fn compose_visible_notes<S, F>(
                     visual.bumpy_period,
                 );
                 let transform_cache = lane_transform_caches[local_col];
-                let effect_zoom = visual_arrow_effect_zoom_cached(
-                    adjusted_travel,
-                    effect_params,
-                    transform_cache,
-                );
+                let effect_zoom = prepared.column_zooms[local_col]
+                    * visual_arrow_effect_zoom_cached(
+                        adjusted_travel,
+                        effect_params,
+                        transform_cache,
+                    );
                 let note_scale = field_zoom * effect_zoom;
                 let target_arrow_px = notes.target_arrow_px * effect_zoom;
                 let scale_mine_for_note = |slot: &S| -> [f32; 2] {
                     let size = scale_mine_slot(slot);
                     [size[0] * effect_zoom, size[1] * effect_zoom]
                 };
-                let note_rotation_z = calc_note_rotation_z(
-                    note.beat,
-                    current_beat,
-                    false,
-                    effect_params,
-                    transform_cache,
-                );
+                let note_rotation_z = prepared.column_rotations_deg[local_col]
+                    + calc_note_rotation_z(
+                        note.beat,
+                        current_beat,
+                        false,
+                        effect_params,
+                        transform_cache,
+                    );
 
                 if matches!(note.note_type, NoteType::Mine) {
                     if fill_slot.is_none() && frame_slot.is_none() {
@@ -1598,6 +1609,7 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
             rot_x_deg: 0.0,
             rot_y_deg: sprite.rot_y_deg,
             rot_z_deg: sprite.rot_z_deg,
+            skew: [0.0, 0.0],
             local_offset: [0.0, 0.0],
             local_offset_rot_sin_cos: [0.0, 1.0],
             texcoordvelocity: None,

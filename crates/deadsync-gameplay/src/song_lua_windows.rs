@@ -374,6 +374,7 @@ pub trait SongLuaColumnOffsetWindowLike {
     fn limit(&self) -> f32;
     fn span_mode(&self) -> SongLuaRuntimeSpanMode;
     fn column(&self) -> usize;
+    fn target(&self) -> SongLuaColumnTransformTarget;
     fn from_y(&self) -> f32;
     fn to_y(&self) -> f32;
     fn easing(&self) -> Option<&str>;
@@ -390,6 +391,7 @@ pub struct SongLuaRuntimeColumnOffsetWindow {
     pub limit: f32,
     pub span_mode: SongLuaRuntimeSpanMode,
     pub column: usize,
+    pub target: SongLuaColumnTransformTarget,
     pub from_y: f32,
     pub to_y: f32,
     pub easing: Option<String>,
@@ -427,6 +429,11 @@ impl SongLuaColumnOffsetWindowLike for SongLuaRuntimeColumnOffsetWindow {
     #[inline(always)]
     fn column(&self) -> usize {
         self.column
+    }
+
+    #[inline(always)]
+    fn target(&self) -> SongLuaColumnTransformTarget {
+        self.target
     }
 
     #[inline(always)]
@@ -496,6 +503,7 @@ pub fn build_song_lua_column_offset_windows_for_player<Window: SongLuaColumnOffs
         }
         out.push(build_song_lua_column_offset_window_runtime(
             window.column(),
+            window.target(),
             start_second,
             end_second,
             sustain_end_second,
@@ -547,6 +555,7 @@ pub fn build_song_lua_column_offset_windows_for_player_reference<
         );
         out.push(build_song_lua_column_offset_window_runtime(
             window.column(),
+            window.target(),
             start_second,
             end_second,
             sustain_end_second,

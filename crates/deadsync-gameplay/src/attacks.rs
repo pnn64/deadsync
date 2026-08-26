@@ -788,6 +788,7 @@ pub enum SongLuaRuntimeEaseAppend {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SongLuaColumnOffsetWindowRuntime {
     pub column: usize,
+    pub target: SongLuaColumnTransformTarget,
     pub start_second: f32,
     pub end_second: f32,
     pub sustain_end_second: f32,
@@ -798,8 +799,18 @@ pub struct SongLuaColumnOffsetWindowRuntime {
     pub opt2: Option<f32>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SongLuaColumnTransformTarget {
+    OffsetX,
+    #[default]
+    OffsetY,
+    Zoom,
+    RotationZ,
+}
+
 pub fn build_song_lua_column_offset_window_runtime(
     column: usize,
+    target: SongLuaColumnTransformTarget,
     start_second: f32,
     end_second: f32,
     sustain_end_second: f32,
@@ -811,6 +822,7 @@ pub fn build_song_lua_column_offset_window_runtime(
 ) -> SongLuaColumnOffsetWindowRuntime {
     SongLuaColumnOffsetWindowRuntime {
         column,
+        target,
         start_second,
         end_second,
         sustain_end_second,
@@ -2762,6 +2774,7 @@ fn song_lua_extend_column_offset_tails_legacy(out: &mut [SongLuaColumnOffsetWind
             .filter_map(|(j, other)| {
                 if i == j
                     || other.column != window.column
+                    || other.target != window.target
                     || !other.start_second.is_finite()
                     || other.start_second <= window.start_second + SAME_TICK_EPSILON
                 {
@@ -2794,14 +2807,18 @@ pub fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowR
             out[left]
                 .column
                 .cmp(&out[right].column)
+                .then_with(|| out[left].target.cmp(&out[right].target))
                 .then_with(|| out[left].start_second.total_cmp(&out[right].start_second))
                 .then_with(|| left.cmp(&right))
         });
         let mut group_start = 0;
         while group_start < indices.len() {
             let column = out[indices[group_start]].column;
+            let target = out[indices[group_start]].target;
             let group_end = indices[group_start..]
-                .partition_point(|&index| out[index].column == column)
+                .partition_point(|&index| {
+                    out[index].column == column && out[index].target == target
+                })
                 + group_start;
             let mut next = group_start + 1;
             for position in group_start..group_end {

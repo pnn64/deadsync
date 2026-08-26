@@ -9,8 +9,8 @@ use crate::{
 use deadsync_core::{input::MAX_COLS, song_time::song_time_ns_invalid};
 use deadsync_gameplay::{
     AccelEffects, AppearanceEffects, ChartNoteIndex, PerspectiveEffects, ScrollEffects,
-    SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindows, VisibilityEffects, VisualEffects,
-    song_lua_column_offset_window_value,
+    SongLuaColumnOffsetWindowRuntime, SongLuaColumnTransformTarget, SongLuaNoteHideWindows,
+    VisibilityEffects, VisualEffects, song_lua_column_offset_window_value,
 };
 use deadsync_noteskin::NoteskinRuntime;
 use deadsync_rules::note::{Note, NoteCountStat};
@@ -254,6 +254,9 @@ pub struct PreparedNotefield<'a, S> {
     pub mini: f32,
     pub receptor_alpha: f32,
     pub blind_active: bool,
+    pub column_x_offsets: [f32; MAX_COLS],
+    pub column_zooms: [f32; MAX_COLS],
+    pub column_rotations_deg: [f32; MAX_COLS],
     pub notes: Option<PreparedNotefieldNotes<'a, S>>,
 }
 
@@ -292,6 +295,11 @@ pub fn prepare_notefield<'a, S>(
         request.visual.perspective.tilt,
     );
     let notes = prepare_notes(request, frame_plan, field_zoom, scroll_speed, effect_height)?;
+    let (column_x_offsets, column_zooms, column_rotations_deg) = song_lua_column_transforms(
+        request.song_lua.column_offsets,
+        frame_plan.num_cols,
+        current_time_s,
+    );
     Some(PreparedNotefield {
         frame_plan,
         field,
@@ -303,6 +311,9 @@ pub fn prepare_notefield<'a, S>(
         mini,
         receptor_alpha: (1.0 - request.visual.visibility.dark).clamp(0.0, 1.0),
         blind_active: request.visual.visibility.blind > f32::EPSILON,
+        column_x_offsets,
+        column_zooms,
+        column_rotations_deg,
         notes,
     })
 }
@@ -459,12 +470,41 @@ fn song_lua_column_y_offsets(
     let mut out = [0.0; MAX_COLS];
     for window in windows {
         if window.column < active_cols
+            && window.target == SongLuaColumnTransformTarget::OffsetY
             && let Some(offset) = song_lua_column_offset_window_value(window, current_time_s)
         {
             out[window.column] = offset;
         }
     }
     out
+}
+
+fn song_lua_column_transforms(
+    windows: &[SongLuaColumnOffsetWindowRuntime],
+    num_cols: usize,
+    current_time_s: f32,
+) -> ([f32; MAX_COLS], [f32; MAX_COLS], [f32; MAX_COLS]) {
+    let active_cols = num_cols.min(MAX_COLS);
+    let mut x_offsets = [0.0; MAX_COLS];
+    let mut zooms = [1.0; MAX_COLS];
+    let mut rotations_deg = [0.0; MAX_COLS];
+    for window in windows {
+        if window.column >= active_cols {
+            continue;
+        }
+        let Some(value) = song_lua_column_offset_window_value(window, current_time_s) else {
+            continue;
+        };
+        match window.target {
+            SongLuaColumnTransformTarget::OffsetX => x_offsets[window.column] = value,
+            SongLuaColumnTransformTarget::OffsetY => {}
+            SongLuaColumnTransformTarget::Zoom => zooms[window.column] = value.max(0.0),
+            SongLuaColumnTransformTarget::RotationZ => {
+                rotations_deg[window.column] = value.to_degrees()
+            }
+        }
+    }
+    (x_offsets, zooms, rotations_deg)
 }
 
 fn resolved_frame_features(
@@ -559,6 +599,31 @@ mod tests {
             resolved_frame_features(features(), ViewOverride::default()),
             features()
         );
+    }
+
+    #[test]
+    fn song_lua_column_transforms_resolve_x_zoom_and_rotation() {
+        let window = |target, from_y, to_y| {
+            deadsync_gameplay::build_song_lua_column_offset_window_runtime(
+                1, target, 1.0, 3.0, 3.0, from_y, to_y, None, None, None,
+            )
+        };
+        let windows = [
+            window(SongLuaColumnTransformTarget::OffsetX, 0.0, 64.0),
+            window(SongLuaColumnTransformTarget::OffsetY, 0.0, 80.0),
+            window(SongLuaColumnTransformTarget::Zoom, 1.0, 0.0),
+            window(
+                SongLuaColumnTransformTarget::RotationZ,
+                0.0,
+                std::f32::consts::TAU,
+            ),
+        ];
+
+        let (x_offsets, zooms, rotations) = song_lua_column_transforms(&windows, 4, 2.0);
+        assert!((x_offsets[1] - 32.0).abs() <= f32::EPSILON);
+        assert!((zooms[1] - 0.5).abs() <= f32::EPSILON);
+        assert!((rotations[1] - 180.0).abs() <= 0.001);
+        assert_eq!(song_lua_column_y_offsets(&windows, 4, 2.0)[1], 40.0);
     }
 
     #[test]
