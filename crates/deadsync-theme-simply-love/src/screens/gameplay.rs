@@ -38,7 +38,7 @@ use deadlib_present::space::{
 };
 use deadlib_render_core::{
     BackendType, BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TMeshCacheKey, TextureHandle,
-    TexturedMeshVertex, render_target_texture_handle,
+    TexturedMeshVertex, render_target_sample_handle, render_target_texture_handle,
 };
 use deadsync_assets::noteskin::{self, Noteskin, SpriteSlot};
 use deadsync_assets::song_lua::{
@@ -3246,6 +3246,9 @@ fn gameplay_song_lua_data(
         session,
         config.center_1player_notefield,
     );
+    let (display_width, display_height) = current_window_px();
+    context.display_width = display_width.max(1) as f32;
+    context.display_height = display_height.max(1) as f32;
     // `VideoRenderers` is a legacy capability preference used by mod charts to
     // gate OpenGL-era ActorFrameTexture effects. DeadSync implements those
     // semantics above every physical backend, so advertise the compatibility
@@ -13570,7 +13573,7 @@ fn build_song_lua_aft_sprite_actor(
         world_z: song_lua_biased_world_z(state, effect_offset[2]),
         size: [SizeSpec::Px(size[0]), SizeSpec::Px(size[1])],
         source: SpriteSource::RenderTarget {
-            handle: texture_handle,
+            handle: render_target_sample_handle(texture_handle, !state.texture_filtering),
             size: texture_size,
         },
         tint,
@@ -16422,14 +16425,9 @@ fn push_song_lua_layer_actors(
                     continue;
                 };
                 let size = overlay_state.size.unwrap_or([space_width, space_height]);
-                let (window_width, window_height) = current_window_px();
                 let target_size = [
-                    (size[0] * window_width as f32 / space_width.max(1.0))
-                        .round()
-                        .clamp(1.0, u32::MAX as f32) as u32,
-                    (size[1] * window_height as f32 / space_height.max(1.0))
-                        .round()
-                        .clamp(1.0, u32::MAX as f32) as u32,
+                    size[0].round().clamp(1.0, u32::MAX as f32) as u32,
+                    size[1].round().clamp(1.0, u32::MAX as f32) as u32,
                 ];
                 let Some(capture_scratch) = aft_capture_scratch.overlay(idx) else {
                     continue;
@@ -22928,13 +22926,14 @@ mod tests {
     #[test]
     fn song_lua_coincident_rgb_aft_renders_once_then_samples_three_times() {
         deadlib_present::space::set_current_window_px(1600, 900);
-        let overlays = vec![
+        let mut overlays = vec![
             test_capture_overlay("CaptureAFT"),
             test_capture_proxy_child(0, SongLuaProxyTarget::Player { player_index: 0 }),
             test_rgb_aft_overlay("AFTSpriteR", "CaptureAFT", [1.0, 0.0, 0.0, 1.0]),
             test_rgb_aft_overlay("AFTSpriteG", "CaptureAFT", [0.0, 1.0, 0.0, 1.0]),
             test_rgb_aft_overlay("AFTSpriteB", "CaptureAFT", [0.0, 0.0, 1.0, 1.0]),
         ];
+        overlays[4].initial_state.texture_filtering = false;
         let overlay_states = overlays
             .iter()
             .map(|overlay| overlay.initial_state)
@@ -22995,7 +22994,7 @@ mod tests {
         else {
             panic!("expected one offscreen AFT capture");
         };
-        assert_eq!(*size, [1600, 900]);
+        assert_eq!(*size, [854, 480]);
         assert_eq!(*logical_size, [854.0, 480.0]);
         assert!(!alpha);
         let [Actor::Frame { children, .. }] = children.as_ref() else {
@@ -23006,7 +23005,7 @@ mod tests {
         };
         assert_eq!(*blend, Some(BlendMode::Alpha));
         assert_eq!(*tint, [1.0; 4]);
-        for actor in &out[1..] {
+        for (index, actor) in out[1..].iter().enumerate() {
             let Actor::Sprite {
                 source: SpriteSource::RenderTarget { handle, .. },
                 ..
@@ -23014,7 +23013,10 @@ mod tests {
             else {
                 panic!("expected an AFT texture consumer");
             };
-            assert_eq!(handle, texture_handle);
+            assert_eq!(
+                *handle,
+                render_target_sample_handle(*texture_handle, index == 2)
+            );
         }
     }
 

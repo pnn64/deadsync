@@ -2,8 +2,8 @@ use deadlib_render_core::{
     BlendMode, CameraUploadCache, DenseSlotMap, DrawOp, DrawStats, RenderFrame, RenderTargetFrame,
     SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, TextureHandle,
     TexturedMeshBufferCache, TexturedMeshInstanceRaw, TexturedMeshUploads, TexturedMeshVertex,
-    Yuv420Upload, draw_storage_stats, is_render_target_texture, resolve_textured_mesh_geometries,
-    resolve_textured_meshes,
+    Yuv420Upload, draw_storage_stats, is_render_target_texture, render_target_base_handle,
+    render_target_uses_nearest, resolve_textured_mesh_geometries, resolve_textured_meshes,
 };
 use glam::Mat4 as Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
@@ -1186,6 +1186,7 @@ fn resolved_texture<'a, T: TextureLookup + ?Sized>(
     handle: TextureHandle,
 ) -> Option<&'a Texture> {
     if is_render_target_texture(handle) {
+        let handle = render_target_base_handle(handle);
         return state
             .offscreen_targets
             .iter()
@@ -1193,6 +1194,23 @@ fn resolved_texture<'a, T: TextureLookup + ?Sized>(
             .map(|target| &target.texture);
     }
     textures.opengl_texture(handle)
+}
+
+fn apply_render_target_filter(gl: &glow::Context, handle: TextureHandle) {
+    if !is_render_target_texture(handle) {
+        return;
+    }
+    let filter = if render_target_uses_nearest(handle) {
+        glow::NEAREST
+    } else {
+        glow::LINEAR
+    };
+    // SAFETY: callers invoke this immediately after binding the referenced AFT
+    // texture on the live render context.
+    unsafe {
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, filter as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, filter as i32);
+    }
 }
 
 fn bind_sprite_texture(state: &State, texture: &Texture) {
@@ -1455,6 +1473,7 @@ fn draw_modern_offscreen_pass(
                         bind_sprite_texture(state, texture);
                         last_bound_tex = Some(texture.primary());
                     }
+                    apply_render_target_filter(gl, run.texture_handle);
                     if state.base_instance {
                         gl.draw_elements_instanced_base_vertex_base_instance(
                             glow::TRIANGLES,
@@ -1591,6 +1610,7 @@ fn draw_modern_offscreen_pass(
                         gl.bind_texture(glow::TEXTURE_2D, Some(texture));
                         last_bound_tex = Some(texture);
                     }
+                    apply_render_target_filter(gl, run.texture_handle);
                     let start = source.vertex_start() as i32;
                     let count = source.vertex_count() as i32;
                     if state.base_instance {
@@ -1735,6 +1755,7 @@ fn draw_legacy_offscreen_pass(
                         bytemuck::cast_slice(&projection),
                     );
                     bind_sprite_texture(state, texture);
+                    apply_render_target_filter(gl, run.texture_handle);
                     let end = run.instance_start.saturating_add(run.instance_count);
                     for index in run.instance_start..end {
                         let Some(instance) = frame.sprite_instances.get(index as usize) else {
@@ -1898,6 +1919,7 @@ fn draw_legacy_offscreen_pass(
                         bytemuck::cast_slice(&projection),
                     );
                     gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                    apply_render_target_filter(gl, run.texture_handle);
                     let start = source.vertex_start() as i32;
                     let count = source.vertex_count() as i32;
                     let triangles = source.vertex_count() / 3;
@@ -2336,6 +2358,7 @@ pub fn draw(
                             bind_sprite_texture(state, texture);
                             last_bound_tex = Some(texture.primary());
                         }
+                        apply_render_target_filter(gl, run.texture_handle);
 
                         if state.base_instance {
                             gl.draw_elements_instanced_base_vertex_base_instance(
@@ -2559,6 +2582,7 @@ pub fn draw(
                             gl.bind_texture(glow::TEXTURE_2D, Some(texture));
                             last_bound_tex = Some(texture);
                         }
+                        apply_render_target_filter(gl, run.texture_handle);
 
                         let draw_start = source.vertex_start() as i32;
                         let draw_count = source.vertex_count() as i32;
@@ -2644,6 +2668,7 @@ pub fn draw(
                             bind_sprite_texture(state, texture);
                             last_bound_tex = Some(texture.primary());
                         }
+                        apply_render_target_filter(gl, run.texture_handle);
 
                         let end = run.instance_start.saturating_add(run.instance_count);
                         for idx in run.instance_start..end {
@@ -2849,6 +2874,7 @@ pub fn draw(
                             gl.bind_texture(glow::TEXTURE_2D, Some(texture));
                             last_bound_tex = Some(texture);
                         }
+                        apply_render_target_filter(gl, run.texture_handle);
 
                         let draw_start = source.vertex_start() as i32;
                         let draw_count = source.vertex_count() as i32;

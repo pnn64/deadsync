@@ -10,7 +10,8 @@ use deadlib_render_core::{
     SamplerCache, SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw as InstanceData,
     TMeshCacheKey, TextureHandle, TexturedMeshBufferCache,
     TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshUploads, TexturedMeshVertex,
-    Yuv420Upload, draw_storage_stats, is_render_target_texture, resolve_textured_mesh_geometries,
+    Yuv420Upload, draw_storage_stats, is_render_target_texture, render_target_base_handle,
+    render_target_uses_nearest, resolve_textured_mesh_geometries,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -81,6 +82,7 @@ pub struct Texture {
     descriptor_set: vk::DescriptorSet,
     descriptor_set_repeat: vk::DescriptorSet,
     pool: vk::DescriptorPool,
+    nearest_sets: Option<(vk::DescriptorSet, vk::DescriptorSet, vk::DescriptorPool)>,
 }
 
 #[derive(Debug)]
@@ -119,6 +121,9 @@ impl Drop for Texture {
                 self.pool,
                 &[self.descriptor_set, self.descriptor_set_repeat],
             );
+            if let Some((set, repeat, pool)) = self.nearest_sets {
+                let _ = self.device.free_descriptor_sets(pool, &[set, repeat]);
+            }
             let mut destroy = |image: &TextureImage| {
                 self.device.destroy_image_view(image.view, None);
                 self.device.destroy_image(image.image, None);
@@ -1709,6 +1714,7 @@ pub fn create_texture(
         descriptor_set: set,
         descriptor_set_repeat: set_repeat,
         pool,
+        nearest_sets: None,
     })
 }
 
@@ -1907,6 +1913,7 @@ pub fn create_yuv420_texture(
         descriptor_set,
         descriptor_set_repeat,
         pool,
+        nearest_sets: None,
     })
 }
 
@@ -2111,6 +2118,7 @@ fn resolved_texture<'a>(
     handle: TextureHandle,
 ) -> Option<&'a Texture> {
     if is_render_target_texture(handle) {
+        let handle = render_target_base_handle(handle);
         state
             .offscreen_targets
             .iter()
@@ -2118,6 +2126,24 @@ fn resolved_texture<'a>(
             .map(|target| &target.texture)
     } else {
         textures.vulkan_texture(handle)
+    }
+}
+
+#[inline(always)]
+fn texture_descriptor_set(
+    texture: &Texture,
+    handle: TextureHandle,
+    repeat: bool,
+) -> vk::DescriptorSet {
+    match (render_target_uses_nearest(handle), repeat) {
+        (true, false) => texture
+            .nearest_sets
+            .map_or(texture.descriptor_set, |sets| sets.0),
+        (true, true) => texture
+            .nearest_sets
+            .map_or(texture.descriptor_set_repeat, |sets| sets.1),
+        (false, false) => texture.descriptor_set,
+        (false, true) => texture.descriptor_set_repeat,
     }
 }
 
@@ -2225,7 +2251,7 @@ fn record_render_pass(
                     else {
                         continue;
                     };
-                    let set = texture.descriptor_set;
+                    let set = texture_descriptor_set(texture, run.texture_handle, false);
                     let yuv420 = texture.images.is_yuv420();
                     let pipeline_bound = matches!(bound, Bound::YuvSprite) == yuv420
                         && matches!(bound, Bound::Sprite | Bound::YuvSprite);
@@ -2363,7 +2389,7 @@ fn record_render_pass(
                         continue;
                     };
                     let Some(set) = resolved_texture(state, textures, run.texture_handle)
-                        .map(|texture| texture.descriptor_set_repeat)
+                        .map(|texture| texture_descriptor_set(texture, run.texture_handle, true))
                     else {
                         continue;
                     };
@@ -2838,7 +2864,7 @@ pub fn draw(
                     else {
                         continue;
                     };
-                    let set = texture.descriptor_set;
+                    let set = texture_descriptor_set(texture, run.texture_handle, false);
                     let yuv420 = texture.images.is_yuv420();
                     let pipeline_bound = matches!(bound, Bound::YuvSprite) == yuv420
                         && matches!(bound, Bound::Sprite | Bound::YuvSprite);
@@ -2968,7 +2994,7 @@ pub fn draw(
                         continue;
                     };
                     let Some(set) = resolved_texture(state, textures, draw.texture_handle)
-                        .map(|texture| texture.descriptor_set_repeat)
+                        .map(|texture| texture_descriptor_set(texture, draw.texture_handle, true))
                     else {
                         continue;
                     };
@@ -5244,6 +5270,24 @@ fn create_offscreen_target(
     )?;
     let (descriptor_set, descriptor_set_repeat, pool) =
         create_texture_descriptor_sets(state, [view; 3], sampler, sampler_repeat)?;
+    let nearest_sampler = get_sampler(
+        state,
+        SamplerDesc {
+            filter: SamplerFilter::Nearest,
+            wrap: SamplerWrap::Clamp,
+            mipmaps: false,
+        },
+    )?;
+    let nearest_repeat_sampler = get_sampler(
+        state,
+        SamplerDesc {
+            filter: SamplerFilter::Nearest,
+            wrap: SamplerWrap::Repeat,
+            mipmaps: false,
+        },
+    )?;
+    let nearest_sets =
+        create_texture_descriptor_sets(state, [view; 3], nearest_sampler, nearest_repeat_sampler)?;
     let texture = Texture {
         device: Arc::clone(&device),
         images: TextureImages::Rgba(TextureImage {
@@ -5254,6 +5298,7 @@ fn create_offscreen_target(
         descriptor_set,
         descriptor_set_repeat,
         pool,
+        nearest_sets: Some(nearest_sets),
     };
     let attachments = [view];
     let framebuffer_info = vk::FramebufferCreateInfo::default()

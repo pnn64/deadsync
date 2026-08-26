@@ -16,16 +16,42 @@ pub const INVALID_TEXTURE_HANDLE: TextureHandle = 0;
 /// handles. Backends resolve these from their render-thread-owned offscreen
 /// target cache instead of the asset texture registry.
 pub const RENDER_TARGET_TEXTURE_BIT: TextureHandle = 1 << 63;
+/// Sampling state is carried by render-target references because, unlike asset
+/// textures, one live AFT may be consumed by sprites with different filtering.
+const RENDER_TARGET_NEAREST_BIT: TextureHandle = 1 << 62;
+const RENDER_TARGET_CONTROL_BITS: TextureHandle =
+    RENDER_TARGET_TEXTURE_BIT | RENDER_TARGET_NEAREST_BIT;
 
 #[inline(always)]
 pub const fn render_target_texture_handle(id: u64) -> TextureHandle {
-    let id = id & !RENDER_TARGET_TEXTURE_BIT;
+    let id = id & !RENDER_TARGET_CONTROL_BITS;
     RENDER_TARGET_TEXTURE_BIT | if id == 0 { 1 } else { id }
 }
 
 #[inline(always)]
 pub const fn is_render_target_texture(handle: TextureHandle) -> bool {
     handle & RENDER_TARGET_TEXTURE_BIT != 0
+}
+
+#[inline(always)]
+pub const fn render_target_sample_handle(handle: TextureHandle, nearest: bool) -> TextureHandle {
+    let handle = render_target_base_handle(handle);
+    handle
+        | if nearest {
+            RENDER_TARGET_NEAREST_BIT
+        } else {
+            0
+        }
+}
+
+#[inline(always)]
+pub const fn render_target_base_handle(handle: TextureHandle) -> TextureHandle {
+    handle & !RENDER_TARGET_NEAREST_BIT
+}
+
+#[inline(always)]
+pub const fn render_target_uses_nearest(handle: TextureHandle) -> bool {
+    is_render_target_texture(handle) && handle & RENDER_TARGET_NEAREST_BIT != 0
 }
 pub type FastU64Map<V> = HashMap<u64, V, rustc_hash::FxBuildHasher>;
 pub type TMeshCacheKey = u64;
@@ -791,6 +817,20 @@ impl core::str::FromStr for PresentModePolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn render_target_sample_handles_preserve_identity_and_filter() {
+        let base = render_target_texture_handle(42);
+        let linear = render_target_sample_handle(base, false);
+        let nearest = render_target_sample_handle(base, true);
+
+        assert_eq!(linear, base);
+        assert_ne!(nearest, base);
+        assert!(is_render_target_texture(nearest));
+        assert!(!render_target_uses_nearest(linear));
+        assert!(render_target_uses_nearest(nearest));
+        assert_eq!(render_target_base_handle(nearest), base);
+    }
 
     #[test]
     fn texture_handles_are_direct_slots_with_invalid_zero_reserved() {

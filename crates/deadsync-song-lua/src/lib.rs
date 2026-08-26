@@ -1237,8 +1237,12 @@ pub struct SongLuaCompileContext {
     pub music_length_seconds: f32,
     pub style_name: String,
     pub global_offset_seconds: f32,
+    /// Theme coordinate space exposed through `SCREEN_WIDTH/SCREEN_HEIGHT`.
     pub screen_width: f32,
     pub screen_height: f32,
+    /// Physical video mode exposed through `DISPLAY` and `PREFSMAN`.
+    pub display_width: f32,
+    pub display_height: f32,
     pub video_renderers: String,
     pub players: [SongLuaPlayerContext; LUA_PLAYERS],
     pub confusion_offset_available: bool,
@@ -1258,6 +1262,8 @@ impl SongLuaCompileContext {
             global_offset_seconds: 0.0,
             screen_width: 640.0,
             screen_height: 480.0,
+            display_width: 640.0,
+            display_height: 480.0,
             video_renderers: "software".to_string(),
             players: std::array::from_fn(|_| SongLuaPlayerContext::default()),
             confusion_offset_available: true,
@@ -7561,10 +7567,12 @@ return Def.ActorFrame{}
         let mut context = SongLuaCompileContext::new(&song_dir, "Display Compat");
         context.screen_width = 854.0;
         context.screen_height = 480.0;
+        context.display_width = 1600.0;
+        context.display_height = 900.0;
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
 
         assert_eq!(compiled.messages.len(), 1);
-        assert_eq!(compiled.messages[0].message, "854:480:true:true");
+        assert_eq!(compiled.messages[0].message, "1600:900:true:true");
     }
 
     #[test]
@@ -7607,6 +7615,8 @@ return Def.ActorFrame{}
         let mut context = SongLuaCompileContext::new(&song_dir, "Display Specs Shape");
         context.screen_width = 1366.0;
         context.screen_height = 768.0;
+        context.display_width = 1366.0;
+        context.display_height = 768.0;
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
 
         assert_eq!(compiled.messages.len(), 1);
@@ -8258,6 +8268,8 @@ return Def.ActorFrame{}
         let mut context = SongLuaCompileContext::new(&song_dir, "PrefsMgr Preferences");
         context.screen_width = 1280.0;
         context.screen_height = 720.0;
+        context.display_width = 1280.0;
+        context.display_height = 720.0;
         context.global_offset_seconds = 0.02;
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
@@ -8371,6 +8383,8 @@ return Def.ActorFrame{}
         let mut context = SongLuaCompileContext::new(&song_dir, "Scale Helper");
         context.screen_width = 1280.0;
         context.screen_height = 720.0;
+        context.display_width = 1280.0;
+        context.display_height = 720.0;
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "199.69");

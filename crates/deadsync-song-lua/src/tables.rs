@@ -2327,8 +2327,8 @@ pub fn create_network_response_table(lua: &Lua) -> mlua::Result<Table> {
 
 pub fn create_display_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let display = lua.create_table()?;
-    let width = context.screen_width.max(1.0).round() as i32;
-    let height = context.screen_height.max(1.0).round() as i32;
+    let width = context.display_width.max(1.0).round() as i32;
+    let height = context.display_height.max(1.0).round() as i32;
     let specs = create_display_specs_table(lua, width, height)?;
 
     display.set(

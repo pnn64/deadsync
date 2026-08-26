@@ -926,6 +926,8 @@ pub fn song_lua_compile_context(
     context.global_offset_seconds = machine_global_offset_seconds;
     context.screen_width = viewport.width();
     context.screen_height = viewport.height();
+    context.display_width = context.screen_width;
+    context.display_height = context.screen_height;
     context.confusion_offset_available = true;
     context.confusion_available = true;
     context.amod_available = false;

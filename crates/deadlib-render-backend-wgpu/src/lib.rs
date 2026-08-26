@@ -3,7 +3,8 @@ use deadlib_render_core::{
     PresentModeTrace, PresentStats, RenderFrame, SamplerCache, SamplerDesc, SamplerFilter,
     SamplerWrap, TMeshCacheKey, TextureHandle, TexturedMeshBufferCache, TexturedMeshUploads,
     TexturedMeshVertex, Yuv420Upload, draw_storage_stats, is_render_target_texture,
-    resolve_textured_mesh_geometries, resolve_textured_meshes,
+    render_target_base_handle, render_target_uses_nearest, resolve_textured_mesh_geometries,
+    resolve_textured_meshes,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -163,6 +164,8 @@ pub struct Texture {
     images: TextureImages,
     bind_group: Arc<wgpu::BindGroup>,
     bind_group_repeat: Arc<wgpu::BindGroup>,
+    nearest_bind_group: Option<Arc<wgpu::BindGroup>>,
+    nearest_bind_group_repeat: Option<Arc<wgpu::BindGroup>>,
 }
 
 impl Texture {
@@ -1059,6 +1062,8 @@ pub fn create_texture(
         },
         bind_group,
         bind_group_repeat,
+        nearest_bind_group: None,
+        nearest_bind_group_repeat: None,
     })
 }
 
@@ -1258,6 +1263,8 @@ pub fn create_yuv420_texture(
         },
         bind_group,
         bind_group_repeat,
+        nearest_bind_group: None,
+        nearest_bind_group_repeat: None,
     })
 }
 
@@ -1317,6 +1324,16 @@ fn create_offscreen_target(
         [&view, &view, &view],
         None,
     );
+    let (nearest_bind_group, nearest_bind_group_repeat) = create_texture_groups(
+        state,
+        SamplerDesc {
+            filter: SamplerFilter::Nearest,
+            wrap: SamplerWrap::Clamp,
+            mipmaps: false,
+        },
+        [&view, &view, &view],
+        None,
+    );
     let texture = Texture {
         id: next_texture_id(state),
         images: TextureImages::Rgba {
@@ -1325,6 +1342,8 @@ fn create_offscreen_target(
         },
         bind_group,
         bind_group_repeat,
+        nearest_bind_group: Some(nearest_bind_group),
+        nearest_bind_group_repeat: Some(nearest_bind_group_repeat),
     };
     let (depth_texture, depth_view) = create_depth_target(&state.device, width, height);
     OffscreenTarget {
@@ -1363,6 +1382,7 @@ fn resolved_texture<'a, T: TextureLookup + ?Sized>(
     handle: TextureHandle,
 ) -> Option<&'a Texture> {
     if is_render_target_texture(handle) {
+        let handle = render_target_base_handle(handle);
         return state
             .offscreen_targets
             .iter()
@@ -1370,6 +1390,27 @@ fn resolved_texture<'a, T: TextureLookup + ?Sized>(
             .map(|target| &target.texture);
     }
     textures.wgpu_texture(handle)
+}
+
+#[inline(always)]
+fn texture_bind_group(texture: &Texture, handle: TextureHandle, repeat: bool) -> &wgpu::BindGroup {
+    match (render_target_uses_nearest(handle), repeat) {
+        (true, false) => texture
+            .nearest_bind_group
+            .as_deref()
+            .unwrap_or(texture.bind_group.as_ref()),
+        (true, true) => texture
+            .nearest_bind_group_repeat
+            .as_deref()
+            .unwrap_or(texture.bind_group_repeat.as_ref()),
+        (false, false) => texture.bind_group.as_ref(),
+        (false, true) => texture.bind_group_repeat.as_ref(),
+    }
+}
+
+#[inline(always)]
+const fn texture_binding_id(texture: &Texture, handle: TextureHandle) -> u64 {
+    texture.id ^ ((render_target_uses_nearest(handle) as u64) << 63)
 }
 
 struct PassDrawData<'a> {
@@ -1479,8 +1520,12 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         data.camera_buffer_start,
                     );
                 }
-                if bindings.texture_required(tex.id, false) {
-                    pass.set_bind_group(texture_group, Some(tex.bind_group.as_ref()), &[]);
+                if bindings.texture_required(texture_binding_id(tex, run.texture_handle), false) {
+                    pass.set_bind_group(
+                        texture_group,
+                        Some(texture_bind_group(tex, run.texture_handle, false)),
+                        &[],
+                    );
                 }
                 pass.draw_indexed(
                     0..state.index_count,
@@ -1571,8 +1616,12 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         data.camera_buffer_start,
                     );
                 }
-                if bindings.texture_required(tex.id, true) {
-                    pass.set_bind_group(texture_group, Some(tex.bind_group_repeat.as_ref()), &[]);
+                if bindings.texture_required(texture_binding_id(tex, run.texture_handle), true) {
+                    pass.set_bind_group(
+                        texture_group,
+                        Some(texture_bind_group(tex, run.texture_handle, true)),
+                        &[],
+                    );
                 }
                 if tmesh_buffer_cache.update_required(source) {
                     if let Some(buffer_key) = source.buffer_key() {
@@ -1951,8 +2000,13 @@ pub fn draw(
                             0,
                         );
                     }
-                    if bindings.texture_required(tex.id, false) {
-                        pass.set_bind_group(texture_group, Some(tex.bind_group.as_ref()), &[]);
+                    if bindings.texture_required(texture_binding_id(tex, run.texture_handle), false)
+                    {
+                        pass.set_bind_group(
+                            texture_group,
+                            Some(texture_bind_group(tex, run.texture_handle, false)),
+                            &[],
+                        );
                     }
                     pass.draw_indexed(
                         0..state.index_count,
@@ -2042,10 +2096,11 @@ pub fn draw(
                             0,
                         );
                     }
-                    if bindings.texture_required(tex.id, true) {
+                    if bindings.texture_required(texture_binding_id(tex, run.texture_handle), true)
+                    {
                         pass.set_bind_group(
                             texture_group,
-                            Some(tex.bind_group_repeat.as_ref()),
+                            Some(texture_bind_group(tex, run.texture_handle, true)),
                             &[],
                         );
                     }

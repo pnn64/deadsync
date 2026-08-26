@@ -2,7 +2,8 @@ use deadlib_render_core::{
     BlendMode, DrawOp, DrawStats, RenderFrame, RenderTargetFrame, SOFTWARE_MESH_STORAGE_SLOT,
     SOFTWARE_OBJECTS_STORAGE_SLOT, SOFTWARE_TMESH_STORAGE_SLOT, SamplerDesc, SamplerFilter,
     SamplerWrap, TextureHandle, TexturedMeshGeometry, TexturedMeshInstanceRaw, Yuv420Upload,
-    draw_storage_stats, is_render_target_texture,
+    draw_storage_stats, is_render_target_texture, render_target_base_handle,
+    render_target_uses_nearest,
 };
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use image::RgbaImage;
@@ -526,6 +527,7 @@ struct ResolvedTextures<'a, T: TextureLookup + Sync> {
 impl<T: TextureLookup + Sync> TextureLookup for ResolvedTextures<'_, T> {
     fn software_texture(&self, handle: TextureHandle) -> Option<&Texture> {
         if is_render_target_texture(handle) {
+            let handle = render_target_base_handle(handle);
             return self
                 .targets
                 .iter()
@@ -533,6 +535,18 @@ impl<T: TextureLookup + Sync> TextureLookup for ResolvedTextures<'_, T> {
                 .map(|target| &target.texture);
         }
         self.external.software_texture(handle)
+    }
+}
+
+#[inline(always)]
+fn effective_sampler(texture: &Texture, handle: TextureHandle) -> SamplerDesc {
+    if render_target_uses_nearest(handle) {
+        SamplerDesc {
+            filter: SamplerFilter::Nearest,
+            ..texture.sampler
+        }
+    } else {
+        texture.sampler
     }
 }
 
@@ -1117,7 +1131,7 @@ fn draw_prepared<'a>(
                     *texture_mask,
                     *blend,
                     &tex.image,
-                    tex.sampler,
+                    effective_sampler(tex, *texture_handle),
                     tex.opaque,
                     width,
                     height,
@@ -1192,7 +1206,7 @@ fn draw_prepared<'a>(
                     *texture_mask,
                     *blend,
                     &tex.image,
-                    tex.sampler,
+                    effective_sampler(tex, *texture_handle),
                     tex.opaque,
                     stripe_y_start,
                     stripe_y_end,
@@ -1228,7 +1242,7 @@ fn draw_prepared<'a>(
                 instance.texture_mask != 0.0,
                 *blend,
                 &tex.image,
-                tex.sampler,
+                effective_sampler(tex, *texture_handle),
                 tex.opaque,
                 width,
                 height,
@@ -1284,7 +1298,7 @@ fn draw_prepared_triangle<'a>(
                 &tex.image,
                 SamplerDesc {
                     wrap: SamplerWrap::Repeat,
-                    ..tex.sampler
+                    ..effective_sampler(tex, *texture_handle)
                 },
                 tex.opaque,
                 stripe_y_start,
