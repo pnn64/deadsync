@@ -827,6 +827,44 @@ pub fn build_song_lua_overlay_ease_windows<Kind>(
     )
 }
 
+pub fn build_song_lua_overlay_update_tracks<OverlayActor>(
+    compiled: &deadsync_song_lua::CompiledSongLua<OverlayActor>,
+    timing_player: &deadsync_rules::timing::TimingData,
+    global_offset_seconds: f32,
+    start_second: f32,
+) -> Vec<deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack> {
+    let mut out = Vec::with_capacity(compiled.overlay_updates.len());
+    for track in &compiled.overlay_updates {
+        let samples = track
+            .samples
+            .iter()
+            .filter_map(|sample| {
+                deadsync_gameplay::song_lua_message_second(
+                    sample.beat,
+                    timing_player,
+                    global_offset_seconds,
+                )
+                .map(|second| {
+                    deadsync_song_lua::SongLuaOverlayRuntimeUpdateSample {
+                        second: second + start_second,
+                        value: sample.value.clone(),
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        if samples.is_empty() {
+            continue;
+        }
+        out.push(deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack {
+            overlay_index: track.overlay_index,
+            target: track.target,
+            samples,
+        });
+    }
+    out.sort_by_key(|track| track.overlay_index);
+    out
+}
+
 fn song_lua_compile_player_screen_x(
     num_players: usize,
     player_index: usize,

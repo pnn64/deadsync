@@ -4,21 +4,22 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::{
     LUA_PLAYERS, SONG_LUA_PLAYER_OPTIONS_KEYS, SongLuaCompileContext, SongLuaCompileInfo,
     SongLuaEaseTarget, SongLuaEaseWindow, SongLuaOverlayCompileActor, SongLuaOverlayEase,
-    SongLuaOverlayState, SongLuaSpanMode, SongLuaTimeUnit, SongLuaTrackedActor,
-    SongLuaTrackedActorTarget, actor_overlay_initial_state, actor_tree_has_update_functions,
-    compile_song_runtime_delta_values, compile_song_runtime_values, overlay_delta_pair_from_states,
-    push_unique_compile_detail, read_f32, reset_overlay_compile_actor_capture_tables,
-    reset_tracked_capture_tables, run_actor_update_functions_with_delta,
-    runtime_player_option_ease_target, set_compile_song_runtime_beat,
-    set_compile_song_runtime_delta_values, set_compile_song_runtime_values, song_display_bps,
-    song_elapsed_seconds_for_beat, song_lua_side_effect_count, song_music_rate,
+    SongLuaOverlayState, SongLuaOverlayUpdateSample, SongLuaOverlayUpdateTrack, SongLuaSpanMode,
+    SongLuaTimeUnit, SongLuaTrackedActor, SongLuaTrackedActorTarget, actor_overlay_initial_state,
+    actor_tree_has_update_functions, compile_song_runtime_delta_values,
+    compile_song_runtime_values, overlay_delta_pair_from_states, push_unique_compile_detail,
+    read_f32, reset_overlay_compile_actor_capture_tables, reset_tracked_capture_tables,
+    run_actor_update_functions_with_delta, runtime_player_option_ease_target,
+    set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
+    set_compile_song_runtime_values, song_display_bps, song_elapsed_seconds_for_beat,
+    song_lua_side_effect_count, song_music_rate,
 };
 
-pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 4096;
-// Dense AFT trees trade temporal resolution for a bounded compile-time and
-// memory cost instead of multiplying thousands of samples by every overlay.
-pub const UPDATE_STATE_SAMPLE_CAP: usize = 16 * 1024;
-const SONG_LUA_PLAYER_TRANSFORM_SAMPLE_DIVISOR: f32 = 4.0;
+pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 8192;
+// Update functions are replayed offline and their numeric properties are
+// interpolated at render rate. Ten source samples per second preserve the
+// chart's continuous screen motion while keeping gameplay transitions bounded.
+const SONG_LUA_UPDATE_TARGET_FPS: f32 = 10.0;
 const PLAYER_TRANSFORM_CAPTURE_KEYS: [&str; 11] = [
     "x",
     "y",
@@ -405,16 +406,12 @@ pub fn update_function_sample_step(len: f32) -> f32 {
     if len <= 0.0 {
         return 0.0;
     }
-    let capped = len / SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES as f32;
-    perframe_segment_step(len).max(capped)
+    (len / SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES as f32).max(1.0 / 192.0)
 }
 
-pub fn update_state_sample_step(len: f32, overlay_count: usize) -> f32 {
-    if len <= 0.0 {
-        return 0.0;
-    }
-    let max_samples = (UPDATE_STATE_SAMPLE_CAP / overlay_count.max(1)).max(1);
-    len / max_samples as f32
+fn update_function_frame_step(context: &SongLuaCompileContext, len: f32) -> f32 {
+    let frame_step = song_display_bps(context) / SONG_LUA_UPDATE_TARGET_FPS;
+    frame_step.max(len / SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES as f32)
 }
 
 pub fn update_function_samples(start: f32, end: f32) -> Vec<SongLuaPerframeSample> {
@@ -524,34 +521,6 @@ pub fn push_perframe_overlay_targets(
             opt2: None,
         });
     }
-}
-
-pub fn update_function_overlay_eases(
-    end: f32,
-    baseline_overlays: &[SongLuaOverlayState],
-    sample_beats: &[f32],
-    overlay_samples: &[Vec<SongLuaOverlayState>],
-) -> Vec<SongLuaOverlayEase> {
-    let mut out = Vec::new();
-    for index in 0..sample_beats.len() {
-        let seg_start = sample_beats[index];
-        let seg_end = sample_beats.get(index + 1).copied().unwrap_or(end);
-        if seg_end <= seg_start {
-            continue;
-        }
-        let from_overlays = &overlay_samples[index];
-        let to_overlays = overlay_samples.get(index + 1).unwrap_or(from_overlays);
-        push_perframe_overlay_targets(
-            &mut out,
-            seg_start,
-            seg_end,
-            from_overlays,
-            to_overlays,
-            baseline_overlays,
-            true,
-        );
-    }
-    out
 }
 
 pub fn push_perframe_player_target(
@@ -853,6 +822,190 @@ pub fn current_overlay_compile_actor_states<Kind>(
     Ok(out)
 }
 
+fn push_update_overlay_value(
+    tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
+    track_indices: &mut std::collections::HashMap<
+        (usize, crate::SongLuaOverlayUpdateTarget),
+        usize,
+    >,
+    overlay_index: usize,
+    target: crate::SongLuaOverlayUpdateTarget,
+    beat: f32,
+    current: crate::SongLuaOverlayUpdateValue,
+    next_beat: f32,
+    next: crate::SongLuaOverlayUpdateValue,
+) {
+    let track_index = *track_indices
+        .entry((overlay_index, target))
+        .or_insert_with(|| {
+            let index = tracks.len();
+            tracks.push(SongLuaOverlayUpdateTrack {
+                overlay_index,
+                target,
+                samples: vec![SongLuaOverlayUpdateSample {
+                    beat: if current == next { next_beat } else { beat },
+                    value: current.clone(),
+                }],
+            });
+            index
+        });
+    if current == next {
+        return;
+    }
+    let track = &mut tracks[track_index];
+    if track
+        .samples
+        .last()
+        .is_some_and(|sample| sample.beat < beat - f32::EPSILON)
+    {
+        track.samples.push(SongLuaOverlayUpdateSample {
+            beat,
+            value: current,
+        });
+    }
+    track.samples.push(SongLuaOverlayUpdateSample {
+        beat: next_beat,
+        value: next,
+    });
+}
+
+fn overlay_state_update_value(
+    state: &SongLuaOverlayState,
+    target: crate::SongLuaOverlayUpdateTarget,
+) -> crate::SongLuaOverlayUpdateValue {
+    use crate::{SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value};
+    macro_rules! value {
+        ($variant:ident, $field:ident) => {
+            Value::$variant(state.$field)
+        };
+    }
+    macro_rules! option {
+        ($variant:ident, $field:ident) => {
+            state.$field.map(Value::$variant).unwrap_or(Value::None)
+        };
+    }
+    match target {
+        Target::X => value!(F32, x),
+        Target::Y => value!(F32, y),
+        Target::Z => value!(F32, z),
+        Target::ZBias => value!(F32, z_bias),
+        Target::DrawOrder => value!(I32, draw_order),
+        Target::DrawByZPosition => value!(Bool, draw_by_z_position),
+        Target::HAlign => value!(F32, halign),
+        Target::VAlign => value!(F32, valign),
+        Target::TextAlign => value!(TextAlign, text_align),
+        Target::Uppercase => value!(Bool, uppercase),
+        Target::ShadowLen => value!(Vec2, shadow_len),
+        Target::ShadowColor => value!(Vec4, shadow_color),
+        Target::Glow => value!(Vec4, glow),
+        Target::Fov => option!(F32, fov),
+        Target::Vanishpoint => option!(Vec2, vanishpoint),
+        Target::Diffuse => value!(Vec4, diffuse),
+        Target::VertexColors => state
+            .vertex_colors
+            .map(|value| Value::VertexColors(std::sync::Arc::new(value)))
+            .unwrap_or(Value::None),
+        Target::Visible => value!(Bool, visible),
+        Target::CropLeft => value!(F32, cropleft),
+        Target::CropRight => value!(F32, cropright),
+        Target::CropTop => value!(F32, croptop),
+        Target::CropBottom => value!(F32, cropbottom),
+        Target::FadeLeft => value!(F32, fadeleft),
+        Target::FadeRight => value!(F32, faderight),
+        Target::FadeTop => value!(F32, fadetop),
+        Target::FadeBottom => value!(F32, fadebottom),
+        Target::MaskSource => value!(Bool, mask_source),
+        Target::MaskDest => value!(Bool, mask_dest),
+        Target::DepthTest => value!(Bool, depth_test),
+        Target::Zoom => value!(F32, zoom),
+        Target::ZoomX => value!(F32, zoom_x),
+        Target::ZoomY => value!(F32, zoom_y),
+        Target::ZoomZ => value!(F32, zoom_z),
+        Target::BaseZoom => value!(F32, basezoom),
+        Target::BaseZoomX => value!(F32, basezoom_x),
+        Target::BaseZoomY => value!(F32, basezoom_y),
+        Target::BaseZoomZ => value!(F32, basezoom_z),
+        Target::RotationX => value!(F32, rot_x_deg),
+        Target::RotationY => value!(F32, rot_y_deg),
+        Target::RotationZ => value!(F32, rot_z_deg),
+        Target::SkewX => value!(F32, skew_x),
+        Target::SkewY => value!(F32, skew_y),
+        Target::Blend => value!(Blend, blend),
+        Target::Vibrate => value!(Bool, vibrate),
+        Target::EffectMagnitude => value!(Vec3, effect_magnitude),
+        Target::EffectClock => value!(EffectClock, effect_clock),
+        Target::EffectMode => value!(EffectMode, effect_mode),
+        Target::EffectColor1 => value!(Vec4, effect_color1),
+        Target::EffectColor2 => value!(Vec4, effect_color2),
+        Target::EffectPeriod => value!(F32, effect_period),
+        Target::EffectOffset => value!(F32, effect_offset),
+        Target::EffectTiming => option!(Vec5, effect_timing),
+        Target::Rainbow => value!(Bool, rainbow),
+        Target::RainbowScroll => value!(Bool, rainbow_scroll),
+        Target::TextJitter => value!(Bool, text_jitter),
+        Target::TextDistortion => value!(F32, text_distortion),
+        Target::TextGlowMode => value!(TextGlowMode, text_glow_mode),
+        Target::MultAttrsWithDiffuse => value!(Bool, mult_attrs_with_diffuse),
+        Target::SpriteAnimate => value!(Bool, sprite_animate),
+        Target::SpriteLoop => value!(Bool, sprite_loop),
+        Target::SpritePlaybackRate => value!(F32, sprite_playback_rate),
+        Target::SpriteStateDelay => value!(F32, sprite_state_delay),
+        Target::SpriteStateIndex => option!(U32, sprite_state_index),
+        Target::VertSpacing => option!(I32, vert_spacing),
+        Target::WrapWidthPixels => option!(I32, wrap_width_pixels),
+        Target::MaxWidth => option!(F32, max_width),
+        Target::MaxHeight => option!(F32, max_height),
+        Target::MaxWPreZoom => value!(Bool, max_w_pre_zoom),
+        Target::MaxHPreZoom => value!(Bool, max_h_pre_zoom),
+        Target::MaxDimensionUsesZoom => value!(Bool, max_dimension_uses_zoom),
+        Target::TextureFiltering => value!(Bool, texture_filtering),
+        Target::TextureWrapping => value!(Bool, texture_wrapping),
+        Target::TexcoordOffset => option!(Vec2, texcoord_offset),
+        Target::CustomTextureRect => option!(Vec4, custom_texture_rect),
+        Target::TexcoordVelocity => option!(Vec2, texcoord_velocity),
+        Target::Size => option!(Vec2, size),
+        Target::StretchRect => option!(Vec4, stretch_rect),
+    }
+}
+
+fn capture_update_overlay_samples<Kind>(
+    lua: &Lua,
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    baseline: &[SongLuaOverlayState],
+    tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
+    track_indices: &mut std::collections::HashMap<
+        (usize, crate::SongLuaOverlayUpdateTarget),
+        usize,
+    >,
+    beat: f32,
+    next_beat: f32,
+) -> Result<(), String> {
+    crate::lua_util::drain_overlay_update_capture(lua, |overlay_index, values| {
+        let Some(baseline) = baseline.get(overlay_index) else {
+            return Ok(());
+        };
+        debug_assert!(overlay_index < overlays.len());
+        for (target, next) in values {
+            let current = track_indices
+                .get(&(overlay_index, *target))
+                .and_then(|index| tracks[*index].samples.last())
+                .map(|sample| sample.value.clone())
+                .unwrap_or_else(|| overlay_state_update_value(baseline, *target));
+            push_update_overlay_value(
+                tracks,
+                track_indices,
+                overlay_index,
+                *target,
+                beat,
+                current,
+                next_beat,
+                next.clone(),
+            );
+        }
+        Ok(())
+    })
+}
+
 pub fn call_update_functions_at(
     lua: &Lua,
     root: &Value,
@@ -879,45 +1032,59 @@ pub fn compile_update_functions<Kind>(
     context: &SongLuaCompileContext,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
     tracked_actors: &[SongLuaTrackedActor],
-) -> Result<(Vec<SongLuaEaseWindow>, Vec<SongLuaOverlayEase>), String> {
+) -> Result<
+    (
+        Vec<SongLuaEaseWindow>,
+        Vec<SongLuaOverlayEase>,
+        Vec<SongLuaOverlayUpdateTrack>,
+    ),
+    String,
+> {
     if !actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())? {
-        return Ok((Vec::new(), Vec::new()));
+        return Ok((Vec::new(), Vec::new(), Vec::new()));
     }
     let start = 0.0;
     let end = update_function_end_beat(context);
     if end <= start {
-        return Ok((Vec::new(), Vec::new()));
+        return Ok((Vec::new(), Vec::new(), Vec::new()));
     }
 
     let player_tables = tracked_player_tables(tracked_actors);
     let option_tables = update_player_option_tables(lua)?;
     reset_overlay_compile_actor_capture_tables(lua, overlays)?;
     reset_tracked_capture_tables(lua, tracked_actors)?;
+    let baseline_overlays = current_overlay_compile_actor_states(overlays)?;
+    let overlay_indices_by_pointer = overlays
+        .iter()
+        .enumerate()
+        .map(|(index, overlay)| (overlay.table.to_pointer() as usize, index))
+        .collect::<std::collections::HashMap<_, _>>();
+    crate::lua_util::begin_overlay_update_capture(lua, overlay_indices_by_pointer);
     call_update_functions_at(lua, root, start, 0.0, 0.0)?;
     let baseline_players = current_perframe_player_states(&player_tables)?;
     let baseline_mods = current_update_mod_states(&option_tables)?;
-    let baseline_overlays = current_overlay_compile_actor_states(overlays)?;
     let mut sample_beats = vec![start];
     let mut player_samples = vec![baseline_players];
     let mut mod_samples = vec![baseline_mods.clone()];
-    let mut overlay_samples = vec![baseline_overlays.clone()];
+    let mut overlay_tracks = Vec::new();
+    let mut overlay_track_indices = std::collections::HashMap::new();
+    capture_update_overlay_samples(
+        lua,
+        overlays,
+        &baseline_overlays,
+        &mut overlay_tracks,
+        &mut overlay_track_indices,
+        start,
+        start,
+    )?;
 
-    let state_step = update_state_sample_step(end - start, overlays.len());
-    let coarse_step = update_function_sample_step(end - start).max(state_step);
-    let fine_step = (coarse_step / SONG_LUA_PLAYER_TRANSFORM_SAMPLE_DIVISOR).max(state_step);
+    let sample_step = update_function_frame_step(context, end - start);
     let mut beat = start;
     let mut transform_masks = player_transform_masks(&player_tables)?;
     while beat < end - f32::EPSILON {
-        let next_beat = (beat
-            + if transform_masks.iter().any(|mask| *mask != 0) {
-                fine_step
-            } else {
-                coarse_step
-            })
-        .min(end);
+        let next_beat = (beat + sample_step).min(end);
         let delta_beats = next_beat - beat;
         let delta_seconds = perframe_delta_seconds(context, delta_beats);
-        reset_overlay_compile_actor_capture_tables(lua, overlays)?;
         reset_tracked_capture_tables(lua, tracked_actors)?;
         call_update_functions_at(lua, root, next_beat, delta_beats, delta_seconds)?;
         let next_masks = player_transform_masks(&player_tables)?;
@@ -945,7 +1112,15 @@ pub fn compile_update_functions<Kind>(
         sample_beats.push(next_beat);
         player_samples.push(next_players);
         mod_samples.push(current_update_mod_states(&option_tables)?);
-        overlay_samples.push(current_overlay_compile_actor_states(overlays)?);
+        capture_update_overlay_samples(
+            lua,
+            overlays,
+            &baseline_overlays,
+            &mut overlay_tracks,
+            &mut overlay_track_indices,
+            beat,
+            next_beat,
+        )?;
         beat = next_beat;
     }
 
@@ -980,9 +1155,8 @@ pub fn compile_update_functions<Kind>(
             &baseline_mods,
         );
     }
-    let overlay_eases =
-        update_function_overlay_eases(end, &baseline_overlays, &sample_beats, &overlay_samples);
-    Ok((eases, overlay_eases))
+    crate::lua_util::end_overlay_update_capture(lua);
+    Ok((eases, Vec::new(), overlay_tracks))
 }
 
 pub fn compile_perframes<Kind>(

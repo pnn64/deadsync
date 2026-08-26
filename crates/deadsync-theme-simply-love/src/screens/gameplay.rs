@@ -1448,6 +1448,19 @@ fn song_lua_overlay_order_cache_from(
                 || ease.to.delta.draw_by_z_position.is_some();
         }
     }
+    for track in song_lua_overlay_runtime_updates(overlays) {
+        if track.overlay_index >= dynamic_local.len() {
+            continue;
+        }
+        dynamic_local[track.overlay_index] = true;
+        dynamic_actor_draw_order[track.overlay_index] |=
+            track.target == deadsync_song_lua::SongLuaOverlayUpdateTarget::DrawOrder;
+        has_dynamic_z_order |= matches!(
+            track.target,
+            deadsync_song_lua::SongLuaOverlayUpdateTarget::Z
+                | deadsync_song_lua::SongLuaOverlayUpdateTarget::DrawByZPosition
+        );
+    }
 
     let dynamic_local_indices = dynamic_local
         .iter()
@@ -3411,17 +3424,44 @@ fn build_song_lua_compiled_visual_layer_runtime(
             &message_seconds,
             &compiled.song_foreground.message_commands,
         );
+    let overlays =
+        song_lua_runtime_overlays(compiled, timing_player, global_offset_seconds, start_second);
 
     Some(deadsync_gameplay::build_song_lua_visual_layer_runtime(
         start_second,
         compiled.screen_width,
         compiled.screen_height,
-        compiled.overlays.clone(),
+        overlays,
         overlay_eases,
         overlay_events,
         compiled.song_foreground.clone(),
         song_foreground_events,
     ))
+}
+
+fn song_lua_runtime_overlays(
+    compiled: &CompiledSongLua,
+    timing_player: &deadsync_rules::timing::TimingData,
+    global_offset_seconds: f32,
+    start_second: f32,
+) -> Vec<SongLuaOverlayActor> {
+    let mut overlays = compiled.overlays.clone();
+    let tracks = deadsync_profile_gameplay::build_song_lua_overlay_update_tracks(
+        compiled,
+        timing_player,
+        global_offset_seconds,
+        start_second,
+    );
+    if !tracks.is_empty() {
+        overlays.push(SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::UpdateTracks { tracks },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        });
+    }
+    overlays
 }
 
 fn log_song_lua_runtime_debug(
@@ -3713,7 +3753,12 @@ fn build_song_lua_runtime_windows_for_data(
     if let Some(primary) = song_lua_data.primary.as_ref() {
         let compiled = &primary.compiled;
         let runtime_started = Instant::now();
-        overlays = compiled.overlays.clone();
+        overlays = song_lua_runtime_overlays(
+            compiled,
+            params.timing_players[0],
+            params.machine_global_offset_seconds,
+            0.0,
+        );
         let message_seconds = deadsync_gameplay::build_song_lua_message_seconds(
             compiled.messages.iter().map(|message| message.beat),
             params.timing_players[0],
@@ -7428,6 +7473,7 @@ fn song_lua_overlay_local_states_all_into(
     message_caches: &mut Vec<SongLuaMessageStateCache>,
     out: &mut Vec<SongLuaOverlayState>,
 ) {
+    let overlay_updates = song_lua_overlay_runtime_updates(overlays);
     out.clear();
     out.reserve(overlays.len());
     message_caches.resize(overlays.len(), SongLuaMessageStateCache::default());
@@ -7439,6 +7485,7 @@ fn song_lua_overlay_local_states_all_into(
             overlay_events,
             overlay_eases,
             overlay_ease_ranges,
+            overlay_updates,
             &mut message_caches[idx],
         ));
     }
@@ -7454,6 +7501,7 @@ fn song_lua_overlay_local_states_into(
     message_caches: &mut Vec<SongLuaMessageStateCache>,
     out: &mut Vec<SongLuaOverlayState>,
 ) -> bool {
+    let overlay_updates = song_lua_overlay_runtime_updates(overlays);
     let mut changed = false;
     if out.len() != overlays.len() {
         out.clear();
@@ -7472,12 +7520,25 @@ fn song_lua_overlay_local_states_into(
             overlay_events,
             overlay_eases,
             overlay_ease_ranges,
+            overlay_updates,
             &mut message_caches[idx],
         );
         changed |= out[idx] != next;
         out[idx] = next;
     }
     changed
+}
+
+fn song_lua_overlay_runtime_updates(
+    overlays: &[SongLuaOverlayActor],
+) -> &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack] {
+    overlays
+        .iter()
+        .find_map(|overlay| match &overlay.kind {
+            SongLuaOverlayKind::UpdateTracks { tracks } => Some(tracks.as_slice()),
+            _ => None,
+        })
+        .unwrap_or(&[])
 }
 
 #[cfg(test)]
@@ -10484,6 +10545,174 @@ impl SongLuaMessageTweenBenchmark {
     }
 }
 
+fn song_lua_overlay_update_value_lerp(
+    from: &deadsync_song_lua::SongLuaOverlayUpdateValue,
+    to: &deadsync_song_lua::SongLuaOverlayUpdateValue,
+    t: f32,
+) -> deadsync_song_lua::SongLuaOverlayUpdateValue {
+    use deadsync_song_lua::SongLuaOverlayUpdateValue as Value;
+    let t = t.clamp(0.0, 1.0);
+    match (from, to) {
+        (Value::F32(from), Value::F32(to)) => Value::F32((to - from).mul_add(t, *from)),
+        (Value::Vec2(from), Value::Vec2(to)) => Value::Vec2(std::array::from_fn(|i| {
+            (to[i] - from[i]).mul_add(t, from[i])
+        })),
+        (Value::Vec3(from), Value::Vec3(to)) => Value::Vec3(std::array::from_fn(|i| {
+            (to[i] - from[i]).mul_add(t, from[i])
+        })),
+        (Value::Vec4(from), Value::Vec4(to)) => Value::Vec4(std::array::from_fn(|i| {
+            (to[i] - from[i]).mul_add(t, from[i])
+        })),
+        (Value::Vec5(from), Value::Vec5(to)) => Value::Vec5(std::array::from_fn(|i| {
+            (to[i] - from[i]).mul_add(t, from[i])
+        })),
+        _ if t >= 1.0 - f32::EPSILON => to.clone(),
+        _ => from.clone(),
+    }
+}
+
+fn apply_song_lua_overlay_update_value(
+    state: &mut SongLuaOverlayState,
+    target: deadsync_song_lua::SongLuaOverlayUpdateTarget,
+    value: &deadsync_song_lua::SongLuaOverlayUpdateValue,
+) {
+    use deadsync_song_lua::{
+        SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value,
+    };
+    macro_rules! set_value {
+        ($target:ident, $variant:ident, $field:ident) => {
+            if target == Target::$target {
+                if let Value::$variant(value) = value {
+                    state.$field = *value;
+                }
+                return;
+            }
+        };
+    }
+    macro_rules! set_option {
+        ($target:ident, $variant:ident, $field:ident) => {
+            if target == Target::$target {
+                state.$field = match value {
+                    Value::$variant(value) => Some(*value),
+                    Value::None => None,
+                    _ => state.$field,
+                };
+                return;
+            }
+        };
+    }
+    set_value!(X, F32, x);
+    set_value!(Y, F32, y);
+    set_value!(Z, F32, z);
+    set_value!(ZBias, F32, z_bias);
+    set_value!(DrawOrder, I32, draw_order);
+    set_value!(DrawByZPosition, Bool, draw_by_z_position);
+    set_value!(HAlign, F32, halign);
+    set_value!(VAlign, F32, valign);
+    set_value!(TextAlign, TextAlign, text_align);
+    set_value!(Uppercase, Bool, uppercase);
+    set_value!(ShadowLen, Vec2, shadow_len);
+    set_value!(ShadowColor, Vec4, shadow_color);
+    set_value!(Glow, Vec4, glow);
+    set_option!(Fov, F32, fov);
+    set_option!(Vanishpoint, Vec2, vanishpoint);
+    set_value!(Diffuse, Vec4, diffuse);
+    if target == Target::VertexColors {
+        state.vertex_colors = match value {
+            Value::VertexColors(value) => Some(**value),
+            Value::None => None,
+            _ => state.vertex_colors,
+        };
+        return;
+    }
+    set_value!(Visible, Bool, visible);
+    set_value!(CropLeft, F32, cropleft);
+    set_value!(CropRight, F32, cropright);
+    set_value!(CropTop, F32, croptop);
+    set_value!(CropBottom, F32, cropbottom);
+    set_value!(FadeLeft, F32, fadeleft);
+    set_value!(FadeRight, F32, faderight);
+    set_value!(FadeTop, F32, fadetop);
+    set_value!(FadeBottom, F32, fadebottom);
+    set_value!(MaskSource, Bool, mask_source);
+    set_value!(MaskDest, Bool, mask_dest);
+    set_value!(DepthTest, Bool, depth_test);
+    set_value!(Zoom, F32, zoom);
+    set_value!(ZoomX, F32, zoom_x);
+    set_value!(ZoomY, F32, zoom_y);
+    set_value!(ZoomZ, F32, zoom_z);
+    set_value!(BaseZoom, F32, basezoom);
+    set_value!(BaseZoomX, F32, basezoom_x);
+    set_value!(BaseZoomY, F32, basezoom_y);
+    set_value!(BaseZoomZ, F32, basezoom_z);
+    set_value!(RotationX, F32, rot_x_deg);
+    set_value!(RotationY, F32, rot_y_deg);
+    set_value!(RotationZ, F32, rot_z_deg);
+    set_value!(SkewX, F32, skew_x);
+    set_value!(SkewY, F32, skew_y);
+    set_value!(Blend, Blend, blend);
+    set_value!(Vibrate, Bool, vibrate);
+    set_value!(EffectMagnitude, Vec3, effect_magnitude);
+    set_value!(EffectClock, EffectClock, effect_clock);
+    set_value!(EffectMode, EffectMode, effect_mode);
+    set_value!(EffectColor1, Vec4, effect_color1);
+    set_value!(EffectColor2, Vec4, effect_color2);
+    set_value!(EffectPeriod, F32, effect_period);
+    set_value!(EffectOffset, F32, effect_offset);
+    set_option!(EffectTiming, Vec5, effect_timing);
+    set_value!(Rainbow, Bool, rainbow);
+    set_value!(RainbowScroll, Bool, rainbow_scroll);
+    set_value!(TextJitter, Bool, text_jitter);
+    set_value!(TextDistortion, F32, text_distortion);
+    set_value!(TextGlowMode, TextGlowMode, text_glow_mode);
+    set_value!(MultAttrsWithDiffuse, Bool, mult_attrs_with_diffuse);
+    set_value!(SpriteAnimate, Bool, sprite_animate);
+    set_value!(SpriteLoop, Bool, sprite_loop);
+    set_value!(SpritePlaybackRate, F32, sprite_playback_rate);
+    set_value!(SpriteStateDelay, F32, sprite_state_delay);
+    set_option!(SpriteStateIndex, U32, sprite_state_index);
+    set_option!(VertSpacing, I32, vert_spacing);
+    set_option!(WrapWidthPixels, I32, wrap_width_pixels);
+    set_option!(MaxWidth, F32, max_width);
+    set_option!(MaxHeight, F32, max_height);
+    set_value!(MaxWPreZoom, Bool, max_w_pre_zoom);
+    set_value!(MaxHPreZoom, Bool, max_h_pre_zoom);
+    set_value!(MaxDimensionUsesZoom, Bool, max_dimension_uses_zoom);
+    set_value!(TextureFiltering, Bool, texture_filtering);
+    set_value!(TextureWrapping, Bool, texture_wrapping);
+    set_option!(TexcoordOffset, Vec2, texcoord_offset);
+    set_option!(CustomTextureRect, Vec4, custom_texture_rect);
+    set_option!(TexcoordVelocity, Vec2, texcoord_velocity);
+    set_option!(Size, Vec2, size);
+    set_option!(StretchRect, Vec4, stretch_rect);
+}
+
+fn apply_song_lua_overlay_runtime_updates_for(
+    now: f32,
+    overlay_index: usize,
+    tracks: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
+    current: &mut SongLuaOverlayState,
+) {
+    let start = tracks.partition_point(|track| track.overlay_index < overlay_index);
+    let end = start + tracks[start..].partition_point(|track| track.overlay_index == overlay_index);
+    for track in &tracks[start..end] {
+        let samples = &track.samples;
+        let next = samples.partition_point(|sample| sample.second <= now);
+        if next == 0 {
+            continue;
+        }
+        let from = &samples[next - 1];
+        let to = samples.get(next).unwrap_or(from);
+        let t = if to.second <= from.second + f32::EPSILON {
+            1.0
+        } else {
+            (now - from.second) / (to.second - from.second)
+        };
+        let value = song_lua_overlay_update_value_lerp(&from.value, &to.value, t);
+        apply_song_lua_overlay_update_value(current, track.target, &value);
+    }
+}
+
 fn apply_song_lua_overlay_runtime_eases_for(
     now: f32,
     overlay_index: usize,
@@ -10532,6 +10761,7 @@ fn song_lua_overlay_render_state_from(
     overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
     overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
+    overlay_updates: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
     message_cache: &mut SongLuaMessageStateCache,
 ) -> SongLuaOverlayState {
     let events = overlay_events.get(overlay_index).map(Vec::as_slice);
@@ -10539,7 +10769,10 @@ fn song_lua_overlay_render_state_from(
     let has_eases = overlay_ease_ranges
         .get(overlay_index)
         .is_some_and(|range| !range.is_empty());
-    if !has_events && !has_eases {
+    let has_updates = overlay_updates
+        .binary_search_by_key(&overlay_index, |track| track.overlay_index)
+        .is_ok();
+    if !has_events && !has_eases && !has_updates {
         return overlay.initial_state;
     }
     song_lua_overlay_render_state_dynamic(
@@ -10549,6 +10782,7 @@ fn song_lua_overlay_render_state_from(
         events,
         overlay_eases,
         overlay_ease_ranges,
+        overlay_updates,
         message_cache,
     )
 }
@@ -10560,6 +10794,7 @@ fn song_lua_overlay_render_state_dynamic(
     events: Option<&[SongLuaOverlayMessageRuntime]>,
     overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
+    overlay_updates: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
     message_cache: &mut SongLuaMessageStateCache,
 ) -> SongLuaOverlayState {
     let current = song_lua_message_state_cached(
@@ -10569,13 +10804,15 @@ fn song_lua_overlay_render_state_dynamic(
         events,
         message_cache,
     );
-    apply_song_lua_overlay_runtime_eases_for(
+    let mut current = apply_song_lua_overlay_runtime_eases_for(
         now,
         overlay_index,
         overlay_eases,
         overlay_ease_ranges,
         current,
-    )
+    );
+    apply_song_lua_overlay_runtime_updates_for(now, overlay_index, overlay_updates, &mut current);
+    current
 }
 
 fn song_lua_message_state_legacy(
@@ -13521,6 +13758,7 @@ fn build_song_lua_overlay_actor_with_scratch(
     match &overlay.kind {
         SongLuaOverlayKind::Actor => None,
         SongLuaOverlayKind::ActorFrame => None,
+        SongLuaOverlayKind::UpdateTracks { .. } => None,
         SongLuaOverlayKind::ActorFrameTexture { .. } => None,
         SongLuaOverlayKind::ActorProxy { .. } => None,
         SongLuaOverlayKind::AftSprite { .. } => None,
@@ -19251,6 +19489,7 @@ mod tests {
                 Some(&events[0]),
                 &[],
                 &ranges,
+                &[],
                 &mut dynamic_cache,
             );
             let actual = song_lua_overlay_render_state_from(
@@ -19260,12 +19499,49 @@ mod tests {
                 &events,
                 &[],
                 &ranges,
+                &[],
                 &mut static_cache,
             );
             assert_eq!(actual, expected, "now={now}");
         }
         assert!(dynamic_cache.initialized);
         assert!(!static_cache.initialized);
+    }
+
+    #[test]
+    fn song_lua_overlay_update_track_restores_cropped_state() {
+        use deadsync_song_lua::{
+            SongLuaOverlayRuntimeUpdateSample, SongLuaOverlayRuntimeUpdateTrack,
+            SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue,
+        };
+        let tracks = vec![SongLuaOverlayRuntimeUpdateTrack {
+            overlay_index: 0,
+            target: SongLuaOverlayUpdateTarget::CropTop,
+            samples: vec![
+                SongLuaOverlayRuntimeUpdateSample {
+                    second: 0.0,
+                    value: SongLuaOverlayUpdateValue::F32(0.0),
+                },
+                SongLuaOverlayRuntimeUpdateSample {
+                    second: 1.0,
+                    value: SongLuaOverlayUpdateValue::F32(0.8),
+                },
+                SongLuaOverlayRuntimeUpdateSample {
+                    second: 2.0,
+                    value: SongLuaOverlayUpdateValue::F32(0.0),
+                },
+            ],
+        }];
+        let mut active = SongLuaOverlayState::default();
+        apply_song_lua_overlay_runtime_updates_for(1.5, 0, &tracks, &mut active);
+        assert!((active.croptop - 0.4).abs() <= f32::EPSILON);
+
+        let mut restored = SongLuaOverlayState {
+            croptop: 0.9,
+            ..SongLuaOverlayState::default()
+        };
+        apply_song_lua_overlay_runtime_updates_for(3.0, 0, &tracks, &mut restored);
+        assert_eq!(restored.croptop, 0.0);
     }
 
     #[test]

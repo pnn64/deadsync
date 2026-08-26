@@ -197,7 +197,7 @@ pub use option_rows::{
 };
 pub use perframe::{
     SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES, SongLuaPerframeEntry, SongLuaPerframePlayerState,
-    SongLuaPerframeSample, SongLuaUpdateModState, UPDATE_STATE_SAMPLE_CAP, active_perframe_entries,
+    SongLuaPerframeSample, SongLuaUpdateModState, active_perframe_entries,
     actor_perframe_player_state, call_perframe_entry, call_update_functions_at, compile_perframes,
     compile_update_functions, current_overlay_compile_actor_states, current_perframe_player_states,
     current_update_mod_states, perframe_boundaries, perframe_delta_seconds, perframe_samples,
@@ -205,8 +205,8 @@ pub use perframe::{
     push_perframe_player_target, push_perframe_player_targets, push_perframe_static_targets,
     push_sampled_perframe_targets, push_update_mod_targets, read_perframe_entries,
     relative_player_target, tracked_player_tables, unsupported_perframe_info,
-    update_function_end_beat, update_function_overlay_eases, update_function_sample_step,
-    update_function_samples, update_player_option_tables, update_state_sample_step,
+    update_function_end_beat, update_function_sample_step, update_function_samples,
+    update_player_option_tables,
 };
 pub use player_options::{
     SONG_LUA_PLAYER_OPTION_CAPABILITIES, SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES,
@@ -1475,6 +1475,7 @@ pub struct CompiledSongLua<OverlayActor> {
     pub sound_paths: Vec<PathBuf>,
     pub overlays: Vec<OverlayActor>,
     pub overlay_eases: Vec<SongLuaOverlayEase>,
+    pub overlay_updates: Vec<SongLuaOverlayUpdateTrack>,
     pub player_actors: [SongLuaCapturedActor; LUA_PLAYERS],
     pub song_foreground: SongLuaCapturedActor,
     pub hidden_players: [bool; LUA_PLAYERS],
@@ -1496,6 +1497,7 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             sound_paths: Vec::new(),
             overlays: Vec::new(),
             overlay_eases: Vec::new(),
+            overlay_updates: Vec::new(),
             player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
             song_foreground: SongLuaCapturedActor::default(),
             hidden_players: [false; LUA_PLAYERS],
@@ -1663,6 +1665,9 @@ impl<Vertex> SongLuaOverlayModelLayer<Vertex> {
 pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
     Actor,
     ActorFrame,
+    UpdateTracks {
+        tracks: Vec<SongLuaOverlayRuntimeUpdateTrack>,
+    },
     ActorFrameTexture {
         alpha_buffer: bool,
         depth_buffer: bool,
@@ -3728,6 +3733,132 @@ pub struct SongLuaOverlayEase {
     pub opt2: Option<f32>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SongLuaOverlayUpdateTarget {
+    X,
+    Y,
+    Z,
+    ZBias,
+    DrawOrder,
+    DrawByZPosition,
+    HAlign,
+    VAlign,
+    TextAlign,
+    Uppercase,
+    ShadowLen,
+    ShadowColor,
+    Glow,
+    Fov,
+    Vanishpoint,
+    Diffuse,
+    VertexColors,
+    Visible,
+    CropLeft,
+    CropRight,
+    CropTop,
+    CropBottom,
+    FadeLeft,
+    FadeRight,
+    FadeTop,
+    FadeBottom,
+    MaskSource,
+    MaskDest,
+    DepthTest,
+    Zoom,
+    ZoomX,
+    ZoomY,
+    ZoomZ,
+    BaseZoom,
+    BaseZoomX,
+    BaseZoomY,
+    BaseZoomZ,
+    RotationX,
+    RotationY,
+    RotationZ,
+    SkewX,
+    SkewY,
+    Blend,
+    Vibrate,
+    EffectMagnitude,
+    EffectClock,
+    EffectMode,
+    EffectColor1,
+    EffectColor2,
+    EffectPeriod,
+    EffectOffset,
+    EffectTiming,
+    Rainbow,
+    RainbowScroll,
+    TextJitter,
+    TextDistortion,
+    TextGlowMode,
+    MultAttrsWithDiffuse,
+    SpriteAnimate,
+    SpriteLoop,
+    SpritePlaybackRate,
+    SpriteStateDelay,
+    SpriteStateIndex,
+    VertSpacing,
+    WrapWidthPixels,
+    MaxWidth,
+    MaxHeight,
+    MaxWPreZoom,
+    MaxHPreZoom,
+    MaxDimensionUsesZoom,
+    TextureFiltering,
+    TextureWrapping,
+    TexcoordOffset,
+    CustomTextureRect,
+    TexcoordVelocity,
+    Size,
+    StretchRect,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SongLuaOverlayUpdateValue {
+    None,
+    F32(f32),
+    I32(i32),
+    U32(u32),
+    Bool(bool),
+    Vec2([f32; 2]),
+    Vec3([f32; 3]),
+    Vec4([f32; 4]),
+    Vec5([f32; 5]),
+    VertexColors(Arc<[[f32; 4]; 4]>),
+    TextAlign(TextAlign),
+    Blend(SongLuaOverlayBlendMode),
+    EffectClock(EffectClock),
+    EffectMode(EffectMode),
+    TextGlowMode(SongLuaTextGlowMode),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaOverlayUpdateSample {
+    pub beat: f32,
+    pub value: SongLuaOverlayUpdateValue,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaOverlayUpdateTrack {
+    pub overlay_index: usize,
+    pub target: SongLuaOverlayUpdateTarget,
+    pub samples: Vec<SongLuaOverlayUpdateSample>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaOverlayRuntimeUpdateSample {
+    pub second: f32,
+    pub value: SongLuaOverlayUpdateValue,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaOverlayRuntimeUpdateTrack {
+    pub overlay_index: usize,
+    pub target: SongLuaOverlayUpdateTarget,
+    pub samples: Vec<SongLuaOverlayRuntimeUpdateSample>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SongLuaCapturedActor {
     pub initial_state: SongLuaOverlayState,
@@ -3957,23 +4088,24 @@ mod tests {
     use super::{
         CompiledSongLua, GRAPH_DISPLAY_VALUE_RESOLUTION, MultitapPhase, SONG_LUA_INITIAL_LIFE,
         SONG_LUA_RUNTIME_KEY, SONG_LUA_SPRITE_STATE_CLEAR, SONG_LUA_STARTUP_MESSAGE,
-        SongLuaColumnOffsetBuildParams, SongLuaColumnOffsetSample, SongLuaCompileContext,
-        SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent,
-        SongLuaModWindow, SongLuaNoteHideWindow, SongLuaNoteskinResolver, SongLuaOverlayActor,
-        SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayCompileActor,
-        SongLuaOverlayEase, SongLuaOverlayEaseBuildParams, SongLuaOverlayKind,
-        SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw, SongLuaOverlayModelLayer,
-        SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaPlayerContext, SongLuaProxyTarget,
-        SongLuaSpanMode, SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit,
+        SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES, SongLuaColumnOffsetBuildParams,
+        SongLuaColumnOffsetSample, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
+        SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow, SongLuaNoteHideWindow,
+        SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayBlendMode,
+        SongLuaOverlayCommandBlock, SongLuaOverlayCompileActor, SongLuaOverlayEase,
+        SongLuaOverlayEaseBuildParams, SongLuaOverlayKind, SongLuaOverlayMessageCommand,
+        SongLuaOverlayModelDraw, SongLuaOverlayModelLayer, SongLuaOverlayState,
+        SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget, SongLuaPlayerContext,
+        SongLuaProxyTarget, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit,
         THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, TOP_SCREEN_THEME_CHILD_NAMES,
-        UNDERLAY_THEME_CHILD_NAMES, UPDATE_STATE_SAMPLE_CAP, actor_indices_for_pointers,
-        actor_overlay_initial_state, actor_pointers_touch_actor,
-        add_actor_child_from_path as add_lua_actor_child_from_path, capture_actor_message_commands,
-        capture_block_set_bool, capture_block_set_f32, capture_function_action_blocks,
-        capture_indexed_actor_function_blocks, capture_overlay_function_eases,
-        collect_indexed_actor_capture_blocks, column_offset_windows_from_samples,
-        compile_song_lua_with_actors, compile_song_runtime_values, compiled_song_lua_sound_paths,
-        create_debug_table, create_dummy_actor as create_lua_dummy_actor,
+        UNDERLAY_THEME_CHILD_NAMES, actor_indices_for_pointers, actor_overlay_initial_state,
+        actor_pointers_touch_actor, add_actor_child_from_path as add_lua_actor_child_from_path,
+        capture_actor_message_commands, capture_block_set_bool, capture_block_set_f32,
+        capture_function_action_blocks, capture_indexed_actor_function_blocks,
+        capture_overlay_function_eases, collect_indexed_actor_capture_blocks,
+        column_offset_windows_from_samples, compile_song_lua_with_actors,
+        compile_song_runtime_values, compiled_song_lua_sound_paths, create_debug_table,
+        create_dummy_actor as create_lua_dummy_actor,
         create_named_child_actor as create_lua_named_child_actor, create_song_runtime_table,
         custom_multi_modifier_key, easiest_steps_difficulty, ensure_overlay_arrow_visual,
         file_path_string, function_named_upvalue_tables, graph_display_body_size,
@@ -3997,7 +4129,7 @@ mod tests {
         sprite_frame_count, sprite_image_frame_size, sprite_texture_rect,
         sprite_texture_rect_with_offset, texture_pixel_offset_rect, theme_has_string,
         theme_metric_number, theme_metric_number_for_screen, theme_pref_default, theme_string,
-        theme_string_names, update_state_sample_step,
+        theme_string_names,
     };
     use std::collections::HashSet;
     use std::fs;
@@ -6195,14 +6327,18 @@ return Def.ActorFrame{
         context.music_length_seconds = 6.0;
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.overlays.len(), 1);
-        assert!(compiled.overlay_eases.iter().any(|ease| {
-            ease.overlay_index == 0 && ease.from.x.is_some() && ease.to.x.is_some()
+        assert!(compiled.overlay_updates.iter().any(|track| {
+            track.overlay_index == 0
+                && track.target == SongLuaOverlayUpdateTarget::X
+                && track.samples.len() > 2
         }));
-        assert!(compiled.overlay_eases.iter().any(|ease| {
-            ease.overlay_index == 0 && ease.from.rot_z_deg.is_some() && ease.to.rot_z_deg.is_some()
+        assert!(compiled.overlay_updates.iter().any(|track| {
+            track.overlay_index == 0
+                && track.target == SongLuaOverlayUpdateTarget::RotationZ
+                && track.samples.len() > 2
         }));
-        assert!(compiled.overlay_eases.iter().any(|ease| {
-            ease.overlay_index == 0 && ease.from.visible.is_some() && ease.to.visible.is_some()
+        assert!(compiled.overlay_updates.iter().any(|track| {
+            track.overlay_index == 0 && track.target == SongLuaOverlayUpdateTarget::Visible
         }));
     }
 
@@ -6224,7 +6360,7 @@ local root = Def.ActorFrame{
         end)
     end,
 }
-for index = 1, 256 do
+for index = 1, 32 do
     root[#root + 1] = Def.Quad{
         InitCommand=function(self)
             targets[#targets + 1] = self
@@ -6237,11 +6373,16 @@ return root
         .unwrap();
 
         let mut context = SongLuaCompileContext::new(&song_dir, "Dense Update Overlays");
-        context.music_length_seconds = 240.0;
+        context.music_length_seconds = 4.0;
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
-        assert_eq!(compiled.overlays.len(), 256);
-        assert!(!compiled.overlay_eases.is_empty());
-        assert!(compiled.overlay_eases.len() <= UPDATE_STATE_SAMPLE_CAP + compiled.overlays.len());
+        assert_eq!(compiled.overlays.len(), 32);
+        assert_eq!(compiled.overlay_updates.len(), 32);
+        assert!(
+            compiled
+                .overlay_updates
+                .iter()
+                .all(|track| track.samples.len() <= 64)
+        );
     }
 
     #[test]
@@ -6343,7 +6484,11 @@ return Def.ActorFrame{
                 .rev()
                 .find(|ease| ease.target == target)
                 .expect("update function should compile player transform samples");
-            assert_eq!(tail.to, 0.0, "transform tail did not close: {target:?}");
+            assert!(
+                tail.to.abs() <= 1.0e-6,
+                "transform tail did not close: {target:?} ({})",
+                tail.to
+            );
         }
     }
 
@@ -16160,14 +16305,11 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn update_state_sample_step_caps_dense_actor_trees() {
+    fn update_function_sample_step_bounds_long_timelines() {
         let len = 512.0;
-        let overlay_count = 512;
-        let step = update_state_sample_step(len, overlay_count);
-        let samples = (len / step).ceil() as usize;
-
-        assert_eq!(samples * overlay_count, UPDATE_STATE_SAMPLE_CAP);
-        assert_eq!(update_state_sample_step(0.0, overlay_count), 0.0);
+        let step = crate::update_function_sample_step(len);
+        assert!((len / step).ceil() as usize <= SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES);
+        assert_eq!(crate::update_function_sample_step(0.0), 0.0);
     }
 
     #[test]

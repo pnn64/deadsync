@@ -901,6 +901,93 @@ fn multitap_qtzn_color_table(noteskin: &str) -> &'static [MultitapColorPair; 8] 
     &MULTITAP_QTZN_VIVID
 }
 
+macro_rules! overlay_value_fields {
+    ($visit:ident) => {
+        $visit!(x);
+        $visit!(y);
+        $visit!(z);
+        $visit!(z_bias);
+        $visit!(draw_order);
+        $visit!(draw_by_z_position);
+        $visit!(halign);
+        $visit!(valign);
+        $visit!(text_align);
+        $visit!(uppercase);
+        $visit!(shadow_len);
+        $visit!(shadow_color);
+        $visit!(glow);
+        $visit!(diffuse);
+        $visit!(visible);
+        $visit!(cropleft);
+        $visit!(cropright);
+        $visit!(croptop);
+        $visit!(cropbottom);
+        $visit!(fadeleft);
+        $visit!(faderight);
+        $visit!(fadetop);
+        $visit!(fadebottom);
+        $visit!(mask_source);
+        $visit!(mask_dest);
+        $visit!(zoom);
+        $visit!(zoom_x);
+        $visit!(zoom_y);
+        $visit!(zoom_z);
+        $visit!(basezoom);
+        $visit!(basezoom_x);
+        $visit!(basezoom_y);
+        $visit!(basezoom_z);
+        $visit!(rot_x_deg);
+        $visit!(rot_y_deg);
+        $visit!(rot_z_deg);
+        $visit!(skew_x);
+        $visit!(skew_y);
+        $visit!(blend);
+        $visit!(vibrate);
+        $visit!(effect_magnitude);
+        $visit!(effect_clock);
+        $visit!(effect_mode);
+        $visit!(effect_color1);
+        $visit!(effect_color2);
+        $visit!(effect_period);
+        $visit!(effect_offset);
+        $visit!(rainbow);
+        $visit!(rainbow_scroll);
+        $visit!(text_jitter);
+        $visit!(text_distortion);
+        $visit!(text_glow_mode);
+        $visit!(mult_attrs_with_diffuse);
+        $visit!(sprite_animate);
+        $visit!(sprite_loop);
+        $visit!(sprite_playback_rate);
+        $visit!(sprite_state_delay);
+        $visit!(max_w_pre_zoom);
+        $visit!(max_h_pre_zoom);
+        $visit!(max_dimension_uses_zoom);
+        $visit!(depth_test);
+        $visit!(texture_filtering);
+        $visit!(texture_wrapping);
+    };
+}
+
+macro_rules! overlay_option_fields {
+    ($visit:ident) => {
+        $visit!(fov);
+        $visit!(vanishpoint);
+        $visit!(vertex_colors);
+        $visit!(effect_timing);
+        $visit!(sprite_state_index);
+        $visit!(vert_spacing);
+        $visit!(wrap_width_pixels);
+        $visit!(max_width);
+        $visit!(max_height);
+        $visit!(texcoord_offset);
+        $visit!(custom_texture_rect);
+        $visit!(texcoord_velocity);
+        $visit!(size);
+        $visit!(stretch_rect);
+    };
+}
+
 pub fn overlay_delta_pair_from_states(
     baseline: SongLuaOverlayState,
     from: SongLuaOverlayState,
@@ -924,83 +1011,8 @@ pub fn overlay_delta_pair_from_states(
             }
         };
     }
-    copy_value_field!(x);
-    copy_value_field!(y);
-    copy_value_field!(z);
-    copy_value_field!(z_bias);
-    copy_value_field!(draw_order);
-    copy_value_field!(draw_by_z_position);
-    copy_value_field!(halign);
-    copy_value_field!(valign);
-    copy_value_field!(text_align);
-    copy_value_field!(uppercase);
-    copy_value_field!(shadow_len);
-    copy_value_field!(shadow_color);
-    copy_value_field!(glow);
-    copy_option_field!(fov);
-    copy_option_field!(vanishpoint);
-    copy_value_field!(diffuse);
-    copy_option_field!(vertex_colors);
-    copy_value_field!(visible);
-    copy_value_field!(cropleft);
-    copy_value_field!(cropright);
-    copy_value_field!(croptop);
-    copy_value_field!(cropbottom);
-    copy_value_field!(fadeleft);
-    copy_value_field!(faderight);
-    copy_value_field!(fadetop);
-    copy_value_field!(fadebottom);
-    copy_value_field!(mask_source);
-    copy_value_field!(mask_dest);
-    copy_value_field!(zoom);
-    copy_value_field!(zoom_x);
-    copy_value_field!(zoom_y);
-    copy_value_field!(zoom_z);
-    copy_value_field!(basezoom);
-    copy_value_field!(basezoom_x);
-    copy_value_field!(basezoom_y);
-    copy_value_field!(basezoom_z);
-    copy_value_field!(rot_x_deg);
-    copy_value_field!(rot_y_deg);
-    copy_value_field!(rot_z_deg);
-    copy_value_field!(skew_x);
-    copy_value_field!(skew_y);
-    copy_value_field!(blend);
-    copy_value_field!(vibrate);
-    copy_value_field!(effect_magnitude);
-    copy_value_field!(effect_clock);
-    copy_value_field!(effect_mode);
-    copy_value_field!(effect_color1);
-    copy_value_field!(effect_color2);
-    copy_value_field!(effect_period);
-    copy_value_field!(effect_offset);
-    copy_option_field!(effect_timing);
-    copy_value_field!(rainbow);
-    copy_value_field!(rainbow_scroll);
-    copy_value_field!(text_jitter);
-    copy_value_field!(text_distortion);
-    copy_value_field!(text_glow_mode);
-    copy_value_field!(mult_attrs_with_diffuse);
-    copy_value_field!(sprite_animate);
-    copy_value_field!(sprite_loop);
-    copy_value_field!(sprite_playback_rate);
-    copy_value_field!(sprite_state_delay);
-    copy_option_field!(sprite_state_index);
-    copy_option_field!(vert_spacing);
-    copy_option_field!(wrap_width_pixels);
-    copy_option_field!(max_width);
-    copy_option_field!(max_height);
-    copy_value_field!(max_w_pre_zoom);
-    copy_value_field!(max_h_pre_zoom);
-    copy_value_field!(max_dimension_uses_zoom);
-    copy_value_field!(depth_test);
-    copy_value_field!(texture_filtering);
-    copy_value_field!(texture_wrapping);
-    copy_option_field!(texcoord_offset);
-    copy_option_field!(custom_texture_rect);
-    copy_option_field!(texcoord_velocity);
-    copy_option_field!(size);
-    copy_option_field!(stretch_rect);
+    overlay_value_fields!(copy_value_field);
+    overlay_option_fields!(copy_option_field);
     overlay_delta_intersection(&out_from, &out_to)
 }
 

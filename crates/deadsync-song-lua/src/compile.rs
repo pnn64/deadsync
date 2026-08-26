@@ -337,28 +337,30 @@ where
     compile_timer.push_stage("perframes");
     out.note_hides = read_note_column_zoom_hides(&lua)?;
     compile_timer.push_stage("note_hides");
-    let (update_eases, update_overlay_eases) = match compile_multitap_update_overlays_for_actors(
-        &lua,
-        context,
-        &mut overlays,
-        &mut out.messages,
-        noteskin_resolver,
-        |overlays, arrow_index, noteskin| {
-            ensure_overlay_arrow_visual(
-                &lua,
-                overlays,
-                arrow_index,
-                noteskin,
-                create_dummy_actor,
-                |noteskin| multitap_arrow_visual_spec(context, noteskin),
-            )
-        },
-    )? {
-        Some(eases) => (Vec::new(), eases),
-        None => compile_update_functions(&lua, &root, context, &mut overlays, &tracked_actors)?,
-    };
+    let (update_eases, update_overlay_eases, update_overlay_tracks) =
+        match compile_multitap_update_overlays_for_actors(
+            &lua,
+            context,
+            &mut overlays,
+            &mut out.messages,
+            noteskin_resolver,
+            |overlays, arrow_index, noteskin| {
+                ensure_overlay_arrow_visual(
+                    &lua,
+                    overlays,
+                    arrow_index,
+                    noteskin,
+                    create_dummy_actor,
+                    |noteskin| multitap_arrow_visual_spec(context, noteskin),
+                )
+            },
+        )? {
+            Some(eases) => (Vec::new(), eases, Vec::new()),
+            None => compile_update_functions(&lua, &root, context, &mut overlays, &tracked_actors)?,
+        };
     out.eases.extend(update_eases);
     out.overlay_eases.extend(update_overlay_eases);
+    out.overlay_updates.extend(update_overlay_tracks);
     compile_timer.push_stage("update_overlays");
     push_startup_message_if_listened(
         &mut out.messages,

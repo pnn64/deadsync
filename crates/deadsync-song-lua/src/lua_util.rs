@@ -20,7 +20,8 @@ use crate::{
     SongLuaMessageEvent, SongLuaNoteHideWindow, SongLuaOverlayBlendMode,
     SongLuaOverlayCommandBlock, SongLuaOverlayEase, SongLuaOverlayEaseBuildParams,
     SongLuaOverlayKind, SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand,
-    SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaPlayerContext,
+    SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta,
+    SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue, SongLuaPlayerContext,
     SongLuaProxyTarget, SongLuaSpanMode, SongLuaTimeUnit, SongLuaTrackedActor,
     SongLuaTrackedActorTarget, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
     TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES, call_with_chunk_env,
@@ -71,6 +72,181 @@ pub struct TopScreenLuaTables {
 pub struct SongLuaOverlayCompileActor<Kind> {
     pub table: Table,
     pub actor: crate::SongLuaOverlayActor<Kind>,
+}
+
+struct SongLuaOverlayUpdateCapture {
+    actor_indices: HashMap<usize, usize>,
+    touched: Vec<usize>,
+    touched_flags: Vec<bool>,
+    values: Vec<Vec<(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>>,
+}
+
+impl SongLuaOverlayUpdateCapture {
+    fn new(actor_indices: HashMap<usize, usize>) -> Self {
+        let actor_count = actor_indices.len();
+        Self {
+            actor_indices,
+            touched: Vec::with_capacity(actor_count),
+            touched_flags: vec![false; actor_count],
+            values: (0..actor_count).map(|_| Vec::new()).collect(),
+        }
+    }
+
+    fn record(
+        &mut self,
+        actor: &Table,
+        target: SongLuaOverlayUpdateTarget,
+        value: SongLuaOverlayUpdateValue,
+    ) -> bool {
+        let Some(&index) = self.actor_indices.get(&(actor.to_pointer() as usize)) else {
+            return false;
+        };
+        if !self.touched_flags[index] {
+            self.touched_flags[index] = true;
+            self.touched.push(index);
+        }
+        if let Some((_, current)) = self.values[index]
+            .iter_mut()
+            .find(|(current, _)| *current == target)
+        {
+            *current = value;
+        } else {
+            self.values[index].push((target, value));
+        }
+        true
+    }
+}
+
+pub fn begin_overlay_update_capture(lua: &Lua, actor_indices: HashMap<usize, usize>) {
+    lua.set_app_data(SongLuaOverlayUpdateCapture::new(actor_indices));
+}
+
+pub fn drain_overlay_update_capture(
+    lua: &Lua,
+    mut visit: impl FnMut(
+        usize,
+        &[(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)],
+    ) -> Result<(), String>,
+) -> Result<(), String> {
+    let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() else {
+        return Ok(());
+    };
+    for position in 0..capture.touched.len() {
+        let index = capture.touched[position];
+        visit(index, &capture.values[index])?;
+    }
+    for position in 0..capture.touched.len() {
+        let index = capture.touched[position];
+        capture.values[index].clear();
+        capture.touched_flags[index] = false;
+    }
+    capture.touched.clear();
+    Ok(())
+}
+
+pub fn end_overlay_update_capture(lua: &Lua) {
+    lua.remove_app_data::<SongLuaOverlayUpdateCapture>();
+}
+
+fn capture_target_for_key(key: &str) -> Option<SongLuaOverlayUpdateTarget> {
+    use SongLuaOverlayUpdateTarget as Target;
+    Some(match key {
+        "x" => Target::X,
+        "y" => Target::Y,
+        "z" => Target::Z,
+        "z_bias" => Target::ZBias,
+        "draw_order" => Target::DrawOrder,
+        "draw_by_z_position" => Target::DrawByZPosition,
+        "halign" => Target::HAlign,
+        "valign" => Target::VAlign,
+        "text_align" => Target::TextAlign,
+        "uppercase" => Target::Uppercase,
+        "shadow_len" => Target::ShadowLen,
+        "shadow_color" => Target::ShadowColor,
+        "glow" => Target::Glow,
+        "fov" => Target::Fov,
+        "vanishpoint" => Target::Vanishpoint,
+        "diffuse" => Target::Diffuse,
+        "vertex_colors" => Target::VertexColors,
+        "visible" => Target::Visible,
+        "cropleft" => Target::CropLeft,
+        "cropright" => Target::CropRight,
+        "croptop" => Target::CropTop,
+        "cropbottom" => Target::CropBottom,
+        "fadeleft" => Target::FadeLeft,
+        "faderight" => Target::FadeRight,
+        "fadetop" => Target::FadeTop,
+        "fadebottom" => Target::FadeBottom,
+        "mask_source" => Target::MaskSource,
+        "mask_dest" => Target::MaskDest,
+        "depth_test" => Target::DepthTest,
+        "zoom" => Target::Zoom,
+        "zoom_x" => Target::ZoomX,
+        "zoom_y" => Target::ZoomY,
+        "zoom_z" => Target::ZoomZ,
+        "basezoom" => Target::BaseZoom,
+        "basezoom_x" => Target::BaseZoomX,
+        "basezoom_y" => Target::BaseZoomY,
+        "basezoom_z" => Target::BaseZoomZ,
+        "rot_x_deg" => Target::RotationX,
+        "rot_y_deg" => Target::RotationY,
+        "rot_z_deg" => Target::RotationZ,
+        "skew_x" => Target::SkewX,
+        "skew_y" => Target::SkewY,
+        "blend" => Target::Blend,
+        "vibrate" => Target::Vibrate,
+        "effect_magnitude" => Target::EffectMagnitude,
+        "effect_clock" => Target::EffectClock,
+        "effect_mode" => Target::EffectMode,
+        "effect_color1" => Target::EffectColor1,
+        "effect_color2" => Target::EffectColor2,
+        "effect_period" => Target::EffectPeriod,
+        "effect_offset" => Target::EffectOffset,
+        "effect_timing" => Target::EffectTiming,
+        "rainbow" => Target::Rainbow,
+        "rainbow_scroll" => Target::RainbowScroll,
+        "text_jitter" => Target::TextJitter,
+        "text_distortion" => Target::TextDistortion,
+        "text_glow_mode" => Target::TextGlowMode,
+        "mult_attrs_with_diffuse" => Target::MultAttrsWithDiffuse,
+        "sprite_animate" => Target::SpriteAnimate,
+        "sprite_loop" => Target::SpriteLoop,
+        "sprite_playback_rate" => Target::SpritePlaybackRate,
+        "sprite_state_delay" => Target::SpriteStateDelay,
+        "sprite_state_index" => Target::SpriteStateIndex,
+        "vert_spacing" => Target::VertSpacing,
+        "wrap_width_pixels" => Target::WrapWidthPixels,
+        "max_width" => Target::MaxWidth,
+        "max_height" => Target::MaxHeight,
+        "max_w_pre_zoom" => Target::MaxWPreZoom,
+        "max_h_pre_zoom" => Target::MaxHPreZoom,
+        "max_dimension_uses_zoom" => Target::MaxDimensionUsesZoom,
+        "texture_filtering" => Target::TextureFiltering,
+        "texture_wrapping" => Target::TextureWrapping,
+        "texcoord_offset" => Target::TexcoordOffset,
+        "custom_texture_rect" => Target::CustomTextureRect,
+        "texcoord_velocity" => Target::TexcoordVelocity,
+        "size" => Target::Size,
+        "stretch_rect" => Target::StretchRect,
+        _ => return None,
+    })
+}
+
+fn record_overlay_update_capture(
+    lua: &Lua,
+    actor: &Table,
+    key: &str,
+    value: SongLuaOverlayUpdateValue,
+) -> bool {
+    let Some(target) = capture_target_for_key(key) else {
+        return false;
+    };
+    lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
+        .is_some_and(|mut capture| capture.record(actor, target, value))
+}
+
+fn overlay_update_capture_active(lua: &Lua) -> bool {
+    lua.app_data_ref::<SongLuaOverlayUpdateCapture>().is_some()
 }
 
 pub fn overlay_compile_actor_tables_for_indices<Kind>(
@@ -1878,9 +2054,11 @@ pub fn actor_current_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Tab
 }
 
 pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) -> mlua::Result<()> {
-    let block = actor_current_capture_block(lua, actor)?;
-    block.set(key, value)?;
-    block.set("__songlua_has_changes", true)?;
+    if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::F32(value)) {
+        let block = actor_current_capture_block(lua, actor)?;
+        block.set(key, value)?;
+        block.set("__songlua_has_changes", true)?;
+    }
     actor.set(format!("__songlua_state_{key}"), value)?;
     Ok(())
 }
@@ -1891,22 +2069,31 @@ pub fn capture_block_set_bool(
     key: &str,
     value: bool,
 ) -> mlua::Result<()> {
-    let block = actor_current_capture_block(lua, actor)?;
-    block.set(key, value)?;
-    block.set("__songlua_has_changes", true)?;
+    if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::Bool(value)) {
+        let block = actor_current_capture_block(lua, actor)?;
+        block.set(key, value)?;
+        block.set("__songlua_has_changes", true)?;
+    }
     actor.set(format!("__songlua_state_{key}"), value)?;
     Ok(())
 }
 
 pub fn capture_block_set_color(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlua::Result<()> {
-    let block = actor_current_capture_block(lua, actor)?;
     let value = lua.create_table()?;
     value.raw_set(1, color[0])?;
     value.raw_set(2, color[1])?;
     value.raw_set(3, color[2])?;
     value.raw_set(4, color[3])?;
-    block.set("diffuse", value.clone())?;
-    block.set("__songlua_has_changes", true)?;
+    if !record_overlay_update_capture(
+        lua,
+        actor,
+        "diffuse",
+        SongLuaOverlayUpdateValue::Vec4(color),
+    ) {
+        let block = actor_current_capture_block(lua, actor)?;
+        block.set("diffuse", value.clone())?;
+        block.set("__songlua_has_changes", true)?;
+    }
     actor.set("__songlua_diffuse", value.clone())?;
     actor.set("__songlua_state_diffuse", value)?;
     Ok(())
@@ -2006,14 +2193,16 @@ pub fn capture_block_set_vec4(
     key: &str,
     value4: [f32; 4],
 ) -> mlua::Result<()> {
-    let block = actor_current_capture_block(lua, actor)?;
     let value = lua.create_table()?;
     value.raw_set(1, value4[0])?;
     value.raw_set(2, value4[1])?;
     value.raw_set(3, value4[2])?;
     value.raw_set(4, value4[3])?;
-    block.set(key, value.clone())?;
-    block.set("__songlua_has_changes", true)?;
+    if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::Vec4(value4)) {
+        let block = actor_current_capture_block(lua, actor)?;
+        block.set(key, value.clone())?;
+        block.set("__songlua_has_changes", true)?;
+    }
     actor.set(format!("__songlua_state_{key}"), value)?;
     Ok(())
 }
@@ -2023,10 +2212,17 @@ pub fn capture_block_set_vertex_colors(
     actor: &Table,
     colors: [[f32; 4]; 4],
 ) -> mlua::Result<()> {
-    let block = actor_current_capture_block(lua, actor)?;
     let value = make_vertex_color_table(lua, colors)?;
-    block.set("vertex_colors", value.clone())?;
-    block.set("__songlua_has_changes", true)?;
+    if !record_overlay_update_capture(
+        lua,
+        actor,
+        "vertex_colors",
+        SongLuaOverlayUpdateValue::VertexColors(Arc::new(colors)),
+    ) {
+        let block = actor_current_capture_block(lua, actor)?;
+        block.set("vertex_colors", value.clone())?;
+        block.set("__songlua_has_changes", true)?;
+    }
     actor.set("__songlua_state_vertex_colors", value)?;
     Ok(())
 }
@@ -2037,31 +2233,37 @@ pub fn capture_block_set_vec5(
     key: &str,
     value5: [f32; 5],
 ) -> mlua::Result<()> {
-    let block = actor_current_capture_block(lua, actor)?;
     let value = lua.create_table()?;
     value.raw_set(1, value5[0])?;
     value.raw_set(2, value5[1])?;
     value.raw_set(3, value5[2])?;
     value.raw_set(4, value5[3])?;
     value.raw_set(5, value5[4])?;
-    block.set(key, value.clone())?;
-    block.set("__songlua_has_changes", true)?;
+    if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::Vec5(value5)) {
+        let block = actor_current_capture_block(lua, actor)?;
+        block.set(key, value.clone())?;
+        block.set("__songlua_has_changes", true)?;
+    }
     actor.set(format!("__songlua_state_{key}"), value)?;
     Ok(())
 }
 
 pub fn capture_block_set_u32(lua: &Lua, actor: &Table, key: &str, value: u32) -> mlua::Result<()> {
-    let block = actor_current_capture_block(lua, actor)?;
-    block.set(key, value)?;
-    block.set("__songlua_has_changes", true)?;
+    if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::U32(value)) {
+        let block = actor_current_capture_block(lua, actor)?;
+        block.set(key, value)?;
+        block.set("__songlua_has_changes", true)?;
+    }
     actor.set(format!("__songlua_state_{key}"), value)?;
     Ok(())
 }
 
 pub fn capture_block_set_i32(lua: &Lua, actor: &Table, key: &str, value: i32) -> mlua::Result<()> {
-    let block = actor_current_capture_block(lua, actor)?;
-    block.set(key, value)?;
-    block.set("__songlua_has_changes", true)?;
+    if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::I32(value)) {
+        let block = actor_current_capture_block(lua, actor)?;
+        block.set(key, value)?;
+        block.set("__songlua_has_changes", true)?;
+    }
     actor.set(format!("__songlua_state_{key}"), value)?;
     Ok(())
 }
@@ -2072,36 +2274,47 @@ pub fn capture_block_set_vec2(
     key: &str,
     value2: [f32; 2],
 ) -> mlua::Result<()> {
-    let block = actor_current_capture_block(lua, actor)?;
     let value = lua.create_table()?;
     value.raw_set(1, value2[0])?;
     value.raw_set(2, value2[1])?;
-    block.set(key, value.clone())?;
-    block.set("__songlua_has_changes", true)?;
+    if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::Vec2(value2)) {
+        let block = actor_current_capture_block(lua, actor)?;
+        block.set(key, value.clone())?;
+        block.set("__songlua_has_changes", true)?;
+    }
     actor.set(format!("__songlua_state_{key}"), value)?;
     Ok(())
 }
 
 pub fn capture_block_set_stretch(lua: &Lua, actor: &Table, rect: [f32; 4]) -> mlua::Result<()> {
-    let block = actor_current_capture_block(lua, actor)?;
     let value = lua.create_table()?;
     value.raw_set(1, rect[0])?;
     value.raw_set(2, rect[1])?;
     value.raw_set(3, rect[2])?;
     value.raw_set(4, rect[3])?;
-    block.set("stretch_rect", value.clone())?;
-    block.set("__songlua_has_changes", true)?;
+    if !record_overlay_update_capture(
+        lua,
+        actor,
+        "stretch_rect",
+        SongLuaOverlayUpdateValue::Vec4(rect),
+    ) {
+        let block = actor_current_capture_block(lua, actor)?;
+        block.set("stretch_rect", value.clone())?;
+        block.set("__songlua_has_changes", true)?;
+    }
     actor.set("__songlua_state_stretch_rect", value)?;
     Ok(())
 }
 
 pub fn capture_block_set_size(lua: &Lua, actor: &Table, size: [f32; 2]) -> mlua::Result<()> {
-    let block = actor_current_capture_block(lua, actor)?;
     let value = lua.create_table()?;
     value.raw_set(1, size[0])?;
     value.raw_set(2, size[1])?;
-    block.set("size", value.clone())?;
-    block.set("__songlua_has_changes", true)?;
+    if !record_overlay_update_capture(lua, actor, "size", SongLuaOverlayUpdateValue::Vec2(size)) {
+        let block = actor_current_capture_block(lua, actor)?;
+        block.set("size", value.clone())?;
+        block.set("__songlua_has_changes", true)?;
+    }
     actor.set("__songlua_state_size", value)?;
     Ok(())
 }
@@ -2126,13 +2339,15 @@ pub fn capture_block_set_vec3(
     key: &str,
     value3: [f32; 3],
 ) -> mlua::Result<()> {
-    let block = actor_current_capture_block(lua, actor)?;
     let value = lua.create_table()?;
     value.raw_set(1, value3[0])?;
     value.raw_set(2, value3[1])?;
     value.raw_set(3, value3[2])?;
-    block.set(key, value.clone())?;
-    block.set("__songlua_has_changes", true)?;
+    if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::Vec3(value3)) {
+        let block = actor_current_capture_block(lua, actor)?;
+        block.set(key, value.clone())?;
+        block.set("__songlua_has_changes", true)?;
+    }
     actor.set(format!("__songlua_state_{key}"), value)?;
     Ok(())
 }
@@ -2143,9 +2358,29 @@ pub fn capture_block_set_string(
     key: &str,
     value: &str,
 ) -> mlua::Result<()> {
-    let block = actor_current_capture_block(lua, actor)?;
-    block.set(key, value)?;
-    block.set("__songlua_has_changes", true)?;
+    let update_value = capture_target_for_key(key).and_then(|target| match target {
+        SongLuaOverlayUpdateTarget::TextAlign => {
+            parse_overlay_text_align(value).map(SongLuaOverlayUpdateValue::TextAlign)
+        }
+        SongLuaOverlayUpdateTarget::Blend => {
+            parse_overlay_blend_mode(value).map(SongLuaOverlayUpdateValue::Blend)
+        }
+        SongLuaOverlayUpdateTarget::EffectClock => {
+            parse_overlay_effect_clock(value).map(SongLuaOverlayUpdateValue::EffectClock)
+        }
+        SongLuaOverlayUpdateTarget::EffectMode => {
+            parse_overlay_effect_mode(value).map(SongLuaOverlayUpdateValue::EffectMode)
+        }
+        SongLuaOverlayUpdateTarget::TextGlowMode => {
+            parse_overlay_text_glow_mode(value).map(SongLuaOverlayUpdateValue::TextGlowMode)
+        }
+        _ => None,
+    });
+    if !update_value.is_some_and(|value| record_overlay_update_capture(lua, actor, key, value)) {
+        let block = actor_current_capture_block(lua, actor)?;
+        block.set(key, value)?;
+        block.set("__songlua_has_changes", true)?;
+    }
     actor.set(format!("__songlua_state_{key}"), value)?;
     Ok(())
 }
@@ -4715,16 +4950,13 @@ pub fn install_actor_extra_transform_methods(lua: &Lua, actor: &Table) -> mlua::
                 if let Some(raw) = args.get(1).cloned().and_then(read_string)
                     && let Some(blend) = parse_overlay_blend_mode(raw.as_str())
                 {
-                    let block = actor_current_capture_block(lua, &actor)?;
                     let label = match blend {
                         SongLuaOverlayBlendMode::Alpha => "alpha",
                         SongLuaOverlayBlendMode::Add => "add",
                         SongLuaOverlayBlendMode::Multiply => "multiply",
                         SongLuaOverlayBlendMode::Subtract => "subtract",
                     };
-                    block.set("blend", label)?;
-                    block.set("__songlua_has_changes", true)?;
-                    actor.set("__songlua_state_blend", label)?;
+                    capture_block_set_string(lua, &actor, "blend", label)?;
                 }
                 Ok(actor.clone())
             }
@@ -4748,14 +4980,16 @@ pub fn install_actor_extra_transform_methods(lua: &Lua, actor: &Table) -> mlua::
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
-                let block = actor_current_capture_block(lua, &actor)?;
-                let value = lua.create_table()?;
-                value.raw_set(1, args.get(1).cloned().and_then(read_f32).unwrap_or(0.0))?;
-                value.raw_set(2, args.get(2).cloned().and_then(read_f32).unwrap_or(0.0))?;
-                value.raw_set(3, args.get(3).cloned().and_then(read_f32).unwrap_or(0.0))?;
-                block.set("effect_magnitude", value.clone())?;
-                block.set("__songlua_has_changes", true)?;
-                actor.set("__songlua_state_effect_magnitude", value)?;
+                capture_block_set_vec3(
+                    lua,
+                    &actor,
+                    "effect_magnitude",
+                    [
+                        args.get(1).cloned().and_then(read_f32).unwrap_or(0.0),
+                        args.get(2).cloned().and_then(read_f32).unwrap_or(0.0),
+                        args.get(3).cloned().and_then(read_f32).unwrap_or(0.0),
+                    ],
+                )?;
                 Ok(actor.clone())
             }
         })?,
@@ -6090,6 +6324,12 @@ pub fn install_actor_runtime_child_methods(
         lua.create_function({
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
+                // Update-function compilation emits player transforms, modifiers,
+                // and overlay property tracks, but not mutable column spline state.
+                // Avoid replaying spline writes that cannot affect its output.
+                if overlay_update_capture_active(lua) {
+                    return Ok(Value::Table(lua.create_table()?));
+                }
                 let is_note_field = actor
                     .get::<Option<String>>("__songlua_player_child_name")?
                     .as_deref()
