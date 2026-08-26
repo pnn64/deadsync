@@ -8,7 +8,7 @@ mod imp {
     use arrayvec::ArrayVec;
     use deadsync_input::fsr::{
         BackendKind, ButtonLabel, ButtonView, ButtonViews, PadDeviceId, PadView, SensorView,
-        SensorViews,
+        SensorViews, ValueCurve,
     };
     use hidapi::{DeviceInfo, HidApi, HidDevice};
     use std::cmp::min;
@@ -31,18 +31,16 @@ mod imp {
     const LINEARIZATION_POWER: u32 = 4;
     const NTH_DEGREE_COEFFICIENT: f32 = 0.9;
     const FIRST_DEGREE_COEFFICIENT: f32 = 0.1;
+    const VALUE_CURVE: ValueCurve = ValueCurve::quartic_blend(
+        MAX_SENSOR_VALUE,
+        NTH_DEGREE_COEFFICIENT,
+        FIRST_DEGREE_COEFFICIENT,
+    );
     const SENSOR_NORMALIZED: [f32; MAX_SENSOR_VALUE as usize + 1] = {
         let mut values = [0.0; MAX_SENSOR_VALUE as usize + 1];
-        let max = MAX_SENSOR_VALUE as f32;
-        let max_squared = max * max;
-        let linearized_max = (max_squared * max_squared) / max;
         let mut raw = 0usize;
         while raw <= MAX_SENSOR_VALUE as usize {
-            let raw_value = raw as f32;
-            let squared = raw_value * raw_value;
-            let nth = (squared * squared) / linearized_max;
-            values[raw] =
-                (nth * NTH_DEGREE_COEFFICIENT + raw_value * FIRST_DEGREE_COEFFICIENT) / max;
+            values[raw] = VALUE_CURVE.normalize(raw as u16);
             raw += 1;
         }
         values
@@ -291,7 +289,7 @@ mod imp {
             aggregate_value,
             aggregate_threshold,
             active: aggregate_value >= aggregate_threshold && aggregate_threshold > 0,
-            value_scale: MAX_SENSOR_VALUE,
+            value_curve: VALUE_CURVE,
             release_threshold: None,
         }
     }

@@ -2,7 +2,7 @@
 
 use deadsync_input::fsr::{
     BackendKind, ButtonLabel, ButtonView, ButtonViews, PadDeviceId, PadView, SensorView,
-    SensorViews,
+    SensorViews, ValueCurve,
 };
 use deadsync_smx::{self as smx, SensorTestData, SensorTestMode, SmxConfig};
 use std::fmt::Write as _;
@@ -30,6 +30,8 @@ pub(super) const MAX_LOADCELL_THRESHOLD: u16 = 200;
 pub(super) const FSR_VALUE_SCALE: u16 = 250;
 pub(super) const LOADCELL_VALUE_SCALE: u16 = 250;
 pub(super) const LOADCELL_RAW_MAX: u16 = 500;
+const FSR_VALUE_CURVE: ValueCurve = ValueCurve::linear(FSR_VALUE_SCALE);
+const LOADCELL_VALUE_CURVE: ValueCurve = ValueCurve::linear(LOADCELL_VALUE_SCALE);
 
 /// Panels exposed for config: (panel_index, label), in L/D/U/R order.
 const VIEW_PANELS: [(usize, &str); SMX_BUTTON_COUNT] = [(3, "L"), (7, "D"), (1, "U"), (5, "R")];
@@ -436,9 +438,9 @@ pub(super) fn fsr_button_view(
             firmware_index: r.firmware_index,
             label: r.label,
             raw_value: r.value,
-            value_norm: normalize(r.value, FSR_VALUE_SCALE),
+            value_norm: FSR_VALUE_CURVE.normalize(r.value),
             raw_threshold: r.threshold,
-            threshold_norm: normalize(r.threshold, FSR_VALUE_SCALE),
+            threshold_norm: FSR_VALUE_CURVE.normalize(r.threshold),
             active: r.value >= r.threshold && r.threshold > 0,
             enabled: r.enabled,
         })
@@ -453,7 +455,7 @@ pub(super) fn fsr_button_view(
         aggregate_value,
         aggregate_threshold,
         active: panel_active,
-        value_scale: FSR_VALUE_SCALE,
+        value_curve: FSR_VALUE_CURVE,
         release_threshold: None,
     }
 }
@@ -475,9 +477,9 @@ pub(super) fn load_cell_button_view(
             firmware_index: s,
             label: None, // corners, not edges -> numbered 1-4 in the UI
             raw_value,
-            value_norm: normalize(raw_value, LOADCELL_VALUE_SCALE),
+            value_norm: LOADCELL_VALUE_CURVE.normalize(raw_value),
             raw_threshold: press,
-            threshold_norm: normalize(press, LOADCELL_VALUE_SCALE),
+            threshold_norm: LOADCELL_VALUE_CURVE.normalize(press),
             active: panel_active,
             enabled: true,
         })
@@ -491,7 +493,7 @@ pub(super) fn load_cell_button_view(
         aggregate_value,
         aggregate_threshold: press,
         active: panel_active,
-        value_scale: LOADCELL_VALUE_SCALE,
+        value_curve: LOADCELL_VALUE_CURVE,
         release_threshold: Some(release),
     }
 }
@@ -563,13 +565,6 @@ pub(super) fn hysteresis_active(was: bool, value: u16, low: u16, high: u16) -> b
     } else {
         was
     }
-}
-
-fn normalize(value: u16, max: u16) -> f32 {
-    if max == 0 {
-        return 0.0;
-    }
-    (value as f32 / max as f32).clamp(0.0, 1.0)
 }
 
 #[cfg(test)]

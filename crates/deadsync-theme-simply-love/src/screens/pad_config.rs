@@ -20,7 +20,9 @@ use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_core::input::InputSource;
-use deadsync_input::fsr::{ButtonLabel, ButtonView, PadDeviceId, PadView, SensorView};
+use deadsync_input::fsr::{
+    ButtonLabel, ButtonView, PadDeviceId, PadView, SensorView, ValueCurve,
+};
 use deadsync_input::{InputEvent, VirtualAction};
 use smallvec::SmallVec;
 
@@ -1016,7 +1018,7 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                 .filter(|s| s.pad == pad_idx && s.button == btn_idx)
                 .map(|s| s.kind);
             let selected = focused_kind.is_some();
-            let scale = button.value_scale;
+            let curve = button.value_curve;
             if let Some(live_release) = button.release_threshold {
                 // Load cells: four corner readings (numbered) sharing the
                 // panel's press/release threshold pair (pending edits are
@@ -1031,13 +1033,12 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     label_zoom,
                     button_label_text(button.label),
                     &button.sensors,
-                    scale,
                     ClusterThresholds {
                         press_label: TextContent::inline_u16(press),
-                        press_norm: normalize(press, scale),
+                        press_norm: curve.normalize(press),
                         release: Some((
                             TextContent::inline_u16(release),
-                            normalize(release, scale),
+                            curve.normalize(release),
                         )),
                         focused: focused_kind,
                         lock_off: state.threshold_lock_off,
@@ -1055,16 +1056,16 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
             let mut ghost_norms = SmallVec::<[f32; 4]>::new();
             let (threshold_label, threshold_norm) =
                 if let Some(v) = pending_simple_threshold(state, pad.device_id, btn_idx) {
-                    (TextContent::inline_u16(v), normalize(v, scale))
+                    (TextContent::inline_u16(v), curve.normalize(v))
                 } else {
                     let (mn, mx) = sensor_threshold_range(button);
                     let label = if mn == mx {
                         TextContent::inline_u16(mx)
                     } else {
-                        ghost_norms = divergent_sensor_threshold_norms(button, scale);
+                        ghost_norms = divergent_sensor_threshold_norms(button);
                         threshold_text(mn, mx)
                     };
-                    (label, normalize(mx, scale))
+                    (label, curve.normalize(mx))
                 };
             if pad.simple_per_sensor_bars {
                 // Per-sensor bars without a separate release threshold.
@@ -1076,7 +1077,6 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     label_zoom,
                     button_label_text(button.label),
                     &button.sensors,
-                    scale,
                     ClusterThresholds {
                         press_label: threshold_label,
                         press_norm: threshold_norm,
@@ -1098,7 +1098,7 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     bar_w,
                     label_zoom,
                     button.aggregate_value,
-                    normalize(button.aggregate_value, scale),
+                    curve.normalize(button.aggregate_value),
                     threshold_label,
                     threshold_norm,
                     &ghost_norms,
@@ -1187,8 +1187,9 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
         for (s, sensor) in button.sensors.iter().enumerate() {
             let x = group_left + ADV_BAR_W * 0.5 + s as f32 * (ADV_BAR_W + ADV_BAR_GAP);
             let fw = sensor.firmware_index;
-            let threshold = current_sensor_threshold(state, device, btn_idx, fw)
-                .unwrap_or(sensor.raw_threshold);
+            let pending = current_sensor_threshold(state, device, btn_idx, fw);
+            let (threshold, threshold_norm) =
+                sensor_threshold_view(sensor, button.value_curve, pending);
             let enabled = current_sensor_enabled(state, device, btn_idx, fw, sensor.enabled);
             let is_focused = focused
                 == Some(AdvTarget::Sensor {
@@ -1208,7 +1209,7 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
                 sensor.value_norm,
                 sensor.active && enabled,
                 threshold,
-                normalize(threshold, button.max_raw_threshold),
+                threshold_norm,
                 enabled,
                 pad.supports_sensor_toggle,
                 is_focused,
@@ -1275,6 +1276,16 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
         },
         zb,
     );
+}
+
+fn sensor_threshold_view(
+    sensor: &SensorView,
+    curve: ValueCurve,
+    pending: Option<u16>,
+) -> (u16, f32) {
+    pending.map_or((sensor.raw_threshold, sensor.threshold_norm), |value| {
+        (value, curve.normalize(value))
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1972,7 +1983,7 @@ fn sensor_threshold_range(button: &ButtonView) -> (u16, u16) {
 /// Distinct enabled-sensor thresholds that diverge from a button's displayed
 /// (max) threshold, for the Simple view's faded ghost lines after per-sensor
 /// Advanced edits. Empty when every enabled sensor agrees.
-fn divergent_sensor_threshold_norms(button: &ButtonView, scale: u16) -> SmallVec<[f32; 4]> {
+fn divergent_sensor_threshold_norms(button: &ButtonView) -> SmallVec<[f32; 4]> {
     let (_, mx) = sensor_threshold_range(button);
     let mut thresholds = SmallVec::<[u16; 4]>::new();
     for s in button.sensors.iter().filter(|s| s.enabled) {
@@ -1982,7 +1993,7 @@ fn divergent_sensor_threshold_norms(button: &ButtonView, scale: u16) -> SmallVec
     }
     thresholds
         .into_iter()
-        .map(|value| normalize(value, scale))
+        .map(|value| button.value_curve.normalize(value))
         .collect()
 }
 
@@ -2010,13 +2021,6 @@ fn threshold_text(min: u16, max: u16) -> TextContent {
 fn sensor_index_text(index: usize) -> TextContent {
     TextContent::inline_format(format_args!("{}", index + 1))
         .expect("sensor index fits inline text")
-}
-
-fn normalize(value: u16, max: u16) -> f32 {
-    if max == 0 {
-        return 0.0;
-    }
-    (value as f32 / max as f32).clamp(0.0, 1.0)
 }
 
 // ─── Input mapping ─────────────────────────────────────────────────────────────
@@ -2279,7 +2283,6 @@ fn push_value_cluster(
     label_zoom: f32,
     label: TextContent,
     sensors: &[SensorView],
-    value_scale: u16,
     thresholds: ClusterThresholds,
     button_active: bool,
     theme: &Theme,
@@ -2311,7 +2314,7 @@ fn push_value_cluster(
     for (i, sensor) in sensors.iter().enumerate() {
         let bx = start_left + thin_w * 0.5 + i as f32 * (thin_w + gap);
         push_quad(actors, bx, y, thin_w, BAR_HEIGHT, TRACK_COLOR, z);
-        let vn = normalize(sensor.raw_value, value_scale);
+        let vn = sensor.value_norm.clamp(0.0, 1.0);
         let fill_h = vn * BAR_HEIGHT;
         if fill_h > 0.0 {
             // All bars color from the PANEL state (the firmware's own
@@ -2621,6 +2624,7 @@ fn pad_text_checksum(text: &[TextContent], geometry: &[f32], targets: &[u8]) -> 
 #[cfg(any(test, feature = "bench-support"))]
 pub fn benchmark_pad_text_legacy(out: &mut Vec<TextContent>) -> u64 {
     out.clear();
+    let curve = ValueCurve::linear(250);
     let group_widths = [4usize; FIXTURE_BUTTON_COUNT]
         .into_iter()
         .map(group_width)
@@ -2632,7 +2636,7 @@ pub fn benchmark_pad_text_legacy(out: &mut Vec<TextContent>) -> u64 {
         .collect::<Vec<_>>();
     let geometry = thresholds
         .into_iter()
-        .map(|value| normalize(value, 250))
+        .map(|value| curve.normalize(value))
         .chain(group_widths)
         .collect::<Vec<_>>();
     let targets = (0..18u8).collect::<Vec<_>>();
@@ -2667,13 +2671,14 @@ pub fn benchmark_pad_text_legacy(out: &mut Vec<TextContent>) -> u64 {
 #[cfg(any(test, feature = "bench-support"))]
 pub fn benchmark_pad_text_current(out: &mut Vec<TextContent>) -> u64 {
     out.clear();
+    let curve = ValueCurve::linear(250);
     let group_widths = std::array::from_fn::<_, FIXTURE_BUTTON_COUNT, _>(|_| group_width(4));
     let mut geometry = SmallVec::<[f32; 12]>::new();
     let targets = (0..18u8).collect::<SmallVec<[u8; 18]>>();
     for (_, min, max, _) in PAD_TEXT_BENCH_ROWS {
         for value in [min, max] {
             if value != 35 && value != 30 {
-                geometry.push(normalize(value, 250));
+                geometry.push(curve.normalize(value));
             }
         }
     }
@@ -2732,7 +2737,7 @@ mod tests {
             raw_value: 0,
             value_norm: 0.0,
             raw_threshold: threshold,
-            threshold_norm: 0.0,
+            threshold_norm: ValueCurve::linear(250).normalize(threshold),
             active: false,
             enabled: true,
         }
@@ -2754,7 +2759,7 @@ mod tests {
             aggregate_value: 0,
             aggregate_threshold: threshold,
             active: false,
-            value_scale: 250,
+            value_curve: ValueCurve::linear(250),
             release_threshold: None,
         }
     }
@@ -2776,7 +2781,7 @@ mod tests {
             aggregate_value: 0,
             aggregate_threshold: press,
             active: false,
-            value_scale: 250,
+            value_curve: ValueCurve::linear(250),
             release_threshold: Some(release),
         }
     }
@@ -3148,23 +3153,51 @@ mod tests {
     fn divergent_sensor_thresholds_lists_distinct_enabled_non_max_values() {
         let mut b = mk_button("L", 50);
         // Uniform sensors: nothing diverges, no ghost lines.
-        assert!(divergent_sensor_threshold_norms(&b, 250).is_empty());
+        assert!(divergent_sensor_threshold_norms(&b).is_empty());
         b.sensors[0].raw_threshold = 30;
         b.sensors[1].raw_threshold = 40;
         b.sensors[2].raw_threshold = 40;
         // sensors[3] stays at 50: the max, drawn as the main line.
         assert_eq!(
-            divergent_sensor_threshold_norms(&b, 250).as_slice(),
-            [normalize(30, 250), normalize(40, 250)]
+            divergent_sensor_threshold_norms(&b).as_slice(),
+            [
+                ValueCurve::linear(250).normalize(30),
+                ValueCurve::linear(250).normalize(40),
+            ]
         );
         // A disabled sensor's stale threshold never fires, so it draws no
         // ghost line and stops widening the range label.
         b.sensors[0].enabled = false;
         assert_eq!(
-            divergent_sensor_threshold_norms(&b, 250).as_slice(),
-            [normalize(40, 250)]
+            divergent_sensor_threshold_norms(&b).as_slice(),
+            [ValueCurve::linear(250).normalize(40)]
         );
         assert_eq!(sensor_threshold_range(&b), (40, 50));
+    }
+
+    #[test]
+    fn fsrio_threshold_uses_the_sensor_display_curve() {
+        let curve = ValueCurve::quartic_blend(850, 0.9, 0.1);
+        let sensor = SensorView {
+            firmware_index: 0,
+            label: None,
+            raw_value: 195,
+            value_norm: curve.normalize(195),
+            raw_threshold: 120,
+            threshold_norm: curve.normalize(120),
+            active: true,
+            enabled: true,
+        };
+
+        let (raw, threshold_norm) = sensor_threshold_view(&sensor, curve, None);
+        assert_eq!(raw, 120);
+        assert_eq!(threshold_norm, sensor.threshold_norm);
+        assert!(sensor.value_norm > threshold_norm);
+        assert_ne!(threshold_norm, ValueCurve::linear(850).normalize(raw));
+
+        let (raw, threshold_norm) = sensor_threshold_view(&sensor, curve, Some(317));
+        assert_eq!(raw, 317);
+        assert_eq!(threshold_norm, curve.normalize(raw));
     }
 
     #[test]

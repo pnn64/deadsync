@@ -14,6 +14,66 @@ pub enum BackendKind {
     Smx,
 }
 
+/// Backend-defined transform from raw sensor units to a displayed bar height.
+///
+/// Sensor fills and threshold lines must use the same curve. Most pads are
+/// linear; Analog Dance Pad firmware uses a quartic/linear blend to compensate
+/// for its FSR response.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ValueCurve {
+    Linear {
+        max_raw: u16,
+    },
+    QuarticBlend {
+        max_raw: u16,
+        quartic_weight: f32,
+        linear_weight: f32,
+    },
+}
+
+impl ValueCurve {
+    pub const fn linear(max_raw: u16) -> Self {
+        Self::Linear { max_raw }
+    }
+
+    pub const fn quartic_blend(
+        max_raw: u16,
+        quartic_weight: f32,
+        linear_weight: f32,
+    ) -> Self {
+        Self::QuarticBlend {
+            max_raw,
+            quartic_weight,
+            linear_weight,
+        }
+    }
+
+    pub const fn normalize(self, value: u16) -> f32 {
+        let max_raw = match self {
+            Self::Linear { max_raw } | Self::QuarticBlend { max_raw, .. } => max_raw,
+        };
+        if max_raw == 0 {
+            return 0.0;
+        }
+        let raw = if value > max_raw { max_raw } else { value } as f32;
+        let max = max_raw as f32;
+        match self {
+            Self::Linear { .. } => raw / max,
+            Self::QuarticBlend {
+                quartic_weight,
+                linear_weight,
+                ..
+            } => {
+                let raw_squared = raw * raw;
+                let max_squared = max * max;
+                let quartic_max = (max_squared * max_squared) / max;
+                let quartic = (raw_squared * raw_squared) / quartic_max;
+                (quartic * quartic_weight + raw * linear_weight) / max
+            }
+        }
+    }
+}
+
 /// Stable identifier for a connected FSR pad: backend + per-backend index.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PadDeviceId {
@@ -70,10 +130,10 @@ pub struct ButtonView {
     pub aggregate_value: u16,
     pub aggregate_threshold: u16,
     pub active: bool,
-    /// Full-scale value for normalizing the live bars and threshold lines.
-    /// May exceed `max_raw_threshold`; backends pick it so the threshold range
-    /// covers most of the bar (readings past it display as a full bar).
-    pub value_scale: u16,
+    /// Curve shared by live bars, threshold lines, and pending threshold edits.
+    /// Its raw maximum may exceed `max_raw_threshold`; backends pick it so the
+    /// editable range covers most of the bar.
+    pub value_curve: ValueCurve,
     /// The release (low) threshold, when the pad exposes it as user-editable
     /// (SMX load-cell pads). `None` means the backend derives it from the
     /// press threshold and the Simple view shows a single editable value.
