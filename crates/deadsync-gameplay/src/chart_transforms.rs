@@ -2098,8 +2098,7 @@ pub fn apply_uncommon_masks_with_masks(
     _player: usize,
 ) {
     if (remove_mask & REMOVE_MASK_BIT_LITTLE) != 0 {
-        let rows_per_beat = ROWS_PER_BEAT.max(1) as usize;
-        notes.retain(|note| note.row_index % rows_per_beat == 0);
+        notes.retain(|note| (note.beat - note.beat.round()).abs() < 0.0001);
     }
 
     if (holds_mask & HOLDS_MASK_BIT_NO_ROLLS) != 0 {
