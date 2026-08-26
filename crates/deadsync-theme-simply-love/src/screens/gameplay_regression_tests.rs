@@ -25,6 +25,7 @@ mod tests {
     use super::{MAX_COLS, MAX_PLAYERS, ScrollSpeedSetting, refresh_active_attack_masks};
     use crate::screens::gameplay as screen_gameplay;
     use deadlib_present::{
+        actors::Actor,
         compose::{self, TextureContext, TextureMeta},
         space,
     };
@@ -505,6 +506,53 @@ mod tests {
     }
 
     const FIXTURE_TEXTURES: FixtureTextureContext = FixtureTextureContext;
+
+    fn actor_tree_has_text(actors: &[Actor], expected: &str) -> bool {
+        actors.iter().any(|actor| match actor {
+            Actor::Text { content, .. } => content.as_str() == expected,
+            Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
+                actor_tree_has_text(children, expected)
+            }
+            Actor::SharedFrame { children, .. } | Actor::RenderTarget { children, .. } => {
+                actor_tree_has_text(children, expected)
+            }
+            Actor::RetainedFrame { frame, .. } => actor_tree_has_text(frame.children(), expected),
+            Actor::Shadow { child, .. } => {
+                actor_tree_has_text(std::slice::from_ref(child.as_ref()), expected)
+            }
+            Actor::Sprite { .. }
+            | Actor::Mesh { .. }
+            | Actor::ReusableMesh { .. }
+            | Actor::TexturedMesh { .. }
+            | Actor::ReusableTexturedMesh { .. }
+            | Actor::CameraPush { .. }
+            | Actor::CameraPop => false,
+        })
+    }
+
+    fn render_target_has_text(actors: &[Actor], expected: &str) -> bool {
+        actors.iter().any(|actor| match actor {
+            Actor::RenderTarget { children, .. } => actor_tree_has_text(children, expected),
+            Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
+                render_target_has_text(children, expected)
+            }
+            Actor::SharedFrame { children, .. } => render_target_has_text(children, expected),
+            Actor::RetainedFrame { frame, .. } => {
+                render_target_has_text(frame.children(), expected)
+            }
+            Actor::Shadow { child, .. } => {
+                render_target_has_text(std::slice::from_ref(child.as_ref()), expected)
+            }
+            Actor::Sprite { .. }
+            | Actor::Text { .. }
+            | Actor::Mesh { .. }
+            | Actor::ReusableMesh { .. }
+            | Actor::TexturedMesh { .. }
+            | Actor::ReusableTexturedMesh { .. }
+            | Actor::CameraPush { .. }
+            | Actor::CameraPop => false,
+        })
+    }
 
     fn fixture_assets() -> crate::assets::AssetManager {
         let mut assets = crate::assets::AssetManager::new();
@@ -2666,6 +2714,53 @@ return Def.ActorFrame{
         let lua_entry = lua_dir.join("default.lua");
         fs::write(&lua_entry, generated_pipeline_song_lua()).unwrap();
         simfile
+    }
+
+    #[test]
+    fn top_screen_text_stays_outside_song_lua_aft_captures() {
+        let simfile = write_pipeline_song_lua_fixture();
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::metrics_for_window(1280, 720);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(1280, 720);
+                space::set_overscan(0, 0, 0, 0);
+                let mut profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
+                profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+                profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(1280.0, 720.0),
+                    GameplaySession::default(),
+                    profiles,
+                );
+                set_fixture_time(&mut state, 2.5);
+                state.set_live_autoplay_enabled(true);
+
+                let assets = fixture_assets();
+                let mut actors = Vec::with_capacity(512);
+                screen_gameplay::push_actors(
+                    &mut actors,
+                    &mut state,
+                    &assets,
+                    screen_gameplay::ActorViewOverride::default(),
+                    123.0,
+                    crate::views::SimplyLoveVisualPolicyView::default(),
+                );
+
+                assert!(actor_tree_has_text(&actors, "EVENT"));
+                assert!(actor_tree_has_text(&actors, "AutoPlay"));
+                assert!(!render_target_has_text(&actors, "EVENT"));
+                assert!(!render_target_has_text(&actors, "AutoPlay"));
+            },
+        );
     }
 
     fn write_direct_note_field_proxy_fixture() -> PathBuf {

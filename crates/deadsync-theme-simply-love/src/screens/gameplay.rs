@@ -4185,6 +4185,102 @@ fn intro_text_target_x(
     screen_center_x() + (notefield_width * 0.5 + text_width * INTRO_TEXT_GETWIDTH_PAD) * side_sign
 }
 
+fn push_system_stage_label(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
+    let intro_text = state.stage_intro_text.as_ref();
+    let is_restart_label = intro_text.starts_with("RESTART ");
+    if intro_text.is_empty()
+        || (!is_restart_label && state.total_elapsed_in_screen() < INTRO_TEXT_SETTLE_SECONDS)
+    {
+        return;
+    }
+    let text_x = intro_text_target_x(
+        state,
+        asset_manager,
+        intro_text,
+        state.hud_snapshot.play_style,
+        state.hud_snapshot.player_side,
+        state.runtime_view.policy.center_single_notefield,
+    );
+    actors.push(act!(text:
+        font(machine_font_key(state.machine_font(), FontRole::Header)): settext(state.stage_intro_text.clone()):
+        align(0.5, 0.5): xy(text_x, screen_height() - 30.0):
+        zoom(0.4):
+        shadowlength(1.0):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(110)
+    ));
+}
+
+fn system_footer_player(
+    player: &profile_data::GameplayHudPlayerSnapshot,
+) -> Option<(&str, Option<AvatarParams<'_>>)> {
+    player.joined.then(|| {
+        let text = if player.guest || player.hide_username {
+            ""
+        } else {
+            player.display_name.as_str()
+        };
+        let avatar = if player.guest {
+            None
+        } else {
+            player
+                .avatar_texture_key
+                .as_deref()
+                .map(|texture_key| AvatarParams { texture_key })
+        };
+        (text, avatar)
+    })
+}
+
+fn push_system_profile_footer(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+    presentation_skeleton: &mut GameplayPresentationSkeleton,
+) {
+    let hud = &state.hud_snapshot;
+    let p1_footer = system_footer_player(&hud.p1);
+    let p2_footer = system_footer_player(&hud.p2);
+    let (left_text, right_text, left_avatar, right_avatar) = if hud.play_style.is_versus() {
+        (
+            p1_footer.map(|footer| footer.0),
+            p2_footer.map(|footer| footer.0),
+            p1_footer.and_then(|footer| footer.1),
+            p2_footer.and_then(|footer| footer.1),
+        )
+    } else {
+        match hud.player_side {
+            profile_data::PlayerSide::P1 => (
+                p1_footer.map(|footer| footer.0),
+                None,
+                p1_footer.and_then(|footer| footer.1),
+                None,
+            ),
+            profile_data::PlayerSide::P2 => (
+                None,
+                p2_footer.map(|footer| footer.0),
+                None,
+                p2_footer.and_then(|footer| footer.1),
+            ),
+        }
+    };
+    presentation_skeleton.push(STATIC_FOOTER, actors, |actors| {
+        actors.push(screen_bar::build_no_background(ScreenBarParams {
+            visual_policy,
+            title: "",
+            title_placement: screen_bar::ScreenBarTitlePlacement::Center,
+            position: screen_bar::ScreenBarPosition::Bottom,
+            transparent: true,
+            fg_color: [1.0; 4],
+            left_text,
+            center_text: None,
+            right_text,
+            left_avatar,
+            right_avatar,
+        }));
+    });
+}
+
 fn gameplay_player_index_for_side(state: &State, side: profile_data::PlayerSide) -> Option<usize> {
     if state.num_players() >= 2 {
         return Some(profile_data::player_side_index(side));
@@ -5867,6 +5963,68 @@ fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
         song_offset: state.song_offset_seconds(),
     };
     resolve_sync_overlay_text(&state.sync_overlay_text_cache, input)
+}
+
+fn push_sync_overlay(actors: &mut Vec<Actor>, state: &State) {
+    let status_line_count = if let Some((status_text, line_count)) = sync_overlay_text(state) {
+        actors.push(act!(text:
+            font("miso"):
+            settext(status_text):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y() + 150.0):
+            horizalign(center):
+            shadowlength(2.0):
+            strokecolor(0.0, 0.0, 0.0, 1.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(2101)
+        ));
+        line_count
+    } else {
+        0
+    };
+
+    if let Some((flash, alpha)) = state.toggle_flash_text() {
+        let y = if status_line_count == 0 {
+            screen_center_y() + 150.0
+        } else {
+            screen_center_y() + 150.0 + 20.0 * status_line_count as f32
+        };
+        actors.push(act!(text:
+            font("miso"):
+            settext(flash):
+            align(0.5, 0.5):
+            xy(screen_center_x(), y):
+            shadowlength(2.0):
+            strokecolor(0.0, 0.0, 0.0, alpha):
+            diffuse(1.0, 1.0, 1.0, alpha):
+            z(2101)
+        ));
+    }
+
+    if state.autosync_mode() == AutosyncMode::Off {
+        return;
+    }
+    let (old_offset, new_offset) = if state.autosync_mode() == AutosyncMode::Machine {
+        (
+            state.initial_global_offset_seconds(),
+            state.global_offset_seconds(),
+        )
+    } else {
+        (
+            state.initial_song_offset_seconds(),
+            state.song_offset_seconds(),
+        )
+    };
+    let adjustments = cached_autosync_text(state, old_offset, new_offset);
+    actors.push(act!(text:
+        font("miso"):
+        settext(adjustments):
+        align(0.5, 0.5):
+        xy(screen_center_x() + 160.0, screen_center_y()):
+        horizalign(center):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(2101)
+    ));
 }
 
 #[inline(always)]
@@ -17142,76 +17300,6 @@ pub fn push_actors(
         }
     }
 
-    // ITGmania/Simply Love parity: ScreenSyncOverlay status text.
-    if !hide_gameplay_hud {
-        let overlay_start = actors.len();
-        let status_line_count = if let Some((status_text, line_count)) = sync_overlay_text(state) {
-            actors.push(act!(text:
-                font("miso"):
-                settext(status_text):
-                align(0.5, 0.5):
-                xy(screen_center_x(), screen_center_y() + 150.0):
-                horizalign(center):
-                shadowlength(2.0):
-                strokecolor(0.0, 0.0, 0.0, 1.0):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                z(2101)
-            ));
-            line_count
-        } else {
-            0
-        };
-
-        if let Some((flash, alpha)) = state.toggle_flash_text() {
-            let y = if status_line_count == 0 {
-                screen_center_y() + 150.0
-            } else {
-                screen_center_y() + 150.0 + 20.0 * status_line_count as f32
-            };
-            actors.push(act!(text:
-                font("miso"):
-                settext(flash):
-                align(0.5, 0.5):
-                xy(screen_center_x(), y):
-                shadowlength(2.0):
-                strokecolor(0.0, 0.0, 0.0, alpha):
-                diffuse(1.0, 1.0, 1.0, alpha):
-                z(2101)
-            ));
-        }
-
-        if state.autosync_mode() != AutosyncMode::Off {
-            let (old_offset, new_offset) = if state.autosync_mode() == AutosyncMode::Machine {
-                (
-                    state.initial_global_offset_seconds(),
-                    state.global_offset_seconds(),
-                )
-            } else {
-                (
-                    state.initial_song_offset_seconds(),
-                    state.song_offset_seconds(),
-                )
-            };
-            let adjustments = cached_autosync_text(state, old_offset, new_offset);
-            actors.push(act!(text:
-                font("miso"):
-                settext(adjustments):
-                align(0.5, 0.5):
-                xy(screen_center_x() + 160.0, screen_center_y()):
-                horizalign(center):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                z(2101)
-            ));
-        }
-        song_lua_capture_new_actors(
-            &mut overlay_proxy_source,
-            actors,
-            overlay_start,
-            song_lua_proxy_actor_scratch.as_mut(),
-            retain_overlay_original,
-        );
-    }
-
     // Hold START/BACK prompt (Simply Love parity: ScreenGameplay debug text).
     if !hide_gameplay_hud {
         let overlay_start = actors.len();
@@ -18766,101 +18854,6 @@ pub fn push_actors(
                 }
             }
         }
-        // Simply Love parity: keep Stage/Event text visible at the footer after intro animation ends.
-        // On a song restart we skip the splode/text in-transition entirely, so make the footer
-        // label appear immediately rather than waiting `INTRO_TEXT_SETTLE_SECONDS` of dead time.
-        let intro_text = state.stage_intro_text.as_ref();
-        let is_restart_label = intro_text.starts_with("RESTART ");
-        if !intro_text.is_empty()
-            && (is_restart_label || state.total_elapsed_in_screen() >= INTRO_TEXT_SETTLE_SECONDS)
-        {
-            let text_x = intro_text_target_x(
-                state,
-                asset_manager,
-                state.stage_intro_text.as_ref(),
-                play_style,
-                player_side,
-                policy.center_single_notefield,
-            );
-            actors.push(act!(text:
-            font(machine_font_key(state.machine_font(), FontRole::Header)): settext(state.stage_intro_text.clone()):
-            align(0.5, 0.5): xy(text_x, screen_height() - 30.0):
-            zoom(0.4):
-            shadowlength(1.0):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            z(110)
-        ));
-        }
-        let hud_snapshot = &state.hud_snapshot;
-        let p1_avatar = hud_snapshot
-            .p1
-            .avatar_texture_key
-            .as_deref()
-            .map(|texture_key| AvatarParams { texture_key });
-        let p2_avatar = hud_snapshot
-            .p2
-            .avatar_texture_key
-            .as_deref()
-            .map(|texture_key| AvatarParams { texture_key });
-
-        let p1_joined = hud_snapshot.p1.joined;
-        let p2_joined = hud_snapshot.p2.joined;
-        let p1_guest = hud_snapshot.p1.guest;
-        let p2_guest = hud_snapshot.p2.guest;
-
-        let (p1_footer_text, p1_footer_avatar) = if p1_joined {
-            (
-                Some(if p1_guest || hud_snapshot.p1.hide_username {
-                    ""
-                } else {
-                    hud_snapshot.p1.display_name.as_str()
-                }),
-                if p1_guest { None } else { p1_avatar },
-            )
-        } else {
-            (None, None)
-        };
-        let (p2_footer_text, p2_footer_avatar) = if p2_joined {
-            (
-                Some(if p2_guest || hud_snapshot.p2.hide_username {
-                    ""
-                } else {
-                    hud_snapshot.p2.display_name.as_str()
-                }),
-                if p2_guest { None } else { p2_avatar },
-            )
-        } else {
-            (None, None)
-        };
-
-        let (footer_left, footer_right, left_avatar, right_avatar) = if play_style.is_versus() {
-            (
-                p1_footer_text,
-                p2_footer_text,
-                p1_footer_avatar,
-                p2_footer_avatar,
-            )
-        } else {
-            match player_side {
-                profile_data::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
-                profile_data::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
-            }
-        };
-        presentation_skeleton.push(STATIC_FOOTER, actors, |actors| {
-            actors.push(screen_bar::build_no_background(ScreenBarParams {
-                visual_policy,
-                title: "",
-                title_placement: screen_bar::ScreenBarTitlePlacement::Center,
-                position: screen_bar::ScreenBarPosition::Bottom,
-                transparent: true,
-                fg_color: [1.0; 4],
-                left_text: footer_left,
-                center_text: None,
-                right_text: footer_right,
-                left_avatar,
-                right_avatar,
-            }));
-        });
         match state.step_stats_mode {
             GameplayStepStatsMode::Hidden => {}
             GameplayStepStatsMode::Side => gameplay_stats::push_step_stats(
@@ -19019,6 +19012,14 @@ pub fn push_actors(
             aft_capture_scratch,
             projected_mesh_scratch,
         );
+    }
+    if !hide_gameplay_hud {
+        // These are separate top-screen actors in ITGmania. Append them only
+        // after every ScreenGameplay/song-local layer so ActorProxy/AFT effects
+        // cannot capture or post-process them.
+        push_system_stage_label(actors, state, asset_manager);
+        push_system_profile_footer(actors, state, visual_policy, presentation_skeleton);
+        push_sync_overlay(actors, state);
     }
     let direct_proxy_len = song_lua_direct_proxies.len();
     state.frame_scratch = Some(frame_scratch);
