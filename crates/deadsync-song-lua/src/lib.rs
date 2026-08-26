@@ -166,17 +166,17 @@ pub use lua_util::{
     run_added_actor_child_commands, run_command_on_leaves,
     run_named_command_on_children_recursively, run_named_command_on_leaves,
     scale_actor_to_rect_with_base_size, set_actor_decode_movie_for_texture,
-    set_actor_effect_defaults, set_actor_effect_mode, set_actor_seconds_into_animation,
-    set_actor_sound_file_from_value, set_actor_sprite_state, set_actor_texture_from_path,
-    set_actor_texture_from_path_methods, set_actor_texture_from_path_methods_or_fallback,
-    set_actor_texture_from_value, set_proxy_target_fields, set_rolling_numbers_metric,
-    snapshot_actor_mutable_state, snapshot_actor_semantic_state_table,
-    snapshot_actors_semantic_state, snapshot_note_column_handlers, snapshot_note_field_columns,
-    song_lua_actor_registry, song_lua_screen_center, song_lua_screen_size, table_bool_field,
-    table_f32_field, table_i32_field, table_string_field, table_vec2, table_vec3, table_vec4,
-    table_vec5, table_vertex_colors, text_attribute_matches, text_attribute_value,
-    texture_source_size, top_screen_steps_text, tracked_indices_for_actor_pointers,
-    tracked_song_lua_actor,
+    set_actor_effect_defaults, set_actor_effect_mode, set_actor_overlay_getter_state,
+    set_actor_seconds_into_animation, set_actor_sound_file_from_value, set_actor_sprite_state,
+    set_actor_texture_from_path, set_actor_texture_from_path_methods,
+    set_actor_texture_from_path_methods_or_fallback, set_actor_texture_from_value,
+    set_proxy_target_fields, set_rolling_numbers_metric, snapshot_actor_mutable_state,
+    snapshot_actor_semantic_state_table, snapshot_actors_semantic_state,
+    snapshot_note_column_handlers, snapshot_note_field_columns, song_lua_actor_registry,
+    song_lua_screen_center, song_lua_screen_size, table_bool_field, table_f32_field,
+    table_i32_field, table_string_field, table_vec2, table_vec3, table_vec4, table_vec5,
+    table_vertex_colors, text_attribute_matches, text_attribute_value, texture_source_size,
+    top_screen_steps_text, tracked_indices_for_actor_pointers, tracked_song_lua_actor,
 };
 pub use mod_windows::read_mod_windows;
 pub use multitap::{
@@ -2427,6 +2427,53 @@ pub struct SongLuaOverlayCommandBlock {
     pub delta: SongLuaOverlayStateDelta,
 }
 
+fn overlay_command_out_bounce(t: f32) -> f32 {
+    const N1: f32 = 7.5625;
+    const D1: f32 = 2.75;
+    if t < 1.0 / D1 {
+        N1 * t * t
+    } else if t < 2.0 / D1 {
+        let t = t - 1.5 / D1;
+        N1 * t * t + 0.75
+    } else if t < 2.5 / D1 {
+        let t = t - 2.25 / D1;
+        N1 * t * t + 0.9375
+    } else {
+        let t = t - 2.625 / D1;
+        N1 * t * t + 0.984_375
+    }
+}
+
+fn overlay_command_ease_factor(easing: Option<&str>, t: f32, opt1: Option<f32>) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    match easing.unwrap_or("linear") {
+        "instant" => 1.0,
+        "inQuad" => t * t,
+        "outQuad" => 1.0 - (1.0 - t) * (1.0 - t),
+        "inOutQuad" => {
+            if t < 0.5 {
+                2.0 * t * t
+            } else {
+                1.0 - 2.0 * (1.0 - t) * (1.0 - t)
+            }
+        }
+        "outElastic" => {
+            if t <= 0.0 || t >= 1.0 {
+                t
+            } else {
+                let period = opt1
+                    .filter(|value| value.is_finite() && *value > 0.0)
+                    .unwrap_or(0.3);
+                let tau = std::f32::consts::TAU / period;
+                2.0_f32.powf(-10.0 * t) * ((t - period * 0.25) * tau).sin() + 1.0
+            }
+        }
+        "inBounce" => 1.0 - overlay_command_out_bounce(1.0 - t),
+        "outBounce" => overlay_command_out_bounce(t),
+        _ => t,
+    }
+}
+
 pub fn overlay_state_after_blocks(
     mut state: SongLuaOverlayState,
     blocks: &[SongLuaOverlayCommandBlock],
@@ -2444,12 +2491,12 @@ pub fn overlay_state_after_blocks(
             continue;
         }
         let target = overlay_state_with_delta(state, &block.delta);
-        return overlay_state_lerp(
-            state,
-            target,
-            ((elapsed - block.start) / block.duration).clamp(0.0, 1.0),
-            &block.delta,
+        let t = overlay_command_ease_factor(
+            block.easing.as_deref(),
+            (elapsed - block.start) / block.duration,
+            block.opt1,
         );
+        return overlay_state_lerp(state, target, t, &block.delta);
     }
     state
 }
@@ -14298,6 +14345,10 @@ return Def.ActorFrame{
             compiled.overlays[0].kind,
             SongLuaOverlayKind::ActorFrameTexture { .. }
         ));
+        assert_eq!(
+            compiled.overlays[0].initial_state.size,
+            Some([640.0, 480.0])
+        );
         assert!(matches!(
             compiled.overlays[1].kind,
             SongLuaOverlayKind::AftSprite { ref capture_name }
@@ -15938,6 +15989,65 @@ return Def.ActorFrame{
         assert!(compiled.overlay_eases.iter().any(|ease| {
             ease.overlay_index == 0 && ease.from.diffuse.is_some() && ease.to.diffuse.is_some()
         }));
+    }
+
+    #[test]
+    fn overlay_perframes_read_in_flight_action_tweens() {
+        let song_dir = test_dir("perframe-action-getter");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local scale
+local target
+mod_actions = {
+    {4, function()
+        scale:decelerate(1):x(1)
+    end, true},
+}
+mod_perframes = {
+    {3, 6, function()
+        target:zoom(scale:GetX())
+    end},
+}
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Scale",
+        InitCommand=function(self)
+            scale = self
+            self:x(10):zoomto(1, 1):visible(false)
+        end,
+    },
+    Def.Quad{
+        Name="Target",
+        InitCommand=function(self)
+            target = self
+            self:zoomto(1, 1)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Perframe Action Getter");
+        context.song_display_bpms = [120.0, 120.0];
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let target_index = compiled
+            .overlays
+            .iter()
+            .position(|overlay| overlay.name.as_deref() == Some("Target"))
+            .unwrap();
+        let sampled_zooms = compiled
+            .overlay_eases
+            .iter()
+            .filter(|ease| ease.overlay_index == target_index && (4.0..6.0).contains(&ease.start))
+            .flat_map(|ease| [ease.from.zoom, ease.to.zoom])
+            .flatten()
+            .collect::<Vec<_>>();
+
+        assert!(sampled_zooms.iter().any(|zoom| (1.1..9.9).contains(zoom)));
+        assert!(sampled_zooms.iter().any(|zoom| (zoom - 3.25).abs() < 0.75));
     }
 
     #[test]

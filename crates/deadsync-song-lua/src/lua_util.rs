@@ -10394,6 +10394,63 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
     Ok(state)
 }
 
+pub fn set_actor_overlay_getter_state(
+    lua: &Lua,
+    actor: &Table,
+    state: SongLuaOverlayState,
+) -> Result<(), String> {
+    macro_rules! set {
+        ($key:literal, $value:expr) => {
+            actor.set($key, $value).map_err(|err| err.to_string())?
+        };
+    }
+    set!("__songlua_visible", state.visible);
+    set!("__songlua_state_x", state.x);
+    set!("__songlua_state_y", state.y);
+    set!("__songlua_state_z", state.z);
+    set!("__songlua_state_zoom", state.zoom);
+    set!("__songlua_state_zoom_x", state.zoom_x);
+    set!("__songlua_state_zoom_y", state.zoom_y);
+    set!("__songlua_state_zoom_z", state.zoom_z);
+    set!("__songlua_state_basezoom", state.basezoom);
+    set!("__songlua_state_basezoom_x", state.basezoom_x);
+    set!("__songlua_state_basezoom_y", state.basezoom_y);
+    set!("__songlua_state_basezoom_z", state.basezoom_z);
+    set!("__songlua_state_rot_x_deg", state.rot_x_deg);
+    set!("__songlua_state_rot_y_deg", state.rot_y_deg);
+    set!("__songlua_state_rot_z_deg", state.rot_z_deg);
+    set!("__songlua_state_halign", state.halign);
+    set!("__songlua_state_valign", state.valign);
+    set!(
+        "__songlua_state_diffuse",
+        make_color_table(lua, state.diffuse).map_err(|err| err.to_string())?
+    );
+    set!(
+        "__songlua_state_glow",
+        make_color_table(lua, state.glow).map_err(|err| err.to_string())?
+    );
+    set!(
+        "__songlua_state_effect_magnitude",
+        lua.create_sequence_from(state.effect_magnitude)
+            .map_err(|err| err.to_string())?
+    );
+    if let Some(size) = state.size {
+        set!(
+            "__songlua_state_size",
+            lua.create_sequence_from(size)
+                .map_err(|err| err.to_string())?
+        );
+    }
+    if let Some(rect) = state.stretch_rect {
+        set!(
+            "__songlua_state_stretch_rect",
+            lua.create_sequence_from(rect)
+                .map_err(|err| err.to_string())?
+        );
+    }
+    Ok(())
+}
+
 pub fn read_graph_display_line_state(
     lua: &Lua,
     actor: &Table,

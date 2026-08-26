@@ -330,6 +330,7 @@ where
         context,
         &mut overlays,
         &tracked_actors,
+        &out.messages,
     )?;
     out.eases.extend(perframe_eases);
     out.overlay_eases.extend(perframe_overlay_eases);

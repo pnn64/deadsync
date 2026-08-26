@@ -1372,10 +1372,7 @@ fn resolved_texture<'a>(
 #[inline(always)]
 fn texture_sampler(texture: &Texture, handle: TextureHandle, repeat: bool) -> &SamplerState {
     match (render_target_uses_nearest(handle), repeat) {
-        (true, false) => texture
-            .nearest_sampler
-            .as_ref()
-            .unwrap_or(&texture.sampler),
+        (true, false) => texture.nearest_sampler.as_ref().unwrap_or(&texture.sampler),
         (true, true) => texture
             .nearest_repeat_sampler
             .as_ref()

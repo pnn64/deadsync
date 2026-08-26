@@ -3,16 +3,17 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use crate::{
     LUA_PLAYERS, SONG_LUA_PLAYER_OPTIONS_KEYS, SongLuaCompileContext, SongLuaCompileInfo,
-    SongLuaEaseTarget, SongLuaEaseWindow, SongLuaOverlayCompileActor, SongLuaOverlayEase,
-    SongLuaOverlayState, SongLuaOverlayUpdateSample, SongLuaOverlayUpdateTrack, SongLuaSpanMode,
-    SongLuaTimeUnit, SongLuaTrackedActor, SongLuaTrackedActorTarget, actor_overlay_initial_state,
-    actor_tree_has_update_functions, compile_song_runtime_delta_values,
-    compile_song_runtime_values, overlay_delta_pair_from_states, push_unique_compile_detail,
-    read_f32, reset_overlay_compile_actor_capture_tables, reset_tracked_capture_tables,
+    SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaOverlayCompileActor,
+    SongLuaOverlayEase, SongLuaOverlayState, SongLuaOverlayUpdateSample, SongLuaOverlayUpdateTrack,
+    SongLuaSpanMode, SongLuaTimeUnit, SongLuaTrackedActor, SongLuaTrackedActorTarget,
+    actor_overlay_initial_state, actor_tree_has_update_functions,
+    compile_song_runtime_delta_values, compile_song_runtime_values, overlay_delta_pair_from_states,
+    overlay_state_after_blocks, push_unique_compile_detail, read_f32,
+    reset_overlay_compile_actor_capture_tables, reset_tracked_capture_tables,
     run_actor_update_functions_with_delta, runtime_player_option_ease_target,
-    set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
-    set_compile_song_runtime_values, song_display_bps, song_elapsed_seconds_for_beat,
-    song_lua_side_effect_count, song_lua_span_end, song_music_rate,
+    set_actor_overlay_getter_state, set_compile_song_runtime_beat,
+    set_compile_song_runtime_delta_values, set_compile_song_runtime_values, song_display_bps,
+    song_elapsed_seconds_for_beat, song_lua_side_effect_count, song_lua_span_end, song_music_rate,
 };
 
 pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 8192;
@@ -1331,6 +1332,116 @@ pub fn compile_update_functions<Kind>(
     Ok((eases, Vec::new(), overlay_tracks))
 }
 
+#[derive(Clone, Copy)]
+struct SongLuaPerframeActiveMessage {
+    command_index: usize,
+    start_beat: f32,
+    base: SongLuaOverlayState,
+}
+
+struct SongLuaPerframeMessageReplay<'a> {
+    messages: &'a [SongLuaMessageEvent],
+    order: Vec<usize>,
+    next: usize,
+    active: Vec<Option<SongLuaPerframeActiveMessage>>,
+}
+
+impl<'a> SongLuaPerframeMessageReplay<'a> {
+    fn new(messages: &'a [SongLuaMessageEvent], overlay_count: usize) -> Self {
+        let mut order = (0..messages.len()).collect::<Vec<_>>();
+        order.sort_by(|&a, &b| messages[a].beat.total_cmp(&messages[b].beat));
+        Self {
+            messages,
+            order,
+            next: 0,
+            active: vec![None; overlay_count],
+        }
+    }
+
+    fn advance<Kind>(
+        &mut self,
+        lua: &Lua,
+        context: &SongLuaCompileContext,
+        overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+        beat: f32,
+    ) -> Result<(), String> {
+        while let Some(&event_index) = self.order.get(self.next) {
+            let event = &self.messages[event_index];
+            if event.beat > beat + f32::EPSILON {
+                break;
+            }
+            for (overlay_index, overlay) in overlays.iter_mut().enumerate() {
+                apply_perframe_active_message(
+                    lua,
+                    context,
+                    overlay,
+                    &mut self.active[overlay_index],
+                    event.beat,
+                )?;
+                let Some(command_index) = overlay
+                    .actor
+                    .message_commands
+                    .iter()
+                    .position(|command| command.message == event.message)
+                else {
+                    continue;
+                };
+                self.active[overlay_index] = Some(SongLuaPerframeActiveMessage {
+                    command_index,
+                    start_beat: event.beat,
+                    base: actor_overlay_initial_state(&overlay.table)?,
+                });
+                apply_perframe_active_message(
+                    lua,
+                    context,
+                    overlay,
+                    &mut self.active[overlay_index],
+                    event.beat,
+                )?;
+            }
+            self.next += 1;
+        }
+        for (overlay_index, overlay) in overlays.iter_mut().enumerate() {
+            apply_perframe_active_message(
+                lua,
+                context,
+                overlay,
+                &mut self.active[overlay_index],
+                beat,
+            )?;
+        }
+        Ok(())
+    }
+}
+
+fn apply_perframe_active_message<Kind>(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+    overlay: &SongLuaOverlayCompileActor<Kind>,
+    active: &mut Option<SongLuaPerframeActiveMessage>,
+    beat: f32,
+) -> Result<(), String> {
+    let Some(message) = *active else {
+        return Ok(());
+    };
+    let Some(command) = overlay.actor.message_commands.get(message.command_index) else {
+        *active = None;
+        return Ok(());
+    };
+    let elapsed = perframe_delta_seconds(context, (beat - message.start_beat).max(0.0));
+    let state = overlay_state_after_blocks(message.base, &command.blocks, elapsed);
+    set_actor_overlay_getter_state(lua, &overlay.table, state)?;
+    let duration = command
+        .blocks
+        .iter()
+        .map(|block| block.start + block.duration.max(0.0))
+        .fold(0.0_f32, f32::max);
+    if elapsed >= duration {
+        *active = None;
+    }
+    Ok(())
+}
+
 pub fn compile_perframes<Kind>(
     lua: &Lua,
     prefix_table: Option<Table>,
@@ -1338,6 +1449,7 @@ pub fn compile_perframes<Kind>(
     context: &SongLuaCompileContext,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
     tracked_actors: &[SongLuaTrackedActor],
+    messages: &[SongLuaMessageEvent],
 ) -> Result<
     (
         Vec<SongLuaEaseWindow>,
@@ -1363,6 +1475,7 @@ pub fn compile_perframes<Kind>(
     let mut out_eases = Vec::new();
     let mut out_overlay_eases = Vec::new();
     let mut saw_recognized_side_effect = false;
+    let mut message_replay = SongLuaPerframeMessageReplay::new(messages, overlays.len());
 
     for window in boundaries.windows(2) {
         let [start, end] = [window[0], window[1]];
@@ -1391,6 +1504,7 @@ pub fn compile_perframes<Kind>(
         let mut overlay_samples = Vec::new();
         for sample in perframe_samples(start, end) {
             let delta_seconds = perframe_delta_seconds(context, sample.delta_beats);
+            message_replay.advance(lua, context, overlays, sample.eval_beat)?;
             reset_overlay_compile_actor_capture_tables(lua, overlays)?;
             reset_tracked_capture_tables(lua, tracked_actors)?;
             for entry in &active {
