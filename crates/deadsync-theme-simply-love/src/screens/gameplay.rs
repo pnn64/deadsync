@@ -9302,6 +9302,134 @@ fn song_lua_proxy_request_analysis_indexed_active(
     analysis
 }
 
+fn song_lua_covering_capture_requests(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    index: &SongLuaProxyRequestIndex,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+    visit_scratch: &mut SongLuaCaptureVisitScratch,
+) -> SongLuaScreenProxyRequests {
+    if index.proxy_indices.is_empty() {
+        return SongLuaScreenProxyRequests::default();
+    }
+    let mut requests = SongLuaScreenProxyRequests::default();
+    visit_scratch.begin(overlays.len());
+    for &overlay_index in &index.root_indices {
+        let Some(overlay_state) = overlay_states.get(overlay_index).copied() else {
+            continue;
+        };
+        let SongLuaOverlayKind::AftSprite { .. } = &overlays[overlay_index].kind else {
+            continue;
+        };
+        let Some(capture_index) = index
+            .topology
+            .aft_sprite_targets
+            .get(overlay_index)
+            .copied()
+            .and_then(SongLuaOverlayIndex::get)
+        else {
+            continue;
+        };
+        let Some(capture_state) = overlay_states.get(capture_index).copied() else {
+            continue;
+        };
+        if !capture_state.visible {
+            continue;
+        }
+        let Some(SongLuaOverlayKind::ActorFrameTexture {
+            alpha_buffer: false,
+            ..
+        }) = overlays.get(capture_index).map(|capture| &capture.kind)
+        else {
+            continue;
+        };
+        let texture_size = capture_state
+            .size
+            .unwrap_or([overlay_space_width, overlay_space_height]);
+        if !song_lua_aft_sprite_covers_screen(
+            overlay_state,
+            texture_size,
+            overlay_space_width,
+            overlay_space_height,
+        ) {
+            continue;
+        }
+        song_lua_collect_capture_requests_indexed(
+            overlays,
+            overlay_states,
+            capture_index,
+            index,
+            &mut requests,
+            visit_scratch,
+        );
+    }
+    requests
+}
+
+fn song_lua_aft_sprite_covers_screen(
+    state: SongLuaOverlayState,
+    texture_size: [f32; 2],
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+) -> bool {
+    let opaque = song_lua_overlay_is_visible(state)
+        && state.diffuse[3] >= 1.0 - f32::EPSILON
+        && state
+            .vertex_colors
+            .is_none_or(|colors| colors.iter().all(|color| color[3] >= 1.0 - f32::EPSILON))
+        && state.blend == SongLuaOverlayBlendMode::Alpha
+        && !state.mask_source
+        && !state.mask_dest
+        && !state.depth_test
+        && state.cropleft <= f32::EPSILON
+        && state.cropright <= f32::EPSILON
+        && state.croptop <= f32::EPSILON
+        && state.cropbottom <= f32::EPSILON
+        && state.fadeleft <= f32::EPSILON
+        && state.faderight <= f32::EPSILON
+        && state.fadetop <= f32::EPSILON
+        && state.fadebottom <= f32::EPSILON
+        && state.rot_x_deg.abs() <= f32::EPSILON
+        && state.rot_y_deg.abs() <= f32::EPSILON
+        && state.rot_z_deg.abs() <= f32::EPSILON
+        && state.skew_x.abs() <= f32::EPSILON
+        && state.skew_y.abs() <= f32::EPSILON
+        && !state.vibrate
+        && state.effect_mode == deadlib_present::anim::EffectMode::None;
+    if !opaque {
+        return false;
+    }
+
+    let screen_w = screen_width();
+    let screen_h = screen_height();
+    let x_scale = screen_w / overlay_space_width.max(1.0);
+    let y_scale = screen_h / overlay_space_height.max(1.0);
+    let [axis_x, axis_y] = song_lua_overlay_axis_scale(state).map(f32::abs);
+    let (left, top, width, height) = if let Some([left, top, right, bottom]) = state.stretch_rect {
+        (
+            left.min(right) * x_scale,
+            top.min(bottom) * y_scale,
+            (right - left).abs() * x_scale * axis_x,
+            (bottom - top).abs() * y_scale * axis_y,
+        )
+    } else {
+        let width = texture_size[0] * x_scale * axis_x;
+        let height = texture_size[1] * y_scale * axis_y;
+        (
+            state.x * x_scale - state.halign * width,
+            state.y * y_scale - state.valign * height,
+            width,
+            height,
+        )
+    };
+    const EDGE_EPSILON: f32 = 0.5;
+    left <= EDGE_EPSILON
+        && top <= EDGE_EPSILON
+        && left + width >= screen_w - EDGE_EPSILON
+        && top + height >= screen_h - EDGE_EPSILON
+}
+
 fn song_lua_merge_proxy_requests(
     into: &mut SongLuaScreenProxyRequests,
     from: SongLuaScreenProxyRequests,
@@ -16689,6 +16817,31 @@ pub fn push_actors(
         );
     }
     let proxy_requests = proxy_analysis.all;
+    let mut covering_proxy_requests = song_lua_covering_capture_requests(
+        &song_lua_visuals.overlays,
+        &song_lua_overlay_state_scratch,
+        &song_lua_proxy_request_index,
+        song_lua_space_width,
+        song_lua_space_height,
+        song_lua_capture_visit_scratch,
+    );
+    for &layer_idx in song_lua_foreground_active_layers {
+        let layer = &song_lua_visuals.foreground_visual_layers[layer_idx];
+        let layer_states = &song_lua_foreground_layer_state_scratch[layer_idx];
+        let request_index = &song_lua_foreground_proxy_request_indices[layer_idx];
+        let covering = song_lua_covering_capture_requests(
+            &layer.overlays,
+            layer_states,
+            request_index,
+            layer.screen_width.max(1.0),
+            layer.screen_height.max(1.0),
+            song_lua_capture_visit_scratch,
+        );
+        song_lua_merge_proxy_requests(&mut covering_proxy_requests, covering);
+    }
+    let retain_underlay_original =
+        !proxy_requests.hide_underlay && !covering_proxy_requests.underlay;
+    let retain_overlay_original = !proxy_requests.hide_overlay && !covering_proxy_requests.overlay;
     let direct_player_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
         proxy_analysis.root_players[player] != 0
             && !proxy_analysis.captured.players[player].player
@@ -16781,7 +16934,7 @@ pub fn push_actors(
         actors,
         underlay_start,
         song_lua_proxy_actor_scratch.as_mut(),
-        !proxy_requests.hide_underlay,
+        retain_underlay_original,
     );
     let cover_alpha = |player_idx: usize| -> f32 {
         if player_idx >= state.num_players() {
@@ -16897,7 +17050,7 @@ pub fn push_actors(
             actors,
             overlay_start,
             song_lua_proxy_actor_scratch.as_mut(),
-            !proxy_requests.hide_overlay,
+            retain_overlay_original,
         );
     }
 
@@ -16957,7 +17110,7 @@ pub fn push_actors(
             actors,
             overlay_start,
             song_lua_proxy_actor_scratch.as_mut(),
-            !proxy_requests.hide_overlay,
+            retain_overlay_original,
         );
     }
 
@@ -16995,7 +17148,7 @@ pub fn push_actors(
             actors,
             overlay_start,
             song_lua_proxy_actor_scratch.as_mut(),
-            !proxy_requests.hide_overlay,
+            retain_overlay_original,
         );
     }
 
@@ -17021,7 +17174,7 @@ pub fn push_actors(
         actors,
         overlay_start,
         song_lua_proxy_actor_scratch.as_mut(),
-        !proxy_requests.hide_overlay,
+        retain_overlay_original,
     );
 
     let mut build_player_bundle =
@@ -17141,7 +17294,7 @@ pub fn push_actors(
             let proxy_field_camera = field_camera;
             let assembly = player_actor_assembly_cache[player_idx].resolve(
                 requests.player && !direct_player_candidates[player_idx],
-                player_state.visible,
+                player_state.visible && !covering_proxy_requests.players[player_idx].player,
                 capture_transform,
             );
             let field_camera = match assembly {
@@ -17585,7 +17738,7 @@ pub fn push_actors(
             actors,
             underlay_start,
             song_lua_proxy_actor_scratch.as_mut(),
-            !proxy_requests.hide_underlay,
+            retain_underlay_original,
         );
     }
 
@@ -17620,7 +17773,7 @@ pub fn push_actors(
         actors,
         underlay_start,
         song_lua_proxy_actor_scratch.as_mut(),
-        !proxy_requests.hide_underlay,
+        retain_underlay_original,
     );
 
     // Simply Love parity: BGAnimations/ScreenGameplay underlay/Shared/Header.lua.
@@ -17641,7 +17794,7 @@ pub fn push_actors(
             actors,
             underlay_start,
             song_lua_proxy_actor_scratch.as_mut(),
-            !proxy_requests.hide_underlay,
+            retain_underlay_original,
         );
     }
 
@@ -18577,7 +18730,7 @@ pub fn push_actors(
             actors,
             underlay_tail_start,
             song_lua_proxy_actor_scratch.as_mut(),
-            !proxy_requests.hide_underlay,
+            retain_underlay_original,
         );
     }
     let song_foreground_state =
@@ -21086,6 +21239,84 @@ mod tests {
         overlay.initial_state.diffuse = diffuse;
         overlay.initial_state.blend = SongLuaOverlayBlendMode::Add;
         overlay
+    }
+
+    fn test_covering_aft_overlays() -> Vec<SongLuaOverlayActor> {
+        let mut sprite = test_aft_overlay("ScreenCapture", true);
+        sprite.initial_state.x = 427.0;
+        sprite.initial_state.y = 240.0;
+        vec![
+            test_capture_overlay("ScreenCapture"),
+            test_capture_proxy_child(0, SongLuaProxyTarget::Underlay { hidden: false }),
+            test_capture_proxy_child(0, SongLuaProxyTarget::Overlay { hidden: false }),
+            test_capture_proxy_child(0, SongLuaProxyTarget::Player { player_index: 0 }),
+            sprite,
+        ]
+    }
+
+    #[test]
+    fn fullscreen_opaque_aft_marks_captured_screen_sources_occluded() {
+        deadlib_present::space::set_current_metrics(deadlib_present::space::metrics_for_window(
+            1280, 720,
+        ));
+        let overlays = test_covering_aft_overlays();
+        let states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let index = SongLuaProxyRequestIndex::new(&overlays);
+        let mut visits = SongLuaCaptureVisitScratch::with_capacity(overlays.len());
+
+        let requests = song_lua_covering_capture_requests(
+            &overlays,
+            &states,
+            &index,
+            854.0,
+            480.0,
+            &mut visits,
+        );
+
+        assert!(requests.underlay);
+        assert!(requests.overlay);
+        assert!(requests.players[0].player);
+        assert!(!requests.players[1].player);
+    }
+
+    #[test]
+    fn partial_translucent_and_alpha_afts_keep_original_screen_sources() {
+        deadlib_present::space::set_current_metrics(deadlib_present::space::metrics_for_window(
+            1280, 720,
+        ));
+        let mut overlays = test_covering_aft_overlays();
+        let index = SongLuaProxyRequestIndex::new(&overlays);
+        let mut visits = SongLuaCaptureVisitScratch::with_capacity(overlays.len());
+        let requests_for = |overlays: &[SongLuaOverlayActor],
+                            visits: &mut SongLuaCaptureVisitScratch| {
+            let states = overlays
+                .iter()
+                .map(|overlay| overlay.initial_state)
+                .collect::<Vec<_>>();
+            song_lua_covering_capture_requests(overlays, &states, &index, 854.0, 480.0, visits)
+        };
+
+        overlays[4].initial_state.zoom = 0.5;
+        assert!(!requests_for(&overlays, &mut visits).underlay);
+        overlays[4].initial_state.zoom = 1.0;
+        overlays[4].initial_state.diffuse[3] = 0.5;
+        assert!(!requests_for(&overlays, &mut visits).underlay);
+        overlays[4].initial_state.diffuse[3] = 1.0;
+        overlays[0].initial_state.visible = false;
+        assert!(!requests_for(&overlays, &mut visits).underlay);
+        overlays[0].initial_state.visible = true;
+        overlays[4].initial_state.depth_test = true;
+        assert!(!requests_for(&overlays, &mut visits).underlay);
+        overlays[4].initial_state.depth_test = false;
+        overlays[0].kind = SongLuaOverlayKind::ActorFrameTexture {
+            alpha_buffer: true,
+            depth_buffer: false,
+            preserve_texture: false,
+        };
+        assert!(!requests_for(&overlays, &mut visits).underlay);
     }
 
     fn test_source_actor() -> Actor {
