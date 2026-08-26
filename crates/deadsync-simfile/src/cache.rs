@@ -28,7 +28,7 @@ use crate::song::{
     ParseSongOptions, SongAnalyzer, SongParseScratch, parse_song_data_file, parse_song_data_file_in,
 };
 
-pub const SONG_CACHE_VERSION: u8 = 21;
+pub const SONG_CACHE_VERSION: u8 = 22;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
@@ -818,6 +818,7 @@ impl From<CachedParsedNote> for ParsedNote {
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 pub struct CachedChartPayload {
+    pub offset: f32,
     pub notes: Vec<u8>,
     pub parsed_notes: Vec<CachedParsedNote>,
     pub row_to_beat: Vec<f32>,
@@ -827,6 +828,7 @@ pub struct CachedChartPayload {
 
 #[derive(Encode)]
 struct BorrowedCachedChartPayload<'a> {
+    offset: f32,
     notes: &'a [u8],
     parsed_notes: &'a [CachedParsedNote],
     row_to_beat: &'a [f32],
@@ -837,6 +839,7 @@ struct BorrowedCachedChartPayload<'a> {
 impl<'a> From<&'a SerializableChartData> for BorrowedCachedChartPayload<'a> {
     fn from(chart: &'a SerializableChartData) -> Self {
         Self {
+            offset: chart.offset,
             notes: &chart.notes,
             parsed_notes: &chart.parsed_notes,
             row_to_beat: &chart.row_to_beat,
@@ -867,6 +870,7 @@ pub struct SerializableChartData {
     pub meter: u32,
     pub step_artist: String,
     pub music_path: Option<String>,
+    pub offset: f32,
     pub notes: Vec<u8>,
     pub parsed_notes: Vec<CachedParsedNote>,
     pub row_to_beat: Vec<f32>,
@@ -935,8 +939,6 @@ pub fn update_precise_song_bounds(song: &mut SerializableSongData, global_offset
         .any(|chart| !chart.difficulty.eq_ignore_ascii_case("edit"));
     let mut first = f32::INFINITY;
     let mut last = 0.0_f32;
-    let song_offset = song.offset;
-
     for chart in &song.charts {
         if !song_length_chart_candidate(chart, has_non_edit) {
             continue;
@@ -968,7 +970,7 @@ pub fn update_precise_song_bounds(song: &mut SerializableSongData, global_offset
         };
         let timing_segments: TimingSegments = chart.timing_segments.clone().into();
         let timing = TimingData::from_segments(
-            -song_offset,
+            -chart.offset,
             global_offset_seconds,
             &timing_segments,
             &chart.row_to_beat,
@@ -1197,13 +1199,12 @@ pub fn build_measure_seconds(timing: &TimingData, measure_count: usize) -> Vec<f
 
 pub fn build_gameplay_chart_from_payload(
     chart: CachedChartPayload,
-    song_offset: f32,
     global_offset_seconds: f32,
 ) -> GameplayChartData {
     let timing_segments: TimingSegments = chart.timing_segments.into();
     let row_to_beat = chart.row_to_beat;
     let timing = TimingData::from_segments(
-        -song_offset,
+        -chart.offset,
         global_offset_seconds,
         &timing_segments,
         &row_to_beat,
@@ -1222,14 +1223,10 @@ pub fn build_gameplay_chart_from_payload(
     }
 }
 
-pub fn build_chart_meta(
-    chart: SerializableChartData,
-    song_offset: f32,
-    global_offset_seconds: f32,
-) -> ChartData {
+pub fn build_chart_meta(chart: SerializableChartData, global_offset_seconds: f32) -> ChartData {
     let timing_segments: TimingSegments = chart.timing_segments.into();
     let timing = TimingData::from_segments(
-        -song_offset,
+        -chart.offset,
         global_offset_seconds,
         &timing_segments,
         &chart.row_to_beat,
@@ -1280,12 +1277,11 @@ pub fn build_chart_meta(
 
 pub fn build_cached_chart_meta(
     chart: &SerializableChartData,
-    song_offset: f32,
     global_offset_seconds: f32,
 ) -> CachedChartMeta {
     let timing_segments: TimingSegments = chart.timing_segments.clone().into();
     let timing = TimingData::from_segments(
-        -song_offset,
+        -chart.offset,
         global_offset_seconds,
         &timing_segments,
         &chart.row_to_beat,
@@ -1375,36 +1371,34 @@ pub fn build_chart_meta_from_cache(chart: CachedChartMeta) -> ChartData {
 
 pub fn build_gameplay_chart(
     chart: SerializableChartData,
-    song_offset: f32,
     global_offset_seconds: f32,
 ) -> GameplayChartData {
     build_gameplay_chart_from_payload(
         CachedChartPayload {
+            offset: chart.offset,
             notes: chart.notes,
             parsed_notes: chart.parsed_notes,
             row_to_beat: chart.row_to_beat,
             timing_segments: chart.timing_segments,
             chart_attacks: chart.chart_attacks,
         },
-        song_offset,
         global_offset_seconds,
     )
 }
 
 fn build_gameplay_chart_from_ref(
     chart: &SerializableChartData,
-    song_offset: f32,
     global_offset_seconds: f32,
 ) -> GameplayChartData {
     build_gameplay_chart_from_payload(
         CachedChartPayload {
+            offset: chart.offset,
             notes: chart.notes.clone(),
             parsed_notes: chart.parsed_notes.clone(),
             row_to_beat: chart.row_to_beat.clone(),
             timing_segments: chart.timing_segments.clone(),
             chart_attacks: chart.chart_attacks.clone(),
         },
-        song_offset,
         global_offset_seconds,
     )
 }
@@ -1414,7 +1408,6 @@ pub fn build_requested_gameplay_charts(
     requested_chart_ixs: &[usize],
     global_offset_seconds: f32,
 ) -> Result<Vec<GameplayChartData>, String> {
-    let song_offset = song.offset;
     requested_chart_ixs
         .iter()
         .map(|&chart_ix| {
@@ -1422,11 +1415,7 @@ pub fn build_requested_gameplay_charts(
                 .charts
                 .get(chart_ix)
                 .ok_or_else(|| format!("Chart index {chart_ix} out of range"))?;
-            Ok(build_gameplay_chart_from_ref(
-                chart,
-                song_offset,
-                global_offset_seconds,
-            ))
+            Ok(build_gameplay_chart_from_ref(chart, global_offset_seconds))
         })
         .collect()
 }
@@ -1438,7 +1427,6 @@ pub fn build_requested_gameplay_charts_legacy(
     requested_chart_ixs: &[usize],
     global_offset_seconds: f32,
 ) -> Result<Vec<GameplayChartData>, String> {
-    let song_offset = song.offset;
     requested_chart_ixs
         .iter()
         .map(|&chart_ix| {
@@ -1447,17 +1435,12 @@ pub fn build_requested_gameplay_charts_legacy(
                 .get(chart_ix)
                 .cloned()
                 .ok_or_else(|| format!("Chart index {chart_ix} out of range"))?;
-            Ok(build_gameplay_chart(
-                chart,
-                song_offset,
-                global_offset_seconds,
-            ))
+            Ok(build_gameplay_chart(chart, global_offset_seconds))
         })
         .collect()
 }
 
 pub fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -> SongData {
-    let song_offset = song.offset;
     SongData {
         simfile_path: PathBuf::from(song.simfile_path),
         title: song.title,
@@ -1511,7 +1494,7 @@ pub fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -
         charts: song
             .charts
             .into_iter()
-            .map(|chart| build_chart_meta(chart, song_offset, global_offset_seconds))
+            .map(|chart| build_chart_meta(chart, global_offset_seconds))
             .collect(),
     }
 }
@@ -1520,7 +1503,6 @@ pub fn build_cached_song_meta(
     song: &SerializableSongData,
     global_offset_seconds: f32,
 ) -> CachedSongMeta {
-    let song_offset = song.offset;
     CachedSongMeta {
         simfile_path: song.simfile_path.clone(),
         title: song.title.clone(),
@@ -1554,7 +1536,7 @@ pub fn build_cached_song_meta(
         charts: song
             .charts
             .iter()
-            .map(|chart| build_cached_chart_meta(chart, song_offset, global_offset_seconds))
+            .map(|chart| build_cached_chart_meta(chart, global_offset_seconds))
             .collect(),
     }
 }
@@ -1859,13 +1841,11 @@ pub fn load_gameplay_charts_cache_file(
 ) -> Option<Vec<GameplayChartData>> {
     let (cached_song, payload_start) =
         load_cached_song_for_gameplay(&song.simfile_path, cache_path, verify_freshness)?;
-    let song_offset = cached_song.data.offset;
     collect_requested_cached_charts(requested_chart_ixs, |chart_ix| {
         let entry = *cached_song.chart_payloads.get(chart_ix)?;
         let payload = load_cached_chart_payload(cache_path, payload_start, entry)?;
         Some(build_gameplay_chart_from_payload(
             payload,
-            song_offset,
             global_offset_seconds,
         ))
     })
@@ -2952,6 +2932,7 @@ mod tests {
         let mut segments = TimingSegments::default();
         segments.bpms = vec![(0.0, 120.0)];
         let payload = CachedChartPayload {
+            offset: 0.25,
             notes: b"1000\n".to_vec(),
             parsed_notes: vec![CachedParsedNote {
                 row_index: 0,
@@ -2964,7 +2945,7 @@ mod tests {
             chart_attacks: Some("mod,0,1".to_string()),
         };
 
-        let chart = build_gameplay_chart_from_payload(payload, 0.25, 0.0);
+        let chart = build_gameplay_chart_from_payload(payload, 0.0);
 
         assert_eq!(chart.notes, b"1000\n");
         assert_eq!(chart.parsed_notes.len(), 1);
@@ -2972,6 +2953,7 @@ mod tests {
         assert_eq!(chart.row_to_beat, vec![0.0]);
         assert_eq!(chart.timing_segments.bpms, vec![(0.0, 120.0)]);
         assert_eq!(chart.chart_attacks.as_deref(), Some("mod,0,1"));
+        assert_eq!(chart.timing.get_time_for_beat(0.0), -0.25);
     }
 
     #[test]
@@ -3021,13 +3003,13 @@ mod tests {
             let segments = TimingSegments::default();
             Some(build_gameplay_chart_from_payload(
                 CachedChartPayload {
+                    offset: 0.0,
                     notes: vec![chart_ix as u8],
                     parsed_notes: Vec::new(),
                     row_to_beat: Vec::new(),
                     timing_segments: CachedTimingSegments::from(&segments),
                     chart_attacks: None,
                 },
-                0.0,
                 0.0,
             ))
         })
@@ -3045,6 +3027,8 @@ mod tests {
 
     #[test]
     fn precise_song_bounds_use_non_edit_playable_chart_rows() {
+        let mut playable = test_serializable_chart("dance-single", "Challenge", 4, Some(8));
+        playable.offset = 1.5;
         let mut song = SerializableSongData {
             simfile_path: "song.sm".to_string(),
             title: String::new(),
@@ -3078,14 +3062,14 @@ mod tests {
             charts: vec![
                 test_serializable_chart("dance-single", "Edit", 1, None),
                 test_serializable_chart("lights-cabinet", "Challenge", 12, None),
-                test_serializable_chart("dance-single", "Challenge", 4, Some(8)),
+                playable,
             ],
         };
 
         update_precise_song_bounds(&mut song, 0.0);
 
-        assert_eq!(song.first_second, 4.0);
-        assert_eq!(song.precise_last_second_seconds, 8.0);
+        assert_eq!(song.first_second, 2.5);
+        assert_eq!(song.precise_last_second_seconds, 6.5);
     }
 
     #[test]
@@ -3262,6 +3246,7 @@ mod tests {
 
         let mut data = cached_song(&simfile);
         let mut chart = test_serializable_chart("dance-single", "Challenge", 0, None);
+        chart.offset = 1.502;
         chart.notes = b"1000\n".to_vec();
         data.charts = vec![chart];
         let song = build_song_meta(data.clone(), 0.0);
@@ -3293,6 +3278,7 @@ mod tests {
         assert!(result.report.song_data_load.is_none());
         assert!(result.report.warnings.is_empty());
         assert_eq!(result.charts[0].notes, b"1000\n");
+        assert!((result.charts[0].timing.get_time_for_beat(0.0) + 1.502).abs() < 1e-6);
 
         let _ = fs::remove_dir_all(root);
     }
@@ -3405,6 +3391,7 @@ mod tests {
             meter: 1,
             step_artist: String::new(),
             music_path: None,
+            offset: 0.0,
             notes: Vec::new(),
             parsed_notes: vec![CachedParsedNote {
                 row_index,

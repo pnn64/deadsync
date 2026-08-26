@@ -548,6 +548,7 @@ fn build_charts(
                 meter,
                 step_artist: chart.step_artist_str,
                 music_path,
+                offset: chart.chart_offset_seconds as f32,
                 notes: chart.minimized_note_data,
                 parsed_notes,
                 row_to_beat: chart.row_to_beat,
@@ -1172,6 +1173,46 @@ mod tests {
         assert_eq!(song.music_length_seconds, 12.5);
         assert_eq!(song.charts.len(), 1);
         assert_eq!(song.charts[0].meter, 1);
+    }
+
+    #[test]
+    fn chart_offset_survives_rssp_handoff() {
+        let root = test_dir("chart-local-offset");
+        let simfile = root.join("song.ssc");
+        fs::write(
+            &simfile,
+            b"#VERSION:0.83;\n\
+              #TITLE:Chart Local Offset;\n\
+              #OFFSET:0.000;\n\
+              #BPMS:0.000=120.000;\n\
+              #NOTEDATA:;\n\
+              #STEPSTYPE:dance-single;\n\
+              #DIFFICULTY:Challenge;\n\
+              #METER:1;\n\
+              #OFFSET:1.502;\n\
+              #BPMS:0.000=120.000;\n\
+              #WARPS:12.000=8.000,22.000=8.000,32.000=8.000;\n\
+              #SCROLLS:0.000=1.000;\n\
+              #FAKES:12.000=8.000,22.000=8.000,32.000=8.000;\n\
+              #NOTES:\n\
+              1000\n\
+              ;",
+        )
+        .unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+
+        let song = parse_song_file(&simfile, &options, |_| 0.0).unwrap();
+        assert_eq!(song.offset, 0.0);
+        assert!((song.charts[0].offset - 1.502).abs() < 1e-6);
+
+        let chart = crate::cache::build_requested_gameplay_charts(&song, &[0], 0.0)
+            .unwrap()
+            .pop()
+            .unwrap();
+        assert!((chart.timing.get_time_for_beat(12.0) - 4.498).abs() < 1e-5);
+        assert!((chart.timing.get_time_for_beat(42.0) - 7.498).abs() < 1e-5);
+
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
