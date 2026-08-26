@@ -1085,6 +1085,17 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                 }
             }
         }
+        Actor::SharedTransform { transform, .. } => {
+            let world_pivot = glam::Vec3::new(
+                pivot[0] - screen_center_x(),
+                screen_center_y() - pivot[1],
+                0.0,
+            );
+            *transform = glam::Mat4::from_translation(world_pivot)
+                * glam::Mat4::from_scale(glam::Vec3::new(zoom, zoom, 1.0))
+                * glam::Mat4::from_translation(-world_pivot)
+                * *transform;
+        }
         Actor::RetainedFrame { offset, size, .. } => {
             offset[0] = scale_about(offset[0], pivot[0], zoom);
             offset[1] = scale_about(offset[1], pivot[1], zoom);
@@ -1140,6 +1151,9 @@ fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
             offset[0] += dx;
             offset[1] += dy;
         }
+        Actor::SharedTransform { transform, .. } => {
+            *transform = glam::Mat4::from_translation(glam::Vec3::new(dx, -dy, 0.0)) * *transform;
+        }
         Actor::Camera { children, .. } => {
             for child in children {
                 apply_offset_to_actor(child, dx, dy);
@@ -1160,6 +1174,7 @@ fn apply_z_offset(actor: &mut Actor, dz: i16) {
         | Actor::ReusableTexturedMesh { z, .. }
         | Actor::Frame { z, .. }
         | Actor::SharedFrame { z, .. }
+        | Actor::SharedTransform { z, .. }
         | Actor::RetainedFrame { z, .. } => *z = z.saturating_add(dz),
         Actor::Camera { .. }
         | Actor::RenderTarget { .. }
@@ -1173,7 +1188,7 @@ fn apply_z_offset(actor: &mut Actor, dz: i16) {
                 apply_z_offset(child, dz);
             }
         }
-        Actor::SharedFrame { children, .. } => {
+        Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. } => {
             if let Some(children) = std::sync::Arc::get_mut(children) {
                 for child in children {
                     apply_z_offset(child, dz);
@@ -1194,7 +1209,7 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
                 apply_clip_rect_to_actor(child, rect);
             }
         }
-        Actor::SharedFrame { children, .. } => {
+        Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. } => {
             if let Some(children) = std::sync::Arc::get_mut(children) {
                 for child in children {
                     apply_clip_rect_to_actor(child, rect);

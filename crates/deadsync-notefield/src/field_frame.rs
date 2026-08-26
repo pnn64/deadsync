@@ -96,7 +96,10 @@ where
         return NotefieldFieldResult::default();
     };
     let field_camera = resolve_field_camera(camera_cache, request, prepared);
-    let actor_camera_scope = request.capture_requests.note_field;
+    // ActorProxy draws a NoteField directly, outside Player::PushPlayerMatrix,
+    // so a NoteField-only capture must not retain the Player perspective
+    // camera. Whole-Player captures do retain it because Player::Draw does.
+    let actor_camera_scope = request.capture_requests.player;
     if actor_camera_scope && let Some(view_proj) = field_camera {
         actors.push(Actor::CameraPush { view_proj });
     }
@@ -123,7 +126,9 @@ where
         field_content_start,
         actor_camera_scope && field_camera.is_some(),
     );
+    let camera_free_capture = request.capture_requests.note_field && !actor_camera_scope;
     if !actor_camera_scope
+        && !camera_free_capture
         && !request.capture_requests.direct_note_field
         && actors.len() > field_start
         && let Some(view_proj) = field_camera
@@ -134,6 +139,7 @@ where
     debug_assert!(
         actors.len() == field_start
             || actor_camera_scope
+            || request.capture_requests.note_field
             || request.view.edit_beat_bars
             || request.capture_requests.direct_note_field,
         "ordinary uncaptured gameplay fields must stay on the direct draw stream",
@@ -144,6 +150,13 @@ where
         .note_field
         .then(|| share_actor_range(actors, field_start, &mut capture_scratch.note_field))
         .flatten();
+    if camera_free_capture
+        && captured_actors.is_some()
+        && let Some(view_proj) = field_camera
+    {
+        actors.insert(field_start, Actor::CameraPush { view_proj });
+        actors.push(Actor::CameraPop);
+    }
     let draw_range = request
         .capture_requests
         .direct_note_field

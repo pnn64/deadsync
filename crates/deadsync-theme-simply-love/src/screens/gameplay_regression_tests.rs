@@ -513,9 +513,9 @@ mod tests {
             Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
                 actor_tree_has_text(children, expected)
             }
-            Actor::SharedFrame { children, .. } | Actor::RenderTarget { children, .. } => {
-                actor_tree_has_text(children, expected)
-            }
+            Actor::SharedFrame { children, .. }
+            | Actor::SharedTransform { children, .. }
+            | Actor::RenderTarget { children, .. } => actor_tree_has_text(children, expected),
             Actor::RetainedFrame { frame, .. } => actor_tree_has_text(frame.children(), expected),
             Actor::Shadow { child, .. } => {
                 actor_tree_has_text(std::slice::from_ref(child.as_ref()), expected)
@@ -536,7 +536,9 @@ mod tests {
             Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
                 render_target_has_text(children, expected)
             }
-            Actor::SharedFrame { children, .. } => render_target_has_text(children, expected),
+            Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. } => {
+                render_target_has_text(children, expected)
+            }
             Actor::RetainedFrame { frame, .. } => {
                 render_target_has_text(frame.children(), expected)
             }

@@ -471,6 +471,18 @@ pub enum Actor {
         blend: Option<BlendMode>,
     },
 
+    /// Shared children drawn through a model transform. Cameras inside the
+    /// shared source are remapped from `source_view_proj` into the transformed
+    /// destination, which is required for ActorProxy-style screen captures.
+    SharedTransform {
+        transform: Matrix4,
+        source_view_proj: Matrix4,
+        children: Arc<[Self]>,
+        z: i16,
+        tint: [f32; 4],
+        blend: Option<BlendMode>,
+    },
+
     /// Immutable actor children whose composed output may be retained by the
     /// song-local composition cache. The wrapper stays compact and may change
     /// placement, visibility, tint, blend, and z without rebuilding children.
@@ -757,7 +769,9 @@ impl Actor {
             Self::Frame { children, .. } | Self::Camera { children, .. } => {
                 children.iter().all(Self::retained_static)
             }
-            Self::SharedFrame { children, .. } => children.iter().all(Self::retained_static),
+            Self::SharedFrame { children, .. } | Self::SharedTransform { children, .. } => {
+                children.iter().all(Self::retained_static)
+            }
             Self::RenderTarget { .. } => false,
             Self::Shadow { child, .. } => child.retained_static(),
             Self::Mesh { .. }
@@ -818,6 +832,7 @@ impl Actor {
                 tint[3] *= alpha;
             }
             Self::RetainedFrame { tint, .. } => tint[3] *= alpha,
+            Self::SharedTransform { tint, .. } => tint[3] *= alpha,
             Self::RenderTarget { .. } => {}
             Self::Camera { children, .. } => {
                 for child in children {
@@ -889,6 +904,13 @@ pub fn actor_tree_stats(actors: &[Actor]) -> ActorTreeStats {
             Actor::RetainedFrame { frame, .. } => {
                 stats.frames = stats.frames.saturating_add(1);
                 for child in frame.children() {
+                    visit(stats, child);
+                }
+            }
+            Actor::SharedTransform { children, .. } => {
+                stats.frames = stats.frames.saturating_add(1);
+                stats.cameras = stats.cameras.saturating_add(1);
+                for child in children.iter() {
                     visit(stats, child);
                 }
             }

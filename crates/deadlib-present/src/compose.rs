@@ -1178,7 +1178,10 @@ fn collect_render_targets<'a>(
             actors::Actor::Frame { children, .. } | actors::Actor::Camera { children, .. } => {
                 collect_render_targets(children, out);
             }
-            actors::Actor::SharedFrame { children, .. } => collect_render_targets(children, out),
+            actors::Actor::SharedFrame { children, .. }
+            | actors::Actor::SharedTransform { children, .. } => {
+                collect_render_targets(children, out);
+            }
             actors::Actor::RetainedFrame { frame, .. } => {
                 collect_render_targets(frame.children(), out);
             }
@@ -1316,6 +1319,7 @@ where
             texture_ctx,
             actor_textures.as_deref(),
             total_elapsed,
+            None,
         );
         let has_flat_draws = match segment.source {
             ActorSegmentSource::Actors(_) => false,
@@ -5538,6 +5542,7 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
     texture_ctx: &T,
     actor_textures: Option<&[Arc<str>]>,
     total_elapsed: f32,
+    camera_prefix: Option<Matrix4>,
 ) {
     let mut sequence = ActorSequenceState::new(camera);
     build_actor_sequence_with_state(
@@ -5563,6 +5568,7 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
         texture_ctx,
         actor_textures,
         total_elapsed,
+        camera_prefix,
     );
 }
 
@@ -5585,6 +5591,7 @@ fn build_actor_sequence_with_state<'a, T, I>(
     texture_ctx: &T,
     actor_textures: Option<&[Arc<str>]>,
     total_elapsed: f32,
+    camera_prefix: Option<Matrix4>,
 ) where
     T: TextureContext + ?Sized,
     I: IntoIterator<Item = ActorBuild<'a>>,
@@ -5599,8 +5606,8 @@ fn build_actor_sequence_with_state<'a, T, I>(
     {
         match actor {
             actors::Actor::CameraPush { view_proj } => {
-                let matrix =
-                    segment_camera.map_or(*view_proj, |camera| *view_proj * *camera.suffix);
+                let view_proj = camera_prefix.map_or(*view_proj, |prefix| prefix * *view_proj);
+                let matrix = segment_camera.map_or(view_proj, |camera| view_proj * *camera.suffix);
                 cameras.push(matrix);
                 sequence.camera_stack.push(sequence.active_camera);
                 sequence.active_camera = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
@@ -5615,8 +5622,8 @@ fn build_actor_sequence_with_state<'a, T, I>(
                 view_proj,
                 children,
             } => {
-                cameras
-                    .push(segment_camera.map_or(*view_proj, |camera| *view_proj * *camera.suffix));
+                let view_proj = camera_prefix.map_or(*view_proj, |prefix| prefix * *view_proj);
+                cameras.push(segment_camera.map_or(view_proj, |camera| view_proj * *camera.suffix));
                 let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
                 build_actor_list(
                     children,
@@ -5638,6 +5645,7 @@ fn build_actor_sequence_with_state<'a, T, I>(
                     texture_ctx,
                     actor_textures,
                     total_elapsed,
+                    camera_prefix,
                 );
             }
             _ => {
@@ -5670,6 +5678,7 @@ fn build_actor_sequence_with_state<'a, T, I>(
                     texture_ctx,
                     actor_textures,
                     total_elapsed,
+                    camera_prefix,
                 );
             }
         }
@@ -6539,6 +6548,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
     texture_ctx: &T,
     actor_textures: Option<&[Arc<str>]>,
     total_elapsed: f32,
+    camera_prefix: Option<Matrix4>,
 ) {
     if let Some(mesh) = textured_mesh_actor_view(actor) {
         build_textured_mesh_actor(
@@ -6914,6 +6924,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 texture_ctx,
                 actor_textures,
                 total_elapsed,
+                camera_prefix,
             );
             let end = out.len();
             if has_shadow(*len) {
@@ -6933,7 +6944,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             view_proj,
             children,
         } => {
-            cameras.push(*view_proj);
+            let view_proj = camera_prefix.map_or(*view_proj, |prefix| prefix * *view_proj);
+            cameras.push(view_proj);
             let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
             build_actor_list(
                 children,
@@ -6955,6 +6967,47 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 texture_ctx,
                 actor_textures,
                 total_elapsed,
+                camera_prefix,
+            );
+        }
+
+        actors::Actor::SharedTransform {
+            transform,
+            source_view_proj,
+            children,
+            z,
+            tint,
+            blend,
+        } => {
+            let active = cameras
+                .get(camera as usize)
+                .copied()
+                .unwrap_or(Matrix4::IDENTITY);
+            let root = active * *transform;
+            let prefix = root * source_view_proj.inverse();
+            cameras.push(root);
+            let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
+            build_actor_list(
+                children,
+                parent,
+                m,
+                fonts,
+                scratch,
+                base_z.saturating_add(*z),
+                id,
+                style.child(*tint, *blend),
+                x_fold,
+                cameras,
+                masks,
+                order_counter,
+                out,
+                sprite_instances,
+                text_cache,
+                texture_cache,
+                texture_ctx,
+                actor_textures,
+                total_elapsed,
+                Some(prefix),
             );
         }
 
@@ -7393,6 +7446,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 texture_ctx,
                 actor_textures,
                 total_elapsed,
+                camera_prefix,
             );
         }
 
@@ -7532,6 +7586,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 texture_ctx,
                 actor_textures,
                 total_elapsed,
+                camera_prefix,
             );
         }
 
@@ -7589,6 +7644,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 texture_ctx,
                 actor_textures,
                 total_elapsed,
+                camera_prefix,
             );
 
             if !cacheable || cameras.len() != camera_start || masks.len() != mask_start {
@@ -10014,6 +10070,67 @@ mod tests {
                 &resources,
             );
         assert_test_frames_equal(&expected, &actual);
+    }
+
+    #[test]
+    fn shared_transform_remaps_nested_source_cameras() {
+        let metrics = Metrics {
+            left: -800.0,
+            right: 800.0,
+            top: 450.0,
+            bottom: -450.0,
+        };
+        let source_view_proj =
+            glam::camera::rh::proj::opengl::orthographic(-427.0, 427.0, -240.0, 240.0, -1.0, 1.0);
+        let nested_view_proj =
+            Matrix4::from_translation(Vector3::new(0.25, -0.5, 0.0)) * source_view_proj;
+        let transform = Matrix4::from_translation(Vector3::new(-800.0, 450.0, 0.0))
+            * Matrix4::from_scale(Vector3::new(1600.0 / 854.0, 1600.0 / 854.0, 1.0))
+            * Matrix4::from_translation(Vector3::new(800.0, -450.0, 0.0));
+        let actors = [Actor::SharedTransform {
+            transform,
+            source_view_proj,
+            children: Arc::from([
+                Actor::CameraPush {
+                    view_proj: nested_view_proj,
+                },
+                Actor::CameraPop,
+            ]),
+            z: 0,
+            tint: [1.0; 4],
+            blend: None,
+        }];
+
+        let render = build_screen(
+            &actors,
+            [0.0, 0.0, 0.0, 1.0],
+            &metrics,
+            &font::FontMap::default(),
+            0.0,
+        );
+        let root_view_proj = glam::camera::rh::proj::opengl::orthographic(
+            metrics.left,
+            metrics.right,
+            metrics.bottom,
+            metrics.top,
+            -1.0,
+            1.0,
+        );
+        let expected = [
+            root_view_proj,
+            root_view_proj * transform,
+            root_view_proj * transform * source_view_proj.inverse() * nested_view_proj,
+        ];
+        assert_eq!(render.cameras.len(), expected.len());
+        for (actual, expected) in render.cameras.iter().zip(expected) {
+            for (actual, expected) in actual
+                .to_cols_array()
+                .into_iter()
+                .zip(expected.to_cols_array())
+            {
+                assert!((actual - expected).abs() < 0.00001);
+            }
+        }
     }
 
     #[test]
