@@ -20,9 +20,7 @@ use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_core::input::InputSource;
-use deadsync_input::fsr::{
-    ButtonLabel, ButtonView, PadDeviceId, PadView, SensorView, ValueCurve,
-};
+use deadsync_input::fsr::{ButtonLabel, ButtonView, PadDeviceId, PadView, SensorView, ValueCurve};
 use deadsync_input::{InputEvent, VirtualAction};
 use smallvec::SmallVec;
 
@@ -1036,10 +1034,7 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     ClusterThresholds {
                         press_label: TextContent::inline_u16(press),
                         press_norm: curve.normalize(press),
-                        release: Some((
-                            TextContent::inline_u16(release),
-                            curve.normalize(release),
-                        )),
+                        release: Some((TextContent::inline_u16(release), curve.normalize(release))),
                         focused: focused_kind,
                         lock_off: state.threshold_lock_off,
                     },

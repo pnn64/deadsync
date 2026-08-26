@@ -1289,15 +1289,23 @@ impl MusicWheelEntry {
         }
     }
 
-    /// Stable identity for a wheel section. Real packs use their directory
-    /// group name so duplicate `DisplayTitle` values remain distinct; virtual
-    /// sort sections fall back to their visible name.
+    /// Stable identity for an openable pack section. Real packs use their
+    /// directory group name so duplicate `DisplayTitle` values remain
+    /// distinct; virtual sort sections fall back to their visible name.
+    /// Series headers return `None` so a parent with the same name as a child
+    /// pack cannot capture pack-focus lookups.
     pub fn section_key(&self) -> Option<&str> {
         match self {
-            MusicWheelEntry::PackHeader { name, pack_key, .. } => {
-                Some(pack_key.as_deref().unwrap_or(name.as_ref()))
-            }
-            MusicWheelEntry::Song(_) => None,
+            MusicWheelEntry::PackHeader {
+                pack_key: Some(key),
+                ..
+            } => Some(key.as_ref()),
+            MusicWheelEntry::PackHeader {
+                name,
+                parent_series: None,
+                ..
+            } => Some(name.as_ref()),
+            MusicWheelEntry::PackHeader { .. } | MusicWheelEntry::Song(_) => None,
         }
     }
 
@@ -20136,6 +20144,31 @@ mod tests {
         assert_eq!(state.entries[1].pack_key(), Some("Pack A"));
         assert!(matches!(state.entries[2], super::MusicWheelEntry::Song(_)));
         assert!(matches!(state.entries[3], super::MusicWheelEntry::Song(_)));
+    }
+
+    #[test]
+    fn confirm_child_matching_series_name_keeps_child_selected() {
+        let packs = [test_pack("Pack A", "Pack A"), test_pack("Pack B", "Pack A")];
+        let mut state = init_placeholder();
+        state.policy.interaction.wheel_style = SelectMusicWheelStyle::Iidx;
+        state.policy.interaction.hide_inactive_series = true;
+        state.all_entries = super::build_series_grouped_entries(&test_entries(), &packs).into();
+        super::rebuild_displayed_entries(&mut state);
+
+        handle_confirm(&mut state);
+        state.selected_index = state
+            .entries
+            .iter()
+            .position(|entry| entry.pack_key() == Some("Pack A"))
+            .expect("open series should list its same-name child pack");
+        handle_confirm(&mut state);
+
+        assert_eq!(state.expanded_series_name.as_deref(), Some("Pack A"));
+        assert_eq!(state.expanded_pack_name.as_deref(), Some("Pack A"));
+        assert_eq!(
+            state.entries[state.selected_index].pack_key(),
+            Some("Pack A")
+        );
     }
 
     #[test]

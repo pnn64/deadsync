@@ -36,11 +36,7 @@ impl ValueCurve {
         Self::Linear { max_raw }
     }
 
-    pub const fn quartic_blend(
-        max_raw: u16,
-        quartic_weight: f32,
-        linear_weight: f32,
-    ) -> Self {
+    pub const fn quartic_blend(max_raw: u16, quartic_weight: f32, linear_weight: f32) -> Self {
         Self::QuarticBlend {
             max_raw,
             quartic_weight,
