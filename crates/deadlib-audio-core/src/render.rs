@@ -783,7 +783,7 @@ mod tests {
         let (popped, _) = render.mix_f32_buffer(music_track_start_frame(), input.len());
         assert_eq!(popped, input.len());
         let mut gain = 1.0;
-        for (frame, samples) in input.chunks_exact(CHANNELS).enumerate() {
+        for (frame, samples) in input.as_chunks::<CHANNELS>().0.iter().enumerate() {
             gain -= MUSIC_GAIN_MAX_STEP;
             for (channel, &sample) in samples.iter().enumerate() {
                 let expected = i16_to_f32(sample) * gain;

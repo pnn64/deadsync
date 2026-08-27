@@ -318,7 +318,7 @@ impl AcScoreCacheState {
             .map_or_else(HashSet::new, |scores| {
                 scores
                     .iter()
-                    .filter_map(|(hash, ac)| ac.itg.is_some().then(|| hash.clone()))
+                    .filter(|&(_hash, ac)| ac.itg.is_some()).map(|(hash, _ac)| hash.clone())
                     .collect()
             })
     }
@@ -5562,7 +5562,7 @@ pub fn arrowcloud_bulk_failure_detail(
 #[inline(always)]
 pub fn should_log_score_import_progress(processed_charts: usize, requested_charts: usize) -> bool {
     processed_charts == requested_charts
-        || processed_charts % SCORE_IMPORT_PROGRESS_LOG_EVERY == 0
+        || processed_charts.is_multiple_of(SCORE_IMPORT_PROGRESS_LOG_EVERY)
         || processed_charts == 1
 }
 
