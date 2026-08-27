@@ -971,6 +971,7 @@ mod tests {
             song_foreground: 11_u16,
             song_foreground_events: vec![build_song_lua_overlay_message_runtime(5.0, 4)],
             hidden_players: [false; MAX_PLAYERS],
+            hidden_screen_layers: [false; 2],
             note_hides: std::array::from_fn(|_| SongLuaNoteHideWindows::default()),
             column_offsets: std::array::from_fn(|_| Vec::new()),
             screen_width: 800.0,

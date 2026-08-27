@@ -154,7 +154,7 @@ pub use lua_util::{
     read_note_column_zoom_hides_for_actor, read_noteskin_tap_actor_model,
     read_noteskin_tap_actor_slots, read_overlay_compile_actor_actions, read_overlay_compile_actors,
     read_proxy_target_kind, read_song_lua_sound_paths, read_song_meter_display_state,
-    read_tracked_compile_actors, read_update_function_nested_tables,
+    read_top_screen_hidden_layers, read_tracked_compile_actors, read_update_function_nested_tables,
     read_update_function_overlay_compile_actor_actions, read_update_function_tables,
     read_vertex_colors_value, record_probe_method_call, register_song_lua_actor,
     remove_actor_child, remove_all_actor_children, reset_actor_capture, reset_actor_capture_tables,
@@ -310,6 +310,7 @@ pub const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
 pub const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
 pub const SONG_LUA_BROADCASTS_KEY: &str = "__songlua_broadcast_messages";
 pub const SONG_LUA_SOUND_PATHS_KEY: &str = "__songlua_sound_paths";
+pub const SONG_LUA_SOUND_CALLS_KEY: &str = "__songlua_sound_calls";
 pub const SONG_LUA_PLAYER_OPTIONS_KEYS: [&str; LUA_PLAYERS] =
     ["__songlua_player_options_1", "__songlua_player_options_2"];
 pub const SONG_LUA_PROBE_METHODS_KEY: &str = "__songlua_probe_methods";
@@ -1533,6 +1534,7 @@ pub struct CompiledSongLua<OverlayActor> {
     pub player_actors: [SongLuaCapturedActor; LUA_PLAYERS],
     pub song_foreground: SongLuaCapturedActor,
     pub hidden_players: [bool; LUA_PLAYERS],
+    pub hidden_screen_layers: [bool; 2],
     pub note_hides: Vec<SongLuaNoteHideWindow>,
     pub column_offsets: Vec<SongLuaColumnOffsetWindow>,
     pub info: SongLuaCompileInfo,
@@ -1555,11 +1557,18 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
             song_foreground: SongLuaCapturedActor::default(),
             hidden_players: [false; LUA_PLAYERS],
+            hidden_screen_layers: [false; 2],
             note_hides: Vec::new(),
             column_offsets: Vec::new(),
             info: SongLuaCompileInfo::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaSoundEvent {
+    pub beat: f32,
+    pub path: PathBuf,
 }
 
 pub fn push_startup_message_if_listened<'a>(
@@ -1737,6 +1746,7 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
     Sprite {
         texture_path: PathBuf,
         texture_key: Arc<str>,
+        states: Arc<[SongLuaSpriteState]>,
     },
     Sound {
         sound_path: PathBuf,
@@ -1771,6 +1781,12 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
         line_state: Box<SongLuaOverlayState>,
     },
     Quad,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SongLuaSpriteState {
+    pub frame: u32,
+    pub delay: f32,
 }
 
 #[must_use]
@@ -1956,14 +1972,12 @@ pub fn sprite_frame_count(sheet_dims: Option<(u32, u32)>) -> u32 {
 #[must_use]
 pub fn sprite_image_frame_size(
     texture_size: Option<(f32, f32)>,
-    animate: bool,
-    state_index: Option<u32>,
+    _animate: bool,
+    _state_index: Option<u32>,
     sheet_dims: Option<(u32, u32)>,
 ) -> Option<(f32, f32)> {
     let (mut width, mut height) = texture_size?;
-    if (animate || song_lua_valid_sprite_state_index(state_index).is_some())
-        && let Some((cols, rows)) = sheet_dims
-    {
+    if let Some((cols, rows)) = sheet_dims {
         width /= cols.max(1) as f32;
         height /= rows.max(1) as f32;
     }
@@ -2137,6 +2151,60 @@ pub fn sprite_animation_state_from(
     } else {
         frame.clamp(0, frame_count - 1) as u32
     }
+}
+
+#[must_use]
+pub fn sprite_custom_animation_state_from(
+    states: &[SongLuaSpriteState],
+    start: u32,
+    seconds: f32,
+    playback_rate: f32,
+    loops: bool,
+) -> u32 {
+    let len = states.len();
+    if len <= 1 {
+        return 0;
+    }
+    let start = (start as usize).min(len - 1);
+    let elapsed = seconds * playback_rate;
+    if states.iter().all(|state| state.delay > 0.000_1) {
+        let cycle = states.iter().map(|state| state.delay).sum::<f32>();
+        let start_time = states[..start].iter().map(|state| state.delay).sum::<f32>();
+        let time = if loops {
+            (start_time + elapsed).rem_euclid(cycle)
+        } else {
+            (start_time + elapsed).clamp(0.0, cycle - f32::EPSILON)
+        };
+        let mut end = 0.0;
+        return states
+            .iter()
+            .position(|state| {
+                end += state.delay;
+                time < end
+            })
+            .unwrap_or(len - 1) as u32;
+    }
+    if elapsed <= 0.0 {
+        return start as u32;
+    }
+    let mut remaining = elapsed;
+    let mut index = start;
+    for _ in 0..len {
+        let delay = states[index].delay;
+        if delay <= 0.000_1 || remaining < delay {
+            return index as u32;
+        }
+        remaining -= delay;
+        if index + 1 == len {
+            if !loops {
+                return index as u32;
+            }
+            index = 0;
+        } else {
+            index += 1;
+        }
+    }
+    index as u32
 }
 
 #[inline(always)]
@@ -3700,6 +3768,7 @@ pub fn push_song_lua_video_paths<'a, NoteskinSlot, ModelVertex, TextAttribute>(
         let SongLuaOverlayKind::Sprite {
             texture_path,
             texture_key,
+            ..
         } = &overlay.kind
         else {
             continue;
@@ -4330,16 +4399,16 @@ mod tests {
         SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw, SongLuaOverlayModelLayer,
         SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget,
         SongLuaOverlayUpdateValue, SongLuaPlayerContext, SongLuaProxyTarget, SongLuaSpanMode,
-        SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit, THEME_RECEPTOR_Y_REV,
-        THEME_RECEPTOR_Y_STD, TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES,
-        actor_indices_for_pointers, actor_overlay_initial_state, actor_pointers_touch_actor,
-        add_actor_child_from_path as add_lua_actor_child_from_path, capture_actor_message_commands,
-        capture_block_set_bool, capture_block_set_f32, capture_function_action_blocks,
-        capture_indexed_actor_function_blocks, capture_overlay_function_eases,
-        collect_indexed_actor_capture_blocks, column_offset_windows_from_samples,
-        compile_song_lua_layers_with_actors, compile_song_lua_with_actors,
-        compile_song_runtime_values, compiled_song_lua_sound_paths, create_debug_table,
-        create_dummy_actor as create_lua_dummy_actor,
+        SongLuaSpeedMod, SongLuaSpriteState, SongLuaTextGlowMode, SongLuaTimeUnit,
+        THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, TOP_SCREEN_THEME_CHILD_NAMES,
+        UNDERLAY_THEME_CHILD_NAMES, actor_indices_for_pointers, actor_overlay_initial_state,
+        actor_pointers_touch_actor, add_actor_child_from_path as add_lua_actor_child_from_path,
+        capture_actor_message_commands, capture_block_set_bool, capture_block_set_f32,
+        capture_function_action_blocks, capture_indexed_actor_function_blocks,
+        capture_overlay_function_eases, collect_indexed_actor_capture_blocks,
+        column_offset_windows_from_samples, compile_song_lua_layers_with_actors,
+        compile_song_lua_with_actors, compile_song_runtime_values, compiled_song_lua_sound_paths,
+        create_debug_table, create_dummy_actor as create_lua_dummy_actor,
         create_named_child_actor as create_lua_named_child_actor, create_song_runtime_table,
         custom_multi_modifier_key, easiest_steps_difficulty, ensure_overlay_arrow_visual,
         file_path_string, function_named_upvalue_tables, graph_display_body_size,
@@ -4360,10 +4429,10 @@ mod tests {
         song_lua_arch_name, song_lua_difficulty_from_value, song_lua_human_player_count,
         song_lua_steps_type_is_dance_single, song_lua_video_paths, sort_compiled_song_lua,
         sort_note_hide_windows, sprite_animation_state_at, sprite_animation_state_from,
-        sprite_frame_count, sprite_image_frame_size, sprite_texture_rect,
-        sprite_texture_rect_with_offset, texture_pixel_offset_rect, theme_has_string,
-        theme_metric_number, theme_metric_number_for_screen, theme_pref_default, theme_string,
-        theme_string_names,
+        sprite_custom_animation_state_from, sprite_frame_count, sprite_image_frame_size,
+        sprite_texture_rect, sprite_texture_rect_with_offset, texture_pixel_offset_rect,
+        theme_has_string, theme_metric_number, theme_metric_number_for_screen, theme_pref_default,
+        theme_string, theme_string_names,
     };
     use std::collections::HashSet;
     use std::fs;
@@ -4379,6 +4448,7 @@ mod tests {
             kind: TestOverlayKind::Sprite {
                 texture_key: Arc::from(path.to_string_lossy().into_owned()),
                 texture_path: path,
+                states: Arc::from([]),
             },
             name: None,
             parent_index: None,
@@ -8494,6 +8564,83 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn compile_song_lua_schedules_function_sound_calls() {
+        let song_dir = test_dir("timed-sound-singleton");
+        fs::write(song_dir.join("begin.ogg"), b"not decoded during compile").unwrap();
+        fs::write(song_dir.join("music.wav"), b"not decoded during compile").unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions={{0.1, function()
+    SOUND:PlayOnce("begin.ogg")
+    SOUND:PlayMusicPart("music.wav", 0, 1, 0, 0)
+end}}
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Timed Sound Singleton"),
+        )
+        .unwrap();
+        let sound = compiled
+            .overlays
+            .iter()
+            .find(|overlay| matches!(overlay.kind, SongLuaOverlayKind::Sound { .. }))
+            .expect("function sound call should compile into a sound actor");
+        let SongLuaOverlayKind::Sound { sound_path } = &sound.kind else {
+            unreachable!();
+        };
+        assert_eq!(sound_path, &song_dir.join("begin.ogg"));
+        assert_eq!(
+            compiled
+                .overlays
+                .iter()
+                .filter(|overlay| matches!(overlay.kind, SongLuaOverlayKind::Sound { .. }))
+                .count(),
+            1
+        );
+        assert_eq!(compiled.messages.len(), 1);
+        assert!((compiled.messages[0].beat - 0.1).abs() <= f32::EPSILON);
+        assert_eq!(sound.message_commands.len(), 1);
+        assert_eq!(
+            sound.message_commands[0].blocks[0].delta.sound_play,
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_preserves_hidden_gameplay_layers() {
+        let song_dir = test_dir("hidden-gameplay-layers");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    InitCommand=function(self)
+        self:SetUpdateFunction(function()
+            local screen=SCREENMAN:GetTopScreen()
+            screen:GetChild("Underlay"):visible(false)
+            screen:GetChild("Overlay"):visible(false)
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Hidden Gameplay Layers"),
+        )
+        .unwrap();
+        assert_eq!(compiled.hidden_screen_layers, [true, true]);
+    }
+
+    #[test]
     fn compile_song_lua_set_current_steps_updates_selected_steps() {
         let song_dir = test_dir("set-current-steps");
         let entry = song_dir.join("default.lua");
@@ -9010,6 +9157,7 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "10:20");
+        assert!(compiled.overlays[0].initial_state.sprite_animate);
     }
 
     #[test]
@@ -9063,6 +9211,8 @@ return Def.ActorFrame{
 return Def.ActorFrame{
     Def.Sprite{
         Texture="panel 4x3.png",
+        Frame0000=2, Delay0000=1,
+        Frame0001=5, Delay0001=0.25,
         OnCommand=function(self)
             self:setstate(1):animate(true):SetAllStateDelays(0.5)
             mod_actions = {
@@ -9090,6 +9240,22 @@ return Def.ActorFrame{
         assert_eq!(state.sprite_state_delay, 0.5);
         assert_eq!(state.sprite_state_index, Some(1));
         assert_eq!(state.custom_texture_rect, None);
+        let SongLuaOverlayKind::Sprite { states, .. } = &compiled.overlays[0].kind else {
+            panic!("expected sprite overlay");
+        };
+        assert_eq!(
+            states.as_ref(),
+            [
+                SongLuaSpriteState {
+                    frame: 2,
+                    delay: 1.0,
+                },
+                SongLuaSpriteState {
+                    frame: 5,
+                    delay: 0.25,
+                },
+            ]
+        );
     }
 
     #[test]
@@ -17631,6 +17797,7 @@ return Def.ActorFrame{
                 SongLuaOverlayKind::Sprite {
                     texture_path: PathBuf::from("arrow.png"),
                     texture_key: Arc::from("arrow.png"),
+                    states: Arc::from([]),
                 },
                 SongLuaOverlayState::default(),
             ))
@@ -17902,10 +18069,10 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn sprite_image_frame_size_divides_animated_or_stateful_sheets() {
+    fn sprite_image_frame_size_always_uses_one_sheet_frame() {
         assert_eq!(
             sprite_image_frame_size(Some((256.0, 128.0)), false, None, Some((4, 2))),
-            Some((256.0, 128.0))
+            Some((64.0, 64.0))
         );
         assert_eq!(
             sprite_image_frame_size(Some((256.0, 128.0)), true, None, Some((4, 2))),
@@ -17922,7 +18089,7 @@ return Def.ActorFrame{
                 Some(SONG_LUA_SPRITE_STATE_CLEAR),
                 Some((4, 2)),
             ),
-            Some((256.0, 128.0))
+            Some((64.0, 64.0))
         );
         assert_eq!(
             sprite_image_frame_size(Some((256.0, 128.0)), true, None, Some((0, 0))),
@@ -17950,6 +18117,36 @@ return Def.ActorFrame{
         assert_eq!(sprite_animation_state_from(2, 0.29, 1.0, 0.1, 4, false), 3);
         assert_eq!(sprite_animation_state_from(2, -0.29, 1.0, 0.1, 4, false), 0);
         assert_eq!(sprite_animation_state_from(7, 0.29, 1.0, 0.0, 4, true), 3);
+    }
+
+    #[test]
+    fn custom_sprite_animation_uses_declared_frames_and_delays() {
+        let states = [
+            SongLuaSpriteState {
+                frame: 2,
+                delay: 1.0,
+            },
+            SongLuaSpriteState {
+                frame: 5,
+                delay: 0.25,
+            },
+        ];
+        assert_eq!(
+            sprite_custom_animation_state_from(&states, 0, 0.99, 1.0, true),
+            0
+        );
+        assert_eq!(
+            sprite_custom_animation_state_from(&states, 0, 1.0, 1.0, true),
+            1
+        );
+        assert_eq!(
+            sprite_custom_animation_state_from(&states, 0, 1.25, 1.0, true),
+            0
+        );
+        assert_eq!(
+            sprite_custom_animation_state_from(&states, 1, 0.25, 1.0, false),
+            1
+        );
     }
 
     #[test]

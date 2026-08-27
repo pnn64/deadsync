@@ -258,6 +258,7 @@ mod runtime_regression_tests {
                     (),
                     Vec::new(),
                     [false; MAX_PLAYERS],
+                    [false; 2],
                     std::array::from_fn(|_| SongLuaNoteHideWindows::default()),
                     std::array::from_fn(|_| Vec::new()),
                     params.screen_width,

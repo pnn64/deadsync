@@ -10,10 +10,10 @@ use crate::{
     SONG_LUA_PLAYER_OPTION_CAPABILITIES, SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES,
     SONG_LUA_PLAYER_OPTIONS_KEYS, SONG_LUA_PRODUCT_FAMILY, SONG_LUA_PRODUCT_ID,
     SONG_LUA_PRODUCT_VERSION, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY,
-    SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY, SONG_LUA_SOUND_PATHS_KEY,
-    SongLuaCompileContext, SongLuaNoteskinResolver, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
-    broadcast_song_lua_message, create_branch_table, create_charman_table, create_conf_option_row,
-    create_course_table, create_custom_option_row, create_difficulty_table,
+    SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY, SONG_LUA_SOUND_CALLS_KEY,
+    SONG_LUA_SOUND_PATHS_KEY, SongLuaCompileContext, SongLuaNoteskinResolver, THEME_RECEPTOR_Y_REV,
+    THEME_RECEPTOR_Y_STD, broadcast_song_lua_message, create_branch_table, create_charman_table,
+    create_conf_option_row, create_course_table, create_custom_option_row, create_difficulty_table,
     create_display_bpms_table, create_display_table, create_enabled_players_table,
     create_game_table, create_gameman_table, create_gameplay_layout, create_hooks_table,
     create_memcardman_table, create_noteskin_table, create_operator_menu_option_rows_table,
@@ -954,7 +954,12 @@ fn song_lua_sound_paths_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(paths)
 }
 
-fn record_song_lua_sound_path(lua: &Lua, song_dir: &Path, args: &MultiValue) -> mlua::Result<()> {
+fn record_song_lua_sound_path(
+    lua: &Lua,
+    song_dir: &Path,
+    args: &MultiValue,
+    capture_call: bool,
+) -> mlua::Result<()> {
     let Some(raw_path) = method_arg(args, 0).cloned().and_then(read_string) else {
         return Ok(());
     };
@@ -966,6 +971,14 @@ fn record_song_lua_sound_path(lua: &Lua, song_dir: &Path, args: &MultiValue) -> 
     }
 
     let key = path.to_string_lossy().into_owned();
+    if capture_call {
+        if let Some(calls) = lua
+            .globals()
+            .get::<Option<Table>>(SONG_LUA_SOUND_CALLS_KEY)?
+        {
+            calls.raw_set(calls.raw_len() + 1, key.clone())?;
+        }
+    }
     let paths = song_lua_sound_paths_table(lua)?;
     for existing in paths.sequence_values::<String>() {
         if existing? == key {
@@ -979,6 +992,7 @@ fn record_song_lua_sound_path(lua: &Lua, song_dir: &Path, args: &MultiValue) -> 
 pub fn install_sound_globals(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     let globals = lua.globals();
     globals.set(SONG_LUA_SOUND_PATHS_KEY, lua.create_table()?)?;
+    globals.set(SONG_LUA_SOUND_CALLS_KEY, Value::Nil)?;
     let sound = lua.create_table()?;
     for name in ["DimMusic", "StopMusic"] {
         let sound_for_return = sound.clone();
@@ -990,7 +1004,7 @@ pub fn install_sound_globals(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
             })?,
         )?;
     }
-    for name in ["PlayMusicPart", "PlayOnce"] {
+    for (name, capture_call) in [("PlayMusicPart", false), ("PlayOnce", true)] {
         let sound_for_return = sound.clone();
         sound.set(
             name,
@@ -998,7 +1012,7 @@ pub fn install_sound_globals(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
                 let song_dir = song_dir.to_path_buf();
                 move |lua, args: MultiValue| {
                     note_song_lua_side_effect(lua)?;
-                    record_song_lua_sound_path(lua, song_dir.as_path(), &args)?;
+                    record_song_lua_sound_path(lua, song_dir.as_path(), &args, capture_call)?;
                     Ok(sound_for_return.clone())
                 }
             })?,

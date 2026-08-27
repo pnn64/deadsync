@@ -118,6 +118,7 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
                 SongLuaOverlayKind::Sprite {
                     texture_path,
                     texture_key,
+                    ..
                 }
                 | SongLuaOverlayKind::ActorMultiVertex {
                     texture_path: Some(texture_path),

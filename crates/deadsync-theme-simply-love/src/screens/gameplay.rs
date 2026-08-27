@@ -3896,6 +3896,7 @@ fn build_song_lua_runtime_windows_for_data(
     let mut song_foreground = SongLuaCapturedActor::default();
     let mut song_foreground_events = Vec::new();
     let mut hidden_players = [false; MAX_PLAYERS];
+    let mut hidden_screen_layers = [false; 2];
     let mut note_hides: [deadsync_gameplay::SongLuaNoteHideWindows; MAX_PLAYERS] =
         std::array::from_fn(|_| deadsync_gameplay::SongLuaNoteHideWindows::default());
     let mut column_offsets: [Vec<deadsync_gameplay::SongLuaColumnOffsetWindowRuntime>;
@@ -3920,6 +3921,7 @@ fn build_song_lua_runtime_windows_for_data(
                 song_foreground,
                 song_foreground_events,
                 hidden_players,
+                hidden_screen_layers,
                 note_hides,
                 column_offsets,
                 params.screen_width,
@@ -3983,6 +3985,7 @@ fn build_song_lua_runtime_windows_for_data(
                 &compiled.song_foreground.message_commands,
             );
         hidden_players = deadsync_gameplay::build_song_lua_hidden_players(&compiled.hidden_players);
+        hidden_screen_layers = compiled.hidden_screen_layers;
         note_hides = deadsync_gameplay::build_song_lua_note_hide_windows_for_players(
             compiled
                 .note_hides
@@ -4102,6 +4105,7 @@ fn build_song_lua_runtime_windows_for_data(
             song_foreground,
             song_foreground_events,
             hidden_players,
+            hidden_screen_layers,
             note_hides,
             column_offsets,
             out_screen_width,
@@ -7671,22 +7675,41 @@ fn song_lua_valid_sprite_state_index(state: SongLuaOverlayState) -> Option<u32> 
 fn song_lua_sprite_sheet_index(
     state: SongLuaOverlayState,
     texture_key: &str,
+    states: &[deadsync_song_lua::SongLuaSpriteState],
     total_elapsed: f32,
 ) -> Option<u32> {
     let start = song_lua_valid_sprite_state_index(state).unwrap_or(0);
     let (cols, rows) = sprite_sheet_dims(texture_key);
     let total = cols.saturating_mul(rows).max(1);
-    if state.sprite_animate && state.sprite_state_delay > 0.0 && total > 1 {
-        return Some(deadsync_song_lua::sprite_animation_state_from(
+    let logical_state = if state.sprite_animate && states.len() > 1 {
+        deadsync_song_lua::sprite_custom_animation_state_from(
+            states,
+            start,
+            total_elapsed,
+            state.sprite_playback_rate,
+            state.sprite_loop,
+        )
+    } else if state.sprite_animate && state.sprite_state_delay > 0.0 && total > 1 {
+        deadsync_song_lua::sprite_animation_state_from(
             start,
             total_elapsed,
             state.sprite_playback_rate,
             state.sprite_state_delay,
             total,
             state.sprite_loop,
-        ));
-    }
-    (state.sprite_animate || song_lua_valid_sprite_state_index(state).is_some()).then_some(start)
+        )
+    } else {
+        start
+    };
+    (total > 1
+        || !states.is_empty()
+        || state.sprite_animate
+        || song_lua_valid_sprite_state_index(state).is_some())
+    .then_some(
+        states
+            .get(logical_state as usize)
+            .map_or(logical_state, |sprite_state| sprite_state.frame),
+    )
 }
 
 fn song_lua_overlay_sprite_size(state: SongLuaOverlayState, texture_key: &str) -> Option<[f32; 2]> {
@@ -7706,10 +7729,12 @@ fn song_lua_overlay_sprite_size(state: SongLuaOverlayState, texture_key: &str) -
 fn song_lua_overlay_uv_rect(
     state: SongLuaOverlayState,
     texture_key: Option<&str>,
+    states: &[deadsync_song_lua::SongLuaSpriteState],
     total_elapsed: f32,
 ) -> Option<[f32; 4]> {
-    let state_index = texture_key
-        .and_then(|texture_key| song_lua_sprite_sheet_index(state, texture_key, total_elapsed));
+    let state_index = texture_key.and_then(|texture_key| {
+        song_lua_sprite_sheet_index(state, texture_key, states, total_elapsed)
+    });
     let sheet_dims = texture_key.map(sprite_sheet_dims);
     deadsync_song_lua::sprite_texture_rect_with_offset(
         state.custom_texture_rect,
@@ -14589,6 +14614,7 @@ fn song_lua_overlay_rect(
 fn song_lua_overlay_uvs(
     state: SongLuaOverlayState,
     texture_key: Option<&str>,
+    states: &[deadsync_song_lua::SongLuaSpriteState],
     flip_x: bool,
     flip_y: bool,
     total_elapsed: f32,
@@ -14602,7 +14628,8 @@ fn song_lua_overlay_uvs(
         mut uv_scale_y,
         mut uv_offset_x,
         mut uv_offset_y,
-    ] = if let Some([u0, v0, u1, v1]) = song_lua_overlay_uv_rect(state, texture_key, total_elapsed)
+    ] = if let Some([u0, v0, u1, v1]) =
+        song_lua_overlay_uv_rect(state, texture_key, states, total_elapsed)
     {
         [
             (u1 - u0).abs().max(1e-6),
@@ -15189,7 +15216,7 @@ fn build_song_lua_aft_sprite_actor(
         z,
         cell: None,
         grid: None,
-        uv_rect: song_lua_overlay_uv_rect(state, None, total_elapsed),
+        uv_rect: song_lua_overlay_uv_rect(state, None, &[], total_elapsed),
         visible: state.visible,
         flip_x,
         flip_y,
@@ -15379,7 +15406,11 @@ fn build_song_lua_overlay_actor_with_scratch(
         SongLuaOverlayKind::ActorProxy { .. } => None,
         SongLuaOverlayKind::AftSprite { .. } => None,
         SongLuaOverlayKind::Sound { .. } => None,
-        SongLuaOverlayKind::Sprite { texture_key, .. } => {
+        SongLuaOverlayKind::Sprite {
+            texture_key,
+            states,
+            ..
+        } => {
             let key = texture_key.as_ref();
             if !asset_manager.has_texture_key(key) {
                 return None;
@@ -15422,7 +15453,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
-                    song_lua_overlay_uvs(state, Some(key), flip_x, flip_y, total_elapsed),
+                    song_lua_overlay_uvs(state, Some(key), states, flip_x, flip_y, total_elapsed),
                     state,
                     flip_x,
                     flip_y,
@@ -15477,7 +15508,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
-                    song_lua_overlay_uvs(state, Some(key), flip_x, flip_y, total_elapsed),
+                    song_lua_overlay_uvs(state, Some(key), states, flip_x, flip_y, total_elapsed),
                     state,
                     flip_x,
                     flip_y,
@@ -15578,7 +15609,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 *world_z += song_lua_biased_world_z(state, effect_offset[2]);
                 scale[0] *= effect_scale[0];
                 scale[1] *= effect_scale[1];
-                *uv_rect = song_lua_overlay_uv_rect(state, Some(key), total_elapsed);
+                *uv_rect = song_lua_overlay_uv_rect(state, Some(key), states, total_elapsed);
                 *texcoordvelocity = state.texcoord_velocity;
                 *actor_effect = deadlib_present::anim::EffectState::default();
                 *actor_flip_x ^= flip_x;
@@ -16039,7 +16070,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
-                    song_lua_overlay_uvs(state, None, flip_x, flip_y, total_elapsed),
+                    song_lua_overlay_uvs(state, None, &[], flip_x, flip_y, total_elapsed),
                     state,
                     flip_x,
                     flip_y,
@@ -16093,7 +16124,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
-                    song_lua_overlay_uvs(state, None, flip_x, flip_y, total_elapsed),
+                    song_lua_overlay_uvs(state, None, &[], flip_x, flip_y, total_elapsed),
                     state,
                     flip_x,
                     flip_y,
@@ -18337,9 +18368,12 @@ pub fn push_actors(
         );
         song_lua_merge_proxy_requests(&mut covering_proxy_requests, covering);
     }
-    let retain_underlay_original =
-        !proxy_requests.hide_underlay && !covering_proxy_requests.underlay;
-    let retain_overlay_original = !proxy_requests.hide_overlay && !covering_proxy_requests.overlay;
+    let retain_underlay_original = !song_lua_visuals.hidden_screen_layers[0]
+        && !proxy_requests.hide_underlay
+        && !covering_proxy_requests.underlay;
+    let retain_overlay_original = !song_lua_visuals.hidden_screen_layers[1]
+        && !proxy_requests.hide_overlay
+        && !covering_proxy_requests.overlay;
     let direct_player_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
         proxy_analysis.root_players[player] != 0
             && !proxy_analysis.captured.players[player].player
@@ -20932,6 +20966,7 @@ mod tests {
         SongLuaOverlayKind::Sprite {
             texture_path: std::path::PathBuf::from(key),
             texture_key: Arc::from(key),
+            states: Arc::from([]),
         }
     }
 
@@ -20940,6 +20975,7 @@ mod tests {
         SongLuaOverlayKind::Sprite {
             texture_path: path,
             texture_key,
+            states: Arc::from([]),
         }
     }
 
@@ -27595,6 +27631,94 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_paused_sheet_keeps_first_frame_uv_at_runtime() {
+        let key = "song-lua-paused 4x3.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+        let overlay = SongLuaOverlayActor {
+            kind: test_sprite_kind(&key),
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                sprite_animate: false,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &asset_manager,
+            778,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            2.0,
+        )
+        .expect_actor("paused sheet sprite should render");
+
+        let Actor::Sprite { uv_rect, .. } = actor else {
+            panic!("expected paused sprite overlay");
+        };
+        assert_eq!(uv_rect, Some([0.0, 0.0, 0.25, 1.0 / 3.0]));
+    }
+
+    #[test]
+    fn song_lua_custom_sprite_state_maps_to_declared_frame_at_runtime() {
+        let key = "song-lua-custom-state 4x3.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: key.clone().into(),
+                texture_key: Arc::from(key.as_str()),
+                states: Arc::from([
+                    deadsync_song_lua::SongLuaSpriteState {
+                        frame: 2,
+                        delay: 999.0,
+                    },
+                    deadsync_song_lua::SongLuaSpriteState {
+                        frame: 5,
+                        delay: 0.1,
+                    },
+                ]),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                sprite_animate: false,
+                sprite_state_index: Some(1),
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &asset_manager,
+            778,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect_actor("custom-state sprite should render");
+
+        let Actor::Sprite { uv_rect, .. } = actor else {
+            panic!("expected custom-state sprite overlay");
+        };
+        assert_eq!(uv_rect, Some([0.25, 1.0 / 3.0, 0.5, 2.0 / 3.0]));
+    }
+
+    #[test]
     fn song_lua_sprite_animation_advances_sheet_frames_at_runtime() {
         let key = "song-lua-animate 4x3.png".to_string();
         let mut asset_manager = AssetManager::new();
@@ -28870,6 +28994,7 @@ mod tests {
             song_foreground: SongLuaCapturedActor::default(),
             song_foreground_events: Vec::new(),
             hidden_players: [false; MAX_PLAYERS],
+            hidden_screen_layers: [false; 2],
             note_hides: std::array::from_fn(|_| {
                 deadsync_gameplay::SongLuaNoteHideWindows::default()
             }),

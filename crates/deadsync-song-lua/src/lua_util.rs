@@ -12,18 +12,19 @@ use crate::{
     GRAPH_DISPLAY_VALUE_RESOLUTION, LUA_PLAYERS, SONG_LUA_BROADCASTS_KEY,
     SONG_LUA_CAPTURE_ACTOR_SET_KEY, SONG_LUA_CAPTURE_ACTORS_KEY, SONG_LUA_CAPTURE_SNAPSHOTS_KEY,
     SONG_LUA_DANGER_LIFE, SONG_LUA_INITIAL_LIFE, SONG_LUA_PROBE_ACTOR_SET_KEY,
-    SONG_LUA_PROBE_ACTORS_KEY, SONG_LUA_PROBE_METHODS_KEY, SONG_LUA_SOUND_PATHS_KEY,
-    SONG_LUA_SPRITE_STATE_CLEAR, SONG_LUA_STARTUP_MESSAGE, SONG_LUA_THEME_PATH_PREFIX,
-    SONG_LUA_TOP_SCREEN_OPTION_ROWS, SongLuaActorMultiVertexPoint, SongLuaCapturedActor,
-    SongLuaColumnOffsetBuildParams, SongLuaColumnOffsetSample, SongLuaColumnOffsetWindow,
-    SongLuaColumnTransformSample, SongLuaColumnTransformTarget, SongLuaCompileContext,
-    SongLuaCompileInfo, SongLuaDifficulty, SongLuaEaseTarget, SongLuaMessageEvent,
-    SongLuaNoteHideWindow, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayEase,
-    SongLuaOverlayEaseBuildParams, SongLuaOverlayKind, SongLuaOverlayMeshVertex,
-    SongLuaOverlayMessageCommand, SongLuaOverlayModelLayer, SongLuaOverlayState,
-    SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue,
-    SongLuaPlayerContext, SongLuaProxyTarget, SongLuaSpanMode, SongLuaTimeUnit,
-    SongLuaTrackedActor, SongLuaTrackedActorTarget, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
+    SONG_LUA_PROBE_ACTORS_KEY, SONG_LUA_PROBE_METHODS_KEY, SONG_LUA_SOUND_CALLS_KEY,
+    SONG_LUA_SOUND_PATHS_KEY, SONG_LUA_SPRITE_STATE_CLEAR, SONG_LUA_STARTUP_MESSAGE,
+    SONG_LUA_THEME_PATH_PREFIX, SONG_LUA_TOP_SCREEN_OPTION_ROWS, SongLuaActorMultiVertexPoint,
+    SongLuaCapturedActor, SongLuaColumnOffsetBuildParams, SongLuaColumnOffsetSample,
+    SongLuaColumnOffsetWindow, SongLuaColumnTransformSample, SongLuaColumnTransformTarget,
+    SongLuaCompileContext, SongLuaCompileInfo, SongLuaDifficulty, SongLuaEaseTarget,
+    SongLuaMessageEvent, SongLuaNoteHideWindow, SongLuaOverlayBlendMode,
+    SongLuaOverlayCommandBlock, SongLuaOverlayEase, SongLuaOverlayEaseBuildParams,
+    SongLuaOverlayKind, SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand,
+    SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta,
+    SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue, SongLuaPlayerContext,
+    SongLuaProxyTarget, SongLuaSoundEvent, SongLuaSpanMode, SongLuaTimeUnit, SongLuaTrackedActor,
+    SongLuaTrackedActorTarget, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
     TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES, call_with_chunk_env,
     call_with_script_dir, call_with_script_path, clone_lua_value,
     column_transform_windows_from_samples, compile_song_runtime_delta_values,
@@ -573,6 +574,29 @@ pub fn read_tracked_compile_actors(
     ])
 }
 
+pub fn read_top_screen_hidden_layers(lua: &Lua) -> Result<[bool; 2], String> {
+    let top_screen = lua
+        .globals()
+        .get::<Table>("__songlua_top_screen")
+        .map_err(|err| err.to_string())?;
+    let children = actor_children(lua, &top_screen).map_err(|err| err.to_string())?;
+    let mut hidden = [false; 2];
+    for (index, name) in ["Underlay", "Overlay"].iter().enumerate() {
+        let actor = children
+            .get::<Option<Table>>(*name)
+            .map_err(|err| err.to_string())?;
+        hidden[index] = if let Some(actor) = actor {
+            actor
+                .get::<Option<bool>>("__songlua_visible")
+                .map_err(|err| err.to_string())?
+                == Some(false)
+        } else {
+            false
+        };
+    }
+    Ok(hidden)
+}
+
 fn make_actor_ctor(
     lua: &Lua,
     actor_type: &'static str,
@@ -596,6 +620,12 @@ fn make_actor_ctor(
             table.set("__songlua_song_dir", song_dir)?;
         }
         set_actor_decode_movie_for_texture(&table)?;
+        if actor_type.eq_ignore_ascii_case("Sprite") {
+            // Actor::Actor starts with animation enabled in ITGmania.  Sprite
+            // sheets rely on that default unless a command explicitly pauses
+            // them.
+            table.set("__songlua_state_sprite_animate", true)?;
+        }
         install_actor_methods(lua, &table)?;
         install_actor_metatable(lua, &table)?;
         reset_actor_capture(lua, &table)?;
@@ -9357,6 +9387,7 @@ pub struct SongLuaFunctionActionCapture {
     pub overlay_blocks: Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>,
     pub tracked_blocks: Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>,
     pub broadcasts: Vec<(String, bool)>,
+    pub sound_paths: Vec<PathBuf>,
     pub saw_side_effect: bool,
 }
 
@@ -9376,6 +9407,13 @@ pub fn capture_function_action_blocks(
     let broadcast_table = lua.create_table().map_err(|err| err.to_string())?;
     globals
         .set(SONG_LUA_BROADCASTS_KEY, broadcast_table.clone())
+        .map_err(|err| err.to_string())?;
+    let previous_sound_calls = globals
+        .get::<Value>(SONG_LUA_SOUND_CALLS_KEY)
+        .map_err(|err| err.to_string())?;
+    let sound_calls = lua.create_table().map_err(|err| err.to_string())?;
+    globals
+        .set(SONG_LUA_SOUND_CALLS_KEY, sound_calls.clone())
         .map_err(|err| err.to_string())?;
     set_compile_song_runtime_beat(lua, beat).map_err(|err| err.to_string())?;
     let capture_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
@@ -9397,15 +9435,20 @@ pub fn capture_function_action_blocks(
     let tracked_blocks =
         collect_tracked_capture_blocks_for_indices(tracked_actors, &tracked_indices);
     let broadcasts = read_song_lua_broadcasts(&broadcast_table).map_err(|err| err.to_string());
+    let sound_paths = read_path_table(&sound_calls);
     reset_actor_capture_tables(lua, &touched_actors)?;
     restore_actors_semantic_state(state_snapshot).map_err(|err| err.to_string())?;
     globals
         .set(SONG_LUA_BROADCASTS_KEY, previous_broadcasts)
         .map_err(|err| err.to_string())?;
+    globals
+        .set(SONG_LUA_SOUND_CALLS_KEY, previous_sound_calls)
+        .map_err(|err| err.to_string())?;
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
     let overlay_blocks = overlay_blocks?;
     let tracked_blocks = tracked_blocks?;
     let broadcasts = broadcasts?;
+    let sound_paths = sound_paths?;
     let saw_side_effect =
         song_lua_side_effect_count(lua).map_err(|err| err.to_string())? > side_effect_before;
     result.map_err(|err| err.to_string())?;
@@ -9413,8 +9456,16 @@ pub fn capture_function_action_blocks(
         overlay_blocks,
         tracked_blocks,
         broadcasts,
+        sound_paths,
         saw_side_effect,
     })
+}
+
+fn read_path_table(table: &Table) -> Result<Vec<PathBuf>, String> {
+    table
+        .sequence_values::<String>()
+        .map(|path| path.map(PathBuf::from).map_err(|err| err.to_string()))
+        .collect()
 }
 
 pub fn capture_overlay_compile_actor_function_action_blocks<Kind>(
@@ -9438,6 +9489,7 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
     persists: bool,
     counter: &mut usize,
     messages: &mut Vec<SongLuaMessageEvent>,
+    sound_events: &mut Vec<SongLuaSoundEvent>,
 ) -> Result<bool, String> {
     let capture = capture_overlay_compile_actor_function_action_blocks(
         lua,
@@ -9446,6 +9498,13 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
         function,
         beat,
     )?;
+    sound_events.extend(
+        capture
+            .sound_paths
+            .iter()
+            .cloned()
+            .map(|path| SongLuaSoundEvent { beat, path }),
+    );
     if !capture.broadcasts.is_empty()
         && capture
             .broadcasts
@@ -9506,6 +9565,7 @@ pub fn read_overlay_compile_actor_actions<Kind>(
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
     tracked_actors: &mut [SongLuaTrackedActor],
     messages: &mut Vec<SongLuaMessageEvent>,
+    sound_events: &mut Vec<SongLuaSoundEvent>,
     counter: &mut usize,
     info: &mut SongLuaCompileInfo,
 ) -> Result<(), String> {
@@ -9520,6 +9580,7 @@ pub fn read_overlay_compile_actor_actions<Kind>(
                 input.persists,
                 counter,
                 messages,
+                sound_events,
             ),
             Ok(true)
         ) {
@@ -9537,6 +9598,7 @@ pub fn read_update_function_overlay_compile_actor_actions<Kind>(
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
     tracked_actors: &mut [SongLuaTrackedActor],
     messages: &mut Vec<SongLuaMessageEvent>,
+    sound_events: &mut Vec<SongLuaSoundEvent>,
     counter: &mut usize,
     info: &mut SongLuaCompileInfo,
 ) -> Result<(), String> {
@@ -9547,6 +9609,7 @@ pub fn read_update_function_overlay_compile_actor_actions<Kind>(
             overlays,
             tracked_actors,
             messages,
+            sound_events,
             counter,
             info,
         )?;
@@ -11259,6 +11322,7 @@ where
                 SongLuaOverlayKind::Sprite {
                     texture_path,
                     texture_key,
+                    states: read_sprite_states(actor)?.into(),
                 }
             }
         }
@@ -11360,6 +11424,25 @@ where
             message_commands,
         },
     }))
+}
+
+fn read_sprite_states(actor: &Table) -> Result<Vec<crate::SongLuaSpriteState>, String> {
+    let mut states = Vec::new();
+    for index in 0.. {
+        let frame_key = format!("Frame{index:04}");
+        let Some(frame) = actor
+            .get::<Option<u32>>(frame_key)
+            .map_err(|err| err.to_string())?
+        else {
+            break;
+        };
+        let delay = actor
+            .get::<Option<f32>>(format!("Delay{index:04}"))
+            .map_err(|err| err.to_string())?
+            .unwrap_or(0.1);
+        states.push(crate::SongLuaSpriteState { frame, delay });
+    }
+    Ok(states)
 }
 
 fn read_actor_multi_vertex_range(

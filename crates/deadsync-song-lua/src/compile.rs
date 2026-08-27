@@ -5,8 +5,10 @@ use std::sync::Arc;
 
 use crate::{
     CompiledSongLua, SongLuaCompileContext, SongLuaCompileTimer, SongLuaHostState,
-    SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayKind, SongLuaOverlayModelLayer,
-    SongLuaOverlayState, SongLuaTimeUnit, SongLuaTrackedActorTarget as TrackedCompileActorTarget,
+    SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayCommandBlock, SongLuaOverlayKind,
+    SongLuaOverlayMessageCommand, SongLuaOverlayModelLayer, SongLuaOverlayState,
+    SongLuaOverlayStateDelta, SongLuaTimeUnit,
+    SongLuaTrackedActorTarget as TrackedCompileActorTarget,
     add_actor_child_from_path as add_host_actor_child_from_path,
     compile_multitap_update_overlays_for_actors, compile_perframes, compile_update_functions,
     create_dummy_actor as create_host_dummy_actor,
@@ -18,7 +20,7 @@ use crate::{
     read_global_function_nested_tables, read_mod_windows, read_note_column_zoom_hides,
     read_noteskin_tap_actor_slots, read_overlay_compile_actor_actions, read_overlay_compile_actors,
     read_proxy_target_kind, read_runtime_mod_eases, read_song_lua_sound_paths,
-    read_tracked_compile_actors, read_update_function_nested_tables,
+    read_top_screen_hidden_layers, read_tracked_compile_actors, read_update_function_nested_tables,
     read_update_function_overlay_compile_actor_actions, read_update_function_tables,
     read_xero_runtime_mod_eases_for_overlay_actors, register_loaded_easing_names,
     restore_compile_globals, run_actor_draw_functions, run_actor_init_commands,
@@ -295,6 +297,7 @@ where
             .is_some_and(|tracked| !tracked.actor.initial_state.visible)
     });
     let mut overlay_trigger_counter = 0usize;
+    let mut sound_events = Vec::new();
     let prefix_perframes = globals
         .get::<Option<Table>>("prefix_globals")
         .map_err(|err| err.to_string())?
@@ -337,6 +340,7 @@ where
             &mut overlays,
             &mut tracked_actors,
             &mut out.messages,
+            &mut sound_events,
             &mut overlay_trigger_counter,
             &mut out.info,
         )?;
@@ -411,6 +415,7 @@ where
         &mut overlays,
         &mut tracked_actors,
         &mut out.messages,
+        &mut sound_events,
         &mut overlay_trigger_counter,
         &mut out.info,
     )?;
@@ -421,6 +426,7 @@ where
         &mut overlays,
         &mut tracked_actors,
         &mut out.messages,
+        &mut sound_events,
         &mut overlay_trigger_counter,
         &mut out.info,
     )?;
@@ -473,7 +479,7 @@ where
             .iter()
             .map(|overlay| overlay.actor.message_commands.as_slice()),
     );
-    let overlay_layers = overlays
+    let mut overlay_layers = overlays
         .iter()
         .map(|overlay| {
             overlay
@@ -484,6 +490,37 @@ where
         })
         .collect::<Result<Vec<_>, _>>()?;
     out.overlays = overlays.into_iter().map(|overlay| overlay.actor).collect();
+    for (index, event) in sound_events.into_iter().enumerate() {
+        let message = format!("__songlua_sound_call_{index}");
+        out.messages.push(crate::SongLuaMessageEvent {
+            beat: event.beat,
+            message: message.clone(),
+            persists: false,
+        });
+        out.overlays.push(SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sound {
+                sound_path: event.path,
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: vec![SongLuaOverlayMessageCommand {
+                message,
+                blocks: vec![SongLuaOverlayCommandBlock {
+                    start: 0.0,
+                    duration: 0.0,
+                    easing: None,
+                    opt1: None,
+                    opt2: None,
+                    delta: SongLuaOverlayStateDelta {
+                        sound_play: Some(true),
+                        ..SongLuaOverlayStateDelta::default()
+                    },
+                }],
+            }],
+        });
+        overlay_layers.push(primary_index);
+    }
     for tracked in tracked_actors {
         match tracked.target {
             TrackedCompileActorTarget::Player(player) => out.player_actors[player] = tracked.actor,
@@ -491,6 +528,7 @@ where
         }
     }
     out.hidden_players = hidden_players;
+    out.hidden_screen_layers = read_top_screen_hidden_layers(&lua)?;
 
     sort_compiled_song_lua(&mut out);
     out.sound_paths = read_song_lua_sound_paths(&lua)?;
@@ -642,6 +680,7 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     primary.player_actors = compiled.player_actors;
     primary.song_foreground = compiled.song_foreground;
     primary.hidden_players = compiled.hidden_players;
+    primary.hidden_screen_layers = compiled.hidden_screen_layers;
     primary.note_hides = compiled.note_hides;
     primary.column_offsets = compiled.column_offsets;
     primary.info = compiled.info;
