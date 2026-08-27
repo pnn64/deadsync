@@ -125,13 +125,6 @@ impl<S> Clone for HoldBodyCapRequest<'_, S> {
     }
 }
 
-/// Whether body/cap composition reached the hold-head stage.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum HoldComposeControl {
-    Continue,
-    AbortHold,
-}
-
 #[derive(Default)]
 struct RenderedHoldBody {
     top: Option<f32>,
@@ -629,24 +622,20 @@ pub(crate) fn compose_hold_body_caps<S, F, P>(
     request: HoldBodyCapRequest<'_, S>,
     sample_path: &P,
     sprite_source: &F,
-) -> HoldComposeControl
-where
+) where
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
     P: Fn(f32) -> HoldPathSample,
 {
     let rendered = compose_hold_body(draws, mesh_scratch, &request, sample_path, sprite_source);
-    if compose_top_cap(
+    compose_top_cap(
         draws,
         mesh_scratch,
         &request,
         &rendered,
         sample_path,
         sprite_source,
-    ) == HoldComposeControl::AbortHold
-    {
-        return HoldComposeControl::AbortHold;
-    }
+    );
     compose_bottom_cap(
         draws,
         mesh_scratch,
@@ -1349,20 +1338,19 @@ fn compose_top_cap<S, F, P>(
     rendered: &RenderedHoldBody,
     sample_path: &P,
     sprite_source: &F,
-) -> HoldComposeControl
-where
+) where
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
     P: Fn(f32) -> HoldPathSample,
 {
     if request.draw_span.is_none() {
-        return HoldComposeControl::Continue;
+        return;
     }
     let Some(slot) = request.top_cap_slot else {
-        return HoldComposeControl::Continue;
+        return;
     };
     if request.y_head <= -400.0 || request.y_head >= request.screen_height + 400.0 {
-        return HoldComposeControl::Continue;
+        return;
     }
 
     let frame = slot.frame_index_from_phase(request.top_cap_phase);
@@ -1399,21 +1387,21 @@ where
         }
     }
     if cap_height <= f32::EPSILON {
-        return HoldComposeControl::Continue;
+        return;
     }
 
     let center_y = f32::midpoint(cap_top, cap_bottom);
     let center = sample_path(center_y);
     let (alpha, glow) = hold_alpha_glow(request, center);
     if alpha <= f32::EPSILON && glow <= f32::EPSILON {
-        return HoldComposeControl::AbortHold;
+        return;
     }
     let top = sample_path(cap_top);
     let bottom = sample_path(cap_bottom);
     let (center_xy, draw_height, path_rotation) =
         hold_segment_pose([top.center_x, cap_top], [bottom.center_x, cap_bottom]);
     if draw_height <= f32::EPSILON {
-        return HoldComposeControl::AbortHold;
+        return;
     }
 
     let use_mesh = !request.use_legacy_sprites
@@ -1505,7 +1493,6 @@ where
             sprite_source,
         );
     }
-    HoldComposeControl::Continue
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1605,21 +1592,20 @@ fn compose_bottom_cap<S, F, P>(
     rendered: &RenderedHoldBody,
     sample_path: &P,
     sprite_source: &F,
-) -> HoldComposeControl
-where
+) where
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
     P: Fn(f32) -> HoldPathSample,
 {
     if request.draw_span.is_none() {
-        return HoldComposeControl::Continue;
+        return;
     }
     let Some(slot) = request.bottom_cap_slot else {
-        return HoldComposeControl::Continue;
+        return;
     };
     let tail_position = request.y_tail + 1.0;
     if tail_position <= -400.0 || tail_position >= request.screen_height + 400.0 {
-        return HoldComposeControl::Continue;
+        return;
     }
 
     let frame = slot.frame_index_from_phase(request.bottom_cap_phase);
@@ -1646,10 +1632,10 @@ where
     let Some((raw_top, draw_bottom)) =
         hold_tail_cap_bounds(tail_position, cap_span, rendered.top, rendered.bottom)
     else {
-        return HoldComposeControl::AbortHold;
+        return;
     };
     if cap_span <= f32::EPSILON {
-        return HoldComposeControl::AbortHold;
+        return;
     }
     let draw_top = if request.y_head > raw_top {
         request.y_head.min(draw_bottom)
@@ -1664,24 +1650,24 @@ where
         cap_span,
         request.lane_reverse && request.top_anchor_reverse,
     ) else {
-        return HoldComposeControl::AbortHold;
+        return;
     };
     if !(draw_height > f32::EPSILON) {
-        return HoldComposeControl::Continue;
+        return;
     }
 
     let center_y = f32::midpoint(draw_top, draw_bottom);
     let center = sample_path(center_y);
     let (alpha, glow) = hold_alpha_glow(request, center);
     if alpha <= f32::EPSILON && glow <= f32::EPSILON {
-        return HoldComposeControl::AbortHold;
+        return;
     }
     let top = sample_path(draw_top);
     let bottom = sample_path(draw_bottom);
     let (center_xy, cap_draw_height, rotation_z) =
         hold_segment_pose([top.center_x, draw_top], [bottom.center_x, draw_bottom]);
     if cap_draw_height <= f32::EPSILON {
-        return HoldComposeControl::AbortHold;
+        return;
     }
 
     let use_mesh = !request.use_legacy_sprites
@@ -1769,7 +1755,6 @@ where
             sprite_source,
         );
     }
-    HoldComposeControl::Continue
 }
 
 fn preferred_hold_visual<'a, T: ?Sized>(
@@ -2379,7 +2364,7 @@ mod tests {
         let mut mesh_scratch = HoldMeshScratch::with_columns(1);
         mesh_scratch.begin_frame();
 
-        let control = compose_hold_body_caps(
+        compose_hold_body_caps(
             &mut actors,
             &mut mesh_scratch,
             body_cap_request(Some(&body), Some(&top), Some(&bottom)),
@@ -2387,7 +2372,6 @@ mod tests {
             &test_source,
         );
 
-        assert_eq!(control, HoldComposeControl::Continue);
         assert_eq!(actors.len(), 6);
         assert_eq!(
             actors.iter().map(sprite_key).collect::<Vec<_>>(),
@@ -2712,7 +2696,7 @@ mod tests {
     }
 
     #[test]
-    fn invisible_top_cap_aborts_before_bottom_and_head_stage() {
+    fn invisible_top_cap_keeps_later_hold_parts_eligible() {
         let body = TestSlot::sprite("body");
         let top = TestSlot::sprite("top");
         let bottom = TestSlot::sprite("bottom");
@@ -2725,7 +2709,7 @@ mod tests {
         let mut mesh_scratch = HoldMeshScratch::with_columns(1);
         mesh_scratch.begin_frame();
 
-        let control = compose_hold_body_caps(
+        compose_hold_body_caps(
             &mut actors,
             &mut mesh_scratch,
             request,
@@ -2733,13 +2717,22 @@ mod tests {
             &test_source,
         );
 
-        assert_eq!(control, HoldComposeControl::AbortHold);
         assert!(
             !actors.is_empty(),
             "visible body slices should remain emitted"
         );
         assert_eq!(top.uv_calls.get(), 1);
-        assert_eq!(bottom.uv_calls.get(), 0);
+        assert_eq!(bottom.uv_calls.get(), 1);
+        assert!(
+            actors.iter().any(|draw| {
+                matches!(
+                    draw,
+                    FlatDraw::Sprite(FlatSprite { source, .. })
+                        if source.texture_key() == Some("bottom")
+                )
+            }),
+            "an invisible top cap must not suppress later hold parts"
+        );
     }
 
     fn visuals() -> HoldVisuals<u8> {

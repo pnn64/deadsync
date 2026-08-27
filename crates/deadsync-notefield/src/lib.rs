@@ -111,10 +111,10 @@ use feedback::{
 };
 pub(crate) use frame_feedback::compose_notefield_feedback;
 pub(crate) use holds::{
-    HoldBodyCapRequest, HoldComposeControl, HoldEntryPlanRequest, HoldPathSample,
-    compose_hold_body_caps, hold_entry_head_beat, hold_entry_plan, hold_parts_for_note_type,
-    mine_part, scale_effect_size, scale_sprite_to_arrow, song_time_ns_to_seconds,
-    tap_part_for_note_type, tap_replacement_head, translated_uv_rect,
+    HoldBodyCapRequest, HoldEntryPlanRequest, HoldPathSample, compose_hold_body_caps,
+    hold_entry_head_beat, hold_entry_plan, hold_parts_for_note_type, mine_part, scale_effect_size,
+    scale_sprite_to_arrow, song_time_ns_to_seconds, tap_part_for_note_type, tap_replacement_head,
+    translated_uv_rect,
 };
 #[cfg(test)]
 use holds::{
