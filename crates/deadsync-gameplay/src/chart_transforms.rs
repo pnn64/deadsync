@@ -2098,7 +2098,7 @@ pub fn apply_uncommon_masks_with_masks(
     _player: usize,
 ) {
     if (remove_mask & REMOVE_MASK_BIT_LITTLE) != 0 {
-        notes.retain(|note| (note.beat - note.beat.round()).abs() < 0.0001);
+        notes.retain(|note| beat_to_note_row(note.beat) % ROWS_PER_BEAT == 0);
     }
 
     if (holds_mask & HOLDS_MASK_BIT_NO_ROLLS) != 0 {
