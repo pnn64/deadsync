@@ -15,7 +15,9 @@ pub struct IdleInhibitor {
 
 impl IdleInhibitor {
     #[must_use]
-    pub const fn acquire() -> Self {
+    // The Unix implementation performs runtime I/O and cannot be `const`.
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn acquire() -> Self {
         Self {
             #[cfg(all(unix, not(target_os = "macos")))]
             _inner: unix::IdleInhibitor::acquire(),
