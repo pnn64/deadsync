@@ -125,8 +125,8 @@ pub struct PlayerRuntime {
 #[derive(Clone, Debug)]
 pub struct GameplayPlayersRuntimeState {
     pub players: [PlayerRuntime; MAX_PLAYERS],
-    /// Latched once at frame start. ITGmania publishes HealthState_Dead after
-    /// the frame's JudgmentMessages, so the judgment that drains life to zero
+    /// Latched once at frame start. `ITGmania` publishes `HealthState_Dead` after
+    /// the frame's `JudgmentMessages`, so the judgment that drains life to zero
     /// (and any other judgments in that update) must remain eligible.
     pub column_judgments_active: [bool; MAX_PLAYERS],
 }

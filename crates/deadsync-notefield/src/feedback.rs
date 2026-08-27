@@ -69,7 +69,7 @@ pub(crate) fn column_flash_reverse_top_y(
     center_y: f32,
     receptor_reverse_y: f32,
 ) -> f32 {
-    center_y + receptor_reverse_y - lane_width * 0.5 - height + style.reverse_anchor_y
+    lane_width.mul_add(-0.5, center_y + receptor_reverse_y) - height + style.reverse_anchor_y
         - layout.reverse_trim
 }
 
@@ -86,7 +86,7 @@ pub(crate) fn column_flash_alpha_at(
     if t >= 1.0 {
         0.0
     } else {
-        base_alpha * (1.0 - t * t)
+        base_alpha * t.mul_add(-t, 1.0)
     }
 }
 
@@ -137,7 +137,7 @@ pub(crate) const fn column_flash_color(
 }
 
 pub(crate) fn field_effect_height(screen_height: f32, tilt: f32) -> f32 {
-    screen_height + tilt.abs() * 200.0
+    tilt.abs().mul_add(200.0, screen_height)
 }
 
 pub(crate) const fn itg_actor_glow_alpha(alpha: f32) -> f32 {
@@ -167,7 +167,7 @@ pub(crate) fn column_cue_reverse_top_y(
     center_y: f32,
     receptor_reverse_y: f32,
 ) -> f32 {
-    center_y + receptor_reverse_y - lane_width * 0.5 - height + style.reverse_anchor_y
+    lane_width.mul_add(-0.5, center_y + receptor_reverse_y) - height + style.reverse_anchor_y
 }
 
 pub(crate) fn column_cue_alpha(elapsed_real: f32, duration_real: f32) -> f32 {
@@ -211,7 +211,7 @@ pub(crate) fn column_cue_alpha_anchored(
     }
     let fade_in = if since_entry_real < fade_time {
         let t = (since_entry_real / fade_time).clamp(0.0, 1.0);
-        1.0 - (1.0 - t) * (1.0 - t)
+        (1.0 - t).mul_add(-(1.0 - t), 1.0)
     } else {
         1.0
     };
@@ -390,8 +390,8 @@ fn compose_column_cue(
             if local_col >= num_cols {
                 continue;
             }
-            let x = request.playfield_center_x
-                + request.column_xs[local_col] * request.spacing_multiplier * request.field_zoom;
+            let x = (request.column_xs[local_col] * request.spacing_multiplier)
+                .mul_add(request.field_zoom, request.playfield_center_x);
             let alpha = style.base_alpha * alpha_mul;
             let rgb = if col_cue.is_mine {
                 style.mine_color
@@ -437,8 +437,8 @@ fn compose_column_cue(
         if local_col >= num_cols {
             continue;
         }
-        let x = request.playfield_center_x
-            + request.column_xs[local_col] * request.spacing_multiplier * request.field_zoom;
+        let x = (request.column_xs[local_col] * request.spacing_multiplier)
+            .mul_add(request.field_zoom, request.playfield_center_x);
         let y = request.field_center_y
             + if request.column_dirs[local_col] < 0.0 {
                 style.countdown_reverse_y
@@ -499,8 +499,8 @@ fn compose_column_flashes(
         if alpha <= 0.0 {
             continue;
         }
-        let x = request.playfield_center_x
-            + request.column_xs[i] * request.spacing_multiplier * request.field_zoom;
+        let x = (request.column_xs[i] * request.spacing_multiplier)
+            .mul_add(request.field_zoom, request.playfield_center_x);
         let reverse = request.column_dirs[i] < 0.0;
         let y = if reverse {
             column_flash_reverse_top_y(
@@ -541,7 +541,7 @@ fn append_column_quad(
     z: i16,
 ) {
     draws.push(FlatDraw::Sprite(FlatSprite {
-        center: [x, y + height * 0.5],
+        center: [x, height.mul_add(0.5, y)],
         world_z: 0.0,
         size: [width, height],
         source: SpriteSource::Solid,
@@ -590,7 +590,7 @@ pub(crate) fn judgment_actor_zoom(mini: f32, judgment_back: bool, _tilt: f32, _s
     if mini <= 0.0 || !mini.is_finite() {
         1.0
     } else {
-        (1.0 - mini * 0.5).max(0.35)
+        mini.mul_add(-0.5, 1.0).max(0.35)
     }
 }
 
@@ -642,18 +642,18 @@ pub(crate) fn tap_judgment_rows(params: TapJudgmentRowsParams) -> (usize, Option
 }
 
 pub(crate) fn held_miss_zoom(elapsed: f32, mini: f32) -> (f32, f32) {
-    let mini_scale = (1.0 - mini * 0.5).max(0.0);
+    let mini_scale = mini.mul_add(-0.5, 1.0).max(0.0);
     if elapsed < 0.1 {
         let t = (elapsed / 0.1).clamp(0.0, 1.0);
-        let ease_t = 1.0 - (1.0 - t).powi(2);
-        let zoom_x = 0.8 + (0.75 - 0.8) * ease_t;
+        let ease_t = (1.0 - t).mul_add(-(1.0 - t), 1.0);
+        let zoom_x = (0.75_f32 - 0.8).mul_add(ease_t, 0.8);
         return (zoom_x * mini_scale, 0.75 * mini_scale);
     }
     if elapsed < 0.3 {
         return (0.75 * mini_scale, 0.75 * mini_scale);
     }
     let t = ((elapsed - 0.3) / 0.2).clamp(0.0, 1.0);
-    let zoom = 0.75 * mini_scale * (1.0 - t.powi(2));
+    let zoom = 0.75 * mini_scale * t.mul_add(-t, 1.0);
     (zoom, zoom)
 }
 
@@ -947,7 +947,7 @@ mod tests {
                 fade: actual_fade,
                 ..
             }) => {
-                assert_eq!(*center, [offset[0], offset[1] + scale[1] * 0.5]);
+                assert_eq!(*center, [offset[0], scale[1].mul_add(0.5, offset[1])]);
                 assert!(matches!(source, SpriteSource::Solid));
                 assert_eq!(*actual_size, scale);
                 for (actual, expected) in actual_tint.iter().zip(tint) {

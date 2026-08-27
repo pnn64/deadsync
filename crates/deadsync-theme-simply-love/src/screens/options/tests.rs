@@ -2841,8 +2841,14 @@ fn row_window_and_edge_tweens_match_screen_options_position_rows() {
 
     update_row_tweens(&mut row_tweens, &mut key, 12, 6, 1.0, 20.0, 0.0);
     let row_step = ROW_H + ROW_GAP;
-    assert_eq!(row_tweens[0].to_y, first_visible_y - 0.5 * row_step);
-    assert_eq!(row_tweens[10].to_y, bottom_hidden_y - 0.5 * row_step);
+    assert_eq!(
+        row_tweens[0].to_y,
+        0.5f32.mul_add(-row_step, first_visible_y)
+    );
+    assert_eq!(
+        row_tweens[10].to_y,
+        0.5f32.mul_add(-row_step, bottom_hidden_y)
+    );
     assert_eq!((row_tweens[0].from_a, row_tweens[0].to_a), (1.0, 0.0));
     assert_eq!((row_tweens[10].from_a, row_tweens[10].to_a), (0.0, 1.0));
 

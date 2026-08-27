@@ -246,7 +246,7 @@ fn note_search_benchmark() {
         })
         .collect::<Vec<_>>();
     for query in 0..4_096 {
-        let beat = 80.0 + (query % (NOTE_STATS - 640)) as f32 * 0.125;
+        let beat = ((query % (NOTE_STATS - 640)) as f32).mul_add(0.125, 80.0);
         let old = legacy_first_beat(beat, 768.0, &stats);
         let new =
             find_first_displayed_beat(beat, 768.0, &stats, |candidate| (candidate - beat) * 48.0);
@@ -255,7 +255,7 @@ fn note_search_benchmark() {
 
     let mut old_query = 0usize;
     let old = measure(NOTE_SEARCHES, || {
-        let beat = 80.0 + (old_query % (NOTE_STATS - 640)) as f32 * 0.125;
+        let beat = ((old_query % (NOTE_STATS - 640)) as f32).mul_add(0.125, 80.0);
         old_query += 1;
         u64::from(
             legacy_first_beat(black_box(beat), 768.0, black_box(&stats))
@@ -265,7 +265,7 @@ fn note_search_benchmark() {
     });
     let mut new_query = 0usize;
     let new = measure(NOTE_SEARCHES, || {
-        let beat = 80.0 + (new_query % (NOTE_STATS - 640)) as f32 * 0.125;
+        let beat = ((new_query % (NOTE_STATS - 640)) as f32).mul_add(0.125, 80.0);
         new_query += 1;
         u64::from(
             find_first_displayed_beat(black_box(beat), 768.0, black_box(&stats), |candidate| {
@@ -339,7 +339,12 @@ fn row_precision_benchmark() {
         0.0,
         &TimingSegments {
             bpms: (0..64)
-                .map(|index| (index as f32 * 16.0, 120.0 + (index % 5) as f32 * 15.0))
+                .map(|index| {
+                    (
+                        index as f32 * 16.0,
+                        ((index % 5) as f32).mul_add(15.0, 120.0),
+                    )
+                })
                 .collect(),
             ..TimingSegments::default()
         },
@@ -354,7 +359,7 @@ fn row_precision_benchmark() {
         .collect::<Vec<_>>();
     let queries = (0..4_096)
         .map(|query| {
-            let beat = 80.0 + (query % (NOTE_STATS - 640)) as f32 * 0.125;
+            let beat = ((query % (NOTE_STATS - 640)) as f32).mul_add(0.125, 80.0);
             (beat, timing.get_time_for_beat_ns(beat))
         })
         .collect::<Vec<_>>();
@@ -382,7 +387,7 @@ fn row_precision_benchmark() {
             black_box(&stats),
         )
         .unwrap_or_default();
-        first as u32 as u64 | (last as u32 as u64) << 32
+        u64::from(first as u32) | u64::from(last as u32) << 32
     });
     let mut new_query = 0usize;
     let new = measure(CMOD_SEARCHES, || {
@@ -398,7 +403,7 @@ fn row_precision_benchmark() {
             .zip(last)
             .map(|(a, b)| (a, b.max(a)))
             .unwrap_or_default();
-        first as u32 as u64 | (last as u32 as u64) << 32
+        u64::from(first as u32) | u64::from(last as u32) << 32
     });
     assert_eq!(old.checksum, new.checksum);
     assert_zero_alloc(&old);
@@ -416,7 +421,12 @@ fn cmod_cue_search_benchmark() {
         0.0,
         &TimingSegments {
             bpms: (0..64)
-                .map(|index| (index as f32 * 16.0, 120.0 + (index % 5) as f32 * 15.0))
+                .map(|index| {
+                    (
+                        index as f32 * 16.0,
+                        ((index % 5) as f32).mul_add(15.0, 120.0),
+                    )
+                })
                 .collect(),
             ..TimingSegments::default()
         },
@@ -431,7 +441,7 @@ fn cmod_cue_search_benchmark() {
         .collect::<Vec<_>>();
     let queries = (0..4_096)
         .map(|query| {
-            let beat = 80.0 + (query % (NOTE_STATS - 640)) as f32 * 0.125;
+            let beat = ((query % (NOTE_STATS - 640)) as f32).mul_add(0.125, 80.0);
             (beat, timing.get_time_for_beat_ns(beat))
         })
         .collect::<Vec<_>>();
@@ -503,11 +513,16 @@ fn cue_segment_window_benchmark() {
     let scrolls = (0..CUE_SEGMENTS)
         .map(|index| ScrollSegment {
             beat: index as f32 * 0.5,
-            ratio: 0.5 + (index % 7) as f32 * 0.125,
+            ratio: ((index % 7) as f32).mul_add(0.125, 0.5),
         })
         .collect::<Vec<_>>();
     let bpms = (0..CUE_SEGMENTS)
-        .map(|index| (index as f32 * 0.5, 90.0 + (index % 11) as f32 * 15.0))
+        .map(|index| {
+            (
+                index as f32 * 0.5,
+                ((index % 11) as f32).mul_add(15.0, 90.0),
+            )
+        })
         .collect::<Vec<_>>();
     let delays = (0..CUE_SEGMENTS)
         .map(|index| DelaySegment {
@@ -521,7 +536,7 @@ fn cue_segment_window_benchmark() {
             duration: 0.05,
         })
         .collect::<Vec<_>>();
-    let cycle = CUE_SEGMENTS as f32 * 0.5 - 24.0;
+    let cycle = (CUE_SEGMENTS as f32).mul_add(0.5, -24.0);
 
     for query in 0..4_096 {
         let low = (query as f32 * 0.37) % cycle;
@@ -590,7 +605,7 @@ fn edit_bar_cursor_benchmark() {
         })
         .collect::<Vec<_>>();
     let step_rows = 12;
-    let cycle_rows = beat_to_note_row(16.0 * EDIT_SIGNATURES as f32 - 32.0);
+    let cycle_rows = beat_to_note_row(16.0f32.mul_add(EDIT_SIGNATURES as f32, -32.0));
 
     for frame in 0..4_096 {
         let center = (frame * 37 % cycle_rows as usize) as i32 + 96;
@@ -743,7 +758,7 @@ fn stream_progress_benchmark() {
     let total = segments
         .iter()
         .filter(|segment| !segment.is_break())
-        .map(|segment| (segment.end() - segment.start()) as f64)
+        .map(|segment| f64::from(segment.end() - segment.start()))
         .sum::<f64>();
     let old_lookup = BinaryProgressLookup::new(&segments);
     let new_lookup = StreamProgressLookup::new(&segments);

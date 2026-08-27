@@ -105,7 +105,7 @@ fn fixture(count: usize, unique: usize) -> Vec<RuntimeModEaseEntry> {
                     SongLuaTimeUnit::Beat
                 },
                 start: key as f32 * 0.125,
-                limit: 0.25 + (key % 5) as f32 * 0.0625,
+                limit: ((key % 5) as f32).mul_add(0.0625, 0.25),
                 easing: format!("ease{}", key % 11),
                 to: key as f32 * -0.75,
                 target: format!("mod{}", key % 37),
@@ -146,7 +146,7 @@ fn reference(source: &[RuntimeModEaseEntry]) -> Vec<RuntimeModEaseEntry> {
 fn checksum(entries: &[RuntimeModEaseEntry]) -> u64 {
     entries.iter().fold(entries.len() as u64, |sum, entry| {
         let sum = entry.target.bytes().fold(sum, |sum, byte| {
-            sum.wrapping_mul(16_777_619).wrapping_add(byte as u64)
+            sum.wrapping_mul(16_777_619).wrapping_add(u64::from(byte))
         });
         sum.rotate_left(11)
             ^ u64::from(entry.start.to_bits())
@@ -166,7 +166,7 @@ fn overlay_fixture(count: usize, unique: usize) -> Vec<RuntimeOverlayCaptureKey>
                     SongLuaTimeUnit::Beat
                 },
                 start: (key as f32 * 0.125).to_bits(),
-                limit: (0.25 + (key % 5) as f32 * 0.0625).to_bits(),
+                limit: ((key % 5) as f32).mul_add(0.0625, 0.25).to_bits(),
                 easing: format!("ease{}", key % 11),
                 target: format!("node{}", key % 37),
                 from: (key as f32 * 0.5).to_bits(),
@@ -191,7 +191,7 @@ fn overlay_reference(source: &[RuntimeOverlayCaptureKey]) -> Vec<RuntimeOverlayC
 fn overlay_checksum(keys: &[RuntimeOverlayCaptureKey]) -> u64 {
     keys.iter().fold(keys.len() as u64, |sum, key| {
         let sum = key.target.bytes().fold(sum, |sum, byte| {
-            sum.wrapping_mul(16_777_619).wrapping_add(byte as u64)
+            sum.wrapping_mul(16_777_619).wrapping_add(u64::from(byte))
         });
         sum.rotate_left(11) ^ key.function as u64 ^ u64::from(key.start).rotate_left(29)
     })

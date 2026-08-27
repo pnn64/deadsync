@@ -493,7 +493,7 @@ pub fn any_player_has_three_key_menu_buttons() -> bool {
 }
 
 /// Returns `true` if at least one player has all four dedicated menu
-/// directional buttons (menu_up, menu_down, menu_left, menu_right) bound.
+/// directional buttons (`menu_up`, `menu_down`, `menu_left`, `menu_right`) bound.
 pub fn any_player_has_four_way_menu_buttons() -> bool {
     player_has_action_set(&[
         VirtualAction::p1_menu_up,
@@ -527,7 +527,7 @@ pub fn set_input_debounce_seconds(seconds: f32) {
 fn debounce_nanos(seconds: f32) -> u32 {
     Duration::from_secs_f32(seconds)
         .as_nanos()
-        .min(u32::MAX as u128) as u32
+        .min(u128::from(u32::MAX)) as u32
 }
 
 #[inline(always)]

@@ -234,7 +234,7 @@ fn debounce_checksum(inputs: &[&str], reference: bool) -> u64 {
         } else {
             parse_input_debounce_seconds(black_box(input))
         };
-        sum.rotate_left(5) ^ parsed.map_or(u32::MAX, f32::to_bits) as u64
+        sum.rotate_left(5) ^ u64::from(parsed.map_or(u32::MAX, f32::to_bits))
     })
 }
 
@@ -260,7 +260,7 @@ fn binding_checksum(binding: InputBinding) -> u64 {
         }
         InputBinding::GamepadCode(binding) => {
             let uuid = binding.uuid.unwrap_or_default().into_iter().fold(
-                binding.code_u32 as u64
+                u64::from(binding.code_u32)
                     ^ (binding.device.unwrap_or_default() as u64).rotate_left(11),
                 |sum, byte| sum.rotate_left(3) ^ u64::from(byte),
             );

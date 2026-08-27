@@ -72,7 +72,7 @@ impl Default for CoinOptions {
 }
 
 impl CoinOptions {
-    /// ITGmania parity: Home is always Event Mode and Pay never is.
+    /// `ITGmania` parity: Home is always Event Mode and Pay never is.
     pub const fn event_mode(self) -> bool {
         match self.mode {
             CoinMode::Home => true,

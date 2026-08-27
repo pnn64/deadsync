@@ -21,8 +21,8 @@ pub struct LoadingBarParams {
 pub fn build(params: LoadingBarParams) -> Actor {
     let width = params.width.max(0.0);
     let height = params.height.max(0.0);
-    let inner_w = (width - BORDER_PX * 2.0).max(0.0);
-    let inner_h = (height - BORDER_PX * 2.0).max(0.0);
+    let inner_w = BORDER_PX.mul_add(-2.0, width).max(0.0);
+    let inner_h = BORDER_PX.mul_add(-2.0, height).max(0.0);
     let fill_w = inner_w * params.progress.clamp(0.0, 1.0);
     let text_max_w = (width - 12.0).max(0.0);
 

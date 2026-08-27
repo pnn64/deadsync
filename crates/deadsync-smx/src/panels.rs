@@ -1,4 +1,4 @@
-//! StepManiaX pad panel lighting effects.
+//! `StepManiaX` pad panel lighting effects.
 //!
 //! Pure effect engine for the SMX 3x3 panels (`PanelFx`), the helper that maps a logical
 //! column to a pad/panel, and the 30Hz worker thread (`SmxPanelLights`) that owns the
@@ -361,7 +361,7 @@ impl PanelFx {
             let inst = (self.beat - self.prev_beat) / dt;
             // 40 beats/s = 2400bpm, beyond any real chart.
             if (0.0..=40.0).contains(&inst) {
-                self.beat_rate += (inst - self.beat_rate) * 0.2;
+                self.beat_rate = (inst - self.beat_rate).mul_add(0.2, self.beat_rate);
             }
         }
         self.prev_beat = self.beat;

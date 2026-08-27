@@ -12,7 +12,7 @@ pub use cache::{
     replaygain_source_mtime_unix_nanos, write_replaygain_cache_file,
 };
 
-/// EBU R 128 / ReplayGain 2.0 reference loudness.
+/// EBU R 128 / `ReplayGain` 2.0 reference loudness.
 const TARGET_LUFS: f64 = -18.0;
 /// Hard ceiling on the linear gain factor we will apply (+12 dB).
 const MAX_GAIN_LINEAR: f32 = 4.0;

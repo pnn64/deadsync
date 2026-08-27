@@ -132,13 +132,13 @@ fn tap_judgment_zoom(elapsed: f32, zoom_mod: f32) -> Option<f32> {
     }
     let zoom = if elapsed < 0.1 {
         let t = elapsed / 0.1;
-        let ease = 1.0 - (1.0 - t).powi(2);
-        0.8 + (0.75 - 0.8) * ease
+        let ease = (1.0 - t).mul_add(-(1.0 - t), 1.0);
+        (0.75_f32 - 0.8).mul_add(ease, 0.8)
     } else if elapsed < 0.7 {
         0.75
     } else {
         let t = (elapsed - 0.7) / 0.2;
-        0.75 * (1.0 - t.powi(2))
+        0.75 * t.mul_add(-t, 1.0)
     };
     Some(zoom * zoom_mod)
 }

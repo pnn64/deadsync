@@ -1,6 +1,6 @@
-//! Modal overlay that visualises a shell-prepared FFmpeg install phase.
+//! Modal overlay that visualises a shell-prepared `FFmpeg` install phase.
 //!
-//! Mirrors [`super::update_overlay`] for the FFmpeg install flow. Options
+//! Mirrors [`super::update_overlay`] for the `FFmpeg` install flow. Options
 //! retains prepared panel content between source revisions, while input
 //! continues to inspect the current [`FfmpegPhase`].
 
@@ -16,7 +16,7 @@ use super::update_overlay::{
     InputOutcome, PanelContent, format_eta, format_size, format_speed, render_panel,
 };
 
-/// Compile actor-ready panel content when the FFmpeg phase changes.
+/// Compile actor-ready panel content when the `FFmpeg` phase changes.
 pub(crate) fn prepare(phase: &FfmpegPhase) -> Option<PanelContent> {
     if matches!(phase, FfmpegPhase::Idle) {
         return None;

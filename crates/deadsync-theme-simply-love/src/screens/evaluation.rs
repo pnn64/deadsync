@@ -516,8 +516,8 @@ impl SubmitFooterCell {
     }
 }
 
-/// Pick icon/countdown/reason for any retryable status (TimedOut, NetworkError,
-/// ServerError). Behavior:
+/// Pick icon/countdown/reason for any retryable status (`TimedOut`, `NetworkError`,
+/// `ServerError`). Behavior:
 /// - `None` (no retry armed) or `Some(0)` for non-auto status → manual F5 ready
 /// - `Some(0)` while auto-retry budget remains → spinner (request fires this tick)
 /// - `Some(n > 0)` → hourglass with countdown
@@ -2830,7 +2830,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                     let lo = min_w.min(max_w);
                     let hi = min_w.max(max_w);
                     let candidate = if SNAP_MAX_ERROR {
-                        observed * (1.0 + (PADDING_PCT as f32) / 100.0)
+                        observed * (1.0 + f32::from(PADDING_PCT) / 100.0)
                     } else {
                         if idx == 1 {
                             idx = 2;
@@ -3728,7 +3728,7 @@ fn sync_submit_event_progress(state: &mut State) {
 }
 
 /// Fires a one-shot PB / WR sound effect (zmod parity, issue #375) when the
-/// GrooveStats submit response first lands with a record banner. Triggers
+/// `GrooveStats` submit response first lands with a record banner. Triggers
 /// once per evaluation visit; subsequent retries or repeated banners do not
 /// re-fire the SFX.
 fn sync_submit_record_sfx(state: &mut State) -> ThemeEffect {
@@ -3770,7 +3770,7 @@ fn sync_submit_record_sfx(state: &mut State) -> ThemeEffect {
 }
 
 /// Returns `true` if a `69` appears anywhere notable in a player's score,
-/// mirroring Simply Love's `IsNice()` (ScreenEvaluation PerPlayer/Upper/nice.lua).
+/// mirroring Simply Love's `IsNice()` (`ScreenEvaluation` PerPlayer/Upper/nice.lua).
 ///
 /// Checks, as substrings of their textual form: the ITG percentage
 /// (e.g. `98.69`), every tap-note judgment count (Fantastic..Miss), the radar
@@ -4219,7 +4219,7 @@ pub fn submission_retry_available(state: &State) -> bool {
     })
 }
 
-/// Returns true if any controller currently has the TestInput pane active.
+/// Returns true if any controller currently has the `TestInput` pane active.
 pub fn test_input_pane_active(state: &State) -> bool {
     state
         .active_pane
@@ -4492,7 +4492,7 @@ const fn auto_screenshot_intro_done_seconds(state: &State, failed: bool) -> f32 
         .max(eval_panes::pane_stats::rolling_numbers_approach_seconds())
 }
 
-/// True if any player expected a GrooveStats submit and the response
+/// True if any player expected a `GrooveStats` submit and the response
 /// (terminal status or event progress) hasn't arrived yet.
 fn waiting_for_groovestats_submit(state: &State) -> bool {
     for player_idx in 0..MAX_PLAYERS {
@@ -4536,7 +4536,7 @@ fn cached_fail_label_text(seconds_total: f32, stream_progress: Option<(u32, u32)
     } else {
         seconds_total as u64
     };
-    let seconds_key = seconds_total.min(u32::MAX as u64) as u32;
+    let seconds_key = seconds_total.min(u64::from(u32::MAX)) as u32;
     cached_text(
         &FAIL_LABEL_CACHE,
         (seconds_key, stream_progress),
@@ -4599,7 +4599,9 @@ fn life_record_lerp_at(life_history: &[(f32, f32)], record_start: f32, sample_ti
     }
 
     let alpha = ((sample_time - earlier_t) / dt).clamp(0.0, 1.0);
-    (earlier_life + (later_life - earlier_life) * alpha).clamp(0.0, 1.0)
+    (later_life - earlier_life)
+        .mul_add(alpha, earlier_life)
+        .clamp(0.0, 1.0)
 }
 
 fn graph_display_life_points(
@@ -4623,11 +4625,11 @@ fn graph_display_life_points(
     for i in 0..GRAPH_LIFE_SAMPLE_COUNT {
         // GraphDisplay samples life with a denominator of 100 but lays those
         // samples across its width with a denominator of 99.
-        let sample_time = record_start + i as f32 * sample_time_step;
+        let sample_time = (i as f32).mul_add(sample_time_step, record_start);
         let life = life_record_lerp_at(life_history, record_start, sample_time);
         points[i] = [
-            line_left + i as f32 * sample_x_step,
-            (1.0 - life) * graph_height + 1.0,
+            (i as f32).mul_add(sample_x_step, line_left),
+            (1.0 - life).mul_add(graph_height, 1.0),
         ];
     }
     Some(points)
@@ -4706,7 +4708,7 @@ fn barely_marker_sample(si: &ScoreInfo, record_start: f32) -> Option<(usize, f32
     let mut min_ix = 0usize;
     let sample_step = sample_duration / GRAPH_LIFE_SAMPLE_COUNT as f32;
     for i in 0..GRAPH_LIFE_SAMPLE_COUNT {
-        let t = record_start + i as f32 * sample_step;
+        let t = (i as f32).mul_add(sample_step, record_start);
         let life = life_record_lerp_at(&si.life_history, record_start, t);
         if life < min_life {
             min_life = life;
@@ -5498,7 +5500,7 @@ pub fn push_actors(
                 };
                 let record_frame_y = 54.0_f32;
                 let record_frame_zoom = 0.225_f32;
-                let record_x = record_frame_x - 110.0 * record_frame_zoom;
+                let record_x = 110.0f32.mul_add(-record_frame_zoom, record_frame_x);
 
                 if let Some(rank) = machine_record_rank {
                     let mr_text = cached_record_text(true, rank);
@@ -5507,7 +5509,7 @@ pub fn push_actors(
                     actors.push(act!(text: font(mr_font):
                         settext(mr_text):
                         align(0.5, 0.5):
-                        xy(record_x, record_frame_y - 18.0 * record_frame_zoom):
+                        xy(record_x, 18.0f32.mul_add(-record_frame_zoom, record_frame_y)):
                         zoom(record_frame_zoom): z(101):
                         diffuse(record_color[0], record_color[1], record_color[2], 1.0)
                     ));
@@ -5520,7 +5522,7 @@ pub fn push_actors(
                     actors.push(act!(text: font(pr_font):
                         settext(pr_text):
                         align(0.5, 0.5):
-                        xy(record_x, record_frame_y + 24.0 * record_frame_zoom):
+                        xy(record_x, 24.0f32.mul_add(record_frame_zoom, record_frame_y)):
                         zoom(record_frame_zoom): z(101):
                         diffuse(record_color[0], record_color[1], record_color[2], 1.0)
                     ));
@@ -5531,7 +5533,7 @@ pub fn push_actors(
             actors.extend(eval_grades::actors(
                 si.grade,
                 eval_grades::EvalGradeParams {
-                    x: upper_origin_x + 70.0 * dir,
+                    x: 70.0f32.mul_add(dir, upper_origin_x),
                     y: cy - 134.0,
                     z: 101,
                     zoom: 0.4,
@@ -5554,7 +5556,7 @@ pub fn push_actors(
                         &si.song.title,
                         true,
                     );
-                    let box_x = upper_origin_x + 129.5 * dir;
+                    let box_x = 129.5f32.mul_add(dir, upper_origin_x);
                     actors.push(act!(quad:
                         align(0.5, 0.5):
                         xy(box_x, cy - 76.0):
@@ -5594,8 +5596,8 @@ pub fn push_actors(
                         color::difficulty_display_name(&si.chart.difficulty, false);
                     let difficulty_text =
                         cached_difficulty_text(style_label, difficulty_display_name);
-                    let text_x = upper_origin_x + 115.0 * dir;
-                    let box_x = upper_origin_x + 134.5 * dir;
+                    let text_x = 115.0f32.mul_add(dir, upper_origin_x);
+                    let box_x = 134.5f32.mul_add(dir, upper_origin_x);
                     let align_x = if side == profile_data::PlayerSide::P1 {
                         0.0
                     } else {
@@ -5640,7 +5642,7 @@ pub fn push_actors(
             if policy.machine_nice_sound && state.nice_scores[player_idx] {
                 actors.push(act!(sprite("nice.png"):
                     align(0.5, 0.5):
-                    xy(upper_origin_x + 70.0 * dir, cy - 94.0):
+                    xy(70.0f32.mul_add(dir, upper_origin_x), cy - 94.0):
                     zoom(0.4):
                     z(101)
                 ));
@@ -5652,8 +5654,8 @@ pub fn push_actors(
                 let step_artist_text = &step_artist.joined;
                 if !step_artist_text.is_empty() {
                     let line_count = step_artist.len().max(1);
-                    let zmod_diff_box_x = upper_origin_x + 129.5 * dir;
-                    let x = zmod_diff_box_x - 21.5 * dir;
+                    let zmod_diff_box_x = 129.5f32.mul_add(dir, upper_origin_x);
+                    let x = 21.5f32.mul_add(-dir, zmod_diff_box_x);
                     // DeadSync's bottom-aligned text block does not include
                     // StepMania's trailing BitmapText height, so Arrow Cloud's
                     // raw cy-42/cy-43 anchor must be compensated here.
@@ -5693,7 +5695,7 @@ pub fn push_actors(
                         .unwrap_or((0.7, 0.0, 24.0, 8.0));
                     let y = y_base + y_nudge;
 
-                    let bg_x = zmod_diff_box_x - 19.5 * dir;
+                    let bg_x = 19.5f32.mul_add(-dir, zmod_diff_box_x);
                     let bg_y = cy - 56.0;
                     let bg_h = (bg_y - y + text_h_px - 3.0).max(1.0);
                     let (fadeleft, faderight) = if side == profile_data::PlayerSide::P1 {
@@ -5727,7 +5729,7 @@ pub fn push_actors(
                 }
             } else if let Some(step_artist_text) = step_artist.cycled(state.screen_elapsed) {
                 if !step_artist_text.is_empty() {
-                    let x = upper_origin_x + 115.0 * dir;
+                    let x = 115.0f32.mul_add(dir, upper_origin_x);
                     let align_x = if side == profile_data::PlayerSide::P1 {
                         0.0
                     } else {
@@ -5755,14 +5757,14 @@ pub fn push_actors(
             // course mode; the course breakdown is the lower graph instead.
             if !si.is_course_summary() {
                 let breakdown_x = if policy.zmod_rating_box_text {
-                    upper_origin_x + 148.0 * dir
+                    148.0f32.mul_add(dir, upper_origin_x)
                 } else {
-                    upper_origin_x + 150.0 * dir
+                    150.0f32.mul_add(dir, upper_origin_x)
                 };
                 let breakdown_width = if policy.zmod_rating_box_text {
                     let banner_half_w = 418.0 * 0.7 * 0.5;
                     let banner_edge_x = screen_center_x() + banner_half_w * dir;
-                    ((breakdown_x - banner_edge_x) * dir - 5.0).max(24.0)
+                    (breakdown_x - banner_edge_x).mul_add(dir, -5.0).max(24.0)
                 } else {
                     155.0
                 };
@@ -5843,7 +5845,7 @@ pub fn push_actors(
                                 })
                             })
                             .unwrap_or((breakdown_width, 14.0));
-                        let bg_x = upper_origin_x + 150.0 * dir;
+                        let bg_x = 150.0f32.mul_add(dir, upper_origin_x);
                         let bg_y = cy - 95.5;
                         let (fadeleft, faderight) = if side == profile_data::PlayerSide::P1 {
                             (0.0, 0.1)
@@ -6078,8 +6080,8 @@ pub fn push_actors(
                     // and vertically around screen_center_y + 50 (matches the other panes' visible area).
                     let panel_center_x = pane_ox;
                     let panel_center_y = screen_center_y() + 50.0;
-                    let anchor_x = panel_center_x - panel_w_scaled * 0.5;
-                    let anchor_y = panel_center_y - panel_h_scaled * 0.5;
+                    let anchor_x = panel_w_scaled.mul_add(-0.5, panel_center_x);
+                    let anchor_y = panel_h_scaled.mul_add(-0.5, panel_center_y);
 
                     let title_font = machine_font_key(policy.machine_font, FontRole::Normal);
                     let body_font = machine_font_key(policy.machine_font, FontRole::Normal);
@@ -6380,8 +6382,8 @@ pub fn push_actors(
                                 graph_width,
                             )
                         {
-                            let x = line_left + barely_ix as f32 * sample_x_step;
-                            let y = (1.0 - barely_life) * graph_height + 1.0;
+                            let x = (barely_ix as f32).mul_add(sample_x_step, line_left);
+                            let y = (1.0 - barely_life).mul_add(graph_height, 1.0);
                             // Keep a tiny marker on the life line, then animate the label/arrow
                             // in the same timing pattern as Simply Love GraphDisplay Barely.
                             life_children.push(act!(quad:
@@ -6471,7 +6473,7 @@ pub fn push_actors(
                                             base_w * fail_box_scale,
                                             (base_w + 1.0) * fail_box_scale,
                                             10.0 * label_lines * fail_box_scale,
-                                            (10.0 * label_lines + 1.0) * fail_box_scale,
+                                            10.0f32.mul_add(label_lines, 1.0) * fail_box_scale,
                                             base_addx * fail_box_scale,
                                         )
                                     })
@@ -6480,7 +6482,7 @@ pub fn push_actors(
                                     30.0,
                                     31.25,
                                     10.0 * label_lines * fail_box_scale,
-                                    (10.0 * label_lines + 1.0) * fail_box_scale,
+                                    10.0f32.mul_add(label_lines, 1.0) * fail_box_scale,
                                     12.5,
                                 ));
 
@@ -6618,7 +6620,7 @@ pub fn push_actors(
                 };
                 actors.push(act!(sprite("GrooveStats.png"):
                     align(1.0, 0.5):
-                    xy(x - layout.record_width * 0.5, AUTO_SUBMIT_RECORD_TEXT_Y):
+                    xy(layout.record_width.mul_add(-0.5, x), AUTO_SUBMIT_RECORD_TEXT_Y):
                     zoom(AUTO_SUBMIT_GS_ICON_ZOOM):
                     z(100)
                 ));
@@ -6648,7 +6650,7 @@ pub fn push_actors(
             let frame = ((state.screen_elapsed.max(0.0) * SUBMIT_FOOTER_SPRITE_FPS) as u32)
                 % SUBMIT_FOOTER_SPRITE_FRAMES;
 
-            let mut cursor = submit_center_x - layout.footer_width * 0.5;
+            let mut cursor = layout.footer_width.mul_add(-0.5, submit_center_x);
             for frag in &layout.frags {
                 match frag {
                     SubmitFrag::Text { text, width } => {

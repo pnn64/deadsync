@@ -111,8 +111,8 @@ pub(crate) fn build_gs_qr_pane(
     let qr_size = GS_QR_SIZE;
     let qr_left = -26.0;
     let qr_top_y = top_y - 6.0;
-    let qr_center_x = qr_left + qr_size * 0.5;
-    let qr_center_y = qr_top_y + qr_size * 0.5;
+    let qr_center_x = qr_size.mul_add(0.5, qr_left);
+    let qr_center_y = qr_size.mul_add(0.5, qr_top_y);
     // SL parity: keep QR fixed and shift the full left info column as a unit.
     let left_col_x = -150.0;
     let score_y = qr_top_y - 6.0;

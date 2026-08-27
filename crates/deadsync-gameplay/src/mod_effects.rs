@@ -108,7 +108,7 @@ pub fn mini_value_for_visual_mask(
 
 #[inline(always)]
 pub fn player_draw_scale_for_mini(tilt: f32, mini_value: f32) -> f32 {
-    (1.0 + 0.5 * tilt.abs()) * (1.0 + mini_value.abs())
+    0.5f32.mul_add(tilt.abs(), 1.0) * (1.0 + mini_value.abs())
 }
 
 #[inline(always)]

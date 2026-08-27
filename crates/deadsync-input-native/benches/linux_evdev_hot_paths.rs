@@ -233,7 +233,7 @@ fn hat_old(events: usize, timestamp: Instant) -> u64 {
     checksum
         ^ state
             .into_iter()
-            .fold(0, |mask, pressed| (mask << 1) | pressed as u64)
+            .fold(0, |mask, pressed| (mask << 1) | u64::from(pressed))
 }
 
 fn hat_new(events: usize, timestamp: Instant) -> u64 {
@@ -255,7 +255,7 @@ fn hat_new(events: usize, timestamp: Instant) -> u64 {
     checksum
         ^ state
             .into_iter()
-            .fold(0, |mask, pressed| (mask << 1) | pressed as u64)
+            .fold(0, |mask, pressed| (mask << 1) | u64::from(pressed))
 }
 
 #[inline(always)]

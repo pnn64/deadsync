@@ -11,7 +11,7 @@ pub fn init() {
 #[inline(always)]
 pub fn instant_nanos(at: Instant) -> u64 {
     at.checked_duration_since(*HOST_EPOCH)
-        .map(|delta| delta.as_nanos().min((u64::MAX - 1) as u128) as u64)
+        .map(|delta| delta.as_nanos().min(u128::from(u64::MAX - 1)) as u64)
         .unwrap_or(0)
 }
 

@@ -300,7 +300,7 @@ fn build_records_pane(
         z(100)
     ));
     for (i, row) in presentation.rows.iter().enumerate() {
-        let y = first_row_y + i as f32 * row_height;
+        let y = (i as f32).mul_add(row_height, first_row_y);
         children.push(act!(text:
             font("miso"):
             settext(row.rank.clone()):

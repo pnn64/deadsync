@@ -1090,7 +1090,7 @@ pub fn intelligent_window_checksum_bench(
             col_offset,
             cols,
         );
-        checksum.rotate_left(7) ^ body ^ ((middle as u64) << 63)
+        checksum.rotate_left(7) ^ body ^ (u64::from(middle) << 63)
     })
 }
 
@@ -1105,14 +1105,14 @@ pub fn intelligent_window_checksum_reference_bench(
     rows.iter().fold(0u64, |checksum, &row| {
         let body_row = row.saturating_add(1);
         let body = (0..cols).fold(0u64, |mask, local| {
-            mask | ((is_hold_body_at_row(notes, body_row, col_offset + local) as u64) << local)
+            mask | (u64::from(is_hold_body_at_row(notes, body_row, col_offset + local)) << local)
         });
         let middle = notes.iter().any(|note| {
             local_player_col(note.column, col_offset, cols).is_some()
                 && note.row_index >= body_row
                 && note.row_index <= row.saturating_add(window_size_rows).saturating_sub(1)
         });
-        checksum.rotate_left(7) ^ body ^ ((middle as u64) << 63)
+        checksum.rotate_left(7) ^ body ^ (u64::from(middle) << 63)
     })
 }
 
@@ -1198,7 +1198,7 @@ fn active_hold_mask(active_ends: &[Option<usize>; MAX_COLS], row: usize, cols: u
         .iter()
         .enumerate()
         .fold(0u64, |mask, (local, end)| {
-            mask | ((end.is_some_and(|end| end >= row) as u64) << local)
+            mask | (u64::from(end.is_some_and(|end| end >= row)) << local)
         })
 }
 
@@ -1777,7 +1777,7 @@ fn tracks_down_mask(
                         .hold
                         .as_ref()
                         .is_some_and(|hold| hold.end_row_index >= row));
-            mask | ((down as u64) << local)
+            mask | (u64::from(down) << local)
         })
 }
 
@@ -2015,7 +2015,7 @@ pub fn hold_row_local_reference_bench(
         checksum
             .wrapping_mul(0x9E37_79B1)
             .wrapping_add(tap)
-            .wrapping_add((cell_has_any_note(notes, row, column) as u64) << 63)
+            .wrapping_add(u64::from(cell_has_any_note(notes, row, column)) << 63)
     })
 }
 
@@ -2056,7 +2056,7 @@ pub fn hold_body_masks_reference_bench(
 ) -> u64 {
     rows.iter().fold(0u64, |checksum, &row| {
         let mask = (0..cols).fold(0u64, |mask, local| {
-            mask | ((is_hold_body_at_row(notes, row, col_offset + local) as u64) << local)
+            mask | (u64::from(is_hold_body_at_row(notes, row, col_offset + local)) << local)
         });
         checksum.rotate_left(7) ^ mask
     })

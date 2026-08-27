@@ -146,11 +146,11 @@ pub(super) const fn sync_profile_scroll_speed(
 }
 
 /// Resolve the scroll speed each player will actually use for the upcoming
-/// play, applying the "No CMod alternative" substitution for charts tagged
-/// "no cmod". Tournament policy can force the alternative to MMod.
+/// play, applying the "No `CMod` alternative" substitution for charts tagged
+/// "no cmod". Tournament policy can force the alternative to `MMod`.
 ///
-/// For any player who is on CMod, is about to play a no-cmod chart, and has a
-/// non-`None` effective alternative, their CMod speed is converted (preserving
+/// For any player who is on `CMod`, is about to play a no-cmod chart, and has a
+/// non-`None` effective alternative, their `CMod` speed is converted (preserving
 /// on-screen speed) to the chosen X/M type. The substitution is written into
 /// the (non-persisted) `player_options[..].scroll_speed` snapshot as well as
 /// returned, so both the arrow-scroll path (which reads the returned array) and
@@ -212,7 +212,7 @@ pub(super) fn tilt_intensity_choices() -> Vec<String> {
     let mut out = Vec::with_capacity(count);
     for i in 0..count {
         out.push(fmt_tilt_intensity(
-            TILT_INTENSITY_MIN + i as f32 * TILT_INTENSITY_STEP,
+            (i as f32).mul_add(TILT_INTENSITY_STEP, TILT_INTENSITY_MIN),
         ));
     }
     out
@@ -230,9 +230,10 @@ pub(super) fn average_error_bar_intensity_choices() -> Vec<String> {
         + 1;
     let mut out = Vec::with_capacity(count);
     for i in 0..count {
-        out.push(fmt_average_error_bar_intensity(
-            AVERAGE_ERROR_BAR_INTENSITY_MIN + i as f32 * AVERAGE_ERROR_BAR_INTENSITY_STEP,
-        ));
+        out.push(fmt_average_error_bar_intensity((i as f32).mul_add(
+            AVERAGE_ERROR_BAR_INTENSITY_STEP,
+            AVERAGE_ERROR_BAR_INTENSITY_MIN,
+        )));
     }
     out
 }
@@ -292,9 +293,10 @@ pub(super) fn long_error_bar_intensity_choices() -> Vec<String> {
         + 1;
     let mut out = Vec::with_capacity(count);
     for i in 0..count {
-        out.push(fmt_long_error_bar_intensity(
-            LONG_ERROR_BAR_INTENSITY_MIN + i as f32 * LONG_ERROR_BAR_INTENSITY_STEP,
-        ));
+        out.push(fmt_long_error_bar_intensity((i as f32).mul_add(
+            LONG_ERROR_BAR_INTENSITY_STEP,
+            LONG_ERROR_BAR_INTENSITY_MIN,
+        )));
     }
     out
 }

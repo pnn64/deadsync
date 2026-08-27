@@ -1996,7 +1996,7 @@ mod runtime_regression_tests {
         assert_eq!(hold.result, Some(HoldResult::LetGo));
         assert!(state.hold_runtime.active_holds[0].is_none());
         assert!((hold.last_held_beat - 0.2).abs() <= 1e-6);
-        assert!(hold.last_held_beat > TIMING_WINDOW_SECONDS_HOLD * 0.25 + f32::EPSILON);
+        assert!(hold.last_held_beat > TIMING_WINDOW_SECONDS_HOLD.mul_add(0.25, f32::EPSILON));
     }
 
     #[test]

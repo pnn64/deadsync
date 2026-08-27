@@ -294,7 +294,7 @@ const TRANSITION_IN_DURATION: f32 = 2.0;
 /// short fade-from-black so the new gameplay frame doesn't pop in.
 pub const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
 /// Duration of the black-to-transparent fade that ends the in-transition.
-/// The black holds solid for (TRANSITION_IN_DURATION - this), then lifts over this window.
+/// The black holds solid for (`TRANSITION_IN_DURATION` - this), then lifts over this window.
 pub const TRANSITION_IN_BLACK_FADE_DURATION: f32 = 0.6;
 // Simply Love ScreenGameplay out.lua: sleep(0.5), linear(1.0).
 pub const TRANSITION_OUT_DELAY: f32 = 0.5;
@@ -835,7 +835,7 @@ const SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS: usize = 64;
 /// Screen-owned reusable storage for one dynamic Song Lua mesh.
 ///
 /// One scratch slot is prewarmed for every compiled projected Sprite/Quad and
-/// ActorMultiVertex during gameplay entry. The game/render thread is the sole
+/// `ActorMultiVertex` during gameplay entry. The game/render thread is the sole
 /// writer and clones the base/glow `Arc<Vec<_>>` buffers into actors each frame.
 /// A normal next frame recovers each uniquely owned buffer, clears it, and
 /// performs no allocation; if an older actor still owns a buffer, the slot
@@ -845,18 +845,18 @@ const SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS: usize = 64;
 /// their live actor use, ultimately with the screen. Replacement and capacity
 /// counters are exposed to the benchmark; worst-case frame work is bounded by
 /// that actor's compiled vertex count.
-/// Static BitmapText uppercase content and the seven rainbow-scroll phases are
+/// Static `BitmapText` uppercase content and the seven rainbow-scroll phases are
 /// also compiled into this overlay-local song-lifetime storage during screen
 /// entry. Rainbow phase storage is capped at 64 characters per actor; larger
 /// text reuses one current-phase buffer sized from the compiled text instead of
-/// retaining seven copies or allocating during gameplay. GraphDisplay body/line geometry and its two-child frame are sized
+/// retaining seven copies or allocating during gameplay. `GraphDisplay` body/line geometry and its two-child frame are sized
 /// from the compiled point count. Static Model glow vertices and stable
 /// renderer geometry keys are computed once per layer during entry.
-/// NoteskinActor slots get an exact-capacity, sealed model cache plus one
+/// `NoteskinActor` slots get an exact-capacity, sealed model cache plus one
 /// pre-whitened glow array per model slot. A gameplay miss preserves output but
 /// counts as failed prewarm and may allocate; registered slots never grow,
 /// prune, or evict, and all model storage is destroyed with the song screen.
-/// BitmapText gets two buffers sized for its compiled
+/// `BitmapText` gets two buffers sized for its compiled
 /// spans plus one whole-text span: one for dynamic diffuse composition and one
 /// for glow/stroke extraction. Gameplay frames only refill or clone these
 /// prewarmed buffers. The fallback conversion also supports test-only builders
@@ -2174,7 +2174,7 @@ fn smooth_life_p(value: f32) -> f32 {
     if t <= 0.5 {
         2.0 * t * t
     } else {
-        1.0 - 2.0 * (1.0 - t) * (1.0 - t)
+        (2.0 * (1.0 - t)).mul_add(-(1.0 - t), 1.0)
     }
 }
 
@@ -2219,7 +2219,7 @@ pub struct State {
     pub(crate) song_banner_key: Option<Arc<str>>,
     pub(crate) pack_banner_key: Option<Arc<str>>,
     /// Immutable song background texture identity resolved at screen entry.
-    /// SongBgWithMovieViz frames clone this handle instead of allocating a new
+    /// `SongBgWithMovieViz` frames clone this handle instead of allocating a new
     /// path string. There are no misses, growth, eviction, or gameplay-thread
     /// destruction; the single optional entry is released with the screen.
     song_background_key: Option<Arc<str>>,
@@ -4237,7 +4237,9 @@ fn intro_text_target_x(
     let text_width = cached_intro_text_width(&state.intro_text_width, || {
         intro_text_width(asset_manager, state, text)
     });
-    screen_center_x() + (notefield_width * 0.5 + text_width * INTRO_TEXT_GETWIDTH_PAD) * side_sign
+    text_width
+        .mul_add(INTRO_TEXT_GETWIDTH_PAD, notefield_width * 0.5)
+        .mul_add(side_sign, screen_center_x())
 }
 
 fn push_system_stage_label(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
@@ -4405,7 +4407,7 @@ fn gameplay_bpm_x(
         } else {
             -1.0
         };
-        return playfield_center_x + side * (field_width * 0.5 + 20.0);
+        return playfield_center_x + side * field_width.mul_add(0.5, 20.0);
     }
 
     let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
@@ -4415,7 +4417,7 @@ fn gameplay_bpm_x(
         } else {
             -0.3
         };
-        return screen_center_x() + screen_width() * side_shift;
+        return screen_width().mul_add(side_shift, screen_center_x());
     }
 
     screen_center_x()
@@ -4441,7 +4443,7 @@ fn upper_nps_graph_x(
     note_field_offset_x: i32,
 ) -> f32 {
     let base_x = if (notefield_x - screen_center_x()).abs() < 1.0 {
-        screen_center_x() - graph_w * 0.5
+        graph_w.mul_add(-0.5, screen_center_x())
     } else if player_side == profile_data::PlayerSide::P1 {
         screen_center_x() - graph_w - widescale(45.0, 95.0)
     } else {
@@ -4524,7 +4526,7 @@ fn difficulty_meter_hits_targets(
 fn side_difficulty_meter_x(player_side: profile_data::PlayerSide) -> f32 {
     match player_side {
         profile_data::PlayerSide::P1 => DIFFICULTY_METER_SIZE * 0.5,
-        profile_data::PlayerSide::P2 => screen_width() - DIFFICULTY_METER_SIZE * 0.5,
+        profile_data::PlayerSide::P2 => DIFFICULTY_METER_SIZE.mul_add(-0.5, screen_width()),
     }
 }
 
@@ -5364,7 +5366,7 @@ fn inline_bpm_text(bpm: f64, show_decimal: bool) -> Option<InlineText> {
     }
 
     let scaled = (bpm * 1_000.0).round().max(0.0);
-    if scaled > f64::from(u32::MAX) * 1_000.0 + 999.0 {
+    if scaled > f64::from(u32::MAX).mul_add(1_000.0, 999.0) {
         return None;
     }
     let scaled = scaled as u64;
@@ -5472,7 +5474,7 @@ impl GameplayBpmTextBenchmark {
     pub fn new() -> Self {
         let old_values = (0..2_048u32)
             .map(|index| {
-                let bpm = 40.0 + f64::from(index) * 0.001;
+                let bpm = f64::from(index).mul_add(0.001, 40.0);
                 ((bpm.to_bits(), true), Arc::from(owned_bpm_text(bpm, true)))
             })
             .collect::<rustc_hash::FxHashMap<_, _>>();
@@ -5709,14 +5711,14 @@ pub fn benchmark_bpm_text_setup(
         let mut plan = GameplayBpmTextPlan::default();
         prewarm_bpm_text_slot(&mut cache, scratch, fonts);
         for index in 0..2_048u32 {
-            let text = plan.resolve(40.0 + f64::from(index) * 0.001, true);
+            let text = plan.resolve(f64::from(index).mul_add(0.001, 40.0), true);
             for byte in text.as_str().bytes() {
                 checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
             }
         }
     } else {
         for index in 0..2_048u32 {
-            let text = owned_bpm_text(40.0 + f64::from(index) * 0.001, true);
+            let text = owned_bpm_text(f64::from(index).mul_add(0.001, 40.0), true);
             cache.prewarm_text(fonts, "miso", &text, None);
             for byte in text.bytes() {
                 checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
@@ -6042,7 +6044,7 @@ fn push_sync_overlay(actors: &mut Vec<Actor>, state: &State) {
         let y = if status_line_count == 0 {
             screen_center_y() + 150.0
         } else {
-            screen_center_y() + 150.0 + 20.0 * status_line_count as f32
+            20.0f32.mul_add(status_line_count as f32, screen_center_y() + 150.0)
         };
         actors.push(act!(text:
             font("miso"):
@@ -6589,46 +6591,46 @@ fn apply_bgchange_transition(
     match transition {
         BackgroundTransition::CrossFade(_) => tint[3] *= 1.0 - progress,
         BackgroundTransition::SlideLeft => {
-            offset[0] -= screen_w * progress;
+            offset[0] = screen_w.mul_add(-progress, offset[0]);
             tint[3] *= 1.0 - progress;
         }
         BackgroundTransition::SlideRight => {
-            offset[0] += screen_w * progress;
+            offset[0] = screen_w.mul_add(progress, offset[0]);
             tint[3] *= 1.0 - progress;
         }
         BackgroundTransition::SlideUp => {
-            offset[1] -= screen_h * progress;
+            offset[1] = screen_h.mul_add(-progress, offset[1]);
             tint[3] *= 1.0 - progress;
         }
         BackgroundTransition::SlideDown => {
-            offset[1] += screen_h * progress;
+            offset[1] = screen_h.mul_add(progress, offset[1]);
             tint[3] *= 1.0 - progress;
         }
         BackgroundTransition::FadeUp => {
-            *cropbottom = -0.3 + 1.6 * progress;
+            *cropbottom = 1.6f32.mul_add(progress, -0.3);
             *fadebottom = 0.3;
         }
         BackgroundTransition::FadeDown => {
-            *croptop = -0.3 + 1.6 * progress;
+            *croptop = 1.6f32.mul_add(progress, -0.3);
             *fadetop = 0.3;
         }
         BackgroundTransition::FadeRight => {
-            *cropleft = -0.3 + 1.6 * progress;
+            *cropleft = 1.6f32.mul_add(progress, -0.3);
             *fadeleft = 0.3;
         }
         BackgroundTransition::FadeLeft => {
-            *cropright = -0.3 + 1.6 * progress;
+            *cropright = 1.6f32.mul_add(progress, -0.3);
             *faderight = 0.3;
         }
         BackgroundTransition::FadeCenterHorizontal => {
-            *croptop = -0.3 + 0.8 * progress;
-            *cropbottom = -0.3 + 0.8 * progress;
+            *croptop = 0.8f32.mul_add(progress, -0.3);
+            *cropbottom = 0.8f32.mul_add(progress, -0.3);
             *fadetop = 0.3;
             *fadebottom = 0.3;
         }
         BackgroundTransition::FadeCenterVertical => {
-            *cropleft = -0.3 + 0.8 * progress;
-            *cropright = -0.3 + 0.8 * progress;
+            *cropleft = 0.8f32.mul_add(progress, -0.3);
+            *cropright = 0.8f32.mul_add(progress, -0.3);
             *fadeleft = 0.3;
             *faderight = 0.3;
         }
@@ -7604,7 +7606,7 @@ fn song_lua_overlay_parent_uses_center_origin(
         SongLuaOverlayKind::Actor
             | SongLuaOverlayKind::ActorFrame
             | SongLuaOverlayKind::ActorFrameTexture { .. }
-    ) && (parent_axis - 0.5 * overlay_space_axis).abs() <= 0.01
+    ) && 0.5f32.mul_add(-overlay_space_axis, parent_axis).abs() <= 0.01
 }
 
 #[inline(always)]
@@ -7670,7 +7672,7 @@ fn song_lua_overlay_compose_state(
         parent_kind,
         parent.x,
         overlay_space_width,
-    ) && (child.x - 0.5 * overlay_space_width).abs() <= epsilon
+    ) && 0.5f32.mul_add(-overlay_space_width, child.x).abs() <= epsilon
     {
         0.0
     } else {
@@ -7685,7 +7687,7 @@ fn song_lua_overlay_compose_state(
         parent_kind,
         parent.y,
         overlay_space_height,
-    ) && (child.y - 0.5 * overlay_space_height).abs() <= epsilon
+    ) && 0.5f32.mul_add(-overlay_space_height, child.y).abs() <= epsilon
     {
         0.0
     } else {
@@ -7755,10 +7757,10 @@ fn song_lua_overlay_compose_state(
         && parent.skew_y.abs() <= f32::EPSILON
     {
         child.stretch_rect = Some([
-            parent.x + left * parent_scale_x,
-            parent.y + top * parent_scale_y,
-            parent.x + right * parent_scale_x,
-            parent.y + bottom * parent_scale_y,
+            left.mul_add(parent_scale_x, parent.x),
+            top.mul_add(parent_scale_y, parent.y),
+            right.mul_add(parent_scale_x, parent.x),
+            bottom.mul_add(parent_scale_y, parent.y),
         ]);
     }
     child
@@ -8454,11 +8456,11 @@ struct SongLuaDirectProxyPart {
     camera: Option<Matrix4>,
 }
 
-/// Song-lifetime backing for direct root ActorProxy and exact AFT destinations.
+/// Song-lifetime backing for direct root `ActorProxy` and exact AFT destinations.
 ///
 /// Owner/thread model: gameplay frame scratch, used only by the game/render
 /// thread. Lifetime: one song. Capacity is the compiled maximum: one entry per
-/// NoteField, Judgment, Combo, or exact single-source AFT destination and two
+/// `NoteField`, Judgment, Combo, or exact single-source AFT destination and two
 /// entries per root whole-Player destination across the main and every
 /// foreground layer, reserved at screen entry. Exact AFT Player destinations
 /// retain both source runs in one entry. Each frame clears and refills the
@@ -8682,7 +8684,7 @@ impl SongLuaProxyJoinScratch {
     }
 }
 
-/// Song-lifetime backing for Song Lua ActorProxy sources.
+/// Song-lifetime backing for Song Lua `ActorProxy` sources.
 ///
 /// Owner/thread model: gameplay `State`, exclusively mutated during actor
 /// composition on the game/render frame thread. Lifetime: one song, allocated
@@ -8897,7 +8899,7 @@ fn song_lua_normalize_proxy_segment(
     .unwrap_or_else(|| Arc::from([]))
 }
 
-/// Song-lifetime backing for ActorFrameTexture capture output.
+/// Song-lifetime backing for `ActorFrameTexture` capture output.
 ///
 /// Owner/thread model: gameplay `State`, exclusively mutated during actor
 /// composition on the game/render frame thread. Lifetime: one song. Capacity:
@@ -9929,17 +9931,17 @@ fn song_lua_map_opaque_rect(
             )
         } else {
             (
-                state.x - state.halign * texture_width * axis_x,
-                state.y - state.valign * texture_height * axis_y,
+                (state.halign * texture_width).mul_add(-axis_x, state.x),
+                (state.valign * texture_height).mul_add(-axis_y, state.y),
                 axis_x,
                 axis_y,
             )
         };
     Some(SongLuaOpaqueRect::new(
-        origin_x + source.left * scale_x,
-        origin_y + source.top * scale_y,
-        origin_x + source.right * scale_x,
-        origin_y + source.bottom * scale_y,
+        source.left.mul_add(scale_x, origin_x),
+        source.top.mul_add(scale_y, origin_y),
+        source.right.mul_add(scale_x, origin_x),
+        source.bottom.mul_add(scale_y, origin_y),
     ))
 }
 
@@ -10159,8 +10161,8 @@ fn song_lua_proxy_transform(
     let y = state.y * screen_height() / overlay_space_height.max(1.0);
     let [scale_x, scale_y] = song_lua_overlay_axis_scale(state);
     Matrix4::from_translation(Vector3::new(
-        -0.5 * render_width + x,
-        0.5 * render_height - y,
+        (-0.5f32).mul_add(render_width, x),
+        0.5f32.mul_add(render_height, -y),
         state.z,
     )) * song_lua_overlay_local_transform(
         [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg],
@@ -11706,7 +11708,7 @@ impl SongLuaUpdateLookupBenchmark {
                 let samples = (0..sample_count)
                     .map(|sample| Sample {
                         second: sample as f32 / 120.0,
-                        value: Value::F32(overlay_index as f32 + sample as f32 * 0.03125),
+                        value: Value::F32((sample as f32).mul_add(0.03125, overlay_index as f32)),
                     })
                     .collect();
                 tracks.push(Track {
@@ -12779,8 +12781,12 @@ fn song_lua_capture_transform_matrix(
 ) -> Option<Matrix4> {
     let x_scale = screen_width() / overlay_space_width.max(1.0);
     let y_scale = screen_height() / overlay_space_height.max(1.0);
-    let translate_x = (state.x - 0.5 * overlay_space_width) * x_scale + extra_offset[0];
-    let translate_y = (state.y - 0.5 * overlay_space_height) * y_scale + extra_offset[1];
+    let translate_x = 0.5f32
+        .mul_add(-overlay_space_width, state.x)
+        .mul_add(x_scale, extra_offset[0]);
+    let translate_y = 0.5f32
+        .mul_add(-overlay_space_height, state.y)
+        .mul_add(y_scale, extra_offset[1]);
     let [scale_x, scale_y] = song_lua_overlay_axis_scale(state);
     let scale_z = song_lua_overlay_z_scale(state);
     if translate_x.abs() <= f32::EPSILON
@@ -13042,9 +13048,15 @@ fn song_lua_apply_overlay_effect(
 ) {
     if matches!(effect.mode, deadlib_present::anim::EffectMode::Spin) {
         let units = deadlib_present::anim::effect_clock_units(effect, effect_time, effect_beat);
-        rot_deg[0] = (rot_deg[0] + effect.magnitude[0] * units).rem_euclid(360.0);
-        rot_deg[1] = (rot_deg[1] + effect.magnitude[1] * units).rem_euclid(360.0);
-        rot_deg[2] = (rot_deg[2] + effect.magnitude[2] * units).rem_euclid(360.0);
+        rot_deg[0] = effect.magnitude[0]
+            .mul_add(units, rot_deg[0])
+            .rem_euclid(360.0);
+        rot_deg[1] = effect.magnitude[1]
+            .mul_add(units, rot_deg[1])
+            .rem_euclid(360.0);
+        rot_deg[2] = effect.magnitude[2]
+            .mul_add(units, rot_deg[2])
+            .rem_euclid(360.0);
     }
     if let Some(percent) = deadlib_present::anim::effect_mix(effect, effect_time, effect_beat) {
         match effect.mode {
@@ -13083,19 +13095,19 @@ fn song_lua_apply_overlay_effect(
             deadlib_present::anim::EffectMode::Bob => {
                 let bob = (percent * 2.0 * std::f32::consts::PI).sin();
                 for i in 0..3 {
-                    offset[i] += effect.magnitude[i] * bob;
+                    offset[i] = effect.magnitude[i].mul_add(bob, offset[i]);
                 }
             }
             deadlib_present::anim::EffectMode::Bounce => {
                 let bounce = (percent * std::f32::consts::PI).sin();
                 for i in 0..3 {
-                    offset[i] += effect.magnitude[i] * bounce;
+                    offset[i] = effect.magnitude[i].mul_add(bounce, offset[i]);
                 }
             }
             deadlib_present::anim::EffectMode::Wag => {
                 let wag = (percent * 2.0 * std::f32::consts::PI).sin();
                 for i in 0..3 {
-                    rot_deg[i] += effect.magnitude[i] * wag;
+                    rot_deg[i] = effect.magnitude[i].mul_add(wag, rot_deg[i]);
                 }
             }
             deadlib_present::anim::EffectMode::Spin | deadlib_present::anim::EffectMode::None => {}
@@ -13380,23 +13392,23 @@ fn song_lua_overlay_view_proj(
     let vanish = camera_state
         .vanishpoint
         .unwrap_or([0.5 * overlay_space_width, 0.5 * overlay_space_height]);
-    let mut vanish_x = width - vanish[0] * x_scale;
-    let mut vanish_y = height - vanish[1] * y_scale;
-    vanish_x -= 0.5 * width;
-    vanish_y -= 0.5 * height;
+    let mut vanish_x = vanish[0].mul_add(-x_scale, width);
+    let mut vanish_y = vanish[1].mul_add(-y_scale, height);
+    vanish_x = 0.5f32.mul_add(-width, vanish_x);
+    vanish_y = 0.5f32.mul_add(-height, vanish_y);
 
     let theta = 0.5 * fov_deg.to_radians();
     let dist = (0.5 * width / theta.tan()).max(1.0);
     let proj = glam::camera::rh::proj::opengl::frustum(
-        (vanish_x - 0.5 * width) / dist,
-        (vanish_x + 0.5 * width) / dist,
-        (vanish_y + 0.5 * height) / dist,
-        (vanish_y - 0.5 * height) / dist,
+        0.5f32.mul_add(-width, vanish_x) / dist,
+        0.5f32.mul_add(width, vanish_x) / dist,
+        0.5f32.mul_add(height, vanish_y) / dist,
+        0.5f32.mul_add(-height, vanish_y) / dist,
         1.0,
         dist + 1000.0,
     );
-    let eye_x = -vanish_x + 0.5 * width;
-    let eye_y = -vanish_y + 0.5 * height;
+    let eye_x = 0.5f32.mul_add(width, -vanish_x);
+    let eye_y = 0.5f32.mul_add(height, -vanish_y);
     let view = glam::camera::rh::view::look_at_mat4(
         Vector3::new(eye_x, eye_y, dist),
         Vector3::new(eye_x, eye_y, 0.0),
@@ -13530,12 +13542,12 @@ fn song_lua_actor_multi_vertex_pos(
     let mut x = pos[0] * scale[0];
     let mut y = -pos[1] * scale[1];
     if skew[0].abs() > f32::EPSILON {
-        x += skew[0] * y;
+        x = skew[0].mul_add(y, x);
     }
     if skew[1].abs() > f32::EPSILON {
-        y += skew[1] * x;
+        y = skew[1].mul_add(x, y);
     }
-    [x * cos_z - y * sin_z, x * sin_z + y * cos_z]
+    [y.mul_add(-sin_z, x * cos_z), y.mul_add(cos_z, x * sin_z)]
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -13560,8 +13572,8 @@ fn append_song_lua_model_actors(
 ) -> bool {
     let mut emitted = false;
     let offset = [
-        state.x * x_scale + effect_offset[0] * x_scale,
-        state.y * y_scale + effect_offset[1] * y_scale,
+        effect_offset[0].mul_add(x_scale, state.x * x_scale),
+        effect_offset[1].mul_add(y_scale, state.y * y_scale),
     ];
     for (idx, layer) in layers.iter().enumerate() {
         if !layer.draw.visible || !asset_manager.has_texture_key(layer.texture_key.as_ref()) {
@@ -13670,8 +13682,8 @@ fn append_song_lua_noteskin_actors(
         None => (None, None),
     };
     let center = [
-        state.x * x_scale + effect_offset[0] * x_scale,
-        state.y * y_scale + effect_offset[1] * y_scale,
+        effect_offset[0].mul_add(x_scale, state.x * x_scale),
+        effect_offset[1].mul_add(y_scale, state.y * y_scale),
     ];
     for (idx, slot) in slots.iter().enumerate() {
         if !asset_manager.has_texture_key(slot.texture_key()) {
@@ -13956,8 +13968,8 @@ fn song_lua_song_meter_actor(
     let stream_height = stream_state.size.map_or(1.0, |size| size[1].abs())
         * parent_scale[1].abs()
         * stream_scale[1].abs();
-    let left = state.x + stream_state.x * parent_scale[0] - full_width * 0.5;
-    let y = state.y + stream_state.y * parent_scale[1];
+    let left = full_width.mul_add(-0.5, stream_state.x.mul_add(parent_scale[0], state.x));
+    let y = stream_state.y.mul_add(parent_scale[1], state.y);
     let tint = [
         state.diffuse[0] * stream_state.diffuse[0],
         state.diffuse[1] * stream_state.diffuse[1],
@@ -14111,9 +14123,13 @@ fn song_lua_graph_display_body_actor(
     if width <= f32::EPSILON || height <= f32::EPSILON {
         return None;
     }
-    let left = state.x - width * state.halign + body_state.x * graph_scale[0];
-    let top =
-        state.y - size[1] * graph_scale[1].abs() * state.valign + body_state.y * graph_scale[1];
+    let left = body_state
+        .x
+        .mul_add(graph_scale[0], width.mul_add(-state.halign, state.x));
+    let top = body_state.y.mul_add(
+        graph_scale[1],
+        (size[1] * graph_scale[1].abs()).mul_add(-state.valign, state.y),
+    );
     let tint = [
         state.diffuse[0] * body_state.diffuse[0],
         state.diffuse[1] * body_state.diffuse[1],
@@ -14137,8 +14153,8 @@ fn song_lua_graph_display_body_actor(
         for (index, pair) in values.windows(2).enumerate() {
             let x0 = left + width * index as f32 / (values.len() - 1) as f32;
             let x1 = left + width * (index + 1) as f32 / (values.len() - 1) as f32;
-            let y0 = top + (1.0 - pair[0].clamp(0.0, 1.0)) * height;
-            let y1 = top + (1.0 - pair[1].clamp(0.0, 1.0)) * height;
+            let y0 = (1.0 - pair[0].clamp(0.0, 1.0)).mul_add(height, top);
+            let y1 = (1.0 - pair[1].clamp(0.0, 1.0)).mul_add(height, top);
             push_graph_display_tri(
                 vertices,
                 [x0 * x_scale, y0 * y_scale],
@@ -14212,10 +14228,14 @@ fn song_lua_graph_display_line_actor(
     let line_height = line_state.size.map_or(1.0, |line_size| line_size[1].abs())
         * graph_scale[1].abs()
         * line_scale[1].abs();
-    let left = state.x - width * state.halign + line_state.x * graph_scale[0];
-    let top = state.y - size[1] * graph_scale[1].abs() * state.valign;
+    let left = line_state
+        .x
+        .mul_add(graph_scale[0], width.mul_add(-state.halign, state.x));
+    let top = (size[1] * graph_scale[1].abs()).mul_add(-state.valign, state.y);
     let height = size[1] * graph_scale[1].abs();
-    let y = top + height * 0.5 + line_state.y * graph_scale[1];
+    let y = line_state
+        .y
+        .mul_add(graph_scale[1], height.mul_add(0.5, top));
     let tint = [
         state.diffuse[0] * line_state.diffuse[0],
         state.diffuse[1] * line_state.diffuse[1],
@@ -14240,8 +14260,8 @@ fn song_lua_graph_display_line_actor(
         for (index, pair) in values.windows(2).enumerate() {
             let x0 = left + width * index as f32 / (values.len() - 1) as f32;
             let x1 = left + width * (index + 1) as f32 / (values.len() - 1) as f32;
-            let y0 = y + (0.5 - pair[0].clamp(0.0, 1.0)) * height;
-            let y1 = y + (0.5 - pair[1].clamp(0.0, 1.0)) * height;
+            let y0 = (0.5 - pair[0].clamp(0.0, 1.0)).mul_add(height, y);
+            let y1 = (0.5 - pair[1].clamp(0.0, 1.0)).mul_add(height, y);
             push_graph_display_line_segment(
                 vertices,
                 [x0 * x_scale, y0 * y_scale],
@@ -14337,8 +14357,8 @@ fn song_lua_project_overlay_point(view_proj: Matrix4, point: [f32; 3]) -> Option
         return None;
     }
     Some([
-        (0.5 * ndc_x + 0.5) * screen_width(),
-        (0.5 - 0.5 * ndc_y) * screen_height(),
+        0.5f32.mul_add(ndc_x, 0.5) * screen_width(),
+        0.5f32.mul_add(-ndc_y, 0.5) * screen_height(),
     ])
 }
 
@@ -14423,8 +14443,8 @@ fn song_lua_overlay_uvs(
     } else {
         [1.0, 1.0, 0.0, 0.0]
     };
-    uv_offset_x += uv_scale_x * cl;
-    uv_offset_y += uv_scale_y * ct;
+    uv_offset_x = uv_scale_x.mul_add(cl, uv_offset_x);
+    uv_offset_y = uv_scale_y.mul_add(ct, uv_offset_y);
     uv_scale_x *= (1.0 - cl - cr).max(0.0);
     uv_scale_y *= (1.0 - ct - cb).max(0.0);
     if flip_x {
@@ -14436,8 +14456,8 @@ fn song_lua_overlay_uvs(
         uv_scale_y = -uv_scale_y;
     }
     if let Some(velocity) = state.texcoord_velocity {
-        uv_offset_x += velocity[0] * total_elapsed;
-        uv_offset_y += velocity[1] * total_elapsed;
+        uv_offset_x = velocity[0].mul_add(total_elapsed, uv_offset_x);
+        uv_offset_y = velocity[1].mul_add(total_elapsed, uv_offset_y);
     }
     [
         [uv_offset_x, uv_offset_y],
@@ -14626,7 +14646,7 @@ impl SongLuaAftCaptureBenchmark {
                     Actor::Frame { z, .. } => song_lua_add_z(*z, 100),
                     _ => 0,
                 };
-                checksum.rotate_left(7) ^ z as u16 as u64
+                checksum.rotate_left(7) ^ u64::from(z as u16)
             },
         )
     }
@@ -14978,8 +14998,8 @@ fn build_song_lua_aft_sprite_actor(
         &mut effect_scale,
         &mut effect_rot,
     );
-    offset[0] += effect_offset[0] * x_scale;
-    offset[1] += effect_offset[1] * y_scale;
+    offset[0] = effect_offset[0].mul_add(x_scale, offset[0]);
+    offset[1] = effect_offset[1].mul_add(y_scale, offset[1]);
     let actor = Actor::Sprite {
         align,
         offset,
@@ -15221,8 +15241,8 @@ fn build_song_lua_overlay_actor_with_scratch(
                     overlay_blend,
                     z,
                     [
-                        center[0] + effect_offset[0] * x_scale,
-                        center[1] + effect_offset[1] * y_scale,
+                        effect_offset[0].mul_add(x_scale, center[0]),
+                        effect_offset[1].mul_add(y_scale, center[1]),
                         effect_offset[2],
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
@@ -15277,8 +15297,8 @@ fn build_song_lua_overlay_actor_with_scratch(
                     overlay_blend,
                     z,
                     [
-                        center[0] + effect_offset[0] * x_scale,
-                        center[1] + effect_offset[1] * y_scale,
+                        effect_offset[0].mul_add(x_scale, center[0]),
+                        effect_offset[1].mul_add(y_scale, center[1]),
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
@@ -15378,8 +15398,8 @@ fn build_song_lua_overlay_actor_with_scratch(
                 *rot_x_deg = effect_rot[0];
                 *rot_y_deg = effect_rot[1];
                 *rot_z_deg = effect_rot[2];
-                offset[0] += effect_offset[0] * x_scale;
-                offset[1] += effect_offset[1] * y_scale;
+                offset[0] = effect_offset[0].mul_add(x_scale, offset[0]);
+                offset[1] = effect_offset[1].mul_add(y_scale, offset[1]);
                 *world_z += song_lua_biased_world_z(state, effect_offset[2]);
                 scale[0] *= effect_scale[0];
                 scale[1] *= effect_scale[1];
@@ -15458,8 +15478,8 @@ fn build_song_lua_overlay_actor_with_scratch(
             let actor = Actor::Text {
                 align: [state.halign, state.valign],
                 offset: [
-                    state.x * x_scale + effect_offset[0] * x_scale,
-                    state.y * y_scale + effect_offset[1] * y_scale,
+                    effect_offset[0].mul_add(x_scale, state.x * x_scale),
+                    effect_offset[1].mul_add(y_scale, state.y * y_scale),
                 ],
                 local_transform: song_lua_overlay_local_transform(
                     effect_rot,
@@ -15547,8 +15567,8 @@ fn build_song_lua_overlay_actor_with_scratch(
                     Actor::ReusableTexturedMesh {
                         align: [0.0, 0.0],
                         offset: [
-                            state.x * x_scale + effect_offset[0] * x_scale,
-                            state.y * y_scale + effect_offset[1] * y_scale,
+                            effect_offset[0].mul_add(x_scale, state.x * x_scale),
+                            effect_offset[1].mul_add(y_scale, state.y * y_scale),
                         ],
                         world_z: song_lua_biased_world_z(state, effect_offset[2]),
                         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -15579,8 +15599,8 @@ fn build_song_lua_overlay_actor_with_scratch(
                     Actor::TexturedMesh {
                         align: [0.0, 0.0],
                         offset: [
-                            state.x * x_scale + effect_offset[0] * x_scale,
-                            state.y * y_scale + effect_offset[1] * y_scale,
+                            effect_offset[0].mul_add(x_scale, state.x * x_scale),
+                            effect_offset[1].mul_add(y_scale, state.y * y_scale),
                         ],
                         world_z: song_lua_biased_world_z(state, effect_offset[2]),
                         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -15622,8 +15642,8 @@ fn build_song_lua_overlay_actor_with_scratch(
                 Actor::ReusableMesh {
                     align: [0.0, 0.0],
                     offset: [
-                        state.x * x_scale + effect_offset[0] * x_scale,
-                        state.y * y_scale + effect_offset[1] * y_scale,
+                        effect_offset[0].mul_add(x_scale, state.x * x_scale),
+                        effect_offset[1].mul_add(y_scale, state.y * y_scale),
                     ],
                     size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                     tint: [1.0; 4],
@@ -15646,8 +15666,8 @@ fn build_song_lua_overlay_actor_with_scratch(
                 Actor::Mesh {
                     align: [0.0, 0.0],
                     offset: [
-                        state.x * x_scale + effect_offset[0] * x_scale,
-                        state.y * y_scale + effect_offset[1] * y_scale,
+                        effect_offset[0].mul_add(x_scale, state.x * x_scale),
+                        effect_offset[1].mul_add(y_scale, state.y * y_scale),
                     ],
                     size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                     tint: [1.0; 4],
@@ -15838,8 +15858,8 @@ fn build_song_lua_overlay_actor_with_scratch(
                     overlay_blend,
                     z,
                     [
-                        center[0] + effect_offset[0] * x_scale,
-                        center[1] + effect_offset[1] * y_scale,
+                        effect_offset[0].mul_add(x_scale, center[0]),
+                        effect_offset[1].mul_add(y_scale, center[1]),
                         effect_offset[2],
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
@@ -15893,8 +15913,8 @@ fn build_song_lua_overlay_actor_with_scratch(
                     overlay_blend,
                     z,
                     [
-                        center[0] + effect_offset[0] * x_scale,
-                        center[1] + effect_offset[1] * y_scale,
+                        effect_offset[0].mul_add(x_scale, center[0]),
+                        effect_offset[1].mul_add(y_scale, center[1]),
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
@@ -15994,8 +16014,8 @@ fn build_song_lua_overlay_actor_with_scratch(
                 *rot_x_deg = effect_rot[0];
                 *rot_y_deg = effect_rot[1];
                 *rot_z_deg = effect_rot[2];
-                offset[0] += effect_offset[0] * x_scale;
-                offset[1] += effect_offset[1] * y_scale;
+                offset[0] = effect_offset[0].mul_add(x_scale, offset[0]);
+                offset[1] = effect_offset[1].mul_add(y_scale, offset[1]);
                 *world_z += song_lua_biased_world_z(state, effect_offset[2]);
                 scale[0] *= effect_scale[0];
                 scale[1] *= effect_scale[1];
@@ -17246,10 +17266,10 @@ fn player_actor_assembly_checksum(assembly: PlayerActorAssembly) -> f32 {
         } => {
             5.0 + f32::from(z_shift)
                 + tint.into_iter().sum::<f32>()
-                + blend.map_or(0.0, |blend| blend as u8 as f32)
+                + blend.map_or(0.0, |blend| f32::from(blend as u8))
                 + root_camera.to_cols_array().into_iter().sum::<f32>()
                 + field_camera_suffix.to_cols_array().into_iter().sum::<f32>()
-                + f32::from(x_fold.is_some() as u8)
+                + f32::from(u8::from(x_fold.is_some()))
         }
     }
 }
@@ -20181,7 +20201,7 @@ fn smx_overlay_x(
 
 // Width of one pad's 4-bar FSR group (unscaled).
 fn smx_fsr_group_w() -> f32 {
-    4.0 * SMX_SENSOR_BAR_W + 3.0 * SMX_SENSOR_BAR_GAP
+    3.0f32.mul_add(SMX_SENSOR_BAR_GAP, 4.0 * SMX_SENSOR_BAR_W)
 }
 
 // Enlarged, vertically-stacked layout for a centered single player: a big FSR
@@ -20206,7 +20226,7 @@ fn smx_centered_layout(
     let scale = SMX_CENTERED_SCALE;
     let fsr_w = smx_fsr_group_w() * scale;
     let fsr_h = (SMX_SENSOR_VALUE_H + SMX_SENSOR_VALUE_GAP + SMX_SENSOR_BAR_H) * scale;
-    let mini_w = (3.0 * SMX_PAD_INPUT_CELL + 2.0 * SMX_PAD_INPUT_GAP) * scale;
+    let mini_w = 2.0f32.mul_add(SMX_PAD_INPUT_GAP, 3.0 * SMX_PAD_INPUT_CELL) * scale;
     let total_h = fsr_h + SMX_CENTERED_STACK_GAP + mini_w;
     let top_y = screen_center_y() - total_h * 0.5;
     let gutter_center = match side {
@@ -20215,7 +20235,7 @@ fn smx_centered_layout(
     };
     (
         scale,
-        gutter_center - fsr_w * 0.5,
+        fsr_w.mul_add(-0.5, gutter_center),
         top_y,
         gutter_center - mini_w * 0.5,
         top_y + fsr_h + SMX_CENTERED_STACK_GAP,
@@ -20264,11 +20284,11 @@ fn push_smx_sensor_display(
         // Centered in the left gutter (to the left of the wide notefield).
         let center_x = field_left * 0.5;
         let group_gap = SMX_DOUBLES_PAIR_GAP;
-        let total_w = pad_group_w * 2.0 + group_gap;
+        let total_w = pad_group_w.mul_add(2.0, group_gap);
         let start_x = center_x - total_w * 0.5;
-        let top_y = screen_height() * SMX_DOUBLES_STACK_TOP_FRAC + SMX_DOUBLES_FSR_Y_OFFSET;
+        let top_y = screen_height().mul_add(SMX_DOUBLES_STACK_TOP_FRAC, SMX_DOUBLES_FSR_Y_OFFSET);
         for sdk_pad in 0..2usize {
-            let gx = start_x + sdk_pad as f32 * (pad_group_w + group_gap);
+            let gx = (sdk_pad as f32).mul_add(pad_group_w + group_gap, start_x);
             draw_smx_fsr_group(actors, state, sdk_pad, gx, top_y, 1.0);
         }
         return;
@@ -20316,8 +20336,8 @@ fn draw_smx_fsr_group(
     let bar_w = SMX_SENSOR_BAR_W * scale;
     let bar_h = SMX_SENSOR_BAR_H * scale;
     let bar_gap = SMX_SENSOR_BAR_GAP * scale;
-    let bar_y = group_top + (SMX_SENSOR_VALUE_H + SMX_SENSOR_VALUE_GAP) * scale;
-    let pad_group_w = 4.0 * bar_w + 3.0 * bar_gap;
+    let bar_y = (SMX_SENSOR_VALUE_H + SMX_SENSOR_VALUE_GAP).mul_add(scale, group_top);
+    let pad_group_w = 3.0f32.mul_add(bar_gap, 4.0 * bar_w);
 
     // Background behind this pad's label + bar group.
     let bg_pad = 3.0 * scale;
@@ -20332,17 +20352,17 @@ fn draw_smx_fsr_group(
     );
 
     for (slot, &(panel, label)) in SMX_SENSOR_DISP_PANELS.iter().enumerate() {
-        let x = group_x + slot as f32 * (bar_w + bar_gap);
+        let x = (slot as f32).mul_add(bar_w + bar_gap, group_x);
 
         // Panel high threshold (max across sensors for FSR), computed once and
         // used for both the active check and the threshold line.
         let panel_view = view.panels[panel];
         let threshold = panel_view.threshold;
-        let threshold_norm = (threshold as f32 / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0);
+        let threshold_norm = (f32::from(threshold) / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0);
 
         let raw_value = panel_view.value;
         let value_norm = raw_value
-            .map_or(0.0, |value| value as f32 / SMX_SENSOR_VALUE_SCALE)
+            .map_or(0.0, |value| f32::from(value) / SMX_SENSOR_VALUE_SCALE)
             .clamp(0.0, 1.0);
         let active = raw_value.is_some_and(|value| value >= threshold && threshold > 0);
 
@@ -20378,7 +20398,7 @@ fn draw_smx_fsr_group(
 
         // Threshold line.
         let threshold_h = 2.0_f32 * scale;
-        let threshold_y = bar_y + (1.0 - threshold_norm) * bar_h - threshold_h * 0.5;
+        let threshold_y = threshold_h.mul_add(-0.5, (1.0 - threshold_norm).mul_add(bar_h, bar_y));
         push_smx_quad(
             actors,
             x,
@@ -20394,7 +20414,7 @@ fn draw_smx_fsr_group(
         let (value_text, value_color) = smx_sensor_value_content(raw_value);
         actors.push(act!(text:
             font(machine_font_key(state.machine_font(), FontRole::Normal)): settext(value_text):
-            align(0.5, 0.0): xy(x + bar_w * 0.5, group_top):
+            align(0.5, 0.0): xy(bar_w.mul_add(0.5, x), group_top):
             zoom(SMX_SENSOR_VALUE_ZOOM * scale):
             diffuse(value_color[0], value_color[1], value_color[2], value_color[3]):
             z(SMX_SENSOR_Z + 2.0)
@@ -20405,7 +20425,7 @@ fn draw_smx_fsr_group(
         actors.push(act!(text:
             font(machine_font_key(state.machine_font(), FontRole::Normal)): settext(label):
             align(0.5, 1.0):
-            xy(x + bar_w * 0.5, bar_y + bar_h - SMX_SENSOR_LETTER_INSET * scale):
+            xy(bar_w.mul_add(0.5, x), SMX_SENSOR_LETTER_INSET.mul_add(-scale, bar_y + bar_h)):
             zoom(SMX_SENSOR_LABEL_ZOOM * scale):
             shadowlength(1.0):
             shadowcolor(
@@ -20448,13 +20468,13 @@ fn push_smx_pad_input_display(
     is_doubles: bool,
     is_centered_single: bool,
 ) {
-    let mini_w = 3.0 * SMX_PAD_INPUT_CELL + 2.0 * SMX_PAD_INPUT_GAP;
+    let mini_w = 2.0f32.mul_add(SMX_PAD_INPUT_GAP, 3.0 * SMX_PAD_INPUT_CELL);
     // Vertically center the mini-pad on the FSR sensor display group, so the two
     // read as aligned when shown together (regardless of whether the FSR display
     // is actually shown). Lifted above the footer so it clears the avatar.
     let fsr_bottom = screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_SENSOR_MARGIN;
     let fsr_group_h = SMX_SENSOR_BAR_H + SMX_SENSOR_VALUE_GAP + SMX_SENSOR_VALUE_H;
-    let y0 = fsr_bottom - fsr_group_h * 0.5 - mini_w * 0.5;
+    let y0 = fsr_group_h.mul_add(-0.5, fsr_bottom) - mini_w * 0.5;
 
     if is_centered_single {
         // Big mini-pad stacked under the FSR group in the open side gutter.
@@ -20488,8 +20508,8 @@ fn push_smx_pad_input_display(
         let start_x = center_x - total_w * 0.5;
         // Below the FSR pair (which starts SMX_DOUBLES_STACK_TOP_FRAC down).
         let fsr_group_h = SMX_SENSOR_VALUE_H + SMX_SENSOR_VALUE_GAP + SMX_SENSOR_BAR_H;
-        let mini_top =
-            screen_height() * SMX_DOUBLES_STACK_TOP_FRAC + fsr_group_h + SMX_DOUBLES_STACK_GAP;
+        let mini_top = screen_height().mul_add(SMX_DOUBLES_STACK_TOP_FRAC, fsr_group_h)
+            + SMX_DOUBLES_STACK_GAP;
         // When the FSR pair is also shown, center each mini under its FSR group
         // above it; otherwise use the natural (tighter) mini-pair spacing so a
         // mini-only display doesn't look oddly spread out.
@@ -20498,11 +20518,13 @@ fn push_smx_pad_input_display(
         let fsr_start_x = center_x - f32::midpoint(fsr_group_w * 2.0, group_gap);
         for half in 0..2usize {
             let x0 = if fsr_active {
-                let fsr_center =
-                    fsr_start_x + half as f32 * (fsr_group_w + group_gap) + fsr_group_w * 0.5;
+                let fsr_center = fsr_group_w.mul_add(
+                    0.5,
+                    (half as f32).mul_add(fsr_group_w + group_gap, fsr_start_x),
+                );
                 fsr_center - mini_w * 0.5
             } else {
-                start_x + half as f32 * (mini_w + group_gap)
+                (half as f32).mul_add(mini_w + group_gap, start_x)
             };
             draw_smx_mini_pad(actors, state, half * 4, x0, mini_top, 1.0);
         }
@@ -20544,7 +20566,7 @@ fn draw_smx_mini_pad(
 ) {
     let cell = SMX_PAD_INPUT_CELL * scale;
     let gap = SMX_PAD_INPUT_GAP * scale;
-    let mini_w = 3.0 * cell + 2.0 * gap;
+    let mini_w = 2.0f32.mul_add(gap, 3.0 * cell);
     let bg_pad = 3.0 * scale;
     push_smx_quad(
         actors,
@@ -20556,8 +20578,8 @@ fn draw_smx_mini_pad(
         SMX_SENSOR_Z - 1.0,
     );
     for &(col_off, gx, gy) in SMX_PAD_INPUT_PANELS.iter() {
-        let cx = x0 + gx * (cell + gap);
-        let cy = y0 + gy * (cell + gap);
+        let cx = gx.mul_add(cell + gap, x0);
+        let cy = gy.mul_add(cell + gap, y0);
         let pressed = state.lane_pressed(base + col_off);
         let color = if pressed {
             SMX_PAD_INPUT_CELL_LIT
@@ -22414,7 +22436,7 @@ mod tests {
         );
         assert_eq!(
             side_difficulty_meter_x(profile_data::PlayerSide::P2),
-            screen_width() - DIFFICULTY_METER_SIZE * 0.5
+            DIFFICULTY_METER_SIZE.mul_add(-0.5, screen_width())
         );
     }
 
@@ -24038,7 +24060,8 @@ mod tests {
         assert!((transformed_top_left.y - top_left.y).abs() < 0.001);
         assert!((transformed_bottom_right.x - display_width * 0.5).abs() < 0.001);
         assert!(
-            (transformed_bottom_right.y - (display_height * 0.5 - 480.0 * scale)).abs() < 0.001
+            (transformed_bottom_right.y - 480.0f32.mul_add(-scale, display_height * 0.5)).abs()
+                < 0.001
         );
     }
 
@@ -25472,8 +25495,8 @@ mod tests {
         let mut aft_overlay = test_aft_overlay("cap", true);
         aft_overlay.name = Some("PlayerCapture".to_string());
         let aft_state = SongLuaOverlayState {
-            x: 0.5 * screen_width() + 24.0,
-            y: 0.5 * screen_height() - 12.0,
+            x: 0.5f32.mul_add(screen_width(), 24.0),
+            y: 0.5f32.mul_add(screen_height(), -12.0),
             rot_z_deg: 8.0,
             zoom: 1.1,
             diffuse: [0.5, 0.8, 0.6, 0.7],
@@ -25594,8 +25617,8 @@ mod tests {
         let mut aft_overlay = test_aft_overlay("cap", true);
         aft_overlay.name = Some("CaptureR".to_string());
         let aft_state = SongLuaOverlayState {
-            x: 0.5 * screen_width() + 24.0,
-            y: 0.5 * screen_height() - 12.0,
+            x: 0.5f32.mul_add(screen_width(), 24.0),
+            y: 0.5f32.mul_add(screen_height(), -12.0),
             rot_z_deg: 8.0,
             zoom: 1.1,
             diffuse: [0.5, 0.8, 0.6, 0.7],
@@ -26895,8 +26918,8 @@ mod tests {
                 let x_scale = screen_width() / 640.0;
                 let y_scale = screen_height() / 480.0;
                 assert_eq!(z, 777);
-                assert!((offset[0] - (320.0 + 10.0) * x_scale).abs() <= 0.000_1);
-                assert!((offset[1] - (240.0 + 20.0) * y_scale).abs() <= 0.000_1);
+                assert!((320.0_f32 + 10.0).mul_add(-x_scale, offset[0]).abs() <= 0.000_1);
+                assert!((240.0_f32 + 20.0).mul_add(-y_scale, offset[1]).abs() <= 0.000_1);
                 assert!((world_z - 7.5).abs() <= 0.000_1);
                 assert!(scale[0] > 0.0);
                 assert!(scale[1] > 0.0);
@@ -26945,8 +26968,8 @@ mod tests {
                 let x_scale = screen_width() / 640.0;
                 let y_scale = screen_height() / 480.0;
                 assert_eq!(z, 778);
-                assert!((offset[0] - 320.0 * x_scale).abs() <= 0.000_1);
-                assert!((offset[1] - 240.0 * y_scale).abs() <= 0.000_1);
+                assert!(320.0f32.mul_add(-x_scale, offset[0]).abs() <= 0.000_1);
+                assert!(240.0f32.mul_add(-y_scale, offset[1]).abs() <= 0.000_1);
                 assert!(world_z.abs() <= 0.000_1);
             }
             other => panic!("expected sprite-backed quad, got {other:?}"),

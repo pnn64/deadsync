@@ -83,7 +83,7 @@ pub(super) fn cached_ratio_i32(curr: i32, total: i32) -> Arc<str> {
 #[inline(always)]
 pub(super) fn offset_ms_text(value: f32) -> InlineText {
     let key = quantize_centi_i32(f64::from(value));
-    InlineText::format(format_args!("{:.2}ms", key as f64 / 100.0))
+    InlineText::format(format_args!("{:.2}ms", f64::from(key) / 100.0))
         .expect("an i32 centisecond value and ms suffix fit inline")
 }
 
@@ -369,10 +369,10 @@ fn preferred_mods_text_key(
         mini_percent: clamp_rounded_i16(display_mini),
         spacing_percent: profile
             .spacing_percent
-            .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
+            .clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16,
         visual_delay_ms: profile
             .visual_delay_ms
-            .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
+            .clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16,
         error_bar_mask: error_bar_mask.bits(),
         avg_error_bar_intensity_centi: clamp_rounded_i16(average_error_bar_intensity * 100.0),
         avg_error_bar_interval_ms: average_error_bar_interval_ms as u16,
@@ -505,7 +505,7 @@ mod tests {
 
     #[test]
     fn inline_combo_text_preserves_all_decimal_boundaries() {
-        for value in [0, 9, 10, 99, 100, u16::MAX as u32, u32::MAX] {
+        for value in [0, 9, 10, 99, 100, u32::from(u16::MAX), u32::MAX] {
             assert_eq!(TextContent::inline_u32(value).as_str(), value.to_string());
         }
     }

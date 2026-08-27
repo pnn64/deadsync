@@ -225,10 +225,10 @@ pub fn screenshot_preview_pose(
         (start_x, start_y, SCREENSHOT_PREVIEW_SCALE)
     } else {
         let t = ((elapsed - hold_seconds) / SCREENSHOT_PREVIEW_TWEEN_SECONDS).clamp(0.0, 1.0);
-        let smooth = t * t * (3.0 - 2.0 * t);
+        let smooth = t * t * 2.0f32.mul_add(-t, 3.0);
         (
-            start_x + (target_x - start_x) * smooth,
-            start_y + (target_y - start_y) * smooth,
+            (target_x - start_x).mul_add(smooth, start_x),
+            (target_y - start_y).mul_add(smooth, start_y),
             SCREENSHOT_PREVIEW_SCALE * (1.0 - smooth),
         )
     };

@@ -104,7 +104,7 @@ impl FromStr for SelectMusicSort {
     }
 }
 
-/// Simply Love's machine-wide Default Sort preference plus DeadSync's
+/// Simply Love's machine-wide Default Sort preference plus `DeadSync`'s
 /// opt-in extension for restoring the last stable sort.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SelectMusicDefaultSort {
@@ -641,7 +641,7 @@ pub enum SrpgVariant {
 impl SrpgVariant {
     pub const ALL: [Self; 2] = [Self::Srpg9, Self::Srpg10];
 
-    /// Current SRPG event represented by GrooveStats' generic RPG panes.
+    /// Current SRPG event represented by `GrooveStats`' generic RPG panes.
     pub const CURRENT: Self = Self::Srpg10;
 
     pub const fn as_str(self) -> &'static str {
@@ -1006,7 +1006,7 @@ impl FromStr for MachinePreferredPlayMode {
     }
 }
 
-/// When to auto-show the ArrowCloud QR-login screen after the user picks
+/// When to auto-show the `ArrowCloud` QR-login screen after the user picks
 /// a profile.  Mirrors Simply Love's `QRLogin` theme pref.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ArrowCloudQrLoginWhen {
@@ -1049,19 +1049,19 @@ impl FromStr for ArrowCloudQrLoginWhen {
     }
 }
 
-/// When to auto-show the GrooveStats QR-login screen after the user picks
+/// When to auto-show the `GrooveStats` QR-login screen after the user picks
 /// a profile.  Mirrors Simply Love's `QRLogin` theme pref — same wire
-/// values and same default as the ArrowCloud variant.
+/// values and same default as the `ArrowCloud` variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GrooveStatsQrLoginWhen {
     /// Always show the login screen after Select Profile.
     Always,
     /// Show only when at least one joined Local player has no saved
-    /// GrooveStats API key.  Default.
+    /// `GrooveStats` API key.  Default.
     #[default]
     Sometimes,
     /// Never auto-show; only the manual Options entry / Manage Local
-    /// Profiles "Link GrooveStats" action can launch it.
+    /// Profiles "Link `GrooveStats`" action can launch it.
     Disabled,
 }
 
@@ -1132,7 +1132,7 @@ impl FromStr for SrpgShopFolder {
 /// Machine-wide font preference, ported from Simply Love's `ThemeFont` pref.
 ///
 /// Controls which font is used for the Bold / Header / Footer / numbers /
-/// ScreenEval roles in static UI text. The Normal (body) role stays Miso
+/// `ScreenEval` roles in static UI text. The Normal (body) role stays Miso
 /// regardless of this pref -- matches SL's `Mega Normal.redir ->
 /// Miso/_miso light`.
 ///

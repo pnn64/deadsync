@@ -4551,7 +4551,7 @@ mod tests {
                     slot.0 += 10;
                 }
             },
-            |slot| slot.0 as f32,
+            |slot| f32::from(slot.0),
         )
         .expect("receptor column");
 

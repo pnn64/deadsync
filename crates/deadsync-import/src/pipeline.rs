@@ -11,38 +11,38 @@ use crate::itg::{ItgReadError, ItgSource};
 use crate::options::translate_player_options;
 use crate::resolver::{ChartResolver, Resolution};
 
-/// Result of importing one ITGmania profile.
+/// Result of importing one `ITGmania` profile.
 #[derive(Debug, Default, Clone)]
 pub struct ImportSummary {
-    /// New DeadSync local profile id.
+    /// New `DeadSync` local profile id.
     pub profile_id: String,
     pub display_name: String,
     /// Total high-score records found in `Stats.xml`.
     pub scores_total: usize,
     /// Plays successfully written to the new profile.
     pub scores_imported: usize,
-    /// Records skipped because the song wasn't in DeadSync's library.
+    /// Records skipped because the song wasn't in `DeadSync`'s library.
     pub charts_song_not_found: usize,
     /// Records skipped because the chart (type/difficulty/edit) wasn't found.
     pub charts_chart_not_found: usize,
-    /// Records whose grade/percent couldn't be mapped to a DeadSync play.
+    /// Records whose grade/percent couldn't be mapped to a `DeadSync` play.
     pub scores_unmapped: usize,
     /// Total favorited songs found in `favorites.txt`.
     pub favorites_total: usize,
     /// Favorited songs matched to a library song and imported.
     pub favorites_imported: usize,
-    /// Favorited songs skipped because the song wasn't in DeadSync's library.
+    /// Favorited songs skipped because the song wasn't in `DeadSync`'s library.
     pub favorites_song_not_found: usize,
     /// ITL `hashMap` entries imported from `ITL2026.json` (0 if absent).
     pub itl_entries_imported: usize,
     /// Whether the source had `ITL2026.json` event data at all.
     pub itl_present: bool,
     /// Whether Simply Love player-options preferences were found and translated
-    /// (vs. falling back to DeadSync defaults for a profile that never ran it).
+    /// (vs. falling back to `DeadSync` defaults for a profile that never ran it).
     pub simply_love_options_imported: bool,
-    /// Whether a GrooveStats API key was carried across.
+    /// Whether a `GrooveStats` API key was carried across.
     pub groovestats_imported: bool,
-    /// Whether an ArrowCloud API key was carried across.
+    /// Whether an `ArrowCloud` API key was carried across.
     pub arrowcloud_imported: bool,
     /// Whether an avatar image was copied into the new profile.
     pub avatar_imported: bool,
@@ -50,13 +50,13 @@ pub struct ImportSummary {
     /// profile was deleted (clean abort) and the count fields are not meaningful.
     pub canceled: bool,
     /// Set to the existing profile's display name when the import was refused
-    /// because this ITGmania profile (matched by its derived GUID) was already
+    /// because this `ITGmania` profile (matched by its derived GUID) was already
     /// imported. When set, no new profile was created.
     pub already_imported_as: Option<String>,
 }
 
 impl ImportSummary {
-    /// Whether GrooveStats and/or ArrowCloud credentials were carried across (so
+    /// Whether `GrooveStats` and/or `ArrowCloud` credentials were carried across (so
     /// the user can pull online scores via Score Import).
     pub const fn online_keys_imported(&self) -> bool {
         self.groovestats_imported || self.arrowcloud_imported

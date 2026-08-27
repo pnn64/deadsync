@@ -321,9 +321,9 @@ fn fixture() -> (Vec<Note>, Vec<i64>) {
 
 fn cue_checksum(cues: Vec<deadsync_gameplay::ColumnCue>) -> u64 {
     cues.into_iter().fold(0u64, |sum, cue| {
-        sum.wrapping_add(cue.start_time.to_bits() as u64)
+        sum.wrapping_add(u64::from(cue.start_time.to_bits()))
             .rotate_left(5)
-            .wrapping_add(cue.duration.to_bits() as u64)
+            .wrapping_add(u64::from(cue.duration.to_bits()))
             .wrapping_add(cue.columns.len() as u64)
     })
 }
@@ -337,16 +337,16 @@ fn row_checksum(rows: (Vec<[u8; LANES]>, Vec<f32>, Vec<usize>)) -> u64 {
         .fold(0u64, |sum, ((row, beat), index)| {
             row.into_iter()
                 .fold(sum.wrapping_add(index as u64), |sum, value| {
-                    sum.rotate_left(3).wrapping_add(value as u64)
+                    sum.rotate_left(3).wrapping_add(u64::from(value))
                 })
-                .wrapping_add(beat.to_bits() as u64)
+                .wrapping_add(u64::from(beat.to_bits()))
         })
 }
 
 fn note_stat_checksum(stats: Vec<deadsync_gameplay::NoteCountStat>) -> u64 {
     stats.into_iter().fold(0u64, |sum, stat| {
         sum.rotate_left(7)
-            .wrapping_add(stat.beat.to_bits() as u64)
+            .wrapping_add(u64::from(stat.beat.to_bits()))
             .wrapping_add(stat.notes_lower as u64)
             .wrapping_add(stat.notes_upper as u64)
     })
@@ -359,7 +359,7 @@ fn player_note_stat_checksum(stats: deadsync_gameplay::GameplayNoteCountStatsSta
             .iter()
             .fold(sum.rotate_left(3), |sum, stat| {
                 sum.rotate_left(7)
-                    .wrapping_add(stat.beat.to_bits() as u64)
+                    .wrapping_add(u64::from(stat.beat.to_bits()))
                     .wrapping_add(stat.notes_lower as u64)
                     .wrapping_add(stat.notes_upper as u64)
             })
@@ -370,7 +370,7 @@ fn player_note_stat_vec_checksum(stats: [Vec<deadsync_gameplay::NoteCountStat>; 
     stats.into_iter().fold(0u64, |sum, player| {
         player.into_iter().fold(sum.rotate_left(3), |sum, stat| {
             sum.rotate_left(7)
-                .wrapping_add(stat.beat.to_bits() as u64)
+                .wrapping_add(u64::from(stat.beat.to_bits()))
                 .wrapping_add(stat.notes_lower as u64)
                 .wrapping_add(stat.notes_upper as u64)
         })
@@ -624,7 +624,7 @@ fn pump_event_checksum(value: (Vec<deadsync_gameplay::PumpHoldEvent>, [u32; 2]))
                 ^ event.time_ns as u64
                 ^ (event.row_index.get() as u64).rotate_left(11)
                 ^ (event.note_index.get() as u64).rotate_left(19)
-                ^ (event.column as u64).rotate_left(27)
+                ^ u64::from(event.column).rotate_left(27)
                 ^ kind
                 ^ u64::from(event.has_tap)
         },
@@ -1057,7 +1057,7 @@ fn main() {
             player: (index % 3 != 0).then_some(1),
             unit: SongLuaRuntimeTimeUnit::Second,
             start: index as f32 * 0.25,
-            limit: index as f32 * 0.25 + 1.0,
+            limit: (index as f32).mul_add(0.25, 1.0),
             span_mode: SongLuaRuntimeSpanMode::End,
             mods: "50% hidden,25% reverse,15% drunk".to_owned(),
         })
@@ -1109,7 +1109,7 @@ fn main() {
             player: 0,
             unit: SongLuaRuntimeTimeUnit::Second,
             start: index as f32 * 0.25,
-            limit: index as f32 * 0.25 + 0.125,
+            limit: (index as f32).mul_add(0.25, 0.125),
             span_mode: SongLuaRuntimeSpanMode::End,
             column: index % MAX_COLS,
             target: SongLuaColumnTransformTarget::OffsetY,
@@ -1164,7 +1164,7 @@ fn main() {
             player: (index % 3 != 0).then_some(1),
             unit: SongLuaRuntimeTimeUnit::Second,
             start: index as f32 * 0.25,
-            limit: index as f32 * 0.25 + 0.125,
+            limit: (index as f32).mul_add(0.25, 0.125),
             span_mode: SongLuaRuntimeSpanMode::End,
             target: SongLuaRuntimeEaseTargetOwned::Mod(
                 EASE_WINDOW_TARGETS[index % EASE_WINDOW_TARGETS.len()].to_owned(),

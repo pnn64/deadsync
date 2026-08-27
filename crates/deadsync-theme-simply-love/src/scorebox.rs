@@ -29,7 +29,7 @@ pub const fn clamp01(v: f32) -> f32 {
 #[inline(always)]
 pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
     let t = clamp01(t);
-    a + (b - a) * t
+    (b - a).mul_add(t, a)
 }
 
 #[inline(always)]
@@ -100,7 +100,7 @@ pub fn scorebox_cycle_state(num_panes: usize, elapsed_seconds: f32) -> ScoreboxC
     let cycle_len = SCOREBOX_LOOP_SECONDS + SCOREBOX_TRANSITION_SECONDS;
     let elapsed = elapsed_seconds.max(0.0);
     let cycle_num = (elapsed / cycle_len).floor() as usize;
-    let cycle_pos = elapsed - (cycle_num as f32) * cycle_len;
+    let cycle_pos = (cycle_num as f32).mul_add(-cycle_len, elapsed);
     let cur_idx = cycle_num % num_panes;
 
     if cycle_pos < SCOREBOX_LOOP_SECONDS {

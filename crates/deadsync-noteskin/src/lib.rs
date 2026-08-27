@@ -1,4 +1,4 @@
-//! DeadSync noteskin parsing and resolution.
+//! `DeadSync` noteskin parsing and resolution.
 //!
 //! This crate owns renderer-agnostic noteskin data loading. Root gameplay
 //! presentation still owns texture registration and actor construction during

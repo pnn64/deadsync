@@ -191,7 +191,7 @@ const BOOM_SFX_PATH: &str = "assets/sounds/boom.ogg";
 
 /// Song-lifetime resolved sounds retained by the application thread.
 ///
-/// Fixed gameplay sounds take direct fields. Arbitrary SongLua paths use the
+/// Fixed gameplay sounds take direct fields. Arbitrary `SongLua` paths use the
 /// prewarmed map because their domain is chart-authored and not statically
 /// bounded. Submission borrows an `SfxId`; no decode, allocation, lock, or
 /// audio-cache lookup occurs on gameplay frames.

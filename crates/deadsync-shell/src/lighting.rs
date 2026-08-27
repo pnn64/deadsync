@@ -1,4 +1,4 @@
-//! Shell policy and adapters for cabinet and StepManiaX lighting.
+//! Shell policy and adapters for cabinet and `StepManiaX` lighting.
 
 use std::sync::Arc;
 

@@ -3,7 +3,7 @@
 //! The recognised set is:
 //!
 //! * `--cleanup-old <staging-dir>`— runs the post-swap cleanup pass
-//!   (delete `*.old` files under exe_dir, remove the staging dir),
+//!   (delete `*.old` files under `exe_dir`, remove the staging dir),
 //!   then continues into normal startup.  PR-11 describes the
 //!   Windows side; the Unix side is a no-op cleanup but the flag is
 //!   accepted so the same parent process can launch either platform.
@@ -133,7 +133,7 @@ impl UpdaterCli {
 /// Runs the post-update cleanup pass.
 ///
 /// Errors are intentionally swallowed (the caller is post-startup
-/// best-effort), but the (removed_count, staging_removed) tuple is
+/// best-effort), but the (`removed_count`, `staging_removed`) tuple is
 /// returned for diagnostics + tests.
 pub fn run_cleanup(exe_dir: &std::path::Path, staging_dir: &std::path::Path) -> (usize, bool) {
     // The `staging_dir` argument is retained for back-compat with old

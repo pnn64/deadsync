@@ -373,14 +373,14 @@ pub fn push_actors(
             if let Some(key) = player.avatar_texture_key.as_deref() {
                 actors.push(act!(sprite(key):
                     align(0.0, 0.0):
-                    xy(x_pos - AVATAR_DIM * 0.5, AVATAR_Y):
+                    xy(AVATAR_DIM.mul_add(-0.5, x_pos), AVATAR_Y):
                     zoomto(AVATAR_DIM, AVATAR_DIM):
                     z(12)
                 ));
             } else {
                 actors.push(act!(quad:
                     align(0.0, 0.0):
-                    xy(x_pos - AVATAR_DIM * 0.5, AVATAR_Y):
+                    xy(AVATAR_DIM.mul_add(-0.5, x_pos), AVATAR_Y):
                     zoomto(AVATAR_DIM, AVATAR_DIM):
                     diffuse(0.157, 0.196, 0.224, 0.667):
                     z(12)
@@ -408,7 +408,7 @@ pub fn push_actors(
 
         if let Some(profile_lines) = lines.profile_lines.as_ref() {
             for (i, line) in profile_lines.iter().enumerate() {
-                let y = (LINE_HEIGHT * (i as f32)) + PROFILE_STATS_Y;
+                let y = LINE_HEIGHT.mul_add(i as f32, PROFILE_STATS_Y);
                 actors.push(act!(text:
                     font("miso"):
                     settext(Arc::clone(line)):
@@ -424,7 +424,7 @@ pub fn push_actors(
         }
 
         for (i, line) in lines.general_lines.iter().enumerate() {
-            let y = (LINE_HEIGHT * ((i + 1) as f32)) + NORMAL_STATS_Y;
+            let y = LINE_HEIGHT.mul_add((i + 1) as f32, NORMAL_STATS_Y);
             actors.push(act!(text:
                 font("miso"):
                 settext(Arc::clone(line)):

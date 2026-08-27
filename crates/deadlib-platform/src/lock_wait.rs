@@ -89,12 +89,15 @@ pub fn lock_mutex<'a, T>(
     }
     let start = Instant::now();
     let guard = mutex.lock().unwrap();
-    let waited_ns = start.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+    let waited_ns = start.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
     stats.record(lock_name, waited_ns);
     guard
 }
 
 #[inline(always)]
 fn lock_wait_now_ns() -> u64 {
-    LOCK_WAIT_EPOCH.elapsed().as_nanos().min(u64::MAX as u128) as u64
+    LOCK_WAIT_EPOCH
+        .elapsed()
+        .as_nanos()
+        .min(u128::from(u64::MAX)) as u64
 }

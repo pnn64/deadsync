@@ -107,7 +107,7 @@ fn fixture(count: usize) -> Vec<SongLuaEaseWindow> {
         .map(|index| SongLuaEaseWindow {
             unit: SongLuaTimeUnit::Beat,
             start: ((index * 73) % count) as f32 * 0.25,
-            limit: 0.125 + (index % 5) as f32 * 0.0625,
+            limit: ((index % 5) as f32).mul_add(0.0625, 0.125),
             span_mode: SongLuaSpanMode::Len,
             from: 0.0,
             to: 1.0,
@@ -158,7 +158,7 @@ fn extend_reference(windows: &mut [SongLuaEaseWindow]) {
 fn checksum(windows: &[SongLuaEaseWindow]) -> u64 {
     windows.iter().fold(0u64, |sum, window| {
         sum.wrapping_mul(16_777_619)
-            .wrapping_add(window.sustain.unwrap_or_default().to_bits() as u64)
+            .wrapping_add(u64::from(window.sustain.unwrap_or_default().to_bits()))
     })
 }
 

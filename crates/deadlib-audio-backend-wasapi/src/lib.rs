@@ -936,7 +936,7 @@ fn set_waveformat_sample_rate(bytes: &mut [u8], rate_hz: u32) {
 
 fn sample_format_from_waveformat(bytes: &[u8]) -> Option<WasapiSampleFormat> {
     let wave = waveformat(bytes);
-    match (wave.wFormatTag as u32, wave.wBitsPerSample) {
+    match (u32::from(wave.wFormatTag), wave.wBitsPerSample) {
         (Audio::WAVE_FORMAT_PCM, 16) => Some(WasapiSampleFormat::I16),
         (Multimedia::WAVE_FORMAT_IEEE_FLOAT, 32) => Some(WasapiSampleFormat::F32),
         (tag, bits) if tag == KernelStreaming::WAVE_FORMAT_EXTENSIBLE => {

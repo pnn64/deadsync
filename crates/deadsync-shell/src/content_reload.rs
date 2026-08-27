@@ -306,7 +306,7 @@ fn compile_noteskins(tx: &SyncSender<SimplyLoveContentReloadEvent>) {
     );
 }
 
-/// Frontload ReplayGain (EBU R128 loudness) analysis before the menu appears,
+/// Frontload `ReplayGain` (EBU R128 loudness) analysis before the menu appears,
 /// so the first play of any song doesn't audibly adjust loudness a few seconds
 /// in. Runs synchronously with progress, populating the same cache the per-song
 /// preview path uses. Unchanged songs resolve from the cache, so only new or

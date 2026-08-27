@@ -157,11 +157,11 @@ mod tests {
         for usage in 0..10 {
             let code = 0x0020_0000 | usage;
             assert_eq!(
-                classify_pad_value(&mut axes, 0x20, usage as u16, code, usage as i64),
+                classify_pad_value(&mut axes, 0x20, usage as u16, code, i64::from(usage)),
                 Some(PadValueKind::Axis)
             );
             assert_eq!(
-                classify_pad_value(&mut axes, 0x20, usage as u16, code, usage as i64),
+                classify_pad_value(&mut axes, 0x20, usage as u16, code, i64::from(usage)),
                 None
             );
         }

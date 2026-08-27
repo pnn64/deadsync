@@ -669,7 +669,7 @@ impl GameplayPacingTrace {
 
     fn log_and_reset(&mut self, now: Instant) {
         let frames = self.frames.max(1);
-        let ms = |sum_us: u64| sum_us as f64 / frames as f64 / 1000.0;
+        let ms = |sum_us: u64| sum_us as f64 / f64::from(frames) / 1000.0;
         let interval_samples = self.present_interval_samples.max(1);
         let margin_samples = self.present_margin_samples.max(1);
         let audio = deadsync_audio_stream::get_output_timing_snapshot();
@@ -696,17 +696,17 @@ impl GameplayPacingTrace {
             self.chain_frames,
             self.other_frames,
             ms(self.dt_sum_us),
-            self.dt_max_us as f64 / 1000.0,
+            f64::from(self.dt_max_us) / 1000.0,
             ms(self.redraw_late_sum_us),
-            self.redraw_late_max_us as f64 / 1000.0,
+            f64::from(self.redraw_late_max_us) / 1000.0,
             ms(self.redraw_delivery_sum_us),
-            self.redraw_delivery_max_us as f64 / 1000.0,
+            f64::from(self.redraw_delivery_max_us) / 1000.0,
             self.redraw_delivery_over_1ms,
             self.redraw_delivery_over_2ms,
             ms(self.draw_sum_us),
-            self.draw_max_us as f64 / 1000.0,
+            f64::from(self.draw_max_us) / 1000.0,
             ms(self.present_sum_us),
-            self.present_max_us as f64 / 1000.0,
+            f64::from(self.present_max_us) / 1000.0,
             self.present_over_1ms,
             self.present_over_3ms,
             ms(self.draw_setup_sum_us),
@@ -734,26 +734,26 @@ impl GameplayPacingTrace {
             record_tail,
             self.storage.total_growths(),
             self.storage,
-            self.display_error_last_us as f64 / 1000.0,
-            self.display_error_abs_sum_us as f64 / frames as f64 / 1000.0,
-            self.display_error_abs_max_us as f64 / 1000.0,
+            f64::from(self.display_error_last_us) / 1000.0,
+            self.display_error_abs_sum_us as f64 / f64::from(frames) / 1000.0,
+            f64::from(self.display_error_abs_max_us) / 1000.0,
             self.display_catching_up_frames,
             u8::from(self.display_catching_up_last),
             self.present_last_mode,
             self.present_display_clock_last,
             self.present_host_clock_last,
             self.present_host_mapped_frames,
-            self.present_inflight_sum as f64 / frames as f64,
+            self.present_inflight_sum as f64 / f64::from(frames),
             self.present_inflight_max,
             self.present_image_wait_frames,
             self.present_back_pressure_frames,
             self.present_queue_idle_frames,
             self.present_suboptimal_frames,
-            self.present_interval_sum_ns as f64 / interval_samples as f64 / 1_000_000.0,
+            self.present_interval_sum_ns as f64 / f64::from(interval_samples) / 1_000_000.0,
             self.present_interval_max_ns as f64 / 1_000_000.0,
-            self.present_margin_sum_ns as f64 / margin_samples as f64 / 1_000_000.0,
+            self.present_margin_sum_ns as f64 / f64::from(margin_samples) / 1_000_000.0,
             self.present_margin_max_ns as f64 / 1_000_000.0,
-            self.present_calibration_error_sum_ns as f64 / frames as f64 / 1_000_000.0,
+            self.present_calibration_error_sum_ns as f64 / f64::from(frames) / 1_000_000.0,
             self.present_calibration_error_max_ns as f64 / 1_000_000.0,
             audio.backend,
             audio.requested_output_mode.as_str(),
@@ -779,7 +779,7 @@ impl GameplayPacingTrace {
 
     fn report(&self) -> GameplayPacingReport {
         let frames = self.frames.max(1);
-        let average = |sum: u64| sum as f64 / frames as f64;
+        let average = |sum: u64| sum as f64 / f64::from(frames);
         let interval_samples = self.present_interval_samples.max(1);
         let margin_samples = self.present_margin_samples.max(1);
         let phase_tails = PHASE_NAMES
@@ -856,7 +856,7 @@ impl GameplayPacingTrace {
             present_display_clock: self.present_display_clock_last.to_string(),
             present_host_clock: self.present_host_clock_last.to_string(),
             present_host_mapped_frames: self.present_host_mapped_frames,
-            present_inflight_avg: self.present_inflight_sum as f64 / frames as f64,
+            present_inflight_avg: self.present_inflight_sum as f64 / f64::from(frames),
             present_inflight_max: self.present_inflight_max,
             present_image_wait_frames: self.present_image_wait_frames,
             present_back_pressure_frames: self.present_back_pressure_frames,

@@ -140,7 +140,7 @@ pub fn update(state: &mut State, dt: f32) {
     if delta_y.abs() <= max_step {
         state.cursor_y = target_y;
     } else {
-        state.cursor_y += delta_y.signum() * max_step;
+        state.cursor_y = delta_y.signum().mul_add(max_step, state.cursor_y);
     }
 
     let zoom_speed = (CHOICE_ZOOM_FOCUSED - CHOICE_ZOOM_UNFOCUSED) / CHOICE_ZOOM_TWEEN_SECONDS;
@@ -155,7 +155,7 @@ pub fn update(state: &mut State, dt: f32) {
         if delta.abs() <= zoom_max_step {
             *zoom = target;
         } else {
-            *zoom += delta.signum() * zoom_max_step;
+            *zoom = delta.signum().mul_add(zoom_max_step, *zoom);
         }
     }
 }

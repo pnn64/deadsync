@@ -170,12 +170,12 @@ pub fn density_graph_u0_for_time(window: DensityGraphWindow, current_music_time:
     if max_seconds <= 0.0_f32 {
         return 0.0;
     }
-    if current_music_time > window.last_second - (max_seconds * 0.75_f32) {
+    if current_music_time > max_seconds.mul_add(-0.75_f32, window.last_second) {
         return max_u0;
     }
 
     let seconds_past_one_fourth =
-        (current_music_time - window.first_second) - (max_seconds * 0.25_f32);
+        max_seconds.mul_add(-0.25_f32, current_music_time - window.first_second);
     if seconds_past_one_fourth > 0.0_f32 {
         return (seconds_past_one_fourth / duration).clamp(0.0_f32, max_u0);
     }

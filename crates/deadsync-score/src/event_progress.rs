@@ -228,10 +228,10 @@ fn srpg_summary_page_text(progress: &ItlEventProgress) -> String {
         "Skill Improvements\n\n\
          {:.2}% ({:+.2}%) at\n\
          {:.2}x ({:+.2}x) rate",
-        progress.score_hundredths as f64 / 100.0,
-        progress.score_delta_hundredths as f64 / 100.0,
-        rate as f64 / 100.0,
-        rate_delta as f64 / 100.0,
+        f64::from(progress.score_hundredths) / 100.0,
+        f64::from(progress.score_delta_hundredths) / 100.0,
+        f64::from(rate) / 100.0,
+        f64::from(rate_delta) / 100.0,
     );
     let lines = srpg_stat_improvement_lines(progress);
     if !lines.is_empty() {
@@ -257,8 +257,8 @@ fn itl_summary_page_text(
          EX Points: {} ({:+})\n\
          Total Points: {} ({:+})\n\n\
          You've passed the chart {} times",
-        progress.score_hundredths as f64 / 100.0,
-        progress.score_delta_hundredths as f64 / 100.0,
+        f64::from(progress.score_hundredths) / 100.0,
+        f64::from(progress.score_delta_hundredths) / 100.0,
         progress.current_points,
         progress.point_delta,
         progress.current_ranking_points,

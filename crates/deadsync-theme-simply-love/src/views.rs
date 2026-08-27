@@ -956,7 +956,7 @@ pub struct SelectMusicRuntimeView {
     pub scoreboxes: Option<[ScoreboxSideView; 2]>,
     /// Replacement overlay data emitted only when its request or cache changes.
     pub leaderboard: Option<SelectMusicLeaderboardView>,
-    /// Replacement availability emitted when GrooveStats status or policy changes.
+    /// Replacement availability emitted when `GrooveStats` status or policy changes.
     pub unlock_downloads_available: Option<bool>,
     /// Completed download event emitted only when the worker queue changes.
     pub ready_song_reload_dirs: Option<Vec<PathBuf>>,
@@ -1033,8 +1033,8 @@ pub enum SimplyLoveContentReloadEvent {
     },
 }
 
-/// Progress and completion data produced by the shell-owned bulk ReplayGain
-/// analysis worker triggered from the Sound options "Apply ReplayGain" action.
+/// Progress and completion data produced by the shell-owned bulk `ReplayGain`
+/// analysis worker triggered from the Sound options "Apply `ReplayGain`" action.
 #[derive(Clone, Debug)]
 pub enum SimplyLoveApplyReplayGainEvent {
     /// Emitted once when the worker has enumerated the library and is about to

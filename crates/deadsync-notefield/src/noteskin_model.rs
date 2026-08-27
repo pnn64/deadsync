@@ -424,7 +424,7 @@ fn model_draw_transform(model_size: [f32; 2], affine: Matrix4) -> Matrix4 {
             affine.w_axis.x,
             -affine.w_axis.y,
             0.0,
-            1.0 - affine.w_axis.z * inv_focal,
+            affine.w_axis.z.mul_add(-inv_focal, 1.0),
         ),
     )
 }
@@ -463,14 +463,14 @@ fn sm_rotation_xyz(rot_x_deg: f32, rot_y_deg: f32, rot_z_deg: f32) -> Matrix4 {
     Matrix4::from_cols(
         Vec4::new(
             cos_z * cos_y,
-            cos_z * sin_y * sin_x + sin_z * cos_x,
-            cos_z * sin_y * cos_x - sin_z * sin_x,
+            sin_z.mul_add(cos_x, cos_z * sin_y * sin_x),
+            sin_z.mul_add(-sin_x, cos_z * sin_y * cos_x),
             0.0,
         ),
         Vec4::new(
             -sin_z * cos_y,
-            -sin_z * sin_y * sin_x + cos_z * cos_x,
-            -sin_z * sin_y * cos_x - cos_z * sin_x,
+            cos_z.mul_add(cos_x, -sin_z * sin_y * sin_x),
+            cos_z.mul_add(-sin_x, -sin_z * sin_y * cos_x),
             0.0,
         ),
         Vec4::new(-sin_y, cos_y * sin_x, cos_y * cos_x, 0.0),

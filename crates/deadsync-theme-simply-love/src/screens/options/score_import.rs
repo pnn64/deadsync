@@ -233,7 +233,7 @@ pub(super) fn build_score_import_overlay_actors(
     let bar_w = widescale(360.0, 520.0);
     let bar_h = RELOAD_BAR_H;
     let bar_cx = screen_width() * 0.5;
-    let bar_cy = screen_height() * 0.5 + 34.0;
+    let bar_cy = screen_height().mul_add(0.5, 34.0);
     let fill_w = (bar_w - 4.0) * progress.clamp(0.0, 1.0);
 
     let mut out: Vec<Actor> = Vec::with_capacity(8);
@@ -802,7 +802,7 @@ pub(super) fn push_score_import_pack_picker_actors(
 fn push_picker_bench_actor(out: &mut Vec<Actor>, content: actors::TextContent, row: usize) {
     out.push(act!(text:
         align(0.0, 0.5):
-        xy(34.0, 74.0 + 27.0 * row as f32):
+        xy(34.0, 27.0f32.mul_add(row as f32, 74.0)):
         font("miso"):
         zoom(0.88):
         maxwidth(632.0):
@@ -824,7 +824,7 @@ fn picker_bench_checksum(actors: &[Actor]) -> u64 {
                 checksum.rotate_left(7)
                     ^ u64::from(offset[0].to_bits())
                     ^ u64::from(offset[1].to_bits()).rotate_left(17)
-                    ^ (*z as u16 as u64),
+                    ^ u64::from(*z as u16),
                 |hash, byte| hash.rotate_left(5) ^ u64::from(byte),
             ),
             _ => checksum,
@@ -1050,7 +1050,8 @@ pub(super) fn update_score_import_ui(score_import: &mut ScoreImportUiState, dt: 
         score_import.displayed_done = target;
     } else if dt > 0.0 && SCORE_IMPORT_PROGRESS_TAU > 0.0 {
         let alpha = 1.0 - (-dt / SCORE_IMPORT_PROGRESS_TAU).exp();
-        score_import.displayed_done += (target - score_import.displayed_done) * alpha;
+        score_import.displayed_done =
+            (target - score_import.displayed_done).mul_add(alpha, score_import.displayed_done);
     } else {
         score_import.displayed_done = target;
     }

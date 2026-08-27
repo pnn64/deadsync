@@ -289,8 +289,8 @@ fn outputs_checksum(value: &StreamOutputs) -> u64 {
         .chain(&value.zmod_segments)
         .fold(0u64, |checksum, segment| {
             checksum.rotate_left(9)
-                ^ (segment.start() as u64)
-                ^ (segment.end() as u64).rotate_left(23)
+                ^ u64::from(segment.start())
+                ^ u64::from(segment.end()).rotate_left(23)
                 ^ u64::from(segment.is_break()).rotate_left(47)
         })
         ^ u64::from(value.total_stream.to_bits()).rotate_left(17)

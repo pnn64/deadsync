@@ -198,15 +198,12 @@ fn pane_color(kind: PaneKind) -> [f32; 4] {
     match kind {
         PaneKind::Gs | PaneKind::Ex | PaneKind::Other => SCOREBOX_GS_BLUE,
         PaneKind::HardEx => [
-            SCOREBOX_GS_BLUE[0]
-                + (color::HARD_EX_SCORE_RGBA[0] - SCOREBOX_GS_BLUE[0])
-                    * SCOREBOX_HARD_EX_BORDER_TINT,
-            SCOREBOX_GS_BLUE[1]
-                + (color::HARD_EX_SCORE_RGBA[1] - SCOREBOX_GS_BLUE[1])
-                    * SCOREBOX_HARD_EX_BORDER_TINT,
-            SCOREBOX_GS_BLUE[2]
-                + (color::HARD_EX_SCORE_RGBA[2] - SCOREBOX_GS_BLUE[2])
-                    * SCOREBOX_HARD_EX_BORDER_TINT,
+            (color::HARD_EX_SCORE_RGBA[0] - SCOREBOX_GS_BLUE[0])
+                .mul_add(SCOREBOX_HARD_EX_BORDER_TINT, SCOREBOX_GS_BLUE[0]),
+            (color::HARD_EX_SCORE_RGBA[1] - SCOREBOX_GS_BLUE[1])
+                .mul_add(SCOREBOX_HARD_EX_BORDER_TINT, SCOREBOX_GS_BLUE[1]),
+            (color::HARD_EX_SCORE_RGBA[2] - SCOREBOX_GS_BLUE[2])
+                .mul_add(SCOREBOX_HARD_EX_BORDER_TINT, SCOREBOX_GS_BLUE[2]),
             1.0,
         ],
         PaneKind::Srpg => SCOREBOX_SRPG_YELLOW,
@@ -746,7 +743,7 @@ fn push_mode_text(
         font("miso"):
         settext(Arc::clone(text)):
         align(0.5, 0.5):
-        xy(center_x + 2.0 * zoom, center_y - 5.0 * zoom):
+        xy(2.0f32.mul_add(zoom, center_x), 5.0f32.mul_add(-zoom, center_y)):
         zoom(0.9 * zoom):
         diffuse(c[0], c[1], c[2], c[3]):
         z(z_base + 2):
@@ -797,7 +794,7 @@ fn push_mode_overlay(
         font("miso"):
         settext(text):
         align(0.5, 0.5):
-        xy(center_x + 2.0 * zoom, center_y - 5.0 * zoom):
+        xy(2.0f32.mul_add(zoom, center_x), 5.0f32.mul_add(-zoom, center_y)):
         zoom(0.9 * zoom):
         diffuse(c[0], c[1], c[2], c[3]):
         z(z_base + 2):
@@ -1047,7 +1044,7 @@ fn push_rank_marker(
         let crown_col = color_with_alpha([1.0; 4], rank_color[3]);
         actors.push(act!(sprite("crown.png"):
             align(0.5, 0.5):
-            xy(center_x + (-SCOREBOX_W * 0.5 + 14.0) * zoom, y):
+            xy((-SCOREBOX_W).mul_add(0.5, 14.0).mul_add(zoom, center_x), y):
             zoom(0.09 * zoom):
             diffuse(crown_col[0], crown_col[1], crown_col[2], crown_col[3]):
             z(z_base + 3)
@@ -1080,12 +1077,12 @@ fn push_rows(
         return;
     }
 
-    let rank_x = center_x + (-SCOREBOX_W * 0.5 + 27.0) * zoom;
-    let name_x = center_x + (-SCOREBOX_W * 0.5 + 30.0) * zoom;
-    let score_x = center_x + (-SCOREBOX_W * 0.5 + 160.0) * zoom;
+    let rank_x = (-SCOREBOX_W).mul_add(0.5, 27.0).mul_add(zoom, center_x);
+    let name_x = (-SCOREBOX_W).mul_add(0.5, 30.0).mul_add(zoom, center_x);
+    let score_x = (-SCOREBOX_W).mul_add(0.5, 160.0).mul_add(zoom, center_x);
 
     for (i, row) in rows.iter().enumerate().take(SCOREBOX_NUM_ENTRIES) {
-        let y = center_y + (-SCOREBOX_H * 0.5 + 16.0 * (i as f32 + 1.0) - 8.0) * zoom;
+        let y = (16.0f32.mul_add(i as f32 + 1.0, -SCOREBOX_H * 0.5) - 8.0).mul_add(zoom, center_y);
         let rank_col = color_with_alpha(row.rank_color, alpha);
         let name_col = color_with_alpha(row.name_color, alpha);
         let score_col = color_with_alpha(row.score_color, alpha);
@@ -1325,7 +1322,7 @@ mod tests {
             rank,
             name: name.to_string(),
             machine_tag: None,
-            score: 10000.0 - rank as f64,
+            score: 10000.0 - f64::from(rank),
             date: String::new(),
             is_rival,
             is_self,

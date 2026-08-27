@@ -88,7 +88,7 @@ fn quantize_centi(value: f64) -> u32 {
     } else {
         0.0
     };
-    ((value * 100.0).round()).clamp(0.0, u32::MAX as f64) as u32
+    ((value * 100.0).round()).clamp(0.0, f64::from(u32::MAX)) as u32
 }
 
 #[inline(always)]
@@ -103,7 +103,7 @@ const fn score_glyph_text(byte: u8) -> &'static str {
 /// Append a fixed-two-decimal score as static digit and punctuation actors.
 ///
 /// The font's authored integer advances determine every glyph position, so the
-/// result matches a single BitmapText actor for proportional and monospace
+/// result matches a single `BitmapText` actor for proportional and monospace
 /// number fonts. Source text has a fixed eleven-glyph domain and score changes
 /// perform no string or `Arc<str>` allocation.
 pub fn push_score_counter(
@@ -128,8 +128,10 @@ pub fn push_score_counter(
         TextAlign::Center => width_padding * ((block_width / 2) & 1),
         TextAlign::Right => width_padding,
     };
-    let mut cursor_x = params.position[0] - params.align[0] * block_width as f32 * params.zoom
-        + line_padding as f32 * params.zoom;
+    let mut cursor_x = (line_padding as f32).mul_add(
+        params.zoom,
+        (params.align[0] * block_width as f32).mul_add(-params.zoom, params.position[0]),
+    );
 
     actors.reserve(glyphs.as_bytes().len());
     for byte in glyphs.as_bytes() {
@@ -147,7 +149,7 @@ pub fn push_score_counter(
         actor.diffuse(params.color);
         actor.z(params.z);
         actors.push(actor.build(0));
-        cursor_x += glyph.advance_i32 as f32 * params.zoom;
+        cursor_x = (glyph.advance_i32 as f32).mul_add(params.zoom, cursor_x);
     }
 }
 
@@ -181,7 +183,7 @@ mod tests {
             (0.005, "0.01"),
             (81.91, "81.91"),
             (100.0, "100.00"),
-            (u32::MAX as f64 / 100.0, "42949672.95"),
+            (f64::from(u32::MAX) / 100.0, "42949672.95"),
         ] {
             assert_eq!(
                 ScoreGlyphs::from_centi(quantize_centi(value)).as_str(),

@@ -658,9 +658,10 @@ mod imp {
     }
 
     #[cfg(any(test, feature = "bench-support"))]
+    #[allow(clippy::suboptimal_flops)] // Must mirror the table's original, non-fused rounding.
     fn normalize_sensor_value_reference(raw: u16) -> f32 {
-        let raw = min(raw, MAX_SENSOR_VALUE) as f32;
-        let max = MAX_SENSOR_VALUE as f32;
+        let raw = f32::from(min(raw, MAX_SENSOR_VALUE));
+        let max = f32::from(MAX_SENSOR_VALUE);
         let linearized_max = max.powi(LINEARIZATION_POWER as i32) / max;
         let nth = raw.powi(LINEARIZATION_POWER as i32) / linearized_max;
         (nth * NTH_DEGREE_COEFFICIENT + raw * FIRST_DEGREE_COEFFICIENT) / max

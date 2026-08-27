@@ -129,7 +129,7 @@ impl DecayingHist {
             *bin *= gamma;
         }
         self.bins[idx] += 1.0;
-        self.total = self.total * gamma + 1.0;
+        self.total = self.total.mul_add(gamma, 1.0);
     }
 
     /// Weighted percentile in microseconds (bucket-quantized). Returns 0 until warmed up.
@@ -196,8 +196,8 @@ impl EwmaStats {
             self.var = 0.0;
         } else {
             let delta = value - self.mean;
-            self.mean += alpha_mean * delta;
-            self.var = (1.0 - alpha_var) * (self.var + alpha_var * delta * delta);
+            self.mean = alpha_mean.mul_add(delta, self.mean);
+            self.var = (1.0 - alpha_var) * (alpha_var * delta).mul_add(delta, self.var);
         }
         self.count = self.count.saturating_add(1);
     }
@@ -515,7 +515,7 @@ impl FrameStatsController {
 
         let audio_callback_gap_ms = if raw_audio_gap_ms > 0.0 {
             self.audio_gap_ms = if self.audio_gap_ms > 0.0 {
-                self.audio_gap_ms + EWMA_ALPHA_MEAN * (raw_audio_gap_ms - self.audio_gap_ms)
+                EWMA_ALPHA_MEAN.mul_add(raw_audio_gap_ms - self.audio_gap_ms, self.audio_gap_ms)
             } else {
                 raw_audio_gap_ms
             };

@@ -237,8 +237,8 @@ fn push_mesh(
     border_modules: u8,
     z: i16,
 ) {
-    let border_px = data.module_px * border_modules as f32;
-    let outer_size = size + border_px * 2.0;
+    let border_px = data.module_px * f32::from(border_modules);
+    let outer_size = border_px.mul_add(2.0, size);
 
     out.push(Actor::Frame {
         align: [0.5, 0.5],

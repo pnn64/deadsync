@@ -16,8 +16,8 @@ pub const COUNTER_TEXT_SLOTS_PER_PLAYER: u8 = MEASURE_COUNTER_LOOKAHEAD_MAX + 3;
 const BROKEN_COUNTER_TEXT_SLOT: u8 = MEASURE_COUNTER_LOOKAHEAD_MAX + 1;
 const RUN_TIMER_TEXT_SLOT: u8 = MEASURE_COUNTER_LOOKAHEAD_MAX + 2;
 
-/// ZMod derives HUD placement from its fixed style notefield width rather than
-/// the live Player `Mini` zoom. DeadSync currently supports dance and Pump.
+/// `ZMod` derives HUD placement from its fixed style notefield width rather than
+/// the live Player `Mini` zoom. `DeadSync` currently supports dance and Pump.
 pub(crate) const fn zmod_hud_column_width(num_cols: usize) -> f32 {
     match num_cols {
         5 | 10 => 50.0,
@@ -159,18 +159,22 @@ fn append_measure_counters(
         } else {
             request.style.total_color
         };
-        let zoom = request.style.base_zoom - request.style.lookahead_zoom_step * f32::from(j);
+        let zoom = request
+            .style
+            .lookahead_zoom_step
+            .mul_add(-f32::from(j), request.style.base_zoom);
         let mut x = request.playfield_center_x;
         let mut y = counter_y;
         if request.vertical {
-            y += request.style.vertical_step_y * f32::from(j);
+            y = request.style.vertical_step_y.mul_add(f32::from(j), y);
         } else {
             let denominator = if lookahead == 0 {
                 1.0
             } else {
                 f32::from(lookahead)
             };
-            x += (column_width / denominator) * request.style.horizontal_span * f32::from(j);
+            x = ((column_width / denominator) * request.style.horizontal_span)
+                .mul_add(f32::from(j), x);
         }
         if request.left {
             x -= column_width;
@@ -215,7 +219,7 @@ fn append_broken_counter(
     let mut y = counter_y + request.style.broken_y_offset;
     if request.vertical {
         y += request.style.broken_vertical_y_offset;
-        x += column_width * request.style.broken_vertical_x_scale;
+        x = column_width.mul_add(request.style.broken_vertical_x_scale, x);
     }
     if request.left {
         x -= column_width;
@@ -262,7 +266,8 @@ fn append_run_timer(
     let current_time = request.current_display_beat / (current_bps * request.music_rate);
     let segment_len = (((segment.end() - segment.start()) as f32) * measure_seconds).ceil() as i32;
     let total = (request.timer_text)(segment_len, 60, false);
-    let remaining = (((segment.end() as f32) * measure_seconds) - current_time)
+    let remaining = (segment.end() as f32)
+        .mul_add(measure_seconds, -current_time)
         .ceil()
         .max(0.0) as i32;
     let text = if remaining > segment_len {
@@ -414,7 +419,7 @@ pub(crate) fn compose_mini_indicator(
         request.color
     };
     let column_width = ScrollSpeedSetting::ARROW_SPACING * request.field_zoom;
-    let mut x = request.playfield_center_x + column_width * request.style.column_offset;
+    let mut x = column_width.mul_add(request.style.column_offset, request.playfield_center_x);
     if request.position == LayoutMiniIndicatorPosition::UnderUpArrow {
         x += request.style.under_up_x_offset + request.layout_add_x;
     }

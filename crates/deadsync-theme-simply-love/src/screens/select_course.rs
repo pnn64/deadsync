@@ -1416,9 +1416,9 @@ fn music_wheel_settle_offset(state: &mut State, dt: f32) {
     let off = state.wheel_offset_from_selection;
     let speed = MUSIC_WHEEL_SETTLE_MIN_SPEED + off.abs() / MUSIC_WHEEL_SWITCH_SECONDS;
     if off > 0.0 {
-        state.wheel_offset_from_selection = (off - speed * dt).max(0.0);
+        state.wheel_offset_from_selection = speed.mul_add(-dt, off).max(0.0);
     } else {
-        state.wheel_offset_from_selection = (off + speed * dt).min(0.0);
+        state.wheel_offset_from_selection = speed.mul_add(dt, off).min(0.0);
     }
 }
 
@@ -1428,7 +1428,7 @@ fn music_wheel_hold_spin_speed(state: &State) -> f32 {
     if configured == 0 {
         MUSIC_WHEEL_HOLD_SPIN_SPEED_DEFAULT
     } else {
-        configured.max(1) as f32
+        f32::from(configured.max(1))
     }
 }
 
@@ -1470,7 +1470,8 @@ fn music_wheel_update_hold_scroll(state: &mut State, dt: f32, dir: NavDirection)
         NavDirection::Right => 1.0,
     };
     let hold_spin_speed = music_wheel_hold_spin_speed(state);
-    state.wheel_offset_from_selection -= hold_spin_speed * moving * dt;
+    state.wheel_offset_from_selection =
+        (hold_spin_speed * moving).mul_add(-dt, state.wheel_offset_from_selection);
     state.wheel_offset_from_selection = state.wheel_offset_from_selection.clamp(-1.0, 1.0);
 
     let off = state.wheel_offset_from_selection;
@@ -2352,9 +2353,9 @@ pub fn push_actors(
     let pane_sel_col =
         selected_diff_col.unwrap_or_else(|| color::simply_love_rgba(state.active_color_index));
     let pane_cx = if is_p2_single {
-        screen_width() * 0.75 + 5.0
+        screen_width().mul_add(0.75, 5.0)
     } else {
-        screen_width() * 0.25 - 5.0
+        screen_width().mul_add(0.25, -5.0)
     };
     select_pane::push_base(
         actors,
@@ -2385,8 +2386,8 @@ pub fn push_actors(
         ),
     ];
     for (i, (name, pct)) in lines.into_iter().enumerate() {
-        actors.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + pane_layout.cols[2] - 50.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): maxwidth(30.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-        actors.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + pane_layout.cols[2] + 25.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+        actors.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(50.0f32.mul_add(-pane_layout.text_zoom, pane_cx + pane_layout.cols[2]), pane_layout.pane_top + pane_layout.rows[i]): maxwidth(30.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+        actors.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(25.0f32.mul_add(pane_layout.text_zoom, pane_cx + pane_layout.cols[2]), pane_layout.pane_top + pane_layout.rows[i]): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
     }
 
     let (box_w, frame_x, frame_y) = if is_wide() {
@@ -2426,9 +2427,9 @@ pub fn push_actors(
     let panel_w = if is_wide() { 286.0 } else { 276.0 };
     let rating_box_cx = screen_center_x() - 26.0;
     let rating_box_cy = screen_center_y() + 67.0;
-    let rating_box_left = rating_box_cx - COURSE_TRACKLIST_RATING_BOX_W * 0.5;
-    let rating_box_top = rating_box_cy - COURSE_TRACKLIST_RATING_BOX_H * 0.5;
-    let rating_box_bottom = rating_box_cy + COURSE_TRACKLIST_RATING_BOX_H * 0.5;
+    let rating_box_left = COURSE_TRACKLIST_RATING_BOX_W.mul_add(-0.5, rating_box_cx);
+    let rating_box_top = COURSE_TRACKLIST_RATING_BOX_H.mul_add(-0.5, rating_box_cy);
+    let rating_box_bottom = COURSE_TRACKLIST_RATING_BOX_H.mul_add(0.5, rating_box_cy);
     let panel_right = rating_box_left - 2.0;
     let panel_h = rating_box_bottom - rating_box_top;
     let panel_cx = panel_right - panel_w * 0.5;
@@ -2488,7 +2489,10 @@ pub fn push_actors(
                 break;
             }
             let entry = &rating.entries[idx];
-            let y = list_start_y + row as f32 * row_spacing - frac * row_spacing;
+            let y = frac.mul_add(
+                -row_spacing,
+                (row as f32).mul_add(row_spacing, list_start_y),
+            );
             if y > panel_bottom + row_spacing {
                 break;
             }
@@ -2561,7 +2565,7 @@ pub fn push_actors(
     };
     if let Some(meta) = selected_meta {
         for slot in 0..COURSE_RATING_VISIBLE_SLOTS {
-            let y = rating_box_cy + (slot as i32 - 2) as f32 * 30.0;
+            let y = ((slot as i32 - 2) as f32).mul_add(30.0, rating_box_cy);
             actors.push(act!(quad:
                 align(0.5, 0.5):
                 xy(rating_box_cx, y):
@@ -2594,7 +2598,7 @@ pub fn push_actors(
     if rating_len > 0 {
         let selected_slot = (selected_rating_index.saturating_sub(rating_top_index))
             .min(COURSE_RATING_VISIBLE_SLOTS - 1);
-        let arrow_y = rating_box_cy + (selected_slot as i32 - 2) as f32 * 30.0 + 1.0;
+        let arrow_y = ((selected_slot as i32 - 2) as f32).mul_add(30.0, rating_box_cy) + 1.0;
         let bounce = course_arrow_bounce01(
             selection_animation_beat,
             state.context.policy.global_offset_seconds,
@@ -2620,7 +2624,7 @@ pub fn push_actors(
     } else {
         screen_center_x() - 345.5
     };
-    let step_artist_y = (screen_center_y() - 9.0) - 0.5 * (screen_height() / 28.0);
+    let step_artist_y = 0.5f32.mul_add(-(screen_height() / 28.0), screen_center_y() - 9.0);
     step_artist_bar::push(
         actors,
         step_artist_bar::StepArtistBarParams {
@@ -2869,7 +2873,7 @@ fn exit_prompt_choice_zoom(
         }
     }
 
-    [SL_EXIT_PROMPT_INACTIVE_ZOOM, SL_EXIT_PROMPT_ACTIVE_ZOOM][(choice == active_choice) as usize]
+    [SL_EXIT_PROMPT_INACTIVE_ZOOM, SL_EXIT_PROMPT_ACTIVE_ZOOM][usize::from(choice == active_choice)]
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2904,7 +2908,7 @@ fn push_exit_prompt_choice(
     ));
     out.push(act!(text:
         align(0.5, 0.5):
-        xy(cx, cy + SL_EXIT_PROMPT_INFO_Y_OFFSET * choice_zoom):
+        xy(cx, SL_EXIT_PROMPT_INFO_Y_OFFSET.mul_add(choice_zoom, cy)):
         font("miso"):
         zoom(SL_EXIT_PROMPT_INFO_ZOOM * choice_zoom):
         settext(info):

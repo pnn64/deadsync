@@ -126,7 +126,7 @@ pub fn update(state: &mut State, dt: f32, confirm_exit_elapsed: f32) -> Option<S
         if delta.abs() <= max_step {
             *zoom = target;
         } else {
-            *zoom += delta.signum() * max_step;
+            *zoom = delta.signum().mul_add(max_step, *zoom);
         }
     }
     None

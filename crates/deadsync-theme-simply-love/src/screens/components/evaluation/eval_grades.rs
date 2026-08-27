@@ -295,8 +295,8 @@ fn pulse_scales(base: f32, elapsed: f32, offset: f32, mx: f32, my: f32) -> (f32,
     let phase = (t + offset) * std::f32::consts::TAU;
     let s = phase.sin();
     (
-        base * (1.0 + STAR_PULSE_AMP * mx * s),
-        base * (1.0 + STAR_PULSE_AMP * my * s),
+        base * (STAR_PULSE_AMP * mx).mul_add(s, 1.0),
+        base * (STAR_PULSE_AMP * my).mul_add(s, 1.0),
     )
 }
 
@@ -395,14 +395,20 @@ fn unit_rand(seed: u32, salt: u32) -> f32 {
 
 #[inline(always)]
 fn rainbow_rgba(elapsed: f32, seed: u32) -> [f32; 4] {
-    let period = 2.0 + 2.0 * unit_rand(seed, 0xA11C_0DE1);
+    let period = 2.0f32.mul_add(unit_rand(seed, 0xA11C_0DE1), 2.0);
     let pct = ((elapsed - STAR_RAINBOW_DELAY_S) / period).rem_euclid(1.0);
-    let between = ((pct + 0.25) * std::f32::consts::TAU).sin() * 0.5 + 0.5;
+    let between = ((pct + 0.25) * std::f32::consts::TAU)
+        .sin()
+        .mul_add(0.5, 0.5);
     let phase = between * std::f32::consts::TAU;
     [
-        phase.cos() * 0.5 + 0.5,
-        (phase + std::f32::consts::TAU / 3.0).cos() * 0.5 + 0.5,
-        (phase + 2.0 * std::f32::consts::TAU / 3.0).cos() * 0.5 + 0.5,
+        phase.cos().mul_add(0.5, 0.5),
+        (phase + std::f32::consts::TAU / 3.0)
+            .cos()
+            .mul_add(0.5, 0.5),
+        (phase + 2.0 * std::f32::consts::TAU / 3.0)
+            .cos()
+            .mul_add(0.5, 0.5),
         1.0,
     ]
 }
@@ -414,7 +420,7 @@ fn accel(t: f32) -> f32 {
 
 #[inline(always)]
 fn decel(t: f32) -> f32 {
-    1.0 - (1.0 - t) * (1.0 - t)
+    (1.0 - t).mul_add(-(1.0 - t), 1.0)
 }
 
 #[inline(always)]
@@ -424,13 +430,13 @@ fn affluent_rot_deg(elapsed: f32, seed: u32) -> f32 {
         return start;
     }
 
-    let half_s = 0.6 + 0.4 * unit_rand(seed, 0xAFF1_0002);
+    let half_s = 0.4f32.mul_add(unit_rand(seed, 0xAFF1_0002), 0.6);
     let cycle_s = half_s * 2.0;
     let t = (elapsed - AFFLUENT_SPIN_DELAY_S).rem_euclid(cycle_s);
     if t < half_s {
-        start - 180.0 * accel(t / half_s)
+        180.0f32.mul_add(-accel(t / half_s), start)
     } else {
-        start - 180.0 - 180.0 * decel((t - half_s) / half_s)
+        180.0f32.mul_add(-decel((t - half_s) / half_s), start - 180.0)
     }
 }
 
@@ -469,8 +475,8 @@ struct StarTransform {
 
 #[inline(always)]
 fn star_transform(s: StarDef, p: EvalGradeParams) -> StarTransform {
-    let x = p.x + s.dx * p.zoom;
-    let y = p.y + s.dy * p.zoom;
+    let x = s.dx.mul_add(p.zoom, p.x);
+    let y = s.dy.mul_add(p.zoom, p.y);
     let base = s.zoom * p.zoom;
     let (sx, sy) = pulse_scales(base, p.elapsed, s.pulse_offset, s.mag_x, s.mag_y);
     let rot = spin_rot_deg(p.elapsed, s.spin_delay_s, s.spin_seed);
@@ -483,8 +489,8 @@ fn child_xy(st: StarTransform, x: f32, y: f32) -> (f32, f32) {
     let lx = x * st.sx;
     let ly = y * st.sy;
     (
-        st.x + lx * r.cos() - ly * r.sin(),
-        st.y + lx * r.sin() + ly * r.cos(),
+        ly.mul_add(-r.sin(), lx.mul_add(r.cos(), st.x)),
+        ly.mul_add(r.cos(), lx.mul_add(r.sin(), st.y)),
     )
 }
 
@@ -630,8 +636,8 @@ fn sample_rgba_bilinear(img: &RgbaImage, x: f32, y: f32) -> Option<[u8; 4]> {
     let mut out = [0; 4];
 
     for i in 0..4 {
-        let top = (p10[i] as f32 - p00[i] as f32).mul_add(fx, p00[i] as f32);
-        let bottom = (p11[i] as f32 - p01[i] as f32).mul_add(fx, p01[i] as f32);
+        let top = (f32::from(p10[i]) - f32::from(p00[i])).mul_add(fx, f32::from(p00[i]));
+        let bottom = (f32::from(p11[i]) - f32::from(p01[i])).mul_add(fx, f32::from(p01[i]));
         out[i] = (bottom - top).mul_add(fy, top).round().clamp(0.0, 255.0) as u8;
     }
     Some(out)

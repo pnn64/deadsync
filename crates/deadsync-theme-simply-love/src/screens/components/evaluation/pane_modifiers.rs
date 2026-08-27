@@ -31,7 +31,7 @@ fn build_modifiers_pane_with_text(
 
     // Simply Love places the modifiers text 10px from the bar's left edge.
     // (For a 300px bar this is equivalent to `center_x - 140`.)
-    let text_x = bar_center_x - (bar_width * 0.5) + 10.0;
+    let text_x = bar_width.mul_add(-0.5, bar_center_x) + 10.0;
     let text_y = frame_center_y - 5.0;
 
     let bg = color::rgba_hex("#1E282F");

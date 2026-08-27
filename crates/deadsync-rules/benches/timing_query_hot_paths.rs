@@ -216,30 +216,35 @@ fn change(old: f64, new: f64) -> f64 {
 fn timing() -> TimingData {
     let segments = TimingSegments {
         bpms: (0..EVENT_COUNT)
-            .map(|index| (index as f32 * 16.0, 90.0 + (index % 7) as f32 * 23.0))
+            .map(|index| {
+                (
+                    index as f32 * 16.0,
+                    ((index % 7) as f32).mul_add(23.0, 90.0),
+                )
+            })
             .collect(),
         stops: (0..EVENT_COUNT)
             .map(|index| StopSegment {
-                beat: index as f32 * 16.0 + 4.0,
-                duration: 0.01 + (index % 5) as f32 * 0.005,
+                beat: (index as f32).mul_add(16.0, 4.0),
+                duration: ((index % 5) as f32).mul_add(0.005, 0.01),
             })
             .collect(),
         delays: (0..EVENT_COUNT)
             .map(|index| DelaySegment {
-                beat: index as f32 * 16.0 + 8.0,
-                duration: 0.005 + (index % 3) as f32 * 0.005,
+                beat: (index as f32).mul_add(16.0, 8.0),
+                duration: ((index % 3) as f32).mul_add(0.005, 0.005),
             })
             .collect(),
         warps: (0..EVENT_COUNT)
             .map(|index| WarpSegment {
-                beat: index as f32 * 16.0 + 12.0,
+                beat: (index as f32).mul_add(16.0, 12.0),
                 length: 1.0,
             })
             .collect(),
         scrolls: (0..EVENT_COUNT)
             .map(|index| ScrollSegment {
                 beat: index as f32 * 16.0,
-                ratio: 0.5 + (index % 7) as f32 * 0.25,
+                ratio: ((index % 7) as f32).mul_add(0.25, 0.5),
             })
             .collect(),
         ..TimingSegments::default()
@@ -270,7 +275,7 @@ fn old_gameplay_timing(timing: &TimingData) -> u64 {
         let beat = index as f32 * 0.25;
         let sum = sum.rotate_left(5) ^ timing.get_time_for_beat_ns(black_box(beat)) as u64;
         if index % 8 == 0 {
-            let tail = beat + 1.0 + (index % 32) as f32 * 0.25;
+            let tail = ((index % 32) as f32).mul_add(0.25, beat + 1.0);
             sum.rotate_left(7) ^ timing.get_time_for_beat_ns(black_box(tail)) as u64
         } else {
             sum
@@ -287,7 +292,7 @@ fn new_gameplay_timing(timing: &TimingData) -> u64 {
         let sum = sum.rotate_left(5)
             ^ timing.get_time_for_beat_ns_cached(black_box(beat), &mut head_cache) as u64;
         if index % 8 == 0 {
-            let tail = beat + 1.0 + (index % 32) as f32 * 0.25;
+            let tail = ((index % 32) as f32).mul_add(0.25, beat + 1.0);
             sum.rotate_left(7)
                 ^ timing.get_time_for_beat_ns_cached(black_box(tail), &mut tail_cache) as u64
         } else {

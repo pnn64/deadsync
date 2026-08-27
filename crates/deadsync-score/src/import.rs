@@ -1,27 +1,27 @@
-//! Pure conversion from an ITGmania `Stats.xml` `<HighScore>` record into a
-//! DeadSync [`LocalScoreEntry`].
+//! Pure conversion from an `ITGmania` `Stats.xml` `<HighScore>` record into a
+//! `DeadSync` [`LocalScoreEntry`].
 //!
 //! This module is intentionally engine-free and side-effect-free so it can be
 //! unit-tested in isolation. The XML/INI parsing and the on-disk writing live
 //! in the main `deadsync` crate; this layer only performs the field mapping.
 //!
-//! ITGmania does not record the FA+ (W0) blue/white split, so neither the EX
+//! `ITGmania` does not record the FA+ (W0) blue/white split, so neither the EX
 //! nor the Hard-EX score can be reconstructed from `Stats.xml`. Both are stored
 //! as `0.0`; only the ITG percent and grade carry over.
 
 use crate::{Grade, LOCAL_SCORE_VERSION, LocalScoreEntry, compute_local_lamp, grade_to_code};
 use chrono::{NaiveDateTime, TimeZone};
 
-/// A single ITGmania high-score record, parsed from `Stats.xml`.
+/// A single `ITGmania` high-score record, parsed from `Stats.xml`.
 ///
-/// Field names mirror the ITGmania `HighScore` XML schema (see
+/// Field names mirror the `ITGmania` `HighScore` XML schema (see
 /// `itgmania/src/HighScore.cpp`). All tap/hold tallies default to `0` when the
 /// corresponding XML element is absent.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ImportedHighScore {
     /// Raw `<Grade>` text, e.g. `"Grade_Tier01"` or `"Grade_Failed"`.
     pub grade: String,
-    /// `<PercentDP>` as a 0.0–1.0 ratio (ITGmania stores it pre-divided).
+    /// `<PercentDP>` as a 0.0–1.0 ratio (`ITGmania` stores it pre-divided).
     pub percent_dp: f64,
     /// `<DateTime>` text, expected as `"YYYY-MM-DD HH:MM:SS"` (local time).
     pub date_time: String,
@@ -45,9 +45,9 @@ pub struct ImportedHighScore {
     pub modifiers: String,
 }
 
-/// Recovers the music rate from an ITGmania `<Modifiers>` string.
+/// Recovers the music rate from an `ITGmania` `<Modifiers>` string.
 ///
-/// ITGmania serialises a non-default rate as a `"<rate>xMusic"` token (see
+/// `ITGmania` serialises a non-default rate as a `"<rate>xMusic"` token (see
 /// `itgmania/src/SongOptions.cpp` `GetMods`), e.g. `"1.5xMusic"`. The token is
 /// comma/space separated from the other modifiers. Returns `1.0` when no rate
 /// token is present or it can't be parsed into a positive number.
@@ -71,14 +71,14 @@ pub fn music_rate_from_modifiers(modifiers: &str) -> f32 {
     1.0
 }
 
-/// Maps an ITGmania `<Grade>` string to a DeadSync [`Grade`].
+/// Maps an `ITGmania` `<Grade>` string to a `DeadSync` [`Grade`].
 ///
-/// ITGmania's `Stats.xml` stores the grade as the bare tier name (e.g.
+/// `ITGmania`'s `Stats.xml` stores the grade as the bare tier name (e.g.
 /// `"Tier04"`, `"Failed"`), whereas the enum form used elsewhere carries a
 /// `"Grade_"` prefix (e.g. `"Grade_Tier04"`). Both are accepted.
 ///
 /// Returns `None` for unrecognized values so the caller can decide how to treat
-/// them (DeadSync has no `Grade_Tier00`/`Grade_Quint` analogue in ITGmania).
+/// them (`DeadSync` has no `Grade_Tier00`/`Grade_Quint` analogue in `ITGmania`).
 pub fn grade_from_itg(grade: &str) -> Option<Grade> {
     let trimmed = grade.trim();
     let tier = trimmed.strip_prefix("Grade_").unwrap_or(trimmed);
@@ -105,7 +105,7 @@ pub fn grade_from_itg(grade: &str) -> Option<Grade> {
     }
 }
 
-/// Parses an ITGmania `<DateTime>` (`"YYYY-MM-DD HH:MM:SS"`, local time) into
+/// Parses an `ITGmania` `<DateTime>` (`"YYYY-MM-DD HH:MM:SS"`, local time) into
 /// epoch milliseconds. Returns `None` if the string can't be parsed.
 pub fn parse_itg_datetime_ms(date_time: &str) -> Option<i64> {
     let naive = NaiveDateTime::parse_from_str(date_time.trim(), "%Y-%m-%d %H:%M:%S").ok()?;
@@ -118,10 +118,10 @@ pub fn parse_itg_datetime_ms(date_time: &str) -> Option<i64> {
     }
 }
 
-/// Converts an [`ImportedHighScore`] into a DeadSync [`LocalScoreEntry`].
+/// Converts an [`ImportedHighScore`] into a `DeadSync` [`LocalScoreEntry`].
 ///
 /// Returns `None` when the grade is unrecognized (the play can't be imported
-/// without a valid DeadSync grade).
+/// without a valid `DeadSync` grade).
 ///
 /// Mapping notes:
 /// * `judgment_counts = [W1, W2, W3, W4, W5, Miss]`.

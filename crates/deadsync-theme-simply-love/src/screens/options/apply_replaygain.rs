@@ -2,7 +2,7 @@ use super::*;
 
 use crate::views::SimplyLoveApplyReplayGainEvent;
 
-/// Modal overlay state for the Sound options "Apply ReplayGain" action. Drives
+/// Modal overlay state for the Sound options "Apply `ReplayGain`" action. Drives
 /// a full-library EBU R128 loudness analysis with a progress bar, ETA readout,
 /// and cancellation.
 pub(super) struct ApplyReplayGainUiState {
@@ -105,7 +105,8 @@ pub(super) fn update_apply_replaygain_ui(ui: &mut ApplyReplayGainUiState, dt: f3
     }
     let dt = dt.max(0.0);
     let alpha = 1.0 - (-dt / APPLY_REPLAYGAIN_PROGRESS_TAU).exp();
-    ui.displayed_done += (target - ui.displayed_done) * alpha.clamp(0.0, 1.0);
+    ui.displayed_done =
+        (target - ui.displayed_done).mul_add(alpha.clamp(0.0, 1.0), ui.displayed_done);
 }
 
 #[inline(always)]
@@ -188,7 +189,7 @@ pub(super) fn build_apply_replaygain_overlay_actors(
     let bar_w = widescale(360.0, 520.0);
     let bar_h = RELOAD_BAR_H;
     let bar_cx = screen_width() * 0.5;
-    let bar_cy = screen_height() * 0.5 + 34.0;
+    let bar_cy = screen_height().mul_add(0.5, 34.0);
     let fill_w = (bar_w - 4.0) * progress.clamp(0.0, 1.0);
 
     let mut out: Vec<Actor> = Vec::with_capacity(8);

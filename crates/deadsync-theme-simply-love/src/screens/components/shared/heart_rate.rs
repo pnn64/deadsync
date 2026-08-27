@@ -80,9 +80,9 @@ pub(crate) fn pulse_scale(elapsed: f32, bpm: u16) -> f32 {
     let period = 60.0 / f32::from(bpm);
     let phase = elapsed.rem_euclid(period) / period;
     if phase < 0.12 {
-        1.0 + 0.20 * (1.0 - phase / 0.12)
+        0.20f32.mul_add(1.0 - phase / 0.12, 1.0)
     } else if (0.18..0.30).contains(&phase) {
-        1.0 + 0.09 * (1.0 - (phase - 0.18) / 0.12)
+        0.09f32.mul_add(1.0 - (phase - 0.18) / 0.12, 1.0)
     } else {
         1.0
     }
@@ -135,7 +135,7 @@ pub fn push(
     ));
     actors.push(act!(text:
         font("miso"): settext(display_text): align(0.0, 0.5): horizalign(left):
-        xy(x + 16.0 * zoom, y): zoom(2.0 * zoom):
+        xy(16.0f32.mul_add(zoom, x), y): zoom(2.0 * zoom):
         diffuse(text_rgba[0], text_rgba[1], text_rgba[2], alpha): z(z)
     ));
 }

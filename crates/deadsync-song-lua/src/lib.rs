@@ -759,7 +759,7 @@ pub fn theme_metric_value_for_human_players(
     if let Some(value) =
         theme_metric_number_for_screen(group, name, human_player_count, screen_height)
     {
-        return Ok(mlua::Value::Number(value as f64));
+        return Ok(mlua::Value::Number(f64::from(value)));
     }
     if let Some(value) = theme_metric_string(group, name) {
         return Ok(mlua::Value::String(lua.create_string(&value)?));
@@ -2008,7 +2008,10 @@ pub fn scale_to_rect_plan(
         return None;
     }
     Some(SongLuaScaleToRectPlan {
-        pos: [rect[0] + width * align[0], rect[1] + height * align[1]],
+        pos: [
+            width.mul_add(align[0], rect[0]),
+            height.mul_add(align[1], rect[1]),
+        ],
         zoom,
         flip_x: width < 0.0,
         flip_y: height < 0.0,
@@ -2439,13 +2442,13 @@ fn overlay_command_out_bounce(t: f32) -> f32 {
         N1 * t * t
     } else if t < 2.0 / D1 {
         let t = t - 1.5 / D1;
-        N1 * t * t + 0.75
+        (N1 * t).mul_add(t, 0.75)
     } else if t < 2.5 / D1 {
         let t = t - 2.25 / D1;
-        N1 * t * t + 0.9375
+        (N1 * t).mul_add(t, 0.9375)
     } else {
         let t = t - 2.625 / D1;
-        N1 * t * t + 0.984_375
+        (N1 * t).mul_add(t, 0.984_375)
     }
 }
 
@@ -2454,12 +2457,12 @@ fn overlay_command_ease_factor(easing: Option<&str>, t: f32, opt1: Option<f32>) 
     match easing.unwrap_or("linear") {
         "instant" => 1.0,
         "inQuad" => t * t,
-        "outQuad" => 1.0 - (1.0 - t) * (1.0 - t),
+        "outQuad" => (1.0 - t).mul_add(-(1.0 - t), 1.0),
         "inOutQuad" => {
             if t < 0.5 {
                 2.0 * t * t
             } else {
-                1.0 - 2.0 * (1.0 - t) * (1.0 - t)
+                (2.0 * (1.0 - t)).mul_add(-(1.0 - t), 1.0)
             }
         }
         "outElastic" => {
@@ -2470,7 +2473,9 @@ fn overlay_command_ease_factor(easing: Option<&str>, t: f32, opt1: Option<f32>) 
                     .filter(|value| value.is_finite() && *value > 0.0)
                     .unwrap_or(0.3);
                 let tau = std::f32::consts::TAU / period;
-                2.0_f32.powf(-10.0 * t) * ((t - period * 0.25) * tau).sin() + 1.0
+                (-10.0 * t)
+                    .exp2()
+                    .mul_add(((t - period * 0.25) * tau).sin(), 1.0)
             }
         }
         "inBounce" => 1.0 - overlay_command_out_bounce(1.0 - t),

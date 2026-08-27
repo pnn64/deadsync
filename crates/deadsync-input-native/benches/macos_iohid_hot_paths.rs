@@ -281,7 +281,7 @@ fn axis_old(events: usize) -> u64 {
         let usage = 0x30 + (index & 7) as u16;
         let code = 0x0001_0000 | u32::from(usage);
         let value = ((index / 16) & 1) as i64;
-        checksum += old_axis_changed(&mut axes, black_box(code), value) as u64;
+        checksum += u64::from(old_axis_changed(&mut axes, black_box(code), value));
     }
     checksum
 }
@@ -292,7 +292,7 @@ fn axis_new(events: usize) -> u64 {
     for index in 0..events {
         let usage = 0x30 + (index & 7) as u16;
         let code = 0x0001_0000 | u32::from(usage);
-        checksum += matches!(
+        checksum += u64::from(matches!(
             classify_pad_value(
                 &mut axes,
                 0x01,
@@ -301,7 +301,7 @@ fn axis_new(events: usize) -> u64 {
                 ((index / 16) & 1) as i64
             ),
             Some(PadValueKind::Axis)
-        ) as u64;
+        ));
     }
     checksum
 }

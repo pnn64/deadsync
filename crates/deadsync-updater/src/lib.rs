@@ -113,7 +113,7 @@ static DOWNLOAD_AGENT: std::sync::LazyLock<ureq::Agent> = std::sync::LazyLock::n
 });
 
 /// Returns the shared agent used for the small update-check HTTP
-/// calls (release JSON, ETag polls, checksum sidecar).
+/// calls (release JSON, `ETag` polls, checksum sidecar).
 pub fn check_agent() -> ureq::Agent {
     CHECK_AGENT.clone()
 }
@@ -161,7 +161,7 @@ pub enum UpdateState {
 /// Outcome of an HTTP poll against the releases endpoint.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FetchOutcome {
-    /// Server responded `304 Not Modified` for the supplied ETag.
+    /// Server responded `304 Not Modified` for the supplied `ETag`.
     NotModified,
     /// Server returned a fresh payload.
     Fresh {
@@ -223,7 +223,7 @@ pub fn io_err_at(op: &str, path: &std::path::Path, err: std::io::Error) -> Updat
 }
 
 /// Like [`io_err_at`] but for operations without a meaningful single
-/// path (zip header read, archive entry by-index, current_exe).
+/// path (zip header read, archive entry by-index, `current_exe`).
 pub fn io_err_op(op: &str, err: impl Display) -> UpdaterError {
     UpdaterError::Io(format!("{op}: {err}"))
 }

@@ -13,7 +13,7 @@ pub fn update(
     const PREVIEW_BPM: f32 = 120.0;
     prepare_presentation(state, asset_manager);
     state.preview_time += dt;
-    state.preview_beat += dt * (PREVIEW_BPM / 60.0);
+    state.preview_beat = dt.mul_add(PREVIEW_BPM / 60.0, state.preview_beat);
     search::update(&mut state.search, dt);
     let active = state.active;
     let arcade_style = state.policy.arcade_navigation;

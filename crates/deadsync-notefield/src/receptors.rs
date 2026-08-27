@@ -400,8 +400,8 @@ fn draw_center<S: NoteskinSlot>(
 ) -> [f32; 2] {
     let [sin_r, cos_r] = slot.base_rot_sin_cos();
     let offset = [
-        position[0] * scale * cos_r - position[1] * scale * sin_r,
-        position[0] * scale * sin_r + position[1] * scale * cos_r,
+        (position[1] * scale).mul_add(-sin_r, position[0] * scale * cos_r),
+        (position[1] * scale).mul_add(cos_r, position[0] * scale * sin_r),
     ];
     [center[0] + offset[0], center[1] + offset[1]]
 }
@@ -436,8 +436,8 @@ fn append_receptor_sprite<S, F>(
     ];
     draws.push(FlatDraw::Sprite(FlatSprite {
         center: [
-            draw.center[0] + (0.5 - draw.align[0]) * size[0],
-            draw.center[1] + (0.5 - draw.align[1]) * size[1],
+            (0.5 - draw.align[0]).mul_add(size[0], draw.center[0]),
+            (0.5 - draw.align[1]).mul_add(size[1], draw.center[1]),
         ],
         world_z: 0.0,
         size,

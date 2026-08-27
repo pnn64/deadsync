@@ -4478,7 +4478,7 @@ fn qpc_freq_hz() -> Option<u64> {
 #[inline(always)]
 fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
     let hz = (*QPC_FREQ_HZ)?;
-    Some(((ticks as u128) * 1_000_000_000u128 / hz as u128).min(u128::from(u64::MAX)) as u64)
+    Some((u128::from(ticks) * 1_000_000_000u128 / u128::from(hz)).min(u128::from(u64::MAX)) as u64)
 }
 
 #[cfg(target_os = "windows")]

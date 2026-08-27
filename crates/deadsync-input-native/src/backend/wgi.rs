@@ -264,7 +264,7 @@ impl ReadingClock {
             self.offset_ns = if self.offset_ns == 0 {
                 offset_sample
             } else {
-                (((self.offset_ns as i128) * 7 + offset_sample as i128) / 8)
+                ((i128::from(self.offset_ns) * 7 + i128::from(offset_sample)) / 8)
                     .try_into()
                     .ok()?
             };
@@ -366,7 +366,7 @@ fn scale_axis(v: f64) -> i16 {
     let v = if v.is_finite() { v } else { 0.0 };
     let v = v.clamp(-1.0, 1.0);
     let x = (v * 32767.0) as i32;
-    x.clamp(i16::MIN as i32, i16::MAX as i32) as i16
+    x.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
 }
 
 #[inline(always)]
@@ -374,7 +374,7 @@ fn scale_trigger(v: f64) -> i16 {
     let v = if v.is_finite() { v } else { 0.0 };
     let v = v.clamp(0.0, 1.0);
     let x = (v * 32767.0) as i32;
-    x.clamp(0, i16::MAX as i32) as i16
+    x.clamp(0, i32::from(i16::MAX)) as i16
 }
 
 #[inline(always)]

@@ -7,7 +7,7 @@
 use crate::pad_config::PadConfigProfile;
 use deadsync_config::prelude::SmxPadPreset;
 
-/// What DeadSync last applied to an SMX pad, so the UI can flag the active one.
+/// What `DeadSync` last applied to an SMX pad, so the UI can flag the active one.
 /// `preset` = a built-in preset (name is its label); otherwise a saved config.
 #[derive(Clone, PartialEq, Eq)]
 pub struct AppliedPadConfig {
@@ -47,7 +47,7 @@ struct ProfilesSig {
 
 #[derive(Default)]
 pub struct PadConfigSync {
-    /// What DeadSync last applied to each pad (index = pad slot 0/1).
+    /// What `DeadSync` last applied to each pad (index = pad slot 0/1).
     pub applied: [Option<AppliedPadConfig>; 2],
     /// Last-resolved inputs per pad slot; `None` forces a re-resolve.
     pub signature: [Option<PadConfigSignature>; 2],

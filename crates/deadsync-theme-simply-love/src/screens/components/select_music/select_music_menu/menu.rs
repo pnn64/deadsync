@@ -367,7 +367,12 @@ pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
     let mut actors = Vec::new();
     let cx = screen_center_x();
     let cy = screen_center_y();
-    let clip_rect = [cx - WIDTH * 0.5, cy - HEIGHT * 0.5, WIDTH, HEIGHT];
+    let clip_rect = [
+        WIDTH.mul_add(-0.5, cx),
+        HEIGHT.mul_add(-0.5, cy),
+        WIDTH,
+        HEIGHT,
+    ];
     let selected_index = p.selected_index.min(p.entries.len().saturating_sub(1));
 
     // Background dim
@@ -465,7 +470,7 @@ fn render_row(
     let vis_bot = row_bot.min(box_bot);
     let vis_h = vis_bot - vis_top;
     let vis_cy = f32::midpoint(vis_top, vis_bot);
-    let left_x = cx - WIDTH * 0.5 + 12.0;
+    let left_x = WIDTH.mul_add(-0.5, cx) + 12.0;
 
     // Row background: category headers get gray bg, others get black
     let is_category_header = matches!(entry, Entry::CategoryHeader { .. });
@@ -645,7 +650,7 @@ fn item_tint(item: &Item, focus_lerp: f32) -> [f32; 3] {
 
 #[inline(always)]
 fn lerp_scalar(a: f32, b: f32, t: f32) -> f32 {
-    a + (b - a) * t
+    (b - a).mul_add(t, a)
 }
 
 #[inline(always)]

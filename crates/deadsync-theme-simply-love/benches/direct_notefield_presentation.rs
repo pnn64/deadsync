@@ -275,7 +275,11 @@ impl PeakScratch {
             let hud = &mut self.hud[player];
             let assembled = &mut self.assembled[player];
             fill_incrementally(field, PEAK_FIELD_ACTORS, player as f32 * 20_000.0);
-            fill_incrementally(hud, PEAK_HUD_ACTORS, player as f32 * 20_000.0 + 10_000.0);
+            fill_incrementally(
+                hud,
+                PEAK_HUD_ACTORS,
+                (player as f32).mul_add(20_000.0, 10_000.0),
+            );
             benchmark_present_identity_notefield(field, hud, assembled);
             let first = match assembled.first() {
                 Some(Actor::CameraPush { view_proj }) => view_proj.w_axis.x,
@@ -2657,12 +2661,15 @@ const fn numeric_value(case: NumericCase, frame: usize, player: usize, run: usiz
 
 fn numeric_position(case: NumericCase, player: usize, run: usize) -> [f32; 2] {
     match case {
-        NumericCase::Combo => [240.0 + player as f32 * 160.0, 265.0],
+        NumericCase::Combo => [(player as f32).mul_add(160.0, 240.0), 265.0],
         NumericCase::CueCountdown => [
-            220.0 + player as f32 * 240.0 + run as f32 * 24.0,
+            (run as f32).mul_add(24.0, (player as f32).mul_add(240.0, 220.0)),
             if run % 2 == 0 { 160.0 } else { 340.0 },
         ],
-        NumericCase::EditMeasure => [256.0 + player as f32 * 342.0, 20.0 + run as f32 * 40.0],
+        NumericCase::EditMeasure => [
+            (player as f32).mul_add(342.0, 256.0),
+            (run as f32).mul_add(40.0, 20.0),
+        ],
     }
 }
 
@@ -3045,10 +3052,13 @@ fn inline_text_style(
     if matches!(case, InlineCase::ErrorBar) {
         return (
             [0.5, 0.5],
-            [220.0 + player as f32 * 240.0 + run as f32 * 32.0, 220.0],
+            [
+                (run as f32).mul_add(32.0, (player as f32).mul_add(240.0, 220.0)),
+                220.0,
+            ],
             TextAlign::Center,
             [0.25, 0.7, 0.7, 0.35][run],
-            [0.2 + run as f32 * 0.15, 0.8, 0.4, 0.9],
+            [(run as f32).mul_add(0.15, 0.2), 0.8, 0.4, 0.9],
             if matches!(run, 0 | 3) { 1.0 } else { 0.0 },
         );
     }
@@ -3056,8 +3066,8 @@ fn inline_text_style(
     (
         [if mini { 0.0 } else { 0.5 }, 0.5],
         [
-            220.0 + player as f32 * 200.0 + run as f32 * 4.0,
-            180.0 + run as f32 * 14.0,
+            (run as f32).mul_add(4.0, (player as f32).mul_add(200.0, 220.0)),
+            (run as f32).mul_add(14.0, 180.0),
         ],
         if mini {
             TextAlign::Left
@@ -3065,7 +3075,7 @@ fn inline_text_style(
             TextAlign::Center
         },
         if mini { 0.4 } else { 0.35 },
-        [0.3 + run as f32 * 0.05, 0.8, 0.4, 0.9],
+        [(run as f32).mul_add(0.05, 0.3), 0.8, 0.4, 0.9],
         1.0,
     )
 }

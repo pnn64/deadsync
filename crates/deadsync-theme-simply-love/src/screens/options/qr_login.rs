@@ -58,7 +58,7 @@ const fn i18n_section(kind: BackendKind) -> &'static str {
     }
 }
 
-/// Top-level chrome (Title / NoPlayerJoined / footer) is service-wide,
+/// Top-level chrome (Title / `NoPlayerJoined` / footer) is service-wide,
 /// so it's keyed off the first slot's backend.  Slots within one UI are
 /// always the same kind (set at construction time), so any slot would
 /// give the same answer; this just avoids re-passing the kind around.
@@ -364,7 +364,7 @@ fn push_slot_panel(
                 ));
             }
 
-            let below_qr = panel_cy + qr_size * 0.5;
+            let below_qr = qr_size.mul_add(0.5, panel_cy);
             // GrooveStats's QR-login flow doesn't ship a short code —
             // the QR is the only verification factor.  Skip the "Code:"
             // line and slide the URL up into its slot so the panel
@@ -404,7 +404,7 @@ fn push_slot_panel(
                 diffuse(0.85, 0.85, 0.85, 1.0)
             ));
 
-            push_status_badge(out, slot, panel_cx, panel_cy - qr_size * 0.5);
+            push_status_badge(out, slot, panel_cx, qr_size.mul_add(-0.5, panel_cy));
         }
         SlotState::Success => {
             out.push(act!(text:

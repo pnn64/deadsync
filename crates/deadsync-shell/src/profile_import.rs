@@ -82,7 +82,7 @@ impl LatestProgress {
     }
 }
 
-/// Shell-owned ITGmania discovery, native folder selection, and import worker.
+/// Shell-owned `ITGmania` discovery, native folder selection, and import worker.
 ///
 /// Progress is sampled through one latest-value slot because the screen replaces
 /// its progress row on every update. Discovery and completion still cross a

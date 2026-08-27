@@ -371,7 +371,7 @@ fn catalog_line_error(line_number: usize, message: &str) -> StepManiaOnlineError
 
 /// Runtime/cache contract:
 ///
-/// - Owner: StepManiaOnline catalog and install workers; UI only snapshots it.
+/// - Owner: `StepManiaOnline` catalog and install workers; UI only snapshots it.
 /// - Thread safety: one mutex guards immutable `Arc` snapshots and ready paths.
 /// - Lifetime: process session; no disk catalog cache is maintained.
 /// - Capacity: 20,000 catalog rows, 64 install records, eight queued downloads,

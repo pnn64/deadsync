@@ -1423,7 +1423,7 @@ pub fn clamp_crossover_cue_quantization(q: u8) -> u8 {
 }
 
 /// Fallback pad-light brightness (0..=100) when a profile has no saved value.
-/// New profiles are seeded from the StepManiaX machine default instead (see
+/// New profiles are seeded from the `StepManiaX` machine default instead (see
 /// `game::profile`); this is only the in-crate default for a fresh struct.
 pub const PAD_LIGHT_BRIGHTNESS_DEFAULT: u8 = 100;
 
@@ -1624,7 +1624,8 @@ pub fn clamp_long_error_bar_intensity(value: f32) -> f32 {
     }
     let clamped = value.clamp(LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_MAX);
     let steps = ((clamped - LONG_ERROR_BAR_INTENSITY_MIN) / LONG_ERROR_BAR_INTENSITY_STEP).round();
-    (LONG_ERROR_BAR_INTENSITY_MIN + steps * LONG_ERROR_BAR_INTENSITY_STEP)
+    steps
+        .mul_add(LONG_ERROR_BAR_INTENSITY_STEP, LONG_ERROR_BAR_INTENSITY_MIN)
         .clamp(LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_MAX)
 }
 
@@ -1639,10 +1640,15 @@ pub fn clamp_average_error_bar_intensity(value: f32) -> f32 {
     );
     let steps =
         ((clamped - AVERAGE_ERROR_BAR_INTENSITY_MIN) / AVERAGE_ERROR_BAR_INTENSITY_STEP).round();
-    (AVERAGE_ERROR_BAR_INTENSITY_MIN + steps * AVERAGE_ERROR_BAR_INTENSITY_STEP).clamp(
-        AVERAGE_ERROR_BAR_INTENSITY_MIN,
-        AVERAGE_ERROR_BAR_INTENSITY_MAX,
-    )
+    steps
+        .mul_add(
+            AVERAGE_ERROR_BAR_INTENSITY_STEP,
+            AVERAGE_ERROR_BAR_INTENSITY_MIN,
+        )
+        .clamp(
+            AVERAGE_ERROR_BAR_INTENSITY_MIN,
+            AVERAGE_ERROR_BAR_INTENSITY_MAX,
+        )
 }
 
 #[inline]
@@ -1778,17 +1784,17 @@ pub fn is_valid_profile_guid(s: &str) -> bool {
     parts.next().is_none()
 }
 
-/// Fixed namespace UUID for deriving DeadSync profile GUIDs from ITGmania
+/// Fixed namespace UUID for deriving `DeadSync` profile GUIDs from `ITGmania`
 /// profile GUIDs. Chosen once and never changed so the mapping stays stable.
 const ITGMANIA_GUID_NAMESPACE: uuid::Uuid =
     uuid::Uuid::from_u128(0x9d3f7c12_4b8e_5a96_b2d1_e7f4a06c83ddu128);
 
-/// Derives a stable DeadSync profile GUID from an ITGmania profile `Guid`
+/// Derives a stable `DeadSync` profile GUID from an `ITGmania` profile `Guid`
 /// (the 16-hex string stored in `Stats.xml` `GeneralData/Guid`).
 ///
-/// ITGmania GUIDs aren't UUIDs, so they can't be used as DeadSync identities
+/// `ITGmania` GUIDs aren't UUIDs, so they can't be used as `DeadSync` identities
 /// directly. We map them through a fixed namespace with UUID v5, which is
-/// deterministic: the same ITGmania GUID always yields the same DeadSync GUID
+/// deterministic: the same `ITGmania` GUID always yields the same `DeadSync` GUID
 /// (so re-importing the same profile produces a matching identity), and the
 /// result is a canonical UUID that satisfies [`is_valid_profile_guid`].
 ///
@@ -4447,12 +4453,12 @@ impl core::fmt::Display for Perspective {
     }
 }
 
-/// Alternative speed-mod type to auto-apply when a chart is tagged "no CMod".
+/// Alternative speed-mod type to auto-apply when a chart is tagged "no `CMod`".
 ///
-/// When a player is on CMod and selects a chart whose title/subtitle contains
+/// When a player is on `CMod` and selects a chart whose title/subtitle contains
 /// "no cmod", the game transparently switches them to this mod type for that
-/// play only. The persisted CMod setting is never written, so returning to
-/// song select restores it. `None` leaves the player on CMod (they must switch
+/// play only. The persisted `CMod` setting is never written, so returning to
+/// song select restores it. `None` leaves the player on `CMod` (they must switch
 /// manually). See `player_options::apply_no_cmod_alternative`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NoCmodAlternative {
@@ -5931,7 +5937,7 @@ impl BackgroundFilter {
     /// Construct from any signed integer, clamping to `0..=100`.
     #[inline]
     pub fn from_i32(value: i32) -> Self {
-        Self::from_percent(value.clamp(0, Self::MAX_PERCENT as i32) as u8)
+        Self::from_percent(value.clamp(0, i32::from(Self::MAX_PERCENT)) as u8)
     }
 
     /// Underlying percentage value `0..=100`.
@@ -5943,7 +5949,7 @@ impl BackgroundFilter {
     /// Alpha value in `0.0..=1.0` to be passed to `diffuse`.
     #[inline]
     pub fn alpha(self) -> f32 {
-        self.0 as f32 / Self::MAX_PERCENT as f32
+        f32::from(self.0) / f32::from(Self::MAX_PERCENT)
     }
 
     /// Convenience for branches that toggle on the "no filter" case.
@@ -5979,7 +5985,7 @@ impl FromStr for BackgroundFilter {
         let value: i32 = numeric
             .parse()
             .map_err(|_| format!("'{s}' is not a valid BackgroundFilter setting"))?;
-        if !(0..=Self::MAX_PERCENT as i32).contains(&value) {
+        if !(0..=i32::from(Self::MAX_PERCENT)).contains(&value) {
             return Err(format!(
                 "BackgroundFilter percent {value} out of range 0..=100"
             ));
@@ -6269,11 +6275,11 @@ fn normalize_graphic_key(
     Ok(format!("{folder}/{basename}"))
 }
 
-/// Like [`normalize_graphic_key`] but **only** resolves names DeadSync actually
+/// Like [`normalize_graphic_key`] but **only** resolves names `DeadSync` actually
 /// ships: a recognized stock alias or `"None"`. Returns `None` for unknown or
 /// custom graphic names instead of fabricating a `folder/basename` path that
-/// would point at a missing texture. Used by the ITGmania importer, where a
-/// Simply Love profile may reference a theme graphic DeadSync doesn't have.
+/// would point at a missing texture. Used by the `ITGmania` importer, where a
+/// Simply Love profile may reference a theme graphic `DeadSync` doesn't have.
 fn recognized_stock_key(raw: &str, stock_aliases: &[(&str, &str)]) -> Option<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -6338,7 +6344,7 @@ impl HoldJudgmentGraphic {
         )
     }
 
-    /// Parse `raw` only if it names a graphic DeadSync ships (a recognized stock
+    /// Parse `raw` only if it names a graphic `DeadSync` ships (a recognized stock
     /// alias or `"None"`), returning `None` for unknown/custom names. Use this
     /// when importing external settings to avoid pointing at a missing texture.
     #[inline(always)]
@@ -6404,7 +6410,7 @@ impl HeldMissGraphic {
         )
     }
 
-    /// Parse `raw` only if it names a graphic DeadSync ships (a recognized stock
+    /// Parse `raw` only if it names a graphic `DeadSync` ships (a recognized stock
     /// alias or `"None"`), returning `None` for unknown/custom names. Use this
     /// when importing external settings to avoid pointing at a missing texture.
     #[inline(always)]
@@ -6654,7 +6660,7 @@ impl JudgmentGraphic {
         )
     }
 
-    /// Parse `raw` only if it names a graphic DeadSync ships (a recognized stock
+    /// Parse `raw` only if it names a graphic `DeadSync` ships (a recognized stock
     /// alias or `"None"`), returning `None` for unknown/custom names. Use this
     /// when importing external settings to avoid pointing at a missing texture.
     #[inline(always)]
@@ -8873,7 +8879,7 @@ pub struct Profile {
     // Custom blue Fantastic window in milliseconds (1..22), shared by FA+ W0 and H.EX split.
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
-    /// Pad-light brightness 0..=100. Seeded from the StepManiaX machine default
+    /// Pad-light brightness 0..=100. Seeded from the `StepManiaX` machine default
     /// when the profile is created; the player adjusts it in Player Options.
     pub pad_light_brightness: u8,
     // Judgment tilt (Simply Love semantics).

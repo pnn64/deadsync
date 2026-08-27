@@ -273,7 +273,7 @@ impl SongData {
 
     /// Float-precision song end time used by graph scaling.
     ///
-    /// Mirrors ITGmania's `Song::GetLastSecond()` chart-selection behavior:
+    /// Mirrors `ITGmania`'s `Song::GetLastSecond()` chart-selection behavior:
     /// if any non-Edit chart exists, ignore Edit charts for song length.
     pub fn precise_last_second(&self) -> f32 {
         let fallback = self.total_length_seconds.max(0) as f32;
@@ -315,12 +315,12 @@ impl SongData {
         }
     }
 
-    /// Whether this song is tagged as not allowing CMod.
+    /// Whether this song is tagged as not allowing `CMod`.
     ///
     /// Event organizers mark such charts by putting "no cmod" somewhere in the
     /// title or subtitle. Matching is case-insensitive and spans the combined
     /// title + subtitle so the tag is found regardless of which field carries
-    /// it. Used by the player-options "No CMod alternative" auto-switch.
+    /// it. Used by the player-options "No `CMod` alternative" auto-switch.
     pub fn is_no_cmod(&self) -> bool {
         title_subtitle_contains_ignore_ascii_case(&self.title, &self.subtitle, "no cmod")
     }
@@ -522,8 +522,8 @@ impl SongData {
         format_display_bpm_range(self.display_bpm_range(), 1.0)
     }
 
-    /// Returns (lo, hi) display BPM, checking the chart's display_bpm first,
-    /// then falling back to the song-level display_bpm, then actual min/max.
+    /// Returns (lo, hi) display BPM, checking the chart's `display_bpm` first,
+    /// then falling back to the song-level `display_bpm`, then actual min/max.
     pub fn chart_display_bpm_range(&self, chart: Option<&ChartData>) -> Option<(f64, f64)> {
         if let Some(chart) = chart {
             match &chart.display_bpm {

@@ -395,7 +395,7 @@ fn stream_position_frames_from_callback(
         return None;
     }
     let dt = (at_nanos.saturating_sub(cb_nanos) as f64) * 1e-9;
-    let frames_since_cb = (dt * sample_rate as f64).clamp(0.0, buf_frames as f64);
+    let frames_since_cb = (dt * f64::from(sample_rate)).clamp(0.0, buf_frames as f64);
     let frames_now = base_frames as f64 + frames_since_cb;
     Some((frames_now.max(start_frame as f64) - start_frame as f64).max(0.0))
 }
@@ -494,8 +494,9 @@ impl PlaybackPosMap {
         if let Some(last) = self.queue.back_mut() {
             let contiguous_stream = last.stream_frame_start + last.frames == seg.stream_frame_start;
             let ratio_match = (last.music_sec_per_frame - seg.music_sec_per_frame).abs() <= 1e-9;
-            let expected_music_start =
-                last.music_start_sec + last.music_sec_per_frame * last.frames as f64;
+            let expected_music_start = last
+                .music_sec_per_frame
+                .mul_add(last.frames as f64, last.music_start_sec);
             let music_contiguous = (expected_music_start - seg.music_start_sec).abs()
                 <= seg.music_sec_per_frame.abs().max(1e-9);
             if contiguous_stream && ratio_match && music_contiguous {
@@ -519,7 +520,9 @@ impl PlaybackPosMap {
             let excess = self.backlog_frames - MUSIC_POS_MAP_BACKLOG_FRAMES;
             let drop = excess.min(front.frames);
             front.stream_frame_start += drop;
-            front.music_start_sec += front.music_sec_per_frame * drop as f64;
+            front.music_start_sec = front
+                .music_sec_per_frame
+                .mul_add(drop as f64, front.music_start_sec);
             front.frames -= drop;
             self.backlog_frames -= drop;
             if front.frames <= 0 {
@@ -540,7 +543,7 @@ impl PlaybackPosMap {
             if stream_frame >= start && stream_frame < end {
                 let diff = stream_frame - start;
                 return Some((
-                    seg.music_start_sec + diff * seg.music_sec_per_frame,
+                    diff.mul_add(seg.music_sec_per_frame, seg.music_start_sec),
                     seg.music_sec_per_frame,
                 ));
             }
@@ -548,16 +551,18 @@ impl PlaybackPosMap {
             if start_dist < closest_dist {
                 closest_dist = start_dist;
                 closest = Some((
-                    seg.music_start_sec + (stream_frame - start) * seg.music_sec_per_frame,
+                    (stream_frame - start).mul_add(seg.music_sec_per_frame, seg.music_start_sec),
                     seg.music_sec_per_frame,
                 ));
             }
-            let end_music = seg.music_start_sec + seg.music_sec_per_frame * seg.frames as f64;
+            let end_music = seg
+                .music_sec_per_frame
+                .mul_add(seg.frames as f64, seg.music_start_sec);
             let end_dist = (stream_frame - end).abs();
             if end_dist < closest_dist {
                 closest_dist = end_dist;
                 closest = Some((
-                    end_music + (stream_frame - end) * seg.music_sec_per_frame,
+                    (stream_frame - end).mul_add(seg.music_sec_per_frame, end_music),
                     seg.music_sec_per_frame,
                 ));
             }
@@ -580,7 +585,7 @@ impl PlaybackPosMap {
                 continue;
             }
             let start_sec = seg.music_start_sec;
-            let end_sec = start_sec + sec_per_frame * seg.frames as f64;
+            let end_sec = sec_per_frame.mul_add(seg.frames as f64, start_sec);
             let (lo, hi) = if start_sec <= end_sec {
                 (start_sec, end_sec)
             } else {

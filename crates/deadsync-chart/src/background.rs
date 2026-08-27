@@ -16,7 +16,7 @@ struct MovieCycle {
 
 impl MovieCycle {
     fn new(mut paths: Vec<PathBuf>, seed_text: &str) -> Self {
-        shuffle_paths(&mut paths, crc32(seed_text.as_bytes()) as u64);
+        shuffle_paths(&mut paths, u64::from(crc32(seed_text.as_bytes())));
         paths.truncate(RANDOM_MOVIE_LIMIT);
         Self { paths, next: 0 }
     }

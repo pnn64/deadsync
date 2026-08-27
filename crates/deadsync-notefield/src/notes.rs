@@ -793,7 +793,7 @@ impl ScrollTravel<'_> {
         direction: f32,
         raw_travel: f32,
     ) -> f32 {
-        receptor_y + direction * self.adjusted(raw_travel) + self.lane_offset(local_col)
+        direction.mul_add(self.adjusted(raw_travel), receptor_y) + self.lane_offset(local_col)
     }
 
     pub fn lane_y_for_beat(
@@ -899,7 +899,7 @@ fn random_speed_mult(stage_seed: u32, note_row: i32, local_col: usize, amount: f
     for _ in 0..3 {
         seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
     }
-    1.0 + (seed as f32 / 4_294_967_296.0) * amount
+    (seed as f32 / 4_294_967_296.0).mul_add(amount, 1.0)
 }
 
 pub(crate) fn note_itg_row(note: &Note) -> i32 {

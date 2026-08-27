@@ -426,7 +426,7 @@ pub(crate) fn build_overlay(
 
     for (slot, row) in overlay.rows.iter().skip(start).take(view_rows).enumerate() {
         let row_index = start + slot;
-        let row_y = row_top + ROW_STEP * slot as f32;
+        let row_y = ROW_STEP.mul_add(slot as f32, row_top);
         let disposition = row_disposition(row, overlay.min_confidence);
         if overlay.current_row == Some(row_index) && overlay.phase == OverlayPhase::Running {
             actors.push(act!(quad:

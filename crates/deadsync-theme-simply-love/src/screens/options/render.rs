@@ -295,11 +295,11 @@ pub(super) fn build_description_layout(
     let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
     let wrap_extra_pad = desc_wrap_extra_pad_unscaled() * s;
     let title_max_width_px =
-        desc_w_unscaled().mul_add(s, -((2.0 * title_side_pad) + wrap_extra_pad));
+        desc_w_unscaled().mul_add(s, -2.0f32.mul_add(title_side_pad, wrap_extra_pad));
     let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
     let bullet_max_width_px = desc_w_unscaled().mul_add(
         s,
-        -((2.0 * bullet_side_pad) + (DESC_BULLET_INDENT_PX * s) + wrap_extra_pad),
+        -(DESC_BULLET_INDENT_PX.mul_add(s, 2.0 * bullet_side_pad) + wrap_extra_pad),
     );
 
     let mut blocks = Vec::new();
@@ -497,7 +497,7 @@ pub(super) fn submenu_cursor_dest(
     let item_col_left = list_x + label_bg_w;
     let item_col_w = list_w - label_bg_w;
     let single_center_x =
-        item_col_w.mul_add(0.5, item_col_left) + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
+        SUB_SINGLE_VALUE_CENTER_OFFSET.mul_add(s, item_col_w.mul_add(0.5, item_col_left));
 
     if selected_row == total_rows - 1 {
         let exit_label = tr("Common", "Exit");
@@ -768,7 +768,7 @@ pub fn push_actors(
                 if row_alpha <= 0.001 {
                     continue;
                 }
-                let row_y = row_mid_y - 0.5 * row_h;
+                let row_y = 0.5f32.mul_add(-row_h, row_mid_y);
                 let is_active = item_idx == state.selected;
                 let is_exit = item_idx == total_items - 1;
                 let row_w = if is_exit || !is_active {
@@ -852,7 +852,7 @@ pub fn push_actors(
                     if row_alpha <= 0.001 {
                         continue;
                     }
-                    let row_y = row_mid_y - 0.5 * row_h;
+                    let row_y = 0.5f32.mul_add(-row_h, row_mid_y);
                     let is_active = row_idx == state.sub_selected;
                     let is_exit = row_idx == total_rows - 1;
                     let row_w = if is_exit || !is_active {
@@ -930,7 +930,8 @@ pub fn push_actors(
                                     col_white
                                 };
                                 value_color[3] *= row_alpha;
-                                let value_x = list_w.mul_add(1.0, list_x - TEXT_LEFT_PAD * s);
+                                let value_x =
+                                    list_w.mul_add(1.0, TEXT_LEFT_PAD.mul_add(-s, list_x));
                                 actors.push(act!(text:
                                     align(1.0, 0.5):
                                     xy(value_x, row_mid_y):
@@ -965,7 +966,8 @@ pub fn push_actors(
                 let label_bg_w = SUB_LABEL_COL_W * s;
                 let label_text_x = SUB_LABEL_TEXT_LEFT_PAD.mul_add(s, list_x);
                 // Keep submenu header labels bounded to the left label column.
-                let label_text_max_w = (label_bg_w - SUB_LABEL_TEXT_LEFT_PAD * s - 5.0).max(0.0);
+                let label_text_max_w =
+                    (SUB_LABEL_TEXT_LEFT_PAD.mul_add(-s, label_bg_w) - 5.0).max(0.0);
 
                 // Helper to compute the cursor center X for a given submenu row index.
                 let calc_row_center_x = |row_idx: usize| -> f32 {
@@ -977,8 +979,8 @@ pub fn push_actors(
                         // matching how single-value rows like Music Rate are centered in player_options.rs.
                         let item_col_left = list_x + label_bg_w;
                         let item_col_w = list_w - label_bg_w;
-                        return item_col_w.mul_add(0.5, item_col_left)
-                            + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
+                        return SUB_SINGLE_VALUE_CENTER_OFFSET
+                            .mul_add(s, item_col_w.mul_add(0.5, item_col_left));
                     }
                     let Some(actual_row_idx) = visible_rows.get(row_idx).copied() else {
                         return list_w.mul_add(0.5, list_x);
@@ -986,8 +988,8 @@ pub fn push_actors(
                     let row = &rows[actual_row_idx];
                     let item_col_left = list_x + label_bg_w;
                     let item_col_w = list_w - label_bg_w;
-                    let single_center_x =
-                        item_col_w.mul_add(0.5, item_col_left) + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
+                    let single_center_x = SUB_SINGLE_VALUE_CENTER_OFFSET
+                        .mul_add(s, item_col_w.mul_add(0.5, item_col_left));
                     // Non-inline rows behave as single-value rows: keep the cursor centered
                     // on the center of the available items column (row width minus label column).
                     if !row.inline {
@@ -1023,7 +1025,7 @@ pub fn push_actors(
                     if row_alpha <= 0.001 {
                         continue;
                     }
-                    let row_y = row_mid_y - 0.5 * row_h;
+                    let row_y = 0.5f32.mul_add(-row_h, row_mid_y);
 
                     let is_active = row_idx == state.sub_selected;
                     let is_exit = row_idx == total_rows - 1;
@@ -1240,7 +1242,7 @@ pub fn push_actors(
                             if layout.inline_row && is_multi_toggle_row {
                                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                                 let offset = widescale(3.0, 4.0);
-                                let underline_y = row_mid_y + layout.text_h * 0.5 + offset;
+                                let underline_y = layout.text_h.mul_add(0.5, row_mid_y) + offset;
                                 let mut line_color =
                                     color::decorative_rgba(state.active_color_index);
                                 line_color[3] *= row_alpha;
@@ -1279,7 +1281,7 @@ pub fn push_actors(
                                     .unwrap_or(40.0)
                                     .ceil();
                                 let offset = widescale(3.0, 4.0);
-                                let underline_y = row_mid_y + layout.text_h * 0.5 + offset;
+                                let underline_y = layout.text_h.mul_add(0.5, row_mid_y) + offset;
                                 let mut line_color =
                                     color::decorative_rgba(state.active_color_index);
                                 line_color[3] *= row_alpha;
@@ -1299,10 +1301,10 @@ pub fn push_actors(
                                 && let Some((center_x, center_y, ring_w, ring_h)) = cursor_now()
                             {
                                 let border_w = widescale(2.0, 2.5);
-                                let left = center_x - ring_w * 0.5;
-                                let right = center_x + ring_w * 0.5;
-                                let top = center_y - ring_h * 0.5;
-                                let bottom = center_y + ring_h * 0.5;
+                                let left = ring_w.mul_add(-0.5, center_x);
+                                let right = ring_w.mul_add(0.5, center_x);
+                                let top = ring_h.mul_add(-0.5, center_y);
+                                let bottom = ring_h.mul_add(0.5, center_y);
                                 let mut ring_color =
                                     color::decorative_rgba(state.active_color_index);
                                 ring_color[3] *= row_alpha;
@@ -1363,10 +1365,10 @@ pub fn push_actors(
                             && let Some((ring_x, ring_y, ring_w, ring_h)) = cursor_now()
                         {
                             let border_w = widescale(2.0, 2.5);
-                            let left = ring_x - ring_w * 0.5;
-                            let right = ring_x + ring_w * 0.5;
-                            let top = ring_y - ring_h * 0.5;
-                            let bottom = ring_y + ring_h * 0.5;
+                            let left = ring_w.mul_add(-0.5, ring_x);
+                            let right = ring_w.mul_add(0.5, ring_x);
+                            let top = ring_h.mul_add(-0.5, ring_y);
+                            let bottom = ring_h.mul_add(0.5, ring_y);
                             let mut ring_color = color::decorative_rgba(state.active_color_index);
                             ring_color[3] *= row_alpha;
 
@@ -1440,7 +1442,8 @@ pub fn push_actors(
                         font("miso"): settext(text):
                         horizalign(left)
                     ));
-                    cursor_y += title_step_px * *line_count as f32 + DESC_BULLET_TOP_PAD_PX * s;
+                    cursor_y +=
+                        DESC_BULLET_TOP_PAD_PX.mul_add(s, title_step_px * *line_count as f32);
                 }
                 RenderedHelpBlock::Bullet { text, line_count } => {
                     let bullet_x = DESC_BULLET_INDENT_PX.mul_add(s, desc_x + bullet_side_pad);
@@ -1452,7 +1455,7 @@ pub fn push_actors(
                         font("miso"): settext(text):
                         horizalign(left)
                     ));
-                    cursor_y += body_step_px * *line_count as f32;
+                    cursor_y = body_step_px.mul_add(*line_count as f32, cursor_y);
                 }
             }
         }

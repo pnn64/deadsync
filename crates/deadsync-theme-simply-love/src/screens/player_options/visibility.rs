@@ -725,8 +725,8 @@ pub(super) fn tap_explosion_options_visible(
 }
 
 /// The Max Heart Rate row is shown only when some active player has a heart-rate
-/// monitor selected (HeartRateMonitor choice index other than 0 = "Off"). When
-/// the HeartRateMonitor row is absent (HRM feature disabled) the row is hidden.
+/// monitor selected (`HeartRateMonitor` choice index other than 0 = "Off"). When
+/// the `HeartRateMonitor` row is absent (HRM feature disabled) the row is hidden.
 pub(super) fn max_heart_rate_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
     if row_map.get(RowId::HeartRateMonitor).is_none() {
         return false;

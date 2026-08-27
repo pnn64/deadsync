@@ -621,7 +621,7 @@ fn clip_density_life_points_impl(
     let b = points[first_visible];
     let dx = (b[0] - a[0]).max(0.000_001_f32);
     let t = ((offset - a[0]) / dx).clamp(0.0_f32, 1.0_f32);
-    points[first_visible - 1] = [offset, a[1] + (b[1] - a[1]) * t];
+    points[first_visible - 1] = [offset, (b[1] - a[1]).mul_add(t, a[1])];
     let stale = first_visible - 1;
     if stale < compact_threshold.max(1) {
         return 0;
@@ -818,7 +818,7 @@ fn push_density_graph_at(
     {
         actors.push(Actor::ReusableMesh {
             align: [0.0, 0.0],
-            offset: [x0 + DENSITY_LIFE_LINE_WIDTH * 0.5, y0],
+            offset: [DENSITY_LIFE_LINE_WIDTH.mul_add(0.5, x0), y0],
             size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
             tint: [1.0; 4],
             vertices: Arc::clone(mesh),
@@ -983,7 +983,7 @@ fn peak_nps_text(peak: f32) -> Arc<str> {
 
 #[inline(always)]
 fn format_game_time(seconds: u32, mode: u8) -> InlineText {
-    let seconds = seconds as u64;
+    let seconds = u64::from(seconds);
     let minutes = seconds / 60;
     let secs = seconds % 60;
     match mode {
@@ -1294,7 +1294,7 @@ fn push_versus_count_texts(
         if !bright_text.is_empty() {
             let mut a = act!(text:
                 font(gameplay_font_key(state, FontRole::ScreenEval)): settext(bright_text):
-                align(0.0, 0.5): xy(anchor_x + dim_len * digit_w, y):
+                align(0.0, 0.5): xy(dim_len.mul_add(digit_w, anchor_x), y):
                 zoom(numbers_zoom_y):
                 diffuse(bright[0], bright[1], bright[2], bright[3]):
                 z(z):
@@ -1325,7 +1325,7 @@ fn push_versus_count_texts(
         if !dim_text.is_empty() {
             let mut a = act!(text:
                 font(gameplay_font_key(state, FontRole::ScreenEval)): settext(dim_text):
-                align(1.0, 0.5): xy(anchor_x - bright_len * digit_w, y):
+                align(1.0, 0.5): xy(bright_len.mul_add(-digit_w, anchor_x), y):
                 zoom(numbers_zoom_y):
                 diffuse(dim[0], dim[1], dim[2], dim[3]):
                 z(z):
@@ -1896,13 +1896,13 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
             continue;
         }
         let layout = step_stats_pane_layout(state, playfield_center_x, side);
-        let x_sign = if side == profile_data::PlayerSide::P1 {
+        let x_sign: f32 = if side == profile_data::PlayerSide::P1 {
             1.0
         } else {
             -1.0
         };
-        let x = layout.sidepane_center_x + x_sign * 94.0 * layout.banner_data_zoom;
-        let y = layout.sidepane_center_y - 37.0 * layout.banner_data_zoom;
+        let x = (x_sign * 94.0).mul_add(layout.banner_data_zoom, layout.sidepane_center_x);
+        let y = 37.0f32.mul_add(-layout.banner_data_zoom, layout.sidepane_center_y);
         heart_rate::push(
             actors,
             reading,
@@ -1944,7 +1944,7 @@ fn push_peak_nps_on_graph(
         graph.x + graph.w - PEAK_NPS_GRAPH_PAD
     };
     let y = graph.y + PEAK_NPS_GRAPH_PAD;
-    let max_w = (graph.w - PEAK_NPS_GRAPH_PAD * 2.0).max(1.0);
+    let max_w = PEAK_NPS_GRAPH_PAD.mul_add(-2.0, graph.w).max(1.0);
 
     if align_left {
         actors.push(act!(text:
@@ -2029,7 +2029,9 @@ pub fn push_versus_step_stats(
 
     let group_zoom_y = 0.8_f32;
     let group_zoom_x = if digits > 4 {
-        (group_zoom_y - 0.12 * (digits.saturating_sub(4) as f32)).max(0.1)
+        0.12f32
+            .mul_add(-(digits.saturating_sub(4) as f32), group_zoom_y)
+            .max(0.1)
     } else {
         group_zoom_y
     };
@@ -2107,8 +2109,9 @@ pub fn push_versus_step_stats(
                         let dim_colors = palette.gameplay_dim;
                         for (row_i, count) in counts.iter().copied().enumerate() {
                             let disabled = split_row_disabled(disabled_windows, row_i);
-                            let y = group_origin_y
-                                + (y_base + row_i as f32 * row_height) * group_zoom_y;
+                            let y = (row_i as f32)
+                                .mul_add(row_height, y_base)
+                                .mul_add(group_zoom_y, group_origin_y);
                             let slot = count_text_slot(player_idx, row_i, !is_p1);
                             let (dim_text, bright_text) =
                                 padded_runs_for_window(count, digits, disabled, slot);
@@ -2149,8 +2152,9 @@ pub fn push_versus_step_stats(
                         ];
                         for (row_i, count) in counts.iter().copied().enumerate() {
                             let disabled = standard_row_disabled(disabled_windows, row_i);
-                            let y = group_origin_y
-                                + (y_base + row_i as f32 * row_height) * group_zoom_y;
+                            let y = (row_i as f32)
+                                .mul_add(row_height, y_base)
+                                .mul_add(group_zoom_y, group_origin_y);
                             let slot = count_text_slot(player_idx, row_i, !is_p1);
                             let (dim_text, bright_text) =
                                 padded_runs_for_window(count, digits, disabled, slot);
@@ -2390,8 +2394,8 @@ pub fn push_double_step_stats(
 
     // TapNoteJudgments.lua (double): x(-GetNotefieldWidth() + 75), y(40), zoom(0.8)
     if mask.contains(profile_data::StepStatisticsMask::JUDGMENT_COUNTER) {
-        let origin_x = pane_cx + ((-notefield_width + 75.0) * banner_data_zoom);
-        let origin_y = pane_cy + (40.0 * banner_data_zoom);
+        let origin_x = (-notefield_width + 75.0).mul_add(banner_data_zoom, pane_cx);
+        let origin_y = 40.0f32.mul_add(banner_data_zoom, pane_cy);
         let base_zoom = 0.8 * banner_data_zoom;
 
         let total_tapnotes = state.display_totals_for_player(0).total_steps as f32;
@@ -2419,9 +2423,9 @@ pub fn push_double_step_stats(
                     return;
                 }
                 let block_w = digit_w * digits as f32;
-                let numbers_left_x = origin_x + (1.4 * block_w);
+                let numbers_left_x = 1.4f32.mul_add(block_w, origin_x);
                 let label_x =
-                    origin_x + ((80.0 + (digits.saturating_sub(4) as f32 * 16.0)) * base_zoom);
+                    (digits.saturating_sub(4) as f32).mul_add(16.0, 80.0).mul_add(base_zoom, origin_x);
                 let label_zoom = base_zoom * 0.833;
                 let show_standard_judgments = !show_fa_split;
 
@@ -2437,9 +2441,9 @@ pub fn push_double_step_stats(
                     for (row_i, count) in counts.into_iter().enumerate() {
                         let label = state.gameplay_stats_text.judgment(row_i);
                         let disabled = standard_row_disabled(disabled_windows, row_i);
-                        let local_y = y_base + (row_i as f32 * row_height);
+                        let local_y = (row_i as f32).mul_add(row_height, y_base);
                         let y_numbers = origin_y + (local_y * base_zoom);
-                        let y_label = origin_y + ((local_y + 1.0) * base_zoom);
+                        let y_label = (local_y + 1.0).mul_add(base_zoom, origin_y);
                         let bright = if disabled {
                             DISABLED_WINDOW_RGBA
                         } else {
@@ -2468,7 +2472,7 @@ pub fn push_double_step_stats(
                         if !bright_text.is_empty() {
                             actors.push(act!(text:
                                 font(gameplay_font_key(state, FontRole::ScreenEval)): settext(bright_text):
-                                align(0.0, 0.5): xy(numbers_left_x + dim_len * digit_w, y_numbers):
+                                align(0.0, 0.5): xy(dim_len.mul_add(digit_w, numbers_left_x), y_numbers):
                                 zoom(numbers_zoom):
                                 diffuse(bright[0], bright[1], bright[2], bright[3]):
                                 z(71):
@@ -2487,7 +2491,7 @@ pub fn push_double_step_stats(
                         ));
 
                         if show_blue_ms_label && row_i == 0 {
-                            let y = y_label + (12.0 * base_zoom);
+                            let y = 12.0f32.mul_add(base_zoom, y_label);
                             actors.push(act!(text:
                                 font("miso"): settext(blue_window_label.clone()):
                                 align(1.0, 0.5): horizalign(right):
@@ -2518,9 +2522,9 @@ pub fn push_double_step_stats(
                     ];
                     for row_i in 0..labels.len() {
                         let disabled = split_row_disabled(disabled_windows, row_i);
-                        let local_y = y_base + (row_i as f32 * row_height);
+                        let local_y = (row_i as f32).mul_add(row_height, y_base);
                         let y_numbers = origin_y + (local_y * base_zoom);
-                        let y_label = origin_y + ((local_y + 1.0) * base_zoom);
+                        let y_label = (local_y + 1.0).mul_add(base_zoom, origin_y);
                         let bright = if disabled {
                             DISABLED_WINDOW_RGBA
                         } else {
@@ -2550,7 +2554,7 @@ pub fn push_double_step_stats(
                         if !bright_text.is_empty() {
                             actors.push(act!(text:
                                 font(gameplay_font_key(state, FontRole::ScreenEval)): settext(bright_text):
-                                align(0.0, 0.5): xy(numbers_left_x + dim_len * digit_w, y_numbers):
+                                align(0.0, 0.5): xy(dim_len.mul_add(digit_w, numbers_left_x), y_numbers):
                                 zoom(numbers_zoom):
                                 diffuse(bright[0], bright[1], bright[2], bright[3]):
                                 z(71):
@@ -2569,7 +2573,7 @@ pub fn push_double_step_stats(
                         ));
 
                         if show_blue_ms_label && row_i == 0 {
-                            let y = y_label + (12.0 * base_zoom);
+                            let y = 12.0f32.mul_add(base_zoom, y_label);
                             actors.push(act!(text:
                                 font("miso"): settext(blue_window_label.clone()):
                                 align(1.0, 0.5): horizalign(right):
@@ -2616,8 +2620,8 @@ pub fn push_double_step_stats(
 
     // Time.lua (double): x(-GetNotefieldWidth() + 150), y(75)
     if mask.contains(profile_data::StepStatisticsMask::SONG_DURATION) {
-        let base_x = pane_cx + ((-notefield_width + 150.0) * banner_data_zoom);
-        let base_y = pane_cy + (75.0 * banner_data_zoom);
+        let base_x = (-notefield_width + 150.0).mul_add(banner_data_zoom, pane_cx);
+        let base_y = 75.0f32.mul_add(banner_data_zoom, pane_cy);
 
         let time_display = step_stats_time_display(state, 0);
         let total_display_seconds = time_display.total_seconds;
@@ -2635,7 +2639,7 @@ pub fn push_double_step_stats(
 
         // Simply Love (Time.lua):
         // label x = 32 + (total_width - 28) == total_width + 4
-        let label_x = base_x + (total_w + 4.0) * number_zoom;
+        let label_x = (total_w + 4.0).mul_add(number_zoom, base_x);
 
         // Remaining row (y=0)
         actors.push(act!(text:
@@ -2652,7 +2656,7 @@ pub fn push_double_step_stats(
             settext(time_remaining_text(state)):
             align(1.0, 0.5):
             horizalign(right):
-            xy(label_x, base_y + 1.0 * number_zoom):
+            xy(label_x, 1.0f32.mul_add(number_zoom, base_y)):
             zoom(label_zoom):
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(71)
@@ -2663,7 +2667,7 @@ pub fn push_double_step_stats(
             font("miso"):
             settext(total_time_str):
             align(-1.2, 0.5):
-            xy(base_x, base_y + (20.0 * number_zoom)):
+            xy(base_x, 20.0f32.mul_add(number_zoom, base_y)):
             zoom(number_zoom):
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(71)
@@ -2673,20 +2677,20 @@ pub fn push_double_step_stats(
             settext(time_total_text(state)):
             align(1.0, 0.5):
             horizalign(right):
-            xy(label_x, base_y + (20.0 * number_zoom) + 1.0 * number_zoom):
+            xy(label_x, 1.0f32.mul_add(number_zoom, 20.0f32.mul_add(number_zoom, base_y))):
             zoom(label_zoom):
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(71)
         ));
 
-        let timing_label_x = label_x + (104.0 * number_zoom);
+        let timing_label_x = 104.0f32.mul_add(number_zoom, label_x);
         push_live_timing_stats_at(
             actors,
             state,
             0,
             profile_data::PlayerSide::P1,
             timing_label_x,
-            timing_label_x + (156.0 * number_zoom),
+            156.0f32.mul_add(number_zoom, timing_label_x),
             false,
             base_y,
             20.0 * number_zoom,
@@ -2830,11 +2834,11 @@ fn build_steps_info(
 
     let ar = screen_width() / screen_height().max(1.0);
     let pnum = profile_data::player_side_number(player_side);
-    let pos_sign = if pnum == 1 { -1.0 } else { 1.0 };
+    let pos_sign: f32 = if pnum == 1 { -1.0 } else { 1.0 };
 
-    let mut x = -190.0;
-    let xoffset = if pnum == 1 { 285.0 } else { 0.0 };
-    let mut yoffset = 0.0;
+    let mut x: f32 = -190.0;
+    let xoffset: f32 = if pnum == 1 { 285.0 } else { 0.0 };
+    let mut yoffset: f32 = 0.0;
     let mut xvalues = 45.0;
     let mut maxwidth = 320.0;
     if note_field_is_centered {
@@ -2849,15 +2853,15 @@ fn build_steps_info(
         }
     }
 
-    let origin_x = layout.sidepane_center_x + ((x + xoffset) * pos_sign * banner_data_zoom);
-    let origin_y = layout.sidepane_center_y + ((-8.0 + yoffset) * banner_data_zoom);
+    let origin_x = ((x + xoffset) * pos_sign).mul_add(banner_data_zoom, layout.sidepane_center_x);
+    let origin_y = (-8.0 + yoffset).mul_add(banner_data_zoom, layout.sidepane_center_y);
     let group_zoom = song_info_text_zoom(layout);
 
     let row_h = 16.0;
     let z = 72i16;
     if !note_field_is_centered {
         for i in 0..4 {
-            let y = origin_y + (row_h * (i as f32 + 1.0) * group_zoom);
+            let y = (row_h * (i as f32 + 1.0)).mul_add(group_zoom, origin_y);
             actors.push(act!(text:
                 font("miso"): settext(step_info_label_text(state, i)):
                 align(0.0, 0.5): xy(origin_x, y):
@@ -2868,7 +2872,7 @@ fn build_steps_info(
     }
 
     let values_x = origin_x + (xvalues * group_zoom);
-    let y_song = origin_y + (row_h * 1.0 * group_zoom);
+    let y_song = (row_h * 1.0).mul_add(group_zoom, origin_y);
     actors.push(act!(text:
         font("miso"): settext(state.song_full_title.clone()):
         align(0.0, 0.5): xy(values_x, y_song):
@@ -2876,7 +2880,7 @@ fn build_steps_info(
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
-    let y_artist = origin_y + (row_h * 2.0 * group_zoom);
+    let y_artist = (row_h * 2.0).mul_add(group_zoom, origin_y);
     actors.push(act!(text:
         font("miso"): settext(Arc::clone(&state.gameplay_stats_text.song_artist)):
         align(0.0, 0.5): xy(values_x, y_artist):
@@ -2884,7 +2888,7 @@ fn build_steps_info(
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
-    let y_pack = origin_y + (row_h * 3.0 * group_zoom);
+    let y_pack = (row_h * 3.0).mul_add(group_zoom, origin_y);
     actors.push(act!(text:
         font("miso"): settext(state.pack_group.clone()):
         align(0.0, 0.5): xy(values_x, y_pack):
@@ -2892,7 +2896,7 @@ fn build_steps_info(
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
-    let y_desc = origin_y + (row_h * 4.0 * group_zoom);
+    let y_desc = (row_h * 4.0).mul_add(group_zoom, origin_y);
     actors.push(act!(text:
         font("miso"): settext(desc_text):
         align(0.0, 0.5): xy(values_x, y_desc):
@@ -2943,7 +2947,7 @@ fn push_holds_mines_rolls_pane_at(
             let fixed_char_width_scaled_for_label = LOGICAL_CHAR_WIDTH_FOR_LABEL * value_zoom;
 
             for (i, (label_index, achieved, total)) in categories.iter().enumerate() {
-                let item_y = frame_cy + (i as f32 - 1.0) * row_height;
+                let item_y = (i as f32 - 1.0).mul_add(row_height, frame_cy);
                 let right_anchor_x = frame_cx;
                 let mut cursor_x = right_anchor_x;
 
@@ -2958,14 +2962,14 @@ fn push_holds_mines_rolls_pane_at(
                 for char_idx in 0..possible_bytes.len() {
                     let original_index = possible_bytes.len() - 1 - char_idx;
                     let color = if original_index < possible_split { GRAY } else { white };
-                    let x_pos = cursor_x - (char_idx as f32 * digit_width);
+                    let x_pos = (char_idx as f32).mul_add(-digit_width, cursor_x);
                     actors.push(act!(text:
                         font(gameplay_font_key(state, FontRole::ScreenEval)): settext(digit_text(possible_bytes[original_index])):
                         align(1.0, 0.5): xy(x_pos, item_y):
                         zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3]): z(70)
                     ));
                 }
-                cursor_x -= possible_bytes.len() as f32 * digit_width;
+                cursor_x = (possible_bytes.len() as f32).mul_add(-digit_width, cursor_x);
 
                 actors.push(act!(text:
                     font(gameplay_font_key(state, FontRole::ScreenEval)): settext(SLASH_TEXT.clone()):
@@ -2977,7 +2981,7 @@ fn push_holds_mines_rolls_pane_at(
                 for char_idx in 0..achieved_bytes.len() {
                     let original_index = achieved_bytes.len() - 1 - char_idx;
                     let color = if original_index < achieved_split { GRAY } else { white };
-                    let x_pos = cursor_x - (char_idx as f32 * digit_width);
+                    let x_pos = (char_idx as f32).mul_add(-digit_width, cursor_x);
                     actors.push(act!(text:
                         font(gameplay_font_key(state, FontRole::ScreenEval)): settext(digit_text(achieved_bytes[original_index])):
                         align(1.0, 0.5): xy(x_pos, item_y):
@@ -2988,7 +2992,7 @@ fn push_holds_mines_rolls_pane_at(
                 let total_value_width_for_label = (achieved_str.len() + 1 + possible_str.len())
                     as f32
                     * fixed_char_width_scaled_for_label;
-                let label_x = right_anchor_x - total_value_width_for_label - (10.0 * frame_zoom);
+                let label_x = 10.0f32.mul_add(-frame_zoom, right_anchor_x - total_value_width_for_label);
 
                 actors.push(act!(text:
                     font("miso"): settext(holds_mines_rolls_label_text(state, *label_index)):
@@ -3060,10 +3064,10 @@ fn build_holds_mines_rolls_pane(
         let fixed_char_width_scaled_for_label = LOGICAL_CHAR_WIDTH_FOR_LABEL * value_zoom;
 
         for (i, (label_index, achieved, total)) in categories.iter().enumerate() {
-            let item_y = frame.center_y + (i as f32 - 1.0) * row_height;
+            let item_y = (i as f32 - 1.0).mul_add(row_height, frame.center_y);
             let right_anchor_x = match player_side {
                 profile_data::PlayerSide::P1 => frame.center_x,
-                profile_data::PlayerSide::P2 => frame.center_x + 100.0 * frame.zoom,
+                profile_data::PlayerSide::P2 => 100.0f32.mul_add(frame.zoom, frame.center_x),
             };
             let mut cursor_x = right_anchor_x;
 
@@ -3083,14 +3087,14 @@ fn build_holds_mines_rolls_pane(
                 } else {
                     white
                 };
-                let x_pos = cursor_x - (char_idx as f32 * digit_width);
+                let x_pos = (char_idx as f32).mul_add(-digit_width, cursor_x);
                 actors.push(act!(text:
                     font(gameplay_font_key(state, FontRole::ScreenEval)): settext(digit_text(possible_bytes[original_index])):
                     align(1.0, 0.5): xy(x_pos, item_y):
                     zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3]): z(70)
                 ));
             }
-            cursor_x -= possible_bytes.len() as f32 * digit_width;
+            cursor_x = (possible_bytes.len() as f32).mul_add(-digit_width, cursor_x);
 
             // 2. Draw slash
             actors.push(act!(text: font(gameplay_font_key(state, FontRole::ScreenEval)): settext(SLASH_TEXT.clone()): align(1.0, 0.5): xy(cursor_x, item_y): zoom(value_zoom): diffuse(gray[0], gray[1], gray[2], gray[3]): z(70)));
@@ -3104,7 +3108,7 @@ fn build_holds_mines_rolls_pane(
                 } else {
                     white
                 };
-                let x_pos = cursor_x - (char_idx as f32 * digit_width);
+                let x_pos = (char_idx as f32).mul_add(-digit_width, cursor_x);
                 actors.push(act!(text:
                     font(gameplay_font_key(state, FontRole::ScreenEval)): settext(digit_text(achieved_bytes[original_index])):
                     align(1.0, 0.5): xy(x_pos, item_y):
@@ -3114,7 +3118,7 @@ fn build_holds_mines_rolls_pane(
 
             // --- Position Label using HARDCODED width assumption ---
             let total_value_width_for_label = (achieved_str.len() + 1 + possible_str.len()) as f32 * fixed_char_width_scaled_for_label;
-            let label_x = right_anchor_x - total_value_width_for_label - (10.0 * frame.zoom);
+            let label_x = 10.0f32.mul_add(-frame.zoom, right_anchor_x - total_value_width_for_label);
 
             actors.push(act!(text:
                 font("miso"): settext(holds_mines_rolls_label_text(state, *label_index)): align(1.0, 0.5): xy(label_x, item_y):
@@ -3302,10 +3306,10 @@ fn build_side_pane(
         let digit_local_width = max_digit_w / final_text_base_zoom;
         let label_local_x_offset = base_label_local_x_offset + (extra_digits * LABEL_DIGIT_STEP);
         let label_world_x =
-            final_judgments_center_x + (x_sign * label_local_x_offset * final_text_base_zoom);
+            (x_sign * label_local_x_offset).mul_add(final_text_base_zoom, final_judgments_center_x);
         let numbers_local_x_offset = base_numbers_local_x_offset + (extra_digits * digit_local_width);
         let numbers_cx =
-            final_judgments_center_x + (x_sign * numbers_local_x_offset * final_text_base_zoom);
+            (x_sign * numbers_local_x_offset).mul_add(final_text_base_zoom, final_judgments_center_x);
         let show_standard_judgments = !show_fa_split;
 
         if show_judgments && show_standard_judgments {
@@ -3315,7 +3319,7 @@ fn build_side_pane(
                 let count = state.display_judgment_count(player_idx, *grade);
                 let disabled = standard_row_disabled(disabled_windows, index);
 
-                let local_y = y_base + (index as f32 * row_height);
+                let local_y = (index as f32).mul_add(row_height, y_base);
                 let world_y = final_judgments_center_y + (local_y * final_text_base_zoom);
 
                 let bright = if disabled {
@@ -3345,7 +3349,7 @@ fn build_side_pane(
                     if !dim_text.is_empty() {
                         actors.push(act!(text:
                             font(gameplay_font_key(state, FontRole::ScreenEval)): settext(dim_text):
-                            align(1.0, 0.5): xy(numbers_cx - bright_len * max_digit_w, world_y):
+                            align(1.0, 0.5): xy(bright_len.mul_add(-max_digit_w, numbers_cx), world_y):
                             zoom(numbers_zoom):
                             diffuse(dim[0], dim[1], dim[2], dim[3]): z(71)
                         ));
@@ -3362,7 +3366,7 @@ fn build_side_pane(
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
                             font(gameplay_font_key(state, FontRole::ScreenEval)): settext(bright_text):
-                            align(0.0, 0.5): xy(numbers_cx + dim_len * max_digit_w, world_y):
+                            align(0.0, 0.5): xy(dim_len.mul_add(max_digit_w, numbers_cx), world_y):
                             zoom(numbers_zoom):
                             diffuse(bright[0], bright[1], bright[2], bright[3]): z(71):
                             horizalign(left)
@@ -3370,7 +3374,7 @@ fn build_side_pane(
                     }
                 }
 
-                let label_world_y = world_y + (1.0 * final_text_base_zoom);
+                let label_world_y = 1.0f32.mul_add(final_text_base_zoom, world_y);
                 let label_zoom = final_text_base_zoom * 0.833;
                 let label = info.label.get();
 
@@ -3428,7 +3432,7 @@ fn build_side_pane(
 
             for (index, (label_index, bright, dim, count)) in rows.iter().enumerate() {
                 let disabled = split_row_disabled(disabled_windows, index);
-                let local_y = y_base + (index as f32 * row_height);
+                let local_y = (index as f32).mul_add(row_height, y_base);
                 let world_y = final_judgments_center_y + (local_y * final_text_base_zoom);
 
                 let bright = if disabled {
@@ -3458,7 +3462,7 @@ fn build_side_pane(
                     if !dim_text.is_empty() {
                         actors.push(act!(text:
                             font(gameplay_font_key(state, FontRole::ScreenEval)): settext(dim_text):
-                            align(1.0, 0.5): xy(numbers_cx - bright_len * max_digit_w, world_y):
+                            align(1.0, 0.5): xy(bright_len.mul_add(-max_digit_w, numbers_cx), world_y):
                             zoom(numbers_zoom):
                             diffuse(dim[0], dim[1], dim[2], dim[3]): z(71)
                         ));
@@ -3475,7 +3479,7 @@ fn build_side_pane(
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
                             font(gameplay_font_key(state, FontRole::ScreenEval)): settext(bright_text):
-                            align(0.0, 0.5): xy(numbers_cx + dim_len * max_digit_w, world_y):
+                            align(0.0, 0.5): xy(dim_len.mul_add(max_digit_w, numbers_cx), world_y):
                             zoom(numbers_zoom):
                             diffuse(bright[0], bright[1], bright[2], bright[3]): z(71):
                             horizalign(left)
@@ -3483,9 +3487,9 @@ fn build_side_pane(
                     }
                 }
 
-                let label_world_y = world_y + (1.0 * final_text_base_zoom);
+                let label_world_y = 1.0f32.mul_add(final_text_base_zoom, world_y);
                 let label_zoom = final_text_base_zoom * 0.833;
-                let sublabel_y = label_world_y + (12.0 * final_text_base_zoom);
+                let sublabel_y = 12.0f32.mul_add(final_text_base_zoom, label_world_y);
                 let sublabel_zoom = final_text_base_zoom * 0.6;
                 let label = state.gameplay_stats_text.judgment(*label_index);
 
@@ -3609,7 +3613,7 @@ fn build_side_pane(
                 ));
                 actors.push(act!(text: font(font_name): settext(time_total_text(state)):
                     align(0.0, 0.5): horizalign(left):
-                    xy(time_x + label_dir * label_offset_total, y_pos_total + 1.0):
+                    xy(label_dir.mul_add(label_offset_total, time_x), y_pos_total + 1.0):
                     zoom(text_zoom): z(71):
                     diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
                 ));
@@ -3622,7 +3626,7 @@ fn build_side_pane(
                 ));
                 actors.push(act!(text: font(font_name): settext(time_total_text(state)):
                     align(1.0, 0.5): horizalign(right):
-                    xy(time_x + label_dir * label_offset_total, y_pos_total + 1.0):
+                    xy(label_dir.mul_add(label_offset_total, time_x), y_pos_total + 1.0):
                     zoom(text_zoom): z(71):
                     diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
                 ));
@@ -3647,7 +3651,7 @@ fn build_side_pane(
                 ));
                 actors.push(act!(text: font(font_name): settext(time_remaining_text(state)):
                     align(0.0, 0.5): horizalign(left):
-                    xy(time_x + label_dir * label_offset_remaining, y_pos_remaining + 1.0):
+                    xy(label_dir.mul_add(label_offset_remaining, time_x), y_pos_remaining + 1.0):
                     zoom(text_zoom): z(71):
                     diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
                 ));
@@ -3660,7 +3664,7 @@ fn build_side_pane(
                 ));
                 actors.push(act!(text: font(font_name): settext(time_remaining_text(state)):
                     align(1.0, 0.5): horizalign(right):
-                    xy(time_x + label_dir * label_offset_remaining, y_pos_remaining + 1.0):
+                    xy(label_dir.mul_add(label_offset_remaining, time_x), y_pos_remaining + 1.0):
                     zoom(text_zoom): z(71):
                     diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
                 ));
@@ -3676,17 +3680,16 @@ fn build_side_pane(
             } else {
                 // SL OffsetCalc.lua P2 anchors live timing to the left of Time.lua.
                 // Keep the non-centered P2 pane from drifting back into duration text.
-                time_x - max_time_label_offset - 160.0 * layout.banner_data_zoom
+                160.0f32.mul_add(-layout.banner_data_zoom, time_x - max_time_label_offset)
             };
             let right_align_timing_values = layout.note_field_is_centered
                 && !layout.is_ultrawide
                 && player_side == profile_data::PlayerSide::P1;
             let timing_value_anchor = if right_align_timing_values {
-                layout.sidepane_center_x + layout.sidepane_width * 0.5
-                    - 18.0 * layout.banner_data_zoom
+                18.0f32.mul_add(-layout.banner_data_zoom, layout.sidepane_width.mul_add(0.5, layout.sidepane_center_x))
             } else if player_side == profile_data::PlayerSide::P2 && !layout.note_field_is_centered
             {
-                time_x - max_time_label_offset - 95.0 * layout.banner_data_zoom
+                95.0f32.mul_add(-layout.banner_data_zoom, time_x - max_time_label_offset)
             } else {
                 timing_label_anchor + timing_value_gap
             };

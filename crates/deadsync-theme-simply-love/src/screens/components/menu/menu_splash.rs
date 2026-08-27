@@ -25,7 +25,7 @@ fn accelerate_p(t: f32) -> f32 {
 
 fn decelerate_p(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
-    1.0 - (1.0 - t) * (1.0 - t)
+    (1.0 - t).mul_add(-(1.0 - t), 1.0)
 }
 
 fn splash_state(
@@ -42,7 +42,7 @@ fn splash_state(
         (first_y * decelerate_p(elapsed / AF_DECEL), 1.0)
     } else {
         let parent_p = accelerate_p((elapsed - AF_DECEL) / AF_ACCEL);
-        (first_y + second_y * parent_p, 1.0 - parent_p)
+        (second_y.mul_add(parent_p, first_y), 1.0 - parent_p)
     };
 
     SplashState {

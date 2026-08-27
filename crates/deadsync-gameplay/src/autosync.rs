@@ -10,7 +10,7 @@ pub fn autosync_mean_ns(samples: &[SongTimeNs; AUTOSYNC_OFFSET_SAMPLE_COUNT]) ->
     } else {
         (sum - count / 2) / count
     };
-    rounded.clamp(i64::MIN as i128, i64::MAX as i128) as SongTimeNs
+    rounded.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as SongTimeNs
 }
 
 #[inline(always)]

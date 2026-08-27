@@ -204,9 +204,9 @@ fn print_result(label: &str, result: &BenchResult) {
 fn output_checksum(output: &[i16]) -> u64 {
     let output = black_box(output);
     output.len() as u64
-        ^ output.first().copied().unwrap_or_default() as u16 as u64
-        ^ ((output.get(output.len() / 2).copied().unwrap_or_default() as u16 as u64) << 16)
-        ^ ((output.last().copied().unwrap_or_default() as u16 as u64) << 32)
+        ^ u64::from(output.first().copied().unwrap_or_default() as u16)
+        ^ (u64::from(output.get(output.len() / 2).copied().unwrap_or_default() as u16) << 16)
+        ^ (u64::from(output.last().copied().unwrap_or_default() as u16) << 32)
 }
 
 fn planar_checksum(output: &PlanarAccum) -> u64 {

@@ -286,7 +286,7 @@ fn music_wheel_hold_spin_speed(configured: u8) -> f32 {
     if configured == 0 {
         MUSIC_WHEEL_HOLD_SPIN_SPEED_DEFAULT
     } else {
-        configured.max(1) as f32
+        f32::from(configured.max(1))
     }
 }
 
@@ -342,9 +342,9 @@ fn cached_chart_info_text(
     } else {
         0.0
     };
-    let mut mask = (show_peak_nps as u8)
-        | ((show_effective_bpm as u8) << 1)
-        | ((show_matrix_rating as u8) << 2);
+    let mut mask = u8::from(show_peak_nps)
+        | (u8::from(show_effective_bpm) << 1)
+        | (u8::from(show_matrix_rating) << 2);
     if mask == 0 {
         mask = 1;
     }
@@ -437,9 +437,9 @@ fn cached_chart_info_text_legacy(
     } else {
         0.0
     };
-    let mut mask = (show_peak_nps as u8)
-        | ((show_effective_bpm as u8) << 1)
-        | ((show_matrix_rating as u8) << 2);
+    let mut mask = u8::from(show_peak_nps)
+        | (u8::from(show_effective_bpm) << 1)
+        | (u8::from(show_matrix_rating) << 2);
     if mask == 0 {
         mask = 1;
     }
@@ -857,8 +857,8 @@ fn song_music_length(song: &SongData) -> f32 {
 }
 
 fn compute_preview_cut(song: &SongData) -> AudioCut {
-    let mut start = song.sample_start.unwrap_or(0.0) as f64;
-    let mut length = song.sample_length.unwrap_or(0.0) as f64;
+    let mut start = f64::from(song.sample_start.unwrap_or(0.0));
+    let mut length = f64::from(song.sample_length.unwrap_or(0.0));
     let total_len = f64::from(song_music_length(song));
 
     if !(length.is_finite() && length > 0.0) {
@@ -1808,7 +1808,7 @@ pub struct State {
     active_playlist_id: Option<String>,
     expanded_series_name: Option<Arc<str>>,
     expanded_pack_name: Option<Arc<str>>,
-    /// Last pack name for which we enqueued ReplayGain prewarm jobs. Guards
+    /// Last pack name for which we enqueued `ReplayGain` prewarm jobs. Guards
     /// against re-enqueueing every frame while the same pack is expanded.
     last_replaygain_prewarmed_pack: Option<Arc<str>>,
     pending_audio: Vec<AudioRequest>,
@@ -4373,9 +4373,9 @@ fn music_wheel_settle_offset(state: &mut State, dt: f32) {
     let off = state.wheel_offset_from_selection;
     let spin_speed = MUSIC_WHEEL_SETTLE_MIN_SPEED + off.abs() / MUSIC_WHEEL_SWITCH_SECONDS;
     if off > 0.0 {
-        state.wheel_offset_from_selection = (off - spin_speed * dt).max(0.0);
+        state.wheel_offset_from_selection = spin_speed.mul_add(-dt, off).max(0.0);
     } else {
-        state.wheel_offset_from_selection = (off + spin_speed * dt).min(0.0);
+        state.wheel_offset_from_selection = spin_speed.mul_add(dt, off).min(0.0);
     }
 }
 
@@ -4415,7 +4415,8 @@ fn music_wheel_update_hold_scroll(state: &mut State, dt: f32, dir: NavDirection)
     };
 
     let hold_spin_speed = music_wheel_hold_spin_speed(state.policy.interaction.wheel_switch_speed);
-    state.wheel_offset_from_selection -= hold_spin_speed * moving * dt;
+    state.wheel_offset_from_selection =
+        (hold_spin_speed * moving).mul_add(-dt, state.wheel_offset_from_selection);
     state.wheel_offset_from_selection = state.wheel_offset_from_selection.clamp(-1.0, 1.0);
 
     let off = state.wheel_offset_from_selection;
@@ -4444,7 +4445,7 @@ fn clear_preview(state: &mut State) {
     queue_audio(state, AudioRequest::StopMusic);
 }
 
-/// Requests ReplayGain analysis for every song in the currently-expanded
+/// Requests `ReplayGain` analysis for every song in the currently-expanded
 /// pack as soon as the pack changes. The shell runs it at background priority
 /// so the foreground preview always jumps ahead of any pack-warm backlog. The
 /// `last_replaygain_prewarmed_pack` guard prevents re-enqueueing every
@@ -6143,14 +6144,14 @@ fn build_sync_curve_mesh(
         let (x0, y0, x1, y1) = match orientation {
             GraphOrientation::Vertical => (
                 axis0 * (graph_w - 1.0).max(0.0),
-                y_bottom + (y_top - y_bottom) * t0,
+                (y_top - y_bottom).mul_add(t0, y_bottom),
                 axis1 * (graph_w - 1.0).max(0.0),
-                y_bottom + (y_top - y_bottom) * t1,
+                (y_top - y_bottom).mul_add(t1, y_bottom),
             ),
             GraphOrientation::Horizontal => (
-                x_left + (x_right - x_left) * t0,
+                (x_right - x_left).mul_add(t0, x_left),
                 (1.0 - axis0) * (graph_h - 1.0).max(0.0),
-                x_left + (x_right - x_left) * t1,
+                (x_right - x_left).mul_add(t1, x_left),
                 (1.0 - axis1) * (graph_h - 1.0).max(0.0),
             ),
         };
@@ -6175,7 +6176,7 @@ fn sync_heat_norm01(v: f64, lo: f64, hi: f64) -> f64 {
 
 #[inline(always)]
 fn sync_lerp(a: f64, b: f64, t: f64) -> f64 {
-    a * (1.0 - t) + b * t
+    b.mul_add(t, a * (1.0 - t))
 }
 
 fn sync_percentile_from_sorted(sorted: &[f64], pct: f64) -> f64 {
@@ -6220,7 +6221,8 @@ fn sync_viridis(t: f64) -> [f32; 4] {
     } else {
         (STOPS[i], STOPS[i + 1], x - i as f64)
     };
-    let mix = |aa: u8, bb: u8| ((aa as f64) * (1.0 - frac) + (bb as f64) * frac) as f32 / 255.0;
+    let mix =
+        |aa: u8, bb: u8| f64::from(bb).mul_add(frac, f64::from(aa) * (1.0 - frac)) as f32 / 255.0;
     [
         mix(a[0], b[0]),
         mix(a[1], b[1]),
@@ -6405,8 +6407,8 @@ fn sync_beat_row_y(
     let total_rows = total_rows.max(1);
     let row_center = (row.min(total_rows - 1) as f32 + 0.5) / total_rows as f32;
     match origin {
-        GraphOrigin::Bottom => graph_y + graph_h * (1.0 - row_center),
-        GraphOrigin::Top => graph_y + graph_h * row_center,
+        GraphOrigin::Bottom => graph_h.mul_add(1.0 - row_center, graph_y),
+        GraphOrigin::Top => graph_h.mul_add(row_center, graph_y),
     }
 }
 
@@ -6545,8 +6547,8 @@ fn build_null_or_die_overlay(
     let (graph_w, graph_h) = sync_overlay_graph_size();
     let graph_x = pane_left + 40.0;
     let graph_y = pane_top + 116.0;
-    let graph_center_x = graph_x + graph_w * 0.5;
-    let graph_center_y = graph_y + graph_h * 0.5;
+    let graph_center_x = graph_w.mul_add(0.5, graph_x);
+    let graph_center_y = graph_h.mul_add(0.5, graph_y);
     let graph_bottom = graph_y + graph_h;
 
     let in_confirm_mode = overlay.confirm_selection.is_some();
@@ -6809,7 +6811,7 @@ fn build_null_or_die_overlay(
     let value_x = colon_anchor_x + 6.0;
     let value_max_w = pane_w * 0.5 - 10.0;
     for (i, line) in status_lines.iter().enumerate() {
-        let line_y = status_y + (i as f32) * SYNC_READY_LINE_STEP;
+        let line_y = (i as f32).mul_add(SYNC_READY_LINE_STEP, status_y);
         match line {
             SyncStatusLine::Plain(text) => {
                 actors.push(act!(text:
@@ -6854,7 +6856,8 @@ fn build_null_or_die_overlay(
         && let Some(warning) =
             sync_low_confidence_warning(overlay.final_confidence, overlay.confidence_threshold)
     {
-        let warning_y = status_y + SYNC_READY_LINE_STEP * (status_lines.len() as f32 - 1.0 + 1.2);
+        let warning_y =
+            SYNC_READY_LINE_STEP.mul_add(status_lines.len() as f32 - 1.0 + 1.2, status_y);
         actors.push(act!(text:
             font("miso"):
             settext(warning):
@@ -6883,13 +6886,13 @@ fn build_null_or_die_overlay(
                 let button_w = 110.0_f32;
                 let button_h = 36.0_f32;
                 let button_gap = 12.0_f32;
-                let total_w = 3.0 * button_w + 2.0 * button_gap;
-                let first_cx = pane_cx - total_w * 0.5 + button_w * 0.5;
+                let total_w = 2.0f32.mul_add(button_gap, 3.0 * button_w);
+                let first_cx = button_w.mul_add(0.5, pane_cx - total_w * 0.5);
 
                 let select_color = color::simply_love_rgba(active_color_index);
                 for action in ConfirmAction::ALL {
                     let i = action.index() as f32;
-                    let cx = first_cx + i * (button_w + button_gap);
+                    let cx = i.mul_add(button_w + button_gap, first_cx);
                     let is_selected = action == selected;
 
                     // Match the lobby overlay's build_box_row style: white
@@ -8543,7 +8546,7 @@ fn sync_convolution_from_digest_sums(
         let mut sum = 0.0;
         for (k, &weight) in kernel.iter().enumerate() {
             let cc = (c as isize - k as isize + 2).rem_euclid(cols as isize) as usize;
-            sum += col_sums[cc] * weight;
+            sum = col_sums[cc].mul_add(weight, sum);
         }
         *out_val = sum * 5.0;
     }
@@ -8589,7 +8592,7 @@ fn sync_apply_delta_seconds(overlay: &NullOrDieOverlayData) -> Option<f32> {
 
 #[inline(always)]
 fn sync_delta_seconds_to_bias_ms(delta_seconds: f32) -> f64 {
-    -(delta_seconds as f64) * 1000.0
+    -f64::from(delta_seconds) * 1000.0
 }
 
 fn suggested_sync_delta_seconds(overlay: &NullOrDieOverlayData) -> Option<f32> {
@@ -8695,7 +8698,7 @@ impl ConfirmAction {
     }
 
     fn step(self, dir: i8) -> ConfirmAction {
-        let next = (self.index() as i32 + dir as i32).clamp(0, 2) as usize;
+        let next = (self.index() as i32 + i32::from(dir)).clamp(0, 2) as usize;
         Self::ALL[next]
     }
 }
@@ -8760,7 +8763,7 @@ fn tick_sync_song_hold(overlay: &mut NullOrDieOverlayData) -> SyncTickOutcome {
         if hold_elapsed >= SYNC_SONG_HOLD_INITIAL_DELAY
             && now.saturating_duration_since(last_tick) >= tick_interval
         {
-            let step = SYNC_SONG_TAP_STEP_SECONDS * dir as f32;
+            let step = SYNC_SONG_TAP_STEP_SECONDS * f32::from(dir);
             apply_sync_song_manual_nudge(overlay, step);
             overlay.nav_last_tick_at = Some(now);
 
@@ -12586,7 +12589,7 @@ fn format_padded_time(seconds: f32) -> Arc<str> {
     } else {
         seconds as u64
     };
-    let key = s.min(u32::MAX as u64) as u32;
+    let key = s.min(u64::from(u32::MAX)) as u32;
     cached_last_text(&PADDED_TIME_LAST, key, || format_padded_time_hashed(key))
 }
 
@@ -12726,8 +12729,8 @@ fn step_artist_values(chart: &ChartData) -> ([&str; 3], usize) {
 }
 
 /// Selects the step artist display text for a chart, cycling through non-empty
-/// values of [step_artist, description, chart_name] every 2 seconds, matching
-/// Simply Love / ITGMania behavior.
+/// values of [`step_artist`, description, `chart_name`] every 2 seconds, matching
+/// Simply Love / `ITGMania` behavior.
 fn step_artist_cycle_text(chart: &ChartData, cycle_elapsed: f32) -> &str {
     let (non_empty, count) = step_artist_values(chart);
     match count {
@@ -12782,7 +12785,7 @@ fn push_sl_select_music_wheel_cascade_mask(
 
     let slot_spacing = screen_height() / n as f32;
     let item_half_h = slot_spacing * 0.5;
-    let x = screen_center_x() + screen_width() * 0.25;
+    let x = screen_width().mul_add(0.25, screen_center_x());
     let w = screen_width() * 0.5;
 
     for i in 1..=count {
@@ -13042,8 +13045,8 @@ fn push_folder_stats_overlay(
     let y = screen_center_y() * 0.3;
     let cx = frame_w * 0.5;
     let cy = frame_h * 0.5;
-    let sx = |local_x: f32| cx + local_x * scale;
-    let sy = |local_y: f32| cy + local_y * scale;
+    let sx = |local_x: f32| local_x.mul_add(scale, cx);
+    let sy = |local_y: f32| local_y.mul_add(scale, cy);
     let accent = color::decorative_rgba(state.active_color_index);
     let font_key = machine_font_key(state.policy.machine_font, FontRole::Normal);
 
@@ -13122,7 +13125,7 @@ fn push_folder_stats_overlay(
     ));
 
     if summary.best_grade > 0 {
-        let best_grade = summary.best_grade as f32;
+        let best_grade = f32::from(summary.best_grade);
         let column_w = if not_wide {
             310.0 / best_grade
         } else {
@@ -13376,7 +13379,7 @@ fn push_heart_rates(
         )),
         is_versus.then_some((profile_data::PlayerSide::P2, screen_center_y() + 111.0)),
     ];
-    let panel_left = chart_info_cx - panel_w * 0.5;
+    let panel_left = panel_w.mul_add(-0.5, chart_info_cx);
     // The BPM text extends to the right of the heart, so offset the anchor to
     // center the complete three-digit readout within the left gutter.
     let x = (panel_left * 0.5 - 11.0).max(12.0);
@@ -13435,7 +13438,7 @@ mod select_heart_rate_tests {
             panic!("heart-rate readout should start with its heart sprite");
         };
         assert!((offset[0] - 16.0).abs() < 0.001);
-        assert!(offset[0] < chart_info_cx - 286.0 * 0.5);
+        assert!(offset[0] < 286.0f32.mul_add(-0.5, chart_info_cx));
     }
 
     #[test]
@@ -13620,8 +13623,8 @@ pub fn push_actors(
         let dim2 = frame_w.min(frame_h).max(1.0);
         let ratio = (dim1 / dim2).max(CDTITLE_RATIO_MIN);
         let to_scale = dim1.max(1.0);
-        let cdtitle_x = banner_cx + CDTITLE_OFFSET_X * banner_zoom;
-        let cdtitle_y = banner_cy + CDTITLE_OFFSET_Y * banner_zoom;
+        let cdtitle_x = CDTITLE_OFFSET_X.mul_add(banner_zoom, banner_cx);
+        let cdtitle_y = CDTITLE_OFFSET_Y.mul_add(banner_zoom, banner_cy);
         let cdtitle_zoom = (CDTITLE_ZOOM_BASE / to_scale) * ratio * banner_zoom;
         let cdtitle_rot =
             360.0 * (state.cdtitle_spin_elapsed / CDTITLE_SPIN_SECONDS).clamp(0.0, 1.0);
@@ -13640,8 +13643,8 @@ pub fn push_actors(
     let music_rate = state.session.music_rate;
     if (music_rate - 1.0).abs() > 0.001 {
         let text = cached_music_rate_banner_text(music_rate);
-        actors.push(act!(quad: align(0.5, 0.5): xy(banner_cx, banner_cy + 75.0 * banner_zoom): setsize(BANNER_NATIVE_WIDTH * banner_zoom, 14.0 * banner_zoom): z(52): diffuse(0.117, 0.156, 0.184, 0.8)));
-        actors.push(act!(text: font("miso"): settext(text): align(0.5, 0.5): xy(banner_cx, banner_cy + 75.0 * banner_zoom): zoom(0.85 * banner_zoom): shadowlength(1.0): z(53): diffuse(1.0, 1.0, 1.0, 1.0)));
+        actors.push(act!(quad: align(0.5, 0.5): xy(banner_cx, 75.0f32.mul_add(banner_zoom, banner_cy)): setsize(BANNER_NATIVE_WIDTH * banner_zoom, 14.0 * banner_zoom): z(52): diffuse(0.117, 0.156, 0.184, 0.8)));
+        actors.push(act!(text: font("miso"): settext(text): align(0.5, 0.5): xy(banner_cx, 75.0f32.mul_add(banner_zoom, banner_cy)): zoom(0.85 * banner_zoom): shadowlength(1.0): z(53): diffuse(1.0, 1.0, 1.0, 1.0)));
     }
 
     if state.policy.media.show_folder_stats {
@@ -13716,7 +13719,7 @@ pub fn push_actors(
             (
                 cached_str_ref(""),
                 cached_str_ref(""),
-                format_padded_time((total_sec / music_rate as f64) as f32),
+                format_padded_time((total_sec / f64::from(music_rate)) as f32),
             )
         }
         None => (cached_str_ref(""), cached_str_ref(""), cached_str_ref("")),
@@ -13778,7 +13781,7 @@ pub fn push_actors(
         chart_panel_stats(immediate_chart_p2, entry_opt);
 
     // Step Artist & Steps
-    let base_y = (screen_center_y() - 9.0) - 0.5 * (screen_height() / 28.0);
+    let base_y = 0.5f32.mul_add(-(screen_height() / 28.0), screen_center_y() - 9.0);
     let mut push_step_artist =
         |y_cen: f32,
          x0: f32,
@@ -13857,7 +13860,7 @@ pub fn push_actors(
     let graph_h = 64.0_f32;
     let graph_body_h = 47.0_f32;
     let chart_info_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
-    let graph_left = chart_info_cx - 0.5 * panel_w;
+    let graph_left = 0.5f32.mul_add(-panel_w, chart_info_cx);
     let breakdown_style = presentation.breakdown_style;
     let pattern_info_mode = presentation.pattern_info_mode;
     let preview_sec = if state.policy.media.show_preview_marker {
@@ -13884,7 +13887,7 @@ pub fn push_actors(
             && let Some(c) = displayed.song.charts.get(displayed.chart_ix)
         {
             let scaled_peak_nps = if music_rate.is_finite() {
-                c.max_nps * music_rate as f64
+                c.max_nps * f64::from(music_rate)
             } else {
                 c.max_nps
             };
@@ -14082,14 +14085,14 @@ pub fn push_actors(
                 ),
             ];
             for (i, (name, pct)) in lines.into_iter().enumerate() {
-                out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-                out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(50.0f32.mul_add(-tz, pane_cx + cols[2]), pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(25.0f32.mul_add(tz, pane_cx + cols[2]), pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
             }
             out.push(act!(text: font("miso"): settext(Arc::clone(&gs_view.mode_label)): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
             if gs_view.show_rivals {
                 for (i, (name, pct)) in gs_view.rivals.iter().enumerate() {
-                    out.push(act!(text: font("miso"): settext(Arc::clone(name)): align(0.5, 0.5): xy(pane_cx + cols[2] + 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-                    out.push(act!(text: font("miso"): settext(Arc::clone(pct)): align(1.0, 0.5): xy(pane_cx + cols[2] + 125.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                    out.push(act!(text: font("miso"): settext(Arc::clone(name)): align(0.5, 0.5): xy(50.0f32.mul_add(tz, pane_cx + cols[2]), pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                    out.push(act!(text: font("miso"): settext(Arc::clone(pct)): align(1.0, 0.5): xy(125.0f32.mul_add(tz, pane_cx + cols[2]), pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
                 }
             }
         } else {
@@ -14104,8 +14107,8 @@ pub fn push_actors(
                 ),
             ];
             for (i, (name, score)) in lines.into_iter().enumerate() {
-                out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-                out.push(act!(text: font("miso"): settext(score): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(50.0f32.mul_add(-tz, pane_cx + cols[2]), pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                out.push(act!(text: font("miso"): settext(score): align(1.0, 0.5): xy(25.0f32.mul_add(tz, pane_cx + cols[2]), pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
             }
             let score_label = if show_ex_score {
                 &labels.ex_score
@@ -14119,7 +14122,7 @@ pub fn push_actors(
     if is_versus {
         push_pane(
             actors,
-            screen_width() * 0.25 - 5.0,
+            screen_width().mul_add(0.25, -5.0),
             sel_col_p1,
             profile_data::PlayerSide::P1,
             steps,
@@ -14133,7 +14136,7 @@ pub fn push_actors(
         );
         push_pane(
             actors,
-            screen_width() * 0.75 + 5.0,
+            screen_width().mul_add(0.75, 5.0),
             sel_col_p2,
             profile_data::PlayerSide::P2,
             steps_p2,
@@ -14147,9 +14150,9 @@ pub fn push_actors(
         );
     } else {
         let pane_cx = if is_p2_solo {
-            screen_width() * 0.75 + 5.0
+            screen_width().mul_add(0.75, 5.0)
         } else {
-            screen_width() * 0.25 - 5.0
+            screen_width().mul_add(0.25, -5.0)
         };
         push_pane(
             actors,
@@ -14295,7 +14298,7 @@ pub fn push_actors(
                                      row: usize,
                                      num: &Arc<str>,
                                      label: &Arc<str>| {
-                let y = stamina_base_y + row as f32 * stamina_row_step;
+                let y = (row as f32).mul_add(stamina_row_step, stamina_base_y);
                 let label_x = num_right_x + 3.0;
                 let num_w = (num_right_x - col_left).max(8.0);
                 let label_w = (col_left + col_w - label_x - 2.0).max(8.0);
@@ -14406,11 +14409,11 @@ pub fn push_actors(
             let col3_label_w = (col3_left + col_w3 - col3_label_x - 2.0).max(8.0);
             let relaxed_num_w = col3_num_w * 1.65;
 
-            let mono_y = stamina_base_y + 2.0 * stamina_row_step;
+            let mono_y = 2.0f32.mul_add(stamina_row_step, stamina_base_y);
             actors.push(act!(text: font("miso"): settext(mono_value): align(1.0, 0.5): horizalign(right): xy(col3_num_x, mono_y): maxwidth(relaxed_num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
             actors.push(act!(text: font("miso"): settext(candles_value): align(0.0, 0.5): horizalign(left): xy(col3_label_x, mono_y): maxwidth(col3_label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
 
-            let stream_y = stamina_base_y + 3.0 * stamina_row_step;
+            let stream_y = 3.0f32.mul_add(stamina_row_step, stamina_base_y);
             actors.push(act!(text: font("miso"): settext(total_stream): align(1.0, 0.5): horizalign(right): xy(col3_num_x, stream_y): maxwidth(relaxed_num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
             actors.push(act!(text: font("miso"): settext(&labels.total_stream): align(0.0, 0.5): horizalign(left): xy(col3_label_x, stream_y): maxwidth(col3_label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
         } else {
@@ -14466,9 +14469,9 @@ pub fn push_actors(
             ];
 
             for (val, lbl, c, r, mw) in items {
-                let y = p_base_y + r as f32 * tech_row_step;
-                let vx = p_v_x + c as f32 * tech_col_spacing;
-                let lx = p_l_x + c as f32 * tech_col_spacing;
+                let y = f32::from(r).mul_add(tech_row_step, p_base_y);
+                let vx = f32::from(c).mul_add(tech_col_spacing, p_v_x);
+                let lx = f32::from(c).mul_add(tech_col_spacing, p_l_x);
                 match mw {
                     Some(w) => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(w): zoom(tech_value_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
                     None => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(tech_value_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
@@ -14633,7 +14636,7 @@ pub fn push_actors(
             }
         };
         let scorebox_center_wheel = fit_scorebox_x(
-            screen_width() * 0.25 - 5.0 + scorebox_side_inset,
+            screen_width().mul_add(0.25, -5.0) + scorebox_side_inset,
             scorebox_zoom,
         );
         let footer_top = screen_height() - 32.0;
@@ -14641,7 +14644,7 @@ pub fn push_actors(
         let tech_box_bottom_y = screen_center_y() + 111.0 + 32.0;
         let pane_to_tech_gap = pane_layout.pane_top - tech_box_bottom_y;
         let scorebox_center_y_above_pane =
-            pane_layout.pane_top - (40.0 * scorebox_zoom) - pane_to_tech_gap;
+            40.0f32.mul_add(-scorebox_zoom, pane_layout.pane_top) - pane_to_tech_gap;
         let p1_gs = state.scoreboxes[profile_data::player_side_index(profile_data::PlayerSide::P1)]
             .groovestats_active;
         let p2_gs = state.scoreboxes[profile_data::player_side_index(profile_data::PlayerSide::P2)]
@@ -14686,11 +14689,11 @@ pub fn push_actors(
         };
         let pane_scorebox_zoom = widescale(0.60, 0.64);
         let pane_scorebox_width = 162.0 * pane_scorebox_zoom;
-        let pane_scorebox_center_y = pane_layout.pane_top + pane_layout.pane_height * 0.5;
+        let pane_scorebox_center_y = pane_layout.pane_height.mul_add(0.5, pane_layout.pane_top);
         let pane_right_inset = 4.0;
         let pane_box_center_x = |pane_cx: f32| {
             fit_scorebox_x(
-                pane_cx + pane_layout.pane_width * 0.5
+                pane_layout.pane_width.mul_add(0.5, pane_cx)
                     - pane_scorebox_width * 0.5
                     - pane_right_inset,
                 pane_scorebox_zoom,
@@ -14701,14 +14704,14 @@ pub fn push_actors(
             if is_versus {
                 push_scorebox(
                     profile_data::PlayerSide::P1,
-                    pane_box_center_x(screen_width() * 0.25 - 5.0),
+                    pane_box_center_x(screen_width().mul_add(0.25, -5.0)),
                     pane_scorebox_center_y,
                     pane_scorebox_zoom,
                     60,
                 );
                 push_scorebox(
                     profile_data::PlayerSide::P2,
-                    pane_box_center_x(screen_width() * 0.75 + 5.0),
+                    pane_box_center_x(screen_width().mul_add(0.75, 5.0)),
                     pane_scorebox_center_y,
                     pane_scorebox_zoom,
                     60,
@@ -14716,7 +14719,7 @@ pub fn push_actors(
             } else if solo_side == profile_data::PlayerSide::P2 {
                 push_scorebox(
                     profile_data::PlayerSide::P2,
-                    pane_box_center_x(screen_width() * 0.75 + 5.0),
+                    pane_box_center_x(screen_width().mul_add(0.75, 5.0)),
                     pane_scorebox_center_y,
                     pane_scorebox_zoom,
                     60,
@@ -14724,7 +14727,7 @@ pub fn push_actors(
             } else {
                 push_scorebox(
                     profile_data::PlayerSide::P1,
-                    pane_box_center_x(screen_width() * 0.25 - 5.0),
+                    pane_box_center_x(screen_width().mul_add(0.25, -5.0)),
                     pane_scorebox_center_y,
                     pane_scorebox_zoom,
                     60,
@@ -14771,7 +14774,7 @@ pub fn push_actors(
     let dx_p2 = 3.0 * bounce;
     if is_versus {
         let slot_p1 = (sel_p1.saturating_sub(top_index)).min(VISIBLE_STEPS_SLOTS - 1);
-        let y_p1 = lst_cy + (slot_p1 as i32 - 2) as f32 * 30.0 + 1.0;
+        let y_p1 = ((slot_p1 as i32 - 2) as f32).mul_add(30.0, lst_cy) + 1.0;
         actors.push(act!(sprite("meter_arrow.png"):
             align(0.0, 0.5):
             xy(screen_center_x() - 53.0 + dx_p1, y_p1):
@@ -14781,7 +14784,7 @@ pub fn push_actors(
         ));
 
         let slot_p2 = (sel_p2.saturating_sub(top_index)).min(VISIBLE_STEPS_SLOTS - 1);
-        let y_p2 = lst_cy + (slot_p2 as i32 - 2) as f32 * 30.0 + 1.0;
+        let y_p2 = ((slot_p2 as i32 - 2) as f32).mul_add(30.0, lst_cy) + 1.0;
         actors.push(act!(sprite("meter_arrow.png"):
             align(0.0, 0.5):
             xy(lst_cx + 8.0 + dx_p2, y_p2):
@@ -14791,7 +14794,7 @@ pub fn push_actors(
         ));
     } else {
         let arrow_slot = (sel_p1.saturating_sub(top_index)).min(VISIBLE_STEPS_SLOTS - 1);
-        let arrow_y = lst_cy + (arrow_slot as i32 - 2) as f32 * 30.0 + 1.0;
+        let arrow_y = ((arrow_slot as i32 - 2) as f32).mul_add(30.0, lst_cy) + 1.0;
         let (arrow_x0, arrow_dx, arrow_rot) = if is_p2_solo {
             let x0 = lst_cx + 8.0;
             (x0, dx_p2, 180.0)
@@ -15299,7 +15302,7 @@ fn exit_prompt_choice_zoom(
         }
     }
 
-    [SL_EXIT_PROMPT_INACTIVE_ZOOM, SL_EXIT_PROMPT_ACTIVE_ZOOM][(choice == active_choice) as usize]
+    [SL_EXIT_PROMPT_INACTIVE_ZOOM, SL_EXIT_PROMPT_ACTIVE_ZOOM][usize::from(choice == active_choice)]
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -15334,7 +15337,7 @@ fn push_exit_prompt_choice(
     ));
     out.push(act!(text:
         align(0.5, 0.5):
-        xy(cx, cy + SL_EXIT_PROMPT_INFO_Y_OFFSET * choice_zoom):
+        xy(cx, SL_EXIT_PROMPT_INFO_Y_OFFSET.mul_add(choice_zoom, cy)):
         font("miso"):
         zoom(SL_EXIT_PROMPT_INFO_ZOOM * choice_zoom):
         settext(info):

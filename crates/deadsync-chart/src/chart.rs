@@ -7,7 +7,7 @@ use std::path::PathBuf;
 pub enum ChartDisplayBpm {
     /// A specific BPM or range specified via `#DISPLAYBPM` (min == max for a single value).
     Specified { min: f64, max: f64 },
-    /// `#DISPLAYBPM:*` - show randomly cycling values (ITGmania shows animated random numbers).
+    /// `#DISPLAYBPM:*` - show randomly cycling values (`ITGmania` shows animated random numbers).
     Random,
 }
 

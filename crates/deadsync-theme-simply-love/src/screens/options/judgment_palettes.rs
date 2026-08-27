@@ -231,7 +231,7 @@ fn palette_overlay_horizontal(state: &mut State, delta: isize) -> ThemeEffect {
             if next_byte == byte {
                 return ThemeEffect::None;
             }
-            *value = next_byte as f32 / 255.0;
+            *value = f32::from(next_byte) / 255.0;
             match state.judgment_palettes.set_color(&palette_id, role, color) {
                 Ok(()) => {
                     set_overlay_message(state, None);
@@ -616,7 +616,7 @@ pub(super) fn build_judgment_palette_overlay(
     push_panel(&mut out, accent, cx, cy);
     out.push(act!(text:
         font(header_font): settext(tr("JudgmentPalettes", "Title")):
-        align(0.0, 0.5): xy(cx - PANEL_W * 0.5 + 18.0, cy - 188.0):
+        align(0.0, 0.5): xy(PANEL_W.mul_add(-0.5, cx) + 18.0, cy - 188.0):
         zoom(0.40): diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(left)
     ));
 
@@ -692,7 +692,7 @@ fn push_panel(out: &mut Vec<Actor>, accent: [f32; 4], cx: f32, cy: f32) {
         diffuse(0.025, 0.025, 0.035, 0.99): z(Z + 2)
     ));
     out.push(act!(quad:
-        align(0.5, 0.5): xy(cx, cy - PANEL_H * 0.5 + HEADER_H * 0.5):
+        align(0.5, 0.5): xy(cx, HEADER_H.mul_add(0.5, PANEL_H.mul_add(-0.5, cy))):
         zoomto(PANEL_W, HEADER_H): diffuse(0.0, 0.0, 0.0, 0.92): z(Z + 4)
     ));
 }
@@ -712,7 +712,7 @@ fn push_browser(
         .saturating_sub(BROWSER_VISIBLE_ROWS / 2)
         .min(total.saturating_sub(BROWSER_VISIBLE_ROWS));
     for index in start..(start + BROWSER_VISIBLE_ROWS).min(total) {
-        let y = cy - 132.0 + (index - start) as f32 * ROW_H;
+        let y = ((index - start) as f32).mul_add(ROW_H, cy - 132.0);
         let active = index == selected;
         if active {
             out.push(act!(quad:
@@ -723,7 +723,7 @@ fn push_browser(
         if index == 0 {
             out.push(act!(text:
                 font(bold_font): settext(tr("JudgmentPalettes", "Create")):
-                align(0.0, 0.5): xy(cx - PANEL_W * 0.5 + 28.0, y): zoom(0.30):
+                align(0.0, 0.5): xy(PANEL_W.mul_add(-0.5, cx) + 28.0, y): zoom(0.30):
                 diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(left)
             ));
             continue;
@@ -738,12 +738,12 @@ fn push_browser(
         };
         out.push(act!(text:
             font(bold_font): settext(marker): align(0.0, 0.5):
-            xy(cx - PANEL_W * 0.5 + 28.0, y): zoom(0.28): maxwidth(305.0):
+            xy(PANEL_W.mul_add(-0.5, cx) + 28.0, y): zoom(0.28): maxwidth(305.0):
             diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(left)
         ));
         for role in JudgmentColorRole::ALL {
             let rgba = entry.palette.color(role);
-            let x = cx + 96.0 + role.index() as f32 * 28.0;
+            let x = (role.index() as f32).mul_add(28.0, cx + 96.0);
             out.push(act!(quad:
                 align(0.5, 0.5): xy(x, y): zoomto(22.0, 22.0):
                 diffuse(rgba[0], rgba[1], rgba[2], 1.0): z(Z + 6)
@@ -781,7 +781,7 @@ fn push_editor(
         return;
     };
     for row in 0..=EDITOR_DONE_ROW {
-        let y = cy - 140.0 + row as f32 * 34.0;
+        let y = (row as f32).mul_add(34.0, cy - 140.0);
         if row == selected {
             out.push(act!(quad:
                 align(0.5, 0.5): xy(cx, y): zoomto(PANEL_W - 30.0, 31.0):
@@ -838,7 +838,7 @@ fn push_editor(
                 .join("  ");
             out.push(act!(text:
                 font("miso"): settext(channel_text): align(1.0, 0.5):
-                xy(cx + PANEL_W * 0.5 - 26.0, y): zoom(0.62):
+                xy(PANEL_W.mul_add(0.5, cx) - 26.0, y): zoom(0.62):
                 diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(right)
             ));
         } else {
@@ -874,7 +874,7 @@ fn push_editor_text(
 ) {
     out.push(act!(text:
         font(bold_font): settext(label): align(0.0, 0.5):
-        xy(cx - PANEL_W * 0.5 + 28.0, y): zoom(0.28):
+        xy(PANEL_W.mul_add(-0.5, cx) + 28.0, y): zoom(0.28):
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(left)
     ));
     if !value.is_empty() {
@@ -888,12 +888,12 @@ fn push_editor_text(
 
 fn push_footer(out: &mut Vec<Actor>, text: String, accent: [f32; 4], cx: f32, cy: f32) {
     out.push(act!(quad:
-        align(0.5, 0.5): xy(cx, cy + PANEL_H * 0.5 - 25.0):
+        align(0.5, 0.5): xy(cx, PANEL_H.mul_add(0.5, cy) - 25.0):
         zoomto(PANEL_W - 20.0, 38.0): diffuse(0.0, 0.0, 0.0, 0.72): z(Z + 4)
     ));
     out.push(act!(text:
         font("miso"): settext(text): align(0.5, 0.5):
-        xy(cx, cy + PANEL_H * 0.5 - 25.0): zoom(0.62): maxwidth(PANEL_W - 40.0):
+        xy(cx, PANEL_H.mul_add(0.5, cy) - 25.0): zoom(0.62): maxwidth(PANEL_W - 40.0):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z + 6): horizalign(center)
     ));
 }
@@ -923,7 +923,7 @@ fn push_delete_confirm(
         z(Z + 22): horizalign(center)
     ));
     for (index, key) in ["Cancel", "Delete"].into_iter().enumerate() {
-        let x = cx + (index as f32 - 0.5) * 150.0;
+        let x = (index as f32 - 0.5).mul_add(150.0, cx);
         out.push(act!(quad:
             align(0.5, 0.5): xy(x, cy + 42.0): zoomto(130.0, 38.0):
             diffuse(

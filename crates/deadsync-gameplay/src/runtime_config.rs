@@ -169,7 +169,7 @@ pub fn scroll_reverse_scale_for_column(
     local_col: usize,
     num_cols: usize,
 ) -> f32 {
-    1.0 - 2.0 * scroll_reverse_percent_for_column(options, local_col, num_cols)
+    2.0f32.mul_add(-scroll_reverse_percent_for_column(options, local_col, num_cols), 1.0)
 }
 
 pub fn column_scroll_dirs_for_flags(flags: ColumnScrollFlags, num_cols: usize) -> [f32; MAX_COLS] {
@@ -824,7 +824,7 @@ pub fn song_clock_music_time_ns(
 ) -> SongTimeNs {
     let slope = normalized_song_rate(snapshot.seconds_per_second);
     if snapshot.valid_at_host_nanos != 0 && captured_host_nanos != 0 {
-        let dt_nanos = captured_host_nanos as i128 - snapshot.valid_at_host_nanos as i128;
+        let dt_nanos = i128::from(captured_host_nanos) - i128::from(snapshot.valid_at_host_nanos);
         return clamp_song_time_ns(
             i128::from(snapshot.song_time_ns) + scaled_song_delta_ns(dt_nanos, slope),
         );
@@ -850,7 +850,7 @@ pub fn music_time_ns_from_song_clock(
     let slope = normalized_song_rate(snapshot.seconds_per_second);
     let snapshot_song_time = song_time_ns_to_seconds(snapshot.song_time_ns);
     if snapshot.valid_at_host_nanos != 0 && captured_host_nanos != 0 {
-        let dt_nanos = captured_host_nanos as i128 - snapshot.valid_at_host_nanos as i128;
+        let dt_nanos = i128::from(captured_host_nanos) - i128::from(snapshot.valid_at_host_nanos);
         if snapshot.timing_diag_enabled {
             log::debug!(
                 "AUDIO_DIAG snap_age_ms={:.3} path=host callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",

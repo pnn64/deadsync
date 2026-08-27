@@ -257,7 +257,7 @@ fn wgi_buttons_old(events: usize, previous: u16, current: u16) -> u64 {
             let new_pressed = current & mask != 0;
             let old_pressed = previous & mask != 0;
             if new_pressed != old_pressed {
-                checksum = checksum.wrapping_add(mask as u64 | ((new_pressed as u64) << 32));
+                checksum = checksum.wrapping_add(u64::from(mask) | (u64::from(new_pressed) << 32));
             }
         }
     }
@@ -277,7 +277,7 @@ fn wgi_buttons_new(events: usize, previous: u16, current: u16) -> u64 {
                 continue;
             }
             let new_pressed = current & mask != 0;
-            checksum = checksum.wrapping_add(mask as u64 | ((new_pressed as u64) << 32));
+            checksum = checksum.wrapping_add(u64::from(mask) | (u64::from(new_pressed) << 32));
         }
     }
     checksum

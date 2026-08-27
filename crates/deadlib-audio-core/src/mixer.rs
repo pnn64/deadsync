@@ -188,7 +188,7 @@ fn mix_sfx_samples(src: &[i16], dst: &mut [f32], gain: f32) {
         return;
     }
     for (dst, &src) in dst.iter_mut().zip(src) {
-        *dst += i16_to_f32(src) * gain;
+        *dst = i16_to_f32(src).mul_add(gain, *dst);
     }
 }
 
@@ -233,12 +233,12 @@ pub const fn scheduled_onset_decision(
 pub fn f32_to_i16(sample: f32) -> i16 {
     // Rust float-to-integer casts saturate and map NaN to zero, which exactly
     // covers the old clamp and boundary branches after scaling.
-    (sample * (i16::MAX as f32 + 1.0)) as i16
+    (sample * (f32::from(i16::MAX) + 1.0)) as i16
 }
 
 #[inline(always)]
 pub fn i16_to_f32(sample: i16) -> f32 {
-    sample as f32 / (i16::MAX as f32 + 1.0)
+    f32::from(sample) / (f32::from(i16::MAX) + 1.0)
 }
 
 #[cfg(feature = "bench-support")]
@@ -247,7 +247,7 @@ pub mod bench_support {
 
     pub fn mix_sfx_old(src: &[i16], dst: &mut [f32], gain: f32) {
         for i in 0..src.len() {
-            dst[i] += i16_to_f32(src[i]) * gain;
+            dst[i] = i16_to_f32(src[i]).mul_add(gain, dst[i]);
         }
     }
 

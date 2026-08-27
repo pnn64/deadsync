@@ -1,4 +1,4 @@
-//! Dedicated screen for the ArrowCloud QR device-login step.
+//! Dedicated screen for the `ArrowCloud` QR device-login step.
 //!
 //! Mirrors Simply Love's `ScreenGrooveStatsLogin`
 //! (`BGAnimations/ScreenGrooveStatsLogin underlay/default.lua`), which
@@ -23,7 +23,7 @@ const TRANSITION_IN_DURATION: f32 = 0.3;
 const TRANSITION_OUT_DURATION: f32 = 0.3;
 
 /// Optional per-profile scoping carried into the screen from Manage
-/// Local Profiles' "Link ArrowCloud" entry.
+/// Local Profiles' "Link `ArrowCloud`" entry.
 #[derive(Clone, Debug)]
 pub struct ProfileTarget {
     pub id: String,
@@ -35,13 +35,13 @@ pub struct State {
     dedicated_three_key_nav: bool,
     pub(crate) ui: Option<QrLoginUiState>,
     pending_start: Option<crate::SimplyLoveQrLoginRequest>,
-    /// `Some` when entered via Manage Local Profiles → Link ArrowCloud,
+    /// `Some` when entered via Manage Local Profiles → Link `ArrowCloud`,
     /// scoping the screen to a single profile (rather than P1/P2 sides).
     /// Cleared on dismiss so subsequent post-Select-Profile auto-flows
     /// don't accidentally inherit it.
     pub target_profile: Option<ProfileTarget>,
-    /// Animated heart/style background, matching SelectProfile /
-    /// SelectColor.  The overlay panel is rendered on top of this with
+    /// Animated heart/style background, matching `SelectProfile` /
+    /// `SelectColor`.  The overlay panel is rendered on top of this with
     /// the standard 0.65-alpha black dimmer.
     bg: visual_style_bg::State,
     /// Tracks the L+R chord used as the Cancel input on three-key

@@ -155,8 +155,8 @@ pub(super) fn render_panel(content: &PanelContent, active_color_index: i32) -> V
         z(Z_PANEL_BG)
     ));
 
-    let title_y = cy - PANEL_H * 0.5 + 50.0;
-    let footer_y = cy + PANEL_H * 0.5 - 40.0;
+    let title_y = PANEL_H.mul_add(-0.5, cy) + 50.0;
+    let footer_y = PANEL_H.mul_add(0.5, cy) - 40.0;
 
     let white = [1.0, 1.0, 1.0, 1.0];
     actors.push(panel_text_tinted(
@@ -170,9 +170,9 @@ pub(super) fn render_panel(content: &PanelContent, active_color_index: i32) -> V
 
     // If the content carries a version tag, render it BIG below the title
     // as the visual focal point of the modal.
-    let mut next_y = title_y + TITLE_PX * 0.55 + 24.0;
+    let mut next_y = TITLE_PX.mul_add(0.55, title_y) + 24.0;
     if let Some(tag) = &content.version_tag {
-        next_y += VERSION_PX * 0.5;
+        next_y = VERSION_PX.mul_add(0.5, next_y);
         actors.push(panel_text_tinted(
             tag.clone(),
             cx,
@@ -181,12 +181,12 @@ pub(super) fn render_panel(content: &PanelContent, active_color_index: i32) -> V
             TextAlign::Center,
             white,
         ));
-        next_y += VERSION_PX * 0.5 + 28.0;
+        next_y += VERSION_PX.mul_add(0.5, 28.0);
     }
 
     let line_gap = 36.0;
     for (i, line) in content.body_lines.iter().enumerate() {
-        let y = next_y + (i as f32) * line_gap;
+        let y = (i as f32).mul_add(line_gap, next_y);
         actors.push(panel_text_tinted(
             line.clone(),
             cx,

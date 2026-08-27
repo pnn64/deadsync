@@ -139,7 +139,7 @@ pub(super) fn init_row_tweens(
     let visibility = row_visibility(row_map, active, option_masks, policy);
     let visible_rows = count_visible_rows(row_map, visibility);
     if visible_rows == 0 {
-        let y = first_row_center_y - row_step * 0.5;
+        let y = row_step.mul_add(-0.5, first_row_center_y);
         return (0..total_rows)
             .map(|_| RowTween {
                 from_y: y,
@@ -156,7 +156,7 @@ pub(super) fn init_row_tweens(
         row_to_visible_index(row_map, idx, visibility).unwrap_or(0)
     });
     let w = compute_row_window(visible_rows, selected_visible, active);
-    let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
+    let mid_pos = (VISIBLE_ROWS as f32).mul_add(0.5, -0.5);
     let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
 
     let mut out: Vec<RowTween> = Vec::with_capacity(total_rows);
@@ -172,7 +172,7 @@ pub(super) fn init_row_tweens(
             bottom_pos,
         );
 
-        let y = (row_step * f_pos) + first_row_center_y;
+        let y = row_step.mul_add(f_pos, first_row_center_y);
         let a = if hidden { 0.0 } else { 1.0 };
         out.push(RowTween {
             from_y: y,
@@ -197,7 +197,7 @@ pub(super) fn retarget_row_tweens(
     let (first_row_center_y, row_step) = row_layout_params();
     let visible_rows = count_visible_rows(row_map, visibility);
     if visible_rows == 0 {
-        let y = first_row_center_y - row_step * 0.5;
+        let y = row_step.mul_add(-0.5, first_row_center_y);
         for tween in row_tweens {
             retarget_row_tween(tween, y, 0.0);
         }
@@ -209,7 +209,7 @@ pub(super) fn retarget_row_tweens(
         row_to_visible_index(row_map, row_idx, visibility).unwrap_or(0)
     });
     let window = compute_row_window(visible_rows, selected_visible, active);
-    let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
+    let mid_pos = (VISIBLE_ROWS as f32).mul_add(0.5, -0.5);
     let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
     let mut visible_idx = 0i32;
     for (row_idx, tween) in row_tweens.iter_mut().enumerate() {
@@ -224,7 +224,7 @@ pub(super) fn retarget_row_tweens(
         );
         retarget_row_tween(
             tween,
-            first_row_center_y + row_step * f_pos,
+            row_step.mul_add(f_pos, first_row_center_y),
             if hidden { 0.0 } else { 1.0 },
         );
     }

@@ -85,7 +85,7 @@ fn parse_song_search_filter(input: &str) -> SongSearchFilter {
                 if value <= 35 {
                     filter.difficulty = Some(value as u8);
                 } else {
-                    filter.bpm_tier = Some(song_search_bpm_tier(value as f64));
+                    filter.bpm_tier = Some(song_search_bpm_tier(f64::from(value)));
                 }
                 chars = tail;
                 continue;
@@ -154,7 +154,7 @@ pub fn song_passes_search_filters(
         && !song.charts.iter().any(|c| {
             c.chart_type.eq_ignore_ascii_case(chart_type)
                 && !c.difficulty.eq_ignore_ascii_case("edit")
-                && c.meter == diff as u32
+                && c.meter == u32::from(diff)
         })
     {
         return false;
@@ -297,7 +297,7 @@ pub fn build_song_search_candidates<'a>(
                     && !song.charts.iter().any(|c| {
                         c.chart_type.eq_ignore_ascii_case(chart_type)
                             && !c.difficulty.eq_ignore_ascii_case("edit")
-                            && c.meter == diff as u32
+                            && c.meter == u32::from(diff)
                     })
                 {
                     continue;

@@ -307,9 +307,9 @@ pub(in crate::screens::options) fn sound_row_index(id: SubRowId) -> Option<usize
     SOUND_OPTIONS_ROWS.iter().position(|row| row.id == id)
 }
 
-/// Live state of the ReplayGain toggle in the Sound submenu (reflects the
+/// Live state of the `ReplayGain` toggle in the Sound submenu (reflects the
 /// user's current, possibly-unsaved, choice). Used to gate the dependent
-/// "Apply ReplayGain" action row.
+/// "Apply `ReplayGain`" action row.
 pub(in crate::screens::options) fn sound_replaygain_enabled(state: &State) -> bool {
     get_choice_by_id(
         &state.sub[SubmenuKind::Sound].choice_indices,

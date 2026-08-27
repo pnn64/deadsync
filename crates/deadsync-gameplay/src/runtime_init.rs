@@ -472,7 +472,7 @@ where
             visual_mask,
             player_profiles[player].mini_percent(),
         );
-        let mut z = 1.0 - mini_value * 0.5;
+        let mut z = mini_value.mul_add(-0.5, 1.0);
         if z.abs() < 0.01 {
             z = 0.01;
         }
@@ -972,7 +972,7 @@ where
     let replay_edges_capacity = [
         0,
         replay_edge_cap(num_cols, replay_cells, replay_mode, replay_seconds),
-    ][replay_capture_enabled as usize];
+    ][usize::from(replay_capture_enabled)];
     let decaying_hold_capacity = (0..num_players).fold(0usize, |acc, player| {
         acc.saturating_add(holds_total[player] as usize + rolls_total[player] as usize)
     });

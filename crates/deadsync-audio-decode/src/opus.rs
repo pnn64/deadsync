@@ -419,7 +419,7 @@ fn parse_head_data(data: &[u8]) -> Result<Header, String> {
         stream_serial: 0,
         channels,
         pre_skip_frames: u16::from_le_bytes([data[10], data[11]]) as usize,
-        gain_q8_db: i16::from_le_bytes([data[16], data[17]]) as i32,
+        gain_q8_db: i32::from(i16::from_le_bytes([data[16], data[17]])),
     })
 }
 

@@ -8,8 +8,8 @@ use crate::content_reload::{
     PROGRESS_EVENTS_PER_FRAME, PROGRESS_QUEUE_CAPACITY, ProgressGate, receive_ready, send_progress,
 };
 
-/// Shell-owned worker that runs a one-shot bulk ReplayGain (EBU R128) analysis
-/// over the whole song library, driven by the Sound options "Apply ReplayGain"
+/// Shell-owned worker that runs a one-shot bulk `ReplayGain` (EBU R128) analysis
+/// over the whole song library, driven by the Sound options "Apply `ReplayGain`"
 /// action. Unlike the boot-time content reload pass, this is user-triggered and
 /// reports progress to the Options screen. Cancellation reuses the crate-level
 /// cooperative skip (`deadsync_audio_replaygain::request_skip_blocking_analysis`)

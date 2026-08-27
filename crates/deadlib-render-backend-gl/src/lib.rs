@@ -229,7 +229,7 @@ struct CachedTMeshGeom {
     vertex_count: u32,
 }
 
-/// Render-thread-owned ActorFrameTexture storage. Slots are bounded by the
+/// Render-thread-owned `ActorFrameTexture` storage. Slots are bounded by the
 /// largest active graph and reused by position; steady-state gameplay only
 /// binds and redraws them. Screen-content changes may replace a slot, while
 /// cache pressure never prunes or destroys targets mid-song.

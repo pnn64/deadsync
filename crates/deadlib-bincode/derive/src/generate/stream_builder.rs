@@ -4,7 +4,7 @@ use crate::prelude::{
 };
 use std::str::FromStr;
 
-/// A helper struct build around a [TokenStream] to make it easier to build code.
+/// A helper struct build around a [`TokenStream`] to make it easier to build code.
 #[must_use]
 #[derive(Default)]
 pub struct StreamBuilder {
@@ -12,7 +12,7 @@ pub struct StreamBuilder {
 }
 
 impl StreamBuilder {
-    /// Generate a new StreamBuilder
+    /// Generate a new `StreamBuilder`
     pub fn new() -> Self {
         Self {
             stream: TokenStream::new(),
@@ -25,7 +25,7 @@ impl StreamBuilder {
         self
     }
 
-    /// Append another StreamBuilder to the current StreamBuilder.
+    /// Append another `StreamBuilder` to the current `StreamBuilder`.
     pub fn append(&mut self, builder: StreamBuilder) -> &mut Self {
         self.stream.extend(builder.stream);
         self

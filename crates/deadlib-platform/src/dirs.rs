@@ -72,7 +72,7 @@ impl AppDirs {
         self.cache_dir.join("replaygain")
     }
 
-    /// Single-file consolidated ReplayGain cache. Replaces the legacy
+    /// Single-file consolidated `ReplayGain` cache. Replaces the legacy
     /// per-song `replaygain/<hash>.bin` layout, which doesn't scale to
     /// libraries of 10k+ songs.
     pub fn replaygain_cache_file(&self) -> PathBuf {

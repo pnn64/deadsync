@@ -448,7 +448,7 @@ fn is_transient_rename_error(error: &io::Error) -> bool {
 
 /// Remove `target` if it exists so a subsequent
 /// `fs::rename(backup, target)` doesn't trip on Windows'
-/// no-overwrite rename semantics.  NotFound is the success case.
+/// no-overwrite rename semantics.  `NotFound` is the success case.
 fn clear_target_for_restore(target: &Path) {
     match fs::remove_file(target) {
         Ok(()) => {}

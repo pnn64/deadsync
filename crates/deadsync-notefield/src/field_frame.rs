@@ -460,8 +460,8 @@ fn compose_field_contents<S, F>(
         let head_adjusted_travel = travel.adjusted_note(head_travel_offset, head_beat, local_col);
         let tail_adjusted_travel =
             travel.adjusted_note(tail_travel_offset, hold.end_beat, local_col);
-        let head_y = lane_receptor_y + dir * head_adjusted_travel + lane_offset;
-        let tail_y = lane_receptor_y + dir * tail_adjusted_travel + lane_offset;
+        let head_y = dir.mul_add(head_adjusted_travel, lane_receptor_y) + lane_offset;
+        let tail_y = dir.mul_add(tail_adjusted_travel, lane_receptor_y) + lane_offset;
         let note_display = ns.note_display_metrics;
         let lane_reverse = col_dir < 0.0;
         let active_state = frame.feedback.lanes[local_col]
@@ -963,7 +963,7 @@ fn compose_visible_notes<S, F>(
                             &notes.tornado_bounds[..num_cols],
                         )
                     };
-                let y_pos = receptor_y + direction * adjusted_travel + lane_offset;
+                let y_pos = direction.mul_add(adjusted_travel, receptor_y) + lane_offset;
                 let world_z = note_world_z_for_bumpy(
                     adjusted_travel,
                     effect_params.bumpy,
@@ -1356,8 +1356,8 @@ fn model_center<S: NoteskinSlot>(
         return center;
     }
     let offset = [
-        local_offset[0] * cos_r - local_offset[1] * sin_r,
-        local_offset[0] * sin_r + local_offset[1] * cos_r,
+        local_offset[1].mul_add(-sin_r, local_offset[0] * cos_r),
+        local_offset[1].mul_add(cos_r, local_offset[0] * sin_r),
     ];
     [center[0] + offset[0], center[1] + offset[1]]
 }
@@ -1411,7 +1411,7 @@ fn dynamic_sudden_offset(params: DynamicSuddenParams<'_>) -> Option<f32> {
         ScrollSpeedSetting::MMod(target_bpm) => target_bpm / display_bpm,
         ScrollSpeedSetting::CMod(_) => return None,
     };
-    let mini_zoom = 1.0 - params.mini * 0.5;
+    let mini_zoom = params.mini.mul_add(-0.5, 1.0);
     let arrow_height = ScrollSpeedSetting::ARROW_SPACING * speed_multiplier * mini_zoom;
     if !arrow_height.is_finite() || arrow_height <= 0.0 {
         return None;
@@ -1574,10 +1574,10 @@ fn resolve_field_camera<S>(
     )
 }
 
-/// Cold SongLua proxy adapter. Ordinary gameplay keeps flat draws in their
+/// Cold `SongLua` proxy adapter. Ordinary gameplay keeps flat draws in their
 /// compact stream; only an explicit field/player capture reconstructs actors.
 /// Cold compatibility adapter for capture consumers that still require an
-/// Actor tree. Ordinary notefield presentation must borrow FlatDraws directly.
+/// Actor tree. Ordinary notefield presentation must borrow `FlatDraws` directly.
 pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
     match draw {
         FlatDraw::Sprite(sprite) => Actor::Sprite {

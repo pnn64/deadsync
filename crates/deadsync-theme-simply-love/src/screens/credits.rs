@@ -216,7 +216,7 @@ const fn line_colors(kind: CreditLineKind) -> ([f32; 4], [f32; 4]) {
 #[inline(always)]
 fn ease_out_cubic(t: f32) -> f32 {
     let u = 1.0 - t.clamp(0.0, 1.0);
-    1.0 - u * u * u
+    (u * u).mul_add(-u, 1.0)
 }
 
 pub const fn handle_input(_state: &mut State, event: &InputEvent) -> ThemeEffect {
@@ -281,8 +281,8 @@ pub fn push_actors(
                 continue;
             }
 
-            let y =
-                base_y + (idx as f32 + ITEM_PADDING_START) * LINE_HEIGHT - scroll_px + cycle_offset;
+            let y = (idx as f32 + ITEM_PADDING_START).mul_add(LINE_HEIGHT, base_y) - scroll_px
+                + cycle_offset;
             if y < -LINE_HEIGHT || y > screen_h + LINE_HEIGHT {
                 continue;
             }
@@ -329,7 +329,7 @@ pub fn push_actors(
         font("miso"):
         settext(return_prompt):
         align(0.5, 0.5):
-        xy(screen_center_x(), screen_h - CINEMATIC_BAR_MAX_H * 0.5):
+        xy(screen_center_x(), CINEMATIC_BAR_MAX_H.mul_add(-0.5, screen_h)):
         zoom(0.7):
         horizalign(center):
         diffuse(1.0, 1.0, 1.0, 0.8):

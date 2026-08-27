@@ -187,7 +187,7 @@ pub(crate) fn build_timing_pane_with_palette(
     let bottombar_height: f32 = 13.0;
 
     let pane_origin_x = pane_origin_x(controller);
-    let frame_x = pane_origin_x - pane_width * 0.5;
+    let frame_x = pane_width.mul_add(-0.5, pane_origin_x);
     let frame_y = deadlib_present::space::screen_center_y() - 56.0;
 
     let mut children = Vec::new();

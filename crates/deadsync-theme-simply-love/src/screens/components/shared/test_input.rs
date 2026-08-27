@@ -448,10 +448,10 @@ fn push_pad_scaled(
     let arrow_h_offset = 67.0_f32 * scale;
     let arrow_v_offset = 68.0_f32 * scale;
     let sprite_zoom = 0.8_f32 * scale;
-    let buttons_y = pad_y + 160.0 * scale;
-    let start_y = pad_y + 146.0 * scale;
-    let select_y = pad_y + 175.0 * scale;
-    let menu_y = pad_y + 160.0 * scale;
+    let buttons_y = 160.0f32.mul_add(scale, pad_y);
+    let start_y = 146.0f32.mul_add(scale, pad_y);
+    let select_y = 175.0f32.mul_add(scale, pad_y);
+    let menu_y = 160.0f32.mul_add(scale, pad_y);
     let menu_x_offset = 37.0_f32 * scale;
 
     actors.push(match game {
@@ -476,7 +476,7 @@ fn push_pad_scaled(
         };
         actors.push(act!(text:
             align(0.5, 0.5):
-            xy(pad_x, pad_y - 130.0 * scale):
+            xy(pad_x, 130.0f32.mul_add(-scale, pad_y)):
             zoom(0.7 * scale):
             font(player_label_font):
             settext(label):
@@ -666,7 +666,7 @@ pub fn build_test_input_screen_content(
     actors
 }
 
-/// Build a TestInput pad for use inside an evaluation pane (SL ScreenEvaluation Pane6 parity).
+/// Build a `TestInput` pad for use inside an evaluation pane (SL `ScreenEvaluation` Pane6 parity).
 ///
 /// `scale` scales the entire pad uniformly (1.0 = full size; SL Pane6 uses ~0.8).
 pub fn build_evaluation_pad(
@@ -718,7 +718,7 @@ mod eval_panel_layout {
     pub const BODY_OFFSET: f32 = 28.889;
 
     /// If true, the title is horizontally centered within the text block;
-    /// otherwise it's left-aligned to TEXT_LEFT_X.
+    /// otherwise it's left-aligned to `TEXT_LEFT_X`.
     pub const TITLE_CENTERED: bool = true;
 
     pub const TITLE_ZOOM: f32 = 1.0889;
@@ -726,10 +726,10 @@ mod eval_panel_layout {
 
     pub const BODY_LINE_SPACING: i32 = 20;
 
-    /// Pad natural full width at PAD_LOGICAL_SCALE = 1.0, in logical px.
+    /// Pad natural full width at `PAD_LOGICAL_SCALE` = 1.0, in logical px.
     /// This is `(arrow_h_offset + half_arrow_sprite) * 2` from `push_pad_scaled`.
     pub const PAD_NATURAL_WIDTH: f32 = (67.0 + 27.0) * 2.0;
-    /// Pad natural full height at PAD_LOGICAL_SCALE = 1.0, in logical px.
+    /// Pad natural full height at `PAD_LOGICAL_SCALE` = 1.0, in logical px.
     pub const PAD_NATURAL_HEIGHT: f32 = (68.0 + 27.0) * 2.0;
 }
 
@@ -742,7 +742,7 @@ pub const fn evaluation_panel_size() -> (f32, f32) {
     )
 }
 
-/// Build the TestInput evaluation panel anchored at its **top-left corner**.
+/// Build the `TestInput` evaluation panel anchored at its **top-left corner**.
 ///
 /// `(anchor_x, anchor_y)` is the screen-space position of the panel's
 /// top-left corner. `scale` uniformly scales the entire panel.
@@ -764,8 +764,8 @@ pub fn build_evaluation_panel(
     // Convert a panel-local (x_right, y_down) point in logical px to screen-space actor coords.
     let map = |local_x: f32, local_y_from_top: f32| -> (f32, f32) {
         (
-            anchor_x + local_x * scale,
-            anchor_y + local_y_from_top * scale,
+            local_x.mul_add(scale, anchor_x),
+            local_y_from_top.mul_add(scale, anchor_y),
         )
     };
 
@@ -774,8 +774,8 @@ pub fn build_evaluation_panel(
         // convert to the pad's center for push_pad_scaled.
         let pad_box_w = PAD_NATURAL_WIDTH * PAD_LOGICAL_SCALE;
         let pad_box_h = PAD_NATURAL_HEIGHT * PAD_LOGICAL_SCALE;
-        let cx_local = PAD_X + pad_box_w * 0.5;
-        let cy_local = PAD_Y + pad_box_h * 0.5;
+        let cx_local = pad_box_w.mul_add(0.5, PAD_X);
+        let cy_local = pad_box_h.mul_add(0.5, PAD_Y);
         map(cx_local, cy_local)
     };
     let pad_scale = PAD_LOGICAL_SCALE * scale;
@@ -801,7 +801,7 @@ pub fn build_evaluation_panel(
     let body_zoom = BODY_ZOOM * scale;
 
     if TITLE_CENTERED {
-        let title_center_x = text_x + block_w * 0.5;
+        let title_center_x = block_w.mul_add(0.5, text_x);
         actors.push(act!(text:
             font(title_font):
             settext(title):

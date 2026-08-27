@@ -24,7 +24,7 @@ fn timing_ns_to_seconds(time_ns: TimingNs) -> f32 {
 
 #[inline(always)]
 fn timing_ns_delta_seconds(lhs: TimingNs, rhs: TimingNs) -> f32 {
-    ((lhs as i128 - rhs as i128) as f64 * 1.0e-9) as f32
+    ((i128::from(lhs) - i128::from(rhs)) as f64 * 1.0e-9) as f32
 }
 
 #[inline(always)]
@@ -613,7 +613,7 @@ impl TimingData {
 
         for &(beat, bpm) in &parsed_bpms {
             if beat > last_beat && last_bpm > 0.0 {
-                current_time += (beat - last_beat) * (60.0 / last_bpm);
+                current_time = (beat - last_beat).mul_add(60.0 / last_bpm, current_time);
             }
             beat_to_time.push(BeatTimePoint {
                 beat,
@@ -664,7 +664,7 @@ impl TimingData {
             let mut last_ratio = 1.0_f32;
             timing_with_stops.scroll_prefix = exact_arc(timing_with_stops.scrolls.len(), |index| {
                 let seg = timing_with_stops.scrolls[index];
-                cum_displayed += (seg.beat - last_real_beat) * last_ratio;
+                cum_displayed = (seg.beat - last_real_beat).mul_add(last_ratio, cum_displayed);
                 let prefix = ScrollPrefix {
                     beat: seg.beat,
                     cum_displayed,
@@ -1442,7 +1442,7 @@ fn stats_from_sums(
     let count_f = count as f32;
     let mean_ms = sum_ms / count_f;
     let mean_abs_ms = sum_abs_ms / count_f;
-    let variance = (sum_sq_ms / count_f - mean_ms * mean_ms).max(0.0);
+    let variance = mean_ms.mul_add(-mean_ms, sum_sq_ms / count_f).max(0.0);
     TimingStats {
         mean_abs_ms,
         mean_ms,
@@ -1482,7 +1482,7 @@ impl TimingStatsAccum {
         self.count = self.count.saturating_add(1);
         self.sum_ms += offset_ms;
         self.sum_abs_ms += abs;
-        self.sum_sq_ms += offset_ms * offset_ms;
+        self.sum_sq_ms = offset_ms.mul_add(offset_ms, self.sum_sq_ms);
         self.max_abs_ms = self.max_abs_ms.max(abs);
     }
 
@@ -1517,7 +1517,7 @@ pub fn record_live_timing_stats(stats: &mut LiveTimingStats, judgment: &Judgment
         let old = stats.recent_errors_ms[stats.recent_next];
         stats.recent_sum_ms -= old;
         stats.recent_sum_abs_ms -= old.abs();
-        stats.recent_sum_sq_ms -= old * old;
+        stats.recent_sum_sq_ms = old.mul_add(-old, stats.recent_sum_sq_ms);
     } else {
         stats.recent_len += 1;
     }
@@ -1641,7 +1641,7 @@ impl StatsAccum {
         let delta = e_ms - self.mean_ms;
         self.mean_ms += delta / n;
         let delta2 = e_ms - self.mean_ms;
-        self.sum_sq_diff_ms += delta * delta2;
+        self.sum_sq_diff_ms = delta.mul_add(delta2, self.sum_sq_diff_ms);
     }
 
     #[inline(always)]
@@ -1710,7 +1710,7 @@ pub fn compute_arrow_timing_stats(
                     judgment::select_row_final_judgment(&mut row_judgment, judgment);
                 }
                 if let Some(code) = local_direction_code(note, col_offset, cols_per_player) {
-                    direction_code = direction_code.saturating_add(code as u32);
+                    direction_code = direction_code.saturating_add(u32::from(code));
                 }
             }
             idx += 1;
@@ -2166,7 +2166,7 @@ fn smooth_hist_counts(counts: &HistCounts, worst_window_bin: i32) -> Vec<(i32, f
         let mut y = 0.0_f32;
         for (offset, weight) in (-3..=3).zip(GAUSS7) {
             let sample = (bin + offset).clamp(-worst_window_bin, worst_window_bin);
-            y += hist_count_at(counts, sample) as f32 * weight;
+            y = (hist_count_at(counts, sample) as f32).mul_add(weight, y);
         }
         smoothed.push((bin, y));
     }
@@ -2323,7 +2323,7 @@ mod timing_summary_reference {
         for_each_row(notes, |judgment| {
             if judgment.grade != JudgeGrade::Miss {
                 let diff = judgment.time_error_ms - mean_ms;
-                sum_diff_sq += diff * diff;
+                sum_diff_sq = diff.mul_add(diff, sum_diff_sq);
             }
         });
         TimingStats {
@@ -2423,7 +2423,7 @@ mod timing_summary_reference {
                     && !matches!(note.note_type, NoteType::Mine)
                     && let Some(code) = local_direction_code(note, col_offset, cols_per_player)
                 {
-                    direction_code = direction_code.saturating_add(code as u32);
+                    direction_code = direction_code.saturating_add(u32::from(code));
                 }
                 idx += 1;
             }
@@ -3309,7 +3309,7 @@ mod tests {
                         row,
                         column,
                         grade,
-                        column as f32 - row as f32 * 0.25,
+                        (row as f32).mul_add(-0.25, column as f32),
                     ));
                     parity.insert(
                         (row, column),

@@ -106,8 +106,8 @@ impl core::fmt::Display for DecodeError {
 impl DecodeError {
     /// If the current error is `InvalidIntegerType`, change the `expected` and
     /// `found` values from `Ux` to `Ix`. This is needed to have correct error
-    /// reporting in src/varint/decode_signed.rs since this calls
-    /// src/varint/decode_unsigned.rs and needs to correct the `expected` and
+    /// reporting in `src/varint/decode_signed.rs` since this calls
+    /// `src/varint/decode_unsigned.rs` and needs to correct the `expected` and
     /// `found` types.
     pub(crate) fn change_integer_type_to_signed(self) -> DecodeError {
         match self {
@@ -131,7 +131,7 @@ pub enum AllowedEnumVariants {
     Allowed(&'static [u32]),
 }
 
-/// Integer types. Used by [DecodeError]. These types have no purpose other than being shown in errors.
+/// Integer types. Used by [`DecodeError`]. These types have no purpose other than being shown in errors.
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq)]
 #[allow(missing_docs)]

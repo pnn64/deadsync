@@ -1602,7 +1602,7 @@ where
     Ok(scaled.round().clamp(0.0, 10_000.0) as u32)
 }
 
-/// Parses external Simply Love/ITGmania ITL JSON text into DeadSync's ITL
+/// Parses external Simply Love/ITGmania ITL JSON text into `DeadSync`'s ITL
 /// cache schema. Empty files and malformed text return `None`.
 pub fn itl_data_from_json(json_text: &str) -> Option<ItlFileData> {
     let data: ItlFileData = serde_json::from_str(json_text).ok()?;

@@ -11,7 +11,7 @@ pub(super) fn format_percent(value: i32) -> String {
 
 #[inline(always)]
 pub(super) fn format_tenths_ms(value_tenths: i32) -> String {
-    format!("{:.1} ms", value_tenths as f64 / 10.0)
+    format!("{:.1} ms", f64::from(value_tenths) / 10.0)
 }
 
 #[inline(always)]

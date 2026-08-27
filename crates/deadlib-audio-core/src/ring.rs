@@ -362,7 +362,8 @@ mod tests {
             while sample_start < sample_end {
                 let timing = MusicBlockTiming {
                     generation,
-                    music_start_sec: start_sec + (sample_start / channels) as f64 * sec_per_frame,
+                    music_start_sec: ((sample_start / channels) as f64)
+                        .mul_add(sec_per_frame, start_sec),
                     music_sec_per_frame: sec_per_frame,
                 };
                 let accepted = stream

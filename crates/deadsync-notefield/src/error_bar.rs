@@ -144,7 +144,7 @@ fn append_monochrome(draws: &mut Vec<FlatDraw>, request: &ErrorBarComposeRequest
                 append_quad(
                     draws,
                     [
-                        request.position[0] + direction * offset,
+                        direction.mul_add(offset, request.position[0]),
                         request.position[1],
                     ],
                     [style.monochrome_line_width, request.max_height],
@@ -389,7 +389,7 @@ fn append_offset_indicator(draws: &mut Vec<FlatDraw>, request: &ErrorBarComposeR
     }
     let mut y = request.offset_indicator_position[1];
     if request.has_error_bar {
-        let min_separation = request.max_height * 0.5 + style.offset_indicator_gap;
+        let min_separation = request.max_height.mul_add(0.5, style.offset_indicator_gap);
         if (y - request.position[1]).abs() < min_separation {
             y = request.position[1] + min_separation;
         }
@@ -678,7 +678,7 @@ pub(crate) fn error_bar_flash_alpha(
     if !age.is_finite() || age < 0.0 || age >= dur {
         return inactive_alpha;
     }
-    1.0 + (inactive_alpha - 1.0) * (age / dur)
+    (inactive_alpha - 1.0).mul_add(age / dur, 1.0)
 }
 
 pub fn error_bar_boundaries_s(

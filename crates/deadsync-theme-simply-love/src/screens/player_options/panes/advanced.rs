@@ -492,12 +492,12 @@ const SCROLL: BitmaskBinding = BitmaskBinding::Generic {
             if p.scroll_option.contains(ScrollOption::Centered) {
                 bits.insert(ScrollMask::from_bits_retain(1u8 << 4));
             }
-            bits.bits() as u32
+            u32::from(bits.bits())
         },
-        get_active: |m| m.scroll.bits() as u32,
+        get_active: |m| u32::from(m.scroll.bits()),
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u8::MAX as u32),
+                b & !u32::from(u8::MAX),
                 0,
                 "ScrollMask init bits exceed u8 width"
             );
@@ -561,8 +561,8 @@ const LIFE_BAR_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
 );
 const STEP_STATISTICS: BitmaskBinding = BitmaskBinding::Generic {
     init: BitmaskInit {
-        from_profile: |p| step_statistics_choice_bits(p.step_statistics) as u32,
-        get_active: |m| step_statistics_choice_bits(m.step_statistics) as u32,
+        from_profile: |p| u32::from(step_statistics_choice_bits(p.step_statistics)),
+        get_active: |m| u32::from(step_statistics_choice_bits(m.step_statistics)),
         set_active: |m, b| {
             m.step_statistics = step_statistics_mask_from_choice_bits(b);
         },
@@ -605,12 +605,12 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
             if p.display_scorebox {
                 bits.insert(GameplayExtrasMask::DISPLAY_SCOREBOX);
             }
-            bits.bits() as u32
+            u32::from(bits.bits())
         },
-        get_active: |m| m.gameplay_extras.bits() as u32,
+        get_active: |m| u32::from(m.gameplay_extras.bits()),
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u16::MAX as u32),
+                b & !u32::from(u16::MAX),
                 0,
                 "GameplayExtrasMask init bits exceed u16 width",
             );
@@ -643,11 +643,11 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
 };
 const COLUMN_FLASH_JUDGMENTS: BitmaskBinding = BitmaskBinding::Generic {
     init: BitmaskInit {
-        from_profile: |p| p.column_flash_mask.bits() as u32,
-        get_active: |m| m.column_flash.bits() as u32,
+        from_profile: |p| u32::from(p.column_flash_mask.bits()),
+        get_active: |m| u32::from(m.column_flash.bits()),
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u8::MAX as u32),
+                b & !u32::from(u8::MAX),
                 0,
                 "ColumnFlashMask init bits exceed u8 width",
             );
@@ -695,11 +695,11 @@ const COLUMN_FLASH_SIZE: ChoiceBinding<usize> = index_binding!(
 );
 const LIVE_TIMING_STATS: BitmaskBinding = BitmaskBinding::Generic {
     init: BitmaskInit {
-        from_profile: |p| p.live_timing_stats_mask.bits() as u32,
-        get_active: |m| m.live_timing_stats.bits() as u32,
+        from_profile: |p| u32::from(p.live_timing_stats_mask.bits()),
+        get_active: |m| u32::from(m.live_timing_stats.bits()),
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u8::MAX as u32),
+                b & !u32::from(u8::MAX),
                 0,
                 "LiveTimingStatsMask init bits exceed u8 width",
             );
@@ -728,12 +728,12 @@ const ERROR_BAR: BitmaskBinding = BitmaskBinding::Generic {
             } else {
                 p.error_bar_active_mask
             };
-            mask.bits() as u32
+            u32::from(mask.bits())
         },
-        get_active: |m| m.error_bar.bits() as u32,
+        get_active: |m| u32::from(m.error_bar.bits()),
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u8::MAX as u32),
+                b & !u32::from(u8::MAX),
                 0,
                 "ErrorBarMask init bits exceed u8 width"
             );
@@ -792,7 +792,7 @@ fn fa_plus_bits_from_profile(p: &PlayerOptionsData) -> u32 {
     if p.split_15_10ms {
         bits.insert(FaPlusMask::SPLIT_15_10MS);
     }
-    bits.bits() as u32
+    u32::from(bits.bits())
 }
 
 /// Project the full FA+ mask onto every fan-out profile field. Both FA+
@@ -817,7 +817,7 @@ const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
         // FA+ Options owns bits 0..=3 of FaPlusMask (WINDOW/EX/HARD_EX/PANE).
         // The row stores its slice in row-local coordinates: choice i ⇔ bit i.
         from_profile: |p| (fa_plus_bits_from_profile(p)) & 0b0000_1111,
-        get_active: |m| (m.fa_plus.bits() & 0b0000_1111) as u32,
+        get_active: |m| u32::from(m.fa_plus.bits() & 0b0000_1111),
         set_active: |m, b| {
             debug_assert_eq!(
                 b & !0b0000_1111u32,
@@ -847,7 +847,7 @@ const FA_PLUS_WINDOW_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
         // FA+ Window Options owns bits 4..=5 of FaPlusMask (BLUE_WINDOW_10MS,
         // SPLIT_15_10MS), shifted into row-local 0..=1.
         from_profile: |p| (fa_plus_bits_from_profile(p) >> 4) & 0b0000_0011,
-        get_active: |m| ((m.fa_plus.bits() >> 4) & 0b0000_0011) as u32,
+        get_active: |m| u32::from((m.fa_plus.bits() >> 4) & 0b0000_0011),
         set_active: |m, b| {
             debug_assert_eq!(b & !0b0000_0011u32, 0, "FA+ Window bits exceed slice width");
             let preserved = m.fa_plus.bits() & 0b1100_1111;
@@ -2089,7 +2089,7 @@ mod bitmask_binding_init_tests {
         );
     }
 
-    /// FA_PLUS_OPTIONS binding's data-driven init must populate the bits
+    /// `FA_PLUS_OPTIONS` binding's data-driven init must populate the bits
     /// AND pin the cursor to 0 even when a non-first bit is the only one
     /// set (Pattern E: cursor=Fixed(0)).
     #[test]
@@ -2150,8 +2150,8 @@ mod bitmask_binding_init_tests {
         );
     }
 
-    /// Order assertion: Scroll choice index N maps to ScrollMask bit (1 << N)
-    /// maps to ScrollOption variant N. The SCROLL binding's from_profile
+    /// Order assertion: Scroll choice index N maps to `ScrollMask` bit (1 << N)
+    /// maps to `ScrollOption` variant N. The SCROLL binding's `from_profile`
     /// closure relies on this 1:1 ordering; if any of the three orderings
     /// drifts, this test must fail before reaching production.
     #[test]

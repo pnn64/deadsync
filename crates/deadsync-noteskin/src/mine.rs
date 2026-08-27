@@ -192,9 +192,9 @@ pub fn mine_gradient_samples(
             if a <= f32::EPSILON {
                 continue;
             }
-            r += f32::from(pixel[0]) * a;
-            g += f32::from(pixel[1]) * a;
-            b += f32::from(pixel[2]) * a;
+            r = f32::from(pixel[0]).mul_add(a, r);
+            g = f32::from(pixel[1]).mul_add(a, g);
+            b = f32::from(pixel[2]).mul_add(a, b);
             alpha_weight += a;
         }
 

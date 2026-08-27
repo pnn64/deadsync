@@ -777,7 +777,7 @@ impl ActorXFold {
 
     #[inline(always)]
     fn offset(self, mut offset: [f32; 2]) -> [f32; 2] {
-        offset[0] = self.pivot_x + (offset[0] - self.pivot_x) * self.scale_x;
+        offset[0] = (offset[0] - self.pivot_x).mul_add(self.scale_x, self.pivot_x);
         offset
     }
 
@@ -868,7 +868,7 @@ impl<'a> ActorSegment<'a> {
 
     /// Borrows a source-ordered draw fragment through ActorProxy-compatible
     /// frame placement. Child Z values are replaced by the proxy layer,
-    /// matching a normalized SharedFrame without rebuilding wide Actor values.
+    /// matching a normalized `SharedFrame` without rebuilding wide Actor values.
     pub const fn flat_proxy(
         draws: &'a [actors::FlatDraw],
         offset: [f32; 2],
@@ -940,7 +940,7 @@ impl<'a> ActorSegment<'a> {
         }
     }
 
-    /// Borrows two camera-delimited ActorProxy source runs through one shared
+    /// Borrows two camera-delimited `ActorProxy` source runs through one shared
     /// enclosing camera scope. Each run retains independent local-Z
     /// normalization while the enclosing matrix is registered only once.
     #[allow(clippy::too_many_arguments)]
@@ -3258,7 +3258,7 @@ pub struct TextLayoutFrameStats {
 /// Persistent bitmap-text layout storage owned by one presentation caller.
 ///
 /// The cache is single-threaded (`&mut self`) and lives for whatever scope its
-/// owner chooses; DeadSync uses separate UI and song-lifetime gameplay instances.
+/// owner chooses; `DeadSync` uses separate UI and song-lifetime gameplay instances.
 /// Callers prewarm before a live interval, then either freeze exactly or allow a
 /// bounded late reserve. A retained miss builds once, while overflow builds an
 /// uncached result without eviction, scans, or destructor cascades. `clear()` or
@@ -5234,9 +5234,15 @@ fn apply_effect_to_sprite(
     if matches!(effect.mode, anim::EffectMode::Spin) {
         // ITGmania spin uses effect delta from clock and does not use effectoffset.
         let units = anim::effect_clock_units(effect, elapsed, beat);
-        rot_deg[0] = (rot_deg[0] + effect.magnitude[0] * units).rem_euclid(360.0);
-        rot_deg[1] = (rot_deg[1] + effect.magnitude[1] * units).rem_euclid(360.0);
-        rot_deg[2] = (rot_deg[2] + effect.magnitude[2] * units).rem_euclid(360.0);
+        rot_deg[0] = effect.magnitude[0]
+            .mul_add(units, rot_deg[0])
+            .rem_euclid(360.0);
+        rot_deg[1] = effect.magnitude[1]
+            .mul_add(units, rot_deg[1])
+            .rem_euclid(360.0);
+        rot_deg[2] = effect.magnitude[2]
+            .mul_add(units, rot_deg[2])
+            .rem_euclid(360.0);
     }
 
     if let Some(percent) = anim::effect_mix(effect, elapsed, beat) {
@@ -5248,7 +5254,9 @@ fn apply_effect_to_sprite(
                 }
             }
             anim::EffectMode::DiffuseShift => {
-                let between = (((percent + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5)
+                let between = ((percent + 0.25) * 2.0 * std::f32::consts::PI)
+                    .sin()
+                    .mul_add(0.5, 0.5)
                     .clamp(0.0, 1.0);
                 for (i, out) in tint.iter_mut().enumerate() {
                     let c = lerp_f32(effect.color2[i], effect.color1[i], between).clamp(0.0, 1.0);
@@ -5298,7 +5306,9 @@ fn apply_effect_to_text(
                 }
             }
             anim::EffectMode::DiffuseShift => {
-                let between = (((percent + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5)
+                let between = ((percent + 0.25) * 2.0 * std::f32::consts::PI)
+                    .sin()
+                    .mul_add(0.5, 0.5)
                     .clamp(0.0, 1.0);
                 for (i, out) in color.iter_mut().enumerate() {
                     let c = lerp_f32(effect.color2[i], effect.color1[i], between).clamp(0.0, 1.0);
@@ -7820,8 +7830,8 @@ fn calculate_uvs<T: TextureContext + ?Sized>(
         ([1.0, 1.0], [0.0, 0.0])
     };
 
-    uv_offset[0] += uv_scale[0] * cl;
-    uv_offset[1] += uv_scale[1] * ct;
+    uv_offset[0] = uv_scale[0].mul_add(cl, uv_offset[0]);
+    uv_offset[1] = uv_scale[1].mul_add(ct, uv_offset[1]);
     uv_scale[0] *= (1.0 - cl - cr).max(0.0);
     uv_scale[1] *= (1.0 - ct - cb).max(0.0);
 
@@ -7835,8 +7845,8 @@ fn calculate_uvs<T: TextureContext + ?Sized>(
     }
 
     if let Some(vel) = texcoordvelocity {
-        uv_offset[0] += vel[0] * total_elapsed;
-        uv_offset[1] += vel[1] * total_elapsed;
+        uv_offset[0] = vel[0].mul_add(total_elapsed, uv_offset[0]);
+        uv_offset[1] = vel[1].mul_add(total_elapsed, uv_offset[1]);
     }
 
     (uv_scale, uv_offset)
@@ -8072,7 +8082,7 @@ fn push_sprite<T: TextureContext + ?Sized>(
         local_offset,
         local_offset_rot_sin_cos,
         edge_fade: [fl_eff, fr_eff, ft_eff, fb_eff],
-        texture_mask: texture_mask as u8 as f32,
+        texture_mask: f32::from(u8::from(texture_mask)),
     });
 
     out.push_sprite(texture_handle, 0, 0, blend, camera, sprite_index);
@@ -8489,8 +8499,9 @@ fn object_world_area(
                 let p0 = world_xy_3d(&transform, vertices[i].pos);
                 let p1 = world_xy_3d(&transform, vertices[i + 1].pos);
                 let p2 = world_xy_3d(&transform, vertices[i + 2].pos);
-                let a = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]);
-                area += 0.5 * a.abs();
+                let a =
+                    (p1[1] - p0[1]).mul_add(-(p2[0] - p0[0]), (p1[0] - p0[0]) * (p2[1] - p0[1]));
+                area = 0.5f32.mul_add(a.abs(), area);
                 i += 3;
             }
             area
@@ -8800,8 +8811,8 @@ fn clipped_sprite_object_to_world_rect_impl<const ACCEPT_CONTAINED_SPRITE: bool>
             }
 
             let uv_offset = [
-                sprite.uv_offset[0] + sprite.uv_scale[0] * cl,
-                sprite.uv_offset[1] + sprite.uv_scale[1] * ct,
+                sprite.uv_scale[0].mul_add(cl, sprite.uv_offset[0]),
+                sprite.uv_scale[1].mul_add(ct, sprite.uv_offset[1]),
             ];
             let uv_scale = [sprite.uv_scale[0] * sx_crop, sprite.uv_scale[1] * sy_crop];
 
@@ -8916,11 +8927,11 @@ fn sprite_world_xy(
     [
         rot_sin_cos[1].mul_add(
             local_x,
-            (-rot_sin_cos[0] * local_y) + center[0] + offset_world[0],
+            (-rot_sin_cos[0]).mul_add(local_y, center[0]) + offset_world[0],
         ),
         rot_sin_cos[0].mul_add(
             local_x,
-            (rot_sin_cos[1] * local_y) + center[1] + offset_world[1],
+            rot_sin_cos[1].mul_add(local_y, center[1]) + offset_world[1],
         ),
     ]
 }
@@ -8944,8 +8955,14 @@ fn is_affine_world_transform(t: &Matrix4) -> bool {
 #[inline(always)]
 fn affine_world_xy_3d(t: &Matrix4, p: [f32; 3]) -> [f32; 2] {
     [
-        t.x_axis.x * p[0] + t.y_axis.x * p[1] + t.z_axis.x * p[2] + t.w_axis.x,
-        t.x_axis.y * p[0] + t.y_axis.y * p[1] + t.z_axis.y * p[2] + t.w_axis.y,
+        t.z_axis
+            .x
+            .mul_add(p[2], t.y_axis.x.mul_add(p[1], t.x_axis.x * p[0]))
+            + t.w_axis.x,
+        t.z_axis
+            .y
+            .mul_add(p[2], t.y_axis.y.mul_add(p[1], t.x_axis.y * p[0]))
+            + t.w_axis.y,
     ]
 }
 
@@ -9064,10 +9081,14 @@ fn baked_tmesh_uv(
     uv_tex_shift: [f32; 2],
 ) -> [f32; 2] {
     [
-        vertex.uv[0].mul_add(uv_scale[0], uv_offset[0])
-            + uv_tex_shift[0] * (vertex.tex_matrix_scale[0] - 1.0),
-        vertex.uv[1].mul_add(uv_scale[1], uv_offset[1])
-            + uv_tex_shift[1] * (vertex.tex_matrix_scale[1] - 1.0),
+        uv_tex_shift[0].mul_add(
+            vertex.tex_matrix_scale[0] - 1.0,
+            vertex.uv[0].mul_add(uv_scale[0], uv_offset[0]),
+        ),
+        uv_tex_shift[1].mul_add(
+            vertex.tex_matrix_scale[1] - 1.0,
+            vertex.uv[1].mul_add(uv_scale[1], uv_offset[1]),
+        ),
     ]
 }
 

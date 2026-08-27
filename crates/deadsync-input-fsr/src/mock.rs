@@ -253,8 +253,11 @@ impl Monitor {
 /// A smooth fake sensor reading: idles at zero with staggered "press" bumps
 /// that cross typical thresholds, so bars move and active states light up.
 fn wave(t: f32, pad: usize, button: usize, sensor: usize, peak: u16) -> u16 {
-    let period = 3.0 + 0.7 * button as f32 + 0.35 * sensor as f32 + 1.3 * pad as f32;
-    let phase = 1.1 * sensor as f32 + 2.3 * button as f32;
+    let period = 1.3f32.mul_add(
+        pad as f32,
+        0.35f32.mul_add(sensor as f32, 0.7f32.mul_add(button as f32, 3.0)),
+    );
+    let phase = 2.3f32.mul_add(button as f32, 1.1 * sensor as f32);
     let s = (t * std::f32::consts::TAU / period + phase).sin();
     (s.max(0.0).powi(3) * 0.85 * f32::from(peak)) as u16
 }

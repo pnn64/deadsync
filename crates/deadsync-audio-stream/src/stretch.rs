@@ -1,7 +1,7 @@
 //! SOLA (Synchronized Overlap-Add) time-stretcher used to implement
 //! `RateModPreservesPitch` for the music stream.
 //!
-//! This is a 1:1 port of ITGMania's `RageSoundReader_SpeedChange` (Glenn
+//! This is a 1:1 port of `ITGMania`'s `RageSoundReader_SpeedChange` (Glenn
 //! Maynard, 2006, MIT-licensed). It changes the duration of a buffered audio
 //! stream without changing its pitch by finding the source position whose
 //! correlation with the recent output window is maximal and linearly
@@ -59,7 +59,7 @@ fn append_crossfade(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Ve
     debug_assert_eq!(prev.len(), weights.len());
     out.reserve(prev.len());
     for ((&a, &b), &t) in prev.iter().zip(current).zip(weights) {
-        out.push(a + (b - a) * t);
+        out.push((b - a).mul_add(t, a));
     }
 }
 
@@ -341,7 +341,8 @@ impl SolaStretcher {
         // stretcher into a passthrough that produced `input` frames instead of
         // `input / ratio`, i.e. no time-stretch at all.
         let advancing = self.pos > 0;
-        let advance = self.window_frames as f32 * self.trailing_speed_ratio + self.error_frames;
+        let advance =
+            (self.window_frames as f32).mul_add(self.trailing_speed_ratio, self.error_frames);
         let rounded = advance.round();
         let prospective_uncorrelated = if advancing {
             let int_advance = rounded as isize;
@@ -578,7 +579,7 @@ pub mod bench_support {
         let denom = window_frames as f32;
         for index in 0..prev.len() {
             let t = (start + index) as f32 / denom;
-            out.push(prev[index] + (current[index] - prev[index]) * t);
+            out.push((current[index] - prev[index]).mul_add(t, prev[index]));
         }
     }
 
@@ -745,7 +746,7 @@ mod tests {
             .enumerate()
             .map(|(index, (&a, &b))| {
                 let t = (start + index) as f32 / stretcher.window_frames as f32;
-                a + (b - a) * t
+                (b - a).mul_add(t, a)
             })
             .collect::<Vec<_>>();
         let mut actual = Vec::new();
@@ -787,7 +788,7 @@ mod tests {
                 re += s * theta.cos();
                 im += s * theta.sin();
             }
-            let mag = re * re + im * im;
+            let mag = im.mul_add(im, re * re);
             if mag > best_mag {
                 best_mag = mag;
                 best_bin = k;
@@ -1016,7 +1017,7 @@ mod tests {
     }
 
     /// At `rate=1.0` SOLA should not stall waiting for the full search
-    /// window — preserve_pitch at unit rate is a no-op and the caller is
+    /// window — `preserve_pitch` at unit rate is a no-op and the caller is
     /// expected to bypass SOLA entirely, but the stretcher itself should
     /// still produce output promptly if it is fed.
     #[test]

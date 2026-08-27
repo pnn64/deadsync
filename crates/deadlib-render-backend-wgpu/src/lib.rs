@@ -955,7 +955,7 @@ fn log_wgpu_adapter_info(api: Api, adapter: &wgpu::Adapter) {
 }
 
 fn init_uniform_proj(device: &wgpu::Device, queue: &wgpu::Queue, projection: Matrix4) -> ProjState {
-    let align = device.limits().min_uniform_buffer_offset_alignment as u64;
+    let align = u64::from(device.limits().min_uniform_buffer_offset_alignment);
     let stride = if align > 0 {
         PROJ_BYTES.div_ceil(align) * align
     } else {
@@ -2143,7 +2143,7 @@ pub fn draw(
             let bytes_per_row = 4 * width;
             let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
             let padded_bytes_per_row = bytes_per_row.div_ceil(align) * align;
-            let readback_size = padded_bytes_per_row as u64 * height as u64;
+            let readback_size = u64::from(padded_bytes_per_row) * u64::from(height);
             let readback_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("wgpu screenshot readback"),
                 size: readback_size,

@@ -125,7 +125,7 @@ pub(super) const NO_CMOD_ALTERNATIVE_VARIANTS: [NoCmodAlternative; 3] = [
     NoCmodAlternative::MMod,
 ];
 
-/// MiniIndicator variants in row-choice order (index ↔ enum).
+/// `MiniIndicator` variants in row-choice order (index ↔ enum).
 pub(super) const MINI_INDICATOR_VARIANTS: [MiniIndicator; 7] = [
     MiniIndicator::None,
     MiniIndicator::SubtractiveScoring,

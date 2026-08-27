@@ -50,7 +50,7 @@ pub struct State {
     offscreen_targets: Vec<OffscreenTarget>,
 }
 
-/// Render-thread-owned, song-reused software ActorFrameTexture storage.
+/// Render-thread-owned, song-reused software `ActorFrameTexture` storage.
 /// Slots are bounded by the largest active graph, allocated at graph warmup,
 /// and replaced only when its handle or dimensions change. Gameplay redraws
 /// reuse the pixel buffers without lookup, eviction, pruning, I/O, or
@@ -492,14 +492,20 @@ fn yuv420_to_rgba(upload: Yuv420Upload<'_>) -> Result<RgbaImage, Box<dyn Error>>
         for col in 0..width {
             let pixel = row * width + col;
             let chroma = chroma_row + col / 2;
-            let y = f32::from(upload.y[pixel]) / 255.0 * upload.levels[0] + upload.levels[1];
-            let u = f32::from(upload.u[chroma]) / 255.0 * upload.levels[2] + upload.levels[3];
-            let v = f32::from(upload.v[chroma]) / 255.0 * upload.levels[2] + upload.levels[3];
+            let y =
+                (f32::from(upload.y[pixel]) / 255.0).mul_add(upload.levels[0], upload.levels[1]);
+            let u =
+                (f32::from(upload.u[chroma]) / 255.0).mul_add(upload.levels[2], upload.levels[3]);
+            let v =
+                (f32::from(upload.v[chroma]) / 255.0).mul_add(upload.levels[2], upload.levels[3]);
             let out = &mut rgba[pixel * 4..pixel * 4 + 4];
-            out[0] = ((y + upload.coeffs[0] * v).clamp(0.0, 1.0) * 255.0).round() as u8;
-            out[1] = ((y + upload.coeffs[1] * u + upload.coeffs[2] * v).clamp(0.0, 1.0) * 255.0)
+            out[0] = (upload.coeffs[0].mul_add(v, y).clamp(0.0, 1.0) * 255.0).round() as u8;
+            out[1] = (upload.coeffs[2]
+                .mul_add(v, upload.coeffs[1].mul_add(u, y))
+                .clamp(0.0, 1.0)
+                * 255.0)
                 .round() as u8;
-            out[2] = ((y + upload.coeffs[3] * u).clamp(0.0, 1.0) * 255.0).round() as u8;
+            out[2] = (upload.coeffs[3].mul_add(u, y).clamp(0.0, 1.0) * 255.0).round() as u8;
             out[3] = 255;
         }
     }
@@ -1520,7 +1526,7 @@ fn prepare_sprite_vertices(
         let local_y = ly * size[1];
         let world = Vector4::new(
             rot_sin_cos[1].mul_add(local_x, -(rot_sin_cos[0] * local_y) + adjusted_center[0]),
-            rot_sin_cos[0].mul_add(local_x, rot_sin_cos[1] * local_y + adjusted_center[1]),
+            rot_sin_cos[0].mul_add(local_x, rot_sin_cos[1].mul_add(local_y, adjusted_center[1])),
             adjusted_center[2],
             1.0,
         );
@@ -1697,10 +1703,14 @@ fn project_tmesh_polygon(
         }
         triangle[i] = ClipVertexTexColor {
             clip,
-            u: vertex.uv[0].mul_add(uv_scale[0], uv_offset[0])
-                + uv_tex_shift[0] * (vertex.tex_matrix_scale[0] - 1.0),
-            v: vertex.uv[1].mul_add(uv_scale[1], uv_offset[1])
-                + uv_tex_shift[1] * (vertex.tex_matrix_scale[1] - 1.0),
+            u: uv_tex_shift[0].mul_add(
+                vertex.tex_matrix_scale[0] - 1.0,
+                vertex.uv[0].mul_add(uv_scale[0], uv_offset[0]),
+            ),
+            v: uv_tex_shift[1].mul_add(
+                vertex.tex_matrix_scale[1] - 1.0,
+                vertex.uv[1].mul_add(uv_scale[1], uv_offset[1]),
+            ),
             color: [
                 vertex.color[0] * tint[0],
                 vertex.color[1] * tint[1],
@@ -2585,8 +2595,8 @@ fn sample_tex_linear<const OPAQUE: bool>(
     v: f32,
     sampler: SamplerDesc,
 ) -> Option<[f32; 4]> {
-    let x = wrap_uv(u, sampler.wrap) * tex_w as f32 - 0.5;
-    let y = wrap_uv(v, sampler.wrap) * tex_h as f32 - 0.5;
+    let x = wrap_uv(u, sampler.wrap).mul_add(tex_w as f32, -0.5);
+    let y = wrap_uv(v, sampler.wrap).mul_add(tex_h as f32, -0.5);
     let x0 = x.floor() as i32;
     let y0 = y.floor() as i32;
     let x1 = x0 + 1;
@@ -2682,8 +2692,8 @@ fn sample_alpha_linear(
     v: f32,
     sampler: SamplerDesc,
 ) -> Option<f32> {
-    let x = wrap_uv(u, sampler.wrap) * tex_w as f32 - 0.5;
-    let y = wrap_uv(v, sampler.wrap) * tex_h as f32 - 0.5;
+    let x = wrap_uv(u, sampler.wrap).mul_add(tex_w as f32, -0.5);
+    let y = wrap_uv(v, sampler.wrap).mul_add(tex_h as f32, -0.5);
     let x0 = x.floor() as i32;
     let y0 = y.floor() as i32;
     let fx = clamp01(x - x0 as f32);
@@ -2892,8 +2902,8 @@ fn rasterize_triangle_impl<
             let sampled = if MASK && OPAQUE {
                 Some([0.0, 0.0, 0.0, 1.0])
             } else {
-                let u = v0.u.mul_add(w0, v1.u * w1) + v2.u * w2;
-                let v = v0.v.mul_add(w0, v1.v * w1) + v2.v * w2;
+                let u = v2.u.mul_add(w2, v0.u.mul_add(w0, v1.u * w1));
+                let v = v2.v.mul_add(w2, v0.v.mul_add(w0, v1.v * w1));
                 if MASK {
                     let alpha = if LINEAR {
                         sample_alpha_linear(tex_data, tex_w, tex_h, u, v, sampler)
@@ -2975,8 +2985,8 @@ fn rasterize_triangle_tex_color_impl<
             let sampled = if MASK && OPAQUE {
                 Some([0.0, 0.0, 0.0, 1.0])
             } else {
-                let u = v0.u.mul_add(w0, v1.u * w1) + v2.u * w2;
-                let v = v0.v.mul_add(w0, v1.v * w1) + v2.v * w2;
+                let u = v2.u.mul_add(w2, v0.u.mul_add(w0, v1.u * w1));
+                let v = v2.v.mul_add(w2, v0.v.mul_add(w0, v1.v * w1));
                 if MASK {
                     let alpha = if LINEAR {
                         sample_alpha_linear(tex_data, tex_w, tex_h, u, v, sampler)
@@ -2997,10 +3007,10 @@ fn rasterize_triangle_tex_color_impl<
                 continue;
             }
 
-            let cr = clamp01(v0.color[0].mul_add(w0, v1.color[0] * w1) + v2.color[0] * w2);
-            let cg = clamp01(v0.color[1].mul_add(w0, v1.color[1] * w1) + v2.color[1] * w2);
-            let cb = clamp01(v0.color[2].mul_add(w0, v1.color[2] * w1) + v2.color[2] * w2);
-            let ca = clamp01(v0.color[3].mul_add(w0, v1.color[3] * w1) + v2.color[3] * w2);
+            let cr = clamp01(v2.color[0].mul_add(w2, v0.color[0].mul_add(w0, v1.color[0] * w1)));
+            let cg = clamp01(v2.color[1].mul_add(w2, v0.color[1].mul_add(w0, v1.color[1] * w1)));
+            let cb = clamp01(v2.color[2].mul_add(w2, v0.color[2].mul_add(w0, v1.color[2] * w1)));
+            let ca = clamp01(v2.color[3].mul_add(w2, v0.color[3].mul_add(w0, v1.color[3] * w1)));
 
             let sr = clamp01(if MASK { cr } else { sampled[0] * cr });
             let sg = clamp01(if MASK { cg } else { sampled[1] * cg });
@@ -3050,10 +3060,10 @@ fn rasterize_triangle_color_impl<const ADD: bool>(
                 continue;
             }
 
-            let sr = clamp01(v0.color[0].mul_add(w0, v1.color[0] * w1) + v2.color[0] * w2);
-            let sg = clamp01(v0.color[1].mul_add(w0, v1.color[1] * w1) + v2.color[1] * w2);
-            let sb = clamp01(v0.color[2].mul_add(w0, v1.color[2] * w1) + v2.color[2] * w2);
-            let sa = clamp01(v0.color[3].mul_add(w0, v1.color[3] * w1) + v2.color[3] * w2);
+            let sr = clamp01(v2.color[0].mul_add(w2, v0.color[0].mul_add(w0, v1.color[0] * w1)));
+            let sg = clamp01(v2.color[1].mul_add(w2, v0.color[1].mul_add(w0, v1.color[1] * w1)));
+            let sb = clamp01(v2.color[2].mul_add(w2, v0.color[2].mul_add(w0, v1.color[2] * w1)));
+            let sa = clamp01(v2.color[3].mul_add(w2, v0.color[3].mul_add(w0, v1.color[3] * w1)));
             if sa <= 0.0 {
                 continue;
             }

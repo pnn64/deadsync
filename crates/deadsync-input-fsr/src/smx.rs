@@ -1,4 +1,4 @@
-//! StepManiaX FSR sensor monitor using the shared SmxManager.
+//! `StepManiaX` FSR sensor monitor using the shared `SmxManager`.
 
 use deadsync_input::fsr::{
     BackendKind, ButtonLabel, ButtonView, ButtonViews, PadDeviceId, PadView, SensorView,
@@ -33,7 +33,7 @@ pub(super) const LOADCELL_RAW_MAX: u16 = 500;
 const FSR_VALUE_CURVE: ValueCurve = ValueCurve::linear(FSR_VALUE_SCALE);
 const LOADCELL_VALUE_CURVE: ValueCurve = ValueCurve::linear(LOADCELL_VALUE_SCALE);
 
-/// Panels exposed for config: (panel_index, label), in L/D/U/R order.
+/// Panels exposed for config: (`panel_index`, label), in L/D/U/R order.
 const VIEW_PANELS: [(usize, &str); SMX_BUTTON_COUNT] = [(3, "L"), (7, "D"), (1, "U"), (5, "R")];
 
 /// Edge label for each of a panel's four FSR sensors, by firmware index.
@@ -70,7 +70,7 @@ impl Monitor {
         }
     }
 
-    /// Enumerate every connected StepManiaX pad (FSR or load cell) as a `PadView`.
+    /// Enumerate every connected `StepManiaX` pad (FSR or load cell) as a `PadView`.
     pub fn poll_pads(&mut self) -> Vec<PadView> {
         let mut pads = Vec::new();
         for pad in 0..2 {
@@ -266,7 +266,7 @@ impl Monitor {
     }
 
     /// Turn auto-recalibration on (max tare `0xFFFF`) or off (max tare `0`),
-    /// matching how other StepManiaX SDK forks toggle it.
+    /// matching how other `StepManiaX` SDK forks toggle it.
     pub fn set_auto_recalibration(&mut self, device: PadDeviceId, enabled: bool) -> bool {
         if device.backend != BackendKind::Smx {
             return false;

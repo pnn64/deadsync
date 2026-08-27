@@ -251,8 +251,8 @@ fn front_circle_layout(i: usize) -> CircleLayout {
     CircleLayout {
         zoom,
         z_pos: (random_xd(fi * 13.0) - 0.6) * (1.0 / zoom) * 850.0,
-        rotation_base: random_xd(fi) as f64 * 400.0,
-        rotation_speed: random_xd(fi * 3.4) as f64 * 14.0,
+        rotation_base: f64::from(random_xd(fi)) * 400.0,
+        rotation_speed: f64::from(random_xd(fi * 3.4)) * 14.0,
         alpha: random_xd(fi),
     }
 }
@@ -260,11 +260,12 @@ fn front_circle_layout(i: usize) -> CircleLayout {
 fn back_circle_layout(i: usize) -> CircleLayout {
     let fi = i as f64;
     let zoom = random_xd(fi * 2.8) + 0.35;
-    let random_rotation = random_xd(fi * 3.6) as f64;
+    let random_rotation = f64::from(random_xd(fi * 3.6));
     CircleLayout {
         zoom,
         z_pos: (random_xd(fi * 13.0) - 0.6) * (2.0 / zoom) * 850.0,
-        rotation_base: random_xd(fi) as f64 * 2000.0 + random_rotation * 14.0 * fi * 2000.0,
+        rotation_base: (random_rotation * 14.0 * fi)
+            .mul_add(2000.0, f64::from(random_xd(fi)) * 2000.0),
         rotation_speed: random_rotation * 14.0,
         alpha: random_xd(fi / 1.6),
     }
@@ -421,7 +422,9 @@ fn random_xd(t: f64) -> f32 {
 
 #[inline(always)]
 fn rotating_degrees(base_deg: f64, deg_per_second: f64, elapsed_s: f64) -> f32 {
-    (base_deg + deg_per_second * elapsed_s).rem_euclid(360.0) as f32
+    deg_per_second
+        .mul_add(elapsed_s, base_deg)
+        .rem_euclid(360.0) as f32
 }
 
 #[inline(always)]

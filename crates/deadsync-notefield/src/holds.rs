@@ -553,7 +553,7 @@ pub(crate) fn hold_entry_plan<T>(request: HoldEntryPlanRequest<'_, T>) -> HoldEn
 
     let let_go_gray = request.let_go_gray.clamp(0.0, 1.0);
     let life = request.life.clamp(0.0, 1.0);
-    let color_scale = let_go_gray + (1.0 - let_go_gray) * life;
+    let color_scale = (1.0 - let_go_gray).mul_add(life, let_go_gray);
     let mut parts = hold_parts_for_note_type(request.note_type);
     let mut top_cap_phase = request.top_cap_phase;
     let mut bottom_cap_phase = request.bottom_cap_phase;
@@ -880,8 +880,8 @@ fn body_segment_v(
 ) -> (f32, f32) {
     let v_range = v_bottom - v_top;
     let base_floor = phase.floor();
-    let mut v0 = v_top + v_range * (phase - base_floor).clamp(0.0, 1.0);
-    let mut v1 = v_top + v_range * (next_phase - base_floor).clamp(0.0, 1.0);
+    let mut v0 = v_range.mul_add((phase - base_floor).clamp(0.0, 1.0), v_top);
+    let mut v1 = v_range.mul_add((next_phase - base_floor).clamp(0.0, 1.0), v_top);
     let portion = (segment_size / segment_height).clamp(0.0, 1.0);
     let body_reaches_tail = (natural_bottom - body_bottom).max(0.0) <= segment_height + 1.0;
     let is_last_visible =
@@ -889,9 +889,9 @@ fn body_segment_v(
     if body_reaches_tail && is_last_visible {
         v1 = v_bottom;
         v0 = if v_range >= 0.0 {
-            v_bottom - v_range.abs() * portion
+            v_range.abs().mul_add(-portion, v_bottom)
         } else {
-            v_bottom + v_range.abs() * portion
+            v_range.abs().mul_add(portion, v_bottom)
         };
     }
     (v0, v1)
@@ -925,8 +925,8 @@ where
         let Some(next_phase) = next_body_phase(phase, phase_end) else {
             break;
         };
-        let y_start = request.y_head + (phase - phase_offset) * segment_height;
-        let y_end = request.y_head + (next_phase - phase_offset) * segment_height;
+        let y_start = (phase - phase_offset).mul_add(segment_height, request.y_head);
+        let y_end = (next_phase - phase_offset).mul_add(segment_height, request.y_head);
         let segment_top = y_start.max(body_top);
         let segment_bottom = y_end.min(body_bottom);
         if segment_bottom - segment_top <= f32::EPSILON {
@@ -1144,8 +1144,8 @@ where
         let Some(next_phase) = next_body_phase(phase, phase_end) else {
             break;
         };
-        let y_start = request.y_head + (phase - phase_offset) * segment_height;
-        let y_end = request.y_head + (next_phase - phase_offset) * segment_height;
+        let y_start = (phase - phase_offset).mul_add(segment_height, request.y_head);
+        let y_end = (next_phase - phase_offset).mul_add(segment_height, request.y_head);
         let segment_top = y_start.max(body_top);
         let segment_bottom = y_end.min(body_bottom);
         if segment_bottom - segment_top <= f32::EPSILON {
@@ -1389,7 +1389,7 @@ where
         if trimmed >= cap_height - f32::EPSILON {
             cap_height = 0.0;
         } else if trimmed > f32::EPSILON {
-            v1 -= (v1 - v0) * (trimmed / cap_height);
+            v1 = (v1 - v0).mul_add(-(trimmed / cap_height), v1);
             cap_bottom -= trimmed;
             cap_height = cap_bottom - cap_top;
         }
@@ -1854,8 +1854,8 @@ pub fn offset_center(
 ) -> [f32; 2] {
     let [s, c] = local_offset_rot_sin_cos;
     [
-        center[0] + local_offset[0] * c - local_offset[1] * s,
-        center[1] + local_offset[0] * s + local_offset[1] * c,
+        local_offset[1].mul_add(-s, local_offset[0].mul_add(c, center[0])),
+        local_offset[1].mul_add(c, local_offset[0].mul_add(s, center[1])),
     ]
 }
 
@@ -2158,9 +2158,9 @@ pub(crate) fn bottom_cap_uv_window(
     }
     let t = (visible / full).clamp(0.0, 1.0);
     if reverse {
-        Some((v0, v0 + (v1 - v0) * t))
+        Some((v0, (v1 - v0).mul_add(t, v0)))
     } else {
-        Some((v1 - (v1 - v0) * t, v1))
+        Some(((v1 - v0).mul_add(-t, v1), v1))
     }
 }
 
@@ -2181,7 +2181,7 @@ pub(crate) fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
 }
 
 pub(crate) fn song_time_ns_delta_seconds(lhs: SongTimeNs, rhs: SongTimeNs) -> f32 {
-    ((lhs as i128 - rhs as i128) as f64 * 1.0e-9) as f32
+    ((i128::from(lhs) - i128::from(rhs)) as f64 * 1.0e-9) as f32
 }
 
 #[cfg(test)]

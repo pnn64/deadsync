@@ -883,7 +883,7 @@ pub fn create_arrow_effects_table(
             let reverse = arrow_effects_reverse_percent(&args)?;
             let receptor_y = (THEME_RECEPTOR_Y_REV - THEME_RECEPTOR_Y_STD)
                 .mul_add(reverse, THEME_RECEPTOR_Y_STD);
-            Ok(receptor_y + y_offset * (1.0 - 2.0 * reverse))
+            Ok(receptor_y + y_offset * 2.0f32.mul_add(-reverse, 1.0))
         })?,
     )?;
     table.set(
@@ -1644,7 +1644,7 @@ pub fn install_ease_table(lua: &Lua, host: &mut SongLuaHostState) -> mlua::Resul
                 if d.abs() <= f32::EPSILON {
                     Ok(b + c)
                 } else {
-                    Ok(b + c * (f32::min(f32::max(_t / d, 0.0), 1.0)))
+                    Ok(c.mul_add(f32::min(f32::max(_t / d, 0.0), 1.0), b))
                 }
             },
         )?;

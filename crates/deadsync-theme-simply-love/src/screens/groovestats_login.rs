@@ -1,4 +1,4 @@
-//! Dedicated screen for the GrooveStats QR device-login step.
+//! Dedicated screen for the `GrooveStats` QR device-login step.
 //!
 //! Mirrors Simply Love's `ScreenGrooveStatsLogin`
 //! (`BGAnimations/ScreenGrooveStatsLogin underlay/default.lua`), which
@@ -6,8 +6,8 @@
 //! boot-flow branch chain (`Scripts/SL-Branches.lua:78-80`).  Gated by
 //! the `GrooveStatsQrLoginWhen` pref (Always/Sometimes/Disabled).
 //!
-//! When both this and the ArrowCloud variant are configured to auto-show,
-//! GrooveStats runs first (`SelectProfile → GrooveStatsLogin →
+//! When both this and the `ArrowCloud` variant are configured to auto-show,
+//! `GrooveStats` runs first (`SelectProfile → GrooveStatsLogin →
 //! ArrowCloudLogin → SelectColor`), matching SL's GrooveStats-first
 //! Branch.AfterSelectProfile ordering.
 //!
@@ -28,7 +28,7 @@ const TRANSITION_IN_DURATION: f32 = 0.3;
 const TRANSITION_OUT_DURATION: f32 = 0.3;
 
 /// Optional per-profile scoping carried into the screen from Manage
-/// Local Profiles' "Link GrooveStats" entry.
+/// Local Profiles' "Link `GrooveStats`" entry.
 #[derive(Clone, Debug)]
 pub struct ProfileTarget {
     pub id: String,
@@ -41,7 +41,7 @@ pub struct State {
     pub(crate) ui: Option<QrLoginUiState>,
     pending_start: Option<crate::SimplyLoveQrLoginRequest>,
     show_arrowcloud_next: bool,
-    /// `Some` when entered via Manage Local Profiles → Link GrooveStats,
+    /// `Some` when entered via Manage Local Profiles → Link `GrooveStats`,
     /// scoping the screen to a single profile (rather than P1/P2 sides).
     /// Cleared on dismiss so subsequent post-Select-Profile auto-flows
     /// don't accidentally inherit it.
@@ -105,7 +105,7 @@ pub fn apply_events(state: &mut State, events: Vec<crate::SimplyLoveQrLoginEvent
     }
 }
 
-/// Input mirrors the ArrowCloud screen:
+/// Input mirrors the `ArrowCloud` screen:
 ///   * Start (or SELECT) → request cancellation, advance to the next stop
 ///                          in the post-SelectProfile chain.
 ///   * Back  (or L+R chord on three-key cabinets) → request cancellation and
@@ -116,9 +116,9 @@ pub fn apply_events(state: &mut State, events: Vec<crate::SimplyLoveQrLoginEvent
 /// Otherwise hand off to `ArrowCloudLogin` so its auto-show check + own
 /// fall-through to `SelectColor` runs next.  This keeps the chain
 /// (`SelectProfile → GrooveStats → ArrowCloud → SelectColor`) terminating
-/// at SelectColor through the ArrowCloud screen's existing logic, even
-/// when ArrowCloud's pref is `Disabled` (the app's ThemeEffect handler
-/// already collapses that case to SelectColor directly).
+/// at `SelectColor` through the `ArrowCloud` screen's existing logic, even
+/// when `ArrowCloud`'s pref is `Disabled` (the app's `ThemeEffect` handler
+/// already collapses that case to `SelectColor` directly).
 pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeEffect>) {
     let start_len = effects.len();
     let three_key = screen_input::three_key_menu_action(

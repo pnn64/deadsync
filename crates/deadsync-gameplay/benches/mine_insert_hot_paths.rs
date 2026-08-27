@@ -295,7 +295,7 @@ fn range_checksum(
         let start = center.saturating_sub(23);
         let end = center + 23;
         let column = (operation_index + query_index * 3) % 4;
-        checksum.rotate_left(1) ^ query(notes, column, start, end) as u64
+        checksum.rotate_left(1) ^ u64::from(query(notes, column, start, end))
     })
 }
 

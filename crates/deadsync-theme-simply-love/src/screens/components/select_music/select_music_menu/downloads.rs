@@ -221,7 +221,7 @@ pub fn build_downloads_overlay(
         font("miso"):
         settext(format!("{finished}/{total}")):
         align(1.0, 0.5):
-        xy(center_x + DOWNLOADS_PANEL_W * 0.5 - 18.0, center_y + DOWNLOADS_TITLE_Y):
+        xy(DOWNLOADS_PANEL_W.mul_add(0.5, center_x) - 18.0, center_y + DOWNLOADS_TITLE_Y):
         zoom(0.85):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(DOWNLOADS_Z + 3):
@@ -251,7 +251,7 @@ pub fn build_downloads_overlay(
         .take(DOWNLOADS_VIEW_ROWS)
         .enumerate()
     {
-        let row_y = center_y + DOWNLOADS_LIST_Y + DOWNLOADS_ROW_STEP * slot as f32;
+        let row_y = DOWNLOADS_ROW_STEP.mul_add(slot as f32, center_y + DOWNLOADS_LIST_Y);
         let row_x = center_x + DOWNLOADS_LIST_X;
         let percent = download_percent(snapshot.current_bytes, snapshot.total_bytes);
         let progress = if snapshot.complete {

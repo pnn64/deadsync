@@ -974,9 +974,9 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         ));
                     }
                     let folder_frame_x = if is_child_pack { 8.0 } else { -3.0 };
-                    let folder_mid_x =
-                        highlight_left_world + folder_frame_x + FOLDER_NATIVE_WIDTH * FOLDER_ZOOM
-                            - 8.0;
+                    let folder_mid_x = FOLDER_NATIVE_WIDTH
+                        .mul_add(FOLDER_ZOOM, highlight_left_world + folder_frame_x)
+                        - 8.0;
                     if is_series_header {
                         let expanded = p
                             .expanded_series_name
@@ -1059,7 +1059,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         let heart_x = -23.0_f32;
                         let heart_pulse_t = {
                             let t = (p.selection_animation_timer / HEART_PULSE_PERIOD).fract();
-                            (t * std::f32::consts::TAU).sin() * 0.5 + 0.5
+                            (t * std::f32::consts::TAU).sin().mul_add(0.5, 0.5)
                         };
                         if p1_fav {
                             let heart_y = if both_joined { -6.0 } else { 0.0 };
@@ -1461,7 +1461,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         let heart_x = -23.0_f32;
                         let heart_pulse_t = {
                             let t = (p.selection_animation_timer / HEART_PULSE_PERIOD).fract();
-                            (t * std::f32::consts::TAU).sin() * 0.5 + 0.5
+                            (t * std::f32::consts::TAU).sin().mul_add(0.5, 0.5)
                         };
                         if p1_fav {
                             let heart_y = if both_joined { -6.0 } else { 0.0 };

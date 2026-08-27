@@ -272,8 +272,8 @@ pub fn append_screenshot_overlay_actors<RequestSide: Copy>(
     }
 
     let border = SCREENSHOT_PREVIEW_BORDER_PX;
-    let outer_w = shot_w + border * 2.0;
-    let outer_h = shot_h + border * 2.0;
+    let outer_w = border.mul_add(2.0, shot_w);
+    let outer_h = border.mul_add(2.0, shot_h);
     let edge_alpha = (0.7 + pose.glow_alpha).clamp(0.0, 1.0);
     let z = SCREENSHOT_PREVIEW_Z;
 
@@ -298,24 +298,24 @@ pub fn append_screenshot_overlay_actors<RequestSide: Copy>(
     for (x, y, width, height) in [
         (
             pose.x,
-            pose.y - shot_h * 0.5 - border * 0.5,
+            border.mul_add(-0.5, shot_h.mul_add(-0.5, pose.y)),
             outer_w,
             border,
         ),
         (
             pose.x,
-            pose.y + shot_h * 0.5 + border * 0.5,
+            border.mul_add(0.5, shot_h.mul_add(0.5, pose.y)),
             outer_w,
             border,
         ),
         (
-            pose.x - shot_w * 0.5 - border * 0.5,
+            border.mul_add(-0.5, shot_w.mul_add(-0.5, pose.x)),
             pose.y,
             border,
             outer_h,
         ),
         (
-            pose.x + shot_w * 0.5 + border * 0.5,
+            border.mul_add(0.5, shot_w.mul_add(0.5, pose.x)),
             pose.y,
             border,
             outer_h,

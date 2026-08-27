@@ -222,7 +222,7 @@ pub fn closest_lane_note_ns<I: Copy + Into<usize>>(
             continue;
         }
         let row_distance = current_row_index.abs_diff(note.row_index);
-        let signed_err_music = current_time_ns as i128 - note_times_ns[note_index] as i128;
+        let signed_err_music = i128::from(current_time_ns) - i128::from(note_times_ns[note_index]);
         // Match ITGmania Player::GetClosestNote: choose by row proximity, and
         // break exact ties toward the later row.
         match best {

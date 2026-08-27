@@ -47,7 +47,7 @@ pub const fn song_lua_player_skew_y_matrix(amount: f32) -> Matrix4 {
 
 #[inline(always)]
 fn song_lua_fold_x_around_pivot(x: f32, pivot_x: f32, cos_y: f32) -> f32 {
-    pivot_x + (x - pivot_x) * cos_y
+    (x - pivot_x).mul_add(cos_y, pivot_x)
 }
 
 pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32) -> Actor {
@@ -497,8 +497,8 @@ pub fn song_lua_player_transform_matrix(request: SongLuaPlayerTransformRequest) 
         return None;
     }
 
-    let pivot_x = playfield_center_x - 0.5 * screen_width;
-    let pivot_y = 0.5 * screen_height - screen_center_y;
+    let pivot_x = 0.5f32.mul_add(-screen_width, playfield_center_x);
+    let pivot_y = 0.5f32.mul_add(screen_height, -screen_center_y);
     // ITGmania actor transforms are authored in screen coordinates (Y down).
     // This matrix is applied in DeadSync world space (Y up), so Z rotation and
     // actor skews flip sign across the Y axis.

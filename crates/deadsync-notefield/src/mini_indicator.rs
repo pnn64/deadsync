@@ -72,8 +72,8 @@ pub fn zmod_target_score_missed(
     if !progress.judged_any {
         return false;
     }
-    let attainable = progress.current_score_percent.clamp(0.0, 100.0)
-        + (1.0 - progress.current_possible_ratio.clamp(0.0, 1.0)) * 100.0;
+    let attainable = (1.0 - progress.current_possible_ratio.clamp(0.0, 1.0))
+        .mul_add(100.0, progress.current_score_percent.clamp(0.0, 100.0));
     attainable < target_score_percent.clamp(0.0, 100.0)
 }
 
@@ -202,7 +202,7 @@ impl BrokenRunSpan {
     }
 }
 
-/// Song-lifetime prefix totals for the StreamProg mini indicator.
+/// Song-lifetime prefix totals for the `StreamProg` mini indicator.
 ///
 /// The gameplay screen owns one lookup per player for the song lifetime. It is
 /// built while entering gameplay, uses one boxed allocation sized to the chart,
@@ -474,7 +474,7 @@ pub(crate) fn zmod_measure_counter_text(
         if !is_lookahead {
             let first = segs[0];
             if !first.is_break() {
-                let value = ((-beat_div4) + (1.0 * multiplier)).floor() as i32;
+                let value = 1.0f32.mul_add(multiplier, -beat_div4).floor() as i32;
                 return Some(ZmodMeasureCounterText::Break(value));
             }
             let len = (first.end() - first.start()) as i32;
@@ -553,7 +553,7 @@ pub fn zmod_percent_from_points(points: i32, total: i32) -> f64 {
     if total <= 0 || points <= 0 {
         return 0.0;
     }
-    ((points as f64 / total as f64) * 10000.0).floor() / 100.0
+    ((f64::from(points) / f64::from(total)) * 10000.0).floor() / 100.0
 }
 
 pub(crate) const fn zmod_subtractive_counter_state(
@@ -639,7 +639,12 @@ pub(crate) fn zmod_pacemaker_color(pace: f64, rival_pace: f64) -> [f32; 4] {
 }
 
 pub(crate) fn rgba8(r: u8, g: u8, b: u8) -> [f32; 4] {
-    [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
+    [
+        f32::from(r) / 255.0,
+        f32::from(g) / 255.0,
+        f32::from(b) / 255.0,
+        1.0,
+    ]
 }
 
 fn zmod_indicator_score_color(score_percent: f64, style: MiniIndicatorColorStyle) -> [f32; 4] {
@@ -791,9 +796,9 @@ pub(crate) fn zmod_combo_glow_color(color1: [f32; 4], color2: [f32; 4], elapsed:
     let through = (elapsed / effect_period).fract();
     let t = f32::midpoint((through * std::f32::consts::TAU).sin(), 1.0);
     [
-        color1[0] + (color2[0] - color1[0]) * t,
-        color1[1] + (color2[1] - color1[1]) * t,
-        color1[2] + (color2[2] - color1[2]) * t,
+        (color2[0] - color1[0]).mul_add(t, color1[0]),
+        (color2[1] - color1[1]).mul_add(t, color1[1]),
+        (color2[2] - color1[2]).mul_add(t, color1[2]),
         1.0,
     ]
 }
@@ -857,7 +862,7 @@ pub(crate) fn zmod_indicator_detailed_color(score_percent: f64) -> [f32; 4] {
 pub(crate) fn zmod_combo_rainbow_color(elapsed: f32, scroll: bool, combo: u32) -> [f32; 4] {
     let speed = if scroll { 0.45 } else { 0.35 };
     let offset = if scroll { combo as f32 * 0.013 } else { 0.0 };
-    let hue = (elapsed * speed + offset).fract();
+    let hue = elapsed.mul_add(speed, offset).fract();
     let h6 = hue * 6.0;
     let i = h6.floor() as i32;
     let f = h6 - i as f32;
@@ -936,9 +941,9 @@ pub fn zmod_stream_prog_completion_for_beat(
         let start = seg.start() as f32;
         let end = seg.end() as f32;
         if curr >= end {
-            done += (end - start) as f64;
+            done += f64::from(end - start);
         } else if curr > start {
-            done += (curr - start) as f64;
+            done += f64::from(curr - start);
         }
     }
     Some((done / total_stream_measures).clamp(0.0, 1.0))

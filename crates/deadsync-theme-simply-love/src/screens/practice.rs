@@ -962,7 +962,7 @@ fn handle_raw_key_event_inner(
 }
 
 /// Maps the gameplay function keys that Practice forwards to its embedded
-/// gameplay runtime. Mirrors the gameplay screen bindings: F6 AutoSync,
+/// gameplay runtime. Mirrors the gameplay screen bindings: F6 `AutoSync`,
 /// F7 assist/hit ticks, F8 autoplay, F11/F12 sync-offset adjustment.
 const fn gameplay_hotkey_input(code: KeyCode) -> Option<GameplayRawKeyInput> {
     match code {
@@ -1109,7 +1109,7 @@ fn practice_edit_field_zoom() -> f32 {
 }
 
 fn practice_edit_cursor_y() -> f32 {
-    screen_center_y() - screen_height() / 480.0 * EDIT_FIELD_HEIGHT_AT_480P * 0.5
+    (screen_height() / 480.0 * EDIT_FIELD_HEIGHT_AT_480P).mul_add(-0.5, screen_center_y())
 }
 
 const fn practice_edit_scroll_speed(state: &State) -> ScrollSpeedSetting {
@@ -1869,7 +1869,7 @@ fn next_display_beat(display_beat: f32, cursor_beat: f32, delta_time: f32) -> f3
         return cursor_beat;
     }
     let t = 1.0 - (-delta_time / DISPLAY_SCROLL_TIME_CONSTANT).exp();
-    display_beat + diff * t
+    diff.mul_add(t, display_beat)
 }
 
 fn change_snap(state: &mut State, delta: isize) {
@@ -2224,7 +2224,7 @@ fn append_player_markers(
         zoom: field_zoom,
     };
     let marker_phase = (state.gameplay.total_elapsed_in_screen() * std::f32::consts::PI).sin();
-    let marker_shade = 0.75 + marker_phase * 0.25;
+    let marker_shade = marker_phase.mul_add(0.25, 0.75);
     let cursor_y = marker_y_for_beat(state, player_idx, col_start, offset_y, state.cursor_beat);
     append_timing_segment_labels(state, actors, geom);
     append_field_cursor(
@@ -2359,12 +2359,12 @@ fn timing_label_y_is_visible(y: f32) -> bool {
 
 fn timing_label_x(center_x: f32, width: f32, zoom: f32, style: TimingLabelStyle) -> f32 {
     let side = if style.left_side { -1.0 } else { 1.0 };
-    center_x + side * (width * 0.5 + style.offset_x * zoom)
+    center_x + side * style.offset_x.mul_add(zoom, width * 0.5)
 }
 
 fn timing_label_glow_alpha(elapsed: f32) -> f32 {
     let phase = elapsed * std::f32::consts::TAU / 6.0;
-    (phase.cos() * 0.5 + 0.5).clamp(0.0, 1.0)
+    phase.cos().mul_add(0.5, 0.5).clamp(0.0, 1.0)
 }
 
 fn timing_speed_label(seg: SpeedSegment) -> String {
@@ -2470,8 +2470,20 @@ fn append_field_cursor(
     }
     let side_gap = ScrollSpeedSetting::ARROW_SPACING * 0.5 * zoom;
     let frame = snap_index.min(SNAP_LABELS.len().saturating_sub(1)) as u32;
-    append_snap_cursor_heart(actors, center_x - width * 0.5 - side_gap, y, zoom, frame);
-    append_snap_cursor_heart(actors, center_x + width * 0.5 + side_gap, y, zoom, frame);
+    append_snap_cursor_heart(
+        actors,
+        width.mul_add(-0.5, center_x) - side_gap,
+        y,
+        zoom,
+        frame,
+    );
+    append_snap_cursor_heart(
+        actors,
+        width.mul_add(0.5, center_x) + side_gap,
+        y,
+        zoom,
+        frame,
+    );
 }
 
 fn append_snap_cursor_heart(actors: &mut Vec<Actor>, x: f32, y: f32, zoom: f32, frame: u32) {
@@ -2868,11 +2880,12 @@ fn append_menu_row(
 
 fn menu_row_y(idx: usize, row_count: usize) -> f32 {
     if row_count.is_multiple_of(2) {
-        screen_center_y()
-            + EDIT_MENU_ROW_HEIGHT * (idx as f32 - (row_count / 2) as f32)
-            + EDIT_MENU_ROW_HEIGHT * 0.5
+        EDIT_MENU_ROW_HEIGHT.mul_add(
+            0.5,
+            EDIT_MENU_ROW_HEIGHT.mul_add(idx as f32 - (row_count / 2) as f32, screen_center_y()),
+        )
     } else {
-        screen_center_y() + EDIT_MENU_ROW_HEIGHT * (idx as f32 - (row_count / 2) as f32)
+        EDIT_MENU_ROW_HEIGHT.mul_add(idx as f32 - (row_count / 2) as f32, screen_center_y())
     }
 }
 
@@ -3462,7 +3475,7 @@ mod tests {
         let travel =
             practice_edit_beat_travel(44.0, 40.0, 0.5, ScrollSpeedSetting::XMod(1.5), 180.0, 1.0);
 
-        assert!((travel - 4.0 * 64.0 * 0.5 * 1.5).abs() <= 0.001);
+        assert!((4.0_f32 * 64.0 * 0.5).mul_add(-1.5, travel).abs() <= 0.001);
     }
 
     #[test]

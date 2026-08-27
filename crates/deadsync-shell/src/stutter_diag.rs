@@ -79,7 +79,7 @@ pub fn stutter_diag_dump_lines(
     for sample in frames {
         let age_ms = context.now_host_nanos.saturating_sub(sample.host_nanos) as f64 / 1_000_000.0;
         let multiple = if sample.expected_us > 0 {
-            sample.frame_us as f64 / sample.expected_us as f64
+            f64::from(sample.frame_us) / f64::from(sample.expected_us)
         } else {
             0.0
         };
@@ -87,26 +87,26 @@ pub fn stutter_diag_dump_lines(
             "Stutter recorder frame age_ms={:.3} screen={:?} dt_ms={:.3} expected_ms={:.3} x{:.2} req={} phases_ms=[pre:{:.3} rq:{:.3} in:{:.3} maintenance:{:.3} up:{:.3} comp:{:.3} upload:{:.3} draw:{:.3}] draw_ms=[acq:{:.3} sub:{:.3} present:{:.3} gpu_wait:{:.3} setup:{:.3} prep:{:.3} record:{:.3}] display=[err_ms:{:+.3} catch:{}] present=[mode:{} display:{} host:{} inflight:{} wait:{} back:{} idle:{} subopt:{}]",
             age_ms,
             sample.screen,
-            sample.frame_us as f64 / 1000.0,
-            sample.expected_us as f64 / 1000.0,
+            f64::from(sample.frame_us) / 1000.0,
+            f64::from(sample.expected_us) / 1000.0,
             multiple,
             sample.redraw_request_reason,
-            sample.pre_redraw_gap_us as f64 / 1000.0,
-            sample.request_to_redraw_us as f64 / 1000.0,
-            sample.input_us as f64 / 1000.0,
-            sample.maintenance_us as f64 / 1000.0,
-            sample.update_us as f64 / 1000.0,
-            sample.compose_us as f64 / 1000.0,
-            sample.upload_us as f64 / 1000.0,
-            sample.draw_us as f64 / 1000.0,
-            sample.acquire_us as f64 / 1000.0,
-            sample.submit_us as f64 / 1000.0,
-            sample.present_us as f64 / 1000.0,
-            sample.gpu_wait_us as f64 / 1000.0,
-            sample.draw_setup_us as f64 / 1000.0,
-            sample.draw_prepare_us as f64 / 1000.0,
-            sample.draw_record_us as f64 / 1000.0,
-            sample.display_error_us as f64 / 1000.0,
+            f64::from(sample.pre_redraw_gap_us) / 1000.0,
+            f64::from(sample.request_to_redraw_us) / 1000.0,
+            f64::from(sample.input_us) / 1000.0,
+            f64::from(sample.maintenance_us) / 1000.0,
+            f64::from(sample.update_us) / 1000.0,
+            f64::from(sample.compose_us) / 1000.0,
+            f64::from(sample.upload_us) / 1000.0,
+            f64::from(sample.draw_us) / 1000.0,
+            f64::from(sample.acquire_us) / 1000.0,
+            f64::from(sample.submit_us) / 1000.0,
+            f64::from(sample.present_us) / 1000.0,
+            f64::from(sample.gpu_wait_us) / 1000.0,
+            f64::from(sample.draw_setup_us) / 1000.0,
+            f64::from(sample.draw_prepare_us) / 1000.0,
+            f64::from(sample.draw_record_us) / 1000.0,
+            f64::from(sample.display_error_us) / 1000.0,
             u8::from(sample.display_catching_up),
             sample.present_mode,
             sample.present_display_clock,
@@ -125,12 +125,12 @@ pub fn stutter_diag_dump_lines(
             "Stutter recorder display age_ms={:.3} kind={} target_ms={:.3} prev_ms={:.3} curr_ms={:.3} err_ms={:+.3} step_ms={:+.3} limit_ms={:.3}",
             age_ms,
             event.kind,
-            event.target_time_sec as f64 * 1000.0,
-            event.previous_time_sec as f64 * 1000.0,
-            event.current_time_sec as f64 * 1000.0,
-            event.error_seconds as f64 * 1000.0,
-            event.step_seconds as f64 * 1000.0,
-            event.limit_seconds as f64 * 1000.0,
+            f64::from(event.target_time_sec) * 1000.0,
+            f64::from(event.previous_time_sec) * 1000.0,
+            f64::from(event.current_time_sec) * 1000.0,
+            f64::from(event.error_seconds) * 1000.0,
+            f64::from(event.step_seconds) * 1000.0,
+            f64::from(event.limit_seconds) * 1000.0,
         ));
     }
     for event in audio_events {

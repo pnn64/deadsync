@@ -363,7 +363,7 @@ pub fn active_perframe_entries(
     start: f32,
     end: f32,
 ) -> Vec<&SongLuaPerframeEntry> {
-    let mid = start + 0.5 * (end - start);
+    let mid = 0.5f32.mul_add(end - start, start);
     entries
         .iter()
         .filter(|entry| mid > entry.start && mid < entry.end)
@@ -1187,7 +1187,7 @@ pub fn call_update_functions_at(
     set_compile_song_runtime_beat(lua, beat).map_err(|err| err.to_string())?;
     set_compile_song_runtime_delta_values(lua, delta_beats, delta_seconds)
         .map_err(|err| err.to_string())?;
-    let result = run_actor_update_functions_with_delta(lua, root, delta_seconds as f64)
+    let result = run_actor_update_functions_with_delta(lua, root, f64::from(delta_seconds))
         .map_err(|err| err.to_string());
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
     set_compile_song_runtime_delta_values(lua, previous_delta.0, previous_delta.1)

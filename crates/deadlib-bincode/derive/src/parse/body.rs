@@ -588,7 +588,7 @@ impl IdentOrIndex {
         }
     }
 
-    /// Convert this ident into a TokenTree. If this is an `Index`, will return `prefix + index` instead.
+    /// Convert this ident into a `TokenTree`. If this is an `Index`, will return `prefix + index` instead.
     pub fn to_token_tree_with_prefix(&self, prefix: &str) -> TokenTree {
         TokenTree::Ident(match self {
             IdentOrIndex::Ident { ident, .. } => (*ident).clone(),

@@ -479,7 +479,7 @@ fn append_line_candidate(
         edit_measure_slots,
         plan.edit,
         info.and_then(|info| info.measure_index),
-        x_center - width * 0.5,
+        width.mul_add(-0.5, x_center),
         y,
         request.field_zoom,
         request.style.measure_line_z,

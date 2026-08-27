@@ -929,23 +929,23 @@ pub(super) fn build_overlay(
         diffuse(0.025, 0.025, 0.035, 0.99): z(Z + 2)
     ));
     out.push(act!(quad:
-        align(0.0, 0.0): xy(cx - PANEL_W * 0.5, cy - PANEL_H * 0.5):
+        align(0.0, 0.0): xy(PANEL_W.mul_add(-0.5, cx), PANEL_H.mul_add(-0.5, cy)):
         zoomto(7.0, PANEL_H): diffuse(accent[0], accent[1], accent[2], 0.86): z(Z + 3)
     ));
     out.push(act!(quad:
-        align(0.5, 0.5): xy(cx, cy - PANEL_H * 0.5 + HEADER_H * 0.5):
+        align(0.5, 0.5): xy(cx, HEADER_H.mul_add(0.5, PANEL_H.mul_add(-0.5, cy))):
         zoomto(PANEL_W, HEADER_H): diffuse(0.0, 0.0, 0.0, 0.92): z(Z + 4)
     ));
     out.push(act!(text:
         font(header_font):
         settext(tr("OptionsDownloadPacks", "Title")):
-        align(0.0, 0.5): xy(cx - PANEL_W * 0.5 + 18.0, cy - 188.0):
+        align(0.0, 0.5): xy(PANEL_W.mul_add(-0.5, cx) + 18.0, cy - 188.0):
         zoom(0.42): diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(left)
     ));
     out.push(act!(text:
         font(bold_font):
         settext(tr("OptionsDownloadPacks", "Source")):
-        align(1.0, 0.5): xy(cx + PANEL_W * 0.5 - 16.0, cy - 194.0):
+        align(1.0, 0.5): xy(PANEL_W.mul_add(0.5, cx) - 16.0, cy - 194.0):
         zoom(0.24): diffuse(accent[0], accent[1], accent[2], 1.0): z(Z + 6): horizalign(right)
     ));
     let shown = data.results.len().to_string();
@@ -957,7 +957,7 @@ pub(super) fn build_overlay(
             "CatalogCount",
             &[("shown", &shown), ("total", &total)],
         )):
-        align(1.0, 0.5): xy(cx + PANEL_W * 0.5 - 16.0, cy - 180.0):
+        align(1.0, 0.5): xy(PANEL_W.mul_add(0.5, cx) - 16.0, cy - 180.0):
         zoom(0.66): diffuse(0.72, 0.72, 0.76, 1.0): z(Z + 6): horizalign(right)
     ));
 
@@ -1018,13 +1018,13 @@ fn push_search(
         diffuse(0.0, 0.0, 0.0, 0.84): z(Z + 4)
     ));
     out.push(act!(quad:
-        align(0.0, 0.5): xy(cx - PANEL_W * 0.5 + 14.0, y): zoomto(4.0, SEARCH_H):
+        align(0.0, 0.5): xy(PANEL_W.mul_add(-0.5, cx) + 14.0, y): zoomto(4.0, SEARCH_H):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z + 5)
     ));
     out.push(act!(text:
         font(bold_font):
         settext(tr("OptionsDownloadPacks", "SearchLabel")):
-        align(0.0, 0.5): xy(cx - PANEL_W * 0.5 + 28.0, y): zoom(0.25):
+        align(0.0, 0.5): xy(PANEL_W.mul_add(-0.5, cx) + 28.0, y): zoom(0.25):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z + 6): horizalign(left)
     ));
     let cursor = if data.blink_t < CURSOR_PERIOD * 0.5 {
@@ -1042,7 +1042,7 @@ fn push_search(
     };
     out.push(act!(text:
         font("miso"): settext(value): align(0.0, 0.5):
-        xy(cx - PANEL_W * 0.5 + 105.0, y): zoom(0.82): maxwidth(PANEL_W - 138.0):
+        xy(PANEL_W.mul_add(-0.5, cx) + 105.0, y): zoom(0.82): maxwidth(PANEL_W - 138.0):
         diffuse(
             if data.query.is_empty() { 0.60 } else { 1.0 },
             if data.query.is_empty() { 0.60 } else { 1.0 },
@@ -1067,7 +1067,7 @@ fn push_substyle_buttons(
     let left = cx - total_width * 0.5;
     let y = cy - 108.0;
     for (index, button) in data.substyles.iter().enumerate() {
-        let x = left + button_width * 0.5 + index as f32 * (button_width + gap);
+        let x = (index as f32).mul_add(button_width + gap, left + button_width * 0.5);
         let active = index == data.selected_substyle;
         out.push(act!(quad:
             align(0.5, 0.5): xy(x, y): zoomto(button_width, FILTER_H):
@@ -1125,7 +1125,7 @@ fn push_catalog(
         };
         let row_index = start + slot;
         let active = row_index == selected;
-        let y = list_top + slot as f32 * ROW_H;
+        let y = (slot as f32).mul_add(ROW_H, list_top);
         out.push(act!(quad:
             align(0.5, 0.5): xy(list_x, y): zoomto(PANE_W - 8.0, ROW_H - 3.0):
             diffuse(accent[0], accent[1], accent[2], if active { 0.82 } else { 0.12 }):
@@ -1133,14 +1133,14 @@ fn push_catalog(
         ));
         out.push(act!(text:
             font(bold_font): settext(pack.name.clone()):
-            align(0.0, 0.5): xy(list_x - PANE_W * 0.5 + 9.0, y - 5.0):
+            align(0.0, 0.5): xy(PANE_W.mul_add(-0.5, list_x) + 9.0, y - 5.0):
             zoom(0.25): maxwidth(258.0):
             diffuse(1.0, 1.0, 1.0, if active { 1.0 } else { 0.75 }):
             z(Z + 6): horizalign(left)
         ));
         out.push(act!(text:
             font("miso"): settext(pack_row_detail(pack, snapshot, &data.installed_names)):
-            align(0.0, 0.5): xy(list_x - PANE_W * 0.5 + 9.0, y + 8.0):
+            align(0.0, 0.5): xy(PANE_W.mul_add(-0.5, list_x) + 9.0, y + 8.0):
             zoom(0.67): maxwidth(258.0):
             diffuse(0.88, 0.88, 0.90, if active { 1.0 } else { 0.60 }):
             z(Z + 6): horizalign(left)
@@ -1161,7 +1161,7 @@ fn push_pack_detail(
     cy: f32,
     bold_font: &'static str,
 ) {
-    let x = cx - PANEL_W * 0.5 + 15.0;
+    let x = PANEL_W.mul_add(-0.5, cx) + 15.0;
     let install = install_for_pack(snapshot, pack.id);
     let installed = pack_is_installed(pack, snapshot, &data.installed_names);
     out.push(act!(quad:
@@ -1354,16 +1354,16 @@ fn push_footer(
         tr("OptionsDownloadPacks", "Footer")
     };
     out.push(act!(quad:
-        align(0.5, 0.5): xy(cx, cy + PANEL_H * 0.5 - 18.0): zoomto(PANEL_W, 36.0):
+        align(0.5, 0.5): xy(cx, PANEL_H.mul_add(0.5, cy) - 18.0): zoomto(PANEL_W, 36.0):
         diffuse(0.0, 0.0, 0.0, 0.94): z(Z + 5)
     ));
     out.push(act!(quad:
-        align(0.0, 0.5): xy(cx - PANEL_W * 0.5, cy + PANEL_H * 0.5 - 18.0):
+        align(0.0, 0.5): xy(PANEL_W.mul_add(-0.5, cx), PANEL_H.mul_add(0.5, cy) - 18.0):
         zoomto(7.0, 36.0): diffuse(accent[0], accent[1], accent[2], 0.86): z(Z + 6)
     ));
     out.push(act!(text:
         font("miso"): settext(hint): align(0.5, 0.5):
-        xy(cx, cy + PANEL_H * 0.5 - 18.0): zoom(0.68): maxwidth(PANEL_W - 28.0):
+        xy(cx, PANEL_H.mul_add(0.5, cy) - 18.0): zoom(0.68): maxwidth(PANEL_W - 28.0):
         diffuse(1.0, 1.0, 1.0, 0.86): z(Z + 6): horizalign(center)
     ));
 }
@@ -1412,7 +1412,7 @@ fn push_confirmation(
         diffuse(0.74, 0.74, 0.78, 1.0): z(Z + 22): horizalign(center)
     ));
     for (index, key) in ["Yes", "No"].into_iter().enumerate() {
-        let x = cx + (index as f32 - 0.5) * 156.0;
+        let x = (index as f32 - 0.5).mul_add(156.0, cx);
         let active = confirm.choice == index;
         out.push(act!(quad:
             align(0.5, 0.5): xy(x, cy + 66.0): zoomto(138.0, 38.0):

@@ -348,7 +348,7 @@ fn leaderboard_icon_bounce_offset(elapsed: f32, dir: f32) -> f32 {
     let t = elapsed.rem_euclid(1.0);
     let phase = if t < 0.5 {
         let u = t / 0.5;
-        1.0 - (1.0 - u) * (1.0 - u)
+        (1.0 - u).mul_add(-(1.0 - u), 1.0)
     } else {
         let u = (t - 0.5) / 0.5;
         1.0 - u * u
@@ -366,7 +366,7 @@ pub fn build_leaderboard_overlay(
 
     let mut actors = Vec::new();
     let overlay_elapsed = overlay.elapsed;
-    let joined_count = overlay.p1.joined as usize + overlay.p2.joined as usize;
+    let joined_count = usize::from(overlay.p1.joined) + usize::from(overlay.p2.joined);
     let pane_width = if joined_count <= 1 {
         GS_LEADERBOARD_PANE_WIDTH_SINGLE
     } else {
@@ -432,7 +432,8 @@ pub fn build_leaderboard_overlay(
             z(GS_LEADERBOARD_Z + 3)
         ));
 
-        let header_y = pane_cy - GS_LEADERBOARD_PANE_HEIGHT * 0.5 + GS_LEADERBOARD_ROW_HEIGHT * 0.5;
+        let header_y = GS_LEADERBOARD_ROW_HEIGHT
+            .mul_add(0.5, GS_LEADERBOARD_PANE_HEIGHT.mul_add(-0.5, pane_cy));
         actors.push(act!(quad:
             align(0.5, 0.5):
             xy(center_x, header_y):
@@ -507,7 +508,7 @@ pub fn build_leaderboard_overlay(
         let date_x = center_x + pane_width * 0.5 - 2.0;
 
         for i in 0..GS_LEADERBOARD_NUM_ENTRIES {
-            let y = pane_cy + GS_LEADERBOARD_ROW_HEIGHT * ((i + 1) as f32 - row_center);
+            let y = GS_LEADERBOARD_ROW_HEIGHT.mul_add((i + 1) as f32 - row_center, pane_cy);
             let mut rank = String::new();
             let mut name = String::new();
             let mut score = String::new();
@@ -633,8 +634,8 @@ pub fn build_leaderboard_overlay(
         }
 
         if !side.loading && side.error_text.is_none() && side.show_icons {
-            let icon_y =
-                pane_cy + GS_LEADERBOARD_PANE_HEIGHT * 0.5 - GS_LEADERBOARD_ROW_HEIGHT * 0.5;
+            let icon_y = GS_LEADERBOARD_ROW_HEIGHT
+                .mul_add(-0.5, GS_LEADERBOARD_PANE_HEIGHT.mul_add(0.5, pane_cy));
             let left_dx = leaderboard_icon_bounce_offset(overlay_elapsed, 1.0);
             let right_dx = leaderboard_icon_bounce_offset(overlay_elapsed, -1.0);
             actors.push(act!(text:

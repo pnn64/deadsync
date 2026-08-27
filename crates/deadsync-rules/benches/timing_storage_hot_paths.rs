@@ -251,27 +251,27 @@ fn timing_segments() -> TimingSegments {
         bpms: vec![(0.0, 120.0)],
         stops: (0..EVENT_COUNT)
             .map(|index| StopSegment {
-                beat: index as f32 * 32.0 + 4.0,
-                duration: 0.02 + (index % 5) as f32 * 0.005,
+                beat: (index as f32).mul_add(32.0, 4.0),
+                duration: ((index % 5) as f32).mul_add(0.005, 0.02),
             })
             .collect(),
         delays: (0..EVENT_COUNT)
             .map(|index| DelaySegment {
-                beat: index as f32 * 32.0 + 8.0,
-                duration: 0.01 + (index % 3) as f32 * 0.005,
+                beat: (index as f32).mul_add(32.0, 8.0),
+                duration: ((index % 3) as f32).mul_add(0.005, 0.01),
             })
             .collect(),
         warps: (0..EVENT_COUNT)
             .map(|index| WarpSegment {
-                beat: index as f32 * 32.0 + 12.0,
+                beat: (index as f32).mul_add(32.0, 12.0),
                 length: 0.25,
             })
             .collect(),
         speeds: (0..EVENT_COUNT)
             .map(|index| SpeedSegment {
-                beat: index as f32 * 32.0 + 16.0,
-                ratio: 0.75 + (index % 4) as f32 * 0.25,
-                delay: 0.5 + (index % 3) as f32 * 0.25,
+                beat: (index as f32).mul_add(32.0, 16.0),
+                ratio: ((index % 4) as f32).mul_add(0.25, 0.75),
+                delay: ((index % 3) as f32).mul_add(0.25, 0.5),
                 unit: if index % 2 == 0 {
                     SpeedUnit::Beats
                 } else {
@@ -281,13 +281,13 @@ fn timing_segments() -> TimingSegments {
             .collect(),
         scrolls: (0..EVENT_COUNT)
             .map(|index| ScrollSegment {
-                beat: index as f32 * 32.0 + 20.0,
-                ratio: 0.5 + (index % 5) as f32 * 0.25,
+                beat: (index as f32).mul_add(32.0, 20.0),
+                ratio: ((index % 5) as f32).mul_add(0.25, 0.5),
             })
             .collect(),
         fakes: (0..EVENT_COUNT)
             .map(|index| FakeSegment {
-                beat: index as f32 * 32.0 + 24.0,
+                beat: (index as f32).mul_add(32.0, 24.0),
                 length: 0.5,
             })
             .collect(),

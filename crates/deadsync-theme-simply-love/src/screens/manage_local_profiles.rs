@@ -61,7 +61,7 @@ const DESC_TITLE_ZOOM: f32 = 1.0;
 const DESC_BODY_ZOOM: f32 = 1.0;
 
 const NAME_MAX_LEN: usize = 32;
-/// Simply Love's ScreenMiniMenuContext uses a 240 px container, 28 px row
+/// Simply Love's `ScreenMiniMenuContext` uses a 240 px container, 28 px row
 /// spacing, and 236x24 px row frames.
 const PROFILE_MENU_W: f32 = 240.0;
 const PROFILE_MENU_HEADER_H: f32 = 28.0;
@@ -168,7 +168,7 @@ struct DeleteConfirmState {
     error: Option<Arc<str>>,
 }
 
-/// Modal listing ITGmania profiles found on disk, for the user to pick one to
+/// Modal listing `ITGmania` profiles found on disk, for the user to pick one to
 /// import. A trailing synthetic "Browse for game directory…" row (selectable
 /// index `candidates.len()`) lets the user point at a portable install.
 struct ImportPickerState {
@@ -216,7 +216,7 @@ enum SectionStatus {
     /// Imported, but some items were skipped (e.g. scores for charts not in the
     /// library, or favorites whose song is missing).
     Partial,
-    /// Nothing to import — not an error (e.g. no ArrowCloud key, no avatar).
+    /// Nothing to import — not an error (e.g. no `ArrowCloud` key, no avatar).
     Skipped,
 }
 
@@ -1174,8 +1174,8 @@ fn import_canceled_message() -> ImportMessageState {
     }
 }
 
-/// The modal shown when an import was refused because the ITGmania profile was
-/// already imported (matched by derived GUID); `existing` is its DeadSync name.
+/// The modal shown when an import was refused because the `ITGmania` profile was
+/// already imported (matched by derived GUID); `existing` is its `DeadSync` name.
 fn import_already_message(existing: &str) -> ImportMessageState {
     ImportMessageState {
         title: tr("Profiles", "ImportAlreadyTitle"),
@@ -1720,8 +1720,9 @@ fn push_desc(ui: &mut Vec<Actor>, state: &State, s: f32, desc_x: f32, list_y: f3
     let presentation = &row.presentation;
 
     let mut cursor_y = DESC_TITLE_TOP_PAD_PX.mul_add(s, list_y);
-    let title_x = desc_x + DESC_TITLE_SIDE_PAD_PX * s;
-    let max_title_w = (DESC_W - 2.0 * DESC_TITLE_SIDE_PAD_PX)
+    let title_x = DESC_TITLE_SIDE_PAD_PX.mul_add(s, desc_x);
+    let max_title_w = 2.0f32
+        .mul_add(-DESC_TITLE_SIDE_PAD_PX, DESC_W)
         .mul_add(s, 0.0)
         .max(0.0);
     ui.push(act!(text:
@@ -1735,14 +1736,15 @@ fn push_desc(ui: &mut Vec<Actor>, state: &State, s: f32, desc_x: f32, list_y: f3
         horizalign(left)
     ));
 
-    cursor_y += DESC_BULLET_TOP_PAD_PX * s;
+    cursor_y = DESC_BULLET_TOP_PAD_PX.mul_add(s, cursor_y);
     if presentation.help_bullets.is_empty() {
         return;
     }
 
     let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
     let bullet_x = DESC_BULLET_INDENT_PX.mul_add(s, desc_x + bullet_side_pad);
-    let max_bullet_w = (DESC_W - 2.0 * DESC_BULLET_SIDE_PAD_PX)
+    let max_bullet_w = 2.0f32
+        .mul_add(-DESC_BULLET_SIDE_PAD_PX, DESC_W)
         .mul_add(s, 0.0)
         .max(0.0);
     ui.push(act!(text:
@@ -1788,7 +1790,7 @@ fn push_name_entry_overlay(ui: &mut Vec<Actor>, state: &State) {
     ui.push(act!(quad:
         align(0.5, 0.5):
         xy(cx, top_cy):
-        zoomto(box_w - 2.0 * border, top_h - 2.0 * border):
+        zoomto(2.0f32.mul_add(-border, box_w), 2.0f32.mul_add(-border, top_h)):
         diffuse(accent[0], accent[1], accent[2], 1.0):
         z(1002)
     ));
@@ -1802,7 +1804,7 @@ fn push_name_entry_overlay(ui: &mut Vec<Actor>, state: &State) {
     ui.push(act!(quad:
         align(0.5, 0.5):
         xy(cx, answer_cy):
-        zoomto(box_w - 2.0 * border, answer_h - 2.0 * border):
+        zoomto(2.0f32.mul_add(-border, box_w), 2.0f32.mul_add(-border, answer_h)):
         diffuse(0.0, 0.0, 0.0, 1.0):
         z(1002)
     ));
@@ -1875,7 +1877,7 @@ fn push_delete_confirm_overlay(ui: &mut Vec<Actor>, state: &State) {
     );
     ui.push(act!(text:
         align(0.5, 0.0):
-        xy(cx, cy - box_h * 0.5 + 16.0):
+        xy(cx, box_h.mul_add(-0.5, cy) + 16.0):
         font("miso"):
         zoom(1.0):
         maxwidth(box_w - 40.0):
@@ -1887,7 +1889,7 @@ fn push_delete_confirm_overlay(ui: &mut Vec<Actor>, state: &State) {
     let cannot_be_undone = tr("Profiles", "CannotBeUndone");
     ui.push(act!(text:
         align(0.5, 0.0):
-        xy(cx, cy - box_h * 0.5 + 58.0):
+        xy(cx, box_h.mul_add(-0.5, cy) + 58.0):
         font("miso"):
         zoom(0.9):
         settext(cannot_be_undone):
@@ -1898,7 +1900,7 @@ fn push_delete_confirm_overlay(ui: &mut Vec<Actor>, state: &State) {
     let yes_no = tr("Profiles", "YesNoPrompt");
     ui.push(act!(text:
         align(0.5, 1.0):
-        xy(cx, cy + box_h * 0.5 - 10.0):
+        xy(cx, box_h.mul_add(0.5, cy) - 10.0):
         font("miso"):
         zoom(0.9):
         settext(yes_no):
@@ -2004,7 +2006,7 @@ fn push_overlay_error(
     };
     ui.push(act!(text:
         align(0.5, 0.0):
-        xy(cx, cy + box_h * 0.5 - 46.0):
+        xy(cx, box_h.mul_add(0.5, cy) - 46.0):
         font("miso"):
         zoom(0.9):
         maxwidth(box_w - 40.0):
@@ -2038,7 +2040,7 @@ fn push_import_picker_overlay(
     // trailing "Browse…" row, plus an optional info line.
     let list_rows = visible.max(1);
     let info_h = if picker.info.is_some() { 26.0 } else { 0.0 };
-    let box_h = header_h + (list_rows as f32) * item_h + item_h + info_h + footer_h;
+    let box_h = (list_rows as f32).mul_add(item_h, header_h) + item_h + info_h + footer_h;
 
     // Lay the list out as a centered block: a name column whose width is the
     // widest label (profile names or the "Browse…" row) and, when any profile is
@@ -2101,16 +2103,16 @@ fn push_import_picker_overlay(
     };
     let accent = color::simply_love_rgba(state.active_color_index);
     // Centered block geometry.
-    let block_left = cx - block_w * 0.5;
+    let block_left = block_w.mul_add(-0.5, cx);
     let tag_x = block_left + widest_label + ROW_TAG_GAP;
-    let hl_left = cx - block_w * 0.5 - 12.0;
+    let hl_left = block_w.mul_add(-0.5, cx) - 12.0;
     let hl_w = block_w + 24.0;
 
     if total == 0 {
         // Empty-state hint, centered where the list would be.
         ui.push(act!(text:
             align(0.5, 0.5):
-            xy(cx, top + header_h + item_h * 0.5):
+            xy(cx, item_h.mul_add(0.5, top + header_h)):
             font("miso"):
             zoom(0.9):
             maxwidth(box_w - 40.0):
@@ -2149,7 +2151,7 @@ fn push_import_picker_overlay(
             // Name in the left column (left-aligned at the block edge).
             ui.push(act!(text:
                 align(0.0, 0.5):
-                xy(block_left, row_y + item_h * 0.5):
+                xy(block_left, item_h.mul_add(0.5, row_y)):
                 font("miso"):
                 zoom(ROW_ZOOM):
                 maxwidth(widest_label):
@@ -2163,7 +2165,7 @@ fn push_import_picker_overlay(
             if imported_as.is_some() {
                 ui.push(act!(text:
                     align(0.0, 0.5):
-                    xy(tag_x, row_y + item_h * 0.5):
+                    xy(tag_x, item_h.mul_add(0.5, row_y)):
                     font("miso"):
                     zoom(TAG_ZOOM):
                     settext(format!("✔ {}", tr("Profiles", "ImportTagImported"))):
@@ -2194,7 +2196,7 @@ fn push_import_picker_overlay(
     };
     ui.push(act!(text:
         align(0.0, 0.5):
-        xy(block_left, browse_y + item_h * 0.5):
+        xy(block_left, item_h.mul_add(0.5, browse_y)):
         font("miso"):
         zoom(ROW_ZOOM):
         maxwidth(widest_label):
@@ -2240,7 +2242,7 @@ fn push_import_progress_overlay(ui: &mut Vec<Actor>, state: &State, header_font:
     let box_h = 176.0_f32;
     let cx = w * 0.5;
     let cy = h * 0.5;
-    let top = cy - box_h * 0.5;
+    let top = box_h.mul_add(-0.5, cy);
 
     push_popup_backdrop(ui, w, h);
     push_popup_box(ui, cx, cy, box_w, box_h);
@@ -2304,7 +2306,7 @@ fn push_import_progress_overlay(ui: &mut Vec<Actor>, state: &State, header_font:
             ui,
             tr("Profiles", "ImportCancelHint").to_string(),
             cx,
-            cy + box_h * 0.5 - 12.0,
+            box_h.mul_add(0.5, cy) - 12.0,
         );
     }
 }
@@ -2368,7 +2370,7 @@ fn push_import_message_overlay(
     let line_h = 28.0_f32;
     let header_h = 58.0_f32;
     let footer_h = 44.0_f32;
-    let box_h = header_h + (message.lines.len().max(1) as f32) * line_h + footer_h;
+    let box_h = (message.lines.len().max(1) as f32).mul_add(line_h, header_h) + footer_h;
     let cx = w * 0.5;
     let cy = h * 0.5;
     let top = cy - box_h * 0.5;
@@ -2406,7 +2408,7 @@ fn push_import_message_overlay(
         }
     }
     let block_w = widest_label + GAP_LABEL_ICON + icon_w + GAP_ICON_STATUS + widest_status;
-    let block_left = cx - block_w * 0.5;
+    let block_left = block_w.mul_add(-0.5, cx);
     let label_x = block_left;
     let icon_x = block_left + widest_label + GAP_LABEL_ICON;
     let status_x = icon_x + icon_w + GAP_ICON_STATUS;
@@ -2642,7 +2644,7 @@ fn push_row(
     if let Some(tag) = row.presentation.indicator.as_ref() {
         ui.push(act!(text:
             align(1.0, 0.5):
-            xy(list_x + list_w - 12.0 * s, row_mid_y):
+            xy(12.0f32.mul_add(-s, list_x + list_w), row_mid_y):
             zoom(0.75):
             diffuse(text_col[0], text_col[1], text_col[2], text_col[3]):
             font("miso"):
@@ -2721,7 +2723,7 @@ fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x:
     let row_h = PROFILE_MENU_ROW_H * s;
     let border = PROFILE_MENU_BORDER * s;
     let body_h = item_h * PROFILE_MENU_ACTIONS.len() as f32;
-    let menu_h = header_h + body_h + 2.0 * border;
+    let menu_h = 2.0f32.mul_add(border, header_h + body_h);
     let mut menu_x = (LIST_W * 0.52).mul_add(s, list_x);
     let mut menu_y = row_top;
 
@@ -2733,7 +2735,7 @@ fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x:
 
     let inner_x = menu_x + border;
     let inner_y = menu_y + border;
-    let inner_w = (menu_w - 2.0 * border).max(0.0);
+    let inner_w = 2.0f32.mul_add(-border, menu_w).max(0.0);
     let accent = color::simply_love_rgba(state.active_color_index);
 
     ui.push(act!(quad:
@@ -2759,10 +2761,10 @@ fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x:
     ));
     ui.push(act!(text:
         align(0.0, 0.5):
-        xy(14.0_f32.mul_add(s, inner_x), inner_y + header_h * 0.5):
+        xy(14.0_f32.mul_add(s, inner_x), header_h.mul_add(0.5, inner_y)):
         font("miso"):
         zoom(1.0):
-        maxwidth(inner_w - 28.0 * s):
+        maxwidth(28.0f32.mul_add(-s, inner_w)):
         settext(menu.display_name.clone()):
         diffuse(0.0, 0.0, 0.0, 1.0):
         z(1006):
@@ -2779,7 +2781,7 @@ fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x:
         };
         ui.push(act!(quad:
             align(0.0, 0.5):
-            xy(inner_x, row_y + item_h * 0.5):
+            xy(inner_x, item_h.mul_add(0.5, row_y)):
             zoomto(inner_w, row_h):
             diffuse(row_bg[0], row_bg[1], row_bg[2], 0.95):
             z(1005)
@@ -2791,10 +2793,10 @@ fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x:
         };
         ui.push(act!(text:
             align(0.0, 0.5):
-            xy(14.0_f32.mul_add(s, inner_x), row_y + item_h * 0.5):
+            xy(14.0_f32.mul_add(s, inner_x), item_h.mul_add(0.5, row_y)):
             font("miso"):
             zoom(0.8):
-            maxwidth(inner_w - 28.0 * s):
+            maxwidth(28.0f32.mul_add(-s, inner_w)):
             settext(profile_menu_action_label(*action)):
             diffuse(text_col[0], text_col[1], text_col[2], text_col[3]):
             z(1006):

@@ -1,10 +1,10 @@
-//! Resolves an ITGmania score key (`Song Dir` + `StepsType` + `Difficulty`) to a
-//! DeadSync GrooveStats `short_hash`, using the already-scanned song database.
+//! Resolves an `ITGmania` score key (`Song Dir` + `StepsType` + `Difficulty`) to a
+//! `DeadSync` `GrooveStats` `short_hash`, using the already-scanned song database.
 //!
-//! ITGmania `Stats.xml` does not store the GrooveStats hash for normal charts —
+//! `ITGmania` `Stats.xml` does not store the `GrooveStats` hash for normal charts —
 //! it identifies a chart by its on-disk song directory plus the steps type and
-//! difficulty. DeadSync keys local scores by `short_hash`, so to import a score
-//! we must locate the same chart in DeadSync's library and read its hash. Charts
+//! difficulty. `DeadSync` keys local scores by `short_hash`, so to import a score
+//! we must locate the same chart in `DeadSync`'s library and read its hash. Charts
 //! that aren't present in the library can't be resolved (we have no hash for
 //! them) and are reported as skipped.
 
@@ -52,8 +52,8 @@ fn hash_ascii_case_insensitive<H: Hasher>(value: &str, state: &mut H) {
     }
 }
 
-/// Builds a fast lookup over the scanned song library and resolves ITGmania
-/// score keys to DeadSync chart hashes.
+/// Builds a fast lookup over the scanned song library and resolves `ITGmania`
+/// score keys to `DeadSync` chart hashes.
 pub struct ChartResolver<'a> {
     /// `(pack_lower, song_folder_lower)` → song.
     by_song: HashMap<SongKey, &'a SongData, FxBuildHasher>,
@@ -93,9 +93,9 @@ impl<'a> ChartResolver<'a> {
         Self { by_song }
     }
 
-    /// Resolves an ITGmania song directory key (e.g. `"Pack/Song"` from
+    /// Resolves an `ITGmania` song directory key (e.g. `"Pack/Song"` from
     /// `favorites.txt`, or a `Stats.xml` `Dir`) to the matching library song.
-    /// Returns `None` when the song isn't in DeadSync's scanned library.
+    /// Returns `None` when the song isn't in `DeadSync`'s scanned library.
     pub fn resolve_song(&self, song_dir: &str) -> Option<&'a SongData> {
         self.song_for_dir(song_dir)
     }
@@ -203,7 +203,7 @@ fn song_folder_name(song: &SongData) -> Option<&str> {
         .and_then(|s| s.to_str())
 }
 
-/// Normalizes an ITGmania `Dir` attribute (e.g. `"Songs/Pack/Song/"`) into a
+/// Normalizes an `ITGmania` `Dir` attribute (e.g. `"Songs/Pack/Song/"`) into a
 /// `(pack_lower, song_folder_lower)` pair. Leading `Songs/` / `AdditionalSongs/`
 /// roots and surrounding slashes are stripped. Returns `None` if the path
 /// doesn't have at least a pack and a song component.

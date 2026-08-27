@@ -4,7 +4,7 @@
 //!
 //! [Reader] is a reader for sources that do not own their data. It is assumed that the reader's data is dropped after the `read` method is called. This reader is incapable of reading borrowed data, like `&str` and `&[u8]`.
 //!
-//! [BorrowReader] is an extension of `Reader` that also allows returning borrowed data. A `BorrowReader` allows reading `&str` and `&[u8]`.
+//! [`BorrowReader`] is an extension of `Reader` that also allows returning borrowed data. A `BorrowReader` allows reading `&str` and `&[u8]`.
 //!
 //! Specifically the `Reader` trait is used by [Decode] and the `BorrowReader` trait is used by `[BorrowDecode]`.
 //!
@@ -59,7 +59,7 @@ pub trait BorrowReader<'storage>: Reader {
     fn take_bytes(&mut self, length: usize) -> Result<&'storage [u8], DecodeError>;
 }
 
-/// A reader type for `&[u8]` slices. Implements both [Reader] and [BorrowReader], and thus can be used for borrowed data.
+/// A reader type for `&[u8]` slices. Implements both [Reader] and [`BorrowReader`], and thus can be used for borrowed data.
 pub struct SliceReader<'storage> {
     pub(crate) slice: &'storage [u8],
 }

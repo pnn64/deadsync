@@ -1,4 +1,4 @@
-//! Shared StepManiaX SDK manager.
+//! Shared `StepManiaX` SDK manager.
 //!
 //! Provides a process-wide `SmxManager` instance that both the input backend
 //! and the FSR monitor can use. Events are routed to registered listeners.
@@ -81,7 +81,7 @@ fn brightness_factor(pct: u8) -> f32 {
         return 0.0;
     }
     let curve = (f32::from(pct) / 100.0).powf(LIGHT_BRIGHTNESS_GAMMA);
-    LIGHT_BRIGHTNESS_MIN_FACTOR + (1.0 - LIGHT_BRIGHTNESS_MIN_FACTOR) * curve
+    (1.0 - LIGHT_BRIGHTNESS_MIN_FACTOR).mul_add(curve, LIGHT_BRIGHTNESS_MIN_FACTOR)
 }
 
 /// Scale a both-pads RGB frame in place by the per-slot brightness. The frame is
@@ -93,7 +93,7 @@ pub(crate) fn apply_brightness(frame: &mut [u8], pct: [u8; 2]) {
     let factor = [brightness_factor(pct[0]), brightness_factor(pct[1])];
     for (i, b) in frame.iter_mut().enumerate() {
         let f = factor[usize::from(i >= half)];
-        *b = (f32::from(*b) * f + 0.5) as u8;
+        *b = f32::from(*b).mul_add(f, 0.5) as u8;
     }
 }
 
@@ -129,7 +129,7 @@ impl BrightnessScale {
             if self.pct[slot] != pct {
                 let factor = brightness_factor(pct);
                 for (value, scaled) in self.table[slot].iter_mut().enumerate() {
-                    *scaled = (value as f32 * factor + 0.5) as u8;
+                    *scaled = (value as f32).mul_add(factor, 0.5) as u8;
                 }
                 self.pct[slot] = pct;
             }
@@ -332,7 +332,7 @@ const PAD_CONFIG_PANELS: usize = 9;
 const PAD_CONFIG_SENSORS: usize = 4;
 
 /// Backend identifier stored with saved pad configs, so an SMX-tuned config is
-/// only ever applied to a StepManiaX pad (FSRio and future FSR backends use their
+/// only ever applied to a `StepManiaX` pad (`FSRio` and future FSR backends use their
 /// own, different config schema).
 pub const BACKEND_ID: &str = "smx";
 
@@ -361,14 +361,14 @@ pub const fn is_fsr(config: &SmxConfig) -> bool {
         && ConfigFlags::from_bits_truncate(config.flags).contains(ConfigFlags::FSR)
 }
 
-/// Whether a USB vendor/product pair is a StepManiaX stage, by the SDK's
+/// Whether a USB vendor/product pair is a `StepManiaX` stage, by the SDK's
 /// `SMX_USB_VENDOR_ID` / `SMX_USB_PRODUCT_ID`.
 pub fn is_smx_usb_device(vendor: Option<u16>, product: Option<u16>) -> bool {
     vendor == Some(SMX_USB_VENDOR_ID) && product == Some(SMX_USB_PRODUCT_ID)
 }
 
 /// Whether the OS gamepad backends should skip a device because native
-/// StepManiaX input already owns it.
+/// `StepManiaX` input already owns it.
 ///
 /// The stage also enumerates as a generic HID game controller on every OS (that
 /// is how it works as a plug-and-play pad without the SDK). While `smx_input` is
@@ -381,7 +381,7 @@ pub fn native_smx_owns_device(vendor: Option<u16>, product: Option<u16>, smx_inp
     smx_input && is_smx_usb_device(vendor, product)
 }
 
-/// Built-in StepManiaX threshold preset (sensitivity), mirroring the official
+/// Built-in `StepManiaX` threshold preset (sensitivity), mirroring the official
 /// SMX config tool's Low / Normal / High.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SmxPadPreset {
@@ -949,7 +949,7 @@ impl PlayerOptionsLightPreview {
 fn rainbow_rgb(phase: f32) -> [u8; 3] {
     let h = phase.rem_euclid(1.0) * 6.0;
     let x = ((h % 2.0) - 1.0).abs();
-    let mid = ((1.0 - x) * 255.0 + 0.5) as u8;
+    let mid = (1.0 - x).mul_add(255.0, 0.5) as u8;
     match h as u8 {
         0 => [255, mid, 0],
         1 => [mid, 255, 0],
@@ -1026,7 +1026,7 @@ const fn indicator_color(connected: bool, ambiguous: bool, slot: usize) -> Optio
     }
 }
 
-/// Per-slot indicator colours for the StepManiaX options page: P1 (slot 0) blue,
+/// Per-slot indicator colours for the `StepManiaX` options page: P1 (slot 0) blue,
 /// P2 (slot 1) red, or white when the assignment is ambiguous; `None` for an
 /// empty slot. Recomputed each frame so a live swap is reflected immediately.
 pub fn player_indicator_colors() -> [Option<[u8; 3]>; 2] {

@@ -33,11 +33,11 @@ pub fn parse_color_text(text: &str) -> Option<[f32; 4]> {
     if let Some(hex) = text.strip_prefix('#')
         && matches!(hex.len(), 6 | 8)
     {
-        let r = u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0;
-        let g = u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0;
-        let b = u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0;
+        let r = f32::from(u8::from_str_radix(&hex[0..2], 16).ok()?) / 255.0;
+        let g = f32::from(u8::from_str_radix(&hex[2..4], 16).ok()?) / 255.0;
+        let b = f32::from(u8::from_str_radix(&hex[4..6], 16).ok()?) / 255.0;
         let a = if hex.len() == 8 {
-            u8::from_str_radix(&hex[6..8], 16).ok()? as f32 / 255.0
+            f32::from(u8::from_str_radix(&hex[6..8], 16).ok()?) / 255.0
         } else {
             1.0
         };
@@ -177,9 +177,9 @@ pub fn judgment_line_color(name: &str) -> Option<[f32; 4]> {
 
 pub fn light_color(color: [f32; 4]) -> [f32; 4] {
     [
-        color[0] * 0.5 + 0.5,
-        color[1] * 0.5 + 0.5,
-        color[2] * 0.5 + 0.5,
+        color[0].mul_add(0.5, 0.5),
+        color[1].mul_add(0.5, 0.5),
+        color[2].mul_add(0.5, 0.5),
         color[3],
     ]
 }

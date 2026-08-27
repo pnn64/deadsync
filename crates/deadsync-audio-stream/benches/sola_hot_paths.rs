@@ -294,10 +294,10 @@ fn main() {
     );
 
     let music_pattern = (0..CORRELATE_FRAMES)
-        .map(|index| ((index as f32 * 0.071).sin() * 0.7) + (index % 17) as f32 * 0.001)
+        .map(|index| ((index % 17) as f32).mul_add(0.001, (index as f32 * 0.071).sin() * 0.7))
         .collect::<Vec<_>>();
     let music_search = (0..CORRELATE_FRAMES * 2)
-        .map(|index| ((index as f32 * 0.069).sin() * 0.7) + (index % 13) as f32 * 0.001)
+        .map(|index| ((index % 13) as f32).mul_add(0.001, (index as f32 * 0.069).sin() * 0.7))
         .collect::<Vec<_>>();
     let music_old = measure(CORRELATION_RUNS, 1, || {
         sola_bench_support::closest_match_old(black_box(&music_search), black_box(&music_pattern))

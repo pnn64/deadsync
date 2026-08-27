@@ -447,7 +447,7 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
     let value = if player_option_uses_bool(key.as_str()) {
         Value::Boolean(amount != Some(0.0))
     } else {
-        Value::Number(amount.unwrap_or(1.0) as f64)
+        Value::Number(f64::from(amount.unwrap_or(1.0)))
     };
     state.set(key.as_str(), value)
 }
@@ -502,7 +502,7 @@ fn install_speedmod_state_method(
             if active.as_deref() == Some(key.as_str()) {
                 return Ok(owner
                     .raw_get::<Option<f32>>(value_key.as_str())?
-                    .map_or(Value::Nil, |value| Value::Number(value as f64)));
+                    .map_or(Value::Nil, |value| Value::Number(f64::from(value))));
             }
             Ok(initial.clone())
         })?,

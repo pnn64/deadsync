@@ -344,8 +344,8 @@ fn option_checksum(value: Option<(usize, usize)>) -> u64 {
 fn totals_checksum(value: &(Vec<StreamSegment>, f32, f32)) -> u64 {
     value.0.iter().fold(0u64, |checksum, segment| {
         checksum.rotate_left(9)
-            ^ (segment.start() as u64)
-            ^ (segment.end() as u64).rotate_left(23)
+            ^ u64::from(segment.start())
+            ^ u64::from(segment.end()).rotate_left(23)
             ^ u64::from(segment.is_break()).rotate_left(47)
     }) ^ u64::from(value.1.to_bits()).rotate_left(17)
         ^ u64::from(value.2.to_bits()).rotate_left(41)

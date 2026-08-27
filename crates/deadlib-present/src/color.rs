@@ -104,7 +104,7 @@ impl Color {
             return None;
         }
         let byte = |idx: usize| u8::from_str_radix(&hex[idx..idx + 2], 16).ok();
-        let chan = |idx: usize| Some(byte(idx)? as f32 / 255.0);
+        let chan = |idx: usize| Some(f32::from(byte(idx)?) / 255.0);
         match hex.len() {
             6 => Some(Self {
                 a: 1.0,
@@ -271,7 +271,7 @@ pub const DECORATIVE_RGBA: [[f32; 4]; 12] = [
 
 /// Simply Love SRPG9 event colors mapped to the normal Select Color hue wheel.
 /// The source theme uses `SL.SRPG9.Colors` directly when SRPG9 is active, but
-/// DeadSync's Select Color screen is keyed to `DECORATIVE_RGBA`.
+/// `DeadSync`'s Select Color screen is keyed to `DECORATIVE_RGBA`.
 pub const SRPG9_RGBA: [[f32; 4]; 12] = [
     rgba_hex("#c32020"), // Red
     rgba_hex("#bf0052"), // Pink
@@ -463,7 +463,7 @@ fn dim_judgment_color(color: [f32; 4], brightest_channel: u8) -> [f32; 4] {
     if max <= f32::EPSILON {
         return [0.0, 0.0, 0.0, color[3]];
     }
-    let scale = (brightest_channel as f32 / 255.0) / max;
+    let scale = (f32::from(brightest_channel) / 255.0) / max;
     [
         color[0] * scale,
         color[1] * scale,

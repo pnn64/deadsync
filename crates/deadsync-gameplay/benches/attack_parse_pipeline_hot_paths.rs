@@ -248,7 +248,7 @@ fn debug_checksum<T: std::fmt::Debug + ?Sized>(value: &T) -> u64 {
     format!("{value:?}").bytes().fold(0, |checksum, byte| {
         checksum
             .wrapping_mul(0x100_0000_01B3)
-            .wrapping_add(byte as u64)
+            .wrapping_add(u64::from(byte))
     })
 }
 

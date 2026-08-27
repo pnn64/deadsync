@@ -585,7 +585,7 @@ pub fn calc_multitap_phase(desc: &MultitapDesc, beat: f32) -> MultitapPhase {
             .unwrap_or(elasticity * MULTITAP_ELASTICITY);
         let t = beat - desc.taps[index];
         out.pos = elasticity * t * (gap - t) / gap;
-        let velocity = elasticity * (gap - 2.0 * t) / gap;
+        let velocity = elasticity * 2.0f32.mul_add(-t, gap) / gap;
         out.squish = MULTITAP_SQUISHY * (velocity.abs() - 0.5);
         out.lin = t / gap;
         out.qtc = calc_multitap_qtzn(desc.taps.get(index + 1).copied());

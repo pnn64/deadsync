@@ -37,14 +37,14 @@ fn machine_record_highlight_color(
         profile_data::PlayerSide::P1 => color::simply_love_rgba(active_color_index),
         profile_data::PlayerSide::P2 => color::simply_love_rgba(active_color_index - 2),
     };
-    let phase =
-        ((elapsed_s / MACHINE_RECORD_HIGHLIGHT_PERIOD_SECONDS) * std::f32::consts::TAU).sin() * 0.5
-            + 0.5;
+    let phase = ((elapsed_s / MACHINE_RECORD_HIGHLIGHT_PERIOD_SECONDS) * std::f32::consts::TAU)
+        .sin()
+        .mul_add(0.5, 0.5);
     let inv = 1.0 - phase;
     [
-        base[0] * inv + phase,
-        base[1] * inv + phase,
-        base[2] * inv + phase,
+        base[0].mul_add(inv, phase),
+        base[1].mul_add(inv, phase),
+        base[2].mul_add(inv, phase),
         1.0,
     ]
 }
@@ -225,7 +225,7 @@ pub(crate) fn build_machine_records_pane(
             push_machine_record_row(
                 &mut children,
                 &text.rows[i],
-                first_row_y + i as f32 * row_height,
+                (i as f32).mul_add(row_height, first_row_y),
                 rank_x,
                 name_x,
                 score_x,
@@ -236,7 +236,7 @@ pub(crate) fn build_machine_records_pane(
         }
 
         let machine_rows_height = MACHINE_RECORD_SPLIT_MACHINE_ROWS as f32 * row_height;
-        let split_y = first_row_y + machine_rows_height - row_height * 0.5;
+        let split_y = row_height.mul_add(-0.5, first_row_y + machine_rows_height);
         children.push(act!(quad:
             align(0.5, 0.5):
             xy(0.0, split_y):
@@ -252,7 +252,7 @@ pub(crate) fn build_machine_records_pane(
             push_machine_record_row(
                 &mut children,
                 row,
-                first_personal_row_y + i as f32 * row_height,
+                (i as f32).mul_add(row_height, first_personal_row_y),
                 rank_x,
                 name_x,
                 score_x,
@@ -269,7 +269,7 @@ pub(crate) fn build_machine_records_pane(
             push_machine_record_row(
                 &mut children,
                 row,
-                first_row_y + row_idx as f32 * row_height,
+                (row_idx as f32).mul_add(row_height, first_row_y),
                 rank_x,
                 name_x,
                 score_x,

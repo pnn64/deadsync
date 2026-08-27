@@ -76,7 +76,7 @@ pub(crate) fn quantize_step(v: f32, step: f32) -> f32 {
     if !v.is_finite() || !step.is_finite() || step == 0.0 {
         0.0
     } else {
-        ((v + step * 0.5) / step).trunc() * step
+        (step.mul_add(0.5, v) / step).trunc() * step
     }
 }
 
@@ -86,14 +86,14 @@ pub fn quantize_centi_i32(value: f64) -> i32 {
     }
     (value * 100.0)
         .round()
-        .clamp(i32::MIN as f64, i32::MAX as f64) as i32
+        .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
 }
 
 pub fn quantize_centi_u32(value: f64) -> u32 {
     if !value.is_finite() || value <= 0.0 {
         return 0;
     }
-    (value * 100.0).round().min(u32::MAX as f64) as u32
+    (value * 100.0).round().min(f64::from(u32::MAX)) as u32
 }
 
 pub fn mod_percent_key(level: f32) -> i16 {
@@ -129,7 +129,7 @@ pub(crate) fn beat_factor(song_beat: f32) -> f32 {
         t * t
     } else {
         let t = sm_scale(beat, accel_time, total_time, 1.0, 0.0);
-        1.0 - (1.0 - t) * (1.0 - t)
+        (1.0 - t).mul_add(-(1.0 - t), 1.0)
     };
     if even_beat {
         factor *= -1.0;
@@ -163,7 +163,7 @@ pub(crate) fn bumpy_angle(y: f32, offset: f32, period: f32) -> f32 {
     let offset = if offset.is_finite() { offset } else { 0.0 };
     let period = if period.is_finite() { period } else { 0.0 };
     let divisor = mod_divisor(period.mul_add(BUMPY_Z_ANGLE_DIVISOR, BUMPY_Z_ANGLE_DIVISOR));
-    (y + 100.0 * offset) / divisor
+    100.0f32.mul_add(offset, y) / divisor
 }
 
 pub(crate) fn apply_accel_y_with_peak(
@@ -191,13 +191,14 @@ pub(crate) fn apply_accel_y_with_peak(
         y += adjust;
     }
     if accel.wave > f32::EPSILON {
-        y += accel.wave * WAVE_MOD_MAGNITUDE * (y / WAVE_MOD_HEIGHT.mul_add(1.0, 0.0)).sin();
+        y = (accel.wave * WAVE_MOD_MAGNITUDE)
+            .mul_add((y / WAVE_MOD_HEIGHT.mul_add(1.0, 0.0)).sin(), y);
     }
     let mut before_boomerang_peak = true;
     if accel.boomerang > f32::EPSILON {
         let peak_at_y = screen_height * 0.75;
         before_boomerang_peak = y < peak_at_y;
-        y = (-y * y / screen_height) + 1.5 * y;
+        y = 1.5f32.mul_add(y, -y * y / screen_height);
     }
     if accel.expand > f32::EPSILON {
         let seconds = elapsed.rem_euclid((std::f32::consts::PI * 2.0).max(f32::EPSILON));
@@ -304,7 +305,7 @@ pub(crate) fn visual_pulse_zoom_for_y(y: f32, params: VisualEffectParams) -> f32
         0.0
     };
     let divisor = mod_divisor(0.4 * ARROW_EFFECT_PIXEL_SIZE * (1.0 + period));
-    ((y + 100.0 * offset) / divisor)
+    (100.0f32.mul_add(offset, y) / divisor)
         .sin()
         .mul_add(outer * 0.5, visual_pulse_inner_zoom(params))
 }
@@ -348,7 +349,9 @@ pub(crate) fn visual_arrow_effect_zoom_cached(
 }
 
 pub(crate) fn visual_confusion_rotation_deg(song_beat: f32, params: VisualEffectParams) -> f32 {
-    (params.confusion_offset + song_beat * params.confusion).rem_euclid(std::f32::consts::TAU)
+    song_beat
+        .mul_add(params.confusion, params.confusion_offset)
+        .rem_euclid(std::f32::consts::TAU)
         * (-180.0 / std::f32::consts::PI)
 }
 
@@ -708,7 +711,7 @@ mod common_note_transform_tests {
 
 pub(crate) fn smoothstep01(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
+    t * t * 2.0f32.mul_add(-t, 3.0)
 }
 
 pub(crate) fn compute_invert_distances(col_offsets: &[f32], out: &mut [f32]) {
@@ -783,7 +786,7 @@ pub(crate) fn tipsy_y_extra(local_col: usize, elapsed: f32, tipsy: f32) -> f32 {
         return 0.0;
     }
     let col = local_col as f32;
-    let angle = elapsed * TIPSY_TIMER_FREQUENCY + col * TIPSY_COLUMN_FREQUENCY;
+    let angle = col.mul_add(TIPSY_COLUMN_FREQUENCY, elapsed * TIPSY_TIMER_FREQUENCY);
     tipsy * angle.cos() * ARROW_EFFECT_PIXEL_SIZE * TIPSY_ARROW_MAGNITUDE
 }
 
@@ -807,7 +810,8 @@ pub(crate) fn drunk_x_extra(
         return 0.0;
     }
     let col = local_col as f32;
-    let angle = elapsed + col * DRUNK_COLUMN_FREQUENCY + y * DRUNK_OFFSET_FREQUENCY / screen_height;
+    let angle =
+        col.mul_add(DRUNK_COLUMN_FREQUENCY, elapsed) + y * DRUNK_OFFSET_FREQUENCY / screen_height;
     drunk * angle.cos() * ARROW_EFFECT_PIXEL_SIZE * DRUNK_ARROW_MAGNITUDE
 }
 
@@ -861,10 +865,14 @@ pub(crate) fn note_x_extra(
             )
             .copied()
             .unwrap_or(base_x);
-        out += (mirrored - base_x) * params.flip;
+        out = (mirrored - base_x).mul_add(params.flip, out);
     }
     if signed_effect_active(params.invert) {
-        out += invert.get(local_col).copied().unwrap_or(0.0) * params.invert;
+        out = invert
+            .get(local_col)
+            .copied()
+            .unwrap_or(0.0)
+            .mul_add(params.invert, out);
     }
     if signed_effect_active(params.beat) {
         out += beat_x_extra(y, beat_factor_value, params.beat);
@@ -984,30 +992,33 @@ pub(crate) fn appearance_note_alpha_glow_cached(
 
 #[inline(always)]
 fn appearance_note_alpha_full(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
-    let zoom = (1.0 - mini * 0.5).abs().max(0.01);
+    let zoom = mini.mul_add(-0.5, 1.0).abs().max(0.01);
     let center_line = CENTER_LINE_Y / zoom;
     let hidden_sudden = params.hidden * params.sudden;
-    let hidden_end = center_line
-        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, -1.0, -1.25)
+    let hidden_end = FADE_DIST_Y
+        .mul_add(sm_scale(hidden_sudden, 0.0, 1.0, -1.0, -1.25), center_line)
         + center_line * params.hidden_offset;
-    let hidden_start = center_line
-        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 0.0, -0.25)
+    let hidden_start = FADE_DIST_Y
+        .mul_add(sm_scale(hidden_sudden, 0.0, 1.0, 0.0, -0.25), center_line)
         + center_line * params.hidden_offset;
-    let sudden_end = center_line
-        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 0.0, 0.25)
+    let sudden_end = FADE_DIST_Y.mul_add(sm_scale(hidden_sudden, 0.0, 1.0, 0.0, 0.25), center_line)
         + center_line * params.sudden_offset;
-    let sudden_start = center_line
-        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 1.0, 1.25)
+    let sudden_start = FADE_DIST_Y
+        .mul_add(sm_scale(hidden_sudden, 0.0, 1.0, 1.0, 1.25), center_line)
         + center_line * params.sudden_offset;
 
     let mut visible_adjust = 0.0;
     if params.hidden > f32::EPSILON {
-        visible_adjust +=
-            params.hidden * sm_scale(y, hidden_start, hidden_end, 0.0, -1.0).clamp(-1.0, 0.0);
+        visible_adjust = params.hidden.mul_add(
+            sm_scale(y, hidden_start, hidden_end, 0.0, -1.0).clamp(-1.0, 0.0),
+            visible_adjust,
+        );
     }
     if params.sudden > f32::EPSILON {
-        visible_adjust +=
-            params.sudden * sm_scale(y, sudden_start, sudden_end, -1.0, 0.0).clamp(-1.0, 0.0);
+        visible_adjust = params.sudden.mul_add(
+            sm_scale(y, sudden_start, sudden_end, -1.0, 0.0).clamp(-1.0, 0.0),
+            visible_adjust,
+        );
     }
     if params.stealth > f32::EPSILON {
         visible_adjust -= params.stealth;

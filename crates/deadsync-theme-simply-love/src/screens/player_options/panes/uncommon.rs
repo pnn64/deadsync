@@ -58,11 +58,11 @@ const APPEARANCE_OPTION_BITS: &[u32] = &[
 ];
 const APPEARANCE: BitmaskBinding = BitmaskBinding::Generic {
     init: BitmaskInit {
-        from_profile: |p| p.appearance_effects_active_mask.bits() as u32,
-        get_active: |m| m.appearance_effects.bits() as u32,
+        from_profile: |p| u32::from(p.appearance_effects_active_mask.bits()),
+        get_active: |m| u32::from(m.appearance_effects.bits()),
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u8::MAX as u32),
+                b & !u32::from(u8::MAX),
                 0,
                 "AppearanceEffectsMask init bits exceed storage width",
             );

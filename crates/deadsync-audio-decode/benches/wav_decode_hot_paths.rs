@@ -200,9 +200,9 @@ fn print_result(label: &str, result: &BenchResult) {
 fn output_checksum(output: &[i16]) -> u64 {
     let output = black_box(output);
     output.len() as u64
-        ^ output.first().copied().unwrap_or_default() as u16 as u64
-        ^ ((output.get(output.len() / 2).copied().unwrap_or_default() as u16 as u64) << 16)
-        ^ ((output.last().copied().unwrap_or_default() as u16 as u64) << 32)
+        ^ u64::from(output.first().copied().unwrap_or_default() as u16)
+        ^ (u64::from(output.get(output.len() / 2).copied().unwrap_or_default() as u16) << 16)
+        ^ (u64::from(output.last().copied().unwrap_or_default() as u16) << 32)
 }
 
 const fn sample_bytes(format: SampleFormat) -> usize {
@@ -230,10 +230,12 @@ fn decode_old(bytes: &[u8], format: SampleFormat, out: &mut Vec<i16>) -> Result<
                     sample[2],
                     if sample[2] & 0x80 != 0 { 0xff } else { 0x00 },
                 ]);
-                (signed >> 8).clamp(i16::MIN as i32, i16::MAX as i32) as i16
+                (signed >> 8).clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
             }
             SampleFormat::Float32 => {
-                let value = f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) as f64;
+                let value = f64::from(f32::from_le_bytes([
+                    sample[0], sample[1], sample[2], sample[3],
+                ]));
                 if value.is_finite() {
                     (value * 32767.0).round().clamp(-32768.0, 32767.0) as i16
                 } else {

@@ -420,7 +420,7 @@ pub fn build_column_judgments_pane_with_palette(
                         max_count_width = w;
                     }
                 }
-                let right_edge_x = col_center_x - 1.0 - max_count_width * 0.5;
+                let right_edge_x = max_count_width.mul_add(-0.5, col_center_x - 1.0);
 
                 let arrow_color = arrow_glow_active.then(|| arrow_breakdown_rgba(col_idx));
 

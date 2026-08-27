@@ -529,7 +529,7 @@ pub fn build_offset_histogram_mesh_with_palette(
     let height_max = ph * 0.75;
     let bottom_y = gh;
     let x_for = |bin: i32| (bin + worst_bin + 1) as f32 * w;
-    let top_y_for = |y: f32| (gh - (y / peak) * height_max).max(0.0);
+    let top_y_for = |y: f32| (y / peak).mul_add(-height_max, gh).max(0.0);
     let first_bin = -worst_observed;
     let mut out: Vec<MeshVertex> = Vec::with_capacity((worst_observed as usize).saturating_mul(12));
 

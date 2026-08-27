@@ -4601,7 +4601,9 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
                 let pause = actor
                     .get::<Option<f32>>("__songlua_scroller_pause_between")?
                     .unwrap_or(0.0);
-                Ok(num_items * seconds_per_item + (num_items - 1.0).max(0.0) * pause)
+                Ok((num_items - 1.0)
+                    .max(0.0)
+                    .mul_add(pause, num_items * seconds_per_item))
             }
         })?,
     )?;
@@ -11542,7 +11544,7 @@ fn actor_multi_vertex_line_join_offset(
         return [prev_normal[0] * half_width, prev_normal[1] * half_width];
     }
     let miter = [miter[0] / miter_len, miter[1] / miter_len];
-    let denom = miter[0] * prev_normal[0] + miter[1] * prev_normal[1];
+    let denom = miter[1].mul_add(prev_normal[1], miter[0] * prev_normal[0]);
     if denom.abs() <= 0.1 {
         return [next_normal[0] * half_width, next_normal[1] * half_width];
     }
@@ -11557,8 +11559,8 @@ fn actor_multi_vertex_offset_point(
 ) -> SongLuaActorMultiVertexPoint {
     SongLuaActorMultiVertexPoint {
         pos: [
-            vertex.pos[0] + offset[0] * sign,
-            vertex.pos[1] + offset[1] * sign,
+            offset[0].mul_add(sign, vertex.pos[0]),
+            offset[1].mul_add(sign, vertex.pos[1]),
         ],
         color: vertex.color,
         uv: vertex.uv,

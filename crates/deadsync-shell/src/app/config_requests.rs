@@ -135,7 +135,7 @@ pub(super) fn execute_gameplay(request: SimplyLoveGameplayConfigRequest) {
 
     match request {
         Request::BackgroundBrightnessTenths(tenths) => {
-            config::update_bg_brightness(tenths.min(10) as f32 / 10.0)
+            config::update_bg_brightness(f32::from(tenths.min(10)) / 10.0)
         }
         Request::CenterPlayerOneNotefield(enabled) => {
             config::update_center_1player_notefield(enabled)
@@ -240,12 +240,14 @@ pub(super) fn execute_null_or_die(request: SimplyLoveNullOrDieConfigRequest) {
         }
         Request::PackSyncThreads(threads) => config::update_null_or_die_pack_sync_threads(threads),
         Request::FingerprintTenths(tenths) => {
-            config::update_null_or_die_fingerprint_ms(tenths as f64 / 10.0)
+            config::update_null_or_die_fingerprint_ms(f64::from(tenths) / 10.0)
         }
-        Request::WindowTenths(tenths) => config::update_null_or_die_window_ms(tenths as f64 / 10.0),
-        Request::StepTenths(tenths) => config::update_null_or_die_step_ms(tenths as f64 / 10.0),
+        Request::WindowTenths(tenths) => {
+            config::update_null_or_die_window_ms(f64::from(tenths) / 10.0)
+        }
+        Request::StepTenths(tenths) => config::update_null_or_die_step_ms(f64::from(tenths) / 10.0),
         Request::MagicOffsetTenths(tenths) => {
-            config::update_null_or_die_magic_offset_ms(tenths as f64 / 10.0)
+            config::update_null_or_die_magic_offset_ms(f64::from(tenths) / 10.0)
         }
         Request::KernelTarget(target) => config::update_null_or_die_kernel_target(match target {
             SimplyLoveSyncKernelTarget::Digest => KernelTarget::Digest,

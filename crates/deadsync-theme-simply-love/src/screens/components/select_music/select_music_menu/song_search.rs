@@ -646,7 +646,7 @@ pub fn build_song_search_overlay(
     let cy = screen_center_y();
     let panel_w = 380.0_f32.min(screen_width() * 0.92);
     let panel_h = 404.0_f32;
-    let top = cy - panel_h * 0.5;
+    let top = panel_h.mul_add(-0.5, cy);
 
     let theme = color::simply_love_rgba(active_color_index);
     const PANEL_BG: [f32; 4] = color::rgba_hex("#071016");
@@ -768,7 +768,7 @@ pub fn build_song_search_overlay(
     let shown = song_search_shown(open);
     for i in 0..shown {
         let m = &open.matches[i];
-        let y = list_top + i as f32 * row_step;
+        let y = (i as f32).mul_add(row_step, list_top);
         let focused = i == open.selected_index;
         if focused {
             actors.push(act!(quad:
@@ -800,7 +800,7 @@ pub fn build_song_search_overlay(
 
     // Detail block for the focused match; values are precomputed when ranked.
     if let Some(m) = song_search_focused_match(open) {
-        let detail_top = cy + panel_h * 0.5 - 96.0;
+        let detail_top = panel_h.mul_add(0.5, cy) - 96.0;
         let details: Vec<(Arc<str>, Arc<str>)> = match m {
             SongSearchMatch::Song { candidate, .. } => {
                 let mut rows = vec![(
@@ -834,7 +834,7 @@ pub fn build_song_search_overlay(
             ],
         };
         for (i, (label, value)) in details.iter().enumerate() {
-            let y = detail_top + i as f32 * 16.0;
+            let y = (i as f32).mul_add(16.0, detail_top);
             actors.push(act!(text:
                 font("miso"): settext(format!("{label}:")):
                 align(0.0, 0.5): xy(list_x, y): zoom(0.75):
@@ -858,7 +858,7 @@ pub fn build_song_search_overlay(
     actors.push(act!(text:
         font("miso"):
         settext(tr_fmt("SelectMusic", "SongSearchFooter", &[("scope", &scope_hint)])):
-        align(0.5, 0.5): xy(cx, cy + panel_h * 0.5 - 14.0): zoom(0.62):
+        align(0.5, 0.5): xy(cx, panel_h.mul_add(0.5, cy) - 14.0): zoom(0.62):
         maxwidth(panel_w - 20.0):
         diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(center)
     ));

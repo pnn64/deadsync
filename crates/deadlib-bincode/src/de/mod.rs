@@ -23,7 +23,7 @@ pub use self::decoder::DecoderImpl;
 ///
 /// Some types may require specific contexts. For example, to decode arena-based collections, an arena allocator must be provided as a context. In these cases, the context type `Context` should be specified or bounded.
 ///
-/// This trait should be implemented for types which do not have references to data in the reader. For types that contain e.g. `&str` and `&[u8]`, implement [BorrowDecode] instead.
+/// This trait should be implemented for types which do not have references to data in the reader. For types that contain e.g. `&str` and `&[u8]`, implement [`BorrowDecode`] instead.
 ///
 /// Whenever you derive `Decode` for your type, the base trait `BorrowDecode` is automatically implemented.
 ///
@@ -101,7 +101,7 @@ pub trait Decode<Context>: Sized {
 /// This trait is implemented automatically by `#[derive(bincode::Decode)]` for
 /// types containing a lifetime.
 pub trait BorrowDecode<'de, Context>: Sized {
-    /// Attempt to decode this type with the given [BorrowDecode].
+    /// Attempt to decode this type with the given [`BorrowDecode`].
     fn borrow_decode<D: BorrowDecoder<'de, Context = Context>>(
         decoder: &mut D,
     ) -> Result<Self, DecodeError>;
@@ -246,7 +246,7 @@ pub trait Decoder: Sealed {
 ///
 /// This is an extension of [Decode] that can also return borrowed data.
 pub trait BorrowDecoder<'de>: Decoder {
-    /// The concrete [BorrowReader] type
+    /// The concrete [`BorrowReader`] type
     type BR: BorrowReader<'de>;
 
     /// Rerturns a mutable reference to the borrow reader
@@ -308,7 +308,7 @@ pub(crate) fn decode_option_variant<D: Decoder>(
         0 => Ok(None),
         1 => Ok(Some(())),
         x => Err(DecodeError::UnexpectedVariant {
-            found: x as u32,
+            found: u32::from(x),
             allowed: &crate::error::AllowedEnumVariants::Range { max: 1, min: 0 },
             type_name,
         }),

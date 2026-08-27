@@ -644,7 +644,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
         let avail_w = (content_right - content_left).max(0.0);
         let avail_h = (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
 
-        let total_w_base = SIDE_W_BASE.mul_add(2.0, DESC_W_BASE * 0.8) + SIDE_GAP_BASE * 2.0;
+        let total_w_base = SIDE_GAP_BASE.mul_add(2.0, SIDE_W_BASE.mul_add(2.0, DESC_W_BASE * 0.8));
         let rows_h_base =
             (VISIBLE_ROWS as f32).mul_add(ROW_H, ((VISIBLE_ROWS - 1) as f32) * ROW_GAP);
 
@@ -677,7 +677,8 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
         let prev_idx = state.prev_selected_row;
         let i_prev_vis = (prev_idx as isize) - (offset_rows as isize);
         let row_step = (ROW_H + ROW_GAP) * s;
-        let from_y_center = (i_prev_vis as f32).mul_add(row_step, first_row_y) + 0.5 * ROW_H * s;
+        let from_y_center =
+            (0.5 * ROW_H).mul_add(s, (i_prev_vis as f32).mul_add(row_step, first_row_y));
         state.cursor_row_anim_from_y = from_y_center;
         state.cursor_row_anim_t = 0.0;
         state.cursor_row_anim_from_row = Some(prev_idx);
@@ -709,7 +710,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     // Advance capture pulse timer for the "heartbeat" animation.
     if state.capture_active {
         // Slightly faster than 1 Hz for a snappier heartbeat.
-        state.capture_pulse_t += dt * 2.5 * std::f32::consts::PI;
+        state.capture_pulse_t = (dt * 2.5).mul_add(std::f32::consts::PI, state.capture_pulse_t);
         if !state.capture_pulse_t.is_finite() {
             state.capture_pulse_t = 0.0;
         }
@@ -1363,7 +1364,7 @@ pub fn push_actors(
     let avail_h = (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
 
     // Base layout extents (unscaled).
-    let total_w_base = SIDE_W_BASE.mul_add(2.0, DESC_W_BASE * 0.8) + SIDE_GAP_BASE * 2.0;
+    let total_w_base = SIDE_GAP_BASE.mul_add(2.0, SIDE_W_BASE.mul_add(2.0, DESC_W_BASE * 0.8));
     // Only VISIBLE_ROWS participate in vertical fit; the list scrolls inside.
     let rows_h_base = (VISIBLE_ROWS as f32).mul_add(ROW_H, ((VISIBLE_ROWS - 1) as f32) * ROW_GAP);
 
@@ -1439,8 +1440,10 @@ pub fn push_actors(
             if row_idx >= mapping_rows {
                 break;
             }
-            let row_center_y =
-                ((i_vis as f32) * (ROW_H + ROW_GAP)).mul_add(s, first_row_y) + 0.5 * ROW_H * s;
+            let row_center_y = (0.5 * ROW_H).mul_add(
+                s,
+                ((i_vis as f32) * (ROW_H + ROW_GAP)).mul_add(s, first_row_y),
+            );
             actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(labels_center_x, row_center_y):

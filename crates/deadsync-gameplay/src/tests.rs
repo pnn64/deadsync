@@ -6779,7 +6779,7 @@ mod tests {
         );
         assert_eq!(
             offset_delta_target_seconds(1.0, OFFSET_DELTA_EPSILON_SECONDS * 2.0),
-            Some(1.0 + OFFSET_DELTA_EPSILON_SECONDS * 2.0)
+            Some(OFFSET_DELTA_EPSILON_SECONDS.mul_add(2.0, 1.0))
         );
         assert_eq!(offset_delta_target_seconds(1.0, -0.25), Some(0.75));
     }
@@ -9898,13 +9898,13 @@ mod tests {
             if frame % 17 == 0 {
                 let col = (frame / 17 * 7) % MAX_COLS;
                 let timers = GameplayReceptorGlowTimers {
-                    press_timer: 0.08 + (col % 4) as f32 * 0.03,
-                    lift_timer: 0.2 + (col % 3) as f32 * 0.04,
-                    lift_start_alpha: 0.25 + col as f32 * 0.02,
-                    lift_start_zoom: 1.0 + col as f32 * 0.03,
+                    press_timer: ((col % 4) as f32).mul_add(0.03, 0.08),
+                    lift_timer: ((col % 3) as f32).mul_add(0.04, 0.2),
+                    lift_start_alpha: (col as f32).mul_add(0.02, 0.25),
+                    lift_start_zoom: (col as f32).mul_add(0.03, 1.0),
                 };
                 let behavior = GameplayReceptorStepBehavior {
-                    duration: 0.06 + (col % 5) as f32 * 0.02,
+                    duration: ((col % 5) as f32).mul_add(0.02, 0.06),
                     zoom_start: 0.7,
                     zoom_end: 1.0,
                     tween: GameplayTween::Decelerate,
@@ -10028,13 +10028,13 @@ mod tests {
 
         for col in 0..MAX_COLS {
             let timers = GameplayReceptorGlowTimers {
-                press_timer: 0.12 + col as f32 * 0.01,
-                lift_timer: 0.22 + col as f32 * 0.01,
-                lift_start_alpha: 0.35 + col as f32 * 0.02,
-                lift_start_zoom: 1.0 + col as f32 * 0.03,
+                press_timer: (col as f32).mul_add(0.01, 0.12),
+                lift_timer: (col as f32).mul_add(0.01, 0.22),
+                lift_start_alpha: (col as f32).mul_add(0.02, 0.35),
+                lift_start_zoom: (col as f32).mul_add(0.03, 1.0),
             };
             let behavior = GameplayReceptorStepBehavior {
-                duration: 0.25 + col as f32 * 0.01,
+                duration: (col as f32).mul_add(0.01, 0.25),
                 zoom_start: 0.7,
                 zoom_end: 1.0,
                 tween: GameplayTween::Decelerate,
@@ -14963,7 +14963,7 @@ mod tests {
                 };
                 let hold = matches!(note_type, NoteType::Hold | NoteType::Roll).then(|| HoldData {
                     end_row_index: row * 12 + 24 + lane,
-                    end_beat: row as f32 * 0.25 + 0.5 + lane as f32 / 48.0,
+                    end_beat: (row as f32).mul_add(0.25, 0.5) + lane as f32 / 48.0,
                     ..test_hold()
                 });
                 let mut note = test_note_at(
@@ -16382,7 +16382,7 @@ mod tests {
                 let hold = matches!(note_type, NoteType::Hold | NoteType::Roll)
                     .then(|| HoldData {
                         end_row_index: local_index * 12 + 6,
-                        end_beat: local_index as f32 * 0.25 + 0.125,
+                        end_beat: (local_index as f32).mul_add(0.25, 0.125),
                         ..test_hold()
                     });
                 let mut note = test_note_at(
@@ -16484,7 +16484,7 @@ mod tests {
         let note_ranges = [(0, 16), (16, 32)];
         let note_time_ns = (0..notes.len())
             .map(|index| {
-                song_time_ns_from_seconds((index % 16) as f32 * 0.125 + (index / 16) as f32)
+                song_time_ns_from_seconds(((index % 16) as f32).mul_add(0.125, (index / 16) as f32))
             })
             .collect::<Vec<_>>();
         let reference_hold_end_time_ns = notes
@@ -19403,7 +19403,7 @@ mod tests {
         ];
         for cols in 1..=MAX_COLS {
             for turn in turns {
-                for seed in [0, 1, 29, u32::MAX as u64, u64::MAX] {
+                for seed in [0, 1, 29, u64::from(u32::MAX), u64::MAX] {
                     let notes = (0..cols * 3)
                         .map(|index| {
                             let mut note = test_note_at(

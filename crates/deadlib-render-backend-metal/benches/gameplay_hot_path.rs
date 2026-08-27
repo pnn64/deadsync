@@ -352,7 +352,7 @@ fn encoder_ops() -> Vec<DesiredState> {
         for run in 0..8 {
             ops.push(DesiredState {
                 kind: DrawKind::Sprite,
-                blend: (run == 7) as u8,
+                blend: u8::from(run == 7),
                 camera: (block % 2) as u8,
                 texture: 1 + (run / 2) as u64,
                 repeat: false,
@@ -373,7 +373,7 @@ fn encoder_ops() -> Vec<DesiredState> {
             let depth = run >= 10;
             ops.push(DesiredState {
                 kind: DrawKind::TexturedMesh,
-                blend: (run == 9) as u8,
+                blend: u8::from(run == 9),
                 camera: (block % 2) as u8,
                 texture: 4,
                 repeat: true,

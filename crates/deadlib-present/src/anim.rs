@@ -28,15 +28,15 @@ use std::collections::VecDeque;
 
 #[derive(Clone, Copy, Debug, PartialEq)] // <-- removed Eq
 pub enum Ease {
-    /// StepMania: `linear(t)`
+    /// `StepMania`: `linear(t)`
     Linear,
-    /// StepMania: `accelerate(t)` (quad-in)
+    /// `StepMania`: `accelerate(t)` (quad-in)
     Accelerate,
-    /// StepMania: `decelerate(t)` (quad-out)
+    /// `StepMania`: `decelerate(t)` (quad-out)
     Decelerate,
-    /// StepMania: `smooth(t)` — classic in–out S curve.
+    /// `StepMania`: `smooth(t)` — classic in–out S curve.
     Smooth,
-    /// StepMania: `ease(time, fEase)` — 1D Bezier curve, fEase in [-100,100].
+    /// `StepMania`: `ease(time, fEase)` — 1D Bezier curve, fEase in [-100,100].
     EaseInOut { bias: f32 },
 }
 
@@ -51,7 +51,7 @@ fn ease_apply(e: Ease, t: f32) -> f32 {
 
     #[inline(always)]
     fn ease_out_quad(u: f32) -> f32 {
-        1.0 - (1.0 - u) * (1.0 - u)
+        (1.0 - u).mul_add(-(1.0 - u), 1.0)
     }
 
     #[inline(always)]
@@ -84,7 +84,7 @@ fn ease_apply(e: Ease, t: f32) -> f32 {
             0.5 * ease_in_quad(u)
         } else {
             let u = ((t - d1) / d2).clamp(0.0, 1.0);
-            0.5 + 0.5 * ease_out_quad(u)
+            0.5f32.mul_add(ease_out_quad(u), 0.5)
         }
     }
 
@@ -101,19 +101,19 @@ fn ease_apply(e: Ease, t: f32) -> f32 {
 fn bezier_coeff(c1: f32, c2: f32, c3: f32, c4: f32) -> (f32, f32, f32, f32) {
     let d = c1;
     let c = 3.0 * (c2 - c1);
-    let b = 3.0 * (c3 - c2) - c;
+    let b = 3.0f32.mul_add(c3 - c2, -c);
     let a = c4 - c1 - c - b;
     (a, b, c, d)
 }
 
 #[inline(always)]
 fn cubic_eval((a, b, c, d): (f32, f32, f32, f32), t: f32) -> f32 {
-    ((a * t + b) * t + c) * t + d
+    a.mul_add(t, b).mul_add(t, c).mul_add(t, d)
 }
 
 #[inline(always)]
 fn cubic_slope((a, b, c, _): (f32, f32, f32, f32), t: f32) -> f32 {
-    3.0 * a * t * t + 2.0 * b * t + c
+    (2.0 * b).mul_add(t, 3.0 * a * t * t) + c
 }
 
 // ITGmania: RageBezier2D::EvaluateYFromX()
@@ -185,7 +185,7 @@ pub fn eval_ease_p_for_f_ease(x: f32, f_ease: f32) -> f32 {
     }
     if f == 100.0 {
         let u = x.clamp(0.0, 1.0);
-        return 1.0 - (1.0 - u) * (1.0 - u);
+        return (1.0 - u).mul_add(-(1.0 - u), 1.0);
     }
 
     // 1D Bezier: {0, x2, y3, 1}
@@ -299,7 +299,7 @@ pub fn effect_mix(effect: EffectState, time: f32, beat: f32) -> Option<f32> {
         0.5
     } else if x < rupath_plus_rdown {
         if t[2] > f32::EPSILON {
-            0.5 + ((x - rup_plus_ath) / t[2]) * 0.5
+            ((x - rup_plus_ath) / t[2]).mul_add(0.5, 0.5)
         } else {
             1.0
         }
@@ -313,7 +313,10 @@ pub fn effect_mix(effect: EffectState, time: f32, beat: f32) -> Option<f32> {
 
 #[inline(always)]
 pub fn glowshift_mix(through: f32) -> f32 {
-    (((through + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5).clamp(0.0, 1.0)
+    ((through + 0.25) * 2.0 * std::f32::consts::PI)
+        .sin()
+        .mul_add(0.5, 0.5)
+        .clamp(0.0, 1.0)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -446,36 +449,36 @@ impl OpPrepared {
     #[inline(always)]
     fn apply_lerp(&self, s: &mut TweenState, a: f32) {
         match self.kind {
-            PreparedKind::X { from, to } => s.x = from + (to - from) * a,
-            PreparedKind::Y { from, to } => s.y = from + (to - from) * a,
-            PreparedKind::WX { from, to } => s.w = from + (to - from) * a,
-            PreparedKind::HY { from, to } => s.h = from + (to - from) * a,
-            PreparedKind::ScaleX { from, to } => s.scale[0] = from + (to - from) * a,
-            PreparedKind::ScaleY { from, to } => s.scale[1] = from + (to - from) * a,
+            PreparedKind::X { from, to } => s.x = (to - from).mul_add(a, from),
+            PreparedKind::Y { from, to } => s.y = (to - from).mul_add(a, from),
+            PreparedKind::WX { from, to } => s.w = (to - from).mul_add(a, from),
+            PreparedKind::HY { from, to } => s.h = (to - from).mul_add(a, from),
+            PreparedKind::ScaleX { from, to } => s.scale[0] = (to - from).mul_add(a, from),
+            PreparedKind::ScaleY { from, to } => s.scale[1] = (to - from).mul_add(a, from),
             PreparedKind::Tint { from, to } => {
                 for i in 0..4 {
-                    s.tint[i] = from[i] + (to[i] - from[i]) * a;
+                    s.tint[i] = (to[i] - from[i]).mul_add(a, from[i]);
                 }
             }
             PreparedKind::Glow { from, to } => {
                 for i in 0..4 {
-                    s.glow[i] = from[i] + (to[i] - from[i]) * a;
+                    s.glow[i] = (to[i] - from[i]).mul_add(a, from[i]);
                 }
             }
             PreparedKind::Visible(v) => s.visible = v,
             PreparedKind::FlipX(v) => s.flip_x = v,
             PreparedKind::FlipY(v) => s.flip_y = v,
-            PreparedKind::RotX { from, to } => s.rot_x = from + (to - from) * a,
-            PreparedKind::RotY { from, to } => s.rot_y = from + (to - from) * a,
-            PreparedKind::RotZ { from, to } => s.rot_z = from + (to - from) * a,
-            PreparedKind::CropL { from, to } => s.crop_l = from + (to - from) * a,
-            PreparedKind::CropR { from, to } => s.crop_r = from + (to - from) * a,
-            PreparedKind::CropT { from, to } => s.crop_t = from + (to - from) * a,
-            PreparedKind::CropB { from, to } => s.crop_b = from + (to - from) * a,
-            PreparedKind::FadeL { from, to } => s.fade_l = from + (to - from) * a,
-            PreparedKind::FadeR { from, to } => s.fade_r = from + (to - from) * a,
-            PreparedKind::FadeT { from, to } => s.fade_t = from + (to - from) * a,
-            PreparedKind::FadeB { from, to } => s.fade_b = from + (to - from) * a,
+            PreparedKind::RotX { from, to } => s.rot_x = (to - from).mul_add(a, from),
+            PreparedKind::RotY { from, to } => s.rot_y = (to - from).mul_add(a, from),
+            PreparedKind::RotZ { from, to } => s.rot_z = (to - from).mul_add(a, from),
+            PreparedKind::CropL { from, to } => s.crop_l = (to - from).mul_add(a, from),
+            PreparedKind::CropR { from, to } => s.crop_r = (to - from).mul_add(a, from),
+            PreparedKind::CropT { from, to } => s.crop_t = (to - from).mul_add(a, from),
+            PreparedKind::CropB { from, to } => s.crop_b = (to - from).mul_add(a, from),
+            PreparedKind::FadeL { from, to } => s.fade_l = (to - from).mul_add(a, from),
+            PreparedKind::FadeR { from, to } => s.fade_r = (to - from).mul_add(a, from),
+            PreparedKind::FadeT { from, to } => s.fade_t = (to - from).mul_add(a, from),
+            PreparedKind::FadeB { from, to } => s.fade_b = (to - from).mul_add(a, from),
         }
     }
 
@@ -828,7 +831,7 @@ impl RuntimeSegment {
     }
 }
 
-/// Public builder API (mirrors StepMania commands inside a time segment).
+/// Public builder API (mirrors `StepMania` commands inside a time segment).
 #[derive(Clone, Debug)]
 pub struct SegmentBuilder {
     ease: Ease,
@@ -1079,7 +1082,7 @@ pub fn decelerate(dur: f32) -> SegmentBuilder {
     SegmentBuilder::new(Ease::Decelerate, dur)
 }
 
-/// Delay with no property changes (StepMania: `sleep(t)`).
+/// Delay with no property changes (`StepMania`: `sleep(t)`).
 pub fn sleep(dur: f32) -> Step {
     Step(Segment::new(Ease::Linear, dur.max(0.0), SmallVec::new()))
 }

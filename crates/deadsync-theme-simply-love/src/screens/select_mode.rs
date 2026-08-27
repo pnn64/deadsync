@@ -318,8 +318,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 #[inline(always)]
 fn root_pt(x: f32, y: f32) -> (f32, f32) {
     (
-        screen_center_x() + ROOT_X_OFF + x * ROOT_ZOOM,
-        screen_center_y() + y * ROOT_ZOOM,
+        x.mul_add(ROOT_ZOOM, screen_center_x() + ROOT_X_OFF),
+        y.mul_add(ROOT_ZOOM, screen_center_y()),
     )
 }
 
@@ -489,9 +489,9 @@ pub fn push_actors(
         let t = ((zoom - mode_flow::CHOICE_ZOOM_UNFOCUSED) / zoom_den).clamp(0.0, 1.0);
 
         let rgb = [
-            label_unselected[0] + (label_selected[0] - label_unselected[0]) * t,
-            label_unselected[1] + (label_selected[1] - label_unselected[1]) * t,
-            label_unselected[2] + (label_selected[2] - label_unselected[2]) * t,
+            (label_selected[0] - label_unselected[0]).mul_add(t, label_unselected[0]),
+            (label_selected[1] - label_unselected[1]).mul_add(t, label_unselected[1]),
+            (label_selected[2] - label_unselected[2]).mul_add(t, label_unselected[2]),
         ];
 
         actors.push(act!(text:
@@ -570,8 +570,8 @@ pub fn push_actors(
 
     for &(dir, x_off) in demo.columns {
         let (x, y) = (
-            nfx + x_off * ROOT_ZOOM * demo.field_zoom,
-            nfy + (-55.0) * ROOT_ZOOM * demo.field_zoom,
+            (x_off * ROOT_ZOOM).mul_add(demo.field_zoom, nfx),
+            ((-55.0) * ROOT_ZOOM).mul_add(demo.field_zoom, nfy),
         );
         let (aw, ah) = root_sz(ARROW_SPRITE_SZ, ARROW_SPRITE_SZ);
         let receptor_texture = if dir == "center" {
@@ -620,18 +620,18 @@ pub fn push_actors(
         } else {
             t_local
         };
-        let y = y0 + (-55.0 - y0) * p;
+        let y = (-55.0 - y0).mul_add(p, y0);
         let rot = if marathon {
             // Match SL's clockwise spin in our opposite-sign rotation space.
-            arrow_rotation(dir) - spin_base - 720.0 * p
+            720.0f32.mul_add(-p, arrow_rotation(dir) - spin_base)
         } else {
             arrow_rotation(dir)
         };
 
         let tint = color::decorative_rgba(state.active_color_index + i as i32);
         let (x, y) = (
-            nfx + col_x * ROOT_ZOOM * demo.field_zoom,
-            nfy + y * ROOT_ZOOM * demo.field_zoom,
+            (col_x * ROOT_ZOOM).mul_add(demo.field_zoom, nfx),
+            (y * ROOT_ZOOM).mul_add(demo.field_zoom, nfy),
         );
         let (aw, ah) = root_sz(ARROW_SPRITE_SZ, ARROW_SPRITE_SZ);
         let is_center = *dir == "center";

@@ -158,8 +158,8 @@ impl PacDriveLightOrdering {
         }
     }
 
-    /// Match ITGmania's `PacDriveLightOrdering` preference behavior.
-    /// `openitg` and the historical `lumenar` name select the OpenITG layout;
+    /// Match `ITGmania`'s `PacDriveLightOrdering` preference behavior.
+    /// `openitg` and the historical `lumenar` name select the `OpenITG` layout;
     /// every other explicit value selects the legacy SM5 layout.
     pub const fn from_preference(raw: &str) -> Self {
         if raw.eq_ignore_ascii_case("openitg") || raw.eq_ignore_ascii_case("lumenar") {
@@ -402,7 +402,7 @@ pub fn rainbow_rgb(phase: f32) -> [u8; 3] {
     let sector = h as u32 % 6;
     let f = h - h.floor();
     let up = (f * 255.0 + 0.5) as u8;
-    let down = ((1.0 - f) * 255.0 + 0.5) as u8;
+    let down = (1.0 - f).mul_add(255.0, 0.5) as u8;
     match sector {
         0 => [255, up, 0],
         1 => [down, 255, 0],

@@ -139,7 +139,10 @@ pub(crate) fn player_metric_y(
     normal_offset: f32,
     reverse_offset: f32,
 ) -> f32 {
-    center_y + offset_y + normal_offset * (1.0 - reverse) + reverse_offset * reverse
+    reverse_offset.mul_add(
+        reverse,
+        normal_offset.mul_add(1.0 - reverse, center_y + offset_y),
+    )
 }
 
 fn rage_frustum(l: f32, r: f32, b: f32, t: f32, zn: f32, zf: f32) -> Matrix4 {
@@ -319,7 +322,7 @@ pub(crate) fn notefield_view_proj(
     let tilt = tilt.clamp(-1.0, 1.0);
     let tilt_deg = (-30.0 * tilt) * reverse_mult;
     let tilt_abs = tilt.abs();
-    let tilt_scale = 1.0 - 0.1 * tilt_abs;
+    let tilt_scale = 0.1f32.mul_add(-tilt_abs, 1.0);
     let y_offset_screen = if tilt > 0.0 {
         -45.0 * tilt
     } else {
@@ -369,7 +372,7 @@ pub(crate) fn effective_mini_value(
 }
 
 pub(crate) fn average_error_bar_mini_scale(mini: f32) -> f32 {
-    (1.1 - 0.545 * mini).max(0.0)
+    0.545f32.mul_add(-mini, 1.1).max(0.0)
 }
 
 pub(crate) fn hud_y(
@@ -380,9 +383,9 @@ pub(crate) fn hud_y(
     reverse_level: f32,
 ) -> f32 {
     if reverse {
-        reverse_y + (centered_y - reverse_y) * reverse_level
+        (centered_y - reverse_y).mul_add(reverse_level, reverse_y)
     } else {
-        normal_y + (centered_y - normal_y) * reverse_level
+        (centered_y - normal_y).mul_add(reverse_level, normal_y)
     }
 }
 
@@ -392,8 +395,8 @@ pub(crate) fn zmod_layout_ys(
     reverse: bool,
     params: ZmodLayoutParams,
 ) -> ZmodLayoutYs {
-    let mut top_y = judgment_y - params.judgment_height * 0.5;
-    let mut bottom_y = judgment_y + params.judgment_height * 0.5;
+    let mut top_y = params.judgment_height.mul_add(-0.5, judgment_y);
+    let mut bottom_y = params.judgment_height.mul_add(0.5, judgment_y);
 
     if params.has_error_bar && params.has_judgment_texture {
         if params.error_bar_up {
@@ -494,7 +497,7 @@ fn field_receptor_y(
     reverse_y: f32,
     centered_y: f32,
 ) -> f32 {
-    let reverse_y = normal_y + (reverse_y - normal_y) * reverse_percent.clamp(0.0, 1.0);
+    let reverse_y = (reverse_y - normal_y).mul_add(reverse_percent.clamp(0.0, 1.0), normal_y);
     (centered_y - reverse_y).mul_add(centered_percent, reverse_y)
 }
 
@@ -513,7 +516,7 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     let base_playfield_center_x = if centered_both_sides || centered_one_side {
         request.screen_center_x
     } else {
-        request.screen_center_x + side_sign * clamped_width * style.side_center_x_ratio
+        (side_sign * clamped_width).mul_add(style.side_center_x_ratio, request.screen_center_x)
     };
     let notefield_offset_x = side_sign * request.notefield_offset_x;
     let playfield_center_x = base_playfield_center_x + notefield_offset_x;
@@ -566,13 +569,16 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
         if i >= request.num_cols {
             return receptor_y_normal;
         }
-        field_receptor_y(
-            column_reverse_percent[i],
-            centered_percent,
-            receptor_y_normal,
-            receptor_y_reverse,
-            receptor_y_centered,
-        ) + request.song_lua_column_y_offsets[i] * request.field_zoom
+        request.song_lua_column_y_offsets[i].mul_add(
+            request.field_zoom,
+            field_receptor_y(
+                column_reverse_percent[i],
+                centered_percent,
+                receptor_y_normal,
+                receptor_y_reverse,
+                receptor_y_centered,
+            ),
+        )
     });
 
     let hud_reverse = column_reverse_percent[0] >= 0.999_9;
@@ -619,7 +625,7 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
 }
 
 pub(crate) fn default_column_x(local_col: usize, num_cols: usize) -> f32 {
-    (local_col as f32 - (num_cols.saturating_sub(1) as f32 * 0.5)) * 64.0
+    (num_cols.saturating_sub(1) as f32).mul_add(-0.5, local_col as f32) * 64.0
 }
 
 pub(crate) trait LaneColumnX {

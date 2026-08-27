@@ -127,7 +127,7 @@ pub(crate) fn append_average_error_bar_part(out: &mut String, params: GameplayMo
     if params.average_error_bar_active {
         begin_display_mod_option(out);
         out.push_str("ErrorBar");
-        push_trimmed_float2(out, params.avg_error_bar_intensity_centi as f32 / 100.0);
+        push_trimmed_float2(out, f32::from(params.avg_error_bar_intensity_centi) / 100.0);
         write!(out, "x(Avg:{}ms)", params.avg_error_bar_interval_ms)
             .expect("writing to a String cannot fail");
     }

@@ -278,8 +278,14 @@ pub fn gif_render_layout(
     Some(GifRenderLayout {
         texture: gif.texture.as_str(),
         crop: style.crop,
-        x: params.pane_x + local_x * params.banner_data_zoom + style.x * actor_frame_zoom,
-        y: params.pane_y - 57.0 * params.banner_data_zoom + style.y * actor_frame_zoom,
+        x: style.x.mul_add(
+            actor_frame_zoom,
+            params.pane_x + local_x * params.banner_data_zoom,
+        ),
+        y: style.y.mul_add(
+            actor_frame_zoom,
+            57.0f32.mul_add(-params.banner_data_zoom, params.pane_y),
+        ),
         zoom: actor_frame_zoom * style.zoom,
         align_x: style.align_x,
         frames: &gif.frames,

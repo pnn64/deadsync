@@ -720,7 +720,7 @@ mod tests {
         let note_y = raw * field_zoom * player_speed;
         let old_measure_y = raw * field_zoom * field_zoom * player_speed;
 
-        assert!((note_y - expected * field_zoom * player_speed).abs() <= 0.001);
+        assert!((expected * field_zoom).mul_add(-player_speed, note_y).abs() <= 0.001);
         assert!(
             (note_y - old_measure_y).abs() > 100.0,
             "double-applying field zoom would drift measure lines away from notes"
@@ -732,7 +732,12 @@ mod tests {
         let edit_raw = edit_beat_scroll_travel(44.0, 40.0);
         let displayed_raw = beat_scroll_travel(42.0, 40.0, 0.5);
 
-        assert!((edit_raw - 4.0 * ScrollSpeedSetting::ARROW_SPACING).abs() <= 0.001);
+        assert!(
+            4.0f32
+                .mul_add(-ScrollSpeedSetting::ARROW_SPACING, edit_raw)
+                .abs()
+                <= 0.001
+        );
         assert!((displayed_raw - ScrollSpeedSetting::ARROW_SPACING).abs() <= 0.001);
         assert!(
             (edit_raw - displayed_raw).abs() > 100.0,
@@ -1311,11 +1316,15 @@ mod tests {
     #[test]
     fn visual_tiny_zoom_matches_itg_power_formula() {
         assert!(
-            (visual_tiny_zoom(VisualEffectParams {
-                tiny: 2.0,
-                ..VisualEffectParams::default()
-            }) - 0.5_f32.powf(2.0))
-            .abs()
+            0.5_f32
+                .mul_add(
+                    -0.5_f32,
+                    visual_tiny_zoom(VisualEffectParams {
+                        tiny: 2.0,
+                        ..VisualEffectParams::default()
+                    }),
+                )
+                .abs()
                 <= 1e-6
         );
         assert!(
@@ -1350,8 +1359,8 @@ mod tests {
         };
         let base = scale_effect_size([64.0, 64.0], 1.25, 1.0);
         let scaled = scale_effect_size([64.0, 64.0], 1.25, visual_arrow_effect_zoom(0.0, doubled));
-        assert!((scaled[0] - base[0] * 2.0).abs() <= 1e-6);
-        assert!((scaled[1] - base[1] * 2.0).abs() <= 1e-6);
+        assert!(base[0].mul_add(-2.0, scaled[0]).abs() <= 1e-6);
+        assert!(base[1].mul_add(-2.0, scaled[1]).abs() <= 1e-6);
     }
 
     #[test]
@@ -4158,7 +4167,7 @@ mod tests {
         let notes = (0..512)
             .map(|index| {
                 let beat = index as f32 * 0.5;
-                test_hold_at_beat(beat, beat + 1.0 + (index % 16) as f32 * 0.25)
+                test_hold_at_beat(beat, ((index % 16) as f32).mul_add(0.25, beat + 1.0))
             })
             .collect::<Vec<_>>();
         let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();

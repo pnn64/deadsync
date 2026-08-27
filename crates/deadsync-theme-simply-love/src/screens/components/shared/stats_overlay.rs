@@ -150,7 +150,7 @@ pub fn push(
 
 fn format_stutter_time(seconds: f32) -> Arc<str> {
     let centi_total = (seconds.max(0.0) * 100.0).round() as u64;
-    let key = (centi_total.min(u32::MAX as u64)) as u32;
+    let key = (centi_total.min(u64::from(u32::MAX))) as u32;
     cached_text(&STUTTER_TIME_CACHE, key, TEXT_CACHE_LIMIT, || {
         let minutes = centi_total / 6_000;
         let rem = centi_total % 6_000;
@@ -188,13 +188,13 @@ pub fn push_stutter(actors: &mut Vec<Actor>, events: &[VisibleStutterSample]) {
     let h = screen_height();
     let skip_x = w - SKIP_X_FROM_RIGHT;
     let skip_y = h - SKIP_Y_FROM_BOTTOM;
-    let half_h = (SKIP_SPACING_Y * SKIP_SLOTS as f32) * 0.5 + EDGE_PAD_Y;
+    let half_h = (SKIP_SPACING_Y * SKIP_SLOTS as f32).mul_add(0.5, EDGE_PAD_Y);
     let top = skip_y - half_h;
     let bottom = skip_y + half_h;
     actors.reserve(events.len().min(SKIP_SLOTS) + 1);
     actors.push(act!(quad:
         align(0.0, 0.0):
-        xy(skip_x - SKIP_WIDTH * 0.5, top):
+        xy(SKIP_WIDTH.mul_add(-0.5, skip_x), top):
         zoomto(SKIP_WIDTH, bottom - top):
         diffuse(0.0, 0.0, 0.0, 0.4):
         z(DEBUG_OVERLAY_Z)
@@ -207,7 +207,7 @@ pub fn push_stutter(actors: &mut Vec<Actor>, events: &[VisibleStutterSample]) {
         let y = if SKIP_SLOTS == 1 {
             line_top
         } else {
-            line_top + (line_bottom - line_top) * (i as f32 / (SKIP_SLOTS - 1) as f32)
+            (line_bottom - line_top).mul_add(i as f32 / (SKIP_SLOTS - 1) as f32, line_top)
         };
         let c = stutter_color(event.severity, event.age_seconds);
         let t = format_stutter_time(event.timestamp_seconds);

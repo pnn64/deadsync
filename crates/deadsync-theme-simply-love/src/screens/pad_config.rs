@@ -110,7 +110,7 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 const THRESHOLD_STEP: u16 = 5;
 
 /// Gap the press/release lock keeps between a load-cell panel's thresholds,
-/// matching the official SMX config tool's two-thumb slider (MinimumDistance).
+/// matching the official SMX config tool's two-thumb slider (`MinimumDistance`).
 const LOCKED_THRESHOLD_GAP: u16 = 10;
 /// Minimum gap with the lock off: release must always stay below press.
 const UNLOCKED_THRESHOLD_GAP: u16 = 1;
@@ -190,7 +190,7 @@ pub struct State {
     /// Whether the cursor pad can be saved to a profile (set by the app: true
     /// only in-session when the cursor pad maps to a local profile).
     save_available: bool,
-    /// Whether DeadSync is currently managing pad config (set by the app). When
+    /// Whether `DeadSync` is currently managing pad config (set by the app). When
     /// true on the standalone screen, direct edits are transient (re-applied on
     /// launch / profile / pad change), so we caption the screen to point the user
     /// at the Song Select profile flow.
@@ -389,7 +389,7 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
         }
         return EditResult::Handled;
     }
-    let step = if fine { 1 } else { THRESHOLD_STEP as i32 };
+    let step = if fine { 1 } else { i32::from(THRESHOLD_STEP) };
     match ui_action(ev.action) {
         Some(UiAction::PrevBar) => state.selected = (state.selected + total - 1) % total,
         Some(UiAction::NextBar) => state.selected = (state.selected + 1) % total,
@@ -405,7 +405,7 @@ pub const fn set_save_available(state: &mut State, available: bool) {
     state.save_available = available;
 }
 
-/// Whether DeadSync is managing pad config (set by the app each frame). Drives the
+/// Whether `DeadSync` is managing pad config (set by the app each frame). Drives the
 /// "edits here are temporary" caption on the standalone Configure Pads screen.
 pub const fn set_managed_active(state: &mut State, active: bool) {
     state.managed_active = active;
@@ -768,9 +768,9 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
 
     let row_h = 34.0;
     let rows = state.profiles.len() + 1;
-    let top = screen_center_y() - rows as f32 * row_h * 0.5 - 8.0;
+    let top = (rows as f32 * row_h).mul_add(-0.5, screen_center_y()) - 8.0;
     for row in 0..rows {
-        let y = top + row as f32 * row_h;
+        let y = (row as f32).mul_add(row_h, top);
         let selected = state.profiles_sel == row;
         if selected {
             // push_quad is top-anchored; center it on the row's text baseline (y).
@@ -952,7 +952,7 @@ fn simple_group_width(buttons: usize, bar_w: f32, gap: f32) -> f32 {
     if buttons == 0 {
         return 0.0;
     }
-    bar_w * buttons as f32 + gap * buttons.saturating_sub(1) as f32
+    gap.mul_add(buttons.saturating_sub(1) as f32, bar_w * buttons as f32)
 }
 
 fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overlay: bool, zb: f32) {
@@ -960,11 +960,18 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
     let natural_panel_widths: SmallVec<[f32; 4]> = state
         .pads
         .iter()
-        .map(|pad| simple_group_width(pad.buttons.len(), BAR_WIDTH, BAR_GAP) + PANEL_PAD_X * 2.0)
+        .map(|pad| {
+            PANEL_PAD_X.mul_add(
+                2.0,
+                simple_group_width(pad.buttons.len(), BAR_WIDTH, BAR_GAP),
+            )
+        })
         .collect();
-    let natural_w = natural_panel_widths.iter().sum::<f32>()
-        + PAD_GAP * state.pads.len().saturating_sub(1) as f32;
-    let scale = ((screen_width() - SCREEN_PAD_X * 2.0) / natural_w.max(1.0)).min(1.0);
+    let natural_w = PAD_GAP.mul_add(
+        state.pads.len().saturating_sub(1) as f32,
+        natural_panel_widths.iter().sum::<f32>(),
+    );
+    let scale = (SCREEN_PAD_X.mul_add(-2.0, screen_width()) / natural_w.max(1.0)).min(1.0);
     let bar_w = BAR_WIDTH * scale;
     let bar_gap = BAR_GAP * scale;
     let pad_gap = PAD_GAP * scale;
@@ -984,7 +991,7 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
 
     for (pad_idx, pad) in state.pads.iter().enumerate() {
         let panel_w = panel_widths[pad_idx];
-        let panel_cx = panel_left + panel_w * 0.5;
+        let panel_cx = panel_w.mul_add(0.5, panel_left);
         push_frame(
             actors,
             panel_cx,
@@ -1009,7 +1016,7 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
         let group_w = simple_group_width(pad.buttons.len(), bar_w, bar_gap);
         let left = panel_cx - group_w * 0.5 + bar_w * 0.5;
         for (btn_idx, button) in pad.buttons.iter().enumerate() {
-            let x = left + btn_idx as f32 * (bar_w + bar_gap);
+            let x = (btn_idx as f32).mul_add(bar_w + bar_gap, left);
             // The focused threshold of this button, if the cursor is on it
             // (dual-threshold buttons hold two cursor stops).
             let focused_kind = selected_cursor
@@ -1158,7 +1165,8 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
     let group_gap = if gaps == 0 {
         0.0
     } else {
-        ADV_GROUP_GAP.min(((screen_width() - SCREEN_PAD_X * 2.0 - bars_w) / gaps as f32).max(8.0))
+        ADV_GROUP_GAP
+            .min(((SCREEN_PAD_X.mul_add(-2.0, screen_width()) - bars_w) / gaps as f32).max(8.0))
     };
     let total_w = bars_w + group_gap * gaps as f32;
     let mut group_left = screen_center_x() - total_w * 0.5;
@@ -1166,7 +1174,7 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
 
     for (btn_idx, button) in pad.buttons.iter().enumerate() {
         let gw = group_widths[btn_idx];
-        let group_cx = group_left + gw * 0.5;
+        let group_cx = gw.mul_add(0.5, group_left);
         // Button label above its sensor group.
         actors.push(act!(text:
             font("miso"):
@@ -1180,7 +1188,7 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
         ));
 
         for (s, sensor) in button.sensors.iter().enumerate() {
-            let x = group_left + ADV_BAR_W * 0.5 + s as f32 * (ADV_BAR_W + ADV_BAR_GAP);
+            let x = (s as f32).mul_add(ADV_BAR_W + ADV_BAR_GAP, ADV_BAR_W.mul_add(0.5, group_left));
             let fw = sensor.firmware_index;
             let pending = current_sensor_threshold(state, device, btn_idx, fw);
             let (threshold, threshold_norm) =
@@ -1323,7 +1331,7 @@ fn push_sensor_bar(
     }
 
     let threshold_h = 2.0_f32;
-    let threshold_y = y + (1.0 - threshold_norm) * ADV_BAR_HEIGHT - threshold_h * 0.5;
+    let threshold_y = threshold_h.mul_add(-0.5, (1.0 - threshold_norm).mul_add(ADV_BAR_HEIGHT, y));
     push_quad(
         actors,
         x,
@@ -1519,7 +1527,7 @@ fn apply_advanced_edit(state: &mut State, ev: &InputEvent, fine: bool) {
 fn edit_focused(state: &mut State, dev: PadDeviceId, target: AdvTarget, up: bool, fine: bool) {
     match target {
         AdvTarget::Sensor { button, sensor } => {
-            let step = if fine { 1 } else { THRESHOLD_STEP as i32 };
+            let step = if fine { 1 } else { i32::from(THRESHOLD_STEP) };
             adjust_sensor_threshold(state, dev, button, sensor, if up { step } else { -step });
         }
         AdvTarget::AutoRecal => {
@@ -1537,11 +1545,11 @@ fn edit_focused(state: &mut State, dev: PadDeviceId, target: AdvTarget, up: bool
             };
             let live = pad.debounce_micros.unwrap_or(DEBOUNCE_DEFAULT_US);
             let current = current_debounce(state, dev, live);
-            let step = if fine {
+            let step = i32::from(if fine {
                 DEBOUNCE_FINE_US
             } else {
                 DEBOUNCE_STEP_US
-            } as i32;
+            });
             let next = (i32::from(current) + if up { step } else { -step })
                 .clamp(i32::from(DEBOUNCE_MIN_US), i32::from(DEBOUNCE_MAX_US))
                 as u16;
@@ -1996,11 +2004,11 @@ fn group_width(sensors: usize) -> f32 {
     if sensors == 0 {
         return ADV_BAR_W;
     }
-    sensors as f32 * ADV_BAR_W + (sensors - 1) as f32 * ADV_BAR_GAP
+    ((sensors - 1) as f32).mul_add(ADV_BAR_GAP, sensors as f32 * ADV_BAR_W)
 }
 
 fn format_ms_text(micros: u16) -> TextContent {
-    TextContent::inline_format(format_args!("{:.1} ms", micros as f32 / 1000.0))
+    TextContent::inline_format(format_args!("{:.1} ms", f32::from(micros) / 1000.0))
         .expect("a u16 microsecond value fits inline milliseconds text")
 }
 
@@ -2215,8 +2223,8 @@ fn push_frame(
     frame_color: [f32; 4],
     z: f32,
 ) {
-    let left = center_x - panel_w * 0.5;
-    let right = center_x + panel_w * 0.5;
+    let left = panel_w.mul_add(-0.5, center_x);
+    let right = panel_w.mul_add(0.5, center_x);
     push_quad(actors, center_x, top_y, panel_w, panel_h, PANEL_BG, z);
     push_quad(
         actors,
@@ -2303,11 +2311,11 @@ fn push_value_cluster(
     let slot_scale = slot_width / BAR_WIDTH;
     let thin_w = 9.0 * slot_scale;
     let gap = 3.0 * slot_scale;
-    let total = n as f32 * thin_w + (n - 1) as f32 * gap;
+    let total = ((n - 1) as f32).mul_add(gap, n as f32 * thin_w);
     let start_left = x_center - total * 0.5;
 
     for (i, sensor) in sensors.iter().enumerate() {
-        let bx = start_left + thin_w * 0.5 + i as f32 * (thin_w + gap);
+        let bx = (i as f32).mul_add(thin_w + gap, start_left + thin_w * 0.5);
         push_quad(actors, bx, y, thin_w, BAR_HEIGHT, TRACK_COLOR, z);
         let vn = sensor.value_norm.clamp(0.0, 1.0);
         let fill_h = vn * BAR_HEIGHT;
@@ -2344,7 +2352,7 @@ fn push_value_cluster(
     let press_focused = focused_kind == Some(ThresholdKind::Press);
     let release_focused = focused_kind == Some(ThresholdKind::Release);
     let threshold_h = 3.0_f32;
-    let threshold_y = y + (1.0 - threshold_norm) * BAR_HEIGHT - threshold_h * 0.5;
+    let threshold_y = threshold_h.mul_add(-0.5, (1.0 - threshold_norm).mul_add(BAR_HEIGHT, y));
     let press_line = if press_focused { sel } else { THRESHOLD_COLOR };
     push_quad(
         actors,
@@ -2356,7 +2364,10 @@ fn push_value_cluster(
         z + if press_focused { 2.1 } else { 2.0 },
     );
     if let Some((_, release_norm)) = &release {
-        let release_y = y + (1.0 - release_norm.clamp(0.0, 1.0)) * BAR_HEIGHT - threshold_h * 0.5;
+        let release_y = threshold_h.mul_add(
+            -0.5,
+            (1.0 - release_norm.clamp(0.0, 1.0)).mul_add(BAR_HEIGHT, y),
+        );
         let release_line = if release_focused { sel } else { OFF_TEXT };
         push_quad(
             actors,
@@ -2372,7 +2383,7 @@ fn push_value_cluster(
     if selected {
         let ox = x_center - f32::midpoint(slot_width, 12.0 * slot_scale);
         let oy = y - 46.0;
-        let ow = slot_width + 12.0 * slot_scale;
+        let ow = 12.0f32.mul_add(slot_scale, slot_width);
         let oh = BAR_HEIGHT + 82.0;
         let t = 2.0_f32;
         let o = [1.0, 1.0, 1.0, 1.0];
@@ -2478,7 +2489,7 @@ fn push_bar(
         let slot_scale = slot_width / BAR_WIDTH;
         let ox = x - f32::midpoint(slot_width, 12.0 * slot_scale);
         let oy = y - 42.0;
-        let ow = slot_width + 12.0 * slot_scale;
+        let ow = 12.0f32.mul_add(slot_scale, slot_width);
         let oh = BAR_HEIGHT + 78.0;
         let t = 2.0_f32;
         let outline = [1.0, 1.0, 1.0, 1.0];
@@ -2503,7 +2514,7 @@ fn push_bar(
         };
         actors.push(act!(text:
             font("miso"): settext("OFF"): align(0.5, 0.5):
-            xy(x, y + BAR_HEIGHT * 0.5): zoom(0.82): horizalign(center):
+            xy(x, BAR_HEIGHT.mul_add(0.5, y)): zoom(0.82): horizalign(center):
             diffuse(off[0], off[1], off[2], off[3]): z(z + 3.0)
         ));
         actors.push(act!(text:
@@ -2533,7 +2544,7 @@ fn push_bar(
 
     // Activation-threshold line.
     let threshold_h = 3.0_f32;
-    let threshold_y = y + (1.0 - threshold_norm) * BAR_HEIGHT - threshold_h * 0.5;
+    let threshold_y = threshold_h.mul_add(-0.5, (1.0 - threshold_norm).mul_add(BAR_HEIGHT, y));
     push_quad(
         actors,
         x,
@@ -2546,7 +2557,7 @@ fn push_bar(
     // Faded ghost lines at per-sensor thresholds that diverge from the main
     // (max) line after Advanced edits, so the spread is visible from Simple.
     for gn in ghost_norms {
-        let gy = y + (1.0 - gn.clamp(0.0, 1.0)) * BAR_HEIGHT - 1.0;
+        let gy = (1.0 - gn.clamp(0.0, 1.0)).mul_add(BAR_HEIGHT, y) - 1.0;
         push_quad(
             actors,
             x,

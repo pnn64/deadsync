@@ -265,7 +265,7 @@ fn accelerate(t: f32) -> f32 {
 #[inline(always)]
 fn decelerate(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
-    1.0 - (1.0 - t) * (1.0 - t)
+    (1.0 - t).mul_add(-(1.0 - t), 1.0)
 }
 
 #[inline(always)]
@@ -402,7 +402,7 @@ fn smooth_p(t: f32) -> f32 {
     if t <= 0.5 {
         2.0 * t * t
     } else {
-        1.0 - 2.0 * (1.0 - t) * (1.0 - t)
+        (2.0 * (1.0 - t)).mul_add(-(1.0 - t), 1.0)
     }
 }
 
@@ -424,14 +424,14 @@ fn secondary_entry_alpha(elapsed: Option<f32>) -> f32 {
 
 fn row_exit_alpha(index: usize, elapsed: Option<f32>) -> f32 {
     elapsed.map_or(1.0, |t| {
-        let fade_t = (t - ROW_STAGGER * index as f32) / ROW_EXIT_DURATION;
+        let fade_t = ROW_STAGGER.mul_add(-(index as f32), t) / ROW_EXIT_DURATION;
         1.0 - fade_t.clamp(0.0, 1.0)
     })
 }
 
 fn row_entry_alpha(index: usize, elapsed: Option<f32>) -> f32 {
     elapsed.map_or(1.0, |t| {
-        ((t - ROW_STAGGER * index as f32) / ROW_ENTRY_DURATION).clamp(0.0, 1.0)
+        (ROW_STAGGER.mul_add(-(index as f32), t) / ROW_ENTRY_DURATION).clamp(0.0, 1.0)
     })
 }
 
@@ -534,8 +534,9 @@ fn build_groovestats_text(
             leaderboard,
             auto_submit,
         } => {
-            let disabled_mask =
-                (!get_scores) as u8 | (((!leaderboard) as u8) << 1) | (((!auto_submit) as u8) << 2);
+            let disabled_mask = u8::from(!get_scores)
+                | (u8::from(!leaderboard) << 1)
+                | (u8::from(!auto_submit) << 2);
             if disabled_mask == 0 {
                 let service = groove_service_name(boogie);
                 (
@@ -1179,7 +1180,9 @@ mod tests {
         approx(secondary_entry_alpha(Some(0.0)), 0.0);
         approx(secondary_entry_alpha(Some(SECONDARY_ENTRY_DELAY)), 0.0);
         approx(
-            secondary_entry_alpha(Some(SECONDARY_ENTRY_DELAY + SECONDARY_ENTRY_DURATION * 0.5)),
+            secondary_entry_alpha(Some(
+                SECONDARY_ENTRY_DURATION.mul_add(0.5, SECONDARY_ENTRY_DELAY),
+            )),
             0.5,
         );
         approx(
@@ -1198,7 +1201,7 @@ mod tests {
             &state,
             None,
             1.0,
-            Some(SECONDARY_ENTRY_DELAY + SECONDARY_ENTRY_DURATION * 0.5),
+            Some(SECONDARY_ENTRY_DURATION.mul_add(0.5, SECONDARY_ENTRY_DELAY)),
             None,
             Default::default(),
         );
@@ -1225,11 +1228,11 @@ mod tests {
 
         approx(row_exit_alpha(3, Some(ROW_STAGGER * 3.0)), 1.0);
         approx(
-            row_exit_alpha(3, Some(ROW_STAGGER * 3.0 + ROW_EXIT_DURATION * 0.5)),
+            row_exit_alpha(3, Some(ROW_EXIT_DURATION.mul_add(0.5, ROW_STAGGER * 3.0))),
             0.5,
         );
         approx(
-            row_exit_alpha(3, Some(ROW_STAGGER * 3.0 + ROW_EXIT_DURATION)),
+            row_exit_alpha(3, Some(ROW_STAGGER.mul_add(3.0, ROW_EXIT_DURATION))),
             0.0,
         );
     }
@@ -1242,11 +1245,11 @@ mod tests {
 
         approx(row_entry_alpha(3, Some(ROW_STAGGER * 3.0)), 0.0);
         approx(
-            row_entry_alpha(3, Some(ROW_STAGGER * 3.0 + ROW_ENTRY_DURATION * 0.5)),
+            row_entry_alpha(3, Some(ROW_ENTRY_DURATION.mul_add(0.5, ROW_STAGGER * 3.0))),
             0.5,
         );
         approx(
-            row_entry_alpha(3, Some(ROW_STAGGER * 3.0 + ROW_ENTRY_DURATION)),
+            row_entry_alpha(3, Some(ROW_STAGGER.mul_add(3.0, ROW_ENTRY_DURATION))),
             1.0,
         );
         approx(row_entry_alpha(3, None), 1.0);

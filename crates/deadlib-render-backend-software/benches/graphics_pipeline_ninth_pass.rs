@@ -367,7 +367,7 @@ fn texture_upload_work(source: &[u8], dest: &mut [u8], classify: bool) -> u64 {
     u64::from(dest[0])
         ^ (u64::from(dest[TEXTURE_BYTES / 2]) << 8)
         ^ (u64::from(dest[TEXTURE_BYTES - 1]) << 16)
-        ^ ((opaque as u64) << 63)
+        ^ (u64::from(opaque) << 63)
 }
 
 #[inline(always)]

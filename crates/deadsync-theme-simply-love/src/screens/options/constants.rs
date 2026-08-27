@@ -97,7 +97,7 @@ pub(super) const SUB_INLINE_ITEMS_LEFT_PAD: f32 = 13.0;
 pub(super) const SUB_SINGLE_VALUE_CENTER_OFFSET: f32 = -43.0;
 
 /// Heart sprite zoom for the options list rows.
-/// This is a StepMania-style "zoom" factor applied to the native SelectColor icon.
+/// This is a StepMania-style "zoom" factor applied to the native `SelectColor` icon.
 pub(super) const HEART_ZOOM: f32 = 0.026;
 
 /// Description pane layout (mirrors Simply Love's `ScreenOptionsService` overlay).

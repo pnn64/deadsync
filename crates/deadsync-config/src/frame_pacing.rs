@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-/// Hold-Tab fast-forward / hold-` slow-down multipliers, ITGmania parity.
+/// Hold-`Tab` fast-forward / hold-`Backquote` slow-down multipliers, `ITGmania` parity.
 ///
 /// `Tab` alone -> `TAB_FAST_MULTIPLIER`x engine update rate.
 /// `` ` `` alone -> `1.0 / TAB_SLOW_DIVISOR`x rate.
@@ -645,7 +645,7 @@ mod tests {
     fn tab_accel_fast_multiplies_by_four() {
         let dt = 0.016_f32;
         let out = apply_tab_acceleration(dt, true, true, false, true);
-        assert!((out - dt * 4.0).abs() < EPS, "got {out}");
+        assert!(dt.mul_add(-4.0, out).abs() < EPS, "got {out}");
     }
 
     #[test]
@@ -752,7 +752,7 @@ mod tests {
         let dt = 0.016_f32;
         let out = apply_tab_acceleration(dt, true, true, false, true);
         assert!(out < MAX_LOGIC_DT_PER_FRAME);
-        assert!((out - 4.0 * dt).abs() < EPS);
+        assert!(4.0f32.mul_add(-dt, out).abs() < EPS);
     }
 
     #[test]
@@ -897,7 +897,9 @@ mod tests {
         assert_eq!(visible.len(), STUTTER_SAMPLE_COUNT);
         assert!((visible[0].timestamp_seconds - 0.1).abs() < EPS);
         assert!(
-            (visible.last().unwrap().timestamp_seconds - STUTTER_SAMPLE_COUNT as f32 * 0.1).abs()
+            (STUTTER_SAMPLE_COUNT as f32)
+                .mul_add(-0.1, visible.last().unwrap().timestamp_seconds)
+                .abs()
                 < EPS
         );
     }

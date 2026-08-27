@@ -6,12 +6,12 @@
 //!   to decide whether to draw a banner.  Lives in memory only.
 //! * A small persisted *cache* (`etag`, last seen tag, cached release)
 //!   — written next to the other cache files so we can do conditional
-//!   requests on the next run (the ETag does the heavy lifting against
+//!   requests on the next run (the `ETag` does the heavy lifting against
 //!   GitHub's 60/hr unauthenticated rate limit) and so the banner
 //!   survives a 304 / offline launch.
 //!
 //! The persisted cache lives outside the user-editable app config on
-//! purpose.  The updater cache contains opaque ETag strings the user
+//! purpose.  The updater cache contains opaque `ETag` strings the user
 //! has no business seeing or editing.
 
 use semver::Version;
@@ -113,7 +113,7 @@ impl CachedRelease {
 #[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpdaterCache {
     /// Tag string of the last release we successfully classified.
-    /// Informational; persisted alongside the ETag so the cache file
+    /// Informational; persisted alongside the `ETag` so the cache file
     /// records both the conditional-request key and the release it
     /// applied to.
     #[serde(default)]
@@ -217,7 +217,7 @@ pub fn load_persisted_cache() {
 /// canonical GitHub host, unless the operator currently has the
 /// release URL override active.  When stripping, also rewrites
 /// `path` so subsequent launches don't have to re-discover the
-/// taint.  Pure-ish (logs + a single fs::write on the rewrite path);
+/// taint.  Pure-ish (logs + a single `fs::write` on the rewrite path);
 /// extracted from `load_persisted_cache` so tests can drive it
 /// against a tempdir without touching the global cache directory.
 fn sanitize_loaded_cache(
@@ -258,7 +258,7 @@ const CANONICAL_RELEASE_HOSTS: &[&str] = &["github.com", "api.github.com"];
 
 /// True when every asset in `cached` advertises a download URL whose
 /// host is in [`CANONICAL_RELEASE_HOSTS`].  Empty asset lists are
-/// considered canonical (there's no URL to validate, and into_release_info
+/// considered canonical (there's no URL to validate, and `into_release_info`
 /// will yield a release with nothing actionable to download).
 fn cached_release_is_canonical(cached: &CachedRelease) -> bool {
     cached
@@ -294,18 +294,18 @@ fn load_cache_from(path: &Path) -> Option<UpdaterCache> {
 ///
 /// The caller passes the *current* cache, the classified state, the
 /// release tag (lifted out before `classify` consumed the `ReleaseInfo`),
-/// and the ETag from the response.  The returned cache is what
+/// and the `ETag` from the response.  The returned cache is what
 /// [`write_cache`] should persist next.
 ///
 /// Two subtleties:
-/// * The ETag is overwritten **unconditionally**, even when the server
-///   omits it.  Holding on to a stale ETag from a previous response
+/// * The `ETag` is overwritten **unconditionally**, even when the server
+///   omits it.  Holding on to a stale `ETag` from a previous response
 ///   would let the next `If-None-Match` header match an unrelated
 ///   payload and trigger a spurious 304.
 /// * `cached_release` is set on `Available`, cleared on `UpToDate`, and
-///   left untouched on `UnknownLatest`: clearing on UpToDate keeps an
+///   left untouched on `UnknownLatest`: clearing on `UpToDate` keeps an
 ///   out-of-date snapshot from re-appearing after the user updates;
-///   leaving it on UnknownLatest is a no-op because we never wrote one
+///   leaving it on `UnknownLatest` is a no-op because we never wrote one
 ///   in that case.
 pub fn apply_fresh_to_cache(
     mut prev: UpdaterCache,

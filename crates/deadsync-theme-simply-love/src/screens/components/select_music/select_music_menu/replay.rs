@@ -220,7 +220,8 @@ pub fn build_replay_overlay(
         z(GS_LEADERBOARD_Z + 3)
     ));
 
-    let header_y = pane_cy - GS_LEADERBOARD_PANE_HEIGHT * 0.5 + GS_LEADERBOARD_ROW_HEIGHT * 0.5;
+    let header_y =
+        GS_LEADERBOARD_ROW_HEIGHT.mul_add(0.5, GS_LEADERBOARD_PANE_HEIGHT.mul_add(-0.5, pane_cy));
     actors.push(act!(quad:
         align(0.5, 0.5):
         xy(pane_cx, header_y):
@@ -249,24 +250,24 @@ pub fn build_replay_overlay(
         font("miso"):
         settext(format!("{} Local Scores", overlay.entries.len())):
         align(0.5, 0.5):
-        xy(pane_cx, pane_cy - GS_LEADERBOARD_PANE_HEIGHT * 0.5 - 24.0):
+        xy(pane_cx, GS_LEADERBOARD_PANE_HEIGHT.mul_add(-0.5, pane_cy) - 24.0):
         zoom(0.8):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(GS_LEADERBOARD_Z + 6):
         horizalign(center)
     ));
 
-    let rank_x = pane_cx - pane_width * 0.5 + 32.0;
-    let name_x = pane_cx - pane_width * 0.5 + 100.0;
+    let rank_x = pane_width.mul_add(-0.5, pane_cx) + 32.0;
+    let name_x = pane_width.mul_add(-0.5, pane_cx) + 100.0;
     let score_x = pane_cx + 63.0;
-    let date_x = pane_cx + pane_width * 0.5 - 2.0;
+    let date_x = pane_width.mul_add(0.5, pane_cx) - 2.0;
 
     for row_slot in 0..visible_rows {
         let row_idx = window_start + row_slot;
         if row_idx >= total_items {
             break;
         }
-        let y = pane_cy + GS_LEADERBOARD_ROW_HEIGHT * ((row_slot + 1) as f32 - row_center);
+        let y = GS_LEADERBOARD_ROW_HEIGHT.mul_add((row_slot + 1) as f32 - row_center, pane_cy);
         let selected = row_idx == overlay.selected_index;
         if selected {
             actors.push(act!(quad:

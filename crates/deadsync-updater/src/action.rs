@@ -196,7 +196,7 @@ impl ProgressThrottle {
             if t == 0 {
                 None
             } else {
-                Some(((written.min(t) as u128 * 100) / t as u128) as u32)
+                Some(((u128::from(written.min(t)) * 100) / u128::from(t)) as u32)
             }
         });
         let is_final = matches!(total, Some(t) if written >= t);

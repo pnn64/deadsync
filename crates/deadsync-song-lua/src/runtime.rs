@@ -59,7 +59,7 @@ pub fn song_lua_runtime_number(value: f32) -> mlua::Result<Value> {
     if value.is_finite() && value.fract().abs() <= f32::EPSILON {
         Ok(Value::Integer(value as i64))
     } else {
-        Ok(Value::Number(value as f64))
+        Ok(Value::Number(f64::from(value)))
     }
 }
 

@@ -1,8 +1,8 @@
-//! Auto-discovery of ITGmania local profiles.
+//! Auto-discovery of `ITGmania` local profiles.
 //!
-//! ITGmania stores per-machine save data in a platform-specific directory, with
+//! `ITGmania` stores per-machine save data in a platform-specific directory, with
 //! local profiles under `<Save>/LocalProfiles/<id>/`. This module scans the
-//! likely save roots and returns every directory that looks like an ITGmania
+//! likely save roots and returns every directory that looks like an `ITGmania`
 //! profile so the import UI can present a picker without asking the user to
 //! browse the filesystem manually.
 
@@ -12,29 +12,29 @@ use std::path::{Path, PathBuf};
 use super::itg;
 use deadsync_profile::favorites_view::unicode_case_insensitive_cmp;
 
-/// One ITGmania local profile found on disk.
+/// One `ITGmania` local profile found on disk.
 #[derive(Debug, Clone)]
 pub struct ItgProfileCandidate {
     /// Absolute path to the `LocalProfiles/<id>/` directory.
     pub dir: PathBuf,
     /// `DisplayName` from `Editable.ini`, falling back to the folder name.
     pub display_name: String,
-    /// ITGmania `Stats.xml` `Guid`, when present. Used to detect a profile that
+    /// `ITGmania` `Stats.xml` `Guid`, when present. Used to detect a profile that
     /// has already been imported. `None` when the profile has no `Stats.xml`.
     pub source_guid: Option<String>,
 }
 
-/// Scans the known ITGmania save locations and returns every local profile
-/// found, sorted by display name. Returns an empty list when ITGmania isn't
+/// Scans the known `ITGmania` save locations and returns every local profile
+/// found, sorted by display name. Returns an empty list when `ITGmania` isn't
 /// installed or has no profiles.
 pub fn detect_itg_local_profiles() -> Vec<ItgProfileCandidate> {
     collect_sorted(local_profiles_roots())
 }
 
-/// Resolves where ITGmania would load profiles from for an install at
-/// `game_dir`, replicating ITGmania's own methodology (`ArchHooks`): if a
+/// Resolves where `ITGmania` would load profiles from for an install at
+/// `game_dir`, replicating `ITGmania`'s own methodology (`ArchHooks`): if a
 /// `Portable.ini` marker sits next to the executable the install is **portable**
-/// and `Save/` lives under the game folder; otherwise ITGmania uses the
+/// and `Save/` lives under the game folder; otherwise `ITGmania` uses the
 /// platform per-user data directory. Profiles are always under
 /// `<save>/LocalProfiles/`. Returns the profiles found there, sorted by display
 /// name.
@@ -42,8 +42,8 @@ pub fn detect_itg_profiles_from_game_dir(game_dir: &Path) -> Vec<ItgProfileCandi
     collect_sorted(itg_local_profiles_roots_for_game_dir(game_dir))
 }
 
-/// `true` when `game_dir` is a portable ITGmania install — i.e. it contains a
-/// `Portable.ini` marker (matched case-insensitively, like ITGmania's VFS).
+/// `true` when `game_dir` is a portable `ITGmania` install — i.e. it contains a
+/// `Portable.ini` marker (matched case-insensitively, like `ITGmania`'s VFS).
 pub fn is_portable_install(game_dir: &Path) -> bool {
     if game_dir.join("Portable.ini").is_file() {
         return true;
@@ -59,7 +59,7 @@ pub fn is_portable_install(game_dir: &Path) -> bool {
     })
 }
 
-/// The `LocalProfiles` root(s) ITGmania would use for an install at `game_dir`:
+/// The `LocalProfiles` root(s) `ITGmania` would use for an install at `game_dir`:
 /// the portable `<game_dir>/Save/LocalProfiles` when `Portable.ini` is present,
 /// otherwise the platform per-user roots (the same ones auto-detection scans).
 fn itg_local_profiles_roots_for_game_dir(game_dir: &Path) -> Vec<PathBuf> {
@@ -155,7 +155,7 @@ mod tests {
         dir
     }
 
-    /// Creates a minimal ITGmania profile at `root/<id>/Editable.ini`.
+    /// Creates a minimal `ITGmania` profile at `root/<id>/Editable.ini`.
     fn make_profile(root: &Path, id: &str, display_name: &str) {
         let dir = root.join(id);
         std::fs::create_dir_all(&dir).expect("create profile dir");

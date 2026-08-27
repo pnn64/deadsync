@@ -1133,7 +1133,7 @@ pub fn manual_qr_url(
     ))
 }
 
-/// Effect to dispatch when a raw GrooveStats QR-login WebSocket text
+/// Effect to dispatch when a raw `GrooveStats` QR-login WebSocket text
 /// frame arrives.  The caller owns transport and channel routing.
 #[derive(Debug, PartialEq, Eq)]
 pub enum GrooveStatsQrLoginWsEffect {
@@ -1204,7 +1204,7 @@ pub enum GrooveStatsQrLoginEvent {
     },
 }
 
-/// WebSocket worker body for GrooveStats QR-login. The caller owns the
+/// WebSocket worker body for `GrooveStats` QR-login. The caller owns the
 /// thread, cancellation flag, and mapping transport events to UI state.
 pub fn run_qr_login_session<F>(uuid: String, cancel: Arc<AtomicBool>, mut dispatch: F)
 where

@@ -34,7 +34,7 @@ impl Generator {
         self.name.clone()
     }
 
-    /// Generate an `for <trait_name> for <target_name>` implementation. See [ImplFor] for more information.
+    /// Generate an `for <trait_name> for <target_name>` implementation. See [`ImplFor`] for more information.
     ///
     /// This will default to the type that is associated with this generator. If you need to generate an impl for another type you can use `impl_trait_for_other_type`
     pub fn impl_for(&mut self, trait_name: impl Into<String>) -> ImplFor<'_, Self> {
@@ -45,7 +45,7 @@ impl Generator {
         )
     }
 
-    /// Generate an `for <..lifetimes> <trait_name> for <target_name>` implementation. See [ImplFor] for more information.
+    /// Generate an `for <..lifetimes> <trait_name> for <target_name>` implementation. See [`ImplFor`] for more information.
     ///
     /// Note:
     /// - Lifetimes should _not_ have the leading apostrophe.

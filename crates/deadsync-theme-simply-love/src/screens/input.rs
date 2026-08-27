@@ -68,9 +68,9 @@ pub enum ThreeKeyMenuAction {
     Cancel,
 }
 
-/// Apply ITGmania's game-button-to-menu-button mapping.
+/// Apply `ITGmania`'s game-button-to-menu-button mapping.
 ///
-/// Pump panels use ITGmania's secondary menu mapping. Like ITGmania, the
+/// Pump panels use `ITGmania`'s secondary menu mapping. Like `ITGmania`, the
 /// secondary mapping is disabled when only dedicated menu buttons are allowed.
 #[inline(always)]
 pub const fn menu_action(

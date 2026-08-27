@@ -31,7 +31,7 @@ impl StreamSegment {
     }
 }
 
-/// Owned stream data prepared for gameplay counters and ZMod progress.
+/// Owned stream data prepared for gameplay counters and `ZMod` progress.
 #[derive(Debug, Default, PartialEq)]
 pub struct StreamOutputs {
     pub counter_segments: Vec<StreamSegment>,
@@ -77,7 +77,7 @@ pub fn stream_sequences_threshold(measures: &[u8], threshold: usize) -> Vec<Stre
     segs
 }
 
-/// Builds optional measure-counter and ZMod output in one density traversal.
+/// Builds optional measure-counter and `ZMod` output in one density traversal.
 pub fn stream_outputs_full_measures(
     measures: &[u8],
     counter_threshold: Option<usize>,

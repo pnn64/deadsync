@@ -1,8 +1,8 @@
-//! Readers for an ITGmania `LocalProfiles/<id>/` directory: the editable profile
+//! Readers for an `ITGmania` `LocalProfiles/<id>/` directory: the editable profile
 //! metadata, online keys, avatar, and the `Stats.xml` high-score database.
 //!
-//! Nothing here touches DeadSync state — these functions only turn files on disk
-//! into plain Rust structs. Mapping into DeadSync types happens in the
+//! Nothing here touches `DeadSync` state — these functions only turn files on disk
+//! into plain Rust structs. Mapping into `DeadSync` types happens in the
 //! root import orchestration layer and in `deadsync_score::import`.
 
 use std::collections::HashMap;
@@ -26,7 +26,7 @@ pub struct ItgEditable {
     pub ignore_step_count_calories: bool,
 }
 
-/// GrooveStats + ArrowCloud online keys.
+/// `GrooveStats` + `ArrowCloud` online keys.
 #[derive(Debug, Clone, Default)]
 pub struct ItgOnlineKeys {
     pub groovestats_api_key: String,
@@ -53,7 +53,7 @@ pub struct ItgSongScores {
     pub steps: Vec<ItgStepsScores>,
 }
 
-/// Everything we managed to read from one ITGmania local profile directory.
+/// Everything we managed to read from one `ITGmania` local profile directory.
 #[derive(Debug, Clone, Default)]
 pub struct ItgSource {
     pub source_dir: PathBuf,
@@ -71,8 +71,8 @@ pub struct ItgSource {
     /// `Stats.xml` `GeneralData/CurrentCombo` — the running combo carried between
     /// songs. `0` when absent.
     pub current_combo: u32,
-    /// `Stats.xml` `GeneralData/Guid` — ITGmania's stable per-profile identifier.
-    /// Used to derive the imported DeadSync profile's GUID so re-importing the
+    /// `Stats.xml` `GeneralData/Guid` — `ITGmania`'s stable per-profile identifier.
+    /// Used to derive the imported `DeadSync` profile's GUID so re-importing the
     /// same profile yields the same identity. Empty when the `Stats.xml` is
     /// missing or has no `Guid`.
     pub guid: String,
@@ -91,7 +91,7 @@ impl ItgSource {
 
 #[derive(Debug)]
 pub enum ItgReadError {
-    /// The directory doesn't look like an ITGmania profile (no `Editable.ini`).
+    /// The directory doesn't look like an `ITGmania` profile (no `Editable.ini`).
     NotAProfile(PathBuf),
     Io(std::io::Error),
     Xml(xml::XmlError),
@@ -121,7 +121,7 @@ impl From<std::io::Error> for ItgReadError {
     }
 }
 
-/// Returns `true` if `dir` looks like an ITGmania local profile directory.
+/// Returns `true` if `dir` looks like an `ITGmania` local profile directory.
 pub fn is_itg_profile_dir(dir: &Path) -> bool {
     find_case_insensitive(dir, "Editable.ini").is_some()
 }
@@ -140,7 +140,7 @@ pub fn read_display_name(dir: &Path) -> Option<String> {
     }
 }
 
-/// Cheaply reads the ITGmania profile `Guid` from `Stats.xml` (or `Stats.xml.gz`)
+/// Cheaply reads the `ITGmania` profile `Guid` from `Stats.xml` (or `Stats.xml.gz`)
 /// without a full XML parse. The `Guid` lives in `GeneralData` at the very top of
 /// the file, so we only scan the head (bounded) instead of the whole — possibly
 /// many-megabyte — score database. Used by the import picker to flag profiles
@@ -189,7 +189,7 @@ fn read_gz_head(path: &Path, cap: u64) -> Option<String> {
     Some(String::from_utf8_lossy(&buf).into_owned())
 }
 
-/// Reads an entire ITGmania local profile directory into an [`ItgSource`].
+/// Reads an entire `ITGmania` local profile directory into an [`ItgSource`].
 pub fn read_profile_dir(dir: &Path) -> Result<ItgSource, ItgReadError> {
     let editable_path = find_case_insensitive(dir, "Editable.ini")
         .ok_or_else(|| ItgReadError::NotAProfile(dir.to_path_buf()))?;
@@ -320,7 +320,7 @@ fn read_favorites(dir: &Path) -> Vec<String> {
 }
 
 /// Reads the raw `ITL2026.json` (Simply Love ITL event data) from a profile
-/// directory, if present. The contents are parsed downstream by DeadSync's ITL
+/// directory, if present. The contents are parsed downstream by `DeadSync`'s ITL
 /// module, which uses the same schema. Returns `None` when the file is missing
 /// or unreadable.
 fn read_itl_json(dir: &Path) -> Option<String> {
@@ -328,7 +328,7 @@ fn read_itl_json(dir: &Path) -> Option<String> {
     fs::read_to_string(&path).ok()
 }
 
-/// Finds an avatar image in the profile dir. ITGmania uses `Avatar.png`; some
+/// Finds an avatar image in the profile dir. `ITGmania` uses `Avatar.png`; some
 /// setups also drop a generic image. We accept common names case-insensitively.
 fn find_avatar(dir: &Path) -> Option<PathBuf> {
     const NAMES: [&str; 4] = ["Avatar.png", "avatar.png", "Avatar.jpg", "Avatar.jpeg"];
@@ -480,7 +480,7 @@ fn parse_bool(s: &str) -> bool {
 }
 
 /// Looks up `name` inside `dir`, matching the file name case-insensitively
-/// (ITGmania/Windows are case-insensitive; DeadSync may run on case-sensitive
+/// (ITGmania/Windows are case-insensitive; `DeadSync` may run on case-sensitive
 /// filesystems). Returns the first matching path.
 fn find_case_insensitive(dir: &Path, name: &str) -> Option<PathBuf> {
     let direct = dir.join(name);

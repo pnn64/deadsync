@@ -283,7 +283,10 @@ fn capture_function_ease<Kind>(
     let probe_started = Instant::now();
     let (probed_target, probe_methods, probe_actor_ptrs) =
         probe_function_ease_target(lua, &input.function).map_err(|err| err.to_string())?;
-    stats.probe_ms += probe_started.elapsed().as_secs_f64() * 1000.0;
+    stats.probe_ms = probe_started
+        .elapsed()
+        .as_secs_f64()
+        .mul_add(1000.0, stats.probe_ms);
     let target = probed_target.unwrap_or(SongLuaEaseTarget::Function);
     if matches!(target, SongLuaEaseTarget::Function) {
         stats.overlay_capture_attempts += 1;

@@ -37,7 +37,7 @@ pub enum DisplayMode {
 pub struct Config {
     pub coin: CoinOptions,
     pub vsync: bool,
-    /// Stored MaxFPS cap value. `0` means "off".
+    /// Stored `MaxFPS` cap value. `0` means "off".
     pub max_fps: u16,
     pub present_mode_policy: PresentModePolicy,
     pub windowed: bool,
@@ -52,10 +52,10 @@ pub struct Config {
     /// game launches cleanly with no stray terminal. Ignored on other platforms,
     /// which always inherit their controlling terminal. Applied at startup.
     pub show_console: bool,
-    /// Write the active screen name to save/current_screen.txt on each transition.
+    /// Write the active screen name to `save/current_screen.txt` on each transition.
     pub write_current_screen: bool,
-    /// Hold-Tab fast-forward (4x) for non-gameplay screens. Issue #174 / ITGmania parity.
-    /// Hold ` for slow (0.25x); both held = halt. Always disabled in Gameplay.
+    /// Hold `Tab` for fast-forward (4x) on non-gameplay screens. Issue #174 / `ITGmania` parity.
+    /// Hold `Backquote` for slow (0.25x); both held = halt. Always disabled in Gameplay.
     pub tab_acceleration: bool,
     /// 0=Off, 1=FPS, 2=FPS+Stutter.
     pub show_stats_mode: u8,
@@ -80,14 +80,14 @@ pub struct Config {
     pub center_1player_notefield: bool,
     /// ITGmania-style wheel banner cache toggle.
     pub banner_cache: bool,
-    /// Cache Select Music CDTitles as raw RGBA blobs on disk.
+    /// Cache Select Music `CDTitles` as raw RGBA blobs on disk.
     pub cdtitle_cache: bool,
     pub display_width: u32,
     pub display_height: u32,
     /// Physical display aspect ratio, independent of the framebuffer resolution.
     /// This supports non-square-pixel displays such as arcade CRTs.
     pub display_aspect_ratio: f32,
-    /// Overscan adjustment (CenterImage). Values are in
+    /// Overscan adjustment (`CenterImage`). Values are in
     /// physical window pixels and scale/translate the entire rendered image so
     /// content cut off by display overscan can be pulled back into view.
     pub center_image_translate_x: i32,
@@ -97,7 +97,7 @@ pub struct Config {
     pub video_renderer: BackendType,
     /// Native high-DPI/Retina rendering. Currently affects macOS OpenGL only.
     pub high_dpi: bool,
-    /// Hide the OS mouse cursor while it is inside the DeadSync window.
+    /// Hide the OS mouse cursor while it is inside the `DeadSync` window.
     pub hide_mouse_cursor: bool,
     pub gfx_debug: bool,
     /// Enable a "Shutdown" entry on the main menu that powers off the host
@@ -107,9 +107,9 @@ pub struct Config {
     pub show_local_ip: bool,
     /// Windows-only: choose which gamepad backend to use.
     pub windows_gamepad_backend: WindowsPadBackend,
-    /// Enable StepManiaX pad input via the RustManiaX SDK (all platforms).
+    /// Enable `StepManiaX` pad input via the `RustManiaX` SDK (all platforms).
     pub smx_input: bool,
-    /// When true, DeadSync resolves and writes a pad config to each connected
+    /// When true, `DeadSync` resolves and writes a pad config to each connected
     /// SMX pad (this pad's saved default -> a global default -> the built-in
     /// `smx_default_pad_config` preset). See `App::apply_smx_managed_preset`.
     pub smx_manages_pad_config: bool,
@@ -130,7 +130,7 @@ pub struct Config {
     /// strip hardware that consumes WS2812 channel order (symptom when wrong:
     /// red shows as green, purple as cyan; yellow and blue look correct).
     pub smx_underglow_grb: bool,
-    /// Built-in pad preset flashed as the fallback when DeadSync manages pad
+    /// Built-in pad preset flashed as the fallback when `DeadSync` manages pad
     /// config and no saved config resolves for the pad.
     pub smx_default_pad_config: SmxPadPreset,
     /// Machine-default pad-light brightness (0..=100). Seeds each new player
@@ -166,14 +166,14 @@ pub struct Config {
     pub hide_inactive_series: bool,
     pub select_music_itl_rank_mode: SelectMusicItlRankMode,
     pub select_music_itl_wheel_mode: SelectMusicItlWheelMode,
-    /// Simply Love MusicWheelStyle parity: IIDX only shows the active pack when expanded.
+    /// Simply Love `MusicWheelStyle` parity: IIDX only shows the active pack when expanded.
     pub select_music_wheel_style: SelectMusicWheelStyle,
     /// zmod difficulty colors: theme-relative Simply Love, fixed ITG, or fixed DDR.
     pub difficulty_color_scheme: DifficultyColorScheme,
-    /// Arrow Cloud SongSelectBG parity: show song/pack art behind wheel rows.
+    /// Arrow Cloud `SongSelectBG` parity: show song/pack art behind wheel rows.
     pub select_music_song_select_bg_mode: SelectMusicSongSelectBgMode,
     pub select_music_new_pack_mode: NewPackMode,
-    /// Arrow Cloud FolderStats parity: pack clear summary box on Select Music.
+    /// Arrow Cloud `FolderStats` parity: pack clear summary box on Select Music.
     pub show_select_music_folder_stats: bool,
     pub show_select_music_previews: bool,
     pub show_select_music_preview_marker: bool,
@@ -195,7 +195,7 @@ pub struct Config {
     pub srpg_variant: SrpgVariant,
     /// Enable or disable animated gameplay background videos.
     pub show_video_backgrounds: bool,
-    /// ITGmania RandomBackgroundMode. DeadSync currently implements RandomMovies.
+    /// `ITGmania` `RandomBackgroundMode`. `DeadSync` currently implements `RandomMovies`.
     pub random_background_mode: RandomBackgroundMode,
     /// Simply Love tournament policy. Applied to per-song gameplay copies of player profiles.
     pub tournament: TournamentModeOptions,
@@ -237,9 +237,9 @@ pub struct Config {
     pub machine_enable_heart_rate_monitors: bool,
     /// Allow players to add a personal timing shift on top of machine global offset.
     pub machine_allow_per_player_global_offsets: bool,
-    /// Apply ITGmania Pack.ini SyncOffset values to gameplay timing.
+    /// Apply `ITGmania` Pack.ini `SyncOffset` values to gameplay timing.
     pub machine_pack_ini_offsets: bool,
-    /// Sync offset to assume for packs without a Pack.ini SyncOffset value.
+    /// Sync offset to assume for packs without a Pack.ini `SyncOffset` value.
     pub machine_default_sync_offset: DefaultSyncOffset,
     /// Post-session flow from Select Music/Course: show Evaluation Summary.
     pub machine_show_eval_summary: bool,
@@ -249,7 +249,7 @@ pub struct Config {
     pub machine_nice_sound: bool,
     /// Post-session flow from Select Music/Course: show Name Entry.
     pub machine_show_name_entry: bool,
-    /// Post-session flow from Select Music/Course: show GameOver.
+    /// Post-session flow from Select Music/Course: show `GameOver`.
     pub machine_show_gameover: bool,
     /// zmod parity: gameplay/eval difficulty meter also displays text labels.
     pub zmod_rating_box_text: bool,
@@ -261,7 +261,7 @@ pub struct Config {
     pub gameplay_banner_mode: GameplayBannerMode,
     /// Require holding Back to leave gameplay instead of exiting on first press.
     pub delayed_back: bool,
-    /// Machine default fail behavior (ITGmania DefaultFailType).
+    /// Machine default fail behavior (`ITGmania` `DefaultFailType`).
     pub default_fail_type: DefaultFailType,
     /// Choose which null-or-die sync graph the Select Music overlay displays.
     pub null_or_die_sync_graph: SyncGraphMode,
@@ -322,7 +322,7 @@ pub struct Config {
     /// updates itself, such as a package manager or storefront.
     pub updater_install_enabled: bool,
     pub rate_mod_preserves_pitch: bool,
-    /// Experimental: apply ReplayGain 2.0 / EBU R 128 loudness normalization
+    /// Experimental: apply `ReplayGain` 2.0 / EBU R 128 loudness normalization
     /// to music playback. Loudness is computed in the background and cached
     /// on disk per song.
     pub enable_replaygain: bool,
@@ -332,10 +332,10 @@ pub struct Config {
     pub show_srpg_shop: bool,
     pub srpg_shop_folder: SrpgShopFolder,
     pub submit_arrowcloud_fails: bool,
-    /// When to auto-show the ArrowCloud QR-login screen after Select
+    /// When to auto-show the `ArrowCloud` QR-login screen after Select
     /// Profile.  Mirrors Simply Love's `QRLogin` theme pref.
     pub arrowcloud_qr_login_when: ArrowCloudQrLoginWhen,
-    /// When to auto-show the GrooveStats QR-login screen after Select
+    /// When to auto-show the `GrooveStats` QR-login screen after Select
     /// Profile.  Mirrors Simply Love's `QRLogin` theme pref.
     pub groovestats_qr_login_when: GrooveStatsQrLoginWhen,
     pub separate_unlocks_by_player: bool,
@@ -352,9 +352,9 @@ pub struct Config {
     pub shade_scatterplot_judgments: bool,
     /// Conditions for auto-screenshotting the Evaluation screen.
     pub auto_screenshot_eval: u8,
-    /// ITGmania InputFilter parity: per-input debounce window in seconds.
+    /// `ITGmania` `InputFilter` parity: per-input debounce window in seconds.
     pub input_debounce_seconds: f32,
-    /// StepMania parity: option menus use Start-to-advance arcade navigation.
+    /// `StepMania` parity: option menus use Start-to-advance arcade navigation.
     pub arcade_options_navigation: bool,
     /// ITGmania/Simply Love parity: use left/right/start style menu navigation.
     pub three_key_navigation: bool,
@@ -362,11 +362,11 @@ pub struct Config {
     pub use_fsrs: bool,
     /// Native cabinet/pad light output driver.
     pub lights_driver: LightsDriverKind,
-    /// PacDrive output pin layout. Mirrors ITGmania's `PacDriveLightOrdering` preference.
+    /// `PacDrive` output pin layout. Mirrors `ITGmania`'s `PacDriveLightOrdering` preference.
     pub pac_drive_light_ordering: PacDriveLightOrdering,
     /// Source for gameplay arrow pad lights.
     pub lights_gameplay_pad_lights: GameplayPadLightMode,
-    /// ITGmania parity: bass lights use quarter-note chart rows only.
+    /// `ITGmania` parity: bass lights use quarter-note chart rows only.
     pub lights_simplify_bass: bool,
     /// Serial port used by the Litboard/Win32Serial/Sextet lights drivers.
     pub lights_com_port: SerialPortName,

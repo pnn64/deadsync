@@ -60,7 +60,7 @@ const BACKGROUND_FILTER: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     init: Some(NumericInit {
-        from_profile: |p| p.background_filter.percent() as i32,
+        from_profile: |p| i32::from(p.background_filter.percent()),
         format: |v| format!("{v}%"),
     }),
 };
@@ -359,11 +359,11 @@ const TAP_EXPLOSION_OPTION_BITS: &[u32] = &[
 
 const TAP_EXPLOSION_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
     init: BitmaskInit {
-        from_profile: |p| p.tap_explosion_active_mask.bits() as u32,
-        get_active: |m| m.tap_explosion.bits() as u32,
+        from_profile: |p| u32::from(p.tap_explosion_active_mask.bits()),
+        get_active: |m| u32::from(m.tap_explosion.bits()),
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u8::MAX as u32),
+                b & !u32::from(u8::MAX),
                 0,
                 "TapExplosionMask init bits exceed storage width",
             );
@@ -384,7 +384,7 @@ const MUSIC_RATE: CustomBinding = CustomBinding {
     apply: |state, _player_idx, row_id, delta, _wrap| {
         let increment = 0.01f32;
         let previous_bits = state.music_rate.to_bits();
-        state.music_rate += delta as f32 * increment;
+        state.music_rate = (delta as f32).mul_add(increment, state.music_rate);
         state.music_rate = (state.music_rate / increment).round() * increment;
         state.music_rate = state.music_rate.clamp(0.05, 3.00);
         if state.music_rate.to_bits() != previous_bits {
@@ -420,7 +420,7 @@ const SPEED_MOD: CustomBinding = CustomBinding {
                 SpeedModType::X => (20.0, 0.05),
                 SpeedModType::C | SpeedModType::M => (2000.0, 5.0),
             };
-            speed_mod.value += delta as f32 * increment;
+            speed_mod.value = (delta as f32).mul_add(increment, speed_mod.value);
             speed_mod.value = (speed_mod.value / increment).round() * increment;
             speed_mod.value = speed_mod.value.clamp(increment, upper);
             (

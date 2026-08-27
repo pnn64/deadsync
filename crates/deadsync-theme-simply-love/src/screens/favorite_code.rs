@@ -30,7 +30,7 @@ struct CodeState {
 
 /// Tracks the Simply Love Favorite1/Favorite2 pad code sequences for both
 /// players simultaneously. Embed one instance in each screen's State that
-/// supports the favorite hotkey (ScreenSelectMusic, ScreenEvaluation).
+/// supports the favorite hotkey (`ScreenSelectMusic`, `ScreenEvaluation`).
 #[derive(Clone, Debug, Default)]
 pub struct FavoriteCodeTracker {
     sides: [[CodeState; 2]; 2],

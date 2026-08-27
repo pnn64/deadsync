@@ -1,14 +1,14 @@
 //! Translate Simply Love per-profile settings (`Simply Love UserPrefs.ini`,
-//! section `[Simply Love]`) into a DeadSync [`PlayerOptionsData`].
+//! section `[Simply Love]`) into a `DeadSync` [`PlayerOptionsData`].
 //!
 //! Simply Love serialises values with Lua's `tostring`, so booleans are written
 //! as `true`/`false`, numbers as their decimal form, and strings verbatim. The
 //! key names in `permitted_profile_settings` (see
 //! `Simply-Love-SM5/Scripts/SL-PlayerProfiles.lua`) overlap heavily with the
-//! names DeadSync already uses, but the *value* vocabularies for many enum-style
+//! names `DeadSync` already uses, but the *value* vocabularies for many enum-style
 //! settings differ. To avoid silently corrupting a profile we only translate the
 //! settings we can map with high confidence and leave everything else at the
-//! DeadSync default:
+//! `DeadSync` default:
 //!
 //! * `SpeedModType` + `SpeedMod` -> [`ScrollSpeedSetting`]
 //! * `Mini` -> `mini_percent`, `Spacing` -> `spacing_percent`
@@ -19,13 +19,13 @@
 //! * `NoteFieldOffsetX` / `NoteFieldOffsetY` -> note-field offsets
 //! * `VisualDelay` -> `visual_delay_ms`
 //! * `TiltMultiplier`, `MeasureCounterLookahead`
-//! * enum-valued settings whose value vocabulary matches a DeadSync `FromStr`:
+//! * enum-valued settings whose value vocabulary matches a `DeadSync` `FromStr`:
 //!   `BackgroundFilter`, `ComboColors`, `ComboMode`, `LifeMeterType`,
 //!   `MeasureCounter`, `MeasureLines`, `ErrorBarTrim`, `MiniIndicator`,
 //!   `StepStatsExtra`, `DataVisualizations` -> `step_statistics`,
 //!   `TargetScore`, `ActionOnMissedTarget`
 //! * `PlayerOptionsString` -> turn + scroll (reverse) modifiers
-//! * SelectMultiple flag groups: `Colorful`/`Monochrome`/`Text`/`Highlight`/
+//! * `SelectMultiple` flag groups: `Colorful`/`Monochrome`/`Text`/`Highlight`/
 //!   `Average` -> `error_bar_active_mask`; `Flash*` -> `column_flash_mask`
 //! * a set of boolean toggles whose name and meaning match 1:1
 //!
@@ -66,9 +66,9 @@ fn sl_f32(map: &SlSettings, key: &str) -> Option<f32> {
     sl_str(map, key)?.parse::<f32>().ok()
 }
 
-/// Parse a Simply Love value into a DeadSync enum via its [`FromStr`]. Returns
+/// Parse a Simply Love value into a `DeadSync` enum via its [`FromStr`]. Returns
 /// `None` (leaving the caller's default in place) when the key is absent or the
-/// value isn't one DeadSync recognises — the DeadSync `FromStr` impls normalise
+/// value isn't one `DeadSync` recognises — the `DeadSync` `FromStr` impls normalise
 /// case/punctuation and reject unknown vocabularies, so this never guesses.
 fn sl_enum<T: FromStr>(map: &SlSettings, key: &str) -> Option<T> {
     sl_str(map, key)?.parse::<T>().ok()
@@ -91,7 +91,7 @@ fn leading_i32(raw: &str) -> Option<i32> {
 }
 
 /// Build a [`ScrollSpeedSetting`] from Simply Love's `SpeedModType` +
-/// `SpeedMod`. SpeedModType is one of `x` / `C` / `M`.
+/// `SpeedMod`. `SpeedModType` is one of `x` / `C` / `M`.
 fn scroll_speed_from_sl(map: &SlSettings) -> Option<ScrollSpeedSetting> {
     let kind = sl_str(map, "SpeedModType")?;
     let value = sl_f32(map, "SpeedMod")?;
@@ -256,10 +256,10 @@ pub fn translate_player_options(map: &SlSettings, base: &PlayerOptionsData) -> P
     out
 }
 
-/// Translate Simply Love's `JudgmentFlash` SelectMultiple booleans
+/// Translate Simply Love's `JudgmentFlash` `SelectMultiple` booleans
 /// (`FlashMiss`/`FlashWayOff`/…/`FlashFantastic`) into a [`ColumnFlashMask`].
 /// Only applied when at least one flag is present so an absent group keeps the
-/// DeadSync default.
+/// `DeadSync` default.
 fn apply_column_flash_flags(out: &mut PlayerOptionsData, map: &SlSettings) {
     let single_bits = [
         ("FlashMiss", ColumnFlashMask::MISS),
@@ -293,10 +293,10 @@ fn apply_column_flash_flags(out: &mut PlayerOptionsData, map: &SlSettings) {
     }
 }
 
-/// Translate Simply Love's error-bar style SelectMultiple booleans
+/// Translate Simply Love's error-bar style `SelectMultiple` booleans
 /// (`Colorful`/`Monochrome`/`Text`/`Highlight`/`Average`) into the
 /// [`ErrorBarMask`], deriving the legacy `error_bar` / `error_bar_text` fields
-/// from the resulting mask (mirroring the DeadSync profile loader). Only applied
+/// from the resulting mask (mirroring the `DeadSync` profile loader). Only applied
 /// when at least one flag is present.
 fn apply_error_bar_flags(out: &mut PlayerOptionsData, map: &SlSettings) {
     let flags = [
@@ -325,7 +325,7 @@ fn apply_error_bar_flags(out: &mut PlayerOptionsData, map: &SlSettings) {
     }
 }
 
-/// Boolean toggles whose Simply Love key and meaning match a DeadSync field 1:1.
+/// Boolean toggles whose Simply Love key and meaning match a `DeadSync` field 1:1.
 fn apply_bool_toggles(out: &mut PlayerOptionsData, map: &SlSettings) {
     macro_rules! set_bool {
         ($key:literal => $field:ident) => {

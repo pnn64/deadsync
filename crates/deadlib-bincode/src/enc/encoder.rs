@@ -6,7 +6,7 @@ use crate::{config::Config, utils::Sealed};
 /// This struct should rarely be used.
 /// In most cases, prefer any of the `encode` functions.
 ///
-/// The ByteOrder that is chosen will impact the endianness that
+/// The `ByteOrder` that is chosen will impact the endianness that
 /// is used to write integers to the writer.
 ///
 /// ```

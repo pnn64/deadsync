@@ -334,7 +334,7 @@ pub fn normalize_player_option_value(lua: &Lua, name: &str, value: Value) -> mlu
             _ => default_player_option_value(lua, name)?,
         });
     }
-    Ok(Value::Number(read_f32(value).unwrap_or(0.0) as f64))
+    Ok(Value::Number(f64::from(read_f32(value).unwrap_or(0.0))))
 }
 
 #[inline(always)]
@@ -356,7 +356,7 @@ pub fn song_lua_speedmod_value(
         (SongLuaSpeedMod::X(value), SongLuaSpeedMod::X(_))
         | (SongLuaSpeedMod::C(value), SongLuaSpeedMod::C(_))
         | (SongLuaSpeedMod::M(value), SongLuaSpeedMod::M(_))
-        | (SongLuaSpeedMod::A(value), SongLuaSpeedMod::A(_)) => Value::Number(value as f64),
+        | (SongLuaSpeedMod::A(value), SongLuaSpeedMod::A(_)) => Value::Number(f64::from(value)),
         _ => Value::Nil,
     }
 }

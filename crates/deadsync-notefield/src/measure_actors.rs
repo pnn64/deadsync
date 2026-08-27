@@ -229,8 +229,8 @@ fn append_dashed_edit_bar(
 ) {
     let dash = dash.max(1.0);
     let step = (dash + gap).max(dash + 1.0);
-    let left = x_center - width * 0.5;
-    let right = x_center + width * 0.5;
+    let left = width.mul_add(-0.5, x_center);
+    let right = width.mul_add(0.5, x_center);
     let mut x = left;
     while x < right {
         let seg_w = dash.min(right - x);
@@ -256,8 +256,8 @@ fn append_measure_quad(
 ) {
     draws.push(FlatDraw::Sprite(FlatSprite {
         center: [
-            xy[0] + (0.5 - align[0]) * size[0],
-            xy[1] + (0.5 - align[1]) * size[1],
+            (0.5 - align[0]).mul_add(size[0], xy[0]),
+            (0.5 - align[1]).mul_add(size[1], xy[1]),
         ],
         world_z: 0.0,
         size,

@@ -426,7 +426,7 @@ pub fn frame_stable_display_clock_step(
         i128::from(previous_display_time_ns) + i128::from(scaled_song_time_ns(delta_time, slope));
     let correction_alpha = 1.0 - f32::exp2(-delta_time / DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S);
     let mut corrected_ns = advanced_ns
-        + ((i128::from(target_display_time_ns) - advanced_ns) as f64 * correction_alpha as f64)
+        + ((i128::from(target_display_time_ns) - advanced_ns) as f64 * f64::from(correction_alpha))
             .round() as i128;
     let max_step_ns = i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_STEP_S, slope));
     if target_delta_ns.abs() > (max_step_ns as f64 * 2.0).round() as i128 {

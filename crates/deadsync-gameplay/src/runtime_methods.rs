@@ -35,7 +35,7 @@ where
                 };
                 self.display
                     .notefield_motion
-                    .set_column_scroll_dir(col, 1.0 - 2.0 * reverse);
+                    .set_column_scroll_dir(col, 2.0f32.mul_add(-reverse, 1.0));
             }
         }
         for (player, scroll) in scrolls.into_iter().enumerate().take(self.setup.num_players) {
@@ -54,7 +54,7 @@ where
             let mini_percent = effective_mini_percent_for_player(self, player);
             let mini = self.profiles_runtime.profiles[player]
                 .effective_mini_value_with_visual_mask(visual_mask, mini_percent);
-            let mut field_zoom = 1.0 - mini * 0.5;
+            let mut field_zoom = mini.mul_add(-0.5, 1.0);
             if field_zoom.abs() < 0.01 {
                 field_zoom = 0.01;
             }
@@ -2486,7 +2486,7 @@ where
     }
 
     /// Judge lift notes on button release. Mirrors tap judging's per-note path but
-    /// only matches NoteType::Lift.
+    /// only matches `NoteType::Lift`.
     pub fn judge_a_lift(&mut self, column: usize, current_time_ns: SongTimeNs) -> bool {
         let rate = normalized_song_rate(self.music_rate());
         let timing_hit_log = timing_hit_log_enabled();

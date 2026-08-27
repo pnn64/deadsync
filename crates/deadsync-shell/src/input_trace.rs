@@ -135,7 +135,10 @@ impl GameplayInputTrace {
         }
         self.batch.gameplay_seen = true;
         self.batch.key_events = self.batch.key_events.saturating_add(1);
-        self.batch.key_repeat_events = self.batch.key_repeat_events.saturating_add(repeat as u32);
+        self.batch.key_repeat_events = self
+            .batch
+            .key_repeat_events
+            .saturating_add(u32::from(repeat));
         self.note_handler_time(handler_us);
     }
 
@@ -229,7 +232,7 @@ impl GameplayInputTrace {
             summary.dispatch_overhead_max_us.max(dispatch_overhead_us);
         summary.slow_batches = summary
             .slow_batches
-            .saturating_add((batch_us >= SLOW_BATCH_US) as u32);
+            .saturating_add(u32::from(batch_us >= SLOW_BATCH_US));
 
         if now.duration_since(summary.started_at) >= TRACE_INTERVAL {
             let batches = summary.batches.max(1);

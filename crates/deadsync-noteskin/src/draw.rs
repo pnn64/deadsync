@@ -13,7 +13,7 @@ impl TweenType {
         match self {
             Self::Linear => t,
             Self::Accelerate => t * t,
-            Self::Decelerate => 1.0 - (1.0 - t) * (1.0 - t),
+            Self::Decelerate => (1.0 - t).mul_add(-(1.0 - t), 1.0),
         }
     }
 }
@@ -206,7 +206,7 @@ pub fn model_effect_mix(effect: ModelEffectState, time: f32, beat: f32) -> Optio
         0.5
     } else if x < rupath_plus_rdown {
         if t[2] > f32::EPSILON {
-            0.5 + ((x - rup_plus_ath) / t[2]) * 0.5
+            ((x - rup_plus_ath) / t[2]).mul_add(0.5, 0.5)
         } else {
             1.0
         }
@@ -220,7 +220,10 @@ pub fn model_effect_mix(effect: ModelEffectState, time: f32, beat: f32) -> Optio
 
 #[inline(always)]
 pub fn glowshift_mix(through: f32) -> f32 {
-    (((through + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5).clamp(0.0, 1.0)
+    ((through + 0.25) * 2.0 * std::f32::consts::PI)
+        .sin()
+        .mul_add(0.5, 0.5)
+        .clamp(0.0, 1.0)
 }
 
 #[inline(always)]
@@ -312,9 +315,15 @@ pub fn model_draw_at(
 
     if matches!(effect.mode, ModelEffectMode::Spin) {
         let clock = model_effect_clock_units(effect, time, beat);
-        out.rot[0] = (out.rot[0] + effect.magnitude[0] * clock).rem_euclid(360.0);
-        out.rot[1] = (out.rot[1] + effect.magnitude[1] * clock).rem_euclid(360.0);
-        out.rot[2] = (out.rot[2] + effect.magnitude[2] * clock).rem_euclid(360.0);
+        out.rot[0] = effect.magnitude[0]
+            .mul_add(clock, out.rot[0])
+            .rem_euclid(360.0);
+        out.rot[1] = effect.magnitude[1]
+            .mul_add(clock, out.rot[1])
+            .rem_euclid(360.0);
+        out.rot[2] = effect.magnitude[2]
+            .mul_add(clock, out.rot[2])
+            .rem_euclid(360.0);
     }
     if let Some(percent) = model_effect_mix(effect, time, beat) {
         match effect.mode {

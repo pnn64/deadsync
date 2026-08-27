@@ -443,7 +443,7 @@ const fn normalized_joined_sides(
 
 fn display_x(placement: PanelPlacement, width: f32) -> f32 {
     let left = width * 0.5;
-    let right = screen_width() - width * 0.5;
+    let right = width.mul_add(-0.5, screen_width());
     match placement {
         PanelPlacement::Left => left,
         PanelPlacement::Center => screen_center_x(),

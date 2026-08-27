@@ -10,7 +10,7 @@ struct BorrowedPayload<'a> {
 fn reusable_encoding_matches_allocating_encoding() {
     let value = (
         "DeadSync persistence",
-        vec![0u64, 250, 251, u32::MAX as u64, u64::MAX],
+        vec![0u64, 250, 251, u64::from(u32::MAX), u64::MAX],
     );
     let config = bincode::config::standard();
     let expected = bincode::encode_to_vec(&value, config).unwrap();

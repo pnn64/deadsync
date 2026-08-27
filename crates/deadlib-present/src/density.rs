@@ -507,7 +507,7 @@ fn density_life_join(prev: [f32; 2], current: [f32; 2], next: [f32; 2], half: f3
         return [prev_normal[0] * half, prev_normal[1] * half];
     }
     let miter = [miter[0] / miter_len, miter[1] / miter_len];
-    let denom = miter[0] * prev_normal[0] + miter[1] * prev_normal[1];
+    let denom = miter[1].mul_add(prev_normal[1], miter[0] * prev_normal[0]);
     if denom.abs() <= 0.1 {
         return [next_normal[0] * half, next_normal[1] * half];
     }
@@ -621,8 +621,8 @@ fn fill_density_life_vertices(
     feather: f32,
     color: [f32; 4],
 ) -> usize {
-    let inner_half = (half - feather * 0.5).max(f32::EPSILON);
-    let outer_scale = (half + feather * 0.5) / inner_half;
+    let inner_half = feather.mul_add(-0.5, half).max(f32::EPSILON);
+    let outer_scale = feather.mul_add(0.5, half) / inner_half;
     let mut written = 0usize;
     let mut a_offset = density_life_offset(points, window, 0, inner_half);
     let mut a_outer = density_life_outer_offset(a_offset, outer_scale);
@@ -767,11 +767,11 @@ pub fn update_density_life_mesh_reusable(
     }
 }
 
-/// Build the 2px-style connected graph used by ITGmania's `GraphLine` actor.
+/// Build the 2px-style connected graph used by `ITGmania`'s `GraphLine` actor.
 ///
 /// Each pair of points is an independent quad and every sample gets a
 /// four-sided radius cap. This intentionally differs from a native line strip:
-/// evaluation lifelines rely on GraphDisplay's capped joins and endpoints.
+/// evaluation lifelines rely on `GraphDisplay`'s capped joins and endpoints.
 pub fn build_graph_line_mesh(
     points: &[[f32; 2]],
     thickness: f32,
@@ -820,11 +820,11 @@ pub fn build_graph_line_mesh(
             let base = side * 3;
             vertices[base] = MeshVertex { pos: point, color };
             vertices[base + 1] = MeshVertex {
-                pos: [point[0] + a[0] * half, point[1] + a[1] * half],
+                pos: [a[0].mul_add(half, point[0]), a[1].mul_add(half, point[1])],
                 color,
             };
             vertices[base + 2] = MeshVertex {
-                pos: [point[0] + b[0] * half, point[1] + b[1] * half],
+                pos: [b[0].mul_add(half, point[0]), b[1].mul_add(half, point[1])],
                 color,
             };
         }

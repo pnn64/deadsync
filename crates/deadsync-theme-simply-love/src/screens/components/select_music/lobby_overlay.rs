@@ -114,7 +114,7 @@ impl PasswordWheel {
         };
         let p = (t / PASSWORD_WHEEL_SLIDE_SECONDS).clamp(0.0, 1.0);
         for it in &mut self.items {
-            it.x = it.x0 + (it.x1 - it.x0) * p;
+            it.x = (it.x1 - it.x0).mul_add(p, it.x0);
             it.x0 = it.x;
         }
         self.anim_elapsed = None;
@@ -194,7 +194,7 @@ impl PasswordWheel {
         *t = (*t + dt).max(0.0);
         let p = (*t / PASSWORD_WHEEL_SLIDE_SECONDS).clamp(0.0, 1.0);
         for it in &mut self.items {
-            it.x = it.x0 + (it.x1 - it.x0) * p;
+            it.x = (it.x1 - it.x0).mul_add(p, it.x0);
         }
         if p >= 1.0 {
             for it in &mut self.items {
@@ -667,7 +667,7 @@ fn build_browse_overlay(
     for (slot, lobby) in visible_lobbies {
         let row_index = overlay.browse_scroll + slot;
         let selected = overlay.browse_index == row_index;
-        let row_y = center_y + LOBBY_LIST_Y + slot as f32 * LOBBY_ROW_STEP;
+        let row_y = (slot as f32).mul_add(LOBBY_ROW_STEP, center_y + LOBBY_LIST_Y);
         actors.extend(build_box_row(
             center_x + LOBBY_LIST_X,
             row_y,
@@ -735,7 +735,7 @@ fn build_browse_overlay(
     for (slot, label) in actions.iter().enumerate() {
         let index = snapshot.available_lobbies.len() + slot;
         let selected = overlay.browse_index == index;
-        let row_y = center_y - 66.0 + slot as f32 * ACTION_BUTTON_STEP;
+        let row_y = (slot as f32).mul_add(ACTION_BUTTON_STEP, center_y - 66.0);
         actors.extend(build_box_row(
             center_x + ACTION_PANEL_X,
             row_y,
@@ -805,7 +805,7 @@ fn build_joined_overlay(
     }
 
     for (idx, player) in joined.players.iter().enumerate() {
-        let row_y = players_y + idx as f32 * 32.0;
+        let row_y = (idx as f32).mul_add(32.0, players_y);
         let screen_suffix = lobby_player_screen_suffix(player);
         actors.push(act!(text:
             font("miso"):
@@ -840,7 +840,7 @@ fn build_joined_overlay(
     let actions = ["Leave Lobby", "Close"];
     for (slot, label) in actions.iter().enumerate() {
         let selected = selected_action_index == slot;
-        let row_y = center_y - 24.0 + slot as f32 * ACTION_BUTTON_STEP;
+        let row_y = (slot as f32).mul_add(ACTION_BUTTON_STEP, center_y - 24.0);
         actors.extend(build_box_row(
             center_x + ACTION_PANEL_X,
             row_y,

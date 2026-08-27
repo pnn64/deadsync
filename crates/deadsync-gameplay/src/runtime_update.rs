@@ -581,7 +581,7 @@ where
             None
         };
         let rate = self.display.density_graph.life_update_rate;
-        self.display.density_graph.life_next_update_elapsed += rate * catch_up_steps as f32;
+        self.display.density_graph.life_next_update_elapsed = rate.mul_add(catch_up_steps as f32, self.display.density_graph.life_next_update_elapsed);
 
         if let Some(x) = density_graph_life_sample_x(
             current_music_time,

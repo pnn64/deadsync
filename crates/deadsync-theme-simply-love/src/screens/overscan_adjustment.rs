@@ -191,7 +191,7 @@ pub fn push_actors(
 
     // Field rows.
     const ROW_SPACING: f32 = 42.0;
-    let base_y = screen_h * 0.5 - ROW_SPACING * 1.5;
+    let base_y = ROW_SPACING.mul_add(-1.5, screen_h * 0.5);
     for (idx, field) in FIELDS.iter().enumerate() {
         let selected = field.field == state.edit.selected();
         let row_alpha = if selected { 1.0 } else { 0.7 } * alpha_mul;
@@ -207,7 +207,7 @@ pub fn push_actors(
             font("miso"):
             settext(text):
             align(0.5, 0.5):
-            xy(screen_center_x(), base_y + idx as f32 * ROW_SPACING):
+            xy(screen_center_x(), (idx as f32).mul_add(ROW_SPACING, base_y)):
             zoom(0.9):
             maxwidth(screen_w * 0.8):
             horizalign(center):

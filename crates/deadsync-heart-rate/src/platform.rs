@@ -752,7 +752,7 @@ pub mod bench_support {
                 .map(str::len)
                 .sum();
             checksum = checksum.wrapping_add(
-                ((missing as u64) << 32) | ((kept as u64) << 16) | ready_bytes as u64,
+                (u64::from(missing) << 32) | ((kept as u64) << 16) | ready_bytes as u64,
             );
         }
         checksum
@@ -781,7 +781,7 @@ pub mod bench_support {
                 .map(|(_, id)| id.len())
                 .sum::<usize>();
             checksum = checksum.wrapping_add(
-                ((missing as u64) << 32) | ((kept as u64) << 16) | ready_bytes as u64,
+                (u64::from(missing) << 32) | ((kept as u64) << 16) | ready_bytes as u64,
             );
         }
         checksum
@@ -793,7 +793,7 @@ pub mod bench_support {
         for _ in 0..iterations {
             let snapshot = build_device_snapshot(black_box(&fixture.devices));
             let same = snapshot == fixture.snapshot;
-            checksum = checksum.wrapping_add(((same as u64) << 32) | snapshot.len() as u64);
+            checksum = checksum.wrapping_add((u64::from(same) << 32) | snapshot.len() as u64);
             black_box(snapshot);
         }
         checksum
@@ -807,7 +807,8 @@ pub mod bench_support {
                 black_box(fixture.snapshot.as_slice()),
                 black_box(&fixture.devices),
             );
-            checksum = checksum.wrapping_add(((same as u64) << 32) | fixture.snapshot.len() as u64);
+            checksum =
+                checksum.wrapping_add((u64::from(same) << 32) | fixture.snapshot.len() as u64);
         }
         checksum
     }

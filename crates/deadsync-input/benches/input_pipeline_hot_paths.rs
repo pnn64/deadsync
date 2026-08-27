@@ -205,10 +205,10 @@ fn keyboard_chatter() {
         let mut checksum = 0u64;
         for _ in 0..CHATTER_PAIRS {
             map_raw_key_event_with(black_box(&release), |event| {
-                checksum = checksum.wrapping_add(event.pressed as u64 + 1);
+                checksum = checksum.wrapping_add(u64::from(event.pressed) + 1);
             });
             map_raw_key_event_with(black_box(&press), |event| {
-                checksum = checksum.wrapping_add(event.pressed as u64 + 1);
+                checksum = checksum.wrapping_add(u64::from(event.pressed) + 1);
             });
         }
         checksum
@@ -252,10 +252,10 @@ fn pad_chatter() {
         let mut checksum = 0u64;
         for _ in 0..CHATTER_PAIRS {
             map_pad_event_with(black_box(&release), |event| {
-                checksum = checksum.wrapping_add(event.pressed as u64 + 1);
+                checksum = checksum.wrapping_add(u64::from(event.pressed) + 1);
             });
             map_pad_event_with(black_box(&press), |event| {
-                checksum = checksum.wrapping_add(event.pressed as u64 + 1);
+                checksum = checksum.wrapping_add(u64::from(event.pressed) + 1);
             });
         }
         checksum
@@ -275,7 +275,7 @@ fn direct_mapping() {
                 index & 1 == 0,
                 timestamp,
                 |event| {
-                    checksum = checksum.wrapping_add(event.pressed as u64 + 1);
+                    checksum = checksum.wrapping_add(u64::from(event.pressed) + 1);
                 },
             );
         }
@@ -364,9 +364,9 @@ fn pipeline_probes() {
     let result = measure(PROBE_EVENTS, || {
         let mut checksum = 0u64;
         for _ in 0..PROBE_EVENTS {
-            checksum ^= drain_debounced_input_events_with(|input| {
+            checksum ^= u64::from(drain_debounced_input_events_with(|input| {
                 black_box(input);
-            }) as u64;
+            }));
         }
         checksum
     });

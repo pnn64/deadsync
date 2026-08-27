@@ -52,7 +52,7 @@ impl<'a, P: FnParent> FnBuilder<'a, P> {
         self
     }
 
-    /// Set the value for `self`. See [FnSelfArg] for more information.
+    /// Set the value for `self`. See [`FnSelfArg`] for more information.
     ///
     /// ```
     /// # use virtue::prelude::{Generator, FnSelfArg};

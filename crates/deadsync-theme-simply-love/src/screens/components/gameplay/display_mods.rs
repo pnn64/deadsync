@@ -32,10 +32,10 @@ pub(super) fn active_alpha(hidden: bool, elapsed_screen_s: f32) -> Option<f32> {
     (alpha > 0.0).then_some(alpha)
 }
 
-/// Compose Simply Love's concrete DisplayMods chrome between the canonical
+/// Compose Simply Love's concrete `DisplayMods` chrome between the canonical
 /// field and HUD passes.
 pub(super) fn compose(actors: &mut Vec<Actor>, frame: DisplayModsFrame) {
-    let mods_line_y = screen_height() * 0.25 * 1.3 + frame.notefield_offset_y;
+    let mods_line_y = (screen_height() * 0.25).mul_add(1.3, frame.notefield_offset_y);
     let mods_line_count = frame
         .mods_text
         .split(", ")
@@ -54,7 +54,7 @@ pub(super) fn compose(actors: &mut Vec<Actor>, frame: DisplayModsFrame) {
         ));
     }
     if frame.warn_cmod_for_itl_chart {
-        let warning_y = mods_line_y + DISPLAY_MODS_LINE_STEP * mods_line_count;
+        let warning_y = DISPLAY_MODS_LINE_STEP.mul_add(mods_line_count, mods_line_y);
         actors.push(act!(quad:
             align(0.5, 0.5):
             xy(frame.playfield_center_x, warning_y):

@@ -392,8 +392,8 @@ fn lookup_checksum<S: BuildHasher>(
                 .copied()
                 .map_or(0, |pref| pref as u64 + 1),
         );
-        checksum = checksum.wrapping_add(new_packs.contains(pack_names[index].as_str()) as u64);
-        checksum = checksum.wrapping_add(edit_songs.contains(&song_keys[index]) as u64);
+        checksum = checksum.wrapping_add(u64::from(new_packs.contains(pack_names[index].as_str())));
+        checksum = checksum.wrapping_add(u64::from(edit_songs.contains(&song_keys[index])));
     }
     checksum
 }

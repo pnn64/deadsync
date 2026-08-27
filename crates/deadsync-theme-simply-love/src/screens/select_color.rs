@@ -49,6 +49,8 @@ struct WheelSamples {
     max_off_visible: f32,
 }
 
+// This geometry is compared bit-for-bit with the legacy wheel; FMA changes its rounding.
+#[allow(clippy::suboptimal_flops)]
 fn wheel_samples(num_slots: i32, screen_w: f32) -> WheelSamples {
     let side_slots = (num_slots / 2) as usize;
     debug_assert!(side_slots <= MAX_WHEEL_SIDE_SLOTS);

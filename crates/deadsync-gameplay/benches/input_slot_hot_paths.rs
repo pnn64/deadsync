@@ -309,12 +309,12 @@ fn run_reset(iterations: usize) {
     let old = measure(iterations, || {
         old_state.benchmark_reset_live_state();
         black_box(&old_state);
-        old_state.pressed_lane_mask() as u64
+        u64::from(old_state.pressed_lane_mask())
     });
     let new = measure(iterations, || {
         new_state.benchmark_reset_live_state();
         black_box(&new_state);
-        new_state.pressed_lane_mask() as u64
+        u64::from(new_state.pressed_lane_mask())
     });
     assert_eq!(old.checksum, new.checksum, "live-state reset diverged");
     assert_zero_alloc(&old);

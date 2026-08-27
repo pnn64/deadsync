@@ -257,8 +257,8 @@ fn scroll_bits(value: ScrollOption) -> u64 {
     ]
     .into_iter()
     .enumerate()
-    .fold(value.is_normal() as u64, |bits, (index, flag)| {
-        bits | ((value.contains(flag) as u64) << (index + 1))
+    .fold(u64::from(value.is_normal()), |bits, (index, flag)| {
+        bits | (u64::from(value.contains(flag)) << (index + 1))
     })
 }
 

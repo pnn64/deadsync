@@ -292,8 +292,8 @@ pub fn push_actors(
         actors.push(act!(sprite(highlight.texture):
             align(0.5, 0.5):
             xy(
-                root_x + highlight.x * CABINET_ZOOM,
-                root_y + highlight.y * CABINET_ZOOM
+                highlight.x.mul_add(CABINET_ZOOM, root_x),
+                highlight.y.mul_add(CABINET_ZOOM, root_y)
             ):
             zoom(highlight.zoom * CABINET_ZOOM):
             diffuse(1.0, 1.0, 1.0, alpha_mul):
@@ -350,7 +350,7 @@ fn push_pad(
         LightPlayer::P1 => P1_PAD_X,
         LightPlayer::P2 => P2_PAD_X,
     };
-    let origin_x = root_x + side_x * PAD_ZOOM;
+    let origin_x = side_x.mul_add(PAD_ZOOM, root_x);
     let origin_y = root_y + PAD_FRAME_Y;
 
     actors.push(act!(sprite(PAD_TEX):
@@ -368,8 +368,8 @@ fn push_pad(
         actors.push(act!(sprite(PANEL_HIGHLIGHT_TEX):
             align(0.5, 0.5):
             xy(
-                root_x + (side_x + highlight.x) * PAD_ZOOM,
-                origin_y + highlight.y * PAD_ZOOM
+                (side_x + highlight.x).mul_add(PAD_ZOOM, root_x),
+                highlight.y.mul_add(PAD_ZOOM, origin_y)
             ):
             zoom(PAD_ZOOM):
             diffuse(1.0, 1.0, 1.0, alpha_mul):
@@ -427,7 +427,7 @@ fn push_labels(
             font("miso"):
             settext(Arc::clone(row)):
             align(0.5, 0.5):
-            xy(info_x, 92.0 + idx as f32 * 28.0):
+            xy(info_x, (idx as f32).mul_add(28.0, 92.0)):
             zoom(0.66):
             maxwidth(188.0):
             horizalign(left):

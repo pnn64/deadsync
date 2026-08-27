@@ -451,7 +451,7 @@ fn score_cache_snapshot_header(index: usize) -> LocalScoreHeader {
     LocalScoreHeader {
         version: LOCAL_SCORE_VERSION,
         played_at_ms: index as i64,
-        music_rate: 1.0 + (index % 4) as f32 * 0.25,
+        music_rate: ((index % 4) as f32).mul_add(0.25, 1.0),
         score_percent: 0.8 + (index % 2_000) as f64 / 10_000.0,
         grade_code: grade_to_code(Grade::Tier08),
         lamp_index: Some((index % 5) as u8),
@@ -2034,7 +2034,7 @@ pub const fn submit_retry_delay_secs(attempt: u8) -> u64 {
 pub fn duration_to_ceil_secs(remaining: Duration) -> u32 {
     let secs = remaining.as_secs();
     let bumped = secs.saturating_add(if remaining.subsec_nanos() > 0 { 1 } else { 0 });
-    bumped.min(u32::MAX as u64) as u32
+    bumped.min(u64::from(u32::MAX)) as u32
 }
 
 pub struct SubmitRetryState<T> {
@@ -2536,7 +2536,7 @@ impl RejectReason {
     }
 }
 
-/// Server-side grade name returned by ArrowCloud's grading systems.
+/// Server-side grade name returned by `ArrowCloud`'s grading systems.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
 pub enum ArrowCloudServerGrade {
     Sex,
@@ -2615,7 +2615,7 @@ impl ArrowCloudServerGrade {
     }
 }
 
-/// A single ArrowCloud score for one chart/leaderboard pair.
+/// A single `ArrowCloud` score for one chart/leaderboard pair.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ArrowCloudScore {
     /// 0.0..=1.0, from the API percent divided by 100.
@@ -2671,7 +2671,7 @@ impl<'de, C> bincode::BorrowDecode<'de, C> for ArrowCloudScore {
 }
 
 impl ArrowCloudScore {
-    /// Adapter used to merge AC cache entries with local and GrooveStats scores.
+    /// Adapter used to merge AC cache entries with local and `GrooveStats` scores.
     pub fn to_cached_score(&self) -> CachedScore {
         let score_10000 = (self.score_percent * 10000.0).clamp(0.0, 10000.0);
         if self.is_fail {
@@ -2891,7 +2891,7 @@ pub fn arrowcloud_submit_stats_from_live_or_results(
     }
 }
 
-/// Global ArrowCloud leaderboard variants. Numeric values match server IDs.
+/// Global `ArrowCloud` leaderboard variants. Numeric values match server IDs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum ArrowCloudLeaderboard {

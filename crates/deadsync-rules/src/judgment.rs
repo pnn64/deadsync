@@ -91,7 +91,7 @@ pub fn judgment_time_error_music_ns_from_ms(time_error_ms: f32, music_rate: f32)
 /// mirroring the logic used by gameplay scoring:
 /// - Any Miss on the row yields a Miss row judgment.
 /// - Otherwise, the latest tap on the row determines the row's grade and timing
-///   window, matching ITGmania's LastTapNoteWithResult.
+///   window, matching `ITGmania`'s `LastTapNoteWithResult`.
 #[inline(always)]
 pub fn aggregate_row_final_judgment<'a, I>(judgments: I) -> Option<&'a Judgment>
 where
@@ -540,13 +540,23 @@ fn ex_total_possible(data: &ExScoreData) -> f64 {
 #[inline(always)]
 fn ex_score_points(data: &ExScoreData) -> f64 {
     let mines_effective = data.mines_hit.min(data.mines_total);
-    f64::from(data.counts.w0) * EX_WEIGHT_W0
-        + f64::from(data.counts.w1) * EX_WEIGHT_W1
-        + f64::from(data.counts.w2) * EX_WEIGHT_W2
-        + f64::from(data.counts.w3) * EX_WEIGHT_W3
-        + f64::from(data.holds_held) * EX_WEIGHT_HELD
-        + f64::from(data.rolls_held) * EX_WEIGHT_HELD
-        + f64::from(mines_effective) * EX_WEIGHT_HIT_MINE
+    f64::from(mines_effective).mul_add(
+        EX_WEIGHT_HIT_MINE,
+        f64::from(data.rolls_held).mul_add(
+            EX_WEIGHT_HELD,
+            f64::from(data.holds_held).mul_add(
+                EX_WEIGHT_HELD,
+                f64::from(data.counts.w3).mul_add(
+                    EX_WEIGHT_W3,
+                    f64::from(data.counts.w2).mul_add(
+                        EX_WEIGHT_W2,
+                        f64::from(data.counts.w1)
+                            .mul_add(EX_WEIGHT_W1, f64::from(data.counts.w0) * EX_WEIGHT_W0),
+                    ),
+                ),
+            ),
+        ),
+    )
 }
 
 #[inline(always)]
@@ -555,12 +565,20 @@ fn hard_ex_score_points(data: &ExScoreData) -> f64 {
     let fantastic_total = data.counts.w0.saturating_add(data.counts.w1);
     let w110 = fantastic_total.saturating_sub(w010);
     let mines_effective = data.mines_hit.min(data.mines_total);
-    f64::from(w010) * HARD_EX_WEIGHT_W010
-        + f64::from(w110) * HARD_EX_WEIGHT_W110
-        + f64::from(data.counts.w2) * HARD_EX_WEIGHT_W2
-        + f64::from(data.holds_held) * HARD_EX_WEIGHT_HELD
-        + f64::from(data.rolls_held) * HARD_EX_WEIGHT_HELD
-        + f64::from(mines_effective) * HARD_EX_WEIGHT_HIT_MINE
+    f64::from(mines_effective).mul_add(
+        HARD_EX_WEIGHT_HIT_MINE,
+        f64::from(data.rolls_held).mul_add(
+            HARD_EX_WEIGHT_HELD,
+            f64::from(data.holds_held).mul_add(
+                HARD_EX_WEIGHT_HELD,
+                f64::from(data.counts.w2).mul_add(
+                    HARD_EX_WEIGHT_W2,
+                    f64::from(w110)
+                        .mul_add(HARD_EX_WEIGHT_W110, f64::from(w010) * HARD_EX_WEIGHT_W010),
+                ),
+            ),
+        ),
+    )
 }
 
 #[inline(always)]
@@ -1245,7 +1263,7 @@ mod tests {
         // MakePercentScore-style epsilon (+0.000001 before truncation) pushes
         // this boundary case to 84.82 instead of 84.81.
         assert!((percent - 0.8482).abs() <= 1e-9);
-        assert!((percent * 100.0 - 84.82).abs() <= 1e-9);
+        assert!(percent.mul_add(100.0, -84.82).abs() <= 1e-9);
     }
 
     #[test]

@@ -326,7 +326,7 @@ pub(super) mod tests {
     /// Stub writeback for synthetic test bindings whose tests only exercise
     /// the init contract (`apply_profile_defaults`). The toggle path is
     /// never invoked, so `project` semantics are irrelevant; the
-    /// mapping still needs to cover the test rows so FirstActiveBit cursor
+    /// mapping still needs to cover the test rows so `FirstActiveBit` cursor
     /// init can resolve active choices.
     const TEST_WRITEBACK: BitmaskWriteback = BitmaskWriteback {
         project: |_, _, _| {},
@@ -1354,9 +1354,9 @@ pub(super) mod tests {
                     if p.scroll_option.contains(ScrollOption::Centered) {
                         bits.insert(ScrollMask::from_bits_retain(1 << 4));
                     }
-                    bits.bits() as u32
+                    u32::from(bits.bits())
                 },
-                get_active: |m| m.scroll.bits() as u32,
+                get_active: |m| u32::from(m.scroll.bits()),
                 set_active: |m, b| {
                     m.scroll = ScrollMask::from_bits_retain(b as u8);
                 },
@@ -1435,9 +1435,9 @@ pub(super) mod tests {
                     if p.hide_combo_explosions {
                         bits.insert(HideMask::COMBO_EXPLOSIONS);
                     }
-                    bits.bits() as u32
+                    u32::from(bits.bits())
                 },
-                get_active: |m| m.hide.bits() as u32,
+                get_active: |m| u32::from(m.hide.bits()),
                 set_active: |m, b| {
                     m.hide = HideMask::from_bits_retain(b as u8);
                 },
@@ -1504,9 +1504,9 @@ pub(super) mod tests {
                     if p.split_15_10ms {
                         bits.insert(FaPlusMask::SPLIT_15_10MS);
                     }
-                    bits.bits() as u32
+                    u32::from(bits.bits())
                 },
-                get_active: |m| m.fa_plus.bits() as u32,
+                get_active: |m| u32::from(m.fa_plus.bits()),
                 set_active: |m, b| {
                     m.fa_plus = FaPlusMask::from_bits_retain(b as u8);
                 },
@@ -1573,9 +1573,9 @@ pub(super) mod tests {
                     if p.display_scorebox {
                         bits.insert(GameplayExtrasMask::DISPLAY_SCOREBOX);
                     }
-                    bits.bits() as u32
+                    u32::from(bits.bits())
                 },
-                get_active: |m| m.gameplay_extras.bits() as u32,
+                get_active: |m| u32::from(m.gameplay_extras.bits()),
                 set_active: |m, b| {
                     m.gameplay_extras = GameplayExtrasMask::from_bits_retain(b as u16);
                 },
@@ -2987,7 +2987,7 @@ pub(super) mod tests {
         let scroll_binding = BitmaskBinding::Generic {
             init: BitmaskInit {
                 from_profile: |_| 0,
-                get_active: |m| m.scroll.bits() as u32,
+                get_active: |m| u32::from(m.scroll.bits()),
                 set_active: |m, b| {
                     m.scroll = ScrollMask::from_bits_retain(b as u8);
                 },
@@ -3373,7 +3373,7 @@ pub(super) mod tests {
         let scroll_binding = BitmaskBinding::Generic {
             init: BitmaskInit {
                 from_profile: |_| 0,
-                get_active: |m| m.scroll.bits() as u32,
+                get_active: |m| u32::from(m.scroll.bits()),
                 set_active: |m, b| {
                     m.scroll = ScrollMask::from_bits_retain(b as u8);
                 },
@@ -4487,8 +4487,8 @@ pub(super) mod tests {
 
         let binding = BitmaskBinding::Generic {
             init: BitmaskInit {
-                from_profile: |p| p.insert_active_mask.bits() as u32,
-                get_active: |m| m.insert.bits() as u32,
+                from_profile: |p| u32::from(p.insert_active_mask.bits()),
+                get_active: |m| u32::from(m.insert.bits()),
                 set_active: |m, b| m.insert = InsertMask::from_bits_retain(b as u8),
                 cursor: CursorInit::FirstActiveBit,
             },
@@ -4543,8 +4543,8 @@ pub(super) mod tests {
 
         let binding = BitmaskBinding::Generic {
             init: BitmaskInit {
-                from_profile: |p| p.insert_active_mask.bits() as u32,
-                get_active: |m| m.insert.bits() as u32,
+                from_profile: |p| u32::from(p.insert_active_mask.bits()),
+                get_active: |m| u32::from(m.insert.bits()),
                 set_active: |m, b| m.insert = InsertMask::from_bits_retain(b as u8),
                 cursor: CursorInit::FirstActiveBit,
             },
@@ -4582,8 +4582,8 @@ pub(super) mod tests {
         let (mut state, _) = setup_state();
         let binding = BitmaskBinding::Generic {
             init: BitmaskInit {
-                from_profile: |p| p.remove_active_mask.bits() as u32,
-                get_active: |m| m.remove.bits() as u32,
+                from_profile: |p| u32::from(p.remove_active_mask.bits()),
+                get_active: |m| u32::from(m.remove.bits()),
                 set_active: |m, b| m.remove = RemoveMask::from_bits_retain(b as u8),
                 cursor: CursorInit::FirstActiveBit,
             },
@@ -4618,8 +4618,8 @@ pub(super) mod tests {
         let (mut state, _) = setup_state();
         let binding = BitmaskBinding::Generic {
             init: BitmaskInit {
-                from_profile: |p| p.holds_active_mask.bits() as u32,
-                get_active: |m| m.holds.bits() as u32,
+                from_profile: |p| u32::from(p.holds_active_mask.bits()),
+                get_active: |m| u32::from(m.holds.bits()),
                 set_active: |m, b| m.holds = HoldsMask::from_bits_retain(b as u8),
                 cursor: CursorInit::FirstActiveBit,
             },
@@ -4655,8 +4655,8 @@ pub(super) mod tests {
         let (mut state, _) = setup_state();
         let binding = BitmaskBinding::Generic {
             init: BitmaskInit {
-                from_profile: |p| p.accel_effects_active_mask.bits() as u32,
-                get_active: |m| m.accel_effects.bits() as u32,
+                from_profile: |p| u32::from(p.accel_effects_active_mask.bits()),
+                get_active: |m| u32::from(m.accel_effects.bits()),
                 set_active: |m, b| m.accel_effects = AccelEffectsMask::from_bits_retain(b as u8),
                 cursor: CursorInit::FirstActiveBit,
             },
@@ -4694,8 +4694,8 @@ pub(super) mod tests {
         let (mut state, _) = setup_state();
         let binding = BitmaskBinding::Generic {
             init: BitmaskInit {
-                from_profile: |p| p.visual_effects_active_mask.bits() as u32,
-                get_active: |m| m.visual_effects.bits() as u32,
+                from_profile: |p| u32::from(p.visual_effects_active_mask.bits()),
+                get_active: |m| u32::from(m.visual_effects.bits()),
                 set_active: |m, b| m.visual_effects = VisualEffectsMask::from_bits_retain(b as u16),
                 cursor: CursorInit::FirstActiveBit,
             },
@@ -4823,8 +4823,8 @@ pub(super) mod tests {
         let (mut state, _) = setup_state();
         let binding = BitmaskBinding::Generic {
             init: BitmaskInit {
-                from_profile: |p| p.appearance_effects_active_mask.bits() as u32,
-                get_active: |m| m.appearance_effects.bits() as u32,
+                from_profile: |p| u32::from(p.appearance_effects_active_mask.bits()),
+                get_active: |m| u32::from(m.appearance_effects.bits()),
                 set_active: |m, b| {
                     m.appearance_effects = AppearanceEffectsMask::from_bits_retain(b as u8)
                 },

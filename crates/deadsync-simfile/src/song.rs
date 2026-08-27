@@ -594,7 +594,7 @@ fn build_charts(
     charts
 }
 
-/// Match ITGmania's `SongUtil::AdjustDuplicateSteps`: within each standard
+/// Match `ITGmania`'s `SongUtil::AdjustDuplicateSteps`: within each standard
 /// difficulty and step type, retain the easiest chart at that difficulty and
 /// expose the others as edits. The chart vector itself stays in simfile order.
 fn adjust_duplicate_charts(charts: &mut Vec<SerializableChartData>) {

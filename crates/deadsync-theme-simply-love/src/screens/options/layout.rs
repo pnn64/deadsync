@@ -630,7 +630,7 @@ pub(super) fn row_dest_for_index(
     let offset = scroll_offset(selected.min(total_rows - 1), total_rows);
     let row_step = (ROW_H + ROW_GAP) * s;
     let first_row_mid_y = (0.5 * ROW_H).mul_add(s, list_y);
-    let top_hidden_mid_y = first_row_mid_y - 0.5 * row_step;
+    let top_hidden_mid_y = 0.5f32.mul_add(-row_step, first_row_mid_y);
     let bottom_hidden_mid_y = ((VISIBLE_ROWS as f32) - 0.5).mul_add(row_step, first_row_mid_y);
     if row_idx < offset {
         (top_hidden_mid_y, 0.0)

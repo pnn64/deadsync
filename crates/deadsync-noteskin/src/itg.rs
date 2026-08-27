@@ -886,7 +886,7 @@ fn parse_ini_int(raw: &str) -> Option<i32> {
         return None;
     }
     let parsed = value[..end].parse::<i64>().ok()?;
-    Some(parsed.clamp(i32::MIN as i64, i32::MAX as i64) as i32)
+    Some(parsed.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32)
 }
 
 pub fn parse_ini_float(raw: &str) -> Option<f32> {

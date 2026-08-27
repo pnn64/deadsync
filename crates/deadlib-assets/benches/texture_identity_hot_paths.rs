@@ -171,7 +171,7 @@ fn video_identity_bench() {
     let old = measure(OPS, || {
         old_queue.push(Arc::clone(&key), Arc::clone(&image));
         let (queued_key, queued_image) = old_queue.pop().unwrap();
-        queued_key.len() as u64 + queued_image.width() as u64
+        queued_key.len() as u64 + u64::from(queued_image.width())
     });
 
     let mut new_queue = TextureUploadQueue::default();
@@ -182,7 +182,7 @@ fn video_identity_bench() {
     let new = measure(OPS, || {
         new_queue.push(42, Arc::clone(&image), SamplerDesc::default());
         let (handle, upload) = new_queue.pop_next(budget, 0, 0).unwrap();
-        handle + upload.image().width() as u64 + key.len() as u64 - 42
+        handle + u64::from(upload.image().width()) + key.len() as u64 - 42
     });
     assert_eq!(old.checksum, new.checksum);
 

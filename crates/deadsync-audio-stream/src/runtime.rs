@@ -246,7 +246,7 @@ fn play_music(engine: Option<&AudioEngine>, path: PathBuf, cut: Cut, looping: bo
     }
 }
 
-/// Applies a ReplayGain result from the background analyzer, but only if it
+/// Applies a `ReplayGain` result from the background analyzer, but only if it
 /// still corresponds to the currently active music track. Called by
 /// `deadsync_audio_replaygain`; safe to call from any thread.
 pub fn set_music_replaygain_if_matches(track_id: u64, gain_linear: f32) {

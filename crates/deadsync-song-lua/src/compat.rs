@@ -427,10 +427,10 @@ pub fn install_stdlib_compat(
             Ok(Value::Table(make_color_table(
                 lua,
                 [
-                    a[0] + (b[0] - a[0]) * percent,
-                    a[1] + (b[1] - a[1]) * percent,
-                    a[2] + (b[2] - a[2]) * percent,
-                    a[3] + (b[3] - a[3]) * percent,
+                    (b[0] - a[0]).mul_add(percent, a[0]),
+                    (b[1] - a[1]).mul_add(percent, a[1]),
+                    (b[2] - a[2]).mul_add(percent, a[2]),
+                    (b[3] - a[3]).mul_add(percent, a[3]),
                 ],
             )?))
         })?,

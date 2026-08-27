@@ -491,7 +491,7 @@ fn measures() -> Vec<u8> {
 
 fn queries() -> [f32; QUERY_COUNT] {
     std::array::from_fn(|index| {
-        -16.0 + (MEASURE_COUNT as f32 * 4.0 + 32.0) * index as f32 / (QUERY_COUNT - 1) as f32
+        -16.0 + (MEASURE_COUNT as f32).mul_add(4.0, 32.0) * index as f32 / (QUERY_COUNT - 1) as f32
     })
 }
 

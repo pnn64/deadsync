@@ -313,7 +313,7 @@ fn stutter_fixture() -> [VisibleStutterSample; 5] {
     std::array::from_fn(|index| VisibleStutterSample {
         timestamp_seconds: 61.25 + index as f32,
         frame_ms: 33.3 + index as f32,
-        frame_multiple: 2.0 + index as f32 * 0.25,
+        frame_multiple: (index as f32).mul_add(0.25, 2.0),
         severity: 1 + (index % 3) as u8,
         age_seconds: index as f32 * 0.4,
     })
@@ -323,8 +323,8 @@ fn stutter_ring_fixture() -> StutterSampleRing {
     let mut ring = StutterSampleRing::new();
     for index in 0..5 {
         ring.push(
-            10.0 + index as f32 * 0.25,
-            0.025 + index as f32 * 0.003,
+            (index as f32).mul_add(0.25, 10.0),
+            (index as f32).mul_add(0.003, 0.025),
             1.0 / 120.0,
             1 + (index % 3) as u8,
         );

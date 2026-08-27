@@ -1279,7 +1279,7 @@ pub fn retrieve_scores(
     network::read_json_body(response).map_err(OnlineRequestError::from)
 }
 
-/// Convert one bulk-score entry into the shared ArrowCloud score cache type.
+/// Convert one bulk-score entry into the shared `ArrowCloud` score cache type.
 ///
 /// Returns `None` when the response has no usable score field; otherwise it
 /// preserves ArrowCloud-native metadata such as server grade, timestamp, and
@@ -1741,15 +1741,15 @@ pub fn scroll_label(scroll: profile_data::ScrollOption) -> Option<String> {
 pub fn speed_payload(speed: ScrollSpeedSetting) -> ArrowCloudSpeed {
     match speed {
         ScrollSpeedSetting::CMod(value) => ArrowCloudSpeed {
-            value: value as f64,
+            value: f64::from(value),
             speed_type: "C",
         },
         ScrollSpeedSetting::MMod(value) => ArrowCloudSpeed {
-            value: value as f64,
+            value: f64::from(value),
             speed_type: "M",
         },
         ScrollSpeedSetting::XMod(value) => ArrowCloudSpeed {
-            value: ((value as f64) * 100.0).round() / 100.0,
+            value: (f64::from(value) * 100.0).round() / 100.0,
             speed_type: "X",
         },
     }
@@ -1835,7 +1835,9 @@ fn life_lerp_at(life_history: &[(f32, f32)], start_time: f32, sample_time: f32) 
         return earlier_life.clamp(0.0, 1.0);
     }
     let alpha = ((sample_time - earlier_time) / dt).clamp(0.0, 1.0);
-    (earlier_life + (later_life - earlier_life) * alpha).clamp(0.0, 1.0)
+    (later_life - earlier_life)
+        .mul_add(alpha, earlier_life)
+        .clamp(0.0, 1.0)
 }
 
 pub fn lifebar_points(
@@ -1863,11 +1865,15 @@ pub fn lifebar_points(
     let mut out = Vec::with_capacity(point_count);
     for i in 0..point_count {
         let sample = i as f32;
-        let x = chart_start_second + sample * x_step;
-        let sample_music_time = chart_start_second + sample * life_step * music_rate;
+        let x = sample.mul_add(x_step, chart_start_second);
+        let sample_music_time = (sample * life_step).mul_add(music_rate, chart_start_second);
         out.push(ArrowCloudLifePoint {
-            x: x as f64,
-            y: life_lerp_at(life_history, chart_start_second, sample_music_time) as f64,
+            x: f64::from(x),
+            y: f64::from(life_lerp_at(
+                life_history,
+                chart_start_second,
+                sample_music_time,
+            )),
         });
     }
     out
@@ -1912,7 +1918,7 @@ pub fn nps_info_from_measure_data(
             0.0
         };
         points.push(ArrowCloudNpsPoint {
-            x: x as f64,
+            x: f64::from(x),
             y,
             measure: measure as u32,
             nps,
@@ -1967,11 +1973,11 @@ pub fn timing_data_from_scatter(
             if !offset_ms.is_finite() {
                 continue;
             }
-            ArrowCloudTimingOffset::Seconds((offset_ms / 1000.0) as f64)
+            ArrowCloudTimingOffset::Seconds(f64::from(offset_ms / 1000.0))
         } else {
             ArrowCloudTimingOffset::Miss("Miss")
         };
-        out.push((point.time_sec as f64, value));
+        out.push((f64::from(point.time_sec), value));
     }
     out
 }
@@ -2136,7 +2142,7 @@ impl ArrowCloudPayload {
 #[inline(always)]
 pub fn submit_music_rate(music_rate: f32) -> f64 {
     if music_rate.is_finite() && music_rate > 0.0 {
-        music_rate as f64
+        f64::from(music_rate)
     } else {
         1.0
     }
@@ -2639,7 +2645,7 @@ pub enum DeviceLoginEvent {
     },
 }
 
-/// `POST /device-login/start`. Asks ArrowCloud to mint a fresh
+/// `POST /device-login/start`. Asks `ArrowCloud` to mint a fresh
 /// device-login session and returns the short code plus poll token.
 pub fn device_login_start(
     body: &DeviceLoginStartReq,
@@ -2647,7 +2653,7 @@ pub fn device_login_start(
     network::post_json(&format!("{DEVICE_LOGIN_BASE}/start"), body)
 }
 
-/// `POST /device-login/poll`. Asks ArrowCloud for the current status of
+/// `POST /device-login/poll`. Asks `ArrowCloud` for the current status of
 /// a device-login session. When `status == "consumed"`, the response
 /// carries the new API key.
 pub fn device_login_poll(body: &DeviceLoginPollReq) -> Result<DeviceLoginPollResp, NetworkError> {

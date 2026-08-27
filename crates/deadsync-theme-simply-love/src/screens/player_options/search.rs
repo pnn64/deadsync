@@ -269,7 +269,7 @@ pub(super) fn move_selection(state: &mut State, delta: isize) {
 ///
 /// Single source of truth shared by the renderer and `accept_ghost`, so Tab can
 /// only complete to something visibly offered. Prefix extensions only — alias
-/// matches (e.g. "arrows" focusing "NoteSkin") deliberately offer none.
+/// matches (e.g. "arrows" focusing "`NoteSkin`") deliberately offer none.
 pub(super) fn completion(open: &SettingSearchOpen) -> Option<(String, String)> {
     if open.query.is_empty() {
         return None;
@@ -344,7 +344,7 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
     let cy = screen_center_y();
     let panel_w = 360.0_f32.min(screen_width() * 0.92);
     let panel_h = 360.0_f32;
-    let top = cy - panel_h * 0.5;
+    let top = panel_h.mul_add(-0.5, cy);
 
     // Theme-native palette, matching the options screen and option rows.
     let theme = color::simply_love_rgba(state.active_color_index);
@@ -451,7 +451,7 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
     let shown = open.matches.len().min(SEARCH_MAX_RESULTS);
     for i in 0..shown {
         let m = &open.matches[i];
-        let y = list_top + i as f32 * row_step;
+        let y = (i as f32).mul_add(row_step, list_top);
         let focused = i == open.selected_index;
         if focused {
             actors.push(act!(quad:
@@ -484,7 +484,7 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
 
     // Focused match detail: current value, then wrapped help text.
     if let Some(m) = focused_match(open) {
-        let value_y = cy + panel_h * 0.5 - 74.0;
+        let value_y = panel_h.mul_add(0.5, cy) - 74.0;
         if let Some(value) = current_value(state, m, open.opener_player) {
             let current = tr_fmt(
                 "PlayerOptions",
@@ -511,7 +511,7 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
     let footer = tr("PlayerOptions", "SettingSearchFooter");
     actors.push(act!(text:
         font("miso"): settext(footer):
-        align(0.5, 0.5): xy(cx, cy + panel_h * 0.5 - 14.0): zoom(0.7):
+        align(0.5, 0.5): xy(cx, panel_h.mul_add(0.5, cy) - 14.0): zoom(0.7):
         maxwidth(panel_w - 24.0):
         diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(center)
     ));

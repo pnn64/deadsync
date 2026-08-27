@@ -54,11 +54,11 @@ pub enum SimplyLoveContentRequest {
     DeleteSong {
         simfile_path: PathBuf,
     },
-    /// Ask the shell to cut short the in-progress startup ReplayGain analysis
+    /// Ask the shell to cut short the in-progress startup `ReplayGain` analysis
     /// so the loading screen can advance without waiting for every song.
     SkipReplayGain,
     /// Analyze EBU R128 loudness for the whole song library and populate the
-    /// ReplayGain cache. Progress is reported via
+    /// `ReplayGain` cache. Progress is reported via
     /// [`crate::views::SimplyLoveApplyReplayGainEvent`]. Cancel an in-flight
     /// run with [`SimplyLoveContentRequest::SkipReplayGain`].
     ApplyReplayGain,

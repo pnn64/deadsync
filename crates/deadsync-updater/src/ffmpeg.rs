@@ -258,7 +258,7 @@ pub fn current() -> FfmpegPhase {
         .unwrap_or(FfmpegPhase::Idle)
 }
 
-/// Monotonic presentation revision for the published FFmpeg phase.
+/// Monotonic presentation revision for the published `FFmpeg` phase.
 #[inline(always)]
 pub fn phase_revision() -> u64 {
     PHASE_REVISION.load(Ordering::Acquire)
@@ -705,8 +705,9 @@ impl ProgressThrottle {
         total: Option<u64>,
         eta_secs: Option<u64>,
     ) -> bool {
-        let pct = total
-            .and_then(|t| (t != 0).then(|| ((written.min(t) as u128 * 100) / t as u128) as u32));
+        let pct = total.and_then(|t| {
+            (t != 0).then(|| ((u128::from(written.min(t)) * 100) / u128::from(t)) as u32)
+        });
         let is_final = matches!(total, Some(t) if written >= t);
         let publish = is_final
             || self.last_published.is_none()

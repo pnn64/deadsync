@@ -182,8 +182,8 @@ struct ClipVertex {
 
 fn clip_triangles() -> [[ClipVertex; 3]; TRIANGLES] {
     std::array::from_fn(|index| {
-        let x = (index % 64) as f32 * 0.025 - 0.8;
-        let y = (index / 64) as f32 * 0.04 - 0.6;
+        let x = ((index % 64) as f32).mul_add(0.025, -0.8);
+        let y = ((index / 64) as f32).mul_add(0.04, -0.6);
         let z = if index % 31 == 0 { -1.2 } else { -0.2 };
         std::array::from_fn(|corner| ClipVertex {
             clip: [

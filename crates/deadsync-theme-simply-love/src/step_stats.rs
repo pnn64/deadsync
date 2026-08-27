@@ -71,8 +71,12 @@ pub fn pane_layout(params: StepStatsPaneParams) -> StepStatsPaneLayout {
         let nf_width = params.notefield_width.unwrap_or(256.0).max(1.0);
         sidepane_width = ((params.screen_w - nf_width) * 0.5).max(1.0);
         sidepane_center_x = match params.player_side {
-            PlayerSide::P1 => params.screen_center_x + nf_width + (sidepane_width - nf_width) * 0.5,
-            PlayerSide::P2 => params.screen_center_x - nf_width - (sidepane_width - nf_width) * 0.5,
+            PlayerSide::P1 => {
+                (sidepane_width - nf_width).mul_add(0.5, params.screen_center_x + nf_width)
+            }
+            PlayerSide::P2 => {
+                (sidepane_width - nf_width).mul_add(-0.5, params.screen_center_x - nf_width)
+            }
         };
     }
 
@@ -87,7 +91,7 @@ pub fn pane_layout(params: StepStatsPaneParams) -> StepStatsPaneLayout {
     let banner_data_zoom = if note_field_is_centered && params.wide && !is_ultrawide {
         let ar = params.screen_w / sh;
         let t = ((ar - 16.0 / 10.0) / (16.0 / 9.0 - 16.0 / 10.0)).clamp(0.0, 1.0);
-        0.825 + (0.925 - 0.825) * t
+        (0.925_f32 - 0.825).mul_add(t, 0.825)
     } else {
         1.0
     };
@@ -125,7 +129,7 @@ pub fn density_graph_width(current_graph_w: f32, sidepane_width: f32, double: bo
 pub fn density_graph_rect(current_graph_w: f32, layout: StepStatsPaneLayout) -> StepStatsGraphRect {
     let graph_w = density_graph_width(current_graph_w, layout.sidepane_width, false);
     StepStatsGraphRect {
-        x: layout.sidepane_center_x - graph_w * 0.5,
+        x: graph_w.mul_add(-0.5, layout.sidepane_center_x),
         y: layout.sidepane_center_y + 55.0,
         w: graph_w,
     }
@@ -150,7 +154,7 @@ pub fn song_banner_placement(
     }
     StepStatsSpritePlacement {
         x: layout.sidepane_center_x + local_x * layout.banner_data_zoom,
-        y: layout.sidepane_center_y - 200.0 * layout.banner_data_zoom,
+        y: 200.0f32.mul_add(-layout.banner_data_zoom, layout.sidepane_center_y),
         zoom: STEP_STATS_SONG_BANNER_ZOOM * layout.banner_data_zoom,
     }
 }
@@ -164,18 +168,18 @@ pub fn pack_banner_placement(
     } else {
         0.25
     };
-    let final_offset = if layout.note_field_is_centered {
+    let final_offset: f32 = if layout.note_field_is_centered {
         -115.0
     } else {
         -160.0
     };
-    let side_sign = match player_side {
+    let side_sign: f32 = match player_side {
         PlayerSide::P1 => 1.0,
         PlayerSide::P2 => -1.0,
     };
     StepStatsSpritePlacement {
-        x: layout.sidepane_center_x + final_offset * side_sign * layout.banner_data_zoom,
-        y: layout.sidepane_center_y + 20.0 * layout.banner_data_zoom,
+        x: (final_offset * side_sign).mul_add(layout.banner_data_zoom, layout.sidepane_center_x),
+        y: 20.0f32.mul_add(layout.banner_data_zoom, layout.sidepane_center_y),
         zoom: final_size * layout.banner_data_zoom,
     }
 }
@@ -190,7 +194,7 @@ pub fn holds_mines_rolls_frame(
     };
     StepStatsFramePlacement {
         center_x: layout.sidepane_center_x + local_x * layout.banner_data_zoom,
-        center_y: layout.sidepane_center_y - 112.0 * layout.banner_data_zoom,
+        center_y: 112.0f32.mul_add(-layout.banner_data_zoom, layout.sidepane_center_y),
         zoom: layout.banner_data_zoom,
     }
 }
@@ -207,14 +211,14 @@ pub fn scorebox_frame(
     };
     let mut local_x = 70.0 * x_sign;
     if layout.note_field_is_centered && wide {
-        local_x += 2.0 * x_sign;
+        local_x = 2.0f32.mul_add(x_sign, local_x);
     }
     if layout.is_ultrawide && num_players > 1 {
         local_x = -local_x;
     }
     StepStatsFramePlacement {
         center_x: layout.sidepane_center_x + local_x * layout.banner_data_zoom,
-        center_y: layout.sidepane_center_y - 115.0 * layout.banner_data_zoom,
+        center_y: 115.0f32.mul_add(-layout.banner_data_zoom, layout.sidepane_center_y),
         zoom: layout.banner_data_zoom,
     }
 }
@@ -230,7 +234,7 @@ pub fn double_pane_layout(
     let banner_data_zoom = if note_field_is_centered {
         let ar = screen_w / screen_h.max(1.0);
         let t = ((ar - 16.0 / 10.0) / (16.0 / 9.0 - 16.0 / 10.0)).clamp(0.0, 1.0);
-        0.825 + (0.925 - 0.825) * t
+        (0.925_f32 - 0.825).mul_add(t, 0.825)
     } else {
         1.0
     };
@@ -248,8 +252,8 @@ pub fn double_song_banner_placement(
     notefield_width: f32,
 ) -> StepStatsSpritePlacement {
     StepStatsSpritePlacement {
-        x: layout.pane_center_x + (notefield_width - 140.0) * layout.banner_data_zoom,
-        y: layout.pane_center_y - 200.0 * layout.banner_data_zoom,
+        x: (notefield_width - 140.0).mul_add(layout.banner_data_zoom, layout.pane_center_x),
+        y: 200.0f32.mul_add(-layout.banner_data_zoom, layout.pane_center_y),
         zoom: STEP_STATS_SONG_BANNER_ZOOM * layout.banner_data_zoom,
     }
 }
@@ -268,8 +272,8 @@ pub fn double_pack_banner_placement(
     let pack_w = STEP_STATS_BANNER_W * final_size * layout.banner_data_zoom;
 
     StepStatsSpritePlacement {
-        x: song_banner.x - song_w * 0.5 + pack_w * 0.5,
-        y: layout.pane_center_y + 20.0 * layout.banner_data_zoom,
+        x: song_w.mul_add(-0.5, song_banner.x) + pack_w * 0.5,
+        y: 20.0f32.mul_add(layout.banner_data_zoom, layout.pane_center_y),
         zoom: final_size * layout.banner_data_zoom,
     }
 }
@@ -279,8 +283,10 @@ pub fn double_holds_mines_rolls_frame(
     notefield_width: f32,
 ) -> StepStatsFramePlacement {
     StepStatsFramePlacement {
-        center_x: layout.pane_center_x + (-notefield_width + 212.0) * layout.banner_data_zoom,
-        center_y: layout.pane_center_y + (-10.0 + 0.8 * 28.0) * layout.banner_data_zoom,
+        center_x: (-notefield_width + 212.0).mul_add(layout.banner_data_zoom, layout.pane_center_x),
+        center_y: 0.8f32
+            .mul_add(28.0, -10.0)
+            .mul_add(layout.banner_data_zoom, layout.pane_center_y),
         zoom: 0.8 * layout.banner_data_zoom,
     }
 }
@@ -290,8 +296,8 @@ pub fn double_scorebox_frame(
     notefield_width: f32,
 ) -> StepStatsFramePlacement {
     StepStatsFramePlacement {
-        center_x: layout.pane_center_x + (notefield_width - 140.0) * layout.banner_data_zoom,
-        center_y: layout.pane_center_y - 115.0 * layout.banner_data_zoom,
+        center_x: (notefield_width - 140.0).mul_add(layout.banner_data_zoom, layout.pane_center_x),
+        center_y: 115.0f32.mul_add(-layout.banner_data_zoom, layout.pane_center_y),
         zoom: layout.banner_data_zoom,
     }
 }

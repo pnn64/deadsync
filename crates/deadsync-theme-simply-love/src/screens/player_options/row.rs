@@ -618,11 +618,11 @@ macro_rules! simple_bitmask_binding {
     ) => {
         $crate::screens::player_options::row::BitmaskBinding::Generic {
             init: $crate::screens::player_options::row::BitmaskInit {
-                from_profile: |p| p.$profile_field.bits() as u32,
-                get_active: |m| m.$state_field.bits() as u32,
+                from_profile: |p| u32::from(p.$profile_field.bits()),
+                get_active: |m| u32::from(m.$state_field.bits()),
                 set_active: |m, b| {
                     debug_assert_eq!(
-                        b & !(<$bits_ty>::MAX as u32),
+                        b & !u32::from(<$bits_ty>::MAX),
                         0,
                         concat!(stringify!($mask_ty), " init bits exceed storage width"),
                     );
@@ -699,12 +699,12 @@ macro_rules! fanout_bitmask_binding {
                             bits.insert(<$mask_ty>::$flag);
                         }
                     )+
-                    bits.bits() as u32
+                    u32::from(bits.bits())
                 },
-                get_active: |m| m.$state_field.bits() as u32,
+                get_active: |m| u32::from(m.$state_field.bits()),
                 set_active: |m, b| {
                     debug_assert_eq!(
-                        b & !(<$bits_ty>::MAX as u32),
+                        b & !u32::from(<$bits_ty>::MAX),
                         0,
                         concat!(stringify!($mask_ty), " init bits exceed storage width"),
                     );
@@ -796,7 +796,7 @@ impl RowMap {
         &self.display_order
     }
 
-    /// Get the RowId at the given display index.
+    /// Get the `RowId` at the given display index.
     #[inline(always)]
     pub fn id_at(&self, display_idx: usize) -> RowId {
         self.display_order[display_idx]

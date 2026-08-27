@@ -186,14 +186,14 @@ impl App {
         }
     }
 
-    /// Drain UI intents, then (when "DeadSync manages pad config" is on) resolve
-    /// and apply the right pad config to each connected StepManiaX pad: this pad's
+    /// Drain UI intents, then (when "`DeadSync` manages pad config" is on) resolve
+    /// and apply the right pad config to each connected `StepManiaX` pad: this pad's
     /// per-pad default → a global default → the machine built-in preset (also the
     /// fallback for Guest / no-config players). Reactive: when the active player
     /// changes, a no-config/guest player resets the pad to the machine preset. A
     /// cheap per-pad signature avoids loading config files or rewriting the pad
     /// unless something relevant changed (so manual edits aren't clobbered).
-    /// Finally mirror the markers to the screen. Off → DeadSync writes nothing.
+    /// Finally mirror the markers to the screen. Off → `DeadSync` writes nothing.
     /// Auto-save the pad→player assignment when none is saved yet:
     /// - **Two pads, distinct jumpers:** persist the jumper-derived P1/P2 map.
     /// - **Single pad:** persist its hardware jumper side.
@@ -265,7 +265,7 @@ impl App {
         self.handle_navigation_action(CurrentScreen::SmxAssignPads);
     }
 
-    /// While the StepManiaX options page is open, light the pads blue (P1) / red
+    /// While the `StepManiaX` options page is open, light the pads blue (P1) / red
     /// (P2), white when ambiguous, so the user can see the assignment, and so a
     /// live Swap is reflected on the pads immediately. Also holds the underglow
     /// strips on a test colour (red with Theme Underglow on, blue with it off)

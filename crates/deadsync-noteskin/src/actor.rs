@@ -442,11 +442,11 @@ fn parse_hex_color(raw: &str) -> Option<[f32; 4]> {
     }
     let byte = |idx: usize| u8::from_str_radix(&hex[idx..idx + 2], 16).ok();
     Some([
-        byte(0)? as f32 / 255.0,
-        byte(2)? as f32 / 255.0,
-        byte(4)? as f32 / 255.0,
+        f32::from(byte(0)?) / 255.0,
+        f32::from(byte(2)?) / 255.0,
+        f32::from(byte(4)?) / 255.0,
         if hex.len() == 8 {
-            byte(6)? as f32 / 255.0
+            f32::from(byte(6)?) / 255.0
         } else {
             1.0
         },

@@ -1,6 +1,6 @@
 //! Platform idle-display inhibition.
 //!
-//! This is process/window policy: while DeadSync owns the display, the desktop
+//! This is process/window policy: while `DeadSync` owns the display, the desktop
 //! should not blank or power it down just because input is arriving through a
 //! raw device path.
 

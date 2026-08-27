@@ -376,7 +376,7 @@ fn zmod_stream_prog_completion(
     player_idx: usize,
     lookup: &StreamProgressLookup,
 ) -> Option<f64> {
-    let total_stream = state.mini_indicator_total_stream_measures(player_idx) as f64;
+    let total_stream = f64::from(state.mini_indicator_total_stream_measures(player_idx));
     let beat_floor = state.visible_beat(player_idx).floor();
     lookup.completion_for_beat(total_stream, beat_floor)
 }

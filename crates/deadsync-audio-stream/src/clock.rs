@@ -70,7 +70,7 @@ fn music_stream_clock_snapshot_at_nanos(
     window: CallbackClockWindow,
 ) -> MusicStreamClockSnapshot {
     let stream_frames = stream_position_frames_from_window(sample_rate, start, at_nanos, window);
-    let stream_seconds = (stream_frames / sample_rate as f64) as f32;
+    let stream_seconds = (stream_frames / f64::from(sample_rate)) as f32;
     let (music_seconds, music_seconds_per_second, has_music_mapping) =
         match clock.lookup(stream_frames) {
             Some((music_seconds, slope)) => (music_seconds, slope, true),
@@ -82,7 +82,7 @@ fn music_stream_clock_snapshot_at_nanos(
     MusicStreamClockSnapshot {
         stream_seconds,
         music_seconds,
-        music_nanos: music_nanos_from_seconds(music_seconds as f64),
+        music_nanos: music_nanos_from_seconds(f64::from(music_seconds)),
         music_seconds_per_second,
         has_music_mapping,
         valid_at,

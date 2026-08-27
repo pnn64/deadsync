@@ -235,11 +235,11 @@ fn append_sprite(
 
 fn ease_out_quad(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
-    1.0 - (1.0 - t).powi(2)
+    (1.0 - t).mul_add(-(1.0 - t), 1.0)
 }
 
 fn lerp(start: f32, end: f32, t: f32) -> f32 {
-    start + (end - start) * t
+    (end - start).mul_add(t, start)
 }
 
 const fn with_alpha(color: [f32; 4], alpha: f32) -> [f32; 4] {

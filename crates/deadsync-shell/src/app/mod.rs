@@ -1549,7 +1549,7 @@ pub struct App {
     /// Config-derived Select Music state is handed off once per config
     /// generation and once on screen re-entry, then retained by the theme.
     select_music_settings_rebuild: bool,
-    /// GrooveStats connection changes publish one atomic generation. Stable
+    /// `GrooveStats` connection changes publish one atomic generation. Stable
     /// Select Music frames avoid locking and cloning the connection status.
     select_music_unlock_status_generation: u64,
     select_music_unlock_rebuild: bool,
@@ -1558,7 +1558,7 @@ pub struct App {
     select_music_ready_reload_generation: u64,
     options_song_pack_generation: u64,
     /// Game-thread-owned, app-lifetime updater cursor with one action slot and
-    /// one FFmpeg slot. It warms during App construction, then two atomic
+    /// one `FFmpeg` slot. It warms during App construction, then two atomic
     /// revision reads gate all phase locking, deep cloning, and shell-view
     /// conversion. A miss replaces only the changed slot on an Options frame
     /// or input event; there is no growth, eviction, pruning, cross-thread

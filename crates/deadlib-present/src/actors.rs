@@ -337,7 +337,7 @@ pub enum Actor {
         rot_x_deg: f32,
         rot_y_deg: f32,
         rot_z_deg: f32,
-        /// StepMania actor-local shear amounts. Applied after rotation and
+        /// `StepMania` actor-local shear amounts. Applied after rotation and
         /// before the sprite geometry scale.
         skew: [f32; 2],
         local_offset: [f32; 2],
@@ -502,7 +502,7 @@ pub enum Actor {
 
     /// Draws `children` into a texture before the main presentation pass.
     /// Placement transforms do not cross this boundary, matching
-    /// StepMania/ITGmania ActorFrameTexture semantics.
+    /// StepMania/ITGmania `ActorFrameTexture` semantics.
     RenderTarget {
         texture_handle: TextureHandle,
         /// Backing texture dimensions in render pixels.
@@ -1516,7 +1516,7 @@ mod tests {
 
     #[test]
     fn inline_u32_text_preserves_decimal_display() {
-        for value in [0, 7, 42, 250, 500, 8_191, u16::MAX as u32, u32::MAX] {
+        for value in [0, 7, 42, 250, 500, 8_191, u32::from(u16::MAX), u32::MAX] {
             let text = TextContent::inline_u32(value);
             assert_eq!(text.as_str(), value.to_string());
             let prepared = TextContent::prepared_u32(value, 9);

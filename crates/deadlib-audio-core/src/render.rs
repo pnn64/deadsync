@@ -38,7 +38,7 @@ pub struct RenderState {
     stale_blocks_left: usize,
     /// Current music gain as seen by the mixer. Ramps toward the shared music
     /// gain target over [`MUSIC_GAIN_RAMP_FRAMES`] frames so asynchronous
-    /// ReplayGain results do not produce an audible step.
+    /// `ReplayGain` results do not produce an audible step.
     music_gain_current: f32,
     /// Gain snap generation last observed; when it changes, the mixer snaps
     /// `music_gain_current` straight to the target instead of ramping.
@@ -58,7 +58,7 @@ fn advance_gain(current: &mut f32, target: f32) {
     if diff.abs() <= MUSIC_GAIN_MAX_STEP {
         *current = target;
     } else {
-        *current += diff.signum() * MUSIC_GAIN_MAX_STEP;
+        *current = diff.signum().mul_add(MUSIC_GAIN_MAX_STEP, *current);
     }
 }
 
@@ -256,8 +256,8 @@ impl RenderState {
                 MusicMapSeg {
                     stream_frame_start: track_frame_start + frame as i64,
                     frames: take as i64,
-                    music_start_sec: timing.music_start_sec
-                        + block_frame as f64 * timing.music_sec_per_frame,
+                    music_start_sec: (block_frame as f64)
+                        .mul_add(timing.music_sec_per_frame, timing.music_start_sec),
                     music_sec_per_frame: timing.music_sec_per_frame,
                 },
             );

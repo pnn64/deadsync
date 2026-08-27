@@ -12,7 +12,7 @@ impl GameplayTween {
         match self {
             Self::Linear => t,
             Self::Accelerate => t * t,
-            Self::Decelerate => 1.0 - (1.0 - t) * (1.0 - t),
+            Self::Decelerate => (1.0 - t).mul_add(-(1.0 - t), 1.0),
         }
     }
 }
@@ -32,7 +32,7 @@ fn song_lua_pow_in_out(t: f32, power: f32) -> f32 {
     if t < 0.5 {
         0.5 * (2.0 * t).powf(power)
     } else {
-        1.0 - 0.5 * (2.0 * (1.0 - t)).powf(power)
+        0.5f32.mul_add(-(2.0 * (1.0 - t)).powf(power), 1.0)
     }
 }
 
@@ -41,7 +41,7 @@ fn song_lua_pow_out_in(t: f32, power: f32) -> f32 {
     if t < 0.5 {
         0.5 * song_lua_pow_out(t * 2.0, power)
     } else {
-        0.5 + 0.5 * song_lua_pow_in((t * 2.0) - 1.0, power)
+        0.5f32.mul_add(song_lua_pow_in(t.mul_add(2.0, -1.0), power), 0.5)
     }
 }
 
@@ -52,13 +52,13 @@ fn song_lua_out_bounce(t: f32) -> f32 {
         N1 * t * t
     } else if t < 2.0 / D1 {
         let t = t - 1.5 / D1;
-        N1 * t * t + 0.75
+        (N1 * t).mul_add(t, 0.75)
     } else if t < 2.5 / D1 {
         let t = t - 2.25 / D1;
-        N1 * t * t + 0.9375
+        (N1 * t).mul_add(t, 0.9375)
     } else {
         let t = t - 2.625 / D1;
-        N1 * t * t + 0.984_375
+        (N1 * t).mul_add(t, 0.984_375)
     }
 }
 
@@ -72,7 +72,7 @@ fn song_lua_in_out_bounce(t: f32) -> f32 {
     if t < 0.5 {
         0.5 * song_lua_in_bounce(t * 2.0)
     } else {
-        0.5 + 0.5 * song_lua_out_bounce((t * 2.0) - 1.0)
+        0.5f32.mul_add(song_lua_out_bounce(t.mul_add(2.0, -1.0)), 0.5)
     }
 }
 
@@ -249,21 +249,21 @@ impl SongLuaEase {
                 if t < 0.5 {
                     0.5 * ((t * std::f32::consts::PI).sin())
                 } else {
-                    0.5 + 0.5 * (1.0 - (((t * 2.0) - 1.0) * std::f32::consts::FRAC_PI_2).cos())
+                    0.5f32.mul_add(1.0 - (((t * 2.0) - 1.0) * std::f32::consts::FRAC_PI_2).cos(), 0.5)
                 }
             }
             Self::InExpo => {
                 if t <= 0.0 {
                     0.0
                 } else {
-                    2.0_f32.powf((10.0 * t) - 10.0)
+                    10.0f32.mul_add(t, -10.0).exp2()
                 }
             }
             Self::OutExpo => {
                 if t >= 1.0 {
                     1.0
                 } else {
-                    1.0 - 2.0_f32.powf(-10.0 * t)
+                    1.0 - (-10.0 * t).exp2()
                 }
             }
             Self::InOutExpo => {
@@ -272,34 +272,34 @@ impl SongLuaEase {
                 } else if t >= 1.0 {
                     1.0
                 } else if t < 0.5 {
-                    0.5 * 2.0_f32.powf((20.0 * t) - 10.0)
+                    0.5 * 20.0f32.mul_add(t, -10.0).exp2()
                 } else {
-                    1.0 - (0.5 * 2.0_f32.powf((-20.0 * t) + 10.0))
+                    0.5f32.mul_add(-(-20.0f32).mul_add(t, 10.0).exp2(), 1.0)
                 }
             }
             Self::OutInExpo => {
                 if t < 0.5 {
-                    0.5 * (1.0 - 2.0_f32.powf(-20.0 * t))
+                    0.5 * (1.0 - (-20.0 * t).exp2())
                 } else if t >= 1.0 {
                     1.0
                 } else {
-                    0.5 + 0.5 * 2.0_f32.powf((20.0 * t) - 20.0)
+                    0.5f32.mul_add(20.0f32.mul_add(t, -20.0).exp2(), 0.5)
                 }
             }
             Self::InCirc => 1.0 - (1.0 - (t * t)).sqrt(),
-            Self::OutCirc => (1.0 - ((t - 1.0) * (t - 1.0))).sqrt(),
+            Self::OutCirc => (t - 1.0).mul_add(-(t - 1.0), 1.0).sqrt(),
             Self::InOutCirc => {
                 if t < 0.5 {
-                    0.5 * (1.0 - (1.0 - 4.0 * t * t).sqrt())
+                    0.5 * (1.0 - (4.0 * t).mul_add(-t, 1.0).sqrt())
                 } else {
-                    f32::midpoint((1.0 - ((-2.0 * t + 2.0) * (-2.0 * t + 2.0))).sqrt(), 1.0)
+                    f32::midpoint((-2.0f32).mul_add(t, 2.0).mul_add(-(-2.0f32).mul_add(t, 2.0), 1.0).sqrt(), 1.0)
                 }
             }
             Self::OutInCirc => {
                 if t < 0.5 {
-                    0.5 * (1.0 - ((2.0 * t - 1.0) * (2.0 * t - 1.0))).sqrt()
+                    0.5 * 2.0f32.mul_add(t, -1.0).mul_add(-2.0f32.mul_add(t, -1.0), 1.0).sqrt()
                 } else {
-                    0.5 + 0.5 * (1.0 - (1.0 - ((2.0 * t - 1.0) * (2.0 * t - 1.0))).sqrt())
+                    0.5f32.mul_add(1.0 - 2.0f32.mul_add(t, -1.0).mul_add(-2.0f32.mul_add(t, -1.0), 1.0).sqrt(), 0.5)
                 }
             }
             Self::InElastic => {
@@ -311,7 +311,7 @@ impl SongLuaEase {
                     let period = opt1.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.3);
                     let tau = std::f32::consts::TAU / period;
                     let u = t - 1.0;
-                    -(2.0_f32.powf(10.0 * u)) * ((u - period * 0.25) * tau).sin()
+                    -(10.0 * u).exp2() * ((u - period * 0.25) * tau).sin()
                 }
             }
             Self::OutElastic => {
@@ -322,7 +322,7 @@ impl SongLuaEase {
                 } else {
                     let period = opt1.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.3);
                     let tau = std::f32::consts::TAU / period;
-                    2.0_f32.powf(-10.0 * t) * ((t - period * 0.25) * tau).sin() + 1.0
+                    (-10.0 * t).exp2().mul_add(((t - period * 0.25) * tau).sin(), 1.0)
                 }
             }
             Self::InOutElastic => {
@@ -334,11 +334,11 @@ impl SongLuaEase {
                     let period = opt1.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.3);
                     let tau = std::f32::consts::TAU / period;
                     if t < 0.5 {
-                        let u = (2.0 * t) - 1.0;
-                        -0.5 * 2.0_f32.powf(10.0 * u) * ((u - period * 0.375) * tau).sin()
+                        let u = 2.0f32.mul_add(t, -1.0);
+                        -0.5 * (10.0 * u).exp2() * ((u - period * 0.375) * tau).sin()
                     } else {
-                        let u = (2.0 * t) - 1.0;
-                        0.5 * 2.0_f32.powf(-10.0 * u) * ((u - period * 0.375) * tau).sin() + 1.0
+                        let u = 2.0f32.mul_add(t, -1.0);
+                        (0.5 * (-10.0 * u).exp2()).mul_add(((u - period * 0.375) * tau).sin(), 1.0)
                     }
                 }
             }
@@ -346,34 +346,34 @@ impl SongLuaEase {
                 if t < 0.5 {
                     0.5 * Self::OutElastic.factor(t * 2.0, opt1, _opt2)
                 } else {
-                    0.5 + 0.5 * Self::InElastic.factor((t * 2.0) - 1.0, opt1, _opt2)
+                    0.5f32.mul_add(Self::InElastic.factor((t * 2.0) - 1.0, opt1, _opt2), 0.5)
                 }
             }
             Self::InBack => {
                 let overshoot = opt1.filter(|v| v.is_finite()).unwrap_or(1.70158);
-                t * t * (((overshoot + 1.0) * t) - overshoot)
+                t * t * (overshoot + 1.0).mul_add(t, -overshoot)
             }
             Self::OutBack => {
                 let overshoot = opt1.filter(|v| v.is_finite()).unwrap_or(1.70158);
                 let u = t - 1.0;
-                (u * u * (((overshoot + 1.0) * u) + overshoot)) + 1.0
+                (u * u).mul_add((overshoot + 1.0).mul_add(u, overshoot), 1.0)
             }
             Self::InOutBack => {
                 let overshoot = opt1.filter(|v| v.is_finite()).unwrap_or(1.70158);
                 let s = overshoot * 1.525;
                 if t < 0.5 {
                     let u = 2.0 * t;
-                    0.5 * (u * u * (((s + 1.0) * u) - s))
+                    0.5 * (u * u * (s + 1.0).mul_add(u, -s))
                 } else {
-                    let u = (2.0 * t) - 2.0;
-                    f32::midpoint(u * u * (((s + 1.0) * u) + s), 2.0)
+                    let u = 2.0f32.mul_add(t, -2.0);
+                    f32::midpoint(u * u * (s + 1.0).mul_add(u, s), 2.0)
                 }
             }
             Self::OutInBack => {
                 if t < 0.5 {
                     0.5 * Self::OutBack.factor(t * 2.0, opt1, _opt2)
                 } else {
-                    0.5 + 0.5 * Self::InBack.factor((t * 2.0) - 1.0, opt1, _opt2)
+                    0.5f32.mul_add(Self::InBack.factor((t * 2.0) - 1.0, opt1, _opt2), 0.5)
                 }
             }
             Self::InBounce => song_lua_in_bounce(t),
@@ -383,7 +383,7 @@ impl SongLuaEase {
                 if t < 0.5 {
                     0.5 * song_lua_out_bounce(t * 2.0)
                 } else {
-                    0.5 + 0.5 * song_lua_in_bounce((t * 2.0) - 1.0)
+                    0.5f32.mul_add(song_lua_in_bounce((t * 2.0) - 1.0), 0.5)
                 }
             }
         }
@@ -417,7 +417,7 @@ pub fn song_lua_column_offset_window_value(
     }
     let t = ((now - window.start_second) / duration).clamp(0.0, 1.0);
     let factor = window.easing.factor(t, window.opt1, window.opt2);
-    Some(window.from_y + (window.to_y - window.from_y) * factor)
+    Some((window.to_y - window.from_y).mul_add(factor, window.from_y))
 }
 
 pub fn song_lua_column_y_offset(
@@ -1826,10 +1826,10 @@ fn danger_effect_rgba(age: f32, base_alpha: f32) -> [f32; 4] {
         .mul_add(0.5, 0.5);
     let inv = 1.0 - f;
 
-    let r = DANGER_EC1_RGBA[0] * f + DANGER_EC2_RGBA[0] * inv;
-    let g = DANGER_EC1_RGBA[1] * f + DANGER_EC2_RGBA[1] * inv;
-    let b = DANGER_EC1_RGBA[2] * f + DANGER_EC2_RGBA[2] * inv;
-    let a = (DANGER_EC1_RGBA[3] * f + DANGER_EC2_RGBA[3] * inv) * base_alpha;
+    let r = DANGER_EC2_RGBA[0].mul_add(inv, DANGER_EC1_RGBA[0] * f);
+    let g = DANGER_EC2_RGBA[1].mul_add(inv, DANGER_EC1_RGBA[1] * f);
+    let b = DANGER_EC2_RGBA[2].mul_add(inv, DANGER_EC1_RGBA[2] * f);
+    let a = DANGER_EC2_RGBA[3].mul_add(inv, DANGER_EC1_RGBA[3] * f) * base_alpha;
     [r, g, b, a]
 }
 

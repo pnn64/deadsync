@@ -191,7 +191,7 @@ pub fn scale_value(value: f32, from_low: f32, from_high: f32, to_low: f32, to_hi
     if span.abs() <= f32::EPSILON {
         to_low
     } else {
-        (value - from_low) / span * (to_high - to_low) + to_low
+        ((value - from_low) / span).mul_add(to_high - to_low, to_low)
     }
 }
 
@@ -365,7 +365,7 @@ pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
             };
             Ok(
                 theme_metric_number_for_screen(&group, &name, human_player_count, screen_height)
-                    .map_or(Value::Nil, |value| Value::Number(value as f64)),
+                    .map_or(Value::Nil, |value| Value::Number(f64::from(value))),
             )
         })?,
     )?;
@@ -1342,7 +1342,7 @@ fn create_player_stage_stats_table(
                 if let Some(score) = method_arg(&args, 0).cloned().and_then(read_i32_value)
                     && score >= 0
                 {
-                    stats.set("__songlua_score", score as i64)?;
+                    stats.set("__songlua_score", i64::from(score))?;
                 }
                 note_song_lua_side_effect(lua)?;
                 Ok(stats.clone())
@@ -1357,7 +1357,7 @@ fn create_player_stage_stats_table(
                 if let Some(score) = method_arg(&args, 0).cloned().and_then(read_i32_value)
                     && score >= 0
                 {
-                    stats.set("__songlua_cur_max_score", score as i64)?;
+                    stats.set("__songlua_cur_max_score", i64::from(score))?;
                 }
                 note_song_lua_side_effect(lua)?;
                 Ok(stats.clone())
@@ -1369,16 +1369,20 @@ fn create_player_stage_stats_table(
         lua.create_function({
             let stats = stats.clone();
             move |lua, args: MultiValue| {
-                let actual = method_arg(&args, 0)
-                    .cloned()
-                    .and_then(read_i32_value)
-                    .unwrap_or(0)
-                    .max(0) as i64;
-                let possible = method_arg(&args, 1)
-                    .cloned()
-                    .and_then(read_i32_value)
-                    .unwrap_or(1)
-                    .max(1) as i64;
+                let actual = i64::from(
+                    method_arg(&args, 0)
+                        .cloned()
+                        .and_then(read_i32_value)
+                        .unwrap_or(0)
+                        .max(0),
+                );
+                let possible = i64::from(
+                    method_arg(&args, 1)
+                        .cloned()
+                        .and_then(read_i32_value)
+                        .unwrap_or(1)
+                        .max(1),
+                );
                 stats.set("__songlua_possible_dance_points", possible)?;
                 stats.set("__songlua_actual_dance_points", actual.min(possible))?;
                 note_song_lua_side_effect(lua)?;
@@ -1846,13 +1850,13 @@ fn prefsmgr_default_value_normalized(
     video_renderers: &str,
 ) -> mlua::Result<Value> {
     if lower == "globaloffsetseconds" {
-        Ok(Value::Number(global_offset_seconds as f64))
+        Ok(Value::Number(f64::from(global_offset_seconds)))
     } else if lower == "displayaspectratio" {
-        Ok(Value::Number(display_aspect_ratio as f64))
+        Ok(Value::Number(f64::from(display_aspect_ratio)))
     } else if lower == "displaywidth" {
-        Ok(Value::Integer(display_width as i64))
+        Ok(Value::Integer(i64::from(display_width)))
     } else if lower == "displayheight" {
-        Ok(Value::Integer(display_height as i64))
+        Ok(Value::Integer(i64::from(display_height)))
     } else if lower == "videorenderers" {
         Ok(Value::String(lua.create_string(video_renderers)?))
     } else if lower == "visualdelayseconds" {
@@ -2190,7 +2194,7 @@ pub fn rotate_lua_table(lua: &Lua, args: &MultiValue, left: bool) -> mlua::Resul
     if len == 0 {
         return lua.create_table();
     }
-    let shift = args.get(1).cloned().and_then(read_i32_value).unwrap_or(1) as i64;
+    let shift = i64::from(args.get(1).cloned().and_then(read_i32_value).unwrap_or(1));
     let len_i64 = len as i64;
     let out = lua.create_table()?;
     for index in 1..=len_i64 {

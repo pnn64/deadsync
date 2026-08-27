@@ -1,4 +1,4 @@
-//! StepManiaX pad → player assignment screen.
+//! `StepManiaX` pad → player assignment screen.
 //!
 //! Walks the user through a press-a-panel flow: press a panel on the pad you
 //! want as P1, then the pad you want as P2. The theme owns this interaction and
@@ -175,7 +175,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeE
     debug_assert!(effects.len() - start_len <= 2);
 }
 
-/// Leave the screen. The options StepManiaX page re-drives the pad lights itself,
+/// Leave the screen. The options `StepManiaX` page re-drives the pad lights itself,
 /// so only restore auto-lighting when returning somewhere that won't (e.g. the
 /// Menu), to avoid a one-frame flicker on the handoff.
 fn append_exit_effects(state: &State, effects: &mut Vec<ThemeEffect>) {
@@ -360,9 +360,9 @@ pub fn push_actors(
         (
             format!("{label}: {val}"),
             [
-                rgb[0] as f32 / 255.0,
-                rgb[1] as f32 / 255.0,
-                rgb[2] as f32 / 255.0,
+                f32::from(rgb[0]) / 255.0,
+                f32::from(rgb[1]) / 255.0,
+                f32::from(rgb[2]) / 255.0,
             ],
         )
     };
@@ -376,7 +376,7 @@ pub fn push_actors(
             font("miso"):
             settext(text):
             align(0.5, 0.5):
-            xy(screen_center_x(), base_y + i as f32 * 40.0):
+            xy(screen_center_x(), (i as f32).mul_add(40.0, base_y)):
             zoom(0.9):
             maxwidth(screen_w * 0.8):
             horizalign(center):

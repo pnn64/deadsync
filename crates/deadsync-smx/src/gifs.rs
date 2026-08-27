@@ -1,4 +1,4 @@
-//! StepManiaX pad GIF decoding and the preloaded animation registry.
+//! `StepManiaX` pad GIF decoding and the preloaded animation registry.
 //!
 //! deadsync owns GIF decode for pad lighting (no SDK involvement): this module
 //! turns GIF bytes into per-panel LED frame sequences and preloads every GIF
@@ -175,13 +175,13 @@ fn push_unique_by_bpm(merged: &mut Vec<BackgroundVariant>, source: &[BackgroundV
 /// like a clean recolor — packs using this feature are expected to author
 /// grayscale source art.
 pub fn tint_full_pad(anim: &FullPadAnim, target_rgb: [u8; 3]) -> FullPadAnim {
-    let scale = target_rgb.map(|c| c as f32 / 255.0);
+    let scale = target_rgb.map(|c| f32::from(c) / 255.0);
     let tint_frame = |frame: &PanelFrame| -> PanelFrame {
         let mut out = *frame;
         for px in out.chunks_exact_mut(3) {
-            px[0] = (px[0] as f32 * scale[0]).round() as u8;
-            px[1] = (px[1] as f32 * scale[1]).round() as u8;
-            px[2] = (px[2] as f32 * scale[2]).round() as u8;
+            px[0] = (f32::from(px[0]) * scale[0]).round() as u8;
+            px[1] = (f32::from(px[1]) * scale[1]).round() as u8;
+            px[2] = (f32::from(px[2]) * scale[2]).round() as u8;
         }
         out
     };
@@ -207,11 +207,11 @@ const LED_SATURATION_GAMMA: f32 = 2.2;
 /// the floor channels drop to the light level the color actually encodes.
 /// Grays and pure primaries pass through unchanged.
 pub fn saturate_for_leds(rgb: [u8; 3]) -> [u8; 3] {
-    let max = rgb.into_iter().max().unwrap_or(0) as f32;
+    let max = f32::from(rgb.into_iter().max().unwrap_or(0));
     if max <= 0.0 {
         return rgb;
     }
-    rgb.map(|c| (max * (c as f32 / max).powf(LED_SATURATION_GAMMA)).round() as u8)
+    rgb.map(|c| (max * (f32::from(c) / max).powf(LED_SATURATION_GAMMA)).round() as u8)
 }
 
 /// A decoded per-panel judgement animation.

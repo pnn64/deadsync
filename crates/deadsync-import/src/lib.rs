@@ -1,7 +1,7 @@
-//! Importing ITGmania + Simply Love profile data into DeadSync DTOs.
+//! Importing `ITGmania` + Simply Love profile data into `DeadSync` DTOs.
 //!
-//! This crate reads ITGmania profile files and translates their data into
-//! DeadSync profile, score, and chart-resolution structures. It does not write
+//! This crate reads `ITGmania` profile files and translates their data into
+//! `DeadSync` profile, score, and chart-resolution structures. It does not write
 //! local profiles or mutate global game state; root import orchestration owns
 //! that boundary.
 

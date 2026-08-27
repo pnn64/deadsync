@@ -74,7 +74,7 @@ pub fn set_overscan(translate_x: i32, translate_y: i32, add_width: i32, add_heig
     OVERSCAN_ADD_HEIGHT.store(add_height, Ordering::Relaxed);
 }
 
-/// Current live overscan values: (translate_x, translate_y, add_width, add_height).
+/// Current live overscan values: (`translate_x`, `translate_y`, `add_width`, `add_height`).
 #[inline]
 pub fn overscan() -> (i32, i32, i32, i32) {
     (

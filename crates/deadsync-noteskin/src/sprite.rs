@@ -822,15 +822,15 @@ pub fn sprite_scrolled_uv(
     let h = (uv[3] - uv[1]).abs();
     if let Some(cycle_seconds) = model_cycle_seconds {
         let clock = sprite_uv_scroll_clock(elapsed, Some(cycle_seconds));
-        let shift_u = uv_offset[0] + uv_velocity[0] * clock;
-        let shift_v = uv_offset[1] + uv_velocity[1] * clock;
+        let shift_u = uv_velocity[0].mul_add(clock, uv_offset[0]);
+        let shift_v = uv_velocity[1].mul_add(clock, uv_offset[1]);
         uv[0] += shift_u;
         uv[2] += shift_u;
         uv[1] += shift_v;
         uv[3] += shift_v;
     } else {
-        let shift_u = uv_offset[0] + uv_velocity[0] * elapsed;
-        let shift_v = uv_offset[1] + uv_velocity[1] * elapsed;
+        let shift_u = uv_velocity[0].mul_add(elapsed, uv_offset[0]);
+        let shift_v = uv_velocity[1].mul_add(elapsed, uv_offset[1]);
         let u_span = (1.0 - w).max(0.0);
         let v_span = (1.0 - h).max(0.0);
         let u_shift = if u_span > f32::EPSILON {

@@ -9,7 +9,7 @@ use crate::{config::Config, error::DecodeError, utils::Sealed};
 /// This struct should rarely be used.
 /// In most cases, prefer any of the `decode` functions.
 ///
-/// The ByteOrder that is chosen will impact the endianness that
+/// The `ByteOrder` that is chosen will impact the endianness that
 /// is used to read integers out of the reader.
 ///
 /// ```

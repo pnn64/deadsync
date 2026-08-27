@@ -356,7 +356,7 @@ impl TexturedMeshInstanceRaw {
             uv_scale,
             uv_offset,
             uv_tex_shift,
-            texture_mask: texture_mask as u8 as f32,
+            texture_mask: f32::from(u8::from(texture_mask)),
         }
     }
 

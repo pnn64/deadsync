@@ -14,7 +14,7 @@ pub fn song_time_ns_from_seconds(seconds: f32) -> SongTimeNs {
     if !seconds.is_finite() {
         return INVALID_SONG_TIME_NS;
     }
-    let nanos = (seconds as f64 * SONG_TIME_NS_PER_SECOND).round();
+    let nanos = (f64::from(seconds) * SONG_TIME_NS_PER_SECOND).round();
     nanos.clamp((i64::MIN + 1) as f64, i64::MAX as f64) as SongTimeNs
 }
 
@@ -28,7 +28,7 @@ pub fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
 
 #[inline(always)]
 pub fn song_time_ns_delta_seconds(lhs: SongTimeNs, rhs: SongTimeNs) -> f32 {
-    ((lhs as i128 - rhs as i128) as f64 / SONG_TIME_NS_PER_SECOND) as f32
+    ((i128::from(lhs) - i128::from(rhs)) as f64 / SONG_TIME_NS_PER_SECOND) as f32
 }
 
 #[inline(always)]
@@ -59,13 +59,13 @@ pub fn song_time_ns_span_seconds(span_ns: i128) -> f32 {
 
 #[inline(always)]
 pub fn clamp_song_time_ns(value: i128) -> SongTimeNs {
-    value.clamp(MIN_VALID_SONG_TIME_NS, i64::MAX as i128) as SongTimeNs
+    value.clamp(MIN_VALID_SONG_TIME_NS, i128::from(i64::MAX)) as SongTimeNs
 }
 
 #[inline(always)]
 pub fn scaled_song_delta_ns(delta_host_nanos: i128, seconds_per_second: f32) -> i128 {
     let slope = normalized_song_rate(seconds_per_second);
-    (delta_host_nanos as f64 * slope as f64).round() as i128
+    (delta_host_nanos as f64 * f64::from(slope)).round() as i128
 }
 
 #[inline(always)]

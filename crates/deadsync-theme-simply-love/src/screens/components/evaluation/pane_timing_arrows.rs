@@ -75,7 +75,7 @@ pub(crate) fn build_timing_arrows_pane(
     let pane_height: f32 = 180.0;
 
     let pane_origin_x = pane_origin_x(controller);
-    let frame_x = pane_origin_x - pane_width * 0.5;
+    let frame_x = pane_width.mul_add(-0.5, pane_origin_x);
     let frame_y = deadlib_present::space::screen_center_y() - 56.0;
 
     let mut children = Vec::new();
@@ -87,12 +87,12 @@ pub(crate) fn build_timing_arrows_pane(
     let data_area_width: f32 = data_area_right - data_area_left;
     let col_step: f32 = data_area_width / 6.0;
     let col_centers: [f32; 6] = [
-        data_area_left + col_step * 0.5,
-        data_area_left + col_step * 1.5,
-        data_area_left + col_step * 2.5,
-        data_area_left + col_step * 3.5,
-        data_area_left + col_step * 4.5,
-        data_area_left + col_step * 5.5,
+        col_step.mul_add(0.5, data_area_left),
+        col_step.mul_add(1.5, data_area_left),
+        col_step.mul_add(2.5, data_area_left),
+        col_step.mul_add(3.5, data_area_left),
+        col_step.mul_add(4.5, data_area_left),
+        col_step.mul_add(5.5, data_area_left),
     ];
 
     let header_y: f32 = 24.0;
@@ -128,7 +128,7 @@ pub(crate) fn build_timing_arrows_pane(
 
     let row_labels: [&'static str; 5] = ["# Steps", "Mean Abs", "Mean", "Stddev*3", "Max"];
     for (row_idx, &label) in row_labels.iter().enumerate() {
-        let y = row_start_y + (row_idx as f32) * row_step;
+        let y = (row_idx as f32).mul_add(row_step, row_start_y);
 
         // Row label.
         children.push(act!(text: font("miso"): settext(label):

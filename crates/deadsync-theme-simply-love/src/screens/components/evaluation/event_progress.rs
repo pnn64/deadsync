@@ -406,7 +406,9 @@ where
         let zoom = zoom_step as f32 / 20.0;
         let wrapped = wrap_text_with_measure(text, pane_width, zoom, &mut measure);
         let line_count = wrapped.split('\n').count().max(1) as f32;
-        let block_height = font_height + (line_count - 1.0).max(0.0) * line_spacing;
+        let block_height = (line_count - 1.0)
+            .max(0.0)
+            .mul_add(line_spacing, font_height);
         let layout = BodyLayout {
             text: wrapped,
             zoom,
@@ -443,7 +445,9 @@ where
         let zoom = zoom_step as f32 / 20.0;
         let wrapped = wrap_text_with_measure(text, max_width, zoom, &mut measure);
         let line_count = wrapped.split('\n').count().max(1) as f32;
-        let block_height = font_height + (line_count - 1.0).max(0.0) * line_spacing;
+        let block_height = (line_count - 1.0)
+            .max(0.0)
+            .mul_add(line_spacing, font_height);
         let layout = HeaderLayout {
             text: wrapped,
             zoom,
@@ -460,8 +464,8 @@ where
 #[inline(always)]
 fn body_bounds(pane_height: f32, row_height: f32, bottom_reserved: f32) -> BodyBounds {
     BodyBounds {
-        top_y: -pane_height * 0.5 + row_height * 1.5,
-        max_height: pane_height - row_height * 1.5 - bottom_reserved,
+        top_y: row_height.mul_add(1.5, -pane_height * 0.5),
+        max_height: row_height.mul_add(-1.5, pane_height) - bottom_reserved,
     }
 }
 
@@ -719,9 +723,9 @@ fn build_overlay_leaderboard(
     single_player: bool,
     z: i16,
 ) -> Vec<Actor> {
-    let rank_x = -(pane_width - OVERLAY_LB_GRID_W) * 0.5 - OVERLAY_LB_GRID_W * 0.5 + 32.0;
-    let name_x = -(pane_width - OVERLAY_LB_GRID_W) * 0.5 - OVERLAY_LB_GRID_W * 0.5 + 100.0;
-    let score_x = -(pane_width - OVERLAY_LB_GRID_W) * 0.5 + OVERLAY_LB_GRID_W * 0.5 - 2.0;
+    let rank_x = OVERLAY_LB_GRID_W.mul_add(-0.5, -(pane_width - OVERLAY_LB_GRID_W) * 0.5) + 32.0;
+    let name_x = OVERLAY_LB_GRID_W.mul_add(-0.5, -(pane_width - OVERLAY_LB_GRID_W) * 0.5) + 100.0;
+    let score_x = OVERLAY_LB_GRID_W.mul_add(0.5, -(pane_width - OVERLAY_LB_GRID_W) * 0.5) - 2.0;
     let date_x = score_x + 100.0;
     let first_row_y = -OVERLAY_ROW_HEIGHT * ((OVERLAY_LB_ROWS - 1) as f32 * 0.5);
     let mut rows: Vec<(
@@ -786,7 +790,7 @@ fn build_overlay_leaderboard(
     let mut children = Vec::with_capacity(OVERLAY_LB_ROWS * 5);
     for (idx, (rank, name, score, date, row_color, score_color, bg)) in rows.into_iter().enumerate()
     {
-        let y = first_row_y + OVERLAY_ROW_HEIGHT * idx as f32;
+        let y = OVERLAY_ROW_HEIGHT.mul_add(idx as f32, first_row_y);
         if let Some(bg) = bg {
             children.push(act!(quad:
                 align(0.5, 0.5):
@@ -898,7 +902,7 @@ fn build_upper_panel(
         asset_manager,
         header_name(progress),
         pane_width,
-        -pane_height * 0.5 + 15.0,
+        (-pane_height).mul_add(0.5, 15.0),
         2,
     ));
     children.push(build_body_text(
@@ -936,8 +940,8 @@ fn build_overlay_panel(
     let border_width = 2.0;
     let event_color = event_color(progress.kind);
     let badge = event_badge(progress.kind);
-    let header_y = -pane_height * 0.5 + 12.0;
-    let header_bar_y = -pane_height * 0.5 + OVERLAY_ROW_HEIGHT * 0.5;
+    let header_y = (-pane_height).mul_add(0.5, 12.0);
+    let header_bar_y = OVERLAY_ROW_HEIGHT.mul_add(0.5, -pane_height * 0.5);
     let has_more_info = progress.overlay_pages.len() > 1;
     let bottom_reserved = if has_more_info {
         OVERLAY_ROW_HEIGHT
@@ -994,7 +998,7 @@ fn build_overlay_panel(
             font(machine_font_key_for_text(machine_font, FontRole::Header, badge)):
             settext(badge):
             align(0.5, 0.5):
-            xy(pane_width * 0.5 - 18.0, header_y):
+            xy(pane_width.mul_add(0.5, -18.0), header_y):
             zoom(0.5):
             diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
             z(4)
@@ -1030,8 +1034,8 @@ fn build_overlay_panel(
         )),
     }
     if has_more_info {
-        let nav_y = pane_height * 0.5 - OVERLAY_ROW_HEIGHT * 0.5;
-        let icon_x = OVERLAY_PANE_NAV_WIDTH * 0.5 - 10.0;
+        let nav_y = OVERLAY_ROW_HEIGHT.mul_add(-0.5, pane_height * 0.5);
+        let icon_x = OVERLAY_PANE_NAV_WIDTH.mul_add(0.5, -10.0);
         children.push(act!(text:
             font("miso"):
             settext("&MENULEFT;"):
@@ -1091,9 +1095,9 @@ pub fn build_event_progress_boxes(
         1.0
     };
     let (center_x, center_y, pane_width, pane_height) = if single_player {
-        (upper_origin_x - 381.0 * dir, 109.0, 156.0, 144.0)
+        (381.0f32.mul_add(-dir, upper_origin_x), 109.0, 156.0, 144.0)
     } else {
-        (upper_origin_x + 211.0 * dir, 274.0, 118.0, 180.0)
+        (211.0f32.mul_add(dir, upper_origin_x), 274.0, 118.0, 180.0)
     };
     let stack_gap = 8.0;
     let visible = progress.len().min(2);
@@ -1110,7 +1114,7 @@ pub fn build_event_progress_boxes(
             build_upper_panel(
                 asset_manager,
                 center_x,
-                center_y + first_offset + idx as f32 * (pane_height + stack_gap),
+                (idx as f32).mul_add(pane_height + stack_gap, center_y + first_offset),
                 pane_width,
                 pane_height,
                 event,
@@ -1197,7 +1201,7 @@ mod tests {
         let short = body_layout_with_measure(
             "Completed the \"Short Achievement\" Achievement!",
             330.0,
-            360.0 - OVERLAY_ROW_HEIGHT * 2.5,
+            OVERLAY_ROW_HEIGHT.mul_add(-2.5, 360.0),
             BODY_FALLBACK_HEIGHT,
             BODY_FALLBACK_SPACING,
             |candidate| candidate.chars().count() as f32 * 8.0,
@@ -1205,7 +1209,7 @@ mod tests {
         let long = body_layout_with_measure(
             "Completed the \"This Achievement Title Is Extremely Long And Should Wrap Instead Of Shrinking The Popup Text\" Achievement!",
             330.0,
-            360.0 - OVERLAY_ROW_HEIGHT * 2.5,
+            OVERLAY_ROW_HEIGHT.mul_add(-2.5, 360.0),
             BODY_FALLBACK_HEIGHT,
             BODY_FALLBACK_SPACING,
             |candidate| candidate.chars().count() as f32 * 8.0,
@@ -1224,7 +1228,7 @@ mod tests {
         let layout = body_layout_with_measure(
             text.as_str(),
             330.0,
-            180.0 - OVERLAY_ROW_HEIGHT * 2.5,
+            OVERLAY_ROW_HEIGHT.mul_add(-2.5, 180.0),
             BODY_FALLBACK_HEIGHT,
             BODY_FALLBACK_SPACING,
             |candidate| candidate.chars().count() as f32 * 8.0,
@@ -1241,13 +1245,13 @@ mod tests {
         let layout = body_layout_with_measure(
             text.as_str(),
             330.0,
-            360.0 - OVERLAY_ROW_HEIGHT * 2.5,
+            OVERLAY_ROW_HEIGHT.mul_add(-2.5, 360.0),
             BODY_FALLBACK_HEIGHT,
             BODY_FALLBACK_SPACING,
             |candidate| candidate.chars().count() as f32 * 8.0,
         );
-        let block_height = BODY_FALLBACK_HEIGHT + 13.0 * BODY_FALLBACK_SPACING;
-        let available_height = 360.0 - OVERLAY_ROW_HEIGHT * 2.5;
+        let block_height = 13.0f32.mul_add(BODY_FALLBACK_SPACING, BODY_FALLBACK_HEIGHT);
+        let available_height = OVERLAY_ROW_HEIGHT.mul_add(-2.5, 360.0);
 
         assert!((layout.zoom - 0.9).abs() < f32::EPSILON);
         assert!(block_height * layout.zoom <= available_height);

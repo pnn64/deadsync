@@ -286,7 +286,7 @@ fn performance(c: &mut Criterion) {
     let text_value = "DeadSync".repeat(PAYLOAD_BYTES / 8);
     let text = bincode::encode_to_vec(&text_value, config).unwrap();
     let float_value = (0..PAYLOAD_BYTES / 4)
-        .map(|value| value as f32 * 0.125 - 16_384.0)
+        .map(|value| (value as f32).mul_add(0.125, -16_384.0))
         .collect::<Vec<_>>();
     let floats = bincode::encode_to_vec(&float_value, config).unwrap();
     report_allocations(&data, &text, &floats);

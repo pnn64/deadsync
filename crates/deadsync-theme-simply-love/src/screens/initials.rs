@@ -278,7 +278,7 @@ impl Wheel {
         };
         let p = (t / WHEEL_SLIDE_SECONDS).clamp(0.0, 1.0);
         for it in &mut self.items {
-            it.x = it.x0 + (it.x1 - it.x0) * p;
+            it.x = (it.x1 - it.x0).mul_add(p, it.x0);
             it.x0 = it.x;
         }
         self.anim_elapsed = None;
@@ -363,7 +363,7 @@ impl Wheel {
         *t = (*t + dt).max(0.0);
         let p = (*t / WHEEL_SLIDE_SECONDS).clamp(0.0, 1.0);
         for it in &mut self.items {
-            it.x = it.x0 + (it.x1 - it.x0) * p;
+            it.x = (it.x1 - it.x0).mul_add(p, it.x0);
         }
         if p >= 1.0 {
             for it in &mut self.items {
@@ -1065,13 +1065,14 @@ fn highlight_row_color(
     elapsed: f32,
 ) -> [f32; 4] {
     let base = player_color_rgba(side, active_color_index);
-    let phase =
-        ((elapsed / HIGHSCORE_HIGHLIGHT_PERIOD) * (std::f32::consts::TAU)).sin() * 0.5 + 0.5;
+    let phase = ((elapsed / HIGHSCORE_HIGHLIGHT_PERIOD) * (std::f32::consts::TAU))
+        .sin()
+        .mul_add(0.5, 0.5);
     let inv = 1.0 - phase;
     [
-        base[0] * inv + phase,
-        base[1] * inv + phase,
-        base[2] * inv + phase,
+        base[0].mul_add(inv, phase),
+        base[1].mul_add(inv, phase),
+        base[2].mul_add(inv, phase),
         1.0,
     ]
 }

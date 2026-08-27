@@ -404,7 +404,7 @@ fn refresh_checksum(output: ActiveAttackRefreshOutput) -> u64 {
 }
 
 fn frame_time(frame: usize) -> f32 {
-    let song_seconds = WINDOW_COUNT as f32 * 0.25 + 1.0;
+    let song_seconds = (WINDOW_COUNT as f32).mul_add(0.25, 1.0);
     (frame as f32 / 120.0) % song_seconds
 }
 
@@ -686,7 +686,7 @@ fn note_hide_benchmark() {
         .map(|index| SongLuaNoteHideWindowRuntime {
             column: 0,
             start_beat: index as f32 * 0.5,
-            end_beat: index as f32 * 0.5 + 0.25,
+            end_beat: (index as f32).mul_add(0.5, 0.25),
         })
         .collect::<Vec<_>>();
     let indexed = SongLuaNoteHideWindows::new(source);
@@ -1054,7 +1054,7 @@ fn cue_anchor_benchmark() {
     assert_eq!(new_first.reallocs, 0);
     assert_eq!(new_first.bytes, 0);
 
-    let cycle_seconds = CUE_COUNT as f32 * 0.25 + 1.0;
+    let cycle_seconds = (CUE_COUNT as f32).mul_add(0.25, 1.0);
     let mut samples = Vec::with_capacity(CUE_ANCHOR_SAMPLES);
     for sample in 0..CUE_ANCHOR_SAMPLES {
         let (old_run, new_run) = if sample % 2 == 0 {

@@ -506,7 +506,7 @@ pub fn build_srpg_shop_overlay(
 fn push_tabs(actors: &mut Vec<Actor>, selected: usize, cx: f32, cy: f32, bold_font: &'static str) {
     let start_x = cx + 53.0;
     for (index, shop) in SHOPS.into_iter().enumerate() {
-        let x = start_x + index as f32 * 64.0;
+        let x = (index as f32).mul_add(64.0, start_x);
         let active = index == selected;
         actors.push(act!(quad:
             align(0.5, 0.5): xy(x, cy + HEADER_CONTENT_Y): zoomto(58.0, 30.0):
@@ -532,14 +532,14 @@ fn push_shop_heading(
 ) {
     actors.push(act!(text:
         font(bold_font): settext(meta.name):
-        align(0.0, 0.5): xy(cx - PANEL_W * 0.5 + 15.0, cy - 153.0): zoom(0.38):
+        align(0.0, 0.5): xy(PANEL_W.mul_add(-0.5, cx) + 15.0, cy - 153.0): zoom(0.38):
         maxwidth(290.0): diffuse(meta.tint[0], meta.tint[1], meta.tint[2], 1.0):
         z(Z + 6): horizalign(left)
     ));
     if let Some(shop) = shop {
         actors.push(act!(text:
             font("miso"): settext(format!("{} {}", format_number(shop.balance), meta.currency)):
-            align(0.0, 0.5): xy(cx - PANEL_W * 0.5 + 15.0, cy - 132.0): zoom(0.83):
+            align(0.0, 0.5): xy(PANEL_W.mul_add(-0.5, cx) + 15.0, cy - 132.0): zoom(0.83):
             diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(left)
         ));
     }
@@ -582,14 +582,14 @@ fn push_catalog(
         .saturating_sub(VIEW_ROWS / 2)
         .min(row_count.saturating_sub(VIEW_ROWS));
     let visible_rows = row_count.min(VIEW_ROWS);
-    let list_h = (visible_rows - 1) as f32 * ROW_H + (ROW_H - 3.0) + LIST_MARGIN * 2.0;
-    let list_y = LIST_Y + (visible_rows - 1) as f32 * ROW_H * 0.5;
+    let list_h = LIST_MARGIN.mul_add(2.0, ((visible_rows - 1) as f32).mul_add(ROW_H, ROW_H - 3.0));
+    let list_y = ((visible_rows - 1) as f32 * ROW_H).mul_add(0.5, LIST_Y);
     actors.push(act!(quad:
         align(0.5, 0.5): xy(cx + LIST_X, cy + list_y): zoomto(LIST_W, list_h):
         diffuse(0.0, 0.0, 0.0, 0.78): z(Z + 4)
     ));
     for (slot, row_index) in (start..row_count.min(start + VIEW_ROWS)).enumerate() {
-        let y = cy + LIST_Y + slot as f32 * ROW_H;
+        let y = (slot as f32).mul_add(ROW_H, cy + LIST_Y);
         let active = row_index == selected;
         let (name, detail) = if row_index == 0 {
             (
@@ -614,13 +614,13 @@ fn push_catalog(
         ));
         actors.push(act!(text:
             font(bold_font): settext(name):
-            align(0.0, 0.5): xy(cx + LIST_X - LIST_W * 0.5 + 9.0, y - 5.0): zoom(0.25):
+            align(0.0, 0.5): xy(LIST_W.mul_add(-0.5, cx + LIST_X) + 9.0, y - 5.0): zoom(0.25):
             maxwidth(205.0): diffuse(1.0, 1.0, 1.0, if active { 1.0 } else { 0.76 }):
             z(Z + 6): horizalign(left)
         ));
         actors.push(act!(text:
             font("miso"): settext(detail):
-            align(0.0, 0.5): xy(cx + LIST_X - LIST_W * 0.5 + 9.0, y + 8.0): zoom(0.67):
+            align(0.0, 0.5): xy(LIST_W.mul_add(-0.5, cx + LIST_X) + 9.0, y + 8.0): zoom(0.67):
             maxwidth(255.0): diffuse(0.88, 0.88, 0.88, if active { 1.0 } else { 0.62 }):
             z(Z + 6): horizalign(left)
         ));
@@ -650,7 +650,7 @@ fn push_bulk_detail(
     cy: f32,
     bold_font: &'static str,
 ) {
-    let x = cx - PANEL_W * 0.5 + 15.0;
+    let x = PANEL_W.mul_add(-0.5, cx) + 15.0;
     let ready = ready_count(overlay, shop);
     let downloaded = shop
         .items
@@ -701,7 +701,7 @@ fn push_item_detail(
     cy: f32,
     bold_font: &'static str,
 ) {
-    let x = cx - PANEL_W * 0.5 + 15.0;
+    let x = PANEL_W.mul_add(-0.5, cx) + 15.0;
     actors.push(act!(quad:
         align(0.0, 0.0): xy(x - 5.0, cy - 115.0): zoomto(286.0, 250.0):
         diffuse(0.0, 0.0, 0.0, 0.72): z(Z + 4)
@@ -767,12 +767,12 @@ fn push_footer(actors: &mut Vec<Actor>, phase: SrpgShopPhase, cx: f32, cy: f32) 
         }
     };
     actors.push(act!(quad:
-        align(0.5, 0.5): xy(cx, cy + PANEL_H * 0.5 - 18.0): zoomto(PANEL_W, 36.0):
+        align(0.5, 0.5): xy(cx, PANEL_H.mul_add(0.5, cy) - 18.0): zoomto(PANEL_W, 36.0):
         diffuse(0.0, 0.0, 0.0, 0.90): z(Z + 5)
     ));
     actors.push(act!(text:
         font("miso"): settext(hint): align(0.5, 0.5):
-        xy(cx, cy + PANEL_H * 0.5 - 18.0): zoom(0.72): maxwidth(PANEL_W - 20.0):
+        xy(cx, PANEL_H.mul_add(0.5, cy) - 18.0): zoom(0.72): maxwidth(PANEL_W - 20.0):
         diffuse(1.0, 1.0, 1.0, 0.85): z(Z + 6): horizalign(center)
     ));
 }

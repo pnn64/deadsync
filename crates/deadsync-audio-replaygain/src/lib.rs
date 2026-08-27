@@ -1,4 +1,4 @@
-//! Experimental ReplayGain 2.0 / EBU R 128 loudness analysis and caching.
+//! Experimental `ReplayGain` 2.0 / EBU R 128 loudness analysis and caching.
 //!
 //! Public API:
 //! - [`get_or_queue_gain_linear`] - returns the linear playback gain for a
@@ -21,7 +21,7 @@
 //!   and true peak.
 //! - Computed values are persisted in a single file at
 //!   `cache_dir/replaygain.bin` (an in-memory map keyed by
-//!   xxhash64(canonical_path) is the source of truth; a dedicated flush
+//!   `xxhash64(canonical_path)` is the source of truth; a dedicated flush
 //!   thread debounces writes by [`FLUSH_DEBOUNCE`] and rewrites the file
 //!   atomically via tmp + rename). Each entry stores the source file's mtime
 //!   and an xxhash64 of its raw bytes: the mtime is the fast-path validator,

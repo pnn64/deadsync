@@ -267,7 +267,7 @@ pub fn push_actors(
             );
 
             if let Some(scaled_text) = speed_text.scaled.as_ref() {
-                let scaled_x = speed_x + main_draw_w * 0.4;
+                let scaled_x = main_draw_w.mul_add(0.4, speed_x);
                 actors.push(act!(text: font(machine_font_key(state.policy.machine_font, FontRole::Header)): settext(scaled_text.clone()):
                     align(0.5, 0.5): xy(scaled_x, speed_mod_scaled_y): zoom(speed_mod_scaled_zoom):
                     diffuse(speed_color[0], speed_color[1], speed_color[2], 0.8 * pane_alpha):
@@ -604,7 +604,7 @@ pub(super) struct RowCtx<'a> {
     pub sl_gray: [f32; 4],
 }
 
-/// Render z-order layers for the player_options screen. Higher values
+/// Render z-order layers for the `player_options` screen. Higher values
 /// draw on top of lower ones.
 pub(super) const Z_ROW_BACKGROUND: i16 = 100;
 /// Row text, underlines, cursor borders, choice values, help text.
@@ -720,7 +720,7 @@ pub(super) fn draw_multi_select_underlines(
 ) {
     let line_thickness = underline_thickness();
     let offset = underline_offset();
-    let underline_base_y = current_row_y + text_h * 0.5 + offset;
+    let underline_base_y = text_h.mul_add(0.5, current_row_y) + offset;
     let underline_y = |player_idx: usize| {
         if active[P1] && active[P2] {
             (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
@@ -768,7 +768,7 @@ pub(super) fn draw_single_select_underline(
 ) {
     let line_thickness = underline_thickness();
     let offset = underline_offset();
-    let underline_base_y = current_row_y + text_h * 0.5 + offset;
+    let underline_base_y = text_h.mul_add(0.5, current_row_y) + offset;
     let underline_y = |player_idx: usize| {
         if active[P1] && active[P2] {
             (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
@@ -837,33 +837,33 @@ pub(super) fn draw_cursor_ring(
         };
         let center_y = center_y + cursor_stack_y(active, player_idx);
 
-        let left = center_x - ring_w * 0.5;
-        let right = center_x + ring_w * 0.5;
-        let top = center_y - ring_h * 0.5;
-        let bottom = center_y + ring_h * 0.5;
+        let left = ring_w.mul_add(-0.5, center_x);
+        let right = ring_w.mul_add(0.5, center_x);
+        let top = ring_h.mul_add(-0.5, center_y);
+        let bottom = ring_h.mul_add(0.5, center_y);
         let mut ring_color = color::decorative_rgba(player_color_index(state, player_idx));
         ring_color[3] *= a;
 
         actors.push(act!(quad:
-            align(0.5, 0.5): xy(f32::midpoint(left, right), top + border_w * 0.5):
+            align(0.5, 0.5): xy(f32::midpoint(left, right), border_w.mul_add(0.5, top)):
             zoomto(ring_w, border_w):
             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
             z(Z_ROW_FOREGROUND)
         ));
         actors.push(act!(quad:
-            align(0.5, 0.5): xy(f32::midpoint(left, right), bottom - border_w * 0.5):
+            align(0.5, 0.5): xy(f32::midpoint(left, right), border_w.mul_add(-0.5, bottom)):
             zoomto(ring_w, border_w):
             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
             z(Z_ROW_FOREGROUND)
         ));
         actors.push(act!(quad:
-            align(0.5, 0.5): xy(left + border_w * 0.5, f32::midpoint(top, bottom)):
+            align(0.5, 0.5): xy(border_w.mul_add(0.5, left), f32::midpoint(top, bottom)):
             zoomto(border_w, ring_h):
             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
             z(Z_ROW_FOREGROUND)
         ));
         actors.push(act!(quad:
-            align(0.5, 0.5): xy(right - border_w * 0.5, f32::midpoint(top, bottom)):
+            align(0.5, 0.5): xy(border_w.mul_add(-0.5, right), f32::midpoint(top, bottom)):
             zoomto(border_w, ring_h):
             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
             z(Z_ROW_FOREGROUND)
@@ -1027,7 +1027,7 @@ fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_i
     let mut choice_center_x = rc.fc.option_column_x[primary_player_idx];
     if rc.row.id == RowId::MusicRate {
         let item_col_left = rc.fc.row_left + TITLE_BG_WIDTH;
-        choice_center_x = item_col_left + (rc.fc.row_width - TITLE_BG_WIDTH) * 0.5;
+        choice_center_x = (rc.fc.row_width - TITLE_BG_WIDTH).mul_add(0.5, item_col_left);
     }
     let choice_idx = rc.row.selected_choice_index[primary_player_idx]
         .min(rc.row.choices.len().saturating_sub(1));
@@ -1074,13 +1074,13 @@ fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_i
         z(Z_ROW_FOREGROUND)
     ));
     let line_thickness = underline_thickness();
-    let underline_y = rc.current_row_y + draw_h * 0.5 + underline_offset();
+    let underline_y = draw_h.mul_add(0.5, rc.current_row_y) + underline_offset();
     let mut line_color =
         color::decorative_rgba(player_color_index(rc.fc.state, primary_player_idx));
     line_color[3] *= rc.a;
     actors.push(act!(quad:
         align(0.0, 0.5):
-        xy(choice_center_x - draw_w * 0.5, underline_y):
+        xy(draw_w.mul_add(-0.5, choice_center_x), underline_y):
         zoomto(draw_w.ceil(), line_thickness):
         diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
         z(Z_ROW_FOREGROUND)
@@ -1099,7 +1099,7 @@ fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_i
         line_color[3] *= rc.a;
         actors.push(act!(quad:
             align(0.0, 0.5):
-            xy(center_x - draw_w * 0.5, underline_y):
+            xy(draw_w.mul_add(-0.5, center_x), underline_y):
             zoomto(draw_w.ceil(), line_thickness):
             diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
             z(Z_ROW_FOREGROUND)
@@ -1461,7 +1461,7 @@ fn draw_noteskin_note(
 fn draw_noteskin_preview(actors: &mut Vec<Actor>, rc: &RowCtx, ns: &Noteskin, center_x: f32) {
     let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
     for &(col, quant_idx, x_mult) in preview_arrows(ns.column_xs.len()) {
-        let x = center_x + x_mult * target_height;
+        let x = x_mult.mul_add(target_height, center_x);
         let note_idx = col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
         draw_noteskin_note(actors, rc, ns, note_idx, quant_idx, x);
     }
@@ -1584,7 +1584,7 @@ fn draw_receptor_preview(
         let Some(receptor_slot) = receptor_ns.receptor_off.get(col) else {
             continue;
         };
-        let center = [center_x + x_mult * target_height, rc.current_row_y];
+        let center = [x_mult.mul_add(target_height, center_x), rc.current_row_y];
         draw_receptor_slot_preview(
             actors,
             rc,
@@ -1668,8 +1668,8 @@ fn draw_receptor_slot_preview(
 
     let [sin_r, cos_r] = slot.base_rot_sin_cos();
     let offset = [
-        draw.pos[0] * scale * cos_r - draw.pos[1] * scale * sin_r,
-        draw.pos[0] * scale * sin_r + draw.pos[1] * scale * cos_r,
+        (draw.pos[1] * scale).mul_add(-sin_r, draw.pos[0] * scale * cos_r),
+        (draw.pos[1] * scale).mul_add(cos_r, draw.pos[0] * scale * sin_r),
     ];
     let sprite_size = [size[0] * draw.zoom[0].abs(), size[1] * draw.zoom[1].abs()];
     if sprite_size[0] <= f32::EPSILON || sprite_size[1] <= f32::EPSILON {

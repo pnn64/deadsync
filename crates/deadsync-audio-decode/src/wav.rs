@@ -441,17 +441,15 @@ mod tests {
                         sample[2],
                         if sample[2] & 0x80 != 0 { 0xff } else { 0x00 },
                     ]);
-                    (signed >> 8).clamp(i16::MIN as i32, i16::MAX as i32) as i16
+                    (signed >> 8).clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
                 }
                 Encoding::Pcm32 => {
                     let signed = i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
-                    (signed >> 16).clamp(i16::MIN as i32, i16::MAX as i32) as i16
+                    (signed >> 16).clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
                 }
-                Encoding::Float32 => {
-                    legacy_float(
-                        f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) as f64,
-                    )
-                }
+                Encoding::Float32 => legacy_float(f64::from(f32::from_le_bytes([
+                    sample[0], sample[1], sample[2], sample[3],
+                ]))),
                 Encoding::Float64 => legacy_float(f64::from_le_bytes([
                     sample[0], sample[1], sample[2], sample[3], sample[4], sample[5], sample[6],
                     sample[7],

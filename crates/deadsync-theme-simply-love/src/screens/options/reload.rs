@@ -160,7 +160,7 @@ pub(super) fn build_reload_overlay_actors(
     let bar_w = widescale(360.0, 520.0);
     let bar_h = RELOAD_BAR_H;
     let bar_cx = screen_width() * 0.5;
-    let bar_cy = screen_height() * 0.5 + 34.0;
+    let bar_cy = screen_height().mul_add(0.5, 34.0);
     let fill_w = (bar_w - 4.0) * progress.clamp(0.0, 1.0);
 
     let mut out: Vec<Actor> = Vec::with_capacity(7);

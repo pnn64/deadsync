@@ -26,7 +26,7 @@ const PANEL_PAD: f32 = 6.0;
 const GRAPH_TEXT_GAP: f32 = 12.0;
 /// Gap between the histogram and the data row below it.
 const DATA_GAP: f32 = 12.0;
-/// miso line pitch at zoom 0.5 (font LineSpacing 24 × 0.5). The data block height is sized
+/// miso line pitch at zoom 0.5 (font `LineSpacing` 24 × 0.5). The data block height is sized
 /// from the tallest cell's line count so there's no fixed over-budget margin below the text.
 const DATA_LINE_PITCH: f32 = 12.0;
 /// Visible height of the final text line (≈ miso Baseline 19 × 0.5), added once on top of
@@ -47,7 +47,7 @@ fn data_block_h(lines: usize) -> f32 {
     if lines == 0 {
         0.0
     } else {
-        DATA_LINE_CAP + DATA_LINE_PITCH * (lines as f32 - 1.0)
+        DATA_LINE_PITCH.mul_add(lines as f32 - 1.0, DATA_LINE_CAP)
     }
 }
 
@@ -69,14 +69,14 @@ fn data_cell_width(text: &str) -> f32 {
     if max_chars == 0 {
         0.0
     } else {
-        max_chars as f32 * DATA_CELL_CHAR_W + DATA_CELL_PAD
+        (max_chars as f32).mul_add(DATA_CELL_CHAR_W, DATA_CELL_PAD)
     }
 }
 
 /// Total width of the data row given each cell's width: the cells plus the inter-cell gaps.
 #[inline(always)]
 fn data_row_width(cell_widths: &[f32; DATA_COLS]) -> f32 {
-    cell_widths.iter().sum::<f32>() + DATA_CELL_GAP * (DATA_COLS as f32 - 1.0)
+    DATA_CELL_GAP.mul_add(DATA_COLS as f32 - 1.0, cell_widths.iter().sum::<f32>())
 }
 
 // Compact (2-player) panel geometry: small graph + one inline readout line.
@@ -303,7 +303,7 @@ fn build_graph(
         if s.is_empty() {
             continue;
         }
-        let x = gx + i as f32 * col_w;
+        let x = (i as f32).mul_add(col_w, gx);
         let mut drawn = 0.0f32;
         segment(
             actors,
@@ -433,7 +433,7 @@ fn ref_line(
     }
     let [gx, baseline, gw, gh] = bounds;
     let px_per_us = gh / scale_us.max(1) as f32;
-    let y = baseline - value_us as f32 * px_per_us;
+    let y = (value_us as f32).mul_add(-px_per_us, baseline);
     actors.push(quad(gx, y - 0.5, gw, 1.0, color, DEBUG_OVERLAY_Z + 3));
 }
 
@@ -456,7 +456,7 @@ fn build_histogram(
             continue;
         }
         let h = (count as f32 / peak) * hh;
-        let x = hx + i as f32 * col_w;
+        let x = (i as f32).mul_add(col_w, hx);
         actors.push(quad(
             x,
             baseline - h,
@@ -716,8 +716,8 @@ pub fn push(
     actors.push(quad(
         layout.graph_x - PANEL_PAD,
         layout.graph_y - PANEL_PAD,
-        layout.graph_w + PANEL_PAD * 2.0,
-        layout.graph_h + PANEL_PAD * 2.0,
+        PANEL_PAD.mul_add(2.0, layout.graph_w),
+        PANEL_PAD.mul_add(2.0, layout.graph_h),
         [0.0, 0.0, 0.0, 0.55],
         DEBUG_OVERLAY_Z,
     ));
@@ -725,8 +725,8 @@ pub fn push(
         actors.push(quad(
             layout.hist_x - PANEL_PAD,
             layout.hist_y - PANEL_PAD,
-            layout.hist_w + PANEL_PAD * 2.0,
-            layout.hist_h + PANEL_PAD * 2.0,
+            PANEL_PAD.mul_add(2.0, layout.hist_w),
+            PANEL_PAD.mul_add(2.0, layout.hist_h),
             [0.0, 0.0, 0.0, 0.55],
             DEBUG_OVERLAY_Z,
         ));
@@ -781,8 +781,8 @@ pub fn push(
         actors.push(quad(
             layout.graph_x - PANEL_PAD,
             layout.data_y - PANEL_PAD,
-            layout.graph_w + PANEL_PAD * 2.0,
-            data_h + PANEL_PAD * 2.0,
+            PANEL_PAD.mul_add(2.0, layout.graph_w),
+            PANEL_PAD.mul_add(2.0, data_h),
             [0.0, 0.0, 0.0, 0.55],
             DEBUG_OVERLAY_Z,
         ));
@@ -941,10 +941,12 @@ mod tests {
         let one = data_cell_width("abc");
         let two = data_cell_width("abc\nlonger line");
         assert!(two > one);
-        assert!((data_cell_width("abc") - (3.0 * DATA_CELL_CHAR_W + DATA_CELL_PAD)).abs() < 0.01);
+        assert!(
+            (data_cell_width("abc") - 3.0f32.mul_add(DATA_CELL_CHAR_W, DATA_CELL_PAD)).abs() < 0.01
+        );
         // The row width is the cells plus the inter-cell gaps.
         let widths = [10.0, 20.0, 30.0, 40.0, 50.0];
-        assert!((data_row_width(&widths) - (150.0 + 4.0 * DATA_CELL_GAP)).abs() < 0.01);
+        assert!((data_row_width(&widths) - 4.0f32.mul_add(DATA_CELL_GAP, 150.0)).abs() < 0.01);
     }
 
     #[test]
@@ -952,7 +954,7 @@ mod tests {
         // Empty block has no height; otherwise one cap plus one pitch per extra line.
         assert_eq!(data_block_h(0), 0.0);
         assert_eq!(data_block_h(1), DATA_LINE_CAP);
-        assert!((data_block_h(6) - (DATA_LINE_CAP + DATA_LINE_PITCH * 5.0)).abs() < 0.01);
+        assert!((data_block_h(6) - DATA_LINE_PITCH.mul_add(5.0, DATA_LINE_CAP)).abs() < 0.01);
         // Fewer lines → a shorter block (e.g. minimal style's 5-line cell vs detailed's 6).
         assert!(data_block_h(5) < data_block_h(6));
         // Line counting: newlines + 1, empty string → 0.

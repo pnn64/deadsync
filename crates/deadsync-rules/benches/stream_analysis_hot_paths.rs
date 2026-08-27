@@ -497,8 +497,8 @@ fn usize_checksum(values: &[usize]) -> u64 {
 fn segment_checksum(segments: &[StreamSegment]) -> u64 {
     segments.iter().fold(0u64, |checksum, segment| {
         checksum.rotate_left(9)
-            ^ (segment.start() as u64)
-            ^ (segment.end() as u64).rotate_left(23)
+            ^ u64::from(segment.start())
+            ^ u64::from(segment.end()).rotate_left(23)
             ^ u64::from(segment.is_break()).rotate_left(47)
     })
 }

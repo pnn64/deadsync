@@ -1,9 +1,9 @@
 //! A tiny, dependency-free XML reader scoped to the well-formed, machine-written
-//! documents DeadSync needs to import (ITGmania `Stats.xml`). It is **not** a
+//! documents `DeadSync` needs to import (`ITGmania` `Stats.xml`). It is **not** a
 //! general-purpose XML parser: it understands elements, attributes, text,
 //! self-closing tags, comments, CDATA, the `<?xml ?>` declaration, and the five
 //! predefined entities plus numeric character references. That is sufficient for
-//! ITGmania's output and keeps us from pulling in a heavyweight XML dependency.
+//! `ITGmania`'s output and keeps us from pulling in a heavyweight XML dependency.
 
 /// A parsed XML element node.
 #[derive(Debug, Clone, Default)]

@@ -46,7 +46,7 @@ pub enum PadBackend {
     FreeBsdEvdev,
     #[cfg(target_os = "macos")]
     MacOsIohid,
-    /// StepManiaX pad via the RustManiaX SDK (all platforms).
+    /// `StepManiaX` pad via the `RustManiaX` SDK (all platforms).
     Smx,
 }
 
@@ -355,7 +355,7 @@ pub fn emit_hat_axis_edges(
     horizontal: bool,
     value: i32,
 ) {
-    let first = [0, 2][horizontal as usize];
+    let first = [0, 2][usize::from(horizontal)];
     let want = [value < 0, value > 0];
     for (offset, &pressed) in want.iter().enumerate() {
         let index = first + offset;

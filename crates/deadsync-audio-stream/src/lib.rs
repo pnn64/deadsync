@@ -571,7 +571,9 @@ fn push_music_block(
         }
         if control.generation.load(Ordering::Acquire) != timing.generation {
             let remaining_frames = (block.len() - sample_offset) / out_channels;
-            return Ok(next_music_sec + remaining_frames as f64 * timing.music_sec_per_frame);
+            return Ok(
+                (remaining_frames as f64).mul_add(timing.music_sec_per_frame, next_music_sec)
+            );
         }
         if backpressure.wait_before_push(writer, timing.generation, control) {
             continue;
@@ -591,7 +593,7 @@ fn push_music_block(
         backpressure.note_pushed(writer, timing.generation);
         let chunk_frames = pushed / out_channels;
         sample_offset += pushed;
-        next_music_sec += chunk_frames as f64 * timing.music_sec_per_frame;
+        next_music_sec = (chunk_frames as f64).mul_add(timing.music_sec_per_frame, next_music_sec);
     }
     Ok(next_music_sec)
 }
@@ -1136,7 +1138,8 @@ fn music_decoder_thread_loop(
                     if drop_samples > 0 {
                         direct = &direct[drop_samples..];
                         preroll_out_frames = preroll_out_frames.saturating_sub(drop_frames as u64);
-                        next_music_output_sec += drop_frames as f64 * music_sec_per_frame;
+                        next_music_output_sec = (drop_frames as f64)
+                            .mul_add(music_sec_per_frame, next_music_output_sec);
                     }
                 }
                 let mut finished = false;
@@ -1253,7 +1256,8 @@ fn music_decoder_thread_loop(
                     if drop_samples > 0 {
                         drop_front_samples(&mut out_tmp, drop_samples);
                         preroll_out_frames = preroll_out_frames.saturating_sub(drop_frames as u64);
-                        next_music_output_sec += drop_frames as f64 * music_sec_per_frame;
+                        next_music_output_sec = (drop_frames as f64)
+                            .mul_add(music_sec_per_frame, next_music_output_sec);
                     }
                 }
                 let finished = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
@@ -1345,7 +1349,8 @@ fn music_decoder_thread_loop(
                         let drop_samples = drop_frames * out_ch;
                         if drop_samples > 0 {
                             drop_front_samples(&mut out_tmp, drop_samples);
-                            next_music_output_sec += drop_frames as f64 * music_sec_per_frame;
+                            next_music_output_sec = (drop_frames as f64)
+                                .mul_add(music_sec_per_frame, next_music_output_sec);
                         }
                     }
                     let _ = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
@@ -1567,9 +1572,9 @@ mod tests {
             assert_eq!(
                 *slice,
                 [
-                    channel as f32 * 100.0 + 2.0,
-                    channel as f32 * 100.0 + 3.0,
-                    channel as f32 * 100.0 + 4.0
+                    (channel as f32).mul_add(100.0, 2.0),
+                    (channel as f32).mul_add(100.0, 3.0),
+                    (channel as f32).mul_add(100.0, 4.0)
                 ]
             );
         }
@@ -1595,7 +1600,7 @@ mod tests {
 
         assert_eq!(frames, 6 * SAMPLE_RATE as usize);
         assert!((music_sec_per_frame - 1.5 / f64::from(SAMPLE_RATE)).abs() <= f64::EPSILON);
-        assert!((-9.0 + frames as f64 * music_sec_per_frame).abs() <= 1e-12);
+        assert!((frames as f64).mul_add(music_sec_per_frame, -9.0).abs() <= 1e-12);
     }
 
     #[test]

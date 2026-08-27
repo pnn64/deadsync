@@ -152,7 +152,7 @@ fn measure_convert(input: &[f32], convert: fn(f32) -> i16) -> BenchResult {
         for (dst, &src) in out.iter_mut().zip(black_box(input)) {
             *dst = convert(src);
         }
-        checksum = checksum.rotate_left(5) ^ out[run % out.len()] as u16 as u64;
+        checksum = checksum.rotate_left(5) ^ u64::from(out[run % out.len()] as u16);
         black_box(&out);
     }
     BenchResult {
@@ -180,7 +180,7 @@ fn measure_resampler_output(
     let started = Instant::now();
     for run in 0..MEASURE_RUNS {
         black_box(write(black_box(input), FRAMES, &mut out));
-        checksum = checksum.rotate_left(5) ^ out[run % out.len()] as u16 as u64;
+        checksum = checksum.rotate_left(5) ^ u64::from(out[run % out.len()] as u16);
         black_box(&out);
     }
     BenchResult {
@@ -212,7 +212,7 @@ fn measure_sfx_collect(packet: &[i16], samples: usize, reserve: bool) -> BenchRe
             let copy = packet.len().min(samples - out.len());
             out.extend_from_slice(&packet[..copy]);
         }
-        black_box(out[out.len() - 1]) as u16 as u64
+        u64::from(black_box(out[out.len() - 1]) as u16)
     };
     for _ in 0..100 {
         black_box(run());
@@ -391,10 +391,10 @@ fn main() {
     );
 
     let correlate = (0..360)
-        .map(|index| ((index as f32 * 0.071).sin() * 0.7) + ((index % 17) as f32 * 0.001))
+        .map(|index| ((index % 17) as f32).mul_add(0.001, (index as f32 * 0.071).sin() * 0.7))
         .collect::<Vec<_>>();
     let mut search = (0..720)
-        .map(|index| ((index as f32 * 0.069).sin() * 0.7) + ((index % 13) as f32 * 0.001))
+        .map(|index| ((index % 13) as f32).mul_add(0.001, (index as f32 * 0.069).sin() * 0.7))
         .collect::<Vec<_>>();
     search[211..211 + correlate.len()].copy_from_slice(&correlate);
     print_pair(
