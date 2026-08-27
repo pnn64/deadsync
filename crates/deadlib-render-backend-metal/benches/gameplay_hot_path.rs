@@ -232,6 +232,7 @@ impl MeshLookupBench {
         Self {
             frame: RenderFrame {
                 clear_color: [0.0; 4],
+                render_targets: Vec::new(),
                 cameras: Vec::new(),
                 sprite_instances: Vec::new(),
                 mesh_vertices: Vec::new(),

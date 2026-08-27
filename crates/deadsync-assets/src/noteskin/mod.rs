@@ -473,7 +473,7 @@ mod tests {
         ];
 
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/noteskins");
-        let names = noteskin_itg::discover_skins(&[root.clone()], "pump");
+        let names = noteskin_itg::discover_skins(std::slice::from_ref(&root), "pump");
         assert_eq!(names, PUMP_SKINS);
         for num_cols in [5, 10] {
             let style = Style {

@@ -1,10 +1,6 @@
 use deadlib_render_core::{BackendType, ClockDomainTrace, PresentModeTrace};
 use deadsync_config::frame_pacing::StutterSampleRing;
-use deadsync_simfile::song_search::{SongSearchCandidate, song_search_difficulties_text};
 use deadsync_theme_simply_love::i18n;
-use deadsync_theme_simply_love::screens::components::select_music::select_music_menu::{
-    SongSearchResultsState, benchmark_song_search_frame_text,
-};
 use deadsync_theme_simply_love::screens::components::shared::frame_stats_overlay::{
     benchmark_build_legacy as benchmark_frame_stats_build_legacy, push as push_frame_stats,
 };
@@ -29,7 +25,7 @@ use deadsync_theme_simply_love::screens::select_color::{
 };
 use deadsync_theme_simply_love::screens::select_mode::SelectModeTextBenchmark;
 use deadsync_theme_simply_love::screens::select_music::{
-    benchmark_info_text_front_cached, benchmark_info_text_hashed, benchmark_wheel_song_meta,
+    benchmark_info_text_front_cached, benchmark_info_text_hashed,
 };
 use deadsync_theme_simply_love::screens::test_lights::LightsTextBenchmark;
 use deadsync_theme_simply_love::views::{
@@ -48,7 +44,6 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 
 const PROFILE_OPS: usize = 500_000;
 const NUMERIC_OPS: usize = 500_000;
-const SEARCH_FRAME_OPS: usize = 100_000;
 const TIMER_OPS: usize = 500_000;
 const TRANSLATION_OPS: usize = 500_000;
 const PRACTICE_OPS: usize = 300_000;
@@ -65,9 +60,6 @@ const SCORE_PICKER_OPS: usize = 50_000;
 const LIGHTS_TEXT_OPS: usize = 300_000;
 const OPTIONS_SEARCH_OPS: usize = 200_000;
 const QR_OVERLAY_OPS: usize = 25_000;
-const SONG_SEARCH_WHEEL_SLOTS: usize = 12;
-const SONG_SEARCH_WHEEL_FOCUS_SLOT: usize = SONG_SEARCH_WHEEL_SLOTS / 2 - 1;
-const DETAIL_LABELS: [&str; 5] = ["Pack", "Song", "Subtitle", "BPMs", "Difficulties"];
 
 struct CountingAlloc {
     enabled: AtomicBool,
@@ -410,77 +402,6 @@ fn legacy_eval_numeric_text(percent: f64, ex: f64, counts: &[u32; 8]) -> usize {
     bytes
 }
 
-fn legacy_song_search_frame_text(
-    results: &SongSearchResultsState,
-    raw_query: &str,
-    chart_type: &str,
-) -> usize {
-    let query = format!("\"{raw_query}\"");
-    let result_count = format!("{} Results Found", results.candidates.len());
-    let total_items = results.candidates.len() + 1;
-    let mut bytes = query.len() + result_count.len();
-
-    for slot_idx in 0..SONG_SEARCH_WHEEL_SLOTS {
-        let offset = slot_idx as isize - SONG_SEARCH_WHEEL_FOCUS_SLOT as isize;
-        let row_idx =
-            ((results.selected_index as isize + offset).rem_euclid(total_items as isize)) as usize;
-        let text = results.candidates.get(row_idx).map_or_else(
-            || "Exit".to_string(),
-            |candidate| candidate.song.display_title(false).to_string(),
-        );
-        bytes += text.len();
-        black_box(text);
-    }
-
-    if let Some(candidate) = results.candidates.get(results.selected_index) {
-        let details = [
-            candidate.pack_name.to_string(),
-            candidate.song.display_title(false).to_string(),
-            candidate.song.display_subtitle(false).to_string(),
-            candidate.song.formatted_chart_display_bpm(None),
-            song_search_difficulties_text(candidate.song.as_ref(), chart_type),
-        ];
-        for (label, value) in DETAIL_LABELS.into_iter().zip(&details) {
-            let label_text = format!("{label}:");
-            let value_text = value.clone();
-            bytes += label_text.len() + value_text.len();
-            black_box(label_text);
-            black_box(value_text);
-        }
-        black_box(details);
-    }
-    black_box(query);
-    black_box(result_count);
-    bytes
-}
-
-fn song_search_fixture() -> SongSearchResultsState {
-    let songs = benchmark_wheel_song_meta(12);
-    let pack_name: Arc<str> = Arc::from("Benchmark Pack");
-    let candidates = songs
-        .songs()
-        .iter()
-        .map(|song| SongSearchCandidate {
-            pack_name: Arc::clone(&pack_name),
-            title: Arc::from(song.display_title(false)),
-            subtitle: Arc::from(song.display_subtitle(false)),
-            bpm: Arc::from(song.formatted_chart_display_bpm(None)),
-            difficulties: Arc::from(song_search_difficulties_text(song, "dance-single")),
-            song: Arc::clone(song),
-        })
-        .collect();
-    SongSearchResultsState {
-        query_label: Arc::from("\"benchmark\""),
-        result_count_label: Arc::from("12 Results Found"),
-        candidates,
-        selected_index: 4,
-        prev_selected_index: 3,
-        last_move_dir: 1,
-        focus_anim_elapsed: 0.1,
-        input_lock: 0.0,
-    }
-}
-
 struct LegacyTimerText {
     second: u64,
     text: Arc<str>,
@@ -610,22 +531,6 @@ fn main() {
         &new_numeric,
     );
 
-    let results = song_search_fixture();
-    let expected = legacy_song_search_frame_text(&results, "benchmark", "dance-single");
-    assert_eq!(expected, benchmark_song_search_frame_text(&results));
-    let old_search = measure(SEARCH_FRAME_OPS, 100, || {
-        legacy_song_search_frame_text(black_box(&results), "benchmark", "dance-single") as u64
-    });
-    let new_search = measure(SEARCH_FRAME_OPS, 100, || {
-        benchmark_song_search_frame_text(black_box(&results)) as u64
-    });
-    print_pair(
-        "3. song-search frame text",
-        SEARCH_FRAME_OPS,
-        &old_search,
-        &new_search,
-    );
-
     let mut old_second = 0_u64;
     let mut old_timer = LegacyTimerText::new(old_second);
     let old_timer_result = measure(TIMER_OPS, 500, || {
@@ -641,7 +546,7 @@ fn main() {
         text_checksum(new_timer.text())
     });
     print_pair(
-        "4. retained elapsed timer text",
+        "3. retained elapsed timer text",
         TIMER_OPS,
         &old_timer_result,
         &new_timer_result,
@@ -666,7 +571,7 @@ fn main() {
         text_checksum(&new_translation)
     });
     print_pair(
-        "5. translation into retained buffer",
+        "4. translation into retained buffer",
         TRANSLATION_OPS,
         &old_translation_result,
         &new_translation_result,
@@ -717,7 +622,7 @@ fn main() {
         text_checksum(&new_edit)
     });
     print_pair(
-        "6. Practice edit-info rebuild",
+        "5. Practice edit-info rebuild",
         PRACTICE_OPS,
         &old_edit_result,
         &new_edit_result,
@@ -734,7 +639,7 @@ fn main() {
         texts_checksum(benchmark_info_text_front_cached())
     });
     print_pair(
-        "7. Select Music stable info text",
+        "6. Select Music stable info text",
         INFO_TEXT_OPS,
         &old_info,
         &new_info,
@@ -745,7 +650,7 @@ fn main() {
     let old_mappings = measure(MAPPING_TEXT_OPS, 100, || mappings.legacy_checksum());
     let new_mappings = measure(MAPPING_TEXT_OPS, 100, || mappings.retained_checksum());
     print_pair(
-        "8. retained mappings labels",
+        "7. retained mappings labels",
         MAPPING_TEXT_OPS,
         &old_mappings,
         &new_mappings,
@@ -763,7 +668,7 @@ fn main() {
         text_checksum(&benchmark_timing_text_current(black_box(timing)))
     });
     print_reduced_pair(
-        "9. one-pass timing telemetry",
+        "8. one-pass timing telemetry",
         TIMING_TEXT_OPS,
         &old_timing,
         &new_timing,
@@ -792,7 +697,7 @@ fn main() {
         new_actors.len() as u64
     });
     print_pair(
-        "10. direct overlay actor append",
+        "9. direct overlay actor append",
         OVERLAY_ACTOR_OPS,
         &old_overlay,
         &new_overlay,
@@ -811,7 +716,7 @@ fn main() {
         checksum
     });
     print_pair(
-        "11. stack/direct Select Color wheel",
+        "10. stack/direct Select Color wheel",
         SELECT_COLOR_WHEEL_OPS,
         &old_wheel,
         &new_wheel,
@@ -829,7 +734,7 @@ fn main() {
         visible_stutter_checksum(&stutter_ring.visible(black_box(11.25)))
     });
     print_pair(
-        "12. fixed stutter filtering",
+        "11. fixed stutter filtering",
         STUTTER_FILTER_OPS,
         &old_stutter_filter,
         &new_stutter_filter,
@@ -867,7 +772,7 @@ fn main() {
         new_frame_actors.len() as u64
     });
     print_reduced_pair(
-        "13. direct frame-stats actor append",
+        "12. direct frame-stats actor append",
         FRAME_STATS_OVERLAY_OPS,
         &old_frame_overlay,
         &new_frame_overlay,
@@ -882,7 +787,7 @@ fn main() {
         benchmark_pad_text_current(&mut new_pad_text)
     });
     print_pair(
-        "14. stack/inline pad frame data",
+        "13. stack/inline pad frame data",
         PAD_TEXT_OPS,
         &old_pad,
         &new_pad,
@@ -897,7 +802,7 @@ fn main() {
         new_select_mode_text.current_frame(1)
     });
     print_pair(
-        "15. retained Select Mode text",
+        "14. retained Select Mode text",
         SELECT_MODE_TEXT_OPS,
         &old_select_mode,
         &new_select_mode,
@@ -913,7 +818,7 @@ fn main() {
         picker.current_frame(&mut new_picker_actors, 7)
     });
     print_pair(
-        "16. retained/direct score-pack rows",
+        "15. retained/direct score-pack rows",
         SCORE_PICKER_OPS,
         &old_picker,
         &new_picker,
@@ -924,7 +829,7 @@ fn main() {
     let mut new_lights_text = LightsTextBenchmark::new();
     let new_lights = measure(LIGHTS_TEXT_OPS, 300, || new_lights_text.current_frame());
     print_pair(
-        "17. retained Test Lights text",
+        "16. retained Test Lights text",
         LIGHTS_TEXT_OPS,
         &old_lights,
         &new_lights,
@@ -934,7 +839,7 @@ fn main() {
     let old_options_search = measure(OPTIONS_SEARCH_OPS, 200, || search.legacy_frame());
     let new_options_search = measure(OPTIONS_SEARCH_OPS, 200, || search.current_frame());
     print_pair(
-        "18. prepared options-search rows",
+        "17. prepared options-search rows",
         OPTIONS_SEARCH_OPS,
         &old_options_search,
         &new_options_search,
@@ -946,7 +851,7 @@ fn main() {
     let mut new_qr_actors = Vec::with_capacity(24);
     let new_qr = measure(QR_OVERLAY_OPS, 25, || qr.current_frame(&mut new_qr_actors));
     print_reduced_pair(
-        "19. shared/direct QR-login overlay",
+        "18. shared/direct QR-login overlay",
         QR_OVERLAY_OPS,
         &old_qr,
         &new_qr,

@@ -643,6 +643,7 @@ fn boundary_actor(index: usize) -> Actor {
         rot_x_deg: 0.0,
         rot_y_deg: 0.0,
         rot_z_deg: (index % 360) as f32,
+        skew: [0.0; 2],
         local_offset: [0.0, 0.0],
         local_offset_rot_sin_cos: [0.0, 1.0],
         texcoordvelocity: None,
@@ -1700,7 +1701,7 @@ fn camera_handoff_frame(kind: CameraHandoffKind, actors: &mut Vec<Actor>, view_p
         CameraHandoffKind::WideActorScope => {
             actors.push(Actor::CameraPush { view_proj });
             black_box(actors.last());
-            actors.truncate(0);
+            actors.clear();
         }
         CameraHandoffKind::DirectMatrix => {
             black_box(&view_proj);

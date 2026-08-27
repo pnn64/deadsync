@@ -17539,7 +17539,7 @@ mod tests {
             banner,
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
                 crate::SimplyLoveMediaRequest::Banner(Some(path))
-            )) if path == PathBuf::from("song-banner.png")
+            )) if path == Path::new("song-banner.png")
         ));
         let Some(super::MediaPathSource::SongBanner(retained)) =
             state.last_requested_banner_source.as_ref()
@@ -17558,7 +17558,7 @@ mod tests {
             cdtitle,
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
                 crate::SimplyLoveMediaRequest::CdTitle(Some(path))
-            )) if path == PathBuf::from("song-cdtitle.png")
+            )) if path == Path::new("song-cdtitle.png")
         ));
         let Some(super::MediaPathSource::SongCdTitle(retained)) =
             state.last_requested_cdtitle_source.as_ref()
@@ -17643,7 +17643,7 @@ mod tests {
             effect,
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
                 crate::SimplyLoveMediaRequest::PackBanner(Some(path))
-            )) if path == PathBuf::from("folder-stats.png")
+            )) if path == Path::new("folder-stats.png")
         ));
         let Some(super::MediaPathSource::Shared(retained)) =
             state.last_requested_folder_stats_banner_source.as_ref()
@@ -18660,7 +18660,7 @@ mod tests {
             action.effect,
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 deadsync_theme::AudioRequest::PlayMusic { path, .. }
-            )) if path == PathBuf::from("preview.ogg")
+            )) if path == Path::new("preview.ogg")
         ));
         assert!(!state.preview_music_muted);
         assert_eq!(current_preview_path(&state), Some(Path::new("preview.ogg")));

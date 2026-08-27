@@ -23,6 +23,15 @@ impl Default for ContainerAttributes {
     }
 }
 
+fn parse_string_literal(val: &Literal) -> Result<String> {
+    let val_string = val.to_string();
+    if val_string.starts_with('"') && val_string.ends_with('"') {
+        Ok(val_string[1..val_string.len() - 1].to_string())
+    } else {
+        Err(Error::custom_at("Should be a literal str", val.span()))
+    }
+}
+
 impl FromAttribute for ContainerAttributes {
     fn parse(group: &Group) -> Result<Option<Self>> {
         let attributes = match parse_tagged_attribute(group, "bincode")? {
@@ -32,66 +41,34 @@ impl FromAttribute for ContainerAttributes {
         let mut result = Self::default();
         for attribute in attributes {
             match attribute {
-                ParsedAttribute::Property(key, val) if key.to_string() == "crate" => {
-                    let val_string = val.to_string();
-                    if val_string.starts_with('"') && val_string.ends_with('"') {
-                        result.crate_name = val_string[1..val_string.len() - 1].to_string();
-                    } else {
-                        return Err(Error::custom_at("Should be a literal str", val.span()));
-                    }
-                }
-                ParsedAttribute::Property(key, val) if key.to_string() == "bounds" => {
-                    let val_string = val.to_string();
-                    if val_string.starts_with('"') && val_string.ends_with('"') {
-                        result.bounds =
-                            Some((val_string[1..val_string.len() - 1].to_string(), val));
-                    } else {
-                        return Err(Error::custom_at("Should be a literal str", val.span()));
-                    }
-                }
-                ParsedAttribute::Property(key, val) if key.to_string() == "decode_bounds" => {
-                    let val_string = val.to_string();
-                    if val_string.starts_with('"') && val_string.ends_with('"') {
-                        result.decode_bounds =
-                            Some((val_string[1..val_string.len() - 1].to_string(), val));
-                    } else {
-                        return Err(Error::custom_at("Should be a literal str", val.span()));
-                    }
-                }
-                ParsedAttribute::Property(key, val) if key.to_string() == "decode_context" => {
-                    let val_string = val.to_string();
-                    if val_string.starts_with('"') && val_string.ends_with('"') {
-                        result.decode_context =
-                            Some((val_string[1..val_string.len() - 1].to_string(), val));
-                    } else {
-                        return Err(Error::custom_at("Should be a literal str", val.span()));
-                    }
-                }
-                ParsedAttribute::Property(key, val) if key.to_string() == "encode_bounds" => {
-                    let val_string = val.to_string();
-                    if val_string.starts_with('"') && val_string.ends_with('"') {
-                        result.encode_bounds =
-                            Some((val_string[1..val_string.len() - 1].to_string(), val));
-                    } else {
-                        return Err(Error::custom_at("Should be a literal str", val.span()));
-                    }
-                }
-                ParsedAttribute::Property(key, val)
-                    if key.to_string() == "borrow_decode_bounds" =>
-                {
-                    let val_string = val.to_string();
-                    if val_string.starts_with('"') && val_string.ends_with('"') {
-                        result.borrow_decode_bounds =
-                            Some((val_string[1..val_string.len() - 1].to_string(), val));
-                    } else {
-                        return Err(Error::custom_at("Should be a literal str", val.span()));
+                ParsedAttribute::Property(key, val) => {
+                    let key_string = key.to_string();
+                    match key_string.as_str() {
+                        "crate" => {
+                            result.crate_name = parse_string_literal(&val)?;
+                        }
+                        "bounds" => {
+                            result.bounds = Some((parse_string_literal(&val)?, val));
+                        }
+                        "decode_bounds" => {
+                            result.decode_bounds = Some((parse_string_literal(&val)?, val));
+                        }
+                        "decode_context" => {
+                            result.decode_context = Some((parse_string_literal(&val)?, val));
+                        }
+                        "encode_bounds" => {
+                            result.encode_bounds = Some((parse_string_literal(&val)?, val));
+                        }
+                        "borrow_decode_bounds" => {
+                            result.borrow_decode_bounds = Some((parse_string_literal(&val)?, val));
+                        }
+                        _ => {
+                            return Err(Error::custom_at("Unknown field attribute", key.span()));
+                        }
                     }
                 }
                 ParsedAttribute::Tag(i) => {
                     return Err(Error::custom_at("Unknown field attribute", i.span()))
-                }
-                ParsedAttribute::Property(key, _) => {
-                    return Err(Error::custom_at("Unknown field attribute", key.span()))
                 }
             }
         }

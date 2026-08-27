@@ -8440,7 +8440,7 @@ mod tests {
 
     #[test]
     fn presized_note_hide_players_match_growth_reference() {
-        let hides = vec![
+        let hides = [
             (1, 7, -4.0, 1.0),
             (0, 2, 40.0, 44.0),
             (0, 2, 42.0, 48.0),

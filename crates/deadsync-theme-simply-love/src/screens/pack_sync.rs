@@ -113,7 +113,7 @@ struct OverlayText {
 
 pub(crate) enum OverlayState {
     Hidden,
-    Visible(OverlayStateData),
+    Visible(Box<OverlayStateData>),
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -635,7 +635,7 @@ pub(crate) fn begin(
     let scroll_index = 0;
     let text = build_overlay_text(&pack_name, summary, min_confidence, phase, scroll_index);
 
-    *state = OverlayState::Visible(OverlayStateData {
+    *state = OverlayState::Visible(Box::new(OverlayStateData {
         rows,
         summary,
         text,
@@ -647,7 +647,7 @@ pub(crate) fn begin(
         owner,
         current_row: None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
-    });
+    }));
     Some(crate::SimplyLoveSyncRequest::StartAnalysis {
         owner,
         targets: request_targets,
@@ -1286,7 +1286,7 @@ mod tests {
     use deadlib_present::actors::TextContent;
     use deadsync_core::input::InputSource;
     use deadsync_input::{InputEvent, VirtualAction};
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::time::Instant;
 
     fn pack_row(bias_ms: f64, confidence: f64) -> RowState {
@@ -1317,7 +1317,7 @@ mod tests {
             eligible: 1,
             ..Summary::default()
         };
-        OverlayState::Visible(OverlayStateData {
+        OverlayState::Visible(Box::new(OverlayStateData {
             rows,
             summary,
             text: build_overlay_text("Test Pack", summary, 0.80, phase, 0),
@@ -1329,7 +1329,7 @@ mod tests {
             owner: crate::SimplyLoveSyncOwner::SelectMusicPack,
             current_row: None,
             menu_lr_chord: crate::screens::input::MenuLrChordTracker::default(),
-        })
+        }))
     }
 
     fn press(action: VirtualAction) -> InputEvent {
@@ -1570,7 +1570,7 @@ mod tests {
                 )),
             ] if *path == "assets/sounds/start.ogg"
                 && matches!(changes.as_slice(), [change]
-                    if change.simfile_path == PathBuf::from("Songs/Test/song.ssc")
+                    if change.simfile_path == Path::new("Songs/Test/song.ssc")
                         && (change.delta_seconds + 0.013).abs() <= f32::EPSILON)
         ));
         assert_eq!(effects.capacity(), 8);
