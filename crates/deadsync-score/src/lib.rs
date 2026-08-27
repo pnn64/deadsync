@@ -318,7 +318,8 @@ impl AcScoreCacheState {
             .map_or_else(HashSet::new, |scores| {
                 scores
                     .iter()
-                    .filter(|&(_hash, ac)| ac.itg.is_some()).map(|(hash, _ac)| hash.clone())
+                    .filter(|&(_hash, ac)| ac.itg.is_some())
+                    .map(|(hash, _ac)| hash.clone())
                     .collect()
             })
     }
