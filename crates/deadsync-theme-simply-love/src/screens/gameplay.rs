@@ -90,7 +90,7 @@ use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingSegments;
 use deadsync_score as score_data;
-use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4 as Vector4};
+use glam::{Mat2 as Matrix2, Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
@@ -7549,6 +7549,51 @@ fn song_lua_overlay_parent_uses_center_origin(
     ) && (parent_axis - 0.5 * overlay_space_axis).abs() <= 0.01
 }
 
+#[inline(always)]
+fn song_lua_overlay_linear_2d(state: SongLuaOverlayState) -> Matrix2 {
+    let [scale_x, scale_y] = song_lua_overlay_axis_scale(state);
+    let skew_x = Matrix2::from_cols_array(&[1.0, 0.0, state.skew_x, 1.0]);
+    let skew_y = Matrix2::from_cols_array(&[1.0, state.skew_y, 0.0, 1.0]);
+    Matrix2::from_angle(state.rot_z_deg.to_radians())
+        * skew_x
+        * skew_y
+        * Matrix2::from_diagonal(Vector2::new(scale_x, scale_y))
+}
+
+fn song_lua_overlay_set_linear_2d(
+    state: &mut SongLuaOverlayState,
+    linear: Matrix2,
+    z_scale: f32,
+) -> bool {
+    const EPS: f32 = 1.0e-6;
+    if !linear.is_finite() || !z_scale.is_finite() {
+        return false;
+    }
+    let scale_x = linear.x_axis.length();
+    if scale_x <= EPS {
+        return false;
+    }
+    let rotation = linear.x_axis.y.atan2(linear.x_axis.x);
+    let local = Matrix2::from_angle(-rotation) * linear;
+    let scale_y = local.y_axis.y;
+    if scale_y.abs() <= EPS || local.x_axis.y.abs() > 0.001 {
+        return false;
+    }
+
+    state.rot_z_deg = rotation.to_degrees();
+    state.skew_x = local.y_axis.x / scale_y;
+    state.skew_y = 0.0;
+    state.basezoom = 1.0;
+    state.zoom = 1.0;
+    state.basezoom_x = scale_x;
+    state.zoom_x = 1.0;
+    state.basezoom_y = scale_y;
+    state.zoom_y = 1.0;
+    state.basezoom_z = z_scale;
+    state.zoom_z = 1.0;
+    true
+}
+
 fn song_lua_overlay_compose_state(
     parent_kind: &SongLuaOverlayKind,
     parent: SongLuaOverlayState,
@@ -7557,9 +7602,8 @@ fn song_lua_overlay_compose_state(
     overlay_space_height: f32,
 ) -> SongLuaOverlayState {
     let [parent_scale_x, parent_scale_y] = song_lua_overlay_axis_scale(parent);
-    let (sin_z, cos_z) = parent.rot_z_deg.to_radians().sin_cos();
     let epsilon = 0.01;
-    let local_x = if matches!(
+    let raw_local_x = if matches!(
         parent_kind,
         SongLuaOverlayKind::Actor
             | SongLuaOverlayKind::ActorFrame
@@ -7573,8 +7617,8 @@ fn song_lua_overlay_compose_state(
         0.0
     } else {
         child.x
-    } * parent_scale_x;
-    let local_y = if matches!(
+    };
+    let raw_local_y = if matches!(
         parent_kind,
         SongLuaOverlayKind::Actor
             | SongLuaOverlayKind::ActorFrame
@@ -7588,9 +7632,50 @@ fn song_lua_overlay_compose_state(
         0.0
     } else {
         child.y
-    } * parent_scale_y;
-    child.x = parent.x + local_x * cos_z - local_y * sin_z;
-    child.y = parent.y + local_x * sin_z + local_y * cos_z;
+    };
+    let local_x = raw_local_x * parent_scale_x;
+    let local_y = raw_local_y * parent_scale_y;
+    let affine_2d = parent.rot_x_deg.abs() <= f32::EPSILON
+        && parent.rot_y_deg.abs() <= f32::EPSILON
+        && child.rot_x_deg.abs() <= f32::EPSILON
+        && child.rot_y_deg.abs() <= f32::EPSILON
+        && (parent.skew_x.abs() > f32::EPSILON
+            || parent.skew_y.abs() > f32::EPSILON
+            || child.skew_x.abs() > f32::EPSILON
+            || child.skew_y.abs() > f32::EPSILON);
+    if affine_2d {
+        let parent_linear = song_lua_overlay_linear_2d(parent);
+        let child_linear = song_lua_overlay_linear_2d(child);
+        let position = Vector2::new(parent.x, parent.y)
+            + parent_linear * Vector2::new(raw_local_x, raw_local_y);
+        let z_scale = song_lua_overlay_z_scale(parent) * song_lua_overlay_z_scale(child);
+        if song_lua_overlay_set_linear_2d(&mut child, parent_linear * child_linear, z_scale) {
+            child.x = position.x;
+            child.y = position.y;
+        } else {
+            let (sin_z, cos_z) = parent.rot_z_deg.to_radians().sin_cos();
+            child.x = parent.x + local_x * cos_z - local_y * sin_z;
+            child.y = parent.y + local_x * sin_z + local_y * cos_z;
+            child.basezoom *= parent.basezoom * parent.zoom;
+            child.basezoom_x *= parent.basezoom_x * parent.zoom_x;
+            child.basezoom_y *= parent.basezoom_y * parent.zoom_y;
+            child.basezoom_z *= parent.basezoom_z * parent.zoom_z;
+            child.rot_z_deg += parent.rot_z_deg;
+            child.skew_x += parent.skew_x;
+            child.skew_y += parent.skew_y;
+        }
+    } else {
+        let (sin_z, cos_z) = parent.rot_z_deg.to_radians().sin_cos();
+        child.x = parent.x + local_x * cos_z - local_y * sin_z;
+        child.y = parent.y + local_x * sin_z + local_y * cos_z;
+        child.basezoom *= parent.basezoom * parent.zoom;
+        child.basezoom_x *= parent.basezoom_x * parent.zoom_x;
+        child.basezoom_y *= parent.basezoom_y * parent.zoom_y;
+        child.basezoom_z *= parent.basezoom_z * parent.zoom_z;
+        child.rot_z_deg += parent.rot_z_deg;
+        child.skew_x += parent.skew_x;
+        child.skew_y += parent.skew_y;
+    }
     for i in 0..4 {
         child.diffuse[i] *= parent.diffuse[i];
     }
@@ -7602,17 +7687,14 @@ fn song_lua_overlay_compose_state(
     child.visible = parent.visible && child.visible;
     child.mask_source |= parent.mask_source;
     child.mask_dest |= parent.mask_dest;
-    child.basezoom *= parent.basezoom * parent.zoom;
-    child.basezoom_x *= parent.basezoom_x * parent.zoom_x;
-    child.basezoom_y *= parent.basezoom_y * parent.zoom_y;
-    child.basezoom_z *= parent.basezoom_z * parent.zoom_z;
     child.rot_x_deg += parent.rot_x_deg;
     child.rot_y_deg += parent.rot_y_deg;
-    child.rot_z_deg += parent.rot_z_deg;
     if let Some([left, top, right, bottom]) = child.stretch_rect
         && parent.rot_x_deg.abs() <= f32::EPSILON
         && parent.rot_y_deg.abs() <= f32::EPSILON
         && parent.rot_z_deg.abs() <= f32::EPSILON
+        && parent.skew_x.abs() <= f32::EPSILON
+        && parent.skew_y.abs() <= f32::EPSILON
     {
         child.stretch_rect = Some([
             parent.x + left * parent_scale_x,
@@ -7635,6 +7717,7 @@ fn song_lua_overlay_local_states_all_into(
     out: &mut Vec<SongLuaOverlayState>,
 ) {
     let overlay_updates = song_lua_overlay_runtime_updates(overlays);
+    let update_snap = song_lua_overlay_update_snap(now, overlay_updates);
     out.clear();
     out.reserve(overlays.len());
     message_caches.resize(overlays.len(), SongLuaMessageStateCache::default());
@@ -7647,6 +7730,7 @@ fn song_lua_overlay_local_states_all_into(
             overlay_eases,
             overlay_ease_ranges,
             overlay_updates,
+            update_snap,
             &mut message_caches[idx],
         ));
     }
@@ -7663,6 +7747,7 @@ fn song_lua_overlay_local_states_into(
     out: &mut Vec<SongLuaOverlayState>,
 ) -> bool {
     let overlay_updates = song_lua_overlay_runtime_updates(overlays);
+    let update_snap = song_lua_overlay_update_snap(now, overlay_updates);
     let mut changed = false;
     if out.len() != overlays.len() {
         out.clear();
@@ -7682,6 +7767,7 @@ fn song_lua_overlay_local_states_into(
             overlay_eases,
             overlay_ease_ranges,
             overlay_updates,
+            update_snap,
             &mut message_caches[idx],
         );
         changed |= out[idx] != next;
@@ -11198,6 +11284,40 @@ fn song_lua_overlay_update_value_lerp(
     }
 }
 
+#[derive(Clone, Copy)]
+struct SongLuaOverlayUpdateSnap {
+    start_second: f32,
+    end_second: f32,
+    t: f32,
+}
+
+fn song_lua_overlay_update_snap(
+    now: f32,
+    tracks: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
+) -> Option<SongLuaOverlayUpdateSnap> {
+    use deadsync_song_lua::{
+        SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value,
+    };
+    tracks
+        .iter()
+        .filter(|track| track.target == Target::Visible)
+        .find_map(|track| {
+            let next = track.samples.partition_point(|sample| sample.second <= now);
+            let from = track.samples.get(next.checked_sub(1)?)?;
+            let to = track.samples.get(next)?;
+            let t = match (&from.value, &to.value) {
+                (Value::Bool(false), Value::Bool(true)) => 1.0,
+                (Value::Bool(true), Value::Bool(false)) => 0.0,
+                _ => return None,
+            };
+            Some(SongLuaOverlayUpdateSnap {
+                start_second: from.second,
+                end_second: to.second,
+                t,
+            })
+        })
+}
+
 fn apply_song_lua_overlay_update_value(
     state: &mut SongLuaOverlayState,
     target: deadsync_song_lua::SongLuaOverlayUpdateTarget,
@@ -11318,6 +11438,7 @@ fn apply_song_lua_overlay_runtime_updates_for(
     now: f32,
     overlay_index: usize,
     tracks: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
+    update_snap: Option<SongLuaOverlayUpdateSnap>,
     current: &mut SongLuaOverlayState,
 ) {
     let start = tracks.partition_point(|track| track.overlay_index < overlay_index);
@@ -11330,11 +11451,17 @@ fn apply_song_lua_overlay_runtime_updates_for(
         }
         let from = &samples[next - 1];
         let to = samples.get(next).unwrap_or(from);
-        let t = if to.second <= from.second + f32::EPSILON {
+        let mut t = if to.second <= from.second + f32::EPSILON {
             1.0
         } else {
             (now - from.second) / (to.second - from.second)
         };
+        if let Some(snap) = update_snap
+            && (from.second - snap.start_second).abs() <= 0.000_1
+            && (to.second - snap.end_second).abs() <= 0.000_1
+        {
+            t = snap.t;
+        }
         let value = song_lua_overlay_update_value_lerp(&from.value, &to.value, t);
         apply_song_lua_overlay_update_value(current, track.target, &value);
     }
@@ -11389,6 +11516,7 @@ fn song_lua_overlay_render_state_from(
     overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
     overlay_updates: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
+    update_snap: Option<SongLuaOverlayUpdateSnap>,
     message_cache: &mut SongLuaMessageStateCache,
 ) -> SongLuaOverlayState {
     let events = overlay_events.get(overlay_index).map(Vec::as_slice);
@@ -11410,6 +11538,7 @@ fn song_lua_overlay_render_state_from(
         overlay_eases,
         overlay_ease_ranges,
         overlay_updates,
+        update_snap,
         message_cache,
     )
 }
@@ -11422,6 +11551,7 @@ fn song_lua_overlay_render_state_dynamic(
     overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
     overlay_updates: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
+    update_snap: Option<SongLuaOverlayUpdateSnap>,
     message_cache: &mut SongLuaMessageStateCache,
 ) -> SongLuaOverlayState {
     let current = song_lua_message_state_cached(
@@ -11438,7 +11568,13 @@ fn song_lua_overlay_render_state_dynamic(
         overlay_ease_ranges,
         current,
     );
-    apply_song_lua_overlay_runtime_updates_for(now, overlay_index, overlay_updates, &mut current);
+    apply_song_lua_overlay_runtime_updates_for(
+        now,
+        overlay_index,
+        overlay_updates,
+        update_snap,
+        &mut current,
+    );
     current
 }
 
@@ -20036,6 +20172,7 @@ mod tests {
                 &[],
                 &ranges,
                 &[],
+                None,
                 &mut dynamic_cache,
             );
             let actual = song_lua_overlay_render_state_from(
@@ -20046,6 +20183,7 @@ mod tests {
                 &[],
                 &ranges,
                 &[],
+                None,
                 &mut static_cache,
             );
             assert_eq!(actual, expected, "now={now}");
@@ -20079,15 +20217,77 @@ mod tests {
             ],
         }];
         let mut active = SongLuaOverlayState::default();
-        apply_song_lua_overlay_runtime_updates_for(1.5, 0, &tracks, &mut active);
+        apply_song_lua_overlay_runtime_updates_for(1.5, 0, &tracks, None, &mut active);
         assert!((active.croptop - 0.4).abs() <= f32::EPSILON);
 
         let mut restored = SongLuaOverlayState {
             croptop: 0.9,
             ..SongLuaOverlayState::default()
         };
-        apply_song_lua_overlay_runtime_updates_for(3.0, 0, &tracks, &mut restored);
+        apply_song_lua_overlay_runtime_updates_for(3.0, 0, &tracks, None, &mut restored);
         assert_eq!(restored.croptop, 0.0);
+    }
+
+    #[test]
+    fn song_lua_overlay_visibility_and_slice_geometry_change_atomically() {
+        use deadsync_song_lua::{
+            SongLuaOverlayRuntimeUpdateSample as Sample, SongLuaOverlayRuntimeUpdateTrack as Track,
+            SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value,
+        };
+        let tracks = vec![
+            Track {
+                overlay_index: 0,
+                target: Target::CropBottom,
+                samples: vec![
+                    Sample {
+                        second: 0.0,
+                        value: Value::F32(0.0),
+                    },
+                    Sample {
+                        second: 1.0,
+                        value: Value::F32(0.8),
+                    },
+                    Sample {
+                        second: 2.0,
+                        value: Value::F32(0.0),
+                    },
+                ],
+            },
+            Track {
+                overlay_index: 1,
+                target: Target::Visible,
+                samples: vec![
+                    Sample {
+                        second: 0.0,
+                        value: Value::Bool(false),
+                    },
+                    Sample {
+                        second: 1.0,
+                        value: Value::Bool(true),
+                    },
+                    Sample {
+                        second: 2.0,
+                        value: Value::Bool(false),
+                    },
+                ],
+            },
+        ];
+
+        let mut crop = SongLuaOverlayState::default();
+        let mut visible = SongLuaOverlayState::default();
+        let snap = song_lua_overlay_update_snap(0.5, &tracks);
+        apply_song_lua_overlay_runtime_updates_for(0.5, 0, &tracks, snap, &mut crop);
+        apply_song_lua_overlay_runtime_updates_for(0.5, 1, &tracks, snap, &mut visible);
+        assert_eq!(crop.cropbottom, 0.8);
+        assert!(visible.visible);
+
+        let mut crop = SongLuaOverlayState::default();
+        let mut visible = SongLuaOverlayState::default();
+        let snap = song_lua_overlay_update_snap(1.5, &tracks);
+        apply_song_lua_overlay_runtime_updates_for(1.5, 0, &tracks, snap, &mut crop);
+        apply_song_lua_overlay_runtime_updates_for(1.5, 1, &tracks, snap, &mut visible);
+        assert_eq!(crop.cropbottom, 0.8);
+        assert!(visible.visible);
     }
 
     #[test]
@@ -22819,6 +23019,60 @@ mod tests {
         );
         assert_eq!(composed.x, 247.0);
         assert_eq!(composed.y, 240.0);
+    }
+
+    #[test]
+    fn song_lua_overlay_nested_rotated_skew_keeps_affine_transform() {
+        let outer = SongLuaOverlayState {
+            x: 427.0,
+            y: 240.0,
+            rot_z_deg: -90.0,
+            ..SongLuaOverlayState::default()
+        };
+        let inner = SongLuaOverlayState {
+            x: -100.0,
+            y: 12.0,
+            skew_x: 0.25,
+            ..SongLuaOverlayState::default()
+        };
+        let sprite = SongLuaOverlayState {
+            x: 20.0,
+            y: 30.0,
+            rot_z_deg: 90.0,
+            ..SongLuaOverlayState::default()
+        };
+        let expected_inner_linear =
+            song_lua_overlay_linear_2d(outer) * song_lua_overlay_linear_2d(inner);
+        let expected_inner_pos = Vector2::new(outer.x, outer.y)
+            + song_lua_overlay_linear_2d(outer) * Vector2::new(inner.x, inner.y);
+        let expected_sprite_pos =
+            expected_inner_pos + expected_inner_linear * Vector2::new(sprite.x, sprite.y);
+        let expected_linear = expected_inner_linear * song_lua_overlay_linear_2d(sprite);
+
+        let inner = song_lua_overlay_compose_state(
+            &SongLuaOverlayKind::ActorFrame,
+            outer,
+            inner,
+            854.0,
+            480.0,
+        );
+        let sprite = song_lua_overlay_compose_state(
+            &SongLuaOverlayKind::ActorFrame,
+            inner,
+            sprite,
+            854.0,
+            480.0,
+        );
+
+        for (actual, expected) in song_lua_overlay_linear_2d(sprite)
+            .to_cols_array()
+            .into_iter()
+            .zip(expected_linear.to_cols_array())
+        {
+            assert!((actual - expected).abs() <= 0.000_1);
+        }
+        assert!((sprite.x - expected_sprite_pos.x).abs() <= 0.000_1);
+        assert!((sprite.y - expected_sprite_pos.y).abs() <= 0.000_1);
     }
 
     #[test]
