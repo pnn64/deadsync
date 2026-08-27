@@ -1703,19 +1703,22 @@ fn run_guarded_actor_command(
         return Ok(());
     }
     active.set(name, true)?;
-    let result = call_actor_function(lua, actor, command, params).map_err(|err| {
-        mlua::Error::external(format!(
-            "{} failed for {}: {err}",
-            name,
-            actor_debug_label(actor)
-        ))
-    });
+    let result = call_actor_function(lua, actor, command, params)
+        .map_err(|err| {
+            mlua::Error::external(format!(
+                "{} failed for {}: {err}",
+                name,
+                actor_debug_label(actor)
+            ))
+        })
+        .and_then(|()| {
+            if drain_queue {
+                drain_actor_command_queue(lua, actor)?;
+            }
+            Ok(())
+        });
     active.set(name, Value::Nil)?;
-    result?;
-    if drain_queue {
-        drain_actor_command_queue(lua, actor)?;
-    }
-    Ok(())
+    result
 }
 
 pub fn actor_active_commands(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
@@ -1951,7 +1954,8 @@ fn capture_actor_command(
     reset_actor_capture(lua, actor).map_err(|err| err.to_string())?;
     let params =
         default_message_command_params(lua, command_name).map_err(|err| err.to_string())?;
-    call_actor_function(lua, actor, &command, params).map_err(|err| err.to_string())?;
+    run_guarded_actor_command(lua, actor, command_name, &command, true, params)
+        .map_err(|err| err.to_string())?;
     flush_actor_capture(actor).map_err(|err| err.to_string())?;
     read_actor_capture_blocks(actor)
 }
@@ -3431,10 +3435,26 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     .get::<Option<bool>>(format!("{name}Command"))?
                     .unwrap_or(false)
                 {
+                    if name.eq_ignore_ascii_case("Update") {
+                        actor.set("__songlua_recurring_update_command", true)?;
+                    }
                     return Ok(actor.clone());
                 }
                 let queue = actor_command_queue(lua, &actor)?;
                 queue.raw_set(queue.raw_len() + 1, name)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "queuemessage",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(message) = args.get(1).cloned().and_then(read_string) {
+                    note_song_lua_side_effect(lua)?;
+                    crate::record_song_lua_broadcast(lua, &message, false)?;
+                }
                 Ok(actor.clone())
             }
         })?,
@@ -6919,6 +6939,17 @@ pub fn run_actor_update_functions_with_delta(
     run_actor_update_functions_for_table(lua, root, delta_seconds)
 }
 
+pub fn run_actor_compile_update_functions_with_delta(
+    lua: &Lua,
+    root: &Value,
+    delta_seconds: f64,
+) -> mlua::Result<()> {
+    let Value::Table(root) = root else {
+        return Ok(());
+    };
+    run_actor_update_functions_for_table_inner(lua, root, delta_seconds, true)
+}
+
 pub fn actor_tree_has_update_functions(lua: &Lua, root: &Value) -> mlua::Result<bool> {
     let Value::Table(root) = root else {
         return Ok(false);
@@ -6967,20 +6998,46 @@ pub fn run_actor_update_functions_for_table(
     actor: &Table,
     parent_delta_seconds: f64,
 ) -> mlua::Result<()> {
+    run_actor_update_functions_for_table_inner(lua, actor, parent_delta_seconds, false)
+}
+
+fn run_actor_update_functions_for_table_inner(
+    lua: &Lua,
+    actor: &Table,
+    parent_delta_seconds: f64,
+    run_recurring_commands: bool,
+) -> mlua::Result<()> {
     let delta_seconds = parent_delta_seconds * actor_update_rate(actor)?;
     if let Some(update) = actor.get::<Option<Function>>("__songlua_update_function")? {
         call_actor_function(lua, actor, &update, Some(Value::Number(delta_seconds)))?;
         drain_actor_command_queue(lua, actor)?;
+    }
+    if run_recurring_commands
+        && actor
+            .get::<Option<bool>>("__songlua_recurring_update_command")?
+            .unwrap_or(false)
+    {
+        run_actor_named_command(lua, actor, "UpdateCommand")?;
     }
     for child in actor.sequence_values::<Value>() {
         let Value::Table(child) = child? else {
             continue;
         };
         child.set("__songlua_parent", actor.clone())?;
-        run_actor_update_functions_for_table(lua, &child, delta_seconds)?;
+        run_actor_update_functions_for_table_inner(
+            lua,
+            &child,
+            delta_seconds,
+            run_recurring_commands,
+        )?;
     }
     if let Some(stream) = song_meter_stream_child(lua, actor)? {
-        run_actor_update_functions_for_table(lua, &stream, delta_seconds)?;
+        run_actor_update_functions_for_table_inner(
+            lua,
+            &stream,
+            delta_seconds,
+            run_recurring_commands,
+        )?;
     }
     Ok(())
 }
@@ -7031,6 +7088,9 @@ pub fn actor_table_has_update_functions(lua: &Lua, actor: &Table) -> mlua::Resul
     if actor
         .get::<Option<Function>>("__songlua_update_function")?
         .is_some()
+        || actor
+            .get::<Option<bool>>("__songlua_recurring_update_command")?
+            .unwrap_or(false)
     {
         return Ok(true);
     }
@@ -11166,9 +11226,12 @@ where
                 .unwrap_or(false),
         }
     } else if actor_type.eq_ignore_ascii_case("ActorProxy") {
-        let Some(target) = read_proxy_target_kind(actor)? else {
-            return Ok(None);
-        };
+        // Some foregrounds bind proxies from an UpdateFunction after startup.
+        // Keep their draw-tree position so the compiler can resolve the target
+        // after it replays update functions.
+        let target = read_proxy_target_kind(actor)?.unwrap_or(SongLuaProxyTarget::Actor {
+            overlay_index: usize::MAX,
+        });
         SongLuaOverlayKind::ActorProxy { target }
     } else if actor_type.eq_ignore_ascii_case("Sprite") {
         if let Some(capture_name) = actor
@@ -12214,6 +12277,23 @@ fn read_update_function_tables_for_table(
             seen_tables,
         )?);
     }
+    if actor
+        .get::<Option<bool>>("__songlua_recurring_update_command")
+        .map_err(|err| err.to_string())?
+        .unwrap_or(false)
+    {
+        if let Some(update) = actor
+            .get::<Option<Function>>("UpdateCommand")
+            .map_err(|err| err.to_string())?
+        {
+            out.extend(function_named_upvalue_tables(
+                getupvalue,
+                &update,
+                names,
+                seen_tables,
+            )?);
+        }
+    }
     for child in actor.sequence_values::<Value>() {
         let Value::Table(child) = child.map_err(|err| err.to_string())? else {
             continue;
@@ -12242,6 +12322,24 @@ fn read_update_function_nested_tables_for_table(
             seen_tables,
             seen_functions,
         )?);
+    }
+    if actor
+        .get::<Option<bool>>("__songlua_recurring_update_command")
+        .map_err(|err| err.to_string())?
+        .unwrap_or(false)
+    {
+        if let Some(update) = actor
+            .get::<Option<Function>>("UpdateCommand")
+            .map_err(|err| err.to_string())?
+        {
+            out.extend(nested_function_named_upvalue_tables(
+                getupvalue,
+                &update,
+                names,
+                seen_tables,
+                seen_functions,
+            )?);
+        }
     }
     for child in actor.sequence_values::<Value>() {
         let Value::Table(child) = child.map_err(|err| err.to_string())? else {

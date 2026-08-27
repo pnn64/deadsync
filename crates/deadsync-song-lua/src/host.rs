@@ -222,6 +222,14 @@ pub fn install_basic_globals(
     let screen_center_y = 0.5 * screen_height;
     globals.set("PLAYER_1", player_number_name(0))?;
     globals.set("PLAYER_2", player_number_name(1))?;
+    globals.set(
+        "PlayerNumberToString",
+        lua.create_function(|_, player: Value| {
+            Ok(player_index_from_value(&player)
+                .map(|player| format!("P{}", player + 1))
+                .unwrap_or_default())
+        })?,
+    )?;
     globals.set("PlayerNumber", create_player_number_table(lua)?)?;
     globals.set("OtherPlayer", create_other_player_table(lua)?)?;
     globals.set("Difficulty", create_difficulty_table(lua)?)?;

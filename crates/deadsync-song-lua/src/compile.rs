@@ -17,11 +17,12 @@ use crate::{
     push_unique_compile_detail, read_actor_model_layers, read_eases_for_overlay_actors,
     read_global_function_nested_tables, read_mod_windows, read_note_column_zoom_hides,
     read_noteskin_tap_actor_slots, read_overlay_compile_actor_actions, read_overlay_compile_actors,
-    read_runtime_mod_eases, read_song_lua_sound_paths, read_tracked_compile_actors,
-    read_update_function_nested_tables, read_update_function_overlay_compile_actor_actions,
-    read_update_function_tables, read_xero_runtime_mod_eases_for_overlay_actors,
-    register_loaded_easing_names, restore_compile_globals, run_actor_draw_functions,
-    run_actor_init_commands, run_actor_startup_commands, run_actor_update_functions,
+    read_proxy_target_kind, read_runtime_mod_eases, read_song_lua_sound_paths,
+    read_tracked_compile_actors, read_update_function_nested_tables,
+    read_update_function_overlay_compile_actor_actions, read_update_function_tables,
+    read_xero_runtime_mod_eases_for_overlay_actors, register_loaded_easing_names,
+    restore_compile_globals, run_actor_draw_functions, run_actor_init_commands,
+    run_actor_startup_commands, run_actor_update_functions,
     runtime_static_overlay_index_for_actors, snapshot_compile_globals, sort_compiled_song_lua,
 };
 
@@ -288,7 +289,7 @@ where
     let mut overlays = overlays?;
     compile_timer.push_stage("read_overlays");
     let mut tracked_actors = read_tracked_compile_actors(&lua, create_named_child_actor)?;
-    let hidden_players = std::array::from_fn(|player| {
+    let mut hidden_players = std::array::from_fn(|player| {
         tracked_actors
             .get(player)
             .is_some_and(|tracked| !tracked.actor.initial_state.visible)
@@ -465,6 +466,7 @@ where
     out.overlay_updates.extend(update_overlay_tracks);
     out.column_offsets.extend(update_column_transforms);
     compile_timer.push_stage("update_overlays");
+    resolve_late_proxy_targets(&mut overlays, &mut hidden_players)?;
     push_startup_message_if_listened(
         &mut out.messages,
         overlays
@@ -495,6 +497,54 @@ where
     compile_timer.push_stage("finalize");
     log_song_lua_compile_timing(&trace_entry_path, &compile_timer);
     split_compiled_song_lua(out, overlay_layers, &entry_paths, primary_index)
+}
+
+fn resolve_late_proxy_targets<NoteskinSlot, ModelVertex>(
+    overlays: &mut [crate::SongLuaOverlayCompileActor<
+        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
+    >],
+    hidden_players: &mut [bool; crate::LUA_PLAYERS],
+) -> Result<(), String> {
+    let actor_indices = overlays
+        .iter()
+        .enumerate()
+        .map(|(index, overlay)| (overlay.table.to_pointer() as usize, index))
+        .collect::<std::collections::HashMap<_, _>>();
+    for overlay in overlays {
+        let SongLuaOverlayKind::ActorProxy { target } = &mut overlay.actor.kind else {
+            continue;
+        };
+        let Some(mut resolved) = read_proxy_target_kind(&overlay.table)? else {
+            continue;
+        };
+        if let crate::SongLuaProxyTarget::Actor { overlay_index } = &mut resolved {
+            *overlay_index = actor_indices
+                .get(overlay_index)
+                .copied()
+                .unwrap_or(usize::MAX);
+        }
+        if let crate::SongLuaProxyTarget::Player { player_index } = resolved {
+            let target_actor = overlay
+                .table
+                .get::<Option<Table>>("__songlua_proxy_target_actor")
+                .map_err(|err| err.to_string())?;
+            let target_hidden = target_actor
+                .and_then(|actor| {
+                    actor
+                        .get::<Option<bool>>("__songlua_visible")
+                        .ok()
+                        .flatten()
+                })
+                .is_some_and(|visible| !visible);
+            if target_hidden {
+                if let Some(hidden) = hidden_players.get_mut(player_index) {
+                    *hidden = true;
+                }
+            }
+        }
+        *target = resolved;
+    }
+    Ok(())
 }
 
 fn mark_compile_layers(root: &Value) -> mlua::Result<()> {

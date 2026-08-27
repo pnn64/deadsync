@@ -11,11 +11,10 @@ use crate::{
     compile_song_runtime_delta_values, compile_song_runtime_values, overlay_delta_pair_from_states,
     overlay_state_after_blocks, push_unique_compile_detail, read_f32,
     read_note_column_transform_samples, reset_overlay_compile_actor_capture_tables,
-    reset_tracked_capture_tables, run_actor_update_functions_with_delta,
-    runtime_player_option_ease_target, set_actor_overlay_getter_state,
-    set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
-    set_compile_song_runtime_values, song_display_bps, song_elapsed_seconds_for_beat,
-    song_lua_side_effect_count, song_lua_span_end, song_music_rate,
+    reset_tracked_capture_tables, runtime_player_option_ease_target,
+    set_actor_overlay_getter_state, set_compile_song_runtime_beat,
+    set_compile_song_runtime_delta_values, set_compile_song_runtime_values, song_display_bps,
+    song_elapsed_seconds_for_beat, song_lua_side_effect_count, song_lua_span_end, song_music_rate,
 };
 
 pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 8192;
@@ -1194,8 +1193,12 @@ pub fn call_update_functions_at(
     set_compile_song_runtime_beat(lua, beat).map_err(|err| err.to_string())?;
     set_compile_song_runtime_delta_values(lua, delta_beats, delta_seconds)
         .map_err(|err| err.to_string())?;
-    let result = run_actor_update_functions_with_delta(lua, root, f64::from(delta_seconds))
-        .map_err(|err| err.to_string());
+    let result = crate::lua_util::run_actor_compile_update_functions_with_delta(
+        lua,
+        root,
+        f64::from(delta_seconds),
+    )
+    .map_err(|err| err.to_string());
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
     set_compile_song_runtime_delta_values(lua, previous_delta.0, previous_delta.1)
         .map_err(|err| err.to_string())?;

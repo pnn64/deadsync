@@ -7359,6 +7359,99 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_captures_queued_message_command_timeline() {
+        let song_dir = test_dir("queued-message-command-timeline");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Wallop",
+        WallopMessageCommand=function(self)
+            self:visible(true):diffusealpha(0):linear(0.15):diffusealpha(1)
+            self:queuecommand("Wait")
+        end,
+        WaitCommand=function(self)
+            self:sleep(1.2):queuecommand("Away")
+        end,
+        AwayCommand=function(self)
+            self:linear(0.2):zoom(6):diffusealpha(0)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Queued Message Timeline"),
+        )
+        .unwrap();
+        let overlay = compiled
+            .overlays
+            .iter()
+            .find(|overlay| overlay.name.as_deref() == Some("Wallop"))
+            .unwrap();
+        let command = overlay
+            .message_commands
+            .iter()
+            .find(|command| command.message == "Wallop")
+            .unwrap();
+        assert_eq!(command.blocks.len(), 3);
+        assert_eq!(command.blocks[0].duration, 0.0);
+        assert_eq!(command.blocks[0].delta.diffuse.unwrap()[3], 0.0);
+        assert_eq!(command.blocks[1].duration, 0.15);
+        assert_eq!(command.blocks[1].delta.diffuse.unwrap()[3], 1.0);
+        assert_eq!(command.blocks[2].start, 1.35);
+        assert_eq!(command.blocks[2].duration, 0.2);
+        assert_eq!(command.blocks[2].delta.diffuse.unwrap()[3], 0.0);
+        assert_eq!(command.blocks[2].delta.zoom_x, Some(6.0));
+    }
+
+    #[test]
+    fn compile_song_lua_captures_actor_queued_messages() {
+        let song_dir = test_dir("actor-queued-message");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local source = nil
+
+mod_actions = {
+    {2, function() source:queuemessage("ShakeScreen") end, true},
+}
+
+return Def.ActorFrame{
+    Def.Actor{
+        InitCommand=function(self) source = self end,
+    },
+    Def.Quad{
+        Name="ShakeTarget",
+        ShakeScreenMessageCommand=function(self)
+            self:linear(0.1):x(12)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Queued Message"),
+        )
+        .unwrap();
+        assert!(
+            compiled
+                .messages
+                .iter()
+                .any(|event| event.beat == 2.0 && event.message == "ShakeScreen")
+        );
+    }
+
+    #[test]
     fn compile_song_lua_hurrytweening_scales_capture_timeline() {
         let song_dir = test_dir("hurrytweening-timeline");
         let entry = song_dir.join("default.lua");
@@ -14251,6 +14344,63 @@ return Def.ActorFrame{
                 .visible,
             Some(true)
         );
+    }
+
+    #[test]
+    fn compile_song_lua_resolves_queued_update_bound_player_proxy() {
+        let song_dir = test_dir("queued-update-bound-player-proxy");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local player = nil
+local bound = false
+
+return Def.ActorFrame{
+    Def.Actor{
+        OnCommand=function(self)
+            self:queuecommand("Update")
+        end,
+        UpdateCommand=function(self)
+            if not bound and GAMESTATE:GetSongBeat() >= 0.2 then
+                assert(PlayerNumberToString(0) == "P1")
+                player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+                player:visible(false)
+                MESSAGEMAN:Broadcast("BindPlayerProxy")
+                bound = true
+            end
+            self:sleep(0.02):queuecommand("Update")
+        end,
+    },
+    Def.ActorProxy{
+        Name="LatePlayerProxy",
+        BindPlayerProxyMessageCommand=function(self)
+            if player then
+                self:SetTarget(player)
+            end
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Update Bound Player Proxy");
+        context.music_length_seconds = 2.0;
+        context.song_display_bpms = [120.0, 120.0];
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let proxy = compiled
+            .overlays
+            .iter()
+            .find(|overlay| overlay.name.as_deref() == Some("LatePlayerProxy"))
+            .unwrap();
+        assert!(matches!(
+            proxy.kind,
+            SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::Player { player_index: 0 }
+            }
+        ));
+        assert!(compiled.hidden_players[0]);
     }
 
     #[test]
