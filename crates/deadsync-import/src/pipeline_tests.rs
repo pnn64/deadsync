@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use deadsync_chart::{ChartData, SongData, SongPack};
+use deadsync_chart::{ArrowStats, ChartData, SongData, SongPack, StaminaCounts, TechCounts};
 use deadsync_profile::PlayerOptionsData;
 use deadsync_score::{decode_local_score_entry, encode_local_score_entry, local_score_from_itg};
 
@@ -60,10 +60,10 @@ fn chart(difficulty: &str, hash: &str) -> ChartData {
         step_artist: String::new(),
         music_path: None,
         short_hash: hash.into(),
-        stats: Default::default(),
-        tech_counts: Default::default(),
+        stats: ArrowStats::default(),
+        tech_counts: TechCounts::default(),
         mines_nonfake: 0,
-        stamina_counts: Default::default(),
+        stamina_counts: StaminaCounts::default(),
         total_streams: 0,
         matrix_rating: 0.0,
         matrix_profile: Box::default(),

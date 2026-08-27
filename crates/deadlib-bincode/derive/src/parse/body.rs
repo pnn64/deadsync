@@ -14,9 +14,7 @@ impl StructBody {
     pub(crate) fn take(input: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Result<Self> {
         match input.peek() {
             Some(TokenTree::Group(_)) => {}
-            Some(TokenTree::Punct(p)) if p.as_char() == ';' => {
-                return Ok(StructBody { fields: None })
-            }
+            Some(TokenTree::Punct(p)) if p.as_char() == ';' => return Ok(Self { fields: None }),
             token => return Error::wrong_token(token, "group or punct"),
         }
         let group = assume_group(input.next());
@@ -33,11 +31,11 @@ impl StructBody {
             found => {
                 return Err(Error::InvalidRustSyntax {
                     span: group.span(),
-                    expected: format!("brace or parenthesis, found {:?}", found),
+                    expected: format!("brace or parenthesis, found {found:?}"),
                 })
             }
         };
-        Ok(StructBody { fields })
+        Ok(Self { fields })
     }
 }
 
@@ -162,7 +160,7 @@ impl EnumBody {
         match input.peek() {
             Some(TokenTree::Group(_)) => {}
             Some(TokenTree::Punct(p)) if p.as_char() == ';' => {
-                return Ok(EnumBody {
+                return Ok(Self {
                     variants: Vec::new(),
                 })
             }
@@ -194,7 +192,7 @@ impl EnumBody {
                     delim => {
                         return Err(Error::InvalidRustSyntax {
                             span: group.span(),
-                            expected: format!("Brace or parenthesis, found {:?}", delim),
+                            expected: format!("Brace or parenthesis, found {delim:?}"),
                         })
                     }
                 }
@@ -207,17 +205,12 @@ impl EnumBody {
                             value = Some(lit);
                         }
                         Some(TokenTree::Punct(p)) if p.as_char() == '-' => match stream.next() {
-                            Some(TokenTree::Literal(lit)) => {
-                                match lit.to_string().parse::<i64>() {
-                                    Ok(val) => value = Some(Literal::i64_unsuffixed(-val)),
-                                    Err(_) => {
-                                        return Err(Error::custom_at(
-                                            "parse::<i64> failed",
-                                            lit.span(),
-                                        ))
-                                    }
-                                };
-                            }
+                            Some(TokenTree::Literal(lit)) => match lit.to_string().parse::<i64>() {
+                                Ok(val) => value = Some(Literal::i64_unsuffixed(-val)),
+                                Err(_) => {
+                                    return Err(Error::custom_at("parse::<i64> failed", lit.span()))
+                                }
+                            },
                             token => return Error::wrong_token(token.as_ref(), "literal"),
                         },
                         token => return Error::wrong_token(token.as_ref(), "literal"),
@@ -241,7 +234,7 @@ impl EnumBody {
             });
         }
 
-        Ok(EnumBody { variants })
+        Ok(Self { variants })
     }
 }
 
@@ -484,7 +477,7 @@ impl UnnamedField {
                 Some(x) => {
                     return Err(Error::InvalidRustSyntax {
                         span: x.span(),
-                        expected: format!("ident or end of group, got {:?}", x),
+                        expected: format!("ident or end of group, got {x:?}"),
                     })
                 }
                 None => break,
@@ -584,16 +577,16 @@ impl IdentOrIndex {
     pub fn unwrap_ident(&self) -> Ident {
         match self {
             Self::Ident { ident, .. } => ident.clone(),
-            x => panic!("Expected ident, found {:?}", x),
+            x => panic!("Expected ident, found {x:?}"),
         }
     }
 
     /// Convert this ident into a `TokenTree`. If this is an `Index`, will return `prefix + index` instead.
     pub fn to_token_tree_with_prefix(&self, prefix: &str) -> TokenTree {
         TokenTree::Ident(match self {
-            IdentOrIndex::Ident { ident, .. } => (*ident).clone(),
-            IdentOrIndex::Index { index, span, .. } => {
-                let name = format!("{}{}", prefix, index);
+            Self::Ident { ident, .. } => (*ident).clone(),
+            Self::Index { index, span, .. } => {
+                let name = format!("{prefix}{index}");
                 Ident::new(&name, *span)
             }
         })
@@ -602,9 +595,9 @@ impl IdentOrIndex {
     /// Return either the index or the ident of this field with a fixed prefix. The prefix will always be added.
     pub fn to_string_with_prefix(&self, prefix: &str) -> String {
         match self {
-            IdentOrIndex::Ident { ident, .. } => ident.to_string(),
-            IdentOrIndex::Index { index, .. } => {
-                format!("{}{}", prefix, index)
+            Self::Ident { ident, .. } => ident.to_string(),
+            Self::Index { index, .. } => {
+                format!("{prefix}{index}")
             }
         }
     }
@@ -621,8 +614,8 @@ impl IdentOrIndex {
 impl std::fmt::Display for IdentOrIndex {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            IdentOrIndex::Ident { ident, .. } => write!(fmt, "{}", ident),
-            IdentOrIndex::Index { index, .. } => write!(fmt, "{}", index),
+            Self::Ident { ident, .. } => write!(fmt, "{ident}"),
+            Self::Index { index, .. } => write!(fmt, "{index}"),
         }
     }
 }

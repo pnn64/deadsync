@@ -675,10 +675,7 @@ impl DynamicMedia {
                     Arc::<str>::from(FALLBACK_KEY)
                 }
                 Err(DynamicImageTextureError::Create(e)) => {
-                    warn!(
-                        "Failed to create GPU texture for banner '{}': {e}. Using fallback.",
-                        key
-                    );
+                    warn!("Failed to create GPU texture for banner '{key}': {e}. Using fallback.");
                     Arc::<str>::from(FALLBACK_KEY)
                 }
             }
@@ -1148,7 +1145,7 @@ impl DynamicMedia {
                     let prepared = *prepared;
                     match prepared.poster {
                         Ok(Some(poster)) => {
-                            assets.queue_texture_upload(prepared.key.clone(), poster)
+                            assets.queue_texture_upload(prepared.key.clone(), poster);
                         }
                         Ok(None) => {}
                         Err(e) => warn!(

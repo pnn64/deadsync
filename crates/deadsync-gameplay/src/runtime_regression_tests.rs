@@ -1935,9 +1935,7 @@ mod runtime_regression_tests {
             .windows_ns[2];
         assert!(
             scaled_great_ns > baseline_great_ns,
-            "music-rate=1.5 should widen the W3 window in song-time ns ({} vs {})",
-            scaled_great_ns,
-            baseline_great_ns,
+            "music-rate=1.5 should widen the W3 window in song-time ns ({scaled_great_ns} vs {baseline_great_ns})",
         );
         assert!(
             state.notes_end_time_ns() > baseline_notes_end,

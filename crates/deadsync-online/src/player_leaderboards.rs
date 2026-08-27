@@ -41,10 +41,7 @@ pub fn fetch_player_leaderboards(
         max_entries,
     )?;
     if let Some(error) = combined.arrowcloud_error {
-        warn!(
-            "ArrowCloud leaderboard fetch failed for chart {}: {}",
-            chart_hash, error
-        );
+        warn!("ArrowCloud leaderboard fetch failed for chart {chart_hash}: {error}");
     }
 
     Ok(combined.fetched)

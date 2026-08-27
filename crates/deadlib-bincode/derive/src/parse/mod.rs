@@ -98,7 +98,7 @@ impl Parse {
     /// Split this struct or enum into a [`Generator`], list of [`Attribute`] and [`Body`].
     pub fn into_generator(self) -> (Generator, Vec<Attribute>, Body) {
         match self {
-            Parse::Struct {
+            Self::Struct {
                 name,
                 generics,
                 generic_constraints,
@@ -110,7 +110,7 @@ impl Parse {
                 attributes,
                 Body::Struct(body),
             ),
-            Parse::Enum {
+            Self::Enum {
                 name,
                 generics,
                 generic_constraints,

@@ -30,26 +30,26 @@ pub(super) fn execute_options(request: SimplyLoveOptionsConfigRequest) {
         Request::UseFsrs(enabled) => config::update_use_fsrs(enabled),
         Request::ThreeKeyNavigation(enabled) => config::update_three_key_navigation(enabled),
         Request::ArcadeOptionsNavigation(enabled) => {
-            config::update_arcade_options_navigation(enabled)
+            config::update_arcade_options_navigation(enabled);
         }
         Request::OnlyDedicatedMenuButtons(enabled) => {
-            config::update_only_dedicated_menu_buttons(enabled)
+            config::update_only_dedicated_menu_buttons(enabled);
         }
         Request::SmxInput(enabled) => config::update_smx_input(enabled),
         Request::SmxPanelLights(enabled) => config::update_smx_panel_lights(enabled),
         Request::SmxManagesPadConfig(enabled) => config::update_smx_manages_pad_config(enabled),
         Request::SmxDefaultPadConfig(preset) => config::update_smx_default_pad_config(preset),
         Request::SmxDefaultLightBrightness(percent) => {
-            profile::update_machine_default_light_brightness_from_config(percent)
+            profile::update_machine_default_light_brightness_from_config(percent);
         }
         Request::SmxPadGifsPack(pack) => config::update_smx_pad_gifs_pack(pack),
         Request::SmxJudgeGifsPack(pack) => config::update_smx_judge_gifs_pack(pack),
         Request::SmxIdleLightsBlack(enabled) => config::update_smx_idle_lights_black(enabled),
         Request::VisualDelayMillis(millis) => {
-            config::update_visual_delay_seconds(millis as f32 / 1000.0)
+            config::update_visual_delay_seconds(millis as f32 / 1000.0);
         }
         Request::InputDebounceMillis(millis) => {
-            config::update_input_debounce_seconds(millis as f32 / 1000.0)
+            config::update_input_debounce_seconds(millis as f32 / 1000.0);
         }
     }
 }
@@ -64,7 +64,7 @@ pub(super) fn execute_coin(request: SimplyLoveCoinConfigRequest) {
         Request::EventMode(enabled) => config::update_event_mode(enabled),
         Request::PremiumFreeMinutes(minutes) => config::update_premium_free_minutes(minutes),
         Request::PremiumFreeGraceSeconds(seconds) => {
-            config::update_premium_free_grace_seconds(seconds)
+            config::update_premium_free_grace_seconds(seconds);
         }
         Request::ContinueOnGiveUp(enabled) => config::update_continue_on_give_up(enabled),
         Request::LongSongSeconds(seconds) => config::update_long_song_seconds(seconds),
@@ -119,13 +119,13 @@ pub(super) fn execute_course(request: SimplyLoveCourseConfigRequest) {
         Request::ShowRandom(enabled) => config::update_show_random_courses(enabled),
         Request::ShowMostPlayed(enabled) => config::update_show_most_played_courses(enabled),
         Request::ShowIndividualScores(enabled) => {
-            config::update_show_course_individual_scores(enabled)
+            config::update_show_course_individual_scores(enabled);
         }
         Request::AutosubmitIndividual(enabled) => {
-            config::update_autosubmit_course_scores_individually(enabled)
+            config::update_autosubmit_course_scores_individually(enabled);
         }
         Request::AutosubmitPostFailPasses(enabled) => {
-            config::update_autosubmit_course_post_fail_passes(enabled)
+            config::update_autosubmit_course_post_fail_passes(enabled);
         }
     }
 }
@@ -135,10 +135,10 @@ pub(super) fn execute_gameplay(request: SimplyLoveGameplayConfigRequest) {
 
     match request {
         Request::BackgroundBrightnessTenths(tenths) => {
-            config::update_bg_brightness(f32::from(tenths.min(10)) / 10.0)
+            config::update_bg_brightness(f32::from(tenths.min(10)) / 10.0);
         }
         Request::CenterPlayerOneNotefield(enabled) => {
-            config::update_center_1player_notefield(enabled)
+            config::update_center_1player_notefield(enabled);
         }
         Request::NoteScrollClock(clock) => config::update_note_scroll_clock(clock),
         Request::BannerMode(mode) => config::update_gameplay_banner_mode(mode),
@@ -163,7 +163,7 @@ pub(super) fn execute_tournament(request: SimplyLoveTournamentConfigRequest) {
     match request {
         Request::Enabled(enabled) => config::update_tournament_mode_enabled(enabled),
         Request::ScoringSystem(scoring_system) => {
-            config::update_tournament_scoring_system(scoring_system)
+            config::update_tournament_scoring_system(scoring_system);
         }
         Request::StepStats(show) => config::update_tournament_step_stats(show),
         Request::EnforceNoCmod(enabled) => config::update_tournament_enforce_no_cmod(enabled),
@@ -179,14 +179,14 @@ pub(super) fn execute_machine(request: SimplyLoveMachineConfigRequest) {
         Request::ShowSelectStyle(enabled) => config::update_machine_show_select_style(enabled),
         Request::PreferredPlayStyle(style) => config::update_machine_preferred_style(style),
         Request::ShowSelectPlayMode(enabled) => {
-            config::update_machine_show_select_play_mode(enabled)
+            config::update_machine_show_select_play_mode(enabled);
         }
         Request::PreferredPlayMode(mode) => config::update_machine_preferred_play_mode(mode),
         Request::Font(font) => config::update_machine_font(font),
         Request::BarColor(color) => config::update_machine_bar_color(color),
         Request::EvaluationStyle(style) => config::update_machine_evaluation_style(style),
         Request::ShowEvaluationSummary(enabled) => {
-            config::update_machine_show_eval_summary(enabled)
+            config::update_machine_show_eval_summary(enabled);
         }
         Request::EasterEggs(enabled) => config::update_machine_easter_eggs(enabled),
         Request::NiceSound(enabled) => config::update_machine_nice_sound(enabled),
@@ -197,10 +197,10 @@ pub(super) fn execute_machine(request: SimplyLoveMachineConfigRequest) {
         Request::SrpgVariant(variant) => config::update_srpg_variant(variant),
         Request::EnableReplays(enabled) => config::update_machine_enable_replays(enabled),
         Request::EnableHeartRateMonitors(enabled) => {
-            config::update_machine_enable_heart_rate_monitors(enabled)
+            config::update_machine_enable_heart_rate_monitors(enabled);
         }
         Request::AllowPerPlayerGlobalOffsets(enabled) => {
-            config::update_machine_allow_per_player_global_offsets(enabled)
+            config::update_machine_allow_per_player_global_offsets(enabled);
         }
         Request::PackIniOffsets(enabled) => config::update_machine_pack_ini_offsets(enabled),
         Request::DefaultSyncOffset(offset) => config::update_machine_default_sync_offset(offset),
@@ -229,25 +229,25 @@ pub(super) fn execute_null_or_die(request: SimplyLoveNullOrDieConfigRequest) {
             config::update_null_or_die_graph_orientation(match orientation {
                 SimplyLoveGraphOrientation::Vertical => config::GraphOrientation::Vertical,
                 SimplyLoveGraphOrientation::Horizontal => config::GraphOrientation::Horizontal,
-            })
+            });
         }
         Request::GraphOrigin(origin) => config::update_null_or_die_graph_origin(match origin {
             SimplyLoveGraphOrigin::Bottom => config::GraphOrigin::Bottom,
             SimplyLoveGraphOrigin::Top => config::GraphOrigin::Top,
         }),
         Request::ConfidencePercent(percent) => {
-            config::update_null_or_die_confidence_percent(percent)
+            config::update_null_or_die_confidence_percent(percent);
         }
         Request::PackSyncThreads(threads) => config::update_null_or_die_pack_sync_threads(threads),
         Request::FingerprintTenths(tenths) => {
-            config::update_null_or_die_fingerprint_ms(f64::from(tenths) / 10.0)
+            config::update_null_or_die_fingerprint_ms(f64::from(tenths) / 10.0);
         }
         Request::WindowTenths(tenths) => {
-            config::update_null_or_die_window_ms(f64::from(tenths) / 10.0)
+            config::update_null_or_die_window_ms(f64::from(tenths) / 10.0);
         }
         Request::StepTenths(tenths) => config::update_null_or_die_step_ms(f64::from(tenths) / 10.0),
         Request::MagicOffsetTenths(tenths) => {
-            config::update_null_or_die_magic_offset_ms(f64::from(tenths) / 10.0)
+            config::update_null_or_die_magic_offset_ms(f64::from(tenths) / 10.0);
         }
         Request::KernelTarget(target) => config::update_null_or_die_kernel_target(match target {
             SimplyLoveSyncKernelTarget::Digest => KernelTarget::Digest,
@@ -276,14 +276,14 @@ pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
         Request::AutoPopulateScores(enabled) => config::update_auto_populate_gs_scores(enabled),
         Request::AutoDownloadUnlocks(enabled) => config::update_auto_download_unlocks(enabled),
         Request::SeparateUnlocksByPlayer(enabled) => {
-            config::update_separate_unlocks_by_player(enabled)
+            config::update_separate_unlocks_by_player(enabled);
         }
         Request::GrooveStatsQrLogin(policy) => {
             config::update_groovestats_qr_login_when(match policy {
                 SimplyLoveQrLoginPolicy::Always => config::GrooveStatsQrLoginWhen::Always,
                 SimplyLoveQrLoginPolicy::Sometimes => config::GrooveStatsQrLoginWhen::Sometimes,
                 SimplyLoveQrLoginPolicy::Disabled => config::GrooveStatsQrLoginWhen::Disabled,
-            })
+            });
         }
         Request::EnableArrowCloud(enabled) => config::update_enable_arrowcloud(enabled),
         Request::SubmitArrowCloudFails(enabled) => config::update_submit_arrowcloud_fails(enabled),
@@ -292,7 +292,7 @@ pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
                 SimplyLoveQrLoginPolicy::Always => config::ArrowCloudQrLoginWhen::Always,
                 SimplyLoveQrLoginPolicy::Sometimes => config::ArrowCloudQrLoginWhen::Sometimes,
                 SimplyLoveQrLoginPolicy::Disabled => config::ArrowCloudQrLoginWhen::Disabled,
-            })
+            });
         }
     }
 }
@@ -303,7 +303,7 @@ pub(super) fn execute_select_music(request: SimplyLoveSelectMusicConfigRequest) 
     match request {
         Request::ShowBanners(enabled) => config::update_show_select_music_banners(enabled),
         Request::ShowVideoBanners(enabled) => {
-            config::update_show_select_music_video_banners(enabled)
+            config::update_show_select_music_video_banners(enabled);
         }
         Request::ShowBreakdown(enabled) => config::update_show_select_music_breakdown(enabled),
         Request::BreakdownStyle(style) => config::update_select_music_breakdown_style(style),
@@ -316,10 +316,10 @@ pub(super) fn execute_select_music(request: SimplyLoveSelectMusicConfigRequest) 
         Request::LastSort(sort) => config::update_select_music_last_sort(sort),
         Request::SeriesSource(source) => config::update_select_music_series_source(source),
         Request::SongSelectBackground(mode) => {
-            config::update_select_music_song_select_bg_mode(mode)
+            config::update_select_music_song_select_bg_mode(mode);
         }
         Request::AllowProfileSwitch(enabled) => {
-            config::update_allow_switch_profile_in_menu(enabled)
+            config::update_allow_switch_profile_in_menu(enabled);
         }
         Request::ShowCdTitles(enabled) => config::update_show_select_music_cdtitles(enabled),
         Request::ShowWheelGrades(enabled) => config::update_show_music_wheel_grades(enabled),
@@ -332,17 +332,17 @@ pub(super) fn execute_select_music(request: SimplyLoveSelectMusicConfigRequest) 
         Request::StepArtistBoxMode(mode) => config::update_select_music_step_artist_box_mode(mode),
         Request::ShowPreviews(enabled) => config::update_show_select_music_previews(enabled),
         Request::ShowPreviewMarker(enabled) => {
-            config::update_show_select_music_preview_marker(enabled)
+            config::update_show_select_music_preview_marker(enabled);
         }
         Request::PreviewLoop(enabled) => config::update_select_music_preview_loop(enabled),
         Request::PreviewStartsImmediately(enabled) => {
-            config::update_select_music_preview_starts_immediately(enabled)
+            config::update_select_music_preview_starts_immediately(enabled);
         }
         Request::ShowGameplayTimer(enabled) => {
-            config::update_show_select_music_gameplay_timer(enabled)
+            config::update_show_select_music_gameplay_timer(enabled);
         }
         Request::ShowStageDisplay(enabled) => {
-            config::update_show_select_music_stage_display(enabled)
+            config::update_show_select_music_stage_display(enabled);
         }
         Request::ShowScorebox(enabled) => config::update_show_select_music_scorebox(enabled),
         Request::ScoreboxPlacement(mode) => config::update_select_music_scorebox_placement(mode),

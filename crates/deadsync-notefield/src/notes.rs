@@ -551,7 +551,7 @@ pub struct ScrollTravel<'a> {
     accel_is_identity: bool,
 }
 
-pub(crate) fn scroll_travel<'a>(request: ScrollTravelRequest<'a>) -> ScrollTravel<'a> {
+pub(crate) fn scroll_travel(request: ScrollTravelRequest<'_>) -> ScrollTravel<'_> {
     let displayed_speed_percent = request
         .timing
         .get_speed_multiplier_ns(request.visible_beat, request.current_time_ns);
@@ -1458,11 +1458,11 @@ mod tests {
         )
     }
 
-    fn request<'a>(
-        timing: &'a TimingData,
+    fn request(
+        timing: &TimingData,
         scroll_speed: ScrollSpeedSetting,
         visible_beat: f32,
-    ) -> ScrollTravelRequest<'a> {
+    ) -> ScrollTravelRequest<'_> {
         ScrollTravelRequest {
             timing,
             accel: AccelYParams::default(),

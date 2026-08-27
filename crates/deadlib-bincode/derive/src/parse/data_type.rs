@@ -14,8 +14,8 @@ impl DataType {
     ) -> Result<(Self, Ident)> {
         if let Some(ident) = super::utils::consume_ident(input) {
             let result = match ident.to_string().as_str() {
-                "struct" => DataType::Struct,
-                "enum" => DataType::Enum,
+                "struct" => Self::Struct,
+                "enum" => Self::Enum,
                 _ => return Err(Error::UnknownDataType(ident.span())),
             };
 
@@ -33,14 +33,11 @@ fn test_datatype_take() {
 
     fn validate_output_eq(input: &str, expected_dt: DataType, expected_ident: &str) {
         let (dt, ident) = DataType::take(&mut token_stream(input)).unwrap_or_else(|e| {
-            panic!("Could not parse tokenstream {:?}: {:?}", input, e);
+            panic!("Could not parse tokenstream {input:?}: {e:?}");
         });
         if dt != expected_dt || ident != expected_ident {
-            println!("While parsing {:?}", input);
-            panic!(
-                "Expected {:?} {:?}, received {:?} {:?}",
-                dt, ident, expected_dt, expected_ident
-            );
+            println!("While parsing {input:?}");
+            panic!("Expected {dt:?} {ident:?}, received {expected_dt:?} {expected_ident:?}");
         }
     }
 

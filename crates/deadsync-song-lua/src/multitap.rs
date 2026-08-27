@@ -133,10 +133,10 @@ pub fn push_overlay_sample_eases(
         }
         match (from.visible, to.visible) {
             (true, true) => {
-                push_overlay_sample_linear_ease(out, overlay_index, baseline, start, end, from, to)
+                push_overlay_sample_linear_ease(out, overlay_index, baseline, start, end, from, to);
             }
             (false, true) => {
-                push_overlay_sample_instant_state(out, overlay_index, end, baseline, to)
+                push_overlay_sample_instant_state(out, overlay_index, end, baseline, to);
             }
             (true, false) => push_overlay_sample_instant_visible(out, overlay_index, end, false),
             (false, false) => {}

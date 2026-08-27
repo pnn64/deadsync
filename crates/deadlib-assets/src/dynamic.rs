@@ -392,8 +392,7 @@ pub fn prewarm_dynamic_image_jobs_with_progress<F>(
     let total_jobs = jobs.len();
     progress(0, total_jobs, None);
     debug!(
-        "{} cache prewarm start: {} input, {} unique, {} duplicate, {} worker threads.",
-        label, input_count, total_jobs, duplicate, worker_count
+        "{label} cache prewarm start: {input_count} input, {total_jobs} unique, {duplicate} duplicate, {worker_count} worker threads."
     );
 
     let (job_tx, job_rx) = mpsc::channel::<DynamicImagePrewarmJob>();

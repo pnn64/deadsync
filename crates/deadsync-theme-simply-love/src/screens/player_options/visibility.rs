@@ -472,7 +472,7 @@ pub(super) fn density_graph_background_visible(
 ) -> bool {
     if row_map.get(RowId::DataVisualizations).is_none() {
         return true;
-    };
+    }
     let mut any_active = false;
     for player_idx in active_player_indices(active) {
         any_active = true;
@@ -493,7 +493,7 @@ pub(super) fn step_stats_extra_visible(
 ) -> bool {
     if row_map.get(RowId::DataVisualizations).is_none() {
         return true;
-    };
+    }
     let mut any_active = false;
     for player_idx in active_player_indices(active) {
         any_active = true;

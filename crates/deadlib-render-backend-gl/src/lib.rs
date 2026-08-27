@@ -757,7 +757,7 @@ pub fn set_vsync_enabled(state: &mut State, enabled: bool) {
         .gl_surface
         .set_swap_interval(&state.gl_context, interval)
     {
-        warn!("Failed to update OpenGL swap interval (VSync): {:?}", e);
+        warn!("Failed to update OpenGL swap interval (VSync): {e:?}");
     } else {
         debug!(
             "Updated OpenGL VSync to {}",
@@ -783,10 +783,7 @@ fn log_opengl_driver_info(gl: &glow::Context) {
         let renderer = norm(gl.get_parameter_string(glow::RENDERER));
         let version = norm(gl.get_parameter_string(glow::VERSION));
         let glsl = norm(gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION));
-        info!(
-            "OpenGL driver: {} [{}], {}, GLSL {}",
-            renderer, vendor, version, glsl
-        );
+        info!("OpenGL driver: {renderer} [{vendor}], {version}, GLSL {glsl}");
     }
 }
 

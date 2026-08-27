@@ -1112,14 +1112,12 @@ fn status_text(
         return match &prompt.mode {
             PasswordPromptMode::CreateLobby => {
                 format!(
-                    "Choose up to {} uppercase letters, or leave it blank for a public lobby.",
-                    PASSWORD_PROMPT_MAX_LEN
+                    "Choose up to {PASSWORD_PROMPT_MAX_LEN} uppercase letters, or leave it blank for a public lobby."
                 )
             }
             PasswordPromptMode::JoinLobby { code } => {
                 format!(
-                    "Enter the {}-letter uppercase password for lobby {code}.",
-                    PASSWORD_PROMPT_MAX_LEN
+                    "Enter the {PASSWORD_PROMPT_MAX_LEN}-letter uppercase password for lobby {code}."
                 )
             }
         };
@@ -1181,10 +1179,7 @@ enum BrowseAction<'a> {
     Close,
 }
 
-fn resolve_browse_action<'a>(
-    snapshot: &'a lobby_data::Snapshot,
-    browse_index: usize,
-) -> BrowseAction<'a> {
+fn resolve_browse_action(snapshot: &lobby_data::Snapshot, browse_index: usize) -> BrowseAction<'_> {
     if let Some(lobby) = snapshot.available_lobbies.get(browse_index) {
         return BrowseAction::Lobby(lobby);
     }

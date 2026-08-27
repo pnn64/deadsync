@@ -46,16 +46,16 @@ impl SongSearchScope {
     #[must_use]
     pub const fn toggled(self) -> Self {
         match self {
-            SongSearchScope::Song => SongSearchScope::Pack,
-            SongSearchScope::Pack => SongSearchScope::Song,
+            Self::Song => Self::Pack,
+            Self::Pack => Self::Song,
         }
     }
 
     /// Localized scope badge text.
     fn label(self) -> Arc<str> {
         match self {
-            SongSearchScope::Song => tr("SelectMusic", "SongSearchScopeSongs"),
-            SongSearchScope::Pack => tr("SelectMusic", "SongSearchScopePacks"),
+            Self::Song => tr("SelectMusic", "SongSearchScopeSongs"),
+            Self::Pack => tr("SelectMusic", "SongSearchScopePacks"),
         }
     }
 }
@@ -174,10 +174,8 @@ impl SongSearchMatch {
     #[must_use]
     pub fn label(&self) -> String {
         match self {
-            SongSearchMatch::Song { candidate, .. } => {
-                clean_search_title(candidate.song.display_title(false))
-            }
-            SongSearchMatch::Pack { name, .. } => name.to_string(),
+            Self::Song { candidate, .. } => clean_search_title(candidate.song.display_title(false)),
+            Self::Pack { name, .. } => name.to_string(),
         }
     }
 }
@@ -213,13 +211,13 @@ impl SongSearchState {
     #[inline(always)]
     #[must_use]
     pub const fn is_open(&self) -> bool {
-        matches!(self, SongSearchState::Open(_))
+        matches!(self, Self::Open(_))
     }
 
     #[inline(always)]
     #[must_use]
     pub const fn is_hidden(&self) -> bool {
-        matches!(self, SongSearchState::Hidden)
+        matches!(self, Self::Hidden)
     }
 }
 
@@ -884,7 +882,7 @@ pub fn build_song_search_overlay(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
+    use deadsync_chart::{ChartData, SongData};
     use std::path::PathBuf;
 
     fn test_chart(meter: u32) -> ChartData {
@@ -897,13 +895,13 @@ mod tests {
             step_artist: String::new(),
             music_path: None,
             short_hash: String::new(),
-            stats: ArrowStats::default(),
-            tech_counts: TechCounts::default(),
+            stats: deadsync_chart::ArrowStats::default(),
+            tech_counts: deadsync_chart::TechCounts::default(),
             mines_nonfake: 0,
-            stamina_counts: StaminaCounts::default(),
+            stamina_counts: deadsync_chart::StaminaCounts::default(),
             total_streams: 0,
             matrix_rating: 0.0,
-            matrix_profile: Default::default(),
+            matrix_profile: Box::default(),
             max_nps: 0.0,
             sn_detailed_breakdown: String::new(),
             sn_partial_breakdown: String::new(),

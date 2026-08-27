@@ -497,8 +497,8 @@ mod tests {
     fn auto_retry_deadline_respects_enabled_services() {
         let now = Instant::now();
         let refresh = scores::EvaluationSubmissionRefresh {
-            generation: Default::default(),
-            snapshots: std::array::from_fn(|_| Default::default()),
+            generation: scores::EvaluationSubmissionGeneration::default(),
+            snapshots: std::array::from_fn(|_| scores::EvaluationSubmissionSnapshot::default()),
             next_refresh_at: None,
             groovestats_next_auto_retry_at: Some(now),
             arrowcloud_next_auto_retry_at: Some(now + std::time::Duration::from_secs(1)),

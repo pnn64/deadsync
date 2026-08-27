@@ -57,7 +57,7 @@ impl UpdaterCli {
         let mut iter = argv.into_iter().map(Into::into).peekable();
         // Skip program name if present.
         let _ = iter.next();
-        let mut out = UpdaterCli::default();
+        let mut out = Self::default();
         let mut apply_archive: Option<PathBuf> = None;
         let mut apply_sha256: Option<String> = None;
         let mut apply_parent_pid: Option<u32> = None;

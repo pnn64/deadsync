@@ -157,7 +157,7 @@ pub(crate) fn init_view() -> SelectMusicInitView {
         songs_root,
         courses_root: dirs.courses_dir(),
         playlists,
-        history: Default::default(),
+        history: SelectMusicHistoryView::default(),
         policy: policy_view(&cfg),
         profiles: profile_view(),
         profile_picker: crate::local_profiles::picker_view(),

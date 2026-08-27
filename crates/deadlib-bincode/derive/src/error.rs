@@ -74,20 +74,20 @@ impl Error {
     pub(crate) fn wrong_token<T>(token: Option<&TokenTree>, expected: &str) -> Result<T> {
         Err(Self::InvalidRustSyntax {
             span: token.map(|t| t.span()).unwrap_or_else(Span::call_site),
-            expected: format!("{}, got {:?}", expected, token),
+            expected: format!("{expected}, got {token:?}"),
         })
     }
 
     /// Return a new error that is located at the given span
     pub const fn with_span(mut self, new_span: Span) -> Self {
         match &mut self {
-            Error::UnknownDataType(span) => *span = new_span,
-            Error::InvalidRustSyntax { span, .. } => *span = new_span,
-            Error::ExpectedIdent(span) => *span = new_span,
-            Error::PushParse { span, .. } => {
+            Self::UnknownDataType(span) => *span = new_span,
+            Self::InvalidRustSyntax { span, .. } => *span = new_span,
+            Self::ExpectedIdent(span) => *span = new_span,
+            Self::PushParse { span, .. } => {
                 *span = Some(new_span);
             }
-            Error::Custom { span, .. } => *span = Some(new_span),
+            Self::Custom { span, .. } => *span = Some(new_span),
         }
 
         self
@@ -99,12 +99,12 @@ impl Error {
 impl Error {
     /// Returns whether this is an unknown-data-type parse error.
     pub fn is_unknown_data_type(&self) -> bool {
-        matches!(self, Error::UnknownDataType(_))
+        matches!(self, Self::UnknownDataType(_))
     }
 
     /// Returns whether this is an invalid-Rust-syntax parse error.
     pub fn is_invalid_rust_syntax(&self) -> bool {
-        matches!(self, Error::InvalidRustSyntax { .. })
+        matches!(self, Self::InvalidRustSyntax { .. })
     }
 }
 
@@ -115,15 +115,14 @@ impl fmt::Display for Error {
                 write!(fmt, "Unknown data type, only enum and struct are supported")
             }
             Self::InvalidRustSyntax { expected, .. } => {
-                write!(fmt, "Invalid rust syntax, expected {}", expected)
+                write!(fmt, "Invalid rust syntax, expected {expected}")
             }
             Self::ExpectedIdent(_) => write!(fmt, "Expected ident"),
             Self::PushParse { error, .. } => write!(
                 fmt,
-                "Invalid code passed to `StreamBuilder::push_parsed`: {}",
-                error
+                "Invalid code passed to `StreamBuilder::push_parsed`: {error}"
             ),
-            Self::Custom { error, .. } => write!(fmt, "{}", error),
+            Self::Custom { error, .. } => write!(fmt, "{error}"),
         }
     }
 }

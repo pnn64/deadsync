@@ -17,7 +17,7 @@ pub enum EncodeError {
 impl core::fmt::Display for EncodeError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         // TODO: Improve this?
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -99,7 +99,7 @@ pub enum DecodeError {
 impl core::fmt::Display for DecodeError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         // TODO: Improve this?
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -109,7 +109,7 @@ impl DecodeError {
     /// reporting in `src/varint/decode_signed.rs` since this calls
     /// `src/varint/decode_unsigned.rs` and needs to correct the `expected` and
     /// `found` types.
-    pub(crate) fn change_integer_type_to_signed(self) -> DecodeError {
+    pub(crate) fn change_integer_type_to_signed(self) -> Self {
         match self {
             Self::InvalidIntegerType { expected, found } => Self::InvalidIntegerType {
                 expected: expected.into_signed(),

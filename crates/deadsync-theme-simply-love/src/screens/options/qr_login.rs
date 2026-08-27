@@ -93,12 +93,12 @@ impl SlotState {
     const fn is_workless(&self) -> bool {
         matches!(
             self,
-            SlotState::NotJoined | SlotState::Guest | SlotState::Success | SlotState::Failed { .. }
+            Self::NotJoined | Self::Guest | Self::Success | Self::Failed { .. }
         )
     }
 
     const fn is_visible(&self) -> bool {
-        !matches!(self, SlotState::NotJoined)
+        !matches!(self, Self::NotJoined)
     }
 }
 

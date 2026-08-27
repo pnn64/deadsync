@@ -42,10 +42,10 @@ const fn add_early_total(slot: &mut ColumnJudgments, judgment: &Judgment, includ
         JudgeGrade::Excellent => slot.early_total_w2 = slot.early_total_w2.saturating_add(1),
         JudgeGrade::Great => slot.early_total_w3 = slot.early_total_w3.saturating_add(1),
         JudgeGrade::Decent if include_bad => {
-            slot.early_total_w4 = slot.early_total_w4.saturating_add(1)
+            slot.early_total_w4 = slot.early_total_w4.saturating_add(1);
         }
         JudgeGrade::WayOff if include_bad => {
-            slot.early_total_w5 = slot.early_total_w5.saturating_add(1)
+            slot.early_total_w5 = slot.early_total_w5.saturating_add(1);
         }
         _ => {}
     }

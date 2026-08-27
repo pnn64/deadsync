@@ -154,7 +154,7 @@ where
             }
             Err(err) => {
                 summary.failed += 1;
-                warn!("noteskin cache compile failed for '{}': {}", label, err);
+                warn!("noteskin cache compile failed for '{label}': {err}");
                 on_progress(idx + 1, total, &label, "failed");
             }
         }

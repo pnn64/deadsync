@@ -1383,7 +1383,7 @@ pub(super) fn repeat_held_dedicated_three_key_start(
     let idx = profile_data::player_side_index(side);
     if !state.start_input[idx].held {
         return None;
-    };
+    }
     let start_input = &mut state.start_input[idx];
     if !screen_input::advance_hold_repeat(
         &mut start_input.held_for,

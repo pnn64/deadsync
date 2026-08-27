@@ -159,7 +159,7 @@ impl Grade {
     /// The "base" grade to fall back to for `+`/`-` variants when no exact gif exists.
     /// `S+` and `S-` fall back to `S`, `A+`/`A-` to `A`, etc. Base grades return `None`.
     #[must_use]
-    pub const fn gif_base(&self) -> Option<Grade> {
+    pub const fn gif_base(&self) -> Option<Self> {
         match self {
             Self::Tier05 | Self::Tier07 => Some(Self::Tier06),
             Self::Tier08 | Self::Tier10 => Some(Self::Tier09),
@@ -5237,8 +5237,7 @@ pub fn log_arrowcloud_bulk_import_event(event: ArrowCloudBulkImportRunEvent) {
             pack_idx,
             total_packs,
         } => debug!(
-            "ArrowCloud bulk import canceled at pack {} ({}/{}).",
-            pack_name, pack_idx, total_packs
+            "ArrowCloud bulk import canceled at pack {pack_name} ({pack_idx}/{total_packs})."
         ),
         ArrowCloudBulkImportRunEvent::ChunkSucceeded {
             pack_idx,

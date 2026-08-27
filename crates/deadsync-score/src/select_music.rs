@@ -1,6 +1,6 @@
 use crate::{CachedScore, Grade};
 use deadsync_chart::SongData;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::cmp::Reverse;
 use std::sync::Arc;
 
@@ -224,7 +224,8 @@ fn chart_hash_song_indices(songs: &[Arc<SongData>]) -> FxHashMap<&str, usize> {
                 .count()
         })
         .sum();
-    let mut hash_to_song_ix = FxHashMap::with_capacity_and_hasher(chart_count, Default::default());
+    let mut hash_to_song_ix =
+        FxHashMap::with_capacity_and_hasher(chart_count, FxBuildHasher::default());
     for (song_ix, song) in songs.iter().enumerate() {
         for chart in &song.charts {
             if chart.has_note_data {

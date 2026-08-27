@@ -790,7 +790,7 @@ mod tests {
 
     #[test]
     fn crossover_annotations_hide_rssp_rows_behind_domain_data() {
-        let rows = [[b'1', b'0', b'0', b'0'], [b'0', b'1', b'0', b'0']];
+        let rows = [*b"1000", *b"0100"];
         let beats = [0.0, 1.0];
         let segments = deadsync_rules::timing::TimingSegments {
             bpms: vec![(0.0, 120.0)],
@@ -822,7 +822,7 @@ mod tests {
 
     #[test]
     fn crossover_annotations_keep_each_foot_lane() {
-        let rows = [[b'1', b'0', b'0', b'1']];
+        let rows = [*b"1001"];
         let beats = [0.0];
         let segments = deadsync_rules::timing::TimingSegments {
             bpms: vec![(0.0, 120.0)],

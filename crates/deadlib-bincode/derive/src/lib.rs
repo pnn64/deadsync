@@ -33,7 +33,7 @@ pub(crate) fn token_stream(
     use std::str::FromStr;
 
     let stream = proc_macro2::TokenStream::from_str(s)
-        .unwrap_or_else(|e| panic!("Could not parse code: {:?}\n{:?}", s, e));
+        .unwrap_or_else(|e| panic!("Could not parse code: {s:?}\n{e:?}"));
     stream.into_iter().peekable()
 }
 

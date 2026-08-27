@@ -26,7 +26,7 @@ impl StreamBuilder {
     }
 
     /// Append another `StreamBuilder` to the current `StreamBuilder`.
-    pub fn append(&mut self, builder: StreamBuilder) -> &mut Self {
+    pub fn append(&mut self, builder: Self) -> &mut Self {
         self.stream.extend(builder.stream);
         self
     }
@@ -69,9 +69,9 @@ impl StreamBuilder {
     /// `delim` indicates which group it is. The `inner` callback is used to fill the contents of the group.
     pub fn group<FN>(&mut self, delim: Delimiter, inner: FN) -> crate::Result<&mut Self>
     where
-        FN: FnOnce(&mut StreamBuilder) -> crate::Result<()>,
+        FN: FnOnce(&mut Self) -> crate::Result<()>,
     {
-        let mut stream = StreamBuilder::new();
+        let mut stream = Self::new();
         inner(&mut stream)?;
         self.stream
             .extend([TokenTree::Group(Group::new(delim, stream.stream))]);

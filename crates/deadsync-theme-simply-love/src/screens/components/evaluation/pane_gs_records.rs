@@ -269,7 +269,7 @@ impl OnlineRecordsPresentation {
 
 impl Default for OnlineRecordsPresentation {
     fn default() -> Self {
-        Self::new(&ScoreboxSideView::default())
+        Self::new(&crate::views::ScoreboxSideView::default())
     }
 }
 

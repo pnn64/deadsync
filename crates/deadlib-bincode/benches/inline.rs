@@ -10,7 +10,7 @@ fn inline_decoder_claim_bytes_read(c: &mut Criterion) {
         b.iter(|| {
             let _: (Vec<String>, usize) =
                 black_box(bincode::decode_from_slice(black_box(&slice), config).unwrap());
-        })
+        });
     });
 }
 

@@ -66,8 +66,8 @@ impl<Context> Decode<Context> for u16 {
                 let mut bytes = [0u8; 2];
                 decoder.reader().read(&mut bytes)?;
                 Ok(match D::C::ENDIAN {
-                    Endianness::Little => u16::from_le_bytes(bytes),
-                    Endianness::Big => u16::from_be_bytes(bytes),
+                    Endianness::Little => Self::from_le_bytes(bytes),
+                    Endianness::Big => Self::from_be_bytes(bytes),
                 })
             }
         }
@@ -86,8 +86,8 @@ impl<Context> Decode<Context> for u32 {
                 let mut bytes = [0u8; 4];
                 decoder.reader().read(&mut bytes)?;
                 Ok(match D::C::ENDIAN {
-                    Endianness::Little => u32::from_le_bytes(bytes),
-                    Endianness::Big => u32::from_be_bytes(bytes),
+                    Endianness::Little => Self::from_le_bytes(bytes),
+                    Endianness::Big => Self::from_be_bytes(bytes),
                 })
             }
         }
@@ -106,8 +106,8 @@ impl<Context> Decode<Context> for u64 {
                 let mut bytes = [0u8; 8];
                 decoder.reader().read(&mut bytes)?;
                 Ok(match D::C::ENDIAN {
-                    Endianness::Little => u64::from_le_bytes(bytes),
-                    Endianness::Big => u64::from_be_bytes(bytes),
+                    Endianness::Little => Self::from_le_bytes(bytes),
+                    Endianness::Big => Self::from_be_bytes(bytes),
                 })
             }
         }
@@ -126,8 +126,8 @@ impl<Context> Decode<Context> for u128 {
                 let mut bytes = [0u8; 16];
                 decoder.reader().read(&mut bytes)?;
                 Ok(match D::C::ENDIAN {
-                    Endianness::Little => u128::from_le_bytes(bytes),
-                    Endianness::Big => u128::from_be_bytes(bytes),
+                    Endianness::Little => Self::from_le_bytes(bytes),
+                    Endianness::Big => Self::from_be_bytes(bytes),
                 })
             }
         }
@@ -165,7 +165,7 @@ impl<Context> Decode<Context> for i8 {
         decoder.claim_bytes_read(1)?;
         let mut bytes = [0u8; 1];
         decoder.reader().read(&mut bytes)?;
-        Ok(bytes[0] as i8)
+        Ok(bytes[0] as Self)
     }
 }
 impl_borrow_decode!(i8);
@@ -181,8 +181,8 @@ impl<Context> Decode<Context> for i16 {
                 let mut bytes = [0u8; 2];
                 decoder.reader().read(&mut bytes)?;
                 Ok(match D::C::ENDIAN {
-                    Endianness::Little => i16::from_le_bytes(bytes),
-                    Endianness::Big => i16::from_be_bytes(bytes),
+                    Endianness::Little => Self::from_le_bytes(bytes),
+                    Endianness::Big => Self::from_be_bytes(bytes),
                 })
             }
         }
@@ -201,8 +201,8 @@ impl<Context> Decode<Context> for i32 {
                 let mut bytes = [0u8; 4];
                 decoder.reader().read(&mut bytes)?;
                 Ok(match D::C::ENDIAN {
-                    Endianness::Little => i32::from_le_bytes(bytes),
-                    Endianness::Big => i32::from_be_bytes(bytes),
+                    Endianness::Little => Self::from_le_bytes(bytes),
+                    Endianness::Big => Self::from_be_bytes(bytes),
                 })
             }
         }
@@ -221,8 +221,8 @@ impl<Context> Decode<Context> for i64 {
                 let mut bytes = [0u8; 8];
                 decoder.reader().read(&mut bytes)?;
                 Ok(match D::C::ENDIAN {
-                    Endianness::Little => i64::from_le_bytes(bytes),
-                    Endianness::Big => i64::from_be_bytes(bytes),
+                    Endianness::Little => Self::from_le_bytes(bytes),
+                    Endianness::Big => Self::from_be_bytes(bytes),
                 })
             }
         }
@@ -241,8 +241,8 @@ impl<Context> Decode<Context> for i128 {
                 let mut bytes = [0u8; 16];
                 decoder.reader().read(&mut bytes)?;
                 Ok(match D::C::ENDIAN {
-                    Endianness::Little => i128::from_le_bytes(bytes),
-                    Endianness::Big => i128::from_be_bytes(bytes),
+                    Endianness::Little => Self::from_le_bytes(bytes),
+                    Endianness::Big => Self::from_be_bytes(bytes),
                 })
             }
         }
@@ -263,7 +263,7 @@ impl<Context> Decode<Context> for isize {
                 Ok(match D::C::ENDIAN {
                     Endianness::Little => i64::from_le_bytes(bytes),
                     Endianness::Big => i64::from_be_bytes(bytes),
-                } as isize)
+                } as Self)
             }
         }
     }
@@ -276,8 +276,8 @@ impl<Context> Decode<Context> for f32 {
         let mut bytes = [0u8; 4];
         decoder.reader().read(&mut bytes)?;
         Ok(match D::C::ENDIAN {
-            Endianness::Little => f32::from_le_bytes(bytes),
-            Endianness::Big => f32::from_be_bytes(bytes),
+            Endianness::Little => Self::from_le_bytes(bytes),
+            Endianness::Big => Self::from_be_bytes(bytes),
         })
     }
 }
@@ -289,8 +289,8 @@ impl<Context> Decode<Context> for f64 {
         let mut bytes = [0u8; 8];
         decoder.reader().read(&mut bytes)?;
         Ok(match D::C::ENDIAN {
-            Endianness::Little => f64::from_le_bytes(bytes),
-            Endianness::Big => f64::from_be_bytes(bytes),
+            Endianness::Little => Self::from_le_bytes(bytes),
+            Endianness::Big => Self::from_be_bytes(bytes),
         })
     }
 }
@@ -375,7 +375,7 @@ where
     T: Decode<Context>,
 {
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
-        match super::decode_option_variant(decoder, core::any::type_name::<Option<T>>())? {
+        match super::decode_option_variant(decoder, core::any::type_name::<Self>())? {
             Some(_) => {
                 let val = T::decode(decoder)?;
                 Ok(Some(val))
@@ -392,7 +392,7 @@ where
     fn borrow_decode<D: BorrowDecoder<'de, Context = Context>>(
         decoder: &mut D,
     ) -> Result<Self, DecodeError> {
-        match super::decode_option_variant(decoder, core::any::type_name::<Option<T>>())? {
+        match super::decode_option_variant(decoder, core::any::type_name::<Self>())? {
             Some(_) => {
                 let val = T::borrow_decode(decoder)?;
                 Ok(Some(val))

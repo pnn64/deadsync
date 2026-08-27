@@ -248,7 +248,7 @@ impl BitmaskBinding {
     #[inline]
     pub const fn init(&self) -> Option<&BitmaskInit> {
         match self {
-            BitmaskBinding::Generic { init, .. } => Some(init),
+            Self::Generic { init, .. } => Some(init),
         }
     }
 }
@@ -306,21 +306,21 @@ impl BitMapping {
     #[inline]
     pub fn bit_for_choice(self, choice_index: usize) -> Option<u32> {
         match self {
-            BitMapping::Sequential { width } => {
+            Self::Sequential { width } => {
                 if choice_index < width as usize {
                     Some(1u32 << choice_index)
                 } else {
                     None
                 }
             }
-            BitMapping::SequentialOffset { offset, width } => {
+            Self::SequentialOffset { offset, width } => {
                 if choice_index < width as usize {
                     Some(1u32 << (offset as usize + choice_index))
                 } else {
                     None
                 }
             }
-            BitMapping::Explicit(bits) => bits.get(choice_index).copied(),
+            Self::Explicit(bits) => bits.get(choice_index).copied(),
         }
     }
 
@@ -329,16 +329,16 @@ impl BitMapping {
     pub fn active_choice_bits(self, active_bits: u32, choice_count: usize) -> u16 {
         let count = choice_count.min(u16::BITS as usize);
         match self {
-            BitMapping::Sequential { width } => {
+            Self::Sequential { width } => {
                 let count = count.min(width as usize);
                 (active_bits & low_bit_mask(count)) as u16
             }
-            BitMapping::SequentialOffset { offset, width } => {
+            Self::SequentialOffset { offset, width } => {
                 let count = count.min(width as usize);
                 let shifted = active_bits.checked_shr(u32::from(offset)).unwrap_or(0);
                 (shifted & low_bit_mask(count)) as u16
             }
-            BitMapping::Explicit(bits) => {
+            Self::Explicit(bits) => {
                 bits.iter()
                     .take(count)
                     .enumerate()
@@ -357,9 +357,9 @@ impl BitMapping {
     #[inline]
     pub const fn required_choices(self) -> usize {
         match self {
-            BitMapping::Sequential { width } => width as usize,
-            BitMapping::SequentialOffset { width, .. } => width as usize,
-            BitMapping::Explicit(bits) => bits.len(),
+            Self::Sequential { width } => width as usize,
+            Self::SequentialOffset { width, .. } => width as usize,
+            Self::Explicit(bits) => bits.len(),
         }
     }
 }

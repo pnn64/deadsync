@@ -159,11 +159,10 @@ pub fn boost_main_thread_timing() -> MainThreadTimingGuard {
     unsafe {
         let timer_result = timeBeginPeriod(timer_period_ms);
         if timer_result == 0 {
-            debug!("Requested Windows timer resolution: {}ms", timer_period_ms);
+            debug!("Requested Windows timer resolution: {timer_period_ms}ms");
         } else {
             warn!(
-                "Failed to request Windows timer resolution {}ms: MMRESULT={}",
-                timer_period_ms, timer_result
+                "Failed to request Windows timer resolution {timer_period_ms}ms: MMRESULT={timer_result}"
             );
         }
     }

@@ -5,7 +5,7 @@ use deadlib_assets::{
 };
 use deadlib_render_core::{FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, TextureHandle};
 use image::RgbaImage;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::{VecDeque, hash_map::Entry};
 use std::hint::black_box;
@@ -141,7 +141,7 @@ impl LegacyVideoQueue {
     fn new() -> Self {
         Self {
             order: VecDeque::with_capacity(1),
-            entries: FxHashMap::with_capacity_and_hasher(1, Default::default()),
+            entries: FxHashMap::with_capacity_and_hasher(1, FxBuildHasher::default()),
         }
     }
 

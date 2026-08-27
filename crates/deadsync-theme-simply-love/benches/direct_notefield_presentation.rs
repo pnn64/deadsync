@@ -656,7 +656,7 @@ fn boundary_actor(index: usize) -> Actor {
         scale: [1.0, 1.0],
         shadow_len: [0.0, 0.0],
         shadow_color: [0.0; 4],
-        effect: Default::default(),
+        effect: deadlib_present::anim::EffectState::default(),
     }
 }
 
@@ -1595,8 +1595,7 @@ fn measure_player_proxy_pair(
 
 fn print_player_proxy_benchmark() {
     println!(
-        "\ndirect SongLua whole-Player proxy benchmark ({} HUD + {} field draws)",
-        BOUNDARY_HUD_ACTORS, FIELD_PROXY_DRAWS
+        "\ndirect SongLua whole-Player proxy benchmark ({BOUNDARY_HUD_ACTORS} HUD + {FIELD_PROXY_DRAWS} field draws)"
     );
     let [actor, direct] = measure_player_proxy_pair(false, false, 0.0);
     assert_eq!(actor.checksum, direct.checksum);
@@ -1614,8 +1613,7 @@ fn print_player_proxy_benchmark() {
 
 fn print_aft_player_proxy_benchmark() {
     println!(
-        "\ndirect SongLua single-source AFT whole-Player proxy benchmark ({} HUD + {} field draws)",
-        BOUNDARY_HUD_ACTORS, FIELD_PROXY_DRAWS
+        "\ndirect SongLua single-source AFT whole-Player proxy benchmark ({BOUNDARY_HUD_ACTORS} HUD + {FIELD_PROXY_DRAWS} field draws)"
     );
     let [actor, direct] = measure_player_proxy_pair(true, false, 0.0);
     assert_eq!(actor.checksum, direct.checksum);
@@ -1632,8 +1630,7 @@ fn print_aft_player_proxy_benchmark() {
 
 fn print_transformed_player_proxy_benchmark() {
     println!(
-        "\ndirect SongLua camera-transformed whole-Player proxy benchmark ({} HUD + {} field draws)",
-        BOUNDARY_HUD_ACTORS, FIELD_PROXY_DRAWS
+        "\ndirect SongLua camera-transformed whole-Player proxy benchmark ({BOUNDARY_HUD_ACTORS} HUD + {FIELD_PROXY_DRAWS} field draws)"
     );
     let [actor, direct] = measure_player_proxy_pair(false, true, 0.0);
     assert_eq!(actor.checksum, direct.checksum);
@@ -1651,8 +1648,7 @@ fn print_transformed_player_proxy_benchmark() {
 
 fn print_y_folded_player_proxy_benchmark() {
     println!(
-        "\ndirect SongLua Y-folded whole-Player proxy benchmark ({} HUD + {} field draws)",
-        BOUNDARY_HUD_ACTORS, FIELD_PROXY_DRAWS
+        "\ndirect SongLua Y-folded whole-Player proxy benchmark ({BOUNDARY_HUD_ACTORS} HUD + {FIELD_PROXY_DRAWS} field draws)"
     );
     let [actor, direct] = measure_player_proxy_pair(false, true, 27.0);
     assert_eq!(actor.checksum, direct.checksum);

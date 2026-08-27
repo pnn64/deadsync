@@ -595,8 +595,10 @@ fn build_song_play_counts(
         return HashMap::new();
     }
 
-    let mut plays_by_chart: FxHashMap<&str, u32> =
-        FxHashMap::with_capacity_and_hasher(played_chart_counts.len(), Default::default());
+    let mut plays_by_chart: FxHashMap<&str, u32> = FxHashMap::with_capacity_and_hasher(
+        played_chart_counts.len(),
+        rustc_hash::FxBuildHasher::default(),
+    );
     for (chart_hash, plays) in played_chart_counts {
         plays_by_chart
             .entry(chart_hash.as_str())
@@ -2837,7 +2839,12 @@ pub fn push_actors(
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
-    push_actors(&mut actors, state, asset_manager, Default::default());
+    push_actors(
+        &mut actors,
+        state,
+        asset_manager,
+        crate::views::SimplyLoveVisualPolicyView::default(),
+    );
     actors
 }
 
@@ -3286,7 +3293,7 @@ mod song_lookup_tests {
                         display_name: "Alice".to_owned(),
                         ..Default::default()
                     },
-                    Default::default(),
+                    SelectFlowPlayerView::default(),
                 ]),
                 music_wheel: Some(MusicWheelRuntimeView {
                     translated_titles: true,
@@ -3317,10 +3324,10 @@ mod song_lookup_tests {
             step_artist: String::new(),
             music_path: None,
             short_hash: hash.to_owned(),
-            stats: Default::default(),
-            tech_counts: Default::default(),
+            stats: deadsync_chart::ArrowStats::default(),
+            tech_counts: deadsync_chart::TechCounts::default(),
             mines_nonfake: 0,
-            stamina_counts: Default::default(),
+            stamina_counts: deadsync_chart::StaminaCounts::default(),
             total_streams: 0,
             matrix_rating: 0.0,
             matrix_profile: Box::default(),

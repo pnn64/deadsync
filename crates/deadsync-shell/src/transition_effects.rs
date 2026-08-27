@@ -115,7 +115,7 @@ mod tests {
         }
     }
 
-    fn options<'a>(speed_mod: &'a [SpeedMod; MAX_PLAYERS]) -> PlayerOptionsTransition<'a> {
+    fn options(speed_mod: &[SpeedMod; MAX_PLAYERS]) -> PlayerOptionsTransition<'_> {
         PlayerOptionsTransition {
             speed_mod,
             chart_difficulty_index: [2, 5],

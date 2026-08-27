@@ -1061,8 +1061,7 @@ mod reading_clock_tests {
             kinds_after_warmup
                 .iter()
                 .all(|k| *k == ReadingClockKind::Microseconds),
-            "clock did not lock Microseconds: {:?}",
-            kinds_after_warmup
+            "clock did not lock Microseconds: {kinds_after_warmup:?}"
         );
 
         // Every press must map within a sub-millisecond window of poll time:

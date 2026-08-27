@@ -2017,7 +2017,7 @@ pub fn get_actors(
         state,
         asset_manager,
         alpha_multiplier,
-        Default::default(),
+        crate::views::SimplyLoveVisualPolicyView::default(),
     );
     actors
 }

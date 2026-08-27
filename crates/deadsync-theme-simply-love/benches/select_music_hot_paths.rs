@@ -440,9 +440,12 @@ fn legacy_preferred(song: &SongData) -> [usize; STANDARD_DIFFICULTY_COUNT] {
 }
 
 fn legacy_wheel_meta(songs: &[Arc<SongData>]) -> LegacyWheelMeta {
-    let mut preferred = FxHashMap::with_capacity_and_hasher(songs.len(), Default::default());
-    let mut edits = FxHashSet::with_capacity_and_hasher(songs.len(), Default::default());
-    let mut pack_prefs = FxHashMap::with_capacity_and_hasher(songs.len(), Default::default());
+    let mut preferred =
+        FxHashMap::with_capacity_and_hasher(songs.len(), rustc_hash::FxBuildHasher::default());
+    let mut edits =
+        FxHashSet::with_capacity_and_hasher(songs.len(), rustc_hash::FxBuildHasher::default());
+    let mut pack_prefs =
+        FxHashMap::with_capacity_and_hasher(songs.len(), rustc_hash::FxBuildHasher::default());
     for (index, song) in songs.iter().enumerate() {
         let ptr = Arc::as_ptr(song) as usize;
         preferred.insert(ptr, legacy_preferred(song));

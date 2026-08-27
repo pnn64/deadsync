@@ -320,7 +320,7 @@ pub enum State {
 impl State {
     #[must_use]
     pub const fn is_hidden(&self) -> bool {
-        matches!(self, State::Hidden)
+        matches!(self, Self::Hidden)
     }
 
     #[must_use]

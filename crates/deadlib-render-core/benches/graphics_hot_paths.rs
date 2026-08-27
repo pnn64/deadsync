@@ -289,8 +289,8 @@ fn pipelines() -> (
         tmesh_geometries: geometries.clone(),
         ops: ops.clone(),
     };
-    let mut legacy = LegacySlots::with_capacity_and_hasher(GEOMETRIES, Default::default());
-    let mut memo = LegacySlots::with_capacity_and_hasher(GEOMETRIES, Default::default());
+    let mut legacy = LegacySlots::with_capacity_and_hasher(GEOMETRIES, FxBuildHasher::default());
+    let mut memo = LegacySlots::with_capacity_and_hasher(GEOMETRIES, FxBuildHasher::default());
     let mut dense = DenseSlotMap::with_capacity(GEOMETRIES);
     let mut legacy_dense = DenseSlotMap::with_capacity(GEOMETRIES);
     for index in 0..GEOMETRIES {

@@ -435,7 +435,7 @@ fn test_decode_u16() {
     for (slice, expected) in errors {
         let mut reader = crate::de::read::SliceReader::new(slice);
         let found = varint_decode_u16(&mut reader, Endianness::Little).unwrap_err();
-        assert_eq!(std::format!("{:?}", expected), std::format!("{:?}", found));
+        assert_eq!(std::format!("{expected:?}"), std::format!("{:?}", found));
     }
 }
 
@@ -489,7 +489,7 @@ fn test_decode_u32() {
     for (slice, expected) in errors {
         let mut reader = crate::de::read::SliceReader::new(slice);
         let found = varint_decode_u32(&mut reader, Endianness::Little).unwrap_err();
-        assert_eq!(std::format!("{:?}", expected), std::format!("{:?}", found));
+        assert_eq!(std::format!("{expected:?}"), std::format!("{:?}", found));
     }
 }
 
@@ -567,7 +567,7 @@ fn test_decode_u64() {
     for (slice, expected) in errors {
         let mut reader = crate::de::read::SliceReader::new(slice);
         let found = varint_decode_u64(&mut reader, Endianness::Little).unwrap_err();
-        assert_eq!(std::format!("{:?}", expected), std::format!("{:?}", found));
+        assert_eq!(std::format!("{expected:?}"), std::format!("{:?}", found));
     }
 }
 
@@ -705,6 +705,6 @@ fn test_decode_u128() {
         let mut reader = crate::de::read::SliceReader::new(slice);
         let found = varint_decode_u128(&mut reader, Endianness::Little).unwrap_err();
         std::dbg!(slice);
-        assert_eq!(std::format!("{:?}", expected), std::format!("{:?}", found));
+        assert_eq!(std::format!("{expected:?}"), std::format!("{:?}", found));
     }
 }

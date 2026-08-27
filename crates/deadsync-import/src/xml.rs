@@ -10,7 +10,7 @@
 pub struct XmlNode {
     pub tag: String,
     pub attrs: Vec<(String, String)>,
-    pub children: Vec<XmlNode>,
+    pub children: Vec<Self>,
     /// Concatenated direct text content (whitespace-trimmed at the edges).
     pub text: String,
 }
@@ -27,12 +27,12 @@ impl XmlNode {
 
     /// Returns the first direct child element with the given tag.
     #[must_use]
-    pub fn child(&self, tag: &str) -> Option<&XmlNode> {
+    pub fn child(&self, tag: &str) -> Option<&Self> {
         self.children.iter().find(|c| c.tag == tag)
     }
 
     /// Iterates direct child elements with the given tag.
-    pub fn children_named<'a>(&'a self, tag: &'a str) -> impl Iterator<Item = &'a XmlNode> + 'a {
+    pub fn children_named<'a>(&'a self, tag: &'a str) -> impl Iterator<Item = &'a Self> + 'a {
         self.children.iter().filter(move |c| c.tag == tag)
     }
 

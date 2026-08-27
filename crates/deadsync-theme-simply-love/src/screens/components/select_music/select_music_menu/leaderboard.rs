@@ -736,7 +736,7 @@ mod tests {
                     groovestats_active: true,
                     ..Default::default()
                 },
-                Default::default(),
+                crate::views::ScoreboxSideView::default(),
             ],
         )
         .expect("joined player should open the overlay");
@@ -755,7 +755,7 @@ mod tests {
                         machine_entries: vec![entry(1, "AAA")],
                         leaderboards: None,
                     },
-                    Default::default(),
+                    SelectMusicLeaderboardSideView::default(),
                 ],
             },
         );

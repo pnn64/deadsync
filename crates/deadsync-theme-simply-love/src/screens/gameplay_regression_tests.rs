@@ -4000,7 +4000,7 @@ return Def.ActorFrame{}
                                 &assets,
                                 screen_gameplay::ActorViewOverride::default(),
                                 123.0,
-                                Default::default(),
+                                crate::views::SimplyLoveVisualPolicyView::default(),
                             );
                         }
                     },

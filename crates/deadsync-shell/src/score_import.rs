@@ -1,5 +1,4 @@
 use deadsync_online::score_compat as scores;
-use deadsync_profile::Profile;
 use deadsync_score::{ScoreBulkImportSummary, ScoreImportProgress};
 use deadsync_theme_simply_love::{
     SimplyLoveScoreImportEvent, SimplyLoveScoreImportProgress, SimplyLoveScoreImportRequest,
@@ -70,7 +69,7 @@ impl Service {
                 }
             );
 
-            let mut runtime_profile = Profile::default();
+            let mut runtime_profile = deadsync_profile::Profile::default();
             runtime_profile.display_name = profile.display_name;
             runtime_profile.groovestats_api_key = profile.groovestats_api_key;
             runtime_profile.groovestats_username = profile.groovestats_username;

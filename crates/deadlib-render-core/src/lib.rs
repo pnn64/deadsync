@@ -87,7 +87,10 @@ impl<V> DenseSlotMap<V> {
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            slots: FastU64Map::with_capacity_and_hasher(capacity, Default::default()),
+            slots: FastU64Map::with_capacity_and_hasher(
+                capacity,
+                rustc_hash::FxBuildHasher::default(),
+            ),
             values: Vec::with_capacity(capacity),
         }
     }

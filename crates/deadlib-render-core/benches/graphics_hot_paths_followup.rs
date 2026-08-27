@@ -259,11 +259,11 @@ fn geometry_benches() -> (LegacyGeometryBench, EntryGeometryBench) {
         .collect::<Vec<_>>();
     (
         LegacyGeometryBench {
-            map: GeometryMap::with_capacity_and_hasher(GEOMETRY_KEYS, Default::default()),
+            map: GeometryMap::with_capacity_and_hasher(GEOMETRY_KEYS, FxBuildHasher::default()),
             keys: keys.clone(),
         },
         EntryGeometryBench {
-            map: GeometryMap::with_capacity_and_hasher(GEOMETRY_KEYS, Default::default()),
+            map: GeometryMap::with_capacity_and_hasher(GEOMETRY_KEYS, FxBuildHasher::default()),
             keys,
         },
     )

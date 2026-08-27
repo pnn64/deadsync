@@ -16,6 +16,8 @@ use deadsync_gameplay::{
 };
 use deadsync_noteskin::NoteskinSlot;
 #[cfg(test)]
+use deadsync_noteskin::{ReceptorIdleGlow, ReceptorReverseBehavior};
+#[cfg(test)]
 use std::sync::Arc;
 
 // ITGmania draws each Pump pad center-first so overlapping inner and outer
@@ -547,9 +549,9 @@ mod tests {
             receptor_off: vec![TestSlot::new("target0"), TestSlot::new("target1")],
             receptor_glow: vec![Some(TestSlot::new("press0")), Some(TestSlot::new("press1"))],
             receptor_idle_glow_layers: vec![None; 2],
-            receptor_off_reverse: vec![Default::default(); 2],
-            receptor_glow_reverse: vec![Default::default(); 2],
-            receptor_idle_glow_reverse: vec![Default::default(); 2],
+            receptor_off_reverse: vec![ReceptorReverseBehavior::default(); 2],
+            receptor_glow_reverse: vec![ReceptorReverseBehavior::default(); 2],
+            receptor_idle_glow_reverse: vec![ReceptorReverseBehavior::default(); 2],
             receptor_step_behaviors: Vec::new(),
             mines: Vec::new(),
             mine_fill_slots: Vec::new(),
@@ -559,7 +561,7 @@ mod tests {
             tap_explosions_by_col,
             mine_hit_explosion: Some(explosion("mine")),
             receptor_glow_behavior: ReceptorGlowBehavior::default(),
-            receptor_idle_glow: Default::default(),
+            receptor_idle_glow: ReceptorIdleGlow::default(),
             receptor_pulse: ReceptorPulse::default(),
             hold_let_go_gray_percent: 0.25,
             hold_columns: vec![
@@ -1254,8 +1256,8 @@ mod tests {
             .map(|lane| TestSlot::new(format!("target{lane}")))
             .collect();
         noteskin.receptor_glow = vec![None; 5];
-        noteskin.receptor_off_reverse = vec![Default::default(); 5];
-        noteskin.receptor_glow_reverse = vec![Default::default(); 5];
+        noteskin.receptor_off_reverse = vec![ReceptorReverseBehavior::default(); 5];
+        noteskin.receptor_glow_reverse = vec![ReceptorReverseBehavior::default(); 5];
         noteskin.column_xs = vec![-96, -48, 0, 48, 96];
         let timing = TimingData::default();
         let note_hides = SongLuaNoteHideWindows::default();

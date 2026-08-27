@@ -350,10 +350,7 @@ impl NoteskinData {
             path = next;
         }
 
-        warn!(
-            "noteskin redirect depth exceeded while resolving '{} {}'",
-            button, element
-        );
+        warn!("noteskin redirect depth exceeded while resolving '{button} {element}'");
         None
     }
 
@@ -613,8 +610,7 @@ pub fn load_noteskin_data(root: &Path, game: &str, skin: &str) -> Result<Noteski
     for _ in 0..MAX_FALLBACK_DEPTH {
         if !seen.insert(current.clone()) {
             return Err(format!(
-                "circular noteskin fallback detected while loading '{skin}' (stuck on '{}')",
-                current
+                "circular noteskin fallback detected while loading '{skin}' (stuck on '{current}')"
             ));
         }
 

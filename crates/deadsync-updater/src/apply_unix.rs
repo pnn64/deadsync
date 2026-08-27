@@ -179,8 +179,7 @@ pub fn extract_tar_gz(zip_bytes: &[u8], dest: &Path) -> Result<usize, UpdaterErr
             // than silently producing a partial install that a user
             // might run.
             return Err(UpdaterError::Io(format!(
-                "rejected non-regular tar entry '{raw_name}' (type {:?})",
-                entry_type,
+                "rejected non-regular tar entry '{raw_name}' (type {entry_type:?})",
             )));
         }
         if let Some(parent) = out_path.parent() {

@@ -770,7 +770,7 @@ pub trait SongLuaRuntimeEaseTargetLike {
     fn as_runtime_ease_target(&self) -> SongLuaRuntimeEaseTarget<'_>;
 }
 
-impl<'a> SongLuaRuntimeEaseTargetLike for SongLuaRuntimeEaseTarget<'a> {
+impl SongLuaRuntimeEaseTargetLike for SongLuaRuntimeEaseTarget<'_> {
     #[inline(always)]
     fn as_runtime_ease_target(&self) -> SongLuaRuntimeEaseTarget<'_> {
         *self
@@ -780,13 +780,13 @@ impl<'a> SongLuaRuntimeEaseTargetLike for SongLuaRuntimeEaseTarget<'a> {
 impl SongLuaRuntimeEaseTargetLike for SongLuaRuntimeEaseTargetOwned {
     fn as_runtime_ease_target(&self) -> SongLuaRuntimeEaseTarget<'_> {
         match self {
-            SongLuaRuntimeEaseTargetOwned::Mod(target_name) => {
+            Self::Mod(target_name) => {
                 SongLuaRuntimeEaseTarget::Mod(target_name.as_str())
             }
-            SongLuaRuntimeEaseTargetOwned::Player(target) => {
+            Self::Player(target) => {
                 SongLuaRuntimeEaseTarget::Player(*target)
             }
-            SongLuaRuntimeEaseTargetOwned::Function => SongLuaRuntimeEaseTarget::Function,
+            Self::Function => SongLuaRuntimeEaseTarget::Function,
         }
     }
 }

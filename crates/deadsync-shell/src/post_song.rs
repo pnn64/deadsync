@@ -35,7 +35,7 @@ pub(crate) fn runtime_view() -> PostSongRuntimeView {
         three_key_navigation: cfg.three_key_navigation,
         srpg10_visuals: cfg.visual_style.is_srpg()
             && matches!(cfg.srpg_variant, config::SrpgVariant::Srpg10),
-        machine_leaderboards: Default::default(),
+        machine_leaderboards: std::collections::HashMap::default(),
     }
 }
 

@@ -170,7 +170,7 @@ fn append_edit_beat_bar(
 ) {
     match frame {
         0 | 1 => {
-            append_edit_bar_segment(draws, x_center, y, width, thickness, alpha, z_measure_lines)
+            append_edit_bar_segment(draws, x_center, y, width, thickness, alpha, z_measure_lines);
         }
         2 => append_dashed_edit_bar(
             draws,

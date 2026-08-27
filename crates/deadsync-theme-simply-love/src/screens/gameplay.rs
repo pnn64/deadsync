@@ -3459,9 +3459,7 @@ fn build_song_lua_compiled_visual_layer_runtime(
     );
     if !start_second.is_finite() {
         log::warn!(
-            "Skipping song lua visual layer for '{}' at beat {:.3}: invalid start time",
-            song_title,
-            start_beat
+            "Skipping song lua visual layer for '{song_title}' at beat {start_beat:.3}: invalid start time"
         );
         return None;
     }
@@ -13034,7 +13032,7 @@ fn song_lua_overlay_effect_state(state: SongLuaOverlayState) -> EffectState {
             .effect_timing
             .unwrap_or([period * 0.5, 0.0, period * 0.5, 0.0, 0.0]),
         magnitude: state.effect_magnitude,
-        ..EffectState::default()
+        ..deadlib_present::anim::EffectState::default()
     }
 }
 
@@ -13925,7 +13923,7 @@ fn song_lua_noteskin_sprite_actor(
         scale: [1.0, 1.0],
         shadow_len: [0.0, 0.0],
         shadow_color: [0.0, 0.0, 0.0, 0.5],
-        effect: EffectState::default(),
+        effect: deadlib_present::anim::EffectState::default(),
     })
 }
 
@@ -15066,7 +15064,7 @@ fn build_song_lua_aft_sprite_actor(
         scale: [effect_scale[0], effect_scale[1]],
         shadow_len: state.shadow_len,
         shadow_color: state.shadow_color,
-        effect: EffectState::default(),
+        effect: deadlib_present::anim::EffectState::default(),
     };
     Some(song_lua_finalize_overlay_actor(
         state,
@@ -15426,7 +15424,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 scale[1] *= effect_scale[1];
                 *uv_rect = song_lua_overlay_uv_rect(state, Some(key), total_elapsed);
                 *texcoordvelocity = state.texcoord_velocity;
-                *actor_effect = EffectState::default();
+                *actor_effect = deadlib_present::anim::EffectState::default();
                 *actor_flip_x ^= flip_x;
                 *actor_flip_y ^= flip_y;
                 *visible = state.visible;
@@ -15538,7 +15536,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 blend: overlay_blend,
                 shadow_len: [0.0, 0.0],
                 shadow_color: [0.0, 0.0, 0.0, 0.5],
-                effect: EffectState::default(),
+                effect: deadlib_present::anim::EffectState::default(),
             };
             Some(finalize_actor(
                 actor,
@@ -16040,7 +16038,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 *world_z += song_lua_biased_world_z(state, effect_offset[2]);
                 scale[0] *= effect_scale[0];
                 scale[1] *= effect_scale[1];
-                *actor_effect = EffectState::default();
+                *actor_effect = deadlib_present::anim::EffectState::default();
                 *actor_flip_x ^= flip_x;
                 *actor_flip_y ^= flip_y;
                 *visible = state.visible;
@@ -19258,7 +19256,7 @@ pub fn push_actors(
                         &field_geom,
                         is_doubles,
                         is_centered_single,
-                    )
+                    );
                 });
                 if smx_overlay_alpha < 1.0 {
                     for a in &mut actors[before..] {
@@ -21692,7 +21690,7 @@ mod tests {
     #[test]
     fn scorebox_polling_stops_when_loading_finishes() {
         let mut profiles: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS] =
-            std::array::from_fn(|_| Default::default());
+            std::array::from_fn(|_| deadsync_score::GameplayScoreboxProfileSnapshot::default());
         profiles[0].display_scorebox = true;
         profiles[0].gs_active = true;
         let mut snapshots = [
@@ -22268,13 +22266,13 @@ mod tests {
         let mut visited = Vec::new();
 
         visit_scheduled_song_lua_sound_events(&events, &mut next_event_ix, 0.0, 0.0, &mut |path| {
-            visited.push(path.to_path_buf())
+            visited.push(path.to_path_buf());
         });
         visit_scheduled_song_lua_sound_events(&events, &mut next_event_ix, 0.0, 1.5, &mut |path| {
-            visited.push(path.to_path_buf())
+            visited.push(path.to_path_buf());
         });
         visit_scheduled_song_lua_sound_events(&events, &mut next_event_ix, 0.0, 1.5, &mut |path| {
-            visited.push(path.to_path_buf())
+            visited.push(path.to_path_buf());
         });
 
         assert_eq!(
@@ -22301,7 +22299,7 @@ mod tests {
 
         visit_scheduled_song_lua_sound_events(&events, &mut next_event_ix, 2.0, 0.5, &mut |_| {});
         visit_scheduled_song_lua_sound_events(&events, &mut next_event_ix, 0.5, 1.5, &mut |path| {
-            visited.push(path.to_path_buf())
+            visited.push(path.to_path_buf());
         });
 
         assert_eq!(visited, [PathBuf::from("one.ogg")]);
@@ -24513,7 +24511,7 @@ mod tests {
             scale: [1.0, 1.0],
             shadow_len: [0.0, 0.0],
             shadow_color: [0.2, 0.4, 0.6, 0.5],
-            effect: EffectState::default(),
+            effect: deadlib_present::anim::EffectState::default(),
         };
 
         let styled =
@@ -28705,7 +28703,9 @@ mod tests {
             song_foreground: SongLuaCapturedActor::default(),
             song_foreground_events: Vec::new(),
             hidden_players: [false; MAX_PLAYERS],
-            note_hides: std::array::from_fn(|_| Default::default()),
+            note_hides: std::array::from_fn(|_| {
+                deadsync_gameplay::SongLuaNoteHideWindows::default()
+            }),
             column_offsets: std::array::from_fn(|_| Vec::new()),
             screen_width: 640.0,
             screen_height: 480.0,

@@ -229,10 +229,10 @@ pub(super) mod tests {
             step_artist: String::new(),
             music_path: None,
             short_hash: "player-options-test".to_string(),
-            stats: Default::default(),
-            tech_counts: Default::default(),
+            stats: deadsync_chart::ArrowStats::default(),
+            tech_counts: deadsync_chart::TechCounts::default(),
             mines_nonfake: 0,
-            stamina_counts: Default::default(),
+            stamina_counts: deadsync_chart::StaminaCounts::default(),
             total_streams: 0,
             matrix_rating: 0.0,
             matrix_profile: Box::default(),
@@ -2323,8 +2323,14 @@ pub(super) mod tests {
     fn player_options_top_bar_reuses_shared_children() {
         ensure_i18n();
         let (state, _) = setup_state();
-        let first = super::super::top_bar_actor(&state, Default::default());
-        let second = super::super::top_bar_actor(&state, Default::default());
+        let first = super::super::top_bar_actor(
+            &state,
+            crate::views::SimplyLoveVisualPolicyView::default(),
+        );
+        let second = super::super::top_bar_actor(
+            &state,
+            crate::views::SimplyLoveVisualPolicyView::default(),
+        );
         let (
             deadlib_present::actors::Actor::SharedFrame {
                 children: first_children,
@@ -4826,7 +4832,7 @@ pub(super) mod tests {
                 from_profile: |p| u32::from(p.appearance_effects_active_mask.bits()),
                 get_active: |m| u32::from(m.appearance_effects.bits()),
                 set_active: |m, b| {
-                    m.appearance_effects = AppearanceEffectsMask::from_bits_retain(b as u8)
+                    m.appearance_effects = AppearanceEffectsMask::from_bits_retain(b as u8);
                 },
                 cursor: CursorInit::FirstActiveBit,
             },

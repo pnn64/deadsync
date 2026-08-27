@@ -552,10 +552,7 @@ fn main() {
         old_projection_result.checksum,
         new_projection_result.checksum
     );
-    println!(
-        "wgpu projection staging ({} cameras, one change every 8 frames)",
-        PROJECTION_COUNT
-    );
+    println!("wgpu projection staging ({PROJECTION_COUNT} cameras, one change every 8 frames)");
     print_result(
         "old: keys then full copy",
         &old_projection_result,
@@ -599,8 +596,7 @@ fn main() {
         measure_pair(COPY_CONFIG, || old_rows.stage(), || new_rows.stage());
     assert_eq!(old_rows_result.checksum, new_rows_result.checksum);
     println!(
-        "\nMetal row staging ({}x{} RGBA, {}-byte aligned rows)",
-        TEXTURE_WIDTH, TEXTURE_HEIGHT, TEXTURE_ALIGNED_ROW
+        "\nMetal row staging ({TEXTURE_WIDTH}x{TEXTURE_HEIGHT} RGBA, {TEXTURE_ALIGNED_ROW}-byte aligned rows)"
     );
     print_result(
         "old: allocate padded rows",

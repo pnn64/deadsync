@@ -179,7 +179,7 @@ impl SelectMusicScoreboxPresentation {
 
 impl Default for SelectMusicScoreboxPresentation {
     fn default() -> Self {
-        Self::new(&ScoreboxSideView::default())
+        Self::new(&crate::views::ScoreboxSideView::default())
     }
 }
 
@@ -1451,7 +1451,8 @@ mod tests {
             ],
         );
 
-        let entries = entries_with_local_self_state(&ScoreboxSideView::default(), &pane);
+        let entries =
+            entries_with_local_self_state(&crate::views::ScoreboxSideView::default(), &pane);
 
         assert_eq!(entries.len(), 2);
         assert!(!entries.iter().any(|entry| entry.is_self));

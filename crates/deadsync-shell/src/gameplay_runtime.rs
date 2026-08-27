@@ -250,7 +250,8 @@ fn scorebox_profiles(
     profiles: &[profile_data::Profile; 2],
     session: &GameplaySession,
 ) -> [deadsync_score::GameplayScoreboxProfileSnapshot; 2] {
-    let mut snapshots = std::array::from_fn(|_| Default::default());
+    let mut snapshots =
+        std::array::from_fn(|_| deadsync_score::GameplayScoreboxProfileSnapshot::default());
     for player in 0..session.play_style.player_count() {
         let gameplay_side = session.runtime_player_side(player);
         let side = profile_side_from_gameplay(gameplay_side);
@@ -810,8 +811,8 @@ mod tests {
                 notes: Vec::new(),
                 parsed_notes: Vec::new(),
                 row_to_beat: Vec::new(),
-                timing_segments: Default::default(),
-                timing: Default::default(),
+                timing_segments: deadsync_rules::timing::TimingSegments::default(),
+                timing: deadsync_rules::timing::TimingData::default(),
                 chart_attacks: None,
             })
         });
@@ -844,7 +845,7 @@ mod tests {
             profile_data::PlayStyle::Double,
         ] {
             let mut profiles: [profile_data::Profile; 2] =
-                std::array::from_fn(|_| Default::default());
+                std::array::from_fn(|_| deadsync_profile::Profile::default());
             profiles[0].display_scorebox = false;
             profiles[1].display_scorebox = true;
             profiles[1].show_ex_score = true;

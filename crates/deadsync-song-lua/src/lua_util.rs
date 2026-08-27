@@ -11119,7 +11119,7 @@ where
     let initial_state = overlay_state_after_blocks(actor_overlay_initial_state(actor)?, &[], 0.0);
     let captured_commands = capture_actor_message_commands(lua, actor)?;
     for skipped in captured_commands.skipped {
-        log::debug!("Skipping song lua overlay message capture for {}", skipped);
+        log::debug!("Skipping song lua overlay message capture for {skipped}");
         on_skipped_message_capture(skipped);
     }
     let message_commands = captured_commands.commands;
@@ -11703,7 +11703,7 @@ pub fn resolve_actor_asset_path(actor: &Table, raw: &str) -> Result<PathBuf, Str
             return Ok(path);
         }
     }
-    Err(format!("actor asset '{}' could not be resolved", raw))
+    Err(format!("actor asset '{raw}' could not be resolved"))
 }
 
 fn resolve_actor_asset_prefix(script_dir: &Path, raw_path: &Path) -> Option<PathBuf> {

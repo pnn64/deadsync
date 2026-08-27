@@ -609,8 +609,7 @@ mod tests {
             .collect::<HashSet<_>>();
         assert!(
             textures.contains("noteskins/dance/cel/textures/Tap Note parts (mipmaps).png"),
-            "expected cel model tap note layers to resolve Tap Note parts texture; got {:?}",
-            textures
+            "expected cel model tap note layers to resolve Tap Note parts texture; got {textures:?}"
         );
     }
 
@@ -1688,8 +1687,7 @@ return t
             .expect("ddr-note receptor should preserve per-frame delays");
         assert!(
             delays.len() >= 2,
-            "expected at least 2 receptor delays, got {:?}",
-            delays
+            "expected at least 2 receptor delays, got {delays:?}"
         );
         assert!(
             (delays[0] - 0.2).abs() < 0.01,
@@ -2406,8 +2404,7 @@ return skin
             .fold(f32::NEG_INFINITY, f32::max);
         assert!(
             (max_alpha - min_alpha) > 0.05,
-            "glow alpha should animate over time for glowshift; got {:?}",
-            glow_alphas
+            "glow alpha should animate over time for glowshift; got {glow_alphas:?}"
         );
     }
 

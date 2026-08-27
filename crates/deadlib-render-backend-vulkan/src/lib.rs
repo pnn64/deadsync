@@ -1541,7 +1541,7 @@ pub fn flush_pending_uploads(state: &mut State) -> Result<(), Box<dyn Error>> {
 }
 
 pub fn retire_submitted_uploads(state: &mut State) {
-    retire_all_submitted_texture_uploads(state)
+    retire_all_submitted_texture_uploads(state);
 }
 
 #[inline(always)]

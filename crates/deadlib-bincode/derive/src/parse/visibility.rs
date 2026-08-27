@@ -37,7 +37,7 @@ impl Visibility {
                     }
                 }
 
-                Ok(Visibility::Pub)
+                Ok(Self::Pub)
             }
             Some(TokenTree::Group(group)) => {
                 // sometimes this is a group instead of an ident
@@ -53,12 +53,12 @@ impl Visibility {
                             // we just consume the visibility, we're not actually using it for generation
                             assume_group(input.next());
                         }
-                        Ok(Visibility::Pub)
+                        Ok(Self::Pub)
                     }
-                    _ => Ok(Visibility::Default),
+                    _ => Ok(Self::Default),
                 }
             }
-            _ => Ok(Visibility::Default),
+            _ => Ok(Self::Default),
         }
     }
 }

@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use winit::keyboard::KeyCode;
 
 use crate::debounce::{
@@ -264,7 +264,7 @@ impl CompiledKeymap {
             .filter(|(device, _)| *device >= PAD_ID_COUNT_CAP)
             .count();
         let mut pad_dir_on_extra =
-            FxHashMap::with_capacity_and_hasher(extra_dir_count, Default::default());
+            FxHashMap::with_capacity_and_hasher(extra_dir_count, FxBuildHasher::default());
         let mut max_pad_device: Option<usize> = None;
         for (&key, actions) in &km.pad_dir_on_rev {
             let mut mask = 0;
@@ -448,11 +448,7 @@ pub fn clear_debounce_state() {
     });
     reset_debounce_state(key_slot_count, pad_slot_capacity);
     if log::log_enabled!(log::Level::Debug) {
-        log::debug!(
-            "INPUT DEBOUNCE CLEAR: key_slots={} pad_slots={}",
-            key_slot_count,
-            pad_slot_count
-        );
+        log::debug!("INPUT DEBOUNCE CLEAR: key_slots={key_slot_count} pad_slots={pad_slot_count}");
     }
 }
 
@@ -788,8 +784,10 @@ impl PadLookupBench {
     #[must_use]
     pub fn new(keymap: &Keymap) -> Self {
         let current = CompiledKeymap::from_keymap(keymap);
-        let mut old_dir_on =
-            FxHashMap::with_capacity_and_hasher(keymap.pad_dir_on_rev.len(), Default::default());
+        let mut old_dir_on = FxHashMap::with_capacity_and_hasher(
+            keymap.pad_dir_on_rev.len(),
+            FxBuildHasher::default(),
+        );
         for (&key, actions) in &keymap.pad_dir_on_rev {
             let mask =
                 actions.iter().fold(0, |mask, action| mask | action.bit()) & !SYSTEM_ACTION_MASK;
@@ -1174,10 +1172,10 @@ pub fn drain_debounced_input_events_with(mut emit: impl FnMut(InputEvent)) -> bo
         let windows = debounce_windows();
         let mut flushed =
             emit_due_debounce_edges_from_mut(&mut state.keyboard, now, windows, |edge| {
-                emit_input_events_from_edge(edge, &mut emit)
+                emit_input_events_from_edge(edge, &mut emit);
             });
         flushed |= emit_due_debounce_edges_from_mut(&mut state.pad, now, windows, |edge| {
-            emit_input_events_from_edge(edge, &mut emit)
+            emit_input_events_from_edge(edge, &mut emit);
         });
         flushed
     })

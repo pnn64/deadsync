@@ -348,7 +348,7 @@ fn achievement_page_text(achievement: &SubmitAchievement) -> String {
         }
         let title = reward.title_unlocked.trim();
         if !title.is_empty() {
-            lines.push(format!("Unlocked the \"{}\" Title!", title));
+            lines.push(format!("Unlocked the \"{title}\" Title!"));
         }
         lines.push(String::new());
     }

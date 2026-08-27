@@ -38,7 +38,7 @@ pub struct SliceWriter<'storage> {
 
 impl<'storage> SliceWriter<'storage> {
     /// Create a new instance of `SliceWriter` with the given byte array.
-    pub const fn new(bytes: &'storage mut [u8]) -> SliceWriter<'storage> {
+    pub const fn new(bytes: &'storage mut [u8]) -> Self {
         let original = bytes.len();
         SliceWriter {
             slice: bytes,

@@ -47,7 +47,7 @@ where
 
     #[inline]
     fn consume(&mut self, n: usize) {
-        (*self).consume(n)
+        (*self).consume(n);
     }
 }
 
@@ -67,7 +67,7 @@ pub struct SliceReader<'storage> {
 impl<'storage> SliceReader<'storage> {
     /// Constructs a slice reader
     #[must_use]
-    pub const fn new(bytes: &'storage [u8]) -> SliceReader<'storage> {
+    pub const fn new(bytes: &'storage [u8]) -> Self {
         SliceReader { slice: bytes }
     }
 }

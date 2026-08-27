@@ -63,7 +63,7 @@ fn init_with_config_and_audio(config: config::Config, audio_options: AudioOption
         smx_assignment: deadsync_theme::views::SmxAssignmentView::default(),
         smx_gifs: deadsync_theme::views::SmxGifCatalogView::default(),
         score_import_profiles: Vec::new(),
-        bookkeeping: Default::default(),
+        bookkeeping: crate::views::BookkeepingView::default(),
     })
 }
 
@@ -378,7 +378,7 @@ fn smx_gif_choices_come_from_shell_catalog() {
             judgment_packs: vec!["Judgment Pack".to_owned()],
         },
         score_import_profiles: Vec::new(),
-        bookkeeping: Default::default(),
+        bookkeeping: crate::views::BookkeepingView::default(),
     });
 
     assert_eq!(state.smx_bg_pack_choices, ["Background Pack"]);
@@ -904,7 +904,7 @@ fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
         smx_assignment: SmxAssignmentView::default(),
         smx_gifs: SmxGifCatalogView::default(),
         score_import_profiles: Vec::new(),
-        bookkeeping: Default::default(),
+        bookkeeping: crate::views::BookkeepingView::default(),
     };
     let mut state = super::init(view.clone());
     state.view = OptionsView::Submenu(SubmenuKind::Gameplay);

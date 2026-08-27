@@ -576,7 +576,12 @@ pub(super) fn revealed_text(
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(64);
-    push_actors(&mut actors, state, asset_manager, Default::default());
+    push_actors(
+        &mut actors,
+        state,
+        asset_manager,
+        crate::views::SimplyLoveVisualPolicyView::default(),
+    );
     actors
 }
 
@@ -977,7 +982,7 @@ pub(super) fn draw_single_value_with_preview(actors: &mut Vec<Actor>, rc: &RowCt
         RowId::HoldJudgment => draw_hold_preview(actors, rc, primary_player_idx),
         RowId::HeldGraphic => draw_held_graphic_preview(actors, rc, primary_player_idx),
         RowId::NoteSkin | RowId::MineSkin | RowId::ReceptorSkin | RowId::TapExplosionSkin => {
-            draw_noteskin_family_preview(actors, rc, primary_player_idx)
+            draw_noteskin_family_preview(actors, rc, primary_player_idx);
         }
         RowId::ComboFont => draw_combo_preview(actors, rc, primary_player_idx),
         RowId::HeartRateMonitor => draw_heart_rate_preview(actors, rc, primary_player_idx),

@@ -448,7 +448,12 @@ pub fn get_actors(
 ) -> Vec<Actor> {
     sync_text(state, stages);
     let mut actors = Vec::with_capacity(64);
-    push_actors(&mut actors, state, asset_manager, Default::default());
+    push_actors(
+        &mut actors,
+        state,
+        asset_manager,
+        crate::views::SimplyLoveVisualPolicyView::default(),
+    );
     actors
 }
 

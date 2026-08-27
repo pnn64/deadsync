@@ -202,9 +202,9 @@ impl ScatterWindow {
     fn ms(self) -> f32 {
         let tw = timing_stats::effective_windows_ms();
         match self {
-            ScatterWindow::FantasticPlus => timing_stats::FA_PLUS_W0_MS,
-            ScatterWindow::Fantastic => tw[0],
-            ScatterWindow::Great => tw[2],
+            Self::FantasticPlus => timing_stats::FA_PLUS_W0_MS,
+            Self::Fantastic => tw[0],
+            Self::Great => tw[2],
         }
     }
 }
@@ -1099,7 +1099,7 @@ mod tests {
     use crate::assets::i18n;
     use crate::views::EvaluationRuntimeView;
     use deadlib_present::actors::{Actor, TextAlign};
-    use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
+    use deadsync_chart::ChartData;
     use deadsync_score as score_data;
     use std::sync::Arc;
 
@@ -1174,7 +1174,7 @@ mod tests {
 
     #[test]
     fn elapsed_sync_retains_timer_text_until_the_visible_second_changes() {
-        let mut state = super::init(None, Default::default());
+        let mut state = super::init(None, crate::views::EvaluationInitView::default());
         super::sync_elapsed(&mut state, 65.1, 3_600.0);
         let session_text = state.session_timer.text().to_owned();
 
@@ -1230,7 +1230,7 @@ mod tests {
 
     #[test]
     fn retry_availability_uses_prepared_submission_status() {
-        let mut state = super::init(None, Default::default());
+        let mut state = super::init(None, crate::views::EvaluationInitView::default());
         assert!(!submission_retry_available(&state));
 
         state.submissions[0].groovestats_status =
@@ -1248,7 +1248,7 @@ mod tests {
 
     #[test]
     fn leaderboard_requests_are_plain_screen_state() {
-        let mut state = super::init(None, Default::default());
+        let mut state = super::init(None, crate::views::EvaluationInitView::default());
         assert_eq!(leaderboard_requests(&state), [false, false]);
 
         state.leaderboards_requested[1] = true;
@@ -1257,12 +1257,12 @@ mod tests {
 
     #[test]
     fn partial_runtime_view_retains_clean_subviews() {
-        let mut state = super::init(None, Default::default());
+        let mut state = super::init(None, crate::views::EvaluationInitView::default());
         state.context.players[0].display_name = "Retained".to_owned();
         state.favorites = [true, false];
         state.groovestats_service = SimplyLoveGrooveStatsService::BoogieStats;
         let mut submissions: [crate::views::EvaluationSubmissionView; 2] =
-            std::array::from_fn(|_| Default::default());
+            std::array::from_fn(|_| crate::views::EvaluationSubmissionView::default());
         submissions[0].groovestats_status = Some(score_data::GrooveStatsSubmitUiStatus::Submitted);
         let view = EvaluationRuntimeView {
             submissions: Some(submissions),
@@ -1314,7 +1314,7 @@ mod tests {
 
     #[test]
     fn nice_eligibility_is_compiled_and_preserved_by_state_clone() {
-        let mut state = super::init(None, Default::default());
+        let mut state = super::init(None, crate::views::EvaluationInitView::default());
         assert_eq!(state.nice_scores, [false; 2]);
 
         state.nice_scores = [true, false];
@@ -1332,10 +1332,10 @@ mod tests {
                 step_artist: String::new(),
                 music_path: None,
                 short_hash: String::new(),
-                stats: ArrowStats::default(),
-                tech_counts: TechCounts::default(),
+                stats: deadsync_chart::ArrowStats::default(),
+                tech_counts: deadsync_chart::TechCounts::default(),
                 mines_nonfake: 0,
-                stamina_counts: StaminaCounts::default(),
+                stamina_counts: deadsync_chart::StaminaCounts::default(),
                 total_streams: 0,
                 matrix_rating: 0.0,
                 matrix_profile: Box::default(),
@@ -3365,12 +3365,12 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         nice_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
-        submissions: std::array::from_fn(|_| Default::default()),
-        submit_text: std::array::from_fn(|_| Default::default()),
+        submissions: std::array::from_fn(|_| crate::views::EvaluationSubmissionView::default()),
+        submit_text: std::array::from_fn(|_| SubmitPresentation::default()),
         leaderboards_requested: [false; MAX_PLAYERS],
         online_records: Default::default(),
-        groovestats_service: Default::default(),
-        lobby_view: Default::default(),
+        groovestats_service: SimplyLoveGrooveStatsService::default(),
+        lobby_view: SimplyLoveLobbyRuntimeView::default(),
         lobby_disconnect_hold_p1: None,
         lobby_disconnect_hold_p2: None,
         event_overlay_page: [0; MAX_PLAYERS],
@@ -3378,7 +3378,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         active_graph,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
-        favorite_code: Default::default(),
+        favorite_code: crate::screens::favorite_code::FavoriteCodeTracker::default(),
         test_input_state: test_input::State::default(),
         graph_cache: std::array::from_fn(|_| RefCell::new(None)),
         chrome_cache: RefCell::new(None),
@@ -3655,12 +3655,12 @@ pub fn init_from_score_info(
         nice_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
-        submissions: std::array::from_fn(|_| Default::default()),
-        submit_text: std::array::from_fn(|_| Default::default()),
+        submissions: std::array::from_fn(|_| crate::views::EvaluationSubmissionView::default()),
+        submit_text: std::array::from_fn(|_| SubmitPresentation::default()),
         leaderboards_requested: [false; MAX_PLAYERS],
         online_records: Default::default(),
-        groovestats_service: Default::default(),
-        lobby_view: Default::default(),
+        groovestats_service: SimplyLoveGrooveStatsService::default(),
+        lobby_view: SimplyLoveLobbyRuntimeView::default(),
         lobby_disconnect_hold_p1: None,
         lobby_disconnect_hold_p2: None,
         event_overlay_page: [0; MAX_PLAYERS],
@@ -3668,7 +3668,7 @@ pub fn init_from_score_info(
         active_graph,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
-        favorite_code: Default::default(),
+        favorite_code: crate::screens::favorite_code::FavoriteCodeTracker::default(),
         test_input_state: test_input::State::default(),
         graph_cache: std::array::from_fn(|_| RefCell::new(None)),
         chrome_cache: RefCell::new(None),
@@ -5985,7 +5985,7 @@ pub fn push_actors(
                         policy.transparent_panels,
                         policy.machine_font,
                         state.context.players[player_idx].judgment_palette,
-                    ))
+                    ));
                 }
                 EvalPane::TimingArrows => {
                     if let Some(text) = state.timing_arrows_text[player_idx].as_ref() {
@@ -6835,6 +6835,11 @@ pub fn push_actors(
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(20);
-    push_actors(&mut actors, state, asset_manager, Default::default());
+    push_actors(
+        &mut actors,
+        state,
+        asset_manager,
+        crate::views::SimplyLoveVisualPolicyView::default(),
+    );
     actors
 }

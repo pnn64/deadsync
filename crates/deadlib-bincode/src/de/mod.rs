@@ -278,7 +278,7 @@ where
 
     #[inline]
     fn unclaim_bytes_read(&mut self, n: usize) {
-        T::unclaim_bytes_read(self, n)
+        T::unclaim_bytes_read(self, n);
     }
 
     fn context(&mut self) -> &mut Self::Context {

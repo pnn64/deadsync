@@ -201,7 +201,7 @@ struct MeshLookupBench {
 
 impl MeshLookupBench {
     fn new() -> Self {
-        let mut slots = SlotMap::with_capacity_and_hasher(GEOMETRIES, Default::default());
+        let mut slots = SlotMap::with_capacity_and_hasher(GEOMETRIES, FxBuildHasher::default());
         let mut values = Vec::with_capacity(GEOMETRIES);
         let geometries = (0..GEOMETRIES)
             .map(|index| {

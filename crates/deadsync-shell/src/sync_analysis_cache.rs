@@ -497,8 +497,7 @@ fn insert_entry(state: &mut CacheState, entry: CacheEntry) -> bool {
     if !state.entries.contains_key(&path) && state.entries.len() >= MAX_CACHE_ENTRIES {
         if !state.warned_full {
             log::warn!(
-                "Null-or-die sync cache reached its {}-entry limit; new results will not be cached.",
-                MAX_CACHE_ENTRIES
+                "Null-or-die sync cache reached its {MAX_CACHE_ENTRIES}-entry limit; new results will not be cached."
             );
             state.warned_full = true;
         }

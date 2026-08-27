@@ -1072,7 +1072,7 @@ mod tests {
         let err = plan_ops(&journal, &staging_dir, &target_dir).unwrap_err();
         match err {
             UpdaterError::Io(msg) => {
-                assert!(msg.contains("type mismatch"), "unexpected error: {msg}",)
+                assert!(msg.contains("type mismatch"), "unexpected error: {msg}",);
             }
             other => panic!("expected Io, got {other:?}"),
         }

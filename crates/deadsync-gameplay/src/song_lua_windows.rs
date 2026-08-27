@@ -21,13 +21,13 @@ impl SongLuaCompilePlayStyleLike for GameplayInputPlayStyle {
     #[inline(always)]
     fn as_song_lua_compile_play_style(self) -> SongLuaCompilePlayStyle {
         match self {
-            GameplayInputPlayStyle::Single | GameplayInputPlayStyle::PumpSingle => {
+            Self::Single | Self::PumpSingle => {
                 SongLuaCompilePlayStyle::Single
             }
-            GameplayInputPlayStyle::Versus | GameplayInputPlayStyle::PumpVersus => {
+            Self::Versus | Self::PumpVersus => {
                 SongLuaCompilePlayStyle::Versus
             }
-            GameplayInputPlayStyle::Double | GameplayInputPlayStyle::PumpDouble => {
+            Self::Double | Self::PumpDouble => {
                 SongLuaCompilePlayStyle::Double
             }
         }

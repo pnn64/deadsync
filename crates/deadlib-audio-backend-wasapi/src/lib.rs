@@ -220,8 +220,7 @@ pub fn prepare(
             WasapiAccessMode::Shared => {
                 if let Err(err) = initialize_shared(&audio_client, &chosen_format) {
                     warn!(
-                        "WASAPI shared sample rate override {} Hz rejected for '{}': {err}. Using mix format.",
-                        rate_hz, device_name
+                        "WASAPI shared sample rate override {rate_hz} Hz rejected for '{device_name}': {err}. Using mix format."
                     );
                     chosen_format = mix_format;
                 }
@@ -234,13 +233,13 @@ pub fn prepare(
         match mode {
             WasapiAccessMode::Shared => initialize_shared(&audio_client, &chosen_format)?,
             WasapiAccessMode::Exclusive => {
-                validate_exclusive_format(&audio_client, &chosen_format, &device_name)?
+                validate_exclusive_format(&audio_client, &chosen_format, &device_name)?;
             }
         }
     }
 
     let sample_format = sample_format_from_waveformat(&chosen_format)
-        .ok_or_else(|| format!("unsupported WASAPI mix format for '{}'", device_name))?;
+        .ok_or_else(|| format!("unsupported WASAPI mix format for '{device_name}'"))?;
     let sample_rate_hz = waveformat(&chosen_format).nSamplesPerSec;
     let channels = waveformat(&chosen_format).nChannels as usize;
     let bytes_per_frame = waveformat(&chosen_format).nBlockAlign;
@@ -277,7 +276,7 @@ pub fn start(
                 sfx_receiver,
                 HANDLE(stop_event_thread as *mut _),
                 ready_tx,
-            )
+            );
         })
         .map_err(|e| {
             // SAFETY: thread spawn failed, so ownership of `stop_event` never left
@@ -726,13 +725,11 @@ fn validate_exclusive_format(
         let channels = wave.nChannels;
         let bits_per_sample = wave.wBitsPerSample;
         return Err(format!(
-            "WASAPI exclusive format not supported for '{}': {} Hz, {} ch, {} bits",
-            device_name, sample_rate_hz, channels, bits_per_sample
+            "WASAPI exclusive format not supported for '{device_name}': {sample_rate_hz} Hz, {channels} ch, {bits_per_sample} bits"
         ));
     }
     Err(format!(
-        "WASAPI exclusive IsFormatSupported failed for '{}': {status:?}",
-        device_name
+        "WASAPI exclusive IsFormatSupported failed for '{device_name}': {status:?}"
     ))
 }
 

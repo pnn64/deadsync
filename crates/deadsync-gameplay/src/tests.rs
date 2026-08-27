@@ -14891,13 +14891,13 @@ mod tests {
         assert_eq!(
             rows,
             vec![
-                [b'0', b'0', b'L', b'0'],
-                [b'0', b'1', b'0', b'0'],
-                [b'0', b'0', b'0', b'2'],
-                [b'0', b'0', b'0', b'3'],
-                [b'4', b'0', b'0', b'0'],
-                [b'3', b'0', b'0', b'0'],
-                [b'0', b'0', b'M', b'0'],
+                *b"00L0",
+                *b"0100",
+                *b"0002",
+                *b"0003",
+                *b"4000",
+                *b"3000",
+                *b"00M0",
             ]
         );
         assert_eq!(beats, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
@@ -14922,7 +14922,7 @@ mod tests {
 
         assert_eq!(
             rows,
-            vec![[b'1', b'0', b'0', b'0'], [b'0', b'0', b'M', b'0']]
+            vec![*b"1000", *b"00M0"]
         );
         assert_eq!(beats, vec![1.0, 3.0]);
         assert_eq!(row_indices, vec![48, 144]);
@@ -14942,7 +14942,7 @@ mod tests {
 
         assert_eq!(
             rows,
-            vec![[b'1', b'0', b'0', b'0'], [b'0', b'M', b'0', b'0']]
+            vec![*b"1000", *b"0M00"]
         );
         assert_eq!(beats, vec![1.0, 2.0]);
         assert_eq!(row_indices, vec![48, 96]);

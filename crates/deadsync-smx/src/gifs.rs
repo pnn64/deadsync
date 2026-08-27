@@ -1561,10 +1561,10 @@ mod tests {
             "foo".to_owned(),
             PackMeta {
                 fallback: PackFallback::Pack("other".to_owned()),
-                can_be_empty: Default::default(),
-                match_color_to_difficulty: Default::default(),
-                merge_common_bpm_variants: Default::default(),
-                merge_fallback_bpm_variants: Default::default(),
+                can_be_empty: HashSet::default(),
+                match_color_to_difficulty: HashSet::default(),
+                merge_common_bpm_variants: HashSet::default(),
+                merge_fallback_bpm_variants: HashSet::default(),
             },
         );
 
@@ -1600,10 +1600,10 @@ mod tests {
             "foo".to_owned(),
             PackMeta {
                 fallback: PackFallback::None,
-                can_be_empty: Default::default(),
-                match_color_to_difficulty: Default::default(),
-                merge_common_bpm_variants: Default::default(),
-                merge_fallback_bpm_variants: Default::default(),
+                can_be_empty: HashSet::default(),
+                match_color_to_difficulty: HashSet::default(),
+                merge_common_bpm_variants: HashSet::default(),
+                merge_fallback_bpm_variants: HashSet::default(),
             },
         );
         assert!(
@@ -1625,9 +1625,9 @@ mod tests {
             PackMeta {
                 fallback: PackFallback::Auto,
                 can_be_empty: ["miss".to_owned()].into_iter().collect(),
-                match_color_to_difficulty: Default::default(),
-                merge_common_bpm_variants: Default::default(),
-                merge_fallback_bpm_variants: Default::default(),
+                match_color_to_difficulty: HashSet::default(),
+                merge_common_bpm_variants: HashSet::default(),
+                merge_fallback_bpm_variants: HashSet::default(),
             },
         );
 
@@ -1656,9 +1656,9 @@ mod tests {
                 can_be_empty: ["gameplay".to_owned(), "default".to_owned()]
                     .into_iter()
                     .collect(),
-                match_color_to_difficulty: Default::default(),
-                merge_common_bpm_variants: Default::default(),
-                merge_fallback_bpm_variants: Default::default(),
+                match_color_to_difficulty: HashSet::default(),
+                merge_common_bpm_variants: HashSet::default(),
+                merge_fallback_bpm_variants: HashSet::default(),
             },
         );
 
@@ -1835,10 +1835,10 @@ mod tests {
             "foo".to_owned(),
             PackMeta {
                 fallback: PackFallback::Auto,
-                can_be_empty: Default::default(),
+                can_be_empty: HashSet::default(),
                 match_color_to_difficulty: ["results".to_owned()].into_iter().collect(),
-                merge_common_bpm_variants: Default::default(),
-                merge_fallback_bpm_variants: Default::default(),
+                merge_common_bpm_variants: HashSet::default(),
+                merge_fallback_bpm_variants: HashSet::default(),
             },
         );
         assert!(reg.background_wants_difficulty_tint(Some("foo"), "results"));
@@ -1881,8 +1881,8 @@ mod tests {
             "mine".to_owned(),
             PackMeta {
                 fallback: PackFallback::Pack("other".to_owned()),
-                can_be_empty: Default::default(),
-                match_color_to_difficulty: Default::default(),
+                can_be_empty: HashSet::default(),
+                match_color_to_difficulty: HashSet::default(),
                 merge_common_bpm_variants: ["song_select".to_owned()].into_iter().collect(),
                 merge_fallback_bpm_variants: ["song_select".to_owned()].into_iter().collect(),
             },
@@ -1944,10 +1944,10 @@ mod tests {
             "mine".to_owned(),
             PackMeta {
                 fallback: PackFallback::Auto,
-                can_be_empty: Default::default(),
-                match_color_to_difficulty: Default::default(),
+                can_be_empty: HashSet::default(),
+                match_color_to_difficulty: HashSet::default(),
                 merge_common_bpm_variants: ["song_select".to_owned()].into_iter().collect(),
-                merge_fallback_bpm_variants: Default::default(),
+                merge_fallback_bpm_variants: HashSet::default(),
             },
         );
         let with_merge = reg
@@ -2175,10 +2175,10 @@ mod tests {
             "mine".to_owned(),
             PackMeta {
                 fallback: PackFallback::Pack("other".to_owned()),
-                can_be_empty: Default::default(),
-                match_color_to_difficulty: Default::default(),
-                merge_common_bpm_variants: Default::default(),
-                merge_fallback_bpm_variants: Default::default(),
+                can_be_empty: HashSet::default(),
+                match_color_to_difficulty: HashSet::default(),
+                merge_common_bpm_variants: HashSet::default(),
+                merge_fallback_bpm_variants: HashSet::default(),
             },
         );
 
@@ -2210,20 +2210,20 @@ mod tests {
             "senpi-basic".to_owned(),
             PackMeta {
                 fallback: PackFallback::Pack(DEFAULT_PACK.to_owned()),
-                can_be_empty: Default::default(),
-                match_color_to_difficulty: Default::default(),
-                merge_common_bpm_variants: Default::default(),
-                merge_fallback_bpm_variants: Default::default(),
+                can_be_empty: HashSet::default(),
+                match_color_to_difficulty: HashSet::default(),
+                merge_common_bpm_variants: HashSet::default(),
+                merge_fallback_bpm_variants: HashSet::default(),
             },
         );
         reg.judgement_pack_meta.insert(
             "senpi-basic".to_owned(),
             PackMeta {
                 fallback: PackFallback::Pack("bg-fallback".to_owned()),
-                can_be_empty: Default::default(),
-                match_color_to_difficulty: Default::default(),
-                merge_common_bpm_variants: Default::default(),
-                merge_fallback_bpm_variants: Default::default(),
+                can_be_empty: HashSet::default(),
+                match_color_to_difficulty: HashSet::default(),
+                merge_common_bpm_variants: HashSet::default(),
+                merge_fallback_bpm_variants: HashSet::default(),
             },
         );
 

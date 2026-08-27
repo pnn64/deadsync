@@ -20,6 +20,7 @@ use deadlib_present::actors::{
     Actor, FlatDraw, FlatMeshVertices, SizeSpec, SpriteSource, TextAlign, TextAttributes,
     TextContent,
 };
+use deadlib_present::anim::EffectState;
 use deadlib_render_core::BlendMode;
 use deadsync_core::{input::MAX_COLS, note::NoteType};
 use deadsync_gameplay::{
@@ -1620,7 +1621,7 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
             scale: [1.0, 1.0],
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0; 4],
-            effect: Default::default(),
+            effect: EffectState::default(),
         },
         FlatDraw::TexturedMesh(mesh) => {
             let make_actor = |vertices| Actor::TexturedMesh {
@@ -1742,7 +1743,7 @@ fn prepared_text_actor(
         blend,
         shadow_len,
         shadow_color,
-        effect: Default::default(),
+        effect: EffectState::default(),
     }
 }
 

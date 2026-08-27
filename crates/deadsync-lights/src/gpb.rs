@@ -115,8 +115,7 @@ impl Driver {
         let Some(info) = exact.or_else(fallback) else {
             if !self.warned_missing {
                 debug!(
-                    "No GPB lights device {:04x}:{:04x} interface {} found",
-                    VENDOR_ID, PRODUCT_ID, LIGHTING_INTERFACE
+                    "No GPB lights device {VENDOR_ID:04x}:{PRODUCT_ID:04x} interface {LIGHTING_INTERFACE} found"
                 );
                 self.warned_missing = true;
             }

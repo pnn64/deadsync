@@ -19,7 +19,7 @@ pub fn run_pad_backend(
     #[cfg(windows)]
     match win_backend {
         WindowsPadBackend::Auto | WindowsPadBackend::RawInput => {
-            crate::backend::w32_raw_input::run(emit_pad, emit_sys, |_| {}, host)
+            crate::backend::w32_raw_input::run(emit_pad, emit_sys, |_| {}, host);
         }
         #[cfg(target_vendor = "win7")]
         WindowsPadBackend::Wgi => {

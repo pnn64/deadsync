@@ -651,8 +651,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBacken
             );
         } else {
             warn!(
-                "Audio output device override index {} not found; using default device.",
-                requested_idx
+                "Audio output device override index {requested_idx} not found; using default device."
             );
         }
     }
@@ -664,8 +663,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBacken
     let native_sample_rate_hz = selected_device.map_or(48_000, |device| device.mix_rate_hz);
     let native_channels = selected_device.map_or(2, |device| device.channels);
     debug!(
-        "Audio device: '{}' (native={} Hz, channels={}).",
-        device_name, native_sample_rate_hz, native_channels
+        "Audio device: '{device_name}' (native={native_sample_rate_hz} Hz, channels={native_channels})."
     );
     debug!(
         "Audio output stream config: {} Hz request, mode={} (WASAPI native path).",

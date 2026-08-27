@@ -1733,7 +1733,7 @@ pub fn log_profile_stats_load_error(path: &Path, error: ProfileStatsLoadError) {
 pub fn log_profile_stats_write_error(profile_id: &str, error: ProfileStatsWriteError) {
     match error {
         ProfileStatsWriteError::Encode => {
-            warn!("Failed to encode profile stats for '{}'.", profile_id);
+            warn!("Failed to encode profile stats for '{profile_id}'.");
         }
         ProfileStatsWriteError::CreateDir { path, error } => {
             warn!(

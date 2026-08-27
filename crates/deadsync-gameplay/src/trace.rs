@@ -319,10 +319,7 @@ pub fn trace_gameplay_update<Profile, OverlayActor, CapturedActor, StateDelta>(
 
     if pending_len >= GAMEPLAY_INPUT_BACKLOG_WARN {
         log::debug!(
-            "Gameplay input backlog: frame={}, pending_edges={}, replay_edges={}",
-            frame_counter,
-            pending_len,
-            replay_edges_len
+            "Gameplay input backlog: frame={frame_counter}, pending_edges={pending_len}, replay_edges={replay_edges_len}"
         );
     }
 

@@ -541,8 +541,8 @@ fn init(
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: api.backends(),
         flags: instance_flags,
-        memory_budget_thresholds: Default::default(),
-        backend_options: Default::default(),
+        memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
+        backend_options: wgpu::BackendOptions::default(),
         display: Some(Box::new(OwnedWindowHandle(window.clone()))),
     });
 
@@ -589,8 +589,8 @@ fn init(
         required_features,
         required_limits,
         memory_hints: wgpu::MemoryHints::Performance,
-        trace: Default::default(),
-        experimental_features: Default::default(),
+        trace: wgpu::Trace::default(),
+        experimental_features: wgpu::ExperimentalFeatures::default(),
     }))?;
 
     let size = window.inner_size();

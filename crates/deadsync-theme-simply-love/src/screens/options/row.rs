@@ -261,8 +261,8 @@ pub enum Choice {
 impl Choice {
     pub fn get(&self) -> Arc<str> {
         match self {
-            Choice::Localized(lkey) => lkey.get(),
-            Choice::Literal(s) => Arc::from(*s),
+            Self::Localized(lkey) => lkey.get(),
+            Self::Literal(s) => Arc::from(*s),
         }
     }
 }

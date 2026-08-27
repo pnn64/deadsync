@@ -422,7 +422,12 @@ pub fn push_actors(
 
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(56);
-    push_actors(&mut actors, state, GameFlag::Dance, Default::default());
+    push_actors(
+        &mut actors,
+        state,
+        GameFlag::Dance,
+        crate::views::SimplyLoveVisualPolicyView::default(),
+    );
     actors
 }
 

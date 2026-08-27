@@ -281,7 +281,7 @@ mod tests {
             active_color_index: 3,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
-            visual_policy: SimplyLoveVisualPolicyView::default(),
+            visual_policy: crate::views::SimplyLoveVisualPolicyView::default(),
         }
     }
 
@@ -298,7 +298,7 @@ mod tests {
         assert_eq!(
             source.texture_key(),
             Some(
-                SimplyLoveVisualPolicyView::default()
+                crate::views::SimplyLoveVisualPolicyView::default()
                     .assets
                     .shared_background
             )
@@ -322,7 +322,7 @@ mod tests {
                 background,
                 assets: crate::visual_styles::for_style_and_variant(style, variant),
                 srpg10_tint: style.is_srpg() && variant == SrpgVariant::Srpg10,
-                ..SimplyLoveVisualPolicyView::default()
+                ..crate::views::SimplyLoveVisualPolicyView::default()
             },
         }
     }

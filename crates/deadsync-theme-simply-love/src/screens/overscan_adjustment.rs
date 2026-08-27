@@ -237,7 +237,12 @@ pub fn push_actors(
 
 pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(24);
-    push_actors(&mut actors, state, alpha_mul, Default::default());
+    push_actors(
+        &mut actors,
+        state,
+        alpha_mul,
+        crate::views::SimplyLoveVisualPolicyView::default(),
+    );
     actors
 }
 

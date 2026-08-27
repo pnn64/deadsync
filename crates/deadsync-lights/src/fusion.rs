@@ -106,10 +106,7 @@ impl Driver {
             .find(|info| info.vendor_id() == VENDOR_ID && info.product_id() == PRODUCT_ID)
         else {
             if !self.warned_missing {
-                debug!(
-                    "No Fusion lights device {:04x}:{:04x} found",
-                    VENDOR_ID, PRODUCT_ID
-                );
+                debug!("No Fusion lights device {VENDOR_ID:04x}:{PRODUCT_ID:04x} found");
                 self.warned_missing = true;
             }
             return;

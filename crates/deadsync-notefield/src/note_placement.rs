@@ -31,13 +31,13 @@ mod tests {
         );
     }
 
-    fn travel<'a>(
-        timing: &'a TimingData,
+    fn travel(
+        timing: &TimingData,
         speed: ScrollSpeedSetting,
         accel: AccelYParams,
         time_ns: i64,
         elapsed_screen_s: f32,
-    ) -> crate::ScrollTravel<'a> {
+    ) -> crate::ScrollTravel<'_> {
         let beat = timing.get_beat_for_time_ns(time_ns);
         scroll_travel(ScrollTravelRequest {
             timing,

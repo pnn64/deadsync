@@ -950,7 +950,7 @@ pub fn get_actors(
         state,
         stages,
         asset_manager,
-        Default::default(),
+        crate::views::SimplyLoveVisualPolicyView::default(),
     );
     actors
 }
@@ -974,7 +974,7 @@ mod tests {
         let stages: [stage_stats::StageSummary; 0] = [];
         let indices: [usize; 0] = [];
         let view = PostSelectStageView::new(&stages, &indices);
-        let mut state = init(Default::default());
+        let mut state = init(PostSongRuntimeView::default());
 
         assert!(sync_stage_rows(&mut state, view));
         assert!(!sync_stage_rows(&mut state, view));

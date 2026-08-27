@@ -656,7 +656,7 @@ where
                 time_ns,
             } => self.handle_hold_let_go(column, note_index, time_ns),
             ActiveHoldResolution::Success { note_index } => {
-                self.handle_hold_success(column, note_index)
+                self.handle_hold_success(column, note_index);
             }
         }
     }

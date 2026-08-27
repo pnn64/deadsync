@@ -80,10 +80,10 @@ impl Service {
         });
         match request.service {
             SimplyLoveQrLoginService::ArrowCloud => {
-                self.start_arrowcloud(id, &request.slots, cancel)
+                self.start_arrowcloud(id, &request.slots, cancel);
             }
             SimplyLoveQrLoginService::GrooveStats => {
-                self.start_groovestats(id, &request.slots, cancel)
+                self.start_groovestats(id, &request.slots, cancel);
             }
         }
     }

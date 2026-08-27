@@ -1301,7 +1301,12 @@ pub fn get_actors(
 ) -> Vec<Actor> {
     sync_stage_texts(state, stages);
     let mut actors = Vec::with_capacity(64);
-    push_actors(&mut actors, state, asset_manager, Default::default());
+    push_actors(
+        &mut actors,
+        state,
+        asset_manager,
+        crate::views::SimplyLoveVisualPolicyView::default(),
+    );
     actors
 }
 
@@ -1352,7 +1357,7 @@ mod tests {
         let stages: [stage_stats::StageSummary; 0] = [];
         let indices: [usize; 0] = [];
         let view = PostSelectStageView::new(&stages, &indices);
-        let mut state = init(Default::default());
+        let mut state = init(PostSongRuntimeView::default());
 
         assert!(sync_stage_texts(&mut state, view));
         assert!(!sync_stage_texts(&mut state, view));

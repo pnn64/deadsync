@@ -1284,7 +1284,7 @@ impl MusicWheelEntry {
     #[must_use]
     pub fn pack_key(&self) -> Option<&str> {
         match self {
-            MusicWheelEntry::PackHeader {
+            Self::PackHeader {
                 pack_key: Some(key),
                 ..
             } => Some(key.as_ref()),
@@ -1300,16 +1300,16 @@ impl MusicWheelEntry {
     #[must_use]
     pub fn section_key(&self) -> Option<&str> {
         match self {
-            MusicWheelEntry::PackHeader {
+            Self::PackHeader {
                 pack_key: Some(key),
                 ..
             } => Some(key.as_ref()),
-            MusicWheelEntry::PackHeader {
+            Self::PackHeader {
                 name,
                 parent_series: None,
                 ..
             } => Some(name.as_ref()),
-            MusicWheelEntry::PackHeader { .. } | MusicWheelEntry::Song(_) => None,
+            Self::PackHeader { .. } | Self::Song(_) => None,
         }
     }
 
@@ -1318,7 +1318,7 @@ impl MusicWheelEntry {
     pub const fn is_series_header(&self) -> bool {
         matches!(
             self,
-            MusicWheelEntry::PackHeader {
+            Self::PackHeader {
                 pack_key: None,
                 parent_series: Some(_),
                 ..
@@ -3719,7 +3719,8 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     let mut scanned_pack_names = Vec::with_capacity(total_packs);
     let mut pack_total_seconds_by_index = vec![0.0_f64; total_packs];
     let pack_color_indices = song_group_color_indices(song_cache);
-    let mut wheel_song_meta = FxHashMap::with_capacity_and_hasher(total_songs, Default::default());
+    let mut wheel_song_meta =
+        FxHashMap::with_capacity_and_hasher(total_songs, rustc_hash::FxBuildHasher::default());
     let mut scored_pack_names = FxHashSet::default();
 
     let last_played = init_view.last_played.clone();
@@ -3852,25 +3853,25 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     let popularity_p1_entries: Arc<[MusicWheelEntry]> = if p1_history.available {
         build_popularity_grouped_entries_for_profile(&all_entries, p1_history)
     } else {
-        Default::default()
+        Vec::default()
     }
     .into();
     let popularity_p2_entries: Arc<[MusicWheelEntry]> = if p2_history.available {
         build_popularity_grouped_entries_for_profile(&all_entries, p2_history)
     } else {
-        Default::default()
+        Vec::default()
     }
     .into();
     let recent_p1_entries: Arc<[MusicWheelEntry]> = if p1_history.available {
         build_recent_grouped_entries_for_profile(&all_entries, p1_history)
     } else {
-        Default::default()
+        Vec::default()
     }
     .into();
     let recent_p2_entries: Arc<[MusicWheelEntry]> = if p2_history.available {
         build_recent_grouped_entries_for_profile(&all_entries, p2_history)
     } else {
-        Default::default()
+        Vec::default()
     }
     .into();
     let top_grades_p1_entries =
@@ -4043,8 +4044,8 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         menu_chord_right_pressed_at: None,
         menu_chord_left_input: None,
         menu_chord_right_input: None,
-        exit_code: Default::default(),
-        favorite_code: Default::default(),
+        exit_code: ExitCodeTracker::default(),
+        favorite_code: crate::screens::favorite_code::FavoriteCodeTracker::default(),
         last_steps_nav_dir_p1: None,
         last_steps_nav_time_p1: None,
         last_steps_nav_dir_p2: None,
@@ -4058,7 +4059,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         currently_playing_preview_song: None,
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
-        audio_playback: AudioPlaybackView::default(),
+        audio_playback: deadsync_theme::views::AudioPlaybackView::default(),
         lobby_view: SimplyLoveLobbyRuntimeView::default(),
         lobby_hud_cache: RefCell::new(lobby_hud::LobbyHudCache::default()),
         arrow_bounce_offset: 0.0,
@@ -4070,7 +4071,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         known_packs,
         music_wheel: MusicWheelRuntimeView::default(),
         downloads: Vec::new(),
-        srpg_shop_snapshot: Default::default(),
+        srpg_shop_snapshot: Arc::default(),
         scoreboxes: Default::default(),
         scorebox_presentation: Default::default(),
         unlock_downloads_available: false,
@@ -4297,8 +4298,8 @@ pub fn init_placeholder() -> State {
         menu_chord_right_pressed_at: None,
         menu_chord_left_input: None,
         menu_chord_right_input: None,
-        exit_code: Default::default(),
-        favorite_code: Default::default(),
+        exit_code: ExitCodeTracker::default(),
+        favorite_code: crate::screens::favorite_code::FavoriteCodeTracker::default(),
         last_steps_nav_dir_p1: None,
         last_steps_nav_time_p1: None,
         last_steps_nav_dir_p2: None,
@@ -4312,7 +4313,7 @@ pub fn init_placeholder() -> State {
         currently_playing_preview_song: None,
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
-        audio_playback: AudioPlaybackView::default(),
+        audio_playback: deadsync_theme::views::AudioPlaybackView::default(),
         lobby_view: SimplyLoveLobbyRuntimeView::default(),
         lobby_hud_cache: RefCell::new(lobby_hud::LobbyHudCache::default()),
         arrow_bounce_offset: 0.0,
@@ -4320,11 +4321,11 @@ pub fn init_placeholder() -> State {
         session,
         profiles: SelectMusicProfileView::default(),
         last_played,
-        favorites: Default::default(),
-        known_packs: Default::default(),
+        favorites: deadsync_profile::FavoriteSnapshot::default(),
+        known_packs: deadsync_profile::KnownPackSnapshot::default(),
         music_wheel: MusicWheelRuntimeView::default(),
         downloads: Vec::new(),
-        srpg_shop_snapshot: Default::default(),
+        srpg_shop_snapshot: Arc::default(),
         scoreboxes: Default::default(),
         scorebox_presentation: Default::default(),
         unlock_downloads_available: false,
@@ -6675,7 +6676,7 @@ fn build_null_or_die_overlay(
             scale: [1.0, 1.0],
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
-            effect: Default::default(),
+            effect: deadlib_present::anim::EffectState::default(),
         });
     }
     actors.push(act!(text:
@@ -8692,21 +8693,17 @@ enum ConfirmAction {
 }
 
 impl ConfirmAction {
-    const ALL: [ConfirmAction; 3] = [
-        ConfirmAction::Edit,
-        ConfirmAction::Confirm,
-        ConfirmAction::Discard,
-    ];
+    const ALL: [Self; 3] = [Self::Edit, Self::Confirm, Self::Discard];
 
     const fn index(self) -> usize {
         match self {
-            ConfirmAction::Edit => 0,
-            ConfirmAction::Confirm => 1,
-            ConfirmAction::Discard => 2,
+            Self::Edit => 0,
+            Self::Confirm => 1,
+            Self::Discard => 2,
         }
     }
 
-    fn step(self, dir: i8) -> ConfirmAction {
+    fn step(self, dir: i8) -> Self {
         let next = (self.index() as i32 + i32::from(dir)).clamp(0, 2) as usize;
         Self::ALL[next]
     }
@@ -10580,7 +10577,7 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 }
 
 fn collapse_expanded_pack(state: &mut State, pack: Arc<str>) {
-    debug!("Up+Down combo: Collapsing pack '{}'.", pack);
+    debug!("Up+Down combo: Collapsing pack '{pack}'.");
     rebuild_displayed_entries(state);
     if let Some(new_sel) = state
         .entries
@@ -10604,7 +10601,7 @@ fn close_open_section_one_level(state: &mut State) {
     let Some(series) = state.expanded_series_name.take() else {
         return;
     };
-    debug!("Up+Down combo: Collapsing series '{}'.", series);
+    debug!("Up+Down combo: Collapsing series '{series}'.");
     rebuild_displayed_entries(state);
     if let Some(new_sel) = state.entries.iter().position(|entry| {
         matches!(
@@ -12136,7 +12133,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         match state.nav_key_held_direction {
             Some(dir) => music_wheel_update_hold_scroll(state, dt, dir),
             None => music_wheel_settle_offset(state, dt),
-        };
+        }
     } else {
         music_wheel_settle_offset(state, dt);
     }
@@ -12988,7 +12985,8 @@ impl WheelSongMetaBench {
 #[must_use]
 pub fn benchmark_wheel_song_meta(song_count: usize) -> WheelSongMetaBench {
     let mut songs = Vec::with_capacity(song_count);
-    let mut prepared = FxHashMap::with_capacity_and_hasher(song_count, Default::default());
+    let mut prepared =
+        FxHashMap::with_capacity_and_hasher(song_count, rustc_hash::FxBuildHasher::default());
     for index in 0..song_count {
         let mut song = (*test_folder_stats_song(index)).clone();
         let pack = if index % 2 == 0 {
@@ -15224,7 +15222,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         state,
         asset_manager,
         stage_number,
-        Default::default(),
+        crate::views::SimplyLoveVisualPolicyView::default(),
     );
     actors
 }
@@ -15645,7 +15643,10 @@ mod tests {
         super::sync_runtime_view(
             &mut state,
             crate::views::SelectMusicRuntimeView {
-                scoreboxes: Some([scorebox("previous-chart".to_string()), Default::default()]),
+                scoreboxes: Some([
+                    scorebox("previous-chart".to_string()),
+                    crate::views::ScoreboxSideView::default(),
+                ]),
                 ..Default::default()
             },
         );
@@ -15664,7 +15665,10 @@ mod tests {
         super::sync_runtime_view(
             &mut state,
             crate::views::SelectMusicRuntimeView {
-                scoreboxes: Some([scorebox(current_hash), Default::default()]),
+                scoreboxes: Some([
+                    scorebox(current_hash),
+                    crate::views::ScoreboxSideView::default(),
+                ]),
                 ..Default::default()
             },
         );
@@ -16185,7 +16189,7 @@ mod tests {
                 "typed text that changed nothing must not be consumed"
             ),
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SongSearch(_)) => {
-                assert!(result.consumed, "a queued search request counts as work")
+                assert!(result.consumed, "a queued search request counts as work");
             }
             other => panic!("expected a search request or none, got {other:?}"),
         }
@@ -17267,9 +17271,9 @@ mod tests {
                         groovestats_active: true,
                         ..Default::default()
                     },
-                    Default::default(),
+                    crate::views::ScoreboxSideView::default(),
                 ]),
-                leaderboard: Some(Default::default()),
+                leaderboard: Some(crate::views::SelectMusicLeaderboardView::default()),
                 unlock_downloads_available: Some(true),
                 ready_song_reload_dirs: Some(vec![std::path::PathBuf::from("Songs/Unlocks")]),
             },
@@ -17327,7 +17331,7 @@ mod tests {
         );
         assert_eq!(super::preview_song_sec(&state), Some(12.5));
 
-        super::sync_runtime_view(&mut state, Default::default());
+        super::sync_runtime_view(&mut state, crate::views::SelectMusicRuntimeView::default());
         assert!(
             state.music_wheel.translated_titles,
             "unchanged wheel snapshot stays retained"

@@ -2772,8 +2772,9 @@ mod tests {
     };
     use crate::{
         ExplosionAnimation, ExplosionSegment, ExplosionState, NoteAnimPart, NoteDisplayMetrics,
-        NotePartAnimation, NotePartTextureTranslate, ReceptorIdleGlow, ReceptorStepBehavior,
-        ReceptorStepBehaviors, Style, TweenType, actor, compiled, itg,
+        NotePartAnimation, NotePartTextureTranslate, ReceptorGlowBehavior, ReceptorIdleGlow,
+        ReceptorPulse, ReceptorReverseBehavior, ReceptorStepBehavior, ReceptorStepBehaviors, Style,
+        TweenType, actor, compiled, itg,
     };
     use std::collections::{HashMap, HashSet};
     use std::sync::Arc;
@@ -3572,9 +3573,9 @@ mod tests {
             receptor_off: vec![Slot(3)],
             receptor_glow: vec![None],
             receptor_idle_glow_layers: vec![None],
-            receptor_off_reverse: vec![Default::default()],
-            receptor_glow_reverse: vec![Default::default()],
-            receptor_idle_glow_reverse: vec![Default::default()],
+            receptor_off_reverse: vec![ReceptorReverseBehavior::default()],
+            receptor_glow_reverse: vec![ReceptorReverseBehavior::default()],
+            receptor_idle_glow_reverse: vec![ReceptorReverseBehavior::default()],
             receptor_step_behaviors: vec![ReceptorStepBehaviors::default()],
             receptor_idle_glow: ReceptorIdleGlow::None,
             mines: vec![Some(Slot(4))],
@@ -5108,9 +5109,9 @@ mod tests {
             tap_explosions: TapExplosionMap::new(),
             tap_explosions_by_col: Vec::new(),
             mine_hit_explosion: None,
-            receptor_glow_behavior: Default::default(),
+            receptor_glow_behavior: ReceptorGlowBehavior::default(),
             receptor_idle_glow: ReceptorIdleGlow::None,
-            receptor_pulse: Default::default(),
+            receptor_pulse: ReceptorPulse::default(),
             hold_let_go_gray_percent: 0.25,
             hold_columns: Vec::new(),
             roll_columns: Vec::new(),

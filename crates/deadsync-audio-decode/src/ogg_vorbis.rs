@@ -7,7 +7,7 @@ use symphonia::core::codecs::audio::{
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
-use symphonia::core::io::MediaSourceStream;
+use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::{Duration, Timestamp};
 
@@ -64,7 +64,7 @@ fn probe_format(
     path: &Path,
 ) -> Result<Box<dyn FormatReader>, Box<dyn std::error::Error + Send + Sync>> {
     let file = File::open(path)?;
-    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let mss = MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default());
     let mut hint = Hint::new();
     hint.with_extension("ogg");
     symphonia::default::get_probe()

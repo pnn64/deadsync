@@ -39,7 +39,7 @@ where
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
         let len = crate::de::decode_slice_len(decoder)?;
         decoder.claim_container_read::<(K, V)>(len)?;
-        let mut map = HashMap::with_capacity_and_hasher(len, S::default());
+        let mut map = Self::with_capacity_and_hasher(len, S::default());
         for _ in 0..len {
             decoder.unclaim_bytes_read(std::mem::size_of::<(K, V)>());
             map.insert(K::decode(decoder)?, V::decode(decoder)?);
@@ -59,7 +59,7 @@ where
     ) -> Result<Self, DecodeError> {
         let len = crate::de::decode_slice_len(decoder)?;
         decoder.claim_container_read::<(K, V)>(len)?;
-        let mut map = HashMap::with_capacity_and_hasher(len, S::default());
+        let mut map = Self::with_capacity_and_hasher(len, S::default());
         for _ in 0..len {
             decoder.unclaim_bytes_read(std::mem::size_of::<(K, V)>());
             map.insert(K::borrow_decode(decoder)?, V::borrow_decode(decoder)?);
@@ -86,7 +86,7 @@ where
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
         let len = crate::de::decode_slice_len(decoder)?;
         decoder.claim_container_read::<T>(len)?;
-        let mut set = HashSet::with_capacity_and_hasher(len, S::default());
+        let mut set = Self::with_capacity_and_hasher(len, S::default());
         for _ in 0..len {
             decoder.unclaim_bytes_read(std::mem::size_of::<T>());
             set.insert(T::decode(decoder)?);
@@ -105,7 +105,7 @@ where
     ) -> Result<Self, DecodeError> {
         let len = crate::de::decode_slice_len(decoder)?;
         decoder.claim_container_read::<T>(len)?;
-        let mut set = HashSet::with_capacity_and_hasher(len, S::default());
+        let mut set = Self::with_capacity_and_hasher(len, S::default());
         for _ in 0..len {
             decoder.unclaim_bytes_read(std::mem::size_of::<T>());
             set.insert(T::borrow_decode(decoder)?);

@@ -436,7 +436,7 @@ pub(super) fn repeat_held_arcade_start(
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     if !state.start_input[idx].held {
         return None;
-    };
+    }
     let start_input = &mut state.start_input[idx];
     if !screen_input::advance_hold_repeat(
         &mut start_input.held_for,

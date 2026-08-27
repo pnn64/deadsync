@@ -2376,7 +2376,7 @@ fn rasterize_triangle_tex_color_mode<const MASK: bool, const OPAQUE: bool>(
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
-            )
+            );
         }
         (SamplerFilter::Nearest, false) => {
             rasterize_triangle_tex_color_impl::<false, false, MASK, OPAQUE>(
@@ -2390,7 +2390,7 @@ fn rasterize_triangle_tex_color_mode<const MASK: bool, const OPAQUE: bool>(
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
-            )
+            );
         }
         (SamplerFilter::Linear, true) => {
             rasterize_triangle_tex_color_impl::<true, true, MASK, OPAQUE>(
@@ -2404,7 +2404,7 @@ fn rasterize_triangle_tex_color_mode<const MASK: bool, const OPAQUE: bool>(
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
-            )
+            );
         }
         (SamplerFilter::Linear, false) => {
             rasterize_triangle_tex_color_impl::<true, false, MASK, OPAQUE>(
@@ -2418,7 +2418,7 @@ fn rasterize_triangle_tex_color_mode<const MASK: bool, const OPAQUE: bool>(
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
-            )
+            );
         }
     }
 }

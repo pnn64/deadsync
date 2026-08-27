@@ -69,22 +69,17 @@ const ARROWCLOUD_APPEARANCE_NAMES: [&str; 5] = ["Hidden", "Sudden", "Stealth", "
 
 #[inline(always)]
 pub fn warn_submit_skip(side: profile_data::PlayerSide, chart_hash: &str, reason: &str) {
-    log::warn!(
-        "Skipping ArrowCloud submit for {:?} ({}): {}.",
-        side,
-        chart_hash,
-        reason
-    );
+    log::warn!("Skipping ArrowCloud submit for {side:?} ({chart_hash}): {reason}.");
 }
 
 #[inline(always)]
 pub fn log_global_submit_skip(log: ArrowCloudAutosubmitLog) {
     match log.level {
         ArrowCloudAutosubmitLogLevel::Debug => {
-            log::debug!("Skipping ArrowCloud submit: {}.", log.reason)
+            log::debug!("Skipping ArrowCloud submit: {}.", log.reason);
         }
         ArrowCloudAutosubmitLogLevel::Warn => {
-            log::warn!("Skipping ArrowCloud submit: {}.", log.reason)
+            log::warn!("Skipping ArrowCloud submit: {}.", log.reason);
         }
     }
 }
@@ -835,7 +830,7 @@ pub fn begin_ready_submit_retry_job(
     let token = next_submit_ui_token();
     let job = take_ready_submit_retry_job(hash, side, manual, token)?;
     set_submit_ui_status(side, hash, token, ArrowCloudSubmitUiStatus::Submitting);
-    log::debug!("Retrying ArrowCloud submit for {:?} ({}).", side, hash);
+    log::debug!("Retrying ArrowCloud submit for {side:?} ({hash}).");
     Some(job)
 }
 

@@ -27,8 +27,8 @@ pub struct EncoderImpl<W: Writer, C: Config> {
 
 impl<W: Writer, C: Config> EncoderImpl<W, C> {
     /// Create a new Encoder
-    pub const fn new(writer: W, config: C) -> EncoderImpl<W, C> {
-        EncoderImpl { writer, config }
+    pub const fn new(writer: W, config: C) -> Self {
+        Self { writer, config }
     }
 
     /// Return the underlying writer

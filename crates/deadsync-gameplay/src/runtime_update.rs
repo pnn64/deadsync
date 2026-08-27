@@ -917,7 +917,7 @@ where
             return false;
         };
         mutate_timing_arc(&mut self.timing_runtime.timing, |timing| {
-            timing.set_global_offset_seconds(new_offset)
+            timing.set_global_offset_seconds(new_offset);
         });
         for (player_idx, timing) in self.timing_runtime.timing_players.iter_mut().enumerate() {
             let effective_offset = new_offset
@@ -926,7 +926,7 @@ where
                     .offsets
                     .player_global_offset_shift_seconds(player_idx);
             mutate_timing_arc(timing, |timing| {
-                timing.set_global_offset_seconds(effective_offset)
+                timing.set_global_offset_seconds(effective_offset);
             });
         }
         self.refresh_timing_after_offset_change();
@@ -943,7 +943,7 @@ where
         };
 
         mutate_timing_arc(&mut self.timing_runtime.timing, |timing| {
-            timing.shift_song_offset_seconds(delta)
+            timing.shift_song_offset_seconds(delta);
         });
         for timing in &mut self.timing_runtime.timing_players {
             mutate_timing_arc(timing, |timing| timing.shift_song_offset_seconds(delta));
@@ -1475,7 +1475,7 @@ where
     pub fn course_display_carry(&self) -> [CourseDisplayCarry; MAX_PLAYERS] {
         let stages = std::array::from_fn(|player| {
             if player >= self.setup.num_players.min(MAX_PLAYERS) {
-                return Default::default();
+                return CourseDisplayStage::default();
             }
             player_course_display_stage(
                 &self.players_runtime.players[player],
@@ -2854,9 +2854,7 @@ where
             .update_prepared_slot(prepared, pressed);
         if update.slot_table_full {
             log::debug!(
-                "Gameplay active input slot table full; dropping held-state edge for {:?} slot {}",
-                source,
-                input_slot
+                "Gameplay active input slot table full; dropping held-state edge for {source:?} slot {input_slot}"
             );
         }
         update
@@ -3000,10 +2998,10 @@ where
             GameplayRawKeyPlan::Restart | GameplayRawKeyPlan::Reload => return action,
             GameplayRawKeyPlan::SetAutosyncMode(mode) => self.set_autosync_mode(mode),
             GameplayRawKeyPlan::SetTimingTickMode(mode) => {
-                self.apply_timing_tick_mode_command(mode, now_music_time)
+                self.apply_timing_tick_mode_command(mode, now_music_time);
             }
             GameplayRawKeyPlan::SetAutoplayEnabled(enabled) => {
-                self.set_live_autoplay_enabled(enabled)
+                self.set_live_autoplay_enabled(enabled);
             }
             GameplayRawKeyPlan::StartOffsetAdjust { key, target } => {
                 let delta = self.start_offset_adjust_hold_key(key, timestamp);

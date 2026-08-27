@@ -187,22 +187,17 @@ pub fn warn_submit_skip(
     chart_hash: &str,
     reason: &str,
 ) {
-    log::warn!(
-        "Skipping {service_name} submit for {:?} ({}): {}.",
-        side,
-        chart_hash,
-        reason
-    );
+    log::warn!("Skipping {service_name} submit for {side:?} ({chart_hash}): {reason}.");
 }
 
 #[inline(always)]
 pub fn log_global_submit_skip(service_name: &str, log: GrooveStatsAutosubmitLog) {
     match log.level {
         GrooveStatsAutosubmitLogLevel::Debug => {
-            log::debug!("Skipping {service_name} submit: {}.", log.reason)
+            log::debug!("Skipping {service_name} submit: {}.", log.reason);
         }
         GrooveStatsAutosubmitLogLevel::Warn => {
-            log::warn!("Skipping {service_name} submit: {}.", log.reason)
+            log::warn!("Skipping {service_name} submit: {}.", log.reason);
         }
     }
 }
@@ -222,7 +217,7 @@ pub fn log_player_submit_skip(
             log.reason
         ),
         GrooveStatsAutosubmitLogLevel::Warn => {
-            warn_submit_skip(service_name, side, chart_hash, log.reason)
+            warn_submit_skip(service_name, side, chart_hash, log.reason);
         }
     }
 }
@@ -2513,7 +2508,7 @@ pub fn begin_ready_submit_retry_request(
     let request = take_ready_submit_retry_request(hash, side, manual, token)?;
     set_submit_ui_status(side, hash, token, GrooveStatsSubmitUiStatus::Submitting);
     arm_submit_event_ui(side, hash, token);
-    log::debug!("Retrying {service_name} submit for {:?} ({}).", side, hash);
+    log::debug!("Retrying {service_name} submit for {side:?} ({hash}).");
     Some(request)
 }
 

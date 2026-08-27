@@ -935,7 +935,7 @@ pub fn get_actors(
         alpha_multiplier,
         None,
         None,
-        Default::default(),
+        crate::views::SimplyLoveVisualPolicyView::default(),
     );
     actors
 }
@@ -1121,7 +1121,7 @@ mod tests {
             1.0,
             None,
             Some(LOGO_SHADOW_EXIT_DURATION * 0.5),
-            Default::default(),
+            crate::views::SimplyLoveVisualPolicyView::default(),
         );
         let shadow_len = actors
             .iter()
@@ -1207,7 +1207,7 @@ mod tests {
             1.0,
             Some(SECONDARY_ENTRY_DURATION.mul_add(0.5, SECONDARY_ENTRY_DELAY)),
             None,
-            Default::default(),
+            crate::views::SimplyLoveVisualPolicyView::default(),
         );
         let text_alpha = |expected: &str| {
             actors

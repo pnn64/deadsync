@@ -502,7 +502,7 @@ fn song_lua_column_transforms(
             SongLuaColumnTransformTarget::OffsetY => {}
             SongLuaColumnTransformTarget::Zoom => zooms[window.column] = value.max(0.0),
             SongLuaColumnTransformTarget::RotationZ => {
-                rotations_deg[window.column] = value.to_degrees()
+                rotations_deg[window.column] = value.to_degrees();
             }
         }
     }

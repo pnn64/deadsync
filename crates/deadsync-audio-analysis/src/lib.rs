@@ -53,8 +53,7 @@ pub fn compute_loudness(path: &Path) -> Result<ReplayGainInfo, String> {
     let sample_rate = opened.sample_rate_hz.max(1);
     if channels > 8 {
         return Err(format!(
-            "ReplayGain: refusing to analyze {} channels",
-            channels
+            "ReplayGain: refusing to analyze {channels} channels"
         ));
     }
 

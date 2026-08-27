@@ -108,7 +108,7 @@ impl<Context, T: Decode<Context>> Decode<Context> for Vec<T> {
             return values;
         }
 
-        let mut values = Vec::with_capacity(len);
+        let mut values = Self::with_capacity(len);
         for _ in 0..len {
             decoder.unclaim_bytes_read(std::mem::size_of::<T>());
             values.push(T::decode(decoder)?);
@@ -131,7 +131,7 @@ impl<'de, T: BorrowDecode<'de, Context>, Context> BorrowDecode<'de, Context> for
             return values;
         }
 
-        let mut values = Vec::with_capacity(len);
+        let mut values = Self::with_capacity(len);
         for _ in 0..len {
             decoder.unclaim_bytes_read(std::mem::size_of::<T>());
             values.push(T::borrow_decode(decoder)?);
@@ -148,7 +148,7 @@ impl<T: Encode> Encode for Vec<T> {
 
 impl<Context> Decode<Context> for String {
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
-        String::from_utf8(Vec::<u8>::decode(decoder)?).map_err(|error| DecodeError::Utf8 {
+        Self::from_utf8(Vec::<u8>::decode(decoder)?).map_err(|error| DecodeError::Utf8 {
             inner: error.utf8_error(),
         })
     }

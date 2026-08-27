@@ -55,7 +55,10 @@ struct QrMeshCache {
 impl QrMeshCache {
     fn with_capacity(capacity: usize) -> Self {
         Self {
-            entries: FxHashMap::with_capacity_and_hasher(capacity, Default::default()),
+            entries: FxHashMap::with_capacity_and_hasher(
+                capacity,
+                rustc_hash::FxBuildHasher::default(),
+            ),
             len: 0,
         }
     }

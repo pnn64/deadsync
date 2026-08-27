@@ -715,7 +715,8 @@ mod tests {
         assert!(post_step_sync_needed(Some(synced), after_step));
         assert!(post_step_sync_needed(None, after_step));
 
-        let mut course = select_course::init(Default::default());
+        let mut course =
+            select_course::init(deadsync_theme_simply_love::views::SelectCourseInitView::default());
         let synced = select_course::runtime_token(&course);
         course.selected_index = course.selected_index.wrapping_add(1);
 

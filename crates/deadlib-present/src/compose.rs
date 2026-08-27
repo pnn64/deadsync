@@ -233,7 +233,7 @@ impl FrameBuilder {
         } = object;
         match object_type {
             EditablePayload::Sprite(instance_index) => {
-                self.push_sprite(texture_handle, order, z, blend, camera, instance_index)
+                self.push_sprite(texture_handle, order, z, blend, camera, instance_index);
             }
             EditablePayload::Mesh {
                 transform,
@@ -1470,7 +1470,7 @@ pub struct ComposeScratch {
     tmesh_geometries: Vec<renderer::TexturedMeshGeometry>,
     ops: Vec<renderer::DrawOp>,
     render_target_frames: Vec<renderer::RenderTargetFrame>,
-    render_target_scratches: Vec<Box<ComposeScratch>>,
+    render_target_scratches: Vec<Box<Self>>,
     tmesh_geom_map: HashMap<TMeshGeomKey, u32, rustc_hash::FxBuildHasher>,
     cameras: Vec<Matrix4>,
     masks: Vec<WorldRect>,
@@ -5979,7 +5979,7 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                         out,
                         texture_cache,
                         texture_ctx,
-                    )
+                    );
                 }
                 actors::FlatDraw::PreparedU32(text) => build_flat_prepared_u32(
                     text,
@@ -9382,6 +9382,7 @@ mod tests {
         FlatSprite, FlatTexturedMesh, InlineText, InlineU32Text, RetainedActorFrame, SizeSpec,
         SpriteSource, TextAlign, TextAttribute, TextAttributes, TextContent,
     };
+    use crate::anim::EffectState;
     use crate::font;
     use crate::font::{Font, Glyph, GlyphMap};
     use crate::space::Metrics;
@@ -9804,7 +9805,7 @@ mod tests {
             scale: [1.0, 1.0],
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0; 4],
-            effect: Default::default(),
+            effect: EffectState::default(),
         }
     }
 
@@ -10382,7 +10383,7 @@ mod tests {
             scale: [1.0, 1.0],
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0; 4],
-            effect: Default::default(),
+            effect: EffectState::default(),
         };
         let actor_mesh = Actor::TexturedMesh {
             align: [0.0, 0.0],
@@ -10914,7 +10915,7 @@ mod tests {
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0; 4],
-            effect: Default::default(),
+            effect: EffectState::default(),
         }
     }
 
@@ -13066,7 +13067,7 @@ mod tests {
             scale: [1.0, 1.0],
             shadow_len: [0.0; 2],
             shadow_color: [0.0; 4],
-            effect: Default::default(),
+            effect: EffectState::default(),
         };
         let frame = Arc::new(RetainedActorFrame::new(vec![sprite]));
         let actors = [Actor::RetainedFrame {
@@ -13746,7 +13747,7 @@ mod tests {
             scale: [1.0, 1.0],
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.0],
-            effect: Default::default(),
+            effect: EffectState::default(),
         };
         let actors = [Actor::SharedFrame {
             align: [0.0, 0.0],
@@ -13807,7 +13808,7 @@ mod tests {
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
-            effect: Default::default(),
+            effect: EffectState::default(),
         }];
         let fonts = font::FontMap::from_iter([("test", test_font())]);
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
@@ -13855,7 +13856,7 @@ mod tests {
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
-            effect: Default::default(),
+            effect: EffectState::default(),
         }];
         let fonts = font::FontMap::from_iter([("test", test_font())]);
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
@@ -13902,7 +13903,7 @@ mod tests {
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
-            effect: Default::default(),
+            effect: EffectState::default(),
         }];
         let fonts = font::FontMap::from_iter([("test", test_font())]);
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
@@ -13947,7 +13948,7 @@ mod tests {
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
-            effect: Default::default(),
+            effect: EffectState::default(),
         }];
         let fonts = font::FontMap::from_iter([("test", test_font())]);
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
@@ -14001,7 +14002,7 @@ mod tests {
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
-            effect: Default::default(),
+            effect: EffectState::default(),
         }];
         let fonts = font::FontMap::from_iter([("test", test_font())]);
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
@@ -14063,7 +14064,7 @@ mod tests {
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
-            effect: Default::default(),
+            effect: EffectState::default(),
         }];
         let fonts = font::FontMap::from_iter([("test", test_font())]);
         let render = build_screen(&actors, [1.0; 4], &metrics, &fonts, 0.0);
@@ -14113,7 +14114,7 @@ mod tests {
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
-            effect: Default::default(),
+            effect: EffectState::default(),
         };
         let fonts = font::FontMap::from_iter([("test", test_font())]);
         let base = build_screen(&[actor.clone()], [1.0; 4], &metrics, &fonts, 0.25);
@@ -14166,7 +14167,7 @@ mod tests {
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
-            effect: Default::default(),
+            effect: EffectState::default(),
         };
         let fonts = font::FontMap::from_iter([("test", test_font())]);
         let base = build_screen(&[actor.clone()], [1.0; 4], &metrics, &fonts, 0.0);
@@ -14231,7 +14232,7 @@ mod tests {
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
-            effect: Default::default(),
+            effect: EffectState::default(),
         }];
         let fonts = font::FontMap::from_iter([("test", test_font_split_pages())]);
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);

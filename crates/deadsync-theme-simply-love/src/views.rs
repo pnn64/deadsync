@@ -150,8 +150,10 @@ pub struct GameplayScoreInitView {
 impl Default for GameplayScoreInitView {
     fn default() -> Self {
         Self {
-            mini_indicator: Default::default(),
-            scorebox_profiles: std::array::from_fn(|_| Default::default()),
+            mini_indicator: deadsync_gameplay::GameplayMiniIndicatorData::default(),
+            scorebox_profiles: std::array::from_fn(|_| {
+                deadsync_score::GameplayScoreboxProfileSnapshot::default()
+            }),
             scorebox_snapshots: std::array::from_fn(|_| None),
             rival_score_types: [None; 2],
         }
@@ -863,8 +865,8 @@ impl SelectMusicSessionView {
 impl Default for SelectMusicSessionView {
     fn default() -> Self {
         Self {
-            play_style: Default::default(),
-            player_side: Default::default(),
+            play_style: PlayStyle::default(),
+            player_side: PlayerSide::default(),
             joined: [true, false],
             guest: [true, true],
             music_rate: 1.0,
@@ -977,7 +979,7 @@ impl Default for SelectMusicRuntimeView {
             profiles: None,
             favorites: None,
             pad_profiles: None,
-            audio_playback: Default::default(),
+            audio_playback: deadsync_theme::views::AudioPlaybackView::default(),
             lobby: None,
             downloads: None,
             srpg_shop: None,
@@ -1086,7 +1088,7 @@ pub struct SimplyLoveLobbyRuntimeView {
 impl Default for SimplyLoveLobbyRuntimeView {
     fn default() -> Self {
         Self {
-            snapshot: Default::default(),
+            snapshot: Arc::default(),
             reconnect_status_text: None,
             disconnect_hold_seconds: 5.0,
         }

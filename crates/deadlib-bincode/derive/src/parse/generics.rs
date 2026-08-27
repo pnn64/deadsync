@@ -30,12 +30,12 @@ pub struct Generics(pub Vec<Generic>);
 impl Generics {
     pub(crate) fn try_take(
         input: &mut Peekable<impl Iterator<Item = TokenTree>>,
-    ) -> Result<Option<Generics>> {
+    ) -> Result<Option<Self>> {
         let maybe_punct = input.peek();
         if let Some(TokenTree::Punct(punct)) = maybe_punct {
             if punct.as_char() == '<' {
                 let punct = assume_punct(input.next(), '<');
-                let mut result = Generics(Vec::new());
+                let mut result = Self(Vec::new());
                 loop {
                     match input.peek() {
                         Some(TokenTree::Punct(punct)) if punct.as_char() == '\'' => {
@@ -57,7 +57,7 @@ impl Generics {
                         x => {
                             return Err(Error::InvalidRustSyntax {
                                 span: x.map(|x| x.span()).unwrap_or_else(|| punct.span()),
-                                expected: format!("', > or an ident, got {:?}", x),
+                                expected: format!("', > or an ident, got {x:?}"),
                             });
                         }
                     }
@@ -192,7 +192,7 @@ pub enum Generic {
 
 impl Generic {
     const fn is_lifetime(&self) -> bool {
-        matches!(self, Generic::Lifetime(_))
+        matches!(self, Self::Lifetime(_))
     }
 
     /// The ident of this generic

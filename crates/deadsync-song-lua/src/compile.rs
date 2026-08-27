@@ -180,7 +180,7 @@ where
         |actor| read_actor_model_layers(actor, read_model_slots, model_layer_from_slot),
         |actor, _context| read_noteskin_tap_actor_slots(actor, read_model_slots),
         |skipped| {
-            push_unique_compile_detail(&mut out.info.skipped_message_command_captures, skipped)
+            push_unique_compile_detail(&mut out.info.skipped_message_command_captures, skipped);
         },
     );
     restore_compile_globals(&globals, compile_globals).map_err(|err| err.to_string())?;

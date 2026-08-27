@@ -110,7 +110,7 @@ pub enum ParsedAttribute {
 fn test_parse_tagged_attribute() {
     let group: Group = match crate::token_stream("[prefix(result, foo = \"bar\", baz)]").next() {
         Some(TokenTree::Group(group)) => group,
-        x => panic!("Unexpected token {:?}", x),
+        x => panic!("Unexpected token {x:?}"),
     };
 
     let attributes = parse_tagged_attribute(&group, "prefix").unwrap().unwrap();
@@ -121,19 +121,19 @@ fn test_parse_tagged_attribute() {
         Some(ParsedAttribute::Tag(i)) => {
             assert_eq!(i.to_string(), String::from("result"));
         }
-        x => panic!("Unexpected attribute: {:?}", x),
+        x => panic!("Unexpected attribute: {x:?}"),
     }
     match iter.next() {
         Some(ParsedAttribute::Property(key, val)) => {
             assert_eq!(key.to_string(), String::from("foo"));
             assert_eq!(val.to_string(), String::from("\"bar\""));
         }
-        x => panic!("Unexpected attribute: {:?}", x),
+        x => panic!("Unexpected attribute: {x:?}"),
     }
     match iter.next() {
         Some(ParsedAttribute::Tag(i)) => {
             assert_eq!(i.to_string(), String::from("baz"));
         }
-        x => panic!("Unexpected attribute: {:?}", x),
+        x => panic!("Unexpected attribute: {x:?}"),
     }
 }

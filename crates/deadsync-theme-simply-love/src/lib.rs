@@ -69,7 +69,7 @@ mod act_macro {
             static __TEXTURE_HANDLE: ::std::sync::atomic::AtomicU64 =
                 ::std::sync::atomic::AtomicU64::new($crate::render::INVALID_TEXTURE_HANDLE);
             static __TEXTURE_GENERATION: ::std::sync::atomic::AtomicU64 =
-                ::std::sync::atomic::AtomicU64::new(::core::u64::MAX);
+                ::std::sync::atomic::AtomicU64::new(u64::MAX);
             ::deadlib_present::__act_from_builder!(
                 ($($tail)+)
                 ::deadsync_assets::present_dsl::SpriteBuilder::static_texture_cached(

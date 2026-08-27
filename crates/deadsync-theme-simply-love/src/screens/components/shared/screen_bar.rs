@@ -393,7 +393,7 @@ mod tests {
             left_avatar: None,
             right_avatar: None,
             fg_color: [1.0; 4],
-            visual_policy: SimplyLoveVisualPolicyView::default(),
+            visual_policy: crate::views::SimplyLoveVisualPolicyView::default(),
         }
     }
 

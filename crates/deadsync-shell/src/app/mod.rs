@@ -1127,13 +1127,17 @@ impl ScreensState {
         let mut evaluation_state = evaluation::init(None, EvaluationInitView::default());
         evaluation_state.active_color_index = color_index;
 
-        let mut evaluation_summary_state = evaluation_summary::init(Default::default());
+        let mut evaluation_summary_state = evaluation_summary::init(
+            deadsync_theme_simply_love::views::PostSongRuntimeView::default(),
+        );
         evaluation_summary_state.active_color_index = color_index;
 
-        let mut initials_state = initials::init(Default::default());
+        let mut initials_state =
+            initials::init(deadsync_theme_simply_love::views::PostSongRuntimeView::default());
         initials_state.active_color_index = color_index;
 
-        let mut gameover_state = gameover::init(Default::default());
+        let mut gameover_state =
+            gameover::init(deadsync_theme_simply_love::views::PostSongRuntimeView::default());
         gameover_state.active_color_index = color_index;
 
         Self {
@@ -1141,7 +1145,7 @@ impl ScreensState {
             menu_state,
             gameplay_state: None,
             practice_state: None,
-            gameplay_score_cursor: Default::default(),
+            gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor::default(),
             options_state,
             credits_state,
             manage_local_profiles_state,
@@ -1740,13 +1744,16 @@ impl App {
         }
         match screen {
             CurrentScreen::Init => {
-                init::sync_loading_events(&mut self.state.screens.init_state, events)
+                init::sync_loading_events(&mut self.state.screens.init_state, events);
             }
             CurrentScreen::Options => {
-                options::sync_reload_events(&mut self.state.screens.options_state, events)
+                options::sync_reload_events(&mut self.state.screens.options_state, events);
             }
             CurrentScreen::SelectMusic => {
-                select_music::sync_reload_events(&mut self.state.screens.select_music_state, events)
+                select_music::sync_reload_events(
+                    &mut self.state.screens.select_music_state,
+                    events,
+                );
             }
             _ => unreachable!("content reload events are only polled for reload-capable screens"),
         }
@@ -4004,7 +4011,7 @@ impl App {
             select_music_downloads_visible: false,
             select_music_shop_generation: 0,
             select_music_shop_visible: false,
-            select_music_lobby: Default::default(),
+            select_music_lobby: lobby_views::RuntimeCursor::default(),
             selection_profile_generation: 0,
             selection_profile_policy: None,
             selection_profile_snapshot: None,
@@ -4021,7 +4028,7 @@ impl App {
             select_course_runtime_key: None,
             select_course_runtime_rebuild: true,
             evaluation_context_rebuild: true,
-            evaluation_lobby: Default::default(),
+            evaluation_lobby: lobby_views::RuntimeCursor::default(),
             evaluation_favorite_key: None,
             evaluation_favorites_rebuild: true,
             evaluation_scorebox_key: None,
@@ -4031,7 +4038,7 @@ impl App {
             evaluation_submission_refresh_at: None,
             evaluation_submission_auto_retry_at: None,
             evaluation_submissions_rebuild: true,
-            gameplay_lobby: Default::default(),
+            gameplay_lobby: lobby_views::RuntimeCursor::default(),
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
             content_reload: crate::content_reload::Service::default(),
@@ -6655,7 +6662,7 @@ impl App {
                 visual_policy,
             ),
             CurrentScreen::Init => {
-                init::push_actors(&mut actors, &self.state.screens.init_state, visual_policy)
+                init::push_actors(&mut actors, &self.state.screens.init_state, visual_policy);
             }
             CurrentScreen::Evaluation => {
                 evaluation::push_actors(
@@ -6707,7 +6714,7 @@ impl App {
                     visual_policy,
                 );
             }
-        };
+        }
 
         if self.state.shell.overlay_mode.shows_fps() {
             screens::components::shared::stats_overlay::push(
@@ -8484,7 +8491,7 @@ impl App {
                             pack_sync_offset_seconds,
                         ) {
                             Ok((key, events)) => {
-                                self.gameplay_lights.set_cabinet_chart(key, events)
+                                self.gameplay_lights.set_cabinet_chart(key, events);
                             }
                             Err(error) => {
                                 warn!(
@@ -10038,7 +10045,7 @@ mod tests {
             mines_avoided: 0,
             mines_total: 0,
             timing: timing_rules::TimingStats::default(),
-            arrow_timing: Default::default(),
+            arrow_timing: deadsync_rules::timing::ArrowTimingStats::default(),
             scatter: Vec::new(),
             scatter_worst_window_ms: 45.0,
             histogram: timing_rules::HistogramMs::default(),
@@ -10052,7 +10059,7 @@ mod tests {
             ex_score_percent: 0.0,
             hard_ex_score_percent: 0.0,
             calories_burned: 0.0,
-            column_judgments: Default::default(),
+            column_judgments: SmallVec::default(),
             noteskin: None,
             show_fa_plus_window: false,
             show_ex_score: false,
@@ -10136,7 +10143,7 @@ mod tests {
                 stddev_ms: 0.0,
                 max_abs_ms: 10.0,
             },
-            arrow_timing: Default::default(),
+            arrow_timing: deadsync_rules::timing::ArrowTimingStats::default(),
             scatter: vec![timing_rules::ScatterPoint {
                 time_sec: 12.0,
                 offset_ms: Some(10.0),

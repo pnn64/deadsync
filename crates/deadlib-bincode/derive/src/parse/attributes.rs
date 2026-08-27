@@ -20,7 +20,7 @@ impl Attribute {
             match input.peek() {
                 Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Bracket => {
                     let group = assume_group(input.next());
-                    result.push(Attribute { tokens: group });
+                    result.push(Self { tokens: group });
                 }
                 Some(TokenTree::Group(g)) => {
                     return Err(Error::InvalidRustSyntax {
@@ -47,14 +47,14 @@ fn test_attributes_try_take() {
     assert!(Attribute::try_take(stream).unwrap().is_empty());
     match stream.next().unwrap() {
         TokenTree::Ident(i) => assert_eq!(i, "struct"),
-        x => panic!("Expected ident, found {:?}", x),
+        x => panic!("Expected ident, found {x:?}"),
     }
 
     let stream = &mut token_stream("#[cfg(test)] struct Foo;");
     assert!(!Attribute::try_take(stream).unwrap().is_empty());
     match stream.next().unwrap() {
         TokenTree::Ident(i) => assert_eq!(i, "struct"),
-        x => panic!("Expected ident, found {:?}", x),
+        x => panic!("Expected ident, found {x:?}"),
     }
 }
 

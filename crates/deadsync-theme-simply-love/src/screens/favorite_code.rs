@@ -105,7 +105,7 @@ impl FavoriteCodeTracker {
                 .checked_duration_since(started_at)
                 .is_none_or(|elapsed| elapsed > CODE_TIMEOUT)
         }) {
-            *state = Default::default();
+            *state = CodeState::default();
         }
 
         if code[state.index] == dir {
@@ -114,14 +114,14 @@ impl FavoriteCodeTracker {
             }
             state.index += 1;
             if state.index == code.len() {
-                *state = Default::default();
+                *state = CodeState::default();
                 return true;
             }
         } else if code[0] == dir {
             state.index = 1;
             state.started_at = Some(timestamp);
         } else {
-            *state = Default::default();
+            *state = CodeState::default();
         }
         false
     }
@@ -178,7 +178,7 @@ mod tests {
         let now = Instant::now();
         assert_eq!(
             enter(
-                &mut FavoriteCodeTracker::default(),
+                &mut crate::screens::favorite_code::FavoriteCodeTracker::default(),
                 P1_LEFT,
                 now,
                 Duration::from_millis(100),
@@ -187,7 +187,7 @@ mod tests {
         );
         assert_eq!(
             enter(
-                &mut FavoriteCodeTracker::default(),
+                &mut crate::screens::favorite_code::FavoriteCodeTracker::default(),
                 P2_RIGHT,
                 now,
                 Duration::from_millis(100),
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn player_queues_do_not_combine() {
-        let mut tracker = FavoriteCodeTracker::default();
+        let mut tracker = crate::screens::favorite_code::FavoriteCodeTracker::default();
         let now = Instant::now();
         let mixed = [
             VirtualAction::p1_right,
@@ -217,7 +217,7 @@ mod tests {
 
     #[test]
     fn code_must_fit_itgmania_total_window() {
-        let mut tracker = FavoriteCodeTracker::default();
+        let mut tracker = crate::screens::favorite_code::FavoriteCodeTracker::default();
         let now = Instant::now();
         for (index, action) in P1_RIGHT.into_iter().enumerate() {
             let offset = [0, 500, 1_000, 1_500, 2_401][index];
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn other_buttons_break_partial_code() {
-        let mut tracker = FavoriteCodeTracker::default();
+        let mut tracker = crate::screens::favorite_code::FavoriteCodeTracker::default();
         let now = Instant::now();
         assert_eq!(tracker.check(P1_RIGHT[0], now), None);
         assert_eq!(

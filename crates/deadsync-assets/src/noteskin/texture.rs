@@ -419,6 +419,7 @@ impl NoteskinSlot for SpriteSlot {
     }
 
     #[inline(always)]
+    #[allow(clippy::use_self)]
     fn texture_key_shared(&self) -> Arc<str> {
         SpriteSlot::texture_key_shared(self)
     }
@@ -430,7 +431,7 @@ impl NoteskinSlot for SpriteSlot {
 
     #[inline(always)]
     fn base_rot_sin_cos(&self) -> [f32; 2] {
-        SpriteSlot::base_rot_sin_cos(self)
+        Self::base_rot_sin_cos(self)
     }
 
     #[inline(always)]
@@ -445,20 +446,21 @@ impl NoteskinSlot for SpriteSlot {
 
     #[inline(always)]
     fn frame_index(&self, time: f32, beat: f32) -> usize {
-        SpriteSlot::frame_index(self, time, beat)
+        Self::frame_index(self, time, beat)
     }
 
     #[inline(always)]
     fn frame_index_from_phase(&self, phase: f32) -> usize {
-        SpriteSlot::frame_index_from_phase(self, phase)
+        Self::frame_index_from_phase(self, phase)
     }
 
     #[inline(always)]
     fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4] {
-        SpriteSlot::uv_for_frame_at(self, frame_index, elapsed)
+        Self::uv_for_frame_at(self, frame_index, elapsed)
     }
 
     #[inline(always)]
+    #[allow(clippy::use_self)]
     fn model_draw_at(&self, time: f32, beat: f32) -> ModelDrawState {
         SpriteSlot::model_draw_at(self, time, beat)
     }
@@ -475,7 +477,7 @@ impl NoteskinSlot for SpriteSlot {
         beat: f32,
         cursor: &mut ModelTweenCursor,
     ) -> ModelDrawState {
-        SpriteSlot::model_draw_at_cursor(self, time, beat, cursor)
+        Self::model_draw_at_cursor(self, time, beat, cursor)
     }
 
     #[inline(always)]
@@ -486,12 +488,12 @@ impl NoteskinSlot for SpriteSlot {
         beat: f32,
         diffuse_alpha: f32,
     ) -> Option<[f32; 4]> {
-        SpriteSlot::model_glow_with_draw(self, draw, time, beat, diffuse_alpha)
+        Self::model_glow_with_draw(self, draw, time, beat, diffuse_alpha)
     }
 
     #[inline(always)]
     fn model_uv_params(&self, uv_rect: [f32; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
-        SpriteSlot::model_uv_params(self, uv_rect)
+        Self::model_uv_params(self, uv_rect)
     }
 }
 

@@ -104,7 +104,7 @@ impl<'a, P: Parent> ImplFor<'a, P> {
     /// ```
     ///
     /// See [`FnBuilder`] for more options, as well as information on how to fill the function body.
-    pub fn generate_fn(&mut self, name: impl Into<String>) -> FnBuilder<'_, ImplFor<'a, P>> {
+    pub fn generate_fn(&mut self, name: impl Into<String>) -> FnBuilder<'_, Self> {
         FnBuilder::new(self, name)
     }
 
@@ -152,7 +152,7 @@ impl<'a, P: Parent> ImplFor<'a, P> {
     }
 }
 
-impl<'a, P: Parent> FnParent for ImplFor<'a, P> {
+impl<P: Parent> FnParent for ImplFor<'_, P> {
     fn append(&mut self, fn_definition: StreamBuilder, fn_body: StreamBuilder) -> Result {
         self.fns.push((fn_definition, fn_body));
         Ok(())
@@ -200,7 +200,7 @@ impl<P: Parent> ImplFor<'_, P> {
         } else if let Some(generics) = self.generator.generics() {
             builder.append(generics.impl_generics_with_additional(&[], impl_generics));
         } else if !impl_generics.is_empty() {
-            append_lifetimes_and_generics(builder, &[], impl_generics)
+            append_lifetimes_and_generics(builder, &[], impl_generics);
         }
         if let Some(t) = &self.trait_name {
             builder.push_parsed(t.to_string()).unwrap();

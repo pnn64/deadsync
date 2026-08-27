@@ -10,7 +10,7 @@ impl DeriveStruct {
     pub fn generate_encode(self, generator: &mut Generator) -> Result<()> {
         let crate_name = &self.attributes.crate_name;
         generator
-            .impl_for(format!("{}::Encode", crate_name))
+            .impl_for(format!("{crate_name}::Encode"))
             .modify_generic_constraints(|generics, where_constraints| {
                 if let Some((bounds, lit)) =
                     (self.attributes.encode_bounds.as_ref()).or(self.attributes.bounds.as_ref())
@@ -22,27 +22,25 @@ impl DeriveStruct {
                 } else {
                     for g in generics.iter_generics() {
                         where_constraints
-                            .push_constraint(g, format!("{}::Encode", crate_name))
+                            .push_constraint(g, format!("{crate_name}::Encode"))
                             .unwrap();
                     }
                 }
                 Ok(())
             })?
             .generate_fn("encode")
-            .with_generic_deps("__E", [format!("{}::enc::Encoder", crate_name)])
+            .with_generic_deps("__E", [format!("{crate_name}::enc::Encoder")])
             .with_self_arg(virtue::generate::FnSelfArg::RefSelf)
             .with_arg("encoder", "&mut __E")
             .with_return_type(format!(
-                "core::result::Result<(), {}::error::EncodeError>",
-                crate_name
+                "core::result::Result<(), {crate_name}::error::EncodeError>"
             ))
             .body(|fn_body| {
                 if let Some(fields) = self.fields.as_ref() {
                     for field in fields.names() {
                         field.attributes().get_attribute::<FieldAttributes>()?;
                         fn_body.push_parsed(format!(
-                            "{}::Encode::encode(&self.{}, encoder)?;",
-                            crate_name, field
+                            "{crate_name}::Encode::encode(&self.{field}, encoder)?;"
                         ))?;
                     }
                 }
@@ -61,7 +59,7 @@ impl DeriveStruct {
             "__Context"
         };
 
-        let mut impl_for = generator.impl_for(format!("{}::Decode", crate_name));
+        let mut impl_for = generator.impl_for(format!("{crate_name}::Decode"));
         if self.attributes.decode_context.is_none() {
             impl_for = impl_for.with_impl_generics(["__Context"]);
         }
@@ -79,10 +77,7 @@ impl DeriveStruct {
                 } else {
                     for g in generics.iter_generics() {
                         where_constraints
-                            .push_constraint(
-                                g,
-                                format!("{}::Decode<{}>", crate_name, decode_context),
-                            )
+                            .push_constraint(g, format!("{crate_name}::Decode<{decode_context}>"))
                             .unwrap();
                     }
                 }
@@ -92,14 +87,12 @@ impl DeriveStruct {
             .with_generic_deps(
                 "__D",
                 [format!(
-                    "{}::de::Decoder<Context = {}>",
-                    crate_name, decode_context
+                    "{crate_name}::de::Decoder<Context = {decode_context}>"
                 )],
             )
             .with_arg("decoder", "&mut __D")
             .with_return_type(format!(
-                "core::result::Result<Self, {}::error::DecodeError>",
-                crate_name
+                "core::result::Result<Self, {crate_name}::error::DecodeError>"
             ))
             .body(|fn_body| {
                 // Ok(Self {
@@ -117,8 +110,7 @@ impl DeriveStruct {
                             for field in fields.names() {
                                 field.attributes().get_attribute::<FieldAttributes>()?;
                                 struct_body.push_parsed(format!(
-                                    "{1}: {0}::Decode::decode(decoder)?,",
-                                    crate_name, field
+                                    "{field}: {crate_name}::Decode::decode(decoder)?,"
                                 ))?;
                             }
                         }
@@ -143,7 +135,7 @@ impl DeriveStruct {
         };
 
         let mut impl_for = generator
-            .impl_for_with_lifetimes(format!("{}::BorrowDecode", crate_name), ["__de"])
+            .impl_for_with_lifetimes(format!("{crate_name}::BorrowDecode"), ["__de"])
             .with_trait_generics([decode_context]);
         if self.attributes.decode_context.is_none() {
             impl_for = impl_for.with_impl_generics(["__Context"]);
@@ -164,8 +156,7 @@ impl DeriveStruct {
                             .push_constraint(
                                 g,
                                 format!(
-                                    "{}::de::BorrowDecode<'__de, {}>",
-                                    crate_name, decode_context
+                                    "{crate_name}::de::BorrowDecode<'__de, {decode_context}>"
                                 ),
                             )
                             .unwrap();
@@ -181,14 +172,12 @@ impl DeriveStruct {
             .with_generic_deps(
                 "__D",
                 [format!(
-                    "{}::de::BorrowDecoder<'__de, Context = {}>",
-                    crate_name, decode_context
+                    "{crate_name}::de::BorrowDecoder<'__de, Context = {decode_context}>"
                 )],
             )
             .with_arg("decoder", "&mut __D")
             .with_return_type(format!(
-                "core::result::Result<Self, {}::error::DecodeError>",
-                crate_name
+                "core::result::Result<Self, {crate_name}::error::DecodeError>"
             ))
             .body(|fn_body| {
                 // Ok(Self {
@@ -200,8 +189,7 @@ impl DeriveStruct {
                             for field in fields.names() {
                                 field.attributes().get_attribute::<FieldAttributes>()?;
                                 struct_body.push_parsed(format!(
-                                    "{1}: {0}::BorrowDecode::<'_, {2}>::borrow_decode(decoder)?,",
-                                    crate_name, field, decode_context,
+                                    "{field}: {crate_name}::BorrowDecode::<'_, {decode_context}>::borrow_decode(decoder)?,",
                                 ))?;
                             }
                         }

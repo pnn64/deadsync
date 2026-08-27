@@ -757,7 +757,11 @@ pub fn push_actors(
 
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(32 + ARROW_COUNT);
-    push_actors(&mut actors, state, Default::default());
+    push_actors(
+        &mut actors,
+        state,
+        crate::views::SimplyLoveVisualPolicyView::default(),
+    );
     actors
 }
 

@@ -234,6 +234,7 @@ pub(crate) use transforms::{
 #[cfg(test)]
 mod tests {
     use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SizeSpec, SpriteSource, TextAlign};
+    use deadlib_present::anim::EffectState;
     use deadlib_render_core::BlendMode;
     use deadsync_gameplay::VisualEffects;
     use deadsync_noteskin::NoteAnimPart;
@@ -3823,7 +3824,7 @@ mod tests {
                 scale: [1.0; 2],
                 shadow_len: [0.0; 2],
                 shadow_color: [0.0; 4],
-                effect: Default::default(),
+                effect: EffectState::default(),
             },
             12.5,
         );
@@ -4127,7 +4128,7 @@ mod tests {
                     |index| legacy.push(index),
                 );
                 for_each_visible_note_index(&note_indices, &note_itg_rows, range, |index| {
-                    cached.push(index)
+                    cached.push(index);
                 });
                 assert_eq!(cached, legacy, "range={range:?}");
             }

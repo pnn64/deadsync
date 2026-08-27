@@ -8736,8 +8736,7 @@ pub fn append_player_options_section(
         options.tap_explosion_active_mask.bits()
     ));
     content.push_str(&format!(
-        "TapExplosionMaskVersion={}\n",
-        TAP_EXPLOSION_MASK_VERSION
+        "TapExplosionMaskVersion={TAP_EXPLOSION_MASK_VERSION}\n"
     ));
     content.push_str(&format!("MiniPercent={}\n", options.mini_percent));
     content.push_str(&format!("Spacing={}\n", options.spacing_percent));

@@ -643,11 +643,11 @@ impl Backend {
         match &mut self.0 {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             BackendImpl::Vulkan(state) => {
-                vulkan::set_present_config(state, vsync_enabled, present_mode_policy)
+                vulkan::set_present_config(state, vsync_enabled, present_mode_policy);
             }
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             BackendImpl::VulkanWgpu(state) => {
-                wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
+                wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy);
             }
             #[cfg(target_os = "macos")]
             BackendImpl::Metal(state) => {
@@ -659,12 +659,12 @@ impl Backend {
             }
             BackendImpl::OpenGL(state) => opengl::set_vsync_enabled(state, vsync_enabled),
             BackendImpl::OpenGLWgpu(state) => {
-                wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
+                wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy);
             }
             BackendImpl::Software(_) => {}
             #[cfg(target_os = "windows")]
             BackendImpl::DirectX(state) => {
-                wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
+                wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy);
             }
         }
     }

@@ -255,6 +255,7 @@ fn nested_song_dir_parts(dir: &str) -> Option<(&str, &str)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_chart::{ArrowStats, StaminaCounts, TechCounts};
 
     #[test]
     fn normalizes_typical_dirs() {
@@ -305,10 +306,10 @@ mod tests {
             step_artist: String::new(),
             music_path: None,
             short_hash: hash.into(),
-            stats: Default::default(),
-            tech_counts: Default::default(),
+            stats: ArrowStats::default(),
+            tech_counts: TechCounts::default(),
             mines_nonfake: 0,
-            stamina_counts: Default::default(),
+            stamina_counts: StaminaCounts::default(),
             total_streams: 0,
             matrix_rating: 0.0,
             matrix_profile: Box::default(),

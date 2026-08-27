@@ -113,7 +113,7 @@ impl Reader {
         }
         if !self.decode_next_packet_into(out)? {
             return Ok(false);
-        };
+        }
         self.cursor_frames = self
             .cursor_frames
             .saturating_add((out.len() / self.spec.channels) as u64);

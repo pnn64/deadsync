@@ -878,7 +878,7 @@ mod tests {
         }
     }
 
-    fn request<'a>(modes: ErrorBarModes, state: ErrorBarState<'a>) -> ErrorBarComposeRequest<'a> {
+    fn request(modes: ErrorBarModes, state: ErrorBarState<'_>) -> ErrorBarComposeRequest<'_> {
         ErrorBarComposeRequest {
             style: style(),
             modes,
