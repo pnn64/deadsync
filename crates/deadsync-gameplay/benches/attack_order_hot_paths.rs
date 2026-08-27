@@ -302,7 +302,7 @@ fn main() {
     );
 
     let mut row_ordered = canonical.clone();
-    for row in row_ordered.chunks_exact_mut(4) {
+    for row in row_ordered.as_chunks_mut::<4>().0 {
         row.reverse();
     }
     let one_turn = [ChartAttackWindow {

@@ -88,7 +88,7 @@ pub fn read_multitap_descs(
         if taps.is_empty() {
             continue;
         }
-        taps.sort_by(|left, right| left.total_cmp(right));
+        taps.sort_by(f32::total_cmp);
         let peak = entry
             .get::<Value>("peak")
             .map_err(|err| err.to_string())

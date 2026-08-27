@@ -307,7 +307,7 @@ pub(super) fn focused_match(open: &SettingSearchOpen) -> Option<&SettingMatch> {
 fn current_value(state: &State, m: &SettingMatch, player_idx: usize) -> Option<String> {
     let row = state.panes[m.pane.index()].row_map.get(m.row_id)?;
     let idx = row.selected_choice_index[player_idx].min(row.choices.len().saturating_sub(1));
-    row.choices.get(idx).map(|c| c.to_string())
+    row.choices.get(idx).map(std::string::ToString::to_string)
 }
 
 /// Row help text joined to one line; `None` when the row has none.

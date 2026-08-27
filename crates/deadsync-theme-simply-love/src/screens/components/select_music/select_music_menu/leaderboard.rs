@@ -571,11 +571,7 @@ pub fn build_leaderboard_overlay(
                     if entry.is_fail {
                         score_col = [1.0, 0.0, 0.0, 1.0];
                     }
-                } else if i == 0
-                    && display_entries
-                        .as_ref()
-                        .is_none_or(|entries| entries.is_empty())
-                {
+                } else if i == 0 && display_entries.as_ref().is_none_or(std::vec::Vec::is_empty) {
                     name = GS_LEADERBOARD_NO_SCORES_TEXT.to_string();
                 }
             }

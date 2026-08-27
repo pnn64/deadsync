@@ -10,6 +10,7 @@ use deadsync_theme::views::GamepadSystemView;
 // Keyboard input is handled centrally via the virtual dispatcher in app
 use deadsync_input::KeyCode;
 use std::collections::VecDeque;
+use std::fmt::Write as _;
 use std::time::Instant;
 
 /* ---------------------------- constants ---------------------------- */
@@ -41,6 +42,14 @@ pub fn update(state: &mut State, dt: f32) {
     state
         .last_inputs
         .retain(|(_, timestamp)| timestamp.elapsed().as_secs_f32() < INPUT_LOG_FADE_DURATION);
+}
+
+fn format_uuid_hex(uuid: &[u8]) -> String {
+    let mut out = String::with_capacity(uuid.len() * 2);
+    for byte in uuid {
+        let _ = write!(out, "{byte:02X}");
+    }
+    out
 }
 
 #[must_use]
@@ -100,7 +109,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             } => {
                 let dev = usize::from(*id);
                 let code_u32 = code.into_u32();
-                let uuid_hex: String = uuid.iter().map(|b| format!("{b:02X}")).collect();
+                let uuid_hex = format_uuid_hex(uuid);
                 format!(
                     "Gamepad {dev} [uuid={uuid_hex}]: RAW BTN {{ PadCode[0x{code_u32:08X}], value: {value:.3}, pressed: {pressed} }}",
                 )
@@ -114,7 +123,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             } => {
                 let dev = usize::from(*id);
                 let code_u32 = code.into_u32();
-                let uuid_hex: String = uuid.iter().map(|b| format!("{b:02X}")).collect();
+                let uuid_hex = format_uuid_hex(uuid);
                 format!(
                     "Gamepad {dev} [uuid={uuid_hex}]: RAW AXIS {{ PadCode[0x{code_u32:08X}], value: {value:.3} }}",
                 )

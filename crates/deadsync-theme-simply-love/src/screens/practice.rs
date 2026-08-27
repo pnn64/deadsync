@@ -1945,7 +1945,11 @@ fn normalize_flash_text(text: Arc<str>) -> Arc<str> {
 
 fn effective_bpm_str(state: &State, rate: f32) -> String {
     let song = state.gameplay.song();
-    let chart = state.gameplay.charts().first().map(|c| c.as_ref());
+    let chart = state
+        .gameplay
+        .charts()
+        .first()
+        .map(std::convert::AsRef::as_ref);
     let is_random = chart
         .is_some_and(|c| matches!(c.display_bpm, Some(deadsync_chart::ChartDisplayBpm::Random)));
     if is_random {
@@ -1994,7 +1998,7 @@ fn seek_chart_note(state: &mut State, dir: i32) {
             .iter()
             .filter(|note| note.can_be_judged && note.beat < current - BEAT_EPSILON)
             .map(|note| note.beat)
-            .max_by(|a, b| a.total_cmp(b))
+            .max_by(f32::total_cmp)
     } else {
         state
             .gameplay
@@ -2002,7 +2006,7 @@ fn seek_chart_note(state: &mut State, dir: i32) {
             .iter()
             .filter(|note| note.can_be_judged && note.beat > current + BEAT_EPSILON)
             .map(|note| note.beat)
-            .min_by(|a, b| a.total_cmp(b))
+            .min_by(f32::total_cmp)
     };
     if let Some(beat) = target {
         set_cursor(state, beat);

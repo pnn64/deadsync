@@ -106,7 +106,7 @@ pub fn perframe_boundaries(entries: &[SongLuaPerframeEntry]) -> Vec<f32> {
         .flat_map(|entry| [entry.start, entry.end])
         .filter(|value| value.is_finite())
         .collect::<Vec<_>>();
-    boundaries.sort_by(|left, right| left.total_cmp(right));
+    boundaries.sort_by(f32::total_cmp);
     boundaries.dedup_by(|left, right| (*left - *right).abs() <= f32::EPSILON);
     boundaries
 }
@@ -546,7 +546,7 @@ fn update_function_replay_beats(
         let beat = *end_beat + reference_step;
         (beat.is_finite() && beat > start && beat < end).then_some(beat)
     }));
-    out.sort_by(|left, right| left.total_cmp(right));
+    out.sort_by(f32::total_cmp);
     out.dedup_by(|left, right| left.to_bits() == right.to_bits());
     let reset_beats = boundaries
         .zero_ends

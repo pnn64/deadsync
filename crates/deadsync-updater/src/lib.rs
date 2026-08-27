@@ -525,7 +525,7 @@ pub fn fetch_latest_release(
         .headers()
         .get("ETag")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_owned());
+        .map(std::borrow::ToOwned::to_owned);
 
     let bytes = response
         .into_body()

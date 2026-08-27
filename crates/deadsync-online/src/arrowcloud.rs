@@ -742,7 +742,8 @@ pub fn evaluation_submission_snapshots<const N: usize>(
         let retry = retry_views[idx];
         let next_retry_is_auto = retry.attempt.is_some_and(|attempt| {
             attempt < ARROWCLOUD_RETRY_MAX_ATTEMPTS
-                && statuses[idx].is_some_and(|status| status.is_auto_retryable())
+                && statuses[idx]
+                    .is_some_and(deadsync_score::ArrowCloudSubmitUiStatus::is_auto_retryable)
         });
         EvaluationSubmissionSnapshot {
             status: statuses[idx],

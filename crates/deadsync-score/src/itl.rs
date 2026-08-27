@@ -174,7 +174,7 @@ impl OnlineItlSelfCacheState {
         }
         let loaded_count = profile_id
             .and_then(|profile_id| self.loaded_profiles.get(profile_id))
-            .map_or(0, |scores| scores.len());
+            .map_or(0, hashbrown::HashMap::len);
         let mut by_chart = HashMap::with_capacity(loaded_count + self.session_by_key.len());
         if let Some(profile_id) = profile_id
             && let Some(values) = self.loaded_profiles.get(profile_id)

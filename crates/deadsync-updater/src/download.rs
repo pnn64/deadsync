@@ -23,6 +23,7 @@
 
 use super::{ReleaseAsset, UpdaterError, user_agent};
 use sha2::{Digest, Sha256};
+use std::fmt::Write as _;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -42,7 +43,7 @@ const COPY_CHUNK_BYTES: usize = 64 * 1024;
 pub fn sha256_hex(digest: &[u8; 32]) -> String {
     let mut out = String::with_capacity(64);
     for byte in digest {
-        out.push_str(&format!("{byte:02x}"));
+        let _ = write!(out, "{byte:02x}");
     }
     out
 }

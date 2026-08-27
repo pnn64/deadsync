@@ -711,9 +711,11 @@ fn compose_field_contents<S, F>(
                 },
                 sprite_source,
             );
-        } else if let Some(note_slots) =
-            head_layers.or_else(|| ns.note_layers.get(note_idx).map(|layers| layers.as_ref()))
-        {
+        } else if let Some(note_slots) = head_layers.or_else(|| {
+            ns.note_layers
+                .get(note_idx)
+                .map(std::convert::AsRef::as_ref)
+        }) {
             let note_scale = hold_note_scale;
             for note_slot in note_slots {
                 compose_flat_noteskin_layer(

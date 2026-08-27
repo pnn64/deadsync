@@ -955,12 +955,14 @@ pub fn song_lua_compile_context(
     let mut context = deadsync_song_lua::SongLuaCompileContext::new(
         song.simfile_path
             .parent()
-            .map(|path| path.to_path_buf())
+            .map(std::path::Path::to_path_buf)
             .unwrap_or_default(),
         song.title.clone(),
     );
-    context.song_display_bpms =
-        song.display_bpm_pair_or(charts.first().map(|chart| chart.as_ref()), [60.0, 60.0]);
+    context.song_display_bpms = song.display_bpm_pair_or(
+        charts.first().map(std::convert::AsRef::as_ref),
+        [60.0, 60.0],
+    );
     context.song_music_rate = if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
     } else {

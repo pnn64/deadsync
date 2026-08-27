@@ -1223,7 +1223,9 @@ mod tests {
         }
         // Serialise behind the worker lock: these tests drive the global
         // PHASE and must not race other state-machine tests.
-        let _g = WORKER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = WORKER_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let releases = host_releases(&[(0, 0, 1), (0, 0, 2)]);
         set_phase(classify_rollback_list_with(releases, true));
         // Up from the top stays at 0.
@@ -1247,7 +1249,9 @@ mod tests {
         if host_target().is_none() {
             return;
         }
-        let _g = WORKER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = WORKER_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let releases = host_releases(&[(0, 0, 5), (0, 0, 9)]);
         set_phase(classify_rollback_list_with(releases, true));
         request_rollback_confirm();

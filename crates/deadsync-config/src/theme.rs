@@ -2269,7 +2269,7 @@ MachineEvaluationStyle=Default\n\
                 load_songs: 'a',
                 test_input: 'a',
             },
-            |raw| raw.chars().next().filter(|ch| ch.is_ascii_lowercase()),
+            |raw| raw.chars().next().filter(char::is_ascii_lowercase),
         );
 
         assert_eq!(

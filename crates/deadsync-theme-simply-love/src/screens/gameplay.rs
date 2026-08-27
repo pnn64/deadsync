@@ -532,7 +532,7 @@ fn noteskin_effects_from_assets(
                             window,
                             bright,
                             ns.tap_explosion_for_col_with_bright(col, window, bright)
-                                .map(|explosion| explosion.duration()),
+                                .map(deadsync_noteskin::TapExplosion::duration),
                         );
                     }
                 }
@@ -543,7 +543,10 @@ fn noteskin_effects_from_assets(
             .as_deref()
             .or_else(|| assets.noteskin[player].as_deref())
             .and_then(|ns| ns.mine_hit_explosion.as_ref())
-            .map_or(MINE_EXPLOSION_DURATION, |explosion| explosion.duration());
+            .map_or(
+                MINE_EXPLOSION_DURATION,
+                deadsync_noteskin::TapExplosion::duration,
+            );
         effects.set_mine_explosion_duration(player, mine_duration);
     }
     effects
@@ -26496,7 +26499,7 @@ mod tests {
             }
         }
         assert_eq!(format!("{legacy:?}"), format!("{normalized:?}"));
-        for (slot_index, actors) in warmed.chunks_exact(2).enumerate() {
+        for (slot_index, actors) in warmed.as_chunks::<2>().0.iter().enumerate() {
             let [
                 Actor::TexturedMesh {
                     geom_cache_key: base_key,

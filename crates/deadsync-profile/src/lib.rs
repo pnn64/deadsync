@@ -7259,21 +7259,22 @@ pub struct LastPlayed {
 }
 
 pub fn append_last_played_section(content: &mut String, section: &str, last_played: &LastPlayed) {
-    content.push_str(&format!("[{section}]\n"));
+    let _ = write!(content, "[{section}]\n");
     if let Some(path) = &last_played.song_music_path {
-        content.push_str(&format!("MusicPath={path}\n"));
+        let _ = write!(content, "MusicPath={path}\n");
     } else {
         content.push_str("MusicPath=\n");
     }
     if let Some(hash) = &last_played.chart_hash {
-        content.push_str(&format!("ChartHash={hash}\n"));
+        let _ = write!(content, "ChartHash={hash}\n");
     } else {
         content.push_str("ChartHash=\n");
     }
-    content.push_str(&format!(
+    let _ = write!(
+        content,
         "DifficultyIndex={}\n",
         last_played.difficulty_index
-    ));
+    );
     content.push('\n');
 }
 
@@ -7320,14 +7321,14 @@ pub fn append_last_played_course_section(
     section: &str,
     last_played: &LastPlayedCourse,
 ) {
-    content.push_str(&format!("[{section}]\n"));
+    let _ = write!(content, "[{section}]\n");
     if let Some(path) = &last_played.course_path {
-        content.push_str(&format!("CoursePath={path}\n"));
+        let _ = write!(content, "CoursePath={path}\n");
     } else {
         content.push_str("CoursePath=\n");
     }
     if let Some(name) = &last_played.difficulty_name {
-        content.push_str(&format!("DifficultyName={name}\n"));
+        let _ = write!(content, "DifficultyName={name}\n");
     } else {
         content.push_str("DifficultyName=\n");
     }
@@ -7701,9 +7702,10 @@ pub fn render_machine_player_defaults_template(common: &PlayerOptionsData) -> St
          ; NewProfilePlayerOptions. Missing override values inherit CommonPlayerOptions.\n\n",
     );
     append_player_options_section(&mut content, COMMON_PLAYER_OPTIONS_SECTION, common);
-    content.push_str(&format!(
+    let _ = write!(
+        content,
         "[{GUEST_PLAYER_OPTIONS_SECTION}]\n\n[{NEW_PROFILE_PLAYER_OPTIONS_SECTION}]\n"
-    ));
+    );
     content
 }
 
@@ -8318,487 +8320,571 @@ pub fn append_player_options_section(
     section: &str,
     options: &PlayerOptionsData,
 ) {
-    content.push_str(&format!("[{section}]\n"));
-    content.push_str(&format!("BackgroundFilter={}\n", options.background_filter));
-    content.push_str(&format!("ScrollSpeed={}\n", options.scroll_speed));
-    content.push_str(&format!(
+    let _ = write!(content, "[{section}]\n");
+    let _ = write!(content, "BackgroundFilter={}\n", options.background_filter);
+    let _ = write!(content, "ScrollSpeed={}\n", options.scroll_speed);
+    let _ = write!(
+        content,
         "NoCmodAlternative={}\n",
         options.no_cmod_alternative
-    ));
-    content.push_str(&format!("Scroll={}\n", options.scroll_option));
-    content.push_str(&format!("Turn={}\n", options.turn_option));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "Scroll={}\n", options.scroll_option);
+    let _ = write!(content, "Turn={}\n", options.turn_option);
+    let _ = write!(
+        content,
         "InsertMask={}\n",
         options.insert_active_mask.bits()
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "RemoveMask={}\n",
         options.remove_active_mask.bits()
-    ));
-    content.push_str(&format!("HoldsMask={}\n", options.holds_active_mask.bits()));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "HoldsMask={}\n", options.holds_active_mask.bits());
+    let _ = write!(
+        content,
         "AccelEffectsMask={}\n",
         options.accel_effects_active_mask.bits()
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "VisualEffectsMask={}\n",
         options.visual_effects_active_mask.bits()
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "AppearanceEffectsMask={}\n",
         options.appearance_effects_active_mask.bits()
-    ));
-    content.push_str(&format!("AttackMode={}\n", options.attack_mode));
-    content.push_str(&format!("HideLightType={}\n", options.hide_light_type));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "AttackMode={}\n", options.attack_mode);
+    let _ = write!(content, "HideLightType={}\n", options.hide_light_type);
+    let _ = write!(
+        content,
         "RescoreEarlyHits={}\n",
         i32::from(options.rescore_early_hits)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "HideEarlyDecentWayOffJudgments={}\n",
         i32::from(options.hide_early_dw_judgments)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "HideEarlyDecentWayOffFlash={}\n",
         i32::from(options.hide_early_dw_flash)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "HideEarlyDecentWayOffColumnFlash={}\n",
         i32::from(options.hide_early_dw_column_flash)
-    ));
-    content.push_str(&format!("TimingWindows={}\n", options.timing_windows));
-    content.push_str(&format!(
-        "HideTargets={}\n",
-        i32::from(options.hide_targets)
-    ));
-    content.push_str(&format!("HideSongBG={}\n", i32::from(options.hide_song_bg)));
-    content.push_str(&format!("HideCombo={}\n", i32::from(options.hide_combo)));
-    content.push_str(&format!(
-        "HideLifebar={}\n",
-        i32::from(options.hide_lifebar)
-    ));
-    content.push_str(&format!("HideScore={}\n", i32::from(options.hide_score)));
-    content.push_str(&format!("HideDanger={}\n", i32::from(options.hide_danger)));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "TimingWindows={}\n", options.timing_windows);
+    let _ = write!(content, "HideTargets={}\n", i32::from(options.hide_targets));
+    let _ = write!(content, "HideSongBG={}\n", i32::from(options.hide_song_bg));
+    let _ = write!(content, "HideCombo={}\n", i32::from(options.hide_combo));
+    let _ = write!(content, "HideLifebar={}\n", i32::from(options.hide_lifebar));
+    let _ = write!(content, "HideScore={}\n", i32::from(options.hide_score));
+    let _ = write!(content, "HideDanger={}\n", i32::from(options.hide_danger));
+    let _ = write!(
+        content,
         "HideComboExplosions={}\n",
         i32::from(options.hide_combo_explosions)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "HideUsername={}\n",
         i32::from(options.hide_username)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ColumnFlashOnMiss={}\n",
         i32::from(options.column_flash_on_miss)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ColumnFlashMask={}\n",
         options.column_flash_mask.bits()
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ColumnFlashBrightness={}\n",
         options.column_flash_brightness
-    ));
-    content.push_str(&format!("ColumnFlashSize={}\n", options.column_flash_size));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "ColumnFlashSize={}\n", options.column_flash_size);
+    let _ = write!(
+        content,
         "SubtractiveScoring={}\n",
         i32::from(options.subtractive_scoring)
-    ));
-    content.push_str(&format!("Pacemaker={}\n", i32::from(options.pacemaker)));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "Pacemaker={}\n", i32::from(options.pacemaker));
+    let _ = write!(
+        content,
         "NPSGraphAtTop={}\n",
         i32::from(options.nps_graph_at_top)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "TransparentDensityGraphBackground={}\n",
         i32::from(options.transparent_density_graph_bg)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "SmxFsrDisplay={}\n",
         i32::from(options.smx_fsr_display)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "SmxPadInputDisplay={}\n",
         i32::from(options.smx_pad_input_display)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "SmxBgPack={}\n",
         options.smx_bg_pack.as_deref().unwrap_or("")
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "SmxJudgePack={}\n",
         options.smx_judge_pack.as_deref().unwrap_or("")
-    ));
-    content.push_str(&format!("MiniIndicator={}\n", options.mini_indicator));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "MiniIndicator={}\n", options.mini_indicator);
+    let _ = write!(
+        content,
         "MiniIndicatorScoreType={}\n",
         options.mini_indicator_score_type
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "MiniIndicatorSubtractiveDisplay={}\n",
         options.mini_indicator_subtractive_display
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "MiniIndicatorSize={}\n",
         options.mini_indicator_size
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "MiniIndicatorColor={}\n",
         options.mini_indicator_color
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "MiniIndicatorPosition={}\n",
         options.mini_indicator_position
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ReverseScroll={}\n",
         i32::from(options.reverse_scroll)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ShowFaPlusWindow={}\n",
         i32::from(options.show_fa_plus_window)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ShowExScore={}\n",
         i32::from(options.show_ex_score)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ShowHardEXScore={}\n",
         i32::from(options.show_hard_ex_score)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ShowFaPlusPane={}\n",
         i32::from(options.show_fa_plus_pane)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "SmallerWhite={}\n",
         i32::from(options.fa_plus_10ms_blue_window)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "SplitWhites={}\n",
         i32::from(options.split_15_10ms)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "TrackEarlyJudgments={}\n",
         i32::from(options.track_early_judgments)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ScaleScatterplot={}\n",
         i32::from(options.scale_scatterplot)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "DimPostFailScatter={}\n",
         i32::from(options.dim_post_fail_scatter)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ScatterplotMaxWindow={}\n",
         options.scatterplot_max_window
-    ));
-    content.push_str(&format!("ScorePosition={}\n", options.score_position));
-    content.push_str(&format!("ScoreDisplay={}\n", options.score_display_mode));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "ScorePosition={}\n", options.score_position);
+    let _ = write!(content, "ScoreDisplay={}\n", options.score_display_mode);
+    let _ = write!(
+        content,
         "CustomFantasticWindow={}\n",
         i32::from(options.custom_fantastic_window)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "CustomFantasticWindowMs={}\n",
         options.custom_fantastic_window_ms
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "PadLightBrightness={}\n",
         options.pad_light_brightness
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "JudgmentTilt={}\n",
         i32::from(options.judgment_tilt)
-    ));
-    content.push_str(&format!("ColumnCues={}\n", i32::from(options.column_cues)));
-    content.push_str(&format!(
-        "MeasureCues={}\n",
-        i32::from(options.measure_cues)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "ColumnCues={}\n", i32::from(options.column_cues));
+    let _ = write!(content, "MeasureCues={}\n", i32::from(options.measure_cues));
+    let _ = write!(
+        content,
         "CrossoverCues={}\n",
         i32::from(options.crossover_cues)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "CrossoverCueDuration={}ms\n",
         options.crossover_cue_duration_ms
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "CrossoverCueQuantization={}\n",
         options.crossover_cue_quantization
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "CrossoverCueBrackets={}\n",
         i32::from(options.crossover_cue_brackets)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ColumnCountdown={}\n",
         i32::from(options.column_countdown)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "JudgmentBack={}\n",
         i32::from(options.judgment_back)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ErrorMSDisplay={}\n",
         i32::from(options.error_ms_display)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "DisplayScorebox={}\n",
         i32::from(options.display_scorebox)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "LiveTimingStats={}\n",
         i32::from(options.live_timing_stats)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "LiveTimingStatsMask={}\n",
         options.live_timing_stats_mask.bits()
-    ));
-    content.push_str(&format!("RainbowMax={}\n", i32::from(options.rainbow_max)));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "RainbowMax={}\n", i32::from(options.rainbow_max));
+    let _ = write!(
+        content,
         "ResponsiveColors={}\n",
         i32::from(options.responsive_colors)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ShowLifePercent={}\n",
         i32::from(options.show_life_percent)
-    ));
-    content.push_str(&format!("TiltMultiplier={}\n", options.tilt_multiplier));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "TiltMultiplier={}\n", options.tilt_multiplier);
+    let _ = write!(
+        content,
         "TiltMinThresholdMs={}\n",
         options.tilt_min_threshold_ms
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "TiltMaxThresholdMs={}\n",
         options.tilt_max_threshold_ms
-    ));
-    content.push_str(&format!("ErrorBar={}\n", options.error_bar));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "ErrorBar={}\n", options.error_bar);
+    let _ = write!(
+        content,
         "ErrorBarText={}\n",
         i32::from(options.error_bar_text)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "TextErrorBarScalable={}\n",
         i32::from(options.text_error_bar_scalable)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "TextErrorBar10ms={}\n",
         i32::from(options.text_error_bar_scalable)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "TextErrorBarThresholdMs={}\n",
         clamp_text_error_bar_threshold_ms(options.text_error_bar_threshold_ms)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ErrorBarMask={}\n",
         options.error_bar_active_mask.bits()
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "Colorful={}\n",
         i32::from(
             options
                 .error_bar_active_mask
                 .contains(ErrorBarMask::COLORFUL)
         )
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "Monochrome={}\n",
         i32::from(
             options
                 .error_bar_active_mask
                 .contains(ErrorBarMask::MONOCHROME)
         )
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "Text={}\n",
         i32::from(options.error_bar_active_mask.contains(ErrorBarMask::TEXT))
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "Highlight={}\n",
         i32::from(
             options
                 .error_bar_active_mask
                 .contains(ErrorBarMask::HIGHLIGHT)
         )
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "Average={}\n",
         i32::from(
             options
                 .error_bar_active_mask
                 .contains(ErrorBarMask::AVERAGE)
         )
-    ));
-    content.push_str(&format!("ErrorBarUp={}\n", i32::from(options.error_bar_up)));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "ErrorBarUp={}\n", i32::from(options.error_bar_up));
+    let _ = write!(
+        content,
         "ErrorBarMultiTick={}\n",
         i32::from(options.error_bar_multi_tick)
-    ));
-    content.push_str(&format!("ErrorBarTrim={}\n", options.error_bar_trim));
-    content.push_str(&format!("CenterTick={}\n", i32::from(options.center_tick)));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "ErrorBarTrim={}\n", options.error_bar_trim);
+    let _ = write!(content, "CenterTick={}\n", i32::from(options.center_tick));
+    let _ = write!(
+        content,
         "ShortAverageErrorBar={}\n",
         i32::from(options.short_average_error_bar_enabled)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "AverageErrorBarIntensity={:.2}\n",
         clamp_average_error_bar_intensity(options.average_error_bar_intensity)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "AverageErrorBarIntervalMs={}\n",
         clamp_average_error_bar_interval_ms(options.average_error_bar_interval_ms)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "LongErrorBar={}\n",
         i32::from(options.long_error_bar_enabled)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "LongErrorBarIntensity={:.2}\n",
         clamp_long_error_bar_intensity(options.long_error_bar_intensity)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "LongErrorBarThresholdMs={}\n",
         clamp_long_error_bar_threshold_ms(options.long_error_bar_threshold_ms)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "LongErrorBarMinSamples={}\n",
         clamp_long_error_bar_min_samples(options.long_error_bar_min_samples)
-    ));
-    content.push_str(&format!("StepStatistics={}\n", options.step_statistics));
-    content.push_str(&format!("StepStatsExtra={}\n", options.step_stats_extra));
-    content.push_str(&format!("TargetScore={}\n", options.target_score));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "StepStatistics={}\n", options.step_statistics);
+    let _ = write!(content, "StepStatsExtra={}\n", options.step_stats_extra);
+    let _ = write!(content, "TargetScore={}\n", options.target_score);
+    let _ = write!(
+        content,
         "TargetScorePercent={}\n",
         options.target_score_percent.min(100)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ActionOnMissedTarget={}\n",
         options.target_score_miss_policy
-    ));
-    content.push_str(&format!("LifeMeterType={}\n", options.lifemeter_type));
-    content.push_str(&format!("MeasureCounter={}\n", options.measure_counter));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "LifeMeterType={}\n", options.lifemeter_type);
+    let _ = write!(content, "MeasureCounter={}\n", options.measure_counter);
+    let _ = write!(
+        content,
         "MeasureCounterLookahead={}\n",
         options.measure_counter_lookahead
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "MeasureCounterLeft={}\n",
         i32::from(options.measure_counter_left)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "MeasureCounterUp={}\n",
         i32::from(options.measure_counter_up)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "MeasureCounterVert={}\n",
         i32::from(options.measure_counter_vert)
-    ));
-    content.push_str(&format!("BrokenRun={}\n", i32::from(options.broken_run)));
-    content.push_str(&format!("RunTimer={}\n", i32::from(options.run_timer)));
-    content.push_str(&format!("MeasureLines={}\n", options.measure_lines));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "BrokenRun={}\n", i32::from(options.broken_run));
+    let _ = write!(content, "RunTimer={}\n", i32::from(options.run_timer));
+    let _ = write!(content, "MeasureLines={}\n", options.measure_lines);
+    let _ = write!(
+        content,
         "HoldJudgmentGraphic={}\n",
         options.hold_judgment_graphic
-    ));
-    content.push_str(&format!("HeldGraphic={}\n", options.held_miss_graphic));
-    content.push_str(&format!("JudgmentGraphic={}\n", options.judgment_graphic));
-    content.push_str(&format!("ComboFont={}\n", options.combo_font));
-    content.push_str(&format!("ComboColors={}\n", options.combo_colors));
-    content.push_str(&format!("ComboMode={}\n", options.combo_mode));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "HeldGraphic={}\n", options.held_miss_graphic);
+    let _ = write!(content, "JudgmentGraphic={}\n", options.judgment_graphic);
+    let _ = write!(content, "ComboFont={}\n", options.combo_font);
+    let _ = write!(content, "ComboColors={}\n", options.combo_colors);
+    let _ = write!(content, "ComboMode={}\n", options.combo_mode);
+    let _ = write!(
+        content,
         "CarryComboBetweenSongs={}\n",
         i32::from(options.carry_combo_between_songs)
-    ));
-    content.push_str(&format!("NoteSkin={}\n", options.noteskin));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "NoteSkin={}\n", options.noteskin);
+    let _ = write!(
+        content,
         "MineSkin={}\n",
         options.mine_noteskin.as_ref().map_or("", NoteSkin::as_str)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "ReceptorSkin={}\n",
         options
             .receptor_noteskin
             .as_ref()
             .map_or("", NoteSkin::as_str)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "TapExplosionSkin={}\n",
         options
             .tap_explosion_noteskin
             .as_ref()
             .map_or("", NoteSkin::as_str)
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "TapExplosionMask={}\n",
         options.tap_explosion_active_mask.bits()
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "TapExplosionMaskVersion={TAP_EXPLOSION_MASK_VERSION}\n"
-    ));
-    content.push_str(&format!("MiniPercent={}\n", options.mini_percent));
-    content.push_str(&format!("Spacing={}\n", options.spacing_percent));
-    content.push_str(&format!("Perspective={}\n", options.perspective));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "MiniPercent={}\n", options.mini_percent);
+    let _ = write!(content, "Spacing={}\n", options.spacing_percent);
+    let _ = write!(content, "Perspective={}\n", options.perspective);
+    let _ = write!(
+        content,
         "NoteFieldOffsetX={}\n",
         options.note_field_offset_x
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "NoteFieldOffsetY={}\n",
         options.note_field_offset_y
-    ));
-    content.push_str(&format!("JudgmentOffsetX={}\n", options.judgment_offset_x));
-    content.push_str(&format!("JudgmentOffsetY={}\n", options.judgment_offset_y));
-    content.push_str(&format!("ComboOffsetX={}\n", options.combo_offset_x));
-    content.push_str(&format!("ComboOffsetY={}\n", options.combo_offset_y));
-    content.push_str(&format!("ErrorBarOffsetX={}\n", options.error_bar_offset_x));
-    content.push_str(&format!("ErrorBarOffsetY={}\n", options.error_bar_offset_y));
-    content.push_str(&format!("VisualDelayMs={}\n", options.visual_delay_ms));
-    content.push_str(&format!(
+    );
+    let _ = write!(content, "JudgmentOffsetX={}\n", options.judgment_offset_x);
+    let _ = write!(content, "JudgmentOffsetY={}\n", options.judgment_offset_y);
+    let _ = write!(content, "ComboOffsetX={}\n", options.combo_offset_x);
+    let _ = write!(content, "ComboOffsetY={}\n", options.combo_offset_y);
+    let _ = write!(content, "ErrorBarOffsetX={}\n", options.error_bar_offset_x);
+    let _ = write!(content, "ErrorBarOffsetY={}\n", options.error_bar_offset_y);
+    let _ = write!(content, "VisualDelayMs={}\n", options.visual_delay_ms);
+    let _ = write!(
+        content,
         "GlobalOffsetShiftMs={}\n",
         options.global_offset_shift_ms
-    ));
+    );
     content.push('\n');
 }
 
 pub fn append_userprofile_section(content: &mut String, guid: &str, profile: &Profile) {
     content.push_str("[userprofile]\n");
     push_profile_guid_line(content, guid);
-    content.push_str(&format!("DisplayName={}\n", profile.display_name));
-    content.push_str(&format!("PlayerInitials={}\n", profile.player_initials));
+    let _ = write!(content, "DisplayName={}\n", profile.display_name);
+    let _ = write!(content, "PlayerInitials={}\n", profile.player_initials);
     if let Some(id) = profile.judgment_palette_id.as_deref() {
-        content.push_str(&format!("JudgmentPalette={id}\n"));
+        let _ = write!(content, "JudgmentPalette={id}\n");
     }
     if let Some(id) = profile.heart_rate_device_id.as_deref() {
-        content.push_str(&format!("HeartRateDeviceId={id}\n"));
+        let _ = write!(content, "HeartRateDeviceId={id}\n");
     }
-    content.push_str(&format!("MaxHeartRate={}\n", profile.max_heart_rate));
+    let _ = write!(content, "MaxHeartRate={}\n", profile.max_heart_rate);
     content.push('\n');
 }
 
 pub fn append_editable_section(content: &mut String, profile: &Profile) {
     content.push_str("[Editable]\n");
-    content.push_str(&format!("WeightPounds={}\n", profile.weight_pounds));
-    content.push_str(&format!("BirthYear={}\n", profile.birth_year));
-    content.push_str(&format!(
+    let _ = write!(content, "WeightPounds={}\n", profile.weight_pounds);
+    let _ = write!(content, "BirthYear={}\n", profile.birth_year);
+    let _ = write!(
+        content,
         "IgnoreStepCountCalories={}\n",
         i32::from(profile.ignore_step_count_calories)
-    ));
+    );
     content.push('\n');
 }
 
 pub fn append_stats_section(content: &mut String, profile: &Profile) {
     content.push_str("[Stats]\n");
-    content.push_str(&format!(
+    let _ = write!(
+        content,
         "CaloriesBurnedDate={}\n",
         profile.calories_burned_day
-    ));
-    content.push_str(&format!(
+    );
+    let _ = write!(
+        content,
         "CaloriesBurnedToday={}\n",
         profile.calories_burned_today
-    ));
+    );
     content.push('\n');
 }
 
@@ -8856,10 +8942,10 @@ pub fn render_groovestats_ini_content(
 ) -> String {
     let mut content = String::new();
     content.push_str("[GrooveStats]\n");
-    content.push_str(&format!("ApiKey={api_key}\n"));
-    content.push_str(&format!("IsPadPlayer={}\n", i32::from(is_pad_player)));
-    content.push_str(&format!("Username={username}\n"));
-    content.push_str(&format!("Password={password}\n"));
+    let _ = write!(content, "ApiKey={api_key}\n");
+    let _ = write!(content, "IsPadPlayer={}\n", i32::from(is_pad_player));
+    let _ = write!(content, "Username={username}\n");
+    let _ = write!(content, "Password={password}\n");
     content.push('\n');
     content
 }
@@ -8868,7 +8954,7 @@ pub fn render_groovestats_ini_content(
 pub fn render_arrowcloud_ini_content(api_key: &str) -> String {
     let mut content = String::new();
     content.push_str("[ArrowCloud]\n");
-    content.push_str(&format!("ApiKey={api_key}\n"));
+    let _ = write!(content, "ApiKey={api_key}\n");
     content.push('\n');
     content
 }

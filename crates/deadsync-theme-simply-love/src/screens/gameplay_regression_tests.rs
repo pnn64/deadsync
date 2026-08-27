@@ -448,7 +448,7 @@ mod tests {
                                 window,
                                 bright,
                                 ns.tap_explosion_for_col_with_bright(col, window, bright)
-                                    .map(|explosion| explosion.duration()),
+                                    .map(deadsync_noteskin::TapExplosion::duration),
                             );
                         }
                     }

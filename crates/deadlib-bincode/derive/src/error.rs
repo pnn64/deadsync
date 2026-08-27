@@ -73,7 +73,7 @@ impl Error {
 
     pub(crate) fn wrong_token<T>(token: Option<&TokenTree>, expected: &str) -> Result<T> {
         Err(Self::InvalidRustSyntax {
-            span: token.map(|t| t.span()).unwrap_or_else(Span::call_site),
+            span: token.map(TokenTree::span).unwrap_or_else(Span::call_site),
             expected: format!("{expected}, got {token:?}"),
         })
     }

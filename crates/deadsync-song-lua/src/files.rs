@@ -340,7 +340,7 @@ pub fn create_fileman_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
             let size = resolve_compat_path(&size_song_dir, raw_path.as_str())
                 .metadata()
                 .ok()
-                .filter(|metadata| metadata.is_file())
+                .filter(std::fs::Metadata::is_file)
                 .map(|metadata| metadata.len().min(i64::MAX as u64) as i64)
                 .unwrap_or(0);
             Ok(size)

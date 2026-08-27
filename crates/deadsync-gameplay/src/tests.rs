@@ -1370,7 +1370,7 @@ mod tests {
         assert_eq!(state.graph_h, 0.0);
         assert_eq!(state.u_window, 1.0);
         assert_eq!(state.life_update_rate, 0.25);
-        assert!(state.life_points.iter().all(|points| points.is_empty()));
+        assert!(state.life_points.iter().all(std::vec::Vec::is_empty));
         assert_eq!(state.life_dirty, [false; MAX_PLAYERS]);
         assert_eq!(state.top_scale_y, [1.0; MAX_PLAYERS]);
     }
@@ -2293,12 +2293,12 @@ mod tests {
     fn gameplay_attack_runtime_state_defaults_to_empty_inactive_state() {
         let state = GameplayAttackRuntimeState::default();
 
-        assert!(state.mask_windows.iter().all(|windows| windows.is_empty()));
+        assert!(state.mask_windows.iter().all(std::vec::Vec::is_empty));
         assert!(
             state
                 .song_lua_ease_windows
                 .iter()
-                .all(|windows| windows.is_empty())
+                .all(std::vec::Vec::is_empty)
         );
         assert!(!state.cleared_for_outro);
         assert_eq!(state.clear_all, [false; MAX_PLAYERS]);
@@ -3180,7 +3180,7 @@ mod tests {
         for layout in 0..5 {
             let mut expected = source.clone();
             if layout == 1 {
-                for row in expected.chunks_exact_mut(4) {
+                for row in expected.as_chunks_mut::<4>().0 {
                     row.reverse();
                 }
             } else if layout == 2 {
@@ -3189,7 +3189,7 @@ mod tests {
                 expected[1].column = expected[0].column;
             } else if layout == 4 {
                 expected[1].column = expected[0].column;
-                for row in expected.chunks_exact_mut(4) {
+                for row in expected.as_chunks_mut::<4>().0 {
                     row.reverse();
                 }
             }

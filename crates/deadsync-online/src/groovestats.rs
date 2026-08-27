@@ -1,5 +1,6 @@
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
+use std::fmt::Write as _;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -265,7 +266,7 @@ pub fn generate_qr_login_uuid() -> String {
     rand::rng().fill_bytes(&mut bytes);
     let mut out = String::with_capacity(32);
     for b in bytes {
-        out.push_str(&format!("{b:02X}"));
+        let _ = write!(out, "{b:02X}");
     }
     out
 }
@@ -2416,7 +2417,9 @@ pub fn evaluation_submission_snapshots<const N: usize>(
         let retry = retry_views[idx];
         let next_retry_is_auto = retry.attempt.is_some_and(|attempt| {
             attempt < GROOVESTATS_RETRY_MAX_ATTEMPTS
-                && ui.status.is_some_and(|status| status.is_auto_retryable())
+                && ui
+                    .status
+                    .is_some_and(deadsync_score::GrooveStatsSubmitUiStatus::is_auto_retryable)
         });
         EvaluationSubmissionSnapshot {
             next_retry_is_auto,
@@ -3021,7 +3024,7 @@ pub fn submit_unlock_plan_from_response(
 ) -> GrooveStatsSubmitUnlockPlan {
     let itl_folder_groups = itl_unlock_folder_groups_from_submit_response(player, response)
         .into_iter()
-        .map(|group| group.to_vec())
+        .map(<[std::string::String]>::to_vec)
         .collect();
     let downloads = if auto_download_unlocks {
         unlock_events_from_submit_response(player, response)

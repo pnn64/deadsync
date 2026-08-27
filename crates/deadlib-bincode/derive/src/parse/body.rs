@@ -515,7 +515,10 @@ impl UnnamedField {
     /// [`type`]: #structfield.type
     #[cfg(test)]
     fn type_string(&self) -> String {
-        self.r#type.iter().map(|t| t.to_string()).collect()
+        self.r#type
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect()
     }
 
     /// Return the span of [`type`].

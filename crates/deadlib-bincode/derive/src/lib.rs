@@ -44,12 +44,12 @@ use virtue::prelude::*;
 pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     #[cfg(not(test))]
     {
-        derive_encode_inner(input).unwrap_or_else(|e| e.into_token_stream())
+        derive_encode_inner(input).unwrap_or_else(error::Error::into_token_stream)
     }
     #[cfg(test)]
     {
         derive_encode_inner(input.into())
-            .unwrap_or_else(|e| e.into_token_stream())
+            .unwrap_or_else(error::Error::into_token_stream)
             .into()
     }
 }
@@ -86,12 +86,12 @@ fn derive_encode_inner(input: TokenStream) -> Result<TokenStream> {
 pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     #[cfg(not(test))]
     {
-        derive_decode_inner(input).unwrap_or_else(|e| e.into_token_stream())
+        derive_decode_inner(input).unwrap_or_else(error::Error::into_token_stream)
     }
     #[cfg(test)]
     {
         derive_decode_inner(input.into())
-            .unwrap_or_else(|e| e.into_token_stream())
+            .unwrap_or_else(error::Error::into_token_stream)
             .into()
     }
 }
@@ -128,12 +128,12 @@ fn derive_decode_inner(input: TokenStream) -> Result<TokenStream> {
 pub fn derive_borrow_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     #[cfg(not(test))]
     {
-        derive_borrow_decode_inner(input).unwrap_or_else(|e| e.into_token_stream())
+        derive_borrow_decode_inner(input).unwrap_or_else(error::Error::into_token_stream)
     }
     #[cfg(test)]
     {
         derive_borrow_decode_inner(input.into())
-            .unwrap_or_else(|e| e.into_token_stream())
+            .unwrap_or_else(error::Error::into_token_stream)
             .into()
     }
 }

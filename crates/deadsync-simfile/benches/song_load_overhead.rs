@@ -31,6 +31,7 @@ use deadsync_simfile::song::{
 };
 use deadsync_simfile::timing::{benchmark_timing_tags_baseline, benchmark_timing_tags_current};
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::fmt::Write as _;
 use std::fs;
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -553,15 +554,15 @@ fn bench_chart_requests() {
 fn bench_media_map() {
     let mut text = String::new();
     for section in 0..32 {
-        text.push_str(&format!("[Unused {section}]\n"));
+        let _ = write!(text, "[Unused {section}]\n");
         for entry in 0..16 {
-            text.push_str(&format!("Unused-{section}-{entry}=Value-{entry}\n"));
+            let _ = write!(text, "Unused-{section}-{entry}=Value-{entry}\n");
         }
     }
     text.push_str("[GenreToSection]\nTechno=Techno Movies\nRock=Rock Movies\n");
     text.push_str("[Techno Movies]\n");
     for entry in 0..64 {
-        text.push_str(&format!("Movie-{entry:03}=1\n"));
+        let _ = write!(text, "Movie-{entry:03}=1\n");
     }
     assert_eq!(
         benchmark_genre_whitelist_legacy(&text, "techno", 1),
@@ -814,9 +815,14 @@ fn timing_tag_fixture() -> (String, String, String) {
             combos.push(',');
         }
         let beat = index * 4;
-        time_signatures.push_str(&format!("{beat}={}={}", 3 + index % 5, 4 << (index % 2)));
-        tickcounts.push_str(&format!("{beat}={}", index % 49));
-        combos.push_str(&format!("{beat}={}={}", 1 + index % 8, 1 + index % 5));
+        let _ = write!(
+            time_signatures,
+            "{beat}={}={}",
+            3 + index % 5,
+            4 << (index % 2)
+        );
+        let _ = write!(tickcounts, "{beat}={}", index % 49);
+        let _ = write!(combos, "{beat}={}={}", 1 + index % 8, 1 + index % 5);
     }
     time_signatures.push_str(",16=11=16,bad");
     tickcounts.push_str(",16=48,bad");

@@ -35,7 +35,10 @@ struct LatestProgress {
 
 impl LatestProgress {
     fn start(&self, import_id: u64) {
-        let mut value = self.value.lock().unwrap_or_else(|error| error.into_inner());
+        let mut value = self
+            .value
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         self.active_import_id.store(import_id, Ordering::Release);
         *value = None;
     }
@@ -44,7 +47,10 @@ impl LatestProgress {
         if self.active_import_id.load(Ordering::Acquire) != import_id {
             return;
         }
-        let mut value = self.value.lock().unwrap_or_else(|error| error.into_inner());
+        let mut value = self
+            .value
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if self.active_import_id.load(Ordering::Relaxed) == import_id {
             *value = Some((done, total, label.to_owned()));
         }
@@ -77,7 +83,7 @@ impl LatestProgress {
         }
         self.value
             .lock()
-            .unwrap_or_else(|error| error.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take();
     }
 }

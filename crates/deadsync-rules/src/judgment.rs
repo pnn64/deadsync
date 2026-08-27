@@ -289,7 +289,7 @@ pub fn current_possible_grade_points_from_counts(
     let tap_rows = scoring_counts
         .iter()
         .copied()
-        .fold(0u32, |sum, count| sum.saturating_add(count));
+        .fold(0u32, u32::saturating_add);
     let resolved = tap_rows
         .saturating_add(holds_resolved)
         .saturating_add(rolls_resolved);

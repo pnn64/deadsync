@@ -136,7 +136,11 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
     let (track_id, channels, sample_rate_hz, frames_total_hint, start_ts, decoder) = {
         let (track, cp) = vorbis_track(format.tracks())
             .ok_or_else(|| format!("OGG '{}' has no Vorbis track", path.display()))?;
-        let channels = cp.channels.as_ref().map(|c| c.count()).unwrap_or(0);
+        let channels = cp
+            .channels
+            .as_ref()
+            .map(symphonia::core::audio::Channels::count)
+            .unwrap_or(0);
         if channels == 0 {
             return Err(format!("OGG '{}' has unknown channel layout", path.display()).into());
         }

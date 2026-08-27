@@ -27,7 +27,7 @@ pub fn timing_window_name(value: Value) -> Option<&'static str> {
             .ok()?
             .chars()
             .rev()
-            .find(|ch| ch.is_ascii_digit())
+            .find(char::is_ascii_digit)
             .and_then(|ch| ch.to_digit(10))
             .map(|value| value as i32),
         _ => None,

@@ -181,7 +181,7 @@ pub fn tint_full_pad(anim: &FullPadAnim, target_rgb: [u8; 3]) -> FullPadAnim {
     let scale = target_rgb.map(|c| f32::from(c) / 255.0);
     let tint_frame = |frame: &PanelFrame| -> PanelFrame {
         let mut out = *frame;
-        for px in out.chunks_exact_mut(3) {
+        for px in out.as_chunks_mut::<3>().0 {
             px[0] = (f32::from(px[0]) * scale[0]).round() as u8;
             px[1] = (f32::from(px[1]) * scale[1]).round() as u8;
             px[2] = (f32::from(px[2]) * scale[2]).round() as u8;
@@ -253,7 +253,7 @@ fn decode_gif(data: &[u8]) -> Result<DecodedGif, &'static str> {
     let decoder = GifDecoder::new(Cursor::new(data)).map_err(|_| "the GIF couldn't be read")?;
     let mut images = Vec::new();
     let mut durations = Vec::new();
-    for frame in decoder.into_frames().filter_map(|f| f.ok()) {
+    for frame in decoder.into_frames().filter_map(std::result::Result::ok) {
         let (numer, denom) = frame.delay().numer_denom_ms();
         let ms = numer as f32 / denom as f32;
         durations.push(if ms <= 0.0 || (28.0..=42.0).contains(&ms) {
@@ -1236,7 +1236,7 @@ mod tests {
         assert_eq!(&f[15 * 3..15 * 3 + 3], &[3, 3, 3]);
         assert_eq!(&f[24 * 3..24 * 3 + 3], &[4, 4, 4]);
         // The off-parity pixel's colour must not land on any LED.
-        assert!(f.chunks_exact(3).all(|led| led != [9, 9, 9]));
+        assert!(f.as_chunks::<3>().0.iter().all(|led| *led != [9, 9, 9]));
     }
 
     #[test]

@@ -9182,7 +9182,7 @@ fn clip_textured_mesh_to_world_rect_with(
     }
 
     let mut out: Option<Vec<renderer::TexturedMeshVertex>> = None;
-    for tri in vertices.chunks_exact(3) {
+    for tri in vertices.as_chunks::<3>().0 {
         let p0 = world_xy(tri[0].pos);
         let p1 = world_xy(tri[1].pos);
         let p2 = world_xy(tri[2].pos);

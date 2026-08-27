@@ -532,7 +532,7 @@ fn order_discovered_skins(mut found: Vec<String>) -> Vec<String> {
     if ordered.is_empty() {
         default_skin_candidates()
             .iter()
-            .map(|skin| skin.to_string())
+            .map(std::string::ToString::to_string)
             .collect()
     } else {
         ordered
@@ -1361,12 +1361,12 @@ mod tests {
 
         assert_eq!(
             resolve_texture_expr(&data, "NOTESKIN:GetPath('Down', 'Tap Note')", Some(&arg0),)
-                .and_then(|path| path.file_name().map(|name| name.to_owned())),
+                .and_then(|path| path.file_name().map(std::borrow::ToOwned::to_owned)),
             Some("Down Tap Note.png".into())
         );
         assert_eq!(
             resolve_texture_expr(&data, "'Fallback Explosion'", Some(&arg0))
-                .and_then(|path| path.file_name().map(|name| name.to_owned())),
+                .and_then(|path| path.file_name().map(std::borrow::ToOwned::to_owned)),
             Some("Fallback Explosion.png".into())
         );
         assert_eq!(

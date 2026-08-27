@@ -17303,7 +17303,7 @@ mod tests {
                 .profiles
                 .display_names
                 .each_ref()
-                .map(|name| name.as_ref()),
+                .map(std::convert::AsRef::as_ref),
             ["Alice", "Bob"]
         );
         assert_eq!(

@@ -56,7 +56,7 @@ impl Generics {
                         }
                         x => {
                             return Err(Error::InvalidRustSyntax {
-                                span: x.map(|x| x.span()).unwrap_or_else(|| punct.span()),
+                                span: x.map(TokenTree::span).unwrap_or_else(|| punct.span()),
                                 expected: format!("', > or an ident, got {x:?}"),
                             });
                         }

@@ -293,7 +293,7 @@ pub fn parse_player_option_amount(text: &str) -> Option<f32> {
 #[must_use]
 pub fn normalize_player_option_key(text: &str) -> String {
     text.chars()
-        .filter(|ch| ch.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .map(|ch| ch.to_ascii_lowercase())
         .collect()
 }

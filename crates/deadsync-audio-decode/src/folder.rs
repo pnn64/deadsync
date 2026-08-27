@@ -35,7 +35,7 @@ fn is_eligible_ogg(path: &Path) -> bool {
 
 pub fn list_ogg_files(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
     let mut out: Vec<PathBuf> = std::fs::read_dir(dir)?
-        .filter_map(|entry| entry.ok())
+        .filter_map(Result::ok)
         .map(|entry| entry.path())
         .filter(|path| is_eligible_ogg(path))
         .collect();

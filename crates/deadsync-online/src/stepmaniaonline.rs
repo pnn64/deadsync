@@ -418,7 +418,7 @@ static DOWNLOAD_QUEUE: LazyLock<Result<SyncSender<DownloadJob>, String>> =
 fn lock_runtime() -> MutexGuard<'static, RuntimeState> {
     RUNTIME
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 #[must_use]

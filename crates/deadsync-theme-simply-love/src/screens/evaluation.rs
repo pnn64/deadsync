@@ -1115,12 +1115,18 @@ mod tests {
 
         assert_eq!(text.len(), 2);
         assert_eq!(text.joined.as_ref(), "Alice\nChallenge");
-        assert_eq!(text.cycled(0.0).map(|line| line.as_ref()), Some("Alice"));
         assert_eq!(
-            text.cycled(2.0).map(|line| line.as_ref()),
+            text.cycled(0.0).map(std::convert::AsRef::as_ref),
+            Some("Alice")
+        );
+        assert_eq!(
+            text.cycled(2.0).map(std::convert::AsRef::as_ref),
             Some("Challenge")
         );
-        assert_eq!(text.cycled(4.0).map(|line| line.as_ref()), Some("Alice"));
+        assert_eq!(
+            text.cycled(4.0).map(std::convert::AsRef::as_ref),
+            Some("Alice")
+        );
     }
 
     #[test]
@@ -1132,14 +1138,17 @@ mod tests {
 
         let text = super::StepArtistText::new("Author", "", "");
         assert_eq!(
-            text.cycled(f32::NAN).map(|line| line.as_ref()),
+            text.cycled(f32::NAN).map(std::convert::AsRef::as_ref),
             Some("Author")
         );
         assert_eq!(
-            text.cycled(f32::INFINITY).map(|line| line.as_ref()),
+            text.cycled(f32::INFINITY).map(std::convert::AsRef::as_ref),
             Some("Author")
         );
-        assert_eq!(text.cycled(-1.0).map(|line| line.as_ref()), Some("Author"));
+        assert_eq!(
+            text.cycled(-1.0).map(std::convert::AsRef::as_ref),
+            Some("Author")
+        );
     }
 
     #[test]

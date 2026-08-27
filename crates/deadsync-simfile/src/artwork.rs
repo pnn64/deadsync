@@ -160,7 +160,7 @@ fn ascii_lowercase_starts_with(value: &str, expected: &str) -> bool {
         .is_some_and(|prefix| {
             prefix
                 .iter()
-                .map(|byte| byte.to_ascii_lowercase())
+                .map(u8::to_ascii_lowercase)
                 .eq(expected.bytes())
         })
 }
@@ -174,7 +174,7 @@ fn ascii_lowercase_ends_with(value: &str, expected: &str) -> bool {
         .is_some_and(|suffix| {
             suffix
                 .iter()
-                .map(|byte| byte.to_ascii_lowercase())
+                .map(u8::to_ascii_lowercase)
                 .eq(expected.bytes())
         })
 }
@@ -185,7 +185,7 @@ fn ascii_lowercase_contains(value: &str, expected: &str) -> bool {
         || value.as_bytes().windows(expected.len()).any(|window| {
             window
                 .iter()
-                .map(|byte| byte.to_ascii_lowercase())
+                .map(u8::to_ascii_lowercase)
                 .eq(expected.bytes())
         })
 }

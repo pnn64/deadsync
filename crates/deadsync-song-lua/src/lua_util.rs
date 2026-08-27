@@ -11414,7 +11414,7 @@ fn actor_multi_vertex_triangle_list(
     vertices: &[SongLuaActorMultiVertexPoint],
 ) -> Vec<SongLuaOverlayMeshVertex> {
     let mut out = Vec::with_capacity(vertices.len() / 3 * 3);
-    for chunk in vertices.chunks_exact(3) {
+    for chunk in vertices.as_chunks::<3>().0 {
         push_actor_multi_vertex_triangle(&mut out, chunk[0], chunk[1], chunk[2]);
     }
     out
@@ -11424,7 +11424,7 @@ fn actor_multi_vertex_quads(
     vertices: &[SongLuaActorMultiVertexPoint],
 ) -> Vec<SongLuaOverlayMeshVertex> {
     let mut out = Vec::with_capacity(vertices.len() / 4 * 6);
-    for chunk in vertices.chunks_exact(4) {
+    for chunk in vertices.as_chunks::<4>().0 {
         push_actor_multi_vertex_quad(&mut out, chunk[0], chunk[1], chunk[2], chunk[3]);
     }
     out

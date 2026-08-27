@@ -561,7 +561,10 @@ mod tests {
             backend: backend.to_string(),
             pad_type: pad_type.map(str::to_owned),
             serial: serial.map(str::to_owned),
-            default_for_serials: default_for.iter().map(|s| s.to_string()).collect(),
+            default_for_serials: default_for
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect(),
             global_default: false,
             settings: vec![
                 ("Panel0.FsrLow".to_string(), "152 152 152 152".to_string()),

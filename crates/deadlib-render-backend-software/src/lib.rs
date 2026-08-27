@@ -1572,7 +1572,7 @@ fn prepare_mesh_triangles(
     let mut projected_count = 0u32;
     let mut min_y = i32::MAX;
     let mut max_y = i32::MIN;
-    'tri: for chunk in vertices.chunks_exact(3) {
+    'tri: for chunk in vertices.as_chunks::<3>().0 {
         let mut tri = [ScreenVertexColor {
             x: 0.0,
             y: 0.0,
@@ -1779,7 +1779,7 @@ fn prepare_tmesh_triangles(
     let mut projected_count = 0u32;
     let mut min_y = i32::MAX;
     let mut max_y = i32::MIN;
-    for chunk in vertices.chunks_exact(3) {
+    for chunk in vertices.as_chunks::<3>().0 {
         let Some((polygon, polygon_len)) = project_tmesh_polygon(
             mvp,
             tint,
@@ -1968,7 +1968,7 @@ fn rasterize_mesh_triangles(
     }; 3];
 
     let mut verts_drawn = 0u32;
-    'tri: for chunk in vertices.chunks_exact(3) {
+    'tri: for chunk in vertices.as_chunks::<3>().0 {
         for i in 0..3 {
             let p = chunk[i].pos;
             let clip = *mvp * Vector4::new(p[0], p[1], 0.0, 1.0);
@@ -2040,7 +2040,7 @@ fn rasterize_textured_mesh_triangles(
     };
 
     let mut verts_drawn = 0u32;
-    for chunk in vertices.chunks_exact(3) {
+    for chunk in vertices.as_chunks::<3>().0 {
         let Some((polygon, polygon_len)) = project_tmesh_polygon(
             mvp,
             tint,

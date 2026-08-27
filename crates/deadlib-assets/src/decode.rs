@@ -310,7 +310,7 @@ mod tests {
                 None,
                 false,
                 |_| false,
-                |key| key.to_string(),
+                std::string::ToString::to_string,
                 |path| PathBuf::from(path),
                 |_| false
             ),
@@ -322,7 +322,7 @@ mod tests {
                 None,
                 false,
                 |_| false,
-                |key| key.to_string(),
+                std::string::ToString::to_string,
                 |path| PathBuf::from(path),
                 |_| false
             ),
@@ -338,7 +338,7 @@ mod tests {
                 None,
                 false,
                 |key| key == "cached.png",
-                |key| key.to_string(),
+                std::string::ToString::to_string,
                 |path| PathBuf::from(path),
                 |_| false
             ),

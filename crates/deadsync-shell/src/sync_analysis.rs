@@ -185,7 +185,7 @@ fn run_song(
         }
         return;
     }
-    let prepared = prepared.and_then(|prepared| prepared.into_prepared());
+    let prepared = prepared.and_then(super::sync_analysis_cache::TargetPreparation::into_prepared);
     let stream_cfg = BiasStreamCfg {
         emit_freq_delta,
         orientation: config::get().null_or_die_graph_orientation,
@@ -371,12 +371,13 @@ fn run_pack(
                     });
                 if prepared
                     .as_ref()
-                    .is_some_and(|prepared| prepared.is_cached())
+                    .is_some_and(super::sync_analysis_cache::TargetPreparation::is_cached)
                 {
                     let _ = tx.send(SimplyLoveSyncEvent::RowCached { index });
                     continue;
                 }
-                let prepared = prepared.and_then(|prepared| prepared.into_prepared());
+                let prepared =
+                    prepared.and_then(super::sync_analysis_cache::TargetPreparation::into_prepared);
 
                 let _ = tx.send(SimplyLoveSyncEvent::RowStarted { index });
                 let mut total_beats = 0usize;
@@ -619,7 +620,7 @@ fn append_sync_mono(samples: &[i16], channels: usize, out: &mut Vec<f32>) {
         ),
         2 => {
             out.reserve(samples.len() / 2);
-            for frame in samples.chunks_exact(2) {
+            for frame in samples.as_chunks::<2>().0 {
                 out.push(f32::from(frame[0].max(frame[1])) * PCM_INV_SCALE);
             }
         }

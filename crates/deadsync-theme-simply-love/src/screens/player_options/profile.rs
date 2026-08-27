@@ -388,7 +388,7 @@ pub(super) fn crossover_cue_duration_choices() -> Vec<String> {
 pub(super) fn crossover_cue_quantization_choices() -> Vec<String> {
     deadsync_profile::CROSSOVER_CUE_QUANTIZATIONS
         .iter()
-        .map(|q| q.to_string())
+        .map(std::string::ToString::to_string)
         .collect()
 }
 

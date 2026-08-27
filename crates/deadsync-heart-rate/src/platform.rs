@@ -96,7 +96,10 @@ pub fn configure(enabled: bool, discover: bool, device_ids: [Option<&str>; 2]) {
         return;
     }
     let runtime = RUNTIME.get_or_init(start_worker);
-    let mut desired = runtime.desired.lock().unwrap_or_else(|e| e.into_inner());
+    let mut desired = runtime
+        .desired
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if desired.enabled == enabled
         && desired.discover == discover
         && desired
@@ -161,7 +164,7 @@ pub fn discovery_snapshot() -> DiscoverySnapshot {
             runtime
                 .shared
                 .read()
-                .unwrap_or_else(|e| e.into_inner())
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .discovery
                 .clone()
         },
@@ -197,7 +200,10 @@ enum MonitorEvent {
 
 async fn worker_loop(desired: Arc<Mutex<Desired>>, shared: Arc<RwLock<Shared>>) {
     loop {
-        let enabled = desired.lock().unwrap_or_else(|e| e.into_inner()).enabled;
+        let enabled = desired
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .enabled;
         if !enabled {
             set_disabled(&shared);
             tokio::time::sleep(SCAN_POLL_INTERVAL).await;
@@ -232,7 +238,10 @@ async fn run_enabled(
     let mut scanning = false;
 
     loop {
-        let current = desired.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let current = desired
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         if !current.enabled {
             stop_scans(&adapters).await;
             let stopped: Vec<String> = monitors.keys().cloned().collect();
@@ -376,7 +385,9 @@ fn device_name(properties: &PeripheralProperties) -> Option<String> {
 }
 
 fn publish_devices(shared: &Arc<RwLock<Shared>>, devices: &HashMap<String, (String, Peripheral)>) {
-    let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
+    let mut shared = shared
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if device_snapshot_matches(&shared.discovery.devices, devices) {
         if shared.discovery.error.take().is_some() {
             mark_discovery_changed();
@@ -586,7 +597,9 @@ fn set_connecting(desired: &Desired, id: &str) {
 }
 
 fn set_disabled(shared: &Arc<RwLock<Shared>>) {
-    let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
+    let mut shared = shared
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if shared.discovery.scanning || shared.discovery.error.is_some() {
         shared.discovery.scanning = false;
         shared.discovery.error = None;
@@ -599,7 +612,9 @@ fn set_disabled(shared: &Arc<RwLock<Shared>>) {
 }
 
 fn set_scanning(shared: &Arc<RwLock<Shared>>, scanning: bool) {
-    let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
+    let mut shared = shared
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if shared.discovery.scanning != scanning || shared.discovery.error.is_some() {
         shared.discovery.scanning = scanning;
         shared.discovery.error = None;
@@ -608,7 +623,9 @@ fn set_scanning(shared: &Arc<RwLock<Shared>>, scanning: bool) {
 }
 
 fn set_error(shared: &Arc<RwLock<Shared>>, error: String) {
-    let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
+    let mut shared = shared
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if shared.discovery.scanning || shared.discovery.error.as_deref() != Some(error.as_str()) {
         shared.discovery.scanning = false;
         shared.discovery.error = Some(error);

@@ -5,6 +5,7 @@ use deadsync_input::{PadCode, PadEvent, PadId, RawKeyboardEvent};
 use rustc_hash::FxHashMap;
 use std::collections::{HashMap, hash_map::Entry};
 use std::ffi::c_void;
+use std::fmt::Write as _;
 use std::mem::size_of;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU8, Ordering};
@@ -424,7 +425,7 @@ fn rawinput_uuid(vendor: u16, product: u16, serial: Option<&str>, name: &str) ->
 fn uuid_hex(uuid: &[u8; 16]) -> String {
     let mut out = String::with_capacity(32);
     for b in uuid {
-        out.push_str(&format!("{b:02x}"));
+        let _ = write!(out, "{b:02x}");
     }
     out
 }

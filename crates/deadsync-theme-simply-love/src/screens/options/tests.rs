@@ -960,7 +960,7 @@ fn judgment_palette_default_row_uses_catalog_and_emits_full_catalog_request() {
     assert_eq!(
         row_choices(&state, SubmenuKind::Gameplay, GAMEPLAY_OPTIONS_ROWS, row)
             .iter()
-            .map(|choice| choice.as_ref())
+            .map(std::convert::AsRef::as_ref)
             .collect::<Vec<_>>(),
         ["Simply Love", "Warm"]
     );
