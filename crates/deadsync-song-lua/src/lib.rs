@@ -224,8 +224,6 @@ pub use runtime::{
     set_compile_song_runtime_delta_values, set_compile_song_runtime_values,
     song_lua_runtime_number, song_lua_side_effect_count,
 };
-#[cfg(any(test, feature = "bench-support"))]
-pub use runtime_mod::collect_unique_runtime_mod_entries;
 pub use runtime_mod::{
     RuntimeModEaseEntry, RuntimeOverlayCaptureKey, XeroRuntimeModEaseEntry,
     XeroRuntimeOverlayFunctionEntry, extend_runtime_mod_sustains, read_runtime_mod_ease_entry,
@@ -234,6 +232,10 @@ pub use runtime_mod::{
     record_unsupported_xero_overlay_function_ease, runtime_mod_ease_target, runtime_mod_end_value,
     runtime_mod_entry_players, runtime_mod_key, runtime_mod_start_value,
     runtime_overlay_capture_key, runtime_player_option_ease_target,
+};
+#[cfg(any(test, feature = "bench-support"))]
+pub use runtime_mod::{
+    collect_unique_runtime_mod_entries, collect_unique_runtime_overlay_capture_keys,
 };
 pub use sl::{create_sl_streams, create_sl_table, init_sl_streams, parse_chart_info};
 pub use song_tables::{
@@ -16773,6 +16775,18 @@ return Def.ActorFrame{
             |index| (index + 1) * 10,
             &[]
         ));
+
+        for pointer_count in [9, 17, 63, 192, 257] {
+            let pointers = (0..pointer_count)
+                .map(|index| 5 + ((index * 73) % pointer_count) * 10)
+                .collect::<Vec<_>>();
+            let reference = (0..513).any(|index| pointers.contains(&(10 + index * 10)));
+            assert_eq!(
+                actor_pointers_touch_actor(513, |index| 10 + index * 10, &pointers),
+                reference,
+                "pointer_count={pointer_count}"
+            );
+        }
     }
 
     #[test]

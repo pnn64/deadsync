@@ -1,6 +1,4 @@
-use deadsync_theme_simply_love::screens::gameplay::{
-    SongLuaAftSpriteIndexBenchmark, SongLuaCaptureStateBenchmark, SongLuaUpdateSourceBenchmark,
-};
+use deadsync_song_lua::actor_pointers_touch_actor;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -95,15 +93,19 @@ struct ResultRow {
     checksum: u64,
 }
 
-fn measure(iterations: usize, mut frame: impl FnMut() -> u64) -> ResultRow {
-    for _ in 0..(iterations / 20).max(20) {
-        black_box(frame());
+fn reference(len: usize, pointer_at: impl Fn(usize) -> usize, actor_ptrs: &[usize]) -> bool {
+    !actor_ptrs.is_empty() && (0..len).any(|index| actor_ptrs.contains(&pointer_at(index)))
+}
+
+fn measure(iterations: usize, mut probe: impl FnMut() -> bool) -> ResultRow {
+    for _ in 0..100 {
+        black_box(probe());
     }
     let cycle_start = cycle_counter();
     let started = Instant::now();
     let mut checksum = 0u64;
     for _ in 0..iterations {
-        checksum = checksum.wrapping_add(black_box(frame()));
+        checksum += u64::from(black_box(probe()));
     }
     let elapsed = started.elapsed();
     let cycle_end = cycle_counter();
@@ -111,23 +113,27 @@ fn measure(iterations: usize, mut frame: impl FnMut() -> u64) -> ResultRow {
     let before = ALLOC.snapshot();
     ALLOC.enabled.store(true, Ordering::Relaxed);
     for _ in 0..iterations {
-        black_box(frame());
+        black_box(probe());
     }
     ALLOC.enabled.store(false, Ordering::Relaxed);
-    let alloc = ALLOC.snapshot().delta(before);
     ResultRow {
         ns: elapsed.as_secs_f64() * 1e9 / iterations as f64,
         cycles: cycle_start
             .zip(cycle_end)
             .map(|(start, end)| end.wrapping_sub(start) as f64 / iterations as f64),
-        alloc,
+        alloc: ALLOC.snapshot().delta(before),
         checksum,
     }
 }
 
-fn run(title: &str, iterations: usize, old: impl FnMut() -> u64, new: impl FnMut() -> u64) {
-    let old = measure(iterations, old);
-    let new = measure(iterations, new);
+fn run(title: &str, actor_ptrs: &[usize], iterations: usize) {
+    const ACTORS: usize = 513;
+    let old = measure(iterations, || {
+        reference(ACTORS, |index| 0x1000 + index * 16, actor_ptrs)
+    });
+    let new = measure(iterations, || {
+        actor_pointers_touch_actor(ACTORS, |index| 0x1000 + index * 16, actor_ptrs)
+    });
     assert_eq!(old.checksum, new.checksum, "{title} behavior diverged");
     assert_eq!(
         (old.alloc.calls, old.alloc.frees, old.alloc.churn),
@@ -141,23 +147,24 @@ fn run(title: &str, iterations: usize, old: impl FnMut() -> u64, new: impl FnMut
     print_row("old", iterations, &old);
     print_row("new", iterations, &new);
     println!(
-        "  change: {:+.2}% latency  {:+.2}% cycles  {:+.2}% throughput",
+        "  change: {:+.2}% latency  {:+.2}% cycles  {:+.2}% throughput  {:+.2}% churn",
         change(old.ns, new.ns),
         change(
             old.cycles.unwrap_or(f64::NAN),
             new.cycles.unwrap_or(f64::NAN)
         ),
         change(1.0 / old.ns, 1.0 / new.ns),
+        change(old.alloc.churn as f64, new.alloc.churn as f64),
     );
 }
 
 fn print_row(label: &str, iterations: usize, row: &ResultRow) {
     println!(
-        "  {label:<3} {:>10.2} ns/frame  {:>10.2} cycles/frame  {:>8.3} Mframe/s  \
-         {:>5.2} alloc/frame  {:>5.2} free/frame  {:>8.1} churn B/frame",
+        "  {label:<3} {:>10.2} ns/probe  {:>10.2} cycles/probe  {:>8.1} probe/s  \
+         {:>5.2} alloc/probe  {:>5.2} free/probe  {:>8.1} churn B/probe",
         row.ns,
         row.cycles.unwrap_or(f64::NAN),
-        1_000.0 / row.ns,
+        1e9 / row.ns,
         row.alloc.calls as f64 / iterations as f64,
         row.alloc.frees as f64 / iterations as f64,
         row.alloc.churn as f64 / iterations as f64,
@@ -165,6 +172,9 @@ fn print_row(label: &str, iterations: usize, row: &ResultRow) {
 }
 
 fn change(old: f64, new: f64) -> f64 {
+    if old == 0.0 {
+        return 0.0;
+    }
     (new / old - 1.0) * 100.0
 }
 
@@ -192,30 +202,36 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
-    let old_source = SongLuaUpdateSourceBenchmark::new(513);
-    let new_source = SongLuaUpdateSourceBenchmark::new(513);
+    let dense_miss = (0..192)
+        .map(|index| 0x1008 + ((index * 73) % 192) * 16)
+        .collect::<Vec<_>>();
     run(
-        "update source lookup (513 actors)",
-        2_000_000,
-        || old_source.reference_frame(),
-        || new_source.current_frame(),
+        "actor-pointer match (513 actors / 192-pointer miss)",
+        &dense_miss,
+        20_000,
     );
 
-    let mut old_capture = SongLuaCaptureStateBenchmark::new(513, 31);
-    let mut new_capture = SongLuaCaptureStateBenchmark::new(513, 31);
+    let mut late_hit = dense_miss;
+    late_hit[191] = 0x1000 + 500 * 16;
     run(
-        "AFT capture state refresh (31 of 513 actors)",
-        100_000,
-        || old_capture.reference_frame(),
-        || new_capture.current_frame(),
+        "actor-pointer match (513 actors / 192-pointer late hit)",
+        &late_hit,
+        20_000,
     );
 
-    let mut old_sprites = SongLuaAftSpriteIndexBenchmark::new(513, 8);
-    let mut new_sprites = SongLuaAftSpriteIndexBenchmark::new(513, 8);
+    let largest_inline_miss = (0..512)
+        .map(|index| 0x1008 + ((index * 73) % 512) * 16)
+        .collect::<Vec<_>>();
     run(
-        "AFT sprite traversal (8 of 513 actors)",
+        "actor-pointer match (513 actors / 512-pointer miss)",
+        &largest_inline_miss,
+        10_000,
+    );
+
+    let small_hit = [0x1000 + 7 * 16, 0xDEAD, 0xBEEF, 0xCAFE];
+    run(
+        "actor-pointer match (small early hit)",
+        &small_hit,
         2_000_000,
-        || old_sprites.reference_frame(),
-        || new_sprites.current_frame(),
     );
 }

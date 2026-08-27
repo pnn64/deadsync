@@ -38,7 +38,7 @@ pub enum XeroRuntimeModEaseEntry {
     Overlay(XeroRuntimeOverlayFunctionEntry),
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeOverlayCaptureKey {
     pub function: usize,
     pub unit: SongLuaTimeUnit,
@@ -277,7 +277,7 @@ where
     let mut current: [HashMap<String, f32>; LUA_PLAYERS] = std::array::from_fn(|_| HashMap::new());
     let mut out = Vec::new();
     let mut overlay_eases = Vec::new();
-    let mut overlay_capture_keys = Vec::new();
+    let mut overlay_capture_keys = RuntimeOverlayCaptureDedup::new(entries.len());
     let mut info = SongLuaCompileInfo::default();
     for entry in entries {
         match entry {
@@ -336,10 +336,9 @@ where
                     );
                     let capture_key =
                         runtime_overlay_capture_key(&entry.entry, &entry.function, from, to);
-                    if overlay_capture_keys.contains(&capture_key) {
+                    if !overlay_capture_keys.insert(capture_key) {
                         continue;
                     }
-                    overlay_capture_keys.push(capture_key);
                     overlay_eases.extend(compile_overlay(
                         &entry.entry,
                         &entry.function,
@@ -603,8 +602,7 @@ struct RuntimeModEntryDedup {
 impl RuntimeModEntryDedup {
     fn new(entry_count: usize) -> Self {
         let slot_count = entry_count
-            .min(1024)
-            .max(1)
+            .clamp(1, 1024)
             .saturating_mul(2)
             .next_power_of_two();
         let mut slots = smallvec::SmallVec::with_capacity(slot_count);
@@ -775,6 +773,106 @@ pub fn runtime_overlay_capture_key(
         opt1: entry.opt1.map(f32::to_bits),
         opt2: entry.opt2.map(f32::to_bits),
     }
+}
+
+fn runtime_overlay_capture_key_hash(key: &RuntimeOverlayCaptureKey) -> u64 {
+    let mut hash = rustc_hash::FxHasher::default();
+    key.function.hash(&mut hash);
+    match key.unit {
+        SongLuaTimeUnit::Beat => 0u8,
+        SongLuaTimeUnit::Second => 1,
+    }
+    .hash(&mut hash);
+    key.start.hash(&mut hash);
+    key.limit.hash(&mut hash);
+    key.easing.hash(&mut hash);
+    key.target.hash(&mut hash);
+    key.from.hash(&mut hash);
+    key.to.hash(&mut hash);
+    key.opt1.hash(&mut hash);
+    key.opt2.hash(&mut hash);
+    hash.finish()
+}
+
+struct RuntimeOverlayCaptureDedup {
+    keys: Vec<RuntimeOverlayCaptureKey>,
+    slots: smallvec::SmallVec<[usize; 2048]>,
+}
+
+impl RuntimeOverlayCaptureDedup {
+    fn new(entry_count: usize) -> Self {
+        let expected = entry_count.saturating_mul(LUA_PLAYERS);
+        let slot_count = expected
+            .clamp(1, 1024)
+            .saturating_mul(2)
+            .next_power_of_two();
+        let mut slots = smallvec::SmallVec::with_capacity(slot_count);
+        slots.resize(slot_count, 0);
+        Self {
+            keys: Vec::with_capacity(expected.min(256)),
+            slots,
+        }
+    }
+
+    fn insert(&mut self, key: RuntimeOverlayCaptureKey) -> bool {
+        if self.keys.len().saturating_mul(2) >= self.slots.len() && !self.grow_slots() {
+            if self.keys.contains(&key) {
+                return false;
+            }
+            self.keys.push(key);
+            return true;
+        }
+        let hash = runtime_overlay_capture_key_hash(&key);
+        let mask = self.slots.len() - 1;
+        let mut slot = hash as usize & mask;
+        loop {
+            let stored = self.slots[slot];
+            if stored == 0 {
+                let index = self.keys.len();
+                self.keys.push(key);
+                self.slots[slot] = index + 1;
+                return true;
+            }
+            if self.keys[stored - 1] == key {
+                return false;
+            }
+            slot = (slot + 1) & mask;
+        }
+    }
+
+    fn grow_slots(&mut self) -> bool {
+        let Some(slot_count) = self.slots.len().checked_mul(2) else {
+            return false;
+        };
+        let mut slots = smallvec::SmallVec::<[usize; 2048]>::with_capacity(slot_count);
+        slots.resize(slot_count, 0);
+        let mask = slot_count - 1;
+        for (index, key) in self.keys.iter().enumerate() {
+            let mut slot = runtime_overlay_capture_key_hash(key) as usize & mask;
+            while slots[slot] != 0 {
+                slot = (slot + 1) & mask;
+            }
+            slots[slot] = index + 1;
+        }
+        self.slots = slots;
+        true
+    }
+}
+
+/// Collects exact-unique overlay capture keys in first-seen order. This is
+/// exposed only so the load-path benchmark can compare against the former
+/// linear scan without duplicating the production index.
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn collect_unique_runtime_overlay_capture_keys(
+    keys: impl IntoIterator<Item = RuntimeOverlayCaptureKey>,
+    entry_count: usize,
+) -> Vec<RuntimeOverlayCaptureKey> {
+    let mut dedup = RuntimeOverlayCaptureDedup::new(entry_count);
+    for key in keys {
+        dedup.insert(key);
+    }
+    dedup.keys
 }
 
 pub fn runtime_mod_ease_target(key: &str, original: &str) -> Option<SongLuaEaseTarget> {
@@ -987,6 +1085,31 @@ mod tests {
         out
     }
 
+    fn overlay_capture_key_fixture(count: usize, unique: usize) -> Vec<RuntimeOverlayCaptureKey> {
+        let unique = unique.max(1);
+        (0..count)
+            .map(|index| {
+                let key = (index * 73) % unique;
+                RuntimeOverlayCaptureKey {
+                    function: 0x1000 + key % 31,
+                    unit: if key % 7 == 0 {
+                        SongLuaTimeUnit::Second
+                    } else {
+                        SongLuaTimeUnit::Beat
+                    },
+                    start: (key as f32 * 0.125).to_bits(),
+                    limit: (0.25 + (key % 5) as f32 * 0.0625).to_bits(),
+                    easing: format!("ease{}", key % 11),
+                    target: format!("node{}", key % 37),
+                    from: (key as f32 * 0.5).to_bits(),
+                    to: (key as f32 * -0.75).to_bits(),
+                    opt1: (key % 4 == 0).then(|| (key as f32 * 0.5).to_bits()),
+                    opt2: (key % 6 == 0).then(|| (key as f32 * -0.25).to_bits()),
+                }
+            })
+            .collect()
+    }
+
     fn sustain_fixture(count: usize) -> Vec<SongLuaEaseWindow> {
         (0..count)
             .map(|index| SongLuaEaseWindow {
@@ -1035,6 +1158,24 @@ mod tests {
                     .iter()
                     .zip(&reference)
                     .all(|(left, right)| runtime_mod_entries_equal(left, right)),
+                "count={count} unique={unique}"
+            );
+        }
+    }
+
+    #[test]
+    fn indexed_overlay_capture_dedup_matches_first_seen_scan() {
+        for (count, unique) in [(0, 1), (1, 1), (33, 11), (513, 127), (513, 513)] {
+            let source = overlay_capture_key_fixture(count, unique);
+            let mut reference = Vec::new();
+            for key in source.iter().cloned() {
+                if !reference.contains(&key) {
+                    reference.push(key);
+                }
+            }
+            assert_eq!(
+                collect_unique_runtime_overlay_capture_keys(source, count),
+                reference,
                 "count={count} unique={unique}"
             );
         }

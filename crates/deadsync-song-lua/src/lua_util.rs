@@ -9625,7 +9625,20 @@ pub fn actor_pointers_touch_actor(
     mut pointer_at: impl FnMut(usize) -> usize,
     actor_ptrs: &[usize],
 ) -> bool {
-    !actor_ptrs.is_empty() && (0..len).any(|index| actor_ptrs.contains(&pointer_at(index)))
+    const LINEAR_MAX: usize = 8;
+    if actor_ptrs.is_empty() {
+        return false;
+    }
+    if actor_ptrs.len() <= LINEAR_MAX {
+        return (0..len).any(|index| actor_ptrs.contains(&pointer_at(index)));
+    }
+    // Dense mod charts can probe hundreds of actor tables at once. Keep the
+    // compilation scratch inline through that range; pathological charts spill
+    // once here, never on a gameplay frame.
+    let mut sorted = smallvec::SmallVec::<[usize; 512]>::from_slice(actor_ptrs);
+    sorted.sort_unstable();
+    sorted.dedup();
+    (0..len).any(|index| sorted.binary_search(&pointer_at(index)).is_ok())
 }
 
 pub fn read_color_args(args: &MultiValue) -> Option<[f32; 4]> {

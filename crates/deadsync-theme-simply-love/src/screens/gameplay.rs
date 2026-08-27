@@ -657,11 +657,11 @@ impl SongLuaOverlayIndex {
 /// change retain the indexed ancestor fallback. There is no synchronization,
 /// gameplay allocation, miss, eviction, or pruning path. Storage is bounded by
 /// the compiled overlay count and is released with the gameplay screen.
-/// `storage_bytes` exposes the retained index footprint for benchmarks.
 #[derive(Default)]
 struct SongLuaOverlayTopologyIndex {
     aft_ancestors: Vec<SongLuaOverlayIndex>,
     aft_sprite_targets: Vec<SongLuaOverlayIndex>,
+    aft_sprite_indices: Box<[usize]>,
     aft_texture_handles: Vec<TextureHandle>,
     camera_ancestors: Vec<SongLuaOverlayIndex>,
     camera_states: Vec<SongLuaOverlayIndex>,
@@ -673,15 +673,22 @@ impl SongLuaOverlayTopologyIndex {
         let aft_ancestors = (0..overlays.len())
             .map(|index| SongLuaOverlayIndex::new(song_lua_overlay_aft_ancestor(overlays, index)))
             .collect::<Vec<_>>();
-        let aft_sprite_targets = overlays
+        let aft_sprite_indices = overlays
             .iter()
-            .map(|overlay| match &overlay.kind {
-                SongLuaOverlayKind::AftSprite { capture_name } => SongLuaOverlayIndex::new(
-                    song_lua_overlay_capture_index_by_name(overlays, capture_name),
-                ),
-                _ => SongLuaOverlayIndex::default(),
+            .enumerate()
+            .filter_map(|(index, overlay)| {
+                matches!(overlay.kind, SongLuaOverlayKind::AftSprite { .. }).then_some(index)
             })
-            .collect::<Vec<_>>();
+            .collect::<Box<[_]>>();
+        let mut aft_sprite_targets = vec![SongLuaOverlayIndex::default(); overlays.len()];
+        for &index in &aft_sprite_indices {
+            let SongLuaOverlayKind::AftSprite { capture_name } = &overlays[index].kind else {
+                unreachable!("AFT sprite index was built from the same immutable actor list");
+            };
+            aft_sprite_targets[index] = SongLuaOverlayIndex::new(
+                song_lua_overlay_capture_index_by_name(overlays, capture_name),
+            );
+        }
         let aft_texture_handles = overlays
             .iter()
             .map(|overlay| {
@@ -721,6 +728,7 @@ impl SongLuaOverlayTopologyIndex {
         Self {
             aft_ancestors,
             aft_sprite_targets,
+            aft_sprite_indices,
             aft_texture_handles,
             camera_ancestors,
             camera_states,
@@ -8262,15 +8270,8 @@ fn song_lua_replacement_active_players_indexed_active(
         song_lua_proxy_active_players_indexed(overlays, overlay_states, proxy_sources, index);
     let mut requests = SongLuaScreenProxyRequests::default();
     visit_scratch.begin(overlays.len());
-    for (overlay_index, capture_index) in index
-        .topology
-        .aft_sprite_targets
-        .iter()
-        .copied()
-        .map(SongLuaOverlayIndex::get)
-        .enumerate()
-    {
-        let Some(capture_index) = capture_index else {
+    for &overlay_index in &index.topology.aft_sprite_indices {
+        let Some(capture_index) = index.topology.aft_sprite_targets[overlay_index].get() else {
             continue;
         };
         let Some(overlay_state) = overlay_states.get(overlay_index) else {
@@ -11909,6 +11910,71 @@ impl SongLuaUpdateSourceBenchmark {
                     u64::from(sample.second.to_bits()).rotate_left(29)
                 })
         })
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct SongLuaAftSpriteIndexBenchmark {
+    targets: Vec<SongLuaOverlayIndex>,
+    indices: Box<[usize]>,
+    visible: Box<[bool]>,
+    frame: usize,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl SongLuaAftSpriteIndexBenchmark {
+    pub fn new(actor_count: usize, sprite_count: usize) -> Self {
+        let actor_count = actor_count.max(1);
+        let sprite_count = sprite_count.min(actor_count);
+        let indices = (0..sprite_count)
+            .map(|sprite| sprite * actor_count / sprite_count.max(1))
+            .collect::<Box<[_]>>();
+        let mut targets = vec![SongLuaOverlayIndex::default(); actor_count];
+        for (capture, &index) in indices.iter().enumerate() {
+            targets[index] = SongLuaOverlayIndex::new(Some(capture));
+        }
+        Self {
+            targets,
+            indices,
+            visible: vec![true; actor_count].into_boxed_slice(),
+            frame: 0,
+        }
+    }
+
+    fn advance(&mut self) {
+        if let Some(&index) = self.indices.get(self.frame % self.indices.len().max(1)) {
+            self.visible[index] = !self.visible[index];
+        }
+        self.frame = self.frame.wrapping_add(1);
+    }
+
+    pub fn reference_frame(&mut self) -> u64 {
+        self.advance();
+        self.targets
+            .iter()
+            .copied()
+            .enumerate()
+            .filter_map(|(index, target)| {
+                self.visible[index]
+                    .then_some(target)
+                    .and_then(SongLuaOverlayIndex::get)
+            })
+            .fold(0u64, |checksum, target| {
+                checksum.rotate_left(7) ^ target as u64
+            })
+    }
+
+    pub fn current_frame(&mut self) -> u64 {
+        self.advance();
+        self.indices
+            .iter()
+            .copied()
+            .filter(|&index| self.visible[index])
+            .filter_map(|index| self.targets[index].get())
+            .fold(0u64, |checksum, target| {
+                checksum.rotate_left(7) ^ target as u64
+            })
     }
 }
 
@@ -20846,6 +20912,19 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_sparse_aft_sprite_index_matches_full_scan() {
+        let mut reference = SongLuaAftSpriteIndexBenchmark::new(513, 8);
+        let mut current = SongLuaAftSpriteIndexBenchmark::new(513, 8);
+        for frame in 0..1_029 {
+            assert_eq!(
+                reference.reference_frame(),
+                current.current_frame(),
+                "frame={frame}"
+            );
+        }
+    }
+
+    #[test]
     fn song_lua_visible_track_index_matches_full_scan_across_wraparound_seeks() {
         let mut reference = SongLuaUpdateSnapBenchmark::new(257, 257);
         let mut current = SongLuaUpdateSnapBenchmark::new(257, 257);
@@ -23552,6 +23631,7 @@ mod tests {
                 "AFT target diverged for overlay {overlay_index}",
             );
         }
+        assert_eq!(topology_index.aft_sprite_indices.as_ref(), &[5, 6]);
 
         overlay_states[2].fov = Some(35.0);
         topology_index.rebuild_camera_states(&overlays, &overlay_states);
