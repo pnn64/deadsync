@@ -267,6 +267,9 @@ impl BenchmarkMediaPrepDispatch {
         }
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal worker fails or disconnects unexpectedly.
     pub fn warm(&mut self) {
         assert!(self.worker.start());
     }
@@ -278,6 +281,9 @@ impl BenchmarkMediaPrepDispatch {
     }
 
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if an internal worker fails or disconnects unexpectedly.
     pub fn drain_burst(&self) -> usize {
         let mut checksum = 0usize;
         for _ in 0..MAX_CACHED_BANNER_VIDEO_PATHS {

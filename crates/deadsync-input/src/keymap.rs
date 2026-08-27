@@ -407,16 +407,25 @@ fn refresh_compiled_keymap(state: &mut ThreadInputState, generation: u64) {
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn with_keymap<R>(f: impl FnOnce(&Keymap) -> R) -> R {
     f(&KEYMAP.read().unwrap())
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn get_keymap() -> Keymap {
     KEYMAP.read().unwrap().clone()
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn set_keymap(new_map: Keymap) {
     let compiled = Arc::new(CompiledKeymap::from_keymap(&new_map));
     let key_slot_count = compiled.key_slot_count;
@@ -1024,6 +1033,9 @@ fn emit_debounced_edges(edges: DebounceEdges, mut emit: impl FnMut(InputEvent)) 
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn map_raw_key_event_with(ev: &RawKeyboardEvent, emit: impl FnMut(InputEvent)) {
     if ev.pressed && ev.repeat {
         return;
@@ -1093,6 +1105,9 @@ pub fn map_keycode_event_with_host(
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
     if matches!(ev, PadEvent::RawAxis { .. }) {
         return;

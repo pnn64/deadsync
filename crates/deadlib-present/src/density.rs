@@ -423,6 +423,9 @@ pub fn update_density_hist_mesh(
     *mesh = Some(Arc::from(verts.into_boxed_slice()));
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn update_density_hist_mesh_reusable(
     mesh: &mut Option<Arc<Vec<MeshVertex>>>,
     cache: Option<&DensityHistCache>,
@@ -738,6 +741,9 @@ pub fn update_density_life_mesh(
 /// The buffer is mutated only while uniquely owned. If a renderer still holds
 /// the preceding frame, a replacement is allocated and that frame remains
 /// immutable.
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn update_density_life_mesh_reusable(
     mesh: &mut Option<Arc<Vec<MeshVertex>>>,
     points: &[[f32; 2]],

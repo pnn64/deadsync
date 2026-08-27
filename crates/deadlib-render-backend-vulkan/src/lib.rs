@@ -371,6 +371,9 @@ pub struct State {
 }
 
 // --- Main Procedural Functions ---
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn init(
     window: &Window,
     vsync_enabled: bool,
@@ -1606,6 +1609,9 @@ pub fn wait_for_idle(state: &mut State) {
     retire_all_textures(state);
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn create_texture(
     state: &mut State,
     image: &RgbaImage,
@@ -1793,6 +1799,9 @@ pub fn update_texture(
     Ok(())
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn create_yuv420_texture(
     state: &mut State,
     upload: Yuv420Upload<'_>,
@@ -2549,6 +2558,9 @@ const fn upload_vulkan_pass(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn draw(
     state: &mut State,
     frame: &RenderFrame,
@@ -3308,6 +3320,9 @@ pub fn draw(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn cleanup(state: &mut State) {
     info!("Cleaning up Vulkan resources...");
     if let Err(e) = submit_pending_texture_uploads(state, state.current_frame) {

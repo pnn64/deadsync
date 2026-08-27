@@ -104,6 +104,9 @@ impl<'a> ChartResolver<'a> {
 
     /// Resolves a score key to a chart `short_hash`.
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn resolve(
         &self,
         song_dir: &str,

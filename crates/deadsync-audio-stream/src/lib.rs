@@ -1432,6 +1432,9 @@ fn music_decoder_thread_loop(
     Ok(())
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn load_and_resample_sfx(
     path: &str,
     output: OutputFormat,

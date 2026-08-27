@@ -8,6 +8,9 @@ impl StreamSegment {
     const BREAK_FLAG: u32 = 1 << 31;
 
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if the function's input or state invariants are violated.
     pub const fn new(start: u32, end: u32, is_break: bool) -> Self {
         assert!(
             start < Self::BREAK_FLAG,

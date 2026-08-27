@@ -986,6 +986,9 @@ fn mark_runtime_player_leaderboards_changed() {
     RUNTIME_PLAYER_LEADERBOARD_GENERATION.fetch_add(1, AtomicOrdering::Release);
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_request_player_leaderboard(
     key: &PlayerLeaderboardCacheKey,
     max_entries: usize,
@@ -1031,6 +1034,9 @@ pub fn runtime_plan_player_leaderboard_request(
     })
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_complete_player_leaderboard_fetch<T>(
     key: &PlayerLeaderboardCacheKey,
     requested_max_entries: usize,
@@ -1098,6 +1104,9 @@ pub fn runtime_run_player_leaderboard_fetch<T>(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_cached_player_leaderboard_itl_self_rank(
     chart_hash: &str,
     profile_snapshot: &GameplayScoreboxProfileSnapshot,
@@ -1106,6 +1115,9 @@ pub fn runtime_cached_player_leaderboard_itl_self_rank(
     cached_player_leaderboard_itl_self_rank(&cache.by_key, chart_hash, profile_snapshot)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_cached_player_leaderboard_srpg_self_score(
     chart_hash: &str,
     profile_snapshot: &GameplayScoreboxProfileSnapshot,
@@ -1116,6 +1128,9 @@ pub fn runtime_cached_player_leaderboard_srpg_self_score(
 
 /// Retry deadline for a cached leaderboard error, excluding requests already
 /// in flight. Callers can retain presentation data until this cadence expires.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_player_leaderboard_retry_deadline(
     chart_hash: &str,
     profile_snapshot: &GameplayScoreboxProfileSnapshot,
@@ -1129,6 +1144,9 @@ pub fn runtime_player_leaderboard_retry_deadline(
     entry.retry_after
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_invalidate_player_leaderboard_chart_for_api(
     api_key: &str,
     chart_hash: &str,
@@ -1141,6 +1159,9 @@ pub fn runtime_invalidate_player_leaderboard_chart_for_api(
     mark_runtime_player_leaderboards_changed();
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_seed_player_leaderboard_entry(
     key: PlayerLeaderboardCacheKey,
     entry: PlayerLeaderboardCacheEntry,
@@ -1153,6 +1174,9 @@ pub fn runtime_seed_player_leaderboard_entry(
     mark_runtime_player_leaderboards_changed();
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_remove_player_leaderboard_entry(key: &PlayerLeaderboardCacheKey) {
     let removed = RUNTIME_PLAYER_LEADERBOARD_CACHE
         .lock()
@@ -1164,6 +1188,9 @@ pub fn runtime_remove_player_leaderboard_entry(key: &PlayerLeaderboardCacheKey) 
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_lock_player_leaderboard_cache() -> MutexGuard<'static, PlayerLeaderboardCacheState> {
     RUNTIME_PLAYER_LEADERBOARD_CACHE.lock().unwrap()
 }

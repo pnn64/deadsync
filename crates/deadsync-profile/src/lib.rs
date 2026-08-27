@@ -213,10 +213,16 @@ pub fn runtime_lock_profiles() -> RuntimeProfileGuard<[Profile; PLAYER_SLOTS]> {
     ))
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_machine_player_defaults() -> MachinePlayerDefaults {
     RUNTIME_MACHINE_PLAYER_DEFAULTS.lock().unwrap().clone()
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_set_machine_player_defaults(defaults: MachinePlayerDefaults) {
     *RUNTIME_MACHINE_PLAYER_DEFAULTS.lock().unwrap() = defaults;
 }
@@ -976,10 +982,16 @@ pub fn runtime_set_session_joined(p1: bool, p2: bool) {
     runtime_lock_session().set_joined_sides(p1, p2);
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_invalidate_profile_dir_cache() {
     *RUNTIME_PROFILE_DIR_CACHE.lock().unwrap() = None;
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_set_profile_dir_cache(root: &Path, cache_map: HashMap<String, PathBuf>) {
     *RUNTIME_PROFILE_DIR_CACHE.lock().unwrap() = Some(RuntimeProfileDirCache {
         root: root.to_path_buf(),
@@ -987,6 +999,9 @@ pub fn runtime_set_profile_dir_cache(root: &Path, cache_map: HashMap<String, Pat
     });
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_resolve_profile_dir(
     root: &Path,
     guid: &str,

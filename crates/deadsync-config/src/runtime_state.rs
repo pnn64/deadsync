@@ -410,6 +410,9 @@ impl RuntimeConfigStore {
         }
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal synchronization lock is poisoned.
     pub fn publish_runtime_state(&self, state: RuntimeStateOptions) {
         *self.machine_default_noteskin.lock().unwrap() = state.machine_default_noteskin;
         *self.additional_song_folders.lock().unwrap() = state.additional_song_folders;
@@ -442,10 +445,16 @@ impl RuntimeConfigStore {
         config_pad_order::reset();
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal synchronization lock is poisoned.
     pub fn machine_default_noteskin(&self) -> String {
         self.machine_default_noteskin.lock().unwrap().clone()
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal synchronization lock is poisoned.
     pub fn smx_pad_assignment(&self) -> (Option<String>, Option<String>) {
         (
             self.smx_p1_serial.lock().unwrap().clone(),
@@ -453,6 +462,9 @@ impl RuntimeConfigStore {
         )
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal synchronization lock is poisoned.
     pub fn default_profiles(&self) -> (Option<String>, Option<String>) {
         (
             self.default_profile_p1.lock().unwrap().clone(),
@@ -460,23 +472,38 @@ impl RuntimeConfigStore {
         )
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal synchronization lock is poisoned.
     pub fn additional_song_folder_roots(&self) -> Vec<AdditionalSongFolder> {
         self.additional_song_folders.lock().unwrap().clone()
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal synchronization lock is poisoned.
     pub fn never_cache_list(&self) -> Vec<String> {
         self.never_cache_list.lock().unwrap().clone()
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal synchronization lock is poisoned.
     pub fn group_is_never_cached(&self, group: &str) -> bool {
         group_is_never_cached(self.never_cache_list.lock().unwrap().as_slice(), group)
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal synchronization lock is poisoned.
     pub fn song_path_is_writable(&self, path: &Path) -> bool {
         let roots = self.additional_song_folders.lock().unwrap().clone();
         song_path_is_writable_for_roots(path, &roots)
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal synchronization lock is poisoned.
     pub fn save_snapshot(&self) -> SaveSnapshot {
         SaveSnapshot {
             config: self.config(),
@@ -525,6 +552,9 @@ impl RuntimeConfigStore {
         )
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal synchronization lock is poisoned.
     pub fn set_smx_pad_assignment(
         &self,
         p1_serial: Option<String>,
@@ -538,6 +568,9 @@ impl RuntimeConfigStore {
         )
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal synchronization lock is poisoned.
     pub fn set_default_profiles(&self, p1: Option<String>, p2: Option<String>) -> bool {
         set_pair_if_changed(
             &mut *self.default_profile_p1.lock().unwrap(),
@@ -547,6 +580,9 @@ impl RuntimeConfigStore {
         )
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal synchronization lock is poisoned.
     pub fn set_machine_default_noteskin(&self, noteskin: &str) -> bool {
         let normalized = normalize_machine_default_noteskin(noteskin);
         set_if_changed(

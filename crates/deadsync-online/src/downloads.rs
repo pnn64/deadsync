@@ -351,6 +351,9 @@ impl DownloadState {
 /// Returns a newly materialized row snapshot only after display state changes.
 /// The generation check keeps unchanged Select Music frames off the download
 /// mutex and avoids cloning every row's strings.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_snapshots_if_changed(last_generation: u64) -> Option<(u64, Vec<DownloadSnapshot>)> {
     if RUNTIME_SNAPSHOT_GENERATION.load(Ordering::Acquire) == last_generation {
         return None;
@@ -360,6 +363,9 @@ pub fn runtime_snapshots_if_changed(last_generation: u64) -> Option<(u64, Vec<Do
     Some((generation, state.snapshots()))
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_completion_counts() -> (usize, usize) {
     RUNTIME_DOWNLOAD_STATE.lock().unwrap().completion_counts()
 }
@@ -367,6 +373,9 @@ pub fn runtime_completion_counts() -> (usize, usize) {
 /// Takes completed song directories only after their queue or completion state
 /// changes. An unchanged frame reads one atomic and does not lock download
 /// state.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_take_ready_song_reload_request_if_changed(
     last_generation: u64,
 ) -> Option<(u64, Vec<PathBuf>)> {
@@ -378,6 +387,9 @@ pub fn runtime_take_ready_song_reload_request_if_changed(
     Some((generation, state.take_ready_song_reload_request()))
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_forget_cached_destination(
     hooks: UnlockDownloadRuntimeHooks,
     url: &str,
@@ -395,6 +407,9 @@ pub fn runtime_forget_cached_destination(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_queue_event_unlock_download(
     hooks: UnlockDownloadRuntimeHooks,
     url: &str,
@@ -437,6 +452,9 @@ pub fn runtime_queue_event_unlock_download(
     spawn_runtime_download(hooks, download);
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_retry_failed_downloads(hooks: UnlockDownloadRuntimeHooks) -> usize {
     let downloads = {
         let mut state = RUNTIME_DOWNLOAD_STATE.lock().unwrap();

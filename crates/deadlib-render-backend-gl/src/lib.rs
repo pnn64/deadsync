@@ -743,6 +743,9 @@ pub fn init(
     Ok(state)
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn set_vsync_enabled(state: &mut State, enabled: bool) {
     if state.vsync_enabled == enabled {
         return;
@@ -1980,6 +1983,9 @@ fn draw_legacy_offscreen_pass(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn draw(
     state: &mut State,
     frame: &RenderFrame,

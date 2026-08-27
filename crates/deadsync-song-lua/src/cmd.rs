@@ -1,3 +1,6 @@
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn preprocess_lua_cmd_syntax(source: &str) -> Result<String, String> {
     let bytes = source.as_bytes();
     let mut out = String::with_capacity(source.len());

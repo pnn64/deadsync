@@ -74,6 +74,9 @@ impl TextureUploadImage<'_> {
 
 impl PendingTextureUpload {
     #[inline(always)]
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn image(&self) -> TextureUploadImage<'_> {
         self.image
             .as_ref()

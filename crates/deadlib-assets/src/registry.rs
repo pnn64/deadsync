@@ -228,6 +228,9 @@ fn remove_texture_handle_alias(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn register_texture_handle(key: &str, handle: TextureHandle) {
     let mut handles = TEXTURE_HANDLES.write().unwrap();
     let mut aliases = TEXTURE_HANDLE_ALIASES.write().unwrap();
@@ -247,6 +250,9 @@ pub fn register_texture_handle(key: &str, handle: TextureHandle) {
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn remove_texture_handle(key: &str) {
     let mut handles = TEXTURE_HANDLES.write().unwrap();
     if handles.remove(key).is_none() {
@@ -257,12 +263,18 @@ pub fn remove_texture_handle(key: &str) {
     touch_texture_registry();
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn clear_texture_handles() {
     TEXTURE_HANDLES.write().unwrap().clear();
     TEXTURE_HANDLE_ALIASES.write().unwrap().clear();
     touch_texture_registry();
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn register_texture_dims(key: &str, w: u32, h: u32) {
     let sheet = parse_sprite_sheet_dims(key);
     if TEXTURE_METADATA
@@ -274,10 +286,16 @@ pub fn register_texture_dims(key: &str, w: u32, h: u32) {
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn texture_dims(key: &str) -> Option<TexMeta> {
     TEXTURE_METADATA.read().unwrap().texture_dims(key)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn sprite_sheet_dims(key: &str) -> (u32, u32) {
     if let Some(dims) = TEXTURE_METADATA.read().unwrap().sheet_dims(key) {
         return dims;
@@ -289,6 +307,9 @@ pub fn sprite_sheet_dims(key: &str) -> (u32, u32) {
         .insert_sheet_dims(key, dims)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn texture_handle(key: &str) -> TextureHandle {
     if let Some(handle) = TEXTURE_HANDLES.read().unwrap().get(key).copied() {
         return handle;
@@ -310,6 +331,9 @@ pub fn texture_handle(key: &str) -> TextureHandle {
         .unwrap_or(INVALID_TEXTURE_HANDLE)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn register_generated_texture(key: &str, image: RgbaImage, sampler: SamplerDesc) {
     let (w, h) = (image.width(), image.height());
     GENERATED_TEXTURES.write().unwrap().register(
@@ -323,10 +347,16 @@ pub fn register_generated_texture(key: &str, image: RgbaImage, sampler: SamplerD
     register_texture_dims(key, w, h);
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn generated_texture(key: &str) -> Option<GeneratedTexture> {
     GENERATED_TEXTURES.read().unwrap().get(key).cloned()
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn take_pending_generated_texture_keys() -> Vec<String> {
     if !GENERATED_TEXTURES_PENDING.swap(false, Ordering::AcqRel) {
         return Vec::new();

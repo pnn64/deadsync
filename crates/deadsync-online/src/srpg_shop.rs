@@ -122,6 +122,9 @@ fn set_runtime_snapshot(runtime: &mut RuntimeState, snapshot: Arc<SrpgShopSnapsh
 }
 
 /// Clones the shared shop snapshot only after its display generation changes.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_snapshot_if_changed(last_generation: u64) -> Option<(u64, Arc<SrpgShopSnapshot>)> {
     if RUNTIME_SNAPSHOT_GENERATION.load(Ordering::Acquire) == last_generation {
         return None;
@@ -167,6 +170,9 @@ pub const fn download_folder(shop_id: u32, folder: SrpgShopFolder) -> &'static s
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_refresh(username: String, password: String) {
     let username = username.trim().to_string();
     if username.is_empty() || password.is_empty() {
@@ -234,6 +240,9 @@ pub fn runtime_refresh(username: String, password: String) {
     });
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_purchase(shop_id: u32, item_id: String, type_id: u8) {
     let (generation, session, mut previous) = {
         let mut runtime = RUNTIME.lock().unwrap();

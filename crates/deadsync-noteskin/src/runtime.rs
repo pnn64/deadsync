@@ -32,6 +32,9 @@ pub struct TapExplosion<T> {
 }
 
 impl<T: Clone> TapExplosion<T> {
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn from_single(slot: T, animation: ExplosionAnimation) -> Self {
         Self::from_layers(vec![TapExplosionLayer { slot, animation }])
             .expect("single tap explosion layer must build")

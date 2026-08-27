@@ -1547,6 +1547,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     ThemeEffect::None
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> ThemeInputResult {
     if state.name_entry.is_none() {
         return ThemeInputResult::ignored();

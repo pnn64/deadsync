@@ -176,6 +176,9 @@ fn ranked_recent_song_indices<H: AsRef<str>>(
     recent_song_ixs
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn ranked_top_grade_songs<K: Ord>(
     songs: Vec<Arc<SongData>>,
     chart_type: &str,

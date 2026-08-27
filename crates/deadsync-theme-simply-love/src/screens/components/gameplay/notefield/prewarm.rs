@@ -59,6 +59,9 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn prewarm_frame_text_scratch(
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,

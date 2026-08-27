@@ -701,6 +701,9 @@ pub mod bench_support {
     }
 
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn stable_ids_old(events: usize) -> u64 {
         let mut checksum = 0u64;
         for event_index in 0..events {
@@ -719,6 +722,9 @@ pub mod bench_support {
     }
 
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn stable_ids_new(events: usize) -> u64 {
         let mut checksum = 0u64;
         for event_index in 0..events {

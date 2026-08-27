@@ -109,6 +109,9 @@ impl<V> DenseSlotMap<V> {
             .get(usize::try_from(buffer_key.checked_sub(1)?).ok()?)
     }
 
+    /// # Panics
+    ///
+    /// Panics if the function's input or state invariants are violated.
     pub fn insert(&mut self, key: u64, value: V) -> u64 {
         assert!(key != 0, "dense slot identity zero is reserved");
         if let Some(&slot) = self.slots.get(&key) {

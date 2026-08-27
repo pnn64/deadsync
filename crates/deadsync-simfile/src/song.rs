@@ -840,6 +840,9 @@ pub fn benchmark_song_parse_previous(path: &Path, rounds: usize) -> u64 {
 
 #[cfg(feature = "bench-support")]
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn benchmark_rssp_note_handoff_baseline(simfile_data: &[u8], rounds: usize) -> u64 {
     let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
     let analyzer = SongAnalyzer::new(&options);
@@ -864,6 +867,9 @@ pub fn benchmark_rssp_note_handoff_baseline(simfile_data: &[u8], rounds: usize) 
 
 #[cfg(feature = "bench-support")]
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn benchmark_rssp_note_handoff_current(simfile_data: &[u8], rounds: usize) -> u64 {
     let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
     let analyzer = SongAnalyzer::new(&options);

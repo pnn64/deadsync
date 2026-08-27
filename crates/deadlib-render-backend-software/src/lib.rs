@@ -681,6 +681,9 @@ fn draw_offscreen_targets(
     vertices
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn draw(
     state: &mut State,
     frame: &RenderFrame,

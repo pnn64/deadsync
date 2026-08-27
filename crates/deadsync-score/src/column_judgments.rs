@@ -108,6 +108,9 @@ fn add_column_judgment(slot: &mut ColumnJudgments, judgment: &Judgment, show_fa_
 }
 
 #[must_use]
+/// # Panics
+///
+/// Panics if the function's input or state invariants are violated.
 pub fn compute_column_judgments(
     notes: &[Note],
     eligible: &[bool],
@@ -192,6 +195,9 @@ pub fn compute_column_judgments(
 
 #[cfg(any(test, feature = "bench-support"))]
 #[must_use]
+/// # Panics
+///
+/// Panics if the function's input or state invariants are violated.
 pub fn compute_column_judgments_reference(
     notes: &[Note],
     eligible: &[bool],

@@ -18,6 +18,9 @@ static COURSE_CACHE: std::sync::LazyLock<Mutex<Vec<CourseData>>> =
     std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
 
 /// Provides safe, read-only access to the global song cache.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn get_song_cache() -> std::sync::MutexGuard<'static, Vec<SongPack>> {
     SONG_CACHE.lock().unwrap()
 }
@@ -27,6 +30,9 @@ pub fn song_cache_generation() -> u64 {
 }
 
 /// A public function to allow the parser to populate the cache.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn set_song_cache(packs: Vec<SongPack>) {
     let mut cache = SONG_CACHE.lock().unwrap();
     *cache = packs;
@@ -44,6 +50,9 @@ pub fn song_is_cached(simfile_path: &Path) -> bool {
 
 /// Removes a song from the live catalog after its directory has been deleted.
 /// Empty packs are removed with it so the wheel matches a fresh library scan.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn remove_song(simfile_path: &Path) -> bool {
     let mut cache = SONG_CACHE.lock().unwrap();
     let removed = remove_song_from_packs(&mut cache, simfile_path);
@@ -194,10 +203,16 @@ where
     Ok(updated)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn get_course_cache() -> std::sync::MutexGuard<'static, Vec<CourseData>> {
     COURSE_CACHE.lock().unwrap()
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn set_course_cache(courses: Vec<CourseData>) {
     *COURSE_CACHE.lock().unwrap() = courses;
 }

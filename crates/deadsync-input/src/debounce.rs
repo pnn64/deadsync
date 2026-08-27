@@ -490,6 +490,9 @@ fn debounce_input_edge_in_store(
     )
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn debounce_input_edge_in_store_mut(
     states: &mut DebounceStore,
     slot: usize,

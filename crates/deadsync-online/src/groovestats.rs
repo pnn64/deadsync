@@ -442,6 +442,9 @@ fn runtime_set_status(status: ConnectionStatus) {
     RUNTIME_STATUS_GENERATION.fetch_add(1, Ordering::Release);
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_get_status() -> ConnectionStatus {
     RUNTIME_STATUS.lock().unwrap().clone()
 }
@@ -2090,6 +2093,9 @@ pub struct GrooveStatsSubmitRequest {
 }
 
 #[must_use]
+/// # Panics
+///
+/// Panics if serialization of the generated value fails.
 pub fn submit_request_parts(
     players: &[GrooveStatsSubmitPlayerRequest],
 ) -> GrooveStatsSubmitRequestParts {
@@ -2390,6 +2396,9 @@ pub struct EvaluationSubmissionSnapshot {
     pub next_auto_retry_at: Option<Instant>,
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn evaluation_submission_snapshots<const N: usize>(
     queries: &[Option<(profile_data::PlayerSide, &str)>; N],
 ) -> [EvaluationSubmissionSnapshot; N] {
@@ -2434,6 +2443,9 @@ pub fn evaluation_submission_snapshots<const N: usize>(
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn reset_submit_retry(side: profile_data::PlayerSide, chart_hash: &str) {
     let mut retry = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
     retry.reset_by_key(profile_data::player_side_index(side), chart_hash, |entry| {
@@ -2445,6 +2457,9 @@ pub fn reset_submit_retry(side: profile_data::PlayerSide, chart_hash: &str) {
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn store_submit_retry(entry: GrooveStatsSubmitRetryEntry) {
     let side = entry.side;
     let mut retry = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
@@ -2460,6 +2475,9 @@ pub fn store_submit_retry(entry: GrooveStatsSubmitRetryEntry) {
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn take_ready_submit_retry(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -2618,6 +2636,9 @@ pub fn complete_submit_player_failure(
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn record_submit_failure(
     side: profile_data::PlayerSide,
     chart_hash: &str,
@@ -2642,6 +2663,9 @@ pub fn record_submit_failure(
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn next_retry_remaining_secs(chart_hash: &str, side: profile_data::PlayerSide) -> Option<u32> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
@@ -2660,6 +2684,9 @@ pub fn next_retry_remaining_secs(chart_hash: &str, side: profile_data::PlayerSid
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn next_retry_is_auto(chart_hash: &str, side: profile_data::PlayerSide) -> bool {
     let hash = chart_hash.trim();
     if hash.is_empty() {
@@ -2687,6 +2714,9 @@ pub fn next_retry_is_auto(chart_hash: &str, side: profile_data::PlayerSide) -> b
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn due_auto_submit_retries() -> Vec<(String, profile_data::PlayerSide, u8)> {
     let due = {
         let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
@@ -3511,6 +3541,9 @@ pub const fn timing_windows_comment(setting: TimingWindowsOption) -> Option<&'st
 }
 
 #[must_use]
+/// # Panics
+///
+/// Panics if serialization of the generated value fails.
 pub fn player_options_json(profile: &Profile) -> String {
     let (speed_mod_type, speed_mod) = match profile.scroll_speed {
         ScrollSpeedSetting::XMod(value) => (1, value),

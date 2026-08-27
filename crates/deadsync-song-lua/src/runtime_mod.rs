@@ -52,6 +52,9 @@ pub struct RuntimeOverlayCaptureKey {
     pub opt2: Option<u32>,
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn read_runtime_mod_eases(
     table: Option<Table>,
     easing_names: &HashMap<*const c_void, String>,
@@ -247,6 +250,9 @@ pub fn read_xero_runtime_mod_entries(
     Ok(entries)
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn read_xero_runtime_mod_eases_with_overlay_capture<F>(
     ease_tables: Vec<Table>,
     node_tables: Vec<Table>,

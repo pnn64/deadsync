@@ -1769,6 +1769,9 @@ impl Default for GameplayHudMemoBenchmark {
 
 /// Prepares the fixed clock, step-count, and live-timing glyph slots used by a
 /// gameplay screen. Each slot owns one actor's alignment and reusable geometry.
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn prewarm_frame_text_scratch(
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,

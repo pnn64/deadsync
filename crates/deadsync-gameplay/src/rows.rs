@@ -341,6 +341,9 @@ fn build_row_entry_compact(
 }
 
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn build_row_entry(
     row_index: usize,
     nonmine_note_indices: [usize; MAX_COLS],
@@ -1291,6 +1294,9 @@ const fn next_row_grid(
 
 #[cfg(any(test, feature = "bench-support"))]
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn build_row_grids_reference(
     notes: &[Note],
     note_range: (usize, usize),

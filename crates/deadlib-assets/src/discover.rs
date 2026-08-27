@@ -371,6 +371,9 @@ pub fn texture_key_source_path(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn noteskin_png_texture_entries(
     roots: &[PathBuf],
     folder: &str,

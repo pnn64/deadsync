@@ -71,6 +71,9 @@ pub fn init(bundle: LanguageBundle) {
 ///
 /// Falls back to English if the key is missing from the active language.
 /// Returns `"Section.Key"` if the key is missing from English too.
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn tr(section: &str, key: &str) -> Arc<str> {
     #[cfg(any(test, feature = "test-support"))]
     ensure_test_init();
@@ -183,6 +186,9 @@ pub fn set_locale(bundle: LanguageBundle) {
 }
 
 /// Returns the currently active locale code.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn current_locale() -> String {
     LANG.get()
         .expect("i18n not initialized")

@@ -295,6 +295,9 @@ pub fn manager() -> Option<&'static SmxManager> {
 
 /// Register a listener for pad input events. Append-only and intended to be
 /// called once at startup; there is no removal.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn add_input_listener(listener: Box<dyn Fn(PadEvent) + Send>) {
     if let Some(s) = SHARED.get() {
         s.input_listeners.lock().unwrap().push(listener);
@@ -303,6 +306,9 @@ pub fn add_input_listener(listener: Box<dyn Fn(PadEvent) + Send>) {
 
 /// Register a listener for system events (connect/disconnect). Append-only and
 /// intended to be called once at startup; there is no removal.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn add_sys_listener(listener: Box<dyn Fn(GpSystemEvent) + Send>) {
     if let Some(s) = SHARED.get() {
         s.sys_listeners.lock().unwrap().push(listener);
@@ -716,6 +722,9 @@ pub fn apply_preset(pad: usize, preset: SmxPadPreset) -> bool {
 }
 
 /// Set sensor test mode for a pad.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn set_test_mode(pad: usize, mode: SensorTestMode) {
     if let Some(s) = SHARED.get() {
         s.manager.set_test_mode(pad, mode);
@@ -732,6 +741,9 @@ pub fn set_test_mode(pad: usize, mode: SensorTestMode) {
 /// Get the latest sensor test data for a pad. Reads our local snapshot (fed by
 /// the SDK's `SensorTestData` event), so it never touches the SDK's global state
 /// mutex. Returns `None` until the first sample arrives after test mode is on.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn get_test_data(pad: usize) -> Option<SensorTestData> {
     SHARED
         .get()
@@ -1214,6 +1226,9 @@ const PANEL_NAMES: [&str; PANEL_COUNT] = ["UL", "U", "UR", "L", "C", "R", "DL", 
 ///
 /// NOTE: identification is by slot index, which can collide with a native
 /// gamepad sharing that index (see `pad_device_id`); the label is best-effort.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn trigger_label(device: usize, code: u32) -> Option<String> {
     let s = SHARED.get()?;
     let panel = PANEL_NAMES.get(code as usize)?;

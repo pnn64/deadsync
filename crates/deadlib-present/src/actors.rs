@@ -691,6 +691,9 @@ impl SharedActorFrameScratch {
         }])
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn refill(
         &mut self,
         offset: [f32; 2],
@@ -733,6 +736,9 @@ impl SharedActorFrameScratch {
     }
 
     /// Release retained child references while preserving the child buffer.
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn clear(&mut self) {
         if Arc::strong_count(&self.source) != 1 {
             let capacity = self.capacity().max(self.initial_capacity);
@@ -1151,6 +1157,9 @@ impl InlineText {
 
     #[inline(always)]
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn as_str(&self) -> &str {
         let bytes = &self.bytes[..self.len as usize];
         std::str::from_utf8(bytes).expect("inline text contains valid UTF-8")
@@ -1272,6 +1281,9 @@ impl InlineU16Text {
 
     #[inline(always)]
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn as_str(&self) -> &str {
         let digits = &self.bytes[self.start as usize..];
         std::str::from_utf8(digits).expect("inline u16 text contains only ASCII decimal digits")
@@ -1315,6 +1327,9 @@ impl InlineU32Text {
 
     #[inline(always)]
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn as_str(&self) -> &str {
         let digits = &self.bytes[self.start as usize..];
         std::str::from_utf8(digits).expect("inline u32 text contains only ASCII decimal digits")
@@ -1377,6 +1392,9 @@ impl TextContent {
     /// Other storage variants retain their original lifetime semantics.
     #[inline]
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn with_frame_inline_slot(self, slot: u8) -> Self {
         let text =
             match self {

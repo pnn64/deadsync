@@ -821,6 +821,9 @@ pub fn pending_missed_hold_resolution_for_note(
     ))
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn collect_pending_missed_hold_resolutions(
     notes: &[Note],
     hold_end_time_cache_ns: &[SongTimeNs],

@@ -1736,6 +1736,9 @@ fn encode_chart_payloads_reused<'a>(
 
 #[cfg(feature = "bench-support")]
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn benchmark_chart_payload_encoding_baseline(
     data: &SerializableSongData,
     iterations: usize,
@@ -1754,6 +1757,9 @@ pub fn benchmark_chart_payload_encoding_baseline(
 
 #[cfg(feature = "bench-support")]
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn benchmark_chart_payload_encoding_current(
     data: &SerializableSongData,
     iterations: usize,

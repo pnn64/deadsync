@@ -499,6 +499,9 @@ impl NoteskinSlot for SpriteSlot {
 
 #[inline(always)]
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex]> {
     let model = slot
         .model

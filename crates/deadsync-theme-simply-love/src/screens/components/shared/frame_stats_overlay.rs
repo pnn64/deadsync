@@ -649,6 +649,9 @@ fn compact_readout_text(summary: &FrameStatsSummary, show_p99: bool) -> String {
 /// either notefield. `style` selects the presentation: `Detailed` shows the histogram and
 /// p99 readouts; `Minimal` drops both (the graph is the jitter display). The caller-owned
 /// actor buffer retains its allocation across frames; there is no per-sample heap work.
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn push(
     actors: &mut Vec<Actor>,
     samples: &[FrameStatsSample],

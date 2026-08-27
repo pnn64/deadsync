@@ -9,6 +9,9 @@ pub struct BuiltinTextureImage {
 }
 
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn solid_texture_image(key: &'static str, rgba: [u8; 4]) -> BuiltinTextureImage {
     BuiltinTextureImage {
         key,
@@ -27,6 +30,9 @@ pub fn black_texture_image() -> BuiltinTextureImage {
 }
 
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn fallback_texture_image() -> RgbaImage {
     let data: [u8; 16] = [
         255, 0, 255, 255, 128, 128, 128, 255, 128, 128, 128, 255, 255, 0, 255, 255,

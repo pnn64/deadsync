@@ -18,6 +18,9 @@ pub struct MixBus(u8);
 
 impl MixBus {
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if the function's input or state invariants are violated.
     pub const fn new(index: u8) -> Self {
         assert!(
             (index as usize) < MAX_MIX_BUSES,

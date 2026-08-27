@@ -90,6 +90,9 @@ fn record_lock_wait(lock_name: &str, stats: &LockWaitStats, waited_ns: u64) {
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn lock_with_wait_stats<'a, T>(
     lock_name: &str,
     stats: &LockWaitStats,

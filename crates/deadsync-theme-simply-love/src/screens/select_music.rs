@@ -8469,6 +8469,9 @@ impl LobbyReconcileBench {
 
 #[cfg(feature = "bench-support")]
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn benchmark_lobby_reconcile_fixture() -> LobbyReconcileBench {
     let mut state = init_placeholder();
     state.profiles.display_names = [Arc::from("Alice"), Arc::from("Bob")];

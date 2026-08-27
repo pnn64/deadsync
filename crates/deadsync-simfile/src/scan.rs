@@ -1642,6 +1642,9 @@ fn run_parallel_jobs_with_state<Worker: Send, T: Send>(
 
 #[cfg(feature = "bench-support")]
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal worker fails or disconnects unexpectedly.
 pub fn benchmark_legacy_song_workers(
     job_count: usize,
     worker_count: usize,

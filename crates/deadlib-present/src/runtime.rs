@@ -110,6 +110,9 @@ const fn seen_recently(last_seen_frame: u64, frame: u64) -> bool {
 }
 
 /// Advance all tweens once per frame and GC unseen actors from the previous frame.
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn tick(dt: f32) {
     REG.with(|r| {
         let mut r = r.borrow_mut();

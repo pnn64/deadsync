@@ -402,6 +402,9 @@ pub fn reuse_lane_note_indices_for_bench<I: Copy + Into<usize>>(
     lane_rows_checksum(lane_note_indices)
 }
 
+/// # Panics
+///
+/// Panics if the function's input or state invariants are violated.
 pub fn init_gameplay_runtime<
     Profile,
     BuildSongLuaRuntime,

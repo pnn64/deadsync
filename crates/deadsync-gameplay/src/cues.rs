@@ -307,6 +307,9 @@ impl CrossoverRow {
 }
 
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn build_crossover_rows<const LANES: usize>(
     notes: &[Note],
     note_range: (usize, usize),

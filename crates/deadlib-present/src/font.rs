@@ -2244,6 +2244,9 @@ fn font_import_candidate_matches(target_stem: &str, path: &Path) -> bool {
             .is_some_and(|rest| rest.starts_with(|ch: char| ch.is_ascii_digit() || ch == '('))
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn parse_with_texture_context(
     ini_path_str: &str,
     texture_ctx: &impl FontTextureContext,

@@ -313,6 +313,9 @@ pub struct BrokenRunLookup {
 
 impl BrokenRunLookup {
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if the function's input or state invariants are violated.
     pub fn new(segments: &[StreamSegment]) -> Self {
         assert!(
             segments.len() <= BrokenRunSpan::BROKEN_FLAG as usize,

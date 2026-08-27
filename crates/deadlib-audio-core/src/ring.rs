@@ -216,6 +216,9 @@ struct TaggedMusicMapSeg {
 /// a hard 2,048-record cap and saturates by dropping new records;
 /// [`played_map_drops`] exposes those misses for telemetry.
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn music_transport(
     sample_rate_hz: u32,
     channels: usize,

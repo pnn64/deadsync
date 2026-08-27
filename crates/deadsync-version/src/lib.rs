@@ -19,6 +19,9 @@ use semver::Version;
 /// which would also break the build's package metadata.
 #[inline]
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn current() -> Version {
     if let Ok(raw) = std::env::var("DEADSYNC_VERSION_OVERRIDE")
         && !raw.trim().is_empty()

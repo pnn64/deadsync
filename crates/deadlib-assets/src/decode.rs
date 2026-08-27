@@ -213,6 +213,9 @@ pub fn prepare_texture_key_load(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal worker fails or disconnects unexpectedly.
 pub fn decode_texture_jobs_parallel(jobs: Vec<TextureDecodeJob>) -> Vec<TextureDecodeResult> {
     let job_count = jobs.len();
     if job_count == 0 {

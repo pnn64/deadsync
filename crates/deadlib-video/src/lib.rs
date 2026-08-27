@@ -69,6 +69,9 @@ pub struct VideoFrame {
 
 impl VideoFrame {
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn into_upload_parts(mut self) -> (Yuv420Image, SyncSender<Vec<u8>>) {
         let image = self
             .image

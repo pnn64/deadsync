@@ -1197,6 +1197,9 @@ impl TweenSeq {
         &mut self.state
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn update(&mut self, mut dt: f32) {
         while dt > 0.0 {
             // pull a step if needed

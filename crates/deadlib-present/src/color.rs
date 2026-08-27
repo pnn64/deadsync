@@ -2,6 +2,9 @@
 /// Panics on invalid input; use only with trusted literals.
 /// Evaluated at COMPILE TIME if assigned to a const/static.
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub const fn rgba_hex(s: &str) -> [f32; 4] {
     let bytes = s.as_bytes();
 

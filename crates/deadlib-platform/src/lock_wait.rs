@@ -80,6 +80,9 @@ impl LockWaitStats {
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn lock_mutex<'a, T>(
     lock_name: &str,
     mutex: &'a Mutex<T>,

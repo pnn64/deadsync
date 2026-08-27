@@ -27,6 +27,9 @@ static PAD_DEVICE_ORDER: LazyLock<Mutex<BTreeMap<PadOrderBackend, Vec<[u8; 16]>>
 /// Append-only: known devices are never renumbered, so per-pad mappings stay
 /// bound to the same physical pad. `changed` tells the config owner whether it
 /// should persist the new order.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn pad_index_for_uuid(backend: PadOrderBackend, uuid: [u8; 16]) -> PadOrderAssignment {
     let mut order = PAD_DEVICE_ORDER.lock().unwrap();
     let list = order.entry(backend).or_default();
@@ -50,6 +53,9 @@ pub fn pad_index_for_uuid(backend: PadOrderBackend, uuid: [u8; 16]) -> PadOrderA
 }
 
 /// Replace one backend's in-memory order from a comma-separated hex string.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn load_pad_order_serialized(backend: PadOrderBackend, raw: &str) {
     let parsed = sanitize(raw.split(',').filter_map(uuid_from_hex).collect());
     let mut order = PAD_DEVICE_ORDER.lock().unwrap();
@@ -120,11 +126,17 @@ pub fn pad_order_backend_from_ini_key(key: &str) -> Option<PadOrderBackend> {
 }
 
 /// Clear every backend's in-memory order.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn reset_pad_order() {
     PAD_DEVICE_ORDER.lock().unwrap().clear();
 }
 
 /// Comma-separated hex serialization of `backend`'s order, empty when none.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn serialized_pad_order(backend: PadOrderBackend) -> String {
     PAD_DEVICE_ORDER
         .lock()

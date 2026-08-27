@@ -161,6 +161,9 @@ pub struct OutboundEnvelope<'a> {
 }
 
 #[must_use]
+/// # Panics
+///
+/// Panics if serialization of the generated value fails.
 pub fn outbound_event_text(event: &str, data: &Value) -> String {
     serde_json::to_string(&OutboundEnvelope { event, data })
         .expect("serialize lobby outbound envelope")
@@ -573,6 +576,9 @@ pub fn lobby_machine_player(
 }
 
 #[must_use]
+/// # Panics
+///
+/// Panics if serialization of the generated value fails.
 pub fn lobby_machine_state_value(
     player1: Option<LobbyMachinePlayer>,
     player2: Option<LobbyMachinePlayer>,
@@ -1419,6 +1425,9 @@ pub fn runtime_update_machine_state(hooks: LobbyRuntimeHooks, screen_name: &str,
     runtime_update_machine_state_sides_with_stats(hooks, screen_name, ready, ready, None, None);
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_update_machine_state_sides_with_stats(
     hooks: LobbyRuntimeHooks,
     screen_name: &str,
@@ -1539,6 +1548,9 @@ pub fn runtime_select_song(hooks: LobbyRuntimeHooks, song_info: LobbySongInfo) {
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_disconnect() {
     runtime_clear_reconnect_target();
     if let Some(tx) = RUNTIME_COMMAND_TX.lock().unwrap().take() {

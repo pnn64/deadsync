@@ -809,6 +809,9 @@ pub fn runtime_prewarm_select_music_score_caches(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_ensure_gs_score_cache_loaded(
     profile_id: &str,
     score_paths: ProfilePathsFn,
@@ -847,6 +850,9 @@ pub fn runtime_ensure_gs_score_cache_loaded(
     result
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_get_gs_score_for_profile(
     profile_id: &str,
     chart_hash: &str,
@@ -878,6 +884,9 @@ pub fn runtime_read_gs_score_for_profile(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_gs_chart_hashes_for_profile(
     profile_id: &str,
     score_paths: ProfilePathsFn,
@@ -907,6 +916,9 @@ pub fn runtime_read_gs_chart_hashes_for_profile(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_set_gs_score_for_profile(
     profile_id: &str,
     chart_hash: String,
@@ -1034,6 +1046,9 @@ pub fn runtime_cache_logged_gs_score_for_profile(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_seed_gs_score(
     profile_id: &str,
     chart_hash: &str,
@@ -1061,6 +1076,9 @@ pub fn runtime_seed_gs_score_access(
     )]
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_ensure_ac_score_cache_loaded(
     profile_id: &str,
     score_paths: ProfilePathsFn,
@@ -1080,6 +1098,9 @@ pub fn runtime_ensure_ac_score_cache_loaded(
     ScoreCacheRuntimeResult::default()
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_get_ac_scores_for_profile(
     profile_id: &str,
     chart_hash: &str,
@@ -1111,6 +1132,9 @@ pub fn runtime_read_ac_scores_for_profile(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_ac_chart_hashes_with_itg_for_profile(
     profile_id: &str,
     score_paths: ProfilePathsFn,
@@ -1140,6 +1164,9 @@ pub fn runtime_read_ac_chart_hashes_with_itg_for_profile(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_set_ac_scores_for_profile_bulk(
     profile_id: &str,
     entries: impl IntoIterator<Item = (String, ArrowCloudScores)>,
@@ -1173,6 +1200,9 @@ pub fn runtime_write_ac_scores_for_profile_bulk(
     )]
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_merge_ac_submit_scores(
     profile_id: &str,
     chart_hash: &str,
@@ -1321,6 +1351,9 @@ pub fn runtime_write_logged_ac_submit_scores(
     ));
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_ensure_local_score_cache_loaded(
     profile_id: &str,
     score_paths: ProfilePathsFn,
@@ -1354,6 +1387,9 @@ pub fn runtime_ensure_local_score_cache_loaded(
     result
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_get_local_itg_score_for_profile(
     profile_id: &str,
     chart_hash: &str,
@@ -1386,6 +1422,9 @@ pub fn runtime_read_local_itg_score_for_profile(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_get_local_pass_rate_for_profile(
     profile_id: &str,
     chart_hash: &str,
@@ -1418,6 +1457,9 @@ pub fn runtime_read_local_pass_rate_for_profile(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_get_local_scalar_score_for_profile(
     profile_id: &str,
     chart_hash: &str,
@@ -1481,6 +1523,9 @@ pub fn runtime_read_best_itg_score_for_profile(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_update_local_score_cache_after_append(
     profile_id: &str,
     chart_hash: &str,
@@ -1575,6 +1620,9 @@ pub fn runtime_append_logged_local_score_for_profile(
     result.append.is_some()
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_seed_local_itg_score(
     profile_id: &str,
     chart_hash: &str,
@@ -1797,6 +1845,9 @@ where
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_update_machine_cache_if_loaded(
     chart_hash: &str,
     score: CachedScore,
@@ -1808,6 +1859,9 @@ pub fn runtime_update_machine_cache_if_loaded(
         .update_if_loaded(chart_hash, score, initials);
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_update_machine_scalar_cache_if_loaded(
     chart_hash: &str,
     ex: LocalScoreBestScalar,
@@ -1835,6 +1889,9 @@ pub fn runtime_machine_record_local_lazy(
     machine_record_local_with_cache(&RUNTIME_MACHINE_LOCAL_SCORE_CACHE, chart_hash, profiles)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_machine_scalar_record_local_lazy(
     chart_hash: &str,
     hard_ex: bool,
@@ -1862,6 +1919,9 @@ where
     (record, result)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_lock_score_caches() -> HeldScoreCaches {
     HeldScoreCaches::new(
         RUNTIME_LOCAL_SCORE_CACHE.lock().unwrap(),
@@ -1995,6 +2055,9 @@ impl HeldScoreCaches {
     /// Entries are sorted by chart hash so prepared runtime views can use
     /// binary search without rebuilding a map in the presentation layer.
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn merged_profile_scores(&self, profile_id: &str) -> Vec<(String, CachedScore)> {
         if profile_id.trim().is_empty() {
             return Vec::new();
@@ -6534,6 +6597,9 @@ pub struct GrooveStatsSubmitUiSnapshot {
     pub record_banner: Option<GrooveStatsSubmitRecordBanner>,
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn groovestats_submit_ui_snapshots<const N: usize>(
     queries: &[Option<(usize, &str)>; N],
 ) -> [GrooveStatsSubmitUiSnapshot; N] {
@@ -6555,6 +6621,9 @@ pub fn groovestats_submit_ui_snapshots<const N: usize>(
     })
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn arrowcloud_submit_ui_statuses<const N: usize>(
     queries: &[Option<(usize, &str)>; N],
 ) -> [Option<ArrowCloudSubmitUiStatus>; N] {
@@ -6563,6 +6632,9 @@ pub fn arrowcloud_submit_ui_statuses<const N: usize>(
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn groovestats_reset_submit_ui_status(side_index: usize, chart_hash: &str) {
     GROOVESTATS_SUBMIT_UI_STATUS
         .lock()
@@ -6572,6 +6644,9 @@ pub fn groovestats_reset_submit_ui_status(side_index: usize, chart_hash: &str) {
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn groovestats_set_submit_ui_status(
     side_index: usize,
     chart_hash: &str,
@@ -6586,6 +6661,9 @@ pub fn groovestats_set_submit_ui_status(
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn groovestats_update_submit_ui_status_if_token(
     side_index: usize,
     chart_hash: &str,
@@ -6608,6 +6686,9 @@ pub fn groovestats_next_submit_ui_token() -> u64 {
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn groovestats_submit_ui_status(
     side_index: usize,
     chart_hash: &str,
@@ -6619,6 +6700,9 @@ pub fn groovestats_submit_ui_status(
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn groovestats_reset_submit_event_ui(side_index: usize, chart_hash: &str) {
     GROOVESTATS_SUBMIT_EVENT_UI
         .lock()
@@ -6628,6 +6712,9 @@ pub fn groovestats_reset_submit_event_ui(side_index: usize, chart_hash: &str) {
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn groovestats_arm_submit_event_ui(side_index: usize, chart_hash: &str, token: u64) {
     GROOVESTATS_SUBMIT_EVENT_UI
         .lock()
@@ -6637,6 +6724,9 @@ pub fn groovestats_arm_submit_event_ui(side_index: usize, chart_hash: &str, toke
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn groovestats_update_submit_event_ui_if_token(
     side_index: usize,
     chart_hash: &str,
@@ -6657,6 +6747,9 @@ pub fn groovestats_update_submit_event_ui_if_token(
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn groovestats_submit_event_progress(
     side_index: usize,
     chart_hash: &str,
@@ -6668,6 +6761,9 @@ pub fn groovestats_submit_event_progress(
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn groovestats_submit_record_banner_ui(
     side_index: usize,
     chart_hash: &str,
@@ -6679,6 +6775,9 @@ pub fn groovestats_submit_record_banner_ui(
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn arrowcloud_reset_submit_ui_status(side_index: usize, chart_hash: &str) {
     ARROWCLOUD_SUBMIT_UI_STATUS
         .lock()
@@ -6688,6 +6787,9 @@ pub fn arrowcloud_reset_submit_ui_status(side_index: usize, chart_hash: &str) {
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn arrowcloud_set_submit_ui_status(
     side_index: usize,
     chart_hash: &str,
@@ -6702,6 +6804,9 @@ pub fn arrowcloud_set_submit_ui_status(
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn arrowcloud_update_submit_ui_status_if_token(
     side_index: usize,
     chart_hash: &str,
@@ -6724,6 +6829,9 @@ pub fn arrowcloud_next_submit_ui_token() -> u64 {
 }
 
 #[inline(always)]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn arrowcloud_submit_ui_status(
     side_index: usize,
     chart_hash: &str,

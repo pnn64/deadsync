@@ -218,6 +218,9 @@ fn enqueue(job: Job, priority: Priority) {
 /// the analysis later completes, the worker reports the resulting gain
 /// through the callback passed to [`init`].
 #[must_use]
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn get_or_queue_gain_linear(path: &Path, track_id: u64) -> Option<f32> {
     if let Some(gain) = terminal_gain_for_path(&in_memory().lock().unwrap(), path) {
         return Some(gain);
@@ -278,6 +281,9 @@ fn cache_path_alias(map: &mut MemoryCache, path: &Path, canonical: &Path, state:
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn prewarm_paths<I>(paths: I, priority: Priority)
 where
     I: IntoIterator<Item = PathBuf>,
@@ -302,6 +308,9 @@ where
 
 /// Drops the in-memory map, clears the on-disk cache file, and removes
 /// any leftover legacy per-song cache directory.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn clear_cache() {
     if let Some(mutex) = IN_MEMORY.get() {
         mutex.lock().unwrap().clear();
@@ -459,6 +468,9 @@ fn blocking_worker_threads(job_count: usize) -> usize {
 /// through `progress(done, total, path)` as each song finishes, where `path` is
 /// the original (pre-canonicalization) path so callers can map it back to a
 /// song/pack for display.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn analyze_paths_blocking<F>(paths: Vec<PathBuf>, mut progress: F)
 where
     F: FnMut(usize, usize, &Path),

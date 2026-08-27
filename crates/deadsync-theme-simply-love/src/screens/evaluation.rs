@@ -5231,6 +5231,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     ThemeEffect::sequence(favorite_effect, effect)
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,

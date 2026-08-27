@@ -2046,6 +2046,9 @@ impl GameplayFrameOrchestrationBenchmark {
         }
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn steady_frame(&mut self) -> u64 {
         let scratch = std::hint::black_box(
             self.scratch
@@ -5479,6 +5482,9 @@ pub struct GameplayBpmTextBenchmark {
 #[cfg(feature = "bench-support")]
 impl GameplayBpmTextBenchmark {
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn new() -> Self {
         let old_values = (0..2_048u32)
             .map(|index| {
@@ -5500,6 +5506,9 @@ impl GameplayBpmTextBenchmark {
         }
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn legacy_frame(&mut self, frame: u32) -> u64 {
         let bpm = 40.0 + f64::from((frame / 60) % 2_048) * 0.001;
         let key = (bpm.to_bits(), true);
@@ -14633,6 +14642,9 @@ impl SongLuaAftCaptureBenchmark {
         }
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn frame(&mut self) -> u64 {
         self.active_bank = (self.active_bank + 1) % SONG_LUA_AFT_FRAME_BANKS;
         let source = &self.source;
@@ -17359,6 +17371,9 @@ impl GameplayActorSegments {
             .count()
     }
 
+    /// # Panics
+    ///
+    /// Panics if an internal state invariant is violated.
     pub fn segments<'a>(
         &'a self,
         state: &'a State,
@@ -18001,6 +18016,9 @@ fn push_song_lua_layer_actors(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal state invariant is violated.
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &mut State,

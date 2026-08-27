@@ -194,6 +194,9 @@ impl OnlineItlSelfCacheState {
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn online_itl_self_score_profile_loaded(profile_id: &str) -> bool {
     ONLINE_ITL_SELF_SCORE_CACHE
         .lock()
@@ -201,6 +204,9 @@ pub fn online_itl_self_score_profile_loaded(profile_id: &str) -> bool {
         .profile_loaded(profile_id)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn insert_online_itl_self_score_profile(profile_id: &str, by_key: OnlineItlSelfIndexMap) {
     ONLINE_ITL_SELF_SCORE_CACHE
         .lock()
@@ -219,6 +225,9 @@ where
     insert_online_itl_self_score_profile(profile_id, load_profile(profile_id));
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn set_online_itl_self_score(
     profile_id: Option<&str>,
     api_key: &str,
@@ -262,6 +271,9 @@ pub fn online_itl_self_score_generation() -> u64 {
     ONLINE_ITL_SELF_SCORE_GENERATION.load(AtomicOrdering::Relaxed)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn online_itl_self_scores_by_chart_for_api(
     profile_id: Option<&str>,
     api_key: &str,
@@ -272,6 +284,9 @@ pub fn online_itl_self_scores_by_chart_for_api(
         .values_by_chart_for_api(profile_id, api_key)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn get_online_itl_self_score(
     chart_hash: &str,
     profile_id: Option<&str>,
@@ -283,6 +298,9 @@ pub fn get_online_itl_self_score(
         .get_value(chart_hash, profile_id, api_key)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn online_itl_self_rank_profile_loaded(profile_id: &str) -> bool {
     ONLINE_ITL_SELF_RANK_CACHE
         .lock()
@@ -290,6 +308,9 @@ pub fn online_itl_self_rank_profile_loaded(profile_id: &str) -> bool {
         .profile_loaded(profile_id)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn insert_online_itl_self_rank_profile(profile_id: &str, by_key: OnlineItlSelfIndexMap) {
     ONLINE_ITL_SELF_RANK_CACHE
         .lock()
@@ -308,6 +329,9 @@ where
     insert_online_itl_self_rank_profile(profile_id, load_profile(profile_id));
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn set_online_itl_self_rank(
     profile_id: Option<&str>,
     api_key: &str,
@@ -346,6 +370,9 @@ pub fn runtime_set_online_itl_self_rank<L, S>(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn get_online_itl_self_rank(
     chart_hash: &str,
     profile_id: Option<&str>,
@@ -357,6 +384,9 @@ pub fn get_online_itl_self_rank(
         .get_value(chart_hash, profile_id, api_key)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn online_srpg_self_score_profile_loaded(profile_id: &str) -> bool {
     ONLINE_SRPG_SELF_SCORE_CACHE
         .lock()
@@ -364,6 +394,9 @@ pub fn online_srpg_self_score_profile_loaded(profile_id: &str) -> bool {
         .profile_loaded(profile_id)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn insert_online_srpg_self_score_profile(profile_id: &str, by_key: OnlineItlSelfIndexMap) {
     ONLINE_SRPG_SELF_SCORE_CACHE
         .lock()
@@ -384,6 +417,9 @@ pub fn runtime_ensure_online_srpg_self_score_profile_loaded<L>(
     insert_online_srpg_self_score_profile(profile_id, load_profile(profile_id));
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn set_online_srpg_self_score(
     profile_id: Option<&str>,
     api_key: &str,
@@ -422,6 +458,9 @@ pub fn runtime_set_online_srpg_self_score<L, S>(
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn get_online_srpg_self_score(
     chart_hash: &str,
     profile_id: Option<&str>,
@@ -479,6 +518,9 @@ pub fn empty_online_itl_overall_ranks() -> Arc<HashMap<String, u32>> {
     EMPTY_ONLINE_ITL_OVERALL_RANKS.clone()
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn cached_online_itl_overall_ranks_for_side(
     side_idx: usize,
     key: &OnlineItlOverallRankCacheKey,
@@ -489,6 +531,9 @@ pub fn cached_online_itl_overall_ranks_for_side(
         .map(|entry| entry.ranks.clone())
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn store_online_itl_overall_ranks_for_side(
     side_idx: usize,
     key: OnlineItlOverallRankCacheKey,
@@ -871,10 +916,16 @@ impl ItlScoreCacheState {
     }
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn itl_score_profile_loaded(profile_id: &str) -> bool {
     ITL_SCORE_CACHE.lock().unwrap().profile_loaded(profile_id)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn insert_itl_score_profile(profile_id: &str, data: ItlFileData) {
     ITL_SCORE_CACHE
         .lock()
@@ -882,6 +933,9 @@ pub fn insert_itl_score_profile(profile_id: &str, data: ItlFileData) {
         .insert_loaded_profile(profile_id, data);
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn set_itl_score_profile(profile_id: &str, data: ItlFileData) {
     ITL_SCORE_CACHE
         .lock()
@@ -957,6 +1011,9 @@ where
     true
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn mark_itl_unlock_folders<'a, I>(profile_id: &str, folders: I)
 where
     I: IntoIterator<Item = &'a str>,
@@ -968,6 +1025,9 @@ where
     crate::runtime_mark_music_wheel_scores_changed();
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn cached_itl_chart_score(profile_id: &str, chart_hash: &str) -> Option<CachedItlScore> {
     ITL_SCORE_CACHE
         .lock()
@@ -988,6 +1048,9 @@ where
     cached_itl_chart_score(profile_id, chart_hash)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn cached_itl_song_score(
     profile_id: &str,
     song: &deadsync_chart::SongData,
@@ -1016,6 +1079,9 @@ pub fn runtime_cached_itl_song_score_assume_loaded(
     cached_itl_song_score(profile_id, song)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn cached_itl_song_folder_unlocked(profile_id: &str, song_folder: &str) -> bool {
     ITL_SCORE_CACHE
         .lock()
@@ -1025,6 +1091,9 @@ pub fn cached_itl_song_folder_unlocked(profile_id: &str, song_folder: &str) -> b
 
 /// Resolve a fixed Select Music wheel transaction under one cache lock.
 /// Missing folders and guest/blank profiles are reported as locked.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn cached_itl_song_folders_unlocked<const N: usize>(
     song_folders: &[Option<&str>; N],
     profile_ids: [Option<&str>; 2],
@@ -1077,6 +1146,9 @@ where
     cached_itl_song_folders_unlocked(song_folders, profile_ids)
 }
 
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
 pub fn cached_itl_chart_no_cmod_for_song(
     profile_id: &str,
     song_dir: Option<&str>,
