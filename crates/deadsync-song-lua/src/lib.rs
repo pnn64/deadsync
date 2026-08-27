@@ -224,6 +224,8 @@ pub use runtime::{
     set_compile_song_runtime_delta_values, set_compile_song_runtime_values,
     song_lua_runtime_number, song_lua_side_effect_count,
 };
+#[cfg(any(test, feature = "bench-support"))]
+pub use runtime_mod::collect_unique_runtime_mod_entries;
 pub use runtime_mod::{
     RuntimeModEaseEntry, RuntimeOverlayCaptureKey, XeroRuntimeModEaseEntry,
     XeroRuntimeOverlayFunctionEntry, extend_runtime_mod_sustains, read_runtime_mod_ease_entry,

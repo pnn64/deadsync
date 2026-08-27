@@ -1,7 +1,8 @@
 use log::debug;
 use mlua::{Function, Lua, Table, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::RandomState};
 use std::ffi::c_void;
+use std::hash::{BuildHasher, Hash, Hasher};
 
 use crate::{
     LUA_PLAYERS, SongLuaCompileContext, SongLuaCompileInfo, SongLuaEaseTarget, SongLuaEaseWindow,
@@ -60,7 +61,7 @@ pub fn read_runtime_mod_eases(
     let Some(table) = table else {
         return Ok((Vec::new(), Vec::new()));
     };
-    let mut entries = Vec::new();
+    let mut entries = RuntimeModEntryDedup::new(table.raw_len());
     for value in table.sequence_values::<Value>() {
         let Value::Table(entry) = value.map_err(|err| err.to_string())? else {
             continue;
@@ -68,13 +69,9 @@ pub fn read_runtime_mod_eases(
         let Some(entry) = read_runtime_mod_ease_entry(entry, easing_names)? else {
             continue;
         };
-        if !entries
-            .iter()
-            .any(|other| runtime_mod_entries_equal(other, &entry))
-        {
-            entries.push(entry);
-        }
+        entries.push(entry);
     }
+    let entries = entries.finish();
     if entries.is_empty() {
         return Ok((Vec::new(), Vec::new()));
     }
@@ -577,6 +574,116 @@ fn runtime_mod_entries_equal(left: &RuntimeModEaseEntry, right: &RuntimeModEaseE
         && left.add == right.add
 }
 
+fn runtime_mod_entry_hash(entry: &RuntimeModEaseEntry, state: &RandomState) -> u64 {
+    let mut hash = state.build_hasher();
+    match entry.unit {
+        SongLuaTimeUnit::Beat => 0u8,
+        SongLuaTimeUnit::Second => 1,
+    }
+    .hash(&mut hash);
+    entry.start.to_bits().hash(&mut hash);
+    entry.limit.to_bits().hash(&mut hash);
+    entry.to.to_bits().hash(&mut hash);
+    entry.target.hash(&mut hash);
+    entry.easing.hash(&mut hash);
+    entry.start_val.map(f32::to_bits).hash(&mut hash);
+    entry.opt1.map(f32::to_bits).hash(&mut hash);
+    entry.opt2.map(f32::to_bits).hash(&mut hash);
+    entry.player.hash(&mut hash);
+    entry.add.hash(&mut hash);
+    hash.finish()
+}
+
+struct RuntimeModEntryDedup {
+    entries: Vec<RuntimeModEaseEntry>,
+    slots: smallvec::SmallVec<[usize; 2048]>,
+    hash_state: RandomState,
+}
+
+impl RuntimeModEntryDedup {
+    fn new(entry_count: usize) -> Self {
+        let slot_count = entry_count
+            .min(1024)
+            .max(1)
+            .saturating_mul(2)
+            .next_power_of_two();
+        let mut slots = smallvec::SmallVec::with_capacity(slot_count);
+        slots.resize(slot_count, 0);
+        Self {
+            entries: Vec::with_capacity(entry_count.min(256)),
+            slots,
+            hash_state: RandomState::new(),
+        }
+    }
+
+    fn push(&mut self, entry: RuntimeModEaseEntry) {
+        if self.entries.len().saturating_mul(2) >= self.slots.len() && !self.grow_slots() {
+            if !self
+                .entries
+                .iter()
+                .any(|other| runtime_mod_entries_equal(other, &entry))
+            {
+                self.entries.push(entry);
+            }
+            return;
+        }
+        let hash = runtime_mod_entry_hash(&entry, &self.hash_state);
+        let mask = self.slots.len() - 1;
+        let mut slot = hash as usize & mask;
+        loop {
+            let stored = self.slots[slot];
+            if stored == 0 {
+                let index = self.entries.len();
+                self.entries.push(entry);
+                self.slots[slot] = index + 1;
+                return;
+            }
+            if runtime_mod_entries_equal(&self.entries[stored - 1], &entry) {
+                return;
+            }
+            slot = (slot + 1) & mask;
+        }
+    }
+
+    fn grow_slots(&mut self) -> bool {
+        let Some(slot_count) = self.slots.len().checked_mul(2) else {
+            return false;
+        };
+        let mut slots = smallvec::SmallVec::<[usize; 2048]>::with_capacity(slot_count);
+        slots.resize(slot_count, 0);
+        let mask = slot_count - 1;
+        for (index, entry) in self.entries.iter().enumerate() {
+            let mut slot = runtime_mod_entry_hash(entry, &self.hash_state) as usize & mask;
+            while slots[slot] != 0 {
+                slot = (slot + 1) & mask;
+            }
+            slots[slot] = index + 1;
+        }
+        self.slots = slots;
+        true
+    }
+
+    fn finish(self) -> Vec<RuntimeModEaseEntry> {
+        self.entries
+    }
+}
+
+/// Collects exact-unique runtime-mod entries in first-seen order. The
+/// compilation-only lookup stays inline through 1,024 source entries and
+/// retains at most 256 output slots before measured growth is necessary.
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn collect_unique_runtime_mod_entries(
+    entries: impl IntoIterator<Item = RuntimeModEaseEntry>,
+    entry_count: usize,
+) -> Vec<RuntimeModEaseEntry> {
+    let mut out = RuntimeModEntryDedup::new(entry_count);
+    for entry in entries {
+        out.push(entry);
+    }
+    out.finish()
+}
+
 pub fn runtime_mod_entry_players(player: Option<u8>) -> Vec<usize> {
     runtime_mod_player_indices(player).collect()
 }
@@ -839,6 +946,47 @@ pub fn record_unsupported_xero_overlay_function_ease(
 mod tests {
     use super::*;
 
+    fn runtime_mod_fixture(count: usize, unique: usize) -> Vec<RuntimeModEaseEntry> {
+        let unique = unique.max(1);
+        (0..count)
+            .map(|index| {
+                let key = (index * 73) % unique;
+                RuntimeModEaseEntry {
+                    unit: if key % 7 == 0 {
+                        SongLuaTimeUnit::Second
+                    } else {
+                        SongLuaTimeUnit::Beat
+                    },
+                    start: key as f32 * 0.125,
+                    limit: 0.25 + (key % 5) as f32 * 0.0625,
+                    easing: format!("ease{}", key % 11),
+                    to: (key as f32 * -0.75).copysign(if key % 2 == 0 { 1.0 } else { -1.0 }),
+                    target: format!("mod{}", key % 37),
+                    start_val: (key % 3 == 0).then_some(key as f32),
+                    opt1: (key % 4 == 0).then_some(key as f32 * 0.5),
+                    opt2: (key % 6 == 0).then_some(key as f32 * -0.25),
+                    player: Some((key % 2 + 1) as u8),
+                    add: key % 5 == 0,
+                }
+            })
+            .collect()
+    }
+
+    fn dedup_runtime_mod_entries_reference(
+        entries: impl IntoIterator<Item = RuntimeModEaseEntry>,
+    ) -> Vec<RuntimeModEaseEntry> {
+        let mut out = Vec::new();
+        for entry in entries {
+            if !out
+                .iter()
+                .any(|other| runtime_mod_entries_equal(other, &entry))
+            {
+                out.push(entry);
+            }
+        }
+        out
+    }
+
     fn sustain_fixture(count: usize) -> Vec<SongLuaEaseWindow> {
         (0..count)
             .map(|index| SongLuaEaseWindow {
@@ -869,6 +1017,27 @@ mod tests {
         assert_eq!(runtime_mod_entry_players(None), vec![0, 1]);
         assert_eq!(runtime_mod_entry_players(Some(0)), vec![0, 1]);
         assert_eq!(runtime_mod_entry_players(Some(3)), vec![0, 1]);
+    }
+
+    #[test]
+    fn indexed_runtime_mod_dedup_matches_first_seen_scan() {
+        for (count, unique) in [(0, 1), (1, 1), (33, 11), (513, 127), (513, 513)] {
+            let source = runtime_mod_fixture(count, unique);
+            let reference = dedup_runtime_mod_entries_reference(source.iter().cloned());
+            let current = collect_unique_runtime_mod_entries(source, count);
+            assert_eq!(
+                current.len(),
+                reference.len(),
+                "count={count} unique={unique}"
+            );
+            assert!(
+                current
+                    .iter()
+                    .zip(&reference)
+                    .all(|(left, right)| runtime_mod_entries_equal(left, right)),
+                "count={count} unique={unique}"
+            );
+        }
     }
 
     #[test]
