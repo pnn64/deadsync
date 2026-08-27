@@ -281,6 +281,16 @@ impl Default for ActorViewOverride {
     }
 }
 
+const fn hidden_gameplay_hud_layers(
+    hide_gameplay_hud: bool,
+    song_lua_hidden_layers: [bool; 2],
+) -> [bool; 2] {
+    [
+        hide_gameplay_hud || song_lua_hidden_layers[0],
+        hide_gameplay_hud || song_lua_hidden_layers[1],
+    ]
+}
+
 #[derive(Clone, Debug)]
 pub struct CourseDisplayInfo {
     pub name: Arc<str>,
@@ -18266,6 +18276,8 @@ pub fn push_actors(
     let centered_single_notefield =
         play_style.is_single() && state.num_players() == 1 && center_1player_notefield;
     let song_lua_visuals = state.song_lua_visuals();
+    let [hide_underlay_hud, hide_overlay_hud] =
+        hidden_gameplay_hud_layers(hide_gameplay_hud, song_lua_visuals.hidden_screen_layers);
     let song_lua_space_width = song_lua_overlay_space_width(state);
     let song_lua_space_height = song_lua_overlay_space_height(state);
     let player_color = color::decorative_rgba(state.player_color_index());
@@ -18518,7 +18530,7 @@ pub fn push_actors(
     }
 
     // Hold START/BACK prompt (Simply Love parity: ScreenGameplay debug text).
-    if !hide_gameplay_hud {
+    if !hide_overlay_hud {
         let overlay_start = actors.len();
         const HOLD_FADE_IN_S: f32 = 1.0 / 8.0;
         const ABORT_FADE_OUT_S: f32 = 0.5;
@@ -18577,7 +18589,7 @@ pub fn push_actors(
         );
     }
 
-    if !hide_gameplay_hud {
+    if !hide_overlay_hud {
         let overlay_start = actors.len();
         let joined_lobby = state.runtime_view.lobby.snapshot.joined_lobby.is_some();
         if state
@@ -19153,7 +19165,7 @@ pub fn push_actors(
     }
 
     // Danger overlay (Simply Love parity): red flashing in danger + green recovery, optional HideDanger.
-    if !hide_gameplay_hud {
+    if !hide_underlay_hud {
         let underlay_start = actors.len();
         let sw = screen_width();
         let sh = screen_height();
@@ -19241,7 +19253,7 @@ pub fn push_actors(
 
     // Simply Love parity: BGAnimations/ScreenGameplay underlay/Shared/Header.lua.
     // This top strip sits underneath the UpperNPSGraph and other HUD actors.
-    if !hide_gameplay_hud {
+    if !hide_underlay_hud {
         let underlay_start = actors.len();
         let header_rgba = gameplay_header_rgba(policy.background_color);
         presentation_skeleton.push(STATIC_HEADER, actors, |actors| {
@@ -19296,7 +19308,7 @@ pub fn push_actors(
             &mut notefield_hud_flat_draw_scratch[0],
         );
     }
-    if !hide_gameplay_hud {
+    if !hide_underlay_hud {
         let underlay_tail_start = actors.len();
         let clamped_width = screen_width().clamp(640.0, 854.0);
         let score_x_p1 = screen_center_x() - clamped_width / 4.3;
@@ -20936,6 +20948,26 @@ mod tests {
         for (style, cols, p1, p2, expected) in cases {
             assert_eq!(gameplay_step_stats_mode(style, cols, p1, p2), expected);
         }
+    }
+
+    #[test]
+    fn song_lua_screen_layers_hide_matching_native_hud() {
+        assert_eq!(
+            hidden_gameplay_hud_layers(false, [false, false]),
+            [false, false]
+        );
+        assert_eq!(
+            hidden_gameplay_hud_layers(false, [true, false]),
+            [true, false]
+        );
+        assert_eq!(
+            hidden_gameplay_hud_layers(false, [false, true]),
+            [false, true]
+        );
+        assert_eq!(
+            hidden_gameplay_hud_layers(true, [false, false]),
+            [true, true]
+        );
     }
 
     #[test]
