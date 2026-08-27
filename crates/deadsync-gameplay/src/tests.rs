@@ -19089,7 +19089,7 @@ mod tests {
         assert!(
             notes
                 .iter()
-                .all(|note| note.row_index % ROWS_PER_BEAT as usize == 0)
+                .all(|note| beat_to_note_row(note.beat) % ROWS_PER_BEAT == 0)
         );
         assert!(notes.iter().all(|note| {
             !note.is_fake
@@ -19099,6 +19099,37 @@ mod tests {
                 && note.hold.is_none()
         }));
         assert!(count_tap_tracks_at_row(&notes, 0, 0, 4) <= 2);
+    }
+
+    #[test]
+    fn little_uses_itg_note_rows_for_compact_chart_indices() {
+        let timing = test_timing(1_000);
+        let near_quarter_beat = 249.0_f32 * 4.0 / 1_000.0;
+        assert_eq!(beat_to_note_row(near_quarter_beat), ROWS_PER_BEAT);
+
+        let mut notes = vec![
+            test_note_at(NoteType::Tap, None, false, 249, near_quarter_beat),
+            test_note_at(NoteType::Tap, None, false, 250, 1.0),
+            test_note_at(NoteType::Tap, None, false, 375, 1.5),
+        ];
+
+        apply_uncommon_masks_with_masks(
+            &mut notes,
+            0,
+            REMOVE_MASK_BIT_LITTLE,
+            0,
+            &timing,
+            0,
+            4,
+            &[],
+            None,
+            0,
+        );
+
+        assert_eq!(
+            notes.iter().map(|note| note.beat).collect::<Vec<_>>(),
+            vec![near_quarter_beat, 1.0]
+        );
     }
 
     #[test]
