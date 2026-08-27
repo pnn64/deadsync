@@ -37,7 +37,10 @@ mod version;
 pub use actions::{SongLuaFunctionActionInput, read_actions_with_function_capture};
 pub use cmd::preprocess_lua_cmd_syntax;
 pub use compat::{SongLuaCompatCallbacks, install_default_stdlib_compat, install_stdlib_compat};
-pub use compile::{compile_song_lua_with_actors, compile_song_lua_with_default_host};
+pub use compile::{
+    compile_song_lua_layers_with_actors, compile_song_lua_layers_with_default_host,
+    compile_song_lua_with_actors, compile_song_lua_with_default_host,
+};
 pub use compile_timing::{
     SongLuaCompileTimer, log_song_lua_compile_timing, song_lua_compile_stage_summary,
 };
@@ -4334,8 +4337,9 @@ mod tests {
         capture_block_set_bool, capture_block_set_f32, capture_function_action_blocks,
         capture_indexed_actor_function_blocks, capture_overlay_function_eases,
         collect_indexed_actor_capture_blocks, column_offset_windows_from_samples,
-        compile_song_lua_with_actors, compile_song_runtime_values, compiled_song_lua_sound_paths,
-        create_debug_table, create_dummy_actor as create_lua_dummy_actor,
+        compile_song_lua_layers_with_actors, compile_song_lua_with_actors,
+        compile_song_runtime_values, compiled_song_lua_sound_paths, create_debug_table,
+        create_dummy_actor as create_lua_dummy_actor,
         create_named_child_actor as create_lua_named_child_actor, create_song_runtime_table,
         custom_multi_modifier_key, easiest_steps_difficulty, ensure_overlay_arrow_visual,
         file_path_string, function_named_upvalue_tables, graph_display_body_size,
@@ -4499,6 +4503,25 @@ mod tests {
     ) -> Result<TestCompiledSongLua, String> {
         compile_song_lua_with_actors(
             entry_path,
+            context,
+            SongLuaNoteskinResolver::default(),
+            test_create_dummy_actor,
+            test_create_named_child_actor,
+            test_install_actor_methods,
+            test_read_model_slots,
+            test_model_layer_from_slot,
+            |_context, _noteskin| None,
+        )
+    }
+
+    fn test_compile_song_lua_layers(
+        entry_paths: &[&Path],
+        primary_index: usize,
+        context: &SongLuaCompileContext,
+    ) -> Result<Vec<TestCompiledSongLua>, String> {
+        compile_song_lua_layers_with_actors(
+            entry_paths,
+            primary_index,
             context,
             SongLuaNoteskinResolver::default(),
             test_create_dummy_actor,
@@ -12061,6 +12084,77 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "true");
+    }
+
+    #[test]
+    fn compile_song_lua_layers_share_init_globals_and_actor_refs() {
+        let song_dir = test_dir("shared-layer-globals");
+        let background = song_dir.join("background.lua");
+        let foreground = song_dir.join("foreground.lua");
+        fs::write(
+            &background,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        Name="SharedPole",
+        OnCommand=function(self)
+            self:queuecommand("Bind")
+        end,
+        BindCommand=function(self)
+            shared_poles[1] = self
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+        fs::write(
+            &foreground,
+            r#"
+mod_actions = {
+    {4, function()
+        shared_poles[1]:linear(1):x(240)
+    end, true},
+}
+
+return Def.ActorFrame{
+    OnCommand=function(self)
+        self:queuecommand("MovePole")
+    end,
+    MovePoleCommand=function(self)
+        shared_poles[1]:x(123)
+    end,
+    Def.Actor{
+        InitCommand=function(self)
+            shared_poles = {}
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua_layers(
+            &[background.as_path(), foreground.as_path()],
+            1,
+            &SongLuaCompileContext::new(&song_dir, "Shared Layer Globals"),
+        )
+        .unwrap();
+
+        assert_eq!(compiled.len(), 2);
+        assert_eq!(compiled[0].overlays.len(), 1);
+        assert_eq!(compiled[0].overlays[0].name.as_deref(), Some("SharedPole"));
+        assert_eq!(compiled[0].overlays[0].initial_state.x, 123.0);
+        assert_eq!(compiled[0].overlays[0].message_commands.len(), 1);
+        assert_eq!(
+            compiled[0].overlays[0].message_commands[0].blocks[0]
+                .delta
+                .x,
+            Some(240.0)
+        );
+        assert_eq!(compiled[0].messages[0].beat, 4.0);
+        assert!(compiled[1].overlays.is_empty());
+        assert_eq!(compiled[1].messages[0].beat, 4.0);
     }
 
     #[test]

@@ -46,7 +46,7 @@ use deadsync_assets::song_lua::{
     SongLuaOverlayCommandBlock, SongLuaOverlayKind, SongLuaOverlayMeshVertex,
     SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw, SongLuaOverlayModelLayer,
     SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaProxyTarget, SongLuaTextGlowMode,
-    compile_song_lua,
+    compile_song_lua, compile_song_lua_layers,
 };
 use deadsync_chart::{
     ChartData, GameplayChartData, SongBackgroundChange, SongBackgroundChangeTarget, SongData,
@@ -3270,6 +3270,157 @@ fn compile_song_lua_layer(
     }
 }
 
+#[derive(Clone, Copy)]
+enum SongLuaLayerTarget {
+    Primary,
+    Background(f32),
+    Foreground(f32),
+}
+
+fn compile_song_lua_session(
+    song: &SongData,
+    primary_ix: Option<usize>,
+    context: &deadsync_assets::song_lua::SongLuaCompileContext,
+) -> Result<GameplaySongLuaData, String> {
+    let mut paths = Vec::new();
+    let mut targets = Vec::new();
+    for change in &song.background_lua_changes {
+        paths.push(change.path.as_path());
+        targets.push(SongLuaLayerTarget::Background(change.start_beat));
+    }
+    for (index, change) in song.foreground_lua_changes.iter().enumerate() {
+        if !change.path.is_file() {
+            continue;
+        }
+        paths.push(change.path.as_path());
+        targets.push(if Some(index) == primary_ix {
+            SongLuaLayerTarget::Primary
+        } else {
+            SongLuaLayerTarget::Foreground(change.start_beat)
+        });
+    }
+    let primary_index = targets
+        .iter()
+        .position(|target| matches!(target, SongLuaLayerTarget::Primary))
+        .unwrap_or(0);
+    if paths.is_empty() {
+        return Ok(GameplaySongLuaData::default());
+    }
+    let compile_started = Instant::now();
+    let compiled = compile_song_lua_layers(&paths, primary_index, context)?;
+    if compiled.len() != targets.len() {
+        return Err("song lua session returned the wrong layer count".to_string());
+    }
+    let compile_ms = compile_started.elapsed().as_secs_f64() * 1000.0;
+    let mut data = GameplaySongLuaData::default();
+    for (compiled, target) in compiled.into_iter().zip(targets) {
+        match target {
+            SongLuaLayerTarget::Primary => {
+                data.primary = Some(GameplayCompiledSongLua {
+                    compiled,
+                    compile_ms,
+                });
+            }
+            SongLuaLayerTarget::Background(start_beat) => {
+                data.background_layers.push(GameplaySongLuaLayer {
+                    start_beat,
+                    compiled,
+                })
+            }
+            SongLuaLayerTarget::Foreground(start_beat) => {
+                data.foreground_layers.push(GameplaySongLuaLayer {
+                    start_beat,
+                    compiled,
+                })
+            }
+        }
+    }
+    Ok(data)
+}
+
+fn compile_song_lua_separately(
+    song: &SongData,
+    primary_ix: usize,
+    context: &deadsync_assets::song_lua::SongLuaCompileContext,
+) -> GameplaySongLuaData {
+    let primary = compile_primary_song_lua(
+        song.title.as_str(),
+        &song.foreground_lua_changes[primary_ix].path,
+        context,
+    );
+    let background_layers = song
+        .background_lua_changes
+        .iter()
+        .filter_map(|change| {
+            compile_song_lua_layer(
+                song.title.as_str(),
+                &change.path,
+                change.start_beat,
+                "background lua layer",
+                context,
+            )
+        })
+        .collect();
+    let foreground_layers = song
+        .foreground_lua_changes
+        .iter()
+        .enumerate()
+        .filter(|(index, change)| *index != primary_ix && change.path.is_file())
+        .filter_map(|(_, change)| {
+            compile_song_lua_layer(
+                song.title.as_str(),
+                &change.path,
+                change.start_beat,
+                "foreground lua layer",
+                context,
+            )
+        })
+        .collect();
+    GameplaySongLuaData {
+        primary,
+        background_layers,
+        foreground_layers,
+    }
+}
+
+fn compile_song_lua_without_primary(
+    song: &SongData,
+    context: &deadsync_assets::song_lua::SongLuaCompileContext,
+) -> GameplaySongLuaData {
+    let background_layers = song
+        .background_lua_changes
+        .iter()
+        .filter_map(|change| {
+            compile_song_lua_layer(
+                song.title.as_str(),
+                &change.path,
+                change.start_beat,
+                "background lua layer",
+                context,
+            )
+        })
+        .collect();
+    let foreground_layers = song
+        .foreground_lua_changes
+        .iter()
+        .filter(|change| change.path.is_file())
+        .filter_map(|change| {
+            compile_song_lua_layer(
+                song.title.as_str(),
+                &change.path,
+                change.start_beat,
+                "foreground lua layer",
+                context,
+            )
+        })
+        .collect();
+    GameplaySongLuaData {
+        primary: None,
+        background_layers,
+        foreground_layers,
+    }
+}
+
 fn gameplay_song_lua_data(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
@@ -3321,55 +3472,17 @@ fn gameplay_song_lua_data(
     // semantics above every physical backend, so advertise the compatibility
     // renderer first while retaining the actual backend for diagnostics.
     context.video_renderers = format!("opengl,{video_renderer}");
-    let primary = primary_ix.and_then(|ix| {
-        compile_primary_song_lua(
-            song.title.as_str(),
-            &song.foreground_lua_changes[ix].path,
-            &context,
+    compile_song_lua_session(song, primary_ix, &context).unwrap_or_else(|err| {
+        log::warn!(
+            "Failed to compile shared gameplay lua session for '{}': {}; retrying layers independently",
+            song.title,
+            err,
+        );
+        primary_ix.map_or_else(
+            || compile_song_lua_without_primary(song, &context),
+            |primary_ix| compile_song_lua_separately(song, primary_ix, &context),
         )
-    });
-    let primary_key = primary_ix.map(|ix| {
-        let change = &song.foreground_lua_changes[ix];
-        (change.start_beat.to_bits(), change.path.clone())
-    });
-    let background_layers = song
-        .background_lua_changes
-        .iter()
-        .filter_map(|change| {
-            compile_song_lua_layer(
-                song.title.as_str(),
-                &change.path,
-                change.start_beat,
-                "background lua layer",
-                &context,
-            )
-        })
-        .collect();
-    let foreground_layers = song
-        .foreground_lua_changes
-        .iter()
-        .filter(|change| {
-            change.path.is_file()
-                && !primary_key.as_ref().is_some_and(|(beat_bits, path)| {
-                    change.start_beat.to_bits() == *beat_bits && change.path == *path
-                })
-        })
-        .filter_map(|change| {
-            compile_song_lua_layer(
-                song.title.as_str(),
-                &change.path,
-                change.start_beat,
-                "foreground lua layer",
-                &context,
-            )
-        })
-        .collect();
-
-    GameplaySongLuaData {
-        primary,
-        background_layers,
-        foreground_layers,
-    }
+    })
 }
 
 fn song_lua_sound_paths(data: &GameplaySongLuaData) -> Vec<PathBuf> {

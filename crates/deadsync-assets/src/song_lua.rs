@@ -4,8 +4,8 @@ use deadlib_present::actors::TextAttribute;
 use deadlib_render_core::{SamplerDesc, SamplerFilter, SamplerWrap, TexturedMeshVertex};
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Style};
 use deadsync_song_lua::{
-    compile_song_lua_with_default_host, overlay_model_layers_from_slots,
-    song_lua_human_player_count, song_lua_style_info,
+    compile_song_lua_layers_with_default_host, compile_song_lua_with_default_host,
+    overlay_model_layers_from_slots, song_lua_human_player_count, song_lua_style_info,
 };
 
 pub use deadsync_song_lua::{
@@ -53,6 +53,22 @@ pub fn compile_song_lua(
 ) -> Result<CompiledSongLua, String> {
     compile_song_lua_with_default_host(
         entry_path,
+        context,
+        song_lua_noteskin_resolver(),
+        crate::noteskin::load_itg_model_slots_from_path,
+        model_layer_from_slot,
+        |context, noteskin| multitap_arrow_visual_spec(noteskin, context),
+    )
+}
+
+pub fn compile_song_lua_layers(
+    entry_paths: &[&Path],
+    primary_index: usize,
+    context: &SongLuaCompileContext,
+) -> Result<Vec<CompiledSongLua>, String> {
+    compile_song_lua_layers_with_default_host(
+        entry_paths,
+        primary_index,
         context,
         song_lua_noteskin_resolver(),
         crate::noteskin::load_itg_model_slots_from_path,

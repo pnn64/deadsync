@@ -1,5 +1,5 @@
 use deadlib_present::actors::TextAttribute;
-use mlua::{Lua, Table};
+use mlua::{Lua, Table, Value};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -25,6 +25,12 @@ use crate::{
     runtime_static_overlay_index_for_actors, snapshot_compile_globals, sort_compiled_song_lua,
 };
 
+const COMPILE_LAYER_KEY: &str = "__songlua_compile_layer";
+
+type DefaultCompiledSongLua<NoteskinSlot, ModelVertex> = CompiledSongLua<
+    SongLuaOverlayActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
+>;
+
 pub fn compile_song_lua_with_default_host<NoteskinSlot, ModelVertex, MultitapArrowVisualSpec>(
     entry_path: &Path,
     context: &SongLuaCompileContext,
@@ -49,6 +55,42 @@ where
 {
     compile_song_lua_with_actors(
         entry_path,
+        context,
+        noteskin_resolver,
+        create_default_dummy_actor,
+        create_default_named_child_actor,
+        install_default_actor_methods,
+        read_model_slots,
+        model_layer_from_slot,
+        multitap_arrow_visual_spec,
+    )
+}
+
+pub fn compile_song_lua_layers_with_default_host<
+    NoteskinSlot,
+    ModelVertex,
+    MultitapArrowVisualSpec,
+>(
+    entry_paths: &[&Path],
+    primary_index: usize,
+    context: &SongLuaCompileContext,
+    noteskin_resolver: SongLuaNoteskinResolver,
+    read_model_slots: fn(&Path) -> Result<Arc<[NoteskinSlot]>, String>,
+    model_layer_from_slot: fn(&NoteskinSlot) -> Option<SongLuaOverlayModelLayer<ModelVertex>>,
+    multitap_arrow_visual_spec: MultitapArrowVisualSpec,
+) -> Result<Vec<DefaultCompiledSongLua<NoteskinSlot, ModelVertex>>, String>
+where
+    MultitapArrowVisualSpec: FnMut(
+        &SongLuaCompileContext,
+        &str,
+    ) -> Option<(
+        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
+        SongLuaOverlayState,
+    )>,
+{
+    compile_song_lua_layers_with_actors(
+        entry_paths,
+        primary_index,
         context,
         noteskin_resolver,
         create_default_dummy_actor,
@@ -102,7 +144,7 @@ pub fn compile_song_lua_with_actors<NoteskinSlot, ModelVertex, MultitapArrowVisu
     install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
     read_model_slots: fn(&Path) -> Result<Arc<[NoteskinSlot]>, String>,
     model_layer_from_slot: fn(&NoteskinSlot) -> Option<SongLuaOverlayModelLayer<ModelVertex>>,
-    mut multitap_arrow_visual_spec: MultitapArrowVisualSpec,
+    multitap_arrow_visual_spec: MultitapArrowVisualSpec,
 ) -> Result<
     CompiledSongLua<
         SongLuaOverlayActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
@@ -118,10 +160,62 @@ where
         SongLuaOverlayState,
     )>,
 {
+    compile_song_lua_layers_with_actors(
+        &[entry_path],
+        0,
+        context,
+        noteskin_resolver,
+        create_dummy_actor,
+        create_named_child_actor,
+        install_actor_methods,
+        read_model_slots,
+        model_layer_from_slot,
+        multitap_arrow_visual_spec,
+    )?
+    .into_iter()
+    .next()
+    .ok_or_else(|| "song lua compiler returned no result for one entry".to_string())
+}
+
+pub fn compile_song_lua_layers_with_actors<NoteskinSlot, ModelVertex, MultitapArrowVisualSpec>(
+    entry_paths: &[&Path],
+    primary_index: usize,
+    context: &SongLuaCompileContext,
+    noteskin_resolver: SongLuaNoteskinResolver,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+    create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
+    install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
+    read_model_slots: fn(&Path) -> Result<Arc<[NoteskinSlot]>, String>,
+    model_layer_from_slot: fn(&NoteskinSlot) -> Option<SongLuaOverlayModelLayer<ModelVertex>>,
+    mut multitap_arrow_visual_spec: MultitapArrowVisualSpec,
+) -> Result<Vec<DefaultCompiledSongLua<NoteskinSlot, ModelVertex>>, String>
+where
+    MultitapArrowVisualSpec: FnMut(
+        &SongLuaCompileContext,
+        &str,
+    ) -> Option<(
+        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
+        SongLuaOverlayState,
+    )>,
+{
+    if entry_paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    if primary_index >= entry_paths.len() {
+        return Err(format!(
+            "song lua primary index {primary_index} is outside {} entries",
+            entry_paths.len()
+        ));
+    }
     let mut compile_timer = SongLuaCompileTimer::start();
-    let entry_path = entry_file_path(entry_path)
-        .ok_or_else(|| format!("song lua entry '{}' does not exist", entry_path.display()))?;
-    let trace_entry_path = entry_path.clone();
+    let entry_paths = entry_paths
+        .iter()
+        .map(|path| {
+            entry_file_path(path)
+                .ok_or_else(|| format!("song lua entry '{}' does not exist", path.display()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let trace_entry_path = entry_paths[primary_index].clone();
     let lua = Lua::new();
     let mut host = SongLuaHostState::default();
     install_compile_host(
@@ -135,27 +229,33 @@ where
     )
     .map_err(|err| err.to_string())?;
     compile_timer.push_stage("host");
-    let root = execute_script_file(&lua, &entry_path, context.song_dir.as_path())
-        .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
-    compile_timer.push_stage("execute");
-    run_actor_init_commands(&lua, &root).map_err(|err| {
-        format!(
-            "failed to run actor init commands for '{}': {err}",
-            entry_path.display()
-        )
-    })?;
-    compile_timer.push_stage("init_commands");
+    let roots = lua.create_table().map_err(|err| err.to_string())?;
+    for (index, entry_path) in entry_paths.iter().enumerate() {
+        let root = execute_script_file(&lua, entry_path, context.song_dir.as_path())
+            .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
+        run_actor_init_commands(&lua, &root).map_err(|err| {
+            format!(
+                "failed to run actor init commands for '{}': {err}",
+                entry_path.display()
+            )
+        })?;
+        roots
+            .raw_set(index + 1, root)
+            .map_err(|err| err.to_string())?;
+    }
+    compile_timer.push_stage("execute_init");
+    let root = Value::Table(roots);
     run_actor_startup_commands(&lua, &root).map_err(|err| {
         format!(
-            "failed to run actor startup commands for '{}': {err}",
-            entry_path.display()
+            "failed to run actor startup commands for song lua session '{}': {err}",
+            trace_entry_path.display()
         )
     })?;
     compile_timer.push_stage("startup_commands");
     run_actor_update_functions(&lua, &root).map_err(|err| {
         format!(
-            "failed to run actor update functions for '{}': {err}",
-            entry_path.display()
+            "failed to run actor update functions for song lua session '{}': {err}",
+            trace_entry_path.display()
         )
     })?;
     compile_timer.push_stage("update_functions");
@@ -163,10 +263,11 @@ where
     compile_timer.push_stage("draw_functions");
     register_loaded_easing_names(&lua, &mut host).map_err(|err| err.to_string())?;
     compile_timer.push_stage("easing_names");
+    mark_compile_layers(&root).map_err(|err| err.to_string())?;
 
     let globals = lua.globals();
     let mut out = CompiledSongLua {
-        entry_path,
+        entry_path: entry_paths[primary_index].clone(),
         screen_width: context.screen_width,
         screen_height: context.screen_height,
         ..CompiledSongLua::default()
@@ -370,6 +471,16 @@ where
             .iter()
             .map(|overlay| overlay.actor.message_commands.as_slice()),
     );
+    let overlay_layers = overlays
+        .iter()
+        .map(|overlay| {
+            overlay
+                .table
+                .get::<Option<usize>>(COMPILE_LAYER_KEY)
+                .map_err(|err| err.to_string())
+                .map(|index| index.unwrap_or(primary_index))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     out.overlays = overlays.into_iter().map(|overlay| overlay.actor).collect();
     for tracked in tracked_actors {
         match tracked.target {
@@ -383,5 +494,109 @@ where
     out.sound_paths = read_song_lua_sound_paths(&lua)?;
     compile_timer.push_stage("finalize");
     log_song_lua_compile_timing(&trace_entry_path, &compile_timer);
-    Ok(out)
+    split_compiled_song_lua(out, overlay_layers, &entry_paths, primary_index)
+}
+
+fn mark_compile_layers(root: &Value) -> mlua::Result<()> {
+    let Value::Table(root) = root else {
+        return Ok(());
+    };
+    for (index, actor) in root.sequence_values::<Value>().enumerate() {
+        mark_actor_layer(&actor?, index)?;
+    }
+    Ok(())
+}
+
+fn mark_actor_layer(actor: &Value, index: usize) -> mlua::Result<()> {
+    let Value::Table(actor) = actor else {
+        return Ok(());
+    };
+    actor.set(COMPILE_LAYER_KEY, index)?;
+    for child in actor.sequence_values::<Value>() {
+        mark_actor_layer(&child?, index)?;
+    }
+    Ok(())
+}
+
+fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
+    mut compiled: DefaultCompiledSongLua<NoteskinSlot, ModelVertex>,
+    overlay_layers: Vec<usize>,
+    entry_paths: &[std::path::PathBuf],
+    primary_index: usize,
+) -> Result<Vec<DefaultCompiledSongLua<NoteskinSlot, ModelVertex>>, String> {
+    if overlay_layers.len() != compiled.overlays.len() {
+        return Err("song lua overlay ownership did not match compiled overlays".to_string());
+    }
+    let mut local_counts = vec![0usize; entry_paths.len()];
+    let overlay_map = overlay_layers
+        .iter()
+        .map(|&layer| {
+            if layer >= local_counts.len() {
+                return Err(format!("song lua overlay has invalid layer index {layer}"));
+            }
+            let local = local_counts[layer];
+            local_counts[layer] += 1;
+            Ok((layer, local))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let mut outputs = entry_paths
+        .iter()
+        .map(|entry_path| DefaultCompiledSongLua {
+            entry_path: entry_path.clone(),
+            screen_width: compiled.screen_width,
+            screen_height: compiled.screen_height,
+            messages: compiled.messages.clone(),
+            sound_paths: compiled.sound_paths.clone(),
+            ..DefaultCompiledSongLua::default()
+        })
+        .collect::<Vec<_>>();
+
+    for (global_index, mut overlay) in compiled.overlays.drain(..).enumerate() {
+        let (layer, _) = overlay_map[global_index];
+        overlay.parent_index = overlay.parent_index.and_then(|parent| {
+            overlay_map
+                .get(parent)
+                .filter(|(parent_layer, _)| *parent_layer == layer)
+                .map(|(_, local)| *local)
+        });
+        if let SongLuaOverlayKind::ActorProxy {
+            target: crate::SongLuaProxyTarget::Actor { overlay_index },
+        } = &mut overlay.kind
+        {
+            *overlay_index = overlay_map
+                .get(*overlay_index)
+                .filter(|(target_layer, _)| *target_layer == layer)
+                .map_or(usize::MAX, |(_, local)| *local);
+        }
+        outputs[layer].overlays.push(overlay);
+    }
+    for mut ease in compiled.overlay_eases.drain(..) {
+        let Some(&(layer, local)) = overlay_map.get(ease.overlay_index) else {
+            continue;
+        };
+        ease.overlay_index = local;
+        outputs[layer].overlay_eases.push(ease);
+    }
+    for mut update in compiled.overlay_updates.drain(..) {
+        let Some(&(layer, local)) = overlay_map.get(update.overlay_index) else {
+            continue;
+        };
+        update.overlay_index = local;
+        outputs[layer].overlay_updates.push(update);
+    }
+
+    let primary = &mut outputs[primary_index];
+    primary.beat_mods = compiled.beat_mods;
+    primary.time_mods = compiled.time_mods;
+    primary.eases = compiled.eases;
+    primary.player_actors = compiled.player_actors;
+    primary.song_foreground = compiled.song_foreground;
+    primary.hidden_players = compiled.hidden_players;
+    primary.note_hides = compiled.note_hides;
+    primary.column_offsets = compiled.column_offsets;
+    primary.info = compiled.info;
+    for output in &mut outputs {
+        sort_compiled_song_lua(output);
+    }
+    Ok(outputs)
 }
