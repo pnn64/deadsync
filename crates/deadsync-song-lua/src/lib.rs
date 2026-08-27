@@ -1350,7 +1350,7 @@ pub enum SongLuaSpanMode {
     End,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SongLuaEaseTarget {
     Mod(String),
     PlayerX,

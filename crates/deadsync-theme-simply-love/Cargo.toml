@@ -44,6 +44,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "song_lua_overlay_sampling_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "select_music_hot_paths"
 harness = false
 required-features = ["bench-support"]

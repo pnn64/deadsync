@@ -752,25 +752,65 @@ pub fn extend_runtime_mod_sustains(windows: &mut [SongLuaEaseWindow]) {
     const DEFAULT_SUSTAIN_BEATS: f32 = 1_000_000.0;
     const SAME_TICK_EPSILON: f32 = 0.001;
 
+    // Typical and unusually dense mod charts fit inline, including 7th Gear.
+    // Pathological charts spill once during compilation, then release the index.
+    let mut order = smallvec::SmallVec::<[usize; 1024]>::with_capacity(windows.len());
+    order.extend(0..windows.len());
+    order.sort_unstable_by(|&left, &right| {
+        windows[left]
+            .player
+            .cmp(&windows[right].player)
+            .then_with(|| windows[left].target.cmp(&windows[right].target))
+            .then_with(|| windows[left].start.total_cmp(&windows[right].start))
+            .then_with(|| left.cmp(&right))
+    });
+
+    let mut group_start = 0;
+    while group_start < order.len() {
+        let first = order[group_start];
+        let mut group_end = group_start + 1;
+        while group_end < order.len()
+            && windows[order[group_end]].player == windows[first].player
+            && windows[order[group_end]].target == windows[first].target
+        {
+            group_end += 1;
+        }
+        for position in group_start..group_end {
+            let index = order[position];
+            let start = windows[index].start;
+            let threshold = start + SAME_TICK_EPSILON;
+            let later = &order[position + 1..group_end];
+            let next = later.partition_point(|&other| windows[other].start <= threshold);
+            let next_start = later
+                .get(next)
+                .map_or(DEFAULT_SUSTAIN_BEATS, |&other| windows[other].start);
+            let end = start + windows[index].limit;
+            if next_start > end + SAME_TICK_EPSILON {
+                windows[index].sustain = Some(next_start - end);
+            }
+        }
+        group_start = group_end;
+    }
+}
+
+#[cfg(test)]
+fn extend_runtime_mod_sustains_reference(windows: &mut [SongLuaEaseWindow]) {
+    const DEFAULT_SUSTAIN_BEATS: f32 = 1_000_000.0;
+    const SAME_TICK_EPSILON: f32 = 0.001;
+
     for index in 0..windows.len() {
         let end = windows[index].start + windows[index].limit;
         let next_start = windows
             .iter()
             .enumerate()
             .filter_map(|(other_index, other)| {
-                if other_index == index
-                    || other.player != windows[index].player
-                    || other.target != windows[index].target
-                    || other.start <= windows[index].start + SAME_TICK_EPSILON
-                {
-                    None
-                } else {
-                    Some(other.start)
-                }
+                (other_index != index
+                    && other.player == windows[index].player
+                    && other.target == windows[index].target
+                    && other.start > windows[index].start + SAME_TICK_EPSILON)
+                    .then_some(other.start)
             })
-            .fold(None::<f32>, |acc, start| {
-                Some(acc.map_or(start, |current| current.min(start)))
-            })
+            .min_by(f32::total_cmp)
             .unwrap_or(DEFAULT_SUSTAIN_BEATS);
         if next_start > end + SAME_TICK_EPSILON {
             windows[index].sustain = Some(next_start - end);
@@ -799,6 +839,29 @@ pub fn record_unsupported_xero_overlay_function_ease(
 mod tests {
     use super::*;
 
+    fn sustain_fixture(count: usize) -> Vec<SongLuaEaseWindow> {
+        (0..count)
+            .map(|index| SongLuaEaseWindow {
+                unit: SongLuaTimeUnit::Beat,
+                start: ((index * 73) % count.max(1)) as f32 * 0.25,
+                limit: 0.125 + (index % 5) as f32 * 0.0625,
+                span_mode: SongLuaSpanMode::Len,
+                from: 0.0,
+                to: 1.0,
+                target: if index % 3 == 0 {
+                    SongLuaEaseTarget::PlayerRotationZ
+                } else {
+                    SongLuaEaseTarget::Mod(format!("mod{}", index % 11))
+                },
+                easing: Some("linear".to_string()),
+                player: Some((index % 2 + 1) as u8),
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            })
+            .collect()
+    }
+
     #[test]
     fn exported_player_list_keeps_invalid_player_fallback_behavior() {
         assert_eq!(runtime_mod_entry_players(Some(1)), vec![0]);
@@ -806,5 +869,14 @@ mod tests {
         assert_eq!(runtime_mod_entry_players(None), vec![0, 1]);
         assert_eq!(runtime_mod_entry_players(Some(0)), vec![0, 1]);
         assert_eq!(runtime_mod_entry_players(Some(3)), vec![0, 1]);
+    }
+
+    #[test]
+    fn grouped_sustain_extension_matches_full_scan_for_unordered_windows() {
+        let mut reference = sustain_fixture(513);
+        let mut current = reference.clone();
+        extend_runtime_mod_sustains_reference(&mut reference);
+        extend_runtime_mod_sustains(&mut current);
+        assert_eq!(current, reference);
     }
 }

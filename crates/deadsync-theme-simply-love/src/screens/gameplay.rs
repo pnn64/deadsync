@@ -613,6 +613,13 @@ struct SongLuaOverlayOrderCache {
     // Most Song Lua trees never mutate ordering fields. Flatten those trees at
     // screen entry so the frame loop can copy one contiguous index slice.
     static_root_order: Option<Box<[usize]>>,
+    // Update tracks are immutable and sorted by overlay. Store their ranges
+    // once, then retain one sample cursor per track across gameplay frames.
+    // Nearby frames advance from the prior boundary; seeks retain logarithmic
+    // fallback through `partition_point_from_hint`.
+    update_ranges: Box<[std::ops::Range<usize>]>,
+    visible_update_indices: SmallVec<[usize; 8]>,
+    update_cursors: Vec<usize>,
     sort_modes: Vec<u8>,
     // Dynamic-capable lists usually keep the same keys for many frames. Remember
     // those keys so we only pay O(n log n) when their effective order changes.
@@ -1448,7 +1455,12 @@ fn song_lua_overlay_order_cache_from(
                 || ease.to.delta.draw_by_z_position.is_some();
         }
     }
-    for track in song_lua_overlay_runtime_updates(overlays) {
+    let overlay_updates = song_lua_overlay_runtime_updates(overlays);
+    let mut visible_update_indices = SmallVec::new();
+    for (track_index, track) in overlay_updates.iter().enumerate() {
+        if track.target == deadsync_song_lua::SongLuaOverlayUpdateTarget::Visible {
+            visible_update_indices.push(track_index);
+        }
         if track.overlay_index >= dynamic_local.len() {
             continue;
         }
@@ -1460,6 +1472,25 @@ fn song_lua_overlay_order_cache_from(
             deadsync_song_lua::SongLuaOverlayUpdateTarget::Z
                 | deadsync_song_lua::SongLuaOverlayUpdateTarget::DrawByZPosition
         );
+    }
+
+    let mut update_ranges = Vec::with_capacity(overlays.len());
+    let mut track_index = 0;
+    for overlay_index in 0..overlays.len() {
+        while overlay_updates
+            .get(track_index)
+            .is_some_and(|track| track.overlay_index < overlay_index)
+        {
+            track_index += 1;
+        }
+        let start = track_index;
+        while overlay_updates
+            .get(track_index)
+            .is_some_and(|track| track.overlay_index == overlay_index)
+        {
+            track_index += 1;
+        }
+        update_ranges.push(start..track_index);
     }
 
     let dynamic_local_indices = dynamic_local
@@ -1505,6 +1536,9 @@ fn song_lua_overlay_order_cache_from(
         dynamic_local_indices,
         dynamic_composed_indices: dynamic_composed_indices.into_boxed_slice(),
         static_root_order,
+        update_ranges: update_ranges.into_boxed_slice(),
+        visible_update_indices,
+        update_cursors: vec![0; overlay_updates.len()],
         sort_modes,
         last_draw_orders: vec![0; overlays.len()],
         last_z_keys: vec![0; overlays.len()],
@@ -7717,7 +7751,13 @@ fn song_lua_overlay_local_states_all_into(
     out: &mut Vec<SongLuaOverlayState>,
 ) {
     let overlay_updates = song_lua_overlay_runtime_updates(overlays);
-    let update_snap = song_lua_overlay_update_snap(now, overlay_updates);
+    let mut order_cache = song_lua_overlay_order_cache_from(overlays, overlay_eases);
+    let update_snap = song_lua_overlay_update_snap(
+        now,
+        overlay_updates,
+        &order_cache.visible_update_indices,
+        &mut order_cache.update_cursors,
+    );
     out.clear();
     out.reserve(overlays.len());
     message_caches.resize(overlays.len(), SongLuaMessageStateCache::default());
@@ -7730,6 +7770,8 @@ fn song_lua_overlay_local_states_all_into(
             overlay_eases,
             overlay_ease_ranges,
             overlay_updates,
+            order_cache.update_ranges[idx].clone(),
+            &mut order_cache.update_cursors,
             update_snap,
             &mut message_caches[idx],
         ));
@@ -7743,11 +7785,15 @@ fn song_lua_overlay_local_states_into(
     overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
     dynamic_indices: &[usize],
+    update_ranges: &[std::ops::Range<usize>],
+    visible_update_indices: &[usize],
+    update_cursors: &mut [usize],
     message_caches: &mut Vec<SongLuaMessageStateCache>,
     out: &mut Vec<SongLuaOverlayState>,
 ) -> bool {
     let overlay_updates = song_lua_overlay_runtime_updates(overlays);
-    let update_snap = song_lua_overlay_update_snap(now, overlay_updates);
+    let update_snap =
+        song_lua_overlay_update_snap(now, overlay_updates, visible_update_indices, update_cursors);
     let mut changed = false;
     if out.len() != overlays.len() {
         out.clear();
@@ -7767,6 +7813,8 @@ fn song_lua_overlay_local_states_into(
             overlay_eases,
             overlay_ease_ranges,
             overlay_updates,
+            update_ranges.get(idx).cloned().unwrap_or(0..0),
+            update_cursors,
             update_snap,
             &mut message_caches[idx],
         );
@@ -7909,7 +7957,7 @@ fn song_lua_overlay_state_sets_from_into(
     overlay_ease_ranges: &[std::ops::Range<usize>],
     screen_width: f32,
     screen_height: f32,
-    order_cache: &SongLuaOverlayOrderCache,
+    order_cache: &mut SongLuaOverlayOrderCache,
     message_caches: &mut Vec<SongLuaMessageStateCache>,
     local_out: &mut Vec<SongLuaOverlayState>,
     overlay_out: &mut Vec<SongLuaOverlayState>,
@@ -7943,18 +7991,29 @@ fn song_lua_overlay_state_sets_active_into(
     overlay_ease_ranges: &[std::ops::Range<usize>],
     screen_width: f32,
     screen_height: f32,
-    order_cache: &SongLuaOverlayOrderCache,
+    order_cache: &mut SongLuaOverlayOrderCache,
     message_caches: &mut Vec<SongLuaMessageStateCache>,
     local_out: &mut Vec<SongLuaOverlayState>,
     overlay_out: &mut Vec<SongLuaOverlayState>,
 ) {
+    let SongLuaOverlayOrderCache {
+        dynamic_local_indices,
+        dynamic_composed_indices,
+        update_ranges,
+        visible_update_indices,
+        update_cursors,
+        ..
+    } = order_cache;
     let local_changed = song_lua_overlay_local_states_into(
         now,
         overlays,
         overlay_events,
         overlay_eases,
         overlay_ease_ranges,
-        &order_cache.dynamic_local_indices,
+        dynamic_local_indices,
+        update_ranges,
+        visible_update_indices,
+        update_cursors,
         message_caches,
         local_out,
     );
@@ -7962,7 +8021,7 @@ fn song_lua_overlay_state_sets_active_into(
         song_lua_overlay_states_from_local_into(
             overlays,
             local_out,
-            &order_cache.dynamic_composed_indices,
+            dynamic_composed_indices,
             screen_width,
             screen_height,
             overlay_out,
@@ -11294,6 +11353,42 @@ struct SongLuaOverlayUpdateSnap {
 fn song_lua_overlay_update_snap(
     now: f32,
     tracks: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
+    visible_track_indices: &[usize],
+    track_cursors: &mut [usize],
+) -> Option<SongLuaOverlayUpdateSnap> {
+    use deadsync_song_lua::SongLuaOverlayUpdateValue as Value;
+    for &track_index in visible_track_indices {
+        let track = tracks.get(track_index)?;
+        let cursor = track_cursors.get_mut(track_index)?;
+        let next =
+            deadsync_gameplay::partition_point_from_hint(&track.samples, *cursor, |sample| {
+                sample.second <= now
+            });
+        *cursor = next;
+        let Some(from) = track.samples.get(next.wrapping_sub(1)) else {
+            continue;
+        };
+        let Some(to) = track.samples.get(next) else {
+            continue;
+        };
+        let t = match (&from.value, &to.value) {
+            (Value::Bool(false), Value::Bool(true)) => 1.0,
+            (Value::Bool(true), Value::Bool(false)) => 0.0,
+            _ => continue,
+        };
+        return Some(SongLuaOverlayUpdateSnap {
+            start_second: from.second,
+            end_second: to.second,
+            t,
+        });
+    }
+    None
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn song_lua_overlay_update_snap_reference(
+    now: f32,
+    tracks: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
 ) -> Option<SongLuaOverlayUpdateSnap> {
     use deadsync_song_lua::{
         SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value,
@@ -11436,16 +11531,24 @@ fn apply_song_lua_overlay_update_value(
 
 fn apply_song_lua_overlay_runtime_updates_for(
     now: f32,
-    overlay_index: usize,
     tracks: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
+    track_range: std::ops::Range<usize>,
+    track_cursors: &mut [usize],
     update_snap: Option<SongLuaOverlayUpdateSnap>,
     current: &mut SongLuaOverlayState,
 ) {
-    let start = tracks.partition_point(|track| track.overlay_index < overlay_index);
-    let end = start + tracks[start..].partition_point(|track| track.overlay_index == overlay_index);
-    for track in &tracks[start..end] {
+    for track_index in track_range {
+        let Some(track) = tracks.get(track_index) else {
+            continue;
+        };
         let samples = &track.samples;
-        let next = samples.partition_point(|sample| sample.second <= now);
+        let Some(cursor) = track_cursors.get_mut(track_index) else {
+            continue;
+        };
+        let next = deadsync_gameplay::partition_point_from_hint(samples, *cursor, |sample| {
+            sample.second <= now
+        });
+        *cursor = next;
         if next == 0 {
             continue;
         }
@@ -11464,6 +11567,206 @@ fn apply_song_lua_overlay_runtime_updates_for(
         }
         let value = song_lua_overlay_update_value_lerp(&from.value, &to.value, t);
         apply_song_lua_overlay_update_value(current, track.target, &value);
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn apply_song_lua_overlay_runtime_updates_for_reference(
+    now: f32,
+    overlay_index: usize,
+    tracks: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
+    current: &mut SongLuaOverlayState,
+) {
+    let start = tracks.partition_point(|track| track.overlay_index < overlay_index);
+    let end = start + tracks[start..].partition_point(|track| track.overlay_index == overlay_index);
+    for track in &tracks[start..end] {
+        let samples = &track.samples;
+        let next = samples.partition_point(|sample| sample.second <= now);
+        if next == 0 {
+            continue;
+        }
+        let from = &samples[next - 1];
+        let to = samples.get(next).unwrap_or(from);
+        let t = if to.second <= from.second + f32::EPSILON {
+            1.0
+        } else {
+            (now - from.second) / (to.second - from.second)
+        };
+        let value = song_lua_overlay_update_value_lerp(&from.value, &to.value, t);
+        apply_song_lua_overlay_update_value(current, track.target, &value);
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct SongLuaUpdateLookupBenchmark {
+    tracks: Vec<deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack>,
+    ranges: Box<[std::ops::Range<usize>]>,
+    cursors: Vec<usize>,
+    states: Vec<SongLuaOverlayState>,
+    frame: usize,
+    sample_count: usize,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl SongLuaUpdateLookupBenchmark {
+    pub fn new(overlay_count: usize, sample_count: usize) -> Self {
+        use deadsync_song_lua::{
+            SongLuaOverlayRuntimeUpdateSample as Sample, SongLuaOverlayRuntimeUpdateTrack as Track,
+            SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value,
+        };
+        let sample_count = sample_count.max(2);
+        let mut tracks = Vec::with_capacity(overlay_count.saturating_mul(2));
+        for overlay_index in 0..overlay_count {
+            for target in [Target::X, Target::SkewX] {
+                let samples = (0..sample_count)
+                    .map(|sample| Sample {
+                        second: sample as f32 / 120.0,
+                        value: Value::F32(overlay_index as f32 + sample as f32 * 0.03125),
+                    })
+                    .collect();
+                tracks.push(Track {
+                    overlay_index,
+                    target,
+                    samples,
+                });
+            }
+        }
+        let ranges = (0..overlay_count)
+            .map(|overlay| overlay * 2..overlay * 2 + 2)
+            .collect();
+        Self {
+            cursors: vec![0; tracks.len()],
+            tracks,
+            ranges,
+            states: vec![SongLuaOverlayState::default(); overlay_count],
+            frame: 0,
+            sample_count,
+        }
+    }
+
+    #[inline(always)]
+    fn now(&mut self) -> f32 {
+        let now = (self.frame % self.sample_count) as f32 / 120.0;
+        self.frame = self.frame.wrapping_add(1);
+        now
+    }
+
+    pub fn reference_frame(&mut self) -> u64 {
+        let now = self.now();
+        for (overlay_index, state) in self.states.iter_mut().enumerate() {
+            apply_song_lua_overlay_runtime_updates_for_reference(
+                now,
+                overlay_index,
+                &self.tracks,
+                state,
+            );
+        }
+        self.checksum()
+    }
+
+    pub fn current_frame(&mut self) -> u64 {
+        let now = self.now();
+        for (overlay_index, state) in self.states.iter_mut().enumerate() {
+            apply_song_lua_overlay_runtime_updates_for(
+                now,
+                &self.tracks,
+                self.ranges[overlay_index].clone(),
+                &mut self.cursors,
+                None,
+                state,
+            );
+        }
+        self.checksum()
+    }
+
+    fn checksum(&self) -> u64 {
+        self.states
+            .iter()
+            .enumerate()
+            .fold(0, |checksum, (index, state)| {
+                checksum.rotate_left(7)
+                    ^ u64::from(state.x.to_bits())
+                    ^ u64::from(state.skew_x.to_bits()).rotate_left(index as u32 & 31)
+            })
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct SongLuaUpdateSnapBenchmark {
+    tracks: Vec<deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack>,
+    visible_indices: Box<[usize]>,
+    cursors: Vec<usize>,
+    frame: usize,
+    sample_count: usize,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl SongLuaUpdateSnapBenchmark {
+    pub fn new(track_count: usize, sample_count: usize) -> Self {
+        use deadsync_song_lua::{
+            SongLuaOverlayRuntimeUpdateSample as Sample, SongLuaOverlayRuntimeUpdateTrack as Track,
+            SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value,
+        };
+        let track_count = track_count.max(1);
+        let sample_count = sample_count.max(2);
+        let tracks = (0..track_count)
+            .map(|index| {
+                let visible = index + 1 == track_count;
+                Track {
+                    overlay_index: index,
+                    target: if visible { Target::Visible } else { Target::X },
+                    samples: (0..sample_count)
+                        .map(|sample| Sample {
+                            second: sample as f32 / 120.0,
+                            value: if visible {
+                                Value::Bool(sample % 2 == 0)
+                            } else {
+                                Value::F32(sample as f32)
+                            },
+                        })
+                        .collect(),
+                }
+            })
+            .collect::<Vec<_>>();
+        Self {
+            visible_indices: Box::new([track_count - 1]),
+            cursors: vec![0; tracks.len()],
+            tracks,
+            frame: 0,
+            sample_count,
+        }
+    }
+
+    #[inline(always)]
+    fn now(&mut self) -> f32 {
+        let now = (self.frame % self.sample_count) as f32 / 120.0;
+        self.frame = self.frame.wrapping_add(1);
+        now
+    }
+
+    pub fn reference_frame(&mut self) -> u64 {
+        let now = self.now();
+        Self::checksum(song_lua_overlay_update_snap_reference(now, &self.tracks))
+    }
+
+    pub fn current_frame(&mut self) -> u64 {
+        let now = self.now();
+        Self::checksum(song_lua_overlay_update_snap(
+            now,
+            &self.tracks,
+            &self.visible_indices,
+            &mut self.cursors,
+        ))
+    }
+
+    fn checksum(snap: Option<SongLuaOverlayUpdateSnap>) -> u64 {
+        snap.map_or(0, |snap| {
+            u64::from(snap.start_second.to_bits())
+                ^ u64::from(snap.end_second.to_bits()).rotate_left(11)
+                ^ u64::from(snap.t.to_bits()).rotate_left(23)
+        })
     }
 }
 
@@ -11516,6 +11819,8 @@ fn song_lua_overlay_render_state_from(
     overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
     overlay_updates: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
+    update_range: std::ops::Range<usize>,
+    update_cursors: &mut [usize],
     update_snap: Option<SongLuaOverlayUpdateSnap>,
     message_cache: &mut SongLuaMessageStateCache,
 ) -> SongLuaOverlayState {
@@ -11524,9 +11829,7 @@ fn song_lua_overlay_render_state_from(
     let has_eases = overlay_ease_ranges
         .get(overlay_index)
         .is_some_and(|range| !range.is_empty());
-    let has_updates = overlay_updates
-        .binary_search_by_key(&overlay_index, |track| track.overlay_index)
-        .is_ok();
+    let has_updates = !update_range.is_empty();
     if !has_events && !has_eases && !has_updates {
         return overlay.initial_state;
     }
@@ -11538,6 +11841,8 @@ fn song_lua_overlay_render_state_from(
         overlay_eases,
         overlay_ease_ranges,
         overlay_updates,
+        update_range,
+        update_cursors,
         update_snap,
         message_cache,
     )
@@ -11551,6 +11856,8 @@ fn song_lua_overlay_render_state_dynamic(
     overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
     overlay_updates: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
+    update_range: std::ops::Range<usize>,
+    update_cursors: &mut [usize],
     update_snap: Option<SongLuaOverlayUpdateSnap>,
     message_cache: &mut SongLuaMessageStateCache,
 ) -> SongLuaOverlayState {
@@ -11570,8 +11877,9 @@ fn song_lua_overlay_render_state_dynamic(
     );
     apply_song_lua_overlay_runtime_updates_for(
         now,
-        overlay_index,
         overlay_updates,
+        update_range,
+        update_cursors,
         update_snap,
         &mut current,
     );
@@ -17409,7 +17717,7 @@ pub fn push_actors(
         &song_lua_visuals.overlay_ease_ranges,
         song_lua_visuals.screen_width,
         song_lua_visuals.screen_height,
-        &song_lua_overlay_order,
+        song_lua_overlay_order,
         song_lua_message_state_cache,
         song_lua_local_state_scratch,
         song_lua_overlay_state_scratch,
@@ -17429,7 +17737,7 @@ pub fn push_actors(
             &layer.overlay_ease_ranges,
             layer.screen_width,
             layer.screen_height,
-            &song_lua_background_visual_layer_orders[layer_idx],
+            &mut song_lua_background_visual_layer_orders[layer_idx],
             message_caches,
             local_states,
             layer_states,
@@ -17448,7 +17756,7 @@ pub fn push_actors(
             &layer.overlay_ease_ranges,
             layer.screen_width,
             layer.screen_height,
-            &song_lua_foreground_visual_layer_orders[layer_idx],
+            &mut song_lua_foreground_visual_layer_orders[layer_idx],
             message_caches,
             local_states,
             layer_states,
@@ -20168,6 +20476,8 @@ mod tests {
         let ranges = vec![0..0];
         let mut dynamic_cache = SongLuaMessageStateCache::default();
         let mut static_cache = SongLuaMessageStateCache::default();
+        let mut dynamic_cursors = Vec::new();
+        let mut static_cursors = Vec::new();
 
         for now in [-1.0, 0.0, 42.0, 10_000.0] {
             let expected = song_lua_overlay_render_state_dynamic(
@@ -20178,6 +20488,8 @@ mod tests {
                 &[],
                 &ranges,
                 &[],
+                0..0,
+                &mut dynamic_cursors,
                 None,
                 &mut dynamic_cache,
             );
@@ -20189,6 +20501,8 @@ mod tests {
                 &[],
                 &ranges,
                 &[],
+                0..0,
+                &mut static_cursors,
                 None,
                 &mut static_cache,
             );
@@ -20222,16 +20536,57 @@ mod tests {
                 },
             ],
         }];
+        let mut cursors = vec![0; tracks.len()];
         let mut active = SongLuaOverlayState::default();
-        apply_song_lua_overlay_runtime_updates_for(1.5, 0, &tracks, None, &mut active);
+        apply_song_lua_overlay_runtime_updates_for(
+            1.5,
+            &tracks,
+            0..1,
+            &mut cursors,
+            None,
+            &mut active,
+        );
         assert!((active.croptop - 0.4).abs() <= f32::EPSILON);
 
         let mut restored = SongLuaOverlayState {
             croptop: 0.9,
             ..SongLuaOverlayState::default()
         };
-        apply_song_lua_overlay_runtime_updates_for(3.0, 0, &tracks, None, &mut restored);
+        apply_song_lua_overlay_runtime_updates_for(
+            3.0,
+            &tracks,
+            0..1,
+            &mut cursors,
+            None,
+            &mut restored,
+        );
         assert_eq!(restored.croptop, 0.0);
+    }
+
+    #[test]
+    fn song_lua_update_cursors_match_binary_search_across_wraparound_seeks() {
+        let mut reference = SongLuaUpdateLookupBenchmark::new(32, 257);
+        let mut current = SongLuaUpdateLookupBenchmark::new(32, 257);
+        for frame in 0..1_029 {
+            assert_eq!(
+                reference.reference_frame(),
+                current.current_frame(),
+                "frame={frame}"
+            );
+        }
+    }
+
+    #[test]
+    fn song_lua_visible_track_index_matches_full_scan_across_wraparound_seeks() {
+        let mut reference = SongLuaUpdateSnapBenchmark::new(257, 257);
+        let mut current = SongLuaUpdateSnapBenchmark::new(257, 257);
+        for frame in 0..1_029 {
+            assert_eq!(
+                reference.reference_frame(),
+                current.current_frame(),
+                "frame={frame}"
+            );
+        }
     }
 
     #[test]
@@ -20281,17 +20636,46 @@ mod tests {
 
         let mut crop = SongLuaOverlayState::default();
         let mut visible = SongLuaOverlayState::default();
-        let snap = song_lua_overlay_update_snap(0.5, &tracks);
-        apply_song_lua_overlay_runtime_updates_for(0.5, 0, &tracks, snap, &mut crop);
-        apply_song_lua_overlay_runtime_updates_for(0.5, 1, &tracks, snap, &mut visible);
+        let mut cursors = vec![0; tracks.len()];
+        let snap = song_lua_overlay_update_snap(0.5, &tracks, &[1], &mut cursors);
+        apply_song_lua_overlay_runtime_updates_for(
+            0.5,
+            &tracks,
+            0..1,
+            &mut cursors,
+            snap,
+            &mut crop,
+        );
+        apply_song_lua_overlay_runtime_updates_for(
+            0.5,
+            &tracks,
+            1..2,
+            &mut cursors,
+            snap,
+            &mut visible,
+        );
         assert_eq!(crop.cropbottom, 0.8);
         assert!(visible.visible);
 
         let mut crop = SongLuaOverlayState::default();
         let mut visible = SongLuaOverlayState::default();
-        let snap = song_lua_overlay_update_snap(1.5, &tracks);
-        apply_song_lua_overlay_runtime_updates_for(1.5, 0, &tracks, snap, &mut crop);
-        apply_song_lua_overlay_runtime_updates_for(1.5, 1, &tracks, snap, &mut visible);
+        let snap = song_lua_overlay_update_snap(1.5, &tracks, &[1], &mut cursors);
+        apply_song_lua_overlay_runtime_updates_for(
+            1.5,
+            &tracks,
+            0..1,
+            &mut cursors,
+            snap,
+            &mut crop,
+        );
+        apply_song_lua_overlay_runtime_updates_for(
+            1.5,
+            &tracks,
+            1..2,
+            &mut cursors,
+            snap,
+            &mut visible,
+        );
         assert_eq!(crop.cropbottom, 0.8);
         assert!(visible.visible);
     }
@@ -20301,6 +20685,7 @@ mod tests {
         let mut message_caches = vec![SongLuaMessageStateCache::default()];
         let mut local_states = vec![SongLuaOverlayState::default()];
         let mut states = vec![SongLuaOverlayState::default()];
+        let mut order_cache = SongLuaOverlayOrderCache::default();
 
         song_lua_overlay_state_sets_from_into(
             42.0,
@@ -20310,7 +20695,7 @@ mod tests {
             &[],
             640.0,
             480.0,
-            &SongLuaOverlayOrderCache::default(),
+            &mut order_cache,
             &mut message_caches,
             &mut local_states,
             &mut states,
@@ -20515,7 +20900,7 @@ mod tests {
             Vec::new(),
         ];
         let ranges = vec![0..0; overlays.len()];
-        let plan = song_lua_overlay_order_cache_from(&overlays, &[]);
+        let mut plan = song_lua_overlay_order_cache_from(&overlays, &[]);
         assert_eq!(&*plan.dynamic_local_indices, &[2]);
         assert_eq!(&*plan.dynamic_composed_indices, &[2, 3]);
         let mut full_caches = vec![SongLuaMessageStateCache::default(); overlays.len()];
@@ -20550,7 +20935,7 @@ mod tests {
                 &ranges,
                 640.0,
                 480.0,
-                &plan,
+                &mut plan,
                 &mut planned_caches,
                 &mut planned_local,
                 &mut planned_composed,
