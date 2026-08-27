@@ -14377,8 +14377,12 @@ fn build_song_lua_aft_sprite_actor(
         mask_dest: state.mask_dest,
         rot_x_deg: effect_rot[0],
         rot_y_deg: effect_rot[1],
-        rot_z_deg: effect_rot[2],
-        skew: [state.skew_x, state.skew_y],
+        // ITG actors are authored in screen space (Y down), while the AFT
+        // sprite is emitted in render space (Y up). Reflect the in-plane
+        // transform so the strip's authored position compensation cancels
+        // its skew instead of doubling it.
+        rot_z_deg: -effect_rot[2],
+        skew: [-state.skew_x, -state.skew_y],
         local_offset: [0.0, 0.0],
         local_offset_rot_sin_cos: [0.0, 1.0],
         texcoordvelocity: state.texcoord_velocity,
@@ -19980,10 +19984,11 @@ mod tests {
     }
 
     #[test]
-    fn aft_sprite_preserves_song_lua_skew_for_strip_composition() {
+    fn aft_sprite_reflects_song_lua_in_plane_transform_into_world_space() {
         let state = SongLuaOverlayState {
             x: 0.5 * screen_width(),
             y: 0.5 * screen_height(),
+            rot_z_deg: 30.0,
             skew_x: 0.375,
             skew_y: -0.25,
             ..SongLuaOverlayState::default()
@@ -20005,7 +20010,8 @@ mod tests {
         assert!(matches!(
             actors.first(),
             Some(Actor::Sprite {
-                skew: [0.375, -0.25],
+                rot_z_deg: -30.0,
+                skew: [-0.375, 0.25],
                 ..
             })
         ));
