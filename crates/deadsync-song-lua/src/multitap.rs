@@ -552,6 +552,7 @@ fn push_overlay_sample_instant_visible(
     });
 }
 
+#[must_use]
 pub fn calc_multitap_phase(desc: &MultitapDesc, beat: f32) -> MultitapPhase {
     let mut out = MultitapPhase {
         pos: 0.0,
@@ -613,6 +614,7 @@ fn calc_multitap_qtzn(beat: Option<f32>) -> u8 {
     }
 }
 
+#[must_use]
 pub fn multitap_frame_state(
     baseline: SongLuaOverlayState,
     context: &SongLuaCompileContext,
@@ -685,6 +687,7 @@ fn multitap_arrow_state(
     state
 }
 
+#[must_use]
 pub fn multitap_deco_state(
     baseline: SongLuaOverlayState,
     noteskin_resolver: SongLuaNoteskinResolver,
@@ -709,6 +712,7 @@ pub fn multitap_deco_state(
     state
 }
 
+#[must_use]
 pub fn multitap_deco_child_state(
     baseline: SongLuaOverlayState,
     noteskin_resolver: SongLuaNoteskinResolver,
@@ -729,6 +733,7 @@ pub fn multitap_deco_child_state(
     state
 }
 
+#[must_use]
 pub fn multitap_explosion_state(
     baseline: SongLuaOverlayState,
     context: &SongLuaCompileContext,
@@ -760,64 +765,64 @@ const fn multitap_pair(left: u32, right: u32) -> MultitapColorPair {
 }
 
 const MULTITAP_QTZN_VIVID: [MultitapColorPair; 8] = [
-    multitap_pair(0xffffff, 0xcccccc),
-    multitap_pair(0xffffff, 0xcccccc),
-    multitap_pair(0xffffff, 0xcccccc),
-    multitap_pair(0xffffff, 0xcccccc),
-    multitap_pair(0xffffff, 0xcccccc),
-    multitap_pair(0xffffff, 0xcccccc),
-    multitap_pair(0xffffff, 0xcccccc),
-    multitap_pair(0xffffff, 0xcccccc),
+    multitap_pair(0x00ff_ffff, 0x00cc_cccc),
+    multitap_pair(0x00ff_ffff, 0x00cc_cccc),
+    multitap_pair(0x00ff_ffff, 0x00cc_cccc),
+    multitap_pair(0x00ff_ffff, 0x00cc_cccc),
+    multitap_pair(0x00ff_ffff, 0x00cc_cccc),
+    multitap_pair(0x00ff_ffff, 0x00cc_cccc),
+    multitap_pair(0x00ff_ffff, 0x00cc_cccc),
+    multitap_pair(0x00ff_ffff, 0x00cc_cccc),
 ];
 const MULTITAP_QTZN_SHADOW: [MultitapColorPair; 8] = [
-    multitap_pair(0xff6100, 0xff0000),
-    multitap_pair(0x00a2ff, 0x00f0ff),
-    multitap_pair(0xfa81d1, 0x7a15fe),
-    multitap_pair(0xe2f90f, 0x09a357),
-    multitap_pair(0xfa81d1, 0x7a15fe),
-    multitap_pair(0xf1db03, 0xe67b02),
-    multitap_pair(0x33fc7b, 0x04b8b6),
-    multitap_pair(0x33fc7b, 0x04b8b6),
+    multitap_pair(0x00ff_6100, 0x00ff_0000),
+    multitap_pair(0x0000_a2ff, 0x0000_f0ff),
+    multitap_pair(0x00fa_81d1, 0x007a_15fe),
+    multitap_pair(0x00e2_f90f, 0x0009_a357),
+    multitap_pair(0x00fa_81d1, 0x007a_15fe),
+    multitap_pair(0x00f1_db03, 0x00e6_7b02),
+    multitap_pair(0x0033_fc7b, 0x0004_b8b6),
+    multitap_pair(0x0033_fc7b, 0x0004_b8b6),
 ];
 const MULTITAP_QTZN_NOTE: [MultitapColorPair; 8] = [
-    multitap_pair(0xff7c7c, 0xff2121),
-    multitap_pair(0x7e86f4, 0x2432ec),
-    multitap_pair(0xbe77fb, 0x9018f8),
-    multitap_pair(0xfaff73, 0xf7ff11),
-    multitap_pair(0xf383bf, 0xeb2c93),
-    multitap_pair(0xff966d, 0xff4d06),
-    multitap_pair(0x90e3ff, 0x43d0ff),
-    multitap_pair(0x85ff7c, 0x30ff20),
+    multitap_pair(0x00ff_7c7c, 0x00ff_2121),
+    multitap_pair(0x007e_86f4, 0x0024_32ec),
+    multitap_pair(0x00be_77fb, 0x0090_18f8),
+    multitap_pair(0x00fa_ff73, 0x00f7_ff11),
+    multitap_pair(0x00f3_83bf, 0x00eb_2c93),
+    multitap_pair(0x00ff_966d, 0x00ff_4d06),
+    multitap_pair(0x0090_e3ff, 0x0043_d0ff),
+    multitap_pair(0x0085_ff7c, 0x0030_ff20),
 ];
 const MULTITAP_QTZN_COLOR: [MultitapColorPair; 8] = [
-    multitap_pair(0xffc5c5, 0xff0000),
-    multitap_pair(0x0000ff, 0xc5c5ff),
-    multitap_pair(0x00ff00, 0xc5ffc5),
-    multitap_pair(0xfff617, 0x646001),
-    multitap_pair(0x00ff00, 0xc5ffc5),
-    multitap_pair(0x00ff00, 0xc5ffc5),
-    multitap_pair(0x00ff00, 0xc5ffc5),
-    multitap_pair(0x00ff00, 0xc5ffc5),
+    multitap_pair(0x00ff_c5c5, 0x00ff_0000),
+    multitap_pair(0x0000_00ff, 0x00c5_c5ff),
+    multitap_pair(0x0000_ff00, 0x00c5_ffc5),
+    multitap_pair(0x00ff_f617, 0x0064_6001),
+    multitap_pair(0x0000_ff00, 0x00c5_ffc5),
+    multitap_pair(0x0000_ff00, 0x00c5_ffc5),
+    multitap_pair(0x0000_ff00, 0x00c5_ffc5),
+    multitap_pair(0x0000_ff00, 0x00c5_ffc5),
 ];
 const MULTITAP_QTZN_RAINBOW: [MultitapColorPair; 8] = [
-    multitap_pair(0xff6100, 0xff0000),
-    multitap_pair(0x00a2ff, 0x00f0ff),
-    multitap_pair(0xfa81d1, 0x7a15fe),
-    multitap_pair(0xfa81d1, 0x7a15fe),
-    multitap_pair(0xfa81d1, 0x7a15fe),
-    multitap_pair(0xfa81d1, 0x7a15fe),
-    multitap_pair(0xfa81d1, 0x7a15fe),
-    multitap_pair(0xfa81d1, 0x7a15fe),
+    multitap_pair(0x00ff_6100, 0x00ff_0000),
+    multitap_pair(0x0000_a2ff, 0x0000_f0ff),
+    multitap_pair(0x00fa_81d1, 0x007a_15fe),
+    multitap_pair(0x00fa_81d1, 0x007a_15fe),
+    multitap_pair(0x00fa_81d1, 0x007a_15fe),
+    multitap_pair(0x00fa_81d1, 0x007a_15fe),
+    multitap_pair(0x00fa_81d1, 0x007a_15fe),
+    multitap_pair(0x00fa_81d1, 0x007a_15fe),
 ];
 const MULTITAP_QTZN_HORSE: [MultitapColorPair; 8] = [
-    multitap_pair(0xdfa9db, 0xa96fba),
-    multitap_pair(0xfaba61, 0xd49234),
-    multitap_pair(0x98d3f1, 0x2c78b6),
-    multitap_pair(0xfe96b9, 0xb7366e),
-    multitap_pair(0xb6b3d5, 0x6947bf),
-    multitap_pair(0xf0e56e, 0xeae6bf),
-    multitap_pair(0x8b7bff, 0x503497),
-    multitap_pair(0xebe6ad, 0xedb032),
+    multitap_pair(0x00df_a9db, 0x00a9_6fba),
+    multitap_pair(0x00fa_ba61, 0x00d4_9234),
+    multitap_pair(0x0098_d3f1, 0x002c_78b6),
+    multitap_pair(0x00fe_96b9, 0x00b7_366e),
+    multitap_pair(0x00b6_b3d5, 0x0069_47bf),
+    multitap_pair(0x00f0_e56e, 0x00ea_e6bf),
+    multitap_pair(0x008b_7bff, 0x0050_3497),
+    multitap_pair(0x00eb_e6ad, 0x00ed_b032),
 ];
 
 const fn multitap_qtzn_tex(qtzn: u8) -> usize {
@@ -988,6 +993,7 @@ macro_rules! overlay_option_fields {
     };
 }
 
+#[must_use]
 pub fn overlay_delta_pair_from_states(
     baseline: SongLuaOverlayState,
     from: SongLuaOverlayState,

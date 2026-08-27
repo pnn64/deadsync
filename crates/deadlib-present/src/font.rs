@@ -514,6 +514,7 @@ fn replace_unicode_markers(text: &str) -> Cow<'_, str> {
 /// Replace StepMania-style text markers:
 /// - `&NAME;` (`FontCharAliases` like `&START;`, `&MENULEFT;`)
 /// - `&#NNNN;` (decimal) and `&xNNNN;` (hex) Unicode markers
+#[must_use]
 pub fn replace_markers(text: &str) -> Cow<'_, str> {
     if !text.as_bytes().contains(&b'&') {
         return Cow::Borrowed(text);
@@ -2871,6 +2872,7 @@ pub fn parse_with_texture_context(
 /* ======================= API ======================= */
 
 /// Traverses the font fallback chain to find a glyph for a given character.
+#[must_use]
 pub fn find_glyph<'a>(start_font: &'a Font, c: char, all_fonts: &'a FontMap) -> Option<&'a Glyph> {
     if c.is_ascii() {
         return start_font.ascii_glyphs[c as usize].as_ref();
@@ -2898,6 +2900,7 @@ pub fn find_glyph<'a>(start_font: &'a Font, c: char, all_fonts: &'a FontMap) -> 
 
 /// `StepMania` parity: calculates the logical width of a line by summing the integer advances.
 #[inline(always)]
+#[must_use]
 pub fn measure_line_width_logical(font: &Font, text: &str, all_fonts: &FontMap) -> i32 {
     text.chars()
         .map(|c| find_glyph(font, c, all_fonts).map_or(0, |glyph| glyph.advance_i32))

@@ -137,6 +137,7 @@ where
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_lua_target_matches_player(target_player: Option<u8>, player: usize) -> bool {
     match target_player {
         Some(target) => usize::from(target) == player + 1,
@@ -145,6 +146,7 @@ pub fn song_lua_target_matches_player(target_player: Option<u8>, player: usize) 
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_lua_end_value(start: f32, limit: f32, span_mode: SongLuaRuntimeSpanMode) -> f32 {
     match span_mode {
         SongLuaRuntimeSpanMode::Len => start + limit.max(0.0),
@@ -153,6 +155,7 @@ pub fn song_lua_end_value(start: f32, limit: f32, span_mode: SongLuaRuntimeSpanM
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_lua_time_to_second(
     unit: SongLuaRuntimeTimeUnit,
     value: f32,
@@ -166,6 +169,7 @@ pub fn song_lua_time_to_second(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_lua_message_second(
     beat: f32,
     timing_player: &TimingData,
@@ -180,6 +184,7 @@ pub fn song_lua_message_second(
     event_second.is_finite().then_some(event_second)
 }
 
+#[must_use]
 pub fn song_lua_window_seconds(
     unit: SongLuaRuntimeTimeUnit,
     start: f32,
@@ -197,6 +202,7 @@ pub fn song_lua_window_seconds(
     Some((start_second, end_second))
 }
 
+#[must_use]
 pub fn song_lua_sustain_end_second(
     unit: SongLuaRuntimeTimeUnit,
     start: f32,
@@ -621,6 +627,7 @@ where
     }
 }
 
+#[must_use]
 pub fn song_lua_compile_player_screen_x(
     num_players: usize,
     player_index: usize,

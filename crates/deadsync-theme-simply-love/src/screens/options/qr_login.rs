@@ -22,7 +22,7 @@ use smallvec::SmallVec;
 const ALL_SIDES: [profile_data::PlayerSide; 2] =
     [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2];
 
-pub(crate) fn append_dismiss_effects(
+pub fn append_dismiss_effects(
     effects: &mut Vec<ThemeEffect>,
     sound_path: &'static str,
     service: crate::SimplyLoveQrLoginService,
@@ -71,7 +71,7 @@ const fn ui_section(ui: &QrLoginUiState) -> &'static str {
 type BackendKind = crate::SimplyLoveQrLoginService;
 
 #[derive(Debug, Clone)]
-pub(crate) enum SlotState {
+pub enum SlotState {
     /// Side is not joined to the session; the slot is hidden entirely.
     NotJoined,
     /// Side is joined but has no Local profile loaded — login is refused.
@@ -102,7 +102,7 @@ impl SlotState {
     }
 }
 
-pub(crate) struct LoginSlot {
+pub struct LoginSlot {
     pub(crate) side: profile_data::PlayerSide,
     pub(crate) state: SlotState,
     /// Which online service this slot is presenting.
@@ -116,12 +116,12 @@ pub(crate) struct LoginSlot {
     pub(crate) had_existing_key: bool,
 }
 
-pub(crate) struct QrLoginUiState {
+pub struct QrLoginUiState {
     pub(crate) slots: [LoginSlot; 2],
 }
 
 /// Build theme-owned display state from the shell-prepared login request.
-pub(crate) fn create_login_ui(request: &crate::SimplyLoveQrLoginRequest) -> QrLoginUiState {
+pub fn create_login_ui(request: &crate::SimplyLoveQrLoginRequest) -> QrLoginUiState {
     QrLoginUiState {
         slots: request.slots.clone().map(|slot| LoginSlot {
             side: slot.side,
@@ -138,6 +138,7 @@ pub(crate) fn create_login_ui(request: &crate::SimplyLoveQrLoginRequest) -> QrLo
 }
 
 /// Apply credential-free progress events prepared by the shell.
+#[allow(clippy::redundant_pub_crate)]
 pub(crate) fn apply_events(
     ui: &mut QrLoginUiState,
     events: impl IntoIterator<Item = crate::SimplyLoveQrLoginEvent>,
@@ -172,11 +173,11 @@ pub(crate) fn apply_events(
 /// `true` when every slot is in a state that needs no further work —
 /// i.e. it's safe to dismiss without silently dropping an in-flight
 /// session.
-pub(crate) fn login_overlay_is_terminal(ui: &QrLoginUiState) -> bool {
+pub fn login_overlay_is_terminal(ui: &QrLoginUiState) -> bool {
     ui.slots.iter().all(|s| s.state.is_workless())
 }
 
-pub(crate) fn push_qr_login_overlay_actors(
+pub fn push_qr_login_overlay_actors(
     out: &mut Vec<Actor>,
     ui: &QrLoginUiState,
     active_color_index: i32,
@@ -510,6 +511,7 @@ pub struct QrOverlayBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl QrOverlayBenchmark {
+    #[must_use]
     pub fn new() -> Self {
         let benchmark = Self {
             ui: QrLoginUiState {

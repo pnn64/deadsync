@@ -17,6 +17,7 @@ pub fn song_group_name(song_dir: &Path) -> String {
         .to_string()
 }
 
+#[must_use]
 pub fn song_lookup_matches(query: &str, song_dir: &str, group: &str, title: &str) -> bool {
     let query = query.trim().replace('\\', "/");
     !query.is_empty()
@@ -26,6 +27,7 @@ pub fn song_lookup_matches(query: &str, song_dir: &str, group: &str, title: &str
             || query.eq_ignore_ascii_case(title))
 }
 
+#[must_use]
 pub fn theme_path(kind: &str, group: &str, name: &str) -> String {
     let group = group.trim_matches('/');
     let name = name.trim_start_matches('/');
@@ -53,6 +55,7 @@ pub fn song_simfile_path(song_dir: &Path) -> Option<PathBuf> {
     song_first_file_path(song_dir, is_song_lua_simfile_path)
 }
 
+#[must_use]
 pub fn resolve_compat_path(song_dir: &Path, raw_path: &str) -> PathBuf {
     let path = Path::new(raw_path.trim());
     if path.is_absolute() {
@@ -270,6 +273,7 @@ pub fn call_with_chunk_env<T>(
     result
 }
 
+#[must_use]
 pub fn entry_file_path(path: &Path) -> Option<PathBuf> {
     if path.is_file() {
         return Some(path.to_path_buf());
@@ -569,6 +573,7 @@ fn fileman_entry_name(path: &Path, return_path_too: bool) -> String {
         .to_string()
 }
 
+#[must_use]
 pub fn wildcard_matches(pattern: &str, text: &str) -> bool {
     let pattern = pattern.as_bytes();
     let text = text.as_bytes();
@@ -595,11 +600,13 @@ pub fn wildcard_matches(pattern: &str, text: &str) -> bool {
     pattern[pattern_idx..].iter().all(|byte| *byte == b'*')
 }
 
+#[must_use]
 pub fn path_basename(text: &str) -> &str {
     let trimmed = text.trim_end_matches(['/', '\\']);
     trimmed.rsplit(['/', '\\']).next().unwrap_or_default()
 }
 
+#[must_use]
 pub fn actor_util_class_registered(name: &str) -> bool {
     matches!(
         name,
@@ -643,6 +650,7 @@ pub fn actor_util_file_type(path: &str) -> &'static str {
     }
 }
 
+#[must_use]
 pub fn strip_sprite_hints(filename: &str) -> String {
     let mut text = filename.replace(" (doubleres)", "");
     if text
@@ -723,6 +731,7 @@ fn path_stem_eq(path: &Path, stem: &str) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_dir_string(path: &Path) -> String {
     let mut text = path.to_string_lossy().replace('\\', "/");
     if !text.ends_with('/') {
@@ -732,11 +741,13 @@ pub fn song_dir_string(path: &Path) -> String {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn file_path_string(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
 #[inline(always)]
+#[must_use]
 pub fn is_song_lua_image_path(path: &Path) -> bool {
     path_has_extension(
         path,
@@ -747,6 +758,7 @@ pub fn is_song_lua_image_path(path: &Path) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn is_song_lua_video_path(path: &Path) -> bool {
     path_has_extension(
         path,
@@ -755,16 +767,19 @@ pub fn is_song_lua_video_path(path: &Path) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn is_song_lua_audio_path(path: &Path) -> bool {
     path_has_extension(path, &["ogg", "mp3", "wav", "flac", "opus", "m4a", "aac"])
 }
 
 #[inline(always)]
+#[must_use]
 pub fn is_song_lua_simfile_path(path: &Path) -> bool {
     path_has_extension(path, &["sm", "ssc"])
 }
 
 #[inline(always)]
+#[must_use]
 pub fn is_song_lua_media_path(path: &Path) -> bool {
     is_song_lua_image_path(path) || is_song_lua_video_path(path) || is_song_lua_audio_path(path)
 }

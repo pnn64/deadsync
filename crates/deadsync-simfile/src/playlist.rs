@@ -22,6 +22,7 @@ pub struct PlaylistSongLookup {
     by_group: HashMap<String, Vec<Arc<SongData>>>,
 }
 
+#[must_use]
 pub fn normalize_song_path(song_path: &str) -> String {
     normalize_song_path_with(song_path, false)
 }
@@ -49,6 +50,7 @@ fn normalize_song_path_with(song_path: &str, ascii_lowercase: bool) -> String {
     normalized
 }
 
+#[must_use]
 pub fn pack_and_song_name_from_path(song_path: &str) -> Option<(String, String)> {
     let mut parts = song_path
         .trim()
@@ -59,6 +61,7 @@ pub fn pack_and_song_name_from_path(song_path: &str) -> Option<(String, String)>
     Some((pack.to_string(), song.to_string()))
 }
 
+#[must_use]
 pub fn song_pack_and_dir_name(song: &SongData) -> Option<(&str, &str)> {
     let song_dir = song.simfile_path.parent()?.file_name()?.to_str()?;
     let pack_dir = song

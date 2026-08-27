@@ -32,10 +32,12 @@ pub enum ValueCurve {
 }
 
 impl ValueCurve {
+    #[must_use]
     pub const fn linear(max_raw: u16) -> Self {
         Self::Linear { max_raw }
     }
 
+    #[must_use]
     pub const fn quartic_blend(max_raw: u16, quartic_weight: f32, linear_weight: f32) -> Self {
         Self::QuarticBlend {
             max_raw,
@@ -44,6 +46,7 @@ impl ValueCurve {
         }
     }
 
+    #[must_use]
     pub const fn normalize(self, value: u16) -> f32 {
         let max_raw = match self {
             Self::Linear { max_raw } | Self::QuarticBlend { max_raw, .. } => max_raw,

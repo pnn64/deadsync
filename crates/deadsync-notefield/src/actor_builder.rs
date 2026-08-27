@@ -119,6 +119,7 @@ pub struct CapturedActorScratch {
 }
 
 impl CapturedActorScratch {
+    #[must_use]
     pub fn with_capacities(field_capacity: usize, hud_capacity: usize) -> Self {
         Self {
             note_field: SharedActorFrameScratch::with_capacity(field_capacity),
@@ -129,6 +130,7 @@ impl CapturedActorScratch {
 }
 
 impl BuiltNotefield {
+    #[must_use]
     pub const fn empty(layout_center_x: f32) -> Self {
         Self {
             layout_center_x,

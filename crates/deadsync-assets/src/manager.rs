@@ -18,6 +18,7 @@ pub struct AssetManager {
 }
 
 impl AssetManager {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             store: AssetStore::new(),
@@ -29,31 +30,37 @@ impl AssetManager {
         self.store.register_font(name, font);
     }
 
+    #[must_use]
     pub const fn fonts(&self) -> &FontMap {
         self.store.fonts()
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn textures(&self) -> &TextureHandleMap<RendererTexture> {
         self.store.textures()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_texture_key(&self, key: &str) -> bool {
         self.store.has_texture_key(key)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_uploaded_texture_key(&self, key: &str) -> bool {
         self.store.has_uploaded_texture_key(key)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_pending_texture_upload(&self, key: &str) -> bool {
         self.store.has_pending_texture_upload(key)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_pending_texture_upload_handle(&self, handle: TextureHandle) -> bool {
         self.store.has_pending_texture_upload_handle(handle)
     }

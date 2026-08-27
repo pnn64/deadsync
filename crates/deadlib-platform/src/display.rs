@@ -12,6 +12,7 @@ pub enum FullscreenType {
 }
 
 impl FullscreenType {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Exclusive => "Exclusive",
@@ -20,6 +21,7 @@ impl FullscreenType {
     }
 }
 
+#[must_use]
 pub const fn fullscreen_type_choice_index(fullscreen_type: FullscreenType) -> usize {
     match fullscreen_type {
         FullscreenType::Exclusive => 0,
@@ -27,6 +29,7 @@ pub const fn fullscreen_type_choice_index(fullscreen_type: FullscreenType) -> us
     }
 }
 
+#[must_use]
 pub const fn fullscreen_type_from_choice(idx: usize) -> FullscreenType {
     match idx {
         1 => FullscreenType::Borderless,
@@ -44,6 +47,7 @@ pub const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
     (800, 600),
 ];
 
+#[must_use]
 pub fn display_aspect_choice_index(width: u32, height: u32) -> usize {
     if height == 0 {
         return 0;
@@ -76,6 +80,7 @@ pub fn display_aspect_choice_index(width: u32, height: u32) -> usize {
     best_idx
 }
 
+#[must_use]
 pub fn display_aspect_label_from_choice(idx: usize) -> &'static str {
     DISPLAY_ASPECT_RATIO_LABELS
         .get(idx)
@@ -89,6 +94,7 @@ pub fn push_unique_resolution(target: &mut Vec<(u32, u32)>, width: u32, height: 
     }
 }
 
+#[must_use]
 pub fn preset_resolutions_for_aspect(label: &str) -> Vec<(u32, u32)> {
     match label.to_ascii_lowercase().as_str() {
         "16:9" => vec![(1280, 720), (1600, 900), (1920, 1080)],
@@ -105,6 +111,7 @@ pub fn preset_resolutions_for_aspect(label: &str) -> Vec<(u32, u32)> {
     }
 }
 
+#[must_use]
 pub fn aspect_matches(width: u32, height: u32, label: &str) -> bool {
     let ratio = width as f32 / height as f32;
     match label {
@@ -233,6 +240,7 @@ const fn names_match(lhs: &str, rhs: &str) -> bool {
 /// Returns a best-effort friendly name for each monitor handle.
 /// OS APIs are queried for friendly names; if we cannot match a monitor,
 /// we fall back to winit's name or "Screen N".
+#[must_use]
 pub fn friendly_monitor_names(monitors: &[MonitorHandle]) -> Vec<String> {
     let snapshots = snapshot_displays();
     let mut used = vec![false; snapshots.len()];
@@ -296,6 +304,7 @@ pub fn friendly_monitor_names(monitors: &[MonitorHandle]) -> Vec<String> {
 }
 
 /// Return monitor specs with friendly names and all advertised video modes.
+#[must_use]
 pub fn monitor_specs(monitors: &[MonitorHandle]) -> Vec<MonitorSpec> {
     let friendly_names = friendly_monitor_names(monitors);
     monitors
@@ -345,6 +354,7 @@ pub fn supported_refresh_rates(spec: Option<&MonitorSpec>, width: u32, height: u
 }
 
 /// Resolve a monitor handle from the requested index, returning (handle, count, `clamped_index`).
+#[must_use]
 pub fn resolve_monitor(
     event_loop: &ActiveEventLoop,
     monitor_index: usize,
@@ -364,6 +374,7 @@ pub fn resolve_monitor(
 }
 
 /// Center the window on the given monitor, clamped to the monitor's bounds.
+#[must_use]
 pub fn default_window_position(
     width: u32,
     height: u32,

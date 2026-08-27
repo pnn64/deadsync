@@ -161,6 +161,7 @@ fn bezier_y_from_x(
 /// StepMania/ITGmania `bouncebegin` tween curve parameterization.
 /// Ported from `itgmania/Themes/_fallback/Scripts/02 Actor.lua`.
 #[inline(always)]
+#[must_use]
 pub fn bouncebegin_p(x: f32) -> f32 {
     bezier_y_from_x(x, 0.0, 0.0, 0.42, -0.42, 2.0 / 3.0, 0.3, 1.0, 1.0)
 }
@@ -168,6 +169,7 @@ pub fn bouncebegin_p(x: f32) -> f32 {
 /// StepMania/ITGmania `bounceend` tween curve parameterization.
 /// Ported from `itgmania/Themes/_fallback/Scripts/02 Actor.lua`.
 #[inline(always)]
+#[must_use]
 pub fn bounceend_p(x: f32) -> f32 {
     bezier_y_from_x(x, 0.0, 0.0, 1.0 / 3.0, 0.7, 0.58, 1.42, 1.0, 1.0)
 }
@@ -175,6 +177,7 @@ pub fn bounceend_p(x: f32) -> f32 {
 /// Evaluate `ease_p` like StepMania/ITGmania `Actor:ease(t, fEase)`.
 /// Ported from `itgmania/Themes/_fallback/Scripts/02 Actor.lua`.
 #[inline(always)]
+#[must_use]
 pub fn eval_ease_p_for_f_ease(x: f32, f_ease: f32) -> f32 {
     let f = f_ease.clamp(-100.0, 100.0);
     if f == -100.0 {
@@ -199,6 +202,7 @@ pub fn eval_ease_p_for_f_ease(x: f32, f_ease: f32) -> f32 {
 
 /// Construct `ease(time, fEase)` — fEase in [-100, 100]; 0 = linear.
 #[inline(always)]
+#[must_use]
 pub fn ease(dur: f32, f_ease: f32) -> SegmentBuilder {
     let bias = f_ease.clamp(-100.0, 100.0);
     SegmentBuilder::new(Ease::EaseInOut { bias }, dur)
@@ -206,6 +210,7 @@ pub fn ease(dur: f32, f_ease: f32) -> SegmentBuilder {
 
 /// Construct `smooth(time)` — classic in–out S curve.
 #[inline(always)]
+#[must_use]
 pub fn smooth(dur: f32) -> SegmentBuilder {
     SegmentBuilder::new(Ease::Smooth, dur)
 }
@@ -259,6 +264,7 @@ impl Default for EffectState {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn effect_clock_units(effect: EffectState, time: f32, beat: f32) -> f32 {
     match effect.clock {
         EffectClock::Time => time,
@@ -267,6 +273,7 @@ pub const fn effect_clock_units(effect: EffectState, time: f32, beat: f32) -> f3
 }
 
 #[inline(always)]
+#[must_use]
 pub fn effect_mix(effect: EffectState, time: f32, beat: f32) -> Option<f32> {
     if !matches!(
         effect.mode,
@@ -312,6 +319,7 @@ pub fn effect_mix(effect: EffectState, time: f32, beat: f32) -> Option<f32> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn glowshift_mix(through: f32) -> f32 {
     ((through + 0.25) * 2.0 * std::f32::consts::PI)
         .sin()
@@ -849,29 +857,35 @@ impl SegmentBuilder {
     }
 
     // --- position ---
+    #[must_use]
     pub fn x(mut self, v: f32) -> Self {
         self.ops.push(BuildOp::X(Target::Abs(v)));
         self
     }
+    #[must_use]
     pub fn y(mut self, v: f32) -> Self {
         self.ops.push(BuildOp::Y(Target::Abs(v)));
         self
     }
+    #[must_use]
     pub fn xy(mut self, x: f32, y: f32) -> Self {
         self.ops.push(BuildOp::X(Target::Abs(x)));
         self.ops.push(BuildOp::Y(Target::Abs(y)));
         self
     }
+    #[must_use]
     pub fn addx(mut self, dx: f32) -> Self {
         self.ops.push(BuildOp::X(Target::Rel(dx)));
         self
     }
+    #[must_use]
     pub fn addy(mut self, dy: f32) -> Self {
         self.ops.push(BuildOp::Y(Target::Rel(dy)));
         self
     }
 
     // --- absolute size (StepMania: SetWidth/SetHeight/setsize) ---
+    #[must_use]
     pub fn size(mut self, w: f32, h: f32) -> Self {
         self.ops.push(BuildOp::Width(Target::Abs(w)));
         self.ops.push(BuildOp::Height(Target::Abs(h)));
@@ -879,6 +893,7 @@ impl SegmentBuilder {
     }
 
     // --- StepMania zoom semantics (scale factors) ---
+    #[must_use]
     pub fn zoom(mut self, f: f32, g: f32) -> Self {
         if (f - g).abs() < f32::EPSILON {
             self.ops.push(BuildOp::ZoomBoth(Target::Abs(f)));
@@ -888,24 +903,29 @@ impl SegmentBuilder {
         }
         self
     }
+    #[must_use]
     pub fn zoomx(mut self, f: f32) -> Self {
         self.ops.push(BuildOp::ZoomX(Target::Abs(f)));
         self
     }
+    #[must_use]
     pub fn zoomy(mut self, f: f32) -> Self {
         self.ops.push(BuildOp::ZoomY(Target::Abs(f)));
         self
     }
+    #[must_use]
     pub fn addzoomx(mut self, df: f32) -> Self {
         self.ops.push(BuildOp::ZoomX(Target::Rel(df)));
         self
     }
+    #[must_use]
     pub fn addzoomy(mut self, df: f32) -> Self {
         self.ops.push(BuildOp::ZoomY(Target::Rel(df)));
         self
     }
 
     // --- zoomto (StepMania: zoomto/zoomtowidth/zoomtoheight) ---
+    #[must_use]
     pub fn zoomto(mut self, w: f32, h: f32) -> Self {
         self.ops.push(BuildOp::ZoomToW(w));
         self.ops.push(BuildOp::ZoomToH(h));
@@ -913,6 +933,7 @@ impl SegmentBuilder {
     }
 
     // --- tint / alpha ---
+    #[must_use]
     pub fn diffuse(mut self, r: f32, g: f32, b: f32, a: f32) -> Self {
         self.ops.push(BuildOp::Tint(
             Target::Abs(r),
@@ -922,6 +943,7 @@ impl SegmentBuilder {
         ));
         self
     }
+    #[must_use]
     pub fn diffuse_rgb(mut self, r: f32, g: f32, b: f32) -> Self {
         self.ops.push(BuildOp::Tint(
             Target::Abs(r),
@@ -931,6 +953,7 @@ impl SegmentBuilder {
         ));
         self
     }
+    #[must_use]
     pub fn alpha(mut self, a: f32) -> Self {
         self.ops.push(BuildOp::Tint(
             Target::Rel(0.0),
@@ -942,6 +965,7 @@ impl SegmentBuilder {
     }
 
     // --- glow ---
+    #[must_use]
     pub fn glow(mut self, r: f32, g: f32, b: f32, a: f32) -> Self {
         self.ops.push(BuildOp::Glow(
             Target::Abs(r),
@@ -951,6 +975,7 @@ impl SegmentBuilder {
         ));
         self
     }
+    #[must_use]
     pub fn glow_rgb(mut self, r: f32, g: f32, b: f32) -> Self {
         self.ops.push(BuildOp::Glow(
             Target::Abs(r),
@@ -960,6 +985,7 @@ impl SegmentBuilder {
         ));
         self
     }
+    #[must_use]
     pub fn glow_alpha(mut self, a: f32) -> Self {
         self.ops.push(BuildOp::Glow(
             Target::Rel(0.0),
@@ -971,118 +997,144 @@ impl SegmentBuilder {
     }
 
     // --- instants ---
+    #[must_use]
     pub fn set_visible(mut self, v: bool) -> Self {
         self.ops.push(BuildOp::Visible(v));
         self
     }
+    #[must_use]
     pub fn flip_x(mut self, v: bool) -> Self {
         self.ops.push(BuildOp::FlipX(v));
         self
     }
+    #[must_use]
     pub fn flip_y(mut self, v: bool) -> Self {
         self.ops.push(BuildOp::FlipY(v));
         self
     }
 
     // --- rotation (degrees) ---  NEW
+    #[must_use]
     pub fn rotationx(mut self, deg: f32) -> Self {
         self.ops.push(BuildOp::RotX(Target::Abs(deg)));
         self
     }
+    #[must_use]
     pub fn addrotationx(mut self, ddeg: f32) -> Self {
         self.ops.push(BuildOp::RotX(Target::Rel(ddeg)));
         self
     }
 
+    #[must_use]
     pub fn rotationy(mut self, deg: f32) -> Self {
         self.ops.push(BuildOp::RotY(Target::Abs(deg)));
         self
     }
+    #[must_use]
     pub fn addrotationy(mut self, ddeg: f32) -> Self {
         self.ops.push(BuildOp::RotY(Target::Rel(ddeg)));
         self
     }
 
+    #[must_use]
     pub fn rotationz(mut self, deg: f32) -> Self {
         self.ops.push(BuildOp::RotZ(Target::Abs(deg)));
         self
     }
+    #[must_use]
     pub fn addrotationz(mut self, ddeg: f32) -> Self {
         self.ops.push(BuildOp::RotZ(Target::Rel(ddeg)));
         self
     }
 
+    #[must_use]
     pub fn cropleft(mut self, v: f32) -> Self {
         self.ops.push(BuildOp::CropL(Target::Abs(v)));
         self
     }
+    #[must_use]
     pub fn cropright(mut self, v: f32) -> Self {
         self.ops.push(BuildOp::CropR(Target::Abs(v)));
         self
     }
+    #[must_use]
     pub fn croptop(mut self, v: f32) -> Self {
         self.ops.push(BuildOp::CropT(Target::Abs(v)));
         self
     }
+    #[must_use]
     pub fn cropbottom(mut self, v: f32) -> Self {
         self.ops.push(BuildOp::CropB(Target::Abs(v)));
         self
     }
+    #[must_use]
     pub fn addcropleft(mut self, dv: f32) -> Self {
         self.ops.push(BuildOp::CropL(Target::Rel(dv)));
         self
     }
+    #[must_use]
     pub fn addcropright(mut self, dv: f32) -> Self {
         self.ops.push(BuildOp::CropR(Target::Rel(dv)));
         self
     }
+    #[must_use]
     pub fn addcroptop(mut self, dv: f32) -> Self {
         self.ops.push(BuildOp::CropT(Target::Rel(dv)));
         self
     }
+    #[must_use]
     pub fn addcropbottom(mut self, dv: f32) -> Self {
         self.ops.push(BuildOp::CropB(Target::Rel(dv)));
         self
     }
 
+    #[must_use]
     pub fn fadeleft(mut self, v: f32) -> Self {
         self.ops.push(BuildOp::FadeL(Target::Abs(v)));
         self
     }
+    #[must_use]
     pub fn faderight(mut self, v: f32) -> Self {
         self.ops.push(BuildOp::FadeR(Target::Abs(v)));
         self
     }
+    #[must_use]
     pub fn fadetop(mut self, v: f32) -> Self {
         self.ops.push(BuildOp::FadeT(Target::Abs(v)));
         self
     }
+    #[must_use]
     pub fn fadebottom(mut self, v: f32) -> Self {
         self.ops.push(BuildOp::FadeB(Target::Abs(v)));
         self
     }
 
+    #[must_use]
     pub fn build(self) -> Step {
         Step(Segment::new(self.ease, self.dur, self.ops))
     }
 }
 
 /// Construct a `linear(t)` segment builder.
+#[must_use]
 pub fn linear(dur: f32) -> SegmentBuilder {
     SegmentBuilder::new(Ease::Linear, dur)
 }
 
 /// Construct an `accelerate(t)` (quad-in) segment builder.
+#[must_use]
 pub fn accelerate(dur: f32) -> SegmentBuilder {
     SegmentBuilder::new(Ease::Accelerate, dur)
 }
 
 /// Construct a `decelerate(t)` (quad-out) segment builder.
+#[must_use]
 pub fn decelerate(dur: f32) -> SegmentBuilder {
     SegmentBuilder::new(Ease::Decelerate, dur)
 }
 
 /// Delay with no property changes (`StepMania`: `sleep(t)`).
+#[must_use]
 pub fn sleep(dur: f32) -> Step {
     Step(Segment::new(Ease::Linear, dur.max(0.0), SmallVec::new()))
 }
@@ -1109,6 +1161,7 @@ pub struct TweenSeq {
 }
 
 impl TweenSeq {
+    #[must_use]
     pub const fn new(initial: TweenState) -> Self {
         Self {
             state: initial,
@@ -1130,10 +1183,12 @@ impl TweenSeq {
         self.queue.push_back(step);
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.current.is_none() && self.queue.is_empty()
     }
 
+    #[must_use]
     pub const fn state(&self) -> &TweenState {
         &self.state
     }

@@ -243,6 +243,7 @@ const GAMEPLAY_BACKGROUND_PREP_RESULTS: usize = 1;
 const MAX_MEDIA_COMPLETIONS_PER_FRAME: usize = 2;
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub const fn benchmark_media_completion_budget() -> usize {
     MAX_MEDIA_COMPLETIONS_PER_FRAME
 }
@@ -276,6 +277,7 @@ impl BenchmarkMediaPrepDispatch {
             .count()
     }
 
+    #[must_use]
     pub fn drain_burst(&self) -> usize {
         let mut checksum = 0usize;
         for _ in 0..MAX_CACHED_BANNER_VIDEO_PATHS {
@@ -1334,7 +1336,7 @@ impl DynamicMedia {
 
     #[inline(always)]
     fn take_releasable_texture(
-        &mut self,
+        &self,
         assets: &mut AssetManager,
         key: &str,
     ) -> Option<(TextureHandle, RendererTexture)> {
@@ -1346,7 +1348,7 @@ impl DynamicMedia {
     }
 
     fn release_texture_key(
-        &mut self,
+        &self,
         assets: &mut AssetManager,
         backend: &mut Backend,
         key: impl AsRef<str>,
@@ -1608,7 +1610,7 @@ impl DynamicMedia {
         }
     }
 
-    fn clear_gameplay_background_results(&mut self) {
+    fn clear_gameplay_background_results(&self) {
         while let Ok(result) = self.gameplay_background_prep.try_recv() {
             if let GameplayBackgroundPrepResult::Ready(prepared) = result {
                 retire_video_player(prepared.player);

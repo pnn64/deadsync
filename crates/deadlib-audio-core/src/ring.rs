@@ -215,6 +215,7 @@ struct TaggedMusicMapSeg {
 /// generation comparison over at most the fixed block count. Played timing has
 /// a hard 2,048-record cap and saturates by dropping new records;
 /// [`played_map_drops`] exposes those misses for telemetry.
+#[must_use]
 pub fn music_transport(
     sample_rate_hz: u32,
     channels: usize,

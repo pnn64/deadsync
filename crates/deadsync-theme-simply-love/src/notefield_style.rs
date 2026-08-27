@@ -233,10 +233,12 @@ pub const SIMPLY_LOVE_NOTEFIELD_STYLE: NotefieldStyle = NotefieldStyle {
     },
 };
 
+#[must_use]
 pub const fn notefield_style() -> NotefieldStyle {
     SIMPLY_LOVE_NOTEFIELD_STYLE
 }
 
+#[must_use]
 pub fn notefield_style_with_palette(
     palette: deadlib_present::color::JudgmentPalette,
 ) -> NotefieldStyle {

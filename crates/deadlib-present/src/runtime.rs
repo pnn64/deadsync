@@ -2,8 +2,8 @@ use std::{cell::RefCell, collections::HashMap};
 
 use crate::anim::{Step, TweenSeq, TweenState};
 
-const FNV_OFFSET: u64 = 0xcbf29ce484222325;
-const FNV_PRIME: u64 = 0x100000001b3;
+const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+const FNV_PRIME: u64 = 0x0100_0000_01b3;
 
 type TweenIndex = HashMap<u64, usize, rustc_hash::FxBuildHasher>;
 
@@ -140,6 +140,7 @@ pub fn tick(dt: f32) {
 
 /// Get/create a tween at this callsite and return its current state.
 /// `steps` are only enqueued on first sight of this site id.
+#[must_use]
 pub fn materialize(id: u64, initial: TweenState, steps: &[Step]) -> TweenState {
     materialize_lazy(id, initial, || steps.iter().cloned())
 }
@@ -169,6 +170,7 @@ where
 }
 
 /// Stable-ish hash for a macro callsite before any per-instance salt is mixed in.
+#[must_use]
 pub const fn site_base(file: &'static str, line: u32, col: u32) -> u64 {
     let bytes = file.as_bytes();
     let mut h = FNV_OFFSET;
@@ -184,6 +186,7 @@ pub const fn site_base(file: &'static str, line: u32, col: u32) -> u64 {
 
 /// Stable-ish id for a macro callsite, with an optional per-instance discriminator.
 #[inline(always)]
+#[must_use]
 pub const fn site_id(site_base: u64, extra: u64) -> u64 {
     site_base ^ extra
 }
@@ -258,7 +261,7 @@ mod tests {
         reset_registry(0);
         let steps = [anim::sleep(0.5), anim::linear(0.5).x(10.0).build()];
 
-        materialize(1, TweenState::default(), &steps);
+        let _ = materialize(1, TweenState::default(), &steps);
         tick(0.25);
         assert_eq!(materialize(1, TweenState::default(), &steps).x, 0.0);
 
@@ -294,8 +297,8 @@ mod tests {
         reset_registry(0);
         let first = [anim::linear(1.0).x(10.0).build()];
         let second = [anim::linear(1.0).x(20.0).build()];
-        materialize(1, TweenState::default(), &first);
-        materialize(2, TweenState::default(), &second);
+        let _ = materialize(1, TweenState::default(), &first);
+        let _ = materialize(2, TweenState::default(), &second);
 
         tick(0.25);
         let second_state = materialize(2, TweenState::default(), &second);
@@ -316,9 +319,9 @@ mod tests {
     fn stale_removal_repairs_swapped_entry_index() {
         reset_registry(0);
         let steps = [anim::linear(10.0).x(30.0).build()];
-        materialize(1, TweenState::default(), &steps);
-        materialize(2, TweenState::default(), &steps);
-        materialize(3, TweenState::default(), &steps);
+        let _ = materialize(1, TweenState::default(), &steps);
+        let _ = materialize(2, TweenState::default(), &steps);
+        let _ = materialize(3, TweenState::default(), &steps);
 
         tick(1.0);
         let third = materialize(3, TweenState::default(), &steps);
@@ -336,8 +339,8 @@ mod tests {
     fn new_actor_can_precede_retained_unseen_actors() {
         reset_registry(0);
         let steps = [anim::linear(10.0).x(30.0).build()];
-        materialize(1, TweenState::default(), &steps);
-        materialize(2, TweenState::default(), &steps);
+        let _ = materialize(1, TweenState::default(), &steps);
+        let _ = materialize(2, TweenState::default(), &steps);
 
         tick(1.0);
         assert_eq!(materialize(3, TweenState::default(), &steps).x, 0.0);
@@ -384,7 +387,7 @@ mod tests {
     fn tick_drops_stale_entries_across_frame_wraparound() {
         reset_registry(u64::MAX - 1);
         let steps = [anim::sleep(1.0)];
-        materialize(7, TweenState::default(), &steps);
+        let _ = materialize(7, TweenState::default(), &steps);
         assert_eq!(registry_len(), 1);
 
         tick(0.0);
@@ -399,7 +402,7 @@ mod tests {
         const FILE: &str = "deadsync/src/engine/present/dsl.rs";
         const LINE: u32 = 614;
         const COL: u32 = 9;
-        const EXTRA: u64 = 0x53434F4C464F524D;
+        const EXTRA: u64 = 0x5343_4F4C_464F_524D;
         const BASE: u64 = site_base(FILE, LINE, COL);
         const ID: u64 = site_id(BASE, EXTRA);
 

@@ -11,6 +11,7 @@ pub fn version_parts(version: &str) -> [i64; 3] {
     parts
 }
 
+#[must_use]
 pub fn version_args(args: &MultiValue) -> Vec<i64> {
     if let Some(Value::String(version)) = args.front()
         && let Ok(version) = version.to_str()
@@ -23,6 +24,7 @@ pub fn version_args(args: &MultiValue) -> Vec<i64> {
         .collect()
 }
 
+#[must_use]
 pub fn is_product_version(product_version: &str, args: &MultiValue) -> bool {
     let expected = version_args(args);
     if expected.is_empty() {
@@ -35,10 +37,12 @@ pub fn is_product_version(product_version: &str, args: &MultiValue) -> bool {
         .all(|(index, value)| product.get(index).is_some_and(|part| *part == value))
 }
 
+#[must_use]
 pub fn song_lua_is_product_version(args: &MultiValue) -> bool {
     is_product_version(SONG_LUA_PRODUCT_VERSION, args)
 }
 
+#[must_use]
 pub fn is_minimum_product_version(product_version: &str, args: &MultiValue) -> bool {
     let expected = version_args(args);
     if expected.is_empty() {
@@ -54,6 +58,7 @@ pub fn is_minimum_product_version(product_version: &str, args: &MultiValue) -> b
     true
 }
 
+#[must_use]
 pub fn song_lua_is_minimum_product_version(args: &MultiValue) -> bool {
     is_minimum_product_version(SONG_LUA_PRODUCT_VERSION, args)
 }

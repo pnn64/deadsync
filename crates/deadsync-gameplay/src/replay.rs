@@ -30,6 +30,7 @@ const fn build_quantization_table() -> [u8; 48] {
 const QUANTIZATION_BY_ROW: [u8; 48] = build_quantization_table();
 
 #[inline(always)]
+#[must_use]
 pub fn quantization_index_from_beat(beat: f32) -> u8 {
     let row = (beat * 48.0).round() as i32;
     QUANTIZATION_BY_ROW[row.rem_euclid(48) as usize]
@@ -38,6 +39,7 @@ pub fn quantization_index_from_beat(beat: f32) -> u8 {
 #[cfg(any(test, feature = "bench-support"))]
 #[doc(hidden)]
 #[inline(always)]
+#[must_use]
 pub fn quantization_index_from_beat_reference(beat: f32) -> u8 {
     // Match ITG's BeatToNoteType path: round beat->row at 48 rows/beat,
     // then classify by measure-subdivision divisibility.
@@ -84,6 +86,7 @@ pub struct ReplayOffsetSnapshot {
     pub beat0_time_ns: SongTimeNs,
 }
 
+#[must_use]
 pub fn build_replay_input_edges(
     replay_edges: &[ReplayInputEdge],
     num_players: usize,
@@ -141,11 +144,13 @@ pub struct GameplayReplayInputState {
 
 impl GameplayReplayInputState {
     #[inline(always)]
+    #[must_use]
     pub const fn new(input: Vec<RecordedLaneEdge>) -> Self {
         Self { input, cursor: 0 }
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.input.is_empty()
     }
@@ -182,6 +187,7 @@ pub struct GameplayReplayRuntimeState {
 
 impl GameplayReplayRuntimeState {
     #[inline(always)]
+    #[must_use]
     pub fn new(
         input: GameplayReplayInputState,
         capture_enabled: bool,
@@ -217,6 +223,7 @@ pub struct GameplayToggleFlashState {
 
 impl GameplayToggleFlashState {
     #[inline(always)]
+    #[must_use]
     pub fn visible_text(&self) -> Option<(&'static str, f32)> {
         toggle_flash_alpha(self.timer).and_then(|alpha| self.text.map(|text| (text, alpha)))
     }
@@ -238,6 +245,7 @@ pub struct GameplayStageRuntimeState {
 
 impl GameplayStageRuntimeState {
     #[inline(always)]
+    #[must_use]
     pub const fn new(
         autoplay_enabled: bool,
         autoplay_used: bool,
@@ -312,6 +320,7 @@ pub struct GameplayChartTotalsState {
 
 impl GameplayChartTotalsState {
     #[inline(always)]
+    #[must_use]
     pub const fn new(
         possible_grade_points: [i32; MAX_PLAYERS],
         total_steps: [u32; MAX_PLAYERS],
@@ -331,6 +340,7 @@ impl GameplayChartTotalsState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn display_totals(
         &self,
         totals: Option<&[CourseDisplayTotals; MAX_PLAYERS]>,
@@ -348,6 +358,7 @@ impl GameplayChartTotalsState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn stage_totals(&self, player_idx: usize) -> CourseDisplayTotals {
         self.display_totals(None, player_idx)
     }
@@ -411,6 +422,7 @@ impl Default for GameplayVisibleTimingState {
 
 impl GameplayVisibleTimingState {
     #[inline(always)]
+    #[must_use]
     pub fn visual_delay_seconds(&self, player: usize) -> f32 {
         self.global_visual_delay_seconds
             + self
@@ -473,6 +485,7 @@ impl Default for GameplayNotefieldMotionState {
 impl GameplayNotefieldMotionState {
     #[allow(clippy::too_many_arguments)]
     #[inline(always)]
+    #[must_use]
     pub const fn new(
         scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
         scroll_reference_bpm: f32,
@@ -500,6 +513,7 @@ impl GameplayNotefieldMotionState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn refresh_needed(&self, current_bpm: f32, dynamic_motion: bool) -> bool {
         self.refresh_dirty || dynamic_motion || self.refresh_bpm_bits != current_bpm.to_bits()
     }
@@ -516,21 +530,25 @@ impl GameplayNotefieldMotionState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn scroll_speed(&self, player: usize) -> ScrollSpeedSetting {
         self.scroll_speed.get(player).copied().unwrap_or_default()
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn scroll_reference_bpm(&self) -> f32 {
         self.scroll_reference_bpm
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn field_zoom(&self, player: usize) -> f32 {
         self.field_zoom.get(player).copied().unwrap_or(1.0)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn scroll_pixels_per_second(&self, player: usize) -> f32 {
         self.scroll_pixels_per_second
             .get(player)
@@ -539,11 +557,13 @@ impl GameplayNotefieldMotionState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn scroll_travel_time(&self, player: usize) -> f32 {
         self.scroll_travel_time.get(player).copied().unwrap_or(0.0)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn draw_distance_before_targets(&self, player: usize) -> f32 {
         self.draw_distance_before_targets
             .get(player)
@@ -552,6 +572,7 @@ impl GameplayNotefieldMotionState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn draw_distance_after_targets(&self, player: usize) -> f32 {
         self.draw_distance_after_targets
             .get(player)
@@ -560,16 +581,19 @@ impl GameplayNotefieldMotionState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn reverse_scroll(&self, player: usize) -> bool {
         self.reverse_scroll.get(player).copied().unwrap_or(false)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn column_scroll_dir(&self, col: usize) -> f32 {
         self.column_scroll_dirs.get(col).copied().unwrap_or(1.0)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn column_scroll_dir_count(&self) -> usize {
         MAX_COLS
     }

@@ -58,6 +58,7 @@ pub const ROLLBACK_VERSION_LIMIT: usize = 5;
 /// Resolves the URL the update check should hit.  By default this is
 /// [`LATEST_RELEASE_URL`], but [`ENV_RELEASE_URL_OVERRIDE`] can
 /// override it for local end-to-end tests.
+#[must_use]
 pub fn release_url() -> String {
     std::env::var(ENV_RELEASE_URL_OVERRIDE).unwrap_or_else(|_| LATEST_RELEASE_URL.to_string())
 }
@@ -66,6 +67,7 @@ pub fn release_url() -> String {
 /// releases.  By default this is [`LATEST_RELEASES_URL`], but
 /// [`ENV_RELEASES_URL_OVERRIDE`] can override it for local end-to-end
 /// tests.
+#[must_use]
 pub fn releases_url() -> String {
     std::env::var(ENV_RELEASES_URL_OVERRIDE).unwrap_or_else(|_| LATEST_RELEASES_URL.to_string())
 }
@@ -74,6 +76,7 @@ pub fn releases_url() -> String {
 /// calls that omit a UA.  Includes the build version so server-side logs
 /// can correlate stale clients.
 #[inline]
+#[must_use]
 pub fn user_agent() -> String {
     deadsync_version::user_agent()
 }
@@ -218,6 +221,7 @@ impl Error for UpdaterError {}
 ///
 /// `op` is a short verb (e.g. `"create_dir_all"`, `"rename"`,
 /// `"open"`); `path` is the affected filesystem path.
+#[must_use]
 pub fn io_err_at(op: &str, path: &std::path::Path, err: std::io::Error) -> UpdaterError {
     UpdaterError::Io(format!("{op} '{}': {err}", path.display()))
 }
@@ -335,6 +339,7 @@ pub fn parse_releases_json(bytes: &[u8]) -> Result<Vec<ReleaseInfo>, UpdaterErro
 ///
 /// Returns each surviving release paired with its host asset so the UI
 /// and download flow don't have to re-pick it.  Pure and table-tested.
+#[must_use]
 pub fn rollback_candidates(
     releases: Vec<ReleaseInfo>,
     current: &Version,
@@ -359,6 +364,7 @@ pub fn rollback_candidates(
 
 /// Compare a release against the current build and decide what to surface.
 #[inline]
+#[must_use]
 pub fn classify(latest: ReleaseInfo) -> UpdateState {
     let current = deadsync_version::current();
     if deadsync_version::is_newer(&latest.version, &current) {
@@ -384,6 +390,7 @@ pub struct HostTarget {
 /// the host is a combination we don't ship binaries for (which means we
 /// also can't pick an asset for it).
 #[inline]
+#[must_use]
 pub const fn host_target() -> Option<HostTarget> {
     // Mapping from Rust target_arch -> the substring used in our asset
     // names.  Anything not listed is treated as unsupported.
@@ -424,6 +431,7 @@ pub const fn host_target() -> Option<HostTarget> {
 /// Build the canonical asset filename for a release tag and host triplet.
 /// Public so unit tests and the picker share the same string.
 #[inline]
+#[must_use]
 pub fn expected_asset_name(version_tag: &str, target: HostTarget) -> String {
     let HostTarget { arch, os, ext } = target;
     let tag = if version_tag.starts_with('v') {
@@ -441,6 +449,7 @@ pub fn expected_asset_name(version_tag: &str, target: HostTarget) -> String {
 /// pull a sibling asset (e.g. a SHA256SUMS file or a different-arch
 /// build).
 #[inline]
+#[must_use]
 pub fn pick_asset_for_host<'a>(
     assets: &'a [ReleaseAsset],
     version_tag: &str,
@@ -454,6 +463,7 @@ pub fn pick_asset_for_host<'a>(
 /// for the host it's running on: Windows uses zip archives, while
 /// Linux, FreeBSD, and macOS use tar archives.
 #[inline]
+#[must_use]
 pub const fn apply_supported_for_host() -> bool {
     cfg!(any(
         target_os = "windows",

@@ -14,6 +14,7 @@ pub struct AssetFontTextureContext {
 }
 
 impl AssetFontTextureContext {
+    #[must_use]
     pub const fn new(asset_roots: Vec<PathBuf>) -> Self {
         Self { asset_roots }
     }
@@ -97,6 +98,7 @@ pub fn parse_font_asset_specs(
         .collect()
 }
 
+#[must_use]
 pub fn font_texture_key(tex_path: &Path, asset_roots: &[PathBuf]) -> String {
     canonical_texture_key_with_asset_roots(tex_path, asset_roots.iter().cloned())
 }
@@ -136,6 +138,7 @@ pub fn prepare_required_font_textures(
     Ok(prepared)
 }
 
+#[must_use]
 pub fn font_texture_asset_roots(data_dir: &Path, exe_dir: &Path) -> Vec<PathBuf> {
     vec![data_dir.join("assets"), exe_dir.join("assets")]
 }

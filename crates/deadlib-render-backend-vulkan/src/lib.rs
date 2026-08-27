@@ -2055,6 +2055,7 @@ fn destroy_texture_images(device: &Device, images: &[TextureImage]) {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn texture_is_yuv420(texture: &Texture) -> bool {
     texture.images.is_yuv420()
 }

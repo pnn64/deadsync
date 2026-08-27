@@ -385,6 +385,7 @@ pub struct SongLuaStyleInfo {
     pub x_offsets: &'static [f32],
 }
 
+#[must_use]
 pub fn song_lua_style_info(style_name: &str) -> SongLuaStyleInfo {
     let normalized = style_name
         .trim()
@@ -424,6 +425,7 @@ pub fn song_lua_style_info(style_name: &str) -> SongLuaStyleInfo {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_lua_style_column_x(style_name: &str, column_index: usize) -> f32 {
     song_lua_style_info(style_name)
         .x_offsets
@@ -433,6 +435,7 @@ pub fn song_lua_style_column_x(style_name: &str, column_index: usize) -> f32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn song_lua_style_column_name(column_index: usize) -> &'static str {
     SONG_LUA_COLUMN_NAMES[column_index % SONG_LUA_COLUMN_NAMES.len()]
 }
@@ -449,6 +452,7 @@ pub enum SongLuaDifficulty {
 
 impl SongLuaDifficulty {
     #[inline(always)]
+    #[must_use]
     pub const fn sm_name(self) -> &'static str {
         match self {
             Self::Beginner => "Difficulty_Beginner",
@@ -461,6 +465,7 @@ impl SongLuaDifficulty {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn meter(self) -> i32 {
         match self {
             Self::Beginner => 1,
@@ -473,11 +478,13 @@ impl SongLuaDifficulty {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn default_enabled() -> Self {
         Self::Challenge
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn from_chart_name(difficulty: &str) -> Self {
         if difficulty.eq_ignore_ascii_case("beginner") {
             Self::Beginner
@@ -501,6 +508,7 @@ impl SongLuaDifficulty {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn sort_key(self) -> u8 {
         match self {
             Self::Beginner => 0,
@@ -555,6 +563,7 @@ impl Default for SongLuaSpeedMod {
     }
 }
 
+#[must_use]
 pub const fn song_lua_speedmod_parts(speedmod: SongLuaSpeedMod) -> (&'static str, f32) {
     match speedmod {
         SongLuaSpeedMod::X(value) => ("X", value),
@@ -564,6 +573,7 @@ pub const fn song_lua_speedmod_parts(speedmod: SongLuaSpeedMod) -> (&'static str
     }
 }
 
+#[must_use]
 pub fn song_music_rate_value(value: f32) -> f32 {
     if value.is_finite() && value > 0.0 {
         value
@@ -572,11 +582,13 @@ pub fn song_music_rate_value(value: f32) -> f32 {
     }
 }
 
+#[must_use]
 pub fn format_song_options_text(music_rate: f32) -> String {
     let rate = song_music_rate_value(music_rate);
     format!("{rate}xMusic")
 }
 
+#[must_use]
 pub fn display_bpms_text(bpms: [f32; 2], rate: f32) -> String {
     let lower = format_display_bpm(bpms[0], rate);
     if (bpms[0] - bpms[1]).abs() <= f32::EPSILON {
@@ -595,6 +607,7 @@ fn format_display_bpm(value: f32, rate: f32) -> String {
     text.strip_suffix(".0").unwrap_or(&text).to_string()
 }
 
+#[must_use]
 pub fn player_short_name(player: usize) -> &'static str {
     match player {
         0 => "P1",
@@ -635,6 +648,7 @@ impl Default for SongLuaPlayerContext {
     }
 }
 
+#[must_use]
 pub fn easiest_steps_difficulty(
     players: &[SongLuaPlayerContext; LUA_PLAYERS],
 ) -> Option<SongLuaDifficulty> {
@@ -645,6 +659,7 @@ pub fn easiest_steps_difficulty(
         .min_by_key(|difficulty| difficulty.sort_key())
 }
 
+#[must_use]
 pub fn song_lua_human_player_count(context: &SongLuaCompileContext) -> usize {
     context
         .players
@@ -653,6 +668,7 @@ pub fn song_lua_human_player_count(context: &SongLuaCompileContext) -> usize {
         .count()
 }
 
+#[must_use]
 pub const fn graph_display_body_size(human_player_count: usize) -> [f32; 2] {
     [
         if human_player_count == 1 {
@@ -664,10 +680,12 @@ pub const fn graph_display_body_size(human_player_count: usize) -> [f32; 2] {
     ]
 }
 
+#[must_use]
 pub fn theme_metric_number(group: &str, name: &str) -> Option<f32> {
     theme_metric_number_for_human_players(group, name, LUA_PLAYERS)
 }
 
+#[must_use]
 pub fn theme_metric_number_for_human_players(
     group: &str,
     name: &str,
@@ -676,6 +694,7 @@ pub fn theme_metric_number_for_human_players(
     theme_metric_number_for_screen(group, name, human_player_count, 480.0)
 }
 
+#[must_use]
 pub fn theme_metric_number_for_screen(
     group: &str,
     name: &str,
@@ -992,6 +1011,7 @@ pub fn theme_string_names(section: &str) -> Vec<String> {
     Vec::new()
 }
 
+#[must_use]
 pub fn theme_string(section: &str, name: &str) -> String {
     if section.eq_ignore_ascii_case("Difficulty")
         || section.eq_ignore_ascii_case("CustomDifficulty")
@@ -1023,6 +1043,7 @@ pub fn theme_string(section: &str, name: &str) -> String {
     }
 }
 
+#[must_use]
 pub fn theme_has_string(section: &str, name: &str) -> bool {
     section.eq_ignore_ascii_case("Difficulty")
         || section.eq_ignore_ascii_case("CustomDifficulty")
@@ -1044,6 +1065,7 @@ pub fn theme_has_string(section: &str, name: &str) -> bool {
         || matches!(name, "Yes" | "No" | "Cancel")
 }
 
+#[must_use]
 pub const fn song_lua_arch_name() -> &'static str {
     if cfg!(target_os = "windows") {
         "Windows"
@@ -1058,6 +1080,7 @@ pub const fn song_lua_arch_name() -> &'static str {
     }
 }
 
+#[must_use]
 pub fn custom_multi_modifier_key(option_name: &str, choice: &str) -> String {
     if option_name.eq_ignore_ascii_case("Hide") {
         format!("Hide{choice}")
@@ -1178,11 +1201,13 @@ impl Default for SongLuaNoteskinResolver {
 
 impl SongLuaNoteskinResolver {
     #[inline(always)]
+    #[must_use]
     pub fn resolve_path(self, skin: &str, button: &str, element: &str) -> Option<PathBuf> {
         (self.resolve_path)(skin, button, element)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn path_string(self, skin: &str, button: &str, element: &str) -> String {
         self.resolve_path(skin, button, element)
             .map(|path| file_path_string(path.as_path()))
@@ -1190,15 +1215,18 @@ impl SongLuaNoteskinResolver {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn metric(self, skin: &str, element: &str, value: &str) -> Option<String> {
         (self.metric)(skin, element, value)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn metric_f(self, skin: &str, element: &str, value: &str) -> Option<f32> {
         (self.metric_f)(skin, element, value)
     }
 
+    #[must_use]
     pub fn metric_i(self, skin: &str, element: &str, value: &str) -> i64 {
         let Some(metric) = self.metric(skin, element, value) else {
             return 0;
@@ -1218,16 +1246,19 @@ impl SongLuaNoteskinResolver {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn metric_b(self, skin: &str, element: &str, value: &str) -> Option<bool> {
         (self.metric_b)(skin, element, value)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn exists(self, skin: &str) -> bool {
         (self.exists)(skin)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn names(self) -> Vec<String> {
         (self.names)()
     }
@@ -1278,6 +1309,7 @@ impl SongLuaCompileContext {
     }
 }
 
+#[must_use]
 pub fn song_lua_default_noteskin_name(context: &SongLuaCompileContext) -> String {
     context
         .players
@@ -1294,21 +1326,25 @@ pub fn song_lua_default_noteskin_name(context: &SongLuaCompileContext) -> String
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_display_bps(context: &SongLuaCompileContext) -> f32 {
     (context.song_display_bpms[0].max(context.song_display_bpms[1]) / 60.0).max(f32::EPSILON)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_music_rate(context: &SongLuaCompileContext) -> f32 {
     song_music_rate_value(context.song_music_rate)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_elapsed_seconds_for_beat(beat: f32, song_bps: f32, music_rate: f32) -> f32 {
     beat / (song_bps.max(f32::EPSILON) * music_rate.max(f32::EPSILON))
 }
 
 #[inline(always)]
+#[must_use]
 pub fn mod_window_cmp(left: &SongLuaModWindow, right: &SongLuaModWindow) -> std::cmp::Ordering {
     left.start
         .total_cmp(&right.start)
@@ -1317,6 +1353,7 @@ pub fn mod_window_cmp(left: &SongLuaModWindow, right: &SongLuaModWindow) -> std:
 }
 
 #[inline(always)]
+#[must_use]
 pub fn ease_window_cmp(left: &SongLuaEaseWindow, right: &SongLuaEaseWindow) -> std::cmp::Ordering {
     left.start
         .total_cmp(&right.start)
@@ -1324,6 +1361,7 @@ pub fn ease_window_cmp(left: &SongLuaEaseWindow, right: &SongLuaEaseWindow) -> s
 }
 
 #[inline(always)]
+#[must_use]
 pub fn message_event_cmp(
     left: &SongLuaMessageEvent,
     right: &SongLuaMessageEvent,
@@ -1332,6 +1370,7 @@ pub fn message_event_cmp(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn overlay_ease_cmp(
     left: &SongLuaOverlayEase,
     right: &SongLuaOverlayEase,
@@ -1613,6 +1652,7 @@ pub struct SongLuaOverlayModelDraw {
 }
 
 impl SongLuaOverlayModelDraw {
+    #[must_use]
     pub const fn new(
         pos: [f32; 3],
         rot: [f32; 3],
@@ -1730,6 +1770,7 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
     Quad,
 }
 
+#[must_use]
 pub const fn parse_overlay_blend_mode(raw: &str) -> Option<SongLuaOverlayBlendMode> {
     if raw.eq_ignore_ascii_case("add") || raw.eq_ignore_ascii_case("blendmode_add") {
         Some(SongLuaOverlayBlendMode::Add)
@@ -1749,6 +1790,7 @@ pub const fn parse_overlay_blend_mode(raw: &str) -> Option<SongLuaOverlayBlendMo
     }
 }
 
+#[must_use]
 pub fn parse_overlay_effect_mode(raw: &str) -> Option<EffectMode> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "none" => Some(EffectMode::None),
@@ -1764,6 +1806,7 @@ pub fn parse_overlay_effect_mode(raw: &str) -> Option<EffectMode> {
     }
 }
 
+#[must_use]
 pub fn parse_overlay_effect_clock(raw: &str) -> Option<EffectClock> {
     let lower = raw
         .trim()
@@ -1781,6 +1824,7 @@ pub fn parse_overlay_effect_clock(raw: &str) -> Option<EffectClock> {
     }
 }
 
+#[must_use]
 pub fn parse_overlay_text_align(raw: &str) -> Option<TextAlign> {
     let lower = raw
         .trim()
@@ -1795,6 +1839,7 @@ pub fn parse_overlay_text_align(raw: &str) -> Option<TextAlign> {
     }
 }
 
+#[must_use]
 pub fn parse_overlay_text_glow_mode(raw: &str) -> Option<SongLuaTextGlowMode> {
     let lower = raw
         .trim()
@@ -1809,6 +1854,7 @@ pub fn parse_overlay_text_glow_mode(raw: &str) -> Option<SongLuaTextGlowMode> {
     }
 }
 
+#[must_use]
 pub const fn input_status_actor_text(actor_type: &str) -> Option<&'static str> {
     if actor_type.eq_ignore_ascii_case("DeviceList") {
         Some("No input devices")
@@ -1820,6 +1866,7 @@ pub const fn input_status_actor_text(actor_type: &str) -> Option<&'static str> {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn effect_clock_label(clock: EffectClock) -> &'static str {
     match clock {
         EffectClock::Time => "time",
@@ -1828,6 +1875,7 @@ pub const fn effect_clock_label(clock: EffectClock) -> &'static str {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn text_glow_mode_label(mode: SongLuaTextGlowMode) -> &'static str {
     match mode {
         SongLuaTextGlowMode::Inner => "inner",
@@ -1837,11 +1885,13 @@ pub const fn text_glow_mode_label(mode: SongLuaTextGlowMode) -> &'static str {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_lua_valid_sprite_state_index(index: Option<u32>) -> Option<u32> {
     index.filter(|&value| value != SONG_LUA_SPRITE_STATE_CLEAR)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn sprite_sheet_rect(index: u32, cols: u32, rows: u32) -> [f32; 4] {
     let cols = cols.max(1);
     let rows = rows.max(1);
@@ -1854,6 +1904,7 @@ pub fn sprite_sheet_rect(index: u32, cols: u32, rows: u32) -> [f32; 4] {
     [left, top, left + width, top + height]
 }
 
+#[must_use]
 pub fn sprite_texture_rect(
     custom_rect: Option<[f32; 4]>,
     state_index: Option<u32>,
@@ -1870,6 +1921,7 @@ pub fn sprite_texture_rect(
     [0.0, 0.0, 1.0, 1.0]
 }
 
+#[must_use]
 pub fn sprite_texture_rect_with_offset(
     custom_rect: Option<[f32; 4]>,
     state_index: Option<u32>,
@@ -1890,6 +1942,7 @@ pub fn sprite_texture_rect_with_offset(
     rect
 }
 
+#[must_use]
 pub fn sprite_frame_count(sheet_dims: Option<(u32, u32)>) -> u32 {
     let Some((cols, rows)) = sheet_dims else {
         return 1;
@@ -1897,6 +1950,7 @@ pub fn sprite_frame_count(sheet_dims: Option<(u32, u32)>) -> u32 {
     cols.max(1).saturating_mul(rows.max(1)).max(1)
 }
 
+#[must_use]
 pub fn sprite_image_frame_size(
     texture_size: Option<(f32, f32)>,
     animate: bool,
@@ -1939,6 +1993,7 @@ pub fn song_lua_valign_value(value: &mlua::Value) -> Option<f32> {
     })
 }
 
+#[must_use]
 pub fn song_lua_align_token(raw: &str) -> String {
     raw.trim()
         .trim_matches('"')
@@ -1953,6 +2008,7 @@ pub fn song_lua_text_align_value(value: &mlua::Value) -> Option<TextAlign> {
     read_string(value.clone()).and_then(|raw| parse_overlay_text_align(raw.as_str()))
 }
 
+#[must_use]
 pub const fn overlay_text_align_label(value: TextAlign) -> &'static str {
     match value {
         TextAlign::Left => "left",
@@ -1961,6 +2017,7 @@ pub const fn overlay_text_align_label(value: TextAlign) -> &'static str {
     }
 }
 
+#[must_use]
 pub fn crop_texture_rect(source: [f32; 2], target: [f32; 2]) -> Option<[f32; 4]> {
     if !source.iter().all(|value| value.is_finite() && *value > 0.0) {
         return None;
@@ -1986,6 +2043,7 @@ pub struct SongLuaScaleToRectPlan {
     pub flip_y: bool,
 }
 
+#[must_use]
 pub fn scale_to_rect_plan(
     rect: [f32; 4],
     base_size: [f32; 2],
@@ -2019,6 +2077,7 @@ pub fn scale_to_rect_plan(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn offset_texture_rect(rect: [f32; 4], offset: [f32; 2]) -> [f32; 4] {
     [
         rect[0] + offset[0],
@@ -2028,6 +2087,7 @@ pub fn offset_texture_rect(rect: [f32; 4], offset: [f32; 2]) -> [f32; 4] {
     ]
 }
 
+#[must_use]
 pub fn texture_pixel_offset_rect(
     rect: [f32; 4],
     texture_size: [f32; 2],
@@ -2042,6 +2102,7 @@ pub fn texture_pixel_offset_rect(
     ))
 }
 
+#[must_use]
 pub fn sprite_animation_state_at(seconds: f32, delay: f32, frame_count: u32) -> u32 {
     let delay = delay.max(0.0);
     let frame_count = frame_count.max(1);
@@ -2052,6 +2113,7 @@ pub fn sprite_animation_state_at(seconds: f32, delay: f32, frame_count: u32) -> 
     }
 }
 
+#[must_use]
 pub fn sprite_animation_state_from(
     start: u32,
     seconds: f32,
@@ -2075,6 +2137,7 @@ pub fn sprite_animation_state_from(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_lua_span_end(start: f32, limit: f32, span_mode: SongLuaSpanMode) -> f32 {
     match span_mode {
         SongLuaSpanMode::Len => start + limit.max(0.0),
@@ -2082,6 +2145,7 @@ pub fn song_lua_span_end(start: f32, limit: f32, span_mode: SongLuaSpanMode) -> 
     }
 }
 
+#[must_use]
 pub const fn rolling_numbers_format(metric: &str) -> &'static str {
     if metric.eq_ignore_ascii_case("RollingNumbersEvaluationB") {
         "%03.0f"
@@ -2095,6 +2159,7 @@ pub const fn rolling_numbers_format(metric: &str) -> &'static str {
     }
 }
 
+#[must_use]
 pub fn format_rolling_number(format: &str, number: f32) -> String {
     let rounded = number.round().clamp(i64::MIN as f32, i64::MAX as f32) as i64;
     if format.contains("%04") {
@@ -2275,6 +2340,7 @@ impl Default for SongLuaOverlayState {
     }
 }
 
+#[must_use]
 pub fn overlay_state_uses_repeat_sampler(state: &SongLuaOverlayState) -> bool {
     state.texture_wrapping
         || state
@@ -2286,10 +2352,12 @@ pub fn overlay_state_uses_repeat_sampler(state: &SongLuaOverlayState) -> bool {
         || state.texcoord_velocity.is_some()
 }
 
+#[must_use]
 pub const fn overlay_state_uses_nearest_sampler(state: &SongLuaOverlayState) -> bool {
     !state.texture_filtering
 }
 
+#[must_use]
 pub fn overlay_state_axis_scale(state: SongLuaOverlayState) -> [f32; 2] {
     let basezoom_x = if (state.basezoom_x - 1.0).abs() <= f32::EPSILON {
         state.basezoom
@@ -2314,6 +2382,7 @@ pub fn overlay_state_axis_scale(state: SongLuaOverlayState) -> [f32; 2] {
     [basezoom_x * zoom_x, basezoom_y * zoom_y]
 }
 
+#[must_use]
 pub fn overlay_state_z_scale(state: SongLuaOverlayState) -> f32 {
     let basezoom_z = if (state.basezoom_z - 1.0).abs() <= f32::EPSILON {
         state.basezoom
@@ -2410,6 +2479,7 @@ pub struct SongLuaOverlayStateDelta {
     pub sound_play: Option<bool>,
 }
 
+#[must_use]
 pub fn overlay_delta_uses_repeat_sampler(delta: &SongLuaOverlayStateDelta) -> bool {
     delta.texture_wrapping == Some(true)
         || delta
@@ -2421,6 +2491,7 @@ pub fn overlay_delta_uses_repeat_sampler(delta: &SongLuaOverlayStateDelta) -> bo
         || delta.texcoord_velocity.is_some()
 }
 
+#[must_use]
 pub fn overlay_delta_uses_nearest_sampler(delta: &SongLuaOverlayStateDelta) -> bool {
     delta.texture_filtering == Some(false)
 }
@@ -2484,6 +2555,7 @@ fn overlay_command_ease_factor(easing: Option<&str>, t: f32, opt1: Option<f32>) 
     }
 }
 
+#[must_use]
 pub fn overlay_state_after_blocks(
     mut state: SongLuaOverlayState,
     blocks: &[SongLuaOverlayCommandBlock],
@@ -3408,6 +3480,7 @@ const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLua
     }
 }
 
+#[must_use]
 pub fn overlay_delta_from_blocks(
     blocks: &[SongLuaOverlayCommandBlock],
 ) -> Option<SongLuaOverlayStateDelta> {
@@ -3418,6 +3491,7 @@ pub fn overlay_delta_from_blocks(
     (!overlay_delta_is_empty(&delta)).then_some(delta)
 }
 
+#[must_use]
 pub fn overlay_delta_intersection(
     from: &SongLuaOverlayStateDelta,
     to: &SongLuaOverlayStateDelta,
@@ -3524,6 +3598,7 @@ pub struct SongLuaOverlayEaseBuildParams {
     pub opt2: Option<f32>,
 }
 
+#[must_use]
 pub fn overlay_eases_from_captures(
     overlay_count: usize,
     from_blocks: &[(usize, Vec<SongLuaOverlayCommandBlock>)],
@@ -3638,6 +3713,7 @@ pub fn push_song_lua_video_paths<'a, NoteskinSlot, ModelVertex, TextAttribute>(
     }
 }
 
+#[must_use]
 pub fn song_lua_video_paths<NoteskinSlot, ModelVertex, TextAttribute>(
     overlays: &[SongLuaOverlayActor<
         SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
@@ -3951,6 +4027,7 @@ pub struct SongLuaNoteHideWindow {
     pub end_beat: f32,
 }
 
+#[must_use]
 pub fn note_hide_window_from_indices(
     player: usize,
     column: usize,
@@ -3974,6 +4051,7 @@ pub fn note_hide_window_from_indices(
     })
 }
 
+#[must_use]
 pub fn note_hide_windows_from_flags(
     player: usize,
     column: usize,
@@ -4009,6 +4087,7 @@ pub fn note_hide_windows_from_flags(
     out
 }
 
+#[must_use]
 pub fn note_column_zoom_hide_beats_per_t(
     mode: &str,
     subtract_song_beat: bool,
@@ -4057,6 +4136,7 @@ pub enum SongLuaColumnTransformTarget {
 
 impl SongLuaColumnTransformTarget {
     #[inline(always)]
+    #[must_use]
     pub const fn baseline(self) -> f32 {
         match self {
             Self::OffsetX | Self::OffsetY | Self::RotationZ => 0.0,
@@ -4080,6 +4160,7 @@ pub struct SongLuaColumnTransformSample {
     pub value: f32,
 }
 
+#[must_use]
 pub fn note_column_pos_offset_y_from_points(mode: &str, points: &[[f32; 2]]) -> Option<f32> {
     const EPS: f32 = 0.001;
     if mode.eq_ignore_ascii_case("NoteColumnSplineMode_Disabled") {
@@ -4119,6 +4200,7 @@ pub struct SongLuaColumnOffsetBuildParams {
     pub opt2: Option<f32>,
 }
 
+#[must_use]
 pub fn column_offset_windows_from_samples(
     from_samples: &[SongLuaColumnOffsetSample],
     to_samples: &[SongLuaColumnOffsetSample],
@@ -4159,6 +4241,7 @@ pub fn column_offset_windows_from_samples(
     out
 }
 
+#[must_use]
 pub fn column_transform_windows_from_samples(
     from_samples: &[SongLuaColumnTransformSample],
     to_samples: &[SongLuaColumnTransformSample],

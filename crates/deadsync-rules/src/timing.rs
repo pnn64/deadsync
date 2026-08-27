@@ -67,6 +67,7 @@ pub struct TimingProfile {
 
 impl TimingProfile {
     #[inline(always)]
+    #[must_use]
     pub fn default_itg_with_fa_plus() -> Self {
         let windows_s = [
             BASE_W1_S + TIMING_WINDOW_ADD_S,
@@ -85,6 +86,7 @@ impl TimingProfile {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn windows_ms(&self) -> [f32; 5] {
         let s = self.windows_s;
         [
@@ -106,6 +108,7 @@ pub struct TimingProfileNs {
 
 impl TimingProfileNs {
     #[inline(always)]
+    #[must_use]
     pub fn from_profile_scaled(profile: &TimingProfile, seconds_per_second: f32) -> Self {
         #[inline(always)]
         fn scale_window_ns(seconds: f32, seconds_per_second: f32) -> TimingNs {
@@ -131,16 +134,19 @@ impl TimingProfileNs {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn effective_windows_ms() -> [f32; 5] {
     TimingProfile::default_itg_with_fa_plus().windows_ms()
 }
 
 #[inline(always)]
+#[must_use]
 pub fn mine_window_s() -> f32 {
     BASE_MINE_S + TIMING_WINDOW_ADD_S
 }
 
 #[inline(always)]
+#[must_use]
 pub fn classify_offset_ns_with_disabled_windows(
     offset_ns: i64,
     profile: &TimingProfileNs,
@@ -195,6 +201,7 @@ pub fn classify_offset_ns_with_disabled_windows(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn largest_enabled_tap_window_ns(
     profile: &TimingProfileNs,
     disabled_windows: &[bool; 5],
@@ -306,6 +313,7 @@ impl Default for TimingSegments {
     }
 }
 
+#[must_use]
 pub const fn default_time_signature() -> TimeSignatureSegment {
     TimeSignatureSegment {
         beat: 0.0,
@@ -314,10 +322,12 @@ pub const fn default_time_signature() -> TimeSignatureSegment {
     }
 }
 
+#[must_use]
 pub fn default_time_signatures() -> Vec<TimeSignatureSegment> {
     vec![default_time_signature()]
 }
 
+#[must_use]
 pub fn default_tickcounts() -> Vec<TickcountSegment> {
     vec![TickcountSegment {
         beat: 0.0,
@@ -325,6 +335,7 @@ pub fn default_tickcounts() -> Vec<TickcountSegment> {
     }]
 }
 
+#[must_use]
 pub const fn default_combo() -> ComboSegment {
     ComboSegment {
         beat: 0.0,
@@ -333,6 +344,7 @@ pub const fn default_combo() -> ComboSegment {
     }
 }
 
+#[must_use]
 pub fn default_combos() -> Vec<ComboSegment> {
     vec![default_combo()]
 }
@@ -426,6 +438,7 @@ pub struct BeatInfoCache {
 }
 
 impl BeatInfoCache {
+    #[must_use]
     pub fn new(timing: &TimingData) -> Self {
         let mut cache = Self {
             start: GetBeatStarts::default(),
@@ -458,6 +471,7 @@ pub struct BeatTimeCache {
 }
 
 impl BeatTimeCache {
+    #[must_use]
     pub fn new(timing: &TimingData) -> Self {
         let beat_start_time_ns = timing.beat_start_time_ns();
         let start = GetBeatStarts {
@@ -494,6 +508,7 @@ pub struct DisplayedBeatCache {
 }
 
 impl DisplayedBeatCache {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             next_prefix: 0,
@@ -582,6 +597,7 @@ fn exact_arc<T: Copy>(len: usize, mut value_at: impl FnMut(usize) -> T) -> Arc<[
 }
 
 impl TimingData {
+    #[must_use]
     pub fn from_segments(
         song_offset_sec: f32,
         global_offset_sec: f32,
@@ -684,6 +700,7 @@ impl TimingData {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn is_fake_at_beat(&self, beat: f32) -> bool {
         if self.fakes.is_empty() {
             return false;
@@ -711,6 +728,7 @@ impl TimingData {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn is_warp_at_beat(&self, beat: f32) -> bool {
         if self.warps.is_empty() {
             return false;
@@ -742,14 +760,17 @@ impl TimingData {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn is_judgable_at_beat(&self, beat: f32) -> bool {
         !self.is_warp_at_beat(beat) && !self.is_fake_at_beat(beat)
     }
 
+    #[must_use]
     pub fn get_beat_for_row(&self, row_index: usize) -> Option<f32> {
         self.row_to_beat.get(row_index).copied()
     }
 
+    #[must_use]
     pub fn get_row_for_beat(&self, target_beat: f32) -> Option<usize> {
         let rows = self.row_to_beat.as_ref();
         if rows.is_empty() {
@@ -781,15 +802,18 @@ impl TimingData {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn cutoff_row_for_note_row(&self, cutoff_note_row: i32) -> usize {
         self.row_to_beat
             .partition_point(|beat| beat_to_note_row(*beat) < cutoff_note_row)
     }
 
+    #[must_use]
     pub fn get_beat_info_from_time(&self, target_time_sec: f32) -> BeatInfo {
         self.get_beat_info_from_time_ns(timing_ns_from_seconds(target_time_sec))
     }
 
+    #[must_use]
     pub fn get_beat_info_from_time_ns(&self, target_time_ns: i64) -> BeatInfo {
         let mut args = GetBeatArgs::default();
         args.elapsed_time_ns = target_time_ns.saturating_add(self.global_offset_ns);
@@ -841,10 +865,12 @@ impl TimingData {
         }
     }
 
+    #[must_use]
     pub fn get_beat_for_time(&self, target_time_sec: f32) -> f32 {
         self.get_beat_for_time_ns(timing_ns_from_seconds(target_time_sec))
     }
 
+    #[must_use]
     pub fn get_beat_for_time_ns(&self, target_time_ns: i64) -> f32 {
         self.get_beat_info_from_time_ns(target_time_ns).beat
     }
@@ -865,10 +891,12 @@ impl TimingData {
         }
     }
 
+    #[must_use]
     pub fn get_time_for_beat(&self, target_beat: f32) -> f32 {
         timing_ns_to_seconds(self.get_time_for_beat_ns(target_beat))
     }
 
+    #[must_use]
     pub fn get_time_for_beat_ns(&self, target_beat: f32) -> i64 {
         self.get_time_for_beat_internal_ns(target_beat)
             .saturating_sub(self.global_offset_ns)
@@ -883,6 +911,7 @@ impl TimingData {
     /// Returns the internal (pre-global-offset) time for a beat. This lives in
     /// the same space as the audio stream's music position, so it is the value
     /// to use when scheduling assist ticks against the playback stream.
+    #[must_use]
     pub fn get_time_for_beat_no_offset_ns(&self, target_beat: f32) -> i64 {
         self.get_time_for_beat_internal_ns(target_beat)
     }
@@ -924,6 +953,7 @@ impl TimingData {
         time_ns
     }
 
+    #[must_use]
     pub fn get_bpm_for_beat(&self, target_beat: f32) -> f32 {
         let points = &self.beat_to_time;
         if points.is_empty() {
@@ -934,11 +964,13 @@ impl TimingData {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn first_bpm(&self) -> f32 {
         self.beat_to_time.first().map_or(60.0, |p| p.bpm)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_bpm_changes(&self) -> bool {
         self.beat_to_time.len() > 1
     }
@@ -1040,7 +1072,7 @@ impl TimingData {
         self.rebuild_speed_runtime();
     }
 
-    fn get_elapsed_time_internal(&self, starts: &mut GetBeatStarts, beat: f32) -> TimingNs {
+    fn get_elapsed_time_internal(&self, starts: &GetBeatStarts, beat: f32) -> TimingNs {
         let mut start = *starts;
         self.get_elapsed_time_internal_mut(&mut start, beat, u32::MAX as usize)
     }
@@ -1235,6 +1267,7 @@ impl TimingData {
         start.last_time_ns
     }
 
+    #[must_use]
     pub fn get_displayed_beat(&self, beat: f32) -> f32 {
         if self.scroll_prefix.is_empty() {
             return beat;
@@ -1278,10 +1311,12 @@ impl TimingData {
         (beat - prefix.beat).mul_add(prefix.ratio, prefix.cum_displayed)
     }
 
+    #[must_use]
     pub fn get_speed_multiplier(&self, beat: f32, time: f32) -> f32 {
         self.get_speed_multiplier_ns(beat, timing_ns_from_seconds(time))
     }
 
+    #[must_use]
     pub fn get_speed_multiplier_ns(&self, beat: f32, time_ns: i64) -> f32 {
         if self.speeds.is_empty() {
             return 1.0;
@@ -1487,6 +1522,7 @@ impl TimingStatsAccum {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn finish(self) -> TimingStats {
         stats_from_sums(
             self.count,
@@ -1529,6 +1565,7 @@ pub fn record_live_timing_stats(stats: &mut LiveTimingStats, judgment: &Judgment
 }
 
 #[inline(always)]
+#[must_use]
 pub fn live_timing_stats_snapshot(stats: &LiveTimingStats) -> LiveTimingSnapshot {
     let mut recent_max_abs = 0.0_f32;
     for e in stats.recent_errors_ms.iter().take(stats.recent_len) {
@@ -1583,6 +1620,7 @@ const fn judgeable_result(note: &Note) -> Option<&Judgment> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn compute_note_timing_stats(notes: &[Note]) -> TimingStats {
     let mut stats = StatsAccum::default();
     for_each_row_final_judgment(notes, |j| {
@@ -1832,6 +1870,7 @@ fn local_direction_code(note: &Note, col_offset: usize, cols_per_player: usize) 
 /// Builds one point per judged row. `foot_by_row`, when supplied, must be
 /// sorted by ascending row index so parity joins remain a single linear pass.
 #[inline(always)]
+#[must_use]
 pub fn build_scatter_points(
     notes: &[Note],
     note_time_cache_ns: &[i64],
@@ -2174,6 +2213,7 @@ fn smooth_hist_counts(counts: &HistCounts, worst_window_bin: i32) -> Vec<(i32, f
 }
 
 #[inline(always)]
+#[must_use]
 pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
     let mut fast_counts = [0u32; FAST_HIST_BINS];
     let scan = scan_hist_bins(notes, &mut fast_counts);
@@ -2191,6 +2231,7 @@ pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
     }
 }
 
+#[must_use]
 pub fn merge_histograms_ms(histograms: &[HistogramMs]) -> HistogramMs {
     merge_histograms_ms_iter(histograms.iter())
 }
@@ -2239,16 +2280,19 @@ pub struct WindowCounts {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn compute_window_counts(notes: &[Note]) -> WindowCounts {
     compute_window_counts_blue_ms(notes, FA_PLUS_W0_MS)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn compute_window_counts_10ms_blue(notes: &[Note]) -> WindowCounts {
     compute_window_counts_blue_ms(notes, FA_PLUS_W010_MS)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn compute_window_counts_blue_ms(notes: &[Note], blue_window_ms: f32) -> WindowCounts {
     let mut out = WindowCounts::default();
     let split_ms = if blue_window_ms.is_finite() && blue_window_ms > 0.0 {
@@ -2599,6 +2643,7 @@ pub mod bench_support {
         shared_runtime: SharedRuntimeTables,
     }
 
+    #[must_use]
     pub fn timing_storage_fixture(timing: &TimingData) -> TimingStorageFixture {
         TimingStorageFixture {
             old_timeline: OldTimelineTables {
@@ -2695,60 +2740,73 @@ pub mod bench_support {
         checksum
     }
 
+    #[must_use]
     pub fn old_timeline_clone_probe(fixture: &TimingStorageFixture) -> u64 {
         let tables = fixture.old_timeline.clone();
         timeline_checksum(&tables.stops, &tables.delays, &tables.warps)
     }
 
+    #[must_use]
     pub fn shared_timeline_clone_probe(fixture: &TimingStorageFixture) -> u64 {
         let tables = fixture.shared_timeline.clone();
         timeline_checksum(&tables.stops, &tables.delays, &tables.warps)
     }
 
+    #[must_use]
     pub fn old_modifier_clone_probe(fixture: &TimingStorageFixture) -> u64 {
         let tables = fixture.old_modifiers.clone();
         modifier_checksum(&tables.speeds, &tables.scrolls, &tables.fakes)
     }
 
+    #[must_use]
     pub fn shared_modifier_clone_probe(fixture: &TimingStorageFixture) -> u64 {
         let tables = fixture.shared_modifiers.clone();
         modifier_checksum(&tables.speeds, &tables.scrolls, &tables.fakes)
     }
 
+    #[must_use]
     pub fn old_runtime_clone_probe(fixture: &TimingStorageFixture) -> u64 {
         let tables = fixture.old_runtime.clone();
         runtime_checksum(&tables.speed_runtime, &tables.scroll_prefix)
     }
 
+    #[must_use]
     pub fn shared_runtime_clone_probe(fixture: &TimingStorageFixture) -> u64 {
         let tables = fixture.shared_runtime.clone();
         runtime_checksum(&tables.speed_runtime, &tables.scroll_prefix)
     }
 
+    #[must_use]
     pub fn timing_stats_old(notes: &[Note]) -> TimingStats {
         timing_summary_reference::stats(notes)
     }
 
+    #[must_use]
     pub fn timing_stats_new(notes: &[Note]) -> TimingStats {
         compute_note_timing_stats(notes)
     }
 
+    #[must_use]
     pub fn histogram_old(notes: &[Note]) -> HistogramMs {
         timing_summary_reference::histogram(notes)
     }
 
+    #[must_use]
     pub fn histogram_new(notes: &[Note]) -> HistogramMs {
         build_histogram_ms(notes)
     }
 
+    #[must_use]
     pub fn merge_old(histograms: &[HistogramMs]) -> HistogramMs {
         timing_summary_reference::merge(histograms)
     }
 
+    #[must_use]
     pub fn merge_new(histograms: &[HistogramMs]) -> HistogramMs {
         merge_histograms_ms(histograms)
     }
 
+    #[must_use]
     pub fn arrow_stats_old(
         notes: &[Note],
         col_offset: usize,
@@ -2758,6 +2816,7 @@ pub mod bench_support {
         timing_summary_reference::arrow_stats(notes, col_offset, cols_per_player, foot_by_note)
     }
 
+    #[must_use]
     pub fn arrow_stats_new(
         notes: &[Note],
         col_offset: usize,
@@ -2767,6 +2826,7 @@ pub mod bench_support {
         compute_arrow_timing_stats(notes, col_offset, cols_per_player, foot_by_note)
     }
 
+    #[must_use]
     pub fn scatter_old(
         notes: &[Note],
         note_time_cache_ns: &[i64],
@@ -2783,6 +2843,7 @@ pub mod bench_support {
         )
     }
 
+    #[must_use]
     pub fn scatter_new(
         notes: &[Note],
         note_time_cache_ns: &[i64],

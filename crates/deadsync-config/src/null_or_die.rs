@@ -118,6 +118,7 @@ pub fn load_null_or_die_options(conf: &SimpleIni, default: NullOrDieOptions) -> 
     }
 }
 
+#[must_use]
 pub fn clamp_null_or_die_confidence_percent(value: u8) -> u8 {
     value.min(100)
 }
@@ -146,6 +147,7 @@ fn quantize_hundredths(value: f64) -> f64 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn clamp_null_or_die_positive_ms(value: f64) -> f64 {
     if !value.is_finite() {
         return NULL_OR_DIE_POSITIVE_MS_MIN;
@@ -154,6 +156,7 @@ pub fn clamp_null_or_die_positive_ms(value: f64) -> f64 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn clamp_null_or_die_magic_offset_ms(value: f64) -> f64 {
     if !value.is_finite() {
         return 0.0;
@@ -175,6 +178,7 @@ fn format_null_or_die_magic_offset_ms(value: f64) -> String {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn null_or_die_graph_orientation_str(orientation: GraphOrientation) -> &'static str {
     match orientation {
         GraphOrientation::Vertical => "Vertical",
@@ -182,6 +186,7 @@ pub const fn null_or_die_graph_orientation_str(orientation: GraphOrientation) ->
     }
 }
 
+#[must_use]
 pub fn parse_null_or_die_graph_orientation(raw: &str) -> Option<GraphOrientation> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "vertical" => Some(GraphOrientation::Vertical),
@@ -191,6 +196,7 @@ pub fn parse_null_or_die_graph_orientation(raw: &str) -> Option<GraphOrientation
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn null_or_die_graph_orientation_choice_index(orientation: GraphOrientation) -> usize {
     match orientation {
         GraphOrientation::Vertical => 0,
@@ -199,6 +205,7 @@ pub const fn null_or_die_graph_orientation_choice_index(orientation: GraphOrient
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn null_or_die_graph_origin_str(origin: GraphOrigin) -> &'static str {
     match origin {
         GraphOrigin::Bottom => "Bottom",
@@ -206,6 +213,7 @@ pub const fn null_or_die_graph_origin_str(origin: GraphOrigin) -> &'static str {
     }
 }
 
+#[must_use]
 pub fn parse_null_or_die_graph_origin(raw: &str) -> Option<GraphOrigin> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "bottom" => Some(GraphOrigin::Bottom),
@@ -215,6 +223,7 @@ pub fn parse_null_or_die_graph_origin(raw: &str) -> Option<GraphOrigin> {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn null_or_die_graph_origin_choice_index(origin: GraphOrigin) -> usize {
     match origin {
         GraphOrigin::Bottom => 0,
@@ -223,6 +232,7 @@ pub const fn null_or_die_graph_origin_choice_index(origin: GraphOrigin) -> usize
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn null_or_die_kernel_target_str(target: KernelTarget) -> &'static str {
     match target {
         KernelTarget::Digest => "Digest",
@@ -245,6 +255,7 @@ pub fn parse_null_or_die_kernel_target(raw: &str) -> Option<KernelTarget> {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn null_or_die_kernel_target_choice_index(target: KernelTarget) -> usize {
     match target {
         KernelTarget::Digest => 0,
@@ -253,6 +264,7 @@ pub const fn null_or_die_kernel_target_choice_index(target: KernelTarget) -> usi
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn null_or_die_kernel_target_from_choice(idx: usize) -> KernelTarget {
     match idx {
         1 => KernelTarget::Accumulator,
@@ -261,6 +273,7 @@ pub const fn null_or_die_kernel_target_from_choice(idx: usize) -> KernelTarget {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn null_or_die_kernel_type_str(kind: BiasKernel) -> &'static str {
     match kind {
         BiasKernel::Rising => "Rising",
@@ -283,6 +296,7 @@ pub fn parse_null_or_die_kernel_type(raw: &str) -> Option<BiasKernel> {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn null_or_die_kernel_type_choice_index(kind: BiasKernel) -> usize {
     match kind {
         BiasKernel::Rising => 0,
@@ -291,6 +305,7 @@ pub const fn null_or_die_kernel_type_choice_index(kind: BiasKernel) -> usize {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn null_or_die_kernel_type_from_choice(idx: usize) -> BiasKernel {
     match idx {
         1 => BiasKernel::Loudest,
@@ -356,6 +371,7 @@ pub fn push_null_or_die_option_lines(content: &mut String, options: NullOrDieOpt
     );
 }
 
+#[must_use]
 pub fn null_or_die_bias_cfg(options: NullOrDieOptions) -> BiasCfg {
     BiasCfg {
         fingerprint_ms: clamp_null_or_die_positive_ms(options.fingerprint_ms),
@@ -368,6 +384,7 @@ pub fn null_or_die_bias_cfg(options: NullOrDieOptions) -> BiasCfg {
     }
 }
 
+#[must_use]
 pub const fn null_or_die_options_from_config(cfg: Config) -> NullOrDieOptions {
     NullOrDieOptions {
         sync_graph: cfg.null_or_die_sync_graph,

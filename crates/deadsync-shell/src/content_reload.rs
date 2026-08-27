@@ -394,6 +394,7 @@ pub fn benchmark_sample_progress<T>(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_receive_ready<T>(rx: &Receiver<T>) -> SmallVec<[T; PROGRESS_EVENTS_PER_FRAME]> {
     receive_ready(rx).events
 }

@@ -143,6 +143,7 @@ pub struct State {
     bg: visual_style_bg::State,
 }
 
+#[must_use]
 pub const fn init(songs_root: PathBuf, courses_root: PathBuf) -> State {
     State {
         elapsed: 0.0,
@@ -450,6 +451,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
 
 /* --------------------------- drawing helpers --------------------------- */
 
+#[must_use]
 pub fn build_squish_bar(progress: f32) -> Actor {
     let w = screen_width();
     let cy = screen_center_y();
@@ -491,6 +493,7 @@ fn build_arrows_backdrop_now() -> Actor {
     )
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     let actor = act!(quad:
         align(0.5, 0.5):

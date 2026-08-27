@@ -473,6 +473,7 @@ impl Backend {
         }
     }
 
+    #[must_use]
     pub const fn texture_is_yuv420(texture: &Texture) -> bool {
         match texture {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]

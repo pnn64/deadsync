@@ -273,6 +273,7 @@ pub struct ItgModelSlotPlan {
 }
 
 impl ItgModelSlotPlan {
+    #[must_use]
     pub fn from_layer(
         layer: ItgResolvedModelLayer,
         model_draw: ModelDrawState,
@@ -302,6 +303,7 @@ impl ItgModelSlotPlan {
         }
     }
 
+    #[must_use]
     pub fn from_texture(
         model: Option<Arc<ModelMesh>>,
         texture: ItgResolvedModelTexture,
@@ -747,6 +749,7 @@ pub fn itg_parse_milkshape_model_layers(
     }
 }
 
+#[must_use]
 pub fn itg_parse_milkshape_model(
     data: &noteskin_itg::NoteskinData,
     path: &Path,

@@ -492,6 +492,7 @@ const fn screen_entry_runtime_views(screen: CurrentScreen) -> u8 {
 
 #[cfg(feature = "bench-support")]
 #[inline(always)]
+#[must_use]
 pub const fn benchmark_smx_screen_work(
     screen: CurrentScreen,
     fsr_active: bool,
@@ -5003,7 +5004,7 @@ impl App {
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::RetryUnlockDownloads) => {
-                    deadsync_online::runtime::retry_failed_unlock_downloads();
+                    let _ = deadsync_online::runtime::retry_failed_unlock_downloads();
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Online(

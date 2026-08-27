@@ -11,6 +11,7 @@ use std::{
 };
 
 #[inline(always)]
+#[must_use]
 pub fn banner_cache_options() -> dynamic::BannerCacheOptions {
     dynamic::BannerCacheOptions {
         enabled: deadsync_config::runtime::get().banner_cache,
@@ -18,6 +19,7 @@ pub fn banner_cache_options() -> dynamic::BannerCacheOptions {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn cdtitle_cache_options() -> dynamic::BannerCacheOptions {
     dynamic::BannerCacheOptions {
         enabled: deadsync_config::runtime::get().cdtitle_cache,
@@ -76,6 +78,7 @@ pub fn ensure_banner_texture(assets: &mut AssetManager, backend: &mut Backend, p
     }
 }
 
+#[must_use]
 pub fn artwork_cache_jobs(banner_paths: &[PathBuf], cdtitle_paths: &[PathBuf]) -> usize {
     let banner_opts = banner_cache_options();
     let cdtitle_opts = cdtitle_cache_options();

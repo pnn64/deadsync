@@ -56,6 +56,7 @@ pub struct StepStatsFramePlacement {
     pub zoom: f32,
 }
 
+#[must_use]
 pub fn pane_layout(params: StepStatsPaneParams) -> StepStatsPaneLayout {
     let sh = params.screen_h.max(1.0);
     let is_ultrawide = params.screen_w / sh > 21.0 / 9.0;
@@ -106,6 +107,7 @@ pub fn pane_layout(params: StepStatsPaneParams) -> StepStatsPaneLayout {
     }
 }
 
+#[must_use]
 pub fn song_info_text_zoom(layout: StepStatsPaneLayout, screen_aspect_ratio: f32) -> f32 {
     let mut zoom = 0.75;
     if layout.note_field_is_centered {
@@ -114,6 +116,7 @@ pub fn song_info_text_zoom(layout: StepStatsPaneLayout, screen_aspect_ratio: f32
     zoom * layout.banner_data_zoom
 }
 
+#[must_use]
 pub fn density_graph_width(current_graph_w: f32, sidepane_width: f32, double: bool) -> f32 {
     if current_graph_w > 0.0 {
         return current_graph_w;
@@ -126,6 +129,7 @@ pub fn density_graph_width(current_graph_w: f32, sidepane_width: f32, double: bo
     width.max(1.0)
 }
 
+#[must_use]
 pub fn density_graph_rect(current_graph_w: f32, layout: StepStatsPaneLayout) -> StepStatsGraphRect {
     let graph_w = density_graph_width(current_graph_w, layout.sidepane_width, false);
     StepStatsGraphRect {
@@ -135,6 +139,7 @@ pub fn density_graph_rect(current_graph_w: f32, layout: StepStatsPaneLayout) -> 
     }
 }
 
+#[must_use]
 pub fn song_banner_placement(
     layout: StepStatsPaneLayout,
     wide: bool,
@@ -159,6 +164,7 @@ pub fn song_banner_placement(
     }
 }
 
+#[must_use]
 pub fn pack_banner_placement(
     layout: StepStatsPaneLayout,
     player_side: PlayerSide,
@@ -184,6 +190,7 @@ pub fn pack_banner_placement(
     }
 }
 
+#[must_use]
 pub fn holds_mines_rolls_frame(
     layout: StepStatsPaneLayout,
     player_side: PlayerSide,
@@ -199,6 +206,7 @@ pub fn holds_mines_rolls_frame(
     }
 }
 
+#[must_use]
 pub fn scorebox_frame(
     layout: StepStatsPaneLayout,
     wide: bool,
@@ -223,6 +231,7 @@ pub fn scorebox_frame(
     }
 }
 
+#[must_use]
 pub fn double_pane_layout(
     screen_center_x: f32,
     screen_center_y: f32,
@@ -247,6 +256,7 @@ pub fn double_pane_layout(
     }
 }
 
+#[must_use]
 pub fn double_song_banner_placement(
     layout: DoubleStepStatsLayout,
     notefield_width: f32,
@@ -258,6 +268,7 @@ pub fn double_song_banner_placement(
     }
 }
 
+#[must_use]
 pub fn double_pack_banner_placement(
     layout: DoubleStepStatsLayout,
     notefield_width: f32,
@@ -278,6 +289,7 @@ pub fn double_pack_banner_placement(
     }
 }
 
+#[must_use]
 pub fn double_holds_mines_rolls_frame(
     layout: DoubleStepStatsLayout,
     notefield_width: f32,
@@ -291,6 +303,7 @@ pub fn double_holds_mines_rolls_frame(
     }
 }
 
+#[must_use]
 pub fn double_scorebox_frame(
     layout: DoubleStepStatsLayout,
     notefield_width: f32,
@@ -302,10 +315,12 @@ pub fn double_scorebox_frame(
     }
 }
 
+#[must_use]
 pub fn double_sidepane_width(screen_w: f32, notefield_width: f32) -> f32 {
     ((screen_w - notefield_width) * 0.5).max(1.0)
 }
 
+#[must_use]
 pub fn double_density_graph_rect(
     layout: DoubleStepStatsLayout,
     screen_w: f32,

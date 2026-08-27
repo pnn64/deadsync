@@ -1,3 +1,6 @@
+// Source-level architecture guards intentionally distinguish crate-private adapters.
+#![allow(clippy::redundant_pub_crate)]
+
 pub mod app;
 
 mod apply_replaygain;

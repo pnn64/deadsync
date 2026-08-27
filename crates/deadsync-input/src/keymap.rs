@@ -480,6 +480,7 @@ fn player_has_action_set(actions: &[VirtualAction]) -> bool {
 
 /// Returns `true` if at least one player has dedicated left/right menu buttons
 /// plus Start bound.
+#[must_use]
 pub fn any_player_has_three_key_menu_buttons() -> bool {
     player_has_action_set(&[
         VirtualAction::p1_menu_left,
@@ -494,6 +495,7 @@ pub fn any_player_has_three_key_menu_buttons() -> bool {
 
 /// Returns `true` if at least one player has all four dedicated menu
 /// directional buttons (`menu_up`, `menu_down`, `menu_left`, `menu_right`) bound.
+#[must_use]
 pub fn any_player_has_four_way_menu_buttons() -> bool {
     player_has_action_set(&[
         VirtualAction::p1_menu_up,
@@ -509,6 +511,7 @@ pub fn any_player_has_four_way_menu_buttons() -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn any_player_has_dedicated_menu_buttons_for_mode(three_key_navigation: bool) -> bool {
     if three_key_navigation {
         any_player_has_three_key_menu_buttons()
@@ -632,6 +635,7 @@ impl Keymap {
     /// This reflects the first `KeyCode::...` token listed for the action
     /// in `deadsync.ini` (or the hardcoded default keymap).
     #[inline(always)]
+    #[must_use]
     pub fn first_key_binding(&self, action: VirtualAction) -> Option<KeyCode> {
         self.map.get(&action).and_then(|bindings| {
             bindings.iter().find_map(|b| {
@@ -647,6 +651,7 @@ impl Keymap {
     /// Returns the raw binding at the given index for this virtual action,
     /// preserving the order parsed from deadsync.ini.
     #[inline(always)]
+    #[must_use]
     pub fn binding_at(&self, action: VirtualAction, index: usize) -> Option<InputBinding> {
         self.map
             .get(&action)
@@ -655,6 +660,7 @@ impl Keymap {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn keycode_mapped(&self, code: KeyCode) -> bool {
         !self.key_actions(code).is_empty()
     }
@@ -670,6 +676,7 @@ impl Keymap {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn raw_key_event_mapped(&self, ev: &RawKeyboardEvent) -> bool {
         self.keycode_mapped(ev.code)
     }
@@ -684,6 +691,7 @@ impl Keymap {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn pad_event_mapped(&self, ev: &PadEvent) -> bool {
         match *ev {
             PadEvent::Dir { id, dir, .. } => {
@@ -777,6 +785,7 @@ pub struct PadLookupBench {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl PadLookupBench {
+    #[must_use]
     pub fn new(keymap: &Keymap) -> Self {
         let current = CompiledKeymap::from_keymap(keymap);
         let mut old_dir_on =
@@ -804,22 +813,26 @@ impl PadLookupBench {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn dir_new(&self, id: PadId, dir: PadDir) -> u32 {
         collect_pad_dir_mask_from_compiled(&self.current, id, dir)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn dir_old(&self, id: PadId, dir: PadDir) -> u32 {
         let dev = usize::from(id);
         self.current.pad_dir_rev[dir.ix()] | self.old_dir_on.get(&(dev, dir)).copied().unwrap_or(0)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn code_new(&self, code: PadCode) -> Option<u32> {
         find_pad_code_map(&self.current, code.into_u32()).map(|code_map| code_map.slot)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn code_old(&self, code: PadCode) -> Option<u32> {
         let code = code.into_u32();
         let index = self
@@ -830,6 +843,7 @@ impl PadLookupBench {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn filter_new(&self, code_index: usize, id: PadId, uuid: [u8; 16]) -> u32 {
         let Some((_, code_map)) = self.current.pad_code_rev.get(code_index) else {
             return 0;
@@ -838,6 +852,7 @@ impl PadLookupBench {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn filter_old(&self, code_index: usize, id: PadId, uuid: [u8; 16]) -> u32 {
         let Some((_, code_map)) = self.old_codes.get(code_index) else {
             return 0;
@@ -860,12 +875,14 @@ impl PadLookupBench {
         mask
     }
 
+    #[must_use]
     pub fn binding_new(&self, id: PadId, code: PadCode, uuid: [u8; 16]) -> Option<(u32, u32)> {
         let code_map = find_pad_code_map(&self.current, code.into_u32())?;
         let mask = collect_pad_code_mask(code_map, usize::from(id), uuid);
         (mask != 0).then_some((code_map.slot, mask))
     }
 
+    #[must_use]
     pub fn binding_old(&self, id: PadId, code: PadCode, uuid: [u8; 16]) -> Option<(u32, u32)> {
         let code = code.into_u32();
         let index = self
@@ -877,6 +894,7 @@ impl PadLookupBench {
         (mask != 0).then_some((code_map.slot, mask))
     }
 
+    #[must_use]
     pub fn code_count(&self) -> usize {
         self.old_codes.len()
     }

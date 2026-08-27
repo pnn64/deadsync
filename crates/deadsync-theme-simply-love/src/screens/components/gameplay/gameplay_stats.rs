@@ -390,6 +390,7 @@ pub struct GameplayStatsTextBenchmark {
 
 #[cfg(feature = "bench-support")]
 impl GameplayStatsTextBenchmark {
+    #[must_use]
     pub fn new() -> Self {
         let artist = "Benchmark Artist".to_string();
         let chart_text = [
@@ -410,6 +411,7 @@ impl GameplayStatsTextBenchmark {
         Self { plan }
     }
 
+    #[must_use]
     pub fn frame(&self, elapsed_seconds: f32) -> usize {
         let mut checksum = 0usize;
         for index in 0..4 {
@@ -1627,10 +1629,12 @@ pub struct GameplayStatsNumericHotBenchmark;
 
 #[cfg(feature = "bench-support")]
 impl GameplayStatsNumericHotBenchmark {
+    #[must_use]
     pub const fn new() -> Self {
         Self
     }
 
+    #[must_use]
     pub fn frame(&self, frame: u32) -> u64 {
         let second = (frame / 60) % 601;
         let mut checksum = 0xcbf2_9ce4_8422_2325u64;
@@ -1672,6 +1676,7 @@ pub struct GameplayHudMemoBenchmark {
 
 #[cfg(feature = "bench-support")]
 impl GameplayHudMemoBenchmark {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             old_count: FixedTextCache::new(),

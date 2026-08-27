@@ -103,12 +103,14 @@ fn pump_tap_rows_reference(notes: &[Note], note_range: (usize, usize)) -> Vec<us
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+#[must_use]
 pub fn pump_tap_rows_for_bench(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
     pump_tap_rows(notes, note_range)
 }
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+#[must_use]
 pub fn pump_tap_rows_reference_for_bench(
     notes: &[Note],
     note_range: (usize, usize),
@@ -168,6 +170,7 @@ fn push_pump_checkpoints(
     }
 }
 
+#[must_use]
 pub fn build_pump_hold_events(
     notes: &[Note],
     note_ranges: &[(usize, usize); MAX_PLAYERS],
@@ -294,6 +297,7 @@ fn build_pump_hold_events_core(
 
 #[cfg(any(test, feature = "bench-support"))]
 #[allow(clippy::too_many_arguments)]
+#[must_use]
 pub fn build_pump_hold_events_reference(
     notes: &[Note],
     note_ranges: &[(usize, usize); MAX_PLAYERS],
@@ -384,6 +388,7 @@ pub struct HoldResolutionPlayerState {
     pub combo: ComboState,
 }
 
+#[must_use]
 pub const fn hold_result_stats_state(player: &PlayerRuntime) -> HoldResultStatsState {
     HoldResultStatsState {
         hands_holding_count_for_stats: player.hands_holding_count_for_stats,
@@ -406,6 +411,7 @@ pub const fn set_hold_result_stats_state(player: &mut PlayerRuntime, stats: Hold
     player.rolls_let_go_for_score = stats.rolls_let_go_for_score;
 }
 
+#[must_use]
 pub const fn hold_resolution_player_state(player: &PlayerRuntime) -> HoldResolutionPlayerState {
     HoldResolutionPlayerState {
         stats: hold_result_stats_state(player),
@@ -478,6 +484,7 @@ pub fn apply_hold_success_player_state(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn replaced_active_hold_settle_time(
     active_note_index: usize,
     active_end_time_ns: SongTimeNs,
@@ -769,6 +776,7 @@ pub struct PendingMissedHoldResolutionUpdate {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn pending_missed_hold_resolution_action(
     hold_result: Option<HoldResult>,
     note_result_grade: Option<JudgeGrade>,
@@ -786,6 +794,7 @@ pub const fn pending_missed_hold_resolution_action(
     }
 }
 
+#[must_use]
 pub fn pending_missed_hold_resolution_for_note(
     note: Option<&Note>,
     hold_end_time_ns: Option<SongTimeNs>,
@@ -877,6 +886,7 @@ pub fn collect_pending_missed_hold_resolutions(
     }
 }
 
+#[must_use]
 pub const fn hold_result_stats_update(
     note_type: NoteType,
     result: HoldResult,
@@ -935,6 +945,7 @@ impl HoldResultStatsUpdate {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn hold_resolution_updates_grade_totals(
     result: HoldResult,
     stats_update: HoldResultStatsUpdate,
@@ -950,6 +961,7 @@ pub const fn hold_resolution_updates_grade_totals(
     }
 }
 
+#[must_use]
 pub const fn started_active_hold_state(
     hold: Option<&mut HoldData>,
     note_index: usize,
@@ -1485,6 +1497,7 @@ pub struct TurnRng {
     state: u64,
 }
 
+#[must_use]
 pub fn turn_seed_for_song(song: &SongData) -> u64 {
     let mut hasher = XxHash64::with_seed(0);
     hasher.write(song.simfile_path.to_string_lossy().as_bytes());
@@ -1493,6 +1506,7 @@ pub fn turn_seed_for_song(song: &SongData) -> u64 {
 
 impl TurnRng {
     #[inline(always)]
+    #[must_use]
     pub const fn new(seed: u64) -> Self {
         let seed = if seed == 0 {
             0x9E37_79B9_7F4A_7C15
@@ -1591,16 +1605,19 @@ pub fn autoplay_judgment_offset_music_ns(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn live_autoplay_enabled_from_flags(autoplay_enabled: bool, replay_mode: bool) -> bool {
     autoplay_enabled && !replay_mode
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn autoplay_blocks_scoring_from_flags(autoplay_enabled: bool, replay_mode: bool) -> bool {
     live_autoplay_enabled_from_flags(autoplay_enabled, replay_mode)
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn autoplay_cursor_for_enable(
     next_tap_miss_cursor: usize,
     note_range: (usize, usize),
@@ -1627,11 +1644,13 @@ pub struct GameplayAutoplayRuntimeState {
 
 impl GameplayAutoplayRuntimeState {
     #[inline(always)]
+    #[must_use]
     pub const fn from_rng_and_cursors(rng: TurnRng, cursors: [usize; MAX_PLAYERS]) -> Self {
         Self { rng, cursors }
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn new(seed: u64, cursors: [usize; MAX_PLAYERS]) -> Self {
         Self::from_rng_and_cursors(TurnRng::new(seed), cursors)
     }
@@ -1654,6 +1673,7 @@ impl GameplayAutoplayRuntimeState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn cursor(self, player: usize) -> usize {
         self.cursors.get(player).copied().unwrap_or(0)
     }
@@ -1841,11 +1861,13 @@ pub fn collect_active_autoplay_roll_columns_reference(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn active_hold_is_engaged(active: &ActiveHold) -> bool {
     !active.let_go && active.life > 0.0
 }
 
 #[inline(always)]
+#[must_use]
 pub fn autoplay_due_active_hold_resolution(
     active: &ActiveHold,
     cutoff_time_ns: SongTimeNs,
@@ -1888,6 +1910,7 @@ pub fn hold_explosion_active(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn let_go_head_beat(
     note_beat: f32,
     end_beat: f32,

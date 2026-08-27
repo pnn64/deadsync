@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+#[must_use]
 pub fn split_bgchange_sets_like_itg(changes: &str, entries: &[String]) -> Vec<Vec<String>> {
     let changes = strip_newlines(changes);
     split_bgchange_sets(&changes, entries, true)
@@ -69,6 +70,7 @@ fn push_bgchange_field(fields: &mut Vec<String>, field: &str, compact_field_grow
     fields.push(field.to_string());
 }
 
+#[must_use]
 pub fn bgchange_field_rejects_non_media(field: &str) -> bool {
     contains_ignore_ascii_case(field, ".ini") || contains_ignore_ascii_case(field, ".xml")
 }
@@ -81,6 +83,7 @@ fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
         .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
 }
 
+#[must_use]
 pub fn parse_bgchange_rate(field: Option<&str>) -> f32 {
     match field {
         Some(field) => field.trim().parse::<f32>().unwrap_or(0.0),

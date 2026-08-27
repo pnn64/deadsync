@@ -161,6 +161,7 @@ pub struct SimplyLoveItgImportSummary {
 }
 
 impl SimplyLoveItgImportSummary {
+    #[must_use]
     pub const fn online_keys_imported(&self) -> bool {
         self.groovestats_imported || self.arrowcloud_imported
     }
@@ -323,6 +324,7 @@ pub enum SimplyLoveQrLoginEvent {
 }
 
 impl SimplyLoveQrLoginEvent {
+    #[must_use]
     pub const fn service(&self) -> SimplyLoveQrLoginService {
         match self {
             Self::Started { service, .. }
@@ -959,6 +961,7 @@ pub struct SimplyLoveEffectRoutePlan {
 
 /// Apply Simply Love's gameplay and course redirects before the shell executes
 /// an effect.
+#[must_use]
 pub fn resolve_effect_route(
     effect: SimplyLoveEffect,
     context: SimplyLoveEffectRouteContext,

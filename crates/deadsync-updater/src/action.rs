@@ -142,6 +142,7 @@ pub enum ActionErrorKind {
 }
 
 impl ActionErrorKind {
+    #[must_use]
     pub const fn classify(err: &UpdaterError) -> Self {
         match err {
             UpdaterError::Network(_) => Self::Network,
@@ -346,6 +347,7 @@ fn set_phase_if_current(generation: u64, next: ActionPhase) -> bool {
 /// `[Options] UpdaterInstallEnabled`; for pure unit tests, prefer
 /// [`classify_check_result_with`] to inject the flag directly without
 /// touching global state.
+#[must_use]
 pub fn classify_check_result(state: UpdateState) -> ActionPhase {
     classify_check_result_with(state, install_enabled())
 }
@@ -353,6 +355,7 @@ pub fn classify_check_result(state: UpdateState) -> ActionPhase {
 /// Same as [`classify_check_result`] but takes the install-enabled flag
 /// explicitly so tests can exercise both branches without mutating the
 /// global config.
+#[must_use]
 pub fn classify_check_result_with(state: UpdateState, install_enabled: bool) -> ActionPhase {
     match state {
         UpdateState::UpToDate => ActionPhase::UpToDate {
@@ -396,6 +399,7 @@ pub fn classify_check_result_with(state: UpdateState, install_enabled: bool) -> 
 }
 
 /// Pure transition: convert an [`UpdaterError`] into an [`ActionPhase::Error`].
+#[must_use]
 pub fn classify_error(err: &UpdaterError) -> ActionPhase {
     ActionPhase::Error {
         kind: ActionErrorKind::classify(err),
@@ -483,12 +487,14 @@ fn run_check_now(generation: u64) {
 /// overlay phase for `current` running version, honouring the
 /// install-enabled gate.  Lifted out of the worker so it is unit-testable
 /// without the network.
+#[must_use]
 pub fn classify_rollback_list(releases: Vec<ReleaseInfo>) -> ActionPhase {
     classify_rollback_list_with(releases, apply_supported_for_host() && install_enabled())
 }
 
 /// Same as [`classify_rollback_list`] but takes the "install allowed"
 /// gate explicitly so tests can exercise both branches.
+#[must_use]
 pub fn classify_rollback_list_with(
     releases: Vec<ReleaseInfo>,
     install_allowed: bool,
@@ -812,6 +818,7 @@ fn resolve_expected_digest(
 }
 
 /// Absolute path of the directory archives are downloaded into.
+#[must_use]
 pub fn downloads_dir() -> PathBuf {
     deadlib_platform::dirs::app_dirs()
         .cache_dir

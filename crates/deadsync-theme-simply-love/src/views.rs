@@ -28,6 +28,7 @@ pub struct PostSelectStageView<'a> {
 }
 
 impl<'a> PostSelectStageView<'a> {
+    #[must_use]
     pub const fn new(
         stages: &'a [deadsync_score::stage_stats::StageSummary],
         indices: &'a [usize],
@@ -35,14 +36,17 @@ impl<'a> PostSelectStageView<'a> {
         Self { stages, indices }
     }
 
+    #[must_use]
     pub const fn len(self) -> usize {
         self.indices.len()
     }
 
+    #[must_use]
     pub const fn is_empty(self) -> bool {
         self.indices.is_empty()
     }
 
+    #[must_use]
     pub fn get(self, index: usize) -> Option<&'a deadsync_score::stage_stats::StageSummary> {
         self.indices
             .get(index)
@@ -844,11 +848,13 @@ pub struct SelectMusicSessionView {
 
 impl SelectMusicSessionView {
     #[inline(always)]
+    #[must_use]
     pub const fn side_joined(self, side: deadsync_profile::PlayerSide) -> bool {
         self.joined[deadsync_profile::player_side_index(side)]
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn side_guest(self, side: deadsync_profile::PlayerSide) -> bool {
         self.guest[deadsync_profile::player_side_index(side)]
     }
@@ -884,11 +890,13 @@ pub struct SelectMusicPadProfileView {
 
 impl SelectMusicProfileView {
     #[inline(always)]
+    #[must_use]
     pub fn display_name(&self, side: deadsync_profile::PlayerSide) -> &str {
         &self.display_names[deadsync_profile::player_side_index(side)]
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn local_profile_id(&self, side: deadsync_profile::PlayerSide) -> Option<&str> {
         self.local_profile_ids[deadsync_profile::player_side_index(side)].as_deref()
     }

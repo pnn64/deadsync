@@ -211,6 +211,7 @@ fn visit_visible_song_select_bg_paths(
     true
 }
 
+#[must_use]
 pub fn visible_song_select_bg_paths(
     entries: &[MusicWheelEntry],
     selected_index: usize,
@@ -234,6 +235,7 @@ pub fn visible_song_select_bg_paths(
     paths
 }
 
+#[must_use]
 pub fn visible_song_select_bg_paths_match(
     entries: &[MusicWheelEntry],
     selected_index: usize,
@@ -1619,6 +1621,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     ));
 }
 
+#[must_use]
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(WHEEL_ACTOR_CAPACITY);
     push(&mut actors, p);

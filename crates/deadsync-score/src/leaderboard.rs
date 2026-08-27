@@ -104,15 +104,18 @@ fn format_leaderboard_date_with_empty(date: &str, empty_text: &str) -> String {
     )
 }
 
+#[must_use]
 pub fn format_leaderboard_date(date: &str) -> String {
     format_leaderboard_date_with_empty(date, "")
 }
 
+#[must_use]
 pub fn format_leaderboard_date_or_placeholder(date: &str) -> String {
     format_leaderboard_date_with_empty(date, "----------")
 }
 
 #[inline(always)]
+#[must_use]
 pub fn scorebox_machine_tag(machine_tag: Option<&str>, name: &str) -> String {
     let src = machine_tag.unwrap_or(name).trim();
     if src.is_empty() {
@@ -126,6 +129,7 @@ pub fn scorebox_machine_tag(machine_tag: Option<&str>, name: &str) -> String {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn scorebox_score_percent(score_10000: f64) -> f64 {
     if score_10000.is_finite() {
         (score_10000 / 100.0).clamp(0.0, 100.0)
@@ -135,16 +139,19 @@ pub fn scorebox_score_percent(score_10000: f64) -> f64 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn format_scorebox_score_percent(score_10000: f64) -> String {
     format!("{:.2}%", scorebox_score_percent(score_10000))
 }
 
 #[inline(always)]
+#[must_use]
 pub fn format_scorebox_score_value(score_10000: f64) -> String {
     format!("{:.2}", scorebox_score_percent(score_10000))
 }
 
 #[inline(always)]
+#[must_use]
 pub fn format_scorebox_rank(rank: u32) -> String {
     format!("{rank}.")
 }
@@ -257,6 +264,7 @@ fn prioritized_leaderboard_entry_refs_with_neighbors(
     selected
 }
 
+#[must_use]
 pub fn prioritized_leaderboard_entry_refs(
     entries: &[LeaderboardEntry],
     max_rows: usize,
@@ -266,6 +274,7 @@ pub fn prioritized_leaderboard_entry_refs(
 
 /// Keeps the world record, self, and rivals visible, then fills the remaining
 /// rows with the entries nearest to self.
+#[must_use]
 pub fn neighboring_leaderboard_entry_refs(
     entries: &[LeaderboardEntry],
     max_rows: usize,
@@ -273,6 +282,7 @@ pub fn neighboring_leaderboard_entry_refs(
     prioritized_leaderboard_entry_refs_with_neighbors(entries, max_rows, true)
 }
 
+#[must_use]
 pub fn prioritized_leaderboard_entries(
     entries: &[LeaderboardEntry],
     max_rows: usize,
@@ -283,6 +293,7 @@ pub fn prioritized_leaderboard_entries(
         .collect()
 }
 
+#[must_use]
 pub fn machine_leaderboard_entries(
     mut plays: Vec<MachineLeaderboardPlay>,
     max_entries: usize,
@@ -313,6 +324,7 @@ pub fn machine_leaderboard_entries(
     out
 }
 
+#[must_use]
 pub fn machine_replay_entries(
     mut plays: Vec<MachineReplayPlay>,
     max_entries: usize,
@@ -354,11 +366,13 @@ pub fn machine_replay_entries(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn leaderboard_username_matches(entry_name: &str, username: &str) -> bool {
     !username.trim().is_empty() && entry_name.eq_ignore_ascii_case(username)
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn leaderboard_score_10000(score: f64, is_fail: bool) -> Option<f64> {
     if is_fail || !score.is_finite() {
         None
@@ -368,11 +382,13 @@ pub const fn leaderboard_score_10000(score: f64, is_fail: bool) -> Option<f64> {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn leaderboard_nonzero_rank(rank: u32) -> Option<u32> {
     if rank == 0 { None } else { Some(rank) }
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn score_import_entry_matches_profile(
     entry_name: &str,
     is_self: bool,
@@ -392,6 +408,7 @@ pub enum ArrowCloudPaneKind {
     HardEx,
 }
 
+#[must_use]
 pub fn arrowcloud_pane_kind_from_type(lb_type: &str) -> Option<ArrowCloudPaneKind> {
     if lb_type.is_empty() {
         return None;
@@ -416,11 +433,13 @@ pub struct ArrowCloudUserContext {
     pub rival_user_ids: HashSet<String>,
 }
 
+#[must_use]
 pub fn arrowcloud_user_id(raw: &str) -> Option<&str> {
     let user_id = raw.trim();
     (!user_id.is_empty()).then_some(user_id)
 }
 
+#[must_use]
 pub fn arrowcloud_target_user_ids(context: Option<&ArrowCloudUserContext>) -> HashSet<String> {
     let Some(context) = context else {
         return HashSet::new();
@@ -435,6 +454,7 @@ pub fn arrowcloud_target_user_ids(context: Option<&ArrowCloudUserContext>) -> Ha
     out
 }
 
+#[must_use]
 pub fn arrowcloud_entry_flags(
     entry_user_id: Option<&str>,
     entry_is_self: bool,
@@ -452,6 +472,7 @@ pub fn arrowcloud_entry_flags(
     (is_self, is_rival)
 }
 
+#[must_use]
 pub fn arrowcloud_leaderboard_entry(
     rank: u32,
     alias: String,
@@ -489,16 +510,19 @@ pub struct LeaderboardPane {
 
 impl LeaderboardPane {
     #[inline(always)]
+    #[must_use]
     pub fn is_groovestats(&self) -> bool {
         self.name.eq_ignore_ascii_case("GrooveStats")
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn is_arrowcloud(&self) -> bool {
         self.arrowcloud_kind.is_some() || self.name.eq_ignore_ascii_case("ArrowCloud")
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn is_hard_ex(&self) -> bool {
         self.arrowcloud_kind == Some(ArrowCloudPaneKind::HardEx)
             || (self.arrowcloud_kind.is_none() && self.name.eq_ignore_ascii_case("ArrowCloud"))
@@ -535,11 +559,13 @@ impl Default for SelectMusicScoreboxFilter {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn select_music_scorebox_filter_has_any(filter: SelectMusicScoreboxFilter) -> bool {
     filter.itg || filter.ex || filter.hard_ex || filter.tournaments
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn select_music_scorebox_filter_allows_kind(
     kind: ScoreboxPaneKind,
     filter: SelectMusicScoreboxFilter,
@@ -554,6 +580,7 @@ pub const fn select_music_scorebox_filter_allows_kind(
     }
 }
 
+#[must_use]
 pub fn select_music_scorebox_filtered_panes(
     panes: &[LeaderboardPane],
     filter: SelectMusicScoreboxFilter,
@@ -568,6 +595,7 @@ pub fn select_music_scorebox_filtered_panes(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn scorebox_pane_kind(pane: &LeaderboardPane) -> ScoreboxPaneKind {
     if let Some(kind) = known_scorebox_pane_kind(pane) {
         return kind;
@@ -616,6 +644,7 @@ fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn scorebox_pane_mode_text(kind: ScoreboxPaneKind, pane: &LeaderboardPane) -> &str {
     match kind {
         ScoreboxPaneKind::Gs => "ITG",
@@ -628,10 +657,12 @@ pub const fn scorebox_pane_mode_text(kind: ScoreboxPaneKind, pane: &LeaderboardP
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn default_scorebox_mode_text(show_ex_score: bool) -> &'static str {
     if show_ex_score { "EX" } else { "ITG" }
 }
 
+#[must_use]
 pub fn preferred_primary_scorebox_pane<'a>(
     panes: &'a [&'a LeaderboardPane],
     show_ex: bool,
@@ -660,6 +691,7 @@ pub fn preferred_primary_scorebox_pane<'a>(
         .or_else(|| panes.first().copied())
 }
 
+#[must_use]
 pub fn leaderboard_pane(
     name: &str,
     entries: Vec<LeaderboardEntry>,
@@ -678,6 +710,7 @@ pub fn leaderboard_pane(
     })
 }
 
+#[must_use]
 pub fn arrowcloud_hard_ex_leaderboard_pane(
     entries: Vec<LeaderboardEntry>,
     personalized: bool,
@@ -693,6 +726,7 @@ pub fn arrowcloud_hard_ex_leaderboard_pane(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn arrowcloud_empty_hard_ex_leaderboard_pane() -> LeaderboardPane {
     arrowcloud_hard_ex_leaderboard_pane(Vec::new(), false)
 }
@@ -1163,6 +1197,7 @@ pub struct CachedPlayerLeaderboardData {
 
 impl CachedPlayerLeaderboardData {
     #[inline(always)]
+    #[must_use]
     pub const fn loading() -> Self {
         Self {
             loading: true,
@@ -1172,6 +1207,7 @@ impl CachedPlayerLeaderboardData {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn ready(data: PlayerLeaderboardData) -> Self {
         Self {
             loading: false,
@@ -1181,6 +1217,7 @@ impl CachedPlayerLeaderboardData {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn error(error: String) -> Self {
         Self {
             loading: false,
@@ -1191,11 +1228,13 @@ impl CachedPlayerLeaderboardData {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn player_leaderboard_loading_snapshot() -> CachedPlayerLeaderboardData {
     CachedPlayerLeaderboardData::loading()
 }
 
 #[inline(always)]
+#[must_use]
 pub fn player_leaderboard_snapshot_from_entry(
     entry: &PlayerLeaderboardCacheEntry,
 ) -> CachedPlayerLeaderboardData {
@@ -1228,6 +1267,7 @@ pub struct GameplayScoreboxProfileSnapshot {
 }
 
 impl GameplayScoreboxProfileSnapshot {
+    #[must_use]
     pub const fn new(
         display_scorebox: bool,
         gs_active: bool,
@@ -1255,41 +1295,49 @@ impl GameplayScoreboxProfileSnapshot {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn api_key(&self) -> &str {
         self.api_key.as_str()
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn arrowcloud_api_key(&self) -> &str {
         self.arrowcloud_api_key.as_str()
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn include_arrowcloud(&self) -> bool {
         self.include_arrowcloud
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn gs_username(&self) -> &str {
         self.gs_username.as_str()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn persistent_profile_id(&self) -> Option<&str> {
         self.persistent_profile_id.as_deref()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn auto_profile_id(&self) -> Option<&str> {
         self.auto_profile_id.as_deref()
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn should_auto_populate(&self) -> bool {
         self.should_auto_populate
     }
 }
 
+#[must_use]
 pub fn scorebox_snapshot(
     display_scorebox: bool,
     show_ex_score: bool,
@@ -1327,6 +1375,7 @@ pub fn scorebox_snapshot(
     )
 }
 
+#[must_use]
 pub fn player_leaderboard_cache_key(
     chart_hash: &str,
     profile_snapshot: &GameplayScoreboxProfileSnapshot,
@@ -1345,6 +1394,7 @@ pub fn player_leaderboard_cache_key(
     })
 }
 
+#[must_use]
 pub fn player_leaderboard_cache_key_ref<'a>(
     chart_hash: &'a str,
     profile_snapshot: &'a GameplayScoreboxProfileSnapshot,
@@ -1372,6 +1422,7 @@ impl hashbrown::Equivalent<PlayerLeaderboardCacheKey> for PlayerLeaderboardCache
     }
 }
 
+#[must_use]
 pub fn cached_player_leaderboard_itl_self_rank(
     by_key: &hashbrown::HashMap<PlayerLeaderboardCacheKey, PlayerLeaderboardCacheEntry>,
     chart_hash: &str,
@@ -1385,6 +1436,7 @@ pub fn cached_player_leaderboard_itl_self_rank(
     data.itl_self_rank
 }
 
+#[must_use]
 pub fn cached_player_leaderboard_srpg_self_score(
     by_key: &hashbrown::HashMap<PlayerLeaderboardCacheKey, PlayerLeaderboardCacheEntry>,
     chart_hash: &str,
@@ -1399,6 +1451,7 @@ pub fn cached_player_leaderboard_srpg_self_score(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn should_keep_newer_player_leaderboard_entry(
     entry: Option<&PlayerLeaderboardCacheEntry>,
     request_started_at: Instant,
@@ -1407,6 +1460,7 @@ pub fn should_keep_newer_player_leaderboard_entry(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn player_leaderboard_request_was_invalidated(
     invalidated_after: Option<Instant>,
     request_started_at: Instant,
@@ -1415,6 +1469,7 @@ pub fn player_leaderboard_request_was_invalidated(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn should_fetch_player_leaderboard_entry(
     entry: Option<&PlayerLeaderboardCacheEntry>,
     max_entries: usize,
@@ -1443,6 +1498,7 @@ pub fn should_fetch_player_leaderboard_entry(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn should_rerun_in_flight_player_leaderboard_fetch(
     in_flight_max_entries: usize,
     requested_max_entries: usize,

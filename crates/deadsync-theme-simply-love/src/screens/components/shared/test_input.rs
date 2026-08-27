@@ -591,6 +591,7 @@ fn push_polling_readout(actors: &mut Vec<Actor>, state: &State, z: f32) {
     ));
 }
 
+#[must_use]
 pub fn build_test_input_screen_content(
     state: &State,
     game: GameFlag,
@@ -669,6 +670,7 @@ pub fn build_test_input_screen_content(
 /// Build a `TestInput` pad for use inside an evaluation pane (SL `ScreenEvaluation` Pane6 parity).
 ///
 /// `scale` scales the entire pad uniformly (1.0 = full size; SL Pane6 uses ~0.8).
+#[must_use]
 pub fn build_evaluation_pad(
     state: &State,
     game: GameFlag,
@@ -696,6 +698,7 @@ pub fn build_evaluation_pad(
 
 /// Approximate visual half-width of a pad rendered by `build_evaluation_pad` at the given scale.
 /// Useful for laying out neighboring elements (e.g., gaps between two pads in Double play).
+#[must_use]
 pub fn evaluation_pad_half_width(scale: f32) -> f32 {
     eval_panel_layout::PAD_NATURAL_WIDTH * 0.5 * scale
 }
@@ -735,6 +738,7 @@ mod eval_panel_layout {
 
 /// Visual size of the unscaled panel in logical pixels (width, height at
 /// scale 1.0).
+#[must_use]
 pub const fn evaluation_panel_size() -> (f32, f32) {
     (
         eval_panel_layout::PANEL_WIDTH,
@@ -746,6 +750,7 @@ pub const fn evaluation_panel_size() -> (f32, f32) {
 ///
 /// `(anchor_x, anchor_y)` is the screen-space position of the panel's
 /// top-left corner. `scale` uniformly scales the entire panel.
+#[must_use]
 pub fn build_evaluation_panel(
     state: &State,
     game: GameFlag,
@@ -844,6 +849,7 @@ pub fn build_evaluation_panel(
     actors
 }
 
+#[must_use]
 pub fn build_select_music_overlay(
     state: &State,
     game: GameFlag,

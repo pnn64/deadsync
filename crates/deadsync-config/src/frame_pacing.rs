@@ -19,6 +19,7 @@ pub const MAX_LOGIC_DT_PER_FRAME: f32 = 0.25;
 pub const BACKGROUND_REDRAW_INTERVAL: Duration = Duration::from_millis(67);
 
 #[inline]
+#[must_use]
 pub fn apply_tab_acceleration(
     wall_dt: f32,
     acceleration_allowed: bool,
@@ -39,6 +40,7 @@ pub fn apply_tab_acceleration(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn frame_interval_for_max_fps(max_fps: u16) -> Option<Duration> {
     if max_fps == 0 {
         None
@@ -48,6 +50,7 @@ pub fn frame_interval_for_max_fps(max_fps: u16) -> Option<Duration> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn advance_redraw_deadline(deadline: Instant, now: Instant, interval: Duration) -> Instant {
     if deadline > now {
         return deadline;
@@ -68,6 +71,7 @@ pub fn advance_redraw_deadline(deadline: Instant, now: Instant, interval: Durati
 }
 
 #[inline(always)]
+#[must_use]
 pub fn window_frame_interval_state(
     vsync_enabled: bool,
     max_fps_interval: Option<Duration>,
@@ -101,16 +105,19 @@ pub fn window_frame_interval_state(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn foreground_input_active(window_focused: bool, surface_active: bool) -> bool {
     window_focused && surface_active
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn should_skip_compose_and_draw(window_occluded: bool, surface_active: bool) -> bool {
     window_occluded || !surface_active
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn queued_input_allowed(
     screen_is_gameplay: bool,
     transition_idle: bool,
@@ -120,11 +127,13 @@ pub const fn queued_input_allowed(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn elapsed_us_since(started: Instant) -> u32 {
     micros_to_u32(started.elapsed().as_micros())
 }
 
 #[inline(always)]
+#[must_use]
 pub fn elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
     micros_to_u32(
         later
@@ -135,6 +144,7 @@ pub fn elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn seconds_to_us_u32(seconds: f32) -> u32 {
     let micros = (seconds * 1_000_000.0).max(0.0);
     if micros > u32::MAX as f32 {
@@ -171,6 +181,7 @@ pub fn update_frame_stats_spike_hold(spike_us: &mut u32, ttl: &mut u16, frame_us
 }
 
 #[inline(always)]
+#[must_use]
 pub fn stutter_severity(frame_seconds: f32, expected_seconds: f32) -> u8 {
     if expected_seconds <= 0.0 {
         return 0;
@@ -195,6 +206,7 @@ pub enum OverlayMode {
 
 impl OverlayMode {
     #[inline(always)]
+    #[must_use]
     pub const fn from_code(mode: u8) -> Self {
         match mode {
             1 => Self::Fps,
@@ -205,6 +217,7 @@ impl OverlayMode {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn next(self) -> Self {
         match self {
             Self::Off => Self::Fps,
@@ -215,21 +228,25 @@ impl OverlayMode {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn shows_fps(self) -> bool {
         !matches!(self, Self::Off)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn shows_stutter(self) -> bool {
         matches!(self, Self::FpsAndStutter | Self::FpsStutterTiming)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn shows_timing(self) -> bool {
         matches!(self, Self::FpsStutterTiming)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
             Self::Off => "OFF",
@@ -240,6 +257,7 @@ impl OverlayMode {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn code(self) -> u8 {
         match self {
             Self::Off => 0,
@@ -260,6 +278,7 @@ pub enum FrameIntervalReason {
 
 impl FrameIntervalReason {
     #[inline(always)]
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::None => "none",
@@ -270,6 +289,7 @@ impl FrameIntervalReason {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn redraw_reason(self) -> &'static str {
         match self {
             Self::None => "scheduled",
@@ -307,6 +327,7 @@ pub struct RedrawRequestState {
 
 impl RedrawRequestState {
     #[inline(always)]
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             requested_at: None,
@@ -345,6 +366,7 @@ impl RedrawRequestState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn pending(&self) -> bool {
         self.requested_at.is_some()
     }
@@ -363,6 +385,7 @@ pub struct FrameLoopModeTracker {
 
 impl FrameLoopModeTracker {
     #[inline(always)]
+    #[must_use]
     pub const fn new() -> Self {
         Self { last: None }
     }
@@ -395,6 +418,7 @@ pub struct StutterSample {
 
 impl StutterSample {
     #[inline(always)]
+    #[must_use]
     pub const fn empty() -> Self {
         Self {
             at_seconds: -1.0,
@@ -469,6 +493,7 @@ impl Default for StutterSampleRing {
 
 impl StutterSampleRing {
     #[inline(always)]
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             samples: [StutterSample::empty(); STUTTER_SAMPLE_COUNT],
@@ -498,6 +523,7 @@ impl StutterSampleRing {
         self.cursor = (self.cursor + 1) % STUTTER_SAMPLE_COUNT;
     }
 
+    #[must_use]
     pub fn visible(self, now_seconds: f32) -> VisibleStutterSamples {
         let mut out = VisibleStutterSamples::new();
         for i in 0..STUTTER_SAMPLE_COUNT {
@@ -526,6 +552,7 @@ impl StutterSampleRing {
     }
 
     #[cfg(any(test, feature = "bench-support"))]
+    #[must_use]
     pub fn visible_legacy(self, now_seconds: f32) -> Vec<VisibleStutterSample> {
         let mut out = Vec::with_capacity(STUTTER_SAMPLE_COUNT);
         for i in 0..STUTTER_SAMPLE_COUNT {

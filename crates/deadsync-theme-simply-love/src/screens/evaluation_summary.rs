@@ -182,10 +182,12 @@ pub struct State {
     runtime: PostSongRuntimeView,
 }
 
+#[must_use]
 pub fn init(runtime: PostSongRuntimeView) -> State {
     init_for_return(runtime, Screen::Initials)
 }
 
+#[must_use]
 pub fn init_for_return(runtime: PostSongRuntimeView, return_to: Screen) -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
@@ -446,6 +448,7 @@ fn fixed_2_text(value: f64) -> TextContent {
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+#[must_use]
 pub fn benchmark_profile_name_changed(sides: [&[&str]; 2]) -> bool {
     sides
         .into_iter()
@@ -454,6 +457,7 @@ pub fn benchmark_profile_name_changed(sides: [&[&str]; 2]) -> bool {
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+#[must_use]
 pub fn benchmark_eval_numeric_text(percent: f64, ex: f64, counts: &[u32; 8]) -> usize {
     let mut bytes = fixed_2_text(percent).as_str().len() + fixed_2_text(ex).as_str().len();
     for count in counts {
@@ -951,10 +955,12 @@ pub fn get_actors(
     actors
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1100)
 }

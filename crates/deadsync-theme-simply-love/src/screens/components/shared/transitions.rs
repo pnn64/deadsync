@@ -4,6 +4,7 @@ use deadlib_present::space::{screen_height, screen_width};
 use deadlib_present::{anim, runtime};
 use std::sync::OnceLock;
 
+#[must_use]
 pub fn fade_in_black_actor(duration: f32, z: i16) -> Actor {
     let salt = (u64::from(duration.to_bits()) << 16) ^ u64::from(z as u16);
     act!(quad:
@@ -17,6 +18,7 @@ pub fn fade_in_black_actor(duration: f32, z: i16) -> Actor {
     )
 }
 
+#[must_use]
 pub fn fade_out_black_actor(duration: f32, z: i16) -> Actor {
     let salt = (u64::from(duration.to_bits()) << 16) ^ u64::from(z as u16);
     act!(quad:
@@ -29,10 +31,12 @@ pub fn fade_out_black_actor(duration: f32, z: i16) -> Actor {
     )
 }
 
+#[must_use]
 pub fn fade_in_black(duration: f32, z: i16) -> (Vec<Actor>, f32) {
     (vec![fade_in_black_actor(duration, z)], duration)
 }
 
+#[must_use]
 pub fn fade_out_black(duration: f32, z: i16) -> (Vec<Actor>, f32) {
     (vec![fade_out_black_actor(duration, z)], duration)
 }

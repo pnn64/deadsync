@@ -58,6 +58,7 @@ impl ScoreImportRuntime {
         }
     }
 
+    #[must_use]
     pub fn from_app_runtime() -> Self {
         Self::new(
             |endpoint, pack_groups_filter, profile_id, only_missing_scores| {

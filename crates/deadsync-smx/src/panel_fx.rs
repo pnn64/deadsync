@@ -44,6 +44,7 @@ impl JudgementGifs {
     /// Whether any animation at all resolved. `false` means no gameplay event on this
     /// pad can ever draw anything (an empty judgement pack), so the pad is left to its
     /// firmware rather than being owned and held black for the whole song.
+    #[must_use]
     pub fn has_any(&self) -> bool {
         let Self {
             fantastic_blue,
@@ -81,6 +82,7 @@ impl JudgementGifs {
 
     /// Resolve the standard judgement names from a registry through the usual
     /// pack-then-size fallback. `_25` is the baseline both pad layouts render.
+    #[must_use]
     pub fn resolve(registry: &GifRegistry, pack: Option<&str>) -> Self {
         let j = |name: &str| registry.judgement(pack, name, PadSize::Leds25);
         Self {
@@ -101,6 +103,7 @@ impl JudgementGifs {
     }
 
     /// The one-shot animation for a tap grade, honouring the FA+ white/blue split.
+    #[must_use]
     pub const fn for_grade(
         &self,
         grade: JudgeGrade,
@@ -119,6 +122,7 @@ impl JudgementGifs {
 }
 
 /// The looping sustain animation for an engaged hold, by its note kind.
+#[must_use]
 pub const fn sustain_anim(gifs: &JudgementGifs, kind: Option<NoteType>) -> Option<&Arc<PanelAnim>> {
     match kind {
         Some(NoteType::Hold) => gifs.freeze.as_ref(),
@@ -131,6 +135,7 @@ pub const fn sustain_anim(gifs: &JudgementGifs, kind: Option<NoteType>) -> Optio
 /// holds in its loop and plays the outro on release (`Sustain`), a roll runs
 /// forward into the outro to show its continuous drain and resets on each step
 /// (`Roll`). `resume` starts a re-triggered overlay at the loop region.
+#[must_use]
 pub const fn sustain_drive(kind: Option<NoteType>, resume: bool) -> OverlayDrive {
     match kind {
         Some(NoteType::Roll) => OverlayDrive::Roll { resume },
@@ -145,6 +150,7 @@ pub const fn sustain_drive(kind: Option<NoteType>, resume: bool) -> OverlayDrive
 /// chain; the caller appends the plain `results` and `default` roles itself:
 /// `results@{diff}@S+ -> results@S+ -> results@{diff}@S -> results@S ->
 /// results@{diff}` (then `results -> default`).
+#[must_use]
 pub fn results_role_candidates(grade: Grade, difficulty: Option<&str>) -> Vec<String> {
     let mut suffixes = vec![grade.gif_suffix()];
     if let Some(base) = grade.gif_base() {

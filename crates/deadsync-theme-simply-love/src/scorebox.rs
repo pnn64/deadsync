@@ -22,17 +22,20 @@ pub struct ScoreboxLogoFit {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn clamp01(v: f32) -> f32 {
     v.clamp(0.0, 1.0)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
     let t = clamp01(t);
     (b - a).mul_add(t, a)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     [
         lerp(a[0], b[0], t),
@@ -43,11 +46,13 @@ pub fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn color_with_alpha(mut rgba: [f32; 4], alpha: f32) -> [f32; 4] {
     rgba[3] *= clamp01(alpha);
     rgba
 }
 
+#[must_use]
 pub fn logo_alpha(
     cycle: ScoreboxCycleState,
     cur_on: bool,
@@ -86,6 +91,7 @@ pub fn logo_alpha(
     }
 }
 
+#[must_use]
 pub fn scorebox_cycle_state(num_panes: usize, elapsed_seconds: f32) -> ScoreboxCycleState {
     if num_panes <= 1 {
         return ScoreboxCycleState {
@@ -130,6 +136,7 @@ pub fn scorebox_cycle_state(num_panes: usize, elapsed_seconds: f32) -> ScoreboxC
     }
 }
 
+#[must_use]
 pub fn fit_scorebox_logo(
     texture_w: u32,
     texture_h: u32,

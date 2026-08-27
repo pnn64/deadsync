@@ -7,6 +7,7 @@ pub struct StreamSegment {
 impl StreamSegment {
     const BREAK_FLAG: u32 = 1 << 31;
 
+    #[must_use]
     pub const fn new(start: u32, end: u32, is_break: bool) -> Self {
         assert!(
             start < Self::BREAK_FLAG,
@@ -18,14 +19,17 @@ impl StreamSegment {
         }
     }
 
+    #[must_use]
     pub const fn start(self) -> u32 {
         self.start_and_break & !Self::BREAK_FLAG
     }
 
+    #[must_use]
     pub const fn end(self) -> u32 {
         self.end
     }
 
+    #[must_use]
     pub const fn is_break(self) -> bool {
         self.start_and_break & Self::BREAK_FLAG != 0
     }
@@ -40,6 +44,7 @@ pub struct StreamOutputs {
     pub total_break: f32,
 }
 
+#[must_use]
 pub fn measure_densities(data: &[u8], lanes: usize) -> Vec<usize> {
     match lanes {
         8 => measure_densities_impl::<8>(data),
@@ -48,6 +53,7 @@ pub fn measure_densities(data: &[u8], lanes: usize) -> Vec<usize> {
 }
 
 /// Counts non-empty rows per measure, saturated at the highest stream threshold.
+#[must_use]
 pub fn stream_measure_densities(data: &[u8], lanes: usize) -> Vec<u8> {
     match lanes {
         8 => stream_measure_densities_impl::<8>(data),
@@ -59,6 +65,7 @@ pub fn stream_measure_densities(data: &[u8], lanes: usize) -> Vec<u8> {
 ///
 /// Note data is scanned only until the requested measure's run ends. The query
 /// does not materialize either the full density list or the segment list.
+#[must_use]
 pub fn stream_run_progress(
     data: &[u8],
     lanes: usize,
@@ -71,6 +78,7 @@ pub fn stream_run_progress(
     }
 }
 
+#[must_use]
 pub fn stream_sequences_threshold(measures: &[u8], threshold: usize) -> Vec<StreamSegment> {
     let mut segs = Vec::with_capacity(measures.len().min(64));
     for_each_stream_segment(measures, threshold, |segment| segs.push(segment));
@@ -502,6 +510,7 @@ fn build_stream_outputs(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn zmod_stream_totals_full_measures(
     measures: &[u8],
     constant_bpm: bool,
@@ -638,6 +647,7 @@ pub mod bench_support {
         zmod_params, zmod_params_with_count,
     };
 
+    #[must_use]
     pub fn measure_densities_overreserved(data: &[u8], lanes: usize) -> Vec<usize> {
         match lanes {
             8 => measure_densities_overreserved_impl::<8>(data),
@@ -677,6 +687,7 @@ pub mod bench_support {
         densities
     }
 
+    #[must_use]
     pub fn zmod_fused_growth(
         measures: &[u8],
         constant_bpm: bool,
@@ -685,6 +696,7 @@ pub mod bench_support {
         build_zmod_totals(measures, threshold, multiplier, 0)
     }
 
+    #[must_use]
     pub fn stream_outputs_counter_growth(
         measures: &[u8],
         counter_threshold: usize,
@@ -694,6 +706,7 @@ pub mod bench_support {
         build_stream_outputs(measures, counter_threshold, 0, params)
     }
 
+    #[must_use]
     pub fn stream_outputs_separate(
         measures: &[u8],
         counter_threshold: usize,
@@ -718,11 +731,13 @@ pub mod bench_support {
         }
     }
 
+    #[must_use]
     pub fn zmod_fallback_probe(measures: &[u8]) -> ([u32; 2], usize) {
         let ([d24, d20], count16) = zmod_density_pair(measures);
         ([d24.ratio.to_bits(), d20.ratio.to_bits()], count16)
     }
 
+    #[must_use]
     pub fn zmod_fallback_probe_independent(measures: &[u8]) -> ([u32; 2], usize) {
         let mut d24 = StreamDensityFold::new(24, 1.5);
         let mut d20 = StreamDensityFold::new(20, 1.25);

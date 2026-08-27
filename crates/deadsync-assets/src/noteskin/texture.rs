@@ -231,20 +231,24 @@ impl SpriteSlot {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn base_rot_sin_cos(&self) -> [f32; 2] {
         self.base_rot_sin_cos
     }
 
+    #[must_use]
     pub fn texture_key(&self) -> &str {
         self.source.texture_key()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn texture_key_shared(&self) -> Arc<str> {
         self.source.texture_key_shared()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn texture_key_handle(&self) -> TextureKeyHandle {
         self.source.texture_key_handle()
     }
@@ -254,11 +258,13 @@ impl SpriteSlot {
         self.source.actor_texture_source(arena)
     }
 
+    #[must_use]
     pub const fn size(&self) -> [i32; 2] {
         self.def.size
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn logical_size(&self) -> [f32; 2] {
         [
             self.source_size[0].max(0) as f32,
@@ -266,6 +272,7 @@ impl SpriteSlot {
         ]
     }
 
+    #[must_use]
     pub fn frame_index(&self, time: f32, beat: f32) -> usize {
         match self.source.as_ref() {
             SpriteSource::Atlas { .. } => 0,
@@ -278,6 +285,7 @@ impl SpriteSlot {
         }
     }
 
+    #[must_use]
     pub fn frame_index_from_phase(&self, phase: f32) -> usize {
         match self.source.as_ref() {
             SpriteSource::Atlas { .. } => 0,
@@ -289,6 +297,7 @@ impl SpriteSlot {
         }
     }
 
+    #[must_use]
     pub fn model_draw_at(&self, time: f32, beat: f32) -> ModelDrawState {
         model_draw_at(
             self.model_draw,
@@ -320,6 +329,7 @@ impl SpriteSlot {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn model_glow_with_draw(
         &self,
         draw: ModelDrawState,
@@ -331,6 +341,7 @@ impl SpriteSlot {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn model_glow_at(&self, time: f32, beat: f32, diffuse_alpha: f32) -> Option<[f32; 4]> {
         model_glow_at(
             self.model_draw,
@@ -344,6 +355,7 @@ impl SpriteSlot {
         )
     }
 
+    #[must_use]
     pub fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4] {
         let uv = match self.source.as_ref() {
             SpriteSource::Atlas { tex_dims, .. } => {
@@ -385,6 +397,7 @@ impl SpriteSlot {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn model_uv_params(&self, uv_rect: [f32; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
         let atlas_tex_dims = match self.source.as_ref() {
             SpriteSource::Atlas { tex_dims, .. } => Some(*tex_dims),
@@ -483,6 +496,7 @@ impl NoteskinSlot for SpriteSlot {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex]> {
     let model = slot
         .model
@@ -501,6 +515,7 @@ pub fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex]> {
     Arc::from(vertices)
 }
 
+#[must_use]
 pub fn test_model_slot() -> SpriteSlot {
     SpriteSlot {
         stable_id: next_slot_id(),

@@ -796,6 +796,7 @@ pub fn push(
 }
 
 #[cfg(any(test, feature = "bench-support"))]
+#[must_use]
 pub fn benchmark_build_legacy(
     samples: &[FrameStatsSample],
     summary: FrameStatsSummary,

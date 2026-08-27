@@ -578,6 +578,7 @@ impl Default for Config {
 }
 
 impl Config {
+    #[must_use]
     pub const fn display_mode(&self) -> DisplayMode {
         if self.windowed {
             DisplayMode::Windowed

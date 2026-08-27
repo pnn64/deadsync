@@ -103,6 +103,7 @@ pub struct EvaluationSubmissionRefresh<const N: usize> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn evaluation_submission_generation() -> EvaluationSubmissionGeneration {
     EvaluationSubmissionGeneration {
         ui: deadsync_score::runtime_evaluation_submission_ui_generation(),
@@ -111,6 +112,7 @@ pub fn evaluation_submission_generation() -> EvaluationSubmissionGeneration {
     }
 }
 
+#[must_use]
 pub fn tick_evaluation_auto_retries(
     groovestats_enabled: bool,
     boogiestats_enabled: bool,
@@ -123,6 +125,7 @@ pub fn tick_evaluation_auto_retries(
     groovestats || arrowcloud
 }
 
+#[must_use]
 pub fn evaluation_submission_refresh<const N: usize>(
     queries: &[Option<(deadsync_profile::PlayerSide, &str)>; N],
 ) -> EvaluationSubmissionRefresh<N> {

@@ -48,6 +48,7 @@ const COMBINING_MARKS: std::ops::RangeInclusive<char> = '\u{300}'..='\u{36f}';
 ///
 /// Borrows for the common all-ASCII case, so callers can precompute this once at
 /// index build without paying an allocation per title.
+#[must_use]
 pub fn fold_diacritics(text: &str) -> Cow<'_, str> {
     if text.is_ascii() {
         return Cow::Borrowed(text);
@@ -89,18 +90,21 @@ pub struct Query {
 
 impl Query {
     #[inline(always)]
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.chars.is_empty()
     }
 
     /// Folded characters, for direct [`subsequence_score`] calls.
     #[inline(always)]
+    #[must_use]
     pub fn chars(&self) -> &[char] {
         &self.chars
     }
 }
 
 /// Prepare a query once per keystroke for reuse across the whole catalog.
+#[must_use]
 pub fn prepare_query(query: &str) -> Query {
     let chars = query_chars(query);
     let text: String = chars.iter().collect();
@@ -125,6 +129,7 @@ pub fn query_chars(query: &str) -> Vec<char> {
 /// Candidates are expected to be pre-folded with [`fold_diacritics`] so the hot
 /// loop pays only the per-char case fold; queries are folded by
 /// [`prepare_query`].
+#[must_use]
 pub fn best_match_score(query: &Query, label: &str, aliases: &[&str]) -> Option<i32> {
     let mut best = subsequence_score(&query.chars, label);
 
@@ -144,6 +149,7 @@ pub fn best_match_score(query: &Query, label: &str, aliases: &[&str]) -> Option<
 
 /// Subsequence match + score; `None` unless every query char appears in order.
 /// Single-pass and allocation-free.
+#[must_use]
 pub fn subsequence_score(query: &[char], candidate: &str) -> Option<i32> {
     if query.is_empty() {
         return Some(0);

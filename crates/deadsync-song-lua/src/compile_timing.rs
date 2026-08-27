@@ -9,6 +9,7 @@ pub struct SongLuaCompileTimer {
 }
 
 impl SongLuaCompileTimer {
+    #[must_use]
     pub fn start() -> Self {
         let now = Instant::now();
         Self {
@@ -24,19 +25,23 @@ impl SongLuaCompileTimer {
         self.stage_started = Instant::now();
     }
 
+    #[must_use]
     pub fn elapsed_ms(&self) -> f64 {
         self.compile_started.elapsed().as_secs_f64() * 1000.0
     }
 
+    #[must_use]
     pub fn should_log(&self) -> bool {
         self.elapsed_ms() >= 1000.0
     }
 
+    #[must_use]
     pub fn stage_summary(&self) -> String {
         song_lua_compile_stage_summary(&self.stage_times)
     }
 }
 
+#[must_use]
 pub fn song_lua_compile_stage_summary(stage_times: &[(&'static str, f64)]) -> String {
     let mut stages = String::new();
     for (stage, ms) in stage_times {

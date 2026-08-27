@@ -1,4 +1,5 @@
 ﻿#[inline(always)]
+#[must_use]
 pub fn autosync_mean_ns(samples: &[SongTimeNs; AUTOSYNC_OFFSET_SAMPLE_COUNT]) -> SongTimeNs {
     let mut sum = 0i128;
     for value in samples {
@@ -14,6 +15,7 @@ pub fn autosync_mean_ns(samples: &[SongTimeNs; AUTOSYNC_OFFSET_SAMPLE_COUNT]) ->
 }
 
 #[inline(always)]
+#[must_use]
 pub fn autosync_stddev_seconds(
     samples: &[SongTimeNs; AUTOSYNC_OFFSET_SAMPLE_COUNT],
     mean_ns: SongTimeNs,
@@ -76,6 +78,7 @@ pub fn apply_autosync_offset_sample(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn autosync_row_hits_enabled(
     replay_mode: bool,
     scoring_blocked: bool,

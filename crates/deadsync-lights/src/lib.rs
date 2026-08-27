@@ -50,6 +50,7 @@ impl SerialPortName {
         }
     }
 
+    #[must_use]
     pub fn parse(raw: &str, default: Self) -> Self {
         let trimmed = raw.trim();
         if trimmed.is_empty() || trimmed.len() > SERIAL_PORT_NAME_CAP {
@@ -66,6 +67,7 @@ impl SerialPortName {
         out
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         std::str::from_utf8(&self.bytes[..self.len as usize]).unwrap_or(DEFAULT_LITBOARD_PORT)
     }
@@ -89,6 +91,7 @@ pub enum DriverKind {
 }
 
 impl DriverKind {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Off => "None",
@@ -151,6 +154,7 @@ pub enum PacDriveLightOrdering {
 }
 
 impl PacDriveLightOrdering {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::OpenItg => "openitg",
@@ -161,6 +165,7 @@ impl PacDriveLightOrdering {
     /// Match `ITGmania`'s `PacDriveLightOrdering` preference behavior.
     /// `openitg` and the historical `lumenar` name select the `OpenITG` layout;
     /// every other explicit value selects the legacy SM5 layout.
+    #[must_use]
     pub const fn from_preference(raw: &str) -> Self {
         if raw.eq_ignore_ascii_case("openitg") || raw.eq_ignore_ascii_case("lumenar") {
             Self::OpenItg
@@ -184,6 +189,7 @@ pub enum GameplayPadLightMode {
 }
 
 impl GameplayPadLightMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Input => "Input",
@@ -243,6 +249,7 @@ pub enum ScreenLightContext {
     Menu,
 }
 
+#[must_use]
 pub const fn screen_light_mode(context: ScreenLightContext) -> Mode {
     match context {
         ScreenLightContext::Init => Mode::Attract,
@@ -262,6 +269,7 @@ pub const fn screen_light_mode(context: ScreenLightContext) -> Mode {
 /// Which named SMX background animation a screen shows (the role half of the
 /// `<role>_<size>.gif` asset name), or `None` where pad lights are owned by
 /// something else.
+#[must_use]
 pub const fn screen_smx_background_role(context: ScreenLightContext) -> Option<&'static str> {
     match context {
         ScreenLightContext::Init
@@ -279,6 +287,7 @@ pub const fn screen_smx_background_role(context: ScreenLightContext) -> Option<&
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn screen_allows_operator_menu_button(context: ScreenLightContext) -> bool {
     !matches!(
         context,
@@ -397,6 +406,7 @@ pub enum ButtonSource {
 
 /// Full-saturation, full-value rainbow colour for a hue phase in `0.0..1.0`
 /// (wraps). Callers apply any separate luminance/brightness scale.
+#[must_use]
 pub fn rainbow_rgb(phase: f32) -> [u8; 3] {
     let h = phase.rem_euclid(1.0) * 6.0;
     let sector = h as u32 % 6;
@@ -413,6 +423,7 @@ pub fn rainbow_rgb(phase: f32) -> [u8; 3] {
     }
 }
 
+#[must_use]
 pub const fn button_source_from_action(
     action: deadsync_input::VirtualAction,
 ) -> Option<ButtonSource> {
@@ -443,6 +454,7 @@ pub const fn button_source_from_action(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn operator_menu_action(action: deadsync_input::VirtualAction) -> bool {
     matches!(
         action,
@@ -479,14 +491,17 @@ pub struct State {
 }
 
 impl State {
+    #[must_use]
     pub const fn cabinet(self, light: CabinetLight) -> bool {
         self.cabinet[light.ix()]
     }
 
+    #[must_use]
     pub const fn button(self, player: Player, button: ButtonLight) -> bool {
         self.buttons[player.ix()][button.ix()]
     }
 
+    #[must_use]
     pub const fn menu_button(self, player: Player, button: ButtonLight) -> bool {
         self.menu_buttons[player.ix()][button.ix()]
     }
@@ -538,6 +553,7 @@ pub struct Manager {
 }
 
 impl Manager {
+    #[must_use]
     pub fn new(
         kind: DriverKind,
         litboard_port: &str,
@@ -593,10 +609,12 @@ impl Manager {
         self.mode = mode;
     }
 
+    #[must_use]
     pub const fn mode(&self) -> Mode {
         self.mode
     }
 
+    #[must_use]
     pub fn state_snapshot(&self) -> State {
         self.last_sent.unwrap_or_default()
     }
@@ -959,6 +977,7 @@ impl Driver {
     }
 }
 
+#[must_use]
 pub fn parse_driver_or_default(raw: &str, default: DriverKind) -> DriverKind {
     DriverKind::from_str(raw).unwrap_or_else(|_| {
         warn!("Ignoring unknown LightsDriver value '{raw}'");
@@ -966,6 +985,7 @@ pub fn parse_driver_or_default(raw: &str, default: DriverKind) -> DriverKind {
     })
 }
 
+#[must_use]
 pub fn parse_gameplay_pad_lights_or_default(
     raw: &str,
     default: GameplayPadLightMode,

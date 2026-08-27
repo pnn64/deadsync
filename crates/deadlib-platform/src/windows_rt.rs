@@ -106,6 +106,7 @@ impl Drop for MainThreadTimingGuard {
 
 impl ThreadPolicyGuard {
     #[inline(always)]
+    #[must_use]
     pub fn into_mmcss_token(mut self) -> usize {
         self.mmcss_handle
             .take()
@@ -150,6 +151,7 @@ fn apply_fallback_priority(profile: ThreadProfile) {
     }
 }
 
+#[must_use]
 pub fn boost_main_thread_timing() -> MainThreadTimingGuard {
     let timer_period_ms = 1u32;
     // SAFETY: `timeBeginPeriod` takes only the requested resolution and does not
@@ -172,6 +174,7 @@ pub fn boost_main_thread_timing() -> MainThreadTimingGuard {
     }
 }
 
+#[must_use]
 pub fn boost_current_thread(role: ThreadRole) -> ThreadPolicyGuard {
     let profile = role.profile();
     let mut task_index = 0u32;
@@ -224,6 +227,7 @@ fn qpc_freq_hz() -> Option<u64> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
     let hz = (*QPC_FREQ_HZ)?;
     ((u128::from(ticks) * 1_000_000_000u128) / u128::from(hz))
@@ -232,6 +236,7 @@ pub fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn current_qpc_nanos() -> Option<u64> {
     // SAFETY: `QueryPerformanceCounter` writes into a valid stack local and does
     // not retain the pointer after the call returns.
@@ -243,6 +248,7 @@ pub fn current_qpc_nanos() -> Option<u64> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn current_host_nanos() -> u64 {
     current_qpc_nanos().unwrap_or(0)
 }

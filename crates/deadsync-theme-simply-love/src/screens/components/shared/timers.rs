@@ -25,6 +25,7 @@ pub struct TimerText {
 }
 
 impl TimerText {
+    #[must_use]
     pub fn new(elapsed: f32) -> Self {
         let second = elapsed_second(elapsed);
         Self {
@@ -44,6 +45,7 @@ impl TimerText {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn text(&self) -> &str {
         self.text.as_str()
     }
@@ -100,6 +102,7 @@ fn push_two_digits(text: &mut InlineText, value: u64) -> bool {
     text.push_ascii(b'0' + (value / 10) as u8) && text.push_ascii(b'0' + (value % 10) as u8)
 }
 
+#[must_use]
 pub fn build_session(timer: &TimerText, machine_font: MachineFont) -> Actor {
     build_header_timer(
         timer.content(SESSION_LAYOUT_SLOT),
@@ -108,6 +111,7 @@ pub fn build_session(timer: &TimerText, machine_font: MachineFont) -> Actor {
     )
 }
 
+#[must_use]
 pub fn build_gameplay(timer: &TimerText, machine_font: MachineFont) -> Actor {
     build_header_timer(
         timer.content(GAMEPLAY_LAYOUT_SLOT),

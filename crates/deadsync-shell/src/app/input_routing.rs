@@ -498,7 +498,7 @@ impl App {
     }
 
     #[inline(always)]
-    pub(super) fn sync_gameplay_input_capture(&mut self) {
+    pub(super) fn sync_gameplay_input_capture(&self) {
         let capture_enabled = raw_keyboard_capture_enabled(
             self.accepts_live_input(),
             self.state.screens.current_screen,
@@ -509,7 +509,7 @@ impl App {
     }
 
     #[inline(always)]
-    pub(super) fn clear_gameplay_input_events(&mut self) {
+    pub(super) fn clear_gameplay_input_events(&self) {
         deadsync_input_native::set_raw_keyboard_capture_enabled(false);
     }
 }

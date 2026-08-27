@@ -627,6 +627,7 @@ impl ScrollTravel<'_> {
             }
     }
 
+    #[must_use]
     pub fn raw_beat(&self, beat: f32) -> f32 {
         match self.raw {
             RawTravel::Edit { current_beat } => edit_beat_scroll_travel(beat, current_beat),
@@ -659,6 +660,7 @@ impl ScrollTravel<'_> {
         }
     }
 
+    #[must_use]
     pub fn raw_note(&self, note: &Note, use_hold_end: bool) -> f32 {
         let beat = if use_hold_end {
             note.hold.as_ref().map_or(note.beat, |hold| hold.end_beat)
@@ -717,6 +719,7 @@ impl ScrollTravel<'_> {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn adjusted_with_peak(&self, raw_travel: f32) -> (f32, bool) {
         if self.accel_is_identity {
             return (raw_travel * self.post_accel_scale, true);
@@ -732,6 +735,7 @@ impl ScrollTravel<'_> {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn adjusted(&self, raw_travel: f32) -> f32 {
         if self.accel_is_identity {
             return raw_travel * self.post_accel_scale;
@@ -778,6 +782,7 @@ impl ScrollTravel<'_> {
         }
     }
 
+    #[must_use]
     pub fn lane_offset(&self, local_col: usize) -> f32 {
         tipsy_y_extra(
             local_col,
@@ -786,6 +791,7 @@ impl ScrollTravel<'_> {
         ) + move_col_extra(self.request.lane_move_y, local_col)
     }
 
+    #[must_use]
     pub fn lane_y(
         &self,
         local_col: usize,
@@ -796,6 +802,7 @@ impl ScrollTravel<'_> {
         direction.mul_add(self.adjusted(raw_travel), receptor_y) + self.lane_offset(local_col)
     }
 
+    #[must_use]
     pub fn lane_y_for_beat(
         &self,
         local_col: usize,
@@ -806,6 +813,7 @@ impl ScrollTravel<'_> {
         self.lane_y(local_col, receptor_y, direction, self.raw_beat(beat))
     }
 
+    #[must_use]
     pub fn adjusted_from_screen_y(
         &self,
         local_col: usize,
@@ -836,6 +844,7 @@ impl ScrollTravel<'_> {
         (screen_y - receptor_y - lane_offset) / direction
     }
 
+    #[must_use]
     pub fn visible_row_range(&self) -> Option<(i32, i32)> {
         self.visible_row_range_for_distances(
             self.request.draw_distance_after_targets,
@@ -886,6 +895,7 @@ impl ScrollTravel<'_> {
             .map(|(first, last)| (first, last.max(first)))
     }
 
+    #[must_use]
     pub const fn arrow_effect_time_s(&self) -> f32 {
         self.request.arrow_effect_time_s
     }

@@ -5,6 +5,7 @@ pub const DEFAULT_FRAME_STATS_OVERLAY_ANCHOR: &str = "auto";
 pub const DEFAULT_FRAME_STATS_OVERLAY_STYLE: &str = "detailed";
 pub const SMX_LIGHT_BRIGHTNESS_MAX: u8 = 100;
 
+#[must_use]
 pub const fn clamp_smx_light_brightness_percent(value: u8) -> u8 {
     if value > SMX_LIGHT_BRIGHTNESS_MAX {
         SMX_LIGHT_BRIGHTNESS_MAX
@@ -13,6 +14,7 @@ pub const fn clamp_smx_light_brightness_percent(value: u8) -> u8 {
     }
 }
 
+#[must_use]
 pub fn normalize_machine_default_noteskin(raw: &str) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -25,6 +27,7 @@ pub fn push_default_noteskin_option_line(content: &mut String, noteskin: &str) {
     push_line(content, "DefaultNoteSkin", noteskin);
 }
 
+#[must_use]
 pub fn canonical_frame_stats_overlay_anchor(value: &str) -> &'static str {
     const KEYS: &[&str] = &[
         "top-left",
@@ -41,6 +44,7 @@ pub fn canonical_frame_stats_overlay_anchor(value: &str) -> &'static str {
         .unwrap_or(DEFAULT_FRAME_STATS_OVERLAY_ANCHOR)
 }
 
+#[must_use]
 pub fn canonical_frame_stats_overlay_style(value: &str) -> &'static str {
     if value.trim().eq_ignore_ascii_case("minimal") {
         "minimal"

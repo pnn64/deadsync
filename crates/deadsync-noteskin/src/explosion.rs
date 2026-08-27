@@ -129,6 +129,7 @@ impl Default for ExplosionAnimation {
 }
 
 impl ExplosionAnimation {
+    #[must_use]
     pub fn duration(&self) -> f32 {
         self.segments
             .iter()
@@ -137,6 +138,7 @@ impl ExplosionAnimation {
             .max(0.0)
     }
 
+    #[must_use]
     pub fn state_at(&self, time: f32) -> ExplosionVisualState {
         let mut elapsed = time;
         let mut current = self.initial;
@@ -274,6 +276,7 @@ impl PendingSegment {
     }
 }
 
+#[must_use]
 pub fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
     let mut animation = ExplosionAnimation {
         initial: ExplosionState::default(),
@@ -568,6 +571,7 @@ pub enum ItgTapExplosionMode {
 }
 
 impl ItgTapExplosionMode {
+    #[must_use]
     pub const fn command_key(self) -> &'static str {
         match self {
             Self::Dim => "dimcommand",
@@ -575,6 +579,7 @@ impl ItgTapExplosionMode {
         }
     }
 
+    #[must_use]
     pub const fn metric_section(self) -> &'static str {
         match self {
             Self::Dim => "GhostArrowDim",
@@ -622,6 +627,7 @@ impl<T> ItgTapExplosionSource<T> {
     }
 }
 
+#[must_use]
 pub fn itg_has_tap_explosion_command(commands: &HashMap<String, String>) -> bool {
     [
         "w1command",
@@ -635,14 +641,17 @@ pub fn itg_has_tap_explosion_command(commands: &HashMap<String, String>) -> bool
     .any(|key| commands.contains_key(*key))
 }
 
+#[must_use]
 pub fn itg_has_hit_mine_command(commands: &HashMap<String, String>) -> bool {
     commands.contains_key("hitminecommand")
 }
 
+#[must_use]
 pub fn itg_is_hit_mine_explosion_element(element: &str) -> bool {
     crate::actor::element_contains_hint(element, "hitmine explosion")
 }
 
+#[must_use]
 pub fn itg_mine_explosion_commands(commands: &HashMap<String, String>) -> Vec<String> {
     ["ecommand", "e2command"]
         .iter()
@@ -655,6 +664,7 @@ pub fn itg_mine_explosion_commands(commands: &HashMap<String, String>) -> Vec<St
         .collect()
 }
 
+#[must_use]
 pub fn itg_hit_mine_command_with_init(
     commands: Option<&HashMap<String, String>>,
     metric_command: Option<String>,
@@ -822,6 +832,7 @@ pub fn itg_hit_mine_explosion_slot<L, T>(
     (source, slot)
 }
 
+#[must_use]
 pub fn itg_tap_explosion_mode(element: &str) -> Option<ItgTapExplosionMode> {
     let starts_with = |prefix: &str| {
         element
@@ -833,6 +844,7 @@ pub fn itg_tap_explosion_mode(element: &str) -> Option<ItgTapExplosionMode> {
         .or_else(|| starts_with("tap explosion dim").then_some(ItgTapExplosionMode::Dim))
 }
 
+#[must_use]
 pub fn itg_tap_explosion_key(window: &str, mode: ItgTapExplosionMode) -> &str {
     if mode == ItgTapExplosionMode::Bright
         && let Some(key) = crate::bright_tap_explosion_key(window)
@@ -843,6 +855,7 @@ pub fn itg_tap_explosion_key(window: &str, mode: ItgTapExplosionMode) -> &str {
     }
 }
 
+#[must_use]
 pub fn itg_tap_explosion_mode_from_commands(
     commands: &HashMap<String, String>,
 ) -> Option<ItgTapExplosionMode> {
@@ -942,8 +955,8 @@ mod tests {
         assert!(anim.blend_add);
         let glow = anim.glow.expect("glow");
         assert_eq!(glow.period, 0.5);
-        assert_eq!(glow.color1, [1.0, 0.0, 0.0, 0.5019608]);
-        assert_eq!(glow.color2, [0.0, 1.0, 0.0, 0.5019608]);
+        assert_eq!(glow.color1, [1.0, 0.0, 0.0, 0.501_960_8]);
+        assert_eq!(glow.color2, [0.0, 1.0, 0.0, 0.501_960_8]);
 
         let normal = parse_explosion_animation("blend,'BlendMode_Normal';diffusealpha,1");
         assert!(!normal.blend_add);

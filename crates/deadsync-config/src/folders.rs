@@ -8,6 +8,7 @@ pub struct AdditionalSongFolder {
     pub writable: bool,
 }
 
+#[must_use]
 pub fn load_additional_song_folders(conf: &SimpleIni) -> Vec<AdditionalSongFolder> {
     let read_only = conf
         .get("Options", "AdditionalSongFoldersReadOnly")
@@ -42,6 +43,7 @@ fn push_additional_song_folders(raw: &str, writable: bool, out: &mut Vec<Additio
     );
 }
 
+#[must_use]
 pub fn additional_song_folder_paths(folders: &[AdditionalSongFolder], writable: bool) -> String {
     let mut out = String::new();
     for folder in folders.iter().filter(|folder| folder.writable == writable) {
@@ -70,6 +72,7 @@ pub fn push_additional_song_folder_option_lines(
     );
 }
 
+#[must_use]
 pub fn song_path_is_writable_for_roots(path: &Path, roots: &[AdditionalSongFolder]) -> bool {
     let path = canonical_or_raw(path);
     let mut best: Option<(usize, bool)> = None;

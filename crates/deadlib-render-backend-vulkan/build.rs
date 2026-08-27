@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     compile_vulkan_shaders(&mut compiler, &out_dir)
 }
 
-fn compile_vulkan_shaders(compiler: &mut Compiler, out_dir: &Path) -> Result<(), Box<dyn Error>> {
+fn compile_vulkan_shaders(compiler: &Compiler, out_dir: &Path) -> Result<(), Box<dyn Error>> {
     use std::{fmt::Write as _, time::SystemTime};
 
     let mut opts = shaderc::CompileOptions::new()?;

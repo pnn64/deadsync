@@ -121,6 +121,7 @@ pub struct SubmitEventProgressInput {
     pub srpg: Option<SubmitEventProgressData>,
 }
 
+#[must_use]
 pub fn event_name_or_unknown(name: &str) -> &str {
     if name.trim().is_empty() {
         "Unknown Event"
@@ -130,6 +131,7 @@ pub fn event_name_or_unknown(name: &str) -> &str {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn clear_type_name(clear_type: u8) -> &'static str {
     match clear_type {
         0 => "No Play",
@@ -143,6 +145,7 @@ pub const fn clear_type_name(clear_type: u8) -> &'static str {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn delta_i32(current: u32, previous: u32) -> i32 {
     (i64::from(current) - i64::from(previous)).clamp(i64::from(i32::MIN), i64::from(i32::MAX))
         as i32
@@ -352,6 +355,7 @@ fn achievement_page_text(achievement: &SubmitAchievement) -> String {
     trim_blank_lines(lines.join("\n"))
 }
 
+#[must_use]
 pub fn event_progress_overlay_pages(
     progress: &ItlEventProgress,
     submit_progress: Option<&SubmitProgress>,
@@ -375,6 +379,7 @@ pub fn event_progress_overlay_pages(
     pages
 }
 
+#[must_use]
 pub fn event_clear_type_change(progress: Option<&SubmitProgress>) -> (Option<u8>, Option<u8>) {
     let Some(progress) = progress else {
         return (None, None);
@@ -390,6 +395,7 @@ pub fn event_clear_type_change(progress: Option<&SubmitProgress>) -> (Option<u8>
     (None, None)
 }
 
+#[must_use]
 pub fn event_stat_improvements(progress: Option<&SubmitProgress>) -> Vec<EventStatImprovement> {
     let Some(progress) = progress else {
         return Vec::new();
@@ -498,6 +504,7 @@ fn srpg_progress_from_submit(input: &SubmitEventProgressInput) -> Option<ItlEven
     Some(progress)
 }
 
+#[must_use]
 pub fn event_progress_from_submit(input: &SubmitEventProgressInput) -> Vec<ItlEventProgress> {
     let mut progress = Vec::with_capacity(2);
     if let Some(srpg) = srpg_progress_from_submit(input) {

@@ -216,6 +216,7 @@ pub enum ActiveSlot {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn active_slot_next(slot: ActiveSlot) -> ActiveSlot {
     use ActiveSlot::{P1Primary, P1Secondary, P2Primary, P2Secondary};
     match slot {
@@ -227,6 +228,7 @@ pub const fn active_slot_next(slot: ActiveSlot) -> ActiveSlot {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn active_slot_prev(slot: ActiveSlot) -> ActiveSlot {
     use ActiveSlot::{P1Primary, P1Secondary, P2Primary, P2Secondary};
     match slot {
@@ -324,6 +326,7 @@ pub struct State {
     menu_lr_undo_slot: Option<ActiveSlot>,
 }
 
+#[must_use]
 pub fn init(runtime: MappingsRuntimeView) -> State {
     let mapping_text = MappingText::new(runtime.game, &runtime.keymap);
     State {
@@ -356,10 +359,12 @@ pub fn init(runtime: MappingsRuntimeView) -> State {
     }
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
@@ -1246,6 +1251,7 @@ pub struct MappingTextBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl MappingTextBenchmark {
+    #[must_use]
     pub fn new() -> Self {
         let runtime = MappingsRuntimeView::default();
         let retained = MappingText::new(runtime.game, &runtime.keymap);
@@ -1256,6 +1262,7 @@ impl MappingTextBenchmark {
         }
     }
 
+    #[must_use]
     pub fn legacy_checksum(&self) -> u64 {
         (0..VISIBLE_ROWS).fold(0, |checksum, row_idx| {
             mapping_row_strings(self.game, &self.keymap, row_idx)
@@ -1266,6 +1273,7 @@ impl MappingTextBenchmark {
         })
     }
 
+    #[must_use]
     pub fn retained_checksum(&self) -> u64 {
         self.retained.rows[..VISIBLE_ROWS]
             .iter()

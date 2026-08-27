@@ -5,6 +5,7 @@ pub struct GameplayViewport {
 }
 
 impl GameplayViewport {
+    #[must_use]
     pub const fn design() -> Self {
         Self {
             width: 854.0,
@@ -12,6 +13,7 @@ impl GameplayViewport {
         }
     }
 
+    #[must_use]
     pub fn new(width: f32, height: f32) -> Self {
         Self {
             width: if width.is_finite() && width > 0.0 {
@@ -28,26 +30,31 @@ impl GameplayViewport {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn width(self) -> f32 {
         self.width
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn height(self) -> f32 {
         self.height
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn center_x(self) -> f32 {
         self.width * 0.5
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn center_y(self) -> f32 {
         self.height * 0.5
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn is_wide(self) -> bool {
         self.width / self.height >= 1.6
     }
@@ -65,6 +72,7 @@ pub const DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER: f32 = 1.5;
 pub const DRAW_DISTANCE_AFTER_TARGETS: f32 = 130.0;
 
 #[inline(always)]
+#[must_use]
 pub fn scroll_receptor_y(
     reverse_percent: f32,
     centered_percent: f32,
@@ -77,11 +85,13 @@ pub fn scroll_receptor_y(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn draw_distance_before_targets(viewport_height: f32, draw_scale: f32) -> f32 {
     viewport_height * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale
 }
 
 #[inline(always)]
+#[must_use]
 pub fn draw_distance_after_targets(
     viewport_height: f32,
     draw_scale: f32,

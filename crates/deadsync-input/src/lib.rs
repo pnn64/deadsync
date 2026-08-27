@@ -70,10 +70,12 @@ pub struct RawKeyboardEvent {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn clamp_input_debounce_seconds(seconds: f32) -> f32 {
     seconds.clamp(INPUT_DEBOUNCE_MIN_SECONDS, INPUT_DEBOUNCE_MAX_SECONDS)
 }
 
+#[must_use]
 pub fn parse_input_debounce_seconds(raw: &str) -> Option<f32> {
     let raw = raw.trim();
     if raw.is_empty() {
@@ -99,6 +101,7 @@ pub fn parse_input_debounce_seconds(raw: &str) -> Option<f32> {
 
 #[cfg(any(test, feature = "bench-support"))]
 #[doc(hidden)]
+#[must_use]
 pub fn parse_input_debounce_seconds_reference(raw: &str) -> Option<f32> {
     let raw = raw.trim();
     if raw.is_empty() {
@@ -133,6 +136,7 @@ pub struct PadCode(pub u32);
 
 impl PadCode {
     #[inline(always)]
+    #[must_use]
     pub const fn into_u32(self) -> u32 {
         self.0
     }
@@ -148,6 +152,7 @@ pub enum PadDir {
 
 impl PadDir {
     #[inline(always)]
+    #[must_use]
     pub const fn ix(self) -> usize {
         match self {
             Self::Up => 0,
@@ -159,6 +164,7 @@ impl PadDir {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn parse_pad_dir(name: &str) -> Option<PadDir> {
     match name {
         "Up" => Some(PadDir::Up),
@@ -212,6 +218,7 @@ pub struct GamepadCodeBinding {
     pub uuid: Option<[u8; 16]>,
 }
 
+#[must_use]
 pub fn gamepad_code_binding_to_token(binding: GamepadCodeBinding) -> String {
     const BASE_LEN: usize = "PadCode[0x00000000]".len();
     const UUID_LEN: usize = 33;
@@ -242,6 +249,7 @@ pub fn gamepad_code_binding_to_token(binding: GamepadCodeBinding) -> String {
 
 #[cfg(any(test, feature = "bench-support"))]
 #[doc(hidden)]
+#[must_use]
 pub fn gamepad_code_binding_to_token_reference(binding: GamepadCodeBinding) -> String {
     let mut s = String::new();
     use std::fmt::Write;
@@ -384,6 +392,7 @@ impl VirtualAction {
     pub const COUNT: usize = Self::p2_coin as usize + 1;
 
     #[inline(always)]
+    #[must_use]
     pub const fn from_ix(ix: usize) -> Option<Self> {
         match ix {
             0 => Some(Self::p1_up),
@@ -423,11 +432,13 @@ impl VirtualAction {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn ix(self) -> usize {
         self as usize
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn bit(self) -> u32 {
         1u32 << (self.ix() as u32)
     }
@@ -437,11 +448,13 @@ impl VirtualAction {
     /// screen; they are consumed directly via keymap lookups (e.g. Tab
     /// acceleration).
     #[inline(always)]
+    #[must_use]
     pub const fn is_system(self) -> bool {
         matches!(self, Self::system_fast_forward | Self::system_slow_down)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_gameplay_arrow(self) -> bool {
         matches!(
             self,
@@ -459,6 +472,7 @@ impl VirtualAction {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn secondary_menu(self) -> Option<Self> {
         match self {
             Self::p1_up => Some(Self::p1_menu_up),
@@ -474,6 +488,7 @@ impl VirtualAction {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn primary_from_menu_alias(self) -> Option<Self> {
         match self {
             Self::p1_menu_up => Some(Self::p1_up),
@@ -531,6 +546,7 @@ pub const SYSTEM_ACTION_MASK: u32 =
     VirtualAction::system_fast_forward.bit() | VirtualAction::system_slow_down.bit();
 
 #[inline(always)]
+#[must_use]
 pub fn action_from_ini_key_lower(key: &str) -> Option<VirtualAction> {
     use VirtualAction::{
         p1_back, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
@@ -591,6 +607,7 @@ fn action_from_ini_key(key: &str) -> Option<VirtualAction> {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn action_to_ini_key(action: VirtualAction) -> &'static str {
     use VirtualAction::{
         p1_back, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
@@ -655,6 +672,7 @@ const SECONDARY_MENU_SOURCE_MASK: u32 = VirtualAction::p1_up.bit()
     | VirtualAction::p2_right.bit();
 
 #[inline(always)]
+#[must_use]
 pub const fn secondary_menu_mask(mask: u32) -> u32 {
     (mask & SECONDARY_MENU_SOURCE_MASK) << 6
 }
@@ -678,6 +696,7 @@ pub fn emit_normalized_actions(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn lane_from_action(action: VirtualAction) -> Option<Lane> {
     match action {
         VirtualAction::p1_left => Some(Lane::Left),
@@ -695,6 +714,7 @@ pub const fn lane_from_action(action: VirtualAction) -> Option<Lane> {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn lane_from_column(column: usize) -> Option<Lane> {
     match column {
         0 => Some(Lane::Left),
@@ -712,6 +732,7 @@ pub const fn lane_from_column(column: usize) -> Option<Lane> {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn pad_dir_from_action(action: VirtualAction) -> Option<PadDir> {
     match action {
         VirtualAction::p1_left | VirtualAction::p2_left => Some(PadDir::Left),
@@ -741,6 +762,7 @@ pub struct InputEvent {
 
 impl InputEvent {
     #[inline(always)]
+    #[must_use]
     pub const fn new(
         action: VirtualAction,
         input_slot: u32,
@@ -954,7 +976,7 @@ mod tests {
     fn gamepad_code_bindings_round_trip_config_tokens() {
         let cases = [
             GamepadCodeBinding {
-                code_u32: 0xDEADBEEF,
+                code_u32: 0xDEAD_BEEF,
                 device: None,
                 uuid: None,
             },

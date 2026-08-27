@@ -226,6 +226,7 @@ pub struct BenchmarkProfileImportService(Service);
 
 #[cfg(feature = "bench-support")]
 impl BenchmarkProfileImportService {
+    #[must_use]
     pub fn active() -> Self {
         let mut service = Service::default();
         let import_id = 1;
@@ -239,6 +240,7 @@ impl BenchmarkProfileImportService {
         self.0.progress.publish(1, done, total, label);
     }
 
+    #[must_use]
     pub fn with_progress_burst(events: usize, label_bytes: usize) -> Self {
         let service = Self::active();
         let label = "p".repeat(label_bytes);

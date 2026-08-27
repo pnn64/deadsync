@@ -17,6 +17,7 @@ pub struct XmlNode {
 
 impl XmlNode {
     /// Returns the value of an attribute by name, if present.
+    #[must_use]
     pub fn attr(&self, name: &str) -> Option<&str> {
         self.attrs
             .iter()
@@ -25,6 +26,7 @@ impl XmlNode {
     }
 
     /// Returns the first direct child element with the given tag.
+    #[must_use]
     pub fn child(&self, tag: &str) -> Option<&XmlNode> {
         self.children.iter().find(|c| c.tag == tag)
     }
@@ -35,12 +37,14 @@ impl XmlNode {
     }
 
     /// Trimmed text of the first direct child with the given tag, or `""`.
+    #[must_use]
     pub fn child_text(&self, tag: &str) -> &str {
         self.child(tag).map(|c| c.text.as_str()).unwrap_or("")
     }
 
     /// Parses the text of a direct child into `T`, returning `None` when the
     /// child is absent, empty, or fails to parse.
+    #[must_use]
     pub fn child_parse<T: std::str::FromStr>(&self, tag: &str) -> Option<T> {
         let t = self.child_text(tag).trim();
         if t.is_empty() {

@@ -25,6 +25,7 @@ pub enum NoteScrollClock {
 
 impl NoteScrollClock {
     #[inline(always)]
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::RawAudio => "RawAudio",
@@ -33,6 +34,7 @@ impl NoteScrollClock {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn choice_index(self) -> usize {
         match self {
             Self::RawAudio => 0,
@@ -41,6 +43,7 @@ impl NoteScrollClock {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn from_choice(index: usize) -> Self {
         if index == 1 {
             Self::FrameStable
@@ -260,6 +263,7 @@ pub fn push_audio_write_current_screen_option_lines(content: &mut String, option
     push_bool(content, "WriteCurrentScreen", options.write_current_screen);
 }
 
+#[must_use]
 pub const fn clamp_audio_volume_percent(value: u8) -> u8 {
     if value > AUDIO_VOLUME_MAX {
         AUDIO_VOLUME_MAX
@@ -268,6 +272,7 @@ pub const fn clamp_audio_volume_percent(value: u8) -> u8 {
     }
 }
 
+#[must_use]
 pub const fn clamp_music_wheel_switch_speed(value: u8) -> u8 {
     if value < MUSIC_WHEEL_SWITCH_SPEED_MIN {
         MUSIC_WHEEL_SWITCH_SPEED_MIN
@@ -276,10 +281,12 @@ pub const fn clamp_music_wheel_switch_speed(value: u8) -> u8 {
     }
 }
 
+#[must_use]
 pub fn parse_auto_audio_output_device(raw: &str) -> Option<Option<u16>> {
     parse_auto_number(raw)
 }
 
+#[must_use]
 pub fn parse_auto_audio_sample_rate_hz(raw: &str) -> Option<Option<u32>> {
     parse_auto_number(raw)
 }
@@ -292,10 +299,12 @@ fn parse_auto_number<T: std::str::FromStr>(raw: &str) -> Option<Option<T>> {
     raw.parse().ok().map(Some)
 }
 
+#[must_use]
 pub fn optional_audio_output_device_value(index: Option<u16>) -> String {
     optional_auto_number_value(index)
 }
 
+#[must_use]
 pub fn optional_audio_sample_rate_hz_value(rate: Option<u32>) -> String {
     optional_auto_number_value(rate)
 }

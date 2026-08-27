@@ -69,6 +69,7 @@ pub struct WasapiOutputPrep {
 }
 
 impl WasapiOutputPrep {
+    #[must_use]
     pub fn ready(&self) -> OutputBackendReady {
         OutputBackendReady {
             device_sample_rate: self.sample_rate_hz,

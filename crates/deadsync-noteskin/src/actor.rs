@@ -70,6 +70,7 @@ pub struct ItgLuaActorDecl {
     pub path_refs: Vec<ItgLuaPathRefDecl>,
 }
 
+#[must_use]
 pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLuaActorDecl {
     let content = strip_lua_comments(content);
     let content = content.as_str();
@@ -307,6 +308,7 @@ fn strip_lua_comments(content: &str) -> String {
     String::from_utf8(out).expect("comment removal preserves valid UTF-8")
 }
 
+#[must_use]
 pub fn parse_wrapper_commands(
     content: &str,
     metrics: &noteskin_itg::IniData,
@@ -322,6 +324,7 @@ pub fn parse_wrapper_commands(
     ))
 }
 
+#[must_use]
 pub fn parse_wrapper_commands_from_file(
     path: &Path,
     metrics: &noteskin_itg::IniData,
@@ -332,12 +335,14 @@ pub fn parse_wrapper_commands_from_file(
     parse_wrapper_commands(&fs::read_to_string(path).ok()?, metrics)
 }
 
+#[must_use]
 pub fn is_lua_path(path: &Path) -> bool {
     path.extension()
         .and_then(|s| s.to_str())
         .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
 }
 
+#[must_use]
 pub fn element_contains_hint(element: &str, hint: &str) -> bool {
     let hint = hint.as_bytes();
     if hint.is_empty() {
@@ -633,6 +638,7 @@ fn find_post_call_property(content: &str, call_close: usize, property: &str) -> 
     None
 }
 
+#[must_use]
 pub fn actor_condition_matches(condition: &str, button: &str, steps_type: &str) -> bool {
     condition
         .split(" and ")

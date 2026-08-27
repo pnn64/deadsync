@@ -38,6 +38,7 @@ impl From<GameplayProfile> for deadsync_profile::Profile {
     }
 }
 
+#[must_use]
 pub const fn gameplay_play_style_from_profile(
     play_style: deadsync_profile::PlayStyle,
 ) -> deadsync_gameplay::GameplayInputPlayStyle {
@@ -57,6 +58,7 @@ pub const fn gameplay_play_style_from_profile(
     }
 }
 
+#[must_use]
 pub const fn gameplay_player_side_from_profile(
     side: deadsync_profile::PlayerSide,
 ) -> deadsync_gameplay::GameplayInputPlayerSide {
@@ -66,6 +68,7 @@ pub const fn gameplay_player_side_from_profile(
     }
 }
 
+#[must_use]
 pub const fn profile_side_from_gameplay(
     side: deadsync_gameplay::GameplayInputPlayerSide,
 ) -> deadsync_profile::PlayerSide {
@@ -82,6 +85,7 @@ pub struct GameplayPackData {
     pub sync_pref: deadsync_chart::SyncPref,
 }
 
+#[must_use]
 pub fn song_pack_group(song: &deadsync_chart::SongData) -> Arc<str> {
     Arc::from(
         song.simfile_path
@@ -94,6 +98,7 @@ pub fn song_pack_group(song: &deadsync_chart::SongData) -> Arc<str> {
     )
 }
 
+#[must_use]
 pub fn gameplay_pack_data(
     song: &deadsync_chart::SongData,
     course_name: Option<&Arc<str>>,
@@ -125,6 +130,7 @@ pub fn gameplay_pack_data(
     }
 }
 
+#[must_use]
 pub fn gameplay_runtime_profile_data(
     player_profiles: &[deadsync_profile::Profile; deadsync_core::input::MAX_PLAYERS],
     session: &deadsync_gameplay::GameplaySession,
@@ -136,6 +142,7 @@ pub fn gameplay_runtime_profile_data(
     runtime_profiles
 }
 
+#[must_use]
 pub const fn gameplay_tick_mode_from_profile(
     mode: deadsync_profile::TimingTickMode,
 ) -> deadsync_gameplay::GameplayTimingTickMode {
@@ -148,6 +155,7 @@ pub const fn gameplay_tick_mode_from_profile(
     }
 }
 
+#[must_use]
 pub const fn profile_tick_mode_from_gameplay(
     mode: deadsync_gameplay::GameplayTimingTickMode,
 ) -> deadsync_profile::TimingTickMode {
@@ -160,6 +168,7 @@ pub const fn profile_tick_mode_from_gameplay(
     }
 }
 
+#[must_use]
 pub const fn gameplay_fail_type_from_config(
     fail_type: deadsync_config::theme::DefaultFailType,
 ) -> deadsync_gameplay::GameplayFailType {
@@ -173,6 +182,7 @@ pub const fn gameplay_fail_type_from_config(
     }
 }
 
+#[must_use]
 pub const fn gameplay_note_scroll_clock_from_config(
     clock: deadsync_config::audio::NoteScrollClock,
 ) -> deadsync_gameplay::GameplayNoteScrollClock {
@@ -186,6 +196,7 @@ pub const fn gameplay_note_scroll_clock_from_config(
     }
 }
 
+#[must_use]
 pub const fn gameplay_config_from_config(
     cfg: &deadsync_config::app_config::Config,
 ) -> deadsync_gameplay::GameplayConfig {
@@ -204,6 +215,7 @@ pub const fn gameplay_config_from_config(
     }
 }
 
+#[must_use]
 pub const fn score_display_mode_from_profile(
     mode: deadsync_profile::ScoreDisplayMode,
 ) -> deadsync_gameplay::GameplayScoreDisplayMode {
@@ -273,6 +285,7 @@ const fn gameplay_target_score_setting(
     }
 }
 
+#[must_use]
 pub const fn gameplay_attack_mode(
     mode: deadsync_profile::AttackMode,
 ) -> deadsync_gameplay::GameplayAttackMode {
@@ -283,6 +296,7 @@ pub const fn gameplay_attack_mode(
     }
 }
 
+#[must_use]
 pub const fn chart_effects_from_profile(
     profile: &deadsync_profile::Profile,
 ) -> deadsync_gameplay::ChartAttackEffects {
@@ -294,6 +308,7 @@ pub const fn chart_effects_from_profile(
     }
 }
 
+#[must_use]
 pub fn score_invalid_reason_lines_for_profile(
     chart: &deadsync_chart::ChartData,
     profile: &deadsync_profile::Profile,
@@ -309,6 +324,7 @@ pub fn score_invalid_reason_lines_for_profile(
     )
 }
 
+#[must_use]
 pub fn blue_fantastic_window_ms_for_profile(
     base_fa_plus_s: f32,
     profile: &deadsync_profile::Profile,
@@ -327,6 +343,7 @@ pub fn blue_fantastic_window_ms_for_profile(
 pub type SongLuaRuntimeOverlayStateDelta =
     deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<deadsync_song_lua::SongLuaOverlayStateDelta>;
 
+#[must_use]
 pub const fn song_lua_difficulty_from_chart(
     difficulty: &str,
 ) -> deadsync_song_lua::SongLuaDifficulty {
@@ -349,6 +366,7 @@ pub const fn song_lua_difficulty_from_chart(
     }
 }
 
+#[must_use]
 pub const fn song_lua_speedmod_from_setting(
     speed: deadsync_rules::scroll::ScrollSpeedSetting,
 ) -> deadsync_song_lua::SongLuaSpeedMod {
@@ -365,6 +383,7 @@ pub const fn song_lua_speedmod_from_setting(
     }
 }
 
+#[must_use]
 pub const fn song_lua_compile_play_style(
     play_style: deadsync_gameplay::GameplayInputPlayStyle,
 ) -> deadsync_gameplay::SongLuaCompilePlayStyle {
@@ -384,6 +403,7 @@ pub const fn song_lua_compile_play_style(
     }
 }
 
+#[must_use]
 pub const fn song_lua_runtime_time_unit(
     unit: deadsync_song_lua::SongLuaTimeUnit,
 ) -> deadsync_gameplay::SongLuaRuntimeTimeUnit {
@@ -395,6 +415,7 @@ pub const fn song_lua_runtime_time_unit(
     }
 }
 
+#[must_use]
 pub const fn song_lua_runtime_span_mode(
     span_mode: deadsync_song_lua::SongLuaSpanMode,
 ) -> deadsync_gameplay::SongLuaRuntimeSpanMode {
@@ -404,6 +425,7 @@ pub const fn song_lua_runtime_span_mode(
     }
 }
 
+#[must_use]
 pub fn song_lua_runtime_ease_target(
     target: &deadsync_song_lua::SongLuaEaseTarget,
 ) -> deadsync_gameplay::SongLuaRuntimeEaseTargetOwned {
@@ -477,6 +499,7 @@ pub fn song_lua_runtime_ease_target(
     }
 }
 
+#[must_use]
 pub fn song_lua_runtime_mod_windows(
     windows: &[deadsync_song_lua::SongLuaModWindow],
 ) -> Vec<deadsync_gameplay::SongLuaRuntimeModWindow> {
@@ -493,6 +516,7 @@ pub fn song_lua_runtime_mod_windows(
         .collect()
 }
 
+#[must_use]
 pub fn song_lua_runtime_ease_windows(
     windows: &[deadsync_song_lua::SongLuaEaseWindow],
 ) -> Vec<deadsync_gameplay::SongLuaRuntimeEaseWindow> {
@@ -515,6 +539,7 @@ pub fn song_lua_runtime_ease_windows(
         .collect()
 }
 
+#[must_use]
 pub fn song_lua_runtime_column_offset_windows(
     windows: &[deadsync_song_lua::SongLuaColumnOffsetWindow],
 ) -> Vec<deadsync_gameplay::SongLuaRuntimeColumnOffsetWindow> {
@@ -553,6 +578,7 @@ pub fn song_lua_runtime_column_offset_windows(
         .collect()
 }
 
+#[must_use]
 pub const fn song_lua_overlay_delta_mask(
     delta: &deadsync_song_lua::SongLuaOverlayStateDelta,
 ) -> deadsync_gameplay::SongLuaOverlayDeltaMask {
@@ -650,6 +676,7 @@ pub const fn song_lua_overlay_delta_mask(
     mask
 }
 
+#[must_use]
 pub const fn song_lua_runtime_overlay_state_delta(
     delta: deadsync_song_lua::SongLuaOverlayStateDelta,
 ) -> SongLuaRuntimeOverlayStateDelta {
@@ -659,6 +686,7 @@ pub const fn song_lua_runtime_overlay_state_delta(
     }
 }
 
+#[must_use]
 pub fn song_lua_runtime_overlay_ease_window(
     ease: &deadsync_song_lua::SongLuaOverlayEase,
 ) -> deadsync_gameplay::SongLuaRuntimeOverlayEaseWindow<SongLuaRuntimeOverlayStateDelta> {
@@ -677,6 +705,7 @@ pub fn song_lua_runtime_overlay_ease_window(
     }
 }
 
+#[must_use]
 pub fn build_song_lua_constant_windows_for_player<OverlayActor>(
     compiled: &deadsync_song_lua::CompiledSongLua<OverlayActor>,
     timing_player: &deadsync_rules::timing::TimingData,
@@ -694,6 +723,7 @@ pub fn build_song_lua_constant_windows_for_player<OverlayActor>(
     )
 }
 
+#[must_use]
 pub fn build_song_lua_ease_windows_for_player<OverlayActor>(
     compiled: &deadsync_song_lua::CompiledSongLua<OverlayActor>,
     timing_player: &deadsync_rules::timing::TimingData,
@@ -712,6 +742,7 @@ pub fn build_song_lua_ease_windows_for_player<OverlayActor>(
     )
 }
 
+#[must_use]
 pub fn build_song_lua_column_offset_windows_for_player<OverlayActor>(
     compiled: &deadsync_song_lua::CompiledSongLua<OverlayActor>,
     timing_player: &deadsync_rules::timing::TimingData,
@@ -727,6 +758,7 @@ pub fn build_song_lua_column_offset_windows_for_player<OverlayActor>(
     )
 }
 
+#[must_use]
 pub fn build_song_lua_actor_message_events_for_commands(
     messages: &[deadsync_song_lua::SongLuaMessageEvent],
     message_seconds: &[Option<f32>],
@@ -745,6 +777,7 @@ pub fn build_song_lua_actor_message_events_for_commands(
     )
 }
 
+#[must_use]
 pub fn build_song_lua_overlay_message_events_with_seconds<Kind>(
     compiled: &deadsync_song_lua::CompiledSongLua<deadsync_song_lua::SongLuaOverlayActor<Kind>>,
     message_seconds: &[Option<f32>],
@@ -795,6 +828,7 @@ fn song_lua_compiled_overlay_ease_cutoff_second<Kind>(
     )
 }
 
+#[must_use]
 pub fn build_song_lua_overlay_ease_windows_with_events<Kind>(
     compiled: &deadsync_song_lua::CompiledSongLua<deadsync_song_lua::SongLuaOverlayActor<Kind>>,
     timing_player: &deadsync_rules::timing::TimingData,
@@ -823,6 +857,7 @@ pub fn build_song_lua_overlay_ease_windows_with_events<Kind>(
     out
 }
 
+#[must_use]
 pub fn build_song_lua_overlay_ease_windows<Kind>(
     compiled: &deadsync_song_lua::CompiledSongLua<deadsync_song_lua::SongLuaOverlayActor<Kind>>,
     timing_player: &deadsync_rules::timing::TimingData,
@@ -843,6 +878,7 @@ pub fn build_song_lua_overlay_ease_windows<Kind>(
     )
 }
 
+#[must_use]
 pub fn build_song_lua_overlay_update_tracks<OverlayActor>(
     compiled: &deadsync_song_lua::CompiledSongLua<OverlayActor>,
     timing_player: &deadsync_rules::timing::TimingData,
@@ -901,6 +937,7 @@ fn song_lua_compile_player_screen_x(
     )
 }
 
+#[must_use]
 pub fn song_lua_compile_context(
     song: &deadsync_chart::SongData,
     charts: &[Arc<deadsync_chart::ChartData>; deadsync_core::input::MAX_PLAYERS],
@@ -983,6 +1020,7 @@ pub fn song_lua_compile_context(
     context
 }
 
+#[must_use]
 pub fn groovestats_eval_state_from_profile(
     chart: &deadsync_chart::ChartData,
     profile: &deadsync_profile::Profile,
@@ -1005,6 +1043,7 @@ pub fn groovestats_eval_state_from_profile(
     })
 }
 
+#[must_use]
 pub fn groovestats_submit_invalid_reason_from_profile(
     chart: &deadsync_chart::ChartData,
     song_has_lua: bool,
@@ -1087,6 +1126,7 @@ where
     result.state
 }
 
+#[must_use]
 pub fn scroll_effects_from_option(
     scroll: deadsync_profile::ScrollOption,
 ) -> deadsync_gameplay::ScrollEffects {
@@ -1099,6 +1139,7 @@ pub fn scroll_effects_from_option(
     )
 }
 
+#[must_use]
 pub const fn tap_explosion_options_from_profile(
     profile: &deadsync_profile::Profile,
 ) -> deadsync_gameplay::TapExplosionOptions {

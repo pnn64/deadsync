@@ -47,6 +47,7 @@ impl<'storage> SliceWriter<'storage> {
     }
 
     /// Return the amount of bytes written so far.
+    #[must_use]
     pub const fn bytes_written(&self) -> usize {
         self.original_length - self.slice.len()
     }

@@ -11,6 +11,7 @@ pub struct PlanarAccum {
 }
 
 impl PlanarAccum {
+    #[must_use]
     pub fn new(channels: usize, capacity_frames: usize) -> Self {
         let mut planar = Vec::with_capacity(channels);
         for _ in 0..channels {
@@ -23,6 +24,7 @@ impl PlanarAccum {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn available_frames(&self) -> usize {
         self.channels
             .first()
@@ -30,6 +32,7 @@ impl PlanarAccum {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.available_frames() == 0
     }
@@ -107,6 +110,7 @@ impl PlanarAccum {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn resampler_params() -> SincInterpolationParameters {
     SincInterpolationParameters {
         sinc_len: 256,
@@ -351,6 +355,7 @@ pub fn apply_fade_envelope(
 }
 
 #[inline]
+#[must_use]
 pub fn saturating_i64_from_u64(value: u64) -> i64 {
     value.min(i64::MAX as u64) as i64
 }

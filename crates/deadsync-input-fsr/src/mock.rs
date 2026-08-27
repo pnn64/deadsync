@@ -211,7 +211,7 @@ impl Monitor {
     }
 
     /// The mock has no hardware test mode to toggle.
-    pub const fn set_active(&mut self, _active: bool) {}
+    pub const fn set_active(&self, _active: bool) {}
 
     /// Mock section for the FSR debug dump, in place of the (dormant) native
     /// SMX section, so the dump matches what the UI shows.

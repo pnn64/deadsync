@@ -78,6 +78,7 @@ pub struct OnlineItlSelfCacheUpdate {
 
 impl OnlineItlSelfCacheState {
     #[inline(always)]
+    #[must_use]
     pub fn profile_loaded(&self, profile_id: &str) -> bool {
         self.loaded_profiles.contains_key(profile_id)
     }
@@ -139,6 +140,7 @@ impl OnlineItlSelfCacheState {
         }
     }
 
+    #[must_use]
     pub fn get_value(
         &self,
         chart_hash: &str,
@@ -160,6 +162,7 @@ impl OnlineItlSelfCacheState {
             .or_else(|| self.session_by_key.get(&kref).copied())
     }
 
+    #[must_use]
     pub fn values_by_chart_for_api(
         &self,
         profile_id: Option<&str>,
@@ -564,6 +567,7 @@ pub enum OnlineItlSelfIndexWriteError {
     },
 }
 
+#[must_use]
 pub fn load_online_itl_self_index_file(path: &Path) -> Option<OnlineItlSelfIndexMap> {
     let bytes = fs::read(path).ok()?;
     let (by_key, _) =
@@ -579,6 +583,7 @@ pub enum OnlineItlSelfIndexKind {
     SrpgScore,
 }
 
+#[must_use]
 pub fn online_itl_self_index_path(profile_dir: &Path, kind: OnlineItlSelfIndexKind) -> PathBuf {
     let file_name = match kind {
         OnlineItlSelfIndexKind::Score => "itl_self.bin",
@@ -588,6 +593,7 @@ pub fn online_itl_self_index_path(profile_dir: &Path, kind: OnlineItlSelfIndexKi
     profile_dir.join("scores").join("gs").join(file_name)
 }
 
+#[must_use]
 pub fn load_online_itl_self_index_for_profile_dir(
     profile_dir: &Path,
     kind: OnlineItlSelfIndexKind,
@@ -772,6 +778,7 @@ pub struct ItlScoreCacheState {
 
 impl ItlScoreCacheState {
     #[inline(always)]
+    #[must_use]
     pub fn profile_loaded(&self, profile_id: &str) -> bool {
         self.loaded_profiles.contains_key(profile_id)
     }
@@ -804,6 +811,7 @@ impl ItlScoreCacheState {
             .map(itl_score_from_entry)
     }
 
+    #[must_use]
     pub fn song_score(
         &self,
         profile_id: &str,
@@ -814,6 +822,7 @@ impl ItlScoreCacheState {
             .and_then(|data| itl_score_for_song(song, data))
     }
 
+    #[must_use]
     pub fn song_folder_unlocked(&self, profile_id: &str, song_folder: &str) -> bool {
         self.loaded_profiles
             .get(profile_id)
@@ -823,6 +832,7 @@ impl ItlScoreCacheState {
 
     /// Resolve one fixed wheel transaction after hashing each profile at most
     /// once. Missing folders and guest/blank profiles stay locked.
+    #[must_use]
     pub fn song_folders_unlocked<const N: usize>(
         &self,
         song_folders: &[Option<&str>; N],
@@ -843,6 +853,7 @@ impl ItlScoreCacheState {
         })
     }
 
+    #[must_use]
     pub fn chart_no_cmod_for_song(
         &self,
         profile_id: &str,
@@ -1113,6 +1124,7 @@ where
     })
 }
 
+#[must_use]
 pub fn runtime_cached_online_itl_self_score_assume_loaded(
     chart_hash: &str,
     profile_id: Option<&str>,
@@ -1160,6 +1172,7 @@ where
     })
 }
 
+#[must_use]
 pub fn runtime_cached_online_itl_self_rank_assume_loaded(
     chart_hash: &str,
     profile_id: Option<&str>,
@@ -1207,6 +1220,7 @@ where
     })
 }
 
+#[must_use]
 pub fn runtime_cached_online_srpg_self_score_assume_loaded(
     chart_hash: &str,
     profile_id: Option<&str>,
@@ -1313,6 +1327,7 @@ pub fn read_itl_file_from_path(path: &Path) -> Result<ItlFileData, ItlFileReadEr
 
 pub const ITL_PROFILE_FILE_NAME: &str = "ITL2026.json";
 
+#[must_use]
 pub fn itl_profile_file_path(profile_dir: &Path) -> PathBuf {
     profile_dir.join(ITL_PROFILE_FILE_NAME)
 }
@@ -1410,6 +1425,7 @@ pub fn write_itl_file_to_path(path: &Path, data: &ItlFileData) -> Result<(), Itl
 
 impl ItlFileData {
     #[inline(always)]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.path_map.is_empty() && self.hash_map.is_empty() && self.unlock_folders.is_empty()
     }
@@ -1495,6 +1511,7 @@ pub struct ItlJudgmentCountsInput {
     pub total_rolls: u32,
 }
 
+#[must_use]
 pub const fn itl_judgments_from_counts(input: ItlJudgmentCountsInput) -> ItlJudgments {
     ItlJudgments {
         w0: input.fantastic_plus,
@@ -1514,6 +1531,7 @@ pub const fn itl_judgments_from_counts(input: ItlJudgmentCountsInput) -> ItlJudg
     }
 }
 
+#[must_use]
 pub fn itl_judgments_from_groovestats_counts(
     fantastic_plus: u32,
     fantastic: u32,
@@ -1560,6 +1578,7 @@ pub struct ItlScoreCalcInput<'a> {
     pub fail_time: Option<deadsync_core::song_time::SongTimeNs>,
 }
 
+#[must_use]
 pub fn itl_ex_score_percent(input: ItlScoreCalcInput<'_>) -> f64 {
     deadsync_rules::judgment::calculate_ex_score_from_notes(
         input.notes,
@@ -1574,10 +1593,12 @@ pub fn itl_ex_score_percent(input: ItlScoreCalcInput<'_>) -> f64 {
     )
 }
 
+#[must_use]
 pub fn itl_current_score_hundredths(input: ItlScoreCalcInput<'_>) -> u32 {
     ex_hundredths(itl_ex_score_percent(input))
 }
 
+#[must_use]
 pub fn itl_timing_windows_all_enabled(disabled_windows: &[bool]) -> bool {
     disabled_windows.iter().all(|disabled| !*disabled)
 }
@@ -1604,6 +1625,7 @@ where
 
 /// Parses external Simply Love/ITGmania ITL JSON text into `DeadSync`'s ITL
 /// cache schema. Empty files and malformed text return `None`.
+#[must_use]
 pub fn itl_data_from_json(json_text: &str) -> Option<ItlFileData> {
     let data: ItlFileData = serde_json::from_str(json_text).ok()?;
     if data.is_empty() {
@@ -1629,6 +1651,7 @@ pub fn is_itl_unlocks_pack(pack_dir: &str) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn itl_group_name_matches(group_name: &str) -> bool {
     contains_ignore_ascii_case(group_name, "itl online 2026")
         || contains_ignore_ascii_case(group_name, "itl 2026")
@@ -1645,12 +1668,14 @@ pub fn itl_song_matches(
     group_name.is_some_and(itl_group_name_matches)
 }
 
+#[must_use]
 pub fn itl_song_dir(song: &deadsync_chart::SongData) -> Option<String> {
     song.simfile_path
         .parent()
         .map(|dir| dir.to_string_lossy().into_owned())
 }
 
+#[must_use]
 pub fn itl_song_matches_context(
     song_dir: Option<&str>,
     group_name: Option<&str>,
@@ -1675,6 +1700,7 @@ pub fn itl_score_for_song(
     itl_entry_for_song(song, data).map(itl_score_from_entry)
 }
 
+#[must_use]
 pub fn itl_chart_no_cmod(subtitle: &str, prev: Option<&ItlHashEntry>) -> bool {
     prev.map_or_else(
         || contains_ignore_ascii_case(subtitle, "no cmod"),
@@ -1689,6 +1715,7 @@ pub fn itl_event_name_from_group(group_name: Option<&str>) -> String {
         .unwrap_or_else(|| "ITL Online 2026".to_string())
 }
 
+#[must_use]
 pub fn itl_steps_type_from_chart_type(chart_type: &str) -> &'static str {
     if contains_ignore_ascii_case(chart_type, "double") {
         "double"
@@ -1706,6 +1733,7 @@ fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn itl_song_folder_unlocked(data: &ItlFileData, song_folder: &str) -> bool {
     data.unlock_folders
         .get(song_folder)
@@ -1728,6 +1756,7 @@ where
 }
 
 #[inline(always)]
+#[must_use]
 pub fn ex_hundredths(ex_percent: f64) -> u32 {
     let ex = if ex_percent.is_finite() {
         ex_percent.clamp(0.0, 100.0)
@@ -1737,6 +1766,7 @@ pub fn ex_hundredths(ex_percent: f64) -> u32 {
     (ex * 100.0).round() as u32
 }
 
+#[must_use]
 pub fn parse_itl_points(chart_name: &str) -> Option<(u32, u32)> {
     let mut nums = chart_name
         .split(|ch: char| !ch.is_ascii_digit())
@@ -1745,6 +1775,7 @@ pub fn parse_itl_points(chart_name: &str) -> Option<(u32, u32)> {
     Some((nums.next()?, nums.next()?))
 }
 
+#[must_use]
 pub fn itl_points_for_chart(chart: &deadsync_chart::ChartData, ex_hundredths: u32) -> Option<u32> {
     let (passing_points, max_scoring_points) = parse_itl_points(chart.chart_name.as_str())?;
     Some(itl_points_for_song(
@@ -1754,6 +1785,7 @@ pub fn itl_points_for_chart(chart: &deadsync_chart::ChartData, ex_hundredths: u3
     ))
 }
 
+#[must_use]
 pub fn itl_points_for_song(passing_points: u32, max_scoring_points: u32, ex_score: f64) -> u32 {
     let scalar = 40.0_f64;
     let curve = (scalar.powf(ex_score.max(0.0) / scalar) - 1.0)
@@ -1781,6 +1813,7 @@ fn apply_itl_overall_ranks(
     }
 }
 
+#[must_use]
 pub fn itl_overall_ranks_from_song_cache(
     song_cache: &[deadsync_chart::SongPack],
     by_chart_score: &HashMap<String, u32>,
@@ -1824,6 +1857,7 @@ pub fn itl_overall_ranks_from_song_cache(
     ranks
 }
 
+#[must_use]
 pub fn itl_judgments_better(cur: &ItlJudgments, prev: &ItlJudgments) -> bool {
     for (cur_value, prev_value) in [
         (cur.w0, prev.w0),
@@ -1843,6 +1877,7 @@ pub fn itl_judgments_better(cur: &ItlJudgments, prev: &ItlJudgments) -> bool {
     false
 }
 
+#[must_use]
 pub const fn itl_clear_type(judgments: &ItlJudgments) -> u8 {
     if judgments.total_rolls.saturating_sub(judgments.rolls) > 0
         || judgments.total_holds.saturating_sub(judgments.holds) > 0
@@ -1874,6 +1909,7 @@ pub const fn itl_clear_type(judgments: &ItlJudgments) -> u8 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn itl_score_from_entry(entry: &ItlHashEntry) -> CachedItlScore {
     CachedItlScore {
         ex_hundredths: entry.ex,
@@ -1935,6 +1971,7 @@ pub fn itl_rebuild_song_ranks(data: &mut ItlFileData) {
     data.points_double = points_double;
 }
 
+#[must_use]
 pub fn itl_point_totals(data: &ItlFileData) -> ItlPointTotals {
     let ranking_points = data.points.iter().take(75).copied().sum();
     let mut song_points = 0u32;

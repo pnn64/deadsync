@@ -5,6 +5,7 @@ pub struct FontStore {
 }
 
 impl FontStore {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             fonts: FontMap::default(),
@@ -19,10 +20,12 @@ impl FontStore {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_font(&self, name: &str) -> bool {
         self.fonts.contains_key(name)
     }
 
+    #[must_use]
     pub const fn fonts(&self) -> &FontMap {
         &self.fonts
     }

@@ -128,6 +128,7 @@ impl std::error::Error for ConnectionProbeError {}
 
 impl ConnectionProbeError {
     #[inline(always)]
+    #[must_use]
     pub const fn connection_error(&self) -> ConnectionError {
         match self {
             Self::Timeout => ConnectionError::TimedOut,
@@ -139,6 +140,7 @@ impl ConnectionProbeError {
 
 impl Service {
     #[inline(always)]
+    #[must_use]
     pub const fn from_boogiestats_active(active: bool) -> Self {
         if active {
             Self::BoogieStats
@@ -148,6 +150,7 @@ impl Service {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn score_import_endpoint(self) -> ScoreImportEndpoint {
         match self {
             Self::GrooveStats => ScoreImportEndpoint::GrooveStats,
@@ -157,16 +160,19 @@ impl Service {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn boogiestats_active(enable_groovestats: bool, enable_boogiestats: bool) -> bool {
     enable_groovestats && enable_boogiestats
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn active_service(enable_groovestats: bool, enable_boogiestats: bool) -> Service {
     Service::from_boogiestats_active(boogiestats_active(enable_groovestats, enable_boogiestats))
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn service_name(service: Service) -> &'static str {
     match service {
         Service::GrooveStats => "GrooveStats",
@@ -222,16 +228,19 @@ pub fn log_player_submit_skip(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn primary_api_base_url() -> &'static str {
     GROOVESTATS_API_BASE_URL
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn boogiestats_api_base_url() -> &'static str {
     BOOGIESTATS_API_BASE_URL
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn api_base_url(service: Service) -> &'static str {
     match service {
         Service::GrooveStats => GROOVESTATS_API_BASE_URL,
@@ -240,17 +249,20 @@ pub const fn api_base_url(service: Service) -> &'static str {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn qr_base_url() -> &'static str {
     GROOVESTATS_QR_BASE_URL
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn qr_login_ws_url() -> &'static str {
     GROOVESTATS_QR_LOGIN_WS_URL
 }
 
 /// 32-character uppercase hex string mirroring Simply Love's
 /// `CRYPTMAN:GenerateRandomUUID():gsub("-",""):upper()`.
+#[must_use]
 pub fn generate_qr_login_uuid() -> String {
     use rand::Rng;
 
@@ -263,10 +275,12 @@ pub fn generate_qr_login_uuid() -> String {
     out
 }
 
+#[must_use]
 pub fn qr_login_url(uuid: &str, side: u8) -> String {
     format!("{GROOVESTATS_QR_LOGIN_URL}?UUID={uuid}&SIDE={side}")
 }
 
+#[must_use]
 pub fn qr_login_uuid_message(uuid: &str) -> String {
     serde_json::json!({ "event": "uuid", "data": { "uuid": uuid } }).to_string()
 }
@@ -277,6 +291,7 @@ fn groovestats_action_url(action: &str) -> String {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn player_leaderboards_url(service: Service) -> String {
     match service {
         Service::GrooveStats => groovestats_action_url("playerLeaderboards"),
@@ -288,6 +303,7 @@ pub fn player_leaderboards_url(service: Service) -> String {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn score_submit_url(service: Service) -> String {
     match service {
         Service::GrooveStats => groovestats_action_url("scoreSubmit"),
@@ -299,6 +315,7 @@ pub fn score_submit_url(service: Service) -> String {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn new_session_url(service: Service) -> String {
     match service {
         Service::GrooveStats => format!(
@@ -329,6 +346,7 @@ pub struct NewSessionResponse {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn services_from_new_session(data: &NewSessionResponse) -> Services {
     Services {
         get_scores: data.services_allowed.player_scores,
@@ -337,6 +355,7 @@ pub const fn services_from_new_session(data: &NewSessionResponse) -> Services {
     }
 }
 
+#[must_use]
 pub fn connection_status_from_new_session(data: &NewSessionResponse) -> ConnectionStatus {
     if !data.services_result.eq_ignore_ascii_case("OK") {
         return ConnectionStatus::Error(ConnectionError::MachineOffline);
@@ -345,6 +364,7 @@ pub fn connection_status_from_new_session(data: &NewSessionResponse) -> Connecti
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn connection_error_from_network_error(error: &NetworkError) -> ConnectionError {
     match error {
         NetworkError::Timeout => ConnectionError::TimedOut,
@@ -365,6 +385,7 @@ pub fn probe_connection(service: Service) -> Result<ConnectionStatus, Connection
     check_connection(service).map_err(ConnectionProbeError::from)
 }
 
+#[must_use]
 pub fn connection_transition_from_probe_result(
     service: Service,
     result: Result<ConnectionStatus, ConnectionProbeError>,
@@ -408,6 +429,7 @@ pub fn connection_transition_from_probe_result(
     }
 }
 
+#[must_use]
 pub fn probe_connection_transition(service: Service) -> ConnectionProbeTransition {
     connection_transition_from_probe_result(service, probe_connection(service))
 }
@@ -580,6 +602,7 @@ pub struct LeaderboardApiEntry {
     pub comments: Option<String>,
 }
 
+#[must_use]
 pub fn leaderboard_entries_from_api(entries: Vec<LeaderboardApiEntry>) -> Vec<LeaderboardEntry> {
     let mut out = Vec::with_capacity(entries.len());
     for entry in entries {
@@ -597,6 +620,7 @@ pub fn leaderboard_entries_from_api(entries: Vec<LeaderboardApiEntry>) -> Vec<Le
     out
 }
 
+#[must_use]
 pub fn leaderboard_pane_from_api(
     name: &str,
     entries: Vec<LeaderboardApiEntry>,
@@ -605,6 +629,7 @@ pub fn leaderboard_pane_from_api(
     leaderboard_pane(name, leaderboard_entries_from_api(entries), is_ex)
 }
 
+#[must_use]
 pub fn leaderboard_self_entry<'a>(
     entries: &'a [LeaderboardApiEntry],
     username: &str,
@@ -617,10 +642,12 @@ pub fn leaderboard_self_entry<'a>(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn leaderboard_entry_score_10000(entry: &LeaderboardApiEntry) -> Option<f64> {
     leaderboard_score_10000(entry.score, entry.is_fail)
 }
 
+#[must_use]
 pub fn leaderboard_self_score_10000(
     entries: &[LeaderboardApiEntry],
     username: &str,
@@ -628,6 +655,7 @@ pub fn leaderboard_self_score_10000(
     Some(leaderboard_entry_score_10000(leaderboard_self_entry(entries, username)?)?.round() as u32)
 }
 
+#[must_use]
 pub fn leaderboard_self_rank(entries: &[LeaderboardApiEntry], username: &str) -> Option<u32> {
     leaderboard_nonzero_rank(leaderboard_self_entry(entries, username)?.rank)
 }
@@ -643,6 +671,7 @@ pub fn gs_ex_evidence_from_leaderboard(
     )
 }
 
+#[must_use]
 pub fn imported_player_score_from_leaderboard_entries(
     gs_entries: &[LeaderboardApiEntry],
     ex_entries: &[LeaderboardApiEntry],
@@ -690,6 +719,7 @@ fn insert_arrowcloud_panes(fetched: &mut FetchedPlayerLeaderboards, panes: Vec<L
     }
 }
 
+#[must_use]
 pub fn fetched_player_leaderboards_from_api(
     decoded: LeaderboardsApiResponse,
     username: &str,
@@ -932,11 +962,13 @@ impl GrooveStatsJudgmentCounts {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn decent_count(&self) -> u32 {
         Self::optional_count(self.decent)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn way_off_count(&self) -> u32 {
         Self::optional_count(self.way_off)
     }
@@ -947,6 +979,7 @@ const fn submit_bad_window_count(disabled: bool, count: u32) -> Option<u32> {
     if disabled { None } else { Some(count) }
 }
 
+#[must_use]
 pub const fn judgment_counts_from_stats(
     windows: WindowCounts,
     disabled_windows: [bool; 5],
@@ -1004,6 +1037,7 @@ pub fn add_rescore_target(counts: &mut GrooveStatsRescoreCounts, judgment: &judg
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn final_result_counts_as_rescore_target(judgment: &judgment::Judgment) -> bool {
     !matches!(
         judgment.grade,
@@ -1025,6 +1059,7 @@ where
     counts
 }
 
+#[must_use]
 pub fn submit_comment(
     counts: &GrooveStatsJudgmentCounts,
     fa_plus_ex_score: Option<f64>,
@@ -1085,6 +1120,7 @@ fn qr_append_rescore(out: &mut String, label: char, value: u32) {
     out.push_str(format!("{value:x}").as_str());
 }
 
+#[must_use]
 pub fn manual_qr_url(
     base_url: &str,
     chart_hash: &str,
@@ -1165,6 +1201,7 @@ struct GrooveStatsApiKeyPayload {
     side: Option<u8>,
 }
 
+#[must_use]
 pub fn classify_qr_login_ws_message(text: &str, expected_uuid: &str) -> GrooveStatsQrLoginWsEffect {
     let Ok(env) = serde_json::from_str::<GrooveStatsWsEnvelope>(text) else {
         return GrooveStatsQrLoginWsEffect::Ignore;
@@ -1329,6 +1366,7 @@ pub struct GrooveStatsGameplayPayloadInput<'a> {
     pub profile: &'a profile_data::Profile,
 }
 
+#[must_use]
 pub fn submit_player_payload_from_input(
     input: GrooveStatsSubmitPlayerPayloadInput<'_>,
 ) -> GrooveStatsSubmitPlayerPayload {
@@ -1357,6 +1395,7 @@ pub fn submit_player_payload_from_input(
     }
 }
 
+#[must_use]
 pub fn submit_player_payload_from_gameplay_input(
     input: GrooveStatsGameplayPayloadInput<'_>,
 ) -> GrooveStatsSubmitPlayerPayload {
@@ -1674,7 +1713,7 @@ fn submit_fail_type_ok_from_app_runtime() -> bool {
 fn refresh_submit_leaderboards_from_app_runtime(player: &GrooveStatsSubmitPlayerJob) {
     let runtime = crate::player_leaderboards::PlayerLeaderboardRuntime::from_app_runtime();
     runtime.invalidate_for_side(player.chart_hash.as_str(), player.side);
-    runtime.get_or_fetch_for_side(
+    let _ = runtime.get_or_fetch_for_side(
         player.chart_hash.as_str(),
         player.side,
         GROOVESTATS_SUBMIT_MAX_ENTRIES,
@@ -1776,6 +1815,7 @@ pub fn retry_submit_from_app_runtime(
     )
 }
 
+#[must_use]
 pub fn retry_manual_submit_from_app_runtime(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -1865,6 +1905,7 @@ pub struct GrooveStatsGameplaySubmitPlayer {
 
 impl GrooveStatsSubmitPlayerDraft {
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
     pub const fn new(
         side: profile_data::PlayerSide,
         slot: u8,
@@ -1891,6 +1932,7 @@ impl GrooveStatsSubmitPlayerDraft {
         }
     }
 
+    #[must_use]
     pub fn retry_entry(&self) -> GrooveStatsSubmitRetryEntry {
         GrooveStatsSubmitRetryEntry::new(
             self.side,
@@ -1906,6 +1948,7 @@ impl GrooveStatsSubmitPlayerDraft {
         )
     }
 
+    #[must_use]
     pub fn player_job(&self, token: u64) -> GrooveStatsSubmitPlayerJob {
         GrooveStatsSubmitPlayerJob {
             side: self.side,
@@ -1923,6 +1966,7 @@ impl GrooveStatsSubmitPlayerDraft {
         }
     }
 
+    #[must_use]
     pub fn player_request(&self) -> GrooveStatsSubmitPlayerRequest {
         GrooveStatsSubmitPlayerRequest {
             slot: self.slot,
@@ -2049,6 +2093,7 @@ pub struct GrooveStatsSubmitRequest {
     pub parts: GrooveStatsSubmitRequestParts,
 }
 
+#[must_use]
 pub fn submit_request_parts(
     players: &[GrooveStatsSubmitPlayerRequest],
 ) -> GrooveStatsSubmitRequestParts {
@@ -2083,6 +2128,7 @@ pub fn submit_request_parts(
     }
 }
 
+#[must_use]
 pub fn submit_request_from_drafts(
     players: Vec<(GrooveStatsSubmitPlayerDraft, u64)>,
 ) -> GrooveStatsSubmitRequest {
@@ -2099,6 +2145,7 @@ pub fn submit_request_from_drafts(
     }
 }
 
+#[must_use]
 pub fn begin_submit_request_from_drafts(
     drafts: Vec<GrooveStatsSubmitPlayerDraft>,
 ) -> Option<GrooveStatsSubmitRequest> {
@@ -2123,6 +2170,7 @@ pub fn begin_submit_request_from_drafts(
     Some(submit_request_from_drafts(players))
 }
 
+#[must_use]
 pub fn retry_submit_request(
     entry: &GrooveStatsSubmitRetryEntry,
     token: u64,
@@ -2171,6 +2219,7 @@ pub struct GrooveStatsSubmitRetryEntry {
 
 impl GrooveStatsSubmitRetryEntry {
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
     pub const fn new(
         side: profile_data::PlayerSide,
         slot: u8,
@@ -2254,6 +2303,7 @@ pub fn set_submit_ui_status(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn update_submit_ui_status_if_token(
     side: profile_data::PlayerSide,
     chart_hash: &str,
@@ -2295,11 +2345,13 @@ pub fn update_submit_event_ui_if_token(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn next_submit_ui_token() -> u64 {
     deadsync_score::groovestats_next_submit_ui_token()
 }
 
 #[inline(always)]
+#[must_use]
 pub fn submit_ui_status_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -2308,6 +2360,7 @@ pub fn submit_ui_status_for_side(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn submit_event_progress_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -2319,6 +2372,7 @@ pub fn submit_event_progress_for_side(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn submit_record_banner_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -2430,6 +2484,7 @@ pub fn take_ready_submit_retry(
     ready
 }
 
+#[must_use]
 pub fn take_ready_submit_retry_request(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -2440,6 +2495,7 @@ pub fn take_ready_submit_retry_request(
         .map(|entry| retry_submit_request(&entry, token))
 }
 
+#[must_use]
 pub fn begin_ready_submit_retry_request(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -2510,6 +2566,7 @@ pub fn tick_auto_submit_retries_if_enabled(
     fired
 }
 
+#[must_use]
 pub fn reject_submit_player_response(player: &GrooveStatsSubmitPlayerJob) -> bool {
     update_submit_ui_status_if_token(
         player.side,
@@ -2521,6 +2578,7 @@ pub fn reject_submit_player_response(player: &GrooveStatsSubmitPlayerJob) -> boo
     )
 }
 
+#[must_use]
 pub fn complete_submit_player_success(
     player: &GrooveStatsSubmitPlayerJob,
     response: &GrooveStatsSubmitApiPlayer,
@@ -2544,6 +2602,7 @@ pub fn complete_submit_player_success(
     accepted
 }
 
+#[must_use]
 pub fn complete_submit_player_failure(
     player: &GrooveStatsSubmitPlayerJob,
     status: GrooveStatsSubmitUiStatus,
@@ -2663,6 +2722,7 @@ pub struct GrooveStatsSubmitApiResponse {
 
 impl GrooveStatsSubmitApiResponse {
     #[inline(always)]
+    #[must_use]
     pub const fn player_for_slot(&self, slot: u8) -> Option<&GrooveStatsSubmitApiPlayer> {
         match slot {
             1 => self.player1.as_ref(),
@@ -2678,6 +2738,7 @@ pub enum GrooveStatsSubmitPlayerResponse<'a> {
     HashMismatch { actual_chart_hash: &'a str },
 }
 
+#[must_use]
 pub fn submit_player_response_for_job<'a>(
     response: &'a GrooveStatsSubmitApiResponse,
     player: &GrooveStatsSubmitPlayerJob,
@@ -2717,6 +2778,7 @@ pub struct GrooveStatsSubmitError {
     pub message: String,
 }
 
+#[must_use]
 pub fn submit_error_status_and_message(
     service_name: &str,
     error: &GrooveStatsSubmitRequestError,
@@ -2759,6 +2821,7 @@ pub fn submit_error_status_and_message(
     }
 }
 
+#[must_use]
 pub fn submit_error_from_request(
     service_name: &str,
     error: GrooveStatsSubmitRequestError,
@@ -2767,6 +2830,7 @@ pub fn submit_error_from_request(
     GrooveStatsSubmitError { status, message }
 }
 
+#[must_use]
 pub fn submit_record_banner_from_api(
     response: &GrooveStatsSubmitApiPlayer,
     username: &str,
@@ -2781,6 +2845,7 @@ pub fn submit_record_banner_from_api(
     )
 }
 
+#[must_use]
 pub fn imported_player_score_from_submit_response(
     response: &GrooveStatsSubmitApiPlayer,
     username: &str,
@@ -2833,6 +2898,7 @@ where
     })
 }
 
+#[must_use]
 pub fn event_progress_from_submit_response(
     player: &GrooveStatsSubmitPlayerJob,
     response: &GrooveStatsSubmitApiPlayer,
@@ -2854,6 +2920,7 @@ pub fn event_progress_from_submit_response(
     event_progress_from_submit(&input)
 }
 
+#[must_use]
 pub fn itl_unlock_folder_groups_from_submit_response<'a>(
     player: &GrooveStatsSubmitPlayerJob,
     response: &'a GrooveStatsSubmitApiPlayer,
@@ -2875,6 +2942,7 @@ pub fn itl_unlock_folder_groups_from_submit_response<'a>(
         .unwrap_or_default()
 }
 
+#[must_use]
 pub fn unlock_events_from_submit_response<'a>(
     player: &GrooveStatsSubmitPlayerJob,
     response: &'a GrooveStatsSubmitApiPlayer,
@@ -2904,6 +2972,7 @@ pub struct GrooveStatsSubmitUnlockPlan {
     pub downloads: Vec<GrooveStatsUnlockDownload>,
 }
 
+#[must_use]
 pub fn unlock_downloads_from_submit_event(
     event: &GrooveStatsSubmitApiEvent,
     profile_name: &str,
@@ -2948,6 +3017,7 @@ pub fn unlock_downloads_from_submit_event(
         .collect()
 }
 
+#[must_use]
 pub fn submit_unlock_plan_from_response(
     player: &GrooveStatsSubmitPlayerJob,
     response: &GrooveStatsSubmitApiPlayer,
@@ -3086,7 +3156,7 @@ where
                     GrooveStatsSubmitPlayerResponse::Accepted(player_response) => player_response,
                     GrooveStatsSubmitPlayerResponse::Missing => {
                         summary.rejected += 1;
-                        reject_submit_player_response(player);
+                        let _ = reject_submit_player_response(player);
                         log::warn!(
                             "{service_name} submit response omitted player{} for {:?} ({}).",
                             player.slot,
@@ -3098,7 +3168,7 @@ where
                     }
                     GrooveStatsSubmitPlayerResponse::HashMismatch { actual_chart_hash } => {
                         summary.rejected += 1;
-                        reject_submit_player_response(player);
+                        let _ = reject_submit_player_response(player);
                         log::warn!(
                             "{service_name} submit response hash mismatch for {:?}: expected {}, got {}.",
                             player.side,
@@ -3111,7 +3181,7 @@ where
                 };
 
                 summary.accepted += 1;
-                complete_submit_player_success(player, player_response);
+                let _ = complete_submit_player_success(player, player_response);
                 accepted_player(player, player_response);
                 log::debug!(
                     "{service_name} submit succeeded for {:?} ({}) result='{}'",
@@ -3126,7 +3196,7 @@ where
             let status = err.status;
             for player in &job.players {
                 summary.failed += 1;
-                complete_submit_player_failure(player, status);
+                let _ = complete_submit_player_failure(player, status);
                 log::warn!(
                     "{service_name} submit failed for {:?} ({}) status={:?}: {}",
                     player.side,
@@ -3228,6 +3298,7 @@ pub struct GrooveStatsSubmitApiProgress {
     pub achievements_completed: Vec<GrooveStatsSubmitApiAchievement>,
 }
 
+#[must_use]
 pub fn submit_progress_from_api(progress: &GrooveStatsSubmitApiProgress) -> SubmitProgress {
     SubmitProgress {
         stat_improvements: progress
@@ -3418,6 +3489,7 @@ where
     }
 }
 
+#[must_use]
 pub fn compact_f32_text(value: f32) -> String {
     let mut text = format!("{value:.2}");
     while text.contains('.') && text.ends_with('0') {
@@ -3430,6 +3502,7 @@ pub fn compact_f32_text(value: f32) -> String {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn timing_windows_comment(setting: TimingWindowsOption) -> Option<&'static str> {
     match setting {
         TimingWindowsOption::None => None,
@@ -3439,6 +3512,7 @@ pub const fn timing_windows_comment(setting: TimingWindowsOption) -> Option<&'st
     }
 }
 
+#[must_use]
 pub fn player_options_json(profile: &Profile) -> String {
     let (speed_mod_type, speed_mod) = match profile.scroll_speed {
         ScrollSpeedSetting::XMod(value) => (1, value),

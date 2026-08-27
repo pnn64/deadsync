@@ -55,10 +55,12 @@ const fn output_format(engine: &AudioEngine) -> OutputFormat {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn timing_diag_last_callback_gap_ns() -> u64 {
     deadlib_audio_core::timing_diag_last_callback_gap_ns()
 }
 
+#[must_use]
 pub fn stutter_diag_trigger_seq() -> u64 {
     deadlib_audio_core::stutter_diag_trigger_seq()
 }
@@ -112,6 +114,7 @@ pub fn preserve_pitch_enabled() -> bool {
 }
 
 impl AudioControl {
+    #[must_use]
     pub const fn without_audio() -> Self {
         Self { engine: None }
     }
@@ -282,10 +285,12 @@ fn set_music_rate(engine: Option<&AudioEngine>, rate: f32) {
     }
 }
 
+#[must_use]
 pub fn assist_sfx_generation() -> u64 {
     assist_tick_generation()
 }
 
+#[must_use]
 pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
     deadlib_audio_core::get_output_timing_snapshot()
 }

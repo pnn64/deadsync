@@ -105,6 +105,7 @@ pub enum Grade {
 
 impl Grade {
     #[inline(always)]
+    #[must_use]
     pub const fn to_sprite_state(&self) -> u32 {
         match self {
             Self::Quint => 0,
@@ -130,6 +131,7 @@ impl Grade {
     }
 
     /// Short display string used in SMX pad GIF filenames (`results_25@<suffix>.gif`).
+    #[must_use]
     pub const fn gif_suffix(&self) -> &'static str {
         match self {
             Self::Quint => "star5",
@@ -156,6 +158,7 @@ impl Grade {
 
     /// The "base" grade to fall back to for `+`/`-` variants when no exact gif exists.
     /// `S+` and `S-` fall back to `S`, `A+`/`A-` to `A`, etc. Base grades return `None`.
+    #[must_use]
     pub const fn gif_base(&self) -> Option<Grade> {
         match self {
             Self::Tier05 | Self::Tier07 => Some(Self::Tier06),
@@ -239,6 +242,7 @@ pub struct MachineLocalScoreCacheState {
 
 impl GsScoreCacheState {
     #[inline(always)]
+    #[must_use]
     pub fn profile_is_loaded(&self, profile_id: &str) -> bool {
         self.loaded_profiles.contains_key(profile_id)
     }
@@ -253,6 +257,7 @@ impl GsScoreCacheState {
             .or_insert_with(|| Arc::new(by_chart));
     }
 
+    #[must_use]
     pub fn get_profile_score(&self, profile_id: &str, chart_hash: &str) -> Option<CachedScore> {
         self.loaded_profiles
             .get(profile_id)
@@ -288,6 +293,7 @@ impl GsScoreCacheState {
 
 impl AcScoreCacheState {
     #[inline(always)]
+    #[must_use]
     pub fn profile_is_loaded(&self, profile_id: &str) -> bool {
         self.loaded_profiles.contains_key(profile_id)
     }
@@ -302,6 +308,7 @@ impl AcScoreCacheState {
             .or_insert_with(|| Arc::new(by_chart));
     }
 
+    #[must_use]
     pub fn get_profile_scores(
         &self,
         profile_id: &str,
@@ -365,6 +372,7 @@ impl AcScoreCacheState {
 
 impl LocalScoreCacheState {
     #[inline(always)]
+    #[must_use]
     pub fn profile_is_loaded(&self, profile_id: &str) -> bool {
         self.loaded_profiles.contains_key(profile_id)
     }
@@ -375,18 +383,21 @@ impl LocalScoreCacheState {
             .or_insert_with(|| Arc::new(index));
     }
 
+    #[must_use]
     pub fn get_profile_itg_score(&self, profile_id: &str, chart_hash: &str) -> Option<CachedScore> {
         self.loaded_profiles
             .get(profile_id)
             .and_then(|idx| idx.best_itg.get(chart_hash).copied())
     }
 
+    #[must_use]
     pub fn get_profile_pass_rate(&self, profile_id: &str, chart_hash: &str) -> Option<u32> {
         self.loaded_profiles
             .get(profile_id)
             .and_then(|idx| idx.best_pass_rate.get(chart_hash).copied())
     }
 
+    #[must_use]
     pub fn get_profile_scalar_score(
         &self,
         profile_id: &str,
@@ -472,6 +483,7 @@ fn score_cache_snapshot_header(index: usize) -> LocalScoreHeader {
 }
 
 impl MachineLocalScoreCacheState {
+    #[must_use]
     pub fn record(&self, chart_hash: &str) -> Option<(String, CachedScore)> {
         self.best_itg
             .get(chart_hash)
@@ -501,6 +513,7 @@ impl MachineLocalScoreCacheState {
         }
     }
 
+    #[must_use]
     pub fn scalar_record(
         &self,
         chart_hash: &str,
@@ -679,6 +692,7 @@ pub fn log_score_cache_result(kind: &str, result: ScoreCacheRuntimeResult) {
     }
 }
 
+#[must_use]
 pub const fn score_cache_kind_label(kind: ScoreCacheRuntimeKind) -> &'static str {
     match kind {
         ScoreCacheRuntimeKind::GrooveStats => "GS",
@@ -1685,6 +1699,7 @@ pub fn runtime_seed_logged_gs_score(
     ));
 }
 
+#[must_use]
 pub fn runtime_machine_record_logged_local(
     chart_hash: &str,
     profiles: &[LocalScoreProfileSource],
@@ -1712,10 +1727,12 @@ pub fn runtime_total_songs_played_for_profile(
     total_local_score_bins_in_root(&score_paths(profile_id).local_dir())
 }
 
+#[must_use]
 pub fn runtime_recent_played_chart_hashes_for_machine(profiles_root: &Path) -> Vec<String> {
     recent_played_chart_hashes_in_profiles_root(profiles_root)
 }
 
+#[must_use]
 pub fn runtime_played_chart_counts_for_machine(profiles_root: &Path) -> Vec<(String, u32)> {
     played_chart_counts_in_profiles_root(profiles_root)
 }
@@ -1734,6 +1751,7 @@ pub fn runtime_played_chart_counts_for_profile(
     played_chart_counts_in_root(&score_paths(profile_id).local_dir())
 }
 
+#[must_use]
 pub fn runtime_ensure_machine_local_score_cache_loaded(
     profiles: &[LocalScoreProfileSource],
 ) -> ScoreCacheRuntimeResult {
@@ -1802,6 +1820,7 @@ pub fn runtime_update_machine_scalar_cache_if_loaded(
         .update_scalar_if_loaded(chart_hash, ex, hard_ex, initials);
 }
 
+#[must_use]
 pub fn runtime_machine_record_local(
     chart_hash: &str,
     profiles: &[LocalScoreProfileSource],
@@ -1918,6 +1937,7 @@ impl HeldProfileScores<'_> {
 }
 
 impl HeldScoreCaches {
+    #[must_use]
     pub const fn new(
         local: MutexGuard<'static, LocalScoreCacheState>,
         gs: MutexGuard<'static, GsScoreCacheState>,
@@ -1927,6 +1947,7 @@ impl HeldScoreCaches {
     }
 
     /// Resolve the merged "best ITG" score for `chart_hash` under `profile_id`.
+    #[must_use]
     pub fn merged(&self, profile_id: &str, chart_hash: &str) -> Option<CachedScore> {
         self.profile(profile_id)?.merged(chart_hash)
     }
@@ -1973,6 +1994,7 @@ impl HeldScoreCaches {
     ///
     /// Entries are sorted by chart hash so prepared runtime views can use
     /// binary search without rebuilding a map in the presentation layer.
+    #[must_use]
     pub fn merged_profile_scores(&self, profile_id: &str) -> Vec<(String, CachedScore)> {
         if profile_id.trim().is_empty() {
             return Vec::new();
@@ -2024,6 +2046,7 @@ pub const SUBMIT_RETRY_MAX_ATTEMPTS: u8 = 5;
 /// Exponential backoff schedule used by every score-submission backend.
 /// `attempt` is 1-based: 1 -> 2s, 2 -> 4s, 3 -> 8s, 4 -> 16s, 5 -> 32s.
 #[inline(always)]
+#[must_use]
 pub const fn submit_retry_delay_secs(attempt: u8) -> u64 {
     1u64 << attempt
 }
@@ -2031,6 +2054,7 @@ pub const fn submit_retry_delay_secs(attempt: u8) -> u64 {
 /// Convert a remaining duration into whole seconds, rounding up so UI
 /// countdowns show the configured delay instead of truncating immediately.
 #[inline]
+#[must_use]
 pub fn duration_to_ceil_secs(remaining: Duration) -> u32 {
     let secs = remaining.as_secs();
     let bumped = secs.saturating_add(if remaining.subsec_nanos() > 0 { 1 } else { 0 });
@@ -2061,6 +2085,7 @@ impl<T> Default for SubmitRetryState<T> {
 
 impl<T> SubmitRetryState<T> {
     #[inline(always)]
+    #[must_use]
     pub fn entries(&self, side_index: usize) -> &[T] {
         &self.by_side[side_index.min(1)]
     }
@@ -2376,6 +2401,7 @@ impl<S: Copy> SubmitUiState<S> {
         true
     }
 
+    #[must_use]
     pub fn get(&self, side_index: usize, chart_hash: &str) -> Option<S> {
         let hash = chart_hash.trim();
         if hash.is_empty() {
@@ -2478,6 +2504,7 @@ impl<P: Clone + Default, B: Clone> SubmitEventUiState<P, B> {
         true
     }
 
+    #[must_use]
     pub fn progress(&self, side_index: usize, chart_hash: &str) -> P {
         let hash = chart_hash.trim();
         if hash.is_empty() {
@@ -2490,6 +2517,7 @@ impl<P: Clone + Default, B: Clone> SubmitEventUiState<P, B> {
             .unwrap_or_default()
     }
 
+    #[must_use]
     pub fn banner(&self, side_index: usize, chart_hash: &str) -> Option<B> {
         let hash = chart_hash.trim();
         if hash.is_empty() {
@@ -2501,6 +2529,7 @@ impl<P: Clone + Default, B: Clone> SubmitEventUiState<P, B> {
             .and_then(|entry| entry.banner.clone())
     }
 
+    #[must_use]
     pub fn view(&self, side_index: usize, chart_hash: &str) -> (P, Option<B>) {
         let hash = chart_hash.trim();
         if hash.is_empty() {
@@ -2527,6 +2556,7 @@ pub enum RejectReason {
 
 impl RejectReason {
     /// Human-readable label suitable for the evaluation footer.
+    #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
             Self::InvalidScore => "Invalid Score",
@@ -2562,6 +2592,7 @@ pub enum ArrowCloudServerGrade {
 }
 
 impl ArrowCloudServerGrade {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Sex => "Sex",
@@ -2588,6 +2619,7 @@ impl ArrowCloudServerGrade {
     }
 
     /// Parse the canonical AC grade string. Case-sensitive; whitespace is trimmed.
+    #[must_use]
     pub fn from_server_str(s: &str) -> Option<Self> {
         match s.trim() {
             "Sex" => Some(Self::Sex),
@@ -2672,6 +2704,7 @@ impl<'de, C> bincode::BorrowDecode<'de, C> for ArrowCloudScore {
 
 impl ArrowCloudScore {
     /// Adapter used to merge AC cache entries with local and `GrooveStats` scores.
+    #[must_use]
     pub fn to_cached_score(&self) -> CachedScore {
         let score_10000 = (self.score_percent * 10000.0).clamp(0.0, 10000.0);
         if self.is_fail {
@@ -2720,6 +2753,7 @@ pub fn arrowcloud_score_from_retrieve_fields(
     })
 }
 
+#[must_use]
 pub fn arrowcloud_score_from_submit_percent(
     percent_0_100: f64,
     is_fail: bool,
@@ -2784,6 +2818,7 @@ pub struct ArrowCloudSubmitStats {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn arrowcloud_time_in_submit_window(time_ns: i64, fail_time_ns: Option<i64>) -> bool {
     match fail_time_ns {
         Some(fail_time) => !song_time_ns_invalid(time_ns) && time_ns <= fail_time,
@@ -2791,6 +2826,7 @@ pub const fn arrowcloud_time_in_submit_window(time_ns: i64, fail_time_ns: Option
     }
 }
 
+#[must_use]
 pub fn arrowcloud_submit_stats_from_results(
     notes: &[Note],
     note_times: &[i64],
@@ -2873,6 +2909,7 @@ pub fn arrowcloud_submit_stats_from_results(
     stats
 }
 
+#[must_use]
 pub fn arrowcloud_submit_stats_from_live_or_results(
     live_stats: ArrowCloudSubmitStats,
     fail_time_ns: Option<i64>,
@@ -2904,11 +2941,13 @@ impl ArrowCloudLeaderboard {
     pub const ALL_GLOBAL: [Self; 3] = [Self::HardEx, Self::Ex, Self::Itg];
 
     #[inline(always)]
+    #[must_use]
     pub const fn id(self) -> u32 {
         self as u32
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn from_id(id: u32) -> Option<Self> {
         match id {
             2 => Some(Self::Ex),
@@ -2939,6 +2978,7 @@ const LUA_SCORE_SUBMIT_ALLOWLIST: &[&str] = &[
 ];
 
 #[inline(always)]
+#[must_use]
 pub fn lua_chart_submit_allowed(chart_hash: &str) -> bool {
     let hash = chart_hash.trim();
     !hash.is_empty()
@@ -2948,6 +2988,7 @@ pub fn lua_chart_submit_allowed(chart_hash: &str) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn lua_submit_allowed(song_has_lua: bool, chart_hash: &str) -> bool {
     !song_has_lua || lua_chart_submit_allowed(chart_hash)
 }
@@ -2962,6 +3003,7 @@ pub struct GsCommentCounts {
     pub m: u32,
 }
 
+#[must_use]
 pub fn parse_gs_comment_counts(comment: &str) -> GsCommentCounts {
     let mut counts = GsCommentCounts::default();
     for part in comment.split(',') {
@@ -2997,6 +3039,7 @@ pub fn parse_gs_comment_counts(comment: &str) -> GsCommentCounts {
     counts
 }
 
+#[must_use]
 pub fn parse_gs_comment_ex_percent(comment: &str) -> Option<f64> {
     let bytes = comment.as_bytes();
     let mut idx = 0usize;
@@ -3039,6 +3082,7 @@ pub fn parse_gs_comment_ex_percent(comment: &str) -> Option<f64> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn groovestats_score_10000_from_counts(
     scoring_counts: &deadsync_rules::judgment::JudgeCounts,
     holds_held_for_score: u32,
@@ -3057,6 +3101,7 @@ pub fn groovestats_score_10000_from_counts(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn groovestats_rate_hundredths(music_rate: f32) -> u32 {
     if music_rate.is_finite() && music_rate > 0.0 {
         (music_rate * 100.0).round().clamp(0.0, u32::MAX as f32) as u32
@@ -3066,11 +3111,13 @@ pub fn groovestats_rate_hundredths(music_rate: f32) -> u32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn groovestats_used_cmod(scroll_speed: ScrollSpeedSetting) -> bool {
     matches!(scroll_speed, ScrollSpeedSetting::CMod(_))
 }
 
 #[inline(always)]
+#[must_use]
 pub fn gs_ex_scoreboard_is_quint(score_10000: f64) -> bool {
     score_10000.is_finite() && score_10000.round().clamp(0.0, 10000.0) >= 10000.0
 }
@@ -3090,6 +3137,7 @@ impl GsExEvidence {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn is_quint(self) -> Option<bool> {
         if let Some(score) = self.leaderboard_score_10000 {
             return Some(gs_ex_scoreboard_is_quint(score));
@@ -3098,11 +3146,13 @@ impl GsExEvidence {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn proves_nonquint(self) -> bool {
         self.is_quint() == Some(false)
     }
 }
 
+#[must_use]
 pub fn gs_lamp_judge_count(lamp_index: Option<u8>, comment: Option<&str>) -> Option<u8> {
     let lamp_index = lamp_index?;
     let comment = comment?;
@@ -3140,6 +3190,7 @@ const GS_DP_W5: i32 = -6;
 const GS_DP_MISS: i32 = -12;
 const GS_DP_HELD: i32 = 5;
 
+#[must_use]
 pub fn gs_lamp_index_from_chart_stats(
     score_10000: f64,
     comment: Option<&str>,
@@ -3242,16 +3293,19 @@ pub fn gs_lamp_index_from_chart_stats(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn cached_failed_gs_score(score_10000: f64) -> CachedScore {
     cached_score(Grade::Failed, score_10000 / 10000.0, None, None)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn cached_missing_gs_score() -> CachedScore {
     cached_failed_gs_score(0.0)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn cached_gs_score_from_lamp(
     score_10000: f64,
     is_fail: bool,
@@ -3270,6 +3324,7 @@ pub fn cached_gs_score_from_lamp(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn cached_gs_score_from_chart_stats(
     score_10000: f64,
     is_fail: bool,
@@ -3282,10 +3337,12 @@ pub fn cached_gs_score_from_chart_stats(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn score_file_shard(hash: &str) -> &str {
     hash.get(..2).unwrap_or("00")
 }
 
+#[must_use]
 pub fn parse_score_file_name(name: &str) -> Option<(&str, i64)> {
     let base = name.strip_suffix(".bin")?;
     let idx_dash = base.rfind('-')?;
@@ -3297,6 +3354,7 @@ pub fn parse_score_file_name(name: &str) -> Option<(&str, i64)> {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_run_passed(
     song_completed_naturally: bool,
     is_failing: bool,
@@ -3307,6 +3365,7 @@ pub const fn gameplay_run_passed(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_run_failed(is_failing: bool, has_fail_time: bool) -> bool {
     is_failing || has_fail_time
 }
@@ -3324,6 +3383,7 @@ pub struct ArrowCloudAutosubmitLog {
 }
 
 impl ArrowCloudAutosubmitLog {
+    #[must_use]
     pub const fn debug(reason: &'static str) -> Self {
         Self {
             level: ArrowCloudAutosubmitLogLevel::Debug,
@@ -3331,6 +3391,7 @@ impl ArrowCloudAutosubmitLog {
         }
     }
 
+    #[must_use]
     pub const fn warn(reason: &'static str) -> Self {
         Self {
             level: ArrowCloudAutosubmitLogLevel::Warn,
@@ -3356,6 +3417,7 @@ pub struct ArrowCloudAutosubmitSessionInput {
     pub autosubmit_course_scores_individually: bool,
 }
 
+#[must_use]
 pub const fn arrowcloud_autosubmit_session_decision(
     input: ArrowCloudAutosubmitSessionInput,
 ) -> ArrowCloudAutosubmitSessionDecision {
@@ -3406,6 +3468,7 @@ pub struct ArrowCloudAutosubmitPlayerInput {
     pub course_stage_life_submit_eligible: bool,
 }
 
+#[must_use]
 pub const fn arrowcloud_autosubmit_player_decision(
     input: ArrowCloudAutosubmitPlayerInput,
 ) -> ArrowCloudAutosubmitPlayerDecision {
@@ -3471,6 +3534,7 @@ pub const fn arrowcloud_autosubmit_player_decision(
     }
 }
 
+#[must_use]
 pub const fn arrowcloud_autosubmit_after_payload_decision(
     failed: bool,
     allow_failed_submit: bool,
@@ -3497,6 +3561,7 @@ pub struct GrooveStatsAutosubmitLog {
 }
 
 impl GrooveStatsAutosubmitLog {
+    #[must_use]
     pub const fn debug(reason: &'static str) -> Self {
         Self {
             level: GrooveStatsAutosubmitLogLevel::Debug,
@@ -3504,6 +3569,7 @@ impl GrooveStatsAutosubmitLog {
         }
     }
 
+    #[must_use]
     pub const fn warn(reason: &'static str) -> Self {
         Self {
             level: GrooveStatsAutosubmitLogLevel::Warn,
@@ -3529,6 +3595,7 @@ pub struct GrooveStatsAutosubmitSessionInput {
     pub autosubmit_course_scores_individually: bool,
 }
 
+#[must_use]
 pub const fn groovestats_autosubmit_session_decision(
     input: GrooveStatsAutosubmitSessionInput,
 ) -> GrooveStatsAutosubmitSessionDecision {
@@ -3578,6 +3645,7 @@ pub struct GrooveStatsAutosubmitPlayerInput {
     pub api_key_present: bool,
 }
 
+#[must_use]
 pub const fn groovestats_autosubmit_player_decision(
     input: GrooveStatsAutosubmitPlayerInput,
 ) -> GrooveStatsAutosubmitPlayerDecision {
@@ -3652,6 +3720,7 @@ pub const fn groovestats_autosubmit_player_decision(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn promote_quint_grade(grade: Grade, ex_score_percent: f64) -> Grade {
     if grade != Grade::Failed && ex_score_percent >= 100.0 {
         Grade::Quint
@@ -3660,6 +3729,7 @@ pub fn promote_quint_grade(grade: Grade, ex_score_percent: f64) -> Grade {
     }
 }
 
+#[must_use]
 pub fn score_to_grade(score: f64) -> Grade {
     let percent = score / 10000.0;
     if percent >= 1.00 {
@@ -3699,6 +3769,7 @@ pub fn score_to_grade(score: f64) -> Grade {
     }
 }
 
+#[must_use]
 pub const fn grade_to_code(grade: Grade) -> u8 {
     match grade {
         Grade::Quint => 0,
@@ -3723,6 +3794,7 @@ pub const fn grade_to_code(grade: Grade) -> u8 {
     }
 }
 
+#[must_use]
 pub const fn grade_from_code(code: u8) -> Grade {
     match code {
         0 => Grade::Quint,
@@ -3748,6 +3820,7 @@ pub const fn grade_from_code(code: u8) -> Grade {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn cached_score(
     grade: Grade,
     score_percent: f64,
@@ -3772,11 +3845,13 @@ pub const fn cached_score(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn cached_score_10000(score: &CachedScore) -> f64 {
     score.score_percent * 10000.0
 }
 
 #[inline(always)]
+#[must_use]
 pub fn same_score_10000(a: f64, b: f64) -> bool {
     a.is_finite() && b.is_finite() && (a.round() - b.round()).abs() <= 1.0
 }
@@ -3823,6 +3898,7 @@ const fn lamp_judge_count_priority(count: Option<u8>) -> u8 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn is_better_itg(new: &CachedScore, old: &CachedScore) -> bool {
     match (old.grade == Grade::Failed, new.grade == Grade::Failed) {
         (true, false) => return true,
@@ -3851,6 +3927,7 @@ pub fn is_better_itg(new: &CachedScore, old: &CachedScore) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn is_better_scalar_score(
     new_grade: Grade,
     new_percent: f64,
@@ -3866,6 +3943,7 @@ pub fn is_better_scalar_score(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn failed_score_override(a: &CachedScore, b: &CachedScore) -> Option<CachedScore> {
     if a.grade == Grade::Failed
         && b.grade != Grade::Failed
@@ -3883,6 +3961,7 @@ pub fn failed_score_override(a: &CachedScore, b: &CachedScore) -> Option<CachedS
 }
 
 #[inline(always)]
+#[must_use]
 pub fn replaces_stale_quint(
     score: &CachedScore,
     existing: &CachedScore,
@@ -3897,6 +3976,7 @@ pub fn replaces_stale_quint(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn should_replace_cached_gs_score(
     score: &CachedScore,
     existing: &CachedScore,
@@ -3933,6 +4013,7 @@ fn fix_quint_grade_lamp(grade: Grade, score_percent: f64, lamp_index: Option<u8>
 }
 
 #[inline(always)]
+#[must_use]
 pub fn fix_gs_cached_score(score: CachedScore) -> CachedScore {
     cached_score(
         fix_quint_grade_lamp(score.grade, score.score_percent, score.lamp_index),
@@ -3943,6 +4024,7 @@ pub fn fix_gs_cached_score(score: CachedScore) -> CachedScore {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn fix_local_ex_grade(grade: Grade, ex_score_percent: f64) -> Grade {
     if grade == Grade::Failed {
         Grade::Failed
@@ -3971,6 +4053,7 @@ pub struct LocalReplayEdge {
 
 impl LocalReplayEdge {
     #[inline(always)]
+    #[must_use]
     pub const fn new(
         event_music_time_ns: SongTimeNs,
         lane: u8,
@@ -3986,6 +4069,7 @@ impl LocalReplayEdge {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn input_source(self) -> InputSource {
         match self.source {
             1 => InputSource::Gamepad,
@@ -3994,6 +4078,7 @@ impl LocalReplayEdge {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn source_code(source: InputSource) -> u8 {
         match source {
             InputSource::Keyboard => 0,
@@ -4098,6 +4183,7 @@ pub enum LocalScoreGameplaySaveSkip {
     Invalid { player_idx: usize, detail: String },
 }
 
+#[must_use]
 pub fn local_score_gameplay_save_decision(
     input: LocalScoreGameplaySaveInput<'_>,
 ) -> LocalScoreGameplaySaveDecision {
@@ -4208,6 +4294,7 @@ pub struct LocalSummaryScoreSaveInput<'a> {
     pub score_valid: bool,
 }
 
+#[must_use]
 pub fn local_summary_score_save_decision(
     input: LocalSummaryScoreSaveInput<'_>,
 ) -> LocalSummaryScoreSaveDecision {
@@ -4272,6 +4359,7 @@ pub struct LocalScoreEntry {
 }
 
 impl LocalScoreEntry {
+    #[must_use]
     pub const fn header(&self) -> LocalScoreHeader {
         LocalScoreHeader {
             version: self.version,
@@ -4378,6 +4466,7 @@ pub fn local_score_entry_from_gameplay_input(
     }
 }
 
+#[must_use]
 pub fn local_score_entry_from_stage_summary(
     played_at_ms: i64,
     music_rate: f32,
@@ -4476,6 +4565,7 @@ const fn local_score_grade(grade_code: u8, has_fail_time: bool) -> Grade {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn cached_score_from_local_header(h: &LocalScoreHeader) -> CachedScore {
     let grade = fix_local_ex_grade(
         local_score_grade(h.grade_code, h.fail_time.is_some()),
@@ -4491,6 +4581,7 @@ pub fn cached_score_from_local_header(h: &LocalScoreHeader) -> CachedScore {
     cached_score(grade, h.score_percent, lamp_index, lamp_judge_count)
 }
 
+#[must_use]
 pub fn decode_local_score_header(bytes: &[u8]) -> Option<LocalScoreHeader> {
     let Ok((h, _)) =
         bincode::decode_from_slice::<LocalScoreHeader, _>(bytes, bincode::config::standard())
@@ -4503,6 +4594,7 @@ pub fn decode_local_score_header(bytes: &[u8]) -> Option<LocalScoreHeader> {
     Some(h)
 }
 
+#[must_use]
 pub fn decode_local_score_entry(bytes: &[u8]) -> Option<LocalScoreEntry> {
     let Ok((entry, _)) =
         bincode::decode_from_slice::<LocalScoreEntry, _>(bytes, bincode::config::standard())
@@ -4515,10 +4607,12 @@ pub fn decode_local_score_entry(bytes: &[u8]) -> Option<LocalScoreEntry> {
     Some(entry)
 }
 
+#[must_use]
 pub fn encode_local_score_entry(entry: &LocalScoreEntry) -> Option<Vec<u8>> {
     bincode::encode_to_vec(entry, bincode::config::standard()).ok()
 }
 
+#[must_use]
 pub fn decode_local_score_index(bytes: &[u8]) -> Option<LocalScoreIndex> {
     let (file, _) =
         bincode::decode_from_slice::<LocalScoreIndexFile, _>(bytes, bincode::config::standard())
@@ -4526,6 +4620,7 @@ pub fn decode_local_score_index(bytes: &[u8]) -> Option<LocalScoreIndex> {
     (file.version == LOCAL_SCORE_INDEX_VERSION).then_some(file.index)
 }
 
+#[must_use]
 pub fn encode_local_score_index(index: &LocalScoreIndex) -> Option<Vec<u8>> {
     bincode::encode_to_vec(
         LocalScoreIndexFile {
@@ -4621,6 +4716,7 @@ pub struct GsScoreEntry {
     pub fetched_at_ms: i64,
 }
 
+#[must_use]
 pub fn gs_score_entry_from_cached(
     score: CachedScore,
     username: &str,
@@ -4637,6 +4733,7 @@ pub fn gs_score_entry_from_cached(
     }
 }
 
+#[must_use]
 pub fn cached_score_from_gs_entry(entry: &GsScoreEntry) -> CachedScore {
     fix_gs_cached_score(cached_score(
         grade_from_code(entry.grade_code),
@@ -4646,6 +4743,7 @@ pub fn cached_score_from_gs_entry(entry: &GsScoreEntry) -> CachedScore {
     ))
 }
 
+#[must_use]
 pub fn decode_gs_score_entry(bytes: &[u8]) -> Option<GsScoreEntry> {
     if let Ok((entry, _)) =
         bincode::decode_from_slice::<GsScoreEntry, _>(bytes, bincode::config::standard())
@@ -4667,11 +4765,13 @@ pub fn decode_gs_score_entry(bytes: &[u8]) -> Option<GsScoreEntry> {
     None
 }
 
+#[must_use]
 pub fn encode_gs_score_entry(entry: &GsScoreEntry) -> Option<Vec<u8>> {
     bincode::encode_to_vec(entry, bincode::config::standard()).ok()
 }
 
 #[inline(always)]
+#[must_use]
 pub fn leaderboard_rank_for_score(entries: &[LeaderboardEntry], score_percent: f64) -> Option<u32> {
     if !score_percent.is_finite() {
         return None;
@@ -4693,6 +4793,7 @@ pub enum ScoreImportEndpoint {
 
 impl ScoreImportEndpoint {
     #[inline(always)]
+    #[must_use]
     pub const fn display_name(self) -> &'static str {
         match self {
             Self::GrooveStats => "GrooveStats",
@@ -4702,6 +4803,7 @@ impl ScoreImportEndpoint {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn requires_username(self) -> bool {
         !matches!(self, Self::ArrowCloud)
     }
@@ -4714,6 +4816,7 @@ pub enum ScoreImportCredentialError {
 }
 
 impl ScoreImportCredentialError {
+    #[must_use]
     pub fn request_message(&self) -> String {
         match self {
             Self::MissingApiKey { endpoint } => {
@@ -4731,6 +4834,7 @@ impl ScoreImportCredentialError {
         }
     }
 
+    #[must_use]
     pub fn import_message(&self) -> String {
         match self {
             Self::MissingApiKey { endpoint } => {
@@ -4812,6 +4916,7 @@ pub const SCORE_IMPORT_ENDPOINT_CHOICES: [ScoreImportEndpoint; 3] = [
 ];
 
 #[inline(always)]
+#[must_use]
 pub const fn score_import_endpoint_choice_index(endpoint: ScoreImportEndpoint) -> usize {
     match endpoint {
         ScoreImportEndpoint::GrooveStats => 0,
@@ -4821,6 +4926,7 @@ pub const fn score_import_endpoint_choice_index(endpoint: ScoreImportEndpoint) -
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn score_import_endpoint_from_choice_index(idx: usize) -> ScoreImportEndpoint {
     match idx {
         1 => ScoreImportEndpoint::BoogieStats,
@@ -4839,12 +4945,14 @@ pub struct ImportedPlayerScore {
 
 impl ImportedPlayerScore {
     #[inline(always)]
+    #[must_use]
     pub fn needs_chart_stats(&self) -> bool {
         let score_percent = self.score_10000 / 10000.0;
         (score_percent - 1.0).abs() > 1e-9 && self.comments.is_some()
     }
 }
 
+#[must_use]
 pub fn merge_local_fail(
     mut imported: ImportedPlayerScore,
     local_score: Option<CachedScore>,
@@ -4869,6 +4977,7 @@ pub struct PlayerScoreImportResult {
 
 impl PlayerScoreImportResult {
     #[inline(always)]
+    #[must_use]
     pub const fn empty() -> Self {
         Self {
             score: None,
@@ -4889,6 +4998,7 @@ pub struct CachedScoreImportResult {
     pub itl_self_found: bool,
 }
 
+#[must_use]
 pub fn cached_score_from_imported_player_score(
     score: ImportedPlayerScore,
     stats: Option<GsLampChartStats>,
@@ -4913,6 +5023,7 @@ pub fn cached_score_from_imported_player_score(
     )
 }
 
+#[must_use]
 pub fn cached_score_import_result_from_imported(
     imported: PlayerScoreImportResult,
     stats: Option<GsLampChartStats>,
@@ -4934,6 +5045,7 @@ pub struct LeaderboardCachedScore {
     pub score_proves_nonquint_ex: bool,
 }
 
+#[must_use]
 pub fn cached_score_from_leaderboard_import(
     imported: Option<ImportedPlayerScore>,
     local_score: Option<CachedScore>,
@@ -4974,6 +5086,7 @@ pub const SCORE_IMPORT_REQUEST_INTERVAL: Duration = Duration::from_millis(334);
 pub const SCORE_IMPORT_PROGRESS_LOG_EVERY: usize = 100;
 
 #[inline(always)]
+#[must_use]
 pub const fn score_import_filter_note(only_missing_scores: bool) -> &'static str {
     if only_missing_scores {
         " (missing only)"
@@ -4982,6 +5095,7 @@ pub const fn score_import_filter_note(only_missing_scores: bool) -> &'static str
     }
 }
 
+#[must_use]
 pub fn queued_score_import_progress(
     requested_charts: usize,
     total_packs: usize,
@@ -5001,6 +5115,7 @@ pub fn queued_score_import_progress(
     }
 }
 
+#[must_use]
 pub const fn empty_score_import_summary() -> ScoreBulkImportSummary {
     ScoreBulkImportSummary {
         requested_charts: 0,
@@ -5013,6 +5128,7 @@ pub const fn empty_score_import_summary() -> ScoreBulkImportSummary {
     }
 }
 
+#[must_use]
 pub fn score_import_summary(
     requested_charts: usize,
     imported_scores: usize,
@@ -5032,6 +5148,7 @@ pub fn score_import_summary(
     }
 }
 
+#[must_use]
 pub fn score_import_pack_detail(
     pack_idx: usize,
     total_packs: usize,
@@ -5505,6 +5622,7 @@ where
     ))
 }
 
+#[must_use]
 pub fn score_import_pack_complete_detail(
     pack_idx: usize,
     total_packs: usize,
@@ -5526,6 +5644,7 @@ pub fn score_import_pack_complete_detail(
     )
 }
 
+#[must_use]
 pub fn arrowcloud_bulk_success_detail(
     pack_idx: usize,
     total_packs: usize,
@@ -5542,6 +5661,7 @@ pub fn arrowcloud_bulk_success_detail(
     )
 }
 
+#[must_use]
 pub fn arrowcloud_bulk_failure_detail(
     pack_idx: usize,
     total_packs: usize,
@@ -5560,6 +5680,7 @@ pub fn arrowcloud_bulk_failure_detail(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn should_log_score_import_progress(
     processed_charts: usize,
     requested_charts: usize,
@@ -5580,6 +5701,7 @@ pub fn wait_for_next_score_import_request(last_request_started_at: Option<Instan
     }
 }
 
+#[must_use]
 pub fn collect_chart_hashes_per_pack_for_import(
     song_packs: &[deadsync_chart::SongPack],
     pack_groups_filter: &[String],
@@ -5642,6 +5764,7 @@ fn push_unique_import_chart_hash<'a>(
     }
 }
 
+#[must_use]
 pub fn gs_lamp_chart_stats_for_hash(
     song_packs: &[deadsync_chart::SongPack],
     chart_hash: &str,
@@ -5666,6 +5789,7 @@ pub fn gs_lamp_chart_stats_for_hash(
     None
 }
 
+#[must_use]
 pub fn imported_score_chart_stats(
     score: &ImportedPlayerScore,
     song_packs: &[deadsync_chart::SongPack],
@@ -5804,6 +5928,7 @@ pub const GS_INVALID_INSERT_MASK: u8 = u8::MAX;
 pub const GS_INVALID_HOLDS_MASK: u8 = 1u8 << 3;
 pub const GROOVESTATS_REASON_COUNT: usize = 12;
 
+#[must_use]
 pub fn groovestats_reason_lines(checks: &[bool; GROOVESTATS_REASON_COUNT]) -> Vec<String> {
     let mut out = Vec::with_capacity(6);
     for (idx, passed) in checks.iter().enumerate() {
@@ -5829,6 +5954,7 @@ pub fn groovestats_reason_lines(checks: &[bool; GROOVESTATS_REASON_COUNT]) -> Ve
     out
 }
 
+#[must_use]
 pub fn groovestats_eval_state_from_parts(input: GrooveStatsEvalInput<'_>) -> GrooveStatsEvalState {
     let chart_type = input.chart_type.trim().to_ascii_lowercase();
     let rate = if input.music_rate.is_finite() && input.music_rate > 0.0 {
@@ -5878,6 +6004,7 @@ pub struct GrooveStatsGameplayEvalResult {
     pub should_set_manual_qr_url: bool,
 }
 
+#[must_use]
 pub fn groovestats_eval_state_from_gameplay_parts(
     mut state: GrooveStatsEvalState,
     input: GrooveStatsGameplayEvalInput,
@@ -5934,6 +6061,7 @@ pub fn groovestats_eval_state_from_gameplay_parts(
     }
 }
 
+#[must_use]
 pub fn itl_eval_state_from_parts(input: ItlEvalInput<'_>) -> ItlEvalState {
     let rate = if input.music_rate.is_finite() && input.music_rate > 0.0 {
         input.music_rate
@@ -5974,6 +6102,7 @@ pub fn itl_eval_state_from_parts(input: ItlEvalInput<'_>) -> ItlEvalState {
     }
 }
 
+#[must_use]
 pub fn itl_eval_state_from_gameplay_context(input: ItlGameplayEvalInput<'_>) -> ItlEvalState {
     let Some(song_dir) = input.song_dir else {
         return ItlEvalState {
@@ -6010,6 +6139,7 @@ pub fn itl_eval_state_from_gameplay_context(input: ItlGameplayEvalInput<'_>) -> 
     })
 }
 
+#[must_use]
 pub fn itl_should_warn_cmod_context(
     cached_no_cmod: Option<bool>,
     group_name: Option<&str>,
@@ -6023,6 +6153,7 @@ pub fn itl_should_warn_cmod_context(
     })
 }
 
+#[must_use]
 pub fn itl_current_score_hundredths_for_submit(
     input: ItlScoreCalcInput<'_>,
     disabled_windows: &[bool],
@@ -6254,6 +6385,7 @@ pub enum GrooveStatsSubmitUiStatus {
 
 impl GrooveStatsSubmitUiStatus {
     #[inline(always)]
+    #[must_use]
     pub const fn can_retry(self) -> bool {
         matches!(
             self,
@@ -6262,11 +6394,13 @@ impl GrooveStatsSubmitUiStatus {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_auto_retryable(self) -> bool {
         matches!(self, Self::TimedOut)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn from_http_status(status_code: u16) -> Self {
         match status_code {
             408 | 504 => Self::TimedOut,
@@ -6298,6 +6432,7 @@ pub enum ArrowCloudSubmitUiStatus {
 
 impl ArrowCloudSubmitUiStatus {
     #[inline(always)]
+    #[must_use]
     pub const fn can_retry(self) -> bool {
         matches!(
             self,
@@ -6306,11 +6441,13 @@ impl ArrowCloudSubmitUiStatus {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_auto_retryable(self) -> bool {
         matches!(self, Self::TimedOut)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn from_http_status(status_code: u16) -> Self {
         match status_code {
             408 | 504 => Self::TimedOut,
@@ -6342,6 +6479,7 @@ const fn submit_result_improved(result: &str) -> bool {
     result.eq_ignore_ascii_case("score-added") || result.eq_ignore_ascii_case("improved")
 }
 
+#[must_use]
 pub fn groovestats_submit_record_banner(
     result: &str,
     show_ex_score: bool,

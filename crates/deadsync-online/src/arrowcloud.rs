@@ -147,6 +147,7 @@ impl std::fmt::Display for ConnectionProbeError {
 
 impl std::error::Error for ConnectionProbeError {}
 
+#[must_use]
 pub fn classify_connection_error(message: &str) -> ConnectionError {
     let lower = message.to_ascii_lowercase();
     if lower.contains("timeout") || lower.contains("timed out") {
@@ -158,6 +159,7 @@ pub fn classify_connection_error(message: &str) -> ConnectionError {
     ConnectionError::CannotConnect
 }
 
+#[must_use]
 pub fn connection_error_from_network_error(error: &NetworkError) -> ConnectionError {
     match error {
         NetworkError::Timeout => ConnectionError::TimedOut,
@@ -168,15 +170,18 @@ pub fn connection_error_from_network_error(error: &NetworkError) -> ConnectionEr
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn api_base_url() -> &'static str {
     ARROWCLOUD_API_BASE_URL
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn user_url() -> &'static str {
     ARROWCLOUD_USER_URL
 }
 
+#[must_use]
 pub fn submit_url(chart_hash: &str) -> Option<String> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
@@ -188,6 +193,7 @@ pub fn submit_url(chart_hash: &str) -> Option<String> {
     ))
 }
 
+#[must_use]
 pub fn leaderboards_url(chart_hash: &str) -> Option<String> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
@@ -199,6 +205,7 @@ pub fn leaderboards_url(chart_hash: &str) -> Option<String> {
     ))
 }
 
+#[must_use]
 pub fn player_leaderboards_url() -> String {
     format!(
         "{}/player-leaderboards.php",
@@ -272,6 +279,7 @@ pub struct ArrowCloudSubmitDraft {
 
 impl ArrowCloudSubmitDraft {
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
     pub const fn new(
         side: profile_data::PlayerSide,
         api_key: String,
@@ -294,6 +302,7 @@ impl ArrowCloudSubmitDraft {
         }
     }
 
+    #[must_use]
     pub fn retry_entry(&self) -> ArrowCloudSubmitRetryEntry {
         ArrowCloudSubmitRetryEntry::new(
             self.side,
@@ -307,6 +316,7 @@ impl ArrowCloudSubmitDraft {
         )
     }
 
+    #[must_use]
     pub fn submit_job(self, token: u64) -> ArrowCloudSubmitJob {
         ArrowCloudSubmitJob {
             side: self.side,
@@ -351,6 +361,7 @@ pub struct ArrowCloudGameplaySubmitPlayer {
     pub payload: Option<ArrowCloudPayload>,
 }
 
+#[must_use]
 pub fn begin_submit_jobs_from_drafts(
     drafts: Vec<ArrowCloudSubmitDraft>,
 ) -> Vec<ArrowCloudSubmitJob> {
@@ -459,6 +470,7 @@ pub fn submit_gameplay_players(
 }
 
 impl ArrowCloudSubmitJob {
+    #[must_use]
     pub const fn new(
         side: profile_data::PlayerSide,
         api_key: String,
@@ -483,6 +495,7 @@ impl ArrowCloudSubmitJob {
         }
     }
 
+    #[must_use]
     pub fn from_retry_entry(entry: ArrowCloudSubmitRetryEntry, token: u64) -> Self {
         Self {
             side: entry.side,
@@ -504,6 +517,7 @@ pub struct ArrowCloudSubmitError {
     pub message: String,
 }
 
+#[must_use]
 pub fn submit_error_status_and_message(
     error: &ArrowCloudSubmitRequestError,
 ) -> (ArrowCloudSubmitUiStatus, String) {
@@ -557,6 +571,7 @@ pub struct ArrowCloudSubmitRetryEntry {
 }
 
 impl ArrowCloudSubmitRetryEntry {
+    #[must_use]
     pub const fn new(
         side: profile_data::PlayerSide,
         api_key: String,
@@ -582,6 +597,7 @@ impl ArrowCloudSubmitRetryEntry {
     }
 }
 
+#[must_use]
 pub fn arrowcloud_submit_error_from_request(
     error: ArrowCloudSubmitRequestError,
 ) -> ArrowCloudSubmitError {
@@ -666,6 +682,7 @@ pub fn set_submit_ui_status(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn update_submit_ui_status_if_token(
     side: profile_data::PlayerSide,
     chart_hash: &str,
@@ -681,11 +698,13 @@ pub fn update_submit_ui_status_if_token(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn next_submit_ui_token() -> u64 {
     deadsync_score::arrowcloud_next_submit_ui_token()
 }
 
 #[inline(always)]
+#[must_use]
 pub fn submit_ui_status_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -789,6 +808,7 @@ pub fn take_ready_submit_retry(
     ready
 }
 
+#[must_use]
 pub fn take_ready_submit_retry_job(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -799,6 +819,7 @@ pub fn take_ready_submit_retry_job(
         .map(|entry| ArrowCloudSubmitJob::from_retry_entry(entry, token))
 }
 
+#[must_use]
 pub fn begin_ready_submit_retry_job(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -860,6 +881,7 @@ pub fn tick_auto_submit_retries_if_enabled(
     fired
 }
 
+#[must_use]
 pub fn complete_submit_job_success(job: &ArrowCloudSubmitJob) -> bool {
     let accepted = update_submit_ui_status_if_token(
         job.side,
@@ -873,6 +895,7 @@ pub fn complete_submit_job_success(job: &ArrowCloudSubmitJob) -> bool {
     accepted
 }
 
+#[must_use]
 pub fn complete_submit_job_failure(
     job: &ArrowCloudSubmitJob,
     status: ArrowCloudSubmitUiStatus,
@@ -907,7 +930,7 @@ where
             }
             Err(err) => {
                 summary.failed += 1;
-                complete_submit_job_failure(&job, err.status);
+                let _ = complete_submit_job_failure(&job, err.status);
                 log::warn!(
                     "ArrowCloud submit failed for {:?} ({}) status={:?}: {}",
                     job.side,
@@ -1070,6 +1093,7 @@ pub fn submit_score_request(
     })
 }
 
+#[must_use]
 pub fn legacy_leaderboards_url(chart_hash: &str) -> Option<String> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
@@ -1082,6 +1106,7 @@ pub fn legacy_leaderboards_url(chart_hash: &str) -> Option<String> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn retrieve_scores_url() -> String {
     format!(
         "{}/v1/retrieve-scores",
@@ -1101,6 +1126,7 @@ pub fn probe_connection() -> Result<ConnectionStatus, ConnectionProbeError> {
     check_connection().map_err(ConnectionProbeError::from)
 }
 
+#[must_use]
 pub fn connection_transition_from_probe_result(
     result: Result<ConnectionStatus, ConnectionProbeError>,
 ) -> ConnectionProbeTransition {
@@ -1119,6 +1145,7 @@ pub fn connection_transition_from_probe_result(
     }
 }
 
+#[must_use]
 pub fn probe_connection_transition() -> ConnectionProbeTransition {
     connection_transition_from_probe_result(probe_connection())
 }
@@ -1284,6 +1311,7 @@ pub fn retrieve_scores(
 /// Returns `None` when the response has no usable score field; otherwise it
 /// preserves ArrowCloud-native metadata such as server grade, timestamp, and
 /// play id.
+#[must_use]
 pub fn score_from_retrieve_entry(entry: &ArrowCloudRetrieveScoreEntry) -> Option<ArrowCloudScore> {
     arrowcloud_score_from_retrieve_fields(
         entry.score,
@@ -1294,6 +1322,7 @@ pub fn score_from_retrieve_entry(entry: &ArrowCloudRetrieveScoreEntry) -> Option
     )
 }
 
+#[must_use]
 pub fn scores_from_retrieve_entry_map(
     leaderboards: &HashMap<String, ArrowCloudRetrieveScoreEntry>,
 ) -> ArrowCloudScores {
@@ -1310,6 +1339,7 @@ pub fn scores_from_retrieve_entry_map(
     out
 }
 
+#[must_use]
 pub fn score_cache_entries_from_retrieve_response(
     response: ArrowCloudRetrieveScoresResponse,
 ) -> HashMap<String, ArrowCloudScores> {
@@ -1511,6 +1541,7 @@ pub fn fetch_user_context(
         .map(|response| response.map(|response| user_context_from_api(response.user)))
 }
 
+#[must_use]
 pub fn leaderboard_entry_from_api(
     entry: ArrowCloudLeaderboardEntry,
     is_self: bool,
@@ -1526,6 +1557,7 @@ pub fn leaderboard_entry_from_api(
     )
 }
 
+#[must_use]
 pub fn hard_ex_pane_from_response(
     decoded: ArrowCloudLeaderboardsApiResponse,
 ) -> Option<ArrowCloudLeaderboardPane> {
@@ -1706,6 +1738,7 @@ fn mask_labels_u16(mask: u16, names: &[&str]) -> Vec<String> {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn turn_label(turn: profile_data::TurnOption) -> &'static str {
     match turn {
         profile_data::TurnOption::None => "None",
@@ -1721,6 +1754,7 @@ pub const fn turn_label(turn: profile_data::TurnOption) -> &'static str {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn scroll_label(scroll: profile_data::ScrollOption) -> Option<String> {
     if scroll.contains(profile_data::ScrollOption::Reverse) {
         Some("Reverse".to_string())
@@ -1738,6 +1772,7 @@ pub fn scroll_label(scroll: profile_data::ScrollOption) -> Option<String> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn speed_payload(speed: ScrollSpeedSetting) -> ArrowCloudSpeed {
     match speed {
         ScrollSpeedSetting::CMod(value) => ArrowCloudSpeed {
@@ -1755,6 +1790,7 @@ pub fn speed_payload(speed: ScrollSpeedSetting) -> ArrowCloudSpeed {
     }
 }
 
+#[must_use]
 pub fn modifiers_from_profile(profile: &Profile) -> ArrowCloudModifiers {
     ArrowCloudModifiers {
         visual_delay: profile.visual_delay_ms,
@@ -1840,6 +1876,7 @@ fn life_lerp_at(life_history: &[(f32, f32)], start_time: f32, sample_time: f32) 
         .clamp(0.0, 1.0)
 }
 
+#[must_use]
 pub fn lifebar_points(
     life_history: &[(f32, f32)],
     chart_start_second: f32,
@@ -1879,6 +1916,7 @@ pub fn lifebar_points(
     out
 }
 
+#[must_use]
 pub fn nps_info_from_measure_data(
     max_nps: f64,
     measure_nps: &[f64],
@@ -1938,6 +1976,7 @@ pub enum ArrowCloudTimingOffset {
 pub type ArrowCloudTimingDatum = (f64, ArrowCloudTimingOffset);
 
 #[inline(always)]
+#[must_use]
 pub fn format_length(seconds: f32) -> String {
     if !seconds.is_finite() || seconds <= 0.0 {
         return "0:00".to_string();
@@ -1955,6 +1994,7 @@ pub fn format_length(seconds: f32) -> String {
     }
 }
 
+#[must_use]
 pub fn timing_data_from_scatter(
     scatter: &[ScatterPoint],
     fail_time_s: Option<f32>,
@@ -2001,6 +2041,7 @@ pub struct ArrowCloudJudgmentCounts {
     pub total_rolls: u32,
 }
 
+#[must_use]
 pub fn judgment_counts_from_stats(
     counts: judgment::JudgeCounts,
     windows: WindowCounts,
@@ -2140,6 +2181,7 @@ impl ArrowCloudPayload {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn submit_music_rate(music_rate: f32) -> f64 {
     if music_rate.is_finite() && music_rate > 0.0 {
         f64::from(music_rate)
@@ -2148,6 +2190,7 @@ pub fn submit_music_rate(music_rate: f32) -> f64 {
     }
 }
 
+#[must_use]
 pub fn payload_from_parts(input: ArrowCloudPayloadParts) -> ArrowCloudPayload {
     let mut payload = ArrowCloudPayload {
         song_name: input.song_name,
@@ -2439,7 +2482,7 @@ fn cache_submit_success_from_app_runtime(job: &ArrowCloudSubmitJob) {
 fn refresh_submit_leaderboards_from_app_runtime(job: &ArrowCloudSubmitJob) {
     let runtime = crate::player_leaderboards::PlayerLeaderboardRuntime::from_app_runtime();
     runtime.invalidate_for_side(job.payload.hash.as_str(), job.side);
-    runtime.get_or_fetch_for_side(
+    let _ = runtime.get_or_fetch_for_side(
         job.payload.hash.as_str(),
         job.side,
         crate::groovestats::GROOVESTATS_SUBMIT_MAX_ENTRIES,
@@ -2492,6 +2535,7 @@ pub fn retry_submit_from_app_runtime(
     )
 }
 
+#[must_use]
 pub fn retry_manual_submit_from_app_runtime(
     chart_hash: &str,
     side: profile_data::PlayerSide,

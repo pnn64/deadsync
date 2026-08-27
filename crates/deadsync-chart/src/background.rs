@@ -28,6 +28,7 @@ impl MovieCycle {
     }
 }
 
+#[must_use]
 pub fn expand_random_background_changes(
     song: &SongData,
     timing: &TimingData,

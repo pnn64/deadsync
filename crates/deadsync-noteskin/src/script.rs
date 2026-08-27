@@ -124,6 +124,7 @@ fn split_script_call_args(raw: &str) -> Vec<String> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn split_script_token(token: &str) -> Option<(String, Vec<String>)> {
     let mut parts = split_script_call_args(token.trim());
     if parts.is_empty() {
@@ -135,16 +136,19 @@ pub fn split_script_token(token: &str) -> Option<(String, Vec<String>)> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn parse_script_number(raw: &str) -> Option<f32> {
     itg_parse_lua_float_expr(raw)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn parse_script_bool(raw: &str) -> bool {
     let t = raw.trim().trim_matches('"').trim_matches('\'');
     t.eq_ignore_ascii_case("true") || t == "1"
 }
 
+#[must_use]
 pub fn parse_linear_frames_expr(raw: &str) -> Option<(usize, Vec<f32>)> {
     let value = raw.trim().trim_end_matches(';').trim();
     let open = value.find('(')?;
@@ -168,6 +172,7 @@ pub fn parse_linear_frames_expr(raw: &str) -> Option<(usize, Vec<f32>)> {
     Some((frame_count, vec![delay; frame_count]))
 }
 
+#[must_use]
 pub fn parse_script_state_properties(args: &[String]) -> Option<(usize, Vec<f32>)> {
     args.first().and_then(|expr| parse_linear_frames_expr(expr))
 }
@@ -184,6 +189,7 @@ pub enum SpriteAnimationCommandPlan {
     AllStateDelays(f32),
 }
 
+#[must_use]
 pub fn sprite_animation_command_plans(script: &str) -> Vec<SpriteAnimationCommandPlan> {
     let script = normalized_script_command(script);
     let mut plans = Vec::new();
@@ -217,6 +223,7 @@ pub fn sprite_animation_command_plans(script: &str) -> Vec<SpriteAnimationComman
     plans
 }
 
+#[must_use]
 pub fn sprite_state_properties_plans(script: &str) -> Vec<SpriteStatePropertiesPlan> {
     sprite_animation_command_plans(script)
         .into_iter()
@@ -227,6 +234,7 @@ pub fn sprite_state_properties_plans(script: &str) -> Vec<SpriteStatePropertiesP
         .collect()
 }
 
+#[must_use]
 pub fn sprite_animation_command_plans_from_commands(
     commands: &HashMap<String, String>,
     default_is_beat_based: bool,
@@ -251,6 +259,7 @@ pub fn sprite_animation_command_plans_from_commands(
     (beat_based, plans)
 }
 
+#[must_use]
 pub fn sprite_state_properties_command_plans(
     commands: &HashMap<String, String>,
     default_is_beat_based: bool,
@@ -404,6 +413,7 @@ fn parse_script_color_args(args: &[String]) -> Option<[f32; 4]> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn parse_script_vertalign(raw: &str) -> Option<f32> {
     let value = raw.trim().trim_matches('"').trim_matches('\'');
     if let Ok(v) = value.parse::<f32>() {
@@ -418,6 +428,7 @@ pub fn parse_script_vertalign(raw: &str) -> Option<f32> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn parse_script_tween(cmd: &str, args: &[String]) -> Option<(ScriptTween, f32)> {
     let tween = match cmd {
         "linear" => ScriptTween::Linear,
@@ -431,6 +442,7 @@ pub fn parse_script_tween(cmd: &str, args: &[String]) -> Option<(ScriptTween, f3
 }
 
 #[inline(always)]
+#[must_use]
 pub fn parse_script_sleep(cmd: &str, args: &[String]) -> Option<f32> {
     if cmd != "sleep" {
         return None;
@@ -439,6 +451,7 @@ pub fn parse_script_sleep(cmd: &str, args: &[String]) -> Option<f32> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn parse_script_control(cmd: &str) -> Option<ScriptControl> {
     match cmd {
         "stoptweening" => Some(ScriptControl::StopTweening),
@@ -506,6 +519,7 @@ pub fn parse_script_actor_mod(cmd: &str, args: &[String]) -> Option<ScriptActorM
 }
 
 #[inline(always)]
+#[must_use]
 pub fn parse_script_effect_clock(raw: &str) -> Option<ModelEffectClock> {
     let lower = raw
         .trim()
@@ -623,6 +637,7 @@ pub fn parse_script_effectclock_from_commands(script: &str) -> Option<bool> {
     out
 }
 
+#[must_use]
 pub fn sprite_animation_is_beat_based(
     commands: &HashMap<String, String>,
     default_is_beat_based: bool,
@@ -677,6 +692,7 @@ impl Default for ItgCommandEffect {
     }
 }
 
+#[must_use]
 pub fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
     let mut out = ItgCommandEffect::default();
     let mut pending_duration = 0.0f32;
@@ -739,6 +755,7 @@ pub fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn tween_type_from_script_tween(tween: ScriptTween) -> TweenType {
     match tween {
         ScriptTween::Linear => TweenType::Linear,
@@ -855,6 +872,7 @@ pub fn itg_apply_actor_mods(state: &mut ModelDrawState, mods: &[ItgActorMod]) {
     }
 }
 
+#[must_use]
 pub fn itg_active_model_commands(
     commands: &HashMap<String, String>,
     active_key: &str,
@@ -1176,7 +1194,7 @@ mod tests {
         assert_eq!(timeline[0].to.pos[0], 8.0);
         assert_eq!(timeline[0].to.rot[2], 45.0);
         assert_eq!(draw.zoom, [0.5, 0.5, 0.5]);
-        assert_eq!(draw.tint, [1.0, 0.0, 0.0, 0.5019608]);
+        assert_eq!(draw.tint, [1.0, 0.0, 0.0, 0.501_960_8]);
         assert_eq!(effect.clock, ModelEffectClock::Beat);
         assert_eq!(effect.mode, ModelEffectMode::GlowShift);
     }

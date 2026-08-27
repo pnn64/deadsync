@@ -241,6 +241,7 @@ pub struct State {
     runtime: PostSongRuntimeView,
 }
 
+#[must_use]
 pub fn init(runtime: PostSongRuntimeView) -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // overwritten by app
@@ -451,10 +452,12 @@ pub fn get_actors(
     actors
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1100)
 }

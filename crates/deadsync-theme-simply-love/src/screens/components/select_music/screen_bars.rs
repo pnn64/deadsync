@@ -89,6 +89,7 @@ pub fn push(
     }));
 }
 
+#[must_use]
 pub fn build_stage_display(stage_number: usize, machine_font: MachineFont) -> Actor {
     STAGE_DISPLAY_CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();

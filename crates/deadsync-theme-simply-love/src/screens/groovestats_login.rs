@@ -50,6 +50,7 @@ pub struct State {
     menu_lr_chord: screen_input::MenuLrChordTracker,
 }
 
+#[must_use]
 pub fn init(active_color_index: i32, dedicated_three_key_nav: bool) -> State {
     State {
         active_color_index,
@@ -79,10 +80,12 @@ pub fn on_enter(
     state.menu_lr_chord = screen_input::MenuLrChordTracker::default();
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }

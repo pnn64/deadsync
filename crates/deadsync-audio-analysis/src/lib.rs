@@ -32,6 +32,7 @@ pub struct ReplayGainInfo {
 /// Convert LUFS + true peak into a linear playback gain, applying a peak
 /// limit so we never amplify into clipping and clamping to a sensible ceiling.
 #[inline]
+#[must_use]
 pub fn gain_linear_from_info(info: ReplayGainInfo) -> f32 {
     if !info.lufs.is_finite() || info.lufs <= -69.5 {
         return UNITY_GAIN;

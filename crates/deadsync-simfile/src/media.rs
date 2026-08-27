@@ -23,6 +23,7 @@ fn extension_matches(ext: &str, extensions: &[&str]) -> bool {
         .any(|candidate| ext.eq_ignore_ascii_case(candidate))
 }
 
+#[must_use]
 pub fn collect_media_roots(
     dirname: &str,
     data_dir: &Path,
@@ -45,6 +46,7 @@ fn push_media_root(out: &mut Vec<PathBuf>, path: PathBuf) {
     }
 }
 
+#[must_use]
 pub fn collapse_song_asset_path(path: &str) -> String {
     collapse_song_asset_path_with(path, false)
 }
@@ -91,6 +93,7 @@ fn collapse_song_asset_path_with(path: &str, backslash_separator: bool) -> Strin
     collapsed
 }
 
+#[must_use]
 pub fn resolve_song_dir_entry_ci(base: &Path, name: &str) -> Option<PathBuf> {
     let entries = fs::read_dir(base).ok()?;
     for entry in entries.flatten() {
@@ -105,6 +108,7 @@ pub fn resolve_song_dir_entry_ci(base: &Path, name: &str) -> Option<PathBuf> {
     None
 }
 
+#[must_use]
 pub fn resolve_song_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<PathBuf> {
     let asset_tag = asset_tag.trim();
     if asset_tag.is_empty() {
@@ -155,10 +159,12 @@ pub fn resolve_song_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<Pa
     Some(path)
 }
 
+#[must_use]
 pub fn resolve_song_asset_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<PathBuf> {
     resolve_song_path_like_itg(song_dir, asset_tag).filter(|path| path.is_file())
 }
 
+#[must_use]
 pub fn resolve_dir_default_lua_like_itg(dir: &Path) -> Option<PathBuf> {
     let direct = dir.join("default.lua");
     resolve_song_dir_entry_ci(dir, "default.lua")
@@ -166,6 +172,7 @@ pub fn resolve_dir_default_lua_like_itg(dir: &Path) -> Option<PathBuf> {
         .or_else(|| direct.is_file().then_some(direct))
 }
 
+#[must_use]
 pub fn list_song_dir_rel_entries(song_dir: &Path) -> Vec<String> {
     let mut dirs = vec![song_dir.to_path_buf()];
     let mut entries = Vec::new();
@@ -193,6 +200,7 @@ pub fn list_song_dir_rel_entries(song_dir: &Path) -> Vec<String> {
     entries
 }
 
+#[must_use]
 pub fn path_uses_lua_like_itg(path: &Path) -> bool {
     if path
         .extension()
@@ -204,6 +212,7 @@ pub fn path_uses_lua_like_itg(path: &Path) -> bool {
     path.is_dir() && resolve_dir_default_lua_like_itg(path).is_some()
 }
 
+#[must_use]
 pub fn song_lua_entry_path_like_itg(path: PathBuf) -> PathBuf {
     if path.is_dir() {
         resolve_dir_default_lua_like_itg(&path).unwrap_or_else(|| path.join("default.lua"))
@@ -212,6 +221,7 @@ pub fn song_lua_entry_path_like_itg(path: PathBuf) -> PathBuf {
     }
 }
 
+#[must_use]
 pub fn resolve_foreground_media_dir(dir: &Path) -> Option<PathBuf> {
     let Ok(read_dir) = fs::read_dir(dir) else {
         return None;
@@ -256,6 +266,7 @@ fn foreground_media_candidate_cmp(
     })
 }
 
+#[must_use]
 pub fn resolve_foreground_media_path(song_dir: &Path, target: &str) -> Option<PathBuf> {
     let path = resolve_song_path_like_itg(song_dir, target)?;
     if path_uses_lua_like_itg(&path) {
@@ -267,6 +278,7 @@ pub fn resolve_foreground_media_path(song_dir: &Path, target: &str) -> Option<Pa
     foreground_media_ext_rank(&path).is_some().then_some(path)
 }
 
+#[must_use]
 pub fn foreground_media_ext_rank(path: &Path) -> Option<u8> {
     let ext = path.extension()?.to_str()?;
     if extension_matches(ext, &BGCHANGE_MOVIE_EXTENSIONS) {
@@ -279,12 +291,14 @@ pub fn foreground_media_ext_rank(path: &Path) -> Option<u8> {
     }
 }
 
+#[must_use]
 pub fn is_bgchange_movie_path(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
         .is_some_and(|ext| extension_matches(ext, &BGCHANGE_MOVIE_EXTENSIONS))
 }
 
+#[must_use]
 pub fn random_movie_paths_for_song(song: &SongData, roots: &[PathBuf]) -> Vec<PathBuf> {
     let group = song_group_name(song);
     let genre_whitelist = group
@@ -505,23 +519,27 @@ fn benchmark_genre_whitelist(
     checksum
 }
 
+#[must_use]
 pub fn is_song_art_image(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
         .is_some_and(|ext| extension_matches(ext, &SONG_ART_EXTENSIONS))
 }
 
+#[must_use]
 pub fn is_mac_resource_fork(path: &Path) -> bool {
     path.file_name()
         .is_some_and(|name| name.to_string_lossy().starts_with("._"))
 }
 
+#[must_use]
 pub fn song_art_file_key(path: &Path) -> String {
     path.to_string_lossy()
         .replace('\\', "/")
         .to_ascii_lowercase()
 }
 
+#[must_use]
 pub fn song_art_file_stem(path: &Path) -> Option<String> {
     Some(path.file_stem()?.to_string_lossy().to_ascii_lowercase())
 }

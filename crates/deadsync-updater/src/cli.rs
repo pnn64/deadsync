@@ -125,6 +125,7 @@ impl UpdaterCli {
     /// Convenience: parse `std::env::args()`.  Lifted out so tests
     /// can hit the table-driven [`parse`](Self::parse) without
     /// touching process state.
+    #[must_use]
     pub fn from_env() -> Self {
         Self::parse(std::env::args())
     }
@@ -135,6 +136,7 @@ impl UpdaterCli {
 /// Errors are intentionally swallowed (the caller is post-startup
 /// best-effort), but the (`removed_count`, `staging_removed`) tuple is
 /// returned for diagnostics + tests.
+#[must_use]
 pub fn run_cleanup(exe_dir: &std::path::Path, staging_dir: &std::path::Path) -> (usize, bool) {
     // The `staging_dir` argument is retained for back-compat with old
     // relaunch command lines but is no longer consulted: the journal
@@ -154,6 +156,7 @@ pub fn run_cleanup(exe_dir: &std::path::Path, staging_dir: &std::path::Path) -> 
 /// media decoders open their input without delete sharing, preventing
 /// the transactional apply from renaming those files while the game is
 /// running.
+#[must_use]
 pub fn run_apply_helper(request: ApplyRequest) -> i32 {
     let fallback_exe = std::env::current_exe().ok();
     if !wait_for_parent_exit(request.parent_pid) {

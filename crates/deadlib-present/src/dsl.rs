@@ -48,6 +48,7 @@ impl TweenProgramTarget {
 // PARITY[<Source>]: <mirrored behavior>. Ref: <file/symbol> when known.
 #[doc(hidden)]
 #[inline(always)]
+#[must_use]
 pub fn __dsl_parse_effect_clock(raw: &str) -> anim::EffectClock {
     let lower = raw
         .trim()
@@ -833,6 +834,7 @@ pub struct SpriteBuilder {
 
 impl SpriteBuilder {
     #[inline(always)]
+    #[must_use]
     pub fn with_source(source: SpriteSource) -> Self {
         Self {
             source,
@@ -884,6 +886,7 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn static_texture(tex: &'static str) -> Self {
         Self::with_source(SpriteSource::TextureStatic(tex))
     }
@@ -904,26 +907,31 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn solid() -> Self {
         Self::with_source(SpriteSource::Solid)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn source(&self) -> &SpriteSource {
         &self.source
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn uv_rect(&self) -> Option<[f32; 4]> {
         self.uv
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn cell(&self) -> Option<(u32, u32)> {
         self.cell
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn grid(&self) -> Option<(u32, u32)> {
         self.grid
     }
@@ -1367,11 +1375,13 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn build(self, site_base: u64) -> Actor {
         self.build_with_native_dims(site_base, None)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn build_with_native_dims(
         mut self,
         _site_base: u64,
@@ -1507,6 +1517,7 @@ impl Default for TextBuilder {
 
 impl TextBuilder {
     #[inline(always)]
+    #[must_use]
     pub fn new() -> Self {
         Self {
             x: 0.0,
@@ -1886,6 +1897,7 @@ impl TextBuilder {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn build(mut self, _site_base: u64) -> Actor {
         if self.content.as_str().as_bytes().contains(&b'&')
             && let std::borrow::Cow::Owned(s) = font::replace_markers(self.content.as_str())

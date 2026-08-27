@@ -11,6 +11,7 @@ pub enum GameplayInputPlayStyle {
 
 impl GameplayInputPlayStyle {
     #[inline(always)]
+    #[must_use]
     pub const fn cols_per_player(self) -> usize {
         match self {
             Self::Single | Self::Versus => 4,
@@ -21,6 +22,7 @@ impl GameplayInputPlayStyle {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn player_count(self) -> usize {
         match self {
             Self::Single | Self::Double | Self::PumpSingle | Self::PumpDouble => 1,
@@ -29,26 +31,31 @@ impl GameplayInputPlayStyle {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn total_cols(self) -> usize {
         self.cols_per_player() * self.player_count()
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_pump(self) -> bool {
         matches!(self, Self::PumpSingle | Self::PumpVersus | Self::PumpDouble)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_versus(self) -> bool {
         matches!(self, Self::Versus | Self::PumpVersus)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_double(self) -> bool {
         matches!(self, Self::Double | Self::PumpDouble)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_single(self) -> bool {
         matches!(self, Self::Single | Self::PumpSingle)
     }
@@ -62,6 +69,7 @@ pub enum GameplayInputPlayerSide {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_player_side_index(side: GameplayInputPlayerSide) -> usize {
     match side {
         GameplayInputPlayerSide::P1 => 0,
@@ -79,6 +87,7 @@ pub enum GameplayErrorBarTrim {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_error_bar_trim_max_window_ix(trim: GameplayErrorBarTrim) -> usize {
     match trim {
         GameplayErrorBarTrim::Off => 4,
@@ -203,6 +212,7 @@ pub trait GameplayProfileData: Clone {
 pub const DEFAULT_NOTESKIN_NAME: &str = "cel";
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_player_side_for_index(player_idx: usize) -> GameplayInputPlayerSide {
     match player_idx {
         1 => GameplayInputPlayerSide::P2,
@@ -211,6 +221,7 @@ pub const fn gameplay_player_side_for_index(player_idx: usize) -> GameplayInputP
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_runtime_player_is_p2(
     play_style: GameplayInputPlayStyle,
     side: GameplayInputPlayerSide,
@@ -228,6 +239,7 @@ pub const fn gameplay_runtime_player_is_p2(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_is_single_p2_side(
     play_style: GameplayInputPlayStyle,
     side: GameplayInputPlayerSide,
@@ -242,6 +254,7 @@ pub const fn gameplay_is_single_p2_side(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_runtime_player_side(
     play_style: GameplayInputPlayStyle,
     session_side: GameplayInputPlayerSide,
@@ -264,21 +277,25 @@ pub struct GameplaySession {
 }
 
 impl GameplaySession {
+    #[must_use]
     pub fn active_profile_id_for_side(&self, side: GameplayInputPlayerSide) -> Option<String> {
         self.active_profile_ids[gameplay_player_side_index(side)].clone()
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn side_joined(&self, side: GameplayInputPlayerSide) -> bool {
         self.joined_sides[gameplay_player_side_index(side)]
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn p2_runtime_player(&self) -> bool {
         gameplay_runtime_player_is_p2(self.play_style, self.player_side)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn runtime_player_side(&self, player_idx: usize) -> GameplayInputPlayerSide {
         gameplay_runtime_player_side(self.play_style, self.player_side, player_idx)
     }

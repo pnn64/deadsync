@@ -681,6 +681,7 @@ pub(crate) fn error_bar_flash_alpha(
     (inactive_alpha - 1.0).mul_add(age / dur, 1.0)
 }
 
+#[must_use]
 pub fn error_bar_boundaries_s(
     windows: [f32; 5],
     fa_plus_s: Option<f32>,

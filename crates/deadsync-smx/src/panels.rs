@@ -52,6 +52,7 @@ const PUMP_TO_PANEL: [usize; 5] = [6, 0, 4, 2, 8];
 /// Mirrors `pad_light_for_col` (app/mod.rs): handles singles, versus, and one-player
 /// doubles via `cols_per_player` and `num_players`. Returns `None` for an out-of-range
 /// column or a non-cardinal local column.
+#[must_use]
 pub fn smx_panel_for_col(
     cols_per_player: usize,
     num_players: usize,
@@ -180,6 +181,7 @@ impl Default for PanelFx {
 }
 
 impl PanelFx {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             panels: std::array::from_fn(|_| std::array::from_fn(|_| PanelState::default())),
@@ -621,11 +623,11 @@ pub(crate) mod bench_support {
         checksum
     }
 
-    pub(crate) fn composite_old(events: usize) -> u64 {
+    pub fn composite_old(events: usize) -> u64 {
         run(events, false)
     }
 
-    pub(crate) fn composite_new(events: usize) -> u64 {
+    pub fn composite_new(events: usize) -> u64 {
         run(events, true)
     }
 }
@@ -799,6 +801,7 @@ impl Default for SmxPanelLights {
 }
 
 impl SmxPanelLights {
+    #[must_use]
     pub fn new() -> Self {
         let (tx, rx) = mpsc::channel();
         let join = thread::Builder::new()

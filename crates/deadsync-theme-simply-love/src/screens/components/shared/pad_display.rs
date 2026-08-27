@@ -35,6 +35,7 @@ thread_local! {
 }
 
 /// Builds a 3x3 pad display actor, positioned and scaled as a group.
+#[must_use]
 pub fn build(params: PadDisplayParams) -> Actor {
     let children = cached_children(params.zoom, params.is_active, params.is_pump);
     Actor::SharedFrame {

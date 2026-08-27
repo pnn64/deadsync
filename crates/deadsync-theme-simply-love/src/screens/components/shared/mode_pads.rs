@@ -26,6 +26,7 @@ const fn states(play_style: PlayStyle, joined: [bool; 2]) -> [bool; 2] {
     joined
 }
 
+#[must_use]
 pub fn build(play_style: PlayStyle, joined: [bool; 2]) -> [Actor; 2] {
     let [p1_active, p2_active] = states(play_style, joined);
     let is_pump = play_style.is_pump();

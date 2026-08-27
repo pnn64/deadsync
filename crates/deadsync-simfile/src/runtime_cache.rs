@@ -33,6 +33,7 @@ pub fn set_song_cache(packs: Vec<SongPack>) {
     SONG_CACHE_GENERATION.fetch_add(1, Ordering::Relaxed);
 }
 
+#[must_use]
 pub fn song_is_cached(simfile_path: &Path) -> bool {
     get_song_cache().iter().any(|pack| {
         pack.songs
@@ -61,6 +62,7 @@ fn remove_song_from_packs(cache: &mut Vec<SongPack>, simfile_path: &Path) -> boo
     cache.iter().map(|pack| pack.songs.len()).sum::<usize>() < old_song_count
 }
 
+#[must_use]
 pub fn song_pack_group_for_simfile_path<'a>(
     packs: &'a [SongPack],
     simfile_path: &Path,
@@ -80,6 +82,7 @@ pub fn song_pack_group_for_song(song: &SongData) -> Option<String> {
     song_pack_group_for_simfile_path(&song_cache, &song.simfile_path).map(str::to_string)
 }
 
+#[must_use]
 pub fn pack_sync_offset_for_song(
     song: &SongData,
     enabled: bool,
@@ -89,6 +92,7 @@ pub fn pack_sync_offset_for_song(
     pack_sync_offset_for_song_in_packs(song, song_cache.as_slice(), enabled, default_sync_pref)
 }
 
+#[must_use]
 pub fn pack_sync_offset_for_song_config(song: &SongData, cfg: &Config) -> f32 {
     pack_sync_offset_for_song(
         song,
@@ -97,6 +101,7 @@ pub fn pack_sync_offset_for_song_config(song: &SongData, cfg: &Config) -> f32 {
     )
 }
 
+#[must_use]
 pub fn pack_sync_offset_for_song_in_packs(
     song: &SongData,
     packs: &[SongPack],
@@ -130,6 +135,7 @@ pub fn replace_song_arc_if_same_simfile(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn can_reuse_quick_restart_payload(
     current_song: &SongData,
     current_chart_hashes: [&str; 2],
@@ -141,6 +147,7 @@ pub fn can_reuse_quick_restart_payload(
         && current_chart_hashes == next_chart_hashes
 }
 
+#[must_use]
 pub fn reloaded_chart_hashes_for_restart(
     old_song: &SongData,
     updated_song: &SongData,

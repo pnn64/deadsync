@@ -37,21 +37,25 @@ impl Default for GameplayInputState {
 
 impl GameplayInputState {
     #[inline(always)]
+    #[must_use]
     pub fn lane_is_pressed(&self, col: usize) -> bool {
         self.lane_counts.get(col).copied().unwrap_or(0) != 0
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn lane_counts(&self) -> &[u16; MAX_COLS] {
         &self.lane_counts
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn pressed_lane_mask(&self) -> LaneMask {
         self.pressed_lane_mask
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn slot_lane_is_down(&self, lane_idx: usize, source: InputSource, input_slot: u32) -> bool {
         self.active_slots
             .slot_lane_is_down(lane_idx, source, input_slot)

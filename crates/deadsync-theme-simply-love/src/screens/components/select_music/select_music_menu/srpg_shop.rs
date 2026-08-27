@@ -117,6 +117,7 @@ pub struct SrpgShopDownload {
     pub url: String,
 }
 
+#[must_use]
 pub fn show_srpg_shop_overlay(side: PlayerSide) -> SrpgShopOverlayState {
     SrpgShopOverlayState::Visible(SrpgShopOverlayStateData {
         side,
@@ -419,6 +420,7 @@ fn active_shop<'a>(
     snapshot.shops.iter().find(|shop| shop.id == shop_id)
 }
 
+#[must_use]
 pub fn build_srpg_shop_overlay(
     state: &SrpgShopOverlayState,
     snapshot: &SrpgShopSnapshot,

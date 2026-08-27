@@ -318,16 +318,19 @@ pub enum State {
 }
 
 impl State {
+    #[must_use]
     pub const fn is_hidden(&self) -> bool {
         matches!(self, State::Hidden)
     }
 
+    #[must_use]
     pub const fn is_visible(&self) -> bool {
         !self.is_hidden()
     }
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn scroll_dir(len: usize, prev: usize, selected: usize) -> isize {
     if len <= 1 {
         return 0;
@@ -344,6 +347,7 @@ pub const fn scroll_dir(len: usize, prev: usize, selected: usize) -> isize {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn scroll_anim_dir(len: usize, prev: usize, selected: usize, input_dir: isize) -> isize {
     let dir = scroll_dir(len, prev, selected);
     if len == 2 && dir != 0 {

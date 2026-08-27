@@ -1,5 +1,6 @@
 use rssp::parse::{decode_bytes, unescape_tag};
 
+#[must_use]
 pub fn latest_simfile_tag_value(simfile_data: &[u8], tag: &[u8]) -> String {
     latest_simfile_tag_values(simfile_data, [tag])
         .into_iter()
@@ -8,6 +9,7 @@ pub fn latest_simfile_tag_value(simfile_data: &[u8], tag: &[u8]) -> String {
 }
 
 /// Extracts the latest value for each requested tag in one pass over a simfile.
+#[must_use]
 pub fn latest_simfile_tag_values<const N: usize>(
     simfile_data: &[u8],
     tags: [&[u8]; N],
@@ -44,6 +46,7 @@ pub fn latest_simfile_tag_values<const N: usize>(
     })
 }
 
+#[must_use]
 pub fn extract_named_tag_values<'a>(data: &'a [u8], tags: &[&[u8]]) -> Vec<&'a [u8]> {
     let mut out = Vec::new();
     let mut i = 0usize;

@@ -86,6 +86,7 @@ pub struct HostInstantMap {
 
 impl HostInstantMap {
     #[inline(always)]
+    #[must_use]
     pub const fn new(instant: Instant, host_nanos: u64) -> Self {
         Self {
             instant,
@@ -94,6 +95,7 @@ impl HostInstantMap {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn instant(self, target_host_nanos: u64) -> Instant {
         if target_host_nanos >= self.host_nanos {
             self.instant

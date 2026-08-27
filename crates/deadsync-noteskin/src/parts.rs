@@ -10,16 +10,19 @@ pub struct Style {
 
 impl Style {
     #[inline(always)]
+    #[must_use]
     pub const fn is_pump(self) -> bool {
         matches!(self.num_cols, 5 | 10)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn game_name(self) -> &'static str {
         if self.is_pump() { "pump" } else { "dance" }
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn steps_type(self) -> &'static str {
         match self.num_cols {
             5 => "StepsType_Pump_Single",
@@ -30,6 +33,7 @@ impl Style {
     }
 }
 
+#[must_use]
 pub fn itg_column_xs(num_cols: usize) -> Vec<i32> {
     if num_cols == 0 {
         return Vec::new();
@@ -105,6 +109,7 @@ impl NoteAnimPart {
         Self::RollTail,
     ];
 
+    #[must_use]
     pub const fn metric_prefix(self) -> &'static str {
         match self {
             Self::Tap => "TapNote",
@@ -143,6 +148,7 @@ pub struct NoteDisplayMetrics {
     pub part_texture_translate: [NotePartTextureTranslate; NOTE_ANIM_PART_COUNT],
 }
 
+#[must_use]
 pub const fn clamped_hold_let_go_gray_percent(metrics: &NoteDisplayMetrics) -> f32 {
     metrics.hold_let_go_gray_percent.clamp(0.0, 1.0)
 }
@@ -170,6 +176,7 @@ pub enum NoteColorType {
 }
 
 impl NoteColorType {
+    #[must_use]
     pub fn from_metric(value: &str) -> Option<Self> {
         let value = value.trim().trim_matches('"').trim_matches('\'');
         if value.eq_ignore_ascii_case("Denominator") {

@@ -225,6 +225,7 @@ impl GameplayInputState {
     }
 
     #[doc(hidden)]
+    #[must_use]
     pub const fn active_slot_storage_bytes() -> usize {
         std::mem::size_of::<ActiveInputSlots>()
     }
@@ -301,17 +302,20 @@ impl ReferenceGameplayInputState {
 
     #[doc(hidden)]
     #[inline(always)]
+    #[must_use]
     pub const fn lane_counts(&self) -> &[u16; MAX_COLS] {
         &self.lane_counts
     }
 
     #[doc(hidden)]
     #[inline(always)]
+    #[must_use]
     pub const fn pressed_lane_mask(&self) -> LaneMask {
         self.pressed_lane_mask
     }
 
     #[doc(hidden)]
+    #[must_use]
     pub const fn active_slot_storage_bytes() -> usize {
         std::mem::size_of::<[ActiveInputSlot; MAX_ACTIVE_INPUT_SLOTS]>()
             + std::mem::size_of::<usize>()
@@ -331,6 +335,7 @@ impl ReferenceGameplayInputState {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn remap_live_input_lane(
     play_style: GameplayInputPlayStyle,
     player_side: GameplayInputPlayerSide,
@@ -398,6 +403,7 @@ pub const fn remap_live_input_lane(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn live_input_lane_for_queue(
     autoplay_enabled: bool,
     play_style: GameplayInputPlayStyle,
@@ -418,11 +424,13 @@ pub const fn live_input_lane_for_queue(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn input_lane_bit(lane_idx: usize) -> LaneMask {
     1u16 << lane_idx
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn input_lane_mask(num_cols: usize) -> LaneMask {
     if num_cols >= MAX_COLS {
         (1u16 << MAX_COLS) - 1
@@ -432,6 +440,7 @@ pub const fn input_lane_mask(num_cols: usize) -> LaneMask {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn lane_inputs_from_mask(mask: LaneMask, num_cols: usize) -> [bool; MAX_COLS] {
     let mut inputs = [false; MAX_COLS];
     let mut lanes = mask & input_lane_mask(num_cols);
@@ -444,6 +453,7 @@ pub const fn lane_inputs_from_mask(mask: LaneMask, num_cols: usize) -> [bool; MA
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn normalized_input_slot(input_slot: u32, fallback_slot: u32, invalid_slot: u32) -> u32 {
     if input_slot == invalid_slot {
         fallback_slot
@@ -453,6 +463,7 @@ pub const fn normalized_input_slot(input_slot: u32, fallback_slot: u32, invalid_
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn should_warn_unmapped_input_clock(
     last_warn_ns: SongTimeNs,
     song_time_ns: SongTimeNs,
@@ -476,6 +487,7 @@ pub fn record_unmapped_input_clock_warning(song_time_ns: SongTimeNs) -> bool {
 }
 
 #[cfg(any(test, feature = "bench-support"))]
+#[must_use]
 pub fn active_input_slot_lane_is_down(
     slots: &[ActiveInputSlot],
     slot_count: usize,

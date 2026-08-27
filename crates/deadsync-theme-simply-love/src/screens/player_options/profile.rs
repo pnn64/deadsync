@@ -13,6 +13,7 @@ pub enum SpeedModType {
 impl SpeedModType {
     /// Index used by the Type-of-Speed-Mod row's x/c/m choices.
     #[inline(always)]
+    #[must_use]
     pub const fn choice_index(self) -> usize {
         match self {
             Self::X => 0,
@@ -22,6 +23,7 @@ impl SpeedModType {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn from_choice_index(idx: usize) -> Self {
         match idx {
             0 => Self::X,
@@ -32,6 +34,7 @@ impl SpeedModType {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn prefix(self) -> &'static str {
         match self {
             Self::X => "X",
@@ -48,6 +51,7 @@ pub struct SpeedMod {
 }
 
 impl SpeedMod {
+    #[must_use]
     pub fn display(&self) -> String {
         match self.mod_type {
             SpeedModType::X => format!("{:.2}x", self.value),
@@ -77,6 +81,7 @@ impl From<ScrollSpeedSetting> for SpeedMod {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn scroll_speed_for_mod(speed_mod: &SpeedMod) -> ScrollSpeedSetting {
     match speed_mod.mod_type {
         SpeedModType::C => ScrollSpeedSetting::CMod(speed_mod.value),
@@ -86,6 +91,7 @@ pub const fn scroll_speed_for_mod(speed_mod: &SpeedMod) -> ScrollSpeedSetting {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn no_cmod_alt_speed_mod_type(alt: NoCmodAlternative) -> Option<SpeedModType> {
     match alt {
         NoCmodAlternative::None => None,
@@ -94,6 +100,7 @@ pub const fn no_cmod_alt_speed_mod_type(alt: NoCmodAlternative) -> Option<SpeedM
     }
 }
 
+#[must_use]
 pub fn convert_speed_mod_to_type(
     speed_mod: &SpeedMod,
     new_type: SpeedModType,
@@ -122,6 +129,7 @@ pub fn convert_speed_mod_to_type(
     }
 }
 
+#[must_use]
 pub fn effective_scroll_speed_with_alt(
     base: &SpeedMod,
     alt: NoCmodAlternative,

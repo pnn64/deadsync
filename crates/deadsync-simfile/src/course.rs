@@ -35,6 +35,7 @@ pub enum CourseType {
     Survival,
 }
 
+#[must_use]
 pub fn course_type(course: &CourseFile) -> CourseType {
     if course.repeat {
         CourseType::Endless
@@ -128,6 +129,7 @@ pub enum RuntimeCourseScanEvent {
     },
 }
 
+#[must_use]
 pub fn runtime_course_scan_log_entry(event: RuntimeCourseScanEvent) -> RuntimeScanLogEntry {
     match event {
         RuntimeCourseScanEvent::Start { courses_root } => RuntimeScanLogEntry::info(format!(
@@ -169,6 +171,7 @@ pub fn parse_course_file(path: &Path) -> Result<CourseFile, String> {
         .map_err(|error| format!("Failed to parse course '{}': {error}", path.display()))
 }
 
+#[must_use]
 pub fn collect_merged_course_paths(roots: &[PathBuf]) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut seen = HashSet::new();
@@ -210,6 +213,7 @@ pub fn collect_course_scan_roots(
     }
 }
 
+#[must_use]
 pub fn course_progress_names<'a>(path: &'a Path, root: &'a Path) -> (&'a str, &'a str) {
     let fallback = root
         .file_name()
@@ -229,6 +233,7 @@ pub fn course_progress_names<'a>(path: &'a Path, root: &'a Path) -> (&'a str, &'
     (group, course)
 }
 
+#[must_use]
 pub fn load_course_paths_with_progress<F>(
     course_paths: Vec<PathBuf>,
     progress_root: &Path,
@@ -286,10 +291,12 @@ where
     CourseLoadReport { courses, failures }
 }
 
+#[must_use]
 pub fn count_course_songs(packs: &[SongPack]) -> usize {
     packs.iter().map(|pack| pack.songs.len()).sum()
 }
 
+#[must_use]
 pub fn song_unique_key(song: &SongData) -> String {
     song.simfile_path
         .parent()
@@ -320,6 +327,7 @@ pub fn nearest_filled_slot<T>(slots: &[Option<T>], preferred: usize) -> Option<u
     best
 }
 
+#[must_use]
 pub const fn shifted_course_difficulty(base: Difficulty, course: Difficulty) -> Difficulty {
     let base = base as i32;
     let delta = (course as i32) - (Difficulty::Medium as i32);
@@ -339,10 +347,12 @@ pub const fn shifted_course_difficulty(base: Difficulty, course: Difficulty) -> 
     }
 }
 
+#[must_use]
 pub const fn course_meter(course: &CourseFile, diff: Difficulty) -> Option<i32> {
     course.meters[diff as usize]
 }
 
+#[must_use]
 pub fn course_difficulty_from_meters(course: &CourseFile) -> Option<(&'static str, u32)> {
     const ORDER: [(Difficulty, &str); 6] = [
         (Difficulty::Challenge, "Challenge"),
@@ -741,6 +751,7 @@ fn song_key_hash(song: &SongData) -> u64 {
     hasher.finish()
 }
 
+#[must_use]
 pub fn load_course_scan_with_progress<F>(
     course_roots: &[PathBuf],
     progress_root: &Path,
@@ -822,6 +833,7 @@ pub fn scan_and_load_courses_runtime<F>(
     });
 }
 
+#[must_use]
 pub fn autogen_nonstop_group_courses(
     courses_root: &Path,
     packs: &[SongPack],

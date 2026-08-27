@@ -206,6 +206,7 @@ pub struct State {
     idle_elapsed: f32,
 }
 
+#[must_use]
 pub fn init() -> State {
     let i18n_revision = i18n::revision();
     State {
@@ -376,16 +377,19 @@ pub const fn handle_raw_key_event(state: &mut State, key: &RawKeyboardEvent) -> 
     ThemeEffect::None
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub const fn out_transition() -> (Vec<Actor>, f32) {
     // Simply Love's ScreenTitleMenu out actor only holds the screen for one
     // second. The menu owns its actor fades and the shell adds the fly burst.
     (Vec::new(), TRANSITION_OUT_DURATION)
 }
 
+#[must_use]
 pub fn cancel_transition() -> (Vec<Actor>, f32) {
     let actor = act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):

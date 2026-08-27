@@ -28,6 +28,7 @@ fn logical_px_for_physical(px: u32, scale: f64) -> u32 {
     ((f64::from(px) / scale.max(0.001)).round().max(1.0)) as u32
 }
 
+#[must_use]
 pub fn render_size_for_window(
     window: &Window,
     backend_type: BackendType,
@@ -36,6 +37,7 @@ pub fn render_size_for_window(
     render_size_for_physical(window, backend_type, high_dpi, window.inner_size())
 }
 
+#[must_use]
 pub fn render_size_for_physical(
     window: &Window,
     backend_type: BackendType,
@@ -68,6 +70,7 @@ pub fn with_requested_window_size(
 }
 
 #[cfg(not(target_os = "macos"))]
+#[must_use]
 pub fn with_requested_window_size(
     attrs: WindowAttributes,
     _backend_type: BackendType,
@@ -78,6 +81,7 @@ pub fn with_requested_window_size(
     attrs.with_inner_size(PhysicalSize::new(width, height))
 }
 
+#[must_use]
 pub fn request_window_size(
     window: &Window,
     backend_type: BackendType,

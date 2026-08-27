@@ -2,9 +2,9 @@ use deadlib_audio_core::{MixBus, MixControls};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, OnceLock};
 
-pub(crate) const EFFECT_BUS: MixBus = MixBus::new(0);
-pub(crate) const SCREEN_BUS: MixBus = MixBus::new(1);
-pub(crate) const ASSIST_TICK_BUS: MixBus = MixBus::new(2);
+pub const EFFECT_BUS: MixBus = MixBus::new(0);
+pub const SCREEN_BUS: MixBus = MixBus::new(1);
+pub const ASSIST_TICK_BUS: MixBus = MixBus::new(2);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AudioMixLevels {
@@ -58,7 +58,7 @@ fn apply_levels(controls: &MixControls, levels: AudioMixLevels) {
     );
 }
 
-pub(crate) fn init_controls() -> Arc<MixControls> {
+pub fn init_controls() -> Arc<MixControls> {
     CONTROLS
         .get_or_init(|| {
             let controls = Arc::new(MixControls::new());
@@ -82,21 +82,21 @@ pub fn audio_mix_levels() -> AudioMixLevels {
 }
 
 #[inline(always)]
-pub(crate) fn stop_screen_bus() {
+pub fn stop_screen_bus() {
     if let Some(controls) = CONTROLS.get() {
         controls.stop_bus(SCREEN_BUS);
     }
 }
 
 #[inline(always)]
-pub(crate) fn stop_assist_tick_bus() {
+pub fn stop_assist_tick_bus() {
     if let Some(controls) = CONTROLS.get() {
         controls.stop_bus(ASSIST_TICK_BUS);
     }
 }
 
 #[inline(always)]
-pub(crate) fn assist_tick_generation() -> u64 {
+pub fn assist_tick_generation() -> u64 {
     CONTROLS
         .get()
         .map_or(0, |controls| controls.bus_generation(ASSIST_TICK_BUS))

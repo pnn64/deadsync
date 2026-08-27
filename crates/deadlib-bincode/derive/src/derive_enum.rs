@@ -3,7 +3,7 @@ use virtue::prelude::*;
 
 const TUPLE_FIELD_PREFIX: &str = "field_";
 
-pub(crate) struct DeriveEnum {
+pub struct DeriveEnum {
     pub variants: Vec<EnumVariant>,
     pub attributes: ContainerAttributes,
 }

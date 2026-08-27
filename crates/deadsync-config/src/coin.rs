@@ -19,6 +19,7 @@ pub enum CoinMode {
 }
 
 impl CoinMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Pay => "Pay",
@@ -73,6 +74,7 @@ impl Default for CoinOptions {
 
 impl CoinOptions {
     /// `ITGmania` parity: Home is always Event Mode and Pay never is.
+    #[must_use]
     pub const fn event_mode(self) -> bool {
         match self.mode {
             CoinMode::Home => true,
@@ -81,10 +83,12 @@ impl CoinOptions {
         }
     }
 
+    #[must_use]
     pub const fn premium_free_available(self) -> bool {
         self.premium_free_minutes > 0 && !self.event_mode() && !matches!(self.mode, CoinMode::Home)
     }
 
+    #[must_use]
     pub fn stage_cost(self, song_seconds: f32, music_rate: f32) -> u8 {
         let duration = song_seconds.max(0.0) / music_rate.max(0.05);
         if duration >= f32::from(self.marathon_song_seconds) {
@@ -96,6 +100,7 @@ impl CoinOptions {
         }
     }
 
+    #[must_use]
     pub const fn premium_free_seconds(self) -> u32 {
         self.premium_free_minutes as u32 * 60
     }

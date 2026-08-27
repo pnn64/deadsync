@@ -938,7 +938,7 @@ pub(in crate::screens::options) fn rebuild_refresh_rate_choices(state: &mut Stat
 
     // Add common fallback rates if list is empty (besides Default)
     if rates.len() == 1 {
-        rates.extend_from_slice(&[60000, 75000, 120000, 144000, 165000, 240000]);
+        rates.extend_from_slice(&[60000, 75000, 120_000, 144_000, 165_000, 240_000]);
     }
 
     // Preserve current selection if possible, else default to "Default".

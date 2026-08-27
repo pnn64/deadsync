@@ -152,6 +152,7 @@ pub(crate) fn runtime_mark_downloaded(url: &str, destination: &str) {
     }
 }
 
+#[must_use]
 pub const fn download_folder(shop_id: u32, folder: SrpgShopFolder) -> &'static str {
     match folder {
         SrpgShopFolder::Unlocks => "Stamina RPG 10 Unlocks",

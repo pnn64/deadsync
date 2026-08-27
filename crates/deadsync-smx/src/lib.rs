@@ -228,6 +228,7 @@ pub struct InitConfig {
 /// enabled, `init` refuses to start the SDK, so UI work can never touch real
 /// hardware. Empty and common falsey values count as unset, so someone
 /// "disabling" with `DEADSYNC_MOCK_PADS=0` doesn't silently get mock pads.
+#[must_use]
 pub fn mock_pads_env() -> Option<String> {
     std::env::var("DEADSYNC_MOCK_PADS")
         .ok()
@@ -346,6 +347,7 @@ pub enum SmxPadType {
 }
 
 impl SmxPadType {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Fsr => "fsr",
@@ -356,6 +358,7 @@ impl SmxPadType {
 
 /// Whether a pad's config describes an FSR pad (vs a load-cell pad), matching the
 /// official tool: master version >= 4 with the FSR flag set.
+#[must_use]
 pub const fn is_fsr(config: &SmxConfig) -> bool {
     config.master_version >= 4
         && ConfigFlags::from_bits_truncate(config.flags).contains(ConfigFlags::FSR)
@@ -363,6 +366,7 @@ pub const fn is_fsr(config: &SmxConfig) -> bool {
 
 /// Whether a USB vendor/product pair is a `StepManiaX` stage, by the SDK's
 /// `SMX_USB_VENDOR_ID` / `SMX_USB_PRODUCT_ID`.
+#[must_use]
 pub fn is_smx_usb_device(vendor: Option<u16>, product: Option<u16>) -> bool {
     vendor == Some(SMX_USB_VENDOR_ID) && product == Some(SMX_USB_PRODUCT_ID)
 }
@@ -377,6 +381,7 @@ pub fn is_smx_usb_device(vendor: Option<u16>, product: Option<u16>) -> bool {
 /// with a different label, e.g. "SMX P2 D" (native) versus "Pad 2 Btn 0x90008"
 /// (generic HID). Gated on `smx_input` (the same flag that starts the SDK), so
 /// with native SMX off the pad still works as a plain gamepad.
+#[must_use]
 pub fn native_smx_owns_device(vendor: Option<u16>, product: Option<u16>, smx_input: bool) -> bool {
     smx_input && is_smx_usb_device(vendor, product)
 }
@@ -391,6 +396,7 @@ pub enum SmxPadPreset {
 }
 
 impl SmxPadPreset {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Low => "Low",
@@ -400,6 +406,7 @@ impl SmxPadPreset {
     }
 
     /// 0/1/2 index used by the options choice list.
+    #[must_use]
     pub const fn index(self) -> usize {
         match self {
             Self::Low => 0,
@@ -408,6 +415,7 @@ impl SmxPadPreset {
         }
     }
 
+    #[must_use]
     pub const fn from_index(i: usize) -> Self {
         match i {
             1 => Self::Medium,
@@ -431,6 +439,7 @@ impl FromStr for SmxPadPreset {
 }
 
 /// The sensor type of a connected pad (`None` if its config isn't available yet).
+#[must_use]
 pub fn pad_sensor_type(pad: usize) -> Option<SmxPadType> {
     get_config(pad).map(|c| {
         if is_fsr(&c) {
@@ -446,6 +455,7 @@ pub fn pad_sensor_type(pad: usize) -> Option<SmxPadType> {
 /// (`0x0F`) for odd panels; sensor `s` is bit `base + s`. Shared by the config
 /// encode/decode here and the live per-sensor edits in the input backend, so the
 /// firmware bit layout has a single source of truth.
+#[must_use]
 pub const fn enabled_bit(panel: usize, sensor: usize) -> (usize, u8) {
     let byte = panel / 2;
     let base = if panel.is_multiple_of(2) { 4 } else { 0 };
@@ -477,6 +487,7 @@ impl PadConfigData {
     /// `padconfig.ini`: per-panel FSR low/high arrays, load-cell low/high, and
     /// per-panel sensor enables, plus the auto-calibration tare and the panel
     /// debounce (in milliseconds).
+    #[must_use]
     pub fn to_settings(&self) -> Vec<(String, String)> {
         let join = |xs: &[u8]| xs.iter().map(u8::to_string).collect::<Vec<_>>().join(" ");
         let mut out = Vec::with_capacity(PAD_CONFIG_PANELS * 5 + 2);
@@ -512,6 +523,7 @@ impl PadConfigData {
 
     /// Decode from the key/value list written by `to_settings`. Returns `None`
     /// if any expected key is missing or malformed.
+    #[must_use]
     pub fn from_settings(settings: &[(String, String)]) -> Option<Self> {
         let get = |key: &str| {
             settings
@@ -568,6 +580,7 @@ impl PadConfigData {
 }
 
 /// Capture a connected pad's managed threshold state (None if no config yet).
+#[must_use]
 pub fn capture_config(pad: usize) -> Option<PadConfigData> {
     let Some(config) = get_config(pad) else {
         log::trace!("SMX: capture_config pad {pad} skipped (config unavailable)");
@@ -594,6 +607,7 @@ pub fn capture_config(pad: usize) -> Option<PadConfigData> {
 
 /// Overlay a captured config onto a pad's current `SmxConfig` and write it.
 /// Returns false if the pad's config isn't available yet.
+#[must_use]
 pub fn apply_config_data(pad: usize, data: &PadConfigData) -> bool {
     let Some(mut config) = get_config(pad) else {
         log::trace!("SMX: apply_config_data pad {pad} skipped (config unavailable)");
@@ -666,6 +680,7 @@ const fn preset_thresholds(preset: SmxPadPreset) -> PresetThresholds {
 /// Flash a built-in preset to a pad: every panel's FSR and load-cell thresholds
 /// (center panel 4 overridden), mirroring the official SMX tool. Returns false
 /// if the pad's config isn't available yet.
+#[must_use]
 pub fn apply_preset(pad: usize, preset: SmxPadPreset) -> bool {
     let Some(mut config) = get_config(pad) else {
         log::trace!("SMX: apply_preset pad {pad} skipped (config unavailable)");
@@ -745,6 +760,7 @@ pub fn set_player_assignment(p1: Option<String>, p2: Option<String>) {
 /// The serial connected at each slot (index 0 = P1, 1 = P2), or `None` if that
 /// slot has no connected pad (or its serial isn't known yet). This reflects the
 /// SDK's *current* ordering, i.e. what is actually assigned right now.
+#[must_use]
 pub fn connected_serials() -> [Option<String>; 2] {
     std::array::from_fn(|slot| {
         let info = get_info(slot);
@@ -754,6 +770,7 @@ pub fn connected_serials() -> [Option<String>; 2] {
 
 /// First 4 chars of a serial, for a compact pad label (e.g. `40ea`). An empty
 /// serial (not read yet) yields `????` so the label keeps its width.
+#[must_use]
 pub fn serial_prefix(serial: &str) -> String {
     if serial.is_empty() {
         "????".to_owned()
@@ -780,6 +797,7 @@ const fn conflict_unresolved(jumpers_conflict: bool, p1_assigned: bool, p2_assig
 /// orders slot 0 = P1-jumper and slot 1 = P2-jumper, so slot 0's serial is P1 and
 /// slot 1's is P2. Returns `None` when the pair is incomplete or ambiguous (same
 /// jumper), leaving it for manual assignment.
+#[must_use]
 pub fn jumper_derived_pair(a: &SmxInfo, b: &SmxInfo) -> Option<(String, String)> {
     let distinct = a.connected
         && b.connected
@@ -791,6 +809,7 @@ pub fn jumper_derived_pair(a: &SmxInfo, b: &SmxInfo) -> Option<(String, String)>
 
 /// True when both pads are connected and report the *same* P1/P2 jumper, so the
 /// SDK can't order them by jumper alone and the user should assign them manually.
+#[must_use]
 pub fn same_jumper_conflict() -> bool {
     jumpers_conflict(&get_info(0), &get_info(1))
 }
@@ -853,6 +872,7 @@ impl OptionsLightPreview {
     const RESEND_INTERVAL: f32 = 0.25;
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_active(&self) -> bool {
         self.active
     }
@@ -916,6 +936,7 @@ impl PlayerOptionsLightPreview {
     const HUE_PERIOD_S: f32 = 5.0;
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_active(&self) -> bool {
         self.active
     }
@@ -1029,6 +1050,7 @@ const fn indicator_color(connected: bool, ambiguous: bool, slot: usize) -> Optio
 /// Per-slot indicator colours for the `StepManiaX` options page: P1 (slot 0) blue,
 /// P2 (slot 1) red, or white when the assignment is ambiguous; `None` for an
 /// empty slot. Recomputed each frame so a live swap is reflected immediately.
+#[must_use]
 pub fn player_indicator_colors() -> [Option<[u8; 3]>; 2] {
     let ambiguous = conflict_warning_active();
     std::array::from_fn(|slot| indicator_color(get_info(slot).connected, ambiguous, slot))
@@ -1299,26 +1321,32 @@ pub mod bench_support {
         checksum
     }
 
+    #[must_use]
     pub fn preview_buffers_old(events: usize) -> u64 {
         preview_frames_old(events)
     }
 
+    #[must_use]
     pub fn preview_buffers_new(events: usize) -> u64 {
         preview_frames_new(events)
     }
 
+    #[must_use]
     pub fn brightness_scale_old(events: usize) -> u64 {
         brightness_old(events)
     }
 
+    #[must_use]
     pub fn brightness_scale_new(events: usize) -> u64 {
         brightness_new(events)
     }
 
+    #[must_use]
     pub fn panel_composite_old(events: usize) -> u64 {
         panels::bench_support::composite_old(events)
     }
 
+    #[must_use]
     pub fn panel_composite_new(events: usize) -> u64 {
         panels::bench_support::composite_new(events)
     }

@@ -2,6 +2,7 @@
 pub const MINI_PERCENT_MAX: f32 = 150.0;
 
 #[inline(always)]
+#[must_use]
 pub fn effective_mini_percent(
     active_mini_percent: Option<f32>,
     fallback_mini_percent: f32,
@@ -24,6 +25,7 @@ pub enum MiniAttackMode {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn attack_mini_target_percent(value: f32, mode: MiniAttackMode, base: f32) -> f32 {
     match mode {
         MiniAttackMode::Absolute => value,
@@ -76,6 +78,7 @@ pub fn approach_attack_mini_percent_to_target(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn mini_value_for_percent(
     mini_percent: f32,
     fallback_mini_percent: f32,
@@ -94,6 +97,7 @@ pub fn mini_value_for_percent(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn mini_value_for_visual_mask(
     mini_percent: f32,
     fallback_mini_percent: f32,
@@ -107,11 +111,13 @@ pub fn mini_value_for_visual_mask(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn player_draw_scale_for_mini(tilt: f32, mini_value: f32) -> f32 {
     0.5f32.mul_add(tilt.abs(), 1.0) * (1.0 + mini_value.abs())
 }
 
 #[inline(always)]
+#[must_use]
 pub fn player_draw_scale_for_visual_mask(
     tilt: f32,
     mini_percent: f32,
@@ -155,6 +161,7 @@ pub struct AccelOverrides {
 
 impl AccelOverrides {
     #[inline(always)]
+    #[must_use]
     pub const fn any(self) -> bool {
         self.boost.is_some()
             || self.brake.is_some()
@@ -263,6 +270,7 @@ pub struct AppearanceOverrides {
 
 impl AppearanceOverrides {
     #[inline(always)]
+    #[must_use]
     pub const fn any(self) -> bool {
         self.hidden.is_some()
             || self.hidden_offset.is_some()
@@ -283,6 +291,7 @@ pub struct VisibilityOverrides {
 
 impl VisibilityOverrides {
     #[inline(always)]
+    #[must_use]
     pub const fn any(self) -> bool {
         self.dark.is_some() || self.blind.is_some() || self.cover.is_some()
     }
@@ -299,6 +308,7 @@ pub struct ScrollOverrides {
 
 impl ScrollOverrides {
     #[inline(always)]
+    #[must_use]
     pub const fn any(self) -> bool {
         self.reverse.is_some()
             || self.split.is_some()
@@ -316,6 +326,7 @@ pub struct PerspectiveOverrides {
 
 impl PerspectiveOverrides {
     #[inline(always)]
+    #[must_use]
     pub const fn any(self) -> bool {
         self.tilt.is_some() || self.skew.is_some()
     }
@@ -332,6 +343,7 @@ pub struct AccelEffects {
 
 impl AccelEffects {
     #[inline(always)]
+    #[must_use]
     pub fn from_mask_bits(mask: u8) -> Self {
         Self {
             boost: f32::from((mask & ACCEL_MASK_BIT_BOOST) != 0),
@@ -378,6 +390,7 @@ impl VisualEffects {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn from_mask_bits(mask: u16) -> Self {
         Self {
             drunk: f32::from((mask & VISUAL_MASK_BIT_DRUNK) != 0),
@@ -408,6 +421,7 @@ impl VisualEffects {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn to_mask_bits(self) -> u16 {
         let mut mask = 0;
         if Self::signed_active(self.drunk) {
@@ -718,6 +732,7 @@ pub struct AppearanceEffects {
 
 impl AppearanceEffects {
     #[inline(always)]
+    #[must_use]
     pub fn from_mask_bits(mask: u8) -> Self {
         Self {
             hidden: f32::from((mask & APPEARANCE_MASK_BIT_HIDDEN) != 0),
@@ -733,6 +748,7 @@ impl AppearanceEffects {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn approach_speeds() -> Self {
         Self {
             hidden: 1.0,
@@ -841,6 +857,7 @@ pub struct ChartAttackEffects {
 
 impl ChartAttackEffects {
     #[inline(always)]
+    #[must_use]
     pub const fn has_note_masks(self) -> bool {
         self.insert_mask != 0 || self.remove_mask != 0 || self.holds_mask != 0
     }

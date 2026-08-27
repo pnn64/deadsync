@@ -96,6 +96,7 @@ pub fn enforce_max_simultaneous_notes(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn local_player_col(column: usize, col_offset: usize, cols: usize) -> Option<usize> {
     if column < col_offset {
         return None;
@@ -105,6 +106,7 @@ pub fn local_player_col(column: usize, col_offset: usize, cols: usize) -> Option
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn player_index_for_column(
     num_players: usize,
     cols_per_player: usize,
@@ -126,12 +128,14 @@ pub const fn player_index_for_column(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn player_column_range(cols_per_player: usize, player: usize) -> (usize, usize) {
     let start = player * cols_per_player;
     (start, start + cols_per_player)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn player_note_range_for_ranges(
     note_ranges: &[(usize, usize)],
     num_players: usize,
@@ -144,6 +148,7 @@ pub fn player_note_range_for_ranges(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn local_column_for_field(cols_per_player: usize, column: usize) -> usize {
     if cols_per_player == 0 {
         column
@@ -163,6 +168,7 @@ fn notes_row_col_sorted(notes: &[Note]) -> bool {
     })
 }
 
+#[must_use]
 pub fn player_rows(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usize> {
     let mut rows = Vec::with_capacity(notes.len());
     let mut ordered = true;
@@ -198,10 +204,12 @@ fn player_rows_rescan(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usi
 }
 
 #[cfg(any(test, feature = "bench-support"))]
+#[must_use]
 pub fn player_rows_reference(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usize> {
     player_rows_rescan(notes, col_offset, cols)
 }
 
+#[must_use]
 pub fn count_nonempty_tracks_at_row(
     notes: &[Note],
     row: usize,
@@ -220,6 +228,7 @@ pub fn count_nonempty_tracks_at_row(
     seen[..cols].iter().filter(|&&on| on).count()
 }
 
+#[must_use]
 pub fn count_tap_or_hold_tracks_at_row(
     notes: &[Note],
     row: usize,
@@ -244,6 +253,7 @@ pub fn count_tap_or_hold_tracks_at_row(
     seen[..cols].iter().filter(|&&on| on).count()
 }
 
+#[must_use]
 pub fn count_tap_tracks_at_row(
     notes: &[Note],
     row: usize,
@@ -265,6 +275,7 @@ pub fn count_tap_tracks_at_row(
     seen[..cols].iter().filter(|&&on| on).count()
 }
 
+#[must_use]
 pub fn first_nonempty_track_at_row(
     notes: &[Note],
     row: usize,
@@ -287,6 +298,7 @@ pub fn first_nonempty_track_at_row(
     first
 }
 
+#[must_use]
 pub fn first_tap_track_at_row(
     notes: &[Note],
     row: usize,
@@ -312,12 +324,14 @@ pub fn first_tap_track_at_row(
     first
 }
 
+#[must_use]
 pub fn cell_has_any_note(notes: &[Note], row: usize, column: usize) -> bool {
     notes
         .iter()
         .any(|note| note.row_index == row && note.column == column)
 }
 
+#[must_use]
 pub fn cell_has_nonfake_note(notes: &[Note], row: usize, column: usize) -> bool {
     notes
         .iter()
@@ -328,6 +342,7 @@ pub fn remove_cell_notes(notes: &mut Vec<Note>, row: usize, column: usize) {
     notes.retain(|note| !(note.row_index == row && note.column == column));
 }
 
+#[must_use]
 pub fn is_hold_body_at_row(notes: &[Note], row: usize, column: usize) -> bool {
     let mut latest: Option<&Note> = None;
     for note in notes {
@@ -349,6 +364,7 @@ pub fn is_hold_body_at_row(notes: &[Note], row: usize, column: usize) -> bool {
         .is_some_and(|hold| hold.end_row_index >= row)
 }
 
+#[must_use]
 pub fn count_held_tracks_at_row(
     notes: &[Note],
     row: usize,
@@ -432,6 +448,7 @@ pub fn convert_tap_row_to_mines(notes: &mut [Note], row: usize) {
     }
 }
 
+#[must_use]
 pub fn track_range_has_any_note(
     notes: &[Note],
     column: usize,
@@ -459,6 +476,7 @@ fn sorted_track_range_has_any_note(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn sorted_track_range_has_any_note_bench(
     notes: &[Note],
     column: usize,
@@ -619,6 +637,7 @@ pub fn apply_mines_insert_reference(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn stomp_mirror_track(local_track: usize, cols: usize) -> usize {
     match cols {
         4 => [3, 2, 1, 0][local_track],
@@ -997,6 +1016,7 @@ pub fn apply_insert_intelligent_taps_reference(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn intelligent_candidate_count_bench(
     notes: &[Note],
     col_offset: usize,
@@ -1007,6 +1027,7 @@ pub fn intelligent_candidate_count_bench(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn intelligent_candidate_count_reference_bench(
     notes: &[Note],
     col_offset: usize,
@@ -1020,6 +1041,7 @@ pub fn intelligent_candidate_count_reference_bench(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn intelligent_endpoint_checksum_bench(
     notes: &[Note],
     rows: &[usize],
@@ -1044,6 +1066,7 @@ pub fn intelligent_endpoint_checksum_bench(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn intelligent_endpoint_checksum_reference_bench(
     notes: &[Note],
     rows: &[usize],
@@ -1063,6 +1086,7 @@ pub fn intelligent_endpoint_checksum_reference_bench(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn intelligent_window_checksum_bench(
     notes: &[Note],
     rows: &[usize],
@@ -1095,6 +1119,7 @@ pub fn intelligent_window_checksum_bench(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn intelligent_window_checksum_reference_bench(
     notes: &[Note],
     rows: &[usize],
@@ -1979,6 +2004,7 @@ pub fn convert_taps_to_holds_reference(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn hold_rows_reference_bench(notes: &[Note], col_offset: usize, cols: usize) -> u64 {
     player_rows_reference(notes, col_offset, cols)
         .into_iter()
@@ -1990,6 +2016,7 @@ pub fn hold_rows_reference_bench(notes: &[Note], col_offset: usize, cols: usize)
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn hold_rows_bench(notes: &[Note], col_offset: usize, cols: usize) -> u64 {
     let mut cursor = 0usize;
     let mut latest = [usize::MAX; MAX_COLS];
@@ -2003,6 +2030,7 @@ pub fn hold_rows_bench(notes: &[Note], col_offset: usize, cols: usize) -> u64 {
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn hold_row_local_reference_bench(
     notes: &[Note],
     row: usize,
@@ -2020,6 +2048,7 @@ pub fn hold_row_local_reference_bench(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn hold_row_local_bench(
     notes: &[Note],
     row: usize,
@@ -2048,6 +2077,7 @@ pub fn hold_row_local_bench(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn hold_body_masks_reference_bench(
     notes: &[Note],
     rows: &[usize],
@@ -2063,6 +2093,7 @@ pub fn hold_body_masks_reference_bench(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn hold_body_masks_bench(
     notes: &[Note],
     rows: &[usize],

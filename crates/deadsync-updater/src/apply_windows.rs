@@ -72,6 +72,7 @@ pub struct ApplyOutcome {
 /// `Program Files` or some other location the current user cannot
 /// modify, in which case the caller should surface a clear error
 /// rather than half-applying the swap.
+#[must_use]
 pub fn is_dir_writable(dir: &Path) -> bool {
     if !dir.is_dir() {
         return false;

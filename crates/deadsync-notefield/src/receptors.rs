@@ -885,7 +885,7 @@ mod tests {
                 generation: 9,
             } if key.as_ref() == "press"
         ));
-        assert_eq!(*tint, [0.2, 0.4, 0.6, 0.24000001]);
+        assert_eq!(*tint, [0.2, 0.4, 0.6, 0.240_000_01]);
         assert_eq!(*uv_rect, [0.1, 0.2, 0.8, 0.9]);
         assert!(*flip_x);
         assert!(!*flip_y);

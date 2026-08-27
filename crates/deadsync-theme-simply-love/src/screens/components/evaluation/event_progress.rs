@@ -1076,6 +1076,7 @@ fn build_overlay_panel(
     }
 }
 
+#[must_use]
 pub fn build_event_progress_boxes(
     asset_manager: &AssetManager,
     side: profile_data::PlayerSide,
@@ -1124,6 +1125,7 @@ pub fn build_event_progress_boxes(
         .collect()
 }
 
+#[must_use]
 pub fn build_event_overlay(
     asset_manager: &AssetManager,
     single_player: bool,

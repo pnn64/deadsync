@@ -65,6 +65,7 @@ const fn log_warning_text(level: LogLevel) -> Option<&'static str> {
 /// it when `log_level` is verbose (Debug/Trace). The vector wrapper
 /// matches the convention used by other shared overlay components
 /// (`stats_overlay`, `gamepad_overlay`).
+#[must_use]
 pub fn build(
     side: VersionOverlaySide,
     log_level: LogLevel,

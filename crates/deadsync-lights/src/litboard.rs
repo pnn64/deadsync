@@ -229,7 +229,7 @@ fn configure_serial(file: &File) -> io::Result<()> {
     if unsafe { GetCommState(handle, &mut dcb) } == 0 {
         return Err(io::Error::last_os_error());
     }
-    dcb.BaudRate = 115200;
+    dcb.BaudRate = 115_200;
     dcb.ByteSize = 8;
     dcb.StopBits = ONESTOPBIT;
     dcb.Parity = NOPARITY;

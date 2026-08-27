@@ -130,6 +130,7 @@ impl Journal {
     /// token.  The returned journal is in the `Applying` state and
     /// has no ops yet — callers add ops via [`Self::push_op`] before
     /// the first [`Self::write_atomic`] call.
+    #[must_use]
     pub fn new(exe_dir: &Path) -> Self {
         let token = generate_token();
         let staging_dir = exe_dir.join(format!("{STAGING_PREFIX}{token}"));
@@ -144,6 +145,7 @@ impl Journal {
 
     /// Builds the backup path for `target` using this journal's token,
     /// matching what [`Self::validate`] requires.
+    #[must_use]
     pub fn backup_path_for(&self, target: &Path) -> PathBuf {
         let mut s = target.as_os_str().to_owned();
         s.push(format!("{BACKUP_INFIX}{}", self.token));
@@ -268,6 +270,7 @@ impl Journal {
 }
 
 /// Path of the journal file relative to the install root.
+#[must_use]
 pub fn journal_path(exe_dir: &Path) -> PathBuf {
     exe_dir.join(JOURNAL_FILENAME)
 }
@@ -279,6 +282,7 @@ pub fn journal_path(exe_dir: &Path) -> PathBuf {
 /// alone: if they didn't already have a marker, we don't create one
 /// just because the release archive ships an empty placeholder; if
 /// they did, we overwrite with the (also empty) replacement.
+#[must_use]
 pub fn is_portability_marker(rel: &Path) -> bool {
     let mut comps = rel.components();
     let Some(first) = comps.next() else {
@@ -336,6 +340,7 @@ pub struct StagingGuard {
 }
 
 impl StagingGuard {
+    #[must_use]
     pub const fn new(path: PathBuf) -> Self {
         Self { path, armed: true }
     }
@@ -363,6 +368,7 @@ fn with_tmp_suffix(path: &Path) -> PathBuf {
 /// from the OS RNG.  Each apply gets its own token so backup names
 /// from different attempts (or from a future attempt that runs while
 /// a previous attempt's backups still linger) cannot collide.
+#[must_use]
 pub fn generate_token() -> String {
     let mut bytes = [0u8; TOKEN_HEX_LEN / 2];
     rand::rng().fill(&mut bytes);
@@ -467,6 +473,7 @@ pub struct ExecuteFailure {
 /// narrow window between `target -> backup` and `staged -> target`
 /// completing would leave the install permanently mixed because the
 /// rename would error and the journal would be dropped.
+#[must_use]
 pub fn recover(exe_dir: &Path) -> RecoveryReport {
     let mut report = RecoveryReport::default();
     let journal = match Journal::load(exe_dir) {
@@ -904,7 +911,7 @@ mod tests {
         j.state = JournalState::Applied;
         j.write_atomic(&dir).unwrap();
 
-        recover(&dir);
+        let _ = recover(&dir);
         assert_eq!(fs::read(&user_file).unwrap(), b"USER CONTENT");
         let _ = fs::remove_dir_all(&dir);
     }

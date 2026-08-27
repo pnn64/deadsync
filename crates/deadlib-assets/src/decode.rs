@@ -59,6 +59,7 @@ pub struct TextureAssetSpec {
     pub path: &'static str,
 }
 
+#[must_use]
 pub const fn texture_asset(path: &'static str) -> TextureAssetSpec {
     TextureAssetSpec { key: path, path }
 }

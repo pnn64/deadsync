@@ -202,6 +202,7 @@ fn apply_judgment_palette_selection(
     }
 }
 
+#[must_use]
 pub fn init(
     song: Arc<SongData>,
     chart_steps_index: [usize; PLAYER_SLOTS],
@@ -229,6 +230,7 @@ pub fn init(
     )
 }
 
+#[must_use]
 pub fn init_for_gameplay(
     song: Arc<SongData>,
     chart_steps_index: [usize; PLAYER_SLOTS],
@@ -647,10 +649,12 @@ pub fn sync_speed_mod_type_rows(state: &mut State) {
     }
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }

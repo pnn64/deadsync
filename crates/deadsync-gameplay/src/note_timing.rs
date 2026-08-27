@@ -1,4 +1,5 @@
 ﻿#[inline(always)]
+#[must_use]
 pub const fn input_queue_cap(num_cols: usize) -> usize {
     // Pre-size one backlog-warning bucket per 4-panel field so live gameplay
     // does not grow the queue before crossing its first pressure threshold.
@@ -11,6 +12,7 @@ pub const fn input_queue_cap(num_cols: usize) -> usize {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn replay_edge_cap(
     num_cols: usize,
     replay_cells: usize,
@@ -40,31 +42,37 @@ fn replay_seconds_cap(num_cols: usize, song_seconds: f32) -> usize {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn lane_press_started(pressed: bool, was_down: bool, is_down: bool) -> bool {
     pressed && !was_down && is_down
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn lane_release_finished(pressed: bool, was_down: bool, is_down: bool) -> bool {
     !pressed && was_down && !is_down
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn lane_edge_judges_tap(pressed: bool, slot_was_down: bool) -> bool {
     pressed && !slot_was_down
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn lane_edge_judges_lift(pressed: bool, slot_was_down: bool) -> bool {
     !pressed && slot_was_down
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn active_hold_counts_as_pressed(live_autoplay: bool, lane_pressed: bool) -> bool {
     live_autoplay || lane_pressed
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn counts_for_early_rescore(note_type: NoteType) -> bool {
     matches!(
         note_type,
@@ -73,6 +81,7 @@ pub const fn counts_for_early_rescore(note_type: NoteType) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn row_final_grade_hides_note(grade: JudgeGrade) -> bool {
     // deadsync's gameplay ruleset is ITG timing with optional FA+ visual
     // overlays, so match Simply Love ITG's MinTNSToHideNotes=W3 behavior.
@@ -83,6 +92,7 @@ pub const fn row_final_grade_hides_note(grade: JudgeGrade) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn lane_edge_matches_note_type(pressed: bool, note_type: NoteType) -> bool {
     match note_type {
         NoteType::Tap | NoteType::Hold | NoteType::Roll => pressed,
@@ -93,11 +103,13 @@ pub const fn lane_edge_matches_note_type(pressed: bool, note_type: NoteType) -> 
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn note_has_displayable_hold(note: &Note) -> bool {
     matches!(note.note_type, NoteType::Hold | NoteType::Roll) && note.hold.is_some()
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn column_cue_is_mine(note: &Note) -> Option<bool> {
     if note.is_fake {
         return None;
@@ -109,6 +121,7 @@ pub const fn column_cue_is_mine(note: &Note) -> Option<bool> {
     }
 }
 
+#[must_use]
 pub fn build_column_cues_for_player(
     notes: &[Note],
     note_range: (usize, usize),
@@ -167,6 +180,7 @@ pub fn build_column_cues_for_player(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn cached_hold_end_time_ns(time_ns: SongTimeNs) -> Option<SongTimeNs> {
     if song_time_ns_invalid(time_ns) {
         None
@@ -177,6 +191,7 @@ pub const fn cached_hold_end_time_ns(time_ns: SongTimeNs) -> Option<SongTimeNs> 
 
 #[cfg(any(test, feature = "bench-support"))]
 #[doc(hidden)]
+#[must_use]
 pub fn build_column_cues_for_player_reference(
     notes: &[Note],
     note_range: (usize, usize),
@@ -255,12 +270,14 @@ pub fn late_note_resolution_window_ns(timing_profile: &TimingProfile, rate: f32)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn max_step_distance_ns(timing_profile: &TimingProfile, rate: f32) -> SongTimeNs {
     late_note_resolution_window_ns(timing_profile, rate)
         .saturating_add(song_time_ns_from_seconds(MAX_INPUT_LATENCY_SECONDS))
 }
 
 #[inline(always)]
+#[must_use]
 pub fn judged_row_lookahead_time_ns(
     current_music_time_ns: SongTimeNs,
     timing_profile: &TimingProfile,
@@ -269,6 +286,7 @@ pub fn judged_row_lookahead_time_ns(
     current_music_time_ns.saturating_add(max_step_distance_ns(timing_profile, rate))
 }
 
+#[must_use]
 pub fn compute_end_times_ns(
     notes: &[Note],
     note_time_cache_ns: &[SongTimeNs],
@@ -310,6 +328,7 @@ pub struct GameplayEndTimingState {
 
 impl GameplayEndTimingState {
     #[inline(always)]
+    #[must_use]
     pub const fn new(
         notes_end_time_ns: SongTimeNs,
         music_end_time_ns: SongTimeNs,
@@ -323,16 +342,19 @@ impl GameplayEndTimingState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn notes_end_time_ns(&self) -> SongTimeNs {
         self.notes_end_time_ns
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn music_end_time_ns(&self) -> SongTimeNs {
         self.music_end_time_ns
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn audio_end_time_ns(&self) -> SongTimeNs {
         self.audio_end_time_ns
     }
@@ -349,6 +371,7 @@ impl GameplayEndTimingState {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_audio_end_time_ns(song: &SongData) -> SongTimeNs {
     let chart_end = song.precise_last_second();
     let audio_len = song.music_length_seconds;
@@ -458,6 +481,7 @@ pub struct GameplayTimeToBeatCaches {
 }
 
 impl GameplayTimeToBeatCaches {
+    #[must_use]
     pub fn new(
         timing: &TimingData,
         timing_players: &[&TimingData; MAX_PLAYERS],
@@ -657,6 +681,7 @@ fn lane_search_rows_from_beats(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn lane_search_rows_for_timing(
     timing: &TimingData,
     time_ns: SongTimeNs,
@@ -681,6 +706,7 @@ fn missed_note_cutoff_row_from_info(timing: &TimingData, beat_info: BeatInfo) ->
 }
 
 #[inline(always)]
+#[must_use]
 pub fn missed_note_cutoff_row_for_timing(timing: &TimingData, cutoff_time_ns: SongTimeNs) -> usize {
     missed_note_cutoff_row_from_info(
         timing,
@@ -689,6 +715,7 @@ pub fn missed_note_cutoff_row_for_timing(timing: &TimingData, cutoff_time_ns: So
 }
 
 #[inline(always)]
+#[must_use]
 pub fn missed_note_cutoff_row_for_music_time(
     timing_profile: &TimingProfile,
     timing: &TimingData,
@@ -700,6 +727,7 @@ pub fn missed_note_cutoff_row_for_music_time(
     missed_note_cutoff_row_for_timing(timing, cutoff_time_ns)
 }
 
+#[must_use]
 pub fn missed_note_cutoff_rows_for_players(
     timing_profile: &TimingProfile,
     timing_players: &[&TimingData; MAX_PLAYERS],
@@ -721,6 +749,7 @@ pub fn missed_note_cutoff_rows_for_players(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn timing_row_floor(timing: &TimingData, beat: f32) -> usize {
     let Some(mut row) = timing.get_row_for_beat(beat) else {
         return 0;
@@ -736,6 +765,7 @@ pub fn timing_row_floor(timing: &TimingData, beat: f32) -> usize {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn assist_row_no_offset_for_timing(
     timing: &TimingData,
     global_offset_seconds: f32,
@@ -766,6 +796,7 @@ fn assist_row_no_offset_cached(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn recent_step_tracks(
     pressed_since_ns: &[Option<SongTimeNs>; MAX_COLS],
     start: usize,
@@ -788,6 +819,7 @@ pub fn recent_step_tracks(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn recent_step_calories(
     pressed_since_ns: &[Option<SongTimeNs>; MAX_COLS],
     start: usize,
@@ -803,6 +835,7 @@ pub fn recent_step_calories(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn stage_music_cut(lead_in_seconds: f32) -> GameplayMusicCut {
     GameplayMusicCut {
         start_sec: f64::from(-lead_in_seconds.max(0.0)),
@@ -812,6 +845,7 @@ pub fn stage_music_cut(lead_in_seconds: f32) -> GameplayMusicCut {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn visible_notefield_time_ns(
     music_time_ns: SongTimeNs,
     visual_delay_seconds: f32,
@@ -820,6 +854,7 @@ pub fn visible_notefield_time_ns(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn music_time_from_stream_position(
     stream_position_seconds: f32,
     lead_in_seconds: f32,
@@ -837,6 +872,7 @@ pub fn music_time_from_stream_position(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn assist_clap_cursor_for_row(rows: &[usize], row: i32) -> usize {
     if row < 0 {
         0
@@ -864,6 +900,7 @@ pub struct GameplayAssistClapState {
 
 impl GameplayAssistClapState {
     #[inline(always)]
+    #[must_use]
     pub const fn new(rows: Vec<usize>) -> Self {
         Self {
             rows,
@@ -927,6 +964,7 @@ impl GameplayAssistClapState {
     }
 }
 
+#[must_use]
 pub fn assist_clap_schedule_update(
     rows: &[usize],
     cursor: usize,
@@ -974,6 +1012,7 @@ pub fn assist_clap_schedule_update(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn assist_clap_music_seconds_for_row(timing: &TimingData, row: usize) -> Option<f64> {
     let beat = timing.get_beat_for_row(row)?;
     Some(timing.get_time_for_beat_no_offset_ns(beat) as f64 * 1.0e-9)
@@ -1054,6 +1093,7 @@ fn build_assist_clap_rows_with_capacity(
     rows
 }
 
+#[must_use]
 pub fn build_assist_clap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
     build_assist_clap_rows_with_capacity(notes, note_range, note_row_count(notes, note_range))
 }
@@ -1078,6 +1118,7 @@ pub struct GameplayTimeBounds {
     pub music_end_time_ns: SongTimeNs,
 }
 
+#[must_use]
 pub fn compute_gameplay_time_bounds_ns(
     notes: &[Note],
     note_time_cache_ns: &[SongTimeNs],
@@ -1156,6 +1197,7 @@ fn hold_end_cache_checksum(cache: impl IntoIterator<Item = SongTimeNs>) -> u64 {
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+#[must_use]
 pub fn build_hold_end_time_cache_reference_for_bench(
     notes: &[Note],
     note_time_cache_ns: &[SongTimeNs],
@@ -1177,6 +1219,7 @@ pub fn build_hold_end_time_cache_reference_for_bench(
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+#[must_use]
 pub fn build_hold_end_time_cache_for_bench(
     notes: &[Note],
     note_time_cache_ns: &[SongTimeNs],
@@ -1194,6 +1237,7 @@ pub fn build_hold_end_time_cache_for_bench(
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+#[must_use]
 pub fn build_assist_clap_rows_preallocated_for_bench(
     notes: &[Note],
     note_range: (usize, usize),
@@ -1204,6 +1248,7 @@ pub fn build_assist_clap_rows_preallocated_for_bench(
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+#[must_use]
 pub fn build_assist_clap_rows_reference_for_bench(
     notes: &[Note],
     note_range: (usize, usize),
@@ -1212,6 +1257,7 @@ pub fn build_assist_clap_rows_reference_for_bench(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn assist_lookahead_music_horizon_seconds(delay_seconds: f32, slope: f32) -> f32 {
     let horizon_real = (delay_seconds + ASSIST_TICK_LOOKAHEAD_MARGIN_SECONDS).max(0.0);
     let slope = if slope.is_finite() && slope > 0.0 {
@@ -1225,6 +1271,7 @@ pub fn assist_lookahead_music_horizon_seconds(delay_seconds: f32, slope: f32) ->
 /// Highest assist row whose no-offset music time falls within the look-ahead
 /// horizon ahead of the audible position.
 #[inline(always)]
+#[must_use]
 pub fn assist_lookahead_future_row(
     timing: &TimingData,
     global_offset_seconds: f32,
@@ -1238,6 +1285,7 @@ pub fn assist_lookahead_future_row(
     assist_row_no_offset_for_timing(timing, global_offset_seconds, future_time).max(song_row)
 }
 
+#[must_use]
 pub fn build_note_count_stats(notes: &[Note], note_range: (usize, usize)) -> Vec<NoteCountStat> {
     let (start, end) = note_range;
     let mut cursor = start.min(notes.len());
@@ -1288,6 +1336,7 @@ fn build_note_count_stats_for_players_reference(
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+#[must_use]
 pub fn build_note_count_stats_for_players_for_bench(
     notes: &[Note],
     note_ranges: &[(usize, usize); MAX_PLAYERS],
@@ -1300,6 +1349,7 @@ pub fn build_note_count_stats_for_players_for_bench(
 }
 
 #[cfg(any(test, feature = "bench-support"))]
+#[must_use]
 pub fn build_note_count_stats_reference(
     notes: &[Note],
     note_range: (usize, usize),

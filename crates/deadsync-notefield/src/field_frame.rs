@@ -832,6 +832,7 @@ fn compose_field_contents<S, F>(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn measure_cue_range_search_enabled(
     show_cues: bool,
     scroll_speed: ScrollSpeedSetting,
@@ -1578,6 +1579,7 @@ fn resolve_field_camera<S>(
 /// compact stream; only an explicit field/player capture reconstructs actors.
 /// Cold compatibility adapter for capture consumers that still require an
 /// Actor tree. Ordinary notefield presentation must borrow `FlatDraws` directly.
+#[must_use]
 pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
     match draw {
         FlatDraw::Sprite(sprite) => Actor::Sprite {

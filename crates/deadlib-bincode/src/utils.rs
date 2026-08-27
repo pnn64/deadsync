@@ -4,7 +4,7 @@ pub trait Sealed {}
 
 impl<T> Sealed for &mut T where T: Sealed {}
 
-pub(crate) fn can_memcpy<T, C>() -> bool
+pub fn can_memcpy<T, C>() -> bool
 where
     C: InternalEndianConfig + InternalIntEncodingConfig,
 {

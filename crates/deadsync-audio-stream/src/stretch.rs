@@ -69,7 +69,7 @@ struct ChannelState {
     last_correlated_pos: usize,
 }
 
-pub(super) struct SolaStretcher {
+pub struct SolaStretcher {
     channels: usize,
     sample_rate: u32,
     window_frames: usize,
@@ -588,6 +588,7 @@ pub mod bench_support {
         append_crossfade(prev, current, weights, out);
     }
 
+    #[must_use]
     pub fn closest_match_old(buffer: &[f32], correlate: &[f32]) -> usize {
         if buffer.len() <= correlate.len() {
             return 0;
@@ -627,6 +628,7 @@ pub mod bench_support {
         best_offset
     }
 
+    #[must_use]
     pub fn closest_match_new(buffer: &[f32], correlate: &[f32]) -> usize {
         find_closest_match(buffer, correlate)
     }

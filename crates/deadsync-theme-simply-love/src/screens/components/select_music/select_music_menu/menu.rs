@@ -95,6 +95,7 @@ impl VisibleState {
     }
 }
 
+#[must_use]
 pub fn open() -> VisibleState {
     VisibleState {
         selected_index: 0,
@@ -363,6 +364,7 @@ pub struct RenderParams<'a> {
     pub selected_color: [f32; 4],
 }
 
+#[must_use]
 pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
     let mut actors = Vec::new();
     let cx = screen_center_x();

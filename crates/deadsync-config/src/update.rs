@@ -57,6 +57,7 @@ pub struct DedicatedMenuNavigation {
     pub disabled_by_missing_bindings: bool,
 }
 
+#[must_use]
 pub const fn dedicated_menu_navigation_label(three_key_navigation: bool) -> &'static str {
     if three_key_navigation {
         "Three Key Menu"
@@ -65,6 +66,7 @@ pub const fn dedicated_menu_navigation_label(three_key_navigation: bool) -> &'st
     }
 }
 
+#[must_use]
 pub const fn resolve_dedicated_menu_navigation(
     requested: bool,
     dedicated_bindings_supported: bool,

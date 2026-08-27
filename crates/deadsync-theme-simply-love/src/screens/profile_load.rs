@@ -20,6 +20,7 @@ pub struct State {
     next_screen: Screen,
 }
 
+#[must_use]
 pub const fn init() -> State {
     State {
         active_color_index: deadlib_present::color::DEFAULT_COLOR_INDEX,
@@ -53,14 +54,17 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     None
 }
 
+#[must_use]
 pub const fn handle_input(_: &mut State, _: &deadsync_input::InputEvent) -> ThemeEffect {
     ThemeEffect::None
 }
 
+#[must_use]
 pub const fn in_transition() -> (Vec<Actor>, f32) {
     (vec![], 0.0)
 }
 
+#[must_use]
 pub const fn out_transition() -> (Vec<Actor>, f32) {
     (vec![], 0.0)
 }
@@ -110,6 +114,7 @@ pub fn push_actors(
     ));
 }
 
+#[must_use]
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(4);
     push_actors(&mut actors, state, Default::default());

@@ -147,6 +147,7 @@ pub fn log_runtime_event(event: DownloadRuntimeEvent) {
     }
 }
 
+#[must_use]
 pub const fn unlock_downloads_available(
     auto_download_unlocks: bool,
     groovestats_status: &ConnectionStatus,
@@ -185,6 +186,7 @@ fn runtime_mark_ready_reload_changed() {
 }
 
 impl DownloadState {
+    #[must_use]
     pub fn snapshots(&self) -> Vec<DownloadSnapshot> {
         self.entries
             .iter()
@@ -198,6 +200,7 @@ impl DownloadState {
             .collect()
     }
 
+    #[must_use]
     pub fn completion_counts(&self) -> (usize, usize) {
         let total = self.entries.len();
         let finished = self.entries.iter().filter(|entry| entry.complete).count();
@@ -591,6 +594,7 @@ where
     })
 }
 
+#[must_use]
 pub fn unlock_destination_pack(destination: &str, roots: &[PathBuf]) -> PathBuf {
     if let Some(existing) = pack_paths_in_roots(destination, roots).pop() {
         return existing;
@@ -829,6 +833,7 @@ where
     Ok(())
 }
 
+#[must_use]
 pub fn sanitize_pack_name(raw: &str) -> String {
     let mut sanitized = String::with_capacity(raw.len());
     for ch in raw.chars() {
@@ -849,10 +854,12 @@ pub fn sanitize_pack_name(raw: &str) -> String {
     sanitized
 }
 
+#[must_use]
 pub fn mime_token(value: &str) -> &str {
     value.split(';').next().unwrap_or("").trim()
 }
 
+#[must_use]
 pub fn cache_has_destination(cache: &UnlockCache, url: &str, destination: &str) -> bool {
     cache
         .get(url)
@@ -953,14 +960,17 @@ pub fn write_unlock_cache_file(
     })
 }
 
+#[must_use]
 pub fn download_filename(id: u64) -> String {
     format!("{id:016x}.zip")
 }
 
+#[must_use]
 pub fn file_len(path: &Path) -> u64 {
     fs::metadata(path).map(|meta| meta.len()).unwrap_or(0)
 }
 
+#[must_use]
 pub fn itl_unlock_pack_ini_content(pack_name: &str) -> Option<String> {
     let lower = pack_name.to_ascii_lowercase();
     if !lower.contains(&format!("itl online {ITL_UNLOCK_PACK_YEAR} unlocks")) {

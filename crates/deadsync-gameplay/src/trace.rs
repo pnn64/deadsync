@@ -24,6 +24,7 @@ pub struct GameplayUpdatePhaseTimings {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_update_hot_phase(phases: &GameplayUpdatePhaseTimings) -> (&'static str, u32) {
     let mut best = ("pre_notes", phases.pre_notes_us);
     if phases.autoplay_us > best.1 {
@@ -100,6 +101,7 @@ pub fn accumulate_gameplay_update_phase_max(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_update_tracked_phase_total_us(phases: &GameplayUpdatePhaseTimings) -> u32 {
     phases
         .pre_notes_us
@@ -119,6 +121,7 @@ pub const fn gameplay_update_tracked_phase_total_us(phases: &GameplayUpdatePhase
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_trace_frame_is_slow(total_us: u32, hot_phase_us: u32) -> bool {
     total_us >= GAMEPLAY_TRACE_SLOW_FRAME_US || hot_phase_us >= GAMEPLAY_TRACE_PHASE_SPIKE_US
 }
@@ -196,6 +199,7 @@ impl Default for GameplayUpdateTraceState {
 
 impl GameplayUpdateTraceState {
     #[inline(always)]
+    #[must_use]
     pub fn from_capacity_snapshot(snapshot: &GameplayCapacityTraceSnapshot) -> Self {
         let mut trace = Self {
             pending_edges_capacity: snapshot.pending_edges_capacity,
@@ -478,6 +482,7 @@ impl GameplayUpdateTraceSummary {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn should_log_summary(&self) -> bool {
         self.elapsed_s >= GAMEPLAY_TRACE_SUMMARY_INTERVAL_S
     }
@@ -562,6 +567,7 @@ impl GameplayInputLatencyTrace {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn avg_us(total_us: u64, samples: u32) -> f32 {
         if samples == 0 {
             0.0
@@ -572,6 +578,7 @@ impl GameplayInputLatencyTrace {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn gameplay_input_latency_sample(
     captured_at: Instant,
     stored_at: Instant,
@@ -590,6 +597,7 @@ pub fn gameplay_input_latency_sample(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn saturating_elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
     let elapsed = later
         .checked_duration_since(earlier)
@@ -603,6 +611,7 @@ pub fn saturating_elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn elapsed_us_since(started: Instant) -> u32 {
     saturating_elapsed_us_between(Instant::now(), started)
 }

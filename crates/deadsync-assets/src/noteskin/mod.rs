@@ -70,31 +70,37 @@ fn add_workspace_noteskin_roots(roots: &mut Vec<PathBuf>, base: &Path) {
     }
 }
 
+#[must_use]
 pub fn song_lua_noteskin_resolve_path(skin: &str, button: &str, element: &str) -> Option<PathBuf> {
     let roots = noteskin_roots();
     noteskin_itg::song_lua_noteskin_resolve_path_from_roots(&roots, "dance", skin, button, element)
 }
 
+#[must_use]
 pub fn song_lua_noteskin_metric(skin: &str, element: &str, value: &str) -> Option<String> {
     let roots = noteskin_roots();
     noteskin_itg::song_lua_noteskin_metric_from_roots(&roots, "dance", skin, element, value)
 }
 
+#[must_use]
 pub fn song_lua_noteskin_metric_f(skin: &str, element: &str, value: &str) -> Option<f32> {
     let roots = noteskin_roots();
     noteskin_itg::song_lua_noteskin_metric_f_from_roots(&roots, "dance", skin, element, value)
 }
 
+#[must_use]
 pub fn song_lua_noteskin_metric_b(skin: &str, element: &str, value: &str) -> Option<bool> {
     let roots = noteskin_roots();
     noteskin_itg::song_lua_noteskin_metric_b_from_roots(&roots, "dance", skin, element, value)
 }
 
+#[must_use]
 pub fn song_lua_noteskin_exists(skin: &str) -> bool {
     let roots = noteskin_roots();
     noteskin_itg::song_lua_noteskin_exists_from_roots(&roots, "dance", skin)
 }
 
+#[must_use]
 pub fn song_lua_noteskin_names() -> Vec<String> {
     let roots = noteskin_roots();
     noteskin_itg::song_lua_noteskin_names_from_roots(&roots, "dance")

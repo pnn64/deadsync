@@ -460,7 +460,7 @@ fn preferred_mods_text_from(
 }
 
 #[inline(always)]
-pub(crate) fn preferred_mods_text(state: &State, player_idx: usize) -> Arc<str> {
+pub fn preferred_mods_text(state: &State, player_idx: usize) -> Arc<str> {
     preferred_mods_text_from(
         &state.profiles()[player_idx],
         state.scroll_speed_for_player(player_idx),

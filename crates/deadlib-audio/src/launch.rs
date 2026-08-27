@@ -40,6 +40,7 @@ pub enum LinuxAudioBackend {
 }
 
 impl LinuxAudioBackend {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Auto => "Auto",
@@ -226,6 +227,7 @@ pub struct OutputPlan {
 }
 
 impl OutputPlan {
+    #[must_use]
     pub fn devices(&self) -> &[OutputDeviceInfo] {
         &self.devices
     }

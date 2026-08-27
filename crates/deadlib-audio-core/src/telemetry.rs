@@ -459,6 +459,7 @@ pub enum OutputTelemetryBackend {
 
 impl OutputTelemetryBackend {
     #[inline(always)]
+    #[must_use]
     pub fn from_backend_name(name: &'static str) -> Self {
         match name {
             "alsa-shared" => Self::AlsaShared,
@@ -475,6 +476,7 @@ impl OutputTelemetryBackend {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn from_bits(bits: u8) -> Self {
         match bits {
             1 => Self::AlsaShared,
@@ -491,6 +493,7 @@ impl OutputTelemetryBackend {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Unknown => "unknown",
@@ -530,6 +533,7 @@ pub enum OutputTelemetryClock {
 
 impl OutputTelemetryClock {
     #[inline(always)]
+    #[must_use]
     pub const fn from_bits(bits: u8) -> Self {
         match bits {
             1 => Self::Callback,
@@ -546,6 +550,7 @@ impl OutputTelemetryClock {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Unknown => "unknown",
@@ -579,6 +584,7 @@ pub enum OutputTimingQuality {
 
 impl OutputTimingQuality {
     #[inline(always)]
+    #[must_use]
     pub const fn from_bits(bits: u8) -> Self {
         match bits {
             1 => Self::Trusted,
@@ -589,6 +595,7 @@ impl OutputTimingQuality {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Unknown => "unknown",
@@ -616,6 +623,7 @@ pub enum StutterDiagAudioEventKind {
 
 impl StutterDiagAudioEventKind {
     #[inline(always)]
+    #[must_use]
     pub const fn from_bits(bits: u8) -> Option<Self> {
         match bits {
             1 => Some(Self::Underrun),
@@ -627,6 +635,7 @@ impl StutterDiagAudioEventKind {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Underrun => "underrun",

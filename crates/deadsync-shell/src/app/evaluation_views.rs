@@ -291,7 +291,7 @@ fn refresh_submissions(
 ) -> scores::EvaluationSubmissionRefresh<MAX_PLAYERS> {
     let mut refresh = scores::evaluation_submission_refresh(queries);
     if auto_retry_at(policy, &refresh).is_some_and(|retry_at| now >= retry_at) {
-        scores::tick_evaluation_auto_retries(
+        let _ = scores::tick_evaluation_auto_retries(
             policy.context.enable_groovestats,
             policy.enable_boogiestats,
             policy.context.enable_arrowcloud,
@@ -351,7 +351,7 @@ impl App {
             .evaluation_submission_auto_retry_at
             .is_some_and(|retry_at| now >= retry_at);
         if submission_auto_retry_due {
-            scores::tick_evaluation_auto_retries(
+            let _ = scores::tick_evaluation_auto_retries(
                 policy.context.enable_groovestats,
                 policy.enable_boogiestats,
                 policy.context.enable_arrowcloud,

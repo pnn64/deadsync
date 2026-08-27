@@ -600,6 +600,7 @@ impl CachedTimingSegments {
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_timing_handoff_baseline(rounds: usize) -> u64 {
     (0..rounds).fold(0u64, |checksum, _| {
         let segments = Arc::new(timing_handoff_fixture());
@@ -614,6 +615,7 @@ pub fn benchmark_timing_handoff_baseline(rounds: usize) -> u64 {
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_timing_handoff_current(rounds: usize) -> u64 {
     (0..rounds).fold(0u64, |checksum, _| {
         let segments = Arc::new(timing_handoff_fixture());
@@ -1105,6 +1107,7 @@ impl From<&ChartDisplayBpm> for CachedChartDisplayBpm {
     }
 }
 
+#[must_use]
 pub fn parse_chart_display_bpm(tag: Option<&str>) -> Option<CachedChartDisplayBpm> {
     let s = tag?.trim();
     if s.is_empty() {
@@ -1129,6 +1132,7 @@ pub fn parse_chart_display_bpm(tag: Option<&str>) -> Option<CachedChartDisplayBp
     }
 }
 
+#[must_use]
 pub fn build_chart_totals(
     parsed_notes: &[CachedParsedNote],
     timing: &TimingData,
@@ -1185,10 +1189,12 @@ pub fn build_chart_totals(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn chart_has_attacks(attacks: Option<&str>) -> bool {
     attacks.is_some_and(|attacks| !attacks.trim().is_empty())
 }
 
+#[must_use]
 pub fn build_measure_seconds(timing: &TimingData, measure_count: usize) -> Vec<f32> {
     let mut seconds = Vec::with_capacity(measure_count);
     for measure in 0..measure_count {
@@ -1275,6 +1281,7 @@ pub fn build_chart_meta(chart: SerializableChartData, global_offset_seconds: f32
     }
 }
 
+#[must_use]
 pub fn build_cached_chart_meta(
     chart: &SerializableChartData,
     global_offset_seconds: f32,
@@ -1369,6 +1376,7 @@ pub fn build_chart_meta_from_cache(chart: CachedChartMeta) -> ChartData {
     }
 }
 
+#[must_use]
 pub fn build_gameplay_chart(
     chart: SerializableChartData,
     global_offset_seconds: f32,
@@ -1499,6 +1507,7 @@ pub fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -
     }
 }
 
+#[must_use]
 pub fn build_cached_song_meta(
     song: &SerializableSongData,
     global_offset_seconds: f32,
@@ -1672,6 +1681,7 @@ fn benchmark_song_cache_paths(
     Ok(checksum)
 }
 
+#[must_use]
 pub fn load_song_cache_file(
     path: &Path,
     cache_path: &Path,
@@ -1725,6 +1735,7 @@ fn encode_chart_payloads_reused<'a>(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_chart_payload_encoding_baseline(
     data: &SerializableSongData,
     iterations: usize,
@@ -1742,6 +1753,7 @@ pub fn benchmark_chart_payload_encoding_baseline(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_chart_payload_encoding_current(
     data: &SerializableSongData,
     iterations: usize,
@@ -1832,6 +1844,7 @@ fn write_song_cache_file_in(
     Ok(())
 }
 
+#[must_use]
 pub fn load_gameplay_charts_cache_file(
     song: &SongData,
     cache_path: &Path,
@@ -1871,6 +1884,7 @@ fn collect_requested_cached_charts(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_chart_requests_legacy(requests: &[usize], rounds: usize) -> u64 {
     let mut checksum = 0u64;
     for _ in 0..rounds {
@@ -1885,6 +1899,7 @@ pub fn benchmark_chart_requests_legacy(requests: &[usize], rounds: usize) -> u64
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_chart_requests_current(requests: &[usize], rounds: usize) -> u64 {
     let mut checksum = 0u64;
     for _ in 0..rounds {
@@ -2140,6 +2155,7 @@ fn runtime_song_parse_log_entry(simfile_path: &Path, fastload: bool) -> RuntimeS
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_runtime_debug_logs(song_count: usize, capture_debug_logs: bool) -> usize {
     let simfile_path = Path::new("Songs/Benchmark Pack/Benchmark Song/chart.ssc");
     (0..song_count)
@@ -2574,6 +2590,7 @@ fn load_cached_song_base_baseline(cache_path: &Path) -> Option<(CachedSong, u64)
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_cache_header_loads_baseline(cache_path: &Path, iterations: usize) -> u64 {
     benchmark_cache_header_loads(cache_path, iterations, |cache_path, _| {
         load_cached_song_base_baseline(cache_path)

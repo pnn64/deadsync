@@ -7,10 +7,12 @@ use std::sync::atomic::{AtomicI32, Ordering};
 // Logical design space
 // -----------------------------------------------------------------------------
 #[inline(always)]
+#[must_use]
 pub const fn logical_height() -> f32 {
     480.0
 }
 #[inline(always)]
+#[must_use]
 pub const fn design_width_16_9() -> f32 {
     854.0
 }
@@ -87,6 +89,7 @@ pub fn overscan() -> (i32, i32, i32, i32) {
 
 /// True if any overscan value is non-zero (i.e. centering should be applied).
 #[inline]
+#[must_use]
 pub fn overscan_active() -> bool {
     overscan() != (0, 0, 0, 0)
 }
@@ -105,6 +108,7 @@ const MIN_OVERSCAN_SCALE: f32 = 0.05;
 /// C = translate(shiftX, shiftY) * scale(scaleX, scaleY)
 /// ```
 #[inline]
+#[must_use]
 pub fn centering_matrix(tx: i32, ty: i32, aw: i32, ah: i32, pw: u32, ph: u32) -> Matrix4 {
     let pw = pw.max(1) as f32;
     let ph = ph.max(1) as f32;
@@ -119,6 +123,7 @@ pub fn centering_matrix(tx: i32, ty: i32, aw: i32, ah: i32, pw: u32, ph: u32) ->
 /// Centering matrix for the current live overscan values and window size, or
 /// `None` when no adjustment is active.
 #[inline]
+#[must_use]
 pub fn current_centering_matrix() -> Option<Matrix4> {
     let (tx, ty, aw, ah) = overscan();
     if (tx, ty, aw, ah) == (0, 0, 0, 0) {
@@ -129,6 +134,7 @@ pub fn current_centering_matrix() -> Option<Matrix4> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn screen_width() -> f32 {
     CURRENT_METRICS.with(|c| {
         let m = c.get();
@@ -136,6 +142,7 @@ pub fn screen_width() -> f32 {
     })
 }
 #[inline(always)]
+#[must_use]
 pub fn screen_height() -> f32 {
     CURRENT_METRICS.with(|c| {
         let m = c.get();
@@ -145,27 +152,33 @@ pub fn screen_height() -> f32 {
 
 // Top-left origin to match SM (SCREEN_LEFT/TOP = 0)
 #[inline(always)]
+#[must_use]
 pub const fn screen_left() -> f32 {
     0.0
 }
 #[inline(always)]
+#[must_use]
 pub const fn screen_top() -> f32 {
     0.0
 }
 #[inline(always)]
+#[must_use]
 pub fn screen_right() -> f32 {
     screen_width()
 }
 #[inline(always)]
+#[must_use]
 pub fn screen_bottom() -> f32 {
     screen_height()
 }
 
 #[inline(always)]
+#[must_use]
 pub fn screen_center_x() -> f32 {
     0.5 * screen_width()
 }
 #[inline(always)]
+#[must_use]
 pub fn screen_center_y() -> f32 {
     0.5 * screen_height()
 }
@@ -174,6 +187,7 @@ pub fn screen_center_y() -> f32 {
 // Metrics for a display aspect ratio (clamped ≤ 16:9)
 // -----------------------------------------------------------------------------
 #[inline(always)]
+#[must_use]
 pub fn metrics_for_aspect(aspect: f32) -> Metrics {
     let aspect = if aspect.is_finite() && aspect > 0.0 {
         aspect
@@ -200,6 +214,7 @@ pub fn metrics_for_aspect(aspect: f32) -> Metrics {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn metrics_for_window(px_w: u32, px_h: u32) -> Metrics {
     let aspect = if px_h == 0 {
         1.0
@@ -210,6 +225,7 @@ pub fn metrics_for_window(px_w: u32, px_h: u32) -> Metrics {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn ortho_for_aspect(aspect: f32) -> Matrix4 {
     let m = metrics_for_aspect(aspect);
     glam::camera::rh::proj::opengl::orthographic(m.left, m.right, m.bottom, m.top, -1.0, 1.0)
@@ -219,6 +235,7 @@ pub fn ortho_for_aspect(aspect: f32) -> Matrix4 {
 // Ortho for current window (also stores CURRENT_PIXEL + CURRENT_METRICS)
 // -----------------------------------------------------------------------------
 #[inline(always)]
+#[must_use]
 pub fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
     set_current_window_px(width, height);
     let m = metrics_for_window(width, height);
@@ -230,6 +247,7 @@ pub fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
 // Aspect helpers
 // -----------------------------------------------------------------------------
 #[inline(always)]
+#[must_use]
 pub fn is_wide() -> bool {
     let w = screen_width();
     let h = screen_height();
@@ -244,6 +262,7 @@ pub fn is_wide() -> bool {
 // -----------------------------------------------------------------------------
 
 /// Helper to select a scale factor based on screen aspect ratio.
+#[must_use]
 pub fn widescale(n43: f32, n169: f32) -> f32 {
     if is_wide() { n169 } else { n43 }
 }

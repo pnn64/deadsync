@@ -51,6 +51,7 @@ pub struct ImportedHighScore {
 /// `itgmania/src/SongOptions.cpp` `GetMods`), e.g. `"1.5xMusic"`. The token is
 /// comma/space separated from the other modifiers. Returns `1.0` when no rate
 /// token is present or it can't be parsed into a positive number.
+#[must_use]
 pub fn music_rate_from_modifiers(modifiers: &str) -> f32 {
     for token in modifiers.split([',', ' ', '\t']) {
         let token = token.trim();
@@ -79,6 +80,7 @@ pub fn music_rate_from_modifiers(modifiers: &str) -> f32 {
 ///
 /// Returns `None` for unrecognized values so the caller can decide how to treat
 /// them (`DeadSync` has no `Grade_Tier00`/`Grade_Quint` analogue in `ITGmania`).
+#[must_use]
 pub fn grade_from_itg(grade: &str) -> Option<Grade> {
     let trimmed = grade.trim();
     let tier = trimmed.strip_prefix("Grade_").unwrap_or(trimmed);
@@ -107,6 +109,7 @@ pub fn grade_from_itg(grade: &str) -> Option<Grade> {
 
 /// Parses an `ITGmania` `<DateTime>` (`"YYYY-MM-DD HH:MM:SS"`, local time) into
 /// epoch milliseconds. Returns `None` if the string can't be parsed.
+#[must_use]
 pub fn parse_itg_datetime_ms(date_time: &str) -> Option<i64> {
     let naive = NaiveDateTime::parse_from_str(date_time.trim(), "%Y-%m-%d %H:%M:%S").ok()?;
     // ITGmania writes timestamps in machine-local time. Interpret them the same
@@ -131,6 +134,7 @@ pub fn parse_itg_datetime_ms(date_time: &str) -> Option<i64> {
 /// * `music_rate` is recovered from the `<Modifiers>` rate token (default 1.0).
 /// * EX / Hard-EX are unrecoverable → `0.0`.
 /// * The lamp is recomputed from the judgment counts (W0 split unknown).
+#[must_use]
 pub fn local_score_from_itg(hs: &ImportedHighScore) -> Option<LocalScoreEntry> {
     let grade = grade_from_itg(&hs.grade)?;
 

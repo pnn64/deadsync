@@ -298,6 +298,7 @@ fn bgchange_asset_roots(dirname: &str) -> Vec<PathBuf> {
     collect_media_roots(dirname, &dirs.data_dir, &dirs.exe_dir, cwd.as_deref())
 }
 
+#[must_use]
 pub fn random_movie_paths(song: &SongData, random_movies: bool) -> Vec<PathBuf> {
     if !random_movies {
         return Vec::new();
@@ -305,6 +306,7 @@ pub fn random_movie_paths(song: &SongData, random_movies: bool) -> Vec<PathBuf> 
     random_movie_paths_for_song(song, &bgchange_asset_roots(RANDOM_MOVIES_DIR))
 }
 
+#[must_use]
 pub fn gameplay_background_changes(
     song: &SongData,
     gameplay_chart: &GameplayChartData,
@@ -336,6 +338,7 @@ fn parse_song_options() -> ParseSongOptions {
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_parse_options_per_song(song_count: usize) -> usize {
     (0..song_count)
         .map(|_| {
@@ -346,6 +349,7 @@ pub fn benchmark_parse_options_per_song(song_count: usize) -> usize {
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_parse_options_hoisted(song_count: usize) -> usize {
     let options = parse_song_options();
     (0..song_count)

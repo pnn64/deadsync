@@ -36,6 +36,7 @@ const PLAYERFRAME_EXIT_ZOOM_OUT_DURATION: f32 = 0.35;
 const JOIN_PULSE_ZOOM_IN: f32 = 1.15;
 const JOIN_PULSE_DURATION: f32 = 0.175;
 
+#[must_use]
 pub const fn exit_anim_duration() -> f32 {
     EXIT_ANIM_DURATION
 }
@@ -388,11 +389,13 @@ fn init_with_profiles(
     state
 }
 
+#[must_use]
 pub fn init(view: ProfilePickerView) -> State {
     let [p1, p2] = view.default_profiles.clone();
     init_with_profiles(view, p1, p2)
 }
 
+#[must_use]
 pub fn init_active(
     view: ProfilePickerView,
     active_profiles: [profile_data::ActiveProfile; 2],
@@ -401,6 +404,7 @@ pub fn init_active(
     init_with_profiles(view, p1, p2)
 }
 
+#[must_use]
 pub fn init_late_join(
     view: ProfilePickerView,
     joining_side: profile_data::PlayerSide,
@@ -501,10 +505,12 @@ pub fn update(state: &mut State, dt: f32) {
     }
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     super::transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     super::transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
@@ -866,7 +872,7 @@ fn exit_anim_t(exiting: bool) -> f32 {
         exiting,
         EXIT_ANIM_DURATION,
         &STEPS,
-        0x53454C5052455849u64, // "SELPREXI"
+        0x5345_4C50_5245_5849_u64, // "SELPREXI"
     )
 }
 
@@ -1249,7 +1255,7 @@ fn box_inner_alpha() -> f32 {
     let mut init = anim::TweenState::default();
     init.x = 0.0;
     const SITE_BASE: u64 = runtime::site_base(file!(), line!(), column!());
-    let sid = runtime::site_id(SITE_BASE, 0x53454C50524F4649u64); // "SELPROFI"
+    let sid = runtime::site_id(SITE_BASE, 0x5345_4C50_524F_4649_u64); // "SELPROFI"
     runtime::materialize(sid, init, steps).x.clamp(0.0, 1.0)
 }
 

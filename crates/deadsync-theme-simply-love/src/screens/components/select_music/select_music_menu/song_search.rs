@@ -43,6 +43,7 @@ pub enum SongSearchScope {
 
 impl SongSearchScope {
     #[inline(always)]
+    #[must_use]
     pub const fn toggled(self) -> Self {
         match self {
             SongSearchScope::Song => SongSearchScope::Pack,
@@ -170,6 +171,7 @@ pub enum SongSearchMatch {
 
 impl SongSearchMatch {
     /// The completion / list label for this match.
+    #[must_use]
     pub fn label(&self) -> String {
         match self {
             SongSearchMatch::Song { candidate, .. } => {
@@ -209,17 +211,20 @@ pub enum SongSearchState {
 
 impl SongSearchState {
     #[inline(always)]
+    #[must_use]
     pub const fn is_open(&self) -> bool {
         matches!(self, SongSearchState::Open(_))
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_hidden(&self) -> bool {
         matches!(self, SongSearchState::Hidden)
     }
 }
 
 /// Open a fresh overlay; the caller populates `matches`.
+#[must_use]
 pub const fn begin_song_search() -> SongSearchState {
     SongSearchState::Open(SongSearchOpen {
         query: String::new(),
@@ -289,6 +294,7 @@ pub fn song_search_delete_word(open: &mut SongSearchOpen) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_search_shown(open: &SongSearchOpen) -> usize {
     open.matches.len().min(SONG_SEARCH_MAX_RESULTS)
 }
@@ -309,6 +315,7 @@ pub fn song_search_move(open: &mut SongSearchOpen, delta: isize) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_search_focused_match(open: &SongSearchOpen) -> Option<&SongSearchMatch> {
     open.matches.get(open.selected_index)
 }
@@ -329,6 +336,7 @@ pub struct SongSearchCompletion {
 /// something visibly offered. The ghost is only offered when the query Tab would
 /// install literally extends what the user typed, so completing a title never
 /// silently widens the search and never renders text Tab would not produce.
+#[must_use]
 pub fn song_search_completion(open: &SongSearchOpen) -> Option<SongSearchCompletion> {
     if open.query.is_empty() {
         return None;
@@ -358,6 +366,7 @@ pub fn song_search_completion(open: &SongSearchOpen) -> Option<SongSearchComplet
 
 /// Rebuild `query` so its free text becomes `label`, keeping the `[###]` filter
 /// tokens verbatim (a BPM token cannot be rebuilt from the parsed tier).
+#[must_use]
 pub fn song_search_query_completed_with(query: &str, label: &str) -> String {
     let mut out = String::new();
     let mut chars = query.chars().peekable();
@@ -454,11 +463,13 @@ struct SongIndexEntry {
 
 impl SongSearchIndex {
     #[inline(always)]
+    #[must_use]
     pub const fn song_count(&self) -> usize {
         self.songs.len()
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn pack_count(&self) -> usize {
         self.packs.len()
     }
@@ -472,6 +483,7 @@ impl SongSearchIndex {
 
 /// Build the search index from the grouped wheel catalog. Runs once at catalog
 /// load (and on reload), not per keystroke.
+#[must_use]
 pub fn build_song_search_index(entries: &[MusicWheelEntry]) -> SongSearchIndex {
     let mut index = SongSearchIndex::default();
     let mut current_pack = usize::MAX;
@@ -524,6 +536,7 @@ fn folded_key(text: &str) -> Arc<str> {
 ///
 /// Only the rows that can be shown are materialized, so a large catalog does
 /// not build candidates it will discard.
+#[must_use]
 pub fn build_song_matches(
     index: &SongSearchIndex,
     query: &str,
@@ -593,6 +606,7 @@ pub fn build_song_matches(
 }
 
 /// Rank packs for `query` by fuzzy-matching their display names.
+#[must_use]
 pub fn build_pack_matches(index: &SongSearchIndex, query: &str) -> Vec<SongSearchMatch> {
     let q = fuzzy::prepare_query(query);
     let mut ranked: Vec<(i32, usize)> = Vec::new();
@@ -632,6 +646,7 @@ fn cmp_ascii_ci(a: &str, b: &str) -> std::cmp::Ordering {
 }
 
 /// Build the overlay actors, or `None` when the search is hidden.
+#[must_use]
 pub fn build_song_search_overlay(
     state: &SongSearchState,
     active_color_index: i32,

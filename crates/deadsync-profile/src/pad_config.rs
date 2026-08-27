@@ -33,6 +33,7 @@ const META_KEYS: [&str; 6] = [
 pub const PAD_CONFIG_FILE: &str = "padconfig.ini";
 
 #[inline(always)]
+#[must_use]
 pub fn pad_config_path(profile_dir: &Path) -> PathBuf {
     profile_dir.join(PAD_CONFIG_FILE)
 }
@@ -109,6 +110,7 @@ pub fn delete_config(list: &mut Vec<PadConfigProfile>, name: &str) -> bool {
     list.len() != before
 }
 
+#[must_use]
 pub fn config_matches(profile: &PadConfigProfile, backend: &str, pad_type: Option<&str>) -> bool {
     profile.backend == backend
         && match (profile.pad_type.as_deref(), pad_type) {
@@ -117,10 +119,12 @@ pub fn config_matches(profile: &PadConfigProfile, backend: &str, pad_type: Optio
         }
 }
 
+#[must_use]
 pub fn is_default_for(profile: &PadConfigProfile, serial: &str) -> bool {
     profile.default_for_serials.iter().any(|s| s == serial)
 }
 
+#[must_use]
 pub fn resolve<'a>(
     profiles: &'a [PadConfigProfile],
     backend: &str,
@@ -140,6 +144,7 @@ pub fn resolve<'a>(
         })
 }
 
+#[must_use]
 pub fn serialize(profiles: &[PadConfigProfile]) -> String {
     let mut content = String::new();
     for (i, p) in profiles.iter().enumerate() {
@@ -158,6 +163,7 @@ pub fn serialize(profiles: &[PadConfigProfile]) -> String {
     content
 }
 
+#[must_use]
 pub fn parse(content: &str) -> Vec<PadConfigProfile> {
     let mut out = Vec::new();
     let mut in_section = false;
@@ -230,6 +236,7 @@ pub fn load_path(path: &Path) -> std::io::Result<Vec<PadConfigProfile>> {
     Ok(parse(&content))
 }
 
+#[must_use]
 pub fn load_dir(profile_dir: &Path) -> Vec<PadConfigProfile> {
     load_path(&pad_config_path(profile_dir)).unwrap_or_default()
 }
@@ -529,7 +536,7 @@ fn flush_profile(
     settings.clear();
 }
 
-fn opt_string(s: &mut String) -> Option<String> {
+fn opt_string(s: &String) -> Option<String> {
     let trimmed = s.trim();
     if trimmed.is_empty() {
         None

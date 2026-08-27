@@ -7,6 +7,7 @@ pub enum StepStatsPlayStyle {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn step_stats_play_style(play_style: GameplayInputPlayStyle) -> StepStatsPlayStyle {
     match play_style {
         GameplayInputPlayStyle::Single | GameplayInputPlayStyle::PumpSingle => {
@@ -21,6 +22,7 @@ pub const fn step_stats_play_style(play_style: GameplayInputPlayStyle) -> StepSt
     }
 }
 
+#[must_use]
 pub fn step_stats_notefield_width(cols_per_player: usize) -> Option<f32> {
     if cols_per_player == 0 {
         return None;
@@ -30,6 +32,7 @@ pub fn step_stats_notefield_width(cols_per_player: usize) -> Option<f32> {
     Some(cols_per_player as f32 * 64.0)
 }
 
+#[must_use]
 pub fn step_stats_upper_density_graph_width(play_style: StepStatsPlayStyle) -> f32 {
     // zmod UpperNPSGraph parity:
     //   width = GetNotefieldWidth()
@@ -45,6 +48,7 @@ pub fn step_stats_upper_density_graph_width(play_style: StepStatsPlayStyle) -> f
     (width - 30.0_f32).max(0.0_f32)
 }
 
+#[must_use]
 pub fn step_stats_density_graph_width(
     play_style: StepStatsPlayStyle,
     cols_per_player: usize,
@@ -108,6 +112,7 @@ pub struct GameplayDensityGraphView {
 
 impl GameplayDensityGraphView {
     #[inline(always)]
+    #[must_use]
     pub fn top_mesh_h(self, player: usize) -> f32 {
         self.top_h * self.top_scale_y[player].clamp(0.0, 1.0)
     }
@@ -154,6 +159,7 @@ impl Default for GameplayDensityGraphState {
     }
 }
 
+#[must_use]
 pub fn density_graph_u0_for_time(window: DensityGraphWindow, current_music_time: f32) -> f32 {
     if window.graph_w <= 0.0_f32 || window.graph_h <= 0.0_f32 || window.scaled_width <= 0.0_f32 {
         return 0.0;
@@ -182,6 +188,7 @@ pub fn density_graph_u0_for_time(window: DensityGraphWindow, current_music_time:
     0.0
 }
 
+#[must_use]
 pub fn density_graph_life_catch_up_steps(
     total_elapsed: f32,
     next_update_elapsed: f32,
@@ -207,6 +214,7 @@ pub fn density_graph_life_catch_up_steps(
 /// sample and floating-point boundary rounding, so a live song never has to grow
 /// this buffer. The simplifier may retain fewer points, but never more than the
 /// number of scheduled samples.
+#[must_use]
 pub fn density_graph_life_capacity(duration: f32, life_update_rate: f32) -> usize {
     if !duration.is_finite()
         || duration <= 0.0
@@ -218,6 +226,7 @@ pub fn density_graph_life_capacity(duration: f32, life_update_rate: f32) -> usiz
     ((duration / life_update_rate).ceil() as usize).saturating_add(2)
 }
 
+#[must_use]
 pub fn density_graph_life_sample_x(
     current_music_time: f32,
     first_second: f32,
@@ -273,6 +282,7 @@ pub fn push_density_life_point(points: &mut Vec<[f32; 2]>, x: f32, y: f32) -> bo
     true
 }
 
+#[must_use]
 pub fn reference_bpm_from_display_tag(
     chart_display_bpm: Option<&ChartDisplayBpm>,
     song_display_bpm: &str,

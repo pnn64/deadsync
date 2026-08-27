@@ -58,6 +58,7 @@ pub struct ImportSummary {
 impl ImportSummary {
     /// Whether `GrooveStats` and/or `ArrowCloud` credentials were carried across (so
     /// the user can pull online scores via Score Import).
+    #[must_use]
     pub const fn online_keys_imported(&self) -> bool {
         self.groovestats_imported || self.arrowcloud_imported
     }
@@ -73,6 +74,7 @@ pub struct PreparedImport {
     pub favorite_hashes: HashSet<String>,
 }
 
+#[must_use]
 pub fn prepare_import(
     source: &ItgSource,
     base_singles: &PlayerOptionsData,

@@ -8,6 +8,7 @@ use deadsync_input::{
 pub use deadsync_input::{editable_key_binding_slot_indices, protected_default_key_for_action};
 use winit::keyboard::KeyCode;
 
+#[must_use]
 pub fn load_keymap_from_ini(conf: &SimpleIni) -> Keymap {
     let section = conf
         .get_section("Keymaps")
@@ -24,6 +25,7 @@ pub fn publish_keymap_from_ini(conf: &SimpleIni) {
     set_keymap(load_keymap_from_ini(conf));
 }
 
+#[must_use]
 pub fn update_keymap_binding_unique_keyboard(
     action: VirtualAction,
     index: usize,
@@ -44,6 +46,7 @@ pub fn update_keymap_binding_unique_keyboard_saved(
     }
 }
 
+#[must_use]
 pub fn update_keymap_binding_unique_gamepad(
     action: VirtualAction,
     index: usize,
@@ -64,6 +67,7 @@ pub fn update_keymap_binding_unique_gamepad_saved(
     }
 }
 
+#[must_use]
 pub fn clear_keymap_binding(action: VirtualAction, index: usize) -> bool {
     let current = get_keymap();
     let (new_map, changed) = cleared_keymap(&current, action, index);
@@ -73,6 +77,7 @@ pub fn clear_keymap_binding(action: VirtualAction, index: usize) -> bool {
     changed
 }
 
+#[must_use]
 pub fn clear_keymap_binding_saved(action: VirtualAction, index: usize) -> bool {
     if clear_keymap_binding(action, index) {
         save_without_keymaps();

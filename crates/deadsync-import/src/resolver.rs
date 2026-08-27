@@ -72,6 +72,7 @@ pub enum Resolution<'a> {
 
 impl<'a> ChartResolver<'a> {
     /// Builds the resolver from the scanned packs.
+    #[must_use]
     pub fn build(packs: &'a [SongPack]) -> Self {
         let mut by_song = HashMap::with_hasher(FxBuildHasher);
         for pack in packs {
@@ -96,11 +97,13 @@ impl<'a> ChartResolver<'a> {
     /// Resolves an `ITGmania` song directory key (e.g. `"Pack/Song"` from
     /// `favorites.txt`, or a `Stats.xml` `Dir`) to the matching library song.
     /// Returns `None` when the song isn't in `DeadSync`'s scanned library.
+    #[must_use]
     pub fn resolve_song(&self, song_dir: &str) -> Option<&'a SongData> {
         self.song_for_dir(song_dir)
     }
 
     /// Resolves a score key to a chart `short_hash`.
+    #[must_use]
     pub fn resolve(
         &self,
         song_dir: &str,
@@ -207,6 +210,7 @@ fn song_folder_name(song: &SongData) -> Option<&str> {
 /// `(pack_lower, song_folder_lower)` pair. Leading `Songs/` / `AdditionalSongs/`
 /// roots and surrounding slashes are stripped. Returns `None` if the path
 /// doesn't have at least a pack and a song component.
+#[must_use]
 pub fn normalize_song_dir(dir: &str) -> Option<(String, String)> {
     let (pack, song) = song_dir_parts(dir)?;
     Some((pack.to_ascii_lowercase(), song.to_ascii_lowercase()))

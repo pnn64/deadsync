@@ -28,6 +28,7 @@ pub const ERROR_BAR_LONG_AVG_SAMPLE_FILTER_S: f32 = 0.060;
 pub const ERROR_BAR_LONG_AVG_PRUNE_PER_TAP: usize = 4;
 
 #[inline(always)]
+#[must_use]
 pub const fn clamp_average_error_bar_interval_ms(ms: u32) -> u32 {
     let clamped = if ms < AVERAGE_ERROR_BAR_INTERVAL_MS_MIN {
         AVERAGE_ERROR_BAR_INTERVAL_MS_MIN
@@ -43,6 +44,7 @@ pub const fn clamp_average_error_bar_interval_ms(ms: u32) -> u32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn error_bar_window_ix(window: TimingWindow) -> usize {
     match window {
         TimingWindow::W0 => 0,

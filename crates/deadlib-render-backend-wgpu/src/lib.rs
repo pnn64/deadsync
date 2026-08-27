@@ -1732,6 +1732,7 @@ pub fn update_yuv420_texture(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn texture_is_yuv420(texture: &Texture) -> bool {
     texture.images.is_yuv420()
 }

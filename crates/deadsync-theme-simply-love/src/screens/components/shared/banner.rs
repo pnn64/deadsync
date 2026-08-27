@@ -49,12 +49,14 @@ fn cover_uv_for_dims(tex_w: f32, tex_h: f32, frame_w: f32, frame_h: f32) -> Opti
 }
 
 #[inline(always)]
+#[must_use]
 pub fn clipped_uv(texture_key: &str, frame_w: f32, frame_h: f32) -> Option<[f32; 4]> {
     let meta = assets::texture_dims(texture_key)?;
     clipped_uv_for_dims(meta.w as f32, meta.h as f32, frame_w, frame_h)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn cover_uv(texture_key: &str, frame_w: f32, frame_h: f32) -> Option<[f32; 4]> {
     let meta = assets::texture_dims(texture_key)?;
     cover_uv_for_dims(meta.w as f32, meta.h as f32, frame_w, frame_h)
@@ -121,8 +123,8 @@ mod tests {
     #[test]
     fn crops_full_art_vertically_like_itgmania() {
         let uv = clipped_uv_for_dims(1536.0, 1024.0, 418.0, 164.0).unwrap();
-        assert!((uv[1] - 0.13074161).abs() < 0.0001);
-        assert!((uv[3] - 0.8692584).abs() < 0.0001);
+        assert!((uv[1] - 0.130_741_61).abs() < 0.0001);
+        assert!((uv[3] - 0.869_258_4).abs() < 0.0001);
     }
 
     #[test]
@@ -140,7 +142,7 @@ mod tests {
     #[test]
     fn covers_fullscreen_background_without_stretching() {
         let uv = cover_uv_for_dims(1536.0, 1024.0, 1280.0, 720.0).unwrap();
-        assert!((uv[1] - 0.078125).abs() < 0.0001);
-        assert!((uv[3] - 0.921875).abs() < 0.0001);
+        assert!((uv[1] - 0.078_125).abs() < 0.0001);
+        assert!((uv[3] - 0.921_875).abs() < 0.0001);
     }
 }

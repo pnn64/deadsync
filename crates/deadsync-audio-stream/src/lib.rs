@@ -133,6 +133,7 @@ pub mod decode_bench_support {
     use super::{PlanarAccum, planar_window};
 
     #[inline]
+    #[must_use]
     pub fn planar_window_checksum(planar: &PlanarAccum, frames: usize) -> u64 {
         planar_window(planar, frames).iter().enumerate().fold(
             0u64,
@@ -237,6 +238,7 @@ impl MusicBackpressureCounters {
 #[cfg(feature = "test-support")]
 impl MusicStream {
     /// Returns a snapshot of benchmark-only pacing counters.
+    #[must_use]
     pub fn backpressure_stats(&self) -> MusicBackpressureStats {
         self.backpressure_stats.snapshot()
     }
@@ -538,6 +540,7 @@ impl MusicBackpressure {
     fn note_outstanding(&self, _outstanding: usize) {}
 }
 
+#[must_use]
 pub fn snap_music_start_sec(path: &Path, start_sec: f64) -> f64 {
     let Ok(Some(snapped)) = decode::snap_start_forward_to_packet(path, start_sec) else {
         return start_sec;

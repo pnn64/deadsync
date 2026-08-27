@@ -26,6 +26,7 @@ pub struct MineGradientSlotPlan {
     pub frame_count: usize,
 }
 
+#[must_use]
 pub fn mine_gradient_slot_plan(colors: &[[f32; 4]]) -> MineGradientSlotPlan {
     let frame_count = colors.len().max(1);
     let frame_size = MINE_GRADIENT_FRAME_SIZE as i32;
@@ -65,6 +66,7 @@ fn mine_grad_byte(v: f32) -> u8 {
     (v.clamp(0.0, 1.0) * 255.0).round() as u8
 }
 
+#[must_use]
 pub fn mine_gradient_texture_key(colors: &[[f32; 4]]) -> String {
     let mut hasher = XxHash64::default();
     hasher.write_u32(MINE_FILL_LAYERS as u32);
@@ -78,6 +80,7 @@ pub fn mine_gradient_texture_key(colors: &[[f32; 4]]) -> String {
     format!("{MINE_GRADIENT_KEY_PREFIX}/{:016x}.png", hasher.finish())
 }
 
+#[must_use]
 pub fn mine_gradient_texture(colors: &[[f32; 4]]) -> RgbaImage {
     let frame_count = colors.len().max(1);
     let frame_size = MINE_GRADIENT_FRAME_SIZE.max(2);
@@ -167,6 +170,7 @@ pub fn mine_gradient_sample_region(
     })
 }
 
+#[must_use]
 pub fn mine_gradient_samples(
     image: &RgbaImage,
     src: [u32; 2],
@@ -248,6 +252,7 @@ pub fn mine_gradient_samples_from_slot(
     mine_gradient_samples(image, region.src, region.size, sample_count)
 }
 
+#[must_use]
 pub fn mine_gradient_resample(colors: &[[f32; 4]], sample_count: usize) -> Option<Vec<[f32; 4]>> {
     if colors.is_empty() {
         return None;

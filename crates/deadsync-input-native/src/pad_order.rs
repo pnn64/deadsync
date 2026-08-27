@@ -85,6 +85,7 @@ where
     }
 }
 
+#[must_use]
 pub fn pad_order_ini_lines() -> Vec<(&'static str, String)> {
     let mut lines = Vec::with_capacity(PAD_ORDER_BACKENDS.len());
     for backend in PAD_ORDER_BACKENDS {
@@ -93,6 +94,7 @@ pub fn pad_order_ini_lines() -> Vec<(&'static str, String)> {
     lines
 }
 
+#[must_use]
 pub const fn pad_order_ini_key(backend: PadOrderBackend) -> &'static str {
     match backend {
         PadOrderBackend::RawInput => "PadOrderRawInput",
@@ -104,6 +106,7 @@ pub const fn pad_order_ini_key(backend: PadOrderBackend) -> &'static str {
     }
 }
 
+#[must_use]
 pub fn pad_order_backend_from_ini_key(key: &str) -> Option<PadOrderBackend> {
     match key {
         "PadOrderRawInput" => Some(PadOrderBackend::RawInput),
@@ -132,6 +135,7 @@ pub fn serialized_pad_order(backend: PadOrderBackend) -> String {
 }
 
 /// Input backends that persist stable pad order.
+#[must_use]
 pub const fn all_pad_order_backends() -> [PadOrderBackend; 6] {
     PAD_ORDER_BACKENDS
 }

@@ -16,16 +16,17 @@ pub struct Params<'a> {
 }
 
 fn message_salt(message: &str) -> u64 {
-    let mut salt = 0xcbf29ce484222325u64;
+    let mut salt = 0xcbf2_9ce4_8422_2325_u64;
     for &b in message.as_bytes() {
         salt ^= u64::from(b);
-        salt = salt.wrapping_mul(0x100000001b3);
+        salt = salt.wrapping_mul(0x0100_0000_01b3);
     }
     salt
 }
 
 /// Builds the actors for a temporary system message overlay at the top of the screen.
 /// The actors manage their own lifecycle (fade-in, hold, fade-out) via tweens.
+#[must_use]
 pub fn build(params: Params) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(2);
 

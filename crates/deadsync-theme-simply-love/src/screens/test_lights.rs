@@ -178,6 +178,7 @@ pub struct State {
     text: RefCell<LightsText>,
 }
 
+#[must_use]
 pub fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
@@ -246,10 +247,12 @@ pub const fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     }
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
@@ -558,6 +561,7 @@ pub struct LightsTextBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl LightsTextBenchmark {
+    #[must_use]
     pub fn new() -> Self {
         let lights = LightsTestView {
             cabinet: [false, true, false, false, false, false],
@@ -573,6 +577,7 @@ impl LightsTextBenchmark {
         }
     }
 
+    #[must_use]
     pub fn legacy_frame(&self) -> u64 {
         LightsText::build(self.lights).checksum()
     }

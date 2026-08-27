@@ -70,6 +70,7 @@ pub struct State {
     edit: OverscanState,
 }
 
+#[must_use]
 pub fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
@@ -139,10 +140,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeE
     debug_assert!(effects.len() - start_len <= 2);
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }

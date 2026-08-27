@@ -840,6 +840,7 @@ pub struct ScoreImportPickerBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl ScoreImportPickerBenchmark {
+    #[must_use]
     pub fn new() -> Self {
         let options = (0..14)
             .map(|index| {

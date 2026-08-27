@@ -333,6 +333,7 @@ impl Default for HoldMeshScratch {
 }
 
 impl HoldMeshScratch {
+    #[must_use]
     pub fn with_columns(columns: usize) -> Self {
         Self::with_pair_limit(columns, HOLD_MESH_PAIRS_PER_FRAME)
     }
@@ -352,6 +353,7 @@ impl HoldMeshScratch {
         self.caps.begin_frame();
     }
 
+    #[must_use]
     pub const fn stats(&self) -> HoldMeshScratchStats {
         let body = self.bodies.stats;
         let cap = self.caps.stats;
@@ -403,6 +405,7 @@ pub struct HoldMeshPoolBench {
 
 #[cfg(feature = "bench-support")]
 impl HoldMeshPoolBench {
+    #[must_use]
     pub fn new(max_pairs: usize, vertices: usize, retained_frames: usize) -> Self {
         Self {
             pool: HoldMeshBufferPool::new(true, max_pairs, vertices),
@@ -444,6 +447,7 @@ pub struct ReferenceHoldMeshPoolBench {
 
 #[cfg(feature = "bench-support")]
 impl ReferenceHoldMeshPoolBench {
+    #[must_use]
     pub fn new(max_pairs: usize, vertices: usize, retained_frames: usize) -> Self {
         Self {
             pool: ReferenceHoldMeshBufferPool::new(max_pairs, vertices),
@@ -1847,6 +1851,7 @@ pub(crate) fn scale_cap_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f32; 
     [target_arrow_px, height * scale]
 }
 
+#[must_use]
 pub fn offset_center(
     center: [f32; 2],
     local_offset: [f32; 2],

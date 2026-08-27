@@ -106,6 +106,7 @@ pub struct State {
     runtime: SelectFlowRuntimeView,
 }
 
+#[must_use]
 pub const fn init(runtime: SelectFlowRuntimeView) -> State {
     let active_color_index = runtime.color_index;
     let scroll = active_color_index as f32;
@@ -140,6 +141,7 @@ pub const fn on_enter(state: &mut State) {
     state.exit_requested = false;
 }
 
+#[must_use]
 pub fn exit_anim_duration() -> f32 {
     let num_slots = if is_wide() { 11 } else { 7 };
     WHEEL_OFF_STAGGER.mul_add(num_slots as f32, WHEEL_OFF_FADE_DURATION)
@@ -149,10 +151,12 @@ pub fn exit_anim_duration() -> f32 {
 
 /* ------------------------------- drawing ------------------------------- */
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
@@ -239,7 +243,7 @@ pub fn push_actors(
         let mut init = anim::TweenState::default();
         init.x = 0.0;
         const SITE_BASE: u64 = runtime::site_base(file!(), line!(), column!());
-        let sid = runtime::site_id(SITE_BASE, 0x53434F4C464F524Du64); // "SCOLFORM"
+        let sid = runtime::site_id(SITE_BASE, 0x5343_4F4C_464F_524D_u64); // "SCOLFORM"
         runtime::materialize(sid, init, steps).x.clamp(0.0, 1.0)
     }
 
@@ -264,9 +268,9 @@ pub fn push_actors(
         let sid = runtime::site_id(
             SITE_BASE,
             if wide {
-                0x53434F4C45584954u64
+                0x5343_4F4C_4558_4954_u64
             } else {
-                0x53434F4C45584954u64 ^ 1
+                0x5343_4F4C_4558_4954_u64 ^ 1
             }, // "SCOLEXIT"
         );
         runtime::materialize(sid, init, steps).x.max(0.0)

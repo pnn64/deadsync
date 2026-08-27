@@ -64,11 +64,13 @@ impl HidReportRoute {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn needs_fallback(&self) -> bool {
         !self.direct
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn direct_index(&self, first_byte: Option<u8>) -> Option<usize> {
         debug_assert!(self.direct);
         if self.unnumbered != NO_REPORT {

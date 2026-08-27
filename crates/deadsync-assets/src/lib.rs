@@ -27,6 +27,7 @@ pub use textures::{
 
 /// Resolve a bundled or data-overlay asset without exposing platform paths to
 /// asset consumers.
+#[must_use]
 pub fn resolve_asset_path(path: &str) -> std::path::PathBuf {
     deadlib_platform::dirs::app_dirs().resolve_asset_path(path)
 }

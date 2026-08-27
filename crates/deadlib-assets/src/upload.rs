@@ -45,6 +45,7 @@ pub enum TextureUploadImage<'a> {
 
 impl TextureUploadImage<'_> {
     #[inline(always)]
+    #[must_use]
     pub fn width(self) -> u32 {
         match self {
             Self::Rgba(image) => image.width(),
@@ -53,6 +54,7 @@ impl TextureUploadImage<'_> {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn height(self) -> u32 {
         match self {
             Self::Rgba(image) => image.height(),
@@ -61,6 +63,7 @@ impl TextureUploadImage<'_> {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn byte_len(self) -> usize {
         match self {
             Self::Rgba(image) => image.as_raw().len(),
@@ -102,6 +105,7 @@ pub struct TextureUploadQueue {
 
 impl TextureUploadQueue {
     #[inline(always)]
+    #[must_use]
     pub fn contains(&self, handle: TextureHandle) -> bool {
         self.entries.contains_key(&handle)
     }

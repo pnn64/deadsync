@@ -37,6 +37,7 @@ pub fn timing_window_name(value: Value) -> Option<&'static str> {
         .then(|| SONG_LUA_TIMING_WINDOW_NAMES[index as usize - 1])
 }
 
+#[must_use]
 pub fn timing_window_seconds(index: i32, mode: &str, tenms: bool) -> f32 {
     if mode.eq_ignore_ascii_case("FA+") && tenms && index == 1 {
         return 0.0085 + 0.0015;

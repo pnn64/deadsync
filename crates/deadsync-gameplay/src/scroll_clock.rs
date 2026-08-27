@@ -15,6 +15,7 @@ pub enum GameplayNoteScrollClock {
 /// audio time without ordinary backward corrections. The raw value remains
 /// authoritative for every gameplay decision.
 #[inline(always)]
+#[must_use]
 pub const fn note_scroll_music_time_ns(
     mode: GameplayNoteScrollClock,
     raw_music_time_ns: SongTimeNs,

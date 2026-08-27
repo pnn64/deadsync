@@ -135,6 +135,7 @@ fn build_hist_cols(
     (cols, blue)
 }
 
+#[must_use]
 pub fn build_density_histogram_cache(
     measure_nps: &[f64],
     peak_nps: f64,
@@ -364,6 +365,7 @@ impl DensityHistCache {
         written
     }
 
+    #[must_use]
     pub fn mesh(&self, offset: f32, visible_width: f32) -> Vec<MeshVertex> {
         let Some(window) = self.visible_window(offset, visible_width) else {
             return Vec::new();
@@ -772,6 +774,7 @@ pub fn update_density_life_mesh_reusable(
 /// Each pair of points is an independent quad and every sample gets a
 /// four-sided radius cap. This intentionally differs from a native line strip:
 /// evaluation lifelines rely on `GraphDisplay`'s capped joins and endpoints.
+#[must_use]
 pub fn build_graph_line_mesh(
     points: &[[f32; 2]],
     thickness: f32,
@@ -851,6 +854,7 @@ pub fn build_graph_line_mesh(
         .collect()
 }
 
+#[must_use]
 pub fn build_density_histogram_mesh(
     measure_nps: &[f64],
     peak_nps: f64,

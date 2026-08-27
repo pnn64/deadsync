@@ -14,6 +14,7 @@ impl Default for GameplayNoteCountStatsState {
 }
 
 impl GameplayNoteCountStatsState {
+    #[must_use]
     pub const fn new(stats: [Vec<NoteCountStat>; MAX_PLAYERS], num_players: usize) -> Self {
         let player_stat_indices = if num_players == 1 { [0, 0] } else { [0, 1] };
         Self {
@@ -46,16 +47,19 @@ impl Default for GameplayNoteRangeState {
 
 impl GameplayNoteRangeState {
     #[inline(always)]
+    #[must_use]
     pub const fn new(ranges: [(usize, usize); MAX_PLAYERS]) -> Self {
         Self { ranges }
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn ranges(&self) -> &[(usize, usize); MAX_PLAYERS] {
         &self.ranges
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn range(&self, player: usize) -> (usize, usize) {
         self.ranges.get(player).copied().unwrap_or((0, 0))
     }
@@ -98,6 +102,7 @@ impl Default for GameplayLaneIndexState {
 }
 
 impl GameplayLaneIndexState {
+    #[must_use]
     pub fn new(
         note_indices: [Vec<ChartNoteIndex>; MAX_COLS],
         hold_indices: [Vec<ChartNoteIndex>; MAX_COLS],
@@ -117,6 +122,7 @@ impl GameplayLaneIndexState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn note_row_indices(&self, col: usize) -> &[ChartNoteIndex] {
         self.note_indices(col)
     }
@@ -127,6 +133,7 @@ impl GameplayLaneIndexState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn note_itg_rows(&self) -> &[i32] {
         &self.note_itg_rows
     }
@@ -170,6 +177,7 @@ impl Default for GameplayRowIndexState {
 }
 
 impl GameplayRowIndexState {
+    #[must_use]
     pub const fn new(
         row_entry_ranges: [(usize, usize); MAX_PLAYERS],
         judged_row_cursor: [usize; MAX_PLAYERS],
@@ -190,6 +198,7 @@ impl GameplayRowIndexState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn tap_row_hold_roll_flags(&self, note_index: usize) -> u8 {
         tap_row_hold_roll_flags_from_metadata(&self.note_row_entry_indices, note_index)
     }
@@ -319,10 +328,12 @@ pub struct GameplayHoldRuntimeState {
 }
 
 impl GameplayHoldRuntimeState {
+    #[must_use]
     pub fn new(notes_len: usize, decaying_hold_capacity: usize) -> Self {
         Self::new_with_pump_events(notes_len, decaying_hold_capacity, Vec::new())
     }
 
+    #[must_use]
     pub fn new_with_pump_events(
         notes_len: usize,
         decaying_hold_capacity: usize,
@@ -389,11 +400,13 @@ impl GameplayHoldRuntimeState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn active_hold_mask(&self) -> LaneMask {
         self.active_hold_mask
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn active_roll_mask(&self) -> LaneMask {
         self.active_roll_mask
     }
@@ -473,6 +486,7 @@ impl Default for GameplayCueRuntimeState {
 }
 
 impl GameplayCueRuntimeState {
+    #[must_use]
     pub fn new(
         measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS],
         column_cues: [Vec<ColumnCue>; MAX_PLAYERS],
@@ -504,6 +518,7 @@ impl GameplayCueRuntimeState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn column_cue_cursor(&self, player: usize) -> usize {
         self.column_cue_cursor
             .get(player)
@@ -526,6 +541,7 @@ impl GameplayCueRuntimeState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn crossover_cue_cursor(&self, player: usize) -> usize {
         self.crossover_cue_cursor
             .get(player)
@@ -537,6 +553,7 @@ impl GameplayCueRuntimeState {
     // cue has not been reached yet (callers fall back to the cue's own start,
     // i.e. the natural fade-in).
     #[inline(always)]
+    #[must_use]
     pub fn crossover_cue_entry_time(&self, player: usize, index: usize) -> Option<f32> {
         if index >= self.crossover_cue_cursor(player) {
             return None;
@@ -629,11 +646,13 @@ pub struct GameplayHoldFeedbackState {
 
 impl GameplayHoldFeedbackState {
     #[inline(always)]
+    #[must_use]
     pub fn hold_judgment(&self, col: usize) -> Option<HoldJudgmentRenderInfo> {
         self.hold_judgments.get(col).copied().flatten()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn hold_judgments(
         &self,
         col_start: usize,
@@ -644,6 +663,7 @@ impl GameplayHoldFeedbackState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn held_miss_judgments(
         &self,
         col_start: usize,
@@ -723,6 +743,7 @@ pub struct GameplayVisualFeedbackState {
 
 impl GameplayVisualFeedbackState {
     #[inline(always)]
+    #[must_use]
     pub fn tap_explosions(
         &self,
         col_start: usize,
@@ -733,6 +754,7 @@ impl GameplayVisualFeedbackState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn column_flashes(
         &self,
         col_start: usize,
@@ -743,6 +765,7 @@ impl GameplayVisualFeedbackState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn mine_explosions(
         &self,
         col_start: usize,
@@ -753,6 +776,7 @@ impl GameplayVisualFeedbackState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn last_tap_judgment(&self, col: usize) -> Option<ColumnTapJudgment> {
         self.last_tap_judgments.get(col).copied().flatten()
     }
@@ -926,6 +950,7 @@ pub struct GameplayExitPromptState {
 
 impl GameplayExitInputState {
     #[inline(always)]
+    #[must_use]
     pub const fn prompt_state(&self) -> GameplayExitPromptState {
         GameplayExitPromptState {
             hold_to_exit_key: self.hold_to_exit_key,
@@ -1027,6 +1052,7 @@ pub fn gameplay_runtime_profiles<Profile: GameplayProfileData>(
     runtime_profiles
 }
 
+#[must_use]
 pub fn gameplay_runtime_charts(
     charts: &[Arc<ChartData>; MAX_PLAYERS],
     session: &GameplaySession,

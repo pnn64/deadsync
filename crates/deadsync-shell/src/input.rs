@@ -691,6 +691,7 @@ pub fn benchmark_prepare_gameplay_capture() {
 
 #[cfg(feature = "bench-support")]
 #[inline(always)]
+#[must_use]
 pub fn benchmark_sync_gameplay_capture(accepts_live_input: bool) -> bool {
     let enabled = raw_keyboard_capture_enabled(
         accepts_live_input,

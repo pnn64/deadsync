@@ -50,6 +50,7 @@ impl Reader {
         }
     }
 
+    #[must_use]
     pub const fn current_frame(&self) -> u64 {
         match self {
             Self::Flac(reader) => reader.current_frame(),

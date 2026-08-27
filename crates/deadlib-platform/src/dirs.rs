@@ -18,56 +18,69 @@ pub struct AppDirs {
 }
 
 impl AppDirs {
+    #[must_use]
     pub fn config_path(&self) -> PathBuf {
         self.data_dir.join("deadsync.ini")
     }
 
+    #[must_use]
     pub fn log_path(&self) -> PathBuf {
         self.data_dir.join("deadsync.log")
     }
 
+    #[must_use]
     pub fn profiles_root(&self) -> PathBuf {
         self.data_dir.join("save").join("profiles")
     }
 
+    #[must_use]
     pub fn screenshots_dir(&self) -> PathBuf {
         self.data_dir.join("save").join("screenshots")
     }
 
+    #[must_use]
     pub fn current_screen_path(&self) -> PathBuf {
         self.data_dir.join("save").join("current_screen.txt")
     }
 
+    #[must_use]
     pub fn default_player_options_path(&self) -> PathBuf {
         self.data_dir
             .join("save")
             .join("default_player_options.ini")
     }
 
+    #[must_use]
     pub fn judgment_palettes_path(&self) -> PathBuf {
         self.data_dir.join("save").join("judgment_palettes.ini")
     }
 
+    #[must_use]
     pub fn songs_dir(&self) -> PathBuf {
         self.data_dir.join("songs")
     }
 
+    #[must_use]
     pub fn courses_dir(&self) -> PathBuf {
         self.data_dir.join("courses")
     }
 
+    #[must_use]
     pub fn song_cache_dir(&self) -> PathBuf {
         self.cache_dir.join("songs")
     }
 
+    #[must_use]
     pub fn banner_cache_dir(&self) -> PathBuf {
         self.cache_dir.join("banner")
     }
 
+    #[must_use]
     pub fn cdtitle_cache_dir(&self) -> PathBuf {
         self.cache_dir.join("cdtitle")
     }
 
+    #[must_use]
     pub fn replaygain_cache_dir(&self) -> PathBuf {
         self.cache_dir.join("replaygain")
     }
@@ -75,22 +88,27 @@ impl AppDirs {
     /// Single-file consolidated `ReplayGain` cache. Replaces the legacy
     /// per-song `replaygain/<hash>.bin` layout, which doesn't scale to
     /// libraries of 10k+ songs.
+    #[must_use]
     pub fn replaygain_cache_file(&self) -> PathBuf {
         self.cache_dir.join("replaygain.bin")
     }
 
+    #[must_use]
     pub fn null_or_die_cache_file(&self) -> PathBuf {
         self.cache_dir.join("null-or-die-sync.json")
     }
 
+    #[must_use]
     pub fn downloads_dir(&self) -> PathBuf {
         self.cache_dir.join("downloads")
     }
 
+    #[must_use]
     pub fn noteskin_cache_dir(&self) -> PathBuf {
         self.cache_dir.join("noteskins")
     }
 
+    #[must_use]
     pub fn unlock_cache_path(&self) -> PathBuf {
         self.cache_dir.join("unlocks-cache.json")
     }
@@ -98,6 +116,7 @@ impl AppDirs {
     /// Returns additional song scan roots beyond the primary `songs_dir()`.
     /// In platform-native mode, also includes `{exe_dir}/songs` so bundled songs
     /// are found even when the data dir is elsewhere.
+    #[must_use]
     pub fn extra_song_roots(&self) -> Vec<PathBuf> {
         if self.portable {
             return Vec::new();
@@ -112,6 +131,7 @@ impl AppDirs {
 
     /// Returns additional course roots beyond the primary `courses_dir()`.
     /// In platform-native mode, also includes `{exe_dir}/courses`.
+    #[must_use]
     pub fn extra_course_roots(&self) -> Vec<PathBuf> {
         if self.portable {
             return Vec::new();
@@ -130,6 +150,7 @@ impl AppDirs {
     /// path. Otherwise, returns the first existing bundled path found from the
     /// current working directory, the workspace `deadsync/` directory, or the
     /// executable directory. If no candidate exists, returns the original path.
+    #[must_use]
     pub fn resolve_asset_path(&self, path: &str) -> PathBuf {
         let original = PathBuf::from(path);
         if original.is_absolute() {
@@ -158,6 +179,7 @@ impl AppDirs {
     /// Strips the data-dir or exe-dir `assets/` prefix from an absolute path,
     /// returning the relative portion after `assets/`. Returns `None` if the
     /// path doesn't start with either prefix.
+    #[must_use]
     pub fn strip_asset_prefix<'a>(&self, path: &'a std::path::Path) -> Option<&'a std::path::Path> {
         let data_assets = self.data_dir.join("assets");
         let exe_assets = self.exe_dir.join("assets");
@@ -169,6 +191,7 @@ impl AppDirs {
     /// Returns all root directories where noteskins may be found.
     /// In platform-native mode the data-dir variant is listed first so that
     /// user-added skins take priority over bundled ones.
+    #[must_use]
     pub fn noteskin_roots(&self) -> Vec<PathBuf> {
         let mut roots = Vec::with_capacity(2);
         if !self.portable {
@@ -322,6 +345,7 @@ pub fn ensure_dirs_exist() {
 
 /// Returns a host-friendly shorthand for an absolute path when a stable home
 /// or application-data environment prefix is available.
+#[must_use]
 pub fn path_shorthand(path: &Path) -> String {
     if let Some(short) = try_path_shorthand(path) {
         return short;

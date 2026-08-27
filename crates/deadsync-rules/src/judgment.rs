@@ -37,6 +37,7 @@ pub const DISPLAY_JUDGE_ORDER: [JudgeGrade; JUDGE_GRADE_COUNT] = [
 ];
 
 #[inline(always)]
+#[must_use]
 pub const fn judge_grade_ix(grade: JudgeGrade) -> usize {
     match grade {
         JudgeGrade::Fantastic => 0,
@@ -49,6 +50,7 @@ pub const fn judge_grade_ix(grade: JudgeGrade) -> usize {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn display_judge_ix(grade: JudgeGrade) -> usize {
     judge_grade_ix(grade)
 }
@@ -66,6 +68,7 @@ pub struct Judgment {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn judgment_time_error_ms_from_music_ns(time_error_music_ns: i64, music_rate: f32) -> f32 {
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
@@ -76,6 +79,7 @@ pub fn judgment_time_error_ms_from_music_ns(time_error_music_ns: i64, music_rate
 }
 
 #[inline(always)]
+#[must_use]
 pub fn judgment_time_error_music_ns_from_ms(time_error_ms: f32, music_rate: f32) -> i64 {
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
@@ -119,6 +123,7 @@ pub fn select_row_final_judgment<'a>(chosen: &mut Option<&'a Judgment>, candidat
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn add_window_counts(lhs: WindowCounts, rhs: WindowCounts) -> WindowCounts {
     WindowCounts {
         w0: lhs.w0.saturating_add(rhs.w0),
@@ -132,6 +137,7 @@ pub const fn add_window_counts(lhs: WindowCounts, rhs: WindowCounts) -> WindowCo
 }
 
 #[inline(always)]
+#[must_use]
 pub fn normalized_blue_window_ms(ms: f32) -> f32 {
     if ms.is_finite() && ms > 0.0 {
         ms
@@ -170,6 +176,7 @@ pub const CHECKPOINT_SCORE_MISS: i32 = -8;
 
 const GRADE_POINTS_BY_IX: [i32; JUDGE_GRADE_COUNT] = [5, 4, 2, 0, -6, -12];
 
+#[must_use]
 pub const fn calculate_itg_grade_points_from_counts(
     scoring_counts: &JudgeCounts,
     holds_held_for_score: u32,
@@ -188,6 +195,7 @@ pub const fn calculate_itg_grade_points_from_counts(
     total
 }
 
+#[must_use]
 pub const fn itg_grade_points_with_checkpoints(
     scoring_counts: &JudgeCounts,
     holds_held_for_score: u32,
@@ -206,6 +214,7 @@ pub const fn itg_grade_points_with_checkpoints(
     .saturating_add((checkpoints_missed as i32).saturating_mul(CHECKPOINT_SCORE_MISS))
 }
 
+#[must_use]
 pub fn calculate_itg_score_percent_from_counts(
     scoring_counts: &JudgeCounts,
     holds_held_for_score: u32,
@@ -227,6 +236,7 @@ pub fn calculate_itg_score_percent_from_counts(
     calculate_itg_score_percent_from_points(total_points, possible_grade_points)
 }
 
+#[must_use]
 pub fn calculate_itg_score_percent_from_points(
     total_points: i32,
     possible_grade_points: i32,
@@ -264,12 +274,13 @@ pub fn calculate_itg_score_percent_from_points(
     let trunc_interval = 10_f64.powi(-(percent_total_digits - 1));
 
     // Small boost to avoid ftruncf-style underflow when very close to 1.0.
-    percent += 0.000001_f64;
+    percent += 0.000_001_f64;
 
     let scaled = (percent / trunc_interval).floor() * trunc_interval;
     scaled.max(0.0)
 }
 
+#[must_use]
 pub fn current_possible_grade_points_from_counts(
     scoring_counts: &JudgeCounts,
     holds_resolved: u32,
@@ -288,6 +299,7 @@ pub fn current_possible_grade_points_from_counts(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn predictive_itg_score_percents(
     current_possible_grade_points: i32,
     possible_grade_points: i32,
@@ -301,6 +313,7 @@ pub fn predictive_itg_score_percents(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn score_missed_holds_and_rolls(chart_type: &str) -> bool {
     // ITGmania _fallback metrics:
     // ScoreMissedHoldsAndRolls = not IsGame("pump") and not IsGame("dance")
@@ -315,6 +328,7 @@ pub fn score_missed_holds_and_rolls(chart_type: &str) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn scored_hold_totals_with_carry(
     held: u32,
     let_go: u32,
@@ -337,6 +351,7 @@ fn scale_range(v: f32, in_lo: f32, in_hi: f32, out_lo: f32, out_hi: f32) -> f32 
 }
 
 #[inline(always)]
+#[must_use]
 pub fn step_calories(weight_pounds: i32, tracks_held: usize) -> f32 {
     let tracks = tracks_held.max(1) as f32;
     let cals_100 = scale_range(tracks, 1.0, 2.0, 0.023, 0.077);
@@ -351,6 +366,7 @@ pub fn step_calories(weight_pounds: i32, tracks_held: usize) -> f32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn max_grade_points(
     total_steps: u32,
     holds_total: u32,
@@ -588,6 +604,7 @@ fn ex_current_possible_points(data: &ExScoreData) -> f64 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn ex_current_possible_ratio(data: &ExScoreData) -> f64 {
     let total = ex_total_possible(data);
     if total <= 0.0 {
@@ -626,16 +643,19 @@ fn predictive_score_percents(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn ex_score_percent(data: &ExScoreData) -> f64 {
     floor_percent(ex_score_points(data), ex_total_possible(data))
 }
 
 #[inline(always)]
+#[must_use]
 pub fn hard_ex_score_percent(data: &ExScoreData) -> f64 {
     floor_percent(hard_ex_score_points(data), ex_total_possible(data))
 }
 
 #[inline(always)]
+#[must_use]
 pub fn predictive_ex_score_percents(data: &ExScoreData) -> (f64, f64, f64) {
     predictive_score_percents(
         ex_total_possible(data),
@@ -645,6 +665,7 @@ pub fn predictive_ex_score_percents(data: &ExScoreData) -> (f64, f64, f64) {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn predictive_hard_ex_score_percents(data: &ExScoreData) -> (f64, f64, f64) {
     predictive_score_percents(
         ex_total_possible(data),
@@ -674,6 +695,7 @@ fn ex_score_data(counts: ExScoreCounts, totals: ExScoreTotals) -> ExScoreData {
 }
 
 /// Reconstructs EX and Hard EX together in one allocation-free note scan.
+#[must_use]
 pub fn calculate_ex_score_percents_from_notes(
     notes: &[Note],
     note_times_ns: &[i64],
@@ -700,6 +722,7 @@ pub fn calculate_ex_score_percents_from_notes(
 ///
 /// This version respects `fail_time` to stop accumulating points if the player
 /// has failed the song.
+#[must_use]
 pub fn calculate_ex_score_from_notes(
     notes: &[Note],
     note_times_ns: &[i64],
@@ -726,6 +749,7 @@ pub fn calculate_ex_score_from_notes(
     .0
 }
 
+#[must_use]
 pub fn calculate_hard_ex_score_from_notes(
     notes: &[Note],
     note_times_ns: &[i64],
@@ -798,6 +822,7 @@ pub mod bench_support {
         counts
     }
 
+    #[must_use]
     pub fn ex_score_percent_from_notes(
         notes: &[Note],
         note_times_ns: &[i64],
@@ -811,6 +836,7 @@ pub mod bench_support {
         ))
     }
 
+    #[must_use]
     pub fn hard_ex_score_percent_from_notes(
         notes: &[Note],
         note_times_ns: &[i64],
@@ -824,6 +850,7 @@ pub mod bench_support {
         ))
     }
 
+    #[must_use]
     pub fn ex_score_percents_from_notes(
         notes: &[Note],
         note_times_ns: &[i64],

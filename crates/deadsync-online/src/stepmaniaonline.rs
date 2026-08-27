@@ -65,6 +65,7 @@ pub struct PackInfo {
 
 impl PackInfo {
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
     pub fn new(
         id: u64,
         name: String,
@@ -420,6 +421,7 @@ fn lock_runtime() -> MutexGuard<'static, RuntimeState> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+#[must_use]
 pub fn runtime_snapshot() -> Arc<Snapshot> {
     Arc::clone(&lock_runtime().snapshot)
 }
@@ -470,6 +472,7 @@ pub fn runtime_queue_download(pack_id: u64, songs_root: PathBuf) -> Result<(), S
     }
 }
 
+#[must_use]
 pub fn runtime_take_ready_song_dirs() -> Vec<PathBuf> {
     std::mem::take(&mut lock_runtime().ready_song_dirs)
 }
@@ -1014,9 +1017,9 @@ fn portable_archive_parts(name: &str) -> Result<Vec<String>, StepManiaOnlineErro
 }
 
 fn safe_unix_entry_type(mode: Option<u32>, is_dir: bool) -> bool {
-    const FILE_TYPE_MASK: u32 = 0o170000;
-    const REGULAR_FILE: u32 = 0o100000;
-    const DIRECTORY: u32 = 0o040000;
+    const FILE_TYPE_MASK: u32 = 0o170_000;
+    const REGULAR_FILE: u32 = 0o100_000;
+    const DIRECTORY: u32 = 0o040_000;
     let Some(kind) = mode.map(|mode| mode & FILE_TYPE_MASK) else {
         return true;
     };
@@ -1034,6 +1037,7 @@ fn is_simfile(name: &str) -> bool {
         })
 }
 
+#[must_use]
 pub fn sanitize_pack_name(raw: &str, pack_id: u64) -> String {
     sanitized_pack_name(raw, pack_id).0
 }

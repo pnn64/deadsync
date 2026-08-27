@@ -40,11 +40,13 @@ pub enum SimplyLoveScreen {
 impl SimplyLoveScreen {
     /// Opaque identity exposed through the generic theme contract.
     #[inline(always)]
+    #[must_use]
     pub const fn id(self) -> deadsync_theme::ThemeScreenId {
         deadsync_theme::ThemeScreenId::new(self.id_str())
     }
 
     /// Stable theme-local identifier used when adapting to `ThemeScreenId`.
+    #[must_use]
     pub const fn id_str(self) -> &'static str {
         match self {
             Self::Menu => "simply-love/menu",
@@ -79,6 +81,7 @@ impl SimplyLoveScreen {
     }
 
     /// Stable external screen name written to `save/current_screen.txt`.
+    #[must_use]
     pub const fn current_screen_file_name(self) -> &'static str {
         match self {
             Self::Menu => "ScreenTitleMenu",
@@ -157,6 +160,7 @@ pub struct SelectMusicJoinPlan {
     pub p2_preferred_difficulty: usize,
 }
 
+#[must_use]
 pub fn late_join_side(
     pressed: bool,
     action: VirtualAction,
@@ -185,6 +189,7 @@ pub fn late_join_side(
     (joined_count == 1 && !context.joined[side_index]).then_some(side)
 }
 
+#[must_use]
 pub const fn select_music_join_plan(context: SelectMusicJoinContext) -> SelectMusicJoinPlan {
     if matches!(context.active_side, PlayerSide::P2) && matches!(context.join_side, PlayerSide::P1)
     {
@@ -204,6 +209,7 @@ pub const fn select_music_join_plan(context: SelectMusicJoinContext) -> SelectMu
     }
 }
 
+#[must_use]
 pub fn profile_selection_plan(context: ProfileSelectionContext) -> ProfileSelectionPlan {
     let preferred_active = context.preferred_difficulties[player_side_index(context.active_side)];
     let navigation_target = if context.fast_switch {
@@ -328,6 +334,7 @@ const fn resolve_post_select_target(
 }
 
 /// Resolve Simply Love's optional startup and post-play screens.
+#[must_use]
 pub fn resolve_navigation(
     policy: SimplyLoveNavigationPolicy,
     from: SimplyLoveScreen,
@@ -396,6 +403,7 @@ pub fn resolve_navigation(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn evaluation_summary_return_to(
     previous: SimplyLoveScreen,
     pending_post_select_summary_exit: bool,
@@ -411,6 +419,7 @@ pub const fn evaluation_summary_return_to(
 }
 
 /// Whether Simply Love renders this screen's transition with actor tweens.
+#[must_use]
 pub const fn uses_actor_fade(screen: SimplyLoveScreen) -> bool {
     matches!(
         screen,
@@ -427,6 +436,7 @@ pub const fn uses_actor_fade(screen: SimplyLoveScreen) -> bool {
 }
 
 /// Simply Love's exact actor-only transition pairs.
+#[must_use]
 pub const fn uses_actor_only_transition(from: SimplyLoveScreen, to: SimplyLoveScreen) -> bool {
     if matches!(from, SimplyLoveScreen::Menu) {
         return !matches!(to, SimplyLoveScreen::Menu | SimplyLoveScreen::Init);

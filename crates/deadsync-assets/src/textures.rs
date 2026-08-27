@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 
 static GRAPHIC_TEXTURE_CHOICES: GraphicTextureChoiceCache = GraphicTextureChoiceCache::new();
 
+#[must_use]
 pub fn graphic_texture_roots(folder: &str) -> Vec<PathBuf> {
     let dirs = dirs::app_dirs();
     discover_graphic_texture_roots(folder, dirs.portable, &dirs.data_dir, &dirs.exe_dir)
@@ -37,6 +38,7 @@ pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
     )
 }
 
+#[must_use]
 pub fn model_texture_sampler(key: &str) -> SamplerDesc {
     SamplerDesc {
         wrap: SamplerWrap::Repeat,

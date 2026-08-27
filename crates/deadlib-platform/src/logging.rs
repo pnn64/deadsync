@@ -37,7 +37,7 @@ impl TeeWriter {
         }
     }
 
-    fn write_file(&mut self, buf: &[u8]) {
+    fn write_file(&self, buf: &[u8]) {
         if !FILE_LOGGING_ENABLED.load(Ordering::Relaxed) {
             return;
         }
@@ -48,7 +48,7 @@ impl TeeWriter {
         }
     }
 
-    fn flush_file(&mut self) {
+    fn flush_file(&self) {
         if !FILE_LOGGING_ENABLED.load(Ordering::Relaxed) {
             return;
         }

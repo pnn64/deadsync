@@ -209,6 +209,7 @@ pub struct State {
     text: RefCell<SelectModeText>,
 }
 
+#[must_use]
 pub fn init(runtime: SelectFlowRuntimeView) -> State {
     let mut flow = ModeFlow::default();
     flow.reset(runtime.play_mode, runtime.premium_free_available);
@@ -238,11 +239,13 @@ pub fn sync_runtime_view(state: &mut State, runtime: SelectFlowRuntimeView) {
     }
 }
 
+#[must_use]
 pub const fn in_transition() -> (Vec<Actor>, f32) {
     // Simply Love handles transitions via per-actor OffCommands and a sleep in out.lua.
     (vec![], 0.0)
 }
 
+#[must_use]
 pub const fn out_transition() -> (Vec<Actor>, f32) {
     // Simply Love handles transitions via per-actor OffCommands and a sleep in out.lua.
     (vec![], 0.0)
@@ -256,7 +259,7 @@ fn exit_anim_t(exiting: bool) -> f32 {
         exiting,
         mode_flow::EXIT_TOTAL_SECONDS,
         &STEPS,
-        0x53504D4F44455849u64, // "SPMODEXI"
+        0x5350_4D4F_4445_5849_u64, // "SPMODEXI"
     )
 }
 
@@ -704,12 +707,14 @@ pub struct SelectModeTextBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl SelectModeTextBenchmark {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             text: SelectModeText::build(i18n::revision()),
         }
     }
 
+    #[must_use]
     pub fn legacy_frame(&self, selected_index: usize) -> u64 {
         let title = tr("ScreenTitles", "SelectMode");
         let labels = choice_labels_legacy();

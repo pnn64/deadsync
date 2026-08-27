@@ -9,6 +9,7 @@ pub struct ExScoreInputs {
     pub mines_hit_for_score: u32,
 }
 
+#[must_use]
 pub const fn ex_score_inputs_from_display(
     counts: WindowCounts,
     counts_10ms: WindowCounts,
@@ -25,6 +26,7 @@ pub const fn ex_score_inputs_from_display(
     }
 }
 
+#[must_use]
 pub const fn ex_score_data_from_display_inputs(
     inputs: ExScoreInputs,
     carry: CourseDisplayCarry,
@@ -63,6 +65,7 @@ pub const fn ex_score_data_from_display_inputs(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn effective_ex_score_inputs(
     live: ExScoreInputs,
     failed_snapshot: Option<ExScoreInputs>,
@@ -108,6 +111,7 @@ pub struct ItgScoreInputs {
     pub possible_grade_points: i32,
 }
 
+#[must_use]
 pub const fn itg_score_inputs_from_display(
     stage: ItgScoreStage,
     carry: CourseDisplayCarry,
@@ -149,6 +153,7 @@ pub const fn itg_score_inputs_from_display(
     }
 }
 
+#[must_use]
 pub fn itg_score_percent_from_inputs(inputs: ItgScoreInputs) -> f64 {
     let points = judgment::itg_grade_points_with_checkpoints(
         &inputs.scoring_counts,
@@ -161,6 +166,7 @@ pub fn itg_score_percent_from_inputs(inputs: ItgScoreInputs) -> f64 {
     judgment::calculate_itg_score_percent_from_points(points, inputs.possible_grade_points)
 }
 
+#[must_use]
 pub fn predictive_itg_score_percent_from_inputs(inputs: ItgScoreInputs) -> f64 {
     let actual = judgment::itg_grade_points_with_checkpoints(
         &inputs.scoring_counts,
@@ -183,6 +189,7 @@ pub fn predictive_itg_score_percent_from_inputs(inputs: ItgScoreInputs) -> f64 {
     kept
 }
 
+#[must_use]
 pub fn display_itg_score_percent_for_mode(
     inputs: ItgScoreInputs,
     mode: GameplayScoreDisplayMode,
@@ -193,6 +200,7 @@ pub fn display_itg_score_percent_for_mode(
     }
 }
 
+#[must_use]
 pub fn display_ex_score_percent_for_mode(
     score: &judgment::ExScoreData,
     mode: GameplayScoreDisplayMode,
@@ -203,6 +211,7 @@ pub fn display_ex_score_percent_for_mode(
     }
 }
 
+#[must_use]
 pub fn display_hard_ex_score_percent_for_mode(
     score: &judgment::ExScoreData,
     mode: GameplayScoreDisplayMode,
@@ -216,6 +225,7 @@ pub fn display_hard_ex_score_percent_for_mode(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn stream_segments_for_note_data(
     notes: &[u8],
     lanes: usize,
@@ -230,6 +240,7 @@ pub fn stream_segments_for_note_data(
 /// Mirrors zmod's `TrackFailTime.lua`: the failed measure must contain at least
 /// 16 note rows and belong to a contiguous run of measures meeting that same
 /// threshold.
+#[must_use]
 pub fn zmod_fail_stream_progress_for_note_data(
     notes: &[u8],
     lanes: usize,
@@ -245,6 +256,7 @@ pub fn zmod_fail_stream_progress_for_note_data(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn zmod_stream_totals_for_densities(
     densities: &[u8],
     constant_bpm: bool,
@@ -276,6 +288,7 @@ pub enum GameplayTargetScoreSetting {
     PersonalBest,
 }
 
+#[must_use]
 pub const fn target_score_setting_percent(setting: GameplayTargetScoreSetting) -> Option<f64> {
     match setting {
         GameplayTargetScoreSetting::CMinus => Some(55.0),

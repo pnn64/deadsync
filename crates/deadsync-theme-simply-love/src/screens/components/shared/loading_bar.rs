@@ -18,6 +18,7 @@ pub struct LoadingBarParams {
     pub z: i16,
 }
 
+#[must_use]
 pub fn build(params: LoadingBarParams) -> Actor {
     let width = params.width.max(0.0);
     let height = params.height.max(0.0);

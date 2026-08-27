@@ -18,6 +18,7 @@ use semver::Version;
 /// Panics at runtime only if Cargo is configured with a non-semver version,
 /// which would also break the build's package metadata.
 #[inline]
+#[must_use]
 pub fn current() -> Version {
     if let Ok(raw) = std::env::var("DEADSYNC_VERSION_OVERRIDE")
         && !raw.trim().is_empty()
@@ -32,12 +33,14 @@ pub fn current() -> Version {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn current_static() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
 /// User-Agent product identifying this build in outgoing HTTP requests.
 #[inline]
+#[must_use]
 pub fn user_agent() -> String {
     format!("DeadSync/{}", current())
 }
@@ -45,6 +48,7 @@ pub fn user_agent() -> String {
 /// `format!("v{}", current())`.  Centralised so callers display the same
 /// tag string the updater will compare against.
 #[inline]
+#[must_use]
 pub fn current_tag() -> String {
     format!("v{}", current())
 }
@@ -53,6 +57,7 @@ pub fn current_tag() -> String {
 /// leading `v`) into a [`Version`].  Returns `None` for tags that are not
 /// valid semver, e.g. `latest`, `nightly-2026-04-29`.
 #[inline]
+#[must_use]
 pub fn parse_release_tag(tag: &str) -> Option<Version> {
     let trimmed = tag.trim();
     let stripped = trimmed.strip_prefix('v').unwrap_or(trimmed);
@@ -62,6 +67,7 @@ pub fn parse_release_tag(tag: &str) -> Option<Version> {
 /// Returns `true` when `latest` is strictly greater than `current` per
 /// semver precedence rules (`1.0.0-rc.1 < 1.0.0`, `0.3.10 > 0.3.9`, etc.).
 #[inline]
+#[must_use]
 pub fn is_newer(latest: &Version, current: &Version) -> bool {
     latest > current
 }

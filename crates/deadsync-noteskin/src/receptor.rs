@@ -26,6 +26,7 @@ pub struct ReceptorGlowBehavior {
 }
 
 impl ReceptorGlowBehavior {
+    #[must_use]
     pub fn sample_press(self, timer_remaining: f32) -> (f32, f32) {
         let duration = self.press_duration.max(0.0);
         if duration <= f32::EPSILON {
@@ -44,6 +45,7 @@ impl ReceptorGlowBehavior {
         (alpha.clamp(0.0, 1.0), zoom.max(0.0))
     }
 
+    #[must_use]
     pub fn sample_lift(
         self,
         timer_remaining: f32,
@@ -93,11 +95,13 @@ pub enum ReceptorIdleGlow {
 
 impl ReceptorIdleGlow {
     #[inline(always)]
+    #[must_use]
     pub const fn is_visible(self) -> bool {
         !matches!(self, Self::None)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn alpha(self, beat: f32, is_in_delay: bool) -> f32 {
         match self {
             Self::None => 0.0,
@@ -126,6 +130,7 @@ pub struct ReceptorStepBehavior {
 }
 
 impl ReceptorStepBehavior {
+    #[must_use]
     pub const fn identity() -> Self {
         Self {
             duration: 0.0,
@@ -136,6 +141,7 @@ impl ReceptorStepBehavior {
         }
     }
 
+    #[must_use]
     pub fn sample_zoom(self, timer_remaining: f32) -> f32 {
         let duration = self.duration.max(0.0);
         if duration <= f32::EPSILON {
@@ -170,6 +176,7 @@ pub struct ReceptorStepBehaviors {
 }
 
 impl ReceptorStepBehaviors {
+    #[must_use]
     pub const fn new(
         none: ReceptorStepBehavior,
         miss: ReceptorStepBehavior,
@@ -182,6 +189,7 @@ impl ReceptorStepBehaviors {
         }
     }
 
+    #[must_use]
     pub fn for_window(self, window: Option<&str>) -> ReceptorStepBehavior {
         match window {
             Some("W1") => self.windows[0],
@@ -213,11 +221,13 @@ pub struct ReceptorReverseState {
 
 impl ReceptorReverseState {
     #[inline(always)]
+    #[must_use]
     pub fn base_rotation_z(self) -> f32 {
         self.base_rotation_z.unwrap_or(0.0)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn vert_align(self) -> f32 {
         self.vert_align.unwrap_or(0.5)
     }
@@ -231,6 +241,7 @@ pub struct ReceptorReverseBehavior {
 
 impl ReceptorReverseBehavior {
     #[inline(always)]
+    #[must_use]
     pub const fn state(self, reverse: bool) -> ReceptorReverseState {
         if reverse {
             self.reverse_on
@@ -254,6 +265,7 @@ pub struct ReceptorPulse {
 }
 
 impl ReceptorPulse {
+    #[must_use]
     pub fn total_period(&self) -> f32 {
         let mut total = 0.0;
         total += self.ramp_to_half.max(0.0);
@@ -264,6 +276,7 @@ impl ReceptorPulse {
         total
     }
 
+    #[must_use]
     pub fn color_for_beat(&self, beat: f32) -> [f32; 4] {
         let cycle = self.total_period();
         if cycle <= f32::EPSILON {
@@ -317,6 +330,7 @@ impl Default for ReceptorPulse {
     }
 }
 
+#[must_use]
 pub fn receptor_glow_behavior_from_commands(
     init_cmd: &str,
     press_cmd: &str,
@@ -482,6 +496,7 @@ pub fn itg_receptor_pulse_command<'a>(layers: &[&'a HashMap<String, String>]) ->
         .map(String::as_str)
 }
 
+#[must_use]
 pub fn itg_receptor_reverse_behaviors(
     layers: &[&HashMap<String, String>],
 ) -> (ReceptorReverseBehavior, ReceptorReverseBehavior) {
@@ -496,6 +511,7 @@ pub fn itg_receptor_reverse_behaviors(
     (off, glow)
 }
 
+#[must_use]
 pub fn receptor_pulse_from_script(command: &str) -> ReceptorPulse {
     let mut pulse = ReceptorPulse::default();
     let command = normalized_script_command(command);
@@ -550,6 +566,7 @@ fn receptor_arrow_command(
         .or_else(|| metrics.get("ReceptorArrow", metric_key).map(str::to_string))
 }
 
+#[must_use]
 pub fn receptor_step_behavior_for_command(
     command: Option<String>,
     base_zoom: f32,
@@ -590,6 +607,7 @@ pub fn receptor_step_behavior_for_command(
     }
 }
 
+#[must_use]
 pub fn receptor_step_behaviors(
     metrics: &IniData,
     commands: Option<&HashMap<String, String>>,
@@ -614,6 +632,7 @@ pub fn receptor_step_behaviors(
     )
 }
 
+#[must_use]
 pub fn receptor_reverse_behavior(commands: &HashMap<String, String>) -> ReceptorReverseBehavior {
     ReceptorReverseBehavior {
         reverse_off: commands
@@ -627,6 +646,7 @@ pub fn receptor_reverse_behavior(commands: &HashMap<String, String>) -> Receptor
     }
 }
 
+#[must_use]
 pub fn receptor_reverse_state(script: &str) -> ReceptorReverseState {
     let mut out = ReceptorReverseState::default();
     let script = normalized_script_command(script);

@@ -198,7 +198,7 @@ impl App {
     /// - **Two pads, distinct jumpers:** persist the jumper-derived P1/P2 map.
     /// - **Single pad:** persist its hardware jumper side.
     /// The ambiguous same-jumper-two-pad case is left for the user to assign.
-    pub(super) fn reconcile_smx_assignment(&mut self, policy: SmxFramePolicy) {
+    pub(super) fn reconcile_smx_assignment(&self, policy: SmxFramePolicy) {
         let screen = self.state.screens.current_screen;
         let smx_input = policy.input;
         if matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice) || !smx_input {

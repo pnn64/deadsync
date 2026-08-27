@@ -130,6 +130,7 @@ pub fn spawn_player_leaderboard_fetch(
     });
 }
 
+#[must_use]
 pub fn get_or_fetch_player_leaderboards(
     service: groovestats::Service,
     chart_hash: &str,
@@ -160,6 +161,7 @@ pub struct PlayerLeaderboardRuntime {
 }
 
 impl PlayerLeaderboardRuntime {
+    #[must_use]
     pub fn from_app_runtime() -> Self {
         Self {
             service: crate::runtime::active_groovestats_service(),
@@ -172,6 +174,7 @@ impl PlayerLeaderboardRuntime {
         }
     }
 
+    #[must_use]
     pub fn get_or_fetch_for_side(
         &self,
         chart_hash: &str,
@@ -182,6 +185,7 @@ impl PlayerLeaderboardRuntime {
         self.get_or_fetch_for_profile(chart_hash, &profile_snapshot, max_entries)
     }
 
+    #[must_use]
     pub fn get_or_fetch_for_profile(
         &self,
         chart_hash: &str,
@@ -198,6 +202,7 @@ impl PlayerLeaderboardRuntime {
         )
     }
 
+    #[must_use]
     pub fn refresh_for_side(
         &self,
         chart_hash: &str,
@@ -223,6 +228,7 @@ impl PlayerLeaderboardRuntime {
         );
     }
 
+    #[must_use]
     pub const fn wheel_profile_context<'a>(
         &self,
         leaderboard_snapshot: &'a GameplayScoreboxProfileSnapshot,
@@ -301,10 +307,12 @@ pub struct ItlWheelSideContext<'a> {
 }
 
 impl<'a> ItlWheelSideContext<'a> {
+    #[must_use]
     pub fn for_profile(profile: &'a GameplayScoreboxProfileSnapshot) -> Self {
         PlayerLeaderboardRuntime::from_app_runtime().wheel_profile_context(profile)
     }
 
+    #[must_use]
     pub fn cached_local_itl_score(
         &self,
         song: &deadsync_chart::SongData,
@@ -312,10 +320,12 @@ impl<'a> ItlWheelSideContext<'a> {
         self.cache.cached_local_itl_score(song)
     }
 
+    #[must_use]
     pub fn cached_self_ex_score(&self, chart_hash: &str) -> Option<u32> {
         self.cache.cached_self_ex_score(chart_hash)
     }
 
+    #[must_use]
     pub fn get_or_fetch_self_ex_score(&self, chart_hash: &str) -> Option<u32> {
         if let Some(score) = self.cached_self_ex_score(chart_hash) {
             return Some(score);
@@ -330,10 +340,12 @@ impl<'a> ItlWheelSideContext<'a> {
         self.cached_self_ex_score(chart_hash)
     }
 
+    #[must_use]
     pub fn cached_srpg_self_score(&self, chart_hash: &str) -> Option<u32> {
         self.cache.cached_srpg_self_score(chart_hash)
     }
 
+    #[must_use]
     pub fn get_or_fetch_srpg_self_score(&self, chart_hash: &str) -> Option<u32> {
         if let Some(score) = self.cached_srpg_self_score(chart_hash) {
             return Some(score);
@@ -346,10 +358,12 @@ impl<'a> ItlWheelSideContext<'a> {
         self.cached_srpg_self_score(chart_hash)
     }
 
+    #[must_use]
     pub fn cached_tournament_rank(&self, chart_hash: &str) -> Option<u32> {
         self.cache.cached_tournament_rank(chart_hash)
     }
 
+    #[must_use]
     pub fn get_or_fetch_tournament_rank(&self, chart_hash: &str) -> Option<u32> {
         if let Some(rank) = self.cached_tournament_rank(chart_hash) {
             return Some(rank);
@@ -363,6 +377,7 @@ impl<'a> ItlWheelSideContext<'a> {
     }
 }
 
+#[must_use]
 pub fn get_or_fetch_player_leaderboards_for_side_from_app_runtime(
     chart_hash: &str,
     side: PlayerSide,
@@ -375,6 +390,7 @@ pub fn get_or_fetch_player_leaderboards_for_side_from_app_runtime(
     )
 }
 
+#[must_use]
 pub fn get_or_fetch_player_leaderboards_for_profile_from_app_runtime(
     chart_hash: &str,
     profile_snapshot: &GameplayScoreboxProfileSnapshot,
@@ -387,6 +403,7 @@ pub fn get_or_fetch_player_leaderboards_for_profile_from_app_runtime(
     )
 }
 
+#[must_use]
 pub fn refresh_player_leaderboards_for_side_from_app_runtime(
     chart_hash: &str,
     side: PlayerSide,
@@ -402,6 +419,7 @@ pub fn invalidate_player_leaderboards_for_side_from_app_runtime(
     PlayerLeaderboardRuntime::from_app_runtime().invalidate_for_side(chart_hash, side);
 }
 
+#[must_use]
 pub fn cached_itl_tournament_overall_ranks_for_profile_from_app_runtime(
     side_idx: usize,
     joined: bool,

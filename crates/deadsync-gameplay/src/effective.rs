@@ -146,6 +146,7 @@ where
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn hold_to_exit_seconds(key: HoldToExitKey) -> f32 {
     match key {
         HoldToExitKey::Start => GIVE_UP_HOLD_SECONDS,
@@ -154,6 +155,7 @@ pub const fn hold_to_exit_seconds(key: HoldToExitKey) -> f32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn exit_total_seconds(kind: ExitTransitionKind) -> f32 {
     match kind {
         ExitTransitionKind::Out => GIVE_UP_OUT_FADE_DELAY_SECONDS + GIVE_UP_OUT_FADE_SECONDS,
@@ -162,6 +164,7 @@ pub const fn exit_total_seconds(kind: ExitTransitionKind) -> f32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn exit_transition_alpha_elapsed(kind: ExitTransitionKind, elapsed_s: f32) -> f32 {
     let (delay, fade) = match kind {
         ExitTransitionKind::Out => (GIVE_UP_OUT_FADE_DELAY_SECONDS, GIVE_UP_OUT_FADE_SECONDS),
@@ -179,11 +182,13 @@ pub fn exit_transition_alpha_elapsed(kind: ExitTransitionKind, elapsed_s: f32) -
 }
 
 #[inline(always)]
+#[must_use]
 pub fn exit_transition_alpha(exit: &ExitTransition) -> f32 {
     exit_transition_alpha_elapsed(exit.kind, exit.started_at.elapsed().as_secs_f32())
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_exit_for_kind(kind: ExitTransitionKind) -> GameplayExit {
     match kind {
         ExitTransitionKind::Out => GameplayExit::Complete,
@@ -192,6 +197,7 @@ pub const fn gameplay_exit_for_kind(kind: ExitTransitionKind) -> GameplayExit {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_menu_input_plan(
     input: GameplayMenuInput,
     pressed: bool,
@@ -218,6 +224,7 @@ pub const fn gameplay_menu_input_plan(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_offset_prompt_choice_delta(
     action: VirtualAction,
     dedicated_menu_only: bool,

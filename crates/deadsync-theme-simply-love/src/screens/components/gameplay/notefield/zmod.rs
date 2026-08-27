@@ -270,7 +270,7 @@ fn zmod_mini_indicator_progress(
     }
 }
 
-pub(crate) fn zmod_target_score_missed(
+pub fn zmod_target_score_missed(
     state: &State,
     player_idx: usize,
     score_type: profile_data::MiniIndicatorScoreType,

@@ -183,6 +183,7 @@ pub fn reload_song_in_cache_runtime(
     })
 }
 
+#[must_use]
 pub fn gameplay_chart_load_log_entries_from_report(
     song: &SongData,
     report: &GameplayChartLoadReport,

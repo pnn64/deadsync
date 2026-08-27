@@ -56,6 +56,7 @@ pub enum PadCommand {
 
 impl PadCommand {
     #[inline(always)]
+    #[must_use]
     pub const fn device(self) -> PadDeviceId {
         match self {
             Self::Threshold { device, .. }
@@ -219,6 +220,7 @@ pub const fn set_filter(state: &mut State, filter: PadFilter) {
     state.filter = filter;
 }
 
+#[must_use]
 pub fn init() -> State {
     State::default()
 }
@@ -281,10 +283,12 @@ pub const fn update(_state: &mut State, _dt: f32) -> Option<ThemeEffect> {
     None
 }
 
+#[must_use]
 pub const fn in_transition() -> (Vec<Actor>, f32) {
     (Vec::new(), TRANSITION_IN_DURATION)
 }
 
+#[must_use]
 pub const fn out_transition() -> (Vec<Actor>, f32) {
     (Vec::new(), TRANSITION_OUT_DURATION)
 }

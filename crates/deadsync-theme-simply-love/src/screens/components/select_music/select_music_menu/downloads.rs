@@ -48,6 +48,7 @@ const fn downloads_scroll_limit(total: usize) -> usize {
     total.saturating_sub(DOWNLOADS_VIEW_ROWS)
 }
 
+#[must_use]
 pub const fn show_downloads_overlay() -> DownloadsOverlayState {
     DownloadsOverlayState::Visible(DownloadsOverlayStateData { scroll_index: 0 })
 }
@@ -156,6 +157,7 @@ const fn download_size(bytes: u64) -> (&'static str, u64) {
     }
 }
 
+#[must_use]
 pub fn build_downloads_overlay(
     state: &DownloadsOverlayState,
     active_color_index: i32,

@@ -7,6 +7,7 @@ pub enum GameplayTween {
 
 impl GameplayTween {
     #[inline(always)]
+    #[must_use]
     pub fn ease(self, progress: f32) -> f32 {
         let t = progress.clamp(0.0, 1.0);
         match self {
@@ -124,6 +125,7 @@ pub enum SongLuaEase {
 }
 
 impl SongLuaEase {
+    #[must_use]
     pub fn from_name(name: Option<&str>) -> Self {
         match name.unwrap_or("linear") {
             "instant" => Self::Instant,
@@ -172,6 +174,7 @@ impl SongLuaEase {
         }
     }
 
+    #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
             Self::Instant => "instant",
@@ -221,6 +224,7 @@ impl SongLuaEase {
 
     // Measured cross-crate gameplay hot path; inlining removes ~16 cycles/sample.
     #[inline(always)]
+    #[must_use]
     pub fn factor(self, t: f32, opt1: Option<f32>, _opt2: Option<f32>) -> f32 {
         let t = t.clamp(0.0, 1.0);
         match self {
@@ -390,6 +394,7 @@ impl SongLuaEase {
     }
 }
 
+#[must_use]
 pub fn song_lua_ease_factor(
     easing: Option<&str>,
     t: f32,
@@ -400,6 +405,7 @@ pub fn song_lua_ease_factor(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_lua_column_offset_window_value(
     window: &SongLuaColumnOffsetWindowRuntime,
     now: f32,
@@ -420,6 +426,7 @@ pub fn song_lua_column_offset_window_value(
     Some((window.to_y - window.from_y).mul_add(factor, window.from_y))
 }
 
+#[must_use]
 pub fn song_lua_column_y_offset(
     windows: &[SongLuaColumnOffsetWindowRuntime],
     local_col: usize,
@@ -452,6 +459,7 @@ pub struct GameplayReceptorGlowBehavior {
 
 impl GameplayReceptorGlowBehavior {
     #[inline(always)]
+    #[must_use]
     pub fn sample_press(self, timer_remaining: f32) -> (f32, f32) {
         let duration = self.press_duration.max(0.0);
         if duration <= f32::EPSILON {
@@ -471,6 +479,7 @@ impl GameplayReceptorGlowBehavior {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn sample_lift(
         self,
         timer_remaining: f32,
@@ -676,11 +685,13 @@ impl GameplayReceptorFeedbackState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn glow_press_timer(&self, col: usize) -> f32 {
         self.glow_press_timers.get(col).copied().unwrap_or(0.0)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn receptor_glow_state(&self, col: usize, lane_pressed: bool) -> GameplayReceptorGlowState {
         if col >= MAX_COLS {
             return GameplayReceptorGlowState {
@@ -698,6 +709,7 @@ impl GameplayReceptorFeedbackState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn bop_zoom(&self, col: usize) -> f32 {
         let Some(timer) = self.bop_timers.get(col).copied() else {
             return 1.0;
@@ -961,6 +973,7 @@ pub struct ReferenceReceptorFeedbackBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl ReferenceReceptorFeedbackBenchmark {
+    #[must_use]
     pub fn new(num_cols: usize, num_players: usize, cols_per_player: usize) -> Self {
         Self {
             state: ReferenceGameplayReceptorFeedbackState::default(),
@@ -1015,6 +1028,7 @@ impl ReferenceReceptorFeedbackBenchmark {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn checksum(&self) -> u64 {
         receptor_feedback_checksum(
             &self.state.glow_press_timers,
@@ -1027,12 +1041,14 @@ impl ReferenceReceptorFeedbackBenchmark {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn probe(&self) -> u64 {
         u64::from(self.state.glow_press_timers[0].to_bits())
             ^ u64::from(self.state.glow_lift_timers[MAX_COLS / 2].to_bits()).rotate_left(21)
             ^ u64::from(self.state.bop_timers[MAX_COLS - 1].to_bits()).rotate_left(43)
     }
 
+    #[must_use]
     pub const fn state_bytes() -> usize {
         std::mem::size_of::<ReferenceGameplayReceptorFeedbackState>()
     }
@@ -1051,6 +1067,7 @@ pub struct ReceptorFeedbackBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl ReceptorFeedbackBenchmark {
+    #[must_use]
     pub fn new(num_cols: usize, num_players: usize, cols_per_player: usize) -> Self {
         Self {
             state: GameplayReceptorFeedbackState::default(),
@@ -1105,6 +1122,7 @@ impl ReceptorFeedbackBenchmark {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn checksum(&self) -> u64 {
         receptor_feedback_checksum(
             &self.state.glow_press_timers,
@@ -1117,18 +1135,21 @@ impl ReceptorFeedbackBenchmark {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn probe(&self) -> u64 {
         u64::from(self.state.glow_press_timers[0].to_bits())
             ^ u64::from(self.state.glow_lift_timers[MAX_COLS / 2].to_bits()).rotate_left(21)
             ^ u64::from(self.state.bop_timers[MAX_COLS - 1].to_bits()).rotate_left(43)
     }
 
+    #[must_use]
     pub const fn state_bytes() -> usize {
         std::mem::size_of::<GameplayReceptorFeedbackState>()
     }
 }
 
 #[inline(always)]
+#[must_use]
 pub fn receptor_glow_duration(behavior: GameplayReceptorGlowBehavior) -> f32 {
     Some(behavior.duration)
         .filter(|duration| *duration > f32::EPSILON)
@@ -1136,6 +1157,7 @@ pub fn receptor_glow_duration(behavior: GameplayReceptorGlowBehavior) -> f32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn receptor_glow_visual(
     behavior: GameplayReceptorGlowBehavior,
     state: GameplayReceptorGlowState,
@@ -1157,6 +1179,7 @@ pub fn receptor_glow_visual(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn receptor_glow_pulse_timers(
     behavior: GameplayReceptorGlowBehavior,
 ) -> GameplayReceptorGlowTimers {
@@ -1169,6 +1192,7 @@ pub fn receptor_glow_pulse_timers(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn receptor_glow_press_timers(
     behavior: GameplayReceptorGlowBehavior,
 ) -> GameplayReceptorGlowTimers {
@@ -1181,6 +1205,7 @@ pub const fn receptor_glow_press_timers(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn receptor_glow_lift_start(
     behavior: GameplayReceptorGlowBehavior,
     press_timer: f32,
@@ -1193,6 +1218,7 @@ pub fn receptor_glow_lift_start(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn receptor_glow_release_timers(
     behavior: GameplayReceptorGlowBehavior,
     press_timer: f32,
@@ -1207,6 +1233,7 @@ pub fn receptor_glow_release_timers(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn tick_receptor_glow_timers(
     behavior: GameplayReceptorGlowBehavior,
     timers: GameplayReceptorGlowTimers,
@@ -1327,6 +1354,7 @@ pub struct GameplayReceptorStepBehavior {
 }
 
 impl GameplayReceptorStepBehavior {
+    #[must_use]
     pub const fn identity() -> Self {
         Self {
             duration: 0.0,
@@ -1338,6 +1366,7 @@ impl GameplayReceptorStepBehavior {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn sample_zoom(self, timer_remaining: f32) -> f32 {
         let duration = self.duration.max(0.0);
         if duration <= f32::EPSILON {
@@ -1365,6 +1394,7 @@ impl Default for GameplayReceptorStepBehavior {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn default_receptor_step_behavior_for_window(
     window: Option<&str>,
 ) -> GameplayReceptorStepBehavior {
@@ -1375,6 +1405,7 @@ pub fn default_receptor_step_behavior_for_window(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn receptor_step_window_index(window: Option<&str>) -> usize {
     match window {
         Some("W1") => 1,
@@ -1388,6 +1419,7 @@ pub fn receptor_step_window_index(window: Option<&str>) -> usize {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn tap_explosion_window_index(window: &str) -> Option<usize> {
     match window {
         "W1" => Some(0),
@@ -1421,6 +1453,7 @@ pub fn tap_explosion_options_from_profile<Profile: GameplayProfileData>(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn tap_explosion_enabled_for_options(options: TapExplosionOptions, window: &str) -> bool {
     match window {
         "W0" | "W1" => options.fantastic,
@@ -1435,6 +1468,7 @@ pub fn tap_explosion_enabled_for_options(options: TapExplosionOptions, window: &
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn hold_explosion_enabled_for_options(options: TapExplosionOptions) -> bool {
     options.holding
 }
@@ -1501,11 +1535,13 @@ impl GameplayNoteskinEffects {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn receptor_glow_behavior_for_player(&self, player: usize) -> GameplayReceptorGlowBehavior {
         self.receptor_glow_behavior[player.min(MAX_PLAYERS - 1)]
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn receptor_step_behavior_for_col(
         &self,
         player: usize,
@@ -1517,6 +1553,7 @@ impl GameplayNoteskinEffects {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn tap_explosion_duration(
         &self,
         player: usize,
@@ -1531,6 +1568,7 @@ impl GameplayNoteskinEffects {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn mine_explosion_duration(&self, player: usize) -> f32 {
         self.mine_explosion_duration[player.min(MAX_PLAYERS - 1)]
     }
@@ -1596,6 +1634,7 @@ pub fn trigger_combo_milestone(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn combo_milestone_duration(kind: ComboMilestoneKind) -> f32 {
     match kind {
         ComboMilestoneKind::Hundred => COMBO_HUNDRED_MILESTONE_DURATION,
@@ -1646,6 +1685,7 @@ pub struct MineHitPlayerState {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn mine_hit_player_state(player: &PlayerRuntime) -> MineHitPlayerState {
     MineHitPlayerState {
         mines_hit: player.mines_hit,
@@ -1689,6 +1729,7 @@ pub struct MineHitSideEffectPlan {
     pub capture_failed_ex_score_inputs: bool,
 }
 
+#[must_use]
 pub const fn mine_hit_side_effect_plan(scoring_blocked: bool) -> MineHitSideEffectPlan {
     MineHitSideEffectPlan {
         life_delta: deadsync_rules::life::LIFE_HIT_MINE,
@@ -1919,6 +1960,7 @@ fn danger_anim_rgba(anim: &DangerAnim, now: f32) -> [f32; 4] {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn danger_health_state(life: f32, is_failing: bool) -> HealthState {
     if is_failing || life <= 0.0 {
         HealthState::Dead
@@ -1930,11 +1972,13 @@ pub fn danger_health_state(life: f32, is_failing: bool) -> HealthState {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn player_health_state(player: &PlayerRuntime) -> HealthState {
     danger_health_state(player.life, player.is_failing)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn danger_fx_rgba(fx: &DangerFx, now: f32) -> [f32; 4] {
     danger_anim_rgba(&fx.anim, now)
 }
@@ -1953,6 +1997,7 @@ impl GameplayDangerFxState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn rgba(&self, player: usize, now: f32) -> [f32; 4] {
         self.effects
             .get(player)

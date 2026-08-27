@@ -10715,6 +10715,7 @@ pub fn install_song_meter_display_children(lua: &Lua, actor: &Table) -> mlua::Re
     Ok(())
 }
 
+#[must_use]
 pub fn read_graph_display_size(
     state: SongLuaOverlayState,
     context: &SongLuaCompileContext,
@@ -11954,6 +11955,7 @@ pub fn actor_effect_magnitude(actor: &Table) -> mlua::Result<[f32; 3]> {
         .unwrap_or([0.0, 0.0, 0.0]))
 }
 
+#[must_use]
 pub fn banner_sort_order_path(sort_order: &str) -> Option<String> {
     let short = sort_order
         .trim()
@@ -12577,12 +12579,14 @@ pub fn read_color_call(args: &MultiValue) -> Option<[f32; 4]> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn method_arg(args: &MultiValue, index: usize) -> Option<&Value> {
     let offset = method_arg_offset(args);
     args.get(offset + index)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn method_arg_offset(args: &MultiValue) -> usize {
     usize::from(matches!(args.front(), Some(Value::Table(_))))
 }

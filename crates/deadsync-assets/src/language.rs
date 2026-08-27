@@ -78,12 +78,14 @@ fn load_from_dir(languages_dir: &Path, locale: &str) -> LanguageBundle {
 }
 
 /// Load the selected language and English fallback from bundled assets.
+#[must_use]
 pub fn load(locale: &str) -> LanguageBundle {
     load_from_dir(&languages_dir_path(), locale)
 }
 
 /// Resolve a configured language choice against bundled assets and the host
 /// locale environment.
+#[must_use]
 pub fn resolve_locale(flag: LanguageFlag) -> String {
     let languages_dir = languages_dir_path();
     resolve_language_locale(flag, raw_os_locale().as_deref(), |code| {
@@ -110,6 +112,7 @@ fn raw_os_locale() -> Option<String> {
 }
 
 /// Return bundled `(locale_code, native_name)` pairs sorted by locale code.
+#[must_use]
 pub fn available_locales() -> Vec<(String, String)> {
     let languages_dir = languages_dir_path();
     let mut locales = Vec::new();

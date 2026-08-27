@@ -10,6 +10,7 @@ pub struct CoalescedFileWriter {
 }
 
 impl CoalescedFileWriter {
+    #[must_use]
     pub fn new(thread_name: &str, path: PathBuf) -> Self {
         let tx = start_write_worker(thread_name, path.clone());
         Self { tx, path }

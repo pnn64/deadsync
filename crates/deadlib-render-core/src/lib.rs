@@ -23,17 +23,20 @@ const RENDER_TARGET_CONTROL_BITS: TextureHandle =
     RENDER_TARGET_TEXTURE_BIT | RENDER_TARGET_NEAREST_BIT;
 
 #[inline(always)]
+#[must_use]
 pub const fn render_target_texture_handle(id: u64) -> TextureHandle {
     let id = id & !RENDER_TARGET_CONTROL_BITS;
     RENDER_TARGET_TEXTURE_BIT | if id == 0 { 1 } else { id }
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn is_render_target_texture(handle: TextureHandle) -> bool {
     handle & RENDER_TARGET_TEXTURE_BIT != 0
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn render_target_sample_handle(handle: TextureHandle, nearest: bool) -> TextureHandle {
     let handle = render_target_base_handle(handle);
     handle
@@ -45,11 +48,13 @@ pub const fn render_target_sample_handle(handle: TextureHandle, nearest: bool) -
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn render_target_base_handle(handle: TextureHandle) -> TextureHandle {
     handle & !RENDER_TARGET_NEAREST_BIT
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn render_target_uses_nearest(handle: TextureHandle) -> bool {
     is_render_target_texture(handle) && handle & RENDER_TARGET_NEAREST_BIT != 0
 }
@@ -79,6 +84,7 @@ impl<V> Default for DenseSlotMap<V> {
 }
 
 impl<V> DenseSlotMap<V> {
+    #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             slots: FastU64Map::with_capacity_and_hasher(capacity, Default::default()),
@@ -87,12 +93,14 @@ impl<V> DenseSlotMap<V> {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn get(&self, key: u64) -> Option<(u64, &V)> {
         let slot = *self.slots.get(&key)?;
         Some((u64::from(slot) + 1, self.values.get(slot as usize)?))
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn get_slot(&self, buffer_key: u64) -> Option<&V> {
         self.values
             .get(usize::try_from(buffer_key.checked_sub(1)?).ok()?)
@@ -112,11 +120,13 @@ impl<V> DenseSlotMap<V> {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.values.len()
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
@@ -150,11 +160,13 @@ impl<V> TextureHandleMap<V> {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn contains_key(&self, handle: &TextureHandle) -> bool {
         self.get(handle).is_some()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn get(&self, handle: &TextureHandle) -> Option<&V> {
         self.slots.get(Self::slot(*handle)?)?.as_ref()
     }
@@ -319,6 +331,7 @@ pub struct TexturedMeshInstanceRaw {
 
 impl TexturedMeshInstanceRaw {
     #[inline(always)]
+    #[must_use]
     pub fn new(
         transform: Matrix4,
         tint: [f32; 4],
@@ -361,6 +374,7 @@ impl TexturedMeshInstanceRaw {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn transform(&self) -> Matrix4 {
         Matrix4::from_cols_array(&[
             self.model_col0[0],
@@ -445,6 +459,7 @@ pub const SAMPLER_DESC_COUNT: usize = 8;
 
 impl SamplerDesc {
     #[inline(always)]
+    #[must_use]
     pub const fn slot(self) -> usize {
         let filter = match self.filter {
             SamplerFilter::Linear => 0,
@@ -471,6 +486,7 @@ pub struct Yuv420Upload<'a> {
 
 impl Yuv420Upload<'_> {
     #[inline]
+    #[must_use]
     pub const fn is_valid(self) -> bool {
         let Some(luma_len) = (self.width as usize).checked_mul(self.height as usize) else {
             return false;
@@ -649,6 +665,7 @@ pub const BACKEND_TYPE_CHOICES: &[(BackendType, &str)] = &[
     (BackendType::Software, "Software"),
 ];
 
+#[must_use]
 pub fn backend_type_choice_index(backend: BackendType) -> usize {
     BACKEND_TYPE_CHOICES
         .iter()
@@ -656,6 +673,7 @@ pub fn backend_type_choice_index(backend: BackendType) -> usize {
         .unwrap_or(0)
 }
 
+#[must_use]
 pub fn backend_type_from_choice(idx: usize) -> BackendType {
     BACKEND_TYPE_CHOICES
         .get(idx)
@@ -693,6 +711,7 @@ pub enum PresentModeTrace {
 
 impl PresentModeTrace {
     #[inline(always)]
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Unknown => "unknown",
@@ -722,6 +741,7 @@ pub enum ClockDomainTrace {
 
 impl ClockDomainTrace {
     #[inline(always)]
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Unknown => "unknown",
@@ -774,6 +794,7 @@ pub struct DrawStats {
 }
 impl PresentModePolicy {
     #[inline(always)]
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Mailbox => "mailbox",
@@ -782,6 +803,7 @@ impl PresentModePolicy {
     }
 }
 
+#[must_use]
 pub const fn present_mode_policy_choice_index(policy: PresentModePolicy) -> usize {
     match policy {
         PresentModePolicy::Mailbox => 0,
@@ -789,6 +811,7 @@ pub const fn present_mode_policy_choice_index(policy: PresentModePolicy) -> usiz
     }
 }
 
+#[must_use]
 pub const fn present_mode_policy_from_choice(idx: usize) -> PresentModePolicy {
     match idx {
         1 => PresentModePolicy::Immediate,

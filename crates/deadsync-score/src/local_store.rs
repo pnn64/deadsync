@@ -94,46 +94,55 @@ impl ScoreProfilePaths {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn profile_dir(&self) -> &Path {
         &self.profile_dir
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn scores_dir(&self) -> PathBuf {
         self.profile_dir.join("scores")
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn gs_dir(&self) -> PathBuf {
         self.scores_dir().join("gs")
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn gs_chart_dir(&self, chart_hash: &str) -> PathBuf {
         self.gs_dir().join(score_file_shard(chart_hash))
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn gs_index_path(&self) -> PathBuf {
         self.gs_dir().join("index.bin")
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn ac_dir(&self) -> PathBuf {
         self.scores_dir().join("ac")
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn ac_index_path(&self) -> PathBuf {
         self.ac_dir().join("index.bin")
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn local_dir(&self) -> PathBuf {
         self.scores_dir().join("local")
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn local_index_path(&self) -> PathBuf {
         self.local_dir().join("index.bin")
     }
@@ -171,6 +180,7 @@ fn write_index_file<T: bincode::Encode>(
     Ok(())
 }
 
+#[must_use]
 pub fn load_gs_score_index_file(path: &Path) -> Option<(HashMap<String, CachedScore>, bool)> {
     let bytes = fs::read(path).ok()?;
     let (mut by_chart, _) = bincode::decode_from_slice::<HashMap<String, CachedScore>, _>(
@@ -194,6 +204,7 @@ pub fn save_gs_score_index_file(
     write_index_file(path, by_chart)
 }
 
+#[must_use]
 pub fn load_gs_score_index_or_scan(
     paths: &ScoreProfilePaths,
 ) -> (HashMap<String, CachedScore>, Option<ScoreIndexWriteError>) {
@@ -210,6 +221,7 @@ pub fn load_gs_score_index_or_scan(
     (scanned, write_error)
 }
 
+#[must_use]
 pub fn load_gs_score_cache_from_paths(paths: &ScoreProfilePaths) -> GsScoreCacheLoad {
     let (by_chart, write_error) = load_gs_score_index_or_scan(paths);
     GsScoreCacheLoad {
@@ -218,6 +230,7 @@ pub fn load_gs_score_cache_from_paths(paths: &ScoreProfilePaths) -> GsScoreCache
     }
 }
 
+#[must_use]
 pub fn load_ac_score_index_file(path: &Path) -> Option<HashMap<String, ArrowCloudScores>> {
     let bytes = fs::read(path).ok()?;
     let (by_chart, _) = bincode::decode_from_slice::<HashMap<String, ArrowCloudScores>, _>(
@@ -235,12 +248,14 @@ pub fn save_ac_score_index_file(
     write_index_file(path, by_chart)
 }
 
+#[must_use]
 pub fn load_ac_score_index_for_profile(
     paths: &ScoreProfilePaths,
 ) -> HashMap<String, ArrowCloudScores> {
     load_ac_score_index_file(&paths.ac_index_path()).unwrap_or_default()
 }
 
+#[must_use]
 pub fn load_local_score_index_file(path: &Path) -> Option<LocalScoreIndex> {
     let bytes = fs::read(path).ok()?;
     decode_local_score_index(&bytes)
@@ -278,10 +293,12 @@ pub fn save_local_score_index_file(
     Ok(())
 }
 
+#[must_use]
 pub fn load_local_score_index_file_or_default(path: &Path) -> LocalScoreIndex {
     load_local_score_index_file(path).unwrap_or_default()
 }
 
+#[must_use]
 pub fn load_local_score_cache_from_paths(paths: &ScoreProfilePaths) -> LocalScoreCacheLoad {
     let index = load_local_score_index_from_root(&paths.local_dir());
     LocalScoreCacheLoad {
@@ -312,6 +329,7 @@ fn count_score_bins_in_dir(dir: &Path) -> u32 {
     total
 }
 
+#[must_use]
 pub fn total_local_score_bins_in_root(root: &Path) -> u32 {
     if !root.is_dir() {
         return 0;
@@ -371,6 +389,7 @@ pub fn collect_recent_local_plays_in_root(root: &Path, latest_by_chart: &mut Has
     }
 }
 
+#[must_use]
 pub fn recent_played_chart_hashes_in_root(root: &Path) -> Vec<String> {
     if !root.is_dir() {
         return Vec::new();
@@ -390,6 +409,7 @@ pub fn recent_played_chart_hashes_in_root(root: &Path) -> Vec<String> {
         .collect()
 }
 
+#[must_use]
 pub fn recent_played_chart_hashes_in_profiles_root(profiles_root: &Path) -> Vec<String> {
     let Ok(read_dir) = fs::read_dir(profiles_root) else {
         return Vec::new();
@@ -453,6 +473,7 @@ pub fn collect_local_play_counts_in_root(root: &Path, counts_by_chart: &mut Hash
     }
 }
 
+#[must_use]
 pub fn played_chart_counts_in_root(root: &Path) -> Vec<(String, u32)> {
     if !root.is_dir() {
         return Vec::new();
@@ -466,6 +487,7 @@ pub fn played_chart_counts_in_root(root: &Path) -> Vec<(String, u32)> {
     ranked
 }
 
+#[must_use]
 pub fn played_chart_counts_in_profiles_root(profiles_root: &Path) -> Vec<(String, u32)> {
     let Ok(read_dir) = fs::read_dir(profiles_root) else {
         return Vec::new();
@@ -488,6 +510,7 @@ pub fn played_chart_counts_in_profiles_root(profiles_root: &Path) -> Vec<(String
     ranked
 }
 
+#[must_use]
 pub fn read_local_score_header(path: &Path) -> Option<LocalScoreHeader> {
     let file = fs::File::open(path).ok()?;
     let mut buf = Vec::with_capacity(1024);
@@ -497,6 +520,7 @@ pub fn read_local_score_header(path: &Path) -> Option<LocalScoreHeader> {
     decode_local_score_header(&buf)
 }
 
+#[must_use]
 pub fn read_local_score_entry(path: &Path) -> Option<LocalScoreEntry> {
     let bytes = fs::read(path).ok()?;
     decode_local_score_entry(&bytes)
@@ -526,6 +550,7 @@ pub fn scan_local_scores_dir(dir: &Path, index: &mut LocalScoreIndex) {
     }
 }
 
+#[must_use]
 pub fn load_local_score_index_from_root(root: &Path) -> LocalScoreIndex {
     if !root.is_dir() {
         return LocalScoreIndex::default();
@@ -636,6 +661,7 @@ pub struct LocalScoreProfileSource {
     pub display_name: String,
 }
 
+#[must_use]
 pub fn machine_local_score_bests_from_profiles(
     profiles: &[LocalScoreProfileSource],
 ) -> MachineLocalScoreBests {
@@ -720,6 +746,7 @@ fn push_local_leaderboard_plays_from_root(
     );
 }
 
+#[must_use]
 pub fn machine_leaderboard_local_from_profiles(
     profiles: &[LocalScoreProfileSource],
     chart_hash: &str,
@@ -753,6 +780,7 @@ pub fn machine_leaderboard_local_from_profiles(
     machine_leaderboard_entries(plays, max_entries)
 }
 
+#[must_use]
 pub fn personal_leaderboard_local_from_root(
     root: &Path,
     chart_hash: &str,
@@ -768,6 +796,7 @@ pub fn personal_leaderboard_local_from_root(
     machine_leaderboard_entries(plays, max_entries)
 }
 
+#[must_use]
 pub fn machine_replays_local_from_profiles(
     profiles: &[LocalScoreProfileSource],
     chart_hash: &str,
@@ -795,6 +824,7 @@ pub fn machine_replays_local_from_profiles(
     machine_replay_entries(plays, max_entries)
 }
 
+#[must_use]
 pub fn local_score_shard_dir(root: &Path, chart_hash: &str) -> PathBuf {
     root.join(score_file_shard(chart_hash))
 }
@@ -941,6 +971,7 @@ fn scan_gs_scores_dir(dir: &Path, best_by_chart: &mut HashMap<String, CachedScor
     }
 }
 
+#[must_use]
 pub fn best_gs_scores_from_dir(dir: &Path) -> HashMap<String, CachedScore> {
     let mut best_by_chart: HashMap<String, CachedScore> = HashMap::new();
 
@@ -961,6 +992,7 @@ pub fn best_gs_scores_from_dir(dir: &Path) -> HashMap<String, CachedScore> {
     best_by_chart
 }
 
+#[must_use]
 pub fn gs_entries_for_chart(chart_hash: &str, dir: &Path) -> Vec<GsScoreEntry> {
     if !dir.is_dir() {
         return Vec::new();

@@ -19,6 +19,7 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn static_texture(tex: &'static str) -> Self {
         Self {
             inner: present_dsl::SpriteBuilder::static_texture(tex),
@@ -42,6 +43,7 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn solid() -> Self {
         Self {
             inner: present_dsl::SpriteBuilder::solid(),
@@ -55,6 +57,7 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn build(self, site_base: u64) -> Actor {
         self.inner.build(site_base)
     }

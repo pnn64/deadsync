@@ -143,6 +143,7 @@ pub struct EditBeatBarCursor<'a> {
 }
 
 impl<'a> EditBeatBarCursor<'a> {
+    #[must_use]
     pub fn new(row: i32, segments: &'a [TimeSignatureSegment]) -> Self {
         let index = sig_index_at_row(segments, row);
         Self {
@@ -208,6 +209,7 @@ fn legacy_sig_index_at_row(segments: &[TimeSignatureSegment], row: i32) -> usize
 }
 
 #[cfg(any(test, feature = "bench-support"))]
+#[must_use]
 pub fn edit_beat_bar_info_for_row(
     row: i32,
     segments: &[TimeSignatureSegment],
@@ -637,6 +639,7 @@ fn append_group_cues(
     }
 }
 
+#[must_use]
 pub fn cue_segment_ranges(
     scrolls: &[ScrollSegment],
     bpms: &[(f32, f32)],

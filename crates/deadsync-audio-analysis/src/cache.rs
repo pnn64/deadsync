@@ -8,7 +8,7 @@ use std::path::Path;
 use std::time::UNIX_EPOCH;
 use twox_hash::XxHash64;
 
-const CACHE_MAGIC: u64 = 0x44535952_47414946; // "DSYRGAIF" - file cache.
+const CACHE_MAGIC: u64 = 0x4453_5952_4741_4946; // "DSYRGAIF" - file cache.
 /// Current on-disk cache layout. Version 2 added the per-entry
 /// `content_hash`; version 1 files are still decoded and migrated (see
 /// [`decode_replaygain_cache`]) so an upgrade never discards existing gains.
@@ -75,6 +75,7 @@ pub enum CacheFreshness {
 
 impl ReplayGainCacheEntry {
     #[inline]
+    #[must_use]
     pub const fn new(
         path_hash: u64,
         mtime_unix_nanos: u64,
@@ -91,6 +92,7 @@ impl ReplayGainCacheEntry {
     }
 
     #[inline]
+    #[must_use]
     pub const fn info(self) -> ReplayGainInfo {
         ReplayGainInfo {
             lufs: self.lufs,
@@ -116,6 +118,7 @@ impl ReplayGainCacheFile {
         Self { entries }
     }
 
+    #[must_use]
     pub fn into_entry_map(self) -> ReplayGainEntryMap {
         let mut map = ReplayGainEntryMap::default();
         map.reserve(self.entries.len());
@@ -126,6 +129,7 @@ impl ReplayGainCacheFile {
     }
 }
 
+#[must_use]
 pub fn read_replaygain_cache_file(path: &Path) -> Option<ReplayGainEntryMap> {
     let bytes = fs::read(path).ok()?;
     Some(decode_replaygain_cache(&bytes)?.into_entry_map())
@@ -190,12 +194,14 @@ pub fn decode_replaygain_cache(bytes: &[u8]) -> Option<ReplayGainCacheFile> {
 }
 
 #[inline]
+#[must_use]
 pub fn replaygain_path_hash(path: &Path) -> u64 {
     let mut hasher = XxHash64::with_seed(0);
     hasher.write(path.as_os_str().to_string_lossy().as_bytes());
     hasher.finish()
 }
 
+#[must_use]
 pub fn replaygain_source_mtime_unix_nanos(path: &Path) -> Option<u64> {
     let meta = fs::metadata(path).ok()?;
     let mtime = meta.modified().ok()?;
@@ -210,6 +216,7 @@ pub fn replaygain_source_mtime_unix_nanos(path: &Path) -> Option<u64> {
 /// xxhash64 of the raw bytes of the source file, streamed in chunks so large
 /// songs are not buffered whole. `None` if the file can't be read. This is the
 /// content fingerprint used to validate a cache entry when the mtime changed.
+#[must_use]
 pub fn replaygain_content_hash(path: &Path) -> Option<u64> {
     let mut file = fs::File::open(path).ok()?;
     let mut hasher = XxHash64::with_seed(0);
@@ -224,6 +231,7 @@ pub fn replaygain_content_hash(path: &Path) -> Option<u64> {
     Some(hasher.finish())
 }
 
+#[must_use]
 pub fn replaygain_cache_entry_for_path(path: &Path, info: ReplayGainInfo) -> ReplayGainCacheEntry {
     ReplayGainCacheEntry::new(
         replaygain_path_hash(path),
@@ -242,6 +250,7 @@ pub fn replaygain_cache_entry_for_path(path: &Path, info: ReplayGainInfo) -> Rep
 /// computed once. A differing hash (or unreadable file) is reported [`Stale`].
 ///
 /// [`Stale`]: CacheFreshness::Stale
+#[must_use]
 pub fn replaygain_cache_check(entry: ReplayGainCacheEntry, path: &Path) -> CacheFreshness {
     let Some(current_mtime) = replaygain_source_mtime_unix_nanos(path) else {
         return CacheFreshness::Stale;
@@ -276,6 +285,7 @@ pub fn replaygain_cache_check(entry: ReplayGainCacheEntry, path: &Path) -> Cache
 
 /// Convenience wrapper over [`replaygain_cache_check`] that collapses the
 /// freshness result to the gain info (discarding the "needs persist" signal).
+#[must_use]
 pub fn replaygain_cache_info_if_fresh(
     entry: ReplayGainCacheEntry,
     path: &Path,

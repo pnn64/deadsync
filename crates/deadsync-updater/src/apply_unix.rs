@@ -78,6 +78,7 @@ where
 /// Strips the optional shared top-level prefix and validates the
 /// remainder: rejects absolute paths and any component that isn't a
 /// plain `Normal` segment.  Returns the cleaned relative path.
+#[must_use]
 pub fn sanitize_entry(name: &str, prefix: Option<&str>) -> Option<PathBuf> {
     let trimmed = name.trim_end_matches('/');
     if trimmed.is_empty() {
@@ -431,6 +432,7 @@ pub fn apply_tar_gz(archive_path: &Path, exe_dir: &Path) -> Result<ApplyOutcome,
 
 /// Probe writability the same way `apply_windows` does so the two
 /// platforms refuse self-update with consistent UX.
+#[must_use]
 pub fn is_dir_writable(dir: &Path) -> bool {
     use std::io::Write;
     if !dir.is_dir() {

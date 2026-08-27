@@ -22,6 +22,7 @@ impl Default for LockWaitStats {
 }
 
 impl LockWaitStats {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             lock_count: AtomicU64::new(0),

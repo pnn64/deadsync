@@ -10,6 +10,7 @@ pub struct SimpleIni {
 }
 
 impl SimpleIni {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -71,20 +72,24 @@ impl SimpleIni {
             .map(String::as_str)
     }
 
+    #[must_use]
     pub fn get_section(&self, section: &str) -> Option<&IniSection> {
         self.sections.get(section)
     }
 
+    #[must_use]
     pub const fn sections(&self) -> &IniSections {
         &self.sections
     }
 
+    #[must_use]
     pub fn into_sections(self) -> IniSections {
         self.sections
     }
 }
 
 /// Unescape INI string escape sequences used by localized string values.
+#[must_use]
 pub fn unescape_ini_value(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     let mut chars = raw.chars();

@@ -40,17 +40,20 @@ pub fn refresh_arrowcloud_status() {
     );
 }
 
+#[must_use]
 pub fn is_boogiestats_active() -> bool {
     let cfg = deadsync_config::runtime::get();
     crate::groovestats::boogiestats_active(cfg.enable_groovestats, cfg.enable_boogiestats)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn active_groovestats_service() -> crate::groovestats::Service {
     let cfg = deadsync_config::runtime::get();
     crate::groovestats::active_service(cfg.enable_groovestats, cfg.enable_boogiestats)
 }
 
+#[must_use]
 pub fn unlock_downloads_available(auto_download_unlocks: bool) -> bool {
     downloads_available(
         auto_download_unlocks,
@@ -59,6 +62,7 @@ pub fn unlock_downloads_available(auto_download_unlocks: bool) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn unlock_download_status_generation() -> u64 {
     crate::groovestats::runtime_status_generation()
 }
@@ -67,6 +71,7 @@ pub fn queue_event_unlock_download(url: &str, unlock_name: &str, pack_name: &str
     runtime_queue_event_unlock_download(DOWNLOAD_RUNTIME_HOOKS, url, unlock_name, pack_name);
 }
 
+#[must_use]
 pub fn retry_failed_unlock_downloads() -> usize {
     runtime_retry_failed_downloads(DOWNLOAD_RUNTIME_HOOKS)
 }

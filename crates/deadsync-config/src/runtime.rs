@@ -62,6 +62,7 @@ pub fn input_routing_config() -> InputRoutingConfig {
     RUNTIME_CONFIG.input_routing_config()
 }
 
+#[must_use]
 pub fn audio_mix_levels() -> AudioMixLevels {
     deadsync_audio_stream::audio_mix_levels()
 }

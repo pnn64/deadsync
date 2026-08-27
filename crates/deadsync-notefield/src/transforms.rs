@@ -80,6 +80,7 @@ pub(crate) fn quantize_step(v: f32, step: f32) -> f32 {
     }
 }
 
+#[must_use]
 pub fn quantize_centi_i32(value: f64) -> i32 {
     if !value.is_finite() {
         return 0;
@@ -89,6 +90,7 @@ pub fn quantize_centi_i32(value: f64) -> i32 {
         .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
 }
 
+#[must_use]
 pub fn quantize_centi_u32(value: f64) -> u32 {
     if !value.is_finite() || value <= 0.0 {
         return 0;
@@ -96,10 +98,12 @@ pub fn quantize_centi_u32(value: f64) -> u32 {
     (value * 100.0).round().min(f64::from(u32::MAX)) as u32
 }
 
+#[must_use]
 pub fn mod_percent_key(level: f32) -> i16 {
     clamp_rounded_i16(level * 100.0)
 }
 
+#[must_use]
 pub const fn clamp_rounded_i16(value: f32) -> i16 {
     if !value.is_finite() {
         return 0;

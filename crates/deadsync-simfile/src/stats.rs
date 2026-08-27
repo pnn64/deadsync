@@ -1,6 +1,7 @@
 use deadsync_chart::StaminaCounts;
 use rssp::patterns::{PatternCounts, PatternVariant, compute_box_counts, count_pattern};
 
+#[must_use]
 pub fn build_stamina_counts(chart: &rssp::report::ChartSummary) -> StaminaCounts {
     build_stamina_counts_from_parts(
         &chart.detected_patterns,

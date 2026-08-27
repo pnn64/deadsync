@@ -19,6 +19,7 @@ pub struct EventTimeCache {
 
 impl EventTimeCache {
     #[inline(always)]
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             sec: 0,
@@ -105,6 +106,7 @@ fn map_event_time(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn event_time(sample: EventTimeSample, sec: i64, usec: i64) -> (Instant, u64) {
     let Some(sample_clock_nanos) = sample.clock_nanos else {
         return (sample.instant, sample.host_nanos);

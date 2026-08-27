@@ -115,11 +115,13 @@ impl PadConfigSync {
     }
 
     /// The active markers, for the screen to mirror for display.
+    #[must_use]
     pub fn snapshot(&self) -> [Option<AppliedPadConfig>; 2] {
         self.applied.clone()
     }
 
     /// Whether `profiles[pad]` needs rebuilding for these inputs.
+    #[must_use]
     pub fn profiles_stale(
         &self,
         pad: usize,
@@ -156,6 +158,7 @@ impl PadConfigSync {
     }
 
     /// The cached saved-config list for a pad.
+    #[must_use]
     pub fn profiles_for(&self, pad: usize) -> &[PadConfigProfile] {
         if pad >= 2 {
             return &[];

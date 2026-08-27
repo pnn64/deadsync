@@ -34,6 +34,7 @@ pub struct StatsPaneParams {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn layout() -> PaneLayout {
     PaneLayout {
         pane_top: screen_height() - 92.0,

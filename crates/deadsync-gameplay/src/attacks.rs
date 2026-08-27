@@ -66,6 +66,7 @@ pub fn perspective_effects_from_profile<Profile: GameplayProfileData>(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn scroll_effects_from_flags(
     reverse: bool,
     split: bool,
@@ -89,6 +90,7 @@ pub fn base_visual_effects<Profile: GameplayProfileData>(profile: &Profile) -> V
 }
 
 #[inline(always)]
+#[must_use]
 pub fn build_attack_mask_windows_for_player(
     chart_attacks: Option<&str>,
     attack_mode: GameplayAttackMode,
@@ -120,6 +122,7 @@ pub fn player_changes_chart<Profile: GameplayProfileData>(
 
 #[cfg(any(test, feature = "bench-support"))]
 #[doc(hidden)]
+#[must_use]
 pub fn parse_chart_attack_windows_reference(raw: &str) -> Vec<ChartAttackWindow> {
     let raw = raw.trim();
     if raw.is_empty() {
@@ -296,6 +299,7 @@ fn parse_chart_attack_chunk(chunk: &str) -> Option<BorrowedChartAttack<'_>> {
 }
 
 #[cfg(any(test, feature = "bench-support"))]
+#[must_use]
 pub fn parse_chart_attack_windows_starts_reference(raw: &str) -> Vec<ChartAttackWindow> {
     let raw = raw.trim();
     if raw.is_empty() {
@@ -328,6 +332,7 @@ pub(crate) fn stream_attack_windows(raw: &str) -> Vec<ChartAttackWindow> {
         .collect()
 }
 
+#[must_use]
 pub fn parse_chart_attack_windows(raw: &str) -> Vec<ChartAttackWindow> {
     let raw = raw.trim();
     if raw.is_empty() {
@@ -353,12 +358,14 @@ pub fn parse_chart_attack_windows(raw: &str) -> Vec<ChartAttackWindow> {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn random_attack_seed(base_seed: u64, player: usize, attacks_len: usize) -> u64 {
     base_seed
         ^ (0xC2B2_AE3D_27D4_EB4F_u64.wrapping_mul(player as u64 + 1))
         ^ (attacks_len as u64).wrapping_mul(0x9E37_79B9_u64)
 }
 
+#[must_use]
 pub fn build_random_attack_windows(
     song_length_seconds: f32,
     player: usize,
@@ -518,6 +525,7 @@ impl Default for ParsedAttackMods {
 
 impl ParsedAttackMods {
     #[inline(always)]
+    #[must_use]
     pub fn has_chart_effect(self) -> bool {
         self.insert_mask != 0
             || self.remove_mask != 0
@@ -526,6 +534,7 @@ impl ParsedAttackMods {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_runtime_mask_effect(self) -> bool {
         self.clear_all
             || self.accel.any()
@@ -539,6 +548,7 @@ impl ParsedAttackMods {
     }
 }
 
+#[must_use]
 pub fn chart_attacks_enabled_for_mode(
     chart_attacks: Option<&str>,
     attack_mode: GameplayAttackMode,
@@ -550,6 +560,7 @@ pub fn chart_attacks_enabled_for_mode(
     }
 }
 
+#[must_use]
 pub fn player_chart_changes_for_options(
     has_uncommon_masks: bool,
     turn_option: GameplayTurnOption,
@@ -598,6 +609,7 @@ pub struct AttackMaskWindow {
     pub mini_speed: Option<f32>,
 }
 
+#[must_use]
 pub fn build_song_lua_constant_attack_mask_window(
     start_second: f32,
     end_second: f32,
@@ -633,6 +645,7 @@ pub fn build_song_lua_constant_attack_mask_window(
     })
 }
 
+#[must_use]
 pub fn build_course_modifier_mask_window(modifiers: &str) -> Option<AttackMaskWindow> {
     let mods = parse_attack_mods(modifiers);
     if !mods.has_runtime_mask_effect() {
@@ -808,6 +821,7 @@ pub enum SongLuaColumnTransformTarget {
     RotationZ,
 }
 
+#[must_use]
 pub fn build_song_lua_column_offset_window_runtime(
     column: usize,
     target: SongLuaColumnTransformTarget,
@@ -867,6 +881,7 @@ pub struct SongLuaNoteHideWindows {
 }
 
 impl SongLuaNoteHideWindows {
+    #[must_use]
     pub fn new(mut windows: Vec<SongLuaNoteHideWindowRuntime>) -> Self {
         windows.sort_unstable_by(|left, right| {
             left.column
@@ -923,6 +938,7 @@ impl SongLuaNoteHideWindows {
 
     #[cfg(any(test, feature = "bench-support"))]
     #[doc(hidden)]
+    #[must_use]
     pub fn new_reference(mut windows: Vec<SongLuaNoteHideWindowRuntime>) -> Self {
         windows.sort_unstable_by(|left, right| {
             left.column
@@ -960,6 +976,7 @@ impl SongLuaNoteHideWindows {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn as_slice(&self) -> &[SongLuaNoteHideWindowRuntime] {
         &self.windows
     }
@@ -969,6 +986,7 @@ impl SongLuaNoteHideWindows {
         self.windows.iter()
     }
 
+    #[must_use]
     pub fn storage_bytes(&self) -> usize {
         self.windows
             .len()
@@ -1010,6 +1028,7 @@ impl SongLuaNoteHideWindows {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn build_song_lua_note_hide_window_runtime(
     column: usize,
     start_beat: f32,
@@ -1065,6 +1084,7 @@ pub fn build_song_lua_note_hide_windows_for_players_reference(
     out.map(SongLuaNoteHideWindows::new_reference)
 }
 
+#[must_use]
 pub fn build_song_lua_hidden_players(flags: &[bool]) -> [bool; MAX_PLAYERS] {
     let mut out = [false; MAX_PLAYERS];
     out[..flags.len().min(MAX_PLAYERS)].copy_from_slice(&flags[..flags.len().min(MAX_PLAYERS)]);
@@ -1086,6 +1106,7 @@ pub struct SongLuaOverlayMessageRuntime {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn build_song_lua_overlay_message_runtime(
     event_second: f32,
     command_index: usize,
@@ -1147,6 +1168,7 @@ pub fn build_song_lua_message_command_indices<'a>(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_lua_message_command_index(
     indices: &SongLuaMessageCommandIndices,
     message: &str,
@@ -1180,6 +1202,7 @@ pub fn build_song_lua_message_command_indices_reference<'a>(
 
 #[cfg(any(test, feature = "bench-support"))]
 #[doc(hidden)]
+#[must_use]
 pub fn song_lua_message_command_index_reference(
     indices: &std::collections::BTreeMap<String, usize>,
     message: &str,
@@ -2247,6 +2270,7 @@ impl Default for SongLuaPlayerTransform {
 pub type SongLuaPlayerTransforms = [SongLuaPlayerTransform; MAX_PLAYERS];
 
 #[inline(always)]
+#[must_use]
 pub const fn song_lua_player_transforms_default() -> SongLuaPlayerTransforms {
     [SongLuaPlayerTransform {
         x: None,
@@ -2275,6 +2299,7 @@ fn finite_transform_or(value: Option<f32>, fallback: f32) -> f32 {
 }
 
 impl SongLuaPlayerTransformValues {
+    #[must_use]
     pub fn resolve(self) -> SongLuaPlayerTransform {
         SongLuaPlayerTransform {
             x: finite_transform_option(self.x),
@@ -2438,6 +2463,7 @@ pub fn song_lua_apply_eased_target(
     }
 }
 
+#[must_use]
 pub fn attack_mask_window_from_parts(
     attack: &ChartAttackWindow,
     mods: ParsedAttackMods,
@@ -2485,6 +2511,7 @@ fn attack_mask_window_from_values(
     })
 }
 
+#[must_use]
 pub fn build_attack_mask_windows(attacks: &[ChartAttackWindow]) -> Vec<AttackMaskWindow> {
     if attacks.is_empty() {
         return Vec::new();
@@ -2500,6 +2527,7 @@ pub fn build_attack_mask_windows(attacks: &[ChartAttackWindow]) -> Vec<AttackMas
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn song_lua_player_transform_target(target: SongLuaEaseMaskTarget) -> bool {
     matches!(
         target,
@@ -2849,12 +2877,14 @@ pub fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowR
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_lua_note_hidden(windows: &SongLuaNoteHideWindows, local_col: usize, beat: f32) -> bool {
     windows.hidden(local_col, beat)
 }
 
 /// Linear lane scan retained as the benchmark/reference path.
 #[inline]
+#[must_use]
 pub fn song_lua_note_hidden_reference(
     windows: &SongLuaNoteHideWindows,
     local_col: usize,
@@ -2869,6 +2899,7 @@ pub fn song_lua_note_hidden_reference(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_lua_field_note_hidden(
     windows: &SongLuaNoteHideWindows,
     cols_per_player: usize,
@@ -2889,6 +2920,7 @@ pub fn offset_song_lua_message_events(events: &mut [SongLuaOverlayMessageRuntime
     }
 }
 
+#[must_use]
 pub fn group_song_lua_overlay_eases<StateDelta>(
     overlay_count: usize,
     mut overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime<StateDelta>>,
@@ -2937,6 +2969,7 @@ fn song_lua_lerp_unclamped(a: f32, b: f32, t: f32) -> f32 {
     (b - a).mul_add(t, a)
 }
 
+#[must_use]
 pub fn song_lua_ease_window_value(window: &SongLuaEaseMaskWindow, now: f32) -> Option<f32> {
     if !now.is_finite()
         || !window.start_second.is_finite()
@@ -2972,6 +3005,7 @@ pub fn song_lua_ease_window_value(window: &SongLuaEaseMaskWindow, now: f32) -> O
 }
 
 #[inline(always)]
+#[must_use]
 pub fn chart_attack_row_range(
     attack: &ChartAttackWindow,
     timing_player: &TimingData,
@@ -2994,6 +3028,7 @@ fn chart_attack_row_range_values(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn chart_attack_turn_seed(base_seed: u64, player: usize, window_index: usize) -> u64 {
     base_seed
         ^ (0x9E37_79B9_u64.wrapping_mul(player as u64 + 1))
@@ -3455,6 +3490,7 @@ pub fn apply_chart_attack_window_reference(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn chart_attack_note_range_bench(
     notes: &[Note],
     start_row: usize,
@@ -3465,6 +3501,7 @@ pub fn chart_attack_note_range_bench(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn chart_attack_note_range_reference_bench(
     notes: &[Note],
     start_row: usize,
@@ -3859,6 +3896,7 @@ pub struct ChartAttackTransformPlayer<'a> {
 
 impl ChartAttackTransformPlayer<'_> {
     #[inline(always)]
+    #[must_use]
     pub fn has_chart_attacks(self) -> bool {
         chart_attacks_enabled_for_mode(self.chart_attacks, self.attack_mode)
     }
@@ -4093,6 +4131,7 @@ const fn mark_scroll_targets(targets: &mut ScrollOverrides, scroll: ScrollOverri
     mark_active_target(&mut targets.centered, scroll.centered);
 }
 
+#[must_use]
 pub fn collect_active_attack_targets(
     windows: &[AttackMaskWindow],
     now: f32,
@@ -4138,6 +4177,7 @@ fn collect_active_attack_targets_selected(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn persisted_target_allowed(
     persisted: bool,
     active_clear_all: bool,
@@ -4147,6 +4187,7 @@ pub const fn persisted_target_allowed(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn persisted_mini_allowed(persisted: bool, active_targets: AttackActiveTargets) -> bool {
     !persisted || (!active_targets.clear_all && !active_targets.mini_percent)
 }
@@ -4171,6 +4212,7 @@ pub struct ActiveAttackMaskValues {
 
 impl ActiveAttackMaskValues {
     #[inline(always)]
+    #[must_use]
     pub fn new(base_appearance: AppearanceEffects) -> Self {
         Self {
             clear_all: false,
@@ -4580,6 +4622,7 @@ pub struct ReferenceAttackWindowIndexBench {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl ReferenceAttackWindowIndexBench {
+    #[must_use]
     pub fn new(windows: Vec<AttackMaskWindow>) -> Self {
         let index = ReferenceActiveWindowIndex::new(&windows, |window| window.start_second);
         Self { windows, index }
@@ -4596,15 +4639,18 @@ impl ReferenceAttackWindowIndexBench {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn active(&self) -> &[usize] {
         &self.index.active
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn stats(&self) -> GameplayWindowIndexStats {
         self.index.stats
     }
 
+    #[must_use]
     pub const fn index_storage_bytes() -> usize {
         std::mem::size_of::<ReferenceActiveWindowIndex>()
     }
@@ -4619,6 +4665,7 @@ pub struct AttackWindowIndexBench {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl AttackWindowIndexBench {
+    #[must_use]
     pub fn new(windows: Vec<AttackMaskWindow>) -> Self {
         let index = ActiveWindowIndex::new(&windows, |window| window.start_second);
         Self { windows, index }
@@ -4636,15 +4683,18 @@ impl AttackWindowIndexBench {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn active(&self) -> &[usize] {
         &self.index.active
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn stats(&self) -> GameplayWindowIndexStats {
         self.index.stats
     }
 
+    #[must_use]
     pub const fn index_storage_bytes() -> usize {
         std::mem::size_of::<ActiveWindowIndex>()
     }
@@ -4708,6 +4758,7 @@ impl Default for GameplayAttackRuntimeState {
 }
 
 impl GameplayAttackRuntimeState {
+    #[must_use]
     pub fn new(
         mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
         song_lua_ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
@@ -4837,6 +4888,7 @@ impl GameplayAttackRuntimeState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn active_window_indices(&self, player: usize) -> (&[usize], &[usize]) {
         self.window_indices
             .get(player)
@@ -4848,6 +4900,7 @@ impl GameplayAttackRuntimeState {
             })
     }
 
+    #[must_use]
     pub fn window_index_stats(
         &self,
         player: usize,
@@ -5012,6 +5065,7 @@ pub fn apply_active_attack_mask_window(
     }
 }
 
+#[must_use]
 pub fn refresh_active_attack_player(
     input: ActiveAttackRefreshInput<'_>,
     state: ActiveAttackRefreshState,
@@ -5070,6 +5124,7 @@ fn refresh_idle_attack_player(
     }
 }
 
+#[must_use]
 pub fn refresh_active_attack_player_indexed(
     input: ActiveAttackRefreshInput<'_>,
     state: ActiveAttackRefreshState,
@@ -5098,6 +5153,7 @@ pub fn refresh_active_attack_player_indexed(
 }
 
 /// Full selected-window evaluation retained as the benchmark/reference path.
+#[must_use]
 pub fn refresh_active_attack_player_indexed_reference(
     input: ActiveAttackRefreshInput<'_>,
     state: ActiveAttackRefreshState,
@@ -5578,6 +5634,7 @@ const fn apply_active_scroll_window(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn turn_option_bits(turn: GameplayTurnOption) -> u16 {
     match turn {
         GameplayTurnOption::None => 0,
@@ -5629,6 +5686,7 @@ fn buffered_attack_token_key<'a>(
     )
 }
 
+#[must_use]
 pub fn attack_token_key(token: &str) -> String {
     let mut key = String::with_capacity(token.len());
     for ch in token.chars() {
@@ -5657,6 +5715,7 @@ fn attack_token_key_reference(token: &str) -> String {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn mod_column_suffix(key: &str, prefix: &str) -> Option<usize> {
     let suffix = key.strip_prefix(prefix)?;
     if suffix.is_empty() {
@@ -6051,6 +6110,7 @@ fn apply_runtime_mod(
     }
 }
 
+#[must_use]
 pub fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
     let mut out = ParsedAttackMods::default();
     let mut key_buffer = [0u8; ATTACK_KEY_STACK_BYTES];
@@ -6084,6 +6144,7 @@ pub fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
 
 #[cfg(any(test, feature = "bench-support"))]
 #[doc(hidden)]
+#[must_use]
 pub fn parse_attack_mods_reference(mods: &str) -> ParsedAttackMods {
     let mut out = ParsedAttackMods::default();
     for token in mods.split(',') {
@@ -6136,12 +6197,14 @@ fn song_lua_runtime_attack_key<'a, const BUFFERED: bool>(
     }
 }
 
+#[must_use]
 pub fn parse_song_lua_runtime_mods(mods: &str) -> ParsedAttackMods {
     parse_song_lua_runtime_mods_core::<true>(mods)
 }
 
 #[cfg(any(test, feature = "bench-support"))]
 #[doc(hidden)]
+#[must_use]
 pub fn parse_song_lua_runtime_mods_reference(mods: &str) -> ParsedAttackMods {
     parse_song_lua_runtime_mods_core::<false>(mods)
 }
@@ -6221,6 +6284,7 @@ pub struct ScrollEffects {
 
 impl ScrollEffects {
     #[inline(always)]
+    #[must_use]
     pub fn from_flags(
         reverse: bool,
         split: bool,
@@ -6238,6 +6302,7 @@ impl ScrollEffects {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn reverse_percent_for_column(self, local_col: usize, num_cols: usize) -> f32 {
         scroll_reverse_percent_for_column(
             ScrollReverseOptions {
@@ -6252,6 +6317,7 @@ impl ScrollEffects {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn reverse_scale_for_column(self, local_col: usize, num_cols: usize) -> f32 {
         scroll_reverse_scale_for_column(
             ScrollReverseOptions {
@@ -6322,11 +6388,13 @@ pub struct PerspectiveEffects {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn merge_attack_value(base: f32, attack: Option<f32>) -> f32 {
     attack.filter(|v| v.is_finite()).unwrap_or(base)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn merge_attack_accel_effects(base: AccelEffects, attack: AccelOverrides) -> AccelEffects {
     AccelEffects {
         boost: merge_attack_value(base.boost, attack.boost),
@@ -6337,6 +6405,7 @@ pub fn merge_attack_accel_effects(base: AccelEffects, attack: AccelOverrides) ->
     }
 }
 
+#[must_use]
 pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides) -> VisualEffects {
     let mut confusion_offset_cols = base.confusion_offset_cols;
     let mut bumpy_cols = base.bumpy_cols;
@@ -6389,6 +6458,7 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn merge_attack_visibility_effects(
     base: VisibilityEffects,
     attack: VisibilityOverrides,
@@ -6401,6 +6471,7 @@ pub fn merge_attack_visibility_effects(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn merge_attack_scroll_effects(base: ScrollEffects, attack: ScrollOverrides) -> ScrollEffects {
     ScrollEffects {
         reverse: merge_attack_value(base.reverse, attack.reverse),
@@ -6412,6 +6483,7 @@ pub fn merge_attack_scroll_effects(base: ScrollEffects, attack: ScrollOverrides)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn merge_attack_perspective_effects(
     base: PerspectiveEffects,
     attack: PerspectiveOverrides,
@@ -6423,6 +6495,7 @@ pub fn merge_attack_perspective_effects(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn effective_attack_accel_effects(
     base_cleared: bool,
     profile_mask_bits: u8,
@@ -6437,6 +6510,7 @@ pub fn effective_attack_accel_effects(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn effective_attack_visual_effects(
     base_cleared: bool,
     profile_mask_bits: u16,
@@ -6451,11 +6525,13 @@ pub fn effective_attack_visual_effects(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn effective_attack_visibility_effects(attack: VisibilityOverrides) -> VisibilityEffects {
     merge_attack_visibility_effects(VisibilityEffects::default(), attack)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn effective_attack_scroll_effects(
     base_cleared: bool,
     base_scroll: ScrollEffects,
@@ -6470,6 +6546,7 @@ pub fn effective_attack_scroll_effects(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn effective_attack_perspective_effects(
     base_cleared: bool,
     base_perspective: PerspectiveEffects,
@@ -6484,6 +6561,7 @@ pub fn effective_attack_perspective_effects(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn effective_attack_scroll_speed(
     base_cleared: bool,
     active_scroll_speed: Option<ScrollSpeedSetting>,
@@ -6503,12 +6581,14 @@ pub const SPACING_PERCENT_MAX: i32 = 100;
 
 /// Multiplier applied to noteskin per-column lateral offsets for Spacing.
 #[inline(always)]
+#[must_use]
 pub fn spacing_multiplier_for_percent(spacing_percent: i32) -> f32 {
     let clamped = spacing_percent.clamp(SPACING_PERCENT_MIN, SPACING_PERCENT_MAX);
     1.0 + clamped as f32 / 100.0
 }
 
 #[inline(always)]
+#[must_use]
 pub fn toggle_flash_alpha(timer_remaining: f32) -> Option<f32> {
     if timer_remaining <= 0.0 {
         return None;

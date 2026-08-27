@@ -151,6 +151,7 @@ pub fn restore_compile_globals(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn is_compile_global_name(name: &str) -> bool {
     matches!(
         name,
@@ -596,6 +597,7 @@ pub struct SongLuaDateGlobals {
     pub second: i32,
 }
 
+#[must_use]
 pub fn song_lua_local_date_globals() -> SongLuaDateGlobals {
     let now = Local::now();
     SongLuaDateGlobals {

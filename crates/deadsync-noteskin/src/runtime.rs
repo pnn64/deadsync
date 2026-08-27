@@ -37,6 +37,7 @@ impl<T: Clone> TapExplosion<T> {
             .expect("single tap explosion layer must build")
     }
 
+    #[must_use]
     pub fn from_layers(layers: Vec<TapExplosionLayer<T>>) -> Option<Self> {
         let first = layers.first()?.clone();
         Some(Self {
@@ -113,19 +114,23 @@ pub struct TapExplosionMap<T> {
 }
 
 impl<T> TapExplosionMap<T> {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.known.len() + self.custom.len()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.known.is_empty() && self.custom.is_empty()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn get(&self, key: &str) -> Option<&TapExplosion<T>> {
         if let Some(index) = tap_explosion_key_index(key) {
             return self.get_known(index);
@@ -133,6 +138,7 @@ impl<T> TapExplosionMap<T> {
         self.custom.get(key)
     }
 
+    #[must_use]
     pub fn contains_key(&self, key: &str) -> bool {
         self.get(key).is_some()
     }
@@ -377,6 +383,7 @@ impl<T> Default for HoldVisuals<T> {
 }
 
 impl ItgHoldKind {
+    #[must_use]
     pub const fn head_inactive(self) -> &'static str {
         match self {
             Self::Hold => "Hold Head Inactive",
@@ -384,6 +391,7 @@ impl ItgHoldKind {
         }
     }
 
+    #[must_use]
     pub const fn head_active(self) -> &'static str {
         match self {
             Self::Hold => "Hold Head Active",
@@ -391,6 +399,7 @@ impl ItgHoldKind {
         }
     }
 
+    #[must_use]
     pub const fn body_inactive(self) -> &'static str {
         match self {
             Self::Hold => "Hold Body Inactive",
@@ -398,6 +407,7 @@ impl ItgHoldKind {
         }
     }
 
+    #[must_use]
     pub const fn body_active(self) -> &'static str {
         match self {
             Self::Hold => "Hold Body Active",
@@ -405,6 +415,7 @@ impl ItgHoldKind {
         }
     }
 
+    #[must_use]
     pub const fn topcap_inactive(self) -> &'static str {
         match self {
             Self::Hold => "Hold TopCap Inactive",
@@ -412,6 +423,7 @@ impl ItgHoldKind {
         }
     }
 
+    #[must_use]
     pub const fn topcap_active(self) -> &'static str {
         match self {
             Self::Hold => "Hold TopCap Active",
@@ -419,6 +431,7 @@ impl ItgHoldKind {
         }
     }
 
+    #[must_use]
     pub const fn bottomcap_inactive(self) -> &'static str {
         match self {
             Self::Hold => "Hold BottomCap Inactive",
@@ -426,6 +439,7 @@ impl ItgHoldKind {
         }
     }
 
+    #[must_use]
     pub const fn bottomcap_active(self) -> &'static str {
         match self {
             Self::Hold => "Hold BottomCap Active",
@@ -464,6 +478,7 @@ pub fn itg_hold_visual_parts<T>(
     }
 }
 
+#[must_use]
 pub fn itg_hold_head_layers<T: Clone>(layers: Vec<T>) -> (Option<T>, Option<Arc<[T]>>) {
     match layers.len() {
         0 => (None, None),
@@ -595,6 +610,7 @@ pub fn default_hold_visuals<T: Clone>(
     (hold, roll)
 }
 
+#[must_use]
 pub fn default_tap_explosions<T: Clone>(
     tap_explosions_by_col: &[TapExplosionMap<T>],
     down_col: usize,
@@ -612,18 +628,21 @@ pub fn default_tap_explosions<T: Clone>(
         .unwrap_or_default()
 }
 
+#[must_use]
 pub fn itg_is_common_fallback_hold_explosion_key(texture_key: &str) -> bool {
     texture_key
         .to_ascii_lowercase()
         .contains("noteskins/common/common/fallback hold explosion")
 }
 
+#[must_use]
 pub fn itg_is_common_noteskin_key(texture_key: &str) -> bool {
     texture_key
         .to_ascii_lowercase()
         .contains("noteskins/common/common/")
 }
 
+#[must_use]
 pub fn itg_roll_explosion_should_use_hold(roll_key: &str, hold_key: &str) -> bool {
     itg_is_common_fallback_hold_explosion_key(roll_key) && !itg_is_common_noteskin_key(hold_key)
 }
@@ -1469,6 +1488,7 @@ pub fn itg_first_actor_sprite_slot<T>(
     None
 }
 
+#[must_use]
 pub fn itg_first_actor_sprite_slot_with_ops<T>(
     data: &itg::NoteskinData,
     compiled_actors: &compiled::CompiledActors,
@@ -1569,6 +1589,7 @@ pub fn itg_resolve_actor_sprites_inner_compiled<T>(
     out
 }
 
+#[must_use]
 pub fn itg_resolve_actor_sprites_with_ops_compiled<T>(
     data: &itg::NoteskinData,
     compiled: &compiled::CompiledLoader,
@@ -2629,6 +2650,7 @@ impl<T> NoteskinRuntime<T> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn bright_tap_explosion_key(window: &str) -> Option<&'static str> {
     match window {
         "W1" => Some("W1Bright"),

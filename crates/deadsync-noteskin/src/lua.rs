@@ -1,3 +1,4 @@
+#[must_use]
 pub fn itg_parse_lua_quoted(raw: &str) -> Option<String> {
     let trimmed = raw
         .trim()
@@ -15,6 +16,7 @@ pub fn itg_parse_lua_quoted(raw: &str) -> Option<String> {
     Some(trimmed[1..trimmed.len() - 1].to_string())
 }
 
+#[must_use]
 pub fn itg_find_matching(content: &str, open_idx: usize, open: char, close: char) -> Option<usize> {
     let mut depth = 0usize;
     for (idx, ch) in content.char_indices().skip_while(|(i, _)| *i < open_idx) {
@@ -30,6 +32,7 @@ pub fn itg_find_matching(content: &str, open_idx: usize, open: char, close: char
     None
 }
 
+#[must_use]
 pub const fn itg_skip_ws(content: &str, mut idx: usize) -> usize {
     let bytes = content.as_bytes();
     while idx < bytes.len() && bytes[idx].is_ascii_whitespace() {
@@ -38,6 +41,7 @@ pub const fn itg_skip_ws(content: &str, mut idx: usize) -> usize {
     idx
 }
 
+#[must_use]
 pub fn itg_split_call_args(raw: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut start = 0usize;
@@ -99,6 +103,7 @@ fn strip_wrapped_parens(raw: &str) -> &str {
     value
 }
 
+#[must_use]
 pub fn itg_parse_lua_float_expr(raw: &str) -> Option<f32> {
     let value = strip_wrapped_parens(raw.trim().trim_end_matches(';'));
     if let Some(v) = itg_parse_lua_float_token(value) {
@@ -125,6 +130,7 @@ pub fn itg_parse_lua_float_expr(raw: &str) -> Option<f32> {
     None
 }
 
+#[must_use]
 pub fn itg_find_function_end(content: &str, mut cursor: usize) -> Option<usize> {
     let bytes = content.as_bytes();
     let mut depth = 1usize;
@@ -182,6 +188,7 @@ const fn is_lua_ident(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
+#[must_use]
 pub fn itg_parse_self_chain_commands(body: &str) -> Option<String> {
     let mut out = Vec::new();
     let mut cursor = 0usize;
@@ -235,6 +242,7 @@ fn itg_parse_lua_method_call(body: &str, name_start: usize) -> Option<(String, S
     ))
 }
 
+#[must_use]
 pub fn itg_extract_quoted_strings(input: &str) -> Vec<String> {
     let mut out = Vec::new();
     let bytes = input.as_bytes();

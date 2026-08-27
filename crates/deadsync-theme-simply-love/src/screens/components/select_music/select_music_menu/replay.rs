@@ -54,6 +54,7 @@ const fn replay_total_items(state: &ReplayOverlayStateData) -> usize {
     state.entries.len() + 1
 }
 
+#[must_use]
 pub const fn begin_replay_overlay(
     entries: Vec<score_data::MachineReplayEntry>,
 ) -> ReplayOverlayState {
@@ -173,6 +174,7 @@ pub fn handle_replay_input(state: &mut ReplayOverlayState, ev: &InputEvent) -> R
     }
 }
 
+#[must_use]
 pub fn build_replay_overlay(
     state: &ReplayOverlayState,
     active_color_index: i32,

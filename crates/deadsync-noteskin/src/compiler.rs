@@ -90,6 +90,7 @@ pub fn ensure_compiled(
     Ok(CompileOutcome::Built)
 }
 
+#[must_use]
 pub fn load_compiled(
     cache_dir: &Path,
     game: &str,

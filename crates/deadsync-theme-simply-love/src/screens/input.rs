@@ -73,6 +73,7 @@ pub enum ThreeKeyMenuAction {
 /// Pump panels use `ITGmania`'s secondary menu mapping. Like `ITGmania`, the
 /// secondary mapping is disabled when only dedicated menu buttons are allowed.
 #[inline(always)]
+#[must_use]
 pub const fn menu_action(
     action: VirtualAction,
     game: GameFlag,
@@ -90,6 +91,7 @@ pub const fn menu_action(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn dedicated_blocks_arrow(
     action: VirtualAction,
     only_dedicated_menu_buttons: bool,
@@ -98,6 +100,7 @@ pub const fn dedicated_blocks_arrow(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn menu_lr_side(action: VirtualAction) -> Option<PlayerSide> {
     match action {
         VirtualAction::p1_left
@@ -201,6 +204,7 @@ impl MenuLrChordTracker {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn both_held(&self, side: PlayerSide) -> bool {
         self.side_state(side).held_mask == (MENU_LR_LEFT | MENU_LR_RIGHT)
     }
@@ -245,6 +249,7 @@ pub fn track_menu_lr_chord(chord: &mut MenuLrChordTracker, ev: &InputEvent) {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn menu_lr_both_held(chord: &MenuLrChordTracker, side: PlayerSide) -> bool {
     chord.both_held(side)
 }
@@ -271,6 +276,7 @@ pub struct State {
     back_hold_secs: f32,
 }
 
+#[must_use]
 pub fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
@@ -314,10 +320,12 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
 
 /* ----------------------------- transitions ----------------------------- */
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }

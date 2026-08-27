@@ -59,6 +59,7 @@ fn cached_ogg_listing_shared(dir: &Path) -> SharedOggListing {
     Arc::clone(map.entry(dir.to_path_buf()).or_insert(files))
 }
 
+#[must_use]
 pub fn cached_ogg_listing(dir: &Path) -> Vec<PathBuf> {
     cached_ogg_listing_shared(dir).as_ref().clone()
 }
@@ -86,6 +87,7 @@ fn time_based_index(len: usize) -> usize {
     (state as usize) % len
 }
 
+#[must_use]
 pub fn pick_random_ogg(dir: &Path) -> Option<PathBuf> {
     let listing = cached_ogg_listing_shared(dir);
     if listing.is_empty() {
@@ -94,6 +96,7 @@ pub fn pick_random_ogg(dir: &Path) -> Option<PathBuf> {
     listing.get(time_based_index(listing.len())).cloned()
 }
 
+#[must_use]
 pub fn pick_indexed_ogg(dir: &Path, index: u32, fallback_name: &str) -> Option<PathBuf> {
     let indexed = dir.join(format!("{index}.ogg"));
     if indexed.is_file() {
@@ -106,6 +109,7 @@ pub fn pick_indexed_ogg(dir: &Path, index: u32, fallback_name: &str) -> Option<P
     None
 }
 
+#[must_use]
 pub fn pick_music_path(path: &Path) -> Option<PathBuf> {
     if path.is_dir() {
         pick_random_ogg(path)
@@ -140,6 +144,7 @@ pub enum MusicPathResult {
 }
 
 impl MusicPathResult {
+    #[must_use]
     pub fn path(self) -> Option<PathBuf> {
         match self {
             Self::Picked(path) => Some(path),

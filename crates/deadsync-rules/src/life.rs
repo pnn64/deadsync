@@ -30,6 +30,7 @@ pub struct LifeMeter {
 
 impl LifeMeter {
     #[inline(always)]
+    #[must_use]
     pub const fn new(life: f32) -> Self {
         Self {
             life,
@@ -40,6 +41,7 @@ impl LifeMeter {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn course_submit_start() -> Self {
         Self::new(0.5)
     }
@@ -55,6 +57,7 @@ pub struct LifeDeltaResult {
 pub const LIFE_HISTORY_SAME_TIME_SHIFT: f32 = 0.003_906_25_f32;
 
 #[inline(always)]
+#[must_use]
 pub const fn judge_life_delta(grade: JudgeGrade) -> f32 {
     match grade {
         JudgeGrade::Fantastic => LIFE_FANTASTIC,

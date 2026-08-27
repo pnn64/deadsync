@@ -8,10 +8,12 @@ use std::thread::LocalKey;
 pub type TextCache<K, S = FxBuildHasher> = HashMap<K, Arc<str>, S>;
 pub type SharedStrCache<S = FxBuildHasher> = HashMap<Box<str>, Arc<str>, S>;
 
+#[must_use]
 pub fn text_cache_with_capacity<K>(capacity: usize) -> TextCache<K> {
     HashMap::with_capacity_and_hasher(capacity, FxBuildHasher)
 }
 
+#[must_use]
 pub fn shared_str_cache_with_capacity(capacity: usize) -> SharedStrCache {
     HashMap::with_capacity_and_hasher(capacity, FxBuildHasher)
 }
@@ -42,6 +44,7 @@ where
 }
 
 #[inline(always)]
+#[must_use]
 pub fn cached_shared_str<S>(
     cache: &'static LocalKey<RefCell<SharedStrCache<S>>>,
     text: &str,

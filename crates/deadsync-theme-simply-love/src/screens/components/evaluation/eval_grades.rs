@@ -42,6 +42,7 @@ pub struct GradeStarTaunt {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn grade_star_taunt_from_counts(counts: judgment::JudgeCounts) -> GradeStarTaunt {
     GradeStarTaunt {
         excellent: counts[judgment::judge_grade_ix(JudgeGrade::Excellent)],
@@ -733,6 +734,7 @@ const fn stars_for(grade: score_data::Grade) -> Option<&'static [StarDef]> {
     }
 }
 
+#[must_use]
 pub fn actors(grade: score_data::Grade, p: EvalGradeParams) -> Vec<Actor> {
     if let Some(stars) = stars_for(grade) {
         return stars

@@ -32,6 +32,7 @@ pub struct ThemeInputResult<S, R> {
 
 impl<S, R> ThemeInputResult<S, R> {
     #[inline(always)]
+    #[must_use]
     pub const fn ignored() -> Self {
         Self {
             consumed: false,
@@ -72,6 +73,7 @@ impl<S, R> ThemeEffect<S, R> {
     /// Empty and singleton lists do not retain a batch allocation. Nested
     /// batches and no-op effects are flattened only when present, leaving the
     /// common already-flat vector untouched.
+    #[must_use]
     pub fn batch(effects: Vec<Self>) -> Self {
         if effects
             .iter()

@@ -47,6 +47,7 @@ pub enum CabinetLightPlan {
 }
 
 impl CabinetLightPlan {
+    #[must_use]
     pub fn request_chart_ixs(&self) -> Vec<usize> {
         match self {
             Self::Explicit { chart_ix, .. } => vec![*chart_ix],
@@ -75,6 +76,7 @@ impl CabinetLightPlan {
     }
 }
 
+#[must_use]
 pub fn cabinet_light_plan(song: &SongData, fallback_chart_ix: usize) -> Option<CabinetLightPlan> {
     if let Some(chart_ix) = closest_standard_chart_ix(
         song,
@@ -142,6 +144,7 @@ fn closest_standard_chart_ix(
     best
 }
 
+#[must_use]
 pub fn cabinet_light_key(
     song: &SongData,
     plan: &CabinetLightPlan,
@@ -156,6 +159,7 @@ pub fn cabinet_light_key(
     }
 }
 
+#[must_use]
 pub fn cabinet_light_chart_from_loaded(
     song: &SongData,
     plan: &CabinetLightPlan,
@@ -177,6 +181,7 @@ fn offset_key_us(seconds: f32) -> i32 {
     }
 }
 
+#[must_use]
 pub const fn cabinet_light_event_enabled(event: CabinetLightEvent, simplify_bass: bool) -> bool {
     !simplify_bass
         || !event.simplify_bass_candidate

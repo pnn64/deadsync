@@ -296,16 +296,19 @@ fn legacy_timing_text(timing: TimingHealth) -> String {
 }
 
 #[cfg(any(test, feature = "bench-support"))]
+#[must_use]
 pub fn benchmark_timing_text_legacy(timing: TimingHealth) -> String {
     legacy_timing_text(timing)
 }
 
 #[cfg(any(test, feature = "bench-support"))]
+#[must_use]
 pub fn benchmark_timing_text_current(timing: TimingHealth) -> String {
     timing_text(timing)
 }
 
 #[cfg(any(test, feature = "bench-support"))]
+#[must_use]
 pub fn benchmark_build_legacy(
     backend: BackendType,
     fps: f32,
@@ -318,6 +321,7 @@ pub fn benchmark_build_legacy(
 }
 
 #[cfg(any(test, feature = "bench-support"))]
+#[must_use]
 pub fn benchmark_build_stutter_legacy(events: &[VisibleStutterSample]) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(events.len() + 1);
     push_stutter(&mut actors, events);

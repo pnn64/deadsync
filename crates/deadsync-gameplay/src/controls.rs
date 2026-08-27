@@ -7,6 +7,7 @@ pub enum GameplayTimingTickMode {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn next_timing_tick_mode(mode: GameplayTimingTickMode) -> GameplayTimingTickMode {
     match mode {
         GameplayTimingTickMode::Off => GameplayTimingTickMode::Assist,
@@ -16,6 +17,7 @@ pub const fn next_timing_tick_mode(mode: GameplayTimingTickMode) -> GameplayTimi
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn timing_tick_mode_status_line(mode: GameplayTimingTickMode) -> Option<&'static str> {
     match mode {
         GameplayTimingTickMode::Off => None,
@@ -25,6 +27,7 @@ pub const fn timing_tick_mode_status_line(mode: GameplayTimingTickMode) -> Optio
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn timing_tick_mode_debug_label(mode: GameplayTimingTickMode) -> &'static str {
     match mode {
         GameplayTimingTickMode::Off => "off",
@@ -65,6 +68,7 @@ pub enum GameplayOffsetAdjustTarget {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn offset_adjust_target(
     shift_held: bool,
     course_active: bool,
@@ -105,6 +109,7 @@ pub enum RawKeyAction {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn offset_adjust_slot_for_key(key: GameplayOffsetAdjustKey) -> usize {
     match key {
         GameplayOffsetAdjustKey::Decrease => 0,
@@ -113,6 +118,7 @@ pub const fn offset_adjust_slot_for_key(key: GameplayOffsetAdjustKey) -> usize {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn offset_adjust_delta_for_key(key: GameplayOffsetAdjustKey) -> f32 {
     match key {
         GameplayOffsetAdjustKey::Decrease => -OFFSET_ADJUST_STEP_SECONDS,
@@ -121,6 +127,7 @@ pub const fn offset_adjust_delta_for_key(key: GameplayOffsetAdjustKey) -> f32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn offset_adjust_repeat_ready(held_elapsed: Duration, last_elapsed: Duration) -> bool {
     held_elapsed >= OFFSET_ADJUST_REPEAT_DELAY && last_elapsed >= OFFSET_ADJUST_REPEAT_INTERVAL
 }
@@ -153,11 +160,13 @@ impl GameplayOffsetAdjustHoldState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn held_since_for_key(self, key: GameplayOffsetAdjustKey) -> Option<Instant> {
         self.held_since[offset_adjust_slot_for_key(key)]
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn last_at_for_key(self, key: GameplayOffsetAdjustKey) -> Option<Instant> {
         self.last_at[offset_adjust_slot_for_key(key)]
     }
@@ -206,6 +215,7 @@ pub fn tick_offset_adjust_hold_state(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn offset_delta_target_seconds(old_offset: f32, delta: f32) -> Option<f32> {
     let new_offset = old_offset + delta;
     ((new_offset - old_offset).abs() >= OFFSET_DELTA_EPSILON_SECONDS).then_some(new_offset)

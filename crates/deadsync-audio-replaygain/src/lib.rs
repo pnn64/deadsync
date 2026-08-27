@@ -217,6 +217,7 @@ fn enqueue(job: Job, priority: Priority) {
 /// foreground analysis job tagged with `track_id` and returns `None`. When
 /// the analysis later completes, the worker reports the resulting gain
 /// through the callback passed to [`init`].
+#[must_use]
 pub fn get_or_queue_gain_linear(path: &Path, track_id: u64) -> Option<f32> {
     if let Some(gain) = terminal_gain_for_path(&in_memory().lock().unwrap(), path) {
         return Some(gain);

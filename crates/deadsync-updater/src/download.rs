@@ -38,6 +38,7 @@ const COPY_CHUNK_BYTES: usize = 64 * 1024;
 
 /// Lower-case hex of a SHA-256 digest.
 #[inline]
+#[must_use]
 pub fn sha256_hex(digest: &[u8; 32]) -> String {
     let mut out = String::with_capacity(64);
     for byte in digest {
@@ -48,6 +49,7 @@ pub fn sha256_hex(digest: &[u8; 32]) -> String {
 
 /// Decode a 64-character hex string into 32 raw bytes.  Returns `None`
 /// for any non-hex character or wrong length.
+#[must_use]
 pub fn parse_hex32(hex: &str) -> Option<[u8; 32]> {
     if hex.len() != 64 {
         return None;
@@ -76,6 +78,7 @@ const fn decode_nibble(c: u8) -> Option<u8> {
 /// boundary (the digest is public), but writing it explicitly avoids
 /// short-circuiting reads when added to other tooling later.
 #[inline]
+#[must_use]
 pub fn verify_sha256(actual: &[u8; 32], expected: &[u8; 32]) -> bool {
     let mut diff: u8 = 0;
     for (a, b) in actual.iter().zip(expected.iter()) {
@@ -85,6 +88,7 @@ pub fn verify_sha256(actual: &[u8; 32], expected: &[u8; 32]) -> bool {
 }
 
 /// Hash the supplied bytes with SHA-256.
+#[must_use]
 pub fn sha256_of(bytes: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
@@ -236,6 +240,7 @@ pub fn cross_check_api_digest(
 /// browser-download base, so deriving the URL by string append matches
 /// the real layout without an extra API call.
 #[inline]
+#[must_use]
 pub fn checksum_sidecar_url(asset_url: &str) -> String {
     format!("{asset_url}.sha256")
 }

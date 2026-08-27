@@ -67,6 +67,7 @@ pub struct ItgLoadRequest {
 }
 
 impl CompiledLoader {
+    #[must_use]
     pub fn find(&self, button: &str, element: &str) -> Option<&CompiledLoaderEntry> {
         let index = self.entries.partition_point(|entry| {
             compiled_loader_entry_cmp(entry, button, element) == CmpOrdering::Less
@@ -76,6 +77,7 @@ impl CompiledLoader {
         })
     }
 
+    #[must_use]
     pub fn load_request(&self, button: &str, element: &str) -> ItgLoadRequest {
         if let Some(entry) = self.find(button, element) {
             return ItgLoadRequest {
@@ -119,18 +121,21 @@ fn compiled_loader_entry_cmp(
 }
 
 impl ItgLoadRequest {
+    #[must_use]
     pub fn maps_head_to_tap(&self) -> bool {
         !self.blank && self.load_element.eq_ignore_ascii_case("Tap Note")
     }
 }
 
 impl CompiledActors {
+    #[must_use]
     pub fn find(&self, key: &str) -> Option<&CompiledActorFile> {
         self.files
             .iter()
             .find(|file| file.key.eq_ignore_ascii_case(key))
     }
 
+    #[must_use]
     pub fn decl_for_path(
         &self,
         search_dirs: &[PathBuf],
@@ -141,6 +146,7 @@ impl CompiledActors {
     }
 }
 
+#[must_use]
 pub fn actor_visit_key(button: &str, element: &str) -> String {
     format!(
         "{}|{}",
@@ -149,10 +155,12 @@ pub fn actor_visit_key(button: &str, element: &str) -> String {
     )
 }
 
+#[must_use]
 pub fn actor_file_visit_key(path: &Path) -> String {
     format!("file:{}", path.display().to_string().to_ascii_lowercase())
 }
 
+#[must_use]
 pub fn compiled_bundle_path(
     cache_dir: &Path,
     game: &str,
@@ -165,6 +173,7 @@ pub fn compiled_bundle_path(
         .join(format!("{source_hash}.bin"))
 }
 
+#[must_use]
 pub fn load_compiled_bundle(path: &Path) -> Option<CompiledNoteskinBundle> {
     let bytes = fs::read(path).ok()?;
     match bincode::decode_from_slice::<CompiledNoteskinBundle, _>(
@@ -220,6 +229,7 @@ pub fn save_compiled_bundle(path: &Path, bundle: &CompiledNoteskinBundle) -> Res
     Ok(())
 }
 
+#[must_use]
 pub fn actor_manifest_key(search_dirs: &[PathBuf], path: &Path) -> Option<String> {
     for dir in search_dirs {
         if !path.starts_with(dir) {
@@ -230,6 +240,7 @@ pub fn actor_manifest_key(search_dirs: &[PathBuf], path: &Path) -> Option<String
     None
 }
 
+#[must_use]
 pub fn actor_manifest_key_for_dir(dir: &Path, path: &Path) -> Option<String> {
     let game = dir.parent()?.file_name()?.to_str()?;
     let skin = dir.file_name()?.to_str()?;

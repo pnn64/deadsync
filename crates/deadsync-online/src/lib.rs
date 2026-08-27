@@ -19,6 +19,7 @@ pub enum OnlineRequestError {
 
 impl OnlineRequestError {
     #[inline(always)]
+    #[must_use]
     pub const fn http_status(&self) -> Option<u16> {
         match self {
             Self::HttpStatus(status) => Some(*status),
@@ -40,6 +41,7 @@ impl std::fmt::Display for OnlineRequestError {
 
 impl std::error::Error for OnlineRequestError {}
 
+#[must_use]
 pub fn boxed_request_error(
     prefix: &str,
     error: OnlineRequestError,

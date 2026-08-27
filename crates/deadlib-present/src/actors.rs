@@ -218,11 +218,13 @@ pub enum SpriteSource {
 
 impl SpriteSource {
     #[inline(always)]
+    #[must_use]
     pub const fn static_texture(key: &'static str) -> Self {
         Self::TextureStatic(key)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn texture_key(&self) -> Option<&str> {
         match self {
             Self::TextureStatic(key) => Some(key),
@@ -661,6 +663,7 @@ pub struct SharedActorFrameScratchStats {
 }
 
 impl SharedActorFrameScratch {
+    #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             source: Self::new_source(capacity),
@@ -672,6 +675,7 @@ impl SharedActorFrameScratch {
 
     /// Borrow the current identity frame without incrementing its reference
     /// count. Callers must not retain the slice across the next mutation.
+    #[must_use]
     pub fn actors(&self) -> &[Actor] {
         self.source.as_ref()
     }
@@ -743,6 +747,7 @@ impl SharedActorFrameScratch {
         children.clear();
     }
 
+    #[must_use]
     pub fn capacity(&self) -> usize {
         let [Actor::Frame { children, .. }] = self.source.as_ref() else {
             return 0;
@@ -750,6 +755,7 @@ impl SharedActorFrameScratch {
         children.capacity()
     }
 
+    #[must_use]
     pub fn stats(&self) -> SharedActorFrameScratchStats {
         SharedActorFrameScratchStats {
             capacity: self.capacity(),
@@ -873,6 +879,7 @@ const fn saturating_u32(value: usize) -> u32 {
     }
 }
 
+#[must_use]
 pub fn actor_tree_stats(actors: &[Actor]) -> ActorTreeStats {
     fn visit(stats: &mut ActorTreeStats, actor: &Actor) {
         stats.total = stats.total.saturating_add(1);
@@ -980,6 +987,7 @@ impl RetainedActorFrame {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn children(&self) -> &[Actor] {
         &self.children
     }
@@ -1013,6 +1021,7 @@ pub enum TextAttributes {
 
 impl TextAttributes {
     #[inline(always)]
+    #[must_use]
     pub fn as_slice(&self) -> &[TextAttribute] {
         match self {
             Self::Empty => &[],
@@ -1023,6 +1032,7 @@ impl TextAttributes {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.as_slice().is_empty()
     }
@@ -1069,6 +1079,7 @@ impl std::ops::Deref for TextAttributes {
 
 impl TextAttribute {
     #[inline(always)]
+    #[must_use]
     pub fn colors(self) -> [[f32; 4]; 4] {
         self.vertex_colors.unwrap_or([self.color; 4])
     }
@@ -1130,6 +1141,7 @@ impl InlineText {
     pub const CAPACITY: usize = 14;
 
     #[inline(always)]
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             bytes: [0; Self::CAPACITY],
@@ -1138,6 +1150,7 @@ impl InlineText {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn as_str(&self) -> &str {
         let bytes = &self.bytes[..self.len as usize];
         std::str::from_utf8(bytes).expect("inline text contains valid UTF-8")
@@ -1145,6 +1158,7 @@ impl InlineText {
 
     /// Formats text into the fixed payload and fails instead of allocating.
     #[inline]
+    #[must_use]
     pub fn format(args: std::fmt::Arguments<'_>) -> Option<Self> {
         let mut text = Self::new();
         std::fmt::write(&mut text, args).ok()?;
@@ -1153,6 +1167,7 @@ impl InlineText {
 
     /// Copies text into the fixed payload and fails instead of allocating.
     #[inline]
+    #[must_use]
     pub fn copy_from(value: &str) -> Option<Self> {
         let mut text = Self::new();
         std::fmt::Write::write_str(&mut text, value).ok()?;
@@ -1235,6 +1250,7 @@ pub struct InlineU16Text {
 
 impl InlineU16Text {
     #[inline(always)]
+    #[must_use]
     pub const fn new(mut value: u16) -> Self {
         let original = value;
         let mut bytes = [0; 5];
@@ -1255,12 +1271,14 @@ impl InlineU16Text {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn as_str(&self) -> &str {
         let digits = &self.bytes[self.start as usize..];
         std::str::from_utf8(digits).expect("inline u16 text contains only ASCII decimal digits")
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn value(&self) -> u16 {
         self.value
     }
@@ -1277,6 +1295,7 @@ impl InlineU32Text {
     pub const CAPACITY: usize = 10;
 
     #[inline(always)]
+    #[must_use]
     pub const fn new(mut value: u32) -> Self {
         let mut bytes = [0; Self::CAPACITY];
         let mut start = bytes.len();
@@ -1295,6 +1314,7 @@ impl InlineU32Text {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn as_str(&self) -> &str {
         let digits = &self.bytes[self.start as usize..];
         std::str::from_utf8(digits).expect("inline u32 text contains only ASCII decimal digits")
@@ -1303,16 +1323,19 @@ impl InlineU32Text {
 
 impl TextContent {
     #[inline(always)]
+    #[must_use]
     pub const fn static_str(value: &'static str) -> Self {
         Self::Static(value)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn inline_u16(value: u16) -> Self {
         Self::InlineU16(InlineU16Text::new(value))
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn prewarmed_u16(value: u16, domain: u8) -> Self {
         Self::PrewarmedU16 {
             text: InlineU16Text::new(value),
@@ -1321,11 +1344,13 @@ impl TextContent {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn inline_u32(value: u32) -> Self {
         Self::InlineU32(InlineU32Text::new(value))
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn prepared_u32(value: u32, slot: u8) -> Self {
         Self::PreparedU32 {
             text: InlineU32Text::new(value),
@@ -1334,6 +1359,7 @@ impl TextContent {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn frame_inline(value: InlineText) -> Self {
         Self::FrameInline {
             text: value,
@@ -1342,6 +1368,7 @@ impl TextContent {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn frame_inline_slot(value: InlineText, slot: u8) -> Self {
         Self::FrameInline { text: value, slot }
     }
@@ -1349,6 +1376,7 @@ impl TextContent {
     /// Routes a heap-free numeric payload through one prewarmed frame slot.
     /// Other storage variants retain their original lifetime semantics.
     #[inline]
+    #[must_use]
     pub fn with_frame_inline_slot(self, slot: u8) -> Self {
         let text =
             match self {
@@ -1380,6 +1408,7 @@ impl TextContent {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
             Self::Static(s) => s,
@@ -1395,11 +1424,13 @@ impl TextContent {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn len(&self) -> usize {
         self.as_str().len()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.as_str().is_empty()
     }

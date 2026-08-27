@@ -307,6 +307,7 @@ fn load_cache_from(path: &Path) -> Option<UpdaterCache> {
 ///   out-of-date snapshot from re-appearing after the user updates;
 ///   leaving it on `UnknownLatest` is a no-op because we never wrote one
 ///   in that case.
+#[must_use]
 pub fn apply_fresh_to_cache(
     mut prev: UpdaterCache,
     state: &UpdateState,

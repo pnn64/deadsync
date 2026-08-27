@@ -11,6 +11,7 @@ pub struct ResolvedSongArtwork {
     pub cdtitle_path: Option<PathBuf>,
 }
 
+#[must_use]
 pub fn resolve_song_artwork_like_itg(
     song_dir: &Path,
     simfile_data: &[u8],

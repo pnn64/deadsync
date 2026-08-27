@@ -16,6 +16,7 @@ pub enum SongLuaOptionValues {
 }
 
 impl SongLuaOptionValues {
+    #[must_use]
     pub const fn len(self) -> usize {
         match self {
             Self::Str(values) => values.len(),
@@ -40,6 +41,7 @@ pub struct SongLuaOptionRowSpec {
 }
 
 impl SongLuaOptionRowSpec {
+    #[must_use]
     pub const fn new(choices: SongLuaOptionValues) -> Self {
         Self {
             choices,
@@ -54,36 +56,43 @@ impl SongLuaOptionRowSpec {
         }
     }
 
+    #[must_use]
     pub const fn values(mut self, values: SongLuaOptionValues) -> Self {
         self.values = Some(values);
         self
     }
 
+    #[must_use]
     pub const fn layout(mut self, layout_type: &'static str) -> Self {
         self.layout_type = layout_type;
         self
     }
 
+    #[must_use]
     pub const fn select(mut self, select_type: &'static str) -> Self {
         self.select_type = select_type;
         self
     }
 
+    #[must_use]
     pub const fn one_choice(mut self) -> Self {
         self.one_choice_for_all_players = true;
         self
     }
 
+    #[must_use]
     pub const fn export(mut self) -> Self {
         self.export_on_change = true;
         self
     }
 
+    #[must_use]
     pub const fn hide_on_disable(mut self) -> Self {
         self.hide_on_disable = true;
         self
     }
 
+    #[must_use]
     pub const fn reload(mut self, messages: &'static [&'static str]) -> Self {
         self.reload_row_messages = messages;
         self
@@ -292,6 +301,7 @@ pub const THEME_PREF_ROW_NAMES: &[&str] = &[
     "EnableOnlineLobbies",
 ];
 
+#[must_use]
 pub fn conf_option_row_spec(name: &str) -> SongLuaNamedOptionRowSpec {
     let (row_name, spec) = match name.to_ascii_lowercase().as_str() {
         "confaspectratio" => (
@@ -333,6 +343,7 @@ pub fn conf_option_row_spec(name: &str) -> SongLuaNamedOptionRowSpec {
     }
 }
 
+#[must_use]
 pub fn custom_option_row_spec(name: &str) -> Option<SongLuaOptionRowSpec> {
     let lower = name.to_ascii_lowercase();
     let spec = match lower.as_str() {
@@ -472,10 +483,12 @@ pub fn custom_option_row_spec(name: &str) -> Option<SongLuaOptionRowSpec> {
     Some(spec)
 }
 
+#[must_use]
 pub fn custom_option_default_text(name: &str) -> Option<String> {
     custom_option_row_spec(name).map(|spec| option_value_text(spec.choices, 0))
 }
 
+#[must_use]
 pub fn option_value_text(values: SongLuaOptionValues, index: usize) -> String {
     match values {
         SongLuaOptionValues::Str(values) => {
@@ -493,6 +506,7 @@ pub fn option_value_text(values: SongLuaOptionValues, index: usize) -> String {
     }
 }
 
+#[must_use]
 pub fn theme_pref_row_spec(name: &str) -> SongLuaOptionRowSpec {
     let lower = name.to_ascii_lowercase();
     match lower.as_str() {
@@ -582,6 +596,7 @@ pub fn theme_pref_row_spec(name: &str) -> SongLuaOptionRowSpec {
     }
 }
 
+#[must_use]
 pub fn operator_menu_option_row_spec(
     method_name: &str,
     kind_arg: Option<&str>,

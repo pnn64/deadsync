@@ -17,6 +17,7 @@ pub const MAX_MIX_BUSES: usize = 8;
 pub struct MixBus(u8);
 
 impl MixBus {
+    #[must_use]
     pub const fn new(index: u8) -> Self {
         assert!(
             (index as usize) < MAX_MIX_BUSES,
@@ -26,6 +27,7 @@ impl MixBus {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn index(self) -> usize {
         self.0 as usize
     }
@@ -42,6 +44,7 @@ pub struct MixControls {
 }
 
 impl MixControls {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             stream_gain: AtomicU32::new(1.0f32.to_bits()),
@@ -125,6 +128,7 @@ pub struct ActiveSfx {
 
 impl ActiveSfx {
     #[inline(always)]
+    #[must_use]
     pub fn from_queued(queued: QueuedSfx) -> Self {
         Self {
             data: queued.data,
@@ -209,6 +213,7 @@ pub enum ScheduledOnset {
 /// `total_before` is the absolute write-head frame at the start of this buffer;
 /// `buf_len` is the buffer length in interleaved samples.
 #[inline(always)]
+#[must_use]
 pub const fn scheduled_onset_decision(
     target_stream_frame: u64,
     total_before: u64,
@@ -230,6 +235,7 @@ pub const fn scheduled_onset_decision(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn f32_to_i16(sample: f32) -> i16 {
     // Rust float-to-integer casts saturate and map NaN to zero, which exactly
     // covers the old clamp and boundary branches after scaling.
@@ -237,6 +243,7 @@ pub fn f32_to_i16(sample: f32) -> i16 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn i16_to_f32(sample: i16) -> f32 {
     f32::from(sample) / (f32::from(i16::MAX) + 1.0)
 }

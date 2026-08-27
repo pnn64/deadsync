@@ -92,6 +92,7 @@ impl FromStr for ScrollSpeedSetting {
 impl ScrollSpeedSetting {
     pub const ARROW_SPACING: f32 = 64.0;
 
+    #[must_use]
     pub fn effective_bpm(
         self,
         current_chart_bpm: f32,
@@ -113,6 +114,7 @@ impl ScrollSpeedSetting {
         }
     }
 
+    #[must_use]
     pub fn beat_multiplier(self, reference_bpm: f32, music_rate: f32) -> f32 {
         // Pixel speed per real second for beat-based mods depends on d(beat)/dt.
         // Since d(beat)/dt scales with Music Rate, apply:
@@ -136,6 +138,7 @@ impl ScrollSpeedSetting {
         }
     }
 
+    #[must_use]
     pub fn pixels_per_second(
         self,
         current_chart_bpm: f32,
@@ -150,6 +153,7 @@ impl ScrollSpeedSetting {
         }
     }
 
+    #[must_use]
     pub fn travel_time_seconds(
         self,
         draw_distance: f32,

@@ -17,6 +17,7 @@ use deadsync_chart::{SongBackgroundChange, SongBackgroundChangeTarget};
 use rssp::parse::{decode_bytes, extract_bgchanges_values, unescape_tag};
 use std::path::{Path, PathBuf};
 
+#[must_use]
 pub fn simfile_uses_lua(song_dir: &Path, simfile_data: &[u8], background_tag: &str) -> bool {
     if resolve_song_path_like_itg(song_dir, background_tag)
         .is_some_and(|path| path_uses_lua_like_itg(&path))
@@ -32,6 +33,7 @@ pub fn simfile_uses_lua(song_dir: &Path, simfile_data: &[u8], background_tag: &s
         )
 }
 
+#[must_use]
 pub fn extract_foreground_changes(
     song_dir: &Path,
     simfile_data: &[u8],
@@ -46,6 +48,7 @@ pub struct ForegroundChangeSets {
 }
 
 /// Resolves foreground media and Lua entries in one simfile and directory pass.
+#[must_use]
 pub fn extract_foreground_change_sets(
     song_dir: &Path,
     simfile_data: &[u8],
@@ -111,6 +114,7 @@ fn extract_foreground_change_sets_with(
     }
 }
 
+#[must_use]
 pub fn extract_foreground_lua_changes(
     song_dir: &Path,
     simfile_data: &[u8],
@@ -118,6 +122,7 @@ pub fn extract_foreground_lua_changes(
     extract_foreground_change_sets_with(song_dir, simfile_data, false, true).lua
 }
 
+#[must_use]
 pub fn extract_background_lua_changes(
     song_dir: &Path,
     simfile_data: &[u8],
@@ -132,6 +137,7 @@ pub struct BackgroundLuaChangeSet {
 }
 
 /// Resolves background Lua entries and detects Lua use in one directory pass.
+#[must_use]
 pub fn extract_background_lua_change_set(
     song_dir: &Path,
     simfile_data: &[u8],
@@ -181,6 +187,7 @@ pub fn extract_background_lua_change_set(
     }
 }
 
+#[must_use]
 pub fn resolve_background_changes_from_roots(
     song_dir: &Path,
     simfile_data: &[u8],
@@ -198,6 +205,7 @@ pub fn resolve_background_changes_from_roots(
     )
 }
 
+#[must_use]
 pub fn resolve_background_layer2_changes_from_roots(
     song_dir: &Path,
     simfile_data: &[u8],

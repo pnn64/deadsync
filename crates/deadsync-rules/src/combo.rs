@@ -17,6 +17,7 @@ pub struct ComboUpdate {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn combo_continues_on_grade(grade: JudgeGrade) -> bool {
     matches!(
         grade,
@@ -25,6 +26,7 @@ pub const fn combo_continues_on_grade(grade: JudgeGrade) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn combo_increments_miss_combo(grade: JudgeGrade) -> bool {
     matches!(grade, JudgeGrade::Miss)
 }

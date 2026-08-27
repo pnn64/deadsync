@@ -66,6 +66,7 @@ pub struct SliceReader<'storage> {
 
 impl<'storage> SliceReader<'storage> {
     /// Constructs a slice reader
+    #[must_use]
     pub const fn new(bytes: &'storage [u8]) -> SliceReader<'storage> {
         SliceReader { slice: bytes }
     }

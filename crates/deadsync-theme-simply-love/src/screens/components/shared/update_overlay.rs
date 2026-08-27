@@ -66,6 +66,7 @@ pub enum InputOutcome {
 
 impl InputOutcome {
     #[inline(always)]
+    #[must_use]
     pub const fn is_consumed(self) -> bool {
         !matches!(self, Self::Passthrough)
     }
@@ -369,6 +370,7 @@ fn phase_version_tag(phase: &ActionPhase) -> Option<String> {
 /// Return `(title, body_lines, footer_hint, progress_fraction_opt)` for
 /// the supplied phase.  Pure so the unit tests can assert on the strings
 /// without invoking the renderer.
+#[must_use]
 pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Option<f32>) {
     match phase {
         ActionPhase::Idle => (String::new(), Vec::new(), String::new(), None),
@@ -544,6 +546,7 @@ const fn error_kind_key(kind: ActionErrorKind) -> &'static str {
 }
 
 /// Dispatch a virtual input event against the current overlay state.
+#[must_use]
 pub const fn handle_input(phase: &ActionPhase, ev: &InputEvent) -> InputOutcome {
     if matches!(phase, ActionPhase::Idle) {
         return InputOutcome::Passthrough;
@@ -631,6 +634,7 @@ pub const fn handle_input(phase: &ActionPhase, ev: &InputEvent) -> InputOutcome 
 
 /// Format a byte count as `"12.3 MiB"` / `"948 KiB"` / `"12 B"`.  Pure;
 /// covered by unit tests.
+#[must_use]
 pub fn format_size(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
     if bytes < 1024 {
@@ -649,6 +653,7 @@ pub fn format_size(bytes: u64) -> String {
 /// `<10s` for the noisy tail of large transfers, `M:SS` up to an
 /// hour, and `Hh MMm` past that.  The output is short enough to fit
 /// alongside the byte counter on a single overlay line.
+#[must_use]
 pub fn format_eta(secs: u64) -> String {
     let m = secs / 60;
     let s = secs % 60;
@@ -660,6 +665,7 @@ pub fn format_eta(secs: u64) -> String {
 }
 
 /// Render a transfer rate as a compact string such as `4.5 MiB/s`.
+#[must_use]
 pub fn format_speed(bytes_per_sec: u64) -> String {
     format!("{}/s", format_size(bytes_per_sec))
 }

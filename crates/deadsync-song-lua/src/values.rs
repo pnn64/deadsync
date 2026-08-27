@@ -183,6 +183,7 @@ pub fn player_index_from_value(value: &Value) -> Option<usize> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn player_number_name(player: usize) -> &'static str {
     match player {
         0 => "PlayerNumber_P1",

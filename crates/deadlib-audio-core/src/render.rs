@@ -370,7 +370,7 @@ impl RenderState {
 
     #[inline(always)]
     fn finish_callback(
-        &mut self,
+        &self,
         total_before: u64,
         emitted_samples: usize,
         popped_samples: usize,

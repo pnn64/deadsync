@@ -52,6 +52,7 @@ pub struct State {
     runtime: SelectFlowRuntimeView,
 }
 
+#[must_use]
 pub fn init(runtime: SelectFlowRuntimeView) -> State {
     let mut flow = StyleFlow::default();
     flow.set_selected_index(Choice::index_for_style(runtime.play_style));
@@ -72,11 +73,13 @@ pub fn sync_runtime_view(state: &mut State, runtime: SelectFlowRuntimeView) {
     state.runtime = runtime;
 }
 
+#[must_use]
 pub const fn in_transition() -> (Vec<Actor>, f32) {
     // Simply Love handles transitions via per-actor OffCommands and a sleep in out.lua.
     (vec![], 0.0)
 }
 
+#[must_use]
 pub const fn out_transition() -> (Vec<Actor>, f32) {
     // Simply Love handles transitions via per-actor OffCommands and a sleep in out.lua.
     (vec![], 0.0)
@@ -134,7 +137,7 @@ fn exit_anim_t(exiting: bool) -> f32 {
         exiting,
         style_flow::CONFIRM_EXIT_SECONDS,
         &STEPS,
-        0x5353544C45584954u64, // "SSTLEXIT"
+        0x5353_544C_4558_4954_u64, // "SSTLEXIT"
     )
 }
 

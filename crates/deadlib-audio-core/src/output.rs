@@ -10,6 +10,7 @@ pub enum AudioOutputMode {
 }
 
 impl AudioOutputMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Auto => "Auto",
@@ -19,6 +20,7 @@ impl AudioOutputMode {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn from_bits(bits: u8) -> Self {
         match bits {
             2 => Self::Shared,
@@ -28,6 +30,7 @@ impl AudioOutputMode {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn bits(self) -> u8 {
         match self {
             Self::Auto => 1,
@@ -90,6 +93,7 @@ pub struct OutputTimingSnapshot {
 
 impl OutputTimingSnapshot {
     #[inline(always)]
+    #[must_use]
     pub const fn has_measurement(self) -> bool {
         !matches!(self.backend, OutputTelemetryBackend::Unknown)
             || self.device_period_ns != 0

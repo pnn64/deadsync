@@ -75,6 +75,7 @@ impl AudioOutputModeChoice {
     /// Collapse exclusive output into the shared base choice so a concrete
     /// theme can present exclusivity as a separate capability-dependent row.
     #[inline(always)]
+    #[must_use]
     pub const fn choice_index(self) -> usize {
         match self {
             Self::Auto => 0,
@@ -83,11 +84,13 @@ impl AudioOutputModeChoice {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn from_choice(index: usize) -> Self {
         if index == 1 { Self::Shared } else { Self::Auto }
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn exclusive_choice_index(self) -> usize {
         if matches!(self, Self::Exclusive) {
             1
@@ -97,6 +100,7 @@ impl AudioOutputModeChoice {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn with_exclusive(self, enabled: bool) -> Self {
         match (enabled, self) {
             (true, _) => Self::Exclusive,
@@ -189,6 +193,7 @@ impl RendererChoice {
     pub const ALL: &'static [Self] = &[Self::OpenGl, Self::OpenGlWgpu, Self::Software];
 
     #[inline(always)]
+    #[must_use]
     pub fn choice_index(self) -> usize {
         Self::ALL
             .iter()
@@ -197,6 +202,7 @@ impl RendererChoice {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn from_choice(index: usize) -> Self {
         Self::ALL.get(index).copied().unwrap_or(Self::OpenGl)
     }
@@ -212,6 +218,7 @@ pub enum FullscreenChoice {
 
 impl FullscreenChoice {
     #[inline(always)]
+    #[must_use]
     pub const fn choice_index(self) -> usize {
         match self {
             Self::Exclusive => 0,
@@ -220,6 +227,7 @@ impl FullscreenChoice {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn from_choice(index: usize) -> Self {
         if index == 1 {
             Self::Borderless
@@ -247,6 +255,7 @@ pub enum PresentPolicyChoice {
 
 impl PresentPolicyChoice {
     #[inline(always)]
+    #[must_use]
     pub const fn choice_index(self) -> usize {
         match self {
             Self::Mailbox => 0,
@@ -255,6 +264,7 @@ impl PresentPolicyChoice {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn from_choice(index: usize) -> Self {
         if index == 1 {
             Self::Immediate
@@ -265,6 +275,7 @@ impl PresentPolicyChoice {
 }
 
 /// Resolve a configured thread count against a shell-prepared choice list.
+#[must_use]
 pub fn thread_choice_index(values: &[u8], thread_count: u8) -> usize {
     values
         .iter()
@@ -279,6 +290,7 @@ pub fn thread_choice_index(values: &[u8], thread_count: u8) -> usize {
 }
 
 /// Translate a theme choice index back to its neutral thread count.
+#[must_use]
 pub fn thread_count_from_choice(values: &[u8], index: usize) -> u8 {
     values.get(index).copied().unwrap_or(0)
 }

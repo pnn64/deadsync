@@ -533,6 +533,7 @@ pub struct PlayerOptionsSearchBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl PlayerOptionsSearchBenchmark {
+    #[must_use]
     pub fn new() -> Self {
         const LABELS: [&str; SEARCH_MAX_RESULTS] = [
             "Speed Mod",
@@ -562,6 +563,7 @@ impl PlayerOptionsSearchBenchmark {
         }
     }
 
+    #[must_use]
     pub fn legacy_frame(&self) -> u64 {
         self.matches
             .iter()
@@ -576,6 +578,7 @@ impl PlayerOptionsSearchBenchmark {
             })
     }
 
+    #[must_use]
     pub fn current_frame(&self) -> u64 {
         self.matches
             .iter()

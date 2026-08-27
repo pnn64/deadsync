@@ -214,6 +214,7 @@ fn push_quad(out: &mut Vec<MeshVertex>, x: f32, y: f32, w: f32, h: f32, color: [
     });
 }
 
+#[must_use]
 pub fn build_scatter_background_mesh(
     graph_width: f32,
     graph_height: f32,
@@ -229,6 +230,7 @@ pub fn build_scatter_background_mesh(
     )
 }
 
+#[must_use]
 pub fn build_scatter_background_mesh_with_palette(
     graph_width: f32,
     graph_height: f32,
@@ -314,6 +316,7 @@ pub fn build_scatter_background_mesh_with_palette(
     out
 }
 
+#[must_use]
 pub fn build_scatter_mesh(
     scatter: &[ScatterPoint],
     first_second: f32,
@@ -340,6 +343,7 @@ pub fn build_scatter_mesh(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[must_use]
 pub fn build_scatter_mesh_with_palette(
     scatter: &[ScatterPoint],
     first_second: f32,
@@ -477,6 +481,7 @@ fn push_hist_segment(
     });
 }
 
+#[must_use]
 pub fn build_offset_histogram_mesh(
     histogram: &HistogramMs,
     pane_width: f32,
@@ -496,6 +501,7 @@ pub fn build_offset_histogram_mesh(
     )
 }
 
+#[must_use]
 pub fn build_offset_histogram_mesh_with_palette(
     histogram: &HistogramMs,
     pane_width: f32,

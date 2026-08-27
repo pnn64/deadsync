@@ -16,12 +16,14 @@ pub struct LookupKey {
 
 impl LookupKey {
     /// Resolve this key to the localized string for the current language.
+    #[must_use]
     pub fn get(&self) -> Arc<str> {
         tr(self.section, self.key)
     }
 }
 
 /// Shorthand for constructing a `LookupKey` in const contexts.
+#[must_use]
 pub const fn lookup_key(section: &'static str, key: &'static str) -> LookupKey {
     LookupKey { section, key }
 }
@@ -113,6 +115,7 @@ fn ensure_test_init() {
 }
 
 /// Look up a localized string with named placeholder substitution.
+#[must_use]
 pub fn tr_fmt(section: &str, key: &str, args: &[(&str, &str)]) -> Arc<str> {
     format_translation_template(tr(section, key).as_ref(), args)
 }

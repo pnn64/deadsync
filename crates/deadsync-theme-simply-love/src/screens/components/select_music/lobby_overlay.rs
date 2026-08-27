@@ -261,6 +261,7 @@ pub enum SoundCue {
 
 impl SoundCue {
     #[inline(always)]
+    #[must_use]
     pub const fn asset_path(self) -> &'static str {
         match self {
             Self::Change => "assets/sounds/change.ogg",
@@ -272,6 +273,7 @@ impl SoundCue {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn show_overlay() -> OverlayState {
     OverlayState::Visible(Box::new(OverlayStateData {
         browse_index: 0,
@@ -510,6 +512,7 @@ pub fn handle_raw_key(
     InputOutcome::None
 }
 
+#[must_use]
 pub fn build_overlay(
     state: &OverlayState,
     active_color_index: i32,

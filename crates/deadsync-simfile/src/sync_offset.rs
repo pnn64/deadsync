@@ -21,22 +21,26 @@ pub struct SongOffsetSaveSummary {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn quantize_sync_offset_seconds(v: f32) -> f32 {
     (v / 0.001_f32).round() * 0.001_f32
 }
 
 #[inline(always)]
+#[must_use]
 pub fn sync_offset_delta_seconds(start: f32, new: f32) -> Option<f32> {
     let delta = quantize_sync_offset_seconds(new) - quantize_sync_offset_seconds(start);
     (delta.abs() >= 0.000_1_f32).then_some(delta)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn sync_offset_target_seconds(start: f32, new: f32) -> Option<f32> {
     sync_offset_delta_seconds(start, new).map(|_| quantize_sync_offset_seconds(new))
 }
 
 #[inline(always)]
+#[must_use]
 pub fn sync_change_line(label: &str, start: f32, new: f32) -> Option<String> {
     let start_q = quantize_sync_offset_seconds(start);
     let new_q = quantize_sync_offset_seconds(new);
@@ -48,16 +52,19 @@ pub fn sync_change_line(label: &str, start: f32, new: f32) -> Option<String> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn sync_offset_changed(start: f32, new: f32) -> bool {
     sync_offset_target_seconds(start, new).is_some()
 }
 
 #[inline(always)]
+#[must_use]
 pub fn sync_offset_saveable_changed(start: f32, new: f32, writable: bool) -> bool {
     sync_offset_changed(start, new) && writable
 }
 
 #[inline(always)]
+#[must_use]
 pub fn gameplay_sync_offset_saveable_changed(
     initial_global_offset_seconds: f32,
     global_offset_seconds: f32,
@@ -82,6 +89,7 @@ pub struct GameplaySyncPromptText<'a> {
     pub song_offset_seconds: f32,
 }
 
+#[must_use]
 pub fn gameplay_sync_prompt_text(input: GameplaySyncPromptText<'_>) -> String {
     let mut text = String::with_capacity(320);
 
@@ -118,6 +126,7 @@ pub fn gameplay_sync_prompt_text(input: GameplaySyncPromptText<'_>) -> String {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn format_offset_tag_value(value: f32) -> String {
     let mut v = quantize_sync_offset_seconds(value);
     if v.abs() < 0.000_5_f32 {
@@ -192,6 +201,7 @@ pub fn rewrite_simfile_offset_tags(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn simfile_backup_path(simfile_path: &Path) -> PathBuf {
     let mut backup = OsString::from(simfile_path.as_os_str());
     backup.push(".old");

@@ -310,6 +310,7 @@ pub struct State {
     menu_lr_undo: i8,
 }
 
+#[must_use]
 pub fn init(view: ManageLocalProfilesView) -> State {
     let ManageLocalProfilesView {
         profiles,
@@ -703,7 +704,7 @@ fn selected_after_delete(selected_before: usize, total_after: usize) -> usize {
     selected
 }
 
-fn confirm_delete(state: &mut State) -> ThemeEffect {
+fn confirm_delete(state: &State) -> ThemeEffect {
     let Some(confirm) = state.delete_confirm.as_ref() else {
         return ThemeEffect::None;
     };
@@ -1592,10 +1593,12 @@ pub fn handle_text(state: &mut State, text: &str) -> ThemeEffect {
     ThemeEffect::None
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
@@ -2917,7 +2920,7 @@ mod tests {
         assert_eq!(fmt_count(999), "999");
         assert_eq!(fmt_count(1000), "1,000");
         assert_eq!(fmt_count(12345), "12,345");
-        assert_eq!(fmt_count(1234567), "1,234,567");
+        assert_eq!(fmt_count(1_234_567), "1,234,567");
     }
 
     fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {

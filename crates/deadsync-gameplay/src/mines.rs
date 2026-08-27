@@ -10,6 +10,7 @@ pub(crate) fn recycle_pending_mine_hit_batch(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn mine_window_bounds_ns(
     mine_times_ns: &[SongTimeNs],
     start_t_ns: SongTimeNs,
@@ -71,11 +72,13 @@ pub fn lane_note_window_bounds_rows_from_cursor<I: Copy + Into<usize>>(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn timing_row_nearest(timing: &TimingData, beat: f32) -> usize {
     timing.get_row_for_beat(beat).unwrap_or(0)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn step_search_row_bounds(
     timing: &TimingData,
     current_time_ns: SongTimeNs,
@@ -239,6 +242,7 @@ pub fn closest_lane_note_ns<I: Copy + Into<usize>>(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn crossed_mine_bounds_ns(
     mine_times_ns: &[SongTimeNs],
     prev_time_ns: SongTimeNs,
@@ -251,6 +255,7 @@ pub fn crossed_mine_bounds_ns(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn crossed_held_mine_can_hit(note: &Note, column: usize) -> bool {
     matches!(note.note_type, NoteType::Mine)
         && note.can_be_judged
@@ -260,6 +265,7 @@ pub const fn crossed_held_mine_can_hit(note: &Note, column: usize) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn mine_hit_offset_in_window(
     time_error_music_ns: SongTimeNs,
     mine_window_music_ns: SongTimeNs,
@@ -268,6 +274,7 @@ pub fn mine_hit_offset_in_window(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn mine_can_be_hit(note: &Note) -> bool {
     note.mine_result.is_none() && !note.is_fake && note.can_be_judged
 }
@@ -322,6 +329,7 @@ pub fn mark_mine_hit_candidate(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn pending_mine_hit_ready(note: &Note) -> bool {
     note.mine_result == Some(MineResult::Hit) && !note.is_fake && note.can_be_judged
 }
@@ -334,6 +342,7 @@ pub struct PendingMineHitEvent {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn pending_mine_hit_event(
     notes: &[Note],
     note_index: usize,
@@ -456,6 +465,7 @@ pub fn mine_avoid_cursor_end<I: Copy + Into<usize>>(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn mine_can_be_avoided(note: &Note) -> bool {
     note.can_be_judged && note.mine_result.is_none()
 }
@@ -587,6 +597,7 @@ pub fn apply_time_based_mine_avoidance_for_players<I: Copy + Into<usize>>(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn completed_mine_can_be_avoided(note: &Note) -> bool {
     matches!(note.note_type, NoteType::Mine)
         && note.can_be_judged
@@ -648,6 +659,7 @@ pub fn finalize_completed_mine_avoidance_for_players(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn crossed_mine_held_start_time(
     now_down: bool,
     was_down: bool,
@@ -673,6 +685,7 @@ pub fn crossed_mine_held_start_time(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn note_tracks_held_miss(note_type: NoteType) -> bool {
     matches!(note_type, NoteType::Tap | NoteType::Hold | NoteType::Roll)
 }
@@ -767,6 +780,7 @@ pub fn track_held_misses_at_note_time_for_players(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn collect_edge_judge_indices(
     row_note_count: usize,
     lead_note_index: usize,

@@ -159,6 +159,7 @@ pub struct LobbyHudCacheStats {
 }
 
 impl LobbyHudCache {
+    #[must_use]
     pub const fn stats(&self) -> LobbyHudCacheStats {
         self.stats
     }
@@ -184,6 +185,7 @@ impl LobbyHudCache {
     }
 }
 
+#[must_use]
 pub fn build_panel(params: RenderParams<'_>) -> Vec<Actor> {
     let placement = panel_placement(params.screen_name, params.joined_sides, params.player_side);
     let width = panel_width(params.screen_name, placement);

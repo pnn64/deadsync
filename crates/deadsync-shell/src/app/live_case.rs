@@ -304,7 +304,7 @@ impl App {
     }
 
     pub(super) fn finish_live_case(
-        &mut self,
+        &self,
         report: GameplayPacingReport,
         event_loop: &ActiveEventLoop,
     ) {

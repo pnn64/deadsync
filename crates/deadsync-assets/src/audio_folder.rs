@@ -26,11 +26,13 @@ fn enabled() -> bool {
 /// Pure resolver: ignores the `custom_sounds_enabled` flag so the caller can
 /// distinguish "no files" from "feature disabled". Returns `None` when the
 /// directory is missing or contains no eligible `.ogg` files.
+#[must_use]
 pub fn random_sfx_in(rel_dir: &str) -> Option<PathBuf> {
     audio_folder::random_sfx_path(rel_dir, |path| dirs::app_dirs().resolve_asset_path(path))
 }
 
 /// Same as [`random_sfx_in`] but takes a fully resolved directory.
+#[must_use]
 pub fn pick_random_in(dir: &Path) -> Option<PathBuf> {
     audio_folder::pick_random_ogg(dir)
 }
@@ -38,6 +40,7 @@ pub fn pick_random_in(dir: &Path) -> Option<PathBuf> {
 /// Picks an indexed `.ogg` file (`{index}.ogg`) from the directory referenced
 /// by `rel_dir`, falling back to `fallback_name` (e.g. `"restart.ogg"`) when
 /// the indexed file is missing. Returns `None` if neither exists.
+#[must_use]
 pub fn indexed_sfx_in(rel_dir: &str, index: u32, fallback_name: &str) -> Option<PathBuf> {
     audio_folder::indexed_sfx_path(rel_dir, index, fallback_name, |path| {
         dirs::app_dirs().resolve_asset_path(path)
@@ -45,11 +48,13 @@ pub fn indexed_sfx_in(rel_dir: &str, index: u32, fallback_name: &str) -> Option<
 }
 
 /// Same as [`indexed_sfx_in`] but takes a fully resolved directory.
+#[must_use]
 pub fn pick_indexed_in(dir: &Path, index: u32, fallback_name: &str) -> Option<PathBuf> {
     audio_folder::pick_indexed_ogg(dir, index, fallback_name)
 }
 
 /// Resolves one enabled custom sound without executing audio work.
+#[must_use]
 pub fn random_sfx(rel_dir: &str) -> Option<PathBuf> {
     if !enabled() {
         return None;
@@ -62,6 +67,7 @@ pub fn random_sfx(rel_dir: &str) -> Option<PathBuf> {
 }
 
 /// Resolves one enabled indexed custom sound without executing audio work.
+#[must_use]
 pub fn indexed_sfx(rel_dir: &str, index: u32, fallback_name: &str) -> Option<PathBuf> {
     if !enabled() {
         return None;
@@ -79,6 +85,7 @@ pub fn indexed_sfx(rel_dir: &str, index: u32, fallback_name: &str) -> Option<Pat
 /// otherwise returns `None`. Independent of `custom_sounds_enabled` because
 /// it powers the per-visual-style menu music selection, not the SFX folder
 /// feature.
+#[must_use]
 pub fn random_music_path(rel_path: &str) -> Option<PathBuf> {
     match audio_folder::music_path_result(rel_path, |path| {
         dirs::app_dirs().resolve_asset_path(path)

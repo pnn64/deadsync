@@ -506,11 +506,13 @@ fn cached_chart_info_text_legacy(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_chart_info_text_old() -> Arc<str> {
     cached_chart_info_text_legacy(true, true, true, 17, 12.5, 14.327)
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_chart_info_text_new() -> Arc<str> {
     cached_chart_info_text(true, true, true, 17, 12.5, 14.327)
 }
@@ -1279,6 +1281,7 @@ impl MediaPathSource {
 }
 
 impl MusicWheelEntry {
+    #[must_use]
     pub fn pack_key(&self) -> Option<&str> {
         match self {
             MusicWheelEntry::PackHeader {
@@ -1294,6 +1297,7 @@ impl MusicWheelEntry {
     /// distinct; virtual sort sections fall back to their visible name.
     /// Series headers return `None` so a parent with the same name as a child
     /// pack cannot capture pack-focus lookups.
+    #[must_use]
     pub fn section_key(&self) -> Option<&str> {
         match self {
             MusicWheelEntry::PackHeader {
@@ -1310,6 +1314,7 @@ impl MusicWheelEntry {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_series_header(&self) -> bool {
         matches!(
             self,
@@ -2081,6 +2086,7 @@ fn maybe_clear_selected_pack_on_score(state: &mut State, mode: NewPackMode) {
     state.new_pack_names.remove(pack_name.as_ref());
 }
 
+#[must_use]
 pub fn is_difficulty_playable(
     song: &Arc<SongData>,
     chart_type: &str,
@@ -2924,7 +2930,7 @@ const RANDOM_BPM_CYCLE_SPEED: f32 = 0.2;
 fn random_bpm_cycle_text(elapsed: f32) -> Arc<str> {
     let cycle = (elapsed / RANDOM_BPM_CYCLE_SPEED) as u32;
     // Deterministic per-cycle "random" via integer hash (Knuth multiplicative)
-    let hash = cycle.wrapping_mul(2654435761);
+    let hash = cycle.wrapping_mul(2_654_435_761);
     if hash.is_multiple_of(10) {
         cached_str_ref("???")
     } else {
@@ -3695,6 +3701,7 @@ pub const fn elapsed_times(state: &State) -> (f32, f32) {
     (state.session_elapsed, state.gameplay_elapsed)
 }
 
+#[must_use]
 pub fn init(init_view: SelectMusicInitView) -> State {
     let started = Instant::now();
     debug!("Preparing SelectMusic state...");
@@ -4167,6 +4174,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     state
 }
 
+#[must_use]
 pub fn init_placeholder() -> State {
     let session = SelectMusicSessionView::default();
     let last_played = SelectMusicLastPlayedView::default();
@@ -6461,7 +6469,7 @@ fn sync_overlay_graph_cols(overlay: &NullOrDieOverlayData) -> SyncGraphCols {
     )
 }
 
-fn refresh_sync_overlay_heat_texture(overlay: &mut NullOrDieOverlayData) {
+fn refresh_sync_overlay_heat_texture(overlay: &NullOrDieOverlayData) {
     let (graph_w, graph_h) = sync_overlay_graph_size();
     let cols = sync_overlay_graph_cols(overlay);
     let Some((matrix, total_rows, data_rows)) = sync_heat_source(overlay) else {
@@ -8459,6 +8467,7 @@ impl LobbyReconcileBench {
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_lobby_reconcile_fixture() -> LobbyReconcileBench {
     let mut state = init_placeholder();
     state.profiles.display_names = [Arc::from("Alice"), Arc::from("Bob")];
@@ -12482,10 +12491,12 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
     pending_effect.unwrap_or(ThemeEffect::None)
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
@@ -12626,6 +12637,7 @@ fn format_chart_length_hashed(key: i32) -> Arc<str> {
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+#[must_use]
 pub fn benchmark_info_text_hashed() -> [Arc<str>; 3] {
     [
         format_bpm_with_rate_hashed(128.0, 184.0, 1.25),
@@ -12636,6 +12648,7 @@ pub fn benchmark_info_text_hashed() -> [Arc<str>; 3] {
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+#[must_use]
 pub fn benchmark_info_text_front_cached() -> [Arc<str>; 3] {
     [
         format_bpm_with_rate(Some((128.0, 184.0)), 1.25),
@@ -12913,6 +12926,7 @@ fn test_media_song(index: usize) -> Arc<SongData> {
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_select_music_entries(
     pack_count: usize,
     songs_per_pack: usize,
@@ -12947,10 +12961,12 @@ pub struct WheelSongMetaBench {
 
 #[cfg(feature = "bench-support")]
 impl WheelSongMetaBench {
+    #[must_use]
     pub fn songs(&self) -> &[Arc<SongData>] {
         &self.songs
     }
 
+    #[must_use]
     pub fn prepared_checksum(&self) -> u64 {
         self.songs
             .iter()
@@ -12969,6 +12985,7 @@ impl WheelSongMetaBench {
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_wheel_song_meta(song_count: usize) -> WheelSongMetaBench {
     let mut songs = Vec::with_capacity(song_count);
     let mut prepared = FxHashMap::with_capacity_and_hasher(song_count, Default::default());
@@ -17467,14 +17484,14 @@ mod tests {
         song.music_path = Some(PathBuf::from("sync test.ogg"));
         song.sample_start = Some(17.5);
         song.sample_length = Some(0.001);
-        song.music_length_seconds = 17.500023;
+        song.music_length_seconds = 17.500_023;
         song.total_length_seconds = 18;
         song.normalized_bpms = "0.000=128.000".to_string();
 
         let cut = super::compute_preview_cut(&song);
 
         assert!((cut.start_sec - 7.5).abs() <= 0.0001);
-        assert!((cut.length_sec - 0.001).abs() <= 0.000001);
+        assert!((cut.length_sec - 0.001).abs() <= 0.000_001);
     }
 
     #[test]

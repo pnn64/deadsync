@@ -186,6 +186,7 @@ pub fn create_branch_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(branch)
 }
 
+#[must_use]
 pub fn scale_value(value: f32, from_low: f32, from_high: f32, to_low: f32, to_high: f32) -> f32 {
     let span = from_high - from_low;
     if span.abs() <= f32::EPSILON {
@@ -203,31 +204,37 @@ fn seconds_to_time_parts(seconds: f64) -> (i64, i64, i64) {
     (minutes, secs, centis)
 }
 
+#[must_use]
 pub fn seconds_to_hhmmss(seconds: f64) -> String {
     let (minutes, seconds, _) = seconds_to_time_parts(seconds);
     format!("{:02}:{:02}:{seconds:02}", minutes / 60, minutes % 60)
 }
 
+#[must_use]
 pub fn seconds_to_mss(seconds: f64) -> String {
     let (minutes, seconds, _) = seconds_to_time_parts(seconds);
     format!("{minutes:01}:{seconds:02}")
 }
 
+#[must_use]
 pub fn seconds_to_mmss(seconds: f64) -> String {
     let (minutes, seconds, _) = seconds_to_time_parts(seconds);
     format!("{minutes:02}:{seconds:02}")
 }
 
+#[must_use]
 pub fn seconds_to_mss_ms_ms(seconds: f64) -> String {
     let (minutes, seconds, centis) = seconds_to_time_parts(seconds);
     format!("{minutes:01}:{seconds:02}.{centis:02}")
 }
 
+#[must_use]
 pub fn seconds_to_mmss_ms_ms(seconds: f64) -> String {
     let (minutes, seconds, centis) = seconds_to_time_parts(seconds);
     format!("{minutes:02}:{seconds:02}.{centis:02}")
 }
 
+#[must_use]
 pub fn format_number_and_suffix(value: i64) -> String {
     let suffix = if (value % 100) / 10 == 1 {
         "th"

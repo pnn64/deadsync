@@ -65,6 +65,7 @@ pub struct MiniIndicatorProgress {
 /// Matches zmod's missed-target test: the score already earned plus every
 /// remaining point cannot reach the configured target.
 #[inline(always)]
+#[must_use]
 pub fn zmod_target_score_missed(
     progress: &MiniIndicatorProgress,
     target_score_percent: f64,
@@ -131,6 +132,7 @@ pub struct ZmodComboColorParams {
     pub elapsed_s: f32,
 }
 
+#[must_use]
 pub const fn zmod_combo_quint_active(show_fa_plus_window: bool, counts: WindowCounts) -> bool {
     show_fa_plus_window
         && counts.w0 > 0
@@ -142,6 +144,7 @@ pub const fn zmod_combo_quint_active(show_fa_plus_window: bool, counts: WindowCo
         && counts.miss == 0
 }
 
+#[must_use]
 pub const fn zmod_resolved_mini_indicator_mode(
     mode: MiniIndicatorMode,
     subtractive: bool,
@@ -225,6 +228,7 @@ struct StreamProgressEntry {
 }
 
 impl StreamProgressLookup {
+    #[must_use]
     pub fn new(segments: &[StreamSegment]) -> Self {
         let mut stream_before = 0.0;
         let entries = segments
@@ -308,6 +312,7 @@ pub struct BrokenRunLookup {
 }
 
 impl BrokenRunLookup {
+    #[must_use]
     pub fn new(segments: &[StreamSegment]) -> Self {
         assert!(
             segments.len() <= BrokenRunSpan::BROKEN_FLAG as usize,
@@ -419,6 +424,7 @@ fn broken_run_end_and_next(segments: &[StreamSegment], start_index: usize) -> (i
     (end as i32, broken, index)
 }
 
+#[must_use]
 pub fn zmod_broken_run_end(segs: &[StreamSegment], start_index: usize) -> (i32, bool) {
     let (end, broken, _) = broken_run_end_and_next(segs, start_index);
     (end, broken)
@@ -549,6 +555,7 @@ pub(crate) fn zmod_broken_run_counter_text(
     }
 }
 
+#[must_use]
 pub fn zmod_percent_from_points(points: i32, total: i32) -> f64 {
     if total <= 0 || points <= 0 {
         return 0.0;
@@ -617,6 +624,7 @@ pub(crate) fn zmod_subtractive_points(
     }
 }
 
+#[must_use]
 pub const fn zmod_mini_indicator_zoom(size: MiniIndicatorSize) -> f32 {
     match size {
         MiniIndicatorSize::Default => 0.35,
@@ -690,6 +698,7 @@ pub(crate) fn zmod_stream_prog_color(completion: f64) -> [f32; 4] {
     }
 }
 
+#[must_use]
 pub fn zmod_mini_indicator_output(
     progress: &MiniIndicatorProgress,
     params: ZmodMiniIndicatorParams,
@@ -892,11 +901,13 @@ const fn zmod_full_combo_rainbow_active(grade: Option<JudgeGrade>) -> bool {
     )
 }
 
+#[must_use]
 pub fn zmod_static_combo_color(params: ZmodComboColorParams) -> [f32; 4] {
     let grade = zmod_combo_grade(params).unwrap_or(JudgeGrade::Miss);
     zmod_combo_solid_color(grade, params.quint_active)
 }
 
+#[must_use]
 pub fn zmod_resolved_combo_color(params: ZmodComboColorParams) -> [f32; 4] {
     match params.style {
         ZmodComboColorStyle::None => [1.0, 1.0, 1.0, 1.0],
@@ -920,6 +931,7 @@ pub fn zmod_resolved_combo_color(params: ZmodComboColorParams) -> [f32; 4] {
     }
 }
 
+#[must_use]
 pub fn zmod_stream_prog_completion_for_beat(
     total_stream_measures: f64,
     segs: &[StreamSegment],

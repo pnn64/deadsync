@@ -25,6 +25,7 @@ impl Default for LogoParams {
 
 /// Build the “banner inside logo” stack with the actor DSL.
 /// Returns a `Vec<Actor>` to be included in a screen's actor list.
+#[must_use]
 pub fn build_logo(
     params: LogoParams,
     title_logo_texture_key: Option<&'static str>,
@@ -89,6 +90,7 @@ pub fn build_logo(
 }
 
 /// Convenience: build with default params.
+#[must_use]
 pub fn build_logo_default(
     title_logo_texture_key: Option<&'static str>,
     game: GameFlag,

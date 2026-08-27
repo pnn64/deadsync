@@ -1,3 +1,4 @@
+#[must_use]
 pub fn parse_bool_str(raw: &str) -> Option<bool> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "1" | "true" | "yes" | "on" => Some(true),
@@ -6,6 +7,7 @@ pub fn parse_bool_str(raw: &str) -> Option<bool> {
     }
 }
 
+#[must_use]
 pub fn parse_loose_bool_str(raw: &str) -> Option<bool> {
     let raw = raw.trim();
     if raw.is_empty() {
@@ -14,6 +16,7 @@ pub fn parse_loose_bool_str(raw: &str) -> Option<bool> {
     parse_bool_str(raw).or_else(|| raw.parse::<u8>().ok().map(|n| n != 0))
 }
 
+#[must_use]
 pub fn parse_u8_bool_str(raw: &str) -> Option<bool> {
     raw.trim().parse::<u8>().ok().map(|n| n != 0)
 }

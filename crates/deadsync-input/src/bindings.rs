@@ -7,6 +7,7 @@ use crate::{
     parse_gamepad_code_binding, parse_pad_dir,
 };
 
+#[must_use]
 pub fn default_keymap() -> Keymap {
     use VirtualAction as A;
     let mut km = Keymap::default();
@@ -198,6 +199,7 @@ pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 32] = [
     ("P2_Coin", ""),
 ];
 
+#[must_use]
 pub fn keymap_ini_lines(keymap: &Keymap) -> Vec<(&'static str, String)> {
     let mut lines = Vec::with_capacity(ALL_VIRTUAL_ACTIONS.len());
     for action in ALL_VIRTUAL_ACTIONS {
@@ -230,6 +232,7 @@ pub fn write_keymap_ini_section(content: &mut String, keymap: &Keymap) {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn default_key_for_action(action: VirtualAction) -> Option<KeyCode> {
     use VirtualAction as A;
     match action {
@@ -264,6 +267,7 @@ pub fn default_binding_for_action(action: VirtualAction) -> Option<InputBinding>
 }
 
 #[inline(always)]
+#[must_use]
 pub fn binding_to_token(binding: InputBinding) -> String {
     match binding {
         InputBinding::Key(code) => format!("KeyCode::{code:?}"),
@@ -488,6 +492,7 @@ pub fn parse_keycode(t: &str) -> Option<InputBinding> {
 
 /// Serialize a single `KeyCode` to its `KeyCode::Name` INI token.
 #[inline(always)]
+#[must_use]
 pub fn keycode_to_token(code: KeyCode) -> String {
     binding_to_token(InputBinding::Key(code))
 }
@@ -495,6 +500,7 @@ pub fn keycode_to_token(code: KeyCode) -> String {
 /// Parse a `KeyCode::Name` INI token into a bare `KeyCode`, ignoring any
 /// non-keyboard binding tokens (pad/gamepad).
 #[inline(always)]
+#[must_use]
 pub fn parse_keycode_to_key(t: &str) -> Option<KeyCode> {
     match parse_keycode(t)? {
         InputBinding::Key(code) => Some(code),
@@ -508,6 +514,7 @@ pub fn parse_pad_code(t: &str) -> Option<InputBinding> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn parse_pad_device_binding(t: &str) -> Option<InputBinding> {
     let mut parts = t.split("::");
     let pad = parts.next()?;
@@ -537,6 +544,7 @@ pub fn parse_pad_dir_binding(t: &str) -> Option<InputBinding> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn parse_binding_token(tok: &str) -> Option<InputBinding> {
     let t = tok.trim();
     parse_keycode(t)
@@ -571,6 +579,7 @@ const fn requested_to_actual_binding_slot(requested_index: usize, first_editable
 }
 
 #[inline(always)]
+#[must_use]
 pub fn editable_key_binding_slot_indices(keymap: &Keymap, action: VirtualAction) -> (usize, usize) {
     if keymap.binding_at(action, 0) == default_binding_for_action(action) {
         (1, 2)
@@ -580,6 +589,7 @@ pub fn editable_key_binding_slot_indices(keymap: &Keymap, action: VirtualAction)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn protected_default_key_for_action(keymap: &Keymap, action: VirtualAction) -> Option<KeyCode> {
     let default_key = default_key_for_action(action)?;
     if keymap.binding_at(action, 0) == Some(InputBinding::Key(default_key)) {
@@ -670,6 +680,7 @@ fn set_binding_at_slot(bindings: &mut Vec<InputBinding>, slot_index: usize, bind
     }
 }
 
+#[must_use]
 pub fn updated_keymap_unique_keyboard(
     current: &Keymap,
     action: VirtualAction,
@@ -713,6 +724,7 @@ pub fn updated_keymap_unique_keyboard(
     new_map
 }
 
+#[must_use]
 pub fn updated_keymap_unique_gamepad(
     current: &Keymap,
     action: VirtualAction,
@@ -746,6 +758,7 @@ pub fn updated_keymap_unique_gamepad(
     new_map
 }
 
+#[must_use]
 pub fn cleared_keymap(current: &Keymap, action: VirtualAction, index: usize) -> (Keymap, bool) {
     let mut new_map = Keymap::default();
     let mut changed = false;
@@ -1172,7 +1185,7 @@ mod tests {
         assert_eq!(
             parse_pad_code("PadCode[0xDEADBEEF]"),
             Some(InputBinding::GamepadCode(GamepadCodeBinding {
-                code_u32: 0xDEADBEEF,
+                code_u32: 0xDEAD_BEEF,
                 device: None,
                 uuid: None,
             }))
@@ -1227,7 +1240,7 @@ mod tests {
         let Some(InputBinding::GamepadCode(binding)) = parse_pad_code(token) else {
             panic!("expected gamepad code binding");
         };
-        assert_eq!(binding.code_u32, 0xDEADBEEF);
+        assert_eq!(binding.code_u32, 0xDEAD_BEEF);
         assert_eq!(binding.device, Some(0));
         assert!(binding.uuid.is_some());
     }
@@ -1370,7 +1383,7 @@ mod tests {
     fn round_trip_gamepad_code() {
         let cases = [
             GamepadCodeBinding {
-                code_u32: 0xDEADBEEF,
+                code_u32: 0xDEAD_BEEF,
                 device: None,
                 uuid: None,
             },

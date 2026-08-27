@@ -8,28 +8,28 @@ use deadsync_smx::{self as smx, SensorTestData, SensorTestMode, SmxConfig};
 use std::fmt::Write as _;
 use std::time::SystemTime;
 
-pub(super) const PANEL_SENSOR_COUNT: usize = 4;
-pub(super) const SMX_BUTTON_COUNT: usize = 4;
-pub(super) const SMX_BUTTON_LABELS: [&str; SMX_BUTTON_COUNT] = ["L", "D", "U", "R"];
+pub const PANEL_SENSOR_COUNT: usize = 4;
+pub const SMX_BUTTON_COUNT: usize = 4;
+pub const SMX_BUTTON_LABELS: [&str; SMX_BUTTON_COUNT] = ["L", "D", "U", "R"];
 
-pub(super) const MIN_FSR_THRESHOLD: u16 = 5;
-pub(super) const MAX_FSR_THRESHOLD: u16 = 250;
+pub const MIN_FSR_THRESHOLD: u16 = 5;
+pub const MAX_FSR_THRESHOLD: u16 = 250;
 
 /// Debounce edit bounds (microseconds). Firmware default is 4000us (4.0ms);
 /// we never let the user drop below 0.5ms.
-pub(super) const MIN_DEBOUNCE_US: u16 = 500;
-pub(super) const MAX_DEBOUNCE_US: u16 = 25000;
+pub const MIN_DEBOUNCE_US: u16 = 500;
+pub const MAX_DEBOUNCE_US: u16 = 25000;
 
 // Pre-v5 load-cell pads: 8-bit thresholds (20-200) and raw live values that
 // reach 500 (no >>2). The display scale is capped at 250 so the threshold band
 // uses most of the bar's height (200 sits at 80%) instead of topping out
 // midway; readings past 250 show a full bar but the numeric readout still
 // reports the true value up to `LOADCELL_RAW_MAX`.
-pub(super) const MIN_LOADCELL_THRESHOLD: u16 = 20;
-pub(super) const MAX_LOADCELL_THRESHOLD: u16 = 200;
-pub(super) const FSR_VALUE_SCALE: u16 = 250;
-pub(super) const LOADCELL_VALUE_SCALE: u16 = 250;
-pub(super) const LOADCELL_RAW_MAX: u16 = 500;
+pub const MIN_LOADCELL_THRESHOLD: u16 = 20;
+pub const MAX_LOADCELL_THRESHOLD: u16 = 200;
+pub const FSR_VALUE_SCALE: u16 = 250;
+pub const LOADCELL_VALUE_SCALE: u16 = 250;
+pub const LOADCELL_RAW_MAX: u16 = 500;
 const FSR_VALUE_CURVE: ValueCurve = ValueCurve::linear(FSR_VALUE_SCALE);
 const LOADCELL_VALUE_CURVE: ValueCurve = ValueCurve::linear(LOADCELL_VALUE_SCALE);
 
@@ -37,9 +37,9 @@ const LOADCELL_VALUE_CURVE: ValueCurve = ValueCurve::linear(LOADCELL_VALUE_SCALE
 const VIEW_PANELS: [(usize, &str); SMX_BUTTON_COUNT] = [(3, "L"), (7, "D"), (1, "U"), (5, "R")];
 
 /// Edge label for each of a panel's four FSR sensors, by firmware index.
-pub(super) const SENSOR_EDGE_LABELS: [&str; PANEL_SENSOR_COUNT] = ["L", "R", "U", "D"];
+pub const SENSOR_EDGE_LABELS: [&str; PANEL_SENSOR_COUNT] = ["L", "R", "U", "D"];
 /// Firmware-index order to display the sensors in so they read L, D, U, R.
-pub(super) const SENSOR_DISPLAY_ORDER: [usize; PANEL_SENSOR_COUNT] = [0, 3, 2, 1];
+pub const SENSOR_DISPLAY_ORDER: [usize; PANEL_SENSOR_COUNT] = [0, 3, 2, 1];
 
 pub struct Monitor {
     /// Whether the config screen has requested live reads (sensor test mode).
@@ -71,7 +71,7 @@ impl Monitor {
     }
 
     /// Enumerate every connected `StepManiaX` pad (FSR or load cell) as a `PadView`.
-    pub fn poll_pads(&mut self) -> Vec<PadView> {
+    pub fn poll_pads(&self) -> Vec<PadView> {
         let mut pads = Vec::new();
         for pad in 0..2 {
             let info = smx::get_info(pad);
@@ -135,7 +135,7 @@ impl Monitor {
     /// panel. Load-cell pads are rejected; their press/release pair is edited
     /// atomically through `set_threshold_pair`.
     pub fn set_threshold(
-        &mut self,
+        &self,
         device: PadDeviceId,
         button: usize,
         sensor: Option<usize>,
@@ -195,7 +195,7 @@ impl Monitor {
     /// single config write, so the pad never observes an inverted intermediate
     /// pair. Rejects FSR pads, out-of-range values, and `release >= press`.
     pub fn set_threshold_pair(
-        &mut self,
+        &self,
         device: PadDeviceId,
         button: usize,
         press: u16,
@@ -237,7 +237,7 @@ impl Monitor {
 
     /// Enable/disable one sensor of a panel via the `enabled_sensors` bitmask.
     pub fn set_sensor_enabled(
-        &mut self,
+        &self,
         device: PadDeviceId,
         button: usize,
         sensor: usize,
@@ -267,7 +267,7 @@ impl Monitor {
 
     /// Turn auto-recalibration on (max tare `0xFFFF`) or off (max tare `0`),
     /// matching how other `StepManiaX` SDK forks toggle it.
-    pub fn set_auto_recalibration(&mut self, device: PadDeviceId, enabled: bool) -> bool {
+    pub fn set_auto_recalibration(&self, device: PadDeviceId, enabled: bool) -> bool {
         if device.backend != BackendKind::Smx {
             return false;
         }
@@ -282,7 +282,7 @@ impl Monitor {
     }
 
     /// Set the per-panel debounce time in microseconds.
-    pub fn set_debounce_micros(&mut self, device: PadDeviceId, micros: u16) -> bool {
+    pub fn set_debounce_micros(&self, device: PadDeviceId, micros: u16) -> bool {
         if device.backend != BackendKind::Smx
             || !(MIN_DEBOUNCE_US..=MAX_DEBOUNCE_US).contains(&micros)
         {
@@ -298,7 +298,7 @@ impl Monitor {
         true
     }
 
-    pub fn debug_dump(&mut self) -> String {
+    pub fn debug_dump(&self) -> String {
         let mut out = String::new();
         let _ = writeln!(out, "DeadSync StepManiaX FSR debug dump");
         let _ = writeln!(out, "generated: {:?}", SystemTime::now());
@@ -416,7 +416,7 @@ fn load_cell_button(
 
 /// One sensor's inputs for the shared button-view builders below, which both
 /// the live backend and the mock use so their presentation can't diverge.
-pub(super) struct SensorReading {
+pub struct SensorReading {
     pub firmware_index: usize,
     pub label: Option<&'static str>,
     pub value: u16,
@@ -427,7 +427,7 @@ pub(super) struct SensorReading {
 /// Assemble an FSR-style button view (per-sensor thresholds and enable bits).
 /// `panel_active` is the panel's pressed state; per-sensor `active` stays the
 /// instantaneous comparison the Advanced view tunes against.
-pub(super) fn fsr_button_view(
+pub fn fsr_button_view(
     label: &'static str,
     readings: [SensorReading; PANEL_SENSOR_COUNT],
     panel_active: bool,
@@ -463,7 +463,7 @@ pub(super) fn fsr_button_view(
 /// Assemble a load-cell button view: four corner readings (numbered 1-4 in
 /// the UI) sharing one press/release pair. Per-sensor `active` mirrors the
 /// panel state so the view can never disagree with what the bars show.
-pub(super) fn load_cell_button_view(
+pub fn load_cell_button_view(
     label: &'static str,
     values: [u16; PANEL_SENSOR_COUNT],
     press: u16,
@@ -555,7 +555,7 @@ fn calibrate_load_cell(value: i16) -> u16 {
 /// Sticky pressed state with the firmware's hysteresis: turns on at/above the
 /// press (`high`) threshold and off only below the release (`low`) threshold;
 /// in between it keeps its previous state.
-pub(super) const fn hysteresis_active(was: bool, value: u16, low: u16, high: u16) -> bool {
+pub const fn hysteresis_active(was: bool, value: u16, low: u16, high: u16) -> bool {
     if high == 0 {
         false
     } else if value >= high {

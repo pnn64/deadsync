@@ -682,6 +682,7 @@ pub fn collect_unique_runtime_mod_entries(
     out.finish()
 }
 
+#[must_use]
 pub fn runtime_mod_entry_players(player: Option<u8>) -> Vec<usize> {
     runtime_mod_player_indices(player).collect()
 }
@@ -696,6 +697,7 @@ fn runtime_mod_player_indices(player: Option<u8>) -> std::ops::Range<usize> {
     }
 }
 
+#[must_use]
 pub fn runtime_mod_key(target: &str) -> String {
     target.to_ascii_lowercase()
 }
@@ -751,6 +753,7 @@ pub fn runtime_mod_start_value(
     })
 }
 
+#[must_use]
 pub fn runtime_mod_end_value(from: f32, entry: &RuntimeModEaseEntry) -> f32 {
     if entry.add { from + entry.to } else { entry.to }
 }
@@ -875,6 +878,7 @@ pub fn collect_unique_runtime_overlay_capture_keys(
     dedup.keys
 }
 
+#[must_use]
 pub fn runtime_mod_ease_target(key: &str, original: &str) -> Option<SongLuaEaseTarget> {
     Some(match key {
         "z" => SongLuaEaseTarget::PlayerZ,
@@ -896,6 +900,7 @@ fn runtime_mod_column_key(key: &str, prefix: &str) -> bool {
         .is_some_and(|column| (1..=16).contains(&column))
 }
 
+#[must_use]
 pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<SongLuaEaseTarget> {
     if runtime_mod_column_key(key, "bumpy")
         || runtime_mod_column_key(key, "tiny")

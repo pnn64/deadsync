@@ -51,6 +51,7 @@ pub struct FfmpegSource {
 
 impl FfmpegSource {
     /// Sum of all archive sizes, or `None` if any archive size is unknown.
+    #[must_use]
     pub fn total_size(&self) -> Option<u64> {
         let mut total = 0u64;
         for archive in self.archives {
@@ -161,6 +162,7 @@ static MR_MACOS_ARM64: FfmpegSource = FfmpegSource {
 /// The pinned ffmpeg source for this host, or `None` for hosts we have
 /// no maintained static build for (Win7 32-bit, FreeBSD, etc.), which
 /// keep relying on an `ffmpeg`/`ffprobe` already on `PATH`.
+#[must_use]
 pub fn host_ffmpeg_source() -> Option<&'static FfmpegSource> {
     if cfg!(all(
         target_os = "windows",
@@ -185,6 +187,7 @@ pub fn host_ffmpeg_source() -> Option<&'static FfmpegSource> {
 
 /// True when the in-app downloader can install ffmpeg on this host.
 /// The Options entry is hidden when this is false.
+#[must_use]
 pub fn install_supported_for_host() -> bool {
     host_ffmpeg_source().is_some()
 }
@@ -674,6 +677,7 @@ fn archive_file_name(url: &str) -> String {
 }
 
 /// Absolute path of the directory archives are staged into.
+#[must_use]
 pub fn downloads_dir() -> Option<PathBuf> {
     Some(
         deadlib_platform::dirs::app_dirs()
@@ -684,6 +688,7 @@ pub fn downloads_dir() -> Option<PathBuf> {
 
 /// Runtime `bin/` directory the tools are installed into
 /// (`<current_dir>/bin`), matching `deadlib-video`'s resolution path.
+#[must_use]
 pub fn install_dir() -> Option<PathBuf> {
     std::env::current_dir().ok().map(|dir| dir.join("bin"))
 }

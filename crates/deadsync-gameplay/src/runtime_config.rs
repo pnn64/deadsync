@@ -37,6 +37,7 @@ pub enum AutosyncMode {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn autosync_mode_status_line(mode: AutosyncMode) -> Option<&'static str> {
     match mode {
         AutosyncMode::Off => None,
@@ -46,6 +47,7 @@ pub const fn autosync_mode_status_line(mode: AutosyncMode) -> Option<&'static st
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn next_autosync_mode(mode: AutosyncMode, course_active: bool) -> AutosyncMode {
     match mode {
         AutosyncMode::Off if course_active => AutosyncMode::Machine,
@@ -56,6 +58,7 @@ pub const fn next_autosync_mode(mode: AutosyncMode, course_active: bool) -> Auto
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_raw_key_plan(
     input: GameplayRawKeyInput,
     pressed: bool,
@@ -95,6 +98,7 @@ pub const fn gameplay_raw_key_plan(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn gameplay_raw_key_action_for_plan(plan: GameplayRawKeyPlan) -> RawKeyAction {
     match plan {
         GameplayRawKeyPlan::Restart => RawKeyAction::Restart,
@@ -134,6 +138,7 @@ pub struct ScrollReverseOptions {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn scroll_reverse_percent_for_column(
     options: ScrollReverseOptions,
     local_col: usize,
@@ -164,6 +169,7 @@ pub fn scroll_reverse_percent_for_column(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn scroll_reverse_scale_for_column(
     options: ScrollReverseOptions,
     local_col: usize,
@@ -172,6 +178,7 @@ pub fn scroll_reverse_scale_for_column(
     2.0f32.mul_add(-scroll_reverse_percent_for_column(options, local_col, num_cols), 1.0)
 }
 
+#[must_use]
 pub fn column_scroll_dirs_for_flags(flags: ColumnScrollFlags, num_cols: usize) -> [f32; MAX_COLS] {
     let mut dirs = [1.0_f32; MAX_COLS];
     let n = num_cols.min(MAX_COLS);
@@ -249,6 +256,7 @@ pub struct GameplaySourceRuntimeState {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn effective_player_global_offset_seconds(
     global_offset_seconds: f32,
     player_global_offset_shift_seconds: &[f32],
@@ -272,6 +280,7 @@ pub struct GameplayOffsetState {
 
 impl GameplayOffsetState {
     #[inline(always)]
+    #[must_use]
     pub const fn new(
         global_offset_seconds: f32,
         player_global_offset_shift_seconds: [f32; MAX_PLAYERS],
@@ -287,26 +296,31 @@ impl GameplayOffsetState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn global_offset_seconds(&self) -> f32 {
         self.global_offset_seconds
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn initial_global_offset_seconds(&self) -> f32 {
         self.initial_global_offset_seconds
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn song_offset_seconds(&self) -> f32 {
         self.song_offset_seconds
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn initial_song_offset_seconds(&self) -> f32 {
         self.initial_song_offset_seconds
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn player_global_offset_shift_seconds(&self, player_idx: usize) -> f32 {
         self.player_global_offset_shift_seconds
             .get(player_idx)
@@ -315,6 +329,7 @@ impl GameplayOffsetState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn effective_player_global_offset_seconds(&self, player_idx: usize) -> f32 {
         effective_player_global_offset_seconds(
             self.global_offset_seconds,
@@ -380,6 +395,7 @@ pub struct GameplayMiniIndicatorOptions {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn mini_indicator_mode_for_options(
     options: GameplayMiniIndicatorOptions,
 ) -> GameplayMiniIndicatorMode {
@@ -414,6 +430,7 @@ pub fn needs_stream_data<Profile: GameplayProfileData>(profile: &Profile) -> boo
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn mini_indicator_needs_stream_data(options: GameplayMiniIndicatorOptions) -> bool {
     options.measure_counter_enabled
         || matches!(
@@ -461,6 +478,7 @@ impl Default for GameplayMiniIndicatorRuntimeState {
 }
 
 impl GameplayMiniIndicatorRuntimeState {
+    #[must_use]
     pub const fn new(
         stream_segments: [Vec<StreamSegment>; MAX_PLAYERS],
         total_stream_measures: [f32; MAX_PLAYERS],
@@ -481,6 +499,7 @@ impl GameplayMiniIndicatorRuntimeState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn total_stream_measures(&self, player: usize) -> f32 {
         self.total_stream_measures
             .get(player)
@@ -489,6 +508,7 @@ impl GameplayMiniIndicatorRuntimeState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn target_score_percent(&self, player: usize) -> f64 {
         self.target_score_percent
             .get(player)
@@ -497,6 +517,7 @@ impl GameplayMiniIndicatorRuntimeState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn rival_score_percent(&self, player: usize) -> f64 {
         self.rival_score_percent.get(player).copied().unwrap_or(0.0)
     }
@@ -542,6 +563,7 @@ pub struct GameplayAudioClockState {
 
 impl GameplayAudioClockState {
     #[inline(always)]
+    #[must_use]
     pub const fn new(
         lead_in_seconds: f32,
         stream_position_seconds: f32,
@@ -555,26 +577,31 @@ impl GameplayAudioClockState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn lead_in_seconds(&self) -> f32 {
         self.lead_in_seconds
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn positive_lead_in_seconds(&self) -> f32 {
         self.lead_in_seconds.max(0.0)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn stream_lead_in_seconds(&self, music_rate: f32) -> f32 {
         self.positive_lead_in_seconds() / normalized_song_rate(music_rate)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn stream_position_seconds(&self) -> f32 {
         self.stream_position_seconds
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn output_delay_seconds(&self) -> f32 {
         self.output_delay_seconds
     }
@@ -608,6 +635,7 @@ pub struct GameplayMusicRateState {
 
 impl GameplayMusicRateState {
     #[inline(always)]
+    #[must_use]
     pub fn new(rate: f32) -> Self {
         Self {
             rate: normalized_song_rate(rate),
@@ -615,6 +643,7 @@ impl GameplayMusicRateState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn rate(&self) -> f32 {
         self.rate
     }
@@ -670,6 +699,7 @@ pub struct GameplaySongPositionState {
 
 impl GameplaySongPositionState {
     #[inline(always)]
+    #[must_use]
     pub const fn new(
         current_beat: f32,
         current_bpm: f32,
@@ -773,6 +803,7 @@ pub struct GameplayFrameBeginUpdate {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn current_song_clock_snapshot(
     audio_snapshot: GameplayAudioSnapshot,
     music_rate: f32,
@@ -817,6 +848,7 @@ pub fn current_song_clock_snapshot(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_clock_music_time_ns(
     snapshot: SongClockSnapshot,
     captured_at: Instant,
@@ -842,6 +874,7 @@ pub fn song_clock_music_time_ns(
     )
 }
 
+#[must_use]
 pub fn music_time_ns_from_song_clock(
     snapshot: SongClockSnapshot,
     captured_at: Instant,
@@ -951,6 +984,7 @@ pub struct GameplayCommandQueue {
 
 impl GameplayCommandQueue {
     #[inline(always)]
+    #[must_use]
     pub fn with_capacity(audio_capacity: usize, session_capacity: usize) -> Self {
         Self {
             audio: Vec::with_capacity(audio_capacity),

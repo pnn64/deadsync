@@ -1,6 +1,7 @@
 use deadsync_chart::notes::ParsedNote;
 use deadsync_core::note::NoteType;
 
+#[must_use]
 pub fn step_type_lanes(step_type: &str) -> usize {
     let step_type = step_type.trim();
     if step_type.eq_ignore_ascii_case("pump-double")
@@ -31,6 +32,7 @@ fn invalidate_hold(
 }
 
 /// Parses minimized chart note data into note events, tracking hold/roll tails.
+#[must_use]
 pub fn parse_chart_notes(minimized_note_data: &[u8], lanes: usize) -> Vec<ParsedNote> {
     parse_chart_notes_as(
         minimized_note_data,

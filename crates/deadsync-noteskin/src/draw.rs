@@ -8,6 +8,7 @@ pub enum TweenType {
 }
 
 impl TweenType {
+    #[must_use]
     pub fn ease(self, progress: f32) -> f32 {
         let t = progress.clamp(0.0, 1.0);
         match self {
@@ -33,6 +34,7 @@ pub struct ModelMesh {
 
 impl ModelMesh {
     #[inline(always)]
+    #[must_use]
     pub fn size(&self) -> [f32; 2] {
         [
             (self.bounds[3] - self.bounds[0]).max(0.0),
@@ -42,6 +44,7 @@ impl ModelMesh {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn model_texture_uv_params(
     uv_rect: [f32; 4],
     src: [i32; 2],
@@ -166,6 +169,7 @@ impl Default for ModelEffectState {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn model_effect_clock_units(effect: ModelEffectState, time: f32, beat: f32) -> f32 {
     match effect.clock {
         ModelEffectClock::Time => time,
@@ -174,6 +178,7 @@ pub const fn model_effect_clock_units(effect: ModelEffectState, time: f32, beat:
 }
 
 #[inline(always)]
+#[must_use]
 pub fn model_effect_mix(effect: ModelEffectState, time: f32, beat: f32) -> Option<f32> {
     if !matches!(
         effect.mode,
@@ -219,6 +224,7 @@ pub fn model_effect_mix(effect: ModelEffectState, time: f32, beat: f32) -> Optio
 }
 
 #[inline(always)]
+#[must_use]
 pub fn glowshift_mix(through: f32) -> f32 {
     ((through + 0.25) * 2.0 * std::f32::consts::PI)
         .sin()
@@ -227,6 +233,7 @@ pub fn glowshift_mix(through: f32) -> f32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn model_auto_rot_z_at(total_frames: f32, keys: &[ModelAutoRotKey], time: f32) -> Option<f32> {
     if total_frames <= f32::EPSILON {
         return None;
@@ -250,6 +257,7 @@ pub fn model_auto_rot_z_at(total_frames: f32, keys: &[ModelAutoRotKey], time: f3
     Some((next.z_deg - prev.z_deg).mul_add(t, prev.z_deg))
 }
 
+#[must_use]
 pub fn model_draw_at(
     base_draw: ModelDrawState,
     timeline: &[ModelTweenSegment],
@@ -413,6 +421,7 @@ pub fn model_draw_at_cursor(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn model_glow_with_draw(
     draw: ModelDrawState,
     effect: ModelEffectState,
@@ -437,6 +446,7 @@ pub fn model_glow_with_draw(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn model_glow_at(
     base_draw: ModelDrawState,
     timeline: &[ModelTweenSegment],

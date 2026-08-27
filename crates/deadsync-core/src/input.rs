@@ -19,6 +19,7 @@ pub enum Lane {
 
 impl Lane {
     #[inline(always)]
+    #[must_use]
     pub const fn index(self) -> usize {
         self as usize
     }

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use deadsync_chart::SongData;
 
+#[must_use]
 pub fn song_pack_group(song: &SongData) -> Option<&str> {
     song.simfile_path
         .parent()
@@ -45,6 +46,7 @@ fn itl_event_intro_name(pack_group: &str) -> Option<String> {
     Some(name.trim().to_string())
 }
 
+#[must_use]
 pub fn event_intro_name_for_pack(pack_group: &str) -> Option<String> {
     let name = pack_group.trim();
     let lower = name.to_ascii_lowercase();

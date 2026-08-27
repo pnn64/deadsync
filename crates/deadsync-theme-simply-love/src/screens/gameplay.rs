@@ -1917,6 +1917,7 @@ pub struct ReferenceSongLuaLayerActivityBenchmark(ReferenceSongLuaLayerActivity)
 
 #[cfg(any(test, feature = "bench-support"))]
 impl ReferenceSongLuaLayerActivityBenchmark {
+    #[must_use]
     pub fn new(starts: Vec<f32>, now: f32) -> Self {
         Self(ReferenceSongLuaLayerActivity::new(starts, now))
     }
@@ -1926,6 +1927,7 @@ impl ReferenceSongLuaLayerActivityBenchmark {
         self.0.sync(now)
     }
 
+    #[must_use]
     pub fn retained_bytes(&self) -> usize {
         self.0.retained_bytes()
     }
@@ -1937,6 +1939,7 @@ pub struct SongLuaLayerActivityBenchmark(SongLuaLayerActivity);
 
 #[cfg(any(test, feature = "bench-support"))]
 impl SongLuaLayerActivityBenchmark {
+    #[must_use]
     pub fn new(starts: Vec<f32>, now: f32) -> Self {
         Self(SongLuaLayerActivity::new(starts, now))
     }
@@ -1946,6 +1949,7 @@ impl SongLuaLayerActivityBenchmark {
         self.0.sync(now)
     }
 
+    #[must_use]
     pub fn retained_bytes(&self) -> usize {
         self.0.retained_bytes()
     }
@@ -2020,6 +2024,7 @@ pub struct GameplayFrameOrchestrationBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl GameplayFrameOrchestrationBenchmark {
+    #[must_use]
     pub fn new(layer_count: usize) -> Self {
         let mut scratch = GameplayFrameScratch::default();
         scratch.lobby_hud_status_scratch = String::with_capacity(128);
@@ -2388,6 +2393,7 @@ impl State {
         self.itl_cmod_warning
     }
 
+    #[must_use]
     pub fn from_gameplay(
         gameplay: GameplayCoreState,
         noteskin_assets: GameplayNoteskinAssets,
@@ -5471,6 +5477,7 @@ pub struct GameplayBpmTextBenchmark {
 
 #[cfg(feature = "bench-support")]
 impl GameplayBpmTextBenchmark {
+    #[must_use]
     pub fn new() -> Self {
         let old_values = (0..2_048u32)
             .map(|index| {
@@ -5774,6 +5781,7 @@ pub struct GameplayLifeTextHotBenchmark {
 
 #[cfg(feature = "bench-support")]
 impl GameplayLifeTextHotBenchmark {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             plan: GameplayLifeTextPlan::new(),
@@ -6327,6 +6335,7 @@ pub fn in_transition(
     (actors, TRANSITION_IN_DURATION)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     let actor = act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
@@ -6496,12 +6505,14 @@ pub struct GameplayBackgroundKeyBenchmark {
 
 #[cfg(feature = "bench-support")]
 impl GameplayBackgroundKeyBenchmark {
+    #[must_use]
     pub fn new() -> Self {
         let path = PathBuf::from("Songs/Benchmark Pack/Benchmark Song/background image.png");
         let cached = crate::assets::media_path_key(&path);
         Self { cached }
     }
 
+    #[must_use]
     pub fn frame(&self) -> usize {
         let key = Arc::clone(std::hint::black_box(&self.cached));
         std::hint::black_box(key.len())
@@ -11347,6 +11358,7 @@ impl Default for SongLuaMessageTweenBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl SongLuaMessageTweenBenchmark {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             blocks: [SongLuaOverlayCommandBlock {
@@ -11696,6 +11708,7 @@ pub struct SongLuaUpdateLookupBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl SongLuaUpdateLookupBenchmark {
+    #[must_use]
     pub fn new(overlay_count: usize, sample_count: usize) -> Self {
         use deadsync_song_lua::{
             SongLuaOverlayRuntimeUpdateSample as Sample, SongLuaOverlayRuntimeUpdateTrack as Track,
@@ -11790,6 +11803,7 @@ pub struct SongLuaUpdateSnapBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl SongLuaUpdateSnapBenchmark {
+    #[must_use]
     pub fn new(track_count: usize, sample_count: usize) -> Self {
         use deadsync_song_lua::{
             SongLuaOverlayRuntimeUpdateSample as Sample, SongLuaOverlayRuntimeUpdateTrack as Track,
@@ -11865,6 +11879,7 @@ pub struct SongLuaUpdateSourceBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl SongLuaUpdateSourceBenchmark {
+    #[must_use]
     pub fn new(actor_count: usize) -> Self {
         use deadsync_song_lua::{
             SongLuaOverlayRuntimeUpdateSample as Sample, SongLuaOverlayRuntimeUpdateTrack as Track,
@@ -11903,10 +11918,12 @@ impl SongLuaUpdateSourceBenchmark {
         }
     }
 
+    #[must_use]
     pub fn reference_frame(&self) -> u64 {
         Self::checksum(song_lua_overlay_runtime_updates_reference(&self.overlays))
     }
 
+    #[must_use]
     pub fn current_frame(&self) -> u64 {
         Self::checksum(song_lua_overlay_runtime_updates_at(
             &self.overlays,
@@ -11936,6 +11953,7 @@ pub struct SongLuaAftSpriteIndexBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl SongLuaAftSpriteIndexBenchmark {
+    #[must_use]
     pub fn new(actor_count: usize, sprite_count: usize) -> Self {
         let actor_count = actor_count.max(1);
         let sprite_count = sprite_count.min(actor_count);
@@ -12004,6 +12022,7 @@ pub struct SongLuaCaptureStateBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 impl SongLuaCaptureStateBenchmark {
+    #[must_use]
     pub fn new(actor_count: usize, capture_children: usize) -> Self {
         let actor_count = actor_count.max(2);
         let capture_children = capture_children.min(actor_count - 1);
@@ -14575,6 +14594,7 @@ pub struct SongLuaAftCaptureBenchmark {
 
 #[cfg(feature = "bench-support")]
 impl SongLuaAftCaptureBenchmark {
+    #[must_use]
     pub fn new(actor_count: usize) -> Self {
         let overlay = SongLuaOverlayActor {
             kind: SongLuaOverlayKind::AftSprite {
@@ -14631,6 +14651,7 @@ impl SongLuaAftCaptureBenchmark {
         checksum
     }
 
+    #[must_use]
     pub fn storage_bytes(&self) -> usize {
         self.banks
             .iter()
@@ -16859,6 +16880,7 @@ impl Default for GameplayTransformedNotefieldBenchmark {
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+#[must_use]
 pub fn benchmark_present_transformed_notefield<'a>(
     benchmark: &'a GameplayTransformedNotefieldBenchmark,
     field_actors: &'a [Actor],
@@ -17145,6 +17167,7 @@ pub struct GameplayPlayerFieldCameraBenchmark {
 #[cfg(feature = "bench-support")]
 impl GameplayPlayerFieldCameraBenchmark {
     #[inline(always)]
+    #[must_use]
     pub fn rebuild(&self, player: usize) -> f32 {
         let (field, suffix, _) = benchmark_player_field_cameras(player);
         player_field_camera_checksum(field * suffix)
@@ -17157,6 +17180,7 @@ impl GameplayPlayerFieldCameraBenchmark {
         player_field_camera_checksum(self.caches[player].resolve(7, 13, Some(field), root, suffix))
     }
 
+    #[must_use]
     pub fn stats(&self) -> [(u64, u64); MAX_PLAYERS] {
         self.caches.map(|cache| {
             let stats = cache.stats();
@@ -17194,6 +17218,7 @@ pub struct GameplayPlayerTransformBenchmark {
 #[cfg(feature = "bench-support")]
 impl GameplayPlayerTransformBenchmark {
     #[inline(always)]
+    #[must_use]
     pub fn resolve_rebuilt(&self, player: usize, transformed: bool) -> f32 {
         player_actor_assembly_checksum(player_actor_assembly_for_transform(
             false,
@@ -17212,6 +17237,7 @@ impl GameplayPlayerTransformBenchmark {
         ))
     }
 
+    #[must_use]
     pub fn stats(&self) -> [(u64, u64); MAX_PLAYERS] {
         self.caches.map(|cache| {
             let stats = cache.stats();
@@ -17749,7 +17775,7 @@ fn push_song_lua_layer_actors(
     out: &mut Vec<Actor>,
     overlays: &[SongLuaOverlayActor],
     order_cache: &mut SongLuaOverlayOrderCache,
-    topology_index: &mut SongLuaOverlayTopologyIndex,
+    topology_index: &SongLuaOverlayTopologyIndex,
     local_overlay_states: &[SongLuaOverlayState],
     overlay_states: &[SongLuaOverlayState],
     song_foreground_state: SongLuaOverlayState,
@@ -24504,9 +24530,9 @@ mod tests {
         else {
             panic!("expected sprite actor");
         };
-        assert_eq!(tint, [0.4, 0.15, 0.040000003, 0.25]);
+        assert_eq!(tint, [0.4, 0.15, 0.040_000_003, 0.25]);
         assert_eq!(glow, [0.25, 0.0625, 0.1, 0.2]);
-        assert_eq!(shadow_color, [0.1, 0.1, 0.060000002, 0.25]);
+        assert_eq!(shadow_color, [0.1, 0.1, 0.060_000_002, 0.25]);
         assert_eq!(blend, BlendMode::Add);
         assert_eq!(z, 9);
     }
@@ -24534,11 +24560,11 @@ mod tests {
             panic!("expected shadow actor");
         };
         assert_eq!(len, [2.0, -3.0]);
-        assert_eq!(color, [0.4, 0.15, 0.040000003, 0.25]);
+        assert_eq!(color, [0.4, 0.15, 0.040_000_003, 0.25]);
         let Actor::Mesh { tint, z, .. } = child.as_ref() else {
             panic!("expected styled mesh child");
         };
-        assert_eq!(*tint, [0.4, 0.15, 0.040000003, 0.25]);
+        assert_eq!(*tint, [0.4, 0.15, 0.040_000_003, 0.25]);
         assert_eq!(*z, 7);
     }
 
@@ -24573,7 +24599,7 @@ mod tests {
         };
         assert!(Arc::ptr_eq(&styled_vertices, &vertices));
         assert_eq!(styled_vertices[0].color, [0.8, 0.6, 0.4, 0.5]);
-        assert_eq!(tint, [0.4, 0.15, 0.040000003, 0.25]);
+        assert_eq!(tint, [0.4, 0.15, 0.040_000_003, 0.25]);
         assert_eq!(blend, BlendMode::Alpha);
         assert_eq!(z, 7);
     }
@@ -24612,7 +24638,7 @@ mod tests {
         else {
             panic!("expected textured mesh actor");
         };
-        assert_eq!(tint, [0.4, 0.15, 0.040000003, 0.25]);
+        assert_eq!(tint, [0.4, 0.15, 0.040_000_003, 0.25]);
         assert_eq!(glow, [0.25, 0.0625, 0.1, 0.2]);
         assert_eq!(blend, BlendMode::Alpha);
         assert_eq!(z, 7);

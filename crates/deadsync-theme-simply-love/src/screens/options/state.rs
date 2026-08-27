@@ -335,6 +335,7 @@ fn nearest_u16_index(values: &[u16], target: u16) -> usize {
         .map_or(0, |(index, _)| index)
 }
 
+#[must_use]
 pub fn init(view: OptionsInitView) -> State {
     let OptionsInitView {
         config: cfg,

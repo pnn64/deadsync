@@ -693,6 +693,7 @@ fn course_name(path: &Path, course: &CourseFile) -> String {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn course_score_hash(course_path: &Path) -> String {
     let mut hasher = XxHash64::with_seed(0xC0_01_53_42_0A);
     hasher.write(course_path.to_string_lossy().as_bytes());
@@ -1359,6 +1360,7 @@ pub fn sync_session_elapsed(state: &mut State, session_elapsed: f32) {
     state.session_timer.sync(session_elapsed);
 }
 
+#[must_use]
 pub fn init(init_view: SelectCourseInitView) -> State {
     let init = build_init_data(&init_view);
     let score_view = SelectCourseScoreView::default();
@@ -2056,10 +2058,12 @@ fn update_impl(state: &mut State, dt: f32, effects: &mut Vec<ThemeEffect>) {
     }
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }

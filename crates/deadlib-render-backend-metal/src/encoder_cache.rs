@@ -1,25 +1,25 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum DrawKind {
+pub enum DrawKind {
     Sprite,
     Mesh,
     TexturedMesh,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum CullMode {
+pub enum CullMode {
     None,
     Back,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum BufferUpdate {
+pub enum BufferUpdate {
     Bind,
     Offset,
 }
 
 /// Frame-local cache of state already installed on one Metal encoder.
 #[derive(Debug, Default)]
-pub(crate) struct EncoderCache {
+pub struct EncoderCache {
     kind: Option<DrawKind>,
     pipeline: Option<(DrawKind, u8, bool)>,
     cameras: [Option<u8>; 2],

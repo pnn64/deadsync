@@ -311,6 +311,7 @@ pub fn build_saved_app_config_file(
     )
 }
 
+#[must_use]
 pub fn build_default_app_config_file() -> String {
     let default = Config::default();
     let gameplay_bg_color = default.gameplay_bg_color.to_hex();

@@ -307,17 +307,20 @@ fn lane_rows_checksum<I: Copy + Into<usize>>(indices: &[Vec<I>; MAX_COLS]) -> u6
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn count_gameplay_setup_notes_reference_for_bench(notes: &[Note], num_cols: usize) -> u64 {
     setup_counts_checksum(&count_gameplay_setup_notes_reference(notes, num_cols))
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn count_gameplay_setup_notes_for_bench(notes: &[Note], num_cols: usize) -> u64 {
     setup_counts_checksum(&count_gameplay_setup_notes(notes, num_cols))
 }
 
 #[cfg(feature = "bench-support")]
 #[allow(clippy::too_many_arguments)]
+#[must_use]
 pub fn build_gameplay_lane_mine_indices_reference_for_bench(
     notes: &[Note],
     note_ranges: &[(usize, usize); MAX_PLAYERS],
@@ -342,6 +345,7 @@ pub fn build_gameplay_lane_mine_indices_reference_for_bench(
 
 #[cfg(feature = "bench-support")]
 #[allow(clippy::too_many_arguments)]
+#[must_use]
 pub fn build_gameplay_lane_mine_indices_for_bench(
     notes: &[Note],
     note_ranges: &[(usize, usize); MAX_PLAYERS],
@@ -365,6 +369,7 @@ pub fn build_gameplay_lane_mine_indices_for_bench(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn build_lane_note_row_indices_reference_for_bench<I: Copy + Into<usize>>(
     lane_note_indices: &[Vec<I>; MAX_COLS],
     note_itg_rows: &[i32],
@@ -378,6 +383,7 @@ pub fn build_lane_note_row_indices_reference_for_bench<I: Copy + Into<usize>>(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn reuse_lane_note_indices_for_bench<I: Copy + Into<usize>>(
     lane_note_indices: &[Vec<I>; MAX_COLS],
     note_itg_rows: &[i32],

@@ -14,6 +14,7 @@ pub struct IdleInhibitor {
 }
 
 impl IdleInhibitor {
+    #[must_use]
     pub const fn acquire() -> Self {
         Self {
             #[cfg(all(unix, not(target_os = "macos")))]

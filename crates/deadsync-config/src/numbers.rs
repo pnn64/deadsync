@@ -1,3 +1,4 @@
+#[must_use]
 pub fn parse_auto_threads_u8(raw: &str) -> Option<u8> {
     let raw = raw.trim();
     if raw.eq_ignore_ascii_case("auto") || raw.is_empty() {

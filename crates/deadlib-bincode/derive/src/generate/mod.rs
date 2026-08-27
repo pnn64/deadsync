@@ -11,18 +11,18 @@ use crate::{
 };
 use std::fmt;
 
-pub(crate) use self::generate_item::{FnBuilder, FnSelfArg};
-pub(crate) use self::generator::Generator;
-pub(crate) use self::impl_for::ImplFor;
-pub(crate) use self::stream_builder::{PushParseError, StreamBuilder};
+pub use self::generate_item::{FnBuilder, FnSelfArg};
+pub use self::generator::Generator;
+pub use self::impl_for::ImplFor;
+pub use self::stream_builder::{PushParseError, StreamBuilder};
 
-pub(crate) trait Parent {
+pub trait Parent {
     fn append(&mut self, builder: StreamBuilder);
     fn generics(&self) -> Option<&Generics>;
     fn generic_constraints(&self) -> Option<&GenericConstraints>;
 }
 
-pub(crate) enum StringOrIdent {
+pub enum StringOrIdent {
     String(String),
     Ident(Ident),
 }

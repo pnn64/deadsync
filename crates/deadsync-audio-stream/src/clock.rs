@@ -12,6 +12,7 @@ use log::debug;
 use std::time::Instant;
 
 #[inline(always)]
+#[must_use]
 pub fn timing_diag_enabled() -> bool {
     log::log_enabled!(log::Level::Debug)
 }
@@ -61,7 +62,7 @@ fn stream_position_frames_from_window(
 
 #[inline(always)]
 fn music_stream_clock_snapshot_at_nanos(
-    clock: &mut MusicClock,
+    clock: &MusicClock,
     sample_rate: u32,
     start: u64,
     valid_at: Instant,

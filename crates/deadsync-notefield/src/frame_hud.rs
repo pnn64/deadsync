@@ -62,6 +62,7 @@ pub struct ErrorBarHudFrame<'a> {
 impl ErrorBarHudFrame<'_> {
     /// Whether the retained millisecond indicator is inside its actor lifetime.
     #[inline]
+    #[must_use]
     pub fn offset_active(
         indicator: Option<OffsetIndicatorText>,
         elapsed_screen: f32,
@@ -101,6 +102,7 @@ pub struct TapJudgmentHudFrame<'a> {
 impl TapJudgmentHudFrame<'_> {
     /// Whether a retained gameplay judgment can still produce a tap actor.
     #[inline]
+    #[must_use]
     pub fn render_active(render: &JudgmentRenderInfo, elapsed_screen: f32) -> bool {
         crate::judgment_feedback::tap_judgment_active(render, elapsed_screen)
     }
@@ -131,12 +133,14 @@ pub struct NotefieldHudFrameView<'a> {
 impl NotefieldHudFrameView<'_> {
     /// Whether combo preparation can produce actors for this frame.
     #[inline]
+    #[must_use]
     pub const fn combo_active(hide_combo: bool, blind: bool, combo_visible: bool) -> bool {
         !hide_combo && !blind && combo_visible
     }
 
     /// Whether graphical or currently active numeric timing feedback can emit actors.
     #[inline]
+    #[must_use]
     pub const fn error_active(blind: bool, error_bar: bool, offset_active: bool) -> bool {
         !blind && (error_bar || offset_active)
     }

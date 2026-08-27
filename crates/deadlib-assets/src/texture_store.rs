@@ -19,6 +19,7 @@ pub struct TextureStore<T> {
 }
 
 impl<T> TextureStore<T> {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             textures: TextureHandleMap::default(),
@@ -31,16 +32,19 @@ impl<T> TextureStore<T> {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn textures(&self) -> &TextureHandleMap<T> {
         &self.textures
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_texture_key(&self, key: &str) -> bool {
         self.texture_handles.contains_key(key)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_uploaded_texture_key(&self, key: &str) -> bool {
         self.texture_handles
             .get(key)
@@ -48,6 +52,7 @@ impl<T> TextureStore<T> {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_pending_texture_upload(&self, key: &str) -> bool {
         self.texture_handles
             .get(key)
@@ -55,6 +60,7 @@ impl<T> TextureStore<T> {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_pending_texture_upload_handle(&self, handle: TextureHandle) -> bool {
         self.pending_texture_uploads.contains(handle)
     }

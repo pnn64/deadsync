@@ -90,7 +90,7 @@ mod imp {
 
         /// FSRIO streams sensor values continuously, so there's no test mode to
         /// toggle; live reads happen in `poll_pads`.
-        pub const fn set_active(&mut self, _active: bool) {}
+        pub const fn set_active(&self, _active: bool) {}
 
         /// Expose every connected FSRIO board, grouping sensors by the board's
         /// sensor-to-button mapping.
@@ -142,7 +142,7 @@ mod imp {
 
         /// FSRIO has no per-sensor enable bit; Advanced exposes thresholds only.
         pub const fn set_sensor_enabled(
-            &mut self,
+            &self,
             _device: PadDeviceId,
             _button: usize,
             _sensor: usize,
@@ -152,16 +152,12 @@ mod imp {
         }
 
         /// FSRIO does not expose auto-recalibration.
-        pub const fn set_auto_recalibration(
-            &mut self,
-            _device: PadDeviceId,
-            _enabled: bool,
-        ) -> bool {
+        pub const fn set_auto_recalibration(&self, _device: PadDeviceId, _enabled: bool) -> bool {
             false
         }
 
         /// FSRIO does not expose a panel debounce setting.
-        pub const fn set_debounce_micros(&mut self, _device: PadDeviceId, _micros: u16) -> bool {
+        pub const fn set_debounce_micros(&self, _device: PadDeviceId, _micros: u16) -> bool {
             false
         }
 
@@ -708,7 +704,7 @@ mod imp {
     }
 
     #[cfg(feature = "bench-support")]
-    pub(crate) mod bench_support {
+    pub mod bench_support {
         use super::*;
         use std::hint::black_box;
 
@@ -856,4 +852,4 @@ mod imp {
 pub use imp::Monitor;
 
 #[cfg(feature = "bench-support")]
-pub(crate) use imp::bench_support;
+pub use imp::bench_support;

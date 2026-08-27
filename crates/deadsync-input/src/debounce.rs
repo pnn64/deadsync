@@ -49,6 +49,7 @@ pub struct DebounceStore {
 
 impl DebounceStore {
     #[inline(always)]
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             slots: Vec::new(),
@@ -243,6 +244,7 @@ pub struct DebounceWindows {
 
 impl DebounceWindows {
     #[inline(always)]
+    #[must_use]
     pub const fn uniform(window: Duration) -> Self {
         // ITGmania InputFilter parity: one global debounce window gates both
         // press and release edges for every input binding.
@@ -757,6 +759,7 @@ pub mod bench_support {
         }
     }
 
+    #[must_use]
     pub fn due_release_old(events: usize) -> u64 {
         let window = Duration::from_millis(20);
         let windows = DebounceWindows::uniform(window);
@@ -784,6 +787,7 @@ pub mod bench_support {
         checksum
     }
 
+    #[must_use]
     pub fn due_release_new(events: usize) -> u64 {
         let window = Duration::from_millis(20);
         let windows = DebounceWindows::uniform(window);
@@ -802,6 +806,7 @@ pub mod bench_support {
         checksum
     }
 
+    #[must_use]
     pub fn pending_store(_: usize) -> DebounceStore {
         let window = Duration::from_millis(200);
         let now = Instant::now();

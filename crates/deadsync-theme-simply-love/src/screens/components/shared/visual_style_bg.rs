@@ -107,6 +107,7 @@ impl TiledStyleState {
 }
 
 impl State {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             tiled: TiledStyleState::new(),

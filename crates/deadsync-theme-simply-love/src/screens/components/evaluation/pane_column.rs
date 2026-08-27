@@ -254,6 +254,7 @@ const fn row_disabled(disabled_windows: [bool; 5], kind: RowKind) -> bool {
     }
 }
 
+#[must_use]
 pub fn build_column_judgments_pane(
     score_info: &ScoreInfo,
     controller: profile_data::PlayerSide,
@@ -274,6 +275,7 @@ pub fn build_column_judgments_pane(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[must_use]
 pub fn build_column_judgments_pane_with_palette(
     score_info: &ScoreInfo,
     controller: profile_data::PlayerSide,

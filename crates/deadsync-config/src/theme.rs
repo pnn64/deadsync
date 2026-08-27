@@ -22,6 +22,7 @@ pub enum BreakdownStyle {
 }
 
 impl BreakdownStyle {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Sl => "SL",
@@ -60,6 +61,7 @@ pub enum SelectMusicSort {
 }
 
 impl SelectMusicSort {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Series => "Series",
@@ -119,6 +121,7 @@ pub enum SelectMusicDefaultSort {
 }
 
 impl SelectMusicDefaultSort {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Series => "Series",
@@ -131,6 +134,7 @@ impl SelectMusicDefaultSort {
         }
     }
 
+    #[must_use]
     pub const fn resolve(self, last_used: SelectMusicSort) -> SelectMusicSort {
         match self {
             Self::Series => SelectMusicSort::Series,
@@ -174,6 +178,7 @@ pub enum DefaultFailType {
 }
 
 impl DefaultFailType {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Immediate => "Immediate",
@@ -202,6 +207,7 @@ pub enum RandomBackgroundMode {
 }
 
 impl RandomBackgroundMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Off => "Off",
@@ -238,6 +244,7 @@ pub enum DefaultSyncOffset {
 }
 
 impl DefaultSyncOffset {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Null => "NULL",
@@ -245,6 +252,7 @@ impl DefaultSyncOffset {
         }
     }
 
+    #[must_use]
     pub const fn sync_pref(self) -> deadsync_chart::SyncPref {
         match self {
             Self::Null => deadsync_chart::SyncPref::Null,
@@ -252,6 +260,7 @@ impl DefaultSyncOffset {
         }
     }
 
+    #[must_use]
     pub const fn from_sync_pref(pref: deadsync_chart::SyncPref) -> Self {
         match pref {
             deadsync_chart::SyncPref::Itg => Self::Itg,
@@ -283,6 +292,7 @@ pub enum VersionOverlaySide {
 }
 
 impl VersionOverlaySide {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Left => "Left",
@@ -311,6 +321,7 @@ pub enum SelectMusicPatternInfoMode {
 }
 
 impl SelectMusicPatternInfoMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Tech => "Tech",
@@ -341,6 +352,7 @@ pub enum SelectMusicStepArtistBoxMode {
 }
 
 impl SelectMusicStepArtistBoxMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Default => "Default",
@@ -349,6 +361,7 @@ impl SelectMusicStepArtistBoxMode {
         }
     }
 
+    #[must_use]
     pub const fn is_expanded(self, theme: ThemeFlag) -> bool {
         match self {
             Self::Default => select_music_step_artist_default_expanded(theme),
@@ -391,6 +404,7 @@ pub enum SelectMusicItlRankMode {
 }
 
 impl SelectMusicItlRankMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::None => "None",
@@ -427,6 +441,7 @@ pub enum SelectMusicItlWheelMode {
 }
 
 impl SelectMusicItlWheelMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Off => "Off",
@@ -464,6 +479,7 @@ pub enum SelectMusicSongSelectBgMode {
 }
 
 impl SelectMusicSongSelectBgMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Off => "Off",
@@ -499,6 +515,7 @@ pub enum SelectMusicWheelStyle {
 }
 
 impl SelectMusicWheelStyle {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Itg => "ITG",
@@ -533,6 +550,7 @@ pub enum SelectMusicSeriesSource {
 }
 
 impl SelectMusicSeriesSource {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::PackIni => "PackIni",
@@ -583,6 +601,7 @@ impl VisualStyle {
         Self::Srpg9,
     ];
 
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Hearts => "Hearts",
@@ -599,6 +618,7 @@ impl VisualStyle {
         }
     }
 
+    #[must_use]
     pub const fn is_srpg(self) -> bool {
         matches!(self, Self::Srpg9)
     }
@@ -644,6 +664,7 @@ impl SrpgVariant {
     /// Current SRPG event represented by `GrooveStats`' generic RPG panes.
     pub const CURRENT: Self = Self::Srpg10;
 
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Srpg9 => "SRPG9",
@@ -651,6 +672,7 @@ impl SrpgVariant {
         }
     }
 
+    #[must_use]
     pub const fn asset_folder(self) -> &'static str {
         match self {
             Self::Srpg9 => "srpg9",
@@ -658,6 +680,7 @@ impl SrpgVariant {
         }
     }
 
+    #[must_use]
     pub fn from_visual_style_str(s: &str) -> Option<Self> {
         let mut key = String::with_capacity(s.len());
         for ch in s.trim().chars() {
@@ -689,6 +712,7 @@ pub enum NewPackMode {
 }
 
 impl NewPackMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Disabled => "Disabled",
@@ -724,6 +748,7 @@ pub enum SelectMusicScoreboxPlacement {
 }
 
 impl SelectMusicScoreboxPlacement {
+    #[must_use]
     pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Auto => "Auto",
@@ -764,6 +789,7 @@ pub enum GameplayBannerMode {
 }
 
 impl GameplayBannerMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Static => "Static",
@@ -772,6 +798,7 @@ impl GameplayBannerMode {
         }
     }
 
+    #[must_use]
     pub const fn looped(self) -> Option<bool> {
         match self {
             Self::Static => None,
@@ -801,6 +828,7 @@ impl FromStr for GameplayBannerMode {
 }
 
 impl GameplayBpmPosition {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::TopCenter => "TopCenter",
@@ -837,6 +865,7 @@ pub const AUTO_SS_QUADS: u8 = 1 << 3;
 pub const AUTO_SS_QUINTS: u8 = 1 << 4;
 
 #[inline(always)]
+#[must_use]
 pub const fn auto_screenshot_bit(idx: usize) -> u8 {
     match idx {
         0 => AUTO_SS_PBS,
@@ -848,6 +877,7 @@ pub const fn auto_screenshot_bit(idx: usize) -> u8 {
     }
 }
 
+#[must_use]
 pub const fn auto_screenshot_eval_matches(
     mask: u8,
     is_pb: bool,
@@ -863,6 +893,7 @@ pub const fn auto_screenshot_eval_matches(
             || ((mask & AUTO_SS_QUINTS) != 0 && is_quint))
 }
 
+#[must_use]
 pub fn auto_screenshot_mask_to_str(mask: u8) -> String {
     if mask == 0 {
         return "Off".to_string();
@@ -876,6 +907,7 @@ pub fn auto_screenshot_mask_to_str(mask: u8) -> String {
     parts.join("|")
 }
 
+#[must_use]
 pub fn auto_screenshot_mask_from_str(s: &str) -> u8 {
     let trimmed = s.trim();
     if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("off") {
@@ -903,6 +935,7 @@ pub enum SyncGraphMode {
 }
 
 impl SyncGraphMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Frequency => "Frequency",
@@ -911,6 +944,7 @@ impl SyncGraphMode {
         }
     }
 
+    #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
             Self::Frequency => "Frequency",
@@ -950,6 +984,7 @@ pub enum MachinePreferredPlayStyle {
 }
 
 impl MachinePreferredPlayStyle {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Single => "Single",
@@ -986,6 +1021,7 @@ pub enum MachinePreferredPlayMode {
 }
 
 impl MachinePreferredPlayMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Regular => "Regular",
@@ -1021,6 +1057,7 @@ pub enum ArrowCloudQrLoginWhen {
 }
 
 impl ArrowCloudQrLoginWhen {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Always => "Always",
@@ -1066,6 +1103,7 @@ pub enum GrooveStatsQrLoginWhen {
 }
 
 impl GrooveStatsQrLoginWhen {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Always => "Always",
@@ -1107,6 +1145,7 @@ pub enum SrpgShopFolder {
 }
 
 impl SrpgShopFolder {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Unlocks => "Unlocks",
@@ -1148,6 +1187,7 @@ pub enum MachineFont {
 }
 
 impl MachineFont {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Wendy => "Wendy",
@@ -1179,6 +1219,7 @@ pub enum MachineBarColor {
 }
 
 impl MachineBarColor {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Default => "Default",
@@ -1187,6 +1228,7 @@ impl MachineBarColor {
         }
     }
 
+    #[must_use]
     pub const fn resolve(self, visual_style: VisualStyle) -> Self {
         match (self, visual_style) {
             (Self::Default, VisualStyle::Technique) => Self::Transparent,
@@ -1224,6 +1266,7 @@ pub enum MachineEvaluationStyle {
 }
 
 impl MachineEvaluationStyle {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Default => "Default",
@@ -1232,6 +1275,7 @@ impl MachineEvaluationStyle {
         }
     }
 
+    #[must_use]
     pub const fn resolve(self, visual_style: VisualStyle) -> Self {
         match (self, visual_style) {
             (Self::Default, VisualStyle::Technique) => Self::Transparent,
@@ -1268,6 +1312,7 @@ pub enum GameFlag {
 }
 
 impl GameFlag {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Dance => "dance",
@@ -1294,6 +1339,7 @@ pub enum ThemeFlag {
 }
 
 impl ThemeFlag {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::SimplyLove => "Simply Love",
@@ -1336,6 +1382,7 @@ pub enum LanguageFlag {
 
 impl LanguageFlag {
     /// Returns the config token persisted to `deadsync.ini`.
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Auto => "auto",
@@ -1354,6 +1401,7 @@ impl LanguageFlag {
     }
 
     /// Returns the locale code used by the i18n system.
+    #[must_use]
     pub const fn locale_code(self) -> &'static str {
         match self {
             Self::Auto => "auto",
@@ -1381,6 +1429,7 @@ impl LanguageFlag {
 /// - `"pt_BR"` -> `"pt-br"`
 /// - `"zh-TW"` / `"zh-HK"` -> `"zh-Hant"`
 /// - `"zh-CN"` / `"zh-SG"` -> `"zh-Hans"`
+#[must_use]
 pub fn normalize_locale(raw: &str) -> String {
     let lower = raw
         .trim()
@@ -1466,6 +1515,7 @@ pub enum LogLevel {
 }
 
 impl LogLevel {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Error => "Error",
@@ -1476,6 +1526,7 @@ impl LogLevel {
         }
     }
 
+    #[must_use]
     pub const fn as_level_filter(self) -> log::LevelFilter {
         match self {
             Self::Error => log::LevelFilter::Error,
@@ -1487,6 +1538,7 @@ impl LogLevel {
     }
 }
 
+#[must_use]
 pub fn parse_visual_style(
     raw_style: Option<&str>,
     raw_legacy_style: Option<&str>,
@@ -1498,6 +1550,7 @@ pub fn parse_visual_style(
         .unwrap_or(default)
 }
 
+#[must_use]
 pub fn parse_srpg_variant(
     raw_variant: Option<&str>,
     raw_legacy_variant: Option<&str>,
@@ -1511,6 +1564,7 @@ pub fn parse_srpg_variant(
         .unwrap_or(default)
 }
 
+#[must_use]
 pub fn parse_machine_default_sync_offset(
     raw_offset: Option<&str>,
     raw_legacy_offset: Option<&str>,
@@ -1522,6 +1576,7 @@ pub fn parse_machine_default_sync_offset(
         .unwrap_or(default)
 }
 
+#[must_use]
 pub fn parse_machine_font(
     raw_font: Option<&str>,
     raw_legacy_font: Option<&str>,
@@ -1540,6 +1595,7 @@ pub enum TournamentScoringSystem {
 }
 
 impl TournamentScoringSystem {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Ex => "EX",

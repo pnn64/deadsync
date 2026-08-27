@@ -52,6 +52,7 @@ pub struct Configuration<E = LittleEndian, I = Varint, L = NoLimit> {
 /// The default config for bincode 2.0. By default this will be:
 /// - Little endian
 /// - Variable int encoding
+#[must_use]
 pub const fn standard() -> Configuration {
     generate()
 }
@@ -59,6 +60,7 @@ pub const fn standard() -> Configuration {
 /// Creates the "legacy" default config. This is the default config that was present in bincode 1.0
 /// - Little endian
 /// - Fixed int length encoding
+#[must_use]
 pub const fn legacy() -> Configuration<LittleEndian, Fixint, NoLimit> {
     generate()
 }
@@ -79,11 +81,13 @@ const fn generate<E, I, L>() -> Configuration<E, I, L> {
 
 impl<E, I, L> Configuration<E, I, L> {
     /// Makes bincode encode all integer types in big endian.
+    #[must_use]
     pub const fn with_big_endian(self) -> Configuration<BigEndian, I, L> {
         generate()
     }
 
     /// Makes bincode encode all integer types in little endian.
+    #[must_use]
     pub const fn with_little_endian(self) -> Configuration<LittleEndian, I, L> {
         generate()
     }
@@ -144,6 +148,7 @@ impl<E, I, L> Configuration<E, I, L> {
     ///
     /// Note that u256 and the like are unsupported by this format; if and when they are added to the
     /// language, they may be supported via the extension point given by the 255 byte.
+    #[must_use]
     pub const fn with_variable_int_encoding(self) -> Configuration<E, Varint, L> {
         generate()
     }
@@ -153,16 +158,19 @@ impl<E, I, L> Configuration<E, I, L> {
     /// * Fixed size integers are encoded directly
     /// * Enum discriminants are encoded as u32
     /// * Lengths and usize are encoded as u64
+    #[must_use]
     pub const fn with_fixed_int_encoding(self) -> Configuration<E, Fixint, L> {
         generate()
     }
 
     /// Sets the byte limit to `limit`.
+    #[must_use]
     pub const fn with_limit<const N: usize>(self) -> Configuration<E, I, Limit<N>> {
         generate()
     }
 
     /// Clear the byte limit.
+    #[must_use]
     pub const fn with_no_limit(self) -> Configuration<E, I, NoLimit> {
         generate()
     }

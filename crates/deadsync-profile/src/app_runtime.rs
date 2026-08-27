@@ -20,6 +20,7 @@ use crate::{
 };
 
 #[inline(always)]
+#[must_use]
 pub fn profiles_root() -> PathBuf {
     dirs::app_dirs().profiles_root()
 }
@@ -43,6 +44,7 @@ pub fn local_profile_dir(id: &str) -> PathBuf {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn local_profile_dir_for_id(id: &str) -> PathBuf {
     local_profile_dir(id)
 }
@@ -63,6 +65,7 @@ pub fn local_score_profile_sources() -> Vec<deadsync_score::LocalScoreProfileSou
     crate::runtime_local_score_profile_sources(&profiles_root(), warn_duplicate_profile_guid)
 }
 
+#[must_use]
 pub fn score_profile_paths_for_id(profile_id: &str) -> deadsync_score::ScoreProfilePaths {
     deadsync_score::ScoreProfilePaths::new(local_profile_dir(profile_id))
 }
@@ -89,6 +92,7 @@ pub fn cached_gs_score_for_id(
     )
 }
 
+#[must_use]
 pub fn cached_gs_score_for_side(
     chart_hash: &str,
     side: PlayerSide,
@@ -171,6 +175,7 @@ pub fn cached_ac_scores_for_id(
     )
 }
 
+#[must_use]
 pub fn cached_ac_scores_for_side(
     chart_hash: &str,
     side: PlayerSide,
@@ -186,6 +191,7 @@ pub fn cached_ac_chart_hashes_with_itg_for_id(profile_id: &str) -> HashSet<Strin
     )
 }
 
+#[must_use]
 pub fn collect_score_import_chart_hashes(
     endpoint: deadsync_score::ScoreImportEndpoint,
     song_cache: &[deadsync_chart::SongPack],
@@ -243,6 +249,7 @@ pub fn total_songs_played_for_id(profile_id: &str) -> u32 {
     deadsync_score::runtime_total_songs_played_for_profile(profile_id, score_profile_paths_for_id)
 }
 
+#[must_use]
 pub fn total_songs_played_for_side(side: PlayerSide) -> u32 {
     let Some(profile_id) = crate::runtime_active_local_profile_id_for_side(side) else {
         return 0;
@@ -250,10 +257,12 @@ pub fn total_songs_played_for_side(side: PlayerSide) -> u32 {
     total_songs_played_for_id(&profile_id)
 }
 
+#[must_use]
 pub fn recent_played_chart_hashes_for_machine() -> Vec<String> {
     deadsync_score::runtime_recent_played_chart_hashes_for_machine(&profiles_root())
 }
 
+#[must_use]
 pub fn played_chart_counts_for_machine() -> Vec<(String, u32)> {
     deadsync_score::runtime_played_chart_counts_for_machine(&profiles_root())
 }
@@ -280,6 +289,7 @@ pub fn prewarm_select_music_score_caches() {
     );
 }
 
+#[must_use]
 pub fn cached_local_score_for_side(
     chart_hash: &str,
     side: PlayerSide,
@@ -296,6 +306,7 @@ pub fn cached_local_pass_rate_for_id(profile_id: &str, chart_hash: &str) -> Opti
     )
 }
 
+#[must_use]
 pub fn cached_local_pass_rate_with_profile(chart_hash: &str, profile_id: &str) -> Option<u32> {
     cached_local_pass_rate_for_id(profile_id, chart_hash)
 }
@@ -311,6 +322,7 @@ pub fn cached_best_itg_score_for_id(
     )
 }
 
+#[must_use]
 pub fn cached_best_itg_score_with_profile(
     chart_hash: &str,
     profile_id: &str,
@@ -318,6 +330,7 @@ pub fn cached_best_itg_score_with_profile(
     cached_best_itg_score_for_id(profile_id, chart_hash)
 }
 
+#[must_use]
 pub fn cached_best_itg_score_for_side(
     chart_hash: &str,
     side: PlayerSide,
@@ -359,6 +372,7 @@ pub fn seed_session_gs_score_for_id(
     );
 }
 
+#[must_use]
 pub fn cached_local_scalar_score_for_side(
     chart_hash: &str,
     side: PlayerSide,
@@ -381,6 +395,7 @@ pub fn cached_local_scalar_score_for_id(
     )
 }
 
+#[must_use]
 pub fn cached_local_ex_score_for_side(
     chart_hash: &str,
     side: PlayerSide,
@@ -388,6 +403,7 @@ pub fn cached_local_ex_score_for_side(
     cached_local_scalar_score_for_side(chart_hash, side, false)
 }
 
+#[must_use]
 pub fn cached_local_ex_score_for_id(
     profile_id: &str,
     chart_hash: &str,
@@ -395,6 +411,7 @@ pub fn cached_local_ex_score_for_id(
     cached_local_scalar_score_for_id(profile_id, chart_hash, false)
 }
 
+#[must_use]
 pub fn cached_local_hard_ex_score_for_side(
     chart_hash: &str,
     side: PlayerSide,
@@ -402,6 +419,7 @@ pub fn cached_local_hard_ex_score_for_side(
     cached_local_scalar_score_for_side(chart_hash, side, true)
 }
 
+#[must_use]
 pub fn cached_local_hard_ex_score_for_id(
     profile_id: &str,
     chart_hash: &str,
@@ -428,6 +446,7 @@ pub fn machine_scalar_record_local(
     .0
 }
 
+#[must_use]
 pub fn machine_leaderboard_local(
     chart_hash: &str,
     max_entries: usize,
@@ -441,6 +460,7 @@ pub fn machine_leaderboard_local(
     )
 }
 
+#[must_use]
 pub fn machine_leaderboard_local_without_names(
     chart_hash: &str,
     max_entries: usize,
@@ -448,6 +468,7 @@ pub fn machine_leaderboard_local_without_names(
     machine_leaderboard_local(chart_hash, max_entries, false)
 }
 
+#[must_use]
 pub fn machine_leaderboard_local_with_names(
     chart_hash: &str,
     max_entries: usize,
@@ -455,6 +476,7 @@ pub fn machine_leaderboard_local_with_names(
     machine_leaderboard_local(chart_hash, max_entries, true)
 }
 
+#[must_use]
 pub fn personal_leaderboard_local_for_side(
     chart_hash: &str,
     side: PlayerSide,
@@ -476,6 +498,7 @@ pub fn personal_leaderboard_local_for_side(
     )
 }
 
+#[must_use]
 pub fn machine_replays_local(
     chart_hash: &str,
     max_entries: usize,
@@ -697,6 +720,7 @@ pub fn seed_session_itl_unlock_folders(profile_id: &str, folders: &[&str]) {
     deadsync_score::mark_itl_unlock_folders(profile_id, folders.iter().copied());
 }
 
+#[must_use]
 pub fn cached_itl_score_for_side(
     chart_hash: &str,
     side: PlayerSide,
@@ -712,6 +736,7 @@ pub fn cached_itl_score_for_id(
     deadsync_score::runtime_cached_itl_chart_score(profile_id, chart_hash, read_itl_file_for_id)
 }
 
+#[must_use]
 pub fn cached_itl_score_for_song(
     song: &deadsync_chart::SongData,
     side: PlayerSide,
@@ -727,6 +752,7 @@ pub fn cached_itl_score_for_song_with_profile(
     deadsync_score::runtime_cached_itl_song_score(song, profile_id, read_itl_file_for_id)
 }
 
+#[must_use]
 pub fn cached_itl_score_for_song_assume_loaded(
     song: &deadsync_chart::SongData,
     profile_id: Option<&str>,
@@ -746,6 +772,7 @@ fn cached_itl_chart_no_cmod_for_song(
     )
 }
 
+#[must_use]
 pub fn should_warn_itl_cmod(
     profile_id: Option<&str>,
     song_dir: Option<&str>,
@@ -799,6 +826,7 @@ pub fn cached_online_itl_self_rank_for_key(
     )
 }
 
+#[must_use]
 pub fn cached_online_itl_self_rank_for_key_assume_loaded(
     chart_hash: &str,
     profile_id: Option<&str>,
@@ -822,6 +850,7 @@ pub fn cached_online_itl_self_score_for_key(
     )
 }
 
+#[must_use]
 pub fn cached_online_itl_self_score_for_key_assume_loaded(
     chart_hash: &str,
     profile_id: Option<&str>,
@@ -845,6 +874,7 @@ pub fn cached_online_srpg_self_score_for_key(
     )
 }
 
+#[must_use]
 pub fn cached_online_srpg_self_score_for_key_assume_loaded(
     chart_hash: &str,
     profile_id: Option<&str>,
@@ -860,6 +890,7 @@ pub struct ItlWheelSideCache<'a> {
 }
 
 impl<'a> ItlWheelSideCache<'a> {
+    #[must_use]
     pub const fn new(
         leaderboard_snapshot: &'a deadsync_score::GameplayScoreboxProfileSnapshot,
     ) -> Self {
@@ -868,10 +899,12 @@ impl<'a> ItlWheelSideCache<'a> {
         }
     }
 
+    #[must_use]
     pub const fn leaderboard_snapshot(&self) -> &deadsync_score::GameplayScoreboxProfileSnapshot {
         self.leaderboard_snapshot
     }
 
+    #[must_use]
     pub fn cached_local_itl_score(
         &self,
         song: &deadsync_chart::SongData,
@@ -882,6 +915,7 @@ impl<'a> ItlWheelSideCache<'a> {
         )
     }
 
+    #[must_use]
     pub fn cached_self_ex_score(&self, chart_hash: &str) -> Option<u32> {
         cached_online_itl_self_score_for_key_assume_loaded(
             chart_hash,
@@ -890,6 +924,7 @@ impl<'a> ItlWheelSideCache<'a> {
         )
     }
 
+    #[must_use]
     pub fn cached_srpg_self_score(&self, chart_hash: &str) -> Option<u32> {
         deadsync_score::runtime_cached_player_leaderboard_srpg_self_score(
             chart_hash,
@@ -904,6 +939,7 @@ impl<'a> ItlWheelSideCache<'a> {
         })
     }
 
+    #[must_use]
     pub fn cached_tournament_rank(&self, chart_hash: &str) -> Option<u32> {
         deadsync_score::runtime_cached_player_leaderboard_itl_self_rank(
             chart_hash,
@@ -919,6 +955,7 @@ impl<'a> ItlWheelSideCache<'a> {
     }
 }
 
+#[must_use]
 pub fn cached_itl_tournament_overall_ranks_for_profile(
     side_idx: usize,
     joined: bool,
@@ -1021,6 +1058,7 @@ pub fn restore_default_profiles(default_profiles: [Option<String>; PLAYER_SLOTS]
 }
 
 #[inline(always)]
+#[must_use]
 pub fn machine_default_noteskin_value() -> NoteSkin {
     NoteSkin::new(&config::machine_default_noteskin())
 }
@@ -1028,6 +1066,7 @@ pub fn machine_default_noteskin_value() -> NoteSkin {
 /// Machine-default pad-light brightness used to seed a new profile, mirroring
 /// `machine_default_noteskin_value`. Players adjust their own value afterwards.
 #[inline(always)]
+#[must_use]
 pub fn machine_default_light_brightness() -> u8 {
     config::get().smx_default_light_brightness
 }
@@ -1134,16 +1173,19 @@ fn update_common_machine_player_default(key: &str, value: &str) {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn machine_common_player_options() -> PlayerOptionsData {
     crate::runtime_machine_player_defaults().common
 }
 
 #[inline(always)]
+#[must_use]
 pub fn guest_player_options() -> PlayerOptionsData {
     crate::runtime_machine_player_defaults().guest
 }
 
 #[inline(always)]
+#[must_use]
 pub fn new_profile_player_options() -> PlayerOptionsData {
     crate::runtime_machine_player_defaults().new_profile
 }
@@ -1270,15 +1312,18 @@ pub fn load_profiles_from_config() {
     load_profiles([p1, p2], config::update_default_profiles);
 }
 
+#[must_use]
 pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
     crate::scan_local_profile_summaries(&profiles_root())
 }
 
+#[must_use]
 pub fn default_local_profile_options_from_config() -> (PlayerOptionsData, PlayerOptionsData) {
     let options = new_profile_player_options();
     (options.clone(), options)
 }
 
+#[must_use]
 pub fn default_profile_for_side(
     default_profiles: [Option<String>; PLAYER_SLOTS],
     side: PlayerSide,
@@ -1288,6 +1333,7 @@ pub fn default_profile_for_side(
     })
 }
 
+#[must_use]
 pub fn default_local_profile_id_for_side(
     default_profiles: [Option<String>; PLAYER_SLOTS],
     side: PlayerSide,
@@ -1298,11 +1344,13 @@ pub fn default_local_profile_id_for_side(
     }
 }
 
+#[must_use]
 pub fn default_profile_for_side_from_config(side: PlayerSide) -> ActiveProfile {
     let (p1, p2) = config::default_profiles();
     default_profile_for_side([p1, p2], side)
 }
 
+#[must_use]
 pub fn default_local_profile_id_for_side_from_config(side: PlayerSide) -> Option<String> {
     let (p1, p2) = config::default_profiles();
     default_local_profile_id_for_side([p1, p2], side)
@@ -1326,6 +1374,7 @@ pub fn update_default_profile_for_side_from_config(side: PlayerSide, profile: Ac
 }
 
 #[inline(always)]
+#[must_use]
 pub fn gameplay_side_for_player(num_players: usize, player_idx: usize) -> PlayerSide {
     crate::side_for_gameplay_player(
         num_players,
@@ -1335,6 +1384,7 @@ pub fn gameplay_side_for_player(num_players: usize, player_idx: usize) -> Player
 }
 
 #[inline(always)]
+#[must_use]
 pub fn active_local_profile_id_for_gameplay_player(
     num_players: usize,
     player_idx: usize,
@@ -1369,6 +1419,7 @@ pub fn smx_gif_packs_from_config(
     smx_gif_packs(machine_bg, machine_judge, config::SmxPackName::parse)
 }
 
+#[must_use]
 pub fn scorebox_profile_snapshot_from_config(
     player_profile: &Profile,
     side_joined: bool,
@@ -1386,6 +1437,7 @@ pub fn scorebox_profile_snapshot_from_config(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn groovestats_score_service_allowed() -> bool {
     config::get().enable_groovestats
 }
@@ -1417,6 +1469,7 @@ pub fn toggle_series_favorite(side: PlayerSide, series_name: &str) -> bool {
     )
 }
 
+#[must_use]
 pub fn set_active_profile_for_side_with_defaults(
     side: PlayerSide,
     profile: ActiveProfile,
@@ -1428,6 +1481,7 @@ pub fn set_active_profile_for_side_with_defaults(
     crate::runtime_profile_for_side(side)
 }
 
+#[must_use]
 pub fn set_active_profile_for_side_from_config(
     side: PlayerSide,
     profile: ActiveProfile,
@@ -1465,6 +1519,7 @@ pub fn set_active_profiles_from_config(
     )
 }
 
+#[must_use]
 pub fn load_default_profiles_for_joined_sides_with_defaults(
     default_profiles: [Option<String>; PLAYER_SLOTS],
 ) -> [Profile; PLAYER_SLOTS] {
@@ -1482,6 +1537,7 @@ pub fn load_default_profiles_for_joined_sides_with_defaults(
     ]
 }
 
+#[must_use]
 pub fn load_default_profiles_for_joined_sides_from_config() -> [Profile; PLAYER_SLOTS] {
     let (p1, p2) = config::default_profiles();
     load_default_profiles_for_joined_sides_with_defaults([p1, p2])

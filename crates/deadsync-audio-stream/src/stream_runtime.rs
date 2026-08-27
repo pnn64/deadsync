@@ -98,7 +98,7 @@ impl MusicStreamRuntime {
         stop_music_track();
     }
 
-    fn set_rate(&mut self, rate: f32, generation: u64) {
+    fn set_rate(&self, rate: f32, generation: u64) {
         if let Some(stream) = &self.music_stream {
             let control = &stream.control;
             control.rate_bits.store(rate.to_bits(), Ordering::Release);
@@ -107,7 +107,7 @@ impl MusicStreamRuntime {
         }
     }
 
-    fn set_preserve_pitch(&mut self, enabled: bool, generation: u64) {
+    fn set_preserve_pitch(&self, enabled: bool, generation: u64) {
         if let Some(stream) = &self.music_stream {
             let control = &stream.control;
             control.preserve_pitch.store(enabled, Ordering::Release);

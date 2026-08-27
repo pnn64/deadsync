@@ -22,6 +22,7 @@ impl SecretString {
         Self(value.into())
     }
 
+    #[must_use]
     pub const fn expose(&self) -> &str {
         self.0.as_str()
     }
@@ -193,6 +194,7 @@ fn runtime_mark_favorites_changed() {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn runtime_lock_session() -> RuntimeProfileGuard<SessionState> {
     RuntimeProfileGuard::new(lock_wait::lock_with_wait_stats(
         "SESSION",
@@ -202,6 +204,7 @@ pub fn runtime_lock_session() -> RuntimeProfileGuard<SessionState> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn runtime_lock_profiles() -> RuntimeProfileGuard<[Profile; PLAYER_SLOTS]> {
     RuntimeProfileGuard::new(lock_wait::lock_with_wait_stats(
         "PROFILES",
@@ -231,6 +234,7 @@ pub fn runtime_update_profile_for_side(
     changed
 }
 
+#[must_use]
 pub fn runtime_profile_for_side(side: PlayerSide) -> Profile {
     runtime_lock_profiles()[player_side_index(side)].clone()
 }
@@ -246,15 +250,18 @@ pub fn with_runtime_heart_rate_device_ids<R>(
 
 /// Per-player configured maximum heart rate (bpm), read from the live profiles.
 /// Used to convert a monitor's bpm reading into a percentage-of-max color zone.
+#[must_use]
 pub fn runtime_max_heart_rates() -> [u16; PLAYER_SLOTS] {
     let profiles = runtime_lock_profiles();
     std::array::from_fn(|player| profiles[player].max_heart_rate)
 }
 
+#[must_use]
 pub fn profile_combo_carry(profiles: &[Profile; PLAYER_SLOTS]) -> [u32; PLAYER_SLOTS] {
     std::array::from_fn(|idx| profiles[idx].current_combo)
 }
 
+#[must_use]
 pub fn preferred_difficulty_index(profile: &Profile, style: PlayStyle) -> usize {
     profile
         .last_played(style)
@@ -262,6 +269,7 @@ pub fn preferred_difficulty_index(profile: &Profile, style: PlayStyle) -> usize 
         .min(deadsync_chart::STANDARD_DIFFICULTY_COUNT.saturating_sub(1))
 }
 
+#[must_use]
 pub fn preferred_difficulty_indices(
     profiles: &[Profile; PLAYER_SLOTS],
     style: PlayStyle,
@@ -269,6 +277,7 @@ pub fn preferred_difficulty_indices(
     std::array::from_fn(|idx| preferred_difficulty_index(&profiles[idx], style))
 }
 
+#[must_use]
 pub fn preferred_difficulty_index_for_side(
     profiles: &[Profile; PLAYER_SLOTS],
     side: PlayerSide,
@@ -277,28 +286,34 @@ pub fn preferred_difficulty_index_for_side(
     preferred_difficulty_index(&profiles[player_side_index(side)], style)
 }
 
+#[must_use]
 pub fn runtime_profile_combo_carry() -> [u32; PLAYER_SLOTS] {
     profile_combo_carry(&runtime_lock_profiles())
 }
 
+#[must_use]
 pub fn runtime_preferred_difficulty_index_for_side(side: PlayerSide, style: PlayStyle) -> usize {
     let profiles = runtime_lock_profiles();
     preferred_difficulty_index_for_side(&profiles, side, style)
 }
 
+#[must_use]
 pub fn runtime_current_profile() -> Profile {
     let side = runtime_lock_session().player_side();
     runtime_profile_for_side(side)
 }
 
+#[must_use]
 pub fn runtime_footer_fields_for_side(side: PlayerSide) -> (Option<String>, String) {
     footer_fields_for_side(&runtime_lock_profiles(), side)
 }
 
+#[must_use]
 pub fn runtime_groovestats_api_key_for_side(side: PlayerSide) -> String {
     groovestats_api_key_for_side(&runtime_lock_profiles(), side)
 }
 
+#[must_use]
 pub fn runtime_gameplay_hud_snapshot() -> GameplayHudSnapshot {
     let (play_style, player_side, joined_mask, active_profiles) = {
         let session = runtime_lock_session();
@@ -326,6 +341,7 @@ pub struct SessionPlayersView {
     pub display_names: [String; PLAYER_SLOTS],
 }
 
+#[must_use]
 pub fn session_players_view(
     profiles: &[Profile; PLAYER_SLOTS],
     joined_mask: u8,
@@ -341,6 +357,7 @@ pub fn session_players_view(
     }
 }
 
+#[must_use]
 pub fn runtime_session_players_view() -> SessionPlayersView {
     let (joined_mask, active_side) = {
         let session = runtime_lock_session();
@@ -382,6 +399,7 @@ pub struct FavoriteSnapshot {
     pub series_names: [HashSet<String>; PLAYER_SLOTS],
 }
 
+#[must_use]
 pub fn favorite_snapshot(profiles: &[Profile; PLAYER_SLOTS]) -> FavoriteSnapshot {
     FavoriteSnapshot {
         chart_hashes: std::array::from_fn(|idx| profiles[idx].favorites.clone()),
@@ -390,6 +408,7 @@ pub fn favorite_snapshot(profiles: &[Profile; PLAYER_SLOTS]) -> FavoriteSnapshot
     }
 }
 
+#[must_use]
 pub fn runtime_favorite_snapshot() -> FavoriteSnapshot {
     favorite_snapshot(&runtime_lock_profiles())
 }
@@ -399,12 +418,14 @@ pub struct KnownPackSnapshot {
     pub names: [HashSet<String>; PLAYER_SLOTS],
 }
 
+#[must_use]
 pub fn known_pack_snapshot(profiles: &[Profile; PLAYER_SLOTS]) -> KnownPackSnapshot {
     KnownPackSnapshot {
         names: std::array::from_fn(|idx| profiles[idx].known_pack_names.clone()),
     }
 }
 
+#[must_use]
 pub fn runtime_known_pack_snapshot() -> KnownPackSnapshot {
     known_pack_snapshot(&runtime_lock_profiles())
 }
@@ -425,18 +446,22 @@ pub fn runtime_update_guest_profile_player_options(player_options: &PlayerOption
     }
 }
 
+#[must_use]
 pub fn runtime_active_profile_for_side(side: PlayerSide) -> ActiveProfile {
     runtime_lock_session().active_profile(side)
 }
 
+#[must_use]
 pub fn runtime_active_profiles() -> [ActiveProfile; PLAYER_SLOTS] {
     runtime_lock_session().active_profiles.clone()
 }
 
+#[must_use]
 pub fn runtime_set_active_profile_for_side(side: PlayerSide, profile: ActiveProfile) -> bool {
     runtime_lock_session().set_active_profile(side, profile)
 }
 
+#[must_use]
 pub fn runtime_set_active_profiles(
     profiles: [ActiveProfile; PLAYER_SLOTS],
 ) -> [bool; PLAYER_SLOTS] {
@@ -455,6 +480,7 @@ pub fn runtime_rename_loaded_local_profile(profile_id: &str, display_name: &str)
     rename_loaded_local_profile(&active_profiles, &mut profiles, profile_id, display_name);
 }
 
+#[must_use]
 pub fn runtime_clear_deleted_local_profile(profile_id: &str) -> [bool; PLAYER_SLOTS] {
     let mut changed = [false; PLAYER_SLOTS];
     let mut session = runtime_lock_session();
@@ -547,6 +573,7 @@ pub fn runtime_resolve_active_profile_load_for_side(
     selection
 }
 
+#[must_use]
 pub fn profile_with_player_options(player_options: &PlayerOptionsData) -> Profile {
     let mut profile = Profile::default();
     profile.set_current_player_options(player_options.clone());
@@ -554,6 +581,7 @@ pub fn profile_with_player_options(player_options: &PlayerOptionsData) -> Profil
     profile
 }
 
+#[must_use]
 pub fn guest_profile(player_options: &PlayerOptionsData) -> Profile {
     let mut guest = profile_with_player_options(player_options);
     guest.display_name = "[ GUEST ]".to_string();
@@ -562,6 +590,7 @@ pub fn guest_profile(player_options: &PlayerOptionsData) -> Profile {
     guest
 }
 
+#[must_use]
 pub fn default_profile_with_player_options(player_options: &PlayerOptionsData) -> Profile {
     profile_with_player_options(player_options)
 }
@@ -642,6 +671,7 @@ pub struct RuntimeProfileLoadReport {
     pub stats_error: Option<ProfileStatsLoadError>,
 }
 
+#[must_use]
 pub fn runtime_load_profile_data_for_side(
     side: PlayerSide,
     profile_dir: &Path,
@@ -803,6 +833,7 @@ pub fn runtime_restore_joined_default_profiles(
     runtime_lock_session().restore_joined_default_profiles(defaults, local_profile_exists)
 }
 
+#[must_use]
 pub fn runtime_default_profile_ids_after_current_selection(
     defaults: [Option<String>; PLAYER_SLOTS],
 ) -> [Option<String>; PLAYER_SLOTS] {
@@ -815,6 +846,7 @@ pub fn runtime_default_profile_ids_after_current_selection(
     )
 }
 
+#[must_use]
 pub fn runtime_local_profile_id_for_pad(is_p2_side: bool) -> Option<String> {
     let side = {
         let session = runtime_lock_session();
@@ -823,6 +855,7 @@ pub fn runtime_local_profile_id_for_pad(is_p2_side: bool) -> Option<String> {
     runtime_active_local_profile_id_for_side(side)
 }
 
+#[must_use]
 pub fn runtime_pad_light_brightness() -> [u8; PLAYER_SLOTS] {
     let (play_style, player_side) = {
         let session = runtime_lock_session();
@@ -842,14 +875,17 @@ pub fn runtime_smx_pack_names_for_profiles<T: Copy>(
     smx_pack_names_for_profiles(&runtime_lock_profiles(), machine_bg, machine_judge, parse)
 }
 
+#[must_use]
 pub fn runtime_session_music_rate() -> f32 {
     runtime_lock_session().music_rate()
 }
 
+#[must_use]
 pub fn runtime_session_snapshot() -> SessionSnapshot {
     SessionSnapshot::from_state(&runtime_lock_session())
 }
 
+#[must_use]
 pub fn runtime_session_snapshot_with_active_ids()
 -> (SessionSnapshot, [Option<String>; PLAYER_SLOTS]) {
     let session = runtime_lock_session();
@@ -873,6 +909,7 @@ pub fn runtime_set_session_music_rate(rate: f32) {
     runtime_lock_session().set_music_rate(rate);
 }
 
+#[must_use]
 pub fn runtime_session_timing_tick_mode() -> TimingTickMode {
     runtime_lock_session().timing_tick_mode()
 }
@@ -881,6 +918,7 @@ pub fn runtime_set_session_timing_tick_mode(mode: TimingTickMode) {
     runtime_lock_session().set_timing_tick_mode(mode);
 }
 
+#[must_use]
 pub fn runtime_session_play_style() -> PlayStyle {
     runtime_lock_session().play_style()
 }
@@ -901,6 +939,7 @@ pub fn runtime_set_session_play_style(style: PlayStyle) {
     }
 }
 
+#[must_use]
 pub fn runtime_session_play_mode() -> PlayMode {
     runtime_lock_session().play_mode()
 }
@@ -909,6 +948,7 @@ pub fn runtime_set_session_play_mode(mode: PlayMode) {
     runtime_lock_session().set_play_mode(mode);
 }
 
+#[must_use]
 pub fn runtime_session_player_side() -> PlayerSide {
     runtime_lock_session().player_side()
 }
@@ -917,14 +957,17 @@ pub fn runtime_set_session_player_side(side: PlayerSide) {
     runtime_lock_session().set_player_side(side);
 }
 
+#[must_use]
 pub fn runtime_session_side_joined(side: PlayerSide) -> bool {
     runtime_lock_session().side_joined(side)
 }
 
+#[must_use]
 pub fn runtime_session_joined_mask() -> u8 {
     runtime_lock_session().joined_mask
 }
 
+#[must_use]
 pub fn runtime_session_side_guest(side: PlayerSide) -> bool {
     active_profile_is_guest(&runtime_lock_session().active_profiles[player_side_index(side)])
 }
@@ -1003,11 +1046,13 @@ pub fn runtime_toggle_favorite_for_side(
     is_now_favorite
 }
 
+#[must_use]
 pub fn runtime_profile_has_favorite_for_side(side: PlayerSide, chart_hash: &str) -> bool {
     let profiles = runtime_lock_profiles();
     profile_has_favorite(&profiles, side, chart_hash)
 }
 
+#[must_use]
 pub fn runtime_favorite_membership<const N: usize>(
     queries: &[FavoriteMembershipQuery<'_>; N],
 ) -> [[bool; PLAYER_SLOTS]; N] {
@@ -1063,6 +1108,7 @@ pub fn runtime_toggle_favorited_series_for_side(
     is_now_favorite
 }
 
+#[must_use]
 pub fn runtime_profile_has_favorited_pack_for_side(side: PlayerSide, pack_name: &str) -> bool {
     let profiles = runtime_lock_profiles();
     profile_side_has_favorited_pack(&profiles, side, pack_name)
@@ -1114,6 +1160,7 @@ pub fn runtime_write_profile_stats_for_side(
     .map(|error| RuntimeProfileStatsWriteError { profile_id, error })
 }
 
+#[must_use]
 pub fn runtime_known_pack_names_for_local_profile(profile_id: &str) -> Option<HashSet<String>> {
     let session = runtime_lock_session();
     let profiles = runtime_lock_profiles();
@@ -1390,6 +1437,7 @@ pub const CROSSOVER_CUE_QUANTIZATION_DEFAULT: u8 = 8;
 
 /// Clamp a crossover-cue duration to `[500, 1500]` ms, snapped to the 100 ms grid.
 #[inline]
+#[must_use]
 pub const fn clamp_crossover_cue_duration_ms(ms: u16) -> u16 {
     let clamped = if ms < CROSSOVER_CUE_DURATION_MIN_MS {
         CROSSOVER_CUE_DURATION_MIN_MS
@@ -1406,6 +1454,7 @@ pub const fn clamp_crossover_cue_duration_ms(ms: u16) -> u16 {
 /// Snap an arbitrary quantization value to the nearest supported crossover-cue
 /// quantization (falling back to the default for non-positive input).
 #[inline]
+#[must_use]
 pub fn clamp_crossover_cue_quantization(q: u8) -> u8 {
     if q == 0 {
         return CROSSOVER_CUE_QUANTIZATION_DEFAULT;
@@ -1429,6 +1478,7 @@ pub const PAD_LIGHT_BRIGHTNESS_DEFAULT: u8 = 100;
 
 /// Clamp a pad-light brightness to the valid 0..=100 percent range.
 #[inline(always)]
+#[must_use]
 pub const fn clamp_pad_light_brightness(percent: u8) -> u8 {
     if percent > 100 { 100 } else { percent }
 }
@@ -1439,6 +1489,7 @@ pub const TAP_EXPLOSION_MASK_VERSION: u8 = 2;
 pub const DEFAULT_COLUMN_FLASH_MASK: ColumnFlashMask = ColumnFlashMask::MISS;
 
 #[inline(always)]
+#[must_use]
 pub const fn clamp_weight_pounds(weight_pounds: i32) -> i32 {
     if weight_pounds == 0 {
         0
@@ -1452,6 +1503,7 @@ pub const fn clamp_weight_pounds(weight_pounds: i32) -> i32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn resolved_weight_pounds(weight_pounds: i32) -> i32 {
     if weight_pounds == 0 {
         DEFAULT_WEIGHT_POUNDS
@@ -1461,6 +1513,7 @@ pub const fn resolved_weight_pounds(weight_pounds: i32) -> i32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn age_years_for_birth_year(birth_year: i32, current_year: i32) -> i32 {
     if birth_year == 0 {
         current_year - DEFAULT_BIRTH_YEAR
@@ -1515,6 +1568,7 @@ fn set_value_if_changed<T: PartialEq>(value: &mut T, new_value: T) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn tap_explosion_mask_for_window(window: &str) -> Option<TapExplosionMask> {
     match window {
         "W0" | "W1" => Some(TapExplosionMask::FANTASTIC),
@@ -1529,6 +1583,7 @@ pub fn tap_explosion_mask_for_window(window: &str) -> Option<TapExplosionMask> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn tap_explosion_mask_enabled(mask: TapExplosionMask, window: &str) -> bool {
     let Some(flag) = tap_explosion_mask_for_window(window) else {
         return false;
@@ -1537,6 +1592,7 @@ pub fn tap_explosion_mask_enabled(mask: TapExplosionMask, window: &str) -> bool 
 }
 
 #[inline(always)]
+#[must_use]
 pub fn normalize_tap_explosion_mask(bits: u8, version: u8) -> TapExplosionMask {
     let mut mask = TapExplosionMask::from_bits_truncate(bits);
     if version < TAP_EXPLOSION_MASK_VERSION {
@@ -1546,6 +1602,7 @@ pub fn normalize_tap_explosion_mask(bits: u8, version: u8) -> TapExplosionMask {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn column_flash_mask_for_grade(
     grade: JudgeGrade,
     blue_fantastic: bool,
@@ -1567,6 +1624,7 @@ pub const fn column_flash_mask_for_grade(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn column_flash_mask_enabled(
     mask: ColumnFlashMask,
     grade: JudgeGrade,
@@ -1576,6 +1634,7 @@ pub const fn column_flash_mask_enabled(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn clamp_tilt_threshold_ms(ms: u32) -> u32 {
     if ms > TILT_THRESHOLD_MAX_MS {
         TILT_THRESHOLD_MAX_MS
@@ -1585,6 +1644,7 @@ pub const fn clamp_tilt_threshold_ms(ms: u32) -> u32 {
 }
 
 #[inline]
+#[must_use]
 pub const fn clamp_long_error_bar_threshold_ms(ms: u32) -> u32 {
     if ms < LONG_ERROR_BAR_THRESHOLD_MS_MIN {
         LONG_ERROR_BAR_THRESHOLD_MS_MIN
@@ -1596,6 +1656,7 @@ pub const fn clamp_long_error_bar_threshold_ms(ms: u32) -> u32 {
 }
 
 #[inline]
+#[must_use]
 pub const fn clamp_text_error_bar_threshold_ms(ms: u32) -> u32 {
     if ms < TEXT_ERROR_BAR_THRESHOLD_MS_MIN {
         TEXT_ERROR_BAR_THRESHOLD_MS_MIN
@@ -1607,6 +1668,7 @@ pub const fn clamp_text_error_bar_threshold_ms(ms: u32) -> u32 {
 }
 
 #[inline]
+#[must_use]
 pub const fn clamp_long_error_bar_min_samples(n: u32) -> u32 {
     if n < LONG_ERROR_BAR_MIN_SAMPLES_MIN {
         LONG_ERROR_BAR_MIN_SAMPLES_MIN
@@ -1618,6 +1680,7 @@ pub const fn clamp_long_error_bar_min_samples(n: u32) -> u32 {
 }
 
 #[inline]
+#[must_use]
 pub fn clamp_long_error_bar_intensity(value: f32) -> f32 {
     if !value.is_finite() {
         return LONG_ERROR_BAR_INTENSITY_DEFAULT;
@@ -1630,6 +1693,7 @@ pub fn clamp_long_error_bar_intensity(value: f32) -> f32 {
 }
 
 #[inline]
+#[must_use]
 pub fn clamp_average_error_bar_intensity(value: f32) -> f32 {
     if !value.is_finite() {
         return AVERAGE_ERROR_BAR_INTENSITY_DEFAULT;
@@ -1652,6 +1716,7 @@ pub fn clamp_average_error_bar_intensity(value: f32) -> f32 {
 }
 
 #[inline]
+#[must_use]
 pub const fn clamp_average_error_bar_interval_ms(ms: u32) -> u32 {
     let clamped = if ms < AVERAGE_ERROR_BAR_INTERVAL_MS_MIN {
         AVERAGE_ERROR_BAR_INTERVAL_MS_MIN
@@ -1667,6 +1732,7 @@ pub const fn clamp_average_error_bar_interval_ms(ms: u32) -> u32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn clamp_custom_fantastic_window_ms(ms: u8) -> u8 {
     if ms < CUSTOM_FANTASTIC_WINDOW_MIN_MS {
         CUSTOM_FANTASTIC_WINDOW_MIN_MS
@@ -1677,6 +1743,7 @@ pub const fn clamp_custom_fantastic_window_ms(ms: u8) -> u8 {
     }
 }
 
+#[must_use]
 pub fn sanitize_player_initials(raw: &str) -> String {
     let mut out = String::with_capacity(PLAYER_INITIALS_MAX_LEN);
     for ch in raw.chars() {
@@ -1690,6 +1757,7 @@ pub fn sanitize_player_initials(raw: &str) -> String {
     out
 }
 
+#[must_use]
 pub fn initials_from_name(name: &str) -> String {
     let mut out = sanitize_player_initials(name);
     match out.len() {
@@ -1702,6 +1770,7 @@ pub fn initials_from_name(name: &str) -> String {
     }
 }
 
+#[must_use]
 pub fn parse_profile_bool(value: &str) -> Option<bool> {
     let value = value.trim();
     if value == "1"
@@ -1721,12 +1790,14 @@ pub fn parse_profile_bool(value: &str) -> Option<bool> {
     }
 }
 
+#[must_use]
 pub fn parse_groovestats_is_pad_player(value: Option<&str>, default: bool) -> bool {
     value
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default, |v| v == 1)
 }
 
+#[must_use]
 pub fn parse_last_played_value(value: Option<&str>) -> Option<String> {
     value.and_then(|s| {
         let trimmed = s.trim();
@@ -1739,6 +1810,7 @@ pub fn parse_last_played_value(value: Option<&str>) -> Option<String> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn is_local_profile_id(s: &str) -> bool {
     !s.is_empty() && s.len() <= 64 && s != "." && s != ".." && !s.contains(['/', '\\', '\0'])
 }
@@ -1755,6 +1827,7 @@ pub const DEFAULT_SCORE_INITIALS: &str = "----";
 
 /// Stable per-profile identity so the on-disk folder can be freely renamed
 /// without losing scores, settings, or online logins.
+#[must_use]
 pub fn generate_profile_guid() -> String {
     uuid::Uuid::new_v4().to_string()
 }
@@ -1770,6 +1843,7 @@ pub fn push_profile_guid_line(out: &mut String, guid: &str) {
 
 /// Recognise an already-assigned identity; `generate_profile_guid` always emits
 /// this canonical dashed-lowercase form.
+#[must_use]
 pub fn is_valid_profile_guid(s: &str) -> bool {
     let groups = [8usize, 4, 4, 4, 12];
     let mut parts = s.split('-');
@@ -1799,6 +1873,7 @@ const ITGMANIA_GUID_NAMESPACE: uuid::Uuid =
 /// result is a canonical UUID that satisfies [`is_valid_profile_guid`].
 ///
 /// Returns `None` when `itg_guid` is blank.
+#[must_use]
 pub fn profile_guid_from_itgmania_guid(itg_guid: &str) -> Option<String> {
     let trimmed = itg_guid.trim();
     if trimmed.is_empty() {
@@ -1824,6 +1899,7 @@ fn is_windows_reserved_name(name: &str) -> bool {
 /// Derive a safe single-segment folder name from a display name. `None` (caller
 /// falls back to the GUID) when nothing usable survives sanitizing or the result
 /// would hit a Windows reserved device name.
+#[must_use]
 pub fn sanitize_folder_base(display_name: &str) -> Option<String> {
     let mut out = String::with_capacity(display_name.len());
     let mut last_was_space = false;
@@ -1866,6 +1942,7 @@ const FOLDER_NAME_MAX_SUFFIX: u32 = 9999;
 /// current folder) when the display name yields nothing usable or every suffix
 /// up to `FOLDER_NAME_MAX_SUFFIX` is taken. Matching against `existing` is
 /// case-insensitive.
+#[must_use]
 pub fn folder_name_for_display(display_name: &str, fallback: &str, existing: &[String]) -> String {
     let taken = |candidate: &str| existing.iter().any(|e| e.eq_ignore_ascii_case(candidate));
 
@@ -1895,6 +1972,7 @@ pub fn cmp_profile_ids_case_insensitive(a: &str, b: &str) -> core::cmp::Ordering
         .then_with(|| a.cmp(b))
 }
 
+#[must_use]
 pub fn rewrite_profile_display_name_content(src: &str, display_name: &str) -> String {
     let mut out = String::with_capacity(src.len() + display_name.len() + 32);
     let mut in_userprofile = false;
@@ -1956,6 +2034,7 @@ pub fn rewrite_profile_display_name_content(src: &str, display_name: &str) -> St
 /// `Guid` under the first `[userprofile]`, replacing any stale value and
 /// creating the section when missing. Extra `[userprofile]` sections (if any)
 /// are left untouched.
+#[must_use]
 pub fn upsert_profile_guid_content(src: &str, guid: &str) -> String {
     let mut out = String::with_capacity(src.len() + guid.len() + 32);
     let mut in_userprofile = false;
@@ -2007,6 +2086,7 @@ pub fn upsert_profile_guid_content(src: &str, guid: &str) -> String {
 /// in a single pass without a full INI parse. Section/key matching is
 /// case-insensitive; the GUID is validated and lowercased so identity keys never
 /// diverge by case. Only the first `[userprofile]` section is consulted.
+#[must_use]
 pub fn read_userprofile_identity(content: &str) -> (Option<String>, Option<String>) {
     let mut in_section = false;
     let mut seen_section = false;
@@ -2051,6 +2131,7 @@ pub fn read_userprofile_identity(content: &str) -> (Option<String>, Option<Strin
     (guid, display)
 }
 
+#[must_use]
 pub fn read_userprofile_initials_content(content: &str) -> Option<String> {
     let mut in_section = false;
     let mut seen_section = false;
@@ -2084,12 +2165,14 @@ pub fn read_userprofile_initials_content(content: &str) -> Option<String> {
     None
 }
 
+#[must_use]
 pub fn read_player_initials_dir(dir: &Path) -> Option<String> {
     fs::read_to_string(profile_ini_path(dir))
         .ok()
         .and_then(|content| read_userprofile_initials_content(&content))
 }
 
+#[must_use]
 pub fn local_score_profile_source(
     display_name: &str,
     dir: PathBuf,
@@ -2134,6 +2217,7 @@ pub fn runtime_local_score_profile_sources(
     })
 }
 
+#[must_use]
 pub fn scorebox_profile_snapshot(
     profile: &Profile,
     side_joined: bool,
@@ -2157,6 +2241,7 @@ pub fn scorebox_profile_snapshot(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn groovestats_side_active(
     enable_groovestats: bool,
     side_joined: bool,
@@ -2185,6 +2270,7 @@ pub fn scorebox_profile_snapshot_for_side(
     )
 }
 
+#[must_use]
 pub fn runtime_scorebox_profile_snapshot_for_side(
     side: PlayerSide,
     enable_groovestats: bool,
@@ -2341,6 +2427,7 @@ thread_local! {
         RefCell::new(MusicProfileSnapshotCache::default());
 }
 
+#[must_use]
 pub fn scorebox_runtime_view(
     profiles: &[Profile; PLAYER_SLOTS],
     active_profiles: &[ActiveProfile; PLAYER_SLOTS],
@@ -2378,6 +2465,7 @@ pub fn scorebox_runtime_view(
 }
 
 #[cfg(any(test, feature = "bench-support"))]
+#[must_use]
 pub fn music_profile_snapshot(
     profiles: &[Profile; PLAYER_SLOTS],
     session: &SessionState,
@@ -2537,6 +2625,7 @@ fn music_profile_fields_match(
     })
 }
 
+#[must_use]
 pub fn runtime_music_profile_snapshot(
     enable_groovestats: bool,
     enable_arrowcloud: bool,
@@ -2598,6 +2687,7 @@ pub fn runtime_music_profile_snapshot(
 /// Resolve the two Evaluation chart favorite flags under one profile lock.
 /// Callers gate this query with [`runtime_favorites_generation`] so stable
 /// frames do not lock the profile store.
+#[must_use]
 pub fn runtime_evaluation_favorite_membership(
     favorite_queries: &[Option<(PlayerSide, &str)>; PLAYER_SLOTS],
 ) -> [bool; PLAYER_SLOTS] {
@@ -2613,6 +2703,7 @@ fn evaluation_favorite_membership(
     })
 }
 
+#[must_use]
 pub fn gameplay_hud_snapshot_from_parts(
     play_style: PlayStyle,
     player_side: PlayerSide,
@@ -2653,6 +2744,7 @@ fn gameplay_hud_player_snapshot(
     }
 }
 
+#[must_use]
 pub const fn side_for_physical_pad(
     play_style: PlayStyle,
     player_side: PlayerSide,
@@ -2667,6 +2759,7 @@ pub const fn side_for_physical_pad(
     }
 }
 
+#[must_use]
 pub const fn side_for_gameplay_player(
     num_players: usize,
     player_idx: usize,
@@ -2715,6 +2808,7 @@ pub fn default_profile_ids_after_joined_selection(
     defaults
 }
 
+#[must_use]
 pub fn default_profile_ids_after_profile_delete(
     defaults: [Option<String>; PLAYER_SLOTS],
     profile_id: &str,
@@ -2722,6 +2816,7 @@ pub fn default_profile_ids_after_profile_delete(
     defaults.map(|id| id.filter(|id| id != profile_id))
 }
 
+#[must_use]
 pub fn default_profile_ids_after_profile_create(
     mut defaults: [Option<String>; PLAYER_SLOTS],
     profile_id: String,
@@ -2769,6 +2864,7 @@ fn set_default_profile_id(
     defaults[side_idx] = new_id;
 }
 
+#[must_use]
 pub fn known_pack_names_for_loaded_profile(
     active_profiles: &[ActiveProfile; PLAYER_SLOTS],
     profiles: &[Profile; PLAYER_SLOTS],
@@ -2820,6 +2916,7 @@ pub fn set_arrowcloud_api_key_for_side(
     profiles[player_side_index(side)].arrowcloud_api_key = api_key.to_string();
 }
 
+#[must_use]
 pub fn footer_fields_for_side(
     profiles: &[Profile; PLAYER_SLOTS],
     side: PlayerSide,
@@ -2831,6 +2928,7 @@ pub fn footer_fields_for_side(
     )
 }
 
+#[must_use]
 pub fn groovestats_api_key_for_side(
     profiles: &[Profile; PLAYER_SLOTS],
     side: PlayerSide,
@@ -2876,6 +2974,7 @@ pub fn update_guest_profile_player_options(
     changed
 }
 
+#[must_use]
 pub const fn pad_light_brightness_for_physical_pad(
     profiles: &[Profile; PLAYER_SLOTS],
     play_style: PlayStyle,
@@ -2989,6 +3088,7 @@ pub fn seed_favorite_for_side(
         .insert(chart_hash.to_string());
 }
 
+#[must_use]
 pub fn profile_has_favorite(
     profiles: &[Profile; PLAYER_SLOTS],
     side: PlayerSide,
@@ -3007,6 +3107,7 @@ pub enum FavoriteMembershipQuery<'a> {
     Song(&'a deadsync_chart::SongData),
 }
 
+#[must_use]
 pub fn favorite_membership<const N: usize>(
     profiles: &[Profile; PLAYER_SLOTS],
     queries: &[FavoriteMembershipQuery<'_>; N],
@@ -3058,10 +3159,12 @@ pub fn seed_favorited_pack_for_side(
         .insert(pack_name.to_string());
 }
 
+#[must_use]
 pub fn profile_has_favorited_pack(profile: &Profile, pack_name: &str) -> bool {
     profile.favorited_packs.iter().any(|p| *p == pack_name)
 }
 
+#[must_use]
 pub fn profile_side_has_favorited_pack(
     profiles: &[Profile; PLAYER_SLOTS],
     side: PlayerSide,
@@ -3276,6 +3379,7 @@ pub fn apply_loaded_profile_data(
     }
 }
 
+#[must_use]
 pub fn find_profile_avatar_path(dir: &Path) -> Option<PathBuf> {
     let Ok(read_dir) = fs::read_dir(dir) else {
         return None;
@@ -3310,46 +3414,55 @@ pub const FAVORITED_PACKS_FILE: &str = "favorited_packs.txt";
 pub const FAVORITED_SERIES_FILE: &str = "favorited_series.txt";
 
 #[inline(always)]
+#[must_use]
 pub fn profile_ini_path(dir: &Path) -> PathBuf {
     dir.join(PROFILE_INI_FILE)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn groovestats_ini_path(dir: &Path) -> PathBuf {
     dir.join(GROOVESTATS_INI_FILE)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn arrowcloud_ini_path(dir: &Path) -> PathBuf {
     dir.join(ARROWCLOUD_INI_FILE)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn profile_stats_path(dir: &Path) -> PathBuf {
     dir.join(PROFILE_STATS_FILE)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn profile_stats_tmp_path(dir: &Path) -> PathBuf {
     dir.join(PROFILE_STATS_TMP_FILE)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn favorites_path(dir: &Path) -> PathBuf {
     dir.join(FAVORITES_FILE)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn favorited_packs_path(dir: &Path) -> PathBuf {
     dir.join(FAVORITED_PACKS_FILE)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn favorited_series_path(dir: &Path) -> PathBuf {
     dir.join(FAVORITED_SERIES_FILE)
 }
 
 /// Read the embedded `Guid` and `DisplayName` from a folder's `profile.ini`.
+#[must_use]
 pub fn read_profile_identity_dir(dir: &Path) -> (Option<String>, Option<String>) {
     match fs::read_to_string(profile_ini_path(dir)) {
         Ok(content) => read_userprofile_identity(&content),
@@ -3358,6 +3471,7 @@ pub fn read_profile_identity_dir(dir: &Path) -> (Option<String>, Option<String>)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn read_profile_guid_dir(dir: &Path) -> Option<String> {
     read_profile_identity_dir(dir).0
 }
@@ -3382,6 +3496,7 @@ pub fn rewrite_profile_display_name_file(
     )
 }
 
+#[must_use]
 pub fn profile_folder_names(root: &Path) -> Vec<String> {
     let Ok(read_dir) = fs::read_dir(root) else {
         return Vec::new();
@@ -3434,6 +3549,7 @@ pub fn build_profile_dir_map(
 
 /// Pure read-only local profile enumeration. Legacy folders without an
 /// embedded GUID are skipped; startup migration is responsible for backfill.
+#[must_use]
 pub fn scan_local_profile_summaries(root: &Path) -> Vec<LocalProfileSummary> {
     let Ok(read_dir) = fs::read_dir(root) else {
         return Vec::new();
@@ -3846,6 +3962,7 @@ pub enum ActiveProfileLoadSelection {
 
 impl ActiveProfileLoadSelection {
     #[inline(always)]
+    #[must_use]
     pub fn local_id(&self) -> Option<&str> {
         match self {
             Self::Local { id } => Some(id),
@@ -3855,6 +3972,7 @@ impl ActiveProfileLoadSelection {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn session_profile(&self) -> ActiveProfile {
         match self {
             Self::Local { id } => ActiveProfile::Local { id: id.clone() },
@@ -3867,11 +3985,13 @@ impl ActiveProfileLoadSelection {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn active_profile_is_guest(profile: &ActiveProfile) -> bool {
     matches!(profile, ActiveProfile::Guest)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn active_profile_local_id(profile: &ActiveProfile) -> Option<&str> {
     match profile {
         ActiveProfile::Local { id } => Some(id),
@@ -3904,6 +4024,7 @@ pub fn resolve_active_profile_for_load(
 /// Translate a stored default-profile id to a canonical GUID: pass valid GUIDs
 /// through, map a legacy folder-name id to that folder's GUID, and otherwise
 /// keep the value unchanged (for example, a stale id with no matching folder).
+#[must_use]
 pub fn heal_default_profile_id(
     stored: Option<String>,
     folder_to_guid: &HashMap<&str, &str>,
@@ -3954,6 +4075,7 @@ pub enum PlayStyle {
 
 impl PlayStyle {
     #[inline(always)]
+    #[must_use]
     pub const fn chart_type(self) -> &'static str {
         match self {
             Self::Single | Self::Versus => "dance-single",
@@ -3964,6 +4086,7 @@ impl PlayStyle {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn cols_per_player(self) -> usize {
         match self {
             Self::Single | Self::Versus => 4,
@@ -3974,6 +4097,7 @@ impl PlayStyle {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn player_count(self) -> usize {
         match self {
             Self::Single | Self::Double | Self::PumpSingle | Self::PumpDouble => 1,
@@ -3982,32 +4106,38 @@ impl PlayStyle {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn total_cols(self) -> usize {
         self.cols_per_player() * self.player_count()
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_pump(self) -> bool {
         matches!(self, Self::PumpSingle | Self::PumpVersus | Self::PumpDouble)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_versus(self) -> bool {
         matches!(self, Self::Versus | Self::PumpVersus)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_double(self) -> bool {
         matches!(self, Self::Double | Self::PumpDouble)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_single(self) -> bool {
         matches!(self, Self::Single | Self::PumpSingle)
     }
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn player_options_section(style: PlayStyle) -> &'static str {
     match style {
         PlayStyle::Single | PlayStyle::Versus => "PlayerOptionsSingles",
@@ -4025,6 +4155,7 @@ pub enum PlayMode {
     PremiumFree,
 }
 
+#[must_use]
 pub const fn play_style_from_machine_preference(
     style: deadsync_config::theme::MachinePreferredPlayStyle,
     game: deadsync_config::theme::GameFlag,
@@ -4040,6 +4171,7 @@ pub const fn play_style_from_machine_preference(
     }
 }
 
+#[must_use]
 pub const fn play_mode_from_machine_preference(
     mode: deadsync_config::theme::MachinePreferredPlayMode,
 ) -> PlayMode {
@@ -4057,6 +4189,7 @@ pub enum PlayerSide {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn player_side_index(side: PlayerSide) -> usize {
     match side {
         PlayerSide::P1 => 0,
@@ -4065,6 +4198,7 @@ pub const fn player_side_index(side: PlayerSide) -> usize {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn player_side_number(side: PlayerSide) -> u8 {
     match side {
         PlayerSide::P1 => 1,
@@ -4073,6 +4207,7 @@ pub const fn player_side_number(side: PlayerSide) -> u8 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn player_side_for_index(player_idx: usize) -> PlayerSide {
     match player_idx {
         1 => PlayerSide::P2,
@@ -4081,6 +4216,7 @@ pub const fn player_side_for_index(player_idx: usize) -> PlayerSide {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn player_side_joined_mask(side: PlayerSide) -> u8 {
     match side {
         PlayerSide::P1 => SESSION_JOINED_MASK_P1,
@@ -4089,6 +4225,7 @@ pub const fn player_side_joined_mask(side: PlayerSide) -> u8 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn joined_player_mask(p1: bool, p2: bool) -> u8 {
     let p1_mask = if p1 { SESSION_JOINED_MASK_P1 } else { 0 };
     let p2_mask = if p2 { SESSION_JOINED_MASK_P2 } else { 0 };
@@ -4096,6 +4233,7 @@ pub const fn joined_player_mask(p1: bool, p2: bool) -> u8 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn play_style_for_joined(
     style: PlayStyle,
     p1_joined: bool,
@@ -4120,11 +4258,13 @@ pub const fn play_style_for_joined(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn player_side_is_joined(joined_mask: u8, side: PlayerSide) -> bool {
     joined_mask & player_side_joined_mask(side) != 0
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn runtime_player_is_p2(play_style: PlayStyle, side: PlayerSide) -> bool {
     matches!(
         (play_style, side),
@@ -4136,11 +4276,13 @@ pub const fn runtime_player_is_p2(play_style: PlayStyle, side: PlayerSide) -> bo
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn is_single_p2_side(play_style: PlayStyle, side: PlayerSide) -> bool {
     play_style.is_single() && matches!(side, PlayerSide::P2)
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn runtime_player_index(play_style: PlayStyle, side: PlayerSide) -> usize {
     if play_style.is_versus() {
         player_side_index(side)
@@ -4150,6 +4292,7 @@ pub const fn runtime_player_index(play_style: PlayStyle, side: PlayerSide) -> us
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn runtime_player_side(
     play_style: PlayStyle,
     session_side: PlayerSide,
@@ -4163,6 +4306,7 @@ pub const fn runtime_player_side(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn physical_player_slot_for_chart_pad(
     play_style: PlayStyle,
     session_side: PlayerSide,
@@ -4206,6 +4350,7 @@ pub struct SessionSnapshot {
 }
 
 impl SessionSnapshot {
+    #[must_use]
     pub const fn from_state(session: &SessionState) -> Self {
         Self {
             joined_mask: session.joined_mask,
@@ -4218,6 +4363,7 @@ impl SessionSnapshot {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn side_joined(self, side: PlayerSide) -> bool {
         player_side_is_joined(self.joined_mask, side)
     }
@@ -4239,11 +4385,13 @@ impl Default for SessionState {
 
 impl SessionState {
     #[inline(always)]
+    #[must_use]
     pub fn active_profile(&self, side: PlayerSide) -> ActiveProfile {
         self.active_profiles[player_side_index(side)].clone()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn active_local_profile_id(&self, side: PlayerSide) -> Option<&str> {
         active_profile_local_id(&self.active_profiles[player_side_index(side)])
     }
@@ -4288,6 +4436,7 @@ impl SessionState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn music_rate(&self) -> f32 {
         if self.music_rate.is_finite() && self.music_rate > 0.0 {
             self.music_rate
@@ -4306,6 +4455,7 @@ impl SessionState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn timing_tick_mode(&self) -> TimingTickMode {
         self.timing_tick_mode
     }
@@ -4316,6 +4466,7 @@ impl SessionState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn play_style(&self) -> PlayStyle {
         self.play_style
     }
@@ -4330,6 +4481,7 @@ impl SessionState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn play_mode(&self) -> PlayMode {
         self.play_mode
     }
@@ -4340,6 +4492,7 @@ impl SessionState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn player_side(&self) -> PlayerSide {
         self.player_side
     }
@@ -4350,6 +4503,7 @@ impl SessionState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn side_joined(&self, side: PlayerSide) -> bool {
         player_side_is_joined(self.joined_mask, side)
     }
@@ -4415,6 +4569,7 @@ pub enum Perspective {
 
 impl Perspective {
     #[inline(always)]
+    #[must_use]
     pub const fn tilt_skew(self) -> (f32, f32) {
         match self {
             Self::Overhead => (0.0, 0.0),
@@ -4555,21 +4710,25 @@ impl ScrollOption {
     pub const Centered: Self = Self(1 << 4);
 
     #[inline(always)]
+    #[must_use]
     pub const fn empty() -> Self {
         Self(0)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn contains(self, flag: Self) -> bool {
         (self.0 & flag.0) != 0
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_normal(self) -> bool {
         self.0 == 0
     }
@@ -4936,6 +5095,7 @@ bitflags! {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn error_bar_mask_from_style(style: ErrorBarStyle, text: bool) -> ErrorBarMask {
     let text_bits = if text { ErrorBarMask::TEXT.bits() } else { 0 };
     let style_bits = match style {
@@ -4950,6 +5110,7 @@ pub const fn error_bar_mask_from_style(style: ErrorBarStyle, text: bool) -> Erro
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn error_bar_style_from_mask(mask: ErrorBarMask) -> ErrorBarStyle {
     if mask.contains(ErrorBarMask::COLORFUL) {
         ErrorBarStyle::Colorful
@@ -4965,6 +5126,7 @@ pub const fn error_bar_style_from_mask(mask: ErrorBarMask) -> ErrorBarStyle {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn error_bar_text_from_mask(mask: ErrorBarMask) -> bool {
     mask.contains(ErrorBarMask::TEXT)
 }
@@ -5346,6 +5508,7 @@ pub enum TimingWindowsOption {
 
 impl TimingWindowsOption {
     #[inline(always)]
+    #[must_use]
     pub const fn disabled_windows(self) -> [bool; 5] {
         match self {
             Self::None => [false; 5],
@@ -5411,11 +5574,13 @@ impl StepStatisticsMask {
         | Self::PEAK_NPS.bits();
 
     #[inline(always)]
+    #[must_use]
     pub const fn all_widgets() -> Self {
         Self::from_bits_retain(Self::ALL_WIDGET_BITS)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn pack_info_enabled(self) -> bool {
         self.intersects(Self::PACK_BANNER | Self::SONG_INFO)
     }
@@ -5544,6 +5709,7 @@ impl StepStatsExtra {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
             Self::None => "None",
@@ -5593,6 +5759,7 @@ pub enum MeasureCounter {
 
 impl MeasureCounter {
     #[inline(always)]
+    #[must_use]
     pub const fn notes_threshold(self) -> Option<usize> {
         match self {
             Self::None => None,
@@ -5605,6 +5772,7 @@ impl MeasureCounter {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn multiplier(self) -> f32 {
         match self {
             Self::TwentyFourth => 1.5,
@@ -5925,6 +6093,7 @@ impl BackgroundFilter {
 
     /// Construct from a raw percentage, clamping to `0..=100`.
     #[inline]
+    #[must_use]
     pub const fn from_percent(value: u8) -> Self {
         let clamped = if value > Self::MAX_PERCENT {
             Self::MAX_PERCENT
@@ -5936,24 +6105,28 @@ impl BackgroundFilter {
 
     /// Construct from any signed integer, clamping to `0..=100`.
     #[inline]
+    #[must_use]
     pub fn from_i32(value: i32) -> Self {
         Self::from_percent(value.clamp(0, i32::from(Self::MAX_PERCENT)) as u8)
     }
 
     /// Underlying percentage value `0..=100`.
     #[inline]
+    #[must_use]
     pub const fn percent(self) -> u8 {
         self.0
     }
 
     /// Alpha value in `0.0..=1.0` to be passed to `diffuse`.
     #[inline]
+    #[must_use]
     pub fn alpha(self) -> f32 {
         f32::from(self.0) / f32::from(Self::MAX_PERCENT)
     }
 
     /// Convenience for branches that toggle on the "no filter" case.
     #[inline]
+    #[must_use]
     pub const fn is_off(self) -> bool {
         self.0 == 0
     }
@@ -6006,10 +6179,12 @@ impl core::fmt::Display for BackgroundFilter {
 pub mod option_parse_reference {
     use super::*;
 
+    #[must_use]
     pub fn lower_key(value: &str) -> String {
         value.trim().to_lowercase()
     }
 
+    #[must_use]
     pub fn compact_key(value: &str) -> String {
         let mut key = String::with_capacity(value.len());
         for ch in value.trim().chars() {
@@ -6020,6 +6195,7 @@ pub mod option_parse_reference {
         key
     }
 
+    #[must_use]
     pub fn profile_bool(value: &str) -> Option<bool> {
         match value.trim().to_ascii_lowercase().as_str() {
             "1" | "true" | "yes" | "on" => Some(true),
@@ -6133,11 +6309,13 @@ impl NoteSkin {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn new(raw: &str) -> Self {
         Self::from_str(raw).unwrap_or_default()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn none_choice() -> Self {
         Self {
             raw: Self::NONE_NAME.to_string(),
@@ -6145,11 +6323,13 @@ impl NoteSkin {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.raw
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn is_none_choice(&self) -> bool {
         self.raw == Self::NONE_NAME
     }
@@ -6179,6 +6359,7 @@ impl core::fmt::Display for NoteSkin {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn resolve_noteskin_choice<'a>(
     noteskin: Option<&'a NoteSkin>,
     fallback: &'a NoteSkin,
@@ -6191,6 +6372,7 @@ pub fn tap_explosion_skin_hidden(noteskin: Option<&NoteSkin>) -> bool {
     noteskin.is_some_and(NoteSkin::is_none_choice)
 }
 
+#[must_use]
 pub fn evaluation_mods_text(profile: &Profile, speed_mod: ScrollSpeedSetting) -> Arc<str> {
     let mut parts = vec![speed_mod.to_string()];
     if profile.mini_percent != 0 {
@@ -6231,6 +6413,7 @@ pub fn evaluation_mods_text(profile: &Profile, speed_mod: ScrollSpeedSetting) ->
 }
 
 #[inline(always)]
+#[must_use]
 pub fn resolve_tap_explosion_skin<'a>(
     noteskin: Option<&'a NoteSkin>,
     fallback: &'a NoteSkin,
@@ -6337,6 +6520,7 @@ impl HoldJudgmentGraphic {
     ];
 
     #[inline(always)]
+    #[must_use]
     pub fn new(raw: &str) -> Self {
         Self(
             normalize_graphic_key(raw, "hold_judgements", Self::STOCK_ALIASES)
@@ -6353,16 +6537,19 @@ impl HoldJudgmentGraphic {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn is_none(&self) -> bool {
         self.0.eq_ignore_ascii_case("None")
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn texture_key(&self) -> Option<&str> {
         (!self.is_none()).then_some(self.as_str())
     }
@@ -6403,6 +6590,7 @@ impl HeldMissGraphic {
     ];
 
     #[inline(always)]
+    #[must_use]
     pub fn new(raw: &str) -> Self {
         Self(
             normalize_graphic_key(raw, "held_miss", Self::STOCK_ALIASES)
@@ -6419,16 +6607,19 @@ impl HeldMissGraphic {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn is_none(&self) -> bool {
         self.0.eq_ignore_ascii_case("None")
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn texture_key(&self) -> Option<&str> {
         (!self.is_none()).then_some(self.as_str())
     }
@@ -6653,6 +6844,7 @@ impl JudgmentGraphic {
     ];
 
     #[inline(always)]
+    #[must_use]
     pub fn new(raw: &str) -> Self {
         Self(
             normalize_graphic_key(raw, "judgements", Self::STOCK_ALIASES)
@@ -6669,16 +6861,19 @@ impl JudgmentGraphic {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn is_none(&self) -> bool {
         self.0.eq_ignore_ascii_case("None")
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn texture_key(&self) -> Option<&str> {
         (!self.is_none()).then_some(self.as_str())
     }
@@ -6803,6 +6998,7 @@ pub fn decode_profile_stats(bytes: &[u8]) -> Result<ProfileStats, ProfileStatsDe
     Err(ProfileStatsDecodeError::InvalidPayload)
 }
 
+#[must_use]
 pub fn encode_profile_stats(stats: &ProfileStats) -> Option<Vec<u8>> {
     let mut known_pack_names: Vec<String> = stats.known_pack_names.iter().cloned().collect();
     known_pack_names.sort_unstable();
@@ -6895,6 +7091,7 @@ fn save_set_file(path: &Path, text: String) {
     }
 }
 
+#[must_use]
 pub fn load_favorites_dir(dir: &Path) -> HashSet<String> {
     let Ok(text) = fs::read_to_string(favorites_path(dir)) else {
         return HashSet::new();
@@ -6942,6 +7139,7 @@ pub fn render_favorited_packs_content(packs: &HashSet<String>) -> String {
     sorted.join("\n")
 }
 
+#[must_use]
 pub fn load_favorited_packs_dir(dir: &Path) -> HashSet<String> {
     let Ok(text) = fs::read_to_string(favorited_packs_path(dir)) else {
         return HashSet::new();
@@ -6949,6 +7147,7 @@ pub fn load_favorited_packs_dir(dir: &Path) -> HashSet<String> {
     parse_favorited_packs_content(&text)
 }
 
+#[must_use]
 pub fn load_favorited_series_dir(dir: &Path) -> HashSet<String> {
     let Ok(text) = fs::read_to_string(favorited_series_path(dir)) else {
         return HashSet::new();
@@ -6966,6 +7165,7 @@ pub struct ProfileSidecarLoadData {
     pub avatar_path: Option<PathBuf>,
 }
 
+#[must_use]
 pub fn load_profile_sidecars_dir(dir: &Path, default_profile: &Profile) -> ProfileSidecarLoadData {
     let (stats, stats_error) = match load_profile_stats_file(&profile_stats_path(dir)) {
         Ok(Some(stats)) => (stats, None),
@@ -7039,6 +7239,7 @@ pub fn add_known_pack_names<'a>(
     changed
 }
 
+#[must_use]
 pub fn unknown_pack_names(
     known_pack_names: &HashSet<String>,
     scanned_pack_names: &[String],
@@ -7460,6 +7661,7 @@ impl Default for MachinePlayerDefaults {
     }
 }
 
+#[must_use]
 pub fn machine_player_defaults_from_ini(
     content: &str,
     base_common: &PlayerOptionsData,
@@ -7490,6 +7692,7 @@ pub fn machine_player_defaults_from_ini(
     }
 }
 
+#[must_use]
 pub fn render_machine_player_defaults_template(common: &PlayerOptionsData) -> String {
     let mut content = String::from(
         "; Machine-wide player defaults.\n\
@@ -7504,6 +7707,7 @@ pub fn render_machine_player_defaults_template(common: &PlayerOptionsData) -> St
     content
 }
 
+#[must_use]
 pub fn upsert_ini_section_value(
     content: &str,
     section_name: &str,
@@ -8637,12 +8841,14 @@ pub fn append_profile_ini_content(content: &mut String, guid: &str, profile: &Pr
     append_stats_section(content, profile);
 }
 
+#[must_use]
 pub fn render_profile_ini_content(guid: &str, profile: &Profile) -> String {
     let mut content = String::new();
     append_profile_ini_content(&mut content, guid, profile);
     content
 }
 
+#[must_use]
 pub fn render_groovestats_ini_content(
     api_key: &str,
     is_pad_player: bool,
@@ -8659,6 +8865,7 @@ pub fn render_groovestats_ini_content(
     content
 }
 
+#[must_use]
 pub fn render_arrowcloud_ini_content(api_key: &str) -> String {
     let mut content = String::new();
     content.push_str("[ArrowCloud]\n");
@@ -8732,6 +8939,7 @@ pub fn write_arrowcloud_api_key_dir(dir: &Path, api_key: &str) -> std::io::Resul
     write_arrowcloud_ini_file(&arrowcloud_ini_path(dir), api_key)
 }
 
+#[must_use]
 pub fn read_arrowcloud_api_key_file(path: &Path) -> String {
     fs::read_to_string(path)
         .ok()
@@ -8739,6 +8947,7 @@ pub fn read_arrowcloud_api_key_file(path: &Path) -> String {
         .unwrap_or_default()
 }
 
+#[must_use]
 pub fn read_groovestats_api_key_file(path: &Path) -> Option<String> {
     fs::read_to_string(path)
         .ok()
@@ -8746,14 +8955,17 @@ pub fn read_groovestats_api_key_file(path: &Path) -> Option<String> {
         .filter(|key| !key.is_empty())
 }
 
+#[must_use]
 pub fn read_arrowcloud_api_key_dir(dir: &Path) -> String {
     read_arrowcloud_api_key_file(&arrowcloud_ini_path(dir))
 }
 
+#[must_use]
 pub fn read_groovestats_api_key_dir(dir: &Path) -> Option<String> {
     read_groovestats_api_key_file(&groovestats_ini_path(dir))
 }
 
+#[must_use]
 pub fn read_groovestats_password_dir(dir: &Path) -> SecretString {
     fs::read_to_string(groovestats_ini_path(dir))
         .ok()
@@ -8767,6 +8979,7 @@ pub fn groovestats_password_from_ini_text(text: &str) -> Option<SecretString> {
         .map(SecretString::new)
 }
 
+#[must_use]
 pub fn api_key_from_ini_text(text: &str) -> Option<String> {
     for line in text.lines() {
         let line = line.trim();
@@ -9182,6 +9395,7 @@ impl Default for Profile {
 }
 
 impl Profile {
+    #[must_use]
     pub fn score_import_api_key(&self, endpoint: ScoreImportEndpoint) -> &str {
         match endpoint {
             ScoreImportEndpoint::GrooveStats | ScoreImportEndpoint::BoogieStats => {
@@ -9191,6 +9405,7 @@ impl Profile {
         }
     }
 
+    #[must_use]
     pub fn score_import_username(&self, endpoint: ScoreImportEndpoint) -> &str {
         if endpoint.requires_username() {
             self.groovestats_username.trim()
@@ -9199,6 +9414,7 @@ impl Profile {
         }
     }
 
+    #[must_use]
     pub fn has_score_import_credentials(&self, endpoint: ScoreImportEndpoint) -> bool {
         !self.score_import_api_key(endpoint).is_empty()
             && (!endpoint.requires_username() || !self.score_import_username(endpoint).is_empty())
@@ -9940,46 +10156,55 @@ impl Profile {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn calculated_weight_pounds(&self) -> i32 {
         resolved_weight_pounds(self.weight_pounds)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn age_years_for(&self, current_year: i32) -> i32 {
         age_years_for_birth_year(self.birth_year, current_year)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn age_years(&self) -> i32 {
         self.age_years_for(Local::now().year())
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn resolved_mine_noteskin(&self) -> &NoteSkin {
         resolve_noteskin_choice(self.mine_noteskin.as_ref(), &self.noteskin)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn resolved_receptor_noteskin(&self) -> &NoteSkin {
         resolve_noteskin_choice(self.receptor_noteskin.as_ref(), &self.noteskin)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn tap_explosion_noteskin_hidden(&self) -> bool {
         tap_explosion_skin_hidden(self.tap_explosion_noteskin.as_ref())
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn resolved_tap_explosion_noteskin(&self) -> Option<&NoteSkin> {
         resolve_tap_explosion_skin(self.tap_explosion_noteskin.as_ref(), &self.noteskin)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn tap_explosion_window_enabled(&self, window: &str) -> bool {
         tap_explosion_mask_enabled(self.tap_explosion_active_mask, window)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn current_player_options(&self) -> PlayerOptionsData {
         PlayerOptionsData {
             background_filter: self.background_filter,
@@ -10269,6 +10494,7 @@ impl Profile {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn player_options(&self, style: PlayStyle) -> &PlayerOptionsData {
         match style {
             PlayStyle::Single | PlayStyle::Versus => &self.player_options_singles,
@@ -10307,6 +10533,7 @@ impl Profile {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn last_played(&self, style: PlayStyle) -> &LastPlayed {
         match style {
             PlayStyle::Single
@@ -10329,6 +10556,7 @@ impl Profile {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn last_played_course(&self, style: PlayStyle) -> &LastPlayedCourse {
         match style {
             PlayStyle::Single
@@ -11941,8 +12169,8 @@ mod tests {
     fn runtime_local_profile_lifecycle_updates_runtime_state() {
         let root = temp_profile_dir("runtime-profile-lifecycle");
         runtime_invalidate_profile_dir_cache();
-        runtime_set_active_profile_for_side(PlayerSide::P1, ActiveProfile::Guest);
-        runtime_set_active_profile_for_side(PlayerSide::P2, ActiveProfile::Guest);
+        let _ = runtime_set_active_profile_for_side(PlayerSide::P1, ActiveProfile::Guest);
+        let _ = runtime_set_active_profile_for_side(PlayerSide::P2, ActiveProfile::Guest);
 
         let created = runtime_create_local_profile(
             &root,
@@ -11956,7 +12184,7 @@ mod tests {
 
         let original_dir = root.join("Alice");
         assert!(original_dir.is_dir());
-        runtime_set_active_profile_for_side(
+        let _ = runtime_set_active_profile_for_side(
             PlayerSide::P1,
             ActiveProfile::Local {
                 id: created.id.clone(),
@@ -11987,8 +12215,8 @@ mod tests {
             ActiveProfile::Guest
         );
 
-        runtime_set_active_profile_for_side(PlayerSide::P1, ActiveProfile::Guest);
-        runtime_set_active_profile_for_side(PlayerSide::P2, ActiveProfile::Guest);
+        let _ = runtime_set_active_profile_for_side(PlayerSide::P1, ActiveProfile::Guest);
+        let _ = runtime_set_active_profile_for_side(PlayerSide::P2, ActiveProfile::Guest);
         runtime_invalidate_profile_dir_cache();
         let _ = fs::remove_dir_all(root);
     }

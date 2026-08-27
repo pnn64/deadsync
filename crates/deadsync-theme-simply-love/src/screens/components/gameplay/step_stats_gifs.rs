@@ -8,6 +8,7 @@ use deadsync_core::input::MAX_PLAYERS;
 
 const GIF_Z: i16 = 65;
 
+#[must_use]
 pub fn resolve_random_extras(
     profiles: &[deadsync_profile::Profile; MAX_PLAYERS],
 ) -> [ResolvedStepStatsExtra; MAX_PLAYERS] {

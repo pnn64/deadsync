@@ -6,6 +6,7 @@ pub struct GameplayBoundaryRuntimeState {
 
 impl GameplayBoundaryRuntimeState {
     #[inline(always)]
+    #[must_use]
     pub fn new(audio_command_capacity: usize, session_command_capacity: usize) -> Self {
         Self {
             commands: GameplayCommandQueue::with_capacity(
@@ -24,6 +25,7 @@ pub struct GameplayPendingInputState<T> {
 
 impl<T> GameplayPendingInputState<T> {
     #[inline(always)]
+    #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             edges: Vec::with_capacity(capacity),
@@ -73,21 +75,25 @@ impl ColumnCueColumns {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn contains(&self, column: usize) -> bool {
         column < MAX_COLS && self.lanes & ((1 as LaneMask) << column) != 0
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.lanes.count_ones() as usize
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.lanes == 0
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn shares_lane(self, other: Self) -> bool {
         self.lanes & other.lanes != 0
     }
@@ -100,6 +106,7 @@ impl ColumnCueColumns {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn iter(self) -> ColumnCueColumnIter {
         ColumnCueColumnIter {
             remaining: self.lanes,
@@ -108,11 +115,13 @@ impl ColumnCueColumns {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn get(self, index: usize) -> Option<ColumnCueColumn> {
         self.iter().nth(index)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn last(self) -> Option<ColumnCueColumn> {
         if self.is_empty() {
             return None;
@@ -191,6 +200,7 @@ pub struct ColumnCue {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn active_column_cue(cues: &[ColumnCue], current_time: f32) -> Option<&ColumnCue> {
     if cues.is_empty() {
         return None;
@@ -205,12 +215,14 @@ pub fn active_column_cue(cues: &[ColumnCue], current_time: f32) -> Option<&Colum
 // two cues can be active at once; rendering both lets the outgoing cue's
 // fade-out crossfade with the incoming cue's fade-in.
 #[inline]
+#[must_use]
 pub fn active_column_cue_range(cues: &[ColumnCue], current_time: f32) -> core::ops::Range<usize> {
     let end = cues.partition_point(|cue| cue.start_time <= current_time);
     active_column_cue_range_from_cursor(cues, current_time, end)
 }
 
 #[inline]
+#[must_use]
 pub fn active_column_cue_range_from_cursor(
     cues: &[ColumnCue],
     current_time: f32,
@@ -230,6 +242,7 @@ pub fn active_column_cue_range_from_cursor(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn column_cue_cursor_from_hint(cues: &[ColumnCue], current_time: f32, cursor: usize) -> usize {
     if cursor > cues.len() {
         return cues.partition_point(|cue| cue.start_time <= current_time);
@@ -258,6 +271,7 @@ pub fn column_cue_cursor_from_hint(cues: &[ColumnCue], current_time: f32, cursor
 // `current_time`, as a contiguous slice in chronological order. See
 // `active_column_cue_range`.
 #[inline]
+#[must_use]
 pub fn active_column_cues(cues: &[ColumnCue], current_time: f32) -> &[ColumnCue] {
     &cues[active_column_cue_range(cues, current_time)]
 }
@@ -286,11 +300,13 @@ pub struct CrossoverRow {
 impl CrossoverRow {
     // A bracket crossover only counts when the player opts brackets in.
     #[inline]
+    #[must_use]
     pub const fn is_active_crossover(&self, include_brackets: bool) -> bool {
         self.crossover && (include_brackets || !self.bracket)
     }
 }
 
+#[must_use]
 pub fn build_crossover_rows<const LANES: usize>(
     notes: &[Note],
     note_range: (usize, usize),
@@ -371,6 +387,7 @@ fn apply_crossover_cell<const LANES: usize>(row: &mut [u8; LANES], lane: usize, 
 
 #[cfg(any(test, feature = "bench-support"))]
 #[doc(hidden)]
+#[must_use]
 pub fn build_crossover_rows_reference<const LANES: usize>(
     notes: &[Note],
     note_range: (usize, usize),
@@ -414,6 +431,7 @@ pub type CrossoverAnnotationBuilder =
     fn(&[Note], (usize, usize), &TimingSegments, usize, usize) -> Vec<CrossoverRow>;
 
 #[inline(always)]
+#[must_use]
 pub const fn empty_crossover_annotations(
     _notes: &[Note],
     _note_range: (usize, usize),
@@ -463,6 +481,7 @@ pub fn build_crossover_cues_for_player_annotations(
 
 // Lowest matching lane wins so results are deterministic. `pos % 4` keeps this
 // working for the second pad of doubles, not just the left pad.
+#[must_use]
 pub const fn crossover_arrow_col(column_mask: u8, want_outer: bool) -> Option<usize> {
     let mut m = column_mask;
     while m != 0 {
@@ -478,6 +497,7 @@ pub const fn crossover_arrow_col(column_mask: u8, want_outer: bool) -> Option<us
 }
 
 #[allow(clippy::too_many_arguments)]
+#[must_use]
 pub fn build_crossover_cues_from_annotations(
     annos: &[CrossoverRow],
     timing_player: &TimingData,
@@ -655,12 +675,14 @@ fn build_crossover_cues_core_with_capacity(
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+#[must_use]
 pub fn build_crossover_cues_for_bench(annos: &[CrossoverRow]) -> Vec<ColumnCue> {
     build_crossover_cues_core(annos, |beat| beat * 0.5, 0, 500, 8, false, 0.0)
 }
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+#[must_use]
 pub fn build_crossover_cues_reference_for_bench(annos: &[CrossoverRow]) -> Vec<ColumnCue> {
     build_crossover_cues_core_with_capacity(
         annos,

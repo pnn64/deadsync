@@ -1,3 +1,4 @@
+#[must_use]
 pub fn sec_at_beat_from_bpms(normalized_bpms: &str, target_beat: f64) -> f64 {
     if !target_beat.is_finite() || target_beat <= 0.0 {
         return 0.0;
@@ -26,6 +27,7 @@ pub fn sec_at_beat_from_bpms(normalized_bpms: &str, target_beat: f64) -> f64 {
     time.max(0.0)
 }
 
+#[must_use]
 pub fn beat_at_sec_from_bpms(normalized_bpms: &str, target_sec: f64) -> f64 {
     if !target_sec.is_finite() || target_sec <= 0.0 {
         return 0.0;

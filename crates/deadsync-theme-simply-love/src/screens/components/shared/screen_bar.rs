@@ -166,14 +166,17 @@ const fn bar_background(
     }
 }
 
+#[must_use]
 pub fn build(params: ScreenBarParams) -> Actor {
     build_with_context(params, ScreenBarContext::Normal)
 }
 
+#[must_use]
 pub fn build_shared(params: ScreenBarParams) -> Actor {
     shared_frame(build_with_context(params, ScreenBarContext::Normal))
 }
 
+#[must_use]
 pub fn build_select_music(params: ScreenBarParams) -> Actor {
     let slot = match params.position {
         ScreenBarPosition::Top => 0,
@@ -217,10 +220,12 @@ fn shared_frame(actor: Actor) -> Actor {
     }
 }
 
+#[must_use]
 pub fn build_title_menu(params: ScreenBarParams) -> Actor {
     build_with_context(params, ScreenBarContext::TitleMenu)
 }
 
+#[must_use]
 pub fn build_no_background(params: ScreenBarParams) -> Actor {
     build_with_context(params, ScreenBarContext::NoBackground)
 }

@@ -44,6 +44,7 @@ fn foot_masks(annotation: &rssp::RowAnnotation) -> (u8, u8) {
     (left, right)
 }
 
+#[must_use]
 pub fn parse_time_signatures(tag: Option<&str>) -> Vec<TimeSignatureSegment> {
     parse_time_signatures_as(
         tag,
@@ -112,6 +113,7 @@ fn parse_time_signatures_as<T>(
     out
 }
 
+#[must_use]
 pub fn parse_tickcounts(tag: Option<&str>) -> Vec<TickcountSegment> {
     parse_tickcounts_as(
         tag,
@@ -166,6 +168,7 @@ fn parse_tickcounts_as<T>(
     out
 }
 
+#[must_use]
 pub fn parse_combos(tag: Option<&str>) -> Vec<ComboSegment> {
     parse_combos_as(
         tag,
@@ -400,6 +403,7 @@ pub(crate) fn parse_combos_baseline(tag: Option<&str>) -> Vec<ComboSegment> {
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_timing_tags_baseline(
     time_signatures: &str,
     tickcounts: &str,
@@ -424,6 +428,7 @@ pub fn benchmark_timing_tags_baseline(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_timing_tags_current(
     time_signatures: &str,
     tickcounts: &str,
@@ -468,6 +473,7 @@ fn timing_tag_checksum(
         })
 }
 
+#[must_use]
 pub fn timing_segments_from_rssp(segments: &rssp_timing::TimingSegments) -> TimingSegments {
     let speeds = segments
         .speeds
@@ -572,6 +578,7 @@ fn rssp_timing_segments_from_deadsync(segments: &TimingSegments) -> rssp_timing:
     }
 }
 
+#[must_use]
 pub fn crossover_annotations<const LANES: usize>(
     rows: &[[u8; LANES]],
     row_to_beat: &[f32],

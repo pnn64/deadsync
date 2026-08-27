@@ -3,7 +3,7 @@ use crate::{Error, Result};
 use std::iter::Peekable;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum DataType {
+pub enum DataType {
     Enum,
     Struct,
 }

@@ -68,6 +68,7 @@ pub struct VideoFrame {
 }
 
 impl VideoFrame {
+    #[must_use]
     pub fn into_upload_parts(mut self) -> (Yuv420Image, SyncSender<Vec<u8>>) {
         let image = self
             .image
@@ -95,6 +96,7 @@ pub struct Yuv420Image {
 }
 
 impl Yuv420Image {
+    #[must_use]
     pub fn from_raw(width: u32, height: u32, raw: Vec<u8>) -> Option<Self> {
         Self::from_raw_with_conversion(width, height, raw, YuvConversion::BT709_LIMITED)
     }
@@ -119,20 +121,24 @@ impl Yuv420Image {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn width(&self) -> u32 {
         self.width
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn height(&self) -> u32 {
         self.height
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn as_raw(&self) -> &[u8] {
         &self.raw
     }
 
+    #[must_use]
     pub fn planes(&self) -> (&[u8], &[u8], &[u8]) {
         let y_len = self.width as usize * self.height as usize;
         let chroma_len = y_len / 4;
@@ -142,11 +148,13 @@ impl Yuv420Image {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn conversion(&self) -> YuvConversion {
         self.conversion
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn into_raw(self) -> Vec<u8> {
         self.raw
     }
@@ -227,6 +235,7 @@ impl Player {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn buffer_pool_misses(&self) -> u64 {
         self.buffer_pool_misses.load(Ordering::Relaxed)
     }
@@ -589,12 +598,14 @@ fn read_frame(stdout: &mut ChildStdout, buf: &mut [u8]) -> io::Result<bool> {
 /// Absolute path of the runtime `bin/` directory the video tools load
 /// from (`<current_dir>/bin`), where the in-app downloader installs them.
 /// `None` only when the working directory can't be determined.
+#[must_use]
 pub fn runtime_bin_dir() -> Option<PathBuf> {
     std::env::current_dir().ok().map(|dir| dir.join("bin"))
 }
 
 /// True when both `ffmpeg` and `ffprobe` resolve, i.e. video playback
 /// will work.
+#[must_use]
 pub fn ffmpeg_available() -> bool {
     tool_is_available("ffmpeg") && tool_is_available("ffprobe")
 }

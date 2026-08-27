@@ -142,6 +142,7 @@ where
     }
 }
 
+#[must_use]
 pub fn load_app_config(conf: &SimpleIni, default: Config) -> Config {
     let loaded = load_config_sections(
         conf,
@@ -214,6 +215,7 @@ pub fn load_app_config(conf: &SimpleIni, default: Config) -> Config {
     cfg
 }
 
+#[must_use]
 pub fn load_bootstrap_bool(path: &Path, key: &str, default: bool) -> bool {
     let mut conf = SimpleIni::new();
     if conf.load(path).is_err() {

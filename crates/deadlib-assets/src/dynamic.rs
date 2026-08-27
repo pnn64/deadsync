@@ -34,6 +34,7 @@ fn banner_cache_opthash(opts: BannerCacheOptions) -> u64 {
 const BANNER_CACHE_MAGIC: [u8; 8] = *b"DSBNR02\0";
 const BANNER_CACHE_HEADER_SIZE: usize = 16;
 
+#[must_use]
 pub fn dynamic_image_cache_path_for(
     path: &Path,
     opts: BannerCacheOptions,
@@ -214,6 +215,7 @@ pub fn load_or_build_cached_dynamic_image(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn is_cacheable_dynamic_image_path(path: &Path) -> bool {
     path_has_extension(
         path,
@@ -225,6 +227,7 @@ pub fn is_cacheable_dynamic_image_path(path: &Path) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn is_dynamic_video_path(path: &Path) -> bool {
     path_has_extension(
         path,
@@ -322,6 +325,7 @@ pub fn push_dynamic_image_prewarm_jobs(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn dynamic_image_prewarm_dedupe_key(
     path: &Path,
     opts: BannerCacheOptions,
@@ -507,6 +511,7 @@ pub fn prewarm_dynamic_image_jobs_with_progress<F>(
     );
 }
 
+#[must_use]
 pub fn dedupe_dynamic_keys(keys: Vec<String>) -> Vec<String> {
     let mut seen = HashSet::with_capacity(keys.len());
     let mut out = Vec::with_capacity(keys.len());
@@ -527,6 +532,7 @@ pub struct DynamicVideoTiming {
 
 impl DynamicVideoTiming {
     #[inline(always)]
+    #[must_use]
     pub const fn new(anchor_gameplay_sec: f32, rate: f32) -> Self {
         Self {
             anchor_gameplay_sec,
@@ -536,11 +542,13 @@ impl DynamicVideoTiming {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn rate(&self) -> f32 {
         self.rate
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn play_time(&self, gameplay_time_sec: f32) -> f32 {
         dynamic_video_play_time(
             gameplay_time_sec,
@@ -560,11 +568,13 @@ impl DynamicVideoTiming {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn normalize_video_rate(rate: f32) -> f32 {
     if rate.is_finite() { rate.max(0.0) } else { 1.0 }
 }
 
 #[inline(always)]
+#[must_use]
 pub fn dynamic_video_play_time(
     gameplay_time_sec: f32,
     anchor_gameplay_sec: f32,

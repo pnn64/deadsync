@@ -11,10 +11,12 @@ pub fn load_never_cache_list(conf: &SimpleIni) -> Vec<String> {
         .collect()
 }
 
+#[must_use]
 pub fn never_cache_list_value(list: &[String]) -> String {
     list.join(",")
 }
 
+#[must_use]
 pub fn group_is_never_cached(list: &[String], group: &str) -> bool {
     let group = group.trim();
     if group.is_empty() {

@@ -46,6 +46,7 @@ pub struct AssetStore<T> {
 }
 
 impl<T> AssetStore<T> {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             texture_store: TextureStore::new(),
@@ -57,11 +58,13 @@ impl<T> AssetStore<T> {
         self.font_store.register_font(name, font);
     }
 
+    #[must_use]
     pub const fn fonts(&self) -> &FontMap {
         self.font_store.fonts()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_font(&self, name: &str) -> bool {
         self.font_store.has_font(name)
     }
@@ -81,26 +84,31 @@ impl<T> AssetStore<T> {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn textures(&self) -> &TextureHandleMap<T> {
         self.texture_store.textures()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_texture_key(&self, key: &str) -> bool {
         self.texture_store.has_texture_key(key)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_uploaded_texture_key(&self, key: &str) -> bool {
         self.texture_store.has_uploaded_texture_key(key)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_pending_texture_upload(&self, key: &str) -> bool {
         self.texture_store.has_pending_texture_upload(key)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn has_pending_texture_upload_handle(&self, handle: TextureHandle) -> bool {
         self.texture_store.has_pending_texture_upload_handle(handle)
     }

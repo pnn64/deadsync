@@ -451,7 +451,7 @@ fn error_bar_boundaries_use_10ms_blue_fantastic_window() {
 
     assert_eq!(len, 2);
     assert!(bounds[0].mul_add(1000.0, -timing::FA_PLUS_W010_MS).abs() <= 0.001);
-    assert!((bounds[1] - windows[0]).abs() <= 0.000001);
+    assert!((bounds[1] - windows[0]).abs() <= 0.000_001);
 }
 
 #[test]

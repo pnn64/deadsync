@@ -30,6 +30,7 @@ pub type SongLuaOverlayKind = deadsync_song_lua::SongLuaOverlayKind<
 pub type SongLuaOverlayActor = deadsync_song_lua::SongLuaOverlayActor<SongLuaOverlayKind>;
 pub type CompiledSongLua = deadsync_song_lua::CompiledSongLua<SongLuaOverlayActor>;
 
+#[must_use]
 pub fn overlay_sampler(overlay: &SongLuaOverlayActor) -> SamplerDesc {
     SamplerDesc {
         filter: if deadsync_song_lua::overlay_actor_uses_nearest_sampler(overlay) {

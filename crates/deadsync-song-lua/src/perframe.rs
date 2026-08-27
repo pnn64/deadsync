@@ -371,11 +371,13 @@ pub fn active_perframe_entries(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn perframe_segment_step(len: f32) -> f32 {
     (len / 96.0).clamp(1.0 / 192.0, 0.125)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn perframe_delta_seconds(context: &SongLuaCompileContext, delta_beats: f32) -> f32 {
     song_elapsed_seconds_for_beat(
         delta_beats,
@@ -385,6 +387,7 @@ pub fn perframe_delta_seconds(context: &SongLuaCompileContext, delta_beats: f32)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn relative_player_target(value: Option<f32>, baseline: Option<f32>) -> Option<f32> {
     value.map(|value| value - baseline.unwrap_or(0.0))
 }
@@ -416,12 +419,14 @@ pub fn call_perframe_entry(
     Ok(saw_side_effect)
 }
 
+#[must_use]
 pub fn update_function_end_beat(context: &SongLuaCompileContext) -> f32 {
     let seconds = context.music_length_seconds.max(0.0);
     let beats = seconds * song_display_bps(context) * song_music_rate(context);
     beats.max(0.0)
 }
 
+#[must_use]
 pub fn update_function_sample_step(len: f32) -> f32 {
     if len <= 0.0 {
         return 0.0;
@@ -556,6 +561,7 @@ fn update_function_replay_beats(
     })
 }
 
+#[must_use]
 pub fn update_function_samples(start: f32, end: f32) -> Vec<SongLuaPerframeSample> {
     let step = update_function_sample_step(end - start);
     let mut out = Vec::new();
@@ -581,6 +587,7 @@ pub fn update_function_samples(start: f32, end: f32) -> Vec<SongLuaPerframeSampl
     out
 }
 
+#[must_use]
 pub fn perframe_samples(start: f32, end: f32) -> Vec<SongLuaPerframeSample> {
     let step = perframe_segment_step(end - start);
     let eps = (0.5 * step).min(0.25 * (end - start)).max(1.0e-4_f32);

@@ -1,4 +1,5 @@
 ﻿#[inline(always)]
+#[must_use]
 pub const fn player_life_is_dead(life: f32, is_failing: bool) -> bool {
     is_failing || life <= 0.0
 }
@@ -49,6 +50,7 @@ fn survival_life(seconds: f32) -> f32 {
     (seconds / SURVIVAL_FULL_LIFE_SECONDS).clamp(0.0, 1.0)
 }
 
+#[must_use]
 pub fn init_course_life(
     config: CourseLifeConfig,
     carry: Option<CourseLifeState>,
@@ -96,6 +98,7 @@ pub fn init_course_life(
     }
 }
 
+#[must_use]
 pub fn course_life_carry(state: CourseLifeState) -> CourseLifeState {
     match state {
         CourseLifeState::Battery {
@@ -248,6 +251,7 @@ pub struct PlayerLifeStatus {
     pub is_failing: bool,
 }
 
+#[must_use]
 pub fn all_joined_players_failed(
     players: &[PlayerLifeStatus; MAX_PLAYERS],
     num_players: usize,
@@ -261,6 +265,7 @@ pub fn all_joined_players_failed(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn player_life_status(player: &PlayerRuntime) -> PlayerLifeStatus {
     PlayerLifeStatus {
         life: player.life,
@@ -268,6 +273,7 @@ pub const fn player_life_status(player: &PlayerRuntime) -> PlayerLifeStatus {
     }
 }
 
+#[must_use]
 pub fn all_joined_player_runtimes_failed(
     players: &[PlayerRuntime; MAX_PLAYERS],
     num_players: usize,
@@ -284,6 +290,7 @@ pub struct IndividualSongOutcome {
     pub fail_time: Option<f32>,
 }
 
+#[must_use]
 pub fn individual_song_outcome(
     player: &PlayerRuntime,
     song_completed_naturally: bool,
@@ -311,6 +318,7 @@ pub fn individual_song_outcome(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn course_submit_life_eligible(life: Option<&deadsync_rules::life::LifeMeter>) -> bool {
     life.is_none_or(|life| !life.is_failing && life.fail_time.is_none() && life.life > 0.0)
 }
@@ -406,6 +414,7 @@ pub fn apply_life_change(player: &mut PlayerRuntime, current_music_time: f32, de
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn player_runtime_is_dead(player: &PlayerRuntime) -> bool {
     player_life_is_dead(player.life, player.is_failing)
 }

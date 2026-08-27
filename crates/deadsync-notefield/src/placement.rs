@@ -261,11 +261,13 @@ impl NotefieldCameraCache {
         camera
     }
 
+    #[must_use]
     pub const fn stats(&self) -> NotefieldCameraCacheStats {
         self.stats
     }
 
     /// Monotonic source token for downstream products derived from this camera.
+    #[must_use]
     pub const fn generation(&self) -> u64 {
         self.stats.rebuilds
     }

@@ -13,6 +13,7 @@ pub struct MyStruct {
 
 impl MyStruct {
     #[inline]
+    #[must_use]
     pub const fn new(v: Vec<String>, string: String, number: usize) -> Self {
         Self { v, string, number }
     }

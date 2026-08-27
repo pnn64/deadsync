@@ -12,19 +12,18 @@ pub(crate) type Result<T = ()> = std::result::Result<T, Error>;
 pub(crate) use self::error::Error;
 
 pub(crate) mod prelude {
-    pub(crate) use crate::generate::{FnSelfArg, Generator, StreamBuilder};
-    pub(crate) use crate::parse::{
-        AttributeAccess, Body, EnumVariant, Fields, FromAttribute, Parse,
-    };
+    pub use crate::generate::{FnSelfArg, Generator, StreamBuilder};
+    pub use crate::parse::{AttributeAccess, Body, EnumVariant, Fields, FromAttribute, Parse};
+    #[allow(clippy::redundant_pub_crate)]
     pub(crate) use crate::{Error, Result};
 
     #[cfg(test)]
-    pub(crate) use proc_macro2::*;
+    pub use proc_macro2::*;
 
     #[cfg(not(test))]
     extern crate proc_macro;
     #[cfg(not(test))]
-    pub(crate) use proc_macro::*;
+    pub use proc_macro::*;
 }
 
 #[cfg(test)]

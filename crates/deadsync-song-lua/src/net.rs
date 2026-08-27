@@ -61,6 +61,7 @@ pub fn query_value_text(value: Value) -> Option<String> {
     }
 }
 
+#[must_use]
 pub fn url_encode_component(text: &str) -> String {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let mut out = String::new();

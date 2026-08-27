@@ -26,6 +26,7 @@ pub struct State {
     pub last_inputs: VecDeque<(String, Instant)>,
 }
 
+#[must_use]
 pub fn init() -> State {
     State {
         elapsed: 0.0,
@@ -42,10 +43,12 @@ pub fn update(state: &mut State, dt: f32) {
         .retain(|(_, timestamp)| timestamp.elapsed().as_secs_f32() < INPUT_LOG_FADE_DURATION);
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
@@ -196,6 +199,7 @@ pub fn push_actors(
     }
 }
 
+#[must_use]
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(10 + INPUT_LOG_MAX_ITEMS);
     push_actors(&mut actors, state, Default::default());

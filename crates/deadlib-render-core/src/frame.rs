@@ -99,6 +99,7 @@ pub struct TexturedMeshSource {
 
 impl TexturedMeshSource {
     #[inline(always)]
+    #[must_use]
     pub const fn transient(vertex_start: u32, vertex_count: u32) -> Self {
         Self {
             buffer_key: INVALID_TMESH_CACHE_KEY,
@@ -108,6 +109,7 @@ impl TexturedMeshSource {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn cached(buffer_key: u64, vertex_count: u32) -> Self {
         debug_assert!(buffer_key != INVALID_TMESH_CACHE_KEY);
         Self {
@@ -118,11 +120,13 @@ impl TexturedMeshSource {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn vertex_start(self) -> u32 {
         self.vertex_start
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn vertex_count(self) -> u32 {
         self.vertex_count
     }
@@ -132,6 +136,7 @@ impl TexturedMeshSource {
     ///
     /// This is not the presentation geometry's cache key. Backends may return
     /// a dense slot or another non-zero identity that makes recording cheap.
+    #[must_use]
     pub const fn buffer_key(self) -> Option<u64> {
         if self.buffer_key == INVALID_TMESH_CACHE_KEY {
             None
@@ -141,6 +146,7 @@ impl TexturedMeshSource {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn shares_vertex_buffer(self, other: Self) -> bool {
         self.buffer_key == other.buffer_key
     }
@@ -197,6 +203,7 @@ struct UncachedGeometry {
 }
 
 impl TexturedMeshUploads {
+    #[must_use]
     pub fn with_capacity(vertices: usize, geometries: usize) -> Self {
         Self {
             vertices: Vec::with_capacity(vertices),
@@ -208,6 +215,7 @@ impl TexturedMeshUploads {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn source(&self, geometry: u32) -> Option<TexturedMeshSource> {
         self.sources.get(geometry as usize).copied()
     }
@@ -389,6 +397,7 @@ pub struct DrawStorageStats {
     pub capacities: [u32; DRAW_STORAGE_SLOTS],
 }
 
+#[must_use]
 pub fn draw_storage_stats(
     frame: &RenderFrame,
     uploads: Option<&TexturedMeshUploads>,

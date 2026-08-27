@@ -1,11 +1,13 @@
 pub const ROWS_PER_BEAT: i32 = 48;
 
 #[inline(always)]
+#[must_use]
 pub fn note_row_to_beat(row: i32) -> f32 {
     row as f32 / ROWS_PER_BEAT as f32
 }
 
 #[inline(always)]
+#[must_use]
 pub fn beat_to_note_row(beat: f32) -> i32 {
     (beat * ROWS_PER_BEAT as f32).round() as i32
 }

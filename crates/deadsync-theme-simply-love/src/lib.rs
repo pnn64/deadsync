@@ -108,6 +108,7 @@ mod act_macro {
 }
 pub(crate) use act_macro::act;
 
+#[must_use]
 pub fn asset_manifest()
 -> deadsync_theme::ThemeAssetManifest<impl Iterator<Item = deadlib_assets::TextureAssetSpec>> {
     deadsync_theme::ThemeAssetManifest {

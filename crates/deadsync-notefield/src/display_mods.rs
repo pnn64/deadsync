@@ -239,6 +239,7 @@ pub(crate) fn append_disabled_timing_windows(out: &mut String, bits: u8) {
     }
 }
 
+#[must_use]
 pub fn gameplay_mods_text(params: GameplayModsTextParams<'_>) -> String {
     let mut out = String::with_capacity(64);
     append_speed(&mut out, params.speed);

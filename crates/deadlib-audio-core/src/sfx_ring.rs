@@ -53,6 +53,7 @@ impl Iterator for SfxDrain<'_> {
 }
 
 /// Create a fixed-capacity, session-lifetime SFX command transport.
+#[must_use]
 pub fn sfx_transport(capacity: usize) -> (SfxSender, SfxReceiver) {
     assert!(capacity > 0, "SFX queue capacity must be nonzero");
     let (producer, consumer) = RingBuffer::new(capacity);

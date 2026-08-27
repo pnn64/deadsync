@@ -1,7 +1,7 @@
 use crate::attribute::{ContainerAttributes, FieldAttributes};
 use virtue::prelude::*;
 
-pub(crate) struct DeriveStruct {
+pub struct DeriveStruct {
     pub fields: Option<Fields>,
     pub attributes: ContainerAttributes,
 }

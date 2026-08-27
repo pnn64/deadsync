@@ -248,6 +248,7 @@ pub const SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES: &[&str] = &[
     "Reverse",
 ];
 
+#[must_use]
 pub fn is_player_option_method_name(name: &str) -> bool {
     SONG_LUA_PLAYER_OPTION_CAPABILITIES.contains(&name)
         || SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES
@@ -281,6 +282,7 @@ pub fn split_first_word(text: &str) -> (&str, &str) {
     }
 }
 
+#[must_use]
 pub fn parse_player_option_amount(text: &str) -> Option<f32> {
     let text = text.trim();
     let raw = text.trim_end_matches('%');
@@ -288,6 +290,7 @@ pub fn parse_player_option_amount(text: &str) -> Option<f32> {
     Some(value / 100.0)
 }
 
+#[must_use]
 pub fn normalize_player_option_key(text: &str) -> String {
     text.chars()
         .filter(|ch| ch.is_ascii_alphanumeric())
@@ -295,6 +298,7 @@ pub fn normalize_player_option_key(text: &str) -> String {
         .collect()
 }
 
+#[must_use]
 pub fn parse_player_speed_option(text: &str) -> Option<(&'static str, f32)> {
     let compact: String = text
         .chars()
@@ -362,6 +366,7 @@ pub fn song_lua_speedmod_value(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn player_option_default_string(name: &str) -> Option<&'static str> {
     Some(match name {
         "drainsetting" => "DrainType_Normal",
@@ -375,6 +380,7 @@ pub fn player_option_default_string(name: &str) -> Option<&'static str> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn player_option_uses_bool(name: &str) -> bool {
     matches!(
         name,

@@ -54,6 +54,7 @@ pub struct State {
     lights_pending: bool,
 }
 
+#[must_use]
 pub const fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
@@ -189,10 +190,12 @@ fn append_exit_effects(state: &State, effects: &mut Vec<ThemeEffect>) {
     debug_assert!(matches!(effects.len() - start_len, 1 | 2));
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }

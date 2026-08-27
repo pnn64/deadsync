@@ -1,5 +1,6 @@
 use deadsync_chart::MatrixRatingInput;
 
+#[must_use]
 pub fn matrix_rating_at_rate(
     base_rating: f64,
     profile: &[MatrixRatingInput],

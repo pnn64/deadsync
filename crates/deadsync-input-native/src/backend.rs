@@ -61,6 +61,7 @@ pub enum WindowsPadBackend {
 
 impl WindowsPadBackend {
     #[inline(always)]
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Auto => "Auto",
@@ -152,26 +153,31 @@ impl BackendHost {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn pad_id_for_uuid(self, backend: PadOrderBackend, uuid: [u8; 16]) -> PadId {
         PadId((self.pad_index_for_uuid)(backend, uuid))
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn native_smx_owns_device(self, vendor: Option<u16>, product: Option<u16>) -> bool {
         (self.native_smx_owns_device)(vendor, product)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn now_nanos(self) -> u64 {
         (self.now_nanos)()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn instant_nanos(self, at: Instant) -> u64 {
         (self.instant_nanos)(at)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn sample_time(self) -> (Instant, u64) {
         let timestamp = Instant::now();
         // Audio snapshots use the authoritative host clock; `instant_nanos` may
@@ -180,11 +186,13 @@ impl BackendHost {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn qpc_ticks_to_nanos(self, ticks: u64) -> Option<u64> {
         (self.qpc_ticks_to_nanos)(ticks)
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn boost_input_thread(self) -> InputThreadPolicy {
         (self.boost_input_thread)()
     }
@@ -246,6 +254,7 @@ pub struct InputThreadPolicy {
 
 impl InputThreadPolicy {
     #[inline(always)]
+    #[must_use]
     pub const fn none() -> Self {
         Self {
             token: 0,
@@ -269,11 +278,12 @@ impl Drop for InputThreadPolicy {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn uuid_from_bytes(bytes: &[u8]) -> [u8; 16] {
     // Deterministic, fast, and tiny: two FNV-1a 64-bit passes with different offsets.
-    const OFF0: u64 = 0xcbf29ce484222325;
-    const OFF1: u64 = 0xaf63dc4c8601ec8c;
-    const PRIME: u64 = 0x00000100000001b3;
+    const OFF0: u64 = 0xcbf2_9ce4_8422_2325;
+    const OFF1: u64 = 0xaf63_dc4c_8601_ec8c;
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
 
     #[inline(always)]
     fn fnv64(mut h: u64, bytes: &[u8]) -> u64 {

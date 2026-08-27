@@ -462,16 +462,16 @@ mod tests {
     fn technique_random_matches_lua_double_precision() {
         let samples = [
             (0.0, 0.5),
-            (1.0, 0.95219797),
-            (1.6, 0.67487276),
-            (13.0, 0.23824042),
-            (26.0, 0.862378),
-            (52.0, 0.5716033),
-            (117.0, 0.9204272),
+            (1.0, 0.952_197_97),
+            (1.6, 0.674_872_76),
+            (13.0, 0.238_240_42),
+            (26.0, 0.862_378),
+            (52.0, 0.571_603_3),
+            (117.0, 0.920_427_2),
         ];
 
         for (input, expected) in samples {
-            assert!((random_xd(input) - expected).abs() < 0.000001);
+            assert!((random_xd(input) - expected).abs() < 0.000_001);
         }
     }
 

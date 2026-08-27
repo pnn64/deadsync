@@ -1,6 +1,7 @@
 /// Accepts "#rgb", "#rgba", "#rrggbb", "#rrggbbaa" (or without '#').
 /// Panics on invalid input; use only with trusted literals.
 /// Evaluated at COMPILE TIME if assigned to a const/static.
+#[must_use]
 pub const fn rgba_hex(s: &str) -> [f32; 4] {
     let bytes = s.as_bytes();
 
@@ -77,11 +78,13 @@ impl Color {
     };
 
     /// Build an opaque color (alpha = 1.0) from RGB channels.
+    #[must_use]
     pub const fn rgb(r: f32, g: f32, b: f32) -> Self {
         Self { a: 1.0, r, g, b }
     }
 
     /// Build a color from render-order `[r, g, b, a]` channels.
+    #[must_use]
     pub const fn from_rgba(rgba: [f32; 4]) -> Self {
         Self {
             a: rgba[3],
@@ -92,12 +95,14 @@ impl Color {
     }
 
     /// Channels as an `[r, g, b, a]` array for render tint/diffuse values.
+    #[must_use]
     pub const fn to_rgba(self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
     }
 
     /// Parse a config hex color string: trimmed, optional leading `#`,
     /// 6-digit `RRGGBB` or 8-digit `AARRGGBB`.
+    #[must_use]
     pub fn from_hex(raw: &str) -> Option<Self> {
         let hex = raw.trim().trim_start_matches('#');
         if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -123,6 +128,7 @@ impl Color {
     }
 
     /// Format as `#RRGGBB` when opaque, otherwise `#AARRGGBB`.
+    #[must_use]
     pub fn to_hex(self) -> String {
         let channel = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
         let (r, g, b) = (channel(self.r), channel(self.g), channel(self.b));
@@ -190,6 +196,7 @@ const fn contains_ascii_ci(haystack: &str, needle: &[u8]) -> bool {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn difficulty_display_name(difficulty_name: &str, zmod_rating_box_text: bool) -> &'static str {
     if difficulty_name.eq_ignore_ascii_case("edit") {
         return "Edit";
@@ -214,6 +221,7 @@ pub fn difficulty_display_name(difficulty_name: &str, zmod_rating_box_text: bool
 /// target the file's actual difficulty rather than a per-song display quirk.
 /// Unrecognized values fall back to `"medium"`, matching `difficulty_display_name`.
 #[inline(always)]
+#[must_use]
 pub fn difficulty_gif_tag(difficulty_name: &str) -> &'static str {
     if difficulty_name.eq_ignore_ascii_case("edit") {
         return "edit";
@@ -227,6 +235,7 @@ pub fn difficulty_gif_tag(difficulty_name: &str) -> &'static str {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn difficulty_display_name_for_song(
     difficulty_name: &str,
     song_main_title: &str,
@@ -376,6 +385,7 @@ impl JudgmentColorRole {
         Self::Miss,
     ];
 
+    #[must_use]
     pub const fn index(self) -> usize {
         match self {
             Self::FantasticBlue => 0,
@@ -388,6 +398,7 @@ impl JudgmentColorRole {
         }
     }
 
+    #[must_use]
     pub const fn config_key(self) -> &'static str {
         match self {
             Self::FantasticBlue => "FantasticBlue",
@@ -420,6 +431,7 @@ impl Default for JudgmentPalette {
 }
 
 impl JudgmentPalette {
+    #[must_use]
     pub const fn new(
         colors: [[f32; 4]; 7],
         gameplay_dim: [[f32; 4]; 7],
@@ -432,6 +444,7 @@ impl JudgmentPalette {
         }
     }
 
+    #[must_use]
     pub fn from_base_colors(colors: [[f32; 4]; 7]) -> Self {
         Self {
             colors,
@@ -440,18 +453,22 @@ impl JudgmentPalette {
         }
     }
 
+    #[must_use]
     pub const fn color(self, role: JudgmentColorRole) -> [f32; 4] {
         self.colors[role.index()]
     }
 
+    #[must_use]
     pub const fn gameplay_dim_color(self, role: JudgmentColorRole) -> [f32; 4] {
         self.gameplay_dim[role.index()]
     }
 
+    #[must_use]
     pub const fn evaluation_dim_color(self, role: JudgmentColorRole) -> [f32; 4] {
         self.evaluation_dim[role.index()]
     }
 
+    #[must_use]
     pub fn with_color(mut self, role: JudgmentColorRole, color: [f32; 4]) -> Self {
         self.colors[role.index()] = color;
         Self::from_base_colors(self.colors)
@@ -521,6 +538,7 @@ pub enum DifficultyColorScheme {
 }
 
 impl DifficultyColorScheme {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::SimplyLove => "Simply Love",
@@ -569,6 +587,7 @@ pub const DDR_DIFFICULTY_RGBA: [[f32; 4]; 5] = [
 
 /// Returns the Simply Love color for a given difficulty, based on an active theme color index.
 #[inline(always)]
+#[must_use]
 pub fn difficulty_rgba(difficulty_name: &str, active_color_index: i32) -> [f32; 4] {
     difficulty_rgba_with_scheme(
         difficulty_name,
@@ -579,6 +598,7 @@ pub fn difficulty_rgba(difficulty_name: &str, active_color_index: i32) -> [f32; 
 
 /// Returns the selected zmod difficulty color for a file difficulty name.
 #[inline(always)]
+#[must_use]
 pub fn difficulty_rgba_with_scheme(
     difficulty_name: &str,
     active_color_index: i32,
@@ -609,33 +629,39 @@ const fn wrap(n: usize, i: i32) -> usize {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn decorative_rgba(idx: i32) -> [f32; 4] {
     DECORATIVE_RGBA[wrap(DECORATIVE_RGBA.len(), idx)]
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn srpg9_rgba(idx: i32) -> [f32; 4] {
     SRPG9_RGBA[wrap(SRPG9_RGBA.len(), idx)]
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn srpg10_rgba(idx: i32) -> [f32; 4] {
     SRPG10_RGBA[wrap(SRPG10_RGBA.len(), idx)]
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn simply_love_rgba(idx: i32) -> [f32; 4] {
     SIMPLY_LOVE_RGBA[wrap(SIMPLY_LOVE_RGBA.len(), idx)]
 }
 
 /// Simply Love `LightenColor(c)` parity: multiplies RGB by 1.25, keeps alpha.
 #[inline(always)]
+#[must_use]
 pub fn lighten_rgba(c: [f32; 4]) -> [f32; 4] {
     [c[0] * 1.25, c[1] * 1.25, c[2] * 1.25, c[3]]
 }
 
 /// Menu selected color rule: “current `SIMPLY_LOVE` minus 2”
 #[inline(always)]
+#[must_use]
 pub const fn menu_selected_rgba(active_idx: i32) -> [f32; 4] {
     simply_love_rgba(active_idx - 2)
 }

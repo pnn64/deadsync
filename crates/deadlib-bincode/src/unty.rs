@@ -6,7 +6,7 @@ use core::{any::TypeId, marker::PhantomData, mem};
 ///
 /// Bincode only compares `T` with lifetime-free numeric primitives, so the
 /// lifetime limitation of `non_static_type_id` cannot produce a false positive.
-pub(crate) fn type_equal<Src: ?Sized, Target: ?Sized>() -> bool {
+pub fn type_equal<Src: ?Sized, Target: ?Sized>() -> bool {
     non_static_type_id::<Src>() == non_static_type_id::<Target>()
 }
 

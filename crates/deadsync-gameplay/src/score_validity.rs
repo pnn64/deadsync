@@ -15,6 +15,7 @@ impl Default for ScoreValidityOptions {
     }
 }
 
+#[must_use]
 pub fn score_invalid_reason_lines_for_options(
     chart: &ChartData,
     options: ScoreValidityOptions,

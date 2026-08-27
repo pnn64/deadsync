@@ -157,6 +157,7 @@ pub struct RuntimeConfigStore {
 }
 
 impl RuntimeConfigStore {
+    #[must_use]
     pub fn new() -> Self {
         let config = Config::default();
         let input_routing_bits = InputRoutingConfig::from_config(&config).bits();
@@ -577,6 +578,7 @@ impl RuntimeConfigStore {
 }
 
 impl PublishedConfigEffects {
+    #[must_use]
     pub const fn from_config(cfg: &Config) -> Self {
         Self {
             audio_mix_levels: audio_mix_levels_from_config(cfg),
@@ -593,6 +595,7 @@ impl PublishedConfigEffects {
     }
 }
 
+#[must_use]
 pub const fn audio_mix_levels_from_config(cfg: &Config) -> AudioMixLevels {
     AudioMixLevels {
         master_volume: cfg.master_volume,
@@ -602,6 +605,7 @@ pub const fn audio_mix_levels_from_config(cfg: &Config) -> AudioMixLevels {
     }
 }
 
+#[must_use]
 pub fn smx_underglow_colors_from_config(
     cfg: &Config,
     lone_pad: bool,
@@ -654,6 +658,7 @@ impl Default for RuntimeStateOptions {
     }
 }
 
+#[must_use]
 pub fn load_runtime_state_options(conf: &SimpleIni) -> RuntimeStateOptions {
     load_runtime_state_options_with_default_noteskin(conf, DEFAULT_MACHINE_NOTESKIN)
 }
@@ -673,6 +678,7 @@ pub fn load_runtime_state_options_with_default_noteskin(
     }
 }
 
+#[must_use]
 pub fn load_runtime_state_ids(conf: &SimpleIni) -> RuntimeStateIds {
     RuntimeStateIds {
         smx_p1_serial: nonempty_option(conf, "SmxP1Serial"),
@@ -682,6 +688,7 @@ pub fn load_runtime_state_ids(conf: &SimpleIni) -> RuntimeStateIds {
     }
 }
 
+#[must_use]
 pub fn load_pad_order_entries(conf: &SimpleIni) -> Option<Vec<PadOrderEntry>> {
     conf.get_section("Options").map(|section| {
         section

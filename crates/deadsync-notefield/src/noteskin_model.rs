@@ -84,6 +84,7 @@ impl Default for ModelMeshCache {
 
 impl ModelMeshCache {
     #[inline(always)]
+    #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             slots: Vec::with_capacity(capacity),
@@ -99,6 +100,7 @@ impl ModelMeshCache {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn stats(&self) -> ModelMeshCacheStats {
         self.stats
     }
@@ -119,6 +121,7 @@ impl ModelMeshCache {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn frame_stats(&self) -> NoteskinFrameCacheStats {
         self.frame_stats
     }
@@ -1124,22 +1127,22 @@ mod tests {
             panic!("expected textured mesh actor");
         };
         let expected_transform = Matrix4::from_cols_array(&[
-            2.6578522,
-            -2.9534407,
+            2.657_852_2,
+            -2.953_440_7,
             0.0,
-            -0.0012019041,
-            -0.66446304,
-            -0.65436834,
+            -0.001_201_904_1,
+            -0.664_463_04,
+            -0.654_368_34,
             0.0,
-            0.00093999587,
-            -1.0260605,
-            -0.48952773,
+            0.000_939_995_87,
+            -1.026_060_5,
+            -0.489_527_73,
             0.0,
-            -0.007229817,
-            -17.262817,
-            -25.939787,
+            -0.007_229_817,
+            -17.262_817,
+            -25.939_787,
             0.0,
-            1.0144548,
+            1.014_454_8,
         ]);
         assert_eq!(align, [0.0, 0.0]);
         assert_eq!(offset, xy);

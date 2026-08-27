@@ -11,7 +11,7 @@ mod visibility;
 
 pub use self::attributes::{Attribute, AttributeAccess, FromAttribute};
 pub use self::body::{EnumBody, EnumVariant, Fields, StructBody};
-pub(crate) use self::data_type::DataType;
+pub use self::data_type::DataType;
 pub use self::generics::{GenericConstraints, Generics};
 use self::visibility::Visibility;
 

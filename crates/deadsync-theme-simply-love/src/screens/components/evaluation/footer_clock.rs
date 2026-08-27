@@ -10,7 +10,7 @@ use std::sync::Arc;
 /// retained string. Cadence tests provide instrumentation, and worst-case
 /// update cost is one clock read plus one short string allocation.
 #[derive(Clone)]
-pub(crate) struct FooterClock {
+pub struct FooterClock {
     check_elapsed: f32,
     minute: i64,
     text: Arc<str>,

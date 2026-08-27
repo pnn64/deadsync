@@ -80,6 +80,7 @@ pub struct ItgSource {
 
 impl ItgSource {
     /// Total number of high-score records across all songs/steps.
+    #[must_use]
     pub fn total_high_scores(&self) -> usize {
         self.songs
             .iter()
@@ -122,6 +123,7 @@ impl From<std::io::Error> for ItgReadError {
 }
 
 /// Returns `true` if `dir` looks like an `ITGmania` local profile directory.
+#[must_use]
 pub fn is_itg_profile_dir(dir: &Path) -> bool {
     find_case_insensitive(dir, "Editable.ini").is_some()
 }
@@ -130,6 +132,7 @@ pub fn is_itg_profile_dir(dir: &Path) -> bool {
 /// without parsing the (potentially large) `Stats.xml`. Used to label profiles
 /// in the import picker. Returns `None` when the file is missing or the name is
 /// blank.
+#[must_use]
 pub fn read_display_name(dir: &Path) -> Option<String> {
     let path = find_case_insensitive(dir, "Editable.ini")?;
     let name = read_editable(&path).display_name;
@@ -145,6 +148,7 @@ pub fn read_display_name(dir: &Path) -> Option<String> {
 /// the file, so we only scan the head (bounded) instead of the whole — possibly
 /// many-megabyte — score database. Used by the import picker to flag profiles
 /// that have already been imported. Returns `None` when absent or unreadable.
+#[must_use]
 pub fn read_source_guid(dir: &Path) -> Option<String> {
     // GeneralData (and thus Guid) sits before SongScores, well within this cap.
     const HEAD_CAP: u64 = 256 * 1024;
@@ -292,6 +296,7 @@ fn read_simply_love(dir: &Path) -> HashMap<String, String> {
 /// song keys. Section header lines (which begin with `---`, e.g.
 /// `---My Stamina Playlist`) and blank lines are skipped; remaining lines are
 /// the favorited song paths. Order is preserved and duplicates are removed.
+#[must_use]
 pub fn parse_favorites_text(text: &str) -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
     let mut out = Vec::new();

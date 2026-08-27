@@ -7,11 +7,13 @@ pub struct ThemeScreenId(&'static str);
 
 impl ThemeScreenId {
     #[inline(always)]
+    #[must_use]
     pub const fn new(id: &'static str) -> Self {
         Self(id)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         self.0
     }

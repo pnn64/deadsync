@@ -68,6 +68,7 @@ impl DisplayClockDiagEvent {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn from_step_event(at_host_nanos: u64, event: DisplayClockStepEvent) -> Self {
         Self {
             at_host_nanos,
@@ -98,6 +99,7 @@ impl Default for DisplayClockDiagRing {
 
 impl DisplayClockDiagRing {
     #[inline(always)]
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             events: [DisplayClockDiagEvent::empty(); DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT],
@@ -108,6 +110,7 @@ impl DisplayClockDiagRing {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn last_trigger_seq(&self) -> u64 {
         self.last_trigger_seq
     }
@@ -212,6 +215,7 @@ pub struct FrameStableDisplayClock {
 
 impl FrameStableDisplayClock {
     #[inline(always)]
+    #[must_use]
     pub const fn new(time_ns: SongTimeNs) -> Self {
         Self {
             current_time_ns: time_ns,
@@ -231,6 +235,7 @@ impl FrameStableDisplayClock {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn health(self) -> DisplayClockHealth {
         DisplayClockHealth {
             error_seconds: song_time_ns_span_seconds(
@@ -249,6 +254,7 @@ pub struct GameplayDisplayClockState {
 
 impl GameplayDisplayClockState {
     #[inline(always)]
+    #[must_use]
     pub const fn new(time_ns: SongTimeNs) -> Self {
         Self {
             clock: FrameStableDisplayClock::new(time_ns),
@@ -262,11 +268,13 @@ impl GameplayDisplayClockState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn health(self) -> DisplayClockHealth {
         self.clock.health()
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn diag_trigger_seq(&self) -> u64 {
         self.diag.last_trigger_seq()
     }
@@ -335,6 +343,7 @@ pub struct GameplayBeatPhaseState {
 
 impl GameplayBeatPhaseState {
     #[inline(always)]
+    #[must_use]
     pub const fn new(is_in_freeze: bool, is_in_delay: bool) -> Self {
         Self {
             is_in_freeze,
@@ -343,16 +352,19 @@ impl GameplayBeatPhaseState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_in_freeze(&self) -> bool {
         self.is_in_freeze
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_in_delay(&self) -> bool {
         self.is_in_delay
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn paused(&self) -> bool {
         self.is_in_freeze || self.is_in_delay
     }

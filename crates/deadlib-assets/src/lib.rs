@@ -77,11 +77,13 @@ pub struct TextureHints {
 
 impl TextureHints {
     #[inline(always)]
+    #[must_use]
     pub fn is_default(&self) -> bool {
         self.raw.is_empty() || self.raw.eq_ignore_ascii_case("default")
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn sampler_desc(&self) -> SamplerDesc {
         SamplerDesc {
             filter: self.sampler_filter.unwrap_or(SamplerFilter::Linear),
@@ -189,6 +191,7 @@ fn parse_res_dims(section: &[u8]) -> Option<(u32, u32)> {
     None
 }
 
+#[must_use]
 pub fn parse_texture_resolution_hint(raw: &str) -> Option<(u32, u32)> {
     let bytes = raw.as_bytes();
     let mut i = 0usize;
@@ -210,6 +213,7 @@ pub fn parse_texture_resolution_hint(raw: &str) -> Option<(u32, u32)> {
     None
 }
 
+#[must_use]
 pub fn texture_source_dims_from_real(texture_key: &str, real_w: u32, real_h: u32) -> (u32, u32) {
     let (mut source_w, mut source_h) =
         parse_texture_resolution_hint(texture_key).unwrap_or((real_w, real_h));
@@ -229,6 +233,7 @@ const fn is_res_tag(bytes: &[u8], idx: usize) -> bool {
         && bytes[idx + 3].eq_ignore_ascii_case(&b's')
 }
 
+#[must_use]
 pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
     let bytes = filename.as_bytes();
     let mut dims: Option<(u32, u32)> = None;
@@ -290,6 +295,7 @@ const fn is_sprite_sheet_right_boundary(bytes: &[u8], right: usize) -> bool {
         )
 }
 
+#[must_use]
 pub fn texture_source_frame_dims_from_real(
     texture_key: &str,
     real_w: u32,
@@ -300,6 +306,7 @@ pub fn texture_source_frame_dims_from_real(
     (source_w / frames_wide.max(1), source_h / frames_high.max(1))
 }
 
+#[must_use]
 pub fn texture_filename_has_multiframe_hint(filename: &str) -> bool {
     let bytes = filename.as_bytes();
     let mut i = 0usize;
@@ -331,6 +338,7 @@ pub fn texture_filename_has_multiframe_hint(filename: &str) -> bool {
     false
 }
 
+#[must_use]
 pub fn strip_sprite_hints(name: &str) -> String {
     let file_name = Path::new(name)
         .file_name()
@@ -365,6 +373,7 @@ pub fn strip_sprite_hints(name: &str) -> String {
     out.replace(" (doubleres)", "").trim().to_string()
 }
 
+#[must_use]
 pub fn direct_texture_key_path(raw: &str, key: &str) -> Option<PathBuf> {
     for candidate in [Path::new(raw), Path::new(key)] {
         if candidate.is_absolute() && candidate.is_file() {
@@ -424,6 +433,7 @@ pub fn open_image_fallback_quiet(path: &Path) -> image::ImageResult<image::Dynam
     open_image_fallback_mode(path, false)
 }
 
+#[must_use]
 pub fn ascii_ci_hash(input: &str) -> u64 {
     let mut hash = 14_695_981_039_346_656_037u64;
     for &b in input.as_bytes() {
@@ -433,6 +443,7 @@ pub fn ascii_ci_hash(input: &str) -> u64 {
     hash
 }
 
+#[must_use]
 pub fn media_path_key(path: &Path) -> Arc<str> {
     match path.to_string_lossy() {
         std::borrow::Cow::Borrowed(key) => Arc::from(key),
@@ -440,6 +451,7 @@ pub fn media_path_key(path: &Path) -> Arc<str> {
     }
 }
 
+#[must_use]
 pub fn parse_texture_hints(raw: &str) -> TextureHints {
     let mut hints = TextureHints::default();
     let trimmed = raw.trim();
@@ -499,11 +511,13 @@ pub fn parse_texture_hints(raw: &str) -> TextureHints {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn is_noteskin_texture_key(key: &str) -> bool {
     key.starts_with("noteskins/")
 }
 
 #[inline(always)]
+#[must_use]
 pub fn initial_texture_sampler(key: &str, needs_repeat: bool) -> SamplerDesc {
     if needs_repeat {
         SamplerDesc {
@@ -518,6 +532,7 @@ pub fn initial_texture_sampler(key: &str, needs_repeat: bool) -> SamplerDesc {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn texture_key_sampler(hints: &TextureHints, needs_repeat: bool) -> SamplerDesc {
     if needs_repeat {
         SamplerDesc {

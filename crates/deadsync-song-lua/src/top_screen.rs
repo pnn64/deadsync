@@ -108,6 +108,7 @@ pub fn top_screen_option_row_name(value: Option<Value>) -> String {
     }
 }
 
+#[must_use]
 pub fn top_screen_option_row_name_at(index: i32) -> Option<&'static str> {
     let index = usize::try_from(index).ok()?;
     SONG_LUA_TOP_SCREEN_OPTION_ROWS
@@ -120,6 +121,7 @@ pub fn top_screen_option_row_name_at(index: i32) -> Option<&'static str> {
         .copied()
 }
 
+#[must_use]
 pub fn option_row_default_text(name: &str) -> String {
     let lower = name.to_ascii_lowercase();
     match lower.as_str() {
@@ -133,6 +135,7 @@ pub fn option_row_default_text(name: &str) -> String {
     }
 }
 
+#[must_use]
 pub const fn player_child_proxy_name(name: &str) -> Option<&'static str> {
     if name.eq_ignore_ascii_case("Judgment") {
         Some("Judgment")
@@ -143,6 +146,7 @@ pub const fn player_child_proxy_name(name: &str) -> Option<&'static str> {
     }
 }
 
+#[must_use]
 pub const fn top_screen_player_name(player_index: usize) -> &'static str {
     match player_index {
         0 => "PlayerP1",
@@ -151,6 +155,7 @@ pub const fn top_screen_player_name(player_index: usize) -> &'static str {
     }
 }
 
+#[must_use]
 pub fn top_screen_player_index(name: &str) -> Option<usize> {
     match name {
         "PlayerP1" => Some(0),
@@ -159,6 +164,7 @@ pub fn top_screen_player_index(name: &str) -> Option<usize> {
     }
 }
 
+#[must_use]
 pub fn top_screen_life_meter_index(name: &str) -> Option<usize> {
     match name {
         "LifeP1" => Some(0),
@@ -167,6 +173,7 @@ pub fn top_screen_life_meter_index(name: &str) -> Option<usize> {
     }
 }
 
+#[must_use]
 pub const fn top_screen_life_meter_name(player_index: usize) -> &'static str {
     match player_index {
         0 => "LifeP1",
@@ -175,6 +182,7 @@ pub const fn top_screen_life_meter_name(player_index: usize) -> &'static str {
     }
 }
 
+#[must_use]
 pub fn top_screen_score_index(name: &str) -> Option<usize> {
     match name {
         "ScoreP1" => Some(0),
@@ -183,6 +191,7 @@ pub fn top_screen_score_index(name: &str) -> Option<usize> {
     }
 }
 
+#[must_use]
 pub const fn top_screen_score_name(player_index: usize) -> &'static str {
     match player_index {
         0 => "ScoreP1",
@@ -191,6 +200,7 @@ pub const fn top_screen_score_name(player_index: usize) -> &'static str {
     }
 }
 
+#[must_use]
 pub const fn top_screen_score_percent_name(player_index: usize) -> &'static str {
     match player_index {
         0 => "PercentP1",
@@ -199,6 +209,7 @@ pub const fn top_screen_score_percent_name(player_index: usize) -> &'static str 
     }
 }
 
+#[must_use]
 pub fn top_screen_steps_display_index(name: &str) -> Option<usize> {
     match name {
         "StepsDisplayP1" => Some(0),
@@ -207,6 +218,7 @@ pub fn top_screen_steps_display_index(name: &str) -> Option<usize> {
     }
 }
 
+#[must_use]
 pub fn top_screen_song_meter_display_index(name: &str) -> Option<usize> {
     match name {
         "SongMeterDisplayP1" => Some(0),
@@ -215,6 +227,7 @@ pub fn top_screen_song_meter_display_index(name: &str) -> Option<usize> {
     }
 }
 
+#[must_use]
 pub fn top_screen_life_meter_bar_index(name: &str) -> Option<usize> {
     match name {
         "LifeMeterBarP1" => Some(0),
@@ -223,6 +236,7 @@ pub fn top_screen_life_meter_bar_index(name: &str) -> Option<usize> {
     }
 }
 
+#[must_use]
 pub fn underlay_score_index(name: &str) -> Option<usize> {
     match name {
         "P1Score" => Some(0),
@@ -231,6 +245,7 @@ pub fn underlay_score_index(name: &str) -> Option<usize> {
     }
 }
 
+#[must_use]
 pub const fn underlay_score_name(player_index: usize) -> &'static str {
     match player_index {
         0 => "P1Score",
@@ -239,6 +254,7 @@ pub const fn underlay_score_name(player_index: usize) -> &'static str {
     }
 }
 
+#[must_use]
 pub fn top_screen_step_stats_pane_index(name: &str) -> Option<usize> {
     match name {
         "StepStatsPaneP1" => Some(0),
@@ -247,6 +263,7 @@ pub fn top_screen_step_stats_pane_index(name: &str) -> Option<usize> {
     }
 }
 
+#[must_use]
 pub fn top_screen_danger_index(name: &str) -> Option<usize> {
     match name {
         "DangerP1" => Some(0),

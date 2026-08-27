@@ -3,6 +3,7 @@ use deadsync_noteskin::ModelDrawState;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 
 #[inline(always)]
+#[must_use]
 pub fn song_lua_note_model_draw(mut draw: ModelDrawState, rotation_y_deg: f32) -> ModelDrawState {
     if rotation_y_deg.abs() > f32::EPSILON {
         draw.rot[1] += rotation_y_deg;
@@ -27,6 +28,7 @@ pub struct SongLuaPlayerTransformRequest {
     pub zoom_z: f32,
 }
 
+#[must_use]
 pub const fn song_lua_player_skew_x_matrix(amount: f32) -> Matrix4 {
     Matrix4::from_cols_array(&[
         1.0, 0.0, 0.0, 0.0, //
@@ -36,6 +38,7 @@ pub const fn song_lua_player_skew_x_matrix(amount: f32) -> Matrix4 {
     ])
 }
 
+#[must_use]
 pub const fn song_lua_player_skew_y_matrix(amount: f32) -> Matrix4 {
     Matrix4::from_cols_array(&[
         1.0, amount, 0.0, 0.0, //
@@ -50,6 +53,7 @@ fn song_lua_fold_x_around_pivot(x: f32, pivot_x: f32, cos_y: f32) -> f32 {
     (x - pivot_x).mul_add(cos_y, pivot_x)
 }
 
+#[must_use]
 pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32) -> Actor {
     if !pivot_x.is_finite() || !rotation_y_deg.is_finite() || rotation_y_deg.abs() <= f32::EPSILON {
         return actor;
@@ -415,6 +419,7 @@ pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: 
     }
 }
 
+#[must_use]
 pub fn song_lua_player_transform_matrix(request: SongLuaPlayerTransformRequest) -> Option<Matrix4> {
     let SongLuaPlayerTransformRequest {
         screen_width,

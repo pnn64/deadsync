@@ -322,7 +322,7 @@ fn texture_source() -> Vec<u8> {
 }
 
 impl OldRows {
-    fn stage(&mut self) -> u64 {
+    fn stage(&self) -> u64 {
         let staged = old_stage_rows(
             &self.source,
             TEXTURE_PACKED_ROW,
@@ -588,7 +588,7 @@ fn main() {
             &mut parity_scratch,
         )
     );
-    let mut old_rows = OldRows {
+    let old_rows = OldRows {
         source: source.clone(),
     };
     let mut new_rows = NewRows {

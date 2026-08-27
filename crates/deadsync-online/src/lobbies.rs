@@ -103,6 +103,7 @@ pub fn close_lobby_socket(socket: &mut LobbySocket) {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn is_transient_lobby_socket_error(error: &LobbySocketError) -> bool {
     matches!(error, LobbySocketError::Transient(_))
 }
@@ -131,6 +132,7 @@ fn set_socket_nonblocking(socket: &mut LobbySocket) -> Result<(), std::io::Error
     }
 }
 
+#[must_use]
 pub fn normalize_lobby_password(raw: &str) -> String {
     let mut out = String::with_capacity(LOBBY_PASSWORD_MAX_LEN);
     for ch in raw.chars() {
@@ -158,16 +160,19 @@ pub struct OutboundEnvelope<'a> {
     pub data: &'a Value,
 }
 
+#[must_use]
 pub fn outbound_event_text(event: &str, data: &Value) -> String {
     serde_json::to_string(&OutboundEnvelope { event, data })
         .expect("serialize lobby outbound envelope")
 }
 
 #[inline]
+#[must_use]
 pub fn search_lobby_text() -> String {
     outbound_event_text(EVENT_SEARCH_LOBBY, &serde_json::json!({}))
 }
 
+#[must_use]
 pub fn create_lobby_text(machine: &Value, password: &str) -> String {
     outbound_event_text(
         EVENT_CREATE_LOBBY,
@@ -178,6 +183,7 @@ pub fn create_lobby_text(machine: &Value, password: &str) -> String {
     )
 }
 
+#[must_use]
 pub fn join_lobby_text(machine: &Value, code: &str, password: &str) -> String {
     outbound_event_text(
         EVENT_JOIN_LOBBY,
@@ -190,10 +196,12 @@ pub fn join_lobby_text(machine: &Value, code: &str, password: &str) -> String {
 }
 
 #[inline]
+#[must_use]
 pub fn leave_lobby_text() -> String {
     outbound_event_text(EVENT_LEAVE_LOBBY, &serde_json::json!({}))
 }
 
+#[must_use]
 pub fn update_machine_text(machine: &Value) -> String {
     outbound_event_text(
         EVENT_UPDATE_MACHINE,
@@ -203,6 +211,7 @@ pub fn update_machine_text(machine: &Value) -> String {
     )
 }
 
+#[must_use]
 pub fn select_song_text(song_info: &LobbySongInfo) -> String {
     outbound_event_text(
         EVENT_SELECT_SONG,
@@ -284,6 +293,7 @@ pub fn lobby_command_action(
     }
 }
 
+#[must_use]
 pub fn connection_state_from_lobby_socket_error(error: &LobbySocketError) -> ConnectionState {
     match error {
         LobbySocketError::Closed => ConnectionState::Disconnected,
@@ -428,6 +438,7 @@ where
     })
 }
 
+#[must_use]
 pub fn lobby_profile_name(name: &str) -> String {
     let trimmed = name.trim();
     if trimmed.is_empty() {
@@ -471,6 +482,7 @@ pub struct LobbySearchedData {
     pub lobbies: Vec<PublicLobbyData>,
 }
 
+#[must_use]
 pub fn public_lobbies_from_search(data: LobbySearchedData) -> Vec<PublicLobby> {
     data.lobbies
         .into_iter()
@@ -541,6 +553,7 @@ pub struct LobbyMachineState {
     pub player2: Option<LobbyMachinePlayer>,
 }
 
+#[must_use]
 pub fn lobby_machine_player(
     player_id: &str,
     profile_name: &str,
@@ -559,6 +572,7 @@ pub fn lobby_machine_player(
     }
 }
 
+#[must_use]
 pub fn lobby_machine_state_value(
     player1: Option<LobbyMachinePlayer>,
     player2: Option<LobbyMachinePlayer>,
@@ -576,6 +590,7 @@ pub struct LocalLobbyPlayer<'a> {
     pub stats: Option<&'a MachinePlayerStats>,
 }
 
+#[must_use]
 pub fn local_lobby_machine_state_value(
     p1: LocalLobbyPlayer<'_>,
     p2: LocalLobbyPlayer<'_>,
@@ -594,6 +609,7 @@ pub fn local_lobby_machine_state_value(
     )
 }
 
+#[must_use]
 pub fn runtime_local_lobby_machine_state_value(
     screen_name: &str,
     p1_ready: bool,
@@ -623,6 +639,7 @@ pub fn runtime_local_lobby_machine_state_value(
     )
 }
 
+#[must_use]
 pub fn local_lobby_machine_player(player: LocalLobbyPlayer<'_>) -> LobbyMachinePlayer {
     lobby_machine_player(
         lobby_player_id(player.side),
@@ -634,6 +651,7 @@ pub fn local_lobby_machine_player(player: LocalLobbyPlayer<'_>) -> LobbyMachineP
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn lobby_player_id(side: PlayerSide) -> &'static str {
     match side {
         PlayerSide::P1 => "P1",
@@ -714,14 +732,17 @@ pub enum GameplayLobbyWaitStatus {
     Ready,
 }
 
+#[must_use]
 pub fn lobby_player_on_screen(player: &LobbyPlayer, screen_name: &str) -> bool {
     player.screen_name.eq_ignore_ascii_case(screen_name)
 }
 
+#[must_use]
 pub const fn gameplay_lobby_wait_required(joined: Option<&JoinedLobby>) -> bool {
     joined.is_some()
 }
 
+#[must_use]
 pub fn gameplay_lobby_wait_status(
     joined: &JoinedLobby,
     gameplay_screen_name: &str,
@@ -742,6 +763,7 @@ pub fn gameplay_lobby_wait_status(
     }
 }
 
+#[must_use]
 pub fn joined_lobby_from_state(data: LobbyStateData) -> JoinedLobby {
     JoinedLobby {
         code: data.code,
@@ -779,6 +801,7 @@ pub struct LobbyLeftData {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn lobby_left_clears_joined(data: &LobbyLeftData) -> bool {
     data.left.unwrap_or(true)
 }
@@ -791,10 +814,12 @@ pub struct ResponseStatusData {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn response_status_clears_joined(data: &ResponseStatusData) -> bool {
     !data.success && matches!(data.event.as_str(), EVENT_JOIN_LOBBY | EVENT_CREATE_LOBBY)
 }
 
+#[must_use]
 pub fn response_status_from_data(data: ResponseStatusData) -> ResponseStatus {
     ResponseStatus {
         event: data.event,
@@ -823,6 +848,7 @@ impl Default for Snapshot {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn can_update_machine_state(snapshot: &Snapshot) -> bool {
     matches!(snapshot.connection, ConnectionState::Connected) && snapshot.joined_lobby.is_some()
 }
@@ -842,6 +868,7 @@ pub fn apply_local_lobby_disconnect(snapshot: &mut Snapshot) {
     snapshot.last_status = None;
 }
 
+#[must_use]
 pub fn select_song_command(snapshot: &Snapshot, song_info: LobbySongInfo) -> Option<LobbyCommand> {
     can_update_machine_state(snapshot).then_some(LobbyCommand::SelectSong { song_info })
 }
@@ -852,11 +879,13 @@ pub struct MachineStateUpdate {
     pub command: LobbyCommand,
 }
 
+#[must_use]
 pub fn machine_state_signature(joined_code: &str, machine_state: &Value) -> String {
     format!("{joined_code}|{machine_state}")
 }
 
 #[allow(clippy::too_many_arguments)]
+#[must_use]
 pub fn machine_state_update_command(
     snapshot: &Snapshot,
     last_signature: Option<&str>,
@@ -990,6 +1019,7 @@ impl ReconnectState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn has_target(&self) -> bool {
         self.target.is_some()
     }
@@ -1017,6 +1047,7 @@ impl ReconnectState {
         self.next_retry_at = Some(now + reconnect_delay(self.retry_attempts));
     }
 
+    #[must_use]
     pub fn status_text(&self, connection: &ConnectionState, now: Instant) -> Option<String> {
         self.target.as_ref()?;
         match connection {
@@ -1053,6 +1084,7 @@ impl ReconnectState {
     }
 }
 
+#[must_use]
 pub const fn reconnect_delay(attempt: u32) -> Duration {
     Duration::from_secs(match attempt {
         0 | 1 => 1,
@@ -1245,6 +1277,7 @@ fn runtime_view_refresh(now: Instant) -> RuntimeViewRefresh {
     }
 }
 
+#[must_use]
 pub fn runtime_refresh_view_state_default() -> RuntimeViewRefresh {
     runtime_refresh_view(DEFAULT_RUNTIME_HOOKS)
 }
@@ -1292,6 +1325,7 @@ pub fn runtime_with_snapshot_for_test<R>(snapshot: Snapshot, f: impl FnOnce() ->
     result
 }
 
+#[must_use]
 pub fn runtime_can_update_machine_state() -> bool {
     let snapshot = runtime_lock_snapshot();
     can_update_machine_state(&snapshot)

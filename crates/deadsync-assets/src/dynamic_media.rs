@@ -77,11 +77,13 @@ pub enum BackgroundTextureError {
     CreateImage(String),
 }
 
+#[must_use]
 pub fn cdtitle_texture_key(path: &Path) -> String {
     let path_key = path.to_string_lossy();
     format!("__cdtitle::{path_key}")
 }
 
+#[must_use]
 pub fn path_texture_key(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
@@ -107,6 +109,7 @@ where
         .collect()
 }
 
+#[must_use]
 pub fn stale_texture_keys(current: &HashSet<String>, next: &HashSet<String>) -> Vec<String> {
     current.difference(next).cloned().collect()
 }
@@ -120,6 +123,7 @@ pub fn replace_texture_key_set(
     stale
 }
 
+#[must_use]
 pub fn dynamic_video_path_in_set(path: &Path, desired_paths: &[&Path]) -> bool {
     dynamic::is_dynamic_video_path(path)
         && desired_paths
@@ -146,6 +150,7 @@ pub fn push_gameplay_media_paths<'a>(
     }
 }
 
+#[must_use]
 pub const fn gameplay_media_paths_capacity(
     song: &SongData,
     gameplay_background_changes: &[SongBackgroundChange],
@@ -156,6 +161,7 @@ pub const fn gameplay_media_paths_capacity(
         .saturating_add(song.foreground_changes.len())
 }
 
+#[must_use]
 pub fn gameplay_media_keys(
     song: &SongData,
     gameplay_background_changes: &[SongBackgroundChange],
@@ -352,6 +358,7 @@ pub struct DynamicBackgroundState {
 }
 
 impl DynamicBackgroundState {
+    #[must_use]
     pub const fn new(
         key: String,
         upload_handle: TextureHandle,
@@ -370,6 +377,7 @@ impl DynamicBackgroundState {
         }
     }
 
+    #[must_use]
     pub fn video_play_time(&self, gameplay_time_sec: f32) -> f32 {
         self.video_timing.play_time(gameplay_time_sec)
     }
@@ -390,15 +398,18 @@ impl DynamicBackgroundState {
         self.video_timing = dynamic::DynamicVideoTiming::new(video_start_sec, video_rate);
     }
 
+    #[must_use]
     pub const fn video_rate(&self) -> f32 {
         self.video_timing.rate()
     }
 
+    #[must_use]
     pub const fn video_start_sec(&self) -> f32 {
         self.video_start_sec
     }
 }
 
+#[must_use]
 pub fn prepare_banner_video(key: String, path: PathBuf, looped: bool) -> BannerVideoPrepResult {
     if !media_cache::banner_cache_options().enabled {
         return match video::open(&path, looped) {
@@ -434,6 +445,7 @@ pub fn prepare_banner_video(key: String, path: PathBuf, looped: bool) -> BannerV
     }))
 }
 
+#[must_use]
 pub fn prepare_gameplay_background(key: String, path: PathBuf) -> GameplayBackgroundPrepResult {
     match video::open_player(&path, true) {
         Ok(player) => {
@@ -471,6 +483,7 @@ pub fn retire_video_player_opt(player: Option<video::Player>) {
     }
 }
 
+#[must_use]
 pub fn retire_dynamic_background_state(mut state: DynamicBackgroundState) -> String {
     retire_video_player_opt(state.video.take());
     state.key

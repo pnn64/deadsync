@@ -111,6 +111,7 @@ impl NotefieldChartView<'_> {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn tap_row_flags(&self, note_index: usize) -> u8 {
         self.note_row_metadata
             .get(note_index)
@@ -261,6 +262,7 @@ pub struct PreparedNotefield<'a, S> {
 }
 
 /// Resolve canonical layout and travel inputs without reading clocks or globals.
+#[must_use]
 pub fn prepare_notefield<'a, S>(
     request: &'a NotefieldComposeRequest<'a, S>,
 ) -> Option<PreparedNotefield<'a, S>> {

@@ -25,6 +25,7 @@ impl GameplayLightTracker {
         *self = Self::default();
     }
 
+    #[must_use]
     pub fn cabinet_key_matches(&self, key: &GameplayLightChartKey) -> bool {
         self.cabinet_key.as_ref() == Some(key)
     }

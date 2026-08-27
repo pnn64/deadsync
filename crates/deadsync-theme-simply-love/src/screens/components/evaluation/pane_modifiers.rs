@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use super::utils::eval_style_alpha;
 
+#[must_use]
 pub fn build_modifiers_pane(
     score_info: &ScoreInfo,
     bar_center_x: f32,

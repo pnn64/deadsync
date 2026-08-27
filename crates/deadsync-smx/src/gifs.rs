@@ -79,6 +79,7 @@ pub enum PadSize {
 }
 
 impl PadSize {
+    #[must_use]
     pub const fn other(self) -> Self {
         match self {
             Self::Leds16 => Self::Leds25,
@@ -118,6 +119,7 @@ pub struct BackgroundVariant {
 /// when the song is faster than every variant (those half-time via the playback
 /// cap). With no song BPM or no tagged variants, the lowest-reference (or only)
 /// variant is used, deterministically regardless of load order.
+#[must_use]
 pub fn select_variant(
     variants: &[BackgroundVariant],
     song_bpm: Option<f32>,
@@ -174,6 +176,7 @@ fn push_unique_by_bpm(merged: &mut Vec<BackgroundVariant>, source: &[BackgroundV
 /// gets multiplied the same way per channel, which generally will not look
 /// like a clean recolor — packs using this feature are expected to author
 /// grayscale source art.
+#[must_use]
 pub fn tint_full_pad(anim: &FullPadAnim, target_rgb: [u8; 3]) -> FullPadAnim {
     let scale = target_rgb.map(|c| f32::from(c) / 255.0);
     let tint_frame = |frame: &PanelFrame| -> PanelFrame {
@@ -206,6 +209,7 @@ const LED_SATURATION_GAMMA: f32 = 2.2;
 /// (`c' = max * (c/max)^GAMMA`), so the peak channel keeps its brightness and
 /// the floor channels drop to the light level the color actually encodes.
 /// Grays and pure primaries pass through unchanged.
+#[must_use]
 pub fn saturate_for_leds(rgb: [u8; 3]) -> [u8; 3] {
     let max = f32::from(rgb.into_iter().max().unwrap_or(0));
     if max <= 0.0 {
@@ -229,6 +233,7 @@ pub struct PanelAnim {
 
 impl PanelAnim {
     /// Whether frames exist after `loop_end`: an outro to play on release.
+    #[must_use]
     pub const fn has_outro(&self) -> bool {
         self.loop_end + 1 < self.frames.len()
     }
@@ -602,6 +607,7 @@ impl GifRegistry {
     /// metadata: a `dance/` pack that supplies any file for a (name, size)
     /// replaces the shipped pack's entry for it outright (BPM variants only
     /// pool across files within one directory, never across the two trees).
+    #[must_use]
     pub fn load(root: &Path) -> Self {
         let mut reg = Self::default();
         for (pack, meta) in load_pack_meta(&root.join("smx-pad-lights")) {
@@ -647,6 +653,7 @@ impl GifRegistry {
     /// pack's own variants. On an exact BPM-tag collision between sources,
     /// this pack's own variant always wins, then the `Fallback` pack's, then
     /// `common`'s — the same precedence as the regular (non-merged) chain.
+    #[must_use]
     pub fn background(
         &self,
         pack: Option<&str>,
@@ -722,6 +729,7 @@ impl GifRegistry {
 
     /// Resolve a per-panel judgement by name (`bad`, `freeze`, ...), with the
     /// same resolution order as `background`.
+    #[must_use]
     pub fn judgement(
         &self,
         pack: Option<&str>,
@@ -740,12 +748,14 @@ impl GifRegistry {
 
     /// Sorted pack names (other than the default) that supply at least one
     /// background.
+    #[must_use]
     pub fn background_packs(&self) -> Vec<String> {
         named_packs(self.backgrounds.keys())
     }
 
     /// Sorted pack names (other than the default) that supply at least one
     /// judgement.
+    #[must_use]
     pub fn judgement_packs(&self) -> Vec<String> {
         named_packs(self.judgements.keys())
     }
@@ -756,6 +766,7 @@ impl GifRegistry {
     /// `Fallback` chain — a pack should only flag roles it authors itself.
     /// `None` or the default pack never want tinting (the shipped pack isn't
     /// meant to imply any particular player's theme color).
+    #[must_use]
     pub fn background_wants_difficulty_tint(&self, pack: Option<&str>, role: &str) -> bool {
         let Some(p) = pack.filter(|p| *p != DEFAULT_PACK) else {
             return false;
@@ -773,6 +784,7 @@ impl GifRegistry {
     /// `background()` itself already returns `None` for it. A supplied gif
     /// always wins over the declaration, and `None` or the default pack has no
     /// declarations.
+    #[must_use]
     pub fn background_declared_empty(&self, pack: Option<&str>, name: &str, size: PadSize) -> bool {
         let Some(p) = pack.filter(|p| *p != DEFAULT_PACK) else {
             return false;
@@ -786,6 +798,7 @@ impl GifRegistry {
                 .contains_key(&key_ref(p, name, size.other()))
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.backgrounds.is_empty() && self.judgements.is_empty()
     }
@@ -944,6 +957,7 @@ fn named_packs<'a>(keys: impl Iterator<Item = &'a Key>) -> Vec<String> {
 /// has no matching, decodable gif; malformed matches are logged and skipped.
 /// The app caches the result per (dir, role), so this touches the filesystem
 /// only the first time a folder is seen.
+#[must_use]
 pub fn load_scoped_background(dir: &Path, role: &str, size: PadSize) -> Vec<BackgroundVariant> {
     let Ok(entries) = fs::read_dir(dir) else {
         return Vec::new();
@@ -1111,6 +1125,7 @@ fn load_pack_meta(dir: &Path) -> HashMap<String, PackMeta> {
 /// Sorted, deduplicated pack directory names under `<tree>/common/` and
 /// `<tree>/dance/`, excluding the default pack. Used by the options screens to
 /// build the pack pickers, so it scans directory names only (no gif decode).
+#[must_use]
 pub fn discover_packs(tree: &Path) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
     for group in GROUPS {

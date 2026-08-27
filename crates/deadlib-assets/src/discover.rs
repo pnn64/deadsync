@@ -46,6 +46,7 @@ pub struct GraphicTextureChoiceCache {
 }
 
 impl GraphicTextureChoiceCache {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             judgment: OnceLock::new(),
@@ -124,6 +125,7 @@ pub struct TextureChoice {
 }
 
 impl TextureChoice {
+    #[must_use]
     pub fn new(key: String, label: String) -> Self {
         Self {
             key: Arc::from(key),
@@ -207,6 +209,7 @@ fn absolute_or_self(path: &Path) -> PathBuf {
         .unwrap_or_else(|_| path.to_path_buf())
 }
 
+#[must_use]
 pub fn graphic_texture_roots(
     folder: &str,
     portable: bool,

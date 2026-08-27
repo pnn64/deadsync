@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 
 /// Compare names case-insensitively over ASCII bytes without allocating.
+#[must_use]
 pub fn ascii_case_insensitive_cmp(left: &str, right: &str) -> Ordering {
     left.bytes()
         .map(|byte| byte.to_ascii_lowercase())

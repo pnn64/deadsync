@@ -134,6 +134,7 @@ pub trait NoteskinSlot: Sized {
 }
 
 #[inline]
+#[must_use]
 pub fn model_vertex_for_sprite(def: &SpriteDefinition, mut vertex: ModelVertex) -> ModelVertex {
     if def.mirror_h {
         vertex.pos[0] = -vertex.pos[0];
@@ -147,6 +148,7 @@ pub fn model_vertex_for_sprite(def: &SpriteDefinition, mut vertex: ModelVertex) 
 }
 
 #[inline(always)]
+#[must_use]
 pub fn neg_rot_sin_cos(rotation_deg: i32) -> [f32; 2] {
     match rotation_deg.rem_euclid(360) {
         0 => [0.0, 1.0],
@@ -160,6 +162,7 @@ pub fn neg_rot_sin_cos(rotation_deg: i32) -> [f32; 2] {
     }
 }
 
+#[must_use]
 pub const fn atlas_sprite_slot_plan(
     texture_key: String,
     tex_dims: (u32, u32),
@@ -183,6 +186,7 @@ pub const fn atlas_sprite_slot_plan(
     }
 }
 
+#[must_use]
 pub fn frame_sprite_slot_plan(
     texture_key: String,
     tex_dims: (u32, u32),
@@ -207,6 +211,7 @@ pub fn frame_sprite_slot_plan(
     }
 }
 
+#[must_use]
 pub fn animation_sprite_slot_plan(
     texture_key: String,
     tex_dims: (u32, u32),
@@ -237,6 +242,7 @@ pub fn animation_sprite_slot_plan(
     ))
 }
 
+#[must_use]
 pub fn all_frames_sprite_slot_plan(
     texture_key: String,
     tex_dims: (u32, u32),
@@ -362,6 +368,7 @@ pub fn itg_all_frames_sprite_slot_plan_from_path(
     .or_else(|| Some(atlas_sprite_slot_plan(key, dims, source_frame, true)))
 }
 
+#[must_use]
 pub fn animation_plan_to_slot_plan(
     texture_key: String,
     tex_dims: (u32, u32),
@@ -386,6 +393,7 @@ pub fn animation_plan_to_slot_plan(
     }
 }
 
+#[must_use]
 pub const fn generated_animation_sprite_slot_plan(
     texture_key: String,
     tex_dims: (u32, u32),
@@ -417,6 +425,7 @@ pub const fn generated_animation_sprite_slot_plan(
     }
 }
 
+#[must_use]
 pub fn state_properties_source_plan(
     texture_key: String,
     tex_dims: (u32, u32),
@@ -435,6 +444,7 @@ pub fn state_properties_source_plan(
     }
 }
 
+#[must_use]
 pub fn all_state_delays_source_plan(
     texture_key: String,
     tex_dims: (u32, u32),
@@ -576,6 +586,7 @@ fn itg_all_state_delays_slot_plan(
     })
 }
 
+#[must_use]
 pub fn sprite_sheet_frame(
     tex_dims: [u32; 2],
     sheet_grid: [usize; 2],
@@ -603,6 +614,7 @@ pub fn sprite_sheet_frame(
     }
 }
 
+#[must_use]
 pub fn sprite_animation_plan(
     tex_dims: [u32; 2],
     sheet_grid: [usize; 2],
@@ -667,6 +679,7 @@ pub fn sprite_animation_plan(
     })
 }
 
+#[must_use]
 pub fn sprite_all_frames_animation_plan(
     tex_dims: [u32; 2],
     sheet_grid: [usize; 2],
@@ -691,6 +704,7 @@ pub fn sprite_all_frames_animation_plan(
     )
 }
 
+#[must_use]
 pub fn sprite_frame_index(
     frame_count: usize,
     rate: AnimationRate,
@@ -723,6 +737,7 @@ pub fn sprite_frame_index(
     ((frame % frames as isize) + frames as isize) as usize % frames
 }
 
+#[must_use]
 pub fn sprite_frame_index_from_phase(
     frame_count: usize,
     frame_durations: Option<&[f32]>,
@@ -742,6 +757,7 @@ pub fn sprite_frame_index_from_phase(
     ((p * frames as f32).floor() as usize).min(frames - 1)
 }
 
+#[must_use]
 pub fn sprite_atlas_uv(tex_dims: [u32; 2], def: &SpriteDefinition, inset_texels: bool) -> [f32; 4] {
     let tw = tex_dims[0].max(1) as f32;
     let th = tex_dims[1].max(1) as f32;
@@ -764,6 +780,7 @@ pub fn sprite_atlas_uv(tex_dims: [u32; 2], def: &SpriteDefinition, inset_texels:
     [u0 / tw, v0 / th, u1 / tw, v1 / th]
 }
 
+#[must_use]
 pub fn sprite_animated_uv(
     tex_dims: [u32; 2],
     def: &SpriteDefinition,
@@ -801,12 +818,14 @@ pub fn sprite_animated_uv(
     sprite_atlas_uv(tex_dims, &frame_def, inset_texels)
 }
 
+#[must_use]
 pub fn sprite_uv_scroll_clock(elapsed: f32, cycle_seconds: Option<f32>) -> f32 {
     cycle_seconds
         .filter(|total| *total > f32::EPSILON && total.is_finite())
         .map_or(elapsed, |total| elapsed.rem_euclid(total) / total)
 }
 
+#[must_use]
 pub fn sprite_scrolled_uv(
     mut uv: [f32; 4],
     uv_velocity: [f32; 2],
@@ -851,6 +870,7 @@ pub fn sprite_scrolled_uv(
     uv
 }
 
+#[must_use]
 pub fn sprite_state_properties_animation(
     tex_dims: [u32; 2],
     sheet_grid: [usize; 2],
@@ -906,6 +926,7 @@ pub fn sprite_state_properties_animation(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn frame_duration_total(durations: &[f32], frames: usize) -> Option<f32> {
     let total = durations.iter().take(frames).fold(0.0, |sum, duration| {
         if *duration > f32::EPSILON {
@@ -918,6 +939,7 @@ pub fn frame_duration_total(durations: &[f32], frames: usize) -> Option<f32> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn duration_frame_index(durations: &[f32], frames: usize, mut position: f32) -> Option<usize> {
     let mut last = None;
     for (idx, duration) in durations.iter().take(frames).enumerate() {

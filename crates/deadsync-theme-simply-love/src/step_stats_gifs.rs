@@ -56,6 +56,7 @@ pub struct GifDefinition {
 
 impl GifDefinition {
     #[inline(always)]
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -76,6 +77,7 @@ pub enum ResolvedStepStatsExtra {
 
 impl ResolvedStepStatsExtra {
     #[inline(always)]
+    #[must_use]
     pub const fn actor_count(self) -> usize {
         matches!(self, Self::Gif(_)) as usize
     }
@@ -130,6 +132,7 @@ pub struct GifRenderLayout {
 }
 
 impl GifRenderLayout {
+    #[must_use]
     pub fn frame_at(self, beat: f32, seconds: f32) -> u32 {
         let clock = match self.effect_clock {
             EffectClock::Time => seconds,
@@ -220,6 +223,7 @@ pub fn option_settings() -> &'static [StepStatsExtra] {
     OPTION_SETTINGS.as_slice()
 }
 
+#[must_use]
 pub fn option_index(setting: &StepStatsExtra) -> usize {
     option_settings()
         .iter()
@@ -247,6 +251,7 @@ pub fn resolve_extra(setting: &StepStatsExtra) -> ResolvedStepStatsExtra {
     }
 }
 
+#[must_use]
 pub fn gif_render_layout(
     extra: ResolvedStepStatsExtra,
     params: GifRenderParams,

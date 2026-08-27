@@ -10,11 +10,13 @@ use crate::update::dedicated_menu_navigation_label;
 use deadlib_platform::{dirs, logging};
 use log::{info, warn};
 
+#[must_use]
 pub fn bootstrap_log_to_file() -> bool {
     let default = Config::default().log_to_file;
     load_bootstrap_bool(&dirs::app_dirs().config_path(), "LogToFile", default)
 }
 
+#[must_use]
 pub fn bootstrap_show_console() -> bool {
     let default = Config::default().show_console;
     load_bootstrap_bool(&dirs::app_dirs().config_path(), "ShowConsole", default)

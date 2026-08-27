@@ -421,6 +421,7 @@ pub use crate::texture::{NullTextureContext, TextureContext, TextureMeta};
 const NULL_TEXTURE_CONTEXT: NullTextureContext = NullTextureContext;
 
 #[inline(always)]
+#[must_use]
 pub fn build_screen(
     actors: &[actors::Actor],
     clear_color: [f32; 4],
@@ -745,6 +746,7 @@ pub struct FlatProxyStyle {
 
 impl FlatProxyStyle {
     /// Creates the fixed source/proxy stages and optional source-space fold.
+    #[must_use]
     pub const fn new(
         source_tint: [f32; 4],
         proxy_tint: [f32; 4],
@@ -771,6 +773,7 @@ impl FlatProxyStyle {
 }
 
 impl ActorXFold {
+    #[must_use]
     pub const fn new(pivot_x: f32, scale_x: f32) -> Self {
         Self { pivot_x, scale_x }
     }
@@ -789,6 +792,7 @@ impl ActorXFold {
 }
 
 impl<'a> ActorSegment<'a> {
+    #[must_use]
     pub const fn new(actors: &'a [actors::Actor]) -> Self {
         Self {
             source: ActorSegmentSource::Actors(actors),
@@ -801,6 +805,7 @@ impl<'a> ActorSegment<'a> {
         }
     }
 
+    #[must_use]
     pub const fn shifted(actors: &'a [actors::Actor], z_shift: i16) -> Self {
         Self {
             source: ActorSegmentSource::Actors(actors),
@@ -813,6 +818,7 @@ impl<'a> ActorSegment<'a> {
         }
     }
 
+    #[must_use]
     pub const fn folded(actors: &'a [actors::Actor], z_shift: i16, x_fold: ActorXFold) -> Self {
         Self {
             source: ActorSegmentSource::Actors(actors),
@@ -825,6 +831,7 @@ impl<'a> ActorSegment<'a> {
         }
     }
 
+    #[must_use]
     pub const fn transformed(
         actors: &'a [actors::Actor],
         z_shift: i16,
@@ -851,6 +858,7 @@ impl<'a> ActorSegment<'a> {
     /// Appends an already-resolved flat draw tail after this actor slice. The
     /// optional camera is the final view-projection matrix for those draws;
     /// actor camera scopes must be closed before the tail begins.
+    #[must_use]
     pub const fn with_flat_draws(
         mut self,
         draws: &'a [actors::FlatDraw],
@@ -869,6 +877,7 @@ impl<'a> ActorSegment<'a> {
     /// Borrows a source-ordered draw fragment through ActorProxy-compatible
     /// frame placement. Child Z values are replaced by the proxy layer,
     /// matching a normalized `SharedFrame` without rebuilding wide Actor values.
+    #[must_use]
     pub const fn flat_proxy(
         draws: &'a [actors::FlatDraw],
         offset: [f32; 2],
@@ -881,6 +890,7 @@ impl<'a> ActorSegment<'a> {
 
     /// Borrows a source-ordered draw fragment through ActorProxy-compatible
     /// frame placement and an optional already-resolved camera scope.
+    #[must_use]
     pub const fn flat_proxy_with_camera(
         draws: &'a [actors::FlatDraw],
         offset: [f32; 2],
@@ -897,6 +907,7 @@ impl<'a> ActorSegment<'a> {
     /// source camera controls the draws when present; otherwise the enclosing
     /// camera does. This matches a one-source nested camera scope without
     /// rebuilding camera actors.
+    #[must_use]
     pub const fn flat_proxy_with_cameras(
         draws: &'a [actors::FlatDraw],
         offset: [f32; 2],
@@ -920,6 +931,7 @@ impl<'a> ActorSegment<'a> {
     /// Borrows an ActorProxy-compatible fragment while applying retained
     /// source/proxy/AFT tints in their original floating-point order.
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
     pub const fn flat_proxy_styled_with_cameras(
         draws: &'a [actors::FlatDraw],
         offset: [f32; 2],
@@ -944,6 +956,7 @@ impl<'a> ActorSegment<'a> {
     /// enclosing camera scope. Each run retains independent local-Z
     /// normalization while the enclosing matrix is registered only once.
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
     pub const fn flat_proxy_pair(
         draws: &'a [actors::FlatDraw],
         tail_draws: &'a [actors::FlatDraw],
@@ -971,6 +984,7 @@ impl<'a> ActorSegment<'a> {
     /// Borrows two camera-delimited proxy runs while applying the same bounded
     /// source/proxy/AFT tint sequence to both.
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
     pub const fn flat_proxy_pair_styled(
         draws: &'a [actors::FlatDraw],
         tail_draws: &'a [actors::FlatDraw],
@@ -1558,6 +1572,7 @@ impl ComposeScratch {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn frame_stats(&self) -> ComposeFrameStats {
         self.frame_stats
     }
@@ -1630,6 +1645,7 @@ impl ComposeScratch {
         self.retained_frames.stats = RetainedFrameCacheStats::default();
     }
 
+    #[must_use]
     pub fn retained_frame_stats(&self) -> RetainedFrameCacheStats {
         let mut stats = self.retained_frames.stats;
         stats.entries = saturating_u32(self.retained_frames.entries.len());
@@ -1644,6 +1660,7 @@ impl ComposeScratch {
     ///
     /// The nested text-vertex total is linear in a hard-capped set of 512
     /// buffers, so callers should sample this only when diagnostics are active.
+    #[must_use]
     pub fn storage_stats(&self) -> ComposeStorageStats {
         let text_vertex_capacity = self
             .recycled_text_mesh_vertices
@@ -3328,6 +3345,7 @@ impl Default for TextLayoutCache {
 }
 
 impl TextLayoutCache {
+    #[must_use]
     pub fn new(max_entries: usize) -> Self {
         let max_entries = max_entries.max(1);
         Self {
@@ -6048,7 +6066,7 @@ fn build_flat_prepared_u32<T: TextureContext + ?Sized>(
     out: &mut FrameBuilder,
     sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     text_cache: &mut TextLayoutCache,
-    texture_cache: &mut TextureLookupCache,
+    texture_cache: &TextureLookupCache,
     texture_ctx: &T,
 ) {
     build_flat_prepared_text(
@@ -6101,7 +6119,7 @@ fn build_flat_prepared_inline<T: TextureContext + ?Sized>(
     out: &mut FrameBuilder,
     sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     text_cache: &mut TextLayoutCache,
-    texture_cache: &mut TextureLookupCache,
+    texture_cache: &TextureLookupCache,
     texture_ctx: &T,
 ) {
     build_flat_prepared_text(
@@ -6153,7 +6171,7 @@ fn build_flat_prepared_text<T: TextureContext + ?Sized>(
     out: &mut FrameBuilder,
     sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     text_cache: &mut TextLayoutCache,
-    texture_cache: &mut TextureLookupCache,
+    texture_cache: &TextureLookupCache,
     texture_ctx: &T,
 ) {
     let Some(font) = fonts.get(text.font) else {
@@ -13151,7 +13169,7 @@ mod tests {
         assert_eq!(run.vertex_count, 1);
         assert_eq!(
             render.mesh_vertices[run.vertex_start as usize].color,
-            [0.2, 0.075, 0.020000001, 0.125]
+            [0.2, 0.075, 0.020_000_001, 0.125]
         );
     }
 
@@ -13678,7 +13696,7 @@ mod tests {
         let (run, base, _) = tmesh_draw(&render, 0);
         assert_eq!(run.instance_count, 2);
         let glow = &render.tmesh_instances[run.instance_start as usize + 1];
-        assert_eq!(base.tint, [0.4, 0.15, 0.040000003, 0.25]);
+        assert_eq!(base.tint, [0.4, 0.15, 0.040_000_003, 0.25]);
         assert_eq!(glow.tint, [0.25, 0.0625, 0.1, 0.2]);
     }
 

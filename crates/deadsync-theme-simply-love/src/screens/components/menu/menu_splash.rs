@@ -102,6 +102,7 @@ fn sprite_splash(
     actor
 }
 
+#[must_use]
 pub fn build(
     active_color_index: i32,
     effects: &crate::visual_styles::EffectAssets,

@@ -7,6 +7,7 @@ pub struct CourseDisplayTotals {
     pub mines_total: u32,
 }
 
+#[must_use]
 pub const fn course_display_totals_for_chart(chart: &ChartData) -> CourseDisplayTotals {
     CourseDisplayTotals {
         possible_grade_points: chart.possible_grade_points,
@@ -17,6 +18,7 @@ pub const fn course_display_totals_for_chart(chart: &ChartData) -> CourseDisplay
     }
 }
 
+#[must_use]
 pub fn course_display_totals_for_player(
     totals: Option<&[CourseDisplayTotals; MAX_PLAYERS]>,
     possible_grade_points: &[i32; MAX_PLAYERS],
@@ -79,6 +81,7 @@ pub struct CourseComboCarryState {
     pub first_fc_attempt_broken: bool,
 }
 
+#[must_use]
 pub const fn course_life_after_carry(current_life: f32, course_carry: Option<CourseDisplayCarry>) -> f32 {
     let Some(carry) = course_carry else {
         return current_life;
@@ -133,6 +136,7 @@ pub struct GameplayWindowCountsState {
 
 impl GameplayWindowCountsState {
     #[inline(always)]
+    #[must_use]
     pub fn sources(&self, player: usize) -> DisplayWindowCountsSources {
         DisplayWindowCountsSources {
             canonical: self.canonical(player),
@@ -142,16 +146,19 @@ impl GameplayWindowCountsState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn canonical(&self, player: usize) -> WindowCounts {
         self.canonical.get(player).copied().unwrap_or_default()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn ten_ms_blue(&self, player: usize) -> WindowCounts {
         self.ten_ms_blue.get(player).copied().unwrap_or_default()
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn display_blue(&self, player: usize) -> WindowCounts {
         self.display_blue.get(player).copied().unwrap_or_default()
     }
@@ -213,6 +220,7 @@ fn display_float_match(a: f32, b: f32) -> bool {
     (a - b).abs() <= 0.000_1
 }
 
+#[must_use]
 pub fn display_window_counts_mode(
     blue_window_ms: Option<f32>,
     display_blue_window_ms: f32,
@@ -233,6 +241,7 @@ pub fn display_window_counts_mode(
     }
 }
 
+#[must_use]
 pub const fn display_window_counts_current(
     sources: DisplayWindowCountsSources,
     mode: DisplayWindowCountsMode,
@@ -245,6 +254,7 @@ pub const fn display_window_counts_current(
     }
 }
 
+#[must_use]
 pub const fn display_window_counts_with_carry(
     current: WindowCounts,
     carry: CourseDisplayCarry,
@@ -260,6 +270,7 @@ pub const fn display_window_counts_with_carry(
     judgment::add_window_counts(current, carry_counts)
 }
 
+#[must_use]
 pub fn display_window_counts_for_notes(
     sources: DisplayWindowCountsSources,
     carry: CourseDisplayCarry,
@@ -296,6 +307,7 @@ pub fn record_combo_window_count_for_judgment(counts: &mut WindowCounts, judgmen
     judgment::add_judgment_to_window_counts(counts, judgment, FA_PLUS_W0_MS);
 }
 
+#[must_use]
 pub const fn display_judgment_count_for_grade(
     stage_counts: judgment::JudgeCounts,
     carry: CourseDisplayCarry,
@@ -338,6 +350,7 @@ pub struct CourseDisplayStage {
     pub checkpoints_missed: u32,
 }
 
+#[must_use]
 pub fn course_display_carry_for_stage(
     previous: CourseDisplayCarry,
     stage: CourseDisplayStage,
@@ -438,6 +451,7 @@ pub fn course_display_carry_for_player(
     carry.map_or_else(CourseDisplayCarry::default, |carry| carry[player_idx])
 }
 
+#[must_use]
 pub const fn player_course_display_stage(
     player: &PlayerRuntime,
     window_counts: WindowCounts,
@@ -514,6 +528,7 @@ pub struct GameplayCourseDisplayState {
 
 impl GameplayCourseDisplayState {
     #[inline(always)]
+    #[must_use]
     pub const fn new(
         carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
         totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
@@ -527,26 +542,31 @@ impl GameplayCourseDisplayState {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_course_stage(&self) -> bool {
         self.totals.is_some()
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn carry(&self) -> Option<&[CourseDisplayCarry; MAX_PLAYERS]> {
         self.carry.as_ref()
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn totals(&self) -> Option<&[CourseDisplayTotals; MAX_PLAYERS]> {
         self.totals.as_ref()
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn timing(&self) -> Option<CourseDisplayTiming> {
         self.timing
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn carry_for_player(&self, player_idx: usize) -> CourseDisplayCarry {
         course_display_carry_for_player(self.carry(), player_idx)
     }

@@ -191,6 +191,7 @@ fn overlay_display_entries(
     score_data::prioritized_leaderboard_entries(entries.as_ref(), GS_LEADERBOARD_NUM_ENTRIES)
 }
 
+#[must_use]
 pub fn show_leaderboard_overlay(
     chart_hash_p1: Option<String>,
     chart_hash_p2: Option<String>,
@@ -242,6 +243,7 @@ pub fn show_leaderboard_overlay(
     )))
 }
 
+#[must_use]
 pub fn leaderboard_runtime_request(
     state: &LeaderboardOverlayState,
 ) -> Option<SelectMusicLeaderboardRequest<'_>> {
@@ -356,6 +358,7 @@ fn leaderboard_icon_bounce_offset(elapsed: f32, dir: f32) -> f32 {
     dir * 10.0 * phase
 }
 
+#[must_use]
 pub fn build_leaderboard_overlay(
     state: &LeaderboardOverlayState,
     machine_font: MachineFont,

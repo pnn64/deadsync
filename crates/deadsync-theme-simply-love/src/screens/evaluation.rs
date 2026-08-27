@@ -3389,6 +3389,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
     state
 }
 
+#[must_use]
 pub fn init_from_score_info(
     score_info: [Option<ScoreInfo>; MAX_PLAYERS],
     stage_duration_seconds: f32,
@@ -4521,10 +4522,12 @@ fn waiting_for_groovestats_submit(state: &State) -> bool {
     false
 }
 
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }

@@ -169,6 +169,7 @@ const fn error_kind_key(kind: ActionErrorKind) -> &'static str {
 }
 
 /// Dispatch a virtual input event against the current overlay state.
+#[must_use]
 pub const fn handle_input(phase: &FfmpegPhase, ev: &InputEvent) -> InputOutcome {
     if matches!(phase, FfmpegPhase::Idle) {
         return InputOutcome::Passthrough;

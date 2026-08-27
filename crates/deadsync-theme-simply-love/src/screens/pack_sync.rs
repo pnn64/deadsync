@@ -18,7 +18,7 @@ const OVERLAY_Z: i16 = 1496;
 const VIEW_ROWS_RUNNING: usize = 7;
 const VIEW_ROWS_REVIEW: usize = 5;
 const ROW_STEP: f32 = 43.0;
-pub(crate) struct TargetSpec {
+pub struct TargetSpec {
     pub song: Arc<SongData>,
     pub simfile_path: PathBuf,
     pub song_title: String,
@@ -27,7 +27,7 @@ pub(crate) struct TargetSpec {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct NavigationPolicy {
+pub struct NavigationPolicy {
     pub only_dedicated_menu_buttons: bool,
     pub three_key_navigation: bool,
 }
@@ -83,7 +83,7 @@ enum OverlayPhase {
     Review,
 }
 
-pub(crate) struct OverlayStateData {
+pub struct OverlayStateData {
     rows: Vec<RowState>,
     summary: Summary,
     text: OverlayText,
@@ -111,7 +111,7 @@ struct OverlayText {
     help: TextContent,
 }
 
-pub(crate) enum OverlayState {
+pub enum OverlayState {
     Hidden,
     Visible(Box<OverlayStateData>),
 }
@@ -127,7 +127,7 @@ struct Summary {
     failed: usize,
 }
 
-pub(crate) fn chart_label(chart: &ChartData) -> String {
+pub fn chart_label(chart: &ChartData) -> String {
     if chart.difficulty.eq_ignore_ascii_case("edit") && !chart.description.trim().is_empty() {
         format!("{} ({})", chart.difficulty, chart.description)
     } else {
@@ -295,7 +295,7 @@ fn refresh_pagination_text(overlay: &mut OverlayStateData) {
     );
 }
 
-pub(crate) fn build_overlay(
+pub fn build_overlay(
     state: &OverlayState,
     active_color_index: i32,
     machine_font: MachineFont,
@@ -603,7 +603,7 @@ pub(crate) fn build_overlay(
     Some(actors)
 }
 
-pub(crate) fn hide(state: &mut OverlayState) -> Option<crate::SimplyLoveSyncRequest> {
+pub fn hide(state: &mut OverlayState) -> Option<crate::SimplyLoveSyncRequest> {
     let request = match state {
         OverlayState::Visible(overlay) if overlay.phase == OverlayPhase::Running => {
             Some(crate::SimplyLoveSyncRequest::CancelAnalysis(overlay.owner))
@@ -614,7 +614,7 @@ pub(crate) fn hide(state: &mut OverlayState) -> Option<crate::SimplyLoveSyncRequ
     request
 }
 
-pub(crate) fn begin(
+pub fn begin(
     state: &mut OverlayState,
     owner: crate::SimplyLoveSyncOwner,
     pack_name: String,
@@ -655,11 +655,11 @@ pub(crate) fn begin(
     })
 }
 
-pub(crate) const fn poll(state: &mut OverlayState) -> bool {
+pub const fn poll(state: &OverlayState) -> bool {
     matches!(state, OverlayState::Visible(_))
 }
 
-pub(crate) fn handle_input(
+pub fn handle_input(
     state: &mut OverlayState,
     ev: &InputEvent,
     navigation: NavigationPolicy,
@@ -1152,7 +1152,7 @@ fn shift(overlay: &mut OverlayStateData, delta: isize) -> bool {
     true
 }
 
-pub(crate) fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSyncEvent) {
+pub fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSyncEvent) {
     let OverlayState::Visible(overlay) = state else {
         return;
     };

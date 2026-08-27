@@ -1,5 +1,6 @@
 use crate::ini::SimpleIni;
 
+#[must_use]
 pub fn has_missing_fields(conf: &SimpleIni, expected_content: &str) -> bool {
     let mut expected = SimpleIni::new();
     expected.load_str(expected_content);

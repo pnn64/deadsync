@@ -33,6 +33,7 @@ fn install_played_map(played: PlayedMapReader) {
 /// Clear the derived map and drain the callback-to-application transport at a
 /// music timeline boundary. This intentionally matches the behavior before
 /// v0.5.654 rather than deferring cleanup until the next clock snapshot.
+#[allow(clippy::redundant_pub_crate)]
 #[inline(always)]
 pub(crate) fn clear_music_pos_map() -> u64 {
     let mut runtime = MUSIC_MAP_RUNTIME.lock().unwrap();
@@ -103,6 +104,7 @@ impl MusicClock {
     }
 
     /// Construct the inert handle used when startup continues without audio.
+    #[must_use]
     pub fn without_audio() -> Self {
         force_music_map_runtime();
         Self { sample_rate: 1 }
@@ -112,7 +114,7 @@ impl MusicClock {
         self.sample_rate
     }
 
-    pub(crate) fn lookup(&mut self, stream_frames: f64) -> Option<(f32, f32)> {
+    pub(crate) fn lookup(&self, stream_frames: f64) -> Option<(f32, f32)> {
         lookup_music_position(stream_frames, self.sample_rate)
     }
 

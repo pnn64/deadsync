@@ -71,6 +71,7 @@ pub const MAX_FPS_HOLD_FAST_AFTER: Duration = Duration::from_millis(700);
 pub const MAX_FPS_HOLD_FASTER_AFTER: Duration = Duration::from_millis(1200);
 pub const MAX_FPS_HOLD_FASTEST_AFTER: Duration = Duration::from_millis(1800);
 
+#[must_use]
 pub const fn lights_driver_choice_index(driver: LightsDriverKind) -> usize {
     match driver {
         LightsDriverKind::Off => 0,
@@ -88,6 +89,7 @@ pub const fn lights_driver_choice_index(driver: LightsDriverKind) -> usize {
     }
 }
 
+#[must_use]
 pub const fn lights_driver_from_choice(idx: usize) -> LightsDriverKind {
     match idx {
         1 => LightsDriverKind::Snek,
@@ -105,6 +107,7 @@ pub const fn lights_driver_from_choice(idx: usize) -> LightsDriverKind {
     }
 }
 
+#[must_use]
 pub const fn lights_gameplay_pad_choice_index(mode: GameplayPadLightMode) -> usize {
     match mode {
         GameplayPadLightMode::Input => 0,
@@ -112,6 +115,7 @@ pub const fn lights_gameplay_pad_choice_index(mode: GameplayPadLightMode) -> usi
     }
 }
 
+#[must_use]
 pub const fn lights_gameplay_pad_from_choice(idx: usize) -> GameplayPadLightMode {
     match idx {
         1 => GameplayPadLightMode::Chart,
@@ -120,6 +124,7 @@ pub const fn lights_gameplay_pad_from_choice(idx: usize) -> GameplayPadLightMode
 }
 
 #[cfg(windows)]
+#[must_use]
 pub const fn windows_pad_backend_choice_index(backend: WindowsPadBackend) -> usize {
     match backend {
         WindowsPadBackend::Auto | WindowsPadBackend::RawInput => 0,
@@ -131,6 +136,7 @@ pub const fn windows_pad_backend_choice_index(backend: WindowsPadBackend) -> usi
 }
 
 #[cfg(windows)]
+#[must_use]
 pub const fn windows_pad_backend_from_choice(idx: usize) -> WindowsPadBackend {
     #[cfg(target_vendor = "win7")]
     {
@@ -144,18 +150,22 @@ pub const fn windows_pad_backend_from_choice(idx: usize) -> WindowsPadBackend {
     }
 }
 
+#[must_use]
 pub fn bg_brightness_choice_index(brightness: f32) -> usize {
     ((clamp_bg_brightness(brightness) * 10.0).round() as i32).clamp(0, 10) as usize
 }
 
+#[must_use]
 pub fn bg_brightness_from_choice(idx: usize) -> f32 {
     idx.min(10) as f32 / 10.0
 }
 
+#[must_use]
 pub const fn clamp_bg_brightness(brightness: f32) -> f32 {
     brightness.clamp(0.0, 1.0)
 }
 
+#[must_use]
 pub const fn clamp_show_stats_mode(mode: u8) -> u8 {
     if mode > SHOW_STATS_MODE_MAX {
         SHOW_STATS_MODE_MAX
@@ -199,6 +209,7 @@ impl Default for SmxPackName {
 impl SmxPackName {
     /// Parse a pack name from the ini. Names longer than the capacity fall
     /// back to empty (the built-in set).
+    #[must_use]
     pub fn parse(raw: &str) -> Self {
         let trimmed = raw.trim();
         if trimmed.is_empty() || trimmed.len() > SMX_PACK_NAME_CAP {
@@ -210,11 +221,13 @@ impl SmxPackName {
         out
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         // Always valid: the bytes are a prefix copied from a &str.
         std::str::from_utf8(&self.bytes[..self.len as usize]).unwrap_or("")
     }
 
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.len == 0
     }
@@ -999,6 +1012,7 @@ pub fn push_system_translation_option_lines(content: &mut String, options: Syste
     push_bool(content, "TranslatedTitles", options.translated_titles);
 }
 
+#[must_use]
 pub fn parse_select_music_itl_rank_mode(
     raw_mode: Option<&str>,
     raw_legacy_chart_rank: Option<&str>,
@@ -1020,6 +1034,7 @@ pub fn parse_select_music_itl_rank_mode(
         .unwrap_or(default)
 }
 
+#[must_use]
 pub fn parse_select_music_song_select_bg_mode(
     raw_mode: Option<&str>,
     raw_legacy_mode: Option<&str>,
@@ -1031,6 +1046,7 @@ pub fn parse_select_music_song_select_bg_mode(
         .unwrap_or(default)
 }
 
+#[must_use]
 pub fn parse_select_music_default_sort(
     raw: Option<&str>,
     legacy_series: Option<&str>,
@@ -1629,6 +1645,7 @@ pub fn push_runtime_worker_theme_option_lines(content: &mut String, options: Run
     push_line(content, "Theme", options.theme_flag.as_str());
 }
 
+#[must_use]
 pub fn music_wheel_scroll_speed_choice_index(speed: u8) -> usize {
     let mut best_idx = 0usize;
     let mut best_diff = u8::MAX;
@@ -1642,6 +1659,7 @@ pub fn music_wheel_scroll_speed_choice_index(speed: u8) -> usize {
     best_idx
 }
 
+#[must_use]
 pub fn music_wheel_scroll_speed_from_choice(idx: usize) -> u8 {
     MUSIC_WHEEL_SCROLL_SPEED_VALUES
         .get(idx)
@@ -1650,11 +1668,13 @@ pub fn music_wheel_scroll_speed_from_choice(idx: usize) -> u8 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn scorebox_cycle_mask(itg: bool, ex: bool, hard_ex: bool, tournaments: bool) -> u8 {
     (itg as u8) | ((ex as u8) << 1) | ((hard_ex as u8) << 2) | ((tournaments as u8) << 3)
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn scorebox_cycle_cursor_index(
     itg: bool,
     ex: bool,
@@ -1675,6 +1695,7 @@ pub const fn scorebox_cycle_cursor_index(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn scorebox_cycle_bit_from_choice(idx: usize) -> u8 {
     if idx < SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES {
         1u8 << (idx as u8)
@@ -1684,6 +1705,7 @@ pub const fn scorebox_cycle_bit_from_choice(idx: usize) -> u8 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn auto_screenshot_cursor_index(mask: u8) -> usize {
     if (mask & AUTO_SS_PBS) != 0 {
         0
@@ -1701,11 +1723,13 @@ pub const fn auto_screenshot_cursor_index(mask: u8) -> usize {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn auto_screenshot_bit_from_choice(idx: usize) -> u8 {
     auto_screenshot_bit(idx)
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn select_music_chart_info_mask(
     peak_nps: bool,
     effective_bpm: bool,
@@ -1715,6 +1739,7 @@ pub const fn select_music_chart_info_mask(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn select_music_chart_info_cursor_index(
     peak_nps: bool,
     effective_bpm: bool,
@@ -1732,6 +1757,7 @@ pub const fn select_music_chart_info_cursor_index(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn select_music_chart_info_bit_from_choice(idx: usize) -> u8 {
     if idx < SELECT_MUSIC_CHART_INFO_NUM_CHOICES {
         1u8 << (idx as u8)
@@ -1741,10 +1767,12 @@ pub const fn select_music_chart_info_bit_from_choice(idx: usize) -> u8 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn select_music_chart_info_enabled_mask(mask: u8) -> u8 {
     if mask == 0 { 1 } else { mask }
 }
 
+#[must_use]
 pub fn build_max_fps_choices() -> Vec<u16> {
     let mut out = Vec::with_capacity(
         1 + usize::from(MAX_FPS_MAX.saturating_sub(MAX_FPS_MIN)) / usize::from(MAX_FPS_STEP),
@@ -1757,6 +1785,7 @@ pub fn build_max_fps_choices() -> Vec<u16> {
     out
 }
 
+#[must_use]
 pub fn max_fps_hold_delta(delta: isize, held_for: Duration) -> isize {
     let multiplier = if held_for >= MAX_FPS_HOLD_FASTEST_AFTER {
         50
@@ -1771,6 +1800,7 @@ pub fn max_fps_hold_delta(delta: isize, held_for: Duration) -> isize {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn clamped_max_fps(max_fps: u16) -> u16 {
     if max_fps < MAX_FPS_MIN {
         MAX_FPS_MIN
@@ -1781,6 +1811,7 @@ pub const fn clamped_max_fps(max_fps: u16) -> u16 {
     }
 }
 
+#[must_use]
 pub fn max_fps_choice_index(values: &[u16], max_fps: u16) -> usize {
     let target = clamped_max_fps(max_fps);
     values.iter().position(|&v| v == target).unwrap_or_else(|| {
@@ -1792,28 +1823,34 @@ pub fn max_fps_choice_index(values: &[u16], max_fps: u16) -> usize {
     })
 }
 
+#[must_use]
 pub fn max_fps_from_choice(values: &[u16], idx: usize) -> u16 {
     values.get(idx).copied().unwrap_or(MAX_FPS_DEFAULT)
 }
 
+#[must_use]
 pub const fn sync_confidence_choice_index(percent: u8) -> usize {
     let capped = if percent > 100 { 100 } else { percent };
     ((capped as usize) + 2) / 5
 }
 
+#[must_use]
 pub const fn sync_confidence_from_choice(idx: usize) -> u8 {
     let capped = if idx > 20 { 20 } else { idx };
     capped as u8 * 5
 }
 
+#[must_use]
 pub const fn translated_titles_choice_index(translated_titles: bool) -> usize {
     if translated_titles { 0 } else { 1 }
 }
 
+#[must_use]
 pub const fn translated_titles_from_choice(idx: usize) -> bool {
     idx == 0
 }
 
+#[must_use]
 pub const fn language_choice_index(flag: LanguageFlag) -> usize {
     match flag {
         LanguageFlag::Auto | LanguageFlag::English => 0,
@@ -1830,6 +1867,7 @@ pub const fn language_choice_index(flag: LanguageFlag) -> usize {
     }
 }
 
+#[must_use]
 pub const fn language_flag_from_choice(idx: usize) -> LanguageFlag {
     match idx {
         1 => LanguageFlag::German,
@@ -1846,6 +1884,7 @@ pub const fn language_flag_from_choice(idx: usize) -> LanguageFlag {
     }
 }
 
+#[must_use]
 pub const fn breakdown_style_choice_index(style: BreakdownStyle) -> usize {
     match style {
         BreakdownStyle::Sl => 0,
@@ -1853,6 +1892,7 @@ pub const fn breakdown_style_choice_index(style: BreakdownStyle) -> usize {
     }
 }
 
+#[must_use]
 pub const fn breakdown_style_from_choice(idx: usize) -> BreakdownStyle {
     match idx {
         1 => BreakdownStyle::Sn,
@@ -1860,6 +1900,7 @@ pub const fn breakdown_style_from_choice(idx: usize) -> BreakdownStyle {
     }
 }
 
+#[must_use]
 pub const fn select_music_default_sort_choice_index(sort: SelectMusicDefaultSort) -> usize {
     match sort {
         SelectMusicDefaultSort::Series => 0,
@@ -1872,6 +1913,7 @@ pub const fn select_music_default_sort_choice_index(sort: SelectMusicDefaultSort
     }
 }
 
+#[must_use]
 pub const fn select_music_default_sort_from_choice(idx: usize) -> SelectMusicDefaultSort {
     match idx {
         1 => SelectMusicDefaultSort::Group,
@@ -1884,6 +1926,7 @@ pub const fn select_music_default_sort_from_choice(idx: usize) -> SelectMusicDef
     }
 }
 
+#[must_use]
 pub const fn select_music_pattern_info_mode_choice_index(
     mode: SelectMusicPatternInfoMode,
 ) -> usize {
@@ -1894,6 +1937,7 @@ pub const fn select_music_pattern_info_mode_choice_index(
     }
 }
 
+#[must_use]
 pub const fn select_music_pattern_info_mode_from_choice(idx: usize) -> SelectMusicPatternInfoMode {
     match idx {
         1 => SelectMusicPatternInfoMode::Tech,
@@ -1902,6 +1946,7 @@ pub const fn select_music_pattern_info_mode_from_choice(idx: usize) -> SelectMus
     }
 }
 
+#[must_use]
 pub const fn select_music_step_artist_box_mode_choice_index(
     mode: SelectMusicStepArtistBoxMode,
 ) -> usize {
@@ -1912,6 +1957,7 @@ pub const fn select_music_step_artist_box_mode_choice_index(
     }
 }
 
+#[must_use]
 pub const fn select_music_step_artist_box_mode_from_choice(
     idx: usize,
 ) -> SelectMusicStepArtistBoxMode {
@@ -1922,6 +1968,7 @@ pub const fn select_music_step_artist_box_mode_from_choice(
     }
 }
 
+#[must_use]
 pub const fn select_music_itl_wheel_mode_choice_index(mode: SelectMusicItlWheelMode) -> usize {
     match mode {
         SelectMusicItlWheelMode::Off => 0,
@@ -1930,6 +1977,7 @@ pub const fn select_music_itl_wheel_mode_choice_index(mode: SelectMusicItlWheelM
     }
 }
 
+#[must_use]
 pub const fn select_music_itl_wheel_mode_from_choice(idx: usize) -> SelectMusicItlWheelMode {
     match idx {
         1 => SelectMusicItlWheelMode::Score,
@@ -1938,6 +1986,7 @@ pub const fn select_music_itl_wheel_mode_from_choice(idx: usize) -> SelectMusicI
     }
 }
 
+#[must_use]
 pub const fn select_music_itl_rank_mode_choice_index(mode: SelectMusicItlRankMode) -> usize {
     match mode {
         SelectMusicItlRankMode::None => 0,
@@ -1946,6 +1995,7 @@ pub const fn select_music_itl_rank_mode_choice_index(mode: SelectMusicItlRankMod
     }
 }
 
+#[must_use]
 pub const fn select_music_itl_rank_mode_from_choice(idx: usize) -> SelectMusicItlRankMode {
     match idx {
         1 => SelectMusicItlRankMode::Chart,
@@ -1954,6 +2004,7 @@ pub const fn select_music_itl_rank_mode_from_choice(idx: usize) -> SelectMusicIt
     }
 }
 
+#[must_use]
 pub const fn select_music_wheel_style_choice_index(style: SelectMusicWheelStyle) -> usize {
     match style {
         SelectMusicWheelStyle::Itg => 0,
@@ -1961,6 +2012,7 @@ pub const fn select_music_wheel_style_choice_index(style: SelectMusicWheelStyle)
     }
 }
 
+#[must_use]
 pub const fn select_music_wheel_style_from_choice(idx: usize) -> SelectMusicWheelStyle {
     match idx {
         1 => SelectMusicWheelStyle::Iidx,
@@ -1968,6 +2020,7 @@ pub const fn select_music_wheel_style_from_choice(idx: usize) -> SelectMusicWhee
     }
 }
 
+#[must_use]
 pub const fn select_music_difficulty_color_scheme_choice_index(
     scheme: DifficultyColorScheme,
 ) -> usize {
@@ -1978,6 +2031,7 @@ pub const fn select_music_difficulty_color_scheme_choice_index(
     }
 }
 
+#[must_use]
 pub const fn select_music_difficulty_color_scheme_from_choice(idx: usize) -> DifficultyColorScheme {
     match idx {
         1 => DifficultyColorScheme::Itg,
@@ -1986,6 +2040,7 @@ pub const fn select_music_difficulty_color_scheme_from_choice(idx: usize) -> Dif
     }
 }
 
+#[must_use]
 pub const fn select_music_series_source_choice_index(source: SelectMusicSeriesSource) -> usize {
     match source {
         SelectMusicSeriesSource::PackIni => 0,
@@ -1993,6 +2048,7 @@ pub const fn select_music_series_source_choice_index(source: SelectMusicSeriesSo
     }
 }
 
+#[must_use]
 pub const fn select_music_series_source_from_choice(idx: usize) -> SelectMusicSeriesSource {
     match idx {
         1 => SelectMusicSeriesSource::Folder,
@@ -2000,6 +2056,7 @@ pub const fn select_music_series_source_from_choice(idx: usize) -> SelectMusicSe
     }
 }
 
+#[must_use]
 pub const fn select_music_song_select_bg_mode_choice_index(
     mode: SelectMusicSongSelectBgMode,
 ) -> usize {
@@ -2010,6 +2067,7 @@ pub const fn select_music_song_select_bg_mode_choice_index(
     }
 }
 
+#[must_use]
 pub const fn select_music_song_select_bg_mode_from_choice(
     idx: usize,
 ) -> SelectMusicSongSelectBgMode {
@@ -2020,6 +2078,7 @@ pub const fn select_music_song_select_bg_mode_from_choice(
     }
 }
 
+#[must_use]
 pub const fn select_music_new_pack_mode_choice_index(mode: NewPackMode) -> usize {
     match mode {
         NewPackMode::Disabled => 0,
@@ -2028,6 +2087,7 @@ pub const fn select_music_new_pack_mode_choice_index(mode: NewPackMode) -> usize
     }
 }
 
+#[must_use]
 pub const fn select_music_new_pack_mode_from_choice(idx: usize) -> NewPackMode {
     match idx {
         1 => NewPackMode::OpenPack,
@@ -2036,6 +2096,7 @@ pub const fn select_music_new_pack_mode_from_choice(idx: usize) -> NewPackMode {
     }
 }
 
+#[must_use]
 pub const fn select_music_scorebox_placement_choice_index(
     placement: SelectMusicScoreboxPlacement,
 ) -> usize {
@@ -2045,6 +2106,7 @@ pub const fn select_music_scorebox_placement_choice_index(
     }
 }
 
+#[must_use]
 pub const fn select_music_scorebox_placement_from_choice(
     idx: usize,
 ) -> SelectMusicScoreboxPlacement {
@@ -2054,6 +2116,7 @@ pub const fn select_music_scorebox_placement_from_choice(
     }
 }
 
+#[must_use]
 pub const fn log_level_choice_index(level: LogLevel) -> usize {
     match level {
         LogLevel::Error => 0,
@@ -2064,6 +2127,7 @@ pub const fn log_level_choice_index(level: LogLevel) -> usize {
     }
 }
 
+#[must_use]
 pub const fn log_level_from_choice(idx: usize) -> LogLevel {
     match idx {
         0 => LogLevel::Error,
@@ -2074,6 +2138,7 @@ pub const fn log_level_from_choice(idx: usize) -> LogLevel {
     }
 }
 
+#[must_use]
 pub const fn default_fail_type_choice_index(fail_type: DefaultFailType) -> usize {
     match fail_type {
         DefaultFailType::Immediate => 0,
@@ -2081,6 +2146,7 @@ pub const fn default_fail_type_choice_index(fail_type: DefaultFailType) -> usize
     }
 }
 
+#[must_use]
 pub const fn default_fail_type_from_choice(idx: usize) -> DefaultFailType {
     match idx {
         0 => DefaultFailType::Immediate,
@@ -2088,6 +2154,7 @@ pub const fn default_fail_type_from_choice(idx: usize) -> DefaultFailType {
     }
 }
 
+#[must_use]
 pub const fn sync_graph_mode_choice_index(mode: SyncGraphMode) -> usize {
     match mode {
         SyncGraphMode::Frequency => 0,
@@ -2096,6 +2163,7 @@ pub const fn sync_graph_mode_choice_index(mode: SyncGraphMode) -> usize {
     }
 }
 
+#[must_use]
 pub const fn sync_graph_mode_from_choice(idx: usize) -> SyncGraphMode {
     match idx {
         0 => SyncGraphMode::Frequency,
@@ -2104,6 +2172,7 @@ pub const fn sync_graph_mode_from_choice(idx: usize) -> SyncGraphMode {
     }
 }
 
+#[must_use]
 pub const fn machine_preferred_play_style_choice_index(style: MachinePreferredPlayStyle) -> usize {
     match style {
         MachinePreferredPlayStyle::Single => 0,
@@ -2112,6 +2181,7 @@ pub const fn machine_preferred_play_style_choice_index(style: MachinePreferredPl
     }
 }
 
+#[must_use]
 pub const fn machine_preferred_play_style_from_choice(idx: usize) -> MachinePreferredPlayStyle {
     match idx {
         1 => MachinePreferredPlayStyle::Versus,
@@ -2120,6 +2190,7 @@ pub const fn machine_preferred_play_style_from_choice(idx: usize) -> MachinePref
     }
 }
 
+#[must_use]
 pub const fn machine_preferred_play_mode_choice_index(mode: MachinePreferredPlayMode) -> usize {
     match mode {
         MachinePreferredPlayMode::Regular => 0,
@@ -2127,6 +2198,7 @@ pub const fn machine_preferred_play_mode_choice_index(mode: MachinePreferredPlay
     }
 }
 
+#[must_use]
 pub const fn machine_preferred_play_mode_from_choice(idx: usize) -> MachinePreferredPlayMode {
     match idx {
         1 => MachinePreferredPlayMode::Marathon,
@@ -2134,6 +2206,7 @@ pub const fn machine_preferred_play_mode_from_choice(idx: usize) -> MachinePrefe
     }
 }
 
+#[must_use]
 pub const fn machine_font_choice_index(font: MachineFont) -> usize {
     match font {
         MachineFont::Wendy => 0,
@@ -2141,6 +2214,7 @@ pub const fn machine_font_choice_index(font: MachineFont) -> usize {
     }
 }
 
+#[must_use]
 pub const fn machine_font_from_choice(idx: usize) -> MachineFont {
     match idx {
         1 => MachineFont::Mega,
@@ -2148,6 +2222,7 @@ pub const fn machine_font_from_choice(idx: usize) -> MachineFont {
     }
 }
 
+#[must_use]
 pub const fn machine_bar_color_choice_index(color: MachineBarColor) -> usize {
     match color {
         MachineBarColor::Default => 0,
@@ -2156,6 +2231,7 @@ pub const fn machine_bar_color_choice_index(color: MachineBarColor) -> usize {
     }
 }
 
+#[must_use]
 pub const fn machine_bar_color_from_choice(idx: usize) -> MachineBarColor {
     match idx {
         1 => MachineBarColor::Colored,
@@ -2164,6 +2240,7 @@ pub const fn machine_bar_color_from_choice(idx: usize) -> MachineBarColor {
     }
 }
 
+#[must_use]
 pub const fn machine_evaluation_style_choice_index(style: MachineEvaluationStyle) -> usize {
     match style {
         MachineEvaluationStyle::Default => 0,
@@ -2172,6 +2249,7 @@ pub const fn machine_evaluation_style_choice_index(style: MachineEvaluationStyle
     }
 }
 
+#[must_use]
 pub const fn machine_evaluation_style_from_choice(idx: usize) -> MachineEvaluationStyle {
     match idx {
         1 => MachineEvaluationStyle::Opaque,
@@ -2180,6 +2258,7 @@ pub const fn machine_evaluation_style_from_choice(idx: usize) -> MachineEvaluati
     }
 }
 
+#[must_use]
 pub const fn random_background_mode_choice_index(mode: RandomBackgroundMode) -> usize {
     match mode {
         RandomBackgroundMode::Off => 0,
@@ -2187,6 +2266,7 @@ pub const fn random_background_mode_choice_index(mode: RandomBackgroundMode) -> 
     }
 }
 
+#[must_use]
 pub const fn random_background_mode_from_choice(idx: usize) -> RandomBackgroundMode {
     match idx {
         1 => RandomBackgroundMode::RandomMovies,
@@ -2194,6 +2274,7 @@ pub const fn random_background_mode_from_choice(idx: usize) -> RandomBackgroundM
     }
 }
 
+#[must_use]
 pub const fn default_sync_offset_choice_index(offset: DefaultSyncOffset) -> usize {
     match offset {
         DefaultSyncOffset::Null => 0,
@@ -2201,6 +2282,7 @@ pub const fn default_sync_offset_choice_index(offset: DefaultSyncOffset) -> usiz
     }
 }
 
+#[must_use]
 pub const fn default_sync_offset_from_choice(idx: usize) -> DefaultSyncOffset {
     match idx {
         1 => DefaultSyncOffset::Itg,
@@ -2208,6 +2290,7 @@ pub const fn default_sync_offset_from_choice(idx: usize) -> DefaultSyncOffset {
     }
 }
 
+#[must_use]
 pub const fn version_overlay_side_choice_index(side: VersionOverlaySide) -> usize {
     match side {
         VersionOverlaySide::Left => 0,
@@ -2215,6 +2298,7 @@ pub const fn version_overlay_side_choice_index(side: VersionOverlaySide) -> usiz
     }
 }
 
+#[must_use]
 pub const fn version_overlay_side_from_choice(idx: usize) -> VersionOverlaySide {
     match idx {
         0 => VersionOverlaySide::Left,
@@ -2222,6 +2306,7 @@ pub const fn version_overlay_side_from_choice(idx: usize) -> VersionOverlaySide 
     }
 }
 
+#[must_use]
 pub const fn visual_style_choice_index(style: VisualStyle) -> usize {
     match style {
         VisualStyle::Hearts => 0,
@@ -2238,6 +2323,7 @@ pub const fn visual_style_choice_index(style: VisualStyle) -> usize {
     }
 }
 
+#[must_use]
 pub const fn visual_style_from_choice(idx: usize) -> VisualStyle {
     match idx {
         1 => VisualStyle::Arrows,
@@ -2254,6 +2340,7 @@ pub const fn visual_style_from_choice(idx: usize) -> VisualStyle {
     }
 }
 
+#[must_use]
 pub const fn srpg_variant_choice_index(variant: SrpgVariant) -> usize {
     match variant {
         SrpgVariant::Srpg9 => 0,
@@ -2261,6 +2348,7 @@ pub const fn srpg_variant_choice_index(variant: SrpgVariant) -> usize {
     }
 }
 
+#[must_use]
 pub const fn srpg_variant_from_choice(idx: usize) -> SrpgVariant {
     match idx {
         1 => SrpgVariant::Srpg10,
@@ -2268,6 +2356,7 @@ pub const fn srpg_variant_from_choice(idx: usize) -> SrpgVariant {
     }
 }
 
+#[must_use]
 pub const fn arrowcloud_qr_login_when_choice_index(when: ArrowCloudQrLoginWhen) -> usize {
     match when {
         ArrowCloudQrLoginWhen::Always => 0,
@@ -2276,6 +2365,7 @@ pub const fn arrowcloud_qr_login_when_choice_index(when: ArrowCloudQrLoginWhen) 
     }
 }
 
+#[must_use]
 pub const fn arrowcloud_qr_login_when_from_choice(idx: usize) -> ArrowCloudQrLoginWhen {
     match idx {
         0 => ArrowCloudQrLoginWhen::Always,
@@ -2284,6 +2374,7 @@ pub const fn arrowcloud_qr_login_when_from_choice(idx: usize) -> ArrowCloudQrLog
     }
 }
 
+#[must_use]
 pub const fn groovestats_qr_login_when_choice_index(when: GrooveStatsQrLoginWhen) -> usize {
     match when {
         GrooveStatsQrLoginWhen::Always => 0,
@@ -2292,6 +2383,7 @@ pub const fn groovestats_qr_login_when_choice_index(when: GrooveStatsQrLoginWhen
     }
 }
 
+#[must_use]
 pub const fn groovestats_qr_login_when_from_choice(idx: usize) -> GrooveStatsQrLoginWhen {
     match idx {
         0 => GrooveStatsQrLoginWhen::Always,
@@ -2300,6 +2392,7 @@ pub const fn groovestats_qr_login_when_from_choice(idx: usize) -> GrooveStatsQrL
     }
 }
 
+#[must_use]
 pub const fn srpg_shop_folder_choice_index(folder: SrpgShopFolder) -> usize {
     match folder {
         SrpgShopFolder::Unlocks => 0,
@@ -2308,6 +2401,7 @@ pub const fn srpg_shop_folder_choice_index(folder: SrpgShopFolder) -> usize {
     }
 }
 
+#[must_use]
 pub const fn srpg_shop_folder_from_choice(idx: usize) -> SrpgShopFolder {
     match idx {
         1 => SrpgShopFolder::Shops,

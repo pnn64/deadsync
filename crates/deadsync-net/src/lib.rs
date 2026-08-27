@@ -50,12 +50,14 @@ impl Display for NetworkError {
 impl Error for NetworkError {}
 
 #[inline(always)]
+#[must_use]
 pub fn is_timeout_message(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
     lower.contains("timeout") || lower.contains("timed out")
 }
 
 #[inline(always)]
+#[must_use]
 pub fn request_error(message: String) -> NetworkError {
     if is_timeout_message(message.as_str()) {
         NetworkError::Timeout
@@ -64,6 +66,7 @@ pub fn request_error(message: String) -> NetworkError {
     }
 }
 
+#[must_use]
 pub fn error_from_ureq(error: ureq::Error) -> NetworkError {
     match error {
         ureq::Error::StatusCode(status) => NetworkError::HttpStatus(status),
@@ -90,6 +93,7 @@ where
         .map_err(|error| NetworkError::Decode(error.to_string()))
 }
 
+#[must_use]
 pub fn read_text_body_or_empty(response: ureq::http::Response<ureq::Body>) -> String {
     response.into_body().read_to_string().unwrap_or_default()
 }
@@ -117,6 +121,7 @@ pub fn read_text_body_bounded(
     String::from_utf8(bytes).map_err(|error| NetworkError::Decode(error.to_string()))
 }
 
+#[must_use]
 pub fn log_body_snippet(text: &str) -> String {
     const MAX_LOG_CHARS: usize = 256;
     if text.is_empty() {
@@ -129,6 +134,7 @@ pub fn log_body_snippet(text: &str) -> String {
     out
 }
 
+#[must_use]
 pub fn build_agent(config: AgentConfig) -> ureq::Agent {
     ureq::Agent::config_builder()
         .user_agent(deadsync_version::user_agent())

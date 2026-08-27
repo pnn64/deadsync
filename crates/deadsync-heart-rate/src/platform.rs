@@ -136,6 +136,7 @@ pub fn configure(enabled: bool, discover: bool, device_ids: [Option<&str>; 2]) {
     }
 }
 
+#[must_use]
 pub fn player_readings() -> [PlayerReading; 2] {
     std::array::from_fn(|player| decode_reading(PLAYER_READINGS[player].load(Ordering::Acquire)))
 }
@@ -682,6 +683,7 @@ pub mod bench_support {
         })
     }
 
+    #[must_use]
     pub fn stable_ids_old(events: usize) -> u64 {
         let mut checksum = 0u64;
         for event_index in 0..events {
@@ -699,6 +701,7 @@ pub mod bench_support {
         checksum
     }
 
+    #[must_use]
     pub fn stable_ids_new(events: usize) -> u64 {
         let mut checksum = 0u64;
         for event_index in 0..events {
@@ -758,6 +761,7 @@ pub mod bench_support {
         checksum
     }
 
+    #[must_use]
     pub fn fixed_selection_new(iterations: usize) -> u64 {
         let desired = shared_desired();
         let mut checksum = 0u64;
@@ -787,6 +791,7 @@ pub mod bench_support {
         checksum
     }
 
+    #[must_use]
     pub fn unchanged_discovery_old(iterations: usize) -> u64 {
         let fixture = discovery_fixture();
         let mut checksum = 0u64;
@@ -799,6 +804,7 @@ pub mod bench_support {
         checksum
     }
 
+    #[must_use]
     pub fn unchanged_discovery_new(iterations: usize) -> u64 {
         let fixture = discovery_fixture();
         let mut checksum = 0u64;

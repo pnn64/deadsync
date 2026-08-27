@@ -9,6 +9,7 @@ pub struct PadIndexUpdate {
     pub changed: bool,
 }
 
+#[must_use]
 pub fn pad_index_for_uuid(backend: PadOrderBackend, uuid: [u8; 16]) -> PadIndexUpdate {
     let assignment = deadsync_input_native::pad_index_for_uuid(backend, uuid);
     PadIndexUpdate {
@@ -17,6 +18,7 @@ pub fn pad_index_for_uuid(backend: PadOrderBackend, uuid: [u8; 16]) -> PadIndexU
     }
 }
 
+#[must_use]
 pub fn pad_index_for_uuid_saved(backend: PadOrderBackend, uuid: [u8; 16]) -> u32 {
     let update = pad_index_for_uuid(backend, uuid);
     if update.changed {

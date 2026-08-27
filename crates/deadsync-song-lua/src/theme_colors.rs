@@ -60,6 +60,7 @@ pub fn parse_color_text(text: &str) -> Option<[f32; 4]> {
     Some([red, green, blue, alpha])
 }
 
+#[must_use]
 pub fn palette_color(index: i64, palette: &[&str]) -> [f32; 4] {
     if palette.is_empty() {
         return [1.0, 1.0, 1.0, 1.0];
@@ -68,6 +69,7 @@ pub fn palette_color(index: i64, palette: &[&str]) -> [f32; 4] {
     parse_color_text(palette[wrapped]).unwrap_or([1.0, 1.0, 1.0, 1.0])
 }
 
+#[must_use]
 pub const fn song_lua_palette(
     diff_palette: Option<&str>,
     decorative: bool,
@@ -80,6 +82,7 @@ pub const fn song_lua_palette(
     }
 }
 
+#[must_use]
 pub fn song_lua_player_color(player: usize, decorative: bool) -> [f32; 4] {
     let index = match player {
         0 => SONG_LUA_ACTIVE_COLOR_INDEX,
@@ -89,6 +92,7 @@ pub fn song_lua_player_color(player: usize, decorative: bool) -> [f32; 4] {
     palette_color(index, song_lua_palette(None, decorative))
 }
 
+#[must_use]
 pub fn song_lua_player_score_color(player: usize) -> [f32; 4] {
     let index = match player {
         0 => SONG_LUA_ACTIVE_COLOR_INDEX,
@@ -98,6 +102,7 @@ pub fn song_lua_player_score_color(player: usize) -> [f32; 4] {
     palette_color(index, SL_COLORS)
 }
 
+#[must_use]
 pub fn song_lua_player_dark_color(player: usize) -> [f32; 4] {
     match player {
         0 => parse_color_text("#da4453").unwrap_or([1.0, 1.0, 1.0, 1.0]),
@@ -106,6 +111,7 @@ pub fn song_lua_player_dark_color(player: usize) -> [f32; 4] {
     }
 }
 
+#[must_use]
 pub fn song_lua_difficulty_index(name: &str) -> Option<i64> {
     match name {
         "Beginner" | "Difficulty_Beginner" => Some(0),
@@ -118,6 +124,7 @@ pub fn song_lua_difficulty_index(name: &str) -> Option<i64> {
     }
 }
 
+#[must_use]
 pub fn song_lua_difficulty_color(difficulty: i64, decorative: bool) -> [f32; 4] {
     if difficulty == 5 {
         return parse_color_text("#B4B7BA").unwrap_or([1.0; 4]);
@@ -128,6 +135,7 @@ pub fn song_lua_difficulty_color(difficulty: i64, decorative: bool) -> [f32; 4] 
     )
 }
 
+#[must_use]
 pub fn custom_difficulty_color(name: &str) -> Option<[f32; 4]> {
     let hex = match name {
         "Beginner" | "Difficulty_Beginner" => "#ff32f8",
@@ -143,6 +151,7 @@ pub fn custom_difficulty_color(name: &str) -> Option<[f32; 4]> {
     parse_color_text(hex)
 }
 
+#[must_use]
 pub fn stage_color(name: &str) -> Option<[f32; 4]> {
     let hex = match name {
         "Stage_1st" => "#00ffc7",
@@ -160,6 +169,7 @@ pub fn stage_color(name: &str) -> Option<[f32; 4]> {
     parse_color_text(hex)
 }
 
+#[must_use]
 pub fn judgment_line_color(name: &str) -> Option<[f32; 4]> {
     let hex = match name {
         "JudgmentLine_W1" => "#bfeaff",
@@ -175,6 +185,7 @@ pub fn judgment_line_color(name: &str) -> Option<[f32; 4]> {
     parse_color_text(hex)
 }
 
+#[must_use]
 pub fn light_color(color: [f32; 4]) -> [f32; 4] {
     [
         color[0].mul_add(0.5, 0.5),
@@ -184,6 +195,7 @@ pub fn light_color(color: [f32; 4]) -> [f32; 4] {
     ]
 }
 
+#[must_use]
 pub fn tone_color(color: [f32; 4], factor: f32) -> [f32; 4] {
     [
         color[0] * factor,
@@ -193,6 +205,7 @@ pub fn tone_color(color: [f32; 4], factor: f32) -> [f32; 4] {
     ]
 }
 
+#[must_use]
 pub const fn blend_color(first: [f32; 4], second: [f32; 4]) -> [f32; 4] {
     [
         f32::midpoint(first[0], second[0]),
@@ -202,6 +215,7 @@ pub const fn blend_color(first: [f32; 4], second: [f32; 4]) -> [f32; 4] {
     ]
 }
 
+#[must_use]
 pub fn color_to_hex(color: [f32; 4]) -> String {
     let component = |value: f32| (value.clamp(0.0, 1.0) * 255.0) as u8;
     format!(

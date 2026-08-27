@@ -60,6 +60,7 @@ impl From<image::ImageError> for ScreenshotSaveError {
     }
 }
 
+#[must_use]
 pub fn sanitize_screenshot_title(title: &str) -> String {
     title
         .chars()
@@ -96,6 +97,7 @@ pub struct ScreenshotRuntimeState<RequestSide: Copy> {
 
 impl<RequestSide: Copy> ScreenshotRuntimeState<RequestSide> {
     #[inline(always)]
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             pending: false,
@@ -174,6 +176,7 @@ pub struct ScreenshotPreviewPose {
     pub glow_alpha: f32,
 }
 
+#[must_use]
 pub fn screenshot_flash_alpha(started_at: Option<Instant>, now: Instant) -> f32 {
     let Some(started_at) = started_at else {
         return 0.0;
@@ -191,6 +194,7 @@ pub fn screenshot_flash_alpha(started_at: Option<Instant>, now: Instant) -> f32 
     fade.clamp(0.0, 1.0) * SCREENSHOT_FLASH_MAX_ALPHA
 }
 
+#[must_use]
 pub fn screenshot_preview_pose(
     started_at: Instant,
     target: ScreenshotPreviewTarget,

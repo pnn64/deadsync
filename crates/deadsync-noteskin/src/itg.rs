@@ -132,6 +132,7 @@ pub fn clear_data_cache() {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn button_for_col(num_cols: usize, col: usize) -> &'static str {
     if matches!(num_cols, 5 | 10) {
         match col % 5 {
@@ -151,6 +152,7 @@ pub const fn button_for_col(num_cols: usize, col: usize) -> &'static str {
     }
 }
 
+#[must_use]
 pub fn down_col(num_cols: usize) -> usize {
     (0..num_cols)
         .find(|&col| {
@@ -163,10 +165,12 @@ pub fn down_col(num_cols: usize) -> usize {
         .unwrap_or(0)
 }
 
+#[must_use]
 pub fn normalized_game_name(game: &str) -> String {
     game.trim().to_ascii_lowercase()
 }
 
+#[must_use]
 pub fn normalized_skin_name(skin: &str) -> String {
     let skin = skin.trim();
     if skin.is_empty() {
@@ -176,19 +180,23 @@ pub fn normalized_skin_name(skin: &str) -> String {
     }
 }
 
+#[must_use]
 pub fn skin_name_is_default(skin: &str) -> bool {
     normalized_skin_name(skin) == DEFAULT_SKIN_NAME
 }
 
+#[must_use]
 pub const fn default_skin_name() -> &'static str {
     DEFAULT_SKIN_NAME
 }
 
+#[must_use]
 pub const fn default_skin_candidates() -> &'static [&'static str] {
     DEFAULT_SKIN_CANDIDATES
 }
 
 #[inline(always)]
+#[must_use]
 pub fn itg_skin_cache_key(style: &Style, skin: &str) -> ItgSkinCacheKey {
     ItgSkinCacheKey {
         num_cols: style.num_cols,
@@ -309,12 +317,14 @@ pub struct NoteskinData {
 }
 
 impl NoteskinData {
+    #[must_use]
     pub fn get_metric(&self, button: &str, value: &str) -> Option<&str> {
         self.metrics
             .get(button, value)
             .or_else(|| self.metrics.get("notedisplay", value))
     }
 
+    #[must_use]
     pub fn resolve_path(&self, button: &str, element: &str) -> Option<PathBuf> {
         let mut path = self.resolve_path_once(button, element)?;
 
@@ -377,6 +387,7 @@ impl NoteskinData {
     }
 }
 
+#[must_use]
 pub fn find_texture_with_prefix(data: &NoteskinData, prefix: &str) -> Option<PathBuf> {
     for dir in &data.search_dirs {
         let Ok(entries) = fs::read_dir(dir) else {
@@ -417,6 +428,7 @@ pub fn find_texture_with_prefix(data: &NoteskinData, prefix: &str) -> Option<Pat
     None
 }
 
+#[must_use]
 pub fn texture_key_for_path(
     asset_relative_path: Option<&Path>,
     path: &Path,
@@ -472,6 +484,7 @@ pub fn resolve_texture_expr(
         })
 }
 
+#[must_use]
 pub fn discover_skins(roots: &[PathBuf], game: &str) -> Vec<String> {
     let game = normalized_game_name(game);
     let mut seen = HashSet::new();
@@ -686,6 +699,7 @@ pub fn load_noteskin_data_cached(
     Ok(entry.clone())
 }
 
+#[must_use]
 pub fn load_noteskin_data_cached_from_roots(
     roots: &[PathBuf],
     game: &str,
@@ -700,6 +714,7 @@ pub fn load_noteskin_data_cached_from_roots(
     None
 }
 
+#[must_use]
 pub fn song_lua_noteskin_resolve_path_from_roots(
     roots: &[PathBuf],
     game: &str,
@@ -722,6 +737,7 @@ pub fn song_lua_noteskin_metric_from_roots(
         .map(str::to_string)
 }
 
+#[must_use]
 pub fn song_lua_noteskin_metric_f_from_roots(
     roots: &[PathBuf],
     game: &str,
@@ -734,6 +750,7 @@ pub fn song_lua_noteskin_metric_f_from_roots(
     )
 }
 
+#[must_use]
 pub fn song_lua_noteskin_metric_b_from_roots(
     roots: &[PathBuf],
     game: &str,
@@ -746,10 +763,12 @@ pub fn song_lua_noteskin_metric_b_from_roots(
     ))
 }
 
+#[must_use]
 pub fn song_lua_noteskin_exists_from_roots(roots: &[PathBuf], game: &str, skin: &str) -> bool {
     load_noteskin_data_cached_from_roots(roots, game, skin).is_some()
 }
 
+#[must_use]
 pub fn song_lua_noteskin_names_from_roots(roots: &[PathBuf], game: &str) -> Vec<String> {
     discover_skins(roots, game)
 }
@@ -889,6 +908,7 @@ fn parse_ini_int(raw: &str) -> Option<i32> {
     Some(parsed.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32)
 }
 
+#[must_use]
 pub fn parse_ini_float(raw: &str) -> Option<f32> {
     let value = parse_ini_value(raw)?;
     value.parse::<f32>().ok()

@@ -54,6 +54,7 @@ pub struct AppPathsView {
 
 impl AppPathsView {
     #[inline(always)]
+    #[must_use]
     pub const fn get(&self, kind: AppPathKind) -> &AppPathView {
         match kind {
             AppPathKind::Data => &self.data,
@@ -381,6 +382,7 @@ pub enum OverlayAnchor {
 
 impl OverlayAnchor {
     #[inline(always)]
+    #[must_use]
     pub const fn to_key(self) -> &'static str {
         match self {
             Self::TopLeft => "top-left",
@@ -393,6 +395,7 @@ impl OverlayAnchor {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn from_key(key: &str) -> Option<Self> {
         match key.trim().to_ascii_lowercase().as_str() {
             "top-left" => Some(Self::TopLeft),
@@ -415,6 +418,7 @@ pub enum OverlayStyle {
 
 impl OverlayStyle {
     #[inline(always)]
+    #[must_use]
     pub const fn toggle(self) -> Self {
         match self {
             Self::Detailed => Self::Minimal,
@@ -423,6 +427,7 @@ impl OverlayStyle {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
             Self::Detailed => "detailed",
@@ -431,6 +436,7 @@ impl OverlayStyle {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn from_key(key: &str) -> Self {
         match key.trim().to_ascii_lowercase().as_str() {
             "minimal" => Self::Minimal,
@@ -439,11 +445,13 @@ impl OverlayStyle {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn show_p99(self) -> bool {
         matches!(self, Self::Detailed)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn show_histogram(self) -> bool {
         matches!(self, Self::Detailed)
     }
@@ -467,6 +475,7 @@ pub struct FrameStatsSample {
 
 impl FrameStatsSample {
     #[inline(always)]
+    #[must_use]
     pub const fn empty() -> Self {
         Self {
             host_nanos: 0,
@@ -484,11 +493,13 @@ impl FrameStatsSample {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.host_nanos == 0
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn measured_us(&self) -> u32 {
         self.maintenance_us
             .saturating_add(self.input_us)
@@ -500,11 +511,13 @@ impl FrameStatsSample {
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn idle_us(&self) -> u32 {
         self.frame_us.saturating_sub(self.measured_us())
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn cpu_work_us(&self) -> u32 {
         self.maintenance_us
             .saturating_add(self.input_us)

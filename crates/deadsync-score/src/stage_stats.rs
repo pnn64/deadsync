@@ -364,6 +364,7 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
     })
 }
 
+#[must_use]
 pub fn total_stage_duration_seconds(stages: &[StageSummary]) -> f32 {
     stages
         .iter()
@@ -379,6 +380,7 @@ pub fn total_stage_duration_seconds(stages: &[StageSummary]) -> f32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn course_eval_is_final(
     next_stage_index: usize,
     stage_count: usize,

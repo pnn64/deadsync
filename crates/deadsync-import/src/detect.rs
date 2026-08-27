@@ -27,6 +27,7 @@ pub struct ItgProfileCandidate {
 /// Scans the known `ITGmania` save locations and returns every local profile
 /// found, sorted by display name. Returns an empty list when `ITGmania` isn't
 /// installed or has no profiles.
+#[must_use]
 pub fn detect_itg_local_profiles() -> Vec<ItgProfileCandidate> {
     collect_sorted(local_profiles_roots())
 }
@@ -38,12 +39,14 @@ pub fn detect_itg_local_profiles() -> Vec<ItgProfileCandidate> {
 /// platform per-user data directory. Profiles are always under
 /// `<save>/LocalProfiles/`. Returns the profiles found there, sorted by display
 /// name.
+#[must_use]
 pub fn detect_itg_profiles_from_game_dir(game_dir: &Path) -> Vec<ItgProfileCandidate> {
     collect_sorted(itg_local_profiles_roots_for_game_dir(game_dir))
 }
 
 /// `true` when `game_dir` is a portable `ITGmania` install — i.e. it contains a
 /// `Portable.ini` marker (matched case-insensitively, like `ITGmania`'s VFS).
+#[must_use]
 pub fn is_portable_install(game_dir: &Path) -> bool {
     if game_dir.join("Portable.ini").is_file() {
         return true;

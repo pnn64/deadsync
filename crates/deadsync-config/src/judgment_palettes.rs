@@ -98,6 +98,7 @@ impl JudgmentPaletteCatalog {
         catalog
     }
 
+    #[must_use]
     pub fn to_ini(&self) -> String {
         let mut output = String::from("[General]\n");
         writeln!(output, "DefaultPalette={}", self.resolved_default_id())
@@ -126,6 +127,7 @@ impl JudgmentPaletteCatalog {
         output
     }
 
+    #[must_use]
     pub fn load(path: &Path) -> Self {
         match std::fs::read_to_string(path) {
             Ok(content) => Self::from_ini(&content),
@@ -157,10 +159,12 @@ impl JudgmentPaletteCatalog {
         })
     }
 
+    #[must_use]
     pub fn palette(&self, id: &str) -> Option<&JudgmentPaletteDefinition> {
         self.palettes.iter().find(|palette| palette.id == id)
     }
 
+    #[must_use]
     pub fn resolved_default_id(&self) -> &str {
         if self.palette(&self.default_palette_id).is_some() {
             &self.default_palette_id
@@ -169,6 +173,7 @@ impl JudgmentPaletteCatalog {
         }
     }
 
+    #[must_use]
     pub fn resolve(&self, selection: Option<&str>) -> JudgmentPalette {
         selection
             .and_then(|id| self.palette(id))

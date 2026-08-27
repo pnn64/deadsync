@@ -397,6 +397,7 @@ pub fn scan_and_load_courses_with_progress_counts_runtime<Progress>(
     });
 }
 
+#[must_use]
 pub fn fmt_scan_time(d: Duration) -> String {
     let ms = d.as_millis();
     if ms < 1000 {
@@ -411,6 +412,7 @@ pub fn fmt_scan_time(d: Duration) -> String {
     format!("{m}m{s:.1}s")
 }
 
+#[must_use]
 pub fn runtime_song_scan_log_entry(event: RuntimeSongScanEvent) -> RuntimeScanLogEntry {
     match event {
         RuntimeSongScanEvent::StartScan { base_root } => RuntimeScanLogEntry::info(format!(
@@ -490,6 +492,7 @@ pub fn runtime_song_scan_log_entry(event: RuntimeSongScanEvent) -> RuntimeScanLo
     }
 }
 
+#[must_use]
 pub fn scan_song_roots(song_roots: &[PathBuf]) -> (Vec<PackScan>, Vec<ScanFailure>) {
     let mut packs = Vec::new();
     let mut failures = Vec::new();
@@ -856,6 +859,7 @@ pub fn benchmark_nested_membership_sorted_paths(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_nested_membership_sorted_names(
     direct_dirs: &[PathBuf],
     queries: &[PathBuf],
@@ -879,6 +883,7 @@ pub fn benchmark_nested_membership_sorted_names(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_nested_membership_linear(
     direct_dirs: &[PathBuf],
     queries: &[PathBuf],
@@ -904,6 +909,7 @@ pub struct BenchmarkScanMapFixture {
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_scan_map_fixture(
     pack_count: usize,
     group_count: usize,
@@ -967,6 +973,7 @@ pub fn benchmark_scan_map_fixture(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_pack_groups_legacy(fixture: &BenchmarkScanMapFixture, rounds: usize) -> u64 {
     let mut checksum = 0u64;
     for _ in 0..rounds {
@@ -987,6 +994,7 @@ pub fn benchmark_pack_groups_legacy(fixture: &BenchmarkScanMapFixture, rounds: u
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_pack_groups_current(fixture: &BenchmarkScanMapFixture, rounds: usize) -> u64 {
     let mut checksum = 0u64;
     for _ in 0..rounds {
@@ -1006,6 +1014,7 @@ pub fn benchmark_pack_groups_current(fixture: &BenchmarkScanMapFixture, rounds: 
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_song_slots_legacy(fixture: &BenchmarkScanMapFixture, rounds: usize) -> u64 {
     let mut checksum = 0u64;
     for _ in 0..rounds {
@@ -1024,6 +1033,7 @@ pub fn benchmark_song_slots_legacy(fixture: &BenchmarkScanMapFixture, rounds: us
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_song_slots_current(fixture: &BenchmarkScanMapFixture, rounds: usize) -> u64 {
     let mut checksum = 0u64;
     for _ in 0..rounds {
@@ -1035,6 +1045,7 @@ pub fn benchmark_song_slots_current(fixture: &BenchmarkScanMapFixture, rounds: u
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_scan_maps_legacy(fixture: &BenchmarkScanMapFixture) -> u64 {
     let mut packs = fixture.packs.clone();
     let mut failures = Vec::new();
@@ -1043,6 +1054,7 @@ pub fn benchmark_scan_maps_legacy(fixture: &BenchmarkScanMapFixture) -> u64 {
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_scan_maps_current(fixture: &BenchmarkScanMapFixture) -> u64 {
     let mut packs = fixture.packs.clone();
     let mut failures = Vec::new();
@@ -1171,6 +1183,7 @@ fn reject_series_collisions_legacy(packs: &mut Vec<PackScan>, failures: &mut Vec
     packs.retain(|pack| rejected.binary_search(&ci_key(&pack.group_name)).is_err());
 }
 
+#[must_use]
 pub fn scan_pack_dirs(
     pack_dirs: &[PathBuf],
     song_roots: &[PathBuf],
@@ -1206,6 +1219,7 @@ fn folder_series_for_pack(pack_dir: &Path, song_roots: &[PathBuf]) -> String {
         .unwrap_or_default()
 }
 
+#[must_use]
 pub fn merge_pack_scans(packs: Vec<PackScan>) -> Vec<PackScan> {
     let mut representatives = pack_group_representatives(&packs);
     let mut merged = Vec::with_capacity(packs.len());
@@ -1247,6 +1261,7 @@ fn merge_pack_scans_legacy(packs: Vec<PackScan>) -> Vec<PackScan> {
     merged
 }
 
+#[must_use]
 pub fn collect_reload_pack_dirs(
     song_roots: &[PathBuf],
     dirs: &[PathBuf],
@@ -1290,6 +1305,7 @@ fn reload_pack_relative_path(dir: &Path, song_roots: &[PathBuf]) -> PathBuf {
     dir.file_name().map(PathBuf::from).unwrap_or_default()
 }
 
+#[must_use]
 pub fn empty_song_pack_from_scan(pack: &PackScan) -> SongPack {
     SongPack {
         group_name: pack.group_name.clone(),
@@ -1306,11 +1322,13 @@ pub fn empty_song_pack_from_scan(pack: &PackScan) -> SongPack {
     }
 }
 
+#[must_use]
 pub fn count_loaded_songs(packs: &[SongPack]) -> usize {
     packs.iter().map(|pack| pack.songs.len()).sum()
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_pack_progress_name(pack: &SongPack) -> &str {
     pack.directory
         .file_name()
@@ -1320,6 +1338,7 @@ pub fn song_pack_progress_name(pack: &SongPack) -> &str {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn song_progress_name(path: &Path) -> &str {
     path.parent()
         .and_then(|dir| dir.file_name())
@@ -1622,6 +1641,7 @@ fn run_parallel_jobs_with_state<Worker: Send, T: Send>(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_legacy_song_workers(
     job_count: usize,
     worker_count: usize,
@@ -1665,6 +1685,7 @@ pub fn benchmark_legacy_song_workers(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_pooled_song_workers(
     job_count: usize,
     worker_count: usize,

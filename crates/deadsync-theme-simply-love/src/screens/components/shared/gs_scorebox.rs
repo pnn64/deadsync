@@ -1111,6 +1111,7 @@ fn push_rows(
     }
 }
 
+#[must_use]
 pub fn select_music_scorebox_actors(
     runtime: &ScoreboxSideView,
     chart_hash: Option<&str>,
@@ -1240,6 +1241,7 @@ pub struct GameplayScoreboxBenchmark {
 
 #[cfg(feature = "bench-support")]
 impl GameplayScoreboxBenchmark {
+    #[must_use]
     pub fn new() -> Self {
         let entry = |rank: u32, pane: usize| score_data::LeaderboardEntry {
             rank,

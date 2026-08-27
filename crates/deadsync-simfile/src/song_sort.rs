@@ -22,6 +22,7 @@ pub struct GroupedSongs {
     pub songs: Vec<Arc<SongData>>,
 }
 
+#[must_use]
 pub fn song_title_sort_key(song: &SongData) -> (String, String, String) {
     let title = if song.translit_title.trim().is_empty() {
         song.title.as_str()
@@ -40,6 +41,7 @@ pub fn song_title_sort_key(song: &SongData) -> (String, String, String) {
     )
 }
 
+#[must_use]
 pub fn alpha_group_bucket_from_text(text: &str) -> u8 {
     let first = text.trim_start().chars().next();
     match first {
@@ -52,10 +54,12 @@ pub fn alpha_group_bucket_from_text(text: &str) -> u8 {
     }
 }
 
+#[must_use]
 pub fn alpha_group_char(bucket: u8) -> Option<char> {
     (bucket >= 2).then(|| (b'A' + bucket.saturating_sub(2)) as char)
 }
 
+#[must_use]
 pub fn title_group_bucket(song: &SongData) -> u8 {
     let title = if song.translit_title.trim().is_empty() {
         song.title.as_str()
@@ -65,6 +69,7 @@ pub fn title_group_bucket(song: &SongData) -> u8 {
     alpha_group_bucket_from_text(title)
 }
 
+#[must_use]
 pub fn song_artist_sort_key(song: &SongData) -> (String, String) {
     (
         song.artist.to_ascii_lowercase(),
@@ -93,11 +98,13 @@ fn cmp_song_title_key(left: &SongData, right: &SongData) -> Ordering {
         })
 }
 
+#[must_use]
 pub fn song_bpm_for_sort(song: &SongData) -> i32 {
     song.display_bpm_range()
         .map_or(0, |(_lo, hi)| hi.max(0.0) as i32)
 }
 
+#[must_use]
 pub fn song_length_for_sort(song: &SongData) -> i32 {
     if song.music_length_seconds.is_finite() && song.music_length_seconds > 0.0 {
         song.music_length_seconds.max(0.0) as i32
@@ -109,6 +116,7 @@ pub fn song_length_for_sort(song: &SongData) -> i32 {
 /// Returns all unique meter values for a song, considering the given chart type.
 /// Non-edit charts are preferred; edit charts are only included if the song has
 /// no non-edit charts at all.
+#[must_use]
 pub fn song_meters_for_sort(song: &SongData, chart_type: &str) -> Vec<u32> {
     let mut meters = Vec::new();
     let mut has_non_edit = false;
@@ -135,6 +143,7 @@ pub fn song_meters_for_sort(song: &SongData, chart_type: &str) -> Vec<u32> {
     meters
 }
 
+#[must_use]
 pub fn title_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
     songs.sort_by(|left, right| {
         title_group_bucket(left)
@@ -146,6 +155,7 @@ pub fn title_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
     grouped_contiguous_songs(songs, |song| SongSortGroup::Title(title_group_bucket(song)))
 }
 
+#[must_use]
 pub fn artist_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
     songs.sort_by(|left, right| {
         alpha_group_bucket_from_text(&left.artist)
@@ -164,6 +174,7 @@ pub fn artist_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> 
     })
 }
 
+#[must_use]
 pub fn genre_grouped_songs(
     mut songs: Vec<Arc<SongData>>,
     unknown_genre_label: &str,
@@ -189,6 +200,7 @@ pub fn genre_grouped_songs(
     })
 }
 
+#[must_use]
 pub fn bpm_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
     songs.sort_by(|left, right| {
         song_bpm_for_sort(left)
@@ -201,6 +213,7 @@ pub fn bpm_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
     })
 }
 
+#[must_use]
 pub fn length_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
     songs.sort_by(|left, right| {
         song_length_for_sort(left)
@@ -213,6 +226,7 @@ pub fn length_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> 
     })
 }
 
+#[must_use]
 pub fn meter_grouped_songs(songs: Vec<Arc<SongData>>, chart_type: &str) -> Vec<GroupedSongs> {
     let mut buckets: BTreeMap<Option<u32>, Vec<Arc<SongData>>> = BTreeMap::new();
     for song in songs {
@@ -241,10 +255,12 @@ pub fn meter_grouped_songs(songs: Vec<Arc<SongData>>, chart_type: &str) -> Vec<G
         .collect()
 }
 
+#[must_use]
 pub fn bpm_bucket_range(max_bpm: i32) -> (i32, i32) {
     bucket_range(max_bpm, SORT_BPM_DIVISION)
 }
 
+#[must_use]
 pub fn length_bucket_range(length_seconds: i32) -> (i32, i32) {
     bucket_range(length_seconds, SORT_LENGTH_DIVISION)
 }

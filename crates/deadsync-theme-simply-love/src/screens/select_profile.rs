@@ -9,11 +9,13 @@ use deadsync_profile as profile_data;
 pub type State = profile_boxes::State;
 
 #[inline(always)]
+#[must_use]
 pub const fn exit_anim_duration() -> f32 {
     profile_boxes::exit_anim_duration()
 }
 
 #[inline(always)]
+#[must_use]
 pub fn init(view: ProfilePickerView) -> State {
     profile_boxes::init(view)
 }
@@ -39,11 +41,13 @@ pub fn update(state: &mut State, dt: f32) {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn in_transition() -> (Vec<Actor>, f32) {
     profile_boxes::in_transition()
 }
 
 #[inline(always)]
+#[must_use]
 pub fn out_transition() -> (Vec<Actor>, f32) {
     profile_boxes::out_transition()
 }

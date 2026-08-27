@@ -13,6 +13,7 @@ pub enum SyncPref {
 pub const ITG_SYNC_OFFSET_SECONDS: f32 = -0.009;
 
 #[inline(always)]
+#[must_use]
 pub const fn resolve_sync_pref(pref: SyncPref, default: SyncPref) -> SyncPref {
     match pref {
         SyncPref::Default => default,
@@ -22,6 +23,7 @@ pub const fn resolve_sync_pref(pref: SyncPref, default: SyncPref) -> SyncPref {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn sync_pref_offset(pref: SyncPref, default: SyncPref) -> f32 {
     match resolve_sync_pref(pref, default) {
         SyncPref::Itg => ITG_SYNC_OFFSET_SECONDS,
@@ -29,6 +31,7 @@ pub const fn sync_pref_offset(pref: SyncPref, default: SyncPref) -> f32 {
     }
 }
 
+#[must_use]
 pub fn format_display_bpm_range(range: Option<(f64, f64)>, music_rate: f32) -> String {
     let Some((lo, hi)) = range else {
         return String::new();
@@ -61,6 +64,7 @@ pub const STANDARD_DIFFICULTY_NAMES: [&str; 5] =
 pub const STANDARD_DIFFICULTY_COUNT: usize = STANDARD_DIFFICULTY_NAMES.len();
 
 #[inline(always)]
+#[must_use]
 pub fn standard_difficulty_index(difficulty_name: &str) -> Option<usize> {
     STANDARD_DIFFICULTY_NAMES
         .iter()
@@ -68,6 +72,7 @@ pub fn standard_difficulty_index(difficulty_name: &str) -> Option<usize> {
 }
 
 #[inline]
+#[must_use]
 pub fn chart_ix_for_steps_index(
     standard_charts: &[Option<usize>; STANDARD_DIFFICULTY_COUNT],
     steps_index: usize,
@@ -129,6 +134,7 @@ pub struct SongBackgroundChange {
 }
 
 impl SongBackgroundChange {
+    #[must_use]
     pub const fn new(start_beat: f32, target: SongBackgroundChangeTarget) -> Self {
         Self {
             start_beat,
@@ -142,10 +148,12 @@ impl SongBackgroundChange {
         }
     }
 
+    #[must_use]
     pub fn effect_is(&self, name: &str) -> bool {
         self.effect.eq_ignore_ascii_case(name)
     }
 
+    #[must_use]
     pub fn transition_is(&self, name: &str) -> bool {
         self.transition.eq_ignore_ascii_case(name)
     }
@@ -275,12 +283,14 @@ impl SongData {
     ///
     /// Mirrors `ITGmania`'s `Song::GetLastSecond()` chart-selection behavior:
     /// if any non-Edit chart exists, ignore Edit charts for song length.
+    #[must_use]
     pub fn precise_last_second(&self) -> f32 {
         let fallback = self.total_length_seconds.max(0) as f32;
         self.precise_last_second_seconds.max(fallback)
     }
 
     #[inline(always)]
+    #[must_use]
     pub const fn precise_first_second(&self) -> f32 {
         if self.first_second.is_finite() {
             self.first_second
@@ -289,6 +299,7 @@ impl SongData {
         }
     }
 
+    #[must_use]
     pub fn display_title(&self, translit: bool) -> &str {
         if translit && !self.translit_title.trim().is_empty() {
             self.translit_title.as_str()
@@ -297,6 +308,7 @@ impl SongData {
         }
     }
 
+    #[must_use]
     pub fn display_subtitle(&self, translit: bool) -> &str {
         if translit && !self.translit_subtitle.trim().is_empty() {
             self.translit_subtitle.as_str()
@@ -305,6 +317,7 @@ impl SongData {
         }
     }
 
+    #[must_use]
     pub fn display_full_title(&self, translit: bool) -> String {
         let title = self.display_title(translit);
         let subtitle = self.display_subtitle(translit);
@@ -321,10 +334,12 @@ impl SongData {
     /// title or subtitle. Matching is case-insensitive and spans the combined
     /// title + subtitle so the tag is found regardless of which field carries
     /// it. Used by the player-options "No `CMod` alternative" auto-switch.
+    #[must_use]
     pub fn is_no_cmod(&self) -> bool {
         title_subtitle_contains_ignore_ascii_case(&self.title, &self.subtitle, "no cmod")
     }
 
+    #[must_use]
     pub fn has_standard_difficulty(&self, chart_type: &str, difficulty_index: usize) -> bool {
         let Some(target) = STANDARD_DIFFICULTY_NAMES.get(difficulty_index) else {
             return false;
@@ -335,6 +350,7 @@ impl SongData {
         })
     }
 
+    #[must_use]
     pub fn edit_charts_sorted(&self, chart_type: &str) -> Vec<&ChartData> {
         let mut edits: Vec<&ChartData> = self
             .charts
@@ -345,6 +361,7 @@ impl SongData {
         edits
     }
 
+    #[must_use]
     pub fn edit_chart_indices_sorted(&self, chart_type: &str) -> Vec<usize> {
         let mut indices: Vec<usize> = self
             .charts
@@ -362,6 +379,7 @@ impl SongData {
     }
 
     #[inline]
+    #[must_use]
     pub fn standard_chart_indices(
         &self,
         chart_type: &str,
@@ -381,6 +399,7 @@ impl SongData {
         out
     }
 
+    #[must_use]
     pub fn chart_for_steps_index(
         &self,
         chart_type: &str,
@@ -398,11 +417,13 @@ impl SongData {
     }
 
     #[inline]
+    #[must_use]
     pub fn chart_music_path(&self, chart_type: &str, steps_index: usize) -> Option<&PathBuf> {
         self.chart_for_steps_index(chart_type, steps_index)
             .and_then(|chart| chart.music_path.as_ref())
     }
 
+    #[must_use]
     pub fn steps_index_for_chart_hash(&self, chart_type: &str, chart_hash: &str) -> Option<usize> {
         let chart = self.charts.iter().find(|chart| {
             chart.chart_type.eq_ignore_ascii_case(chart_type) && chart.short_hash == chart_hash
@@ -433,6 +454,7 @@ impl SongData {
         None
     }
 
+    #[must_use]
     pub fn steps_len(&self, chart_type: &str) -> usize {
         STANDARD_DIFFICULTY_COUNT
             + self
@@ -442,6 +464,7 @@ impl SongData {
                 .count()
     }
 
+    #[must_use]
     pub fn best_steps_index(
         &self,
         chart_type: &str,
@@ -501,6 +524,7 @@ impl SongData {
         (lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0).then_some((lo, hi))
     }
 
+    #[must_use]
     pub fn display_bpm_range(&self) -> Option<(f64, f64)> {
         if let Some(range) = self.tagged_display_bpm_range() {
             return Some(range);
@@ -518,12 +542,14 @@ impl SongData {
     ///
     /// Matches Simply Love's semantics by treating non-positive DISPLAYBPM values
     /// as invalid and falling back to actual BPM range.
+    #[must_use]
     pub fn formatted_display_bpm(&self) -> String {
         format_display_bpm_range(self.display_bpm_range(), 1.0)
     }
 
     /// Returns (lo, hi) display BPM, checking the chart's `display_bpm` first,
     /// then falling back to the song-level `display_bpm`, then actual min/max.
+    #[must_use]
     pub fn chart_display_bpm_range(&self, chart: Option<&ChartData>) -> Option<(f64, f64)> {
         if let Some(chart) = chart {
             match &chart.display_bpm {
@@ -545,6 +571,7 @@ impl SongData {
         self.display_bpm_range()
     }
 
+    #[must_use]
     pub fn display_bpm_pair_or(&self, chart: Option<&ChartData>, fallback: [f32; 2]) -> [f32; 2] {
         self.chart_display_bpm_range(chart)
             .map(|(lo, hi)| {
@@ -560,10 +587,12 @@ impl SongData {
     }
 
     /// Formats display BPM for UI text, checking chart-level tag first.
+    #[must_use]
     pub fn formatted_chart_display_bpm(&self, chart: Option<&ChartData>) -> String {
         format_display_bpm_range(self.chart_display_bpm_range(chart), 1.0)
     }
 
+    #[must_use]
     pub fn active_background_path(&self, beat: f32) -> Option<&PathBuf> {
         match self
             .active_background_change(beat)
@@ -577,11 +606,13 @@ impl SongData {
         }
     }
 
+    #[must_use]
     pub fn active_foreground_path(&self, beat: f32) -> Option<&PathBuf> {
         let path = &self.active_foreground_change(beat)?.path;
         path.is_file().then_some(path)
     }
 
+    #[must_use]
     pub fn gameplay_background_path_for_change_ix(
         &self,
         next_background_change_ix: usize,
@@ -594,6 +625,7 @@ impl SongData {
         )
     }
 
+    #[must_use]
     pub fn gameplay_background_path_for_changes<'a>(
         &'a self,
         background_changes: &'a [SongBackgroundChange],

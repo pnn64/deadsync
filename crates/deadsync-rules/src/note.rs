@@ -65,6 +65,7 @@ pub fn advance_hold_last_held(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn hold_window_seconds(note_type: NoteType) -> f32 {
     match note_type {
         NoteType::Roll => TIMING_WINDOW_SECONDS_ROLL,
@@ -73,6 +74,7 @@ pub const fn hold_window_seconds(note_type: NoteType) -> f32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn advance_hold_life_ns(
     note_type: NoteType,
     life: f32,
@@ -175,6 +177,7 @@ fn carried_holds_for_row(active_hold_ends: &mut [usize; MAX_COLS], row: usize) -
 /// the row-index runtime built immediately afterward relies on the same
 /// invariant. Keeping the scan ordered avoids rebuilding and sorting row and
 /// hold collections during every transformed-chart initialization.
+#[must_use]
 pub fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> PlayerTotals {
     let (start, end) = note_range;
     if start >= end {
@@ -417,7 +420,7 @@ mod tests {
         let zero_elapsed = advanced
             .zero_elapsed_music_ns
             .expect("hold should cross zero");
-        assert!((song_time_ns_to_seconds(zero_elapsed) - 0.080375).abs() <= 1e-6);
+        assert!((song_time_ns_to_seconds(zero_elapsed) - 0.080_375).abs() <= 1e-6);
     }
 
     #[test]

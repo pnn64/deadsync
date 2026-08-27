@@ -7,6 +7,7 @@ pub const MUSIC_POS_MAP_BACKLOG_FRAMES: i64 = 80_000;
 const NANOS_PER_SECOND: f64 = 1_000_000_000.0;
 
 #[inline(always)]
+#[must_use]
 pub fn music_nanos_from_seconds(seconds: f64) -> i64 {
     if !seconds.is_finite() {
         return 0;
@@ -16,6 +17,7 @@ pub fn music_nanos_from_seconds(seconds: f64) -> i64 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn normalized_music_rate(rate: f32) -> f32 {
     if rate.is_finite() && rate > 0.0 {
         rate
@@ -25,6 +27,7 @@ pub fn normalized_music_rate(rate: f32) -> f32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn fallback_music_position(stream_seconds: f32, cut_start_sec: f64, rate: f32) -> (f32, f32) {
     let rate = normalized_music_rate(rate);
     let stream_seconds = if stream_seconds.is_finite() {
@@ -44,6 +47,7 @@ pub fn fallback_music_position(stream_seconds: f32, cut_start_sec: f64, rate: f3
 }
 
 #[inline(always)]
+#[must_use]
 pub fn music_clock_seed_enabled(cut_start_sec: f64) -> bool {
     cut_start_sec.is_finite() && cut_start_sec != 0.0
 }
@@ -431,6 +435,7 @@ fn stream_position_frames_from_anchor_pair(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn stream_position_frames_from_window(
     sample_rate: u32,
     start_frame: u64,
@@ -468,6 +473,7 @@ pub fn stream_position_frames_from_window(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn fallback_stream_position_frames(start_frame: u64, window: CallbackClockWindow) -> f64 {
     window.total_frames.saturating_sub(start_frame) as f64
 }
@@ -531,6 +537,7 @@ impl PlaybackPosMap {
         }
     }
 
+    #[must_use]
     pub fn search(&self, stream_frame: f64) -> Option<(f64, f64)> {
         if self.queue.is_empty() || !stream_frame.is_finite() {
             return None;
@@ -573,6 +580,7 @@ impl PlaybackPosMap {
     /// Inverse of [`search`]: given a music position in seconds, return the
     /// track-relative stream frame at which it plays. Prefers the segment that
     /// contains `music_seconds`; otherwise extrapolates from the nearest segment.
+    #[must_use]
     pub fn invert(&self, music_seconds: f64) -> Option<f64> {
         if self.queue.is_empty() || !music_seconds.is_finite() {
             return None;

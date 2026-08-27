@@ -119,10 +119,12 @@ impl LiveCase {
         path.map(|path| Self::load(path, build)).transpose()
     }
 
+    #[must_use]
     pub fn data_dir(&self) -> &Path {
         &self.data_dir
     }
 
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }

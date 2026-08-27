@@ -1,4 +1,5 @@
 ﻿#[inline(always)]
+#[must_use]
 pub const fn column_flash_duration(grade: JudgeGrade) -> f32 {
     match grade {
         JudgeGrade::Miss => COLUMN_FLASH_MISS_DURATION,
@@ -30,6 +31,7 @@ pub fn column_flash_options_from_profile<Profile: GameplayProfileData>(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn column_flash_enabled_for_options(
     options: ColumnFlashOptions,
     grade: JudgeGrade,
@@ -105,16 +107,19 @@ pub fn tick_mine_explosion_slot(slot: &mut Option<ActiveMineExplosion>, delta_ti
 }
 
 #[inline(always)]
+#[must_use]
 pub fn column_flash_expired_at(flash: ActiveColumnFlash, screen_time_s: f32) -> bool {
     screen_time_s - flash.started_at_screen_s >= column_flash_duration(flash.grade)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn hold_judgment_expired_at(render_info: HoldJudgmentRenderInfo, screen_time_s: f32) -> bool {
     screen_time_s - render_info.started_at_screen_s >= HOLD_JUDGMENT_TOTAL_DURATION
 }
 
 #[inline(always)]
+#[must_use]
 pub fn held_miss_judgment_expired_at(render_info: HeldMissRenderInfo, screen_time_s: f32) -> bool {
     screen_time_s - render_info.started_at_screen_s >= HELD_MISS_TOTAL_DURATION
 }
@@ -135,6 +140,7 @@ pub const TAP_EXPLOSION_WINDOWS: [&str; TAP_EXPLOSION_WINDOW_COUNT] =
     ["W1", "W2", "W3", "W4", "W5", "Miss", "Held"];
 
 #[inline(always)]
+#[must_use]
 pub const fn grade_to_window(grade: JudgeGrade) -> Option<&'static str> {
     match grade {
         JudgeGrade::Fantastic => Some("W1"),
@@ -170,6 +176,7 @@ pub fn fantastic_window_options<Profile: GameplayProfileData>(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn fantastic_window_seconds(options: FantasticWindowOptions) -> f32 {
     options
         .custom_fantastic_window_s
@@ -177,6 +184,7 @@ pub fn fantastic_window_seconds(options: FantasticWindowOptions) -> f32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn blue_fantastic_window_ms(options: FantasticWindowOptions) -> f32 {
     if let Some(custom_s) = options.custom_fantastic_window_s {
         return custom_s * 1000.0;
@@ -205,6 +213,7 @@ pub struct PlayerJudgmentTiming {
 
 
 #[inline(always)]
+#[must_use]
 pub fn build_player_judgment_timing_for_options(
     mut timing_profile: TimingProfile,
     fantastic_options: FantasticWindowOptions,
@@ -250,6 +259,7 @@ pub struct NoteHitEval {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn note_hit_eval_for_timing(
     timing: PlayerJudgmentTiming,
     note_time_ns: SongTimeNs,
@@ -273,6 +283,7 @@ pub fn note_hit_eval_for_timing(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn note_hit_judgment(
     hit: NoteHitEval,
     judgment_offset_music_ns: SongTimeNs,
@@ -291,6 +302,7 @@ pub fn note_hit_judgment(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn final_note_hit_judgment(
     hit: NoteHitEval,
     judgment_offset_music_ns: SongTimeNs,
@@ -308,6 +320,7 @@ pub struct FinalNoteHitPlan {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn final_note_hit_plan(
     hit: NoteHitEval,
     judgment_offset_music_ns: SongTimeNs,
@@ -331,6 +344,7 @@ pub struct HitActiveHoldStart {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn hit_active_hold_start(
     note_type: NoteType,
     note_index: usize,
@@ -360,6 +374,7 @@ pub struct ProvisionalEarlyHitPlan {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn provisional_early_hit_plan(
     hit: NoteHitEval,
     rate: f32,
@@ -383,6 +398,7 @@ pub enum EarlyRescoreHitDecision {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn early_rescore_hit_decision(
     row_rescore_track_count: usize,
     hit: NoteHitEval,
@@ -412,11 +428,13 @@ pub const fn early_rescore_hit_decision(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn timing_hit_log_enabled() -> bool {
     log::log_enabled!(log::Level::Debug)
 }
 
 #[inline(always)]
+#[must_use]
 pub fn gameplay_input_log_enabled() -> bool {
     log::log_enabled!(log::Level::Debug)
 }
@@ -884,6 +902,7 @@ pub fn tap_judgment_uses_bright_explosion_from_profile<Profile: GameplayProfileD
     tap_judgment_uses_bright_explosion_for_options(profile.fantastic_feedback_options(), judgment)
 }
 
+#[must_use]
 pub fn tap_judgment_uses_bright_explosion_for_options(
     options: FantasticFeedbackOptions,
     judgment: &Judgment,

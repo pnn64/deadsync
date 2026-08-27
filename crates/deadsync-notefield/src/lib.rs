@@ -1,3 +1,6 @@
+// Source-level architecture guards intentionally distinguish crate-private helpers.
+#![allow(clippy::redundant_pub_crate)]
+
 mod actor_builder;
 mod combo_feedback;
 mod compose;
@@ -173,6 +176,7 @@ pub mod performance {
     };
     #[cfg(feature = "bench-support")]
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
     pub fn notefield_view_proj(
         screen_w: f32,
         screen_h: f32,
@@ -2012,7 +2016,7 @@ mod tests {
         assert!((column_cue_alpha(0.15, 1.0) - 1.0).abs() <= 1e-6);
         assert!((column_cue_alpha(0.5, 1.0) - 1.0).abs() <= 1e-6);
         assert!((column_cue_alpha(0.925, 1.0) - 0.75).abs() <= 1e-6);
-        assert!((column_cue_alpha(0.95, 1.0) - 0.5555556).abs() <= 1e-6);
+        assert!((column_cue_alpha(0.95, 1.0) - 0.555_555_6).abs() <= 1e-6);
         assert!((column_cue_alpha(1.0, 1.0) - 0.0).abs() <= 1e-6);
     }
 

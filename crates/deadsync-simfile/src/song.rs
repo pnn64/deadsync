@@ -45,6 +45,7 @@ pub struct ParseSongOptions {
 }
 
 impl ParseSongOptions {
+    #[must_use]
     pub const fn new(
         song_movie_roots: Vec<PathBuf>,
         random_movie_roots: Vec<PathBuf>,
@@ -65,6 +66,7 @@ pub struct SongAnalyzer {
 }
 
 impl SongAnalyzer {
+    #[must_use]
     pub fn new(options: &ParseSongOptions) -> Self {
         Self {
             prepared: PreparedAnalysis::new(AnalysisOptions {
@@ -831,11 +833,13 @@ fn max_chart_bpm(bpms: &[(f32, f32)]) -> f64 {
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_song_parse_previous(path: &Path, rounds: usize) -> u64 {
     benchmark_song_parse_mode(path, SongBuildMode::Baseline, rounds)
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_rssp_note_handoff_baseline(simfile_data: &[u8], rounds: usize) -> u64 {
     let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
     let analyzer = SongAnalyzer::new(&options);
@@ -859,6 +863,7 @@ pub fn benchmark_rssp_note_handoff_baseline(simfile_data: &[u8], rounds: usize) 
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_rssp_note_handoff_current(simfile_data: &[u8], rounds: usize) -> u64 {
     let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
     let analyzer = SongAnalyzer::new(&options);
@@ -881,16 +886,19 @@ pub fn benchmark_rssp_note_handoff_current(simfile_data: &[u8], rounds: usize) -
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_song_parse_current(path: &Path, rounds: usize) -> u64 {
     benchmark_song_parse_mode(path, SongBuildMode::Direct, rounds)
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_song_bytes_previous(path: &Path) -> Vec<u8> {
     benchmark_song_bytes(path, SongBuildMode::Baseline)
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_song_bytes_current(path: &Path) -> Vec<u8> {
     benchmark_song_bytes(path, SongBuildMode::Direct)
 }
@@ -919,6 +927,7 @@ fn benchmark_song_bytes(path: &Path, mode: SongBuildMode) -> Vec<u8> {
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_note_parse_legacy(note_data: &[u8], lanes: usize, rounds: usize) -> u64 {
     (0..rounds).fold(0u64, |checksum, _| {
         let notes: Vec<_> = parse_chart_notes_legacy(note_data, lanes)
@@ -930,6 +939,7 @@ pub fn benchmark_note_parse_legacy(note_data: &[u8], lanes: usize, rounds: usize
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_note_parse_current(note_data: &[u8], lanes: usize, rounds: usize) -> u64 {
     (0..rounds).fold(0u64, |checksum, _| {
         let notes = parse_cached_notes(note_data, lanes, None);
@@ -938,6 +948,7 @@ pub fn benchmark_note_parse_current(note_data: &[u8], lanes: usize, rounds: usiz
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn benchmark_note_parse_precomputed(
     note_data: &[u8],
     lanes: usize,

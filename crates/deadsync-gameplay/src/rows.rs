@@ -6,6 +6,7 @@ impl ChartNoteIndex {
     pub const INVALID: Self = Self(u32::MAX);
 
     #[inline(always)]
+    #[must_use]
     pub const fn get(self) -> usize {
         self.0 as usize
     }
@@ -16,6 +17,7 @@ impl ChartNoteIndex {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn try_from_usize(index: usize) -> Option<Self> {
         let index = u32::try_from(index).ok()?;
         (index != u32::MAX).then_some(Self(index))
@@ -42,6 +44,7 @@ pub struct ChartRowIndex(u32);
 
 impl ChartRowIndex {
     #[inline(always)]
+    #[must_use]
     pub const fn get(self) -> usize {
         self.0 as usize
     }
@@ -96,11 +99,13 @@ pub struct RowEntry {
 
 impl RowEntry {
     #[inline(always)]
+    #[must_use]
     pub fn note_indices(&self) -> &[ChartNoteIndex] {
         &self.nonmine_note_indices[..usize::from(self.nonmine_note_count)]
     }
 }
 
+#[must_use]
 pub fn score_rows_finalized_for_players(
     row_entries: &[RowEntry],
     row_entry_ranges: &[(usize, usize); MAX_PLAYERS],
@@ -117,6 +122,7 @@ pub fn score_rows_finalized_for_players(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn first_time_index_at_or_after(
     times_ns: &[SongTimeNs],
     range: (usize, usize),
@@ -128,6 +134,7 @@ pub fn first_time_index_at_or_after(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn first_row_entry_index_at_or_after_time(
     row_entries: &[RowEntry],
     range: (usize, usize),
@@ -289,6 +296,7 @@ pub fn practice_cursors_for_players<I: Copy + Into<usize>>(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn count_rescore_tracks_on_row(row_entry: &RowEntry) -> usize {
     usize::from(row_entry.rescore_track_count)
 }
@@ -332,6 +340,7 @@ fn build_row_entry_compact(
     }
 }
 
+#[must_use]
 pub fn build_row_entry(
     row_index: usize,
     nonmine_note_indices: [usize; MAX_COLS],
@@ -368,6 +377,7 @@ pub const NOTE_ROW_ENTRY_INDEX_MASK: u32 = (1 << 30) - 1;
 pub const NOTE_ROW_FLAGS_SHIFT: u32 = 30;
 
 #[inline(always)]
+#[must_use]
 pub fn tap_row_hold_roll_flags_from_metadata(metadata: &[u32], note_index: usize) -> u8 {
     metadata
         .get(note_index)
@@ -542,6 +552,7 @@ fn row_metadata_checksum(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn build_gameplay_row_indices_reference_for_bench(
     notes: &[Note],
     note_ranges: &[(usize, usize); MAX_PLAYERS],
@@ -560,6 +571,7 @@ pub fn build_gameplay_row_indices_reference_for_bench(
 }
 
 #[cfg(feature = "bench-support")]
+#[must_use]
 pub fn build_gameplay_row_indices_for_bench(
     notes: &[Note],
     note_ranges: &[(usize, usize); MAX_PLAYERS],
@@ -703,6 +715,7 @@ pub fn mark_row_entry_note_finalized(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn row_entry_index_for_note(
     note_row_entry_indices: &[u32],
     note_index: usize,
@@ -715,6 +728,7 @@ pub fn row_entry_index_for_note(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn finalized_row_outcome_for_entry(
     row_entries: &[RowEntry],
     row_entry_index: usize,
@@ -725,6 +739,7 @@ pub fn finalized_row_outcome_for_entry(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn finalized_row_outcome_for_note(
     row_entries: &[RowEntry],
     note_row_entry_indices: &[u32],
@@ -757,6 +772,7 @@ pub struct CompletedRowVisibility<'a> {
 
 impl<'a> CompletedRowVisibility<'a> {
     #[inline(always)]
+    #[must_use]
     pub const fn new(row_entries: &'a [RowEntry], note_row_entry_indices: &'a [u32]) -> Self {
         Self {
             row_entries,
@@ -765,12 +781,14 @@ impl<'a> CompletedRowVisibility<'a> {
     }
 
     #[inline(always)]
+    #[must_use]
     pub fn hides_note(self, note_index: usize) -> bool {
         completed_row_hides_note(self.row_entries, self.note_row_entry_indices, note_index)
     }
 }
 
 #[inline(always)]
+#[must_use]
 pub fn row_entry_for_note<'a>(
     row_entries: &'a [RowEntry],
     note_row_entry_indices: &[u32],
@@ -781,6 +799,7 @@ pub fn row_entry_for_note<'a>(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn completed_row_final_judgment<'a>(
     notes: &'a [Note],
     row_entry: &RowEntry,
@@ -809,6 +828,7 @@ pub struct FinalizedRowJudgment {
     pub outcome: FinalizedRowOutcome,
 }
 
+#[must_use]
 pub fn finalized_row_judgment_for_entry(
     notes: &[Note],
     row_entry: &RowEntry,
@@ -838,6 +858,7 @@ pub fn finalized_row_judgment_for_entry(
 }
 
 #[inline(always)]
+#[must_use]
 pub fn completed_row_tap_feedback_plan(
     notes: &[Note],
     row_entry: &RowEntry,
@@ -871,6 +892,7 @@ pub struct CompletedRowTapFeedbackPlan {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn completed_row_flash_note_indices_and_judgment(
     notes: &[Note],
     row_entry: &RowEntry,
@@ -880,6 +902,7 @@ pub fn completed_row_flash_note_indices_and_judgment(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn suppress_final_bad_rescore_visual(
     row_had_provisional_early_hit: bool,
     final_grade: JudgeGrade,
@@ -888,6 +911,7 @@ pub const fn suppress_final_bad_rescore_visual(
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn finalized_row_awards_hand(
     final_grade: JudgeGrade,
     note_count: u32,
@@ -908,6 +932,7 @@ pub struct RowFinalizationPlayerState {
     pub hands_achieved: u32,
 }
 
+#[must_use]
 pub const fn row_finalization_player_state(player: &PlayerRuntime) -> RowFinalizationPlayerState {
     RowFinalizationPlayerState {
         combo: player_combo_state(player),
@@ -949,6 +974,7 @@ pub struct RowFinalizationPlan {
     pub capture_failed_ex_score_inputs: bool,
 }
 
+#[must_use]
 pub const fn row_finalization_plan(
     row_judgment: FinalizedRowJudgment,
     scoring_blocked: bool,
@@ -971,6 +997,7 @@ pub const fn row_finalization_plan(
     }
 }
 
+#[must_use]
 pub fn row_finalization_plan_for_entry(
     notes: &[Note],
     row_entry: &RowEntry,
@@ -1021,6 +1048,7 @@ pub fn apply_row_finalization_player_state(
     }
 }
 
+#[must_use]
 pub fn carried_holds_down_at_row(
     notes: &[Note],
     active_holds: &[Option<ActiveHold>],
@@ -1061,6 +1089,7 @@ pub enum PlayerRowScanState {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn player_row_scan_state(
     row_entries: &[RowEntry],
     row_entry_index: usize,
@@ -1195,6 +1224,7 @@ pub fn collect_ready_judged_row_events(
     }
 }
 
+#[must_use]
 pub fn advance_judged_row_cursor_for_entries(
     row_entries: &[RowEntry],
     row_range: (usize, usize),
@@ -1215,6 +1245,7 @@ pub struct RowGrid {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn notes_row_sorted(notes: &[Note]) -> bool {
     notes
         .windows(2)
@@ -1259,6 +1290,7 @@ const fn next_row_grid(
 }
 
 #[cfg(any(test, feature = "bench-support"))]
+#[must_use]
 pub fn build_row_grids_reference(
     notes: &[Note],
     note_range: (usize, usize),

@@ -45,6 +45,7 @@ fn song_search_bpm_tier(bpm: f64) -> i32 {
     (((bpm + 0.5) / 10.0).floor() * 10.0) as i32
 }
 
+#[must_use]
 pub fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> String {
     const ORDER: [&str; 5] = ["beginner", "easy", "medium", "hard", "challenge"];
     let mut out = String::new();
@@ -125,6 +126,7 @@ pub struct SongSearchLiveQuery {
 /// Parse a typeahead query, splitting `[###]` filters from the free text.
 ///
 /// The `pack/song` split is deliberately not applied: packs have their own scope.
+#[must_use]
 pub fn parse_song_search_live(input: &str) -> SongSearchLiveQuery {
     let filter = parse_song_search_filter(input);
     SongSearchLiveQuery {
@@ -136,6 +138,7 @@ pub fn parse_song_search_live(input: &str) -> SongSearchLiveQuery {
 
 /// Whether `song` has the chart type and passes the `[###]` filters. Title
 /// matching is the ranker's job, not this predicate's.
+#[must_use]
 pub fn song_passes_search_filters(
     song: &SongData,
     chart_type: &str,

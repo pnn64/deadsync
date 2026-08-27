@@ -290,6 +290,7 @@ pub const SUBMIT_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
 /// | `Numbers`    | `wendy_monospace_numbers`   | `mega_monospace_numbers` |
 /// | `ScreenEval` | `wendy_screenevaluation`    | `mega_screenevaluation`  |
 /// | `Headline`   | `wendy_white`               | `mega_alpha`             |
+#[must_use]
 pub const fn machine_font_key(machine_font: MachineFont, role: FontRole) -> &'static str {
     use MachineFont::{Mega, Wendy};
     match (machine_font, role) {
@@ -325,6 +326,7 @@ fn mega_alpha_supports(text: &str) -> bool {
 /// For alphabetic roles under [`MachineFont::Mega`], text containing any glyph
 /// Mega cannot render falls back to Wendy for the whole actor. This avoids
 /// mixed Mega/Miso strings from per-glyph fallback.
+#[must_use]
 pub fn machine_font_key_for_text(
     machine_font: MachineFont,
     role: FontRole,
@@ -570,11 +572,13 @@ pub const SRPG10_EVAL_TEXTURES: [&str; 6] = [
 ];
 
 #[inline(always)]
+#[must_use]
 pub const fn for_style(style: VisualStyle) -> &'static Assets {
     &ASSETS[style_index(style)]
 }
 
 #[inline(always)]
+#[must_use]
 pub fn for_style_and_variant(style: VisualStyle, variant: SrpgVariant) -> &'static Assets {
     if style.is_srpg() && variant == SrpgVariant::Srpg10 {
         &SRPG10_ASSETS
@@ -584,6 +588,7 @@ pub fn for_style_and_variant(style: VisualStyle, variant: SrpgVariant) -> &'stat
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn srpg10_active(style: VisualStyle, variant: SrpgVariant) -> bool {
     style.is_srpg() && matches!(variant, SrpgVariant::Srpg10)
 }
@@ -649,6 +654,7 @@ pub fn initial_texture_assets() -> impl Iterator<Item = TextureAssetSpec> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn effect_zoom_scale(texture_key: &str) -> f32 {
     if texture_key.contains("doubleres") {
         0.5
@@ -658,6 +664,7 @@ pub fn effect_zoom_scale(texture_key: &str) -> f32 {
 }
 
 #[inline(always)]
+#[must_use]
 pub const fn srpg10_faction_name(color_index: i32) -> &'static str {
     match color_index.rem_euclid(12) {
         0..=2 => "Unaffiliated",
@@ -668,6 +675,7 @@ pub const fn srpg10_faction_name(color_index: i32) -> &'static str {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn is_shared_background_texture(key: &str) -> bool {
     all_assets().any(|asset| asset.shared_background == key)
 }

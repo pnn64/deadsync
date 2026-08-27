@@ -52,6 +52,7 @@ impl Default for Monitor {
 }
 
 impl Monitor {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             fsrio: fsrio::Monitor::new(),
@@ -317,18 +318,22 @@ pub mod bench_support {
         checksum
     }
 
+    #[must_use]
     pub fn sensor_groups_old(events: usize) -> u64 {
         crate::fsrio::bench_support::sensor_groups_old(events)
     }
 
+    #[must_use]
     pub fn sensor_groups_new(events: usize) -> u64 {
         crate::fsrio::bench_support::sensor_groups_new(events)
     }
 
+    #[must_use]
     pub fn normalization_old(events: usize) -> u64 {
         crate::fsrio::bench_support::normalization_old(events)
     }
 
+    #[must_use]
     pub fn normalization_new(events: usize) -> u64 {
         crate::fsrio::bench_support::normalization_new(events)
     }
