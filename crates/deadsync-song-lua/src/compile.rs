@@ -465,7 +465,14 @@ where
             },
         )? {
             Some(eases) => (Vec::new(), eases, Vec::new(), Vec::new()),
-            None => compile_update_functions(&lua, &root, context, &mut overlays, &tracked_actors)?,
+            None => compile_update_functions(
+                &lua,
+                &root,
+                context,
+                &mut overlays,
+                &tracked_actors,
+                &out.messages,
+            )?,
         };
     out.eases.extend(update_eases);
     out.overlay_eases.extend(update_overlay_eases);

@@ -64,6 +64,7 @@ const SONG_LUA_CHILD_GROUP_KEY: &str = "__songlua_child_group";
 const SONG_LUA_AFT_COUNTER_KEY: &str = "__songlua_aft_counter";
 const DRAW_CALLBACK_ACTIVE_KEY: &str = "__songlua_draw_callback_active";
 const MANUAL_DRAW_STATE_KEY: &str = "__songlua_manual_draw_state";
+const ACTIVE_BROADCAST_KEY: &str = "__songlua_active_broadcast";
 
 pub struct TopScreenLuaTables {
     pub top_screen: Table,
@@ -80,6 +81,14 @@ struct SongLuaOverlayUpdateCapture {
     touched: Vec<usize>,
     touched_flags: Vec<bool>,
     values: Vec<Vec<(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>>,
+    deferred: Vec<Vec<SongLuaDeferredOverlayUpdate>>,
+}
+
+#[derive(Clone)]
+pub struct SongLuaDeferredOverlayUpdate {
+    pub delay_seconds: f32,
+    pub target: SongLuaOverlayUpdateTarget,
+    pub value: SongLuaOverlayUpdateValue,
 }
 
 impl SongLuaOverlayUpdateCapture {
@@ -90,7 +99,17 @@ impl SongLuaOverlayUpdateCapture {
             touched: Vec::with_capacity(actor_count),
             touched_flags: vec![false; actor_count],
             values: (0..actor_count).map(|_| Vec::new()).collect(),
+            deferred: (0..actor_count).map(|_| Vec::new()).collect(),
         }
+    }
+
+    fn touch(&mut self, actor: &Table) -> Option<usize> {
+        let &index = self.actor_indices.get(&(actor.to_pointer() as usize))?;
+        if !self.touched_flags[index] {
+            self.touched_flags[index] = true;
+            self.touched.push(index);
+        }
+        Some(index)
     }
 
     fn record(
@@ -99,13 +118,9 @@ impl SongLuaOverlayUpdateCapture {
         target: SongLuaOverlayUpdateTarget,
         value: SongLuaOverlayUpdateValue,
     ) -> bool {
-        let Some(&index) = self.actor_indices.get(&(actor.to_pointer() as usize)) else {
+        let Some(index) = self.touch(actor) else {
             return false;
         };
-        if !self.touched_flags[index] {
-            self.touched_flags[index] = true;
-            self.touched.push(index);
-        }
         if let Some((_, current)) = self.values[index]
             .iter_mut()
             .find(|(current, _)| *current == target)
@@ -114,6 +129,24 @@ impl SongLuaOverlayUpdateCapture {
         } else {
             self.values[index].push((target, value));
         }
+        true
+    }
+
+    fn record_deferred(
+        &mut self,
+        actor: &Table,
+        delay_seconds: f32,
+        target: SongLuaOverlayUpdateTarget,
+        value: SongLuaOverlayUpdateValue,
+    ) -> bool {
+        let Some(index) = self.touch(actor) else {
+            return false;
+        };
+        self.deferred[index].push(SongLuaDeferredOverlayUpdate {
+            delay_seconds,
+            target,
+            value,
+        });
         true
     }
 }
@@ -127,6 +160,7 @@ pub fn drain_overlay_update_capture(
     mut visit: impl FnMut(
         usize,
         &[(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)],
+        &[SongLuaDeferredOverlayUpdate],
     ) -> Result<(), String>,
 ) -> Result<(), String> {
     let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() else {
@@ -134,11 +168,12 @@ pub fn drain_overlay_update_capture(
     };
     for position in 0..capture.touched.len() {
         let index = capture.touched[position];
-        visit(index, &capture.values[index])?;
+        visit(index, &capture.values[index], &capture.deferred[index])?;
     }
     for position in 0..capture.touched.len() {
         let index = capture.touched[position];
         capture.values[index].clear();
+        capture.deferred[index].clear();
         capture.touched_flags[index] = false;
     }
     capture.touched.clear();
@@ -242,8 +277,40 @@ fn record_overlay_update_capture(
     let Some(target) = capture_target_for_key(key) else {
         return false;
     };
+    let active_broadcast = lua
+        .globals()
+        .raw_get::<Option<String>>(ACTIVE_BROADCAST_KEY)
+        .ok()
+        .flatten();
+    let direct_message_actor = active_broadcast.as_deref().is_some_and(|message| {
+        actor
+            .get::<Option<Function>>(format!("{message}MessageCommand"))
+            .ok()
+            .flatten()
+            .is_some()
+    });
+    let cursor = actor
+        .get::<Option<f32>>("__songlua_capture_cursor")
+        .ok()
+        .flatten()
+        .unwrap_or(0.0)
+        .max(0.0);
+    let duration = actor
+        .get::<Option<f32>>("__songlua_capture_duration")
+        .ok()
+        .flatten()
+        .unwrap_or(0.0)
+        .max(0.0);
     lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
-        .is_some_and(|mut capture| capture.record(actor, target, value))
+        .is_some_and(|mut capture| {
+            if direct_message_actor {
+                capture.touch(actor).is_some()
+            } else if cursor > f32::EPSILON && duration <= f32::EPSILON {
+                capture.record_deferred(actor, cursor, target, value)
+            } else {
+                capture.record(actor, target, value)
+            }
+        })
 }
 
 pub fn overlay_compile_actor_tables_for_indices<Kind>(
@@ -1367,19 +1434,33 @@ pub fn broadcast_song_lua_message(
         return Ok(());
     }
     let command = format!("{message}MessageCommand");
-    let registry = song_lua_actor_registry(lua)?;
-    let mut actors = Vec::with_capacity(registry.raw_len());
-    for value in registry.sequence_values::<Value>() {
-        let Value::Table(actor) = value? else {
-            continue;
-        };
-        actors.push(actor);
-    }
-    let params = normalize_broadcast_params(lua, message, params)?;
-    for actor in actors {
-        run_actor_named_command_with_drain_and_params(lua, &actor, &command, true, params.clone())?;
-    }
-    Ok(())
+    let globals = lua.globals();
+    let previous_broadcast = globals.raw_get::<Value>(ACTIVE_BROADCAST_KEY)?;
+    globals.raw_set(ACTIVE_BROADCAST_KEY, message)?;
+    let result = || {
+        let registry = song_lua_actor_registry(lua)?;
+        let mut actors = Vec::with_capacity(registry.raw_len());
+        for value in registry.sequence_values::<Value>() {
+            let Value::Table(actor) = value? else {
+                continue;
+            };
+            actors.push(actor);
+        }
+        let params = normalize_broadcast_params(lua, message, params)?;
+        actors.into_iter().try_for_each(|actor| {
+            run_actor_named_command_with_drain_and_params(
+                lua,
+                &actor,
+                &command,
+                true,
+                params.clone(),
+            )
+        })
+    };
+    let result = result();
+    let restore = globals.raw_set(ACTIVE_BROADCAST_KEY, previous_broadcast);
+    restore?;
+    result
 }
 
 fn normalize_judgment_params(lua: &Lua, params: &Table) -> mlua::Result<()> {
@@ -1758,6 +1839,16 @@ pub fn actor_active_commands(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     let active = lua.create_table()?;
     actor.set("__songlua_active_commands", active.clone())?;
     Ok(active)
+}
+
+fn actor_has_active_command(lua: &Lua, actor: &Table) -> mlua::Result<bool> {
+    for pair in actor_active_commands(lua, actor)?.pairs::<Value, Value>() {
+        let (_, value) = pair?;
+        if truthy(&value) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 pub fn actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
@@ -3472,6 +3563,9 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                 }
                 let queue = actor_command_queue(lua, &actor)?;
                 queue.raw_set(queue.raw_len() + 1, name)?;
+                if !actor_has_active_command(lua, &actor)? {
+                    drain_actor_command_queue(lua, &actor)?;
+                }
                 Ok(actor.clone())
             }
         })?,

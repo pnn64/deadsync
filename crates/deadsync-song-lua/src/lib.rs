@@ -6666,6 +6666,105 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_captures_delayed_cross_actor_queuecommands() {
+        let song_dir = test_dir("update-cross-actor-queuecommand");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local flash
+local fired = false
+
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Flash",
+        InitCommand=function(self)
+            flash = self
+            self:visible(false)
+        end,
+        HideCommand=function(self)
+            self:visible(false)
+        end,
+    },
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                if not fired and GAMESTATE:GetSongBeat() >= 1 then
+                    fired = true
+                    flash:visible(true):sleep(0.25):queuecommand("Hide")
+                end
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Cross Actor QueueCommand");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 3.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let visible = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| track.target == SongLuaOverlayUpdateTarget::Visible)
+            .expect("the flash should have a sampled visibility track");
+        assert!(visible.samples.iter().any(|sample| {
+            sample.beat >= 1.0 && sample.value == SongLuaOverlayUpdateValue::Bool(true)
+        }));
+        assert!(visible.samples.iter().any(|sample| {
+            (sample.beat - 1.25).abs() <= 1.0e-4
+                && sample.value == SongLuaOverlayUpdateValue::Bool(false)
+        }));
+    }
+
+    #[test]
+    fn compile_song_lua_replays_message_tweens_before_update_sampling() {
+        let song_dir = test_dir("update-message-tween-replay");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local helper
+local action = 1
+local mod_actions = {
+    {1, function() helper:linear(0.5):x(30) end},
+}
+
+return Def.ActorFrame{
+    Def.Quad{
+        InitCommand=function(self) helper = self end,
+    },
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                local beat = GAMESTATE:GetSongBeat()
+                while action <= #mod_actions and beat >= mod_actions[action][1] do
+                    mod_actions[action][2]()
+                    action = action + 1
+                end
+                SCREENMAN:GetTopScreen():GetChild("PlayerP1"):rotationz(helper:GetX())
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Update Message Tween Replay");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 3.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert!(compiled.eases.iter().any(|ease| {
+            ease.player == Some(1)
+                && ease.target == SongLuaEaseTarget::PlayerRotationZ
+                && (ease.from.abs() > 1.0e-4 || ease.to.abs() > 1.0e-4)
+        }));
+    }
+
+    #[test]
     fn compile_song_lua_bounds_dense_update_overlay_sampling() {
         let song_dir = test_dir("dense-update-overlay-sampling");
         let entry = song_dir.join("default.lua");
@@ -7435,7 +7534,19 @@ return Def.ActorFrame{
         fs::write(
             &entry,
             r#"
+local action = 1
+local actions = {{0.4, "Wallop"}}
+
 return Def.ActorFrame{
+    InitCommand=function(self)
+        self:SetUpdateFunction(function()
+            local beat = GAMESTATE:GetSongBeat()
+            while action <= #actions and beat >= actions[action][1] do
+                MESSAGEMAN:Broadcast(actions[action][2])
+                action = action + 1
+            end
+        end)
+    end,
     Def.Quad{
         Name="Wallop",
         WallopMessageCommand=function(self)
@@ -7478,6 +7589,18 @@ return Def.ActorFrame{
         assert_eq!(command.blocks[2].duration, 0.2);
         assert_eq!(command.blocks[2].delta.diffuse.unwrap()[3], 0.0);
         assert_eq!(command.blocks[2].delta.zoom_x, Some(6.0));
+        let overlay_index = compiled
+            .overlays
+            .iter()
+            .position(|candidate| candidate.name.as_deref() == Some("Wallop"))
+            .unwrap();
+        assert!(
+            compiled
+                .overlay_updates
+                .iter()
+                .all(|track| track.overlay_index != overlay_index),
+            "the recurring Update must not duplicate a direct message timeline"
+        );
     }
 
     #[test]
