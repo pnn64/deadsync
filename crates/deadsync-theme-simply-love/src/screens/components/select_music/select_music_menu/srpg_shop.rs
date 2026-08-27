@@ -150,7 +150,7 @@ pub fn update_srpg_shop_overlay(state: &mut SrpgShopOverlayState, snapshot: &Srp
             .as_deref()
             .is_some_and(|message| message.starts_with("Purchasing "))
     {
-        overlay.local_message = snapshot.message.clone();
+        overlay.local_message.clone_from(&snapshot.message);
     }
     if snapshot.phase != SrpgShopPhase::Ready {
         overlay.confirm = None;
@@ -843,9 +843,10 @@ fn item_row_detail(item: &SrpgShopItem, currency: &str, queued: bool) -> String 
             },
             SrpgShopItemKind::Relic => "RELIC".to_string(),
         };
-        return item.cost.map_or(kind.clone(), |cost| {
-            format!("{kind}  •  {} {currency}", format_number(cost))
-        });
+        return item.cost.map_or_else(
+            || kind.clone(),
+            |cost| format!("{kind}  •  {} {currency}", format_number(cost)),
+        );
     }
     if item.downloaded {
         return "OWNED  •  DOWNLOADED".to_string();

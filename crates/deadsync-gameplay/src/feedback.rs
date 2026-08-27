@@ -292,7 +292,7 @@ impl SongLuaEase {
                 if t < 0.5 {
                     0.5 * (1.0 - (1.0 - 4.0 * t * t).sqrt())
                 } else {
-                    0.5 * ((1.0 - ((-2.0 * t + 2.0) * (-2.0 * t + 2.0))).sqrt() + 1.0)
+                    f32::midpoint((1.0 - ((-2.0 * t + 2.0) * (-2.0 * t + 2.0))).sqrt(), 1.0)
                 }
             }
             Self::OutInCirc => {
@@ -366,7 +366,7 @@ impl SongLuaEase {
                     0.5 * (u * u * (((s + 1.0) * u) - s))
                 } else {
                     let u = (2.0 * t) - 2.0;
-                    0.5 * (u * u * (((s + 1.0) * u) + s) + 2.0)
+                    f32::midpoint(u * u * (((s + 1.0) * u) + s), 2.0)
                 }
             }
             Self::OutInBack => {
@@ -577,7 +577,7 @@ impl GameplayReceptorFeedbackState {
     }
 
     #[inline(always)]
-    fn set_dense_cleanup_frames(&mut self, frames: LaneMask) {
+    const fn set_dense_cleanup_frames(&mut self, frames: LaneMask) {
         self.glow_active = (self.glow_active & !RECEPTOR_DENSE_CLEANUP_MASK)
             | ((frames << MAX_COLS) & RECEPTOR_DENSE_CLEANUP_MASK);
     }
@@ -588,7 +588,7 @@ impl GameplayReceptorFeedbackState {
     }
 
     #[inline(always)]
-    fn enter_dense_mode(&mut self) {
+    const fn enter_dense_mode(&mut self) {
         if (self.glow_active_lanes() | self.bop_active).count_ones() as usize > MAX_COLS / 2 {
             self.set_dense_cleanup_frames(RECEPTOR_DENSE_CLEANUP_FRAMES);
         }
@@ -637,7 +637,7 @@ impl GameplayReceptorFeedbackState {
     }
 
     #[inline(always)]
-    pub fn set_glow_timers(&mut self, col: usize, timers: GameplayReceptorGlowTimers) {
+    pub const fn set_glow_timers(&mut self, col: usize, timers: GameplayReceptorGlowTimers) {
         if col >= MAX_COLS {
             return;
         }
@@ -862,7 +862,7 @@ impl ReferenceGameplayReceptorFeedbackState {
             .fill(GameplayReceptorStepBehavior::identity());
     }
 
-    fn set_glow_timers(&mut self, col: usize, timers: GameplayReceptorGlowTimers) {
+    const fn set_glow_timers(&mut self, col: usize, timers: GameplayReceptorGlowTimers) {
         if col >= MAX_COLS {
             return;
         }
@@ -1169,7 +1169,7 @@ pub fn receptor_glow_pulse_timers(
 }
 
 #[inline(always)]
-pub fn receptor_glow_press_timers(
+pub const fn receptor_glow_press_timers(
     behavior: GameplayReceptorGlowBehavior,
 ) -> GameplayReceptorGlowTimers {
     GameplayReceptorGlowTimers {
@@ -1451,7 +1451,7 @@ pub struct GameplayNoteskinEffects {
 
 impl GameplayNoteskinEffects {
     #[inline(always)]
-    pub fn set_receptor_glow_behavior(
+    pub const fn set_receptor_glow_behavior(
         &mut self,
         player: usize,
         behavior: GameplayReceptorGlowBehavior,
@@ -1494,7 +1494,7 @@ impl GameplayNoteskinEffects {
     }
 
     #[inline(always)]
-    pub fn set_mine_explosion_duration(&mut self, player: usize, duration: f32) {
+    pub const fn set_mine_explosion_duration(&mut self, player: usize, duration: f32) {
         if player < MAX_PLAYERS {
             self.mine_explosion_duration[player] = duration;
         }
@@ -1646,7 +1646,7 @@ pub struct MineHitPlayerState {
 }
 
 #[inline(always)]
-pub fn mine_hit_player_state(player: &PlayerRuntime) -> MineHitPlayerState {
+pub const fn mine_hit_player_state(player: &PlayerRuntime) -> MineHitPlayerState {
     MineHitPlayerState {
         mines_hit: player.mines_hit,
         mines_hit_for_score: player.mines_hit_for_score,
@@ -1655,7 +1655,7 @@ pub fn mine_hit_player_state(player: &PlayerRuntime) -> MineHitPlayerState {
 }
 
 #[inline(always)]
-pub fn write_mine_hit_player_state(player: &mut PlayerRuntime, state: MineHitPlayerState) {
+pub const fn write_mine_hit_player_state(player: &mut PlayerRuntime, state: MineHitPlayerState) {
     player.mines_hit = state.mines_hit;
     player.mines_hit_for_score = state.mines_hit_for_score;
     write_player_combo_state(player, state.combo);
@@ -1689,7 +1689,7 @@ pub struct MineHitSideEffectPlan {
     pub capture_failed_ex_score_inputs: bool,
 }
 
-pub fn mine_hit_side_effect_plan(scoring_blocked: bool) -> MineHitSideEffectPlan {
+pub const fn mine_hit_side_effect_plan(scoring_blocked: bool) -> MineHitSideEffectPlan {
     MineHitSideEffectPlan {
         life_delta: deadsync_rules::life::LIFE_HIT_MINE,
         apply_life_change: !scoring_blocked,

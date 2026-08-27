@@ -33,7 +33,7 @@ const STATS_TEXT_ZOOM: f32 = 0.95;
 const AVATAR_DIM: f32 = 110.0;
 const AVATAR_Y: f32 = 12.0;
 
-fn player_color_rgba(side: profile_data::PlayerSide, active_color_index: i32) -> [f32; 4] {
+const fn player_color_rgba(side: profile_data::PlayerSide, active_color_index: i32) -> [f32; 4] {
     match side {
         profile_data::PlayerSide::P1 => color::simply_love_rgba(active_color_index),
         profile_data::PlayerSide::P2 => color::simply_love_rgba(active_color_index - 2),
@@ -262,7 +262,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
 }
 
 #[inline(always)]
-fn gameover_seconds(srpg10: bool) -> f32 {
+const fn gameover_seconds(srpg10: bool) -> f32 {
     if srpg10 {
         SRPG10_GAMEOVER_SECONDS
     } else {
@@ -270,7 +270,7 @@ fn gameover_seconds(srpg10: bool) -> f32 {
     }
 }
 
-pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ThemeEffect {
+pub const fn handle_input(_state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if !ev.pressed {
         return ThemeEffect::None;
     }

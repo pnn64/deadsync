@@ -1227,10 +1227,10 @@ pub fn merge_pack_scans(packs: Vec<PackScan>) -> Vec<PackScan> {
 }
 
 #[cfg(feature = "bench-support")]
-fn merge_pack_scans_legacy(mut packs: Vec<PackScan>) -> Vec<PackScan> {
+fn merge_pack_scans_legacy(packs: Vec<PackScan>) -> Vec<PackScan> {
     let mut merged = Vec::with_capacity(packs.len());
     let mut pack_slots = HashMap::with_capacity(packs.len());
-    for pack in packs.drain(..) {
+    for pack in packs {
         let key = ci_key(&pack.group_name);
         if key.is_empty() {
             merged.push(pack);
@@ -1695,7 +1695,7 @@ fn benchmark_worker_job(job_idx: usize, work_iterations: usize) -> u64 {
 }
 
 #[cfg(feature = "bench-support")]
-fn fold_worker_checksum(checksum: u64, job_idx: usize, result: u64) -> u64 {
+const fn fold_worker_checksum(checksum: u64, job_idx: usize, result: u64) -> u64 {
     checksum.wrapping_add(result.rotate_left((job_idx & 63) as u32))
 }
 
@@ -2694,10 +2694,8 @@ mod tests {
         fs::create_dir_all(&extra_pack).unwrap();
         fs::create_dir_all(base.join("Other")).unwrap();
 
-        let (dirs, keys) = collect_reload_pack_dirs(
-            &[base.clone(), extra.clone()],
-            std::slice::from_ref(&base_pack),
-        );
+        let (dirs, keys) =
+            collect_reload_pack_dirs(&[base, extra], std::slice::from_ref(&base_pack));
 
         let mut actual_dirs = dirs
             .iter()
@@ -2747,10 +2745,8 @@ mod tests {
         fs::create_dir_all(&base_pack).unwrap();
         fs::create_dir_all(&extra_pack).unwrap();
 
-        let (dirs, keys) = collect_reload_pack_dirs(
-            &[base.clone(), extra.clone()],
-            std::slice::from_ref(&base_pack),
-        );
+        let (dirs, keys) =
+            collect_reload_pack_dirs(&[base, extra], std::slice::from_ref(&base_pack));
 
         assert_eq!(dirs.len(), 2);
         assert!(dirs.contains(&base_pack));

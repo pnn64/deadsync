@@ -93,7 +93,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -205,7 +205,7 @@ fn output_checksum(output: &[i16]) -> u64 {
         ^ ((output.last().copied().unwrap_or_default() as u16 as u64) << 32)
 }
 
-fn sample_bytes(format: SampleFormat) -> usize {
+const fn sample_bytes(format: SampleFormat) -> usize {
     match format {
         SampleFormat::Pcm16 => 2,
         SampleFormat::Pcm24 => 3,

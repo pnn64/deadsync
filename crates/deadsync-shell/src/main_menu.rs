@@ -9,7 +9,7 @@ use deadsync_theme_simply_love::views::{
     MainMenuRuntimeView, MainMenuSmxConflictView,
 };
 
-fn arrowcloud_status(status: ArrowCloudStatus) -> MainMenuArrowCloudStatus {
+const fn arrowcloud_status(status: ArrowCloudStatus) -> MainMenuArrowCloudStatus {
     match status {
         ArrowCloudStatus::Pending => MainMenuArrowCloudStatus::Pending,
         ArrowCloudStatus::Connected => MainMenuArrowCloudStatus::Connected,
@@ -22,7 +22,7 @@ fn arrowcloud_status(status: ArrowCloudStatus) -> MainMenuArrowCloudStatus {
     }
 }
 
-fn groove_status(boogie: bool, status: GrooveStatus) -> MainMenuGrooveStatus {
+const fn groove_status(boogie: bool, status: GrooveStatus) -> MainMenuGrooveStatus {
     match status {
         GrooveStatus::Pending => MainMenuGrooveStatus::Pending { boogie },
         GrooveStatus::Error(kind) => MainMenuGrooveStatus::Error {

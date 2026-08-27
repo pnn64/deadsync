@@ -160,7 +160,7 @@ pub fn neg_rot_sin_cos(rotation_deg: i32) -> [f32; 2] {
     }
 }
 
-pub fn atlas_sprite_slot_plan(
+pub const fn atlas_sprite_slot_plan(
     texture_key: String,
     tex_dims: (u32, u32),
     source_frame: (u32, u32),
@@ -386,7 +386,7 @@ pub fn animation_plan_to_slot_plan(
     }
 }
 
-pub fn generated_animation_sprite_slot_plan(
+pub const fn generated_animation_sprite_slot_plan(
     texture_key: String,
     tex_dims: (u32, u32),
     frame_size: [i32; 2],

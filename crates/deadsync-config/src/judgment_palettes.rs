@@ -93,7 +93,7 @@ impl JudgmentPaletteCatalog {
         if let Some(default_id) = ini.get("General", "DefaultPalette")
             && catalog.palette(default_id).is_some()
         {
-            catalog.default_palette_id = default_id.to_owned();
+            default_id.clone_into(&mut catalog.default_palette_id);
         }
         catalog
     }
@@ -228,7 +228,7 @@ impl JudgmentPaletteCatalog {
         }
         self.palettes.remove(index);
         if self.default_palette_id == id {
-            self.default_palette_id = SIMPLY_LOVE_PALETTE_ID.to_owned();
+            SIMPLY_LOVE_PALETTE_ID.clone_into(&mut self.default_palette_id);
         }
         Ok(())
     }
@@ -237,7 +237,7 @@ impl JudgmentPaletteCatalog {
         if self.palette(id).is_none() {
             return Err("The judgment palette no longer exists.".to_owned());
         }
-        self.default_palette_id = id.to_owned();
+        id.clone_into(&mut self.default_palette_id);
         Ok(())
     }
 

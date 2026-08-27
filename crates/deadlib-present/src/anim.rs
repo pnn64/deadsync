@@ -259,7 +259,7 @@ impl Default for EffectState {
 }
 
 #[inline(always)]
-pub fn effect_clock_units(effect: EffectState, time: f32, beat: f32) -> f32 {
+pub const fn effect_clock_units(effect: EffectState, time: f32, beat: f32) -> f32 {
     match effect.clock {
         EffectClock::Time => time,
         EffectClock::Beat => beat,
@@ -498,7 +498,7 @@ pub struct Segment {
 }
 
 impl Segment {
-    fn new(ease: Ease, dur: f32, build_ops: BuildOps) -> Self {
+    const fn new(ease: Ease, dur: f32, build_ops: BuildOps) -> Self {
         Self {
             ease,
             dur: dur.max(0.0),
@@ -1106,7 +1106,7 @@ pub struct TweenSeq {
 }
 
 impl TweenSeq {
-    pub fn new(initial: TweenState) -> Self {
+    pub const fn new(initial: TweenState) -> Self {
         Self {
             state: initial,
             queue: VecDeque::new(),
@@ -1131,11 +1131,11 @@ impl TweenSeq {
         self.current.is_none() && self.queue.is_empty()
     }
 
-    pub fn state(&self) -> &TweenState {
+    pub const fn state(&self) -> &TweenState {
         &self.state
     }
 
-    pub fn state_mut(&mut self) -> &mut TweenState {
+    pub const fn state_mut(&mut self) -> &mut TweenState {
         &mut self.state
     }
 

@@ -143,7 +143,7 @@ pub struct State {
     bg: visual_style_bg::State,
 }
 
-pub fn init(songs_root: PathBuf, courses_root: PathBuf) -> State {
+pub const fn init(songs_root: PathBuf, courses_root: PathBuf) -> State {
     State {
         elapsed: 0.0,
         phase: InitPhase::Loading,
@@ -403,7 +403,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 }
 
 #[inline(always)]
-fn is_start_or_back(action: VirtualAction) -> bool {
+const fn is_start_or_back(action: VirtualAction) -> bool {
     matches!(
         action,
         VirtualAction::p1_start

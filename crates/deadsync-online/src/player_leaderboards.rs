@@ -223,7 +223,7 @@ impl PlayerLeaderboardRuntime {
         );
     }
 
-    pub fn wheel_profile_context<'a>(
+    pub const fn wheel_profile_context<'a>(
         &self,
         leaderboard_snapshot: &'a GameplayScoreboxProfileSnapshot,
     ) -> ItlWheelSideContext<'a> {

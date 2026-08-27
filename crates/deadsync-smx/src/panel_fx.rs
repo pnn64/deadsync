@@ -101,7 +101,11 @@ impl JudgementGifs {
     }
 
     /// The one-shot animation for a tap grade, honouring the FA+ white/blue split.
-    pub fn for_grade(&self, grade: JudgeGrade, blue_fantastic: bool) -> Option<&Arc<PanelAnim>> {
+    pub const fn for_grade(
+        &self,
+        grade: JudgeGrade,
+        blue_fantastic: bool,
+    ) -> Option<&Arc<PanelAnim>> {
         match grade {
             JudgeGrade::Fantastic if blue_fantastic => self.fantastic_blue.as_ref(),
             JudgeGrade::Fantastic => self.fantastic_white.as_ref(),
@@ -115,7 +119,7 @@ impl JudgementGifs {
 }
 
 /// The looping sustain animation for an engaged hold, by its note kind.
-pub fn sustain_anim(gifs: &JudgementGifs, kind: Option<NoteType>) -> Option<&Arc<PanelAnim>> {
+pub const fn sustain_anim(gifs: &JudgementGifs, kind: Option<NoteType>) -> Option<&Arc<PanelAnim>> {
     match kind {
         Some(NoteType::Hold) => gifs.freeze.as_ref(),
         Some(NoteType::Roll) => gifs.roll.as_ref(),
@@ -127,7 +131,7 @@ pub fn sustain_anim(gifs: &JudgementGifs, kind: Option<NoteType>) -> Option<&Arc
 /// holds in its loop and plays the outro on release (`Sustain`), a roll runs
 /// forward into the outro to show its continuous drain and resets on each step
 /// (`Roll`). `resume` starts a re-triggered overlay at the loop region.
-pub fn sustain_drive(kind: Option<NoteType>, resume: bool) -> OverlayDrive {
+pub const fn sustain_drive(kind: Option<NoteType>, resume: bool) -> OverlayDrive {
     match kind {
         Some(NoteType::Roll) => OverlayDrive::Roll { resume },
         _ => OverlayDrive::Sustain { resume },
@@ -178,7 +182,7 @@ pub fn tap_event(judged: Option<ColumnTapJudgment>, prev: &mut f32) -> Option<(J
 
 /// Decide an edge on a boolean tracker (a freeze/roll engage or a physical panel
 /// press): `Some(true)` on rise, `Some(false)` on fall, `None` when nothing changed.
-pub fn hold_edge(engaged: bool, prev: &mut bool) -> Option<bool> {
+pub const fn hold_edge(engaged: bool, prev: &mut bool) -> Option<bool> {
     if engaged == *prev {
         None
     } else {

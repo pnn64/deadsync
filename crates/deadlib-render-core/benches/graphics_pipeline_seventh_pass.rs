@@ -97,7 +97,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -108,7 +108,7 @@ impl AllocSnapshot {
         }
     }
 
-    fn churn_bytes(self) -> u64 {
+    const fn churn_bytes(self) -> u64 {
         self.alloc_bytes + self.realloc_bytes + self.free_bytes
     }
 }
@@ -301,11 +301,10 @@ fn texture_handles() -> [u8; OBJECTS] {
 
 fn resolve_textures_old(table: &TextureTable, handles: &[u8; OBJECTS]) -> u64 {
     handles.iter().fold(0u64, |checksum, &handle| {
-        table
-            .software(black_box(handle))
-            .map_or(checksum.rotate_left(3), |value| {
-                checksum.rotate_left(3) ^ value
-            })
+        table.software(black_box(handle)).map_or_else(
+            || checksum.rotate_left(3),
+            |value| checksum.rotate_left(3) ^ value,
+        )
     })
 }
 
@@ -320,9 +319,10 @@ fn resolve_textures_new(table: &TextureTable, handles: &[u8; OBJECTS]) -> u64 {
                 value
             }
         };
-        value.map_or(checksum.rotate_left(3), |value| {
-            checksum.rotate_left(3) ^ value
-        })
+        value.map_or_else(
+            || checksum.rotate_left(3),
+            |value| checksum.rotate_left(3) ^ value,
+        )
     })
 }
 

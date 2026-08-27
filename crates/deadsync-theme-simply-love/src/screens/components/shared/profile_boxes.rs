@@ -438,7 +438,7 @@ pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
 }
 
 #[inline(always)]
-pub fn set_fast_switch(state: &mut State, enabled: bool) {
+pub const fn set_fast_switch(state: &mut State, enabled: bool) {
     state.fast_switch = enabled;
 }
 
@@ -535,7 +535,7 @@ fn active_choices(state: &State) -> (profile_data::ActiveProfile, profile_data::
     (p1, p2)
 }
 
-fn trigger_invalid_choice(state: &mut State, is_p1: bool) -> ThemeEffect {
+const fn trigger_invalid_choice(state: &mut State, is_p1: bool) -> ThemeEffect {
     if is_p1 {
         state.p1_shake_t = 0.0;
         // Simply Love `InvalidChoiceMessageCommand` starts with `finishtweening()`,

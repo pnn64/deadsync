@@ -914,7 +914,7 @@ unsafe fn free_com_task_mem(ptr: *const c_void) {
 }
 
 #[inline(always)]
-fn waveformat(bytes: &[u8]) -> &Audio::WAVEFORMATEX {
+const fn waveformat(bytes: &[u8]) -> &Audio::WAVEFORMATEX {
     // SAFETY: all callers pass byte buffers originating from WASAPI waveform
     // structures, so the prefix is a valid `WAVEFORMATEX` for the lifetime of the
     // slice borrow.

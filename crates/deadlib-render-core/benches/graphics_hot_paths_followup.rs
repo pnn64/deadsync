@@ -102,7 +102,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -113,7 +113,7 @@ impl AllocSnapshot {
         }
     }
 
-    fn churn_bytes(self) -> u64 {
+    const fn churn_bytes(self) -> u64 {
         self.alloc_bytes + self.realloc_bytes + self.free_bytes
     }
 }
@@ -397,7 +397,7 @@ impl LegacyUploadBench {
         checksum
     }
 
-    fn advance(&mut self) {
+    const fn advance(&mut self) {
         self.frame = (self.frame + 1) % FRAMES_IN_FLIGHT;
         self.sequence = self.sequence.wrapping_add(1);
     }
@@ -448,7 +448,7 @@ fn batch_checksum(batch: &UploadBatch) -> u64 {
         .fold(0, |checksum, value| checksum.rotate_left(3) ^ value)
 }
 
-fn recycle_empty_vec<T>(recycled: &mut Vec<T>, candidate: &mut Vec<T>) {
+const fn recycle_empty_vec<T>(recycled: &mut Vec<T>, candidate: &mut Vec<T>) {
     if candidate.capacity() > recycled.capacity() {
         std::mem::swap(recycled, candidate);
     }

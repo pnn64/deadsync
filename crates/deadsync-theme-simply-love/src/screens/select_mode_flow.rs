@@ -110,7 +110,7 @@ impl State {
     }
 
     #[inline(always)]
-    pub fn choice_zoom(&self, index: usize) -> f32 {
+    pub const fn choice_zoom(&self, index: usize) -> f32 {
         self.choice_zooms[index]
     }
 
@@ -126,7 +126,7 @@ impl State {
 }
 
 #[inline(always)]
-fn cursor_target_y(index: usize) -> f32 {
+const fn cursor_target_y(index: usize) -> f32 {
     CURSOR_HEIGHT.mul_add(index as f32, CURSOR_START_Y)
 }
 
@@ -171,7 +171,7 @@ pub fn finish_exit(state: &mut State, exit_elapsed: f32) -> Option<Screen> {
     None
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> InputEffect {
+pub const fn handle_input(state: &mut State, ev: &InputEvent) -> InputEffect {
     if !ev.pressed || state.exit_requested {
         return InputEffect::None;
     }

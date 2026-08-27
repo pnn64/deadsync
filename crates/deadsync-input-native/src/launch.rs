@@ -173,7 +173,7 @@ pub fn unix_raw_keyboard_backend_active() -> bool {
 
 #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
 #[inline(always)]
-pub fn unix_raw_keyboard_backend_active() -> bool {
+pub const fn unix_raw_keyboard_backend_active() -> bool {
     true
 }
 

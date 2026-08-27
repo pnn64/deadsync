@@ -318,7 +318,7 @@ fn decode_numeric_entity(entity: &str) -> Option<char> {
 }
 
 #[inline]
-fn utf8_char_len(first: u8) -> usize {
+const fn utf8_char_len(first: u8) -> usize {
     match first {
         0x00..=0x7F => 1,
         0xC0..=0xDF => 2,

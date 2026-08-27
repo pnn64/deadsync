@@ -92,7 +92,7 @@ fn quantize_centi(value: f64) -> u32 {
 }
 
 #[inline(always)]
-fn score_glyph_text(byte: u8) -> &'static str {
+const fn score_glyph_text(byte: u8) -> &'static str {
     match byte {
         b'0'..=b'9' => SCORE_GLYPH_TEXT[(byte - b'0') as usize],
         b'.' => SCORE_GLYPH_TEXT[10],

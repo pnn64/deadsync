@@ -320,7 +320,7 @@ pub fn nearest_filled_slot<T>(slots: &[Option<T>], preferred: usize) -> Option<u
     best
 }
 
-pub fn shifted_course_difficulty(base: Difficulty, course: Difficulty) -> Difficulty {
+pub const fn shifted_course_difficulty(base: Difficulty, course: Difficulty) -> Difficulty {
     let base = base as i32;
     let delta = (course as i32) - (Difficulty::Medium as i32);
     let mut idx = base + delta;
@@ -716,7 +716,7 @@ pub fn push_song_bpm_range(min_bpm: &mut Option<f64>, max_bpm: &mut Option<f64>,
     *max_bpm = Some(max_bpm.map_or(hi, |curr| curr.max(hi)));
 }
 
-pub fn add_chart_totals(totals: &mut CourseTotals, chart: &ChartData) {
+pub const fn add_chart_totals(totals: &mut CourseTotals, chart: &ChartData) {
     totals.steps = totals.steps.saturating_add(chart.stats.total_steps);
     totals.jumps = totals.jumps.saturating_add(chart.stats.jumps);
     totals.holds = totals.holds.saturating_add(chart.stats.holds);
@@ -1137,7 +1137,7 @@ fn validate_song_dir(
     }
 }
 
-fn sort_pick_label(sort: rssp::course::SongSort) -> &'static str {
+const fn sort_pick_label(sort: rssp::course::SongSort) -> &'static str {
     match sort {
         rssp::course::SongSort::MostPlays => "BEST",
         rssp::course::SongSort::FewestPlays => "WORST",
@@ -1146,7 +1146,7 @@ fn sort_pick_label(sort: rssp::course::SongSort) -> &'static str {
     }
 }
 
-fn course_ref_error(message: String) -> CourseRefError {
+const fn course_ref_error(message: String) -> CourseRefError {
     CourseRefError { message }
 }
 
@@ -1369,10 +1369,9 @@ mod tests {
             Some("pack"),
             "song",
         );
-        assert_eq!(found, Some(extra_song.clone()));
+        assert_eq!(found, Some(extra_song));
 
-        let group =
-            resolve_course_group_dir(&[base.clone(), extra.clone()], &mut HashMap::new(), "pack");
+        let group = resolve_course_group_dir(&[base, extra.clone()], &mut HashMap::new(), "pack");
         assert_eq!(group, Some(extra.join("Pack")));
 
         let _ = fs::remove_dir_all(root);
@@ -1738,7 +1737,7 @@ mod tests {
     fn grade_sorts_compare_best_grade_counts_first() {
         let a = song_with_charts("Pack/A/song.ssc", vec![test_chart("Hard", 7, true, "a")]);
         let b = song_with_charts("Pack/B/song.ssc", vec![test_chart("Hard", 8, true, "b")]);
-        let candidates = vec![
+        let mut candidates = vec![
             CourseCandidate {
                 song: a.clone(),
                 chart_indices: vec![0],
@@ -1760,7 +1759,7 @@ mod tests {
         ]);
 
         let top = pick_course_candidate(
-            &mut candidates.clone(),
+            &mut candidates,
             Some(SongSort::TopGrades),
             0,
             &HashMap::new(),

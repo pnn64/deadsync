@@ -73,7 +73,7 @@ impl GlowEffect {
 }
 
 #[inline(always)]
-fn clamp_rgba_unit(color: [f32; 4]) -> [f32; 4] {
+const fn clamp_rgba_unit(color: [f32; 4]) -> [f32; 4] {
     [
         color[0].clamp(0.0, 1.0),
         color[1].clamp(0.0, 1.0),
@@ -244,7 +244,7 @@ struct PendingSegment {
 }
 
 impl PendingSegment {
-    fn end_state(&self) -> ExplosionState {
+    const fn end_state(&self) -> ExplosionState {
         let mut end_state = self.start;
         if let Some(z) = self.target_zoom {
             end_state.zoom = z;
@@ -261,7 +261,7 @@ impl PendingSegment {
         end_state
     }
 
-    fn into_segment(self) -> ExplosionSegment {
+    const fn into_segment(self) -> ExplosionSegment {
         ExplosionSegment {
             duration: self.duration.max(0.0),
             tween: self.tween,
@@ -568,14 +568,14 @@ pub enum ItgTapExplosionMode {
 }
 
 impl ItgTapExplosionMode {
-    pub fn command_key(self) -> &'static str {
+    pub const fn command_key(self) -> &'static str {
         match self {
             Self::Dim => "dimcommand",
             Self::Bright => "brightcommand",
         }
     }
 
-    pub fn metric_section(self) -> &'static str {
+    pub const fn metric_section(self) -> &'static str {
         match self {
             Self::Dim => "GhostArrowDim",
             Self::Bright => "GhostArrowBright",

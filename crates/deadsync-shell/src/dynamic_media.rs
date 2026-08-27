@@ -135,7 +135,7 @@ impl<J: Send + 'static, R: Send + 'static> MediaPrepWorker<J, R> {
         }
         #[cfg(test)]
         {
-            self.test_result_tx = Some(result_tx.clone());
+            self.test_result_tx = Some(result_tx);
         }
         self.request_tx = Some(request_tx);
         self.result_rx = Some(result_rx);
@@ -243,7 +243,7 @@ const GAMEPLAY_BACKGROUND_PREP_RESULTS: usize = 1;
 const MAX_MEDIA_COMPLETIONS_PER_FRAME: usize = 2;
 
 #[cfg(feature = "bench-support")]
-pub fn benchmark_media_completion_budget() -> usize {
+pub const fn benchmark_media_completion_budget() -> usize {
     MAX_MEDIA_COMPLETIONS_PER_FRAME
 }
 
@@ -1052,7 +1052,7 @@ impl DynamicMedia {
         !self.pending_gameplay_background_preps.is_empty()
     }
 
-    pub(crate) fn banner_sync_pending(&self) -> bool {
+    pub(crate) const fn banner_sync_pending(&self) -> bool {
         !self.banner_video_request.settled
     }
 

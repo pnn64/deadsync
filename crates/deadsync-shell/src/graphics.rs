@@ -179,7 +179,7 @@ pub fn initialize_renderer(
     })
 }
 
-pub fn renderer_startup_config(
+pub const fn renderer_startup_config(
     shell: &mut ShellState,
     settings: RendererStartupSettings,
 ) -> RendererStartupConfig {
@@ -229,7 +229,7 @@ pub fn start_renderer_runtime(
     })
 }
 
-pub fn apply_app_window_setup_state(shell: &mut ShellState, setup: &AppWindowSetup) {
+pub const fn apply_app_window_setup_state(shell: &mut ShellState, setup: &AppWindowSetup) {
     shell.display_monitor = setup.monitor;
 }
 
@@ -273,7 +273,7 @@ pub fn prepare_renderer_switch_window(
     }
 }
 
-pub fn apply_renderer_switch_window_state(
+pub const fn apply_renderer_switch_window_state(
     shell: &mut ShellState,
     result: RendererSwitchWindowResult,
 ) {
@@ -282,7 +282,7 @@ pub fn apply_renderer_switch_window_state(
     shell.pending_window_position = result.pending_position;
 }
 
-pub fn renderer_switch_window_config(
+pub const fn renderer_switch_window_config(
     shell: &ShellState,
     backend_type: BackendType,
     high_dpi: bool,
@@ -411,7 +411,7 @@ pub fn available_monitor_specs(event_loop: &ActiveEventLoop) -> Vec<MonitorSpec>
     display::monitor_specs(&monitors)
 }
 
-pub fn graphics_change_context_from_monitor(
+pub const fn graphics_change_context_from_monitor(
     shell: &ShellState,
     current_renderer: BackendType,
     fallback_fullscreen_type: FullscreenType,
@@ -457,7 +457,7 @@ pub fn apply_renderer_switch_restore_display(
     apply_renderer_switch_restore_state(shell, monitor, monitor_count, fallback_fullscreen_type)
 }
 
-pub fn apply_renderer_switch_restore_state(
+pub const fn apply_renderer_switch_restore_state(
     shell: &mut ShellState,
     monitor: usize,
     monitor_count: usize,
@@ -477,7 +477,7 @@ pub fn apply_renderer_switch_restore_state(
     }
 }
 
-pub fn startup_display_sync(
+pub const fn startup_display_sync(
     shell: &ShellState,
     fullscreen_type: FullscreenType,
     monitor_count: usize,
@@ -529,7 +529,7 @@ pub const fn runtime_display_mode_sync(
     }
 }
 
-pub fn apply_recreate_display_change(
+pub const fn apply_recreate_display_change(
     shell: &mut ShellState,
     display: RecreateDisplayChange,
 ) -> RecreateDisplayState {
@@ -600,7 +600,7 @@ pub fn apply_display_aspect_ratio(
     }
 }
 
-pub fn apply_display_mode_result(
+pub const fn apply_display_mode_result(
     shell: &mut ShellState,
     mode: DisplayMode,
     result: &crate::window::DisplayModeResult,
@@ -612,7 +612,7 @@ pub fn apply_display_mode_result(
     shell.display_mode = mode;
 }
 
-pub fn apply_resolution_result(
+pub const fn apply_resolution_result(
     shell: &mut ShellState,
     width: u32,
     height: u32,
@@ -624,7 +624,7 @@ pub fn apply_resolution_result(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn runtime_display_mode_change(
+pub const fn runtime_display_mode_change(
     shell: &ShellState,
     backend_type: BackendType,
     high_dpi: bool,
@@ -646,7 +646,7 @@ pub fn runtime_display_mode_change(
     }
 }
 
-pub fn runtime_resolution_change(
+pub const fn runtime_resolution_change(
     shell: &ShellState,
     backend_type: BackendType,
     high_dpi: bool,
@@ -945,9 +945,11 @@ pub fn graphics_change_plan(
     } else {
         let display = request
             .display_mode
-            .or(request
-                .monitor_requested
-                .then_some(context.current_display_mode))
+            .or_else(|| {
+                request
+                    .monitor_requested
+                    .then_some(context.current_display_mode)
+            })
             .map(|mode| ExistingDisplayChange {
                 mode,
                 monitor: context.chosen_monitor,

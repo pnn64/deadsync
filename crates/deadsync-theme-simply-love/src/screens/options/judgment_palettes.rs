@@ -90,7 +90,7 @@ pub(super) fn update_judgment_palette_overlay(state: &mut State, dt: f32) -> Opt
     Some(effect)
 }
 
-fn palette_channel_adjustment_active(state: &State) -> bool {
+const fn palette_channel_adjustment_active(state: &State) -> bool {
     matches!(
         state.judgment_palette_overlay,
         JudgmentPaletteOverlayState::Editor {

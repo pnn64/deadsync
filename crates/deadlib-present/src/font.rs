@@ -885,7 +885,7 @@ fn parse_ascii_digits(bytes: &[u8]) -> Option<u32> {
 }
 
 #[inline(always)]
-fn is_res_tag(bytes: &[u8], idx: usize) -> bool {
+const fn is_res_tag(bytes: &[u8], idx: usize) -> bool {
     idx + 4 <= bytes.len()
         && bytes[idx] == b'('
         && bytes[idx + 1].eq_ignore_ascii_case(&b'r')
@@ -894,7 +894,7 @@ fn is_res_tag(bytes: &[u8], idx: usize) -> bool {
 }
 
 #[inline(always)]
-fn skip_parenthetical(bytes: &[u8], start: usize) -> usize {
+const fn skip_parenthetical(bytes: &[u8], start: usize) -> usize {
     let mut depth = 0usize;
     let mut idx = start;
     while idx < bytes.len() {
@@ -917,12 +917,12 @@ fn skip_parenthetical(bytes: &[u8], start: usize) -> usize {
 }
 
 #[inline(always)]
-fn is_sprite_sheet_left_boundary(bytes: &[u8], left: usize) -> bool {
+const fn is_sprite_sheet_left_boundary(bytes: &[u8], left: usize) -> bool {
     left > 0 && matches!(bytes[left - 1], b' ' | b'\t' | b'\r' | b'\n' | b'_')
 }
 
 #[inline(always)]
-fn is_sprite_sheet_right_boundary(bytes: &[u8], right: usize) -> bool {
+const fn is_sprite_sheet_right_boundary(bytes: &[u8], right: usize) -> bool {
     right == bytes.len()
         || matches!(
             bytes[right],
@@ -2341,7 +2341,7 @@ pub fn parse_with_texture_context(
             ini_path_buf.to_string_lossy()
         );
         return Err(FontParseError::ImportRecursion {
-            current: ini_path_buf.clone(),
+            current: ini_path_buf,
             chain,
         });
     }

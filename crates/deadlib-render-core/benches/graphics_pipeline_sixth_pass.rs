@@ -97,7 +97,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -108,7 +108,7 @@ impl AllocSnapshot {
         }
     }
 
-    fn churn_bytes(self) -> u64 {
+    const fn churn_bytes(self) -> u64 {
         self.alloc_bytes + self.realloc_bytes + self.free_bytes
     }
 }
@@ -341,7 +341,7 @@ fn sprite_setup_new(objects: &[ObjectBounds; OBJECTS]) -> u64 {
 }
 
 #[inline(always)]
-fn clamp01(value: f32) -> f32 {
+const fn clamp01(value: f32) -> f32 {
     value.clamp(0.0, 1.0)
 }
 

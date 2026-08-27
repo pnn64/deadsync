@@ -38,7 +38,7 @@ impl From<GameplayProfile> for deadsync_profile::Profile {
     }
 }
 
-pub fn gameplay_play_style_from_profile(
+pub const fn gameplay_play_style_from_profile(
     play_style: deadsync_profile::PlayStyle,
 ) -> deadsync_gameplay::GameplayInputPlayStyle {
     match play_style {
@@ -57,7 +57,7 @@ pub fn gameplay_play_style_from_profile(
     }
 }
 
-pub fn gameplay_player_side_from_profile(
+pub const fn gameplay_player_side_from_profile(
     side: deadsync_profile::PlayerSide,
 ) -> deadsync_gameplay::GameplayInputPlayerSide {
     match side {
@@ -66,7 +66,7 @@ pub fn gameplay_player_side_from_profile(
     }
 }
 
-pub fn profile_side_from_gameplay(
+pub const fn profile_side_from_gameplay(
     side: deadsync_gameplay::GameplayInputPlayerSide,
 ) -> deadsync_profile::PlayerSide {
     match side {
@@ -107,7 +107,7 @@ pub fn gameplay_pack_data(
             .iter()
             .find(|pack| pack.group_name == pack_group.as_ref())
     {
-        pack_banner_path = pack.banner_path.clone();
+        pack_banner_path.clone_from(&pack.banner_path);
         sync_pref = pack.sync_pref;
     }
     if let Some(course_name) = course_name {
@@ -136,7 +136,7 @@ pub fn gameplay_runtime_profile_data(
     runtime_profiles
 }
 
-pub fn gameplay_tick_mode_from_profile(
+pub const fn gameplay_tick_mode_from_profile(
     mode: deadsync_profile::TimingTickMode,
 ) -> deadsync_gameplay::GameplayTimingTickMode {
     match mode {
@@ -148,7 +148,7 @@ pub fn gameplay_tick_mode_from_profile(
     }
 }
 
-pub fn profile_tick_mode_from_gameplay(
+pub const fn profile_tick_mode_from_gameplay(
     mode: deadsync_gameplay::GameplayTimingTickMode,
 ) -> deadsync_profile::TimingTickMode {
     match mode {
@@ -160,7 +160,7 @@ pub fn profile_tick_mode_from_gameplay(
     }
 }
 
-pub fn gameplay_fail_type_from_config(
+pub const fn gameplay_fail_type_from_config(
     fail_type: deadsync_config::theme::DefaultFailType,
 ) -> deadsync_gameplay::GameplayFailType {
     match fail_type {
@@ -173,7 +173,7 @@ pub fn gameplay_fail_type_from_config(
     }
 }
 
-pub fn gameplay_note_scroll_clock_from_config(
+pub const fn gameplay_note_scroll_clock_from_config(
     clock: deadsync_config::audio::NoteScrollClock,
 ) -> deadsync_gameplay::GameplayNoteScrollClock {
     match clock {
@@ -186,7 +186,7 @@ pub fn gameplay_note_scroll_clock_from_config(
     }
 }
 
-pub fn gameplay_config_from_config(
+pub const fn gameplay_config_from_config(
     cfg: &deadsync_config::app_config::Config,
 ) -> deadsync_gameplay::GameplayConfig {
     deadsync_gameplay::GameplayConfig {
@@ -204,7 +204,7 @@ pub fn gameplay_config_from_config(
     }
 }
 
-pub fn score_display_mode_from_profile(
+pub const fn score_display_mode_from_profile(
     mode: deadsync_profile::ScoreDisplayMode,
 ) -> deadsync_gameplay::GameplayScoreDisplayMode {
     match mode {
@@ -217,7 +217,7 @@ pub fn score_display_mode_from_profile(
     }
 }
 
-fn gameplay_target_score_setting(
+const fn gameplay_target_score_setting(
     setting: deadsync_profile::TargetScoreSetting,
 ) -> deadsync_gameplay::GameplayTargetScoreSetting {
     match setting {
@@ -273,7 +273,7 @@ fn gameplay_target_score_setting(
     }
 }
 
-pub fn gameplay_attack_mode(
+pub const fn gameplay_attack_mode(
     mode: deadsync_profile::AttackMode,
 ) -> deadsync_gameplay::GameplayAttackMode {
     match mode {
@@ -283,7 +283,7 @@ pub fn gameplay_attack_mode(
     }
 }
 
-pub fn chart_effects_from_profile(
+pub const fn chart_effects_from_profile(
     profile: &deadsync_profile::Profile,
 ) -> deadsync_gameplay::ChartAttackEffects {
     deadsync_gameplay::ChartAttackEffects {
@@ -327,7 +327,9 @@ pub fn blue_fantastic_window_ms_for_profile(
 pub type SongLuaRuntimeOverlayStateDelta =
     deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<deadsync_song_lua::SongLuaOverlayStateDelta>;
 
-pub fn song_lua_difficulty_from_chart(difficulty: &str) -> deadsync_song_lua::SongLuaDifficulty {
+pub const fn song_lua_difficulty_from_chart(
+    difficulty: &str,
+) -> deadsync_song_lua::SongLuaDifficulty {
     if difficulty.eq_ignore_ascii_case("beginner") {
         deadsync_song_lua::SongLuaDifficulty::Beginner
     } else if difficulty.eq_ignore_ascii_case("easy") || difficulty.eq_ignore_ascii_case("basic") {
@@ -551,7 +553,7 @@ pub fn song_lua_runtime_column_offset_windows(
         .collect()
 }
 
-pub fn song_lua_overlay_delta_mask(
+pub const fn song_lua_overlay_delta_mask(
     delta: &deadsync_song_lua::SongLuaOverlayStateDelta,
 ) -> deadsync_gameplay::SongLuaOverlayDeltaMask {
     let mut mask = 0u128;
@@ -648,7 +650,7 @@ pub fn song_lua_overlay_delta_mask(
     mask
 }
 
-pub fn song_lua_runtime_overlay_state_delta(
+pub const fn song_lua_runtime_overlay_state_delta(
     delta: deadsync_song_lua::SongLuaOverlayStateDelta,
 ) -> SongLuaRuntimeOverlayStateDelta {
     SongLuaRuntimeOverlayStateDelta {
@@ -1097,7 +1099,7 @@ pub fn scroll_effects_from_option(
     )
 }
 
-pub fn tap_explosion_options_from_profile(
+pub const fn tap_explosion_options_from_profile(
     profile: &deadsync_profile::Profile,
 ) -> deadsync_gameplay::TapExplosionOptions {
     let mask = profile.tap_explosion_active_mask;
@@ -1113,7 +1115,7 @@ pub fn tap_explosion_options_from_profile(
     }
 }
 
-fn gameplay_turn_option(
+const fn gameplay_turn_option(
     turn: deadsync_profile::TurnOption,
 ) -> deadsync_gameplay::GameplayTurnOption {
     match turn {
@@ -1129,7 +1131,7 @@ fn gameplay_turn_option(
     }
 }
 
-fn mini_indicator_mode(
+const fn mini_indicator_mode(
     mode: deadsync_profile::MiniIndicator,
 ) -> deadsync_gameplay::GameplayMiniIndicatorMode {
     match mode {
@@ -1155,7 +1157,9 @@ fn mini_indicator_mode(
     }
 }
 
-fn error_bar_trim(trim: deadsync_profile::ErrorBarTrim) -> deadsync_gameplay::GameplayErrorBarTrim {
+const fn error_bar_trim(
+    trim: deadsync_profile::ErrorBarTrim,
+) -> deadsync_gameplay::GameplayErrorBarTrim {
     match trim {
         deadsync_profile::ErrorBarTrim::Off => deadsync_gameplay::GameplayErrorBarTrim::Off,
         deadsync_profile::ErrorBarTrim::Fantastic => {

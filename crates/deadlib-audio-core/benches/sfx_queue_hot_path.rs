@@ -97,7 +97,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -108,7 +108,7 @@ impl AllocSnapshot {
         }
     }
 
-    fn churn_bytes(self) -> u64 {
+    const fn churn_bytes(self) -> u64 {
         self.alloc_bytes + self.realloc_bytes + self.dealloc_bytes
     }
 }

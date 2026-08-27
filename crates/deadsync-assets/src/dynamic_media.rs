@@ -146,7 +146,7 @@ pub fn push_gameplay_media_paths<'a>(
     }
 }
 
-pub fn gameplay_media_paths_capacity(
+pub const fn gameplay_media_paths_capacity(
     song: &SongData,
     gameplay_background_changes: &[SongBackgroundChange],
 ) -> usize {
@@ -352,7 +352,7 @@ pub struct DynamicBackgroundState {
 }
 
 impl DynamicBackgroundState {
-    pub fn new(
+    pub const fn new(
         key: String,
         upload_handle: TextureHandle,
         path: PathBuf,
@@ -390,11 +390,11 @@ impl DynamicBackgroundState {
         self.video_timing = dynamic::DynamicVideoTiming::new(video_start_sec, video_rate);
     }
 
-    pub fn video_rate(&self) -> f32 {
+    pub const fn video_rate(&self) -> f32 {
         self.video_timing.rate()
     }
 
-    pub fn video_start_sec(&self) -> f32 {
+    pub const fn video_start_sec(&self) -> f32 {
         self.video_start_sec
     }
 }

@@ -372,7 +372,7 @@ where
         };
         let seq_end = CALLBACK_CLOCK_SEQ.load(Ordering::Acquire);
         if seq_start == seq_end {
-            let at_nanos = at_nanos.unwrap_or(window.last_nanos.saturating_sub(1));
+            let at_nanos = at_nanos.unwrap_or_else(|| window.last_nanos.saturating_sub(1));
             return (valid_at, at_nanos, source, window);
         }
     }
@@ -468,7 +468,7 @@ pub fn stream_position_frames_from_window(
 }
 
 #[inline(always)]
-pub fn fallback_stream_position_frames(start_frame: u64, window: CallbackClockWindow) -> f64 {
+pub const fn fallback_stream_position_frames(start_frame: u64, window: CallbackClockWindow) -> f64 {
     window.total_frames.saturating_sub(start_frame) as f64
 }
 

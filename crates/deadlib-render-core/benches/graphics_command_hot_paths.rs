@@ -95,7 +95,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -106,7 +106,7 @@ impl AllocSnapshot {
         }
     }
 
-    fn churn_bytes(self) -> u64 {
+    const fn churn_bytes(self) -> u64 {
         self.alloc_bytes + self.realloc_bytes + self.free_bytes
     }
 }
@@ -232,7 +232,7 @@ struct CompletionCell {
 }
 
 impl CompletionCell {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             version: AtomicU32::new(0),
             present_id: AtomicU32::new(0),
@@ -330,7 +330,7 @@ fn completion_checksum(completion: Completion) -> u64 {
 }
 
 #[inline(never)]
-fn driver_call(work: u64, call: u64) -> u64 {
+const fn driver_call(work: u64, call: u64) -> u64 {
     black_box(
         work.rotate_left(7)
             .wrapping_add(call)
@@ -358,7 +358,7 @@ fn retained_gl_upload(sequence: &mut u64) -> u64 {
     upload_checksum(*sequence)
 }
 
-fn upload_checksum(sequence: u64) -> u64 {
+const fn upload_checksum(sequence: u64) -> u64 {
     sequence.rotate_left(11).wrapping_add(0xfeed_beef)
 }
 

@@ -115,7 +115,7 @@ impl DecayingHist {
     }
 
     #[inline(always)]
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         self.bins = [0.0; DHIST_BINS];
         self.total = 0.0;
     }
@@ -153,7 +153,7 @@ impl DecayingHist {
     /// Effective sample count represented by the decaying histogram.
     #[inline(always)]
     #[cfg(test)]
-    pub fn effective_n(&self) -> u32 {
+    pub const fn effective_n(&self) -> u32 {
         self.total.round().max(0.0) as u32
     }
 }
@@ -183,7 +183,7 @@ impl EwmaStats {
     }
 
     #[inline(always)]
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         self.mean = 0.0;
         self.var = 0.0;
         self.count = 0;
@@ -203,7 +203,7 @@ impl EwmaStats {
     }
 
     #[inline(always)]
-    pub fn mean(&self) -> f32 {
+    pub const fn mean(&self) -> f32 {
         self.mean
     }
 
@@ -250,7 +250,7 @@ impl FrameStatsLong {
     }
 
     #[inline(always)]
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         self.frame_hist.reset();
         self.error_hist.reset();
         self.frame_ewma.reset();
@@ -288,27 +288,27 @@ impl FrameStatsLong {
     }
 
     #[inline(always)]
-    pub fn p99_frame_us(&self) -> u32 {
+    pub const fn p99_frame_us(&self) -> u32 {
         self.cached_p99_frame_us
     }
 
     #[inline(always)]
-    pub fn p99_error_us(&self) -> u32 {
+    pub const fn p99_error_us(&self) -> u32 {
         self.cached_p99_error_us
     }
 
     #[inline(always)]
-    pub fn avg_frame_us(&self) -> u32 {
+    pub const fn avg_frame_us(&self) -> u32 {
         self.frame_ewma.mean().max(0.0).round() as u32
     }
 
     #[inline(always)]
-    pub fn avg_cpu_us(&self) -> u32 {
+    pub const fn avg_cpu_us(&self) -> u32 {
         self.cpu_ewma.mean().max(0.0).round() as u32
     }
 
     #[inline(always)]
-    pub fn avg_gpu_us(&self) -> u32 {
+    pub const fn avg_gpu_us(&self) -> u32 {
         self.gpu_ewma.mean().max(0.0).round() as u32
     }
 
@@ -324,7 +324,7 @@ impl FrameStatsLong {
 
     #[inline(always)]
     #[cfg(test)]
-    pub fn effective_n(&self) -> u32 {
+    pub const fn effective_n(&self) -> u32 {
         self.frame_hist.effective_n()
     }
 }
@@ -432,11 +432,11 @@ impl FrameStatsController {
     }
 
     #[inline(always)]
-    pub fn enabled(&self) -> bool {
+    pub const fn enabled(&self) -> bool {
         self.enabled
     }
 
-    pub fn toggle(&mut self) -> bool {
+    pub const fn toggle(&mut self) -> bool {
         self.enabled = !self.enabled;
         if !self.enabled {
             self.samples.clear();
@@ -449,7 +449,7 @@ impl FrameStatsController {
     }
 
     /// Apply automatic placement only while no persisted/user choice exists.
-    pub fn use_default_anchor(&mut self) {
+    pub const fn use_default_anchor(&mut self) {
         if !self.anchor_user_set {
             self.anchor = default_overlay_anchor();
         }
@@ -461,7 +461,7 @@ impl FrameStatsController {
         self.anchor
     }
 
-    pub fn toggle_style(&mut self) -> OverlayStyle {
+    pub const fn toggle_style(&mut self) -> OverlayStyle {
         self.style = self.style.toggle();
         self.style
     }

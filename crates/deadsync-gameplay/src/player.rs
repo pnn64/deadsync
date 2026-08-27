@@ -23,7 +23,7 @@ pub struct HeldMissRenderInfo {
 }
 
 #[inline(always)]
-pub fn judgment_render_info(judgment: Judgment, started_at_screen_s: f32) -> JudgmentRenderInfo {
+pub const fn judgment_render_info(judgment: Judgment, started_at_screen_s: f32) -> JudgmentRenderInfo {
     JudgmentRenderInfo {
         judgment,
         started_at_screen_s,
@@ -31,7 +31,7 @@ pub fn judgment_render_info(judgment: Judgment, started_at_screen_s: f32) -> Jud
 }
 
 #[inline(always)]
-pub fn mine_judgment_render_info(
+pub const fn mine_judgment_render_info(
     result: MineResult,
     column: usize,
     started_at_screen_s: f32,
@@ -44,7 +44,7 @@ pub fn mine_judgment_render_info(
 }
 
 #[inline(always)]
-pub fn hold_judgment_render_info(
+pub const fn hold_judgment_render_info(
     result: HoldResult,
     started_at_screen_s: f32,
 ) -> HoldJudgmentRenderInfo {
@@ -409,17 +409,17 @@ pub const fn player_mines_hit(player: &PlayerRuntime) -> u32 {
 }
 
 #[inline(always)]
-pub fn add_player_mines_avoided(player: &mut PlayerRuntime, count: u32) {
+pub const fn add_player_mines_avoided(player: &mut PlayerRuntime, count: u32) {
     player.mines_avoided = player.mines_avoided.saturating_add(count);
 }
 
 #[inline(always)]
-pub fn set_player_mines_avoided(player: &mut PlayerRuntime, count: u32) {
+pub const fn set_player_mines_avoided(player: &mut PlayerRuntime, count: u32) {
     player.mines_avoided = count;
 }
 
 #[inline(always)]
-pub fn set_player_last_judgment(
+pub const fn set_player_last_judgment(
     player: &mut PlayerRuntime,
     judgment: Judgment,
     started_at_screen_s: f32,
@@ -428,7 +428,7 @@ pub fn set_player_last_judgment(
 }
 
 #[inline(always)]
-pub fn set_player_last_mine_judgment(
+pub const fn set_player_last_mine_judgment(
     player: &mut PlayerRuntime,
     result: MineResult,
     column: usize,
@@ -442,7 +442,7 @@ pub fn set_player_last_mine_judgment(
 }
 
 #[inline(always)]
-pub fn player_combo_state(player: &PlayerRuntime) -> ComboState {
+pub const fn player_combo_state(player: &PlayerRuntime) -> ComboState {
     ComboState {
         combo: player.combo,
         miss_combo: player.miss_combo,
@@ -453,7 +453,7 @@ pub fn player_combo_state(player: &PlayerRuntime) -> ComboState {
 }
 
 #[inline(always)]
-pub fn write_player_combo_state(player: &mut PlayerRuntime, state: ComboState) {
+pub const fn write_player_combo_state(player: &mut PlayerRuntime, state: ComboState) {
     player.combo = state.combo;
     player.miss_combo = state.miss_combo;
     player.full_combo_grade = state.full_combo_grade;
@@ -476,7 +476,7 @@ pub fn apply_combo_update(
 }
 
 #[inline(always)]
-pub fn update_itg_grade_totals(player: &mut PlayerRuntime) {
+pub const fn update_itg_grade_totals(player: &mut PlayerRuntime) {
     player.earned_grade_points = judgment::itg_grade_points_with_checkpoints(
         &player.scoring_counts,
         player.holds_held_for_score,
@@ -488,7 +488,7 @@ pub fn update_itg_grade_totals(player: &mut PlayerRuntime) {
 }
 
 #[inline(always)]
-pub fn apply_course_combo_carry(
+pub const fn apply_course_combo_carry(
     player: &mut PlayerRuntime,
     carry_combo_between_songs: bool,
     replay_mode: bool,
@@ -517,7 +517,7 @@ pub fn apply_course_combo_carry(
 }
 
 #[inline(always)]
-pub fn player_score_stage(player: &PlayerRuntime) -> ItgScoreStage {
+pub const fn player_score_stage(player: &PlayerRuntime) -> ItgScoreStage {
     ItgScoreStage {
         scoring_counts: player.scoring_counts,
         holds_held_for_score: player.holds_held_for_score,
@@ -531,7 +531,7 @@ pub fn player_score_stage(player: &PlayerRuntime) -> ItgScoreStage {
 }
 
 #[inline(always)]
-pub fn player_display_judgment_count(
+pub const fn player_display_judgment_count(
     player: &PlayerRuntime,
     carry: CourseDisplayCarry,
     grade: JudgeGrade,
@@ -552,7 +552,7 @@ pub fn player_course_submit_life_eligible(player: &PlayerRuntime) -> bool {
 }
 
 #[inline(always)]
-pub fn capture_player_failed_ex_score_inputs(
+pub const fn capture_player_failed_ex_score_inputs(
     player: &mut PlayerRuntime,
     live: ExScoreInputs,
 ) -> bool {
@@ -600,7 +600,7 @@ pub const fn final_note_result_effects(
     }
 }
 
-pub fn register_provisional_early_note_result(note: &mut Note, judgment: Judgment) -> bool {
+pub const fn register_provisional_early_note_result(note: &mut Note, judgment: Judgment) -> bool {
     if note.early_result.is_some() {
         return false;
     }
@@ -933,7 +933,7 @@ pub fn collect_time_based_tap_misses_for_players(
     }
 }
 
-pub fn apply_final_note_result(
+pub const fn apply_final_note_result(
     note: &mut Note,
     judgment: Judgment,
     column_count: usize,

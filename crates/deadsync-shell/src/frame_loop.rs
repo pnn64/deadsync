@@ -71,14 +71,14 @@ impl FrameLoopState {
         self.reset_schedule(Instant::now());
     }
 
-    pub fn reset_schedule(&mut self, now: Instant) {
+    pub const fn reset_schedule(&mut self, now: Instant) {
         self.next_redraw_at = now;
         self.redraw_request.reset();
         self.mode.reset();
     }
 
     #[inline(always)]
-    pub fn note_redraw_requested(&mut self, now: Instant, reason: &'static str) {
+    pub const fn note_redraw_requested(&mut self, now: Instant, reason: &'static str) {
         self.redraw_request.note_requested(now, reason);
     }
 
@@ -89,7 +89,7 @@ impl FrameLoopState {
     }
 
     #[inline(always)]
-    pub fn redraw_pending(&self) -> bool {
+    pub const fn redraw_pending(&self) -> bool {
         self.redraw_request.pending()
     }
 
@@ -109,7 +109,7 @@ impl FrameLoopState {
         self.mode.note(mode)
     }
 
-    pub fn set_window_focus(&mut self, focused: bool) -> bool {
+    pub const fn set_window_focus(&mut self, focused: bool) -> bool {
         if self.window_focused == focused {
             return false;
         }
@@ -117,7 +117,7 @@ impl FrameLoopState {
         true
     }
 
-    pub fn set_window_occluded(&mut self, occluded: bool) -> bool {
+    pub const fn set_window_occluded(&mut self, occluded: bool) -> bool {
         if self.window_occluded == occluded {
             return false;
         }
@@ -125,7 +125,7 @@ impl FrameLoopState {
         true
     }
 
-    pub fn set_surface_active(&mut self, active: bool) -> bool {
+    pub const fn set_surface_active(&mut self, active: bool) -> bool {
         if self.surface_active == active {
             return false;
         }
@@ -134,7 +134,7 @@ impl FrameLoopState {
     }
 
     #[inline(always)]
-    pub fn should_skip_compose_and_draw(&self) -> bool {
+    pub const fn should_skip_compose_and_draw(&self) -> bool {
         should_skip_compose_and_draw(self.window_occluded, self.surface_active)
     }
 

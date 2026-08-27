@@ -885,11 +885,8 @@ const SMX_BG_PACK: CustomBinding = CustomBinding {
                 .map(ToString::to_string)
                 .unwrap_or_default()
         };
-        state.player_options[player_idx].smx_bg_pack = if pack.is_empty() {
-            None
-        } else {
-            Some(pack.clone())
-        };
+        state.player_options[player_idx].smx_bg_pack =
+            if pack.is_empty() { None } else { Some(pack) };
         Outcome::persisted()
     },
 };
@@ -911,11 +908,8 @@ const SMX_JUDGE_PACK: CustomBinding = CustomBinding {
                 .map(ToString::to_string)
                 .unwrap_or_default()
         };
-        state.player_options[player_idx].smx_judge_pack = if pack.is_empty() {
-            None
-        } else {
-            Some(pack.clone())
-        };
+        state.player_options[player_idx].smx_judge_pack =
+            if pack.is_empty() { None } else { Some(pack) };
         Outcome::persisted()
     },
 };

@@ -132,7 +132,7 @@ pub fn clear_data_cache() {
 }
 
 #[inline(always)]
-pub fn button_for_col(num_cols: usize, col: usize) -> &'static str {
+pub const fn button_for_col(num_cols: usize, col: usize) -> &'static str {
     if matches!(num_cols, 5 | 10) {
         match col % 5 {
             0 => "DownLeft",

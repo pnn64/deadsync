@@ -92,7 +92,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -131,7 +131,7 @@ impl ToggleWorkload {
         }
     }
 
-    fn next(&mut self) -> Edge {
+    const fn next(&mut self) -> Edge {
         let index = self.cursor;
         let edge = binding_edge(index, self.press_next);
         if self.press_next {

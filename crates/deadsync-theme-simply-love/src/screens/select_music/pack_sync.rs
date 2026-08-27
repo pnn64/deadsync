@@ -25,7 +25,7 @@ pub(super) fn show_from_selected(state: &mut State) {
     show_for_group(state, pack_name.as_ref());
 }
 
-pub(super) fn poll(state: &mut State) -> bool {
+pub(super) const fn poll(state: &mut State) -> bool {
     shared_pack_sync::poll(&mut state.pack_sync_overlay)
 }
 
@@ -41,7 +41,7 @@ pub(super) fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec
     );
 }
 
-fn preferred_difficulty_index(state: &State) -> usize {
+const fn preferred_difficulty_index(state: &State) -> usize {
     match (state.session.play_style, state.session.player_side) {
         (
             profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,

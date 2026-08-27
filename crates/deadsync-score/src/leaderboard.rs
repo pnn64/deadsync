@@ -359,7 +359,7 @@ pub fn leaderboard_username_matches(entry_name: &str, username: &str) -> bool {
 }
 
 #[inline(always)]
-pub fn leaderboard_score_10000(score: f64, is_fail: bool) -> Option<f64> {
+pub const fn leaderboard_score_10000(score: f64, is_fail: bool) -> Option<f64> {
     if is_fail || !score.is_finite() {
         None
     } else {
@@ -373,7 +373,7 @@ pub const fn leaderboard_nonzero_rank(rank: u32) -> Option<u32> {
 }
 
 #[inline(always)]
-pub fn score_import_entry_matches_profile(
+pub const fn score_import_entry_matches_profile(
     entry_name: &str,
     is_self: bool,
     endpoint: ScoreImportEndpoint,
@@ -616,7 +616,7 @@ fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
 }
 
 #[inline(always)]
-pub fn scorebox_pane_mode_text(kind: ScoreboxPaneKind, pane: &LeaderboardPane) -> &str {
+pub const fn scorebox_pane_mode_text(kind: ScoreboxPaneKind, pane: &LeaderboardPane) -> &str {
     match kind {
         ScoreboxPaneKind::Gs => "ITG",
         ScoreboxPaneKind::Ex => "EX",
@@ -1228,7 +1228,7 @@ pub struct GameplayScoreboxProfileSnapshot {
 }
 
 impl GameplayScoreboxProfileSnapshot {
-    pub fn new(
+    pub const fn new(
         display_scorebox: bool,
         gs_active: bool,
         show_ex_score: bool,
@@ -1255,12 +1255,12 @@ impl GameplayScoreboxProfileSnapshot {
     }
 
     #[inline(always)]
-    pub fn api_key(&self) -> &str {
+    pub const fn api_key(&self) -> &str {
         self.api_key.as_str()
     }
 
     #[inline(always)]
-    pub fn arrowcloud_api_key(&self) -> &str {
+    pub const fn arrowcloud_api_key(&self) -> &str {
         self.arrowcloud_api_key.as_str()
     }
 
@@ -1270,7 +1270,7 @@ impl GameplayScoreboxProfileSnapshot {
     }
 
     #[inline(always)]
-    pub fn gs_username(&self) -> &str {
+    pub const fn gs_username(&self) -> &str {
         self.gs_username.as_str()
     }
 
@@ -1443,7 +1443,7 @@ pub fn should_fetch_player_leaderboard_entry(
 }
 
 #[inline(always)]
-pub fn should_rerun_in_flight_player_leaderboard_fetch(
+pub const fn should_rerun_in_flight_player_leaderboard_fetch(
     in_flight_max_entries: usize,
     requested_max_entries: usize,
     refresh_cached: bool,

@@ -562,9 +562,9 @@ pub fn create_profileman_table(lua: &Lua) -> mlua::Result<Table> {
     profileman.set(
         "GetProfile",
         lua.create_function({
-            let machine_profile = machine_profile.clone();
-            let player_profiles = player_profiles.clone();
-            let fallback_profile = fallback_profile.clone();
+            let machine_profile = machine_profile;
+            let player_profiles = player_profiles;
+            let fallback_profile = fallback_profile;
             move |_, args: MultiValue| {
                 let profile = match method_arg(&args, 0).and_then(profile_slot_from_value) {
                     Some(SongLuaProfileSlot::Player(index)) => player_profiles[index].clone(),
@@ -622,7 +622,7 @@ pub fn create_profileman_table(lua: &Lua) -> mlua::Result<Table> {
     profileman.set(
         "GetLocalProfileFromIndex",
         lua.create_function({
-            let local_profile = local_profile.clone();
+            let local_profile = local_profile;
             move |_, _args: MultiValue| Ok(local_profile.clone())
         })?,
     )?;
@@ -1125,7 +1125,7 @@ pub fn create_statsman_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua
     statsman.set(
         "GetPlayedStageStats",
         lua.create_function({
-            let stage_stats = stage_stats.clone();
+            let stage_stats = stage_stats;
             move |_, args: MultiValue| {
                 let ago = method_arg(&args, 0)
                     .cloned()
@@ -1755,7 +1755,7 @@ pub fn create_prefsmgr_table(
         })?,
     )?;
     prefsmgr.set("PreferenceExists", {
-        let exists_video_renderers = video_renderers.clone();
+        let exists_video_renderers = video_renderers;
         lua.create_function(move |lua, args: MultiValue| {
             let Some(key) = method_arg(&args, 0).cloned().and_then(read_string) else {
                 return Ok(false);
@@ -2602,7 +2602,7 @@ fn create_display_spec_table(lua: &Lua, width: i32, height: i32) -> mlua::Result
     spec.set(
         "GetSupportedModes",
         lua.create_function({
-            let modes = modes.clone();
+            let modes = modes;
             move |_, _args: MultiValue| Ok(modes.clone())
         })?,
     )?;

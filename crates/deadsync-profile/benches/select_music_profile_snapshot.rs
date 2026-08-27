@@ -75,7 +75,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             frees: self.frees - before.frees,
@@ -84,7 +84,7 @@ impl AllocSnapshot {
         }
     }
 
-    fn churn(self) -> u64 {
+    const fn churn(self) -> u64 {
         self.alloc_bytes + self.free_bytes
     }
 }
@@ -256,7 +256,7 @@ fn main() {
     );
 
     let mut changed_profiles = profiles.clone();
-    changed_profiles[0].display_name = "Changed Player".to_owned();
+    "Changed Player".clone_into(&mut changed_profiles[0].display_name);
     let variants = [&profiles, &changed_profiles];
     let mut old_variant = 0usize;
     let mut new_variant = 0usize;

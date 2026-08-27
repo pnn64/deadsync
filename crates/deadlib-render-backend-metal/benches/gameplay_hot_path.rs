@@ -96,7 +96,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -274,7 +274,7 @@ impl MeshLookupBench {
     }
 }
 
-fn mesh_key(index: usize) -> u64 {
+const fn mesh_key(index: usize) -> u64 {
     (index as u64 + 0x1000_0001)
         .wrapping_mul(0x9e37_79b9_7f4a_7c15)
         .rotate_left(17)
@@ -500,7 +500,7 @@ fn emit(out: &mut EncodeResult, count: u32) {
 }
 
 #[inline(never)]
-fn metal_call(work: &mut u64) {
+const fn metal_call(work: &mut u64) {
     *work = black_box(work.rotate_left(7).wrapping_add(0x9e37_79b9));
 }
 

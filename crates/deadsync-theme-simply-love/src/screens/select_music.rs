@@ -699,8 +699,8 @@ struct PreviewMarker {
 #[inline(always)]
 fn sl_selection_anim_beat(entry_opt: Option<&MusicWheelEntry>, state: &State) -> f32 {
     match entry_opt {
-        Some(MusicWheelEntry::Song(song)) => preview_song_sec(state).map_or(
-            state.session_elapsed * song.max_bpm.max(1.0) as f32 / 60.0,
+        Some(MusicWheelEntry::Song(song)) => preview_song_sec(state).map_or_else(
+            || state.session_elapsed * song.max_bpm.max(1.0) as f32 / 60.0,
             |sec| beat_at_sec(song, sec) as f32,
         ),
         _ => state.session_elapsed * 2.5, // 150 BPM fallback
@@ -791,7 +791,7 @@ pub fn sync_profile_picker(state: &mut State, view: ProfilePickerView) {
 }
 
 #[inline(always)]
-pub fn downloads_overlay_visible(state: &State) -> bool {
+pub const fn downloads_overlay_visible(state: &State) -> bool {
     matches!(
         state.downloads_overlay,
         select_music_menu::DownloadsOverlayState::Visible(_)
@@ -799,7 +799,7 @@ pub fn downloads_overlay_visible(state: &State) -> bool {
 }
 
 #[inline(always)]
-pub fn srpg_shop_overlay_visible(state: &State) -> bool {
+pub const fn srpg_shop_overlay_visible(state: &State) -> bool {
     matches!(
         state.srpg_shop_overlay,
         select_music_menu::SrpgShopOverlayState::Visible(_)
@@ -807,12 +807,12 @@ pub fn srpg_shop_overlay_visible(state: &State) -> bool {
 }
 
 #[inline(always)]
-pub fn local_profile_ids(state: &State) -> &[Option<Arc<str>>; 2] {
+pub const fn local_profile_ids(state: &State) -> &[Option<Arc<str>>; 2] {
     &state.profiles.local_profile_ids
 }
 
 #[inline(always)]
-pub fn pad_profile_menu_visible(state: &State) -> bool {
+pub const fn pad_profile_menu_visible(state: &State) -> bool {
     state.policy.fsr_profiles && state.select_music_menu.is_visible()
 }
 
@@ -1009,7 +1009,7 @@ const EXIT_CODE_SEQUENCE: [NavDirection; 8] = [
 
 impl ExitCodeSideState {
     #[inline(always)]
-    fn reset(&mut self) {
+    const fn reset(&mut self) {
         self.index = 0;
         self.first_input_at = None;
     }
@@ -1043,7 +1043,7 @@ impl ExitCodeSideState {
 
 impl ExitCodeTracker {
     #[inline(always)]
-    fn side_mut(&mut self, side: profile_data::PlayerSide) -> &mut ExitCodeSideState {
+    const fn side_mut(&mut self, side: profile_data::PlayerSide) -> &mut ExitCodeSideState {
         match side {
             profile_data::PlayerSide::P1 => &mut self.p1,
             profile_data::PlayerSide::P2 => &mut self.p2,
@@ -1051,7 +1051,7 @@ impl ExitCodeTracker {
     }
 
     #[inline(always)]
-    fn reset(&mut self, side: profile_data::PlayerSide) {
+    const fn reset(&mut self, side: profile_data::PlayerSide) {
         self.side_mut(side).reset();
     }
 
@@ -1222,7 +1222,7 @@ impl From<SelectMusicSort> for WheelSortMode {
     }
 }
 
-fn saved_sort(sort: WheelSortMode) -> Option<SelectMusicSort> {
+const fn saved_sort(sort: WheelSortMode) -> Option<SelectMusicSort> {
     Some(match sort {
         WheelSortMode::Series => SelectMusicSort::Series,
         WheelSortMode::Group => SelectMusicSort::Group,
@@ -1310,7 +1310,7 @@ impl MusicWheelEntry {
     }
 
     #[inline(always)]
-    pub fn is_series_header(&self) -> bool {
+    pub const fn is_series_header(&self) -> bool {
         matches!(
             self,
             MusicWheelEntry::PackHeader {
@@ -2367,7 +2367,7 @@ fn fill_displayed_entries(
                 parent_series,
                 ..
             } => {
-                let section_key = pack_key.as_deref().unwrap_or(name.as_ref());
+                let section_key = pack_key.as_deref().unwrap_or_else(|| name.as_ref());
                 current_pack_key = Some(section_key);
                 let parent_is_open = parent_series
                     .as_deref()
@@ -2686,7 +2686,7 @@ fn first_header_name(entries: &[MusicWheelEntry]) -> Option<Arc<str>> {
     })
 }
 
-fn write_header_song_count(
+const fn write_header_song_count(
     entries: &mut [MusicWheelEntry],
     header_index: Option<usize>,
     count: usize,
@@ -3349,7 +3349,12 @@ fn playlist_song_sources(
     for entry in grouped_entries {
         match entry {
             MusicWheelEntry::PackHeader { name, pack_key, .. } => {
-                current_group = Some(pack_key.as_deref().unwrap_or(name.as_ref()).to_owned());
+                current_group = Some(
+                    pack_key
+                        .as_deref()
+                        .unwrap_or_else(|| name.as_ref())
+                        .to_owned(),
+                );
             }
             MusicWheelEntry::Song(song) => sources.push(PlaylistSongSource {
                 group_name: current_group.clone(),
@@ -4356,7 +4361,7 @@ pub fn init_placeholder() -> State {
     }
 }
 
-pub fn set_heart_rate_view(state: &mut State, view: heart_rate::HeartRateView) {
+pub const fn set_heart_rate_view(state: &mut State, view: heart_rate::HeartRateView) {
     state.heart_rate_view = view;
 }
 
@@ -4463,7 +4468,7 @@ fn maybe_prewarm_replaygain_for_pack(
     for entry in state.group_entries.iter() {
         match entry {
             MusicWheelEntry::PackHeader { name, pack_key, .. } => {
-                current_pack_key = Some(pack_key.as_deref().unwrap_or(name.as_ref()));
+                current_pack_key = Some(pack_key.as_deref().unwrap_or_else(|| name.as_ref()));
             }
             MusicWheelEntry::Song(song) if current_pack_key == Some(pack.as_ref()) => {
                 if let Some(path) = song.music_path.clone() {
@@ -4692,7 +4697,7 @@ fn toggle_preview_mute(state: &mut State, resume_immediately: bool) {
 }
 
 #[inline(always)]
-fn clear_menu_chord(state: &mut State) {
+const fn clear_menu_chord(state: &mut State) {
     state.menu_chord_mask = 0;
     state.menu_chord_left_pressed_at = None;
     state.menu_chord_right_pressed_at = None;
@@ -4710,13 +4715,13 @@ fn logic_dt_duration(dt: f32) -> Duration {
 }
 
 #[inline(always)]
-fn clear_nav_hold(state: &mut State) {
+const fn clear_nav_hold(state: &mut State) {
     state.nav_key_held_direction = None;
     state.nav_key_held_elapsed = Duration::ZERO;
 }
 
 #[inline(always)]
-fn start_nav_hold(state: &mut State, dir: NavDirection) {
+const fn start_nav_hold(state: &mut State, dir: NavDirection) {
     state.nav_key_held_direction = Some(dir);
     state.nav_key_held_elapsed = Duration::ZERO;
 }
@@ -4823,21 +4828,21 @@ fn toggle_favorite_for_selected_entry(state: &mut State, side: profile_data::Pla
 }
 
 #[inline(always)]
-fn clear_p1_ud_chord(state: &mut State) {
+const fn clear_p1_ud_chord(state: &mut State) {
     state.chord_mask_p1 = 0;
     state.p1_chord_up_pressed_at = None;
     state.p1_chord_down_pressed_at = None;
 }
 
 #[inline(always)]
-fn clear_p2_ud_chord(state: &mut State) {
+const fn clear_p2_ud_chord(state: &mut State) {
     state.chord_mask_p2 = 0;
     state.p2_chord_up_pressed_at = None;
     state.p2_chord_down_pressed_at = None;
 }
 
 #[inline(always)]
-fn clear_overlay_nav_hold(state: &mut State) {
+const fn clear_overlay_nav_hold(state: &mut State) {
     state.overlay_nav_held_direction = None;
     state.overlay_nav_held_since = None;
     state.overlay_nav_last_scrolled_at = None;
@@ -4983,7 +4988,7 @@ const fn exit_code_action_dir(action: VirtualAction) -> Option<NavDirection> {
 }
 
 #[inline(always)]
-fn reset_exit_code_on_non_lr_press(state: &mut State, ev: &InputEvent) {
+const fn reset_exit_code_on_non_lr_press(state: &mut State, ev: &InputEvent) {
     if ev.pressed
         && exit_code_action_dir(ev.action).is_none()
         && let Some(side) = input_side(ev.action)
@@ -5008,7 +5013,7 @@ const fn direct_lr_blocked_by_dedicated_menu(
 }
 
 #[inline(always)]
-fn modal_blocks_arrow(state: &State, action: VirtualAction) -> bool {
+const fn modal_blocks_arrow(state: &State, action: VirtualAction) -> bool {
     screen_input::dedicated_blocks_arrow(action, state.policy.dedicated_menu_only)
 }
 
@@ -5071,7 +5076,7 @@ fn try_open_select_music_menu_with_select_start(
 }
 
 #[inline(always)]
-fn update_select_hold_state(state: &mut State, ev: &InputEvent) {
+const fn update_select_hold_state(state: &mut State, ev: &InputEvent) {
     match ev.action {
         VirtualAction::p1_select => state.p1_select_held = ev.pressed,
         VirtualAction::p2_select => state.p2_select_held = ev.pressed,
@@ -5340,7 +5345,7 @@ fn show_test_input_overlay(state: &mut State) {
 }
 
 #[inline(always)]
-fn hide_test_input_overlay(state: &mut State) {
+const fn hide_test_input_overlay(state: &mut State) {
     state.test_input_overlay_visible = false;
 }
 
@@ -5390,7 +5395,7 @@ fn show_pad_config_overlay(state: &mut State) {
 }
 
 #[inline(always)]
-fn hide_pad_config_overlay(state: &mut State) {
+const fn hide_pad_config_overlay(state: &mut State) {
     state.pad_config_overlay_visible = false;
 }
 
@@ -5523,7 +5528,7 @@ fn commit_song_search(state: &mut State) {
     close_song_search(state);
     match pick {
         Some(select_music_menu::SongSearchMatch::Song { candidate, .. }) => {
-            let song = candidate.song.clone();
+            let song = candidate.song;
             focus_song_from_search(state, &song);
             let song_packs = std::mem::take(&mut state.song_packs);
             refresh_after_reload(state, song_packs);
@@ -6505,12 +6510,12 @@ struct NullOrDieOverlayRefresh {
 
 impl NullOrDieOverlayRefresh {
     #[inline(always)]
-    fn heat(&mut self) {
+    const fn heat(&mut self) {
         self.heat = true;
     }
 
     #[inline(always)]
-    fn meshes(&mut self) {
+    const fn meshes(&mut self) {
         self.heat = true;
         self.curve = true;
     }
@@ -7127,7 +7132,7 @@ fn build_manual_sync_overlay(
 /// the counter has to outlive it too. Restarting at 0 on re-entry would let a
 /// result still queued from a previous visit match the new screen's generation
 /// and be applied as if it were current.
-pub fn adopt_song_search_generation(state: &mut State, previous: &State) {
+pub const fn adopt_song_search_generation(state: &mut State, previous: &State) {
     state.song_search_generation = previous.song_search_generation;
 }
 
@@ -7510,7 +7515,7 @@ const fn steps_index_for_side(
     }
 }
 
-fn set_steps_index_for_side(
+const fn set_steps_index_for_side(
     state: &mut State,
     play_style: profile_data::PlayStyle,
     side: profile_data::PlayerSide,
@@ -7733,7 +7738,7 @@ fn hide_sync_overlay(state: &mut State) {
 }
 
 #[inline(always)]
-fn selected_steps_index_for_sync(state: &State) -> usize {
+const fn selected_steps_index_for_sync(state: &State) -> usize {
     match (state.session.play_style, state.session.player_side) {
         (
             profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,
@@ -7744,7 +7749,7 @@ fn selected_steps_index_for_sync(state: &State) -> usize {
 }
 
 #[inline(always)]
-fn preferred_steps_index_for_sync(state: &State) -> usize {
+const fn preferred_steps_index_for_sync(state: &State) -> usize {
     match (state.session.play_style, state.session.player_side) {
         (
             profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,
@@ -7755,7 +7760,7 @@ fn preferred_steps_index_for_sync(state: &State) -> usize {
 }
 
 #[inline(always)]
-fn set_selected_steps_index_for_sync(state: &mut State, steps_index: usize) {
+const fn set_selected_steps_index_for_sync(state: &mut State, steps_index: usize) {
     match (state.session.play_style, state.session.player_side) {
         (
             profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,
@@ -7867,7 +7872,7 @@ fn set_lobby_notice(state: &mut State, text: impl Into<String>) {
     state.lobby_notice_time_left = 2.5;
 }
 
-fn clear_lobby_disconnect_holds(state: &mut State) {
+const fn clear_lobby_disconnect_holds(state: &mut State) {
     state.lobby_disconnect_hold_p1 = None;
     state.lobby_disconnect_hold_p2 = None;
 }
@@ -8660,7 +8665,7 @@ fn begin_sync_song_hold(overlay: &mut NullOrDieOverlayData, dir: i8) {
     overlay.nav_last_sfx_at = Some(now);
 }
 
-fn clear_sync_song_hold(overlay: &mut NullOrDieOverlayData) {
+const fn clear_sync_song_hold(overlay: &mut NullOrDieOverlayData) {
     overlay.nav_held_dir = None;
     overlay.nav_held_since = None;
     overlay.nav_last_tick_at = None;
@@ -8681,7 +8686,7 @@ impl ConfirmAction {
         ConfirmAction::Discard,
     ];
 
-    fn index(self) -> usize {
+    const fn index(self) -> usize {
         match self {
             ConfirmAction::Edit => 0,
             ConfirmAction::Confirm => 1,
@@ -8695,7 +8700,7 @@ impl ConfirmAction {
     }
 }
 
-fn enter_confirm_mode(overlay: &mut NullOrDieOverlayData) {
+const fn enter_confirm_mode(overlay: &mut NullOrDieOverlayData) {
     if overlay.confirm_selection.is_some() {
         return;
     }
@@ -8709,7 +8714,7 @@ fn enter_confirm_mode(overlay: &mut NullOrDieOverlayData) {
     clear_sync_song_hold(overlay);
 }
 
-fn exit_confirm_mode(overlay: &mut NullOrDieOverlayData) {
+const fn exit_confirm_mode(overlay: &mut NullOrDieOverlayData) {
     overlay.confirm_selection = None;
     clear_sync_song_hold(overlay);
 }
@@ -9065,7 +9070,7 @@ fn selected_pack_sync_paths(state: &State, target_pack_key: &str) -> Vec<PathBuf
                 pack_key: entry_pack_key,
                 ..
             } => {
-                current_pack_key = Some(entry_pack_key.as_deref().unwrap_or(name.as_ref()));
+                current_pack_key = Some(entry_pack_key.as_deref().unwrap_or_else(|| name.as_ref()));
             }
             MusicWheelEntry::Song(song) if current_pack_key == Some(target_pack_key) => {
                 paths.push(song.simfile_path.clone());
@@ -9384,7 +9389,7 @@ fn show_sync_pack_overlay(state: &mut State) {
         return;
     };
     let pack_name = name.to_string();
-    let pack_key = pack_key.as_deref().unwrap_or(name.as_ref());
+    let pack_key = pack_key.as_deref().unwrap_or_else(|| name.as_ref());
     let simfile_paths = selected_pack_sync_paths(state, pack_key);
     if simfile_paths.is_empty() {
         return;
@@ -10116,7 +10121,7 @@ fn perform_pad_profile_save(state: &mut State) {
             state,
             crate::SimplyLoveHardwareRequest::RenameSmxPadConfig {
                 profile_id: profile_id.clone(),
-                serial: serial.clone(),
+                serial: serial,
                 old_name: old.clone(),
                 new_name: name.clone(),
                 set_default: draft.set_default,
@@ -10143,7 +10148,7 @@ fn perform_pad_profile_save(state: &mut State) {
                     pad,
                     applied: AppliedPadConfig {
                         preset: false,
-                        name: name.clone(),
+                        name: name,
                     },
                 });
             }
@@ -10245,7 +10250,7 @@ fn perform_pad_profile_delete(state: &mut State) {
             state,
             crate::SimplyLoveHardwareRequest::DeleteSmxPadConfig {
                 profile_id: profile_id.clone(),
-                name: name.clone(),
+                name: name,
             },
         );
         // It may have been this pad's active/default config; re-resolve so the
@@ -11160,7 +11165,7 @@ fn keymap_has_player_input(km: &Keymap, key: &RawKeyboardEvent) -> bool {
 }
 
 #[inline(always)]
-fn take_song_search_ignored_text(state: &mut State) -> bool {
+const fn take_song_search_ignored_text(state: &mut State) -> bool {
     if !state.song_search_ignore_next_text {
         return false;
     }
@@ -12545,7 +12550,9 @@ pub fn prime_displayed_chart_data(state: &mut State) {
         .map(|chart_ix| DisplayedChart { song, chart_ix });
 }
 
-pub fn take_pending_replay(state: &mut State) -> Option<select_music_menu::ReplayStartPayload> {
+pub const fn take_pending_replay(
+    state: &mut State,
+) -> Option<select_music_menu::ReplayStartPayload> {
     state.pending_replay.take()
 }
 
@@ -12642,7 +12649,7 @@ fn allow_gs_fetch_for_selection(state: &State) -> bool {
 }
 
 #[inline(always)]
-fn delayed_selection_updates_blocked(state: &State) -> bool {
+const fn delayed_selection_updates_blocked(state: &State) -> bool {
     state.song_delete_prompt.is_some()
         || state.select_music_menu.is_visible()
         || !matches!(
@@ -13168,7 +13175,7 @@ fn push_folder_stats_overlay(
 }
 
 #[inline(always)]
-fn solo_runtime_side(
+const fn solo_runtime_side(
     play_style: profile_data::PlayStyle,
     session_side: profile_data::PlayerSide,
 ) -> profile_data::PlayerSide {
@@ -18033,7 +18040,7 @@ mod tests {
     fn lobby_song_key_preserves_normalized_selection_identity() {
         let song = test_lobby_song_info("Songs/Pack/Song");
         let key = super::LobbySongKey::new(&song);
-        let mut equivalent = song.clone();
+        let mut equivalent = song;
         equivalent.song_path = " /Songs\\Pack//Song/ ".to_string();
 
         assert!(key.matches(&equivalent));
@@ -18052,7 +18059,7 @@ mod tests {
             connection: lobby_data::ConnectionState::Connected,
             joined_lobby: Some(test_joined_lobby(
                 vec![test_lobby_player("ScreenSelectMusic")],
-                Some(song_info.clone()),
+                Some(song_info),
             )),
             ..Default::default()
         });
@@ -20671,7 +20678,7 @@ mod tests {
                 test_lobby_player("ScreenSelectMusic"),
                 test_lobby_player("ScreenGameplay"),
             ],
-            Some(song.clone()),
+            Some(song),
         );
 
         assert_eq!(select_music_lobby_lock_text_for(&joined, 1, None), None);
@@ -20687,7 +20694,7 @@ mod tests {
         });
         let joined = test_joined_lobby(
             vec![test_lobby_player("ScreenSelectMusic"), remote],
-            Some(song.clone()),
+            Some(song),
         );
 
         assert_eq!(
@@ -20704,7 +20711,7 @@ mod tests {
                 test_lobby_player("ScreenSelectMusic"),
                 test_lobby_player("ScreenPlayerOptions"),
             ],
-            Some(song.clone()),
+            Some(song),
         );
 
         assert_eq!(select_music_lobby_lock_text_for(&joined, 1, None), None);

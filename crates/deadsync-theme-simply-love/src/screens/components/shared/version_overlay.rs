@@ -51,7 +51,7 @@ fn version_text(version: &'static str, build_hash: Option<&'static str>) -> Arc<
 /// problems behind a wall of noise, so we surface them on-screen the
 /// same way we surface the build version.
 #[inline]
-fn log_warning_text(level: LogLevel) -> Option<&'static str> {
+const fn log_warning_text(level: LogLevel) -> Option<&'static str> {
     match level {
         LogLevel::Debug => Some("log: debug"),
         LogLevel::Trace => Some("log: trace"),

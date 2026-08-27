@@ -143,7 +143,7 @@ pub struct NoteDisplayMetrics {
     pub part_texture_translate: [NotePartTextureTranslate; NOTE_ANIM_PART_COUNT],
 }
 
-pub fn clamped_hold_let_go_gray_percent(metrics: &NoteDisplayMetrics) -> f32 {
+pub const fn clamped_hold_let_go_gray_percent(metrics: &NoteDisplayMetrics) -> f32 {
     metrics.hold_let_go_gray_percent.clamp(0.0, 1.0)
 }
 

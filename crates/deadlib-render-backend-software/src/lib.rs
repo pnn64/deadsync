@@ -539,7 +539,7 @@ impl<T: TextureLookup + Sync> TextureLookup for ResolvedTextures<'_, T> {
 }
 
 #[inline(always)]
-fn effective_sampler(texture: &Texture, handle: TextureHandle) -> SamplerDesc {
+const fn effective_sampler(texture: &Texture, handle: TextureHandle) -> SamplerDesc {
     if render_target_uses_nearest(handle) {
         SamplerDesc {
             filter: SamplerFilter::Nearest,
@@ -1338,7 +1338,7 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     state.projection = ortho_for_window(width, height);
 }
 
-pub fn set_default_projection(state: &mut State, projection: Matrix4) {
+pub const fn set_default_projection(state: &mut State, projection: Matrix4) {
     state.projection = projection;
 }
 
@@ -1365,12 +1365,12 @@ fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
 }
 
 #[inline(always)]
-fn clamp01(x: f32) -> f32 {
+const fn clamp01(x: f32) -> f32 {
     x.clamp(0.0, 1.0)
 }
 
 #[inline(always)]
-fn pack_rgba(c: [f32; 4]) -> u32 {
+const fn pack_rgba(c: [f32; 4]) -> u32 {
     let r = clamp01(c[0]).mul_add(255.0, 0.5) as u32;
     let g = clamp01(c[1]).mul_add(255.0, 0.5) as u32;
     let b = clamp01(c[2]).mul_add(255.0, 0.5) as u32;
@@ -1450,7 +1450,7 @@ impl ScreenRows {
     }
 
     #[inline(always)]
-    fn overlaps(self, start: usize, end: usize) -> bool {
+    const fn overlaps(self, start: usize, end: usize) -> bool {
         self.start < end as u32 && self.end > start as u32
     }
 }
@@ -1531,7 +1531,7 @@ fn prepare_sprite_vertices(
         let ndc_x = clip.x / clip.w;
         let ndc_y = clip.y / clip.w;
 
-        let sx = ((ndc_x + 1.0) * 0.5) * (width as f32);
+        let sx = f32::midpoint(ndc_x, 1.0) * (width as f32);
         let sy = ((1.0 - ndc_y) * 0.5) * (height as f32);
 
         let (u0, v0) = UV_BASE[i];
@@ -1583,7 +1583,7 @@ fn prepare_mesh_triangles(
                 continue 'tri;
             }
             tri[i] = ScreenVertexColor {
-                x: ((ndc_x + 1.0) * 0.5) * width as f32,
+                x: f32::midpoint(ndc_x, 1.0) * width as f32,
                 y: ((1.0 - ndc_y) * 0.5) * height as f32,
                 color: [
                     chunk[i].color[0] * tint[0],
@@ -1738,7 +1738,7 @@ fn project_tmesh_polygon(
             return None;
         }
         projected[i] = ScreenVertexTexColor {
-            x: ((ndc_x + 1.0) * 0.5) * width as f32,
+            x: f32::midpoint(ndc_x, 1.0) * width as f32,
             y: ((1.0 - ndc_y) * 0.5) * height as f32,
             u: vertex.u,
             v: vertex.v,
@@ -1970,7 +1970,7 @@ fn rasterize_mesh_triangles(
                 continue 'tri;
             }
 
-            let sx = ((ndc_x + 1.0) * 0.5) * (width as f32);
+            let sx = f32::midpoint(ndc_x, 1.0) * (width as f32);
             let sy = ((1.0 - ndc_y) * 0.5) * (height as f32);
             tri[i] = ScreenVertexColor {
                 x: sx,
@@ -2812,7 +2812,7 @@ fn triangle_setup_in_rows(
 
 impl RasterSetup {
     #[inline(always)]
-    fn rows(self) -> ScreenRows {
+    const fn rows(self) -> ScreenRows {
         ScreenRows {
             start: self.min_y as u32,
             end: self.max_y as u32 + 1,

@@ -164,7 +164,7 @@ fn lua_skip_ws(source: &str, mut index: usize) -> Option<usize> {
     (index < bytes.len()).then_some(index)
 }
 
-fn lua_ident_byte(byte: u8) -> bool {
+const fn lua_ident_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
 }
 

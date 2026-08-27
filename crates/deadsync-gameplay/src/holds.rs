@@ -355,7 +355,7 @@ pub struct HoldResultStatsState {
     pub rolls_let_go_for_score: u32,
 }
 
-pub fn apply_hold_result_stats_update(
+pub const fn apply_hold_result_stats_update(
     state: &mut HoldResultStatsState,
     update: HoldResultStatsUpdate,
 ) {
@@ -384,7 +384,7 @@ pub struct HoldResolutionPlayerState {
     pub combo: ComboState,
 }
 
-pub fn hold_result_stats_state(player: &PlayerRuntime) -> HoldResultStatsState {
+pub const fn hold_result_stats_state(player: &PlayerRuntime) -> HoldResultStatsState {
     HoldResultStatsState {
         hands_holding_count_for_stats: player.hands_holding_count_for_stats,
         holds_held: player.holds_held,
@@ -396,7 +396,7 @@ pub fn hold_result_stats_state(player: &PlayerRuntime) -> HoldResultStatsState {
     }
 }
 
-pub fn set_hold_result_stats_state(player: &mut PlayerRuntime, stats: HoldResultStatsState) {
+pub const fn set_hold_result_stats_state(player: &mut PlayerRuntime, stats: HoldResultStatsState) {
     player.hands_holding_count_for_stats = stats.hands_holding_count_for_stats;
     player.holds_held = stats.holds_held;
     player.holds_held_for_score = stats.holds_held_for_score;
@@ -406,14 +406,14 @@ pub fn set_hold_result_stats_state(player: &mut PlayerRuntime, stats: HoldResult
     player.rolls_let_go_for_score = stats.rolls_let_go_for_score;
 }
 
-pub fn hold_resolution_player_state(player: &PlayerRuntime) -> HoldResolutionPlayerState {
+pub const fn hold_resolution_player_state(player: &PlayerRuntime) -> HoldResolutionPlayerState {
     HoldResolutionPlayerState {
         stats: hold_result_stats_state(player),
         combo: player_combo_state(player),
     }
 }
 
-pub fn set_hold_resolution_player_state(
+pub const fn set_hold_resolution_player_state(
     player: &mut PlayerRuntime,
     state: HoldResolutionPlayerState,
 ) {
@@ -421,7 +421,7 @@ pub fn set_hold_resolution_player_state(
     write_player_combo_state(player, state.combo);
 }
 
-pub fn apply_hold_resolution_player_state(
+pub const fn apply_hold_resolution_player_state(
     player: &mut PlayerRuntime,
     state: HoldResolutionPlayerState,
 ) {
@@ -950,7 +950,7 @@ pub const fn hold_resolution_updates_grade_totals(
     }
 }
 
-pub fn started_active_hold_state(
+pub const fn started_active_hold_state(
     hold: Option<&mut HoldData>,
     note_index: usize,
     note_type: NoteType,
@@ -1493,7 +1493,7 @@ pub fn turn_seed_for_song(song: &SongData) -> u64 {
 
 impl TurnRng {
     #[inline(always)]
-    pub fn new(seed: u64) -> Self {
+    pub const fn new(seed: u64) -> Self {
         let seed = if seed == 0 {
             0x9E37_79B9_7F4A_7C15
         } else {
@@ -1503,7 +1503,7 @@ impl TurnRng {
     }
 
     #[inline(always)]
-    pub fn next_u32(&mut self) -> u32 {
+    pub const fn next_u32(&mut self) -> u32 {
         // xorshift64*
         let mut x = self.state;
         x ^= x << 13;
@@ -1519,7 +1519,7 @@ impl TurnRng {
     }
 
     #[inline(always)]
-    pub fn gen_range(&mut self, upper_exclusive: usize) -> usize {
+    pub const fn gen_range(&mut self, upper_exclusive: usize) -> usize {
         if upper_exclusive <= 1 {
             0
         } else {
@@ -1632,7 +1632,7 @@ impl GameplayAutoplayRuntimeState {
     }
 
     #[inline(always)]
-    pub fn new(seed: u64, cursors: [usize; MAX_PLAYERS]) -> Self {
+    pub const fn new(seed: u64, cursors: [usize; MAX_PLAYERS]) -> Self {
         Self::from_rng_and_cursors(TurnRng::new(seed), cursors)
     }
 
@@ -1888,7 +1888,7 @@ pub fn hold_explosion_active(
 }
 
 #[inline(always)]
-pub fn let_go_head_beat(
+pub const fn let_go_head_beat(
     note_beat: f32,
     end_beat: f32,
     last_held_beat: f32,

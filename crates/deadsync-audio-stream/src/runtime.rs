@@ -47,7 +47,7 @@ struct AudioThreadReady {
     played_map: PlayedMapReader,
 }
 
-fn output_format(engine: &AudioEngine) -> OutputFormat {
+const fn output_format(engine: &AudioEngine) -> OutputFormat {
     OutputFormat {
         sample_rate_hz: engine.device_sample_rate,
         channels: engine.device_channels,

@@ -975,7 +975,7 @@ impl RetainedActorFrame {
     }
 
     #[inline(always)]
-    pub(crate) fn id(&self) -> u64 {
+    pub(crate) const fn id(&self) -> u64 {
         self.id
     }
 
@@ -1160,7 +1160,7 @@ impl InlineText {
     }
 
     #[inline(always)]
-    pub fn push_ascii(&mut self, byte: u8) -> bool {
+    pub const fn push_ascii(&mut self, byte: u8) -> bool {
         let index = self.len as usize;
         if !byte.is_ascii() || index == Self::CAPACITY {
             return false;
@@ -1171,7 +1171,7 @@ impl InlineText {
     }
 
     #[inline]
-    pub fn push_u32(&mut self, mut value: u32) -> bool {
+    pub const fn push_u32(&mut self, mut value: u32) -> bool {
         let digits = decimal_digits(value);
         let start = self.len as usize;
         let end = start + digits;
@@ -1235,7 +1235,7 @@ pub struct InlineU16Text {
 
 impl InlineU16Text {
     #[inline(always)]
-    pub fn new(mut value: u16) -> Self {
+    pub const fn new(mut value: u16) -> Self {
         let original = value;
         let mut bytes = [0; 5];
         let mut start = bytes.len();
@@ -1277,7 +1277,7 @@ impl InlineU32Text {
     pub const CAPACITY: usize = 10;
 
     #[inline(always)]
-    pub fn new(mut value: u32) -> Self {
+    pub const fn new(mut value: u32) -> Self {
         let mut bytes = [0; Self::CAPACITY];
         let mut start = bytes.len();
         loop {
@@ -1308,12 +1308,12 @@ impl TextContent {
     }
 
     #[inline(always)]
-    pub fn inline_u16(value: u16) -> Self {
+    pub const fn inline_u16(value: u16) -> Self {
         Self::InlineU16(InlineU16Text::new(value))
     }
 
     #[inline(always)]
-    pub fn prewarmed_u16(value: u16, domain: u8) -> Self {
+    pub const fn prewarmed_u16(value: u16, domain: u8) -> Self {
         Self::PrewarmedU16 {
             text: InlineU16Text::new(value),
             domain,
@@ -1321,12 +1321,12 @@ impl TextContent {
     }
 
     #[inline(always)]
-    pub fn inline_u32(value: u32) -> Self {
+    pub const fn inline_u32(value: u32) -> Self {
         Self::InlineU32(InlineU32Text::new(value))
     }
 
     #[inline(always)]
-    pub fn prepared_u32(value: u32, slot: u8) -> Self {
+    pub const fn prepared_u32(value: u32, slot: u8) -> Self {
         Self::PreparedU32 {
             text: InlineU32Text::new(value),
             slot,

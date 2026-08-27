@@ -154,8 +154,8 @@ impl App {
 
         if let Some(state) = &mut self.state.screens.gameplay_state {
             let was_dirty = state.background_path_dirty;
-            state.current_background_path = path.clone();
-            state.current_background_key = path_key.clone();
+            state.current_background_path.clone_from(&path);
+            state.current_background_key.clone_from(&path_key);
             state.background_allow_video = allow_video;
             state.background_path_dirty = was_dirty;
             state.background_texture_key = texture_key.clone();

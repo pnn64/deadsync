@@ -144,7 +144,7 @@ pub fn push_overlay_sample_eases(
     }
 }
 
-pub fn apply_multitap_field_state(
+pub const fn apply_multitap_field_state(
     state: &mut SongLuaOverlayState,
     context: &SongLuaCompileContext,
     player: usize,
@@ -820,7 +820,7 @@ const MULTITAP_QTZN_HORSE: [MultitapColorPair; 8] = [
     multitap_pair(0xebe6ad, 0xedb032),
 ];
 
-fn multitap_qtzn_tex(qtzn: u8) -> usize {
+const fn multitap_qtzn_tex(qtzn: u8) -> usize {
     match qtzn {
         2 => 1,
         3 => 2,

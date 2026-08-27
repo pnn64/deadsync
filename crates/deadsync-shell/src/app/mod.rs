@@ -492,7 +492,7 @@ const fn screen_entry_runtime_views(screen: CurrentScreen) -> u8 {
 
 #[cfg(feature = "bench-support")]
 #[inline(always)]
-pub fn benchmark_smx_screen_work(
+pub const fn benchmark_smx_screen_work(
     screen: CurrentScreen,
     fsr_active: bool,
     options_lights_active: bool,
@@ -692,7 +692,9 @@ fn evaluation_context_view(
     }
 }
 
-fn scorebox_pane_filter(config: &config::Config) -> deadsync_score::SelectMusicScoreboxFilter {
+const fn scorebox_pane_filter(
+    config: &config::Config,
+) -> deadsync_score::SelectMusicScoreboxFilter {
     deadsync_score::SelectMusicScoreboxFilter {
         itg: config.select_music_scorebox_cycle_itg,
         ex: config.select_music_scorebox_cycle_ex,
@@ -1014,7 +1016,7 @@ fn noteskin_catalog_view() -> NoteskinCatalogView {
     }
 }
 
-fn bookkeeping_view(bookkeeping: crate::coin::Bookkeeping) -> BookkeepingView {
+const fn bookkeeping_view(bookkeeping: crate::coin::Bookkeeping) -> BookkeepingView {
     BookkeepingView {
         coins_inserted: bookkeeping.coins_inserted,
         credits_spent: bookkeeping.credits_spent,
@@ -1092,7 +1094,7 @@ impl ScreensState {
 
         let app_paths = app_paths_view();
         let init_songs_root = app_paths.songs.path.clone();
-        let init_courses_root = app_paths.courses.path.clone();
+        let init_courses_root = app_paths.courses.path;
         let mut options_state = options::init(options_init_view(audio_options, bookkeeping));
         options_state.active_color_index = color_index;
 
@@ -1760,7 +1762,7 @@ impl App {
         );
     }
 
-    fn mark_screen_entry_runtime_dirty(&mut self, target: CurrentScreen) {
+    const fn mark_screen_entry_runtime_dirty(&mut self, target: CurrentScreen) {
         let views = screen_entry_runtime_views(target);
         if views & EVALUATION_RUNTIME_VIEWS != 0 {
             self.mark_evaluation_runtime_dirty();
@@ -1946,7 +1948,7 @@ impl App {
     }
 
     #[inline(always)]
-    fn accepts_live_input(&self) -> bool {
+    const fn accepts_live_input(&self) -> bool {
         config::foreground_input_active(
             self.state.shell.frame_loop.window_focused(),
             self.state.shell.frame_loop.surface_active(),
@@ -2536,7 +2538,7 @@ impl App {
         let profile_dirty = self.select_course_profile_rebuild || profile_snapshot_changed;
         self.select_course_profile_rebuild = false;
         if self.select_course_settings_rebuild || profile_dirty {
-            let context = Self::select_course_context(policy.context, &profile_snapshot);
+            let context = Self::select_course_context(policy.context, profile_snapshot);
             select_course::sync_context(&mut self.state.screens.select_course_state, context);
         }
         self.select_course_settings_rebuild = false;
@@ -2546,7 +2548,7 @@ impl App {
             || self
                 .select_course_runtime_key
                 .as_ref()
-                .is_none_or(|key| !key.matches(source, &profile_snapshot, policy.wheel));
+                .is_none_or(|key| !key.matches(source, profile_snapshot, policy.wheel));
         let (music_wheel, score) = if runtime_dirty {
             let profile_view = &profile_snapshot.scorebox;
             let music_wheel = Self::prepare_music_wheel_runtime(
@@ -2560,7 +2562,7 @@ impl App {
             );
             self.select_course_runtime_key = Some(SelectCourseRuntimeKey::new(
                 source,
-                &profile_snapshot,
+                profile_snapshot,
                 policy.wheel,
             ));
             (Some(music_wheel), Some(score))
@@ -2568,7 +2570,7 @@ impl App {
             (None, None)
         };
         self.select_course_runtime_rebuild = false;
-        let players = profile_dirty.then(|| Self::select_course_players(&profile_snapshot));
+        let players = profile_dirty.then(|| Self::select_course_players(profile_snapshot));
         if players.is_none() && music_wheel.is_none() {
             return;
         }
@@ -2630,7 +2632,7 @@ impl App {
         view
     }
 
-    fn sync_light_input(&mut self, ev: &InputEvent) {
+    const fn sync_light_input(&mut self, ev: &InputEvent) {
         match light_input_route(ev.action, ev.pressed) {
             LightInputRoute::Pad {
                 player,
@@ -2662,11 +2664,14 @@ impl App {
                 .map(|state| &state.gameplay),
             _ => None,
         };
-        gameplay_state.map_or([HideFlags::default(); 2], |state| {
-            hide_flags_for_profiles(std::array::from_fn(|player| {
-                state.profiles()[player].hide_light_type
-            }))
-        })
+        gameplay_state.map_or_else(
+            || [HideFlags::default(); 2],
+            |state| {
+                hide_flags_for_profiles(std::array::from_fn(|player| {
+                    state.profiles()[player].hide_light_type
+                }))
+            },
+        )
     }
 
     fn sync_gameplay_light_blinks(
@@ -3313,7 +3318,7 @@ impl App {
                     self.state
                         .coin
                         .premium_seconds_left(coin_options, redraw_started)
-                        .unwrap_or(coin_options.premium_free_seconds())
+                        .unwrap_or_else(|| coin_options.premium_free_seconds())
                 });
                 debug_assert!(self.theme_effect_scratch.is_empty());
                 self.state.screens.step_idle(
@@ -6016,7 +6021,7 @@ impl App {
                 &mut self.asset_manager,
                 backend,
                 join_side,
-                joined_profile.avatar_path.clone(),
+                joined_profile.avatar_path,
             );
         }
 
@@ -6092,7 +6097,7 @@ impl App {
             )
             .cloned();
         state.current_background_key = path.as_deref().map(deadsync_assets::media_path_key);
-        state.current_background_path = path.clone();
+        state.current_background_path.clone_from(&path);
         state.background_allow_video = show_video_backgrounds;
         state.background_path_dirty = false;
         path
@@ -9120,7 +9125,7 @@ impl App {
                 self.state
                     .coin
                     .premium_seconds_left(coin_options, Instant::now())
-                    .unwrap_or(coin_options.premium_free_seconds())
+                    .unwrap_or_else(|| coin_options.premium_free_seconds())
             });
             select_music::sync_premium_free_countdown(
                 &mut self.state.screens.select_music_state,
@@ -10206,14 +10211,11 @@ mod tests {
             course_type: deadsync_theme_simply_love::views::CourseTypeView::Nonstop,
             lives: -1,
             song_stub: song_a.clone(),
-            stages: vec![
-                test_course_stage(song_a.clone()),
-                test_course_stage(song_b.clone()),
-            ],
+            stages: vec![test_course_stage(song_a.clone()), test_course_stage(song_b)],
             course_display_totals,
             next_stage_index: 1,
             stage_summaries: vec![stage_stats::StageSummary {
-                song: song_a.clone(),
+                song: song_a,
                 music_rate: 1.0,
                 duration_seconds: 60.0,
                 players: stage_players,
@@ -10308,13 +10310,8 @@ mod tests {
             evaluation::init_from_score_info(first, 60.0, test_evaluation_context(&config));
 
         let mut second = std::array::from_fn(|_| None);
-        let mut second_p2 = test_score_info(
-            song.clone(),
-            side,
-            "stage-b",
-            ScrollSpeedSetting::default(),
-            1.0,
-        );
+        let mut second_p2 =
+            test_score_info(song, side, "stage-b", ScrollSpeedSetting::default(), 1.0);
         second_p2.column_judgments = vec![
             evaluation::ColumnJudgments {
                 w0: 4,

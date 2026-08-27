@@ -431,7 +431,7 @@ fn compare_count(section: &'static str, expected: usize, actual: usize) -> Compa
     compare_value(section, 0, "count", expected, actual)
 }
 
-fn difference<T>(
+const fn difference<T>(
     section: &'static str,
     index: usize,
     field: &'static str,

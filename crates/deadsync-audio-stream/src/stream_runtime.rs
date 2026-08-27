@@ -34,7 +34,7 @@ pub struct MusicStreamRuntime {
 }
 
 impl MusicStreamRuntime {
-    pub fn new(writer: MusicBlockWriter, output: OutputFormat) -> Self {
+    pub const fn new(writer: MusicBlockWriter, output: OutputFormat) -> Self {
         Self {
             music_stream: None,
             writer: Some(writer),

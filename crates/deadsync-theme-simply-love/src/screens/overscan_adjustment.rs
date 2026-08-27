@@ -89,7 +89,7 @@ pub fn on_enter(state: &mut State, view: OverscanAdjustmentView) {
     apply_preview(values);
 }
 
-pub fn update(_state: &mut State, _dt: f32) {}
+pub const fn update(_state: &mut State, _dt: f32) {}
 
 /// Raw keyboard handling for the per-field key bindings. Returns `true`
 /// when the key was consumed so it does not also fire as a virtual menu action

@@ -29,11 +29,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 // --- Colors ---
-fn col_music_wheel_box() -> [f32; 4] {
+const fn col_music_wheel_box() -> [f32; 4] {
     const C: [f32; 4] = color::rgba_hex("#0a141b");
     C
 }
-fn col_pack_header_box() -> [f32; 4] {
+const fn col_pack_header_box() -> [f32; 4] {
     const C: [f32; 4] = color::rgba_hex("#4c565d");
     C
 }
@@ -331,18 +331,18 @@ const fn col_quint_lamp() -> [f32; 4] {
     // zmod quint color: color("1,0.2,0.406,1")
     [1.0, 0.2, 0.406, 1.0]
 }
-fn col_clear_lamp() -> [f32; 4] {
+const fn col_clear_lamp() -> [f32; 4] {
     // zmod clear lamp
     const C: [f32; 4] = color::rgba_hex("#0000CC");
     C
 }
-fn col_fail_lamp() -> [f32; 4] {
+const fn col_fail_lamp() -> [f32; 4] {
     // zmod fail lamp
     const C: [f32; 4] = color::rgba_hex("#990000");
     C
 }
 
-fn lamp_judge_count_color(lamp_index: u8) -> [f32; 4] {
+const fn lamp_judge_count_color(lamp_index: u8) -> [f32; 4] {
     // zmod uses SL.JudgmentColors["FA+"][lamp+1] for the single-digit overlay.
     match lamp_index {
         1 => color::JUDGMENT_FA_PLUS_WHITE_RGBA,
@@ -354,7 +354,7 @@ fn lamp_judge_count_color(lamp_index: u8) -> [f32; 4] {
 }
 
 #[inline(always)]
-fn digit_text(digit: u8) -> &'static str {
+const fn digit_text(digit: u8) -> &'static str {
     const DIGITS: [&str; 10] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
     DIGITS[digit as usize]
 }
@@ -414,7 +414,7 @@ fn cached_str_ref(text: &str) -> Arc<str> {
     cached_shared_str(&STR_REF_CACHE, text, STR_REF_CACHE_LIMIT)
 }
 
-fn song_pack_sync_style(pref: SyncPref, default: DefaultSyncOffset) -> DefaultSyncOffset {
+const fn song_pack_sync_style(pref: SyncPref, default: DefaultSyncOffset) -> DefaultSyncOffset {
     DefaultSyncOffset::from_sync_pref(resolve_sync_pref(pref, default.sync_pref()))
 }
 
@@ -488,7 +488,7 @@ pub(crate) const fn itl_fetch_flags(
 }
 
 #[inline(always)]
-fn itl_rank_color(rank: u32, is_double_style: bool) -> [f32; 4] {
+const fn itl_rank_color(rank: u32, is_double_style: bool) -> [f32; 4] {
     let [t1, t2, t3, t4, t5] = if is_double_style {
         [5, 20, 40, 50, 55]
     } else {
@@ -954,7 +954,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                                 .is_some_and(|expanded| expanded == name.as_ref())
                         } else {
                             p.expanded_pack_name.is_some_and(|expanded| {
-                                expanded == pack_key.as_deref().unwrap_or(name.as_ref())
+                                expanded == pack_key.as_deref().unwrap_or_else(|| name.as_ref())
                             })
                         };
                         let alpha = if active { 0.5 } else { 0.1 };
@@ -2181,7 +2181,7 @@ mod tests {
             &paths,
         ));
 
-        let mut changed = paths.clone();
+        let mut changed = paths;
         changed[0] = PathBuf::from("different.png");
         assert!(!visible_song_select_bg_paths_match(
             &entries,

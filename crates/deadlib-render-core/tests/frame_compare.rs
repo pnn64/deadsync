@@ -54,7 +54,7 @@ fn render_fixture() -> RenderFrame {
     }
 }
 
-fn sprite_instance() -> SpriteInstanceRaw {
+const fn sprite_instance() -> SpriteInstanceRaw {
     SpriteInstanceRaw {
         center: [0.0, 0.0, 0.0, 1.0],
         size: [1.0, 1.0],

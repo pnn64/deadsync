@@ -473,7 +473,7 @@ impl Backend {
         }
     }
 
-    pub fn texture_is_yuv420(texture: &Texture) -> bool {
+    pub const fn texture_is_yuv420(texture: &Texture) -> bool {
         match texture {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             Texture::Vulkan(texture) => vulkan::texture_is_yuv420(texture),

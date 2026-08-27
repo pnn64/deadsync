@@ -353,7 +353,7 @@ pub fn parse_chart_attack_windows(raw: &str) -> Vec<ChartAttackWindow> {
 }
 
 #[inline(always)]
-pub fn random_attack_seed(base_seed: u64, player: usize, attacks_len: usize) -> u64 {
+pub const fn random_attack_seed(base_seed: u64, player: usize, attacks_len: usize) -> u64 {
     base_seed
         ^ (0xC2B2_AE3D_27D4_EB4F_u64.wrapping_mul(player as u64 + 1))
         ^ (attacks_len as u64).wrapping_mul(0x9E37_79B9_u64)
@@ -1299,7 +1299,7 @@ pub type SongLuaRuntimeBuildOutput<OverlayActor, CapturedActor, StateDelta> = (
     SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta>,
 );
 
-pub fn build_song_lua_runtime_visuals<OverlayActor, CapturedActor, StateDelta>(
+pub const fn build_song_lua_runtime_visuals<OverlayActor, CapturedActor, StateDelta>(
     overlays: Vec<OverlayActor>,
     overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime<StateDelta>>,
     overlay_ease_ranges: Vec<std::ops::Range<usize>>,
@@ -1786,7 +1786,7 @@ fn append_song_lua_ease_targets_key(
         );
     };
 
-    if let Some(col) = mod_column_suffix(&key, "bumpy") {
+    if let Some(col) = mod_column_suffix(key, "bumpy") {
         push(
             SongLuaEaseMaskTarget::VisualBumpyColumn(col),
             pct_from,
@@ -1794,7 +1794,7 @@ fn append_song_lua_ease_targets_key(
         );
         return true;
     }
-    if let Some(col) = mod_column_suffix(&key, "tiny") {
+    if let Some(col) = mod_column_suffix(key, "tiny") {
         push(
             SongLuaEaseMaskTarget::VisualTinyColumn(col),
             pct_from,
@@ -1802,7 +1802,7 @@ fn append_song_lua_ease_targets_key(
         );
         return true;
     }
-    if let Some(col) = mod_column_suffix(&key, "movex") {
+    if let Some(col) = mod_column_suffix(key, "movex") {
         push(
             SongLuaEaseMaskTarget::VisualMoveXColumn(col),
             pct_from,
@@ -1810,7 +1810,7 @@ fn append_song_lua_ease_targets_key(
         );
         return true;
     }
-    if let Some(col) = mod_column_suffix(&key, "movey") {
+    if let Some(col) = mod_column_suffix(key, "movey") {
         push(
             SongLuaEaseMaskTarget::VisualMoveYColumn(col),
             pct_from,
@@ -1818,7 +1818,7 @@ fn append_song_lua_ease_targets_key(
         );
         return true;
     }
-    if let Some(col) = mod_column_suffix(&key, "confusionoffset") {
+    if let Some(col) = mod_column_suffix(key, "confusionoffset") {
         push(
             SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col),
             pct_from,
@@ -2293,7 +2293,7 @@ impl SongLuaPlayerTransformValues {
     }
 }
 
-pub fn song_lua_apply_player_transform_target(
+pub const fn song_lua_apply_player_transform_target(
     target: SongLuaEaseMaskTarget,
     value: f32,
     player: &mut SongLuaPlayerTransformValues,
@@ -2994,7 +2994,7 @@ fn chart_attack_row_range_values(
 }
 
 #[inline(always)]
-pub fn chart_attack_turn_seed(base_seed: u64, player: usize, window_index: usize) -> u64 {
+pub const fn chart_attack_turn_seed(base_seed: u64, player: usize, window_index: usize) -> u64 {
     base_seed
         ^ (0x9E37_79B9_u64.wrapping_mul(player as u64 + 1))
         ^ ((window_index as u64).wrapping_mul(0xA5A5_5A5A_u64))
@@ -4039,7 +4039,7 @@ pub struct AttackActiveTargets {
 }
 
 #[inline(always)]
-fn mark_active_target(targets: &mut Option<f32>, value: Option<f32>) {
+const fn mark_active_target(targets: &mut Option<f32>, value: Option<f32>) {
     if value.is_some() {
         *targets = Some(0.0);
     }
@@ -4085,7 +4085,7 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.random_speed, visual.random_speed);
 }
 
-fn mark_scroll_targets(targets: &mut ScrollOverrides, scroll: ScrollOverrides) {
+const fn mark_scroll_targets(targets: &mut ScrollOverrides, scroll: ScrollOverrides) {
     mark_active_target(&mut targets.reverse, scroll.reverse);
     mark_active_target(&mut targets.split, scroll.split);
     mark_active_target(&mut targets.alternate, scroll.alternate);
@@ -4138,7 +4138,7 @@ fn collect_active_attack_targets_selected(
 }
 
 #[inline(always)]
-pub fn persisted_target_allowed(
+pub const fn persisted_target_allowed(
     persisted: bool,
     active_clear_all: bool,
     active_target: Option<f32>,
@@ -4147,7 +4147,7 @@ pub fn persisted_target_allowed(
 }
 
 #[inline(always)]
-pub fn persisted_mini_allowed(persisted: bool, active_targets: AttackActiveTargets) -> bool {
+pub const fn persisted_mini_allowed(persisted: bool, active_targets: AttackActiveTargets) -> bool {
     !persisted || (!active_targets.clear_all && !active_targets.mini_percent)
 }
 
@@ -4664,7 +4664,7 @@ fn attack_window_active(window: &AttackMaskWindow, now: f32) -> bool {
 }
 
 #[inline(always)]
-fn attack_window_expiry(window: &AttackMaskWindow) -> f32 {
+const fn attack_window_expiry(window: &AttackMaskWindow) -> f32 {
     if window.persist_after_end {
         window.sustain_end_second
     } else {
@@ -4678,7 +4678,7 @@ fn ease_window_active(window: &SongLuaEaseMaskWindow, now: f32) -> bool {
 }
 
 #[inline(always)]
-fn ease_window_expiry(window: &SongLuaEaseMaskWindow) -> f32 {
+const fn ease_window_expiry(window: &SongLuaEaseMaskWindow) -> f32 {
     window.sustain_end_second
 }
 
@@ -5026,7 +5026,7 @@ pub fn refresh_active_attack_player(
 }
 
 #[inline(always)]
-fn appearance_bits_eq(left: AppearanceEffects, right: AppearanceEffects) -> bool {
+const fn appearance_bits_eq(left: AppearanceEffects, right: AppearanceEffects) -> bool {
     left.hidden.to_bits() == right.hidden.to_bits()
         && left.hidden_offset.to_bits() == right.hidden_offset.to_bits()
         && left.sudden.to_bits() == right.sudden.to_bits()
@@ -5251,7 +5251,7 @@ fn refresh_active_attack_player_full(
     }
 }
 
-fn apply_active_visual_target(
+const fn apply_active_visual_target(
     value: &mut Option<f32>,
     speed: &mut Option<f32>,
     incoming: Option<f32>,
@@ -5506,7 +5506,7 @@ fn apply_active_visual_window(
     );
 }
 
-fn apply_active_scroll_target(
+const fn apply_active_scroll_target(
     value: &mut Option<f32>,
     speed: &mut Option<f32>,
     incoming: Option<f32>,
@@ -5523,7 +5523,7 @@ fn apply_active_scroll_target(
     }
 }
 
-fn apply_active_scroll_window(
+const fn apply_active_scroll_window(
     values: &mut ActiveAttackMaskValues,
     window: &AttackMaskWindow,
     active_targets: AttackActiveTargets,
@@ -5748,7 +5748,7 @@ fn parse_attack_level_token(token: &str) -> (Option<f32>, &str) {
 }
 
 #[inline(always)]
-fn set_approached_mod(
+const fn set_approached_mod(
     value: &mut Option<f32>,
     value_speed: &mut Option<f32>,
     target: Option<f32>,

@@ -511,7 +511,7 @@ where
     if num_players == 1 {
         timing_players[1] = timing_players[0].clone();
     }
-    let replay_offsets = replay_offsets.unwrap_or(ReplayOffsetSnapshot {
+    let replay_offsets = replay_offsets.unwrap_or_else(|| ReplayOffsetSnapshot {
         beat0_time_ns: timing_players[0].get_time_for_beat_ns(0.0),
     });
     let replay_beat0_times = std::array::from_fn(|player| {

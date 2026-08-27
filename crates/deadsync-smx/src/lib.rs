@@ -356,7 +356,7 @@ impl SmxPadType {
 
 /// Whether a pad's config describes an FSR pad (vs a load-cell pad), matching the
 /// official tool: master version >= 4 with the FSR flag set.
-pub fn is_fsr(config: &SmxConfig) -> bool {
+pub const fn is_fsr(config: &SmxConfig) -> bool {
     config.master_version >= 4
         && ConfigFlags::from_bits_truncate(config.flags).contains(ConfigFlags::FSR)
 }
@@ -446,7 +446,7 @@ pub fn pad_sensor_type(pad: usize) -> Option<SmxPadType> {
 /// (`0x0F`) for odd panels; sensor `s` is bit `base + s`. Shared by the config
 /// encode/decode here and the live per-sensor edits in the input backend, so the
 /// firmware bit layout has a single source of truth.
-pub fn enabled_bit(panel: usize, sensor: usize) -> (usize, u8) {
+pub const fn enabled_bit(panel: usize, sensor: usize) -> (usize, u8) {
     let byte = panel / 2;
     let base = if panel.is_multiple_of(2) { 4 } else { 0 };
     (byte, 1u8 << (base + sensor))
@@ -628,7 +628,7 @@ struct PresetThresholds {
     fsr_high_center: u8,
 }
 
-fn preset_thresholds(preset: SmxPadPreset) -> PresetThresholds {
+const fn preset_thresholds(preset: SmxPadPreset) -> PresetThresholds {
     match preset {
         SmxPadPreset::Low => PresetThresholds {
             load_cell_low: 70,
@@ -765,13 +765,13 @@ pub fn serial_prefix(serial: &str) -> String {
 /// Pure: do two pads' jumpers conflict? Both connected and reporting the same
 /// P1/P2 jumper, so the SDK can't order them by jumper alone and the user must
 /// assign them manually.
-fn jumpers_conflict(a: &SmxInfo, b: &SmxInfo) -> bool {
+const fn jumpers_conflict(a: &SmxInfo, b: &SmxInfo) -> bool {
     a.connected && b.connected && a.is_player2 == b.is_player2
 }
 
 /// Pure: is a same-jumper conflict still unresolved? True when the jumpers
 /// conflict and the saved assignment does not pin both player sides.
-fn conflict_unresolved(jumpers_conflict: bool, p1_assigned: bool, p2_assigned: bool) -> bool {
+const fn conflict_unresolved(jumpers_conflict: bool, p1_assigned: bool, p2_assigned: bool) -> bool {
     jumpers_conflict && (!p1_assigned || !p2_assigned)
 }
 
@@ -941,7 +941,7 @@ impl PlayerOptionsLightPreview {
     }
 
     #[cfg(test)]
-    fn phase(&self) -> f32 {
+    const fn phase(&self) -> f32 {
         self.phase
     }
 }
@@ -1014,7 +1014,7 @@ pub const CONFLICT_WARNING_RGB: [f32; 3] = [1.0, 0.78, 0.2];
 
 /// Pure: indicator colour for a slot. P1 (slot 0) blue, P2 (slot 1) red, white
 /// when the assignment is ambiguous, `None` for an empty slot.
-fn indicator_color(connected: bool, ambiguous: bool, slot: usize) -> Option<[u8; 3]> {
+const fn indicator_color(connected: bool, ambiguous: bool, slot: usize) -> Option<[u8; 3]> {
     if !connected {
         None
     } else if ambiguous {
@@ -1048,7 +1048,7 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
             // Cache the stable device UUID + serial for the input/disconnect
             // handlers and friendly trigger labels.
             *shared.uuid[pad].lock().unwrap() = uuid_from_bytes(info.serial.as_bytes());
-            *shared.serial[pad].lock().unwrap() = info.serial.clone();
+            (*shared.serial[pad].lock().unwrap()).clone_from(&info.serial);
 
             log::info!(
                 "SMX: pad {pad} connected (P{} slot, jumper P{}, fw {}, serial {}, has_serial={})",
@@ -1174,7 +1174,7 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
 // NOTE: this can collide with indices assigned by the native gamepad backends
 // if other pads are connected at the same time; a shared id allocator across
 // backends would be needed to fully disambiguate.
-fn pad_device_id(pad: usize) -> PadId {
+const fn pad_device_id(pad: usize) -> PadId {
     PadId(pad as u32)
 }
 

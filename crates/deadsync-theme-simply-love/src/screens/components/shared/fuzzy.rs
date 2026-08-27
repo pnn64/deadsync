@@ -89,7 +89,7 @@ pub struct Query {
 
 impl Query {
     #[inline(always)]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.chars.is_empty()
     }
 

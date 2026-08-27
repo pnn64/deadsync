@@ -163,7 +163,7 @@ pub const ZMOD_DISPLAY_DIFFICULTY_NAMES: [&str; 5] =
     ["Beginner", "Easy", "Medium", "Hard", "Expert"];
 
 #[inline(always)]
-fn contains_ascii_ci(haystack: &str, needle: &[u8]) -> bool {
+const fn contains_ascii_ci(haystack: &str, needle: &[u8]) -> bool {
     if needle.is_empty() {
         return true;
     }
@@ -609,22 +609,22 @@ const fn wrap(n: usize, i: i32) -> usize {
 }
 
 #[inline(always)]
-pub fn decorative_rgba(idx: i32) -> [f32; 4] {
+pub const fn decorative_rgba(idx: i32) -> [f32; 4] {
     DECORATIVE_RGBA[wrap(DECORATIVE_RGBA.len(), idx)]
 }
 
 #[inline(always)]
-pub fn srpg9_rgba(idx: i32) -> [f32; 4] {
+pub const fn srpg9_rgba(idx: i32) -> [f32; 4] {
     SRPG9_RGBA[wrap(SRPG9_RGBA.len(), idx)]
 }
 
 #[inline(always)]
-pub fn srpg10_rgba(idx: i32) -> [f32; 4] {
+pub const fn srpg10_rgba(idx: i32) -> [f32; 4] {
     SRPG10_RGBA[wrap(SRPG10_RGBA.len(), idx)]
 }
 
 #[inline(always)]
-pub fn simply_love_rgba(idx: i32) -> [f32; 4] {
+pub const fn simply_love_rgba(idx: i32) -> [f32; 4] {
     SIMPLY_LOVE_RGBA[wrap(SIMPLY_LOVE_RGBA.len(), idx)]
 }
 
@@ -636,7 +636,7 @@ pub fn lighten_rgba(c: [f32; 4]) -> [f32; 4] {
 
 /// Menu selected color rule: “current `SIMPLY_LOVE` minus 2”
 #[inline(always)]
-pub fn menu_selected_rgba(active_idx: i32) -> [f32; 4] {
+pub const fn menu_selected_rgba(active_idx: i32) -> [f32; 4] {
     simply_love_rgba(active_idx - 2)
 }
 

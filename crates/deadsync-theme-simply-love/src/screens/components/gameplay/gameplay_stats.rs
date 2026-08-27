@@ -163,7 +163,7 @@ static LIVE_TIMING_LABELS: LazyLock<[Arc<str>; 3]> = LazyLock::new(|| {
 });
 
 #[inline(always)]
-fn gameplay_font_key(state: &State, role: FontRole) -> &'static str {
+const fn gameplay_font_key(state: &State, role: FontRole) -> &'static str {
     machine_font_key(state.machine_font(), role)
 }
 
@@ -596,8 +596,10 @@ fn density_life_edge_feather(
     {
         return 0.5;
     }
-    let pixel_scale =
-        (pixel_width as f32 / logical_width + pixel_height as f32 / logical_height) * 0.5;
+    let pixel_scale = f32::midpoint(
+        pixel_width as f32 / logical_width,
+        pixel_height as f32 / logical_height,
+    );
     pixel_scale.recip() * 0.5
 }
 
@@ -925,12 +927,12 @@ fn blue_window_label(ms: i32) -> Arc<str> {
 }
 
 #[inline(always)]
-fn standard_row_disabled(disabled_windows: [bool; 5], row: usize) -> bool {
+const fn standard_row_disabled(disabled_windows: [bool; 5], row: usize) -> bool {
     row < 5 && disabled_windows[row]
 }
 
 #[inline(always)]
-fn split_row_disabled(disabled_windows: [bool; 5], row: usize) -> bool {
+const fn split_row_disabled(disabled_windows: [bool; 5], row: usize) -> bool {
     match row {
         0 | 1 => disabled_windows[0],
         2 => disabled_windows[1],
@@ -1041,7 +1043,7 @@ fn live_timing_pair_text_in_slot(recent_ms: f32, all_ms: f32, slot: usize) -> Te
 }
 
 #[inline(always)]
-fn live_timing_stat_mask(index: usize) -> profile_data::LiveTimingStatsMask {
+const fn live_timing_stat_mask(index: usize) -> profile_data::LiveTimingStatsMask {
     match index {
         0 => profile_data::LiveTimingStatsMask::MEAN,
         1 => profile_data::LiveTimingStatsMask::MEAN_ABS,
@@ -1670,7 +1672,7 @@ pub struct GameplayHudMemoBenchmark {
 
 #[cfg(feature = "bench-support")]
 impl GameplayHudMemoBenchmark {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             old_count: FixedTextCache::new(),
             new_count: SlotTextCache::new(),

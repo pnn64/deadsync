@@ -93,27 +93,25 @@ pub fn initial_texture_decode_jobs(
     graphic_roots: impl Fn(&str) -> Vec<PathBuf>,
     resolve_asset_path: impl Fn(&str) -> PathBuf,
 ) -> Vec<TextureDecodeJob> {
-    let mut textures: Vec<(String, String)> = texture_assets
+    let textures = texture_assets
         .into_iter()
         .map(|asset| (asset.key.to_string(), asset.path.to_string()))
-        .collect();
-    textures.extend(noteskin_png_texture_entries(
-        noteskin_roots,
-        "noteskins",
-        canonical_key,
-    ));
-    for spec in graphic_folders {
-        for texture in discover_graphic_textures_in_roots(
-            spec.folder,
-            graphic_roots(spec.folder),
-            spec.love_first,
-            spec.require_multiframe_hint,
-        ) {
-            textures.push((texture.key, texture.source_path));
-        }
-    }
+        .chain(noteskin_png_texture_entries(
+            noteskin_roots,
+            "noteskins",
+            canonical_key,
+        ))
+        .chain(graphic_folders.iter().flat_map(|spec| {
+            discover_graphic_textures_in_roots(
+                spec.folder,
+                graphic_roots(spec.folder),
+                spec.love_first,
+                spec.require_multiframe_hint,
+            )
+            .into_iter()
+            .map(|texture| (texture.key, texture.source_path))
+        }));
     textures
-        .into_iter()
         .map(|(key, relative_path)| TextureDecodeJob {
             key,
             path: initial_texture_source_path(&relative_path, &resolve_asset_path),

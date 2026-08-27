@@ -119,7 +119,7 @@ pub fn select_row_final_judgment<'a>(chosen: &mut Option<&'a Judgment>, candidat
 }
 
 #[inline(always)]
-pub fn add_window_counts(lhs: WindowCounts, rhs: WindowCounts) -> WindowCounts {
+pub const fn add_window_counts(lhs: WindowCounts, rhs: WindowCounts) -> WindowCounts {
     WindowCounts {
         w0: lhs.w0.saturating_add(rhs.w0),
         w1: lhs.w1.saturating_add(rhs.w1),
@@ -170,7 +170,7 @@ pub const CHECKPOINT_SCORE_MISS: i32 = -8;
 
 const GRADE_POINTS_BY_IX: [i32; JUDGE_GRADE_COUNT] = [5, 4, 2, 0, -6, -12];
 
-pub fn calculate_itg_grade_points_from_counts(
+pub const fn calculate_itg_grade_points_from_counts(
     scoring_counts: &JudgeCounts,
     holds_held_for_score: u32,
     rolls_held_for_score: u32,
@@ -188,7 +188,7 @@ pub fn calculate_itg_grade_points_from_counts(
     total
 }
 
-pub fn itg_grade_points_with_checkpoints(
+pub const fn itg_grade_points_with_checkpoints(
     scoring_counts: &JudgeCounts,
     holds_held_for_score: u32,
     rolls_held_for_score: u32,
@@ -315,7 +315,7 @@ pub fn score_missed_holds_and_rolls(chart_type: &str) -> bool {
 }
 
 #[inline(always)]
-pub fn scored_hold_totals_with_carry(
+pub const fn scored_hold_totals_with_carry(
     held: u32,
     let_go: u32,
     carry_held: u32,
@@ -515,7 +515,7 @@ fn compute_ex_score_counts(
 }
 
 #[inline(always)]
-fn window_counts_total_taps(counts: WindowCounts) -> u32 {
+const fn window_counts_total_taps(counts: WindowCounts) -> u32 {
     counts
         .w0
         .saturating_add(counts.w1)

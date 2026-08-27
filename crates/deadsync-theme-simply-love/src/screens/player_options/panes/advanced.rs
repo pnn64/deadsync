@@ -798,7 +798,7 @@ fn fa_plus_bits_from_profile(p: &PlayerOptionsData) -> u32 {
 /// Project the full FA+ mask onto every fan-out profile field. Both FA+
 /// rows share the same projection — they only differ in which slice of
 /// `FaPlusMask` they own at toggle time.
-fn project_fa_plus(
+const fn project_fa_plus(
     _m: &mut PlayerOptionMasks,
     p: &mut PlayerOptionsData,
     _b: u32,

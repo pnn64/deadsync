@@ -110,7 +110,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -221,7 +221,7 @@ fn legacy_first_beat(
     };
     let mut first = low;
     for _ in 0..24 {
-        let mid = (low + high) * 0.5;
+        let mid = f32::midpoint(low, high);
         let too_many_notes = high_count.is_some_and(|high| {
             high.notes_upper
                 .saturating_sub(note_count_at(stats, mid).notes_lower)
@@ -488,7 +488,7 @@ fn cmod_cue_search_benchmark() {
     print_change(&old, &new);
 }
 
-fn range_checksum(ranges: &deadsync_notefield::performance::CueSegmentRanges) -> u64 {
+const fn range_checksum(ranges: &deadsync_notefield::performance::CueSegmentRanges) -> u64 {
     ranges.scrolls.start as u64
         ^ (ranges.scrolls.end as u64).rotate_left(7)
         ^ (ranges.bpms.start as u64).rotate_left(13)

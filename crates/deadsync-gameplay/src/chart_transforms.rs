@@ -619,7 +619,7 @@ pub fn apply_mines_insert_reference(
 }
 
 #[inline(always)]
-pub fn stomp_mirror_track(local_track: usize, cols: usize) -> usize {
+pub const fn stomp_mirror_track(local_track: usize, cols: usize) -> usize {
     match cols {
         4 => [3, 2, 1, 0][local_track],
         8 => [1, 0, 3, 2, 5, 4, 7, 6][local_track],
@@ -635,7 +635,7 @@ struct IntelligentRowSummary {
 
 impl IntelligentRowSummary {
     #[inline(always)]
-    fn single_endpoint(self) -> bool {
+    const fn single_endpoint(self) -> bool {
         self.nonempty.count_ones() == 1 && self.tap_or_hold.count_ones() == 1
     }
 

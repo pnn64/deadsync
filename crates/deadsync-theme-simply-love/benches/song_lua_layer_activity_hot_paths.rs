@@ -93,7 +93,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -216,7 +216,7 @@ fn run(title: &str, iterations: usize, times: FrameTimes, starts: Vec<f32>) {
     let mut new = SongLuaLayerActivityBenchmark::new(starts, f32::NEG_INFINITY);
     let new_bytes = new.retained_bytes();
     let mut new_times = FrameTimes {
-        values: old_times.values.clone(),
+        values: old_times.values,
         cursor: 0,
     };
     let new_result = measure(iterations, || active_checksum(new.sync(new_times.next())));

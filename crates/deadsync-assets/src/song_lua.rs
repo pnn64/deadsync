@@ -98,7 +98,7 @@ fn model_layer_from_slot_frame(
     ))
 }
 
-fn song_lua_model_draw(draw: deadsync_noteskin::ModelDrawState) -> SongLuaOverlayModelDraw {
+const fn song_lua_model_draw(draw: deadsync_noteskin::ModelDrawState) -> SongLuaOverlayModelDraw {
     SongLuaOverlayModelDraw::new(
         draw.pos,
         draw.rot,

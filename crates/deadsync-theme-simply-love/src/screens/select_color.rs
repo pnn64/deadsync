@@ -104,7 +104,7 @@ pub struct State {
     runtime: SelectFlowRuntimeView,
 }
 
-pub fn init(runtime: SelectFlowRuntimeView) -> State {
+pub const fn init(runtime: SelectFlowRuntimeView) -> State {
     let active_color_index = runtime.color_index;
     let scroll = active_color_index as f32;
     State {
@@ -387,7 +387,7 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
 }
 
 #[inline(always)]
-fn select_color_tint(color_index: i32, srpg10: bool) -> [f32; 4] {
+const fn select_color_tint(color_index: i32, srpg10: bool) -> [f32; 4] {
     if srpg10 {
         color::srpg10_rgba(color_index)
     } else {

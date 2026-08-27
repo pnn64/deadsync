@@ -421,7 +421,7 @@ pub(super) fn sync_pack_options(state: &State) -> (Vec<String>, Vec<Option<Strin
     installed_pack_options(state, &tr("OptionsSyncPack", "AllPacks"))
 }
 
-pub(super) fn score_import_profile_eligible(
+pub(super) const fn score_import_profile_eligible(
     endpoint: score_data::ScoreImportEndpoint,
     profile_cfg: &crate::SimplyLoveScoreImportProfile,
 ) -> bool {

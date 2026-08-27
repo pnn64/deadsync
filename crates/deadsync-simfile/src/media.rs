@@ -442,7 +442,7 @@ fn parse_ini_sections_legacy(text: &str) -> HashMap<String, Vec<(String, String)
             continue;
         }
         if line.starts_with('[') && line.ends_with(']') {
-            current = line[1..line.len() - 1].trim().to_owned();
+            line[1..line.len() - 1].trim().clone_into(&mut current);
             sections.entry(current.clone()).or_default();
             continue;
         }

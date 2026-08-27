@@ -322,11 +322,11 @@ fn itg_apply_rotation(slot: &mut SpriteSlot, rotation_z: i32) {
     slot.set_rotation_deg(rotation_z);
 }
 
-fn itg_slot_base_zoom(slot: &SpriteSlot) -> f32 {
+const fn itg_slot_base_zoom(slot: &SpriteSlot) -> f32 {
     slot.model_draw.zoom[0]
 }
 
-fn itg_slot_model_info(slot: &SpriteSlot) -> (bool, [f32; 2]) {
+const fn itg_slot_model_info(slot: &SpriteSlot) -> (bool, [f32; 2]) {
     (slot.model.is_some(), slot.uv_velocity)
 }
 

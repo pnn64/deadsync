@@ -142,7 +142,7 @@ pub enum ActionErrorKind {
 }
 
 impl ActionErrorKind {
-    pub fn classify(err: &UpdaterError) -> Self {
+    pub const fn classify(err: &UpdaterError) -> Self {
         match err {
             UpdaterError::Network(_) => Self::Network,
             UpdaterError::RateLimited => Self::RateLimited,
@@ -1050,7 +1050,7 @@ mod tests {
         );
         let name = expected_asset_name(&bumped, target);
         let info = release_with_tag(&bumped, &name);
-        let phase = classify_check_result(UpdateState::Available(info.clone()));
+        let phase = classify_check_result(UpdateState::Available(info));
         if apply_supported_for_host() {
             match phase {
                 ActionPhase::ConfirmDownload { asset, .. } => assert_eq!(asset.name, name),
@@ -1372,7 +1372,7 @@ mod tests {
         let published = set_phase_if_current(
             stale,
             ActionPhase::Ready {
-                info: info.clone(),
+                info: info,
                 path: PathBuf::from("ignored"),
                 sha256: [0u8; 32],
             },

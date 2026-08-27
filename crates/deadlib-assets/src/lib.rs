@@ -114,7 +114,7 @@ fn parse_ascii_digits(bytes: &[u8]) -> Option<u32> {
 }
 
 #[inline(always)]
-fn skip_parenthetical(bytes: &[u8], start: usize) -> usize {
+const fn skip_parenthetical(bytes: &[u8], start: usize) -> usize {
     let mut depth = 0usize;
     let mut idx = start;
     while idx < bytes.len() {
@@ -221,7 +221,7 @@ pub fn texture_source_dims_from_real(texture_key: &str, real_w: u32, real_h: u32
 }
 
 #[inline(always)]
-fn is_res_tag(bytes: &[u8], idx: usize) -> bool {
+const fn is_res_tag(bytes: &[u8], idx: usize) -> bool {
     idx + 4 <= bytes.len()
         && bytes[idx] == b'('
         && bytes[idx + 1].eq_ignore_ascii_case(&b'r')
@@ -277,12 +277,12 @@ pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
 }
 
 #[inline(always)]
-fn is_sprite_sheet_left_boundary(bytes: &[u8], left: usize) -> bool {
+const fn is_sprite_sheet_left_boundary(bytes: &[u8], left: usize) -> bool {
     left > 0 && matches!(bytes[left - 1], b' ' | b'\t' | b'\r' | b'\n' | b'_')
 }
 
 #[inline(always)]
-fn is_sprite_sheet_right_boundary(bytes: &[u8], right: usize) -> bool {
+const fn is_sprite_sheet_right_boundary(bytes: &[u8], right: usize) -> bool {
     right == bytes.len()
         || matches!(
             bytes[right],

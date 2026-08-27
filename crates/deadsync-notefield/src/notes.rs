@@ -614,7 +614,7 @@ pub(crate) fn scroll_travel<'a>(request: ScrollTravelRequest<'a>) -> ScrollTrave
 
 impl ScrollTravel<'_> {
     #[inline(always)]
-    pub(crate) fn supports_sparse_measure_line_candidates(
+    pub(crate) const fn supports_sparse_measure_line_candidates(
         &self,
         displayed_beat_monotonic: bool,
     ) -> bool {
@@ -886,7 +886,7 @@ impl ScrollTravel<'_> {
             .map(|(first, last)| (first, last.max(first)))
     }
 
-    pub fn arrow_effect_time_s(&self) -> f32 {
+    pub const fn arrow_effect_time_s(&self) -> f32 {
         self.request.arrow_effect_time_s
     }
 }
@@ -980,12 +980,10 @@ pub(crate) fn lane_hold_window_bounds_by_note_row<I: Copy + Into<usize>>(
     let low = low.max(0);
     while start > 0 {
         let prev_note_index = indices[start - 1].into();
-        let prev_end_row = notes[prev_note_index]
-            .hold
-            .as_ref()
-            .map_or(note_itg_row(&notes[prev_note_index]), |hold| {
-                beat_to_note_row(hold.end_beat)
-            });
+        let prev_end_row = notes[prev_note_index].hold.as_ref().map_or_else(
+            || note_itg_row(&notes[prev_note_index]),
+            |hold| beat_to_note_row(hold.end_beat),
+        );
         if prev_end_row < low {
             break;
         }
@@ -1007,12 +1005,10 @@ pub(crate) fn lane_hold_window_bounds_by_note_row_from_cursor<I: Copy + Into<usi
     let low = low.max(0);
     while start > 0 {
         let prev_note_index = indices[start - 1].into();
-        let prev_end_row = notes[prev_note_index]
-            .hold
-            .as_ref()
-            .map_or(note_itg_row(&notes[prev_note_index]), |hold| {
-                beat_to_note_row(hold.end_beat)
-            });
+        let prev_end_row = notes[prev_note_index].hold.as_ref().map_or_else(
+            || note_itg_row(&notes[prev_note_index]),
+            |hold| beat_to_note_row(hold.end_beat),
+        );
         if prev_end_row < low {
             break;
         }
@@ -1184,7 +1180,7 @@ fn find_first_displayed_beat_inner<F: FnMut(f32) -> f32>(
     let mut low = if stats.is_empty() { high - 4.0 } else { 0.0 };
     let mut first = low;
     for _ in 0..24 {
-        let mid = (low + high) * 0.5;
+        let mid = f32::midpoint(low, high);
         if y_for_beat(mid) < -draw_distance || note_count_cutoff.is_some_and(|cutoff| mid < cutoff)
         {
             first = mid;

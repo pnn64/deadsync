@@ -82,7 +82,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             frees: self.frees - before.frees,
@@ -91,7 +91,7 @@ impl AllocSnapshot {
         }
     }
 
-    fn churn(self) -> u64 {
+    const fn churn(self) -> u64 {
         self.alloc_bytes + self.free_bytes
     }
 }
@@ -336,7 +336,7 @@ fn print_dispatch(label: &str, samples: &[DispatchSample]) {
     );
 }
 
-fn percentile<T: Copy>(sorted: &[T], percentile: usize) -> T {
+const fn percentile<T: Copy>(sorted: &[T], percentile: usize) -> T {
     sorted[(sorted.len() - 1) * percentile / 100]
 }
 

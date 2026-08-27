@@ -63,7 +63,7 @@ pub fn parse_hex32(hex: &str) -> Option<[u8; 32]> {
 }
 
 #[inline]
-fn decode_nibble(c: u8) -> Option<u8> {
+const fn decode_nibble(c: u8) -> Option<u8> {
     match c {
         b'0'..=b'9' => Some(c - b'0'),
         b'a'..=b'f' => Some(c - b'a' + 10),
@@ -678,7 +678,7 @@ mod tests {
         let payload = b"hello world".to_vec();
         let mut wrong = sha256_of(&payload);
         wrong[0] ^= 0xff;
-        let mut reader = std::io::Cursor::new(payload.clone());
+        let mut reader = std::io::Cursor::new(payload);
         let err = stream_to_file(&mut reader, &staging, &wrong, None, &mut |_, _| {}, &|| {
             false
         })

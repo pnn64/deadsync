@@ -217,7 +217,7 @@ struct MusicBackpressureCounters {
 
 #[cfg(feature = "test-support")]
 impl MusicBackpressureCounters {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             waits: AtomicU64::new(0),
             transition_pushes: AtomicU64::new(0),
@@ -282,7 +282,7 @@ struct DecoderWake {
 }
 
 impl DecoderWake {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             sequence: AtomicU64::new(0),
             thread: OnceLock::new(),
@@ -769,7 +769,7 @@ fn secs_to_frames(seconds: f64, sample_rate: u32) -> u64 {
 }
 
 #[inline]
-fn seek_preroll_in_frames(seek_ok: bool, start_frame: u64, seek_start_frame: u64) -> u64 {
+const fn seek_preroll_in_frames(seek_ok: bool, start_frame: u64, seek_start_frame: u64) -> u64 {
     if seek_ok {
         start_frame.saturating_sub(seek_start_frame)
     } else {

@@ -74,7 +74,7 @@ impl RecordsPaneKind {
     }
 
     #[inline(always)]
-    fn logo(self) -> &'static str {
+    const fn logo(self) -> &'static str {
         match self {
             Self::ItlEx => "ITL.png",
             Self::Srpg => srpg_logo_texture_key(SrpgVariant::CURRENT),
@@ -140,7 +140,7 @@ struct RecordsRow {
 }
 
 impl RecordsRow {
-    fn placeholder() -> Self {
+    const fn placeholder() -> Self {
         Self {
             rank: TextContent::static_str(GS_ROW_PLACEHOLDER_RANK),
             name: TextContent::static_str(GS_ROW_PLACEHOLDER_NAME),
@@ -151,7 +151,7 @@ impl RecordsRow {
         }
     }
 
-    fn status(message: &'static str) -> Self {
+    const fn status(message: &'static str) -> Self {
         Self {
             rank: TextContent::static_str(""),
             name: TextContent::static_str(message),
@@ -262,7 +262,7 @@ impl OnlineRecordsPresentation {
     }
 
     #[inline(always)]
-    fn pane(&self, kind: RecordsPaneKind) -> &RecordsPanePresentation {
+    const fn pane(&self, kind: RecordsPaneKind) -> &RecordsPanePresentation {
         &self.panes[kind.index()]
     }
 }

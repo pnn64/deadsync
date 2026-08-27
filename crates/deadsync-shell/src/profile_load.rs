@@ -64,7 +64,7 @@ impl Service {
     }
 }
 
-pub(crate) fn select_course_policy_view(config: &config::Config) -> SelectCoursePolicyView {
+pub(crate) const fn select_course_policy_view(config: &config::Config) -> SelectCoursePolicyView {
     SelectCoursePolicyView {
         show_random_courses: config.show_random_courses,
         show_most_played_courses: config.show_most_played_courses,

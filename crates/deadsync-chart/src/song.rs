@@ -129,7 +129,7 @@ pub struct SongBackgroundChange {
 }
 
 impl SongBackgroundChange {
-    pub fn new(start_beat: f32, target: SongBackgroundChangeTarget) -> Self {
+    pub const fn new(start_beat: f32, target: SongBackgroundChangeTarget) -> Self {
         Self {
             start_beat,
             target,
@@ -281,7 +281,7 @@ impl SongData {
     }
 
     #[inline(always)]
-    pub fn precise_first_second(&self) -> f32 {
+    pub const fn precise_first_second(&self) -> f32 {
         if self.first_second.is_finite() {
             self.first_second
         } else {
@@ -613,7 +613,7 @@ impl SongData {
                     Some(path)
                 } else {
                     self.fallback_background_path(allow_video)
-                        .or(exists.then_some(path))
+                        .or_else(|| exists.then_some(path))
                 }
             }
             Some(SongBackgroundChangeTarget::Animation(_)) => {

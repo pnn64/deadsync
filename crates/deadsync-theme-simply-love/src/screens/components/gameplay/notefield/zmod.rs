@@ -19,7 +19,7 @@ use super::player_blue_window_ms;
 use super::text::zmod_mini_indicator_text_content;
 
 #[inline(always)]
-pub(super) fn zmod_small_combo_font(combo_font: profile_data::ComboFont) -> &'static str {
+pub(super) const fn zmod_small_combo_font(combo_font: profile_data::ComboFont) -> &'static str {
     match combo_font {
         profile_data::ComboFont::Wendy | profile_data::ComboFont::WendyCursed => "wendy",
         profile_data::ComboFont::ArialRounded => "combo_arial_rounded",
@@ -33,7 +33,9 @@ pub(super) fn zmod_small_combo_font(combo_font: profile_data::ComboFont) -> &'st
 }
 
 #[inline(always)]
-pub(super) fn zmod_combo_font_name(combo_font: profile_data::ComboFont) -> Option<&'static str> {
+pub(super) const fn zmod_combo_font_name(
+    combo_font: profile_data::ComboFont,
+) -> Option<&'static str> {
     match combo_font {
         profile_data::ComboFont::Wendy => Some("wendy_combo"),
         profile_data::ComboFont::ArialRounded => Some("combo_arial_rounded"),
@@ -66,7 +68,7 @@ fn zmod_combo_quint_active(
 }
 
 #[inline(always)]
-fn zmod_combo_color_style(colors: profile_data::ComboColors) -> ZmodComboColorStyle {
+const fn zmod_combo_color_style(colors: profile_data::ComboColors) -> ZmodComboColorStyle {
     match colors {
         profile_data::ComboColors::None => ZmodComboColorStyle::None,
         profile_data::ComboColors::Rainbow => ZmodComboColorStyle::Rainbow,
@@ -291,7 +293,7 @@ pub(crate) fn zmod_target_score_missed(
 }
 
 #[inline(always)]
-fn mini_indicator_score_type(
+const fn mini_indicator_score_type(
     score_type: profile_data::MiniIndicatorScoreType,
 ) -> MiniIndicatorScoreType {
     match score_type {
@@ -302,7 +304,7 @@ fn mini_indicator_score_type(
 }
 
 #[inline(always)]
-fn mini_indicator_mode(mode: profile_data::MiniIndicator) -> MiniIndicatorMode {
+const fn mini_indicator_mode(mode: profile_data::MiniIndicator) -> MiniIndicatorMode {
     match mode {
         profile_data::MiniIndicator::None => MiniIndicatorMode::None,
         profile_data::MiniIndicator::SubtractiveScoring => MiniIndicatorMode::SubtractiveScoring,
@@ -315,7 +317,7 @@ fn mini_indicator_mode(mode: profile_data::MiniIndicator) -> MiniIndicatorMode {
 }
 
 #[inline(always)]
-pub(super) fn zmod_indicator_mode(profile: &profile_data::Profile) -> MiniIndicatorMode {
+pub(super) const fn zmod_indicator_mode(profile: &profile_data::Profile) -> MiniIndicatorMode {
     zmod_resolved_mini_indicator_mode(
         mini_indicator_mode(profile.mini_indicator),
         profile.subtractive_scoring,
@@ -336,7 +338,9 @@ fn mini_indicator_output_if_enabled<T>(
 }
 
 #[inline(always)]
-fn mini_indicator_color_style(style: profile_data::MiniIndicatorColor) -> MiniIndicatorColorStyle {
+const fn mini_indicator_color_style(
+    style: profile_data::MiniIndicatorColor,
+) -> MiniIndicatorColorStyle {
     match style {
         profile_data::MiniIndicatorColor::Default => MiniIndicatorColorStyle::Default,
         profile_data::MiniIndicatorColor::Detailed => MiniIndicatorColorStyle::Detailed,
@@ -345,7 +349,7 @@ fn mini_indicator_color_style(style: profile_data::MiniIndicatorColor) -> MiniIn
 }
 
 #[inline(always)]
-fn mini_indicator_subtractive_display(
+const fn mini_indicator_subtractive_display(
     display: profile_data::MiniIndicatorSubtractiveDisplay,
 ) -> MiniIndicatorSubtractiveDisplay {
     match display {
@@ -359,7 +363,7 @@ fn mini_indicator_subtractive_display(
 }
 
 #[inline(always)]
-pub(super) fn zmod_mini_indicator_zoom(size: profile_data::MiniIndicatorSize) -> f32 {
+pub(super) const fn zmod_mini_indicator_zoom(size: profile_data::MiniIndicatorSize) -> f32 {
     let size = match size {
         profile_data::MiniIndicatorSize::Default => MiniIndicatorSize::Default,
         profile_data::MiniIndicatorSize::Large => MiniIndicatorSize::Large,

@@ -1080,14 +1080,14 @@ fn find_function_end(content: &str, mut cursor: usize) -> Option<usize> {
     None
 }
 
-fn token_boundary(bytes: &[u8], start: usize, len: usize) -> bool {
+const fn token_boundary(bytes: &[u8], start: usize, len: usize) -> bool {
     let prev_ok = start == 0 || !is_lua_ident(bytes[start - 1]);
     let end = start + len;
     let next_ok = end >= bytes.len() || !is_lua_ident(bytes[end]);
     prev_ok && next_ok
 }
 
-fn is_lua_ident(b: u8) -> bool {
+const fn is_lua_ident(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
@@ -1476,7 +1476,7 @@ fn find_matching(content: &str, open_idx: usize, open: char, close: char) -> Opt
     None
 }
 
-fn skip_ws(content: &str, mut idx: usize) -> usize {
+const fn skip_ws(content: &str, mut idx: usize) -> usize {
     let bytes = content.as_bytes();
     while idx < bytes.len() && bytes[idx].is_ascii_whitespace() {
         idx += 1;

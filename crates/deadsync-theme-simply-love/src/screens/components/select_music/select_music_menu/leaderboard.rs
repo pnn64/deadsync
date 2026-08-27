@@ -153,7 +153,7 @@ fn apply_leaderboard_side_snapshot(
                     && pane.disabled == disabled
                     && pane.personalized == personalized
             })
-            .unwrap_or(side.pane_index.min(panes.len().saturating_sub(1)));
+            .unwrap_or_else(|| side.pane_index.min(panes.len().saturating_sub(1)));
     } else {
         side.pane_index = 0;
     }
@@ -286,7 +286,7 @@ pub fn update_leaderboard_overlay(state: &mut LeaderboardOverlayState, dt: f32) 
 }
 
 #[inline(always)]
-fn leaderboard_shift(side: &mut LeaderboardSideState, delta: isize) -> bool {
+const fn leaderboard_shift(side: &mut LeaderboardSideState, delta: isize) -> bool {
     if side.loading || side.error_text.is_some() || side.panes.len() <= 1 {
         return false;
     }
@@ -374,7 +374,7 @@ pub fn build_leaderboard_overlay(
     };
     let show_date = joined_count <= 1;
     let pane_cy = screen_center_y() + GS_LEADERBOARD_PANE_CENTER_Y;
-    let row_center = (GS_LEADERBOARD_NUM_ENTRIES as f32 + 1.0) * 0.5;
+    let row_center = f32::midpoint(GS_LEADERBOARD_NUM_ENTRIES as f32, 1.0);
 
     actors.push(act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):

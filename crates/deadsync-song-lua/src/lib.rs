@@ -433,7 +433,7 @@ pub fn song_lua_style_column_x(style_name: &str, column_index: usize) -> f32 {
 }
 
 #[inline(always)]
-pub fn song_lua_style_column_name(column_index: usize) -> &'static str {
+pub const fn song_lua_style_column_name(column_index: usize) -> &'static str {
     SONG_LUA_COLUMN_NAMES[column_index % SONG_LUA_COLUMN_NAMES.len()]
 }
 
@@ -478,7 +478,7 @@ impl SongLuaDifficulty {
     }
 
     #[inline(always)]
-    pub fn from_chart_name(difficulty: &str) -> Self {
+    pub const fn from_chart_name(difficulty: &str) -> Self {
         if difficulty.eq_ignore_ascii_case("beginner") {
             Self::Beginner
         } else if difficulty.eq_ignore_ascii_case("easy")
@@ -555,7 +555,7 @@ impl Default for SongLuaSpeedMod {
     }
 }
 
-pub fn song_lua_speedmod_parts(speedmod: SongLuaSpeedMod) -> (&'static str, f32) {
+pub const fn song_lua_speedmod_parts(speedmod: SongLuaSpeedMod) -> (&'static str, f32) {
     match speedmod {
         SongLuaSpeedMod::X(value) => ("X", value),
         SongLuaSpeedMod::C(value) => ("C", value),
@@ -653,7 +653,7 @@ pub fn song_lua_human_player_count(context: &SongLuaCompileContext) -> usize {
         .count()
 }
 
-pub fn graph_display_body_size(human_player_count: usize) -> [f32; 2] {
+pub const fn graph_display_body_size(human_player_count: usize) -> [f32; 2] {
     [
         if human_player_count == 1 {
             610.0
@@ -823,7 +823,7 @@ fn theme_explicit_line_metric(group: &str, row: &str) -> Option<&'static str> {
     None
 }
 
-fn theme_line_names(group: &str) -> Option<&'static str> {
+const fn theme_line_names(group: &str) -> Option<&'static str> {
     if group.eq_ignore_ascii_case("ScreenPlayerOptions") {
         Some(SONG_LUA_SCREEN_PLAYER_OPTIONS_LINE_NAMES)
     } else if group.eq_ignore_ascii_case("ScreenPlayerOptions2") {
@@ -1044,7 +1044,7 @@ pub fn theme_has_string(section: &str, name: &str) -> bool {
         || matches!(name, "Yes" | "No" | "Cancel")
 }
 
-pub fn song_lua_arch_name() -> &'static str {
+pub const fn song_lua_arch_name() -> &'static str {
     if cfg!(target_os = "windows") {
         "Windows"
     } else if cfg!(target_os = "macos") {
@@ -1139,27 +1139,27 @@ pub struct SongLuaNoteskinResolver {
     pub names: SongLuaNoteskinNamesResolver,
 }
 
-fn missing_noteskin_path(_: &str, _: &str, _: &str) -> Option<PathBuf> {
+const fn missing_noteskin_path(_: &str, _: &str, _: &str) -> Option<PathBuf> {
     None
 }
 
-fn missing_noteskin_metric(_: &str, _: &str, _: &str) -> Option<String> {
+const fn missing_noteskin_metric(_: &str, _: &str, _: &str) -> Option<String> {
     None
 }
 
-fn missing_noteskin_metric_f(_: &str, _: &str, _: &str) -> Option<f32> {
+const fn missing_noteskin_metric_f(_: &str, _: &str, _: &str) -> Option<f32> {
     None
 }
 
-fn missing_noteskin_metric_b(_: &str, _: &str, _: &str) -> Option<bool> {
+const fn missing_noteskin_metric_b(_: &str, _: &str, _: &str) -> Option<bool> {
     None
 }
 
-fn missing_noteskin_exists(_: &str) -> bool {
+const fn missing_noteskin_exists(_: &str) -> bool {
     false
 }
 
-fn missing_noteskin_names() -> Vec<String> {
+const fn missing_noteskin_names() -> Vec<String> {
     Vec::new()
 }
 
@@ -1648,7 +1648,7 @@ pub struct SongLuaOverlayModelLayer<Vertex> {
 }
 
 impl<Vertex> SongLuaOverlayModelLayer<Vertex> {
-    pub fn new(
+    pub const fn new(
         texture_key: Arc<str>,
         vertices: Arc<[Vertex]>,
         model_size: [f32; 2],
@@ -1730,7 +1730,7 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
     Quad,
 }
 
-pub fn parse_overlay_blend_mode(raw: &str) -> Option<SongLuaOverlayBlendMode> {
+pub const fn parse_overlay_blend_mode(raw: &str) -> Option<SongLuaOverlayBlendMode> {
     if raw.eq_ignore_ascii_case("add") || raw.eq_ignore_ascii_case("blendmode_add") {
         Some(SongLuaOverlayBlendMode::Add)
     } else if raw.eq_ignore_ascii_case("multiply") || raw.eq_ignore_ascii_case("blendmode_multiply")
@@ -1809,7 +1809,7 @@ pub fn parse_overlay_text_glow_mode(raw: &str) -> Option<SongLuaTextGlowMode> {
     }
 }
 
-pub fn input_status_actor_text(actor_type: &str) -> Option<&'static str> {
+pub const fn input_status_actor_text(actor_type: &str) -> Option<&'static str> {
     if actor_type.eq_ignore_ascii_case("DeviceList") {
         Some("No input devices")
     } else if actor_type.eq_ignore_ascii_case("InputList") {
@@ -1820,7 +1820,7 @@ pub fn input_status_actor_text(actor_type: &str) -> Option<&'static str> {
 }
 
 #[inline(always)]
-pub fn effect_clock_label(clock: EffectClock) -> &'static str {
+pub const fn effect_clock_label(clock: EffectClock) -> &'static str {
     match clock {
         EffectClock::Time => "time",
         EffectClock::Beat => "beat",
@@ -1828,7 +1828,7 @@ pub fn effect_clock_label(clock: EffectClock) -> &'static str {
 }
 
 #[inline(always)]
-pub fn text_glow_mode_label(mode: SongLuaTextGlowMode) -> &'static str {
+pub const fn text_glow_mode_label(mode: SongLuaTextGlowMode) -> &'static str {
     match mode {
         SongLuaTextGlowMode::Inner => "inner",
         SongLuaTextGlowMode::Stroke => "stroke",
@@ -1953,7 +1953,7 @@ pub fn song_lua_text_align_value(value: &mlua::Value) -> Option<TextAlign> {
     read_string(value.clone()).and_then(|raw| parse_overlay_text_align(raw.as_str()))
 }
 
-pub fn overlay_text_align_label(value: TextAlign) -> &'static str {
+pub const fn overlay_text_align_label(value: TextAlign) -> &'static str {
     match value {
         TextAlign::Left => "left",
         TextAlign::Center => "center",
@@ -2079,7 +2079,7 @@ pub fn song_lua_span_end(start: f32, limit: f32, span_mode: SongLuaSpanMode) -> 
     }
 }
 
-pub fn rolling_numbers_format(metric: &str) -> &'static str {
+pub const fn rolling_numbers_format(metric: &str) -> &'static str {
     if metric.eq_ignore_ascii_case("RollingNumbersEvaluationB") {
         "%03.0f"
     } else if metric.eq_ignore_ascii_case("RollingNumbersEvaluationA")
@@ -2283,7 +2283,7 @@ pub fn overlay_state_uses_repeat_sampler(state: &SongLuaOverlayState) -> bool {
         || state.texcoord_velocity.is_some()
 }
 
-pub fn overlay_state_uses_nearest_sampler(state: &SongLuaOverlayState) -> bool {
+pub const fn overlay_state_uses_nearest_sampler(state: &SongLuaOverlayState) -> bool {
     !state.texture_filtering
 }
 
@@ -2506,7 +2506,7 @@ pub fn overlay_state_after_blocks(
     state
 }
 
-fn overlay_state_with_delta(
+const fn overlay_state_with_delta(
     mut state: SongLuaOverlayState,
     delta: &SongLuaOverlayStateDelta,
 ) -> SongLuaOverlayState {
@@ -2514,7 +2514,7 @@ fn overlay_state_with_delta(
     state
 }
 
-fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlayStateDelta) {
+const fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlayStateDelta) {
     if let Some(value) = delta.x {
         state.x = value;
     }
@@ -3067,7 +3067,7 @@ fn overlay_state_lerp(
     from
 }
 
-fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
+const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
     delta.x.is_none()
         && delta.y.is_none()
         && delta.z.is_none()
@@ -3148,7 +3148,7 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.sound_play.is_none()
 }
 
-fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverlayStateDelta) {
+const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverlayStateDelta) {
     if from.x.is_some() {
         into.x = from.x;
     }
@@ -3766,7 +3766,7 @@ pub fn ensure_overlay_arrow_visual<NoteskinSlot, ModelVertex, TextAttr>(
     Ok(())
 }
 
-fn overlay_actor_has_visual<NoteskinSlot, ModelVertex, TextAttribute>(
+const fn overlay_actor_has_visual<NoteskinSlot, ModelVertex, TextAttribute>(
     actor: &SongLuaOverlayActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
 ) -> bool {
     matches!(
@@ -9035,8 +9035,7 @@ return Def.ActorFrame{
             &entry,
             &SongLuaCompileContext::new(&song_dir, "LoadActor Ambiguous Autowildcard"),
         )
-        .unwrap_err()
-        .to_string();
+        .unwrap_err();
         assert!(error.contains("multiple matches"), "{error}");
         assert!(error.contains("overlay 2x2.png"), "{error}");
         assert!(error.contains("overlay 3x4.png"), "{error}");

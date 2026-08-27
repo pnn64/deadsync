@@ -295,7 +295,7 @@ fn memory_summary() -> Option<String> {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn memory_summary() -> Option<String> {
+const fn memory_summary() -> Option<String> {
     None
 }
 

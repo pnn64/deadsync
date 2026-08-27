@@ -38,7 +38,7 @@ pub struct Driver {
 }
 
 impl Driver {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             api: None,
             device: None,
@@ -135,7 +135,7 @@ impl Driver {
     }
 }
 
-fn build_report(state: &State) -> [u8; REPORT_SIZE] {
+const fn build_report(state: &State) -> [u8; REPORT_SIZE] {
     let mut report = [0u8; REPORT_SIZE];
     report[0] = REPORT_ID;
     set(
@@ -217,7 +217,7 @@ fn build_report(state: &State) -> [u8; REPORT_SIZE] {
     report
 }
 
-fn set(report: &mut [u8; REPORT_SIZE], light_index: usize, on: bool) {
+const fn set(report: &mut [u8; REPORT_SIZE], light_index: usize, on: bool) {
     report[light_index + 1] = if on { ON } else { 0 };
 }
 

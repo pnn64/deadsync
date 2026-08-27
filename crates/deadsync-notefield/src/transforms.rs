@@ -100,7 +100,7 @@ pub fn mod_percent_key(level: f32) -> i16 {
     clamp_rounded_i16(level * 100.0)
 }
 
-pub fn clamp_rounded_i16(value: f32) -> i16 {
+pub const fn clamp_rounded_i16(value: f32) -> i16 {
     if !value.is_finite() {
         return 0;
     }

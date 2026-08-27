@@ -45,7 +45,7 @@ pub struct Driver {
 }
 
 impl Driver {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             api: None,
             device: None,
@@ -200,7 +200,7 @@ fn build_report(state: &State) -> [u8; REPORT_SIZE] {
     report
 }
 
-fn set_player(lights: &mut u32, player: Player, state: &State) {
+const fn set_player(lights: &mut u32, player: Player, state: &State) {
     let (up, down, left, right) = match player {
         Player::P1 => (P1_UP, P1_DOWN, P1_LEFT, P1_RIGHT),
         Player::P2 => (P2_UP, P2_DOWN, P2_LEFT, P2_RIGHT),
@@ -211,7 +211,7 @@ fn set_player(lights: &mut u32, player: Player, state: &State) {
     set_bit(lights, right, state.button(player, ButtonLight::Right));
 }
 
-fn set_bit(bits: &mut u32, bit: u8, on: bool) {
+const fn set_bit(bits: &mut u32, bit: u8, on: bool) {
     if on {
         *bits |= 1u32 << bit;
     }

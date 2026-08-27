@@ -451,7 +451,7 @@ struct OnlineItlOverallRankCacheState {
 }
 
 #[inline(always)]
-fn online_itl_overall_rank_entry_for_side(
+const fn online_itl_overall_rank_entry_for_side(
     state: &OnlineItlOverallRankCacheState,
     side_idx: usize,
 ) -> Option<&OnlineItlOverallRankCacheEntry> {
@@ -462,7 +462,7 @@ fn online_itl_overall_rank_entry_for_side(
 }
 
 #[inline(always)]
-fn online_itl_overall_rank_entry_for_side_mut(
+const fn online_itl_overall_rank_entry_for_side_mut(
     state: &mut OnlineItlOverallRankCacheState,
     side_idx: usize,
 ) -> &mut Option<OnlineItlOverallRankCacheEntry> {
@@ -1495,7 +1495,7 @@ pub struct ItlJudgmentCountsInput {
     pub total_rolls: u32,
 }
 
-pub fn itl_judgments_from_counts(input: ItlJudgmentCountsInput) -> ItlJudgments {
+pub const fn itl_judgments_from_counts(input: ItlJudgmentCountsInput) -> ItlJudgments {
     ItlJudgments {
         w0: input.fantastic_plus,
         w1: input.fantastic,
@@ -1843,7 +1843,7 @@ pub fn itl_judgments_better(cur: &ItlJudgments, prev: &ItlJudgments) -> bool {
     false
 }
 
-pub fn itl_clear_type(judgments: &ItlJudgments) -> u8 {
+pub const fn itl_clear_type(judgments: &ItlJudgments) -> u8 {
     if judgments.total_rolls.saturating_sub(judgments.rolls) > 0
         || judgments.total_holds.saturating_sub(judgments.holds) > 0
     {
@@ -1874,7 +1874,7 @@ pub fn itl_clear_type(judgments: &ItlJudgments) -> u8 {
 }
 
 #[inline(always)]
-pub fn itl_score_from_entry(entry: &ItlHashEntry) -> CachedItlScore {
+pub const fn itl_score_from_entry(entry: &ItlHashEntry) -> CachedItlScore {
     CachedItlScore {
         ex_hundredths: entry.ex,
         clear_type: entry.clear_type,

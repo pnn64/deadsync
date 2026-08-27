@@ -51,7 +51,7 @@ mod runtime_regression_tests {
         }
     }
 
-    fn all_tap_explosion_options() -> TapExplosionOptions {
+    const fn all_tap_explosion_options() -> TapExplosionOptions {
         TapExplosionOptions {
             fantastic: true,
             excellent: true,

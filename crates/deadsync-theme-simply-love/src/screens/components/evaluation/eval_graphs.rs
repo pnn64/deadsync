@@ -117,7 +117,7 @@ fn color_for_quant(quantization_idx: u8) -> [f32; 4] {
 }
 
 #[inline(always)]
-fn color_for_foot(parity_foot: ScatterFoot) -> [f32; 4] {
+const fn color_for_foot(parity_foot: ScatterFoot) -> [f32; 4] {
     match parity_foot {
         ScatterFoot::Left => [1.0, 0.0, 0.0, 1.0],
         ScatterFoot::Right => [0.0, 0.0, 1.0, 1.0],
@@ -172,7 +172,7 @@ fn miss_color_for_scatter(
 }
 
 #[inline(always)]
-fn scatter_hit_alpha(scale: ScatterPlotScale) -> f32 {
+const fn scatter_hit_alpha(scale: ScatterPlotScale) -> f32 {
     match scale {
         ScatterPlotScale::Itg | ScatterPlotScale::Ex | ScatterPlotScale::HardEx => 1.0,
         ScatterPlotScale::Arrow | ScatterPlotScale::Quant | ScatterPlotScale::FootParity => 0.666,
@@ -430,7 +430,7 @@ fn hist_worst_observed_bin(histogram: &HistogramMs, worst_bin: i32) -> i32 {
 }
 
 #[inline(always)]
-fn hist_raw_y(bins: &[(i32, u32)], raw_ix: &mut usize, bin: i32) -> f32 {
+const fn hist_raw_y(bins: &[(i32, u32)], raw_ix: &mut usize, bin: i32) -> f32 {
     while *raw_ix < bins.len() && bins[*raw_ix].0 < bin {
         *raw_ix += 1;
     }

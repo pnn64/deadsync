@@ -54,7 +54,7 @@ pub struct State {
     lights_pending: bool,
 }
 
-pub fn init() -> State {
+pub const fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: visual_style_bg::State::new(),
@@ -199,11 +199,11 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn hardware_effect(request: crate::SimplyLoveHardwareRequest) -> ThemeEffect {
+const fn hardware_effect(request: crate::SimplyLoveHardwareRequest) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Hardware(request))
 }
 
-fn sync_view(state: &mut State, view: &SmxAssignmentView) {
+const fn sync_view(state: &mut State, view: &SmxAssignmentView) {
     state.conflict_warning = view.conflict_warning;
     state.conflict_rgb = view.conflict_rgb;
     state.player_rgb = view.player_rgb;

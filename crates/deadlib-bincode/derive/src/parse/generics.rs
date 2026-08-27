@@ -191,12 +191,12 @@ pub enum Generic {
 }
 
 impl Generic {
-    fn is_lifetime(&self) -> bool {
+    const fn is_lifetime(&self) -> bool {
         matches!(self, Generic::Lifetime(_))
     }
 
     /// The ident of this generic
-    pub fn ident(&self) -> &Ident {
+    pub const fn ident(&self) -> &Ident {
         match self {
             Self::Lifetime(lt) => &lt.ident,
             Self::Generic(gen) => &gen.ident,

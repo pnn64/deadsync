@@ -57,7 +57,7 @@ const _: () = {
 
 impl ColumnCueColumns {
     #[inline(always)]
-    pub fn insert(&mut self, column: usize, is_mine: bool) -> bool {
+    pub const fn insert(&mut self, column: usize, is_mine: bool) -> bool {
         if column >= MAX_COLS {
             return false;
         }
@@ -93,7 +93,7 @@ impl ColumnCueColumns {
     }
 
     #[inline(always)]
-    pub fn extend_missing(&mut self, other: Self) {
+    pub const fn extend_missing(&mut self, other: Self) {
         let added = other.lanes & !self.lanes;
         self.lanes |= added;
         self.mines |= other.mines & added;
@@ -113,7 +113,7 @@ impl ColumnCueColumns {
     }
 
     #[inline(always)]
-    pub fn last(self) -> Option<ColumnCueColumn> {
+    pub const fn last(self) -> Option<ColumnCueColumn> {
         if self.is_empty() {
             return None;
         }
@@ -414,7 +414,7 @@ pub type CrossoverAnnotationBuilder =
     fn(&[Note], (usize, usize), &TimingSegments, usize, usize) -> Vec<CrossoverRow>;
 
 #[inline(always)]
-pub fn empty_crossover_annotations(
+pub const fn empty_crossover_annotations(
     _notes: &[Note],
     _note_range: (usize, usize),
     _timing_segments: &TimingSegments,
@@ -463,7 +463,7 @@ pub fn build_crossover_cues_for_player_annotations(
 
 // Lowest matching lane wins so results are deterministic. `pos % 4` keeps this
 // working for the second pad of doubles, not just the left pad.
-pub fn crossover_arrow_col(column_mask: u8, want_outer: bool) -> Option<usize> {
+pub const fn crossover_arrow_col(column_mask: u8, want_outer: bool) -> Option<usize> {
     let mut m = column_mask;
     while m != 0 {
         let c = m.trailing_zeros() as usize;

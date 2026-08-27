@@ -47,7 +47,7 @@ struct MockPad {
 }
 
 impl MockPad {
-    fn new(kind: MockKind) -> Self {
+    const fn new(kind: MockKind) -> Self {
         let press = match kind {
             MockKind::LoadCell => INIT_LOADCELL_PRESS,
             MockKind::Fsr => INIT_FSR_THRESHOLD,
@@ -211,7 +211,7 @@ impl Monitor {
     }
 
     /// The mock has no hardware test mode to toggle.
-    pub fn set_active(&mut self, _active: bool) {}
+    pub const fn set_active(&mut self, _active: bool) {}
 
     /// Mock section for the FSR debug dump, in place of the (dormant) native
     /// SMX section, so the dump matches what the UI shows.

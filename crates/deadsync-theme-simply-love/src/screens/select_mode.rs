@@ -238,12 +238,12 @@ pub fn sync_runtime_view(state: &mut State, runtime: SelectFlowRuntimeView) {
     }
 }
 
-pub fn in_transition() -> (Vec<Actor>, f32) {
+pub const fn in_transition() -> (Vec<Actor>, f32) {
     // Simply Love handles transitions via per-actor OffCommands and a sleep in out.lua.
     (vec![], 0.0)
 }
 
-pub fn out_transition() -> (Vec<Actor>, f32) {
+pub const fn out_transition() -> (Vec<Actor>, f32) {
     // Simply Love handles transitions via per-actor OffCommands and a sleep in out.lua.
     (vec![], 0.0)
 }

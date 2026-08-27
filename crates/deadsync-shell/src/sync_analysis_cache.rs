@@ -41,7 +41,7 @@ pub(crate) struct AnalysisOptions {
 }
 
 impl AnalysisOptions {
-    pub(crate) fn new(cfg: &BiasCfg, confidence_percent: u8) -> Self {
+    pub(crate) const fn new(cfg: &BiasCfg, confidence_percent: u8) -> Self {
         Self {
             revision: ANALYSIS_REVISION,
             fingerprint_ms: cfg.fingerprint_ms.to_bits(),
@@ -195,7 +195,7 @@ impl TargetPreparation {
         self.cached.is_some()
     }
 
-    pub(crate) fn cached_analysis(&self) -> Option<&CachedAnalysis> {
+    pub(crate) const fn cached_analysis(&self) -> Option<&CachedAnalysis> {
         self.cached.as_ref()
     }
 
@@ -216,7 +216,7 @@ pub(crate) struct CompletedTarget {
 }
 
 impl CompletedTarget {
-    pub(crate) fn new(prepared: PreparedTarget, bias_ms: f64, confidence: f64) -> Self {
+    pub(crate) const fn new(prepared: PreparedTarget, bias_ms: f64, confidence: f64) -> Self {
         Self {
             prepared,
             bias_ms,
@@ -225,7 +225,7 @@ impl CompletedTarget {
         }
     }
 
-    pub(crate) fn with_plot(
+    pub(crate) const fn with_plot(
         prepared: PreparedTarget,
         bias_ms: f64,
         confidence: f64,
@@ -541,7 +541,7 @@ fn trim_plots(plots: &mut HashMap<PathBuf, CachedPlotEntry>) {
     }
 }
 
-fn mark_changed(state: &mut CacheState) {
+const fn mark_changed(state: &mut CacheState) {
     state.generation = state.generation.wrapping_add(1);
 }
 

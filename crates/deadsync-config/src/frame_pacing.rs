@@ -315,12 +315,12 @@ impl RedrawRequestState {
     }
 
     #[inline(always)]
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         *self = Self::new();
     }
 
     #[inline(always)]
-    pub fn note_requested(&mut self, now: Instant, reason: &'static str) {
+    pub const fn note_requested(&mut self, now: Instant, reason: &'static str) {
         if self.requested_at.is_none() {
             self.requested_at = Some(now);
             self.reason = reason;
@@ -368,7 +368,7 @@ impl FrameLoopModeTracker {
     }
 
     #[inline(always)]
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         self.last = None;
     }
 
@@ -477,12 +477,12 @@ impl StutterSampleRing {
     }
 
     #[inline(always)]
-    pub fn clear(&mut self) {
+    pub const fn clear(&mut self) {
         *self = Self::new();
     }
 
     #[inline(always)]
-    pub fn push(
+    pub const fn push(
         &mut self,
         at_seconds: f32,
         frame_seconds: f32,
@@ -578,7 +578,7 @@ impl<T: Copy, const N: usize> FixedFrameStatsRing<T, N> {
     }
 
     #[inline(always)]
-    pub fn clear(&mut self) {
+    pub const fn clear(&mut self) {
         self.samples = [self.empty; N];
         self.cursor = 0;
         self.len = 0;

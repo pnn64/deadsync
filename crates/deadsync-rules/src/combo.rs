@@ -30,7 +30,7 @@ pub const fn combo_increments_miss_combo(grade: JudgeGrade) -> bool {
 }
 
 #[inline(always)]
-pub fn clear_full_combo_state(state: &mut ComboState) {
+pub const fn clear_full_combo_state(state: &mut ComboState) {
     state.first_fc_attempt_broken = true;
     state.full_combo_grade = None;
 }

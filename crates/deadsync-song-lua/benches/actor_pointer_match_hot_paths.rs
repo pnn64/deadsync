@@ -77,7 +77,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             calls: self.calls - before.calls,
             frees: self.frees - before.frees,

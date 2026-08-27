@@ -104,7 +104,7 @@ fn measure_new() -> (Vec<f64>, u64) {
     (samples, checksum)
 }
 
-fn percentile(sorted: &[f64], percent: usize) -> f64 {
+const fn percentile(sorted: &[f64], percent: usize) -> f64 {
     sorted[(sorted.len() - 1) * percent / 100]
 }
 

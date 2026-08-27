@@ -246,7 +246,7 @@ impl BitmaskBinding {
     /// uniformly pattern-match on `Some` so future additions remain
     /// backward-compatible.
     #[inline]
-    pub fn init(&self) -> Option<&BitmaskInit> {
+    pub const fn init(&self) -> Option<&BitmaskInit> {
         match self {
             BitmaskBinding::Generic { init, .. } => Some(init),
         }
@@ -355,7 +355,7 @@ impl BitMapping {
     /// drop bits, and "row has fewer choices than the mask exposes"
     /// cannot silently leave bits unreachable.
     #[inline]
-    pub fn required_choices(self) -> usize {
+    pub const fn required_choices(self) -> usize {
         match self {
             BitMapping::Sequential { width } => width as usize,
             BitMapping::SequentialOffset { width, .. } => width as usize,
@@ -365,7 +365,7 @@ impl BitMapping {
 }
 
 #[inline(always)]
-fn low_bit_mask(count: usize) -> u32 {
+const fn low_bit_mask(count: usize) -> u32 {
     if count == 0 { 0 } else { (1u32 << count) - 1 }
 }
 
@@ -760,18 +760,18 @@ impl RowMap {
     }
 
     #[inline(always)]
-    pub fn get(&self, id: RowId) -> Option<&Row> {
+    pub const fn get(&self, id: RowId) -> Option<&Row> {
         self.rows[id.index()].as_ref()
     }
 
     #[inline(always)]
-    pub fn get_mut(&mut self, id: RowId) -> Option<&mut Row> {
+    pub const fn get_mut(&mut self, id: RowId) -> Option<&mut Row> {
         self.rows[id.index()].as_mut()
     }
 
     /// Panicking accessor for rows known to exist in the current pane.
     #[inline(always)]
-    pub fn row(&self, id: RowId) -> &Row {
+    pub const fn row(&self, id: RowId) -> &Row {
         self.rows[id.index()].as_ref().expect("row must exist")
     }
 
@@ -782,12 +782,12 @@ impl RowMap {
     }
 
     #[inline(always)]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.display_order.len()
     }
 
     #[inline(always)]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.display_order.is_empty()
     }
 
@@ -992,14 +992,14 @@ impl Row {
     /// Set every slot's initial cursor to the same index. Used when a row
     /// has a meaningful "default position" (e.g. the zero offset for HUD
     /// offset rows).
-    pub fn with_initial_choice_index(mut self, idx: usize) -> Self {
+    pub const fn with_initial_choice_index(mut self, idx: usize) -> Self {
         self.selected_choice_index = [idx; PLAYER_SLOTS];
         self
     }
 
     /// Set per-player initial cursor positions. Used by Stepchart, where
     /// each player's initial difficulty selection is independent.
-    pub fn with_initial_choice_indices(mut self, idxs: [usize; PLAYER_SLOTS]) -> Self {
+    pub const fn with_initial_choice_indices(mut self, idxs: [usize; PLAYER_SLOTS]) -> Self {
         self.selected_choice_index = idxs;
         self
     }
@@ -1014,7 +1014,7 @@ impl Row {
 
     /// Mark the row as mirrored across all player slots. Used by
     /// `WhatComesNext` so a change on one player propagates to all.
-    pub fn with_mirror_across_players(mut self) -> Self {
+    pub const fn with_mirror_across_players(mut self) -> Self {
         self.mirror_across_players = true;
         self
     }
@@ -1149,7 +1149,7 @@ pub(super) fn row_supports_inline_nav(row: &Row) -> bool {
 }
 
 #[inline(always)]
-pub(super) fn row_toggles_with_start(row: &Row) -> bool {
+pub(super) const fn row_toggles_with_start(row: &Row) -> bool {
     matches!(row.behavior, RowBehavior::Bitmask(_))
 }
 

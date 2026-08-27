@@ -213,7 +213,7 @@ impl SelectMusicFramePolicy {
         }
     }
 
-    fn settings_view(self) -> SelectMusicSettingsView {
+    const fn settings_view(self) -> SelectMusicSettingsView {
         SelectMusicSettingsView {
             arrow_bounce_offset: self.arrow_bounce_offset,
             policy: self.view,

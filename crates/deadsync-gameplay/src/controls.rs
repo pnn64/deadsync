@@ -138,12 +138,12 @@ impl GameplayOffsetAdjustHoldState {
     }
 
     #[inline(always)]
-    pub fn start(&mut self, key: GameplayOffsetAdjustKey, at: Instant) -> f32 {
+    pub const fn start(&mut self, key: GameplayOffsetAdjustKey, at: Instant) -> f32 {
         start_offset_adjust_hold_state(&mut self.held_since, &mut self.last_at, key, at)
     }
 
     #[inline(always)]
-    pub fn clear(&mut self, key: GameplayOffsetAdjustKey) {
+    pub const fn clear(&mut self, key: GameplayOffsetAdjustKey) {
         clear_offset_adjust_hold_state(&mut self.held_since, &mut self.last_at, key);
     }
 
@@ -153,17 +153,17 @@ impl GameplayOffsetAdjustHoldState {
     }
 
     #[inline(always)]
-    pub fn held_since_for_key(self, key: GameplayOffsetAdjustKey) -> Option<Instant> {
+    pub const fn held_since_for_key(self, key: GameplayOffsetAdjustKey) -> Option<Instant> {
         self.held_since[offset_adjust_slot_for_key(key)]
     }
 
     #[inline(always)]
-    pub fn last_at_for_key(self, key: GameplayOffsetAdjustKey) -> Option<Instant> {
+    pub const fn last_at_for_key(self, key: GameplayOffsetAdjustKey) -> Option<Instant> {
         self.last_at[offset_adjust_slot_for_key(key)]
     }
 }
 
-pub fn start_offset_adjust_hold_state(
+pub const fn start_offset_adjust_hold_state(
     held_since: &mut [Option<Instant>; 2],
     last_at: &mut [Option<Instant>; 2],
     key: GameplayOffsetAdjustKey,
@@ -175,7 +175,7 @@ pub fn start_offset_adjust_hold_state(
     offset_adjust_delta_for_key(key)
 }
 
-pub fn clear_offset_adjust_hold_state(
+pub const fn clear_offset_adjust_hold_state(
     held_since: &mut [Option<Instant>; 2],
     last_at: &mut [Option<Instant>; 2],
     key: GameplayOffsetAdjustKey,

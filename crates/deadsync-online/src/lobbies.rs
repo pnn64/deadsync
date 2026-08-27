@@ -103,7 +103,7 @@ pub fn close_lobby_socket(socket: &mut LobbySocket) {
 }
 
 #[inline(always)]
-pub fn is_transient_lobby_socket_error(error: &LobbySocketError) -> bool {
+pub const fn is_transient_lobby_socket_error(error: &LobbySocketError) -> bool {
     matches!(error, LobbySocketError::Transient(_))
 }
 
@@ -718,7 +718,7 @@ pub fn lobby_player_on_screen(player: &LobbyPlayer, screen_name: &str) -> bool {
     player.screen_name.eq_ignore_ascii_case(screen_name)
 }
 
-pub fn gameplay_lobby_wait_required(joined: Option<&JoinedLobby>) -> bool {
+pub const fn gameplay_lobby_wait_required(joined: Option<&JoinedLobby>) -> bool {
     joined.is_some()
 }
 
@@ -823,7 +823,7 @@ impl Default for Snapshot {
 }
 
 #[inline(always)]
-pub fn can_update_machine_state(snapshot: &Snapshot) -> bool {
+pub const fn can_update_machine_state(snapshot: &Snapshot) -> bool {
     matches!(snapshot.connection, ConnectionState::Connected) && snapshot.joined_lobby.is_some()
 }
 
@@ -990,7 +990,7 @@ impl ReconnectState {
     }
 
     #[inline(always)]
-    pub fn has_target(&self) -> bool {
+    pub const fn has_target(&self) -> bool {
         self.target.is_some()
     }
 
@@ -1053,7 +1053,7 @@ impl ReconnectState {
     }
 }
 
-pub fn reconnect_delay(attempt: u32) -> Duration {
+pub const fn reconnect_delay(attempt: u32) -> Duration {
     Duration::from_secs(match attempt {
         0 | 1 => 1,
         2 => 2,
@@ -1109,7 +1109,7 @@ struct RuntimeViewGuard<T: 'static> {
 }
 
 impl<T> RuntimeViewGuard<T> {
-    fn new(guard: MutexGuard<'static, T>) -> Self {
+    const fn new(guard: MutexGuard<'static, T>) -> Self {
         Self {
             guard,
             dirty: false,

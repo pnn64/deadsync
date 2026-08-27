@@ -30,7 +30,7 @@ pub struct DecoderImpl<R, C: Config, Context> {
 
 impl<R: Reader, C: Config, Context> DecoderImpl<R, C, Context> {
     /// Construct a new Decoder
-    pub fn new(reader: R, config: C, context: Context) -> DecoderImpl<R, C, Context> {
+    pub const fn new(reader: R, config: C, context: Context) -> DecoderImpl<R, C, Context> {
         DecoderImpl {
             reader,
             config,

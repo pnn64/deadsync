@@ -677,7 +677,7 @@ pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Re
                 .unwrap_or(Value::Nil))
         })?,
     )?;
-    let steps_by_type_for_get = steps_by_type.clone();
+    let steps_by_type_for_get = steps_by_type;
     table.set(
         "GetStepsByStepsType",
         lua.create_function(move |lua, args: MultiValue| {
@@ -947,10 +947,10 @@ pub fn create_songman_table(
         "FindCourse",
         lua.create_function({
             let current_course = current_course.clone();
-            let current_course_dir = current_course_dir.clone();
-            let current_dir = current_dir.clone();
+            let current_course_dir = current_course_dir;
+            let current_dir = current_dir;
             let current_group = current_group.clone();
-            let current_title = current_title.clone();
+            let current_title = current_title;
             move |_, args: MultiValue| {
                 let Some(query) = method_arg(&args, 0).cloned().and_then(read_string) else {
                     return Ok(Value::Nil);
@@ -975,7 +975,7 @@ pub fn create_songman_table(
     songman.set(
         "GetRandomCourse",
         lua.create_function({
-            let current_course = current_course.clone();
+            let current_course = current_course;
             move |_, _args: MultiValue| Ok(current_course.clone())
         })?,
     )?;
@@ -1048,8 +1048,8 @@ pub fn create_songman_table(
     songman.set(
         "GetExtraStageInfo",
         lua.create_function({
-            let current_song = current_song.clone();
-            let current_steps = current_steps.clone();
+            let current_song = current_song;
+            let current_steps = current_steps;
             move |_, _args: MultiValue| Ok((current_song.clone(), current_steps.clone()))
         })?,
     )?;
@@ -1118,7 +1118,7 @@ pub fn create_songman_table(
     songman.set(
         "GetPreferredSortSongsBySectionName",
         lua.create_function({
-            let current_group = current_group.clone();
+            let current_group = current_group;
             let group_songs = group_songs.clone();
             move |lua, args: MultiValue| {
                 let section = method_arg(&args, 0)
@@ -1179,7 +1179,7 @@ pub fn create_songman_table(
         "GetPopularSongs",
         lua.create_function(move |_, _args: MultiValue| Ok(group_songs.clone()))?,
     )?;
-    let popular_courses = group_courses.clone();
+    let popular_courses = group_courses;
     songman.set(
         "GetPopularCourses",
         lua.create_function(move |_, _args: MultiValue| Ok(popular_courses.clone()))?,

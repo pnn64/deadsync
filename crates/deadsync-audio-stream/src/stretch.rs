@@ -149,22 +149,22 @@ impl SolaStretcher {
     }
 
     #[allow(dead_code)]
-    pub(super) fn channels(&self) -> usize {
+    pub(super) const fn channels(&self) -> usize {
         self.channels
     }
 
     #[allow(dead_code)]
-    pub(super) fn sample_rate(&self) -> u32 {
+    pub(super) const fn sample_rate(&self) -> u32 {
         self.sample_rate
     }
 
     #[allow(dead_code)]
-    pub(super) fn window_frames(&self) -> usize {
+    pub(super) const fn window_frames(&self) -> usize {
         self.window_frames
     }
 
     #[allow(dead_code)]
-    pub(super) fn tolerance_frames(&self) -> usize {
+    pub(super) const fn tolerance_frames(&self) -> usize {
         self.tolerance_frames
     }
 
@@ -173,7 +173,7 @@ impl SolaStretcher {
     /// is the ratio actually being applied to the output frames produced by the
     /// next [`pull`].
     #[allow(dead_code)]
-    pub(super) fn trailing_speed_ratio(&self) -> f32 {
+    pub(super) const fn trailing_speed_ratio(&self) -> f32 {
         self.trailing_speed_ratio
     }
 
@@ -210,13 +210,13 @@ impl SolaStretcher {
     /// mirroring upstream's EOF branch in `RageSoundReader_SpeedChange::Step`.
     /// Cleared by [`reset`]; only meaningful when the stretcher is being torn
     /// down (a looping decoder keeps feeding and never calls this).
-    pub(super) fn finish(&mut self) {
+    pub(super) const fn finish(&mut self) {
         self.finishing = true;
     }
 
     /// Total source frames currently buffered for the SOLA search window.
     #[allow(dead_code)]
-    pub(super) fn buffered_source_frames(&self) -> usize {
+    pub(super) const fn buffered_source_frames(&self) -> usize {
         self.data_avail_frames
     }
 

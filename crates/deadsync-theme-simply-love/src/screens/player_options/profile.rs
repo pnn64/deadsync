@@ -138,7 +138,7 @@ pub fn effective_scroll_speed_with_alt(
 }
 
 #[inline(always)]
-pub(super) fn sync_profile_scroll_speed(
+pub(super) const fn sync_profile_scroll_speed(
     profile: &mut deadsync_profile::PlayerOptionsData,
     speed_mod: &SpeedMod,
 ) {
@@ -481,7 +481,7 @@ pub(super) fn speed_mod_bpm_pair(
     }
 }
 
-fn rounded_bpm_pair(lo: f32, hi: f32) -> [i32; 2] {
+const fn rounded_bpm_pair(lo: f32, hi: f32) -> [i32; 2] {
     let lo_i = lo.round() as i32;
     let hi_i = hi.round() as i32;
     [lo_i, hi_i]

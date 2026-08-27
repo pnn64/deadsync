@@ -136,7 +136,7 @@ pub const fn hide_flags_from_profile(hide: HideLightType) -> HideFlags {
     }
 }
 
-pub fn smx_background_role(
+pub const fn smx_background_role(
     screen: Screen,
     enabled: bool,
     assignment_preview: bool,

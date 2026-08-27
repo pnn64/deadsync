@@ -205,7 +205,7 @@ struct PracticeEditText {
 }
 
 impl PracticeEditText {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             labels: None,
             info: None,
@@ -267,7 +267,7 @@ struct PracticeMenuText {
 }
 
 impl PracticeMenuText {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             def: None,
             labels: None,
@@ -589,7 +589,7 @@ fn append_pending_effects(
     }
 }
 
-pub fn edit_snapshot(state: &State) -> EditSnapshot {
+pub const fn edit_snapshot(state: &State) -> EditSnapshot {
     EditSnapshot {
         cursor_beat: state.cursor_beat,
         selection_anchor: state.selection_anchor,
@@ -964,7 +964,7 @@ fn handle_raw_key_event_inner(
 /// Maps the gameplay function keys that Practice forwards to its embedded
 /// gameplay runtime. Mirrors the gameplay screen bindings: F6 AutoSync,
 /// F7 assist/hit ticks, F8 autoplay, F11/F12 sync-offset adjustment.
-fn gameplay_hotkey_input(code: KeyCode) -> Option<GameplayRawKeyInput> {
+const fn gameplay_hotkey_input(code: KeyCode) -> Option<GameplayRawKeyInput> {
     match code {
         KeyCode::F6 => Some(GameplayRawKeyInput::Autosync),
         KeyCode::F7 => Some(GameplayRawKeyInput::TimingTick),
@@ -1112,7 +1112,7 @@ fn practice_edit_cursor_y() -> f32 {
     screen_center_y() - screen_height() / 480.0 * EDIT_FIELD_HEIGHT_AT_480P * 0.5
 }
 
-fn practice_edit_scroll_speed(state: &State) -> ScrollSpeedSetting {
+const fn practice_edit_scroll_speed(state: &State) -> ScrollSpeedSetting {
     ScrollSpeedSetting::XMod(EDIT_SCROLL_SPEEDS[state.edit_scroll_speed_index])
 }
 
@@ -1248,7 +1248,7 @@ fn action_exit_practice(_state: &mut State, _snap_music_start: MusicStartSnap) -
     ThemeEffect::Navigate(Screen::SelectMusic)
 }
 
-fn practice_nav_mode(state: &State) -> PracticeNavMode {
+const fn practice_nav_mode(state: &State) -> PracticeNavMode {
     practice_nav_mode_from_config(
         state.runtime.only_dedicated_menu_buttons,
         state.runtime.three_key_navigation,
@@ -1268,7 +1268,10 @@ const fn practice_nav_mode_from_config(
     }
 }
 
-fn edit_cursor_hold_dir_for_action(state: &State, action: VirtualAction) -> Option<CursorHoldDir> {
+const fn edit_cursor_hold_dir_for_action(
+    state: &State,
+    action: VirtualAction,
+) -> Option<CursorHoldDir> {
     edit_cursor_hold_dir_for_action_in_mode(practice_nav_mode(state), action)
 }
 
@@ -1303,7 +1306,7 @@ const fn edit_cursor_hold_dir_for_action_in_mode(
     }
 }
 
-fn edit_snap_delta_for_action(state: &State, action: VirtualAction) -> Option<isize> {
+const fn edit_snap_delta_for_action(state: &State, action: VirtualAction) -> Option<isize> {
     edit_snap_delta_for_action_in_mode(practice_nav_mode(state), action)
 }
 
@@ -1330,7 +1333,7 @@ const fn edit_snap_delta_for_action_in_mode(
     }
 }
 
-fn menu_step_delta_for_action(state: &State, action: VirtualAction) -> Option<isize> {
+const fn menu_step_delta_for_action(state: &State, action: VirtualAction) -> Option<isize> {
     menu_step_delta_for_action_in_mode(practice_nav_mode(state), action)
 }
 
@@ -1371,7 +1374,7 @@ fn start_selection_like_itg(state: &mut State, snap_music_start: MusicStartSnap)
                 .selection_anchor
                 .map(|start| (start, max_play_beat(state)))
         })
-        .unwrap_or((state.cursor_beat, max_play_beat(state)));
+        .unwrap_or_else(|| (state.cursor_beat, max_play_beat(state)));
     start_playback(
         state,
         start_beat,
@@ -1434,21 +1437,21 @@ const fn opposite_cursor_hold_dir(dir: CursorHoldDir) -> CursorHoldDir {
     }
 }
 
-fn cursor_hold_count(state: &State, dir: CursorHoldDir) -> u8 {
+const fn cursor_hold_count(state: &State, dir: CursorHoldDir) -> u8 {
     match dir {
         CursorHoldDir::Up => state.cursor_hold_up_count,
         CursorHoldDir::Down => state.cursor_hold_down_count,
     }
 }
 
-fn cursor_hold_count_mut(state: &mut State, dir: CursorHoldDir) -> &mut u8 {
+const fn cursor_hold_count_mut(state: &mut State, dir: CursorHoldDir) -> &mut u8 {
     match dir {
         CursorHoldDir::Up => &mut state.cursor_hold_up_count,
         CursorHoldDir::Down => &mut state.cursor_hold_down_count,
     }
 }
 
-fn press_cursor_hold_input(state: &mut State, dir: CursorHoldDir) {
+const fn press_cursor_hold_input(state: &mut State, dir: CursorHoldDir) {
     let count = cursor_hold_count_mut(state, dir);
     *count = count.saturating_add(1);
     start_cursor_hold(state, dir);
@@ -1469,19 +1472,19 @@ fn release_cursor_hold_input(state: &mut State, dir: CursorHoldDir) {
     }
 }
 
-fn start_cursor_hold(state: &mut State, dir: CursorHoldDir) {
+const fn start_cursor_hold(state: &mut State, dir: CursorHoldDir) {
     state.cursor_hold_dir = Some(dir);
     state.cursor_hold_delay_left = EDIT_CURSOR_REPEAT_DELAY_SECONDS;
     state.cursor_hold_repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
 }
 
-fn clear_cursor_hold_timer(state: &mut State) {
+const fn clear_cursor_hold_timer(state: &mut State) {
     state.cursor_hold_dir = None;
     state.cursor_hold_delay_left = 0.0;
     state.cursor_hold_repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
 }
 
-fn clear_cursor_hold_inputs(state: &mut State) {
+const fn clear_cursor_hold_inputs(state: &mut State) {
     state.cursor_hold_up_count = 0;
     state.cursor_hold_down_count = 0;
     clear_cursor_hold_timer(state);
@@ -1502,14 +1505,14 @@ const fn page_hold_dir_for_key(code: KeyCode) -> Option<PageHoldDir> {
     }
 }
 
-fn page_hold_count(state: &State, dir: PageHoldDir) -> u8 {
+const fn page_hold_count(state: &State, dir: PageHoldDir) -> u8 {
     match dir {
         PageHoldDir::Up => state.page_hold_up_count,
         PageHoldDir::Down => state.page_hold_down_count,
     }
 }
 
-fn page_hold_count_mut(state: &mut State, dir: PageHoldDir) -> &mut u8 {
+const fn page_hold_count_mut(state: &mut State, dir: PageHoldDir) -> &mut u8 {
     match dir {
         PageHoldDir::Up => &mut state.page_hold_up_count,
         PageHoldDir::Down => &mut state.page_hold_down_count,
@@ -1524,7 +1527,7 @@ fn press_page_hold_input_for_key(state: &mut State, dir: PageHoldDir, repeat: bo
     move_cursor_by_page_dir(state, dir);
 }
 
-fn press_page_hold_input(state: &mut State, dir: PageHoldDir) {
+const fn press_page_hold_input(state: &mut State, dir: PageHoldDir) {
     let count = page_hold_count_mut(state, dir);
     *count = count.saturating_add(1);
     start_page_hold(state, dir);
@@ -1545,19 +1548,19 @@ fn release_page_hold_input(state: &mut State, dir: PageHoldDir) {
     }
 }
 
-fn start_page_hold(state: &mut State, dir: PageHoldDir) {
+const fn start_page_hold(state: &mut State, dir: PageHoldDir) {
     state.page_hold_dir = Some(dir);
     state.page_hold_delay_left = EDIT_CURSOR_REPEAT_DELAY_SECONDS;
     state.page_hold_repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
 }
 
-fn clear_page_hold_timer(state: &mut State) {
+const fn clear_page_hold_timer(state: &mut State) {
     state.page_hold_dir = None;
     state.page_hold_delay_left = 0.0;
     state.page_hold_repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
 }
 
-fn clear_page_hold_inputs(state: &mut State) {
+const fn clear_page_hold_inputs(state: &mut State) {
     state.page_hold_up_count = 0;
     state.page_hold_down_count = 0;
     clear_page_hold_timer(state);
@@ -1592,14 +1595,14 @@ const fn music_rate_hold_dir_for_event(
     }
 }
 
-fn music_rate_hold_count(state: &State, dir: MusicRateHoldDir) -> u8 {
+const fn music_rate_hold_count(state: &State, dir: MusicRateHoldDir) -> u8 {
     match dir {
         MusicRateHoldDir::Lower => state.music_rate_hold_lower_count,
         MusicRateHoldDir::Raise => state.music_rate_hold_raise_count,
     }
 }
 
-fn music_rate_hold_count_mut(state: &mut State, dir: MusicRateHoldDir) -> &mut u8 {
+const fn music_rate_hold_count_mut(state: &mut State, dir: MusicRateHoldDir) -> &mut u8 {
     match dir {
         MusicRateHoldDir::Lower => &mut state.music_rate_hold_lower_count,
         MusicRateHoldDir::Raise => &mut state.music_rate_hold_raise_count,
@@ -1630,25 +1633,25 @@ fn release_music_rate_hold_input(state: &mut State, dir: MusicRateHoldDir) {
     stop_music_rate_hold_dir(state, dir);
 }
 
-fn start_music_rate_hold(state: &mut State, dir: MusicRateHoldDir) {
+const fn start_music_rate_hold(state: &mut State, dir: MusicRateHoldDir) {
     state.music_rate_hold_dir = Some(dir);
     state.music_rate_hold_delay_left = MUSIC_RATE_REPEAT_DELAY_SECONDS;
     state.music_rate_hold_repeat_left = MUSIC_RATE_REPEAT_INTERVAL_SECONDS;
 }
 
-fn clear_music_rate_hold_timer(state: &mut State) {
+const fn clear_music_rate_hold_timer(state: &mut State) {
     state.music_rate_hold_dir = None;
     state.music_rate_hold_delay_left = 0.0;
     state.music_rate_hold_repeat_left = MUSIC_RATE_REPEAT_INTERVAL_SECONDS;
 }
 
-fn clear_music_rate_hold_inputs(state: &mut State) {
+const fn clear_music_rate_hold_inputs(state: &mut State) {
     state.music_rate_hold_lower_count = 0;
     state.music_rate_hold_raise_count = 0;
     clear_music_rate_hold_timer(state);
 }
 
-fn stop_music_rate_hold_dir(state: &mut State, dir: MusicRateHoldDir) {
+const fn stop_music_rate_hold_dir(state: &mut State, dir: MusicRateHoldDir) {
     let other = opposite_music_rate_hold_dir(dir);
     if music_rate_hold_count(state, other) > 0 {
         start_music_rate_hold(state, other);
@@ -2068,7 +2071,7 @@ fn clear_selection(state: &mut State) {
     set_flash_tr(state, "FlashSelectionCleared");
 }
 
-fn set_marker_range(state: &mut State, a: f32, b: f32) {
+const fn set_marker_range(state: &mut State, a: f32, b: f32) {
     state.selection_anchor = Some(a.min(b));
     state.selection_end = Some(a.max(b));
 }
@@ -2088,7 +2091,7 @@ fn clamp_selection(
     }
 }
 
-fn clamp_marker_beat(beat: f32, max_beat: f32) -> f32 {
+const fn clamp_marker_beat(beat: f32, max_beat: f32) -> f32 {
     if beat.is_finite() {
         beat.clamp(MIN_CURSOR_BEAT, max_beat)
     } else {

@@ -103,7 +103,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -114,7 +114,7 @@ impl AllocSnapshot {
         }
     }
 
-    fn churn_bytes(self) -> u64 {
+    const fn churn_bytes(self) -> u64 {
         self.alloc_bytes + self.realloc_bytes + self.free_bytes
     }
 }
@@ -325,7 +325,7 @@ fn pipelines() -> (
     )
 }
 
-fn mesh_key(index: usize) -> u64 {
+const fn mesh_key(index: usize) -> u64 {
     (index as u64 + 0x1000_0001)
         .wrapping_mul(0x9e37_79b9_7f4a_7c15)
         .rotate_left(17)

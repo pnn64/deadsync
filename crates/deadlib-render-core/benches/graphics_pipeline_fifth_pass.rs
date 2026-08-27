@@ -94,7 +94,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -105,7 +105,7 @@ impl AllocSnapshot {
         }
     }
 
-    fn churn_bytes(self) -> u64 {
+    const fn churn_bytes(self) -> u64 {
         self.alloc_bytes + self.realloc_bytes + self.free_bytes
     }
 }
@@ -188,7 +188,7 @@ struct CommandOp {
 }
 
 #[inline(never)]
-fn driver_call(work: u64, call: u64) -> u64 {
+const fn driver_call(work: u64, call: u64) -> u64 {
     black_box(
         work.rotate_left(7)
             .wrapping_add(call)

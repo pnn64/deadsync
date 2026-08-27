@@ -409,7 +409,7 @@ pub const fn global_entry_transition(
     }
 }
 
-pub fn apply_actor_entry_transition(shell: &mut ShellState, target: Screen) {
+pub const fn apply_actor_entry_transition(shell: &mut ShellState, target: Screen) {
     shell.transition = actor_entry_transition(target);
 }
 
@@ -424,11 +424,15 @@ pub fn apply_actor_fade_out_transition(
         actor_fade_out_transition(from, target, select_color_duration, select_profile_duration);
 }
 
-pub fn apply_global_fade_out_transition(shell: &mut ShellState, target: Screen, duration: f32) {
+pub const fn apply_global_fade_out_transition(
+    shell: &mut ShellState,
+    target: Screen,
+    duration: f32,
+) {
     shell.transition = global_fade_out_transition(target, duration);
 }
 
-pub fn apply_global_entry_transition(
+pub const fn apply_global_entry_transition(
     shell: &mut ShellState,
     previous: Screen,
     target: Screen,

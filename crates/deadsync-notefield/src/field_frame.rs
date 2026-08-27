@@ -832,7 +832,7 @@ fn compose_field_contents<S, F>(
 }
 
 #[inline(always)]
-pub fn measure_cue_range_search_enabled(
+pub const fn measure_cue_range_search_enabled(
     show_cues: bool,
     scroll_speed: ScrollSpeedSetting,
     displayed_beat_monotonic: bool,
@@ -1363,7 +1363,7 @@ fn model_center<S: NoteskinSlot>(
 }
 
 #[inline(always)]
-fn note_alpha_params(appearance: AppearanceEffects) -> NoteAlphaParams {
+const fn note_alpha_params(appearance: AppearanceEffects) -> NoteAlphaParams {
     NoteAlphaParams {
         hidden: appearance.hidden,
         hidden_offset: appearance.hidden_offset,
@@ -1561,7 +1561,7 @@ fn resolve_field_camera<S>(
     prepared: &PreparedNotefield<'_, S>,
 ) -> Option<glam::Mat4> {
     let field = prepared.field;
-    let center_y = 0.5 * (field.receptor_y_normal + field.receptor_y_reverse);
+    let center_y = f32::midpoint(field.receptor_y_normal, field.receptor_y_reverse);
     let perspective = request.visual.perspective;
     cache.resolve(
         request.geometry.screen_width,

@@ -18,7 +18,7 @@ pub struct ImplFor<'a, P: Parent> {
 }
 
 impl<'a, P: Parent> ImplFor<'a, P> {
-    pub(super) fn new(
+    pub(super) const fn new(
         generator: &'a mut P,
         type_name: StringOrIdent,
         trait_name: Option<StringOrIdent>,

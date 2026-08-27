@@ -81,7 +81,7 @@ impl<T> AssetStore<T> {
     }
 
     #[inline(always)]
-    pub fn textures(&self) -> &TextureHandleMap<T> {
+    pub const fn textures(&self) -> &TextureHandleMap<T> {
         self.texture_store.textures()
     }
 

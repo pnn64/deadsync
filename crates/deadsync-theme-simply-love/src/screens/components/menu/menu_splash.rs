@@ -60,13 +60,13 @@ fn splash_state(
 }
 
 #[inline(always)]
-fn color1_rgba(active_color_index: i32) -> [f32; 4] {
+const fn color1_rgba(active_color_index: i32) -> [f32; 4] {
     // GetHexColor(SL.Global.ActiveColorIndex-2, true)
     color::decorative_rgba(active_color_index - 2)
 }
 
 #[inline(always)]
-fn color2_rgba(active_color_index: i32) -> [f32; 4] {
+const fn color2_rgba(active_color_index: i32) -> [f32; 4] {
     // GetHexColor(SL.Global.ActiveColorIndex-1, true)
     color::decorative_rgba(active_color_index - 1)
 }

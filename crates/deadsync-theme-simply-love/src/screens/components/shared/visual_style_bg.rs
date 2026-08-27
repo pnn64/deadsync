@@ -107,7 +107,7 @@ impl TiledStyleState {
 }
 
 impl State {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             tiled: TiledStyleState::new(),
             technique: technique_bg::State::new(),
@@ -230,7 +230,7 @@ pub fn set_srpg_background_key(key: Option<String>) {
     });
 }
 
-fn srpg_background_tint(active_color_index: i32, srpg10: bool) -> [f32; 4] {
+const fn srpg_background_tint(active_color_index: i32, srpg10: bool) -> [f32; 4] {
     if srpg10 {
         color::srpg10_rgba(active_color_index)
     } else {

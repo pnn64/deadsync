@@ -999,7 +999,7 @@ mod tests {
         let backup = journal.backup_path_for(&target);
         let ops = [Op {
             staged,
-            target: target.clone(),
+            target: target,
             backup,
             target_existed: false,
         }];
@@ -1037,7 +1037,7 @@ mod tests {
         fs::write(&target, b"STALE").unwrap();
 
         let ops = [Op {
-            staged: staged.clone(),
+            staged: staged,
             target: target.clone(),
             backup: backup.clone(),
             target_existed: true,

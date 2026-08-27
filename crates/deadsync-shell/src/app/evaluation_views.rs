@@ -22,7 +22,7 @@ pub(super) struct EvaluationFramePolicy {
 }
 
 impl EvaluationFramePolicy {
-    pub(super) fn from_config(config: &config::Config) -> Self {
+    pub(super) const fn from_config(config: &config::Config) -> Self {
         Self {
             context: EvaluationPolicyView {
                 enable_groovestats: config.enable_groovestats,
@@ -302,7 +302,7 @@ fn refresh_submissions(
 }
 
 impl App {
-    pub(super) fn mark_evaluation_runtime_dirty(&mut self) {
+    pub(super) const fn mark_evaluation_runtime_dirty(&mut self) {
         self.evaluation_context_rebuild = true;
         self.evaluation_lobby.force_refresh();
         self.evaluation_favorites_rebuild = true;

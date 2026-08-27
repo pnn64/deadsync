@@ -42,7 +42,7 @@ pub struct GradeStarTaunt {
 }
 
 #[inline(always)]
-pub fn grade_star_taunt_from_counts(counts: judgment::JudgeCounts) -> GradeStarTaunt {
+pub const fn grade_star_taunt_from_counts(counts: judgment::JudgeCounts) -> GradeStarTaunt {
     GradeStarTaunt {
         excellent: counts[judgment::judge_grade_ix(JudgeGrade::Excellent)],
         great: counts[judgment::judge_grade_ix(JudgeGrade::Great)],
@@ -265,7 +265,7 @@ const STARS_TIER04: [StarDef; 1] = [StarDef {
 }];
 
 #[inline(always)]
-fn letter_tex(grade: score_data::Grade) -> &'static str {
+const fn letter_tex(grade: score_data::Grade) -> &'static str {
     match grade {
         score_data::Grade::Tier05 => "grades/s-plus.png",
         score_data::Grade::Tier06 => "grades/s.png",
@@ -301,7 +301,7 @@ fn pulse_scales(base: f32, elapsed: f32, offset: f32, mx: f32, my: f32) -> (f32,
 }
 
 #[inline(always)]
-fn mix_u32(mut x: u32) -> u32 {
+const fn mix_u32(mut x: u32) -> u32 {
     // MurmurHash3 finalizer-ish; deterministic and fast.
     x ^= x >> 16;
     x = x.wrapping_mul(0x7FEB_352D);
@@ -370,17 +370,17 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
 }
 
 #[inline(always)]
-fn one_w2_taunt(t: GradeStarTaunt) -> bool {
+const fn one_w2_taunt(t: GradeStarTaunt) -> bool {
     t.miss == 0 && t.way_off == 0 && t.decent == 0 && t.great == 0 && t.excellent == 1
 }
 
 #[inline(always)]
-fn one_w3_flag(t: GradeStarTaunt) -> bool {
+const fn one_w3_flag(t: GradeStarTaunt) -> bool {
     t.miss == 0 && t.way_off == 0 && t.decent == 0 && t.great == 1
 }
 
 #[inline(always)]
-fn star_seed(s: StarDef) -> u32 {
+const fn star_seed(s: StarDef) -> u32 {
     if s.spin_seed != 0 {
         s.spin_seed
     } else {
@@ -716,7 +716,7 @@ fn star_actors(s: StarDef, p: EvalGradeParams) -> Vec<Actor> {
 }
 
 #[inline(always)]
-fn stars_for(grade: score_data::Grade) -> Option<&'static [StarDef]> {
+const fn stars_for(grade: score_data::Grade) -> Option<&'static [StarDef]> {
     match grade {
         score_data::Grade::Quint => Some(&STARS_QUINT),
         score_data::Grade::Tier01 => Some(&STARS_TIER01),

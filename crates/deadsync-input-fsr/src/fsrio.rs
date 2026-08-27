@@ -90,7 +90,7 @@ mod imp {
 
         /// FSRIO streams sensor values continuously, so there's no test mode to
         /// toggle; live reads happen in `poll_pads`.
-        pub fn set_active(&mut self, _active: bool) {}
+        pub const fn set_active(&mut self, _active: bool) {}
 
         /// Expose every connected FSRIO board, grouping sensors by the board's
         /// sensor-to-button mapping.
@@ -141,7 +141,7 @@ mod imp {
         }
 
         /// FSRIO has no per-sensor enable bit; Advanced exposes thresholds only.
-        pub fn set_sensor_enabled(
+        pub const fn set_sensor_enabled(
             &mut self,
             _device: PadDeviceId,
             _button: usize,
@@ -152,12 +152,16 @@ mod imp {
         }
 
         /// FSRIO does not expose auto-recalibration.
-        pub fn set_auto_recalibration(&mut self, _device: PadDeviceId, _enabled: bool) -> bool {
+        pub const fn set_auto_recalibration(
+            &mut self,
+            _device: PadDeviceId,
+            _enabled: bool,
+        ) -> bool {
             false
         }
 
         /// FSRIO does not expose a panel debounce setting.
-        pub fn set_debounce_micros(&mut self, _device: PadDeviceId, _micros: u16) -> bool {
+        pub const fn set_debounce_micros(&mut self, _device: PadDeviceId, _micros: u16) -> bool {
             false
         }
 

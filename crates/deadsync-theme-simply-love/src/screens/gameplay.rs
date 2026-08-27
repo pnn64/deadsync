@@ -317,7 +317,7 @@ enum BackgroundTransition {
 }
 
 impl BackgroundTransition {
-    fn from_name(name: &str) -> Option<Self> {
+    const fn from_name(name: &str) -> Option<Self> {
         if name.eq_ignore_ascii_case("CrossFade_Fastest") {
             Some(Self::CrossFade(0.5))
         } else if name.eq_ignore_ascii_case("CrossFade_Faster") {
@@ -550,7 +550,7 @@ fn noteskin_effects_from_assets(
 }
 
 #[inline(always)]
-fn gameplay_tween(tween: TweenType) -> GameplayTween {
+const fn gameplay_tween(tween: TweenType) -> GameplayTween {
     match tween {
         TweenType::Linear => GameplayTween::Linear,
         TweenType::Accelerate => GameplayTween::Accelerate,
@@ -559,7 +559,9 @@ fn gameplay_tween(tween: TweenType) -> GameplayTween {
 }
 
 #[inline(always)]
-fn gameplay_receptor_glow_behavior(behavior: ReceptorGlowBehavior) -> GameplayReceptorGlowBehavior {
+const fn gameplay_receptor_glow_behavior(
+    behavior: ReceptorGlowBehavior,
+) -> GameplayReceptorGlowBehavior {
     GameplayReceptorGlowBehavior {
         press_duration: behavior.press_duration,
         press_alpha_start: behavior.press_alpha_start,
@@ -578,7 +580,9 @@ fn gameplay_receptor_glow_behavior(behavior: ReceptorGlowBehavior) -> GameplayRe
 }
 
 #[inline(always)]
-fn gameplay_receptor_step_behavior(behavior: ReceptorStepBehavior) -> GameplayReceptorStepBehavior {
+const fn gameplay_receptor_step_behavior(
+    behavior: ReceptorStepBehavior,
+) -> GameplayReceptorStepBehavior {
     GameplayReceptorStepBehavior {
         duration: behavior.duration,
         zoom_start: behavior.zoom_start,
@@ -1373,7 +1377,7 @@ impl Default for SongLuaMessageStateCache {
 
 impl SongLuaMessageStateCache {
     #[inline(always)]
-    fn reset(&mut self, initial_state: SongLuaOverlayState) {
+    const fn reset(&mut self, initial_state: SongLuaOverlayState) {
         self.initialized = true;
         self.next_event = 0;
         self.processed_until = f32::NEG_INFINITY;
@@ -1384,7 +1388,7 @@ impl SongLuaMessageStateCache {
     }
 
     #[inline(always)]
-    fn reset_active_blocks(&mut self, state: SongLuaOverlayState) {
+    const fn reset_active_blocks(&mut self, state: SongLuaOverlayState) {
         self.active_next_block = 0;
         self.active_easing = None;
         self.active_block_state = state;
@@ -2147,7 +2151,7 @@ impl LifeMeterVisual {
 }
 
 #[inline]
-fn visible_life(life: f32, dead: bool) -> f32 {
+const fn visible_life(life: f32, dead: bool) -> f32 {
     if dead || !life.is_finite() {
         0.0
     } else {
@@ -2156,7 +2160,7 @@ fn visible_life(life: f32, dead: bool) -> f32 {
 }
 
 #[inline]
-fn finite_nonnegative(value: f32) -> f32 {
+const fn finite_nonnegative(value: f32) -> f32 {
     if value.is_finite() {
         value.max(0.0)
     } else {
@@ -2367,7 +2371,7 @@ impl GameplayPresentationSkeleton {
 }
 
 impl State {
-    pub fn machine_font(&self) -> crate::config::MachineFont {
+    pub const fn machine_font(&self) -> crate::config::MachineFont {
         self.runtime_view.policy.machine_font
     }
 
@@ -2905,7 +2909,7 @@ impl State {
     }
 
     #[inline(always)]
-    pub(crate) fn notefield_judgment_assets(
+    pub(crate) const fn notefield_judgment_assets(
         &self,
         player_idx: usize,
     ) -> &notefield::ResolvedJudgmentAssets {
@@ -2913,12 +2917,15 @@ impl State {
     }
 
     #[inline(always)]
-    pub(crate) fn notefield_plan(&self, player_idx: usize) -> &notefield::GameplayNotefieldPlan {
+    pub(crate) const fn notefield_plan(
+        &self,
+        player_idx: usize,
+    ) -> &notefield::GameplayNotefieldPlan {
         &self.notefield_plans[player_idx]
     }
 
     #[inline(always)]
-    pub fn actor_resources(&self) -> &ActorResourceArena {
+    pub const fn actor_resources(&self) -> &ActorResourceArena {
         &self.actor_resources
     }
 
@@ -2955,7 +2962,7 @@ impl State {
     }
 
     #[inline(always)]
-    fn display_mods_text(&self, player: usize) -> &Arc<str> {
+    const fn display_mods_text(&self, player: usize) -> &Arc<str> {
         &self.display_mods_text[player]
     }
 }
@@ -3661,7 +3668,7 @@ fn log_song_lua_runtime_debug(
     }
 }
 
-fn song_lua_runtime_summary_is_notable(
+const fn song_lua_runtime_summary_is_notable(
     compiled: &CompiledSongLua,
     overlay_ease_count: usize,
     total_constant: usize,
@@ -4636,7 +4643,7 @@ fn set_local_lobby_player_ready(state: &mut State, side: profile_data::PlayerSid
     }
 }
 
-fn clear_lobby_disconnect_holds(state: &mut State) {
+const fn clear_lobby_disconnect_holds(state: &mut State) {
     state.lobby_disconnect_hold_p1 = None;
     state.lobby_disconnect_hold_p2 = None;
 }
@@ -4758,14 +4765,14 @@ fn write_gameplay_lobby_hud_status(state: &State, text: &mut String) -> bool {
     true
 }
 
-pub fn scorebox_snapshot_for_side(
+pub const fn scorebox_snapshot_for_side(
     state: &State,
     side: profile_data::PlayerSide,
 ) -> Option<&score_data::CachedPlayerLeaderboardData> {
     state.scorebox_side_snapshot[profile_data::player_side_index(side)].as_ref()
 }
 
-pub fn scorebox_profile_for_side(
+pub const fn scorebox_profile_for_side(
     state: &State,
     side: profile_data::PlayerSide,
 ) -> &score_data::GameplayScoreboxProfileSnapshot {
@@ -4803,7 +4810,7 @@ pub fn on_enter(state: &mut State) {
     state.lobby_music_started = true;
 }
 
-pub fn on_exit(state: &mut State) {
+pub const fn on_exit(state: &mut State) {
     state.smx_sensor_views = [None, None];
 }
 
@@ -4952,7 +4959,7 @@ pub fn sync_score_runtime_view(state: &mut State, view: GameplayScoreRuntimeView
     state.itl_cmod_warning = view.itl_cmod_warning;
 }
 
-pub fn rival_score_type_for_side(
+pub const fn rival_score_type_for_side(
     state: &State,
     side: profile_data::PlayerSide,
 ) -> Option<profile_data::MiniIndicatorScoreType> {
@@ -5192,7 +5199,7 @@ pub fn set_smx_sensor_pad_view(
     }
 }
 
-pub fn heart_rate_generation(state: &State) -> (u64, u64) {
+pub const fn heart_rate_generation(state: &State) -> (u64, u64) {
     state.heart_rate_generation
 }
 
@@ -5215,7 +5222,7 @@ pub fn runtime_profile_side(state: &State, player_idx: usize) -> profile_data::P
     profile_side_from_gameplay(state.runtime_player_side(player_idx))
 }
 
-pub fn smx_sensor_profile_enabled(state: &State) -> bool {
+pub const fn smx_sensor_profile_enabled(state: &State) -> bool {
     state.runtime_view.policy.smx_profile_enabled
 }
 
@@ -6249,7 +6256,7 @@ pub fn in_transition(
     let intro_color = state.map_or(color::decorative_rgba(0), |gs| {
         color::decorative_rgba(gs.player_color_index())
     });
-    let text_target_x = state.map_or(screen_center_x(), |gs| {
+    let text_target_x = state.map_or_else(screen_center_x, |gs| {
         intro_text_target_x(
             gs,
             asset_manager,
@@ -6961,7 +6968,10 @@ fn song_lua_overlay_space_height(state: &State) -> f32 {
     state.song_lua_visuals().screen_height.max(1.0)
 }
 
-fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlayStateDelta) {
+const fn apply_song_lua_overlay_delta(
+    state: &mut SongLuaOverlayState,
+    delta: &SongLuaOverlayStateDelta,
+) {
     if let Some(value) = delta.x {
         state.x = value;
     }
@@ -7195,7 +7205,7 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     }
 }
 
-fn song_lua_overlay_state_with_delta(
+const fn song_lua_overlay_state_with_delta(
     mut state: SongLuaOverlayState,
     delta: &SongLuaOverlayStateDelta,
 ) -> SongLuaOverlayState {
@@ -8482,7 +8492,7 @@ impl SongLuaDirectProxies {
         self.entries.push(proxy);
     }
 
-    fn len(&self) -> usize {
+    const fn len(&self) -> usize {
         self.entries.len()
     }
 }
@@ -8543,7 +8553,7 @@ impl PreparedProxySource {
     }
 
     #[inline(always)]
-    fn view(&self) -> SongLuaProxySource<'_> {
+    const fn view(&self) -> SongLuaProxySource<'_> {
         SongLuaProxySource::offset(&self.segments, self.offset)
     }
 }
@@ -8578,7 +8588,7 @@ const SONG_LUA_PROXY_SEGMENT_CAPACITIES: [usize; SONG_LUA_PROXY_POOL_CLASSES] = 
     SONG_LUA_SCREEN_CAPTURE_CAPACITY,
 ];
 
-fn song_lua_proxy_pool_class(target: &SongLuaProxyTarget) -> usize {
+const fn song_lua_proxy_pool_class(target: &SongLuaProxyTarget) -> usize {
     match target {
         SongLuaProxyTarget::Player { .. } => SONG_LUA_PLAYER_PROXY_CLASS,
         SongLuaProxyTarget::NoteField { .. } => SONG_LUA_NOTEFIELD_PROXY_CLASS,
@@ -8923,7 +8933,7 @@ impl SongLuaAftCaptureScratch {
         }
     }
 
-    fn begin_frame(&mut self) {
+    const fn begin_frame(&mut self) {
         self.active_bank = (self.active_bank + 1) % SONG_LUA_AFT_FRAME_BANKS;
     }
 
@@ -9736,7 +9746,7 @@ struct SongLuaOpaqueRect {
 }
 
 impl SongLuaOpaqueRect {
-    fn new(left: f32, top: f32, right: f32, bottom: f32) -> Self {
+    const fn new(left: f32, top: f32, right: f32, bottom: f32) -> Self {
         Self {
             left: left.min(right),
             top: top.min(bottom),
@@ -12976,7 +12986,7 @@ fn song_lua_build_capture_actor(
 }
 
 #[inline(always)]
-fn song_lua_overlay_blend(blend: SongLuaOverlayBlendMode) -> BlendMode {
+const fn song_lua_overlay_blend(blend: SongLuaOverlayBlendMode) -> BlendMode {
     match blend {
         SongLuaOverlayBlendMode::Alpha => BlendMode::Alpha,
         SongLuaOverlayBlendMode::Add => BlendMode::Add,
@@ -14343,8 +14353,8 @@ fn song_lua_overlay_rect(
     let (base_center, base_size) = if let Some([left, top, right, bottom]) = state.stretch_rect {
         (
             [
-                0.5 * (left + right) * x_scale,
-                0.5 * (top + bottom) * y_scale,
+                f32::midpoint(left, right) * x_scale,
+                f32::midpoint(top, bottom) * y_scale,
             ],
             [
                 (right - left).abs() * x_scale * size_scale_x,
@@ -18080,8 +18090,8 @@ pub fn push_actors(
     }
     let mut proxy_analysis = song_lua_proxy_request_analysis_indexed(
         &song_lua_visuals.overlays,
-        &song_lua_overlay_state_scratch,
-        &song_lua_proxy_request_index,
+        song_lua_overlay_state_scratch,
+        song_lua_proxy_request_index,
         song_lua_capture_visit_scratch,
     );
     for &layer_idx in song_lua_foreground_active_layers {
@@ -18101,9 +18111,9 @@ pub fn push_actors(
     let proxy_requests = proxy_analysis.all;
     let mut covering_proxy_requests = song_lua_covering_capture_requests(
         &song_lua_visuals.overlays,
-        &song_lua_local_state_scratch,
-        &song_lua_overlay_state_scratch,
-        &song_lua_proxy_request_index,
+        song_lua_local_state_scratch,
+        song_lua_overlay_state_scratch,
+        song_lua_proxy_request_index,
         song_lua_space_width,
         song_lua_space_height,
         song_lua_capture_visit_scratch,
@@ -18885,9 +18895,9 @@ pub fn push_actors(
     ];
     let mut replacement_active_players = song_lua_replacement_active_players_indexed(
         &song_lua_visuals.overlays,
-        &song_lua_overlay_state_scratch,
+        song_lua_overlay_state_scratch,
         &replacement_proxy_sources,
-        &song_lua_proxy_request_index,
+        song_lua_proxy_request_index,
         song_lua_capture_visit_scratch,
     );
     for &layer_idx in song_lua_foreground_active_layers {
@@ -19905,8 +19915,8 @@ pub fn push_actors(
         &song_lua_visuals.overlays,
         song_lua_overlay_order,
         &mut song_lua_proxy_request_index.topology,
-        &song_lua_local_state_scratch,
-        &song_lua_overlay_state_scratch,
+        song_lua_local_state_scratch,
+        song_lua_overlay_state_scratch,
         song_foreground_state,
         &proxy_sources,
         Some(&mut *song_lua_direct_proxies),
@@ -19925,9 +19935,9 @@ pub fn push_actors(
     );
     if let Some(actor) = build_foreground_media(
         state,
-        &song_lua_overlay_state_scratch,
-        &song_lua_background_layer_state_scratch,
-        &song_lua_foreground_layer_state_scratch,
+        song_lua_overlay_state_scratch,
+        song_lua_background_layer_state_scratch,
+        song_lua_foreground_layer_state_scratch,
     ) {
         actors.push(actor);
     }
@@ -20129,7 +20139,7 @@ const SMX_SENSOR_THRESHOLD: [f32; 4] = [1.0, 0.45, 0.0, 1.0];
 const SMX_SENSOR_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.35];
 
 #[inline(always)]
-fn smx_sensor_value_content(value: Option<u16>) -> (TextContent, [f32; 4]) {
+const fn smx_sensor_value_content(value: Option<u16>) -> (TextContent, [f32; 4]) {
     match value {
         Some(value) => (TextContent::prewarmed_u16(value, 0), SMX_SENSOR_VALUE_COLOR),
         None => (TextContent::Static("--"), SMX_SENSOR_VALUE_IDLE_COLOR),
@@ -20201,7 +20211,7 @@ fn smx_centered_layout(
     let top_y = screen_center_y() - total_h * 0.5;
     let gutter_center = match side {
         profile_data::PlayerSide::P1 => field_left * 0.5,
-        profile_data::PlayerSide::P2 => (field_right + screen_width()) * 0.5,
+        profile_data::PlayerSide::P2 => f32::midpoint(field_right, screen_width()),
     };
     (
         scale,
@@ -20485,7 +20495,7 @@ fn push_smx_pad_input_display(
         // mini-only display doesn't look oddly spread out.
         let fsr_active = state.profiles()[0].smx_fsr_display;
         let fsr_group_w = smx_fsr_group_w();
-        let fsr_start_x = center_x - (fsr_group_w * 2.0 + group_gap) * 0.5;
+        let fsr_start_x = center_x - f32::midpoint(fsr_group_w * 2.0, group_gap);
         for half in 0..2usize {
             let x0 = if fsr_active {
                 let fsr_center =

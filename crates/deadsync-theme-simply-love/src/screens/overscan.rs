@@ -52,7 +52,7 @@ impl Values {
     }
 
     #[inline(always)]
-    fn get_mut(&mut self, field: Field) -> &mut i32 {
+    const fn get_mut(&mut self, field: Field) -> &mut i32 {
         match field {
             Field::AddHeight => &mut self.add_height,
             Field::AddWidth => &mut self.add_width,
@@ -109,21 +109,21 @@ impl State {
         self.selected
     }
 
-    pub fn reset(&mut self, values: Values) {
+    pub const fn reset(&mut self, values: Values) {
         self.values = values;
         self.initial = values;
         self.selected = Field::AddHeight;
     }
 }
 
-pub fn apply_adjustment(state: &mut State, adjustment: Adjustment) -> Values {
+pub const fn apply_adjustment(state: &mut State, adjustment: Adjustment) -> Values {
     state.selected = adjustment.field;
     let value = state.values.get_mut(adjustment.field);
     *value = value.saturating_add(adjustment.delta);
     state.values
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> Action {
+pub const fn handle_input(state: &mut State, ev: &InputEvent) -> Action {
     if !ev.pressed {
         return Action::None;
     }

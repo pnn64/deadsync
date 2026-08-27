@@ -361,7 +361,7 @@ enum SubmitFooterStatus {
 }
 
 #[inline(always)]
-fn footer_status_from_groovestats(
+const fn footer_status_from_groovestats(
     status: score_data::GrooveStatsSubmitUiStatus,
     next_retry_remaining_secs: Option<u32>,
     next_retry_is_auto: bool,
@@ -389,7 +389,7 @@ fn footer_status_from_groovestats(
 }
 
 #[inline(always)]
-fn footer_status_from_arrowcloud(
+const fn footer_status_from_arrowcloud(
     status: score_data::ArrowCloudSubmitUiStatus,
     next_retry_remaining_secs: Option<u32>,
     next_retry_is_auto: bool,
@@ -469,12 +469,12 @@ impl SubmitFooterCell {
 
     /// Returns retained text fragments surrounding the icon sprite.
     #[inline(always)]
-    fn sprite_render_parts(&self) -> (&Arc<str>, &Arc<str>) {
+    const fn sprite_render_parts(&self) -> (&Arc<str>, &Arc<str>) {
         (&self.prefix, &self.suffix)
     }
 
     /// Texture key for the cell's icon sprite.
-    fn sprite_texture_key(&self) -> &'static str {
+    const fn sprite_texture_key(&self) -> &'static str {
         match self.icon {
             CellIcon::Spinner => SUBMIT_FOOTER_SPINNER_TEXTURE,
             CellIcon::Hourglass => SUBMIT_FOOTER_HOURGLASS_TEXTURE,
@@ -486,7 +486,7 @@ impl SubmitFooterCell {
 
     /// Whether the icon is a multi-frame animation. Static (single-frame)
     /// sprites should always use frame 0.
-    fn icon_is_animated(&self) -> bool {
+    const fn icon_is_animated(&self) -> bool {
         matches!(self.icon, CellIcon::Spinner | CellIcon::Hourglass)
     }
 
@@ -494,7 +494,7 @@ impl SubmitFooterCell {
     /// bracket text in white; only the icon itself is tinted, using colors
     /// drawn from the gameplay judgment palette so the eye reads them the
     /// same way it reads judgments.
-    fn sprite_tint(&self) -> [f32; 4] {
+    const fn sprite_tint(&self) -> [f32; 4] {
         match self.icon {
             CellIcon::Check => SUBMIT_FOOTER_TINT_OK,
             CellIcon::Hourglass => SUBMIT_FOOTER_TINT_AUTO_RETRY,
@@ -508,7 +508,7 @@ impl SubmitFooterCell {
     /// Used to fine-tune optical sizing — the hourglass silhouette is taller
     /// than it is wide so we shave a few % off the height to keep it from
     /// dominating the line.
-    fn sprite_scale_y(&self) -> f32 {
+    const fn sprite_scale_y(&self) -> f32 {
         match self.icon {
             CellIcon::Hourglass => 0.90,
             _ => 1.0,
@@ -836,7 +836,7 @@ fn cached_str_ref(text: &str) -> Arc<str> {
 }
 
 #[inline(always)]
-fn course_graph_stage_seconds(stage: &CourseGraphStage) -> f32 {
+const fn course_graph_stage_seconds(stage: &CourseGraphStage) -> f32 {
     if stage.song_last_second.is_finite() {
         stage.song_last_second.max(0.0)
     } else {
@@ -1318,7 +1318,7 @@ mod tests {
         assert_eq!(state.nice_scores, [false; 2]);
 
         state.nice_scores = [true, false];
-        assert_eq!(state.clone().nice_scores, [true, false]);
+        assert_eq!(state.nice_scores, [true, false]);
     }
 
     fn test_course_graph_stage(song_last_second: f32) -> CourseGraphStage {
@@ -2240,7 +2240,7 @@ const fn eval_has_test_input_pane(only_dedicated_menu_buttons: bool) -> bool {
 }
 
 #[inline(always)]
-fn eval_has_arrow_timing_pane(score_info: &ScoreInfo) -> bool {
+const fn eval_has_arrow_timing_pane(score_info: &ScoreInfo) -> bool {
     // The per-arrow timing pane is only meaningful on 4-panel (singles) charts,
     // where ←/↓/↑/→ map cleanly onto the four columns shown in the table.
     score_info.arrow_timing.per_column.len() == 4
@@ -3785,13 +3785,13 @@ struct Nice69Buf {
 }
 
 impl Nice69Buf {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             bytes: [0; 48],
             len: 0,
         }
     }
-    fn reset(&mut self) {
+    const fn reset(&mut self) {
         self.len = 0;
     }
     fn contains_69(&self) -> bool {
@@ -4140,7 +4140,7 @@ fn evaluation_lobby_player_stats(
     })
 }
 
-fn clear_lobby_disconnect_holds(state: &mut State) {
+const fn clear_lobby_disconnect_holds(state: &mut State) {
     state.lobby_disconnect_hold_p1 = None;
     state.lobby_disconnect_hold_p2 = None;
 }
@@ -4228,7 +4228,10 @@ pub fn test_input_pane_active(state: &State) -> bool {
 }
 
 #[inline(always)]
-fn eval_player_color_rgba(side: profile_data::PlayerSide, active_color_index: i32) -> [f32; 4] {
+const fn eval_player_color_rgba(
+    side: profile_data::PlayerSide,
+    active_color_index: i32,
+) -> [f32; 4] {
     match side {
         profile_data::PlayerSide::P1 => color::simply_love_rgba(active_color_index),
         profile_data::PlayerSide::P2 => color::simply_love_rgba(active_color_index - 2),
@@ -4302,7 +4305,7 @@ fn stage_in_result(state: &State) -> (bool, bool) {
 }
 
 #[inline(always)]
-fn stage_in_stinger_seconds(failed: bool, srpg10: bool) -> f32 {
+const fn stage_in_stinger_seconds(failed: bool, srpg10: bool) -> f32 {
     if srpg10 {
         if failed {
             SRPG10_EVAL_FAILED_SECONDS
@@ -4484,7 +4487,7 @@ fn auto_screenshot_phase(state: &State) -> AutoScreenshotPhase {
 }
 
 #[inline(always)]
-fn auto_screenshot_intro_done_seconds(state: &State, failed: bool) -> f32 {
+const fn auto_screenshot_intro_done_seconds(state: &State, failed: bool) -> f32 {
     stage_in_stinger_seconds(failed, state.context.policy.srpg10_visuals)
         .max(eval_panes::pane_stats::rolling_numbers_approach_seconds())
 }
@@ -4660,7 +4663,7 @@ fn eval_life_record_start(si: &ScoreInfo) -> f32 {
     }
 }
 
-fn eval_life_graph_first(si: &ScoreInfo) -> f32 {
+const fn eval_life_graph_first(si: &ScoreInfo) -> f32 {
     if si.is_course_summary() {
         0.0
     } else {

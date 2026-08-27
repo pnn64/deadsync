@@ -229,7 +229,7 @@ pub struct PanelAnim {
 
 impl PanelAnim {
     /// Whether frames exist after `loop_end`: an outro to play on release.
-    pub fn has_outro(&self) -> bool {
+    pub const fn has_outro(&self) -> bool {
         self.loop_end + 1 < self.frames.len()
     }
 }
@@ -822,7 +822,7 @@ fn key(pack: &str, name: &str, size: PadSize) -> Key {
     }
 }
 
-fn key_ref<'a>(pack: &'a str, name: &'a str, size: PadSize) -> KeyRef<'a> {
+const fn key_ref<'a>(pack: &'a str, name: &'a str, size: PadSize) -> KeyRef<'a> {
     KeyRef { pack, name, size }
 }
 

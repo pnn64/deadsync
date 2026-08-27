@@ -718,7 +718,7 @@ where
 }
 
 #[inline(always)]
-fn gameplay_menu_input(action: VirtualAction) -> Option<GameplayMenuInput> {
+const fn gameplay_menu_input(action: VirtualAction) -> Option<GameplayMenuInput> {
     match action {
         VirtualAction::p1_start => Some(GameplayMenuInput::P1Start),
         VirtualAction::p2_start => Some(GameplayMenuInput::P2Start),

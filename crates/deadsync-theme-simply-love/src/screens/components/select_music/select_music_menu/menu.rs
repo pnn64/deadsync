@@ -464,7 +464,7 @@ fn render_row(
     let vis_top = row_top.max(box_top);
     let vis_bot = row_bot.min(box_bot);
     let vis_h = vis_bot - vis_top;
-    let vis_cy = (vis_top + vis_bot) * 0.5;
+    let vis_cy = f32::midpoint(vis_top, vis_bot);
     let left_x = cx - WIDTH * 0.5 + 12.0;
 
     // Row background: category headers get gray bg, others get black

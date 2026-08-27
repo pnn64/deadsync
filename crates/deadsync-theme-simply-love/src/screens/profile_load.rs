@@ -20,7 +20,7 @@ pub struct State {
     next_screen: Screen,
 }
 
-pub fn init() -> State {
+pub const fn init() -> State {
     State {
         active_color_index: deadlib_present::color::DEFAULT_COLOR_INDEX,
         elapsed: 0.0,
@@ -29,7 +29,7 @@ pub fn init() -> State {
     }
 }
 
-pub fn on_enter(state: &mut State, play_mode: profile_data::PlayMode) {
+pub const fn on_enter(state: &mut State, play_mode: profile_data::PlayMode) {
     state.elapsed = 0.0;
     state.ready = false;
     state.next_screen = match play_mode {
@@ -41,7 +41,7 @@ pub fn on_enter(state: &mut State, play_mode: profile_data::PlayMode) {
 }
 
 #[inline(always)]
-pub fn sync_ready(state: &mut State, ready: bool) {
+pub const fn sync_ready(state: &mut State, ready: bool) {
     state.ready = ready;
 }
 
@@ -53,15 +53,15 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     None
 }
 
-pub fn handle_input(_: &mut State, _: &deadsync_input::InputEvent) -> ThemeEffect {
+pub const fn handle_input(_: &mut State, _: &deadsync_input::InputEvent) -> ThemeEffect {
     ThemeEffect::None
 }
 
-pub fn in_transition() -> (Vec<Actor>, f32) {
+pub const fn in_transition() -> (Vec<Actor>, f32) {
     (vec![], 0.0)
 }
 
-pub fn out_transition() -> (Vec<Actor>, f32) {
+pub const fn out_transition() -> (Vec<Actor>, f32) {
     (vec![], 0.0)
 }
 

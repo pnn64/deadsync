@@ -661,7 +661,7 @@ fn set_executable(path: &Path) -> Result<(), UpdaterError> {
 }
 
 #[cfg(not(unix))]
-fn set_executable(_path: &Path) -> Result<(), UpdaterError> {
+const fn set_executable(_path: &Path) -> Result<(), UpdaterError> {
     Ok(())
 }
 

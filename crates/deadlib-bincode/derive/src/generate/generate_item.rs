@@ -65,7 +65,7 @@ impl<'a, P: FnParent> FnBuilder<'a, P> {
     /// # generator.assert_eq("impl Foo { fn foo (& self ,) { } }");
     /// ```
     #[must_use]
-    pub fn with_self_arg(mut self, self_arg: FnSelfArg) -> Self {
+    pub const fn with_self_arg(mut self, self_arg: FnSelfArg) -> Self {
         self.self_arg = self_arg;
         self
     }

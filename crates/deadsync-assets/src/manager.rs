@@ -34,7 +34,7 @@ impl AssetManager {
     }
 
     #[inline(always)]
-    pub fn textures(&self) -> &TextureHandleMap<RendererTexture> {
+    pub const fn textures(&self) -> &TextureHandleMap<RendererTexture> {
         self.store.textures()
     }
 

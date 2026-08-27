@@ -124,7 +124,7 @@ pub fn read_easing_name(
 }
 
 #[inline(always)]
-pub fn truthy(value: &Value) -> bool {
+pub const fn truthy(value: &Value) -> bool {
     !matches!(value, Value::Nil | Value::Boolean(false))
 }
 

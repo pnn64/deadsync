@@ -64,7 +64,7 @@ impl HidReportRoute {
     }
 
     #[inline(always)]
-    pub fn needs_fallback(&self) -> bool {
+    pub const fn needs_fallback(&self) -> bool {
         !self.direct
     }
 

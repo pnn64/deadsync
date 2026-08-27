@@ -20,7 +20,7 @@ use std::path::Path;
 /// small `[alt]` page and the miso font.
 ///
 /// Letters without a matching accented variant in both fonts stay unchanged.
-fn accent_char(c: char) -> char {
+const fn accent_char(c: char) -> char {
     match c {
         'A' => 'Á',
         'C' => 'Ç',

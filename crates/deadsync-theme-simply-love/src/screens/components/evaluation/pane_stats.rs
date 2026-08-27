@@ -152,12 +152,12 @@ fn max_window_count(wc: WindowCounts) -> u32 {
 }
 
 #[inline(always)]
-fn standard_row_disabled(disabled_windows: [bool; 5], row: usize) -> bool {
+const fn standard_row_disabled(disabled_windows: [bool; 5], row: usize) -> bool {
     row < 5 && disabled_windows[row]
 }
 
 #[inline(always)]
-fn split_row_disabled(disabled_windows: [bool; 5], row: usize) -> bool {
+const fn split_row_disabled(disabled_windows: [bool; 5], row: usize) -> bool {
     match row {
         0 | 1 => disabled_windows[0],
         2 => disabled_windows[1],

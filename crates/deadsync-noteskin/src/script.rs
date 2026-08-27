@@ -739,7 +739,7 @@ pub fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
 }
 
 #[inline(always)]
-pub fn tween_type_from_script_tween(tween: ScriptTween) -> TweenType {
+pub const fn tween_type_from_script_tween(tween: ScriptTween) -> TweenType {
     match tween {
         ScriptTween::Linear => TweenType::Linear,
         ScriptTween::Accelerate => TweenType::Accelerate,

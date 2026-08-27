@@ -348,7 +348,7 @@ pub(super) fn visible_items(state: &State) -> &[&'static Item] {
     &state.main_visible_items
 }
 
-fn item_visible(id: ItemId, capabilities: SimplyLoveUpdaterCapabilities) -> bool {
+const fn item_visible(id: ItemId, capabilities: SimplyLoveUpdaterCapabilities) -> bool {
     match id {
         ItemId::CheckForUpdates | ItemId::RollBackVersion => capabilities.app_update,
         ItemId::DownloadVideoSupport => capabilities.ffmpeg_install,

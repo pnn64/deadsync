@@ -63,7 +63,7 @@ pub fn folder_stats_best_grade(star_counts: &[u32; FOLDER_STATS_STAR_BUCKETS]) -
         .map_or(0, |idx| (FOLDER_STATS_STAR_BUCKETS - idx) as u8)
 }
 
-pub fn folder_stats_difficulty_label(difficulty: &str) -> &str {
+pub const fn folder_stats_difficulty_label(difficulty: &str) -> &str {
     if difficulty.eq_ignore_ascii_case("Challenge") {
         "Expert"
     } else if difficulty.eq_ignore_ascii_case("Beginner") {
@@ -81,11 +81,11 @@ pub fn folder_stats_difficulty_label(difficulty: &str) -> &str {
     }
 }
 
-pub fn grade_sort_order(grade: Grade) -> u8 {
+pub const fn grade_sort_order(grade: Grade) -> u8 {
     grade.to_sprite_state() as u8
 }
 
-pub fn grade_group_name(grade: Grade) -> &'static str {
+pub const fn grade_group_name(grade: Grade) -> &'static str {
     match grade {
         Grade::Quint => "\u{2605}\u{2605}\u{2605}\u{2605}\u{2605}",
         Grade::Tier01 => "\u{2605}\u{2605}\u{2605}\u{2605}",

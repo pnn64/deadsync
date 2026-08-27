@@ -152,67 +152,73 @@ fn queue_volume_change(state: &mut State, target: AudioVolumeTarget, percent: u8
     );
 }
 
-fn select_music_config_effect(request: crate::SimplyLoveSelectMusicConfigRequest) -> ThemeEffect {
+const fn select_music_config_effect(
+    request: crate::SimplyLoveSelectMusicConfigRequest,
+) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
         crate::SimplyLoveConfigRequest::SelectMusic(request),
     ))
 }
 
-fn machine_config_effect(request: crate::SimplyLoveMachineConfigRequest) -> ThemeEffect {
+const fn machine_config_effect(request: crate::SimplyLoveMachineConfigRequest) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
         crate::SimplyLoveConfigRequest::Machine(request),
     ))
 }
 
-fn coin_config_effect(request: crate::SimplyLoveCoinConfigRequest) -> ThemeEffect {
+const fn coin_config_effect(request: crate::SimplyLoveCoinConfigRequest) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
         crate::SimplyLoveConfigRequest::Coin(request),
     ))
 }
 
-fn advanced_config_effect(request: crate::SimplyLoveAdvancedConfigRequest) -> ThemeEffect {
+const fn advanced_config_effect(request: crate::SimplyLoveAdvancedConfigRequest) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
         crate::SimplyLoveConfigRequest::Advanced(request),
     ))
 }
 
-fn course_config_effect(request: crate::SimplyLoveCourseConfigRequest) -> ThemeEffect {
+const fn course_config_effect(request: crate::SimplyLoveCourseConfigRequest) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
         crate::SimplyLoveConfigRequest::Course(request),
     ))
 }
 
-fn gameplay_config_effect(request: crate::SimplyLoveGameplayConfigRequest) -> ThemeEffect {
+const fn gameplay_config_effect(request: crate::SimplyLoveGameplayConfigRequest) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
         crate::SimplyLoveConfigRequest::Gameplay(request),
     ))
 }
 
-fn tournament_config_effect(request: crate::SimplyLoveTournamentConfigRequest) -> ThemeEffect {
+const fn tournament_config_effect(
+    request: crate::SimplyLoveTournamentConfigRequest,
+) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
         crate::SimplyLoveConfigRequest::Tournament(request),
     ))
 }
 
-fn lights_config_effect(request: crate::SimplyLoveLightsConfigRequest) -> ThemeEffect {
+const fn lights_config_effect(request: crate::SimplyLoveLightsConfigRequest) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
         crate::SimplyLoveConfigRequest::Lights(request),
     ))
 }
 
-fn null_or_die_config_effect(request: crate::SimplyLoveNullOrDieConfigRequest) -> ThemeEffect {
+const fn null_or_die_config_effect(
+    request: crate::SimplyLoveNullOrDieConfigRequest,
+) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
         crate::SimplyLoveConfigRequest::NullOrDie(request),
     ))
 }
 
-fn online_config_effect(request: crate::SimplyLoveOnlineConfigRequest) -> ThemeEffect {
+const fn online_config_effect(request: crate::SimplyLoveOnlineConfigRequest) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
         crate::SimplyLoveConfigRequest::Online(request),
     ))
 }
 
-fn options_config_effect(request: crate::SimplyLoveOptionsConfigRequest) -> ThemeEffect {
+const fn options_config_effect(request: crate::SimplyLoveOptionsConfigRequest) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
         crate::SimplyLoveConfigRequest::Options(request),
     ))

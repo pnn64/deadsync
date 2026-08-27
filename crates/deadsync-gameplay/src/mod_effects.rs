@@ -155,7 +155,7 @@ pub struct AccelOverrides {
 
 impl AccelOverrides {
     #[inline(always)]
-    pub fn any(self) -> bool {
+    pub const fn any(self) -> bool {
         self.boost.is_some()
             || self.brake.is_some()
             || self.wave.is_some()
@@ -263,7 +263,7 @@ pub struct AppearanceOverrides {
 
 impl AppearanceOverrides {
     #[inline(always)]
-    pub fn any(self) -> bool {
+    pub const fn any(self) -> bool {
         self.hidden.is_some()
             || self.hidden_offset.is_some()
             || self.sudden.is_some()
@@ -283,7 +283,7 @@ pub struct VisibilityOverrides {
 
 impl VisibilityOverrides {
     #[inline(always)]
-    pub fn any(self) -> bool {
+    pub const fn any(self) -> bool {
         self.dark.is_some() || self.blind.is_some() || self.cover.is_some()
     }
 }
@@ -299,7 +299,7 @@ pub struct ScrollOverrides {
 
 impl ScrollOverrides {
     #[inline(always)]
-    pub fn any(self) -> bool {
+    pub const fn any(self) -> bool {
         self.reverse.is_some()
             || self.split.is_some()
             || self.alternate.is_some()
@@ -316,7 +316,7 @@ pub struct PerspectiveOverrides {
 
 impl PerspectiveOverrides {
     #[inline(always)]
-    pub fn any(self) -> bool {
+    pub const fn any(self) -> bool {
         self.tilt.is_some() || self.skew.is_some()
     }
 }
@@ -733,7 +733,7 @@ impl AppearanceEffects {
     }
 
     #[inline(always)]
-    pub fn approach_speeds() -> Self {
+    pub const fn approach_speeds() -> Self {
         Self {
             hidden: 1.0,
             hidden_offset: 1.0,

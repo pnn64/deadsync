@@ -194,7 +194,7 @@ impl PanelFx {
 
     /// Force a pad slot to solid black regardless of any effects or background.
     /// Persists across `clear_panels` / `clear_all` since it is a mode, not an effect.
-    pub fn set_pad_blackout(&mut self, pad: usize, on: bool) {
+    pub const fn set_pad_blackout(&mut self, pad: usize, on: bool) {
         if pad < PADS {
             self.blackout[pad] = on;
         }
@@ -218,7 +218,7 @@ impl PanelFx {
     }
 
     /// Update the song beat position driving a `BeatLocked` background.
-    pub fn set_beat(&mut self, beat: f32) {
+    pub const fn set_beat(&mut self, beat: f32) {
         self.beat = beat;
     }
 
@@ -685,7 +685,7 @@ impl LightsTx {
     /// Called on that pad's every active transition: while we didn't own it the
     /// pad was showing firmware content, so an identical-looking frame must still
     /// be re-sent to take the LEDs back.
-    fn invalidate_pad(&mut self, pad: usize) {
+    const fn invalidate_pad(&mut self, pad: usize) {
         if pad < PADS {
             self.have_last[pad] = false;
         }

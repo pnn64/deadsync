@@ -286,7 +286,7 @@ pub(super) struct CursorRect {
 
 impl CursorRect {
     #[inline(always)]
-    pub(super) fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
+    pub(super) const fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
         Self { x, y, w, h }
     }
 
@@ -516,12 +516,12 @@ pub(super) struct RowLayoutKey {
 
 impl State {
     #[inline(always)]
-    pub(crate) fn pane(&self) -> &PaneState {
+    pub(crate) const fn pane(&self) -> &PaneState {
         &self.panes[self.current_pane.index()]
     }
 
     #[inline(always)]
-    pub(crate) fn pane_mut(&mut self) -> &mut PaneState {
+    pub(crate) const fn pane_mut(&mut self) -> &mut PaneState {
         &mut self.panes[self.current_pane.index()]
     }
 }

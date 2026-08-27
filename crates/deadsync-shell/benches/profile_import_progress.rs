@@ -77,7 +77,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             frees: self.frees - before.frees,
@@ -105,7 +105,7 @@ impl UiState {
         }
     }
 
-    fn checksum(&self) -> usize {
+    const fn checksum(&self) -> usize {
         self.done ^ self.total.rotate_left(7) ^ self.label.len().rotate_left(13)
     }
 }

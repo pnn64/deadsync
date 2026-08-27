@@ -95,7 +95,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -106,7 +106,7 @@ impl AllocSnapshot {
         }
     }
 
-    fn churn_bytes(self) -> u64 {
+    const fn churn_bytes(self) -> u64 {
         self.alloc_bytes + self.realloc_bytes + self.free_bytes
     }
 }
@@ -342,7 +342,7 @@ fn shade_mask_old(
 }
 
 #[inline(always)]
-fn shade_mask_opaque(tint: [f32; 4]) -> [f32; 4] {
+const fn shade_mask_opaque(tint: [f32; 4]) -> [f32; 4] {
     tint
 }
 
@@ -445,7 +445,7 @@ fn opaque_work(data: &[u8], specialized: bool) -> u64 {
 }
 
 #[inline(always)]
-fn wrap_old(index: i32, max: usize) -> usize {
+const fn wrap_old(index: i32, max: usize) -> usize {
     if max.is_power_of_two() {
         index as usize & (max - 1)
     } else {
@@ -454,7 +454,7 @@ fn wrap_old(index: i32, max: usize) -> usize {
 }
 
 #[inline(always)]
-fn wrap_new(index: i32, max: usize, mask: usize) -> usize {
+const fn wrap_new(index: i32, max: usize, mask: usize) -> usize {
     if mask != 0 {
         index as usize & mask
     } else {

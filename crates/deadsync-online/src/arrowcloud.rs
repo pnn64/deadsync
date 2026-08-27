@@ -272,7 +272,7 @@ pub struct ArrowCloudSubmitDraft {
 
 impl ArrowCloudSubmitDraft {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub const fn new(
         side: profile_data::PlayerSide,
         api_key: String,
         payload: ArrowCloudPayload,
@@ -459,7 +459,7 @@ pub fn submit_gameplay_players(
 }
 
 impl ArrowCloudSubmitJob {
-    pub fn new(
+    pub const fn new(
         side: profile_data::PlayerSide,
         api_key: String,
         token: u64,
@@ -557,7 +557,7 @@ pub struct ArrowCloudSubmitRetryEntry {
 }
 
 impl ArrowCloudSubmitRetryEntry {
-    pub fn new(
+    pub const fn new(
         side: profile_data::PlayerSide,
         api_key: String,
         payload: ArrowCloudPayload,
@@ -2125,7 +2125,7 @@ pub struct ArrowCloudGameplayPayloadInput<'a> {
 }
 
 impl ArrowCloudPayload {
-    pub fn fill_metadata(&mut self) {
+    pub const fn fill_metadata(&mut self) {
         self.body_version = ARROWCLOUD_BODY_VERSION;
         self.arrow_cloud_body_version = ARROWCLOUD_BODY_VERSION;
         self.engine_name = ARROWCLOUD_ENGINE_NAME;
@@ -2706,7 +2706,7 @@ fn run_device_login_session_with<S, P, F, W>(
 
     if !dispatch(DeviceLoginEvent::Started {
         short_code: start.short_code.clone(),
-        verification_url: start.verification_url.clone(),
+        verification_url: start.verification_url,
     }) {
         return;
     }

@@ -3979,7 +3979,7 @@ return Def.ActorFrame{}
                             vec![0.0, state.clock.song_position.current_music_time_display];
                         for window in &state.mods.attacks.song_lua_ease_windows[0] {
                             times.push(window.start_second);
-                            times.push((window.start_second + window.end_second) * 0.5);
+                            times.push(f32::midpoint(window.start_second, window.end_second));
                             times.push(window.end_second);
                             times.push(window.sustain_end_second);
                         }

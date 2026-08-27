@@ -107,7 +107,7 @@ impl PlanarAccum {
 }
 
 #[inline(always)]
-pub fn resampler_params() -> SincInterpolationParameters {
+pub const fn resampler_params() -> SincInterpolationParameters {
     SincInterpolationParameters {
         sinc_len: 256,
         f_cutoff: Some(0.95),

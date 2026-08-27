@@ -317,7 +317,12 @@ async fn start_scans(adapters: &[Adapter], filter: &ScanFilter) -> Result<(), St
     Ok(())
 }
 
-fn scan_needed(connecting: bool, discover: bool, has_monitor: bool, missing_device: bool) -> bool {
+const fn scan_needed(
+    connecting: bool,
+    discover: bool,
+    has_monitor: bool,
+    missing_device: bool,
+) -> bool {
     !connecting && (missing_device || (discover && !has_monitor))
 }
 

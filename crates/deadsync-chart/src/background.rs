@@ -217,7 +217,7 @@ struct XorShift64 {
 }
 
 impl XorShift64 {
-    fn new(seed: u64) -> Self {
+    const fn new(seed: u64) -> Self {
         Self {
             state: if seed == 0 {
                 0x9E37_79B9_7F4A_7C15
@@ -227,7 +227,7 @@ impl XorShift64 {
         }
     }
 
-    fn next_u32(&mut self) -> u32 {
+    const fn next_u32(&mut self) -> u32 {
         let mut x = self.state;
         x ^= x << 13;
         x ^= x >> 7;
@@ -236,7 +236,7 @@ impl XorShift64 {
         (x >> 32) as u32
     }
 
-    fn gen_range(&mut self, upper_exclusive: usize) -> usize {
+    const fn gen_range(&mut self, upper_exclusive: usize) -> usize {
         if upper_exclusive <= 1 {
             0
         } else {

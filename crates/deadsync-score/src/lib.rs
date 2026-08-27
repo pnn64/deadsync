@@ -679,7 +679,7 @@ pub fn log_score_cache_result(kind: &str, result: ScoreCacheRuntimeResult) {
     }
 }
 
-pub fn score_cache_kind_label(kind: ScoreCacheRuntimeKind) -> &'static str {
+pub const fn score_cache_kind_label(kind: ScoreCacheRuntimeKind) -> &'static str {
     match kind {
         ScoreCacheRuntimeKind::GrooveStats => "GS",
         ScoreCacheRuntimeKind::ArrowCloud => "AC",
@@ -1918,7 +1918,7 @@ impl HeldProfileScores<'_> {
 }
 
 impl HeldScoreCaches {
-    pub fn new(
+    pub const fn new(
         local: MutexGuard<'static, LocalScoreCacheState>,
         gs: MutexGuard<'static, GsScoreCacheState>,
         ac: MutexGuard<'static, AcScoreCacheState>,
@@ -2737,7 +2737,7 @@ pub fn arrowcloud_score_from_submit_percent(
     })
 }
 
-pub fn set_arrowcloud_score_for_leaderboard(
+pub const fn set_arrowcloud_score_for_leaderboard(
     scores: &mut ArrowCloudScores,
     leaderboard_id: u32,
     score: ArrowCloudScore,
@@ -2784,7 +2784,7 @@ pub struct ArrowCloudSubmitStats {
 }
 
 #[inline(always)]
-pub fn arrowcloud_time_in_submit_window(time_ns: i64, fail_time_ns: Option<i64>) -> bool {
+pub const fn arrowcloud_time_in_submit_window(time_ns: i64, fail_time_ns: Option<i64>) -> bool {
     match fail_time_ns {
         Some(fail_time) => !song_time_ns_invalid(time_ns) && time_ns <= fail_time,
         None => true,
@@ -4025,8 +4025,7 @@ pub fn local_replay_edges_for_player(
         (start, start.saturating_add(cols_per_player))
     };
 
-    let mut out = Vec::new();
-    out.reserve(replay_edges.size_hint().1.unwrap_or(4096).min(4096));
+    let mut out = Vec::with_capacity(replay_edges.size_hint().1.unwrap_or(4096).min(4096));
     for e in replay_edges {
         let lane = e.lane_index as usize;
         if lane < col_start || lane >= col_end || song_time_ns_invalid(e.event_music_time_ns) {
@@ -4273,7 +4272,7 @@ pub struct LocalScoreEntry {
 }
 
 impl LocalScoreEntry {
-    pub fn header(&self) -> LocalScoreHeader {
+    pub const fn header(&self) -> LocalScoreHeader {
         LocalScoreHeader {
             version: self.version,
             played_at_ms: self.played_at_ms,
@@ -5227,7 +5226,7 @@ where
             if should_cancel() {
                 canceled = true;
                 on_event(ArrowCloudBulkImportRunEvent::Canceled {
-                    pack_name: pack_name.clone(),
+                    pack_name: pack_name,
                     pack_idx,
                     total_packs,
                 });
@@ -5561,7 +5560,10 @@ pub fn arrowcloud_bulk_failure_detail(
 }
 
 #[inline(always)]
-pub fn should_log_score_import_progress(processed_charts: usize, requested_charts: usize) -> bool {
+pub const fn should_log_score_import_progress(
+    processed_charts: usize,
+    requested_charts: usize,
+) -> bool {
     processed_charts == requested_charts
         || processed_charts.is_multiple_of(SCORE_IMPORT_PROGRESS_LOG_EVERY)
         || processed_charts == 1
@@ -6336,7 +6338,7 @@ pub enum GrooveStatsSubmitRecordBanner {
 }
 
 #[inline(always)]
-fn submit_result_improved(result: &str) -> bool {
+const fn submit_result_improved(result: &str) -> bool {
     result.eq_ignore_ascii_case("score-added") || result.eq_ignore_ascii_case("improved")
 }
 

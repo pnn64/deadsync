@@ -681,7 +681,7 @@ mod tests {
         };
         save_cache_to(&path, &cache).unwrap();
 
-        let cleansed = sanitize_loaded_cache(&path, cache.clone(), false);
+        let cleansed = sanitize_loaded_cache(&path, cache, false);
         assert!(cleansed.cached_release.is_none());
         // ETag and last_seen_tag survive — only the dangerous bit is dropped.
         assert_eq!(cleansed.etag.as_deref(), Some("\"etag\""));

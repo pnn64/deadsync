@@ -24,7 +24,7 @@ pub struct GameplayUpdatePhaseTimings {
 }
 
 #[inline(always)]
-pub fn gameplay_update_hot_phase(phases: &GameplayUpdatePhaseTimings) -> (&'static str, u32) {
+pub const fn gameplay_update_hot_phase(phases: &GameplayUpdatePhaseTimings) -> (&'static str, u32) {
     let mut best = ("pre_notes", phases.pre_notes_us);
     if phases.autoplay_us > best.1 {
         best = ("autoplay", phases.autoplay_us);
@@ -100,7 +100,7 @@ pub fn accumulate_gameplay_update_phase_max(
 }
 
 #[inline(always)]
-pub fn gameplay_update_tracked_phase_total_us(phases: &GameplayUpdatePhaseTimings) -> u32 {
+pub const fn gameplay_update_tracked_phase_total_us(phases: &GameplayUpdatePhaseTimings) -> u32 {
     phases
         .pre_notes_us
         .saturating_add(phases.autoplay_us)
@@ -416,7 +416,7 @@ pub fn trace_gameplay_update<Profile, OverlayActor, CapturedActor, StateDelta>(
 }
 
 #[inline(always)]
-fn record_capacity_growth(
+const fn record_capacity_growth(
     old: &mut usize,
     new_capacity: usize,
     len: usize,

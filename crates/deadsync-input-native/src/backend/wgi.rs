@@ -108,7 +108,7 @@ fn offset_between(host_ns: u64, reading_ns: u64) -> Option<i64> {
 }
 
 #[inline(always)]
-fn apply_offset(reading_ns: u64, offset_ns: i64) -> u64 {
+const fn apply_offset(reading_ns: u64, offset_ns: i64) -> u64 {
     if offset_ns >= 0 {
         reading_ns.saturating_add(offset_ns as u64)
     } else {
@@ -139,7 +139,7 @@ fn instant_from_host_sample(
 
 impl ReadingClock {
     #[inline(always)]
-    fn seed(&mut self, raw: u64, poll_host_nanos: u64) {
+    const fn seed(&mut self, raw: u64, poll_host_nanos: u64) {
         if raw == 0 || poll_host_nanos == 0 {
             return;
         }
@@ -407,7 +407,7 @@ fn raw_reading_changed(
 }
 
 #[inline(always)]
-fn dir_xy_from_switch(pos: GameControllerSwitchPosition) -> (i32, i32) {
+const fn dir_xy_from_switch(pos: GameControllerSwitchPosition) -> (i32, i32) {
     match pos {
         GameControllerSwitchPosition::Up => (0, 1),
         GameControllerSwitchPosition::Down => (0, -1),
@@ -893,7 +893,7 @@ pub fn run(
         RawGameController::RawGameControllerAdded(&added_handler)
     });
 
-    let removed_tx = tx.clone();
+    let removed_tx = tx;
     let removed_handler = EventHandler::<RawGameController>::new(move |_, c| {
         if let Some(c) = c.as_ref() {
             let _ = removed_tx.send(Msg::Removed(c.clone()));
@@ -1067,10 +1067,10 @@ mod reading_clock_tests {
 
         // Every press must map within a sub-millisecond window of poll time:
         // no early tail (the bug produced tens of ms early) and no late tail.
-        let max_early = press_off_ms.iter().cloned().fold(f64::MIN, f64::max);
+        let max_early = press_off_ms.iter().copied().fold(f64::MIN, f64::max);
         let max_late = press_off_ms
             .iter()
-            .cloned()
+            .copied()
             .fold(f64::MIN, |a, b| a.max(-b));
         assert!(
             max_early < 3.0 && max_late < 3.0,

@@ -290,7 +290,7 @@ pub const SUBMIT_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
 /// | `Numbers`    | `wendy_monospace_numbers`   | `mega_monospace_numbers` |
 /// | `ScreenEval` | `wendy_screenevaluation`    | `mega_screenevaluation`  |
 /// | `Headline`   | `wendy_white`               | `mega_alpha`             |
-pub fn machine_font_key(machine_font: MachineFont, role: FontRole) -> &'static str {
+pub const fn machine_font_key(machine_font: MachineFont, role: FontRole) -> &'static str {
     use MachineFont::{Mega, Wendy};
     match (machine_font, role) {
         (_, FontRole::Normal) => "miso",
@@ -305,7 +305,7 @@ pub fn machine_font_key(machine_font: MachineFont, role: FontRole) -> &'static s
     }
 }
 
-fn mega_alpha_supports_char(c: char) -> bool {
+const fn mega_alpha_supports_char(c: char) -> bool {
     matches!(c,
         'A'..='Z' | 'a'..='z' | '0'..='9' |
         ' ' | '?' | '!' | '.' | ',' | ';' | ':' | '\'' | '"' |
@@ -570,7 +570,7 @@ pub const SRPG10_EVAL_TEXTURES: [&str; 6] = [
 ];
 
 #[inline(always)]
-pub fn for_style(style: VisualStyle) -> &'static Assets {
+pub const fn for_style(style: VisualStyle) -> &'static Assets {
     &ASSETS[style_index(style)]
 }
 
@@ -658,7 +658,7 @@ pub fn effect_zoom_scale(texture_key: &str) -> f32 {
 }
 
 #[inline(always)]
-pub fn srpg10_faction_name(color_index: i32) -> &'static str {
+pub const fn srpg10_faction_name(color_index: i32) -> &'static str {
     match color_index.rem_euclid(12) {
         0..=2 => "Unaffiliated",
         3..=5 => "Democratic People's Republic of Timing",

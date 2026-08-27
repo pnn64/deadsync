@@ -562,7 +562,7 @@ fn first_editable_binding_slot(action: VirtualAction, bindings: &[InputBinding])
 }
 
 #[inline(always)]
-fn requested_to_actual_binding_slot(requested_index: usize, first_editable: usize) -> usize {
+const fn requested_to_actual_binding_slot(requested_index: usize, first_editable: usize) -> usize {
     if first_editable == 0 {
         requested_index.saturating_sub(1)
     } else {

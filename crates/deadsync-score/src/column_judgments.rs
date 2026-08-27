@@ -32,7 +32,7 @@ pub struct ColumnJudgments {
 pub type ColumnJudgmentList = SmallVec<[ColumnJudgments; MAX_COLS]>;
 
 #[inline(always)]
-fn add_early_total(slot: &mut ColumnJudgments, judgment: &Judgment, include_bad: bool) {
+const fn add_early_total(slot: &mut ColumnJudgments, judgment: &Judgment, include_bad: bool) {
     if matches!(judgment.window, Some(TimingWindow::W0)) {
         slot.early_total_w0 = slot.early_total_w0.saturating_add(1);
         return;
@@ -52,7 +52,7 @@ fn add_early_total(slot: &mut ColumnJudgments, judgment: &Judgment, include_bad:
 }
 
 #[inline(always)]
-fn column_judgment_col(note: &Note, col_offset: usize, cols: usize) -> Option<usize> {
+const fn column_judgment_col(note: &Note, col_offset: usize, cols: usize) -> Option<usize> {
     if note.column < col_offset {
         return None;
     }
@@ -61,7 +61,7 @@ fn column_judgment_col(note: &Note, col_offset: usize, cols: usize) -> Option<us
 }
 
 #[inline(always)]
-fn note_counts_for_column_judgments(note: &Note) -> bool {
+const fn note_counts_for_column_judgments(note: &Note) -> bool {
     !note.is_fake && note.can_be_judged && !matches!(note.note_type, NoteType::Mine)
 }
 

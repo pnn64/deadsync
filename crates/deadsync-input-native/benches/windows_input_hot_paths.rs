@@ -89,7 +89,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -190,11 +190,11 @@ fn device_lookup_new(events: usize, devices: &FxHashMap<isize, u64>) -> u64 {
     checksum
 }
 
-fn pad_idx(_: PadOrderBackend, _: [u8; 16]) -> u32 {
+const fn pad_idx(_: PadOrderBackend, _: [u8; 16]) -> u32 {
     0
 }
 
-fn smx_owns(_: Option<u16>, _: Option<u16>) -> bool {
+const fn smx_owns(_: Option<u16>, _: Option<u16>) -> bool {
     false
 }
 
@@ -207,11 +207,11 @@ fn host_now_nanos() -> u64 {
     host_instant_nanos(Instant::now())
 }
 
-fn qpc_nanos(_: u64) -> Option<u64> {
+const fn qpc_nanos(_: u64) -> Option<u64> {
     None
 }
 
-fn no_thread_boost() -> InputThreadPolicy {
+const fn no_thread_boost() -> InputThreadPolicy {
     InputThreadPolicy::none()
 }
 

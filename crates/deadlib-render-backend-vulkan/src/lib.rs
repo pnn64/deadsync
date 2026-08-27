@@ -204,7 +204,7 @@ impl VertexBindingCache {
     }
 
     #[inline(always)]
-    fn index_required(&mut self) -> bool {
+    const fn index_required(&mut self) -> bool {
         !mem::replace(&mut self.index_bound, true)
     }
 }
@@ -2060,7 +2060,7 @@ pub const fn texture_is_yuv420(texture: &Texture) -> bool {
 }
 
 #[inline(always)]
-pub fn request_screenshot(state: &mut State) {
+pub const fn request_screenshot(state: &mut State) {
     state.screenshot_requested = true;
 }
 
@@ -2506,7 +2506,7 @@ fn resolve_vulkan_geometries(
     });
 }
 
-fn upload_vulkan_pass(
+const fn upload_vulkan_pass(
     state: &State,
     pass: VulkanPass<'_>,
     uploads: &TexturedMeshUploads,
@@ -3549,7 +3549,7 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     }
 }
 
-pub fn set_default_projection(state: &mut State, projection: Matrix4) {
+pub const fn set_default_projection(state: &mut State, projection: Matrix4) {
     state.projection = projection;
 }
 
@@ -4412,7 +4412,7 @@ fn select_physical_device(
 }
 
 #[inline(always)]
-fn vk_vendor_name(vendor_id: u32) -> &'static str {
+const fn vk_vendor_name(vendor_id: u32) -> &'static str {
     match vendor_id {
         0x10DE => "NVIDIA",
         0x1002 | 0x1022 => "AMD",
@@ -4494,7 +4494,7 @@ fn current_host_nanos() -> u64 {
 }
 
 #[inline(always)]
-fn vk_present_mode_trace(mode: vk::PresentModeKHR) -> PresentModeTrace {
+const fn vk_present_mode_trace(mode: vk::PresentModeKHR) -> PresentModeTrace {
     match mode {
         vk::PresentModeKHR::FIFO => PresentModeTrace::Fifo,
         vk::PresentModeKHR::FIFO_RELAXED => PresentModeTrace::FifoRelaxed,
@@ -4505,7 +4505,7 @@ fn vk_present_mode_trace(mode: vk::PresentModeKHR) -> PresentModeTrace {
 }
 
 #[inline(always)]
-fn vk_clock_domain_trace(domain: Option<vk::TimeDomainKHR>) -> ClockDomainTrace {
+const fn vk_clock_domain_trace(domain: Option<vk::TimeDomainKHR>) -> ClockDomainTrace {
     match domain {
         Some(vk::TimeDomainKHR::DEVICE) => ClockDomainTrace::Device,
         Some(vk::TimeDomainKHR::CLOCK_MONOTONIC) => ClockDomainTrace::Monotonic,

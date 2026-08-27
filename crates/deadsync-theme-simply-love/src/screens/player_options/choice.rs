@@ -11,7 +11,7 @@ use deadsync_profile::PlayerSide;
 /// The typed bindings (`NumericBinding`, `ChoiceBinding<T>`) wrap this
 /// internally via their `apply_for_player` methods below, so the
 /// dispatcher itself never reads it.
-pub(super) fn persist_ctx(state: &State, player_idx: usize) -> (bool, PlayerSide) {
+pub(super) const fn persist_ctx(state: &State, player_idx: usize) -> (bool, PlayerSide) {
     let play_style = state.play_style;
     let persisted_idx = state.persisted_player_idx;
     let should_persist = play_style.is_versus() || player_idx == persisted_idx;
@@ -346,7 +346,7 @@ fn refresh_pane_defaults(state: &mut State) {
     );
 }
 
-fn reset_what_comes_next(state: &mut State) {
+const fn reset_what_comes_next(state: &mut State) {
     // Simply Love's ScreenAfterPlayerOptions rows use the generic
     // LoadSelections path, so they start on Gameplay each screen entry.
     if let Some(row) = state.pane_mut().row_map.get_mut(RowId::WhatComesNext) {

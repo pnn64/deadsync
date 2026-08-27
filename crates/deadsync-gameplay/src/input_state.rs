@@ -42,7 +42,7 @@ impl GameplayInputState {
     }
 
     #[inline(always)]
-    pub fn lane_counts(&self) -> &[u16; MAX_COLS] {
+    pub const fn lane_counts(&self) -> &[u16; MAX_COLS] {
         &self.lane_counts
     }
 
@@ -94,7 +94,7 @@ impl GameplayInputState {
     }
 
     #[inline(always)]
-    fn update_pressed_lane_mask(&mut self, lane_idx: usize, is_down: bool) {
+    const fn update_pressed_lane_mask(&mut self, lane_idx: usize, is_down: bool) {
         if lane_idx < MAX_COLS {
             let bit = input_lane_bit(lane_idx);
             if is_down {

@@ -493,7 +493,7 @@ pub(crate) fn exit(state: &mut gameplay::State) {
 }
 
 #[inline(always)]
-fn audio_cut(cut: GameplayMusicCut) -> deadsync_audio_stream::Cut {
+const fn audio_cut(cut: GameplayMusicCut) -> deadsync_audio_stream::Cut {
     deadsync_audio_stream::Cut {
         start_sec: cut.start_sec,
         length_sec: cut.length_sec,

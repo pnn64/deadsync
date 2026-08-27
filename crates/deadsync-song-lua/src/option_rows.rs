@@ -16,7 +16,7 @@ pub enum SongLuaOptionValues {
 }
 
 impl SongLuaOptionValues {
-    pub fn len(self) -> usize {
+    pub const fn len(self) -> usize {
         match self {
             Self::Str(values) => values.len(),
             Self::Bool(values) => values.len(),
@@ -40,7 +40,7 @@ pub struct SongLuaOptionRowSpec {
 }
 
 impl SongLuaOptionRowSpec {
-    pub fn new(choices: SongLuaOptionValues) -> Self {
+    pub const fn new(choices: SongLuaOptionValues) -> Self {
         Self {
             choices,
             values: None,
@@ -54,37 +54,37 @@ impl SongLuaOptionRowSpec {
         }
     }
 
-    pub fn values(mut self, values: SongLuaOptionValues) -> Self {
+    pub const fn values(mut self, values: SongLuaOptionValues) -> Self {
         self.values = Some(values);
         self
     }
 
-    pub fn layout(mut self, layout_type: &'static str) -> Self {
+    pub const fn layout(mut self, layout_type: &'static str) -> Self {
         self.layout_type = layout_type;
         self
     }
 
-    pub fn select(mut self, select_type: &'static str) -> Self {
+    pub const fn select(mut self, select_type: &'static str) -> Self {
         self.select_type = select_type;
         self
     }
 
-    pub fn one_choice(mut self) -> Self {
+    pub const fn one_choice(mut self) -> Self {
         self.one_choice_for_all_players = true;
         self
     }
 
-    pub fn export(mut self) -> Self {
+    pub const fn export(mut self) -> Self {
         self.export_on_change = true;
         self
     }
 
-    pub fn hide_on_disable(mut self) -> Self {
+    pub const fn hide_on_disable(mut self) -> Self {
         self.hide_on_disable = true;
         self
     }
 
-    pub fn reload(mut self, messages: &'static [&'static str]) -> Self {
+    pub const fn reload(mut self, messages: &'static [&'static str]) -> Self {
         self.reload_row_messages = messages;
         self
     }

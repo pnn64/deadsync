@@ -20,15 +20,15 @@ pub struct Driver {
 }
 
 impl Driver {
-    pub fn new(port: String) -> Self {
+    pub const fn new(port: String) -> Self {
         Self::with_name("Litboard", port)
     }
 
-    pub fn win32_serial(port: String) -> Self {
+    pub const fn win32_serial(port: String) -> Self {
         Self::with_name("Win32Serial", port)
     }
 
-    fn with_name(name: &'static str, port: String) -> Self {
+    const fn with_name(name: &'static str, port: String) -> Self {
         Self {
             name,
             port,

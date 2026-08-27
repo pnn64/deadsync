@@ -251,7 +251,7 @@ pub fn crossed_mine_bounds_ns(
 }
 
 #[inline(always)]
-pub fn crossed_held_mine_can_hit(note: &Note, column: usize) -> bool {
+pub const fn crossed_held_mine_can_hit(note: &Note, column: usize) -> bool {
     matches!(note.note_type, NoteType::Mine)
         && note.can_be_judged
         && note.mine_result.is_none()
@@ -268,7 +268,7 @@ pub fn mine_hit_offset_in_window(
 }
 
 #[inline(always)]
-pub fn mine_can_be_hit(note: &Note) -> bool {
+pub const fn mine_can_be_hit(note: &Note) -> bool {
     note.mine_result.is_none() && !note.is_fake && note.can_be_judged
 }
 
@@ -456,12 +456,12 @@ pub fn mine_avoid_cursor_end<I: Copy + Into<usize>>(
 }
 
 #[inline(always)]
-pub fn mine_can_be_avoided(note: &Note) -> bool {
+pub const fn mine_can_be_avoided(note: &Note) -> bool {
     note.can_be_judged && note.mine_result.is_none()
 }
 
 #[inline(always)]
-pub fn apply_mine_avoid_result(note: &mut Note) -> bool {
+pub const fn apply_mine_avoid_result(note: &mut Note) -> bool {
     if !mine_can_be_avoided(note) {
         return false;
     }
@@ -587,7 +587,7 @@ pub fn apply_time_based_mine_avoidance_for_players<I: Copy + Into<usize>>(
 }
 
 #[inline(always)]
-pub fn completed_mine_can_be_avoided(note: &Note) -> bool {
+pub const fn completed_mine_can_be_avoided(note: &Note) -> bool {
     matches!(note.note_type, NoteType::Mine)
         && note.can_be_judged
         && !note.is_fake
@@ -595,7 +595,7 @@ pub fn completed_mine_can_be_avoided(note: &Note) -> bool {
 }
 
 #[inline(always)]
-pub fn apply_completed_mine_avoid_result(note: &mut Note) -> bool {
+pub const fn apply_completed_mine_avoid_result(note: &mut Note) -> bool {
     if !completed_mine_can_be_avoided(note) {
         return false;
     }
@@ -767,7 +767,7 @@ pub fn track_held_misses_at_note_time_for_players(
 }
 
 #[inline(always)]
-pub fn collect_edge_judge_indices(
+pub const fn collect_edge_judge_indices(
     row_note_count: usize,
     lead_note_index: usize,
 ) -> Option<([usize; MAX_COLS], usize)> {

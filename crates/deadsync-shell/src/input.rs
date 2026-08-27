@@ -32,7 +32,7 @@ pub enum GameplayQueuedEvent {
 }
 
 #[inline(always)]
-pub fn gameplay_raw_key_event(raw_key: &RawKeyboardEvent) -> Option<GameplayQueuedEvent> {
+pub const fn gameplay_raw_key_event(raw_key: &RawKeyboardEvent) -> Option<GameplayQueuedEvent> {
     if raw_key.repeat {
         return None;
     }
@@ -533,7 +533,7 @@ pub struct GameplayRawKeyRoutePlan {
 
 impl QueuedInputFlushPlan {
     #[inline(always)]
-    pub fn route_drained_event(
+    pub const fn route_drained_event(
         self,
         batch: &mut QueuedInputBatchState,
         error_pending: bool,
@@ -580,7 +580,7 @@ impl QueuedInputBatchState {
     }
 
     #[inline(always)]
-    pub fn note_event(&mut self) {
+    pub const fn note_event(&mut self) {
         self.flushed = true;
     }
 

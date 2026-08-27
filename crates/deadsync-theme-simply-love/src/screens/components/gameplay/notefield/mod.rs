@@ -71,7 +71,7 @@ const TEXT_CACHE_LIMIT: usize = 8192;
 const MEASURE_PREWARM_CAP: i32 = 64;
 
 #[inline(always)]
-fn column_flash_dimmed(brightness: profile_data::ColumnFlashBrightness) -> bool {
+const fn column_flash_dimmed(brightness: profile_data::ColumnFlashBrightness) -> bool {
     matches!(brightness, profile_data::ColumnFlashBrightness::Dimmed)
 }
 
@@ -169,12 +169,12 @@ impl ResolvedJudgmentAssets {
     }
 
     #[inline(always)]
-    pub(crate) fn judgment(&self) -> Option<&'static assets::TextureChoice> {
+    pub(crate) const fn judgment(&self) -> Option<&'static assets::TextureChoice> {
         self.judgment
     }
 
     #[inline(always)]
-    pub(crate) fn hold_judgment(&self) -> Option<&'static assets::TextureChoice> {
+    pub(crate) const fn hold_judgment(&self) -> Option<&'static assets::TextureChoice> {
         self.hold_judgment
     }
 
@@ -340,7 +340,9 @@ impl ResolvedComboMilestoneAssets {
 }
 
 #[inline(always)]
-fn combo_milestone_keys(effects: &'static crate::visual_styles::EffectAssets) -> [&'static str; 4] {
+const fn combo_milestone_keys(
+    effects: &'static crate::visual_styles::EffectAssets,
+) -> [&'static str; 4] {
     [
         COMBO_BURST_TEXTURE,
         effects.combo_100milestone_splode,
@@ -350,7 +352,7 @@ fn combo_milestone_keys(effects: &'static crate::visual_styles::EffectAssets) ->
 }
 
 #[inline(always)]
-fn gameplay_error_bar_trim(trim: profile_data::ErrorBarTrim) -> GameplayErrorBarTrim {
+const fn gameplay_error_bar_trim(trim: profile_data::ErrorBarTrim) -> GameplayErrorBarTrim {
     match trim {
         profile_data::ErrorBarTrim::Off => GameplayErrorBarTrim::Off,
         profile_data::ErrorBarTrim::Fantastic => GameplayErrorBarTrim::Fantastic,
@@ -360,7 +362,7 @@ fn gameplay_error_bar_trim(trim: profile_data::ErrorBarTrim) -> GameplayErrorBar
 }
 
 #[inline(always)]
-fn error_bar_trim_max_window_ix(trim: profile_data::ErrorBarTrim) -> usize {
+const fn error_bar_trim_max_window_ix(trim: profile_data::ErrorBarTrim) -> usize {
     gameplay_error_bar_trim_max_window_ix(gameplay_error_bar_trim(trim))
 }
 
@@ -396,7 +398,7 @@ fn zmod_layout_params(
 }
 
 #[inline(always)]
-fn hold_explosion_enabled(profile: &profile_data::Profile) -> bool {
+const fn hold_explosion_enabled(profile: &profile_data::Profile) -> bool {
     let mask = profile.tap_explosion_active_mask;
     hold_explosion_enabled_for_options(TapExplosionOptions {
         fantastic: mask.contains(profile_data::TapExplosionMask::FANTASTIC),

@@ -39,7 +39,7 @@ pub struct Driver {
 }
 
 impl Driver {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             api: None,
             device: None,
@@ -135,7 +135,7 @@ impl Driver {
     }
 }
 
-fn build_cabinet_report(state: &State) -> [u8; REPORT_SIZE] {
+const fn build_cabinet_report(state: &State) -> [u8; REPORT_SIZE] {
     let mut bits = 0u8;
     set_bit(
         &mut bits,
@@ -175,7 +175,7 @@ fn build_cabinet_report(state: &State) -> [u8; REPORT_SIZE] {
     [REPORT_ID, CABINET_REPORT, bits]
 }
 
-fn build_pad_report(state: &State) -> [u8; REPORT_SIZE] {
+const fn build_pad_report(state: &State) -> [u8; REPORT_SIZE] {
     let mut bits = 0u8;
     set_bit(
         &mut bits,
@@ -220,7 +220,7 @@ fn build_pad_report(state: &State) -> [u8; REPORT_SIZE] {
     [REPORT_ID, PAD_REPORT, bits]
 }
 
-fn set_bit(bits: &mut u8, bit: u8, on: bool) {
+const fn set_bit(bits: &mut u8, bit: u8, on: bool) {
     if on {
         *bits |= 1u8 << bit;
     }

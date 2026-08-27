@@ -161,7 +161,7 @@ impl PacDriveLightOrdering {
     /// Match ITGmania's `PacDriveLightOrdering` preference behavior.
     /// `openitg` and the historical `lumenar` name select the OpenITG layout;
     /// every other explicit value selects the legacy SM5 layout.
-    pub fn from_preference(raw: &str) -> Self {
+    pub const fn from_preference(raw: &str) -> Self {
         if raw.eq_ignore_ascii_case("openitg") || raw.eq_ignore_ascii_case("lumenar") {
             Self::OpenItg
         } else {
@@ -491,19 +491,19 @@ impl State {
         self.menu_buttons[player.ix()][button.ix()]
     }
 
-    fn set_cabinet(&mut self, light: CabinetLight, on: bool) {
+    const fn set_cabinet(&mut self, light: CabinetLight, on: bool) {
         self.cabinet[light.ix()] = on;
     }
 
-    fn set_button(&mut self, player: Player, button: ButtonLight, on: bool) {
+    const fn set_button(&mut self, player: Player, button: ButtonLight, on: bool) {
         self.buttons[player.ix()][button.ix()] = on;
     }
 
-    fn set_menu_button(&mut self, player: Player, button: ButtonLight, on: bool) {
+    const fn set_menu_button(&mut self, player: Player, button: ButtonLight, on: bool) {
         self.menu_buttons[player.ix()][button.ix()] = on;
     }
 
-    fn set_any_button(&mut self, player: Player, button: ButtonLight, on: bool) {
+    const fn set_any_button(&mut self, player: Player, button: ButtonLight, on: bool) {
         self.set_button(player, button, on);
         self.set_menu_button(player, button, on);
     }
@@ -593,7 +593,7 @@ impl Manager {
         self.mode = mode;
     }
 
-    pub fn mode(&self) -> Mode {
+    pub const fn mode(&self) -> Mode {
         self.mode
     }
 
@@ -601,56 +601,61 @@ impl Manager {
         self.last_sent.unwrap_or_default()
     }
 
-    pub fn set_test_auto_cycle(&mut self) {
+    pub const fn set_test_auto_cycle(&mut self) {
         self.mode = Mode::TestAutoCycle;
         self.test_auto_seconds = 0.0;
     }
 
-    pub fn step_test_cabinet(&mut self, delta: i8) {
+    pub const fn step_test_cabinet(&mut self, delta: i8) {
         self.mode = Mode::TestManualCycle;
         self.test_cabinet_ix = step_index(self.test_cabinet_ix, delta, TEST_CABINET_LIGHTS.len());
     }
 
-    pub fn step_test_button(&mut self, delta: i8) {
+    pub const fn step_test_button(&mut self, delta: i8) {
         self.mode = Mode::TestManualCycle;
         self.test_button_ix = step_index(self.test_button_ix, delta, TEST_BUTTON_LIGHTS.len());
     }
 
-    pub fn set_gameplay_pad_lights(&mut self, mode: GameplayPadLightMode) {
+    pub const fn set_gameplay_pad_lights(&mut self, mode: GameplayPadLightMode) {
         self.gameplay_pad_lights = mode;
     }
 
-    pub fn set_joined(&mut self, joined: [bool; PLAYER_COUNT]) {
+    pub const fn set_joined(&mut self, joined: [bool; PLAYER_COUNT]) {
         self.joined = joined;
     }
 
-    pub fn set_hide_flags(&mut self, hide: [HideFlags; PLAYER_COUNT]) {
+    pub const fn set_hide_flags(&mut self, hide: [HideFlags; PLAYER_COUNT]) {
         self.hide = hide;
     }
 
-    pub fn set_button_pressed(&mut self, player: Player, button: ButtonLight, pressed: bool) {
+    pub const fn set_button_pressed(&mut self, player: Player, button: ButtonLight, pressed: bool) {
         self.button_pressed[player.ix()][button.ix()] = pressed;
     }
 
-    pub fn set_menu_button_pressed(&mut self, player: Player, button: ButtonLight, pressed: bool) {
+    pub const fn set_menu_button_pressed(
+        &mut self,
+        player: Player,
+        button: ButtonLight,
+        pressed: bool,
+    ) {
         self.menu_button_pressed[player.ix()][button.ix()] = pressed;
     }
 
-    pub fn clear_button_pressed(&mut self) {
+    pub const fn clear_button_pressed(&mut self) {
         self.button_pressed = [[false; BUTTON_COUNT]; PLAYER_COUNT];
         self.menu_button_pressed = [[false; BUTTON_COUNT]; PLAYER_COUNT];
     }
 
-    pub fn clear_blinks(&mut self) {
+    pub const fn clear_blinks(&mut self) {
         self.button_blink = [[0.0; BUTTON_COUNT]; PLAYER_COUNT];
         self.cabinet_blink = [0.0; CABINET_COUNT];
     }
 
-    pub fn blink_cabinet(&mut self, light: CabinetLight) {
+    pub const fn blink_cabinet(&mut self, light: CabinetLight) {
         self.cabinet_blink[light.ix()] = BLINK_SECONDS;
     }
 
-    pub fn blink_button(&mut self, player: Player, button: ButtonLight) {
+    pub const fn blink_button(&mut self, player: Player, button: ButtonLight) {
         self.button_blink[player.ix()][button.ix()] = BLINK_SECONDS;
     }
 
@@ -751,7 +756,7 @@ impl Manager {
         state.set_any_button(player, button, true);
     }
 
-    fn build_test_manual(&self, state: &mut State) {
+    const fn build_test_manual(&self, state: &mut State) {
         let cabinet = TEST_CABINET_LIGHTS[self.test_cabinet_ix % TEST_CABINET_LIGHTS.len()];
         let (player, button) = TEST_BUTTON_LIGHTS[self.test_button_ix % TEST_BUTTON_LIGHTS.len()];
         state.set_cabinet(cabinet, true);
@@ -825,7 +830,7 @@ fn fade_timers<const N: usize>(timers: &mut [f32; N], delta: f32) {
     }
 }
 
-fn step_index(index: usize, delta: i8, len: usize) -> usize {
+const fn step_index(index: usize, delta: i8, len: usize) -> usize {
     ((index as isize + delta as isize).rem_euclid(len as isize)) as usize
 }
 

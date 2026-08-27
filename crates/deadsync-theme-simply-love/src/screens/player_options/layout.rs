@@ -243,7 +243,7 @@ fn retarget_row_tween(tween: &mut RowTween, y: f32, alpha: f32) {
 }
 
 #[inline(always)]
-pub(super) fn f_pos_for_visible_idx(
+pub(super) const fn f_pos_for_visible_idx(
     visible_idx: i32,
     window: RowWindow,
     mid_pos: f32,

@@ -51,7 +51,7 @@ pub fn restart_payload_from_eval(
     for entry in score_info.iter().flatten() {
         song.get_or_insert_with(|| entry.song.clone());
         let side = player_side_index(entry.side);
-        chart_hashes[side] = entry.chart.short_hash.clone();
+        chart_hashes[side].clone_from(&entry.chart.short_hash);
         scroll_speed[side] = entry.speed_mod;
         if music_rate.is_none() && entry.music_rate.is_finite() && entry.music_rate > 0.0 {
             music_rate = Some(entry.music_rate);
@@ -148,7 +148,7 @@ pub const fn practice_reload_allowed(screen: Screen, practice_state_active: bool
 }
 
 #[inline(always)]
-fn select_restart_steps(
+const fn select_restart_steps(
     resolved_steps: [usize; MAX_PLAYERS],
     play_style: PlayStyle,
     player_side: PlayerSide,

@@ -188,7 +188,7 @@ pub fn init() -> State {
     }
 }
 
-pub fn on_enter(state: &mut State) {
+pub const fn on_enter(state: &mut State) {
     state.manual_elapsed = 0.0;
     state.manual_active = false;
 }
@@ -208,7 +208,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     ))
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+pub const fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if !ev.pressed {
         return ThemeEffect::None;
     }
@@ -333,7 +333,7 @@ pub fn get_actors(state: &State, lights: LightsTestView, alpha_mul: f32) -> Vec<
     actors
 }
 
-fn set_manual(state: &mut State) {
+const fn set_manual(state: &mut State) {
     state.manual_active = true;
     state.manual_elapsed = 0.0;
 }

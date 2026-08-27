@@ -112,7 +112,7 @@ impl ShellState {
     }
 
     #[inline(always)]
-    pub fn note_redraw_requested(&mut self, now: Instant, reason: &'static str) {
+    pub const fn note_redraw_requested(&mut self, now: Instant, reason: &'static str) {
         self.frame_loop.note_redraw_requested(now, reason);
     }
 
@@ -122,7 +122,7 @@ impl ShellState {
     }
 
     #[inline(always)]
-    pub fn redraw_pending(&self) -> bool {
+    pub const fn redraw_pending(&self) -> bool {
         self.frame_loop.redraw_pending()
     }
 
@@ -169,12 +169,12 @@ impl ShellState {
     }
 
     #[inline(always)]
-    pub fn should_skip_compose_and_draw(&self) -> bool {
+    pub const fn should_skip_compose_and_draw(&self) -> bool {
         self.frame_loop.should_skip_compose_and_draw()
     }
 
     #[inline(always)]
-    pub fn set_overlay_mode(&mut self, mode: u8) {
+    pub const fn set_overlay_mode(&mut self, mode: u8) {
         let next = OverlayMode::from_code(mode);
         if self.overlay_mode.shows_stutter() && !next.shows_stutter() {
             self.clear_stutter_samples();
@@ -183,7 +183,7 @@ impl ShellState {
     }
 
     #[inline(always)]
-    pub fn cycle_overlay_mode(&mut self) -> u8 {
+    pub const fn cycle_overlay_mode(&mut self) -> u8 {
         let prev = self.overlay_mode;
         self.overlay_mode = self.overlay_mode.next();
         if prev.shows_stutter() && !self.overlay_mode.shows_stutter() {
@@ -193,7 +193,7 @@ impl ShellState {
     }
 
     #[inline(always)]
-    pub fn push_stutter_sample(
+    pub const fn push_stutter_sample(
         &mut self,
         at_seconds: f32,
         frame_seconds: f32,
@@ -205,7 +205,7 @@ impl ShellState {
     }
 
     #[inline(always)]
-    pub fn clear_stutter_samples(&mut self) {
+    pub const fn clear_stutter_samples(&mut self) {
         self.stutter_samples.clear();
     }
 

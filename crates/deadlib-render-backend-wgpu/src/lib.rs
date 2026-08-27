@@ -169,7 +169,7 @@ pub struct Texture {
 }
 
 impl Texture {
-    fn rgba_view(&self) -> Option<&wgpu::TextureView> {
+    const fn rgba_view(&self) -> Option<&wgpu::TextureView> {
         match &self.images {
             TextureImages::Rgba { _view, .. } => Some(_view),
             TextureImages::Yuv420 { .. } => None,
@@ -253,7 +253,7 @@ impl DrawBindingCache {
     }
 
     #[inline(always)]
-    fn reset_camera(&mut self) {
+    const fn reset_camera(&mut self) {
         self.camera = None;
     }
 
@@ -268,7 +268,7 @@ impl DrawBindingCache {
     }
 
     #[inline(always)]
-    fn index_required(&mut self) -> bool {
+    const fn index_required(&mut self) -> bool {
         !mem::replace(&mut self.index_bound, true)
     }
 }
@@ -306,7 +306,7 @@ struct PresentCompletionCell {
 }
 
 impl PresentCompletionCell {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             version: AtomicU32::new(0),
             present_id: AtomicU32::new(0),
@@ -1003,7 +1003,7 @@ fn init_uniform_proj(device: &wgpu::Device, queue: &wgpu::Queue, projection: Mat
 }
 
 #[inline(always)]
-fn proj_binding(buffer: &wgpu::Buffer) -> wgpu::BindingResource<'_> {
+const fn proj_binding(buffer: &wgpu::Buffer) -> wgpu::BindingResource<'_> {
     wgpu::BindingResource::Buffer(wgpu::BufferBinding {
         buffer,
         offset: 0,
@@ -1138,7 +1138,7 @@ fn create_texture_groups(
 }
 
 #[inline(always)]
-fn next_texture_id(state: &mut State) -> u64 {
+const fn next_texture_id(state: &mut State) -> u64 {
     let id = state.next_texture_id;
     state.next_texture_id = state.next_texture_id.wrapping_add(1);
     id
@@ -1398,11 +1398,11 @@ fn texture_bind_group(texture: &Texture, handle: TextureHandle, repeat: bool) ->
         (true, false) => texture
             .nearest_bind_group
             .as_deref()
-            .unwrap_or(texture.bind_group.as_ref()),
+            .unwrap_or_else(|| texture.bind_group.as_ref()),
         (true, true) => texture
             .nearest_bind_group_repeat
             .as_deref()
-            .unwrap_or(texture.bind_group_repeat.as_ref()),
+            .unwrap_or_else(|| texture.bind_group_repeat.as_ref()),
         (false, false) => texture.bind_group.as_ref(),
         (false, true) => texture.bind_group_repeat.as_ref(),
     }
@@ -1773,7 +1773,7 @@ fn ensure_cached_tmesh(
 }
 
 #[inline(always)]
-pub fn request_screenshot(state: &mut State) {
+pub const fn request_screenshot(state: &mut State) {
     state.screenshot_requested = true;
 }
 
@@ -2780,7 +2780,7 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     reconfigure_surface(state);
 }
 
-pub fn set_default_projection(state: &mut State, projection: Matrix4) {
+pub const fn set_default_projection(state: &mut State, projection: Matrix4) {
     state.projection = projection;
 }
 

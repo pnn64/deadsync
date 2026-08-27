@@ -14,7 +14,7 @@ pub struct AssetFontTextureContext {
 }
 
 impl AssetFontTextureContext {
-    pub fn new(asset_roots: Vec<PathBuf>) -> Self {
+    pub const fn new(asset_roots: Vec<PathBuf>) -> Self {
         Self { asset_roots }
     }
 }
@@ -140,7 +140,7 @@ pub fn font_texture_asset_roots(data_dir: &Path, exe_dir: &Path) -> Vec<PathBuf>
     vec![data_dir.join("assets"), exe_dir.join("assets")]
 }
 
-pub fn set_font_fallback(font: &mut Font, fallback_font_name: Option<&'static str>) {
+pub const fn set_font_fallback(font: &mut Font, fallback_font_name: Option<&'static str>) {
     if let Some(fallback) = fallback_font_name {
         font.fallback_font_name = Some(fallback);
     }

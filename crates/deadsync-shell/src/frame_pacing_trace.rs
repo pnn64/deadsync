@@ -379,7 +379,7 @@ impl GameplayPacingTrace {
         Self::with_phase_storage(now, phase_hists.into_boxed_slice())
     }
 
-    fn with_phase_storage(now: Instant, phase_hists: Box<[PhaseHist]>) -> Self {
+    const fn with_phase_storage(now: Instant, phase_hists: Box<[PhaseHist]>) -> Self {
         Self {
             capture_frames: None,
             started_at: now,

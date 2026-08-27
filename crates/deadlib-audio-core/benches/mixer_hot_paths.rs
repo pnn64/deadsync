@@ -93,7 +93,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -104,7 +104,7 @@ impl AllocSnapshot {
         }
     }
 
-    fn churn_bytes(self) -> u64 {
+    const fn churn_bytes(self) -> u64 {
         self.alloc_bytes + self.realloc_bytes + self.free_bytes
     }
 }
@@ -224,13 +224,13 @@ fn cycle_counter() -> Option<u64> {
     None
 }
 
-fn f32_checksum(samples: &[f32]) -> u64 {
+const fn f32_checksum(samples: &[f32]) -> u64 {
     samples[0].to_bits() as u64
         ^ (samples[SAMPLES / 2].to_bits() as u64).rotate_left(17)
         ^ (samples[SAMPLES - 1].to_bits() as u64).rotate_left(33)
 }
 
-fn i16_checksum(samples: &[i16]) -> u64 {
+const fn i16_checksum(samples: &[i16]) -> u64 {
     samples[0] as u16 as u64
         ^ (samples[SAMPLES / 2] as u16 as u64).rotate_left(17)
         ^ (samples[SAMPLES - 1] as u16 as u64).rotate_left(33)

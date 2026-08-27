@@ -75,7 +75,7 @@ fn starts_with_ci(slice: &[u8], tag: &[u8]) -> bool {
 }
 
 #[inline(always)]
-fn find_byte(slice: &[u8], needle: u8) -> Option<usize> {
+const fn find_byte(slice: &[u8], needle: u8) -> Option<usize> {
     let mut i = 0usize;
     while i < slice.len() {
         if slice[i] == needle {
@@ -87,7 +87,7 @@ fn find_byte(slice: &[u8], needle: u8) -> Option<usize> {
 }
 
 #[inline(always)]
-fn find_either_byte(slice: &[u8], a: u8, b: u8) -> Option<usize> {
+const fn find_either_byte(slice: &[u8], a: u8, b: u8) -> Option<usize> {
     let mut i = 0usize;
     while i < slice.len() {
         if slice[i] == a || slice[i] == b {

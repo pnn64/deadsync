@@ -106,13 +106,13 @@ impl<RequestSide: Copy> ScreenshotRuntimeState<RequestSide> {
     }
 
     #[inline(always)]
-    pub fn request(&mut self, side: Option<RequestSide>) {
+    pub const fn request(&mut self, side: Option<RequestSide>) {
         self.pending = true;
         self.request_side = side;
     }
 
     #[inline(always)]
-    pub fn take_pending_request(&mut self) -> Option<Option<RequestSide>> {
+    pub const fn take_pending_request(&mut self) -> Option<Option<RequestSide>> {
         if !self.pending {
             return None;
         }
@@ -126,17 +126,17 @@ impl<RequestSide: Copy> ScreenshotRuntimeState<RequestSide> {
     }
 
     #[inline(always)]
-    pub fn mark_saved(&mut self, now: Instant) {
+    pub const fn mark_saved(&mut self, now: Instant) {
         self.flash_started_at = Some(now);
     }
 
     #[inline(always)]
-    pub fn clear_preview(&mut self) {
+    pub const fn clear_preview(&mut self) {
         self.preview = None;
     }
 
     #[inline(always)]
-    pub fn set_preview(&mut self, now: Instant, target: ScreenshotPreviewTarget) {
+    pub const fn set_preview(&mut self, now: Instant, target: ScreenshotPreviewTarget) {
         self.preview = Some(ScreenshotPreviewState {
             started_at: now,
             target,

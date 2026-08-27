@@ -30,7 +30,7 @@ pub fn itg_find_matching(content: &str, open_idx: usize, open: char, close: char
     None
 }
 
-pub fn itg_skip_ws(content: &str, mut idx: usize) -> usize {
+pub const fn itg_skip_ws(content: &str, mut idx: usize) -> usize {
     let bytes = content.as_bytes();
     while idx < bytes.len() && bytes[idx].is_ascii_whitespace() {
         idx += 1;
@@ -163,7 +163,7 @@ pub fn itg_find_function_end(content: &str, mut cursor: usize) -> Option<usize> 
     None
 }
 
-fn itg_token_boundary(bytes: &[u8], start: usize, len: usize) -> bool {
+const fn itg_token_boundary(bytes: &[u8], start: usize, len: usize) -> bool {
     let prev_ok = if start == 0 {
         true
     } else {
@@ -178,7 +178,7 @@ fn itg_token_boundary(bytes: &[u8], start: usize, len: usize) -> bool {
     prev_ok && next_ok
 }
 
-fn is_lua_ident(b: u8) -> bool {
+const fn is_lua_ident(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 

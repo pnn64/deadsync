@@ -82,7 +82,7 @@ pub struct EditBeatBarInfo {
     pub measure_index: Option<i64>,
 }
 
-fn valid_sig(sig: TimeSignatureSegment) -> TimeSignatureSegment {
+const fn valid_sig(sig: TimeSignatureSegment) -> TimeSignatureSegment {
     if sig.numerator > 0 && sig.denominator > 0 {
         sig
     } else {
@@ -90,7 +90,7 @@ fn valid_sig(sig: TimeSignatureSegment) -> TimeSignatureSegment {
     }
 }
 
-fn sig_at(segments: &[TimeSignatureSegment], index: usize) -> TimeSignatureSegment {
+const fn sig_at(segments: &[TimeSignatureSegment], index: usize) -> TimeSignatureSegment {
     if segments.is_empty() {
         default_time_signature()
     } else {
@@ -395,7 +395,7 @@ fn group_geometry(
     request: &MeasureComposeRequest<'_, '_>,
     group: MeasureGroup,
 ) -> Option<(f32, f32)> {
-    let center_x_offset = 0.5 * (group.min_x + group.max_x) * request.field_zoom;
+    let center_x_offset = f32::midpoint(group.min_x, group.max_x) * request.field_zoom;
     let width =
         ((group.max_x - group.min_x) + ScrollSpeedSetting::ARROW_SPACING) * request.field_zoom;
     (width.is_finite() && width > 0.0)

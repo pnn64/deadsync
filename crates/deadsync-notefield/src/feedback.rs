@@ -113,7 +113,7 @@ pub(crate) fn column_flash_alpha(
     )
 }
 
-pub(crate) fn column_flash_color(
+pub(crate) const fn column_flash_color(
     style: ColumnFlashStyle,
     grade: JudgeGrade,
     blue_fantastic: bool,
@@ -140,7 +140,7 @@ pub(crate) fn field_effect_height(screen_height: f32, tilt: f32) -> f32 {
     screen_height + tilt.abs() * 200.0
 }
 
-pub(crate) fn itg_actor_glow_alpha(alpha: f32) -> f32 {
+pub(crate) const fn itg_actor_glow_alpha(alpha: f32) -> f32 {
     if alpha.is_finite() {
         alpha.clamp(0.0, 1.0)
     } else {

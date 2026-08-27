@@ -87,7 +87,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -150,7 +150,7 @@ fn old_frame(state: &mut DirtyState, frame: u64) -> u64 {
 }
 
 #[inline(never)]
-fn transition_driven_frame(state: &mut DirtyState, frame: u64) -> u64 {
+const fn transition_driven_frame(state: &mut DirtyState, frame: u64) -> u64 {
     black_box(&mut *state);
     frame.rotate_left(7)
 }

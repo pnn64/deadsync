@@ -145,7 +145,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -153,7 +153,7 @@ impl AllocSnapshot {
         }
     }
 
-    fn add(&mut self, other: Self) {
+    const fn add(&mut self, other: Self) {
         self.allocs += other.allocs;
         self.reallocs += other.reallocs;
         self.bytes += other.bytes;
@@ -2647,7 +2647,7 @@ const fn numeric_run_count(case: NumericCase) -> usize {
     }
 }
 
-fn numeric_value(case: NumericCase, frame: usize, player: usize, run: usize) -> u32 {
+const fn numeric_value(case: NumericCase, frame: usize, player: usize, run: usize) -> u32 {
     match case {
         NumericCase::Combo => ((frame + 1) * (player + 3)) as u32,
         NumericCase::CueCountdown => ((frame / 60 + player * 11 + run * 7) % 60 + 1) as u32,

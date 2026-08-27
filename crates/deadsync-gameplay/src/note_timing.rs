@@ -93,12 +93,12 @@ pub const fn lane_edge_matches_note_type(pressed: bool, note_type: NoteType) -> 
 }
 
 #[inline(always)]
-pub fn note_has_displayable_hold(note: &Note) -> bool {
+pub const fn note_has_displayable_hold(note: &Note) -> bool {
     matches!(note.note_type, NoteType::Hold | NoteType::Roll) && note.hold.is_some()
 }
 
 #[inline(always)]
-pub fn column_cue_is_mine(note: &Note) -> Option<bool> {
+pub const fn column_cue_is_mine(note: &Note) -> Option<bool> {
     if note.is_fake {
         return None;
     }
@@ -338,7 +338,7 @@ impl GameplayEndTimingState {
     }
 
     #[inline(always)]
-    pub fn set_note_and_music_end_times(
+    pub const fn set_note_and_music_end_times(
         &mut self,
         notes_end_time_ns: SongTimeNs,
         music_end_time_ns: SongTimeNs,
@@ -864,7 +864,7 @@ pub struct GameplayAssistClapState {
 
 impl GameplayAssistClapState {
     #[inline(always)]
-    pub fn new(rows: Vec<usize>) -> Self {
+    pub const fn new(rows: Vec<usize>) -> Self {
         Self {
             rows,
             cursor: 0,
@@ -882,7 +882,7 @@ impl GameplayAssistClapState {
     }
 
     #[inline(always)]
-    pub fn note_sfx_generation(&mut self, sfx_generation: u64) -> bool {
+    pub const fn note_sfx_generation(&mut self, sfx_generation: u64) -> bool {
         let timeline_reset = self.sfx_generation_seen != sfx_generation;
         if timeline_reset {
             self.sfx_generation_seen = sfx_generation;
@@ -891,13 +891,13 @@ impl GameplayAssistClapState {
     }
 
     #[inline(always)]
-    pub fn note_disabled(&mut self, sfx_generation: u64) {
+    pub const fn note_disabled(&mut self, sfx_generation: u64) {
         self.note_sfx_generation(sfx_generation);
         self.reanchor_when_enabled = true;
     }
 
     #[inline(always)]
-    pub fn begin_enabled_update(&mut self, sfx_generation: u64) -> bool {
+    pub const fn begin_enabled_update(&mut self, sfx_generation: u64) -> bool {
         let generation_changed = self.note_sfx_generation(sfx_generation);
         let reanchor = self.reanchor_when_enabled;
         self.reanchor_when_enabled = false;

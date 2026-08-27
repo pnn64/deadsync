@@ -60,7 +60,7 @@ impl HeldControls {
         }
     }
 
-    pub fn update_modifier(&mut self, code: KeyCode, pressed: bool) {
+    pub const fn update_modifier(&mut self, code: KeyCode, pressed: bool) {
         match code {
             KeyCode::ShiftLeft | KeyCode::ShiftRight => self.shift = pressed,
             KeyCode::ControlLeft | KeyCode::ControlRight => self.ctrl = pressed,
@@ -70,7 +70,7 @@ impl HeldControls {
         }
     }
 
-    pub fn clear(&mut self) {
+    pub const fn clear(&mut self) {
         self.shift = false;
         self.ctrl = false;
         self.alt = false;
@@ -101,12 +101,12 @@ impl HeldControls {
     }
 
     #[inline(always)]
-    pub fn set_fast_forward(&mut self, pressed: bool) {
+    pub const fn set_fast_forward(&mut self, pressed: bool) {
         self.fast_forward = pressed;
     }
 
     #[inline(always)]
-    pub fn set_slow_down(&mut self, pressed: bool) {
+    pub const fn set_slow_down(&mut self, pressed: bool) {
         self.slow_down = pressed;
     }
 
@@ -138,12 +138,12 @@ impl ShellInteractionState {
     }
 
     #[inline(always)]
-    pub fn controls(&self) -> &HeldControls {
+    pub const fn controls(&self) -> &HeldControls {
         &self.controls
     }
 
     #[inline(always)]
-    pub fn controls_mut(&mut self) -> &mut HeldControls {
+    pub const fn controls_mut(&mut self) -> &mut HeldControls {
         &mut self.controls
     }
 
@@ -164,7 +164,7 @@ impl ShellInteractionState {
     }
 
     #[inline(always)]
-    pub fn clear_exit_intent(&mut self) {
+    pub const fn clear_exit_intent(&mut self) {
         self.exit_intent = ExitIntent::None;
     }
 

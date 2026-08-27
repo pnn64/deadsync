@@ -36,7 +36,7 @@ const TIER_GOLD: [f32; 4] = color::rgba_hex("#F6AB2D");
 const TIER_PRISMATIC: [f32; 4] = color::rgba_hex("#8731D2");
 
 #[inline(always)]
-fn event_color(kind: score_data::EventProgressKind) -> [f32; 4] {
+const fn event_color(kind: score_data::EventProgressKind) -> [f32; 4] {
     match kind {
         score_data::EventProgressKind::Itl => ITL_PINK,
         score_data::EventProgressKind::Srpg => SRPG_YELLOW,
@@ -44,7 +44,7 @@ fn event_color(kind: score_data::EventProgressKind) -> [f32; 4] {
 }
 
 #[inline(always)]
-fn event_badge(kind: score_data::EventProgressKind) -> Option<&'static str> {
+const fn event_badge(kind: score_data::EventProgressKind) -> Option<&'static str> {
     match kind {
         score_data::EventProgressKind::Itl => Some("EX"),
         score_data::EventProgressKind::Srpg => None,
@@ -99,7 +99,7 @@ fn format_signed_rate_hundredths(value: i32) -> String {
 }
 
 #[inline(always)]
-fn clear_type_name(clear_type: u8) -> &'static str {
+const fn clear_type_name(clear_type: u8) -> &'static str {
     match clear_type {
         0 => "No Play",
         1 => "Clear",

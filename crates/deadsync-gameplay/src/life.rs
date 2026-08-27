@@ -360,7 +360,7 @@ pub fn apply_gameplay_life_delta(
 }
 
 #[inline(always)]
-fn player_runtime_life_meter(player: &PlayerRuntime) -> deadsync_rules::life::LifeMeter {
+const fn player_runtime_life_meter(player: &PlayerRuntime) -> deadsync_rules::life::LifeMeter {
     deadsync_rules::life::LifeMeter {
         life: player.life,
         combo_after_miss: player.combo_after_miss,
@@ -370,7 +370,7 @@ fn player_runtime_life_meter(player: &PlayerRuntime) -> deadsync_rules::life::Li
 }
 
 #[inline(always)]
-fn write_player_runtime_life_meter(
+const fn write_player_runtime_life_meter(
     player: &mut PlayerRuntime,
     meter: deadsync_rules::life::LifeMeter,
 ) {
@@ -406,6 +406,6 @@ pub fn apply_life_change(player: &mut PlayerRuntime, current_music_time: f32, de
 }
 
 #[inline(always)]
-pub fn player_runtime_is_dead(player: &PlayerRuntime) -> bool {
+pub const fn player_runtime_is_dead(player: &PlayerRuntime) -> bool {
     player_life_is_dead(player.life, player.is_failing)
 }

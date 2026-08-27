@@ -319,7 +319,7 @@ fn set_macos_app_icon() {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn set_macos_app_icon() {}
+const fn set_macos_app_icon() {}
 
 #[cfg(test)]
 mod tests {

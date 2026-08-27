@@ -366,7 +366,7 @@ pub fn build_default_app_config_file() -> String {
     )
 }
 
-fn runtime_state_ids<'a>(
+const fn runtime_state_ids<'a>(
     smx_p1_serial: &'a str,
     smx_p2_serial: &'a str,
     default_profile_p1: &'a str,
@@ -380,7 +380,7 @@ fn runtime_state_ids<'a>(
     }
 }
 
-fn audio_options(cfg: &Config) -> AudioOptions {
+const fn audio_options(cfg: &Config) -> AudioOptions {
     AudioOptions {
         visual_delay_seconds: cfg.visual_delay_seconds,
         note_scroll_clock: cfg.note_scroll_clock,
@@ -400,7 +400,7 @@ fn audio_options(cfg: &Config) -> AudioOptions {
     }
 }
 
-fn audio_device_options<'a>(cfg: &Config, output_mode: &'a str) -> AudioDeviceOptions<'a> {
+const fn audio_device_options<'a>(cfg: &Config, output_mode: &'a str) -> AudioDeviceOptions<'a> {
     AudioDeviceOptions {
         output_device_index: cfg.audio_output_device_index,
         output_mode,
@@ -408,7 +408,7 @@ fn audio_device_options<'a>(cfg: &Config, output_mode: &'a str) -> AudioDeviceOp
     }
 }
 
-fn display_options<'a>(
+const fn display_options<'a>(
     cfg: &Config,
     present_mode_policy: &'a str,
     video_renderer: &'a str,
@@ -427,7 +427,7 @@ fn display_options<'a>(
     }
 }
 
-fn runtime_io_options<'a>(
+const fn runtime_io_options<'a>(
     cfg: &'a Config,
     linux_audio_backend: &'a str,
     lights_driver: &'a str,
@@ -443,7 +443,7 @@ fn runtime_io_options<'a>(
     }
 }
 
-fn system_options(cfg: &Config) -> SystemOptions {
+const fn system_options(cfg: &Config) -> SystemOptions {
     SystemOptions {
         coin: cfg.coin,
         game_flag: cfg.game_flag,
@@ -513,7 +513,7 @@ fn system_input_hardware_options(
     }
 }
 
-fn runtime_options(cfg: &Config) -> RuntimeOptions {
+const fn runtime_options(cfg: &Config) -> RuntimeOptions {
     RuntimeOptions {
         fastload: cfg.fastload,
         cachesongs: cfg.cachesongs,
@@ -533,7 +533,7 @@ fn runtime_options(cfg: &Config) -> RuntimeOptions {
     }
 }
 
-fn stats_overlay_options<'a>(
+const fn stats_overlay_options<'a>(
     cfg: &Config,
     frame_stats_overlay_anchor: Option<&'a str>,
     frame_stats_overlay_style: Option<&'a str>,
@@ -547,7 +547,7 @@ fn stats_overlay_options<'a>(
     }
 }
 
-fn theme_presentation_options(cfg: &Config) -> ThemePresentationOptions {
+const fn theme_presentation_options(cfg: &Config) -> ThemePresentationOptions {
     ThemePresentationOptions {
         simply_love_color: cfg.simply_love_color,
         show_select_music_gameplay_timer: cfg.show_select_music_gameplay_timer,
@@ -564,7 +564,7 @@ fn theme_presentation_options(cfg: &Config) -> ThemePresentationOptions {
     }
 }
 
-fn machine_flow_options(cfg: &Config) -> MachineFlowOptions {
+const fn machine_flow_options(cfg: &Config) -> MachineFlowOptions {
     MachineFlowOptions {
         machine_show_eval_summary: cfg.machine_show_eval_summary,
         machine_easter_eggs: cfg.machine_easter_eggs,
@@ -589,7 +589,7 @@ fn machine_flow_options(cfg: &Config) -> MachineFlowOptions {
     }
 }
 
-fn null_or_die_options(cfg: &Config) -> NullOrDieOptions {
+const fn null_or_die_options(cfg: &Config) -> NullOrDieOptions {
     NullOrDieOptions {
         sync_graph: cfg.null_or_die_sync_graph,
         graph_orientation: cfg.null_or_die_graph_orientation,
@@ -606,7 +606,7 @@ fn null_or_die_options(cfg: &Config) -> NullOrDieOptions {
     }
 }
 
-fn select_music_options(cfg: &Config) -> SelectMusicOptions {
+const fn select_music_options(cfg: &Config) -> SelectMusicOptions {
     SelectMusicOptions {
         breakdown_style: cfg.select_music_breakdown_style,
         show_banners: cfg.show_select_music_banners,
@@ -648,14 +648,14 @@ fn select_music_options(cfg: &Config) -> SelectMusicOptions {
     }
 }
 
-fn select_music_save_options(cfg: &Config) -> SelectMusicSaveOptions {
+const fn select_music_save_options(cfg: &Config) -> SelectMusicSaveOptions {
     SelectMusicSaveOptions {
         select_music: select_music_options(cfg),
         separate_unlocks_by_player: cfg.separate_unlocks_by_player,
     }
 }
 
-fn theme_shortcut_tokens<'a>(
+const fn theme_shortcut_tokens<'a>(
     practice: &'a str,
     song_search: &'a str,
     load_songs: &'a str,

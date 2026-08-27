@@ -208,7 +208,7 @@ impl StutterDiagRecorder {
     }
 
     #[inline(always)]
-    pub fn reset_frame_clock(&mut self) {
+    pub const fn reset_frame_clock(&mut self) {
         self.frames.clear();
         self.last_dump_host_nanos = 0;
     }
@@ -278,7 +278,7 @@ impl StutterDiagRecorder {
             });
     }
 
-    pub fn take_dump_trigger(
+    pub const fn take_dump_trigger(
         &mut self,
         now_host_nanos: u64,
         severity: u8,

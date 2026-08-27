@@ -400,7 +400,7 @@ fn install_host(lua: &Lua, data: &noteskin_itg::NoteskinData) -> mlua::Result<()
         lua.create_function(|_, (lhs, _rhs): (Table, Value)| Ok(lhs))?,
     )?;
     let make_actor = {
-        let actor_mt = actor_mt.clone();
+        let actor_mt = actor_mt;
         lua.create_function(
             move |lua, (blank, button, element): (bool, Option<String>, Option<String>)| {
                 let actor = lua.create_table()?;
@@ -422,7 +422,7 @@ fn install_host(lua: &Lua, data: &noteskin_itg::NoteskinData) -> mlua::Result<()
             make_actor_for_path(&make_actor, value)
         })?
     };
-    globals.set("LoadActor", load_actor.clone())?;
+    globals.set("LoadActor", load_actor)?;
     let var_fn = lua.create_function(|lua, name: String| {
         let globals = lua.globals();
         match name.as_str() {
@@ -480,7 +480,7 @@ fn install_host(lua: &Lua, data: &noteskin_itg::NoteskinData) -> mlua::Result<()
     globals.set("Def", def)?;
     let data = data.clone();
     let loadfile = {
-        let make_actor = make_actor.clone();
+        let make_actor = make_actor;
         lua.create_function(move |lua, value: Value| -> mlua::Result<Value> {
             let Some((button, element)) = loadfile_target(&data, value)? else {
                 return Ok(Value::Nil);
@@ -689,7 +689,7 @@ fn normalize_table_aliases(
         return Ok(());
     };
     let mut existing = Vec::new();
-    for pair in table.clone().pairs::<Value, Value>() {
+    for pair in table.pairs::<Value, Value>() {
         let (key, value) = pair?;
         let Value::String(text) = key else {
             continue;

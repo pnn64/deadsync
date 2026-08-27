@@ -29,7 +29,7 @@ impl GameplayLightTracker {
         self.cabinet_key.as_ref() == Some(key)
     }
 
-    pub fn restart_cabinet_chart(&mut self) {
+    pub const fn restart_cabinet_chart(&mut self) {
         self.cabinet_cursor = 0;
         self.cabinet_last_time_ns = i64::MAX;
     }
@@ -121,7 +121,7 @@ impl GameplayLightTracker {
     }
 }
 
-fn gameplay_note_lights(note: &Note) -> bool {
+const fn gameplay_note_lights(note: &Note) -> bool {
     note.can_be_judged
         && !note.is_fake
         && matches!(

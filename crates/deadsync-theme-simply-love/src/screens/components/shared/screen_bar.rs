@@ -141,7 +141,7 @@ fn cached_str_ref(text: &str) -> Arc<str> {
     cached_shared_str(&STR_REF_CACHE, text, TEXT_CACHE_LIMIT)
 }
 
-fn bar_background(
+const fn bar_background(
     transparent: bool,
     context: ScreenBarContext,
     policy: SimplyLoveVisualPolicyView,

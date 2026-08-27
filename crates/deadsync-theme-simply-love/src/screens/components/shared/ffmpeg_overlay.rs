@@ -156,7 +156,7 @@ fn panel_content(phase: &FfmpegPhase) -> PanelContent {
     }
 }
 
-fn error_kind_key(kind: ActionErrorKind) -> &'static str {
+const fn error_kind_key(kind: ActionErrorKind) -> &'static str {
     match kind {
         ActionErrorKind::Network => "ErrorNetwork",
         ActionErrorKind::RateLimited => "ErrorRateLimited",
@@ -169,7 +169,7 @@ fn error_kind_key(kind: ActionErrorKind) -> &'static str {
 }
 
 /// Dispatch a virtual input event against the current overlay state.
-pub fn handle_input(phase: &FfmpegPhase, ev: &InputEvent) -> InputOutcome {
+pub const fn handle_input(phase: &FfmpegPhase, ev: &InputEvent) -> InputOutcome {
     if matches!(phase, FfmpegPhase::Idle) {
         return InputOutcome::Passthrough;
     }

@@ -24,7 +24,7 @@ pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
 }
 
 #[inline(always)]
-pub fn set_fast_switch(state: &mut State, enabled: bool) {
+pub const fn set_fast_switch(state: &mut State, enabled: bool) {
     profile_boxes::set_fast_switch(state, enabled);
 }
 

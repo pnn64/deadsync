@@ -436,7 +436,7 @@ impl Fields {
     ///     D { a: u32, b: u32 }, // will return `Delimiter::Brace`
     /// }
     /// ```
-    pub fn delimiter(&self) -> Delimiter {
+    pub const fn delimiter(&self) -> Delimiter {
         match self {
             Self::Tuple(_) => Delimiter::Parenthesis,
             Self::Struct(_) => Delimiter::Brace,
@@ -610,7 +610,7 @@ impl IdentOrIndex {
     }
 
     /// Returns the attributes of this field.
-    pub fn attributes(&self) -> &Vec<Attribute> {
+    pub const fn attributes(&self) -> &Vec<Attribute> {
         match self {
             Self::Ident { attributes, .. } => attributes,
             Self::Index { attributes, .. } => attributes,

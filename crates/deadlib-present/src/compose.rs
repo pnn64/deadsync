@@ -109,7 +109,7 @@ struct FrameBuilder {
 
 impl FrameBuilder {
     #[inline(always)]
-    fn len(&self) -> usize {
+    const fn len(&self) -> usize {
         self.items.len()
     }
 
@@ -1681,7 +1681,7 @@ impl ComposeScratch {
     }
 
     #[inline(always)]
-    fn transient_text_mesh_scratch(
+    const fn transient_text_mesh_scratch(
         &mut self,
     ) -> (
         &mut Vec<TextMeshBatchBuilder>,
@@ -2378,7 +2378,7 @@ struct CachedTextPage {
 }
 
 impl CachedTextPage {
-    fn new(key: Arc<str>) -> Self {
+    const fn new(key: Arc<str>) -> Self {
         Self {
             key,
             handle: Cell::new(renderer::INVALID_TEXTURE_HANDLE),
@@ -2958,7 +2958,7 @@ impl TextureLookupCache {
 }
 
 #[inline(always)]
-fn str_ptr(key: &str) -> *const str {
+const fn str_ptr(key: &str) -> *const str {
     key as *const str
 }
 
@@ -3231,7 +3231,7 @@ struct PrewarmedU16Domain {
 }
 
 impl PrewarmedU16Domain {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             key: None,
             layouts: Vec::new(),
@@ -3443,7 +3443,7 @@ impl TextLayoutCache {
     }
 
     #[inline(always)]
-    fn record_layout_build(&mut self, layout: &CachedTextLayout) {
+    const fn record_layout_build(&mut self, layout: &CachedTextLayout) {
         let Some(frame_stats) = self.frame_stats.as_mut() else {
             return;
         };
@@ -4178,7 +4178,7 @@ fn start_x_logical(align: actors::TextAlign, block_w_logical: f32, line_w_logica
 }
 
 #[inline(always)]
-fn text_block_height_i(font_height: i32, line_spacing: i32, num_lines: usize) -> i32 {
+const fn text_block_height_i(font_height: i32, line_spacing: i32, num_lines: usize) -> i32 {
     if num_lines > 1 {
         font_height + ((num_lines - 1) as i32 * line_spacing)
     } else {
@@ -4304,7 +4304,7 @@ fn push_cached_line(
 }
 
 #[inline(always)]
-fn attr_end(attr: &actors::TextAttribute) -> usize {
+const fn attr_end(attr: &actors::TextAttribute) -> usize {
     attr.start.saturating_add(attr.length)
 }
 
@@ -4860,7 +4860,7 @@ fn build_transient_text_mesh_builders(
 }
 
 #[inline(always)]
-fn text_jitter_offset(seed: u32, char_index: usize) -> [f32; 2] {
+const fn text_jitter_offset(seed: u32, char_index: usize) -> [f32; 2] {
     let mut value = seed.wrapping_mul(0x9e37_79b9);
     value ^= (char_index as u32).wrapping_mul(0x85eb_ca6b);
     value ^= value >> 16;
@@ -5336,7 +5336,7 @@ fn has_shadow(len: [f32; 2]) -> bool {
 }
 
 #[inline(always)]
-fn sprite_source_handle(
+const fn sprite_source_handle(
     source: &actors::SpriteSource,
     generation: u64,
 ) -> Option<renderer::TextureHandle> {

@@ -97,7 +97,7 @@ pub(super) fn mark_speed_value_dirty(state: &mut State, player_idx: usize) {
     state.speed_header_dirty |= bit;
 }
 
-pub(super) fn speed_value(state: &State, player_idx: usize) -> &SpeedValuePresentation {
+pub(super) const fn speed_value(state: &State, player_idx: usize) -> &SpeedValuePresentation {
     state.speed_values[player_idx]
         .as_ref()
         .expect("Player Options speed presentation must be prepared")
@@ -148,12 +148,12 @@ pub(super) fn mark_speed_header_dirty(state: &mut State, player_idx: usize) {
     state.speed_header_dirty |= 1 << player_idx.min(PLAYER_SLOTS - 1);
 }
 
-pub(super) fn mark_music_rate_dirty(state: &mut State) {
+pub(super) const fn mark_music_rate_dirty(state: &mut State) {
     state.speed_header_dirty = ALL_PLAYER_BITS;
     state.music_rate_text_dirty = true;
 }
 
-pub(super) fn speed_header(state: &State, player_idx: usize) -> &SpeedHeaderPresentation {
+pub(super) const fn speed_header(state: &State, player_idx: usize) -> &SpeedHeaderPresentation {
     state.speed_headers[player_idx]
         .as_ref()
         .expect("Player Options speed header must be prepared")
@@ -183,7 +183,7 @@ pub(super) fn music_rate_line_content(text: &str) -> TextContent {
     TextContent::inline_str(text).unwrap_or_else(|| TextContent::Shared(Arc::from(text)))
 }
 
-pub(super) fn music_rate_text(state: &State) -> &MusicRatePresentation {
+pub(super) const fn music_rate_text(state: &State) -> &MusicRatePresentation {
     state
         .music_rate_text
         .as_ref()
@@ -652,7 +652,7 @@ pub(super) fn selection_border_width() -> f32 {
 
 /// Simply Love / Arrow Cloud offset stacked P1/P2 cursors by one pixel.
 #[inline(always)]
-pub(super) fn cursor_stack_y(active: [bool; PLAYER_SLOTS], player_idx: usize) -> f32 {
+pub(super) const fn cursor_stack_y(active: [bool; PLAYER_SLOTS], player_idx: usize) -> f32 {
     if !active[P1] || !active[P2] {
         return 0.0;
     }
@@ -694,7 +694,7 @@ pub(super) fn multi_select_mask(state: &State, row: &Row, player_idx: usize) -> 
 
 /// Remove and return the lowest active choice index from a bounded UI mask.
 #[inline(always)]
-pub(super) fn take_active_choice(mask: &mut u16) -> Option<usize> {
+pub(super) const fn take_active_choice(mask: &mut u16) -> Option<usize> {
     if *mask == 0 {
         return None;
     }
@@ -796,7 +796,7 @@ pub(super) fn draw_single_select_underline(
 }
 
 /// Color palette index for a player's underline / cursor.
-pub(super) fn player_color_index(state: &State, player_idx: usize) -> i32 {
+pub(super) const fn player_color_index(state: &State, player_idx: usize) -> i32 {
     if player_idx == P2 {
         state.active_color_index - 2
     } else {
@@ -845,25 +845,25 @@ pub(super) fn draw_cursor_ring(
         ring_color[3] *= a;
 
         actors.push(act!(quad:
-            align(0.5, 0.5): xy((left + right) * 0.5, top + border_w * 0.5):
+            align(0.5, 0.5): xy(f32::midpoint(left, right), top + border_w * 0.5):
             zoomto(ring_w, border_w):
             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
             z(Z_ROW_FOREGROUND)
         ));
         actors.push(act!(quad:
-            align(0.5, 0.5): xy((left + right) * 0.5, bottom - border_w * 0.5):
+            align(0.5, 0.5): xy(f32::midpoint(left, right), bottom - border_w * 0.5):
             zoomto(ring_w, border_w):
             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
             z(Z_ROW_FOREGROUND)
         ));
         actors.push(act!(quad:
-            align(0.5, 0.5): xy(left + border_w * 0.5, (top + bottom) * 0.5):
+            align(0.5, 0.5): xy(left + border_w * 0.5, f32::midpoint(top, bottom)):
             zoomto(border_w, ring_h):
             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
             z(Z_ROW_FOREGROUND)
         ));
         actors.push(act!(quad:
-            align(0.5, 0.5): xy(right - border_w * 0.5, (top + bottom) * 0.5):
+            align(0.5, 0.5): xy(right - border_w * 0.5, f32::midpoint(top, bottom)):
             zoomto(border_w, ring_h):
             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
             z(Z_ROW_FOREGROUND)

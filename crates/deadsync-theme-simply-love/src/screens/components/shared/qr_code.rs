@@ -95,7 +95,7 @@ impl QrMeshCache {
         self.len = 0;
     }
 
-    fn len(&self) -> usize {
+    const fn len(&self) -> usize {
         self.len
     }
 }

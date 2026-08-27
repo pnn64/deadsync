@@ -141,17 +141,17 @@ pub struct GameplayReplayInputState {
 
 impl GameplayReplayInputState {
     #[inline(always)]
-    pub fn new(input: Vec<RecordedLaneEdge>) -> Self {
+    pub const fn new(input: Vec<RecordedLaneEdge>) -> Self {
         Self { input, cursor: 0 }
     }
 
     #[inline(always)]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.input.is_empty()
     }
 
     #[inline(always)]
-    pub fn reset_cursor(&mut self) {
+    pub const fn reset_cursor(&mut self) {
         self.cursor = 0;
     }
 
@@ -197,7 +197,7 @@ impl GameplayReplayRuntimeState {
     }
 
     #[inline(always)]
-    pub fn disable_replay_mode(&mut self) {
+    pub const fn disable_replay_mode(&mut self) {
         self.mode = false;
         self.capture_enabled = false;
     }
@@ -254,12 +254,12 @@ impl GameplayStageRuntimeState {
     }
 
     #[inline(always)]
-    pub fn disable_score(&mut self) {
+    pub const fn disable_score(&mut self) {
         self.score_valid = [false; MAX_PLAYERS];
     }
 
     #[inline(always)]
-    pub fn reset_for_practice(&mut self) {
+    pub const fn reset_for_practice(&mut self) {
         self.song_completed_naturally = false;
         self.autoplay_used = false;
     }
@@ -421,7 +421,7 @@ impl GameplayVisibleTimingState {
     }
 
     #[inline(always)]
-    pub fn set_player_time(
+    pub const fn set_player_time(
         &mut self,
         player: usize,
         music_time_ns: SongTimeNs,
@@ -473,7 +473,7 @@ impl Default for GameplayNotefieldMotionState {
 impl GameplayNotefieldMotionState {
     #[allow(clippy::too_many_arguments)]
     #[inline(always)]
-    pub fn new(
+    pub const fn new(
         scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
         scroll_reference_bpm: f32,
         field_zoom: [f32; MAX_PLAYERS],
@@ -500,18 +500,18 @@ impl GameplayNotefieldMotionState {
     }
 
     #[inline(always)]
-    pub fn refresh_needed(&self, current_bpm: f32, dynamic_motion: bool) -> bool {
+    pub const fn refresh_needed(&self, current_bpm: f32, dynamic_motion: bool) -> bool {
         self.refresh_dirty || dynamic_motion || self.refresh_bpm_bits != current_bpm.to_bits()
     }
 
     #[inline(always)]
-    pub fn mark_refreshed(&mut self, current_bpm: f32) {
+    pub const fn mark_refreshed(&mut self, current_bpm: f32) {
         self.refresh_bpm_bits = current_bpm.to_bits();
         self.refresh_dirty = false;
     }
 
     #[inline(always)]
-    pub fn mark_refresh_dirty(&mut self) {
+    pub const fn mark_refresh_dirty(&mut self) {
         self.refresh_dirty = true;
     }
 
@@ -521,7 +521,7 @@ impl GameplayNotefieldMotionState {
     }
 
     #[inline(always)]
-    pub fn scroll_reference_bpm(&self) -> f32 {
+    pub const fn scroll_reference_bpm(&self) -> f32 {
         self.scroll_reference_bpm
     }
 
@@ -575,21 +575,21 @@ impl GameplayNotefieldMotionState {
     }
 
     #[inline(always)]
-    pub fn set_reverse_scroll(&mut self, player: usize, reverse: bool) {
+    pub const fn set_reverse_scroll(&mut self, player: usize, reverse: bool) {
         if player < MAX_PLAYERS {
             self.reverse_scroll[player] = reverse;
         }
     }
 
     #[inline(always)]
-    pub fn set_column_scroll_dir(&mut self, col: usize, direction: f32) {
+    pub const fn set_column_scroll_dir(&mut self, col: usize, direction: f32) {
         if col < MAX_COLS {
             self.column_scroll_dirs[col] = direction;
         }
     }
 
     #[inline(always)]
-    pub fn set_player_motion(
+    pub const fn set_player_motion(
         &mut self,
         player: usize,
         scroll_pixels_per_second: f32,

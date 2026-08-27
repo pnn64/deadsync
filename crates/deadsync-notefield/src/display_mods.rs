@@ -175,7 +175,7 @@ pub(crate) fn append_turn_parts(out: &mut String, bits: u16) {
     }
 }
 
-fn attack_mode_name(mode: GameplayModsAttackMode) -> Option<&'static str> {
+const fn attack_mode_name(mode: GameplayModsAttackMode) -> Option<&'static str> {
     match mode {
         GameplayModsAttackMode::On => None,
         GameplayModsAttackMode::Off => Some("NoAttacks"),

@@ -25,7 +25,7 @@ struct EventBatchTrace {
 
 impl EventBatchTrace {
     #[inline(always)]
-    fn new(now: Instant) -> Self {
+    const fn new(now: Instant) -> Self {
         Self {
             started_at: now,
             gameplay_seen: false,
@@ -39,7 +39,7 @@ impl EventBatchTrace {
     }
 
     #[inline(always)]
-    fn reset(&mut self, now: Instant) {
+    const fn reset(&mut self, now: Instant) {
         *self = Self::new(now);
     }
 }
@@ -63,7 +63,7 @@ struct EventTrace {
 
 impl EventTrace {
     #[inline(always)]
-    fn new(now: Instant) -> Self {
+    const fn new(now: Instant) -> Self {
         Self {
             started_at: now,
             batches: 0,
@@ -82,7 +82,7 @@ impl EventTrace {
     }
 
     #[inline(always)]
-    fn reset(&mut self, now: Instant) {
+    const fn reset(&mut self, now: Instant) {
         *self = Self::new(now);
     }
 }
@@ -93,7 +93,7 @@ pub struct GameplayInputTrace {
 }
 
 impl GameplayInputTrace {
-    pub fn new(now: Instant) -> Self {
+    pub const fn new(now: Instant) -> Self {
         Self {
             batch: EventBatchTrace::new(now),
             summary: EventTrace::new(now),
@@ -101,7 +101,7 @@ impl GameplayInputTrace {
     }
 
     #[inline(always)]
-    pub fn reset(&mut self, now: Instant) {
+    pub const fn reset(&mut self, now: Instant) {
         self.batch.reset(now);
         self.summary.reset(now);
     }
@@ -124,7 +124,7 @@ impl GameplayInputTrace {
     }
 
     #[inline(always)]
-    fn note_new_events(&mut self, now: Instant) {
+    const fn note_new_events(&mut self, now: Instant) {
         self.batch.reset(now);
     }
 
@@ -157,7 +157,7 @@ impl GameplayInputTrace {
     }
 
     #[inline(always)]
-    fn note_queued_input(&mut self) {
+    const fn note_queued_input(&mut self) {
         self.batch.gameplay_seen = true;
         self.batch.queued_events = self.batch.queued_events.saturating_add(1);
     }

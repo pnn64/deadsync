@@ -97,7 +97,7 @@ impl InputRoutingConfig {
     const SMX_INPUT: u8 = 1 << 2;
     const SMX_PANEL_LIGHTS: u8 = 1 << 3;
 
-    fn from_config(cfg: &Config) -> Self {
+    const fn from_config(cfg: &Config) -> Self {
         Self {
             only_dedicated_menu_buttons: cfg.only_dedicated_menu_buttons,
             keyboard_features: cfg.keyboard_features,
@@ -577,7 +577,7 @@ impl RuntimeConfigStore {
 }
 
 impl PublishedConfigEffects {
-    pub fn from_config(cfg: &Config) -> Self {
+    pub const fn from_config(cfg: &Config) -> Self {
         Self {
             audio_mix_levels: audio_mix_levels_from_config(cfg),
             replaygain_enabled: cfg.enable_replaygain,
@@ -593,7 +593,7 @@ impl PublishedConfigEffects {
     }
 }
 
-pub fn audio_mix_levels_from_config(cfg: &Config) -> AudioMixLevels {
+pub const fn audio_mix_levels_from_config(cfg: &Config) -> AudioMixLevels {
     AudioMixLevels {
         master_volume: cfg.master_volume,
         music_volume: cfg.music_volume,

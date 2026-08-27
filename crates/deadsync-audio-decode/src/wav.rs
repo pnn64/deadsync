@@ -351,7 +351,7 @@ fn decode_packet_into(
 }
 
 #[inline(always)]
-fn pcm24_to_i16(sample: &[u8; 3]) -> i16 {
+const fn pcm24_to_i16(sample: &[u8; 3]) -> i16 {
     let signed = i32::from_le_bytes([
         sample[0],
         sample[1],

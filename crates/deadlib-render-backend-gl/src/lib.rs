@@ -1293,7 +1293,7 @@ fn ensure_cached_tmesh(
 }
 
 #[inline(always)]
-pub fn request_screenshot(state: &mut State) {
+pub const fn request_screenshot(state: &mut State) {
     state.screenshot_requested = true;
 }
 
@@ -3050,7 +3050,7 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     state.projection = ortho_for_window(width, height);
 }
 
-pub fn set_default_projection(state: &mut State, projection: Matrix4) {
+pub const fn set_default_projection(state: &mut State, projection: Matrix4) {
     state.projection = projection;
 }
 

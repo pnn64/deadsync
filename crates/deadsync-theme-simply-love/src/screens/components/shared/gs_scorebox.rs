@@ -162,7 +162,11 @@ impl SelectMusicScoreboxPresentation {
     }
 
     #[inline(always)]
-    pub(crate) fn view(&self, chart_matches: bool, show_online: bool) -> &SelectMusicScoreboxView {
+    pub(crate) const fn view(
+        &self,
+        chart_matches: bool,
+        show_online: bool,
+    ) -> &SelectMusicScoreboxView {
         if !chart_matches {
             &self.stale
         } else if show_online {
@@ -691,36 +695,36 @@ fn select_music_panes_from_snapshot(
 }
 
 #[inline(always)]
-fn is_gs_logo(pane: &GameplayScoreboxPane) -> bool {
+const fn is_gs_logo(pane: &GameplayScoreboxPane) -> bool {
     !pane.is_arrowcloud && matches!(pane.kind, PaneKind::Gs | PaneKind::Ex)
 }
 
 #[inline(always)]
-fn is_ex_text(pane: &GameplayScoreboxPane) -> bool {
+const fn is_ex_text(pane: &GameplayScoreboxPane) -> bool {
     matches!(pane.kind, PaneKind::Ex)
 }
 
-fn is_arrowcloud_logo(pane: &GameplayScoreboxPane) -> bool {
+const fn is_arrowcloud_logo(pane: &GameplayScoreboxPane) -> bool {
     pane.is_arrowcloud
 }
 
 #[inline(always)]
-fn is_hard_ex_text(pane: &GameplayScoreboxPane) -> bool {
+const fn is_hard_ex_text(pane: &GameplayScoreboxPane) -> bool {
     matches!(pane.kind, PaneKind::HardEx)
 }
 
 #[inline(always)]
-fn is_srpg_logo(kind: PaneKind) -> bool {
+const fn is_srpg_logo(kind: PaneKind) -> bool {
     matches!(kind, PaneKind::Srpg)
 }
 
 #[inline(always)]
-fn is_itl_logo(kind: PaneKind) -> bool {
+const fn is_itl_logo(kind: PaneKind) -> bool {
     matches!(kind, PaneKind::Itl)
 }
 
 #[inline(always)]
-fn is_fallback_text(pane: &GameplayScoreboxPane) -> bool {
+const fn is_fallback_text(pane: &GameplayScoreboxPane) -> bool {
     matches!(pane.kind, PaneKind::Other)
         || (pane.is_arrowcloud && matches!(pane.kind, PaneKind::Gs))
 }

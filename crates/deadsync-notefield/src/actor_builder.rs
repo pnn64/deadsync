@@ -129,7 +129,7 @@ impl CapturedActorScratch {
 }
 
 impl BuiltNotefield {
-    pub fn empty(layout_center_x: f32) -> Self {
+    pub const fn empty(layout_center_x: f32) -> Self {
         Self {
             layout_center_x,
             field_camera: None,
@@ -145,7 +145,7 @@ impl BuiltNotefield {
 }
 
 #[cfg(test)]
-pub(crate) fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
+pub(crate) const fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
     match &mut actor {
         Actor::Sprite { world_z: z, .. }
         | Actor::TexturedMesh { world_z: z, .. }

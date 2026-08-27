@@ -133,7 +133,7 @@ pub fn option_row_default_text(name: &str) -> String {
     }
 }
 
-pub fn player_child_proxy_name(name: &str) -> Option<&'static str> {
+pub const fn player_child_proxy_name(name: &str) -> Option<&'static str> {
     if name.eq_ignore_ascii_case("Judgment") {
         Some("Judgment")
     } else if name.eq_ignore_ascii_case("Combo") {
@@ -143,7 +143,7 @@ pub fn player_child_proxy_name(name: &str) -> Option<&'static str> {
     }
 }
 
-pub fn top_screen_player_name(player_index: usize) -> &'static str {
+pub const fn top_screen_player_name(player_index: usize) -> &'static str {
     match player_index {
         0 => "PlayerP1",
         1 => "PlayerP2",
@@ -167,7 +167,7 @@ pub fn top_screen_life_meter_index(name: &str) -> Option<usize> {
     }
 }
 
-pub fn top_screen_life_meter_name(player_index: usize) -> &'static str {
+pub const fn top_screen_life_meter_name(player_index: usize) -> &'static str {
     match player_index {
         0 => "LifeP1",
         1 => "LifeP2",
@@ -183,7 +183,7 @@ pub fn top_screen_score_index(name: &str) -> Option<usize> {
     }
 }
 
-pub fn top_screen_score_name(player_index: usize) -> &'static str {
+pub const fn top_screen_score_name(player_index: usize) -> &'static str {
     match player_index {
         0 => "ScoreP1",
         1 => "ScoreP2",
@@ -191,7 +191,7 @@ pub fn top_screen_score_name(player_index: usize) -> &'static str {
     }
 }
 
-pub fn top_screen_score_percent_name(player_index: usize) -> &'static str {
+pub const fn top_screen_score_percent_name(player_index: usize) -> &'static str {
     match player_index {
         0 => "PercentP1",
         1 => "PercentP2",
@@ -231,7 +231,7 @@ pub fn underlay_score_index(name: &str) -> Option<usize> {
     }
 }
 
-pub fn underlay_score_name(player_index: usize) -> &'static str {
+pub const fn underlay_score_name(player_index: usize) -> &'static str {
     match player_index {
         0 => "P1Score",
         1 => "P2Score",

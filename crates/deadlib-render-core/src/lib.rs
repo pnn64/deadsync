@@ -112,12 +112,12 @@ impl<V> DenseSlotMap<V> {
     }
 
     #[inline(always)]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.values.len()
     }
 
     #[inline(always)]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
 
@@ -361,7 +361,7 @@ impl TexturedMeshInstanceRaw {
     }
 
     #[inline(always)]
-    pub fn transform(&self) -> Matrix4 {
+    pub const fn transform(&self) -> Matrix4 {
         Matrix4::from_cols_array(&[
             self.model_col0[0],
             self.model_col0[1],
@@ -471,7 +471,7 @@ pub struct Yuv420Upload<'a> {
 
 impl Yuv420Upload<'_> {
     #[inline]
-    pub fn is_valid(self) -> bool {
+    pub const fn is_valid(self) -> bool {
         let Some(luma_len) = (self.width as usize).checked_mul(self.height as usize) else {
             return false;
         };
@@ -510,12 +510,12 @@ impl<V> Default for SamplerCache<V> {
 
 impl<V> SamplerCache<V> {
     #[inline(always)]
-    pub fn get(&self, desc: SamplerDesc) -> Option<&V> {
+    pub const fn get(&self, desc: SamplerDesc) -> Option<&V> {
         self.slots[desc.slot()].as_ref()
     }
 
     #[inline(always)]
-    pub fn insert(&mut self, desc: SamplerDesc, value: V) -> Option<V> {
+    pub const fn insert(&mut self, desc: SamplerDesc, value: V) -> Option<V> {
         self.slots[desc.slot()].replace(value)
     }
 

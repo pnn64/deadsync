@@ -147,7 +147,7 @@ pub fn log_runtime_event(event: DownloadRuntimeEvent) {
     }
 }
 
-pub fn unlock_downloads_available(
+pub const fn unlock_downloads_available(
     auto_download_unlocks: bool,
     groovestats_status: &ConnectionStatus,
 ) -> bool {
@@ -896,7 +896,7 @@ pub fn unzip_to_destination(
     let mut archive = ZipArchive::new(file)?;
     for idx in 0..archive.len() {
         let mut entry = archive.by_index(idx)?;
-        let Some(relative_path) = entry.enclosed_name().map(|path| path.to_path_buf()) else {
+        let Some(relative_path) = entry.enclosed_name().map(|path| path) else {
             continue;
         };
         let out_path = destination.join(relative_path);

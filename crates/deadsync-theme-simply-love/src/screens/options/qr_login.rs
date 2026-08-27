@@ -51,7 +51,7 @@ fn side_label(kind: BackendKind, side: profile_data::PlayerSide) -> Arc<str> {
 /// Translation section to read panel/title/footer strings out of.  Each
 /// backend has its own `[<...>Login]` block in en.ini.
 #[inline]
-fn i18n_section(kind: BackendKind) -> &'static str {
+const fn i18n_section(kind: BackendKind) -> &'static str {
     match kind {
         BackendKind::ArrowCloud => "ArrowCloudLogin",
         BackendKind::GrooveStats => "GrooveStatsLogin",
@@ -63,7 +63,7 @@ fn i18n_section(kind: BackendKind) -> &'static str {
 /// always the same kind (set at construction time), so any slot would
 /// give the same answer; this just avoids re-passing the kind around.
 #[inline]
-fn ui_section(ui: &QrLoginUiState) -> &'static str {
+const fn ui_section(ui: &QrLoginUiState) -> &'static str {
     i18n_section(ui.slots[0].kind)
 }
 
@@ -90,14 +90,14 @@ pub(crate) enum SlotState {
 }
 
 impl SlotState {
-    fn is_workless(&self) -> bool {
+    const fn is_workless(&self) -> bool {
         matches!(
             self,
             SlotState::NotJoined | SlotState::Guest | SlotState::Success | SlotState::Failed { .. }
         )
     }
 
-    fn is_visible(&self) -> bool {
+    const fn is_visible(&self) -> bool {
         !matches!(self, SlotState::NotJoined)
     }
 }

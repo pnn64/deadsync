@@ -111,7 +111,7 @@ impl ModelMeshCache {
 
     /// Start or stop optional hit/evaluation collection and reset those counters.
     #[inline(always)]
-    pub fn begin_hit_stats(&mut self, enabled: bool) {
+    pub const fn begin_hit_stats(&mut self, enabled: bool) {
         self.collect_hit_stats = enabled;
         self.stats.hits = 0;
         self.frame_stats.hits = 0;
@@ -129,17 +129,17 @@ impl ModelMeshCache {
     }
 
     #[inline(always)]
-    pub(crate) fn note_window_cursor(&mut self, lane: usize) -> &mut LaneWindowCursor {
+    pub(crate) const fn note_window_cursor(&mut self, lane: usize) -> &mut LaneWindowCursor {
         &mut self.note_window_cursors[lane]
     }
 
     #[inline(always)]
-    pub(crate) fn hold_window_cursor(&mut self, lane: usize) -> &mut LaneWindowCursor {
+    pub(crate) const fn hold_window_cursor(&mut self, lane: usize) -> &mut LaneWindowCursor {
         &mut self.hold_window_cursors[lane]
     }
 
     #[inline(always)]
-    pub fn seal(&mut self) {
+    pub const fn seal(&mut self) {
         self.sealed = true;
     }
 
@@ -333,7 +333,7 @@ fn lookup_size_for_slots(slot_count: usize) -> usize {
         .expect("noteskin slot lookup capacity overflow")
 }
 
-fn insert_lookup_entry(lookup: &mut [SlotLookup], entry: SlotLookup) {
+const fn insert_lookup_entry(lookup: &mut [SlotLookup], entry: SlotLookup) {
     let lookup_mask = lookup.len() - 1;
     let mut cell = slot_lookup_start(entry.stable_id, lookup_mask);
     loop {
@@ -346,7 +346,7 @@ fn insert_lookup_entry(lookup: &mut [SlotLookup], entry: SlotLookup) {
 }
 
 #[inline(always)]
-fn slot_lookup_start(stable_id: u64, lookup_mask: usize) -> usize {
+const fn slot_lookup_start(stable_id: u64, lookup_mask: usize) -> usize {
     let mixed = stable_id.wrapping_mul(0x9e37_79b9_7f4a_7c15);
     ((mixed ^ (mixed >> 32)) as usize) & lookup_mask
 }

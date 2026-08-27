@@ -1547,7 +1547,7 @@ fn install_tap_note_methods(
     note.set(
         "GetHoldNoteResult",
         lua.create_function({
-            let result = result.clone();
+            let result = result;
             move |_, _args: MultiValue| Ok(result.clone())
         })?,
     )?;
@@ -1659,7 +1659,7 @@ pub fn run_actor_named_command_with_drain_and_params(
     run_guarded_actor_command(lua, actor, name, &command, drain_queue, params)
 }
 
-pub fn actor_runs_startup_commands(actor: &Table) -> mlua::Result<bool> {
+pub const fn actor_runs_startup_commands(actor: &Table) -> mlua::Result<bool> {
     let _ = actor;
     Ok(true)
 }
@@ -7574,7 +7574,7 @@ pub fn create_note_field_actor(
     actor.set("__songlua_state_x", 0.0_f32)?;
     actor.set(
         "__songlua_state_y",
-        0.5 * (THEME_RECEPTOR_Y_STD + THEME_RECEPTOR_Y_REV),
+        f32::midpoint(THEME_RECEPTOR_Y_STD, THEME_RECEPTOR_Y_REV),
     )?;
     actor.set("__songlua_state_z", 0.0_f32)?;
     Ok(actor)
@@ -7715,8 +7715,8 @@ pub fn create_top_screen_table(
             Ok(Value::Table(child))
         })?,
     )?;
-    let life_meters_for_get_life_meter = life_meters.clone();
-    let players_for_get_life_meter = players.clone();
+    let life_meters_for_get_life_meter = life_meters;
+    let players_for_get_life_meter = players;
     top_screen.set(
         "GetLifeMeter",
         lua.create_function(move |_, args: MultiValue| {
@@ -9682,7 +9682,7 @@ pub fn flush_actor_capture(actor: &Table) -> mlua::Result<()> {
     {
         let blocks: Table = actor.get("__songlua_capture_blocks")?;
         let index = blocks.raw_len() + 1;
-        blocks.raw_set(index, block.clone())?;
+        blocks.raw_set(index, block)?;
     }
     actor.set("__songlua_capture_cursor", cursor + duration)?;
     actor.set("__songlua_capture_duration", 0.0_f32)?;
@@ -11588,7 +11588,7 @@ fn push_actor_multi_vertex_triangle(
 }
 
 #[inline(always)]
-fn actor_multi_vertex_mesh_vertex(
+const fn actor_multi_vertex_mesh_vertex(
     vertex: SongLuaActorMultiVertexPoint,
 ) -> SongLuaOverlayMeshVertex {
     SongLuaOverlayMeshVertex {
@@ -11957,7 +11957,7 @@ pub fn banner_sort_order_path(sort_order: &str) -> Option<String> {
         .trim()
         .split_once('_')
         .map(|(_, short)| short)
-        .unwrap_or(sort_order.trim());
+        .unwrap_or_else(|| sort_order.trim());
     let short = short
         .strip_suffix("_P1")
         .or_else(|| short.strip_suffix("_P2"))
@@ -12299,7 +12299,7 @@ pub fn create_music_wheel_table(lua: &Lua, current_sort_order: Table) -> mlua::R
         "ChangeSort",
         lua.create_function({
             let wheel = wheel.clone();
-            let current_sort_order = current_sort_order.clone();
+            let current_sort_order = current_sort_order;
             move |lua, args: MultiValue| {
                 if let Some(sort) = method_arg(&args, 0).cloned().and_then(read_string) {
                     current_sort_order.raw_set(1, sort)?;

@@ -107,12 +107,12 @@ const COLOR_REF_TARGET: [f32; 4] = [0.55, 0.95, 0.55, 0.55];
 const COLOR_REF_DOUBLE: [f32; 4] = [0.95, 0.55, 0.30, 0.45];
 
 #[inline(always)]
-fn anchor_is_right(a: OverlayAnchor) -> bool {
+const fn anchor_is_right(a: OverlayAnchor) -> bool {
     matches!(a, OverlayAnchor::TopRight | OverlayAnchor::BottomRight)
 }
 
 #[inline(always)]
-fn anchor_is_bottom(a: OverlayAnchor) -> bool {
+const fn anchor_is_bottom(a: OverlayAnchor) -> bool {
     matches!(
         a,
         OverlayAnchor::BottomLeft | OverlayAnchor::BottomRight | OverlayAnchor::BottomCenter
@@ -120,7 +120,7 @@ fn anchor_is_bottom(a: OverlayAnchor) -> bool {
 }
 
 #[inline(always)]
-fn anchor_is_center(a: OverlayAnchor) -> bool {
+const fn anchor_is_center(a: OverlayAnchor) -> bool {
     matches!(a, OverlayAnchor::TopCenter | OverlayAnchor::BottomCenter)
 }
 

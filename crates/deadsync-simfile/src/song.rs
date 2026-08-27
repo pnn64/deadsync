@@ -45,7 +45,7 @@ pub struct ParseSongOptions {
 }
 
 impl ParseSongOptions {
-    pub fn new(
+    pub const fn new(
         song_movie_roots: Vec<PathBuf>,
         random_movie_roots: Vec<PathBuf>,
         bg_animation_roots: Vec<PathBuf>,
@@ -91,11 +91,11 @@ pub struct SongParseScratch {
 }
 
 impl SongParseScratch {
-    pub(crate) fn cache_header(&mut self) -> &mut Vec<u8> {
+    pub(crate) const fn cache_header(&mut self) -> &mut Vec<u8> {
         &mut self.cache_header
     }
 
-    pub(crate) fn cache_payloads(&mut self) -> &mut Vec<Vec<u8>> {
+    pub(crate) const fn cache_payloads(&mut self) -> &mut Vec<Vec<u8>> {
         &mut self.cache_payloads
     }
 }
@@ -110,7 +110,7 @@ enum SongBuildMode {
 }
 
 impl SongBuildMode {
-    fn rssp_note_output(self) -> bool {
+    const fn rssp_note_output(self) -> bool {
         matches!(self, Self::Direct)
     }
 }
@@ -133,7 +133,7 @@ fn new_cached_note(row_index: usize, column: usize, note_type: NoteType) -> Cach
 }
 
 #[cfg(any(test, feature = "bench-support"))]
-fn set_cached_tail(note: &mut CachedParsedNote, tail_row_index: usize) {
+const fn set_cached_tail(note: &mut CachedParsedNote, tail_row_index: usize) {
     note.tail_row_index = Some(tail_row_index as u32);
 }
 

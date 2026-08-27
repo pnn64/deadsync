@@ -1078,7 +1078,7 @@ fn sanitized_pack_name(raw: &str, pack_id: u64) -> (String, bool) {
     (output, changed)
 }
 
-fn invalid_path_char(ch: char) -> bool {
+const fn invalid_path_char(ch: char) -> bool {
     ch.is_control() || matches!(ch, '<' | '>' | ':' | '"' | '|' | '?' | '*')
 }
 

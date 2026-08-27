@@ -50,7 +50,7 @@ impl Reader {
         }
     }
 
-    pub fn current_frame(&self) -> u64 {
+    pub const fn current_frame(&self) -> u64 {
         match self {
             Self::Flac(reader) => reader.current_frame(),
             Self::Mp3(reader) => reader.current_frame(),

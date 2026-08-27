@@ -549,7 +549,7 @@ struct StreamProgress {
 }
 
 impl StreamProgress {
-    fn new(threshold: usize, current: usize) -> Self {
+    const fn new(threshold: usize, current: usize) -> Self {
         Self {
             threshold,
             current,
@@ -757,7 +757,7 @@ fn trim_cr(line: &[u8]) -> &[u8] {
     line.strip_suffix(b"\r").unwrap_or(line)
 }
 
-fn skip_ws(mut line: &[u8]) -> &[u8] {
+const fn skip_ws(mut line: &[u8]) -> &[u8] {
     while let [byte, rest @ ..] = line {
         if !byte.is_ascii_whitespace() {
             break;

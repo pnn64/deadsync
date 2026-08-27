@@ -43,7 +43,7 @@ pub enum SongSearchScope {
 
 impl SongSearchScope {
     #[inline(always)]
-    pub fn toggled(self) -> Self {
+    pub const fn toggled(self) -> Self {
         match self {
             SongSearchScope::Song => SongSearchScope::Pack,
             SongSearchScope::Pack => SongSearchScope::Song,
@@ -73,7 +73,7 @@ const DIFFICULTY_WORDS: [&str; 8] = [
 
 /// Zero-width space / BOM, which some packs prepend to `#TITLE`.
 #[inline]
-fn is_title_pad(c: char) -> bool {
+const fn is_title_pad(c: char) -> bool {
     c.is_whitespace() || c == '\u{200b}' || c == '\u{feff}'
 }
 
@@ -209,18 +209,18 @@ pub enum SongSearchState {
 
 impl SongSearchState {
     #[inline(always)]
-    pub fn is_open(&self) -> bool {
+    pub const fn is_open(&self) -> bool {
         matches!(self, SongSearchState::Open(_))
     }
 
     #[inline(always)]
-    pub fn is_hidden(&self) -> bool {
+    pub const fn is_hidden(&self) -> bool {
         matches!(self, SongSearchState::Hidden)
     }
 }
 
 /// Open a fresh overlay; the caller populates `matches`.
-pub fn begin_song_search() -> SongSearchState {
+pub const fn begin_song_search() -> SongSearchState {
     SongSearchState::Open(SongSearchOpen {
         query: String::new(),
         scope: SongSearchScope::Song,
@@ -454,12 +454,12 @@ struct SongIndexEntry {
 
 impl SongSearchIndex {
     #[inline(always)]
-    pub fn song_count(&self) -> usize {
+    pub const fn song_count(&self) -> usize {
         self.songs.len()
     }
 
     #[inline(always)]
-    pub fn pack_count(&self) -> usize {
+    pub const fn pack_count(&self) -> usize {
         self.packs.len()
     }
 

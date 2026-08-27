@@ -326,7 +326,7 @@ pub fn create_fileman_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
             Ok(resolve_compat_path(&file_song_dir, raw_path.as_str()).exists())
         })?,
     )?;
-    let size_song_dir = song_dir.clone();
+    let size_song_dir = song_dir;
     fileman.set(
         "GetFileSizeBytes",
         lua.create_function(move |_, args: MultiValue| {
@@ -463,8 +463,7 @@ fn find_compat_files_table(lua: &Lua, song_dir: &Path, args: &MultiValue) -> mlu
         .get(1)
         .cloned()
         .and_then(read_string)
-        .unwrap_or_else(|| "ogg".to_string())
-        .to_string();
+        .unwrap_or_else(|| "ogg".to_string());
     let files = find_compat_files(song_dir, &dir, &extension).map_err(mlua::Error::external)?;
     let table = lua.create_table()?;
     for (index, file) in files.into_iter().enumerate() {

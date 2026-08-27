@@ -152,7 +152,7 @@ pub fn bg_brightness_from_choice(idx: usize) -> f32 {
     idx.min(10) as f32 / 10.0
 }
 
-pub fn clamp_bg_brightness(brightness: f32) -> f32 {
+pub const fn clamp_bg_brightness(brightness: f32) -> f32 {
     brightness.clamp(0.0, 1.0)
 }
 
@@ -215,7 +215,7 @@ impl SmxPackName {
         std::str::from_utf8(&self.bytes[..self.len as usize]).unwrap_or("")
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.len == 0
     }
 }

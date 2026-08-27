@@ -37,7 +37,7 @@ pub struct Driver {
 }
 
 impl Driver {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             api: None,
             device: None,

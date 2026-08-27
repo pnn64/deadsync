@@ -58,7 +58,7 @@ pub struct ImportSummary {
 impl ImportSummary {
     /// Whether GrooveStats and/or ArrowCloud credentials were carried across (so
     /// the user can pull online scores via Score Import).
-    pub fn online_keys_imported(&self) -> bool {
+    pub const fn online_keys_imported(&self) -> bool {
         self.groovestats_imported || self.arrowcloud_imported
     }
 }
@@ -167,7 +167,7 @@ where
         guid: &prepared.profile_guid,
     };
     let profile_id = create_profile(&data).map_err(ItgReadError::Io)?;
-    prepared.summary.profile_id = profile_id.clone();
+    prepared.summary.profile_id.clone_from(&profile_id);
 
     let (written, canceled) = import_scores(
         &profile_id,

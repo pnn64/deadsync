@@ -70,7 +70,7 @@ struct PasswordWheel {
 }
 
 #[inline(always)]
-fn wrap_info_index(info_pos: i32, slot_index1: usize, len: usize) -> usize {
+const fn wrap_info_index(info_pos: i32, slot_index1: usize, len: usize) -> usize {
     let len_i = len as i32;
     let idx1 = (info_pos - 1 + slot_index1 as i32).rem_euclid(len_i) + 1;
     (idx1 - 1) as usize
@@ -104,7 +104,7 @@ impl PasswordWheel {
     }
 
     #[inline(always)]
-    fn focused_info_index(&self) -> usize {
+    const fn focused_info_index(&self) -> usize {
         self.items[PASSWORD_WHEEL_FOCUS_POS - 1].info_index
     }
 
@@ -1086,7 +1086,7 @@ fn push_password_prompt_footer(
     }
 }
 
-fn close_hint(overlay: &OverlayStateData, snapshot: &lobby_data::Snapshot) -> &'static str {
+const fn close_hint(overlay: &OverlayStateData, snapshot: &lobby_data::Snapshot) -> &'static str {
     if overlay.password_prompt.is_some() {
         return "&MENULEFT;/&MENURIGHT;: PICK    &START;: CHOOSE    &BACK;: CANCEL";
     }
@@ -1147,7 +1147,7 @@ fn status_text(
 }
 
 #[inline(always)]
-fn browse_item_count(snapshot: &lobby_data::Snapshot) -> usize {
+const fn browse_item_count(snapshot: &lobby_data::Snapshot) -> usize {
     snapshot.available_lobbies.len() + 3
 }
 
@@ -1235,7 +1235,7 @@ fn begin_password_prompt_join(code: &str) -> PasswordPromptState {
     }
 }
 
-fn reset_nav_hold(prompt: &mut PasswordPromptState) {
+const fn reset_nav_hold(prompt: &mut PasswordPromptState) {
     prompt.nav_key_held_direction = None;
     prompt.nav_key_held_since = None;
     prompt.nav_key_last_scrolled_at = None;
@@ -1450,7 +1450,7 @@ fn password_prompt_title(prompt: &PasswordPromptState) -> String {
 }
 
 #[inline(always)]
-fn password_prompt_hint(_prompt: &PasswordPromptState) -> &'static str {
+const fn password_prompt_hint(_prompt: &PasswordPromptState) -> &'static str {
     "Use &MENULEFT;/&MENURIGHT; to pick characters, then press &START;."
 }
 

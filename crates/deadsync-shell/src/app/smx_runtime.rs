@@ -165,7 +165,7 @@ impl App {
                 self.pad_config_sync.store_profiles(
                     pad,
                     Some(pid.to_owned()),
-                    cursor_pad_type.clone(),
+                    cursor_pad_type,
                     list,
                 );
             }

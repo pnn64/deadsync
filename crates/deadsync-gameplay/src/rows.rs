@@ -908,7 +908,7 @@ pub struct RowFinalizationPlayerState {
     pub hands_achieved: u32,
 }
 
-pub fn row_finalization_player_state(player: &PlayerRuntime) -> RowFinalizationPlayerState {
+pub const fn row_finalization_player_state(player: &PlayerRuntime) -> RowFinalizationPlayerState {
     RowFinalizationPlayerState {
         combo: player_combo_state(player),
         current_combo_window_counts: player.current_combo_window_counts,
@@ -918,7 +918,7 @@ pub fn row_finalization_player_state(player: &PlayerRuntime) -> RowFinalizationP
     }
 }
 
-pub fn set_row_finalization_player_state(
+pub const fn set_row_finalization_player_state(
     player: &mut PlayerRuntime,
     state: RowFinalizationPlayerState,
 ) {
@@ -949,7 +949,7 @@ pub struct RowFinalizationPlan {
     pub capture_failed_ex_score_inputs: bool,
 }
 
-pub fn row_finalization_plan(
+pub const fn row_finalization_plan(
     row_judgment: FinalizedRowJudgment,
     scoring_blocked: bool,
     skip_life_change: bool,
@@ -1061,7 +1061,7 @@ pub enum PlayerRowScanState {
 }
 
 #[inline(always)]
-pub fn player_row_scan_state(
+pub const fn player_row_scan_state(
     row_entries: &[RowEntry],
     row_entry_index: usize,
     lookahead_time_ns: SongTimeNs,
@@ -1221,7 +1221,7 @@ pub fn notes_row_sorted(notes: &[Note]) -> bool {
         .all(|pair| pair[0].row_index <= pair[1].row_index)
 }
 
-fn next_row_grid(
+const fn next_row_grid(
     notes: &[Note],
     cursor: &mut usize,
     end: usize,
@@ -1293,7 +1293,7 @@ pub fn build_row_grids_reference(
 }
 
 #[inline(always)]
-fn note_counts_for_simultaneous_limit(note: &Note) -> bool {
+const fn note_counts_for_simultaneous_limit(note: &Note) -> bool {
     match note.note_type {
         NoteType::Tap | NoteType::Lift => !note.is_fake,
         NoteType::Hold | NoteType::Roll => true,

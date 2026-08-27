@@ -141,7 +141,7 @@ fn progress_view(progress: ScoreImportProgress) -> SimplyLoveScoreImportProgress
     }
 }
 
-fn summary_view(summary: ScoreBulkImportSummary) -> SimplyLoveScoreImportSummary {
+const fn summary_view(summary: ScoreBulkImportSummary) -> SimplyLoveScoreImportSummary {
     SimplyLoveScoreImportSummary {
         requested_charts: summary.requested_charts,
         imported_scores: summary.imported_scores,

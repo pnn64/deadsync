@@ -6,7 +6,7 @@ use winit::window::Window;
 ///
 /// Normal desktops retain control of focus. The fallback only acts on bare
 /// X11, where no client owns `SubstructureRedirectMask` on the window's root.
-pub fn focus_unmanaged_startup_window(window: &Window) -> bool {
+pub const fn focus_unmanaged_startup_window(window: &Window) -> bool {
     #[cfg(all(unix, not(target_os = "macos")))]
     {
         focus_unmanaged_x11(window)

@@ -68,7 +68,10 @@ pub fn palette_color(index: i64, palette: &[&str]) -> [f32; 4] {
     parse_color_text(palette[wrapped]).unwrap_or([1.0, 1.0, 1.0, 1.0])
 }
 
-pub fn song_lua_palette(diff_palette: Option<&str>, decorative: bool) -> &'static [&'static str] {
+pub const fn song_lua_palette(
+    diff_palette: Option<&str>,
+    decorative: bool,
+) -> &'static [&'static str] {
     match diff_palette {
         Some(value) if value.eq_ignore_ascii_case("ITG") => ITG_DIFF_COLORS,
         Some(value) if value.eq_ignore_ascii_case("DDR") => DDR_DIFF_COLORS,
@@ -190,12 +193,12 @@ pub fn tone_color(color: [f32; 4], factor: f32) -> [f32; 4] {
     ]
 }
 
-pub fn blend_color(first: [f32; 4], second: [f32; 4]) -> [f32; 4] {
+pub const fn blend_color(first: [f32; 4], second: [f32; 4]) -> [f32; 4] {
     [
-        0.5 * (first[0] + second[0]),
-        0.5 * (first[1] + second[1]),
-        0.5 * (first[2] + second[2]),
-        0.5 * (first[3] + second[3]),
+        f32::midpoint(first[0], second[0]),
+        f32::midpoint(first[1], second[1]),
+        f32::midpoint(first[2], second[2]),
+        f32::midpoint(first[3], second[3]),
     ]
 }
 

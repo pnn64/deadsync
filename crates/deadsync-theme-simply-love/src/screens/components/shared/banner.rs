@@ -71,7 +71,7 @@ fn build_sprite(
     uv: Option<[f32; 4]>,
 ) -> Actor {
     let texture_key = texture_key.into();
-    let mut actor = act!(sprite(texture_key.clone()):
+    let mut actor = act!(sprite(texture_key):
         align(0.5, 0.5):
         xy(x, y):
         setsize(frame_w, frame_h):

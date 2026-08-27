@@ -6,7 +6,7 @@ use deadsync_score::{
     lua_submit_allowed, promote_quint_grade, score_to_grade,
 };
 
-fn entry(score: f64) -> LeaderboardEntry {
+const fn entry(score: f64) -> LeaderboardEntry {
     LeaderboardEntry {
         rank: 0,
         name: String::new(),

@@ -726,6 +726,6 @@ pub(in crate::screens::options) fn toggle_select_music_chart_info_option(
 }
 
 #[inline(always)]
-pub(in crate::screens::options) fn select_music_chart_info_enabled_mask(state: &State) -> u8 {
+pub(in crate::screens::options) const fn select_music_chart_info_enabled_mask(state: &State) -> u8 {
     config::select_music_chart_info_enabled_mask(state.chart_info_mask)
 }

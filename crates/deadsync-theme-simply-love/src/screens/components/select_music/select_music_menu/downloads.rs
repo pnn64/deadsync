@@ -44,16 +44,16 @@ pub enum DownloadsInputOutcome {
     Closed,
 }
 
-fn downloads_scroll_limit(total: usize) -> usize {
+const fn downloads_scroll_limit(total: usize) -> usize {
     total.saturating_sub(DOWNLOADS_VIEW_ROWS)
 }
 
-pub fn show_downloads_overlay() -> DownloadsOverlayState {
+pub const fn show_downloads_overlay() -> DownloadsOverlayState {
     DownloadsOverlayState::Visible(DownloadsOverlayStateData { scroll_index: 0 })
 }
 
 #[inline(always)]
-pub fn hide_downloads_overlay(state: &mut DownloadsOverlayState) {
+pub const fn hide_downloads_overlay(state: &mut DownloadsOverlayState) {
     *state = DownloadsOverlayState::Hidden;
 }
 
@@ -146,7 +146,7 @@ fn download_amount_text(current_bytes: u64, total_bytes: u64) -> String {
 }
 
 #[inline(always)]
-fn download_size(bytes: u64) -> (&'static str, u64) {
+const fn download_size(bytes: u64) -> (&'static str, u64) {
     if bytes >= 1024 * 1024 {
         ("MiB", 1024 * 1024)
     } else if bytes >= 1024 {

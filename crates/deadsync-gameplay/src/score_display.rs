@@ -9,7 +9,7 @@ pub struct ExScoreInputs {
     pub mines_hit_for_score: u32,
 }
 
-pub fn ex_score_inputs_from_display(
+pub const fn ex_score_inputs_from_display(
     counts: WindowCounts,
     counts_10ms: WindowCounts,
     stage: ItgScoreStage,
@@ -25,7 +25,7 @@ pub fn ex_score_inputs_from_display(
     }
 }
 
-pub fn ex_score_data_from_display_inputs(
+pub const fn ex_score_data_from_display_inputs(
     inputs: ExScoreInputs,
     carry: CourseDisplayCarry,
     totals: CourseDisplayTotals,
@@ -71,7 +71,7 @@ pub fn effective_ex_score_inputs(
 }
 
 #[inline(always)]
-pub fn capture_failed_ex_score_inputs(
+pub const fn capture_failed_ex_score_inputs(
     failed_snapshot: &mut Option<ExScoreInputs>,
     fail_time: Option<f32>,
     live: ExScoreInputs,
@@ -108,7 +108,7 @@ pub struct ItgScoreInputs {
     pub possible_grade_points: i32,
 }
 
-pub fn itg_score_inputs_from_display(
+pub const fn itg_score_inputs_from_display(
     stage: ItgScoreStage,
     carry: CourseDisplayCarry,
     totals: CourseDisplayTotals,

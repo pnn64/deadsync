@@ -750,7 +750,7 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
         sample_start: None,
         sample_length: None,
         min_bpm: meta.min_bpm.unwrap_or(0.0),
-        max_bpm: meta.max_bpm.unwrap_or(meta.min_bpm.unwrap_or(0.0)),
+        max_bpm: meta.max_bpm.unwrap_or_else(|| meta.min_bpm.unwrap_or(0.0)),
         normalized_bpms: String::new(),
         music_length_seconds: meta.total_length_seconds.max(0) as f32,
         first_second: 0.0,
@@ -977,7 +977,7 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
                     rating.total_length_seconds.max(0),
                 )
             })
-            .unwrap_or((min_bpm, max_bpm, total_seconds.max(0)));
+            .unwrap_or_else(|| (min_bpm, max_bpm, total_seconds.max(0)));
         let meta = Arc::new(CourseMeta {
             source: course.clone(),
             path: path.clone(),
@@ -1187,7 +1187,7 @@ pub fn restore_selection_for_course(
 }
 
 #[inline(always)]
-fn selected_course_rating_index(state: &State) -> usize {
+const fn selected_course_rating_index(state: &State) -> usize {
     state.course_selection.rating_index
 }
 
@@ -1209,7 +1209,7 @@ fn rebuild_course_summary(state: &mut State) {
     let length_seconds = rating
         .map(|rating| rating.total_length_seconds.max(0))
         .filter(|seconds| *seconds > 0)
-        .unwrap_or(meta.total_length_seconds.max(0));
+        .unwrap_or_else(|| meta.total_length_seconds.max(0));
     let songs = rating.map_or_else(zero_count_text, |rating| {
         Arc::clone(&rating.entry_count_text)
     });
@@ -1588,7 +1588,7 @@ fn handle_rating_dir(
 }
 
 #[inline(always)]
-fn clear_wheel_hold(state: &mut State) {
+const fn clear_wheel_hold(state: &mut State) {
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
 }
@@ -2074,7 +2074,7 @@ pub fn trigger_immediate_refresh(state: &mut State) {
 }
 
 #[inline(always)]
-pub fn allows_late_join(_state: &State) -> bool {
+pub const fn allows_late_join(_state: &State) -> bool {
     true
 }
 
@@ -2217,7 +2217,7 @@ pub struct SelectCourseRuntimeToken {
 }
 
 #[inline(always)]
-pub fn runtime_token(state: &State) -> SelectCourseRuntimeToken {
+pub const fn runtime_token(state: &State) -> SelectCourseRuntimeToken {
     SelectCourseRuntimeToken {
         content_generation: state.wheel_content_generation,
         selected_index: state.selected_index,
@@ -2834,7 +2834,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 }
 
 #[inline(always)]
-fn begin_exit_prompt(state: &mut State) {
+const fn begin_exit_prompt(state: &mut State) {
     state.exit_prompt = ExitPromptState::Active {
         elapsed: 0.0,
         active_choice: 0,

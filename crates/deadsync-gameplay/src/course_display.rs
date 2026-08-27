@@ -7,7 +7,7 @@ pub struct CourseDisplayTotals {
     pub mines_total: u32,
 }
 
-pub fn course_display_totals_for_chart(chart: &ChartData) -> CourseDisplayTotals {
+pub const fn course_display_totals_for_chart(chart: &ChartData) -> CourseDisplayTotals {
     CourseDisplayTotals {
         possible_grade_points: chart.possible_grade_points,
         total_steps: chart.stats.total_steps,
@@ -79,7 +79,7 @@ pub struct CourseComboCarryState {
     pub first_fc_attempt_broken: bool,
 }
 
-pub fn course_life_after_carry(current_life: f32, course_carry: Option<CourseDisplayCarry>) -> f32 {
+pub const fn course_life_after_carry(current_life: f32, course_carry: Option<CourseDisplayCarry>) -> f32 {
     let Some(carry) = course_carry else {
         return current_life;
     };
@@ -90,7 +90,7 @@ pub fn course_life_after_carry(current_life: f32, course_carry: Option<CourseDis
     }
 }
 
-pub fn apply_course_combo_carry_state(
+pub const fn apply_course_combo_carry_state(
     state: &mut CourseComboCarryState,
     carry_combo_between_songs: bool,
     replay_mode: bool,
@@ -176,7 +176,7 @@ impl GameplayWindowCountsState {
     }
 
     #[inline(always)]
-    pub fn set_player_for_test(
+    pub const fn set_player_for_test(
         &mut self,
         player: usize,
         canonical: WindowCounts,
@@ -233,7 +233,7 @@ pub fn display_window_counts_mode(
     }
 }
 
-pub fn display_window_counts_current(
+pub const fn display_window_counts_current(
     sources: DisplayWindowCountsSources,
     mode: DisplayWindowCountsMode,
 ) -> Option<WindowCounts> {
@@ -245,7 +245,7 @@ pub fn display_window_counts_current(
     }
 }
 
-pub fn display_window_counts_with_carry(
+pub const fn display_window_counts_with_carry(
     current: WindowCounts,
     carry: CourseDisplayCarry,
     mode: DisplayWindowCountsMode,
@@ -296,7 +296,7 @@ pub fn record_combo_window_count_for_judgment(counts: &mut WindowCounts, judgmen
     judgment::add_judgment_to_window_counts(counts, judgment, FA_PLUS_W0_MS);
 }
 
-pub fn display_judgment_count_for_grade(
+pub const fn display_judgment_count_for_grade(
     stage_counts: judgment::JudgeCounts,
     carry: CourseDisplayCarry,
     grade: JudgeGrade,
@@ -419,7 +419,7 @@ pub fn course_display_carry_for_stages(
 ) -> [CourseDisplayCarry; MAX_PLAYERS] {
     let mut carry = [CourseDisplayCarry::default(); MAX_PLAYERS];
     for player in 0..num_players.min(MAX_PLAYERS) {
-        let previous_player = previous.map_or(CourseDisplayCarry::default(), |old| old[player]);
+        let previous_player = previous.map_or_else(CourseDisplayCarry::default, |old| old[player]);
         carry[player] = course_display_carry_for_stage(previous_player, stages[player]);
     }
     if num_players == 1 {
@@ -435,10 +435,10 @@ pub fn course_display_carry_for_player(
     if player_idx >= MAX_PLAYERS {
         return CourseDisplayCarry::default();
     }
-    carry.map_or(CourseDisplayCarry::default(), |carry| carry[player_idx])
+    carry.map_or_else(CourseDisplayCarry::default, |carry| carry[player_idx])
 }
 
-pub fn player_course_display_stage(
+pub const fn player_course_display_stage(
     player: &PlayerRuntime,
     window_counts: WindowCounts,
     window_counts_10ms_blue: WindowCounts,
@@ -497,7 +497,7 @@ pub fn course_display_timing_for_stages<T>(
 }
 
 #[inline(always)]
-fn sanitize_course_display_seconds(seconds: f32) -> f32 {
+const fn sanitize_course_display_seconds(seconds: f32) -> f32 {
     if seconds.is_finite() {
         seconds.max(0.0)
     } else {
@@ -514,7 +514,7 @@ pub struct GameplayCourseDisplayState {
 
 impl GameplayCourseDisplayState {
     #[inline(always)]
-    pub fn new(
+    pub const fn new(
         carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
         totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
         timing: Option<CourseDisplayTiming>,
@@ -527,22 +527,22 @@ impl GameplayCourseDisplayState {
     }
 
     #[inline(always)]
-    pub fn is_course_stage(&self) -> bool {
+    pub const fn is_course_stage(&self) -> bool {
         self.totals.is_some()
     }
 
     #[inline(always)]
-    pub fn carry(&self) -> Option<&[CourseDisplayCarry; MAX_PLAYERS]> {
+    pub const fn carry(&self) -> Option<&[CourseDisplayCarry; MAX_PLAYERS]> {
         self.carry.as_ref()
     }
 
     #[inline(always)]
-    pub fn totals(&self) -> Option<&[CourseDisplayTotals; MAX_PLAYERS]> {
+    pub const fn totals(&self) -> Option<&[CourseDisplayTotals; MAX_PLAYERS]> {
         self.totals.as_ref()
     }
 
     #[inline(always)]
-    pub fn timing(&self) -> Option<CourseDisplayTiming> {
+    pub const fn timing(&self) -> Option<CourseDisplayTiming> {
         self.timing
     }
 

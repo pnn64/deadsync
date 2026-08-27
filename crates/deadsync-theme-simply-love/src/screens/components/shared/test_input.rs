@@ -735,7 +735,7 @@ mod eval_panel_layout {
 
 /// Visual size of the unscaled panel in logical pixels (width, height at
 /// scale 1.0).
-pub fn evaluation_panel_size() -> (f32, f32) {
+pub const fn evaluation_panel_size() -> (f32, f32) {
     (
         eval_panel_layout::PANEL_WIDTH,
         eval_panel_layout::PANEL_HEIGHT,

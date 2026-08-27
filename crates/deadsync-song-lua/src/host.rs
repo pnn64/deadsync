@@ -105,11 +105,7 @@ fn install_compile_globals(
         create_dummy_actor,
         create_named_child_actor,
     )?;
-    install_screen_manager_globals(
-        lua,
-        top_screen.top_screen.clone(),
-        top_screen.players.clone(),
-    )?;
+    install_screen_manager_globals(lua, top_screen.top_screen.clone(), top_screen.players)?;
     install_sound_globals(lua, context.song_dir.as_path())?;
     install_message_manager_globals(lua, broadcast_song_lua_message)?;
     install_late_globals(lua, context)?;
@@ -164,7 +160,7 @@ pub fn is_compile_global_name(name: &str) -> bool {
 
 pub fn create_chunk_env_proxy(lua: &Lua, target: Table) -> mlua::Result<Table> {
     let proxy = lua.create_table()?;
-    proxy.set("__songlua_env_target", target.clone())?;
+    proxy.set("__songlua_env_target", target)?;
     let globals = lua.globals();
     let mt = lua.create_table()?;
     let proxy_for_index = proxy.clone();
@@ -181,13 +177,13 @@ pub fn create_chunk_env_proxy(lua: &Lua, target: Table) -> mlua::Result<Table> {
         })?,
     )?;
     let proxy_for_newindex = proxy.clone();
-    let globals_for_newindex = globals.clone();
+    let globals_for_newindex = globals;
     mt.set(
         "__newindex",
         lua.create_function(move |_, (_self, key, value): (Table, Value, Value)| {
             let target: Table = proxy_for_newindex.get("__songlua_env_target")?;
             target.set(key.clone(), value.clone())?;
-            if let Some(name) = read_string(key.clone())
+            if let Some(name) = read_string(key)
                 && is_compile_global_name(name.as_str())
             {
                 globals_for_newindex.set(name, value)?;
@@ -758,7 +754,7 @@ pub fn install_screen_manager_globals(
     screenman.set(
         "AddNewScreenToTop",
         lua.create_function({
-            let top_screen = top_screen.clone();
+            let top_screen = top_screen;
             move |lua, args: MultiValue| {
                 if let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) {
                     top_screen.set("Name", name)?;
@@ -1267,16 +1263,10 @@ pub fn install_game_state_globals(
         };
         current_trail.raw_set(player_index + 1, trail)?;
     }
-    let course = create_course_table(lua, context, song.clone(), primary_trail.clone())?;
+    let course = create_course_table(lua, context, song.clone(), primary_trail)?;
     globals.set(
         "SONGMAN",
-        create_songman_table(
-            lua,
-            song.clone(),
-            players.steps[0].clone(),
-            course.clone(),
-            context,
-        )?,
+        create_songman_table(lua, song, players.steps[0].clone(), course.clone(), context)?,
     )?;
     gamestate.set(
         "GetCurrentSteps",
@@ -1322,7 +1312,7 @@ pub fn install_game_state_globals(
     gamestate.set(
         "SetCurrentSteps",
         lua.create_function({
-            let current_steps = current_steps.clone();
+            let current_steps = current_steps;
             move |lua, args: MultiValue| {
                 let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
                     return Ok(());
@@ -1373,7 +1363,7 @@ pub fn install_game_state_globals(
     gamestate.set(
         "GetSongOptions",
         lua.create_function({
-            let song_options = song_options.clone();
+            let song_options = song_options;
             move |lua, _args: MultiValue| {
                 let rate = song_options
                     .get::<Option<f32>>("__songlua_music_rate")?
@@ -1512,7 +1502,7 @@ pub fn install_game_state_globals(
     gamestate.set(
         "SetCurrentStyle",
         lua.create_function({
-            let current_style = current_style.clone();
+            let current_style = current_style;
             move |lua, args: MultiValue| {
                 let style_name = method_arg(&args, 0)
                     .cloned()
@@ -1527,7 +1517,7 @@ pub fn install_game_state_globals(
     gamestate.set(
         "SetCurrentTrail",
         lua.create_function({
-            let current_trail = current_trail.clone();
+            let current_trail = current_trail;
             move |lua, args: MultiValue| {
                 let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
                     note_song_lua_side_effect(lua)?;

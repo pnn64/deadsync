@@ -333,7 +333,7 @@ fn resize_output(out: &mut Vec<i16>, samples: usize) {
 }
 
 #[inline(always)]
-fn signed_as_u16(samples: &mut [i16]) -> &mut [u16] {
+const fn signed_as_u16(samples: &mut [i16]) -> &mut [u16] {
     // SAFETY: `i16` and `u16` have identical size and alignment, every bit
     // pattern is valid for both, and the returned slice keeps the input's
     // length and exclusive lifetime. opusic-c immediately reinterprets its

@@ -180,12 +180,12 @@ struct ImportPickerState {
 
 impl ImportPickerState {
     /// The index of the synthetic "Browse…" row.
-    fn browse_index(&self) -> usize {
+    const fn browse_index(&self) -> usize {
         self.candidates.len()
     }
 
     /// `true` when the "Browse…" row is currently selected.
-    fn browse_selected(&self) -> bool {
+    const fn browse_selected(&self) -> bool {
         self.selected == self.browse_index()
     }
 
@@ -223,7 +223,7 @@ enum SectionStatus {
 impl SectionStatus {
     /// The status glyph (proven to render in the menu font — see the evaluation
     /// submit footer).
-    fn icon(self) -> &'static str {
+    const fn icon(self) -> &'static str {
         match self {
             Self::Imported | Self::Partial => "✔",
             Self::Skipped => "⊘",
@@ -232,7 +232,7 @@ impl SectionStatus {
 
     /// Icon / status-text color: green when imported, amber when partial, gray
     /// when skipped.
-    fn rgba(self) -> [f32; 4] {
+    const fn rgba(self) -> [f32; 4] {
         match self {
             Self::Imported => [0.55, 0.92, 0.55, 1.0],
             Self::Partial => [0.96, 0.78, 0.36, 1.0],
@@ -256,7 +256,7 @@ enum MessageLine {
 
 impl MessageLine {
     /// A centered, full-white line (error/canceled bodies, sub-heading).
-    fn plain(text: String) -> Self {
+    const fn plain(text: String) -> Self {
         Self::Center {
             text,
             rgba: [1.0, 1.0, 1.0, 1.0],
@@ -264,7 +264,7 @@ impl MessageLine {
     }
 
     /// A centered, dimmed line (secondary notes / caveats).
-    fn note(text: String) -> Self {
+    const fn note(text: String) -> Self {
         Self::Center {
             text,
             rgba: [0.78, 0.78, 0.78, 1.0],
@@ -272,7 +272,7 @@ impl MessageLine {
     }
 
     /// A two-column ledger row.
-    fn row(label: String, status: String, kind: SectionStatus) -> Self {
+    const fn row(label: String, status: String, kind: SectionStatus) -> Self {
         Self::Row {
             label,
             status,
@@ -380,7 +380,7 @@ pub fn sync_runtime_view(state: &mut State, view: ManageLocalProfilesView) {
     state.prev_selected = state.prev_selected.min(state.rows.len() - 1);
 }
 
-fn move_selected(state: &mut State, dir: NavDirection, wrap: NavWrap) {
+const fn move_selected(state: &mut State, dir: NavDirection, wrap: NavWrap) {
     let total = state.rows.len();
     if total == 0 {
         state.selected = 0;
@@ -427,7 +427,7 @@ fn on_nav_release(state: &mut State, dir: NavDirection) {
     }
 }
 
-fn reset_nav_hold(state: &mut State) {
+const fn reset_nav_hold(state: &mut State) {
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.nav_key_last_scrolled_at = None;
@@ -598,7 +598,7 @@ fn cancel_profile_menu(state: &mut State) {
     reset_nav_hold(state);
 }
 
-fn move_profile_menu_selected(state: &mut State, dir: NavDirection) {
+const fn move_profile_menu_selected(state: &mut State, dir: NavDirection) {
     let Some(menu) = state.profile_menu.as_mut() else {
         return;
     };
@@ -806,7 +806,7 @@ fn cancel_import_picker(state: &mut State) {
     reset_nav_hold(state);
 }
 
-fn move_import_picker_selected(state: &mut State, dir: NavDirection) {
+const fn move_import_picker_selected(state: &mut State, dir: NavDirection) {
     let Some(picker) = state.import_picker.as_mut() else {
         return;
     };
@@ -1273,7 +1273,7 @@ fn activate_selected_row(state: &mut State) -> ThemeEffect {
 }
 
 #[inline(always)]
-fn undo_nav_move(state: &mut State, undo: i8) {
+const fn undo_nav_move(state: &mut State, undo: i8) {
     match undo {
         1 => move_selected(state, NavDirection::Down, NavWrap::Wrap),
         -1 => move_selected(state, NavDirection::Up, NavWrap::Wrap),
@@ -1282,7 +1282,7 @@ fn undo_nav_move(state: &mut State, undo: i8) {
 }
 
 #[inline(always)]
-fn undo_profile_menu_move(state: &mut State, undo: i8) {
+const fn undo_profile_menu_move(state: &mut State, undo: i8) {
     match undo {
         1 => move_profile_menu_selected(state, NavDirection::Down),
         -1 => move_profile_menu_selected(state, NavDirection::Up),
@@ -2545,7 +2545,7 @@ fn row_label(kind: &RowKind) -> Arc<str> {
     }
 }
 
-fn row_is_exit(kind: &RowKind) -> bool {
+const fn row_is_exit(kind: &RowKind) -> bool {
     matches!(kind, RowKind::Exit)
 }
 
@@ -2559,7 +2559,7 @@ fn row_width(list_w: f32, sep_w: f32, is_active: bool, is_exit: bool) -> f32 {
     }
 }
 
-fn row_bg_color(colors: &RowColors, is_active: bool, is_exit: bool) -> [f32; 4] {
+const fn row_bg_color(colors: &RowColors, is_active: bool, is_exit: bool) -> [f32; 4] {
     if is_active {
         if is_exit {
             colors.brand_bg
@@ -2571,7 +2571,7 @@ fn row_bg_color(colors: &RowColors, is_active: bool, is_exit: bool) -> [f32; 4] 
     }
 }
 
-fn row_text_color(colors: &RowColors, is_active: bool, is_exit: bool) -> [f32; 4] {
+const fn row_text_color(colors: &RowColors, is_active: bool, is_exit: bool) -> [f32; 4] {
     if is_exit {
         if is_active {
             colors.black

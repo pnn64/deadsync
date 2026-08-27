@@ -334,7 +334,7 @@ fn session_slot(service: SimplyLoveQrLoginService, side: PlayerSide) -> SimplyLo
     }
 }
 
-fn unavailable_slot(
+const fn unavailable_slot(
     side: PlayerSide,
     availability: SimplyLoveQrLoginSlotAvailability,
 ) -> SimplyLoveQrLoginSlot {

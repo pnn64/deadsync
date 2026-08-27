@@ -22,7 +22,7 @@ impl SecretString {
         Self(value.into())
     }
 
-    pub fn expose(&self) -> &str {
+    pub const fn expose(&self) -> &str {
         self.0.as_str()
     }
 }
@@ -123,7 +123,7 @@ pub struct RuntimeProfileGuard<T: 'static> {
 }
 
 impl<T> RuntimeProfileGuard<T> {
-    fn new(guard: MutexGuard<'static, T>) -> Self {
+    const fn new(guard: MutexGuard<'static, T>) -> Self {
         Self {
             guard,
             dirty: false,
@@ -720,7 +720,7 @@ pub struct RuntimeProfileSideLoadReport {
 }
 
 impl RuntimeProfileSideLoadReport {
-    fn guest(selection: ActiveProfileLoadSelection) -> Self {
+    const fn guest(selection: ActiveProfileLoadSelection) -> Self {
         Self {
             selection,
             default_files_dir: None,
@@ -1470,7 +1470,7 @@ pub const fn age_years_for_birth_year(birth_year: i32, current_year: i32) -> i32
 }
 
 #[inline]
-fn set_i32_if_changed(value: &mut i32, new_value: i32) -> bool {
+const fn set_i32_if_changed(value: &mut i32, new_value: i32) -> bool {
     if *value == new_value {
         return false;
     }
@@ -1488,7 +1488,7 @@ fn set_f32_if_changed(value: &mut f32, new_value: f32) -> bool {
 }
 
 #[inline]
-fn set_u32_if_changed(value: &mut u32, new_value: u32) -> bool {
+const fn set_u32_if_changed(value: &mut u32, new_value: u32) -> bool {
     if *value == new_value {
         return false;
     }
@@ -1497,7 +1497,7 @@ fn set_u32_if_changed(value: &mut u32, new_value: u32) -> bool {
 }
 
 #[inline]
-fn set_u8_if_changed(value: &mut u8, new_value: u8) -> bool {
+const fn set_u8_if_changed(value: &mut u8, new_value: u8) -> bool {
     if *value == new_value {
         return false;
     }
@@ -2647,7 +2647,7 @@ fn gameplay_hud_player_snapshot(
     }
 }
 
-pub fn side_for_physical_pad(
+pub const fn side_for_physical_pad(
     play_style: PlayStyle,
     player_side: PlayerSide,
     is_p2_side: bool,
@@ -2661,7 +2661,7 @@ pub fn side_for_physical_pad(
     }
 }
 
-pub fn side_for_gameplay_player(
+pub const fn side_for_gameplay_player(
     num_players: usize,
     player_idx: usize,
     session_side: PlayerSide,
@@ -2870,7 +2870,7 @@ pub fn update_guest_profile_player_options(
     changed
 }
 
-pub fn pad_light_brightness_for_physical_pad(
+pub const fn pad_light_brightness_for_physical_pad(
     profiles: &[Profile; PLAYER_SLOTS],
     play_style: PlayStyle,
     player_side: PlayerSide,
@@ -3861,7 +3861,7 @@ impl ActiveProfileLoadSelection {
 }
 
 #[inline(always)]
-pub fn active_profile_is_guest(profile: &ActiveProfile) -> bool {
+pub const fn active_profile_is_guest(profile: &ActiveProfile) -> bool {
     matches!(profile, ActiveProfile::Guest)
 }
 
@@ -4305,7 +4305,7 @@ impl SessionState {
     }
 
     #[inline(always)]
-    pub fn set_timing_tick_mode(&mut self, mode: TimingTickMode) {
+    pub const fn set_timing_tick_mode(&mut self, mode: TimingTickMode) {
         self.timing_tick_mode = mode;
     }
 
@@ -4329,7 +4329,7 @@ impl SessionState {
     }
 
     #[inline(always)]
-    pub fn set_play_mode(&mut self, mode: PlayMode) {
+    pub const fn set_play_mode(&mut self, mode: PlayMode) {
         self.play_mode = mode;
     }
 
@@ -4339,7 +4339,7 @@ impl SessionState {
     }
 
     #[inline(always)]
-    pub fn set_player_side(&mut self, side: PlayerSide) {
+    pub const fn set_player_side(&mut self, side: PlayerSide) {
         self.player_side = side;
     }
 
@@ -4349,7 +4349,7 @@ impl SessionState {
     }
 
     #[inline(always)]
-    pub fn set_joined_sides(&mut self, p1: bool, p2: bool) {
+    pub const fn set_joined_sides(&mut self, p1: bool, p2: bool) {
         self.joined_mask = joined_player_mask(p1, p2);
     }
 }
@@ -9323,7 +9323,7 @@ impl Profile {
         set_value_if_changed(&mut self.carry_combo_between_songs, enabled)
     }
 
-    pub fn set_current_combo(&mut self, combo: u32) -> bool {
+    pub const fn set_current_combo(&mut self, combo: u32) -> bool {
         set_u32_if_changed(&mut self.current_combo, combo)
     }
 
@@ -9377,7 +9377,7 @@ impl Profile {
         set_value_if_changed(&mut self.rescore_early_hits, enabled)
     }
 
-    pub fn set_gameplay_extras(
+    pub const fn set_gameplay_extras(
         &mut self,
         column_flash_on_miss: bool,
         subtractive_scoring: bool,
@@ -9491,7 +9491,7 @@ impl Profile {
         set_value_if_changed(&mut self.tap_explosion_active_mask, setting)
     }
 
-    pub fn set_early_dw_options(
+    pub const fn set_early_dw_options(
         &mut self,
         hide_judgments: bool,
         hide_flash: bool,
@@ -9627,7 +9627,7 @@ impl Profile {
         set_value_if_changed(&mut self.show_life_percent, enabled)
     }
 
-    pub fn set_hide_options(
+    pub const fn set_hide_options(
         &mut self,
         hide_targets: bool,
         hide_song_bg: bool,
@@ -9784,14 +9784,14 @@ impl Profile {
         set_f32_if_changed(&mut self.tilt_multiplier, multiplier)
     }
 
-    pub fn set_custom_fantastic_window_ms(&mut self, ms: u8) -> bool {
+    pub const fn set_custom_fantastic_window_ms(&mut self, ms: u8) -> bool {
         set_u8_if_changed(
             &mut self.custom_fantastic_window_ms,
             clamp_custom_fantastic_window_ms(ms),
         )
     }
 
-    pub fn set_pad_light_brightness(&mut self, percent: u8) -> bool {
+    pub const fn set_pad_light_brightness(&mut self, percent: u8) -> bool {
         set_u8_if_changed(
             &mut self.pad_light_brightness,
             clamp_pad_light_brightness(percent),
@@ -9805,7 +9805,7 @@ impl Profile {
         )
     }
 
-    pub fn set_average_error_bar_interval_ms(&mut self, ms: u32) -> bool {
+    pub const fn set_average_error_bar_interval_ms(&mut self, ms: u32) -> bool {
         set_u32_if_changed(
             &mut self.average_error_bar_interval_ms,
             clamp_average_error_bar_interval_ms(ms),
@@ -9816,7 +9816,7 @@ impl Profile {
         set_value_if_changed(&mut self.short_average_error_bar_enabled, enabled)
     }
 
-    pub fn set_text_error_bar_threshold_ms(&mut self, ms: u32) -> bool {
+    pub const fn set_text_error_bar_threshold_ms(&mut self, ms: u32) -> bool {
         set_u32_if_changed(
             &mut self.text_error_bar_threshold_ms,
             clamp_text_error_bar_threshold_ms(ms),
@@ -9834,21 +9834,21 @@ impl Profile {
         set_value_if_changed(&mut self.long_error_bar_enabled, enabled)
     }
 
-    pub fn set_long_error_bar_threshold_ms(&mut self, ms: u32) -> bool {
+    pub const fn set_long_error_bar_threshold_ms(&mut self, ms: u32) -> bool {
         set_u32_if_changed(
             &mut self.long_error_bar_threshold_ms,
             clamp_long_error_bar_threshold_ms(ms),
         )
     }
 
-    pub fn set_long_error_bar_min_samples(&mut self, n: u32) -> bool {
+    pub const fn set_long_error_bar_min_samples(&mut self, n: u32) -> bool {
         set_u32_if_changed(
             &mut self.long_error_bar_min_samples,
             clamp_long_error_bar_min_samples(n),
         )
     }
 
-    pub fn set_error_bar_options(&mut self, up: bool, multi_tick: bool) -> bool {
+    pub const fn set_error_bar_options(&mut self, up: bool, multi_tick: bool) -> bool {
         if self.error_bar_up == up && self.error_bar_multi_tick == multi_tick {
             return false;
         }
@@ -9905,7 +9905,7 @@ impl Profile {
         set_u8_if_changed(&mut self.measure_counter_lookahead, lookahead.min(4))
     }
 
-    pub fn set_measure_counter_options(
+    pub const fn set_measure_counter_options(
         &mut self,
         left: bool,
         up: bool,
@@ -10229,8 +10229,8 @@ impl Profile {
         self.transparent_density_graph_bg = options.transparent_density_graph_bg;
         self.smx_fsr_display = options.smx_fsr_display;
         self.smx_pad_input_display = options.smx_pad_input_display;
-        self.smx_bg_pack = options.smx_bg_pack.clone();
-        self.smx_judge_pack = options.smx_judge_pack.clone();
+        self.smx_bg_pack.clone_from(&options.smx_bg_pack);
+        self.smx_judge_pack.clone_from(&options.smx_judge_pack);
         self.mini_indicator = options.mini_indicator;
         self.mini_indicator_score_type = options.mini_indicator_score_type;
         self.mini_indicator_subtractive_display = options.mini_indicator_subtractive_display;
@@ -10273,7 +10273,7 @@ impl Profile {
     }
 
     #[inline(always)]
-    pub fn player_options_mut(&mut self, style: PlayStyle) -> &mut PlayerOptionsData {
+    pub const fn player_options_mut(&mut self, style: PlayStyle) -> &mut PlayerOptionsData {
         match style {
             PlayStyle::Single | PlayStyle::Versus => &mut self.player_options_singles,
             PlayStyle::Double => &mut self.player_options_doubles,
@@ -10312,7 +10312,7 @@ impl Profile {
     }
 
     #[inline(always)]
-    pub fn last_played_mut(&mut self, style: PlayStyle) -> &mut LastPlayed {
+    pub const fn last_played_mut(&mut self, style: PlayStyle) -> &mut LastPlayed {
         match style {
             PlayStyle::Single
             | PlayStyle::Versus
@@ -10334,7 +10334,7 @@ impl Profile {
     }
 
     #[inline(always)]
-    pub fn last_played_course_mut(&mut self, style: PlayStyle) -> &mut LastPlayedCourse {
+    pub const fn last_played_course_mut(&mut self, style: PlayStyle) -> &mut LastPlayedCourse {
         match style {
             PlayStyle::Single
             | PlayStyle::Versus
@@ -12482,7 +12482,7 @@ mod tests {
         let profile = dir.join("profile.png");
         fs::write(&avatar, b"avatar").unwrap();
 
-        assert_eq!(find_profile_avatar_path(&dir), Some(avatar.clone()));
+        assert_eq!(find_profile_avatar_path(&dir), Some(avatar));
 
         fs::write(&profile, b"profile").unwrap();
         assert_eq!(find_profile_avatar_path(&dir), Some(profile));

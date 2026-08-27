@@ -167,7 +167,7 @@ impl TexturedMeshBufferCache {
     }
 
     #[inline(always)]
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         self.last_source = None;
     }
 }

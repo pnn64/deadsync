@@ -15,7 +15,7 @@ const MACHINE_RECORD_SPLIT_ROW_HEIGHT: f32 = 20.25;
 const MACHINE_RECORD_HIGHLIGHT_PERIOD_SECONDS: f32 = 4.0 / 3.0;
 
 #[inline(always)]
-fn machine_record_rank_window(highlight_rank: Option<u32>) -> (u32, u32) {
+const fn machine_record_rank_window(highlight_rank: Option<u32>) -> (u32, u32) {
     let mut lower: u32 = 1;
     let mut upper: u32 = MACHINE_RECORD_ROWS as u32;
     if let Some(rank) = highlight_rank

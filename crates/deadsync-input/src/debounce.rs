@@ -49,7 +49,7 @@ pub struct DebounceStore {
 
 impl DebounceStore {
     #[inline(always)]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             slots: Vec::new(),
             due_slots: Vec::new(),
@@ -84,7 +84,7 @@ impl DebounceStore {
     }
 
     #[inline(always)]
-    pub(crate) fn has_scheduled_work(&self) -> bool {
+    pub(crate) const fn has_scheduled_work(&self) -> bool {
         !self.due_slots.is_empty()
     }
 
@@ -250,7 +250,7 @@ impl DebounceWindows {
     }
 
     #[inline(always)]
-    fn prune_window(self) -> Duration {
+    const fn prune_window(self) -> Duration {
         self.window
     }
 }
@@ -270,7 +270,7 @@ fn due_delta_us(due_at: Option<Instant>, now: Instant) -> Option<i128> {
 }
 
 #[inline(always)]
-fn debounced_edge(
+const fn debounced_edge(
     state: DebounceState,
     input_slot: u32,
     pressed: bool,
@@ -533,7 +533,7 @@ pub fn debounce_input_edge_in_store_mut(
 
     let (edges, prune, new_due_at) = {
         let slot_state = &mut states.slots[slot];
-        let mut state = slot_state.state.unwrap_or(DebounceState {
+        let mut state = slot_state.state.unwrap_or_else(|| DebounceState {
             action_mask,
             source,
             held_raw: false,
@@ -679,7 +679,7 @@ pub mod bench_support {
             let now = Instant::now();
             let input_slot = slot as u32;
             let old_due_at = store.slots[slot].due_at;
-            let mut state = store.slots[slot].state.unwrap_or(DebounceState {
+            let mut state = store.slots[slot].state.unwrap_or_else(|| DebounceState {
                 action_mask: MASK,
                 source: InputSource::Keyboard,
                 held_raw: false,

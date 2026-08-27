@@ -458,7 +458,7 @@ pub fn install_stdlib_compat(
         lua.create_function(move |lua, (target, env): (Value, Table)| match target {
             Value::Function(function) => {
                 (callbacks.retarget_loader_env)(lua, &function, &env)?;
-                let _ = function.set_environment(env.clone())?;
+                let _ = function.set_environment(env)?;
                 Ok(Value::Function(function))
             }
             Value::Integer(_) | Value::Number(_) => {

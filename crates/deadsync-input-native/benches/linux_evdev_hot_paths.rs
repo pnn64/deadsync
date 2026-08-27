@@ -97,7 +97,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -200,7 +200,7 @@ fn timestamp_new(events: usize, sample: EventTimeSample) -> u64 {
     checksum
 }
 
-fn event_checksum(checksum: &mut u64, event: PadEvent) {
+const fn event_checksum(checksum: &mut u64, event: PadEvent) {
     if let PadEvent::Dir { dir, pressed, .. } = event {
         *checksum = checksum
             .rotate_left(5)

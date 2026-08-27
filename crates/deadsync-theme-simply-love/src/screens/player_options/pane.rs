@@ -47,7 +47,7 @@ impl PaneTransition {
     }
 
     #[inline(always)]
-    pub(super) fn is_active(self) -> bool {
+    pub(super) const fn is_active(self) -> bool {
         !matches!(self, Self::None)
     }
 }

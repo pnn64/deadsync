@@ -101,7 +101,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -112,7 +112,7 @@ impl AllocSnapshot {
         }
     }
 
-    fn churn_bytes(self) -> u64 {
+    const fn churn_bytes(self) -> u64 {
         self.alloc_bytes + self.realloc_bytes + self.free_bytes
     }
 }
@@ -302,7 +302,7 @@ fn triangles_new(triangles: &[Triangle; TRIANGLES], bins: &mut TriangleBins) -> 
 }
 
 #[inline(always)]
-fn wrap_old(i: i32, max: usize) -> usize {
+const fn wrap_old(i: i32, max: usize) -> usize {
     let max = max as i32;
     let mut value = i % max;
     if value < 0 {
@@ -312,7 +312,7 @@ fn wrap_old(i: i32, max: usize) -> usize {
 }
 
 #[inline(always)]
-fn wrap_new(i: i32, max: usize) -> usize {
+const fn wrap_new(i: i32, max: usize) -> usize {
     if max.is_power_of_two() {
         i as usize & (max - 1)
     } else {
@@ -343,12 +343,12 @@ fn wrap_batch(inputs: &[(i32, usize)], fast: bool) -> u64 {
 }
 
 #[inline(always)]
-fn clamp01(value: f32) -> f32 {
+const fn clamp01(value: f32) -> f32 {
     value.clamp(0.0, 1.0)
 }
 
 #[inline(always)]
-fn pack_old(rgb: [f32; 3]) -> u32 {
+const fn pack_old(rgb: [f32; 3]) -> u32 {
     let r = clamp01(rgb[0]).mul_add(255.0, 0.5) as u32;
     let g = clamp01(rgb[1]).mul_add(255.0, 0.5) as u32;
     let b = clamp01(rgb[2]).mul_add(255.0, 0.5) as u32;
@@ -357,7 +357,7 @@ fn pack_old(rgb: [f32; 3]) -> u32 {
 }
 
 #[inline(always)]
-fn pack_new(rgb: [f32; 3]) -> u32 {
+const fn pack_new(rgb: [f32; 3]) -> u32 {
     let r = rgb[0].mul_add(255.0, 0.5) as u32;
     let g = rgb[1].mul_add(255.0, 0.5) as u32;
     let b = rgb[2].mul_add(255.0, 0.5) as u32;

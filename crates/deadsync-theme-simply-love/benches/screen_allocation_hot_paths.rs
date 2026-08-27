@@ -135,7 +135,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -272,7 +272,7 @@ fn print_reduced_pair(title: &str, iterations: usize, old: &BenchResult, new: &B
     );
 }
 
-fn timing_fixture() -> TimingHealth {
+const fn timing_fixture() -> TimingHealth {
     TimingHealth {
         interval_ns: 16_666_667,
         display_error_ms: -0.42,

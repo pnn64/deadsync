@@ -116,7 +116,7 @@ struct AllocSnapshot {
 }
 
 impl AllocSnapshot {
-    fn delta(self, before: Self) -> Self {
+    const fn delta(self, before: Self) -> Self {
         Self {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
@@ -378,7 +378,7 @@ fn refresh_state() -> ActiveAttackRefreshState {
     }
 }
 
-fn next_refresh_state(output: ActiveAttackRefreshOutput) -> ActiveAttackRefreshState {
+const fn next_refresh_state(output: ActiveAttackRefreshOutput) -> ActiveAttackRefreshState {
     ActiveAttackRefreshState {
         attack_current_appearance: output.attack_current_appearance,
         active_attack_visual: output.active_attack_visual,

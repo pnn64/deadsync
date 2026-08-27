@@ -279,7 +279,7 @@ impl SmxPanelDriver {
         if unchanged {
             return;
         }
-        self.backgrounds[pad] = background.clone();
+        self.backgrounds[pad].clone_from(&background);
         self.lights.set_background_for_pad(pad, background);
         self.sync_worker();
     }

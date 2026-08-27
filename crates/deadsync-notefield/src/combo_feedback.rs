@@ -242,7 +242,7 @@ fn lerp(start: f32, end: f32, t: f32) -> f32 {
     start + (end - start) * t
 }
 
-fn with_alpha(color: [f32; 4], alpha: f32) -> [f32; 4] {
+const fn with_alpha(color: [f32; 4], alpha: f32) -> [f32; 4] {
     [color[0], color[1], color[2], alpha]
 }
 

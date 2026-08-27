@@ -238,7 +238,7 @@ pub fn sync_dir(path: &std::path::Path) -> std::io::Result<()> {
 }
 
 #[cfg(not(unix))]
-pub fn sync_dir(_path: &std::path::Path) -> std::io::Result<()> {
+pub const fn sync_dir(_path: &std::path::Path) -> std::io::Result<()> {
     Ok(())
 }
 

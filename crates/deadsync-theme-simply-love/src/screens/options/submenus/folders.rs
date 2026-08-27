@@ -133,7 +133,7 @@ pub(in crate::screens::options) const FOLDERS_OPTIONS_ITEMS: &[Item] = &[
 
 /// Maps a folder row id to the absolute path it represents. Returns `None`
 /// for rows that don't belong to the Folders submenu.
-fn folder_kind_for_row(id: SubRowId) -> Option<AppPathKind> {
+const fn folder_kind_for_row(id: SubRowId) -> Option<AppPathKind> {
     Some(match id {
         SubRowId::FoldersDataDir => AppPathKind::Data,
         SubRowId::FoldersCacheDir => AppPathKind::Cache,

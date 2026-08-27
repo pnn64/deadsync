@@ -507,7 +507,7 @@ fn song_lua_column_transforms(
     (x_offsets, zooms, rotations_deg)
 }
 
-fn resolved_frame_features(
+const fn resolved_frame_features(
     mut features: NotefieldFrameFeatures,
     view: ViewOverride,
 ) -> NotefieldFrameFeatures {

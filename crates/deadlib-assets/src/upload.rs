@@ -205,7 +205,7 @@ impl TextureUploadQueue {
     }
 
     #[cfg(test)]
-    fn queued_bytes(&self) -> usize {
+    const fn queued_bytes(&self) -> usize {
         self.queued_bytes
     }
 }

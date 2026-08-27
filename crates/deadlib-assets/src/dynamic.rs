@@ -527,7 +527,7 @@ pub struct DynamicVideoTiming {
 
 impl DynamicVideoTiming {
     #[inline(always)]
-    pub fn new(anchor_gameplay_sec: f32, rate: f32) -> Self {
+    pub const fn new(anchor_gameplay_sec: f32, rate: f32) -> Self {
         Self {
             anchor_gameplay_sec,
             anchor_media_sec: 0.0,
@@ -536,7 +536,7 @@ impl DynamicVideoTiming {
     }
 
     #[inline(always)]
-    pub fn rate(&self) -> f32 {
+    pub const fn rate(&self) -> f32 {
         self.rate
     }
 
@@ -560,7 +560,7 @@ impl DynamicVideoTiming {
 }
 
 #[inline(always)]
-pub fn normalize_video_rate(rate: f32) -> f32 {
+pub const fn normalize_video_rate(rate: f32) -> f32 {
     if rate.is_finite() { rate.max(0.0) } else { 1.0 }
 }
 

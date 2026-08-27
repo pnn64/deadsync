@@ -135,7 +135,7 @@ impl<S, R> ThemeEffect<S, R> {
 impl<S: Copy, R> ThemeEffect<S, R> {
     /// Return the effect as a flow event, or `None` for non-flow effects.
     #[inline(always)]
-    pub fn flow_event(&self) -> Option<ThemeFlowEvent<S>> {
+    pub const fn flow_event(&self) -> Option<ThemeFlowEvent<S>> {
         match self {
             Self::Navigate(screen) => Some(ThemeFlowEvent::Navigate(*screen)),
             Self::NavigateNoFade(screen) => Some(ThemeFlowEvent::NavigateNoFade(*screen)),

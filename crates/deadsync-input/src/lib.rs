@@ -70,7 +70,7 @@ pub struct RawKeyboardEvent {
 }
 
 #[inline(always)]
-pub fn clamp_input_debounce_seconds(seconds: f32) -> f32 {
+pub const fn clamp_input_debounce_seconds(seconds: f32) -> f32 {
     seconds.clamp(INPUT_DEBOUNCE_MIN_SECONDS, INPUT_DEBOUNCE_MAX_SECONDS)
 }
 
@@ -741,7 +741,7 @@ pub struct InputEvent {
 
 impl InputEvent {
     #[inline(always)]
-    pub fn new(
+    pub const fn new(
         action: VirtualAction,
         input_slot: u32,
         pressed: bool,

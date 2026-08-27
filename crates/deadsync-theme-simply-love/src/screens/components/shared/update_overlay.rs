@@ -531,7 +531,7 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
     }
 }
 
-fn error_kind_key(kind: ActionErrorKind) -> &'static str {
+const fn error_kind_key(kind: ActionErrorKind) -> &'static str {
     match kind {
         ActionErrorKind::Network => "ErrorNetwork",
         ActionErrorKind::RateLimited => "ErrorRateLimited",
@@ -544,7 +544,7 @@ fn error_kind_key(kind: ActionErrorKind) -> &'static str {
 }
 
 /// Dispatch a virtual input event against the current overlay state.
-pub fn handle_input(phase: &ActionPhase, ev: &InputEvent) -> InputOutcome {
+pub const fn handle_input(phase: &ActionPhase, ev: &InputEvent) -> InputOutcome {
     if matches!(phase, ActionPhase::Idle) {
         return InputOutcome::Passthrough;
     }

@@ -3068,8 +3068,8 @@ mod tests {
         let w2_ms = timing::TimingProfile::default_itg_with_fa_plus().windows_s[0] * 1000.0;
         let smaller_white_ms = timing::FA_PLUS_W010_MS;
         let w1_ms = timing::FA_PLUS_W0_MS;
-        let inner_mid_ms = (smaller_white_ms + w1_ms) * 0.5;
-        let fantastic_mid_ms = (w1_ms + w2_ms) * 0.5;
+        let inner_mid_ms = f32::midpoint(smaller_white_ms, w1_ms);
+        let fantastic_mid_ms = f32::midpoint(w1_ms, w2_ms);
 
         assert_close(
             error_bar_text_scalable_zoom(inner_mid_ms, 10.0, w2_ms),
@@ -4278,7 +4278,7 @@ mod tests {
             let mut low = if has_cache { 0.0 } else { high - 4.0 };
             let mut first = low;
             for _ in 0..24 {
-                let mid = (low + high) * 0.5;
+                let mid = f32::midpoint(low, high);
                 let note_limit_hit = if has_cache {
                     let low_count = note_count_at(mid);
                     let high_count = note_count_at(current_beat);

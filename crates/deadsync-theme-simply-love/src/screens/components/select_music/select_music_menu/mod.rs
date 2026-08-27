@@ -318,17 +318,17 @@ pub enum State {
 }
 
 impl State {
-    pub fn is_hidden(&self) -> bool {
+    pub const fn is_hidden(&self) -> bool {
         matches!(self, State::Hidden)
     }
 
-    pub fn is_visible(&self) -> bool {
+    pub const fn is_visible(&self) -> bool {
         !self.is_hidden()
     }
 }
 
 #[inline(always)]
-pub fn scroll_dir(len: usize, prev: usize, selected: usize) -> isize {
+pub const fn scroll_dir(len: usize, prev: usize, selected: usize) -> isize {
     if len <= 1 {
         return 0;
     }
@@ -358,7 +358,7 @@ pub fn scroll_anim_dir(len: usize, prev: usize, selected: usize, input_dir: isiz
 }
 
 #[inline(always)]
-pub(crate) fn set_text_clip_rect(actor: &mut Actor, rect: [f32; 4]) {
+pub(crate) const fn set_text_clip_rect(actor: &mut Actor, rect: [f32; 4]) {
     if let Actor::Text { clip, .. } = actor {
         *clip = Some(rect);
     }

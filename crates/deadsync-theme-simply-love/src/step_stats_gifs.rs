@@ -61,7 +61,7 @@ impl GifDefinition {
     }
 
     #[inline(always)]
-    fn style(&self, side: PlayerSide, wide: bool) -> GifStyle {
+    const fn style(&self, side: PlayerSide, wide: bool) -> GifStyle {
         self.styles[wide as usize][player_index(side)]
     }
 }
@@ -290,7 +290,7 @@ pub fn gif_render_layout(
     })
 }
 
-fn player_index(side: PlayerSide) -> usize {
+const fn player_index(side: PlayerSide) -> usize {
     match side {
         PlayerSide::P1 => 0,
         PlayerSide::P2 => 1,

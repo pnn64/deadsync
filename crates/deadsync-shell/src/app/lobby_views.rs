@@ -44,7 +44,7 @@ impl Default for RuntimeCursor {
 
 impl RuntimeCursor {
     #[inline(always)]
-    pub(super) fn force_refresh(&mut self) {
+    pub(super) const fn force_refresh(&mut self) {
         self.rebuild = true;
     }
 

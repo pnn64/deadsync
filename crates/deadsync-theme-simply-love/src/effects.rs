@@ -928,7 +928,7 @@ pub type SimplyLoveEffect = deadsync_theme::ThemeEffect<SimplyLoveScreen, Simply
 pub type SimplyLoveInputResult =
     deadsync_theme::ThemeInputResult<SimplyLoveScreen, SimplyLoveRuntimeRequest>;
 
-pub(crate) fn sfx(path: &'static str) -> SimplyLoveEffect {
+pub(crate) const fn sfx(path: &'static str) -> SimplyLoveEffect {
     SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(path)))
 }
 
@@ -936,7 +936,7 @@ pub(crate) fn sfx_then(path: &'static str, effect: SimplyLoveEffect) -> SimplyLo
     SimplyLoveEffect::sequence(sfx(path), effect)
 }
 
-pub(crate) fn lobby(request: SimplyLoveLobbyRequest) -> SimplyLoveEffect {
+pub(crate) const fn lobby(request: SimplyLoveLobbyRequest) -> SimplyLoveEffect {
     SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Online(
         SimplyLoveOnlineRequest::Lobby(request),
     ))

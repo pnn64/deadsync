@@ -38,7 +38,7 @@ pub struct SliceWriter<'storage> {
 
 impl<'storage> SliceWriter<'storage> {
     /// Create a new instance of `SliceWriter` with the given byte array.
-    pub fn new(bytes: &'storage mut [u8]) -> SliceWriter<'storage> {
+    pub const fn new(bytes: &'storage mut [u8]) -> SliceWriter<'storage> {
         let original = bytes.len();
         SliceWriter {
             slice: bytes,
@@ -47,7 +47,7 @@ impl<'storage> SliceWriter<'storage> {
     }
 
     /// Return the amount of bytes written so far.
-    pub fn bytes_written(&self) -> usize {
+    pub const fn bytes_written(&self) -> usize {
         self.original_length - self.slice.len()
     }
 }

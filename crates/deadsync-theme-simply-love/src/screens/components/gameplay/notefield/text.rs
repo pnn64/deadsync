@@ -201,7 +201,7 @@ const fn turn_option_bits(turn: profile_data::TurnOption) -> u16 {
 }
 
 #[inline(always)]
-fn gameplay_mods_attack_mode(mode: profile_data::AttackMode) -> GameplayModsAttackMode {
+const fn gameplay_mods_attack_mode(mode: profile_data::AttackMode) -> GameplayModsAttackMode {
     match mode {
         profile_data::AttackMode::Off => GameplayModsAttackMode::Off,
         profile_data::AttackMode::On => GameplayModsAttackMode::On,
@@ -210,7 +210,7 @@ fn gameplay_mods_attack_mode(mode: profile_data::AttackMode) -> GameplayModsAtta
 }
 
 #[inline(always)]
-fn profile_error_bar_mask(profile: &profile_data::Profile) -> profile_data::ErrorBarMask {
+const fn profile_error_bar_mask(profile: &profile_data::Profile) -> profile_data::ErrorBarMask {
     if profile.error_bar_active_mask.is_empty() {
         profile_data::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text)
     } else {

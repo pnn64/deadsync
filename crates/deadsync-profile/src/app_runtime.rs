@@ -868,7 +868,7 @@ impl<'a> ItlWheelSideCache<'a> {
         }
     }
 
-    pub fn leaderboard_snapshot(&self) -> &deadsync_score::GameplayScoreboxProfileSnapshot {
+    pub const fn leaderboard_snapshot(&self) -> &deadsync_score::GameplayScoreboxProfileSnapshot {
         self.leaderboard_snapshot
     }
 
@@ -1175,7 +1175,7 @@ pub fn load_profile_for_side(side: PlayerSide) {
     let defaults = crate::runtime_machine_player_defaults();
     let today = chrono::Local::now().date_naive().to_string();
     let mut default_profile = crate::default_profile_with_player_options(&defaults.new_profile);
-    default_profile.calories_burned_day = today.clone();
+    default_profile.calories_burned_day.clone_from(&today);
     let load = crate::runtime_load_profile_for_side(
         &profiles_root(),
         side,

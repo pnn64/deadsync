@@ -190,7 +190,7 @@ impl ActiveInputSlots {
     }
 
     #[inline(always)]
-    fn clear(&mut self) {
+    const fn clear(&mut self) {
         self.slot_count = 0;
     }
 }
@@ -432,7 +432,7 @@ pub const fn input_lane_mask(num_cols: usize) -> LaneMask {
 }
 
 #[inline(always)]
-pub fn lane_inputs_from_mask(mask: LaneMask, num_cols: usize) -> [bool; MAX_COLS] {
+pub const fn lane_inputs_from_mask(mask: LaneMask, num_cols: usize) -> [bool; MAX_COLS] {
     let mut inputs = [false; MAX_COLS];
     let mut lanes = mask & input_lane_mask(num_cols);
     while lanes != 0 {
@@ -528,7 +528,7 @@ fn insert_active_input_slot(
 
 #[inline(always)]
 #[cfg(any(test, feature = "bench-support"))]
-fn remove_active_input_slot_if_empty(
+const fn remove_active_input_slot_if_empty(
     slots: &mut [ActiveInputSlot],
     slot_count: &mut usize,
     idx: usize,

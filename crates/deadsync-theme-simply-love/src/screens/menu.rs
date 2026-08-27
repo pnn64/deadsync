@@ -45,7 +45,7 @@ pub const OPTION_COUNT: usize = 3;
 const MAX_OPTION_COUNT: usize = OPTION_COUNT + 1;
 
 #[inline]
-fn option_count(state: &State) -> usize {
+const fn option_count(state: &State) -> usize {
     if !matches!(
         state.runtime_view.coin_mode,
         deadsync_config::prelude::CoinMode::Home
@@ -357,13 +357,13 @@ pub fn update_attract(state: &mut State, dt: f32) -> ThemeEffect {
 }
 
 #[inline(always)]
-fn reset_idle(state: &mut State) {
+const fn reset_idle(state: &mut State) {
     state.idle_elapsed = 0.0;
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app
 // Screen-specific raw keyboard handling for Menu (e.g., F4 to Sandbox)
-pub fn handle_raw_key_event(state: &mut State, key: &RawKeyboardEvent) -> ThemeEffect {
+pub const fn handle_raw_key_event(state: &mut State, key: &RawKeyboardEvent) -> ThemeEffect {
     reset_idle(state);
     if !key.pressed {
         return ThemeEffect::None;
@@ -380,7 +380,7 @@ pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
-pub fn out_transition() -> (Vec<Actor>, f32) {
+pub const fn out_transition() -> (Vec<Actor>, f32) {
     // Simply Love's ScreenTitleMenu out actor only holds the screen for one
     // second. The menu owns its actor fades and the shell adds the fly burst.
     (Vec::new(), TRANSITION_OUT_DURATION)
@@ -936,13 +936,13 @@ pub fn get_actors(
 }
 
 #[inline(always)]
-fn move_selection(state: &mut State, delta: isize) {
+const fn move_selection(state: &mut State, delta: isize) {
     let n = option_count(state) as isize;
     let cur = state.selected_index as isize;
     set_selected(state, (cur + delta).rem_euclid(n) as usize);
 }
 
-fn set_selected(state: &mut State, selected_index: usize) {
+const fn set_selected(state: &mut State, selected_index: usize) {
     let old_index = state.selected_index;
     if old_index == selected_index {
         return;

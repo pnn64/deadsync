@@ -73,7 +73,7 @@ impl Default for SettingSearchState {
 
 impl SettingSearchState {
     #[inline(always)]
-    pub(super) fn is_open(&self) -> bool {
+    pub(super) const fn is_open(&self) -> bool {
         matches!(self, Self::Open(_))
     }
 }
@@ -100,7 +100,7 @@ fn clean_label(raw: &str) -> String {
 
 /// English synonym keywords matched alongside the localized label, so queries
 /// like "cmod" or "arrows" resolve. Lives here because `fuzzy` is domain-agnostic.
-fn row_aliases(id: RowId) -> &'static [&'static str] {
+const fn row_aliases(id: RowId) -> &'static [&'static str] {
     match id {
         RowId::SpeedMod => &["speed", "cmod", "mmod", "xmod", "bpm", "rate"],
         RowId::TypeOfSpeedMod => &["speed type", "cmod", "mmod", "xmod"],

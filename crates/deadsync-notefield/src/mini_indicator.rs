@@ -193,11 +193,11 @@ impl BrokenRunSpan {
         }
     }
 
-    fn segment_index(self) -> usize {
+    const fn segment_index(self) -> usize {
         (self.segment_and_broken & !Self::BROKEN_FLAG) as usize
     }
 
-    fn broken(self) -> bool {
+    const fn broken(self) -> bool {
         self.segment_and_broken & Self::BROKEN_FLAG != 0
     }
 }
@@ -556,7 +556,7 @@ pub fn zmod_percent_from_points(points: i32, total: i32) -> f64 {
     ((points as f64 / total as f64) * 10000.0).floor() / 100.0
 }
 
-pub(crate) fn zmod_subtractive_counter_state(
+pub(crate) const fn zmod_subtractive_counter_state(
     progress: &MiniIndicatorProgress,
     score_type: MiniIndicatorScoreType,
 ) -> (u32, bool) {
@@ -789,7 +789,7 @@ pub fn zmod_mini_indicator_output(
 pub(crate) fn zmod_combo_glow_color(color1: [f32; 4], color2: [f32; 4], elapsed: f32) -> [f32; 4] {
     let effect_period = 0.8_f32;
     let through = (elapsed / effect_period).fract();
-    let t = ((through * std::f32::consts::TAU).sin() + 1.0) * 0.5;
+    let t = f32::midpoint((through * std::f32::consts::TAU).sin(), 1.0);
     [
         color1[0] + (color2[0] - color1[0]) * t,
         color1[1] + (color2[1] - color1[1]) * t,
@@ -872,7 +872,7 @@ pub(crate) fn zmod_combo_rainbow_color(elapsed: f32, scroll: bool, combo: u32) -
     }
 }
 
-fn zmod_combo_grade(params: ZmodComboColorParams) -> Option<JudgeGrade> {
+const fn zmod_combo_grade(params: ZmodComboColorParams) -> Option<JudgeGrade> {
     if params.full_combo_mode {
         params.full_combo_grade
     } else {
@@ -880,7 +880,7 @@ fn zmod_combo_grade(params: ZmodComboColorParams) -> Option<JudgeGrade> {
     }
 }
 
-fn zmod_full_combo_rainbow_active(grade: Option<JudgeGrade>) -> bool {
+const fn zmod_full_combo_rainbow_active(grade: Option<JudgeGrade>) -> bool {
     matches!(
         grade,
         Some(JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great)

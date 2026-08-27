@@ -62,7 +62,7 @@ const fn band(label: &'static str, start_ms: f32, end_ms: f32, color: [f32; 4]) 
 }
 
 #[inline(always)]
-fn timing_bands_itg(
+const fn timing_bands_itg(
     timing_windows: [f32; 5],
     palette: JudgmentPalette,
 ) -> ([TimingBand; 7], usize) {
@@ -92,7 +92,10 @@ fn timing_bands_itg(
 }
 
 #[inline(always)]
-fn timing_bands_ex(timing_windows: [f32; 5], palette: JudgmentPalette) -> ([TimingBand; 7], usize) {
+const fn timing_bands_ex(
+    timing_windows: [f32; 5],
+    palette: JudgmentPalette,
+) -> ([TimingBand; 7], usize) {
     let blue = palette.color(Role::FantasticBlue);
     let excellent = palette.color(Role::Excellent);
     let great = palette.color(Role::Great);
@@ -121,7 +124,7 @@ fn timing_bands_ex(timing_windows: [f32; 5], palette: JudgmentPalette) -> ([Timi
 }
 
 #[inline(always)]
-fn timing_bands_hard_ex(
+const fn timing_bands_hard_ex(
     timing_windows: [f32; 5],
     palette: JudgmentPalette,
 ) -> ([TimingBand; 7], usize) {
@@ -155,7 +158,7 @@ fn timing_bands_hard_ex(
 }
 
 #[inline(always)]
-fn timing_bands_ms(
+const fn timing_bands_ms(
     scale: TimingHistogramScale,
     timing_windows: [f32; 5],
     palette: JudgmentPalette,

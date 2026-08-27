@@ -1372,28 +1372,28 @@ pub fn push_actors(
 
                             actors.push(act!(quad:
                                 align(0.5, 0.5):
-                                xy((left + right) * 0.5, top + border_w * 0.5):
+                                xy(f32::midpoint(left, right), top + border_w * 0.5):
                                 zoomto(ring_w, border_w):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                                 z(101)
                             ));
                             actors.push(act!(quad:
                                 align(0.5, 0.5):
-                                xy((left + right) * 0.5, bottom - border_w * 0.5):
+                                xy(f32::midpoint(left, right), bottom - border_w * 0.5):
                                 zoomto(ring_w, border_w):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                                 z(101)
                             ));
                             actors.push(act!(quad:
                                 align(0.5, 0.5):
-                                xy(left + border_w * 0.5, (top + bottom) * 0.5):
+                                xy(left + border_w * 0.5, f32::midpoint(top, bottom)):
                                 zoomto(border_w, ring_h):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                                 z(101)
                             ));
                             actors.push(act!(quad:
                                 align(0.5, 0.5):
-                                xy(right - border_w * 0.5, (top + bottom) * 0.5):
+                                xy(right - border_w * 0.5, f32::midpoint(top, bottom)):
                                 zoomto(border_w, ring_h):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                                 z(101)

@@ -208,7 +208,7 @@ pub fn open_smx_config_submenu(state: &mut State) {
 }
 
 /// Whether the options screen is currently showing the StepManiaX config submenu.
-pub fn is_smx_config_view(state: &State) -> bool {
+pub const fn is_smx_config_view(state: &State) -> bool {
     matches!(state.view, OptionsView::Submenu(SubmenuKind::SmxConfig))
 }
 

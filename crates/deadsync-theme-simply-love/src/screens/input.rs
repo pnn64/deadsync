@@ -14,7 +14,7 @@ const MENU_LR_LEFT: u8 = 1 << 0;
 const MENU_LR_RIGHT: u8 = 1 << 1;
 
 #[inline(always)]
-pub fn reset_hold_repeat(
+pub const fn reset_hold_repeat(
     held_for: &mut Duration,
     next_repeat_at: &mut Duration,
     initial_delay: Duration,
@@ -141,7 +141,7 @@ fn menu_lr_times_are_simultaneous(a: Option<Instant>, b: Option<Instant>) -> boo
 
 impl MenuLrChordTracker {
     #[inline(always)]
-    fn side_state(&self, side: PlayerSide) -> &MenuLrChordSideState {
+    const fn side_state(&self, side: PlayerSide) -> &MenuLrChordSideState {
         match side {
             PlayerSide::P1 => &self.p1,
             PlayerSide::P2 => &self.p2,
@@ -149,7 +149,7 @@ impl MenuLrChordTracker {
     }
 
     #[inline(always)]
-    fn side_state_mut(&mut self, side: PlayerSide) -> &mut MenuLrChordSideState {
+    const fn side_state_mut(&mut self, side: PlayerSide) -> &mut MenuLrChordSideState {
         match side {
             PlayerSide::P1 => &mut self.p1,
             PlayerSide::P2 => &mut self.p2,
@@ -201,7 +201,7 @@ impl MenuLrChordTracker {
     }
 
     #[inline(always)]
-    pub fn both_held(&self, side: PlayerSide) -> bool {
+    pub const fn both_held(&self, side: PlayerSide) -> bool {
         self.side_state(side).held_mask == (MENU_LR_LEFT | MENU_LR_RIGHT)
     }
 }
@@ -245,7 +245,7 @@ pub fn track_menu_lr_chord(chord: &mut MenuLrChordTracker, ev: &InputEvent) {
 }
 
 #[inline(always)]
-pub fn menu_lr_both_held(chord: &MenuLrChordTracker, side: PlayerSide) -> bool {
+pub const fn menu_lr_both_held(chord: &MenuLrChordTracker, side: PlayerSide) -> bool {
     chord.both_held(side)
 }
 /* ---------------------------- transitions ---------------------------- */
@@ -283,7 +283,7 @@ pub fn init() -> State {
     }
 }
 
-pub fn on_enter(state: &mut State, dedicated_three_key_nav: bool) {
+pub const fn on_enter(state: &mut State, dedicated_three_key_nav: bool) {
     state.dedicated_three_key_nav = dedicated_three_key_nav;
     state.raw_back_hold_active = false;
     state.select_back_held = [false; 2];

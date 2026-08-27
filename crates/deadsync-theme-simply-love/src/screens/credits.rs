@@ -179,7 +179,7 @@ pub struct State {
     scroll_items: f32,
 }
 
-pub fn init() -> State {
+pub const fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: visual_style_bg::State::new(),
@@ -219,7 +219,7 @@ fn ease_out_cubic(t: f32) -> f32 {
     1.0 - u * u * u
 }
 
-pub fn handle_input(_state: &mut State, event: &InputEvent) -> ThemeEffect {
+pub const fn handle_input(_state: &mut State, event: &InputEvent) -> ThemeEffect {
     if !event.pressed {
         return ThemeEffect::None;
     }

@@ -518,43 +518,49 @@ pub fn itg_roll_visuals_from_parts<T: Clone>(
         parts
             .head_active_layers
             .clone()
-            .or(parts.head_inactive_layers.clone())
+            .or_else(|| parts.head_inactive_layers.clone())
             .or_else(|| hold.head_active_layers.clone())
             .or_else(|| hold.head_inactive_layers.clone())
     };
     HoldVisuals {
-        head_inactive: parts.head_inactive.clone().or(hold.head_inactive.clone()),
+        head_inactive: parts
+            .head_inactive
+            .clone()
+            .or_else(|| hold.head_inactive.clone()),
         head_active: parts
             .head_active
             .or(parts.head_inactive)
-            .or(hold.head_active.clone())
-            .or(hold.head_inactive.clone()),
+            .or_else(|| hold.head_active.clone())
+            .or_else(|| hold.head_inactive.clone()),
         head_inactive_layers,
         head_active_layers,
-        body_inactive: parts.body_inactive.clone().or(hold.body_inactive.clone()),
+        body_inactive: parts
+            .body_inactive
+            .clone()
+            .or_else(|| hold.body_inactive.clone()),
         body_active: parts
             .body_active
             .or(parts.body_inactive)
-            .or(hold.body_active.clone())
-            .or(hold.body_inactive.clone()),
+            .or_else(|| hold.body_active.clone())
+            .or_else(|| hold.body_inactive.clone()),
         topcap_inactive: parts
             .topcap_inactive
             .clone()
-            .or(hold.topcap_inactive.clone()),
+            .or_else(|| hold.topcap_inactive.clone()),
         topcap_active: parts
             .topcap_active
             .or(parts.topcap_inactive)
-            .or(hold.topcap_active.clone())
-            .or(hold.topcap_inactive.clone()),
+            .or_else(|| hold.topcap_active.clone())
+            .or_else(|| hold.topcap_inactive.clone()),
         bottomcap_inactive: parts
             .bottomcap_inactive
             .clone()
-            .or(hold.bottomcap_inactive.clone()),
+            .or_else(|| hold.bottomcap_inactive.clone()),
         bottomcap_active: parts
             .bottomcap_active
             .or(parts.bottomcap_inactive)
-            .or(hold.bottomcap_active.clone())
-            .or(hold.bottomcap_inactive.clone()),
+            .or_else(|| hold.bottomcap_active.clone())
+            .or_else(|| hold.bottomcap_inactive.clone()),
         explosion: None,
     }
 }
@@ -1923,7 +1929,7 @@ pub fn itg_runtime_columns_compiled<T: Clone>(
         )
         .ok_or_else(|| format!("failed to resolve Receptor for button '{button}'"))?;
         if receptor_pulse_command.is_none() {
-            receptor_pulse_command = receptor_column.pulse_command.clone();
+            receptor_pulse_command.clone_from(&receptor_column.pulse_command);
         }
         if receptor_idle_glow == ReceptorIdleGlow::None {
             receptor_idle_glow = receptor_column.idle_glow;
@@ -3047,7 +3053,7 @@ mod tests {
         let selected = default_tap_explosions(
             &[
                 TapExplosionMap::from([("W1", first.clone())]),
-                TapExplosionMap::from([("W1", down.clone())]),
+                TapExplosionMap::from([("W1", down)]),
             ],
             1,
         );

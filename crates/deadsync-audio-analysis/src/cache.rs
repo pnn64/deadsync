@@ -75,7 +75,7 @@ pub enum CacheFreshness {
 
 impl ReplayGainCacheEntry {
     #[inline]
-    pub fn new(
+    pub const fn new(
         path_hash: u64,
         mtime_unix_nanos: u64,
         content_hash: u64,
@@ -91,7 +91,7 @@ impl ReplayGainCacheEntry {
     }
 
     #[inline]
-    pub fn info(self) -> ReplayGainInfo {
+    pub const fn info(self) -> ReplayGainInfo {
         ReplayGainInfo {
             lufs: self.lufs,
             true_peak_linear: self.true_peak_linear,

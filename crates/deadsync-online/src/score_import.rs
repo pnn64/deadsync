@@ -189,7 +189,7 @@ impl ScoreImportRuntime {
         let stats_chart_hash = chart_hash.clone();
         let score_profile_id = profile_id.clone();
         let score_chart_hash = chart_hash.clone();
-        let missing_profile_id = profile_id.clone();
+        let missing_profile_id = profile_id;
         let missing_chart_hash = chart_hash.clone();
         fetch_and_store_active_service_grade(
             &profile,

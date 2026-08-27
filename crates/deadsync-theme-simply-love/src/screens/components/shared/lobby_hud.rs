@@ -159,7 +159,7 @@ pub struct LobbyHudCacheStats {
 }
 
 impl LobbyHudCache {
-    pub fn stats(&self) -> LobbyHudCacheStats {
+    pub const fn stats(&self) -> LobbyHudCacheStats {
         self.stats
     }
 
@@ -367,7 +367,7 @@ fn ordered_players(joined: &lobbies::JoinedLobby) -> Vec<(usize, &lobbies::Lobby
 }
 
 #[inline(always)]
-fn is_score_screen(screen_name: &str) -> bool {
+const fn is_score_screen(screen_name: &str) -> bool {
     screen_name.eq_ignore_ascii_case("ScreenGameplay")
         || screen_name.eq_ignore_ascii_case("ScreenEvaluationStage")
 }
@@ -406,7 +406,7 @@ fn panel_width(screen_name: &str, placement: PanelPlacement) -> f32 {
     }
 }
 
-fn panel_placement(
+const fn panel_placement(
     screen_name: &str,
     joined_sides: [bool; 2],
     player_side: PlayerSide,
@@ -428,7 +428,7 @@ fn panel_placement(
     }
 }
 
-fn normalized_joined_sides(
+const fn normalized_joined_sides(
     [mut p1_joined, mut p2_joined]: [bool; 2],
     player_side: PlayerSide,
 ) -> [bool; 2] {

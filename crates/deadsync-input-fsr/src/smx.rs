@@ -47,7 +47,7 @@ pub struct Monitor {
 }
 
 impl Monitor {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { read_active: false }
     }
 
@@ -498,7 +498,7 @@ pub(super) fn load_cell_button_view(
     }
 }
 
-fn sensor_enabled(config: &SmxConfig, panel: usize, sensor: usize) -> bool {
+const fn sensor_enabled(config: &SmxConfig, panel: usize, sensor: usize) -> bool {
     let (byte, mask) = smx::enabled_bit(panel, sensor);
     config.enabled_sensors[byte] & mask != 0
 }
@@ -528,14 +528,14 @@ fn fsr_config_for_edit(pad: usize, op: &str) -> Option<SmxConfig> {
     Some(config)
 }
 
-fn is_fsr(config: &SmxConfig) -> bool {
+const fn is_fsr(config: &SmxConfig) -> bool {
     deadsync_smx::is_fsr(config)
 }
 
 /// Scale a raw calibrated FSR sensor reading to the 0-250 range used by the
 /// FSR thresholds, matching the official SMX config tool: clamp noise to zero,
 /// then `value >> 2` (divide by 4).
-fn calibrate_fsr(value: i16) -> u16 {
+const fn calibrate_fsr(value: i16) -> u16 {
     if value <= 0 {
         return 0;
     }
@@ -555,7 +555,7 @@ fn calibrate_load_cell(value: i16) -> u16 {
 /// Sticky pressed state with the firmware's hysteresis: turns on at/above the
 /// press (`high`) threshold and off only below the release (`low`) threshold;
 /// in between it keeps its previous state.
-pub(super) fn hysteresis_active(was: bool, value: u16, low: u16, high: u16) -> bool {
+pub(super) const fn hysteresis_active(was: bool, value: u16, low: u16, high: u16) -> bool {
     if high == 0 {
         false
     } else if value >= high {

@@ -368,7 +368,7 @@ pub fn null_or_die_bias_cfg(options: NullOrDieOptions) -> BiasCfg {
     }
 }
 
-pub fn null_or_die_options_from_config(cfg: Config) -> NullOrDieOptions {
+pub const fn null_or_die_options_from_config(cfg: Config) -> NullOrDieOptions {
     NullOrDieOptions {
         sync_graph: cfg.null_or_die_sync_graph,
         graph_orientation: cfg.null_or_die_graph_orientation,

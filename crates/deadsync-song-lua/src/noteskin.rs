@@ -134,7 +134,7 @@ pub fn create_noteskin_table(
         )?,
     )?;
 
-    let default_load_skin = default_noteskin.clone();
+    let default_load_skin = default_noteskin;
     noteskin.set(
         "LoadActor",
         lua.create_function(

@@ -93,7 +93,7 @@ impl State {
     }
 
     #[inline(always)]
-    pub fn choice_zoom(&self, index: usize) -> f32 {
+    pub const fn choice_zoom(&self, index: usize) -> f32 {
         self.choice_zooms[index]
     }
 
@@ -132,14 +132,14 @@ pub fn update(state: &mut State, dt: f32, confirm_exit_elapsed: f32) -> Option<S
     None
 }
 
-fn confirm(state: &mut State, game: GameFlag) -> InputEffect {
+const fn confirm(state: &mut State, game: GameFlag) -> InputEffect {
     state.exit_requested = true;
     state.exit_chosen_anim = true;
     state.exit_target = Some(Screen::SelectPlayMode);
     InputEffect::Confirm(Choice::from_index(state.selected_index).play_style(game))
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent, game: GameFlag) -> InputEffect {
+pub const fn handle_input(state: &mut State, ev: &InputEvent, game: GameFlag) -> InputEffect {
     if !ev.pressed || state.exit_requested {
         return InputEffect::None;
     }

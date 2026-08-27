@@ -319,12 +319,12 @@ pub struct EvaluationView<N, S> {
 
 impl<N, S> EvaluationView<N, S> {
     #[inline(always)]
-    pub fn judgment_count(&self, grade: JudgeGrade) -> u32 {
+    pub const fn judgment_count(&self, grade: JudgeGrade) -> u32 {
         self.judgment_counts[judgment::judge_grade_ix(grade)]
     }
 
     #[inline(always)]
-    pub fn is_course_summary(&self) -> bool {
+    pub const fn is_course_summary(&self) -> bool {
         !self.course_graph_stages.is_empty()
     }
 }

@@ -2,7 +2,7 @@ use super::*;
 use deadsync_profile as profile_data;
 
 // Small helpers to let the app dispatcher manage hold-to-scroll without exposing fields
-pub fn on_nav_press(state: &mut State, dir: NavDirection) {
+pub const fn on_nav_press(state: &mut State, dir: NavDirection) {
     state.nav_key_held_direction = Some(dir);
     let repeat_delay = nav_repeat_delay(state.view);
     screen_input::reset_hold_repeat(
@@ -24,7 +24,7 @@ pub fn on_nav_release(state: &mut State, dir: NavDirection) {
     }
 }
 
-pub(super) fn on_lr_press(state: &mut State, delta: isize) {
+pub(super) const fn on_lr_press(state: &mut State, delta: isize) {
     state.nav_lr_held_direction = Some(delta);
     screen_input::reset_hold_repeat(
         &mut state.nav_lr_held_for,
@@ -1259,7 +1259,7 @@ fn move_options_selection_vertical(
     }
 }
 
-fn start_side(action: VirtualAction) -> Option<profile_data::PlayerSide> {
+const fn start_side(action: VirtualAction) -> Option<profile_data::PlayerSide> {
     match action {
         VirtualAction::p1_start => Some(profile_data::PlayerSide::P1),
         VirtualAction::p2_start => Some(profile_data::PlayerSide::P2),
@@ -1267,7 +1267,7 @@ fn start_side(action: VirtualAction) -> Option<profile_data::PlayerSide> {
     }
 }
 
-fn on_start_press(state: &mut State, side: profile_data::PlayerSide) {
+const fn on_start_press(state: &mut State, side: profile_data::PlayerSide) {
     let idx = profile_data::player_side_index(side);
     state.start_input[idx].held = true;
     let start_input = &mut state.start_input[idx];
@@ -1283,7 +1283,7 @@ fn clear_start_hold(state: &mut State, side: profile_data::PlayerSide) {
     state.start_input[idx] = OptionsStartInput::default();
 }
 
-fn dedicated_three_key_options_event(action: VirtualAction) -> bool {
+const fn dedicated_three_key_options_event(action: VirtualAction) -> bool {
     matches!(
         action,
         VirtualAction::p1_left
@@ -1301,7 +1301,7 @@ fn dedicated_three_key_options_event(action: VirtualAction) -> bool {
     )
 }
 
-fn dedicated_three_key_menu_nav(view: OptionsView) -> bool {
+const fn dedicated_three_key_menu_nav(view: OptionsView) -> bool {
     matches!(
         view,
         OptionsView::Main | OptionsView::Submenu(SubmenuKind::Input)
@@ -1522,7 +1522,7 @@ pub(super) fn handle_dedicated_three_key_options_input(
 /// return to a parent submenu we must also restore *its* parent link, otherwise
 /// a third-level page (e.g. SMX Config) would strand its parent (Input Options)
 /// with no way back to the Input launcher.
-pub(super) fn submenu_parent_kind_of(kind: SubmenuKind) -> Option<SubmenuKind> {
+pub(super) const fn submenu_parent_kind_of(kind: SubmenuKind) -> Option<SubmenuKind> {
     match kind {
         SubmenuKind::InputBackend => Some(SubmenuKind::Input),
         SubmenuKind::SmxConfig => Some(SubmenuKind::InputBackend),
@@ -1534,7 +1534,7 @@ pub(super) fn submenu_parent_kind_of(kind: SubmenuKind) -> Option<SubmenuKind> {
     }
 }
 
-pub(super) fn cancel_current_view(state: &mut State) -> ThemeEffect {
+pub(super) const fn cancel_current_view(state: &mut State) -> ThemeEffect {
     match state.view {
         OptionsView::Main => ThemeEffect::Navigate(Screen::Menu),
         OptionsView::Submenu(_) => {

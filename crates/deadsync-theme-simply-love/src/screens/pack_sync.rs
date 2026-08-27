@@ -655,7 +655,7 @@ pub(crate) fn begin(
     })
 }
 
-pub(crate) fn poll(state: &mut OverlayState) -> bool {
+pub(crate) const fn poll(state: &mut OverlayState) -> bool {
     matches!(state, OverlayState::Visible(_))
 }
 
@@ -925,7 +925,7 @@ fn row_disposition(row: &RowState, min_confidence: f64) -> RowDisposition {
     }
 }
 
-fn add_disposition(summary: &mut Summary, disposition: RowDisposition) {
+const fn add_disposition(summary: &mut Summary, disposition: RowDisposition) {
     let counter = match disposition {
         RowDisposition::Pending | RowDisposition::Running => return,
         RowDisposition::Cached => {
@@ -941,7 +941,7 @@ fn add_disposition(summary: &mut Summary, disposition: RowDisposition) {
     *counter += 1;
 }
 
-fn remove_disposition(summary: &mut Summary, disposition: RowDisposition) {
+const fn remove_disposition(summary: &mut Summary, disposition: RowDisposition) {
     let counter = match disposition {
         RowDisposition::Pending | RowDisposition::Running => return,
         RowDisposition::Cached => {
@@ -971,7 +971,7 @@ fn replace_disposition(
 }
 
 #[inline(always)]
-fn can_save(overlay: &OverlayStateData) -> bool {
+const fn can_save(overlay: &OverlayStateData) -> bool {
     overlay.summary.eligible > 0
 }
 
@@ -990,7 +990,7 @@ fn collect_changes(overlay: &OverlayStateData) -> Vec<SongOffsetSyncChange> {
 }
 
 #[inline(always)]
-fn choose_review_answer(overlay: &mut OverlayStateData, yes: bool) -> bool {
+const fn choose_review_answer(overlay: &mut OverlayStateData, yes: bool) -> bool {
     if !can_save(overlay) || overlay.yes_selected == yes {
         return false;
     }
@@ -1025,11 +1025,11 @@ const fn review_choice_delta(action: VirtualAction, dedicated_menu_only: bool) -
 }
 
 #[inline(always)]
-fn scroll_limit(total: usize, view_rows: usize) -> usize {
+const fn scroll_limit(total: usize, view_rows: usize) -> usize {
     total.saturating_sub(view_rows)
 }
 
-fn view_rows(overlay: &OverlayStateData) -> usize {
+const fn view_rows(overlay: &OverlayStateData) -> usize {
     view_rows_for_phase(overlay.phase)
 }
 
@@ -1128,7 +1128,7 @@ fn refresh_row_text(row: &mut RowState, min_confidence: f64) {
     row.text.result = result;
 }
 
-fn follow_row(overlay: &mut OverlayStateData, row_index: usize) {
+const fn follow_row(overlay: &mut OverlayStateData, row_index: usize) {
     let view_rows = view_rows(overlay);
     if row_index < overlay.scroll_index {
         overlay.scroll_index = row_index;

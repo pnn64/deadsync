@@ -336,7 +336,7 @@ pub struct StagingGuard {
 }
 
 impl StagingGuard {
-    pub fn new(path: PathBuf) -> Self {
+    pub const fn new(path: PathBuf) -> Self {
         Self { path, armed: true }
     }
 
@@ -399,7 +399,7 @@ fn is_simple_relative(path: &Path, root: &Path) -> bool {
     saw_any
 }
 
-fn io_err_msg(msg: String) -> UpdaterError {
+const fn io_err_msg(msg: String) -> UpdaterError {
     UpdaterError::Io(msg)
 }
 
@@ -805,7 +805,7 @@ mod tests {
         j.ops.push(Op {
             staged: s2,
             target: t2.clone(),
-            backup: b2.clone(),
+            backup: b2,
             target_existed: false,
         });
         j.state = JournalState::Applied;
@@ -848,19 +848,19 @@ mod tests {
         j.ops.push(Op {
             staged: j.staging_dir.join("a.bin"),
             target: t1.clone(),
-            backup: b1.clone(),
+            backup: b1,
             target_existed: true,
         });
         j.ops.push(Op {
             staged: j.staging_dir.join("b.bin"),
             target: t2.clone(),
-            backup: b2.clone(),
+            backup: b2,
             target_existed: false,
         });
         j.ops.push(Op {
             staged: j.staging_dir.join("c.bin"),
             target: t3.clone(),
-            backup: b3.clone(),
+            backup: b3,
             target_existed: false,
         });
         j.state = JournalState::Applying;
@@ -1033,7 +1033,7 @@ mod tests {
         fs::create_dir_all(&j.staging_dir).unwrap();
         j.ops.push(Op {
             staged: j.staging_dir.join("blocker"),
-            target: t.clone(),
+            target: t,
             backup: b,
             target_existed: false,
         });

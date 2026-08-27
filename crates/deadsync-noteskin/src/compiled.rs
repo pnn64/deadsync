@@ -325,7 +325,7 @@ mod tests {
             version: CACHE_SCHEMA_VERSION,
             files: vec![CompiledActorFile {
                 key: "dance/default/down receptor.lua".to_string(),
-                decl: decl.clone(),
+                decl: decl,
             }],
         };
 

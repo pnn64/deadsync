@@ -22,7 +22,7 @@ const PANE3_SINGLE_WIDTH: f32 = 230.0;
 const PANE3_DOUBLE_WIDTH: f32 = 520.0;
 
 #[inline(always)]
-fn pane3_width(num_cols: usize) -> f32 {
+const fn pane3_width(num_cols: usize) -> f32 {
     if matches!(num_cols, 8 | 10) {
         PANE3_DOUBLE_WIDTH
     } else {
@@ -65,12 +65,12 @@ fn pane3_solid_arrow_texture(texture_key: &str) -> String {
 }
 
 #[inline(always)]
-fn pane3_zoom_x(slot: &SpriteSlot) -> f32 {
+const fn pane3_zoom_x(slot: &SpriteSlot) -> f32 {
     if slot.def.mirror_h { -1.0 } else { 1.0 }
 }
 
 #[inline(always)]
-fn pane3_zoom_y(slot: &SpriteSlot) -> f32 {
+const fn pane3_zoom_y(slot: &SpriteSlot) -> f32 {
     if slot.def.mirror_v { -1.0 } else { 1.0 }
 }
 
@@ -197,7 +197,7 @@ struct RowCounts {
 }
 
 #[inline(always)]
-fn column_row_counts(cj: ColumnJudgments, kind: RowKind) -> RowCounts {
+const fn column_row_counts(cj: ColumnJudgments, kind: RowKind) -> RowCounts {
     match kind {
         RowKind::FanCombined => RowCounts {
             count: cj.w0.saturating_add(cj.w1),
@@ -243,7 +243,7 @@ fn column_row_counts(cj: ColumnJudgments, kind: RowKind) -> RowCounts {
 }
 
 #[inline(always)]
-fn row_disabled(disabled_windows: [bool; 5], kind: RowKind) -> bool {
+const fn row_disabled(disabled_windows: [bool; 5], kind: RowKind) -> bool {
     match kind {
         RowKind::FanCombined | RowKind::FanW0 | RowKind::FanW1 => disabled_windows[0],
         RowKind::Ex => disabled_windows[1],

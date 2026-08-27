@@ -311,7 +311,7 @@ fn append_color_bands(
         };
         for (center_x, alpha) in [
             (-0.5 * (last_x + x), early_alpha),
-            (0.5 * (last_x + x), late_alpha),
+            (f32::midpoint(last_x, x), late_alpha),
         ] {
             append_quad(
                 draws,
@@ -529,7 +529,7 @@ fn width_scale(width: f32, request: &ErrorBarComposeRequest<'_>, scale: f32) -> 
     }
 }
 
-fn layers(request: &ErrorBarComposeRequest<'_>) -> ErrorBarLayers {
+const fn layers(request: &ErrorBarComposeRequest<'_>) -> ErrorBarLayers {
     if request.judgment_back {
         request.style.back_layers
     } else {

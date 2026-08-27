@@ -27,7 +27,7 @@ pub struct Driver {
 }
 
 impl Driver {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             api: None,
             devices: [
@@ -184,7 +184,7 @@ impl DeviceSlot {
     }
 }
 
-fn build_player_report(state: &State, player: Player) -> [u8; REPORT_SIZE] {
+const fn build_player_report(state: &State, player: Player) -> [u8; REPORT_SIZE] {
     let mut report = [0u8; REPORT_SIZE];
     report[0] = REPORT_ID;
     set(&mut report, BTN1, state.button(player, ButtonLight::Up));
@@ -194,7 +194,7 @@ fn build_player_report(state: &State, player: Player) -> [u8; REPORT_SIZE] {
     report
 }
 
-fn set(report: &mut [u8; REPORT_SIZE], light_index: usize, on: bool) {
+const fn set(report: &mut [u8; REPORT_SIZE], light_index: usize, on: bool) {
     report[light_index + 1] = if on { ON } else { 0 };
 }
 

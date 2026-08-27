@@ -100,7 +100,7 @@ pub fn gameplay_offset_prompt_needed(
         && gameplay_offset_saveable_changed(snapshot)
 }
 
-pub fn route_offset_prompt_input(
+pub const fn route_offset_prompt_input(
     prompt: &mut GameplayOffsetSavePrompt,
     pressed: bool,
     action: VirtualAction,

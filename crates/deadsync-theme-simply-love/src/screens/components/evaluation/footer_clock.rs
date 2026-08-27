@@ -52,7 +52,7 @@ impl FooterClock {
     }
 
     #[inline(always)]
-    pub(crate) fn text(&self) -> &Arc<str> {
+    pub(crate) const fn text(&self) -> &Arc<str> {
         &self.text
     }
 }

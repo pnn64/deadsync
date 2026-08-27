@@ -54,7 +54,7 @@ pub fn upsert_config(
     if let Some(existing) = list.iter_mut().find(|p| p.name.eq_ignore_ascii_case(name)) {
         existing.backend = backend.to_string();
         existing.pad_type = pad_type;
-        existing.serial = serial.clone();
+        existing.serial.clone_from(&serial);
         existing.settings = settings;
     } else {
         list.push(PadConfigProfile {
@@ -278,7 +278,7 @@ pub struct PadConfigIoError {
     pub error: std::io::Error,
 }
 
-fn pad_config_io_error(path: PathBuf, error: std::io::Error) -> PadConfigIoError {
+const fn pad_config_io_error(path: PathBuf, error: std::io::Error) -> PadConfigIoError {
     PadConfigIoError { path, error }
 }
 

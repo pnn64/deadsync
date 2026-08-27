@@ -64,15 +64,15 @@ pub struct Driver {
 }
 
 impl Driver {
-    pub fn piuio() -> Self {
+    pub const fn piuio() -> Self {
         Self::new(&PIUIO_MAP)
     }
 
-    pub fn itgio() -> Self {
+    pub const fn itgio() -> Self {
         Self::new(&ITGIO_MAP)
     }
 
-    fn new(map: &'static BoardMap) -> Self {
+    const fn new(map: &'static BoardMap) -> Self {
         Self {
             map,
             last_outputs: [None; OUTPUT_COUNT],
@@ -207,7 +207,7 @@ fn set_output(outputs: &mut [Option<bool>; OUTPUT_COUNT], output: usize, on: boo
     outputs[output] = Some(current || on);
 }
 
-fn source_on(state: &State, source: Source) -> bool {
+const fn source_on(state: &State, source: Source) -> bool {
     match source {
         Source::Cabinet(light) => state.cabinet(light),
         Source::Button(player, button) => state.button(player, button),

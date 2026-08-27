@@ -287,22 +287,22 @@ impl GameplayOffsetState {
     }
 
     #[inline(always)]
-    pub fn global_offset_seconds(&self) -> f32 {
+    pub const fn global_offset_seconds(&self) -> f32 {
         self.global_offset_seconds
     }
 
     #[inline(always)]
-    pub fn initial_global_offset_seconds(&self) -> f32 {
+    pub const fn initial_global_offset_seconds(&self) -> f32 {
         self.initial_global_offset_seconds
     }
 
     #[inline(always)]
-    pub fn song_offset_seconds(&self) -> f32 {
+    pub const fn song_offset_seconds(&self) -> f32 {
         self.song_offset_seconds
     }
 
     #[inline(always)]
-    pub fn initial_song_offset_seconds(&self) -> f32 {
+    pub const fn initial_song_offset_seconds(&self) -> f32 {
         self.initial_song_offset_seconds
     }
 
@@ -324,12 +324,12 @@ impl GameplayOffsetState {
     }
 
     #[inline(always)]
-    pub fn set_global_offset_seconds(&mut self, seconds: f32) {
+    pub const fn set_global_offset_seconds(&mut self, seconds: f32) {
         self.global_offset_seconds = seconds;
     }
 
     #[inline(always)]
-    pub fn set_song_offset_seconds(&mut self, seconds: f32) {
+    pub const fn set_song_offset_seconds(&mut self, seconds: f32) {
         self.song_offset_seconds = seconds;
     }
 
@@ -461,7 +461,7 @@ impl Default for GameplayMiniIndicatorRuntimeState {
 }
 
 impl GameplayMiniIndicatorRuntimeState {
-    pub fn new(
+    pub const fn new(
         stream_segments: [Vec<StreamSegment>; MAX_PLAYERS],
         total_stream_measures: [f32; MAX_PLAYERS],
         target_score_percent: [f64; MAX_PLAYERS],
@@ -555,12 +555,12 @@ impl GameplayAudioClockState {
     }
 
     #[inline(always)]
-    pub fn lead_in_seconds(&self) -> f32 {
+    pub const fn lead_in_seconds(&self) -> f32 {
         self.lead_in_seconds
     }
 
     #[inline(always)]
-    pub fn positive_lead_in_seconds(&self) -> f32 {
+    pub const fn positive_lead_in_seconds(&self) -> f32 {
         self.lead_in_seconds.max(0.0)
     }
 
@@ -570,32 +570,32 @@ impl GameplayAudioClockState {
     }
 
     #[inline(always)]
-    pub fn stream_position_seconds(&self) -> f32 {
+    pub const fn stream_position_seconds(&self) -> f32 {
         self.stream_position_seconds
     }
 
     #[inline(always)]
-    pub fn output_delay_seconds(&self) -> f32 {
+    pub const fn output_delay_seconds(&self) -> f32 {
         self.output_delay_seconds
     }
 
     #[inline(always)]
-    pub fn set_lead_in_seconds(&mut self, seconds: f32) {
+    pub const fn set_lead_in_seconds(&mut self, seconds: f32) {
         self.lead_in_seconds = seconds;
     }
 
     #[inline(always)]
-    pub fn set_stream_position_seconds(&mut self, seconds: f32) {
+    pub const fn set_stream_position_seconds(&mut self, seconds: f32) {
         self.stream_position_seconds = seconds;
     }
 
     #[inline(always)]
-    pub fn set_output_delay_seconds(&mut self, seconds: f32) {
+    pub const fn set_output_delay_seconds(&mut self, seconds: f32) {
         self.output_delay_seconds = seconds.max(0.0);
     }
 
     #[inline(always)]
-    pub fn set_audio_snapshot(&mut self, snapshot: GameplayAudioSnapshot) {
+    pub const fn set_audio_snapshot(&mut self, snapshot: GameplayAudioSnapshot) {
         self.stream_position_seconds = snapshot.stream_clock.stream_seconds;
         self.output_delay_seconds = snapshot.output_delay_seconds.max(0.0);
     }
@@ -615,7 +615,7 @@ impl GameplayMusicRateState {
     }
 
     #[inline(always)]
-    pub fn rate(&self) -> f32 {
+    pub const fn rate(&self) -> f32 {
         self.rate
     }
 
@@ -689,7 +689,7 @@ impl GameplaySongPositionState {
     }
 
     #[inline(always)]
-    pub fn set_music_position(
+    pub const fn set_music_position(
         &mut self,
         current_beat: f32,
         current_bpm: f32,
@@ -701,7 +701,7 @@ impl GameplaySongPositionState {
     }
 
     #[inline(always)]
-    pub fn set_display_position(
+    pub const fn set_display_position(
         &mut self,
         current_beat_display: f32,
         current_bpm_display: f32,

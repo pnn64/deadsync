@@ -27,7 +27,7 @@ pub struct SongLuaPlayerTransformRequest {
     pub zoom_z: f32,
 }
 
-pub fn song_lua_player_skew_x_matrix(amount: f32) -> Matrix4 {
+pub const fn song_lua_player_skew_x_matrix(amount: f32) -> Matrix4 {
     Matrix4::from_cols_array(&[
         1.0, 0.0, 0.0, 0.0, //
         amount, 1.0, 0.0, 0.0, //
@@ -36,7 +36,7 @@ pub fn song_lua_player_skew_x_matrix(amount: f32) -> Matrix4 {
     ])
 }
 
-pub fn song_lua_player_skew_y_matrix(amount: f32) -> Matrix4 {
+pub const fn song_lua_player_skew_y_matrix(amount: f32) -> Matrix4 {
     Matrix4::from_cols_array(&[
         1.0, amount, 0.0, 0.0, //
         0.0, 1.0, 0.0, 0.0, //

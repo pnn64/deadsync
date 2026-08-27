@@ -30,7 +30,7 @@ struct ThreadProfile {
 }
 
 impl ThreadRole {
-    fn profile(self) -> ThreadProfile {
+    const fn profile(self) -> ThreadProfile {
         match self {
             Self::Main => ThreadProfile {
                 label: "main",

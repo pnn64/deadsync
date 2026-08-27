@@ -184,7 +184,7 @@ impl HoldMeshBufferPool {
     }
 
     #[inline(always)]
-    fn begin_frame(&mut self) {
+    const fn begin_frame(&mut self) {
         self.next_pair = 0;
         self.current_pairs = 0;
     }
@@ -253,7 +253,7 @@ impl ReferenceHoldMeshBufferPool {
         }
     }
 
-    fn begin_frame(&mut self) {
+    const fn begin_frame(&mut self) {
         self.availability_ready = false;
     }
 
@@ -347,12 +347,12 @@ impl HoldMeshScratch {
     }
 
     #[inline(always)]
-    pub fn begin_frame(&mut self) {
+    pub const fn begin_frame(&mut self) {
         self.bodies.begin_frame();
         self.caps.begin_frame();
     }
 
-    pub fn stats(&self) -> HoldMeshScratchStats {
+    pub const fn stats(&self) -> HoldMeshScratchStats {
         let body = self.bodies.stats;
         let cap = self.caps.stats;
         HoldMeshScratchStats {
@@ -482,7 +482,7 @@ impl ReferenceHoldMeshPoolBench {
 
 /// Resolve the beat used by a hold head without exposing gameplay hold state to
 /// the canonical notefield planner.
-pub(crate) fn hold_entry_head_beat(
+pub(crate) const fn hold_entry_head_beat(
     note_beat: f32,
     end_beat: f32,
     last_held_beat: f32,
@@ -947,7 +947,7 @@ where
             request.y_tail,
             phase_end,
         );
-        let center_y = (segment_top + segment_bottom) * 0.5;
+        let center_y = f32::midpoint(segment_top, segment_bottom);
         let sample = sample_path(center_y);
         let (alpha, glow) = hold_alpha_glow(request, sample);
         if alpha > f32::EPSILON || glow > f32::EPSILON {
@@ -1177,7 +1177,7 @@ where
             let t1 = ((slice_bottom - segment_top) / segment_size).clamp(0.0, 1.0);
             let slice_v0 = (v1 - v0).mul_add(t0, v0);
             let slice_v1 = (v1 - v0).mul_add(t1, v0);
-            let center_y = (slice_top + slice_bottom) * 0.5;
+            let center_y = f32::midpoint(slice_top, slice_bottom);
             let center = sample_path(center_y);
             let (alpha, glow) = hold_alpha_glow(request, center);
             if alpha <= f32::EPSILON && glow <= f32::EPSILON {
@@ -1398,7 +1398,7 @@ where
         return HoldComposeControl::Continue;
     }
 
-    let center_y = (cap_top + cap_bottom) * 0.5;
+    let center_y = f32::midpoint(cap_top, cap_bottom);
     let center = sample_path(center_y);
     let (alpha, glow) = hold_alpha_glow(request, center);
     if alpha <= f32::EPSILON && glow <= f32::EPSILON {
@@ -1666,7 +1666,7 @@ where
         return HoldComposeControl::Continue;
     }
 
-    let center_y = (draw_top + draw_bottom) * 0.5;
+    let center_y = f32::midpoint(draw_top, draw_bottom);
     let center = sample_path(center_y);
     let (alpha, glow) = hold_alpha_glow(request, center);
     if alpha <= f32::EPSILON && glow <= f32::EPSILON {
@@ -1788,7 +1788,7 @@ pub(crate) fn translated_uv_rect(mut uv: [f32; 4], translate: [f32; 2]) -> [f32;
     uv
 }
 
-pub(crate) fn maybe_flip_uv_vert(mut uv: [f32; 4], flip: bool) -> [f32; 4] {
+pub(crate) const fn maybe_flip_uv_vert(mut uv: [f32; 4], flip: bool) -> [f32; 4] {
     if flip {
         uv.swap(1, 3);
     }
@@ -1951,7 +1951,7 @@ pub(crate) fn hold_strip_row_3d(
     )
 }
 
-pub(crate) fn hold_strip_row_from_positions(
+pub(crate) const fn hold_strip_row_from_positions(
     left: [f32; 3],
     right: [f32; 3],
     u0: f32,
@@ -1975,14 +1975,14 @@ pub(crate) fn hold_strip_row_from_positions(
     ]
 }
 
-pub(crate) fn hold_strip_quad(
+pub(crate) const fn hold_strip_quad(
     top: [TexturedMeshVertex; 2],
     bottom: [TexturedMeshVertex; 2],
 ) -> [TexturedMeshVertex; 6] {
     [top[0], top[1], bottom[1], top[0], bottom[1], bottom[0]]
 }
 
-pub(crate) fn hold_strip_draw(
+pub(crate) const fn hold_strip_draw(
     texture: Arc<str>,
     vertices: Arc<[TexturedMeshVertex]>,
     blend: BlendMode,
@@ -2007,7 +2007,7 @@ pub(crate) fn hold_strip_draw(
     })
 }
 
-pub(crate) fn hold_strip_glow_draw(
+pub(crate) const fn hold_strip_glow_draw(
     texture: Arc<str>,
     vertices: Arc<[TexturedMeshVertex]>,
     depth_test: bool,
@@ -2031,7 +2031,7 @@ pub(crate) fn hold_strip_glow_draw(
     })
 }
 
-fn hold_reusable_strip_draw(
+const fn hold_reusable_strip_draw(
     texture: Arc<str>,
     vertices: Arc<Vec<TexturedMeshVertex>>,
     blend: BlendMode,
@@ -2056,7 +2056,7 @@ fn hold_reusable_strip_draw(
     })
 }
 
-fn hold_reusable_strip_glow_draw(
+const fn hold_reusable_strip_glow_draw(
     texture: Arc<str>,
     vertices: Arc<Vec<TexturedMeshVertex>>,
     depth_test: bool,
@@ -2167,7 +2167,10 @@ pub(crate) fn bottom_cap_uv_window(
 pub(crate) fn hold_segment_pose(top: [f32; 2], bottom: [f32; 2]) -> ([f32; 2], f32, f32) {
     let dx = bottom[0] - top[0];
     let dy = bottom[1] - top[1];
-    let center = [(top[0] + bottom[0]) * 0.5, (top[1] + bottom[1]) * 0.5];
+    let center = [
+        f32::midpoint(top[0], bottom[0]),
+        f32::midpoint(top[1], bottom[1]),
+    ];
     let len = (dx * dx + dy * dy).sqrt();
     let rot = dx.atan2(dy).to_degrees();
     (center, len, rot)

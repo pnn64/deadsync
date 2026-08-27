@@ -13,36 +13,36 @@ pub type TweenSteps = SmallVec<[anim::Step; 4]>;
 pub struct TweenProgramTarget;
 
 impl TweenProgramTarget {
-    pub fn xy(&mut self, _: f32, _: f32) {}
-    pub fn x(&mut self, _: f32) {}
-    pub fn y(&mut self, _: f32) {}
-    pub fn addx(&mut self, _: f32) {}
-    pub fn addy(&mut self, _: f32) {}
-    pub fn diffuse(&mut self, _: [f32; 4]) {}
-    pub fn alpha(&mut self, _: f32) {}
-    pub fn glow(&mut self, _: [f32; 4]) {}
-    pub fn zoom(&mut self, _: f32) {}
-    pub fn zoomx(&mut self, _: f32) {}
-    pub fn zoomy(&mut self, _: f32) {}
-    pub fn addzoomx(&mut self, _: f32) {}
-    pub fn addzoomy(&mut self, _: f32) {}
-    pub fn zoomto(&mut self, _: f32, _: f32) {}
-    pub fn size(&mut self, _: f32, _: f32) {}
-    pub fn cropleft(&mut self, _: f32) {}
-    pub fn cropright(&mut self, _: f32) {}
-    pub fn croptop(&mut self, _: f32) {}
-    pub fn cropbottom(&mut self, _: f32) {}
-    pub fn fadeleft(&mut self, _: f32) {}
-    pub fn faderight(&mut self, _: f32) {}
-    pub fn fadetop(&mut self, _: f32) {}
-    pub fn fadebottom(&mut self, _: f32) {}
-    pub fn visible(&mut self, _: bool) {}
-    pub fn rotationx(&mut self, _: f32) {}
-    pub fn rotationy(&mut self, _: f32) {}
-    pub fn rotationz(&mut self, _: f32) {}
-    pub fn addrotationx(&mut self, _: f32) {}
-    pub fn addrotationy(&mut self, _: f32) {}
-    pub fn addrotationz(&mut self, _: f32) {}
+    pub const fn xy(&mut self, _: f32, _: f32) {}
+    pub const fn x(&mut self, _: f32) {}
+    pub const fn y(&mut self, _: f32) {}
+    pub const fn addx(&mut self, _: f32) {}
+    pub const fn addy(&mut self, _: f32) {}
+    pub const fn diffuse(&mut self, _: [f32; 4]) {}
+    pub const fn alpha(&mut self, _: f32) {}
+    pub const fn glow(&mut self, _: [f32; 4]) {}
+    pub const fn zoom(&mut self, _: f32) {}
+    pub const fn zoomx(&mut self, _: f32) {}
+    pub const fn zoomy(&mut self, _: f32) {}
+    pub const fn addzoomx(&mut self, _: f32) {}
+    pub const fn addzoomy(&mut self, _: f32) {}
+    pub const fn zoomto(&mut self, _: f32, _: f32) {}
+    pub const fn size(&mut self, _: f32, _: f32) {}
+    pub const fn cropleft(&mut self, _: f32) {}
+    pub const fn cropright(&mut self, _: f32) {}
+    pub const fn croptop(&mut self, _: f32) {}
+    pub const fn cropbottom(&mut self, _: f32) {}
+    pub const fn fadeleft(&mut self, _: f32) {}
+    pub const fn faderight(&mut self, _: f32) {}
+    pub const fn fadetop(&mut self, _: f32) {}
+    pub const fn fadebottom(&mut self, _: f32) {}
+    pub const fn visible(&mut self, _: bool) {}
+    pub const fn rotationx(&mut self, _: f32) {}
+    pub const fn rotationy(&mut self, _: f32) {}
+    pub const fn rotationz(&mut self, _: f32) {}
+    pub const fn addrotationx(&mut self, _: f32) {}
+    pub const fn addrotationy(&mut self, _: f32) {}
+    pub const fn addrotationz(&mut self, _: f32) {}
 }
 // PARITY COMMENT STANDARD:
 // PARITY[<Source>]: <mirrored behavior>. Ref: <file/symbol> when known.
@@ -909,7 +909,7 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
-    pub fn source(&self) -> &SpriteSource {
+    pub const fn source(&self) -> &SpriteSource {
         &self.source
     }
 
@@ -929,23 +929,23 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
-    pub fn tweensalt(&mut self, salt: u64) {
+    pub const fn tweensalt(&mut self, salt: u64) {
         self.tween_salt = salt;
     }
 
     #[inline(always)]
-    pub fn xy(&mut self, x: f32, y: f32) {
+    pub const fn xy(&mut self, x: f32, y: f32) {
         self.x = x;
         self.y = y;
     }
 
     #[inline(always)]
-    pub fn x(&mut self, x: f32) {
+    pub const fn x(&mut self, x: f32) {
         self.x = x;
     }
 
     #[inline(always)]
-    pub fn y(&mut self, y: f32) {
+    pub const fn y(&mut self, y: f32) {
         self.y = y;
     }
 
@@ -960,65 +960,65 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
-    pub fn align(&mut self, h: f32, v: f32) {
+    pub const fn align(&mut self, h: f32, v: f32) {
         self.hx = h;
         self.vy = v;
     }
 
     #[inline(always)]
-    pub fn halign(&mut self, h: f32) {
+    pub const fn halign(&mut self, h: f32) {
         self.hx = h;
     }
 
     #[inline(always)]
-    pub fn valign(&mut self, v: f32) {
+    pub const fn valign(&mut self, v: f32) {
         self.vy = v;
     }
 
     #[inline(always)]
-    pub fn z(&mut self, z: i16) {
+    pub const fn z(&mut self, z: i16) {
         self.z = z;
     }
 
     #[inline(always)]
-    pub fn diffuse(&mut self, rgba: [f32; 4]) {
+    pub const fn diffuse(&mut self, rgba: [f32; 4]) {
         self.tint = rgba;
     }
 
     #[inline(always)]
-    pub fn alpha(&mut self, a: f32) {
+    pub const fn alpha(&mut self, a: f32) {
         self.tint[3] = a;
     }
 
     #[inline(always)]
-    pub fn glow(&mut self, rgba: [f32; 4]) {
+    pub const fn glow(&mut self, rgba: [f32; 4]) {
         self.glow = rgba;
     }
 
     #[inline(always)]
-    pub fn blend(&mut self, blend: BlendMode) {
+    pub const fn blend(&mut self, blend: BlendMode) {
         self.blend = blend;
     }
 
     #[inline(always)]
-    pub fn size(&mut self, w: f32, h: f32) {
+    pub const fn size(&mut self, w: f32, h: f32) {
         self.w = w;
         self.h = h;
     }
 
     #[inline(always)]
-    pub fn zoom(&mut self, f: f32) {
+    pub const fn zoom(&mut self, f: f32) {
         self.sx = f;
         self.sy = f;
     }
 
     #[inline(always)]
-    pub fn zoomx(&mut self, x: f32) {
+    pub const fn zoomx(&mut self, x: f32) {
         self.sx = x;
     }
 
     #[inline(always)]
-    pub fn zoomy(&mut self, y: f32) {
+    pub const fn zoomy(&mut self, y: f32) {
         self.sy = y;
     }
 
@@ -1081,101 +1081,101 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
-    pub fn mask_source(&mut self) {
+    pub const fn mask_source(&mut self) {
         self.mask_source = true;
     }
 
     #[inline(always)]
-    pub fn mask_dest(&mut self) {
+    pub const fn mask_dest(&mut self) {
         self.mask_dest = true;
     }
 
     #[inline(always)]
-    pub fn texcoordvelocity(&mut self, vel: [f32; 2]) {
+    pub const fn texcoordvelocity(&mut self, vel: [f32; 2]) {
         self.texv = Some(vel);
     }
 
     #[inline(always)]
-    pub fn cropleft(&mut self, v: f32) {
+    pub const fn cropleft(&mut self, v: f32) {
         self.cl = v;
     }
 
     #[inline(always)]
-    pub fn cropright(&mut self, v: f32) {
+    pub const fn cropright(&mut self, v: f32) {
         self.cr = v;
     }
 
     #[inline(always)]
-    pub fn croptop(&mut self, v: f32) {
+    pub const fn croptop(&mut self, v: f32) {
         self.ct = v;
     }
 
     #[inline(always)]
-    pub fn cropbottom(&mut self, v: f32) {
+    pub const fn cropbottom(&mut self, v: f32) {
         self.cb = v;
     }
 
     #[inline(always)]
-    pub fn fadeleft(&mut self, v: f32) {
+    pub const fn fadeleft(&mut self, v: f32) {
         self.fl = v;
     }
 
     #[inline(always)]
-    pub fn faderight(&mut self, v: f32) {
+    pub const fn faderight(&mut self, v: f32) {
         self.fr = v;
     }
 
     #[inline(always)]
-    pub fn fadetop(&mut self, v: f32) {
+    pub const fn fadetop(&mut self, v: f32) {
         self.ft = v;
     }
 
     #[inline(always)]
-    pub fn fadebottom(&mut self, v: f32) {
+    pub const fn fadebottom(&mut self, v: f32) {
         self.fb = v;
     }
 
     #[inline(always)]
-    pub fn setstate(&mut self, i: u32) {
+    pub const fn setstate(&mut self, i: u32) {
         self.cell = Some((i, u32::MAX));
         self.grid = None;
         self.uv = None;
     }
 
     #[inline(always)]
-    pub fn animate(&mut self, v: bool) {
+    pub const fn animate(&mut self, v: bool) {
         self.anim_enable = v;
     }
 
     #[inline(always)]
-    pub fn setallstatedelays(&mut self, s: f32) {
+    pub const fn setallstatedelays(&mut self, s: f32) {
         self.state_delay = s.max(0.0);
     }
 
     #[inline(always)]
-    pub fn customtexturerect(&mut self, uv: [f32; 4]) {
+    pub const fn customtexturerect(&mut self, uv: [f32; 4]) {
         self.uv = Some(uv);
         self.cell = None;
         self.grid = None;
     }
 
     #[inline(always)]
-    pub fn visible(&mut self, v: bool) {
+    pub const fn visible(&mut self, v: bool) {
         self.vis = v;
     }
 
     #[inline(always)]
-    pub fn rotationx(&mut self, d: f32) {
+    pub const fn rotationx(&mut self, d: f32) {
         self.rot_x = d;
     }
 
     #[inline(always)]
-    pub fn rotationy(&mut self, d: f32) {
+    pub const fn rotationy(&mut self, d: f32) {
         self.rot_y = d;
     }
 
     #[inline(always)]
-    pub fn rotationz(&mut self, d: f32) {
+    pub const fn rotationz(&mut self, d: f32) {
         self.rot_z = d;
     }
 
@@ -1201,7 +1201,7 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
-    pub fn shadowlengthx(&mut self, v: f32) {
+    pub const fn shadowlengthx(&mut self, v: f32) {
         self.shx = v;
     }
 
@@ -1211,27 +1211,27 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
-    pub fn shadowcolor(&mut self, c: [f32; 4]) {
+    pub const fn shadowcolor(&mut self, c: [f32; 4]) {
         self.shc = c;
     }
 
     #[inline(always)]
-    pub fn effectclock(&mut self, clock: anim::EffectClock) {
+    pub const fn effectclock(&mut self, clock: anim::EffectClock) {
         self.effect.clock = clock;
     }
 
     #[inline(always)]
-    pub fn effectmode(&mut self, mode: anim::EffectMode) {
+    pub const fn effectmode(&mut self, mode: anim::EffectMode) {
         self.effect.mode = mode;
     }
 
     #[inline(always)]
-    pub fn effectcolor1(&mut self, color: [f32; 4]) {
+    pub const fn effectcolor1(&mut self, color: [f32; 4]) {
         self.effect.color1 = color;
     }
 
     #[inline(always)]
-    pub fn effectcolor2(&mut self, color: [f32; 4]) {
+    pub const fn effectcolor2(&mut self, color: [f32; 4]) {
         self.effect.color2 = color;
     }
 
@@ -1244,7 +1244,7 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
-    pub fn effectoffset(&mut self, v: f32) {
+    pub const fn effectoffset(&mut self, v: f32) {
         self.effect.offset = v;
     }
 
@@ -1265,33 +1265,33 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
-    pub fn effectmagnitude(&mut self, v: [f32; 3]) {
+    pub const fn effectmagnitude(&mut self, v: [f32; 3]) {
         self.effect.magnitude = v;
     }
 
     #[inline(always)]
-    pub fn strokecolor(&mut self, _rgba: [f32; 4]) {}
+    pub const fn strokecolor(&mut self, _rgba: [f32; 4]) {}
 
     #[inline(always)]
-    pub fn font(&mut self, _font: &'static str) {}
+    pub const fn font(&mut self, _font: &'static str) {}
 
     #[inline(always)]
     pub fn settext(&mut self, _content: TextContent) {}
 
     #[inline(always)]
-    pub fn horizalign(&mut self, _align: TextAlign) {}
+    pub const fn horizalign(&mut self, _align: TextAlign) {}
 
     #[inline(always)]
-    pub fn wrapwidthpixels(&mut self, _w: f32) {}
+    pub const fn wrapwidthpixels(&mut self, _w: f32) {}
 
     #[inline(always)]
-    pub fn vertspacing(&mut self, _s: f32) {}
+    pub const fn vertspacing(&mut self, _s: f32) {}
 
     #[inline(always)]
-    pub fn maxwidth(&mut self, _w: f32) {}
+    pub const fn maxwidth(&mut self, _w: f32) {}
 
     #[inline(always)]
-    pub fn maxheight(&mut self, _h: f32) {}
+    pub const fn maxheight(&mut self, _h: f32) {}
 
     #[inline(always)]
     pub fn build_tweened(self, site_base: u64, build_steps: impl FnOnce() -> TweenSteps) -> Actor {
@@ -1542,23 +1542,23 @@ impl TextBuilder {
     }
 
     #[inline(always)]
-    pub fn tweensalt(&mut self, salt: u64) {
+    pub const fn tweensalt(&mut self, salt: u64) {
         self.tween_salt = salt;
     }
 
     #[inline(always)]
-    pub fn xy(&mut self, x: f32, y: f32) {
+    pub const fn xy(&mut self, x: f32, y: f32) {
         self.x = x;
         self.y = y;
     }
 
     #[inline(always)]
-    pub fn x(&mut self, x: f32) {
+    pub const fn x(&mut self, x: f32) {
         self.x = x;
     }
 
     #[inline(always)]
-    pub fn y(&mut self, y: f32) {
+    pub const fn y(&mut self, y: f32) {
         self.y = y;
     }
 
@@ -1573,43 +1573,43 @@ impl TextBuilder {
     }
 
     #[inline(always)]
-    pub fn align(&mut self, h: f32, v: f32) {
+    pub const fn align(&mut self, h: f32, v: f32) {
         self.hx = h;
         self.vy = v;
     }
 
     #[inline(always)]
-    pub fn halign(&mut self, h: f32) {
+    pub const fn halign(&mut self, h: f32) {
         self.hx = h;
     }
 
     #[inline(always)]
-    pub fn valign(&mut self, v: f32) {
+    pub const fn valign(&mut self, v: f32) {
         self.vy = v;
     }
 
     #[inline(always)]
-    pub fn diffuse(&mut self, rgba: [f32; 4]) {
+    pub const fn diffuse(&mut self, rgba: [f32; 4]) {
         self.color = rgba;
     }
 
     #[inline(always)]
-    pub fn alpha(&mut self, a: f32) {
+    pub const fn alpha(&mut self, a: f32) {
         self.color[3] = a;
     }
 
     #[inline(always)]
-    pub fn glow(&mut self, rgba: [f32; 4]) {
+    pub const fn glow(&mut self, rgba: [f32; 4]) {
         self.glow = rgba;
     }
 
     #[inline(always)]
-    pub fn strokecolor(&mut self, rgba: [f32; 4]) {
+    pub const fn strokecolor(&mut self, rgba: [f32; 4]) {
         self.stroke_color = Some(rgba);
     }
 
     #[inline(always)]
-    pub fn font(&mut self, font: &'static str) {
+    pub const fn font(&mut self, font: &'static str) {
         self.font = font;
     }
 
@@ -1619,17 +1619,17 @@ impl TextBuilder {
     }
 
     #[inline(always)]
-    pub fn horizalign(&mut self, align: TextAlign) {
+    pub const fn horizalign(&mut self, align: TextAlign) {
         self.talign = align;
     }
 
     #[inline(always)]
-    pub fn z(&mut self, z: i16) {
+    pub const fn z(&mut self, z: i16) {
         self.z = z;
     }
 
     #[inline(always)]
-    pub fn zoom(&mut self, f: f32) {
+    pub const fn zoom(&mut self, f: f32) {
         self.sx = f;
         self.sy = f;
         if self.saw_max_w {
@@ -1641,7 +1641,7 @@ impl TextBuilder {
     }
 
     #[inline(always)]
-    pub fn zoomx(&mut self, x: f32) {
+    pub const fn zoomx(&mut self, x: f32) {
         self.sx = x;
         if self.saw_max_w {
             self.max_w_pre_zoom = true;
@@ -1649,7 +1649,7 @@ impl TextBuilder {
     }
 
     #[inline(always)]
-    pub fn zoomy(&mut self, y: f32) {
+    pub const fn zoomy(&mut self, y: f32) {
         self.sy = y;
         if self.saw_max_h {
             self.max_h_pre_zoom = true;
@@ -1673,12 +1673,12 @@ impl TextBuilder {
     }
 
     #[inline(always)]
-    pub fn zoomtowidth(&mut self, w: f32) {
+    pub const fn zoomtowidth(&mut self, w: f32) {
         self.fit_w = Some(w);
     }
 
     #[inline(always)]
-    pub fn zoomtoheight(&mut self, h: f32) {
+    pub const fn zoomtoheight(&mut self, h: f32) {
         self.fit_h = Some(h);
     }
 
@@ -1689,28 +1689,28 @@ impl TextBuilder {
     }
 
     #[inline(always)]
-    pub fn vertspacing(&mut self, spacing: f32) {
+    pub const fn vertspacing(&mut self, spacing: f32) {
         // Mirrors SM5 `BitmapText:vertspacing(n)` — overrides the font's
         // default line spacing (i.e. the distance between successive lines).
         self.line_spacing = Some(spacing as i32);
     }
 
     #[inline(always)]
-    pub fn maxwidth(&mut self, w: f32) {
+    pub const fn maxwidth(&mut self, w: f32) {
         self.max_w = Some(w);
         self.saw_max_w = true;
         self.max_w_pre_zoom = false;
     }
 
     #[inline(always)]
-    pub fn maxheight(&mut self, h: f32) {
+    pub const fn maxheight(&mut self, h: f32) {
         self.max_h = Some(h);
         self.saw_max_h = true;
         self.max_h_pre_zoom = false;
     }
 
     #[inline(always)]
-    pub fn blend(&mut self, blend: BlendMode) {
+    pub const fn blend(&mut self, blend: BlendMode) {
         self.blend = blend;
     }
 
@@ -1721,7 +1721,7 @@ impl TextBuilder {
     }
 
     #[inline(always)]
-    pub fn shadowlengthx(&mut self, v: f32) {
+    pub const fn shadowlengthx(&mut self, v: f32) {
         self.shx = v;
     }
 
@@ -1731,27 +1731,27 @@ impl TextBuilder {
     }
 
     #[inline(always)]
-    pub fn shadowcolor(&mut self, c: [f32; 4]) {
+    pub const fn shadowcolor(&mut self, c: [f32; 4]) {
         self.shc = c;
     }
 
     #[inline(always)]
-    pub fn effectclock(&mut self, clock: anim::EffectClock) {
+    pub const fn effectclock(&mut self, clock: anim::EffectClock) {
         self.effect.clock = clock;
     }
 
     #[inline(always)]
-    pub fn effectmode(&mut self, mode: anim::EffectMode) {
+    pub const fn effectmode(&mut self, mode: anim::EffectMode) {
         self.effect.mode = mode;
     }
 
     #[inline(always)]
-    pub fn effectcolor1(&mut self, color: [f32; 4]) {
+    pub const fn effectcolor1(&mut self, color: [f32; 4]) {
         self.effect.color1 = color;
     }
 
     #[inline(always)]
-    pub fn effectcolor2(&mut self, color: [f32; 4]) {
+    pub const fn effectcolor2(&mut self, color: [f32; 4]) {
         self.effect.color2 = color;
     }
 
@@ -1764,7 +1764,7 @@ impl TextBuilder {
     }
 
     #[inline(always)]
-    pub fn effectoffset(&mut self, v: f32) {
+    pub const fn effectoffset(&mut self, v: f32) {
         self.effect.offset = v;
     }
 
@@ -1785,81 +1785,81 @@ impl TextBuilder {
     }
 
     #[inline(always)]
-    pub fn effectmagnitude(&mut self, v: [f32; 3]) {
+    pub const fn effectmagnitude(&mut self, v: [f32; 3]) {
         self.effect.magnitude = v;
     }
 
     #[inline(always)]
-    pub fn size(&mut self, _w: f32, _h: f32) {}
+    pub const fn size(&mut self, _w: f32, _h: f32) {}
 
     #[inline(always)]
-    pub fn zoomto(&mut self, _w: f32, _h: f32) {}
+    pub const fn zoomto(&mut self, _w: f32, _h: f32) {}
 
     #[inline(always)]
-    pub fn mask_source(&mut self) {}
+    pub const fn mask_source(&mut self) {}
 
     #[inline(always)]
-    pub fn mask_dest(&mut self) {}
+    pub const fn mask_dest(&mut self) {}
 
     #[inline(always)]
-    pub fn texcoordvelocity(&mut self, _vel: [f32; 2]) {}
+    pub const fn texcoordvelocity(&mut self, _vel: [f32; 2]) {}
 
     #[inline(always)]
-    pub fn cropleft(&mut self, _v: f32) {}
+    pub const fn cropleft(&mut self, _v: f32) {}
 
     #[inline(always)]
-    pub fn cropright(&mut self, _v: f32) {}
+    pub const fn cropright(&mut self, _v: f32) {}
 
     #[inline(always)]
-    pub fn croptop(&mut self, _v: f32) {}
+    pub const fn croptop(&mut self, _v: f32) {}
 
     #[inline(always)]
-    pub fn cropbottom(&mut self, _v: f32) {}
+    pub const fn cropbottom(&mut self, _v: f32) {}
 
     #[inline(always)]
-    pub fn fadeleft(&mut self, _v: f32) {}
+    pub const fn fadeleft(&mut self, _v: f32) {}
 
     #[inline(always)]
-    pub fn faderight(&mut self, _v: f32) {}
+    pub const fn faderight(&mut self, _v: f32) {}
 
     #[inline(always)]
-    pub fn fadetop(&mut self, _v: f32) {}
+    pub const fn fadetop(&mut self, _v: f32) {}
 
     #[inline(always)]
-    pub fn fadebottom(&mut self, _v: f32) {}
+    pub const fn fadebottom(&mut self, _v: f32) {}
 
     #[inline(always)]
-    pub fn setstate(&mut self, _i: u32) {}
+    pub const fn setstate(&mut self, _i: u32) {}
 
     #[inline(always)]
-    pub fn animate(&mut self, _v: bool) {}
+    pub const fn animate(&mut self, _v: bool) {}
 
     #[inline(always)]
-    pub fn setallstatedelays(&mut self, _s: f32) {}
+    pub const fn setallstatedelays(&mut self, _s: f32) {}
 
     #[inline(always)]
-    pub fn customtexturerect(&mut self, _uv: [f32; 4]) {}
+    pub const fn customtexturerect(&mut self, _uv: [f32; 4]) {}
 
     #[inline(always)]
-    pub fn visible(&mut self, _v: bool) {}
+    pub const fn visible(&mut self, _v: bool) {}
 
     #[inline(always)]
-    pub fn rotationx(&mut self, _d: f32) {}
+    pub const fn rotationx(&mut self, _d: f32) {}
 
     #[inline(always)]
-    pub fn rotationy(&mut self, _d: f32) {}
+    pub const fn rotationy(&mut self, _d: f32) {}
 
     #[inline(always)]
-    pub fn rotationz(&mut self, _d: f32) {}
+    pub const fn rotationz(&mut self, _d: f32) {}
 
     #[inline(always)]
-    pub fn addrotationx(&mut self, _dd: f32) {}
+    pub const fn addrotationx(&mut self, _dd: f32) {}
 
     #[inline(always)]
-    pub fn addrotationy(&mut self, _dd: f32) {}
+    pub const fn addrotationy(&mut self, _dd: f32) {}
 
     #[inline(always)]
-    pub fn addrotationz(&mut self, _dd: f32) {}
+    pub const fn addrotationz(&mut self, _dd: f32) {}
 
     #[inline(always)]
     pub fn build_tweened(

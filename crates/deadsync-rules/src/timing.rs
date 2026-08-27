@@ -306,7 +306,7 @@ impl Default for TimingSegments {
     }
 }
 
-pub fn default_time_signature() -> TimeSignatureSegment {
+pub const fn default_time_signature() -> TimeSignatureSegment {
     TimeSignatureSegment {
         beat: 0.0,
         numerator: 4,
@@ -1296,15 +1296,19 @@ impl TimingData {
         }
         let i = segment_index as usize;
         let seg = self.speeds[i];
-        let rt = self.speed_runtime.get(i).copied().unwrap_or(SpeedRuntime {
-            start_time_ns: self.get_time_for_beat_ns(seg.beat),
-            end_time_ns: if seg.unit == SpeedUnit::Seconds {
-                timing_ns_add_seconds(self.get_time_for_beat_ns(seg.beat), seg.delay)
-            } else {
-                self.get_time_for_beat_ns(seg.beat + seg.delay)
-            },
-            prev_ratio: if i > 0 { self.speeds[i - 1].ratio } else { 1.0 },
-        });
+        let rt = self
+            .speed_runtime
+            .get(i)
+            .copied()
+            .unwrap_or_else(|| SpeedRuntime {
+                start_time_ns: self.get_time_for_beat_ns(seg.beat),
+                end_time_ns: if seg.unit == SpeedUnit::Seconds {
+                    timing_ns_add_seconds(self.get_time_for_beat_ns(seg.beat), seg.delay)
+                } else {
+                    self.get_time_for_beat_ns(seg.beat + seg.delay)
+                },
+                prev_ratio: if i > 0 { self.speeds[i - 1].ratio } else { 1.0 },
+            });
 
         if time_ns >= rt.end_time_ns || seg.delay <= 0.0 {
             return seg.ratio;
@@ -1570,7 +1574,7 @@ where
 }
 
 #[inline(always)]
-fn judgeable_result(note: &Note) -> Option<&Judgment> {
+const fn judgeable_result(note: &Note) -> Option<&Judgment> {
     if note.is_fake || !note.can_be_judged || matches!(note.note_type, NoteType::Mine) {
         None
     } else {
@@ -2628,7 +2632,7 @@ pub mod bench_support {
         }
     }
 
-    fn mix(checksum: u64, value: u64) -> u64 {
+    const fn mix(checksum: u64, value: u64) -> u64 {
         checksum.rotate_left(9) ^ value
     }
 
@@ -3861,7 +3865,7 @@ mod tests {
         let profile = TimingProfile::default_itg_with_fa_plus();
         let disabled = [false, false, false, true, true];
         let profile_ns = TimingProfileNs::from_profile_scaled(&profile, 1.0);
-        let offset_ns = (profile_ns.windows_ns[2] + profile_ns.windows_ns[3]) / 2;
+        let offset_ns = i64::midpoint(profile_ns.windows_ns[2], profile_ns.windows_ns[3]);
 
         assert!(
             classify_offset_ns_with_disabled_windows(offset_ns, &profile_ns, &disabled).is_none()

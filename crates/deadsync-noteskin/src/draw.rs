@@ -166,7 +166,7 @@ impl Default for ModelEffectState {
 }
 
 #[inline(always)]
-pub fn model_effect_clock_units(effect: ModelEffectState, time: f32, beat: f32) -> f32 {
+pub const fn model_effect_clock_units(effect: ModelEffectState, time: f32, beat: f32) -> f32 {
     match effect.clock {
         ModelEffectClock::Time => time,
         ModelEffectClock::Beat => beat,

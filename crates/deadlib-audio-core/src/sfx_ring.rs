@@ -36,7 +36,7 @@ impl SfxSender {
 impl SfxReceiver {
     /// Drain the commands available at callback entry in FIFO order.
     #[inline(always)]
-    pub fn try_iter(&mut self) -> SfxDrain<'_> {
+    pub const fn try_iter(&mut self) -> SfxDrain<'_> {
         SfxDrain {
             consumer: &mut self.consumer,
         }

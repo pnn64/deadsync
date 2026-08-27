@@ -305,7 +305,7 @@ where
     }
 
     #[inline(always)]
-    pub fn music_rate(&self) -> f32 {
+    pub const fn music_rate(&self) -> f32 {
         self.clock.music_rate.rate()
     }
 
@@ -399,7 +399,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_last_judgment(&mut self, player_idx: usize, judgment: Judgment) {
+    pub const fn set_last_judgment(&mut self, player_idx: usize, judgment: Judgment) {
         set_player_last_judgment(
             &mut self.players_runtime.players[player_idx],
             judgment,
@@ -408,7 +408,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_last_mine_judgment(&mut self, player_idx: usize, column: usize, result: MineResult) {
+    pub const fn set_last_mine_judgment(&mut self, player_idx: usize, column: usize, result: MineResult) {
         set_player_last_mine_judgment(
             &mut self.players_runtime.players[player_idx],
             result,
@@ -610,7 +610,7 @@ where
     }
 
     #[inline(always)]
-    pub fn display_clock_stutter_diag_trigger_seq(&self) -> u64 {
+    pub const fn display_clock_stutter_diag_trigger_seq(&self) -> u64 {
         self.clock.display_clock.diag_trigger_seq()
     }
 
@@ -704,7 +704,7 @@ where
     }
 
     #[inline(always)]
-    pub fn players(&self) -> &[PlayerRuntime; MAX_PLAYERS] {
+    pub const fn players(&self) -> &[PlayerRuntime; MAX_PLAYERS] {
         &self.players_runtime.players
     }
 
@@ -714,7 +714,7 @@ where
     }
 
     #[inline(always)]
-    pub fn profiles(&self) -> &[Profile; MAX_PLAYERS] {
+    pub const fn profiles(&self) -> &[Profile; MAX_PLAYERS] {
         &self.profiles_runtime.profiles
     }
 
@@ -729,7 +729,7 @@ where
     }
 
     #[inline(always)]
-    pub fn gameplay_charts(&self) -> &[Arc<GameplayChartData>; MAX_PLAYERS] {
+    pub const fn gameplay_charts(&self) -> &[Arc<GameplayChartData>; MAX_PLAYERS] {
         &self.source.gameplay_charts
     }
 
@@ -739,7 +739,7 @@ where
     }
 
     #[inline(always)]
-    pub fn charts(&self) -> &[Arc<ChartData>; MAX_PLAYERS] {
+    pub const fn charts(&self) -> &[Arc<ChartData>; MAX_PLAYERS] {
         &self.source.charts
     }
 
@@ -749,7 +749,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_num_players(&mut self, num_players: usize) {
+    pub const fn set_num_players(&mut self, num_players: usize) {
         self.setup.num_players = num_players;
         self.display.notefield_motion.mark_refresh_dirty();
     }
@@ -760,7 +760,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_num_cols(&mut self, num_cols: usize) {
+    pub const fn set_num_cols(&mut self, num_cols: usize) {
         self.setup.num_cols = num_cols;
         self.display.notefield_motion.mark_refresh_dirty();
     }
@@ -771,7 +771,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_cols_per_player(&mut self, cols_per_player: usize) {
+    pub const fn set_cols_per_player(&mut self, cols_per_player: usize) {
         self.setup.cols_per_player = cols_per_player;
         self.display.notefield_motion.mark_refresh_dirty();
     }
@@ -827,7 +827,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_end_times(&mut self, notes_end_time_ns: SongTimeNs, music_end_time_ns: SongTimeNs) {
+    pub const fn set_end_times(&mut self, notes_end_time_ns: SongTimeNs, music_end_time_ns: SongTimeNs) {
         self.clock
             .end_timing
             .set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
@@ -968,7 +968,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_global_offsets(
+    pub const fn set_global_offsets(
         &mut self,
         initial_global_offset_seconds: f32,
         global_offset_seconds: f32,
@@ -1056,7 +1056,7 @@ where
     }
 
     #[inline(always)]
-    pub fn player_attack_base_cleared(&self, player_idx: usize) -> bool {
+    pub const fn player_attack_base_cleared(&self, player_idx: usize) -> bool {
         player_idx < self.setup.num_players && self.mods.attacks.clear_all[player_idx]
     }
 
@@ -1231,7 +1231,7 @@ where
     }
 
     #[inline(always)]
-    pub fn lane_hold_index_lists(&self) -> &[Vec<ChartNoteIndex>] {
+    pub const fn lane_hold_index_lists(&self) -> &[Vec<ChartNoteIndex>] {
         &self.chart_runtime.lane_indices.hold_indices
     }
 
@@ -1262,7 +1262,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_color_indices(&mut self, active_color_index: i32, player_color_index: i32) {
+    pub const fn set_color_indices(&mut self, active_color_index: i32, player_color_index: i32) {
         self.display.active_color_index = active_color_index;
         self.display.player_color_index = player_color_index;
     }
@@ -1273,7 +1273,7 @@ where
     }
 
     #[inline(always)]
-    pub fn lane_note_row_index_lists(&self) -> &[Vec<ChartNoteIndex>] {
+    pub const fn lane_note_row_index_lists(&self) -> &[Vec<ChartNoteIndex>] {
         &self.chart_runtime.lane_indices.note_indices
     }
 
@@ -1516,7 +1516,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_live_window_counts(
+    pub const fn set_live_window_counts(
         &mut self,
         player_idx: usize,
         canonical: WindowCounts,
@@ -1544,12 +1544,12 @@ where
     }
 
     #[inline(always)]
-    pub fn course_display_is_course_stage(&self) -> bool {
+    pub const fn course_display_is_course_stage(&self) -> bool {
         self.progress.course_display.is_course_stage()
     }
 
     #[inline(always)]
-    pub fn course_display_timing(&self) -> Option<CourseDisplayTiming> {
+    pub const fn course_display_timing(&self) -> Option<CourseDisplayTiming> {
         self.progress.course_display.timing()
     }
 
@@ -1578,7 +1578,7 @@ where
     }
 
     #[inline(always)]
-    pub fn notefield_column_scroll_dir_count(&self) -> usize {
+    pub const fn notefield_column_scroll_dir_count(&self) -> usize {
         self.display.notefield_motion.column_scroll_dir_count()
     }
 
@@ -1593,32 +1593,32 @@ where
     }
 
     #[inline(always)]
-    pub fn scroll_reference_bpm(&self) -> f32 {
+    pub const fn scroll_reference_bpm(&self) -> f32 {
         self.display.notefield_motion.scroll_reference_bpm()
     }
 
     #[inline(always)]
-    pub fn notes_end_time_ns(&self) -> SongTimeNs {
+    pub const fn notes_end_time_ns(&self) -> SongTimeNs {
         self.clock.end_timing.notes_end_time_ns()
     }
 
     #[inline(always)]
-    pub fn music_end_time_ns(&self) -> SongTimeNs {
+    pub const fn music_end_time_ns(&self) -> SongTimeNs {
         self.clock.end_timing.music_end_time_ns()
     }
 
     #[inline(always)]
-    pub fn is_in_freeze(&self) -> bool {
+    pub const fn is_in_freeze(&self) -> bool {
         self.display.beat_phase.is_in_freeze()
     }
 
     #[inline(always)]
-    pub fn is_in_delay(&self) -> bool {
+    pub const fn is_in_delay(&self) -> bool {
         self.display.beat_phase.is_in_delay()
     }
 
     #[inline(always)]
-    pub fn beat_phase_paused(&self) -> bool {
+    pub const fn beat_phase_paused(&self) -> bool {
         self.display.beat_phase.paused()
     }
 
@@ -1666,7 +1666,7 @@ where
     }
 
     #[inline(always)]
-    pub fn display_score_stage(&self, player_idx: usize) -> ItgScoreStage {
+    pub const fn display_score_stage(&self, player_idx: usize) -> ItgScoreStage {
         player_score_stage(&self.players_runtime.players[player_idx])
     }
 
@@ -1887,12 +1887,12 @@ where
     }
 
     #[inline(always)]
-    pub fn player_is_dead(&self, player: usize) -> bool {
+    pub const fn player_is_dead(&self, player: usize) -> bool {
         player_runtime_is_dead(&self.players_runtime.players[player])
     }
 
     #[inline(always)]
-    pub fn player_score_is_blocked(&self, player: usize) -> bool {
+    pub const fn player_score_is_blocked(&self, player: usize) -> bool {
         self.player_is_dead(player) && !self.setup.include_post_fail_passes
     }
 
@@ -1933,7 +1933,7 @@ where
     }
 
     #[inline(always)]
-    pub fn disable_score_for_practice(&mut self) {
+    pub const fn disable_score_for_practice(&mut self) {
         self.progress.stage.disable_score();
         self.progress.replay.disable_replay_mode();
     }
@@ -2003,7 +2003,7 @@ where
     }
 
     #[inline(always)]
-    pub fn runtime_player_side(&self, player: usize) -> GameplayInputPlayerSide {
+    pub const fn runtime_player_side(&self, player: usize) -> GameplayInputPlayerSide {
         self.setup.session.runtime_player_side(player)
     }
 
@@ -2016,7 +2016,7 @@ where
     }
 
     #[inline(always)]
-    pub fn timing_profile_windows_s(&self) -> [f32; 5] {
+    pub const fn timing_profile_windows_s(&self) -> [f32; 5] {
         self.timing_runtime.timing_profile.windows_s
     }
 
@@ -2061,32 +2061,32 @@ where
     }
 
     #[inline(always)]
-    pub fn global_offset_seconds(&self) -> f32 {
+    pub const fn global_offset_seconds(&self) -> f32 {
         self.clock.offsets.global_offset_seconds()
     }
 
     #[inline(always)]
-    pub fn initial_global_offset_seconds(&self) -> f32 {
+    pub const fn initial_global_offset_seconds(&self) -> f32 {
         self.clock.offsets.initial_global_offset_seconds()
     }
 
     #[inline(always)]
-    pub fn song_offset_seconds(&self) -> f32 {
+    pub const fn song_offset_seconds(&self) -> f32 {
         self.clock.offsets.song_offset_seconds()
     }
 
     #[inline(always)]
-    pub fn initial_song_offset_seconds(&self) -> f32 {
+    pub const fn initial_song_offset_seconds(&self) -> f32 {
         self.clock.offsets.initial_song_offset_seconds()
     }
 
     #[inline(always)]
-    pub fn set_replay_capture_enabled(&mut self, enabled: bool) {
+    pub const fn set_replay_capture_enabled(&mut self, enabled: bool) {
         self.progress.replay.capture_enabled = enabled;
     }
 
     #[inline(always)]
-    pub fn replay_capture_enabled(&self) -> bool {
+    pub const fn replay_capture_enabled(&self) -> bool {
         self.progress.replay.capture_enabled
     }
 
@@ -2101,12 +2101,12 @@ where
     }
 
     #[inline(always)]
-    pub fn autoplay_enabled(&self) -> bool {
+    pub const fn autoplay_enabled(&self) -> bool {
         self.progress.stage.autoplay_enabled
     }
 
     #[inline(always)]
-    pub fn autoplay_used(&self) -> bool {
+    pub const fn autoplay_used(&self) -> bool {
         self.progress.stage.autoplay_used
     }
 
@@ -2121,38 +2121,38 @@ where
     }
 
     #[inline(always)]
-    pub fn song_completed_naturally(&self) -> bool {
+    pub const fn song_completed_naturally(&self) -> bool {
         self.progress.stage.song_completed_naturally
     }
 
     #[inline(always)]
-    pub fn reset_stage_runtime_for_test(&mut self) {
+    pub const fn reset_stage_runtime_for_test(&mut self) {
         self.progress.stage.autoplay_enabled = false;
         self.progress.stage.song_completed_naturally = false;
     }
 
     #[inline(always)]
-    pub fn reset_exit_input(&mut self) {
+    pub const fn reset_exit_input(&mut self) {
         self.control.exit_input.reset();
     }
 
     #[inline(always)]
-    pub fn set_autoplay_enabled_for_test(&mut self, enabled: bool) {
+    pub const fn set_autoplay_enabled_for_test(&mut self, enabled: bool) {
         self.progress.stage.autoplay_enabled = enabled;
     }
 
     #[inline(always)]
-    pub fn autosync_mode(&self) -> AutosyncMode {
+    pub const fn autosync_mode(&self) -> AutosyncMode {
         self.control.autosync.mode
     }
 
     #[inline(always)]
-    pub fn autosync_standard_deviation(&self) -> f32 {
+    pub const fn autosync_standard_deviation(&self) -> f32 {
         self.control.autosync.standard_deviation
     }
 
     #[inline(always)]
-    pub fn autosync_sample_count(&self) -> usize {
+    pub const fn autosync_sample_count(&self) -> usize {
         self.control.autosync.offset_sample_count
     }
 
@@ -2219,7 +2219,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_visible_time(
+    pub const fn set_visible_time(
         &mut self,
         player: usize,
         music_time_ns: SongTimeNs,
@@ -2320,7 +2320,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_receptor_glow_timers(&mut self, col: usize, timers: GameplayReceptorGlowTimers) {
+    pub const fn set_receptor_glow_timers(&mut self, col: usize, timers: GameplayReceptorGlowTimers) {
         self.display.receptor_feedback.set_glow_timers(col, timers);
     }
 
@@ -2433,17 +2433,17 @@ where
     }
 
     #[inline(always)]
-    pub fn pending_input_is_empty(&self) -> bool {
+    pub const fn pending_input_is_empty(&self) -> bool {
         self.pending_input.edges.is_empty()
     }
 
     #[inline(always)]
-    pub fn pending_input_len(&self) -> usize {
+    pub const fn pending_input_len(&self) -> usize {
         self.pending_input.edges.len()
     }
 
     #[inline(always)]
-    pub fn live_input_lane_for_queue(&self, lane: Lane) -> Option<Lane> {
+    pub const fn live_input_lane_for_queue(&self, lane: Lane) -> Option<Lane> {
         live_input_lane_for_queue(
             self.progress.stage.autoplay_enabled,
             self.setup.session.play_style,
@@ -2523,12 +2523,12 @@ where
     }
 
     #[inline(always)]
-    pub fn exit_transition_active(&self) -> bool {
+    pub const fn exit_transition_active(&self) -> bool {
         self.control.exit_input.exit_transition.is_some()
     }
 
     #[inline(always)]
-    pub fn exit_prompt_state(&self) -> GameplayExitPromptState {
+    pub const fn exit_prompt_state(&self) -> GameplayExitPromptState {
         self.control.exit_input.prompt_state()
     }
 
@@ -2549,7 +2549,7 @@ where
     }
 
     #[inline(always)]
-    pub fn player_for_col(&self, col: usize) -> usize {
+    pub const fn player_for_col(&self, col: usize) -> usize {
         player_index_for_column(self.setup.num_players, self.setup.cols_per_player, col)
     }
 
@@ -2577,7 +2577,7 @@ where
     }
 
     #[inline(always)]
-    pub fn clear_offset_adjust_hold_key(&mut self, key: GameplayOffsetAdjustKey) {
+    pub const fn clear_offset_adjust_hold_key(&mut self, key: GameplayOffsetAdjustKey) {
         self.control.offset_adjust_hold.clear(key);
     }
 
@@ -2587,7 +2587,7 @@ where
     }
 
     #[inline(always)]
-    pub fn start_offset_adjust_hold_key(
+    pub const fn start_offset_adjust_hold_key(
         &mut self,
         key: GameplayOffsetAdjustKey,
         at: Instant,
@@ -2605,7 +2605,7 @@ where
     }
 
     #[inline(always)]
-    pub fn offset_adjust_target(&self) -> GameplayOffsetAdjustTarget {
+    pub const fn offset_adjust_target(&self) -> GameplayOffsetAdjustTarget {
         offset_adjust_target(
             self.control.exit_input.shift_held,
             self.progress.course_display.is_course_stage(),
@@ -2642,7 +2642,7 @@ where
     }
 
     #[inline(always)]
-    pub fn autosync_row_hits_enabled(&self, scoring_blocked: bool) -> bool {
+    pub const fn autosync_row_hits_enabled(&self, scoring_blocked: bool) -> bool {
         autosync_row_hits_enabled(
             self.progress.replay.mode,
             scoring_blocked,
@@ -2669,12 +2669,12 @@ where
     }
 
     #[inline(always)]
-    pub fn timing_tick_status_line(&self) -> Option<&'static str> {
+    pub const fn timing_tick_status_line(&self) -> Option<&'static str> {
         timing_tick_mode_status_line(self.control.tick_mode)
     }
 
     #[inline(always)]
-    pub fn tick_mode(&self) -> GameplayTimingTickMode {
+    pub const fn tick_mode(&self) -> GameplayTimingTickMode {
         self.control.tick_mode
     }
 
@@ -2776,12 +2776,12 @@ where
     }
 
     #[inline(always)]
-    pub fn stage_autoplay_enabled(&self) -> bool {
+    pub const fn stage_autoplay_enabled(&self) -> bool {
         self.progress.stage.autoplay_enabled
     }
 
     #[inline(always)]
-    pub fn live_autoplay_enabled(&self) -> bool {
+    pub const fn live_autoplay_enabled(&self) -> bool {
         live_autoplay_enabled_from_flags(
             self.progress.stage.autoplay_enabled,
             self.progress.replay.mode,
@@ -2789,7 +2789,7 @@ where
     }
 
     #[inline(always)]
-    pub fn autoplay_blocks_scoring(&self) -> bool {
+    pub const fn autoplay_blocks_scoring(&self) -> bool {
         autoplay_blocks_scoring_from_flags(
             self.progress.stage.autoplay_enabled,
             self.progress.replay.mode,
@@ -2797,7 +2797,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_stage_autoplay_enabled(&mut self, enabled: bool) -> bool {
+    pub const fn set_stage_autoplay_enabled(&mut self, enabled: bool) -> bool {
         if self.progress.stage.autoplay_enabled == enabled {
             return false;
         }
@@ -2811,12 +2811,12 @@ where
     }
 
     #[inline(always)]
-    pub fn lane_input_counts(&self) -> &[u16; MAX_COLS] {
+    pub const fn lane_input_counts(&self) -> &[u16; MAX_COLS] {
         self.control.input_state.lane_counts()
     }
 
     #[inline(always)]
-    pub fn normalized_input_slot_for_lane(
+    pub const fn normalized_input_slot_for_lane(
         &self,
         lane_idx: usize,
         input_slot: u32,
@@ -2874,7 +2874,7 @@ where
         self.control.input_state.release_lane(lane_idx);
     }
 
-    pub fn current_lane_inputs(&self) -> [bool; MAX_COLS] {
+    pub const fn current_lane_inputs(&self) -> [bool; MAX_COLS] {
         lane_inputs_from_mask(
             self.control.input_state.pressed_lane_mask(),
             self.setup.num_cols,
@@ -2917,7 +2917,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_previous_lane_inputs(&mut self, inputs: [bool; MAX_COLS]) {
+    pub const fn set_previous_lane_inputs(&mut self, inputs: [bool; MAX_COLS]) {
         self.control.input_state.prev_inputs = inputs;
     }
 
@@ -2951,18 +2951,18 @@ where
     }
 
     #[inline(always)]
-    pub fn mark_autoplay_used(&mut self) {
+    pub const fn mark_autoplay_used(&mut self) {
         self.progress.stage.autoplay_used = true;
     }
 
     #[inline(always)]
-    pub fn set_raw_modifier_state(&mut self, shift_held: bool, ctrl_held: bool) {
+    pub const fn set_raw_modifier_state(&mut self, shift_held: bool, ctrl_held: bool) {
         self.control.exit_input.shift_held = shift_held;
         self.control.exit_input.ctrl_held = ctrl_held;
     }
 
     #[inline(always)]
-    pub fn set_raw_modifier_key(&mut self, key: GameplayRawModifierKey, pressed: bool) {
+    pub const fn set_raw_modifier_key(&mut self, key: GameplayRawModifierKey, pressed: bool) {
         match key {
             GameplayRawModifierKey::Shift => self.control.exit_input.shift_held = pressed,
             GameplayRawModifierKey::Ctrl => self.control.exit_input.ctrl_held = pressed,
@@ -2970,7 +2970,7 @@ where
     }
 
     #[inline(always)]
-    pub fn raw_key_plan(
+    pub const fn raw_key_plan(
         &self,
         input: GameplayRawKeyInput,
         pressed: bool,
@@ -3040,7 +3040,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_autosync_mode(&mut self, mode: AutosyncMode) {
+    pub const fn set_autosync_mode(&mut self, mode: AutosyncMode) {
         self.control.autosync.mode = mode;
     }
 
@@ -3267,7 +3267,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_screen_elapsed(&mut self, elapsed: f32) {
+    pub const fn set_screen_elapsed(&mut self, elapsed: f32) {
         self.boundary.total_elapsed_in_screen = elapsed;
     }
 
@@ -3294,7 +3294,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_density_graph_life_dirty(&mut self, player: usize, dirty: bool) {
+    pub const fn set_density_graph_life_dirty(&mut self, player: usize, dirty: bool) {
         if player < MAX_PLAYERS {
             self.display.density_graph.life_dirty[player] = dirty;
         }

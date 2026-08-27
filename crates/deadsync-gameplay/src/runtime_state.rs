@@ -14,7 +14,7 @@ impl Default for GameplayNoteCountStatsState {
 }
 
 impl GameplayNoteCountStatsState {
-    pub fn new(stats: [Vec<NoteCountStat>; MAX_PLAYERS], num_players: usize) -> Self {
+    pub const fn new(stats: [Vec<NoteCountStat>; MAX_PLAYERS], num_players: usize) -> Self {
         let player_stat_indices = if num_players == 1 { [0, 0] } else { [0, 1] };
         Self {
             stats,
@@ -170,7 +170,7 @@ impl Default for GameplayRowIndexState {
 }
 
 impl GameplayRowIndexState {
-    pub fn new(
+    pub const fn new(
         row_entry_ranges: [(usize, usize); MAX_PLAYERS],
         judged_row_cursor: [usize; MAX_PLAYERS],
         note_row_entry_indices: Vec<u32>,
@@ -389,17 +389,17 @@ impl GameplayHoldRuntimeState {
     }
 
     #[inline(always)]
-    pub fn active_hold_mask(&self) -> LaneMask {
+    pub const fn active_hold_mask(&self) -> LaneMask {
         self.active_hold_mask
     }
 
     #[inline(always)]
-    pub fn active_roll_mask(&self) -> LaneMask {
+    pub const fn active_roll_mask(&self) -> LaneMask {
         self.active_roll_mask
     }
 
     #[inline(always)]
-    pub fn set_active_hold_mask(&mut self, mask: LaneMask) {
+    pub const fn set_active_hold_mask(&mut self, mask: LaneMask) {
         self.active_hold_mask = mask;
         self.active_roll_mask &= mask;
     }
@@ -852,7 +852,7 @@ impl GameplayVisualFeedbackState {
 }
 
 #[inline(always)]
-fn set_feedback_bit(mask: &mut LaneMask, col: usize, active: bool) {
+const fn set_feedback_bit(mask: &mut LaneMask, col: usize, active: bool) {
     if col >= LaneMask::BITS as usize {
         return;
     }
@@ -926,7 +926,7 @@ pub struct GameplayExitPromptState {
 
 impl GameplayExitInputState {
     #[inline(always)]
-    pub fn prompt_state(&self) -> GameplayExitPromptState {
+    pub const fn prompt_state(&self) -> GameplayExitPromptState {
         GameplayExitPromptState {
             hold_to_exit_key: self.hold_to_exit_key,
             hold_to_exit_start: self.hold_to_exit_start,
@@ -936,14 +936,14 @@ impl GameplayExitInputState {
     }
 
     #[inline(always)]
-    pub fn arm_hold(&mut self, key: HoldToExitKey, at: Instant) {
+    pub const fn arm_hold(&mut self, key: HoldToExitKey, at: Instant) {
         self.hold_to_exit_key = Some(key);
         self.hold_to_exit_start = Some(at);
         self.hold_to_exit_aborted_at = None;
     }
 
     #[inline(always)]
-    pub fn abort_hold(&mut self, at: Instant) {
+    pub const fn abort_hold(&mut self, at: Instant) {
         if self.hold_to_exit_start.is_some() {
             self.hold_to_exit_key = None;
             self.hold_to_exit_start = None;
@@ -952,12 +952,12 @@ impl GameplayExitInputState {
     }
 
     #[inline(always)]
-    pub fn clear_aborted_hold(&mut self) {
+    pub const fn clear_aborted_hold(&mut self) {
         self.hold_to_exit_aborted_at = None;
     }
 
     #[inline(always)]
-    pub fn begin_exit(&mut self, kind: ExitTransitionKind, at: Instant) -> bool {
+    pub const fn begin_exit(&mut self, kind: ExitTransitionKind, at: Instant) -> bool {
         if self.exit_transition.is_some() {
             return false;
         }
@@ -972,12 +972,12 @@ impl GameplayExitInputState {
     }
 
     #[inline(always)]
-    pub fn clear_exit(&mut self) {
+    pub const fn clear_exit(&mut self) {
         self.exit_transition = None;
     }
 
     #[inline(always)]
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         self.hold_to_exit_key = None;
         self.hold_to_exit_start = None;
         self.hold_to_exit_aborted_at = None;

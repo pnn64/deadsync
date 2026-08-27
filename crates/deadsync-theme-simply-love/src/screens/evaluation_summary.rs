@@ -62,7 +62,7 @@ struct SummaryRows {
 }
 
 impl SummaryRows {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             rows: Vec::new(),
             dirty: true,
@@ -73,7 +73,7 @@ impl SummaryRows {
         }
     }
 
-    fn mark_dirty(&mut self) {
+    const fn mark_dirty(&mut self) {
         self.dirty = true;
     }
 
@@ -207,7 +207,7 @@ pub fn update(state: &mut State, dt: f32) {
     state.footer_clock.update(dt);
 }
 
-pub fn mark_stage_rows_dirty(state: &mut State) {
+pub const fn mark_stage_rows_dirty(state: &mut State) {
     state.stage_rows.mark_dirty();
 }
 

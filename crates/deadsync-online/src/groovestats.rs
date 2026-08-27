@@ -617,7 +617,7 @@ pub fn leaderboard_self_entry<'a>(
 }
 
 #[inline(always)]
-pub fn leaderboard_entry_score_10000(entry: &LeaderboardApiEntry) -> Option<f64> {
+pub const fn leaderboard_entry_score_10000(entry: &LeaderboardApiEntry) -> Option<f64> {
     leaderboard_score_10000(entry.score, entry.is_fail)
 }
 
@@ -947,7 +947,7 @@ const fn submit_bad_window_count(disabled: bool, count: u32) -> Option<u32> {
     if disabled { None } else { Some(count) }
 }
 
-pub fn judgment_counts_from_stats(
+pub const fn judgment_counts_from_stats(
     windows: WindowCounts,
     disabled_windows: [bool; 5],
     total_steps: u32,
@@ -1865,7 +1865,7 @@ pub struct GrooveStatsGameplaySubmitPlayer {
 
 impl GrooveStatsSubmitPlayerDraft {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub const fn new(
         side: profile_data::PlayerSide,
         slot: u8,
         chart_hash: String,
@@ -2171,7 +2171,7 @@ pub struct GrooveStatsSubmitRetryEntry {
 
 impl GrooveStatsSubmitRetryEntry {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub const fn new(
         side: profile_data::PlayerSide,
         slot: u8,
         chart_hash: String,
@@ -2663,7 +2663,7 @@ pub struct GrooveStatsSubmitApiResponse {
 
 impl GrooveStatsSubmitApiResponse {
     #[inline(always)]
-    pub fn player_for_slot(&self, slot: u8) -> Option<&GrooveStatsSubmitApiPlayer> {
+    pub const fn player_for_slot(&self, slot: u8) -> Option<&GrooveStatsSubmitApiPlayer> {
         match slot {
             1 => self.player1.as_ref(),
             2 => self.player2.as_ref(),

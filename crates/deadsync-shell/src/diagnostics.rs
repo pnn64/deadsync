@@ -3,7 +3,7 @@ use deadlib_render_core::{ClockDomainTrace, PresentStats};
 use deadsync_theme::views::AudioTimingView;
 use deadsync_theme_simply_love::views::TimingHealth;
 
-fn audio_timing_view(audio: OutputTimingSnapshot) -> AudioTimingView {
+const fn audio_timing_view(audio: OutputTimingSnapshot) -> AudioTimingView {
     AudioTimingView {
         backend: audio.backend.as_str(),
         requested_output_mode: audio.requested_output_mode.as_str(),

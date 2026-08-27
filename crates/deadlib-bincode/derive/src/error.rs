@@ -79,7 +79,7 @@ impl Error {
     }
 
     /// Return a new error that is located at the given span
-    pub fn with_span(mut self, new_span: Span) -> Self {
+    pub const fn with_span(mut self, new_span: Span) -> Self {
         match &mut self {
             Error::UnknownDataType(span) => *span = new_span,
             Error::InvalidRustSyntax { span, .. } => *span = new_span,

@@ -762,7 +762,7 @@ pub(super) fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32,
                 .iter()
                 .position(|&old_actual| old_actual == actual_idx)
                 .and_then(|old_idx| old_tweens.get(old_idx).map(|tw| (tw.y(), tw.a())))
-                .or({
+                .or_else(|| {
                     if rows
                         .get(actual_idx)
                         .is_some_and(|r| r.id == SubRowId::SoftwareRendererThreads)

@@ -84,7 +84,7 @@ impl State {
         paid
     }
 
-    pub fn start_premium_free(&mut self, now: Instant) {
+    pub const fn start_premium_free(&mut self, now: Instant) {
         self.premium_started = Some(now);
     }
 
@@ -124,7 +124,7 @@ impl State {
     ) -> bool {
         let seconds_left = self
             .premium_seconds_left(options, now)
-            .unwrap_or(options.premium_free_seconds());
+            .unwrap_or_else(|| options.premium_free_seconds());
         song_seconds.max(0.0)
             <= seconds_left.saturating_add(u32::from(options.premium_free_grace_seconds)) as f32
     }

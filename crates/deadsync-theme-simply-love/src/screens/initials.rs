@@ -164,7 +164,7 @@ impl InitialsStageTexts {
         }
     }
 
-    fn mark_dirty(&mut self) {
+    const fn mark_dirty(&mut self) {
         self.dirty = true;
     }
 
@@ -218,7 +218,7 @@ pub struct State {
     runtime: PostSongRuntimeView,
 }
 
-fn player_color_rgba(side: profile_data::PlayerSide, active_color_index: i32) -> [f32; 4] {
+const fn player_color_rgba(side: profile_data::PlayerSide, active_color_index: i32) -> [f32; 4] {
     match side {
         profile_data::PlayerSide::P1 => color::simply_love_rgba(active_color_index),
         profile_data::PlayerSide::P2 => color::simply_love_rgba(active_color_index - 2),
@@ -230,7 +230,7 @@ fn sanitize_name(raw: &str) -> String {
 }
 
 #[inline(always)]
-fn wrap_info_index(info_pos: i32, slot_index1: usize, len: usize) -> usize {
+const fn wrap_info_index(info_pos: i32, slot_index1: usize, len: usize) -> usize {
     // Simply Love's wrapped_index(start, offset, set_size):
     // ((start - 1 + offset) % set_size) + 1
     let len_i = len as i32;
@@ -268,7 +268,7 @@ impl Wheel {
     }
 
     #[inline(always)]
-    fn focused_info_index(&self) -> usize {
+    const fn focused_info_index(&self) -> usize {
         self.items[WHEEL_FOCUS_POS - 1].info_index
     }
 
@@ -430,7 +430,7 @@ fn is_matching_stage_score(entry_score: f64, stage_score: f64) -> bool {
 }
 
 #[inline(always)]
-fn highscore_rank_window(highlight_rank: Option<u32>) -> (u32, u32) {
+const fn highscore_rank_window(highlight_rank: Option<u32>) -> (u32, u32) {
     let mut lower: u32 = 1;
     let mut upper: u32 = HIGHSCORE_ROW_COUNT as u32;
     if let Some(rank) = highlight_rank
@@ -626,7 +626,7 @@ fn player_entry_for(player: &PostSongPlayerView) -> PlayerEntry {
     }
 }
 
-fn reset_nav_hold(p: &mut PlayerEntry) {
+const fn reset_nav_hold(p: &mut PlayerEntry) {
     p.nav_key_held_direction = None;
     p.nav_key_held_since = None;
     p.nav_key_last_scrolled_at = None;
@@ -693,7 +693,7 @@ pub fn init(runtime: PostSongRuntimeView) -> State {
     }
 }
 
-pub fn mark_stage_texts_dirty(state: &mut State) {
+pub const fn mark_stage_texts_dirty(state: &mut State) {
     state.stage_texts.mark_dirty();
 }
 

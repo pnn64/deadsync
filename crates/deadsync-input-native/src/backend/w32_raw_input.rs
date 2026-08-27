@@ -969,7 +969,11 @@ where
 }
 
 #[inline(always)]
-fn update_held_state(held: &mut [bool; RAW_KEY_HELD_SLOTS], slot: usize, pressed: bool) -> bool {
+const fn update_held_state(
+    held: &mut [bool; RAW_KEY_HELD_SLOTS],
+    slot: usize,
+    pressed: bool,
+) -> bool {
     if held[slot] == pressed {
         return false;
     }

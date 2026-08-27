@@ -222,7 +222,7 @@ pub fn load_bootstrap_bool(path: &Path, key: &str, default: bool) -> bool {
     crate::options::load_bool_option(&conf, "Options", key, default)
 }
 
-fn apply_display_opts(
+const fn apply_display_opts(
     display: DisplayLoadOptions<FullscreenType, PresentModePolicy, BackendType>,
     cfg: &mut Config,
 ) {
@@ -238,7 +238,7 @@ fn apply_display_opts(
     cfg.video_renderer = display.video_renderer;
 }
 
-fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
+const fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.coin = loaded.coin;
     cfg.game_flag = loaded.game_flag;
     cfg.auto_download_unlocks = loaded.auto_download_unlocks;
@@ -292,7 +292,7 @@ fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.show_console = loaded.show_console;
 }
 
-fn apply_system_hardware_opts(
+const fn apply_system_hardware_opts(
     hardware: SystemInputHardwareLoadOptions<WindowsPadBackend, deadsync_smx::SmxPadPreset>,
     cfg: &mut Config,
 ) {
@@ -301,7 +301,7 @@ fn apply_system_hardware_opts(
     cfg.smx_default_light_brightness = hardware.smx_default_light_brightness;
 }
 
-fn apply_null_or_die_opts(loaded: NullOrDieOptions, cfg: &mut Config) {
+const fn apply_null_or_die_opts(loaded: NullOrDieOptions, cfg: &mut Config) {
     cfg.null_or_die_sync_graph = loaded.sync_graph;
     cfg.null_or_die_graph_orientation = loaded.graph_orientation;
     cfg.null_or_die_graph_origin = loaded.graph_origin;
@@ -316,7 +316,7 @@ fn apply_null_or_die_opts(loaded: NullOrDieOptions, cfg: &mut Config) {
     cfg.null_or_die_full_spectrogram = loaded.full_spectrogram;
 }
 
-fn apply_audio_opts(
+const fn apply_audio_opts(
     runtime: AudioRuntimeOptions<LinuxAudioBackend, AudioOutputMode>,
     loaded: AudioOptions,
     cfg: &mut Config,
@@ -340,7 +340,7 @@ fn apply_audio_opts(
     cfg.tab_acceleration = loaded.tab_acceleration;
 }
 
-fn apply_select_music_opts(loaded: SelectMusicOptions, cfg: &mut Config) {
+const fn apply_select_music_opts(loaded: SelectMusicOptions, cfg: &mut Config) {
     cfg.select_music_breakdown_style = loaded.breakdown_style;
     cfg.show_select_music_banners = loaded.show_banners;
     cfg.show_version_overlay = loaded.show_version_overlay;
@@ -380,7 +380,7 @@ fn apply_select_music_opts(loaded: SelectMusicOptions, cfg: &mut Config) {
     cfg.auto_screenshot_eval = loaded.auto_screenshot_eval;
 }
 
-fn apply_runtime_opts(
+const fn apply_runtime_opts(
     loaded: RuntimeOptions,
     io: RuntimeIoLoadOptions<
         deadsync_lights::DriverKind,
@@ -411,7 +411,7 @@ fn apply_runtime_opts(
     cfg.lights_com_port = io.lights_com_port;
 }
 
-fn apply_theme_presentation(loaded: ThemePresentationOptions, cfg: &mut Config) {
+const fn apply_theme_presentation(loaded: ThemePresentationOptions, cfg: &mut Config) {
     cfg.simply_love_color = loaded.simply_love_color;
     cfg.show_select_music_gameplay_timer = loaded.show_select_music_gameplay_timer;
     cfg.keyboard_features = loaded.keyboard_features;
@@ -426,7 +426,7 @@ fn apply_theme_presentation(loaded: ThemePresentationOptions, cfg: &mut Config) 
     cfg.gameplay_banner_mode = loaded.gameplay_banner_mode;
 }
 
-fn apply_machine_flow(
+const fn apply_machine_flow(
     loaded: MachineFlowOptions,
     shortcuts: ThemeShortcutOptions<KeyCode>,
     cfg: &mut Config,

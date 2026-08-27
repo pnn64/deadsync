@@ -222,7 +222,7 @@ impl FrameStableDisplayClock {
     }
 
     #[inline(always)]
-    pub fn reset(&mut self, time_ns: SongTimeNs) -> SongTimeNs {
+    pub const fn reset(&mut self, time_ns: SongTimeNs) -> SongTimeNs {
         self.current_time_ns = time_ns;
         self.target_time_ns = time_ns;
         self.catching_up = false;
@@ -257,7 +257,7 @@ impl GameplayDisplayClockState {
     }
 
     #[inline(always)]
-    pub fn reset(&mut self, time_ns: SongTimeNs) -> SongTimeNs {
+    pub const fn reset(&mut self, time_ns: SongTimeNs) -> SongTimeNs {
         self.clock.reset(time_ns)
     }
 
@@ -358,7 +358,7 @@ impl GameplayBeatPhaseState {
     }
 
     #[inline(always)]
-    pub fn set(&mut self, is_in_freeze: bool, is_in_delay: bool) {
+    pub const fn set(&mut self, is_in_freeze: bool, is_in_delay: bool) {
         self.is_in_freeze = is_in_freeze;
         self.is_in_delay = is_in_delay;
     }

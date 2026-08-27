@@ -209,7 +209,7 @@ pub enum ScheduledOnset {
 /// `total_before` is the absolute write-head frame at the start of this buffer;
 /// `buf_len` is the buffer length in interleaved samples.
 #[inline(always)]
-pub fn scheduled_onset_decision(
+pub const fn scheduled_onset_decision(
     target_stream_frame: u64,
     total_before: u64,
     device_channels: usize,

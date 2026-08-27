@@ -210,12 +210,12 @@ pub struct State {
 }
 
 /// Set where Back returns to (e.g. Song Select when opened from its menu).
-pub fn set_return_screen(state: &mut State, screen: Screen) {
+pub const fn set_return_screen(state: &mut State, screen: Screen) {
     state.return_screen = Some(screen);
 }
 
 /// Set which pads to show (defaults to all). Apply before the next `set_pads`.
-pub fn set_filter(state: &mut State, filter: PadFilter) {
+pub const fn set_filter(state: &mut State, filter: PadFilter) {
     state.filter = filter;
 }
 
@@ -224,7 +224,7 @@ pub fn init() -> State {
 }
 
 /// Apply the shell-owned FSR feature policy to input and presentation.
-pub fn set_fsr_enabled(state: &mut State, enabled: bool) {
+pub const fn set_fsr_enabled(state: &mut State, enabled: bool) {
     state.fsr_enabled = enabled;
 }
 
@@ -277,15 +277,15 @@ pub fn take_commands(state: &mut State) -> Vec<PadCommand> {
     std::mem::take(&mut state.pending)
 }
 
-pub fn update(_state: &mut State, _dt: f32) -> Option<ThemeEffect> {
+pub const fn update(_state: &mut State, _dt: f32) -> Option<ThemeEffect> {
     None
 }
 
-pub fn in_transition() -> (Vec<Actor>, f32) {
+pub const fn in_transition() -> (Vec<Actor>, f32) {
     (Vec::new(), TRANSITION_IN_DURATION)
 }
 
-pub fn out_transition() -> (Vec<Actor>, f32) {
+pub const fn out_transition() -> (Vec<Actor>, f32) {
     (Vec::new(), TRANSITION_OUT_DURATION)
 }
 
@@ -401,13 +401,13 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
 }
 
 /// Whether saving is available for the cursor pad (set by the app each frame).
-pub fn set_save_available(state: &mut State, available: bool) {
+pub const fn set_save_available(state: &mut State, available: bool) {
     state.save_available = available;
 }
 
 /// Whether DeadSync is managing pad config (set by the app each frame). Drives the
 /// "edits here are temporary" caption on the standalone Configure Pads screen.
-pub fn set_managed_active(state: &mut State, active: bool) {
+pub const fn set_managed_active(state: &mut State, active: bool) {
     state.managed_active = active;
 }
 
@@ -432,7 +432,7 @@ pub fn set_profiles(state: &mut State, profiles: Vec<ProfileListEntry>) {
 
 /// Open the "Profiles" management list over the current view. Same gating as
 /// `begin_save` (in-session SMX pad with a local profile).
-pub fn begin_profiles(state: &mut State) {
+pub const fn begin_profiles(state: &mut State) {
     if !state.save_available || state.pads.is_empty() || state.saving.is_some() {
         return;
     }
@@ -453,7 +453,7 @@ pub fn reset_modes(state: &mut State) {
     state.threshold_lock_off = false;
 }
 
-pub fn is_profiles_mode(state: &State) -> bool {
+pub const fn is_profiles_mode(state: &State) -> bool {
     state.profiles_mode
 }
 
@@ -543,13 +543,13 @@ fn apply_profiles_edit(state: &mut State, ev: &InputEvent) -> EditResult {
     EditResult::Handled
 }
 
-pub fn is_saving(state: &State) -> bool {
+pub const fn is_saving(state: &State) -> bool {
     state.saving.is_some()
 }
 
 /// Toggle the name box's "Set as default" flag (driven by Up/Down on the
 /// keyboard, which the raw-key path otherwise swallows for text entry).
-pub fn toggle_save_default(state: &mut State) {
+pub const fn toggle_save_default(state: &mut State) {
     if let Some(d) = state.saving.as_mut() {
         d.set_default = !d.set_default;
     }
@@ -564,7 +564,7 @@ pub fn save_name_nonempty(state: &State) -> bool {
 }
 
 /// Take the confirmed save draft, clearing save mode.
-pub fn take_save(state: &mut State) -> Option<SaveDraft> {
+pub const fn take_save(state: &mut State) -> Option<SaveDraft> {
     state.saving.take()
 }
 
@@ -1335,7 +1335,7 @@ fn push_sensor_bar(
     );
 
     if selected {
-        let ox = x - (ADV_BAR_W + 8.0) * 0.5;
+        let ox = x - f32::midpoint(ADV_BAR_W, 8.0);
         let oy = y - 16.0;
         let ow = ADV_BAR_W + 8.0;
         let oh = ADV_BAR_HEIGHT + 44.0;
@@ -1939,7 +1939,7 @@ fn pad_has_release(pad: &PadView) -> bool {
 }
 
 /// The gap load-cell edits keep between release and press.
-fn threshold_gap(state: &State) -> u16 {
+const fn threshold_gap(state: &State) -> u16 {
     if state.threshold_lock_off {
         UNLOCKED_THRESHOLD_GAP
     } else {
@@ -2181,14 +2181,14 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
 
 // ─── Shared drawing ────────────────────────────────────────────────────────────
 
-fn theme(active_color_index: i32) -> Theme {
+const fn theme(active_color_index: i32) -> Theme {
     Theme {
         frame: with_alpha(color::decorative_rgba(active_color_index - 2), 0.95),
         fill_idle: with_alpha(color::decorative_rgba(active_color_index), 0.95),
     }
 }
 
-fn with_alpha(mut rgba: [f32; 4], alpha: f32) -> [f32; 4] {
+const fn with_alpha(mut rgba: [f32; 4], alpha: f32) -> [f32; 4] {
     rgba[3] = alpha;
     rgba
 }
@@ -2370,7 +2370,7 @@ fn push_value_cluster(
     }
 
     if selected {
-        let ox = x_center - (slot_width + 12.0 * slot_scale) * 0.5;
+        let ox = x_center - f32::midpoint(slot_width, 12.0 * slot_scale);
         let oy = y - 46.0;
         let ow = slot_width + 12.0 * slot_scale;
         let oh = BAR_HEIGHT + 82.0;
@@ -2476,7 +2476,7 @@ fn push_bar(
 
     if selected {
         let slot_scale = slot_width / BAR_WIDTH;
-        let ox = x - (slot_width + 12.0 * slot_scale) * 0.5;
+        let ox = x - f32::midpoint(slot_width, 12.0 * slot_scale);
         let oy = y - 42.0;
         let ow = slot_width + 12.0 * slot_scale;
         let oh = BAR_HEIGHT + 78.0;
@@ -2624,13 +2624,10 @@ pub fn benchmark_pad_text_legacy(out: &mut Vec<TextContent>) -> u64 {
         .into_iter()
         .map(group_width)
         .collect::<Vec<_>>();
-    let thresholds = PAD_TEXT_BENCH_ROWS
+    let geometry = PAD_TEXT_BENCH_ROWS
         .iter()
         .flat_map(|(_, min, max, _)| [*min, *max])
         .filter(|value| *value != 35 && *value != 30)
-        .collect::<Vec<_>>();
-    let geometry = thresholds
-        .into_iter()
         .map(|value| curve.normalize(value))
         .chain(group_widths)
         .collect::<Vec<_>>();

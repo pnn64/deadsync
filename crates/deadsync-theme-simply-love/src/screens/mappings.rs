@@ -384,7 +384,7 @@ const fn total_rows(game: GameFlag) -> usize {
     mapping_row_count(game) + 1
 }
 
-fn move_selection(state: &mut State, dir: NavDirection, wrap: NavWrap) -> ThemeEffect {
+const fn move_selection(state: &mut State, dir: NavDirection, wrap: NavWrap) -> ThemeEffect {
     let total = total_rows(state.runtime.game);
     if total == 0 {
         return ThemeEffect::None;
@@ -473,7 +473,7 @@ fn capture_debounce_active(state: &State, timestamp: Instant) -> bool {
 }
 
 #[inline(always)]
-fn cancel_capture(state: &mut State) {
+const fn cancel_capture(state: &mut State) {
     state.capture_active = false;
     state.capture_row = None;
     state.capture_slot = None;
@@ -581,7 +581,7 @@ fn mapped_raw_nav_action(state: &State, key_event: &RawKeyboardEvent) -> Option<
     keymap_raw_nav_action(&state.runtime.keymap, key_event)
 }
 
-fn config_effect(request: SimplyLoveMappingsConfigRequest) -> ThemeEffect {
+const fn config_effect(request: SimplyLoveMappingsConfigRequest) -> ThemeEffect {
     ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Config(
         SimplyLoveConfigRequest::Mappings(request),
     ))
@@ -595,7 +595,7 @@ fn mapping_change_effect(
 }
 
 #[inline(always)]
-fn input_event_from_raw(action: VirtualAction, key_event: &RawKeyboardEvent) -> InputEvent {
+const fn input_event_from_raw(action: VirtualAction, key_event: &RawKeyboardEvent) -> InputEvent {
     InputEvent {
         action,
         input_slot: 0,

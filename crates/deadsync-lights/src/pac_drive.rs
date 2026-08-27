@@ -41,7 +41,7 @@ pub struct Driver {
 }
 
 impl Driver {
-    pub fn new(ordering: PacDriveLightOrdering) -> Self {
+    pub const fn new(ordering: PacDriveLightOrdering) -> Self {
         Self {
             api: None,
             device: None,
@@ -159,7 +159,7 @@ const fn product_range_text() -> &'static str {
     "1500-1507"
 }
 
-fn build_report(state: &State, ordering: PacDriveLightOrdering) -> [u8; REPORT_SIZE] {
+const fn build_report(state: &State, ordering: PacDriveLightOrdering) -> [u8; REPORT_SIZE] {
     let mut report = [0u8; REPORT_SIZE];
     report[0] = REPORT_ID;
 
@@ -170,7 +170,7 @@ fn build_report(state: &State, ordering: PacDriveLightOrdering) -> [u8; REPORT_S
     report
 }
 
-fn build_openitg_report(state: &State, report: &mut [u8; REPORT_SIZE]) {
+const fn build_openitg_report(state: &State, report: &mut [u8; REPORT_SIZE]) {
     set_led(report, LED01, state.button(Player::P1, ButtonLight::Left));
     set_led(report, LED02, state.button(Player::P1, ButtonLight::Right));
     set_led(report, LED03, state.button(Player::P1, ButtonLight::Up));
@@ -206,7 +206,7 @@ fn build_openitg_report(state: &State, report: &mut [u8; REPORT_SIZE]) {
     set_led(report, LED16, bass);
 }
 
-fn build_sm5_report(state: &State, report: &mut [u8; REPORT_SIZE]) {
+const fn build_sm5_report(state: &State, report: &mut [u8; REPORT_SIZE]) {
     set_led(report, LED01, state.cabinet(CabinetLight::MarqueeUpperLeft));
     set_led(
         report,
@@ -243,7 +243,7 @@ fn build_sm5_report(state: &State, report: &mut [u8; REPORT_SIZE]) {
     );
 }
 
-fn set_led(report: &mut [u8; REPORT_SIZE], led: u8, on: bool) {
+const fn set_led(report: &mut [u8; REPORT_SIZE], led: u8, on: bool) {
     if !on {
         return;
     }

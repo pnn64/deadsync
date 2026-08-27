@@ -964,7 +964,7 @@ mod tests {
             overlay_eases: layer.overlay_eases.clone(),
             overlay_ease_ranges: vec![0..1],
             overlay_events: layer.overlay_events.clone(),
-            background_visual_layers: vec![layer.clone()],
+            background_visual_layers: vec![layer],
             foreground_visual_layers: Vec::new(),
             player_actors: [9_u16; MAX_PLAYERS],
             player_events: std::array::from_fn(|_| Vec::new()),
@@ -3249,7 +3249,7 @@ mod tests {
             .map(|note| (note.row_index, note.column))
             .collect();
         let mut off_notes = original.clone();
-        let mut missing_notes = original.clone();
+        let mut missing_notes = original;
 
         apply_chart_attacks_for_mode(
             &mut off_notes,

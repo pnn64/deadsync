@@ -354,7 +354,7 @@ pub fn benchmark_parse_options_hoisted(song_count: usize) -> usize {
 }
 
 #[cfg(feature = "bench-support")]
-fn parse_options_checksum(options: &ParseSongOptions) -> usize {
+const fn parse_options_checksum(options: &ParseSongOptions) -> usize {
     options.mono_threshold
         ^ options.song_movie_roots.len()
         ^ options.random_movie_roots.len()

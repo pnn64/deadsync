@@ -50,11 +50,13 @@ pub struct ReplayStartPayload {
     pub replay_beat0_time_ns: i64,
 }
 
-fn replay_total_items(state: &ReplayOverlayStateData) -> usize {
+const fn replay_total_items(state: &ReplayOverlayStateData) -> usize {
     state.entries.len() + 1
 }
 
-pub fn begin_replay_overlay(entries: Vec<score_data::MachineReplayEntry>) -> ReplayOverlayState {
+pub const fn begin_replay_overlay(
+    entries: Vec<score_data::MachineReplayEntry>,
+) -> ReplayOverlayState {
     ReplayOverlayState::Visible(ReplayOverlayStateData {
         entries,
         selected_index: 0,
@@ -184,7 +186,7 @@ pub fn build_replay_overlay(
     let pane_width = GS_LEADERBOARD_PANE_WIDTH_SINGLE;
     let pane_cx = screen_center_x();
     let pane_cy = screen_center_y() + GS_LEADERBOARD_PANE_CENTER_Y;
-    let row_center = (GS_LEADERBOARD_NUM_ENTRIES as f32 + 1.0) * 0.5;
+    let row_center = f32::midpoint(GS_LEADERBOARD_NUM_ENTRIES as f32, 1.0);
     let selected_color = color::simply_love_rgba(active_color_index);
     let total_items = replay_total_items(overlay).max(1);
     let visible_rows = GS_LEADERBOARD_NUM_ENTRIES;

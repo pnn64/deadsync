@@ -412,7 +412,7 @@ pub fn build_course_graph_stages(
 }
 
 #[inline(always)]
-fn add_column_judgments(dst: &mut ColumnJudgments, src: ColumnJudgments) {
+const fn add_column_judgments(dst: &mut ColumnJudgments, src: ColumnJudgments) {
     dst.w0 = dst.w0.saturating_add(src.w0);
     dst.w1 = dst.w1.saturating_add(src.w1);
     dst.w2 = dst.w2.saturating_add(src.w2);

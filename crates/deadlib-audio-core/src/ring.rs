@@ -40,7 +40,7 @@ impl MusicBlock {
     }
 
     #[inline(always)]
-    pub(crate) fn timing(&self) -> MusicBlockTiming {
+    pub(crate) const fn timing(&self) -> MusicBlockTiming {
         self.timing
     }
 }
@@ -66,13 +66,13 @@ pub struct MusicBlockWriter {
 
 impl MusicBlockWriter {
     #[inline(always)]
-    pub fn channels(&self) -> usize {
+    pub const fn channels(&self) -> usize {
         self.channels
     }
 
     /// Returns the fixed number of blocks in this transport.
     #[inline(always)]
-    pub fn capacity_blocks(&self) -> usize {
+    pub const fn capacity_blocks(&self) -> usize {
         self.capacity_blocks
     }
 
@@ -159,7 +159,7 @@ pub struct AudioRenderHandle {
 
 impl AudioRenderHandle {
     #[inline(always)]
-    pub(crate) fn capacity_blocks(&self) -> usize {
+    pub(crate) const fn capacity_blocks(&self) -> usize {
         self.capacity_blocks
     }
 
