@@ -12532,6 +12532,34 @@ fn song_lua_add_z(z: i16, delta: i16) -> i16 {
 const SONG_LUA_PLAYER_LAYER_Z_BASE: i16 = 900;
 const SONG_LUA_OVERLAY_LAYER_Z_BASE: i16 = 1100;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SongLuaLayerDepth {
+    base: i16,
+    ceiling: i16,
+}
+
+impl SongLuaLayerDepth {
+    fn shifted(self, z: f32) -> Self {
+        Self {
+            base: song_lua_add_z(self.base, song_lua_rounded_z(z)),
+            ..self
+        }
+    }
+
+    fn draw_z(self, draw_idx: usize) -> i16 {
+        song_lua_add_z(self.base, draw_idx.min(i16::MAX as usize) as i16).min(self.ceiling)
+    }
+}
+
+const SONG_LUA_BACKGROUND_DEPTH: SongLuaLayerDepth = SongLuaLayerDepth {
+    base: 0,
+    ceiling: SONG_LUA_PLAYER_LAYER_Z_BASE - 1,
+};
+const SONG_LUA_FOREGROUND_DEPTH: SongLuaLayerDepth = SongLuaLayerDepth {
+    base: SONG_LUA_OVERLAY_LAYER_Z_BASE,
+    ceiling: i16::MAX,
+};
+
 fn song_lua_rounded_z(value: f32) -> i16 {
     if !value.is_finite() {
         return 0;
@@ -17865,7 +17893,8 @@ fn prepare_song_lua_layer(
     order_cache: &mut SongLuaOverlayOrderCache,
     order_scratch: &mut Vec<usize>,
     aft_capture_scratch: &mut SongLuaAftCaptureScratch,
-) -> Option<i16> {
+    depth: SongLuaLayerDepth,
+) -> Option<SongLuaLayerDepth> {
     if overlays.is_empty() {
         order_scratch.clear();
         return None;
@@ -17878,6 +17907,7 @@ fn prepare_song_lua_layer(
         order_cache,
         order_scratch,
         aft_capture_scratch,
+        depth,
     ))
 }
 
@@ -17889,15 +17919,12 @@ fn prepare_active_song_lua_layer(
     order_cache: &mut SongLuaOverlayOrderCache,
     order_scratch: &mut Vec<usize>,
     aft_capture_scratch: &mut SongLuaAftCaptureScratch,
-) -> i16 {
+    depth: SongLuaLayerDepth,
+) -> SongLuaLayerDepth {
     aft_capture_scratch.begin_frame();
-    let base_z = song_lua_add_z(
-        SONG_LUA_OVERLAY_LAYER_Z_BASE,
-        song_lua_rounded_z(song_foreground_state.z),
-    );
     out.reserve(overlays.len());
     song_lua_overlay_order_into(overlays, overlay_states, order_cache, None, order_scratch);
-    base_z
+    depth.shifted(song_foreground_state.z)
 }
 
 fn push_song_lua_layer_actors(
@@ -17922,8 +17949,9 @@ fn push_song_lua_layer_actors(
     capture_order_scratch: &mut Vec<usize>,
     aft_capture_scratch: &mut SongLuaAftCaptureScratch,
     projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
+    depth: SongLuaLayerDepth,
 ) {
-    let Some(song_lua_overlay_base_z) = prepare_song_lua_layer(
+    let Some(song_lua_depth) = prepare_song_lua_layer(
         out,
         overlays,
         overlay_states,
@@ -17931,6 +17959,7 @@ fn push_song_lua_layer_actors(
         order_cache,
         order_scratch,
         aft_capture_scratch,
+        depth,
     ) else {
         return;
     };
@@ -17951,10 +17980,7 @@ fn push_song_lua_layer_actors(
             .get(idx)
             .copied()
             .unwrap_or_else(SongLuaOverlayState::default);
-        let z = song_lua_add_z(
-            song_lua_overlay_base_z,
-            draw_idx.min(i16::MAX as usize) as i16,
-        );
+        let z = song_lua_depth.draw_z(draw_idx);
         match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {
                 if let Some((player_index, sources)) =
@@ -18399,6 +18425,7 @@ pub fn push_actors(
             song_lua_capture_order_scratch,
             aft_capture_scratch,
             projected_mesh_scratch,
+            SONG_LUA_BACKGROUND_DEPTH,
         );
     }
     song_lua_capture_new_actors(
@@ -20110,6 +20137,7 @@ pub fn push_actors(
         song_lua_capture_order_scratch,
         song_lua_aft_capture_scratch,
         song_lua_projected_mesh_scratch,
+        SONG_LUA_FOREGROUND_DEPTH,
     );
     if let Some(actor) = build_foreground_media(
         state,
@@ -20167,6 +20195,7 @@ pub fn push_actors(
             song_lua_capture_order_scratch,
             aft_capture_scratch,
             projected_mesh_scratch,
+            SONG_LUA_FOREGROUND_DEPTH,
         );
     }
     if !hide_gameplay_hud {
@@ -21387,6 +21416,7 @@ mod tests {
             &mut legacy_order_cache,
             &mut legacy_order,
             &mut legacy_aft,
+            SONG_LUA_FOREGROUND_DEPTH,
         );
         assert_eq!(
             prepare_song_lua_layer(
@@ -21397,6 +21427,7 @@ mod tests {
                 &mut fast_order_cache,
                 &mut fast_order,
                 &mut fast_aft,
+                SONG_LUA_FOREGROUND_DEPTH,
             ),
             None
         );
@@ -23589,6 +23620,7 @@ mod tests {
             &mut capture_order_scratch,
             &mut aft_capture_scratch,
             &mut projected_mesh_scratch,
+            SONG_LUA_FOREGROUND_DEPTH,
         );
 
         assert_eq!(out.len(), 3);
@@ -24967,6 +24999,7 @@ mod tests {
             &mut capture_order_scratch,
             &mut aft_capture_scratch,
             &mut projected_mesh_scratch,
+            SONG_LUA_FOREGROUND_DEPTH,
         );
 
         assert_eq!(out.len(), 4);
@@ -28945,7 +28978,10 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_foreground_overlays_cover_notefield_layer() {
+    fn song_lua_layers_keep_background_player_foreground_order() {
+        let highest_background = SONG_LUA_BACKGROUND_DEPTH
+            .shifted(f32::MAX)
+            .draw_z(usize::MAX);
         let player_layer = song_lua_player_layer_z(
             true,
             &SongLuaCapturedActor::default(),
@@ -28955,6 +28991,10 @@ mod tests {
         let highest_notefield_layer = song_lua_add_z(player_layer, 200);
         let foreground_layer = song_lua_add_z(SONG_LUA_OVERLAY_LAYER_Z_BASE, 0);
 
+        assert!(
+            highest_background < player_layer,
+            "background Lua must stay below the isolated player/notefield subtree"
+        );
         assert!(
             highest_notefield_layer <= foreground_layer,
             "foreground Lua should draw over the isolated player/notefield subtree"
