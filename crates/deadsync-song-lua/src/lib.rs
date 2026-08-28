@@ -6582,6 +6582,58 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_contains_update_errors_in_itg_order() {
+        let song_dir = test_dir("set-update-function-error-order");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local order = ""
+local recorded = false
+local function mark(value)
+    if not recorded then order = order .. value end
+end
+
+return Def.ActorFrame{
+    OnCommand=function(self)
+        self:SetUpdateFunction(function()
+            mark("p")
+            if not recorded then
+                recorded = true
+                mod_actions = {{1, order, true}}
+            end
+        end)
+    end,
+    Def.ActorFrame{
+        OnCommand=function(self)
+            self:SetUpdateFunction(function()
+                mark("a")
+                missing_global:x(1)
+            end)
+        end,
+    },
+    Def.ActorFrame{
+        OnCommand=function(self)
+            self:SetUpdateFunction(function()
+                mark("b")
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "SetUpdateFunction Error Order"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "abp");
+    }
+
+    #[test]
     fn compile_song_lua_drains_update_function_queuecommands() {
         let song_dir = test_dir("set-update-function-queuecommand");
         let entry = song_dir.join("default.lua");

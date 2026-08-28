@@ -65,6 +65,9 @@ const SONG_LUA_AFT_COUNTER_KEY: &str = "__songlua_aft_counter";
 const DRAW_CALLBACK_ACTIVE_KEY: &str = "__songlua_draw_callback_active";
 const MANUAL_DRAW_STATE_KEY: &str = "__songlua_manual_draw_state";
 const ACTIVE_BROADCAST_KEY: &str = "__songlua_active_broadcast";
+const UPDATE_FN_ERROR_KEY: &str = "__songlua_update_function_error_reported";
+const UPDATE_CMD_ERROR_KEY: &str = "__songlua_update_command_error_reported";
+const UPDATE_QUEUE_ERROR_KEY: &str = "__songlua_update_queue_error_reported";
 
 pub struct TopScreenLuaTables {
     pub top_screen: Table,
@@ -7216,6 +7219,77 @@ fn actor_update_rate(actor: &Table) -> mlua::Result<f64> {
     })
 }
 
+fn report_update_error(
+    actor: &Table,
+    reported_key: &'static str,
+    callback: &'static str,
+    err: &mlua::Error,
+) -> mlua::Result<()> {
+    if actor.get::<Option<bool>>(reported_key)?.unwrap_or(false) {
+        return Ok(());
+    }
+    actor.set(reported_key, true)?;
+    log::warn!(
+        "Song lua {callback} failed for {}; preserving partial update state: {err}",
+        actor_debug_label(actor),
+    );
+    Ok(())
+}
+
+fn run_recurring_update(
+    lua: &Lua,
+    actor: &Table,
+    delta_seconds: f64,
+    enabled: bool,
+) -> mlua::Result<()> {
+    if !enabled
+        || !actor
+            .get::<Option<bool>>("__songlua_recurring_update_command")?
+            .unwrap_or(false)
+    {
+        return Ok(());
+    }
+    let interval = actor
+        .get::<Option<f64>>("__songlua_recurring_update_interval")?
+        .unwrap_or(0.0);
+    let runs = if interval > f64::EPSILON {
+        let elapsed = actor
+            .get::<Option<f64>>("__songlua_recurring_update_elapsed")?
+            .unwrap_or(0.0)
+            + delta_seconds.max(0.0);
+        let runs = ((elapsed + f64::EPSILON) / interval).floor().min(64.0) as usize;
+        actor.set(
+            "__songlua_recurring_update_elapsed",
+            (elapsed - interval * runs as f64).max(0.0),
+        )?;
+        runs
+    } else {
+        1
+    };
+    for _ in 0..runs {
+        if let Err(err) = run_actor_named_command(lua, actor, "UpdateCommand") {
+            report_update_error(actor, UPDATE_CMD_ERROR_KEY, "UpdateCommand", &err)?;
+        }
+    }
+    Ok(())
+}
+
+fn run_update_callback(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Result<()> {
+    let Some(update) = actor.get::<Option<Function>>("__songlua_update_function")? else {
+        return Ok(());
+    };
+    let update_result =
+        call_actor_function(lua, actor, &update, Some(Value::Number(delta_seconds)));
+    let drain_result = drain_actor_command_queue(lua, actor);
+    if let Err(err) = update_result {
+        report_update_error(actor, UPDATE_FN_ERROR_KEY, "update function", &err)?;
+    }
+    if let Err(err) = drain_result {
+        report_update_error(actor, UPDATE_QUEUE_ERROR_KEY, "update queue", &err)?;
+    }
+    Ok(())
+}
+
 pub fn run_actor_update_functions_for_table(
     lua: &Lua,
     actor: &Table,
@@ -7231,35 +7305,9 @@ fn run_actor_update_functions_for_table_inner(
     run_recurring_commands: bool,
 ) -> mlua::Result<()> {
     let delta_seconds = parent_delta_seconds * actor_update_rate(actor)?;
-    if let Some(update) = actor.get::<Option<Function>>("__songlua_update_function")? {
-        call_actor_function(lua, actor, &update, Some(Value::Number(delta_seconds)))?;
-        drain_actor_command_queue(lua, actor)?;
-    }
-    if run_recurring_commands
-        && actor
-            .get::<Option<bool>>("__songlua_recurring_update_command")?
-            .unwrap_or(false)
-    {
-        let interval = actor
-            .get::<Option<f64>>("__songlua_recurring_update_interval")?
-            .unwrap_or(0.0);
-        if interval > f64::EPSILON {
-            let elapsed = actor
-                .get::<Option<f64>>("__songlua_recurring_update_elapsed")?
-                .unwrap_or(0.0)
-                + delta_seconds.max(0.0);
-            let runs = ((elapsed + f64::EPSILON) / interval).floor().min(64.0) as usize;
-            actor.set(
-                "__songlua_recurring_update_elapsed",
-                (elapsed - interval * runs as f64).max(0.0),
-            )?;
-            for _ in 0..runs {
-                run_actor_named_command(lua, actor, "UpdateCommand")?;
-            }
-        } else {
-            run_actor_named_command(lua, actor, "UpdateCommand")?;
-        }
-    }
+    // ITGmania runs Actor::UpdateInternal (including queued UpdateCommands),
+    // then child updates, then the ActorFrame update function.
+    run_recurring_update(lua, actor, delta_seconds, run_recurring_commands)?;
     for child in actor.sequence_values::<Value>() {
         let Value::Table(child) = child? else {
             continue;
@@ -7280,6 +7328,7 @@ fn run_actor_update_functions_for_table_inner(
             run_recurring_commands,
         )?;
     }
+    run_update_callback(lua, actor, delta_seconds)?;
     Ok(())
 }
 
