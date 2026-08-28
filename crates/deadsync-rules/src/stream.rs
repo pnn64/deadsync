@@ -50,7 +50,9 @@ pub struct StreamOutputs {
 #[must_use]
 pub fn measure_densities(data: &[u8], lanes: usize) -> Vec<usize> {
     match lanes {
+        5 => measure_densities_impl::<5>(data),
         8 => measure_densities_impl::<8>(data),
+        10 => measure_densities_impl::<10>(data),
         _ => measure_densities_impl::<4>(data),
     }
 }
@@ -59,7 +61,9 @@ pub fn measure_densities(data: &[u8], lanes: usize) -> Vec<usize> {
 #[must_use]
 pub fn stream_measure_densities(data: &[u8], lanes: usize) -> Vec<u8> {
     match lanes {
+        5 => stream_measure_densities_impl::<5>(data),
         8 => stream_measure_densities_impl::<8>(data),
+        10 => stream_measure_densities_impl::<10>(data),
         _ => stream_measure_densities_impl::<4>(data),
     }
 }
@@ -76,7 +80,9 @@ pub fn stream_run_progress(
     current_measure: usize,
 ) -> Option<(usize, usize)> {
     match lanes {
+        5 => stream_run_progress_impl::<5>(data, threshold, current_measure),
         8 => stream_run_progress_impl::<8>(data, threshold, current_measure),
+        10 => stream_run_progress_impl::<10>(data, threshold, current_measure),
         _ => stream_run_progress_impl::<4>(data, threshold, current_measure),
     }
 }
@@ -977,6 +983,26 @@ mod tests {
     }
 
     #[test]
+    fn measure_densities_support_pump_lanes() {
+        let single = b"00001\n10000\n,\n00000\n;";
+        let double = b"0000100000\n0000000001\n,\n0000000000\n;";
+
+        assert_eq!(measure_densities(single, 5), vec![2, 0]);
+        assert_eq!(measure_densities(double, 10), vec![2, 0]);
+    }
+
+    #[test]
+    fn stream_density_counts_pump_outer_lanes() {
+        let mut single = b"00001\n".repeat(16);
+        single.extend_from_slice(b";\n");
+        let mut double = b"0000000001\n".repeat(16);
+        double.extend_from_slice(b";\n");
+
+        assert_eq!(stream_measure_densities(&single, 5), [16]);
+        assert_eq!(stream_measure_densities(&double, 10), [16]);
+    }
+
+    #[test]
     fn measure_densities_counts_steps_without_row_scratch() {
         let data = b"  // ignored\r\n  1000\r\n0000\nM000\n2000\n3000\n4000\n,\n,\n0100\n";
 
@@ -1034,6 +1060,11 @@ mod tests {
             stream_run_progress(&eight_lane_data, 8, 16, 2),
             Some((2, 3))
         );
+
+        let five_lane_data = note_data_from_densities::<5>(&densities);
+        let ten_lane_data = note_data_from_densities::<10>(&densities);
+        assert_eq!(stream_run_progress(&five_lane_data, 5, 16, 2), Some((2, 3)));
+        assert_eq!(stream_run_progress(&ten_lane_data, 10, 16, 2), Some((2, 3)));
     }
 
     #[test]
