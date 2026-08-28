@@ -10401,21 +10401,45 @@ fn song_lua_direct_proxy(
     if !song_lua_overlay_is_visible(state) || source.draw_start >= source.draw_end {
         return None;
     }
+    let transformed = song_lua_proxy_needs_transform(state);
+    let (offset, enclosing_camera, camera) = if transformed {
+        let source_view_proj = song_lua_proxy_source_view_proj();
+        let transform = song_lua_proxy_transform(
+            state,
+            [-source.target[0], -source.target[1]],
+            overlay_space_width,
+            overlay_space_height,
+            screen_width(),
+            screen_height(),
+        );
+        let prefix = source_view_proj * transform * source_view_proj.inverse();
+        (
+            [0.0, 0.0],
+            Some(source_view_proj * transform),
+            source.camera.map(|camera| prefix * camera),
+        )
+    } else {
+        (
+            [
+                state.x * screen_width() / overlay_space_width.max(1.0) - source.target[0],
+                state.y * screen_height() / overlay_space_height.max(1.0) - source.target[1],
+            ],
+            None,
+            source.camera,
+        )
+    };
     Some(SongLuaDirectProxy {
         actor_insert,
         player,
         draws: source.draws,
         draw_start: source.draw_start,
         draw_end: source.draw_end,
-        offset: [
-            state.x * screen_width() / overlay_space_width.max(1.0) - source.target[0],
-            state.y * screen_height() / overlay_space_height.max(1.0) - source.target[1],
-        ],
+        offset,
         z,
         style: FlatProxyStyle::new(source.tint, state.diffuse, source.x_fold),
         blend: song_lua_overlay_blend(state.blend),
-        enclosing_camera: None,
-        camera: source.camera,
+        enclosing_camera,
+        camera,
         tail: None,
     })
 }
@@ -25935,6 +25959,104 @@ mod tests {
         )]);
         assert_eq!(
             compare_render_frames_semantic(&aft_actor_frame, &aft_direct_frame),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn transformed_direct_proxy_matches_actor_proxy_matrix() {
+        let metrics = deadlib_present::space::metrics_for_window(854, 480);
+        deadlib_present::space::set_current_metrics(metrics);
+        let draw = FlatDraw::Sprite(deadlib_present::actors::FlatSprite {
+            center: [410.0, 180.0],
+            world_z: 96.0,
+            size: [32.0, 24.0],
+            source: deadlib_present::actors::SpriteSource::Solid,
+            tint: [0.8, 0.6, 0.4, 0.9],
+            glow: [0.0; 4],
+            uv_rect: [0.0, 0.0, 1.0, 1.0],
+            flip_x: false,
+            flip_y: false,
+            fade: [0.0; 4],
+            blend: BlendMode::Alpha,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            z: 7,
+        });
+        let source_camera = Matrix4::from_translation(Vector3::new(0.05, -0.08, 0.0))
+            * song_lua_proxy_source_view_proj();
+        let source = [Arc::<[Actor]>::from([
+            Actor::CameraPush {
+                view_proj: source_camera,
+            },
+            actor_from_flat_draw(draw.clone()),
+            Actor::CameraPop,
+        ])];
+        let proxy_state = SongLuaOverlayState {
+            x: 510.0,
+            y: 190.0,
+            z: 24.0,
+            zoom_x: 0.85,
+            zoom_y: 1.1,
+            zoom_z: 0.2,
+            rot_x_deg: 7.0,
+            rot_y_deg: -11.0,
+            rot_z_deg: 5.0,
+            skew_x: 0.08,
+            ..SongLuaOverlayState::default()
+        };
+        let actor =
+            song_lua_build_proxy_actor(proxy_state, 321, &source, screen_width(), screen_height())
+                .expect("transformed ActorProxy control should render");
+        let direct = song_lua_direct_proxy(
+            proxy_state,
+            321,
+            SongLuaDirectProxySource {
+                draws: SongLuaDirectDraws::Field,
+                draw_start: 0,
+                draw_end: 1,
+                target: [0.0, 0.0],
+                tint: [1.0; 4],
+                x_fold: None,
+                camera: Some(source_camera),
+            },
+            0,
+            0,
+            screen_width(),
+            screen_height(),
+        )
+        .expect("transformed direct ActorProxy should render");
+        let draws = [draw];
+        let resources = ActorResourceArena::new(0);
+        let fonts = font::FontMap::default();
+        let compose = |segment: ActorSegment<'_>| {
+            let mut text = TextLayoutCache::default();
+            let mut scratch = ComposeScratch::default();
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[segment],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut text,
+                &mut scratch,
+                &NullTextureContext,
+                &resources,
+            )
+        };
+        let actor_frame = compose(ActorSegment::new(std::slice::from_ref(&actor)));
+        let direct_frame = compose(ActorSegment::flat_proxy_styled_with_cameras(
+            &draws,
+            direct.offset,
+            direct.z,
+            &direct.style,
+            direct.blend,
+            direct.enclosing_camera.as_ref(),
+            direct.camera.as_ref(),
+        ));
+
+        assert_eq!(
+            compare_render_frames_semantic(&actor_frame, &direct_frame),
             Ok(())
         );
     }

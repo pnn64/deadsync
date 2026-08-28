@@ -6754,11 +6754,12 @@ return Def.ActorFrame{
     Def.ActorFrame{
         FireMessageCommand=function(self)
             capture_fired = true
+            target:aux(6)
             target:visible(true):x(99)
         end,
         InitCommand=function(self)
             self:SetUpdateFunction(function()
-                if capture_fired then target:y(77) end
+                if capture_fired or target:getaux() > 0 then target:y(77) end
             end)
         end,
     },

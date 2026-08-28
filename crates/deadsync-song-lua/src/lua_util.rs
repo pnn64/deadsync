@@ -4384,8 +4384,9 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "aux",
         lua.create_function({
             let actor = actor.clone();
-            move |_, args: MultiValue| {
+            move |lua, args: MultiValue| {
                 if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+                    prepare_capture_scope_actor(lua, &actor)?;
                     actor.set("__songlua_aux", value)?;
                 }
                 Ok(actor.clone())
