@@ -8588,6 +8588,13 @@ struct SongLuaDirectProxySource {
     tint: [f32; 4],
     x_fold: Option<ActorXFold>,
     camera: Option<Matrix4>,
+    player_camera: Option<SongLuaDirectPlayerCamera>,
+}
+
+#[derive(Clone, Copy)]
+struct SongLuaDirectPlayerCamera {
+    base: Matrix4,
+    suffix: Matrix4,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -10403,7 +10410,6 @@ fn song_lua_direct_proxy(
     }
     let transformed = song_lua_proxy_needs_transform(state);
     let (offset, enclosing_camera, camera) = if transformed {
-        let source_view_proj = song_lua_proxy_source_view_proj();
         let transform = song_lua_proxy_transform(
             state,
             [-source.target[0], -source.target[1]],
@@ -10412,12 +10418,26 @@ fn song_lua_direct_proxy(
             screen_width(),
             screen_height(),
         );
-        let prefix = source_view_proj * transform * source_view_proj.inverse();
-        (
-            [0.0, 0.0],
-            Some(source_view_proj * transform),
-            source.camera.map(|camera| prefix * camera),
-        )
+        if let Some(player_camera) = source.player_camera {
+            // ITGmania's ActorProxy draws its target with the proxy transform
+            // already on the world stack. Player then installs the notefield
+            // projection and applies its own transform, so the order is
+            // projection * proxy * Player. In particular, an enclosing
+            // zoomz(0) must flatten Bumpy before perspective projection.
+            (
+                [0.0, 0.0],
+                None,
+                Some(player_camera.base * transform * player_camera.suffix),
+            )
+        } else {
+            let source_view_proj = song_lua_proxy_source_view_proj();
+            let prefix = source_view_proj * transform * source_view_proj.inverse();
+            (
+                [0.0, 0.0],
+                Some(source_view_proj * transform),
+                source.camera.map(|camera| prefix * camera),
+            )
+        }
     } else {
         (
             [
@@ -17046,11 +17066,21 @@ fn song_lua_player_transform_is_direct_hud_proxy(transform: SongLuaCaptureTransf
     song_lua_player_transform_is_direct_proxy(transform)
 }
 
+#[cfg(test)]
 fn song_lua_direct_field_camera(
     field_camera: Option<Matrix4>,
     transform: SongLuaCaptureTransform,
 ) -> Option<Matrix4> {
-    let player_transform = song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
+    let player_transform = song_lua_player_camera_suffix(transform);
+    match (field_camera, player_transform) {
+        (Some(camera), Some(player_transform)) => Some(camera * player_transform),
+        (None, Some(player_transform)) => Some(song_lua_player_root_camera(player_transform)),
+        (camera, None) => camera,
+    }
+}
+
+fn song_lua_player_camera_suffix(transform: SongLuaCaptureTransform) -> Option<Matrix4> {
+    song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
         screen_width: screen_width(),
         screen_height: screen_height(),
         screen_center_y: screen_center_y(),
@@ -17064,12 +17094,7 @@ fn song_lua_direct_field_camera(
         zoom_x: transform.zoom_x,
         zoom_y: transform.zoom_y,
         zoom_z: transform.zoom_z,
-    });
-    match (field_camera, player_transform) {
-        (Some(camera), Some(player_transform)) => Some(camera * player_transform),
-        (None, Some(player_transform)) => Some(song_lua_player_root_camera(player_transform)),
-        (camera, None) => camera,
-    }
+    })
 }
 
 #[cfg(feature = "bench-support")]
@@ -18868,6 +18893,19 @@ pub fn push_actors(
                 && song_lua_player_transform_is_direct_proxy(capture_transform)
                 && field_scratch.is_empty()
                 && hud_scratch.is_empty();
+            let needs_direct_camera = direct_player
+                || direct_note_field_candidates[player_idx]
+                || direct_judgment_candidates[player_idx]
+                || direct_combo_candidates[player_idx];
+            let direct_camera_suffix = needs_direct_camera
+                .then(|| song_lua_player_camera_suffix(capture_transform))
+                .flatten();
+            let direct_hud_camera = direct_camera_suffix.map(song_lua_player_root_camera);
+            let direct_field_camera = match (proxy_field_camera, direct_camera_suffix) {
+                (Some(camera), Some(suffix)) => Some(camera * suffix),
+                (None, Some(suffix)) => Some(song_lua_player_root_camera(suffix)),
+                (camera, None) => camera,
+            };
             let captured_player_source = if requests.player && !direct_player {
                 let scratch = song_lua_proxy_actor_scratch
                     .as_mut()
@@ -18895,6 +18933,8 @@ pub fn push_actors(
                     // Whole-Player capture retains the Player transform in the
                     // source and lets ActorProxy add its authored placement.
                     let target = [0.0, 0.0];
+                    let suffix = direct_camera_suffix.unwrap_or(Matrix4::IDENTITY);
+                    let root_base = song_lua_player_root_camera(Matrix4::IDENTITY);
                     [
                         SongLuaDirectProxySource {
                             draws: SongLuaDirectDraws::Hud,
@@ -18903,7 +18943,11 @@ pub fn push_actors(
                             target,
                             tint: capture_transform.tint,
                             x_fold: direct_x_fold,
-                            camera: song_lua_direct_field_camera(None, capture_transform),
+                            camera: direct_hud_camera,
+                            player_camera: Some(SongLuaDirectPlayerCamera {
+                                base: root_base,
+                                suffix,
+                            }),
                         },
                         SongLuaDirectProxySource {
                             draws: SongLuaDirectDraws::Field,
@@ -18912,10 +18956,11 @@ pub fn push_actors(
                             target,
                             tint: capture_transform.tint,
                             x_fold: direct_x_fold,
-                            camera: song_lua_direct_field_camera(
-                                proxy_field_camera,
-                                capture_transform,
-                            ),
+                            camera: direct_field_camera,
+                            player_camera: Some(SongLuaDirectPlayerCamera {
+                                base: proxy_field_camera.unwrap_or(root_base),
+                                suffix,
+                            }),
                         },
                     ]
                 })
@@ -18937,7 +18982,8 @@ pub fn push_actors(
                     target: [capture_transform.target_x, capture_transform.target_y],
                     tint: capture_transform.tint,
                     x_fold: direct_x_fold,
-                    camera: song_lua_direct_field_camera(proxy_field_camera, capture_transform),
+                    camera: direct_field_camera,
+                    player_camera: None,
                 });
             let note_field_source = if direct_note_field_candidates[player_idx] {
                 (!direct_note_field)
@@ -18983,7 +19029,8 @@ pub fn push_actors(
                     target: [capture_transform.target_x, capture_transform.target_y],
                     tint: capture_transform.tint,
                     x_fold: direct_x_fold,
-                    camera: song_lua_direct_field_camera(None, capture_transform),
+                    camera: direct_hud_camera,
+                    player_camera: None,
                 });
             let judgment_source = if direct_judgment_candidates[player_idx] {
                 (!direct_judgment)
@@ -19019,7 +19066,8 @@ pub fn push_actors(
                     target: [capture_transform.target_x, capture_transform.target_y],
                     tint: capture_transform.tint,
                     x_fold: direct_x_fold,
-                    camera: song_lua_direct_field_camera(None, capture_transform),
+                    camera: direct_hud_camera,
+                    player_camera: None,
                 });
             let combo_source = if direct_combo_candidates[player_idx] {
                 (!direct_combo)
@@ -23744,6 +23792,7 @@ mod tests {
                     tint: [1.0; 4],
                     x_fold: None,
                     camera: Some(Matrix4::IDENTITY),
+                    player_camera: None,
                 }),
                 None,
             ],
@@ -23756,6 +23805,7 @@ mod tests {
                     tint: [1.0; 4],
                     x_fold: None,
                     camera: None,
+                    player_camera: None,
                 }),
                 None,
             ],
@@ -23768,6 +23818,7 @@ mod tests {
                     tint: [1.0; 4],
                     x_fold: None,
                     camera: None,
+                    player_camera: None,
                 }),
                 None,
             ],
@@ -25910,6 +25961,7 @@ mod tests {
             tint: transform.tint,
             x_fold: song_lua_player_x_fold(transform),
             camera,
+            player_camera: None,
         };
         let mut aft_direct = song_lua_direct_proxy(
             proxy_state,
@@ -26019,6 +26071,7 @@ mod tests {
                 tint: [1.0; 4],
                 x_fold: None,
                 camera: Some(source_camera),
+                player_camera: None,
             },
             0,
             0,
@@ -26059,6 +26112,65 @@ mod tests {
             compare_render_frames_semantic(&actor_frame, &direct_frame),
             Ok(())
         );
+    }
+
+    #[test]
+    fn transformed_player_proxy_flattens_depth_before_perspective() {
+        let metrics = deadlib_present::space::metrics_for_window(854, 480);
+        deadlib_present::space::set_current_metrics(metrics);
+        let base = Matrix4::from_cols_array(&[
+            1.0, 0.0, 0.0, 0.0, //
+            0.0, 1.0, 0.0, 0.0, //
+            0.0, 0.0, 1.0, 0.001, // perspective divide varies with source Z
+            0.0, 0.0, 0.0, 1.0,
+        ]);
+        let suffix = Matrix4::from_translation(Vector3::new(12.0, -8.0, 0.0))
+            * Matrix4::from_scale(Vector3::new(0.9, 1.1, 1.0));
+        let proxy_state = SongLuaOverlayState {
+            x: screen_center_x(),
+            y: screen_center_y(),
+            zoom_z: 0.0,
+            ..SongLuaOverlayState::default()
+        };
+        let direct = song_lua_direct_proxy(
+            proxy_state,
+            321,
+            SongLuaDirectProxySource {
+                draws: SongLuaDirectDraws::Field,
+                draw_start: 0,
+                draw_end: 1,
+                target: [0.0, 0.0],
+                tint: [1.0; 4],
+                x_fold: None,
+                camera: Some(base * suffix),
+                player_camera: Some(SongLuaDirectPlayerCamera { base, suffix }),
+            },
+            0,
+            0,
+            screen_width(),
+            screen_height(),
+        )
+        .expect("flattened Player proxy should render");
+        let proxy_transform = song_lua_proxy_transform(
+            proxy_state,
+            [0.0, 0.0],
+            screen_width(),
+            screen_height(),
+            screen_width(),
+            screen_height(),
+        );
+        let camera = direct.camera.expect("Player proxy should resolve a camera");
+
+        assert_eq!(direct.enclosing_camera, None);
+        assert_eq!(camera, base * proxy_transform * suffix);
+        let project = |z| {
+            let clip = camera * Vector4::new(410.0, 180.0, z, 1.0);
+            [clip.x / clip.w, clip.y / clip.w]
+        };
+        let near = project(-96.0);
+        let far = project(96.0);
+        assert!((near[0] - far[0]).abs() <= 1e-5);
+        assert!((near[1] - far[1]).abs() <= 1e-5);
     }
 
     #[test]
@@ -26158,6 +26270,7 @@ mod tests {
                     tint: [1.0; 4],
                     x_fold: None,
                     camera: source_camera,
+                    player_camera: None,
                 },
                 0,
                 0,
