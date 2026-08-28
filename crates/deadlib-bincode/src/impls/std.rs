@@ -8,6 +8,47 @@ use std::{
     hash::{BuildHasher, Hash},
 };
 
+pub(crate) fn decode_hash_map_into<Context, K, V, S, D>(
+    decoder: &mut D,
+    map: &mut HashMap<K, V, S>,
+) -> Result<(), DecodeError>
+where
+    K: Decode<Context> + Eq + Hash,
+    V: Decode<Context>,
+    S: BuildHasher,
+    D: Decoder<Context = Context>,
+{
+    map.clear();
+    let len = crate::de::decode_slice_len(decoder)?;
+    decoder.claim_container_read::<(K, V)>(len)?;
+    map.reserve(len);
+    for _ in 0..len {
+        decoder.unclaim_bytes_read(std::mem::size_of::<(K, V)>());
+        map.insert(K::decode(decoder)?, V::decode(decoder)?);
+    }
+    Ok(())
+}
+
+pub(crate) fn decode_hash_set_into<Context, T, S, D>(
+    decoder: &mut D,
+    set: &mut HashSet<T, S>,
+) -> Result<(), DecodeError>
+where
+    T: Decode<Context> + Eq + Hash,
+    S: BuildHasher,
+    D: Decoder<Context = Context>,
+{
+    set.clear();
+    let len = crate::de::decode_slice_len(decoder)?;
+    decoder.claim_container_read::<T>(len)?;
+    set.reserve(len);
+    for _ in 0..len {
+        decoder.unclaim_bytes_read(std::mem::size_of::<T>());
+        set.insert(T::decode(decoder)?);
+    }
+    Ok(())
+}
+
 impl std::error::Error for EncodeError {}
 
 impl std::error::Error for DecodeError {

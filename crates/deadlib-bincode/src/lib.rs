@@ -76,6 +76,63 @@ pub fn decode_from_slice_into_vec<T: de::Decode<()>, C: Config>(
     Ok(src.len() - decoder.reader().slice.len())
 }
 
+/// Decode a string from a byte slice while reusing its allocation.
+///
+/// `value` is cleared before decoding but retains its capacity. After one
+/// sufficiently large call, repeated calls can therefore decode without
+/// allocator traffic. On failure, `value` is empty.
+pub fn decode_from_slice_into_string<C: Config>(
+    src: &[u8],
+    value: &mut String,
+    config: C,
+) -> Result<usize, error::DecodeError> {
+    let reader = de::read::SliceReader::new(src);
+    let mut decoder = de::DecoderImpl::<_, C, ()>::new(reader, config, ());
+    impls::decode_string_into(&mut decoder, value)?;
+    Ok(src.len() - decoder.reader().slice.len())
+}
+
+/// Decode a hash map from a byte slice while reusing its allocation.
+///
+/// `values` is cleared before decoding but retains its buckets and hasher. On
+/// failure, it may contain a successfully decoded prefix.
+pub fn decode_from_slice_into_hash_map<K, V, S, C>(
+    src: &[u8],
+    values: &mut std::collections::HashMap<K, V, S>,
+    config: C,
+) -> Result<usize, error::DecodeError>
+where
+    K: de::Decode<()> + Eq + std::hash::Hash,
+    V: de::Decode<()>,
+    S: std::hash::BuildHasher,
+    C: Config,
+{
+    let reader = de::read::SliceReader::new(src);
+    let mut decoder = de::DecoderImpl::<_, C, ()>::new(reader, config, ());
+    impls::decode_hash_map_into(&mut decoder, values)?;
+    Ok(src.len() - decoder.reader().slice.len())
+}
+
+/// Decode a hash set from a byte slice while reusing its allocation.
+///
+/// `values` is cleared before decoding but retains its buckets and hasher. On
+/// failure, it may contain a successfully decoded prefix.
+pub fn decode_from_slice_into_hash_set<T, S, C>(
+    src: &[u8],
+    values: &mut std::collections::HashSet<T, S>,
+    config: C,
+) -> Result<usize, error::DecodeError>
+where
+    T: de::Decode<()> + Eq + std::hash::Hash,
+    S: std::hash::BuildHasher,
+    C: Config,
+{
+    let reader = de::read::SliceReader::new(src);
+    let mut decoder = de::DecoderImpl::<_, C, ()>::new(reader, config, ());
+    impls::decode_hash_set_into(&mut decoder, values)?;
+    Ok(src.len() - decoder.reader().slice.len())
+}
+
 /// Decode a borrowed value from a byte slice using the given configuration.
 ///
 /// The returned value may borrow strings and byte slices directly from `src`,

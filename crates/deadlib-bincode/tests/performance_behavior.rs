@@ -1,4 +1,5 @@
 use bincode::{BorrowDecode, Decode, Encode};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, PartialEq, Encode, BorrowDecode)]
 struct BorrowedPayload<'a> {
@@ -70,6 +71,91 @@ fn reusable_vector_decode_preserves_limits_and_error_prefix() {
         bincode::error::DecodeError::UnexpectedEnd { additional: 1 }
     ));
     assert_eq!(decoded, [1]);
+}
+
+#[test]
+fn reusable_string_decode_matches_allocating_decode() {
+    let value = "DeadSync allocation reuse ".repeat(4_096);
+    let config = bincode::config::standard();
+    let mut encoded = bincode::encode_to_vec(&value, config).unwrap();
+    encoded.extend_from_slice(b"trailing");
+    let expected = bincode::decode_from_slice::<String, _>(&encoded, config).unwrap();
+    let mut decoded = String::with_capacity(value.len() * 2);
+    decoded.push_str("discarded contents");
+    let allocation = decoded.as_ptr();
+
+    let used = bincode::decode_from_slice_into_string(&encoded, &mut decoded, config).unwrap();
+    assert_eq!((&decoded, used), (&expected.0, expected.1));
+    assert_eq!(decoded.as_ptr(), allocation);
+
+    let shorter = bincode::encode_to_vec("short", config).unwrap();
+    let used = bincode::decode_from_slice_into_string(&shorter, &mut decoded, config).unwrap();
+    assert_eq!(decoded, "short");
+    assert_eq!(used, shorter.len());
+    assert_eq!(decoded.as_ptr(), allocation);
+
+    let error =
+        bincode::decode_from_slice_into_string(&[1, 0xff], &mut decoded, config).unwrap_err();
+    assert!(matches!(error, bincode::error::DecodeError::Utf8 { .. }));
+    assert!(decoded.is_empty());
+
+    let error =
+        bincode::decode_from_slice_into_string(&[3, b'a'], &mut decoded, config).unwrap_err();
+    assert!(matches!(
+        error,
+        bincode::error::DecodeError::UnexpectedEnd { additional: 2 }
+    ));
+    assert!(decoded.is_empty());
+}
+
+#[test]
+fn reusable_hash_map_decode_matches_allocating_decode() {
+    let values = (0..128u64)
+        .map(|value| (value.wrapping_mul(1_000_003), value.rotate_left(17)))
+        .collect::<HashMap<_, _>>();
+    let config = bincode::config::standard();
+    let mut encoded = bincode::encode_to_vec(&values, config).unwrap();
+    encoded.extend_from_slice(b"trailing");
+    let expected = bincode::decode_from_slice::<HashMap<u64, u64>, _>(&encoded, config).unwrap();
+    let mut decoded = HashMap::with_capacity(values.len() * 2);
+    decoded.insert(u64::MAX, 42);
+    let capacity = decoded.capacity();
+
+    let used = bincode::decode_from_slice_into_hash_map(&encoded, &mut decoded, config).unwrap();
+    assert_eq!((&decoded, used), (&expected.0, expected.1));
+    assert_eq!(decoded.capacity(), capacity);
+
+    let error =
+        bincode::decode_from_slice_into_hash_map(&encoded, &mut decoded, config.with_limit::<16>())
+            .unwrap_err();
+    assert!(matches!(error, bincode::error::DecodeError::LimitExceeded));
+    assert!(decoded.is_empty());
+    assert_eq!(decoded.capacity(), capacity);
+}
+
+#[test]
+fn reusable_hash_set_decode_matches_allocating_decode() {
+    let values = (0..256u64)
+        .map(|value| value.wrapping_mul(1_000_003))
+        .collect::<HashSet<_>>();
+    let config = bincode::config::standard();
+    let mut encoded = bincode::encode_to_vec(&values, config).unwrap();
+    encoded.extend_from_slice(b"trailing");
+    let expected = bincode::decode_from_slice::<HashSet<u64>, _>(&encoded, config).unwrap();
+    let mut decoded = HashSet::with_capacity(values.len() * 2);
+    decoded.insert(u64::MAX);
+    let capacity = decoded.capacity();
+
+    let used = bincode::decode_from_slice_into_hash_set(&encoded, &mut decoded, config).unwrap();
+    assert_eq!((&decoded, used), (&expected.0, expected.1));
+    assert_eq!(decoded.capacity(), capacity);
+
+    let error =
+        bincode::decode_from_slice_into_hash_set(&encoded, &mut decoded, config.with_limit::<16>())
+            .unwrap_err();
+    assert!(matches!(error, bincode::error::DecodeError::LimitExceeded));
+    assert!(decoded.is_empty());
+    assert_eq!(decoded.capacity(), capacity);
 }
 
 #[test]

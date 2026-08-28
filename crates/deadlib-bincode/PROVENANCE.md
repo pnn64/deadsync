@@ -54,7 +54,10 @@ produced by the retained surface under `config::standard()`.
   avoid repeated generic decoder bookkeeping.
 - Emit each multi-byte variable-width integer with one writer call containing
   both its marker and payload.
+- Reuse caller-owned string, hash-map, and hash-set allocations during
+  top-level decoding.
 - Add paired old/new Criterion benchmarks with throughput, allocation churn,
   and Windows thread-cycle reporting. Run them with
   `cargo bench -p deadlib-bincode --bench performance -- --noplot` and
-  `cargo bench -p deadlib-bincode --bench additional_performance -- --noplot`.
+  `cargo bench -p deadlib-bincode --bench additional_performance -- --noplot`,
+  and `cargo bench -p deadlib-bincode --bench second_pass_performance -- --noplot`.

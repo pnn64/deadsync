@@ -214,6 +214,36 @@ pub(crate) fn decode_vec_into<T: Decode<Context>, Context, D: Decoder<Context = 
     Ok(())
 }
 
+pub(crate) fn decode_string_into<Context, D: Decoder<Context = Context>>(
+    decoder: &mut D,
+    value: &mut String,
+) -> Result<(), DecodeError> {
+    let mut bytes = std::mem::take(value).into_bytes();
+    if let Err(error) = decode_vec_into(decoder, &mut bytes) {
+        bytes.clear();
+        // SAFETY: an empty byte vector is valid UTF-8. Moving the allocation
+        // back also retains capacity on failed decodes.
+        *value = unsafe { String::from_utf8_unchecked(bytes) };
+        return Err(error);
+    }
+
+    match String::from_utf8(bytes) {
+        Ok(decoded) => {
+            *value = decoded;
+            Ok(())
+        }
+        Err(error) => {
+            let inner = error.utf8_error();
+            let mut bytes = error.into_bytes();
+            bytes.clear();
+            // SAFETY: an empty byte vector is valid UTF-8. Moving the
+            // allocation back keeps `value` reusable after invalid input.
+            *value = unsafe { String::from_utf8_unchecked(bytes) };
+            Err(DecodeError::Utf8 { inner })
+        }
+    }
+}
+
 impl<Context, T: Decode<Context>> Decode<Context> for Vec<T> {
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
         let len = crate::de::decode_slice_len(decoder)?;
