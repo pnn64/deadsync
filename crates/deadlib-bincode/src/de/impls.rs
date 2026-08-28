@@ -85,6 +85,59 @@ fn decode_bool_array<T, D: Decoder, const N: usize>(
     }))
 }
 
+fn decode_varint_array<T, D: Decoder, const N: usize>(
+    decoder: &mut D,
+) -> Option<Result<[T; N], DecodeError>> {
+    if D::C::INT_ENCODING != IntEncoding::Variable {
+        return None;
+    }
+
+    macro_rules! decode_as {
+        ($ty:ty, $decode:path) => {
+            if crate::unty::type_equal::<T, $ty>() {
+                let mut values = core::mem::MaybeUninit::<[T; N]>::uninit();
+                let output = values.as_mut_ptr().cast::<$ty>();
+                for index in 0..N {
+                    let value = match $decode(decoder.reader(), D::C::ENDIAN) {
+                        Ok(value) => value,
+                        Err(error) => return Some(Err(error)),
+                    };
+                    // SAFETY: `type_equal` established that T is the concrete
+                    // integer type, and index is within the N-element array.
+                    unsafe { output.add(index).write(value) };
+                }
+                // SAFETY: every one of the N array elements was initialized.
+                return Some(Ok(unsafe { values.assume_init() }));
+            }
+        };
+    }
+
+    match core::mem::size_of::<T>() {
+        2 => {
+            decode_as!(u16, crate::varint::varint_decode_u16);
+            decode_as!(i16, crate::varint::varint_decode_i16);
+        }
+        4 => {
+            decode_as!(u32, crate::varint::varint_decode_u32);
+            decode_as!(i32, crate::varint::varint_decode_i32);
+            decode_as!(usize, crate::varint::varint_decode_usize);
+            decode_as!(isize, crate::varint::varint_decode_isize);
+        }
+        8 => {
+            decode_as!(u64, crate::varint::varint_decode_u64);
+            decode_as!(i64, crate::varint::varint_decode_i64);
+            decode_as!(usize, crate::varint::varint_decode_usize);
+            decode_as!(isize, crate::varint::varint_decode_isize);
+        }
+        16 => {
+            decode_as!(u128, crate::varint::varint_decode_u128);
+            decode_as!(i128, crate::varint::varint_decode_i128);
+        }
+        _ => {}
+    }
+    None
+}
+
 impl<Context> Decode<Context> for bool {
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
         match u8::decode(decoder)? {
@@ -386,6 +439,8 @@ where
             result
         } else if let Some(result) = decode_bool_array(decoder) {
             result
+        } else if let Some(result) = decode_varint_array(decoder) {
+            result
         } else {
             let result = super::impl_core::collect_into_array(&mut (0..N).map(|_| {
                 // See the documentation on `unclaim_bytes_read` as to why we're doing this here
@@ -414,6 +469,8 @@ where
         } else if let Some(result) = decode_raw_array(decoder) {
             result
         } else if let Some(result) = decode_bool_array(decoder) {
+            result
+        } else if let Some(result) = decode_varint_array(decoder) {
             result
         } else {
             let result = super::impl_core::collect_into_array(&mut (0..N).map(|_| {

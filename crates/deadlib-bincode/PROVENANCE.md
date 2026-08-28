@@ -77,6 +77,12 @@ produced by the retained surface under `config::standard()`.
 - Encode and decode 16-, 32-, and 64-byte array collections through contiguous
   writes and reads for common identifiers, hashes, keys, and signatures while
   retaining scalar fallbacks for non-slice readers.
+- Decode allocating borrowed variable-integer vectors through the specialized
+  loop so limited configurations avoid per-element claim bookkeeping.
+- Decode variable-integer arrays through type-specialized loops while retaining
+  fixed-encoding dispatch and scalar reader fallbacks.
+- Parse opposite-endian fixed integers and floating-point vectors from one
+  contiguous input region for owned, borrowed, and caller-reused decoding.
 - Add paired old/new Criterion benchmarks with throughput, allocation churn,
   and Windows thread-cycle reporting. Run them with
   `cargo bench -p deadlib-bincode --bench performance -- --noplot` and
@@ -89,4 +95,5 @@ produced by the retained surface under `config::standard()`.
   `cargo bench -p deadlib-bincode --bench seventh_pass_performance -- --noplot`,
   `cargo bench -p deadlib-bincode --bench eighth_pass_performance -- --noplot`,
   `cargo bench -p deadlib-bincode --bench ninth_pass_performance -- --noplot`,
-  and `cargo bench -p deadlib-bincode --bench tenth_pass_performance -- --noplot`.
+  `cargo bench -p deadlib-bincode --bench tenth_pass_performance -- --noplot`,
+  and `cargo bench -p deadlib-bincode --bench eleventh_pass_performance -- --noplot`.

@@ -1701,6 +1701,315 @@ fn specialized_varint_vectors_round_trip_boundaries() {
 }
 
 #[test]
+fn borrowed_varint_vectors_cover_boundaries_limits_and_reader_fallback() {
+    macro_rules! round_trip {
+        ($values:expr) => {{
+            let values = $values;
+            {
+                let config = bincode::config::standard().with_limit::<4096>();
+                let encoded = bincode::encode_to_vec(&values, config).unwrap();
+                let decoded =
+                    bincode::borrow_decode_from_slice::<Vec<_>, _>(&encoded, config).unwrap();
+                assert_eq!(decoded, (values.clone(), encoded.len()));
+            }
+            {
+                let config = bincode::config::standard()
+                    .with_big_endian()
+                    .with_limit::<4096>();
+                let encoded = bincode::encode_to_vec(&values, config).unwrap();
+                let decoded =
+                    bincode::borrow_decode_from_slice::<Vec<_>, _>(&encoded, config).unwrap();
+                assert_eq!(decoded, (values.clone(), encoded.len()));
+            }
+        }};
+    }
+
+    round_trip!(vec![0u16, 250, 251, u16::MAX]);
+    round_trip!(vec![0u32, 250, 251, 65_536, u32::MAX]);
+    round_trip!(vec![0u64, 250, 251, 65_536, 1u64 << 32, u64::MAX]);
+    round_trip!(vec![0u128, 250, 1u128 << 64, u128::MAX]);
+    round_trip!(vec![0i16, -1, 1, i16::MIN, i16::MAX]);
+    round_trip!(vec![0i32, -1, 1, i32::MIN, i32::MAX]);
+    round_trip!(vec![0i64, -1, 1, i64::MIN, i64::MAX]);
+    round_trip!(vec![0i128, -1, 1, i128::MIN, i128::MAX]);
+    round_trip!(vec![0usize, 250, 251, usize::MAX]);
+    round_trip!(vec![0isize, -1, 1, isize::MIN, isize::MAX]);
+
+    let config = bincode::config::standard();
+    let error =
+        bincode::borrow_decode_from_slice::<Vec<u64>, _>(&[3, 1, 251, 0], config).unwrap_err();
+    assert!(matches!(
+        error,
+        bincode::error::DecodeError::UnexpectedEnd { additional: 1 }
+    ));
+    let encoded = bincode::encode_to_vec(vec![1u64, 2, 3], config).unwrap();
+    let error =
+        bincode::borrow_decode_from_slice::<Vec<u64>, _>(&encoded, config.with_limit::<16>())
+            .unwrap_err();
+    assert!(matches!(error, bincode::error::DecodeError::LimitExceeded));
+
+    struct NoPeek<'a>(&'a [u8]);
+    impl bincode::de::read::Reader for NoPeek<'_> {
+        fn read(&mut self, bytes: &mut [u8]) -> Result<(), bincode::error::DecodeError> {
+            if bytes.len() > self.0.len() {
+                return Err(bincode::error::DecodeError::UnexpectedEnd {
+                    additional: bytes.len() - self.0.len(),
+                });
+            }
+            let (read, remaining) = self.0.split_at(bytes.len());
+            bytes.copy_from_slice(read);
+            self.0 = remaining;
+            Ok(())
+        }
+    }
+    impl<'a> bincode::de::read::BorrowReader<'a> for NoPeek<'a> {
+        fn take_bytes(&mut self, length: usize) -> Result<&'a [u8], bincode::error::DecodeError> {
+            if length > self.0.len() {
+                return Err(bincode::error::DecodeError::UnexpectedEnd {
+                    additional: length - self.0.len(),
+                });
+            }
+            let (read, remaining) = self.0.split_at(length);
+            self.0 = remaining;
+            Ok(read)
+        }
+    }
+
+    let values = vec![0u64, 250, 251, 65_536, u64::MAX];
+    let encoded = bincode::encode_to_vec(&values, config).unwrap();
+    let mut decoder = bincode::de::DecoderImpl::new(NoPeek(&encoded), config, ());
+    assert_eq!(Vec::<u64>::borrow_decode(&mut decoder).unwrap(), values);
+}
+
+#[test]
+fn varint_arrays_cover_integer_types_limits_errors_and_fallback() {
+    macro_rules! round_trip {
+        ($values:expr) => {{
+            let values = $values;
+            {
+                let config = bincode::config::standard().with_limit::<4096>();
+                let encoded = bincode::encode_to_vec(values, config).unwrap();
+                assert_eq!(
+                    bincode::decode_from_slice(&encoded, config).unwrap(),
+                    (values, encoded.len())
+                );
+                assert_eq!(
+                    bincode::borrow_decode_from_slice(&encoded, config).unwrap(),
+                    (values, encoded.len())
+                );
+            }
+            {
+                let config = bincode::config::standard()
+                    .with_big_endian()
+                    .with_limit::<4096>();
+                let encoded = bincode::encode_to_vec(values, config).unwrap();
+                assert_eq!(
+                    bincode::decode_from_slice(&encoded, config).unwrap(),
+                    (values, encoded.len())
+                );
+                assert_eq!(
+                    bincode::borrow_decode_from_slice(&encoded, config).unwrap(),
+                    (values, encoded.len())
+                );
+            }
+        }};
+    }
+
+    round_trip!([0u16, 250, 251, u16::MAX]);
+    round_trip!([0u32, 250, 251, 65_536, u32::MAX]);
+    round_trip!([0u64, 250, 251, 65_536, 1u64 << 32, u64::MAX]);
+    round_trip!([0u128, 250, 1u128 << 64, u128::MAX]);
+    round_trip!([0i16, -1, 1, i16::MIN, i16::MAX]);
+    round_trip!([0i32, -1, 1, i32::MIN, i32::MAX]);
+    round_trip!([0i64, -1, 1, i64::MIN, i64::MAX]);
+    round_trip!([0i128, -1, 1, i128::MIN, i128::MAX]);
+    round_trip!([0usize, 250, 251, usize::MAX]);
+    round_trip!([0isize, -1, 1, isize::MIN, isize::MAX]);
+
+    let config = bincode::config::standard();
+    let error = bincode::decode_from_slice::<[u64; 3], _>(&[1, 251, 0], config).unwrap_err();
+    assert!(matches!(
+        error,
+        bincode::error::DecodeError::UnexpectedEnd { additional: 1 }
+    ));
+    let encoded = bincode::encode_to_vec([1u64, 2, 3], config).unwrap();
+    let error =
+        bincode::decode_from_slice::<[u64; 3], _>(&encoded, config.with_limit::<16>()).unwrap_err();
+    assert!(matches!(error, bincode::error::DecodeError::LimitExceeded));
+
+    struct NoPeek<'a>(&'a [u8]);
+    impl bincode::de::read::Reader for NoPeek<'_> {
+        fn read(&mut self, bytes: &mut [u8]) -> Result<(), bincode::error::DecodeError> {
+            if bytes.len() > self.0.len() {
+                return Err(bincode::error::DecodeError::UnexpectedEnd {
+                    additional: bytes.len() - self.0.len(),
+                });
+            }
+            let (read, remaining) = self.0.split_at(bytes.len());
+            bytes.copy_from_slice(read);
+            self.0 = remaining;
+            Ok(())
+        }
+    }
+    let values = [0u64, 250, 251, 65_536, u64::MAX];
+    let encoded = bincode::encode_to_vec(values, config).unwrap();
+    let mut decoder = bincode::de::DecoderImpl::new(NoPeek(&encoded), config, ());
+    assert_eq!(<[u64; 5]>::decode(&mut decoder).unwrap(), values);
+}
+
+#[test]
+fn endian_converting_vectors_cover_numeric_types_reuse_and_fallback() {
+    macro_rules! round_trip {
+        ($values:expr) => {{
+            let values = $values;
+            {
+                let config = bincode::config::legacy()
+                    .with_big_endian()
+                    .with_limit::<4096>();
+                let encoded = bincode::encode_to_vec(&values, config).unwrap();
+                assert_eq!(
+                    bincode::decode_from_slice::<Vec<_>, _>(&encoded, config).unwrap(),
+                    (values.clone(), encoded.len())
+                );
+                assert_eq!(
+                    bincode::borrow_decode_from_slice::<Vec<_>, _>(&encoded, config).unwrap(),
+                    (values.clone(), encoded.len())
+                );
+                let mut reused = Vec::with_capacity(values.len() * 2);
+                reused.extend_from_slice(&values);
+                let allocation = reused.as_ptr();
+                assert_eq!(
+                    bincode::decode_from_slice_into_vec(&encoded, &mut reused, config).unwrap(),
+                    encoded.len()
+                );
+                assert_eq!(reused, values);
+                assert_eq!(reused.as_ptr(), allocation);
+                let mut borrowed_reused = Vec::with_capacity(values.len() * 2);
+                borrowed_reused.extend_from_slice(&values);
+                let allocation = borrowed_reused.as_ptr();
+                assert_eq!(
+                    bincode::borrow_decode_from_slice_into_vec(
+                        &encoded,
+                        &mut borrowed_reused,
+                        config,
+                    )
+                    .unwrap(),
+                    encoded.len()
+                );
+                assert_eq!(borrowed_reused, values);
+                assert_eq!(borrowed_reused.as_ptr(), allocation);
+            }
+            {
+                let config = bincode::config::legacy()
+                    .with_little_endian()
+                    .with_limit::<4096>();
+                let encoded = bincode::encode_to_vec(&values, config).unwrap();
+                assert_eq!(
+                    bincode::decode_from_slice::<Vec<_>, _>(&encoded, config).unwrap(),
+                    (values.clone(), encoded.len())
+                );
+            }
+        }};
+    }
+
+    round_trip!(vec![0u16, 1, 0x1234, u16::MAX]);
+    round_trip!(vec![0u32, 1, 0x1234_5678, u32::MAX]);
+    round_trip!(vec![0u64, 1, 0x1234_5678_9abc_def0, u64::MAX]);
+    round_trip!(vec![0u128, 1, 1u128 << 96, u128::MAX]);
+    round_trip!(vec![0i16, -1, 1, i16::MIN, i16::MAX]);
+    round_trip!(vec![0i32, -1, 1, i32::MIN, i32::MAX]);
+    round_trip!(vec![0i64, -1, 1, i64::MIN, i64::MAX]);
+    round_trip!(vec![0i128, -1, 1, i128::MIN, i128::MAX]);
+
+    let floats = vec![
+        0.0f64,
+        -0.0,
+        1.25,
+        f64::INFINITY,
+        f64::from_bits(0x7ff8_0000_0000_1234),
+    ];
+    macro_rules! check_floats {
+        ($config:expr) => {{
+            let config = $config;
+            let encoded = bincode::encode_to_vec(&floats, config).unwrap();
+            let decoded = bincode::decode_from_slice::<Vec<f64>, _>(&encoded, config)
+                .unwrap()
+                .0;
+            assert!(decoded
+                .iter()
+                .zip(&floats)
+                .all(|(decoded, expected)| decoded.to_bits() == expected.to_bits()));
+        }};
+    }
+    check_floats!(bincode::config::standard().with_big_endian());
+    check_floats!(bincode::config::standard().with_little_endian());
+
+    let floats = vec![
+        0.0f32,
+        -0.0,
+        1.25,
+        f32::INFINITY,
+        f32::from_bits(0x7fc0_1234),
+    ];
+    macro_rules! check_floats32 {
+        ($config:expr) => {{
+            let config = $config;
+            let encoded = bincode::encode_to_vec(&floats, config).unwrap();
+            let decoded = bincode::borrow_decode_from_slice::<Vec<f32>, _>(&encoded, config)
+                .unwrap()
+                .0;
+            assert!(decoded
+                .iter()
+                .zip(&floats)
+                .all(|(decoded, expected)| decoded.to_bits() == expected.to_bits()));
+        }};
+    }
+    check_floats32!(bincode::config::standard().with_big_endian());
+    check_floats32!(bincode::config::standard().with_little_endian());
+
+    let config = bincode::config::legacy().with_big_endian();
+    let values = vec![0x0102_0304u32, 0xaabb_ccdd];
+    let expected = [0, 0, 0, 0, 0, 0, 0, 2, 1, 2, 3, 4, 0xaa, 0xbb, 0xcc, 0xdd];
+    assert_eq!(bincode::encode_to_vec(&values, config).unwrap(), expected);
+
+    let encoded = bincode::encode_to_vec(vec![1u64, 2, 3], config).unwrap();
+    let mut reused = Vec::<u64>::with_capacity(8);
+    reused.extend_from_slice(&[99; 3]);
+    let allocation = reused.as_ptr();
+    let error =
+        bincode::decode_from_slice_into_vec(&encoded[..encoded.len() - 1], &mut reused, config)
+            .unwrap_err();
+    assert!(matches!(
+        error,
+        bincode::error::DecodeError::UnexpectedEnd { additional: 1 }
+    ));
+    assert_eq!(reused, [1, 2]);
+    assert_eq!(reused.as_ptr(), allocation);
+    let error =
+        bincode::decode_from_slice_into_vec(&encoded, &mut reused, config.with_limit::<16>())
+            .unwrap_err();
+    assert!(matches!(error, bincode::error::DecodeError::LimitExceeded));
+    assert!(reused.is_empty());
+
+    struct NoPeek<'a>(&'a [u8]);
+    impl bincode::de::read::Reader for NoPeek<'_> {
+        fn read(&mut self, bytes: &mut [u8]) -> Result<(), bincode::error::DecodeError> {
+            if bytes.len() > self.0.len() {
+                return Err(bincode::error::DecodeError::UnexpectedEnd {
+                    additional: bytes.len() - self.0.len(),
+                });
+            }
+            let (read, remaining) = self.0.split_at(bytes.len());
+            bytes.copy_from_slice(read);
+            self.0 = remaining;
+            Ok(())
+        }
+    }
+    let mut decoder = bincode::de::DecoderImpl::new(NoPeek(&encoded), config, ());
+    assert_eq!(Vec::<u64>::decode(&mut decoder).unwrap(), [1, 2, 3]);
+}
+
+#[test]
 fn borrowed_decode_rejects_invalid_text() {
     assert!(matches!(
         bincode::borrow_decode_from_slice::<&str, _>(&[1, 0xff], bincode::config::standard()),

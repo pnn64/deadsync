@@ -1,5 +1,5 @@
 use crate::{
-    config::{IntEncoding, InternalEndianConfig, InternalIntEncodingConfig},
+    config::{Endianness, IntEncoding, InternalEndianConfig, InternalIntEncodingConfig},
     de::{read::Reader, BorrowDecode, BorrowDecoder, Decode, Decoder},
     enc::{self, write::SizeWriter, Encode, Encoder},
     error::{DecodeError, EncodeError},
@@ -181,6 +181,84 @@ fn decode_bool_vec_into<T, D: Decoder>(
         decoder.reader().consume(len);
         Some(Ok(()))
     }
+}
+
+#[inline(never)]
+fn decode_endian_vec_into<T, D: Decoder>(
+    decoder: &mut D,
+    len: usize,
+    values: &mut Vec<T>,
+    decode_floats: bool,
+) -> Option<Result<(), DecodeError>> {
+    let fixed_integers = D::C::INT_ENCODING == IntEncoding::Fixed;
+
+    macro_rules! decode_as {
+        ($ty:ty, $size:literal) => {
+            if crate::unty::type_equal::<T, $ty>() {
+                let byte_len = match len.checked_mul($size) {
+                    Some(byte_len) => byte_len,
+                    None => return Some(Err(DecodeError::LimitExceeded)),
+                };
+                let source = decoder.reader().peek_read(byte_len)?;
+                if source.len() < byte_len {
+                    return Some(Err(DecodeError::UnexpectedEnd {
+                        additional: byte_len - source.len(),
+                    }));
+                }
+
+                values.reserve(len);
+                for bytes in source[..byte_len].chunks_exact($size) {
+                    let bytes: [u8; $size] = bytes.try_into().unwrap();
+                    let value = match D::C::ENDIAN {
+                        Endianness::Little => <$ty>::from_le_bytes(bytes),
+                        Endianness::Big => <$ty>::from_be_bytes(bytes),
+                    };
+                    // SAFETY: `type_equal` established that T is the concrete
+                    // numeric type, and reserve provided room for every value.
+                    unsafe {
+                        values
+                            .as_mut_ptr()
+                            .add(values.len())
+                            .cast::<$ty>()
+                            .write(value);
+                        values.set_len(values.len() + 1);
+                    }
+                }
+                decoder.reader().consume(byte_len);
+                return Some(Ok(()));
+            }
+        };
+    }
+
+    if fixed_integers {
+        match core::mem::size_of::<T>() {
+            2 => {
+                decode_as!(u16, 2);
+                decode_as!(i16, 2);
+            }
+            4 => {
+                decode_as!(u32, 4);
+                decode_as!(i32, 4);
+            }
+            8 => {
+                decode_as!(u64, 8);
+                decode_as!(i64, 8);
+            }
+            16 => {
+                decode_as!(u128, 16);
+                decode_as!(i128, 16);
+            }
+            _ => {}
+        }
+    }
+    if decode_floats {
+        match core::mem::size_of::<T>() {
+            4 => decode_as!(f32, 4),
+            8 => decode_as!(f64, 8),
+            _ => {}
+        }
+    }
+    None
 }
 
 fn decode_varint_vec_into<T, D: Decoder>(
@@ -389,10 +467,18 @@ pub(crate) fn decode_vec_into<T: Decode<Context>, Context, D: Decoder<Context = 
             return result;
         }
     }
+    if D::C::INT_ENCODING == IntEncoding::Fixed {
+        if let Some(result) = decode_endian_vec_into(decoder, len, values, false) {
+            return result;
+        }
+    }
     if let Some(result) = decode_bool_vec_into(decoder, len, values) {
         return result;
     }
     if let Some(result) = decode_varint_vec_into(decoder, len, values) {
+        return result;
+    }
+    if let Some(result) = decode_endian_vec_into(decoder, len, values, true) {
         return result;
     }
 
@@ -439,10 +525,18 @@ pub(crate) fn borrow_decode_vec_into<
             return result;
         }
     }
+    if D::C::INT_ENCODING == IntEncoding::Fixed {
+        if let Some(result) = decode_endian_vec_into(decoder, len, values, false) {
+            return result;
+        }
+    }
     if let Some(result) = decode_bool_vec_into(decoder, len, values) {
         return result;
     }
     if let Some(result) = decode_varint_vec_into(decoder, len, values) {
+        return result;
+    }
+    if let Some(result) = decode_endian_vec_into(decoder, len, values, true) {
         return result;
     }
 
@@ -504,11 +598,21 @@ impl<Context, T: Decode<Context>> Decode<Context> for Vec<T> {
         }
 
         let mut values = Self::new();
+        if D::C::INT_ENCODING == IntEncoding::Fixed {
+            if let Some(result) = decode_endian_vec_into(decoder, len, &mut values, false) {
+                result?;
+                return Ok(values);
+            }
+        }
         if let Some(result) = decode_bool_vec_into(decoder, len, &mut values) {
             result?;
             return Ok(values);
         }
         if let Some(result) = decode_varint_vec_into(decoder, len, &mut values) {
+            result?;
+            return Ok(values);
+        }
+        if let Some(result) = decode_endian_vec_into(decoder, len, &mut values, true) {
             result?;
             return Ok(values);
         }
@@ -537,7 +641,21 @@ impl<'de, T: BorrowDecode<'de, Context>, Context> BorrowDecode<'de, Context> for
         }
 
         let mut values = Self::with_capacity(len);
+        if D::C::INT_ENCODING == IntEncoding::Fixed {
+            if let Some(result) = decode_endian_vec_into(decoder, len, &mut values, false) {
+                result?;
+                return Ok(values);
+            }
+        }
         if let Some(result) = decode_bool_vec_into(decoder, len, &mut values) {
+            result?;
+            return Ok(values);
+        }
+        if let Some(result) = decode_varint_vec_into(decoder, len, &mut values) {
+            result?;
+            return Ok(values);
+        }
+        if let Some(result) = decode_endian_vec_into(decoder, len, &mut values, true) {
             result?;
             return Ok(values);
         }
