@@ -62,10 +62,13 @@ produced by the retained surface under `config::standard()`.
   byte slices.
 - Decode native-endian floating-point and fixed-width integer arrays with one
   contiguous copy while preserving scalar reader and endian fallbacks.
+- Reuse allocations owned by strings and nested byte, numeric, and string
+  vectors during caller-owned vector decoding.
 - Add paired old/new Criterion benchmarks with throughput, allocation churn,
   and Windows thread-cycle reporting. Run them with
   `cargo bench -p deadlib-bincode --bench performance -- --noplot` and
   `cargo bench -p deadlib-bincode --bench additional_performance -- --noplot`,
   `cargo bench -p deadlib-bincode --bench second_pass_performance -- --noplot`,
   `cargo bench -p deadlib-bincode --bench third_pass_performance -- --noplot`,
-  and `cargo bench -p deadlib-bincode --bench fourth_pass_performance -- --noplot`.
+  `cargo bench -p deadlib-bincode --bench fourth_pass_performance -- --noplot`,
+  and `cargo bench -p deadlib-bincode --bench fifth_pass_performance -- --noplot`.

@@ -63,8 +63,9 @@ pub fn decode_from_slice<D: de::Decode<()>, C: Config>(
 ///
 /// `values` is cleared before decoding but retains its capacity. After one
 /// sufficiently large call, repeated calls can therefore decode without
-/// allocator traffic. On failure, its contents are unspecified and may include
-/// a successfully decoded prefix.
+/// allocator traffic. Allocations owned by `String` elements and nested numeric,
+/// byte, or string vectors are reused as well. On failure, its contents are
+/// unspecified and may include a successfully decoded prefix.
 pub fn decode_from_slice_into_vec<T: de::Decode<()>, C: Config>(
     src: &[u8],
     values: &mut Vec<T>,

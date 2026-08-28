@@ -190,10 +190,139 @@ fn decode_varint_vec_into<T, D: Decoder>(
     None
 }
 
+fn decode_string_vec_into<Context, D: Decoder<Context = Context>>(
+    decoder: &mut D,
+    values: &mut Vec<String>,
+) -> Result<(), DecodeError> {
+    let len = match crate::de::decode_slice_len(decoder) {
+        Ok(len) => len,
+        Err(error) => {
+            values.clear();
+            return Err(error);
+        }
+    };
+    if let Err(error) = decoder.claim_container_read::<String>(len) {
+        values.clear();
+        return Err(error);
+    }
+    values.reserve(len.saturating_sub(values.len()));
+
+    for index in 0..len {
+        decoder.unclaim_bytes_read(std::mem::size_of::<String>());
+        if index < values.len() {
+            if let Err(error) = decode_string_into(decoder, &mut values[index]) {
+                values.truncate(index);
+                return Err(error);
+            }
+        } else {
+            let mut value = String::new();
+            decode_string_into(decoder, &mut value)?;
+            values.push(value);
+        }
+    }
+    values.truncate(len);
+    Ok(())
+}
+
+fn decode_nested_vec_into<Context, T, D>(
+    decoder: &mut D,
+    values: &mut Vec<Vec<T>>,
+) -> Result<(), DecodeError>
+where
+    T: Decode<Context>,
+    D: Decoder<Context = Context>,
+{
+    let len = match crate::de::decode_slice_len(decoder) {
+        Ok(len) => len,
+        Err(error) => {
+            values.clear();
+            return Err(error);
+        }
+    };
+    if let Err(error) = decoder.claim_container_read::<Vec<T>>(len) {
+        values.clear();
+        return Err(error);
+    }
+    values.reserve(len.saturating_sub(values.len()));
+
+    for index in 0..len {
+        decoder.unclaim_bytes_read(std::mem::size_of::<Vec<T>>());
+        if index < values.len() {
+            if let Err(error) = decode_vec_into(decoder, &mut values[index]) {
+                values.truncate(index);
+                return Err(error);
+            }
+        } else {
+            let mut value = Vec::new();
+            decode_vec_into(decoder, &mut value)?;
+            values.push(value);
+        }
+    }
+    values.truncate(len);
+    Ok(())
+}
+
+fn decode_reused_vec_elements<T, Context, D>(
+    decoder: &mut D,
+    values: &mut Vec<T>,
+) -> Option<Result<(), DecodeError>>
+where
+    T: Decode<Context>,
+    D: Decoder<Context = Context>,
+{
+    // String and Vec have the same three-word representation on supported
+    // targets. Most other T values can avoid every TypeId comparison.
+    if std::mem::size_of::<T>() != std::mem::size_of::<String>() {
+        return None;
+    }
+
+    if crate::unty::type_equal::<T, String>() {
+        // SAFETY: `type_equal` established that T is String, so the vector
+        // layouts and element validity requirements are identical.
+        let values = unsafe { &mut *(values as *mut Vec<T>).cast::<Vec<String>>() };
+        return Some(decode_string_vec_into(decoder, values));
+    }
+
+    macro_rules! decode_nested_as {
+        ($ty:ty) => {
+            if crate::unty::type_equal::<T, Vec<$ty>>() {
+                // SAFETY: `type_equal` established that T is Vec<$ty>, so the
+                // outer vector layouts and element validity are identical.
+                let values = unsafe { &mut *(values as *mut Vec<T>).cast::<Vec<Vec<$ty>>>() };
+                return Some(decode_nested_vec_into(decoder, values));
+            }
+        };
+    }
+
+    decode_nested_as!(u8);
+    decode_nested_as!(u16);
+    decode_nested_as!(u32);
+    decode_nested_as!(u64);
+    decode_nested_as!(u128);
+    decode_nested_as!(usize);
+    decode_nested_as!(i8);
+    decode_nested_as!(i16);
+    decode_nested_as!(i32);
+    decode_nested_as!(i64);
+    decode_nested_as!(i128);
+    decode_nested_as!(isize);
+    decode_nested_as!(f32);
+    decode_nested_as!(f64);
+    decode_nested_as!(bool);
+    decode_nested_as!(String);
+    None
+}
+
 pub(crate) fn decode_vec_into<T: Decode<Context>, Context, D: Decoder<Context = Context>>(
     decoder: &mut D,
     values: &mut Vec<T>,
 ) -> Result<(), DecodeError> {
+    if !values.is_empty() {
+        if let Some(result) = decode_reused_vec_elements(decoder, values) {
+            return result;
+        }
+    }
+
     values.clear();
     let len = crate::de::decode_slice_len(decoder)?;
     decoder.claim_container_read::<T>(len)?;

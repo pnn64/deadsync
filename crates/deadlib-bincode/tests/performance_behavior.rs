@@ -140,6 +140,191 @@ fn reusable_vector_decode_preserves_limits_and_error_prefix() {
 }
 
 #[test]
+fn reusable_string_vector_decode_reuses_element_allocations() {
+    let values = vec![
+        "chart-alpha-dead-sync".repeat(4),
+        "chart-beta-dead-sync".repeat(4),
+        "chart-gamma-dead-sync".repeat(4),
+    ];
+    let config = bincode::config::standard();
+    let mut encoded = bincode::encode_to_vec(&values, config).unwrap();
+    encoded.extend_from_slice(b"trailing");
+    let expected = bincode::decode_from_slice::<Vec<String>, _>(&encoded, config).unwrap();
+    let mut decoded = (0..values.len())
+        .map(|_| String::with_capacity(256))
+        .collect::<Vec<_>>();
+    for value in &mut decoded {
+        value.push_str("discarded");
+    }
+    let outer_allocation = decoded.as_ptr();
+    let element_allocations = decoded
+        .iter()
+        .map(|value| value.as_ptr())
+        .collect::<Vec<_>>();
+
+    let used = bincode::decode_from_slice_into_vec(&encoded, &mut decoded, config).unwrap();
+    assert_eq!(
+        (decoded.as_slice(), used),
+        (expected.0.as_slice(), expected.1)
+    );
+    assert_eq!(decoded.as_ptr(), outer_allocation);
+    assert!(decoded
+        .iter()
+        .zip(&element_allocations)
+        .all(|(value, allocation)| value.as_ptr() == *allocation));
+
+    let shorter_values = values[..2].to_vec();
+    let shorter = bincode::encode_to_vec(&shorter_values, config).unwrap();
+    let used = bincode::decode_from_slice_into_vec(&shorter, &mut decoded, config).unwrap();
+    assert_eq!(
+        (decoded.as_slice(), used),
+        (shorter_values.as_slice(), shorter.len())
+    );
+    assert_eq!(decoded.as_ptr(), outer_allocation);
+    assert!(decoded
+        .iter()
+        .zip(&element_allocations)
+        .all(|(value, allocation)| value.as_ptr() == *allocation));
+
+    let truncated = &encoded[..encoded.len() - b"trailing".len() - 1];
+    let error = bincode::decode_from_slice_into_vec(truncated, &mut decoded, config).unwrap_err();
+    assert!(matches!(
+        error,
+        bincode::error::DecodeError::UnexpectedEnd { .. }
+    ));
+    assert_eq!(decoded, values[..2]);
+    assert_eq!(decoded[0].as_ptr(), element_allocations[0]);
+    assert_eq!(decoded[1].as_ptr(), element_allocations[1]);
+
+    let error =
+        bincode::decode_from_slice_into_vec(&encoded, &mut decoded, config.with_limit::<16>())
+            .unwrap_err();
+    assert!(matches!(error, bincode::error::DecodeError::LimitExceeded));
+    assert!(decoded.is_empty());
+}
+
+#[test]
+fn reusable_nested_byte_vectors_reuse_inner_allocations() {
+    let values = (0..16usize)
+        .map(|outer| {
+            (0..96usize)
+                .map(|inner| outer.wrapping_mul(31).wrapping_add(inner) as u8)
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let config = bincode::config::standard();
+    let encoded = bincode::encode_to_vec(&values, config).unwrap();
+    let expected = bincode::decode_from_slice::<Vec<Vec<u8>>, _>(&encoded, config).unwrap();
+    let mut decoded = (0..values.len())
+        .map(|_| {
+            let mut value = Vec::with_capacity(192);
+            value.extend_from_slice(b"discarded");
+            value
+        })
+        .collect::<Vec<_>>();
+    let outer_allocation = decoded.as_ptr();
+    let inner_allocations = decoded
+        .iter()
+        .map(|value| value.as_ptr())
+        .collect::<Vec<_>>();
+
+    let used = bincode::decode_from_slice_into_vec(&encoded, &mut decoded, config).unwrap();
+    assert_eq!(
+        (decoded.as_slice(), used),
+        (expected.0.as_slice(), expected.1)
+    );
+    assert_eq!(decoded.as_ptr(), outer_allocation);
+    assert!(decoded
+        .iter()
+        .zip(inner_allocations)
+        .all(|(value, allocation)| value.as_ptr() == allocation));
+}
+
+#[test]
+fn reusable_nested_numeric_vectors_reuse_inner_allocations_across_configs() {
+    let values = (0..16u64)
+        .map(|outer| {
+            (0..64u64)
+                .map(|inner| outer.wrapping_mul(1_000_003) ^ inner.rotate_left(17))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    macro_rules! check_config {
+        ($config:expr) => {{
+            let config = $config;
+            let encoded = bincode::encode_to_vec(&values, config).unwrap();
+            let expected =
+                bincode::decode_from_slice::<Vec<Vec<u64>>, _>(&encoded, config).unwrap();
+            let mut decoded = (0..values.len())
+                .map(|_| {
+                    let mut value = Vec::with_capacity(128);
+                    value.extend_from_slice(&[u64::MAX; 4]);
+                    value
+                })
+                .collect::<Vec<_>>();
+            let outer_allocation = decoded.as_ptr();
+            let inner_allocations = decoded
+                .iter()
+                .map(|value| value.as_ptr())
+                .collect::<Vec<_>>();
+
+            let used = bincode::decode_from_slice_into_vec(&encoded, &mut decoded, config).unwrap();
+            assert_eq!(
+                (decoded.as_slice(), used),
+                (expected.0.as_slice(), expected.1)
+            );
+            assert_eq!(decoded.as_ptr(), outer_allocation);
+            assert!(decoded
+                .iter()
+                .zip(inner_allocations)
+                .all(|(value, allocation)| value.as_ptr() == allocation));
+        }};
+    }
+
+    check_config!(bincode::config::standard());
+    check_config!(bincode::config::standard().with_big_endian());
+    check_config!(bincode::config::legacy());
+    check_config!(bincode::config::legacy().with_big_endian());
+}
+
+#[test]
+fn reusable_nested_vectors_preserve_complete_prefix_on_error() {
+    let values = vec![vec![1u8, 2, 3], vec![4, 5, 6, 7]];
+    let config = bincode::config::standard();
+    let encoded = bincode::encode_to_vec(&values, config).unwrap();
+    let truncated = &encoded[..encoded.len() - 1];
+    let mut decoded = vec![vec![99; 16], vec![88; 16]];
+    let outer_allocation = decoded.as_ptr();
+    let first_allocation = decoded[0].as_ptr();
+
+    let error = bincode::decode_from_slice_into_vec(truncated, &mut decoded, config).unwrap_err();
+    assert!(matches!(
+        error,
+        bincode::error::DecodeError::UnexpectedEnd { additional: 1 }
+    ));
+    assert_eq!(decoded, values[..1]);
+    assert_eq!(decoded.as_ptr(), outer_allocation);
+    assert_eq!(decoded[0].as_ptr(), first_allocation);
+}
+
+#[test]
+fn deep_reuse_dispatch_preserves_same_size_generic_elements() {
+    let values = vec![[1u64, 2, 3], [u64::MAX, 250, 251]];
+    let config = bincode::config::standard();
+    let encoded = bincode::encode_to_vec(&values, config).unwrap();
+    let mut decoded = vec![[99u64; 3]; 4];
+    let allocation = decoded.as_ptr();
+
+    let used = bincode::decode_from_slice_into_vec(&encoded, &mut decoded, config).unwrap();
+    assert_eq!(
+        (decoded.as_slice(), used),
+        (values.as_slice(), encoded.len())
+    );
+    assert_eq!(decoded.as_ptr(), allocation);
+}
+
+#[test]
 fn reusable_string_decode_matches_allocating_decode() {
     let value = "DeadSync allocation reuse ".repeat(4_096);
     let config = bincode::config::standard();
