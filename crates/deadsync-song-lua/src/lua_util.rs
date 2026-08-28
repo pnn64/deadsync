@@ -7229,7 +7229,7 @@ fn report_update_error(
         return Ok(());
     }
     actor.set(reported_key, true)?;
-    log::warn!(
+    log::debug!(
         "Song lua {callback} failed for {}; preserving partial update state: {err}",
         actor_debug_label(actor),
     );
