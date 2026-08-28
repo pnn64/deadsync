@@ -2309,6 +2309,7 @@ pub struct SongLuaOverlayState {
     pub sprite_playback_rate: f32,
     pub sprite_state_delay: f32,
     pub sprite_state_index: Option<u32>,
+    pub sprite_animation_epoch: Option<f32>,
     pub decode_movie: bool,
     pub vert_spacing: Option<i32>,
     pub wrap_width_pixels: Option<i32>,
@@ -2392,6 +2393,7 @@ impl Default for SongLuaOverlayState {
             sprite_playback_rate: 1.0,
             sprite_state_delay: 0.1,
             sprite_state_index: None,
+            sprite_animation_epoch: None,
             decode_movie: false,
             vert_spacing: None,
             wrap_width_pixels: None,
@@ -3719,6 +3721,7 @@ pub fn overlay_eases_from_captures(
 pub struct SongLuaOverlayMessageCommand {
     pub message: String,
     pub blocks: Vec<SongLuaOverlayCommandBlock>,
+    pub aux: Option<f32>,
 }
 
 pub fn message_command_lists_have_listener<'a>(
@@ -6734,6 +6737,88 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_propagates_actorframe_play_and_queued_commands() {
+        let song_dir = test_dir("actorframe-command-propagation");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target
+
+mod_actions = {
+    {1, function()
+        target:playcommand("Hit")
+    end, true},
+    {2, function()
+        target:queuecommand("Respawn")
+    end, true},
+}
+
+return Def.ActorFrame{
+    Def.ActorFrame{
+        Name="Target",
+        OnCommand=function(self) target = self end,
+        Def.Quad{
+            Name="Face",
+            OnCommand=cmd(visible,true),
+            HitCommand=cmd(visible,false),
+            RespawnCommand=cmd(visible,true),
+        },
+        Def.ActorFrame{
+            Def.Quad{
+                Name="Flash",
+                OnCommand=cmd(visible,false),
+                HitCommand=cmd(visible,true),
+                RespawnCommand=cmd(visible,false),
+            },
+        },
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "ActorFrame Commands");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 3.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let hit = &compiled
+            .messages
+            .iter()
+            .find(|message| (message.beat - 1.0).abs() <= f32::EPSILON)
+            .unwrap()
+            .message;
+        let respawn = &compiled
+            .messages
+            .iter()
+            .find(|message| (message.beat - 2.0).abs() <= f32::EPSILON)
+            .unwrap()
+            .message;
+        for name in ["Face", "Flash"] {
+            let actor = compiled
+                .overlays
+                .iter()
+                .find(|overlay| overlay.name.as_deref() == Some(name))
+                .unwrap();
+            let hit_command = actor
+                .message_commands
+                .iter()
+                .find(|command| command.message == *hit)
+                .unwrap();
+            let respawn_command = actor
+                .message_commands
+                .iter()
+                .find(|command| command.message == *respawn)
+                .unwrap();
+            assert_eq!(hit_command.blocks[0].delta.visible, Some(name == "Flash"));
+            assert_eq!(
+                respawn_command.blocks[0].delta.visible,
+                Some(name == "Face")
+            );
+        }
+    }
+
+    #[test]
     fn compile_song_lua_message_capture_restores_external_state() {
         let song_dir = test_dir("message-capture-external-state");
         let entry = song_dir.join("default.lua");
@@ -7401,6 +7486,65 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].beat, 1.0);
         assert_eq!(compiled.messages[0].message, "LoopSafe");
+    }
+
+    #[test]
+    fn compile_song_lua_runs_recursive_updates_at_queued_interval() {
+        let song_dir = test_dir("recursive-update-interval");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local ball
+
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Ball",
+        OnCommand=function(self)
+            ball = self
+            self:x(0)
+        end,
+    },
+    Def.Actor{
+        OnCommand=function(self)
+            self:queuecommand("Update")
+        end,
+        UpdateCommand=function(self)
+            ball:addx(1)
+            self:sleep(0.02)
+            self:queuecommand("Update")
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Recursive Update Interval");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let ball_index = compiled
+            .overlays
+            .iter()
+            .position(|overlay| overlay.name.as_deref() == Some("Ball"))
+            .unwrap();
+        let max_x = compiled
+            .overlay_updates
+            .iter()
+            .filter(|track| {
+                track.overlay_index == ball_index && track.target == SongLuaOverlayUpdateTarget::X
+            })
+            .flat_map(|track| &track.samples)
+            .filter_map(|sample| match sample.value {
+                SongLuaOverlayUpdateValue::F32(value) => Some(value),
+                _ => None,
+            })
+            .fold(f32::NEG_INFINITY, f32::max);
+        assert!(
+            max_x >= 40.0,
+            "expected the 20 ms loop to run at least 40 times, got {max_x}"
+        );
     }
 
     #[test]
@@ -15424,6 +15568,68 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_replays_function_action_aux_before_updates() {
+        let song_dir = test_dir("overlay-function-aux");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local stone
+
+mod_actions = {
+    {1, function()
+        stone:aux(3)
+    end, true},
+}
+
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Stone",
+        OnCommand=function(self)
+            stone = self
+            self:visible(false)
+        end,
+    },
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                if stone:getaux() > 0 then
+                    stone:visible(true)
+                end
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Overlay Function Aux");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let (stone_index, stone) = compiled
+            .overlays
+            .iter()
+            .enumerate()
+            .find(|(_, overlay)| overlay.name.as_deref() == Some("Stone"))
+            .unwrap();
+        assert!(
+            stone
+                .message_commands
+                .iter()
+                .any(|command| command.aux == Some(3.0))
+        );
+        assert!(compiled.overlay_updates.iter().any(|track| {
+            track.overlay_index == stone_index
+                && track.target == SongLuaOverlayUpdateTarget::Visible
+                && track.samples.iter().any(|sample| {
+                    sample.beat >= 1.0 && sample.value == SongLuaOverlayUpdateValue::Bool(true)
+                })
+        }));
+    }
+
+    #[test]
     fn compile_song_lua_scopes_unprobed_overlay_function_eases() {
         let song_dir = test_dir("unprobed-overlay-function-ease");
         let entry = song_dir.join("default.lua");
@@ -18089,10 +18295,12 @@ return Def.ActorFrame{
         let first = vec![SongLuaOverlayMessageCommand {
             message: "Alpha".to_string(),
             blocks: Vec::new(),
+            aux: None,
         }];
         let second = vec![SongLuaOverlayMessageCommand {
             message: "Beta".to_string(),
             blocks: Vec::new(),
+            aux: None,
         }];
 
         assert!(message_command_lists_have_listener(
@@ -18110,6 +18318,7 @@ return Def.ActorFrame{
         let commands = vec![SongLuaOverlayMessageCommand {
             message: SONG_LUA_STARTUP_MESSAGE.to_string(),
             blocks: Vec::new(),
+            aux: None,
         }];
         let mut messages = Vec::new();
 

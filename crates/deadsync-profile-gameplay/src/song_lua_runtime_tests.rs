@@ -70,6 +70,7 @@ fn song_lua_overlay_eases_stop_after_later_message_blocks() {
             initial_state: SongLuaOverlayState::default(),
             message_commands: vec![SongLuaOverlayMessageCommand {
                 message: "ResetBlack".to_string(),
+                aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
                     start: 0.0,
                     duration: 0.0,
@@ -128,6 +129,7 @@ fn song_lua_overlay_eases_ignore_same_timestamp_setup_blocks() {
             initial_state: SongLuaOverlayState::default(),
             message_commands: vec![SongLuaOverlayMessageCommand {
                 message: "SetupZoom".to_string(),
+                aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
                     start: 0.0,
                     duration: 0.0,
@@ -186,6 +188,7 @@ fn song_lua_overlay_eases_stop_persisting_after_later_reset_messages() {
             initial_state: SongLuaOverlayState::default(),
             message_commands: vec![SongLuaOverlayMessageCommand {
                 message: "ResetBlack".to_string(),
+                aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
                     start: 0.0,
                     duration: 0.0,

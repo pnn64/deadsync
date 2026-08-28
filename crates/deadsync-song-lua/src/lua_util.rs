@@ -1820,6 +1820,21 @@ pub fn run_actor_named_command_with_drain_and_params(
     run_guarded_actor_command(lua, actor, name, &command, drain_queue, params)
 }
 
+fn run_actor_message_with_params(
+    lua: &Lua,
+    actor: &Table,
+    name: &str,
+    params: Option<Value>,
+) -> mlua::Result<()> {
+    run_actor_named_command_with_drain_and_params(lua, actor, name, true, params.clone())?;
+    if actor_type_is(actor, "ActorFrame")? || actor_type_is(actor, "ActorFrameTexture")? {
+        for child in actor_direct_children(lua, actor)? {
+            run_actor_message_with_params(lua, &child, name, params.clone())?;
+        }
+    }
+    Ok(())
+}
+
 pub const fn actor_runs_startup_commands(actor: &Table) -> mlua::Result<bool> {
     let _ = actor;
     Ok(true)
@@ -1864,6 +1879,19 @@ fn run_guarded_actor_command(
         return Ok(());
     }
     active.set(name, true)?;
+    let recurring_cursor_key = "__songlua_recurring_update_start_cursor";
+    let previous_recurring_cursor = if name.eq_ignore_ascii_case("UpdateCommand") {
+        let previous = actor.get::<Value>(recurring_cursor_key)?;
+        actor.set(
+            recurring_cursor_key,
+            actor
+                .get::<Option<f32>>("__songlua_capture_cursor")?
+                .unwrap_or(0.0),
+        )?;
+        Some(previous)
+    } else {
+        None
+    };
     let result = call_actor_function(lua, actor, command, params)
         .map_err(|err| {
             mlua::Error::external(format!(
@@ -1878,6 +1906,9 @@ fn run_guarded_actor_command(
             }
             Ok(())
         });
+    if let Some(previous) = previous_recurring_cursor {
+        actor.set(recurring_cursor_key, previous)?;
+    }
     active.set(name, Value::Nil)?;
     result
 }
@@ -1922,7 +1953,7 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             queue.raw_set(index, value)?;
         }
         queue.raw_set(len, Value::Nil)?;
-        run_actor_named_command(lua, actor, &format!("{name}Command"))?;
+        run_actor_message_with_params(lua, actor, &format!("{name}Command"), None)?;
     }
     Ok(())
 }
@@ -2191,8 +2222,11 @@ pub fn capture_actor_message_commands(
             }
         };
         if !blocks.is_empty() {
-            out.commands
-                .push(SongLuaOverlayMessageCommand { message, blocks });
+            out.commands.push(SongLuaOverlayMessageCommand {
+                message,
+                blocks,
+                aux: None,
+            });
         }
     }
     flush_actor_capture(actor).map_err(|err| err.to_string())?;
@@ -2204,6 +2238,7 @@ pub fn capture_actor_message_commands(
         out.commands.push(SongLuaOverlayMessageCommand {
             message: SONG_LUA_STARTUP_MESSAGE.to_string(),
             blocks: startup_sound_blocks,
+            aux: None,
         });
     }
     Ok(out)
@@ -3617,6 +3652,16 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                 {
                     if name.eq_ignore_ascii_case("Update") {
                         actor.set("__songlua_recurring_update_command", true)?;
+                        let cursor = actor
+                            .get::<Option<f32>>("__songlua_capture_cursor")?
+                            .unwrap_or(0.0);
+                        let start = actor
+                            .get::<Option<f32>>("__songlua_recurring_update_start_cursor")?
+                            .unwrap_or(cursor);
+                        let interval = (cursor - start).max(0.0);
+                        if interval > f32::EPSILON {
+                            actor.set("__songlua_recurring_update_interval", interval)?;
+                        }
                     }
                     return Ok(actor.clone());
                 }
@@ -3658,13 +3703,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                 {
                     run_named_command_on_children_recursively(lua, &actor, &command_name, params)?;
                 } else {
-                    run_actor_named_command_with_drain_and_params(
-                        lua,
-                        &actor,
-                        &command_name,
-                        true,
-                        params,
-                    )?;
+                    run_actor_message_with_params(lua, &actor, &command_name, params)?;
                 }
                 Ok(actor.clone())
             }
@@ -7201,7 +7240,25 @@ fn run_actor_update_functions_for_table_inner(
             .get::<Option<bool>>("__songlua_recurring_update_command")?
             .unwrap_or(false)
     {
-        run_actor_named_command(lua, actor, "UpdateCommand")?;
+        let interval = actor
+            .get::<Option<f64>>("__songlua_recurring_update_interval")?
+            .unwrap_or(0.0);
+        if interval > f64::EPSILON {
+            let elapsed = actor
+                .get::<Option<f64>>("__songlua_recurring_update_elapsed")?
+                .unwrap_or(0.0)
+                + delta_seconds.max(0.0);
+            let runs = ((elapsed + f64::EPSILON) / interval).floor().min(64.0) as usize;
+            actor.set(
+                "__songlua_recurring_update_elapsed",
+                (elapsed - interval * runs as f64).max(0.0),
+            )?;
+            for _ in 0..runs {
+                run_actor_named_command(lua, actor, "UpdateCommand")?;
+            }
+        } else {
+            run_actor_named_command(lua, actor, "UpdateCommand")?;
+        }
     }
     for child in actor.sequence_values::<Value>() {
         let Value::Table(child) = child? else {
@@ -9540,9 +9597,29 @@ pub fn capture_overlay_compile_actor_function_eases<Kind>(
 pub struct SongLuaFunctionActionCapture {
     pub overlay_blocks: Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>,
     pub tracked_blocks: Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>,
+    pub overlay_aux: Vec<(usize, f32)>,
+    pub tracked_aux: Vec<(usize, f32)>,
     pub broadcasts: Vec<(String, bool)>,
     pub sound_paths: Vec<PathBuf>,
     pub saw_side_effect: bool,
+}
+
+fn captured_actor_aux_change(
+    actor: &Table,
+    snapshots: &[(Table, Vec<(String, Value)>)],
+) -> Option<f32> {
+    let current = actor
+        .get::<Option<f32>>("__songlua_aux")
+        .ok()
+        .flatten()
+        .unwrap_or(0.0);
+    let previous = snapshots
+        .iter()
+        .find(|(snapshot_actor, _)| snapshot_actor.to_pointer() == actor.to_pointer())
+        .and_then(|(_, state)| state.iter().find(|(key, _)| key == "__songlua_aux"))
+        .and_then(|(_, value)| read_f32(value.clone()))
+        .unwrap_or(0.0);
+    (current != previous).then_some(current)
 }
 
 pub fn capture_function_action_blocks(
@@ -9585,6 +9662,20 @@ pub fn capture_function_action_blocks(
         .map(|(index, actor)| (*index, actor.clone()))
         .collect();
     let tracked_indices = tracked_indices_for_actor_pointers(tracked_actors, &actor_ptrs);
+    let overlay_aux = overlay_tables
+        .iter()
+        .filter_map(|(index, actor)| {
+            captured_actor_aux_change(actor, &state_snapshot).map(|aux| (*index, aux))
+        })
+        .collect();
+    let tracked_aux = tracked_indices
+        .iter()
+        .filter_map(|&index| {
+            tracked_actors.get(index).and_then(|tracked| {
+                captured_actor_aux_change(&tracked.table, &state_snapshot).map(|aux| (index, aux))
+            })
+        })
+        .collect();
     let overlay_blocks = collect_indexed_actor_capture_blocks(&overlay_tables);
     let tracked_blocks =
         collect_tracked_capture_blocks_for_indices(tracked_actors, &tracked_indices);
@@ -9609,6 +9700,8 @@ pub fn capture_function_action_blocks(
     Ok(SongLuaFunctionActionCapture {
         overlay_blocks,
         tracked_blocks,
+        overlay_aux,
+        tracked_aux,
         broadcasts,
         sound_paths,
         saw_side_effect,
@@ -9681,28 +9774,50 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
         }
     }
 
-    if capture.overlay_blocks.is_empty() && capture.tracked_blocks.is_empty() {
+    if capture.overlay_blocks.is_empty()
+        && capture.tracked_blocks.is_empty()
+        && capture.overlay_aux.is_empty()
+        && capture.tracked_aux.is_empty()
+    {
         return Ok(capture.saw_side_effect);
     }
 
     let message = format!("__songlua_overlay_fn_action_{counter}");
     *counter += 1;
-    for (overlay_index, blocks) in capture.overlay_blocks {
+    let mut overlay_commands = capture
+        .overlay_aux
+        .into_iter()
+        .map(|(index, aux)| (index, (Vec::new(), Some(aux))))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    for (index, blocks) in capture.overlay_blocks {
+        overlay_commands.entry(index).or_default().0 = blocks;
+    }
+    for (overlay_index, (blocks, aux)) in overlay_commands {
         overlays[overlay_index]
             .actor
             .message_commands
             .push(SongLuaOverlayMessageCommand {
                 message: message.clone(),
                 blocks,
+                aux,
             });
     }
-    for (tracked_index, blocks) in capture.tracked_blocks {
+    let mut tracked_commands = capture
+        .tracked_aux
+        .into_iter()
+        .map(|(index, aux)| (index, (Vec::new(), Some(aux))))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    for (index, blocks) in capture.tracked_blocks {
+        tracked_commands.entry(index).or_default().0 = blocks;
+    }
+    for (tracked_index, (blocks, aux)) in tracked_commands {
         tracked_actors[tracked_index]
             .actor
             .message_commands
             .push(SongLuaOverlayMessageCommand {
                 message: message.clone(),
                 blocks,
+                aux,
             });
     }
     messages.push(SongLuaMessageEvent {

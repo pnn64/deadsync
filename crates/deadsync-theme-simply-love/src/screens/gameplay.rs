@@ -7735,6 +7735,35 @@ fn song_lua_overlay_sprite_size(state: SongLuaOverlayState, texture_key: &str) -
     Some([width, height])
 }
 
+fn song_lua_overlay_sprite_offscreen(
+    state: SongLuaOverlayState,
+    size: [f32; 2],
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+) -> bool {
+    const EDGE_SLOP: f32 = 12.0;
+
+    if state.rot_x_deg.abs() > f32::EPSILON
+        || state.rot_y_deg.abs() > f32::EPSILON
+        || state.rot_z_deg.abs() > f32::EPSILON
+        || state.skew_x.abs() > f32::EPSILON
+        || state.skew_y.abs() > f32::EPSILON
+        || state.vibrate
+        || !matches!(state.effect_mode, deadlib_present::anim::EffectMode::None)
+    {
+        return false;
+    }
+    let [scale_x, scale_y] = song_lua_overlay_axis_scale(state).map(f32::abs);
+    let width = size[0] * scale_x;
+    let height = size[1] * scale_y;
+    let left = width.mul_add(-state.halign, state.x);
+    let top = height.mul_add(-state.valign, state.y);
+    left >= overlay_space_width - EDGE_SLOP
+        || left + width <= EDGE_SLOP
+        || top >= overlay_space_height - EDGE_SLOP
+        || top + height <= EDGE_SLOP
+}
+
 fn song_lua_overlay_uv_rect(
     state: SongLuaOverlayState,
     texture_key: Option<&str>,
@@ -11877,6 +11906,13 @@ fn apply_song_lua_overlay_runtime_updates_for(
         }
         let value = song_lua_overlay_update_value_lerp(&from.value, &to.value, t);
         apply_song_lua_overlay_update_value(current, track.target, &value);
+        if track.target == deadsync_song_lua::SongLuaOverlayUpdateTarget::SpriteStateIndex {
+            current.sprite_animation_epoch = Some(if t >= 1.0 - f32::EPSILON {
+                to.second
+            } else {
+                from.second
+            });
+        }
     }
 }
 
@@ -12352,10 +12388,16 @@ fn apply_song_lua_overlay_runtime_eases_for(
         }
         if now >= ease.sustain_end_second {
             apply_song_lua_overlay_delta(&mut current, &ease.to.delta);
+            if ease.to.delta.sprite_state_index.is_some() {
+                current.sprite_animation_epoch = Some(ease.end_second);
+            }
             continue;
         }
         if ease.end_second <= ease.start_second || now >= ease.end_second {
             apply_song_lua_overlay_delta(&mut current, &ease.to.delta);
+            if ease.to.delta.sprite_state_index.is_some() {
+                current.sprite_animation_epoch = Some(ease.end_second);
+            }
             continue;
         }
         let t = ease.easing.factor(
@@ -12366,6 +12408,9 @@ fn apply_song_lua_overlay_runtime_eases_for(
         let from_state = song_lua_overlay_state_with_delta(current, &ease.from.delta);
         let to_state = song_lua_overlay_state_with_delta(current, &ease.to.delta);
         current = song_lua_overlay_state_lerp(from_state, to_state, t, &ease.to.delta);
+        if ease.from.delta.sprite_state_index.is_some() {
+            current.sprite_animation_epoch = Some(ease.start_second);
+        }
     }
     current
 }
@@ -12465,16 +12510,36 @@ fn song_lua_message_state_legacy(
             continue;
         };
         if let Some((blocks, base, start_second)) = active.take() {
-            current = song_lua_overlay_apply_blocks(base, blocks, event_second - start_second);
+            let elapsed = event_second - start_second;
+            current = song_lua_overlay_apply_blocks(base, blocks, elapsed);
+            if let Some(epoch) = song_lua_sprite_animation_epoch(blocks, elapsed, start_second) {
+                current.sprite_animation_epoch = Some(epoch);
+            }
         }
         let base = current;
         current = song_lua_overlay_apply_blocks(base, &command.blocks, 0.0);
         active = Some((&command.blocks, base, event_second));
     }
     if let Some((blocks, base, start_second)) = active {
-        current = song_lua_overlay_apply_blocks(base, blocks, now - start_second);
+        let elapsed = now - start_second;
+        current = song_lua_overlay_apply_blocks(base, blocks, elapsed);
+        if let Some(epoch) = song_lua_sprite_animation_epoch(blocks, elapsed, start_second) {
+            current.sprite_animation_epoch = Some(epoch);
+        }
     }
     current
+}
+
+fn song_lua_sprite_animation_epoch(
+    blocks: &[SongLuaOverlayCommandBlock],
+    elapsed: f32,
+    command_start_second: f32,
+) -> Option<f32> {
+    blocks.iter().rev().find_map(|block| {
+        let activation = block.start + block.duration.max(0.0);
+        (block.delta.sprite_state_index.is_some() && elapsed >= activation)
+            .then_some(command_start_second + activation)
+    })
 }
 
 fn song_lua_message_state_cached(
@@ -12508,15 +12573,23 @@ fn song_lua_message_state_cached(
             && let Some(active_command) = message_commands.get(active_command_index)
         {
             let command_base = cache.base_state;
+            let elapsed = event.event_second - cache.active_start_second;
             cache.base_state = song_lua_overlay_apply_blocks_cached(
                 command_base,
                 &active_command.blocks,
-                event.event_second - cache.active_start_second,
+                elapsed,
                 &mut cache.active_next_block,
                 &mut cache.active_easing,
                 &mut cache.active_block_state,
                 &mut cache.active_last_elapsed,
             );
+            if let Some(epoch) = song_lua_sprite_animation_epoch(
+                &active_command.blocks,
+                elapsed,
+                cache.active_start_second,
+            ) {
+                cache.base_state.sprite_animation_epoch = Some(epoch);
+            }
         }
         cache.active_command_index = Some(event.command_index);
         cache.active_start_second = event.event_second;
@@ -12529,15 +12602,22 @@ fn song_lua_message_state_cached(
     else {
         return cache.base_state;
     };
-    song_lua_overlay_apply_blocks_cached(
+    let elapsed = now - cache.active_start_second;
+    let mut current = song_lua_overlay_apply_blocks_cached(
         cache.base_state,
         &command.blocks,
-        now - cache.active_start_second,
+        elapsed,
         &mut cache.active_next_block,
         &mut cache.active_easing,
         &mut cache.active_block_state,
         &mut cache.active_last_elapsed,
-    )
+    );
+    if let Some(epoch) =
+        song_lua_sprite_animation_epoch(&command.blocks, elapsed, cache.active_start_second)
+    {
+        current.sprite_animation_epoch = Some(epoch);
+    }
+    current
 }
 
 fn song_lua_player_render_state(
@@ -14698,7 +14778,8 @@ fn song_lua_overlay_uvs(
     states: &[deadsync_song_lua::SongLuaSpriteState],
     flip_x: bool,
     flip_y: bool,
-    total_elapsed: f32,
+    animation_elapsed: f32,
+    texture_elapsed: f32,
 ) -> [[f32; 2]; 4] {
     let cl = state.cropleft.clamp(0.0, 1.0);
     let cr = state.cropright.clamp(0.0, 1.0);
@@ -14710,7 +14791,7 @@ fn song_lua_overlay_uvs(
         mut uv_offset_x,
         mut uv_offset_y,
     ] = if let Some([u0, v0, u1, v1]) =
-        song_lua_overlay_uv_rect(state, texture_key, states, total_elapsed)
+        song_lua_overlay_uv_rect(state, texture_key, states, animation_elapsed)
     {
         [
             (u1 - u0).abs().max(1e-6),
@@ -14734,8 +14815,8 @@ fn song_lua_overlay_uvs(
         uv_scale_y = -uv_scale_y;
     }
     if let Some(velocity) = state.texcoord_velocity {
-        uv_offset_x = velocity[0].mul_add(total_elapsed, uv_offset_x);
-        uv_offset_y = velocity[1].mul_add(total_elapsed, uv_offset_y);
+        uv_offset_x = velocity[0].mul_add(texture_elapsed, uv_offset_x);
+        uv_offset_y = velocity[1].mul_add(texture_elapsed, uv_offset_y);
     }
     [
         [uv_offset_x, uv_offset_y],
@@ -15510,14 +15591,28 @@ fn build_song_lua_overlay_actor_with_scratch(
             ..
         } => {
             let key = texture_key.as_ref();
+            let animation_elapsed = state
+                .sprite_animation_epoch
+                .map_or(total_elapsed, |epoch| (effect_time - epoch).max(0.0));
             if !asset_manager.has_texture_key(key) {
                 return None;
             }
+            let source_size = song_lua_overlay_sprite_size(state, key)?;
+            if camera_state.is_none()
+                && state.stretch_rect.is_none()
+                && song_lua_overlay_sprite_offscreen(
+                    state,
+                    source_size,
+                    overlay_space_width,
+                    overlay_space_height,
+                )
+            {
+                return None;
+            }
             if let Some(view_proj) = perspective_view_proj {
-                let size = song_lua_overlay_sprite_size(state, key)?;
                 let (center, size) = song_lua_overlay_rect(
                     state,
-                    size,
+                    source_size,
                     x_scale,
                     y_scale,
                     size_scale_x,
@@ -15552,7 +15647,15 @@ fn build_song_lua_overlay_actor_with_scratch(
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
-                    song_lua_overlay_uvs(state, Some(key), states, flip_x, flip_y, total_elapsed),
+                    song_lua_overlay_uvs(
+                        state,
+                        Some(key),
+                        states,
+                        flip_x,
+                        flip_y,
+                        animation_elapsed,
+                        total_elapsed,
+                    ),
                     state,
                     flip_x,
                     flip_y,
@@ -15571,10 +15674,9 @@ fn build_song_lua_overlay_actor_with_scratch(
                 && !state.mask_source
                 && !state.mask_dest
             {
-                let size = song_lua_overlay_sprite_size(state, key)?;
                 let (center, size) = song_lua_overlay_rect(
                     state,
-                    size,
+                    source_size,
                     x_scale,
                     y_scale,
                     size_scale_x,
@@ -15608,7 +15710,15 @@ fn build_song_lua_overlay_actor_with_scratch(
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
-                    song_lua_overlay_uvs(state, Some(key), states, flip_x, flip_y, total_elapsed),
+                    song_lua_overlay_uvs(
+                        state,
+                        Some(key),
+                        states,
+                        flip_x,
+                        flip_y,
+                        animation_elapsed,
+                        total_elapsed,
+                    ),
                     state,
                     flip_x,
                     flip_y,
@@ -15632,13 +15742,12 @@ fn build_song_lua_overlay_actor_with_scratch(
                     z(z)
                 )
             } else {
-                let size = song_lua_overlay_sprite_size(state, key)?;
                 act!(sprite(Arc::clone(texture_key)):
                     align(state.halign, state.valign):
                     xy(state.x * x_scale, state.y * y_scale):
                     setsize(
-                        size[0] * x_scale * size_scale_x,
-                        size[1] * y_scale * size_scale_y
+                        source_size[0] * x_scale * size_scale_x,
+                        source_size[1] * y_scale * size_scale_y
                     ):
                     z(z)
                 )
@@ -15710,7 +15819,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 *world_z += song_lua_biased_world_z(state, effect_offset[2]);
                 scale[0] *= effect_scale[0];
                 scale[1] *= effect_scale[1];
-                *uv_rect = song_lua_overlay_uv_rect(state, Some(key), states, total_elapsed);
+                *uv_rect = song_lua_overlay_uv_rect(state, Some(key), states, animation_elapsed);
                 *texcoordvelocity = state.texcoord_velocity;
                 *actor_effect = deadlib_present::anim::EffectState::default();
                 *actor_flip_x ^= flip_x;
@@ -16176,7 +16285,15 @@ fn build_song_lua_overlay_actor_with_scratch(
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
-                    song_lua_overlay_uvs(state, None, &[], flip_x, flip_y, total_elapsed),
+                    song_lua_overlay_uvs(
+                        state,
+                        None,
+                        &[],
+                        flip_x,
+                        flip_y,
+                        total_elapsed,
+                        total_elapsed,
+                    ),
                     state,
                     flip_x,
                     flip_y,
@@ -16231,7 +16348,15 @@ fn build_song_lua_overlay_actor_with_scratch(
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
-                    song_lua_overlay_uvs(state, None, &[], flip_x, flip_y, total_elapsed),
+                    song_lua_overlay_uvs(
+                        state,
+                        None,
+                        &[],
+                        flip_x,
+                        flip_y,
+                        total_elapsed,
+                        total_elapsed,
+                    ),
                     state,
                     flip_x,
                     flip_y,
@@ -21140,6 +21265,7 @@ mod tests {
     fn test_message_command(delta: SongLuaOverlayStateDelta) -> SongLuaOverlayMessageCommand {
         SongLuaOverlayMessageCommand {
             message: String::new(),
+            aux: None,
             blocks: vec![SongLuaOverlayCommandBlock {
                 start: 0.0,
                 duration: 0.75,
@@ -21751,6 +21877,7 @@ mod tests {
     fn song_lua_message_block_cursor_matches_replay_across_block_rewinds() {
         let command = SongLuaOverlayMessageCommand {
             message: "LongCommand".to_string(),
+            aux: None,
             blocks: (0..128)
                 .map(|index| SongLuaOverlayCommandBlock {
                     start: index as f32 * 0.25,
@@ -24217,6 +24344,44 @@ mod tests {
         );
         assert_eq!(composed.x, 247.0);
         assert_eq!(composed.y, 240.0);
+    }
+
+    #[test]
+    fn song_lua_overlay_culls_fully_offscreen_sprite_frame() {
+        let hidden = SongLuaOverlayState {
+            x: 1_014.0,
+            y: 240.0,
+            ..SongLuaOverlayState::default()
+        };
+        let edge = SongLuaOverlayState {
+            x: 850.0,
+            y: 240.0,
+            ..SongLuaOverlayState::default()
+        };
+        let transparent_edge_sliver = SongLuaOverlayState {
+            x: 978.8,
+            y: 285.6,
+            zoom: 0.94,
+            ..SongLuaOverlayState::default()
+        };
+        assert!(song_lua_overlay_sprite_offscreen(
+            hidden,
+            [288.0, 352.0],
+            854.0,
+            480.0,
+        ));
+        assert!(!song_lua_overlay_sprite_offscreen(
+            edge,
+            [288.0, 352.0],
+            854.0,
+            480.0,
+        ));
+        assert!(song_lua_overlay_sprite_offscreen(
+            transparent_edge_sliver,
+            [288.0, 352.0],
+            854.0,
+            480.0,
+        ));
     }
 
     #[test]
@@ -28062,6 +28227,108 @@ mod tests {
             }
             other => panic!("expected sprite overlay, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn song_lua_sprite_setstate_restarts_custom_animation() {
+        let key = "song-lua-animation-reset 4x1.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 10));
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: key.clone().into(),
+                texture_key: Arc::from(key.as_str()),
+                states: Arc::from([
+                    deadsync_song_lua::SongLuaSpriteState {
+                        frame: 0,
+                        delay: 0.07,
+                    },
+                    deadsync_song_lua::SongLuaSpriteState {
+                        frame: 1,
+                        delay: 0.07,
+                    },
+                    deadsync_song_lua::SongLuaSpriteState {
+                        frame: 2,
+                        delay: 0.07,
+                    },
+                    deadsync_song_lua::SongLuaSpriteState {
+                        frame: 3,
+                        delay: 9_999.0,
+                    },
+                ]),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                sprite_animate: true,
+                sprite_loop: false,
+                sprite_state_index: Some(0),
+                sprite_animation_epoch: Some(10.0),
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &asset_manager,
+            778,
+            640.0,
+            480.0,
+            10.08,
+            0.0,
+            42.0,
+        )
+        .expect_actor("reset animated sprite should render");
+
+        let Actor::Sprite { uv_rect, .. } = actor else {
+            panic!("expected sprite overlay");
+        };
+        assert_eq!(uv_rect, Some([0.25, 0.0, 0.5, 1.0]));
+    }
+
+    #[test]
+    fn song_lua_update_setstate_records_animation_epoch() {
+        let tracks = [deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack {
+            overlay_index: 0,
+            target: deadsync_song_lua::SongLuaOverlayUpdateTarget::SpriteStateIndex,
+            samples: vec![
+                deadsync_song_lua::SongLuaOverlayRuntimeUpdateSample {
+                    second: 1.0,
+                    value: deadsync_song_lua::SongLuaOverlayUpdateValue::U32(0),
+                },
+                deadsync_song_lua::SongLuaOverlayRuntimeUpdateSample {
+                    second: 2.0,
+                    value: deadsync_song_lua::SongLuaOverlayUpdateValue::U32(2),
+                },
+            ],
+        }];
+        let mut cursors = [0];
+        let mut state = SongLuaOverlayState::default();
+        apply_song_lua_overlay_runtime_updates_for(
+            1.1,
+            &tracks,
+            0..1,
+            &mut cursors,
+            None,
+            &mut state,
+        );
+        assert_eq!(state.sprite_state_index, Some(0));
+        assert_eq!(state.sprite_animation_epoch, Some(1.0));
+
+        apply_song_lua_overlay_runtime_updates_for(
+            2.0,
+            &tracks,
+            0..1,
+            &mut cursors,
+            None,
+            &mut state,
+        );
+        assert_eq!(state.sprite_state_index, Some(2));
+        assert_eq!(state.sprite_animation_epoch, Some(2.0));
     }
 
     #[test]

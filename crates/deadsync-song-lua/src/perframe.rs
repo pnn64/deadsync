@@ -1546,6 +1546,12 @@ impl<'a> SongLuaPerframeMessageReplay<'a> {
                 else {
                     continue;
                 };
+                if let Some(aux) = overlay.actor.message_commands[command_index].aux {
+                    overlay
+                        .table
+                        .set("__songlua_aux", aux)
+                        .map_err(|err| err.to_string())?;
+                }
                 self.active[overlay_index] = Some(SongLuaPerframeActiveMessage {
                     command_index,
                     start_beat: event.beat,

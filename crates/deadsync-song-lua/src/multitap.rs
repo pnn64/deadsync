@@ -421,6 +421,7 @@ fn install_multitap_explosion_messages<Kind>(
             .push(SongLuaOverlayMessageCommand {
                 message: message.clone(),
                 blocks,
+                aux: None,
             });
         installed = true;
     }

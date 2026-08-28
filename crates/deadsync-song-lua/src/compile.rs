@@ -513,6 +513,7 @@ where
             initial_state: SongLuaOverlayState::default(),
             message_commands: vec![SongLuaOverlayMessageCommand {
                 message,
+                aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
                     start: 0.0,
                     duration: 0.0,
