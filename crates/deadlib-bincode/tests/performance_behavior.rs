@@ -507,6 +507,166 @@ fn reusable_hash_map_reuses_string_keys_and_values_together() {
 }
 
 #[test]
+fn reusable_hash_map_reuses_byte_buffer_key_allocations() {
+    let values = (0..128u64)
+        .map(|index| {
+            let mut key = index.to_le_bytes().to_vec();
+            key.extend((0..88u64).map(|offset| index.wrapping_mul(31).wrapping_add(offset) as u8));
+            (key, index.wrapping_mul(1_000_003))
+        })
+        .collect::<HashMap<_, _>>();
+    let config = bincode::config::standard();
+    let encoded = bincode::encode_to_vec(&values, config).unwrap();
+    let mut decoded = (0..values.len())
+        .map(|index| {
+            let mut key = Vec::with_capacity(192);
+            key.extend_from_slice(&(index as u64).to_le_bytes());
+            (key, u64::MAX)
+        })
+        .collect::<HashMap<_, _>>();
+    let capacity = decoded.capacity();
+    let allocations = decoded
+        .keys()
+        .map(|key| key.as_ptr() as usize)
+        .collect::<HashSet<_>>();
+
+    let used = bincode::decode_from_slice_into_hash_map(&encoded, &mut decoded, config).unwrap();
+    assert_eq!((&decoded, used), (&values, encoded.len()));
+    assert_eq!(decoded.capacity(), capacity);
+    assert_eq!(
+        decoded
+            .keys()
+            .map(|key| key.as_ptr() as usize)
+            .collect::<HashSet<_>>(),
+        allocations
+    );
+}
+
+#[test]
+fn reusable_hash_map_reuses_byte_buffer_value_allocations() {
+    let values = (0..128u64)
+        .map(|index| {
+            let mut value = index.to_le_bytes().to_vec();
+            value
+                .extend((0..88u64).map(|offset| index.wrapping_mul(31).wrapping_add(offset) as u8));
+            (index.wrapping_mul(1_000_003), value)
+        })
+        .collect::<HashMap<_, _>>();
+    let config = bincode::config::standard();
+    let encoded = bincode::encode_to_vec(&values, config).unwrap();
+    let mut decoded = (0..values.len() as u64)
+        .map(|index| {
+            let mut value = Vec::with_capacity(192);
+            value.extend_from_slice(b"discarded");
+            (index, value)
+        })
+        .collect::<HashMap<_, _>>();
+    let capacity = decoded.capacity();
+    let allocations = decoded
+        .values()
+        .map(|value| value.as_ptr() as usize)
+        .collect::<HashSet<_>>();
+
+    let used = bincode::decode_from_slice_into_hash_map(&encoded, &mut decoded, config).unwrap();
+    assert_eq!((&decoded, used), (&values, encoded.len()));
+    assert_eq!(decoded.capacity(), capacity);
+    assert_eq!(
+        decoded
+            .values()
+            .map(|value| value.as_ptr() as usize)
+            .collect::<HashSet<_>>(),
+        allocations
+    );
+}
+
+#[test]
+fn reusable_hash_map_reuses_mixed_string_and_byte_buffers() {
+    let values = (0..64u64)
+        .map(|index| {
+            let mut value = index.to_le_bytes().to_vec();
+            value.extend((0..88u64).map(|offset| index.wrapping_add(offset) as u8));
+            (format!("chart-{index:03}-dead-sync"), value)
+        })
+        .collect::<HashMap<_, _>>();
+    let config = bincode::config::standard();
+    let encoded = bincode::encode_to_vec(&values, config).unwrap();
+    let mut decoded = (0..values.len())
+        .map(|index| {
+            let mut key = String::with_capacity(128);
+            let mut value = Vec::with_capacity(192);
+            key.push_str(&format!("discarded-{index}"));
+            value.extend_from_slice(b"discarded");
+            (key, value)
+        })
+        .collect::<HashMap<_, _>>();
+    let key_allocations = decoded
+        .keys()
+        .map(|key| key.as_ptr() as usize)
+        .collect::<HashSet<_>>();
+    let value_allocations = decoded
+        .values()
+        .map(|value| value.as_ptr() as usize)
+        .collect::<HashSet<_>>();
+
+    bincode::decode_from_slice_into_hash_map(&encoded, &mut decoded, config).unwrap();
+    assert_eq!(decoded, values);
+    assert_eq!(
+        decoded
+            .keys()
+            .map(|key| key.as_ptr() as usize)
+            .collect::<HashSet<_>>(),
+        key_allocations
+    );
+    assert_eq!(
+        decoded
+            .values()
+            .map(|value| value.as_ptr() as usize)
+            .collect::<HashSet<_>>(),
+        value_allocations
+    );
+}
+
+#[test]
+fn reusable_byte_key_hash_map_preserves_errors_and_duplicate_keys() {
+    let config = bincode::config::standard();
+    let entries = vec![(vec![1u8; 96], 1u64), (vec![2u8; 96], 251u64)];
+    let encoded = bincode::encode_to_vec(&entries, config).unwrap();
+    let mut decoded = (0..entries.len())
+        .map(|index| {
+            let mut key = Vec::with_capacity(192);
+            key.extend_from_slice(&[index as u8; 8]);
+            (key, u64::MAX)
+        })
+        .collect::<HashMap<_, _>>();
+
+    let error = bincode::decode_from_slice_into_hash_map(
+        &encoded[..encoded.len() - 1],
+        &mut decoded,
+        config,
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        bincode::error::DecodeError::UnexpectedEnd { .. }
+    ));
+    assert_eq!(decoded.len(), 1);
+    assert_eq!(decoded.get(&entries[0].0), Some(&entries[0].1));
+
+    let error =
+        bincode::decode_from_slice_into_hash_map(&encoded, &mut decoded, config.with_limit::<16>())
+            .unwrap_err();
+    assert!(matches!(error, bincode::error::DecodeError::LimitExceeded));
+    assert!(decoded.is_empty());
+
+    let duplicate_entries = vec![(vec![7u8; 32], 1u64), (vec![7u8; 32], 2)];
+    let encoded = bincode::encode_to_vec(&duplicate_entries, config).unwrap();
+    decoded.insert(vec![9u8; 32], u64::MAX);
+    bincode::decode_from_slice_into_hash_map(&encoded, &mut decoded, config).unwrap();
+    assert_eq!(decoded.len(), 1);
+    assert_eq!(decoded.get(&duplicate_entries[0].0), Some(&2));
+}
+
+#[test]
 fn reusable_string_key_hash_map_preserves_errors_and_duplicate_keys() {
     let config = bincode::config::standard();
     let entries = vec![
@@ -628,6 +788,66 @@ fn reusable_hash_set_reuses_string_allocations() {
     let encoded = bincode::encode_to_vec(&ordered, config).unwrap();
     decoded.insert(String::with_capacity(128));
     decoded.insert("another warm allocation".to_owned());
+    let error = bincode::decode_from_slice_into_hash_set(
+        &encoded[..encoded.len() - 1],
+        &mut decoded,
+        config,
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        bincode::error::DecodeError::UnexpectedEnd { .. }
+    ));
+    assert_eq!(decoded.len(), 1);
+    assert!(decoded.contains(&ordered[0]));
+}
+
+#[test]
+fn reusable_hash_set_reuses_byte_buffer_allocations() {
+    let values = (0..128u64)
+        .map(|index| {
+            let mut value = index.to_le_bytes().to_vec();
+            value
+                .extend((0..88u64).map(|offset| index.wrapping_mul(31).wrapping_add(offset) as u8));
+            value
+        })
+        .collect::<HashSet<_>>();
+    let config = bincode::config::standard();
+    let encoded = bincode::encode_to_vec(&values, config).unwrap();
+    let mut decoded = (0..values.len())
+        .map(|index| {
+            let mut value = Vec::with_capacity(192);
+            value.extend_from_slice(&(index as u64).to_le_bytes());
+            value
+        })
+        .collect::<HashSet<_>>();
+    let capacity = decoded.capacity();
+    let allocations = decoded
+        .iter()
+        .map(|value| value.as_ptr() as usize)
+        .collect::<HashSet<_>>();
+
+    let used = bincode::decode_from_slice_into_hash_set(&encoded, &mut decoded, config).unwrap();
+    assert_eq!((&decoded, used), (&values, encoded.len()));
+    assert_eq!(decoded.capacity(), capacity);
+    assert_eq!(
+        decoded
+            .iter()
+            .map(|value| value.as_ptr() as usize)
+            .collect::<HashSet<_>>(),
+        allocations
+    );
+
+    let error =
+        bincode::decode_from_slice_into_hash_set(&encoded, &mut decoded, config.with_limit::<16>())
+            .unwrap_err();
+    assert!(matches!(error, bincode::error::DecodeError::LimitExceeded));
+    assert!(decoded.is_empty());
+
+    let ordered = vec![vec![1u8; 96], vec![2u8; 96]];
+    let encoded = bincode::encode_to_vec(&ordered, config).unwrap();
+    decoded.insert(Vec::with_capacity(192));
+    decoded.insert(vec![9u8; 8]);
     let error = bincode::decode_from_slice_into_hash_set(
         &encoded[..encoded.len() - 1],
         &mut decoded,

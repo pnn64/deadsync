@@ -66,6 +66,8 @@ produced by the retained surface under `config::standard()`.
   vectors during caller-owned vector decoding.
 - Pool and reuse allocations owned by string hash-map keys, string hash-map
   values, and string hash-set elements during caller-owned decoding.
+- Pool and reuse allocations owned by byte-buffer hash-map keys, byte-buffer
+  hash-map values, and byte-buffer hash-set elements, including mixed maps.
 - Add paired old/new Criterion benchmarks with throughput, allocation churn,
   and Windows thread-cycle reporting. Run them with
   `cargo bench -p deadlib-bincode --bench performance -- --noplot` and
@@ -74,4 +76,5 @@ produced by the retained surface under `config::standard()`.
   `cargo bench -p deadlib-bincode --bench third_pass_performance -- --noplot`,
   `cargo bench -p deadlib-bincode --bench fourth_pass_performance -- --noplot`,
   `cargo bench -p deadlib-bincode --bench fifth_pass_performance -- --noplot`,
-  and `cargo bench -p deadlib-bincode --bench sixth_pass_performance -- --noplot`.
+  `cargo bench -p deadlib-bincode --bench sixth_pass_performance -- --noplot`,
+  and `cargo bench -p deadlib-bincode --bench seventh_pass_performance -- --noplot`.
