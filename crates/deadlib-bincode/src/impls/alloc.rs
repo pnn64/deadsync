@@ -143,6 +143,44 @@ fn copy_into_vec<T, D: Decoder>(
     Some(Ok(()))
 }
 
+fn decode_bool_vec_into<T, D: Decoder>(
+    decoder: &mut D,
+    len: usize,
+    values: &mut Vec<T>,
+) -> Option<Result<(), DecodeError>> {
+    if !crate::unty::type_equal::<T, bool>() {
+        return None;
+    }
+
+    let source = decoder.reader().peek_read(len)?;
+    if source.len() < len {
+        return None;
+    }
+    let source = &source[..len];
+    let invalid = source
+        .iter()
+        .position(|byte| *byte > 1)
+        .map(|index| (index, source[index]));
+    let valid_len = invalid.map_or(len, |(index, _)| index);
+
+    values.reserve(valid_len);
+    // SAFETY: type_equal established that T is bool. Every source byte before
+    // valid_len was checked to be 0 or 1, both valid bool representations, and
+    // reserve provided space for exactly that many initialized values.
+    unsafe {
+        std::ptr::copy_nonoverlapping(source.as_ptr(), values.as_mut_ptr().cast::<u8>(), valid_len);
+        values.set_len(valid_len);
+    }
+
+    if let Some((index, value)) = invalid {
+        decoder.reader().consume(index + 1);
+        Some(Err(DecodeError::InvalidBooleanValue(value)))
+    } else {
+        decoder.reader().consume(len);
+        Some(Ok(()))
+    }
+}
+
 fn decode_varint_vec_into<T, D: Decoder>(
     decoder: &mut D,
     len: usize,
@@ -349,6 +387,9 @@ pub(crate) fn decode_vec_into<T: Decode<Context>, Context, D: Decoder<Context = 
             return result;
         }
     }
+    if let Some(result) = decode_bool_vec_into(decoder, len, values) {
+        return result;
+    }
     if let Some(result) = decode_varint_vec_into(decoder, len, values) {
         return result;
     }
@@ -395,6 +436,9 @@ pub(crate) fn borrow_decode_vec_into<
         if let Some(result) = copy_into_vec(decoder, len, values) {
             return result;
         }
+    }
+    if let Some(result) = decode_bool_vec_into(decoder, len, values) {
+        return result;
     }
     if let Some(result) = decode_varint_vec_into(decoder, len, values) {
         return result;
@@ -458,6 +502,10 @@ impl<Context, T: Decode<Context>> Decode<Context> for Vec<T> {
         }
 
         let mut values = Self::new();
+        if let Some(result) = decode_bool_vec_into(decoder, len, &mut values) {
+            result?;
+            return Ok(values);
+        }
         if let Some(result) = decode_varint_vec_into(decoder, len, &mut values) {
             result?;
             return Ok(values);
@@ -487,6 +535,10 @@ impl<'de, T: BorrowDecode<'de, Context>, Context> BorrowDecode<'de, Context> for
         }
 
         let mut values = Self::with_capacity(len);
+        if let Some(result) = decode_bool_vec_into(decoder, len, &mut values) {
+            result?;
+            return Ok(values);
+        }
         for _ in 0..len {
             decoder.unclaim_bytes_read(std::mem::size_of::<T>());
             values.push(T::borrow_decode(decoder)?);

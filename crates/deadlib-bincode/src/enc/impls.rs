@@ -9,11 +9,19 @@ fn encoded_bytes<T, C>(values: &[T]) -> Option<&[u8]>
 where
     C: InternalEndianConfig + InternalIntEncodingConfig,
 {
-    if !crate::unty::type_equal::<T, u8>() && !crate::utils::can_memcpy::<T, C>() {
+    if core::mem::size_of::<T>() == 1 {
+        if !crate::unty::type_equal::<T, u8>()
+            && !crate::unty::type_equal::<T, bool>()
+            && !crate::utils::can_memcpy::<T, C>()
+        {
+            return None;
+        }
+    } else if !crate::utils::can_memcpy::<T, C>() {
         return None;
     }
 
-    // SAFETY: T is u8 or `can_memcpy` restricted it to a padding-free numeric
+    // SAFETY: T is u8, bool (whose valid in-memory values are its 0/1 wire
+    // values), or `can_memcpy` restricted it to a padding-free numeric
     // primitive whose in-memory representation has the configured byte order.
     Some(unsafe {
         core::slice::from_raw_parts(values.as_ptr().cast(), core::mem::size_of_val(values))

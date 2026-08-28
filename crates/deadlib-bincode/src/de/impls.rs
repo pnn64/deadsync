@@ -52,6 +52,38 @@ fn decode_raw_array<T, D: Decoder, const N: usize>(
     }
 }
 
+fn decode_bool_array<T, D: Decoder, const N: usize>(
+    decoder: &mut D,
+) -> Option<Result<[T; N], DecodeError>> {
+    if !crate::unty::type_equal::<T, bool>() {
+        return None;
+    }
+
+    let source = decoder.reader().peek_read(N)?;
+    if source.len() < N {
+        return None;
+    }
+    let source = &source[..N];
+    if let Some(index) = source.iter().position(|byte| *byte > 1) {
+        let value = source[index];
+        decoder.reader().consume(index + 1);
+        return Some(Err(DecodeError::InvalidBooleanValue(value)));
+    }
+
+    let mut values = [false; N];
+    // SAFETY: type_equal established that T is bool. Every source byte was
+    // checked to be 0 or 1, both valid bool representations, and values has
+    // storage for exactly N bools.
+    unsafe {
+        core::ptr::copy_nonoverlapping(source.as_ptr(), values.as_mut_ptr().cast::<u8>(), N);
+    }
+    decoder.reader().consume(N);
+    // SAFETY: type_equal established that T and bool are the same type.
+    Some(Ok(unsafe {
+        (&values as *const [bool; N]).cast::<[T; N]>().read()
+    }))
+}
+
 impl<Context> Decode<Context> for bool {
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
         match u8::decode(decoder)? {
@@ -351,6 +383,8 @@ where
             result
         } else if let Some(result) = decode_raw_array(decoder) {
             result
+        } else if let Some(result) = decode_bool_array(decoder) {
+            result
         } else {
             let result = super::impl_core::collect_into_array(&mut (0..N).map(|_| {
                 // See the documentation on `unclaim_bytes_read` as to why we're doing this here
@@ -377,6 +411,8 @@ where
         if let Some(result) = decode_u8_array(decoder) {
             result
         } else if let Some(result) = decode_raw_array(decoder) {
+            result
+        } else if let Some(result) = decode_bool_array(decoder) {
             result
         } else {
             let result = super::impl_core::collect_into_array(&mut (0..N).map(|_| {

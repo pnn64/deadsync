@@ -8,6 +8,12 @@ pub fn can_memcpy<T, C>() -> bool
 where
     C: InternalEndianConfig + InternalIntEncodingConfig,
 {
+    // i8 is always encoded as its single in-memory byte, independently of
+    // integer encoding or byte order, and every bit pattern is valid.
+    if crate::unty::type_equal::<T, i8>() {
+        return true;
+    }
+
     let native_endian = match C::ENDIAN {
         Endianness::Little => cfg!(target_endian = "little"),
         Endianness::Big => cfg!(target_endian = "big"),
