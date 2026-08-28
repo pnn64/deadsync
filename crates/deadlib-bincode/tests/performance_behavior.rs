@@ -1,10 +1,29 @@
 use bincode::{BorrowDecode, Decode, Encode};
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static BORROWED_DROPS: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug, PartialEq, Encode, BorrowDecode)]
 struct BorrowedPayload<'a> {
     name: &'a str,
     bytes: &'a [u8],
+}
+
+struct DropTrackedBorrowed<'a>(&'a str);
+
+impl Drop for DropTrackedBorrowed<'_> {
+    fn drop(&mut self) {
+        BORROWED_DROPS.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+impl<'de> BorrowDecode<'de, ()> for DropTrackedBorrowed<'de> {
+    fn borrow_decode<D: bincode::de::BorrowDecoder<'de, Context = ()>>(
+        decoder: &mut D,
+    ) -> Result<Self, bincode::error::DecodeError> {
+        Ok(Self(<&str>::borrow_decode(decoder)?))
+    }
 }
 
 #[test]
@@ -173,6 +192,126 @@ fn borrowed_decode_points_into_source() {
     let source = encoded.as_ptr_range();
     assert!(source.contains(&decoded.name.as_ptr()));
     assert!(source.contains(&decoded.bytes.as_ptr()));
+}
+
+#[test]
+fn reusable_borrowed_vector_decode_reuses_storage_and_source() {
+    let values = (0..128)
+        .map(|index| format!("chart-{index:03}-dead-sync"))
+        .collect::<Vec<_>>();
+    let shorter_values = vec!["short".to_owned(), "tail".to_owned()];
+    let config = bincode::config::standard();
+    let mut encoded = bincode::encode_to_vec(&values, config).unwrap();
+    encoded.extend_from_slice(b"trailing");
+    let shorter = bincode::encode_to_vec(&shorter_values, config).unwrap();
+    let expected = bincode::borrow_decode_from_slice::<Vec<&str>, _>(&encoded, config).unwrap();
+    let mut decoded = Vec::with_capacity(values.len() * 2);
+    decoded.push("discarded");
+    let allocation = decoded.as_ptr();
+
+    let used = bincode::borrow_decode_from_slice_into_vec(&encoded, &mut decoded, config).unwrap();
+    assert_eq!(
+        (decoded.as_slice(), used),
+        (expected.0.as_slice(), expected.1)
+    );
+    assert_eq!(decoded.as_ptr(), allocation);
+    let source = encoded.as_ptr_range();
+    assert!(decoded.iter().all(|value| source.contains(&value.as_ptr())));
+
+    let used = bincode::borrow_decode_from_slice_into_vec(&shorter, &mut decoded, config).unwrap();
+    assert_eq!(decoded, ["short", "tail"]);
+    assert_eq!(used, shorter.len());
+    assert_eq!(decoded.as_ptr(), allocation);
+    let source = shorter.as_ptr_range();
+    assert!(decoded.iter().all(|value| source.contains(&value.as_ptr())));
+}
+
+#[test]
+fn reusable_borrowed_vector_keeps_initialized_prefix_droppable_on_error() {
+    BORROWED_DROPS.store(0, Ordering::SeqCst);
+    let config = bincode::config::standard();
+    let encoded = bincode::encode_to_vec(vec!["complete", "truncated"], config).unwrap();
+    let truncated = &encoded[..encoded.len() - 1];
+    let mut decoded = Vec::with_capacity(4);
+    decoded.push(DropTrackedBorrowed("discarded"));
+    let allocation = decoded.as_ptr();
+
+    let error =
+        bincode::borrow_decode_from_slice_into_vec(truncated, &mut decoded, config).unwrap_err();
+    assert!(matches!(
+        error,
+        bincode::error::DecodeError::UnexpectedEnd { .. }
+    ));
+    assert_eq!(BORROWED_DROPS.load(Ordering::SeqCst), 1);
+    assert_eq!(decoded.len(), 1);
+    assert_eq!(decoded[0].0, "complete");
+    assert_eq!(decoded.as_ptr(), allocation);
+
+    drop(decoded);
+    assert_eq!(BORROWED_DROPS.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn reusable_borrowed_hash_map_decode_reuses_storage_and_source() {
+    let values = (0..128u64)
+        .map(|value| (format!("chart-{value:03}"), value.rotate_left(17)))
+        .collect::<HashMap<_, _>>();
+    let config = bincode::config::standard();
+    let mut encoded = bincode::encode_to_vec(&values, config).unwrap();
+    encoded.extend_from_slice(b"trailing");
+    let expected =
+        bincode::borrow_decode_from_slice::<HashMap<&str, u64>, _>(&encoded, config).unwrap();
+    let mut decoded = HashMap::with_capacity(values.len() * 2);
+    decoded.insert("discarded", u64::MAX);
+    let capacity = decoded.capacity();
+
+    let used =
+        bincode::borrow_decode_from_slice_into_hash_map(&encoded, &mut decoded, config).unwrap();
+    assert_eq!((&decoded, used), (&expected.0, expected.1));
+    assert_eq!(decoded.capacity(), capacity);
+    let source = encoded.as_ptr_range();
+    assert!(decoded.keys().all(|key| source.contains(&key.as_ptr())));
+
+    let error = bincode::borrow_decode_from_slice_into_hash_map(
+        &encoded,
+        &mut decoded,
+        config.with_limit::<16>(),
+    )
+    .unwrap_err();
+    assert!(matches!(error, bincode::error::DecodeError::LimitExceeded));
+    assert!(decoded.is_empty());
+    assert_eq!(decoded.capacity(), capacity);
+}
+
+#[test]
+fn reusable_borrowed_hash_set_decode_reuses_storage_and_source() {
+    let values = (0..256u64)
+        .map(|value| format!("chart-{value:03}-{}", value.rotate_left(11)))
+        .collect::<HashSet<_>>();
+    let config = bincode::config::standard();
+    let mut encoded = bincode::encode_to_vec(&values, config).unwrap();
+    encoded.extend_from_slice(b"trailing");
+    let expected = bincode::borrow_decode_from_slice::<HashSet<&str>, _>(&encoded, config).unwrap();
+    let mut decoded = HashSet::with_capacity(values.len() * 2);
+    decoded.insert("discarded");
+    let capacity = decoded.capacity();
+
+    let used =
+        bincode::borrow_decode_from_slice_into_hash_set(&encoded, &mut decoded, config).unwrap();
+    assert_eq!((&decoded, used), (&expected.0, expected.1));
+    assert_eq!(decoded.capacity(), capacity);
+    let source = encoded.as_ptr_range();
+    assert!(decoded.iter().all(|value| source.contains(&value.as_ptr())));
+
+    let error = bincode::borrow_decode_from_slice_into_hash_set(
+        &encoded,
+        &mut decoded,
+        config.with_limit::<16>(),
+    )
+    .unwrap_err();
+    assert!(matches!(error, bincode::error::DecodeError::LimitExceeded));
+    assert!(decoded.is_empty());
+    assert_eq!(decoded.capacity(), capacity);
 }
 
 #[test]

@@ -214,6 +214,60 @@ pub(crate) fn decode_vec_into<T: Decode<Context>, Context, D: Decoder<Context = 
     Ok(())
 }
 
+pub(crate) fn borrow_decode_vec_into<
+    'de,
+    T: BorrowDecode<'de, Context>,
+    Context,
+    D: BorrowDecoder<'de, Context = Context>,
+>(
+    decoder: &mut D,
+    values: &mut Vec<T>,
+) -> Result<(), DecodeError> {
+    values.clear();
+    let len = crate::de::decode_slice_len(decoder)?;
+    decoder.claim_container_read::<T>(len)?;
+
+    if crate::unty::type_equal::<T, u8>() {
+        if let Some(result) = copy_into_vec(decoder, len, values) {
+            return result;
+        }
+
+        values.reserve(len);
+        // SAFETY: `type_equal` established that T is u8, so zero is a valid T
+        // and the initialized allocation can be exposed to `Reader::read`.
+        unsafe {
+            std::ptr::write_bytes(values.as_mut_ptr(), 0, len);
+            values.set_len(len);
+            let bytes = std::slice::from_raw_parts_mut(values.as_mut_ptr().cast::<u8>(), len);
+            decoder.reader().read(bytes)?;
+        }
+        return Ok(());
+    }
+
+    if crate::utils::can_memcpy::<T, D::C>() {
+        if let Some(result) = copy_into_vec(decoder, len, values) {
+            return result;
+        }
+    }
+    if let Some(result) = decode_varint_vec_into(decoder, len, values) {
+        return result;
+    }
+
+    values.reserve(len);
+    for _ in 0..len {
+        decoder.unclaim_bytes_read(std::mem::size_of::<T>());
+        let value = T::borrow_decode(decoder)?;
+        // SAFETY: `reserve(len)` provides enough spare capacity for every
+        // iteration. Advancing the length immediately after each write keeps
+        // the successfully decoded prefix initialized and droppable on error.
+        unsafe {
+            values.as_mut_ptr().add(values.len()).write(value);
+            values.set_len(values.len() + 1);
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn decode_string_into<Context, D: Decoder<Context = Context>>(
     decoder: &mut D,
     value: &mut String,

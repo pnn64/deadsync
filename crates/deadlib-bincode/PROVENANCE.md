@@ -56,8 +56,11 @@ produced by the retained surface under `config::standard()`.
   both its marker and payload.
 - Reuse caller-owned string, hash-map, and hash-set allocations during
   top-level decoding.
+- Reuse caller-owned vector, hash-map, and hash-set storage while decoding
+  elements that borrow directly from the input slice.
 - Add paired old/new Criterion benchmarks with throughput, allocation churn,
   and Windows thread-cycle reporting. Run them with
   `cargo bench -p deadlib-bincode --bench performance -- --noplot` and
   `cargo bench -p deadlib-bincode --bench additional_performance -- --noplot`,
-  and `cargo bench -p deadlib-bincode --bench second_pass_performance -- --noplot`.
+  `cargo bench -p deadlib-bincode --bench second_pass_performance -- --noplot`,
+  and `cargo bench -p deadlib-bincode --bench third_pass_performance -- --noplot`.

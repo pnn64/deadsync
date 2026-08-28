@@ -49,6 +49,47 @@ where
     Ok(())
 }
 
+pub(crate) fn borrow_decode_hash_map_into<'de, Context, K, V, S, D>(
+    decoder: &mut D,
+    map: &mut HashMap<K, V, S>,
+) -> Result<(), DecodeError>
+where
+    K: BorrowDecode<'de, Context> + Eq + Hash,
+    V: BorrowDecode<'de, Context>,
+    S: BuildHasher,
+    D: BorrowDecoder<'de, Context = Context>,
+{
+    map.clear();
+    let len = crate::de::decode_slice_len(decoder)?;
+    decoder.claim_container_read::<(K, V)>(len)?;
+    map.reserve(len);
+    for _ in 0..len {
+        decoder.unclaim_bytes_read(std::mem::size_of::<(K, V)>());
+        map.insert(K::borrow_decode(decoder)?, V::borrow_decode(decoder)?);
+    }
+    Ok(())
+}
+
+pub(crate) fn borrow_decode_hash_set_into<'de, Context, T, S, D>(
+    decoder: &mut D,
+    set: &mut HashSet<T, S>,
+) -> Result<(), DecodeError>
+where
+    T: BorrowDecode<'de, Context> + Eq + Hash,
+    S: BuildHasher,
+    D: BorrowDecoder<'de, Context = Context>,
+{
+    set.clear();
+    let len = crate::de::decode_slice_len(decoder)?;
+    decoder.claim_container_read::<T>(len)?;
+    set.reserve(len);
+    for _ in 0..len {
+        decoder.unclaim_bytes_read(std::mem::size_of::<T>());
+        set.insert(T::borrow_decode(decoder)?);
+    }
+    Ok(())
+}
+
 impl std::error::Error for EncodeError {}
 
 impl std::error::Error for DecodeError {

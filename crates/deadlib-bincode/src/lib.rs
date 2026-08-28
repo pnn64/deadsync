@@ -149,6 +149,69 @@ pub fn borrow_decode_from_slice<'a, D: de::BorrowDecode<'a, ()>, C: Config>(
     Ok((result, bytes_read))
 }
 
+/// Decode a borrowed vector while reusing its allocation.
+///
+/// `values` is cleared before decoding but retains its capacity. Elements may
+/// borrow directly from `src`. On failure, it may contain a successfully
+/// decoded prefix.
+pub fn borrow_decode_from_slice_into_vec<'a, T, C>(
+    src: &'a [u8],
+    values: &mut Vec<T>,
+    config: C,
+) -> Result<usize, error::DecodeError>
+where
+    T: de::BorrowDecode<'a, ()>,
+    C: Config,
+{
+    let reader = de::read::SliceReader::new(src);
+    let mut decoder = de::DecoderImpl::<_, C, ()>::new(reader, config, ());
+    impls::borrow_decode_vec_into(&mut decoder, values)?;
+    Ok(src.len() - decoder.reader().slice.len())
+}
+
+/// Decode a borrowed hash map while reusing its allocation.
+///
+/// `values` is cleared before decoding but retains its buckets and hasher.
+/// Keys and values may borrow directly from `src`. On failure, the map may
+/// contain a successfully decoded prefix.
+pub fn borrow_decode_from_slice_into_hash_map<'a, K, V, S, C>(
+    src: &'a [u8],
+    values: &mut std::collections::HashMap<K, V, S>,
+    config: C,
+) -> Result<usize, error::DecodeError>
+where
+    K: de::BorrowDecode<'a, ()> + Eq + std::hash::Hash,
+    V: de::BorrowDecode<'a, ()>,
+    S: std::hash::BuildHasher,
+    C: Config,
+{
+    let reader = de::read::SliceReader::new(src);
+    let mut decoder = de::DecoderImpl::<_, C, ()>::new(reader, config, ());
+    impls::borrow_decode_hash_map_into(&mut decoder, values)?;
+    Ok(src.len() - decoder.reader().slice.len())
+}
+
+/// Decode a borrowed hash set while reusing its allocation.
+///
+/// `values` is cleared before decoding but retains its buckets and hasher.
+/// Elements may borrow directly from `src`. On failure, the set may contain a
+/// successfully decoded prefix.
+pub fn borrow_decode_from_slice_into_hash_set<'a, T, S, C>(
+    src: &'a [u8],
+    values: &mut std::collections::HashSet<T, S>,
+    config: C,
+) -> Result<usize, error::DecodeError>
+where
+    T: de::BorrowDecode<'a, ()> + Eq + std::hash::Hash,
+    S: std::hash::BuildHasher,
+    C: Config,
+{
+    let reader = de::read::SliceReader::new(src);
+    let mut decoder = de::DecoderImpl::<_, C, ()>::new(reader, config, ());
+    impls::borrow_decode_hash_set_into(&mut decoder, values)?;
+    Ok(src.len() - decoder.reader().slice.len())
+}
+
 #[cfg(doc)]
 pub mod spec {
     #![doc = include_str!("../docs/spec.md")]

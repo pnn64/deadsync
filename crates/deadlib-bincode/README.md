@@ -19,7 +19,10 @@ package.
 - `encode_to_vec`, reusable `encode_into_vec`, owned `decode_from_slice`,
   reusable `decode_from_slice_into_vec`, `decode_from_slice_into_string`,
   `decode_from_slice_into_hash_map`, and `decode_from_slice_into_hash_set`,
-  allocation-free `borrow_decode_from_slice`, and `config::standard()`
+  allocation-free `borrow_decode_from_slice`, reusable
+  `borrow_decode_from_slice_into_vec`,
+  `borrow_decode_from_slice_into_hash_map`, and
+  `borrow_decode_from_slice_into_hash_set`, and `config::standard()`
 - Compile-time decode limits through `Configuration::with_limit`
 - `Encode`, `Decode`, and `BorrowDecode` traits and derives
 - Booleans, integer and floating-point primitives, strings, vectors, options,
