@@ -57,3 +57,7 @@ harness = false
 [[bench]]
 name = "fifth_pass_performance"
 harness = false
+
+[[bench]]
+name = "sixth_pass_performance"
+harness = false

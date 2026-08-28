@@ -8,6 +8,170 @@ use std::{
     hash::{BuildHasher, Hash},
 };
 
+fn decode_string_key_hash_map_into<Context, V, S, D>(
+    decoder: &mut D,
+    map: &mut HashMap<String, V, S>,
+) -> Result<(), DecodeError>
+where
+    V: Decode<Context>,
+    S: BuildHasher,
+    D: Decoder<Context = Context>,
+{
+    let len = match crate::de::decode_slice_len(decoder) {
+        Ok(len) => len,
+        Err(error) => {
+            map.clear();
+            return Err(error);
+        }
+    };
+    if let Err(error) = decoder.claim_container_read::<(String, V)>(len) {
+        map.clear();
+        return Err(error);
+    }
+
+    let mut keys = map.drain().map(|(key, _)| key).collect::<Vec<_>>();
+    map.reserve(len);
+    for _ in 0..len {
+        decoder.unclaim_bytes_read(std::mem::size_of::<(String, V)>());
+        let mut key = keys.pop().unwrap_or_default();
+        crate::impls::decode_string_into(decoder, &mut key)?;
+        map.insert(key, V::decode(decoder)?);
+    }
+    Ok(())
+}
+
+fn decode_string_value_hash_map_into<Context, K, S, D>(
+    decoder: &mut D,
+    map: &mut HashMap<K, String, S>,
+) -> Result<(), DecodeError>
+where
+    K: Decode<Context> + Eq + Hash,
+    S: BuildHasher,
+    D: Decoder<Context = Context>,
+{
+    let len = match crate::de::decode_slice_len(decoder) {
+        Ok(len) => len,
+        Err(error) => {
+            map.clear();
+            return Err(error);
+        }
+    };
+    if let Err(error) = decoder.claim_container_read::<(K, String)>(len) {
+        map.clear();
+        return Err(error);
+    }
+
+    let mut values = map.drain().map(|(_, value)| value).collect::<Vec<_>>();
+    map.reserve(len);
+    for _ in 0..len {
+        decoder.unclaim_bytes_read(std::mem::size_of::<(K, String)>());
+        let key = K::decode(decoder)?;
+        let mut value = values.pop().unwrap_or_default();
+        crate::impls::decode_string_into(decoder, &mut value)?;
+        map.insert(key, value);
+    }
+    Ok(())
+}
+
+fn decode_string_pair_hash_map_into<Context, S, D>(
+    decoder: &mut D,
+    map: &mut HashMap<String, String, S>,
+) -> Result<(), DecodeError>
+where
+    S: BuildHasher,
+    D: Decoder<Context = Context>,
+{
+    let len = match crate::de::decode_slice_len(decoder) {
+        Ok(len) => len,
+        Err(error) => {
+            map.clear();
+            return Err(error);
+        }
+    };
+    if let Err(error) = decoder.claim_container_read::<(String, String)>(len) {
+        map.clear();
+        return Err(error);
+    }
+
+    let mut entries = map.drain().collect::<Vec<_>>();
+    map.reserve(len);
+    for _ in 0..len {
+        decoder.unclaim_bytes_read(std::mem::size_of::<(String, String)>());
+        let (mut key, mut value) = entries.pop().unwrap_or_default();
+        crate::impls::decode_string_into(decoder, &mut key)?;
+        crate::impls::decode_string_into(decoder, &mut value)?;
+        map.insert(key, value);
+    }
+    Ok(())
+}
+
+fn decode_reused_hash_map_strings<Context, K, V, S, D>(
+    decoder: &mut D,
+    map: &mut HashMap<K, V, S>,
+) -> Option<Result<(), DecodeError>>
+where
+    K: Decode<Context> + Eq + Hash,
+    V: Decode<Context>,
+    S: BuildHasher,
+    D: Decoder<Context = Context>,
+{
+    let string_size = std::mem::size_of::<String>();
+    let string_key =
+        std::mem::size_of::<K>() == string_size && crate::unty::type_equal::<K, String>();
+    let string_value =
+        std::mem::size_of::<V>() == string_size && crate::unty::type_equal::<V, String>();
+
+    if string_key && string_value {
+        // SAFETY: both type comparisons established the exact key and value
+        // types, so this is the same HashMap instantiation.
+        let map =
+            unsafe { &mut *(map as *mut HashMap<K, V, S>).cast::<HashMap<String, String, S>>() };
+        return Some(decode_string_pair_hash_map_into(decoder, map));
+    }
+    if string_key {
+        // SAFETY: the type comparison established that K is exactly String.
+        let map = unsafe { &mut *(map as *mut HashMap<K, V, S>).cast::<HashMap<String, V, S>>() };
+        return Some(decode_string_key_hash_map_into(decoder, map));
+    }
+    if string_value {
+        // SAFETY: the type comparison established that V is exactly String.
+        let map = unsafe { &mut *(map as *mut HashMap<K, V, S>).cast::<HashMap<K, String, S>>() };
+        return Some(decode_string_value_hash_map_into(decoder, map));
+    }
+    None
+}
+
+fn decode_string_hash_set_into<Context, S, D>(
+    decoder: &mut D,
+    set: &mut HashSet<String, S>,
+) -> Result<(), DecodeError>
+where
+    S: BuildHasher,
+    D: Decoder<Context = Context>,
+{
+    let len = match crate::de::decode_slice_len(decoder) {
+        Ok(len) => len,
+        Err(error) => {
+            set.clear();
+            return Err(error);
+        }
+    };
+    if let Err(error) = decoder.claim_container_read::<String>(len) {
+        set.clear();
+        return Err(error);
+    }
+
+    let mut values = set.drain().collect::<Vec<_>>();
+    set.reserve(len);
+    for _ in 0..len {
+        decoder.unclaim_bytes_read(std::mem::size_of::<String>());
+        let mut value = values.pop().unwrap_or_default();
+        crate::impls::decode_string_into(decoder, &mut value)?;
+        set.insert(value);
+    }
+    Ok(())
+}
+
 pub(crate) fn decode_hash_map_into<Context, K, V, S, D>(
     decoder: &mut D,
     map: &mut HashMap<K, V, S>,
@@ -18,6 +182,15 @@ where
     S: BuildHasher,
     D: Decoder<Context = Context>,
 {
+    let string_size = std::mem::size_of::<String>();
+    if (std::mem::size_of::<K>() == string_size || std::mem::size_of::<V>() == string_size)
+        && !map.is_empty()
+    {
+        if let Some(result) = decode_reused_hash_map_strings(decoder, map) {
+            return result;
+        }
+    }
+
     map.clear();
     let len = crate::de::decode_slice_len(decoder)?;
     decoder.claim_container_read::<(K, V)>(len)?;
@@ -38,6 +211,15 @@ where
     S: BuildHasher,
     D: Decoder<Context = Context>,
 {
+    if std::mem::size_of::<T>() == std::mem::size_of::<String>()
+        && !set.is_empty()
+        && crate::unty::type_equal::<T, String>()
+    {
+        // SAFETY: the type comparison established that T is exactly String.
+        let set = unsafe { &mut *(set as *mut HashSet<T, S>).cast::<HashSet<String, S>>() };
+        return decode_string_hash_set_into(decoder, set);
+    }
+
     set.clear();
     let len = crate::de::decode_slice_len(decoder)?;
     decoder.claim_container_read::<T>(len)?;
