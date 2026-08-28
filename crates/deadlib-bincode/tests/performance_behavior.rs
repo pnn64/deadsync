@@ -1551,6 +1551,118 @@ fn signed_byte_batches_cover_vectors_arrays_configs_and_reuse() {
     assert_eq!((writer.calls, writer.bytes), (2, expected.len()));
 }
 
+fn check_fixed_byte_array_batches<const N: usize>() {
+    let values = (0..8usize)
+        .map(|outer| std::array::from_fn(|inner| outer.wrapping_mul(31).wrapping_add(inner) as u8))
+        .collect::<Vec<[u8; N]>>();
+    let config = bincode::config::standard();
+    let mut expected = vec![values.len() as u8];
+    expected.extend(values.iter().flatten().copied());
+
+    assert_eq!(bincode::encode_to_vec(&values, config).unwrap(), expected);
+    assert_eq!(
+        bincode::decode_from_slice::<Vec<[u8; N]>, _>(&expected, config)
+            .unwrap()
+            .0,
+        values
+    );
+    assert_eq!(
+        bincode::borrow_decode_from_slice::<Vec<[u8; N]>, _>(&expected, config)
+            .unwrap()
+            .0,
+        values
+    );
+
+    let mut decoded = Vec::with_capacity(16);
+    decoded.extend((0..8).map(|_| [0xa5; N]));
+    let allocation = decoded.as_ptr();
+    let used = bincode::decode_from_slice_into_vec(&expected, &mut decoded, config).unwrap();
+    assert_eq!(
+        (decoded.as_slice(), used),
+        (values.as_slice(), expected.len())
+    );
+    assert_eq!(decoded.as_ptr(), allocation);
+
+    let mut writer = WriteCounter::default();
+    let mut encoder = bincode::enc::EncoderImpl::new(&mut writer, config);
+    values.as_slice().encode(&mut encoder).unwrap();
+    assert_eq!((writer.calls, writer.bytes), (2, expected.len()));
+
+    let array: [[u8; N]; 4] = std::array::from_fn(|index| values[index]);
+    let expected_array = array.iter().flatten().copied().collect::<Vec<_>>();
+    assert_eq!(
+        bincode::encode_to_vec(array, config).unwrap(),
+        expected_array
+    );
+    assert_eq!(
+        bincode::decode_from_slice::<[[u8; N]; 4], _>(&expected_array, config)
+            .unwrap()
+            .0,
+        array
+    );
+    assert_eq!(
+        bincode::decode_from_slice::<[[u8; N]; 4], _>(&expected_array, config.with_big_endian(),)
+            .unwrap()
+            .0,
+        array
+    );
+
+    let error =
+        bincode::decode_from_slice_into_vec(&expected[..expected.len() - 1], &mut decoded, config)
+            .unwrap_err();
+    assert!(matches!(
+        error,
+        bincode::error::DecodeError::UnexpectedEnd { .. }
+    ));
+    assert_eq!(decoded, values[..values.len() - 1]);
+    assert_eq!(decoded.as_ptr(), allocation);
+
+    let error =
+        bincode::decode_from_slice_into_vec(&expected, &mut decoded, config.with_limit::<32>())
+            .unwrap_err();
+    assert!(matches!(error, bincode::error::DecodeError::LimitExceeded));
+    assert!(decoded.is_empty());
+}
+
+#[test]
+fn fixed_byte_array_batches_cover_ids_hashes_and_signatures() {
+    check_fixed_byte_array_batches::<16>();
+    check_fixed_byte_array_batches::<32>();
+    check_fixed_byte_array_batches::<64>();
+}
+
+#[test]
+fn fixed_byte_array_batches_preserve_non_peeking_reader_fallback() {
+    struct NoPeek<'a>(&'a [u8]);
+    impl bincode::de::read::Reader for NoPeek<'_> {
+        fn read(&mut self, bytes: &mut [u8]) -> Result<(), bincode::error::DecodeError> {
+            if bytes.len() > self.0.len() {
+                return Err(bincode::error::DecodeError::UnexpectedEnd {
+                    additional: bytes.len() - self.0.len(),
+                });
+            }
+            let (read, remaining) = self.0.split_at(bytes.len());
+            bytes.copy_from_slice(read);
+            self.0 = remaining;
+            Ok(())
+        }
+    }
+
+    let values = (0..4usize)
+        .map(|outer| std::array::from_fn(|inner| outer.wrapping_add(inner) as u8))
+        .collect::<Vec<[u8; 32]>>();
+    let encoded = bincode::encode_to_vec(&values, bincode::config::standard()).unwrap();
+    let mut decoder =
+        bincode::de::DecoderImpl::new(NoPeek(&encoded), bincode::config::standard(), ());
+    assert_eq!(Vec::<[u8; 32]>::decode(&mut decoder).unwrap(), values);
+
+    let array: [[u8; 32]; 4] = std::array::from_fn(|index| values[index]);
+    let encoded = bincode::encode_to_vec(array, bincode::config::standard()).unwrap();
+    let mut decoder =
+        bincode::de::DecoderImpl::new(NoPeek(&encoded), bincode::config::standard(), ());
+    assert_eq!(<[[u8; 32]; 4]>::decode(&mut decoder).unwrap(), array);
+}
+
 #[test]
 fn specialized_varint_vectors_round_trip_boundaries() {
     macro_rules! round_trip {

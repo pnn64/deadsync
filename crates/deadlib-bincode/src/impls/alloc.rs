@@ -86,9 +86,10 @@ fn decode_raw_vec<T, D: Decoder>(
     }
     let source = &source[..byte_len];
     let mut values = Vec::<T>::with_capacity(len);
-    // SAFETY: can_memcpy restricts T to numeric primitives where every bit
-    // pattern is valid. The source contains exactly len complete values in
-    // native byte order, and with_capacity allocated space for all of them.
+    // SAFETY: can_memcpy restricts T to padding-free types where every bit
+    // pattern is valid and memory matches the configured wire representation.
+    // The source contains exactly len complete values, and with_capacity
+    // allocated space for all of them.
     unsafe {
         std::ptr::copy_nonoverlapping(source.as_ptr(), values.as_mut_ptr().cast(), byte_len);
         values.set_len(len);
@@ -132,9 +133,10 @@ fn copy_into_vec<T, D: Decoder>(
     }
 
     values.reserve(len);
-    // SAFETY: callers restrict T to u8 or to numeric primitives for which
-    // every bit pattern is valid. `reserve` provides space for `len` values
-    // and source contains the corresponding number of initialized bytes.
+    // SAFETY: callers restrict T to u8 or to padding-free types for which
+    // every bit pattern is valid and memory matches the wire representation.
+    // `reserve` provides space for `len` values and source contains the
+    // corresponding number of initialized bytes.
     unsafe {
         std::ptr::copy_nonoverlapping(source.as_ptr(), values.as_mut_ptr().cast(), byte_len);
         values.set_len(len);

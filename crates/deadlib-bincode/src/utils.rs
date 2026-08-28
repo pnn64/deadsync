@@ -9,9 +9,21 @@ where
     C: InternalEndianConfig + InternalIntEncodingConfig,
 {
     // i8 is always encoded as its single in-memory byte, independently of
-    // integer encoding or byte order, and every bit pattern is valid.
+    // integer encoding or byte order, and every bit pattern is valid. Keep
+    // this direct gate separate so its hot-path code generation stays minimal.
     if crate::unty::type_equal::<T, i8>() {
         return true;
+    }
+
+    // These alignment-one arrays also have wire representations identical to
+    // memory. Size gates keep unrelated primitive paths free of more checks.
+    if core::mem::align_of::<T>() == 1 {
+        match core::mem::size_of::<T>() {
+            16 if crate::unty::type_equal::<T, [u8; 16]>() => return true,
+            32 if crate::unty::type_equal::<T, [u8; 32]>() => return true,
+            64 if crate::unty::type_equal::<T, [u8; 64]>() => return true,
+            _ => {}
+        }
     }
 
     let native_endian = match C::ENDIAN {

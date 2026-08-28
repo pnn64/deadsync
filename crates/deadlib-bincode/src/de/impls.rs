@@ -42,9 +42,10 @@ fn decode_raw_array<T, D: Decoder, const N: usize>(
         }));
     }
     let mut values = core::mem::MaybeUninit::<[T; N]>::uninit();
-    // SAFETY: `can_memcpy` restricts T to numeric primitives where every bit
-    // pattern is valid. The source has exactly N complete values in native
-    // byte order and `values` provides enough correctly aligned storage.
+    // SAFETY: `can_memcpy` restricts T to padding-free types where every bit
+    // pattern is valid and memory matches the configured wire representation.
+    // The source has exactly N complete values and `values` provides enough
+    // correctly aligned storage.
     unsafe {
         core::ptr::copy_nonoverlapping(source.as_ptr(), values.as_mut_ptr().cast::<u8>(), byte_len);
         decoder.reader().consume(byte_len);

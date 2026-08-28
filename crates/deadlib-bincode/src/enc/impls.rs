@@ -21,8 +21,8 @@ where
     }
 
     // SAFETY: T is u8, bool (whose valid in-memory values are its 0/1 wire
-    // values), or `can_memcpy` restricted it to a padding-free numeric
-    // primitive whose in-memory representation has the configured byte order.
+    // values), or `can_memcpy` restricted it to a padding-free type whose
+    // in-memory representation is its configured wire representation.
     Some(unsafe {
         core::slice::from_raw_parts(values.as_ptr().cast(), core::mem::size_of_val(values))
     })

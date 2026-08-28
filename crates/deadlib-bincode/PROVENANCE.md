@@ -74,6 +74,9 @@ produced by the retained surface under `config::standard()`.
 - Batch boolean slice and array encoding, validate and copy boolean vectors
   and arrays in bulk, and batch signed-byte slices, vectors, and arrays while
   preserving scalar reader fallbacks and the existing allocation floor.
+- Encode and decode 16-, 32-, and 64-byte array collections through contiguous
+  writes and reads for common identifiers, hashes, keys, and signatures while
+  retaining scalar fallbacks for non-slice readers.
 - Add paired old/new Criterion benchmarks with throughput, allocation churn,
   and Windows thread-cycle reporting. Run them with
   `cargo bench -p deadlib-bincode --bench performance -- --noplot` and
@@ -85,4 +88,5 @@ produced by the retained surface under `config::standard()`.
   `cargo bench -p deadlib-bincode --bench sixth_pass_performance -- --noplot`,
   `cargo bench -p deadlib-bincode --bench seventh_pass_performance -- --noplot`,
   `cargo bench -p deadlib-bincode --bench eighth_pass_performance -- --noplot`,
-  and `cargo bench -p deadlib-bincode --bench ninth_pass_performance -- --noplot`.
+  `cargo bench -p deadlib-bincode --bench ninth_pass_performance -- --noplot`,
+  and `cargo bench -p deadlib-bincode --bench tenth_pass_performance -- --noplot`.
