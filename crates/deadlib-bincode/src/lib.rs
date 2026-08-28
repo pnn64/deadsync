@@ -40,7 +40,7 @@ pub mod error;
 pub use bincode_derive::{BorrowDecode, Decode, Encode};
 pub use de::{BorrowDecode, Decode};
 pub use enc::Encode;
-pub use impls::{encode_into_vec, encode_to_vec};
+pub use impls::{encode_into_slice, encode_into_vec, encode_to_vec, encoded_size};
 
 use config::Config;
 use de::Decoder;

@@ -48,6 +48,53 @@ fn reusable_encoding_matches_allocating_encoding() {
 }
 
 #[test]
+fn size_query_and_slice_encoding_match_allocating_encoding() {
+    let value = (
+        7u8,
+        [
+            0.0f32,
+            -0.0,
+            1.25,
+            f32::INFINITY,
+            f32::from_bits(0x7fc0_1234),
+        ],
+    );
+    let config = bincode::config::standard();
+    let expected = bincode::encode_to_vec(value, config).unwrap();
+    assert_eq!(
+        bincode::encoded_size(value, config).unwrap(),
+        expected.len()
+    );
+
+    let mut destination = vec![0xa5; expected.len() + 8];
+    let used = bincode::encode_into_slice(value, &mut destination, config).unwrap();
+    assert_eq!(used, expected.len());
+    assert_eq!(&destination[..used], expected);
+    assert_eq!(&destination[used..], &[0xa5; 8]);
+
+    let mut short = vec![0xa5; expected.len() - 1];
+    let error = bincode::encode_into_slice(value, &mut short, config).unwrap_err();
+    assert!(matches!(error, bincode::error::EncodeError::UnexpectedEnd));
+    assert_eq!(short[0], 7);
+    assert!(short[1..].iter().all(|byte| *byte == 0xa5));
+
+    let big_endian = bincode::config::standard().with_big_endian();
+    let expected = bincode::encode_to_vec(value, big_endian).unwrap();
+    let mut destination = vec![0; expected.len()];
+    assert_eq!(
+        bincode::encoded_size(value, big_endian).unwrap(),
+        expected.len()
+    );
+    assert_eq!(
+        bincode::encode_into_slice(value, &mut destination, big_endian).unwrap(),
+        expected.len()
+    );
+    assert_eq!(destination, expected);
+
+    assert_eq!(bincode::encode_into_slice((), &mut [], config).unwrap(), 0);
+}
+
+#[test]
 fn reusable_vector_decode_matches_allocating_decode() {
     let values = vec![0u64, 250, 251, u64::from(u16::MAX) + 1, u64::MAX];
     let config = bincode::config::standard();
@@ -366,6 +413,22 @@ fn owned_byte_decode_keeps_fallback_reader_behavior() {
     let reader = NoPeek(&encoded);
     let mut decoder = bincode::de::DecoderImpl::new(reader, bincode::config::standard(), ());
     assert_eq!(Vec::<u64>::decode(&mut decoder).unwrap(), integers);
+
+    let float_array = [
+        0.0f32,
+        -0.0,
+        1.25,
+        f32::INFINITY,
+        f32::from_bits(0x7fc0_1234),
+    ];
+    let encoded = bincode::encode_to_vec(float_array, bincode::config::standard()).unwrap();
+    let reader = NoPeek(&encoded);
+    let mut decoder = bincode::de::DecoderImpl::new(reader, bincode::config::standard(), ());
+    let decoded = <[f32; 5]>::decode(&mut decoder).unwrap();
+    assert!(decoded
+        .iter()
+        .zip(float_array)
+        .all(|(decoded, expected)| decoded.to_bits() == expected.to_bits()));
 }
 
 #[test]
@@ -404,6 +467,15 @@ fn numeric_batch_rejects_short_peek_buffer() {
         error,
         bincode::error::DecodeError::UnexpectedEnd { additional: 1 }
     ));
+
+    let encoded = bincode::encode_to_vec([0.0f32, 1.0, 2.0], bincode::config::standard()).unwrap();
+    let mut decoder =
+        bincode::de::DecoderImpl::new(ShortPeek(&encoded), bincode::config::standard(), ());
+    let error = <[f32; 3]>::decode(&mut decoder).unwrap_err();
+    assert!(matches!(
+        error,
+        bincode::error::DecodeError::UnexpectedEnd { additional: 1 }
+    ));
 }
 
 #[test]
@@ -438,6 +510,57 @@ fn numeric_batches_keep_wire_format() {
             .0,
         integers
     );
+}
+
+#[test]
+fn numeric_array_batches_keep_wire_format_and_limits() {
+    let floats = [0.0f32, -0.0, 1.25, f32::from_bits(0x7fc0_1234)];
+    let expected = [
+        0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 160, 63, 0x34, 0x12, 0xc0, 0x7f,
+    ];
+    let config = bincode::config::standard();
+    assert_eq!(bincode::encode_to_vec(floats, config).unwrap(), expected);
+    let decoded = bincode::decode_from_slice::<[f32; 4], _>(&expected, config)
+        .unwrap()
+        .0;
+    assert!(decoded
+        .iter()
+        .zip(floats)
+        .all(|(decoded, expected)| decoded.to_bits() == expected.to_bits()));
+    let borrowed = bincode::borrow_decode_from_slice::<[f32; 4], _>(&expected, config)
+        .unwrap()
+        .0;
+    assert!(borrowed
+        .iter()
+        .zip(floats)
+        .all(|(decoded, expected)| decoded.to_bits() == expected.to_bits()));
+
+    let fixed = [0x0102_0304_0506_0708u64, 0x1112_1314_1516_1718, u64::MAX];
+    for big_endian in [false, true] {
+        if big_endian {
+            let config = bincode::config::legacy().with_big_endian();
+            let encoded = bincode::encode_to_vec(fixed, config).unwrap();
+            assert_eq!(
+                bincode::decode_from_slice::<[u64; 3], _>(&encoded, config)
+                    .unwrap()
+                    .0,
+                fixed
+            );
+        } else {
+            let config = bincode::config::legacy();
+            let encoded = bincode::encode_to_vec(fixed, config).unwrap();
+            assert_eq!(
+                bincode::decode_from_slice::<[u64; 3], _>(&encoded, config)
+                    .unwrap()
+                    .0,
+                fixed
+            );
+        }
+    }
+
+    let error = bincode::decode_from_slice::<[f32; 4], _>(&expected, config.with_limit::<15>())
+        .unwrap_err();
+    assert!(matches!(error, bincode::error::DecodeError::LimitExceeded));
 }
 
 #[test]

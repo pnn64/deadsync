@@ -7,6 +7,28 @@ use crate::{
 };
 use std::{boxed::Box, string::String, vec::Vec};
 
+/// Return the number of bytes required to encode a value.
+pub fn encoded_size<E: Encode, C: Config>(val: E, config: C) -> Result<usize, EncodeError> {
+    let mut encoder = enc::EncoderImpl::<_, C>::new(SizeWriter::default(), config);
+    val.encode(&mut encoder)?;
+    Ok(encoder.into_writer().bytes_written)
+}
+
+/// Encode a value into a caller-provided byte slice.
+///
+/// The returned `usize` is the number of destination bytes written. If the
+/// destination is too short, the already-written prefix remains in `dst`.
+pub fn encode_into_slice<E: Encode, C: Config>(
+    val: E,
+    dst: &mut [u8],
+    config: C,
+) -> Result<usize, EncodeError> {
+    let writer = enc::write::SliceWriter::new(dst);
+    let mut encoder = enc::EncoderImpl::<_, C>::new(writer, config);
+    val.encode(&mut encoder)?;
+    Ok(encoder.into_writer().bytes_written())
+}
+
 struct VecWriter<'a> {
     inner: &'a mut Vec<u8>,
 }
@@ -21,11 +43,7 @@ impl enc::write::Writer for VecWriter<'_> {
 
 /// Encode a value into a newly allocated byte vector.
 pub fn encode_to_vec<E: Encode, C: Config>(val: E, config: C) -> Result<Vec<u8>, EncodeError> {
-    let size = {
-        let mut encoder = enc::EncoderImpl::<_, C>::new(SizeWriter::default(), config);
-        val.encode(&mut encoder)?;
-        encoder.into_writer().bytes_written
-    };
+    let size = encoded_size(&val, config)?;
     let mut bytes = Vec::with_capacity(size);
     encode_into_vec(val, &mut bytes, config)?;
     Ok(bytes)

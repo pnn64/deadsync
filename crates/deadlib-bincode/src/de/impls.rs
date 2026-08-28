@@ -27,6 +27,31 @@ fn decode_u8_array<T, D: Decoder, const N: usize>(
     }))
 }
 
+fn decode_raw_array<T, D: Decoder, const N: usize>(
+    decoder: &mut D,
+) -> Option<Result<[T; N], DecodeError>> {
+    if !crate::utils::can_memcpy::<T, D::C>() {
+        return None;
+    }
+
+    let byte_len = core::mem::size_of::<[T; N]>();
+    let source = decoder.reader().peek_read(byte_len)?;
+    if source.len() < byte_len {
+        return Some(Err(DecodeError::UnexpectedEnd {
+            additional: byte_len - source.len(),
+        }));
+    }
+    let mut values = core::mem::MaybeUninit::<[T; N]>::uninit();
+    // SAFETY: `can_memcpy` restricts T to numeric primitives where every bit
+    // pattern is valid. The source has exactly N complete values in native
+    // byte order and `values` provides enough correctly aligned storage.
+    unsafe {
+        core::ptr::copy_nonoverlapping(source.as_ptr(), values.as_mut_ptr().cast::<u8>(), byte_len);
+        decoder.reader().consume(byte_len);
+        Some(Ok(values.assume_init()))
+    }
+}
+
 impl<Context> Decode<Context> for bool {
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
         match u8::decode(decoder)? {
@@ -324,6 +349,8 @@ where
 
         if let Some(result) = decode_u8_array(decoder) {
             result
+        } else if let Some(result) = decode_raw_array(decoder) {
+            result
         } else {
             let result = super::impl_core::collect_into_array(&mut (0..N).map(|_| {
                 // See the documentation on `unclaim_bytes_read` as to why we're doing this here
@@ -348,6 +375,8 @@ where
         decoder.claim_bytes_read(core::mem::size_of::<[T; N]>())?;
 
         if let Some(result) = decode_u8_array(decoder) {
+            result
+        } else if let Some(result) = decode_raw_array(decoder) {
             result
         } else {
             let result = super::impl_core::collect_into_array(&mut (0..N).map(|_| {

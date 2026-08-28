@@ -1,6 +1,6 @@
 mod alloc;
 pub(crate) use self::alloc::{borrow_decode_vec_into, decode_string_into, decode_vec_into};
-pub use self::alloc::{encode_into_vec, encode_to_vec};
+pub use self::alloc::{encode_into_slice, encode_into_vec, encode_to_vec, encoded_size};
 
 mod std;
 pub(crate) use self::std::{

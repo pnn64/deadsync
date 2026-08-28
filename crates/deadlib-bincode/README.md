@@ -16,7 +16,8 @@ package.
 
 ## Supported surface
 
-- `encode_to_vec`, reusable `encode_into_vec`, owned `decode_from_slice`,
+- `encode_to_vec`, allocation-free `encoded_size` and `encode_into_slice`,
+  reusable `encode_into_vec`, owned `decode_from_slice`,
   reusable `decode_from_slice_into_vec`, `decode_from_slice_into_string`,
   `decode_from_slice_into_hash_map`, and `decode_from_slice_into_hash_set`,
   allocation-free `borrow_decode_from_slice`, reusable
