@@ -295,16 +295,16 @@ pub(crate) fn history_view() -> SelectMusicHistoryView {
     for profile_id in profile_ids.iter().flatten() {
         profile::ensure_score_caches_loaded_for_id(profile_id);
     }
-    let machine_played_chart_counts = scores::played_chart_counts_for_machine();
-    let machine_recent_chart_hashes = scores::recent_played_chart_hashes_for_machine();
+    let machine_history = scores::played_chart_history_for_machine();
     let mut sides = std::array::from_fn(|side_idx| {
         let Some(profile_id) = profile_ids[side_idx].as_deref() else {
             return SelectMusicHistorySideView::default();
         };
+        let history = scores::played_chart_history_for_profile(profile_id);
         SelectMusicHistorySideView {
             available: true,
-            played_chart_counts: scores::played_chart_counts_for_profile(profile_id),
-            recent_chart_hashes: scores::recent_played_chart_hashes_for_profile(profile_id),
+            played_chart_counts: history.played_chart_counts,
+            recent_chart_hashes: history.recent_chart_hashes,
             cached_scores: Vec::new(),
         }
     });
@@ -315,8 +315,8 @@ pub(crate) fn history_view() -> SelectMusicHistoryView {
         }
     }
     SelectMusicHistoryView {
-        machine_played_chart_counts,
-        machine_recent_chart_hashes,
+        machine_played_chart_counts: machine_history.played_chart_counts,
+        machine_recent_chart_hashes: machine_history.recent_chart_hashes,
         sides,
     }
 }

@@ -1785,6 +1785,11 @@ pub fn runtime_played_chart_counts_for_machine(profiles_root: &Path) -> Vec<(Str
     played_chart_counts_in_profiles_root(profiles_root)
 }
 
+#[must_use]
+pub fn runtime_played_chart_history_for_machine(profiles_root: &Path) -> PlayedChartHistory {
+    played_chart_history_in_profiles_root(profiles_root)
+}
+
 pub fn runtime_recent_played_chart_hashes_for_profile(
     profile_id: &str,
     score_paths: ProfilePathsFn,
@@ -1797,6 +1802,13 @@ pub fn runtime_played_chart_counts_for_profile(
     score_paths: ProfilePathsFn,
 ) -> Vec<(String, u32)> {
     played_chart_counts_in_root(&score_paths(profile_id).local_dir())
+}
+
+pub fn runtime_played_chart_history_for_profile(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) -> PlayedChartHistory {
+    played_chart_history_in_root(&score_paths(profile_id).local_dir())
 }
 
 #[must_use]

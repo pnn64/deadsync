@@ -1,5 +1,7 @@
+use rustc_hash::FxBuildHasher;
 use std::collections::HashMap;
 use std::fs;
+use std::hash::BuildHasher;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -348,7 +350,67 @@ pub fn total_local_score_bins_in_root(root: &Path) -> u32 {
     total
 }
 
-fn collect_recent_plays_in_dir(dir: &Path, latest_by_chart: &mut HashMap<String, i64>) {
+type FxMap<K, V> = HashMap<K, V, FxBuildHasher>;
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PlayedChartHistory {
+    pub recent_chart_hashes: Vec<String>,
+    pub played_chart_counts: Vec<(String, u32)>,
+}
+
+#[derive(Clone, Copy)]
+struct ChartPlayHistory {
+    latest_ms: i64,
+    count: u32,
+}
+
+fn note_recent<S: BuildHasher>(
+    latest_by_chart: &mut HashMap<String, i64, S>,
+    chart_hash: &str,
+    played_at_ms: i64,
+) {
+    match latest_by_chart.get_mut(chart_hash) {
+        Some(existing) => *existing = (*existing).max(played_at_ms),
+        None => {
+            latest_by_chart.insert(chart_hash.to_owned(), played_at_ms);
+        }
+    }
+}
+
+fn note_count<S: BuildHasher>(counts_by_chart: &mut HashMap<String, u32, S>, chart_hash: &str) {
+    match counts_by_chart.get_mut(chart_hash) {
+        Some(count) => *count = count.saturating_add(1),
+        None => {
+            counts_by_chart.insert(chart_hash.to_owned(), 1);
+        }
+    }
+}
+
+fn note_history(history_by_chart: &mut FxMap<String, ChartPlayHistory>, name: &str) {
+    let Some((chart_hash, played_at_ms)) = parse_score_file_name(name) else {
+        return;
+    };
+    match history_by_chart.get_mut(chart_hash) {
+        Some(history) => {
+            history.latest_ms = history.latest_ms.max(played_at_ms);
+            history.count = history.count.saturating_add(1);
+        }
+        None => {
+            history_by_chart.insert(
+                chart_hash.to_owned(),
+                ChartPlayHistory {
+                    latest_ms: played_at_ms,
+                    count: 1,
+                },
+            );
+        }
+    }
+}
+
+fn collect_recent_plays_in_dir<S: BuildHasher>(
+    dir: &Path,
+    latest_by_chart: &mut HashMap<String, i64, S>,
+) {
     let Ok(read_dir) = fs::read_dir(dir) else {
         return;
     };
@@ -363,20 +425,14 @@ fn collect_recent_plays_in_dir(dir: &Path, latest_by_chart: &mut HashMap<String,
         let Some((chart_hash, played_at_ms)) = parse_score_file_name(name) else {
             continue;
         };
-        match latest_by_chart.get_mut(chart_hash) {
-            Some(existing) => {
-                if played_at_ms > *existing {
-                    *existing = played_at_ms;
-                }
-            }
-            None => {
-                latest_by_chart.insert(chart_hash.to_string(), played_at_ms);
-            }
-        }
+        note_recent(latest_by_chart, chart_hash, played_at_ms);
     }
 }
 
-pub fn collect_recent_local_plays_in_root(root: &Path, latest_by_chart: &mut HashMap<String, i64>) {
+pub fn collect_recent_local_plays_in_root<S: BuildHasher>(
+    root: &Path,
+    latest_by_chart: &mut HashMap<String, i64, S>,
+) {
     collect_recent_plays_in_dir(root, latest_by_chart);
     let Ok(read_dir) = fs::read_dir(root) else {
         return;
@@ -389,15 +445,39 @@ pub fn collect_recent_local_plays_in_root(root: &Path, latest_by_chart: &mut Has
     }
 }
 
-#[must_use]
-pub fn recent_played_chart_hashes_in_root(root: &Path) -> Vec<String> {
-    if !root.is_dir() {
-        return Vec::new();
+fn collect_history_in_dir(dir: &Path, history_by_chart: &mut FxMap<String, ChartPlayHistory>) {
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        note_history(history_by_chart, name);
     }
+}
 
-    let mut latest_by_chart: HashMap<String, i64> = HashMap::new();
-    collect_recent_local_plays_in_root(root, &mut latest_by_chart);
+fn collect_local_history_in_root(
+    root: &Path,
+    history_by_chart: &mut FxMap<String, ChartPlayHistory>,
+) {
+    collect_history_in_dir(root, history_by_chart);
+    let Ok(read_dir) = fs::read_dir(root) else {
+        return;
+    };
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_history_in_dir(&path, history_by_chart);
+        }
+    }
+}
 
+fn rank_recent<S: BuildHasher>(latest_by_chart: HashMap<String, i64, S>) -> Vec<String> {
     let mut ranked: Vec<(i64, String)> = latest_by_chart
         .into_iter()
         .map(|(chart_hash, played_at_ms)| (played_at_ms, chart_hash))
@@ -409,13 +489,51 @@ pub fn recent_played_chart_hashes_in_root(root: &Path) -> Vec<String> {
         .collect()
 }
 
+fn rank_counts<S: BuildHasher>(counts_by_chart: HashMap<String, u32, S>) -> Vec<(String, u32)> {
+    let mut ranked: Vec<(String, u32)> = counts_by_chart.into_iter().collect();
+    ranked.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    ranked
+}
+
+fn rank_history(history_by_chart: FxMap<String, ChartPlayHistory>) -> PlayedChartHistory {
+    let mut recent: Vec<(String, ChartPlayHistory)> = history_by_chart.into_iter().collect();
+    let mut played_chart_counts = Vec::with_capacity(recent.len());
+    for (chart_hash, history) in &recent {
+        played_chart_counts.push((chart_hash.clone(), history.count));
+    }
+    played_chart_counts.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    recent.sort_unstable_by(|a, b| {
+        b.1.latest_ms
+            .cmp(&a.1.latest_ms)
+            .then_with(|| a.0.cmp(&b.0))
+    });
+    PlayedChartHistory {
+        recent_chart_hashes: recent
+            .into_iter()
+            .map(|(chart_hash, _)| chart_hash)
+            .collect(),
+        played_chart_counts,
+    }
+}
+
+#[must_use]
+pub fn recent_played_chart_hashes_in_root(root: &Path) -> Vec<String> {
+    if !root.is_dir() {
+        return Vec::new();
+    }
+
+    let mut latest_by_chart = FxMap::default();
+    collect_recent_local_plays_in_root(root, &mut latest_by_chart);
+    rank_recent(latest_by_chart)
+}
+
 #[must_use]
 pub fn recent_played_chart_hashes_in_profiles_root(profiles_root: &Path) -> Vec<String> {
     let Ok(read_dir) = fs::read_dir(profiles_root) else {
         return Vec::new();
     };
 
-    let mut latest_by_chart: HashMap<String, i64> = HashMap::new();
+    let mut latest_by_chart = FxMap::default();
     for entry in read_dir.flatten() {
         let profile_dir = entry.path();
         if !profile_dir.is_dir() {
@@ -427,18 +545,13 @@ pub fn recent_played_chart_hashes_in_profiles_root(profiles_root: &Path) -> Vec<
         }
     }
 
-    let mut ranked: Vec<(i64, String)> = latest_by_chart
-        .into_iter()
-        .map(|(chart_hash, played_at_ms)| (played_at_ms, chart_hash))
-        .collect();
-    ranked.sort_unstable_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
-    ranked
-        .into_iter()
-        .map(|(_, chart_hash)| chart_hash)
-        .collect()
+    rank_recent(latest_by_chart)
 }
 
-fn collect_play_counts_in_dir(dir: &Path, counts_by_chart: &mut HashMap<String, u32>) {
+fn collect_play_counts_in_dir<S: BuildHasher>(
+    dir: &Path,
+    counts_by_chart: &mut HashMap<String, u32, S>,
+) {
     let Ok(read_dir) = fs::read_dir(dir) else {
         return;
     };
@@ -453,14 +566,14 @@ fn collect_play_counts_in_dir(dir: &Path, counts_by_chart: &mut HashMap<String, 
         let Some((chart_hash, _played_at_ms)) = parse_score_file_name(name) else {
             continue;
         };
-        counts_by_chart
-            .entry(chart_hash.to_string())
-            .and_modify(|count| *count = count.saturating_add(1))
-            .or_insert(1);
+        note_count(counts_by_chart, chart_hash);
     }
 }
 
-pub fn collect_local_play_counts_in_root(root: &Path, counts_by_chart: &mut HashMap<String, u32>) {
+pub fn collect_local_play_counts_in_root<S: BuildHasher>(
+    root: &Path,
+    counts_by_chart: &mut HashMap<String, u32, S>,
+) {
     collect_play_counts_in_dir(root, counts_by_chart);
     let Ok(read_dir) = fs::read_dir(root) else {
         return;
@@ -479,12 +592,9 @@ pub fn played_chart_counts_in_root(root: &Path) -> Vec<(String, u32)> {
         return Vec::new();
     }
 
-    let mut counts_by_chart: HashMap<String, u32> = HashMap::new();
+    let mut counts_by_chart = FxMap::default();
     collect_local_play_counts_in_root(root, &mut counts_by_chart);
-
-    let mut ranked: Vec<(String, u32)> = counts_by_chart.into_iter().collect();
-    ranked.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-    ranked
+    rank_counts(counts_by_chart)
 }
 
 #[must_use]
@@ -493,7 +603,7 @@ pub fn played_chart_counts_in_profiles_root(profiles_root: &Path) -> Vec<(String
         return Vec::new();
     };
 
-    let mut counts_by_chart: HashMap<String, u32> = HashMap::new();
+    let mut counts_by_chart = FxMap::default();
     for entry in read_dir.flatten() {
         let profile_dir = entry.path();
         if !profile_dir.is_dir() {
@@ -505,9 +615,73 @@ pub fn played_chart_counts_in_profiles_root(profiles_root: &Path) -> Vec<(String
         }
     }
 
-    let mut ranked: Vec<(String, u32)> = counts_by_chart.into_iter().collect();
-    ranked.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-    ranked
+    rank_counts(counts_by_chart)
+}
+
+#[must_use]
+pub fn played_chart_history_in_root(root: &Path) -> PlayedChartHistory {
+    if !root.is_dir() {
+        return PlayedChartHistory::default();
+    }
+    let mut history_by_chart = FxMap::default();
+    collect_local_history_in_root(root, &mut history_by_chart);
+    rank_history(history_by_chart)
+}
+
+#[must_use]
+pub fn played_chart_history_in_profiles_root(profiles_root: &Path) -> PlayedChartHistory {
+    let Ok(read_dir) = fs::read_dir(profiles_root) else {
+        return PlayedChartHistory::default();
+    };
+    let mut history_by_chart = FxMap::default();
+    for entry in read_dir.flatten() {
+        let profile_dir = entry.path();
+        if !profile_dir.is_dir() {
+            continue;
+        }
+        let local_root = profile_dir.join("scores").join("local");
+        if local_root.is_dir() {
+            collect_local_history_in_root(&local_root, &mut history_by_chart);
+        }
+    }
+    rank_history(history_by_chart)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_play_counts_from_names(names: &[String]) -> Vec<(String, u32)> {
+    let mut counts_by_chart = FxMap::default();
+    for name in names {
+        if let Some((chart_hash, _)) = parse_score_file_name(name) {
+            note_count(&mut counts_by_chart, chart_hash);
+        }
+    }
+    rank_counts(counts_by_chart)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_recent_from_names(names: &[String]) -> Vec<String> {
+    let mut latest_by_chart = FxMap::default();
+    for name in names {
+        if let Some((chart_hash, played_at_ms)) = parse_score_file_name(name) {
+            note_recent(&mut latest_by_chart, chart_hash, played_at_ms);
+        }
+    }
+    rank_recent(latest_by_chart)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_history_from_names(names: &[String]) -> PlayedChartHistory {
+    let mut history_by_chart = FxMap::default();
+    for name in names {
+        note_history(&mut history_by_chart, name);
+    }
+    rank_history(history_by_chart)
 }
 
 #[must_use]
@@ -1065,4 +1239,130 @@ pub fn write_gs_score_entry_file(
     })?;
 
     Ok(ScoreStoreWriteStatus::Written(path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEMP_DIR: AtomicU64 = AtomicU64::new(0);
+
+    struct TempTree(PathBuf);
+
+    impl TempTree {
+        fn new(label: &str) -> Self {
+            let id = NEXT_TEMP_DIR.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "deadsync-score-{label}-{}-{id}",
+                std::process::id()
+            ));
+            fs::create_dir_all(&path).expect("test temp directory should be creatable");
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempTree {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn touch(dir: &Path, name: &str) {
+        fs::create_dir_all(dir).expect("score shard should be creatable");
+        fs::write(dir.join(name), []).expect("score fixture should be writable");
+    }
+
+    #[test]
+    fn combined_history_matches_independent_rankings() {
+        let names = [
+            "alpha-100.bin",
+            "alpha-300.bin",
+            "beta-250.bin",
+            "beta-200.bin",
+            "gamma-300.bin",
+            "invalid.bin",
+            "ignored.txt",
+        ]
+        .map(str::to_owned);
+
+        let history = benchmark_history_from_names(&names);
+        assert_eq!(
+            history.recent_chart_hashes,
+            benchmark_recent_from_names(&names)
+        );
+        assert_eq!(
+            history.played_chart_counts,
+            benchmark_play_counts_from_names(&names)
+        );
+        assert_eq!(history.recent_chart_hashes, ["alpha", "gamma", "beta"]);
+        assert_eq!(
+            history.played_chart_counts,
+            [
+                ("alpha".to_owned(), 2),
+                ("beta".to_owned(), 2),
+                ("gamma".to_owned(), 1)
+            ]
+        );
+    }
+
+    #[test]
+    fn combined_history_preserves_root_and_shard_behavior() {
+        let tree = TempTree::new("history-root");
+        touch(tree.path(), "delta-150.bin");
+        touch(&tree.path().join("aa"), "alpha-100.bin");
+        touch(&tree.path().join("aa"), "alpha-300.bin");
+        touch(&tree.path().join("bb"), "beta-250.bin");
+        touch(&tree.path().join("bb"), "beta-200.bin");
+        touch(&tree.path().join("cc"), "gamma-300.bin");
+        touch(&tree.path().join("cc"), "ignored.txt");
+
+        let history = played_chart_history_in_root(tree.path());
+        assert_eq!(
+            history.recent_chart_hashes,
+            recent_played_chart_hashes_in_root(tree.path())
+        );
+        assert_eq!(
+            history.played_chart_counts,
+            played_chart_counts_in_root(tree.path())
+        );
+        assert_eq!(
+            history.recent_chart_hashes,
+            ["alpha", "gamma", "beta", "delta"]
+        );
+    }
+
+    #[test]
+    fn combined_machine_history_preserves_profile_aggregation() {
+        let tree = TempTree::new("history-profiles");
+        let p1 = tree.path().join("p1").join("scores").join("local");
+        let p2 = tree.path().join("p2").join("scores").join("local");
+        touch(&p1.join("aa"), "alpha-100.bin");
+        touch(&p1.join("bb"), "beta-300.bin");
+        touch(&p2.join("aa"), "alpha-400.bin");
+        touch(&p2.join("cc"), "gamma-200.bin");
+
+        let history = played_chart_history_in_profiles_root(tree.path());
+        assert_eq!(
+            history.recent_chart_hashes,
+            recent_played_chart_hashes_in_profiles_root(tree.path())
+        );
+        assert_eq!(
+            history.played_chart_counts,
+            played_chart_counts_in_profiles_root(tree.path())
+        );
+        assert_eq!(history.recent_chart_hashes, ["alpha", "beta", "gamma"]);
+        assert_eq!(
+            history.played_chart_counts,
+            [
+                ("alpha".to_owned(), 2),
+                ("beta".to_owned(), 1),
+                ("gamma".to_owned(), 1)
+            ]
+        );
+    }
 }

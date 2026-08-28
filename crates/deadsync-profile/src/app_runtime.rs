@@ -267,6 +267,11 @@ pub fn played_chart_counts_for_machine() -> Vec<(String, u32)> {
     deadsync_score::runtime_played_chart_counts_for_machine(&profiles_root())
 }
 
+#[must_use]
+pub fn played_chart_history_for_machine() -> deadsync_score::PlayedChartHistory {
+    deadsync_score::runtime_played_chart_history_for_machine(&profiles_root())
+}
+
 pub fn recent_played_chart_hashes_for_id(profile_id: &str) -> Vec<String> {
     deadsync_score::runtime_recent_played_chart_hashes_for_profile(
         profile_id,
@@ -276,6 +281,10 @@ pub fn recent_played_chart_hashes_for_id(profile_id: &str) -> Vec<String> {
 
 pub fn played_chart_counts_for_id(profile_id: &str) -> Vec<(String, u32)> {
     deadsync_score::runtime_played_chart_counts_for_profile(profile_id, score_profile_paths_for_id)
+}
+
+pub fn played_chart_history_for_id(profile_id: &str) -> deadsync_score::PlayedChartHistory {
+    deadsync_score::runtime_played_chart_history_for_profile(profile_id, score_profile_paths_for_id)
 }
 
 pub fn prewarm_select_music_score_caches() {
