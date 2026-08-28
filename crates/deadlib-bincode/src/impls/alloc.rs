@@ -1,4 +1,5 @@
 use crate::{
+    config::{IntEncoding, InternalEndianConfig, InternalIntEncodingConfig},
     de::{read::Reader, BorrowDecode, BorrowDecoder, Decode, Decoder},
     enc::{self, write::SizeWriter, Encode, Encoder},
     error::{DecodeError, EncodeError},
@@ -68,7 +69,7 @@ fn decode_raw_vec<T, D: Decoder>(
     let source = &source[..byte_len];
     let mut values = Vec::<T>::with_capacity(len);
     // SAFETY: can_memcpy restricts T to numeric primitives where every bit
-    // pattern is valid, the source contains exactly len complete values in
+    // pattern is valid. The source contains exactly len complete values in
     // native byte order, and with_capacity allocated space for all of them.
     unsafe {
         std::ptr::copy_nonoverlapping(source.as_ptr(), values.as_mut_ptr().cast(), byte_len);
@@ -96,6 +97,123 @@ fn decode_u8_vec<T, D: Decoder>(
     Some(Ok(unsafe { std::mem::transmute::<Vec<u8>, Vec<T>>(bytes) }))
 }
 
+fn copy_into_vec<T, D: Decoder>(
+    decoder: &mut D,
+    len: usize,
+    values: &mut Vec<T>,
+) -> Option<Result<(), DecodeError>> {
+    let byte_len = match len.checked_mul(std::mem::size_of::<T>()) {
+        Some(len) => len,
+        None => return Some(Err(DecodeError::LimitExceeded)),
+    };
+    let source = decoder.reader().peek_read(byte_len)?;
+    if source.len() < byte_len {
+        return Some(Err(DecodeError::UnexpectedEnd {
+            additional: byte_len - source.len(),
+        }));
+    }
+
+    values.reserve(len);
+    // SAFETY: callers restrict T to u8 or to numeric primitives for which
+    // every bit pattern is valid. `reserve` provides space for `len` values
+    // and source contains the corresponding number of initialized bytes.
+    unsafe {
+        std::ptr::copy_nonoverlapping(source.as_ptr(), values.as_mut_ptr().cast(), byte_len);
+        values.set_len(len);
+    }
+    decoder.reader().consume(byte_len);
+    Some(Ok(()))
+}
+
+fn decode_varint_vec_into<T, D: Decoder>(
+    decoder: &mut D,
+    len: usize,
+    values: &mut Vec<T>,
+) -> Option<Result<(), DecodeError>> {
+    if D::C::INT_ENCODING != IntEncoding::Variable {
+        return None;
+    }
+
+    macro_rules! decode_as {
+        ($ty:ty, $decode:path) => {
+            if crate::unty::type_equal::<T, $ty>() {
+                values.reserve(len);
+                for _ in 0..len {
+                    let value = match $decode(decoder.reader(), D::C::ENDIAN) {
+                        Ok(value) => value,
+                        Err(error) => return Some(Err(error)),
+                    };
+                    // SAFETY: `type_equal` established that T and the concrete
+                    // integer have identical size, alignment, and validity.
+                    unsafe {
+                        values
+                            .as_mut_ptr()
+                            .add(values.len())
+                            .cast::<$ty>()
+                            .write(value);
+                        values.set_len(values.len() + 1);
+                    }
+                }
+                return Some(Ok(()));
+            }
+        };
+    }
+
+    decode_as!(u16, crate::varint::varint_decode_u16);
+    decode_as!(u32, crate::varint::varint_decode_u32);
+    decode_as!(u64, crate::varint::varint_decode_u64);
+    decode_as!(u128, crate::varint::varint_decode_u128);
+    decode_as!(usize, crate::varint::varint_decode_usize);
+    decode_as!(i16, crate::varint::varint_decode_i16);
+    decode_as!(i32, crate::varint::varint_decode_i32);
+    decode_as!(i64, crate::varint::varint_decode_i64);
+    decode_as!(i128, crate::varint::varint_decode_i128);
+    decode_as!(isize, crate::varint::varint_decode_isize);
+    None
+}
+
+pub(crate) fn decode_vec_into<T: Decode<Context>, Context, D: Decoder<Context = Context>>(
+    decoder: &mut D,
+    values: &mut Vec<T>,
+) -> Result<(), DecodeError> {
+    values.clear();
+    let len = crate::de::decode_slice_len(decoder)?;
+    decoder.claim_container_read::<T>(len)?;
+
+    if crate::unty::type_equal::<T, u8>() {
+        if let Some(result) = copy_into_vec(decoder, len, values) {
+            return result;
+        }
+
+        values.reserve(len);
+        // SAFETY: `type_equal` established that T is u8, so zero is a valid T
+        // and the initialized allocation can be exposed to `Reader::read`.
+        unsafe {
+            std::ptr::write_bytes(values.as_mut_ptr(), 0, len);
+            values.set_len(len);
+            let bytes = std::slice::from_raw_parts_mut(values.as_mut_ptr().cast::<u8>(), len);
+            decoder.reader().read(bytes)?;
+        }
+        return Ok(());
+    }
+
+    if crate::utils::can_memcpy::<T, D::C>() {
+        if let Some(result) = copy_into_vec(decoder, len, values) {
+            return result;
+        }
+    }
+    if let Some(result) = decode_varint_vec_into(decoder, len, values) {
+        return result;
+    }
+
+    values.reserve(len);
+    for _ in 0..len {
+        decoder.unclaim_bytes_read(std::mem::size_of::<T>());
+        values.push(T::decode(decoder)?);
+    }
+    Ok(())
+}
+
 impl<Context, T: Decode<Context>> Decode<Context> for Vec<T> {
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
         let len = crate::de::decode_slice_len(decoder)?;
@@ -108,7 +226,13 @@ impl<Context, T: Decode<Context>> Decode<Context> for Vec<T> {
             return values;
         }
 
-        let mut values = Self::with_capacity(len);
+        let mut values = Self::new();
+        if let Some(result) = decode_varint_vec_into(decoder, len, &mut values) {
+            result?;
+            return Ok(values);
+        }
+
+        values.reserve(len);
         for _ in 0..len {
             decoder.unclaim_bytes_read(std::mem::size_of::<T>());
             values.push(T::decode(decoder)?);

@@ -49,6 +49,12 @@ produced by the retained surface under `config::standard()`.
 - Batch native-endian floating-point slices and fixed-width integer slices into
   contiguous copies while retaining scalar fallbacks for other configurations
   and reader types.
+- Reuse caller-owned vector capacity during top-level vector decoding.
+- Decode variable-width integer vectors through type-specialized loops that
+  avoid repeated generic decoder bookkeeping.
+- Emit each multi-byte variable-width integer with one writer call containing
+  both its marker and payload.
 - Add paired old/new Criterion benchmarks with throughput, allocation churn,
   and Windows thread-cycle reporting. Run them with
-  `cargo bench -p deadlib-bincode --bench performance -- --noplot`.
+  `cargo bench -p deadlib-bincode --bench performance -- --noplot` and
+  `cargo bench -p deadlib-bincode --bench additional_performance -- --noplot`.

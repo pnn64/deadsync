@@ -17,7 +17,8 @@ package.
 ## Supported surface
 
 - `encode_to_vec`, reusable `encode_into_vec`, owned `decode_from_slice`,
-  allocation-free `borrow_decode_from_slice`, and `config::standard()`
+  reusable `decode_from_slice_into_vec`, allocation-free
+  `borrow_decode_from_slice`, and `config::standard()`
 - Compile-time decode limits through `Configuration::with_limit`
 - `Encode`, `Decode`, and `BorrowDecode` traits and derives
 - Booleans, integer and floating-point primitives, strings, vectors, options,

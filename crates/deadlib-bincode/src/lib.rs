@@ -59,6 +59,23 @@ pub fn decode_from_slice<D: de::Decode<()>, C: Config>(
     Ok((result, bytes_read))
 }
 
+/// Decode a vector from a byte slice while reusing its allocation.
+///
+/// `values` is cleared before decoding but retains its capacity. After one
+/// sufficiently large call, repeated calls can therefore decode without
+/// allocator traffic. On failure, its contents are unspecified and may include
+/// a successfully decoded prefix.
+pub fn decode_from_slice_into_vec<T: de::Decode<()>, C: Config>(
+    src: &[u8],
+    values: &mut Vec<T>,
+    config: C,
+) -> Result<usize, error::DecodeError> {
+    let reader = de::read::SliceReader::new(src);
+    let mut decoder = de::DecoderImpl::<_, C, ()>::new(reader, config, ());
+    impls::decode_vec_into(&mut decoder, values)?;
+    Ok(src.len() - decoder.reader().slice.len())
+}
+
 /// Decode a borrowed value from a byte slice using the given configuration.
 ///
 /// The returned value may borrow strings and byte slices directly from `src`,
