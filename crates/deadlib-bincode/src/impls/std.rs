@@ -28,6 +28,16 @@ where
     crate::impls::decode_vec_into(decoder, value)
 }
 
+fn decode_string_vector_in_place<Context, D>(
+    decoder: &mut D,
+    value: &mut Vec<String>,
+) -> Result<(), DecodeError>
+where
+    D: Decoder<Context = Context>,
+{
+    crate::impls::decode_vec_into(decoder, value)
+}
+
 fn decode_reused_key_hash_map_into<Context, K, V, S, D, F>(
     decoder: &mut D,
     map: &mut HashMap<K, V, S>,
@@ -156,6 +166,10 @@ where
         std::mem::size_of::<K>() == string_size && crate::unty::type_equal::<K, Vec<u8>>();
     let bytes_value =
         std::mem::size_of::<V>() == string_size && crate::unty::type_equal::<V, Vec<u8>>();
+    let string_vector_key =
+        std::mem::size_of::<K>() == string_size && crate::unty::type_equal::<K, Vec<String>>();
+    let string_vector_value =
+        std::mem::size_of::<V>() == string_size && crate::unty::type_equal::<V, Vec<String>>();
 
     if string_key && string_value {
         // SAFETY: both type comparisons established the exact key and value
@@ -179,6 +193,19 @@ where
             map,
             decode_string_in_place,
             decode_bytes_in_place,
+        ));
+    }
+    if string_key && string_vector_value {
+        // SAFETY: both type comparisons established the exact key and value
+        // types, so this is the same HashMap instantiation.
+        let map = unsafe {
+            &mut *(map as *mut HashMap<K, V, S>).cast::<HashMap<String, Vec<String>, S>>()
+        };
+        return Some(decode_reused_pair_hash_map_into(
+            decoder,
+            map,
+            decode_string_in_place,
+            decode_string_vector_in_place,
         ));
     }
     if bytes_key && string_value {
@@ -205,6 +232,58 @@ where
             decode_bytes_in_place,
         ));
     }
+    if bytes_key && string_vector_value {
+        // SAFETY: both type comparisons established the exact key and value
+        // types, so this is the same HashMap instantiation.
+        let map = unsafe {
+            &mut *(map as *mut HashMap<K, V, S>).cast::<HashMap<Vec<u8>, Vec<String>, S>>()
+        };
+        return Some(decode_reused_pair_hash_map_into(
+            decoder,
+            map,
+            decode_bytes_in_place,
+            decode_string_vector_in_place,
+        ));
+    }
+    if string_vector_key && string_value {
+        // SAFETY: both type comparisons established the exact key and value
+        // types, so this is the same HashMap instantiation.
+        let map = unsafe {
+            &mut *(map as *mut HashMap<K, V, S>).cast::<HashMap<Vec<String>, String, S>>()
+        };
+        return Some(decode_reused_pair_hash_map_into(
+            decoder,
+            map,
+            decode_string_vector_in_place,
+            decode_string_in_place,
+        ));
+    }
+    if string_vector_key && bytes_value {
+        // SAFETY: both type comparisons established the exact key and value
+        // types, so this is the same HashMap instantiation.
+        let map = unsafe {
+            &mut *(map as *mut HashMap<K, V, S>).cast::<HashMap<Vec<String>, Vec<u8>, S>>()
+        };
+        return Some(decode_reused_pair_hash_map_into(
+            decoder,
+            map,
+            decode_string_vector_in_place,
+            decode_bytes_in_place,
+        ));
+    }
+    if string_vector_key && string_vector_value {
+        // SAFETY: both type comparisons established the exact key and value
+        // types, so this is the same HashMap instantiation.
+        let map = unsafe {
+            &mut *(map as *mut HashMap<K, V, S>).cast::<HashMap<Vec<String>, Vec<String>, S>>()
+        };
+        return Some(decode_reused_pair_hash_map_into(
+            decoder,
+            map,
+            decode_string_vector_in_place,
+            decode_string_vector_in_place,
+        ));
+    }
     if string_key {
         // SAFETY: the type comparison established that K is exactly String.
         let map = unsafe { &mut *(map as *mut HashMap<K, V, S>).cast::<HashMap<String, V, S>>() };
@@ -223,6 +302,16 @@ where
             decode_bytes_in_place,
         ));
     }
+    if string_vector_key {
+        // SAFETY: the type comparison established that K is exactly Vec<String>.
+        let map =
+            unsafe { &mut *(map as *mut HashMap<K, V, S>).cast::<HashMap<Vec<String>, V, S>>() };
+        return Some(decode_reused_key_hash_map_into(
+            decoder,
+            map,
+            decode_string_vector_in_place,
+        ));
+    }
     if string_value {
         // SAFETY: the type comparison established that V is exactly String.
         let map = unsafe { &mut *(map as *mut HashMap<K, V, S>).cast::<HashMap<K, String, S>>() };
@@ -239,6 +328,16 @@ where
             decoder,
             map,
             decode_bytes_in_place,
+        ));
+    }
+    if string_vector_value {
+        // SAFETY: the type comparison established that V is exactly Vec<String>.
+        let map =
+            unsafe { &mut *(map as *mut HashMap<K, V, S>).cast::<HashMap<K, Vec<String>, S>>() };
+        return Some(decode_reused_value_hash_map_into(
+            decoder,
+            map,
+            decode_string_vector_in_place,
         ));
     }
     None
@@ -327,6 +426,12 @@ where
             // SAFETY: the type comparison established that T is exactly Vec<u8>.
             let set = unsafe { &mut *(set as *mut HashSet<T, S>).cast::<HashSet<Vec<u8>, S>>() };
             return decode_reused_hash_set_into(decoder, set, decode_bytes_in_place);
+        }
+        if crate::unty::type_equal::<T, Vec<String>>() {
+            // SAFETY: the type comparison established that T is exactly Vec<String>.
+            let set =
+                unsafe { &mut *(set as *mut HashSet<T, S>).cast::<HashSet<Vec<String>, S>>() };
+            return decode_reused_hash_set_into(decoder, set, decode_string_vector_in_place);
         }
     }
 

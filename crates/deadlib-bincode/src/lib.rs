@@ -96,9 +96,10 @@ pub fn decode_from_slice_into_string<C: Config>(
 /// Decode a hash map from a byte slice while reusing its allocation.
 ///
 /// `values` is cleared before decoding but retains its buckets and hasher. On
-/// warmed calls, allocations owned by `String` and `Vec<u8>` keys and values
-/// are reused through a temporary pool. On failure, the map may contain a
-/// successfully decoded prefix.
+/// warmed calls, allocations owned by `String`, `Vec<u8>`, and `Vec<String>`
+/// keys and values are reused through a temporary pool. For `Vec<String>`,
+/// both the vector and every nested string allocation are retained. On
+/// failure, the map may contain a successfully decoded prefix.
 pub fn decode_from_slice_into_hash_map<K, V, S, C>(
     src: &[u8],
     values: &mut std::collections::HashMap<K, V, S>,
@@ -119,9 +120,10 @@ where
 /// Decode a hash set from a byte slice while reusing its allocation.
 ///
 /// `values` is cleared before decoding but retains its buckets and hasher.
-/// Allocations owned by `String` and `Vec<u8>` elements are reused through a
-/// temporary pool on warmed calls. On failure, the set may contain a
-/// successfully decoded prefix.
+/// Allocations owned by `String`, `Vec<u8>`, and `Vec<String>` elements are
+/// reused through a temporary pool on warmed calls. For `Vec<String>`, both
+/// the vector and every nested string allocation are retained. On failure,
+/// the set may contain a successfully decoded prefix.
 pub fn decode_from_slice_into_hash_set<T, S, C>(
     src: &[u8],
     values: &mut std::collections::HashSet<T, S>,
