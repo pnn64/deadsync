@@ -1,7 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt, tr_fmt_into};
-use crate::assets::sprite_sheet_dims;
 use crate::assets::{FontRole, machine_font_key, visual_styles};
 use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter, score_comparison_enabled,
@@ -7689,7 +7688,7 @@ fn song_lua_sprite_sheet_index(
     total_elapsed: f32,
 ) -> Option<u32> {
     let start = song_lua_valid_sprite_state_index(state).unwrap_or(0);
-    let (cols, rows) = sprite_sheet_dims(texture_key);
+    let (cols, rows) = deadsync_song_lua::parse_sprite_sheet_dims(texture_key);
     let total = cols.saturating_mul(rows).max(1);
     let logical_state = if state.sprite_animate && states.len() > 1 {
         deadsync_song_lua::sprite_custom_animation_state_from(
@@ -7731,7 +7730,7 @@ fn song_lua_overlay_sprite_size(state: SongLuaOverlayState, texture_key: &str) -
         Some((tex.w as f32, tex.h as f32)),
         state.sprite_animate,
         state.sprite_state_index,
-        Some(sprite_sheet_dims(texture_key)),
+        Some(deadsync_song_lua::parse_sprite_sheet_dims(texture_key)),
     )?;
     Some([width, height])
 }
@@ -7745,7 +7744,7 @@ fn song_lua_overlay_uv_rect(
     let state_index = texture_key.and_then(|texture_key| {
         song_lua_sprite_sheet_index(state, texture_key, states, total_elapsed)
     });
-    let sheet_dims = texture_key.map(sprite_sheet_dims);
+    let sheet_dims = texture_key.map(deadsync_song_lua::parse_sprite_sheet_dims);
     deadsync_song_lua::sprite_texture_rect_with_offset(
         state.custom_texture_rect,
         state_index,
@@ -11606,6 +11605,11 @@ struct SongLuaOverlayUpdateSnap {
     t: f32,
 }
 
+// UpdateFunction state is sampled at 10 Hz. A visibility edge can bracket a
+// short geometry update, but a longer span is a dormant actor waiting for a
+// future command and must not be snapped active across that whole span.
+const SONG_LUA_UPDATE_SNAP_MAX_SECONDS: f32 = 0.25;
+
 fn song_lua_overlay_update_snap(
     now: f32,
     tracks: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
@@ -11627,6 +11631,9 @@ fn song_lua_overlay_update_snap(
         let Some(to) = track.samples.get(next) else {
             continue;
         };
+        if to.second - from.second > SONG_LUA_UPDATE_SNAP_MAX_SECONDS {
+            continue;
+        }
         let t = match (&from.value, &to.value) {
             (Value::Bool(false), Value::Bool(true)) => 1.0,
             (Value::Bool(true), Value::Bool(false)) => 0.0,
@@ -11656,6 +11663,9 @@ fn song_lua_overlay_update_snap_reference(
             let next = track.samples.partition_point(|sample| sample.second <= now);
             let from = track.samples.get(next.checked_sub(1)?)?;
             let to = track.samples.get(next)?;
+            if to.second - from.second > SONG_LUA_UPDATE_SNAP_MAX_SECONDS {
+                return None;
+            }
             let t = match (&from.value, &to.value) {
                 (Value::Bool(false), Value::Bool(true)) => 1.0,
                 (Value::Bool(true), Value::Bool(false)) => 0.0,
@@ -13243,6 +13253,7 @@ fn song_lua_overlay_has_visible_output(state: SongLuaOverlayState) -> bool {
 fn song_lua_apply_overlay_effect(
     effect: EffectState,
     rainbow: bool,
+    vibrate: bool,
     effect_time: f32,
     effect_beat: f32,
     tint: &mut [f32; 4],
@@ -13251,6 +13262,22 @@ fn song_lua_apply_overlay_effect(
     scale: &mut [f32; 3],
     rot_deg: &mut [f32; 3],
 ) {
+    if vibrate {
+        // ITGmania chooses a fresh random offset once per rendered frame. Use
+        // a stable 60 Hz frame clock so high-refresh rendering keeps the same
+        // rapid shake cadence instead of becoming a several-hundred-Hz blur.
+        let frame = (effect_time.max(0.0) * 60.0).floor() as u32;
+        for (axis, out) in offset.iter_mut().enumerate() {
+            let mut hash = frame ^ (axis as u32 + 1).wrapping_mul(0x9e37_79b9);
+            hash ^= hash >> 16;
+            hash = hash.wrapping_mul(0x7feb_352d);
+            hash ^= hash >> 15;
+            hash = hash.wrapping_mul(0x846c_a68b);
+            hash ^= hash >> 16;
+            let jitter = (hash as f32 / u32::MAX as f32).mul_add(2.0, -1.0);
+            *out = effect.magnitude[axis].mul_add(jitter, *out);
+        }
+    }
     if matches!(effect.mode, deadlib_present::anim::EffectMode::Spin) {
         let units = deadlib_present::anim::effect_clock_units(effect, effect_time, effect_beat);
         rot_deg[0] = effect.magnitude[0]
@@ -15202,6 +15229,7 @@ fn build_song_lua_aft_sprite_actor(
     song_lua_apply_overlay_effect(
         song_lua_overlay_effect_state(state),
         state.rainbow,
+        state.vibrate,
         effect_time,
         effect_beat,
         &mut tint,
@@ -15299,6 +15327,12 @@ fn append_song_lua_multi_actor_overlay(
     let x_scale = screen_width() / overlay_space_width.max(1.0);
     let y_scale = screen_height() / overlay_space_height.max(1.0);
     let overlay_scale = song_lua_overlay_axis_scale(state);
+    if overlay_scale
+        .iter()
+        .any(|scale| !scale.is_finite() || scale.abs() <= f32::EPSILON)
+    {
+        return Some(false);
+    }
     let actor_scale = [overlay_scale[0].abs(), overlay_scale[1].abs()];
     let effect = song_lua_overlay_effect_state(state);
     let mut tint = state.diffuse;
@@ -15309,6 +15343,7 @@ fn append_song_lua_multi_actor_overlay(
     song_lua_apply_overlay_effect(
         effect,
         state.rainbow,
+        state.vibrate,
         effect_time,
         effect_beat,
         &mut tint,
@@ -15390,6 +15425,15 @@ fn build_song_lua_overlay_actor_with_scratch(
     let x_scale = screen_width() / overlay_space_width.max(1.0);
     let y_scale = screen_height() / overlay_space_height.max(1.0);
     let overlay_scale = song_lua_overlay_axis_scale(state);
+    // A zero zoom has no geometry in ITGmania. Do not pass a 0x0 sprite to
+    // `deadlib-present`: generic sprites use 0x0 as the sentinel for native
+    // texture size, which would resurrect a hidden sprite sheet at full size.
+    if overlay_scale
+        .iter()
+        .any(|scale| !scale.is_finite() || scale.abs() <= f32::EPSILON)
+    {
+        return None;
+    }
     let (size_scale_x, flip_x) = if overlay_scale[0] < 0.0 {
         (-overlay_scale[0], true)
     } else {
@@ -15443,6 +15487,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_apply_overlay_effect(
                     effect,
                     state.rainbow,
+                    state.vibrate,
                     effect_time,
                     effect_beat,
                     &mut tint,
@@ -15499,6 +15544,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_apply_overlay_effect(
                     effect,
                     state.rainbow,
+                    state.vibrate,
                     effect_time,
                     effect_beat,
                     &mut tint,
@@ -15590,6 +15636,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_apply_overlay_effect(
                     effect,
                     state.rainbow,
+                    state.vibrate,
                     effect_time,
                     effect_beat,
                     &mut effect_tint,
@@ -15668,6 +15715,7 @@ fn build_song_lua_overlay_actor_with_scratch(
             song_lua_apply_overlay_effect(
                 effect,
                 state.rainbow,
+                state.vibrate,
                 effect_time,
                 effect_beat,
                 &mut color,
@@ -15754,6 +15802,7 @@ fn build_song_lua_overlay_actor_with_scratch(
             song_lua_apply_overlay_effect(
                 effect,
                 state.rainbow,
+                state.vibrate,
                 effect_time,
                 effect_beat,
                 &mut tint,
@@ -15908,6 +15957,7 @@ fn build_song_lua_overlay_actor_with_scratch(
             song_lua_apply_overlay_effect(
                 effect,
                 state.rainbow,
+                state.vibrate,
                 effect_time,
                 effect_beat,
                 &mut tint,
@@ -15956,6 +16006,7 @@ fn build_song_lua_overlay_actor_with_scratch(
             song_lua_apply_overlay_effect(
                 effect,
                 state.rainbow,
+                state.vibrate,
                 effect_time,
                 effect_beat,
                 &mut tint,
@@ -16060,6 +16111,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_apply_overlay_effect(
                     effect,
                     state.rainbow,
+                    state.vibrate,
                     effect_time,
                     effect_beat,
                     &mut tint,
@@ -16115,6 +16167,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_apply_overlay_effect(
                     effect,
                     state.rainbow,
+                    state.vibrate,
                     effect_time,
                     effect_beat,
                     &mut tint,
@@ -16206,6 +16259,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_apply_overlay_effect(
                     effect,
                     state.rainbow,
+                    state.vibrate,
                     effect_time,
                     effect_beat,
                     &mut effect_tint,
@@ -21240,11 +21294,11 @@ mod tests {
                         value: Value::F32(0.0),
                     },
                     Sample {
-                        second: 1.0,
+                        second: 0.1,
                         value: Value::F32(0.8),
                     },
                     Sample {
-                        second: 2.0,
+                        second: 0.2,
                         value: Value::F32(0.0),
                     },
                 ],
@@ -21258,11 +21312,11 @@ mod tests {
                         value: Value::Bool(false),
                     },
                     Sample {
-                        second: 1.0,
+                        second: 0.1,
                         value: Value::Bool(true),
                     },
                     Sample {
-                        second: 2.0,
+                        second: 0.2,
                         value: Value::Bool(false),
                     },
                 ],
@@ -21272,9 +21326,9 @@ mod tests {
         let mut crop = SongLuaOverlayState::default();
         let mut visible = SongLuaOverlayState::default();
         let mut cursors = vec![0; tracks.len()];
-        let snap = song_lua_overlay_update_snap(0.5, &tracks, &[1], &mut cursors);
+        let snap = song_lua_overlay_update_snap(0.05, &tracks, &[1], &mut cursors);
         apply_song_lua_overlay_runtime_updates_for(
-            0.5,
+            0.05,
             &tracks,
             0..1,
             &mut cursors,
@@ -21282,7 +21336,7 @@ mod tests {
             &mut crop,
         );
         apply_song_lua_overlay_runtime_updates_for(
-            0.5,
+            0.05,
             &tracks,
             1..2,
             &mut cursors,
@@ -21294,9 +21348,9 @@ mod tests {
 
         let mut crop = SongLuaOverlayState::default();
         let mut visible = SongLuaOverlayState::default();
-        let snap = song_lua_overlay_update_snap(1.5, &tracks, &[1], &mut cursors);
+        let snap = song_lua_overlay_update_snap(0.15, &tracks, &[1], &mut cursors);
         apply_song_lua_overlay_runtime_updates_for(
-            1.5,
+            0.15,
             &tracks,
             0..1,
             &mut cursors,
@@ -21304,7 +21358,7 @@ mod tests {
             &mut crop,
         );
         apply_song_lua_overlay_runtime_updates_for(
-            1.5,
+            0.15,
             &tracks,
             1..2,
             &mut cursors,
@@ -21313,6 +21367,45 @@ mod tests {
         );
         assert_eq!(crop.cropbottom, 0.8);
         assert!(visible.visible);
+    }
+
+    #[test]
+    fn song_lua_dormant_visibility_track_stays_hidden_until_trigger() {
+        use deadsync_song_lua::{
+            SongLuaOverlayRuntimeUpdateSample as Sample, SongLuaOverlayRuntimeUpdateTrack as Track,
+            SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value,
+        };
+        let tracks = vec![Track {
+            overlay_index: 0,
+            target: Target::Visible,
+            samples: vec![
+                Sample {
+                    second: 0.0,
+                    value: Value::Bool(false),
+                },
+                Sample {
+                    second: 60.0,
+                    value: Value::Bool(true),
+                },
+            ],
+        }];
+        let mut cursors = vec![0];
+        let snap = song_lua_overlay_update_snap(1.0, &tracks, &[0], &mut cursors);
+        let mut state = SongLuaOverlayState {
+            visible: false,
+            ..SongLuaOverlayState::default()
+        };
+        apply_song_lua_overlay_runtime_updates_for(
+            1.0,
+            &tracks,
+            0..1,
+            &mut cursors,
+            snap,
+            &mut state,
+        );
+
+        assert!(snap.is_none());
+        assert!(!state.visible);
     }
 
     #[test]
@@ -27188,6 +27281,80 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_vibrate_applies_effect_magnitude_at_runtime() {
+        let effect = EffectState {
+            magnitude: [20.0, 10.0, 5.0],
+            ..EffectState::default()
+        };
+        let mut tint = [1.0; 4];
+        let mut glow = [0.0; 4];
+        let mut still = [0.0; 3];
+        let mut scale = [1.0; 3];
+        let mut rotation = [0.0; 3];
+        song_lua_apply_overlay_effect(
+            effect,
+            false,
+            false,
+            0.5,
+            0.0,
+            &mut tint,
+            &mut glow,
+            &mut still,
+            &mut scale,
+            &mut rotation,
+        );
+        assert_eq!(still, [0.0; 3]);
+
+        let mut shaken = [0.0; 3];
+        song_lua_apply_overlay_effect(
+            effect,
+            false,
+            true,
+            0.5,
+            0.0,
+            &mut tint,
+            &mut glow,
+            &mut shaken,
+            &mut scale,
+            &mut rotation,
+        );
+        assert!(shaken.iter().any(|value| value.abs() > 0.001));
+        assert!(shaken[0].abs() <= effect.magnitude[0]);
+        assert!(shaken[1].abs() <= effect.magnitude[1]);
+        assert!(shaken[2].abs() <= effect.magnitude[2]);
+
+        let mut same_frame = [0.0; 3];
+        song_lua_apply_overlay_effect(
+            effect,
+            false,
+            true,
+            0.51,
+            0.0,
+            &mut tint,
+            &mut glow,
+            &mut same_frame,
+            &mut scale,
+            &mut rotation,
+        );
+        assert_eq!(same_frame, shaken);
+
+        let mut next_frame = [0.0; 3];
+        song_lua_apply_overlay_effect(
+            effect,
+            false,
+            true,
+            0.52,
+            0.0,
+            &mut tint,
+            &mut glow,
+            &mut next_frame,
+            &mut scale,
+            &mut rotation,
+        );
+        assert_ne!(next_frame, shaken);
+    }
+
+    #[test]
     fn song_lua_quad_applies_custom_effect_timing_at_runtime() {
         let overlay = SongLuaOverlayActor {
             kind: SongLuaOverlayKind::Quad,
@@ -27660,6 +27827,93 @@ mod tests {
             }
             other => panic!("expected sprite overlay, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn song_lua_target_sheet_uses_filename_grid_for_physical_size() {
+        let key = r"C:\songs\Botanic Panic\lua\ayaze\target 4x2.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(256, 128));
+        let overlay = SongLuaOverlayActor {
+            kind: test_sprite_kind(&key),
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                zoom: 0.75,
+                zoom_x: 0.75,
+                zoom_y: 0.75,
+                zoom_z: 0.75,
+                basezoom_x: -1.0,
+                sprite_animate: true,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &asset_manager,
+            778,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect_actor("target sheet sprite should render");
+
+        let Actor::Sprite { size, uv_rect, .. } = actor else {
+            panic!("expected target sprite overlay");
+        };
+        let [SizeSpec::Px(width), SizeSpec::Px(height)] = size else {
+            panic!("expected explicit target sprite size");
+        };
+        assert!((width - 48.0 * screen_width() / 640.0).abs() <= 0.000_1);
+        assert!((height - 48.0 * screen_height() / 480.0).abs() <= 0.000_1);
+        assert_eq!(uv_rect, Some([0.0, 0.0, 0.25, 0.5]));
+    }
+
+    #[test]
+    fn song_lua_zero_zoom_sheet_does_not_fall_back_to_native_size() {
+        let key = r"C:\songs\Botanic Panic\lua\ayaze\target 4x2.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(256, 128));
+        let overlay = SongLuaOverlayActor {
+            kind: test_sprite_kind(&key),
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+
+        assert!(
+            build_song_lua_overlay_actor(
+                &overlay,
+                SongLuaOverlayState {
+                    x: 320.0,
+                    y: 240.0,
+                    zoom: 0.0,
+                    zoom_x: 0.0,
+                    zoom_y: 0.0,
+                    zoom_z: 0.0,
+                    basezoom_x: -1.0,
+                    sprite_animate: true,
+                    ..SongLuaOverlayState::default()
+                },
+                None,
+                &asset_manager,
+                778,
+                640.0,
+                480.0,
+                0.0,
+                0.0,
+                0.0,
+            )
+            .is_none()
+        );
     }
 
     #[test]

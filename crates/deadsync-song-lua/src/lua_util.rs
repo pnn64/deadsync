@@ -81,12 +81,13 @@ struct SongLuaOverlayUpdateCapture {
     touched: Vec<usize>,
     touched_flags: Vec<bool>,
     values: Vec<Vec<(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>>,
-    deferred: Vec<Vec<SongLuaDeferredOverlayUpdate>>,
+    scheduled: Vec<Vec<SongLuaScheduledOverlayUpdate>>,
 }
 
 #[derive(Clone)]
-pub struct SongLuaDeferredOverlayUpdate {
+pub struct SongLuaScheduledOverlayUpdate {
     pub delay_seconds: f32,
+    pub duration_seconds: f32,
     pub target: SongLuaOverlayUpdateTarget,
     pub value: SongLuaOverlayUpdateValue,
 }
@@ -99,7 +100,7 @@ impl SongLuaOverlayUpdateCapture {
             touched: Vec::with_capacity(actor_count),
             touched_flags: vec![false; actor_count],
             values: (0..actor_count).map(|_| Vec::new()).collect(),
-            deferred: (0..actor_count).map(|_| Vec::new()).collect(),
+            scheduled: (0..actor_count).map(|_| Vec::new()).collect(),
         }
     }
 
@@ -132,18 +133,20 @@ impl SongLuaOverlayUpdateCapture {
         true
     }
 
-    fn record_deferred(
+    fn record_scheduled(
         &mut self,
         actor: &Table,
         delay_seconds: f32,
+        duration_seconds: f32,
         target: SongLuaOverlayUpdateTarget,
         value: SongLuaOverlayUpdateValue,
     ) -> bool {
         let Some(index) = self.touch(actor) else {
             return false;
         };
-        self.deferred[index].push(SongLuaDeferredOverlayUpdate {
+        self.scheduled[index].push(SongLuaScheduledOverlayUpdate {
             delay_seconds,
+            duration_seconds,
             target,
             value,
         });
@@ -160,7 +163,7 @@ pub fn drain_overlay_update_capture(
     mut visit: impl FnMut(
         usize,
         &[(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)],
-        &[SongLuaDeferredOverlayUpdate],
+        &[SongLuaScheduledOverlayUpdate],
     ) -> Result<(), String>,
 ) -> Result<(), String> {
     let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() else {
@@ -168,12 +171,12 @@ pub fn drain_overlay_update_capture(
     };
     for position in 0..capture.touched.len() {
         let index = capture.touched[position];
-        visit(index, &capture.values[index], &capture.deferred[index])?;
+        visit(index, &capture.values[index], &capture.scheduled[index])?;
     }
     for position in 0..capture.touched.len() {
         let index = capture.touched[position];
         capture.values[index].clear();
-        capture.deferred[index].clear();
+        capture.scheduled[index].clear();
         capture.touched_flags[index] = false;
     }
     capture.touched.clear();
@@ -305,8 +308,8 @@ fn record_overlay_update_capture(
         .is_some_and(|mut capture| {
             if direct_message_actor {
                 capture.touch(actor).is_some()
-            } else if cursor > f32::EPSILON && duration <= f32::EPSILON {
-                capture.record_deferred(actor, cursor, target, value)
+            } else if cursor > f32::EPSILON || duration > f32::EPSILON {
+                capture.record_scheduled(actor, cursor, duration, target, value)
             } else {
                 capture.record(actor, target, value)
             }
@@ -1255,6 +1258,53 @@ fn restore_actor_state(
     Ok(())
 }
 
+fn is_scalar_lua_value(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Boolean(_) | Value::Integer(_) | Value::Number(_) | Value::String(_)
+    )
+}
+
+fn snapshot_scalar_globals(lua: &Lua) -> mlua::Result<Vec<(String, Value)>> {
+    let mut out = Vec::new();
+    for pair in lua.globals().pairs::<Value, Value>() {
+        let (key, value) = pair?;
+        let Value::String(key) = key else {
+            continue;
+        };
+        if is_scalar_lua_value(&value) {
+            out.push((key.to_str()?.to_string(), value));
+        }
+    }
+    Ok(out)
+}
+
+fn restore_scalar_globals(lua: &Lua, snapshot: Vec<(String, Value)>) -> mlua::Result<()> {
+    let globals = lua.globals();
+    let keys = snapshot
+        .iter()
+        .map(|(key, _)| key.as_str())
+        .collect::<HashSet<_>>();
+    let mut remove = Vec::new();
+    for pair in globals.clone().pairs::<Value, Value>() {
+        let (key, value) = pair?;
+        let Value::String(key) = key else {
+            continue;
+        };
+        let key = key.to_str()?;
+        if is_scalar_lua_value(&value) && !keys.contains(key.as_ref()) {
+            remove.push(key.to_string());
+        }
+    }
+    for key in remove {
+        globals.set(key, Value::Nil)?;
+    }
+    for (key, value) in snapshot {
+        globals.set(key, value)?;
+    }
+    Ok(())
+}
+
 pub fn snapshot_actors_semantic_state(
     lua: &Lua,
     actors: &[Table],
@@ -2087,7 +2137,16 @@ pub fn capture_actor_command_preserving_state(
     command_name: &str,
 ) -> Result<Vec<SongLuaOverlayCommandBlock>, String> {
     let snapshot = snapshot_actor_mutable_state(lua, actor).map_err(|err| err.to_string())?;
+    let globals_snapshot = snapshot_scalar_globals(lua).map_err(|err| err.to_string())?;
+    let capture_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
     let captured = capture_actor_command(lua, actor, command_name);
+    let touched = capture_scope_actor_tables(&capture_scope.actors).map_err(|err| err.to_string());
+    let touched_snapshots =
+        capture_scope_snapshots(&capture_scope.snapshots).map_err(|err| err.to_string());
+    restore_action_capture_scope(lua, capture_scope).map_err(|err| err.to_string())?;
+    reset_actor_capture_tables(lua, &touched?)?;
+    restore_actors_semantic_state(touched_snapshots?).map_err(|err| err.to_string())?;
+    restore_scalar_globals(lua, globals_snapshot).map_err(|err| err.to_string())?;
     restore_actor_mutable_state(actor, snapshot).map_err(|err| err.to_string())?;
     captured
 }
@@ -11183,6 +11242,42 @@ pub fn collect_aft_capture_names(actor: &Table, out: &mut HashSet<String>) -> Re
     Ok(())
 }
 
+fn global_actor_references(lua: &Lua) -> Result<HashSet<usize>, String> {
+    let registry = song_lua_actor_registry(lua).map_err(|err| err.to_string())?;
+    let actor_pointers = registry
+        .sequence_values::<Table>()
+        .map(|actor| actor.map(|actor| actor.to_pointer() as usize))
+        .collect::<mlua::Result<HashSet<_>>>()
+        .map_err(|err| err.to_string())?;
+    let globals = lua.globals();
+    let globals_pointer = globals.to_pointer() as usize;
+    let registry_pointer = registry.to_pointer() as usize;
+    let mut referenced = HashSet::new();
+    for pair in globals.clone().pairs::<Value, Value>() {
+        let (_, Value::Table(table)) = pair.map_err(|err| err.to_string())? else {
+            continue;
+        };
+        let pointer = table.to_pointer() as usize;
+        if actor_pointers.contains(&pointer) {
+            referenced.insert(pointer);
+            continue;
+        }
+        if pointer == globals_pointer || pointer == registry_pointer {
+            continue;
+        }
+        for pair in table.pairs::<Value, Value>() {
+            let (_, Value::Table(value)) = pair.map_err(|err| err.to_string())? else {
+                continue;
+            };
+            let pointer = value.to_pointer() as usize;
+            if actor_pointers.contains(&pointer) {
+                referenced.insert(pointer);
+            }
+        }
+    }
+    Ok(referenced)
+}
+
 pub fn actor_aft_capture_name(actor: &Table) -> mlua::Result<Option<String>> {
     if let Some(capture_name) = actor
         .get::<Option<String>>("__songlua_aft_capture_name")?
@@ -11216,12 +11311,14 @@ where
     };
     let mut aft_capture_names = HashSet::new();
     collect_aft_capture_names(root, &mut aft_capture_names)?;
+    let referenced_actors = global_actor_references(lua)?;
     let mut out = Vec::new();
     read_overlay_compile_actors_from_table(
         lua,
         root,
         None,
         &aft_capture_names,
+        &referenced_actors,
         &mut out,
         context,
         &read_model_layers,
@@ -11259,6 +11356,7 @@ fn read_overlay_compile_actors_from_table<
     actor: &Table,
     parent_index: Option<usize>,
     aft_capture_names: &HashSet<String>,
+    referenced_actors: &HashSet<usize>,
     out: &mut Vec<
         SongLuaOverlayCompileActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
     >,
@@ -11277,6 +11375,7 @@ where
         actor,
         parent_index,
         aft_capture_names,
+        referenced_actors,
         context,
         read_model_layers,
         read_noteskin_tap_actor_slots,
@@ -11297,6 +11396,7 @@ where
             &child,
             next_parent_index,
             aft_capture_names,
+            referenced_actors,
             out,
             context,
             read_model_layers,
@@ -11312,6 +11412,7 @@ fn read_overlay_compile_actor<NoteskinSlot, ModelVertex, ReadModel, ReadNoteskin
     actor: &Table,
     parent_index: Option<usize>,
     aft_capture_names: &HashSet<String>,
+    referenced_actors: &HashSet<usize>,
     context: &SongLuaCompileContext,
     read_model_layers: &ReadModel,
     read_noteskin_tap_actor_slots: &ReadNoteskin,
@@ -11362,6 +11463,7 @@ where
             && initial_state == SongLuaOverlayState::default()
             && message_commands.is_empty()
             && !has_draw_function
+            && !referenced_actors.contains(&(actor.to_pointer() as usize))
         {
             return Ok(None);
         }

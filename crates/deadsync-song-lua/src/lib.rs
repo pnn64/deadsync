@@ -6691,7 +6691,8 @@ return Def.ActorFrame{
             self:SetUpdateFunction(function()
                 if not fired and GAMESTATE:GetSongBeat() >= 1 then
                     fired = true
-                    flash:visible(true):sleep(0.25):queuecommand("Hide")
+                    flash:visible(true):diffusealpha(1)
+                    flash:sleep(0.25):linear(0.25):diffusealpha(0):queuecommand("Hide")
                 end
             end)
         end,
@@ -6714,8 +6715,149 @@ return Def.ActorFrame{
             sample.beat >= 1.0 && sample.value == SongLuaOverlayUpdateValue::Bool(true)
         }));
         assert!(visible.samples.iter().any(|sample| {
-            (sample.beat - 1.25).abs() <= 1.0e-4
+            (sample.beat - 1.5).abs() <= 1.0e-4
                 && sample.value == SongLuaOverlayUpdateValue::Bool(false)
+        }));
+        let diffuse = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| track.target == SongLuaOverlayUpdateTarget::Diffuse)
+            .expect("the flash should have a sampled diffuse track");
+        assert!(diffuse.samples.iter().any(|sample| {
+            (sample.beat - 1.25).abs() <= 1.0e-4
+                && sample.value == SongLuaOverlayUpdateValue::Vec4([1.0, 1.0, 1.0, 1.0])
+        }));
+        assert!(diffuse.samples.iter().any(|sample| {
+            (sample.beat - 1.5).abs() <= 1.0e-4
+                && sample.value == SongLuaOverlayUpdateValue::Vec4([1.0, 1.0, 1.0, 0.0])
+        }));
+    }
+
+    #[test]
+    fn compile_song_lua_message_capture_restores_external_state() {
+        let song_dir = test_dir("message-capture-external-state");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target
+capture_fired = false
+
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Target",
+        InitCommand=function(self)
+            target = self
+            self:visible(false):x(0):y(0)
+        end,
+    },
+    Def.ActorFrame{
+        FireMessageCommand=function(self)
+            capture_fired = true
+            target:visible(true):x(99)
+        end,
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                if capture_fired then target:y(77) end
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Message Capture State");
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let (target_index, target) = compiled
+            .overlays
+            .iter()
+            .enumerate()
+            .find(|(_, overlay)| overlay.name.as_deref() == Some("Target"))
+            .expect("the target actor should compile");
+        assert!(!target.initial_state.visible);
+        assert_eq!(target.initial_state.x, 0.0);
+        assert!(!compiled.overlay_updates.iter().any(|track| {
+            track.overlay_index == target_index && track.target == SongLuaOverlayUpdateTarget::Y
+        }));
+    }
+
+    #[test]
+    fn compile_song_lua_keeps_globally_referenced_actor_frames() {
+        let song_dir = test_dir("globally-referenced-actor-frames");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+group_a = nil
+groups = {}
+mod_actions = {
+    {1, function() group_a:linear(1):x(100) end, true},
+}
+
+return Def.ActorFrame{
+    Def.ActorFrame{
+        OnCommand=function(self) group_a = self end,
+        Def.Quad{Name="ChildA"},
+    },
+    Def.ActorFrame{
+        OnCommand=function(self) groups[1] = self end,
+        Def.Quad{Name="ChildB"},
+    },
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                groups[1]:x(GAMESTATE:GetSongBeat() * 10)
+                groups[1]:y(20)
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Referenced Actor Frames");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 3.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let child_parent = |name: &str| {
+            compiled
+                .overlays
+                .iter()
+                .find(|overlay| overlay.name.as_deref() == Some(name))
+                .and_then(|overlay| overlay.parent_index)
+                .expect("the child should retain its referenced parent")
+        };
+        let group_a_index = child_parent("ChildA");
+        let group_b_index = child_parent("ChildB");
+        assert!(matches!(
+            compiled.overlays[group_a_index].kind,
+            SongLuaOverlayKind::ActorFrame
+        ));
+        assert!(matches!(
+            compiled.overlays[group_b_index].kind,
+            SongLuaOverlayKind::ActorFrame
+        ));
+        assert!(
+            compiled.overlays[group_a_index]
+                .message_commands
+                .iter()
+                .flat_map(|command| &command.blocks)
+                .any(|block| block.delta.x == Some(100.0) && block.duration == 1.0)
+        );
+        assert!(compiled.messages.iter().any(|event| {
+            (event.beat - 1.0).abs() <= f32::EPSILON
+                && event.message.starts_with("__songlua_overlay_fn_action_")
+        }));
+        assert!(compiled.overlay_updates.iter().any(|track| {
+            track.overlay_index == group_b_index
+                && track.target == SongLuaOverlayUpdateTarget::Y
+                && track
+                    .samples
+                    .iter()
+                    .any(|sample| sample.value == SongLuaOverlayUpdateValue::F32(20.0))
         }));
     }
 

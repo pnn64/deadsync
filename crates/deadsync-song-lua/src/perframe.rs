@@ -1132,11 +1132,11 @@ fn capture_update_overlay_samples<Kind>(
     next_beat: f32,
     reset_missing_from: Option<&HashSet<(usize, crate::SongLuaOverlayUpdateTarget)>>,
     message_applied: &[bool],
-    deferred_samples: &mut Vec<SongLuaDeferredOverlaySample>,
+    scheduled_samples: &mut Vec<SongLuaScheduledOverlaySample>,
 ) -> Result<HashSet<(usize, crate::SongLuaOverlayUpdateTarget)>, String> {
     let mut touched = HashSet::new();
     let mut reset_indices = Vec::new();
-    crate::lua_util::drain_overlay_update_capture(lua, |overlay_index, values, deferred| {
+    crate::lua_util::drain_overlay_update_capture(lua, |overlay_index, values, scheduled| {
         let Some(baseline) = baseline.get(overlay_index) else {
             return Ok(());
         };
@@ -1161,11 +1161,15 @@ fn capture_update_overlay_samples<Kind>(
             );
         }
         let beats_per_second = song_display_bps(context) * song_music_rate(context);
-        deferred_samples.extend(deferred.iter().map(|update| SongLuaDeferredOverlaySample {
-            overlay_index,
-            target: update.target,
-            beat: update.delay_seconds.mul_add(beats_per_second, next_beat),
-            value: update.value.clone(),
+        scheduled_samples.extend(scheduled.iter().map(|update| {
+            SongLuaScheduledOverlaySample {
+                overlay_index,
+                target: update.target,
+                start_beat: update.delay_seconds.mul_add(beats_per_second, next_beat),
+                end_beat: (update.delay_seconds + update.duration_seconds)
+                    .mul_add(beats_per_second, next_beat),
+                value: update.value.clone(),
+            }
         }));
         Ok(())
     })?;
@@ -1203,20 +1207,40 @@ fn capture_update_overlay_samples<Kind>(
     Ok(touched)
 }
 
-struct SongLuaDeferredOverlaySample {
+struct SongLuaScheduledOverlaySample {
     overlay_index: usize,
     target: SongLuaOverlayUpdateTarget,
-    beat: f32,
+    start_beat: f32,
+    end_beat: f32,
     value: SongLuaOverlayUpdateValue,
 }
 
-fn merge_deferred_overlay_samples(
+fn sort_overlay_update_samples(samples: &mut Vec<SongLuaOverlayUpdateSample>) {
+    samples.sort_by(|left, right| left.beat.total_cmp(&right.beat));
+    let mut merged: Vec<SongLuaOverlayUpdateSample> = Vec::with_capacity(samples.len());
+    for sample in samples.drain(..) {
+        if let Some(last) = merged.last_mut()
+            && (last.beat - sample.beat).abs() <= f32::EPSILON
+        {
+            *last = sample;
+        } else {
+            merged.push(sample);
+        }
+    }
+    *samples = merged;
+}
+
+fn merge_scheduled_overlay_samples(
     tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
     track_indices: &mut std::collections::HashMap<(usize, SongLuaOverlayUpdateTarget), usize>,
     baseline: &[SongLuaOverlayState],
-    deferred: Vec<SongLuaDeferredOverlaySample>,
+    mut scheduled: Vec<SongLuaScheduledOverlaySample>,
 ) {
-    for sample in deferred {
+    for track in tracks.iter_mut() {
+        sort_overlay_update_samples(&mut track.samples);
+    }
+    scheduled.sort_by(|left, right| left.start_beat.total_cmp(&right.start_beat));
+    for sample in scheduled {
         let track_index = *track_indices
             .entry((sample.overlay_index, sample.target))
             .or_insert_with(|| {
@@ -1234,28 +1258,30 @@ fn merge_deferred_overlay_samples(
                 });
                 index
             });
-        tracks[track_index]
+        let track = &mut tracks[track_index];
+        let current = track
             .samples
-            .push(SongLuaOverlayUpdateSample {
-                beat: sample.beat,
-                value: sample.value,
+            .iter()
+            .rev()
+            .find(|current| current.beat <= sample.start_beat + f32::EPSILON)
+            .map(|current| current.value.clone())
+            .unwrap_or_else(|| {
+                overlay_state_update_value(&baseline[sample.overlay_index], sample.target)
             });
+        if sample.end_beat > sample.start_beat + f32::EPSILON {
+            track.samples.push(SongLuaOverlayUpdateSample {
+                beat: sample.start_beat,
+                value: current,
+            });
+        }
+        track.samples.push(SongLuaOverlayUpdateSample {
+            beat: sample.end_beat,
+            value: sample.value,
+        });
+        sort_overlay_update_samples(&mut track.samples);
     }
     for track in tracks {
-        track
-            .samples
-            .sort_by(|left, right| left.beat.total_cmp(&right.beat));
-        let mut merged: Vec<SongLuaOverlayUpdateSample> = Vec::with_capacity(track.samples.len());
-        for sample in track.samples.drain(..) {
-            if let Some(last) = merged.last_mut()
-                && (last.beat - sample.beat).abs() <= f32::EPSILON
-            {
-                *last = sample;
-            } else {
-                merged.push(sample);
-            }
-        }
-        track.samples = merged;
+        sort_overlay_update_samples(&mut track.samples);
     }
 }
 
@@ -1331,7 +1357,7 @@ pub fn compile_update_functions<Kind>(
     let mut column_samples = vec![baseline_columns];
     let mut overlay_tracks = Vec::new();
     let mut overlay_track_indices = std::collections::HashMap::new();
-    let mut deferred_overlay_samples = Vec::new();
+    let mut scheduled_overlay_samples = Vec::new();
     let mut prior_overlay_touches = capture_update_overlay_samples(
         lua,
         context,
@@ -1343,7 +1369,7 @@ pub fn compile_update_functions<Kind>(
         start,
         None,
         message_replay.applied(),
-        &mut deferred_overlay_samples,
+        &mut scheduled_overlay_samples,
     )?;
 
     let replay = update_function_replay_beats(lua, root, context, start, end)?;
@@ -1396,7 +1422,7 @@ pub fn compile_update_functions<Kind>(
             next_beat,
             reset_missing.then_some(&prior_overlay_touches),
             message_replay.applied(),
-            &mut deferred_overlay_samples,
+            &mut scheduled_overlay_samples,
         )?;
         prior_overlay_touches = next_overlay_touches;
         beat = next_beat;
@@ -1450,11 +1476,11 @@ pub fn compile_update_functions<Kind>(
             },
         ));
     }
-    merge_deferred_overlay_samples(
+    merge_scheduled_overlay_samples(
         &mut overlay_tracks,
         &mut overlay_track_indices,
         &baseline_overlays,
-        deferred_overlay_samples,
+        scheduled_overlay_samples,
     );
     crate::lua_util::end_overlay_update_capture(lua);
     Ok((eases, Vec::new(), overlay_tracks, column_transforms))
