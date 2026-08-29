@@ -13,6 +13,11 @@ name = "song_load_overhead"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "song_sort_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [features]
 bench-support = []
 
