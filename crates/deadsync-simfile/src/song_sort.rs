@@ -85,7 +85,8 @@ fn cmp_ignore_ascii_case(left: &str, right: &str) -> Ordering {
 }
 
 #[inline]
-fn cmp_song_title_key(left: &SongData, right: &SongData) -> Ordering {
+#[must_use]
+pub fn song_title_cmp(left: &SongData, right: &SongData) -> Ordering {
     cmp_ignore_ascii_case(left.display_title(true), right.display_title(true))
         .then_with(|| {
             cmp_ignore_ascii_case(left.display_subtitle(true), right.display_subtitle(true))
@@ -148,7 +149,7 @@ pub fn title_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
     songs.sort_by(|left, right| {
         title_group_bucket(left)
             .cmp(&title_group_bucket(right))
-            .then_with(|| cmp_song_title_key(left, right))
+            .then_with(|| song_title_cmp(left, right))
             .then_with(|| left.title.cmp(&right.title))
             .then_with(|| left.subtitle.cmp(&right.subtitle))
     });
@@ -167,7 +168,7 @@ pub fn artist_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> 
                     right.simfile_path.to_string_lossy().as_ref(),
                 )
             })
-            .then_with(|| cmp_song_title_key(left, right))
+            .then_with(|| song_title_cmp(left, right))
     });
     grouped_contiguous_songs(songs, |song| {
         SongSortGroup::Artist(alpha_group_bucket_from_text(&song.artist))
@@ -192,7 +193,7 @@ pub fn genre_grouped_songs(
         } else {
             &right.genre
         };
-        cmp_ignore_ascii_case(left_name, right_name).then_with(|| cmp_song_title_key(left, right))
+        cmp_ignore_ascii_case(left_name, right_name).then_with(|| song_title_cmp(left, right))
     });
     grouped_contiguous_songs(songs, |song| {
         let genre = song.genre.trim();
@@ -205,7 +206,7 @@ pub fn bpm_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
     songs.sort_by(|left, right| {
         song_bpm_for_sort(left)
             .cmp(&song_bpm_for_sort(right))
-            .then_with(|| cmp_song_title_key(left, right))
+            .then_with(|| song_title_cmp(left, right))
     });
     grouped_contiguous_songs(songs, |song| {
         let (lo, hi) = bpm_bucket_range(song_bpm_for_sort(song));
@@ -218,7 +219,7 @@ pub fn length_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> 
     songs.sort_by(|left, right| {
         song_length_for_sort(left)
             .cmp(&song_length_for_sort(right))
-            .then_with(|| cmp_song_title_key(left, right))
+            .then_with(|| song_title_cmp(left, right))
     });
     grouped_contiguous_songs(songs, |song| {
         let (lo, hi) = length_bucket_range(song_length_for_sort(song));
@@ -246,7 +247,7 @@ pub fn meter_grouped_songs(songs: Vec<Arc<SongData>>, chart_type: &str) -> Vec<G
     buckets
         .into_iter()
         .map(|(meter, mut songs)| {
-            songs.sort_by(|left, right| cmp_song_title_key(left, right));
+            songs.sort_by(|left, right| song_title_cmp(left, right));
             GroupedSongs {
                 group: SongSortGroup::Meter(meter),
                 songs,
@@ -511,7 +512,7 @@ mod tests {
         for left in &songs {
             for right in &songs {
                 assert_eq!(
-                    cmp_song_title_key(left, right),
+                    song_title_cmp(left, right),
                     song_title_sort_key(left).cmp(&song_title_sort_key(right))
                 );
             }

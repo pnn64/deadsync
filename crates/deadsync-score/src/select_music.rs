@@ -1,7 +1,7 @@
 use crate::{CachedScore, Grade};
 use deadsync_chart::SongData;
 use rustc_hash::{FxBuildHasher, FxHashMap};
-use std::cmp::Reverse;
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 pub const FOLDER_STATS_STAR_BUCKETS: usize = 5;
@@ -114,17 +114,17 @@ pub const fn grade_group_name(grade: Grade) -> &'static str {
     }
 }
 
-pub fn ranked_popular_songs<K: Ord>(
+pub fn ranked_popular_songs<H: AsRef<str>>(
     songs: Vec<Arc<SongData>>,
-    chart_play_counts: impl IntoIterator<Item = (String, u32)>,
+    chart_play_counts: impl IntoIterator<Item = (H, u32)>,
     limit: usize,
     include_zero_play_songs: bool,
-    sort_key: impl Fn(&SongData) -> K,
+    song_cmp: impl Fn(&SongData, &SongData) -> Ordering,
 ) -> Vec<(Arc<SongData>, u32)> {
     let hash_to_song_ix = chart_hash_song_indices(&songs);
     let mut song_play_counts = vec![0u32; songs.len()];
     for (chart_hash, chart_plays) in chart_play_counts {
-        let Some(&song_ix) = hash_to_song_ix.get(chart_hash.as_str()) else {
+        let Some(&song_ix) = hash_to_song_ix.get(chart_hash.as_ref()) else {
             continue;
         };
         song_play_counts[song_ix] = song_play_counts[song_ix].saturating_add(chart_plays);
@@ -136,14 +136,18 @@ pub fn ranked_popular_songs<K: Ord>(
         .filter(|(song_ix, _)| include_zero_play_songs || song_play_counts[*song_ix] > 0)
         .map(|(song_ix, song)| (song, song_play_counts[song_ix]))
         .collect();
-    ranked.sort_by_cached_key(|(song, play_count)| (Reverse(*play_count), sort_key(song)));
+    ranked.sort_by(|(left_song, left_count), (right_song, right_count)| {
+        right_count
+            .cmp(left_count)
+            .then_with(|| song_cmp(left_song, right_song))
+    });
     ranked.truncate(limit.min(ranked.len()));
     ranked
 }
 
-pub fn ranked_recent_songs(
+pub fn ranked_recent_songs<H: AsRef<str>>(
     songs: Vec<Arc<SongData>>,
-    recent_chart_hashes: impl IntoIterator<Item = String>,
+    recent_chart_hashes: impl IntoIterator<Item = H>,
     limit: usize,
 ) -> Vec<Arc<SongData>> {
     let recent_song_ixs = ranked_recent_song_indices(&songs, recent_chart_hashes, limit);
@@ -215,6 +219,35 @@ pub fn ranked_top_grade_songs<K: Ord>(
         (grade_key, sort_key(song))
     });
     graded_songs
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_ranked_popular_songs_cached<H: AsRef<str>, K: Ord>(
+    songs: Vec<Arc<SongData>>,
+    chart_play_counts: impl IntoIterator<Item = (H, u32)>,
+    limit: usize,
+    include_zero_play_songs: bool,
+    sort_key: impl Fn(&SongData) -> K,
+) -> Vec<(Arc<SongData>, u32)> {
+    let hash_to_song_ix = chart_hash_song_indices(&songs);
+    let mut song_play_counts = vec![0u32; songs.len()];
+    for (chart_hash, chart_plays) in chart_play_counts {
+        let Some(&song_ix) = hash_to_song_ix.get(chart_hash.as_ref()) else {
+            continue;
+        };
+        song_play_counts[song_ix] = song_play_counts[song_ix].saturating_add(chart_plays);
+    }
+
+    let mut ranked: Vec<(Arc<SongData>, u32)> = songs
+        .into_iter()
+        .enumerate()
+        .filter(|(song_ix, _)| include_zero_play_songs || song_play_counts[*song_ix] > 0)
+        .map(|(song_ix, song)| (song, song_play_counts[song_ix]))
+        .collect();
+    ranked
+        .sort_by_cached_key(|(song, play_count)| (std::cmp::Reverse(*play_count), sort_key(song)));
+    ranked.truncate(limit.min(ranked.len()));
+    ranked
 }
 
 fn chart_hash_song_indices(songs: &[Arc<SongData>]) -> FxHashMap<&str, usize> {
@@ -379,30 +412,35 @@ mod tests {
 
     #[test]
     fn ranked_popular_songs_sums_chart_counts_and_keeps_requested_zeroes() {
-        let songs = vec![
-            Arc::new(song(vec![chart("Hard", "a"), chart("Challenge", "b")])),
-            Arc::new(song(vec![chart("Hard", "c")])),
-            Arc::new(song(vec![chart("Hard", "d")])),
-        ];
+        let mut played = song(vec![chart("Hard", "a"), chart("Challenge", "b")]);
+        played.simfile_path = PathBuf::from("c.ssc");
+        let mut zero_b = song(vec![chart("Hard", "c")]);
+        zero_b.simfile_path = PathBuf::from("b.ssc");
+        let mut zero_a = song(vec![chart("Hard", "d")]);
+        zero_a.simfile_path = PathBuf::from("a.ssc");
+        let songs = vec![Arc::new(played), Arc::new(zero_b), Arc::new(zero_a)];
+        let counts = [("a".to_string(), 2), ("b".to_string(), 3)];
 
         let ranked = ranked_popular_songs(
             songs.clone(),
-            [("a".to_string(), 2), ("b".to_string(), 3)],
+            counts.iter().map(|(hash, count)| (hash.as_str(), *count)),
             3,
             true,
-            |song| song.simfile_path.clone(),
+            |left, right| left.simfile_path.cmp(&right.simfile_path),
         );
 
         assert_eq!(ranked.len(), 3);
         assert_eq!(ranked[0].1, 5);
         assert_eq!(ranked[1].1, 0);
+        assert_eq!(ranked[1].0.simfile_path, PathBuf::from("a.ssc"));
+        assert_eq!(ranked[2].0.simfile_path, PathBuf::from("b.ssc"));
 
         let ranked = ranked_popular_songs(
             songs,
             [("a".to_string(), 2), ("b".to_string(), 3)],
             3,
             false,
-            |song| song.simfile_path.clone(),
+            |left, right| left.simfile_path.cmp(&right.simfile_path),
         );
         assert_eq!(ranked.len(), 1);
         assert_eq!(ranked[0].1, 5);
@@ -415,16 +453,13 @@ mod tests {
             Arc::new(song(vec![chart("Hard", "c")])),
         ];
 
-        let ranked = ranked_recent_songs(
-            songs.clone(),
-            [
-                "missing".to_string(),
-                "b".to_string(),
-                "a".to_string(),
-                "c".to_string(),
-            ],
-            2,
-        );
+        let hashes = [
+            "missing".to_string(),
+            "b".to_string(),
+            "a".to_string(),
+            "c".to_string(),
+        ];
+        let ranked = ranked_recent_songs(songs.clone(), hashes.iter().map(String::as_str), 2);
 
         assert_eq!(ranked.len(), 2);
         assert!(Arc::ptr_eq(&ranked[0], &songs[0]));

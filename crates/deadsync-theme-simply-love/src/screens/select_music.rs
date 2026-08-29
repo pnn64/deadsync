@@ -68,8 +68,8 @@ use deadsync_simfile::playlist::{
 };
 use deadsync_simfile::song_sort::{
     GroupedSongs, SongSortGroup, alpha_group_char, artist_grouped_songs, bpm_grouped_songs,
-    genre_grouped_songs, length_grouped_songs, meter_grouped_songs, song_title_sort_key,
-    title_grouped_songs,
+    genre_grouped_songs, length_grouped_songs, meter_grouped_songs, song_title_cmp,
+    song_title_sort_key, title_grouped_songs,
 };
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
 use deadsync_theme::views::{AudioPlaybackView, SmxAssignmentPadView, SmxAssignmentView};
@@ -3070,10 +3070,13 @@ fn build_popularity_grouped_entries(
 ) -> Vec<MusicWheelEntry> {
     let ranked = score_data::ranked_popular_songs(
         songs_from_entries(grouped_entries),
-        history.machine_played_chart_counts.iter().cloned(),
+        history
+            .machine_played_chart_counts
+            .iter()
+            .map(|(hash, count)| (hash.as_str(), *count)),
         POPULAR_SONGS_TO_SHOW,
         true,
-        song_title_sort_key,
+        song_title_cmp,
     );
     single_header_song_entries(
         tr("SelectMusic", "MostPopular").to_string(),
@@ -3087,7 +3090,10 @@ fn build_recent_grouped_entries(
 ) -> Vec<MusicWheelEntry> {
     let songs = score_data::ranked_recent_songs(
         songs_from_entries(grouped_entries),
-        history.machine_recent_chart_hashes.iter().cloned(),
+        history
+            .machine_recent_chart_hashes
+            .iter()
+            .map(String::as_str),
         RECENT_SONGS_TO_SHOW,
     );
     single_header_song_entries(tr("SelectMusic", "RecentlyPlayed").to_string(), songs)
@@ -3153,10 +3159,13 @@ fn build_popularity_grouped_entries_for_profile(
     let header = format!("{} (Profile)", tr("SelectMusic", "MostPopular"));
     let ranked = score_data::ranked_popular_songs(
         songs_from_entries(grouped_entries),
-        history.played_chart_counts.iter().cloned(),
+        history
+            .played_chart_counts
+            .iter()
+            .map(|(hash, count)| (hash.as_str(), *count)),
         POPULAR_SONGS_TO_SHOW,
         false,
-        song_title_sort_key,
+        song_title_cmp,
     );
     single_header_song_entries(header, ranked.into_iter().map(|(song, _)| song))
 }
@@ -3170,7 +3179,7 @@ fn build_recent_grouped_entries_for_profile(
         header,
         score_data::ranked_recent_songs(
             songs_from_entries(grouped_entries),
-            history.recent_chart_hashes.iter().cloned(),
+            history.recent_chart_hashes.iter().map(String::as_str),
             RECENT_SONGS_TO_SHOW,
         ),
     )
