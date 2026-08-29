@@ -9653,6 +9653,60 @@ pub struct SongLuaFunctionActionCapture {
     pub saw_side_effect: bool,
 }
 
+struct FunctionActionTableSnapshot {
+    table: Table,
+    entries: Vec<(Value, Value)>,
+}
+
+fn snapshot_function_action_table(table: Table) -> mlua::Result<FunctionActionTableSnapshot> {
+    let entries = table
+        .clone()
+        .pairs::<Value, Value>()
+        .collect::<mlua::Result<Vec<_>>>()?;
+    Ok(FunctionActionTableSnapshot { table, entries })
+}
+
+fn snapshot_function_action_tables(
+    lua: &Lua,
+    function: &Function,
+) -> mlua::Result<Vec<FunctionActionTableSnapshot>> {
+    let globals = lua.globals();
+    let mut tables = vec![globals.clone()];
+    if let Some(environment) = function.environment() {
+        let target = environment
+            .raw_get::<Option<Table>>("__songlua_env_target")?
+            .unwrap_or(environment);
+        if tables
+            .iter()
+            .all(|table| table.to_pointer() != target.to_pointer())
+        {
+            tables.push(target);
+        }
+    }
+    tables
+        .into_iter()
+        .map(snapshot_function_action_table)
+        .collect()
+}
+
+fn restore_function_action_tables(snapshots: Vec<FunctionActionTableSnapshot>) -> mlua::Result<()> {
+    for snapshot in snapshots {
+        let keys = snapshot
+            .table
+            .clone()
+            .pairs::<Value, Value>()
+            .map(|pair| pair.map(|(key, _)| key))
+            .collect::<mlua::Result<Vec<_>>>()?;
+        for key in keys {
+            snapshot.table.raw_set(key, Value::Nil)?;
+        }
+        for (key, value) in snapshot.entries {
+            snapshot.table.raw_set(key, value)?;
+        }
+    }
+    Ok(())
+}
+
 fn captured_actor_aux_change(
     actor: &Table,
     snapshots: &[(Table, Vec<(String, Value)>)],
@@ -9678,6 +9732,8 @@ pub fn capture_function_action_blocks(
     function: &Function,
     beat: f32,
 ) -> Result<SongLuaFunctionActionCapture, String> {
+    let table_snapshots =
+        snapshot_function_action_tables(lua, function).map_err(|err| err.to_string())?;
     let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
     let side_effect_before = song_lua_side_effect_count(lua).map_err(|err| err.to_string())?;
     let globals = lua.globals();
@@ -9730,6 +9786,8 @@ pub fn capture_function_action_blocks(
         collect_tracked_capture_blocks_for_indices(tracked_actors, &tracked_indices);
     let broadcasts = read_song_lua_broadcasts(&broadcast_table).map_err(|err| err.to_string());
     let sound_paths = read_path_table(&sound_calls);
+    let saw_side_effect =
+        song_lua_side_effect_count(lua).map_err(|err| err.to_string())? > side_effect_before;
     reset_actor_capture_tables(lua, &touched_actors)?;
     restore_actors_semantic_state(state_snapshot).map_err(|err| err.to_string())?;
     globals
@@ -9739,12 +9797,11 @@ pub fn capture_function_action_blocks(
         .set(SONG_LUA_SOUND_CALLS_KEY, previous_sound_calls)
         .map_err(|err| err.to_string())?;
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
+    restore_function_action_tables(table_snapshots).map_err(|err| err.to_string())?;
     let overlay_blocks = overlay_blocks?;
     let tracked_blocks = tracked_blocks?;
     let broadcasts = broadcasts?;
     let sound_paths = sound_paths?;
-    let saw_side_effect =
-        song_lua_side_effect_count(lua).map_err(|err| err.to_string())? > side_effect_before;
     result.map_err(|err| err.to_string())?;
     Ok(SongLuaFunctionActionCapture {
         overlay_blocks,

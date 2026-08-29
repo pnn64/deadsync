@@ -883,7 +883,6 @@ pub fn build_song_lua_overlay_update_tracks<OverlayActor>(
     compiled: &deadsync_song_lua::CompiledSongLua<OverlayActor>,
     timing_player: &deadsync_rules::timing::TimingData,
     global_offset_seconds: f32,
-    start_second: f32,
 ) -> Vec<deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack> {
     let mut out = Vec::with_capacity(compiled.overlay_updates.len());
     for track in &compiled.overlay_updates {
@@ -898,7 +897,7 @@ pub fn build_song_lua_overlay_update_tracks<OverlayActor>(
                 )
                 .map(|second| {
                     deadsync_song_lua::SongLuaOverlayRuntimeUpdateSample {
-                        second: second + start_second,
+                        second,
                         value: sample.value.clone(),
                     }
                 })

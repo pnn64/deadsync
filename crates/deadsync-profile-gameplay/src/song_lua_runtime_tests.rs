@@ -5,8 +5,10 @@ use deadsync_song_lua::{
     SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow,
     SongLuaMessageEvent, SongLuaModWindow, SongLuaNoteskinResolver, SongLuaOverlayActor,
     SongLuaOverlayCommandBlock, SongLuaOverlayEase, SongLuaOverlayMessageCommand,
-    SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaPlayerContext, SongLuaSpanMode,
-    SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua_with_default_host,
+    SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayUpdateSample,
+    SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateTrack, SongLuaOverlayUpdateValue,
+    SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
+    compile_song_lua_with_default_host,
 };
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -57,6 +59,30 @@ fn test_timing(last_row: usize) -> TimingData {
         ..TimingSegments::default()
     };
     TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(last_row))
+}
+
+#[test]
+fn song_lua_overlay_updates_keep_absolute_song_time() {
+    let timing = test_timing(8 * 48);
+    let compiled = TestCompiledSongLua {
+        overlay_updates: vec![SongLuaOverlayUpdateTrack {
+            overlay_index: 0,
+            target: SongLuaOverlayUpdateTarget::Y,
+            samples: vec![SongLuaOverlayUpdateSample {
+                beat: 4.0,
+                value: SongLuaOverlayUpdateValue::F32(120.0),
+            }],
+        }],
+        ..Default::default()
+    };
+    let global_offset_seconds = 0.25;
+
+    let tracks =
+        super::build_song_lua_overlay_update_tracks(&compiled, &timing, global_offset_seconds);
+
+    let expected =
+        deadsync_gameplay::song_lua_message_second(4.0, &timing, global_offset_seconds).unwrap();
+    assert_eq!(tracks[0].samples[0].second, expected);
 }
 
 #[test]

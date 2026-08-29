@@ -4411,7 +4411,7 @@ mod tests {
         capture_overlay_function_eases, collect_indexed_actor_capture_blocks,
         column_offset_windows_from_samples, compile_song_lua_layers_with_actors,
         compile_song_lua_with_actors, compile_song_runtime_values, compiled_song_lua_sound_paths,
-        create_debug_table, create_dummy_actor as create_lua_dummy_actor,
+        create_chunk_env_proxy, create_debug_table, create_dummy_actor as create_lua_dummy_actor,
         create_named_child_actor as create_lua_named_child_actor, create_song_runtime_table,
         custom_multi_modifier_key, easiest_steps_difficulty, ensure_overlay_arrow_visual,
         file_path_string, function_named_upvalue_tables, graph_display_body_size,
@@ -15682,6 +15682,67 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_does_not_apply_future_action_globals_early() {
+        let song_dir = test_dir("future-action-global");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target
+future_speed = 0
+
+mod_actions = {
+    {100, function()
+        future_speed = 1
+    end, true},
+}
+
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Target",
+        InitCommand=function(self)
+            target = self
+        end,
+    },
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                local beat = GAMESTATE:GetSongBeat()
+                if beat > 2 and future_speed < 1 then
+                    future_speed = future_speed + 0.1
+                end
+                target:x(future_speed * 10)
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Future Action Global");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 6.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let x = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| track.target == SongLuaOverlayUpdateTarget::X)
+            .expect("the post-gate motion should produce an X track");
+
+        assert!(
+            x.samples
+                .iter()
+                .filter(|sample| sample.beat <= 2.0)
+                .all(|sample| sample.value == SongLuaOverlayUpdateValue::F32(0.0))
+        );
+        assert!(x.samples.iter().any(|sample| {
+            sample.beat > 2.0
+                && matches!(sample.value, SongLuaOverlayUpdateValue::F32(value) if value > 0.0)
+        }));
+    }
+
+    #[test]
     fn compile_song_lua_scopes_unprobed_overlay_function_eases() {
         let song_dir = test_dir("unprobed-overlay-function-ease");
         let entry = song_dir.join("default.lua");
@@ -18189,6 +18250,33 @@ return Def.ActorFrame{
         assert!(capture.saw_side_effect);
         assert!(actor.get::<bool>("__songlua_visible").unwrap());
         assert_eq!(compile_song_runtime_values(&lua).unwrap(), (2.0, 3.0));
+    }
+
+    #[test]
+    fn capture_function_action_blocks_restores_lua_globals() {
+        let lua = Lua::new();
+        let runtime = create_song_runtime_table(&lua, &SongLuaCompileContext::new("", "")).unwrap();
+        lua.globals().set(SONG_LUA_RUNTIME_KEY, runtime).unwrap();
+        let target = lua.create_table().unwrap();
+        target.set("future_speed", 0).unwrap();
+        let environment = create_chunk_env_proxy(&lua, target.clone()).unwrap();
+        let function = lua
+            .load(
+                r#"
+return function()
+    future_speed = 1
+    future_only = 2
+end
+"#,
+            )
+            .set_environment(environment)
+            .eval::<Function>()
+            .unwrap();
+
+        capture_function_action_blocks(&lua, &[], &[], &function, 100.0).unwrap();
+
+        assert_eq!(target.get::<i64>("future_speed").unwrap(), 0);
+        assert_eq!(target.get::<Option<i64>>("future_only").unwrap(), None);
     }
 
     #[test]

@@ -3614,8 +3614,7 @@ fn build_song_lua_compiled_visual_layer_runtime(
             &message_seconds,
             &compiled.song_foreground.message_commands,
         );
-    let overlays =
-        song_lua_runtime_overlays(compiled, timing_player, global_offset_seconds, start_second);
+    let overlays = song_lua_runtime_overlays(compiled, timing_player, global_offset_seconds);
 
     Some(deadsync_gameplay::build_song_lua_visual_layer_runtime(
         start_second,
@@ -3633,14 +3632,12 @@ fn song_lua_runtime_overlays(
     compiled: &CompiledSongLua,
     timing_player: &deadsync_rules::timing::TimingData,
     global_offset_seconds: f32,
-    start_second: f32,
 ) -> Vec<SongLuaOverlayActor> {
     let mut overlays = compiled.overlays.clone();
     let tracks = deadsync_profile_gameplay::build_song_lua_overlay_update_tracks(
         compiled,
         timing_player,
         global_offset_seconds,
-        start_second,
     );
     if !tracks.is_empty() {
         overlays.push(SongLuaOverlayActor {
@@ -3949,7 +3946,6 @@ fn build_song_lua_runtime_windows_for_data(
             compiled,
             params.timing_players[0],
             params.machine_global_offset_seconds,
-            0.0,
         );
         let message_seconds = deadsync_gameplay::build_song_lua_message_seconds(
             compiled.messages.iter().map(|message| message.beat),
