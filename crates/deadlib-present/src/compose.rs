@@ -1486,7 +1486,7 @@ pub struct ComposeScratch {
     frame_stats: ComposeFrameStats,
 }
 
-pub const COMPOSE_STORAGE_SLOTS: usize = 23;
+pub const COMPOSE_STORAGE_SLOTS: usize = 21;
 pub const COMPOSE_STORAGE_NAMES: [&str; COMPOSE_STORAGE_SLOTS] = [
     "draw_items",
     "mesh_payloads",
@@ -1504,9 +1504,7 @@ pub const COMPOSE_STORAGE_NAMES: [&str; COMPOSE_STORAGE_SLOTS] = [
     "z_perm",
     "sparse_z_keys",
     "sparse_z_buckets",
-    "texture_dims",
-    "texture_sheets",
-    "texture_handles",
+    "texture_lookups",
     "text_builders",
     "text_recycle",
     "text_vertices",
@@ -1561,7 +1559,7 @@ impl ComposeScratch {
         reserve_vec_headroom(&mut self.sprite_instances, draw_floor);
         reserve_vec_headroom(&mut self.sorted_sprite_instances, sorted_sprite_floor);
         reserve_vec_headroom(&mut self.sparse_z_keys, lookup_floor);
-        reserve_map_headroom(&mut self.texture_cache.handles, lookup_floor);
+        reserve_map_headroom(&mut self.texture_cache.entries, lookup_floor);
     }
 
     /// Enables or disables low-overhead timing for the next composition pass.
@@ -1686,9 +1684,7 @@ impl ComposeScratch {
                 saturating_u32(self.z_perm.capacity()),
                 saturating_u32(self.sparse_z_keys.capacity()),
                 saturating_u32(self.sparse_z_bucket_by_key.capacity()),
-                saturating_u32(self.texture_cache.dims.capacity()),
-                saturating_u32(self.texture_cache.sheets.capacity()),
-                saturating_u32(self.texture_cache.handles.capacity()),
+                saturating_u32(self.texture_cache.entries.capacity()),
                 saturating_u32(self.transient_text_mesh_builders.capacity()),
                 saturating_u32(self.recycled_text_mesh_vertices.capacity()),
                 saturating_u32(text_vertex_capacity),
@@ -2801,6 +2797,71 @@ type AttrIndices = SmallVec<[usize; 8]>;
 type ClipPolygon = SmallVec<[ClipVertex; 8]>;
 type ClippedMesh = SmallVec<[renderer::TexturedMeshVertex; 18]>;
 
+const MISSING_BYTE_INDEX: u8 = u8::MAX;
+
+struct ByteIndex {
+    slots: [u8; 256],
+}
+
+impl ByteIndex {
+    const fn new() -> Self {
+        Self {
+            slots: [MISSING_BYTE_INDEX; 256],
+        }
+    }
+
+    #[inline(always)]
+    fn get(&self, byte: u8) -> Option<usize> {
+        let index = self.slots[usize::from(byte)];
+        (index != MISSING_BYTE_INDEX).then_some(usize::from(index))
+    }
+
+    #[inline(always)]
+    fn insert(&mut self, byte: u8, index: usize) {
+        debug_assert!(index < usize::from(MISSING_BYTE_INDEX));
+        self.slots[usize::from(byte)] = index as u8;
+    }
+
+    fn clear(&mut self) {
+        self.slots.fill(MISSING_BYTE_INDEX);
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct FrameInlineByteIndexBench {
+    index: ByteIndex,
+    values: Vec<u8>,
+}
+
+#[cfg(feature = "bench-support")]
+impl FrameInlineByteIndexBench {
+    #[must_use]
+    pub fn new(domain: &[u8]) -> Self {
+        let mut index = ByteIndex::new();
+        let mut values = Vec::with_capacity(domain.len());
+        for &byte in domain {
+            if index.get(byte).is_some() {
+                continue;
+            }
+            index.insert(byte, values.len());
+            values.push(byte);
+        }
+        Self { index, values }
+    }
+
+    #[must_use]
+    pub fn checksum(&self, text: &[u8]) -> Option<u64> {
+        text.iter().try_fold(0u64, |sum, &byte| {
+            let index = self.index.get(byte)?;
+            Some(
+                sum.wrapping_mul(131)
+                    .wrapping_add(u64::from(self.values[index])),
+            )
+        })
+    }
+}
+
 struct TextLayoutPlacement {
     sx: f32,
     sy: f32,
@@ -2824,24 +2885,44 @@ type SharedAliasEntries = SmallVec<[SharedLayoutEntry; 1]>;
 type SharedAliasMap = HashMap<usize, SharedAliasEntries, TextLayoutHasher>;
 
 #[derive(Clone, Copy)]
-struct TextureCacheEntry<T> {
+struct TextureCacheEntry {
     fingerprint: u64,
     validated_frame: u64,
-    value: T,
+    dims: Option<TextureMeta>,
+    sheet: Option<(u32, u32)>,
+    handle: Option<renderer::TextureHandle>,
 }
 
-type TextureLookupMap<T> = HashMap<usize, TextureCacheEntry<T>, TextLayoutHasher>;
-type TextureMetaMap = TextureLookupMap<TextureMeta>;
-type TextureSheetMap = TextureLookupMap<(u32, u32)>;
-type TextureHandleLookupMap = TextureLookupMap<renderer::TextureHandle>;
+impl TextureCacheEntry {
+    const fn new(fingerprint: u64, validated_frame: u64) -> Self {
+        Self {
+            fingerprint,
+            validated_frame,
+            dims: None,
+            sheet: None,
+            handle: None,
+        }
+    }
+}
 
+type TextureLookupMap = HashMap<usize, TextureCacheEntry, TextLayoutHasher>;
+
+/// Main-thread pointer cache owned by one [`ComposeScratch`].
+///
+/// The cache lives for the screen/session scratch lifetime and is pre-sized at
+/// the transition boundary by `retain_working_set_headroom`. One entry combines
+/// dimensions, sheet dimensions, and the render handle so a key is fingerprinted
+/// at most once per frame. Registry-generation changes clear all entries; there
+/// is no live-frame pruning or scan. Misses call only the supplied in-memory
+/// `TextureContext`, destruction happens with the scratch owner, and capacity is
+/// exposed through `ComposeStorageStats`. Worst-case per-key frame work is one
+/// string fingerprint, one map lookup per requested field, and three context
+/// lookups on a completely cold entry.
 #[derive(Default)]
 struct TextureLookupCache {
     generation: u64,
     frame: u64,
-    dims: TextureMetaMap,
-    sheets: TextureSheetMap,
-    handles: TextureHandleLookupMap,
+    entries: TextureLookupMap,
 }
 
 impl TextureLookupCache {
@@ -2860,9 +2941,7 @@ impl TextureLookupCache {
     }
 
     fn clear_entries(&mut self) {
-        self.dims.clear();
-        self.sheets.clear();
-        self.handles.clear();
+        self.entries.clear();
     }
 
     #[inline(always)]
@@ -2878,27 +2957,28 @@ impl TextureLookupCache {
     }
 
     #[inline(always)]
-    fn validated_value<T: Copy>(
-        frame: u64,
-        entries: &mut TextureLookupMap<T>,
-        key_ptr: usize,
-        key: &str,
-    ) -> Result<T, u64> {
+    fn validated_entry(&mut self, key_ptr: usize, key: &str) -> &mut TextureCacheEntry {
         // The actor tree and cached font storage stay alive for the whole compose
         // call, so a key address validated in this frame cannot change contents.
         // Revalidate on the next frame to protect against allocator address reuse.
-        if let Some(entry) = entries.get_mut(&key_ptr) {
-            if entry.validated_frame == frame {
-                return Ok(entry.value);
+        match self.entries.entry(key_ptr) {
+            Entry::Occupied(mut occupied) => {
+                if occupied.get().validated_frame != self.frame {
+                    let fingerprint = Self::key_fingerprint(key);
+                    let entry = occupied.get_mut();
+                    if entry.fingerprint == fingerprint {
+                        entry.validated_frame = self.frame;
+                    } else {
+                        *entry = TextureCacheEntry::new(fingerprint, self.frame);
+                    }
+                }
+                occupied.into_mut()
             }
-            let fingerprint = Self::key_fingerprint(key);
-            if entry.fingerprint == fingerprint {
-                entry.validated_frame = frame;
-                return Ok(entry.value);
-            }
-            return Err(fingerprint);
+            Entry::Vacant(vacant) => vacant.insert(TextureCacheEntry::new(
+                Self::key_fingerprint(key),
+                self.frame,
+            )),
         }
-        Err(Self::key_fingerprint(key))
     }
 
     #[inline(always)]
@@ -2909,19 +2989,12 @@ impl TextureLookupCache {
         key: &str,
     ) -> Option<TextureMeta> {
         let key_ptr = Self::ptr_cache_key(key_ptr);
-        let fingerprint = match Self::validated_value(self.frame, &mut self.dims, key_ptr, key) {
-            Ok(meta) => return Some(meta),
-            Err(fingerprint) => fingerprint,
-        };
+        let entry = self.validated_entry(key_ptr, key);
+        if let Some(meta) = entry.dims {
+            return Some(meta);
+        }
         let meta = texture_ctx.texture_dims(key)?;
-        self.dims.insert(
-            key_ptr,
-            TextureCacheEntry {
-                fingerprint,
-                validated_frame: self.frame,
-                value: meta,
-            },
-        );
+        entry.dims = Some(meta);
         Some(meta)
     }
 
@@ -2933,19 +3006,12 @@ impl TextureLookupCache {
         key: &str,
     ) -> (u32, u32) {
         let key_ptr = Self::ptr_cache_key(key_ptr);
-        let fingerprint = match Self::validated_value(self.frame, &mut self.sheets, key_ptr, key) {
-            Ok(dims) => return dims,
-            Err(fingerprint) => fingerprint,
-        };
+        let entry = self.validated_entry(key_ptr, key);
+        if let Some(sheet) = entry.sheet {
+            return sheet;
+        }
         let dims = texture_ctx.sprite_sheet_dims(key);
-        self.sheets.insert(
-            key_ptr,
-            TextureCacheEntry {
-                fingerprint,
-                validated_frame: self.frame,
-                value: dims,
-            },
-        );
+        entry.sheet = Some(dims);
         dims
     }
 
@@ -2957,20 +3023,74 @@ impl TextureLookupCache {
         key: &str,
     ) -> renderer::TextureHandle {
         let key_ptr = Self::ptr_cache_key(key_ptr);
-        let fingerprint = match Self::validated_value(self.frame, &mut self.handles, key_ptr, key) {
-            Ok(handle) => return handle,
-            Err(fingerprint) => fingerprint,
-        };
+        let entry = self.validated_entry(key_ptr, key);
+        if let Some(handle) = entry.handle {
+            return handle;
+        }
         let handle = texture_ctx.texture_handle(key);
-        self.handles.insert(
-            key_ptr,
-            TextureCacheEntry {
-                fingerprint,
-                validated_frame: self.frame,
-                value: handle,
-            },
-        );
+        entry.handle = Some(handle);
         handle
+    }
+}
+
+#[cfg(feature = "bench-support")]
+struct TextureLookupBenchContext;
+
+#[cfg(feature = "bench-support")]
+impl TextureContext for TextureLookupBenchContext {
+    fn texture_registry_generation(&self) -> u64 {
+        1
+    }
+
+    fn texture_dims(&self, key: &str) -> Option<TextureMeta> {
+        Some(TextureMeta {
+            w: key.len() as u32,
+            h: u32::from(key.as_bytes().first().copied().unwrap_or_default()) + 1,
+        })
+    }
+
+    fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
+        ((key.len() as u32 % 8) + 1, 2)
+    }
+
+    fn texture_handle(&self, key: &str) -> renderer::TextureHandle {
+        key.len() as renderer::TextureHandle + 1
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct TextureLookupBenchState {
+    cache: TextureLookupCache,
+}
+
+#[cfg(feature = "bench-support")]
+impl TextureLookupBenchState {
+    #[must_use]
+    pub fn new(capacity: usize) -> Self {
+        let mut cache = TextureLookupCache::default();
+        cache.entries.reserve(capacity);
+        Self { cache }
+    }
+
+    pub fn lookup_frame(&mut self, keys: &[Arc<str>]) -> u64 {
+        let texture_ctx = TextureLookupBenchContext;
+        self.cache.begin_frame(&texture_ctx);
+        keys.iter().fold(0u64, |sum, key| {
+            let key_ptr = str_ptr(key);
+            let meta = self
+                .cache
+                .texture_dims(&texture_ctx, key_ptr, key)
+                .expect("benchmark context always supplies dimensions");
+            let sheet = self.cache.sprite_sheet_dims(&texture_ctx, key_ptr, key);
+            let handle = self.cache.texture_handle(&texture_ctx, key_ptr, key);
+            sum.wrapping_mul(131)
+                .wrapping_add(u64::from(meta.w))
+                .wrapping_add(u64::from(meta.h) << 8)
+                .wrapping_add(u64::from(sheet.0) << 16)
+                .wrapping_add(u64::from(sheet.1) << 24)
+                .wrapping_add(handle << 32)
+        })
     }
 }
 
@@ -2991,7 +3111,8 @@ struct FrameInlineLayoutSlot {
     meshes: Option<PreparedTextMeshes>,
     cache_prepared_meshes: bool,
     prepared_key: Option<TextLayoutKey>,
-    glyphs: Vec<(u8, Option<CachedGlyph>)>,
+    glyphs: Vec<Option<CachedGlyph>>,
+    glyph_indices: ByteIndex,
     key: Option<(TextLayoutKey, actors::InlineText)>,
 }
 
@@ -3003,6 +3124,7 @@ impl FrameInlineLayoutSlot {
             cache_prepared_meshes: false,
             prepared_key: None,
             glyphs: Vec::new(),
+            glyph_indices: ByteIndex::new(),
             key: None,
         }
     }
@@ -3021,15 +3143,16 @@ impl FrameInlineLayoutSlot {
         self.layout.line_spacing = key.line_spacing;
         self.glyphs.reserve(glyph_domain.as_str().len());
         for (char_index, byte) in glyph_domain.as_str().bytes().enumerate() {
-            if self.glyphs.iter().any(|(known, _)| *known == byte) {
+            if self.glyph_indices.get(byte).is_some() {
                 continue;
             }
             let glyph = font::find_glyph(font, char::from(byte), fonts)
                 .map(|glyph| cached_glyph(&mut self.layout.texture_pages, glyph, char_index, true));
-            self.glyphs.push((byte, glyph));
+            self.glyph_indices.insert(byte, self.glyphs.len());
+            self.glyphs.push(glyph);
         }
         self.meshes = Some(PreparedTextMeshes::new(
-            self.glyphs.iter().filter_map(|(_, glyph)| glyph.as_ref()),
+            self.glyphs.iter().flatten(),
             actors::InlineText::CAPACITY,
             align,
         ));
@@ -3054,10 +3177,10 @@ impl FrameInlineLayoutSlot {
         self.layout.stroke_batches = CachedTextMeshVariants::default();
         let mut width_i32 = 0i32;
         for (char_index, byte) in text.as_str().bytes().enumerate() {
-            let Some((_, glyph)) = self.glyphs.iter().find(|(known, _)| *known == byte) else {
+            let Some(glyph_index) = self.glyph_indices.get(byte) else {
                 return false;
             };
-            let Some(mut glyph) = *glyph else {
+            let Some(mut glyph) = self.glyphs[glyph_index] else {
                 continue;
             };
             glyph.char_index = char_index;
@@ -3138,6 +3261,7 @@ impl FrameInlineLayoutSlot {
         self.cache_prepared_meshes = false;
         self.prepared_key = None;
         self.glyphs.clear();
+        self.glyph_indices.clear();
     }
 
     fn clear(&mut self) {
@@ -3145,6 +3269,7 @@ impl FrameInlineLayoutSlot {
         self.meshes = None;
         self.prepared_key = None;
         self.glyphs.clear();
+        self.glyph_indices.clear();
         self.key = None;
     }
 }
@@ -9361,7 +9486,7 @@ fn clip_rotated_sprite_to_world_rect(
 #[cfg(test)]
 mod tests {
     use super::{
-        ActorSegment, ActorXFold, CachedGlyph, CachedTextLayout, CachedTextMeshBatch,
+        ActorSegment, ActorXFold, ByteIndex, CachedGlyph, CachedTextLayout, CachedTextMeshBatch,
         CachedTextMeshVariants, CachedTextPage, ComposeScratch, DrawItem, EditableDraw,
         EditablePayload, FrameBuilder, MeshPayload, MeshVertices, TextAttrCursor, TextLayoutCache,
         TextLayoutKey, TextMeshBatchBuilder, TextPageId, TextureCacheEntry, TextureContext,
@@ -11632,28 +11757,14 @@ mod tests {
             .dims
             .insert(String::from(key.as_ref()), TextureMeta { w: 64, h: 32 });
         texture_ctx.handles.insert(String::from(key.as_ref()), 11);
-        cache.dims.insert(
+        cache.entries.insert(
             key_addr,
             TextureCacheEntry {
                 fingerprint,
                 validated_frame: cache.frame,
-                value: TextureMeta { w: 64, h: 32 },
-            },
-        );
-        cache.sheets.insert(
-            key_addr,
-            TextureCacheEntry {
-                fingerprint,
-                validated_frame: cache.frame,
-                value: (4, 2),
-            },
-        );
-        cache.handles.insert(
-            key_addr,
-            TextureCacheEntry {
-                fingerprint,
-                validated_frame: cache.frame,
-                value: 11,
+                dims: Some(TextureMeta { w: 64, h: 32 }),
+                sheet: Some((4, 2)),
+                handle: Some(11),
             },
         );
 
@@ -11681,18 +11792,14 @@ mod tests {
             cache.texture_dims(&texture_ctx, key_ptr, key.as_ref()),
             Some(TextureMeta { w: 64, h: 32 })
         );
-        assert_eq!(cache.dims[&key_addr].validated_frame, cache.frame);
+        assert_eq!(cache.entries[&key_addr].validated_frame, cache.frame);
 
-        assert_eq!(cache.dims.len(), 1);
-        assert_eq!(cache.sheets.len(), 1);
-        assert_eq!(cache.handles.len(), 1);
+        assert_eq!(cache.entries.len(), 1);
 
         cache.generation = cache.generation.wrapping_sub(1);
         cache.begin_frame(&texture_ctx);
 
-        assert!(cache.dims.is_empty());
-        assert!(cache.sheets.is_empty());
-        assert!(cache.handles.is_empty());
+        assert!(cache.entries.is_empty());
     }
 
     #[test]
@@ -11938,6 +12045,30 @@ mod tests {
         assert_eq!(stats.misses, 1);
         assert_eq!(stats.owned_hits, 1);
         assert_eq!(stats.owned_entries, 1);
+    }
+
+    #[test]
+    fn frame_inline_byte_index_matches_linear_lookup() {
+        let domain = b"0123456789-.ms";
+        let mut index = ByteIndex::new();
+        let mut linear = Vec::new();
+        for &byte in domain {
+            if linear.contains(&byte) {
+                continue;
+            }
+            index.insert(byte, linear.len());
+            linear.push(byte);
+        }
+
+        for byte in u8::MIN..=u8::MAX {
+            assert_eq!(
+                index.get(byte),
+                linear.iter().position(|&known| known == byte),
+                "byte {byte}"
+            );
+        }
+        index.clear();
+        assert!((u8::MIN..=u8::MAX).all(|byte| index.get(byte).is_none()));
     }
 
     #[test]
@@ -12713,7 +12844,7 @@ mod tests {
         scratch.sprite_instances.reserve(16);
         scratch.sorted_sprite_instances.reserve(16);
         scratch.sparse_z_keys.reserve(8);
-        scratch.texture_cache.handles.reserve(4);
+        scratch.texture_cache.entries.reserve(4);
         scratch.retain_working_set_headroom(32, 32, 16, 16);
         let first_entry = scratch.storage_stats();
         for (name, target) in [
@@ -12722,7 +12853,7 @@ mod tests {
             ("sprite_inst", 64),
             ("sprite_sort", 64),
             ("sparse_z_keys", 32),
-            ("texture_handles", 32),
+            ("texture_lookups", 32),
         ] {
             let slot = super::COMPOSE_STORAGE_NAMES
                 .iter()

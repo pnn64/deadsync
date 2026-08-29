@@ -3,8 +3,8 @@ use deadlib_render_core::{
     BlendMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
 };
 use glam::Mat4 as Matrix4;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::cell::{Cell, Ref, RefCell};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
@@ -24,7 +24,7 @@ pub struct ActorResourceStats {
 
 struct ActorResourceStorage {
     textures: Vec<Arc<str>>,
-    texture_ids: HashMap<usize, ActorTextureId>,
+    texture_ids: FxHashMap<usize, ActorTextureId>,
 }
 
 /// Song-lifetime ownership arena for resources referenced by transient actors.
@@ -61,7 +61,10 @@ impl ActorResourceArena {
             max_textures,
             storage: RefCell::new(ActorResourceStorage {
                 textures: Vec::with_capacity(max_textures.min(256)),
-                texture_ids: HashMap::with_capacity(max_textures.min(256)),
+                texture_ids: FxHashMap::with_capacity_and_hasher(
+                    max_textures.min(256),
+                    FxBuildHasher,
+                ),
             }),
             texture_hits: Cell::new(0),
             collect_hit_stats: Cell::new(false),
