@@ -7,7 +7,7 @@ use std::{
     collections::HashSet,
     fs,
     hash::{BuildHasher, Hasher},
-    io::Read,
+    io::{Read, Write},
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
@@ -101,13 +101,6 @@ pub fn save_raw_cached_banner_image(cache_path: &Path, rgba: &RgbaImage) -> bool
     if !ensure_cache_parent(cache_path) {
         return false;
     }
-    let raw = rgba.as_raw();
-    let mut out = Vec::<u8>::with_capacity(BANNER_CACHE_HEADER_SIZE.saturating_add(raw.len()));
-    out.extend_from_slice(&BANNER_CACHE_MAGIC);
-    out.extend_from_slice(&rgba.width().to_le_bytes());
-    out.extend_from_slice(&rgba.height().to_le_bytes());
-    out.extend_from_slice(raw);
-
     let parent = cache_path.parent().unwrap_or_else(|| Path::new("."));
     let file_name = cache_path
         .file_name()
@@ -116,7 +109,9 @@ pub fn save_raw_cached_banner_image(cache_path: &Path, rgba: &RgbaImage) -> bool
     let tmp_seq = BANNER_CACHE_TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let tmp_path = parent.join(format!(".{file_name}.tmp-{}-{tmp_seq}", std::process::id()));
 
-    if let Err(e) = fs::write(&tmp_path, out) {
+    let write_result =
+        fs::File::create(&tmp_path).and_then(|file| write_raw_cached_banner(file, rgba));
+    if let Err(e) = write_result {
         warn!(
             "Failed to save raw banner cache '{}': {e}",
             cache_path.to_string_lossy()
@@ -138,6 +133,25 @@ pub fn save_raw_cached_banner_image(cache_path: &Path, rgba: &RgbaImage) -> bool
     }
 
     true
+}
+
+fn write_raw_cached_banner(mut writer: impl Write, rgba: &RgbaImage) -> std::io::Result<()> {
+    let mut header = [0u8; BANNER_CACHE_HEADER_SIZE];
+    header[..8].copy_from_slice(&BANNER_CACHE_MAGIC);
+    header[8..12].copy_from_slice(&rgba.width().to_le_bytes());
+    header[12..16].copy_from_slice(&rgba.height().to_le_bytes());
+    writer.write_all(&header)?;
+    writer.write_all(rgba.as_raw())
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_write_raw_cached_banner(
+    writer: impl Write,
+    rgba: &RgbaImage,
+) -> std::io::Result<usize> {
+    write_raw_cached_banner(writer, rgba)?;
+    Ok(BANNER_CACHE_HEADER_SIZE.saturating_add(rgba.as_raw().len()))
 }
 
 fn load_cached_banner_image(cache_path: &Path, source_path: &Path) -> Option<RgbaImage> {
@@ -731,6 +745,21 @@ mod tests {
 
         assert!(save_raw_cached_banner_image(&cache_path, &expected));
         assert_eq!(load_raw_cached_banner_image(&cache_path), Some(expected));
+    }
+
+    #[test]
+    fn streamed_raw_cache_bytes_match_legacy_staging_layout() {
+        let rgba = RgbaImage::from_raw(2, 2, (0..16).collect()).unwrap();
+        let mut expected = Vec::with_capacity(BANNER_CACHE_HEADER_SIZE + rgba.as_raw().len());
+        expected.extend_from_slice(&BANNER_CACHE_MAGIC);
+        expected.extend_from_slice(&rgba.width().to_le_bytes());
+        expected.extend_from_slice(&rgba.height().to_le_bytes());
+        expected.extend_from_slice(rgba.as_raw());
+        let mut actual = Vec::new();
+
+        write_raw_cached_banner(&mut actual, &rgba).unwrap();
+
+        assert_eq!(actual, expected);
     }
 
     #[test]

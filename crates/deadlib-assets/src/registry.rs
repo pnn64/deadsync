@@ -80,16 +80,25 @@ struct GeneratedTextureEntry<T> {
     pending: bool,
 }
 
+/// Session-lifetime generated-texture registry drained by the render thread.
+///
+/// Producers append only the first update for a key until the next drain. The
+/// pending vector owns the eventual return strings, so draining touches only
+/// changed entries and transfers its allocation to the upload batch. A miss is
+/// impossible because entries are never evicted; destruction occurs when the
+/// process registry is dropped. `asset_cache_hot_paths` measures sparse-drain
+/// cost and allocation churn. Worst-case drain work is linear in the number of
+/// changed textures, never in the full registry size.
 struct GeneratedTextureRegistry<T> {
     entries: FxHashMap<String, GeneratedTextureEntry<T>>,
-    pending: usize,
+    pending_keys: Vec<String>,
 }
 
 impl<T> Default for GeneratedTextureRegistry<T> {
     fn default() -> Self {
         Self {
             entries: FxHashMap::default(),
-            pending: 0,
+            pending_keys: Vec::new(),
         }
     }
 }
@@ -100,18 +109,19 @@ impl<T> GeneratedTextureRegistry<T> {
             entry.value = value;
             if !entry.pending {
                 entry.pending = true;
-                self.pending += 1;
+                self.pending_keys.push(key.to_string());
             }
             return;
         }
+        let key = key.to_string();
+        self.pending_keys.push(key.clone());
         self.entries.insert(
-            key.to_string(),
+            key,
             GeneratedTextureEntry {
                 value,
                 pending: true,
             },
         );
-        self.pending += 1;
     }
 
     fn get(&self, key: &str) -> Option<&T> {
@@ -119,18 +129,14 @@ impl<T> GeneratedTextureRegistry<T> {
     }
 
     fn take_pending_keys(&mut self) -> Vec<String> {
-        if self.pending == 0 {
-            return Vec::new();
+        let pending = std::mem::take(&mut self.pending_keys);
+        for key in &pending {
+            self.entries
+                .get_mut(key)
+                .expect("queued generated texture must remain registered")
+                .pending = false;
         }
-        let mut out = Vec::with_capacity(self.pending);
-        for (key, entry) in &mut self.entries {
-            if entry.pending {
-                entry.pending = false;
-                out.push(key.clone());
-            }
-        }
-        self.pending = 0;
-        out
+        pending
     }
 }
 
@@ -364,6 +370,33 @@ pub fn take_pending_generated_texture_keys() -> Vec<String> {
     GENERATED_TEXTURES.write().unwrap().take_pending_keys()
 }
 
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct GeneratedTexturePendingBench {
+    registry: GeneratedTextureRegistry<u64>,
+}
+
+#[cfg(feature = "bench-support")]
+impl GeneratedTexturePendingBench {
+    #[must_use]
+    pub fn new(keys: &[String]) -> Self {
+        let mut registry = GeneratedTextureRegistry::default();
+        for (index, key) in keys.iter().enumerate() {
+            registry.register(key, index as u64);
+        }
+        drop(registry.take_pending_keys());
+        Self { registry }
+    }
+
+    #[must_use]
+    pub fn update_and_drain(&mut self, keys: &[String], indices: &[usize]) -> Vec<String> {
+        for &index in indices {
+            self.registry.register(&keys[index], index as u64);
+        }
+        self.registry.take_pending_keys()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -460,6 +493,26 @@ mod tests {
 
         registry.register("generated/lifebar", 3);
         assert_eq!(registry.take_pending_keys(), ["generated/lifebar"]);
+    }
+
+    #[test]
+    fn generated_registry_drains_only_changed_keys_in_publish_order() {
+        let mut registry = GeneratedTextureRegistry::default();
+        for index in 0..512 {
+            registry.register(&format!("generated/{index:04}"), index);
+        }
+        assert_eq!(registry.take_pending_keys().len(), 512);
+
+        registry.register("generated/0400", 900);
+        registry.register("generated/0007", 901);
+        registry.register("generated/0400", 902);
+
+        assert_eq!(
+            registry.take_pending_keys(),
+            ["generated/0400", "generated/0007"]
+        );
+        assert_eq!(registry.get("generated/0400"), Some(&902));
+        assert!(registry.take_pending_keys().is_empty());
     }
 
     #[test]

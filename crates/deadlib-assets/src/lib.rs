@@ -61,7 +61,7 @@ use std::{
     sync::Arc,
 };
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TextureHints {
     pub non_default: bool,
     pub mipmaps: Option<bool>,
@@ -98,6 +98,65 @@ fn has_ascii_case_insensitive_substr(haystack: &[u8], needle: &[u8]) -> bool {
     haystack
         .windows(needle.len())
         .any(|window| window.eq_ignore_ascii_case(needle))
+}
+
+const HINT_16BPP: u16 = 1 << 0;
+const HINT_32BPP: u16 = 1 << 1;
+const HINT_ALPHAMAP: u16 = 1 << 2;
+const HINT_CLAMP: u16 = 1 << 3;
+const HINT_DITHER: u16 = 1 << 4;
+const HINT_DOUBLERES: u16 = 1 << 5;
+const HINT_GRAYSCALE: u16 = 1 << 6;
+const HINT_LINEAR: u16 = 1 << 7;
+const HINT_MIPMAPS: u16 = 1 << 8;
+const HINT_NEAREST: u16 = 1 << 9;
+const HINT_NOMIPMAPS: u16 = 1 << 10;
+const HINT_POINT: u16 = 1 << 11;
+const HINT_REPEAT: u16 = 1 << 12;
+const HINT_STRETCH: u16 = 1 << 13;
+const HINT_WRAP: u16 = 1 << 14;
+
+#[inline(always)]
+fn hint_starts_with(bytes: &[u8], start: usize, needle: &[u8]) -> bool {
+    bytes
+        .get(start..start.saturating_add(needle.len()))
+        .is_some_and(|candidate| candidate.eq_ignore_ascii_case(needle))
+}
+
+fn texture_hint_flags(bytes: &[u8]) -> u16 {
+    let mut flags = 0u16;
+    for index in 0..bytes.len() {
+        let (first, second) = match bytes[index].to_ascii_lowercase() {
+            b'1' => (b"16bpp".as_slice(), HINT_16BPP),
+            b'3' => (b"32bpp".as_slice(), HINT_32BPP),
+            b'a' => (b"alphamap".as_slice(), HINT_ALPHAMAP),
+            b'c' => (b"clamp".as_slice(), HINT_CLAMP),
+            b'g' => (b"grayscale".as_slice(), HINT_GRAYSCALE),
+            b'l' => (b"linear".as_slice(), HINT_LINEAR),
+            b'm' => (b"mipmaps".as_slice(), HINT_MIPMAPS),
+            b'p' => (b"point".as_slice(), HINT_POINT),
+            b'r' => (b"repeat".as_slice(), HINT_REPEAT),
+            b's' => (b"stretch".as_slice(), HINT_STRETCH),
+            b'w' => (b"wrap".as_slice(), HINT_WRAP),
+            b'd' => {
+                if hint_starts_with(bytes, index, b"dither") {
+                    flags |= HINT_DITHER;
+                }
+                (b"doubleres".as_slice(), HINT_DOUBLERES)
+            }
+            b'n' => {
+                if hint_starts_with(bytes, index, b"nearest") {
+                    flags |= HINT_NEAREST;
+                }
+                (b"nomipmaps".as_slice(), HINT_NOMIPMAPS)
+            }
+            _ => continue,
+        };
+        if hint_starts_with(bytes, index, first) {
+            flags |= second;
+        }
+    }
+    flags
 }
 
 #[inline(always)]
@@ -475,44 +534,33 @@ pub fn parse_texture_hints(raw: &str) -> TextureHints {
     }
     hints.non_default = true;
 
-    let has = |sub: &[u8]| has_ascii_case_insensitive_substr(trimmed.as_bytes(), sub);
-
-    if has(b"32bpp") {
+    let flags = texture_hint_flags(trimmed.as_bytes());
+    if flags & HINT_32BPP != 0 {
         hints.color_depth = Some(32);
-    } else if has(b"16bpp") {
+    } else if flags & HINT_16BPP != 0 {
         hints.color_depth = Some(16);
     }
-    if has(b"dither") {
-        hints.dither = true;
-    }
-    if has(b"stretch") {
-        hints.stretch = true;
-    }
-    if has(b"mipmaps") {
+    hints.dither = flags & HINT_DITHER != 0;
+    hints.stretch = flags & HINT_STRETCH != 0;
+    if flags & HINT_MIPMAPS != 0 {
         hints.mipmaps = Some(true);
     }
-    if has(b"nomipmaps") {
+    if flags & HINT_NOMIPMAPS != 0 {
         hints.mipmaps = Some(false);
     }
-    if has(b"grayscale") {
-        hints.grayscale = true;
-    }
-    if has(b"alphamap") {
-        hints.alphamap = true;
-    }
-    if has(b"doubleres") {
-        hints.doubleres = true;
-    }
-    if has(b"nearest") || has(b"point") {
+    hints.grayscale = flags & HINT_GRAYSCALE != 0;
+    hints.alphamap = flags & HINT_ALPHAMAP != 0;
+    hints.doubleres = flags & HINT_DOUBLERES != 0;
+    if flags & (HINT_NEAREST | HINT_POINT) != 0 {
         hints.sampler_filter = Some(SamplerFilter::Nearest);
     }
-    if has(b"linear") {
+    if flags & HINT_LINEAR != 0 {
         hints.sampler_filter = Some(SamplerFilter::Linear);
     }
-    if has(b"wrap") || has(b"repeat") {
+    if flags & (HINT_WRAP | HINT_REPEAT) != 0 {
         hints.sampler_wrap = Some(SamplerWrap::Repeat);
     }
-    if has(b"clamp") {
+    if flags & HINT_CLAMP != 0 {
         hints.sampler_wrap = Some(SamplerWrap::Clamp);
     }
     if hints.mipmaps == Some(true) && hints.sampler_wrap.is_none() {
@@ -635,6 +683,48 @@ pub fn fix_hidden_alpha(image: &mut RgbaImage) {
 mod tests {
     use super::*;
 
+    fn reference_texture_hints(raw: &str) -> TextureHints {
+        let mut hints = TextureHints::default();
+        let trimmed = raw.trim();
+        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("default") {
+            return hints;
+        }
+        hints.non_default = true;
+        let has = |needle| has_ascii_case_insensitive_substr(trimmed.as_bytes(), needle);
+        if has(b"32bpp") {
+            hints.color_depth = Some(32);
+        } else if has(b"16bpp") {
+            hints.color_depth = Some(16);
+        }
+        hints.dither = has(b"dither");
+        hints.stretch = has(b"stretch");
+        if has(b"mipmaps") {
+            hints.mipmaps = Some(true);
+        }
+        if has(b"nomipmaps") {
+            hints.mipmaps = Some(false);
+        }
+        hints.grayscale = has(b"grayscale");
+        hints.alphamap = has(b"alphamap");
+        hints.doubleres = has(b"doubleres");
+        if has(b"nearest") || has(b"point") {
+            hints.sampler_filter = Some(SamplerFilter::Nearest);
+        }
+        if has(b"linear") {
+            hints.sampler_filter = Some(SamplerFilter::Linear);
+        }
+        if has(b"wrap") || has(b"repeat") {
+            hints.sampler_wrap = Some(SamplerWrap::Repeat);
+        }
+        if has(b"clamp") {
+            hints.sampler_wrap = Some(SamplerWrap::Clamp);
+        }
+        if hints.mipmaps == Some(true) && hints.sampler_wrap.is_none() {
+            hints.sampler_wrap = Some(SamplerWrap::Repeat);
+        }
+        hints
+    }
+
     #[test]
     fn parses_texture_resolution_hint_from_parenthetical_res_tag() {
         assert_eq!(
@@ -681,6 +771,32 @@ mod tests {
         assert_eq!(hints.mipmaps, Some(true));
         assert_eq!(hints.sampler_filter, Some(SamplerFilter::Nearest));
         assert_eq!(hints.sampler_wrap, Some(SamplerWrap::Repeat));
+    }
+
+    #[test]
+    fn single_pass_texture_hints_match_repeated_scan_reference() {
+        let cases = [
+            "",
+            "   ",
+            "default",
+            " DEFAULT ",
+            "plain texture.png",
+            "16bpp and later 32BPP",
+            "nomipmaps",
+            "mipmaps nearest wrap",
+            "nomipmaps point repeat linear clamp",
+            "prefixditherSuffix DOUBLEres grayscale alphamap stretch",
+            "nearestlinear wrapclamp 32bpp16bpp",
+            "NOMIPMAPS MIPMAPS",
+            "short n m d a c g l p r s w 3 1",
+        ];
+        for raw in cases {
+            assert_eq!(
+                parse_texture_hints(raw),
+                reference_texture_hints(raw),
+                "{raw}"
+            );
+        }
     }
 
     #[test]
