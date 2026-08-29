@@ -5,7 +5,11 @@ edition = "2024"
 license = "GPL-3.0"
 
 [features]
-bench-support = ["deadsync-config/bench-support", "deadsync-notefield/bench-support"]
+bench-support = [
+    "deadsync-config/bench-support",
+    "deadsync-notefield/bench-support",
+    "deadsync-simfile/bench-support",
+]
 test-support = []
 
 [[bench]]
@@ -65,6 +69,11 @@ required-features = ["bench-support"]
 
 [[bench]]
 name = "screen_allocation_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
+name = "song_search_hot_paths"
 harness = false
 required-features = ["bench-support"]
 

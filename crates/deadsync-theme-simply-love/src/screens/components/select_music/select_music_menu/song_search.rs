@@ -23,6 +23,7 @@ use deadsync_simfile::song_search::{
     SongSearchCandidate, parse_song_search_live, song_passes_search_filters,
     song_search_difficulties_text,
 };
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 pub const SONG_SEARCH_MAX_LEN: usize = 80;
@@ -543,8 +544,9 @@ pub fn build_song_matches(
     let parsed = parse_song_search_live(query);
     let q = fuzzy::prepare_query(&parsed.text);
     let empty_query = q.is_empty();
-    // (score, index into `index.songs`)
-    let mut ranked: Vec<(i32, usize)> = Vec::new();
+    // Only nine rows can be shown. Keep those nine ordered on the stack rather
+    // than allocating and sorting every fuzzy match in a large library.
+    let mut ranked = TopResults::<SONG_SEARCH_MAX_RESULTS>::new();
 
     for (i, entry) in index.songs.iter().enumerate() {
         if !song_passes_search_filters(&entry.song, chart_type, parsed.difficulty, parsed.bpm_tier)
@@ -554,8 +556,8 @@ pub fn build_song_matches(
 
         if empty_query {
             // Nothing typed: only the first window of rows is ever visible.
-            ranked.push((0, i));
-            if ranked.len() >= SONG_SEARCH_MAX_RESULTS {
+            ranked.push_back((0, i));
+            if ranked.is_full() {
                 break;
             }
             continue;
@@ -570,20 +572,11 @@ pub fn build_song_matches(
         let Some(score) = score else {
             continue;
         };
-        ranked.push((score, i));
-    }
-
-    if !empty_query {
-        // Higher score first; ties broken by case-insensitive title order.
-        ranked.sort_by(|a, b| {
-            b.0.cmp(&a.0)
-                .then_with(|| cmp_ascii_ci(&index.songs[a.1].title, &index.songs[b.1].title))
-        });
-        ranked.truncate(SONG_SEARCH_MAX_RESULTS);
+        ranked.insert_by((score, i), |a, b| song_rank_cmp(index, a, b));
     }
 
     ranked
-        .into_iter()
+        .take()
         .map(|(score, i)| {
             let entry = &index.songs[i];
             let song = &entry.song;
@@ -607,8 +600,159 @@ pub fn build_song_matches(
 #[must_use]
 pub fn build_pack_matches(index: &SongSearchIndex, query: &str) -> Vec<SongSearchMatch> {
     let q = fuzzy::prepare_query(query);
+    let mut ranked = TopResults::<SONG_SEARCH_MAX_RESULTS>::new();
+
+    for (i, pack) in index.packs.iter().enumerate() {
+        let score = if q.is_empty() {
+            Some(0)
+        } else {
+            fuzzy::best_match_score(&q, &pack.search_name, &[])
+        };
+        let Some(score) = score else {
+            continue;
+        };
+        ranked.insert_by((score, i), |a, b| pack_rank_cmp(index, a, b));
+    }
+
+    ranked
+        .take()
+        .map(|(score, i)| SongSearchMatch::Pack {
+            name: Arc::clone(&index.packs[i].name),
+            song_count: index.packs[i].song_count,
+            score,
+        })
+        .collect()
+}
+
+#[derive(Clone, Copy)]
+struct TopResults<const N: usize> {
+    entries: [(i32, usize); N],
+    len: usize,
+}
+
+impl<const N: usize> TopResults<N> {
+    const fn new() -> Self {
+        Self {
+            entries: [(0, 0); N],
+            len: 0,
+        }
+    }
+
+    #[inline]
+    fn push_back(&mut self, value: (i32, usize)) {
+        debug_assert!(self.len < N);
+        self.entries[self.len] = value;
+        self.len += 1;
+    }
+
+    #[inline]
+    const fn is_full(&self) -> bool {
+        self.len == N
+    }
+
+    #[inline]
+    fn insert_by(
+        &mut self,
+        value: (i32, usize),
+        compare: impl Fn(&(i32, usize), &(i32, usize)) -> Ordering,
+    ) {
+        if self.is_full() && compare(&self.entries[N - 1], &value) != Ordering::Greater {
+            return;
+        }
+        let position = self.entries[..self.len]
+            .partition_point(|entry| compare(entry, &value) != Ordering::Greater);
+
+        self.len = (self.len + 1).min(N);
+        self.entries
+            .copy_within(position..self.len - 1, position + 1);
+        self.entries[position] = value;
+    }
+
+    fn take(self) -> impl Iterator<Item = (i32, usize)> {
+        self.entries.into_iter().take(self.len)
+    }
+}
+
+#[inline]
+fn song_rank_cmp(index: &SongSearchIndex, a: &(i32, usize), b: &(i32, usize)) -> Ordering {
+    b.0.cmp(&a.0)
+        .then_with(|| cmp_ascii_ci(&index.songs[a.1].title, &index.songs[b.1].title))
+}
+
+#[inline]
+fn pack_rank_cmp(index: &SongSearchIndex, a: &(i32, usize), b: &(i32, usize)) -> Ordering {
+    b.0.cmp(&a.0)
+        .then_with(|| cmp_ascii_ci(&index.packs[a.1].name, &index.packs[b.1].name))
+}
+
+/// Pre-optimization full-sort path retained only for exact benchmark comparisons.
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn build_song_matches_reference(
+    index: &SongSearchIndex,
+    query: &str,
+    chart_type: &str,
+) -> Vec<SongSearchMatch> {
+    let parsed = parse_song_search_live(query);
+    let q = fuzzy::prepare_query(&parsed.text);
+    let empty_query = q.is_empty();
     let mut ranked: Vec<(i32, usize)> = Vec::new();
 
+    for (i, entry) in index.songs.iter().enumerate() {
+        if !song_passes_search_filters(&entry.song, chart_type, parsed.difficulty, parsed.bpm_tier)
+        {
+            continue;
+        }
+        if empty_query {
+            ranked.push((0, i));
+            if ranked.len() >= SONG_SEARCH_MAX_RESULTS {
+                break;
+            }
+            continue;
+        }
+
+        let mut score = fuzzy::best_match_score(&q, &entry.search_title, &[]);
+        if let Some(translit) = &entry.search_translit
+            && let Some(t) = fuzzy::best_match_score(&q, translit, &[])
+        {
+            score = Some(score.map_or(t, |s| s.max(t)));
+        }
+        let Some(score) = score else {
+            continue;
+        };
+        ranked.push((score, i));
+    }
+
+    if !empty_query {
+        ranked.sort_by(|a, b| song_rank_cmp(index, a, b));
+        ranked.truncate(SONG_SEARCH_MAX_RESULTS);
+    }
+    ranked
+        .into_iter()
+        .map(|(score, i)| {
+            let entry = &index.songs[i];
+            let song = &entry.song;
+            SongSearchMatch::Song {
+                candidate: SongSearchCandidate {
+                    pack_name: index.pack_name(entry.pack),
+                    title: Arc::clone(&entry.title),
+                    subtitle: Arc::from(song.display_subtitle(false)),
+                    bpm: Arc::from(song.formatted_chart_display_bpm(None)),
+                    difficulties: Arc::from(song_search_difficulties_text(song, chart_type)),
+                    song: Arc::clone(song),
+                },
+                score,
+            }
+        })
+        .collect()
+}
+
+/// Pre-optimization full-sort path retained only for exact benchmark comparisons.
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn build_pack_matches_reference(index: &SongSearchIndex, query: &str) -> Vec<SongSearchMatch> {
+    let q = fuzzy::prepare_query(query);
+    let mut ranked: Vec<(i32, usize)> = Vec::new();
     for (i, pack) in index.packs.iter().enumerate() {
         let score = if q.is_empty() {
             Some(0)
@@ -620,11 +764,7 @@ pub fn build_pack_matches(index: &SongSearchIndex, query: &str) -> Vec<SongSearc
         };
         ranked.push((score, i));
     }
-
-    ranked.sort_by(|a, b| {
-        b.0.cmp(&a.0)
-            .then_with(|| cmp_ascii_ci(&index.packs[a.1].name, &index.packs[b.1].name))
-    });
+    ranked.sort_by(|a, b| pack_rank_cmp(index, a, b));
     ranked.truncate(SONG_SEARCH_MAX_RESULTS);
     ranked
         .into_iter()
@@ -980,6 +1120,25 @@ mod tests {
         build_song_search_index(&wheel)
     }
 
+    fn match_signature(matches: &[SongSearchMatch]) -> Vec<(u8, String, usize, i32)> {
+        matches
+            .iter()
+            .map(|item| match item {
+                SongSearchMatch::Song { candidate, score } => (
+                    0,
+                    candidate.title.to_string(),
+                    candidate.song.charts.len(),
+                    *score,
+                ),
+                SongSearchMatch::Pack {
+                    name,
+                    song_count,
+                    score,
+                } => (1, name.to_string(), *song_count, *score),
+            })
+            .collect()
+    }
+
     #[test]
     fn fuzzy_ranks_prefix_first() {
         let songs = vec![
@@ -1034,6 +1193,63 @@ mod tests {
         let index = index_from(&songs);
         let matches = build_song_matches(&index, "", "dance-single");
         assert_eq!(matches.len(), 2);
+    }
+
+    #[test]
+    fn bounded_song_ranking_matches_full_sort() {
+        let songs = (0..96)
+            .map(|i| {
+                let pack = if i % 2 == 0 { "Pack A" } else { "Pack B" };
+                let title = format!("Catalog Song {:02} Remix {}", i % 23, 95 - i);
+                (pack, test_song(&title, 120.0 + f64::from(i)))
+            })
+            .collect::<Vec<_>>();
+        let index = index_from(&songs);
+
+        for query in [
+            "song",
+            "ctlg",
+            "remix 4",
+            "catalog song 07",
+            "zzzz",
+            "",
+            "[10]",
+        ] {
+            assert_eq!(
+                match_signature(&build_song_matches(&index, query, "dance-single")),
+                match_signature(&build_song_matches_reference(&index, query, "dance-single",)),
+                "query={query:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn bounded_pack_ranking_matches_full_sort() {
+        let mut wheel = Vec::new();
+        for i in 0..64 {
+            let name = format!("Collection Pack {:02}", i % 19);
+            wheel.push(MusicWheelEntry::PackHeader {
+                name: Arc::from(name),
+                original_index: i,
+                banner_path: None,
+                song_count: i + 1,
+                pack_key: None,
+                parent_series: None,
+            });
+            wheel.push(MusicWheelEntry::Song(test_song(
+                &format!("Song {i}"),
+                120.0,
+            )));
+        }
+        let index = build_song_search_index(&wheel);
+
+        for query in ["pack", "cllctn", "pack 04", "missing", ""] {
+            assert_eq!(
+                match_signature(&build_pack_matches(&index, query)),
+                match_signature(&build_pack_matches_reference(&index, query)),
+                "query={query:?}",
+            );
+        }
     }
 
     #[test]
