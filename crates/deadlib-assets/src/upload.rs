@@ -180,7 +180,38 @@ impl TextureUploadQueue {
         }
     }
 
+    #[inline]
     pub fn pop_next(
+        &mut self,
+        budget: TextureUploadBudget,
+        drained_uploads: usize,
+        drained_bytes: usize,
+    ) -> Option<(TextureHandle, PendingTextureUpload)> {
+        while let Some(&handle) = self.order.front() {
+            let Entry::Occupied(entry) = self.entries.entry(handle) else {
+                self.order.pop_front();
+                continue;
+            };
+            let upload_bytes = entry.get().bytes;
+            let next_bytes = drained_bytes.saturating_add(upload_bytes);
+            let fits_budget =
+                drained_uploads < budget.max_uploads && next_bytes <= budget.max_bytes;
+            let allow_first =
+                drained_uploads == 0 && budget.max_uploads > 0 && budget.max_bytes > 0;
+            if !fits_budget && !allow_first {
+                return None;
+            }
+            let (_, upload) = entry.remove_entry();
+            self.order.pop_front();
+            self.queued_bytes = self.queued_bytes.saturating_sub(upload_bytes);
+            return Some((handle, upload));
+        }
+        None
+    }
+
+    #[cfg(feature = "bench-support")]
+    #[inline]
+    pub fn pop_next_reference(
         &mut self,
         budget: TextureUploadBudget,
         drained_uploads: usize,
@@ -286,6 +317,25 @@ mod tests {
         assert_eq!(first.bytes, 12);
         assert!(queue.pop_next(budget, 1, first.bytes).is_none());
         assert!(queue.contains(11));
+    }
+
+    #[test]
+    fn budget_rejection_preserves_front_for_the_next_drain() {
+        let mut queue = TextureUploadQueue::default();
+        queue.push(7, Arc::new(blank_rgba(2, 2)), SamplerDesc::default());
+        queue.push(11, Arc::new(blank_rgba(1, 1)), SamplerDesc::default());
+
+        let blocked = TextureUploadBudget {
+            max_uploads: 1,
+            max_bytes: 64,
+        };
+        assert!(queue.pop_next(blocked, 1, 0).is_none());
+        assert_eq!(queue.len(), 2);
+        assert_eq!(queue.queued_bytes(), 20);
+
+        let (handle, upload) = queue.pop_next(blocked, 0, 0).unwrap();
+        assert_eq!(handle, 7);
+        assert_eq!(upload.bytes, 16);
     }
 
     #[test]

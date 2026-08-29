@@ -1,12 +1,14 @@
 use deadlib_assets::dynamic::benchmark_write_raw_cached_banner;
 use deadlib_assets::registry::GeneratedTexturePendingBench;
+use deadlib_assets::upload::{TextureUploadBudget, TextureUploadQueue};
 use deadlib_assets::{TextureHints, parse_texture_hints};
-use deadlib_render_core::{SamplerFilter, SamplerWrap};
+use deadlib_render_core::{SamplerDesc, SamplerFilter, SamplerWrap};
 use image::RgbaImage;
 use rustc_hash::FxHashMap;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::io::{self, Write};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
@@ -377,6 +379,7 @@ fn main() {
     const HINT_OPS: usize = 16_384;
     const GENERATED_OPS: usize = 512;
     const CACHE_WRITE_OPS: usize = 32;
+    const BUDGET_STOP_OPS: usize = 32_768;
 
     let hint_cases = [
         "",
@@ -446,6 +449,34 @@ fn main() {
         "raw artwork-cache staging (2 MiB RGBA)",
         &old_cache_write,
         &new_cache_write,
+    );
+
+    let upload = Arc::new(RgbaImage::new(64, 64));
+    let mut old_queue = TextureUploadQueue::default();
+    let mut new_queue = TextureUploadQueue::default();
+    for handle in 1..=64 {
+        old_queue.push(handle, Arc::clone(&upload), SamplerDesc::default());
+        new_queue.push(handle, Arc::clone(&upload), SamplerDesc::default());
+    }
+    let budget = TextureUploadBudget {
+        max_uploads: 4,
+        max_bytes: usize::MAX,
+    };
+    let old_budget_stop = measure(BUDGET_STOP_OPS, 1, || {
+        black_box(&mut old_queue)
+            .pop_next_reference(budget, budget.max_uploads, 0)
+            .is_none() as u64
+    });
+    let new_budget_stop = measure(BUDGET_STOP_OPS, 1, || {
+        black_box(&mut new_queue)
+            .pop_next(budget, budget.max_uploads, 0)
+            .is_none() as u64
+    });
+    assert_eq!(old_budget_stop.checksum, new_budget_stop.checksum);
+    print_pair(
+        "texture-upload budget stop (64 queued uploads)",
+        &old_budget_stop,
+        &new_budget_stop,
     );
 }
 

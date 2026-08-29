@@ -17,6 +17,11 @@ name = "background_expansion_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "song_selection_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 

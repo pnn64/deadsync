@@ -379,6 +379,16 @@ impl SongData {
     }
 
     #[inline]
+    fn first_edit_chart(&self, chart_type: &str) -> Option<&ChartData> {
+        self.charts
+            .iter()
+            .enumerate()
+            .filter(|(_, chart)| is_edit_chart(chart, chart_type))
+            .min_by(|(left, _), (right, _)| self.edit_chart_index_cmp(*left, *right))
+            .map(|(_, chart)| chart)
+    }
+
+    #[inline]
     #[must_use]
     pub fn standard_chart_indices(
         &self,
@@ -399,6 +409,7 @@ impl SongData {
         out
     }
 
+    #[inline]
     #[must_use]
     pub fn chart_for_steps_index(
         &self,
@@ -413,6 +424,9 @@ impl SongData {
         }
 
         let edit_index = steps_index.checked_sub(STANDARD_DIFFICULTY_COUNT)?;
+        if edit_index == 0 {
+            return self.first_edit_chart(chart_type);
+        }
         self.edit_charts_sorted(chart_type).get(edit_index).copied()
     }
 
@@ -464,6 +478,7 @@ impl SongData {
                 .count()
     }
 
+    #[inline]
     #[must_use]
     pub fn best_steps_index(
         &self,
@@ -473,12 +488,22 @@ impl SongData {
         let preferred = preferred_difficulty_index.min(STANDARD_DIFFICULTY_COUNT - 1);
         let mut best_standard = None;
         let mut best_distance = usize::MAX;
-        for index in 0..STANDARD_DIFFICULTY_COUNT {
-            if self.chart_for_steps_index(chart_type, index).is_none() {
+        let mut has_edit = false;
+        for chart in &self.charts {
+            if !chart.chart_type.eq_ignore_ascii_case(chart_type) {
                 continue;
             }
+            let Some(index) = standard_difficulty_index(&chart.difficulty) else {
+                has_edit |= chart.difficulty.eq_ignore_ascii_case("edit");
+                continue;
+            };
             let distance = index.abs_diff(preferred);
-            if distance < best_distance {
+            if distance == 0 {
+                return Some(index);
+            }
+            if distance < best_distance
+                || (distance == best_distance && best_standard.is_none_or(|best| index < best))
+            {
                 best_distance = distance;
                 best_standard = Some(index);
             }
@@ -486,16 +511,7 @@ impl SongData {
         if best_standard.is_some() {
             return best_standard;
         }
-
-        if self
-            .charts
-            .iter()
-            .any(|chart| is_edit_chart(chart, chart_type))
-        {
-            Some(STANDARD_DIFFICULTY_COUNT)
-        } else {
-            None
-        }
+        has_edit.then_some(STANDARD_DIFFICULTY_COUNT)
     }
 
     #[inline(always)]
@@ -717,6 +733,58 @@ fn title_subtitle_contains_ignore_ascii_case(title: &str, subtitle: &str, needle
     })
 }
 
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::*;
+
+    #[inline]
+    pub fn chart_for_steps_index_reference<'a>(
+        song: &'a SongData,
+        chart_type: &str,
+        steps_index: usize,
+    ) -> Option<&'a ChartData> {
+        if let Some(diff_name) = STANDARD_DIFFICULTY_NAMES.get(steps_index) {
+            return song.charts.iter().find(|chart| {
+                chart.chart_type.eq_ignore_ascii_case(chart_type)
+                    && chart.difficulty.eq_ignore_ascii_case(diff_name)
+            });
+        }
+
+        let edit_index = steps_index.checked_sub(STANDARD_DIFFICULTY_COUNT)?;
+        song.edit_charts_sorted(chart_type).get(edit_index).copied()
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn best_steps_index_reference(
+        song: &SongData,
+        chart_type: &str,
+        preferred_difficulty_index: usize,
+    ) -> Option<usize> {
+        let preferred = preferred_difficulty_index.min(STANDARD_DIFFICULTY_COUNT - 1);
+        let mut best_standard = None;
+        let mut best_distance = usize::MAX;
+        for index in 0..STANDARD_DIFFICULTY_COUNT {
+            if chart_for_steps_index_reference(song, chart_type, index).is_none() {
+                continue;
+            }
+            let distance = index.abs_diff(preferred);
+            if distance < best_distance {
+                best_distance = distance;
+                best_standard = Some(index);
+            }
+        }
+        if best_standard.is_some() {
+            return best_standard;
+        }
+
+        song.charts
+            .iter()
+            .any(|chart| is_edit_chart(chart, chart_type))
+            .then_some(STANDARD_DIFFICULTY_COUNT)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -932,8 +1000,7 @@ mod tests {
         let song = song_with_charts(&["Beginner", "Easy", "Hard"]);
 
         assert_eq!(song.best_steps_index("dance-single", 4), Some(3));
-        let result = song.best_steps_index("dance-single", 2);
-        assert!(result == Some(1) || result == Some(3));
+        assert_eq!(song.best_steps_index("dance-single", 2), Some(1));
     }
 
     #[test]
@@ -1015,6 +1082,28 @@ mod tests {
             .collect();
 
         assert_eq!(hashes, ["sparse-alpha", "sparse-zeta", "dense-edit"]);
+    }
+
+    #[test]
+    fn first_edit_fast_path_preserves_stable_tie_order() {
+        let mut song = song_with_charts(&["Easy"]);
+        let mut first = chart_with_difficulty("Edit");
+        first.description = "Same".to_string();
+        first.short_hash = "first".to_string();
+        let mut second = first.clone();
+        second.short_hash = "second".to_string();
+        song.charts.extend([first, second]);
+
+        assert_eq!(
+            song.chart_for_steps_index("dance-single", STANDARD_DIFFICULTY_COUNT)
+                .map(|chart| chart.short_hash.as_str()),
+            Some("first")
+        );
+        assert_eq!(
+            song.chart_for_steps_index("dance-single", STANDARD_DIFFICULTY_COUNT + 1)
+                .map(|chart| chart.short_hash.as_str()),
+            Some("second")
+        );
     }
 
     #[test]
