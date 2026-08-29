@@ -463,8 +463,10 @@ mod tests {
         player.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Great)] = 4;
         player.holds_held_for_score = 3;
         player.holds_let_go_for_score = 4;
+        player.holds_resolved_for_score = 7;
         player.rolls_held_for_score = 5;
         player.rolls_let_go_for_score = 6;
+        player.rolls_resolved_for_score = 11;
         player.mines_hit_for_score = 7;
 
         let stage = player_score_stage(&player);
@@ -473,9 +475,9 @@ mod tests {
             2
         );
         assert_eq!(stage.holds_held_for_score, 3);
-        assert_eq!(stage.holds_let_go_for_score, 4);
+        assert_eq!(stage.holds_resolved_for_score, 7);
         assert_eq!(stage.rolls_held_for_score, 5);
-        assert_eq!(stage.rolls_let_go_for_score, 6);
+        assert_eq!(stage.rolls_resolved_for_score, 11);
         assert_eq!(stage.mines_hit_for_score, 7);
         assert_eq!(
             player_display_judgment_count(
@@ -513,6 +515,8 @@ mod tests {
         assert_eq!(carry_stage.window_counts_10ms_blue.w0, 1);
         assert_eq!(carry_stage.window_counts_display_blue.w2, 2);
         assert_eq!(carry_stage.holds_held_for_score, 3);
+        assert_eq!(carry_stage.holds_resolved_for_score, 7);
+        assert_eq!(carry_stage.rolls_resolved_for_score, 11);
         assert_eq!(carry_stage.mines_hit_for_score, 7);
 
         let mut players = std::array::from_fn(|_| init_player_runtime());
@@ -576,9 +580,11 @@ mod tests {
         player.holds_held = 3;
         player.holds_held_for_score = 4;
         player.holds_let_go_for_score = 5;
+        player.holds_resolved_for_score = 9;
         player.rolls_held = 6;
         player.rolls_held_for_score = 7;
         player.rolls_let_go_for_score = 8;
+        player.rolls_resolved_for_score = 15;
         player.combo = 99;
         player.miss_combo = 1;
 
@@ -587,22 +593,28 @@ mod tests {
         assert_eq!(state.stats.holds_held, 3);
         assert_eq!(state.stats.holds_held_for_score, 4);
         assert_eq!(state.stats.holds_let_go_for_score, 5);
+        assert_eq!(state.stats.holds_resolved_for_score, 9);
         assert_eq!(state.stats.rolls_held, 6);
         assert_eq!(state.stats.rolls_held_for_score, 7);
         assert_eq!(state.stats.rolls_let_go_for_score, 8);
+        assert_eq!(state.stats.rolls_resolved_for_score, 15);
         assert_eq!(state.combo.combo, 99);
         assert_eq!(state.combo.miss_combo, 1);
 
         state.stats.hands_holding_count_for_stats = 0;
         state.stats.holds_held = 13;
+        state.stats.holds_resolved_for_score = 34;
         state.stats.rolls_let_go_for_score = 21;
+        state.stats.rolls_resolved_for_score = 55;
         state.combo.combo = 100;
         state.combo.miss_combo = 0;
         apply_hold_resolution_player_state(&mut player, state);
 
         assert_eq!(player.hands_holding_count_for_stats, 0);
         assert_eq!(player.holds_held, 13);
+        assert_eq!(player.holds_resolved_for_score, 34);
         assert_eq!(player.rolls_let_go_for_score, 21);
+        assert_eq!(player.rolls_resolved_for_score, 55);
         assert_eq!(player.combo, 100);
         assert_eq!(player.miss_combo, 0);
     }
@@ -704,8 +716,7 @@ mod tests {
         player.life = 0.0;
         player.is_failing = true;
         player.fail_time = Some(8.0);
-        player.course_submit_life =
-            Some(deadsync_rules::life::LifeMeter::course_submit_start());
+        player.course_submit_life = Some(deadsync_rules::life::LifeMeter::course_submit_start());
 
         let disabled = individual_song_outcome(&player, true, false);
         assert!(disabled.is_failing);
@@ -2136,13 +2147,7 @@ mod tests {
             (None, GameplayAttackMode::Random),
         ] {
             assert_eq!(
-                build_attack_mask_windows_for_mode(
-                    chart_attacks,
-                    mode,
-                    1,
-                    0xA5A5_5A5A,
-                    64.0,
-                ),
+                build_attack_mask_windows_for_mode(chart_attacks, mode, 1, 0xA5A5_5A5A, 64.0,),
                 build_attack_mask_windows_for_mode_reference(
                     chart_attacks,
                     mode,
@@ -2986,19 +2991,13 @@ mod tests {
                 mods,
                 0xA5A5_5A5A,
             );
-            apply_chart_attack_window(
-                &mut actual,
-                &timing,
-                0,
-                4,
-                0,
-                row_bounds,
-                mods,
-                0xA5A5_5A5A,
-            );
+            apply_chart_attack_window(&mut actual, &timing, 0, 4, 0, row_bounds, mods, 0xA5A5_5A5A);
             assert!(chart_attack_notes_sorted(&actual));
             assert!(chart_attack_notes_sorted(&expected));
-            let mut actual_notes = actual.iter().map(|note| format!("{note:?}")).collect::<Vec<_>>();
+            let mut actual_notes = actual
+                .iter()
+                .map(|note| format!("{note:?}"))
+                .collect::<Vec<_>>();
             let mut expected_notes = expected
                 .iter()
                 .map(|note| format!("{note:?}"))
@@ -3025,16 +3024,7 @@ mod tests {
         let mods = parse_attack_mods("mirror,nomines,nolifts");
         let mut expected = source.clone();
         let mut actual = source;
-        apply_chart_attack_window_reference(
-            &mut expected,
-            &timing,
-            0,
-            4,
-            0,
-            row_bounds,
-            mods,
-            29,
-        );
+        apply_chart_attack_window_reference(&mut expected, &timing, 0, 4, 0, row_bounds, mods, 29);
         apply_chart_attack_window(&mut actual, &timing, 0, 4, 0, row_bounds, mods, 29);
         assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
     }
@@ -3143,13 +3133,8 @@ mod tests {
                     } else {
                         NoteType::Tap
                     };
-                    let mut note = test_note_at(
-                        kind,
-                        None,
-                        false,
-                        row_index,
-                        row_index as f32 / 48.0,
-                    );
+                    let mut note =
+                        test_note_at(kind, None, false, row_index, row_index as f32 / 48.0);
                     note.column = column;
                     note
                 })
@@ -3204,15 +3189,7 @@ mod tests {
                 0,
                 0x1234_5678,
             );
-            apply_chart_attack_windows(
-                &mut actual,
-                &attacks,
-                &timing,
-                0,
-                4,
-                0,
-                0x1234_5678,
-            );
+            apply_chart_attack_windows(&mut actual, &attacks, &timing, 0, 4, 0, 0x1234_5678);
             assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
         }
     }
@@ -3741,8 +3718,8 @@ mod tests {
 
         assert_eq!(parse_attack_mods(&mods), parse_attack_mods_reference(&mods));
         for token in [
-            "C600", "c 450", "X2", "x 1.5", "M800", "m 700", "3x", "3X", "Cinf", "C0",
-            "C-1", "garbage",
+            "C600", "c 450", "X2", "x 1.5", "M800", "m 700", "3x", "3X", "Cinf", "C0", "C-1",
+            "garbage",
         ] {
             assert_eq!(
                 parse_attack_mods(token),
@@ -6083,13 +6060,8 @@ mod tests {
             edge: (usize, InputSource, u32, bool),
         ) {
             let (lane_idx, source, input_slot, pressed) = edge;
-            let old_was_down = active_input_slot_lane_is_down(
-                slots,
-                *slot_count,
-                lane_idx,
-                source,
-                input_slot,
-            );
+            let old_was_down =
+                active_input_slot_lane_is_down(slots, *slot_count, lane_idx, source, input_slot);
             let prepared = state.prepare_slot_update(lane_idx, source, input_slot);
             assert_eq!(prepared.slot_was_down(), old_was_down);
 
@@ -6115,13 +6087,7 @@ mod tests {
             assert_eq!(state.pressed_lane_mask(), expected_mask);
             assert_eq!(
                 state.slot_lane_is_down(lane_idx, source, input_slot),
-                active_input_slot_lane_is_down(
-                    slots,
-                    *slot_count,
-                    lane_idx,
-                    source,
-                    input_slot,
-                )
+                active_input_slot_lane_is_down(slots, *slot_count, lane_idx, source, input_slot,)
             );
         }
 
@@ -7476,9 +7442,8 @@ mod tests {
         let expected = build_song_lua_constant_windows_for_player_reference(
             &time_mods, &beat_mods, &timing, 0, 0.125,
         );
-        let actual = build_song_lua_constant_windows_for_player(
-            &time_mods, &beat_mods, &timing, 0, 0.125,
-        );
+        let actual =
+            build_song_lua_constant_windows_for_player(&time_mods, &beat_mods, &timing, 0, 0.125);
 
         assert_eq!(actual, expected);
     }
@@ -7549,11 +7514,9 @@ mod tests {
             },
         ];
 
-        let expected = build_song_lua_column_offset_windows_for_player_reference(
-            &windows, &timing, 0, 0.25,
-        );
-        let actual =
-            build_song_lua_column_offset_windows_for_player(&windows, &timing, 0, 0.25);
+        let expected =
+            build_song_lua_column_offset_windows_for_player_reference(&windows, &timing, 0, 0.25);
+        let actual = build_song_lua_column_offset_windows_for_player(&windows, &timing, 0, 0.25);
 
         assert_eq!(actual, expected);
     }
@@ -7628,14 +7591,8 @@ mod tests {
             &[],
             |_| {},
         );
-        let actual = build_song_lua_ease_windows_for_player(
-            &windows,
-            &timing,
-            0,
-            0.125,
-            &[],
-            |_| {},
-        );
+        let actual =
+            build_song_lua_ease_windows_for_player(&windows, &timing, 0, 0.125, &[], |_| {});
 
         assert_eq!(actual, expected);
     }
@@ -7820,10 +7777,7 @@ mod tests {
         assert_eq!(windows[1].target, SongLuaEaseMaskTarget::MiniPercent);
         assert_near(windows[1].from, 25.0);
         assert_near(windows[1].to, 50.0);
-        assert_eq!(
-            windows[2].target,
-            SongLuaEaseMaskTarget::VisualRandomSpeed
-        );
+        assert_eq!(windows[2].target, SongLuaEaseMaskTarget::VisualRandomSpeed);
         assert_near(windows[2].from, 0.0);
         assert_near(windows[2].to, 0.5);
     }
@@ -10370,19 +10324,18 @@ mod tests {
     #[test]
     fn indexed_autoplay_roll_columns_match_full_scan_for_every_lane_set() {
         for present in 0..=input_lane_mask(MAX_COLS) {
-            let active_holds: [Option<ActiveHold>; MAX_COLS] =
-                std::array::from_fn(|column| {
-                    if present & input_lane_bit(column) == 0 {
-                        return None;
-                    }
-                    let mut active = if column % 3 == 0 {
-                        active_hold_for_autoplay(2_000)
-                    } else {
-                        active_roll_for_autoplay(2_000)
-                    };
-                    active.let_go = column % 4 == 0;
-                    Some(active)
-                });
+            let active_holds: [Option<ActiveHold>; MAX_COLS] = std::array::from_fn(|column| {
+                if present & input_lane_bit(column) == 0 {
+                    return None;
+                }
+                let mut active = if column % 3 == 0 {
+                    active_hold_for_autoplay(2_000)
+                } else {
+                    active_roll_for_autoplay(2_000)
+                };
+                active.let_go = column % 4 == 0;
+                Some(active)
+            });
             let active_roll_mask =
                 active_holds
                     .iter()
@@ -11196,9 +11149,9 @@ mod tests {
                     ..WindowCounts::default()
                 },
                 holds_held_for_score: 8,
-                holds_let_go_for_score: 9,
+                holds_resolved_for_score: 17,
                 rolls_held_for_score: 10,
-                rolls_let_go_for_score: 11,
+                rolls_resolved_for_score: 21,
                 mines_hit_for_score: 12,
                 ..CourseDisplayCarry::default()
             },
@@ -11226,9 +11179,9 @@ mod tests {
                     ..WindowCounts::default()
                 },
                 holds_held_for_score: 16,
-                holds_let_go_for_score: 17,
+                holds_resolved_for_score: 33,
                 rolls_held_for_score: 18,
-                rolls_let_go_for_score: 19,
+                rolls_resolved_for_score: 37,
                 mines_hit_for_score: 20,
                 ..CourseDisplayStage::default()
             },
@@ -11246,9 +11199,9 @@ mod tests {
         assert_eq!(carry.window_counts_10ms_blue.w0, 20);
         assert_eq!(carry.window_counts_display_blue.w2, 22);
         assert_eq!(carry.holds_held_for_score, 24);
-        assert_eq!(carry.holds_let_go_for_score, 26);
+        assert_eq!(carry.holds_resolved_for_score, 50);
         assert_eq!(carry.rolls_held_for_score, 28);
-        assert_eq!(carry.rolls_let_go_for_score, 30);
+        assert_eq!(carry.rolls_resolved_for_score, 58);
         assert_eq!(carry.mines_hit_for_score, 32);
     }
 
@@ -11553,7 +11506,12 @@ mod tests {
         player.course_life = state;
         player.life = life;
 
-        apply_course_life_event(&mut player, 1.0, -0.02, CourseLifeEvent::Tap(JudgeGrade::Great));
+        apply_course_life_event(
+            &mut player,
+            1.0,
+            -0.02,
+            CourseLifeEvent::Tap(JudgeGrade::Great),
+        );
         assert_near(player.life, 1.0);
         apply_course_life_event(
             &mut player,
@@ -11577,10 +11535,8 @@ mod tests {
     #[test]
     fn survival_meter_carries_time_and_applies_itg_deltas() {
         let mut player = init_player_runtime();
-        let (state, life) = init_course_life(
-            CourseLifeConfig::Survival { gain_seconds: 5.0 },
-            None,
-        );
+        let (state, life) =
+            init_course_life(CourseLifeConfig::Survival { gain_seconds: 5.0 }, None);
         player.course_life = state;
         player.life = life;
         update_course_life_time(&mut player, 5.0, 5.0);
@@ -12143,9 +12099,9 @@ mod tests {
                     ..WindowCounts::default()
                 },
                 holds_held_for_score: 4,
-                holds_let_go_for_score: 1,
+                holds_resolved_for_score: 5,
                 rolls_held_for_score: 5,
-                rolls_let_go_for_score: 2,
+                rolls_resolved_for_score: 7,
                 mines_hit_for_score: 6,
             },
             CourseDisplayCarry {
@@ -12158,9 +12114,9 @@ mod tests {
                     ..WindowCounts::default()
                 },
                 holds_held_for_score: 7,
-                holds_let_go_for_score: 3,
+                holds_resolved_for_score: 10,
                 rolls_held_for_score: 8,
-                rolls_let_go_for_score: 4,
+                rolls_resolved_for_score: 12,
                 mines_hit_for_score: 9,
                 ..CourseDisplayCarry::default()
             },
@@ -12200,9 +12156,9 @@ mod tests {
             ItgScoreStage {
                 scoring_counts: [1, 2, 3, 4, 5, 6],
                 holds_held_for_score: 7,
-                holds_let_go_for_score: 8,
+                holds_resolved_for_score: 15,
                 rolls_held_for_score: 9,
-                rolls_let_go_for_score: 10,
+                rolls_resolved_for_score: 19,
                 mines_hit_for_score: 11,
                 checkpoints_hit: 0,
                 checkpoints_missed: 0,
@@ -12212,9 +12168,9 @@ mod tests {
         assert_eq!(inputs.counts.w1, 3);
         assert_eq!(inputs.counts_10ms.w0, 2);
         assert_eq!(inputs.holds_held_for_score, 7);
-        assert_eq!(inputs.holds_let_go_for_score, 8);
+        assert_eq!(inputs.holds_resolved_for_score, 15);
         assert_eq!(inputs.rolls_held_for_score, 9);
-        assert_eq!(inputs.rolls_let_go_for_score, 10);
+        assert_eq!(inputs.rolls_resolved_for_score, 19);
         assert_eq!(inputs.mines_hit_for_score, 11);
     }
 
@@ -12289,9 +12245,9 @@ mod tests {
             ItgScoreStage {
                 scoring_counts: [1, 2, 3, 4, 5, 6],
                 holds_held_for_score: 7,
-                holds_let_go_for_score: 8,
+                holds_resolved_for_score: 15,
                 rolls_held_for_score: 9,
-                rolls_let_go_for_score: 10,
+                rolls_resolved_for_score: 19,
                 mines_hit_for_score: 11,
                 checkpoints_hit: 17,
                 checkpoints_missed: 18,
@@ -12299,9 +12255,9 @@ mod tests {
             CourseDisplayCarry {
                 scoring_counts: [10, 20, 30, 40, 50, 60],
                 holds_held_for_score: 12,
-                holds_let_go_for_score: 13,
+                holds_resolved_for_score: 25,
                 rolls_held_for_score: 14,
-                rolls_let_go_for_score: 15,
+                rolls_resolved_for_score: 29,
                 mines_hit_for_score: 16,
                 checkpoints_hit: 19,
                 checkpoints_missed: 20,
@@ -13288,25 +13244,50 @@ mod tests {
 
         assert_eq!(hold.holds_held, 1);
         assert_eq!(hold.holds_held_for_score, 1);
+        assert_eq!(hold.holds_resolved_for_score, 1);
         assert!(hold.decrement_hands_holding);
         assert!(hold.update_grade_totals);
         assert_eq!(roll.rolls_held, 1);
         assert_eq!(roll.rolls_held_for_score, 1);
+        assert_eq!(roll.rolls_resolved_for_score, 1);
         assert!(roll.decrement_hands_holding);
         assert!(roll.update_grade_totals);
     }
 
     #[test]
-    fn hold_result_stats_update_counts_let_go_for_score_only() {
+    fn hold_result_stats_update_counts_let_go_as_resolved() {
         let hold = hold_result_stats_update(NoteType::Hold, HoldResult::LetGo, false, false);
         let roll = hold_result_stats_update(NoteType::Roll, HoldResult::LetGo, false, false);
 
         assert_eq!(hold.holds_held, 0);
         assert_eq!(hold.holds_let_go_for_score, 1);
+        assert_eq!(hold.holds_resolved_for_score, 1);
         assert!(hold.update_grade_totals);
         assert_eq!(roll.rolls_held, 0);
         assert_eq!(roll.rolls_let_go_for_score, 1);
+        assert_eq!(roll.rolls_resolved_for_score, 1);
         assert!(roll.update_grade_totals);
+    }
+
+    #[test]
+    fn hold_result_stats_update_counts_missed_as_resolved_only() {
+        let hold = hold_result_stats_update(NoteType::Hold, HoldResult::Missed, false, false);
+        let roll = hold_result_stats_update(NoteType::Roll, HoldResult::Missed, false, false);
+
+        assert_eq!(
+            hold,
+            HoldResultStatsUpdate {
+                holds_resolved_for_score: 1,
+                ..HoldResultStatsUpdate::ZERO
+            }
+        );
+        assert_eq!(
+            roll,
+            HoldResultStatsUpdate {
+                rolls_resolved_for_score: 1,
+                ..HoldResultStatsUpdate::ZERO
+            }
+        );
     }
 
     #[test]
@@ -13354,9 +13335,11 @@ mod tests {
             holds_held: 10,
             holds_held_for_score: 20,
             holds_let_go_for_score: 30,
+            holds_resolved_for_score: 40,
             rolls_held: 40,
             rolls_held_for_score: 50,
             rolls_let_go_for_score: 60,
+            rolls_resolved_for_score: 80,
         };
 
         apply_hold_result_stats_update(
@@ -13366,9 +13349,11 @@ mod tests {
                 holds_held: 1,
                 holds_held_for_score: 2,
                 holds_let_go_for_score: 3,
+                holds_resolved_for_score: 7,
                 rolls_held: 4,
                 rolls_held_for_score: 5,
                 rolls_let_go_for_score: 6,
+                rolls_resolved_for_score: 8,
                 update_grade_totals: true,
             },
         );
@@ -13377,9 +13362,11 @@ mod tests {
         assert_eq!(state.holds_held, 11);
         assert_eq!(state.holds_held_for_score, 22);
         assert_eq!(state.holds_let_go_for_score, 33);
+        assert_eq!(state.holds_resolved_for_score, 47);
         assert_eq!(state.rolls_held, 44);
         assert_eq!(state.rolls_held_for_score, 55);
         assert_eq!(state.rolls_let_go_for_score, 66);
+        assert_eq!(state.rolls_resolved_for_score, 88);
     }
 
     #[test]
@@ -14892,13 +14879,7 @@ mod tests {
         assert_eq!(
             rows,
             vec![
-                *b"00L0",
-                *b"0100",
-                *b"0002",
-                *b"0003",
-                *b"4000",
-                *b"3000",
-                *b"00M0",
+                *b"00L0", *b"0100", *b"0002", *b"0003", *b"4000", *b"3000", *b"00M0",
             ]
         );
         assert_eq!(beats, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
@@ -14921,10 +14902,7 @@ mod tests {
 
         let (rows, beats, row_indices) = build_crossover_rows::<4>(&notes, (0, notes.len()), 2);
 
-        assert_eq!(
-            rows,
-            vec![*b"1000", *b"00M0"]
-        );
+        assert_eq!(rows, vec![*b"1000", *b"00M0"]);
         assert_eq!(beats, vec![1.0, 3.0]);
         assert_eq!(row_indices, vec![48, 144]);
     }
@@ -14941,10 +14919,7 @@ mod tests {
 
         let (rows, beats, row_indices) = build_crossover_rows::<4>(&notes, (0, notes.len()), 0);
 
-        assert_eq!(
-            rows,
-            vec![*b"1000", *b"0M00"]
-        );
+        assert_eq!(rows, vec![*b"1000", *b"0M00"]);
         assert_eq!(beats, vec![1.0, 2.0]);
         assert_eq!(row_indices, vec![48, 96]);
     }
@@ -15154,9 +15129,8 @@ mod tests {
                 true,
             ));
         }
-        let expected = build_crossover_cues_core_with_capacity(
-            &annos, xover_time, 2, 500, 8, false, -0.3, 0,
-        );
+        let expected =
+            build_crossover_cues_core_with_capacity(&annos, xover_time, 2, 500, 8, false, -0.3, 0);
         let actual = build_crossover_cues_core(&annos, xover_time, 2, 500, 8, false, -0.3);
         assert_eq!(actual, expected);
 
@@ -16255,13 +16229,8 @@ mod tests {
         let mut notes = Vec::new();
         for row in 0..768 {
             for column in 0..=row % 7 {
-                let mut note = test_note_at(
-                    NoteType::Tap,
-                    None,
-                    false,
-                    row * 12,
-                    row as f32 * 0.25,
-                );
+                let mut note =
+                    test_note_at(NoteType::Tap, None, false, row * 12, row as f32 * 0.25);
                 note.column = column;
                 notes.push(note);
             }
@@ -16308,13 +16277,8 @@ mod tests {
         let mut notes = Vec::new();
         for row in 0..256 {
             for column in 0..=row % 5 {
-                let mut note = test_note_at(
-                    NoteType::Tap,
-                    None,
-                    false,
-                    row * 12,
-                    row as f32 * 0.25,
-                );
+                let mut note =
+                    test_note_at(NoteType::Tap, None, false, row * 12, row as f32 * 0.25);
                 note.column = column;
                 notes.push(note);
             }
@@ -16343,10 +16307,8 @@ mod tests {
 
     #[test]
     fn lane_index_state_returns_slices_and_clears() {
-        let mut note_indices: [Vec<ChartNoteIndex>; MAX_COLS] =
-            std::array::from_fn(|_| Vec::new());
-        let mut hold_indices: [Vec<ChartNoteIndex>; MAX_COLS] =
-            std::array::from_fn(|_| Vec::new());
+        let mut note_indices: [Vec<ChartNoteIndex>; MAX_COLS] = std::array::from_fn(|_| Vec::new());
+        let mut hold_indices: [Vec<ChartNoteIndex>; MAX_COLS] = std::array::from_fn(|_| Vec::new());
         note_indices[1].push(compact_note_index(7));
         hold_indices[1].push(compact_note_index(9));
         let mut state = GameplayLaneIndexState::new(note_indices, hold_indices, vec![12, 24]);
@@ -16380,12 +16342,11 @@ mod tests {
                     5 => NoteType::Roll,
                     _ => NoteType::Tap,
                 };
-                let hold = matches!(note_type, NoteType::Hold | NoteType::Roll)
-                    .then(|| HoldData {
-                        end_row_index: local_index * 12 + 6,
-                        end_beat: (local_index as f32).mul_add(0.25, 0.125),
-                        ..test_hold()
-                    });
+                let hold = matches!(note_type, NoteType::Hold | NoteType::Roll).then(|| HoldData {
+                    end_row_index: local_index * 12 + 6,
+                    end_beat: (local_index as f32).mul_add(0.25, 0.125),
+                    ..test_hold()
+                });
                 let mut note = test_note_at(
                     note_type,
                     hold,
@@ -16465,19 +16426,12 @@ mod tests {
                     _ => NoteType::Tap,
                 };
                 let beat = (local_index / 2) as f32 * 0.25;
-                let hold = matches!(note_type, NoteType::Hold | NoteType::Roll)
-                    .then(|| HoldData {
-                        end_row_index: local_index / 2 * 12 + 6,
-                        end_beat: beat + 0.125,
-                        ..test_hold()
-                    });
-                let mut note = test_note_at(
-                    note_type,
-                    hold,
-                    false,
-                    local_index / 2 * 12,
-                    beat,
-                );
+                let hold = matches!(note_type, NoteType::Hold | NoteType::Roll).then(|| HoldData {
+                    end_row_index: local_index / 2 * 12 + 6,
+                    end_beat: beat + 0.125,
+                    ..test_hold()
+                });
+                let mut note = test_note_at(note_type, hold, false, local_index / 2 * 12, beat);
                 note.column = player * 4 + local_index % 4;
                 notes.push(note);
             }
@@ -16534,13 +16488,8 @@ mod tests {
                 2,
                 notes.len() / 2,
             );
-        let (rows, ranges, metadata) = build_gameplay_row_indices(
-            &notes,
-            &note_ranges,
-            &note_time_ns,
-            2,
-            notes.len() / 2,
-        );
+        let (rows, ranges, metadata) =
+            build_gameplay_row_indices(&notes, &note_ranges, &note_time_ns, 2, notes.len() / 2);
         assert_eq!(ranges, reference_ranges);
         assert_eq!(rows.len(), reference_rows.len());
         for (row, reference) in rows.iter().zip(&reference_rows) {
@@ -16576,7 +16525,10 @@ mod tests {
 
         assert_eq!(state.row_entry_ranges[0], (1, 3));
         assert_eq!(state.judged_row_cursor[1], 5);
-        assert_eq!(row_entry_index_for_note(&state.note_row_entry_indices, 1), Some(1));
+        assert_eq!(
+            row_entry_index_for_note(&state.note_row_entry_indices, 1),
+            Some(1)
+        );
         assert_eq!(state.tap_row_hold_roll_flags(1), 3);
         assert_eq!(state.tap_row_hold_roll_flags(99), 0);
 
@@ -18565,13 +18517,23 @@ mod tests {
 
         assert_eq!(notes.len(), expected.len());
         for (index, (actual, expected)) in notes.iter().zip(&expected).enumerate() {
-            assert_eq!(actual.beat.to_bits(), expected.beat.to_bits(), "beat {index}");
-            assert_eq!(actual.quantization_idx, expected.quantization_idx, "quant {index}");
+            assert_eq!(
+                actual.beat.to_bits(),
+                expected.beat.to_bits(),
+                "beat {index}"
+            );
+            assert_eq!(
+                actual.quantization_idx, expected.quantization_idx,
+                "quant {index}"
+            );
             assert_eq!(actual.column, expected.column, "column {index}");
             assert_eq!(actual.note_type, expected.note_type, "type {index}");
             assert_eq!(actual.row_index, expected.row_index, "row {index}");
             assert_eq!(actual.is_fake, expected.is_fake, "fake {index}");
-            assert_eq!(actual.can_be_judged, expected.can_be_judged, "judge {index}");
+            assert_eq!(
+                actual.can_be_judged, expected.can_be_judged,
+                "judge {index}"
+            );
             assert_eq!(
                 actual.hold.as_ref().map(|hold| hold.end_row_index),
                 expected.hold.as_ref().map(|hold| hold.end_row_index),
@@ -18726,14 +18688,8 @@ mod tests {
         let mut expected = source.clone();
         let mut actual = source.clone();
         for (window, offset) in [
-            (
-                ROWS_PER_BEAT as usize,
-                ROWS_PER_BEAT as usize / 2,
-            ),
-            (
-                ROWS_PER_BEAT as usize / 2,
-                ROWS_PER_BEAT as usize / 4,
-            ),
+            (ROWS_PER_BEAT as usize, ROWS_PER_BEAT as usize / 2),
+            (ROWS_PER_BEAT as usize / 2, ROWS_PER_BEAT as usize / 4),
         ] {
             apply_insert_intelligent_taps_reference(
                 &mut expected,
@@ -19023,13 +18979,7 @@ mod tests {
                     cols,
                     simultaneous,
                 );
-                convert_taps_to_holds(
-                    &mut actual,
-                    &timing,
-                    col_offset,
-                    cols,
-                    simultaneous,
-                );
+                convert_taps_to_holds(&mut actual, &timing, col_offset, cols, simultaneous);
                 assert_eq!(
                     format!("{actual:?}"),
                     format!("{expected:?}"),

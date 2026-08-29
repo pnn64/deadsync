@@ -306,17 +306,23 @@ mod runtime_regression_tests {
             state.chart_runtime.notes.len(),
             state.chart_runtime.note_displayed_beat_cache.len()
         );
-        debug_assert!(state.chart_runtime.notes.iter().enumerate().all(
-            |(note_index, note)| {
-                let timing = &state.timing_runtime.timing_players[state.player_for_col(note.column)];
-                state.chart_runtime.note_time_cache_ns[note_index]
-                    == timing.get_time_for_beat_ns(note.beat)
-                    && state.chart_runtime.hold_end_time_cache_ns[note_index]
-                        == note.hold.as_ref().map_or(INVALID_SONG_TIME_NS, |hold| {
-                            timing.get_time_for_beat_ns(hold.end_beat)
-                        })
-            }
-        ));
+        debug_assert!(
+            state
+                .chart_runtime
+                .notes
+                .iter()
+                .enumerate()
+                .all(|(note_index, note)| {
+                    let timing =
+                        &state.timing_runtime.timing_players[state.player_for_col(note.column)];
+                    state.chart_runtime.note_time_cache_ns[note_index]
+                        == timing.get_time_for_beat_ns(note.beat)
+                        && state.chart_runtime.hold_end_time_cache_ns[note_index]
+                            == note.hold.as_ref().map_or(INVALID_SONG_TIME_NS, |hold| {
+                                timing.get_time_for_beat_ns(hold.end_beat)
+                            })
+                })
+        );
         debug_assert_eq!(
             state.chart_runtime.notes.len(),
             state.chart_runtime.column_judgment_eligible.len()
@@ -480,7 +486,10 @@ mod runtime_regression_tests {
                 state.chart_runtime.lane_indices.note_indices[col].len()
             );
             debug_assert!(
-                state.chart_runtime.lane_indices.note_row_indices(col)
+                state
+                    .chart_runtime
+                    .lane_indices
+                    .note_row_indices(col)
                     .windows(2)
                     .all(|pair| {
                         let left = pair[0].get();
@@ -520,7 +529,13 @@ mod runtime_regression_tests {
         }
         for col in state.setup.num_cols..MAX_COLS {
             debug_assert!(state.chart_runtime.lane_indices.note_indices[col].is_empty());
-            debug_assert!(state.chart_runtime.lane_indices.note_row_indices(col).is_empty());
+            debug_assert!(
+                state
+                    .chart_runtime
+                    .lane_indices
+                    .note_row_indices(col)
+                    .is_empty()
+            );
             debug_assert!(state.chart_runtime.lane_indices.hold_indices[col].is_empty());
         }
         let mut lane_positions = [0usize; MAX_COLS];
@@ -1140,8 +1155,14 @@ mod runtime_regression_tests {
             .get_beat_info_from_time_ns(music_time_ns);
         state.update_song_position_from_time(music_time_ns, music_time_ns, music_time_ns);
 
-        assert_eq!(state.clock.song_position.current_beat.to_bits(), expected.beat.to_bits());
-        assert_eq!(state.clock.song_position.current_bpm.to_bits(), expected.bpm.to_bits());
+        assert_eq!(
+            state.clock.song_position.current_beat.to_bits(),
+            expected.beat.to_bits()
+        );
+        assert_eq!(
+            state.clock.song_position.current_bpm.to_bits(),
+            expected.bpm.to_bits()
+        );
         assert_eq!(
             state.clock.song_position.current_beat_display.to_bits(),
             expected.beat.to_bits(),
@@ -1225,15 +1246,17 @@ mod runtime_regression_tests {
 
         let state = regression_state_with_profiles(profiles);
 
-        assert_eq!(state.players_runtime.players[0].combo_milestones.capacity(), 0);
+        assert_eq!(
+            state.players_runtime.players[0].combo_milestones.capacity(),
+            0
+        );
         assert!(state.players_runtime.players[0].combo_milestones.is_empty());
     }
 
     #[test]
     fn detached_player_timing_keeps_independent_clock_queries() {
         let mut state = regression_state();
-        Arc::make_mut(&mut state.timing_runtime.timing_players[0])
-            .shift_song_offset_seconds(0.125);
+        Arc::make_mut(&mut state.timing_runtime.timing_players[0]).shift_song_offset_seconds(0.125);
         state.clock.visible_timing.global_visual_delay_seconds = 0.0;
         state.clock.visible_timing.player_visual_delay_seconds[0] = 0.0;
         state.reset_time_to_beat_caches();
@@ -1247,8 +1270,8 @@ mod runtime_regression_tests {
             .timing_runtime
             .timing
             .get_beat_info_from_time_ns(music_time_ns);
-        let expected_player = state.timing_runtime.timing_players[0]
-            .get_beat_info_from_time_ns(music_time_ns);
+        let expected_player =
+            state.timing_runtime.timing_players[0].get_beat_info_from_time_ns(music_time_ns);
         state.update_song_position_from_time(music_time_ns, music_time_ns, music_time_ns);
 
         assert_ne!(expected_song.beat.to_bits(), expected_player.beat.to_bits());
@@ -1271,12 +1294,10 @@ mod runtime_regression_tests {
         let mut state = regression_state();
         assert_eq!(state.setup.num_cols, 4);
         for (col, slot) in [(0, 10), (3, 11), (3, 12), (4, 13)] {
-            state.control.input_state.update_slot(
-                col,
-                InputSource::Keyboard,
-                slot,
-                true,
-            );
+            state
+                .control
+                .input_state
+                .update_slot(col, InputSource::Keyboard, slot, true);
         }
 
         let inputs = state.current_lane_inputs();
@@ -1314,8 +1335,7 @@ mod runtime_regression_tests {
     fn idle_held_lane_scan_only_latches_the_current_snapshot() {
         let mut state = regression_state();
         state.control.input_state.prev_inputs[0] = true;
-        state.control.input_state.lane_pressed_since_ns[0] =
-            Some(song_time_ns_from_seconds(0.9));
+        state.control.input_state.lane_pressed_since_ns[0] = Some(song_time_ns_from_seconds(0.9));
         let held_window_before = state.hold_runtime.tap_miss_held_at_note.clone();
         let pending_mines_before = state
             .chart_runtime
@@ -1330,10 +1350,7 @@ mod runtime_regression_tests {
 
         assert!(inputs.iter().all(|pressed| !pressed));
         assert_eq!(state.control.input_state.prev_inputs, inputs);
-        assert_eq!(
-            state.hold_runtime.tap_miss_held_at_note,
-            held_window_before
-        );
+        assert_eq!(state.hold_runtime.tap_miss_held_at_note, held_window_before);
         assert_eq!(
             state.chart_runtime.mine_scan.pending_mine_hit_indices,
             pending_mines_before
@@ -1754,16 +1771,19 @@ mod runtime_regression_tests {
         state.chart_runtime.hold_end_time_cache_ns[0] = hold_end_ns;
         set_regression_mine(&mut state, 1, 1, ROWS_PER_BEAT as usize, hold_end_ns);
         state.players_runtime.players[0].life = 0.04;
-        state.set_active_hold(0, Some(ActiveHold {
-            note_index: 0,
-            start_time_ns: 0,
-            end_time_ns: hold_end_ns,
-            note_type: NoteType::Hold,
-            let_go: false,
-            is_pressed: true,
-            life: MAX_HOLD_LIFE,
-            last_update_time_ns: 0,
-        }));
+        state.set_active_hold(
+            0,
+            Some(ActiveHold {
+                note_index: 0,
+                start_time_ns: 0,
+                end_time_ns: hold_end_ns,
+                note_type: NoteType::Hold,
+                let_go: false,
+                is_pressed: true,
+                life: MAX_HOLD_LIFE,
+                last_update_time_ns: 0,
+            }),
+        );
 
         assert!(state.hit_mine(1, 1, 0));
         assert_eq!(
@@ -1825,6 +1845,7 @@ mod runtime_regression_tests {
             None
         );
         assert_eq!(state.players_runtime.players[0].holds_let_go_for_score, 0);
+        assert_eq!(state.players_runtime.players[0].holds_resolved_for_score, 0);
 
         state.resolve_pending_missed_holds(hold_end_ns.saturating_sub(1));
         assert_eq!(
@@ -1835,6 +1856,7 @@ mod runtime_regression_tests {
             None
         );
         assert_eq!(state.players_runtime.players[0].holds_let_go_for_score, 0);
+        assert_eq!(state.players_runtime.players[0].holds_resolved_for_score, 0);
 
         state.resolve_pending_missed_holds(hold_end_ns);
 
@@ -1846,6 +1868,7 @@ mod runtime_regression_tests {
             Some(HoldResult::LetGo)
         );
         assert_eq!(state.players_runtime.players[0].holds_let_go_for_score, 1);
+        assert_eq!(state.players_runtime.players[0].holds_resolved_for_score, 1);
         assert_eq!(
             state.display.hold_feedback.hold_judgments[0]
                 .as_ref()
@@ -1881,11 +1904,13 @@ mod runtime_regression_tests {
             Some(HoldResult::Missed)
         );
         assert_eq!(state.players_runtime.players[0].holds_let_go_for_score, 0);
+        assert_eq!(state.players_runtime.players[0].holds_resolved_for_score, 0);
         assert!(state.display.hold_feedback.hold_judgments[0].is_none());
 
         state.resolve_pending_missed_holds(hold_end_ns);
 
         assert_eq!(state.players_runtime.players[0].holds_let_go_for_score, 0);
+        assert_eq!(state.players_runtime.players[0].holds_resolved_for_score, 1);
         assert_eq!(
             state.display.hold_feedback.hold_judgments[0]
                 .as_ref()
@@ -1974,16 +1999,19 @@ mod runtime_regression_tests {
             .as_mut()
             .expect("test hold")
             .life = 0.25;
-        state.set_active_hold(0, Some(ActiveHold {
-            note_index: 0,
-            start_time_ns: 0,
-            end_time_ns: hold_end_ns,
-            note_type: NoteType::Hold,
-            let_go: false,
-            is_pressed: false,
-            life: 0.25,
-            last_update_time_ns: 0,
-        }));
+        state.set_active_hold(
+            0,
+            Some(ActiveHold {
+                note_index: 0,
+                start_time_ns: 0,
+                end_time_ns: hold_end_ns,
+                note_type: NoteType::Hold,
+                let_go: false,
+                is_pressed: false,
+                life: 0.25,
+                last_update_time_ns: 0,
+            }),
+        );
 
         let target_ns = song_time_ns_from_seconds(0.2);
         state.integrate_active_hold_to_time(0, target_ns);
@@ -2010,16 +2038,19 @@ mod runtime_regression_tests {
             test_hold(0, ROWS_PER_BEAT as usize + 12, ROWS_PER_BEAT as usize * 2);
         state.chart_runtime.hold_end_time_cache_ns[0] = previous_end_ns;
         state.chart_runtime.hold_end_time_cache_ns[1] = next_end_ns;
-        state.set_active_hold(0, Some(ActiveHold {
-            note_index: 0,
-            start_time_ns: 0,
-            end_time_ns: previous_end_ns,
-            note_type: NoteType::Hold,
-            let_go: false,
-            is_pressed: true,
-            life: MAX_HOLD_LIFE,
-            last_update_time_ns: song_time_ns_from_seconds(0.95),
-        }));
+        state.set_active_hold(
+            0,
+            Some(ActiveHold {
+                note_index: 0,
+                start_time_ns: 0,
+                end_time_ns: previous_end_ns,
+                note_type: NoteType::Hold,
+                let_go: false,
+                is_pressed: true,
+                life: MAX_HOLD_LIFE,
+                last_update_time_ns: song_time_ns_from_seconds(0.95),
+            }),
+        );
 
         state.start_active_hold(
             0,
@@ -2058,16 +2089,19 @@ mod runtime_regression_tests {
         state.chart_runtime.notes[0] = roll;
 
         let event_time_ns = song_time_ns_from_seconds(TIMING_WINDOW_SECONDS_ROLL + 0.01);
-        state.set_active_hold(0, Some(ActiveHold {
-            note_index: 0,
-            start_time_ns: 0,
-            end_time_ns: song_time_ns_from_seconds(2.0),
-            note_type: NoteType::Roll,
-            let_go: false,
-            is_pressed: false,
-            life: MAX_HOLD_LIFE,
-            last_update_time_ns: 0,
-        }));
+        state.set_active_hold(
+            0,
+            Some(ActiveHold {
+                note_index: 0,
+                start_time_ns: 0,
+                end_time_ns: song_time_ns_from_seconds(2.0),
+                note_type: NoteType::Roll,
+                let_go: false,
+                is_pressed: false,
+                life: MAX_HOLD_LIFE,
+                last_update_time_ns: 0,
+            }),
+        );
         state
             .pending_input
             .edges
@@ -2266,10 +2300,8 @@ mod runtime_regression_tests {
             combo: 3,
             miss_combo: 2,
         }];
-        let mut state = hold_regression_state_with_timing(
-            GameplayInputPlayStyle::PumpSingle,
-            timing_segments,
-        );
+        let mut state =
+            hold_regression_state_with_timing(GameplayInputPlayStyle::PumpSingle, timing_segments);
         let head_time_ns = state.hold_runtime.pump_events[0].time_ns;
         let tail_time_ns = state
             .hold_runtime
@@ -2295,10 +2327,8 @@ mod runtime_regression_tests {
             ticks: 2,
         }];
 
-        let state = hold_regression_state_with_timing(
-            GameplayInputPlayStyle::PumpSingle,
-            timing_segments,
-        );
+        let state =
+            hold_regression_state_with_timing(GameplayInputPlayStyle::PumpSingle, timing_segments);
 
         assert_eq!(
             state
@@ -2380,10 +2410,8 @@ mod runtime_regression_tests {
             beat: 0.0,
             ticks: 1,
         }];
-        let mut state = hold_regression_state_with_timing(
-            GameplayInputPlayStyle::PumpSingle,
-            timing_segments,
-        );
+        let mut state =
+            hold_regression_state_with_timing(GameplayInputPlayStyle::PumpSingle, timing_segments);
         let head_time_ns = state.chart_runtime.note_time_cache_ns[0];
         let checkpoints: Vec<SongTimeNs> = state
             .hold_runtime
@@ -2499,7 +2527,11 @@ mod runtime_regression_tests {
         let tail_time_ns = cached_hold_end_time_ns(state.chart_runtime.hold_end_time_cache_ns[0])
             .expect("short Pump hold tail time");
 
-        state.process_pump_hold_events(head_time_ns.saturating_sub(1), tail_time_ns, &[false; MAX_COLS]);
+        state.process_pump_hold_events(
+            head_time_ns.saturating_sub(1),
+            tail_time_ns,
+            &[false; MAX_COLS],
+        );
         assert!(state.chart_runtime.notes[0].result.is_none());
         assert!(
             state.chart_runtime.notes[0]
@@ -2508,7 +2540,10 @@ mod runtime_regression_tests {
                 .is_some_and(|hold| hold.result.is_none())
         );
 
-        assert!(state.judge_a_tap(0, tail_time_ns.saturating_add(song_time_ns_from_seconds(0.02))));
+        assert!(state.judge_a_tap(
+            0,
+            tail_time_ns.saturating_add(song_time_ns_from_seconds(0.02))
+        ));
         state.resolve_pending_pump_hold_tails();
 
         assert_eq!(
@@ -3166,14 +3201,8 @@ mod runtime_regression_tests {
     #[test]
     fn course_stage_scores_keep_submission_totals_separate_from_display_totals() {
         let mut state = regression_state();
-        state.progress.chart_totals = GameplayChartTotalsState::new(
-            [10, 10],
-            [1, 1],
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0],
-        );
+        state.progress.chart_totals =
+            GameplayChartTotalsState::new([10, 10], [1, 1], [0, 0], [0, 0], [0, 0], [0, 0]);
         state.progress.course_display = GameplayCourseDisplayState::new(
             Some([
                 CourseDisplayCarry {
@@ -3235,8 +3264,7 @@ mod runtime_regression_tests {
         player.life = 0.0;
         player.is_failing = true;
         player.fail_time = Some(3.0);
-        player.course_submit_life =
-            Some(deadsync_rules::life::LifeMeter::course_submit_start());
+        player.course_submit_life = Some(deadsync_rules::life::LifeMeter::course_submit_start());
         player.failed_ex_score_inputs = Some(ExScoreInputs::default());
         state.set_live_window_counts(
             0,
@@ -4003,13 +4031,12 @@ mod runtime_regression_tests {
             state.display.receptor_feedback.glow_press_timers[0] > f32::EPSILON;
         state.display.receptor_feedback.clear_timers_for_test();
         set_single_judged_tap(&mut state, column, row_index, JudgeGrade::Great, 0.0);
-        state.mods.song_lua_visuals.note_hides[0] = SongLuaNoteHideWindows::new(vec![
-            SongLuaNoteHideWindowRuntime {
+        state.mods.song_lua_visuals.note_hides[0] =
+            SongLuaNoteHideWindows::new(vec![SongLuaNoteHideWindowRuntime {
                 column,
                 start_beat: 0.0,
                 end_beat: 2.0,
-            },
-        ]);
+            }]);
 
         state.trigger_completed_row_tap_explosions(0, 0);
 

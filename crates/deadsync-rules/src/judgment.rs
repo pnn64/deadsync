@@ -331,14 +331,12 @@ pub fn score_missed_holds_and_rolls(chart_type: &str) -> bool {
 #[must_use]
 pub const fn scored_hold_totals_with_carry(
     held: u32,
-    let_go: u32,
+    resolved: u32,
     carry_held: u32,
-    carry_let_go: u32,
+    carry_resolved: u32,
 ) -> (u32, u32) {
     let held_total = held.saturating_add(carry_held);
-    let resolved_total = held_total
-        .saturating_add(let_go)
-        .saturating_add(carry_let_go);
+    let resolved_total = resolved.saturating_add(carry_resolved);
     (held_total, resolved_total)
 }
 
@@ -1052,7 +1050,7 @@ mod tests {
 
     #[test]
     fn scored_hold_totals_include_course_carry() {
-        assert_eq!(scored_hold_totals_with_carry(3, 2, 4, 5), (7, 14));
+        assert_eq!(scored_hold_totals_with_carry(3, 5, 4, 9), (7, 14));
     }
 
     #[test]
@@ -1673,5 +1671,27 @@ mod tests {
         assert!((kept - 82.89).abs() <= 1e-9);
         assert!((lost - 17.11).abs() <= 1e-9);
         assert!((pace - 68.29).abs() <= 1e-9);
+    }
+
+    #[test]
+    fn predictive_hard_ex_counts_completely_missed_hold_at_tail() {
+        let before_tail = ExScoreData {
+            counts: WindowCounts {
+                w1: 20,
+                miss: 1,
+                ..WindowCounts::default()
+            },
+            total_steps: 652,
+            holds_total: 1,
+            ..ExScoreData::default()
+        };
+        let after_tail = ExScoreData {
+            holds_resolved: 1,
+            ..before_tail
+        };
+
+        assert_eq!(ex_total_possible(&before_tail), 2283.0);
+        assert_eq!(predictive_hard_ex_score_percents(&before_tail).0, 99.40);
+        assert_eq!(predictive_hard_ex_score_percents(&after_tail).0, 99.36);
     }
 }

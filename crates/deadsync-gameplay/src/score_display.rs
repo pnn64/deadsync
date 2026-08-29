@@ -1,11 +1,11 @@
-﻿#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ExScoreInputs {
     pub counts: WindowCounts,
     pub counts_10ms: WindowCounts,
     pub holds_held_for_score: u32,
-    pub holds_let_go_for_score: u32,
+    pub holds_resolved_for_score: u32,
     pub rolls_held_for_score: u32,
-    pub rolls_let_go_for_score: u32,
+    pub rolls_resolved_for_score: u32,
     pub mines_hit_for_score: u32,
 }
 
@@ -19,9 +19,9 @@ pub const fn ex_score_inputs_from_display(
         counts,
         counts_10ms,
         holds_held_for_score: stage.holds_held_for_score,
-        holds_let_go_for_score: stage.holds_let_go_for_score,
+        holds_resolved_for_score: stage.holds_resolved_for_score,
         rolls_held_for_score: stage.rolls_held_for_score,
-        rolls_let_go_for_score: stage.rolls_let_go_for_score,
+        rolls_resolved_for_score: stage.rolls_resolved_for_score,
         mines_hit_for_score: stage.mines_hit_for_score,
     }
 }
@@ -34,22 +34,19 @@ pub const fn ex_score_data_from_display_inputs(
 ) -> judgment::ExScoreData {
     let (holds_held, holds_resolved) = judgment::scored_hold_totals_with_carry(
         inputs.holds_held_for_score,
-        inputs.holds_let_go_for_score,
+        inputs.holds_resolved_for_score,
         carry.holds_held_for_score,
-        carry.holds_let_go_for_score,
+        carry.holds_resolved_for_score,
     );
     let (rolls_held, rolls_resolved) = judgment::scored_hold_totals_with_carry(
         inputs.rolls_held_for_score,
-        inputs.rolls_let_go_for_score,
+        inputs.rolls_resolved_for_score,
         carry.rolls_held_for_score,
-        carry.rolls_let_go_for_score,
+        carry.rolls_resolved_for_score,
     );
     judgment::ExScoreData {
         counts: judgment::add_window_counts(inputs.counts, carry.window_counts),
-        counts_10ms: judgment::add_window_counts(
-            inputs.counts_10ms,
-            carry.window_counts_10ms_blue,
-        ),
+        counts_10ms: judgment::add_window_counts(inputs.counts_10ms, carry.window_counts_10ms_blue),
         holds_held,
         holds_resolved,
         rolls_held,
@@ -90,9 +87,9 @@ pub const fn capture_failed_ex_score_inputs(
 pub struct ItgScoreStage {
     pub scoring_counts: judgment::JudgeCounts,
     pub holds_held_for_score: u32,
-    pub holds_let_go_for_score: u32,
+    pub holds_resolved_for_score: u32,
     pub rolls_held_for_score: u32,
-    pub rolls_let_go_for_score: u32,
+    pub rolls_resolved_for_score: u32,
     pub mines_hit_for_score: u32,
     pub checkpoints_hit: u32,
     pub checkpoints_missed: u32,
@@ -137,18 +134,16 @@ pub const fn itg_score_inputs_from_display(
         mines_hit_for_score: stage
             .mines_hit_for_score
             .saturating_add(carry.mines_hit_for_score),
-        checkpoints_hit: stage
-            .checkpoints_hit
-            .saturating_add(carry.checkpoints_hit),
+        checkpoints_hit: stage.checkpoints_hit.saturating_add(carry.checkpoints_hit),
         checkpoints_missed: stage
             .checkpoints_missed
             .saturating_add(carry.checkpoints_missed),
-        holds_resolved_for_score: holds_held_for_score
-            .saturating_add(stage.holds_let_go_for_score)
-            .saturating_add(carry.holds_let_go_for_score),
-        rolls_resolved_for_score: rolls_held_for_score
-            .saturating_add(stage.rolls_let_go_for_score)
-            .saturating_add(carry.rolls_let_go_for_score),
+        holds_resolved_for_score: stage
+            .holds_resolved_for_score
+            .saturating_add(carry.holds_resolved_for_score),
+        rolls_resolved_for_score: stage
+            .rolls_resolved_for_score
+            .saturating_add(carry.rolls_resolved_for_score),
         possible_grade_points: totals.possible_grade_points,
     }
 }

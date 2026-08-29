@@ -138,12 +138,8 @@ fn zmod_mini_indicator_progress(
         .saturating_add(w4)
         .saturating_add(w5)
         .saturating_add(miss);
-    let resolved_holds = p
-        .holds_held_for_score
-        .saturating_add(p.holds_let_go_for_score);
-    let resolved_rolls = p
-        .rolls_held_for_score
-        .saturating_add(p.rolls_let_go_for_score);
+    let resolved_holds = p.holds_resolved_for_score;
+    let resolved_rolls = p.rolls_resolved_for_score;
     let current_possible_dp = (tap_rows
         .saturating_add(resolved_holds)
         .saturating_add(resolved_rolls) as i32)

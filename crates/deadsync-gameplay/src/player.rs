@@ -24,7 +24,10 @@ pub struct HeldMissRenderInfo {
 
 #[inline(always)]
 #[must_use]
-pub const fn judgment_render_info(judgment: Judgment, started_at_screen_s: f32) -> JudgmentRenderInfo {
+pub const fn judgment_render_info(
+    judgment: Judgment,
+    started_at_screen_s: f32,
+) -> JudgmentRenderInfo {
     JudgmentRenderInfo {
         judgment,
         started_at_screen_s,
@@ -92,9 +95,11 @@ pub struct PlayerRuntime {
     pub holds_held: u32,
     pub holds_held_for_score: u32,
     pub holds_let_go_for_score: u32,
+    pub holds_resolved_for_score: u32,
     pub rolls_held: u32,
     pub rolls_held_for_score: u32,
     pub rolls_let_go_for_score: u32,
+    pub rolls_resolved_for_score: u32,
     pub checkpoints_hit: u32,
     pub checkpoints_missed: u32,
     pub mines_hit: u32,
@@ -242,9 +247,11 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
         holds_held: 0,
         holds_held_for_score: 0,
         holds_let_go_for_score: 0,
+        holds_resolved_for_score: 0,
         rolls_held: 0,
         rolls_held_for_score: 0,
         rolls_let_go_for_score: 0,
+        rolls_resolved_for_score: 0,
         checkpoints_hit: 0,
         checkpoints_missed: 0,
         mines_hit: 0,
@@ -277,10 +284,7 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
 
 #[must_use]
 pub fn init_player_runtime_for_practice(judge_start_music_time: f32) -> PlayerRuntime {
-    init_player_runtime_for_practice_with_caps(
-        judge_start_music_time,
-        PlayerBufferCaps::default(),
-    )
+    init_player_runtime_for_practice_with_caps(judge_start_music_time, PlayerBufferCaps::default())
 }
 
 #[must_use]
@@ -373,10 +377,7 @@ pub fn init_player_runtime_for_song_with_course_life(
     player
 }
 
-pub fn reset_player_runtime_for_practice(
-    player: &mut PlayerRuntime,
-    judge_start_music_time: f32,
-) {
+pub fn reset_player_runtime_for_practice(player: &mut PlayerRuntime, judge_start_music_time: f32) {
     let mut combo_milestones = std::mem::take(&mut player.combo_milestones);
     let mut life_history = std::mem::take(&mut player.life_history);
     let mut error_bar_avg_samples = std::mem::take(&mut player.error_bar_avg_samples);
@@ -539,9 +540,9 @@ pub const fn player_score_stage(player: &PlayerRuntime) -> ItgScoreStage {
     ItgScoreStage {
         scoring_counts: player.scoring_counts,
         holds_held_for_score: player.holds_held_for_score,
-        holds_let_go_for_score: player.holds_let_go_for_score,
+        holds_resolved_for_score: player.holds_resolved_for_score,
         rolls_held_for_score: player.rolls_held_for_score,
-        rolls_let_go_for_score: player.rolls_let_go_for_score,
+        rolls_resolved_for_score: player.rolls_resolved_for_score,
         mines_hit_for_score: player.mines_hit_for_score,
         checkpoints_hit: player.checkpoints_hit,
         checkpoints_missed: player.checkpoints_missed,

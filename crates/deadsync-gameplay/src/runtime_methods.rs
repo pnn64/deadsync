@@ -648,6 +648,26 @@ where
         }
     }
 
+    fn handle_hold_missed(&mut self, column: usize, note_index: usize) {
+        let player = self.player_for_col(column);
+        let stats_update = hold_result_stats_update(
+            self.chart_runtime.notes[note_index].note_type,
+            HoldResult::Missed,
+            self.autoplay_blocks_scoring(),
+            self.player_score_is_blocked(player),
+        );
+        let mut stats = hold_result_stats_state(&self.players_runtime.players[player]);
+        apply_hold_result_stats_update(&mut stats, stats_update);
+        set_hold_result_stats_state(&mut self.players_runtime.players[player], stats);
+        self.display.hold_feedback.set_hold_judgment(
+            column,
+            Some(HoldJudgmentRenderInfo {
+                result: HoldResult::Missed,
+                started_at_screen_s: self.boundary.total_elapsed_in_screen,
+            }),
+        );
+    }
+
     #[inline(always)]
     fn resolve_active_hold(&mut self, column: usize, resolution: ActiveHoldResolution) {
         match resolution {
@@ -825,11 +845,8 @@ where
         let Some(hold) = note.hold.as_mut() else {
             return;
         };
-        let player = player_index_for_column(
-            self.setup.num_players,
-            self.setup.cols_per_player,
-            column,
-        );
+        let player =
+            player_index_for_column(self.setup.num_players, self.setup.cols_per_player, column);
         advance_pump_active_hold_to_time(
             active,
             hold,
@@ -904,11 +921,12 @@ where
             has_tap |= event.has_tap;
             let note_index = event.note_index.get();
             let column = usize::from(event.column);
-            let active_held = self.hold_runtime.active_holds[column]
-                .as_ref()
-                .is_some_and(|active| {
-                    active.note_index == note_index && active.life > 0.0 && !active.let_go
-                });
+            let active_held =
+                self.hold_runtime.active_holds[column]
+                    .as_ref()
+                    .is_some_and(|active| {
+                        active.note_index == note_index && active.life > 0.0 && !active.let_go
+                    });
             if active_held {
                 held = held.saturating_add(1);
                 held_columns |= 1 << column;
@@ -937,9 +955,8 @@ where
             return;
         }
 
-        let checkpoint_beat = note_row_to_beat(
-            self.hold_runtime.pump_events[row_start].row_index.get() as i32,
-        );
+        let checkpoint_beat =
+            note_row_to_beat(self.hold_runtime.pump_events[row_start].row_index.get() as i32);
         let (combo_multiplier, miss_combo_multiplier) = combo_multipliers_at_beat(
             &self.source.gameplay_charts[player].timing_segments.combos,
             checkpoint_beat,
@@ -997,11 +1014,7 @@ where
         }
     }
 
-    fn resolve_pump_hold_tail_ready(
-        &mut self,
-        note_index: usize,
-        column: usize,
-    ) {
+    fn resolve_pump_hold_tail_ready(&mut self, note_index: usize, column: usize) {
         let active_life = self.hold_runtime.active_holds[column]
             .as_ref()
             .filter(|active| active.note_index == note_index)
@@ -1040,9 +1053,7 @@ where
         }
         // Pump themes hide the terminal hold judgment while retaining its score,
         // life change, statistics, and Held explosion.
-        self.display
-            .hold_feedback
-            .set_hold_judgment(column, None);
+        self.display.hold_feedback.set_hold_judgment(column, None);
     }
 
     fn resolve_pump_hold_tail(&mut self, event: PumpHoldEvent) {
@@ -1097,11 +1108,7 @@ where
                 row_end += 1;
             }
             self.hold_runtime.pump_event_cursor = row_end;
-            self.advance_pump_holds_for_player(
-                usize::from(first.player),
-                inputs,
-                first.time_ns,
-            );
+            self.advance_pump_holds_for_player(usize::from(first.player), inputs, first.time_ns);
 
             for event_ix in row_start..row_end {
                 let event = self.hold_runtime.pump_events[event_ix];
@@ -1186,14 +1193,7 @@ where
                 match event.resolution {
                     PendingMissedHoldResolution::None => {}
                     PendingMissedHoldResolution::ShowMissedFeedback => {
-                        let column = event.column;
-                        self.display.hold_feedback.set_hold_judgment(
-                            column,
-                            Some(HoldJudgmentRenderInfo {
-                                result: HoldResult::Missed,
-                                started_at_screen_s: self.boundary.total_elapsed_in_screen,
-                            }),
-                        );
+                        self.handle_hold_missed(event.column, event.note_index);
                     }
                     PendingMissedHoldResolution::ScoreLetGo => {
                         self.handle_hold_let_go(event.column, event.note_index, event.end_time_ns);
@@ -1330,9 +1330,7 @@ where
         if let Some(column) = effects.held_miss_column {
             self.display.hold_feedback.set_held_miss(
                 column,
-                Some(held_miss_render_info(
-                    self.boundary.total_elapsed_in_screen,
-                )),
+                Some(held_miss_render_info(self.boundary.total_elapsed_in_screen)),
             );
         }
     }
@@ -1368,10 +1366,7 @@ where
         self.display.toggle_flash.tick(delta_time);
         for player in 0..self.setup.num_players {
             if self.profiles_runtime.profiles[player].combo_milestones_enabled() {
-                tick_player_combo_milestones(
-                    &mut self.players_runtime.players[player],
-                    delta_time,
-                );
+                tick_player_combo_milestones(&mut self.players_runtime.players[player], delta_time);
             }
         }
         let now = self.boundary.total_elapsed_in_screen;
@@ -1601,8 +1596,7 @@ where
 
     fn latch_column_judgment_health(&mut self) {
         self.players_runtime.column_judgments_active = std::array::from_fn(|player| {
-            player < self.setup.num_players
-                && !self.player_score_is_blocked(player)
+            player < self.setup.num_players && !self.player_score_is_blocked(player)
         });
     }
 
@@ -2627,11 +2621,7 @@ where
         true
     }
 
-    pub fn track_held_misses(
-        &mut self,
-        inputs: &[bool; MAX_COLS],
-        music_time_ns: SongTimeNs,
-    ) {
+    pub fn track_held_misses(&mut self, inputs: &[bool; MAX_COLS], music_time_ns: SongTimeNs) {
         track_held_misses_at_note_time_for_players(
             &self.chart_runtime.notes,
             &self.chart_runtime.note_time_cache_ns,

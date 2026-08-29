@@ -64,9 +64,9 @@ pub struct CourseDisplayCarry {
     pub rolls_held: u32,
     pub mines_avoided: u32,
     pub holds_held_for_score: u32,
-    pub holds_let_go_for_score: u32,
+    pub holds_resolved_for_score: u32,
     pub rolls_held_for_score: u32,
-    pub rolls_let_go_for_score: u32,
+    pub rolls_resolved_for_score: u32,
     pub mines_hit_for_score: u32,
     pub checkpoints_hit: u32,
     pub checkpoints_missed: u32,
@@ -82,7 +82,10 @@ pub struct CourseComboCarryState {
 }
 
 #[must_use]
-pub const fn course_life_after_carry(current_life: f32, course_carry: Option<CourseDisplayCarry>) -> f32 {
+pub const fn course_life_after_carry(
+    current_life: f32,
+    course_carry: Option<CourseDisplayCarry>,
+) -> f32 {
     let Some(carry) = course_carry else {
         return current_life;
     };
@@ -118,14 +121,12 @@ pub const fn apply_course_combo_carry_state(
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct DisplayWindowCountsSources {
     pub canonical: WindowCounts,
     pub ten_ms_blue: WindowCounts,
     pub display_blue: WindowCounts,
 }
-
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GameplayWindowCountsState {
@@ -204,16 +205,16 @@ impl GameplayWindowCountsState {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub enum DisplayWindowCountsMode {
     #[default]
     Canonical,
     TenMsBlue,
     DisplayBlue,
-    CustomBlue { split_ms: f32 },
+    CustomBlue {
+        split_ms: f32,
+    },
 }
-
 
 #[inline(always)]
 fn display_float_match(a: f32, b: f32) -> bool {
@@ -342,9 +343,9 @@ pub struct CourseDisplayStage {
     pub rolls_held: u32,
     pub mines_avoided: u32,
     pub holds_held_for_score: u32,
-    pub holds_let_go_for_score: u32,
+    pub holds_resolved_for_score: u32,
     pub rolls_held_for_score: u32,
-    pub rolls_let_go_for_score: u32,
+    pub rolls_resolved_for_score: u32,
     pub mines_hit_for_score: u32,
     pub checkpoints_hit: u32,
     pub checkpoints_missed: u32,
@@ -404,15 +405,15 @@ pub fn course_display_carry_for_stage(
         holds_held_for_score: previous
             .holds_held_for_score
             .saturating_add(stage.holds_held_for_score),
-        holds_let_go_for_score: previous
-            .holds_let_go_for_score
-            .saturating_add(stage.holds_let_go_for_score),
+        holds_resolved_for_score: previous
+            .holds_resolved_for_score
+            .saturating_add(stage.holds_resolved_for_score),
         rolls_held_for_score: previous
             .rolls_held_for_score
             .saturating_add(stage.rolls_held_for_score),
-        rolls_let_go_for_score: previous
-            .rolls_let_go_for_score
-            .saturating_add(stage.rolls_let_go_for_score),
+        rolls_resolved_for_score: previous
+            .rolls_resolved_for_score
+            .saturating_add(stage.rolls_resolved_for_score),
         mines_hit_for_score: previous
             .mines_hit_for_score
             .saturating_add(stage.mines_hit_for_score),
@@ -475,9 +476,9 @@ pub const fn player_course_display_stage(
         rolls_held: player.rolls_held,
         mines_avoided: player.mines_avoided,
         holds_held_for_score: player.holds_held_for_score,
-        holds_let_go_for_score: player.holds_let_go_for_score,
+        holds_resolved_for_score: player.holds_resolved_for_score,
         rolls_held_for_score: player.rolls_held_for_score,
-        rolls_let_go_for_score: player.rolls_let_go_for_score,
+        rolls_resolved_for_score: player.rolls_resolved_for_score,
         mines_hit_for_score: player.mines_hit_for_score,
         checkpoints_hit: player.checkpoints_hit,
         checkpoints_missed: player.checkpoints_missed,

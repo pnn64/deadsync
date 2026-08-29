@@ -1,4 +1,4 @@
-﻿#[derive(Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct ActiveHold {
     pub note_index: usize,
     pub start_time_ns: SongTimeNs,
@@ -39,10 +39,7 @@ struct PumpHoldSource {
     column: u8,
 }
 
-fn pump_tap_rows_and_hold_count(
-    notes: &[Note],
-    note_range: (usize, usize),
-) -> (Vec<usize>, usize) {
+fn pump_tap_rows_and_hold_count(notes: &[Note], note_range: (usize, usize)) -> (Vec<usize>, usize) {
     let end = note_range.1.min(notes.len());
     let start = note_range.0.min(end);
     let mut rows = Vec::with_capacity(end - start);
@@ -111,10 +108,7 @@ pub fn pump_tap_rows_for_bench(notes: &[Note], note_range: (usize, usize)) -> Ve
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 #[must_use]
-pub fn pump_tap_rows_reference_for_bench(
-    notes: &[Note],
-    note_range: (usize, usize),
-) -> Vec<usize> {
+pub fn pump_tap_rows_reference_for_bench(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
     pump_tap_rows_reference(notes, note_range)
 }
 
@@ -240,7 +234,7 @@ fn build_pump_hold_events_core(
             events.push(PumpHoldEvent {
                 time_ns: note_time_cache_ns[note_index],
                 row_index: ChartRowIndex::from_validated(
-                    beat_to_note_row(note.beat).max(0) as usize,
+                    beat_to_note_row(note.beat).max(0) as usize
                 ),
                 note_index: source.note_index,
                 player: source.player,
@@ -342,9 +336,11 @@ pub struct HoldResultStatsUpdate {
     pub holds_held: u32,
     pub holds_held_for_score: u32,
     pub holds_let_go_for_score: u32,
+    pub holds_resolved_for_score: u32,
     pub rolls_held: u32,
     pub rolls_held_for_score: u32,
     pub rolls_let_go_for_score: u32,
+    pub rolls_resolved_for_score: u32,
     pub update_grade_totals: bool,
 }
 
@@ -354,9 +350,11 @@ pub struct HoldResultStatsState {
     pub holds_held: u32,
     pub holds_held_for_score: u32,
     pub holds_let_go_for_score: u32,
+    pub holds_resolved_for_score: u32,
     pub rolls_held: u32,
     pub rolls_held_for_score: u32,
     pub rolls_let_go_for_score: u32,
+    pub rolls_resolved_for_score: u32,
 }
 
 pub const fn apply_hold_result_stats_update(
@@ -373,6 +371,9 @@ pub const fn apply_hold_result_stats_update(
     state.holds_let_go_for_score = state
         .holds_let_go_for_score
         .saturating_add(update.holds_let_go_for_score);
+    state.holds_resolved_for_score = state
+        .holds_resolved_for_score
+        .saturating_add(update.holds_resolved_for_score);
     state.rolls_held = state.rolls_held.saturating_add(update.rolls_held);
     state.rolls_held_for_score = state
         .rolls_held_for_score
@@ -380,6 +381,9 @@ pub const fn apply_hold_result_stats_update(
     state.rolls_let_go_for_score = state
         .rolls_let_go_for_score
         .saturating_add(update.rolls_let_go_for_score);
+    state.rolls_resolved_for_score = state
+        .rolls_resolved_for_score
+        .saturating_add(update.rolls_resolved_for_score);
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -395,9 +399,11 @@ pub const fn hold_result_stats_state(player: &PlayerRuntime) -> HoldResultStatsS
         holds_held: player.holds_held,
         holds_held_for_score: player.holds_held_for_score,
         holds_let_go_for_score: player.holds_let_go_for_score,
+        holds_resolved_for_score: player.holds_resolved_for_score,
         rolls_held: player.rolls_held,
         rolls_held_for_score: player.rolls_held_for_score,
         rolls_let_go_for_score: player.rolls_let_go_for_score,
+        rolls_resolved_for_score: player.rolls_resolved_for_score,
     }
 }
 
@@ -406,9 +412,11 @@ pub const fn set_hold_result_stats_state(player: &mut PlayerRuntime, stats: Hold
     player.holds_held = stats.holds_held;
     player.holds_held_for_score = stats.holds_held_for_score;
     player.holds_let_go_for_score = stats.holds_let_go_for_score;
+    player.holds_resolved_for_score = stats.holds_resolved_for_score;
     player.rolls_held = stats.rolls_held;
     player.rolls_held_for_score = stats.rolls_held_for_score;
     player.rolls_let_go_for_score = stats.rolls_let_go_for_score;
+    player.rolls_resolved_for_score = stats.rolls_resolved_for_score;
 }
 
 #[must_use]
@@ -897,7 +905,7 @@ pub const fn hold_result_stats_update(
     player_dead: bool,
 ) -> HoldResultStatsUpdate {
     let mut update = HoldResultStatsUpdate {
-        decrement_hands_holding: true,
+        decrement_hands_holding: !matches!(result, HoldResult::Missed),
         ..HoldResultStatsUpdate::ZERO
     };
     if scoring_blocked {
@@ -908,6 +916,7 @@ pub const fn hold_result_stats_update(
         (NoteType::Hold, HoldResult::Held, false) => {
             update.holds_held = 1;
             update.holds_held_for_score = 1;
+            update.holds_resolved_for_score = 1;
             update.update_grade_totals = true;
         }
         (NoteType::Hold, HoldResult::Held, true) => {
@@ -915,11 +924,16 @@ pub const fn hold_result_stats_update(
         }
         (NoteType::Hold, HoldResult::LetGo, false) => {
             update.holds_let_go_for_score = 1;
+            update.holds_resolved_for_score = 1;
             update.update_grade_totals = true;
+        }
+        (NoteType::Hold, HoldResult::Missed, false) => {
+            update.holds_resolved_for_score = 1;
         }
         (NoteType::Roll, HoldResult::Held, false) => {
             update.rolls_held = 1;
             update.rolls_held_for_score = 1;
+            update.rolls_resolved_for_score = 1;
             update.update_grade_totals = true;
         }
         (NoteType::Roll, HoldResult::Held, true) => {
@@ -927,7 +941,11 @@ pub const fn hold_result_stats_update(
         }
         (NoteType::Roll, HoldResult::LetGo, false) => {
             update.rolls_let_go_for_score = 1;
+            update.rolls_resolved_for_score = 1;
             update.update_grade_totals = true;
+        }
+        (NoteType::Roll, HoldResult::Missed, false) => {
+            update.rolls_resolved_for_score = 1;
         }
         _ => {}
     }
@@ -940,9 +958,11 @@ impl HoldResultStatsUpdate {
         holds_held: 0,
         holds_held_for_score: 0,
         holds_let_go_for_score: 0,
+        holds_resolved_for_score: 0,
         rolls_held: 0,
         rolls_held_for_score: 0,
         rolls_let_go_for_score: 0,
+        rolls_resolved_for_score: 0,
         update_grade_totals: false,
     };
 }
