@@ -1,29 +1,48 @@
+use crate::latest_worker_value::LatestWorkerValue;
 use deadsync_online::score_compat as scores;
 use deadsync_score::{ScoreBulkImportSummary, ScoreImportProgress};
 use deadsync_theme_simply_love::{
     SimplyLoveScoreImportEvent, SimplyLoveScoreImportProgress, SimplyLoveScoreImportRequest,
     SimplyLoveScoreImportSummary,
 };
+use smallvec::SmallVec;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
 
-const PENDING_EVENTS: usize = 64;
+const PENDING_TERMINALS: usize = 8;
+const TERMINALS_PER_FRAME: usize = 8;
+const FRAME_EVENTS: usize = 2;
+type ImportResult = Result<SimplyLoveScoreImportSummary, String>;
 
-/// Shell-owned score-import worker, cancellation state, and bounded event queue.
+/// Shell-owned score-import worker, cancellation, and frame handoff.
+///
+/// The worker owns network and score-cache work. Replaceable progress lives in
+/// one latest-value slot, while the reliable completion crosses an eight-entry
+/// bounded queue. The frame thread uses a nonblocking progress sample and drains
+/// at most eight stale/current terminals into two inline event slots. Progress
+/// replacement destroys old detail strings on the worker; completion destroys
+/// the slot on the frame thread. There is no gameplay miss path, eviction scan,
+/// or heap allocation for the event container. `score_import_handoff` measures
+/// worker publication and worst burst integration; the frame work bound is one
+/// progress sample plus eight terminal probes.
 pub(crate) struct Service {
-    tx: mpsc::SyncSender<(u64, SimplyLoveScoreImportEvent)>,
-    rx: mpsc::Receiver<(u64, SimplyLoveScoreImportEvent)>,
+    tx: mpsc::SyncSender<(u64, ImportResult)>,
+    rx: mpsc::Receiver<(u64, ImportResult)>,
+    progress: Arc<LatestWorkerValue<SimplyLoveScoreImportProgress>>,
     active: Option<(u64, Arc<AtomicBool>)>,
+    active_jobs: usize,
     next_id: u64,
 }
 
 impl Default for Service {
     fn default() -> Self {
-        let (tx, rx) = mpsc::sync_channel(PENDING_EVENTS);
+        let (tx, rx) = mpsc::sync_channel(PENDING_TERMINALS);
         Self {
             tx,
             rx,
+            progress: Arc::new(LatestWorkerValue::default()),
             active: None,
+            active_jobs: 0,
             next_id: 0,
         }
     }
@@ -37,7 +56,10 @@ impl Service {
         let cancel = Arc::new(AtomicBool::new(false));
         let thread_cancel = Arc::clone(&cancel);
         let tx = self.tx.clone();
+        let progress = Arc::clone(&self.progress);
         self.active = Some((job_id, cancel));
+        self.active_jobs += 1;
+        progress.start(job_id);
 
         std::thread::spawn(move || {
             let SimplyLoveScoreImportRequest {
@@ -80,17 +102,14 @@ impl Service {
                 runtime_profile,
                 pack_groups,
                 only_missing_groovestats_scores,
-                |progress| {
-                    let _ = tx.send((
-                        job_id,
-                        SimplyLoveScoreImportEvent::Progress(progress_view(progress)),
-                    ));
+                |sample| {
+                    progress.publish(job_id, progress_view(sample));
                 },
                 || thread_cancel.load(Ordering::Relaxed),
             )
             .map(summary_view)
             .map_err(|error| error.to_string());
-            let _ = tx.send((job_id, SimplyLoveScoreImportEvent::Finished(result)));
+            let _ = tx.send((job_id, result));
         });
     }
 
@@ -100,32 +119,81 @@ impl Service {
         }
     }
 
-    /// Returns `None` without touching the queue when no import is active.
-    /// `Finished` is the worker's final FIFO event, so clearing `active` cannot
-    /// strand a later event from that job.
-    pub(crate) fn poll(&mut self) -> Option<Vec<SimplyLoveScoreImportEvent>> {
-        self.active.as_ref()?;
+    /// Returns `None` without touching the queue when no import worker is active.
+    /// Each worker sends exactly one terminal, so superseded jobs keep polling
+    /// until their completion has been removed from the shared queue.
+    pub(crate) fn poll(&mut self) -> Option<SmallVec<[SimplyLoveScoreImportEvent; FRAME_EVENTS]>> {
+        if self.active_jobs == 0 {
+            return None;
+        }
         Some(self.drain_events())
     }
 
-    fn drain_events(&mut self) -> Vec<SimplyLoveScoreImportEvent> {
+    fn drain_events(&mut self) -> SmallVec<[SimplyLoveScoreImportEvent; FRAME_EVENTS]> {
         let active_id = self.active.as_ref().map(|(id, _)| *id);
-        let mut finished = false;
-        let events = self
-            .rx
-            .try_iter()
-            .filter_map(|(job_id, event)| {
-                if Some(job_id) != active_id {
-                    return None;
-                }
-                finished |= matches!(event, SimplyLoveScoreImportEvent::Finished(_));
-                Some(event)
-            })
-            .collect::<Vec<_>>();
-        if finished {
+        let mut events = SmallVec::new();
+        if let Some(job_id) = active_id
+            && let Some(progress) = self.progress.take(job_id)
+        {
+            events.push(SimplyLoveScoreImportEvent::Progress(progress));
+        }
+        for _ in 0..TERMINALS_PER_FRAME {
+            let Ok((job_id, result)) = self.rx.try_recv() else {
+                break;
+            };
+            self.active_jobs = self.active_jobs.saturating_sub(1);
+            if Some(job_id) != active_id {
+                continue;
+            }
             self.active = None;
+            self.progress.finish(job_id);
+            events.push(SimplyLoveScoreImportEvent::Finished(result));
+            break;
         }
         events
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub struct BenchmarkScoreImportService(Service);
+
+#[cfg(feature = "bench-support")]
+impl BenchmarkScoreImportService {
+    #[must_use]
+    pub fn active() -> Self {
+        let mut service = Service::default();
+        service.active = Some((1, Arc::new(AtomicBool::new(false))));
+        service.active_jobs = 1;
+        service.progress.start(1);
+        Self(service)
+    }
+
+    pub fn publish_progress(&self, done: usize, total: usize, detail: &str) {
+        self.0.progress.publish(
+            1,
+            SimplyLoveScoreImportProgress {
+                processed_charts: done,
+                total_charts: total,
+                imported_scores: done.saturating_sub(2),
+                missing_scores: done.min(2),
+                failed_requests: 0,
+                detail: detail.to_owned(),
+            },
+        );
+    }
+
+    #[must_use]
+    pub fn with_progress_burst(events: usize, detail_bytes: usize) -> Self {
+        let service = Self::active();
+        let detail = "p".repeat(detail_bytes);
+        for done in 1..=events {
+            service.publish_progress(done, events, &detail);
+        }
+        service
+    }
+
+    pub fn poll(&mut self) -> Option<SmallVec<[SimplyLoveScoreImportEvent; FRAME_EVENTS]>> {
+        self.0.poll()
     }
 }
 
@@ -156,6 +224,25 @@ const fn summary_view(summary: ScoreBulkImportSummary) -> SimplyLoveScoreImportS
 mod tests {
     use super::*;
 
+    fn test_progress(done: usize, total: usize, detail: &str) -> SimplyLoveScoreImportProgress {
+        SimplyLoveScoreImportProgress {
+            processed_charts: done,
+            total_charts: total,
+            imported_scores: done.saturating_sub(2),
+            missing_scores: done.min(2),
+            failed_requests: 0,
+            detail: detail.to_owned(),
+        }
+    }
+
+    fn active_service(job_id: u64) -> Service {
+        let mut service = Service::default();
+        service.active = Some((job_id, Arc::new(AtomicBool::new(false))));
+        service.active_jobs = 1;
+        service.progress.start(job_id);
+        service
+    }
+
     #[test]
     fn score_import_summary_keeps_theme_visible_fields() {
         let view = summary_view(ScoreBulkImportSummary {
@@ -179,13 +266,12 @@ mod tests {
         assert!(service.poll().is_none());
 
         service.active = Some((7, Arc::new(AtomicBool::new(false))));
+        service.active_jobs = 1;
+        service.progress.start(7);
         assert!(service.poll().is_some_and(|events| events.is_empty()));
         service
             .tx
-            .send((
-                7,
-                SimplyLoveScoreImportEvent::Finished(Err("finished".to_owned())),
-            ))
+            .send((7, Err("finished".to_owned())))
             .expect("the service owns the matching receiver");
         let events = service.poll().expect("the job is active");
 
@@ -194,5 +280,80 @@ mod tests {
             [SimplyLoveScoreImportEvent::Finished(Err(reason))] if reason == "finished"
         ));
         assert!(service.poll().is_none());
+    }
+
+    #[test]
+    fn score_import_progress_keeps_only_the_latest_sample() {
+        let mut service = active_service(1);
+        for done in 1..=64 {
+            service
+                .progress
+                .publish(1, test_progress(done, 64, &"p".repeat(24)));
+        }
+        let events = service.poll().expect("the import is active");
+
+        assert!(matches!(
+            events.as_slice(),
+            [SimplyLoveScoreImportEvent::Progress(progress)]
+                if progress.processed_charts == 64 && progress.detail.len() == 24
+        ));
+        assert!(!events.spilled());
+    }
+
+    #[test]
+    fn score_import_delivers_latest_progress_before_completion() {
+        let mut service = active_service(1);
+        for done in 1..=8 {
+            service
+                .progress
+                .publish(1, test_progress(done, 8, "last visible"));
+        }
+        service
+            .tx
+            .send((
+                1,
+                Ok(SimplyLoveScoreImportSummary {
+                    requested_charts: 8,
+                    imported_scores: 6,
+                    missing_scores: 2,
+                    failed_requests: 0,
+                    rate_limit_per_second: 3,
+                    elapsed_seconds: 1.0,
+                    canceled: false,
+                }),
+            ))
+            .expect("the service owns the matching receiver");
+
+        let events = service.poll().expect("the import is active");
+        assert!(matches!(
+            events.as_slice(),
+            [
+                SimplyLoveScoreImportEvent::Progress(progress),
+                SimplyLoveScoreImportEvent::Finished(Ok(_)),
+            ] if progress.processed_charts == 8
+        ));
+        assert!(!events.spilled());
+        assert!(service.poll().is_none());
+    }
+
+    #[test]
+    fn superseded_score_events_do_not_replace_or_finish_active_job() {
+        let mut service = active_service(2);
+        service.active_jobs = 2;
+        service.progress.publish(1, test_progress(1, 2, "stale"));
+        service.progress.publish(2, test_progress(3, 4, "current"));
+        service
+            .tx
+            .send((1, Err("stale completion".to_owned())))
+            .expect("the service owns the matching receiver");
+
+        let events = service.poll().expect("the current import is active");
+        assert!(matches!(
+            events.as_slice(),
+            [SimplyLoveScoreImportEvent::Progress(progress)]
+                if progress.processed_charts == 3 && progress.detail == "current"
+        ));
+        assert!(service.active.is_some());
+        assert_eq!(service.active_jobs, 1);
     }
 }

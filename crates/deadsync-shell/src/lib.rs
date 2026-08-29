@@ -23,6 +23,7 @@ mod input;
 mod input_backend;
 mod input_trace;
 mod interaction;
+mod latest_worker_value;
 mod lighting;
 pub mod live_case;
 mod local_profiles;
@@ -82,6 +83,10 @@ pub(crate) use interaction::ShellInteractionState;
 pub(crate) use navigation::{TransitionMusicPaths, TransitionState, transition_audio_plan};
 #[cfg(feature = "bench-support")]
 pub use profile_import::BenchmarkProfileImportService;
+#[cfg(feature = "bench-support")]
+pub use qr_login::{BenchmarkQrLoginService, benchmark_qr_route, benchmark_qr_route_reference};
 pub(crate) use runtime::ShellState;
+#[cfg(feature = "bench-support")]
+pub use score_import::BenchmarkScoreImportService;
 pub(crate) use session::SessionState;
 pub(crate) use stutter_diag::StutterDiagRecorder;

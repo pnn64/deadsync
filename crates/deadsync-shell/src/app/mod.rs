@@ -1863,28 +1863,21 @@ impl App {
     }
 
     fn poll_qr_login(&mut self) {
-        let Some(events) = self.qr_login.poll() else {
+        let Some((service, events)) = self.qr_login.poll() else {
             return;
         };
-        let mut arrowcloud = Vec::new();
-        let mut groovestats = Vec::new();
-        for event in events {
-            match event.service() {
-                SimplyLoveQrLoginService::ArrowCloud => arrowcloud.push(event),
-                SimplyLoveQrLoginService::GrooveStats => groovestats.push(event),
-            }
+        if events.is_empty() {
+            return;
         }
-        if !arrowcloud.is_empty() {
-            screens::arrowcloud_login::apply_events(
+        match service {
+            SimplyLoveQrLoginService::ArrowCloud => screens::arrowcloud_login::apply_events(
                 &mut self.state.screens.arrowcloud_login_state,
-                arrowcloud,
-            );
-        }
-        if !groovestats.is_empty() {
-            screens::groovestats_login::apply_events(
+                events,
+            ),
+            SimplyLoveQrLoginService::GrooveStats => screens::groovestats_login::apply_events(
                 &mut self.state.screens.groovestats_login_state,
-                groovestats,
-            );
+                events,
+            ),
         }
     }
 

@@ -1,3 +1,4 @@
+use crate::latest_worker_value::LatestWorkerValue;
 use deadsync_import::app_runtime::{ImportSummary, import_itg_profile_dir};
 use deadsync_import::detect::{
     ItgProfileCandidate, detect_itg_local_profiles, detect_itg_profiles_from_game_dir,
@@ -12,8 +13,8 @@ use deadsync_theme_simply_love::{
 use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, TryLockError, mpsc};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, mpsc};
 
 const PENDING_TERMINALS: usize = 8;
 const TERMINALS_PER_FRAME: usize = 8;
@@ -27,67 +28,6 @@ enum WorkerEvent {
     },
 }
 
-#[derive(Default)]
-struct LatestProgress {
-    active_import_id: AtomicU64,
-    value: Mutex<Option<(usize, usize, String)>>,
-}
-
-impl LatestProgress {
-    fn start(&self, import_id: u64) {
-        let mut value = self
-            .value
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        self.active_import_id.store(import_id, Ordering::Release);
-        *value = None;
-    }
-
-    fn publish(&self, import_id: u64, done: usize, total: usize, label: &str) {
-        if self.active_import_id.load(Ordering::Acquire) != import_id {
-            return;
-        }
-        let mut value = self
-            .value
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if self.active_import_id.load(Ordering::Relaxed) == import_id {
-            *value = Some((done, total, label.to_owned()));
-        }
-    }
-
-    fn take(&self, import_id: u64) -> Option<SimplyLoveProfileImportEvent> {
-        if self.active_import_id.load(Ordering::Acquire) != import_id {
-            return None;
-        }
-        let mut value = match self.value.try_lock() {
-            Ok(value) => value,
-            Err(TryLockError::Poisoned(error)) => error.into_inner(),
-            Err(TryLockError::WouldBlock) => return None,
-        };
-        if self.active_import_id.load(Ordering::Relaxed) != import_id {
-            return None;
-        }
-        value.take().map(
-            |(done, total, label)| SimplyLoveProfileImportEvent::Progress { done, total, label },
-        )
-    }
-
-    fn finish(&self, import_id: u64) {
-        if self
-            .active_import_id
-            .compare_exchange(import_id, 0, Ordering::AcqRel, Ordering::Acquire)
-            .is_err()
-        {
-            return;
-        }
-        self.value
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-    }
-}
-
 /// Shell-owned `ITGmania` discovery, native folder selection, and import worker.
 ///
 /// Progress is sampled through one latest-value slot because the screen replaces
@@ -98,7 +38,7 @@ impl LatestProgress {
 pub(crate) struct Service {
     tx: mpsc::SyncSender<WorkerEvent>,
     rx: mpsc::Receiver<WorkerEvent>,
-    progress: Arc<LatestProgress>,
+    progress: Arc<LatestWorkerValue<(usize, usize, String)>>,
     active_import: Option<(u64, Arc<AtomicBool>)>,
     active_jobs: usize,
     next_import_id: u64,
@@ -110,7 +50,7 @@ impl Default for Service {
         Self {
             tx,
             rx,
-            progress: Arc::new(LatestProgress::default()),
+            progress: Arc::new(LatestWorkerValue::default()),
             active_import: None,
             active_jobs: 0,
             next_import_id: 0,
@@ -167,7 +107,7 @@ impl Service {
             let result = import_itg_profile(
                 &dir,
                 |done, total, label| {
-                    progress.publish(import_id, done, total, label);
+                    progress.publish(import_id, (done, total, label.to_owned()));
                 },
                 || thread_cancel.load(Ordering::Relaxed),
             )
@@ -199,9 +139,9 @@ impl Service {
     fn drain_events(&mut self) -> SmallVec<[SimplyLoveProfileImportEvent; FRAME_EVENTS]> {
         let mut events = SmallVec::new();
         if let Some((import_id, _)) = self.active_import.as_ref()
-            && let Some(progress) = self.progress.take(*import_id)
+            && let Some((done, total, label)) = self.progress.take(*import_id)
         {
-            events.push(progress);
+            events.push(SimplyLoveProfileImportEvent::Progress { done, total, label });
         }
         for _ in 0..TERMINALS_PER_FRAME {
             let Ok(event) = self.rx.try_recv() else {
@@ -243,7 +183,7 @@ impl BenchmarkProfileImportService {
     }
 
     pub fn publish_progress(&self, done: usize, total: usize, label: &str) {
-        self.0.progress.publish(1, done, total, label);
+        self.0.progress.publish(1, (done, total, label.to_owned()));
     }
 
     #[must_use]
@@ -396,7 +336,7 @@ mod tests {
         for done in 1..=64 {
             service
                 .progress
-                .publish(import_id, done, 64, &"p".repeat(24));
+                .publish(import_id, (done, 64, "p".repeat(24)));
         }
         let events = service.poll().expect("the import is active");
 
@@ -409,16 +349,16 @@ mod tests {
 
     #[test]
     fn superseded_import_progress_cannot_replace_the_active_sample() {
-        let progress = LatestProgress::default();
+        let progress = LatestWorkerValue::default();
         progress.start(1);
-        progress.publish(1, 1, 2, "old");
+        progress.publish(1, (1, 2, "old".to_owned()));
         progress.start(2);
-        progress.publish(1, 2, 2, "stale");
-        progress.publish(2, 3, 4, "current");
+        progress.publish(1, (2, 2, "stale".to_owned()));
+        progress.publish(2, (3, 4, "current".to_owned()));
 
         assert!(matches!(
             progress.take(2),
-            Some(SimplyLoveProfileImportEvent::Progress { done: 3, total: 4, label })
+            Some((3, 4, label))
                 if label == "current"
         ));
     }
@@ -430,7 +370,9 @@ mod tests {
         service.active_jobs = 1;
         service.active_import = Some((import_id, Arc::new(AtomicBool::new(false))));
         service.progress.start(import_id);
-        service.progress.publish(import_id, 8, 10, "last visible");
+        service
+            .progress
+            .publish(import_id, (8, 10, "last visible".to_owned()));
         service
             .tx
             .send(WorkerEvent::ImportFinished {
@@ -460,7 +402,7 @@ mod tests {
         service.active_jobs = 2;
         service.active_import = Some((2, Arc::new(AtomicBool::new(false))));
         service.progress.start(2);
-        service.progress.publish(2, 1, 2, "current");
+        service.progress.publish(2, (1, 2, "current".to_owned()));
         service
             .tx
             .send(WorkerEvent::ImportFinished {

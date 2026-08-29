@@ -102,7 +102,10 @@ pub fn update(state: &mut State, _dt: f32, effects: &mut Vec<ThemeEffect>) {
     debug_assert!(effects.len() - start_len <= 1);
 }
 
-pub fn apply_events(state: &mut State, events: Vec<crate::SimplyLoveQrLoginEvent>) {
+pub fn apply_events(
+    state: &mut State,
+    events: impl IntoIterator<Item = crate::SimplyLoveQrLoginEvent>,
+) {
     if let Some(ui) = state.ui.as_mut() {
         apply_qr_events(ui, events);
     }

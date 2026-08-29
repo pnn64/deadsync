@@ -273,7 +273,7 @@ pub fn apply_sync_analysis_events(state: &mut State, events: Vec<crate::SimplyLo
 
 pub fn apply_score_import_events(
     state: &mut State,
-    events: Vec<crate::SimplyLoveScoreImportEvent>,
+    events: impl IntoIterator<Item = crate::SimplyLoveScoreImportEvent>,
 ) {
     for event in events {
         apply_score_import_event(state, event);
