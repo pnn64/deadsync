@@ -7,10 +7,10 @@ use deadsync_assets::dynamic_media::{
     BackgroundTextureError, BannerVideoPrepResult, DynamicBackgroundState,
     DynamicImageTextureError, DynamicVideoState, GameplayBackgroundPrepResult,
     SongLuaVideoPrepResult, create_cdtitle_texture, create_inserted_banner_texture,
-    dynamic_video_key_set, dynamic_video_path_in_set, path_texture_key, prepare_banner_video,
-    prepare_gameplay_background, prepare_song_lua_video, replace_texture_key_set,
-    retire_dynamic_background_state, retire_dynamic_video_state, retire_video_player,
-    set_banner_texture_for_path, set_image_background_texture, set_video_background_poster_texture,
+    dynamic_video_path_in_set, path_texture_key, prepare_banner_video, prepare_gameplay_background,
+    prepare_song_lua_video, replace_texture_key_set, retire_dynamic_background_state,
+    retire_dynamic_video_state, retire_video_player, set_banner_texture_for_path,
+    set_image_background_texture, set_video_background_poster_texture,
     set_video_background_texture, start_background_video,
 };
 use deadsync_assets::media_cache;
@@ -241,11 +241,109 @@ const GAMEPLAY_BACKGROUND_PREP_RESULTS: usize = 1;
 /// measures burst latency, cycles, and destruction churn. Worst live-frame
 /// integration is exactly this many results; remaining work is deferred.
 const MAX_MEDIA_COMPLETIONS_PER_FRAME: usize = 2;
+const INLINE_MEDIA_KEYS: usize = 8;
+
+fn extract_stale_media<T>(
+    media: &mut FxHashMap<String, T>,
+    mut is_stale: impl FnMut(&str, &T) -> bool,
+    mut retire: impl FnMut(T),
+) -> SmallVec<[String; INLINE_MEDIA_KEYS]> {
+    media
+        .extract_if(|key, state| is_stale(key, state))
+        .map(|(key, state)| {
+            retire(state);
+            key
+        })
+        .collect()
+}
+
+fn song_video_keys(paths: &[PathBuf]) -> SmallVec<[Cow<'_, str>; INLINE_MEDIA_KEYS]> {
+    paths
+        .iter()
+        .filter(|path| dynamic::is_dynamic_video_path(path))
+        .map(|path| path.to_string_lossy())
+        .collect()
+}
+
+fn song_video_key_is_desired(key: &str, desired: &[Cow<'_, str>]) -> bool {
+    desired.iter().any(|candidate| candidate.as_ref() == key)
+}
 
 #[cfg(feature = "bench-support")]
 #[must_use]
 pub const fn benchmark_media_completion_budget() -> usize {
     MAX_MEDIA_COMPLETIONS_PER_FRAME
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_video_membership_reference(
+    paths: &[PathBuf],
+    active: &[String],
+    failed: &[String],
+) -> u64 {
+    let desired = paths
+        .iter()
+        .filter(|path| dynamic::is_dynamic_video_path(path))
+        .map(|path| path.to_string_lossy())
+        .collect::<FxHashSet<_>>();
+    active.iter().chain(failed).fold(0, |sum, key| {
+        sum.wrapping_mul(131)
+            .wrapping_add(key.len() as u64)
+            .wrapping_add(u64::from(desired.contains(key.as_str())))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_video_membership(paths: &[PathBuf], active: &[String], failed: &[String]) -> u64 {
+    let desired = song_video_keys(paths);
+    active.iter().chain(failed).fold(0, |sum, key| {
+        sum.wrapping_mul(131)
+            .wrapping_add(key.len() as u64)
+            .wrapping_add(u64::from(song_video_key_is_desired(key, &desired)))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_stale_extract_reference(
+    active: &mut FxHashMap<String, u64>,
+    desired: &FxHashSet<String>,
+) -> u64 {
+    let initial_len = active.len();
+    let stale = active
+        .keys()
+        .filter(|key| !desired.contains(key.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    stale.into_iter().fold(initial_len as u64, |sum, key| {
+        let value = active
+            .remove(&key)
+            .expect("collected stale benchmark key remains active");
+        sum.wrapping_add(value)
+            .wrapping_add((key.len() as u64).rotate_left(17))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_stale_extract(
+    active: &mut FxHashMap<String, u64>,
+    desired: &FxHashSet<String>,
+) -> u64 {
+    let initial_len = active.len();
+    let mut retired = 0u64;
+    let stale = extract_stale_media(
+        active,
+        |key, _| !desired.contains(key),
+        |value| retired = retired.wrapping_add(value),
+    );
+    stale
+        .into_iter()
+        .fold(initial_len as u64 + retired, |sum, key| {
+            sum.wrapping_add((key.len() as u64).rotate_left(17))
+        })
 }
 
 #[cfg(feature = "bench-support")]
@@ -704,18 +802,12 @@ impl DynamicMedia {
             return;
         }
         self.retain_banner_video_prep(desired_path, looped);
-        let stale_keys = self
-            .active_banner_videos
-            .iter()
-            .filter(|(_, state)| {
-                Some(state.path.as_path()) != desired_path || state.looped != looped
-            })
-            .map(|(key, _)| key.clone())
-            .collect::<Vec<_>>();
+        let stale_keys = extract_stale_media(
+            &mut self.active_banner_videos,
+            |_, state| Some(state.path.as_path()) != desired_path || state.looped != looped,
+            retire_dynamic_video_state,
+        );
         for key in stale_keys {
-            if let Some(state) = self.active_banner_videos.remove(&key) {
-                retire_dynamic_video_state(state);
-            }
             self.release_texture_key(assets, backend, key);
         }
         self.drain_banner_video_preps(assets, desired_path, looped);
@@ -745,18 +837,14 @@ impl DynamicMedia {
             return;
         }
         self.retain_banner_video_preps(desired_paths, looped);
-        let stale_keys = self
-            .active_banner_videos
-            .iter()
-            .filter(|(_, state)| {
+        let stale_keys = extract_stale_media(
+            &mut self.active_banner_videos,
+            |_, state| {
                 !dynamic_video_path_in_set(&state.path, desired_paths) || state.looped != looped
-            })
-            .map(|(key, _)| key.clone())
-            .collect::<Vec<_>>();
+            },
+            retire_dynamic_video_state,
+        );
         for key in stale_keys {
-            if let Some(state) = self.active_banner_videos.remove(&key) {
-                retire_dynamic_video_state(state);
-            }
             self.release_texture_key(assets, backend, key);
         }
         self.drain_banner_video_preps_multi(assets, desired_paths, looped);
@@ -1111,28 +1199,21 @@ impl DynamicMedia {
         backend: &mut Backend,
         paths: &[PathBuf],
     ) {
-        let desired = dynamic_video_key_set(paths);
-        let stale_active = self
-            .active_song_lua_videos
-            .keys()
-            .filter(|key| !desired.contains(key.as_str()))
-            .cloned()
-            .collect::<Vec<_>>();
+        let desired = song_video_keys(paths);
+        let stale_active = extract_stale_media(
+            &mut self.active_song_lua_videos,
+            |key, _| !song_video_key_is_desired(key, &desired),
+            |state| retire_video_player(state.player),
+        );
         let stale_failed = self
             .failed_song_lua_video_keys
-            .iter()
-            .filter(|key| !desired.contains(key.as_str()))
-            .cloned()
-            .collect::<Vec<_>>();
+            .extract_if(|key| !song_video_key_is_desired(key, &desired))
+            .collect::<SmallVec<[_; INLINE_MEDIA_KEYS]>>();
 
         for key in stale_active {
-            if let Some(state) = self.active_song_lua_videos.remove(&key) {
-                retire_video_player(state.player);
-            }
             self.release_texture_key(assets, backend, key);
         }
         for key in stale_failed {
-            self.failed_song_lua_video_keys.remove(&key);
             self.release_texture_key(assets, backend, key);
         }
 
@@ -1642,6 +1723,51 @@ impl Default for DynamicMedia {
 mod tests {
     use super::*;
     use std::sync::Barrier;
+
+    #[test]
+    fn song_video_membership_filters_static_and_matches_exact_paths() {
+        let paths = [
+            PathBuf::from("overlay.png"),
+            PathBuf::from("movie.mp4"),
+            PathBuf::from("clip.avi"),
+        ];
+
+        let desired = song_video_keys(&paths);
+        assert!(!desired.spilled());
+        assert!(song_video_key_is_desired("movie.mp4", &desired));
+        assert!(song_video_key_is_desired("clip.avi", &desired));
+        assert!(!song_video_key_is_desired("overlay.png", &desired));
+        assert!(!song_video_key_is_desired("other.mp4", &desired));
+
+        let overflow = (0..INLINE_MEDIA_KEYS + 1)
+            .map(|index| PathBuf::from(format!("movie-{index}.mp4")))
+            .collect::<Vec<_>>();
+        let desired = song_video_keys(&overflow);
+        assert!(desired.spilled());
+        assert!(song_video_key_is_desired("movie-8.mp4", &desired));
+    }
+
+    #[test]
+    fn stale_media_extraction_moves_keys_and_retires_values() {
+        let mut active = FxHashMap::from_iter([
+            ("keep.mp4".to_owned(), 1_u64),
+            ("stale-a.mp4".to_owned(), 2),
+            ("stale-b.mp4".to_owned(), 3),
+        ]);
+        let mut retired = Vec::new();
+        let mut stale = extract_stale_media(
+            &mut active,
+            |key, _| key.starts_with("stale"),
+            |value| retired.push(value),
+        );
+        stale.sort();
+        retired.sort_unstable();
+
+        assert_eq!(stale.as_slice(), ["stale-a.mp4", "stale-b.mp4"]);
+        assert_eq!(retired, [2, 3]);
+        assert_eq!(active.len(), 1);
+        assert_eq!(active.get("keep.mp4"), Some(&1));
+    }
 
     struct BlockingPrep {
         value: usize,

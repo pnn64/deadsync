@@ -6,7 +6,6 @@ use deadlib_video as video;
 use deadsync_chart::{SongBackgroundChange, SongBackgroundChangeTarget, SongData};
 use image::RgbaImage;
 use rustc_hash::FxHashSet;
-use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -95,17 +94,6 @@ where
     paths
         .into_iter()
         .map(|path| path_texture_key(path))
-        .collect()
-}
-
-pub fn dynamic_video_key_set<'a, I>(paths: I) -> FxHashSet<Cow<'a, str>>
-where
-    I: IntoIterator<Item = &'a PathBuf>,
-{
-    paths
-        .into_iter()
-        .filter(|path| dynamic::is_dynamic_video_path(path))
-        .map(|path| path.to_string_lossy())
         .collect()
 }
 
@@ -616,21 +604,6 @@ mod tests {
 
         assert_eq!(actual.len(), expected.len());
         assert!(expected.iter().all(|key| actual.contains(key)));
-    }
-
-    #[test]
-    fn dynamic_video_key_set_filters_static_images() {
-        let paths = [
-            PathBuf::from("bg.png"),
-            PathBuf::from("movie.mp4"),
-            PathBuf::from("clip.avi"),
-        ];
-        let keys = dynamic_video_key_set(paths.iter());
-
-        assert_eq!(keys.len(), 2);
-        assert!(!keys.contains("bg.png"));
-        assert!(keys.contains("movie.mp4"));
-        assert!(keys.contains("clip.avi"));
     }
 
     #[test]

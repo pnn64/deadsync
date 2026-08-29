@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::thread::LocalKey;
 
 pub type TextCache<K, S = FxBuildHasher> = HashMap<K, Arc<str>, S>;
-pub type SharedStrCache<S = FxBuildHasher> = HashMap<Box<str>, Arc<str>, S>;
+pub type SharedStrCache<S = FxBuildHasher> = HashMap<Arc<str>, (), S>;
 
 #[must_use]
 pub fn text_cache_with_capacity<K>(capacity: usize) -> TextCache<K> {
@@ -45,6 +45,15 @@ where
 
 #[inline(always)]
 #[must_use]
+/// Intern a shared actor string in a caller-owned thread-local cache.
+///
+/// The `LocalKey` owner provides single-threaded synchronization, pre-sizes
+/// storage, and chooses the hard entry limit. Hits clone the map's `Arc<str>`
+/// key; misses allocate that key once and stop inserting after saturation.
+/// There is no eviction or live-frame maintenance, and entries are destroyed
+/// with the owning thread. Callers prewarm where practical. No counters are
+/// collected; `internal_hashing` measures hit/miss cycles and allocation cost.
+/// Worst-case work is one lookup plus one string allocation.
 pub fn cached_shared_str<S>(
     cache: &'static LocalKey<RefCell<SharedStrCache<S>>>,
     text: &str,
@@ -55,12 +64,12 @@ where
 {
     cache.with(|cache| {
         let mut cache = cache.borrow_mut();
-        if let Some(shared) = cache.get(text) {
-            return shared.clone();
+        if let Some((shared, ())) = cache.get_key_value(text) {
+            return Arc::clone(shared);
         }
         let shared: Arc<str> = Arc::<str>::from(text);
         if cache.len() < limit {
-            cache.insert(text.into(), shared.clone());
+            cache.insert(Arc::clone(&shared), ());
         }
         shared
     })
@@ -117,6 +126,11 @@ mod tests {
         let first = cached_shared_str(&TEST_STR_CACHE, first_input.as_str(), 4);
         let second = cached_shared_str(&TEST_STR_CACHE, second_input.as_str(), 4);
         assert!(Arc::ptr_eq(&first, &second));
+        TEST_STR_CACHE.with(|cache| {
+            let cache = cache.borrow();
+            let stored = cache.keys().next().expect("cached string key exists");
+            assert!(Arc::ptr_eq(&first, stored));
+        });
         assert_eq!(second.as_ref(), "alpha");
     }
 

@@ -1643,7 +1643,9 @@ mod tests {
 
     #[test]
     fn renderer_window_size_updates_shell_metrics_without_backend() {
-        let mut shell = ShellState::new(&Config::default(), 0);
+        let mut config = Config::default();
+        config.display_aspect_ratio = 4.0 / 3.0;
+        let mut shell = ShellState::new(&config, 0);
         let size = sync_renderer_window_size(
             &mut shell,
             None,

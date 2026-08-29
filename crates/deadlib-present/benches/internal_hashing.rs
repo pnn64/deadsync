@@ -1,5 +1,6 @@
 use deadlib_present::cache::{SharedStrCache, cached_shared_str, shared_str_cache_with_capacity};
 use deadlib_present::font::{Glyph, GlyphMap};
+use rustc_hash::FxBuildHasher;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
 use std::collections::{HashMap, hash_map::RandomState};
@@ -12,6 +13,7 @@ use std::time::{Duration, Instant};
 
 const KEYS: usize = 1_024;
 const LOOKUPS: usize = 8_000_000;
+const SAMPLES: usize = 21;
 
 #[global_allocator]
 static ALLOC: CountingAlloc = CountingAlloc::new();
@@ -206,6 +208,7 @@ fn main() {
         GlyphMap::from_iter(glyph_keys.iter().copied().map(|key| (key, glyph.clone())));
 
     println!("internal hashing ({KEYS} warmed entries x {LOOKUPS} lookups)");
+    benchmark_shared_cache_misses(&strings);
     print_pair(
         "shared actor strings",
         &measure_shared(&RANDOM_STRINGS, &strings),
@@ -216,6 +219,109 @@ fn main() {
         &measure_glyphs(&random_glyphs, &glyph_keys),
         &measure_glyphs(&fast_glyphs, &glyph_keys),
     );
+}
+
+#[derive(Clone, Copy)]
+struct MissSample {
+    ns: f64,
+    cycles: u64,
+    alloc: AllocSnapshot,
+    checksum: u64,
+}
+
+fn benchmark_shared_cache_misses(keys: &[Box<str>]) {
+    let old = sample_shared_cache_misses(keys, true);
+    let new = sample_shared_cache_misses(keys, false);
+    assert_eq!(old.checksum, new.checksum);
+
+    println!("shared actor string cache misses ({KEYS} unique strings)");
+    print_miss("old", old, keys.len());
+    print_miss("new", new, keys.len());
+    println!(
+        "  change: {:+.2}% median  {:+.2}% p95  {:+.2}% cycles  {:+.2}% allocs  {:+.2}% bytes",
+        change(old.ns, new.ns),
+        change(old.p95_ns, new.p95_ns),
+        change(old.cycles as f64, new.cycles as f64),
+        change(old.alloc.allocs as f64, new.alloc.allocs as f64),
+        change(old.alloc.bytes as f64, new.alloc.bytes as f64),
+    );
+}
+
+#[derive(Clone, Copy)]
+struct MissRow {
+    ns: f64,
+    p95_ns: f64,
+    cycles: u64,
+    alloc: AllocSnapshot,
+    checksum: u64,
+}
+
+fn sample_shared_cache_misses(keys: &[Box<str>], reference: bool) -> MissRow {
+    let mut samples = Vec::with_capacity(SAMPLES);
+    for _ in 0..SAMPLES {
+        let mut old = HashMap::<Box<str>, Arc<str>, FxBuildHasher>::with_capacity_and_hasher(
+            KEYS,
+            FxBuildHasher,
+        );
+        let mut new =
+            HashMap::<Arc<str>, (), FxBuildHasher>::with_capacity_and_hasher(KEYS, FxBuildHasher);
+        let before = ALLOC.snapshot();
+        let cycles_before = read_cycles();
+        let started = Instant::now();
+        let checksum = keys.iter().fold(0u64, |sum, key| {
+            let shared = if reference {
+                if let Some(shared) = old.get(key.as_ref()) {
+                    Arc::clone(shared)
+                } else {
+                    let shared: Arc<str> = Arc::from(key.as_ref());
+                    old.insert(key.as_ref().into(), Arc::clone(&shared));
+                    shared
+                }
+            } else if let Some((shared, ())) = new.get_key_value(key.as_ref()) {
+                Arc::clone(shared)
+            } else {
+                let shared: Arc<str> = Arc::from(key.as_ref());
+                new.insert(Arc::clone(&shared), ());
+                shared
+            };
+            sum.wrapping_mul(131).wrapping_add(shared.len() as u64)
+        });
+        samples.push(MissSample {
+            ns: started.elapsed().as_secs_f64() * 1.0e9,
+            cycles: read_cycles().saturating_sub(cycles_before),
+            alloc: ALLOC.snapshot().delta(before),
+            checksum,
+        });
+    }
+    samples.sort_by(|a, b| a.ns.total_cmp(&b.ns));
+    let median = samples[SAMPLES / 2];
+    MissRow {
+        ns: median.ns,
+        p95_ns: samples[SAMPLES * 95 / 100].ns,
+        cycles: median.cycles,
+        alloc: median.alloc,
+        checksum: median.checksum,
+    }
+}
+
+fn print_miss(label: &str, row: MissRow, items: usize) {
+    println!(
+        "  {label:<3} {:>10.1} ns  p95 {:>10.1} ns  {:>10} cycles  {:>10.0} item/s  \
+         {:>5} alloc  {:>8} B",
+        row.ns,
+        row.p95_ns,
+        row.cycles,
+        items as f64 * 1.0e9 / row.ns,
+        row.alloc.allocs,
+        row.alloc.bytes,
+    );
+}
+
+fn change(old: f64, new: f64) -> f64 {
+    if old == 0.0 {
+        return if new == 0.0 { 0.0 } else { f64::INFINITY };
+    }
+    (new / old - 1.0) * 100.0
 }
 
 #[cfg(target_arch = "x86_64")]

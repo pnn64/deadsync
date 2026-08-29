@@ -16,6 +16,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "dynamic_media_reconcile_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "content_worker_hot_paths"
 harness = false
 required-features = ["bench-support"]
