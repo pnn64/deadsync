@@ -17,7 +17,17 @@ use glutin::{
 use image::RgbaImage;
 use log::{debug, info, warn};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawWindowHandle};
-use std::{cell::Cell, error::Error, ffi::CStr, mem, num::NonZeroU32, sync::Arc, time::Instant};
+use std::{
+    error::Error,
+    ffi::CStr,
+    mem,
+    num::NonZeroU32,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Instant,
+};
 use winit::window::Window;
 
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -192,10 +202,11 @@ const TMESH_ATTRIBS: [(u32, &str); 13] = [
 ];
 
 // A handle to one RGBA texture or three planar video textures on the GPU. The
-// scalar filter mirror is render-thread-only and suppresses redundant AFT
-// sampler mutations; it is initialized with the filter installed at creation.
+// atomic filter bit suppresses redundant AFT sampler mutations. Relaxed access
+// is sufficient because the renderer still owns all mutation ordering; the
+// atomic preserves `Texture: Sync` for shared cross-backend texture lookups.
 #[derive(Debug)]
-pub struct Texture(TextureImages, Cell<SamplerFilter>);
+pub struct Texture(TextureImages, AtomicBool);
 
 #[derive(Debug)]
 enum TextureImages {
@@ -859,7 +870,12 @@ pub fn create_texture(
         image.as_raw(),
         sampler,
     )
-    .map(|texture| Texture(TextureImages::Rgba(texture), Cell::new(sampler.filter)))
+    .map(|texture| {
+        Texture(
+            TextureImages::Rgba(texture),
+            AtomicBool::new(sampler.filter == SamplerFilter::Nearest),
+        )
+    })
 }
 
 fn create_gl_texture(
@@ -994,7 +1010,7 @@ pub fn create_yuv420_texture(
             levels: upload.levels,
             coeffs: upload.coeffs,
         },
-        Cell::new(sampler.filter),
+        AtomicBool::new(sampler.filter == SamplerFilter::Nearest),
     ))
 }
 
@@ -1146,7 +1162,7 @@ fn create_offscreen_target(
             handle,
             width,
             height,
-            texture: Texture(TextureImages::Rgba(raw), Cell::new(SamplerFilter::Linear)),
+            texture: Texture(TextureImages::Rgba(raw), AtomicBool::new(false)),
             framebuffer,
             depth,
             initialized: false,
@@ -1203,7 +1219,12 @@ fn resolved_texture<'a, T: TextureLookup + ?Sized>(
 }
 
 fn apply_render_target_filter(gl: &glow::Context, texture: &Texture, handle: TextureHandle) {
-    let Some(filter) = changed_render_target_filter(texture.1.get(), handle) else {
+    let current = if texture.1.load(Ordering::Relaxed) {
+        SamplerFilter::Nearest
+    } else {
+        SamplerFilter::Linear
+    };
+    let Some(filter) = changed_render_target_filter(current, handle) else {
         return;
     };
     let gl_filter = match filter {
@@ -1216,7 +1237,9 @@ fn apply_render_target_filter(gl: &glow::Context, texture: &Texture, handle: Tex
         gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, gl_filter as i32);
         gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, gl_filter as i32);
     }
-    texture.1.set(filter);
+    texture
+        .1
+        .store(filter == SamplerFilter::Nearest, Ordering::Relaxed);
 }
 
 #[inline(always)]
@@ -3633,6 +3656,7 @@ pub mod bench_support {
     };
     use deadlib_render_core::{render_target_sample_handle, render_target_texture_handle};
     use std::hint::black_box;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     #[derive(Clone, Copy)]
     pub enum VertexEvent {
@@ -3667,13 +3691,21 @@ pub mod bench_support {
 
     #[must_use]
     pub fn filters_new(handles: &[TextureHandle]) -> u64 {
-        filter_checksum(handles, |current, handle| {
-            if let Some(wanted) = changed_render_target_filter(*current, handle) {
+        let nearest = AtomicBool::new(false);
+        handles.iter().fold(0_u64, |checksum, &handle| {
+            let current = if nearest.load(Ordering::Relaxed) {
+                SamplerFilter::Nearest
+            } else {
+                SamplerFilter::Linear
+            };
+            if let Some(wanted) = changed_render_target_filter(current, handle) {
                 mock_driver_write(wanted);
                 mock_driver_write(wanted);
-                *current = wanted;
+                nearest.store(wanted == SamplerFilter::Nearest, Ordering::Relaxed);
             }
-            wanted_filter(handle)
+            checksum
+                .wrapping_mul(257)
+                .wrapping_add((wanted_filter(handle) == SamplerFilter::Nearest) as u64)
         })
     }
 
@@ -3821,7 +3853,7 @@ pub mod bench_support {
 #[cfg(test)]
 mod tests {
     use super::{
-        GlApi, GlPath, GlVersion, SamplerFilter, base_instance_capability,
+        GlApi, GlPath, GlVersion, SamplerFilter, Texture, base_instance_capability,
         changed_render_target_filter, clamp_vertex_count, gl_state_update, parse_gl_version,
         surface_extent,
     };
@@ -3860,6 +3892,12 @@ mod tests {
             changed_render_target_filter(SamplerFilter::Linear, 42),
             None
         );
+    }
+
+    #[test]
+    fn texture_remains_sync_for_shared_backend_lookup() {
+        fn assert_sync<T: Sync>() {}
+        assert_sync::<Texture>();
     }
 
     #[test]
