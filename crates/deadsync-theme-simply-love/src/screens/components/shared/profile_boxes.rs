@@ -93,12 +93,10 @@ const SHAKE_DUR: f32 = SHAKE_STEP_DUR * 3.0;
 #[derive(Clone)]
 struct Choice {
     kind: profile_data::ActiveProfile,
-    display_name: String,
-    speed_mod: String,
-    avatar_key: Option<String>,
-    total_songs: String,
-    scroll_option: profile_data::ScrollOption,
-    mini_indicator: profile_data::MiniIndicator,
+    display_name: Arc<str>,
+    avatar_key: Option<Arc<str>>,
+    total_songs: Arc<str>,
+    recent_mods: Arc<str>,
     noteskin: profile_data::NoteSkin,
     judgment: profile_data::JudgmentGraphic,
 }
@@ -295,32 +293,41 @@ fn format_recent_mods(
     out
 }
 
-fn build_choices(view: &ProfilePickerView) -> Vec<Choice> {
-    let mut out = Vec::with_capacity(view.profiles.len() + 1);
+fn build_choices(
+    guest: crate::views::ProfilePickerEntryView,
+    profiles: Vec<crate::views::ProfilePickerEntryView>,
+) -> Vec<Choice> {
+    let mut out = Vec::with_capacity(profiles.len() + 1);
+    let guest_mods = format_recent_mods(
+        &guest.speed_mod,
+        guest.scroll_option,
+        guest.mini_indicator,
+        &guest.noteskin,
+    );
     out.push(Choice {
         kind: profile_data::ActiveProfile::Guest,
-        display_name: tr("SelectProfile", "GuestLabel").to_string(),
-        speed_mod: view.guest.speed_mod.clone(),
+        display_name: tr("SelectProfile", "GuestLabel"),
         avatar_key: None,
-        total_songs: String::new(),
-        scroll_option: view.guest.scroll_option,
-        mini_indicator: view.guest.mini_indicator,
-        noteskin: view.guest.noteskin.clone(),
-        judgment: view.guest.judgment.clone(),
+        total_songs: Arc::from(""),
+        recent_mods: guest_mods.into(),
+        noteskin: guest.noteskin,
+        judgment: guest.judgment,
     });
-    for profile in &view.profiles {
+    for profile in profiles {
+        let recent_mods = format_recent_mods(
+            &profile.speed_mod,
+            profile.scroll_option,
+            profile.mini_indicator,
+            &profile.noteskin,
+        );
         out.push(Choice {
-            kind: profile_data::ActiveProfile::Local {
-                id: profile.id.clone(),
-            },
-            display_name: profile.display_name.clone(),
-            speed_mod: profile.speed_mod.clone(),
-            avatar_key: profile.avatar_key.clone(),
-            total_songs: format_total_songs_played(profile.total_songs_played),
-            scroll_option: profile.scroll_option,
-            mini_indicator: profile.mini_indicator,
-            noteskin: profile.noteskin.clone(),
-            judgment: profile.judgment.clone(),
+            kind: profile_data::ActiveProfile::Local { id: profile.id },
+            display_name: profile.display_name.into(),
+            avatar_key: profile.avatar_key.map(Arc::from),
+            total_songs: format_total_songs_played(profile.total_songs_played).into(),
+            recent_mods: recent_mods.into(),
+            noteskin: profile.noteskin,
+            judgment: profile.judgment,
         });
     }
     out
@@ -344,8 +351,15 @@ fn init_with_profiles(
     p1_profile: profile_data::ActiveProfile,
     p2_profile: profile_data::ActiveProfile,
 ) -> State {
-    let choices = build_choices(&view);
-    let noteskin_cache = NoteskinCache::new(view.game, choices.len());
+    let ProfilePickerView {
+        game,
+        guest,
+        profiles,
+        three_key_navigation,
+        ..
+    } = view;
+    let choices = build_choices(guest, profiles);
+    let noteskin_cache = NoteskinCache::new(game, choices.len());
     let p1_selected_index = selected_index_for(&choices, p1_profile);
     let p2_selected_index = selected_index_for(&choices, p2_profile);
 
@@ -360,7 +374,7 @@ fn init_with_profiles(
         p2_selected_index,
         exit_anim: false,
         choices,
-        three_key_navigation: view.three_key_navigation,
+        three_key_navigation,
         bg: visual_style_bg::State::new(),
         noteskin_cache,
         p1_preview_noteskin: None,
@@ -391,7 +405,11 @@ fn init_with_profiles(
 
 #[must_use]
 pub fn init(view: ProfilePickerView) -> State {
-    let [p1, p2] = view.default_profiles.clone();
+    let mut view = view;
+    let [p1, p2] = std::mem::replace(
+        &mut view.default_profiles,
+        std::array::from_fn(|_| profile_data::ActiveProfile::Guest),
+    );
     init_with_profiles(view, p1, p2)
 }
 
@@ -410,13 +428,20 @@ pub fn init_late_join(
     joining_side: profile_data::PlayerSide,
     active_profiles: [profile_data::ActiveProfile; 2],
 ) -> State {
+    let mut view = view;
+    let defaults = std::mem::replace(
+        &mut view.default_profiles,
+        std::array::from_fn(|_| profile_data::ActiveProfile::Guest),
+    );
+    let [p1_active, p2_active] = active_profiles;
+    let [p1_default, p2_default] = defaults;
     let p1_profile = match joining_side {
-        profile_data::PlayerSide::P1 => view.default_profiles[0].clone(),
-        profile_data::PlayerSide::P2 => active_profiles[0].clone(),
+        profile_data::PlayerSide::P1 => p1_default,
+        profile_data::PlayerSide::P2 => p1_active,
     };
     let p2_profile = match joining_side {
-        profile_data::PlayerSide::P1 => active_profiles[1].clone(),
-        profile_data::PlayerSide::P2 => view.default_profiles[1].clone(),
+        profile_data::PlayerSide::P1 => p2_active,
+        profile_data::PlayerSide::P2 => p2_default,
     };
     init_with_profiles(view, p1_profile, p2_profile)
 }
@@ -1521,9 +1546,7 @@ fn push_scroller_frame(
     // NoteSkin + JudgmentGraphic previews (SL-style placement).
     if selected_is_local {
         let selected_mods = selected
-            .map(|c| {
-                format_recent_mods(&c.speed_mod, c.scroll_option, c.mini_indicator, &c.noteskin)
-            })
+            .map(|choice| Arc::clone(&choice.recent_mods))
             .unwrap_or_default();
         let preview_y = frame_cy + PREVIEW_Y_OFF;
 
@@ -1704,17 +1727,18 @@ fn push_scroller_frame(
     }
 }
 
-fn build_box_actors(
+fn push_box_actors(
+    actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
     alpha_multiplier: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
-) -> Vec<Actor> {
+) {
     if alpha_multiplier <= 0.0 {
-        return Vec::new();
+        return;
     }
-    let mut actors: Vec<Actor> = Vec::with_capacity(96);
-    let mut ui: Vec<Actor> = Vec::new();
+    actors.reserve(96);
+    let box_start = actors.len();
     let inner_alpha = box_inner_alpha();
     let exit_t = exit_anim_t(state.exit_anim);
     let exit_zoom = if state.exit_anim {
@@ -1742,15 +1766,14 @@ fn build_box_actors(
 
     // P1: keep both frames alive (visibility via alpha) so tween state doesn't reset.
     {
-        let mut p1_ui: Vec<Actor> = Vec::new();
-
+        let side_start = actors.len();
         let show_scroller = state.p1_joined && !state.p1_ready;
         let show_join = !state.p1_joined || state.p1_ready;
         let show_selected_name = state.p1_joined && state.p1_ready;
 
-        let mut scroller_ui: Vec<Actor> = Vec::new();
+        let scroller_start = actors.len();
         push_scroller_frame(
-            &mut scroller_ui,
+            actors,
             asset_manager,
             &state.choices,
             state.p1_selected_index,
@@ -1769,19 +1792,18 @@ fn build_box_actors(
             col_overlay,
             visual_policy,
         );
-        for a in &mut scroller_ui {
+        for a in &mut actors[scroller_start..] {
             a.mul_alpha(if show_scroller { 1.0 } else { 0.0 });
         }
-        p1_ui.extend(scroller_ui);
 
-        let mut join_ui: Vec<Actor> = Vec::new();
+        let join_start = actors.len();
         let join_text = if state.p1_ready {
             tr("SelectProfile", "WaitingText")
         } else {
             tr("SelectProfile", "JoinText")
         };
         push_join_prompt(
-            &mut join_ui,
+            actors,
             p1_cx,
             cy,
             frame_h,
@@ -1790,14 +1812,13 @@ fn build_box_actors(
             state.preview_time,
             join_text,
         );
-        for a in &mut join_ui {
+        for a in &mut actors[join_start..] {
             a.mul_alpha(if show_join { 1.0 } else { 0.0 });
         }
-        p1_ui.extend(join_ui);
 
         if show_selected_name {
             let name = state.choices.get(state.p1_selected_index).map_or_else(
-                || tr("SelectProfile", "GuestLabel").to_string(),
+                || tr("SelectProfile", "GuestLabel"),
                 |c| c.display_name.clone(),
             );
             let a = act!(text:
@@ -1812,34 +1833,32 @@ fn build_box_actors(
                 z(106):
                 horizalign(center)
             );
-            p1_ui.push(a);
+            actors.push(a);
         }
 
         let zoom = exit_zoom * join_pulse_zoom(state.p1_join_pulse_t);
         if (zoom - 1.0).abs() > f32::EPSILON {
-            for a in &mut p1_ui {
+            for a in &mut actors[side_start..] {
                 apply_zoom_to_actor(a, [p1_cx, cy], zoom);
             }
         }
         if p1_shake_dx != 0.0 {
-            for a in &mut p1_ui {
+            for a in &mut actors[side_start..] {
                 apply_offset_to_actor(a, p1_shake_dx, 0.0);
             }
         }
-        ui.extend(p1_ui);
     }
 
     // P2
     {
-        let mut p2_ui: Vec<Actor> = Vec::new();
-
+        let side_start = actors.len();
         let show_scroller = state.p2_joined && !state.p2_ready;
         let show_join = !state.p2_joined || state.p2_ready;
         let show_selected_name = state.p2_joined && state.p2_ready;
 
-        let mut scroller_ui: Vec<Actor> = Vec::new();
+        let scroller_start = actors.len();
         push_scroller_frame(
-            &mut scroller_ui,
+            actors,
             asset_manager,
             &state.choices,
             state.p2_selected_index,
@@ -1858,19 +1877,18 @@ fn build_box_actors(
             col_overlay,
             visual_policy,
         );
-        for a in &mut scroller_ui {
+        for a in &mut actors[scroller_start..] {
             a.mul_alpha(if show_scroller { 1.0 } else { 0.0 });
         }
-        p2_ui.extend(scroller_ui);
 
-        let mut join_ui: Vec<Actor> = Vec::new();
+        let join_start = actors.len();
         let join_text = if state.p2_ready {
             tr("SelectProfile", "WaitingText")
         } else {
             tr("SelectProfile", "JoinText")
         };
         push_join_prompt(
-            &mut join_ui,
+            actors,
             p2_cx,
             cy,
             frame_h,
@@ -1879,14 +1897,13 @@ fn build_box_actors(
             state.preview_time,
             join_text,
         );
-        for a in &mut join_ui {
+        for a in &mut actors[join_start..] {
             a.mul_alpha(if show_join { 1.0 } else { 0.0 });
         }
-        p2_ui.extend(join_ui);
 
         if show_selected_name {
             let name = state.choices.get(state.p2_selected_index).map_or_else(
-                || tr("SelectProfile", "GuestLabel").to_string(),
+                || tr("SelectProfile", "GuestLabel"),
                 |c| c.display_name.clone(),
             );
             let a = act!(text:
@@ -1901,28 +1918,25 @@ fn build_box_actors(
                 z(106):
                 horizalign(center)
             );
-            p2_ui.push(a);
+            actors.push(a);
         }
 
         let zoom = exit_zoom * join_pulse_zoom(state.p2_join_pulse_t);
         if (zoom - 1.0).abs() > f32::EPSILON {
-            for a in &mut p2_ui {
+            for a in &mut actors[side_start..] {
                 apply_zoom_to_actor(a, [p2_cx, cy], zoom);
             }
         }
         if p2_shake_dx != 0.0 {
-            for a in &mut p2_ui {
+            for a in &mut actors[side_start..] {
                 apply_offset_to_actor(a, p2_shake_dx, 0.0);
             }
         }
-        ui.extend(p2_ui);
     }
 
-    for mut a in ui {
+    for a in &mut actors[box_start..] {
         a.mul_alpha(alpha_multiplier);
-        actors.push(a);
     }
-    actors
 }
 
 pub fn get_box_actors_with_z(
@@ -1932,7 +1946,14 @@ pub fn get_box_actors_with_z(
     z_offset: i16,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) -> Vec<Actor> {
-    let mut actors = build_box_actors(state, asset_manager, alpha_multiplier, visual_policy);
+    let mut actors = Vec::with_capacity(96);
+    push_box_actors(
+        &mut actors,
+        state,
+        asset_manager,
+        alpha_multiplier,
+        visual_policy,
+    );
     if z_offset != 0 {
         for actor in &mut actors {
             apply_z_offset(actor, z_offset);
@@ -1998,12 +2019,13 @@ pub fn push_actors(
         right_avatar: None,
         visual_policy,
     }));
-    actors.extend(build_box_actors(
+    push_box_actors(
+        actors,
         state,
         asset_manager,
         alpha_multiplier,
         visual_policy,
-    ));
+    );
 }
 
 pub fn get_actors(
@@ -2022,14 +2044,141 @@ pub fn get_actors(
     actors
 }
 
+#[cfg(any(test, feature = "bench-support"))]
+pub struct ProfilePickerHotBenchmark {
+    display_name: String,
+    avatar_key: String,
+    shared_display_name: Arc<str>,
+    shared_avatar_key: Arc<str>,
+    speed_mod: String,
+    scroll: profile_data::ScrollOption,
+    mini_indicator: profile_data::MiniIndicator,
+    noteskin: profile_data::NoteSkin,
+    recent_mods: Arc<str>,
+    staged_actors: Vec<Actor>,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ProfilePickerHotBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let display_name = "Benchmark Profile With Avatar".to_owned();
+        let avatar_key = "save/localprofiles/00000001/profile.png".to_owned();
+        let speed_mod = "C650".to_owned();
+        let scroll =
+            profile_data::ScrollOption::Reverse.union(profile_data::ScrollOption::Centered);
+        let mini_indicator = profile_data::MiniIndicator::Pacemaker;
+        let noteskin = profile_data::NoteSkin::new("cel");
+        let recent_mods = format_recent_mods(&speed_mod, scroll, mini_indicator, &noteskin).into();
+        let staged_actors = (0..28)
+            .map(|index| {
+                act!(quad:
+                    xy(index as f32, index as f32 * 0.5):
+                    zoomto(64.0, 32.0):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    z(100 + index)
+                )
+            })
+            .collect();
+        Self {
+            shared_display_name: Arc::from(display_name.as_str()),
+            shared_avatar_key: Arc::from(avatar_key.as_str()),
+            display_name,
+            avatar_key,
+            speed_mod,
+            scroll,
+            mini_indicator,
+            noteskin,
+            recent_mods,
+            staged_actors,
+        }
+    }
+
+    #[must_use]
+    pub fn legacy_identity(&self) -> u64 {
+        let display_name = self.display_name.clone();
+        let avatar_key = self.avatar_key.clone();
+        text_checksum(&display_name).rotate_left(7) ^ text_checksum(&avatar_key)
+    }
+
+    #[must_use]
+    pub fn shared_identity(&self) -> u64 {
+        let display_name = Arc::clone(&self.shared_display_name);
+        let avatar_key = Arc::clone(&self.shared_avatar_key);
+        text_checksum(&display_name).rotate_left(7) ^ text_checksum(&avatar_key)
+    }
+
+    #[must_use]
+    pub fn legacy_recent_mods(&self) -> u64 {
+        text_checksum(&format_recent_mods(
+            &self.speed_mod,
+            self.scroll,
+            self.mini_indicator,
+            &self.noteskin,
+        ))
+    }
+
+    #[must_use]
+    pub fn prepared_recent_mods(&self) -> u64 {
+        let recent_mods = Arc::clone(&self.recent_mods);
+        text_checksum(&recent_mods)
+    }
+
+    pub fn legacy_actor_staging(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let mut boxes = Vec::with_capacity(96);
+        let mut ui = Vec::new();
+        for _ in 0..2 {
+            let mut side = Vec::new();
+            let mut scroller = Vec::new();
+            scroller.extend(self.staged_actors.iter().take(25).cloned());
+            side.extend(scroller);
+            let mut join = Vec::new();
+            join.extend(self.staged_actors.iter().skip(25).cloned());
+            side.extend(join);
+            ui.extend(side);
+        }
+        boxes.extend(ui);
+        out.extend(boxes);
+        actor_checksum(out)
+    }
+
+    pub fn direct_actor_staging(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.reserve(self.staged_actors.len() * 2);
+        for _ in 0..2 {
+            out.extend(self.staged_actors.iter().cloned());
+        }
+        actor_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for ProfilePickerHotBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn text_checksum(text: &str) -> u64 {
+    text.bytes().fold(text.len() as u64, |checksum, byte| {
+        checksum.rotate_left(5) ^ u64::from(byte)
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn actor_checksum(actors: &[Actor]) -> u64 {
+    actors.len() as u64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::views::ProfilePickerEntryView;
 
-    #[test]
-    fn picker_uses_shell_prepared_choices_and_default_selection() {
-        let state = init(ProfilePickerView {
+    fn picker_fixture() -> ProfilePickerView {
+        ProfilePickerView {
             game: GameFlag::Dance,
             guest: ProfilePickerEntryView {
                 id: String::new(),
@@ -2060,25 +2209,56 @@ mod tests {
                 profile_data::ActiveProfile::Guest,
             ],
             three_key_navigation: true,
-        });
+        }
+    }
+
+    #[test]
+    fn picker_uses_shell_prepared_choices_and_default_selection() {
+        let state = init(picker_fixture());
 
         assert_eq!(state.choices.len(), 2);
         assert_eq!(state.p1_selected_index, 1);
         assert_eq!(state.p2_selected_index, 0);
         assert!(state.three_key_navigation);
-        assert_eq!(state.choices[0].speed_mod, "M325");
+        assert!(state.choices[0].recent_mods.contains("M325"));
         assert_eq!(state.choices[0].noteskin.as_str(), "metal");
-        assert_eq!(state.choices[1].display_name, "Alice");
-        assert_eq!(state.choices[1].speed_mod, "C650");
+        assert_eq!(state.choices[1].display_name.as_ref(), "Alice");
         assert_eq!(state.choices[1].avatar_key.as_deref(), Some("alice.png"));
-        assert_eq!(
-            state.choices[1].scroll_option,
-            profile_data::ScrollOption::Reverse
+        assert!(state.choices[1].recent_mods.contains("C650"));
+        assert!(state.choices[1].recent_mods.contains("cel"));
+    }
+
+    #[test]
+    fn profile_frame_keeps_selected_avatar_and_prepared_text() {
+        let state = init(picker_fixture());
+        let actors = get_box_actors_with_z(
+            &state,
+            &AssetManager::new(),
+            1.0,
+            0,
+            crate::views::SimplyLoveVisualPolicyView::default(),
         );
-        assert_eq!(
-            state.choices[1].mini_indicator,
-            profile_data::MiniIndicator::Pacemaker
+        let selected = &state.choices[1];
+        let mut texts = actors.iter().filter_map(|actor| match actor {
+            Actor::Text { content, .. } => Some(content.as_str()),
+            _ => None,
+        });
+        assert!(
+            texts
+                .clone()
+                .any(|text| text == selected.display_name.as_ref())
         );
+        assert!(
+            texts
+                .clone()
+                .any(|text| text == selected.total_songs.as_ref())
+        );
+        assert!(texts.any(|text| text == selected.recent_mods.as_ref()));
+        assert!(actors.iter().any(|actor| matches!(
+            actor,
+            Actor::Sprite { source, .. }
+                if source.texture_key() == selected.avatar_key.as_deref()
+        )));
     }
 
     #[test]
@@ -2097,5 +2277,23 @@ mod tests {
             ),
             "UpRight"
         );
+    }
+
+    #[test]
+    fn prepared_profile_payloads_and_direct_staging_preserve_behavior() {
+        let benchmark = ProfilePickerHotBenchmark::new();
+        assert_eq!(benchmark.legacy_identity(), benchmark.shared_identity());
+        assert_eq!(
+            benchmark.legacy_recent_mods(),
+            benchmark.prepared_recent_mods()
+        );
+
+        let mut legacy = Vec::new();
+        let mut direct = Vec::new();
+        assert_eq!(
+            benchmark.legacy_actor_staging(&mut legacy),
+            benchmark.direct_actor_staging(&mut direct)
+        );
+        assert_eq!(format!("{legacy:?}"), format!("{direct:?}"));
     }
 }
