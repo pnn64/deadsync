@@ -3,10 +3,86 @@ use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row, note_row_to_beat};
 use deadsync_rules::timing::{
     TimeSignatureSegment, TimingData, TimingSegments, default_time_signature,
 };
+use rustc_hash::FxHashSet;
 use std::path::PathBuf;
 
 const RANDOM_BG_CHANGE_MEASURES: i32 = 4;
 const RANDOM_MOVIE_LIMIT: usize = 10;
+const FOUR_FOUR_CHANGE_ROWS: usize = (RANDOM_BG_CHANGE_MEASURES * 4 * ROWS_PER_BEAT) as usize;
+const DENSE_ROW_WORDS: usize = 1_024;
+const DENSE_ROW_CAPACITY: i64 = (DENSE_ROW_WORDS * u64::BITS as usize) as i64;
+
+// Load-local scratch: the 8 KiB stack path covers 65,536 contiguous note rows
+// without heap work. Unusually wide or malformed charts promote to the sparse set.
+struct UsedRows {
+    first: i32,
+    dense: bool,
+    bits: [u64; DENSE_ROW_WORDS],
+    sparse: FxHashSet<i32>,
+}
+
+impl UsedRows {
+    fn new(first: i32, last: i32, sparse_capacity: usize) -> Self {
+        let span = i64::from(last) - i64::from(first) + 1;
+        let dense = (1..=DENSE_ROW_CAPACITY).contains(&span);
+        let sparse = if dense {
+            FxHashSet::default()
+        } else {
+            FxHashSet::with_capacity_and_hasher(sparse_capacity, Default::default())
+        };
+        Self {
+            first,
+            dense,
+            bits: [0; DENSE_ROW_WORDS],
+            sparse,
+        }
+    }
+
+    fn insert(&mut self, row: i32) -> bool {
+        let offset = i64::from(row) - i64::from(self.first);
+        if self.dense && !(0..DENSE_ROW_CAPACITY).contains(&offset) {
+            self.promote_sparse();
+        }
+        if !self.dense {
+            return self.sparse.insert(row);
+        }
+        let offset = offset as usize;
+        let bit = 1_u64 << (offset % u64::BITS as usize);
+        let word = &mut self.bits[offset / u64::BITS as usize];
+        let inserted = *word & bit == 0;
+        *word |= bit;
+        inserted
+    }
+
+    fn remove(&mut self, row: i32) {
+        if !self.dense {
+            self.sparse.remove(&row);
+            return;
+        }
+        let offset = (i64::from(row) - i64::from(self.first)) as usize;
+        self.bits[offset / u64::BITS as usize] &= !(1_u64 << (offset % u64::BITS as usize));
+    }
+
+    fn promote_sparse(&mut self) {
+        for (word_index, mut word) in self.bits.iter().copied().enumerate() {
+            while word != 0 {
+                let bit_index = word.trailing_zeros() as usize;
+                let offset = word_index * u64::BITS as usize + bit_index;
+                self.sparse
+                    .insert((i64::from(self.first) + offset as i64) as i32);
+                word &= word - 1;
+            }
+        }
+        self.dense = false;
+    }
+}
+
+struct RandomExpansion<'a> {
+    timing_segments: &'a TimingSegments,
+    time_sigs: &'a [TimeSignatureSegment],
+    used_rows: &'a mut UsedRows,
+    cycle: &'a mut MovieCycle,
+}
 
 #[derive(Clone, Debug)]
 struct MovieCycle {
@@ -36,31 +112,37 @@ pub fn expand_random_background_changes(
     paths: Vec<PathBuf>,
     seed_text: &str,
 ) -> Vec<SongBackgroundChange> {
-    if paths.is_empty() {
+    if paths.is_empty() || random_expansion_unneeded(&song.background_changes) {
         return song.background_changes.clone();
     }
     let mut cycle = MovieCycle::new(paths, seed_text);
     let last_beat =
         timing.get_beat_for_time(song.precise_last_second().max(song.music_length_seconds));
+    let time_sigs = normalized_time_signatures(timing_segments);
+    let estimated_changes = song
+        .background_changes
+        .len()
+        .saturating_add(timing_segments.bpms.len())
+        .saturating_add(beat_to_note_row(last_beat).max(0) as usize / FOUR_FOUR_CHANGE_ROWS);
+    let (first_row, last_row) = background_row_bounds(&song.background_changes, last_beat);
+    let mut used_rows = UsedRows::new(first_row, last_row, estimated_changes);
+    let mut expansion = RandomExpansion {
+        timing_segments,
+        time_sigs: &time_sigs,
+        used_rows: &mut used_rows,
+        cycle: &mut cycle,
+    };
 
     if song.background_changes.is_empty() {
-        let mut out = Vec::new();
+        let mut out = Vec::with_capacity(estimated_changes);
         let template = SongBackgroundChange::new(0.0, SongBackgroundChangeTarget::Random);
-        push_random_segment(
-            &mut out,
-            0.0,
-            last_beat,
-            timing_segments,
-            &mut cycle,
-            &template,
-        );
+        push_random_segment(&mut out, 0.0, last_beat, &mut expansion, &template);
         push_static_song_background(song, last_beat, &mut out);
         sort_background_changes(&mut out);
         return out;
     }
 
-    let mut out = Vec::with_capacity(song.background_changes.len());
-    let mut expanded_random = false;
+    let mut out = Vec::with_capacity(estimated_changes);
     for (ix, change) in song.background_changes.iter().enumerate() {
         match change.target {
             SongBackgroundChangeTarget::Random => {
@@ -73,20 +155,38 @@ pub fn expand_random_background_changes(
                     &mut out,
                     change.start_beat,
                     end_beat,
-                    timing_segments,
-                    &mut cycle,
+                    &mut expansion,
                     change,
                 );
-                expanded_random = true;
             }
-            _ => out.push(change.clone()),
+            _ => {
+                expansion
+                    .used_rows
+                    .insert(beat_to_note_row(change.start_beat));
+                out.push(change.clone());
+            }
         }
-    }
-    if !expanded_random {
-        return song.background_changes.clone();
     }
     sort_background_changes(&mut out);
     out
+}
+
+fn random_expansion_unneeded(changes: &[SongBackgroundChange]) -> bool {
+    !changes.is_empty()
+        && !changes
+            .iter()
+            .any(|change| matches!(change.target, SongBackgroundChangeTarget::Random))
+}
+
+fn background_row_bounds(changes: &[SongBackgroundChange], last_beat: f32) -> (i32, i32) {
+    let last_song_row = beat_to_note_row(last_beat);
+    changes.iter().fold(
+        (0.min(last_song_row), 0.max(last_song_row)),
+        |(first, last), change| {
+            let row = beat_to_note_row(change.start_beat);
+            (first.min(row), last.max(row))
+        },
+    )
 }
 
 fn sort_background_changes(changes: &mut [SongBackgroundChange]) {
@@ -109,8 +209,7 @@ fn push_random_segment(
     out: &mut Vec<SongBackgroundChange>,
     start_beat: f32,
     end_beat: f32,
-    timing_segments: &TimingSegments,
-    cycle: &mut MovieCycle,
+    expansion: &mut RandomExpansion<'_>,
     template: &SongBackgroundChange,
 ) {
     let start_row = beat_to_note_row(start_beat);
@@ -118,10 +217,10 @@ fn push_random_segment(
     if end_row <= start_row {
         return;
     }
-    let time_sigs = normalized_time_signatures(timing_segments);
-    for (ix, sig) in time_sigs.iter().enumerate() {
+    for (ix, sig) in expansion.time_sigs.iter().enumerate() {
         let sig_start_row = beat_to_note_row(sig.beat);
-        let sig_end_row = time_sigs
+        let sig_end_row = expansion
+            .time_sigs
             .get(ix + 1)
             .map(|next| beat_to_note_row(next.beat))
             .unwrap_or(end_row);
@@ -136,33 +235,32 @@ fn push_random_segment(
         }
         let mut row = first_row;
         while row < last_row {
-            push_random_change(out, row, cycle, template);
+            push_random_change(out, expansion.used_rows, row, expansion.cycle, template);
             row += step_rows;
         }
     }
 
-    for &(beat, _) in &timing_segments.bpms {
+    for &(beat, _) in &expansion.timing_segments.bpms {
         let row = beat_to_note_row(beat);
-        if row < start_row || row >= end_row || !row_starts_measure(row, &time_sigs) {
+        if row < start_row || row >= end_row || !row_starts_measure(row, expansion.time_sigs) {
             continue;
         }
-        push_random_change(out, row, cycle, template);
+        push_random_change(out, expansion.used_rows, row, expansion.cycle, template);
     }
 }
 
 fn push_random_change(
     out: &mut Vec<SongBackgroundChange>,
+    used_rows: &mut UsedRows,
     row: i32,
     cycle: &mut MovieCycle,
     template: &SongBackgroundChange,
 ) {
-    if out
-        .iter()
-        .any(|change| beat_to_note_row(change.start_beat) == row)
-    {
+    if !used_rows.insert(row) {
         return;
     }
     let Some(path) = cycle.next_path() else {
+        used_rows.remove(row);
         return;
     };
     let mut change = template.clone();
@@ -261,6 +359,47 @@ fn crc32(bytes: &[u8]) -> u32 {
     !crc
 }
 
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::*;
+
+    #[must_use]
+    pub fn reused_signature_checksum(
+        timing_segments: &TimingSegments,
+        interval_count: usize,
+    ) -> u64 {
+        let time_sigs = normalized_time_signatures(timing_segments);
+        let mut checksum = 0_u64;
+        for interval in 0..interval_count {
+            for sig in &time_sigs {
+                checksum = checksum
+                    .wrapping_mul(1_099_511_628_211)
+                    .wrapping_add(u64::from(sig.beat.to_bits()))
+                    .wrapping_add(sig.numerator as u64)
+                    .wrapping_add((sig.denominator as u64) << 32)
+                    .wrapping_add(interval as u64);
+            }
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn unique_rows(rows: &[i32]) -> Vec<i32> {
+        let (first, last) = rows
+            .iter()
+            .copied()
+            .fold((0, 0), |(first, last), row| (first.min(row), last.max(row)));
+        let mut used_rows = UsedRows::new(first, last, rows.len());
+        let mut out = Vec::with_capacity(rows.len());
+        for &row in rows {
+            if used_rows.insert(row) {
+                out.push(row);
+            }
+        }
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -273,11 +412,41 @@ mod tests {
         SongBackgroundChange::new(0.0, SongBackgroundChangeTarget::Random)
     }
 
+    fn push_segment(
+        out: &mut Vec<SongBackgroundChange>,
+        start_beat: f32,
+        end_beat: f32,
+        segments: &TimingSegments,
+        cycle: &mut MovieCycle,
+        template: &SongBackgroundChange,
+    ) {
+        let time_sigs = normalized_time_signatures(segments);
+        let first_row = out
+            .iter()
+            .map(|change| beat_to_note_row(change.start_beat))
+            .fold(beat_to_note_row(start_beat), i32::min);
+        let last_row = out
+            .iter()
+            .map(|change| beat_to_note_row(change.start_beat))
+            .fold(beat_to_note_row(end_beat), i32::max);
+        let mut used_rows = UsedRows::new(first_row, last_row, out.len() + 16);
+        for change in out.iter() {
+            used_rows.insert(beat_to_note_row(change.start_beat));
+        }
+        let mut expansion = RandomExpansion {
+            timing_segments: segments,
+            time_sigs: &time_sigs,
+            used_rows: &mut used_rows,
+            cycle,
+        };
+        push_random_segment(out, start_beat, end_beat, &mut expansion, template);
+    }
+
     #[test]
     fn random_segments_change_every_four_measures_in_four_four() {
         let mut out = Vec::new();
         let mut cycle = MovieCycle::new(vec![path("a.avi"), path("b.avi")], "song");
-        push_random_segment(
+        push_segment(
             &mut out,
             0.0,
             64.0,
@@ -294,15 +463,17 @@ mod tests {
 
     #[test]
     fn random_segments_use_time_signature_measure_length() {
-        let mut segments = TimingSegments::default();
-        segments.time_signatures = vec![TimeSignatureSegment {
-            beat: 0.0,
-            numerator: 3,
-            denominator: 4,
-        }];
+        let segments = TimingSegments {
+            time_signatures: vec![TimeSignatureSegment {
+                beat: 0.0,
+                numerator: 3,
+                denominator: 4,
+            }],
+            ..TimingSegments::default()
+        };
         let mut out = Vec::new();
         let mut cycle = MovieCycle::new(vec![path("a.avi"), path("b.avi")], "song");
-        push_random_segment(
+        push_segment(
             &mut out,
             0.0,
             48.0,
@@ -319,11 +490,13 @@ mod tests {
 
     #[test]
     fn random_segments_add_measure_start_bpm_changes_once() {
-        let mut segments = TimingSegments::default();
-        segments.bpms = vec![(0.0, 120.0), (8.0, 140.0), (16.0, 160.0)];
+        let segments = TimingSegments {
+            bpms: vec![(0.0, 120.0), (8.0, 140.0), (16.0, 160.0)],
+            ..TimingSegments::default()
+        };
         let mut out = Vec::new();
         let mut cycle = MovieCycle::new(vec![path("a.avi"), path("b.avi")], "song");
-        push_random_segment(
+        push_segment(
             &mut out,
             0.0,
             32.0,
@@ -342,5 +515,158 @@ mod tests {
     #[test]
     fn crc32_matches_itg_hash_for_string() {
         assert_eq!(crc32(b"RandomMovies"), 0x67B4_79F8);
+    }
+
+    #[test]
+    fn non_random_changes_skip_expansion_work() {
+        let changes = [
+            SongBackgroundChange::new(0.0, SongBackgroundChangeTarget::NoSongBg),
+            SongBackgroundChange::new(
+                16.0,
+                SongBackgroundChangeTarget::File(path("background.png")),
+            ),
+        ];
+        assert!(random_expansion_unneeded(&changes));
+        assert!(!random_expansion_unneeded(&[]));
+        assert!(!random_expansion_unneeded(&[SongBackgroundChange::new(
+            0.0,
+            SongBackgroundChangeTarget::Random
+        ),]));
+    }
+
+    #[test]
+    fn row_tracker_preserves_dense_and_sparse_membership() {
+        for mut rows in [
+            UsedRows::new(-64, 4_096, 8),
+            UsedRows::new(i32::MIN, i32::MAX, 8),
+        ] {
+            assert!(rows.insert(-32));
+            assert!(!rows.insert(-32));
+            assert!(rows.insert(2_048));
+            rows.remove(-32);
+            assert!(rows.insert(-32));
+        }
+    }
+
+    #[test]
+    fn shared_state_matches_legacy_rows_across_random_segments() {
+        let segments = TimingSegments {
+            time_signatures: vec![
+                TimeSignatureSegment {
+                    beat: 48.0,
+                    numerator: 3,
+                    denominator: 4,
+                },
+                TimeSignatureSegment {
+                    beat: 0.0,
+                    numerator: 4,
+                    denominator: 4,
+                },
+            ],
+            bpms: vec![(0.0, 120.0), (16.0, 130.0), (48.0, 150.0), (60.0, 170.0)],
+            ..TimingSegments::default()
+        };
+        let template = random_template();
+        let paths = vec![path("a.avi"), path("b.avi"), path("c.avi")];
+        let time_sigs = normalized_time_signatures(&segments);
+        let mut used_rows = UsedRows::new(0, beat_to_note_row(144.0), 64);
+        let mut actual = Vec::new();
+        let mut cycle = MovieCycle::new(paths.clone(), "song");
+        let mut expansion = RandomExpansion {
+            timing_segments: &segments,
+            time_sigs: &time_sigs,
+            used_rows: &mut used_rows,
+            cycle: &mut cycle,
+        };
+        for (start, end) in [(0.0, 48.0), (48.0, 96.0), (96.0, 144.0)] {
+            push_random_segment(&mut actual, start, end, &mut expansion, &template);
+        }
+
+        let mut expected = Vec::new();
+        let mut legacy_cycle = MovieCycle::new(paths, "song");
+        for (start, end) in [(0.0, 48.0), (48.0, 96.0), (96.0, 144.0)] {
+            legacy_push_random_segment(
+                &mut expected,
+                start,
+                end,
+                &segments,
+                &mut legacy_cycle,
+                &template,
+            );
+        }
+        assert_eq!(change_snapshots(&actual), change_snapshots(&expected));
+    }
+
+    fn change_snapshots(changes: &[SongBackgroundChange]) -> Vec<(i32, PathBuf)> {
+        changes
+            .iter()
+            .map(|change| {
+                let SongBackgroundChangeTarget::File(path) = &change.target else {
+                    panic!("random expansion must emit file targets");
+                };
+                (beat_to_note_row(change.start_beat), path.clone())
+            })
+            .collect()
+    }
+
+    fn legacy_push_random_segment(
+        out: &mut Vec<SongBackgroundChange>,
+        start_beat: f32,
+        end_beat: f32,
+        timing_segments: &TimingSegments,
+        cycle: &mut MovieCycle,
+        template: &SongBackgroundChange,
+    ) {
+        let start_row = beat_to_note_row(start_beat);
+        let end_row = beat_to_note_row(end_beat);
+        if end_row <= start_row {
+            return;
+        }
+        let time_sigs = normalized_time_signatures(timing_segments);
+        for (ix, sig) in time_sigs.iter().enumerate() {
+            let sig_start_row = beat_to_note_row(sig.beat);
+            let sig_end_row = time_sigs
+                .get(ix + 1)
+                .map(|next| beat_to_note_row(next.beat))
+                .unwrap_or(end_row);
+            let first_row = sig_start_row.max(start_row);
+            let last_row = sig_end_row.min(end_row);
+            if first_row >= last_row {
+                continue;
+            }
+            let step_rows = RANDOM_BG_CHANGE_MEASURES * note_rows_per_measure(*sig);
+            let mut row = first_row;
+            while row < last_row {
+                legacy_push_random_change(out, row, cycle, template);
+                row += step_rows;
+            }
+        }
+        for &(beat, _) in &timing_segments.bpms {
+            let row = beat_to_note_row(beat);
+            if row >= start_row && row < end_row && row_starts_measure(row, &time_sigs) {
+                legacy_push_random_change(out, row, cycle, template);
+            }
+        }
+    }
+
+    fn legacy_push_random_change(
+        out: &mut Vec<SongBackgroundChange>,
+        row: i32,
+        cycle: &mut MovieCycle,
+        template: &SongBackgroundChange,
+    ) {
+        if out
+            .iter()
+            .any(|change| beat_to_note_row(change.start_beat) == row)
+        {
+            return;
+        }
+        let Some(path) = cycle.next_path() else {
+            return;
+        };
+        let mut change = template.clone();
+        change.start_beat = note_row_to_beat(row);
+        change.target = SongBackgroundChangeTarget::File(path);
+        out.push(change);
     }
 }
