@@ -2,6 +2,7 @@ use image::RgbaImage;
 use log::warn;
 use serde::Deserialize;
 use std::{
+    ffi::OsString,
     io::{self, Read},
     path::{Path, PathBuf},
     process::{Child, ChildStdout, Command, Stdio},
@@ -506,18 +507,12 @@ fn probe(path: &Path, looped: bool) -> Result<Info, String> {
         .ok_or_else(|| format!("video width is invalid for '{}'", path.display()))?;
     let height = even_dimension(height)
         .ok_or_else(|| format!("video height is invalid for '{}'", path.display()))?;
-    let fps = parse_rate(stream.avg_frame_rate.as_deref())
-        .or_else(|| parse_rate(stream.r_frame_rate.as_deref()))
+    let fps = parse_rate(stream.avg_frame_rate)
+        .or_else(|| parse_rate(stream.r_frame_rate))
         .unwrap_or(DEFAULT_FPS)
         .clamp(1.0, MAX_FPS);
-    let duration_sec = parse_duration(stream.duration.as_deref()).or_else(|| {
-        parse_duration(
-            parsed
-                .format
-                .as_ref()
-                .and_then(|fmt| fmt.duration.as_deref()),
-        )
-    });
+    let duration_sec = parse_duration(stream.duration)
+        .or_else(|| parse_duration(parsed.format.as_ref().and_then(|fmt| fmt.duration)));
     let conversion = probe_conversion(stream, width, height);
 
     Ok(Info {
@@ -658,20 +653,39 @@ fn resolve_tool_path_in_dirs(name: &str, runtime_bin: Option<&Path>) -> Option<P
 
 fn tool_path_in_dir(name: &str, dir: Option<&Path>) -> Option<PathBuf> {
     let dir = dir?;
-    bundled_tool_candidates(name)
-        .into_iter()
-        .map(|candidate| dir.join(candidate))
-        .find(|path| path.is_file())
+    let primary = primary_tool_path(dir, name);
+    if primary.is_file() {
+        return Some(primary);
+    }
+    let fallback = fallback_tool_path(dir, name);
+    fallback.is_file().then_some(fallback)
 }
 
 #[cfg(windows)]
-fn bundled_tool_candidates(name: &str) -> [String; 2] {
-    [format!("{name}.exe"), name.to_string()]
+fn primary_tool_path(dir: &Path, name: &str) -> PathBuf {
+    dir.join(exe_tool_name(name))
 }
 
 #[cfg(not(windows))]
-fn bundled_tool_candidates(name: &str) -> [String; 2] {
-    [name.to_string(), format!("{name}.exe")]
+fn primary_tool_path(dir: &Path, name: &str) -> PathBuf {
+    dir.join(name)
+}
+
+#[cfg(windows)]
+fn fallback_tool_path(dir: &Path, name: &str) -> PathBuf {
+    dir.join(name)
+}
+
+#[cfg(not(windows))]
+fn fallback_tool_path(dir: &Path, name: &str) -> PathBuf {
+    dir.join(exe_tool_name(name))
+}
+
+fn exe_tool_name(name: &str) -> OsString {
+    let mut candidate = OsString::with_capacity(name.len() + 4);
+    candidate.push(name);
+    candidate.push(".exe");
+    candidate
 }
 
 #[inline(always)]
@@ -731,13 +745,23 @@ fn parse_rate(raw: Option<&str>) -> Option<f32> {
         return None;
     }
     let (num, den) = raw.split_once('/')?;
-    let num = num.parse::<f64>().ok()?;
-    let den = den.parse::<f64>().ok()?;
+    let (num, den) = match (parse_ascii_u64(num), parse_ascii_u64(den)) {
+        (Some(num), Some(den)) => (num as f64, den as f64),
+        _ => (num.parse::<f64>().ok()?, den.parse::<f64>().ok()?),
+    };
     if !num.is_finite() || !den.is_finite() || den <= 0.0 {
         return None;
     }
     let fps = (num / den) as f32;
     (fps.is_finite() && fps > 0.0).then_some(fps)
+}
+
+fn parse_ascii_u64(raw: &str) -> Option<u64> {
+    (!raw.is_empty()).then_some(())?;
+    raw.bytes().try_fold(0_u64, |value, byte| {
+        let digit = byte.checked_sub(b'0').filter(|digit| *digit <= 9)?;
+        value.checked_mul(10)?.checked_add(u64::from(digit))
+    })
 }
 
 fn parse_duration(raw: Option<&str>) -> Option<f32> {
@@ -746,7 +770,7 @@ fn parse_duration(raw: Option<&str>) -> Option<f32> {
 }
 
 fn probe_conversion(stream: &ProbeStream, _width: u32, _height: u32) -> YuvConversion {
-    let coeffs = match stream.color_space.as_deref() {
+    let coeffs = match stream.color_space {
         Some("bt709" | "smpte240m") => [1.5748, -0.187_324, -0.468_124, 1.8556],
         Some("bt2020nc" | "bt2020c") => [1.4746, -0.164_553, -0.571_353, 1.8814],
         Some("fcc" | "bt470bg" | "smpte170m" | "smpte428") => {
@@ -754,7 +778,7 @@ fn probe_conversion(stream: &ProbeStream, _width: u32, _height: u32) -> YuvConve
         }
         _ => [1.402, -0.344_136, -0.714_136, 1.772],
     };
-    if matches!(stream.color_range.as_deref(), Some("pc" | "jpeg")) {
+    if matches!(stream.color_range, Some("pc" | "jpeg")) {
         YuvConversion::full(coeffs)
     } else {
         YuvConversion::limited(coeffs)
@@ -762,33 +786,89 @@ fn probe_conversion(stream: &ProbeStream, _width: u32, _height: u32) -> YuvConve
 }
 
 #[derive(Deserialize)]
-struct ProbeOutput {
-    streams: Vec<ProbeStream>,
-    format: Option<ProbeFormat>,
+struct ProbeOutput<'a> {
+    #[serde(borrow)]
+    streams: Vec<ProbeStream<'a>>,
+    #[serde(borrow)]
+    format: Option<ProbeFormat<'a>>,
 }
 
 #[derive(Deserialize)]
-struct ProbeStream {
+struct ProbeStream<'a> {
     width: Option<u32>,
     height: Option<u32>,
-    avg_frame_rate: Option<String>,
-    r_frame_rate: Option<String>,
-    duration: Option<String>,
-    color_space: Option<String>,
-    color_range: Option<String>,
+    #[serde(borrow)]
+    avg_frame_rate: Option<&'a str>,
+    #[serde(borrow)]
+    r_frame_rate: Option<&'a str>,
+    #[serde(borrow)]
+    duration: Option<&'a str>,
+    #[serde(borrow)]
+    color_space: Option<&'a str>,
+    #[serde(borrow)]
+    color_range: Option<&'a str>,
 }
 
 #[derive(Deserialize)]
-struct ProbeFormat {
-    duration: Option<String>,
+struct ProbeFormat<'a> {
+    #[serde(borrow)]
+    duration: Option<&'a str>,
+}
+
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::*;
+
+    #[must_use]
+    pub fn probe_json_checksum(raw: &[u8]) -> u64 {
+        let parsed: ProbeOutput<'_> =
+            serde_json::from_slice(raw).expect("valid benchmark probe JSON");
+        let mut checksum = parsed.streams.len() as u64;
+        for stream in &parsed.streams {
+            checksum = checksum
+                .wrapping_mul(131)
+                .wrapping_add(u64::from(stream.width.unwrap_or_default()))
+                .wrapping_add(u64::from(stream.height.unwrap_or_default()) << 32);
+            for value in [
+                stream.avg_frame_rate,
+                stream.r_frame_rate,
+                stream.duration,
+                stream.color_space,
+                stream.color_range,
+            ]
+            .into_iter()
+            .flatten()
+            {
+                checksum = value.bytes().fold(checksum, |sum, byte| {
+                    sum.wrapping_mul(33).wrapping_add(u64::from(byte))
+                });
+            }
+        }
+        if let Some(duration) = parsed.format.and_then(|format| format.duration) {
+            checksum = duration.bytes().fold(checksum, |sum, byte| {
+                sum.wrapping_mul(33).wrapping_add(u64::from(byte))
+            });
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn rate_bits(raw: &str) -> u32 {
+        parse_rate(Some(raw)).map_or(u32::MAX, f32::to_bits)
+    }
+
+    #[must_use]
+    pub fn primary_path(dir: &Path, name: &str) -> PathBuf {
+        primary_tool_path(dir, name)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        Info, Player, ProbeStream, QueuedFrame, Yuv420Image, YuvConversion,
-        bundled_tool_candidates, clamp_play_time, decode_command, parse_duration, parse_rate,
-        probe_conversion, resolve_tool_path_in_dirs, take_frame_buffer,
+        Info, Player, ProbeOutput, ProbeStream, QueuedFrame, Yuv420Image, YuvConversion,
+        clamp_play_time, decode_command, fallback_tool_path, parse_duration, parse_rate,
+        primary_tool_path, probe_conversion, resolve_tool_path_in_dirs, take_frame_buffer,
     };
     use std::{
         fs,
@@ -831,7 +911,7 @@ mod tests {
     }
 
     fn write_tool(dir: &Path, name: &str) -> PathBuf {
-        let path = dir.join(&bundled_tool_candidates(name)[0]);
+        let path = primary_tool_path(dir, name);
         fs::write(&path, []).unwrap();
         path
     }
@@ -840,6 +920,16 @@ mod tests {
     fn parse_rate_handles_fraction() {
         let fps = parse_rate(Some("30000/1001")).unwrap();
         assert!((fps - 29.97003).abs() < 0.001);
+    }
+
+    #[test]
+    fn parse_rate_preserves_general_float_fallback() {
+        assert_eq!(parse_rate(Some("29.97/1.0")), Some(29.97));
+        let numerator = "18446744073709551616".parse::<f64>().unwrap();
+        assert_eq!(
+            parse_rate(Some("18446744073709551616/1")),
+            Some(numerator as f32)
+        );
     }
 
     #[test]
@@ -869,6 +959,19 @@ mod tests {
         fs::create_dir_all(&runtime_bin).unwrap();
         let resolved = resolve_tool_path_in_dirs("ffprobe", Some(runtime_bin.as_path()));
         assert!(resolved.is_none());
+    }
+
+    #[test]
+    fn resolve_tool_path_preserves_platform_fallback() {
+        let runtime = TempDir::new("runtime-fallback");
+        let runtime_bin = runtime.path().join("bin");
+        fs::create_dir_all(&runtime_bin).unwrap();
+        let fallback = fallback_tool_path(&runtime_bin, "ffprobe");
+        fs::write(&fallback, []).unwrap();
+
+        let resolved = resolve_tool_path_in_dirs("ffprobe", Some(runtime_bin.as_path()));
+
+        assert_eq!(resolved.as_deref(), Some(fallback.as_path()));
     }
 
     #[test]
@@ -998,14 +1101,14 @@ mod tests {
 
     #[test]
     fn probe_conversion_uses_metadata_then_bt601_fallback() {
-        let stream = |space: Option<&str>, range: Option<&str>| ProbeStream {
+        let stream = |space: Option<&'static str>, range: Option<&'static str>| ProbeStream {
             width: None,
             height: None,
             avg_frame_rate: None,
             r_frame_rate: None,
             duration: None,
-            color_space: space.map(str::to_string),
-            color_range: range.map(str::to_string),
+            color_space: space,
+            color_range: range,
         };
         let bt601 = probe_conversion(&stream(Some("smpte170m"), Some("tv")), 1920, 1080);
         assert_eq!(bt601.coeffs[0], 1.402);
@@ -1013,5 +1116,26 @@ mod tests {
         assert_eq!(fallback.coeffs[0], 1.402);
         let full = probe_conversion(&stream(Some("bt709"), Some("pc")), 640, 480);
         assert_eq!(full.levels, [1.0, 0.0, 1.0, -128.0 / 255.0]);
+    }
+
+    #[test]
+    fn probe_metadata_borrows_json_strings() {
+        let json = br#"{
+            "streams": [{
+                "width": 1920,
+                "height": 1080,
+                "avg_frame_rate": "60000/1001",
+                "r_frame_rate": "60/1",
+                "duration": "12.5",
+                "color_space": "bt709",
+                "color_range": "tv"
+            }],
+            "format": { "duration": "12.6" }
+        }"#;
+        let parsed: ProbeOutput<'_> = serde_json::from_slice(json).unwrap();
+        let rate = parsed.streams[0].avg_frame_rate.unwrap();
+
+        assert_eq!(rate, "60000/1001");
+        assert!(json.as_ptr_range().contains(&rate.as_ptr()));
     }
 }
