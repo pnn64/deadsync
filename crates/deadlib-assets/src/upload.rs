@@ -113,6 +113,12 @@ impl TextureUploadQueue {
         self.entries.contains_key(&handle)
     }
 
+    #[inline(always)]
+    pub(crate) fn dimensions(&self, handle: TextureHandle) -> Option<(u32, u32)> {
+        let image = self.entries.get(&handle)?.image();
+        Some((image.width(), image.height()))
+    }
+
     pub fn push(&mut self, handle: TextureHandle, image: Arc<RgbaImage>, sampler: SamplerDesc) {
         self.push_inner(handle, UploadImage::Shared(image), sampler, None);
     }
@@ -288,6 +294,17 @@ mod tests {
                 .pop_next(budget, 2, first.bytes + second.bytes)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn queued_dimensions_follow_the_latest_replacement() {
+        let mut queue = TextureUploadQueue::default();
+        queue.push(7, Arc::new(blank_rgba(2, 2)), SamplerDesc::default());
+        assert_eq!(queue.dimensions(7), Some((2, 2)));
+
+        queue.push(7, Arc::new(blank_rgba(4, 3)), SamplerDesc::default());
+        assert_eq!(queue.dimensions(7), Some((4, 3)));
+        assert_eq!(queue.len(), 1);
     }
 
     #[test]

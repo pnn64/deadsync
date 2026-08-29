@@ -88,6 +88,7 @@ impl TextureMetadataRegistry {
 }
 
 struct GeneratedTextureEntry<T> {
+    key: Arc<str>,
     value: T,
     pending: bool,
 }
@@ -95,15 +96,17 @@ struct GeneratedTextureEntry<T> {
 /// Session-lifetime generated-texture registry drained by the render thread.
 ///
 /// Producers append only the first update for a key until the next drain. The
-/// pending vector owns the eventual return strings, so draining touches only
-/// changed entries and transfers its allocation to the upload batch. A miss is
-/// impossible because entries are never evicted; destruction occurs when the
-/// process registry is dropped. `asset_cache_hot_paths` measures sparse-drain
-/// cost and allocation churn. Worst-case drain work is linear in the number of
-/// changed textures, never in the full registry size.
+/// pending vector shares the registered keys, so draining touches only
+/// changed entries and then retains that vector's allocation for the next
+/// batch. Its `Arc<str>` values share the session-owned map keys, so an update
+/// performs no key allocation. Delivery holds the registry write lock once for
+/// the batch; a miss is impossible because entries are never evicted.
+/// Destruction occurs when the process registry is dropped.
+/// `asset_cache_hot_paths` measures sparse-drain and delivery cost. Worst-case
+/// drain work is linear in changed textures, never in the full registry size.
 struct GeneratedTextureRegistry<T> {
-    entries: FxHashMap<String, GeneratedTextureEntry<T>>,
-    pending_keys: Vec<String>,
+    entries: FxHashMap<Arc<str>, GeneratedTextureEntry<T>>,
+    pending_keys: Vec<Arc<str>>,
 }
 
 impl<T> Default for GeneratedTextureRegistry<T> {
@@ -121,15 +124,16 @@ impl<T> GeneratedTextureRegistry<T> {
             entry.value = value;
             if !entry.pending {
                 entry.pending = true;
-                self.pending_keys.push(key.to_string());
+                self.pending_keys.push(Arc::clone(&entry.key));
             }
             return;
         }
-        let key = key.to_string();
-        self.pending_keys.push(key.clone());
+        let key: Arc<str> = Arc::from(key);
+        self.pending_keys.push(Arc::clone(&key));
         self.entries.insert(
-            key,
+            Arc::clone(&key),
             GeneratedTextureEntry {
+                key,
                 value,
                 pending: true,
             },
@@ -140,7 +144,8 @@ impl<T> GeneratedTextureRegistry<T> {
         self.entries.get(key).map(|entry| &entry.value)
     }
 
-    fn take_pending_keys(&mut self) -> Vec<String> {
+    #[cfg(any(test, feature = "bench-support"))]
+    fn take_pending_keys(&mut self) -> Vec<Arc<str>> {
         let pending = std::mem::take(&mut self.pending_keys);
         for key in &pending {
             self.entries
@@ -149,6 +154,23 @@ impl<T> GeneratedTextureRegistry<T> {
                 .pending = false;
         }
         pending
+    }
+
+    fn drain_pending(&mut self, mut visit: impl FnMut(Arc<str>, T))
+    where
+        T: Clone,
+    {
+        let mut pending = std::mem::take(&mut self.pending_keys);
+        for key in pending.drain(..) {
+            let entry = self
+                .entries
+                .get_mut(&key)
+                .expect("queued generated texture must remain registered");
+            entry.pending = false;
+            let value = entry.value.clone();
+            visit(key, value);
+        }
+        self.pending_keys = pending;
     }
 }
 
@@ -395,14 +417,14 @@ pub fn generated_texture(key: &str) -> Option<GeneratedTexture> {
     GENERATED_TEXTURES.read().unwrap().get(key).cloned()
 }
 
-/// # Panics
-///
-/// Panics if an internal synchronization lock is poisoned.
-pub fn take_pending_generated_texture_keys() -> Vec<String> {
+pub(crate) fn drain_pending_generated_textures(mut visit: impl FnMut(Arc<str>, GeneratedTexture)) {
     if !GENERATED_TEXTURES_PENDING.swap(false, Ordering::AcqRel) {
-        return Vec::new();
+        return;
     }
-    GENERATED_TEXTURES.write().unwrap().take_pending_keys()
+    GENERATED_TEXTURES
+        .write()
+        .unwrap()
+        .drain_pending(&mut visit);
 }
 
 #[cfg(feature = "bench-support")]
@@ -424,11 +446,147 @@ impl GeneratedTexturePendingBench {
     }
 
     #[must_use]
-    pub fn update_and_drain(&mut self, keys: &[String], indices: &[usize]) -> Vec<String> {
+    pub fn update_and_drain(&mut self, keys: &[String], indices: &[usize]) -> Vec<Arc<str>> {
         for &index in indices {
             self.registry.register(&keys[index], index as u64);
         }
         self.registry.take_pending_keys()
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct GeneratedTextureDeliveryBench {
+    registry: RwLock<GeneratedTextureRegistry<u64>>,
+}
+
+#[cfg(feature = "bench-support")]
+impl GeneratedTextureDeliveryBench {
+    #[must_use]
+    pub fn new(keys: &[String]) -> Self {
+        let mut registry = GeneratedTextureRegistry::default();
+        for (index, key) in keys.iter().enumerate() {
+            registry.register(key, index as u64);
+        }
+        drop(registry.take_pending_keys());
+        Self {
+            registry: RwLock::new(registry),
+        }
+    }
+
+    #[must_use]
+    pub fn update_and_fetch_reference(&self, keys: &[String], indices: &[usize]) -> u64 {
+        {
+            let mut registry = self.registry.write().unwrap();
+            for &index in indices {
+                registry.register(&keys[index], index as u64);
+            }
+        }
+        let pending = self.registry.write().unwrap().take_pending_keys();
+        pending.into_iter().fold(0, |sum, key| {
+            let value = self
+                .registry
+                .read()
+                .unwrap()
+                .get(&key)
+                .copied()
+                .expect("pending generated texture remains registered");
+            sum ^ value.rotate_left((key.len() % 64) as u32)
+        })
+    }
+
+    #[must_use]
+    pub fn update_and_deliver(&self, keys: &[String], indices: &[usize]) -> u64 {
+        let mut registry = self.registry.write().unwrap();
+        for &index in indices {
+            registry.register(&keys[index], index as u64);
+        }
+        let mut checksum = 0;
+        registry.drain_pending(|key, value| {
+            checksum ^= value.rotate_left((key.len() % 64) as u32);
+        });
+        checksum
+    }
+}
+
+#[cfg(feature = "bench-support")]
+struct OwnedGeneratedTextureEntry {
+    value: u64,
+    pending: bool,
+}
+
+#[cfg(feature = "bench-support")]
+#[derive(Default)]
+struct OwnedGeneratedTextureRegistry {
+    entries: FxHashMap<String, OwnedGeneratedTextureEntry>,
+    pending_keys: Vec<String>,
+}
+
+#[cfg(feature = "bench-support")]
+impl OwnedGeneratedTextureRegistry {
+    fn register(&mut self, key: &str, value: u64) {
+        if let Some(entry) = self.entries.get_mut(key) {
+            entry.value = value;
+            if !entry.pending {
+                entry.pending = true;
+                self.pending_keys.push(key.to_owned());
+            }
+            return;
+        }
+        let key = key.to_owned();
+        self.pending_keys.push(key.clone());
+        self.entries.insert(
+            key,
+            OwnedGeneratedTextureEntry {
+                value,
+                pending: true,
+            },
+        );
+    }
+
+    fn drain_pending(&mut self) -> u64 {
+        let mut pending = std::mem::take(&mut self.pending_keys);
+        let mut checksum = 0;
+        for key in pending.drain(..) {
+            let entry = self
+                .entries
+                .get_mut(&key)
+                .expect("queued benchmark texture remains registered");
+            entry.pending = false;
+            checksum ^= entry.value.rotate_left((key.len() % 64) as u32);
+        }
+        self.pending_keys = pending;
+        checksum
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct GeneratedTextureOwnedKeyBench {
+    registry: RwLock<OwnedGeneratedTextureRegistry>,
+}
+
+#[cfg(feature = "bench-support")]
+impl GeneratedTextureOwnedKeyBench {
+    #[must_use]
+    pub fn new(keys: &[String]) -> Self {
+        let mut registry = OwnedGeneratedTextureRegistry::default();
+        for (index, key) in keys.iter().enumerate() {
+            registry.register(key, index as u64);
+        }
+        registry.drain_pending();
+        Self {
+            registry: RwLock::new(registry),
+        }
+    }
+
+    #[must_use]
+    pub fn update_and_deliver(&self, keys: &[String], indices: &[usize]) -> u64 {
+        let mut registry = self.registry.write().unwrap();
+        for &index in indices {
+            registry.register(&keys[index], index as u64);
+        }
+        registry.drain_pending()
     }
 }
 
@@ -567,11 +725,25 @@ mod tests {
         registry.register("generated/lifebar", 2_u64);
 
         assert_eq!(registry.get("generated/lifebar"), Some(&2));
-        assert_eq!(registry.take_pending_keys(), ["generated/lifebar"]);
+        assert_eq!(
+            registry
+                .take_pending_keys()
+                .iter()
+                .map(AsRef::as_ref)
+                .collect::<Vec<_>>(),
+            ["generated/lifebar"]
+        );
         assert!(registry.take_pending_keys().is_empty());
 
         registry.register("generated/lifebar", 3);
-        assert_eq!(registry.take_pending_keys(), ["generated/lifebar"]);
+        assert_eq!(
+            registry
+                .take_pending_keys()
+                .iter()
+                .map(AsRef::as_ref)
+                .collect::<Vec<_>>(),
+            ["generated/lifebar"]
+        );
     }
 
     #[test]
@@ -587,11 +759,43 @@ mod tests {
         registry.register("generated/0400", 902);
 
         assert_eq!(
-            registry.take_pending_keys(),
+            registry
+                .take_pending_keys()
+                .iter()
+                .map(AsRef::as_ref)
+                .collect::<Vec<_>>(),
             ["generated/0400", "generated/0007"]
         );
         assert_eq!(registry.get("generated/0400"), Some(&902));
         assert!(registry.take_pending_keys().is_empty());
+    }
+
+    #[test]
+    fn generated_registry_delivers_latest_values_and_reuses_owned_keys() {
+        let mut registry = GeneratedTextureRegistry::default();
+        registry.register("generated/a", 1_u64);
+        registry.register("generated/b", 2);
+        registry.register("generated/a", 3);
+
+        let stored_key = Arc::clone(
+            &registry
+                .entries
+                .get("generated/a")
+                .expect("registered key exists")
+                .key,
+        );
+        let mut delivered = Vec::new();
+        registry.drain_pending(|key, value| delivered.push((key, value)));
+
+        assert!(Arc::ptr_eq(&stored_key, &delivered[0].0));
+        assert_eq!(
+            delivered
+                .iter()
+                .map(|(key, value)| (key.as_ref(), *value))
+                .collect::<Vec<_>>(),
+            [("generated/a", 3), ("generated/b", 2)]
+        );
+        assert!(registry.pending_keys.is_empty());
     }
 
     #[test]
@@ -604,12 +808,14 @@ mod tests {
             SamplerDesc::default(),
         );
 
-        let pending = take_pending_generated_texture_keys();
+        let mut pending = Vec::new();
+        drain_pending_generated_textures(|key, _| pending.push(key));
         assert!(
             pending
                 .iter()
-                .any(|key| key == "generated/pending-gate-test")
+                .any(|key| key.as_ref() == "generated/pending-gate-test")
         );
-        assert!(take_pending_generated_texture_keys().is_empty());
+        drain_pending_generated_textures(|key, _| pending.push(key));
+        assert_eq!(pending.len(), 1);
     }
 }

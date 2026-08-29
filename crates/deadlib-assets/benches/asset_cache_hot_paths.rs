@@ -1,6 +1,7 @@
 use deadlib_assets::dynamic::benchmark_write_raw_cached_banner;
 use deadlib_assets::registry::{
-    GeneratedTexturePendingBench, texture_key_ownership_reference, texture_key_ownership_shared,
+    GeneratedTextureDeliveryBench, GeneratedTextureOwnedKeyBench, GeneratedTexturePendingBench,
+    texture_key_ownership_reference, texture_key_ownership_shared,
 };
 use deadlib_assets::upload::{TextureUploadBudget, TextureUploadQueue};
 use deadlib_assets::{TextureHints, TextureStore, parse_texture_hints};
@@ -310,8 +311,9 @@ impl LegacyGeneratedRegistry {
     }
 }
 
-fn pending_checksum(keys: Vec<String>) -> u64 {
+fn pending_checksum<T: AsRef<str>>(keys: Vec<T>) -> u64 {
     keys.into_iter().fold(0u64, |sum, key| {
+        let key = key.as_ref();
         let hash = key.bytes().fold(key.len() as u64, |hash, byte| {
             hash.wrapping_mul(131) ^ u64::from(byte)
         });
@@ -383,6 +385,8 @@ fn main() {
     const CACHE_WRITE_OPS: usize = 32;
     const BUDGET_STOP_OPS: usize = 32_768;
     const SHARED_QUEUE_OPS: usize = 8_192;
+    const GENERATED_DELIVERY_OPS: usize = 2_048;
+    const METADATA_SKIP_OPS: usize = 8_192;
     const KEY_OWNERSHIP_OPS: usize = 128;
 
     let hint_cases = [
@@ -434,6 +438,37 @@ fn main() {
         &new_generated_row,
     );
 
+    let delivery_updates = (0..64).map(|index| index * 61).collect::<Vec<_>>();
+    let old_delivery = GeneratedTextureDeliveryBench::new(&generated_keys);
+    let old_delivery_row = measure(GENERATED_DELIVERY_OPS, delivery_updates.len(), || {
+        old_delivery.update_and_fetch_reference(&generated_keys, &delivery_updates)
+    });
+    let new_delivery = GeneratedTextureDeliveryBench::new(&generated_keys);
+    let new_delivery_row = measure(GENERATED_DELIVERY_OPS, delivery_updates.len(), || {
+        new_delivery.update_and_deliver(&generated_keys, &delivery_updates)
+    });
+    assert_eq!(old_delivery_row.checksum, new_delivery_row.checksum);
+    print_pair(
+        "generated-texture batched delivery (64 changed keys)",
+        &old_delivery_row,
+        &new_delivery_row,
+    );
+
+    let old_owned_keys = GeneratedTextureOwnedKeyBench::new(&generated_keys);
+    let old_owned_key_row = measure(GENERATED_DELIVERY_OPS, delivery_updates.len(), || {
+        old_owned_keys.update_and_deliver(&generated_keys, &delivery_updates)
+    });
+    let new_shared_keys = GeneratedTextureDeliveryBench::new(&generated_keys);
+    let new_shared_key_row = measure(GENERATED_DELIVERY_OPS, delivery_updates.len(), || {
+        new_shared_keys.update_and_deliver(&generated_keys, &delivery_updates)
+    });
+    assert_eq!(old_owned_key_row.checksum, new_shared_key_row.checksum);
+    print_pair(
+        "generated-texture shared pending keys (64 changes)",
+        &old_owned_key_row,
+        &new_shared_key_row,
+    );
+
     let rgba = source_image(1_024, 512);
     let cache_bytes = CACHE_HEADER_SIZE + rgba.as_raw().len();
     let old_cache_write = measure(CACHE_WRITE_OPS, cache_bytes, || {
@@ -479,6 +514,41 @@ fn main() {
         "owned-key shared upload queueing",
         &old_shared_queue,
         &new_shared_queue,
+    );
+
+    let mut old_metadata_store = TextureStore::<()>::new();
+    old_metadata_store.queue_texture_upload_shared_metadata_reference(
+        String::from("generated/old/stable-dimensions"),
+        Arc::clone(&shared_upload),
+        SamplerDesc::default(),
+    );
+    let old_metadata_skip = measure(METADATA_SKIP_OPS, 1, || {
+        old_metadata_store.queue_texture_upload_shared_metadata_reference(
+            String::from("generated/old/stable-dimensions"),
+            Arc::clone(&shared_upload),
+            SamplerDesc::default(),
+        );
+        1
+    });
+    let mut new_metadata_store = TextureStore::<()>::new();
+    new_metadata_store.queue_texture_upload_shared(
+        String::from("generated/new/stable-dimensions"),
+        Arc::clone(&shared_upload),
+        SamplerDesc::default(),
+    );
+    let new_metadata_skip = measure(METADATA_SKIP_OPS, 1, || {
+        new_metadata_store.queue_texture_upload_shared(
+            String::from("generated/new/stable-dimensions"),
+            Arc::clone(&shared_upload),
+            SamplerDesc::default(),
+        );
+        1
+    });
+    assert_eq!(old_metadata_skip.checksum, new_metadata_skip.checksum);
+    print_pair(
+        "unchanged upload-metadata registration",
+        &old_metadata_skip,
+        &new_metadata_skip,
     );
 
     let texture_keys = (0..256)

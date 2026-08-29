@@ -1,7 +1,8 @@
-use crate::registry::{register_texture_dims_shared, register_texture_handle_shared};
+use crate::registry::{
+    drain_pending_generated_textures, register_texture_dims_shared, register_texture_handle_shared,
+};
 use crate::{
-    GeneratedTexture, TexMeta, clear_texture_handles, generated_texture, register_texture_dims,
-    remove_texture_handle, take_pending_generated_texture_keys,
+    GeneratedTexture, TexMeta, clear_texture_handles, register_texture_dims, remove_texture_handle,
     upload::{PendingTextureUpload, TextureUploadBudget, TextureUploadQueue},
 };
 use deadlib_render_core::{SamplerDesc, TextureHandle, TextureHandleMap};
@@ -186,15 +187,30 @@ impl<T> TextureStore<T> {
         image: Arc<RgbaImage>,
         sampler: SamplerDesc,
     ) {
+        let (width, height) = (image.width(), image.height());
         let handle = if let Some(&handle) = self.texture_handles.get(key.as_str()) {
-            register_texture_dims(&key, image.width(), image.height());
+            if !self.upload_dims_match(handle, width, height) {
+                register_texture_dims(&key, width, height);
+            }
             handle
         } else {
             let key: Arc<str> = Arc::from(key);
-            register_texture_dims_shared(Arc::clone(&key), image.width(), image.height());
+            register_texture_dims_shared(Arc::clone(&key), width, height);
             self.reserve_new_texture_handle(key)
         };
         self.pending_texture_uploads.push(handle, image, sampler);
+    }
+
+    #[inline(always)]
+    fn upload_dims_match(&self, handle: TextureHandle, width: u32, height: u32) -> bool {
+        self.pending_texture_uploads
+            .dimensions(handle)
+            .or_else(|| {
+                self.uploaded_texture_dims
+                    .get(&handle)
+                    .map(|meta| (meta.w, meta.h))
+            })
+            .is_some_and(|dims| dims == (width, height))
     }
 
     #[cfg(feature = "bench-support")]
@@ -206,6 +222,25 @@ impl<T> TextureStore<T> {
     ) {
         let handle = self.reserve_texture_handle(key.clone());
         register_texture_dims(&key, image.width(), image.height());
+        self.pending_texture_uploads.push(handle, image, sampler);
+    }
+
+    #[cfg(feature = "bench-support")]
+    pub fn queue_texture_upload_shared_metadata_reference(
+        &mut self,
+        key: String,
+        image: Arc<RgbaImage>,
+        sampler: SamplerDesc,
+    ) {
+        let (width, height) = (image.width(), image.height());
+        let handle = if let Some(&handle) = self.texture_handles.get(key.as_str()) {
+            register_texture_dims(&key, width, height);
+            handle
+        } else {
+            let key: Arc<str> = Arc::from(key);
+            register_texture_dims_shared(Arc::clone(&key), width, height);
+            self.reserve_new_texture_handle(key)
+        };
         self.pending_texture_uploads.push(handle, image, sampler);
     }
 
@@ -265,12 +300,19 @@ impl<T> TextureStore<T> {
     }
 
     pub fn queue_pending_generated_textures(&mut self) {
-        for key in take_pending_generated_texture_keys() {
-            let Some(GeneratedTexture { image, sampler }) = generated_texture(&key) else {
-                continue;
+        drain_pending_generated_textures(|key, GeneratedTexture { image, sampler }| {
+            let (width, height) = (image.width(), image.height());
+            let handle = if let Some(&handle) = self.texture_handles.get(key.as_ref()) {
+                if !self.upload_dims_match(handle, width, height) {
+                    register_texture_dims(&key, width, height);
+                }
+                handle
+            } else {
+                register_texture_dims_shared(Arc::clone(&key), width, height);
+                self.reserve_new_texture_handle(key)
             };
-            self.queue_texture_upload_shared(key, image, sampler);
-        }
+            self.pending_texture_uploads.push(handle, image, sampler);
+        });
     }
 
     pub fn pop_next_upload(
@@ -347,6 +389,7 @@ mod tests {
             SamplerDesc::default(),
         );
         let first_handle = textures.reserve_texture_handle(key.to_string());
+        assert!(textures.upload_dims_match(first_handle, 2, 2));
 
         textures.queue_texture_upload_shared(
             key.to_string(),
@@ -356,6 +399,8 @@ mod tests {
         let second_handle = textures.reserve_texture_handle(key.to_string());
 
         assert_eq!(first_handle, second_handle);
+        assert!(!textures.upload_dims_match(second_handle, 2, 2));
+        assert!(textures.upload_dims_match(second_handle, 4, 2));
         assert_eq!(crate::texture_handle(key), first_handle);
         let dims = crate::texture_dims(key).unwrap();
         assert_eq!((dims.w, dims.h), (4, 2));
