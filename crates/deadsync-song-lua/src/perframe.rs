@@ -1134,6 +1134,13 @@ fn capture_update_overlay_samples<Kind>(
     message_applied: &[bool],
     scheduled_samples: &mut Vec<SongLuaScheduledOverlaySample>,
 ) -> Result<HashSet<(usize, crate::SongLuaOverlayUpdateTarget)>, String> {
+    merge_completed_scheduled_overlay_samples(
+        tracks,
+        track_indices,
+        baseline,
+        scheduled_samples,
+        next_beat,
+    );
     let mut touched = HashSet::new();
     let mut reset_indices = Vec::new();
     crate::lua_util::drain_overlay_update_capture(lua, |overlay_index, values, scheduled| {
@@ -1213,6 +1220,25 @@ struct SongLuaScheduledOverlaySample {
     start_beat: f32,
     end_beat: f32,
     value: SongLuaOverlayUpdateValue,
+}
+
+fn merge_completed_scheduled_overlay_samples(
+    tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
+    track_indices: &mut std::collections::HashMap<(usize, SongLuaOverlayUpdateTarget), usize>,
+    baseline: &[SongLuaOverlayState],
+    scheduled: &mut Vec<SongLuaScheduledOverlaySample>,
+    beat: f32,
+) {
+    if scheduled.is_empty() {
+        return;
+    }
+    let (completed, pending) = std::mem::take(scheduled)
+        .into_iter()
+        .partition(|sample| sample.end_beat <= beat + f32::EPSILON);
+    *scheduled = pending;
+    if !completed.is_empty() {
+        merge_scheduled_overlay_samples(tracks, track_indices, baseline, completed);
+    }
 }
 
 fn sort_overlay_update_samples(samples: &mut Vec<SongLuaOverlayUpdateSample>) {

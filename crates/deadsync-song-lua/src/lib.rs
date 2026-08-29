@@ -7045,6 +7045,76 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_holds_sparse_action_updates_until_the_next_action() {
+        let song_dir = test_dir("sparse-action-overlay-updates");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target
+local action = 1
+local mod_actions = {
+    {1, function()
+        target:accelerate(0.375)
+        target:addx(100)
+    end},
+    {5, function()
+        target:x(100)
+        target:decelerate(0.75)
+        target:x(20)
+    end},
+}
+
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Target",
+        InitCommand=function(self) target = self self:x(0) end,
+    },
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                local beat = GAMESTATE:GetSongBeat()
+                while action <= #mod_actions and beat >= mod_actions[action][1] do
+                    mod_actions[action][2]()
+                    action = action + 1
+                end
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Sparse Action Updates");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 7.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let (target_index, _) = compiled
+            .overlays
+            .iter()
+            .enumerate()
+            .find(|(_, overlay)| overlay.name.as_deref() == Some("Target"))
+            .unwrap();
+        let track = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| {
+                track.overlay_index == target_index && track.target == SongLuaOverlayUpdateTarget::X
+            })
+            .unwrap();
+        let next = track.samples.partition_point(|sample| sample.beat <= 4.0);
+        assert_eq!(
+            track.samples[next - 1].value,
+            SongLuaOverlayUpdateValue::F32(100.0)
+        );
+        assert_eq!(
+            track.samples[next].value,
+            SongLuaOverlayUpdateValue::F32(100.0)
+        );
+    }
+
+    #[test]
     fn compile_song_lua_bounds_dense_update_overlay_sampling() {
         let song_dir = test_dir("dense-update-overlay-sampling");
         let entry = song_dir.join("default.lua");
