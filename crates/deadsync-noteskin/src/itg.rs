@@ -1,5 +1,6 @@
 use hashbrown::{Equivalent, HashMap as BorrowMap};
 use log::warn;
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::hash::{Hash, Hasher};
@@ -20,17 +21,72 @@ const DEFAULT_SKIN_NAME: &str = "default";
 const DEFAULT_SKIN_CANDIDATES: &[&str] = &[DEFAULT_SKIN_NAME, "cel"];
 
 type PathLookupCache = BorrowMap<IniKey, BorrowMap<IniKey, Option<PathBuf>>>;
+type NoteskinDataCache = BorrowMap<NoteskinDataCacheKey, Arc<NoteskinData>>;
 
 static CHILD_DIR_CACHE: OnceLock<Mutex<PathLookupCache>> = OnceLock::new();
 static FILE_PREFIX_CACHE: OnceLock<Mutex<PathLookupCache>> = OnceLock::new();
-static NOTESKIN_DATA_CACHE: OnceLock<Mutex<HashMap<NoteskinDataCacheKey, Arc<NoteskinData>>>> =
-    OnceLock::new();
+/// Process-wide noteskin source cache owned by transition/worker callers.
+///
+/// A mutex serializes the short lookup/insert critical sections; file loading
+/// happens after releasing it. Entries live for the session until an explicit
+/// source-change clear and are bounded by encountered root/game/skin tuples.
+/// Player Options and gameplay transitions warm the cache. A miss performs
+/// synchronous INI and directory I/O, so callers must not miss on gameplay
+/// frames. There is no incremental eviction: clearing happens at transition
+/// boundaries and drops `Arc`s in the clearing caller. Load errors and existing
+/// warnings instrument misses. A warm hit performs one lock and one borrowed
+/// hash lookup without allocating normalized game or skin strings.
+static NOTESKIN_DATA_CACHE: OnceLock<Mutex<NoteskinDataCache>> = OnceLock::new();
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct NoteskinDataCacheKey {
     root: String,
     game: String,
     skin: String,
+}
+
+impl Hash for NoteskinDataCacheKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        hash_data_cache_key(&self.root, &self.game, &self.skin, state);
+    }
+}
+
+struct NoteskinDataCacheKeyRef<'a> {
+    root: Cow<'a, str>,
+    game: &'a str,
+    skin: &'a str,
+}
+
+impl<'a> NoteskinDataCacheKeyRef<'a> {
+    fn new(root: &'a Path, game: &'a str, skin: &'a str) -> Self {
+        Self {
+            root: root.to_string_lossy(),
+            game: game.trim(),
+            skin: normalized_skin_ref(skin),
+        }
+    }
+
+    fn into_owned(self) -> NoteskinDataCacheKey {
+        NoteskinDataCacheKey {
+            root: self.root.to_ascii_lowercase(),
+            game: self.game.to_ascii_lowercase(),
+            skin: self.skin.to_ascii_lowercase(),
+        }
+    }
+}
+
+impl Hash for NoteskinDataCacheKeyRef<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        hash_data_cache_key(&self.root, self.game, self.skin, state);
+    }
+}
+
+impl Equivalent<NoteskinDataCacheKey> for NoteskinDataCacheKeyRef<'_> {
+    fn equivalent(&self, key: &NoteskinDataCacheKey) -> bool {
+        self.root.eq_ignore_ascii_case(&key.root)
+            && self.game.eq_ignore_ascii_case(&key.game)
+            && self.skin.eq_ignore_ascii_case(&key.skin)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -170,14 +226,18 @@ pub fn normalized_game_name(game: &str) -> String {
     game.trim().to_ascii_lowercase()
 }
 
-#[must_use]
-pub fn normalized_skin_name(skin: &str) -> String {
+fn normalized_skin_ref(skin: &str) -> &str {
     let skin = skin.trim();
     if skin.is_empty() {
-        DEFAULT_SKIN_NAME.to_string()
+        DEFAULT_SKIN_NAME
     } else {
-        skin.to_ascii_lowercase()
+        skin
     }
+}
+
+#[must_use]
+pub fn normalized_skin_name(skin: &str) -> String {
+    normalized_skin_ref(skin).to_ascii_lowercase()
 }
 
 #[must_use]
@@ -205,11 +265,12 @@ pub fn itg_skin_cache_key(style: &Style, skin: &str) -> ItgSkinCacheKey {
     }
 }
 
-fn noteskin_data_cache_key(root: &Path, game: &str, skin: &str) -> NoteskinDataCacheKey {
-    NoteskinDataCacheKey {
-        root: root.to_string_lossy().to_ascii_lowercase(),
-        game: normalized_game_name(game),
-        skin: normalized_skin_name(skin),
+fn hash_data_cache_key(root: &str, game: &str, skin: &str, state: &mut impl Hasher) {
+    for value in [root, game, skin] {
+        for byte in value.bytes() {
+            state.write_u8(byte.to_ascii_lowercase());
+        }
+        state.write_u8(0xff);
     }
 }
 
@@ -262,8 +323,13 @@ impl IniData {
 
         let content = fs::read_to_string(path)
             .map_err(|e| format!("failed to read ini '{}': {e}", path.display()))?;
+        Ok(Self::parse(&content))
+    }
+
+    fn parse(content: &str) -> Self {
         let mut out = Self::default();
         let mut section = IniKey::new("");
+        let mut section_present = false;
 
         for raw_line in content.lines() {
             let line = raw_line.trim();
@@ -273,6 +339,7 @@ impl IniData {
             if line.starts_with('[') && line.ends_with(']') && line.len() > 2 {
                 section = IniKey::new(line[1..line.len() - 1].trim());
                 out.sections.entry(section.clone()).or_default();
+                section_present = true;
                 continue;
             }
             let Some((key_raw, value_raw)) = line.split_once('=') else {
@@ -282,14 +349,18 @@ impl IniData {
             if key.is_empty() {
                 continue;
             }
+            if !section_present {
+                out.sections.entry(section.clone()).or_default();
+                section_present = true;
+            }
             let value = value_raw.trim().to_string();
             out.sections
-                .entry(section.clone())
-                .or_default()
+                .get_mut(&IniKeyRef(&section.0))
+                .expect("current INI section must exist")
                 .insert(IniKey::new(key), value);
         }
 
-        Ok(out)
+        out
     }
 
     pub fn get(&self, section: &str, key: &str) -> Option<&str> {
@@ -676,8 +747,8 @@ pub fn load_noteskin_data_cached(
     game: &str,
     skin: &str,
 ) -> Result<Arc<NoteskinData>, String> {
-    let key = noteskin_data_cache_key(root, game, skin);
-    let cache = NOTESKIN_DATA_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let key = NoteskinDataCacheKeyRef::new(root, game, skin);
+    let cache = NOTESKIN_DATA_CACHE.get_or_init(|| Mutex::new(BorrowMap::new()));
     if let Some(cached) = cache
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -688,6 +759,7 @@ pub fn load_noteskin_data_cached(
     }
 
     let loaded = Arc::new(load_noteskin_data(root, game, skin)?);
+    let key = key.into_owned();
     let mut guard = cache
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -769,6 +841,50 @@ pub fn song_lua_noteskin_names_from_roots(roots: &[PathBuf], game: &str) -> Vec<
     discover_skins(roots, game)
 }
 
+#[derive(Clone, Copy)]
+struct NoteMetricKeys {
+    length: &'static str,
+    vivid: &'static str,
+    add_x: &'static str,
+    add_y: &'static str,
+    spacing_x: &'static str,
+    spacing_y: &'static str,
+    count: &'static str,
+    color_type: &'static str,
+}
+
+macro_rules! note_metric_keys {
+    ($prefix:literal) => {
+        NoteMetricKeys {
+            length: concat!($prefix, "AnimationLength"),
+            vivid: concat!($prefix, "AnimationIsVivid"),
+            add_x: concat!($prefix, "AdditionTextureCoordOffsetX"),
+            add_y: concat!($prefix, "AdditionTextureCoordOffsetY"),
+            spacing_x: concat!($prefix, "NoteColorTextureCoordSpacingX"),
+            spacing_y: concat!($prefix, "NoteColorTextureCoordSpacingY"),
+            count: concat!($prefix, "NoteColorCount"),
+            color_type: concat!($prefix, "NoteColorType"),
+        }
+    };
+}
+
+const NOTE_METRIC_KEYS: [NoteMetricKeys; crate::NOTE_ANIM_PART_COUNT] = [
+    note_metric_keys!("TapNote"),
+    note_metric_keys!("TapMine"),
+    note_metric_keys!("TapLift"),
+    note_metric_keys!("TapFake"),
+    note_metric_keys!("HoldHead"),
+    note_metric_keys!("HoldTopCap"),
+    note_metric_keys!("HoldBody"),
+    note_metric_keys!("HoldBottomCap"),
+    note_metric_keys!("HoldTail"),
+    note_metric_keys!("RollHead"),
+    note_metric_keys!("RollTopCap"),
+    note_metric_keys!("RollBody"),
+    note_metric_keys!("RollBottomCap"),
+    note_metric_keys!("RollTail"),
+];
+
 pub fn note_display_metrics(metrics: &IniData) -> NoteDisplayMetrics {
     let mut out = NoteDisplayMetrics::default();
     let read_bool = |key: &str, default: bool| {
@@ -829,31 +945,23 @@ pub fn note_display_metrics(metrics: &IniData) -> NoteDisplayMetrics {
         read_bool("TopHoldAnchorWhenReverse", out.top_hold_anchor_when_reverse);
     out.hold_active_is_add_layer = read_bool("HoldActiveIsAddLayer", out.hold_active_is_add_layer);
     for part in NoteAnimPart::ALL {
-        let prefix = part.metric_prefix();
-        let length_key = format!("{prefix}AnimationLength");
-        let vivid_key = format!("{prefix}AnimationIsVivid");
-        let add_x_key = format!("{prefix}AdditionTextureCoordOffsetX");
-        let add_y_key = format!("{prefix}AdditionTextureCoordOffsetY");
-        let spacing_x_key = format!("{prefix}NoteColorTextureCoordSpacingX");
-        let spacing_y_key = format!("{prefix}NoteColorTextureCoordSpacingY");
-        let count_key = format!("{prefix}NoteColorCount");
-        let color_type_key = format!("{prefix}NoteColorType");
+        let keys = NOTE_METRIC_KEYS[part as usize];
         let default_anim = out.part_animation[part as usize];
-        let length = read_float(&length_key, default_anim.length).abs().max(1e-6);
-        let vivid = read_bool(&vivid_key, default_anim.vivid);
+        let length = read_float(keys.length, default_anim.length).abs().max(1e-6);
+        let vivid = read_bool(keys.vivid, default_anim.vivid);
         out.part_animation[part as usize] = NotePartAnimation { length, vivid };
         let default_translate = out.part_texture_translate[part as usize];
         let addition_offset = [
-            read_float(&add_x_key, default_translate.addition_offset[0]),
-            read_float(&add_y_key, default_translate.addition_offset[1]),
+            read_float(keys.add_x, default_translate.addition_offset[0]),
+            read_float(keys.add_y, default_translate.addition_offset[1]),
         ];
         let note_color_spacing = [
-            read_float(&spacing_x_key, default_translate.note_color_spacing[0]),
-            read_float(&spacing_y_key, default_translate.note_color_spacing[1]),
+            read_float(keys.spacing_x, default_translate.note_color_spacing[0]),
+            read_float(keys.spacing_y, default_translate.note_color_spacing[1]),
         ];
-        let note_color_count = read_int(&count_key, default_translate.note_color_count);
+        let note_color_count = read_int(keys.count, default_translate.note_color_count);
         let note_color_type = metrics
-            .get("NoteDisplay", &color_type_key)
+            .get("NoteDisplay", keys.color_type)
             .and_then(NoteColorType::from_metric)
             .unwrap_or(default_translate.note_color_type);
         out.part_texture_translate[part as usize] = NotePartTextureTranslate {
@@ -1026,6 +1134,128 @@ fn is_redir(path: &Path) -> bool {
         .is_some_and(|ext| ext.eq_ignore_ascii_case("redir"))
 }
 
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::*;
+
+    fn lookup_checksum(parsed: &IniData, queries: &[(&str, &str)]) -> u64 {
+        queries.iter().fold(0_u64, |checksum, &(section, key)| {
+            parsed.get(section, key).map_or(checksum, |value| {
+                value.bytes().fold(checksum, |sum, byte| {
+                    sum.wrapping_mul(131).wrapping_add(u64::from(byte))
+                })
+            })
+        })
+    }
+
+    #[must_use]
+    pub fn parse_ini(raw: &str) -> IniData {
+        IniData::parse(raw)
+    }
+
+    #[must_use]
+    pub fn ini_checksum(raw: &str, queries: &[(&str, &str)]) -> u64 {
+        lookup_checksum(&IniData::parse(raw), queries)
+    }
+
+    #[must_use]
+    pub fn legacy_ini_checksum(raw: &str, queries: &[(&str, &str)]) -> u64 {
+        let mut parsed = IniData::default();
+        let mut section = IniKey::new("");
+        for raw_line in raw.lines() {
+            let line = raw_line.trim();
+            if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+                continue;
+            }
+            if line.starts_with('[') && line.ends_with(']') && line.len() > 2 {
+                section = IniKey::new(line[1..line.len() - 1].trim());
+                parsed.sections.entry(section.clone()).or_default();
+                continue;
+            }
+            let Some((key_raw, value_raw)) = line.split_once('=') else {
+                continue;
+            };
+            let key = key_raw.trim();
+            if key.is_empty() {
+                continue;
+            }
+            parsed
+                .sections
+                .entry(section.clone())
+                .or_default()
+                .insert(IniKey::new(key), value_raw.trim().to_string());
+        }
+        lookup_checksum(&parsed, queries)
+    }
+
+    #[must_use]
+    pub fn metric_checksum(metrics: &IniData) -> u64 {
+        let parsed = note_display_metrics(metrics);
+        let mut checksum = u64::from(parsed.draw_hold_head_for_taps_on_same_row)
+            | (u64::from(parsed.draw_roll_head_for_taps_on_same_row) << 1)
+            | (u64::from(parsed.tap_hold_roll_on_row_means_hold) << 2)
+            | (u64::from(parsed.hold_head_is_above_wavy_parts) << 3)
+            | (u64::from(parsed.hold_tail_is_above_wavy_parts) << 4)
+            | (u64::from(parsed.flip_head_and_tail_when_reverse) << 5)
+            | (u64::from(parsed.flip_hold_body_when_reverse) << 6)
+            | (u64::from(parsed.top_hold_anchor_when_reverse) << 7)
+            | (u64::from(parsed.hold_active_is_add_layer) << 8);
+        for value in [
+            parsed.start_drawing_hold_body_offset_from_head,
+            parsed.stop_drawing_hold_body_offset_from_tail,
+            parsed.hold_let_go_gray_percent,
+        ] {
+            checksum = checksum
+                .wrapping_mul(131)
+                .wrapping_add(u64::from(value.to_bits()));
+        }
+        for (animation, translate) in parsed
+            .part_animation
+            .into_iter()
+            .zip(parsed.part_texture_translate)
+        {
+            checksum = checksum
+                .wrapping_mul(131)
+                .wrapping_add(u64::from(animation.length.to_bits()))
+                .wrapping_add(u64::from(animation.vivid));
+            for value in [
+                translate.addition_offset[0],
+                translate.addition_offset[1],
+                translate.note_color_spacing[0],
+                translate.note_color_spacing[1],
+            ] {
+                checksum = checksum
+                    .wrapping_mul(131)
+                    .wrapping_add(u64::from(value.to_bits()));
+            }
+            checksum = checksum
+                .wrapping_mul(131)
+                .wrapping_add(translate.note_color_count as u64)
+                .wrapping_add(translate.note_color_type as u64);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn cache_hit_checksum(root: &Path, game: &str, skin: &str, hits: usize) -> u64 {
+        let mut cache = BorrowMap::new();
+        cache.insert(
+            NoteskinDataCacheKeyRef::new(root, game, skin).into_owned(),
+            17_u64,
+        );
+        (0..hits).fold(0_u64, |checksum, index| {
+            let key = NoteskinDataCacheKeyRef::new(root, game, skin);
+            checksum.wrapping_add(
+                cache
+                    .get(&key)
+                    .copied()
+                    .unwrap_or_default()
+                    .wrapping_add(index as u64),
+            )
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1144,6 +1374,31 @@ mod tests {
         assert_eq!(refreshed.get_metric("Down", "Foo"), Some("new"));
 
         let _ = fs::remove_dir_all(root);
+        clear_lookup_caches();
+        clear_data_cache();
+    }
+
+    #[test]
+    fn data_cache_hits_borrow_normalized_lookup_keys() {
+        let _guard = LOOKUP_CACHE_TEST_LOCK.lock().unwrap();
+        clear_lookup_caches();
+        clear_data_cache();
+        let root = temp_root("borrowed-data-cache-key");
+        let skin_dir = root.join("dance/hot");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=hot\n[Down]\nFoo=cached\n",
+        )
+        .unwrap();
+        let first = load_noteskin_data_cached(&root, "dance", "hot").unwrap();
+        fs::remove_dir_all(&root).unwrap();
+        let upper_root = PathBuf::from(root.to_string_lossy().to_ascii_uppercase());
+
+        let second = load_noteskin_data_cached(&upper_root, " DANCE ", " HOT ").unwrap();
+
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(second.get_metric("down", "foo"), Some("cached"));
         clear_lookup_caches();
         clear_data_cache();
     }
@@ -1457,6 +1712,24 @@ mod tests {
         assert_eq!(
             metrics.get("NOTEDISPLAY", "TAPNOTEANIMATIONLENGTH"),
             Some("2")
+        );
+    }
+
+    #[test]
+    fn ini_parser_preserves_global_and_repeated_section_values() {
+        let metrics = IniData::parse(
+            "GlobalKey = before\n[NoteDisplay]\nTapNoteAnimationLength = 2\n\
+             [notedisplay]\nTapNoteAnimationIsVivid = 1\n",
+        );
+
+        assert_eq!(metrics.get("", "globalkey"), Some("before"));
+        assert_eq!(
+            metrics.get("NOTEDISPLAY", "tapnoteanimationlength"),
+            Some("2")
+        );
+        assert_eq!(
+            metrics.get("NoteDisplay", "TapNoteAnimationIsVivid"),
+            Some("1")
         );
     }
 
