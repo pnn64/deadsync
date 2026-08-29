@@ -154,6 +154,8 @@ enum ProjState {
         capacity: usize,
         buffer: wgpu::Buffer,
         group: wgpu::BindGroup,
+        offscreen_buffer: wgpu::Buffer,
+        offscreen_group: wgpu::BindGroup,
         layout: wgpu::BindGroupLayout,
     },
 }
@@ -404,9 +406,11 @@ pub struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     projection: Matrix4,
-    // Render-thread-only uniform bytes double as the exact bitwise camera
-    // cache. Capacity warms at initialization/growth and lives for the session.
+    // Render-thread-only uniform bytes double as exact bitwise camera caches.
+    // Main and batched offscreen passes keep independent GPU/CPU storage so an
+    // unchanged pass cannot observe the other pass's most recent upload.
     projection_upload: Vec<u8>,
+    offscreen_projection_upload: Vec<u8>,
     bind_layout: wgpu::BindGroupLayout,
     rgba_conversion: wgpu::Buffer,
     samplers: SamplerCache<wgpu::Sampler>,
@@ -774,6 +778,7 @@ fn init(
         config,
         projection,
         projection_upload: Vec::with_capacity(projection_upload_capacity),
+        offscreen_projection_upload: Vec::with_capacity(projection_upload_capacity),
         bind_layout,
         rgba_conversion,
         samplers: SamplerCache::default(),
@@ -970,6 +975,13 @@ fn init_uniform_proj(device: &wgpu::Device, queue: &wgpu::Queue, projection: Mat
     });
     let proj_array = projection.to_cols_array_2d();
     queue.write_buffer(&buffer, 0, cast_slice(&proj_array));
+    let offscreen_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu offscreen projection"),
+        size: (capacity as u64) * stride,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    queue.write_buffer(&offscreen_buffer, 0, cast_slice(&proj_array));
 
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("wgpu proj layout"),
@@ -992,12 +1004,22 @@ fn init_uniform_proj(device: &wgpu::Device, queue: &wgpu::Queue, projection: Mat
             resource: proj_binding(&buffer),
         }],
     });
+    let offscreen_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("wgpu offscreen proj group"),
+        layout: &layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: proj_binding(&offscreen_buffer),
+        }],
+    });
 
     ProjState::Uniform {
         stride,
         capacity,
         buffer,
         group,
+        offscreen_buffer,
+        offscreen_group,
         layout,
     }
 }
@@ -1418,7 +1440,20 @@ struct PassDrawData<'a> {
     ops: &'a [DrawOp],
     sprite_buffer_offset: u64,
     mesh_buffer_offset: u64,
-    camera_buffer_start: usize,
+    camera_binding: CameraBinding,
+}
+
+#[derive(Clone, Copy)]
+struct CameraBinding {
+    buffer_start: usize,
+    use_offscreen_proj: bool,
+}
+
+impl CameraBinding {
+    const MAIN: Self = Self {
+        buffer_start: 0,
+        use_offscreen_proj: false,
+    };
 }
 
 fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
@@ -1434,7 +1469,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
         ProjState::Immediates => 0,
         ProjState::Uniform { .. } => 1,
     };
-    let mut vertices_drawn = 0u32;
+    let mut vertices_drawn = 0u64;
     let mut last_kind = None;
     let mut last_blend = None;
     let mut last_sprite_yuv = None;
@@ -1517,7 +1552,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         camera_count,
                         data.cameras,
                         state.projection,
-                        data.camera_buffer_start,
+                        data.camera_binding,
                     );
                 }
                 if bindings.texture_required(texture_binding_id(tex, run.texture_handle), false) {
@@ -1532,7 +1567,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                     0,
                     run.instance_start..(run.instance_start + run.instance_count),
                 );
-                vertices_drawn = vertices_drawn.saturating_add(4 * run.instance_count);
+                vertices_drawn += 4 * u64::from(run.instance_count);
             }
             DrawOp::Mesh(run) => {
                 if run.vertex_count == 0 {
@@ -1564,14 +1599,14 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         camera_count,
                         data.cameras,
                         state.projection,
-                        data.camera_buffer_start,
+                        data.camera_binding,
                     );
                 }
                 pass.draw(
                     run.vertex_start..(run.vertex_start + run.vertex_count),
                     0..1,
                 );
-                vertices_drawn = vertices_drawn.saturating_add(run.vertex_count);
+                vertices_drawn += u64::from(run.vertex_count);
             }
             DrawOp::TexturedMesh(run) => {
                 let Some(source) = uploads.source(run.geometry) else {
@@ -1613,7 +1648,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         camera_count,
                         data.cameras,
                         state.projection,
-                        data.camera_buffer_start,
+                        data.camera_binding,
                     );
                 }
                 if bindings.texture_required(texture_binding_id(tex, run.texture_handle), true) {
@@ -1640,12 +1675,20 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                     run.instance_start..(run.instance_start + run.instance_count),
                 );
                 let tri_count = source.vertex_count() / 3;
-                vertices_drawn =
-                    vertices_drawn.saturating_add(tri_count.saturating_mul(run.instance_count));
+                vertices_drawn += u64::from(tri_count) * u64::from(run.instance_count);
             }
         }
     }
-    vertices_drawn
+    clamp_vertex_count(vertices_drawn)
+}
+
+#[inline(always)]
+const fn clamp_vertex_count(count: u64) -> u32 {
+    if count > u32::MAX as u64 {
+        u32::MAX
+    } else {
+        count as u32
+    }
 }
 
 pub fn update_texture(
@@ -1905,7 +1948,7 @@ pub fn draw(
         .saturating_add(elapsed_us_since(backend_setup_started));
 
     let backend_record_started = Instant::now();
-    let mut vertices_drawn = 0u32;
+    let mut vertices_drawn = 0u64;
     {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("wgpu render pass"),
@@ -1998,7 +2041,7 @@ pub fn draw(
                             camera_count,
                             &frame.cameras,
                             state.projection,
-                            0,
+                            CameraBinding::MAIN,
                         );
                     }
                     if bindings.texture_required(texture_binding_id(tex, run.texture_handle), false)
@@ -2014,7 +2057,7 @@ pub fn draw(
                         0,
                         run.instance_start..(run.instance_start + run.instance_count),
                     );
-                    vertices_drawn = vertices_drawn.saturating_add(4 * run.instance_count);
+                    vertices_drawn += 4 * u64::from(run.instance_count);
                 }
                 DrawOp::Mesh(run) => {
                     if run.vertex_count == 0 {
@@ -2043,14 +2086,14 @@ pub fn draw(
                             camera_count,
                             &frame.cameras,
                             state.projection,
-                            0,
+                            CameraBinding::MAIN,
                         );
                     }
                     pass.draw(
                         run.vertex_start..(run.vertex_start + run.vertex_count),
                         0..1,
                     );
-                    vertices_drawn = vertices_drawn.saturating_add(run.vertex_count);
+                    vertices_drawn += u64::from(run.vertex_count);
                 }
                 DrawOp::TexturedMesh(run) => {
                     let Some(source) = state.uploads.source(run.geometry) else {
@@ -2094,7 +2137,7 @@ pub fn draw(
                             camera_count,
                             &frame.cameras,
                             state.projection,
-                            0,
+                            CameraBinding::MAIN,
                         );
                     }
                     if bindings.texture_required(texture_binding_id(tex, run.texture_handle), true)
@@ -2123,8 +2166,7 @@ pub fn draw(
                         run.instance_start..(run.instance_start + run.instance_count),
                     );
                     let tri_count = source.vertex_count() / 3;
-                    vertices_drawn =
-                        vertices_drawn.saturating_add(tri_count.saturating_mul(run.instance_count));
+                    vertices_drawn += u64::from(tri_count) * u64::from(run.instance_count);
                 }
             }
         }
@@ -2316,7 +2358,9 @@ pub fn draw(
         reconfigure_surface(state);
     }
 
-    stats.vertices = stats.vertices.saturating_add(vertices_drawn);
+    stats.vertices = stats
+        .vertices
+        .saturating_add(clamp_vertex_count(vertices_drawn));
     Ok(stats)
 }
 
@@ -2487,7 +2531,10 @@ fn draw_offscreen_targets_batched(
                 sprite_buffer_offset: (instance_start * mem::size_of::<InstanceRaw>()) as u64,
                 mesh_buffer_offset: (mesh_start * mem::size_of::<deadlib_render_core::MeshVertex>())
                     as u64,
-                camera_buffer_start: camera_start,
+                camera_binding: CameraBinding {
+                    buffer_start: camera_start,
+                    use_offscreen_proj: true,
+                },
             },
             &state.uploads,
             textures,
@@ -2618,7 +2665,7 @@ fn draw_offscreen_targets_serial(
                     ops: &target_frame.ops,
                     sprite_buffer_offset: 0,
                     mesh_buffer_offset: 0,
-                    camera_buffer_start: 0,
+                    camera_binding: CameraBinding::MAIN,
                 },
                 &state.uploads,
                 textures,
@@ -2652,25 +2699,31 @@ fn upload_offscreen_projections(state: &mut State, frame: &RenderFrame) {
         .render_targets
         .iter()
         .map(|target| target.cameras.len() + 1)
-        .sum::<usize>()
-        .max(1);
-    ensure_projection_capacity(state, matrix_count);
-    stage_offscreen_projection_upload(
-        &mut state.projection_upload,
+        .sum::<usize>();
+    let buffer_recreated = ensure_projection_capacity(state, matrix_count.max(1));
+    let changed = stage_offscreen_projection_upload(
+        &mut state.offscreen_projection_upload,
         frame
             .render_targets
             .iter()
             .map(|target| target.cameras.as_slice()),
         state.projection,
         stride,
+        matrix_count,
     );
+    if matrix_count == 0 || !(buffer_recreated || changed) {
+        return;
+    }
 
-    let ProjState::Uniform { buffer, .. } = &state.proj else {
+    let ProjState::Uniform {
+        offscreen_buffer, ..
+    } = &state.proj
+    else {
         return;
     };
     state
         .queue
-        .write_buffer(buffer, 0, &state.projection_upload);
+        .write_buffer(offscreen_buffer, 0, &state.offscreen_projection_upload);
 }
 
 fn stage_offscreen_projection_upload<'a>(
@@ -2678,18 +2731,27 @@ fn stage_offscreen_projection_upload<'a>(
     camera_sets: impl IntoIterator<Item = &'a [Matrix4]>,
     fallback: Matrix4,
     stride: usize,
-) {
+    matrix_count: usize,
+) -> bool {
     debug_assert!(stride >= PROJ_BYTES as usize);
-    upload.clear();
+    let required_len = matrix_count * stride;
+    let mut changed = upload.len() != required_len;
+    upload.resize(required_len, 0);
+    let mut offset = 0;
     for cameras in camera_sets {
         for matrix in cameras.iter().chain(std::iter::once(&fallback)) {
-            let offset = upload.len();
-            upload.resize(offset + stride, 0);
             let columns = matrix.to_cols_array();
             let bytes = cast_slice(std::slice::from_ref(&columns));
-            upload[offset..offset + bytes.len()].copy_from_slice(bytes);
+            let destination = &mut upload[offset..offset + bytes.len()];
+            if destination != bytes {
+                destination.copy_from_slice(bytes);
+                changed = true;
+            }
+            offset += stride;
         }
     }
+    debug_assert_eq!(offset, upload.len());
+    changed
 }
 
 #[inline(always)]
@@ -2752,7 +2814,7 @@ fn set_camera(
     camera_count: usize,
     cameras: &[Matrix4],
     fallback: Matrix4,
-    buffer_start: usize,
+    binding: CameraBinding,
 ) {
     match proj {
         ProjState::Immediates => {
@@ -2760,13 +2822,23 @@ fn set_camera(
             let vp_array = vp.to_cols_array_2d();
             pass.set_immediates(0, cast_slice(&vp_array));
         }
-        ProjState::Uniform { group, stride, .. } => {
+        ProjState::Uniform {
+            group,
+            offscreen_group,
+            stride,
+            ..
+        } => {
             let idx = if (camera as usize) < camera_count {
                 camera as usize
             } else {
                 camera_count
             };
-            let offset = (((buffer_start + idx) as u64) * *stride) as u32;
+            let offset = (((binding.buffer_start + idx) as u64) * *stride) as u32;
+            let group = if binding.use_offscreen_proj {
+                offscreen_group
+            } else {
+                group
+            };
             pass.set_bind_group(0, group, &[offset]);
         }
     }
@@ -2858,6 +2930,8 @@ fn ensure_projection_capacity(state: &mut State, needed: usize) -> bool {
         capacity,
         buffer,
         group,
+        offscreen_buffer,
+        offscreen_group,
         layout,
     } = &mut state.proj
     else {
@@ -2873,6 +2947,12 @@ fn ensure_projection_capacity(state: &mut State, needed: usize) -> bool {
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+    *offscreen_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu offscreen projection"),
+        size: (new_cap as u64) * *stride,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
     *group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("wgpu proj group"),
         layout,
@@ -2881,7 +2961,17 @@ fn ensure_projection_capacity(state: &mut State, needed: usize) -> bool {
             resource: proj_binding(buffer),
         }],
     });
+    *offscreen_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("wgpu offscreen proj group"),
+        layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: proj_binding(offscreen_buffer),
+        }],
+    });
     *capacity = new_cap;
+    state.projection_upload.clear();
+    state.offscreen_projection_upload.clear();
     true
 }
 
@@ -2911,9 +3001,19 @@ fn reconfigure_surface(state: &mut State) {
 
     if matches!(state.proj, ProjState::Uniform { .. }) {
         let fallback = state.projection.to_cols_array_2d();
-        if let ProjState::Uniform { buffer, .. } = &state.proj {
+        if let ProjState::Uniform {
+            buffer,
+            offscreen_buffer,
+            ..
+        } = &state.proj
+        {
             state.queue.write_buffer(buffer, 0, cast_slice(&fallback));
+            state
+                .queue
+                .write_buffer(offscreen_buffer, 0, cast_slice(&fallback));
         }
+        state.projection_upload.clear();
+        state.offscreen_projection_upload.clear();
     }
 
     if format_changed {
@@ -3747,12 +3847,140 @@ const YUV_SHADER_UBO: &str = include_str!("shaders/wgpu_sprite_yuv_ubo.wgsl");
 const MESH_SHADER_UBO: &str = include_str!("shaders/wgpu_mesh_ubo.wgsl");
 const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
 
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::{Matrix4, cast_slice, clamp_vertex_count, stage_offscreen_projection_upload};
+
+    #[derive(Clone, Copy)]
+    pub enum VertexEvent {
+        Sprite(u32),
+        Mesh(u32),
+        TexturedMesh { vertices: u32, instances: u32 },
+    }
+
+    pub struct ProjectionFixture {
+        camera_sets: Vec<Vec<Matrix4>>,
+        fallback: Matrix4,
+        stride: usize,
+        matrix_count: usize,
+    }
+
+    #[must_use]
+    pub fn vertex_events(count: usize) -> Vec<VertexEvent> {
+        let mut seed = 0x1357_9bdf_2468_ace0_u64;
+        (0..count)
+            .map(|_| {
+                seed = seed
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                match seed % 3 {
+                    0 => VertexEvent::Sprite(((seed >> 8) % 64 + 1) as u32),
+                    1 => VertexEvent::Mesh(((seed >> 16) % 1_024 + 3) as u32),
+                    _ => VertexEvent::TexturedMesh {
+                        vertices: (((seed >> 24) % 256 + 1) * 3) as u32,
+                        instances: ((seed >> 40) % 32 + 1) as u32,
+                    },
+                }
+            })
+            .collect()
+    }
+
+    #[must_use]
+    pub fn vertices_old(events: &[VertexEvent]) -> u64 {
+        let count = events.iter().fold(0_u32, |count, event| match *event {
+            VertexEvent::Sprite(instances) => count.saturating_add(4 * instances),
+            VertexEvent::Mesh(vertices) => count.saturating_add(vertices),
+            VertexEvent::TexturedMesh {
+                vertices,
+                instances,
+            } => count.saturating_add((vertices / 3).saturating_mul(instances)),
+        });
+        u64::from(count)
+    }
+
+    #[must_use]
+    pub fn vertices_new(events: &[VertexEvent]) -> u64 {
+        let count = events.iter().fold(0_u64, |count, event| match *event {
+            VertexEvent::Sprite(instances) => count + 4 * u64::from(instances),
+            VertexEvent::Mesh(vertices) => count + u64::from(vertices),
+            VertexEvent::TexturedMesh {
+                vertices,
+                instances,
+            } => count + u64::from(vertices / 3) * u64::from(instances),
+        });
+        u64::from(clamp_vertex_count(count))
+    }
+
+    #[must_use]
+    pub fn projection_fixture(
+        pass_count: usize,
+        cameras_per_pass: usize,
+        phase: f32,
+    ) -> ProjectionFixture {
+        let camera_sets = (0..pass_count)
+            .map(|pass| {
+                (0..cameras_per_pass)
+                    .map(|camera| {
+                        let value = (pass * cameras_per_pass + camera) as f32 + phase;
+                        Matrix4::from_translation([value, value * 0.5, -value].into())
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        ProjectionFixture {
+            matrix_count: pass_count * (cameras_per_pass + 1),
+            camera_sets,
+            fallback: Matrix4::from_translation([phase, -phase, phase * 0.5].into()),
+            stride: 256,
+        }
+    }
+
+    #[must_use]
+    pub const fn projection_bytes(fixture: &ProjectionFixture) -> usize {
+        fixture.matrix_count * fixture.stride
+    }
+
+    #[must_use]
+    pub fn projections_old(fixture: &ProjectionFixture, upload: &mut Vec<u8>) -> u64 {
+        upload.clear();
+        for cameras in &fixture.camera_sets {
+            for matrix in cameras.iter().chain(std::iter::once(&fixture.fallback)) {
+                let offset = upload.len();
+                upload.resize(offset + fixture.stride, 0);
+                let columns = matrix.to_cols_array();
+                let bytes = cast_slice(std::slice::from_ref(&columns));
+                upload[offset..offset + bytes.len()].copy_from_slice(bytes);
+            }
+        }
+        projection_checksum(upload, fixture.stride)
+    }
+
+    #[must_use]
+    pub fn projections_new(fixture: &ProjectionFixture, upload: &mut Vec<u8>) -> u64 {
+        let _ = stage_offscreen_projection_upload(
+            upload,
+            fixture.camera_sets.iter().map(Vec::as_slice),
+            fixture.fallback,
+            fixture.stride,
+            fixture.matrix_count,
+        );
+        projection_checksum(upload, fixture.stride)
+    }
+
+    fn projection_checksum(upload: &[u8], stride: usize) -> u64 {
+        upload.chunks_exact(stride).fold(0_u64, |checksum, slot| {
+            let head = u64::from_le_bytes(slot[..8].try_into().expect("matrix prefix"));
+            checksum.wrapping_mul(257).wrapping_add(head)
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         DrawBindingCache, InstanceBinding, Matrix4, PresentCompletion, PresentCompletionCell,
-        SHADER_IMM, SHADER_UBO, YUV_SHADER_IMM, YUV_SHADER_UBO, stage_offscreen_projection_upload,
-        stage_projection_upload,
+        SHADER_IMM, SHADER_UBO, YUV_SHADER_IMM, YUV_SHADER_UBO, clamp_vertex_count,
+        stage_offscreen_projection_upload, stage_projection_upload,
     };
     use std::sync::{
         Arc,
@@ -3801,6 +4029,14 @@ mod tests {
         assert!(cache.instance_required(InstanceBinding::TexturedMesh));
         assert!(!cache.instance_required(InstanceBinding::TexturedMesh));
         assert!(cache.instance_required(InstanceBinding::Sprite));
+    }
+
+    #[test]
+    fn vertex_count_clamps_only_at_the_u32_stats_boundary() {
+        assert_eq!(clamp_vertex_count(0), 0);
+        assert_eq!(clamp_vertex_count(u64::from(u32::MAX) - 1), u32::MAX - 1);
+        assert_eq!(clamp_vertex_count(u64::from(u32::MAX)), u32::MAX);
+        assert_eq!(clamp_vertex_count(u64::from(u32::MAX) + 1), u32::MAX);
     }
 
     #[test]
@@ -3866,12 +4102,13 @@ mod tests {
         ];
         let fallback = Matrix4::from_translation([5.0, 6.0, 7.0].into());
 
-        stage_offscreen_projection_upload(
+        assert!(stage_offscreen_projection_upload(
             &mut upload,
             [first.as_slice(), second.as_slice()],
             fallback,
             STRIDE,
-        );
+            5,
+        ));
 
         let expected = [first[0], fallback, second[0], second[1], fallback];
         assert_eq!(upload.len(), expected.len() * STRIDE);
@@ -3887,6 +4124,55 @@ mod tests {
                     .all(|byte| *byte == 0)
             );
         }
+        assert!(!stage_offscreen_projection_upload(
+            &mut upload,
+            [first.as_slice(), second.as_slice()],
+            fallback,
+            STRIDE,
+            5,
+        ));
+
+        let allocation = upload.as_ptr();
+        let empty: [Matrix4; 0] = [];
+        assert!(stage_offscreen_projection_upload(
+            &mut upload,
+            [empty.as_slice()],
+            fallback,
+            STRIDE,
+            1,
+        ));
+        assert_eq!(upload.as_ptr(), allocation);
+        assert_eq!(upload.len(), STRIDE);
+        assert_eq!(
+            &upload[..64],
+            bytemuck::cast_slice(&fallback.to_cols_array())
+        );
+        assert!(upload[64..].iter().all(|byte| *byte == 0));
+
+        assert!(stage_offscreen_projection_upload(
+            &mut upload,
+            [first.as_slice(), second.as_slice()],
+            fallback,
+            STRIDE,
+            5,
+        ));
+        assert_eq!(upload.as_ptr(), allocation);
+
+        assert!(stage_offscreen_projection_upload(
+            &mut upload,
+            std::iter::empty::<&[Matrix4]>(),
+            fallback,
+            STRIDE,
+            0,
+        ));
+        assert!(upload.is_empty());
+        assert!(!stage_offscreen_projection_upload(
+            &mut upload,
+            std::iter::empty::<&[Matrix4]>(),
+            fallback,
+            STRIDE,
+            0,
+        ));
     }
 
     #[test]
