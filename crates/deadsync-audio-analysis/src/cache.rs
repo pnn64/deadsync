@@ -114,7 +114,7 @@ impl ReplayGainCacheFile {
         I: IntoIterator<Item = ReplayGainCacheEntry>,
     {
         let mut entries: Vec<_> = entries.into_iter().collect();
-        entries.sort_by_key(|entry| entry.path_hash);
+        entries.sort_unstable_by_key(|entry| entry.path_hash);
         Self { entries }
     }
 
@@ -154,12 +154,14 @@ pub fn write_replaygain_cache_file(
 }
 
 pub fn encode_replaygain_cache(payload: &ReplayGainCacheFile) -> Result<Vec<u8>, String> {
-    let body =
-        bincode::encode_to_vec(payload, bincode::config::standard()).map_err(|e| format!("{e}"))?;
-    let mut out = Vec::with_capacity(12 + body.len());
-    out.extend_from_slice(&CACHE_MAGIC.to_le_bytes());
-    out.extend_from_slice(&CACHE_VERSION.to_le_bytes());
-    out.extend_from_slice(&body);
+    let config = bincode::config::standard();
+    let body_len = bincode::encoded_size(payload, config).map_err(|e| format!("{e}"))?;
+    let mut out = vec![0; 12 + body_len];
+    out[..8].copy_from_slice(&CACHE_MAGIC.to_le_bytes());
+    out[8..12].copy_from_slice(&CACHE_VERSION.to_le_bytes());
+    let written =
+        bincode::encode_into_slice(payload, &mut out[12..], config).map_err(|e| format!("{e}"))?;
+    out.truncate(12 + written);
     Ok(out)
 }
 
@@ -297,6 +299,63 @@ pub fn replaygain_cache_info_if_fresh(
     }
 }
 
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::{
+        CACHE_MAGIC, CACHE_VERSION, ReplayGainCacheEntry, ReplayGainCacheFile,
+        encode_replaygain_cache,
+    };
+
+    #[must_use]
+    pub fn sort_entries_old(entries: &[ReplayGainCacheEntry]) -> u64 {
+        let mut entries = entries.to_vec();
+        entries.sort_by_key(|entry| entry.path_hash);
+        entry_checksum(&entries)
+    }
+
+    #[must_use]
+    pub fn sort_entries_new(entries: &[ReplayGainCacheEntry]) -> u64 {
+        let file = ReplayGainCacheFile::from_entries(entries.iter().copied());
+        entry_checksum(&file.entries)
+    }
+
+    #[must_use]
+    pub fn encode_cache_old(payload: &ReplayGainCacheFile) -> u64 {
+        let body = bincode::encode_to_vec(payload, bincode::config::standard())
+            .expect("benchmark payload encodes");
+        let mut out = Vec::with_capacity(12 + body.len());
+        out.extend_from_slice(&CACHE_MAGIC.to_le_bytes());
+        out.extend_from_slice(&CACHE_VERSION.to_le_bytes());
+        out.extend_from_slice(&body);
+        byte_checksum(&out)
+    }
+
+    #[must_use]
+    pub fn encode_cache_new(payload: &ReplayGainCacheFile) -> u64 {
+        byte_checksum(&encode_replaygain_cache(payload).expect("benchmark payload encodes"))
+    }
+
+    fn entry_checksum(entries: &[ReplayGainCacheEntry]) -> u64 {
+        entries.iter().fold(0_u64, |checksum, entry| {
+            checksum
+                .wrapping_mul(1_099_511_628_211)
+                .wrapping_add(entry.path_hash)
+                .wrapping_add(entry.mtime_unix_nanos)
+                .wrapping_add(entry.content_hash)
+                .wrapping_add(u64::from(entry.lufs.to_bits()))
+                .wrapping_add(u64::from(entry.true_peak_linear.to_bits()))
+        })
+    }
+
+    fn byte_checksum(bytes: &[u8]) -> u64 {
+        bytes.iter().fold(0_u64, |checksum, &byte| {
+            checksum
+                .wrapping_mul(1_099_511_628_211)
+                .wrapping_add(u64::from(byte))
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -322,6 +381,15 @@ mod tests {
         ]
     }
 
+    fn encode_cache_reference(payload: &ReplayGainCacheFile) -> Vec<u8> {
+        let body = bincode::encode_to_vec(payload, bincode::config::standard()).expect("body");
+        let mut out = Vec::with_capacity(12 + body.len());
+        out.extend_from_slice(&CACHE_MAGIC.to_le_bytes());
+        out.extend_from_slice(&CACHE_VERSION.to_le_bytes());
+        out.extend_from_slice(&body);
+        out
+    }
+
     #[test]
     fn cache_file_roundtrip() {
         let payload = ReplayGainCacheFile {
@@ -330,6 +398,31 @@ mod tests {
         let bytes = encode_replaygain_cache(&payload).expect("encode");
         let decoded = decode_replaygain_cache(&bytes).expect("decode");
         assert_eq!(decoded, payload);
+    }
+
+    #[test]
+    fn cache_encoding_preserves_wire_format() {
+        let payload = ReplayGainCacheFile {
+            entries: sample_entries(),
+        };
+
+        assert_eq!(
+            encode_replaygain_cache(&payload).expect("encode"),
+            encode_cache_reference(&payload)
+        );
+    }
+
+    #[test]
+    fn cache_entries_are_sorted_by_unique_path_hash() {
+        let mut entries = sample_entries();
+        entries.reverse();
+
+        let file = ReplayGainCacheFile::from_entries(entries);
+        assert!(
+            file.entries
+                .windows(2)
+                .all(|pair| pair[0].path_hash < pair[1].path_hash)
+        );
     }
 
     #[test]

@@ -13,7 +13,8 @@ pub use cache::{
 };
 
 /// EBU R 128 / `ReplayGain` 2.0 reference loudness.
-const TARGET_LUFS: f64 = -18.0;
+const TARGET_LUFS: f32 = -18.0;
+const DB_TO_LOG2: f32 = std::f32::consts::LOG2_10 / 20.0;
 /// Hard ceiling on the linear gain factor we will apply (+12 dB).
 const MAX_GAIN_LINEAR: f32 = 4.0;
 /// Linear gain returned for silence / un-analyzable tracks.
@@ -37,8 +38,7 @@ pub fn gain_linear_from_info(info: ReplayGainInfo) -> f32 {
     if !info.lufs.is_finite() || info.lufs <= -69.5 {
         return UNITY_GAIN;
     }
-    let gain_db = TARGET_LUFS - f64::from(info.lufs);
-    let raw_linear = 10f64.powf(gain_db / 20.0) as f32;
+    let raw_linear = ((TARGET_LUFS - info.lufs) * DB_TO_LOG2).exp2();
     let peak_limited = if info.true_peak_linear > f32::EPSILON {
         (1.0 / info.true_peak_linear).max(0.0)
     } else {
@@ -110,6 +110,53 @@ pub fn compute_loudness(path: &Path) -> Result<ReplayGainInfo, String> {
     })
 }
 
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::{MAX_GAIN_LINEAR, ReplayGainInfo, TARGET_LUFS, UNITY_GAIN, gain_linear_from_info};
+
+    #[must_use]
+    pub fn gains_old(infos: &[ReplayGainInfo]) -> u64 {
+        gain_checksum(infos.iter().copied().map(gain_old))
+    }
+
+    #[must_use]
+    pub fn gains_new(infos: &[ReplayGainInfo]) -> u64 {
+        gain_checksum(infos.iter().copied().map(gain_linear_from_info))
+    }
+
+    #[must_use]
+    pub fn max_gain_error(infos: &[ReplayGainInfo]) -> f32 {
+        infos
+            .iter()
+            .copied()
+            .map(|info| (gain_old(info) - gain_linear_from_info(info)).abs())
+            .fold(0.0, f32::max)
+    }
+
+    fn gain_old(info: ReplayGainInfo) -> f32 {
+        if !info.lufs.is_finite() || info.lufs <= -69.5 {
+            return UNITY_GAIN;
+        }
+        let gain_db = f64::from(TARGET_LUFS) - f64::from(info.lufs);
+        let raw_linear = 10f64.powf(gain_db / 20.0) as f32;
+        let peak_limited = if info.true_peak_linear > f32::EPSILON {
+            (1.0 / info.true_peak_linear).max(0.0)
+        } else {
+            MAX_GAIN_LINEAR
+        };
+        raw_linear.min(peak_limited).clamp(0.0, MAX_GAIN_LINEAR)
+    }
+
+    fn gain_checksum(gains: impl IntoIterator<Item = f32>) -> u64 {
+        gains.into_iter().fold(0_u64, |checksum, gain| {
+            let quantized = (gain * 10_000.0).round() as u32;
+            checksum
+                .wrapping_mul(1_099_511_628_211)
+                .wrapping_add(u64::from(quantized))
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,7 +165,7 @@ mod tests {
     #[test]
     fn gain_unity_for_target_loudness() {
         let g = gain_linear_from_info(ReplayGainInfo {
-            lufs: TARGET_LUFS as f32,
+            lufs: TARGET_LUFS,
             true_peak_linear: 0.5,
         });
         assert!((g - 1.0).abs() < 1e-4, "expected ~1.0, got {g}");
@@ -160,6 +207,37 @@ mod tests {
             true_peak_linear: 0.0,
         });
         assert!(g <= MAX_GAIN_LINEAR + 1e-4);
+    }
+
+    #[test]
+    fn gain_conversion_tracks_double_precision_reference() {
+        for lufs_tenths in -695..=100 {
+            for peak_percent in 0..=200 {
+                let info = ReplayGainInfo {
+                    lufs: lufs_tenths as f32 * 0.1,
+                    true_peak_linear: peak_percent as f32 * 0.01,
+                };
+                let expected = if info.lufs <= -69.5 {
+                    UNITY_GAIN
+                } else {
+                    let gain_db = f64::from(TARGET_LUFS) - f64::from(info.lufs);
+                    let raw = 10f64.powf(gain_db / 20.0) as f32;
+                    let peak_limited = if info.true_peak_linear > f32::EPSILON {
+                        (1.0 / info.true_peak_linear).max(0.0)
+                    } else {
+                        MAX_GAIN_LINEAR
+                    };
+                    raw.min(peak_limited).clamp(0.0, MAX_GAIN_LINEAR)
+                };
+                let actual = gain_linear_from_info(info);
+                assert!(
+                    (actual - expected).abs() <= 2e-6,
+                    "lufs={}, peak={}, expected={expected}, actual={actual}",
+                    info.lufs,
+                    info.true_peak_linear
+                );
+            }
+        }
     }
 
     #[test]
