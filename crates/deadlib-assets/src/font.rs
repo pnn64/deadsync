@@ -1,6 +1,6 @@
 use crate::{
     TextureHints, canonical_texture_key_with_asset_roots, decode_texture_image,
-    parse_sprite_sheet_dims, parse_texture_hints,
+    parse_sprite_sheet_dims, parse_texture_hints, texture_hint_doubleres, texture_hint_is_default,
 };
 use deadlib_present::font::{self, Font, FontLoadData, FontParseError};
 use image::RgbaImage;
@@ -30,11 +30,11 @@ impl font::FontTextureContext for AssetFontTextureContext {
     }
 
     fn texture_hint_is_default(&self, raw: &str) -> bool {
-        parse_texture_hints(raw).is_default()
+        texture_hint_is_default(raw)
     }
 
     fn texture_hint_doubleres(&self, raw: &str) -> bool {
-        parse_texture_hints(raw).doubleres
+        texture_hint_doubleres(raw)
     }
 }
 

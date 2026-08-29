@@ -17,10 +17,10 @@ use deadsync_assets::media_cache;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use log::{debug, warn};
+use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{Arc, Mutex, mpsc},
     thread::{self, JoinHandle},
@@ -391,35 +391,35 @@ fn sync_bg_video_timing(state: &mut DynamicBackgroundState, timing: BgVideoTimin
 
 pub struct DynamicMedia {
     current_dynamic_banner: Option<DynamicBannerState>,
-    active_banner_videos: HashMap<String, DynamicVideoState>,
+    active_banner_videos: FxHashMap<String, DynamicVideoState>,
     /// Screen-local banner preparation states. Entries are retained after a
     /// failure only while that exact path/mode remains desired, preventing
     /// live-frame retry storms without becoming a session-growing cache.
-    banner_video_preps: HashMap<PathBuf, BannerVideoPrepState>,
+    banner_video_preps: FxHashMap<PathBuf, BannerVideoPrepState>,
     banner_video_prep: MediaPrepWorker<BannerVideoPrepJob, BannerVideoPrepResult>,
     banner_video_request: BannerVideoRequest,
     current_dynamic_cdtitle: Option<(Arc<str>, PathBuf)>,
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
-    dynamic_pack_banner_keys: std::collections::HashSet<String>,
-    wheel_item_background_keys: HashSet<String>,
+    dynamic_pack_banner_keys: FxHashSet<String>,
+    wheel_item_background_keys: FxHashSet<String>,
     current_dynamic_background: Option<DynamicBackgroundState>,
-    active_song_lua_videos: HashMap<String, SongLuaVideoState>,
-    failed_song_lua_video_keys: HashSet<String>,
-    gameplay_background_keys: HashSet<String>,
-    pending_gameplay_background_preps: HashSet<String>,
+    active_song_lua_videos: FxHashMap<String, SongLuaVideoState>,
+    failed_song_lua_video_keys: FxHashSet<String>,
+    gameplay_background_keys: FxHashSet<String>,
+    pending_gameplay_background_preps: FxHashSet<String>,
     gameplay_background_prep:
         MediaPrepWorker<GameplayBackgroundPrepJob, GameplayBackgroundPrepResult>,
     failed_gameplay_background_key: Option<String>,
     current_profile_avatars: [Option<(String, PathBuf)>; 2],
-    preloaded_profile_avatar_keys: HashSet<String>,
+    preloaded_profile_avatar_keys: FxHashSet<String>,
 }
 
 impl DynamicMedia {
     pub fn new() -> Self {
         Self {
             current_dynamic_banner: None,
-            active_banner_videos: HashMap::new(),
-            banner_video_preps: HashMap::new(),
+            active_banner_videos: FxHashMap::default(),
+            banner_video_preps: FxHashMap::default(),
             banner_video_prep: MediaPrepWorker::new(
                 "banner-video-prep",
                 BANNER_VIDEO_PREP_WORKERS,
@@ -430,13 +430,13 @@ impl DynamicMedia {
             banner_video_request: BannerVideoRequest::default(),
             current_dynamic_cdtitle: None,
             current_dynamic_pack_banner: None,
-            dynamic_pack_banner_keys: std::collections::HashSet::new(),
-            wheel_item_background_keys: HashSet::new(),
+            dynamic_pack_banner_keys: FxHashSet::default(),
+            wheel_item_background_keys: FxHashSet::default(),
             current_dynamic_background: None,
-            active_song_lua_videos: HashMap::new(),
-            failed_song_lua_video_keys: HashSet::new(),
-            gameplay_background_keys: HashSet::new(),
-            pending_gameplay_background_preps: HashSet::new(),
+            active_song_lua_videos: FxHashMap::default(),
+            failed_song_lua_video_keys: FxHashSet::default(),
+            gameplay_background_keys: FxHashSet::default(),
+            pending_gameplay_background_preps: FxHashSet::default(),
             gameplay_background_prep: MediaPrepWorker::new(
                 "gameplay-background-prep",
                 GAMEPLAY_BACKGROUND_PREP_WORKERS,
@@ -446,7 +446,7 @@ impl DynamicMedia {
             ),
             failed_gameplay_background_key: None,
             current_profile_avatars: std::array::from_fn(|_| None),
-            preloaded_profile_avatar_keys: HashSet::new(),
+            preloaded_profile_avatar_keys: FxHashSet::default(),
         }
     }
 
@@ -633,7 +633,7 @@ impl DynamicMedia {
         backend: &mut Backend,
         paths: Vec<PathBuf>,
     ) {
-        let mut desired = HashSet::with_capacity(paths.len());
+        let mut desired = FxHashSet::with_capacity_and_hasher(paths.len(), FxBuildHasher);
         for path in paths {
             let key = path.to_string_lossy().into_owned();
             if desired.insert(key) {

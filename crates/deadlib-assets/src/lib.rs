@@ -61,9 +61,9 @@ use std::{
     sync::Arc,
 };
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct TextureHints {
-    pub raw: String,
+    pub non_default: bool,
     pub mipmaps: Option<bool>,
     pub grayscale: bool,
     pub alphamap: bool,
@@ -78,8 +78,8 @@ pub struct TextureHints {
 impl TextureHints {
     #[inline(always)]
     #[must_use]
-    pub fn is_default(&self) -> bool {
-        self.raw.is_empty() || self.raw.eq_ignore_ascii_case("default")
+    pub const fn is_default(&self) -> bool {
+        !self.non_default
     }
 
     #[inline(always)]
@@ -217,7 +217,7 @@ pub fn parse_texture_resolution_hint(raw: &str) -> Option<(u32, u32)> {
 pub fn texture_source_dims_from_real(texture_key: &str, real_w: u32, real_h: u32) -> (u32, u32) {
     let (mut source_w, mut source_h) =
         parse_texture_resolution_hint(texture_key).unwrap_or((real_w, real_h));
-    if parse_texture_hints(texture_key).doubleres {
+    if texture_hint_doubleres(texture_key) {
         source_w /= 2;
         source_h /= 2;
     }
@@ -370,7 +370,22 @@ pub fn strip_sprite_hints(name: &str) -> String {
         out.push(bytes[i] as char);
         i += 1;
     }
-    out.replace(" (doubleres)", "").trim().to_string()
+    const DOUBLERES_HINT: &str = " (doubleres)";
+    while let Some(start) = out.find(DOUBLERES_HINT) {
+        out.replace_range(start..start + DOUBLERES_HINT.len(), "");
+    }
+
+    let trim_start = out.len() - out.trim_start().len();
+    let trim_end = out.trim_end().len();
+    if trim_start >= trim_end {
+        out.clear();
+        return out;
+    }
+    out.truncate(trim_end);
+    if trim_start != 0 {
+        out.drain(..trim_start);
+    }
+    out
 }
 
 #[must_use]
@@ -455,13 +470,10 @@ pub fn media_path_key(path: &Path) -> Arc<str> {
 pub fn parse_texture_hints(raw: &str) -> TextureHints {
     let mut hints = TextureHints::default();
     let trimmed = raw.trim();
-    if trimmed.is_empty() {
+    if texture_hint_is_default(trimmed) {
         return hints;
     }
-    hints.raw = trimmed.to_string();
-    if trimmed.eq_ignore_ascii_case("default") {
-        return hints;
-    }
+    hints.non_default = true;
 
     let has = |sub: &[u8]| has_ascii_case_insensitive_substr(trimmed.as_bytes(), sub);
 
@@ -508,6 +520,19 @@ pub fn parse_texture_hints(raw: &str) -> TextureHints {
     }
 
     hints
+}
+
+#[inline(always)]
+#[must_use]
+pub fn texture_hint_is_default(raw: &str) -> bool {
+    let trimmed = raw.trim();
+    trimmed.is_empty() || trimmed.eq_ignore_ascii_case("default")
+}
+
+#[inline(always)]
+#[must_use]
+pub fn texture_hint_doubleres(raw: &str) -> bool {
+    has_ascii_case_insensitive_substr(raw.trim().as_bytes(), b"doubleres")
 }
 
 #[inline(always)]
@@ -659,6 +684,27 @@ mod tests {
     }
 
     #[test]
+    fn texture_hint_predicates_match_full_parse() {
+        let cases = [
+            "",
+            "   ",
+            "default",
+            " DEFAULT ",
+            "example.png",
+            "example (DOUBLEres).png",
+            "default doubleres",
+            "example (nearest mipmaps wrap)",
+        ];
+
+        for raw in cases {
+            let hints = parse_texture_hints(raw);
+            assert_eq!(texture_hint_is_default(raw), hints.is_default(), "{raw}");
+            assert_eq!(texture_hint_doubleres(raw), hints.doubleres, "{raw}");
+        }
+        assert!(!std::mem::needs_drop::<TextureHints>());
+    }
+
+    #[test]
     fn apply_texture_hints_converts_grayscale() {
         let mut image = RgbaImage::from_raw(1, 1, vec![100, 150, 200, 77]).expect("test image");
         let hints = TextureHints {
@@ -761,6 +807,59 @@ mod tests {
             "snap_display_icon_9x1"
         );
         assert_eq!(strip_sprite_hints("mine.png"), "mine");
+    }
+
+    #[test]
+    fn optimized_sprite_hint_strip_matches_reference() {
+        fn reference(name: &str) -> String {
+            let file_name = Path::new(name)
+                .file_name()
+                .and_then(|file| file.to_str())
+                .unwrap_or(name);
+            let without_ext = file_name
+                .rsplit_once('.')
+                .map_or(file_name, |(stem, _)| stem);
+            let bytes = without_ext.as_bytes();
+            let mut out = String::with_capacity(without_ext.len());
+            let mut i = 0usize;
+            while i < bytes.len() {
+                if bytes[i] == b' ' {
+                    let mut left = i + 1;
+                    while left < bytes.len() && bytes[left].is_ascii_digit() {
+                        left += 1;
+                    }
+                    if left > i + 1 && left < bytes.len() && matches!(bytes[left], b'x' | b'X') {
+                        let mut right = left + 1;
+                        while right < bytes.len() && bytes[right].is_ascii_digit() {
+                            right += 1;
+                        }
+                        if right > left + 1 {
+                            i = right;
+                            continue;
+                        }
+                    }
+                }
+                out.push(bytes[i] as char);
+                i += 1;
+            }
+            out.replace(" (doubleres)", "").trim().to_string()
+        }
+
+        let cases = [
+            "grades/grades 1x19.png",
+            "_miso light 16X7 doubleres.png",
+            "practice/snap_display_icon_9x1 (doubleres).png",
+            "  spaced 4x2 label  ",
+            "two 1x2 hints 3x4 (doubleres) (doubleres).png",
+            "no 1x hint.png",
+            "no 1x0 hint.png",
+            "unchanged (DOUBLEres).png",
+            "mine.png",
+        ];
+
+        for name in cases {
+            assert_eq!(strip_sprite_hints(name), reference(name), "{name}");
+        }
     }
 
     #[test]

@@ -5,8 +5,8 @@ use deadlib_render_core::{SamplerDesc, TextureHandle};
 use deadlib_video as video;
 use deadsync_chart::{SongBackgroundChange, SongBackgroundChangeTarget, SongData};
 use image::RgbaImage;
+use rustc_hash::FxHashSet;
 use std::borrow::Cow;
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -88,7 +88,7 @@ pub fn path_texture_key(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
-pub fn texture_key_set<'a, I>(paths: I) -> HashSet<String>
+pub fn texture_key_set<'a, I>(paths: I) -> FxHashSet<String>
 where
     I: IntoIterator<Item = &'a PathBuf>,
 {
@@ -98,7 +98,7 @@ where
         .collect()
 }
 
-pub fn dynamic_video_key_set<'a, I>(paths: I) -> HashSet<Cow<'a, str>>
+pub fn dynamic_video_key_set<'a, I>(paths: I) -> FxHashSet<Cow<'a, str>>
 where
     I: IntoIterator<Item = &'a PathBuf>,
 {
@@ -110,13 +110,13 @@ where
 }
 
 #[must_use]
-pub fn stale_texture_keys(current: &HashSet<String>, next: &HashSet<String>) -> Vec<String> {
+pub fn stale_texture_keys(current: &FxHashSet<String>, next: &FxHashSet<String>) -> Vec<String> {
     current.difference(next).cloned().collect()
 }
 
 pub fn replace_texture_key_set(
-    current: &mut HashSet<String>,
-    next: HashSet<String>,
+    current: &mut FxHashSet<String>,
+    next: FxHashSet<String>,
 ) -> Vec<String> {
     let stale = stale_texture_keys(current, &next);
     *current = next;
@@ -497,6 +497,7 @@ pub fn retire_dynamic_video_state(state: DynamicVideoState) {
 mod tests {
     use super::*;
     use deadsync_chart::{SongBackgroundChange, SongForegroundChange};
+    use std::collections::HashSet;
 
     #[test]
     fn gameplay_media_keys_include_song_and_bgchange_paths() {
@@ -598,6 +599,24 @@ mod tests {
     }
 
     #[test]
+    fn fast_texture_key_set_matches_standard_membership() {
+        let paths = [
+            PathBuf::from("Pack A/Song 1/banner.png"),
+            PathBuf::from("Pack B/Song 2/movie.mp4"),
+            PathBuf::from("Pack A/Song 1/banner.png"),
+            PathBuf::from("Pack C/Song 3/background.jpg"),
+        ];
+        let expected = paths
+            .iter()
+            .map(|path| path_texture_key(path))
+            .collect::<HashSet<_>>();
+        let actual = texture_key_set(paths.iter());
+
+        assert_eq!(actual.len(), expected.len());
+        assert!(expected.iter().all(|key| actual.contains(key)));
+    }
+
+    #[test]
     fn dynamic_video_key_set_filters_static_images() {
         let paths = [
             PathBuf::from("bg.png"),
@@ -616,10 +635,10 @@ mod tests {
     fn replace_texture_key_set_returns_stale_keys() {
         let mut current = ["a.png".to_string(), "b.png".to_string()]
             .into_iter()
-            .collect::<HashSet<_>>();
+            .collect::<FxHashSet<_>>();
         let next = ["b.png".to_string(), "c.png".to_string()]
             .into_iter()
-            .collect::<HashSet<_>>();
+            .collect::<FxHashSet<_>>();
 
         let mut stale = replace_texture_key_set(&mut current, next);
         stale.sort();
