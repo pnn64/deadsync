@@ -17,6 +17,7 @@ struct SpriteInstance {
 struct SpriteOut {
     float4 pos [[position]];
     float2 uv;
+    float2 quad_uv;
     float4 tint;
     float4 edge_fade;
     float texture_mask;
@@ -53,6 +54,7 @@ vertex SpriteOut sprite_vertex(
     SpriteOut out;
     out.pos = proj * float4(center.xy + rotated + offset_world, center.z, 1.0);
     out.uv = uvs[vertex_id] * float2(inst.uv_scale) + float2(inst.uv_offset);
+    out.quad_uv = uvs[vertex_id];
     out.tint = float4(inst.tint);
     out.edge_fade = float4(inst.edge_fade);
     out.texture_mask = inst.texture_mask;
@@ -72,8 +74,8 @@ fragment float4 sprite_fragment(
     sampler tex_sampler [[sampler(0)]])
 {
     float4 texel = tex.sample(tex_sampler, in.uv);
-    float fade_x = edge_factor(in.uv.x, in.edge_fade.x, in.edge_fade.y);
-    float fade_y = edge_factor(in.uv.y, in.edge_fade.z, in.edge_fade.w);
+    float fade_x = edge_factor(in.quad_uv.x, in.edge_fade.x, in.edge_fade.y);
+    float fade_y = edge_factor(in.quad_uv.y, in.edge_fade.z, in.edge_fade.w);
     float4 color = texel * in.tint;
     if (in.texture_mask > 0.5) {
         color = float4(in.tint.rgb, texel.a * in.tint.a);
@@ -99,8 +101,8 @@ fragment float4 sprite_yuv_fragment(
         y + coeffs.y * u + coeffs.z * v,
         y + coeffs.w * u,
         1.0);
-    float fade_x = edge_factor(in.uv.x, in.edge_fade.x, in.edge_fade.y);
-    float fade_y = edge_factor(in.uv.y, in.edge_fade.z, in.edge_fade.w);
+    float fade_x = edge_factor(in.quad_uv.x, in.edge_fade.x, in.edge_fade.y);
+    float fade_y = edge_factor(in.quad_uv.y, in.edge_fade.z, in.edge_fade.w);
     float4 color = texel * in.tint;
     if (in.texture_mask > 0.5) {
         color = float4(in.tint.rgb, in.tint.a);

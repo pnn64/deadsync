@@ -3751,7 +3751,8 @@ const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
 mod tests {
     use super::{
         DrawBindingCache, InstanceBinding, Matrix4, PresentCompletion, PresentCompletionCell,
-        YUV_SHADER_IMM, YUV_SHADER_UBO, stage_offscreen_projection_upload, stage_projection_upload,
+        SHADER_IMM, SHADER_UBO, YUV_SHADER_IMM, YUV_SHADER_UBO, stage_offscreen_projection_upload,
+        stage_projection_upload,
     };
     use std::sync::{
         Arc,
@@ -3761,15 +3762,15 @@ mod tests {
     const STRIDE: usize = 256;
 
     #[test]
-    fn planar_video_shaders_validate() {
-        for source in [YUV_SHADER_IMM, YUV_SHADER_UBO] {
-            let module = naga::front::wgsl::parse_str(source).expect("YUV shader parses");
+    fn sprite_shaders_validate() {
+        for source in [SHADER_IMM, SHADER_UBO, YUV_SHADER_IMM, YUV_SHADER_UBO] {
+            let module = naga::front::wgsl::parse_str(source).expect("sprite shader parses");
             naga::valid::Validator::new(
                 naga::valid::ValidationFlags::all(),
                 naga::valid::Capabilities::all(),
             )
             .validate(&module)
-            .expect("YUV shader validates");
+            .expect("sprite shader validates");
         }
     }
 

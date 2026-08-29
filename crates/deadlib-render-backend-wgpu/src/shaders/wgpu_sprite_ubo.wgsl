@@ -27,6 +27,7 @@ struct VertexOut {
     @location(1) tint: vec4<f32>,
     @location(2) edge_fade: vec4<f32>,
     @location(3) texture_mask: f32,
+    @location(4) quad_uv: vec2<f32>,
 };
 
 @vertex
@@ -49,6 +50,7 @@ fn vs_main(input: VertexIn) -> VertexOut {
     out.tint = input.tint;
     out.edge_fade = input.edge_fade;
     out.texture_mask = input.texture_mask;
+    out.quad_uv = input.uv;
     return out;
 }
 
@@ -67,8 +69,8 @@ fn edge_factor(t: f32, feather_l: f32, feather_r: f32) -> f32 {
 @fragment
 fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
     let texel = textureSample(u_tex, u_sampler, input.uv);
-    let fade_x = edge_factor(input.uv.x, input.edge_fade.x, input.edge_fade.y);
-    let fade_y = edge_factor(input.uv.y, input.edge_fade.z, input.edge_fade.w);
+    let fade_x = edge_factor(input.quad_uv.x, input.edge_fade.x, input.edge_fade.y);
+    let fade_y = edge_factor(input.quad_uv.y, input.edge_fade.z, input.edge_fade.w);
     let fade = min(fade_x, fade_y);
     var color = texel * input.tint;
     if input.texture_mask > 0.5 {
@@ -77,4 +79,3 @@ fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
     color.a = color.a * fade;
     return color;
 }
-
