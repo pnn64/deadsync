@@ -209,6 +209,26 @@ impl VertexBindingCache {
     }
 }
 
+/// Render-pass-local descriptor binding state. Pipeline binds do not disturb
+/// Vulkan descriptor state, so returning to the same texture after an
+/// untextured draw does not require another driver command.
+#[derive(Debug, Default)]
+struct DescriptorBindingCache {
+    set: Option<vk::DescriptorSet>,
+}
+
+impl DescriptorBindingCache {
+    #[inline(always)]
+    fn update_required(&mut self, set: vk::DescriptorSet) -> bool {
+        if self.set == Some(set) {
+            false
+        } else {
+            self.set = Some(set);
+            true
+        }
+    }
+}
+
 struct SwapchainResources {
     swapchain_loader: swapchain::Device,
     swapchain: vk::SwapchainKHR,
@@ -2122,6 +2142,11 @@ struct VulkanPassOffsets {
     tmesh_instance: u32,
 }
 
+#[inline(always)]
+fn clamp_vertex_count(count: u64) -> u32 {
+    count.min(u64::from(u32::MAX)) as u32
+}
+
 fn resolved_texture<'a>(
     state: &'a State,
     textures: &'a impl TextureLookup,
@@ -2169,7 +2194,7 @@ fn record_render_pass(
     clear_color: [f32; 4],
     offsets: VulkanPassOffsets,
     write_alpha: bool,
-) -> u32 {
+) -> u64 {
     let device = state.device.as_ref().unwrap();
     let (sprite_pipeline, sprite_pipeline_layout) = if write_alpha {
         (state.sprite_pipeline, state.sprite_pipeline_layout)
@@ -2250,10 +2275,10 @@ fn record_render_pass(
         }
         let mut bound = Bound::None;
         let mut bindings = VertexBindingCache::default();
-        let mut last_set = vk::DescriptorSet::null();
+        let mut descriptor = DescriptorBindingCache::default();
         let mut last_camera = CameraUploadCache::default();
         let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
-        let mut vertices_drawn = 0u32;
+        let mut vertices_drawn = 0u64;
         for op in pass.ops {
             match *op {
                 DrawOp::Sprite(run) => {
@@ -2296,7 +2321,6 @@ fn record_render_pass(
                             Bound::Sprite
                         };
                         last_camera = CameraUploadCache::default();
-                        last_set = vk::DescriptorSet::null();
                         tmesh_buffer_cache.reset();
                     }
                     if last_camera.update_required(run.camera) {
@@ -2320,7 +2344,7 @@ fn record_render_pass(
                             bytemuck::bytes_of(&push),
                         );
                     }
-                    if last_set != set {
+                    if descriptor.update_required(set) {
                         if let TextureImages::Yuv420 { levels, coeffs, .. } = &texture.images {
                             let conversion = YuvPush {
                                 levels: *levels,
@@ -2346,7 +2370,6 @@ fn record_render_pass(
                             &[set],
                             &[],
                         );
-                        last_set = set;
                     }
                     device.cmd_draw_indexed(
                         cmd,
@@ -2356,7 +2379,7 @@ fn record_render_pass(
                         0,
                         offsets.sprite + run.instance_start,
                     );
-                    vertices_drawn = vertices_drawn.saturating_add(4 * run.instance_count);
+                    vertices_drawn += 4 * u64::from(run.instance_count);
                 }
                 DrawOp::Mesh(run) => {
                     if !matches!(bound, Bound::Mesh) {
@@ -2392,7 +2415,7 @@ fn record_render_pass(
                         );
                     }
                     device.cmd_draw(cmd, run.vertex_count, 1, offsets.mesh + run.vertex_start, 0);
-                    vertices_drawn = vertices_drawn.saturating_add(run.vertex_count);
+                    vertices_drawn += u64::from(run.vertex_count);
                 }
                 DrawOp::TexturedMesh(run) => {
                     let Some(source) = uploads.source(run.geometry) else {
@@ -2418,7 +2441,6 @@ fn record_render_pass(
                             );
                         }
                         bound = Bound::TexturedMesh;
-                        last_set = vk::DescriptorSet::null();
                         tmesh_buffer_cache.reset();
                     }
                     if tmesh_buffer_cache.update_required(source) {
@@ -2454,7 +2476,7 @@ fn record_render_pass(
                             bytemuck::bytes_of(&push),
                         );
                     }
-                    if last_set != set {
+                    if descriptor.update_required(set) {
                         device.cmd_bind_descriptor_sets(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
@@ -2463,7 +2485,6 @@ fn record_render_pass(
                             &[set],
                             &[],
                         );
-                        last_set = set;
                     }
                     let first_vertex = if source.buffer_key().is_some() {
                         0
@@ -2477,9 +2498,8 @@ fn record_render_pass(
                         first_vertex,
                         offsets.tmesh_instance + run.instance_start,
                     );
-                    vertices_drawn = vertices_drawn.saturating_add(
-                        (source.vertex_count() / 3).saturating_mul(run.instance_count),
-                    );
+                    vertices_drawn +=
+                        u64::from(source.vertex_count() / 3) * u64::from(run.instance_count);
                 }
             }
         }
@@ -2587,39 +2607,34 @@ pub fn draw(
 
     let backend_prepare_started = Instant::now();
     ensure_offscreen_targets(state, &frame.render_targets)?;
-    for (index, target) in frame.render_targets.iter().enumerate() {
-        let device = Arc::clone(state.device.as_ref().unwrap());
+    {
         let State {
+            device,
             instance,
             pdevice,
             cached_tmesh,
             cached_tmesh_bytes,
             target_uploads,
-            ..
-        } = state;
-        resolve_vulkan_geometries(
-            instance,
-            &device,
-            *pdevice,
-            cached_tmesh,
-            cached_tmesh_bytes,
-            &target.tmesh_geometries,
-            &mut target_uploads[index],
-        );
-    }
-    {
-        let device = Arc::clone(state.device.as_ref().unwrap());
-        let State {
-            instance,
-            pdevice,
-            cached_tmesh,
-            cached_tmesh_bytes,
             uploads,
             ..
         } = state;
+        let device = device
+            .as_deref()
+            .expect("Vulkan device must exist while drawing");
+        for (index, target) in frame.render_targets.iter().enumerate() {
+            resolve_vulkan_geometries(
+                instance,
+                device,
+                *pdevice,
+                cached_tmesh,
+                cached_tmesh_bytes,
+                &target.tmesh_geometries,
+                &mut target_uploads[index],
+            );
+        }
         resolve_vulkan_geometries(
             instance,
-            &device,
+            device,
             *pdevice,
             cached_tmesh,
             cached_tmesh_bytes,
@@ -2787,7 +2802,7 @@ pub fn draw(
             .saturating_add(elapsed_us_since(backend_upload_started));
 
         let backend_record_started = Instant::now();
-        let mut offscreen_vertices = 0u32;
+        let mut offscreen_vertices = 0u64;
         target_cursor = VulkanPassOffsets::default();
         for (index, target_frame) in frame.render_targets.iter().enumerate() {
             let offsets = VulkanPassOffsets {
@@ -2798,7 +2813,7 @@ pub fn draw(
             };
             let target = &state.offscreen_targets[index];
             let preserve = target_frame.preserve && target.initialized;
-            offscreen_vertices = offscreen_vertices.saturating_add(record_render_pass(
+            offscreen_vertices += record_render_pass(
                 state,
                 cmd,
                 VulkanPass::from(target_frame),
@@ -2817,7 +2832,7 @@ pub fn draw(
                 [0.0, 0.0, 0.0, if target_frame.alpha { 0.0 } else { 1.0 }],
                 offsets,
                 target_frame.alpha,
-            ));
+            );
             state.offscreen_targets[index].initialized = true;
             target_cursor.sprite += target_frame.sprite_instances.len() as u32;
             target_cursor.mesh += target_frame.mesh_vertices.len() as u32;
@@ -2864,12 +2879,12 @@ pub fn draw(
         }
         let mut bound = Bound::None;
         let mut bindings = VertexBindingCache::default();
-        let mut last_set = vk::DescriptorSet::null();
+        let mut descriptor = DescriptorBindingCache::default();
         // These pipelines declare the same vertex push-constant range, so the
         // projection remains compatible when only the pipeline kind changes.
         let mut last_camera = CameraUploadCache::default();
         let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
-        let mut vertices_drawn: u32 = 0;
+        let mut vertices_drawn = 0u64;
         for op in &frame.ops {
             match op {
                 DrawOp::Sprite(run) => {
@@ -2908,7 +2923,6 @@ pub fn draw(
                             Bound::Sprite
                         };
                         last_camera = CameraUploadCache::default();
-                        last_set = vk::DescriptorSet::null();
                         tmesh_buffer_cache.reset();
                     }
 
@@ -2934,7 +2948,7 @@ pub fn draw(
                         );
                     }
 
-                    if last_set != set {
+                    if descriptor.update_required(set) {
                         if let TextureImages::Yuv420 { levels, coeffs, .. } = &texture.images {
                             let conversion = YuvPush {
                                 levels: *levels,
@@ -2960,12 +2974,11 @@ pub fn draw(
                             &[set],
                             &[],
                         );
-                        last_set = set;
                     }
 
                     let first_instance = base_first_instance.unwrap_or(0) + run.instance_start;
                     device.cmd_draw_indexed(cmd, 6, run.instance_count, 0, 0, first_instance);
-                    vertices_drawn = vertices_drawn.saturating_add(4 * run.instance_count);
+                    vertices_drawn += 4 * u64::from(run.instance_count);
                 }
                 DrawOp::Mesh(draw) => {
                     if !matches!(bound, Bound::Mesh) {
@@ -3000,7 +3013,7 @@ pub fn draw(
 
                     let first_vertex = base_first_vertex.unwrap_or(0) + draw.vertex_start;
                     device.cmd_draw(cmd, draw.vertex_count, 1, first_vertex, 0);
-                    vertices_drawn = vertices_drawn.saturating_add(draw.vertex_count);
+                    vertices_drawn += u64::from(draw.vertex_count);
                 }
                 DrawOp::TexturedMesh(draw) => {
                     let Some(source) = state.uploads.source(draw.geometry) else {
@@ -3022,7 +3035,6 @@ pub fn draw(
                             device.cmd_bind_vertex_buffers(cmd, 1, &[inst], &[0]);
                         }
                         bound = Bound::TexturedMesh;
-                        last_set = vk::DescriptorSet::null();
                         tmesh_buffer_cache.reset();
                     }
 
@@ -3060,7 +3072,7 @@ pub fn draw(
                         );
                     }
 
-                    if last_set != set {
+                    if descriptor.update_required(set) {
                         device.cmd_bind_descriptor_sets(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
@@ -3069,7 +3081,6 @@ pub fn draw(
                             &[set],
                             &[],
                         );
-                        last_set = set;
                     }
 
                     let first_vertex = if source.buffer_key().is_some() {
@@ -3087,8 +3098,7 @@ pub fn draw(
                         first_instance,
                     );
                     let tri_count = source.vertex_count() / 3;
-                    vertices_drawn = vertices_drawn
-                        .saturating_add(tri_count.saturating_mul(draw.instance_count));
+                    vertices_drawn += u64::from(tri_count) * u64::from(draw.instance_count);
                 }
             }
         }
@@ -3315,7 +3325,7 @@ pub fn draw(
         stats.present_stats.applied_back_pressure = back_pressure_waited;
         stats.present_stats.queue_idle_waited = queue_idle_waited;
         state.current_frame = (state.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
-        stats.vertices = vertices_drawn.saturating_add(offscreen_vertices);
+        stats.vertices = clamp_vertex_count(vertices_drawn + offscreen_vertices);
         Ok(stats)
     }
 }
@@ -5581,6 +5591,159 @@ fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
     glam::camera::rh::proj::opengl::orthographic(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
 }
 
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::{DescriptorBindingCache, clamp_vertex_count};
+    use ash::vk::{self, Handle};
+    use std::{hint::black_box, sync::Arc};
+
+    #[derive(Clone, Copy)]
+    pub enum DescriptorEvent {
+        Sprite(vk::DescriptorSet),
+        Mesh,
+        TexturedMesh(vk::DescriptorSet),
+    }
+
+    #[derive(Clone, Copy)]
+    pub enum VertexEvent {
+        Sprite(u32),
+        Mesh(u32),
+        TexturedMesh { vertices: u32, instances: u32 },
+    }
+
+    #[must_use]
+    pub fn descriptor_events(count: usize) -> Vec<DescriptorEvent> {
+        let sprite = vk::DescriptorSet::from_raw(1);
+        let tmesh = vk::DescriptorSet::from_raw(2);
+        (0..count)
+            .map(|index| match index % 8 {
+                0 | 1 | 3 | 4 => DescriptorEvent::Sprite(sprite),
+                2 | 5 => DescriptorEvent::Mesh,
+                _ => DescriptorEvent::TexturedMesh(tmesh),
+            })
+            .collect()
+    }
+
+    #[must_use]
+    pub fn descriptors_old(events: &[DescriptorEvent]) -> u64 {
+        let mut bound = 0_u8;
+        let mut last_set = vk::DescriptorSet::null();
+        events.iter().fold(0_u64, |checksum, &event| {
+            let (kind, set) = match event {
+                DescriptorEvent::Sprite(set) => (1, Some(set)),
+                DescriptorEvent::Mesh => (2, None),
+                DescriptorEvent::TexturedMesh(set) => (3, Some(set)),
+            };
+            if kind != bound {
+                bound = kind;
+                if set.is_some() {
+                    last_set = vk::DescriptorSet::null();
+                }
+            }
+            if let Some(set) = set
+                && last_set != set
+            {
+                mock_driver_write(set);
+                last_set = set;
+            }
+            descriptor_checksum(checksum, event)
+        })
+    }
+
+    #[must_use]
+    pub fn descriptors_new(events: &[DescriptorEvent]) -> u64 {
+        let mut cache = DescriptorBindingCache::default();
+        events.iter().fold(0_u64, |checksum, &event| {
+            if let DescriptorEvent::Sprite(set) | DescriptorEvent::TexturedMesh(set) = event
+                && cache.update_required(set)
+            {
+                mock_driver_write(set);
+            }
+            descriptor_checksum(checksum, event)
+        })
+    }
+
+    #[must_use]
+    pub fn owner_refs_old(owner: &Arc<u64>, count: usize) -> u64 {
+        (0..count).fold(0_u64, |checksum, index| {
+            let device = Arc::clone(owner);
+            checksum
+                .wrapping_mul(257)
+                .wrapping_add(black_box(*device).wrapping_add(index as u64))
+        })
+    }
+
+    #[must_use]
+    pub fn owner_refs_new(owner: &Arc<u64>, count: usize) -> u64 {
+        let device = owner.as_ref();
+        (0..count).fold(0_u64, |checksum, index| {
+            checksum
+                .wrapping_mul(257)
+                .wrapping_add(black_box(*device).wrapping_add(index as u64))
+        })
+    }
+
+    #[must_use]
+    pub fn vertex_events(count: usize) -> Vec<VertexEvent> {
+        let mut seed = 0x1357_9bdf_2468_ace0_u64;
+        (0..count)
+            .map(|_| {
+                seed = seed
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                match seed % 3 {
+                    0 => VertexEvent::Sprite(((seed >> 8) % 64 + 1) as u32),
+                    1 => VertexEvent::Mesh(((seed >> 16) % 1_024 + 3) as u32),
+                    _ => VertexEvent::TexturedMesh {
+                        vertices: (((seed >> 24) % 256 + 1) * 3) as u32,
+                        instances: ((seed >> 40) % 32 + 1) as u32,
+                    },
+                }
+            })
+            .collect()
+    }
+
+    #[must_use]
+    pub fn vertices_old(events: &[VertexEvent]) -> u64 {
+        let count = events.iter().fold(0_u32, |count, event| match *event {
+            VertexEvent::Sprite(instances) => count.saturating_add(4 * instances),
+            VertexEvent::Mesh(vertices) => count.saturating_add(vertices),
+            VertexEvent::TexturedMesh {
+                vertices,
+                instances,
+            } => count.saturating_add((vertices / 3).saturating_mul(instances)),
+        });
+        u64::from(count)
+    }
+
+    #[must_use]
+    pub fn vertices_new(events: &[VertexEvent]) -> u64 {
+        let count = events.iter().fold(0_u64, |count, event| match *event {
+            VertexEvent::Sprite(instances) => count + 4 * u64::from(instances),
+            VertexEvent::Mesh(vertices) => count + u64::from(vertices),
+            VertexEvent::TexturedMesh {
+                vertices,
+                instances,
+            } => count + u64::from(vertices / 3) * u64::from(instances),
+        });
+        u64::from(clamp_vertex_count(count))
+    }
+
+    fn descriptor_checksum(checksum: u64, event: DescriptorEvent) -> u64 {
+        let value = match event {
+            DescriptorEvent::Sprite(set) => set.as_raw().wrapping_mul(2).wrapping_add(1),
+            DescriptorEvent::Mesh => 0,
+            DescriptorEvent::TexturedMesh(set) => set.as_raw().wrapping_mul(2).wrapping_add(2),
+        };
+        checksum.wrapping_mul(257).wrapping_add(value)
+    }
+
+    #[inline(never)]
+    fn mock_driver_write(set: vk::DescriptorSet) {
+        black_box(set);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5615,6 +5778,29 @@ mod tests {
         assert!(cache.instance_required(InstanceBinding::TexturedMesh));
         assert!(!cache.instance_required(InstanceBinding::TexturedMesh));
         assert!(cache.instance_required(InstanceBinding::Sprite));
+    }
+
+    #[test]
+    fn descriptor_binding_survives_pipeline_changes() {
+        use ash::vk::Handle;
+
+        let first = vk::DescriptorSet::from_raw(1);
+        let second = vk::DescriptorSet::from_raw(2);
+        let mut cache = DescriptorBindingCache::default();
+
+        assert!(cache.update_required(first));
+        assert!(!cache.update_required(first));
+        assert!(cache.update_required(second));
+        assert!(!cache.update_required(second));
+        assert!(cache.update_required(first));
+    }
+
+    #[test]
+    fn vertex_count_clamps_only_at_the_stats_boundary() {
+        assert_eq!(clamp_vertex_count(0), 0);
+        assert_eq!(clamp_vertex_count(u64::from(u32::MAX) - 1), u32::MAX - 1);
+        assert_eq!(clamp_vertex_count(u64::from(u32::MAX)), u32::MAX);
+        assert_eq!(clamp_vertex_count(u64::from(u32::MAX) + 1), u32::MAX);
     }
 
     #[test]
